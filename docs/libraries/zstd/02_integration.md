@@ -62,7 +62,7 @@ target_include_directories(ProjectV PRIVATE
 
 ### Вариант 3: vcpkg
 
-```cmake
+```
 # vcpkg.json
 {
     "dependencies": [

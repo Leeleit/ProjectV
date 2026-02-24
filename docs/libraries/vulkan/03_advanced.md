@@ -10,10 +10,10 @@
 
 ### Почему bindless для ProjectV
 
-| Подход | Дескрипторов | Производительность | Гибкость |
-|--------|--------------|-------------------|----------|
-| **Legacy** | 16-64 | Низкая | Ограниченная |
-| **Bindless** | **1M+** | **Высокая** | **Максимальная** |
+| Подход       | Дескрипторов | Производительность | Гибкость         |
+|--------------|--------------|--------------------|------------------|
+| **Legacy**   | 16-64        | Низкая             | Ограниченная     |
+| **Bindless** | **1M+**      | **Высокая**        | **Максимальная** |
 
 ### Настройка bindless дескрипторов
 
@@ -250,7 +250,7 @@ public:
 
 ### Шейдер для bindless воксельного рендеринга
 
-```glsl
+```
 #version 460
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_EXT_buffer_reference : require
@@ -259,51 +259,51 @@ public:
 layout(set = 0, binding = 0) uniform texture2D textures[];
 layout(set = 0, binding = 1) uniform sampler texture_samplers[];
 layout(set = 0, binding = 2) buffer VoxelBuffers {
-    uint voxels[];
+  uint voxels[];
 } voxel_buffers[];
 
 // Push constants для воксельного чанка
 layout(push_constant) uniform PushConstants {
-    uint voxel_buffer_index;
-    uint texture_index;
-    ivec3 chunk_coord;
-    uint lod;
+  uint voxel_buffer_index;
+  uint texture_index;
+  ivec3 chunk_coord;
+  uint lod;
 } push;
 
 // Структура вокселя
 struct Voxel {
-    uint material_id;
-    uint light_level;
-    uint flags;
+  uint material_id;
+  uint light_level;
+  uint flags;
 };
 
 Voxel get_voxel(ivec3 pos) {
-    // Линеаризация координат (16x16x16 чанк)
-    uint index = pos.x + pos.y * 16 + pos.z * 256;
+  // Линеаризация координат (16x16x16 чанк)
+  uint index = pos.x + pos.y * 16 + pos.z * 256;
 
-    // Non-uniform access к bindless буферу
-    uint data = voxel_buffers[nonuniformEXT(push.voxel_buffer_index)].voxels[index];
+  // Non-uniform access к bindless буферу
+  uint data = voxel_buffers[nonuniformEXT(push.voxel_buffer_index)].voxels[index];
 
-    return Voxel(
-        data & 0xFF,           // material_id
-        (data >> 8) & 0xFF,    // light_level
-        (data >> 16) & 0xFFFF  // flags
-    );
+  return Voxel(
+  data & 0xFF, // material_id
+  (data >> 8) & 0xFF, // light_level
+  (data >> 16) & 0xFFFF// flags
+  );
 }
 
 vec4 sample_voxel_texture(ivec3 pos) {
-    Voxel voxel = get_voxel(pos);
+  Voxel voxel = get_voxel(pos);
 
-    // Non-uniform access к bindless текстуре
-    vec4 color = texture(
-        sampler2D(textures[nonuniformEXT(voxel.material_id)], texture_samplers[0]),
-        vec2(pos.xz) / 16.0
-    );
+  // Non-uniform access к bindless текстуре
+  vec4 color = texture(
+  sampler2D(textures[nonuniformEXT(voxel.material_id)], texture_samplers[0]),
+  vec2(pos.xz) / 16.0
+  );
 
-    // Освещение
-    color.rgb *= float(voxel.light_level) / 255.0;
+  // Освещение
+  color.rgb *= float(voxel.light_level) / 255.0;
 
-    return color;
+  return color;
 }
 ```
 
@@ -313,9 +313,9 @@ vec4 sample_voxel_texture(ivec3 pos) {
 
 ### Timeline vs Binary Semaphores
 
-| Тип | Значение | Использование |
-|-----|----------|---------------|
-| **Binary** | 0/1 | Простая синхронизация |
+| Тип          | Значение     | Использование                          |
+|--------------|--------------|----------------------------------------|
+| **Binary**   | 0/1          | Простая синхронизация                  |
 | **Timeline** | **uint64_t** | **Сложные зависимости, async compute** |
 
 ### Асинхронная генерация вокселей
@@ -550,54 +550,54 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
 // Push constants
 layout(push_constant) uniform PushConstants {
-    ivec3 chunk_coord;
-    uint lod;
-    uint64_t buffer_device_address;
+  ivec3 chunk_coord;
+  uint lod;
+  uint64_t buffer_device_address;
 } push;
 
 // Структура вокселя
 struct Voxel {
-    uint material_id;
-    uint light_level;
-    uint flags;
+  uint material_id;
+  uint light_level;
+  uint flags;
 };
 
 // Buffer device address для записи вокселей
 layout(buffer_reference, std430) buffer VoxelBuffer {
-    Voxel voxels[];
+  Voxel voxels[];
 };
 
 void main() {
-    ivec3 voxel_pos = ivec3(gl_GlobalInvocationID.xyz);
+  ivec3 voxel_pos = ivec3(gl_GlobalInvocationID.xyz);
 
-    // Генерация вокселя на основе позиции и координат чанка
-    ivec3 world_pos = push.chunk_coord * 16 + voxel_pos;
+  // Генерация вокселя на основе позиции и координат чанка
+  ivec3 world_pos = push.chunk_coord * 16 + voxel_pos;
 
-    // Простая процедурная генерация (замените на свою логику)
-    float height = sin(world_pos.x * 0.1) * cos(world_pos.z * 0.1) * 10.0;
+  // Простая процедурная генерация (замените на свою логику)
+  float height = sin(world_pos.x * 0.1) * cos(world_pos.z * 0.1) * 10.0;
 
-    Voxel voxel;
+  Voxel voxel;
 
-    if (world_pos.y < height) {
-        voxel.material_id = 1;  // Земля
-        voxel.light_level = 15;
-        voxel.flags = 0;
-    } else if (world_pos.y < height + 1) {
-        voxel.material_id = 2;  // Трава
-        voxel.light_level = 15;
-        voxel.flags = 1;  // Прозрачный
-    } else {
-        voxel.material_id = 0;  // Воздух
-        voxel.light_level = 15;
-        voxel.flags = 2;  // Пустой
-    }
+  if (world_pos.y < height) {
+    voxel.material_id = 1;// Земля
+    voxel.light_level = 15;
+    voxel.flags = 0;
+  } else if (world_pos.y < height + 1) {
+    voxel.material_id = 2;// Трава
+    voxel.light_level = 15;
+    voxel.flags = 1;// Прозрачный
+  } else {
+    voxel.material_id = 0;// Воздух
+    voxel.light_level = 15;
+    voxel.flags = 2;// Пустой
+  }
 
-    // Запись вокселя через buffer device address
-    VoxelBuffer voxel_buffer = VoxelBuffer(push.buffer_device_address);
+  // Запись вокселя через buffer device address
+  VoxelBuffer voxel_buffer = VoxelBuffer(push.buffer_device_address);
 
-    // Линеаризация координат
-    uint index = voxel_pos.x + voxel_pos.y * 16 + voxel_pos.z * 256;
-    voxel_buffer.voxels[index] = voxel;
+  // Линеаризация координат
+  uint index = voxel_pos.x + voxel_pos.y * 16 + voxel_pos.z * 256;
+  voxel_buffer.voxels[index] = voxel;
 }
 ```
 
@@ -607,10 +607,10 @@ void main() {
 
 ### Почему GPU-Driven для ProjectV
 
-| Подход | CPU Overhead | GPU Utilization | Scalability |
-|--------|--------------|-----------------|-------------|
-| **CPU-Driven** | Высокий | Низкая | Ограниченная |
-| **GPU-Driven** | **Низкий** | **Высокая** | **Масштабируемая** |
+| Подход         | CPU Overhead | GPU Utilization | Scalability        |
+|----------------|--------------|-----------------|--------------------|
+| **CPU-Driven** | Высокий      | Низкая          | Ограниченная       |
+| **GPU-Driven** | **Низкий**   | **Высокая**     | **Масштабируемая** |
 
 ### Indirect Drawing с воксельными чанками
 
@@ -868,126 +868,126 @@ private:
 
 ### Compute Shader для Frustum Culling
 
-```glsl
+```
 #version 460
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 // Push constants
 layout(push_constant) uniform CullConstants {
-    mat4 view_proj;
-    uint chunk_count;
-    float lod_distances[4];
+  mat4 view_proj;
+  uint chunk_count;
+  float lod_distances[4];
 } constants;
 
 // Входные данные (инстансы чанков)
 layout(set = 0, binding = 0) buffer ChunkData {
-    mat4 transforms[];
-    ivec3 coords[];
-    uint lods[];
-    uint visibilities[];
+  mat4 transforms[];
+  ivec3 coords[];
+  uint lods[];
+  uint visibilities[];
 } chunk_data;
 
 // Выходные данные (indirect draw commands)
 layout(set = 0, binding = 1) buffer IndirectCommands {
-    uvec4 commands[];
+  uvec4 commands[];
 } indirect_commands;
 
 // Счётчик видимых чанков
 layout(set = 0, binding = 2) buffer DrawCount {
-    uint count;
+  uint count;
 } draw_count;
 
 // Frustum planes (из view_proj матрицы)
 struct Frustum {
-    vec4 planes[6];
+  vec4 planes[6];
 };
 
 Frustum extract_frustum(mat4 view_proj) {
-    Frustum frustum;
+  Frustum frustum;
 
-    // Left plane
-    frustum.planes[0] = view_proj[3] + view_proj[0];
+  // Left plane
+  frustum.planes[0] = view_proj[3] + view_proj[0];
 
-    // Right plane
-    frustum.planes[1] = view_proj[3] - view_proj[0];
+  // Right plane
+  frustum.planes[1] = view_proj[3] - view_proj[0];
 
-    // Bottom plane
-    frustum.planes[2] = view_proj[3] + view_proj[1];
+  // Bottom plane
+  frustum.planes[2] = view_proj[3] + view_proj[1];
 
-    // Top plane
-    frustum.planes[3] = view_proj[3] - view_proj[1];
+  // Top plane
+  frustum.planes[3] = view_proj[3] - view_proj[1];
 
-    // Near plane
-    frustum.planes[4] = view_proj[3] + view_proj[2];
+  // Near plane
+  frustum.planes[4] = view_proj[3] + view_proj[2];
 
-    // Far plane
-    frustum.planes[5] = view_proj[3] - view_proj[2];
+  // Far plane
+  frustum.planes[5] = view_proj[3] - view_proj[2];
 
-    // Normalize planes
-    for (int i = 0; i < 6; ++i) {
-        float length = length(frustum.planes[i].xyz);
-        frustum.planes[i] /= length;
-    }
+  // Normalize planes
+  for (int i = 0; i < 6; ++i) {
+    float length = length(frustum.planes[i].xyz);
+    frustum.planes[i] /= length;
+  }
 
-    return frustum;
+  return frustum;
 }
 
 bool sphere_in_frustum(vec3 center, float radius, Frustum frustum) {
-    for (int i = 0; i < 6; ++i) {
-        float distance = dot(frustum.planes[i].xyz, center) + frustum.planes[i].w;
-        if (distance < -radius) {
-            return false;
-        }
+  for (int i = 0; i < 6; ++i) {
+    float distance = dot(frustum.planes[i].xyz, center) + frustum.planes[i].w;
+    if (distance < -radius) {
+      return false;
     }
-    return true;
+  }
+  return true;
 }
 
 void main() {
-    uint chunk_index = gl_GlobalInvocationID.x;
-    if (chunk_index >= constants.chunk_count) return;
+  uint chunk_index = gl_GlobalInvocationID.x;
+  if (chunk_index >= constants.chunk_count) return;
 
-    // Центр чанка (в мировых координатах)
-    vec3 chunk_center = vec3(chunk_data.coords[chunk_index]) * 16.0 + vec3(8.0);
+  // Центр чанка (в мировых координатах)
+  vec3 chunk_center = vec3(chunk_data.coords[chunk_index]) * 16.0 + vec3(8.0);
 
-    // Радиус чанка (bounding sphere)
-    float radius = 13.856; // sqrt(3) * 8 (диагональ куба 16x16x16)
+  // Радиус чанка (bounding sphere)
+  float radius = 13.856;// sqrt(3) * 8 (диагональ куба 16x16x16)
 
-    // Извлечение frustum
-    Frustum frustum = extract_frustum(constants.view_proj);
+  // Извлечение frustum
+  Frustum frustum = extract_frustum(constants.view_proj);
 
-    // Проверка видимости
-    bool visible = sphere_in_frustum(chunk_center, radius, frustum);
+  // Проверка видимости
+  bool visible = sphere_in_frustum(chunk_center, radius, frustum);
 
-    // LOD selection на основе расстояния
-    vec3 camera_pos = vec3(0.0); // Замените на реальную позицию камеры
-    float distance = length(chunk_center - camera_pos);
+  // LOD selection на основе расстояния
+  vec3 camera_pos = vec3(0.0);// Замените на реальную позицию камеры
+  float distance = length(chunk_center - camera_pos);
 
-    uint lod = 0;
-    for (uint i = 0; i < 4; ++i) {
-        if (distance < constants.lod_distances[i]) {
-            lod = i;
-            break;
-        }
+  uint lod = 0;
+  for (uint i = 0; i < 4; ++i) {
+    if (distance < constants.lod_distances[i]) {
+      lod = i;
+      break;
     }
+  }
 
-    // Обновление видимости
-    chunk_data.visibilities[chunk_index] = visible ? 1 : 0;
-    chunk_data.lods[chunk_index] = lod;
+  // Обновление видимости
+  chunk_data.visibilities[chunk_index] = visible ? 1 : 0;
+  chunk_data.lods[chunk_index] = lod;
 
-    // Генерация indirect draw command для видимых чанков
-    if (visible) {
-        uint draw_index = atomicAdd(draw_count.count, 1);
+  // Генерация indirect draw command для видимых чанков
+  if (visible) {
+    uint draw_index = atomicAdd(draw_count.count, 1);
 
-        // VkDrawIndexedIndirectCommand
-        indirect_commands.commands[draw_index] = uvec4(
-            36,            // indexCount (куб: 12 треугольников * 3 индекса)
-            1,             // instanceCount
-            0,             // firstIndex
-            0,             // vertexOffset
-            chunk_index    // firstInstance
-        );
-    }
+    // VkDrawIndexedIndirectCommand
+    indirect_commands.commands[draw_index] = uvec4(
+    36, // indexCount (куб: 12 треугольников * 3 индекса)
+    1, // instanceCount
+    0, // firstIndex
+    0, // vertexOffset
+    chunk_index// firstInstance
+    );
+  }
 }
 ```
 
@@ -998,21 +998,25 @@ void main() {
 Продвинутые техники Vulkan для ProjectV:
 
 ### 1. **Bindless Rendering**
+
 - **1M+ текстур** в одном дескрипторном наборе
 - **Non-uniform indexing** в шейдерах
 - **Минимальный CPU overhead** для смены текстур
 
 ### 2. **Timeline Semaphores**
+
 - **Асинхронная генерация** вокселей на GPU
 - **Сложные зависимости** между задачами
 - **Эффективная синхронизация** compute и graphics очередей
 
 ### 3. **GPU-Driven Rendering**
+
 - **Frustum culling** на GPU
 - **Indirect drawing** с динамическим количеством draw calls
 - **LOD selection** на основе расстояния
 
 ### 4. **Buffer Device Address**
+
 - **Прямой доступ** к буферам из шейдеров
 - **Гибкая работа** с воксельными данными
 - **Минимальные overhead** для random access
@@ -1024,4 +1028,5 @@ void main() {
 3. **Гибкость**: Легко добавлять новые типы вокселей и материалы
 4. **Современность**: Использование Vulkan 1.3+ features для максимальной производительности
 
-Эти техники превращают ProjectV из простого воксельного рендерера в современный GPU-driven движок, способный рендерить миллионы вокселей с минимальным участием CPU.
+Эти техники превращают ProjectV из простого воксельного рендерера в современный GPU-driven движок, способный рендерить
+миллионы вокселей с минимальным участием CPU.

@@ -51,7 +51,7 @@ target_link_libraries(ProjectV PRIVATE
 
 ### Вариант 3: vcpkg
 
-```cmake
+```
 # vcpkg.json
 {
     "dependencies": [
