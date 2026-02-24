@@ -2,6 +2,10 @@
 
 <!-- anchor: 05_tools -->
 
+> **Для понимание:** Accessor tools — это как набор профессиональных кухонных ножей для шеф-повара. Каждый нож (функция)
+> предназначен для конкретной задачи: один режет мясо (`copyFromAccessor`), другой нарезает овощи (`iterateAccessor`),
+> третий чистит рыбу (`getAccessorElement`). Fastgltf даёт вам сырые ингредиенты (данные), а эти инструменты помогают
+> приготовить из них блюдо (готовые массивы для рендеринга).
 
 Утилиты для работы с accessor данными. Заголовок: `fastgltf/tools.hpp`.
 
@@ -14,6 +18,9 @@ Accessor tools упрощают чтение данных из accessors:
 - Поддерживают нормализацию
 
 ```cpp
+#include <print>
+#include <expected>
+#include <span>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>  // Для glm типов
 ```
@@ -346,6 +353,10 @@ fastgltf::copyFromAccessor<glm::vec3>(asset, accessor, vertices.data());
 
 <!-- anchor: 06_performance -->
 
+> **Для понимание:** Производительность fastgltf — это как спортивный автомобиль против городских малолитражек.
+> SIMD-оптимизации — это турбонаддув, memory mapping — это облегчённый кузов, а правильные Category — это выбор
+> правильной
+> передачи на трассе. Вы не просто загружаете модель, вы участвуете в гонке за минимальное время загрузки.
 
 Benchmarks и обоснование выбора fastgltf.
 
@@ -491,6 +502,7 @@ for (const auto& file : files) {
         return parser.loadGltf(data.get(), ...).get();
     }));
 }
+```
 
 ---
 
@@ -498,852 +510,513 @@ for (const auto& file : files) {
 
 <!-- anchor: 07_advanced -->
 
+> **Для понимания:** Продвинутые темы fastgltf — это как профессиональный инструментарий для хирурга. Каждый
+> инструмент (функция) предназначен для сложных операций: sparse accessors — это микрохирургические инструменты для
+> работы
+> с повреждёнными тканями, morph targets — это пластическая хирургия для 3D моделей, анимации — это нейрохирургия для
+> оживления скелетов, GPU-Driven загрузка — это трансплантология для прямой пересадки данных в GPU. Вы не просто
+> загружаете модель, вы проводите сложную операцию по её оживлению в реальном времени.
 
-Sparse accessors, morph targets, анимации, скиннинг и GPU-driven загрузка.
+Расширенные возможности и сложные сценарии использования fastgltf.
 
 ## Sparse Accessors
 
-### Концепция
+> **Для понимания:** Sparse accessors — это как патч для программного обеспечения. Представьте, что у вас есть полная
+> модель (программа), но некоторые её части повреждены или отсутствуют (баги). Вместо перезаписи всей программы, вы
+> накладываете патч (sparse данные) только на повреждённые участки. Это экономит память и ускоряет загрузку.
 
-Sparse accessors позволяют хранить только изменённые значения вместо полного дублирования буфера.
+Sparse accessors позволяют эффективно хранить данные, где большинство значений одинаковы или нулевые.
 
-```
-
-Базовый буфер (или нули)
-↓
-Инициализация
-↓
-Sparse indices (какие элементы заменяются)
-↓
-Sparse values (новые значения)
-↓
-Итоговый accessor
-
-```
-
-### Применение
-
-- Partial updates вершинных данных
-- Сжатие анимационных ключевых кадров
-- Динамические изменения ландшафта
-
-### Структура
+### Структура Sparse Accessor
 
 ```cpp
 struct SparseAccessor {
-    size_t count;                    // Количество изменённых элементов
-    size_t indicesAccessor;          // Accessor с индексами
-    size_t valuesAccessor;           // Accessor с новыми значениями
-    ComponentType indicesComponentType;
-    // ...
+    size_t count;                     // Количество sparse значений
+    size_t indicesBufferView;         // BufferView с индексами
+    size_t valuesBufferView;          // BufferView со значениями
+    ComponentType indicesComponentType; // Тип индексов
 };
 ```
 
-### Использование
-
-Accessor tools автоматически обрабатывают sparse:
+### Пример использования
 
 ```cpp
-// Автоматическая обработка
-std::vector<glm::vec3> vertices(accessor.count);
-fastgltf::copyFromAccessor<glm::vec3>(asset, accessor, vertices.data());
-// vertices содержит итоговые данные с применёнными sparse значениями
-```
+#include <print>
+#include <expected>
+#include <fastgltf/tools.hpp>
 
-### Ручная обработка
+void processSparseAccessor(const fastgltf::Asset& asset,
+                           const fastgltf::Accessor& accessor) {
 
-```cpp
-if (accessor.sparse.has_value()) {
-    const auto& sparse = *accessor.sparse;
+    if (accessor.sparse.has_value()) {
+        const auto& sparse = *accessor.sparse;
 
-    // 1. Базовые данные
-    if (accessor.bufferViewIndex.has_value()) {
-        fastgltf::copyFromAccessor<glm::vec3>(asset, accessor, output.data());
-    } else {
-        std::fill(output.begin(), output.end(), glm::vec3(0.0f));
-    }
+        std::println("Sparse accessor: {} values", sparse.count);
 
-    // 2. Индексы
-    std::vector<uint32_t> indices(sparse.count);
-    fastgltf::copyFromAccessor<uint32_t>(
-        asset, asset.accessors[sparse.indicesAccessor], indices.data());
+        // Чтение sparse индексов
+        std::vector<uint32_t> sparseIndices(sparse.count);
+        const auto& indicesView = asset.bufferViews[sparse.indicesBufferView];
 
-    // 3. Новые значения
-    std::vector<glm::vec3> values(sparse.count);
-    fastgltf::copyFromAccessor<glm::vec3>(
-        asset, asset.accessors[sparse.valuesAccessor], values.data());
+        // Чтение sparse значений
+        std::vector<glm::vec3> sparseValues(sparse.count);
+        const auto& valuesView = asset.bufferViews[sparse.valuesBufferView];
 
-    // 4. Применение
-    for (size_t i = 0; i < sparse.count; ++i) {
-        output[indices[i]] = values[i];
+        // Accessor tools автоматически применяют sparse данные
+        std::vector<glm::vec3> finalData(accessor.count);
+        fastgltf::copyFromAccessor<glm::vec3>(asset, accessor,
+                                               finalData.data());
     }
 }
 ```
 
----
+### Оптимизации
 
-## Morph Targets (Blend Shapes)
+- **Экономия памяти**: Хранение только изменённых значений
+- **Быстрая загрузка**: Меньше данных для чтения
+- **Автоматическая обработка**: Accessor tools применяют sparse данные автоматически
 
-### Концепция
+## Morph Targets
 
-Morph targets позволяют деформировать меш путём интерполяции между базовой формой и целевыми формами.
+> **Для понимания:** Morph targets — это как пластическая хирургия для 3D моделей. У вас есть базовое лицо модели, а
+> morph targets — это набор "операций": улыбка, моргание, нахмуривание. Смешивая эти операции в разных пропорциях, вы
+> создаёте выражения лица. Каждый morph target — это дельта (изменение) относительно базовой геометрии.
 
-```
-vertex_final = vertex_base + Σ(weight[i] * target_offset[i])
-```
+Morph targets позволяют анимировать вершины меша для создания выражений лица, деформаций и других эффектов.
 
-### Структура в glTF
-
-```
-Mesh
-├── primitives[]
-│   └── Primitive
-│       ├── attributes (POSITION, NORMAL, ...)
-│       └── targets[] (MorphTarget)
-│           ├── POSITION delta
-│           ├── NORMAL delta
-│           └── TANGENT delta
-└── weights[] (веса по умолчанию)
-```
-
-### Извлечение morph targets
+### Структура Morph Target
 
 ```cpp
-std::vector<glm::vec3> extractMorphDeltas(
-    const fastgltf::Asset& asset,
-    const fastgltf::Primitive& primitive,
-    size_t targetIndex) {
-
-    std::vector<glm::vec3> deltas;
-
-    if (targetIndex >= primitive.targets.size()) {
-        return deltas;
-    }
-
-    const auto& target = primitive.targets[targetIndex];
-    auto it = target.find("POSITION");
-
-    if (it != target.end()) {
-        const auto& accessor = asset.accessors[it->second];
-        deltas.resize(accessor.count);
-        fastgltf::copyFromAccessor<glm::vec3>(asset, accessor, deltas.data());
-    }
-
-    return deltas;
-}
+// В Primitive:
+std::vector<std::unordered_map<std::string, size_t>> targets;
+// Каждый target — словарь атрибут->accessor
 ```
 
-### Применение morph targets
+### Пример использования
 
 ```cpp
-void applyMorphTargets(
-    std::vector<glm::vec3>& positions,
-    const std::vector<glm::vec3>& basePositions,
-    const std::vector<std::vector<glm::vec3>>& targetDeltas,
-    const std::vector<float>& weights) {
+#include <print>
+#include <span>
+#include <fastgltf/tools.hpp>
 
-    positions = basePositions;
+struct MorphWeights {
+    std::vector<float> weights;
+};
 
-    for (size_t t = 0; t < targetDeltas.size() && t < weights.size(); ++t) {
-        float weight = weights[t];
-        const auto& deltas = targetDeltas[t];
+void processMorphTargets(const fastgltf::Asset& asset,
+                         const fastgltf::Primitive& primitive,
+                         const MorphWeights& weights) {
 
-        for (size_t v = 0; v < positions.size() && v < deltas.size(); ++v) {
-            positions[v] += deltas[v] * weight;
+    if (!primitive.targets.empty()) {
+        std::println("Morph targets: {}", primitive.targets.size());
+
+        // Базовые позиции вершин
+        auto* posAttr = primitive.findAttribute("POSITION");
+        if (!posAttr) return;
+
+        const auto& baseAccessor = asset.accessors[posAttr->accessorIndex];
+        std::vector<glm::vec3> basePositions(baseAccessor.count);
+        fastgltf::copyFromAccessor<glm::vec3>(asset, baseAccessor,
+                                               basePositions.data());
+
+        // Применяем morph targets с весами
+        std::vector<glm::vec3> finalPositions = basePositions;
+
+        for (size_t i = 0; i < primitive.targets.size() && i < weights.weights.size(); ++i) {
+            float weight = weights.weights[i];
+            if (weight == 0.0f) continue;
+
+            const auto& target = primitive.targets[i];
+            auto it = target.find("POSITION");
+            if (it == target.end()) continue;
+
+            const auto& targetAccessor = asset.accessors[it->second];
+            std::vector<glm::vec3> deltas(targetAccessor.count);
+            fastgltf::copyFromAccessor<glm::vec3>(asset, targetAccessor,
+                                                   deltas.data());
+
+            // Смешиваем с весом
+            for (size_t j = 0; j < finalPositions.size(); ++j) {
+                finalPositions[j] += deltas[j] * weight;
+            }
         }
     }
 }
 ```
 
-### GLSL шейдер
+### Оптимизации
 
-```glsl
-layout (location = 0) in vec3 inPosition;
-layout (location = 1) in vec3 inNormal;
-
-// Morph target data
-layout (binding = 0) buffer MorphPositions { vec3 morphPositions[]; };
-layout (binding = 1) buffer MorphNormals { vec3 morphNormals[]; };
-
-uniform float morphWeights[MAX_MORPH_TARGETS];
-uniform int morphTargetCount;
-uniform int vertexCount;
-
-void main() {
-    vec3 position = inPosition;
-    vec3 normal = inNormal;
-
-    for (int t = 0; t < morphTargetCount; ++t) {
-        int offset = t * vertexCount + gl_VertexIndex;
-        position += morphPositions[offset] * morphWeights[t];
-        normal += morphNormals[offset] * morphWeights[t];
-    }
-
-    normal = normalize(normal);
-    // ...
-}
-```
-
----
+- **Интерполяция**: Плавное смешивание между targets
+- **Частичное обновление**: Обновлять только изменённые вершины
+- **GPU вычисления**: Выполнять смешивание в шейдерах
 
 ## Анимации
 
-### Структура
+> **Для понимания:** Анимации в fastgltf — это как музыкальная партитура для 3D моделей. Каждый инструмент (узел) имеет
+> свою партию (ключевые кадры), а дирижёр (анимационная система) синхронизирует их во времени. Sampler — это нотная
+> запись, Channel — это связь инструмента с партией, Animation — это вся композиция.
 
+Fastgltf загружает анимационные данные, но не выполняет интерполяцию — это задача движка.
+
+### Структура анимации
+
+```cpp
+struct Animation {
+    std::string name;
+    std::vector<AnimationSampler> samplers;
+    std::vector<AnimationChannel> channels;
+};
+
+struct AnimationSampler {
+    size_t inputAccessor;   // Время (float)
+    size_t outputAccessor;  // Значения (TRS)
+    AnimationInterpolation interpolation;
+};
+
+struct AnimationChannel {
+    size_t samplerIndex;
+    size_t nodeIndex;
+    AnimationPath path;     // translation, rotation, scale
+};
 ```
-Animation
-├── channels[]
-│   └── AnimationChannel
-│       ├── target.node
-│       ├── target.path (translation/rotation/scale/weights)
-│       └── samplerIndex
-└── samplers[]
-    └── AnimationSampler
-        ├── inputAccessor (время ключевых кадров)
-        ├── outputAccessor (значения)
-        └── interpolation (LINEAR/STEP/CUBICSPLINE)
+
+### Пример использования
+
+```cpp
+#include <print>
+#include <expected>
+#include <fastgltf/tools.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+struct AnimationState {
+    float currentTime = 0.0f;
+    std::vector<glm::vec3> translations;
+    std::vector<glm::quat> rotations;
+    std::vector<glm::vec3> scales;
+};
+
+void loadAnimation(const fastgltf::Asset& asset,
+                   const fastgltf::Animation& animation,
+                   AnimationState& state) {
+
+    std::println("Animation: {} ({} channels)",
+                 animation.name, animation.channels.size());
+
+    // Загружаем время для каждого семплера
+    std::vector<std::vector<float>> timeData;
+    for (const auto& sampler : animation.samplers) {
+        const auto& accessor = asset.accessors[sampler.inputAccessor];
+        std::vector<float> times(accessor.count);
+        fastgltf::copyFromAccessor<float>(asset, accessor, times.data());
+        timeData.push_back(std::move(times));
+    }
+
+    // Инициализируем состояние
+    state.translations.resize(asset.nodes.size(), glm::vec3(0.0f));
+    state.rotations.resize(asset.nodes.size(), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    state.scales.resize(asset.nodes.size(), glm::vec3(1.0f));
+}
 ```
 
 ### Интерполяция
 
-| Тип           | Описание              | Использование                  |
-|---------------|-----------------------|--------------------------------|
-| `LINEAR`      | Линейная интерполяция | Большинство анимаций           |
-| `STEP`        | Без интерполяции      | Visibility, discrete           |
-| `CUBICSPLINE` | Кубический сплайн     | Camera paths, плавные движения |
+- **LINEAR**: Линейная интерполяция для translation и scale
+- **STEP**: Ступенчатая (без интерполяции)
+- **CUBICSPLINE**: Кубическая сплайн-интерполяция (сложнее, но плавнее)
 
-### Обработка анимации
+## Скиннинг
 
-```cpp
-void processAnimation(
-    const fastgltf::Asset& asset,
-    const fastgltf::Animation& animation,
-    float time,
-    std::map<size_t, glm::mat4>& nodeTransforms) {
+> **Для понимания:** Скиннинг — это как марионетка для 3D моделей. Кости (joints) — это ниточки, которые тянут вершины (
+> skin). Inverse bind matrices — это начальная поза марионетки на полке, а skin matrices — это текущая поза в руках
+> кукловода. Каждая вершина привязана к нескольким костям с разными весами (насколько сильно каждая кость её тянет).
 
-    for (const auto& channel : animation.channels) {
-        if (!channel.nodeIndex.has_value()) continue;
+Скиннинг позволяет деформировать меш с помощью иерархии костей.
 
-        const auto& sampler = animation.samplers[channel.samplerIndex];
-        const auto& inputAccessor = asset.accessors[sampler.inputAccessor];
-        const auto& outputAccessor = asset.accessors[sampler.outputAccessor];
-
-        // Временные метки
-        std::vector<float> keyframeTimes;
-        fastgltf::iterateAccessor<float>(asset, inputAccessor,
-            [&](float t) { keyframeTimes.push_back(t); });
-
-        // Поиск текущего ключевого кадра
-        size_t keyframeIndex = 0;
-        for (size_t i = 0; i < keyframeTimes.size() - 1; ++i) {
-            if (time >= keyframeTimes[i] && time < keyframeTimes[i + 1]) {
-                keyframeIndex = i;
-                break;
-            }
-        }
-
-        float t0 = keyframeTimes[keyframeIndex];
-        float t1 = keyframeTimes[keyframeIndex + 1];
-        float alpha = (time - t0) / (t1 - t0);
-
-        size_t nodeIndex = *channel.nodeIndex;
-
-        switch (channel.path) {
-            case fastgltf::AnimationPath::Translation: {
-                std::vector<glm::vec3> values;
-                fastgltf::iterateAccessor<glm::vec3>(asset, outputAccessor,
-                    [&](glm::vec3 v) { values.push_back(v); });
-                glm::vec3 pos = glm::mix(values[keyframeIndex],
-                                         values[keyframeIndex + 1], alpha);
-                nodeTransforms[nodeIndex] = glm::translate(
-                    nodeTransforms[nodeIndex], pos);
-                break;
-            }
-            case fastgltf::AnimationPath::Rotation: {
-                std::vector<glm::quat> values;
-                fastgltf::iterateAccessor<glm::quat>(asset, outputAccessor,
-                    [&](glm::quat q) { values.push_back(q); });
-                glm::quat rot = glm::slerp(values[keyframeIndex],
-                                           values[keyframeIndex + 1], alpha);
-                nodeTransforms[nodeIndex] *= glm::mat4_cast(rot);
-                break;
-            }
-            case fastgltf::AnimationPath::Scale: {
-                std::vector<glm::vec3> values;
-                fastgltf::iterateAccessor<glm::vec3>(asset, outputAccessor,
-                    [&](glm::vec3 v) { values.push_back(v); });
-                glm::vec3 scale = glm::mix(values[keyframeIndex],
-                                           values[keyframeIndex + 1], alpha);
-                nodeTransforms[nodeIndex] = glm::scale(
-                    nodeTransforms[nodeIndex], scale);
-                break;
-            }
-            case fastgltf::AnimationPath::Weights: {
-                // Morph target weights
-                break;
-            }
-        }
-    }
-}
-```
-
-### CUBICSPLINE интерполяция
+### Структура скиннинга
 
 ```cpp
-glm::vec3 cubicSplineInterpolate(
-    const std::vector<glm::vec3>& data,
-    size_t keyframeIndex,
-    float alpha,
-    float deltaTime) {
-
-    // [in-tangent, value, out-tangent] для каждого кадра
-    size_t idx = keyframeIndex * 3;
-    glm::vec3 inTangent = data[idx];
-    glm::vec3 value = data[idx + 1];
-    glm::vec3 outTangent = data[idx + 2];
-
-    glm::vec3 nextValue = data[(keyframeIndex + 1) * 3 + 1];
-    glm::vec3 nextInTangent = data[(keyframeIndex + 1) * 3];
-
-    float t = alpha;
-    float t2 = t * t;
-    float t3 = t2 * t;
-
-    return (2.0f * t3 - 3.0f * t2 + 1.0f) * value +
-           (t3 - 2.0f * t2 + t) * outTangent * deltaTime +
-           (-2.0f * t3 + 3.0f * t2) * nextValue +
-           (t3 - t2) * nextInTangent * deltaTime;
-}
+struct Skin {
+    std::optional<size_t> inverseBindMatricesAccessor;
+    std::vector<size_t> joints;      // Индексы узлов-костей
+    std::optional<size_t> skeleton;  // Корневой узел
+};
 ```
 
----
-
-## Скиннинг (Skeletal Animation)
-
-### Структура
-
-```
-Skin
-├── joints[] (индексы Node)
-├── inverseBindMatrices (Accessor с матрицами)
-└── skeleton (опционально, root node)
-
-Primitive
-├── JOINTS_0 (uvec4 — индексы костей)
-└── WEIGHTS_0 (vec4 — веса)
-```
-
-### Извлечение данных скиннинга
+### Пример использования
 
 ```cpp
-struct SkeletonData {
+#include <print>
+#include <expected>
+#include <fastgltf/tools.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+struct SkinningData {
     std::vector<glm::mat4> inverseBindMatrices;
     std::vector<glm::mat4> jointMatrices;
-    std::vector<size_t> jointNodeIndices;
+    std::vector<glm::ivec4> jointIndices;
+    std::vector<glm::vec4> jointWeights;
 };
 
-SkeletonData extractSkinData(const fastgltf::Asset& asset,
-                             const fastgltf::Skin& skin) {
-    SkeletonData data;
-    size_t jointCount = skin.joints.size();
+void loadSkin(const fastgltf::Asset& asset,
+              const fastgltf::Skin& skin,
+              SkinningData& data) {
 
-    data.jointNodeIndices = skin.joints;
-    data.jointMatrices.resize(jointCount, glm::mat4(1.0f));
+    std::println("Skin with {} joints", skin.joints.size());
 
-    if (skin.inverseBindMatrices.has_value()) {
-        const auto& accessor = asset.accessors[*skin.inverseBindMatrices];
-        data.inverseBindMatrices.resize(jointCount);
-        fastgltf::copyFromAccessor<glm::mat4>(
-            asset, accessor, data.inverseBindMatrices.data());
+    // Загружаем inverse bind matrices
+    if (skin.inverseBindMatricesAccessor.has_value()) {
+        const auto& accessor = asset.accessors[*skin.inverseBindMatricesAccessor];
+        data.inverseBindMatrices.resize(accessor.count);
+        fastgltf::copyFromAccessor<glm::mat4>(asset, accessor,
+                                               data.inverseBindMatrices.data());
     } else {
-        data.inverseBindMatrices.resize(jointCount, glm::mat4(1.0f));
+        // По умолчанию — identity matrices
+        data.inverseBindMatrices.resize(skin.joints.size(), glm::mat4(1.0f));
     }
 
-    return data;
+    // Инициализируем joint matrices
+    data.jointMatrices.resize(skin.joints.size(), glm::mat4(1.0f));
+
+    // Для примитива с skin нужно загрузить JOINTS_0 и WEIGHTS_0
 }
 ```
 
-### Обновление joint matrices
+### Вычисление skin matrices
 
 ```cpp
-void updateJointMatrices(
-    SkeletonData& skeleton,
-    const std::vector<glm::mat4>& nodeGlobalTransforms) {
+void updateSkinMatrices(const fastgltf::Asset& asset,
+                        const fastgltf::Skin& skin,
+                        const std::vector<glm::mat4>& globalTransforms,
+                        SkinningData& data) {
 
-    for (size_t i = 0; i < skeleton.jointNodeIndices.size(); ++i) {
-        size_t nodeIndex = skeleton.jointNodeIndices[i];
-        skeleton.jointMatrices[i] =
-            nodeGlobalTransforms[nodeIndex] * skeleton.inverseBindMatrices[i];
+    for (size_t i = 0; i < skin.joints.size(); ++i) {
+        size_t nodeIndex = skin.joints[i];
+        const glm::mat4& globalTransform = globalTransforms[nodeIndex];
+        const glm::mat4& inverseBind = data.inverseBindMatrices[i];
+
+        // Skin matrix = GlobalTransform × InverseBind
+        data.jointMatrices[i] = globalTransform * inverseBind;
     }
 }
 ```
-
-### Веса вершин
-
-```cpp
-struct VertexSkinData {
-    glm::uvec4 jointIndices;
-    glm::vec4 weights;
-};
-
-std::vector<VertexSkinData> extractVertexSkinData(
-    const fastgltf::Asset& asset,
-    const fastgltf::Primitive& primitive) {
-
-    auto jointsIt = primitive.findAttribute("JOINTS_0");
-    auto weightsIt = primitive.findAttribute("WEIGHTS_0");
-
-    if (jointsIt == primitive.attributes.end() ||
-        weightsIt == primitive.attributes.end()) {
-        return {};
-    }
-
-    size_t vertexCount = asset.accessors[jointsIt->accessorIndex].count;
-    std::vector<VertexSkinData> skinData(vertexCount);
-
-    // Извлечение индексов костей
-    const auto& jointsAccessor = asset.accessors[jointsIt->accessorIndex];
-    if (jointsAccessor.componentType == fastgltf::ComponentType::UnsignedByte) {
-        std::vector<glm::u8vec4> temp(vertexCount);
-        fastgltf::copyFromAccessor<glm::u8vec4>(asset, jointsAccessor, temp.data());
-        for (size_t i = 0; i < vertexCount; ++i) {
-            skinData[i].jointIndices = glm::uvec4(temp[i]);
-        }
-    } else if (jointsAccessor.componentType ==
-               fastgltf::ComponentType::UnsignedShort) {
-        std::vector<glm::u16vec4> temp(vertexCount);
-        fastgltf::copyFromAccessor<glm::u16vec4>(asset, jointsAccessor, temp.data());
-        for (size_t i = 0; i < vertexCount; ++i) {
-            skinData[i].jointIndices = glm::uvec4(temp[i]);
-        }
-    }
-
-    // Извлечение весов
-    const auto& weightsAccessor = asset.accessors[weightsIt->accessorIndex];
-    fastgltf::copyFromAccessor<glm::vec4>(asset, weightsAccessor,
-        [&](glm::vec4 weight, size_t idx) {
-            skinData[idx].weights = weight;
-        });
-
-    // Нормализация
-    for (auto& sd : skinData) {
-        float sum = sd.weights.x + sd.weights.y + sd.weights.z + sd.weights.w;
-        if (sum > 0.0f) sd.weights /= sum;
-    }
-
-    return skinData;
-}
-```
-
-### GLSL шейдер
-
-```glsl
-layout (location = 0) in vec3 inPosition;
-layout (location = 1) in vec3 inNormal;
-layout (location = 2) in uvec4 inJoints;
-layout (location = 3) in vec4 inWeights;
-
-layout (binding = 0) readonly buffer JointMatrices {
-    mat4 jointMatrices[];
-};
-
-void main() {
-    mat4 skinMatrix =
-        inWeights.x * jointMatrices[inJoints.x] +
-        inWeights.y * jointMatrices[inJoints.y] +
-        inWeights.z * jointMatrices[inJoints.z] +
-        inWeights.w * jointMatrices[inJoints.w];
-
-    vec3 position = (skinMatrix * vec4(inPosition, 1.0)).xyz;
-    vec3 normal = normalize((skinMatrix * vec4(inNormal, 0.0)).xyz);
-
-    gl_Position = projection * view * model * vec4(position, 1.0);
-}
-```
-
----
 
 ## GPU-Driven Загрузка
 
-### Zero-copy через BufferAllocationCallback
+> **Для понимания:** GPU-Driven загрузка — это как прямая доставка товаров на склад без промежуточных складов. Вместо
+> того чтобы везти товары (данные) через центральный склад (CPU память), вы отправляете их прямо в региональный
+> распределительный центр (GPU память). Memory mapping — это когда вы просто открываете дверь склада и берёте товары, не
+> перетаскивая их.
+
+Оптимизации для прямой загрузки данных в GPU память.
+
+### Memory Mapping
 
 ```cpp
-struct GpuContext {
-    // Ваш GPU context (VMA, VkDevice, ...)
-};
+#include <print>
+#include <expected>
+#include <fastgltf/parser.hpp>
 
-fastgltf::Parser createGpuParser(GpuContext& ctx) {
+void loadWithMemoryMapping(const std::filesystem::path& path) {
+    // Memory mapping для больших файлов
+    auto mappedFile = fastgltf::MappedGltfFile::FromPath(path);
+    if (!mappedFile) {
+        std::println("Failed to memory map: {}",
+                     fastgltf::getErrorName(mappedFile.error()));
+        return;
+    }
+
     fastgltf::Parser parser;
-    parser.setUserPointer(&ctx);
+    auto asset = parser.loadGltf(*mappedFile, path.parent_path());
 
-    parser.setBufferAllocationCallback(
-        [](void* userPointer, size_t bufferSize,
-           fastgltf::BufferAllocateFlags flags) -> fastgltf::BufferInfo {
-
-            auto* ctx = static_cast<GpuContext*>(userPointer);
-
-            // Выделение GPU буфера с mapped памятью
-            void* mappedPtr = allocateGpuBuffer(ctx, bufferSize);
-
-            return fastgltf::BufferInfo{
-                .mappedMemory = mappedPtr,
-                .customId = /* ваш ID */
-            };
-        },
-        nullptr,  // unmap
-        nullptr   // deallocate
-    );
-
-    return parser;
-}
-```
-
-### Преимущества
-
-- Нет промежуточных CPU буферов
-- Данные записываются сразу в GPU память
-- Минимальное копирование
-
-### Требования
-
-- GPU буфер должен быть host-visible
-- Или использовать staging buffer с последующим transfer
-
----
-
-## Резюме
-
-| Тема                 | Ключевые концепции                 | Инструменты fastgltf                  |
-|----------------------|------------------------------------|---------------------------------------|
-| **Sparse Accessors** | Partial updates, экономия памяти   | `Accessor::sparse`, accessor tools    |
-| **Morph Targets**    | Blend shapes, интерполяция         | `Primitive::targets`, `Mesh::weights` |
-| **Анимации**         | Keyframes, каналы, интерполяция    | `Animation`, `AnimationSampler`       |
-| **Скиннинг**         | Кости, веса, inverse bind matrices | `Skin`, JOINTS_0, WEIGHTS_0           |
-| **GPU-Driven**       | Zero-copy, callbacks               | `setBufferAllocationCallback`         |
-
----
-
-## Решение проблем fastgltf
-
-<!-- anchor: 08_troubleshooting -->
-
-
-Диагностика и исправление типичных ошибок.
-
-## Коды ошибок
-
-| Код                          | Причина                         | Решение                                                            |
-|------------------------------|---------------------------------|--------------------------------------------------------------------|
-| `InvalidPath`                | Неверный путь к директории      | Проверьте `path.parent_path()`                                     |
-| `MissingExtensions`          | Расширения не включены в Parser | Добавьте расширения в конструктор Parser                           |
-| `UnknownRequiredExtension`   | Неподдерживаемое расширение     | Используйте `DontRequireValidAssetMember` или найдите альтернативу |
-| `InvalidJson`                | Ошибка парсинга JSON            | Проверьте файл валидатором glTF                                    |
-| `InvalidGltf`                | Невалидные данные glTF          | Проверьте структуру файла                                          |
-| `InvalidOrMissingAssetField` | Поле asset отсутствует          | Используйте `DontRequireValidAssetMember`                          |
-| `InvalidGLB`                 | Невалидный GLB                  | Проверьте заголовок и чанки                                        |
-| `MissingExternalBuffer`      | Внешний буфер не найден         | Используйте `LoadExternalBuffers`                                  |
-| `UnsupportedVersion`         | Неподдерживаемая версия glTF    | Конвертируйте в glTF 2.0                                           |
-| `InvalidURI`                 | Ошибка парсинга URI             | Проверьте формат URI                                               |
-| `InvalidFileData`            | Тип файла не определён          | Проверьте содержимое файла                                         |
-| `FailedWritingFiles`         | Ошибка при экспорте             | Проверьте права доступа                                            |
-| `FileBufferAllocationFailed` | Не удалось выделить память      | Уменьшите размер файла или используйте streaming                   |
-
-## Диагностика
-
-### Проверка файла перед загрузкой
-
-```cpp
-// Определение типа файла
-auto type = fastgltf::determineGltfFileType(data.get());
-if (type == fastgltf::GltfType::Invalid) {
-    std::cerr << "Invalid glTF file\n";
-    return;
-}
-
-// Валидация после загрузки
-auto asset = parser.loadGltf(data.get(), basePath, options);
-if (asset.error() == fastgltf::Error::None) {
-    auto validateError = fastgltf::validate(asset.get());
-    if (validateError != fastgltf::Error::None) {
-        std::cerr << "Validation: "
-                  << fastgltf::getErrorMessage(validateError) << "\n";
+    if (!asset) {
+        std::println("Failed to load: {}",
+                     fastgltf::getErrorName(asset.error()));
+        return;
     }
+
+    std::println("Loaded {} meshes with memory mapping",
+                 asset->meshes.size());
 }
 ```
 
-### Проверка расширений
+### Zero-Copy Загрузка в Vulkan
 
 ```cpp
-auto asset = parser.loadGltf(data.get(), basePath, options);
+#include <print>
+#include <expected>
+#include <fastgltf/parser.hpp>
+#include <vulkan/vulkan.h>
 
-// Проверка обязательных расширений
-for (const auto& ext : asset->extensionsRequired) {
-    std::cout << "Required: " << ext << "\n";
-
-    // Проверка, поддерживает ли ваш код это расширение
-    if (!isExtensionSupported(ext)) {
-        std::cerr << "Unsupported required extension: " << ext << "\n";
-    }
-}
-```
-
-### Проверка источников данных
-
-```cpp
-for (size_t i = 0; i < asset->buffers.size(); ++i) {
-    const auto& buffer = asset->buffers[i];
-
-    std::cout << "Buffer " << i << ": ";
-
-    if (std::holds_alternative<fastgltf::sources::ByteView>(buffer.data)) {
-        std::cout << "ByteView (GLB/base64)\n";
-    } else if (std::holds_alternative<fastgltf::sources::Array>(buffer.data)) {
-        std::cout << "Array (embedded)\n";
-    } else if (std::holds_alternative<fastgltf::sources::Vector>(buffer.data)) {
-        std::cout << "Vector (loaded external)\n";
-    } else if (std::holds_alternative<fastgltf::sources::URI>(buffer.data)) {
-        const auto& uri = std::get<fastgltf::sources::URI>(buffer.data);
-        std::cout << "URI: " << uri.uri.path() << "\n";
-        std::cout << "  Need to load manually or use LoadExternalBuffers\n";
-    } else if (std::holds_alternative<fastgltf::sources::CustomBuffer>(buffer.data)) {
-        std::cout << "CustomBuffer (GPU)\n";
-    }
-}
-```
-
-## Типичные проблемы
-
-### Проблема: MissingExtensions
-
-**Симптом:** Ошибка `MissingExtensions` при загрузке модели.
-
-**Причина:** Модель использует расширение, не включённое в Parser.
-
-**Решение:**
-
-```cpp
-// До:
-fastgltf::Parser parser;
-
-// После:
-fastgltf::Extensions extensions =
-    fastgltf::Extensions::KHR_texture_basisu
-    | fastgltf::Extensions::KHR_materials_unlit;
-
-fastgltf::Parser parser(extensions);
-```
-
-### Проблема: MissingExternalBuffer
-
-**Симптом:** Ошибка `MissingExternalBuffer` при загрузке.
-
-**Причина:** Внешние .bin файлы не загружаются автоматически.
-
-**Решение:**
-
-```cpp
-auto asset = parser.loadGltf(
-    data.get(),
-    basePath,
-    fastgltf::Options::LoadExternalBuffers  // Добавьте этот флаг
-);
-```
-
-### Проблема: Данные accessor недоступны
-
-**Симптом:** `iterateAccessor` или `copyFromAccessor` не работают.
-
-**Причина:** Буфер имеет тип `sources::URI` без загрузки.
-
-**Решение:**
-
-```cpp
-// Вариант 1: Использовать LoadExternalBuffers
-auto asset = parser.loadGltf(data.get(), basePath,
-    fastgltf::Options::LoadExternalBuffers);
-
-// Вариант 2: Кастомный BufferDataAdapter
-auto customAdapter = [&](const Asset& asset, size_t bufferViewIdx) {
-    // Загрузка из вашего источника
-    return yourDataSpan;
+struct VulkanBuffer {
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    void* mapped;
 };
 
-fastgltf::iterateAccessor<glm::vec3>(asset, accessor,
-    [&](glm::vec3 pos) { /* ... */ }, customAdapter);
-```
+void loadDirectToVulkan(const fastgltf::Asset& asset,
+                        VulkanBuffer& stagingBuffer) {
 
-### Проблема: Неверный тип в accessor tools
+    // Callback для прямой записи в Vulkan buffer
+    auto mapCallback = [](std::uint64_t bufferSize, void* userPointer)
+        -> fastgltf::BufferInfo {
 
-**Симптом:** Assert или crash при использовании `iterateAccessor`.
+        VulkanBuffer* buffer = static_cast<VulkanBuffer*>(userPointer);
 
-**Причина:** Тип в шаблоне не соответствует `AccessorType` accessor.
+        // Map Vulkan memory
+        vkMapMemory(device, buffer->memory, 0, bufferSize, 0, &buffer->mapped);
 
-**Решение:**
+        return fastgltf::BufferInfo{
+            .mappedMemory = buffer->mapped,
+            .customId = reinterpret_cast<fastgltf::CustomBufferId>(buffer)
+        };
+    };
 
-```cpp
-// Проверка типа accessor
-if (accessor.type == fastgltf::AccessorType::Vec3) {
-    fastgltf::iterateAccessor<glm::vec3>(asset, accessor, ...);  // OK
+    auto unmapCallback = [](fastgltf::BufferInfo* bufferInfo, void* userPointer) {
+        VulkanBuffer* buffer = reinterpret_cast<VulkanBuffer*>(bufferInfo->customId);
+        vkUnmapMemory(device, buffer->memory);
+    };
+
+    // Настраиваем parser с callbacks
+    fastgltf::Parser parser;
+    parser.setBufferAllocationCallback(mapCallback, unmapCallback);
+    parser.setUserPointer(&stagingBuffer);
 }
+```
 
-// Не делайте так:
-if (accessor.type == fastgltf::AccessorType::Vec3) {
-    fastgltf::iterateAccessor<glm::vec2>(asset, accessor, ...);  // Assert!
+### Оптимизации
+
+- **Memory mapping**: Избегаем копирования в CPU память
+- **Direct GPU upload**: Прямая запись в GPU буферы
+- **Async загрузка**: Перекрываем загрузку с вычислениями
+
+## Решение проблем
+
+> **Для понимания:** Решение проблем fastgltf — это как диагностика автомобиля: нужно знать коды ошибок (Error enum) и
+> как их исправить (рекомендации). У вас есть приборная панель (getErrorName), мануал (getErrorMessage) и набор
+> инструментов (решения). Каждая ошибка — это конкретная неисправность, которую можно починить.
+
+Распространённые проблемы и их решения.
+
+### Ошибка: InvalidPath
+
+```cpp
+auto asset = parser.loadGltf(data.get(), "invalid/path");
+if (!asset) {
+    if (asset.error() == fastgltf::Error::InvalidPath) {
+        std::println("Исправьте: Укажите правильный путь к директории glTF");
+        std::println("Решение: Используйте std::filesystem::absolute()");
+    }
 }
 ```
 
-### Проблема: Большой файл не загружается
-
-**Симптом:** `FileBufferAllocationFailed` или out of memory.
-
-**Причина:** Файл слишком большой для загрузки в RAM.
-
-**Решение:**
+### Ошибка: MissingExternalBuffer
 
 ```cpp
-// Используйте memory mapping для больших файлов
-auto data = fastgltf::MappedGltfFile::FromPath("large_model.glb");
-
-// Или отключите кастомный memory pool
-// В CMake:
-// set(FASTGLTF_DISABLE_CUSTOM_MEMORY_POOL ON CACHE BOOL "" FORCE)
-```
-
-### Проблема: Матрицы узлов не разложены
-
-**Симптом:** `node.transform` всегда содержит матрицу, а не TRS.
-
-**Причина:** Не указан флаг `DecomposeNodeMatrices`.
-
-**Решение:**
-
-```cpp
+// Включите LoadExternalBuffers
 auto asset = parser.loadGltf(data.get(), basePath,
-    fastgltf::Options::DecomposeNodeMatrices);
+                             fastgltf::Options::LoadExternalBuffers);
+```
 
-// Теперь node.transform может быть TRS
-if (std::holds_alternative<fastgltf::TRS>(node.transform)) {
-    auto& trs = std::get<fastgltf::TRS>(node.transform);
-    // translation, rotation, scale
+### Ошибка: InvalidGLB
+
+```cpp
+// Проверьте, что файл действительно GLB
+auto type = fastgltf::determineGltfFileType(data);
+if (type != fastgltf::GltfType::GLB) {
+    std::println("Файл не является GLB контейнером");
 }
 ```
 
-## Валидация glTF файлов
-
-### Онлайн валидаторы
-
-- [glTF Validator](https://github.khronos.org/glTF-Validator/) — официальный валидатор Khronos
-- [glTF Report](https://github.com/AnalyticalGraphicsInc/gltf-report) — детальный отчёт
-
-### Программная валидация
+### Ошибка: InvalidJson
 
 ```cpp
-auto asset = parser.loadGltf(data.get(), basePath, options);
-if (asset.error() != fastgltf::Error::None) {
-    std::cerr << "Load error: "
-              << fastgltf::getErrorMessage(asset.error()) << "\n";
-    return;
-}
-
-auto validateError = fastgltf::validate(asset.get());
-if (validateError != fastgltf::Error::None) {
-    std::cerr << "Validation error: "
-              << fastgltf::getErrorMessage(validateError) << "\n";
-    // Файл не соответствует спецификации glTF 2.0
+// Проверьте целостность JSON
+if (asset.error() == fastgltf::Error::InvalidJson) {
+    std::println("JSON повреждён или содержит синтаксические ошибки");
+    std::println("Решение: Проверьте файл с помощью JSON валидатора");
 }
 ```
 
-## Отладка
-
-### Вывод структуры модели
+### Ошибка: MissingExtensions
 
 ```cpp
-void debugAsset(const fastgltf::Asset& asset) {
-    std::cout << "=== Asset Debug ===\n";
-    std::cout << "Meshes: " << asset.meshes.size() << "\n";
-    std::cout << "Nodes: " << asset.nodes.size() << "\n";
-    std::cout << "Scenes: " << asset.scenes.size() << "\n";
-    std::cout << "Materials: " << asset.materials.size() << "\n";
-    std::cout << "Buffers: " << asset.buffers.size() << "\n";
-    std::cout << "BufferViews: " << asset.bufferViews.size() << "\n";
-    std::cout << "Accessors: " << asset.accessors.size() << "\n";
-    std::cout << "Animations: " << asset.animations.size() << "\n";
-    std::cout << "Skins: " << asset.skins.size() << "\n";
-
-    if (asset.defaultScene.has_value()) {
-        std::cout << "Default scene: " << *asset.defaultScene << "\n";
-    }
-
-    for (const auto& ext : asset.extensionsUsed) {
-        std::cout << "Extension used: " << ext << "\n";
-    }
-}
+// Включите необходимые extensions в parser
+fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_basisu |
+                        fastgltf::Extensions::EXT_meshopt_compression);
 ```
 
-### Вывод примитива
+### Полный список ошибок
+
+| Ошибка                  | Причина                    | Решение                                   |
+|-------------------------|----------------------------|-------------------------------------------|
+| `InvalidPath`           | Неверный путь к директории | Используйте `std::filesystem::absolute()` |
+| `MissingExtensions`     | Требуются extensions       | Включите extensions в конструкторе Parser |
+| `InvalidJson`           | Повреждённый JSON          | Проверьте файл валидатором                |
+| `InvalidGLB`            | Не GLB файл                | Используйте `determineGltfFileType()`     |
+| `MissingExternalBuffer` | Внешний буфер не найден    | Включите `Options::LoadExternalBuffers`   |
+| `InvalidURI`            | Некорректный URI           | Проверьте пути к файлам                   |
+
+### Отладка
 
 ```cpp
-void debugPrimitive(const fastgltf::Primitive& primitive) {
-    std::cout << "Primitive:\n";
-    std::cout << "  Type: " << static_cast<int>(primitive.type) << "\n";
-    std::cout << "  Attributes:\n";
+#include <print>
+#include <expected>
+#include <fastgltf/parser.hpp>
 
-    for (const auto& attr : primitive.attributes) {
-        std::cout << "    " << attr.name << " -> accessor " << attr.accessorIndex << "\n";
+void debugLoad(const std::filesystem::path& path) {
+    fastgltf::Parser parser;
+    auto data = fastgltf::GltfDataBuffer::FromPath(path);
+
+    if (!data) {
+        std::println("Failed to load file: {}",
+                     fastgltf::getErrorName(data.error()));
+        return;
     }
 
-    if (primitive.indicesAccessor.has_value()) {
-        std::cout << "  Indices: accessor " << *primitive.indicesAccessor << "\n";
-    }
+    auto asset = parser.loadGltf(data.get(), path.parent_path());
 
-    if (primitive.materialIndex.has_value()) {
-        std::cout << "  Material: " << *primitive.materialIndex << "\n";
-    }
+    if (!asset) {
+        auto error = asset.error();
+        std::println("Failed to parse glTF: {}",
+                     fastgltf::getErrorName(error));
+        std::println("Message: {}",
+                     fastgltf::getErrorMessage(error));
 
-    std::cout << "  Morph targets: " << primitive.targets.size() << "\n";
-}
-```
-
-## Часто задаваемые вопросы
-
-**Q: Почему fastgltf не загружает изображения?**
-
-A: fastgltf не включает декодер изображений. Используйте stb_image или аналоги:
-
-```cpp
-for (const auto& image : asset->images) {
-    if (std::holds_alternative<fastgltf::sources::URI>(image.data)) {
-        auto& uri = std::get<fastgltf::sources::URI>(image.data);
-        // Загрузка через stb_image
-        int w, h, channels;
-        auto* pixels = stbi_load(uri.uri.path().c_str(), &w, &h, &channels, 4);
+        // Дополнительная диагностика
+        if (error == fastgltf::Error::InvalidGltf) {
+            std::println("Проверьте структуру glTF файла");
+        }
+    } else {
+        std::println("Success! Loaded {} meshes",
+                     asset->meshes.size());
     }
 }
 ```
 
-**Q: Как загрузить Draco-сжатую модель?**
+## Заключение
 
-A: fastgltf не поддерживает Draco. Используйте tinygltf или конвертируйте модель.
+Fastgltf предоставляет мощный набор инструментов для работы с glTF 2.0, оптимизированный для производительности и
+современных C++ стандартов. Ключевые преимущества:
 
-**Q: Как экспортировать glTF?**
+1. **Производительность**: SIMD-оптимизации, memory mapping, async загрузка
+2. **Современный C++**: C++20/23/26, `std::expected`, `std::span`, `std::print`
+3. **Гибкость**: Поддержка extensions, кастомные адаптеры, callbacks
+4. **Data-Oriented Design**: Плоские массивы, SoA, эффективная работа с памятью
 
-A: Используйте `Exporter` или `FileExporter`:
+### Рекомендации для ProjectV
 
-```cpp
-fastgltf::FileExporter exporter;
-auto error = exporter.writeGltfJson(asset, "output.gltf",
-                                     fastgltf::ExportOptions::PrettyPrintJson);
-```
+- Используйте `Category::OnlyRenderable` для статических моделей
+- Применяйте memory mapping для файлов >100MB
+- Реализуйте zero-copy загрузку через Vulkan Memory Allocator
+- Преобразуйте иерархические данные в SoA массивы для ECS
+- Используйте `std::expected` для обработки ошибок
 
-**Q: Почему анимации не загружаются?**
+### Дальнейшее изучение
 
-A: Проверьте Category:
+- Исходный код: `external/fastgltf/include/fastgltf/`
+- Примеры: `external/fastgltf/examples/`
+- Документация: `docs/libraries/fastgltf/01_reference.md`
+- Интеграция: `docs/libraries/fastgltf/02_integration.md`
 
-```cpp
-// Неправильно:
-auto asset = parser.loadGltf(data.get(), basePath, options,
-                              fastgltf::Category::OnlyRenderable);  // Нет анимаций!
-
-// Правильно:
-auto asset = parser.loadGltf(data.get(), basePath, options,
-                              fastgltf::Category::All);  // Или OnlyAnimations
+Fastgltf — это не просто библиотека загрузки glTF, это фундамент для высокопроизводительного рендеринга в ProjectV.
+Правильное использование его возможностей позволит достичь максимальной производительности в GPU-driven воксельном
+движке.
