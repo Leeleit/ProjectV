@@ -268,6 +268,7 @@ quat → повороты
 Вычисления:
 vertex → model → view → projection → NDC
 ```
+
 ---
 
 ## Глоссарий GLM

@@ -25,9 +25,9 @@ target_link_libraries(ProjectV PRIVATE glaze::glaze)
 include(FetchContent)
 
 FetchContent_Declare(
-    glaze
-    GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-    GIT_TAG v2.0.0  # Фиксируем версию
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG v2.0.0  # Фиксируем версию
 )
 
 FetchContent_MakeAvailable(glaze)

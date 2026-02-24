@@ -1,6 +1,5 @@
 # Импорт .VOX файлов (MagicaVoxel) через fastgltf
 
-
 Руководство по импорту воксельных моделей из MagicaVoxel (.VOX формат) в ProjectV с использованием fastgltf для
 конвертации в glTF.
 

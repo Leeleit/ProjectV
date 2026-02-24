@@ -66,7 +66,6 @@ ImGui разделён на ядро и два типа backend'ов:
 
 <!-- anchor: 02_concepts -->
 
-
 ## Immediate mode vs Retained mode
 
 | Парадигма             | Как создаётся UI                                            | Где хранится состояние                          |
@@ -322,6 +321,7 @@ flowchart TD
     PollEvents --> NewFrameVk --> NewFrameSDL --> NewFrame --> UserUI --> Render --> RenderDrawData
     Frame --> ShutdownVk --> ShutdownSDL --> DestroyContext
 ```
+
 ---
 
 ## 07_glossary
@@ -329,7 +329,6 @@ flowchart TD
 <!-- anchor: 07_glossary -->
 
 ﻿# Глоссарий Dear ImGui
-
 
 Словарь терминов ImGui.
 

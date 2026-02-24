@@ -1,16 +1,69 @@
-﻿## Обзор volk
+﻿# Volk
 
-<!-- anchor: 00_overview -->
-
-
-Мета-загрузчик для Vulkan API.
+**Volk — это мост между вашим кодом и драйвером GPU.** Мета-загрузчик, который превращает статическую зависимость от
+Vulkan loader в динамический выбор во время выполнения.
 
 ---
 
 ## Назначение
 
-volk — библиотека для динамической загрузки функций Vulkan без статической или динамической линковки с системным Vulkan
+Volk — библиотека для динамической загрузки функций Vulkan без статической или динамической линковки с системным Vulkan
 loader (`vulkan-1.dll` / `libvulkan.so`).
+
+### Проблема традиционного подхода
+
+При стандартной линковке с Vulkan loader:
+
+1. Приложение зависит от `vulkan-1.dll` / `libvulkan.so` при запуске
+2. Каждый вызов функции проходит через dispatch цепочку loader'а
+3. Dispatch overhead может достигать 7% для device-intensive workloads
+
+### Решение volk
+
+Volk загружает Vulkan loader динамически во время выполнения и предоставляет прямые указатели на функции:
+
+1. Приложение запускается без установленного Vulkan (проверка в runtime)
+2. После `volkLoadDevice()` вызовы идут напрямую в драйвер
+3. Dispatch overhead устранён
+
+---
+
+## Архитектура
+
+### Vulkan Loader
+
+Vulkan использует динамическую загрузку функций через loader — системную библиотеку `vulkan-1.dll` (Windows) или
+`libvulkan.so` (Linux).
+
+```
+Приложение
+    ↓
+vulkan-1.dll (loader) — диспетчеризация
+    ↓
+Validation Layers — проверки (если включены)
+    ↓
+Драйвер GPU — выполнение
+```
+
+### Мета-загрузчик volk
+
+Volk загружает Vulkan loader динамически во время выполнения и предоставляет прямые указатели на функции.
+
+```
+volkInitialize()
+    ↓
+Загрузка vulkan-1.dll/libvulkan.so
+    ↓
+Получение vkGetInstanceProcAddr
+    ↓
+volkLoadInstance(instance)
+    ↓
+Загрузка instance-функций
+    ↓
+volkLoadDevice(device)
+    ↓
+Прямые указатели на драйвер
+```
 
 ---
 
@@ -38,7 +91,7 @@ loader (`vulkan-1.dll` / `libvulkan.so`).
 
 ## Совместимость
 
-volk совместим со всеми версиями Vulkan от 1.0 до 1.4 и автоматически загружает функции расширений через
+Volk совместим со всеми версиями Vulkan от 1.0 до 1.4 и автоматически загружает функции расширений через
 `vkGetInstanceProcAddr`.
 
 ### Поддерживаемые платформы
@@ -51,163 +104,213 @@ volk совместим со всеми версиями Vulkan от 1.0 до 1.
 
 ---
 
-## Зачем нужен volk
+## Entrypoints
 
-### Проблема традиционного подхода
-
-При стандартной линковке с Vulkan loader:
-
-1. Приложение зависит от `vulkan-1.dll` / `libvulkan.so` при запуске
-2. Каждый вызов функции проходит через dispatch цепочку loader'а
-3. Dispatch overhead может достигать 7% для device-intensive workloads
-
-### Решение volk
-
-volk загружает Vulkan loader динамически и предоставляет прямые указатели на функции драйвера:
-
-1. Приложение запускается без установленного Vulkan (проверка в runtime)
-2. После `volkLoadDevice()` вызовы идут напрямую в драйвер
-3. Dispatch overhead устранён
-
----
-
-## Исходный код
-
-Репозиторий: [github.com/zeux/volk](https://github.com/zeux/volk)
-
----
-
-## Установка volk
-
-<!-- anchor: 02_installation -->
-
-
-Сборка и подключение к проекту.
-
----
-
-## CMake targets
-
-volk предоставляет два CMake target'а:
-
-| Target         | Описание               |
-|----------------|------------------------|
-| `volk`         | Статическая библиотека |
-| `volk_headers` | Header-only режим      |
-
----
-
-## Статическая библиотека
-
-### CMakeLists.txt
-
-```cmake
-add_subdirectory(external/volk)
-target_link_libraries(YourApp PRIVATE volk)
-```
-
-### Платформенные defines
-
-Передайте через `VOLK_STATIC_DEFINES`:
-
-```cmake
-if (WIN32)
-    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WIN32_KHR)
-elseif(UNIX AND NOT APPLE)
-    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_XLIB_KHR)
-    # Или для Wayland: VK_USE_PLATFORM_WAYLAND_KHR
-elseif(APPLE)
-    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_MACOS_MVK)
-endif()
-
-add_subdirectory(external/volk)
-target_link_libraries(YourApp PRIVATE volk)
-```
-
----
-
-## Header-only режим
-
-### CMakeLists.txt
-
-```cmake
-add_subdirectory(external/volk)
-target_link_libraries(YourApp PRIVATE volk_headers)
-```
-
-### Код
-
-В одном .cpp файле:
+Vulkan функции загружаются по имени через `vkGetInstanceProcAddr`:
 
 ```cpp
-#define VK_NO_PROTOTYPES
-#define VOLK_IMPLEMENTATION
-#include "volk.h"
+PFN_vkCreateInstance vkCreateInstance =
+    (PFN_vkCreateInstance)vkGetInstanceProcAddr(NULL, "vkCreateInstance");
 ```
 
-В остальных файлах:
+Volk автоматизирует этот процесс для всех функций.
 
-```cpp
-#define VK_NO_PROTOTYPES
-#include "volk.h"
-```
+### Типы entrypoints
 
-**Важно:** Файл `volk.c` не компилируется в этом режиме. Он должен находиться в той же директории, что и `volk.h`.
+| Тип      | Загрузка                               | Примеры                                                      |
+|----------|----------------------------------------|--------------------------------------------------------------|
+| Global   | `vkGetInstanceProcAddr(NULL, ...)`     | `vkCreateInstance`, `vkEnumerateInstanceExtensionProperties` |
+| Instance | `vkGetInstanceProcAddr(instance, ...)` | `vkCreateDevice`, `vkDestroyInstance`                        |
+| Device   | `vkGetDeviceProcAddr(device, ...)`     | `vkCmdDraw`, `vkQueueSubmit`                                 |
 
 ---
 
-## Установка и find_package
+## Dispatch цепочка
 
-### Сборка с установкой
+### Без volk
 
-```bash
-cmake -DVOLK_INSTALL=ON ..
-cmake --build . --target install
+```cpp
+// Глобальная функция через loader
+vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+
+// Путь: Приложение → Loader → Layers → Драйвер
 ```
 
-### Использование в проекте
+### С volk после volkLoadDevice
 
-```cmake
-find_package(volk CONFIG REQUIRED)
-target_link_libraries(YourApp PRIVATE volk::volk)
+```cpp
+// Указатель на функцию драйвера
+vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+
+// Путь: Приложение → Драйвер (напрямую)
 ```
 
-Импортированные targets:
+---
 
-- `volk::volk` — статическая библиотека
-- `volk::volk_headers` — header-only
+## Глобальные указатели
+
+Volk объявляет все Vulkan функции как extern-указатели:
+
+```c
+// В volk.h
+extern PFN_vkCreateInstance vkCreateInstance;
+extern PFN_vkCmdDraw vkCmdDraw;
+extern PFN_vkQueueSubmit vkQueueSubmit;
+// ... и так далее для всех функций
+```
+
+### Заполнение указателей
+
+```cpp
+// После volkInitialize()
+vkCreateInstance != nullptr  // Глобальные функции
+
+// После volkLoadInstance(instance)
+vkCreateDevice != nullptr    // Instance функции
+vkDestroyInstance != nullptr
+
+// После volkLoadDevice(device)
+vkCmdDraw != nullptr         // Device функции (прямые)
+vkQueueSubmit != nullptr
+```
+
+---
+
+## VolkDeviceTable
+
+Структура для хранения указателей device-функций. Используется при работе с несколькими `VkDevice`.
+
+### Объявление
+
+```cpp
+struct VolkDeviceTable {
+    PFN_vkCmdDraw vkCmdDraw;
+    PFN_vkQueueSubmit vkQueueSubmit;
+    PFN_vkCreateBuffer vkCreateBuffer;
+    // ... все device-функции
+};
+```
+
+### Использование
+
+```cpp
+VolkDeviceTable table;
+volkLoadDeviceTable(&table, device);
+
+// Вызов через таблицу
+table.vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+```
 
 ---
 
 ## VK_NO_PROTOTYPES
 
-Обязательный макрос для работы volk.
+Макрос Vulkan, запрещающий объявления прототипов функций в `vulkan.h`.
 
-### Проблема без макроса
-
-При включении `vulkan.h` без `VK_NO_PROTOTYPES`:
+### Без макроса
 
 ```cpp
-#include <vulkan/vulkan.h>  // Объявляет vkCreateInstance как extern-функцию
-// Линкер ищет реализацию в vulkan-1.dll
+// vulkan.h объявляет:
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(
+    const VkInstanceCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkInstance* pInstance);
+
+// Линкер ожидает реализацию в vulkan-1.dll
 ```
 
-volk объявляет функции как указатели. Без макроса возникают конфликты символов.
-
-### Решение
-
-Определите макрос до включения любого заголовка, который тянет `vulkan.h`:
+### С макросом
 
 ```cpp
 #define VK_NO_PROTOTYPES
-#include "volk.h"  // volk сам включит vulkan.h без прототипов
+#include <vulkan/vulkan.h>
+
+// vulkan.h объявляет только типы:
+typedef VkResult (VKAPI_PTR *PFN_vkCreateInstance)(
+    const VkInstanceCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkInstance* pInstance);
+
+// Нет прототипов — линкер не ищет реализации
 ```
 
-### CMake
+Volk заполняет указатели во время выполнения, поэтому прототипы не нужны.
 
-```cmake
-target_compile_definitions(YourApp PRIVATE VK_NO_PROTOTYPES)
+---
+
+## Validation Layers
+
+Volk полностью совместим с validation layers.
+
+### Как это работает
+
+```cpp
+const char* layers[] = {"VK_LAYER_KHRONOS_validation"};
+createInfo.ppEnabledLayerNames = layers;
+createInfo.enabledLayerCount = 1;
+
+vkCreateInstance(&createInfo, nullptr, &instance);
+volkLoadInstance(instance);
 ```
+
+### Dispatch с layers
+
+```
+Приложение
+    ↓
+volk указатель
+    ↓
+Validation Layer (перехват)
+    ↓
+Драйвер
+```
+
+---
+
+## Выбор стратегии
+
+### Одно устройство
+
+```cpp
+volkInitialize();
+vkCreateInstance(...);
+volkLoadInstance(instance);
+vkCreateDevice(...);
+volkLoadDevice(device);  // Глобальные указатели → драйвер
+```
+
+### Несколько устройств
+
+```cpp
+volkInitialize();
+vkCreateInstance(...);
+volkLoadInstanceOnly(instance);  // Только instance-функции
+
+for (auto& device : devices) {
+    vkCreateDevice(...);
+    volkLoadDeviceTable(&device.table, device.handle);
+}
+
+// Вызовы через таблицы
+devices[0].table.vkCmdDraw(...);
+devices[1].table.vkCmdDraw(...);
+```
+
+---
+
+## Глоссарий
+
+| Термин                 | Определение                                                     |
+|------------------------|-----------------------------------------------------------------|
+| **Volk**               | Мета-загрузчик для Vulkan API.                                  |
+| **Vulkan Loader**      | Системная библиотека `vulkan-1.dll` / `libvulkan.so`.           |
+| **Dispatch overhead**  | Накладные расходы на диспетчеризацию вызовов через loader.      |
+| **Entrypoint**         | Точка входа Vulkan функции.                                     |
+| **VK_NO_PROTOTYPES**   | Макрос, запрещающий объявления прототипов функций в `vulkan.h`. |
+| **VolkDeviceTable**    | Структура для хранения указателей device-функций.               |
+| **Global functions**   | Функции, доступные до создания instance (`vkCreateInstance`).   |
+| **Instance functions** | Функции, требующие instance (`vkCreateDevice`).                 |
+| **Device functions**   | Функции, требующие device (`vkCmdDraw`).                        |
 
 ---
 
@@ -222,70 +325,65 @@ target_compile_definitions(YourApp PRIVATE VK_NO_PROTOTYPES)
 
 ---
 
-## VOLK_NAMESPACE
+## Функции
 
-Помещает все символы volk в namespace `volk::`. Требует компиляции volk.c как C++.
-
-### CMake
-
-```cmake
-set(VOLK_NAMESPACE ON)
-add_subdirectory(external/volk)
-target_link_libraries(YourApp PRIVATE volk)
-```
-
-### Код
-
-```cpp
-#define VK_NO_PROTOTYPES
-#include "volk.h"
-
-volk::volkInitialize();
-volk::volkLoadInstance(instance);
-volk::volkLoadDevice(device);
-```
-
-Используется для избежания конфликтов при смешивании volk с прямым использованием Vulkan.
+| Термин                      | Определение                                             |
+|-----------------------------|---------------------------------------------------------|
+| **volkInitialize**          | Загружает Vulkan loader и глобальные функции.           |
+| **volkLoadInstance**        | Загружает instance-функции.                             |
+| **volkLoadDevice**          | Загружает device-функции (прямые указатели на драйвер). |
+| **volkLoadInstanceOnly**    | Загружает только instance-функции.                      |
+| **volkLoadDeviceTable**     | Загружает device-функции в таблицу.                     |
+| **volkGetInstanceVersion**  | Возвращает версию Vulkan loader.                        |
+| **volkGetLoadedInstance**   | Возвращает текущий загруженный instance.                |
+| **volkGetLoadedDevice**     | Возвращает текущий загруженный device.                  |
+| **volkGetInstanceProcAddr** | Возвращает указатель на `vkGetInstanceProcAddr`.        |
+| **volkGetDeviceProcAddr**   | Возвращает указатель на `vkGetDeviceProcAddr`.          |
 
 ---
 
-## VOLK_NO_DEVICE_PROTOTYPES
+## Производительность
 
-Скрывает прототипы device-функций. Используется при table-based интерфейсе.
+### Dispatch Overhead
 
-```cpp
-#define VK_NO_PROTOTYPES
-#define VOLK_NO_DEVICE_PROTOTYPES
-#include "volk.h"
+При каждом вызове Vulkan функции через loader:
 
-// Device-функции недоступны напрямую
-// vkCmdDraw(...); // Ошибка компиляции
-
-// Нужно использовать таблицы
-VolkDeviceTable table;
-volkLoadDeviceTable(&table, device);
-table.vkCmdDraw(...);
 ```
+Приложение
+    ↓
+vulkan-1.dll (loader) — диспетчеризация
+    ↓
+Validation Layers — проверки (если включены)
+    ↓
+Драйвер GPU — выполнение
+```
+
+Каждый переход добавляет накладные расходы.
+
+### Величина overhead
+
+| Тип нагрузки                                | Overhead через loader  |
+|---------------------------------------------|------------------------|
+| Device-intensive (vkCmdDraw, vkCmdDispatch) | До 7%                  |
+| Instance-intensive (vkCreateDevice)         | Минимальный            |
+| Смешанная                                   | Зависит от соотношения |
+
+### Когда использовать volkLoadDevice
+
+**Обязательно:**
+
+- Частые draw/dispatch вызовы (более 100 на кадр)
+- Compute-intensive приложения
+- Real-time рендеринг
+
+**Не критично:**
+
+- Редкие Vulkan вызовы
+- UI-приложения
+- Tools и утилиты
 
 ---
 
-## Проверка установки
+## Исходный код
 
-```cpp
-#include "volk.h"
-#include <stdio.h>
-
-int main() {
-    if (volkInitialize() != VK_SUCCESS) {
-        printf("Vulkan loader not found\n");
-        return 1;
-    }
-
-    uint32_t version = volkGetInstanceVersion();
-    printf("Vulkan %u.%u.%u loaded\n",
-           VK_VERSION_MAJOR(version),
-           VK_VERSION_MINOR(version),
-           VK_VERSION_PATCH(version));
-
-    return 0;
-}
+Репозиторий: [github.com/zeux/volk](https://github.com/zeux/volk)

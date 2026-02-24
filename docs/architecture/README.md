@@ -63,15 +63,15 @@
 |---|---------------------------------------------------------|---------------------------------------------|
 | 1 | [Vulkan Spec](practice/02_render/01_vulkan_spec.md)     | Vulkan 1.4, dynamic rendering, mesh shaders |
 | 2 | [GPU Staging](practice/02_render/02_gpu_staging.md)     | Staging buffers, transfer contracts         |
-| 3 | [GPU Debugging](practice/02_render/03_gpu_debugging.md) | RenderDoc, NVIDIA Nsight                  |
+| 3 | [GPU Debugging](practice/02_render/03_gpu_debugging.md) | RenderDoc, NVIDIA Nsight                    |
 | 4 | [Render Graph](practice/02_render/04_render_graph.md)   | Frame graph, pass management                |
 
 ### 🧊 03_voxel/ — Воксельная система
 
 | # | Документ                                                           | Описание                                |
 |---|--------------------------------------------------------------------|-----------------------------------------|
-| 1 | [SVO Architecture](practice/03_voxel/01_svo_architecture.md)       | SVO + Chunks hybrid, std::mdspan    |
-| 2 | [Voxel Pipeline](practice/03_voxel/02_voxel_pipeline.md)           | GPU-driven рендеринг вокселей       |
+| 1 | [SVO Architecture](practice/03_voxel/01_svo_architecture.md)       | SVO + Chunks hybrid, std::mdspan        |
+| 2 | [Voxel Pipeline](practice/03_voxel/02_voxel_pipeline.md)           | GPU-driven рендеринг вокселей           |
 | 3 | [Voxel Sync Pipeline](practice/03_voxel/03_voxel_sync_pipeline.md) | Синхронизация CPU/GPU воксельных данных |
 | 4 | [SVO-CA Bridge](practice/03_voxel/04_svo_ca_bridge.md)             | Memory bridge для Cellular Automata     |
 
@@ -81,11 +81,11 @@
 |---|-------------------------------------------------------------------------------------|--------------------------------------|
 | 1 | [Jolt-Vulkan Bridge](practice/04_physics_ca/01_jolt_vulkan_bridge.md)               | Синхронизация физики и рендеринга    |
 | 2 | [Physics-Voxel Integration](practice/04_physics_ca/02_physics_voxel_integration.md) | Интеграция физики с вокселями        |
-| 3 | [GPU Cellular Automata](practice/04_physics_ca/03_gpu_cellular_automata.md)         | CA для жидкостей/сыпучих/огня    |
+| 3 | [GPU Cellular Automata](practice/04_physics_ca/03_gpu_cellular_automata.md)         | CA для жидкостей/сыпучих/огня        |
 | 4 | [CPU-GPU Physics Sync](practice/04_physics_ca/04_cpu_gpu_physics_sync.md)           | Синхронизация физики между CPU и GPU |
 | 5 | [Destruction Physics](practice/04_physics_ca/05_destruction_physics.md)             | Разрушение воксельных объектов       |
 | 6 | [CA-Physics Bridge](practice/04_physics_ca/05_ca_physics_bridge.md)                 | Мост между CA и физикой              |
-| 7 | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты   |
+| 7 | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты      |
 
 ### 🎮 05_ecs_gameplay/ — ECS и Gameplay
 
@@ -97,8 +97,8 @@
 | 4 | [Input System](practice/05_ecs_gameplay/04_input_system.md)               | Стек слоёв ввода: ImGui, debug-консоль |
 | 5 | [Input Actions](practice/05_ecs_gameplay/05_input_actions.md)             | Action Mapping система                 |
 | 6 | [Game UI](practice/05_ecs_gameplay/06_game_ui.md)                         | UI Strategy (ImGui/RmlUi)              |
-| 7 | [Network-Ready ECS](practice/05_ecs_gameplay/07_network_ready_ecs.md)     | Репликация, Rollback/Prediction     |
-| 8 | [Non-Euclidean Geometry](practice/05_ecs_gameplay/08_non_euclidean.md)    | SCP-style неевклидова геометрия     |
+| 7 | [Network-Ready ECS](practice/05_ecs_gameplay/07_network_ready_ecs.md)     | Репликация, Rollback/Prediction        |
+| 8 | [Non-Euclidean Geometry](practice/05_ecs_gameplay/08_non_euclidean.md)    | SCP-style неевклидова геометрия        |
 
 ### 📁 06_assets/ — Ресурсы и материалы
 
@@ -111,7 +111,7 @@
 | 5 | [Hot-Reload](practice/06_assets/05_hot_reload.md)                   | Быстрая итерация без перезапуска             |
 | 6 | [Asset Management](practice/06_assets/06_asset_management.md)       | Управление ассетами                          |
 | 7 | [Material System](practice/06_assets/07_material_system.md)         | PBR материалы для вокселей                   |
-| 8 | [Networking Concept](practice/06_assets/08_networking_concept.md)   | Networking (Post-MVP Vision)              |
+| 8 | [Networking Concept](practice/06_assets/08_networking_concept.md)   | Networking (Post-MVP Vision)                 |
 | 9 | [Asset Pipeline](practice/06_assets/08_asset_pipeline.md)           | Offline Compiler для ассетов                 |
 
 ### 📋 07_meta/ — Meta-документация

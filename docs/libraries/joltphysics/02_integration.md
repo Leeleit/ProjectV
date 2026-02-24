@@ -2,7 +2,6 @@
 
 <!-- anchor: 03_integration -->
 
-
 ## CMake
 
 ### Базовое подключение

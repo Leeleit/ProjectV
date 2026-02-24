@@ -19,8 +19,8 @@ add_subdirectory(external/volk)
 add_subdirectory(external/VulkanMemoryAllocator)
 
 target_link_libraries(ProjectV PRIVATE
-    volk::volk
-    VulkanMemoryAllocator::VulkanMemoryAllocator
+  volk::volk
+  VulkanMemoryAllocator::VulkanMemoryAllocator
 )
 ```
 
@@ -30,22 +30,22 @@ target_link_libraries(ProjectV PRIVATE
 include(FetchContent)
 
 FetchContent_Declare(
-    volk
-    GIT_REPOSITORY https://github.com/zeux/volk.git
-    GIT_TAG master
+  volk
+  GIT_REPOSITORY https://github.com/zeux/volk.git
+  GIT_TAG master
 )
 
 FetchContent_Declare(
-    VMA
-    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG master
+  VMA
+  GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+  GIT_TAG master
 )
 
 FetchContent_MakeAvailable(volk VMA)
 
 target_link_libraries(ProjectV PRIVATE
-    volk::volk
-    VulkanMemoryAllocator::VulkanMemoryAllocator
+  volk::volk
+  VulkanMemoryAllocator::VulkanMemoryAllocator
 )
 ```
 
@@ -512,11 +512,13 @@ private:
 
 1. **volk** как мета-лоадер для избежания overhead драйвера
 2. **VMA** для эффективного управления памятью с TLSF алгоритмом
-3. **Обязательные расширения**: timeline semaphores, buffer device address, descriptor indexing, synchronization2, dynamic rendering
+3. **Обязательные расширения**: timeline semaphores, buffer device address, descriptor indexing, synchronization2,
+   dynamic rendering
 4. **Опциональные расширения**: shader objects, mesh shaders для будущих оптимизаций
 5. **Отдельные очереди**: graphics, compute, transfer для параллелизма
 
 Эта конфигурация обеспечивает основу для:
+
 - Bindless rendering (descriptor indexing)
 - GPU-driven rendering (buffer device address)
 - Асинхронные вычисления (timeline semaphores)

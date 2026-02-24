@@ -911,6 +911,7 @@ Offset | Size | Type     | Description
 ```
 
 **Контракт:**
+
 - Magic должен быть 0x564F5821
 - Version должен быть ≤ 2
 - Header size должен быть 32 байта
@@ -939,6 +940,7 @@ Offset | Size | Type     | Description
 ```
 
 **Контракт:**
+
 - Data size должен быть кратен 4 (выравнивание)
 - Для compressed форматов используется Zstd поверх raw data
 - Mip levels ≥ 1
@@ -961,6 +963,7 @@ Offset | Size | Type     | Description
 ```
 
 **Контракт:**
+
 - Entity count ≤ 1,000,000 (прагматичный лимит)
 - Component type count ≤ 256
 - Reserved поля должны быть 0
@@ -983,6 +986,7 @@ Offset | Size | Type     | Description
 ```
 
 **Контракт:**
+
 - Все обязательные поля должны присутствовать
 - Timestamps должны быть монотонными (modified ≥ created)
 - total_chunks должен быть точным числом загруженных чанков

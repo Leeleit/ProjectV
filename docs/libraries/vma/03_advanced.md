@@ -1,8 +1,45 @@
-# VMA в ProjectV: Паттерны
+# VMA в ProjectV: Продвинутые паттерны
 
-**🔴 Уровень 3: Продвинутый**
+**Производительность — это не опция, а архитектурное требование.** В воксельном движке управление памятью определяет
+границы возможного.
 
-Паттерны управления памятью для воксельного движка.
+---
+
+## Архитектура памяти для воксельного движка
+
+### Требования к памяти
+
+Воксельный движок предъявляет особые требования к управлению памятью:
+
+| Тип ресурса         | Характеристики                            | Частота обновления           | Стратегия VMA                   |
+|---------------------|-------------------------------------------|------------------------------|---------------------------------|
+| Воксельные чанки    | Множество объектов фиксированного размера | При загрузке/выгрузке чанков | `MIN_MEMORY` + пулы             |
+| Текстуры материалов | Крупные ресурсы                           | Редко                        | `MIN_MEMORY` + dedicated        |
+| Compute buffers     | Storage buffers для шейдеров              | Зависит от алгоритма         | Зависит от частоты              |
+| Uniform buffers     | Матрицы камеры, параметры                 | Каждый кадр                  | `MIN_TIME` + persistent mapping |
+| Staging buffers     | Временные буферы                          | Часто                        | `MIN_TIME`                      |
+
+### Архитектура памяти
+
+```
+VmaAllocator
+    │
+    ├── ChunkPool (VmaPool)
+    │       ├── ChunkAllocation[0] ─── VkBuffer (16KB)
+    │       ├── ChunkAllocation[1] ─── VkBuffer (16KB)
+    │       └── ...
+    │
+    ├── TexturePool (опционально)
+    │       └── TextureAllocation ─── VkImage
+    │
+    ├── UniformBuffers
+    │       ├── UniformAllocation[0] ─── VkBuffer (persistent mapped)
+    │       ├── UniformAllocation[1]
+    │       └── UniformAllocation[2]
+    │
+    └── StagingBuffers
+            └── StagingAllocation ─── VkBuffer (host-visible)
+```
 
 ---
 
@@ -93,6 +130,13 @@ public:
 };
 ```
 
+**Преимущества пулов:**
+
+1. **Уменьшение фрагментации** — чанки одного размера аллоцируются из предварительно выделенных блоков
+2. **Быстрые аллокации** — не требуется поиск в общей куче
+3. **Контроль памяти** — можно ограничить максимальный размер пула
+4. **Локализация данных** — чанки одного типа располагаются рядом
+
 ---
 
 ## Паттерн 2: Интеграция с Tracy
@@ -181,108 +225,7 @@ void updateMemoryStats(VmaAllocator allocator) {
 
 ---
 
-## Паттерн 3: Интеграция с flecs ECS
-
-> **См. также:** [ECS философия](../../philosophy/04_ecs-philosophy.md) — принципы проектирования ECS компонентов.
-
-### Проблема
-
-GPU ресурсы нужно связать с ECS сущностями для автоматического управления жизненным циклом.
-
-### Решение
-
-```cpp
-#include <flecs.h>
-
-namespace projectv::ecs {
-
-// Компоненты
-struct VmaBufferComponent {
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VmaAllocation allocation = VK_NULL_HANDLE;
-    VkDeviceSize size = 0;
-};
-
-struct VmaImageComponent {
-    VkImage image = VK_NULL_HANDLE;
-    VmaAllocation allocation = VK_NULL_HANDLE;
-    VkExtent3D extent = {};
-    VkFormat format = VK_FORMAT_UNDEFINED;
-};
-
-// Компонент-тег для загрузки
-struct NeedsGpuUpload {};
-
-// Система очистки ресурсов
-void registerVmaCleanupSystem(flecs::world& world, VmaAllocator allocator) {
-    // Observer для буферов
-    world.observer<VmaBufferComponent>()
-        .event(flecs::OnRemove)
-        .iter([allocator](flecs::iter& it, VmaBufferComponent* buffers) {
-            for (auto i : it) {
-                if (buffers[i].buffer != VK_NULL_HANDLE) {
-                    vmaDestroyBuffer(allocator, buffers[i].buffer, buffers[i].allocation);
-                }
-            }
-        });
-
-    // Observer для изображений
-    world.observer<VmaImageComponent>()
-        .event(flecs::OnRemove)
-        .iter([allocator](flecs::iter& it, VmaImageComponent* images) {
-            for (auto i : it) {
-                if (images[i].image != VK_NULL_HANDLE) {
-                    vmaDestroyImage(allocator, images[i].image, images[i].allocation);
-                }
-            }
-        });
-}
-
-// Система загрузки чанков
-class ChunkUploadSystem {
-    VmaAllocator m_allocator;
-    VkDeviceSize m_chunkSize;
-
-public:
-    ChunkUploadSystem(flecs::world& world, VmaAllocator allocator, VkDeviceSize chunkSize)
-        : m_allocator(allocator), m_chunkSize(chunkSize)
-    {
-        world.system<VmaBufferComponent, const NeedsGpuUpload>("ChunkUploadSystem")
-            .iter([this](flecs::iter& it, VmaBufferComponent* buffers, const NeedsGpuUpload*) {
-                for (auto i : it) {
-                    if (buffers[i].buffer == VK_NULL_HANDLE) {
-                        buffers[i] = createChunkBuffer();
-                        it.entity(i).remove<NeedsGpuUpload>();
-                    }
-                }
-            });
-    }
-
-private:
-    VmaBufferComponent createChunkBuffer() {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = m_chunkSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-
-        VmaAllocationCreateInfo allocInfo = {};
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-        VmaBufferComponent result;
-        result.size = m_chunkSize;
-        vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo,
-                       &result.buffer, &result.allocation, nullptr);
-
-        return result;
-    }
-};
-
-} // namespace projectv::ecs
-```
-
----
-
-## Паттерн 4: Double buffering для compute
+## Паттерн 3: Double buffering для compute
 
 ### Проблема
 
@@ -350,88 +293,7 @@ public:
 
 ---
 
-## Паттерн 5: Загрузка текстур через staging
-
-### Проблема
-
-Текстуры материалов загружаются асинхронно, требуется эффективный staging.
-
-### Решение
-
-```cpp
-class TextureLoader {
-    VmaAllocator m_allocator;
-
-public:
-    struct TextureResult {
-        VkImage image;
-        VmaAllocation allocation;
-        VkImageView view;
-    };
-
-    TextureResult loadFromMemory(VmaAllocator allocator,
-                                 const void* pixelData,
-                                 uint32_t width, uint32_t height,
-                                 VkFormat format,
-                                 VkCommandBuffer cmdBuffer)
-    {
-        VkDeviceSize imageSize = width * height * 4;  // RGBA8
-
-        // 1. Staging буфер
-        VkBufferCreateInfo stagingInfo = {};
-        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        stagingInfo.size = imageSize;
-        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-
-        VmaAllocationCreateInfo stagingAllocInfo = {};
-        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-        VkBuffer stagingBuffer;
-        VmaAllocation stagingAllocation;
-        VmaAllocationInfo stagingAllocResult;
-        vmaCreateBuffer(allocator, &stagingInfo, &stagingAllocInfo,
-                       &stagingBuffer, &stagingAllocation, &stagingAllocResult);
-
-        // 2. Копирование данных
-        memcpy(stagingAllocResult.pMappedData, pixelData, imageSize);
-        vmaFlushAllocation(allocator, stagingAllocation, 0, VK_WHOLE_SIZE);
-
-        // 3. Создание изображения
-        VkImageCreateInfo imageInfo = {};
-        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageInfo.extent = {width, height, 1};
-        imageInfo.mipLevels = 1;
-        imageInfo.arrayLayers = 1;
-        imageInfo.format = format;
-        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-        VmaAllocationCreateInfo imageAllocInfo = {};
-        imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-        TextureResult result;
-        vmaCreateImage(allocator, &imageInfo, &imageAllocInfo,
-                      &result.image, &result.allocation, nullptr);
-
-        // 4. Переход layout + копирование
-        // ... (VkImageMemoryBarrier + vkCmdCopyBufferToImage)
-
-        // 5. Освобождение staging
-        vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation);
-
-        return result;
-    }
-};
-```
-
----
-
-## Паттерн 6: Кольцевой staging buffer
+## Паттерн 4: Кольцевой staging buffer
 
 ### Проблема
 
@@ -519,18 +381,120 @@ public:
 
 ---
 
-## Рекомендации
+## Паттерн 5: Загрузка текстур через staging
 
-### Чего избегать
+### Проблема
 
-1. **Создание/уничтожение буферов каждый кадр** — используйте пулы и ring buffers
-2. **Игнорирование `vmaFlushAllocation`** — может работать на одной GPU и ломаться на другой
-3. **Прямой доступ к device-local памяти** — используйте staging
-4. **Аллокации без ограничений** — устанавливайте `maxBlockCount` для пулов
+Текстуры материалов загружаются асинхронно, требуется эффективный staging.
 
-### Оптимизации
+### Решение
 
-1. **Batch-загрузка** — объединяйте мелкие загрузки в одну
-2. **Pre-allocation** — создавайте пулы заранее
-3. **Memory aliasing** — для ресурсов, используемых в разное время
-4. **Defragmentation** — периодически для долгоживущих ресурсов
+```cpp
+class TextureLoader {
+    VmaAllocator m_allocator;
+
+public:
+    struct TextureResult {
+        VkImage image;
+        VmaAllocation allocation;
+        VkImageView view;
+    };
+
+    TextureResult loadFromMemory(VmaAllocator allocator,
+                                 const void* pixelData,
+                                 uint32_t width, uint32_t height,
+                                 VkFormat format,
+                                 VkCommandBuffer cmdBuffer)
+    {
+        VkDeviceSize imageSize = width * height * 4;  // RGBA8
+
+        // 1. Staging буфер
+        VkBufferCreateInfo stagingInfo = {};
+        stagingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        stagingInfo.size = imageSize;
+        stagingInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo stagingAllocInfo = {};
+        stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer stagingBuffer;
+        VmaAllocation stagingAllocation;
+        VmaAllocationInfo stagingAllocResult;
+        vmaCreateBuffer(allocator, &stagingInfo, &stagingAllocInfo,
+                       &stagingBuffer, &stagingAllocation, &stagingAllocResult);
+
+        // 2. Копирование данных
+        memcpy(stagingAllocResult.pMappedData, pixelData, imageSize);
+        vmaFlushAllocation(allocator, stagingAllocation, 0, VK_WHOLE_SIZE);
+
+        // 3. Создание изображения
+        VkImageCreateInfo imageInfo = {};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.extent = {width, height, 1};
+        imageInfo.mipLevels = 1;
+        imageInfo.arrayLayers = 1;
+        imageInfo.format = format;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        VmaAllocationCreateInfo imageAllocInfo = {};
+        imageAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+
+        TextureResult result;
+        vmaCreateImage(allocator, &imageInfo, &imageAllocInfo,
+                      &result.image, &result.allocation, nullptr);
+
+        // 4. Переход layout + копирование
+        // ... (VkImageMemoryBarrier + vkCmdCopyBufferToImage)
+
+        // 5. Освобождение staging
+        vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation);
+
+        return result;
+    }
+};
+```
+
+---
+
+## Troubleshooting
+
+### Ошибки компиляции
+
+#### VK_NO_PROTOTYPES при использовании volk
+
+**Сообщение:**
+
+```
+To use volk, you need to define VK_NO_PROTOTYPES before including vulkan.h
+```
+
+**Решение:** В каждом .cpp перед любыми includes:
+
+```cpp
+#define VK_NO_PROTOTYPES
+#include "volk.h"
+#include "vma/vk_mem_alloc.h"
+```
+
+### Ошибки линковки
+
+#### Неразрешённые символы: vmaCreateAllocator, vmaCreateBuffer
+
+**Причина:** Макрос `VMA_IMPLEMENTATION` не определён ни в одном .cpp.
+
+**Решение:** В одном .cpp файле:
+
+```cpp
+#define VMA_IMPLEMENTATION
+#include "vma/vk_mem_alloc.h"
+```
+
+#### Дублирование символов VMA
+
+**Причина:** `VMA

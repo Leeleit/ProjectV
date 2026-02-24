@@ -2,7 +2,8 @@
 
 <!-- anchor: 02_integration -->
 
-Интеграция Zstd в ProjectV: CMake конфигурация, многопоточное сжатие воксельных данных и интеграция с сетевым протоколом.
+Интеграция Zstd в ProjectV: CMake конфигурация, многопоточное сжатие воксельных данных и интеграция с сетевым
+протоколом.
 
 ---
 
@@ -17,18 +18,18 @@
 add_subdirectory(external/zstd/build/cmake)
 
 target_link_libraries(ProjectV PRIVATE
-    libzstd_static
+  libzstd_static
 )
 
 # Включить многопоточную поддержку
 target_compile_definitions(ProjectV PRIVATE
-    ZSTD_MULTITHREAD
+  ZSTD_MULTITHREAD
 )
 
 # Установить минимальную версию Zstd
 set_target_properties(libzstd_static PROPERTIES
-    C_STANDARD 11
-    C_STANDARD_REQUIRED ON
+  C_STANDARD 11
+  C_STANDARD_REQUIRED ON
 )
 ```
 
@@ -38,9 +39,9 @@ set_target_properties(libzstd_static PROPERTIES
 include(FetchContent)
 
 FetchContent_Declare(
-    zstd
-    GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG v1.5.5
+  zstd
+  GIT_REPOSITORY https://github.com/facebook/zstd.git
+  GIT_TAG v1.5.5
 )
 
 set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "Don't build CLI programs")
@@ -50,13 +51,13 @@ set(ZSTD_MULTITHREAD_SUPPORT ON CACHE BOOL "Enable multithreading")
 FetchContent_MakeAvailable(zstd)
 
 target_link_libraries(ProjectV PRIVATE
-    libzstd_static
+  libzstd_static
 )
 
 # Добавить include директории
 target_include_directories(ProjectV PRIVATE
-    ${zstd_SOURCE_DIR}/lib
-    ${zstd_SOURCE_DIR}/lib/common
+  ${zstd_SOURCE_DIR}/lib
+  ${zstd_SOURCE_DIR}/lib/common
 )
 ```
 
