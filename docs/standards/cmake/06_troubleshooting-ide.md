@@ -90,9 +90,10 @@ target_link_options(MyTarget PRIVATE -stdlib=libc++ -lc++abi)
 **Решение:**
 
 1. Установить kit вручную:
-  - `Ctrl+Shift+P` → "CMake: Select a Kit"
-  - Выбрать "Scan for Kits"
-  - Выбрать "Clang 18.x"
+
+- `Ctrl+Shift+P` → "CMake: Select a Kit"
+- Выбрать "Scan for Kits"
+- Выбрать "Clang 18.x"
 
 2. Или настроить `settings.json`:
 

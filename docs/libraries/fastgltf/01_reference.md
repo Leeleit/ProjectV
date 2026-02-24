@@ -1,7 +1,4 @@
-﻿## fastgltf
-
-<!-- anchor: 00_overview -->
-
+﻿# fastgltf
 
 **fastgltf** — высокопроизводительная библиотека загрузки glTF 2.0 на C++17 с минимальными зависимостями. Использует
 SIMD (simdjson) для ускорения парсинга JSON и base64-декодирования. Поддерживает полную спецификацию glTF 2.0 и
@@ -66,6 +63,10 @@ fastgltf следует принципу C++: "you don't pay for what you don't 
 - `LoadExternalImages` — загрузка внешних изображений
 - `DecomposeNodeMatrices` — разложение матриц на TRS
 
+> **Для понимания:** fastgltf — это не кухонный комбайн, который пытается сделать всё. Это острый японский нож: делает
+> одну вещь — режет glTF — но делает это идеально. Вы сами решаете, какие ингредиенты (буферы, изображения) загружать, а
+> какие оставить на тарелке (URI).
+
 ## Типобезопасность
 
 Сравнение подходов:
@@ -101,9 +102,6 @@ if (node.meshIndex.has_value()) {
 ---
 
 ## Основные понятия fastgltf
-
-<!-- anchor: 03_concepts -->
-
 
 Введение в glTF 2.0 и внутреннюю структуру fastgltf.
 
@@ -161,6 +159,10 @@ Asset
 └── extensionsRequired — обязательные расширения
 ```
 
+> **Для понимания:** fastgltf::Asset — это коробка с деталями из IKEA. Там есть всё: винтики (буферы), доски (меши),
+> инструкция (ноды). Но мы не живем в коробке. Мы достаем детали и собираем из них мебель (сущности в ECS). После сборки
+> коробку (Asset) мы выбрасываем (освобождаем память), а мебель (Vulkan буферы) остается.
+
 ## Цепочка данных: Buffer → BufferView → Accessor
 
 Данные геометрии идут по цепочке:
@@ -217,6 +219,10 @@ struct Accessor {
     AccessorBoundsArray min, max;
 };
 ```
+
+> **Для понимания:** Buffer — это длинная колбаса сырого фарша (байты). BufferView — это нарезка этой колбасы на куски.
+> А Accessor — это этикетка, которая говорит: "В этом куске лежат vec3 позиции, читать с шагом 12 байт". Не путайте
+> этикетку с самой колбасой.
 
 ### Вычисление размера
 
@@ -292,11 +298,14 @@ if (std::holds_alternative<fastgltf::TRS>(node.transform)) {
 Функции загрузки возвращают `fastgltf::Expected<T>`:
 
 ```cpp
+#include <print>
+#include <fastgltf/core.hpp>
+
 auto asset = parser.loadGltf(data.get(), basePath);
 
-// Проверка ошибки
+// Проверка ошибки через std::expected
 if (asset.error() != fastgltf::Error::None) {
-    std::cerr << fastgltf::getErrorMessage(asset.error()) << "\n";
+    std::println(stderr, "Ошибка загрузки: {}", fastgltf::getErrorMessage(asset.error()));
     return;
 }
 
@@ -304,8 +313,6 @@ if (asset.error() != fastgltf::Error::None) {
 fastgltf::Asset& model = asset.get();
 // или
 fastgltf::Asset* model = asset.get_if();  // nullptr при ошибке
-// или
-fastgltf::Asset& model = *asset;  // UB при ошибке!
 ```
 
 ## Primitive
@@ -404,211 +411,190 @@ struct Material {
     AlphaMode alphaMode;
     float alphaCutoff;
     bool doubleSided;
-    bool unlit;
+    bool unlit;  // KHR_materials_unlit
 };
+```
+
+### PBRData
+
+```cpp
+struct PBRData {
+    Optional<size_t> baseColorTexture;
+    Optional<size_t> metallicRoughnessTexture;
+
+    std::array<float, 4> baseColorFactor;
+    float metallicFactor;
+    float roughnessFactor;
+};
+```
+
+### AlphaMode
+
+```cpp
+enum class AlphaMode : std::uint8_t {
+    Opaque,      // Непрозрачный
+    Mask,        // Маска (alphaCutoff)
+    Blend        // Смешивание
+};
+```
+
+### Текстуры
+
+Текстуры ссылаются на `asset.textures[]`, которые содержат `imageIndex` и `samplerIndex`:
+
+```cpp
+struct Texture {
+    Optional<size_t> imageIndex;
+    Optional<size_t> samplerIndex;
+    std::string name;
+};
+```
+
+### Sampler
+
+```cpp
+struct Sampler {
+    Optional<Filter> magFilter;   // Увеличение
+    Optional<Filter> minFilter;   // Уменьшение
+    Optional<Wrap> wrapS;         // U координата
+    Optional<Wrap> wrapT;         // V координата
+    std::string name;
+};
+```
+
+### Image
+
+```cpp
+struct Image {
+    std::string name;
+    DataSource data;  // URI, BufferView, ByteView, Vector
+    Optional<MimeType> mimeType;
+};
+```
+
+> **Для понимания:** Material — это рецепт для рендеринга поверхности. PBRData — это список ингредиентов (цвет,
+> металличность, шероховатость), текстуры — это фотографии ингредиентов, а sampler — это инструкция по их смешиванию (
+> фильтрация, повторение). AlphaMode — это указание, должен ли ингредиент быть прозрачным, а doubleSided — нужно ли
+> готовить обе стороны блюда.
+
+## doubleSided и unlit
+
+### doubleSided
+
+```cpp
+if (material.doubleSided) {
+    // Отключить backface culling
+    glDisable(GL_CULL_FACE);
+    // или
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+}
+```
+
+### unlit (KHR_materials_unlit)
+
+```cpp
+if (material.unlit) {
+    // Использовать unlit шейдер (без освещения)
+    // baseColorFactor напрямую как цвет пикселя
+}
 ```
 
 ## Утилиты типов
 
-Функции из `types.hpp`:
+### ComponentType
 
-| Функция                                   | Описание                          |
-|-------------------------------------------|-----------------------------------|
-| `getNumComponents(AccessorType)`          | Количество компонентов (Vec3 → 3) |
-| `getElementByteSize(type, componentType)` | Размер элемента в байтах          |
-| `getComponentByteSize(ComponentType)`     | Размер компонента в байтах        |
-| `getComponentBitSize(ComponentType)`      | Размер компонента в битах         |
-| `getGLComponentType(ComponentType)`       | OpenGL-константа типа             |
-| `getAccessorTypeName(AccessorType)`       | Строковое имя («VEC3», «SCALAR»)  |
-
----
-
-## Глоссарий fastgltf
-
-<!-- anchor: 09_glossary -->
-
-
-Термины glTF 2.0 и fastgltf.
-
-## Карта связей ключевых терминов
-
-```
-Файл .gltf/.glb
-      ↓
-    Parser
-      ↓
-    Asset
-      ├── buffers[] (DataSource)
-      ├── bufferViews[] (byteOffset/Stride)
-      ├── accessors[] (Type/ComponentType)
-      ├── meshes[] (Primitive[])
-      ├── materials[] (PBR)
-      ├── nodes[] (transform: TRS/matrix)
-      ├── scenes[] (nodeIndices)
-      ├── animations[]
-      └── skins[]
-
-Buffer → BufferView → Accessor → Primitive
-                                     ↓
-                                   Mesh → Node → Scene
+```cpp
+enum class ComponentType : std::uint16_t {
+    Byte = 5120,
+    UnsignedByte = 5121,
+    Short = 5122,
+    UnsignedShort = 5123,
+    Int = 5124,
+    UnsignedInt = 5125,
+    Float = 5126,
+    Double = 5130  // Только с Options::AllowDouble
+};
 ```
 
----
+### AccessorType
 
-## glTF 2.0
-
-| Термин    | Определение                                                                                                          |
-|-----------|----------------------------------------------------------------------------------------------------------------------|
-| **glTF**  | GL Transmission Format — формат 3D-моделей от Khronos Group. Состоит из JSON-файла с метаданными и бинарных буферов. |
-| **GLB**   | Бинарный контейнер glTF: один файл с JSON-чанком и бинарными чанками.                                                |
-| **Asset** | Результат парсинга glTF. Содержит все данные модели: меши, материалы, узлы, анимации.                                |
-
-## Цепочка данных
-
-| Термин         | Определение                                                                         | Пример                             |
-|----------------|-------------------------------------------------------------------------------------|------------------------------------|
-| **Buffer**     | Массив байтов — сырые данные. Источник определяется через `DataSource`.             | `Buffer[0]: 16384 байт`            |
-| **BufferView** | Участок буфера: offset, length, stride. Связывает Accessor с Buffer.                | `offset=0, length=8192, stride=12` |
-| **Accessor**   | Типизированное описание данных: тип, componentType, count. Ссылается на BufferView. | `Vec3 Float, count=1024`           |
-
-### Формула размера
-
-```
-size = count * getNumComponents(type) * getComponentByteSize(componentType)
+```cpp
+enum class AccessorType : std::uint8_t {
+    Scalar,
+    Vec2,
+    Vec3,
+    Vec4,
+    Mat2,
+    Mat3,
+    Mat4
+};
 ```
 
-## Геометрия
+### PrimitiveType
 
-| Термин        | Определение                                                                                           |
-|---------------|-------------------------------------------------------------------------------------------------------|
-| **Primitive** | Часть меша: режим отрисовки, атрибуты, индексы, материал. Доступ к атрибутам через `findAttribute()`. |
-| **Mesh**      | Набор примитивов. Один меш может содержать несколько примитивов с разными материалами.                |
-| **Attribute** | Именованная ссылка на accessor: POSITION, NORMAL, TEXCOORD_0, TANGENT, JOINTS_0, WEIGHTS_0.           |
+```cpp
+enum class PrimitiveType : std::uint8_t {
+    Points,
+    Lines,
+    LineLoop,
+    LineStrip,
+    Triangles,
+    TriangleStrip,
+    TriangleFan
+};
+```
 
-## Иерархия сцены
+### BufferTarget
 
-| Термин    | Определение                                                                                 |
-|-----------|---------------------------------------------------------------------------------------------|
-| **Node**  | Узел сцены. Содержит transform (TRS или matrix), ссылки на mesh, skin, camera, children.    |
-| **Scene** | Набор корневых узлов через `nodeIndices`. У модели может быть несколько сцен.               |
-| **TRS**   | Decomposed transform: Translation, Rotation, Scale. Появляется при `DecomposeNodeMatrices`. |
+```cpp
+enum class BufferTarget : std::uint16_t {
+    ArrayBuffer = 34962,
+    ElementArrayBuffer = 34963
+};
+```
 
-## Материалы
+## Заключение
 
-| Термин          | Определение                                                                           |
-|-----------------|---------------------------------------------------------------------------------------|
-| **Material**    | PBR материал: baseColor, metallic, roughness, normal, emission.                       |
-| **PBR**         | Physically Based Rendering — подход к материалов, основанный на физических свойствах. |
-| **TextureInfo** | Ссылка на текстуру: textureIndex, texCoordIndex, опциональный transform.              |
-| **Sampler**     | Настройки фильтрации и wrapping для текстуры.                                         |
+Fastgltf предоставляет полную, типобезопасную реализацию glTF 2.0 с акцентом на производительность и современный C++.
 
-## Анимации
+### Ключевые особенности
 
-| Термин               | Определение                                                                            |
-|----------------------|----------------------------------------------------------------------------------------|
-| **Animation**        | Набор каналов и сэмплеров для анимации свойств узлов.                                  |
-| **AnimationChannel** | Связь между target (node + path) и sampler.                                            |
-| **AnimationSampler** | Интерполяция между ключевыми кадрами: input (время), output (значения), interpolation. |
-| **Interpolation**    | LINEAR, STEP, CUBICSPLINE — метод интерполяции между кадрами.                          |
+1. **Производительность**: SIMD-оптимизации, memory mapping, минимальные аллокации
+2. **Типобезопасность**: `std::optional`, `std::variant`, проверки во время компиляции
+3. **Гибкость**: DataSource варианты, кастомные callbacks, расширения
+4. **Современный C++**: C++17 минимум, поддержка C++20/23/26 фич
 
-## Скиннинг
+### Структура данных
 
-| Термин                  | Определение                                                   |
-|-------------------------|---------------------------------------------------------------|
-| **Skin**                | Данные для skeletal animation: joints, inverseBindMatrices.   |
-| **Joint**               | Кость скелета — ссылка на Node.                               |
-| **Inverse Bind Matrix** | Матрица для перевода вершины в пространство кости.            |
-| **JOINTS_0**            | Атрибут примитива: индексы костей для каждой вершины (uvec4). |
-| **WEIGHTS_0**           | Атрибут примитива: веса влияния костей (vec4).                |
+- **Asset** — корневой контейнер со всеми данными
+- **DataSource** — варианты источников данных (URI, BufferView, ByteView, etc.)
+- **Accessor chain** — Buffer → BufferView → Accessor → Primitive
+- **Иерархия сцены** — Scene → Nodes → Mesh → Primitive
 
-## Morph Targets
+### Обработка ошибок
 
-| Термин           | Определение                                                                           |
-|------------------|---------------------------------------------------------------------------------------|
-| **Morph Target** | Blend shape — дельты позиций/нормалей для деформации меша.                            |
-| **Weight**       | Вес morph target (0-1) для интерполяции между базовой и целевой формой.               |
-| **targets**      | Массив morph targets в Primitive. Каждый target — набор атрибутов (POSITION, NORMAL). |
+- **Expected<T>** — современная обработка ошибок
+- **getErrorMessage()** — человекочитаемые сообщения
+- **getErrorName()** — машинно-читаемые коды
 
-## Sparse Accessors
+### Расширения
 
-| Термин              | Определение                                                                 |
-|---------------------|-----------------------------------------------------------------------------|
-| **Sparse Accessor** | Accessor с частичным обновлением данных. Хранит только изменённые значения. |
-| **Sparse Indices**  | Индексы элементов, которые заменяются.                                      |
-| **Sparse Values**   | Новые значения для указанных индексов.                                      |
+Fastgltf поддерживает большинство расширений glTF через битовые маски в конструкторе Parser.
 
-## Система загрузки fastgltf
+### Для ProjectV
 
-| Термин            | Определение                                                                        |
-|-------------------|------------------------------------------------------------------------------------|
-| **Parser**        | Класс для парсинга glTF/GLB. Не потокобезопасен, переиспользуйте между загрузками. |
-| **Expected\<T\>** | Тип возврата функций загрузки: содержит либо T, либо Error.                        |
-| **DataSource**    | variant с источником данных буфера/изображения.                                    |
+Fastgltf идеально подходит для ProjectV благодаря:
 
-## DataSource варианты
+1. **Data-Oriented Design**: Плоские массивы для преобразования в SoA
+2. **GPU-ready**: Прямая запись в mapped GPU buffers
+3. **Производительность**: Критична для воксельного рендеринга
+4. **Современный C++**: Соответствует требованиям C++26 проекта
 
-| Вариант          | Когда появляется              | Нужен кастомный адаптер? |
-|------------------|-------------------------------|--------------------------|
-| **ByteView**     | GLB, base64 без копирования   | Нет                      |
-| **Array**        | GLB, встроенные данные        | Нет                      |
-| **Vector**       | `LoadExternalBuffers`         | Нет                      |
-| **URI**          | Внешний файл без загрузки     | Да                       |
-| **CustomBuffer** | `setBufferAllocationCallback` | Да                       |
-| **BufferView**   | Изображение в bufferView      | —                        |
-| **Fallback**     | EXT_meshopt_compression       | Да                       |
+### Дальнейшее изучение
 
-## Options
+- **Интеграция**: См. `02_integration.md` для подключения к ProjectV
+- **Продвинутые темы**: См. `03_advanced.md` для сложных сценариев
+- **Исходники**: `external/fastgltf/include/` для деталей реализации
 
-| Опция                           | Эффект                                                |
-|---------------------------------|-------------------------------------------------------|
-| **LoadExternalBuffers**         | Загрузка внешних .bin файлов в Vector                 |
-| **LoadExternalImages**          | Загрузка внешних изображений                          |
-| **DecomposeNodeMatrices**       | Разложение матриц узлов на TRS                        |
-| **GenerateMeshIndices**         | Генерация индексов для примитивов без indicesAccessor |
-| **AllowDouble**                 | Разрешить GL_DOUBLE как componentType                 |
-| **DontRequireValidAssetMember** | Пропустить проверку поля asset                        |
-
-## Category
-
-| Значение           | Что парсится                                       |
-|--------------------|----------------------------------------------------|
-| **All**            | Всё                                                |
-| **OnlyRenderable** | Всё, кроме Animations, Skins                       |
-| **OnlyAnimations** | Только Animations, Accessors, BufferViews, Buffers |
-
-## Accessor Types
-
-| Тип        | Компоненты | Пример               |
-|------------|------------|----------------------|
-| **Scalar** | 1          | float, uint32_t      |
-| **Vec2**   | 2          | glm::vec2            |
-| **Vec3**   | 3          | glm::vec3            |
-| **Vec4**   | 4          | glm::vec4, glm::quat |
-| **Mat2**   | 4          | glm::mat2            |
-| **Mat3**   | 9          | glm::mat3            |
-| **Mat4**   | 16         | glm::mat4            |
-
-## Component Types
-
-| Тип               | Размер           | OpenGL константа  |
-|-------------------|------------------|-------------------|
-| **Byte**          | 1 byte (signed)  | GL_BYTE           |
-| **UnsignedByte**  | 1 byte           | GL_UNSIGNED_BYTE  |
-| **Short**         | 2 bytes (signed) | GL_SHORT          |
-| **UnsignedShort** | 2 bytes          | GL_UNSIGNED_SHORT |
-| **UnsignedInt**   | 4 bytes          | GL_UNSIGNED_INT   |
-| **Float**         | 4 bytes          | GL_FLOAT          |
-
-## Термины которые часто путают
-
-| Пара                      | Различие                                                                  |
-|---------------------------|---------------------------------------------------------------------------|
-| **Buffer vs BufferView**  | Buffer — сырые байты; BufferView — "окно" в Buffer с offset/length/stride |
-| **Accessor vs Primitive** | Accessor — описание данных; Primitive — использование этих данных         |
-| **Node vs Scene**         | Node — элемент иерархии; Scene — набор корневых Node                      |
-| **DataSource vs Buffer**  | DataSource — откуда брать данные; Buffer — сами данные                    |
-| **TRS vs Matrix**         | TRS — decomposed transform; Matrix — combined transform                   |
-
----
-
-Используйте этот глоссарий как справочник при чтении других разделов.
+Fastgltf — это не просто парсер glTF, это фундамент для высокопроизводительной загрузки 3D контента в современном C++
+проекте.

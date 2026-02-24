@@ -53,18 +53,21 @@
 PIMPL обязателен для всех типов, которые:
 
 1. **Инкапсулируют внешние C++ библиотеки**
-  - `RenderDevice` → Vulkan types
-  - `PhysicsWorld` → Jolt types
-  - `ECSWorld` → Flecs types
-  - `AudioEngine` → miniaudio types
+
+- `RenderDevice` → Vulkan types
+- `PhysicsWorld` → Jolt types
+- `ECSWorld` → Flecs types
+- `AudioEngine` → miniaudio types
 
 2. **Содержат типы, несовместимые с модулями**
-  - Шаблоны с макросами из external libraries
-  - Типы с `#include` зависимостями
+
+- Шаблоны с макросами из external libraries
+- Типы с `#include` зависимостями
 
 3. **Имеют платформо-зависимую реализацию**
-  - `PlatformSubsystem` → SDL types
-  - `FileSystem` → platform-specific handles
+
+- `PlatformSubsystem` → SDL types
+- `FileSystem` → platform-specific handles
 
 ### 4.2 Пример: RenderDevice с PIMPL
 
@@ -318,21 +321,25 @@ auto PhysicsWorld::create(Config const& config) noexcept
 PIMPL запрещён для всех типов, которые:
 
 1. **Обрабатываются в ECS системах**
-  - Компоненты
-  - Теги
+
+- Компоненты
+- Теги
 
 2. **Итерируются в массивах**
-  - Mesh vertices
-  - Particle data
-  - Voxel data
+
+- Mesh vertices
+- Particle data
+- Voxel data
 
 3. **Используются в SIMD операциях**
-  - Math types (vec3, mat4, quat)
-  - Bounding volumes
+
+- Math types (vec3, mat4, quat)
+- Bounding volumes
 
 4. **Требуют trivially copyable**
-  - GPU buffer data
-  - Network packets
+
+- GPU buffer data
+- Network packets
 
 ### 5.2 Математическое обоснование
 
@@ -876,19 +883,24 @@ private:
 При создании нового типа ответьте на вопросы:
 
 1. **Будет ли тип обрабатываться в ECS system?**
-  - Да → PIMPL ЗАПРЕЩЁН, используйте trivially copyable struct
+
+- Да → PIMPL ЗАПРЕЩЁН, используйте trivially copyable struct
 
 2. **Тип инкапсулирует внешнюю C++ библиотеку?**
-  - Да → PIMPL ОБЯЗАТЕЛЕН
+
+- Да → PIMPL ОБЯЗАТЕЛЕН
 
 3. **Тип будет итерироваться в массивах по тысячам элементов?**
-  - Да → PIMPL ЗАПРЕЩЁН
+
+- Да → PIMPL ЗАПРЕЩЁН
 
 4. **Тип создаётся один раз при старте?**
-  - Да → PIMPL РЕКОМЕНДОВАН
+
+- Да → PIMPL РЕКОМЕНДОВАН
 
 5. **Тип содержит std::string, std::vector или другие heap-allocated данные?**
-  - Да → либо PIMPL, либо вынести в отдельный cold component
+
+- Да → либо PIMPL, либо вынести в отдельный cold component
 
 ### 8.2 Static Assertions
 

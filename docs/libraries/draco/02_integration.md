@@ -1,9 +1,11 @@
 ﻿## Интеграция
 
-<!-- anchor: 02_integration -->
-
-
 Подключение Draco к проекту через CMake.
+
+> **Для понимания:** Интеграция Draco в проект похожа на подключение библиотеки сжатия ZIP к вашему приложению. Вы не
+> пишете алгоритмы сжатия с нуля — вы используете готовое решение, которое уже оптимизировано и протестировано. Draco
+> предоставляет готовые CMake цели, которые автоматически настраивают include пути и зависимости, как установка пакета
+> через менеджер пакетов.
 
 ## CMake интеграция
 
@@ -42,9 +44,9 @@ target_link_libraries(my_app PRIVATE draco::draco)
 include(FetchContent)
 
 FetchContent_Declare(
-    draco
-    GIT_REPOSITORY https://github.com/google/draco.git
-    GIT_TAG 1.5.7
+  draco
+  GIT_REPOSITORY https://github.com/google/draco.git
+  GIT_TAG 1.5.7
 )
 
 FetchContent_MakeAvailable(draco)
@@ -277,9 +279,6 @@ Draco гарантирует обратную совместимость decoder
 
 ## glTF Transcoding
 
-<!-- anchor: 07_gltf-transcoding -->
-
-
 Интеграция Draco с glTF через EXT_mesh_draco и draco_transcoder.
 
 ## EXT_mesh_draco
@@ -381,18 +380,36 @@ draco_transcoder -i model.glb -o model_web.glb -qp 12 -qn 8 -cl 5
 #ifdef DRACO_TRANSCODER_SUPPORTED
 #include <draco/io/gltf_decoder.h>
 #include <draco/io/scene_io.h>
+#include <expected>
+#include <print>
 
-draco::GltfDecoder decoder;
-auto scene = decoder.DecodeFromFile("model.glb");
-if (!scene.ok()) {
-    std::cerr << "Error: " << scene.status().error_msg() << "\n";
-    return;
+std::expected<std::unique_ptr<draco::Scene>, draco::Status> load_gltf_with_draco(
+    std::string_view filepath)
+{
+    draco::GltfDecoder decoder;
+    auto scene = decoder.DecodeFromFile(filepath.data());
+    if (!scene.ok()) {
+        std::println(stderr, "Ошибка загрузки glTF: {}", scene.status().error_msg());
+        return std::unexpected(scene.status());
+    }
+    return std::move(scene).value();
 }
 
-// Доступ к сцене
-for (int i = 0; i < scene.value()->NumMeshes(); ++i) {
-    const draco::Mesh& mesh = scene.value()->GetMesh(i);
-    // Обработка mesh
+// Использование
+int main() {
+    auto scene = load_gltf_with_draco("model.glb");
+    if (!scene) {
+        std::println(stderr, "Не удалось загрузить сцену: {}", scene.error().error_msg());
+        return 1;
+    }
+
+    // Доступ к сцене
+    for (int i = 0; i < (*scene)->NumMeshes(); ++i) {
+        const draco::Mesh& mesh = (*scene)->GetMesh(i);
+        // Обработка mesh
+    }
+
+    return 0;
 }
 #endif
 ```
@@ -641,9 +658,6 @@ time draco_decoder ...
 ---
 
 ## Интеграция Draco в ProjectV
-
-<!-- anchor: 12_projectv-integration -->
-
 
 Специфика интеграции Draco в воксельный движок ProjectV: работа с SVO, sparse data, интеграция с VMA и flecs.
 

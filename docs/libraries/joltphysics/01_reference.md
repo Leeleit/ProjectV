@@ -66,7 +66,6 @@ Broad Phase → Narrow Phase → Solver → Position Update
 
 <!-- anchor: 02_concepts -->
 
-
 ## Слои объектов (Object Layers)
 
 ### Назначение
@@ -403,7 +402,6 @@ physics_system.Init(
 ## Глоссарий JoltPhysics
 
 <!-- anchor: 08_glossary -->
-
 
 ## Основные термины
 

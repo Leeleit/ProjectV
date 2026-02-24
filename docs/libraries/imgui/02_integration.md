@@ -2,7 +2,6 @@
 
 <!-- anchor: 03_integration -->
 
-
 ## Оглавление
 
 - [1. CMake](#1-cmake)

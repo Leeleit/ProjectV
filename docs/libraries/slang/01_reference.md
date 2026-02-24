@@ -1530,6 +1530,7 @@ target_slang_shaders(MyApp
         shaders/compute.slang
 )
 ```
+
 ---
 
 ## Глоссарий Slang
