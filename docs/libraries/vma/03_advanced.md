@@ -1,5 +1,9 @@
 # VMA в ProjectV: Продвинутые паттерны
 
+> **Для понимания:** Продвинутые паттерны VMA — это как турбонаддув для двигателя. Базовый движок работает, но чтобы
+> выжать максимум, нужно добавить интеркулер (double buffering), турбину (пулы) и систему зажигания (Tracy). Без этого —
+> просто громкий шум без скорости.
+
 **Производительность — это не опция, а архитектурное требование.** В воксельном движке управление памятью определяет
 границы возможного.
 
@@ -255,8 +259,12 @@ public:
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 VMA_MEMORY_USAGE_AUTO);
 
-            // Выделение descriptor set
-            // ...
+            // Выделение descriptor set для storage buffer
+            // В ProjectV это делается через DescriptorSetAllocator:
+            // 1. Создаём VkDescriptorSetLayout с VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+            // 2. Выделяем descriptor set из пула
+            // 3. Записываем descriptor с нашим буфером
+            // Пример кода находится в src/vulkan/descriptor_allocator.cpp
         }
     }
 
@@ -450,7 +458,66 @@ public:
                       &result.image, &result.allocation, nullptr);
 
         // 4. Переход layout + копирование
-        // ... (VkImageMemoryBarrier + vkCmdCopyBufferToImage)
+        {
+            // Барьер для перехода из UNDEFINED в TRANSFER_DST_OPTIMAL
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = result.image;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+            vkCmdPipelineBarrier(cmdBuffer,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }
+
+        // Копирование данных из staging буфера в изображение
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = {0, 0, 0};
+        region.imageExtent = {width, height, 1};
+
+        vkCmdCopyBufferToImage(cmdBuffer, stagingBuffer, result.image,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+        // Барьер для перехода из TRANSFER_DST_OPTIMAL в SHADER_READ_ONLY_OPTIMAL
+        {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = result.image;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(cmdBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &barrier);
+        }
 
         // 5. Освобождение staging
         vmaDestroyBuffer(allocator, stagingBuffer, stagingAllocation);
@@ -497,4 +564,460 @@ To use volk, you need to define VK_NO_PROTOTYPES before including vulkan.h
 
 #### Дублирование символов VMA
 
-**Причина:** `VMA
+**Причина:** `VMA_IMPLEMENTATION` определён в нескольких .cpp файлах.
+
+**Решение:** Убедиться, что макрос определён только в одном файле. Использовать `#ifndef VMA_IMPLEMENTATION`:
+
+```cpp
+// src/vma_init.cpp
+#ifndef VMA_IMPLEMENTATION
+#define VMA_IMPLEMENTATION
+#endif
+#include "vma/vk_mem_alloc.h"
+```
+
+### Ошибки выполнения
+
+#### VMA не может найти подходящий тип памяти
+
+**Причина:** Запрошенные флаги использования несовместимы с доступными типами памяти.
+
+**Решение:** Проверить `VkPhysicalDeviceMemoryProperties` и использовать `VMA_MEMORY_USAGE_AUTO`:
+
+```cpp
+VmaAllocationCreateInfo allocInfo = {};
+allocInfo.usage = VMA_MEMORY_USAGE_AUTO;  // Пусть VMA сам выберет
+// Не указывать memoryTypeIndex вручную
+```
+
+#### Утечки памяти при использовании пулов
+
+**Причина:** Ресурсы из пула не освобождены перед уничтожением пула.
+
+**Решение:** Правильный порядок очистки:
+
+```cpp
+// 1. Уничтожить все буферы/изображения из пула
+for (auto& buffer : buffers) {
+    vmaDestroyBuffer(allocator, buffer, allocation);
+}
+
+// 2. Уничтожить пул
+vmaDestroyPool(allocator, pool);
+
+// 3. Уничтожить аллокатор (опционально)
+vmaDestroyAllocator(allocator);
+```
+
+## Современный C++26: паттерны для воксельного движка
+
+### Паттерн 6: SoA для воксельных данных с выравниванием
+
+```cpp
+#include <print>
+#include <expected>
+#include "vma/result.hpp"
+
+// SoA (Structure of Arrays) вместо AoS (Array of Structures)
+struct alignas(64) VoxelChunkSoA {
+    // Позиции вокселей (16384 вокселей * 3 float)
+    alignas(16) float positions[16384][3];  // 192KB
+
+    // Типы материалов (отдельный массив для лучшей локализации)
+    alignas(4) uint32_t materials[16384];   // 64KB
+
+    // Освещение (опционально)
+    alignas(4) float lighting[16384];       // 64KB
+
+    // Флаги (сжатые)
+    alignas(1) uint8_t flags[16384];        // 16KB
+
+    // Общий размер: ~336KB, выровнено по 64 байта
+    static constexpr size_t SIZE = 16384;
+    static constexpr size_t BYTE_SIZE = sizeof(VoxelChunkSoA);
+};
+
+class VoxelChunkBuffer {
+    VmaAllocator m_allocator;
+    VkBuffer m_buffer;
+    VmaAllocation m_allocation;
+
+public:
+    VmaResult<void> create(VmaAllocator allocator) {
+        m_allocator = allocator;
+
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = VoxelChunkSoA::BYTE_SIZE;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                          VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+
+        if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+                           &m_buffer, &m_allocation, nullptr) != VK_SUCCESS) {
+            std::println(stderr, "Failed to create voxel chunk buffer");
+            return std::unexpected(VmaError::BufferCreationFailed);
+        }
+
+        std::println("Created voxel chunk buffer: {} KB aligned to 64 bytes",
+                     VoxelChunkSoA::BYTE_SIZE / 1024);
+        return {};
+    }
+
+    ~VoxelChunkBuffer() {
+        if (m_buffer) {
+            vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
+        }
+    }
+
+    VmaResult<void> upload(const VoxelChunkSoA& data) {
+        void* mapped;
+        if (vmaMapMemory(m_allocator, m_allocation, &mapped) != VK_SUCCESS) {
+            return std::unexpected(VmaError::MapFailed);
+        }
+
+        memcpy(mapped, &data, VoxelChunkSoA::BYTE_SIZE);
+        vmaFlushAllocation(m_allocator, m_allocation, 0, VK_WHOLE_SIZE);
+        vmaUnmapMemory(m_allocator, m_allocation);
+
+        return {};
+    }
+};
+```
+
+### Паттерн 7: Triple buffering для compute с timeline semaphores
+
+```cpp
+#include <array>
+#include <print>
+
+class ComputeTripleBuffer {
+    struct Frame {
+        VmaBuffer buffer;
+        uint64_t timelineValue = 0;
+        bool ready = false;
+    };
+
+    std::array<Frame, 3> m_frames;
+    size_t m_currentFrame = 0;
+    VmaAllocator m_allocator;
+
+public:
+    VmaResult<void> initialize(VmaAllocator allocator, VkDeviceSize size) {
+        m_allocator = allocator;
+
+        for (size_t i = 0; i < 3; ++i) {
+            auto result = VmaBuffer::create(allocator, size,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VMA_MEMORY_USAGE_AUTO,
+                VMA_ALLOCATION_CREATE_STRATEGY_MIN_TIME_BIT);
+
+            if (!result) {
+                std::println(stderr, "Failed to create compute buffer {}", i);
+                return std::unexpected(result.error());
+            }
+
+            m_frames[i].buffer = std::move(*result);
+            m_frames[i].timelineValue = i;
+        }
+
+        std::println("Initialized compute triple buffer: {} MB per frame",
+                     size / (1024.0 * 1024.0));
+        return {};
+    }
+
+    Frame& get_current() { return m_frames[m_currentFrame]; }
+    Frame& get_next() { return m_frames[(m_currentFrame + 1) % 3]; }
+    Frame& get_previous() { return m_frames[(m_currentFrame + 2) % 3]; }
+
+    void advance() {
+        m_currentFrame = (m_currentFrame + 1) % 3;
+    }
+
+    void wait_for_frame(size_t frameIndex, VkSemaphore semaphore, uint64_t waitValue) {
+        // Используем timeline semaphore для синхронизации
+        VkSemaphoreWaitInfo waitInfo = {};
+        waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+        waitInfo.semaphoreCount = 1;
+        waitInfo.pSemaphores = &semaphore;
+        waitInfo.pValues = &waitValue;
+
+        // Ждём, пока GPU закончит работу с этим кадром
+        vkWaitSemaphores(device, &waitInfo, UINT64_MAX);
+        m_frames[frameIndex].ready = true;
+    }
+};
+```
+
+### Паттерн 8: Memory budget с предупреждениями и автоматической реакцией
+
+```cpp
+#include <chrono>
+#include <print>
+#include <expected>
+#include <functional>
+#include <vector>
+
+namespace projectv::memory {
+
+enum class MemoryPressureAction {
+    ClearTextureCache,      // Очистить кэш текстур
+    ReduceRenderDistance,   // Уменьшить дальность прорисовки
+    UnloadUnusedChunks,     // Выгрузить неиспользуемые чанки
+    ReduceTextureQuality,   // Уменьшить качество текстур
+    FlushStagingBuffers     // Очистить staging буферы
+};
+
+struct MemoryPressureEvent {
+    uint32_t heapIndex;
+    float usagePercent;
+    std::chrono::steady_clock::time_point timestamp;
+    std::vector<MemoryPressureAction> suggestedActions;
+};
+
+class MemoryBudgetMonitor {
+    VmaAllocator m_allocator;
+    std::chrono::steady_clock::time_point m_lastCheck;
+    float m_warningThreshold = 0.85f;  // 85% - предупреждение
+    float m_criticalThreshold = 0.95f; // 95% - критический уровень
+    std::vector<MemoryPressureEvent> m_pressureHistory;
+    
+    // Callback для реакции на нехватку памяти
+    std::function<void(const MemoryPressureEvent&)> m_pressureCallback;
+
+public:
+    MemoryBudgetMonitor(VmaAllocator allocator) 
+        : m_allocator(allocator) 
+    {
+        m_lastCheck = std::chrono::steady_clock::now();
+    }
+
+    // Конструктор с callback'ом для автоматической реакции
+    MemoryBudgetMonitor(VmaAllocator allocator, 
+                       std::function<void(const MemoryPressureEvent&)> callback)
+        : m_allocator(allocator), m_pressureCallback(std::move(callback))
+    {
+        m_lastCheck = std::chrono::steady_clock::now();
+    }
+
+    // Метод с использованием C++26 Deducing This для цепочки вызовов
+    MemoryBudgetMonitor& check_budget(this MemoryBudgetMonitor& self) {
+        auto now = std::chrono::steady_clock::now();
+        if (now - self.m_lastCheck < std::chrono::milliseconds(500)) {
+            return self;  // Проверяем не чаще 2 раза в секунду
+        }
+
+        self.m_lastCheck = now;
+
+        VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
+        vmaGetHeapBudgets(self.m_allocator, budgets);
+
+        for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+            if (budgets[i].budget > 0) {
+                float usage = float(budgets[i].usage) / float(budgets[i].budget);
+                float usagePercent = usage * 100.0f;
+
+                if (usage > self.m_criticalThreshold) {
+                    self.handle_critical_pressure(i, usagePercent, budgets[i]);
+                } else if (usage > self.m_warningThreshold) {
+                    self.handle_warning_pressure(i, usagePercent, budgets[i]);
+                }
+            }
+        }
+
+        return self;
+    }
+
+    // Получение статистики для Tracy
+    void update_tracy_stats() const {
+#ifdef TRACY_ENABLE
+        VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
+        vmaGetHeapBudgets(m_allocator, budgets);
+
+        for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+            if (budgets[i].budget > 0) {
+                float usagePercent = float(budgets[i].usage) / float(budgets[i].budget) * 100.0f;
+                TracyPlot(std::format("VMA_Heap{}_Usage", i).c_str(), usagePercent);
+                TracyPlot(std::format("VMA_Heap{}_BudgetMB", i).c_str(), 
+                         int64_t(budgets[i].budget / (1024 * 1024)));
+            }
+        }
+#endif
+    }
+
+    // Получение истории событий давления памяти
+    const std::vector<MemoryPressureEvent>& get_pressure_history() const {
+        return m_pressureHistory;
+    }
+
+    // Настройка порогов
+    MemoryBudgetMonitor& set_thresholds(float warning, float critical) {
+        m_warningThreshold = warning;
+        m_criticalThreshold = critical;
+        return *this;
+    }
+
+private:
+    void handle_warning_pressure(uint32_t heapIndex, float usagePercent, const VmaBudget& budget) {
+        std::println(stderr, "⚠️  WARNING: Heap {} usage: {:.1f}% (budget: {} MB, usage: {} MB)",
+                     heapIndex, usagePercent, 
+                     budget.budget / (1024 * 1024),
+                     budget.usage / (1024 * 1024));
+
+        MemoryPressureEvent event{
+            .heapIndex = heapIndex,
+            .usagePercent = usagePercent,
+            .timestamp = std::chrono::steady_clock::now(),
+            .suggestedActions = {
+                MemoryPressureAction::ClearTextureCache,
+                MemoryPressureAction::FlushStagingBuffers
+            }
+        };
+
+        m_pressureHistory.push_back(event);
+        
+        if (m_pressureCallback) {
+            m_pressureCallback(event);
+        }
+    }
+
+    void handle_critical_pressure(uint32_t heapIndex, float usagePercent, const VmaBudget& budget) {
+        std::println(stderr, "🚨 CRITICAL: Heap {} usage: {:.1f}% (budget: {} MB, usage: {} MB)",
+                     heapIndex, usagePercent,
+                     budget.budget / (1024 * 1024),
+                     budget.usage / (1024 * 1024));
+
+        MemoryPressureEvent event{
+            .heapIndex = heapIndex,
+            .usagePercent = usagePercent,
+            .timestamp = std::chrono::steady_clock::now(),
+            .suggestedActions = {
+                MemoryPressureAction::ClearTextureCache,
+                MemoryPressureAction::ReduceRenderDistance,
+                MemoryPressureAction::UnloadUnusedChunks,
+                MemoryPressureAction::ReduceTextureQuality,
+                MemoryPressureAction::FlushStagingBuffers
+            }
+        };
+
+        m_pressureHistory.push_back(event);
+        
+        if (m_pressureCallback) {
+            m_pressureCallback(event);
+        }
+    }
+};
+
+// Пример использования с stdexec для периодической проверки
+class MemoryBudgetMonitorSystem {
+    MemoryBudgetMonitor m_monitor;
+    
+public:
+    MemoryBudgetMonitorSystem(VmaAllocator allocator)
+        : m_monitor(allocator, [this](const MemoryPressureEvent& event) {
+            handle_memory_pressure(event);
+        })
+    {}
+
+    // Запуск мониторинга через stdexec scheduler
+    stdexec::sender auto start_monitoring(stdexec::scheduler auto scheduler) {
+        return stdexec::schedule(scheduler)
+             | stdexec::then([this]() {
+                   // Инициализация Tracy
+                   m_monitor.update_tracy_stats();
+               })
+             | stdexec::let_value([this]() {
+                   return stdexec::schedule_after(std::chrono::milliseconds(500))
+                        | stdexec::then([this]() {
+                              m_monitor.check_budget().update_tracy_stats();
+                          })
+                        | stdexec::repeat();
+               });
+    }
+
+private:
+    void handle_memory_pressure(const MemoryPressureEvent& event) {
+        std::println("Handling memory pressure on heap {}: {:.1f}%", 
+                     event.heapIndex, event.usagePercent);
+        
+        // Автоматическая реакция на нехватку памяти
+        for (auto action : event.suggestedActions) {
+            switch (action) {
+                case MemoryPressureAction::ClearTextureCache:
+                    clear_texture_cache();
+                    break;
+                case MemoryPressureAction::ReduceRenderDistance:
+                    reduce_render_distance();
+                    break;
+                case MemoryPressureAction::UnloadUnusedChunks:
+                    unload_unused_chunks();
+                    break;
+                case MemoryPressureAction::ReduceTextureQuality:
+                    reduce_texture_quality();
+                    break;
+                case MemoryPressureAction::FlushStagingBuffers:
+                    flush_staging_buffers();
+                    break;
+            }
+        }
+    }
+
+    void clear_texture_cache() {
+        // Реализация очистки кэша текстур
+        std::println("Clearing texture cache...");
+    }
+
+    void reduce_render_distance() {
+        // Реализация уменьшения дальности прорисовки
+        std::println("Reducing render distance...");
+    }
+
+    void unload_unused_chunks() {
+        // Реализация выгрузки неиспользуемых чанков
+        std::println("Unloading unused chunks...");
+    }
+
+    void reduce_texture_quality() {
+        // Реализация уменьшения качества текстур
+        std::println("Reducing texture quality...");
+    }
+
+    void flush_staging_buffers() {
+        // Реализация очистки staging буферов
+        std::println("Flushing staging buffers...");
+    }
+};
+
+} // namespace projectv::memory
+```
+
+## Итог: философия продвинутых паттернов
+
+1. **SoA всегда, AoS никогда** — данные должны быть выровнены для кэша и SIMD
+2. **Triple buffering для compute** — избегаем stalls между кадрами
+3. **Memory budget monitoring** — предупреждаем о нехватке памяти до её исчерпания
+4. **Timeline semaphores** — современная синхронизация вместо старых барьеров
+5. **Профилирование с Tracy** — видимость = контроль
+
+> **Почему именно так?** Потому что воксельный движок — это не про красоту, а про эффективность. Каждый лишний байт,
+> каждая лишняя синхронизация, каждый промах кэша — это потерянные FPS. Продвинутые паттерны VMA дают контроль над
+> памятью
+> на уровне, недоступном при ручном управлении.
+
+---
+
+## Что дальше?
+
+После освоения продвинутых паттернов VMA вы готовы к:
+
+1. **Интеграции с volk** — мета-лоадер для прямых вызовов драйвера
+2. **Интеграции с flecs** — ECS для управления ресурсами как компонентами
+3. **GPU-driven rendering** — вынос логики рендеринга в compute shaders
+4. **Bindless rendering** — отказ от descriptor sets в пользу giant descriptor arrays
+
+Каждый следующий шаг строится на правильном управлении памятью через VMA. Без этого фундамента — всё остальное
+бессмысленно.

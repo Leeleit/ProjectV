@@ -1,5 +1,9 @@
 ﻿# Vulkan Memory Allocator (VMA)
 
+> **Для понимания:** VMA — это как менеджер склада для видеопамяти. Вместо того чтобы самому таскать коробки и помнить,
+> где что лежит, вы говорите "мне нужен ящик для вершин размером 64KB", и получаете его с правильной маркировкой и в
+> оптимальном месте склада. А когда ящик больше не нужен — менеджер сам его утилизирует.
+
 **VMA — это дефрагментатор хаоса в видеопамяти.** Библиотека, которая берёт на себя грязную работу по общению с
 драйвером, позволяя думать о данных, а не о выравнивании памяти в 256 байт.
 
@@ -293,126 +297,70 @@ for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
 
 ---
 
-## Глоссарий
+## Почему VMA, а не ручное управление памятью?
 
-| Термин                   | Определение                                                                    |
-|--------------------------|--------------------------------------------------------------------------------|
-| **VMA**                  | Vulkan Memory Allocator — библиотека для управления памятью в Vulkan.          |
-| **VmaAllocator**         | Главный объект VMA. Создаётся через `vmaCreateAllocator()`.                    |
-| **VmaAllocation**        | Handle выделенного куска памяти.                                               |
-| **VmaPool**              | Пользовательский пул памяти определённого типа.                                |
-| **Memory type**          | Один из вариантов памяти в `VkPhysicalDeviceMemoryProperties`.                 |
-| **Memory heap**          | Физический блок видеопамяти. Один heap может содержать несколько memory types. |
-| **Staging buffer**       | Временный host-visible буфер для передачи данных с CPU на GPU.                 |
-| **GPU-only resource**    | Ресурс в device-local памяти: вершинные/индексные буферы, текстуры.            |
-| **Persistent mapping**   | Постоянно отображённая память.                                                 |
-| **Readback**             | Чтение данных с GPU на CPU.                                                    |
-| **Dedicated allocation** | Отдельный блок `VkDeviceMemory` под один ресурс.                               |
+**Для понимания:** Представьте, что вам нужно построить дом. Можно самому замешивать бетон, пилить доски и класть
+кирпичи. А можно заказать готовые панели и собрать дом за неделю. VMA — это готовые панели для видеопамяти.
 
----
+### Проблемы ручного управления:
 
-## VMA_MEMORY_USAGE
+1. **Выравнивание:** Каждый тип памяти требует разного выравнивания (256 байт, 64 байт, зависит от GPU)
+2. **Фрагментация:** Множество мелких аллокаций создают "дыры" в памяти
+3. **Сложность:** 5 операций Vulkan вместо одной функции VMA
+4. **Производительность:** Неоптимальный выбор типа памяти = медленный доступ
 
-| Значение                                | Описание                                              |
-|-----------------------------------------|-------------------------------------------------------|
-| `VMA_MEMORY_USAGE_AUTO`                 | Автовыбор по usage буфера/изображения. Рекомендуется. |
-| `VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE`   | Приоритет device-local.                               |
-| `VMA_MEMORY_USAGE_AUTO_PREFER_HOST`     | Приоритет host-памяти.                                |
-| `VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED` | Transient attachment (мобильные).                     |
+### Что даёт VMA:
 
-Для mappable-аллокаций с `AUTO` обязательно указать флаг доступа:
-
-- `VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT` — запись
-- `VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT` — чтение или read/write
+1. **Одна операция:** `vmaCreateBuffer()` вместо `vkCreateBuffer()` + `vkGetBufferMemoryRequirements()` +
+   `vkAllocateMemory()` + `vkBindBufferMemory()`
+2. **Автовыбор:** Оптимальный тип памяти по подсказке использования
+3. **Дефрагментация:** Перемещение данных для уменьшения фрагментации
+4. **Статистика:** Мониторинг использования памяти в реальном времени
+5. **Бюджет:** Предотвращение исчерпания видеопамяти
 
 ---
 
-## Флаги
+## Когда что использовать: практическое руководство
 
-| Термин                               | Определение                                                        |
-|--------------------------------------|--------------------------------------------------------------------|
-| **MAPPED_BIT**                       | `VMA_ALLOCATION_CREATE_MAPPED_BIT` — сразу получить `pMappedData`. |
-| **HOST_ACCESS_SEQUENTIAL_WRITE_BIT** | Последовательная запись с CPU (staging upload).                    |
-| **HOST_ACCESS_RANDOM_BIT**           | Случайный доступ с CPU (readback, uniform с read/write).           |
-| **DEDICATED_MEMORY_BIT**             | Принудительная dedicated-аллокация.                                |
-| **WITHIN_BUDGET_BIT**                | Возврат ошибки при превышении бюджета памяти.                      |
-| **STRATEGY_MIN_MEMORY_BIT**          | Алгоритм выбора блока: минимум памяти (best-fit).                  |
-| **STRATEGY_MIN_TIME_BIT**            | Алгоритм выбора блока: минимум времени (first-fit).                |
+### 1. **Вершинные/индексные буферы (GPU-only)**
 
----
-
-## Функции
-
-| Термин                      | Определение                                                    |
-|-----------------------------|----------------------------------------------------------------|
-| **vmaCreateAllocator**      | Создаёт главный объект VMA после VkDevice.                     |
-| **vmaDestroyAllocator**     | Уничтожает аллокатор (после освобождения всех ресурсов).       |
-| **vmaCreateBuffer**         | Создаёт VkBuffer и выделяет для него память.                   |
-| **vmaCreateImage**          | Создаёт VkImage и выделяет для него память.                    |
-| **vmaDestroyBuffer**        | Уничтожает буфер и освобождает аллокацию.                      |
-| **vmaDestroyImage**         | Уничтожает изображение и освобождает аллокацию.                |
-| **vmaMapMemory**            | Отображает host-visible аллокацию в адресное пространство CPU. |
-| **vmaUnmapMemory**          | Отменяет отображение памяти.                                   |
-| **vmaFlushAllocation**      | Сброс кэша CPU после записи (для не-coherent памяти).          |
-| **vmaInvalidateAllocation** | Инвалидация кэша CPU перед чтением (для readback).             |
-| **vmaCreatePool**           | Создаёт пользовательский пул памяти.                           |
-| **vmaDestroyPool**          | Уничтожает пул (все аллокации должны быть освобождены).        |
-| **vmaGetHeapBudgets**       | Возвращает бюджет памяти по heap'ам.                           |
-| **vmaCalculateStatistics**  | Возвращает статистику использования памяти.                    |
-
----
-
-## Структуры данных
-
-| Термин                | Определение                                                                            |
-|-----------------------|----------------------------------------------------------------------------------------|
-| **VmaAllocationInfo** | Информация об аллокации: `deviceMemory`, `offset`, `size`, `pMappedData`, `pUserData`. |
-| **VmaBudget**         | Данные по heap'у: `usage`, `budget`, `statistics`.                                     |
-| **VmaStatistics**     | Статистика: `blockCount`, `allocationCount`, `allocationBytes`, `unusedBytes`.         |
-| **VmaPoolCreateInfo** | Параметры пула: `memoryTypeIndex`, `blockSize`, `minBlockCount`, `maxBlockCount`.      |
-
----
-
-## Общая схема
-
+```cpp
+VmaAllocationCreateInfo allocInfo = {};
+allocInfo.usage = VMA_MEMORY_USAGE_AUTO;  // VMA выберет device-local
+// MIN_MEMORY для долгоживущих ресурсов
+allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
 ```
-VkDevice создан
-    │
-    ▼
-vmaCreateAllocator
-    │
-    ▼
-vmaCreateBuffer / vmaCreateImage
-    │
-    ├── GPU-only: вершины, текстуры
-    │       └── Загрузка через staging
-    │
-    ├── Host-visible (staging): upload CPU→GPU
-    │       └── vmaMapMemory → memcpy → vmaFlushAllocation
-    │
-    ├── Host-visible (persistent): uniform, частые обновления
-    │       └── VMA_ALLOCATION_CREATE_MAPPED_BIT
-    │
-    └── Host-visible (readback): GPU→CPU
-            └── vmaInvalidateAllocation → vmaMapMemory → чтение
-    │
-    ▼
-vmaDestroyBuffer / vmaDestroyImage
-    │
-    ▼
-vmaDestroyAllocator
+
+### 2. **Uniform буферы (каждый кадр)**
+
+```cpp
+allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+// MAPPED_BIT + SEQUENTIAL_WRITE для persistent mapping
+allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                  VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                  VMA_ALLOCATION_CREATE_STRATEGY_MIN_TIME_BIT;
+```
+
+### 3. **Staging буферы (загрузка текстур)**
+
+```cpp
+allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+// MIN_TIME для временных ресурсов
+allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                  VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                  VMA_ALLOCATION_CREATE_STRATEGY_MIN_TIME_BIT;
+```
+
+### 4. **Compute storage buffers**
+
+```cpp
+allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+// Зависит от частоты обновления:
+// - Часто: MIN_TIME
+// - Редко: MIN_MEMORY
+allocInfo.flags = updateFrequently
+    ? VMA_ALLOCATION_CREATE_STRATEGY_MIN_TIME_BIT
+    : VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
 ```
 
 ---
-
-## Лицензия
-
-MIT License. Copyright © 2017-2024 Advanced Micro Devices, Inc.
-
----
-
-## Ссылки
-
-- **Исходный код:
-  ** [GitHub - GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
-- **Документация:** [Vulkan Memory Allocator (GPUOpen)](https://gpuopen.com/vulkan-memory

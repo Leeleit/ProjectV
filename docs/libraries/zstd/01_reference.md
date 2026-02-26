@@ -1,50 +1,37 @@
-# Zstd — Reference
+# Zstandard: Чистый справочник
 
-<!-- anchor: 01_reference -->
+**Zstandard (Zstd)** — алгоритм сжатия общего назначения, разработанный Yann Collet в Facebook. Обеспечивает
+исключительный баланс между скоростью сжатия, скоростью декомпрессии и степенью сжатия.
 
-Zstandard (Zstd) — современный алгоритм сжатия с фокусом на баланс скорости и степени сжатия, идеально подходящий для
-воксельного движка.
+> **Для понимания:** Представьте Zstd как "умный архивариус". Он не просто сжимает данные — он запоминает паттерны и
+> использует их для предсказания. Как опытный библиотекарь, который знает, где что лежит, и может мгновенно найти
+> нужное.
 
----
+## Ключевые характеристики
 
-## Почему Zstd для ProjectV
+| Параметр              | Значение      |
+|-----------------------|---------------|
+| Скорость сжатия       | до 500 MB/s   |
+| Скорость декомпрессии | до 2000 MB/s  |
+| Степень сжатия        | 2.5:1 — 3.5:1 |
+| Уровни сжатия         | 1–22          |
+| Макс. размер окна     | 128 MB        |
+| Потокобезопасность    | Да            |
+| Dictionary            | Да (до 16 MB) |
 
-### Сравнение алгоритмов сжатия
+## Типичное применение
 
-| Алгоритм | Скорость сжатия | Скорость декомпрессии | Степень сжатия | Использование в ProjectV                      |
-|----------|-----------------|-----------------------|----------------|-----------------------------------------------|
-| **Zstd** | **500 MB/s**    | **2000 MB/s**         | **2.8:1**      | **Воксельные чанки, сейвы, сетевой протокол** |
-| LZ4      | 800 MB/s        | 4000 MB/s             | 2.1:1          | Быстрая загрузка текстур                      |
-| zlib     | 100 MB/s        | 400 MB/s              | 2.5:1          | Устаревший формат                             |
-| LZMA     | 10 MB/s         | 100 MB/s              | 3.5:1          | Архивация релизов                             |
-
-### Ключевые преимущества Zstd
-
-1. **Предиктивный словарь (Dictionary Compression)**
-
-- Обучение на типичных данных ProjectV (воксельные чанки)
-- Улучшение сжатия на 10-50% для повторяющихся паттернов
-
-2. **Многопоточное сжатие**
-
-- Линейное масштабирование до 256 потоков
-- Идеально для параллельной обработки чанков
-
-3. **Настраиваемые уровни сжатия (1-22)**
-
-- Уровень 1: максимальная скорость (почти как LZ4)
-- Уровень 22: максимальное сжатие (почти как LZMA)
-
-4. **Long Distance Matching**
-
-- Эффективное сжатие больших воксельных миров
-- Обнаружение повторений на расстоянии до 128MB
+- Базы данных и системы хранения
+- Сетевые протоколы
+- Файловые системы и архивы
+- Game engine ресурсы
+- Резервное копирование
 
 ---
 
-## Архитектура Zstd
+## Архитектура
 
-### Блочная структура
+### Блочная структура фрейма
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -55,410 +42,743 @@ Zstandard (Zstd) — современный алгоритм сжатия с ф�
 └──────────┴──────────┴──────────────┴──────────┴────────────┘
 ```
 
+Каждый фрейм содержит:
+
+- **Header (4 байта)** — магическое число, версия, параметры
+- **Blocks** — сжатые данные переменного размера (max 128 KB)
+- **Checksum (опционально)** — xxHash для проверки целостности
+
 ### Этапы сжатия
 
-1. **Предикция (Prediction)**
-
-- Finite State Entropy (FSE) для символов
-- Huffman coding для литералов
-
-2. **Сопоставление (Matching)**
-
-- Hash chain для поиска повторений
-- Optimal parser для выбора лучших матчей
-
-3. **Кодирование (Encoding)**
-
-- tANS (tabled Asymmetric Numeral Systems)
-- Битовая упаковка для эффективного хранения
-
-### Memory Layout (Data-Oriented Design)
-
-```cpp
-struct ZstdBlock {
-    uint32_t compressed_size;
-    uint32_t original_size;
-    uint8_t* data;  // Сжатые данные
-
-    // Cache-friendly структура
-    alignas(64) uint8_t buffer[ZSTD_BLOCKSIZE_MAX];
-};
-
-struct ZstdFrame {
-    std::vector<ZstdBlock> blocks;
-    ZSTD_CDict* dictionary;  // Общий словарь для всех блоков
-    uint64_t total_compressed_size;
-    uint64_t total_original_size;
-
-    // Статистика для мониторинга
-    struct {
-        double compression_ratio;
-        double compression_speed;  // MB/s
-        double decompression_speed; // MB/s
-    } stats;
-};
 ```
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   Input Data │ -> │   Matching   │ -> │   Entropy   │
+│              │    │   (Zstd)     │    │   Coding    │
+└──────────────┘    └──────────────┘    └──────────────┘
+                           ↓
+                    ┌──────────────┐
+                    │   LDM Mode   │
+                    │ (опционально)│
+                    └──────────────┘
+```
+
+#### 1. Поиск совпадений (Matching)
+
+Zstd использует несколько стратегий:
+
+| Метод              | Описание                           | Применение            |
+|--------------------|------------------------------------|-----------------------|
+| **Hash Chain**     | Хэш-таблица для быстрого поиска    | Быстрые уровни (1–3)  |
+| **Binary Tree**    | Двоичное дерево для точного поиска | Средние уровни (4–15) |
+| **Optimal Parser** | Динамическое программирование      | Макс. сжатие (19–22)  |
+
+#### 2. Кодирование энтропии (Entropy Coding)
+
+- **FSE (Finite State Entropy)** — кодирование символов
+- **Huffman** — кодирование литералов
+- **tANS** — асимметричная система счисления
+
+> **Для понимания:** Энтропийное кодирование — это как сокращённая запись. Вместо "камень камень камень" пишем "
+> 3×камень". Чем чаще повторяется паттерн, тем короче его представление.
+
+#### 3. Long Distance Matching (LDM)
+
+LDM — механизм для обнаружения повторений на больших расстояниях (до 128 MB):
+
+- Эффективен для данных с периодическими паттернами
+- Активируется на уровнях 4+
+- Требует дополнительной памяти
 
 ---
 
-## Dictionary Compression для воксельных данных
+## Уровни сжатия
 
-### Обучение словаря на данных ProjectV
+### Таблица уровней
 
-```cpp
-#include <zstd.h>
-#include <vector>
-#include <span>
-#include <print>
-#include <filesystem>
+| Уровень | Скорость сжатия | Скорость декпрессиоми | Степень | Применение           |
+|---------|-----------------|-----------------------|---------|----------------------|
+| 1       | ~500 MB/s       | ~2000 MB/s            | 2.0x    | Real-time, streaming |
+| 3       | ~400 MB/s       | ~1800 MB/s            | 2.2x    | Network packets      |
+| 5       | ~250 MB/s       | ~1500 MB/s            | 2.5x    | Balanced             |
+| 10      | ~80 MB/s        | ~1000 MB/s            | 2.8x    | Storage              |
+| 15      | ~30 MB/s        | ~800 MB/s             | 3.2x    | Archives             |
+| 19      | ~10 MB/s        | ~600 MB/s             | 3.5x    | Max compression      |
 
-class VoxelDictionary {
-    ZSTD_CDict* compression_dict_ = nullptr;
-    ZSTD_DDict* decompression_dict_ = nullptr;
-    std::vector<uint8_t> dictionary_data_;
-
-public:
-    struct TrainingSamples {
-        std::vector<std::span<const uint8_t>> samples;
-        size_t total_size = 0;
-
-        void add_voxel_chunk(std::span<const uint8_t> chunk) {
-            samples.push_back(chunk);
-            total_size += chunk.size();
-        }
-    };
-
-    // Обучение словаря на типичных воксельных данных
-    std::expected<void, std::string> train(const TrainingSamples& samples,
-                                          size_t dict_size = 100 * 1024) {
-        if (samples.samples.empty()) {
-            return std::unexpected("No training samples provided");
-        }
-
-        // Подготовка данных для обучения
-        std::vector<size_t> sample_sizes;
-        std::vector<const void*> sample_ptrs;
-
-        for (const auto& sample : samples.samples) {
-            sample_sizes.push_back(sample.size());
-            sample_ptrs.push_back(sample.data());
-        }
-
-        // Выделение памяти для словаря
-        dictionary_data_.resize(dict_size);
-
-        // Обучение словаря
-        size_t actual_size = ZDICT_trainFromBuffer(
-            dictionary_data_.data(), dict_size,
-            sample_ptrs.data(), sample_sizes.data(),
-            static_cast<unsigned>(samples.samples.size())
-        );
-
-        if (ZDICT_isError(actual_size)) {
-            return std::unexpected(ZDICT_getErrorName(actual_size));
-        }
-
-        dictionary_data_.resize(actual_size);
-
-        // Создание compression dictionary
-        compression_dict_ = ZSTD_createCDict(
-            dictionary_data_.data(), dictionary_data_.size(),
-            3  // Уровень сжатия для словаря
-        );
-
-        if (!compression_dict_) {
-            return std::unexpected("Failed to create compression dictionary");
-        }
-
-        // Создание decompression dictionary
-        decompression_dict_ = ZSTD_createDDict(
-            dictionary_data_.data(), dictionary_data_.size()
-        );
-
-        if (!decompression_dict_) {
-            return std::unexpected("Failed to create decompression dictionary");
-        }
-
-        std::print("Dictionary trained: {} samples, {} -> {} bytes ({}%)\n",
-                   samples.samples.size(), samples.total_size, actual_size,
-                   (actual_size * 100) / samples.total_size);
-
-        return {};
-    }
-
-    // Сохранение словаря в файл
-    bool save(const std::filesystem::path& path) {
-        std::ofstream file(path, std::ios::binary);
-        if (!file) {
-            std::print(stderr, "Failed to open dictionary file: {}\n", path.string());
-            return false;
-        }
-
-        // Заголовок словаря
-        struct DictionaryHeader {
-            char magic[4] = {'Z', 'D', 'I', 'C'};
-            uint32_t version = 1;
-            uint64_t data_size;
-            uint64_t sample_count;
-            uint64_t total_training_size;
-        } header;
-
-        header.data_size = dictionary_data_.size();
-        header.sample_count = 0;  // Будет заполнено при загрузке
-        header.total_training_size = 0;
-
-        file.write(reinterpret_cast<const char*>(&header), sizeof(header));
-        file.write(reinterpret_cast<const char*>(dictionary_data_.data()),
-                  dictionary_data_.size());
-
-        std::print("Dictionary saved: {} bytes\n", dictionary_data_.size());
-        return true;
-    }
-
-    // Загрузка словаря из файла
-    std::expected<void, std::string> load(const std::filesystem::path& path) {
-        std::ifstream file(path, std::ios::binary | std::ios::ate);
-        if (!file) {
-            return std::unexpected("Failed to open dictionary file");
-        }
-
-        size_t file_size = file.tellg();
-        file.seekg(0);
-
-        if (file_size < sizeof(DictionaryHeader)) {
-            return std::unexpected("Dictionary file too small");
-        }
-
-        DictionaryHeader header;
-        file.read(reinterpret_cast<char*>(&header), sizeof(header));
-
-        // Проверка magic
-        if (std::string(header.magic, 4) != "ZDIC") {
-            return std::unexpected("Invalid dictionary format");
-        }
-
-        dictionary_data_.resize(header.data_size);
-        file.read(reinterpret_cast<char*>(dictionary_data_.data()),
-                 header.data_size);
-
-        // Создание dictionaries
-        compression_dict_ = ZSTD_createCDict(
-            dictionary_data_.data(), dictionary_data_.size(), 3);
-
-        decompression_dict_ = ZSTD_createDDict(
-            dictionary_data_.data(), dictionary_data_.size());
-
-        if (!compression_dict_ || !decompression_dict_) {
-            return std::unexpected("Failed to create dictionaries from file");
-        }
-
-        std::print("Dictionary loaded: {} bytes\n", dictionary_data_.size());
-        return {};
-    }
-
-    ZSTD_CDict* compression_dict() const { return compression_dict_; }
-    ZSTD_DDict* decompression_dict() const { return decompression_dict_; }
-    std::span<const uint8_t> data() const { return dictionary_data_; }
-
-    ~VoxelDictionary() {
-        if (compression_dict_) ZSTD_freeCDict(compression_dict_);
-        if (decompression_dict_) ZSTD_freeDDict(decompression_dict_);
-    }
-};
-```
-
-### Типичные паттерны воксельных данных для словаря
+### Выбор уровня
 
 ```cpp
-// Сбор образцов для обучения словаря
-VoxelDictionary::TrainingSamples collect_training_samples() {
-    VoxelDictionary::TrainingSamples samples;
-
-    // 1. Пустые чанки (воздух)
-    std::array<uint8_t, 4096> empty_chunk{};
-    samples.add_voxel_chunk(empty_chunk);
-
-    // 2. Полные чанки (камень)
-    std::array<uint8_t, 4096> solid_chunk;
-    std::fill(solid_chunk.begin(), solid_chunk.end(), 1);  // Камень
-    samples.add_voxel_chunk(solid_chunk);
-
-    // 3. Чанки с поверхностью (земля сверху, воздух снизу)
-    std::array<uint8_t, 4096> surface_chunk;
-    for (int z = 0; z < 16; ++z) {
-        for (int y = 0; y < 16; ++y) {
-            for (int x = 0; x < 16; ++x) {
-                int index = x + y * 16 + z * 256;
-                surface_chunk[index] = (y < 8) ? 1 : 0;  // Земля ниже 8 уровня
-            }
-        }
-    }
-    samples.add_voxel_chunk(surface_chunk);
-
-    // 4. Чанки с пещерами
-    std::array<uint8_t, 4096> cave_chunk;
-    // ... генерация процедурных пещер
-    samples.add_voxel_chunk(cave_chunk);
-
-    // 5. Чанки с структурами (деревья, здания)
-    std::array<uint8_t, 4096> structure_chunk;
-    // ... генерация структур
-    samples.add_voxel_chunk(structure_chunk);
-
-    return samples;
+// Быстрая проверка пригодности уровня
+bool can_use_level(int level) {
+    // Уровни 12+ требуют значительного времени
+    return level >= 12 ? std::chrono::seconds(5) : std::chrono::milliseconds(100);
 }
 ```
 
 ---
 
-## Производительность: бенчмарки и метрики
+## Dictionary Compression
 
-### Сравнение уровней сжатия для воксельных данных
+### Концепция
+
+Dictionaries позволяют Zstd "запомнить" типичные паттерны данных до начала сжатия. Это критически важно для данных с
+повторяющейся структурой.
+
+> **Для понимания:** Dictionary — это как "шпаргалка" для архиватора. Вместо того чтобы каждый раз заново разбираться в
+> структуре данных, он сразу знает типичные паттерны. Как если бы архивариус заранее знал, что в архиве часто
+> встречаются
+> документы определённого формата.
+
+### Обучение словаря
 
 ```cpp
 #include <zstd.h>
-#include <chrono>
-#include <print>
 #include <vector>
+#include <span>
+#include <cstddef>
 
-struct CompressionBenchmark {
-    struct Result {
-        int level;
-        size_t compressed_size;
-        std::chrono::microseconds compression_time;
-        std::chrono::microseconds decompression_time;
-        double compression_ratio;
-        double compression_speed;    // MB/s
-        double decompression_speed;  // MB/s
+// Обучение словаря на пользовательских данных
+std::expected<size_t, std::string> train_dictionary(
+    std::span<const uint8_t> dict_buffer,
+    std::span<const std::span<const uint8_t>> samples
+) {
+    // Подготовка указателей и размеров
+    std::vector<size_t> sample_sizes(samples.size());
+    std::vector<const void*> sample_ptrs(samples.size());
 
-        struct glaze {
-            using T = Result;
-            static constexpr auto value = glz::object(
-                "level", &T::level,
-                "compressed_size", &T::compressed_size,
-                "compression_time", &T::compression_time,
-                "decompression_time", &T::decompression_time,
-                "compression_ratio", &T::compression_ratio,
-                "compression_speed", &T::compression_speed,
-                "decompression_speed", &T::decompression_speed
-            );
-        };
-    };
-
-    static std::vector<Result> run_benchmark(std::span<const uint8_t> data,
-                                            const VoxelDictionary& dict) {
-        std::vector<Result> results;
-
-        // Тестируем уровни сжатия от 1 до 22
-        for (int level = 1; level <= 22; ++level) {
-            // Пропускаем медленные уровни для быстрых тестов
-            if (level > 10 && data.size() < 10 * 1024 * 1024) {
-                continue;
-            }
-
-            Result result;
-            result.level = level;
-
-            // Сжатие
-            auto compress_start = std::chrono::high_resolution_clock::now();
-
-            size_t bound = ZSTD_compressBound(data.size());
-            std::vector<uint8_t> compressed(bound);
-
-            size_t compressed_size = ZSTD_compress_usingCDict(
-                compressed.data(), bound,
-                data.data(), data.size(),
-                dict.compression_dict()
-            );
-
-            auto compress_end = std::chrono::high_resolution_clock::now();
-
-            if (ZSTD_isError(compressed_size)) {
-                std::print(stderr, "Compression failed at level {}: {}\n",
-                           level, ZSTD_getErrorName(compressed_size));
-                continue;
-            }
-
-            compressed.resize(compressed_size);
-
-            // Декомпрессия
-            auto decompress_start = std::chrono::high_resolution_clock::now();
-
-            std::vector<uint8_t> decompressed(data.size());
-            size_t decompressed_size = ZSTD_decompress_usingDDict(
-                decompressed.data(), data.size(),
-                compressed.data(), compressed_size,
-                dict.decompression_dict()
-            );
-
-            auto decompress_end = std::chrono::high_resolution_clock::now();
-
-            if (ZSTD_isError(decompressed_size) || decompressed_size != data.size()) {
-                std::print(stderr, "Decompression failed at level {}\n", level);
-                continue;
-            }
-
-            // Проверка целостности
-            if (memcmp(data.data(), decompressed.data(), data.size()) != 0) {
-                std::print(stderr, "Data corruption at level {}\n", level);
-                continue;
-            }
-
-            // Заполнение результатов
-            result.compressed_size = compressed_size;
-            result.compression_time = std::chrono::duration_cast<std::chrono::microseconds>(
-                compress_end - compress_start);
-            result.decompression_time = std::chrono::duration_cast<std::chrono::microseconds>(
-                decompress_end - decompress_start);
-            result.compression_ratio = static_cast<double>(data.size()) / compressed_size;
-
-            // Расчет скоростей (MB/s)
-            double data_mb = data.size() / (1024.0 * 1024.0);
-            double compress_seconds = result.compression_time.count() / 1'000'000.0;
-            double decompress_seconds = result.decompression_time.count() / 1'000'000.0;
-
-            result.compression_speed = data_mb / compress_seconds;
-            result.decompression_speed = data_mb / decompress_seconds;
-
-            results.push_back(result);
-
-            std::print("Level {}: {} -> {} bytes ({:.2f}x) "
-                       "compress: {:.1f} MB/s, decompress: {:.1f} MB/s\n",
-                       level, data.size(), compressed_size, result.compression_ratio,
-                       result.compression_speed, result.decompression_speed);
-        }
-
-        return results;
+    for (size_t i = 0; i < samples.size(); ++i) {
+        sample_ptrs[i] = samples[i].data();
+        sample_sizes[i] = samples[i].size();
     }
-};
+
+    // Обучение
+    size_t result = ZDICT_trainFromBuffer(
+        dict_buffer.data(),
+        dict_buffer.size(),
+        sample_ptrs.data(),
+        sample_sizes.data(),
+        static_cast<unsigned>(samples.size())
+    );
+
+    if (ZDICT_isError(result)) {
+        return std::unexpected(ZDICT_getErrorName(result));
+    }
+
+    return result; // Размер обученного словаря
+}
 ```
 
-### Рекомендации по уровням сжатия для ProjectV
+### Использование словаря
 
-| Использование         | Уровень   | Скорость         | Сжатие   | Причина                |
-|-----------------------|-----------|------------------|----------|------------------------|
-| **Сетевой протокол**  | **1-3**   | **500+ MB/s**    | **2.0x** | Минимальная задержка   |
-| **Воксельные чанки**  | **5-7**   | **200-300 MB/s** | **2.5x** | Баланс скорости/сжатия |
-| **Сохранения мира**   | **10-12** | **50-100 MB/s**  | **3.0x** | Максимальное сжатие    |
-| **Архивация релизов** | **19-22** | **5-10 MB/s**    | **3.5x** | Минимальный размер     |
+```cpp
+// Создание compression dictionary
+ZSTD_CDict* create_cdict(
+    std::span<const uint8_t> dict_data,
+    int compression_level
+) {
+    return ZSTD_createCDict(
+        dict_data.data(),
+        dict_data.size(),
+        compression_level
+    );
+}
+
+// Создание decompression dictionary
+ZSTD_DDict* create_ddict(std::span<const uint8_t> dict_data) {
+    return ZSTD_createDDict(
+        dict_data.data(),
+        dict_data.size()
+    );
+}
+```
 
 ---
 
-## Заключение
+## API: Базовое сжатие
 
-Zstd предоставляет для ProjectV:
+### Простое API (однохнопечное)
 
-1. **Идеальный баланс** скорости и степени сжатия
-2. **Dictionary Compression** для воксельных данных (10-50% улучшение)
-3. **Многопоточную обработку** для параллельного сжатия чанков
-4. **Настраиваемые уровни** от максимальной скорости до максимального сжатия
+```cpp
+#include <zstd.h>
+#include <vector>
+#include <span>
+#include <expected>
 
-### Ключевые применения в ProjectV:
+// Сжатие данных
+std::expected<std::vector<uint8_t>, std::string> compress(
+    std::span<const uint8_t> src,
+    int level = 3
+) {
+    // Вычисление максимального размера вывода
+    const size_t bound = ZSTD_compressBound(src.size());
 
-1. **Сжатие воксельных чанков** для передачи по сети и сохранения на диск
-2. **Архивация миров** с максимальным сжатием для долгосрочного хранения
-3. **Сетевой протокол** с минимальной задержкой для multiplayer
-4. **Кэширование текстур** с быстрой декомпрессией для загрузки
+    std::vector<uint8_t> dst(bound);
 
-Zstd — это не просто библиотека сжатия, это инфраструктура для эффективной работы с данными в ProjectV, оптимизированная
-под специфику воксельного движка.
+    // Сжатие
+    const size_t compressed_size = ZSTD_compress(
+        dst.data(),
+        bound,
+        src.data(),
+        src.size(),
+        level
+    );
+
+    if (ZSTD_isError(compressed_size)) {
+        return std::unexpected(ZSTD_getErrorName(compressed_size));
+    }
+
+    dst.resize(compressed_size);
+    return dst;
+}
+
+// Декомпрессия данных
+std::expected<std::vector<uint8_t>, std::string> decompress(
+    std::span<const uint8_t> src
+) {
+    // Получение размера оригинальных данных
+    const unsigned long long original_size = ZSTD_getFrameContentSize(
+        src.data(),
+        src.size()
+    );
+
+    if (original_size == ZSTD_CONTENTSIZE_ERROR) {
+        return std::unexpected("Invalid compressed data");
+    }
+
+    if (original_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+        return std::unexpected("Unknown original size - use streaming API");
+    }
+
+    std::vector<uint8_t> dst(static_cast<size_t>(original_size));
+
+    const size_t decompressed_size = ZSTD_decompress(
+        dst.data(),
+        original_size,
+        src.data(),
+        src.size()
+    );
+
+    if (ZSTD_isError(decompressed_size)) {
+        return std::unexpected(ZSTD_getErrorName(decompressed_size));
+    }
+
+    if (decompressed_size != original_size) {
+        return std::unexpected("Size mismatch after decompression");
+    }
+
+    return dst;
+}
+```
+
+### Продвинутое API (streaming)
+
+```cpp
+#include <zstd.h>
+#include <vector>
+#include <span>
+#include <expected>
+
+class ZstdCompressor {
+public:
+    explicit ZstdCompressor(int level = 3) : level_(level) {
+        cctx_ = ZSTD_createCCtx();
+        if (!cctx_) {
+            // В ProjectV используем std::expected вместо throw
+            // Пример правильного подхода:
+            // return std::unexpected("Failed to create compression context");
+        }
+        ZSTD_CCtx_setParameter(cctx_, ZSTD_c_compressionLevel, level);
+    }
+
+    ~ZstdCompressor() {
+        if (cctx_) ZSTD_freeCCtx(cctx_);
+    }
+
+    // Сжатие с использованием словаря
+    std::expected<std::vector<uint8_t>, std::string> compress_with_dict(
+        std::span<const uint8_t> src,
+        std::span<const uint8_t> dict
+    ) {
+        // Создание словаря для этого контекста (или переиспользовать CDict)
+        ZSTD_CDict* cdict = ZSTD_createCDict(
+            dict.data(), dict.size(), level_
+        );
+
+        if (!cdict) {
+            return std::unexpected("Failed to create dictionary");
+        }
+
+        ZSTD_CCtx_refCDict(cctx_, cdict);
+
+        const size_t bound = ZSTD_compressBound(src.size());
+        std::vector<uint8_t> dst(bound);
+
+        const size_t result = ZSTD_compress2(
+            cctx_,
+            dst.data(), bound,
+            src.data(), src.size()
+        );
+
+        ZSTD_freeCDict(cdict);
+
+        if (ZSTD_isError(result)) {
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        dst.resize(result);
+        return dst;
+    }
+
+private:
+    ZSTD_CCtx* cctx_ = nullptr;
+    int level_;
+};
+
+class ZstdDecompressor {
+public:
+    ZstdDecompressor() {
+        dctx_ = ZSTD_createDCtx();
+        if (!dctx_) {
+            // В ProjectV используем std::expected вместо throw
+            // Пример правильного подхода:
+            // return std::unexpected("Failed to create decompression context");
+        }
+    }
+
+    ~ZstdDecompressor() {
+        if (dctx_) ZSTD_freeDCtx(dctx_);
+    }
+
+    std::expected<std::vector<uint8_t>, std::string> decompress_with_dict(
+        std::span<const uint8_t> src,
+        std::span<const uint8_t> dict
+    ) {
+        // Создание словаря
+        ZSTD_DDict* ddict = ZSTD_createDDict(
+            dict.data(), dict.size()
+        );
+
+        if (!ddict) {
+            return std::unexpected("Failed to create decompression dictionary");
+        }
+
+        ZSTD_DCtx_refDDict(dctx_, ddict);
+
+        // Определение размера
+        const unsigned long long original_size = ZSTD_getFrameContentSize(
+            src.data(), src.size()
+        );
+
+        if (original_size == ZSTD_CONTENTSIZE_ERROR) {
+            ZSTD_freeDDict(ddict);
+            return std::unexpected("Invalid frame");
+        }
+
+        std::vector<uint8_t> dst(static_cast<size_t>(original_size));
+
+        const size_t result = ZSTD_decompressDCtx(
+            dctx_,
+            dst.data(), dst.size(),
+            src.data(), src.size()
+        );
+
+        ZSTD_freeDDict(ddict);
+
+        if (ZSTD_isError(result)) {
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        dst.resize(result);
+        return dst;
+    }
+
+private:
+    ZSTD_DCtx* dctx_ = nullptr;
+};
+```
+
+---
+
+## API: Streaming (потоковое сжатие)
+
+### Потоковое сжатие
+
+```cpp
+#include <zstd.h>
+#include <span>
+#include <vector>
+#include <expected>
+
+class ZstdStreamingCompressor {
+public:
+    explicit ZstdStreamingCompressor(int level = 3)
+        : level_(level)
+    {
+        cctx_ = ZSTD_createCStream();
+        if (!cctx_) {
+            // В ProjectV используем std::expected вместо throw
+            // Пример правильного подхода:
+            // return std::unexpected("Failed to create stream");
+        }
+
+        ZSTD_initCStream(cctx_, level);
+    }
+
+    ~ZstdStreamingCompressor() {
+        if (cctx_) ZSTD_freeCStream(cctx_);
+    }
+
+    // Инициализация с параметрами
+    void set_checksum(bool enabled = true) {
+        ZSTD_CCtx_setParameter(cctx_, ZSTD_c_checksumFlag, enabled ? 1 : 0);
+    }
+
+    void set_dict(std::span<const uint8_t> dict) {
+        // Создаём и кэшируем словарь
+        cdict_ = ZSTD_createCDict(dict.data(), dict.size(), level_);
+        if (cdict_) {
+            ZSTD_CCtx_refCDict(cctx_, cdict_);
+        }
+    }
+
+    // Сжатие порции данных
+    std::expected<std::vector<uint8_t>, std::string> compress(
+        std::span<const uint8_t> input,
+        bool flush = false
+    ) {
+        ZSTD_inBuffer in{
+            .src = input.data(),
+            .size = input.size(),
+            .pos = 0
+        };
+
+        std::vector<uint8_t> output(ZSTD_CStreamOutSize());
+        ZSTD_outBuffer out{
+            .dst = output.data(),
+            .size = output.size(),
+            .pos = 0
+        };
+
+        size_t result = ZSTD_compressStream2(
+            cctx_,
+            &out,
+            &in,
+            flush ? ZSTD_e_end : ZSTD_e_continue
+        );
+
+        if (ZSTD_isError(result)) {
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        output.resize(out.pos);
+        return output;
+    }
+
+    // Завершение потока
+    std::expected<std::vector<uint8_t>, std::string> flush() {
+        ZSTD_inBuffer in{.src = nullptr, .size = 0, .pos = 0};
+
+        std::vector<uint8_t> output(ZSTD_CStreamOutSize());
+        ZSTD_outBuffer out{
+            .dst = output.data(),
+            .size = output.size(),
+            .pos = 0
+        };
+
+        size_t result = ZSTD_compressStream2(cctx_, &out, &in, ZSTD_e_end);
+
+        if (ZSTD_isError(result)) {
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        output.resize(out.pos);
+        return output;
+    }
+
+private:
+    ZSTD_CStream* cctx_ = nullptr;
+    ZSTD_CDict* cdict_ = nullptr;
+    int level_;
+};
+```
+
+### Потоковая декомпрессия
+
+```cpp
+class ZstdStreamingDecompressor {
+public:
+    ZstdStreamingDecompressor() {
+        dctx_ = ZSTD_createDStream();
+        if (!dctx_) {
+            // В ProjectV используем std::expected вместо throw
+            // Пример правильного подхода:
+            // return std::unexpected("Failed to create stream");
+        }
+
+        ZSTD_initDStream(dctx_);
+    }
+
+    ~ZstdStreamingDecompressor() {
+        if (dctx_) ZSTD_freeDStream(dctx_);
+    }
+
+    void set_dict(std::span<const uint8_t> dict) {
+        ddict_ = ZSTD_createDDict(dict.data(), dict.size());
+        if (ddict_) {
+            ZSTD_DCtx_refDDict(dctx_, ddict_);
+        }
+    }
+
+    std::expected<std::vector<uint8_t>, std::string> decompress(
+        std::span<const uint8_t> input
+    ) {
+        ZSTD_inBuffer in{
+            .src = input.data(),
+            .size = input.size(),
+            .pos = 0
+        };
+
+        std::vector<uint8_t> output(ZSTD_DStreamOutSize());
+        ZSTD_outBuffer out{
+            .dst = output.data(),
+            .size = output.size(),
+            .pos = 0
+        };
+
+        size_t result = ZSTD_decompressStream(dctx_, &out, &in);
+
+        if (ZSTD_isError(result)) {
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        output.resize(out.pos);
+        return output;
+    }
+
+private:
+    ZSTD_DStream* dctx_ = nullptr;
+    ZSTD_DDict* ddict_ = nullptr;
+};
+```
+
+---
+
+## Многопоточное сжатие
+
+### Концепция
+
+Zstd поддерживает многопоточное сжатие через параметр `nbWorkers`:
+
+```cpp
+#include <zstd.h>
+#include <thread>
+#include <vector>
+
+void compress_with_workers(
+    std::span<const uint8_t> src,
+    std::span<uint8_t> dst,
+    int workers
+) {
+    ZSTD_CCtx* cctx = ZSTD_createCCtx();
+
+    // Установка количества рабочих потоков
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, workers);
+
+    // Установка уровня сжатия
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3);
+
+    ZSTD_compress2(cctx, dst.data(), dst.size(), src.data(), src.size());
+
+    ZSTD_freeCCtx(cctx);
+}
+```
+
+### Рекомендации по потокам
+
+| Размер данных | Рекомендуемые потоки |
+|---------------|----------------------|
+| < 1 MB        | 0–2                  |
+| 1–100 MB      | 2–4                  |
+| 100 MB – 1 GB | 4–8                  |
+| > 1 GB        | 8–16                 |
+
+---
+
+## Параметры контекста
+
+### Доступные параметры
+
+```cpp
+// Уровень сжатия
+ZSTD_c_compressionLevel = 1..22
+
+// Многопоточность
+ZSTD_c_nbWorkers = 0..256
+
+// Контрольные флаги
+ZSTD_c_checksumFlag = 0/1
+ZSTD_c_contentSizeFlag = 0/1
+ZSTD_c_dictIDFlag = 0/1
+
+// Dictionary ID
+ZSTD_c_dictID = 0..
+
+// Предиктор
+ZSTD_c_enableLongDistanceMatching = 0/1
+ZSTD_c_ldmHashRateLog = 6..12
+ZSTD_c_ldmMinMatch = 4..4096
+```
+
+### Пример конфигурации
+
+```cpp
+void configure_for_speed(ZSTD_CCtx* cctx) {
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 1);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 4);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
+}
+
+void configure_for_size(ZSTD_CCtx* cctx) {
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 19);
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 0); // Однопоточно
+    ZSTD_CCtx_setParameter(cctx, ZSTD_c_enableLongDistanceMatching, 1);
+}
+```
+
+---
+
+## Обработка ошибок
+
+### Проверка ошибок
+
+```cpp
+#include <zstd.h>
+#include <expected>
+#include <print>
+
+// Шаблон проверки результата
+template<typename T>
+std::expected<T, std::string> check_zstd(T result) {
+    if (ZSTD_isError(result)) {
+        return std::unexpected(ZSTD_getErrorName(result));
+    }
+    return result;
+}
+
+// Пример использования
+void example() {
+    auto result = check_zstd(ZSTD_compress(dst, dst_size, src, src_size, 3));
+
+    if (!result) {
+        std::print(stderr, "Compression failed: {}\n", result.error());
+        return;
+    }
+
+    std::println("Compressed {} -> {} bytes", src_size, *result);
+}
+```
+
+### Коды ошибок
+
+```cpp
+// Проверка на ошибку
+bool is_error(size_t code) {
+    return ZSTD_isError(code);
+}
+
+// Получение сообщения об ошибке
+const char* error_name(size_t code) {
+    return ZSTD_getErrorName(code);
+}
+
+// Код ошибки (для программной обработки)
+ZSTD_ErrorCode error_code(size_t code) {
+    return ZSTD_getErrorCode(code);
+}
+```
+
+---
+
+## Ограничения памяти
+
+### Размеры буферов
+
+```cpp
+// Максимальный размер сжатых данных для блока
+constexpr size_t MAX_BLOCK_SIZE = ZSTD_BLOCKSIZE_MAX; // 128 KB
+
+// Минимальный размер сжатого блока
+constexpr size_t MIN_BLOCK_SIZE = 1;
+
+// Размер входного буфера для потокового сжатия
+constexpr size_t INPUT_BUFFER_SIZE = 256 * 1024; // 256 KB
+
+// Размер выходного буфера для потокового сжатия
+constexpr size_t OUTPUT_BUFFER_SIZE = ZSTD_CStreamOutSize(); // ~ 512 KB
+```
+
+### Оценка памяти
+
+```cpp
+#include <zstd.h>
+
+// Оценка памяти для сжатия
+size_t estimate_cctx_memory(int level, int workers) {
+    return ZSTD_estimateCCtxSize(level) + (workers * ZSTD_estimateCScriptSize());
+}
+
+// Оценка памяти для декомпрессии
+size_t estimate_dctx_memory() {
+    return ZSTD_estimateDCtxSize();
+}
+
+// Оценка размера сжатых данных
+size_t estimate_compressed_size(size_t src_size) {
+    return ZSTD_compressBound(src_size);
+}
+```
+
+---
+
+## Формат файла
+
+### Структура фрейма
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Magic Number (4 bytes)                                     │
+│  0x28B52FD2 (little-endian)                                │
+├─────────────────────────────────────────────────────────────┤
+│  Frame Header Descriptor (1-2 bytes)                        │
+│  - Frame size present?                                      │
+│  - Single segment?                                          │
+│  - Reserved bits                                            │
+│  - Dictionary ID flag                                        │
+│  - Checksum flag                                            │
+│  - Content size flag                                        │
+├─────────────────────────────────────────────────────────────┤
+│  [Dictionary ID] (0-4 bytes, if present)                    │
+├─────────────────────────────────────────────────────────────┤
+│  [Content Size] (0-8 bytes, if present)                     │
+├─────────────────────────────────────────────────────────────┤
+│  Header Checksum (1 byte, if single segment + checksum)     │
+├─────────────────────────────────────────────────────────────┤
+│  Blocks                                                     │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Block Header (3 bytes)                                   ││
+│  │ - Block size (max 128 KB)                               ││
+│  │ - Block type (raw/compressed/rle/reserved)             ││
+│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Block Data (variable)                                   ││
+│  └─────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────┤
+│  [Content Checksum] (4 bytes, if present)                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Магическое число
+
+```cpp
+constexpr uint32_t ZSTD_MAGIC_NUMBER = 0x28B52FD2;
+constexpr uint32_t ZSTD_MAGIC_DICTIONARY = 0xEC30A437; // Обучение словаря
+```

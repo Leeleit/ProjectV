@@ -1,19 +1,15 @@
 # Glaze — Integration
 
-<!-- anchor: 02_integration -->
-
 Подключение Glaze к ProjectV, базовые паттерны и каноничные структуры конфигурации.
 
 ---
 
 ## CMake Integration
 
-### Вариант 1: Git Submodule (рекомендуется)
+### Вариант 1: Git Submodule
 
 ```cmake
-# Добавить подмодуль
-# git submodule add https://github.com/stephenberry/glaze.git external/glaze
-
+# Add as git submodule
 add_subdirectory(external/glaze)
 
 target_link_libraries(ProjectV PRIVATE glaze::glaze)
@@ -26,8 +22,7 @@ include(FetchContent)
 
 FetchContent_Declare(
   glaze
-  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-  GIT_TAG v2.0.0  # Фиксируем версию
+  # glaze repository configuration
 )
 
 FetchContent_MakeAvailable(glaze)
@@ -245,38 +240,35 @@ bool save_config(const T& config, const std::filesystem::path& path) {
 
 ```cpp
 #include <atomic>
-#include <thread>
 #include <chrono>
-#include <mutex>
+#include <stdexec/execution.hpp>
+#include <expected>
 
 class ConfigManager {
-    EngineConfig current_config_;
-    EngineConfig pending_config_;
+    // Double-buffered конфиг (lock-free подход)
+    alignas(64) EngineConfig configs_[2];
+    std::atomic<size_t> current_index_{0};
     std::atomic<bool> config_updated_{false};
     std::filesystem::file_time_type last_write_time_;
     std::filesystem::path config_path_;
-    std::jthread monitor_thread_;
-    std::mutex config_mutex_;
+    stdexec::scheduler auto scheduler_;
 
 public:
-    ConfigManager(std::filesystem::path path)
-        : config_path_(std::move(path)) {
+    ConfigManager(std::filesystem::path path, stdexec::scheduler auto scheduler = stdexec::get_default_scheduler())
+        : config_path_(std::move(path)), scheduler_(scheduler) {
 
         // Загружаем начальный конфиг
         if (auto config = load_config<EngineConfig>(config_path_)) {
-            current_config_ = *config;
+            configs_[0] = *config;
             last_write_time_ = std::filesystem::last_write_time(config_path_);
         }
 
-        // Запускаем мониторинг
-        monitor_thread_ = std::jthread([this](std::stop_token stop_token) {
-            monitor_loop(stop_token);
-        });
+        // Запускаем мониторинг через stdexec
+        start_monitoring();
     }
 
     const EngineConfig& get_config() const {
-        std::lock_guard lock(config_mutex_);
-        return current_config_;
+        return configs_[current_index_.load(std::memory_order_acquire)];
     }
 
     bool has_update() const {
@@ -288,45 +280,71 @@ public:
             return;
         }
 
-        std::lock_guard lock(config_mutex_);
-        current_config_ = pending_config_;
-        std::print("Config hot-reloaded\n");
+        // Атомарно переключаем индекс
+        size_t old_index = current_index_.load(std::memory_order_relaxed);
+        size_t new_index = 1 - old_index;  // Переключаем 0<->1
+        current_index_.store(new_index, std::memory_order_release);
+        
+        std::print("Config hot-reloaded (lock-free double buffer)\n");
     }
 
 private:
-    void monitor_loop(std::stop_token stop_token) {
-        using namespace std::chrono_literals;
+    void start_monitoring() {
+        // Создаем периодическую задачу через stdexec
+        auto monitoring_task = stdexec::schedule(scheduler_)
+                             | stdexec::then([this]() -> std::expected<EngineConfig, std::string> {
+                                   return check_for_updates();
+                               })
+                             | stdexec::then([this](std::expected<EngineConfig, std::string> result) {
+                                   if (result) {
+                                       // Успешный парсинг — сохраняем в буфер
+                                       size_t old_index = current_index_.load(std::memory_order_relaxed);
+                                       size_t new_index = 1 - old_index;
+                                       configs_[new_index] = std::move(*result);
+                                       config_updated_.store(true, std::memory_order_release);
+                                   }
+                                   return result;
+                               });
 
-        while (!stop_token.stop_requested()) {
-            std::this_thread::sleep_for(500ms);  // Проверяем каждые 500ms
+        // Запускаем периодически (каждые 500ms)
+        auto periodic_task = stdexec::schedule(scheduler_)
+                           | stdexec::then([this, task = std::move(monitoring_task)]() mutable {
+                                 // Используем stdexec для периодического выполнения
+                                 return stdexec::schedule_after(scheduler_, std::chrono::milliseconds(500))
+                                      | stdexec::then([task = std::move(task)]() mutable {
+                                            // Перезапускаем задачу
+                                            return task;
+                                        });
+                             });
 
-            try {
-                auto current_time = std::filesystem::last_write_time(config_path_);
+        // Запускаем асинхронно
+        stdexec::start_detached(std::move(periodic_task));
+    }
 
-                if (current_time > last_write_time_) {
-                    last_write_time_ = current_time;
+    std::expected<EngineConfig, std::string> check_for_updates() {
+        // Проверяем существование файла без исключений
+        std::error_code ec;
+        auto current_time = std::filesystem::last_write_time(config_path_, ec);
+        
+        if (ec) {
+            return std::unexpected(std::string("Filesystem error: ") + ec.message());
+        }
 
-                    // Парсим во временную структуру (на стеке)
-                    EngineConfig new_config;
-                    auto error = glz::read_file_json(new_config, config_path_.string());
+        if (current_time > last_write_time_) {
+            last_write_time_ = current_time;
 
-                    if (!error) {
-                        // Успешный парсинг — сохраняем для применения
-                        {
-                            std::lock_guard lock(config_mutex_);
-                            pending_config_ = new_config;
-                        }
-                        config_updated_.store(true, std::memory_order_release);
-                    } else {
-                        // Ошибка парсинга — логируем, но движок не падает
-                        std::print(stderr, "Config parse error (ignored): {}\n",
-                                   glz::format_error(error, config_path_.string()));
-                    }
-                }
-            } catch (const std::filesystem::filesystem_error& e) {
-                std::print(stderr, "Filesystem error: {}\n", e.what());
+            // Парсим конфиг
+            EngineConfig new_config;
+            auto error = glz::read_file_json(new_config, config_path_.string());
+
+            if (!error) {
+                return new_config;
+            } else {
+                return std::unexpected(glz::format_error(error, config_path_.string()));
             }
         }
+
+        return std::unexpected("No update");
     }
 };
 ```
@@ -365,7 +383,15 @@ void render_system(flecs::iter& it, ConfigComponent* configs) {
         // Используем актуальные настройки рендеринга
         float voxel_size = config.render.voxel_size;
         uint32_t ray_steps = config.render.max_ray_steps;
-        // ...
+        bool enable_soft_shadows = config.render.enable_soft_shadows;
+        bool enable_gi = config.render.enable_gi;
+        bool enable_fog = config.render.enable_fog;
+        glm::vec3 ambient_light = config.render.ambient_light;
+        float exposure = config.render.exposure;
+        
+        // Пример использования настроек в рендеринге
+        // Здесь будет реальный код рендеринга с использованием конфигурации
+        // Например: setup_rendering_parameters(voxel_size, ray_steps, enable_soft_shadows, ambient_light, exposure);
     }
 }
 
@@ -545,4 +571,10 @@ bool migrate_config(EngineConfig& config, const ConfigVersion& loaded_version) {
 
         // Пример: добавление новых полей
         if (loaded_version.major == 1 && loaded_version.minor == 0) {
-            //
+            // Например, добавили новое поле в 1.1, которого не было в 1.0
+            config.render.enable_gi = false;
+            std::println("Migrated from 1.0 to 1.1: enable_gi set to false");
+        }
+    }
+    return true;
+}

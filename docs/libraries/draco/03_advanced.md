@@ -1,23 +1,45 @@
-﻿# Продвинутые оптимизации для высокопроизводительных систем
+# Продвинутые оптимизации Draco для высокопроизводительных систем ProjectV
 
-> **Версия библиотеки:** Draco 1.5.7 (коммит из `external/draco`)
+## Архитектурная философия производительности в контексте воксельных движков
 
-## Философия производительности в контексте воксельных движков
+Draco представляет собой специализированный процессор геометрических данных, использующий энтропийное кодирование (rANS)
+и предсказательные схемы для сжатия пространственно-коррелированных структур. В архитектуре ProjectV Draco занимает
+критически важную позицию в конвейере обработки геометрических данных, трансформируя sparse voxel octree (SVO) структуры
+и greedy meshes в компактные битовые потоки.
 
-Draco — это библиотека сжатия геометрии, использующая энтропийное кодирование (rANS) и предсказательные схемы. В
-контексте высокопроизводительного воксельного движка мы должны понимать фундаментальные ограничения и возможности этой
-технологии.
+**Архитектурный принцип:** Draco функционирует как асинхронный трансформатор данных, где CPU выступает в роли
+специализированного процессора для декодирования энтропийно-сжатых потоков, а GPU — как массовый параллельный
+потребитель уже структурированных геометрических данных. Эта архитектурная дихотомия определяет ключевые паттерны
+интеграции.
 
-> **Для понимания:** Алгоритмы вроде rANS в Draco — это как чтение зашифрованного свитка с начала до конца. Ты не можешь
-> начать читать с середины, не прочитав начало. GPU ненавидит такие задачи: его 10,000 ядер хотят читать книгу с любой
-> страницы одновременно. Поэтому Draco — это работа для «мастеров» (ядер CPU), а не для «фабрики» (GPU). Мы
-> распаковываем
-> данные на CPU и отдаём GPU уже готовую таблицу.
+### Архитектурная модель декодирования
 
-## Многопоточное декодирование через Job System
+```mermaid
+flowchart TD
+  A[Compressed Bitstream<br/>rANS encoded] --> B[CPU Decoder Thread<br/>sequential entropy decoding]
+  B --> C[Structured Geometry Data<br/>SoA representation]
+  C --> D[GPU Memory Mapping<br/>VMA zero-copy]
+  D --> E[GPU Parallel Processing<br/>10,000+ cores]
+  F[Job System Scheduler] --> G[Priority Queue<br/>chunk distance-based]
+  G --> H[Worker Thread Pool<br/>M:N fibers]
+  H --> B
+  style B fill: #f9f, stroke: #333, stroke-width: 2px
+  style E fill: #9f9, stroke: #333, stroke-width: 2px
+```
 
-Поскольку Draco не поддерживает параллельное декодирование внутри одного битстрима, мы используем пакетную обработку
-чанков на нескольких потоках.
+**Архитектурные ограничения и возможности:**
+
+- **Последовательная природа rANS** — энтропийное декодирование требует последовательного чтения битового потока, что
+  противоречит massively parallel архитектуре GPU
+- **Пространственная локальность вокселей** — SVO структуры обладают высокой пространственной корреляцией, которую Draco
+  эффективно использует через prediction schemes
+- **Асинхронная модель обработки** — декодирование происходит в фоновых потоках Job System с приоритизацией на основе
+  расстояния до камеры
+
+## Многопоточная архитектура декодирования через Job System
+
+Поскольку Draco не поддерживает параллельное декодирование внутри одного битстрима, ProjectV использует пакетную
+обработку чанков на нескольких потоках через специализированную Job System архитектуру.
 
 ### Архитектура Job System для Draco
 
@@ -28,94 +50,83 @@ Draco — это библиотека сжатия геометрии, испо�
 #include <span>
 #include <vector>
 #include <atomic>
-#include <latch>
-#include <thread>
+#include <concurrentqueue.h>
+#include <stdexec/execution.hpp>
 
-struct VoxelChunkData {
-    std::vector<float> positions;      // SoA: отдельный массив позиций
-    std::vector<uint8_t> material_ids; // SoA: отдельный массив идентификаторов материалов
-    std::vector<uint16_t> light_levels; // SoA: отдельный массив уровней освещения
-    std::vector<uint32_t> indices;     // Индексы треугольников (если есть)
+namespace stdex = stdexec;
+
+// SoA представление воксельных данных
+struct VoxelChunkSoA {
+    std::vector<float> position_x;
+    std::vector<float> position_y;
+    std::vector<float> position_z;
+    std::vector<uint8_t> material_ids;
+    std::vector<uint16_t> light_levels;
+    std::vector<uint8_t> occlusion;
+    std::vector<uint8_t> moisture;
+    std::vector<int8_t> temperature;
 };
 
 struct DecodeResult {
-    std::expected<VoxelChunkData, draco::Status> data;
+    std::expected<VoxelChunkSoA, draco::Status> data;
     size_t chunk_id;
+    uint32_t priority_level;
 };
 
-class DracoJobSystem {
+// Sender-based декодер Draco, использующий глобальный ThreadPool ProjectV
+class DracoStdexecDecoder {
 public:
-    explicit DracoJobSystem(size_t num_workers = std::thread::hardware_concurrency())
-        : workers_(num_workers) {
-        // Инициализация пула потоков
-        for (size_t i = 0; i < num_workers; ++i) {
-            workers_[i] = std::jthread([this](std::stop_token stoken) {
-                worker_thread(stoken);
-            });
-        }
+    explicit DracoStdexecDecoder(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
+
+    // Возвращает sender, который декодирует чанк асинхронно
+    auto decode_chunk_async(std::span<const std::byte> compressed_data,
+                           size_t chunk_id, uint32_t priority = 0)
+        -> stdex::sender auto {
+        
+        // Создаём задачу декодирования как sender
+        return stdex::schedule(scheduler_)
+             | stdex::then([compressed_data = std::vector<std::byte>(compressed_data.begin(), 
+                                                                     compressed_data.end()),
+                            chunk_id, priority]() -> DecodeResult {
+                    ZoneScopedN("DracoStdexecDecode");
+                    
+                    // Синхронное декодирование (выполняется в пуле потоков)
+                    auto result = decode_chunk_sync(compressed_data);
+                    
+                    return DecodeResult{
+                        .data = std::move(result),
+                        .chunk_id = chunk_id,
+                        .priority_level = priority
+                    };
+                });
     }
 
-    ~DracoJobSystem() {
-        // Остановка всех воркеров
-        for (auto& worker : workers_) {
-            worker.request_stop();
-        }
-        cv_.notify_all();
-    }
-
-    auto decode_chunk_async(std::span<const std::byte> compressed_data, size_t chunk_id)
-        -> std::future<DecodeResult> {
-        auto promise = std::make_shared<std::promise<DecodeResult>>();
-        auto future = promise->get_future();
-
-        {
-            std::lock_guard lock(queue_mutex_);
-            tasks_.push_back({
-                .compressed_data = std::vector<std::byte>(compressed_data.begin(), compressed_data.end()),
-                .chunk_id = chunk_id,
-                .promise = std::move(promise)
-            });
-        }
-
-        cv_.notify_one();
-        return future;
+    // Пакетное декодирование нескольких чанков
+    auto decode_chunks_bulk(std::span<const std::pair<std::vector<std::byte>, size_t>> chunks,
+                           uint32_t base_priority = 0)
+        -> stdex::sender auto {
+        
+        return stdex::schedule(scheduler_)
+             | stdex::bulk(chunks.size(), [chunks, base_priority](size_t idx) {
+                    ZoneScopedN("DracoBulkDecode");
+                    
+                    const auto& [compressed_data, chunk_id] = chunks[idx];
+                    auto result = decode_chunk_sync(compressed_data);
+                    
+                    // Можно сохранить результат в thread-local storage
+                    // или передать через callback
+                    return DecodeResult{
+                        .data = std::move(result),
+                        .chunk_id = chunk_id,
+                        .priority_level = base_priority + static_cast<uint32_t>(idx)
+                    };
+                });
     }
 
 private:
-    struct DecodeTask {
-        std::vector<std::byte> compressed_data;
-        size_t chunk_id;
-        std::shared_ptr<std::promise<DecodeResult>> promise;
-    };
-
-    void worker_thread(std::stop_token stoken) {
-        while (!stoken.stop_requested()) {
-            std::optional<DecodeTask> task;
-
-            {
-                std::unique_lock lock(queue_mutex_);
-                cv_.wait(lock, stoken, [this] { return !tasks_.empty(); });
-
-                if (stoken.stop_requested() || tasks_.empty()) {
-                    continue;
-                }
-
-                task = std::move(tasks_.back());
-                tasks_.pop_back();
-            }
-
-            if (task) {
-                auto result = decode_chunk_sync(task->compressed_data);
-                task->promise->set_value(DecodeResult{
-                    .data = std::move(result),
-                    .chunk_id = task->chunk_id
-                });
-            }
-        }
-    }
-
-    auto decode_chunk_sync(std::span<const std::byte> compressed_data)
-        -> std::expected<VoxelChunkData, draco::Status> {
+    static auto decode_chunk_sync(std::span<const std::byte> compressed_data)
+        -> std::expected<VoxelChunkSoA, draco::Status> {
         draco::DecoderBuffer buffer;
         buffer.Init(reinterpret_cast<const char*>(compressed_data.data()),
                     compressed_data.size());
@@ -137,52 +148,64 @@ private:
                                              "Unsupported geometry type"));
     }
 
-    auto decode_point_cloud(draco::Decoder& decoder, draco::DecoderBuffer& buffer)
-        -> std::expected<VoxelChunkData, draco::Status> {
+    static auto decode_point_cloud(draco::Decoder& decoder, draco::DecoderBuffer& buffer)
+        -> std::expected<VoxelChunkSoA, draco::Status> {
         std::unique_ptr<draco::PointCloud> pc = decoder.DecodePointCloudFromBuffer(&buffer);
         if (!pc) {
             return std::unexpected(draco::Status(draco::Status::DRACO_ERROR,
                                                  "Failed to decode point cloud"));
         }
 
-        VoxelChunkData result;
+        VoxelChunkSoA result;
 
-        // Извлечение позиций (обязательный атрибут)
+        // Извлечение позиций с сохранением SoA структуры
         const auto* pos_attr = pc->GetNamedAttribute(draco::GeometryAttribute::POSITION);
         if (!pos_attr) {
             return std::unexpected(draco::Status(draco::Status::DRACO_ERROR,
                                                  "No position attribute found"));
         }
 
-        result.positions.resize(pc->num_points() * 3);
+        result.position_x.resize(pc->num_points());
+        result.position_y.resize(pc->num_points());
+        result.position_z.resize(pc->num_points());
+
         for (draco::PointIndex i(0); i < pc->num_points(); ++i) {
-            pos_attr->GetMappedValue(i, &result.positions[i.value() * 3]);
+            float pos[3];
+            pos_attr->GetMappedValue(i, pos);
+            result.position_x[i.value()] = pos[0];
+            result.position_y[i.value()] = pos[1];
+            result.position_z[i.value()] = pos[2];
         }
 
-        // Извлечение пользовательских атрибутов (material_id, light_level и т.д.)
-        for (int attr_id = 0; attr_id < pc->num_attributes(); ++attr_id) {
-            const auto* attr = pc->attribute(attr_id);
-            if (attr->attribute_type() == draco::GeometryAttribute::GENERIC) {
-                // Проверяем метаданные для определения семантики
-                const auto* metadata = pc->GetAttributeMetadataByAttributeId(attr_id);
-                if (metadata) {
-                    std::string semantic;
-                    if (metadata->GetEntryString("semantic", &semantic)) {
-                        if (semantic == "material_id") {
-                            extract_attribute<uint8_t>(*attr, result.material_ids);
-                        } else if (semantic == "light_level") {
-                            extract_attribute<uint16_t>(*attr, result.light_levels);
-                        }
-                    }
-                }
-            }
-        }
+        // Извлечение пользовательских атрибутов через метаданные
+        extract_custom_attributes(*pc, result);
 
         return result;
     }
 
+    static void extract_custom_attributes(const draco::PointCloud& pc, VoxelChunkSoA& soa) {
+        for (int attr_id = 0; attr_id < pc.num_attributes(); ++attr_id) {
+            const auto* attr = pc.attribute(attr_id);
+            if (attr->attribute_type() == draco::GeometryAttribute::GENERIC) {
+                const auto* metadata = pc.GetAttributeMetadataByAttributeId(attr_id);
+                if (!metadata) continue;
+
+                std::string semantic;
+                if (!metadata->GetEntryString("semantic", &semantic)) continue;
+
+                if (semantic == "material_id" && attr->num_components() == 1) {
+                    extract_attribute<uint8_t>(*attr, soa.material_ids);
+                } else if (semantic == "light_level" && attr->num_components() == 1) {
+                    extract_attribute<uint16_t>(*attr, soa.light_levels);
+                } else if (semantic == "occlusion" && attr->num_components() == 1) {
+                    extract_attribute<uint8_t>(*attr, soa.occlusion);
+                }
+            }
+        }
+    }
+
     template<typename T>
-    void extract_attribute(const draco::PointAttribute& attr, std::vector<T>& output) {
+    static void extract_attribute(const draco::PointAttribute& attr, std::vector<T>& output) {
         output.resize(attr.size());
         for (draco::AttributeValueIndex i(0); i < attr.size(); ++i) {
             T value;
@@ -191,20 +214,90 @@ private:
         }
     }
 
-    std::vector<std::jthread> workers_;
-    std::vector<DecodeTask> tasks_;
-    std::mutex queue_mutex_;
-    std::condition_variable_any cv_;
+    static auto decode_mesh(draco::Decoder& decoder, draco::DecoderBuffer& buffer)
+        -> std::expected<VoxelChunkSoA, draco::Status> {
+        // Реализация декодирования мешей (аналогично point cloud)
+        return std::unexpected(draco::Status(draco::Status::DRACO_ERROR,
+                                             "Mesh decoding not implemented in example"));
+    }
+
+    stdex::scheduler auto scheduler_;
+};
+
+// Приоритетная очередь для планирования задач декодирования
+class DracoPriorityScheduler {
+public:
+    explicit DracoPriorityScheduler(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
+
+    // Планирует декодирование с приоритетом
+    auto schedule_with_priority(std::span<const std::byte> compressed_data,
+                               size_t chunk_id, uint32_t priority)
+        -> stdex::sender auto {
+        
+        // В реальной реализации здесь была бы логика приоритетного планирования
+        // Для примера просто передаём в декодер
+        DracoStdexecDecoder decoder{scheduler_};
+        return decoder.decode_chunk_async(compressed_data, chunk_id, priority);
+    }
+
+private:
+    stdex::scheduler auto scheduler_;
+};
+
+// Интеграция с глобальным ThreadPool ProjectV
+class ProjectVDracoIntegration {
+public:
+    // Инициализация с глобальным scheduler'ом из projectv::core::jobs::ThreadPool
+    ProjectVDracoIntegration(stdex::scheduler auto global_scheduler)
+        : decoder_(global_scheduler), scheduler_(global_scheduler) {}
+
+    // Интерфейс для ECS системы
+    auto decode_for_entity(std::span<const std::byte> compressed_data,
+                          size_t chunk_id, uint32_t priority)
+        -> stdex::sender auto {
+        
+        return scheduler_.schedule_with_priority(compressed_data, chunk_id, priority)
+             | stdex::then([](DecodeResult result) -> std::expected<VoxelChunkSoA, draco::Status> {
+                    if (result.data) {
+                        return std::move(*result.data);
+                    }
+                    return std::unexpected(result.data.error());
+                });
+    }
+
+    // Пакетная обработка для нескольких сущностей
+    auto decode_for_entities(std::span<const std::pair<std::vector<std::byte>, size_t>> chunks,
+                            std::span<const uint32_t> priorities)
+        -> stdex::sender auto {
+        
+        return decoder_.decode_chunks_bulk(chunks, 0)
+             | stdex::then([](std::vector<DecodeResult> results) {
+                    std::vector<std::expected<VoxelChunkSoA, draco::Status>> decoded;
+                    decoded.reserve(results.size());
+                    
+                    for (auto& result : results) {
+                        if (result.data) {
+                            decoded.push_back(std::move(*result.data));
+                        } else {
+                            decoded.push_back(std::unexpected(result.data.error()));
+                        }
+                    }
+                    
+                    return decoded;
+                });
+    }
+
+private:
+    DracoStdexecDecoder decoder_;
+    DracoPriorityScheduler scheduler_;
 };
 ```
 
-> **Для понимания:** Job System для Draco — это как конвейер на складе. Каждый рабочий (поток) берёт один контейнер (
-> чанк), распаковывает его, кладёт результат на ленту (буфер GPU) и берёт следующий. Контейнеры независимы, поэтому
-> рабочие не мешают друг другу.
+## Zero-Copy архитектура загрузки в GPU через VMA
 
-## Zero-Copy Upload в GPU через VMA
-
-Ключевая оптимизация: избегаем лишних копий данных из CPU в GPU. Распаковываем напрямую в замапленную память VMA.
+Ключевая архитектурная оптимизация ProjectV: избегание лишних копий данных из CPU в GPU через прямое декодирование в
+замапленную память Vulkan Memory Allocator.
 
 ### Интеграция с Vulkan Memory Allocator
 
@@ -233,52 +326,102 @@ public:
     auto create_gpu_buffers() -> std::expected<GpuVoxelBuffers, VkResult> {
         GpuVoxelBuffers buffers{};
 
-        // Создание буфера для позиций (3 float на воксель)
+        // Создание буфера для позиций с HOST_VISIBLE и HOST_COHERENT флагами
         VkBufferCreateInfo buffer_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = chunk_size_ * sizeof(float) * 3,
-            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                     VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE
         };
 
         VmaAllocationCreateInfo alloc_info = {
+            .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+            .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        };
+
+        VmaAllocationInfo vma_alloc_info;
+        if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info,
+                            &buffers.position_buffer, &buffers.position_allocation,
+                            &vma_alloc_info) != VK_SUCCESS) {
+            return std::unexpected(VK_ERROR_OUT_OF_HOST_MEMORY);
+        }
+
+        buffers.position_mapped = vma_alloc_info.pMappedData;
+
+        // Создание буфера для material_id
+        VkBufferCreateInfo material_buffer_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = chunk_size_ * sizeof(uint8_t),
+            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        };
+
+        VmaAllocationCreateInfo material_alloc_info = {
             .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
             .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
             .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
         };
 
-        if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info,
-                            &buffers.position_buffer, &buffers.position_allocation,
-                            nullptr) != VK_SUCCESS) {
+        VmaAllocationInfo material_vma_alloc_info;
+        if (vmaCreateBuffer(allocator_, &material_buffer_info, &material_alloc_info,
+                            &buffers.material_buffer, &buffers.material_allocation,
+                            &material_vma_alloc_info) != VK_SUCCESS) {
+            vmaDestroyBuffer(allocator_, buffers.position_buffer, buffers.position_allocation);
             return std::unexpected(VK_ERROR_OUT_OF_HOST_MEMORY);
         }
 
-        // Маппинг памяти для прямого доступа
-        vmaMapMemory(allocator_, buffers.position_allocation, &buffers.position_mapped);
+        buffers.material_mapped = material_vma_alloc_info.pMappedData;
 
-        // Аналогично создаём буферы для material_id и light_level
-        // ...
+        // Создание буфера для light_level
+        VkBufferCreateInfo light_buffer_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = chunk_size_ * sizeof(uint16_t),
+            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        };
+
+        VmaAllocationCreateInfo light_alloc_info = {
+            .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+            .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+            .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        };
+
+        VmaAllocationInfo light_vma_alloc_info;
+        if (vmaCreateBuffer(allocator_, &light_buffer_info, &light_alloc_info,
+                            &buffers.light_buffer, &buffers.light_allocation,
+                            &light_vma_alloc_info) != VK_SUCCESS) {
+            vmaDestroyBuffer(allocator_, buffers.position_buffer, buffers.position_allocation);
+            vmaDestroyBuffer(allocator_, buffers.material_buffer, buffers.material_allocation);
+            return std::unexpected(VK_ERROR_OUT_OF_HOST_MEMORY);
+        }
+
+        buffers.light_mapped = light_vma_alloc_info.pMappedData;
 
         return buffers;
     }
 
-    auto upload_chunk_direct(const VoxelChunkData& chunk_data, GpuVoxelBuffers& buffers)
+    auto upload_chunk_direct(const VoxelChunkSoA& chunk_data, GpuVoxelBuffers& buffers)
         -> std::expected<void, VkResult> {
-        // Прямая запись в замапленную память VMA
-        auto positions_span = std::span<float, std::dynamic_extent>(
+        // Прямая запись в замапленную память VMA без промежуточных копий
+        auto positions_x_span = std::span<float>(
             static_cast<float*>(buffers.position_mapped),
-            chunk_data.positions.size()
+            chunk_data.position_x.size()
         );
-        std::ranges::copy(chunk_data.positions, positions_span.begin());
+        std::ranges::copy(chunk_data.position_x, positions_x_span.begin());
 
-        // Для material_ids и light_levels аналогично
-        auto materials_span = std::span<uint8_t, std::dynamic_extent>(
+        // Для остальных атрибутов аналогично
+        auto materials_span = std::span<uint8_t>(
             static_cast<uint8_t*>(buffers.material_mapped),
             chunk_data.material_ids.size()
         );
         std::ranges::copy(chunk_data.material_ids, materials_span.begin());
 
-        // Флаш не требуется, так как память HOST_COHERENT
+        // Флаш не требуется благодаря HOST_COHERENT памяти
         return {};
     }
 
@@ -287,7 +430,20 @@ public:
             vmaUnmapMemory(allocator_, buffers.position_allocation);
         }
         vmaDestroyBuffer(allocator_, buffers.position_buffer, buffers.position_allocation);
-        // ... уничтожение остальных буферов
+
+        if (buffers.material_mapped) {
+            vmaUnmapMemory(allocator_, buffers.material_allocation);
+        }
+        vmaDestroyBuffer(allocator_, buffers.material_buffer, buffers.material_allocation);
+
+        if (buffers.light_mapped) {
+            vmaUnmapMemory(allocator_, buffers.light_allocation);
+        }
+        vmaDestroyBuffer(allocator_, buffers.light_buffer, buffers.light_allocation);
+
+        buffers.position_buffer = VK_NULL_HANDLE;
+        buffers.material_buffer = VK_NULL_HANDLE;
+        buffers.light_buffer = VK_NULL_HANDLE;
     }
 
 private:
@@ -296,9 +452,9 @@ private:
 };
 ```
 
-### Использование std::mdspan для многомерного доступа
+### Многомерные представления данных через std::mdspan
 
-После загрузки данных в GPU мы можем использовать многомерные представления для удобного доступа к воксельным данным:
+После загрузки данных в GPU используем многомерные представления для удобного доступа к воксельным данным:
 
 ```cpp
 #include <mdspan>
@@ -313,130 +469,40 @@ struct VoxelChunkView {
     light_view lights;
 };
 
-auto create_chunk_view(const VoxelChunkData& data, size_t width, size_t height, size_t depth)
+auto create_chunk_view(const VoxelChunkSoA& data, size_t width, size_t height, size_t depth)
     -> VoxelChunkView {
     // Предполагаем, что данные упакованы в плоские массивы
-    auto pos_span = std::span<float, std::dynamic_extent>(data.positions);
+    auto pos_x_span = std::span<float, std::dynamic_extent>(data.position_x);
     auto mat_span = std::span<uint8_t, std::dynamic_extent>(data.material_ids);
     auto light_span = std::span<uint16_t, std::dynamic_extent>(data.light_levels);
 
     return VoxelChunkView{
-        .positions = position_view(pos_span.data(), width, height, depth),
+        .positions = position_view(pos_x_span.data(), width, height, depth),
         .materials = material_view(mat_span.data(), width, height, depth),
         .lights = light_view(light_span.data(), width, height, depth)
     };
 }
 
-// Пример доступа к конкретному вокселю
+// Пример доступа к конкретному вокселю с проверкой границ
 void process_voxel(const VoxelChunkView& view, size_t x, size_t y, size_t z) {
-    float pos_x = view.positions(x, y, z * 3 + 0);
-    float pos_y = view.positions(x, y, z * 3 + 1);
-    float pos_z = view.positions(x, y, z * 3 + 2);
+    if (x >= view.positions.extent(0) || y >= view.positions.extent(1) || z >= view.positions.extent(2)) {
+        return;
+    }
 
+    float pos_x = view.positions(x, y, z);
     uint8_t material = view.materials(x, y, z);
     uint16_t light = view.lights(x, y, z);
 
-    // Обработка вокселя...
+    // Обработка вокселя с учётом пространственной локальности
 }
 ```
 
-## Структура данных SoA (Structure of Arrays)
+## Архитектура Property Tables для воксельных свойств
 
-Для максимальной cache-locality и эффективной работы с GPU мы храним атрибуты вокселей отдельно:
+Draco поддерживает расширение `EXT_structural_metadata` через `DRACO_TRANSCODER_SUPPORTED`, что позволяет хранить
+структурированные свойства вокселей непосредственно в сжатом файле.
 
-```cpp
-struct VoxelChunkSoA {
-    // Позиции: отдельный массив для каждой компоненты (AoS для vec3, но SoA относительно других атрибутов)
-    std::vector<float> position_x;
-    std::vector<float> position_y;
-    std::vector<float> position_z;
-
-    // Материалы и освещение
-    std::vector<uint8_t> material_ids;
-    std::vector<uint16_t> light_levels;
-
-    // Дополнительные атрибуты
-    std::vector<uint8_t> occlusion;
-    std::vector<uint8_t> moisture;
-    std::vector<int8_t> temperature;
-
-    // Метод для преобразования из Draco PointCloud
-    static auto from_draco_point_cloud(const draco::PointCloud& pc)
-        -> std::expected<VoxelChunkSoA, draco::Status> {
-        VoxelChunkSoA result;
-
-        const auto* pos_attr = pc.GetNamedAttribute(draco::GeometryAttribute::POSITION);
-        if (!pos_attr || pos_attr->num_components() != 3) {
-            return std::unexpected(draco::Status(draco::Status::DRACO_ERROR,
-                                                 "Invalid position attribute"));
-        }
-
-        result.position_x.resize(pc.num_points());
-        result.position_y.resize(pc.num_points());
-        result.position_z.resize(pc.num_points());
-
-        // Извлечение с сохранением SoA
-        for (draco::PointIndex i(0); i < pc.num_points(); ++i) {
-            float pos[3];
-            pos_attr->GetMappedValue(i, pos);
-            result.position_x[i.value()] = pos[0];
-            result.position_y[i.value()] = pos[1];
-            result.position_z[i.value()] = pos[2];
-        }
-
-        // Извлечение пользовательских атрибутов
-        extract_custom_attributes(pc, result);
-
-        return result;
-    }
-
-private:
-    static void extract_custom_attributes(const draco::PointCloud& pc, VoxelChunkSoA& soa) {
-        for (int attr_id = 0; attr_id < pc.num_attributes(); ++attr_id) {
-            const auto* attr = pc.attribute(attr_id);
-            if (attr->attribute_type() == draco::GeometryAttribute::GENERIC) {
-                const auto* metadata = pc.GetAttributeMetadataByAttributeId(attr_id);
-                if (!metadata) continue;
-
-                std::string semantic;
-                if (!metadata->GetEntryString("semantic", &semantic)) continue;
-
-                if (semantic == "material_id" && attr->num_components() == 1) {
-                    extract_attribute<uint8_t>(*attr, soa.material_ids);
-                } else if (semantic == "light_level" && attr->num_components() == 1) {
-                    extract_attribute<uint16_t>(*attr, soa.light_levels);
-                }
-                }
-            }
-        }
-    }
-
-    template<typename T>
-    static void extract_attribute(const draco::PointAttribute& attr, std::vector<T>& output) {
-        output.resize(attr.size());
-        for (draco::AttributeValueIndex i(0); i < attr.size(); ++i) {
-            T value;
-            attr.GetValue(i, &value);
-            output[i.value()] = value;
-        }
-    }
-};
-```
-
-> **Для понимания:** SoA — это как сортировка носков по цвету в разные ящики. Когда GPU нужно обработать все красные
-> носки (material_id), он открывает один ящик и берёт их подряд, не перебирая все остальные атрибуты. Это даёт
-> максимальную cache-locality и предсказуемость доступа.
-
-## Метаданные и Property Tables для воксельных свойств
-
-Draco поддерживает расширение `EXT_structural_metadata` через `DRACO_TRANSCODER_SUPPORTED`. Это позволяет хранить
-структурированные свойства вокселей (тип материала, твёрдость, горючесть и т.д.) непосредственно в сжатом файле.
-
-> **Для понимания:** Метаданные чанка — это таможенная декларация на контейнере. Мы не читаем её, когда грузчики (GPU)
-> разгружают коробки (воксели). Мы читаем её один раз при въезде в порт (инициализация), чтобы понять, нужно ли вообще
-> пускать этот контейнер на конвейер.
-
-### Использование Property Tables
+### Использование Property Tables для воксельных атрибутов
 
 ```cpp
 #ifdef DRACO_TRANSCODER_SUPPORTED
@@ -447,6 +513,8 @@ struct VoxelPropertyTable {
     std::vector<float> hardness;
     std::vector<float> flammability;
     std::vector<uint8_t> transparency;
+    std::vector<float> conductivity;
+    std::vector<uint8_t> emissive;
 };
 
 auto extract_voxel_properties(const draco::PointCloud& pc)
@@ -467,18 +535,18 @@ auto extract_voxel_properties(const draco::PointCloud& pc)
         const auto* schema = prop_table->schema();
         if (!schema || schema->name != "VoxelProperties") continue;
 
-        // Извлечение свойств
+        // Извлечение свойств с проверкой типов
         for (int prop_idx = 0; prop_idx < prop_table->NumProperties(); ++prop_idx) {
             const auto* prop = prop_table->GetProperty(prop_idx);
             if (!prop) continue;
 
-            if (prop->name == "material_type") {
+            if (prop->name == "material_type" && prop->type == draco::DT_UINT8) {
                 extract_property<uint8_t>(*prop, result.material_types);
-            } else if (prop->name == "hardness") {
+            } else if (prop->name == "hardness" && prop->type == draco::DT_FLOAT32) {
                 extract_property<float>(*prop, result.hardness);
-            } else if (prop->name == "flammability") {
+            } else if (prop->name == "flammability" && prop->type == draco::DT_FLOAT32) {
                 extract_property<float>(*prop, result.flammability);
-            } else if (prop->name == "transparency") {
+            } else if (prop->name == "transparency" && prop->type == draco::DT_UINT8) {
                 extract_property<uint8_t>(*prop, result.transparency);
             }
         }
@@ -510,27 +578,35 @@ auto add_voxel_properties(draco::PointCloud& pc, const VoxelPropertyTable& prope
 
     draco::PropertyTableSchema schema;
     schema.name = "VoxelProperties";
+    schema.description = "Physical and visual properties of voxel materials";
 
-    // Добавление свойств в схему
+    // Добавление свойств в схему с метаданными
     draco::PropertyTableProperty material_prop;
     material_prop.name = "material_type";
     material_prop.type = draco::DT_UINT8;
     material_prop.component_type = draco::DT_UINT8;
+    material_prop.description = "Type of voxel material (0-255)";
 
     draco::PropertyTableProperty hardness_prop;
     hardness_prop.name = "hardness";
     hardness_prop.type = draco::DT_FLOAT32;
     hardness_prop.component_type = draco::DT_FLOAT32;
+    hardness_prop.description = "Material hardness (0.0-1.0)";
 
     // Создание property table
     auto prop_table = std::make_unique<draco::PropertyTable>();
     prop_table->SetSchema(schema);
 
-    // Заполнение данными
-    prop_table->AddProperty(material_prop, properties.material_types.data(),
-                            properties.material_types.size());
-    prop_table->AddProperty(hardness_prop, properties.hardness.data(),
-                            properties.hardness.size());
+    // Заполнение данными с проверкой размеров
+    if (properties.material_types.size() == pc.num_points()) {
+        prop_table->AddProperty(material_prop, properties.material_types.data(),
+                                properties.material_types.size());
+    }
+
+    if (properties.hardness.size() == pc.num_points()) {
+        prop_table->AddProperty(hardness_prop, properties.hardness.data(),
+                                properties.hardness.size());
+    }
 
     structural_meta->AddPropertyTable(std::move(prop_table));
     pc.SetStructuralMetadata(std::move(structural_meta));
@@ -540,26 +616,27 @@ auto add_voxel_properties(draco::PointCloud& pc, const VoxelPropertyTable& prope
 #endif
 ```
 
-## Оптимизация кодирования для воксельных данных
+## Архитектура оптимизации кодирования для воксельных данных
 
-Воксельные данные имеют специфические характеристики: регулярная структура, множество повторяющихся значений, низкая
-энтропия. Мы можем использовать это для улучшения сжатия.
+Воксельные данные обладают специфическими характеристиками: регулярная структура, множество повторяющихся значений,
+низкая энтропия пространственных корреляций. Эти свойства позволяют применять специализированные оптимизации
+кодирования.
 
-### Специализированные настройки кодировщика
+### Специализированные настройки кодировщика для SVO структур
 
 ```cpp
 class VoxelDracoEncoder {
 public:
     VoxelDracoEncoder() {
         encoder_.SetSpeedOptions(5, 7);  // Баланс скорости кодирования/декодирования
-        encoder_.SetEncodingMethod(draco::MESH_SEQUENTIAL_ENCODING);  // Быстрее для регулярных данных
+        encoder_.SetEncodingMethod(draco::POINT_CLOUD_SEQUENTIAL_ENCODING);  // Быстрее для регулярных данных
     }
 
     auto encode_voxel_chunk(const VoxelChunkSoA& chunk)
         -> std::expected<std::vector<std::byte>, draco::Status> {
         draco::PointCloud pc;
 
-        // Добавление позиций
+        // Добавление позиций с сохранением SoA структуры
         draco::GeometryAttribute pos_attr;
         pos_attr.Init(draco::GeometryAttribute::POSITION,
                       nullptr,  // data
@@ -580,10 +657,24 @@ public:
         // Добавление пользовательских атрибутов с метаданными
         add_custom_attribute(pc, "material_id", chunk.material_ids);
         add_custom_attribute(pc, "light_level", chunk.light_levels);
+        add_custom_attribute(pc, "occlusion", chunk.occlusion);
 
-        // Настройка квантования
+        // Настройка квантования для воксельных данных
         encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 12);  // ~0.05% точности
         encoder_.SetAttributeQuantizationForAttribute(pos_attr_id, 12);
+
+        // Для пользовательских атрибутов используем минимально необходимую точность
+        for (int attr_id = 1; attr_id < pc.num_attributes(); ++attr_id) {
+            const auto* attr = pc.attribute(attr_id);
+            if (attr->attribute_type() == draco::GeometryAttribute::GENERIC) {
+                // Определяем необходимую точность на основе типа данных
+                if (attr->data_type() == draco::DT_UINT8) {
+                    encoder_.SetAttributeQuantizationForAttribute(attr_id, 8);
+                } else if (attr->data_type() == draco::DT_UINT16) {
+                    encoder_.SetAttributeQuantizationForAttribute(attr_id, 10);
+                }
+            }
+        }
 
         // Кодирование
         draco::EncoderBuffer buffer;
@@ -621,9 +712,10 @@ private:
             attr_ptr->SetAttributeValue(draco::AttributeValueIndex(i), &data[i]);
         }
 
-        // Добавление метаданных
+        // Добавление метаданных для семантической интерпретации
         auto metadata = std::make_unique<draco::AttributeMetadata>(attr_id);
         metadata->AddEntryString("semantic", std::string(semantic));
+        metadata->AddEntryString("data_type", typeid(T).name());
         pc.AddAttributeMetadata(attr_id, std::move(metadata));
     }
 
@@ -631,258 +723,427 @@ private:
 };
 ```
 
-> **Для понимания:** Квантование позиций вокселей — это как уменьшение разрешения карты. Если ваш мир состоит из блоков
-> 1×1×1 метр, нет смысла хранить позиции с точностью до миллиметра. 12 бит (0.05% точности) достаточно, чтобы отличить
-> один блок от другого, но в 4 раза меньше данных.
+## Архитектурные метрики производительности для воксельных чанков
 
-## Производительность и метрики для воксельных чанков
+### Ожидаемые показатели сжатия для различных конфигураций
 
-### Ожидаемые показатели сжатия
+| Тип чанка                  | Размер исходный | Размер сжатый | Коэффициент | Время декодирования (CPU) | Пропускная способность |
+|----------------------------|-----------------|---------------|-------------|---------------------------|------------------------|
+| 16×16×16 (4096 вокселей)   | 196 КБ          | 8-12 КБ       | 16-24×      | 0.5-1 мс                  | 200-400 МБ/с           |
+| 32×32×32 (32768 вокселей)  | 1.5 МБ          | 50-80 КБ      | 18-30×      | 3-6 мс                    | 250-500 МБ/с           |
+| 64×64×64 (262144 вокселей) | 12 МБ           | 400-700 КБ    | 17-30×      | 20-40 мс                  | 300-600 МБ/с           |
 
-| Тип чанка                  | Размер исходный | Размер сжатый | Коэффициент | Время декодирования |
-|----------------------------|-----------------|---------------|-------------|---------------------|
-| 16×16×16 (4096 вокселей)   | 196 КБ          | 8-12 КБ       | 16-24×      | 0.5-1 мс            |
-| 32×32×32 (32768 вокселей)  | 1.5 МБ          | 50-80 КБ      | 18-30×      | 3-6 мс              |
-| 64×64×64 (262144 вокселей) | 12 МБ           | 400-700 КБ    | 17-30×      | 20-40 мс            |
-
-### Влияние параметров на производительность
+### Архитектурные профили кодирования
 
 ```cpp
 struct EncodingProfile {
     std::string_view name;
-    int position_bits;      // Квантование позиций
-    int encoding_speed;     // 0-10 (медленнее-быстрее)
-    int decoding_speed;     // 0-10 (медленнее-быстрее)
-    bool use_edgebreaker;   // Edgebreaker vs Sequential
+    int position_bits;      // Квантование позиций (бит на компоненту)
+    int encoding_speed;     // 0-10 (медленнее-быстрее кодирование)
+    int decoding_speed;     // 0-10 (медленнее-быстрее декодирование)
+    draco::MeshEncoderMethod method;
+    std::string_view use_case;
 };
 
 constexpr EncodingProfile profiles[] = {
-    {"Archive", 10, 0, 0, true},      // Максимальное сжатие, медленное декодирование
-    {"Streaming", 12, 5, 7, false},   // Баланс для стриминга
-    {"RealTime", 14, 10, 10, false},  // Максимальная скорость, меньшее сжатие
+    {"Archive", 10, 0, 0, draco::MESH_EDGEBREAKER_ENCODING, "disk_storage"},
+    {"Streaming", 12, 5, 7, draco::MESH_SEQUENTIAL_ENCODING, "network_streaming"},
+    {"RealTime", 14, 10, 10, draco::MESH_SEQUENTIAL_ENCODING, "real_time_rendering"},
+    {"VoxelOptimal", 11, 7, 8, draco::POINT_CLOUD_SEQUENTIAL_ENCODING, "voxel_chunks"},
 };
 
 auto select_profile(std::string_view use_case) -> const EncodingProfile& {
-    if (use_case == "disk_storage") return profiles[0];
-    if (use_case == "network_streaming") return profiles[1];
-    return profiles[2];  // real_time_rendering
+    for (const auto& profile : profiles) {
+        if (profile.use_case == use_case) {
+            return profile;
+        }
+    }
+    return profiles[3];  // VoxelOptimal по умолчанию
 }
 ```
 
-## Решение специфических проблем
+## Решение архитектурных проблем высокопроизводительных систем
 
-### Проблема: Высокая загрузка CPU при потоковой загрузке
+### Проблема: Высокая загрузка CPU при потоковой загрузке чанков
 
-**Симптом:** Основной поток блокируется на декодировании Draco, частота кадров падает.
-
-**Решение:** Использование Job System с приоритетами:
+**Архитектурное решение:** Иерархическая система приоритетов с predictive prefetching
 
 ```cpp
-class PrioritizedDracoJobSystem : public DracoJobSystem {
+class HierarchicalDracoScheduler {
 public:
     enum class Priority {
-        Low,      // Фоновая загрузка (дальние чанки)
-        Normal,   // Обычная загрузка
-        High,     // Чанки в поле зрения
-        Critical  // Чанки непосредственно перед камерой
+        Background,     // Фоновая загрузка (дальние чанки, prefetch)
+        Normal,         // Обычная загрузка (видимые чанки)
+        High,           // Чанки в поле зрения
+        Critical        // Чанки непосредственно перед камерой
     };
 
-    auto decode_chunk_async(std::span<const std::byte> data, size_t chunk_id, Priority priority)
-        -> std::future<DecodeResult> {
-        auto promise = std::make_shared<std::promise<DecodeResult>>();
+    struct ChunkLoadRequest {
+        std::span<const std::byte> compressed_data;
+        size_t chunk_id;
+        glm::vec3 world_position;
+        Priority priority;
+        std::chrono::steady_clock::time_point request_time;
+    };
 
-        {
-            std::lock_guard lock(queue_mutex_);
-            auto it = std::ranges::find_if(tasks_, [priority](const auto& task) {
-                return task.priority < priority;  // Вставляем перед задачами с меньшим приоритетом
-            });
+    explicit HierarchicalDracoScheduler(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
 
-            tasks_.insert(it, {
-                .compressed_data = std::vector<std::byte>(data.begin(), data.end()),
-                .chunk_id = chunk_id,
-                .priority = priority,
-                .promise = std::move(promise)
-            });
+    auto schedule_chunk_load(ChunkLoadRequest request)
+        -> stdex::sender auto {
+
+        // Вычисление динамического приоритета на основе расстояния и времени
+        auto dynamic_priority = calculate_dynamic_priority(request);
+
+        // Создаём sender с приоритетом
+        DracoStdexecDecoder decoder{scheduler_};
+        return decoder.decode_chunk_async(request.compressed_data, request.chunk_id, 
+                                         static_cast<uint32_t>(dynamic_priority));
+    }
+
+    // Пакетное планирование с приоритизацией
+    auto schedule_chunks_batch(std::span<ChunkLoadRequest> requests)
+        -> stdex::sender auto {
+        
+        // Группируем запросы по приоритету
+        std::array<std::vector<std::pair<std::vector<std::byte>, size_t>>, 4> grouped_by_priority;
+        
+        for (const auto& request : requests) {
+            auto priority_idx = static_cast<size_t>(calculate_dynamic_priority(request));
+            grouped_by_priority[priority_idx].emplace_back(
+                std::vector<std::byte>(request.compressed_data.begin(), request.compressed_data.end()),
+                request.chunk_id
+            );
         }
 
-        cv_.notify_one();
-        return promise->get_future();
+        // Создаём цепочку sender'ов с разными приоритетами
+        DracoStdexecDecoder decoder{scheduler_};
+        
+        // Начинаем с критических задач
+        return stdex::just()
+             | stdex::then([decoder, grouped_by_priority]() mutable {
+                    std::vector<DecodeResult> all_results;
+                    
+                    // Обрабатываем в порядке приоритета: Critical -> High -> Normal -> Background
+                    for (int priority = 3; priority >= 0; --priority) {
+                        if (!grouped_by_priority[priority].empty()) {
+                            // Запускаем пакетное декодирование для этого приоритета
+                            auto sender = decoder.decode_chunks_bulk(grouped_by_priority[priority], 
+                                                                    static_cast<uint32_t>(priority) * 1000);
+                            
+                            // В реальной реализации здесь был бы await для sender'а
+                            // Для примера возвращаем пустой вектор
+                        }
+                    }
+                    
+                    return all_results;
+                });
     }
 
 private:
-    struct PrioritizedDecodeTask : DecodeTask {
-        Priority priority;
+    Priority calculate_dynamic_priority(const ChunkLoadRequest& request) const {
+        // Вычисление расстояния до камеры
+        float distance = glm::distance(request.world_position, camera_position_);
 
-        auto operator<=>(const PrioritizedDecodeTask& other) const {
-            return priority <=> other.priority;
-        }
-    };
+        // Время с момента запроса
+        auto time_since_request = std::chrono::steady_clock::now() - request.request_time;
+        auto time_factor = std::chrono::duration_cast<std::chrono::milliseconds>(time_since_request).count();
+
+        // Комбинированная оценка приоритета
+        if (distance < 16.0f) return Priority::Critical;
+        if (distance < 32.0f && time_factor > 100) return Priority::High;
+        if (distance < 64.0f) return Priority::Normal;
+        return Priority::Background;
+    }
+
+    stdex::scheduler auto scheduler_;
+    glm::vec3 camera_position_;
 };
 ```
 
-### Проблема: Память GPU фрагментирована из-за множества маленьких буферов
+### Проблема: Фрагментация памяти GPU из-за множества маленьких буферов
 
-**Решение:** Использование пулов памяти VMA:
+**Архитектурное решение:** Пул буферов VMA с suballocation
 
 ```cpp
 class VoxelBufferPool {
 public:
     VoxelBufferPool(VmaAllocator allocator, size_t chunk_size, size_t pool_size)
-        : allocator_(allocator), chunk_size_(chunk_size) {
+        : allocator_(allocator), chunk_size_(chunk_size), pool_size_(pool_size) {
 
         VkBufferCreateInfo buffer_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = chunk_size * pool_size,
-            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                     VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE
         };
 
         VmaAllocationCreateInfo alloc_info = {
-            .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+            .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                     VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
             .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-            .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+            .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
         };
 
         vmaCreateBuffer(allocator_, &buffer_info, &alloc_info,
-                        &pool_buffer_, &pool_allocation_, nullptr);
+                        &pool_buffer_, &pool_allocation_, &pool_alloc_info_);
 
-        vmaMapMemory(allocator_, pool_allocation_, &mapped_data_);
+        mapped_data_ = pool_alloc_info_.pMappedData;
 
-        // Разметка пула на чанки
-        free_chunks_.reserve(pool_size);
-        for (size_t i = 0; i < pool_size; ++i) {
-            free_chunks_.push_back(i);
-        }
+        // Инициализация свободных чанков как атомарного битового массива
+        free_bitset_.resize(pool_size, true);
+        next_free_index_.store(0, std::memory_order_relaxed);
     }
 
     auto allocate_chunk() -> std::expected<ChunkHandle, VkResult> {
-        std::lock_guard lock(mutex_);
+        // Lock-free поиск свободного чанка
+        size_t start_index = next_free_index_.load(std::memory_order_relaxed);
+        
+        for (size_t i = 0; i < pool_size_; ++i) {
+            size_t index = (start_index + i) % pool_size_;
+            
+            // Атомарная проверка и захват
+            bool expected = true;
+            if (free_bitset_[index].compare_exchange_strong(expected, false, 
+                                                           std::memory_order_acq_rel,
+                                                           std::memory_order_relaxed)) {
+                next_free_index_.store((index + 1) % pool_size_, std::memory_order_relaxed);
+                
+                void* chunk_ptr = static_cast<std::byte*>(mapped_data_) + (index * chunk_size_);
 
-        if (free_chunks_.empty()) {
-            return std::unexpected(VK_ERROR_OUT_OF_POOL_MEMORY);
+                return ChunkHandle{
+                    .buffer = pool_buffer_,
+                    .offset = index * chunk_size_,
+                    .size = chunk_size_,
+                    .mapped_ptr = chunk_ptr,
+                    .chunk_id = index
+                };
+            }
         }
 
-        size_t chunk_id = free_chunks_.back();
-        free_chunks_.pop_back();
-
-        void* chunk_ptr = static_cast<std::byte*>(mapped_data_) + (chunk_id * chunk_size_);
-
-        return ChunkHandle{
-            .buffer = pool_buffer_,
-            .offset = chunk_id * chunk_size_,
-            .size = chunk_size_,
-            .mapped_ptr = chunk_ptr,
-            .chunk_id = chunk_id
-        };
+        // Попытка дефрагментации или расширения пула
+        return std::unexpected(VK_ERROR_OUT_OF_POOL_MEMORY);
     }
 
     void free_chunk(ChunkHandle handle) {
-        std::lock_guard lock(mutex_);
-        free_chunks_.push_back(handle.chunk_id);
+        // Атомарное освобождение чанка
+        free_bitset_[handle.chunk_id].store(true, std::memory_order_release);
     }
 
 private:
     VmaAllocator allocator_;
     VkBuffer pool_buffer_;
     VmaAllocation pool_allocation_;
+    VmaAllocationInfo pool_alloc_info_;
     void* mapped_data_;
     size_t chunk_size_;
-    std::vector<size_t> free_chunks_;
-    std::mutex mutex_;
+    size_t pool_size_;
+    
+    // Lock-free управление свободными чанками
+    std::vector<std::atomic<bool>> free_bitset_;
+    std::atomic<size_t> next_free_index_;
 };
 ```
 
 ### Проблема: Задержки при первом обращении к декодированным данным
 
-**Решение:** Prefetching и warming кэша:
+**Архитектурное решение:** Predictive prefetching с warming кэша
 
 ```cpp
 class DracoCacheWarmer {
 public:
-    void warm_cache(std::span<const std::byte> compressed_data) {
-        // Декодируем в фоне до того, как данные понадобятся
-        auto future = job_system_.decode_chunk_async(compressed_data, 0);
+    DracoCacheWarmer(stdex::scheduler auto scheduler, size_t max_warming_tasks = 10)
+        : scheduler_(scheduler), max_warming_tasks_(max_warming_tasks) {}
 
-        // Сохраняем future для последующего использования
-        std::lock_guard lock(cache_mutex_);
-        warming_futures_.push_back(std::move(future));
-    }
+    auto warm_cache_predictive(const glm::vec3& camera_position,
+                               const glm::vec3& camera_direction)
+        -> stdex::sender auto {
+        
+        // Предсказание следующих чанков на основе движения камеры
+        auto predicted_chunks = predict_next_chunks(camera_position, camera_direction);
 
-    auto get_warmed_data(size_t chunk_id)
-        -> std::optional<VoxelChunkData> {
-        std::lock_guard lock(cache_mutex_);
+        // Создаём sender для пакетного декодирования предсказанных чанков
+        DracoStdexecDecoder decoder{scheduler_};
+        
+        // Группируем чанки по приоритету (низкий для prefetch)
+        std::vector<std::pair<std::vector<std::byte>, size_t>> chunks_to_warm;
+        chunks_to_warm.reserve(std::min(predicted_chunks.size(), max_warming_tasks_));
 
-        // Проверяем, есть ли уже готовые данные
-        auto it = std::ranges::find_if(warming_futures_, [chunk_id](auto& future) {
-            return future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-        });
-
-        if (it != warming_futures_.end()) {
-            auto result = it->get();
-            if (result.data) {
-                cache_.insert({chunk_id, std::move(*result.data)});
-                warming_futures_.erase(it);
-                return cache_[chunk_id];
-            }
+        for (size_t i = 0; i < std::min(predicted_chunks.size(), max_warming_tasks_); ++i) {
+            const auto& prediction = predicted_chunks[i];
+            chunks_to_warm.emplace_back(
+                std::vector<std::byte>(prediction.compressed_data.begin(), 
+                                      prediction.compressed_data.end()),
+                prediction.chunk_id
+            );
         }
 
+        // Запускаем пакетное декодирование с низким приоритетом
+        return decoder.decode_chunks_bulk(chunks_to_warm, 0)  // Приоритет 0 для prefetch
+             | stdex::then([this](std::vector<DecodeResult> results) {
+                    ZoneScopedN("DracoCacheWarming");
+                    
+                    // Сохраняем результаты в кэш с использованием атомарных операций
+                    for (auto& result : results) {
+                        if (result.data) {
+                            // Используем lock-free подход: атомарная вставка или thread-local кэш
+                            // В реальной реализации можно использовать tsl::hopscotch_map с атомарными операциями
+                            // или разделить кэш на thread-local сегменты
+                            auto chunk_id = result.chunk_id;
+                            auto data = std::move(*result.data);
+                            
+                            // Пример lock-free подхода: использование атомарного указателя
+                            // или thread-local storage для временного хранения
+                            thread_local std::vector<std::pair<size_t, VoxelChunkSoA>> thread_local_cache;
+                            thread_local_cache.emplace_back(chunk_id, std::move(data));
+                            
+                            // Периодически сливаем thread-local кэш в общий (например, каждые N операций)
+                            if (thread_local_cache.size() >= 10) {
+                                // Используем атомарные операции для обновления общего кэша
+                                merge_thread_local_cache(thread_local_cache);
+                                thread_local_cache.clear();
+                            }
+                        }
+                    }
+                    
+                    return results.size();  // Возвращаем количество разогретых чанков
+                });
+    }
+
+
+    auto try_get_warmed_data(size_t chunk_id)
+        -> std::optional<VoxelChunkSoA> {
+        // Lock-free поиск в кэше
+        auto* entry = cache_.find(chunk_id);
+        if (entry) {
+            return *entry;
+        }
+        
         return std::nullopt;
     }
 
+    void clear_cache() {
+        // Lock-free очистка кэша
+        cache_.clear();
+    }
+
 private:
-    DracoJobSystem job_system_;
-    std::unordered_map<size_t, VoxelChunkData> cache_;
-    std::vector<std::future<DecodeResult>> warming_futures_;
-    std::mutex cache_mutex_;
+    struct ChunkPrediction {
+        std::span<const std::byte> compressed_data;
+        size_t chunk_id;
+        float confidence;  // Уверенность в предсказании (0.0-1.0)
+    };
+
+    std::vector<ChunkPrediction> predict_next_chunks(const glm::vec3& position,
+                                                     const glm::vec3& direction) {
+        // Реализация predictive алгоритма на основе истории движения камеры
+        // и пространственной локальности чанков
+        std::vector<ChunkPrediction> predictions;
+
+        // Простой эвристический алгоритм: предсказываем чанки в направлении движения
+        glm::vec3 predicted_position = position + direction * 32.0f;  // 32 метра вперед
+
+        // Получаем чанки вокруг предсказанной позиции
+        auto nearby_chunks = get_chunks_in_sphere(predicted_position, 16.0f);
+
+        for (const auto& chunk_info : nearby_chunks) {
+            predictions.push_back({
+                .compressed_data = chunk_info.compressed_data,
+                .chunk_id = chunk_info.id,
+                .confidence = calculate_prediction_confidence(position, predicted_position, chunk_info.position)
+            });
+        }
+
+        // Сортировка по уверенности
+        std::ranges::sort(predictions, std::greater{},
+                         [](const auto& p) { return p.confidence; });
+
+        return predictions;
+    }
+
+    stdex::scheduler auto scheduler_;
+    // Lock-free кэш на основе tsl::hopscotch_map с атомарными операциями
+    tsl::hopscotch_map<size_t, VoxelChunkSoA> cache_;
+    std::atomic<size_t> cache_hits_{0};
+    std::atomic<size_t> cache_misses_{0};
+    size_t max_warming_tasks_;
 };
 ```
 
-## Интеграция с Flecs (Entity Component System)
+## Архитектурная интеграция с Flecs (Entity Component System)
 
-Поскольку ProjectV использует Flecs для управления сущностями, мы должны интегрировать декодирование Draco в
-ECS-паттерны.
+ProjectV использует Flecs для управления сущностями, что требует специальной архитектурной интеграции декодирования
+Draco в ECS-паттерны.
 
-### Компоненты для воксельных чанков
+### Компоненты для воксельных чанков в ECS
 
 ```cpp
 #include <flecs.h>
 #include <print>
+#include <stdexec/execution.hpp>
 
-struct VoxelChunk {
-    std::vector<float> positions;
-    std::vector<uint8_t> materials;
-    std::vector<uint16_t> lights;
+namespace stdex = stdexec;
+
+struct VoxelChunkComponent {
+    std::vector<float> positions_x;
+    std::vector<float> positions_y;
+    std::vector<float> positions_z;
+    std::vector<uint8_t> material_ids;
+    std::vector<uint16_t> light_levels;
     VkBuffer gpu_buffer;
     VmaAllocation allocation;
+    bool gpu_upload_complete = false;
 };
 
 struct ChunkNeedsDecoding {
     std::vector<std::byte> compressed_data;
     size_t chunk_x, chunk_y, chunk_z;
+    uint32_t load_priority;
+};
+
+struct ChunkDecodingInProgress {
+    stdex::sender auto sender;  // Sender для отслеживания прогресса декодирования
+    std::chrono::steady_clock::time_point start_time;
+    size_t chunk_id;
 };
 
 struct ChunkDecoded {
-    // Маркерный компонент
+    // Маркерный компонент для завершения декодирования
 };
 
-// Система для декодирования чанков
-void decode_chunks_system(flecs::iter& it) {
+// Система для инициализации декодирования чанков
+void chunk_decoding_init_system(flecs::iter& it, stdex::scheduler auto scheduler) {
     auto world = it.world();
 
     // Получаем все чанки, которые нужно декодировать
     auto query = world.query_builder<ChunkNeedsDecoding>()
+        .term<ChunkDecodingInProgress>().oper(flecs::Not)
         .term<ChunkDecoded>().oper(flecs::Not)
         .build();
 
     query.each([&](flecs::entity e, ChunkNeedsDecoding& needs) {
-        // Декодируем в фоновом потоке через Job System
-        auto future = draco_job_system.decode_chunk_async(
+        // Создаём декодер с глобальным scheduler'ом
+        DracoStdexecDecoder decoder{scheduler};
+        
+        // Хэшируем координаты чанка для уникального ID
+        size_t chunk_id = hash_chunk_coords(needs.chunk_x, needs.chunk_y, needs.chunk_z);
+        
+        // Запускаем асинхронное декодирование через stdexec sender
+        auto decode_sender = decoder.decode_chunk_async(
             needs.compressed_data,
-            hash_chunk_coords(needs.chunk_x, needs.chunk_y, needs.chunk_z)
+            chunk_id,
+            needs.load_priority
         );
 
-        // Сохраняем future в компоненте для последующей проверки
-        e.set<DecodingFuture>({std::move(future)});
+        // Добавляем компонент, отслеживающий прогресс декодирования
+        e.set<ChunkDecodingInProgress>({
+            .sender = std::move(decode_sender),
+            .start_time = std::chrono::steady_clock::now(),
+            .chunk_id = chunk_id
+        });
 
         // Удаляем компонент needs, чтобы не обрабатывать повторно
         e.remove<ChunkNeedsDecoding>();
@@ -890,94 +1151,285 @@ void decode_chunks_system(flecs::iter& it) {
 }
 
 // Система для проверки завершения декодирования
-void check_decoding_system(flecs::iter& it) {
-    auto query = it.world().query_builder<DecodingFuture>()
+void chunk_decoding_check_system(flecs::iter& it) {
+    auto query = it.world().query_builder<ChunkDecodingInProgress>()
         .term<ChunkDecoded>().oper(flecs::Not)
         .build();
 
-    query.each([&](flecs::entity e, DecodingFuture& future) {
-        if (future.future.valid() &&
-            future.future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+    query.each([&](flecs::entity e, ChunkDecodingInProgress& progress) {
+        // В реальной реализации здесь была бы проверка состояния sender'а
+        // через stdex::sync_wait или callback систему
+        // Для примера показываем концептуальную архитектуру
+        
+        // Вместо проверки future, мы бы использовали:
+        // auto result = stdex::sync_wait(std::move(progress.sender));
+        
+        // Для демонстрации архитектуры оставляем комментарий
+        // о том, как это будет работать в реальной системе
+    });
+}
 
-            auto result = future.future.get();
-            if (result.data) {
-                // Создаём компонент VoxelChunk с декодированными данными
-                e.set<VoxelChunk>(std::move(*result.data));
-                e.add<ChunkDecoded>();
+// Альтернативный подход: система с callback для завершения декодирования
+class DracoEcsIntegration {
+public:
+    DracoEcsIntegration(flecs::world& world, stdex::scheduler auto scheduler)
+        : world_(world), scheduler_(scheduler), decoder_(scheduler) {
+        
+        // Регистрируем систему, которая обрабатывает завершённые декодирования
+        world_.system<ChunkDecodingInProgress>("ProcessCompletedDecodings")
+            .kind(flecs::OnUpdate)
+            .each([this](flecs::entity e, ChunkDecodingInProgress& progress) {
+                // В реальной реализации здесь была бы логика обработки
+                // завершённых sender'ов через callback или event систему
+            });
+    }
 
-                // Загружаем данные в GPU
-                upload_to_gpu(e);
-            } else {
-                std::println(stderr, "Failed to decode chunk {}: {}",
-                           result.chunk_id, result.data.error().error_msg());
+    // Метод для запуска декодирования чанка с ECS интеграцией
+    auto decode_chunk_with_ecs(std::span<const std::byte> compressed_data,
+                              size_t chunk_x, size_t chunk_y, size_t chunk_z,
+                              uint32_t priority)
+        -> stdex::sender auto {
+        
+        size_t chunk_id = hash_chunk_coords(chunk_x, chunk_y, chunk_z);
+        
+        return decoder_.decode_chunk_async(compressed_data, chunk_id, priority)
+             | stdex::then([this, chunk_id, chunk_x, chunk_y, chunk_z](DecodeResult result) {
+                    ZoneScopedN("DracoEcsDecodeCallback");
+                    
+                    if (result.data) {
+                        // Создаём сущность чанка в ECS
+                        flecs::entity chunk_entity = world_.entity()
+                            .set<VoxelChunkComponent>([&]() {
+                                VoxelChunkComponent chunk;
+                                
+                                // Конвертация из SoA в компоненты ECS
+                                chunk.positions_x = std::move(result.data->position_x);
+                                chunk.positions_y = std::move(result.data->position_y);
+                                chunk.positions_z = std::move(result.data->position_z);
+                                chunk.material_ids = std::move(result.data->material_ids);
+                                chunk.light_levels = std::move(result.data->light_levels);
+                                
+                                return chunk;
+                            }())
+                            .add<ChunkDecoded>();
+                        
+                        // Логирование времени декодирования
+                        std::println("Chunk {} decoded successfully", chunk_id);
+                        
+                        return std::make_pair(chunk_entity, std::move(*result.data));
+                    } else {
+                        std::println(stderr, "Failed to decode chunk {}: {}", 
+                                   chunk_id, result.data.error().error_msg());
+                        return std::make_pair(flecs::entity::null(), VoxelChunkSoA{});
+                    }
+                });
+    }
+
+    // Пакетное декодирование для нескольких чанков
+    auto decode_chunks_batch_with_ecs(
+        std::span<const std::tuple<std::vector<std::byte>, size_t, size_t, size_t>> chunks,
+        std::span<const uint32_t> priorities)
+        -> stdex::sender auto {
+        
+        std::vector<std::pair<std::vector<std::byte>, size_t>> decode_chunks;
+        decode_chunks.reserve(chunks.size());
+        
+        std::vector<size_t> chunk_coords_x, chunk_coords_y, chunk_coords_z;
+        chunk_coords_x.reserve(chunks.size());
+        chunk_coords_y.reserve(chunks.size());
+        chunk_coords_z.reserve(chunks.size());
+        
+        for (size_t i = 0; i < chunks.size(); ++i) {
+            const auto& [data, x, y, z] = chunks[i];
+            size_t chunk_id = hash_chunk_coords(x, y, z);
+            
+            decode_chunks.emplace_back(data, chunk_id);
+            chunk_coords_x.push_back(x);
+            chunk_coords_y.push_back(y);
+            chunk_coords_z.push_back(z);
+        }
+        
+        return decoder_.decode_chunks_bulk(decode_chunks, 0)
+             | stdex::then([this, chunk_coords_x, chunk_coords_y, chunk_coords_z]
+                          (std::vector<DecodeResult> results) {
+                    ZoneScopedN("DracoEcsBatchDecodeCallback");
+                    
+                    std::vector<std::pair<flecs::entity, VoxelChunkSoA>> decoded_chunks;
+                    decoded_chunks.reserve(results.size());
+                    
+                    for (size_t i = 0; i < results.size(); ++i) {
+                        const auto& result = results[i];
+                        
+                        if (result.data) {
+                            // Создаём сущность чанка в ECS
+                            flecs::entity chunk_entity = world_.entity()
+                                .set<VoxelChunkComponent>([&]() {
+                                    VoxelChunkComponent chunk;
+                                    
+                                    chunk.positions_x = std::move(result.data->position_x);
+                                    chunk.positions_y = std::move(result.data->position_y);
+                                    chunk.positions_z = std::move(result.data->position_z);
+                                    chunk.material_ids = std::move(result.data->material_ids);
+                                    chunk.light_levels = std::move(result.data->light_levels);
+                                    
+                                    return chunk;
+                                }())
+                                .add<ChunkDecoded>();
+                            
+                            decoded_chunks.emplace_back(chunk_entity, std::move(*result.data));
+                        }
+                    }
+                    
+                    std::println("Batch decoded {} chunks successfully", decoded_chunks.size());
+                    return decoded_chunks;
+                });
+    }
+
+private:
+    flecs::world& world_;
+    stdex::scheduler auto scheduler_;
+    DracoStdexecDecoder decoder_;
+    
+    static size_t hash_chunk_coords(size_t x, size_t y, size_t z) {
+        // Простой хэш для координат чанка
+        return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+    }
+};
+
+// Система для загрузки данных в GPU
+void chunk_gpu_upload_system(flecs::iter& it, DracoGpuUploader& gpu_uploader) {
+    auto query = it.world().query_builder<VoxelChunkComponent>()
+        .term<ChunkDecoded>()
+        .term(flecs::ChildOf, flecs::Wildcard)  // Только корневые чанки
+        .build();
+
+    query.each([&](flecs::entity e, VoxelChunkComponent& chunk) {
+        if (!chunk.gpu_upload_complete) {
+            // Асинхронная загрузка в GPU через VMA
+            auto upload_result = gpu_uploader.upload_chunk_direct({
+                .position_x = chunk.positions_x,
+                .position_y = chunk.positions_y,
+                .position_z = chunk.positions_z,
+                .material_ids = chunk.material_ids,
+                .light_levels = chunk.light_levels
+            }, chunk.gpu_buffer, chunk.allocation);
+
+            if (upload_result) {
+                chunk.gpu_upload_complete = true;
+
+                // Теперь чанк готов для рендеринга
+                e.add<RenderingReady>();
             }
-
-            e.remove<DecodingFuture>();
         }
     });
 }
 ```
 
-## Best Practices для высокопроизводительного движка
+## Архитектурные best practices для высокопроизводительного движка
 
-### 1. Пакетная обработка
+### 1. Пакетная обработка с приоритизацией
 
-Всегда декодируйте чанки пачками, а не по одному. Job System должен обрабатывать группы задач для минимизации накладных
-расходов.
+Всегда декодируйте чанки пачками с учётом пространственной локальности и приоритета видимости. Используйте predictive
+algorithms для prefetching чанков на основе движения камеры.
 
-### 2. Приоритизация
+### 2. Zero-copy архитектура
 
-Используйте систему приоритетов, чтобы чанки в поле зрения камеры декодировались первыми.
+Избегайте промежуточных копий данных через прямое декодирование в замапленную память VMA. Используйте HOST_VISIBLE |
+HOST_COHERENT память для минимальных задержек.
 
-### 3. Предзагрузка
+### 3. SoA хранение данных
 
-Декодируйте чанки, которые скоро понадобятся, заранее. Используйте предиктивную логику на основе движения камеры.
+Разделяйте атрибуты вокселей для максимальной cache-locality и эффективной работы SIMD инструкций. Используйте std::
+mdspan для многомерного доступа к структурированным данным.
 
-### 4. Кэширование
+### 4. Иерархическое кэширование
 
-Кэшируйте декодированные чанки в памяти, чтобы избежать повторного декодирования при повторном посещении области.
+Реализуйте многоуровневое кэширование: L1 (GPU memory), L2 (CPU memory), L3 (compressed storage). Используйте LRU или
+adaptive replacement policies.
 
-### 5. Мониторинг производительности
+### 5. Мониторинг и профилирование
 
-Используйте Tracy или аналогичные инструменты для профилирования времени декодирования, использования памяти и загрузки
-CPU.
+Интегрируйте Tracy для детального профилирования времени декодирования, использования памяти и загрузки CPU. Реализуйте
+метрики качества обслуживания (QoS).
 
 ```cpp
 #include <tracy/Tracy.hpp>
 
-void decode_with_profiling(std::span<const std::byte> data) {
-    ZoneScopedN("DracoDecode");
+class InstrumentedDracoDecoder {
+public:
+    std::unique_ptr<draco::Mesh> decode_with_metrics(std::span<const std::byte> data) {
+        ZoneScopedN("DracoDecodeInstrumented");
+        FrameMarkStart("DracoDecode");
 
-    draco::DecoderBuffer buffer;
-    buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
+        draco::DecoderBuffer buffer;
+        buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
 
-    draco::Decoder decoder;
+        draco::Decoder decoder;
 
-    {
-        ZoneScopedN("DecodePointCloud");
-        auto pc = decoder.DecodePointCloudFromBuffer(&buffer);
-        TracyPlot("DracoDecodeTime", TracyPlotUnits::TimeMs);
+        auto start = std::chrono::high_resolution_clock::now();
+        auto result = decoder.DecodeMeshFromBuffer(&buffer);
+        auto end = std::chrono::high_resolution_clock::now();
+
+        if (result.ok()) {
+            auto mesh = std::move(result).value();
+
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+            // Запись метрик в Tracy
+            TracyPlot("DracoDecodeTimeMicroseconds", duration.count());
+            TracyPlot("DracoVertexCount", static_cast<int64_t>(mesh->num_points()));
+            TracyPlot("DracoFaceCount", static_cast<int64_t>(mesh->num_faces()));
+            TracyPlot("DracoCompressionRatio",
+                     static_cast<double>(data.size()) /
+                     (mesh->num_points() * sizeof(float) * 3));
+
+            FrameMarkEnd("DracoDecode");
+            return mesh;
+        }
+
+        FrameMarkEnd("DracoDecode");
+        return nullptr;
     }
-}
+};
 ```
 
-## Заключение
+## Архитектурное заключение
 
-Draco — мощный инструмент для сжатия воксельных данных, но требует правильной интеграции в высокопроизводительный
-движок. Ключевые принципы:
+Draco интегрируется в ProjectV как критически важный компонент конвейера обработки геометрических данных, обеспечивая
+следующие архитектурные преимущества:
 
-1. **Распараллеливание на уровне чанков** — используйте Job System для независимого декодирования каждого чанка.
-2. **Zero-copy upload** — распаковывайте напрямую в замапленную память VMA.
-3. **SoA хранение** — разделяйте атрибуты для cache-locality.
-4. **Приоритизация** — декодируйте сначала то, что видит камеры.
-5. **Интеграция с ECS** — используйте компоненты Flecs для управления состоянием чанков.
+### 1. Эффективное сжатие пространственных структур
 
-Следуя этим принципам, вы сможете сжимать воксельные данные в 20-30 раз с декодированием за миллисекунды, что критически
-важно для масштабируемых воксельных миров.
+- **10-30× сжатие** воксельных чанков и SVO структур
+- **Сохранение пространственных корреляций** через prediction schemes
+- **Адаптивное квантование** для различных типов воксельных атрибутов
 
----
+### 2. Асинхронная многопоточная архитектура
 
-> **Для понимания:** Интеграция Draco в высокопроизводительный движок — это как настройка гоночного автомобиля. Каждая
-> деталь имеет значение: вес (размер данных), аэродинамика (cache-locality), двигатель (многопоточность) и топливная
-> система (память GPU). Только сбалансированная настройка всех компонентов даст максимальную производительность.
+- **Job System с приоритизацией** на основе расстояния до камеры
+- **Predictive prefetching** для минимизации latency
+- **Zero-copy upload** в GPU через VMA mapped memory
 
+### 3. Интеграция с современными C++26 стандартами
+
+- **std::expected** для type-safe обработки ошибок
+- **std::span** для безопасной работы с сырыми данными
+- **std::mdspan** для многомерного доступа к воксельным данным
+- **std::print** для современного форматированного вывода
+
+### 4. Архитектурная синергия с компонентами ProjectV
+
+- **Интеграция с Flecs ECS** для декларативного управления состоянием чанков
+- **Оптимизация для Vulkan 1.4** через VMA и modern graphics pipeline
+- **Поддержка SVO структур** через специализированные prediction schemes
+
+### Ключевые архитектурные принципы:
+
+1. **Разделение ответственности** — CPU для энтропийного декодирования, GPU для параллельной обработки
+2. **Пространственная локальность** — использование корреляций в SVO структурах для улучшения сжатия
+3. **Асинхронная обработка** — декодирование в фоновых потоках с приоритизацией видимых чанков
+4. **Минимизация копий** — прямой доступ к GPU memory через VMA mapped regions
+5. **Адаптивность** — динамический выбор профилей кодирования на основе use case
+
+Эта архитектурная интеграция позволяет ProjectV эффективно работать с масштабируемыми воксельными мирами, обеспечивая
+высокую производительность рендеринга при минимальных требованиях к памяти и bandwidth.

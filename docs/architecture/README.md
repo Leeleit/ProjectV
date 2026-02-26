@@ -39,6 +39,12 @@
 
 ---
 
+## Будущие механики (`future/`)
+
+TODO
+
+---
+
 ## Практика (`practice/`)
 
 Практическая реализация архитектурных паттернов в ProjectV, организованная по категориям:
@@ -83,8 +89,8 @@
 | 2 | [Physics-Voxel Integration](practice/04_physics_ca/02_physics_voxel_integration.md) | Интеграция физики с вокселями        |
 | 3 | [GPU Cellular Automata](practice/04_physics_ca/03_gpu_cellular_automata.md)         | CA для жидкостей/сыпучих/огня        |
 | 4 | [CPU-GPU Physics Sync](practice/04_physics_ca/04_cpu_gpu_physics_sync.md)           | Синхронизация физики между CPU и GPU |
-| 5 | [Destruction Physics](practice/04_physics_ca/05_destruction_physics.md)             | Разрушение воксельных объектов       |
-| 6 | [CA-Physics Bridge](practice/04_physics_ca/05_ca_physics_bridge.md)                 | Мост между CA и физикой              |
+| 5 | [CA-Physics Bridge](practice/04_physics_ca/05_ca_physics_bridge.md)                 | Мост между CA и физикой              |
+| 6 | [Multithreading Contracts](practice/04_physics_ca/06_multithreading_contracts.md)   | TODO                                 |
 | 7 | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты      |
 
 ### 🎮 05_ecs_gameplay/ — ECS и Gameplay
@@ -97,8 +103,6 @@
 | 4 | [Input System](practice/05_ecs_gameplay/04_input_system.md)               | Стек слоёв ввода: ImGui, debug-консоль |
 | 5 | [Input Actions](practice/05_ecs_gameplay/05_input_actions.md)             | Action Mapping система                 |
 | 6 | [Game UI](practice/05_ecs_gameplay/06_game_ui.md)                         | UI Strategy (ImGui/RmlUi)              |
-| 7 | [Network-Ready ECS](practice/05_ecs_gameplay/07_network_ready_ecs.md)     | Репликация, Rollback/Prediction        |
-| 8 | [Non-Euclidean Geometry](practice/05_ecs_gameplay/08_non_euclidean.md)    | SCP-style неевклидова геометрия        |
 
 ### 📁 06_assets/ — Ресурсы и материалы
 
@@ -111,17 +115,15 @@
 | 5 | [Hot-Reload](practice/06_assets/05_hot_reload.md)                   | Быстрая итерация без перезапуска             |
 | 6 | [Asset Management](practice/06_assets/06_asset_management.md)       | Управление ассетами                          |
 | 7 | [Material System](practice/06_assets/07_material_system.md)         | PBR материалы для вокселей                   |
-| 8 | [Networking Concept](practice/06_assets/08_networking_concept.md)   | Networking (Post-MVP Vision)                 |
-| 9 | [Asset Pipeline](practice/06_assets/08_asset_pipeline.md)           | Offline Compiler для ассетов                 |
+| 8 | [Asset Pipeline](practice/06_assets/08_asset_pipeline.md)           | Offline Compiler для ассетов                 |
 
 ### 📋 07_meta/ — Meta-документация
 
 | # | Документ                                                            | Описание                   |
 |---|---------------------------------------------------------------------|----------------------------|
 | 1 | [Team Workflow](practice/07_meta/01_team_workflow.md)               | Организация работы команды |
-| 2 | [Modding API](practice/07_meta/02_modding_api.md)                   | API для модификаций        |
-| 3 | [Implementation Order](practice/07_meta/02_implementation_order.md) | Порядок имплементации      |
-| 4 | [Testing Architecture](practice/07_meta/03_testing_architecture.md) | Архитектура тестирования   |
+| 2 | [Implementation Order](practice/07_meta/02_implementation_order.md) | Порядок имплементации      |
+| 3 | [Testing Architecture](practice/07_meta/03_testing_architecture.md) | Архитектура тестирования   |
 
 ---
 

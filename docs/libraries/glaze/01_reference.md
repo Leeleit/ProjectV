@@ -1,17 +1,11 @@
 # Glaze — Reference
 
-<!-- anchor: 00_overview -->
-
 **Glaze** — библиотека compile-time reflection и сериализации для C++23/26. Нулевые аллокации, проверка типов при
 компиляции, бинарный и JSON форматы.
 
-Версия: **2.0.0+**
-Исходники: [stephenberry/glaze](https://github.com/stephenberry/glaze)
-Лицензия: MIT
-
 ---
 
-## Что это и зачем взяли
+## Что это и зачем
 
 Glaze — это ответ на проблему "JSON-парсинг в C++ должен быть быстрым и типобезопасным". В отличие от традиционных
 библиотек, которые полагаются на runtime reflection или макросы, Glaze использует compile-time reflection через
@@ -19,7 +13,7 @@ Glaze — это ответ на проблему "JSON-парсинг в C++ д
 
 **Почему Glaze, а не nlohmann/json?**
 
-| Аспект                 | nlohmann/json                        | Glaze                  | Выигрыш для ProjectV  |
+| Аспект                 | nlohmann/json                        | Glaze                  | Выигрыш               |
 |------------------------|--------------------------------------|------------------------|-----------------------|
 | **Парсинг JSON**       | ~50ms (динамические аллокации)       | ~10ms (zero-copy)      | **5× быстрее**        |
 | **Память**             | Каждый элемент — отдельная аллокация | Прямой доступ к буферу | **Zero-overhead**     |
@@ -64,13 +58,6 @@ glz::read_json(v, R"({"x": 1, "y": 2})");  // Compile-time проверка ти
 | Сериализация struct  | 20ms          | 12ms      | **5ms**         | Zero-copy write   |
 | Память (peak)        | 3× данных     | 2× данных | **1.1× данных** | Аллокации         |
 | Binary serialization | ❌             | ❌         | **✅**           | До 10× компактнее |
-
-### Особенности для воксельного движка
-
-1. **Конфиги движка** — hot reload без остановки рендера
-2. **Метаданные ассетов** — сериализация структур вокселей
-3. **Сетевой протокол** — бинарный формат для мультиплеера
-4. **Save/load мира** — эффективное сохранение чанков
 
 ---
 
@@ -117,22 +104,22 @@ glz::read_json(d, json);  // Прямой доступ к "value"
 
 ### Бинарный формат
 
-Для воксельных данных (чанки, сейвы):
+Для компактного хранения:
 
 ```cpp
-struct VoxelChunk {
-    glm::ivec3 coord;
-    std::array<uint8_t, 4096> voxels;  // 16³
+struct MeshData {
+    glm::ivec3 position;
+    std::array<uint8_t, 256> attributes;
 };
 
-VoxelChunk chunk;
+MeshData data;
 std::vector<uint8_t> buffer;
 
 // Сериализация (в 3-5 раз компактнее JSON)
-glz::write_binary(chunk, buffer);
+glz::write_binary(data, buffer);
 
 // Десериализация (zero-copy для trivial типов)
-glz::read_binary(chunk, buffer);
+glz::read_binary(data, buffer);
 ```
 
 ---
@@ -151,17 +138,6 @@ glz::read_binary(chunk, buffer);
 - **Glaze**: thread-safe парсинг (read-only буфер + отдельная структура)
 - **nlohmann**: требует синхронизации (shared mutable tree)
 
-### Производительность в ProjectV
-
-```cpp
-// Загрузка 1000 конфигов чанков
-for (const auto& chunk : world.chunks) {
-    ChunkConfig config;
-    glz::read_json(config, chunk.configData);  // ~1ms каждый
-    // vs nlohmann: ~5ms + аллокации
-}
-```
-
 ---
 
 ## Ограничения
@@ -170,25 +146,3 @@ for (const auto& chunk : world.chunks) {
 2. **Compile-time проверки** — ошибки типов видны только при компиляции
 3. **Структуры должны быть "простыми"** — сложные inheritance не поддерживается
 4. **Нет runtime schema validation** — все проверки на этапе компиляции
-
----
-
-## ProjectV Integration Philosophy
-
-Glaze выбран не просто как "ещё один JSON парсер", а как фундаментальный инструмент для:
-
-1. **Конфигурации без компромиссов** — 60 FPS даже при hot reload
-2. **Сериализации воксельных данных** — эффективное сохранение мира
-3. **Метаданных ассетов** — типобезопасный доступ к ресурсам
-4. **Сетевого протокола** — минимальная задержка, максимальная пропускная способность
-
-**Мантра**: "Если данные можно описать структурой C++, они должны сериализоваться через Glaze".
-
----
-
-## Ссылки
-
-- [Официальная документация Glaze](https://github.com/stephenberry/glaze)
-- [Сравнение JSON библиотек](https://github.com/miloyip/nativejson-benchmark)
-- [Data-Oriented Design в C++](../../architecture/practice/02_dod.md)
-- [Сериализация в игровых движках](../../architecture/practice/11_serialization.md)
