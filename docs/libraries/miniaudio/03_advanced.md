@@ -1,1305 +1,613 @@
-## Источники данных
+# miniaudio: Хардкорные оптимизации и DOD
 
-<!-- anchor: 04_data-sources -->
+> **Для понимания:** Аудио в играх — это невидимый фронт. Пока игрок смотрит на воксели, звуковой движок каждую
+> миллисекунду гоняет данные между CPU, памятью и звуковой картой. Оптимизация аудио — это как настройка спортивного
+> мотора: каждая доля секунды на счету, и никаких лишних движений.
 
+## Zero-Allocation в Audio Thread
 
-Data source — абстракция для любых источников аудиоданных: файлы, память, генераторы, кастомные реализации.
+> **Для понимания:** Audio callback работает в реальном времени. Представьте, что это пожарная команда: когда звучит
+> тревога (callback), у вас есть строго ограниченное время до следующего вызова. Любая аллокация памяти — как попытка
+> вызвать мастерскую во время пожара. Никакой надежды успеть.
 
----
+### Pre-allocated Audio Buffers
 
-## Интерфейс ma_data_source
+```cpp
+// ХРАНИМ ВСЁ В STACK или статике
+alignas(64) struct AudioFrame {
+    float left;
+    float right;
+};
 
-Все data sources реализуют общий интерфейс. Это позволяет использовать декодер, генератор или кастомный источник везде,
-где ожидается `ma_data_source`.
+class AudioProcessor {
+    // Статический буфер - никакой аллокации в рантайме
+    static constexpr size_t BUFFER_SIZE = 2048;
+    alignas(64) std::array<AudioFrame, BUFFER_SIZE> m_buffer;
 
-### Основные функции интерфейса
-
-```c
-ma_result ma_data_source_read_pcm_frames(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
-ma_result ma_data_source_seek_to_pcm_frame(ma_data_source* pDataSource, ma_uint64 frameIndex);
-ma_result ma_data_source_get_length_in_pcm_frames(ma_data_source* pDataSource, ma_uint64* pLength);
-ma_result ma_data_source_get_cursor_in_pcm_frames(ma_data_source* pDataSource, ma_uint64* pCursor);
-ma_result ma_data_source_get_available_frames(ma_data_source* pDataSource, ma_uint64* pAvailableFrames);
-
-ma_format ma_data_source_get_data_format(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels, ma_uint32* pSampleRate);
-```
-
-### Использование с декодером
-
-```c
-ma_decoder decoder;
-ma_decoder_init_file("audio.wav", NULL, &decoder);
-
-// Декодер — это data source
-ma_data_source* pSource = (ma_data_source*)&decoder;
-
-ma_uint64 framesRead;
-float buffer[1024];
-ma_data_source_read_pcm_frames(pSource, buffer, 1024, &framesRead);
-```
-
----
-
-## Декодеры
-
-### Поддерживаемые форматы
-
-| Формат | Встроенная поддержка | Примечание                             |
-|--------|----------------------|----------------------------------------|
-| WAV    | Да                   | Все варианты (PCM, float, ADPCM и др.) |
-| FLAC   | Да                   | Без внешних зависимостей               |
-| MP3    | Да                   | Без внешних зависимостей               |
-| Vorbis | Нет                  | Требует внешний декодер                |
-| Opus   | Нет                  | Требует внешний декодер                |
-| AAC    | Нет                  | Требует внешний декодер                |
-
-### Инициализация декодера
-
-```c
-// Из файла
-ma_result ma_decoder_init_file(const char* pFilePath, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-
-// Из памяти
-ma_result ma_decoder_init_memory(const void* pData, size_t dataSize, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-
-// С кастомными callbacks (для виртуальных файлов)
-ma_result ma_decoder_init(ma_decoder_read_proc onRead, ma_decoder_seek_proc onSeek, void* pUserData, const ma_decoder_config* pConfig, ma_decoder* pDecoder);
-```
-
-### Конфигурация декодера
-
-```c
-ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 48000);
-// outputFormat = ma_format_f32  — выходной формат
-// outputChannels = 2            — выходные каналы (resample если нужно)
-// outputSampleRate = 48000      — выходная частота
-
-// Дополнительные поля
-config.allocationCallbacks = NULL;  // Кастомный аллокатор
-config.encodingFormat = ma_encoding_format_unknown;  // Явно указать формат
-```
-
-### Пример: декодирование в память
-
-```c
-#include "miniaudio.h"
-#include <stdio.h>
-#include <stdlib.h>
-
-int main() {
-    ma_decoder decoder;
-    ma_result result;
-
-    result = ma_decoder_init_file("sound.wav", NULL, &decoder);
-    if (result != MA_SUCCESS) {
-        printf("Ошибка: %s\n", ma_result_description(result));
-        return -1;
+    std::span<AudioFrame> process(std::span<const AudioFrame> input) {
+        // Обработка без аллокаций
+        for (size_t i = 0; i < input.size(); ++i) {
+            // DSP манипуляции
+            m_buffer[i].left = input[i].left * m_gain;
+            m_buffer[i].right = input[i].right * m_gain;
+        }
+        return m_buffer.first(input.size());
     }
-
-    // Получить длину
-    ma_uint64 length;
-    ma_decoder_get_length_in_pcm_frames(&decoder, &length);
-
-    // Выделить буфер
-    size_t bytesPerFrame = ma_get_bytes_per_frame(decoder.outputFormat, decoder.outputChannels);
-    void* pBuffer = malloc((size_t)(length * bytesPerFrame));
-
-    // Прочитать все кадры
-    ma_uint64 framesRead;
-    ma_decoder_read_pcm_frames(&decoder, pBuffer, length, &framesRead);
-
-    printf("Декодировано %llu кадров\n", (unsigned long long)framesRead);
-
-    free(pBuffer);
-    ma_decoder_uninit(&decoder);
-    return 0;
-}
-```
-
----
-
-## Кастомные декодеры (Vorbis, Opus)
-
-Для форматов без встроенной поддержки можно подключить внешний декодер.
-
-### Структура callbacks
-
-```c
-typedef ma_result (*ma_decoder_read_proc)(ma_decoder* pDecoder, void* pBuffer, size_t bytesToRead, size_t* pBytesRead);
-typedef ma_result (*ma_decoder_seek_proc)(ma_decoder* pDecoder, ma_int64 offset, ma_seek_origin origin);
-```
-
-### Пример: интеграция stb_vorbis
-
-```c
-#define STB_VORBIS_HEADER_ONLY
-#include "stb_vorbis.h"
-
-typedef struct {
-    ma_data_source_base base;
-    stb_vorbis* pVorbis;
-    ma_format format;
-    ma_uint32 channels;
-    ma_uint32 sampleRate;
-} vorbis_decoder;
-
-static ma_result vorbis_read_pcm_frames(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead) {
-    vorbis_decoder* pDec = (vorbis_decoder*)pDataSource;
-    int framesRead = stb_vorbis_get_samples_float_interleaved(
-        pDec->pVorbis,
-        pDec->channels,
-        (float*)pFramesOut,
-        (int)(frameCount * pDec->channels)
-    );
-    if (pFramesRead) *pFramesRead = framesRead;
-    return (framesRead > 0) ? MA_SUCCESS : MA_AT_END;
-}
-
-// ... реализация остальных методов data source
-```
-
----
-
-## Энкодеры
-
-miniaudio поддерживает кодирование только в WAV.
-
-### Основные функции
-
-```c
-ma_encoder_config ma_encoder_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate);
-ma_result ma_encoder_init_file(const char* pFilePath, const ma_encoder_config* pConfig, ma_encoder* pEncoder);
-ma_result ma_encoder_init_write_callbacks(ma_encoder_write_proc onWrite, ma_encoder_seek_proc onSeek, void* pUserData, const ma_encoder_config* pConfig, ma_encoder* pEncoder);
-
-ma_result ma_encoder_write_pcm_frames(ma_encoder* pEncoder, const void* pFramesIn, ma_uint64 frameCount, ma_uint64* pFramesWritten);
-
-void ma_encoder_uninit(ma_encoder* pEncoder);
-```
-
-### Пример: запись в WAV файл
-
-```c
-#include "miniaudio.h"
-
-int main() {
-    ma_encoder encoder;
-    ma_encoder_config config = ma_encoder_config_init(ma_format_s16, 2, 44100);
-
-    ma_result result = ma_encoder_init_file("output.wav", &config, &encoder);
-    if (result != MA_SUCCESS) {
-        return -1;
-    }
-
-    // Генерация или захват аудио
-    int16_t buffer[1024 * 2];  // 1024 стерео кадров
-    for (int i = 0; i < 1024; i++) {
-        // Синус 440 Гц
-        float t = (float)i / 44100.0f;
-        int16_t sample = (int16_t)(32767.0f * 0.1f * sinf(2.0f * 3.14159f * 440.0f * t));
-        buffer[i * 2] = sample;
-        buffer[i * 2 + 1] = sample;
-    }
-
-    ma_uint64 framesWritten;
-    ma_encoder_write_pcm_frames(&encoder, buffer, 1024, &framesWritten);
-
-    ma_encoder_uninit(&encoder);
-    return 0;
-}
-```
-
----
-
-## Генераторы
-
-miniaudio включает базовые генераторы волн.
-
-### ma_waveform
-
-```c
-ma_waveform_config ma_waveform_config_init(ma_format format, ma_uint32 channels, ma_uint32 sampleRate, ma_waveform_type type, double amplitude, double frequency);
-ma_result ma_waveform_init(const ma_waveform_config* pConfig, ma_waveform* pWaveform);
-void ma_waveform_uninit(ma_waveform* pWaveform);
-
-ma_result ma_waveform_read_pcm_frames(ma_waveform* pWaveform, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
-
-void ma_waveform_set_frequency(ma_waveform* pWaveform, double frequency);
-void ma_waveform_set_amplitude(ma_waveform* pWaveform, double amplitude);
-void ma_waveform_set_type(ma_waveform* pWaveform, ma_waveform_type type);
-```
-
-### Типы волн
-
-```c
-typedef enum {
-    ma_waveform_type_sine,       // Синус
-    ma_waveform_type_square,     // Прямоугольная
-    ma_waveform_type_triangle,   // Треугольная
-    ma_waveform_type_sawtooth    // Пилообразная
-} ma_waveform_type;
-```
-
-### Пример: генерация синусоиды
-
-```c
-ma_waveform waveform;
-ma_waveform_config config = ma_waveform_config_init(ma_format_f32, 2, 48000, ma_waveform_type_sine, 0.1, 440.0);
-ma_waveform_init(&config, &waveform);
-
-// Чтение кадров
-float buffer[1024 * 2];
-ma_uint64 framesRead;
-ma_waveform_read_pcm_frames(&waveform, buffer, 1024, &framesRead);
-```
-
----
-
-## ma_noise
-
-Генератор шума.
-
-```c
-ma_noise_config ma_noise_config_init(ma_format format, ma_uint32 channels, ma_noise_type type, ma_int32 seed, double amplitude);
-ma_result ma_noise_init(const ma_noise_config* pConfig, ma_noise* pNoise);
-void ma_noise_uninit(ma_noise* pNoise);
-
-ma_result ma_noise_read_pcm_frames(ma_noise* pNoise, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
-```
-
-### Типы шума
-
-```c
-typedef enum {
-    ma_noise_type_white,   // Белый шум
-    ma_noise_type_pink,    // Розовый шум
-    ma_noise_type_brownian // Броуновский шум
-} ma_noise_type;
-```
-
----
-
-## Создание кастомного data source
-
-Для создания своего источника данных нужно реализовать интерфейс `ma_data_source`.
-
-### Структура
-
-```c
-typedef struct {
-    ma_data_source_base base;  // Базовая структура (обязательно первой)
-    // Ваши данные
-    const float* pData;
-    ma_uint64 frameCount;
-    ma_uint64 cursor;
-    ma_uint32 channels;
-    ma_uint32 sampleRate;
-} my_data_source;
-```
-
-### Реализация callbacks
-
-```c
-static ma_result my_data_source_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead) {
-    my_data_source* pSrc = (my_data_source*)pDataSource;
-    ma_uint64 framesToRead = frameCount;
-
-    if (pSrc->cursor + framesToRead > pSrc->frameCount) {
-        framesToRead = pSrc->frameCount - pSrc->cursor;
-    }
-
-    size_t bytesPerFrame = sizeof(float) * pSrc->channels;
-    memcpy(pFramesOut, pSrc->pData + pSrc->cursor * pSrc->channels, (size_t)(framesToRead * bytesPerFrame));
-
-    pSrc->cursor += framesToRead;
-    if (pFramesRead) *pFramesRead = framesToRead;
-
-    return (framesToRead > 0) ? MA_SUCCESS : MA_AT_END;
-}
-
-static ma_result my_data_source_seek(ma_data_source* pDataSource, ma_uint64 frameIndex) {
-    my_data_source* pSrc = (my_data_source*)pDataSource;
-    if (frameIndex > pSrc->frameCount) return MA_INVALID_ARGS;
-    pSrc->cursor = frameIndex;
-    return MA_SUCCESS;
-}
-
-static ma_result my_data_source_get_length(ma_data_source* pDataSource, ma_uint64* pLength) {
-    my_data_source* pSrc = (my_data_source*)pDataSource;
-    *pLength = pSrc->frameCount;
-    return MA_SUCCESS;
-}
-
-static ma_result my_data_source_get_cursor(ma_data_source* pDataSource, ma_uint64* pCursor) {
-    my_data_source* pSrc = (my_data_source*)pDataSource;
-    *pCursor = pSrc->cursor;
-    return MA_SUCCESS;
-}
-```
-
-### Инициализация
-
-```c
-ma_result my_data_source_init(my_data_source* pSrc, const float* pData, ma_uint64 frameCount, ma_uint32 channels, ma_uint32 sampleRate) {
-    ma_data_source_config baseConfig = ma_data_source_config_init();
-    baseConfig.vtable = &g_my_data_source_vtable;  // Таблица виртуальных функций
-
-    ma_result result = ma_data_source_init(&baseConfig, &pSrc->base);
-    if (result != MA_SUCCESS) return result;
-
-    pSrc->pData = pData;
-    pSrc->frameCount = frameCount;
-    pSrc->cursor = 0;
-    pSrc->channels = channels;
-    pSrc->sampleRate = sampleRate;
-
-    return MA_SUCCESS;
-}
-
-// Таблица виртуальных функций
-static ma_data_source_vtable g_my_data_source_vtable = {
-    my_data_source_read,
-    my_data_source_seek,
-    my_data_source_get_length,
-    my_data_source_get_cursor,
-    NULL  // get_available_frames (опционально)
 };
 ```
 
-### Использование с ma_sound
+### Object Pool для звуков
 
-```c
-my_data_source mySource;
-my_data_source_init(&mySource, audioData, frameCount, 2, 48000);
+```cpp
+// Пул объектов - аллокация только при старте
+class SoundPool {
+    struct Node {
+        ma_sound sound;
+        bool in_use = false;
+        std::string name;
+    };
 
-ma_sound sound;
-ma_sound_init_from_data_source(&engine, &mySource, 0, NULL, &sound);
-ma_sound_start(&sound);
+    std::vector<Node> m_pool;
+    std::mutex m_mutex;
 
----
+public:
+    SoundPool(size_t size) {
+        m_pool.resize(size);
+    }
 
-## Продвинутые темы
+    // Аллокация при старте, не в рантайме
+    ma_sound* allocate(const char* name) {
+        std::lock_guard lock(m_mutex);
+        for (auto& node : m_pool) {
+            if (!node.in_use) {
+                node.in_use = true;
+                node.name = name;
+                return &node.sound;
+            }
+        }
+        return nullptr;  // Pool exhausted
+    }
 
-<!-- anchor: 05_advanced -->
-
-
-Node Graph, Spatial Audio, Custom Decoders, Resource Manager.
-
----
-
-## Node Graph
-
-Node Graph — система для построения сложных аудио-цепочек: микширование, эффекты, маршрутизация.
-
-### Основные понятия
-
-- **Node** — узел графа (звук, эффект, микшер)
-- **Input bus** — входы узла (куда приходят данные)
-- **Output bus** — выходы узла (откуда уходят данные)
-- **Endpoint** — финальный узел, подключённый к устройству
-
-### Структура ma_node_graph
-
-```c
-ma_node_graph_config ma_node_graph_config_init(ma_uint32 channels);
-ma_result ma_node_graph_init(const ma_node_graph_config* pConfig, ma_allocation_callbacks* pAllocationCallbacks, ma_node_graph* pNodeGraph);
-void ma_node_graph_uninit(ma_node_graph* pNodeGraph);
-
-// Чтение данных из графа
-ma_result ma_node_graph_read_pcm_frames(ma_node_graph* pNodeGraph, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead);
-
-// Доступ к endpoint
-ma_node* ma_node_graph_get_endpoint(ma_node_graph* pNodeGraph);
-```
-
-### Структура ma_node
-
-```c
-ma_node_config ma_node_config_init();
-ma_result ma_node_init(ma_node_graph* pNodeGraph, const ma_node_config* pConfig, ma_node* pNode);
-void ma_node_uninit(ma_node* pNode);
-
-// Подключение узлов
-ma_result ma_node_attach_output_bus(ma_node* pNode, ma_uint32 outputBusIndex, ma_node* pOtherNode, ma_uint32 otherNodeInputBusIndex);
-void ma_node_detach_output_bus(ma_node* pNode, ma_uint32 outputBusIndex);
-
-// Управление
-void ma_node_set_volume(ma_node* pNode, float volume);
-float ma_node_get_volume(ma_node* pNode);
-void ma_node_set_enabled(ma_node* pNode, ma_bool32 isEnabled);
-```
-
-### Пример: простая цепочка
-
-```c
-// Создание node graph
-ma_node_graph_config graphConfig = ma_node_graph_config_init(2);  // Стерео
-ma_node_graph nodeGraph;
-ma_node_graph_init(&graphConfig, NULL, &nodeGraph);
-
-// Звук подключается к endpoint автоматически при создании через ma_sound
-// Для кастомных узлов:
-ma_node_attach_output_bus(&myEffectNode, 0, ma_node_graph_get_endpoint(&nodeGraph), 0);
-```
-
----
-
-## Spatial Audio
-
-miniaudio поддерживает 3D позиционирование звуков.
-
-### Listener
-
-Listener — "слушатель" в 3D пространстве. По умолчанию один listener (индекс 0).
-
-```c
-// Установка позиции listener
-ma_engine_listener_set_position(&engine, 0, x, y, z);
-
-// Установка направления (вперёд)
-ma_engine_listener_set_direction(&engine, 0, forwardX, forwardY, forwardZ);
-
-// Установка "вверх" для ориентации
-ma_engine_listener_set_world_up(&engine, 0, upX, upY, upZ);
-
-// Направленный listener (cone)
-ma_engine_listener_set_cone(&engine, 0, innerAngle, outerAngle, outerGain);
-```
-
-### Звук в пространстве
-
-```c
-ma_sound sound;
-ma_sound_init_from_file(&engine, "explosion.wav", 0, NULL, NULL, &sound);
-
-// Позиция звука
-ma_sound_set_position(&sound, 10.0f, 0.0f, 5.0f);
-
-// Направленный звук
-ma_sound_set_direction(&sound, 1.0f, 0.0f, 0.0f);
-ma_sound_set_cone(&sound, MA_PI/4, MA_PI/2, 0.5f);
-
-// Скорость для эффекта Доплера
-ma_sound_set_velocity(&sound, vx, vy, vz);
-
-// Модель затухания
-ma_sound_set_attenuation_model(&sound, ma_attenuation_model_inverse);
-ma_sound_set_min_distance(&sound, 1.0f);
-ma_sound_set_max_distance(&sound, 100.0f);
-ma_sound_set_rolloff(&sound, 1.0f);
-
-ma_sound_start(&sound);
-```
-
-### Модели затухания
-
-```c
-typedef enum {
-    ma_attenuation_model_none,       // Нет затухания
-    ma_attenuation_model_inverse,    // 1/distance (реалистичное)
-    ma_attenuation_model_linear,     // Линейное
-    ma_attenuation_model_exponential // Экспоненциальное
-} ma_attenuation_model;
-```
-
-### Coordinate system
-
-miniaudio использует правую систему координат:
-
-- **+X** — вправо
-- **+Y** — вверх
-- **+Z** — назад (к слушателю)
-
-Для смены системы координат используйте `ma_engine_listener_set_world_up`.
-
----
-
-## Custom Decoders
-
-Для форматов без встроенной поддержки (Vorbis, Opus, AAC).
-
-### Подход 1: Реализация ma_data_source
-
-Создайте структуру, первым полем которой является `ma_data_source_base`. Реализуйте vtable с функциями чтения, seek,
-получения длины.
-
-```c
-typedef struct {
-    ma_data_source_base base;
-    YourDecoder decoder;
-    // ...
-} my_format_decoder;
-
-static ma_data_source_vtable g_my_vtable = {
-    my_read_pcm_frames,
-    my_seek_to_pcm_frame,
-    my_get_length_in_pcm_frames,
-    my_get_cursor_in_pcm_frames,
-    NULL  // get_available_frames
+    void deallocate(ma_sound* sound) {
+        std::lock_guard lock(m_mutex);
+        for (auto& node : m_pool) {
+            if (&node.sound == sound) {
+                node.in_use = false;
+                return;
+            }
+        }
+    }
 };
 ```
 
-### Подход 2: Использование ma_decoder_init с callbacks
+## Cache-Line Alignment
 
-```c
-typedef struct {
-    ma_decoder decoder;
-    YourDecoderState* pState;
-} my_decoder_wrapper;
+> **Для понимания:** CPU читает память «строками» по 64 байта. Если ваши данные пересекают границы этих строк — CPU
+> приходится читать два раза. Для аудио, где данные гоняются туда-сюда сотни раз в секунду, это критично.
 
-ma_result my_on_read(ma_decoder* pDecoder, void* pBuffer, size_t bytesToRead, size_t* pBytesRead) {
-    my_decoder_wrapper* pWrapper = (my_decoder_wrapper*)pDecoder;
-    // Чтение из pWrapper->pState
+### SoA для Audio Processing
+
+> **Для понимания:** Традиционный подход (AoS): `struct Frame { float l, r; }` → массив таких структур. SoA: два массива
+`left[]` и `right[]`. SoA лучше, потому что CPU может читать каналы параллельно.
+
+```cpp
+// AoS (Array of Structures) - плохо для SIMD
+struct AudioFrameAoS {
+    float left;
+    float right;
+};
+std::vector<AudioFrameAoS> frames_aos;
+
+// SoA (Structure of Arrays) - хорошо для SIMD и кэша
+struct alignas(64) AudioFrameSoA {
+    // Каждый канал - отдельный массив (кэш-линия = 64 байт = 16 float)
+    alignas(64) std::span<float> left;
+    alignas(64) std::span<float> right;
+
+    // Или фиксированный размер
+    static constexpr size_t CHANNELS = 2;
+    static constexpr size_t CAPACITY = 2048;
+
+    alignas(64) float left_data[CAPACITY];
+    alignas(64) float right_data[CAPACITY];
+
+    AudioFrameSoA()
+        : left(left_data, CAPACITY)
+        , right(right_data, CAPACITY)
+    {}
+
+    // SIMD-friendly обработка
+    void process_gain(float gain) {
+        // SSE/AVX может обработать 4/8 float за раз
+        for (size_t i = 0; i < CAPACITY; i += 4) {
+            __m128 l = _mm_load_ps(&left_data[i]);
+            __m128 r = _mm_load_ps(&right_data[i]);
+            __m128 g = _mm_set1_ps(gain);
+            l = _mm_mul_ps(l, g);
+            r = _mm_mul_ps(r, g);
+            _mm_store_ps(&left_data[i], l);
+            _mm_store_ps(&right_data[i], r);
+        }
+    }
+};
+```
+
+### DSP State Alignment
+
+```cpp
+// Состояние DSP - выравниваем для SIMD
+struct alignas(64) DSPState {
+    // Filter state
+    float b0 = 0, b1 = 0, b2 = 0;  // Feedforward
+    float a1 = 0, a2 = 0;           // Feedback
+
+    // Должно быть кратно 16 байтам для AVX
+    float delay[8] = {0};           // Delay line
+
+    // Громкость и pitch
+    float volume = 1.0f;
+    float pitch = 1.0f;
+
+    // Padding до 64 байт
+    float _padding[3] = {0};
+};
+static_assert(sizeof(DSPState) == 64, "DSPState must be 64 bytes");
+
+// Массив DSP-состояний для нескольких каналов/источников
+alignas(64) std::array<DSPState, MAX_VOICES> dsp_states;
+```
+
+## Thread-Local Audio Processing
+
+> **Для понимание:** Аудио callback однопоточен по своей природе. Но подготовка данных (декодирование, микширование)
+> может и должна быть многопоточной. Thread-local хранилище избавляет от блокировок.
+
+### Thread-Local Decoder Pool
+
+```cpp
+// Thread-local пул декодеров - каждый поток имеет свой набор
+class ThreadLocalDecoderPool {
+    // TLS - у каждого потока своя копия
+    static thread_local std::vector<ma_decoder> s_decoders;
+    static thread_local size_t s_current_index;
+
+public:
+    static ma_decoder* acquire() {
+        if (s_current_index >= s_decoders.size()) {
+            // Расширяем пул при необходимости
+            s_decoders.emplace_back();
+        }
+        return &s_decoders[s_current_index++];
+    }
+
+    static void release() {
+        // Не уменьшаем - пул растёт только
+        // Для сброса между кадрами:
+        // s_current_index = 0;
+    }
+
+    static void reset() {
+        s_current_index = 0;
+    }
+};
+
+thread_local std::vector<ma_decoder> ThreadLocalDecoderPool::s_decoders;
+thread_local size_t ThreadLocalDecoderPool::s_current_index = 0;
+```
+
+### Job System для Audio
+
+> **Для понимания:** Наш Job System (который мы ещё напишем) работает на основных потоках. Audio thread — отдельный.
+> Задача: подготовить данные в Jobs до того, как audio callback их запросит.
+
+```cpp
+// Готовим микс заранее, в main thread
+class AudioMixJob {
+    // Входные данные - SoA формат
+    struct VoiceInput {
+        std::span<float> left;
+        std::span<float> right;
+        float volume;
+        float pan;
+    };
+
+    // Выходной буфер
+    alignas(64) std::vector<float> mix_buffer;
+
+public:
+    void add_voice(const VoiceInput& voice) {
+        m_voices.push_back(voice);
+    }
+
+    // Job function - запускается в Job System
+    void execute() {
+        // Очистка выхода
+        std::fill(mix_buffer.begin(), mix_buffer.end(), 0.0f);
+
+        // Микширование всех voice
+        for (const auto& voice : m_voices) {
+            for (size_t i = 0; i < voice.left.size(); ++i) {
+                mix_buffer[i] += voice.left[i] * voice.volume * (1.0f - voice.pan);
+                mix_buffer[i] += voice.right[i] * voice.volume * (1.0f + voice.pan);
+            }
+        }
+    }
+
+    std::span<float> get_output() { return mix_buffer; }
+};
+```
+
+## Lock-Free Audio Queue
+
+> **Для понимание:** Когда main thread хочет передать команду в audio thread (например, "play sound"), нужна очередь без
+> блокировок. Иначе — race condition или deadlock.
+
+### Single-Producer Single-Consumer Ring Buffer
+
+```cpp
+template<typename T, size_t N>
+class alignas(64) SPSCQueue {
+    static_assert((N & (N - 1)) == 0, "N must be power of 2");
+
+    alignas(64) T m_data[N];
+    alignas(64) std::atomic<size_t> m_head{0};  // Пишет producer
+    alignas(64) std::atomic<size_t> m_tail{0};  // Читает consumer
+
+public:
+    // Producer (main thread) - неблокирующая запись
+    bool try_push(const T& value) {
+        size_t head = m_head.load(std::memory_order_relaxed);
+        size_t next_head = (head + 1) & (N - 1);
+
+        if (next_head == m_tail.load(std::memory_order_acquire)) {
+            return false;  // Queue full
+        }
+
+        m_data[head] = value;
+        m_head.store(next_head, std::memory_order_release);
+        return true;
+    }
+
+    // Consumer (audio thread) - неблокирующее чтение
+    bool try_pop(T& value) {
+        size_t tail = m_tail.load(std::memory_order_relaxed);
+
+        if (tail == m_head.load(std::memory_order_acquire)) {
+            return false;  // Queue empty
+        }
+
+        value = m_data[tail];
+        m_tail.store((tail + 1) & (N - 1), std::memory_order_release);
+        return true;
+    }
+};
+
+// Команды для audio thread
+struct AudioCommand {
+    enum class Type : uint8_t {
+        Play,
+        Stop,
+        SetVolume,
+        SetPosition
+    };
+
+    Type type;
+    uint32_t sound_id;
+    union {
+        float volume;
+        float position[3];
+    } params;
+};
+```
+
+### Интеграция с audio callback
+
+```cpp
+SPSCQueue<AudioCommand, 256> g_audio_commands;
+
+void audio_callback(ma_device* /*device*/, void* pOutput,
+                    const void* /*pInput*/, ma_uint32 frameCount) {
+    float* output = (float*)pOutput;
+
+    // Обрабатываем команды
+    AudioCommand cmd;
+    while (g_audio_commands.try_pop(cmd)) {
+        switch (cmd.type) {
+            case AudioCommand::Type::Stop:
+                // Остановить звук
+                break;
+            case AudioCommand::Type::SetVolume:
+                // Установить громкость
+                break;
+            // ...
+        }
+    }
+
+    // Заполняем выход
+    std::fill_n(output, frameCount * 2, 0.0f);
 }
-
-ma_result my_on_seek(ma_decoder* pDecoder, ma_int64 offset, ma_seek_origin origin) {
-    my_decoder_wrapper* pWrapper = (my_decoder_wrapper*)pDecoder;
-    // Seek в pWrapper->pState
-}
 ```
 
----
-
-## Resource Manager
-
-Resource manager управляет загрузкой, кэшированием и выгрузкой аудиоресурсов.
-
-### Конфигурация
-
-```c
-ma_resource_manager_config config = ma_resource_manager_config_init();
-
-// Формат по умолчанию
-config.decodedFormat = ma_format_f32;
-config.decodedChannels = 2;
-config.decodedSampleRate = 48000;
-
-// Ограничения памяти
-config.decodedBufferCap = 0;  // 0 = без ограничения
-
-// Функции для работы с файлами
-config.pVFS = NULL;  // Виртуальная файловая система
-
-ma_resource_manager resourceManager;
-ma_resource_manager_init(&config, &resourceManager);
-```
-
-### Использование с engine
-
-```c
-ma_engine_config engineConfig = ma_engine_config_init();
-engineConfig.pResourceManager = &resourceManager;
-
-ma_engine engine;
-ma_engine_init(&engineConfig, &engine);
-```
-
-### Асинхронная загрузка
-
-```c
-// Создание fence для ожидания
-ma_fence fence;
-ma_fence_init(&fence);
-
-ma_sound sound;
-ma_sound_init_from_file(&engine, "big_sound.wav", MA_SOUND_FLAG_ASYNC, NULL, &fence, &sound);
-
-// ... делать другие вещи ...
-
-// Ожидание завершения загрузки
-ma_fence_wait(&fence);
-ma_fence_uninit(&fence);
-
-ma_sound_start(&sound);
-```
-
----
-
-## Эффекты и фильтры
-
-miniaudio включает базовые эффекты.
-
-### Biquad Filter (EQ)
-
-```c
-ma_biquad_config config = ma_biquad_config_init(ma_format_f32, 2, b0, b1, b2, a0, a1, a2);
-ma_biquad biquad;
-ma_biquad_init(&config, &biquad);
-
-// Применение
-ma_biquad_process_pcm_frames(&biquad, pFramesOut, pFramesIn, frameCount);
-```
-
-### Predefined filters
-
-```c
-// Low-pass
-ma_lpf_config lpfConfig = ma_lpf_config_init(ma_format_f32, 2, 48000, 2000, 0);
-ma_lpf lpf;
-ma_lpf_init(&lpfConfig, &lpf);
-
-// High-pass
-ma_hpf_config hpfConfig = ma_hpf_config_init(ma_format_f32, 2, 48000, 200, 0);
-ma_hpf hpf;
-ma_hpf_init(&hpfConfig, &hpf);
-
-// Band-pass
-ma_bpf_config bpfConfig = ma_bpf_config_init(ma_format_f32, 2, 48000, 1000, 2.0);
-ma_bpf bpf;
-ma_bpf_init(&bpfConfig, &bpf);
-
-// Notch
-ma_notch_config notchConfig = ma_notch_config_init(ma_format_f32, 2, 48000, 60, 10);
-ma_notch notch;
-ma_notch_init(&notchConfig, &notch);
-
-// Peaking EQ
-ma_peak_config peakConfig = ma_peak_config_init(ma_format_f32, 2, 48000, 1000, 2.0, 6.0);
-ma_peak peak;
-ma_peak_init(&peakConfig, &peak);
-```
-
-### Пример: применение фильтра в callback
-
-```c
-void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-    my_state* pState = (my_state*)pDevice->pUserData;
-
-    // Чтение из data source
-    ma_data_source_read_pcm_frames(pState->pDataSource, pOutput, frameCount, NULL);
-
-    // Применение фильтра
-    ma_lpf_process_pcm_frames(&pState->lpf, pOutput, pOutput, frameCount);
-}
-```
-
----
-
-## Resampling
-
-miniaudio поддерживает передискретизацию (resampling).
-
-### ma_resampler
-
-```c
-ma_resampler_config config = ma_resampler_config_init(
-    ma_format_f32,
-    2,
-    44100,   // Входная частота
-    48000,   // Выходная частота
-    ma_resample_algorithm_linear  // Алгоритм
-);
-
-ma_resampler resampler;
-ma_resampler_init(&config, &resampler);
-
-// Передискретизация
-ma_uint64 framesIn = 1024;
-ma_uint64 framesOut;
-ma_resampler_process_pcm_frames(&resampler, pInput, &framesIn, pOutput, &framesOut);
-```
-
-### Алгоритмы resampling
-
-```c
-typedef enum {
-    ma_resample_algorithm_linear,    // Линейный (быстрый)
-    ma_resample_algorithm_speex      // Speex (качественный)
-} ma_resample_algorithm;
-```
-
----
-
-## Data Conversion
-
-Конвертация форматов, каналов, sample rate.
-
-### Формат
-
-```c
-ma_pcm_format_converter_config config = ma_pcm_format_converter_config_init(
-    ma_format_f32,  // Выходной формат
-    ma_format_s16,  // Входной формат
-    2               // Каналы
-);
-
-ma_pcm_format_converter converter;
-ma_pcm_format_converter_init(&config, &converter);
-
-ma_pcm_format_converter_process_pcm_frames(&converter, pOut, pIn, frameCount);
-```
-
-### Каналы (channel converter)
-
-```c
-ma_channel_converter_config config = ma_channel_converter_config_init(
-    ma_format_f32,
-    2,              // Входные каналы
-    inChannelMap,
-    6,              // Выходные каналы (5.1)
-    outChannelMap,
-    ma_channel_mix_mode_default
-);
-
-ma_channel_converter converter;
-ma_channel_converter_init(&config, &converter);
-```
-
----
-
-## Channel Maps
-
-Стандартные channel maps:
-
-```c
-// Стерео
-MA_CHANNEL_FRONT_LEFT
-MA_CHANNEL_FRONT_RIGHT
-
-// 5.1
-MA_CHANNEL_FRONT_LEFT
-MA_CHANNEL_FRONT_RIGHT
-MA_CHANNEL_FRONT_CENTER
-MA_CHANNEL_LFE
-MA_CHANNEL_BACK_LEFT
-MA_CHANNEL_BACK_RIGHT
-
-// 7.1
-MA_CHANNEL_FRONT_LEFT
-MA_CHANNEL_FRONT_RIGHT
-MA_CHANNEL_FRONT_CENTER
-MA_CHANNEL_LFE
-MA_CHANNEL_SIDE_LEFT
-MA_CHANNEL_SIDE_RIGHT
-MA_CHANNEL_BACK_LEFT
-MA_CHANNEL_BACK_RIGHT
-```
-
-### Получение стандартных карт
-
-```c
-ma_channel_map standardMap;
-ma_channel_map_init_standard(ma_standard_channel_map_default, standardMap, 0, channelCount);
-```
-
----
-
-## Pan
-
-Панорамирование для стерео.
-
-```c
-// Панорамирование: -1 (только левый) .. 0 (центр) .. +1 (только правый)
-ma_pan_config config = ma_pan_config_init(ma_format_f32, 2, 0.5f);
-ma_pan pan;
-ma_pan_init(&config, &pan);
-
-ma_pan_process_pcm_frames(&pan, pFramesOut, pFramesIn, frameCount);
-```
-
----
-
-## Offline Rendering
-
-Рендеринг без устройства (например, для экспорта).
-
-### Конфигурация engine без устройства
-
-```c
-ma_engine_config config = ma_engine_config_init();
-config.noDevice = MA_TRUE;
-config.format = ma_format_f32;
-config.channels = 2;
-config.sampleRate = 48000;
-
-ma_engine engine;
-ma_engine_init(&config, &engine);
-
-// Загрузка и воспроизведение звуков
-ma_sound sound;
-ma_sound_init_from_file(&engine, "music.wav", 0, NULL, NULL, &sound);
-ma_sound_start(&sound);
-
-// Чтение данных
-float buffer[1024 * 2];
-ma_uint64 framesRead;
-ma_engine_read_pcm_frames(&engine, buffer, 1024, &framesRead);
-
-// Запись в файл через ma_encoder...
-
----
-
-## Решение проблем
-
-<!-- anchor: 06_troubleshooting -->
-
-
-Диагностика и исправление ошибок для всех платформ.
-
----
-
-## Общие проблемы
-
-### MA_NO_BACKEND
-
-**Симптом:** `ma_device_init` или `ma_context_init` возвращает `MA_NO_BACKEND`.
-
-**Причины и решения:**
-
-1. **Нет аудио драйверов**
-  - Windows: установите драйверы звуковой карты или проверьте WASAPI/DirectSound
-  - Linux: проверьте ALSA (`aplay -l`) или PulseAudio (`pactl info`)
-  - macOS: проверьте Core Audio
-
-2. **Бэкенд явно отключен макросами**
-   ```c
-   // Проверьте, не определены ли:
-   // MA_ENABLE_ONLY_SPECIFIC_BACKENDS
-   // или MA_NO_WASAPI, MA_NO_DSOUND и т.д.
-   ```
-
-3. **Неправильный порядок бэкендов**
-   ```c
-   // Явно укажите бэкенды:
-   ma_backend backends[] = { ma_backend_wasapi, ma_backend_dsound };
-   ma_context_init(NULL, 2, backends, &context);
-   ```
-
----
-
-### MA_NO_DEVICE
-
-**Симптом:** `MA_NO_DEVICE` при инициализации устройства.
-
-**Причины и решения:**
-
-1. **Устройство отключено или не существует**
-
-- Проверьте список устройств через `ma_context_get_devices`
-
-2. **Неверный Device ID**
-   ```c
-   // Убедитесь, что ID валиден:
-   if (pPlaybackInfos[index].isDefault) {
-       config.playback.pDeviceID = NULL;  // NULL = default
-   } else {
-       config.playback.pDeviceID = &pPlaybackInfos[index].id;
-   }
-   ```
-
----
-
-### MA_DEVICE_IN_USE
-
-**Симптом:** Устройство занято другим приложением.
-
-**Решения:**
-
-1. **Используйте shared mode (по умолчанию)**
-   ```c
-   config.playback.shareMode = ma_share_mode_shared;
-   ```
-
-2. **Попробуйте другое устройство**
-
-3. **Закройте приложения, использующие аудио**
-
----
-
-### MA_FORMAT_NOT_SUPPORTED
-
-**Симптом:** Формат не поддерживается устройством.
-
-**Решения:**
-
-1. **Используйте ma_format_f32 или ma_format_s16**
-   ```c
-   config.playback.format = ma_format_f32;  // Обычно поддерживается
-   ```
-
-2. **Декодируйте в поддерживаемый формат**
-   ```c
-   ma_decoder_config decoderConfig = ma_decoder_config_init(ma_format_f32, 2, 48000);
-   ```
-
----
-
-### Нет звука
-
-**Симптом:** Ошибок нет, но звука не слышно.
-
-**Диагностика:**
-
-1. **Устройство запущено?**
-   ```c
-   if (!ma_device_is_started(&device)) {
-       ma_device_start(&device);
-   }
-   ```
-
-2. **Callback вызывается?**
-   ```c
-   void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-       static int callCount = 0;
-       callCount++;  // Поставьте breakpoint или лог
-       // ...
-   }
-   ```
-
-3. **Данные не нулевые?**
-   ```c
-   // Проверьте, что буфер заполняется:
-   for (ma_uint32 i = 0; i < frameCount * channels; i++) {
-       ((float*)pOutput)[i] = 0.1f;  // Тестовый тон
-   }
-   ```
-
-4. **Громкость в системе**
-
-- Проверьте микшер Windows / PulseAudio / Core Audio
-- Проверьте, не muted ли приложение
-
-5. **Громкость в miniaudio**
-   ```c
-   ma_sound_set_volume(&sound, 1.0f);  // Полная громкость
-   ma_sound_group_set_volume(&group, 1.0f);
-   ```
-
----
-
-## Платформенные проблемы
-
-### Windows
-
-#### WASAPI exclusive mode зависает
-
-**Решение:** Используйте shared mode или корректно обрабатывайте переключение:
-
-```c
-config.playback.shareMode = ma_share_mode_shared;
-```
-
-#### WinMM: высокий latency
-
-**Решение:** Используйте WASAPI или DirectSound:
-
-```c
-ma_backend backends[] = { ma_backend_wasapi, ma_backend_dsound };
-```
-
-#### Проблемы с Unicode путями
-
-**Решение:** Используйте широкие символы:
-
-```c
-ma_decoder_init_file_w(L"путь/к/файлу.wav", NULL, &decoder);
-```
-
----
-
-### Linux
-
-#### Нет звука в ALSA
-
-**Диагностика:**
-
-```bash
-aplay -l              # Список устройств
-aplay test.wav        # Тест ALSA напрямую
-```
-
-**Решения:**
-
-1. Проверьте права доступа к `/dev/snd/*`
-2. Добавьте пользователя в группу `audio`
-3. Используйте PulseAudio:
-   ```c
-   ma_backend backends[] = { ma_backend_pulseaudio, ma_backend_alsa };
-   ```
-
-#### PulseAudio: устройство занято
-
-**Решение:**
-
-```bash
-pulseaudio -k         # Перезапуск PulseAudio
-```
-
-#### JACK: не может подключиться
-
-**Решения:**
-
-1. Убедитесь, что JACK сервер запущен
-2. Используйте ALSA напрямую или через PulseAudio bridge
-
-#### Ошибки линковки
-
-```
-undefined reference to `pthread_create'
-undefined reference to `dlopen'
-```
-
-**Решение:** Добавьте библиотеки:
-
-```cmake
-target_link_libraries(YourApp PRIVATE pthread dl m)
-```
-
----
-
-### macOS / iOS
-
-#### Нет звука на macOS
-
-**Проверки:**
-
-1. System Preferences → Sound → Output
-2. Разрешения приложения (Microphone для capture)
-
-#### iOS: AVAudioSession
-
-**Важно:** На iOS нужно настроить AVAudioSession:
-
-```objc
-#import <AVFoundation/AVFoundation.h>
-
-AVAudioSession* session = [AVAudioSession sharedInstance];
-[session setCategory:AVAudioSessionCategoryPlayback error:nil];
-[session setActive:YES error:nil];
-```
-
-#### iOS: нет звука в фоне
-
-**Решение:** Включите background audio в Info.plist:
-
-```
-<key>UIBackgroundModes</key>
-<array>
-    <string>audio</string>
-</array>
-```
-
----
-
-### Android
-
-#### OpenSL|ES: не работает на новых Android
-
-**Решение:** Используйте AAudio (Android 8.0+):
-
-```c
-ma_backend backends[] = { ma_backend_aaudio, ma_backend_opensl };
-```
-
-#### Нет разрешения на запись
-
-**Решение:** Добавьте в AndroidManifest.xml:
-
-```
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-```
-
-#### Проблемы с потоком
-
-На Android callback может вызываться из Java-потока. Убедитесь, что callback не блокируется.
-
----
-
-### Emscripten / Web
-
-#### Не работает в браузере
-
-**Требования:**
-
-1. User interaction для разблокировки аудио
-2. HTTPS или localhost для некоторых функций
-
-**Решение:**
-
-```javascript
-// Разблокировка после клика
-document.addEventListener('click', function() {
-    // Воспроизвести звук через miniaudio
-}, { once: true });
-```
-
-#### Проблемы с размером буфера
-
-Web Audio может требовать определённые размеры буферов. Используйте auto настройки.
-
----
-
-## Проблемы производительности
-
-### Glitches / Dropouts
-
-**Причины:**
-
-1. Слишком большой период обработки
-2. Блокирующие операции в callback
-3. Недостаточный приоритет потока
-
-**Решения:**
-
-1. **Уменьшите период**
-   ```c
-   config.periodSizeInFrames = 256;  // Меньше = ниже latency, но больше CPU
-   ```
-
-2. **Не блокируйте в callback**
-   ```c
-   // ПЛОХО:
-   void data_callback(...) {
-       malloc(...);      // Блокирует!
-       file_read(...);   // Блокирует!
-       mutex_lock(...);  // Блокирует!
-   }
-
-   // ХОРОШО:
-   void data_callback(...) {
-       // Только обработка данных
-   }
-   ```
-
-3. **Повысить приоритет потока**
-   ```c
-   ma_context_config contextConfig = ma_context_config_init();
-   contextConfig.threadPriority = ma_thread_priority_realtime;
-   ```
-
----
-
-### Высокое потребление CPU
-
-**Диагностика:**
-
-1. Профилируйте callback
-2. Проверьте количество активных звуков
-
-**Решения:**
-
-1. **Используйте High-level API** вместо ручного микширования
-2. **Остановите неиспользуемые звуки**
-   ```c
-   ma_sound_stop(&sound);
-   ```
-3. **Уменьшите sample rate**
-   ```c
-   config.sampleRate = 44100;  // Вместо 48000
-   ```
-
----
-
-### Утечки памяти
-
-**Проверьте:**
-
-1. Все `ma_xxx_init` имеют парные `ma_xxx_uninit`
-2. Звуки, созданные через `ma_engine_play_sound`, управляются автоматически
-3. Звуки, созданные через `ma_sound_init_from_file`, требуют `ma_sound_uninit`
-
-```c
-// Не забывайте:
-ma_sound_uninit(&sound);
-ma_engine_uninit(&engine);
-ma_device_uninit(&device);
-ma_decoder_uninit(&decoder);
-```
-
----
-
-## Отладка
-
-### Логирование
-
-```c
-void log_callback(void* pUserData, ma_uint32 level, const char* pMessage) {
-    printf("[miniaudio] %s\n", pMessage);
-}
-
-ma_context_config config = ma_context_config_init();
-config.logCallback = log_callback;
-```
-
-### Проверка callback
-
-```c
-void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-    // Занулить буфер в начале (если noPreZeroedOutputBuffer = false, это уже сделано)
-    // memset(pOutput, 0, frameCount * bytesPerFrame);
-
-    // Ваш код...
-
-    // Проверка на clipping
-    float* pOut = (float*)pOutput;
-    for (ma_uint32 i = 0; i < frameCount * channels; i++) {
-        if (pOut[i] > 1.0f) pOut[i] = 1.0f;
-        if (pOut[i] < -1.0f) pOut[i] = -1.0f;
+## SIMD Audio Processing
+
+> **Для понимания:** Современные CPU могут обрабатывать несколько значений за такт. Для аудио это критично — чем больше
+> каналов, тем больше вычислений. SIMD (Single Instruction Multiple Data) — это как конвейер на заводе: одна команда
+> обрабатывает сразу несколько деталей.
+
+### Stereo Gain с AVX
+
+```cpp
+#include <immintrin.h>
+
+void apply_gain_stereo_avx(float* left, float* right,
+                           float gain, size_t sample_count) {
+    __m256 g = _mm256_set1_ps(gain);
+
+    size_t i = 0;
+    for (; i + 8 <= sample_count; i += 8) {
+        // Загрузить 8 float
+        __m256 l = _mm256_loadu_ps(&left[i]);
+        __m256 r = _mm256_loadu_ps(&right[i]);
+
+        // Умножить
+        l = _mm256_mul_ps(l, g);
+        r = _mm256_mul_ps(r, g);
+
+        // Сохранить
+        _mm256_storeu_ps(&left[i], l);
+        _mm256_storeu_ps(&right[i], r);
+    }
+
+    // Остаток
+    for (; i < sample_count; ++i) {
+        left[i] *= gain;
+        right[i] *= gain;
     }
 }
 ```
 
-### Тестовый тон
+### mixing с SSE
 
-Если нет звука, попробуйте сгенерировать простой тон:
+```cpp
+// Смешивание двух стерео буферов
+void mix_buffers_sse(float* __restrict__ dst,
+                      const float* __restrict__ src,
+                      float volume, size_t frames) {
+    __m256 v = _mm256_set1_ps(volume);
+    size_t i = 0;
 
-```c
-void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-    static float phase = 0.0f;
-    float* pOut = (float*)pOutput;
+    for (; i + 8 <= frames; i += 8) {
+        // dst[0-7] = dst[0-7] + src[0-7] * volume
+        __m256 d = _mm256_loadu_ps(&dst[i]);
+        __m256 s = _mm256_loadu_ps(&src[i]);
+        d = _mm256_fmadd_ps(s, v, d);  // FMA: d + s * v
+        _mm256_storeu_ps(&dst[i], d);
+    }
 
-    for (ma_uint32 i = 0; i < frameCount; i++) {
-        float sample = 0.1f * sinf(phase);
-        pOut[i * 2] = sample;
-        pOut[i * 2 + 1] = sample;
-
-        phase += 2.0f * 3.14159f * 440.0f / pDevice->sampleRate;
-        if (phase > 2.0f * 3.14159f) phase -= 2.0f * 3.14159f;
+    // Обработка остатка
+    for (; i < frames; ++i) {
+        dst[i] += src[i] * volume;
     }
 }
 ```
 
----
+## Memory Mapping для больших аудиофайлов
 
-## Частые ошибки
+> **Для понимания:** Если у вас 10-минутный саундтрек, загружать его весь в память — расточительство. Memory mapping (
+> mmap) позволяет обращаться к файлу как к памяти, а OS сама подгружает нужные страницы.
 
-### Копирование структур
+```cpp
+#include <sys/mman.h>
+#include <unistd.h>
 
-```c
-// ОШИБКА: Копирование структуры
-ma_sound sound1;
-ma_sound_init_from_file(&engine, "test.wav", 0, NULL, NULL, &sound1);
-ma_sound sound2 = sound1;  // ОШИБКА! Указатель внутри невалиден
+class MappedAudioFile {
+    int m_fd = -1;
+    void* m_mapping = nullptr;
+    size_t m_size = 0;
 
-// ПРАВИЛЬНО: Используйте ma_sound_init_copy
-ma_sound sound2;
-ma_sound_init_copy(&engine, &sound1, 0, NULL, &sound2);
+public:
+    std::expected<void, AudioError> open(const char* path) {
+        m_fd = open(path, O_RDONLY);
+        if (m_fd < 0) {
+            return std::unexpected(AudioError::ResourceLoadFailed);
+        }
+
+        m_size = lseek(m_fd, 0, SEEK_END);
+
+        m_mapping = mmap(nullptr, m_size, PROT_READ, MAP_PRIVATE, m_fd, 0);
+        if (m_mapping == MAP_FAILED) {
+            close(m_fd);
+            return std::unexpected(AudioError::ResourceLoadFailed);
+        }
+
+        // Подсказка OS о паттерне доступа
+        madvise(m_mapping, m_size, MADAV_SEQUENTIAL);
+
+        return {};
+    }
+
+    ~MappedAudioFile() {
+        if (m_mapping) munmap(m_mapping, m_size);
+        if (m_fd >= 0) close(m_fd);
+    }
+
+    // Передаём указатель в miniaudio
+    ma_result init_decoder(ma_decoder* decoder) {
+        return ma_decoder_init_memory(
+            m_mapping,
+            m_size,
+            nullptr,  // config
+            decoder
+        );
+    }
+
+    void* data() const { return m_mapping; }
+    size_t size() const { return m_size; }
+};
 ```
 
-### Инициализация в callback
+## Spatial Audio Optimization
 
-```c
-// ОШИБКА: Инициализация в callback
-void data_callback(...) {
-    ma_device_start(&device);  // DEADLOCK!
-}
+> **Для понимания:** Расчёт spatial audio (panner) для каждого звука — дорого. Оптимизация: обновлять только те звуки,
+> которые изменили позицию, и кэшировать результаты.
 
-// ПРАВИЛЬНО: Сигнализация из callback
-volatile bool shouldStart = false;
-void data_callback(...) {
-    shouldStart = true;
-}
-// В другом потоке:
-if (shouldStart) ma_device_start(&device);
+### Dirty Flag для Spatial
+
+```cpp
+class SpatialAudioSystem {
+    struct SpatialSource {
+        ma_sound sound;
+        float last_position[3];
+        bool dirty = true;
+        bool spatial_enabled = true;
+    };
+
+    std::vector<SpatialSource> m_sources;
+
+public:
+    void update_positions() {
+        for (auto& src : m_sources) {
+            if (!src.dirty) continue;
+
+            // Обновляем только если изменилась позиция
+            ma_sound_set_position(&src.sound,
+                src.last_position[0],
+                src.last_position[1],
+                src.last_position[2]);
+
+            src.dirty = false;
+        }
+    }
+
+    void set_position(size_t index, float x, float y, float z) {
+        auto& src = m_sources[index];
+
+        // Проверяем, изменилась ли позиция
+        if (src.last_position[0] != x ||
+            src.last_position[1] != y ||
+            src.last_position[2] != z) {
+
+            src.last_position[0] = x;
+            src.last_position[1] = y;
+            src.last_position[2] = z;
+            src.dirty = true;
+        }
+    }
+};
 ```
 
-### Неправильный формат декодера
+### Frustum Culling для Spatial Audio
 
-```c
-// ОШИБКА: Формат не совпадает с устройством
-ma_decoder_init_file("sound.wav", NULL, &decoder);  // Format может быть любым
-config.playback.format = decoder.outputFormat;  // Может не поддерживаться!
+```cpp
+// Не проигрываем звуки, которые далеко или за пределами слышимости
+struct AudioCullingSystem {
+    struct Listener {
+        float position[3];
+        float forward[3];
+        float hearing_distance;
+        float fov_angle;  // radians
+    };
 
-// ПРАВИЛЬНО: Явно укажите формат декодера
-ma_decoder_config decConfig = ma_decoder_config_init(ma_format_f32, 2, 48000);
-ma_decoder_init_file("sound.wav", &decConfig, &decoder);
+    bool is_audible(const Listener& listener, const float sound_pos[3]) {
+        // Distance culling
+        float dx = sound_pos[0] - listener.position[0];
+        float dy = sound_pos[1] - listener.position[1];
+        float dz = sound_pos[2] - listener.position[2];
+        float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (dist > listener.hearing_distance) {
+            return false;
+        }
+
+        // Direction culling (внутри ли конуса)
+        // Dot product для угла
+        // ...
+
+        return true;
+    }
+};
+```
+
+## Profiling и Debug
+
+> **Для понимания:** Tracy (наш профайлер) интегрируется с audio. Главное — не мерять audio callback напрямую (это
+> исказит результаты), а мерять подготовку данных.
+
+### Tracy для Audio Jobs
+
+```cpp
+#include <tracy/Tracy.hpp>
+
+void audio_prepare_job() {
+    ZoneScopedN("AudioPrepare");
+
+    // Декодирование
+    {
+        ZoneScopedN("Decode");
+        decode_audio_data();
+    }
+
+    // Микширование
+    {
+        ZoneScopedN("Mix");
+        mix_audio_buffers();
+    }
+
+    // Обновление spatial
+    {
+        ZoneScopedN("SpatialUpdate");
+        update_spatial_positions();
+    }
+}
+```
+
+### Latency Measurement
+
+```cpp
+// Замер задержки audio thread
+class AudioLatencyTracker {
+    std::chrono::high_resolution_clock::time_point m_last_callback;
+    std::vector<double> m_latencies;
+
+public:
+    void on_callback() {
+        auto now = std::chrono::high_resolution_clock::now();
+
+        if (m_last_callback.time_since_epoch().count() > 0) {
+            auto delta = std::chrono::duration<double, std::milli>(
+                now - m_last_callback
+            ).count();
+            m_latencies.push_back(delta);
+
+            if (m_latencies.size() > 1000) {
+                // Логируем среднее/макс/мин
+                double avg = 0, max = 0, min = 1e9;
+                for (auto l : m_latencies) {
+                    avg += l;
+                    max = std::max(max, l);
+                    min = std::min(min, l);
+                }
+                avg /= m_latencies.size();
+
+                std::println("Audio latency: avg={:.2f}ms, min={:.2f}ms, max={:.2f}ms",
+                    avg, min, max);
+                m_latencies.clear();
+            }
+        }
+
+        m_last_callback = now;
+    }
+};
+```
+
+## Резюме хардкора
+
+1. **Zero-allocation** в audio thread — никаких new/malloc в callback
+2. **SoA vs AoS** — структура массивов для SIMD и кэша
+3. **Cache-line alignment** — 64-байтное выравнивание для AVX
+4. **Thread-local** — TLS для декодеров, job system для подготовки
+5. **SPSC queue** — lock-free коммуникация main ↔ audio thread
+6. **SIMD** — AVX/SSE для gain, mixing, фильтров
+7. **Memory mapping** — для больших файлов без загрузки в RAM
+8. **Spatial culling** — не обновляем то, что не слышно
+9. **Tracy integration** — профилирование подготовки, не callback

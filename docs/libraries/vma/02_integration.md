@@ -1,5 +1,9 @@
 # VMA в ProjectV: Интеграция
 
+> **Для понимания:** Интеграция VMA — это как подключение центрального отопления в дом. Сначала нужно правильно
+> установить котел (аллокатор), развести трубы (пулы), подключить радиаторы (буферы), и только потом можно наслаждаться
+> теплом. Ошибка на любом этапе = холод зимой.
+
 **VMA — это не просто библиотека, а архитектурный выбор.** В ProjectV он становится центральным узлом управления
 памятью, связывающим Vulkan, ECS и системы рендеринга.
 
@@ -57,38 +61,56 @@ VMA распространяется как header-only библиотека. Р
 
 ## Как инициализировать в движке
 
-### Создание аллокатора с volk
+### Создание аллокатора с volk (C++26 версия)
 
 После инициализации Vulkan и создания device:
 
 ```cpp
-VmaAllocatorCreateInfo allocInfo = {};
-allocInfo.physicalDevice = physicalDevice;
-allocInfo.device = device;
-allocInfo.instance = instance;
-allocInfo.vulkanApiVersion = VK_API_VERSION_1_4;
+#include <print>
+#include <expected>
+#include "vma/result.hpp"  // Наш VmaResult из 01_reference.md
 
-// Vulkan 1.1+ включает KHR_dedicated_allocation и KHR_bind_memory2
-allocInfo.flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT |
-                  VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT;
+VmaResult<VmaAllocator> create_vma_allocator(
+    VkInstance instance,
+    VkPhysicalDevice physicalDevice,
+    VkDevice device,
+    bool hasMemoryBudgetExtension,
+    bool hasBufferDeviceAddress)
+{
+    VmaAllocatorCreateInfo allocInfo = {};
+    allocInfo.physicalDevice = physicalDevice;
+    allocInfo.device = device;
+    allocInfo.instance = instance;
+    allocInfo.vulkanApiVersion = VK_API_VERSION_1_4;
 
-// Интеграция с volk
-VmaVulkanFunctions vulkanFunctions = {};
-vmaImportVulkanFunctionsFromVolk(&allocInfo, &vulkanFunctions);
-allocInfo.pVulkanFunctions = &vulkanFunctions;
+    // Vulkan 1.1+ включает KHR_dedicated_allocation и KHR_bind_memory2
+    allocInfo.flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT |
+                      VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT;
 
-// Бюджет памяти (требует VK_EXT_memory_budget)
-if (hasMemoryBudgetExtension) {
-    allocInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    // Интеграция с volk
+    VmaVulkanFunctions vulkanFunctions = {};
+    vmaImportVulkanFunctionsFromVolk(&allocInfo, &vulkanFunctions);
+    allocInfo.pVulkanFunctions = &vulkanFunctions;
+
+    // Бюджет памяти (требует VK_EXT_memory_budget)
+    if (hasMemoryBudgetExtension) {
+        allocInfo.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    }
+
+    // Buffer device address (требует VK_KHR_buffer_device_address)
+    if (hasBufferDeviceAddress) {
+        allocInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    }
+
+    VmaAllocator allocator;
+    if (vmaCreateAllocator(&allocInfo, &allocator) != VK_SUCCESS) {
+        std::println(stderr, "Failed to create VMA allocator");
+        return std::unexpected(VmaError::AllocatorCreationFailed);
+    }
+
+    std::println("VMA allocator created with flags: {:#x}", allocInfo.flags);
+    return allocator;
 }
-
-// Buffer device address (требует VK_KHR_buffer_device_address)
-if (hasBufferDeviceAddress) {
-    allocInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-}
-
-VmaAllocator allocator;
-VkResult result = vmaCreateAllocator(&allocInfo, &allocator);
 ```
 
 ### Порядок уничтожения
@@ -529,3 +551,196 @@ allocInfo.pUserData = (void*)"VertexBufferData";
 ```
 
 ### Release
+
+```cpp
+// Release: минимум проверок, максимум производительности
+allocInfo.flags = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT |
+                  VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT;
+// Без VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT если не нужен бюджет
+```
+
+## Злые хаки интеграции
+
+### Хак #1: Принудительное выравнивание для SoA данных
+
+```cpp
+// Вместо AoS (Array of Structures):
+struct VertexAoS {
+    float x, y, z;
+    float nx, ny, nz;
+    float u, v;
+}; // 32 байта, плохая локализация
+
+// Используем SoA (Structure of Arrays) с alignas:
+struct alignas(64) VertexSoA {
+    // Позиции (выровнены для SIMD)
+    alignas(16) float positions[16384][3];
+
+    // Нормали (отдельный массив)
+    alignas(16) float normals[16384][3];
+
+    // UV координаты
+    alignas(8) float uvs[16384][2];
+
+    // Размер: 16384 вершин * (12 + 12 + 8) = 524KB
+    // Выровнено по 64 байта = идеально для кэша
+};
+
+// Создаём буфер с VMA:
+VmaResult<VmaBuffer> create_vertex_buffer(VmaAllocator allocator, size_t vertexCount) {
+    VkDeviceSize size = sizeof(VertexSoA);
+
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+                       &buffer, &allocation, nullptr) != VK_SUCCESS) {
+        return std::unexpected(VmaError::BufferCreationFailed);
+    }
+
+    std::println("Created SoA vertex buffer: {} vertices, {} KB aligned to 64 bytes",
+                 vertexCount, size / 1024);
+
+    return VmaBuffer(allocator, buffer, allocation, size);
+}
+```
+
+### Хак #2: Пул для воксельных чанков с предварительным выделением
+
+```cpp
+class VoxelChunkPool {
+    VmaAllocator m_allocator;
+    VmaPool m_pool;
+    std::vector<VmaBuffer> m_preallocated;
+
+public:
+    VmaResult<void> initialize(VmaAllocator allocator, size_t chunkCount, VkDeviceSize chunkSize) {
+        m_allocator = allocator;
+
+        // Находим тип памяти для storage buffers
+        VkBufferCreateInfo sampleInfo = {};
+        sampleInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        sampleInfo.size = chunkSize;
+        sampleInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+        VmaAllocationCreateInfo sampleAlloc = {};
+        sampleAlloc.usage = VMA_MEMORY_USAGE_AUTO;
+
+        uint32_t memoryTypeIndex;
+        vmaFindMemoryTypeIndexForBufferInfo(allocator, &sampleInfo, &sampleAlloc, &memoryTypeIndex);
+
+        // Создаём пул
+        VmaPoolCreateInfo poolInfo = {};
+        poolInfo.memoryTypeIndex = memoryTypeIndex;
+        poolInfo.blockSize = 64 * 1024 * 1024;  // 64MB блоки
+        poolInfo.minBlockCount = 1;
+        poolInfo.maxBlockCount = 16;
+
+        if (vmaCreatePool(allocator, &poolInfo, &m_pool) != VK_SUCCESS) {
+            return std::unexpected(VmaError::AllocatorCreationFailed);
+        }
+
+        // Предварительно аллоцируем чанки
+        m_preallocated.reserve(chunkCount);
+        for (size_t i = 0; i < chunkCount; ++i) {
+            if (auto buffer = create_chunk(chunkSize); buffer) {
+                m_preallocated.push_back(std::move(*buffer));
+            } else {
+                std::println(stderr, "Failed to preallocate chunk {}", i);
+                return std::unexpected(buffer.error());
+            }
+        }
+
+        std::println("Preallocated {} voxel chunks ({} MB each) in pool",
+                     chunkCount, chunkSize / (1024.0 * 1024.0));
+        return {};
+    }
+
+private:
+    VmaResult<VmaBuffer> create_chunk(VkDeviceSize size) {
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = size;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                          VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.pool = m_pool;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+
+        VkBuffer buffer;
+        VmaAllocation allocation;
+        if (vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo,
+                           &buffer, &allocation, nullptr) != VK_SUCCESS) {
+            return std::unexpected(VmaError::BufferCreationFailed);
+        }
+
+        return VmaBuffer(m_allocator, buffer, allocation, size);
+    }
+};
+```
+
+### Хак #3: Tracy + VMA = профилирование в реальном времени
+
+```cpp
+#ifdef TRACY_ENABLE
+#include "Tracy.hpp"
+
+class TrackedVmaBuffer : public VmaBuffer {
+    const char* m_name;
+
+public:
+    TrackedVmaBuffer(VmaAllocator allocator, VkDeviceSize size,
+                     VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
+                     const char* name, VmaAllocationCreateFlags flags = 0)
+        : VmaBuffer(allocator, size, usage, memoryUsage, flags)
+        , m_name(name)
+    {
+        TracyAllocN((void*)this, size, m_name);
+    }
+
+    ~TrackedVmaBuffer() {
+        TracyFreeN((void*)this, m_name);
+    }
+};
+
+// Использование:
+auto buffer = TrackedVmaBuffer(allocator, 1024 * 1024,
+    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    VMA_MEMORY_USAGE_AUTO,
+    "VertexBuffer_Chunk42");
+// Tracy покажет аллокацию с именем "VertexBuffer_Chunk42"
+#endif
+```
+
+## Итог: философия интеграции VMA в ProjectV
+
+1. **RAII везде** — никаких голых указателей, только умные обёртки
+2. **std::expected вместо исключений** — предсказуемая обработка ошибок
+3. **SoA вместо AoS** — данные выровнены для кэша и SIMD
+4. **Пулы для одинаковых объектов** — уменьшение фрагментации
+5. **Интеграция с ECS** — ресурсы как компоненты, очистка автоматическая
+6. **Профилирование с Tracy** — видимость использования памяти
+
+> **Почему именно так?** Потому что в воксельном движке управление памятью — это 80% производительности. Неправильная
+> аллокация = просадка FPS при загрузке чанков. VMA + наши обёртки = предсказуемость и контроль.
+
+---
+
+## Следующий шаг
+
+После интеграции VMA переходим к [продвинутым паттернам](03_advanced.md):
+
+- Double buffering для compute shaders
+- Кольцевые staging буферы
+- Загрузка текстур через пулы
+- Интеграция с Tracy для мониторинга

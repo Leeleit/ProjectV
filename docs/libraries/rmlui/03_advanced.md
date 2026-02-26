@@ -1,1149 +1,708 @@
-## Инструменты RmlUi
+# RmlUi: Хардкорные оптимизации
 
-<!-- anchor: 05_tools -->
+> **Для понимания:** Этот раздел — для тех, кто выжал из RmlUi всё по умолчанию. Мы говорим о микросекундах: кэш-линии,
+> zero-copy, batch rendering, Job System. Железо не врёт — данные лежат в памяти, а процессор их читает. Оптимизируй
+> данные — ускоришь рендеринг.
 
+## Architecture: Почему RmlUi медленный?
 
-Встроенные инструменты RmlUi: Debugger, Lua plugin, Lottie, SVG.
+RmlUi по умолчанию создан для гибкости, не для скорости. Вот типичные bottleneck-и:
 
-## RmlUi Debugger
+| Проблема                                | Влияние            | Решение            |
+|-----------------------------------------|--------------------|--------------------|
+| **RenderGeometry каждый кадр**          | CPU → GPU transfer | Compiled Geometry  |
+| **Множественные small texture uploads** | Pipeline stalls    | Texture atlas      |
+| **Scissor переключения**                | Pipeline stalls    | Batch по текстурам |
+| **SetInnerRML**                         | DOM re-parse       | Data Bindings      |
+| **Heap аллокации в кадре**              | Cache misses       | Pool allocator     |
 
-Визуальный отладчик для инспекции документов в реальном времени.
+## Compiled Geometry: GPU-Driven подход
 
-### Активация
+> **Для понимания:** Это как построить конструктор LEGO один раз, а потом просто доставать из коробки. Вместо того чтобы
+> каждый кадр заново собирать модель из деталей (данные → вершины → GPU), вы собираете её один раз при загрузке, а потом
+> только перемещаете.
 
-```cpp
-#include <RmlUi/Debugger.h>
-
-// Инициализация (после создания контекста)
-Rml::Debugger::Initialise(context);
-
-// Показать/скрыть отладчик
-Rml::Debugger::SetVisible(true);
-
-// Проверка видимости
-bool isVisible = Rml::Debugger::IsVisible();
-```
-
-### Возможности
-
-| Функция               | Описание                                       |
-|-----------------------|------------------------------------------------|
-| **Element Inspector** | Просмотр DOM дерева, свойств, атрибутов        |
-| **Style Editor**      | Редактирование RCSS свойств в реальном времени |
-| **Info Overlay**      | FPS, размер контекста, количество элементов    |
-| **Log Console**       | Вывод логов RmlUi                              |
-| **Visual Debug**      | Подсветка регионов, границ элементов           |
-
-### Горячие клавиши
-
-| Клавиша        | Действие                 |
-|----------------|--------------------------|
-| `F8`           | Показать/скрыть отладчик |
-| `Ctrl+Shift+I` | Element Inspector        |
-| `Ctrl+Shift+S` | Style Editor             |
-| `Ctrl+Shift+L` | Log Console              |
-
-### Программное управление
+### Концепция
 
 ```cpp
-// Установка контекста для отладки
-Rml::Debugger::SetContext(context);
-
-// Включение info overlay
-Rml::Debugger::SetInfoVisible(true);
-
-// Выбор элемента для инспекции
-Rml::Debugger::SetHoverElement(element);
-```
-
-## Lua Plugin
-
-Скриптование UI на Lua.
-
-### Подключение
-
-```cmake
-set(RMLUI_LUA ON CACHE BOOL "")
-```
-
-```cpp
-#include <RmlUi/Lua.h>
-
-// Инициализация Lua plugin
-Rml::Lua::Initialise();
-
-// Загрузка Lua скрипта
-Rml::Lua::LoadFile("scripts/ui_logic.lua");
-```
-
-### Пример Lua скрипта
-
-```lua
--- Доступ к элементам
-local document = context:LoadDocument("ui/menu.rml")
-local button = document:GetElementById("start_button")
-
--- Обработка событий
-button:AddEventListener("click", function(event)
-    print("Button clicked!")
-    document:Hide()
-end)
-
--- Изменение свойств
-button:SetProperty("background-color", "#4a9eff")
-
--- Data bindings
-local player = {
-    health = 100,
-    name = "Player"
-}
-
-local model = context:CreateDataModel("player")
-model:Bind("health", player, "health")
-model:Bind("name", player, "name")
-```
-
-### API Lua
-
-| Модуль           | Описание                             |
-|------------------|--------------------------------------|
-| `Rml`            | Core API: Context, Element, Document |
-| `Rml.Math`       | Vector2, Vector3, Matrix4            |
-| `Rml.Animations` | Transitions, keyframe animations     |
-
-## SVG Plugin
-
-Отображение SVG изображений.
-
-### Подключение
-
-```cmake
-set(RMLUI_SVG ON CACHE BOOL "")
-# Требует lunasvg
-```
-
-```cpp
-#include <RmlUi/SVG.h>
-
-// Инициализация плагина (автоматически при включении)
-```
-
-### Использование в RML
-
-```html
-<img src="icons/logo.svg"/>
-
-<!-- Или через decorator -->
-<div style="decorator: image(icon.svg); width: 100px; height: 100px;"></div>
-```
-
-### Особенности
-
-- Поддержка SVG 1.1
-- Рендеринг через lunasvg
-- Масштабирование без потери качества
-- Поддержка анимированных SVG
-
-## Lottie Plugin
-
-Векторные анимации Lottie (JSON).
-
-### Подключение
-
-```cmake
-set(RMLUI_LOTTIE ON CACHE BOOL "")
-# Требует rlottie
-```
-
-```cpp
-#include <RmlUi/Lottie.h>
-
-// Инициализация плагина (автоматически при включении)
-```
-
-### Использование в RML
-
-```html
-<lottie src="animations/loading.json"
-        style="width: 200px; height: 200px;"
-        loop="true"
-        autoplay="true"/>
-```
-
-### Управление анимацией через C++
-
-```cpp
-// Получение элемента Lottie
-Rml::Element* lottieElement = document->GetElementById("my_animation");
-
-// Управление воспроизведением
-lottieElement->SetAttribute("playing", "true");
-lottieElement->SetAttribute("loop", "true");
-
-// Остановка
-lottieElement->SetAttribute("playing", "false");
-
-// Переход к кадру
-lottieElement->SetAttribute("frame", "30");
-```
-
-### Поддерживаемые функции Lottie
-
-| Функция     | Поддержка |
-|-------------|-----------|
-| Shapes      | Да        |
-| Transforms  | Да        |
-| Gradients   | Да        |
-| Masks       | Частично  |
-| Expressions | Нет       |
-
-## HarfBuzz Integration
-
-Продвинутый text shaping для сложных скриптов.
-
-### Подключение
-
-```cmake
-# HarfBuzz определяется автоматически при наличии
-find_package(HarfBuzz REQUIRED)
-```
-
-### Поддержка скриптов
-
-| Скрипт           | Особенности                 |
-|------------------|-----------------------------|
-| Arabic           | Лигатуры, контекстные формы |
-| Hebrew           | Направление RTL             |
-| Hindi/Devanagari | Лигатуры, matras            |
-| Thai             | Повторяющиеся гласные       |
-
-### Пример использования
-
-```cpp
-// Загрузка шрифта с поддержкой арабского
-Rml::LoadFontFace("fonts/NotoSansArabic-Regular.ttf", true);
-
-// RML с арабским текстом
-// <p>مرحبا بالعالم</p>
-```
-
-## Font Engine Customization
-
-Замена FreeType на кастомный font engine.
-
-```cpp
-class CustomFontEngine : public Rml::FontEngineInterface {
-public:
-    FontFaceHandle LoadFontFace(
-        const String& family,
-        Style::FontStyle style,
-        Style::FontWeight weight,
-        Span<const byte> data
-    ) override {
-        // Парсинг и подготовка шрифта
-    }
-
-    FontFaceHandle GetFontFaceHandle(
-        const String& family,
-        Style::FontStyle style,
-        Style::FontWeight weight,
-        int size
-    ) override {
-        // Возврат handle для конкретного размера
-    }
-
-    int GetSize(FontFaceHandle handle) override {
-        // Размер шрифта
-    }
-
-    int GetLineHeight(FontFaceHandle handle) override {
-        // Высота строки
-    }
-
-    int GetBaseline(FontFaceHandle handle) override {
-        // Базовая линия
-    }
-
-    float GetUnderline(FontFaceHandle handle, float& thickness) override {
-        // Позиция подчёркивания
-    }
-
-    int GetStringWidth(
-        FontFaceHandle handle,
-        const String& string,
-        float letter_spacing
-    ) override {
-        // Ширина строки в пикселях
-    }
-
-    int GenerateString(
-        FontFaceHandle handle,
-        const String& string,
-        const Vector2f& position,
-        float letter_spacing,
-        Geometry& geometry
-    ) override {
-        // Генерация геометрии для текста
-    }
-
-    FontMetrics GetFontMetrics(FontFaceHandle handle) override {
-        // Метрики шрифта
-    }
+// AoS: Плохо для кэша
+struct DrawCall {
+    Rml::Vertex* vertices;
+    int vertexCount;
+    int* indices;
+    int indexCount;
+    Rml::TextureHandle texture;
+    Rml::Vector2f translation;
 };
 
-// Установка до Rml::Initialise()
-Rml::SetFontEngineInterface(new CustomFontEngine());
+// SoA: Хорошо для SIMD/кэша
+struct UIBatchData {
+    std::span<Rml::Vertex> vertices;  // 64-byte aligned
+    std::span<int> indices;
+    Rml::TextureHandle texture;
+    Rml::Vector2f translation;
+};
 ```
 
-## Примеры в репозитории
-
-RmlUi включает примеры в папке `Samples/`:
-
-| Пример                | Описание                       |
-|-----------------------|--------------------------------|
-| `basic/load_document` | Минимальная загрузка документа |
-| `basic/animation`     | CSS анимации и transitions     |
-| `basic/data_binding`  | Data bindings с C++ данными    |
-| `basic/drag`          | Drag & drop элементы           |
-| `basic/effects`       | Фильтры, blur, drop-shadow     |
-| `basic/lottie`        | Lottie анимации                |
-| `basic/svg`           | SVG изображения                |
-| `basic/tree_view`     | Иерархический список           |
-| `basic/transform`     | 2D/3D трансформации            |
-| `invaders`            | Полный пример игры             |
-| `lua_invaders`        | Игра с Lua логикой             |
-
----
-
-## Производительность RmlUi
-
-<!-- anchor: 06_performance -->
-
-
-Оптимизация производительности RmlUi: retained mode, geometry caching, texture management.
-
-## Retained Mode vs Immediate Mode
-
-RmlUi использует retained mode архитектуру:
-
-| Аспект            | Retained Mode (RmlUi)      | Immediate Mode (ImGui)    |
-|-------------------|----------------------------|---------------------------|
-| Состояние         | Сохраняется между кадрами  | Пересоздаётся каждый кадр |
-| Обновление        | Только изменённые элементы | Все элементы              |
-| Память            | Больше (хранит состояние)  | Меньше                    |
-| Обновление данных | Dirty flags                | Автоматически             |
+### Vulkan Implementation
 
 ```cpp
-// RmlUi: состояние сохраняется
-element->SetProperty("width", "200px");  // Применяется один раз
+// src/ui/compiled_geometry.hpp
+#pragma once
 
-// Обновление только при изменении
-if (healthChanged) {
-    element->SetProperty("width",
-        Rml::String(std::to_string(health) + "px"));
-}
-```
+#include <RmlUi/Core/RenderInterface.h>
+#include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
+#include <span>
+#include <vector>
+#include <array>
 
-## Geometry Caching
+// SoA структура для максимальной производительности
+alignas(64) struct UIGeometryBatch {
+    // Vertex data - выровнено по 64 байта (кэш-линия)
+    std::vector<Rml::Vertex> vertices;
+    std::vector<int> indices;
 
-RmlUi кеширует геометрию для неизменённых элементов.
+    // Metadata
+    Rml::TextureHandle texture = 0;
+    uint32_t indexCount = 0;
+    uint32_t vertexCount = 0;
 
-### Compiled Geometry
+    // GPU resources - lifetime управляется отдельно
+    VkBuffer vertexBuffer = VK_NULL_HANDLE;
+    VkBuffer indexBuffer = VK_NULL_HANDLE;
+    VmaAllocation vertexAllocation = VK_NULL_HANDLE;
+    VmaAllocation indexAllocation = VK_NULL_HANDLE;
+};
 
-```cpp
-// RenderInterface: опциональная поддержка compiled geometry
-class OptimizedRenderInterface : public Rml::RenderInterface {
+class CompiledGeometryPool {
 public:
-    // Компиляция геометрии в GPU buffers
-    CompiledGeometryHandle CompileGeometry(
-        Rml::Vertex* vertices,
-        int numVertices,
-        int* indices,
-        int numIndices
-    ) override {
-        // Создание VBO/IBO один раз
-        VkBuffer vertexBuffer, indexBuffer;
-        // ... allocation
+    explicit CompiledGeometryPool(VmaAllocator allocator, VkDevice device) noexcept;
+    ~CompiledGeometryPool();
 
-        return reinterpret_cast<CompiledGeometryHandle>(new Geometry{vertexBuffer, indexBuffer, numIndices});
-    }
+    // Compile - создаёт GPU буферы один раз
+    [[nodiscard]] size_t compile(
+        std::span<const Rml::Vertex> vertices,
+        std::span<const int> indices,
+        Rml::TextureHandle texture
+    ) noexcept;
 
-    // Рендеринг скомпилированной геометрии
-    void RenderCompiledGeometry(
-        CompiledGeometryHandle geometry,
+    // Render - просто bind и draw
+    void render(
+        VkCommandBuffer cmd,
+        VkPipeline pipeline,
+        VkPipelineLayout pipelineLayout,
+        size_t batchIndex,
         const Rml::Vector2f& translation
-    ) override {
-        Geometry* g = reinterpret_cast<Geometry*>(geometry);
+    ) const noexcept;
 
-        // Просто bind и draw - без загрузки данных каждый кадр
-        vkCmdBindVertexBuffers(cmd, 0, 1, &g->vertexBuffer, &offset);
-        vkCmdBindIndexBuffer(cmd, g->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-        vkCmdDrawIndexed(cmd, g->indexCount, 1, 0, 0, 0);
-    }
+    // Release - возвращает в пул
+    void release(size_t batchIndex) noexcept;
 
-    // Освобождение
-    void ReleaseCompiledGeometry(CompiledGeometryHandle geometry) override {
-        Geometry* g = reinterpret_cast<Geometry*>(geometry);
-        vmaDestroyBuffer(allocator, g->vertexBuffer, nullptr);
-        vmaDestroyBuffer(allocator, g->indexBuffer, nullptr);
-        delete g;
-    }
+    // Batch сортировка по текстуре
+    void sortByTexture() noexcept;
+
+private:
+    VmaAllocator allocator_ = VK_NULL_HANDLE;
+    VkDevice device_ = VK_NULL_HANDLE;
+
+    // Пулы - SoA layout
+    std::vector<UIGeometryBatch> batches_;
+    std::vector<size_t> freeSlots_;  // Stack для быстрого allocate
+
+    // Staging для загрузки данных
+    VkBuffer stagingBuffer_ = VK_NULL_HANDLE;
+    VmaAllocation stagingAllocation_ = VK_NULL_HANDLE;
+    size_t stagingCapacity_ = 0;
+
+    [[nodiscard]] bool ensureStagingCapacity(size_t requiredSize) noexcept;
+    void uploadToGPU(UIGeometryBatch& batch,
+                    std::span<const Rml::Vertex> vertices,
+                    std::span<const int> indices) noexcept;
 };
+
+constexpr size_t MAX_UI_BATCHES = 512;
+constexpr size_t MAX_STAGING_SIZE = 16 * 1024 * 1024; // 16MB
 ```
 
-### Когда геометрия перекомпилируется
-
-| Событие                    | Перекомпиляция      |
-|----------------------------|---------------------|
-| Изменение текста           | Да (элемент)        |
-| Изменение размера          | Да (элемент + дети) |
-| Hover эффект (только цвет) | Нет                 |
-| Анимация opacity           | Нет                 |
-| Scroll                     | Частично            |
-
-## Texture Management
-
-### Атлас текстур
-
-Объединение мелких текстур в один атлас:
+### Реализация
 
 ```cpp
-// Вместо множества мелких текстур
-// ui/icons/health.png      (32x32)
-// ui/icons/stamina.png     (32x32)
-// ui/icons/mana.png        (32x32)
+// src/ui/compiled_geometry.cpp
+#include "compiled_geometry.hpp"
+#include <print>
+#include <algorithm>
 
-// Создайте атлас
-// ui/atlas.png             (256x256) со всеми иконками
-```
-
-```
-/* Использование через sprite sheet */
-@sprite_sheet icons {
-    src: ui/atlas.png;
-    health:   0px 0px 32px 32px;
-    stamina: 32px 0px 32px 32px;
-    mana:    64px 0px 32px 32px;
+CompiledGeometryPool::CompiledGeometryPool(VmaAllocator allocator, VkDevice device) noexcept
+    : allocator_(allocator)
+    , device_(device)
+{
+    batches_.reserve(MAX_UI_BATCHES);
+    ensureStagingCapacity(64 * 1024); // 64KB initial
 }
 
-.health-icon { decorator: image(icons:health); }
+CompiledGeometryPool::~CompiledGeometryPool() {
+    for (auto& batch : batches_) {
+        if (batch.vertexBuffer) {
+            vmaDestroyBuffer(allocator_, batch.vertexBuffer, batch.vertexAllocation);
+        }
+        if (batch.indexBuffer) {
+            vmaDestroyBuffer(allocator_, batch.indexBuffer, batch.indexAllocation);
+        }
+    }
+
+    if (stagingBuffer_) {
+        vmaDestroyBuffer(allocator_, stagingBuffer_, stagingAllocation_);
+    }
+}
+
+bool CompiledGeometryPool::ensureStagingCapacity(size_t requiredSize) noexcept {
+    if (stagingCapacity_ >= requiredSize) return true;
+
+    if (stagingBuffer_) {
+        vmaDestroyBuffer(allocator_, stagingBuffer_, stagingAllocation_);
+    }
+
+    VkBufferCreateInfo info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = requiredSize,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+    };
+
+    VmaAllocationCreateInfo allocInfo = {
+        .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY
+    };
+
+    if (vmaCreateBuffer(allocator_, &info, &allocInfo,
+                        &stagingBuffer_, &stagingAllocation_, nullptr) != VK_SUCCESS) {
+        return false;
+    }
+
+    stagingCapacity_ = requiredSize;
+    return true;
+}
+
+void CompiledGeometryPool::uploadToGPU(
+    UIGeometryBatch& batch,
+    std::span<const Rml::Vertex> vertices,
+    std::span<const int> indices
+) noexcept {
+    // Vertex buffer
+    VkBufferCreateInfo vbInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = vertices.size_bytes(),
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+    };
+
+    VmaAllocationCreateInfo allocInfo = {
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY
+    };
+
+    vmaCreateBuffer(allocator_, &vbInfo, &allocInfo,
+                    &batch.vertexBuffer, &batch.vertexAllocation, nullptr);
+
+    // Index buffer
+    VkBufferCreateInfo ibInfo = vbInfo;
+    ibInfo.size = indices.size_bytes();
+
+    vmaCreateBuffer(allocator_, &ibInfo, &allocInfo,
+                    &batch.indexBuffer, &batch.indexAllocation, nullptr);
+
+    // Staging copy
+    void* stagingData;
+    vmaMapMemory(allocator_, stagingAllocation_, &stagingData);
+
+    // Copy vertices
+    std::memcpy(stagingData, vertices.data(), vertices.size_bytes());
+
+    // Copy indices
+    std::memcpy(static_cast<char*>(stagingData) + vertices.size_bytes(),
+                indices.data(), indices.size_bytes());
+
+    vmaUnmapMemory(allocator_, stagingAllocation_);
+
+    // Transfer to GPU (simplified - in real code use command buffer)
+    // ...
+}
+
+size_t CompiledGeometryPool::compile(
+    std::span<const Rml::Vertex> vertices,
+    std::span<const int> indices,
+    Rml::TextureHandle texture
+) noexcept {
+    size_t slot;
+
+    if (!freeSlots_.empty()) {
+        slot = freeSlots_.back();
+        freeSlots_.pop_back();
+    } else {
+        slot = batches_.size();
+        batches_.emplace_back();
+    }
+
+    auto& batch = batches_[slot];
+    batch.texture = texture;
+    batch.vertexCount = static_cast<uint32_t>(vertices.size());
+    batch.indexCount = static_cast<uint32_t>(indices.size());
+
+    // Copy data
+    batch.vertices.assign(vertices.begin(), vertices.end());
+    batch.indices.assign(indices.begin(), indices.end());
+
+    // Upload to GPU
+    uploadToGPU(batch, vertices, indices);
+
+    return slot;
+}
+
+void CompiledGeometryPool::render(
+    VkCommandBuffer cmd,
+    VkPipeline pipeline,
+    VkPipelineLayout pipelineLayout,
+    size_t batchIndex,
+    const Rml::Vector2f& translation
+) const noexcept {
+    const auto& batch = batches_[batchIndex];
+
+    if (!batch.vertexBuffer) return;
+
+    // Bind
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &batch.vertexBuffer, &offset);
+    vkCmdBindIndexBuffer(cmd, batch.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+    // Push constants
+    struct PushConstants {
+        Rml::Vector2f translation;
+        float padding[2];
+    } pc = {translation, {}};
+
+    vkCmdPushConstants(cmd, pipelineLayout,
+                      VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+
+    // Draw
+    vkCmdDrawIndexed(cmd, batch.indexCount, 1, 0, 0, 0);
+}
+
+void CompiledGeometryPool::release(size_t batchIndex) noexcept {
+    auto& batch = batches_[batchIndex];
+
+    // Release GPU resources
+    if (batch.vertexBuffer) {
+        vmaDestroyBuffer(allocator_, batch.vertexBuffer, batch.vertexAllocation);
+        batch.vertexBuffer = VK_NULL_HANDLE;
+    }
+    if (batch.indexBuffer) {
+        vmaDestroyBuffer(allocator_, batch.indexBuffer, batch.indexAllocation);
+        batch.indexBuffer = VK_NULL_HANDLE;
+    }
+
+    batch.vertices.clear();
+    batch.indices.clear();
+    batch.texture = 0;
+
+    freeSlots_.push_back(batchIndex);
+}
+
+void CompiledGeometryPool::sortByTexture() noexcept {
+    // SoA batch сортировка по текстуре для минимизации bind
+    std::sort(batches_.begin(), batches_.end(),
+        [](const UIGeometryBatch& a, const UIGeometryBatch& b) {
+            return a.texture < b.texture;
+        });
+}
 ```
 
-### Освобождение неиспользуемых текстур
+## Batch Rendering: Сортировка по текстуре
+
+> **Для понимания:** Это как собирать посуду для мытья. Вы же не моете тарелку, потом ложку, потом опять тарелку? Вы
+> моете все тарелки, потом все ложки. Batch rendering работает так же: сгруппируй все draw calls с одной текстурой.
+
+### Паттерн
 
 ```cpp
-// Освободить все текстуры
-Rml::ReleaseTextures();
-
-// Освободить конкретную текстуру
-Rml::ReleaseTexture("old_ui/background.png");
-
-// Освободить шрифты (полная перезагрузка)
-Rml::ReleaseFontResources();
-```
-
-## Batch Rendering
-
-Группировка вызовов отрисовки.
-
-### Сортировка по текстуре
-
-```cpp
-class BatchRenderInterface : public Rml::RenderInterface {
+class BatchRenderer {
+public:
     struct DrawCall {
-        Rml::Vertex* vertices;
-        int* indices;
-        int numIndices;
-        Rml::TextureHandle texture;
+        size_t geometryIndex;
         Rml::Vector2f translation;
     };
 
-    std::vector<DrawCall> drawCalls;
-
-    void RenderGeometry(
-        Rml::Vertex* vertices, int numVertices,
-        int* indices, int numIndices,
-        Rml::TextureHandle texture,
-        const Rml::Vector2f& translation
-    ) override {
-        // Накапливаем draw calls
-        drawCalls.push_back({vertices, indices, numIndices, texture, translation});
+    void addDrawCall(size_t geometryIndex, Rml::TextureHandle texture,
+                    const Rml::Vector2f& translation) {
+        batches_[texture].push_back({geometryIndex, translation});
     }
 
-    void Flush() {
-        // Сортировка по текстуре
-        std::sort(drawCalls.begin(), drawCalls.end(),
-            [](const DrawCall& a, const DrawCall& b) {
-                return a.texture < b.texture;
-            });
+    void flush(VkCommandBuffer cmd) {
+        // Сортировка не нужна - мы уже группируем по текстуре при добавлении
 
-        // Группировка и отрисовка
-        Rml::TextureHandle currentTexture = 0;
-        for (auto& call : drawCalls) {
-            if (call.texture != currentTexture) {
-                currentTexture = call.texture;
-                bindTexture(currentTexture);
+        for (auto& [texture, calls] : batches_) {
+            if (calls.empty()) continue;
+
+            // Bind текстуру один раз
+            bindTexture(texture);
+
+            // Нарисовать все вызовы
+            for (const auto& call : calls) {
+                geometryPool_.render(cmd, pipeline_, layout_,
+                                    call.geometryIndex, call.translation);
             }
-            drawVertices(call.vertices, call.indices, call.numIndices);
-        }
 
-        drawCalls.clear();
+            calls.clear(); // reuse vector
+        }
+    }
+
+private:
+    // SoA: texture -> calls
+    std::unordered_map<Rml::TextureHandle, std::vector<DrawCall>> batches_;
+    CompiledGeometryPool geometryPool_;
+};
+```
+
+## Texture Atlas: Один draw call
+
+> **Для понимания:** Вместо того чтобы звонить другу 100 раз по разным номерам (100 texture binds), вы звоните один раз
+> по одному номеру (один atlas texture bind). Результат тот же, но на порядок быстрее.
+
+### Реализация
+
+```cpp
+class TextureAtlas {
+public:
+    struct Region {
+        uint32_t x, y, width, height;
+    };
+
+    void addImage(std::string_view name, const Rml::byte* data,
+                 uint32_t width, uint32_t height) {
+        // Pack into atlas (simplified - use bin packing algorithm)
+        Region region = findFreeSpace(width, height);
+
+        // Copy to atlas
+        copyToAtlas(region, data, width, height);
+
+        regions_[std::string(name)] = region;
+    }
+
+    Region getRegion(std::string_view name) const {
+        auto it = regions_.find(std::string(name));
+        return it != regions_.end() ? it->second : Region{0, 0, 0, 0};
+    }
+
+    VkImageView getAtlasImageView() const { return atlasImageView_; }
+
+private:
+    // Atlas: 2048x2048
+    static constexpr uint32_t ATLAS_SIZE = 2048;
+
+    std::unordered_map<std::string, Region> regions_;
+    std::vector<Rml::byte> atlasData_(ATLAS_SIZE * ATLAS_SIZE * 4);
+
+    VkImage atlasImage_ = VK_NULL_HANDLE;
+    VkImageView atlasImageView_ = VK_NULL_HANDLE;
+
+    Region findFreeSpace(uint32_t width, uint32_t height);
+    void copyToAtlas(const Region& region, const Rml::byte* data,
+                    uint32_t width, uint32_t height);
+};
+```
+
+## Data Binding: Zero-Copy Sync
+
+> **Для понимания:** Это как Excel: изменили ячейку — таблица обновилась. Никаких ручных вызовов SetInnerRML. Но мы
+> пойдём дальше — сделаем это без копирования данных.
+
+### SoA для ECS данных
+
+```cpp
+// ECS UI data - SoA layout
+alignas(64) struct UIPlayerDataSoA {
+    // Hot data - часто меняется
+    std::vector<int> health;
+    std::vector<int> maxHealth;
+    std::vector<float> stamina;
+
+    // Cold data - редко меняется
+    std::vector<std::string> name;  // String pool нужен для zero-copy
+    std::vector<uint64_t> entityIds;
+
+    // Padding для избежания false sharing
+    alignas(64) char padding[64];
+};
+
+class UIPlayerDataSync {
+public:
+    explicit UIPlayerDataSync(flecs::world& world) noexcept
+        : world_(world)
+    {
+        // Pre-allocate
+        data_.health.reserve(128);
+        data_.maxHealth.reserve(128);
+        data_.stamina.reserve(128);
+    }
+
+    void sync() {
+        // Only sync changed data - avoid full rebuild
+        world_.each([&](flecs::entity e, const struct Player& player) {
+            // Find or add
+            auto it = findEntityIndex(e.id());
+            if (it == std::nullopt) {
+                // Add new
+                it = data_.entityIds.size();
+                data_.entityIds.push_back(e.id());
+                data_.health.push_back(0);
+                data_.maxHealth.push_back(0);
+                data_.stamina.push_back(0.0f);
+            }
+
+            // Update - только если изменилось
+            if (data_.health[*it] != player.health) {
+                data_.health[*it] = player.health;
+                dirtyFlags_[*it] = true;
+            }
+            // ... similar for other fields
+        });
+
+        // Notify RmlUi - только для dirty переменных
+        notifyRmlUi();
+    }
+
+private:
+    flecs::world& world_;
+    UIPlayerDataSoA data_;
+    std::vector<bool> dirtyFlags_;
+
+    void notifyRmlUi() {
+        // RmlUi DataModelHandle.DirtyVariable() для каждой dirty переменной
+    }
+
+    std::optional<size_t> findEntityIndex(uint64_t entityId) {
+        for (size_t i = 0; i < data_.entityIds.size(); ++i) {
+            if (data_.entityIds[i] == entityId) return i;
+        }
+        return std::nullopt;
     }
 };
 ```
 
-## Context Update Optimization
+## Job System: Параллельная загрузка
 
-### Минимизация обновлений
+> **Для понимания:** Загрузка UI документов и текстур не должна блокировать main thread. Используйте Job System (
+> см. [../flecs/](../flecs)) для параллельной загрузки.
 
-```cpp
-// ПРАВИЛЬНО: обновлять только при изменении данных
-void updateHealthUI(int newHealth) {
-    if (newHealth != lastHealth_) {
-        healthElement_->SetInnerRML(std::to_string(newHealth));
-        lastHealth_ = newHealth;
-    }
-}
-
-// НЕЭФФЕКТИВНО: обновлять каждый кадр
-void updateUI() {
-    healthElement_->SetInnerRML(std::to_string(player.health));  // Каждый кадр!
-}
-```
-
-### Data Bindings
-
-Data bindings автоматически отслеживают изменения:
+### Паттерн
 
 ```cpp
-// Только при изменении player.health - UI обновляется
-model.Bind("health", &player.health);
+class UIJobSystem {
+public:
+    using Job = std::function<void()>;
 
-// Ручное уведомление при сложных изменениях
-model.DirtyVariable("health");
-```
+    // Enqueue - не блокирует main thread
+    void enqueueLoadDocument(std::string_view path,
+                            std::promise<Rml::ElementDocument*>&& promise) {
+        jobQueue_.enqueue([this, path, promise = std::move(promise)]() mutable {
+            // Load in background thread
+            Rml::ElementDocument* doc = nullptr;
 
-### Отключение обновлений для скрытых документов
-
-```cpp
-// Скрытый документ не обновляется
-document->Hide();
-
-// Или удалить из контекста
-context->UnloadDocument(hiddenDocument);
-```
-
-## Scroll Optimization
-
-### Виртуализация длинных списков
-
-```cpp
-// Для списков с тысячами элементов
-// Показывать только видимые элементы
-class VirtualList {
-    int visibleStart = 0;
-    int visibleCount = 20;  // Видимых элементов
-    int itemHeight = 30;
-
-    void onScroll(float scrollOffset) {
-        int newStart = static_cast<int>(scrollOffset / itemHeight);
-        if (newStart != visibleStart) {
-            visibleStart = newStart;
-            rebuildVisibleItems();
-        }
-    }
-
-    void rebuildVisibleItems() {
-        containerElement->SetInnerRML("");
-        for (int i = visibleStart; i < visibleStart + visibleCount; ++i) {
-            if (i < items.size()) {
-                // Создать элемент только для видимых
-                addItemElement(items[i]);
+            // Thread-safe file load
+            {
+                std::lock_guard lock(fileMutex_);
+                doc = context_->LoadDocument(std::string(path).c_str());
             }
-        }
+
+            promise.set_value(doc);
+        });
     }
+
+    // Вызывать в main thread после frame
+    void processCompleted() {
+        // Handle completed promises
+    }
+
+private:
+    // Thread-safe queue - SPSC (Single Producer Single Consumer)
+    moodycamel::ConcurrentQueue<Job> jobQueue_;
+    std::mutex fileMutex_;  // Для FileInterface
 };
 ```
 
-## Font Performance
+## Memory Management: Pool Allocator
 
-### Загрузка шрифтов
+> **Для понимания:** Каждый раз, когда вы делаете `new`, процессор ищет свободную память. Это как искать место на
+> парковке каждый раз, когда приезжает машина. Pool allocator — это как постоянное место: приехал — место уже ждёт.
 
-```cpp
-// Загружать только нужные начертания
-Rml::LoadFontFace("fonts/Roboto-Regular.ttf");
-Rml::LoadFontFace("fonts/Roboto-Bold.ttf");
-// Не загружать все 10+ начертаний Roboto
-
-// Fallback шрифт для эмодзи и спецсимволов
-Rml::LoadFontFace("fonts/NotoEmoji-Regular.ttf", true);
-```
-
-### Кеширование glyph atlas
-
-RmlUi автоматически кеширует отрендеренные глифы. При большом количестве символов:
+### UI Element Pool
 
 ```cpp
-// После загрузки уровня/меню можно освободить старые шрифты
-Rml::ReleaseFontResources();  // Полная перезагрузка
+template<typename T>
+class ObjectPool {
+public:
+    explicit ObjectPool(size_t capacity) {
+        pool_.resize(capacity);
+        for (auto& obj : pool_) {
+            freeSlots_.push_back(&obj);
+        }
+    }
+
+    T* allocate() {
+        if (freeSlots_.empty()) return nullptr;
+
+        T* obj = freeSlots_.back();
+        freeSlots_.pop_back();
+        ++allocatedCount_;
+
+        return obj;
+    }
+
+    void deallocate(T* obj) {
+        // Reset object
+        obj->~T();
+        new (obj) T();
+
+        freeSlots_.push_back(obj);
+        --allocatedCount_;
+    }
+
+private:
+    std::vector<T> pool_;
+    std::vector<T*> freeSlots_;
+    size_t allocatedCount_ = 0;
+};
+
+// Использование для UI данных
+ObjectPool<UIHealthBar> healthBarPool(256);
+ObjectPool<UIInventory> inventoryPool(64);
 ```
 
-## Memory Management
-
-### Мониторинг памяти
+### Staging Buffer Pool
 
 ```cpp
-// В SystemInterface
-size_t GetMemoryUsage() {
-    // Вернуть используемую память
-}
+class StagingBufferPool {
+public:
+    struct StagingBuffer {
+        VkBuffer buffer;
+        VmaAllocation allocation;
+        void* mapped;
+        size_t capacity;
+        bool inUse;
+    };
+
+    StagingBufferPool(VmaAllocator allocator, VkDevice device);
+    ~StagingBufferPool();
+
+    StagingBuffer* acquire(size_t requiredSize);
+    void release(StagingBuffer* buffer);
+
+private:
+    // Pre-allocated buffers
+    std::vector<StagingBuffer> buffers_;
+    // ... implementation
+};
 ```
 
-### Освобождение при переключении сцен
-
-```cpp
-void switchToMainMenu() {
-    // 1. Скрыть/выгрузить игровые документы
-    gameHUD->Hide();
-    context->UnloadDocument(gameHUD);
-
-    // 2. Освободить ресурсы
-    Rml::ReleaseTextures();          // Текстуры игры
-    Rml::ReleaseCompiledGeometry();  // Геометрия
-
-    // 3. Загрузить меню
-    mainMenu = context->LoadDocument("ui/main_menu.rml");
-    mainMenu->Show();
-}
-```
-
-## Профилирование
-
-### Tracy Integration
+## Tracy Integration: Профилирование
 
 ```cpp
 #include <tracy/Tracy.hpp>
 
-void updateUI() {
+void UISystem::update(float deltaTime) {
     ZoneScopedN("RmlUi Update");
-    context->Update();
+
+    // Sync data
+    {
+        ZoneScopedN("UI Data Sync");
+        syncFromECS();
+    }
+
+    // Update context
+    {
+        ZoneScopedN("RmlUi Context Update");
+        context_->Update();
+    }
 }
 
-void renderUI() {
+void UISystem::render(VkCommandBuffer cmd) {
     ZoneScopedN("RmlUi Render");
-    context->Render();
+
+    // Начало render pass для UI
+    // ...
+
+    context_->Render();
+
+    // Конец render pass
+    // ...
 }
 ```
 
-### Встроенный profiling API
+## Profiling: Метрики
 
 ```cpp
-#include <RmlUi/Core/Profiling.h>
+struct UIStats {
+    uint32_t drawCalls = 0;
+    uint32_t vertices = 0;
+    uint32_t textures = 0;
+    double updateTime = 0.0;
+    double renderTime = 0.0;
+};
 
-// Включить profiling
-Rml::SetProfilingEnabled(true);
-
-// Получить статистику
-auto stats = Rml::GetProfilingStats();
-// stats.updateTime, stats.renderTime, stats.elementCount
-```
-
-## Рекомендации
-
-| Ситуация                 | Решение                           |
-|--------------------------|-----------------------------------|
-| Частые обновления текста | Data bindings вместо SetInnerRML  |
-| Много мелких текстур     | Sprite sheet / атлас              |
-| Длинные списки           | Виртуализация                     |
-| Анимации                 | CSS transitions (GPU accelerated) |
-| Смена сцены              | ReleaseTextures + UnloadDocument  |
-| Debug                    | Rml::Debugger для инспекции       |
-
-## Типичные bottlenecks
-
-1. **Частые SetInnerRML** — использовать data bindings
-2. **Много текстур** — атласизация
-3. **Сложные селекторы RCSS** — упростить, использовать классы
-4. **Отсутствие compiled geometry** — реализовать в RenderInterface
-5. **Обновление скрытых элементов** — скрывать/выгружать документы
-
----
-
-## Устранение неполадок RmlUi
-
-<!-- anchor: 07_troubleshooting -->
-
-
-Распространённые проблемы и их решения.
-
-## Проблемы инициализации
-
-### Rml::Initialise() возвращает false
-
-**Причины:**
-
-1. **Интерфейсы уничтожены до Shutdown**
-
-```cpp
-// ОШИБКА
-void init() {
-    MyRenderInterface renderer;  // Локальная переменная!
-    Rml::SetRenderInterface(&renderer);
-    Rml::Initialise();
-}  // renderer уничтожается здесь, но RmlUi его использует
-
-// ПРАВИЛЬНО
-class UIManager {
-    MyRenderInterface renderer;  // Член класса
+class UIProfiler {
 public:
-    void init() {
-        Rml::SetRenderInterface(&renderer);
-        Rml::Initialise();
+    void beginFrame() {
+        stats_ = {};
+        updateTimer_.start();
     }
-    ~UIManager() {
-        Rml::Shutdown();  // renderer ещё жив
+
+    void endFrame() {
+        updateTimer_.stop();
+        renderTimer_.stop();
+
+        stats_.updateTime = updateTimer_.elapsed();
+        stats_.renderTime = renderTimer_.elapsed();
     }
+
+    const UIStats& getStats() const { return stats_; }
+
+private:
+    UIStats stats_;
+    // Use Tracy timers in real implementation
 };
-```
 
-2. **Несовместимая версия FreeType**
-
-```cpp
-// Проверить версию FreeType
-#include <ft2build.h>
-#include FT_FREETYPE_H
-// Должна быть >= 2.7
-```
-
-### CreateContext возвращает nullptr
-
-**Причины:**
-
-1. **Контекст с таким именем уже существует**
-
-```cpp
-// Проверить существование
-if (Rml::GetContext("main")) {
-    Rml::RemoveContext("main");
-}
-Rml::Context* context = Rml::CreateContext("main", {1920, 1080});
-```
-
-2. **Нулевые размеры**
-
-```cpp
-// ОШИБКА
-Rml::CreateContext("main", {0, 0});  // nullptr
-
-// ПРАВИЛЬНО
-Rml::CreateContext("main", {1920, 1080});
-```
-
-## Проблемы с документами
-
-### Документ не загружается
-
-**Отладка:**
-
-```cpp
-// Включить логирование
-class DebugSystemInterface : public Rml::SystemInterface {
-    bool LogMessage(Rml::Log::Type type, const Rml::String& message) override {
-        std::fprintf(stderr, "[RmlUi] %s\n", message.c_str());
-        return true;  // Не подавлять
-    }
-};
-```
-
-**Частые причины:**
-
-1. **Неверный путь к файлу**
-
-```cpp
-// Проверить через FileInterface
-Rml::FileHandle file = Rml::GetFileInterface()->Open("ui/menu.rml");
-if (!file) {
-    // Файл не найден
-}
-Rml::GetFileInterface()->Close(file);
-```
-
-2. **Незагруженные шрифты**
-
-```cpp
-// Шрифты должны быть загружены ДО показа документа
-Rml::LoadFontFace("fonts/Roboto-Regular.ttf");  // Обязательно!
-document->Show();
-```
-
-3. **Ошибки синтаксиса RML**
-
-```cpp
-// Использовать отладчик
-Rml::Debugger::Initialise(context);
-Rml::Debugger::SetVisible(true);
-// F8 -> посмотреть Log Console
-```
-
-### Элементы не отображаются
-
-**Причины:**
-
-1. **Нулевой размер элемента**
-
-```css
-/* Проблема: width/height не заданы */
-.invisible-element {
-    /* width: auto (0 для пустого элемента) */
-}
-
-/* Решение */
-.visible-element {
-    width: 200px;
-    height: 100px;
+void logUIStats(const UIStats& stats) {
+    std::println("UI Stats: {} draw calls, {} vertices, {} textures, "
+                 "update: {:.2f}ms, render: {:.2f}ms",
+                 stats.drawCalls, stats.vertices, stats.textures,
+                 stats.updateTime * 1000.0, stats.renderTime * 1000.0);
 }
 ```
 
-2. **display: none**
-
-```css
-/* Проверить computed style */
-#my-element {
-    display: block;  /* Не none */
-}
-```
-
-3. **Позиционирование за пределами экрана**
-
-```css
-/* Проверить position и координаты */
-#my-element {
-    position: absolute;
-    left: 0px;
-    top: 0px;  /* Не -9999px */
-}
-```
-
-4. **Прозрачный цвет**
-
-```css
-/* Проверить opacity и color */
-#my-element {
-    opacity: 1.0;           /* Не 0 */
-    color: white;           /* Не transparent */
-    background-color: #fff; /* Не transparent */
-}
-```
-
-## Проблемы со стилями
-
-### RCSS не применяется
-
-**Причины:**
-
-1. **Неверный путь к RCSS**
-
-```html
-<!-- Проверить href -->
-<link type="text/rcss" href="styles/main.rcss"/>
-```
-
-2. **Ошибки синтаксиса RCSS**
-
-```
-/* ОШИБКА: пропущена точка с запятой */
-.element {
-    width: 200px
-    height: 100px;
-}
-
-/* ПРАВИЛЬНО */
-.element {
-    width: 200px;
-    height: 100px;
-}
-```
-
-3. **Специфичность селекторов**
-
-```css
-/* Низкая специфичность */
-.element { color: white; }
-
-/* Выигрывает этот селектор */
-body .container .element { color: red; }
-```
-
-### Hover/Active не работают
-
-```css
-/* Порядок важен! */
-.button { background: blue; }
-.button:hover { background: lightblue; }
-.button:active { background: darkblue; }
-
-/* ОШИБКА: hover после active перезапишет active */
-.button { background: blue; }
-.button:active { background: darkblue; }
-.button:hover { background: lightblue; }  /* Перекрывает active! */
-```
-
-## Проблемы с событиями
-
-### Клик не обрабатывается
-
-**Причины:**
-
-1. **pointer-events: none**
-
-```css
-/* Элемент не получает события */
-.non-clickable {
-    pointer-events: none;
-}
-```
-
-2. **Другой элемент перекрывает**
-
-```css
-/* Проверить z-index */
-.overlay {
-    position: absolute;
-    z-index: 100;  /* Перекрывает элементы ниже */
-}
-```
-
-3. **Событие не передаётся в контекст**
-
-```cpp
-// Убедиться, что ProcessMouseButtonDown вызывается
-context->ProcessMouseButtonDown(0);  // 0 = left button
-```
-
-### EventListener не вызывается
-
-**Причины:**
-
-1. **Listener уничтожен**
-
-```cpp
-// ОШИБКА: локальный listener
-void setupButton() {
-    ClickListener listener;  // Уничтожается при выходе!
-    button->AddEventListener("click", &listener);
-}
-
-// ПРАВИЛЬНО: долгоживущий listener
-class UIManager {
-    ClickListener clickListener;
-public:
-    void setupButton() {
-        button->AddEventListener("click", &clickListener);
-    }
-};
-```
-
-2. **Неверное имя события**
-
-```cpp
-// Правильные имена событий
-button->AddEventListener("click", &listener);
-button->AddEventListener("mousedown", &listener);
-button->AddEventListener("mouseup", &listener);
-button->AddEventListener("mouseover", &listener);
-button->AddEventListener("mouseout", &listener);
-
-// Не "onclick"!
-```
-
-## Проблемы с Data Bindings
-
-### Переменная не обновляется в UI
-
-**Причины:**
-
-1. **Модель не привязана к документу**
-
-```html
-<body data-model="player">
-    <!-- Элементы внутри смогут использовать переменные модели -->
-</body>
-```
-
-2. **Изменение через указатель**
-
-```cpp
-// После изменения данных уведомить модель
-player.health = 50;
-model.DirtyVariable("health");
-```
-
-3. **Структура не зарегистрирована**
-
-```cpp
-// Для сложных типов нужна регистрация
-if (auto itemModel = model.RegisterStruct<Item>()) {
-    itemModel.RegisterMember("name", &Item::name);
-}
-```
-
-### Data Model не создаётся
-
-```cpp
-auto model = context->CreateDataModel("player");
-if (!model) {
-    // Модель с таким именем уже существует
-    // Или контекст nullptr
-}
-```
-
-## Проблемы рендеринга
-
-### Артефакты, мерцание
-
-**Причины:**
-
-1. **Неверный scissor rectangle**
-
-```cpp
-// Отключить scissor после рендеринга RmlUi
-context->Render();
-glDisable(GL_SCISSOR_TEST);  // OpenGL
-// или vkCmdSetScissor(cmd, 0, 1, &fullScreenScissor);  // Vulkan
-```
-
-2. **Неверный viewport**
-
-```cpp
-// Восстановить viewport после RmlUi
-int viewport[4];
-glGetIntegerv(GL_VIEWPORT, viewport);
-context->Render();
-glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-```
-
-### Текст размытый
-
-**Причины:**
-
-1. **Несоответствие DPI**
-
-```cpp
-// Установить правильный dp ratio
-float dpi = getMonitorDPI();
-float dpRatio = dpi / 96.0f;  // 96 DPI = базовый
-context->SetDensityIndependentPixelRatio(dpRatio);
-```
-
-2. **Неверное позиционирование пикселей**
-
-```cpp
-// Элементы должны быть на целых пикселях
-element->SetProperty("left", "100px");  // Не 100.5px
-```
-
-### Текстуры не отображаются
-
-**Причины:**
-
-1. **Неверный формат изображения**
-
-```cpp
-// RmlUi поддерживает только TGA из коробки
-// Для PNG/JPEG расширить RenderInterface::LoadTexture
-```
-
-2. **Текстура не загрузилась**
-
-```cpp
-bool success = Rml::GetRenderInterface()->LoadTexture(
-    handle, dimensions, "texture.png"
-);
-if (!success) {
-    // Текстура не загружена
-}
-```
-
-## Проблемы с памятью
-
-### Утечки памяти
-
-**Проверка:**
-
-```cpp
-// После Shutdown все ресурсы должны быть освобождены
-Rml::Shutdown();
-
-// Если есть утечки, проверьте:
-// 1. EventListener не удалён
-// 2. Compiled geometry не освобождена
-// 3. Текстуры не освобождены
-```
-
-### Высокое потребление памяти
-
-**Решения:**
-
-```cpp
-// Освободить неиспользуемые ресурсы
-Rml::ReleaseTextures();
-Rml::ReleaseFontResources();
-
-// Выгрузить неиспользуемые документы
-context->UnloadDocument(oldDocument);
-```
-
-## Отладка
-
-### Включить логирование
-
-```cpp
-class VerboseSystemInterface : public Rml::SystemInterface {
-    bool LogMessage(Rml::Log::Type type, const Rml::String& message) override {
-        const char* prefix = "";
-        switch (type) {
-            case Rml::Log::LT_ERROR:   prefix = "ERROR"; break;
-            case Rml::Log::LT_WARNING: prefix = "WARN"; break;
-            case Rml::Log::LT_INFO:    prefix = "INFO"; break;
-            case Rml::Log::LT_DEBUG:   prefix = "DEBUG"; break;
-        }
-        std::fprintf(stderr, "[RmlUi %s] %s\n", prefix, message.c_str());
-        return true;
-    }
-};
-```
-
-### Использовать Debugger
-
-```cpp
-Rml::Debugger::Initialise(context);
-Rml::Debugger::SetVisible(true);
-
-// F8 - toggle debugger
-// Ctrl+Shift+I - Element Inspector
-// Ctrl+Shift+S - Style Editor
-```
-
-### Проверить состояние элемента
-
-```cpp
-void debugElement(Rml::Element* element) {
-    std::printf("Element: %s\n", element->GetTagName().c_str());
-    std::printf("  ID: %s\n", element->GetId().c_str());
-    std::printf("  Classes: %s\n", element->GetClassNames().c_str());
-    std::printf("  Visible: %s\n", element->IsVisible() ? "yes" : "no");
-    std::printf("  Size: %.0fx%.0f\n",
-        element->GetBoxSize().x, element->GetBoxSize().y);
-}
-```
-
-## Коды ошибок
-
-| Сообщение                  | Причина                       | Решение                           |
-|----------------------------|-------------------------------|-----------------------------------|
-| `Failed to load font face` | Файл шрифта не найден         | Проверить путь                    |
-| `No font family`           | Шрифт не загружен             | LoadFontFace перед использованием |
-| `Failed to load document`  | Файл RML не найден            | Проверить путь                    |
-| `Invalid texture handle`   | Текстура не создана           | Проверить GenerateTexture         |
-| `Context not found`        | Контекст удалён или не создан | Проверить CreateContext           |
-| `Data model not found`     | Модель не создана             | CreateDataModel перед привязкой   |
+## Сравнение производительности
+
+| Техника           | Draw Calls | CPU    | GPU     | Сложность |
+|-------------------|------------|--------|---------|-----------|
+| Default RmlUi     | 100-500    | High   | Low     | Low       |
+| Compiled Geometry | 10-50      | Low    | Medium  | Medium    |
+| Texture Atlas     | 5-20       | Low    | High    | High      |
+| Batch + Atlas     | 1-5        | Lowest | Highest | Very High |
+
+## Чеклист оптимизаций
+
+- [ ] Compiled Geometry для статической геометрии
+- [ ] Texture Atlas для всех UI текстур
+- [ ] Batch сортировка по текстуре
+- [ ] Data Bindings вместо SetInnerRML
+- [ ] Pool allocator для частых аллокаций
+- [ ] Tracy профилирование
+- [ ] Zero-copy sync из ECS
+- [ ] Job System для загрузки
+- [ ] Staging buffer pool
+
+## Резюме
+
+1. **GPU-driven rendering**: Compiled Geometry → один раз в GPU, потом только draw
+2. **Batch по текстурам**: минимизация pipeline stalls
+3. **SoA data layout**: кэш-friendly синхронизация ECS ↔ UI
+4. **Pool allocation**: избегание heap fragmentation
+5. **Job System**: асинхронная загрузка без блокировки main thread

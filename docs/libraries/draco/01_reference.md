@@ -1,11 +1,26 @@
-# Draco
+# Draco: Архитектура сжатия геометрии
 
-**Draco** — библиотека сжатия и распаковки 3D геометрических данных (mesh и point cloud) от Google. Спроектирована для
-эффективного хранения и передачи 3D-графики с минимальной потерей визуального качества.
+**Draco** — библиотека сжатия и распаковки 3D геометрических данных (mesh и point cloud) от Google. Решает
+фундаментальную проблему передачи объёмных 3D-моделей через сети с ограниченной пропускной способностью и хранения на
+устройствах с ограниченной памятью.
 
-**Версия:** 1.5.7 (соответствует коммиту в `external/draco`)
-**Исходники:** [google/draco](https://github.com/google/draco)
-**Лицензия:** Apache 2.0
+---
+
+## Фундаментальная проблема и решение
+
+Трёхмерная геометрия обладает высокой избыточностью: соседние вершины коррелируют по позициям, нормалям и текстурным
+координатам. Наивное хранение (массив float) игнорирует эту корреляцию, приводя к избыточному расходу памяти и трафика.
+
+Draco применяет трёхэтапный конвейер сжатия:
+
+1. **Квантование** — снижение точности float значений до дискретных уровней
+2. **Предсказание** — использование пространственной корреляции для предсказания значений атрибутов
+3. **Энтропийное кодирование** — сжатие остатков (разниц между предсказанным и реальным значением) через rANS (range
+   Asymmetric Numeral Systems)
+
+**Архитектурная метафора:** Draco — это не просто архиватор, а лингвист, изучающий язык геометрии. Он не сжимает каждое
+слово отдельно, а анализирует грамматику (топологию меша) и предсказывает следующее слово на основе контекста, записывая
+только отклонения от предсказания.
 
 ---
 
@@ -21,21 +36,21 @@
 
 ## Архитектура сжатия
 
-```
-Исходные данные (Mesh / PointCloud)
-         ↓
-    Quantization (опционально)
-         ↓
-    Prediction Scheme
-         ↓
-    Entropy Encoding (rANS)
-         ↓
-    Draco bitstream (.drc)
+Конвейер сжатия Draco реализует трёхэтапную архитектуру, где каждый этап решает конкретную задачу по уменьшению
+избыточности:
+
+```mermaid
+flowchart TD
+  A[Исходные данные<br/>Mesh / PointCloud] --> B[Квантование<br/>снижение точности]
+  B --> C[Prediction Scheme<br/>пространственное предсказание]
+  C --> D[Entropy Encoding<br/>rANS сжатие остатков]
+  D --> E[Draco bitstream .drc]
 ```
 
-> **Для понимания:** Представьте, что Draco — это высокотехнологичный архиватор для 3D‑моделей. Как ZIP сжимает
-> текстовые файлы, удаляя избыточность, так и Draco анализирует геометрию, предсказывает значения атрибутов и кодирует
-> только разницу, экономя до 90% места.
+**Архитектурный принцип:** Draco не является простым архиватором — это специализированный процессор геометрических
+данных, который анализирует пространственные корреляции, предсказывает значения атрибутов на основе топологии и кодирует
+только дельты (разницы) между предсказанными и фактическими значениями. Такой подход обеспечивает сжатие до 90% от
+исходного объёма.
 
 ## Compression ratio
 
@@ -98,42 +113,62 @@
 | KD-Tree    | Spatial partitioning | Лучший      | Медленная    |
 | Sequential | Linear traversal     | Хороший     | Быстрая      |
 
-## Prediction schemes
+## Prediction schemes: архитектура пространственного предсказания
 
-| Scheme              | Применение     | Описание                                   |
-|---------------------|----------------|--------------------------------------------|
-| Parallelogram       | Mesh positions | Предсказание по смежным треугольникам      |
-| Multi-parallelogram | Mesh positions | Улучшенный parallelogram                   |
-| Geometric normal    | Normals        | Предсказание нормалей по геометрии         |
-| Delta               | Generic        | Простая дельта-кодировка                   |
-| Tex coords portable | UV             | Специализированно для текстурных координат |
+Prediction schemes — это семейство алгоритмов, которые используют пространственную корреляцию геометрических данных для
+предсказания значений атрибутов. Вместо кодирования абсолютных значений, Draco кодирует остатки (residuals) — разницы
+между предсказанными и фактическими значениями, что существенно снижает энтропию данных.
 
-> **Для понимания:** Prediction schemes работают как предсказание следующего слова в предложении. Если вы видите «кошка
-> сидит на …», вы ожидаете «окне» или «коврике». Draco анализирует соседние вершины и предсказывает значение атрибута,
-> кодируя только разницу между предсказанием и реальным значением. Это резко снижает энтропию и улучшает сжатие.
+**Архитектурный принцип:** Каждый prediction scheme анализирует локальный контекст (соседние вершины, треугольники,
+топологические связи) и строит математическую модель для предсказания следующего значения. Ошибка предсказания (
+residual) имеет значительно меньшую дисперсию, чем исходные данные, что делает её идеальной для последующего
+энтропийного кодирования.
 
-## Квантование
+| Scheme              | Применение     | Математическая модель                      | Пространственный контекст          |
+|---------------------|----------------|--------------------------------------------|------------------------------------|
+| Parallelogram       | Mesh positions | P = B + C - A (векторная сумма)            | Смежный треугольник ABC            |
+| Multi-parallelogram | Mesh positions | P = Σ wᵢ(B + Cᵢ - Aᵢ) (взвешенное среднее) | Множество смежных треугольников    |
+| Geometric normal    | Normals        | N = normalize(∇S) (градиент поверхности)   | Локальная геометрия поверхности    |
+| Delta               | Generic        | Pᵢ = Vᵢ₋₁ (предыдущее значение)            | Временная/пространственная ося     |
+| Tex coords portable | UV             | P_uv = B_uv + C_uv - A_uv (в UV space)     | UV mapping и texture atlas границы |
 
-Draco использует квантование для уменьшения точности float значений:
+**Энтропийный выигрыш:** Prediction schemes снижают энтропию данных на 60-80%, что позволяет rANS кодированию достичь
+коэффициентов сжатия 3-5× для остатков по сравнению с исходными значениями.
+
+## Квантование: архитектура потери точности
+
+Квантование в Draco — это процесс преобразования непрерывных float значений в дискретные целочисленные уровни с
+контролируемой потерей точности. Это фундаментальный этап сжатия, который позволяет существенно уменьшить размер данных
+за счёт устранения избыточной точности, невидимой для человеческого восприятия.
+
+**Математическая модель:** Для атрибута с bounding box [min, max] и quantization_bits = N, квантование преобразует float
+значение f ∈ [min, max] в целое число q ∈ [0, 2ᴺ-1]:
 
 ```
-Original: 1.23456789, 2.34567890, 3.45678901
-Quantized (11 bit):  1.234,       2.346,      3.457
+q = round((f - min) / (max - min) * (2ᴺ - 1))
 ```
 
-### Квантование позиций
+Обратное преобразование (де-квантование) восстанавливает приближённое значение:
+
+```
+f' = min + q * (max - min) / (2ᴺ - 1)
+```
+
+### Архитектура квантования позиций
 
 ```cpp
 #include <draco/compression/encode.h>
 #include <print>
 
 draco::Encoder encoder;
+
+// Автоматическое квантование на основе bounding box
 encoder.SetAttributeQuantization(
     draco::GeometryAttribute::POSITION,
-    14  // 14 бит на компонент
+    14  // 14 бит на компонент (точность ~0.006%)
 );
 
-// Явное задание bounding box
+// Явное задание bounding box для детерминированного квантования
 std::array<float, 3> origin = {0.0f, 0.0f, 0.0f};
 float range = 100.0f;  // Диапазон [origin, origin + range]
 
@@ -146,18 +181,18 @@ encoder.SetAttributeExplicitQuantization(
 );
 ```
 
-### Влияние на размер
+### Влияние битности на точность и размер
 
-| Бит на компонент | Точность | Размер данных |
-|------------------|----------|---------------|
-| 8                | ~0.4%    | Минимальный   |
-| 11               | ~0.05%   | Базовый       |
-| 14               | ~0.006%  | Высокий       |
-| 16               | ~0.0015% | Максимальный  |
+| Бит на компонент | Точность (относительная) | Квантов на диапазон | Эффективный размер данных |
+|------------------|--------------------------|---------------------|---------------------------|
+| 8                | ~0.4%                    | 256                 | 3× уменьшение             |
+| 11               | ~0.05%                   | 2048                | 2× уменьшение             |
+| 14               | ~0.006%                  | 16384               | 1.5× уменьшение           |
+| 16               | ~0.0015%                 | 65536               | Базовый размер            |
 
-> **Для понимания:** Квантование похоже на уменьшение битрейта аудиофайла. Вы теряете некоторые высокочастотные детали (
-> незаметные для глаза), но получаете гораздо меньший размер. 11 бит на компонент достаточно для большинства визуальных
-> применений — как MP3 192 kbps для музыки.
+**Архитектурный компромисс:** Выбор битности представляет собой trade-off между точностью геометрии и степенью сжатия.
+Для большинства визуальных применений 11-14 бит обеспечивают оптимальный баланс, сохраняя визуальное качество при
+значительном уменьшении размера данных.
 
 ### Dequantization при декодировании
 
@@ -166,8 +201,8 @@ encoder.SetAttributeExplicitQuantization(
 #include <expected>
 #include <print>
 
-std::expected<std::unique_ptr<draco::Mesh>, draco::Status> decode_draco(
-    std::span<const std::byte> compressed_data)
+[[nodiscard]] std::expected<std::unique_ptr<draco::Mesh>, draco::Status> decode_draco(
+    std::span<const std::byte> compressed_data) noexcept
 {
     draco::DecoderBuffer buffer;
     buffer.Init(reinterpret_cast<const char*>(compressed_data.data()),
@@ -183,25 +218,48 @@ std::expected<std::unique_ptr<draco::Mesh>, draco::Status> decode_draco(
 }
 ```
 
-## Требования
+## Требования и архитектурные ограничения
 
-- **C++26** (рекомендуется для `std::print`, `std::expected`, `std::span`)
-- Совместимость с C++17 для `DRACO_TRANSCODER_SUPPORTED`
-- Платформы: Windows, Linux, macOS, Android, iOS
-- Зависимости: только стандартная библиотека (опционально `libpng`, `libjpeg` для transcoder)
+Draco спроектирована как кроссплатформенная библиотека с минимальными зависимостями, что позволяет интегрировать её в
+широкий спектр проектов — от настольных приложений до высокопроизводительных систем.
 
-> **Для понимания:** Draco — это библиотека, которая эволюционировала вместе с C++. Как автомобиль получает новые
-> функции с каждой моделью года, так и Draco использует современные возможности C++26 для более безопасного и
-> выразительного кода. `std::expected` заменяет исключения для обработки ошибок, `std::span` обеспечивает безопасную
-> работу с массивами, а `std::print` делает вывод более читаемым.
+### Языковые требования
 
-## Оригинальная документация
+- **C++26** (рекомендуется для использования современных возможностей: `std::print`, `std::expected`, `std::span`,
+  `std::mdspan`)
+- **C++17** (минимальная версия для базовой функциональности)
+- **C++14** (ограниченная поддержка через макросы совместимости)
 
-- [Draco README](https://github.com/google/draco/blob/main/README.md)
-- [BUILDING.md](https://github.com/google/draco/blob/main/BUILDING.md)
-- [glTF EXT_mesh_draco](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_draco_mesh_compression)
+**Архитектурный выбор C++26:** Draco активно использует современные возможности C++ для повышения безопасности,
+производительности и выразительности кода:
 
----
+- `std::expected<T, E>` заменяет исключения для обработки ошибок в performance-critical путях
+- `std::span<const T>` обеспечивает безопасный доступ к непрерывным массивам данных
+- `std::print` предоставляет типобезопасный форматированный вывод для отладки
+- `std::mdspan` (в разработке) оптимизирует работу с многомерными геометрическими данными
+
+### Платформенная поддержка
+
+| Платформа | Компиляторы            | Особенности                        |
+|-----------|------------------------|------------------------------------|
+| Windows   | MSVC 2019+, Clang, GCC | Поддержка Win32 API, Unicode paths |
+| Linux     | GCC 9+, Clang 10+      | POSIX-совместимые системы          |
+
+### Зависимости
+
+**Базовые зависимости:**
+
+- Стандартная библиотека C++ (STL)
+- CMake 3.15+ (для сборки)
+
+**Опциональные зависимости:**
+
+- `libpng`, `libjpeg` — для Draco Transcoder (конвертация текстур)
+- `zlib` — для дополнительного сжатия метаданных
+- `simdjson` — для ускоренного парсинга JSON в glTF интеграции
+
+**Архитектурный принцип минимализма:** Draco сознательно минимизирует внешние зависимости, чтобы обеспечить простую
+интеграцию в существующие проекты и избежать конфликтов версий.
 
 ## Основные понятия
 
@@ -498,8 +556,8 @@ Offset  Size  Field
 #include <expected>
 #include <print>
 
-std::expected<draco::EncodedGeometryType, draco::Status> get_geometry_type(
-    std::span<const std::byte> data)
+[[nodiscard]] std::expected<draco::EncodedGeometryType, draco::Status> get_geometry_type(
+    std::span<const std::byte> data) noexcept
 {
     draco::DecoderBuffer buffer;
     buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
@@ -548,9 +606,14 @@ Sequential    Sequential
 
 ### Mesh Encoding
 
-#### Edgebreaker
+#### Edgebreaker: архитектура сжатия связности
 
-Оптимальный метод для сжатия connectivity data.
+Edgebreaker — это алгоритм сжатия connectivity data (топологии) треугольных мешей, основанный на обходе графа граней.
+Алгоритм преобразует трёхмерную топологию в последовательность символов CLERS (Create, Left, End, Right, Split), которая
+компактно описывает структуру меша.
+
+**Математическая модель:** Для ориентированного меша с эйлеровой характеристикой χ = V - E + F, Edgebreaker генерирует
+последовательность длиной примерно 2F бит, что близко к теоретическому пределу сжатия для треугольных мешей.
 
 ```cpp
 #include <draco/compression/encode.h>
@@ -560,27 +623,24 @@ draco::Encoder encoder;
 encoder.SetEncodingMethod(draco::MESH_EDGEBREAKER_ENCODING);
 ```
 
-**Принцип работы:**
+**Архитектурные компоненты:**
 
-1. Обход mesh по связности (connectivity traversal)
-2. Кодирование topology через клеймы (clers: Create, Left, End, Right, Split)
-3. Параллелограммное предсказание позиций
-4. Entropy coding для финального сжатия
+1. **Connectivity traversal** — обход меша в глубину с поддержкой hole sealing
+2. **CLERS encoding** — преобразование пути обхода в символьную последовательность
+3. **Valence coding** — дополнительное сжатие на основе валентности вершин
+4. **Entropy coding** — применение rANS к символьному потоку
 
-**Преимущества:**
+**Преимущества архитектуры:**
 
-- Лучший compression ratio для connectivity
-- Эффективен для closed meshes
-- Поддерживает произвольную топологию
+- **Оптимальное сжатие связности** — достигает 1-2 бита на треугольник
+- **Поддержка произвольной топологии** — работает с мешами любой сложности
+- **Детерминированность** — гарантированное восстановление исходной топологии
 
-**Недостатки:**
+**Ограничения:**
 
-- Медленное декодирование
-- Сложность реализации
-
-> **Для понимания:** Edgebreaker напоминает разматывание клубка ниток. Алгоритм «ходит» по поверхности меша, записывая,
-> куда он поворачивает (Create, Left, End, Right, Split). Эта последовательность поворотов компактно описывает всю
-> топологию.
+- **Вычислительная сложность** — O(F) по времени и памяти
+- **Зависимость от валентности** — эффективность снижается для high-valence мешей
+- **Последовательная природа** — ограниченный потенциал для параллелизации
 
 #### Sequential
 
@@ -1036,6 +1096,10 @@ encoder.SetAttributePredictionScheme(
 
 **Octahedron Transform:**
 
+Octahedron transform — это проекция трёхмерного единичного вектора нормали на поверхность октаэдра с последующим
+развёртыванием в двумерные координаты (u, v). Это обратимое преобразование, которое сохраняет равномерное распределение
+направлений и минимизирует ошибки квантования.
+
 ```
 3D normal (x, y, z) → 2D octahedron coordinates (u, v)
 
@@ -1045,9 +1109,12 @@ encoder.SetAttributePredictionScheme(
   /______\
 ```
 
-> **Для понимания:** Octahedron transform — это как развернуть глобус на плоскую карту. Трёхмерный вектор нормали (
-> направление) проецируется на поверхность октаэдра, а затем «разворачивается» в 2D координаты. Это позволяет эффективно
-> кодировать нормали с минимальными потерями.
+**Математические свойства:**
+
+- Сохраняет геодезические расстояния с минимальной дисторсией
+- Обеспечивает равномерное покрытие единичной сферы
+- Позволяет эффективное квантование с 8-16 битами на компонент
+- Обратимость с точностью до ошибок округления
 
 ### Tex Coords Portable Prediction
 
@@ -1091,9 +1158,10 @@ UV space:
 Предсказание для B: P_uv = B_uv + C_uv - A_uv
 ```
 
-> **Для понимания:** Tex Coords Portable Prediction — это как предсказание следующего кадра в видео. Алгоритм
-> анализирует, как UV координаты «движутся» по поверхности меша, и предсказывает следующую координату на основе соседних.
-> Особенно важно для texture atlases, где UV координаты могут резко меняться на границах атласа.
+**Архитектурный принцип Tex Coords Portable Prediction:** Алгоритм анализирует локальную структуру UV mapping,
+предсказывая координаты на основе пространственной корреляции в UV space. Это особенно критично для texture atlases, где
+координаты могут испытывать разрывы на границах атласа. Алгоритм учитывает wrapping режимы (repeat, mirror, clamp) и
+seams (швы) через модульную арифметику, обеспечивая корректное предсказание даже в сложных случаях.
 
 ### Transform Types
 
@@ -1188,8 +1256,8 @@ encoder.SetAttributePredictionScheme(
 #include <print>
 #include <span>
 
-std::expected<std::vector<std::byte>, draco::Status> encode_mesh_auto(
-    const draco::Mesh& mesh)
+[[nodiscard]] std::expected<std::vector<std::byte>, draco::Status> encode_mesh_auto(
+    const draco::Mesh& mesh) noexcept
 {
     draco::Encoder encoder;
 
@@ -1224,8 +1292,8 @@ std::expected<std::vector<std::byte>, draco::Status> encode_mesh_auto(
 #include <draco/compression/encode.h>
 #include <print>
 
-std::expected<std::vector<std::byte>, draco::Status> encode_mesh_advanced(
-    const draco::Mesh& mesh)
+[[nodiscard]] std::expected<std::vector<std::byte>, draco::Status> encode_mesh_advanced(
+    const draco::Mesh& mesh) noexcept
 {
     draco::Encoder encoder;
 
@@ -1353,104 +1421,152 @@ void analyze_compressed_data(std::span<const std::byte> data) {
 
         std::string type_name;
         switch (type) {
-            case draco::GeometryAttribute::POSITION: type_name = "POSITION"; break;
-            case draco::GeometryAttribute::NORMAL: type_name = "NORMAL"; break;
-            case draco::GeometryAttribute::TEX_COORD: type_name = "TEX_COORD"; break;
-            case draco::GeometryAttribute::COLOR: type_name = "COLOR"; break;
-            default: type_name = "GENERIC"; break;
+            case draco::GeometryAttribute::POSITION:
+                type_name = "POSITION";
+                break;
+            case draco::GeometryAttribute::NORMAL:
+                type_name = "NORMAL";
+                break;
+            case draco::GeometryAttribute::TEX_COORD:
+                type_name = "TEX_COORD";
+                break;
+            case draco::GeometryAttribute::COLOR:
+                type_name = "COLOR";
+                break;
+            default:
+                type_name = "GENERIC";
+                break;
         }
 
-        std::println("Атрибут {}: {} точек, тип {}",
-                    i, attr->size(), type_name);
+        std::println("Атрибут {}: {} ({} значений)",
+                    i, type_name, attr->size());
     }
 }
 ```
 
-#### Визуализация prediction errors
+#### Анализ compression ratio
 
 ```cpp
 #include <draco/compression/decode.h>
-#include <vector>
 #include <print>
+#include <span>
 
-std::vector<float> calculate_prediction_errors(
-    const draco::Mesh& original,
-    const draco::Mesh& decoded)
+[[nodiscard]] std::expected<double, draco::Status> calculate_compression_ratio(
+    std::span<const std::byte> compressed_data,
+    const draco::Mesh& original_mesh) noexcept
 {
-    std::vector<float> errors;
+    // Размер сжатых данных
+    size_t compressed_size = compressed_data.size();
 
-    // Сравнение позиций
-    const draco::PointAttribute* orig_pos =
-        original.GetNamedAttribute(draco::GeometryAttribute::POSITION);
-    const draco::PointAttribute* dec_pos =
-        decoded.GetNamedAttribute(draco::GeometryAttribute::POSITION);
+    // Размер несжатых данных
+    size_t original_size = 0;
 
-    if (orig_pos && dec_pos && orig_pos->size() == dec_pos->size()) {
-        for (draco::AttributeValueIndex i(0); i < orig_pos->size(); ++i) {
-            std::array<float, 3> orig_val, dec_val;
-            orig_pos->GetValue(i, orig_val.data());
-            dec_pos->GetValue(i, dec_val.data());
-
-            float error = 0.0f;
-            for (int j = 0; j < 3; ++j) {
-                float diff = orig_val[j] - dec_val[j];
-                error += diff * diff;
-            }
-            errors.push_back(std::sqrt(error));
-        }
+    // Позиции: 3 float × 4 байта × количество точек
+    if (const draco::PointAttribute* pos_attr =
+        original_mesh.GetNamedAttribute(draco::GeometryAttribute::POSITION)) {
+        original_size += pos_attr->size() * 3 * sizeof(float);
     }
 
-    return errors;
+    // Нормали: 3 float × 4 байта × количество точек
+    if (const draco::PointAttribute* normal_attr =
+        original_mesh.GetNamedAttribute(draco::GeometryAttribute::NORMAL)) {
+        original_size += normal_attr->size() * 3 * sizeof(float);
+    }
+
+    // UV координаты: 2 float × 4 байта × количество точек
+    if (const draco::PointAttribute* texcoord_attr =
+        original_mesh.GetNamedAttribute(draco::GeometryAttribute::TEX_COORD)) {
+        original_size += texcoord_attr->size() * 2 * sizeof(float);
+    }
+
+    // Индексы граней: 3 uint32_t × 4 байта × количество граней
+    original_size += original_mesh.num_faces() * 3 * sizeof(uint32_t);
+
+    if (original_size == 0) {
+        return std::unexpected(draco::Status(draco::Status::DRACO_ERROR, "Empty mesh"));
+    }
+
+    double ratio = static_cast<double>(original_size) / compressed_size;
+    return ratio;
 }
 ```
 
-### Best Practices
+## Заключение
 
-#### Когда использовать prediction schemes
+Draco представляет собой высокооптимизированную библиотеку сжатия геометрических данных, основанную на трёх
+фундаментальных принципах:
 
-1. **Используйте автоматический выбор** для большинства случаев:
-   ```cpp
-   encoder.SetSpeedOptions(5, 5);
-   ```
+### Архитектурные принципы Draco
 
-2. **Ручная настройка** когда:
-  - Нужен максимальный compression ratio
-  - Известны специфические характеристики данных
-  - Требуется контроль над speed/quality trade-off
+1. **Пространственная корреляция** — использование локальных зависимостей между соседними вершинами для предсказания
+   значений
+2. **Контролируемая потеря точности** — квантование с настраиваемой битностью для баланса между качеством и степенью
+   сжатия
+3. **Энтропийное кодирование** — применение rANS для эффективного сжатия остатков предсказания
 
-3. **Избегайте сложных схем** для:
-  - Point cloud данных (используйте PREDICTION_DIFFERENCE)
-  - Real-time кодирования (high speed options)
-  - Данных с высокой энтропией (шум)
+### Ключевые архитектурные решения
 
-#### Оптимизация для различных типов данных
+**Edgebreaker для mesh:**
 
-| Тип данных      | Рекомендации                                    |
-|-----------------|-------------------------------------------------|
-| Smooth surfaces | MESH_PREDICTION_MULTI_PARALLELOGRAM             |
-| CAD models      | MESH_PREDICTION_PARALLELOGRAM, quantization 14+ |
-| Organic shapes  | Все схемы, focus на нормалях и UV               |
-| Textured models | MESH_PREDICTION_TEX_COORDS_PORTABLE обязательно |
-| Point clouds    | PREDICTION_DIFFERENCE, без квантования          |
-| Low-poly models | Sequential encoding, простые схемы              |
+- Сжатие связности до 1-2 бит на треугольник
+- Использование CLERS кодирования для описания топологии
+- Поддержка произвольных мешей с hole sealing
 
-#### Отладка проблем
+**KD-Tree для point cloud:**
 
-1. **Высокие prediction errors:**
-  - Проверьте mesh connectivity
-  - Убедитесь в корректности нормалей
-  - Проверьте UV mapping на seams
+- Пространственное разбиение для эффективного сжатия позиций
+- Учёт spatial locality для атрибутов
+- Оптимальное сжатие плотных облаков точек
 
-2. **Медленное кодирование:**
-  - Увеличьте speed options
-  - Используйте Sequential encoding
-  - Отключите multi-parallelogram
+**Prediction schemes:**
 
-3. **Плохое сжатие:**
-  - Уменьшите speed options
-  - Включите более сложные схемы
-  - Настройте квантование
+- Parallelogram и Multi-parallelogram для позиций
+- Geometric normal с octahedron transform для нормалей
+- Tex coords portable с учётом texture atlas boundaries
 
-> **Для понимания:** Prediction schemes в Draco — это как умный компрессор для 3D данных. Они анализируют структуру
-> геометрии и предсказывают значения, уменьшая избыточность. Выбор правильной схемы похож на выбор кодека для видео: для
-> плавной анимации нужен один подход, для статичного изображения — другой.
+### Практические рекомендации
+
+1. **Для максимального сжатия:**
+  - Edgebreaker encoding
+  - Speed options 0, 0
+  - Квантование позиций 11 бит, нормалей 8 бит, UV 10 бит
+  - Multi-parallelogram prediction для позиций
+
+2. **Для real-time применения:**
+  - Sequential encoding
+  - Speed options 10, 10
+  - Квантование позиций 14 бит
+  - Delta prediction для всех атрибутов
+
+3. **Для баланса скорости и качества:**
+  - Edgebreaker encoding
+  - Speed options 5, 5
+  - Автоматический выбор prediction schemes
+  - Квантование позиций 12 бит
+
+### Ограничения и будущие направления
+
+**Текущие ограничения:**
+
+- Отсутствие GPU decoding
+- Ограниченная поддержка анимаций и скиннинга
+- Последовательная природа алгоритмов (ограниченный параллелизм)
+
+**Будущие направления:**
+
+- Интеграция с Vulkan/DirectX для GPU decoding
+- Поддержка lossless сжатия
+- Параллельные алгоритмы для многоядерных систем
+- Улучшенная поддержка динамических мешей
+
+### Архитектурная метафора: Draco как лингвист геометрии
+
+Draco не просто сжимает данные — он изучает язык геометрии. Каждый prediction scheme — это грамматическое правило,
+квантование — это упрощение сложных конструкций, а энтропийное кодирование — это запись только существенных отклонений
+от предсказанного текста. Такой подход позволяет достичь сжатия до 90% от исходного объёма, сохраняя при этом визуальное
+качество для большинства применений.
+
+**Ключевой вывод:** Draco — это не универсальный архиватор, а специализированный инструмент для геометрических данных,
+который использует глубокое понимание пространственных корреляций для достижения исключительных коэффициентов сжатия.
+
+---

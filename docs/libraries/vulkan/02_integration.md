@@ -1,218 +1,270 @@
-# Vulkan Libraries — Integration
+# Vulkan в ProjectV: Интеграция
 
-<!-- anchor: 02_integration -->
+> **Для понимания:** Инициализация Vulkan — это как запуск ядерного реактора. Нужно проверить сотни параметров,
+> подключить системы безопасности, и только потом дать команду "старт". В ProjectV мы делаем это один раз, но делаем
+> правильно.
 
-Подключение volk и VMA к ProjectV, инициализация Modern Vulkan 1.4 с обязательными расширениями.
+## CMake конфигурация
 
----
+### Git Submodules (рекомендуется для ProjectV)
 
-## CMake Integration
+ProjectV использует подмодули для внешних зависимостей. Структура:
 
-### Вариант 1: Git Submodules (рекомендуется)
+```
+ProjectV/
+├── external/
+│   ├── volk/                    # Мета-лоадер
+│   ├── VulkanMemoryAllocator/   # Аллокатор памяти
+│   └── SDL/                     # Оконная система
+└── CMakeLists.txt
+```
 
 ```cmake
-# Добавить подмодули
-# git submodule add https://github.com/zeux/volk.git external/volk
-# git submodule add https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git external/VulkanMemoryAllocator
+# CMakeLists.txt ProjectV
+cmake_minimum_required(VERSION 3.25)
+project(ProjectV LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Обязательные макросы для Vulkan
+add_compile_definitions(VK_NO_PROTOTYPES)
+
+# Подключение подмодулей
 add_subdirectory(external/volk)
 add_subdirectory(external/VulkanMemoryAllocator)
+add_subdirectory(external/SDL)
 
-target_link_libraries(ProjectV PRIVATE
-  volk::volk
-  VulkanMemoryAllocator::VulkanMemoryAllocator
+# Наш движок
+add_executable(ProjectV
+    src/main.cpp
+    src/vulkan/context.cpp
+    src/vulkan/device.cpp
 )
-```
-
-### Вариант 2: FetchContent
-
-```cmake
-include(FetchContent)
-
-FetchContent_Declare(
-  volk
-  GIT_REPOSITORY https://github.com/zeux/volk.git
-  GIT_TAG master
-)
-
-FetchContent_Declare(
-  VMA
-  GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-  GIT_TAG master
-)
-
-FetchContent_MakeAvailable(volk VMA)
-
-target_link_libraries(ProjectV PRIVATE
-  volk::volk
-  VulkanMemoryAllocator::VulkanMemoryAllocator
-)
-```
-
-### Вариант 3: vcpkg
-
-```
-# vcpkg.json
-{
-    "dependencies": [
-        "volk",
-        "vulkan-memory-allocator"
-    ]
-}
-
-# CMakeLists.txt
-find_package(volk REQUIRED)
-find_package(VulkanMemoryAllocator REQUIRED)
 
 target_link_libraries(ProjectV PRIVATE
     volk::volk
-    VulkanMemoryAllocator::VulkanMemoryAllocator
+    GPUOpen::VulkanMemoryAllocator
+    SDL3::SDL3
 )
-```
 
----
+# Для отладки
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(ProjectV PRIVATE DEBUG)
+    target_compile_definitions(ProjectV PRIVATE VK_VALIDATION)
+endif()
+```
 
 ## Инициализация Modern Vulkan 1.4
 
-### 1. volk инициализация (первым делом!)
+### 1. Обработка ошибок через std::expected
 
 ```cpp
-#include <volk.h>
-#include <print>
+// vulkan/error.hpp
+#pragma once
 #include <expected>
+#include <print>
+#include <string>
 
 enum class VulkanError {
     VolkInitFailed,
     InstanceCreationFailed,
     DeviceCreationFailed,
-    VmaInitFailed
+    VmaInitFailed,
+    SurfaceCreationFailed,
+    SwapchainCreationFailed,
+    NoSuitableDevice
 };
 
 template<typename T>
 using VulkanResult = std::expected<T, VulkanError>;
 
+inline std::string to_string(VulkanError error) {
+    switch (error) {
+        case VulkanError::VolkInitFailed: return "volk initialization failed";
+        case VulkanError::InstanceCreationFailed: return "Vulkan instance creation failed";
+        case VulkanError::DeviceCreationFailed: return "Vulkan device creation failed";
+        case VulkanError::VmaInitFailed: return "VMA initialization failed";
+        case VulkanError::SurfaceCreationFailed: return "Surface creation failed";
+        case VulkanError::SwapchainCreationFailed: return "Swapchain creation failed";
+        case VulkanError::NoSuitableDevice: return "No suitable Vulkan device found";
+        default: return "Unknown Vulkan error";
+    }
+}
+```
+
+### 2. Vulkan Context с RAII
+
+```cpp
+// vulkan/context.hpp
+#pragma once
+#define VK_NO_PROTOTYPES
+#include <volk.h>
+#include <vk_mem_alloc.h>
+#include <SDL3/SDL_video.h>
+#include <print>
+#include <expected>
+#include "error.hpp"
+
 class VulkanContext {
+public:
+    VulkanContext() = default;
+    ~VulkanContext() { shutdown(); }
+
+    // Non-copyable
+    VulkanContext(const VulkanContext&) = delete;
+    VulkanContext& operator=(const VulkanContext&) = delete;
+
+    // Movable
+    VulkanContext(VulkanContext&& other) noexcept;
+    VulkanContext& operator=(VulkanContext&& other) noexcept;
+
+    VulkanResult<void> initialize(SDL_Window* window);
+    void shutdown();
+
+    VkInstance instance() const { return instance_; }
+    VkPhysicalDevice physical_device() const { return physical_device_; }
+    VkDevice device() const { return device_; }
+    VmaAllocator allocator() const { return allocator_; }
+    VkQueue graphics_queue() const { return graphics_queue_; }
+    VkQueue compute_queue() const { return compute_queue_; }
+
+private:
+    VulkanResult<void> create_instance();
+    VulkanResult<void> create_surface(SDL_Window* window);
+    VulkanResult<void> select_physical_device();
+    VulkanResult<void> create_device();
+    VulkanResult<void> create_allocator();
+    VulkanResult<void> get_queues();
+
     VkInstance instance_ = VK_NULL_HANDLE;
+    VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;
     VmaAllocator allocator_ = VK_NULL_HANDLE;
+    VkQueue graphics_queue_ = VK_NULL_HANDLE;
+    VkQueue compute_queue_ = VK_NULL_HANDLE;
+    VkQueue transfer_queue_ = VK_NULL_HANDLE;
 
-public:
-    VulkanResult<void> initialize() {
-        // 1. Инициализация volk (ДО любого Vulkan вызова!)
-        VkResult result = volkInitialize();
-        if (result != VK_SUCCESS) {
-            std::print(stderr, "volkInitialize failed: {}\n", result);
-            return std::unexpected(VulkanError::VolkInitFailed);
-        }
+    uint32_t graphics_family_ = 0;
+    uint32_t compute_family_ = 0;
+    uint32_t transfer_family_ = 0;
 
-        // 2. Проверка версии Vulkan
-        uint32_t version = volkGetInstanceVersion();
-        if (version < VK_API_VERSION_1_3) {
-            std::print(stderr, "Vulkan 1.3+ required, got: {}.{}.{}\n",
-                       VK_VERSION_MAJOR(version),
-                       VK_VERSION_MINOR(version),
-                       VK_VERSION_PATCH(version));
-            return std::unexpected(VulkanError::VolkInitFailed);
-        }
+    VmaVulkanFunctions vulkan_functions_ = {};
+};
+```
 
-        // 3. Создание instance с Modern Vulkan features
-        if (!create_instance()) {
-            return std::unexpected(VulkanError::InstanceCreationFailed);
-        }
+### 3. Реализация инициализации
 
-        // 4. Загрузка instance функций
-        volkLoadInstance(instance_);
+```cpp
+// vulkan/context.cpp
+#include "context.hpp"
 
-        // 5. Выбор physical device
-        if (!select_physical_device()) {
-            return std::unexpected(VulkanError::DeviceCreationFailed);
-        }
-
-        // 6. Создание logical device с обязательными расширениями
-        if (!create_device()) {
-            return std::unexpected(VulkanError::DeviceCreationFailed);
-        }
-
-        // 7. Загрузка device функций
-        volkLoadDevice(device_);
-
-        // 8. Инициализация VMA
-        if (!initialize_vma()) {
-            return std::unexpected(VulkanError::VmaInitFailed);
-        }
-
-        std::print("Vulkan context initialized: API {}.{}.{}\n",
-                   VK_VERSION_MAJOR(version),
-                   VK_VERSION_MINOR(version),
-                   VK_VERSION_PATCH(version));
-
-        return {};
+VulkanResult<void> VulkanContext::initialize(SDL_Window* window) {
+    // 1. Инициализация volk (ПЕРВЫМ делом!)
+    if (volkInitialize() != VK_SUCCESS) {
+        std::println(stderr, "volkInitialize failed");
+        return std::unexpected(VulkanError::VolkInitFailed);
     }
 
-private:
-    bool create_instance() {
-        // Обязательные extensions для ProjectV
-        const char* instance_extensions[] = {
-            VK_KHR_SURFACE_EXTENSION_NAME,
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,  // или другие платформы
-            VK_EXT_DEBUG_UTILS_EXTENSION_NAME,    // Для отладки
-        };
+    uint32_t version = volkGetInstanceVersion();
+    std::println("Vulkan loader version: {}.{}.{}",
+                 VK_VERSION_MAJOR(version),
+                 VK_VERSION_MINOR(version),
+                 VK_VERSION_PATCH(version));
 
-        // Vulkan 1.3 core features
-        VkApplicationInfo app_info = {};
-        app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        app_info.pApplicationName = "ProjectV";
-        app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.pEngineName = "ProjectV Engine";
-        app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        app_info.apiVersion = VK_API_VERSION_1_3;  // Минимум 1.3
-
-        VkInstanceCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        create_info.pApplicationInfo = &app_info;
-        create_info.enabledExtensionCount = static_cast<uint32_t>(std::size(instance_extensions));
-        create_info.ppEnabledExtensionNames = instance_extensions;
-
-        // Validation layers (только в debug)
-        #ifdef _DEBUG
-        const char* validation_layers[] = {
-            "VK_LAYER_KHRONOS_validation"
-        };
-        create_info.enabledLayerCount = static_cast<uint32_t>(std::size(validation_layers));
-        create_info.ppEnabledLayerNames = validation_layers;
-        #endif
-
-        VkResult result = volkCreateInstance(&create_info, nullptr, &instance_);
-        return result == VK_SUCCESS;
+    // 2. Создание instance
+    if (auto result = create_instance(); !result) {
+        return std::unexpected(result.error());
     }
 
-    bool select_physical_device() {
-        uint32_t device_count = 0;
-        vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+    // 3. Загрузка instance функций
+    volkLoadInstance(instance_);
 
-        if (device_count == 0) {
-            std::print(stderr, "No Vulkan devices found\n");
-            return false;
-        }
-
-        std::vector<VkPhysicalDevice> devices(device_count);
-        vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
-
-        // Выбираем устройство с поддержкой обязательных features
-        for (auto device : devices) {
-            if (check_device_features(device)) {
-                physical_device_ = device;
-                return true;
-            }
-        }
-
-        std::print(stderr, "No suitable Vulkan device found\n");
-        return false;
+    // 4. Создание surface
+    if (auto result = create_surface(window); !result) {
+        return std::unexpected(result.error());
     }
 
-    bool check_device_features(VkPhysicalDevice device) {
-        // Проверяем обязательные features Vulkan 1.3
+    // 5. Выбор physical device
+    if (auto result = select_physical_device(); !result) {
+        return std::unexpected(result.error());
+    }
+
+    // 6. Создание logical device
+    if (auto result = create_device(); !result) {
+        return std::unexpected(result.error());
+    }
+
+    // 7. Загрузка device функций (прямые вызовы драйвера!)
+    volkLoadDevice(device_);
+
+    // 8. Создание VMA allocator
+    if (auto result = create_allocator(); !result) {
+        return std::unexpected(result.error());
+    }
+
+    // 9. Получение очередей
+    if (auto result = get_queues(); !result) {
+        return std::unexpected(result.error());
+    }
+
+    std::println("Vulkan context initialized successfully");
+    return {};
+}
+
+VulkanResult<void> VulkanContext::create_instance() {
+    // Обязательные extensions для SDL3 и отладки
+    const char* instance_extensions[] = {
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_WIN32_SURFACE_EXTENSION_NAME,  // Windows
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,    // Для отладки
+    };
+
+    VkApplicationInfo app_info = {};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pApplicationName = "ProjectV";
+    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.pEngineName = "ProjectV Engine";
+    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.apiVersion = VK_API_VERSION_1_3;  // Минимум 1.3
+
+    VkInstanceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.pApplicationInfo = &app_info;
+    create_info.enabledExtensionCount = static_cast<uint32_t>(std::size(instance_extensions));
+    create_info.ppEnabledExtensionNames = instance_extensions;
+
+    // Validation layers только в Debug
+#ifdef DEBUG
+    const char* validation_layers[] = {
+        "VK_LAYER_KHRONOS_validation"
+    };
+    create_info.enabledLayerCount = static_cast<uint32_t>(std::size(validation_layers));
+    create_info.ppEnabledLayerNames = validation_layers;
+#endif
+
+    if (vkCreateInstance(&create_info, nullptr, &instance_) != VK_SUCCESS) {
+        return std::unexpected(VulkanError::InstanceCreationFailed);
+    }
+
+    return {};
+}
+
+VulkanResult<void> VulkanContext::select_physical_device() {
+    uint32_t device_count = 0;
+    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+
+    if (device_count == 0) {
+        return std::unexpected(VulkanError::NoSuitableDevice);
+    }
+
+    std::vector<VkPhysicalDevice> devices(device_count);
+    vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+
+    // Проверяем обязательные features Vulkan 1.3
+    for (auto device : devices) {
         VkPhysicalDeviceFeatures2 features2 = {};
         features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
@@ -246,282 +298,282 @@ private:
         vkGetPhysicalDeviceFeatures2(device, &features2);
 
         // Проверяем обязательные features
-        if (!timeline_features.timelineSemaphore) {
-            std::print(stderr, "Device missing timeline semaphores\n");
-            return false;
-        }
-        if (!bda_features.bufferDeviceAddress) {
-            std::print(stderr, "Device missing buffer device address\n");
-            return false;
-        }
-        if (!indexing_features.descriptorBindingPartiallyBound ||
-            !indexing_features.runtimeDescriptorArray) {
-            std::print(stderr, "Device missing descriptor indexing features\n");
-            return false;
-        }
-        if (!sync2_features.synchronization2) {
-            std::print(stderr, "Device missing synchronization2\n");
-            return false;
-        }
-        if (!dynamic_rendering_features.dynamicRendering) {
-            std::print(stderr, "Device missing dynamic rendering\n");
-            return false;
+        if (!timeline_features.timelineSemaphore ||
+            !bda_features.bufferDeviceAddress ||
+            !indexing_features.descriptorBindingPartiallyBound ||
+            !indexing_features.runtimeDescriptorArray ||
+            !sync2_features.synchronization2 ||
+            !dynamic_rendering_features.dynamicRendering) {
+            continue;
         }
 
-        return true;
-    }
-
-    bool create_device() {
-        // Обязательные device extensions
-        const char* device_extensions[] = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-            VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
-            VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-            VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-            VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-        };
-
-        // Опциональные extensions (если поддерживаются)
-        std::vector<const char*> optional_extensions;
-        if (check_extension_support(VK_EXT_SHADER_OBJECT_EXTENSION_NAME)) {
-            optional_extensions.push_back(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
-        }
-        if (check_extension_support(VK_EXT_MESH_SHADER_EXTENSION_NAME)) {
-            optional_extensions.push_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
-        }
-
-        // Объединяем обязательные и опциональные
-        std::vector<const char*> all_extensions;
-        all_extensions.insert(all_extensions.end(),
-                             std::begin(device_extensions),
-                             std::end(device_extensions));
-        all_extensions.insert(all_extensions.end(),
-                             optional_extensions.begin(),
-                             optional_extensions.end());
-
-        // Очереди: graphics + compute + transfer
-        float queue_priority = 1.0f;
-
-        VkDeviceQueueCreateInfo queue_infos[3] = {};
-
-        // Graphics queue
-        uint32_t graphics_family = find_queue_family(VK_QUEUE_GRAPHICS_BIT);
-        queue_infos[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queue_infos[0].queueFamilyIndex = graphics_family;
-        queue_infos[0].queueCount = 1;
-        queue_infos[0].pQueuePriorities = &queue_priority;
-
-        // Compute queue (желательно отдельная)
-        uint32_t compute_family = find_queue_family(VK_QUEUE_COMPUTE_BIT);
-        if (compute_family != graphics_family) {
-            queue_infos[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_infos[1].queueFamilyIndex = compute_family;
-            queue_infos[1].queueCount = 1;
-            queue_infos[1].pQueuePriorities = &queue_priority;
-        }
-
-        // Transfer queue (желательно отдельная)
-        uint32_t transfer_family = find_queue_family(VK_QUEUE_TRANSFER_BIT);
-        if (transfer_family != graphics_family && transfer_family != compute_family) {
-            queue_infos[2].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_infos[2].queueFamilyIndex = transfer_family;
-            queue_infos[2].queueCount = 1;
-            queue_infos[2].pQueuePriorities = &queue_priority;
-        }
-
-        // Features chain (как в check_device_features)
-        VkPhysicalDeviceFeatures2 features2 = {};
-        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-
-        VkPhysicalDeviceTimelineSemaphoreFeatures timeline_features = {};
-        timeline_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
-        timeline_features.timelineSemaphore = VK_TRUE;
-
-        VkPhysicalDeviceBufferDeviceAddressFeatures bda_features = {};
-        bda_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-        bda_features.bufferDeviceAddress = VK_TRUE;
-
-        VkPhysicalDeviceDescriptorIndexingFeatures indexing_features = {};
-        indexing_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-        indexing_features.descriptorBindingPartiallyBound = VK_TRUE;
-        indexing_features.runtimeDescriptorArray = VK_TRUE;
-        indexing_features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-
-        VkPhysicalDeviceSynchronization2Features sync2_features = {};
-        sync2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-        sync2_features.synchronization2 = VK_TRUE;
-
-        VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_features = {};
-        dynamic_rendering_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-        dynamic_rendering_features.dynamicRendering = VK_TRUE;
-
-        // Chain
-        features2.pNext = &timeline_features;
-        timeline_features.pNext = &bda_features;
-        bda_features.pNext = &indexing_features;
-        indexing_features.pNext = &sync2_features;
-        sync2_features.pNext = &dynamic_rendering_features;
-
-        VkDeviceCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        create_info.pNext = &features2;
-        create_info.queueCreateInfoCount = 3;
-        create_info.pQueueCreateInfos = queue_infos;
-        create_info.enabledExtensionCount = static_cast<uint32_t>(all_extensions.size());
-        create_info.ppEnabledExtensionNames = all_extensions.data();
-
-        VkResult result = vkCreateDevice(physical_device_, &create_info, nullptr, &device_);
-        return result == VK_SUCCESS;
-    }
-
-    bool initialize_vma() {
-        VmaAllocatorCreateInfo create_info = {};
-        create_info.instance = instance_;
-        create_info.physicalDevice = physical_device_;
-        create_info.device = device_;
-        create_info.vulkanApiVersion = VK_API_VERSION_1_3;
-
-        // Включаем BDA поддержку
-        create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-
-        // Включаем memory budgeting (опционально)
-        #ifdef VK_EXT_memory_budget
-        if (check_extension_support(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME)) {
-            create_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
-        }
-        #endif
-
-        VkResult result = vmaCreateAllocator(&create_info, &allocator_);
-        return result == VK_SUCCESS;
-    }
-
-    uint32_t find_queue_family(VkQueueFlags required_flags) {
-        uint32_t queue_family_count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
-
-        std::vector<VkQueueFamilyProperties> families(queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, families.data());
-
-        for (uint32_t i = 0; i < queue_family_count; ++i) {
-            if (families[i].queueFlags & required_flags) {
-                return i;
-            }
-        }
-
-        return 0;  // Fallback
-    }
-
-    bool check_extension_support(const char* extension_name) {
-        uint32_t extension_count = 0;
-        vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, nullptr);
-
-        std::vector<VkExtensionProperties> extensions(extension_count);
-        vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &extension_count, extensions.data());
-
-        for (const auto& extension : extensions) {
-            if (strcmp(extension.extensionName, extension_name) == 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-};
-
-// Использование
-int main() {
-    VulkanContext context;
-    if (auto result = context.initialize(); !result) {
-        std::print(stderr, "Failed to initialize Vulkan\n");
-        return 1;
-    }
-
-    std::print("Vulkan ready for ProjectV\n");
-    return 0;
-}
-```
-
----
-
-## Получение очередей и завершение инициализации
-
-```cpp
-class VulkanContext {
-    // ... предыдущие поля ...
-
-    VkQueue graphics_queue_ = VK_NULL_HANDLE;
-    VkQueue compute_queue_ = VK_NULL_HANDLE;
-    VkQueue transfer_queue_ = VK_NULL_HANDLE;
-
-public:
-    VulkanResult<void> initialize() {
-        // ... предыдущая инициализация ...
-
-        // 9. Получение очередей
-        vkGetDeviceQueue(device_, graphics_family_, 0, &graphics_queue_);
-        vkGetDeviceQueue(device_, compute_family_, 0, &compute_queue_);
-        vkGetDeviceQueue(device_, transfer_family_, 0, &transfer_queue_);
-
-        // 10. Проверка timeline semaphores
-        if (!check_timeline_semaphore_support()) {
-            return std::unexpected(VulkanError::DeviceCreationFailed);
-        }
-
-        std::print("Vulkan context fully initialized\n");
+        physical_device_ = device;
         return {};
     }
 
-    VkQueue graphics_queue() const { return graphics_queue_; }
-    VkQueue compute_queue() const { return compute_queue_; }
-    VkQueue transfer_queue() const { return transfer_queue_; }
-    VmaAllocator allocator() const { return allocator_; }
+    return std::unexpected(VulkanError::NoSuitableDevice);
+}
 
-private:
-    bool check_timeline_semaphore_support() {
-        VkSemaphoreTypeCreateInfo timeline_info = {};
-        timeline_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
-        timeline_info.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
-        timeline_info.initialValue = 0;
+VulkanResult<void> VulkanContext::create_device() {
+    // Обязательные device extensions
+    const char* device_extensions[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
+        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+    };
 
-        VkSemaphoreCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        create_info.pNext = &timeline_info;
+    // Очереди: graphics + compute + transfer
+    float queue_priority = 1.0f;
+    std::vector<VkDeviceQueueCreateInfo> queue_infos;
 
-        VkSemaphore semaphore = VK_NULL_HANDLE;
-        VkResult result = vkCreateSemaphore(device_, &create_info, nullptr, &semaphore);
+    // Graphics queue
+    uint32_t queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, families.data());
 
-        if (result == VK_SUCCESS) {
-            vkDestroySemaphore(device_, semaphore, nullptr);
-            return true;
+    // Находим подходящие queue families
+    for (uint32_t i = 0; i < queue_family_count; ++i) {
+        if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            graphics_family_ = i;
+            VkDeviceQueueCreateInfo info = {};
+            info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            info.queueFamilyIndex = i;
+            info.queueCount = 1;
+            info.pQueuePriorities = &queue_priority;
+            queue_infos.push_back(info);
         }
-
-        return false;
+        if ((families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) && i != graphics_family_) {
+            compute_family_ = i;
+            VkDeviceQueueCreateInfo info = {};
+            info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            info.queueFamilyIndex = i;
+            info.queueCount = 1;
+            info.pQueuePriorities = &queue_priority;
+            queue_infos.push_back(info);
+        }
+        if ((families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
+            i != graphics_family_ && i != compute_family_) {
+            transfer_family_ = i;
+            VkDeviceQueueCreateInfo info = {};
+            info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            info.queueFamilyIndex = i;
+            info.queueCount = 1;
+            info.pQueuePriorities = &queue_priority;
+            queue_infos.push_back(info);
+        }
     }
 
-    uint32_t graphics_family_ = 0;
-    uint32_t compute_family_ = 0;
-    uint32_t transfer_family_ = 0;
-};
-```
+    // Features chain
+    VkPhysicalDeviceFeatures2 features2 = {};
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
----
+    VkPhysicalDeviceTimelineSemaphoreFeatures timeline_features = {};
+    timeline_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+    timeline_features.timelineSemaphore = VK_TRUE;
 
-## Заключение
+    VkPhysicalDeviceBufferDeviceAddressFeatures bda_features = {};
+    bda_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+    bda_features.bufferDeviceAddress = VK_TRUE;
 
-Инициализация Modern Vulkan 1.4 для ProjectV требует:
+    VkPhysicalDeviceDescriptorIndexingFeatures indexing_features = {};
+    indexing_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+    indexing_features.descriptorBindingPartiallyBound = VK_TRUE;
+    indexing_features.runtimeDescriptorArray = VK_TRUE;
+    indexing_features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 
-1. **volk** как мета-лоадер для избежания overhead драйвера
-2. **VMA** для эффективного управления памятью с TLSF алгоритмом
-3. **Обязательные расширения**: timeline semaphores, buffer device address, descriptor indexing, synchronization2,
-   dynamic rendering
-4. **Опциональные расширения**: shader objects, mesh shaders для будущих оптимизаций
-5. **Отдельные очереди**: graphics, compute, transfer для параллелизма
+    VkPhysicalDeviceSynchronization2Features sync2_features = {};
+    sync2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+    sync2_features.synchronization2 = VK_TRUE;
 
-Эта конфигурация обеспечивает основу для:
+    VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering_features = {};
+    dynamic_rendering_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynamic_rendering_features.dynamicRendering = VK_TRUE;
 
-- Bindless rendering (descriptor indexing)
-- GPU-driven rendering (buffer device address)
-- Асинхронные вычисления (timeline semaphores)
-- Современный рендеринг без legacy (dynamic rendering)
+    // Chain
+    features2.pNext = &timeline_features;
+    timeline_features.pNext = &bda_features;
+    bda_features.pNext = &indexing_features;
+    indexing_features.pNext = &sync2_features;
+    sync2_features.pNext = &dynamic_rendering_features;
 
-Следующий шаг: продвинутые техники в `03_advanced.md`.
+    VkDeviceCreateInfo create_info = {};
+    create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    create_info.pNext = &features2;
+    create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_infos.size());
+    create_info.pQueueCreateInfos = queue_infos.data();
+    create_info.enabledExtensionCount = static_cast<uint32_t>(std::size(device_extensions));
+    create_info.ppEnabledExtensionNames = device_extensions;
+
+    if (vkCreateDevice(physical_device_, &create_info, nullptr, &device_) != VK_SUCCESS) {
+        return std::unexpected(VulkanError::DeviceCreationFailed);
+    }
+
+    return {};
+}
+
+VulkanResult<void> VulkanContext::create_allocator() {
+    VmaAllocatorCreateInfo create_info = {};
+    create_info.instance = instance_;
+    create_info.physicalDevice = physical_device_;
+    create_info.device = device_;
+    create_info.vulkanApiVersion = VK_API_VERSION_1_3;
+
+    // Включаем BDA поддержку
+    create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+    // Интеграция с volk: передаём функции напрямую
+    create_info.pVulkanFunctions = &vulkan_functions_;
+
+    // Получаем функции Vulkan через volk
+    VmaVulkanFunctions vulkan_functions = {};
+    vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+    vulkan_functions.vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties;
+    vulkan_functions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
+    vulkan_functions.vkAllocateMemory = vkAllocateMemory;
+    vulkan_functions.vkFreeMemory = vkFreeMemory;
+    vulkan_functions.vkMapMemory = vkMapMemory;
+    vulkan_functions.vkUnmapMemory = vkUnmapMemory;
+    vulkan_functions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
+    vulkan_functions.vkInvalidateMappedMemoryRanges = vkInvalidateMappedMemoryRanges;
+    vulkan_functions.vkBindBufferMemory = vkBindBufferMemory;
+    vulkan_functions.vkBindImageMemory = vkBindImageMemory;
+    vulkan_functions.vkGetBufferMemoryRequirements = vkGetBufferMemoryRequirements;
+    vulkan_functions.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
+    vulkan_functions.vkCreateBuffer = vkCreateBuffer;
+    vulkan_functions.vkDestroyBuffer = vkDestroyBuffer;
+    vulkan_functions.vkCreateImage = vkCreateImage;
+    vulkan_functions.vkDestroyImage = vkDestroyImage;
+    vulkan_functions.vkCmdCopyBuffer = vkCmdCopyBuffer;
+
+    // Для Vulkan 1.3+ и BDA
+    vulkan_functions.vkGetBufferDeviceAddress = vkGetBufferDeviceAddress;
+    vulkan_functions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
+    vulkan_functions.vkGetDeviceImageMemoryRequirements = vkGetDeviceImageMemoryRequirements;
+
+    create_info.pVulkanFunctions = &vulkan_functions;
+
+    if (vmaCreateAllocator(&create_info, &allocator_) != VK_SUCCESS) {
+        return std::unexpected(VulkanError::VmaInitFailed);
+    }
+
+    std::println("VMA allocator created with BDA support");
+    return {};
+}
+
+VulkanResult<void> VulkanContext::get_queues() {
+    vkGetDeviceQueue(device_, graphics_family_, 0, &graphics_queue_);
+    vkGetDeviceQueue(device_, compute_family_, 0, &compute_queue_);
+    vkGetDeviceQueue(device_, transfer_family_, 0, &transfer_queue_);
+
+    std::println("Queues acquired: graphics={}, compute={}, transfer={}",
+                 static_cast<void*>(graphics_queue_),
+                 static_cast<void*>(compute_queue_),
+                 static_cast<void*>(transfer_queue_));
+    return {};
+}
+
+VulkanResult<void> VulkanContext::create_surface(SDL_Window* window) {
+    if (!SDL_Vulkan_CreateSurface(window, instance_, nullptr, &surface_)) {
+        std::println(stderr, "SDL_Vulkan_CreateSurface failed");
+        return std::unexpected(VulkanError::SurfaceCreationFailed);
+    }
+
+    // Проверяем, что surface поддерживается выбранным устройством
+    VkBool32 supported = VK_FALSE;
+    vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, graphics_family_, surface_, &supported);
+
+    if (!supported) {
+        vkDestroySurfaceKHR(instance_, surface_, nullptr);
+        surface_ = VK_NULL_HANDLE;
+        return std::unexpected(VulkanError::SurfaceCreationFailed);
+    }
+
+    std::println("Vulkan surface created successfully");
+    return {};
+}
+
+void VulkanContext::shutdown() {
+    if (allocator_ != VK_NULL_HANDLE) {
+        vmaDestroyAllocator(allocator_);
+        allocator_ = VK_NULL_HANDLE;
+    }
+
+    if (device_ != VK_NULL_HANDLE) {
+        vkDestroyDevice(device_, nullptr);
+        device_ = VK_NULL_HANDLE;
+    }
+
+    if (surface_ != VK_NULL_HANDLE) {
+        vkDestroySurfaceKHR(instance_, surface_, nullptr);
+        surface_ = VK_NULL_HANDLE;
+    }
+
+    if (instance_ != VK_NULL_HANDLE) {
+        vkDestroyInstance(instance_, nullptr);
+        instance_ = VK_NULL_HANDLE;
+    }
+
+    graphics_queue_ = VK_NULL_HANDLE;
+    compute_queue_ = VK_NULL_HANDLE;
+    transfer_queue_ = VK_NULL_HANDLE;
+
+    std::println("Vulkan context shutdown complete");
+}
+
+VulkanContext::VulkanContext(VulkanContext&& other) noexcept
+    : instance_(other.instance_)
+    , surface_(other.surface_)
+    , physical_device_(other.physical_device_)
+    , device_(other.device_)
+    , allocator_(other.allocator_)
+    , graphics_queue_(other.graphics_queue_)
+    , compute_queue_(other.compute_queue_)
+    , transfer_queue_(other.transfer_queue_)
+    , graphics_family_(other.graphics_family_)
+    , compute_family_(other.compute_family_)
+    , transfer_family_(other.transfer_family_)
+    , vulkan_functions_(other.vulkan_functions_) {
+
+    other.instance_ = VK_NULL_HANDLE;
+    other.surface_ = VK_NULL_HANDLE;
+    other.physical_device_ = VK_NULL_HANDLE;
+    other.device_ = VK_NULL_HANDLE;
+    other.allocator_ = VK_NULL_HANDLE;
+    other.graphics_queue_ = VK_NULL_HANDLE;
+    other.compute_queue_ = VK_NULL_HANDLE;
+    other.transfer_queue_ = VK_NULL_HANDLE;
+}
+
+VulkanContext& VulkanContext::operator=(VulkanContext&& other) noexcept {
+    if (this != &other) {
+        shutdown();
+
+        instance_ = other.instance_;
+        surface_ = other.surface_;
+        physical_device_ = other.physical_device_;
+        device_ = other.device_;
+        allocator_ = other.allocator_;
+        graphics_queue_ = other.graphics_queue_;
+        compute_queue_ = other.compute_queue_;
+        transfer_queue_ = other.transfer_queue_;
+        graphics_family_ = other.graphics_family_;
+        compute_family_ = other.compute_family_;
+        transfer_family_ = other.transfer_family_;
+        vulkan_functions_ = other.vulkan_functions_;
+
+        other.instance_ = VK_NULL_HANDLE;
+        other.surface_ = VK_NULL_HANDLE;
+        other.physical_device_ = VK_NULL_HANDLE;
+        other.device_ = VK_NULL_HANDLE;
+        other.allocator_ = VK_NULL_HANDLE;
+        other.graphics_queue_ = VK_NULL_HANDLE;
+        other.compute_queue_ = VK_NULL_HANDLE;
+        other.transfer_queue_ = VK_NULL_HANDLE;
+    }
+    return *this;
+}

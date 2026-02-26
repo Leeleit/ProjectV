@@ -1,1308 +1,746 @@
-## Производительность Slang
+# Slang: Продвинутые оптимизации и DOD
 
-<!-- anchor: 07_performance -->
+## Data-Oriented Design для шейдеров
 
-Оптимизации производительности компиляции и выполнения шейдеров Slang.
+### SoA vs AoS в шейдерах
 
----
-
-## Оптимизация времени компиляции
-
-### Модульная компиляция
-
-Модульная система Slang позволяет компилировать только изменённые модули:
-
-```
-Изменённый модуль → Перекомпиляция только этого модуля
-                         ↓
-Кэшированные модули → Линковка → SPIR-V
-```
-
-При изменении одного модуля в большой кодобазе (100+ файлов):
-
-- **GLSL**: полная перекомпиляция (10-30 секунд)
-- **Slang**: инкрементальная перекомпиляция (1-5 секунд)
-
-### Параметры компиляции
-
-```bash
-# Для разработки: быстрая компиляция
-slangc shader.slang -o shader.spv -target spirv -O1
-
-# Для production: максимальная оптимизация
-slangc shader.slang -o shader.spv -target spirv -O3
-
-# Параллельная компиляция (Slang API)
-# session->setEnableParallelCompilation(true);
-```
-
-### Кэширование модулей
-
-```cpp
-// Включение кэша на диске через Slang API
-slang::SessionDesc sessionDesc{};
-sessionDesc.enableEffectCache = true;
-sessionDesc.effectCachePath = "build/.slang_cache";
-```
-
-### Структура модулей для кэширования
-
-```
-shaders/
-├── core/           # Редко меняется → кэшируется надолго
-│   ├── types.slang
-│   └── math.slang
-├── materials/      # Иногда меняется
-│   └── pbr.slang
-└── render/         # Часто меняется → перекомпилируется
-    └── main.slang
-```
-
----
-
-## Оптимизация времени выполнения
-
-### Специализация generics
+Традиционный подход (AoS — Array of Structures) хранит данные вершины вместе:
 
 ```slang
-// Generic шейдер
-generic<T>
-struct Processor
+// AoS — плохо для cache locality при обработке одного поля
+struct Vertex
 {
-    T process(T input) { return input * 2.0; }
+    float3 position;
+    float3 normal;
+    float2 uv;
+    float4 color;
 };
 
-// Явная специализация для конкретного типа
-specialized<float>
-struct Processor<float>
+StructuredBuffer<Vertex> vertices;
+```
+
+SoA (Structure of Arrays) разделяет данные для последовательного доступа:
+
+```slang
+// SoA — хорошо для cache locality
+struct VertexBufferSoA
 {
-    float process(float input)
+    float3 positions[];
+    float3 normals[];
+    float2 uvs[];
+    float4 colors[];
+};
+
+StructuredBuffer<VertexBufferSoA> vertexBuffers;
+
+// Доступ: обрабатываем только нужное поле
+float3 p = vertexBuffers[0].positions[index];
+```
+
+> **Для понимания:** AoS — как шкаф с ящиками, где в каждом ящике лежит полный набор вещей (одежда + обувь +
+> аксессуары). Чтобы перебрать только обувь, нужно открыть все ящики. SoA — как несколько шкафов: один только с одеждой,
+> другой только с обувью. Перебрать всю обувь = открыть один шкаф.
+
+### Hot/Cold Data Separation
+
+Горячие данные (читаются каждый кадр):
+
+- Позиции вершин, нормали
+- Матрицы трансформации
+- Индексы видимых объектов
+
+Холодные данные (читаются редко):
+
+- Метаданные материалов
+- Параметры компиляции
+- Таблицы поиска (LUT)
+
+```slang
+// Hot data — часто обновляется
+struct FrameConstants
+{
+    float4x4 viewProj;
+    float4x4 invViewProj;
+    float3 cameraPos;
+    float time;
+    uint frameIndex;
+};
+
+// Cold data — статичные параметры
+struct MaterialConstants
+{
+    float4 baseColor;
+    float metallic;
+    float roughness;
+    float padding;
+};
+```
+
+### Cache Line Alignment в C++
+
+```cpp
+alignas(64) struct alignas(64) ShaderParameterBlock {
+    float4x4 viewProj;
+    float3 cameraPos;
+    float padding1;    // 4 байта → выравнивание до 16 байт
+    uint frameIndex;
+    float padding2[3]; // Выравнивание до 64 байт
+};
+
+static_assert(sizeof(ShaderParameterBlock) == 64, "Cache line aligned");
+static_assert(alignof(ShaderParameterBlock) == 64, "Cache line aligned");
+```
+
+## Zero-Copy загрузка шейдеров
+
+### Memory Mapping больших шейдеров
+
+```cpp
+#include <sys/mman.h>
+#include <fcntl.h>
+
+class MappedShaderSource {
+public:
+    bool load(const std::string& path) {
+        int fd = open(path.c_str(), O_RDONLY);
+        if (fd < 0) return false;
+
+        struct stat sb;
+        fstat(fd, &sb);
+        m_size = sb.st_size;
+
+        m_data = mmap(nullptr, m_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (m_data == MAP_FAILED) {
+            close(fd);
+            return false;
+        }
+
+        // Подсказка ядру о паттерне доступа
+        madvise(m_data, m_size, MADV_SEQUENTIAL);
+        return true;
+    }
+
+    std::span<const char> getSource() const {
+        return {static_cast<const char*>(m_data), m_size};
+    }
+
+    ~MappedShaderSource() {
+        if (m_data) munmap(m_data, m_size);
+    }
+
+private:
+    size_t m_size = 0;
+    void* m_data = nullptr;
+};
+```
+
+### Потоковая компиляция
+
+```cpp
+class StreamingShaderCompiler {
+public:
+    std::expected<VkShaderModule, std::string> compileAndUpload(
+        const MappedShaderSource& source,
+        slang::ISession* session,
+        VkDevice device,
+        const std::string& entryPoint,
+        VkShaderStageFlagBits stage)
     {
-        // Компилятор может применить специфичные оптимизации
-        return fma(input, 2.0, 0.0);  // FMA инструкция
+        Slang::ComPtr<slang::IBlob> diagnostics;
+
+        // Компиляция
+        auto module = session->loadModuleFromSourceString(
+            "stream_module",
+            "stream_module",
+            source.getSource().data(),
+            diagnostics.writeRef()
+        );
+
+        if (!module) {
+            return std::unexpected("Compilation failed");
+        }
+
+        // Получение SPIR-V
+        Slang::ComPtr<slang::IBlob> spirvCode;
+        module->getEntryPointCode(0, 0, spirvCode.writeRef(), diagnostics.writeRef());
+
+        // Создание VkShaderModule
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = spirvCode->getBufferSize();
+        createInfo.pCode = spirvCode->getBufferPointer();
+
+        VkShaderModule moduleHandle;
+        if (vkCreateShaderModule(device, &createInfo, nullptr, &moduleHandle) != VK_SUCCESS) {
+            return std::unexpected("Failed to create shader module");
+        }
+
+        return moduleHandle;
     }
 };
 ```
 
-### Инлайнинг функций
+## Многопоточная компиляция
 
-```slang
-// Принудительный инлайн для критичных функций
-[ForceInline]
-float criticalCalculation(float x)
-{
-    return x * 2.0 + 1.0;
-}
-
-// Запрет инлайна для больших функций
-[NoInline]
-float complexNoise(float3 p)
-{
-    // Сложные вычисления, инлайн ухудшит производительность
-    return fractalNoise(p, 8);
-}
-```
-
-### Группировка данных
-
-```slang
-// SOA (Structure of Arrays) для лучшей cache locality
-struct VoxelDataSOA
-{
-    float* densities;   // Все densities подряд
-    float3* colors;     // Все colors подряд
-    uint* materials;    // Все materials подряд
-};
-
-// Вместо AOS (Array of Structures)
-struct VoxelDataAOS
-{
-    float density;
-    float3 color;
-    uint material;
-};
-// Плохо для cache locality при обработке одного поля
-```
-
-### Shared memory в compute shaders
-
-```slang
-[numthreads(32, 32, 1)]
-void csMain(uint3 id : SV_DispatchThreadID, uint3 localId : SV_GroupThreadID)
-{
-    // Shared memory для данных, используемых в группе
-    groupshared float sharedData[32][32];
-
-    // Загрузка в shared memory
-    sharedData[localId.x][localId.y] = input[id.xy];
-
-    // Синхронизация перед использованием
-    GroupMemoryBarrierWithGroupSync();
-
-    // Обработка с быстрым доступом к shared memory
-    float result = process(sharedData, localId);
-    output[id.xy] = result;
-}
-```
-
----
-
-## Сравнение с GLSL/HLSL
-
-### Время компиляции
-
-| Сценарий                       | GLSL               | Slang (первая компиляция) | Slang (с кэшем) |
-|--------------------------------|--------------------|---------------------------|-----------------|
-| Большая кодобаза (100+ файлов) | 10-30 сек          | 15-45 сек                 | 1-5 сек         |
-| Изменение одного файла         | 10-30 сек (полная) | 1-3 сек (инкремент)       | 0.5-2 сек       |
-| Маленький проект (1-5 файлов)  | 0.1-0.5 сек        | 0.2-0.8 сек               | 0.1-0.3 сек     |
-
-### Размер SPIR-V
-
-| Метрика               | GLSL    | Slang  |
-|-----------------------|---------|--------|
-| Размер бинарника      | Базовый | +0-10% |
-| Количество инструкций | Базовое | +0-5%  |
-| Время выполнения      | Базовое | +0-5%  |
-
-Разница в размере и производительности выполнения минимальна, так как оба компилируются в один и тот же SPIR-V.
-
----
-
-## Профилирование
-
-### Измерение времени компиляции
-
-```bash
-# Встроенное измерение времени фаз
-slangc shader.slang -target spirv -o shader.spv -time-phases
-```
-
-### Slang API: измерение
+### Параллельная компиляция шейдеров
 
 ```cpp
-auto start = std::chrono::high_resolution_clock::now();
+#include <thread>
+#include <latch>
 
-Slang::ComPtr<slang::IBlob> spirvCode;
-linkedProgram->getEntryPointCode(0, 0, spirvCode.writeRef(), nullptr);
+class ParallelShaderCompiler {
+public:
+    struct CompileTask {
+        std::string sourcePath;
+        std::string entryPoint;
+        VkShaderStageFlagBits stage;
+        std::promise<VkShaderModule> promise;
+    };
 
-auto end = std::chrono::high_resolution_clock::now();
-auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    void initialize(uint32_t threadCount) {
+        m_threadCount = threadCount;
+        m_threads.resize(threadCount);
 
-std::cout << "Compilation time: " << duration.count() << "ms\n";
-std::cout << "SPIR-V size: " << spirvCode->getBufferSize() << " bytes\n";
+        for (uint32_t i = 0; i < threadCount; ++i) {
+            m_threads[i] = std::thread([this, i] { workerThread(i); });
+        }
+    }
+
+    std::future<VkShaderModule> submitTask(CompileTask task) {
+        auto future = task.promise.get_future();
+        {
+            std::scoped_lock lock(m_queueMutex);
+            m_queue.push(std::move(task));
+        }
+        m_cv.notify_one();
+        return future;
+    }
+
+    void shutdown() {
+        m_running = false;
+        m_cv.notify_all();
+        for (auto& t : m_threads) {
+            if (t.joinable()) t.join();
+        }
+    }
+
+private:
+    void workerThread(uint32_t id) {
+        while (m_running) {
+            CompileTask task;
+            {
+                std::unique_lock lock(m_queueMutex);
+                m_cv.wait(lock, [this] { return !m_queue.empty() || !m_running; });
+
+                if (!m_running && m_queue.empty()) break;
+                task = std::move(m_queue.front());
+                m_queue.pop();
+            }
+
+            // Компиляция в thread-local сессии
+            auto module = compileInSession(task);
+            task.promise.set_value(module);
+        }
+    }
+
+    VkShaderModule compileInSession(const CompileTask& task) {
+        // Thread-local slang session для избежания contention
+        thread_local auto session = createThreadLocalSession();
+        return doCompile(session, task);
+    }
+
+    std::atomic<bool> m_running{true};
+    uint32_t m_threadCount = 0;
+    std::vector<std::thread> m_threads;
+    std::mutex m_queueMutex;
+    std::condition_variable m_cv;
+    std::queue<CompileTask> m_queue;
+};
+```
+
+### Thread-Local сессия
+
+```cpp
+class ThreadLocalSlangSession {
+public:
+    slang::ISession* get() {
+        if (!m_session) {
+            m_session = createSession();
+        }
+        return m_session.get();
+    }
+
+private:
+    thread_local Slang::ComPtr<slang::ISession> m_session;
+
+    Slang::ComPtr<slang::ISession> createSession() {
+        Slang::ComPtr<slang::ISession> session;
+
+        slang::TargetDesc targetDesc{};
+        targetDesc.format = SLANG_SPIRV;
+        targetDesc.profile = m_globalSession->findProfile("spirv_1_5");
+
+        slang::SessionDesc sessionDesc{};
+        sessionDesc.targets = &targetDesc;
+        sessionDesc.targetCount = 1;
+
+        m_globalSession->createSession(sessionDesc, session.writeRef());
+        return session;
+    }
+
+    Slang::ComPtr<slang::IGlobalSession> m_globalSession;
+};
+```
+
+## GPU-Driven паттерны
+
+### Indirect Drawing с compute shader
+
+```slang
+// Compute shader: определяет что рисовать
+[numthreads(64, 1, 1)]
+void csMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= params.objectCount) return;
+
+    Object object = objects[id.x];
+
+    // Frustum culling
+    if (!isInFrustum(object.aabb, params.frustum)) return;
+
+    // LOD selection
+    float dist = distance(object.position, params.cameraPos);
+    uint lod = selectLOD(dist);
+
+    // Запись в indirect buffer
+    uint slot;
+    InterlockedAdd(drawCount[0], 1, slot);
+
+    DrawCommand cmd;
+    cmd.vertexCount = lodVertexCounts[lod];
+    cmd.instanceCount = 1;
+    cmd.firstVertex = lodVertexOffsets[lod];
+    cmd.firstInstance = slot;
+
+    drawCommands[slot] = cmd;
+}
+```
+
+### Buffer Device Address для zero-copy
+
+```slang
+// Shader получает указатели на буфера через push constants
+[[vk::push_constant]]
+struct DrawParams
+{
+    DeviceBuffer objects;      // Указатель на массив объектов
+    DeviceBuffer drawCommands; // Указатель на indirect commands
+    DeviceBuffer materials;   // Указатель на данные материалов
+    uint objectCount;
+} params;
+
+// GPU-driven rendering: CPU не трогает данные
+[numthreads(64, 1, 1)]
+void csMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= params.objectCount) return;
+
+    Object obj = params.objects.data[id.x];
+    Material mat = params.materials.data[obj.materialId];
+
+    // Полная обработка на GPU
+    float4 worldPos = mul(params.modelMatrix, float4(obj.position, 1.0));
+    float4 clipPos = mul(params.viewProj, worldPos);
+    float3 normal = normalize(mul((float3x3)obj.normalMatrix, mat.normal));
+
+    // Фрагментный shader должен вывести clipPos.w для depth
+    output.depth = clipPos.z / clipPos.w;
+}
+```
+
+```cpp
+// C++: только передача адресов
+void updateDrawParams(VkCommandBuffer cmd, VkBuffer objectBuffer, VkBuffer commandBuffer) {
+    VkBufferDeviceAddressInfo addrInfo{};
+    addrInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addrInfo.buffer = objectBuffer;
+    VkDeviceAddress objectAddr = vkGetBufferDeviceAddress(device, &addrInfo);
+
+    addrInfo.buffer = commandBuffer;
+    VkDeviceAddress commandAddr = vkGetBufferDeviceAddress(device, &addrInfo);
+
+    DrawParams params{};
+    params.objects = objectAddr;
+    params.drawCommands = commandAddr;
+
+    vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(params), &params);
+}
+```
+
+## Оптимизация descriptor sets
+
+### Bindless Rendering
+
+```slang
+// Массив текстур без фиксированного binding
+[[vk::binding(0, 0)]]
+Texture2D materialTextures[];  // 1000+ текстур
+
+[[vk::binding(1, 0)]]
+SamplerState linearSampler;
+
+float4 sampleMaterial(uint textureIndex, float2 uv)
+{
+    // Динамический индекс без изменения pipeline
+    return materialTextures[NonUniformResourceIndex(textureIndex)]
+        .Sample(linearSampler, uv);
+}
+```
+
+```cpp
+// C++: создание descriptor set с variable descriptor count
+VkDescriptorSetLayoutBinding binding{};
+binding.binding = 0;
+binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+binding.descriptorCount = 1024;  // Максимум текстур
+binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
+flagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+flagsInfo.pBindingFlags = &bindingFlags;
+
+VkDescriptorBindingFlags bindingFlags =
+    VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+    VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+```
+
+### Descriptor Pool Management
+
+```cpp
+class DescriptorPoolManager {
+public:
+    void initialize(VkDevice device, uint32_t maxSets) {
+        m_device = device;
+
+        // Preallocated pools для разных типов descriptors
+        VkDescriptorPoolSize sizes[] = {
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 256 },
+            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024 },
+            { VK_DESCRIPTOR_TYPE_SAMPLER, 64 },
+            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 256 },
+        };
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        poolInfo.maxSets = maxSets;
+        poolInfo.poolSizeCount = std::size(sizes);
+        poolInfo.pPoolSizes = sizes;
+
+        vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_pool);
+    }
+
+    std::expected<VkDescriptorSet, std::string> allocate(VkDescriptorSetLayout layout) {
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = m_pool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &layout;
+
+        VkDescriptorSet set;
+        if (vkAllocateDescriptorSets(m_device, &allocInfo, &set) != VK_SUCCESS) {
+            return std::unexpected("Failed to allocate descriptor set");
+        }
+
+        return set;
+    }
+
+private:
+    VkDevice m_device;
+    VkDescriptorPool m_pool;
+};
+```
+
+## Профилирование и отладка
+
+### Tracy интеграция
+
+```cpp
+#include <tracy/Tracy.hpp>
+
+class ProfiledShaderCompiler {
+public:
+    void compileWithProfiling(
+        const std::string& source,
+        const std::string& name)
+    {
+        ZoneScopedN("ShaderCompile");
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        // Компиляция
+        auto result = compile(source);
+
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now() - start
+        );
+
+        TracyPlot("Shader/CompileTimeUs", duration.count());
+        TracyPlot("Shader/Success", result.has_value() ? 1 : 0);
+
+        if (result) {
+            TracyPlot("Shader/SizeBytes",
+                static_cast<int64_t>(result->size()));
+        }
+    }
+
+    void loadWithProfiling(const std::string& path) {
+        ZoneScopedN("ShaderLoad");
+
+        auto start = std::chrono::high_resolution_clock::now();
+        auto data = readFile(path);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now() - start
+        );
+
+        TracyPlot("Shader/LoadTimeUs", duration.count());
+    }
+};
 ```
 
 ### Анализ SPIR-V
 
-```bash
-# Генерация SPIR-V ассемблера для анализа
-slangc shader.slang -target spirv-asm -o shader.spvasm
-
-# Подсчёт инструкций
-grep -c "Op" shader.spvasm
-```
-
----
-
-## Рекомендации
-
-### Организация кода
-
-1. **Выносить стабильный код в модули**: типы данных, математика, константы
-2. **Избегать циклических зависимостей**: модули должны иметь чёткую иерархию
-3. **Минимизировать зависимости между модулями**: меньше зависимостей — быстрее компиляция
-
-### Выбор стратегии компиляции
-
-| Сценарий       | Стратегия                              |
-|----------------|----------------------------------------|
-| Финальный билд | Offline компиляция через CMake, -O3    |
-| Разработка     | Runtime компиляция с кэшированием, -O1 |
-| CI/CD          | Offline компиляция, проверка ошибок    |
-
-### Память компилятора
-
 ```cpp
-// Освобождение ресурсов после компиляции
-session = nullptr;
-globalSession = nullptr;
-// Сборка мусора Slang
-```
+class SPIRVAnalyzer {
+public:
+    struct Stats {
+        uint32_t instructions;
+        uint32_t functions;
+        uint32_t uniforms;
+        uint32_t branchComplexity;
+    };
 
----
+    Stats analyze(const std::span<const uint32_t> spirv) {
+        Stats stats{};
 
-## Типичные проблемы
+        // Parse SPIR-V header
+        if (spirv.size() < 5) return stats;
 
-### Медленная компиляция
+        uint32_t idBound = spirv[4];
 
-**Причины:**
+        // Count OpInstructions (упрощённо)
+        for (size_t i = 5; i < spirv.size(); ) {
+            uint32_t op = spirv[i] & 0xFFFF;
+            uint32_t wordCount = spirv[i] >> 16;
 
-- Большое количество модулей с перекрёстными зависимостями
-- Глубокая вложенность `#include` или `import`
-- Сложные generic-конструкции без специализации
+            stats.instructions++;
 
-**Решения:**
+            switch (op) {
+                case 54:  // OpFunction
+                    stats.functions++;
+                    break;
+                case 59:  // OpVariable (uniform)
+                    stats.uniforms++;
+                    break;
+                case 330: // OpSelectionMerge
+                case 331: // OpBranchConditional
+                    stats.branchComplexity++;
+                    break;
+            }
 
-- Реорганизовать структуру модулей
-- Использовать кэширование
-- Явно специализировать generics для часто используемых типов
+            i += wordCount;
+        }
 
-### Большой размер SPIR-V
-
-**Причины:**
-
-- Отладочная информация (`-g`)
-- Неоптимизированный код
-- Дублирование кода через copy-paste
-
-**Решения:**
-
-- Использовать `-O` или `-O2`
-- Убрать отладочную информацию для production
-- Вынести общий код в функции или модули
-
----
-
-## Решение проблем Slang
-
-<!-- anchor: 08_troubleshooting -->
-
-Диагностика и устранение ошибок компиляции и интеграции с Vulkan.
-
----
-
-## Ошибки компиляции (slangc)
-
-### `error: no module named 'X' found`
-
-**Симптом:**
-
-```
-error: no module named 'math_utils' found
-```
-
-**Причины и решения:**
-
-1. Файл не в пути поиска:
-
-```bash
-slangc shader.slang -I shaders/common -I shaders/utils -o shader.spv -target spirv
-```
-
-2. Неверный синтаксис импорта:
-
-```slang
-// Неверно — использование путей
-import "shaders/common/math_utils";
-
-// Верно — только имя модуля
-import math_utils;
-```
-
-3. Неверное имя файла: файл должен называться `math_utils.slang`.
-
----
-
-### `error: expected ';'` / синтаксические ошибки
-
-**Частые причины:**
-
-```slang
-// Ошибка: атрибут без скобок
-[numthreads 8, 8, 8]
-void csMain() { }
-
-// Верно
-[numthreads(8, 8, 8)]
-void csMain() { }
-
-// Ошибка: неверный generic синтаксис
-generic T myFunc(T x) { }
-
-// Верно
-generic<T> T myFunc(T x) { return x; }
-```
-
----
-
-### `error: type 'X' does not conform to interface 'Y'`
-
-**Симптом:**
-
-```
-error: type 'MyMaterial' does not conform to interface 'IMaterial'
-```
-
-**Решение:** Проверьте, что реализованы все методы интерфейса:
-
-```slang
-interface IMaterial
-{
-    float3 albedo;
-    float roughness;
-    float3 evaluate(float3 viewDir, float3 lightDir);
-};
-
-// Неполная реализация — ошибка
-struct MyMaterial : IMaterial
-{
-    float3 albedo;
-    float roughness;
-    // evaluate() отсутствует
-};
-
-// Полная реализация
-struct MyMaterial : IMaterial
-{
-    float3 albedo;
-    float roughness;
-
-    float3 evaluate(float3 viewDir, float3 lightDir)
-    {
-        return albedo * max(dot(viewDir, lightDir), 0.0);
+        return stats;
     }
 };
 ```
 
----
+## Оптимизация времени компиляции
 
-### `error: cannot specialize generic with non-type argument`
+### Модульное кэширование
+
+```cmake
+# CMake: включение кэша эффектов
+set(SLANG_EFFECT_CACHE_DIR "${CMAKE_BINARY_DIR}/.slang_cache")
+
+# Флаги для кэширования
+set(COMPILE_FLAGS
+    ${COMPILE_FLAGS}
+    "-enable-effect-cache"
+)
+```
+
+### Инкрементальная компиляция
+
+```cpp
+class IncrementalShaderCompiler {
+public:
+    struct CompilationResult {
+        std::vector<uint32_t> spirv;
+        std::string moduleHash;
+        std::chrono::steady_clock::time_point timestamp;
+    };
+
+    std::expected<CompilationResult, std::string> compileIncremental(
+        const std::string& sourcePath,
+        slang::ISession* session)
+    {
+        // Вычисляем хэш исходника
+        auto sourceHash = computeFileHash(sourcePath);
+
+        // Проверяем кэш
+        if (auto cached = getFromCache(sourceHash)) {
+            TracyPlot("Shader/CacheHit", 1);
+            return cached;
+        }
+
+        TracyPlot("Shader/CacheHit", 0);
+
+        // Компилируем
+        auto result = doCompile(sourcePath, session);
+        if (!result) return result;
+
+        // Сохраняем в кэш
+        saveToCache(sourceHash, *result);
+
+        return result;
+    }
+
+private:
+    std::string computeFileHash(const std::string& path) {
+        // MD5 или xxHash для быстрого хэширования
+        // Пример с xxHash64 (требует подключения xxhash.h)
+        XXH64_hash_t hash = XXH64(path.data(), path.size(), 0);
+        return std::to_string(hash);
+    }
+
+    std::expected<CompilationResult, std::string> getFromCache(const std::string& hash) {
+        auto it = m_cache.find(hash);
+        if (it == m_cache.end()) {
+            return std::unexpected(std::errc::no_such_file_or_directory);
+        }
+
+        // Проверяем timestamp
+        auto now = std::chrono::steady_clock::now();
+        if (now - it->second.timestamp > m_maxAge) {
+            m_cache.erase(it);
+            return std::unexpected(std::errc::timed_out);
+        }
+
+        return it->second;
+    }
+
+    void saveToCache(const std::string& hash, const CompilationResult& result) {
+        m_cache[hash] = result;
+    }
+
+    std::chrono::seconds m_maxAge{3600};  // 1 час
+    std::unordered_map<std::string, CompilationResult> m_cache;
+};
+```
+
+### Batch компиляция
+
+```cpp
+class BatchShaderCompiler {
+public:
+    std::vector<std::expected<VkShaderModule, std::string>> compileAll(
+        const std::vector<ShaderSource>& sources,
+        slang::ISession* session,
+        VkDevice device)
+    {
+        std::vector<std::future<CompileResult>> futures;
+
+        // Параллельная отправка задач
+        for (const auto& src : sources) {
+            futures.push_back(m_threadPool.submit([=, &session] {
+                return compileOne(src, session, device);
+            }));
+        }
+
+        // Сбор результатов
+        std::vector<std::expected<VkShaderModule, std::string>> results;
+        results.reserve(futures.size());
+
+        for (auto& f : futures) {
+            results.push_back(f.get());
+        }
+
+        return results;
+    }
+
+private:
+    ThreadPool m_threadPool;  // M:N job system
+};
+```
+
+## Алерты и best practices
+
+### Правило 1: Минимум перекомпиляций
+
+```cmake
+# Плохо: перекомпилировать все шейдеры при любом изменении
+add_custom_command(ALL DEPENDS ${ALL_SHADERS})
+
+# Хорошо: инкрементальная компиляция через CMake
+# Только изменённые файлы перекомпилируются
+```
+
+### Правило 2: Separate Hot и Cold модули
 
 ```slang
-// Ошибка: передача значения вместо типа
-Processor<32> proc;  // 32 — значение
+// hot/module.slang — часто меняется
+module Hot;
 
-// Верно: передача типа
-Processor<MyData> proc;
+// Cold модуль — кэшируется
+module Cold;
+export float coldFunction();
+```
 
-// Для параметров-значений используйте специализационные константы
+### Правило 3: Избегайте runtime компиляции в hot path
+
+```cpp
+// Плохо: компиляция каждый кадр
+void renderFrame() {
+    auto shader = compileShader(source);  // НИКОГДА
+}
+
+// Хорошо: compile-time или загрузка precompiled
+VkShaderModule shader = loadPrecompiled("gbuffer.spv");
+```
+
+### Правило 4: Предварительное выделение памяти
+
+```cpp
+// Предварительно распределяем буфера для SPIR-V
+std::vector<uint32_t> spirvBuffer;
+spirvBuffer.reserve(1024 * 1024);  // 1MB preallocated
+```
+
+### Правило 5: используйте specialization константы вместо branch
+
+```slang
+// Плохо: динамическая ветка
+if (params.enableShading) { /* ... */ }
+
+// Хорошо: специализационная константа
 [[vk::constant_id(0)]]
-const uint SIZE = 32;
-```
-
----
-
-### `error: 'spirv_1_6' profile requires Vulkan 1.3`
-
-**Решение:** Подберите соответствующий профиль:
-
-| Vulkan | SPIR-V профиль |
-|--------|----------------|
-| 1.1    | spirv_1_3      |
-| 1.2    | spirv_1_5      |
-| 1.3    | spirv_1_6      |
-
----
-
-## Ошибки Vulkan интеграции
-
-### Validation layer: `VUID-VkShaderModuleCreateInfo-pCode-01379`
-
-**Симптом:** Ошибка при `vkCreateShaderModule` — «pCode must be aligned to 4 bytes».
-
-**Решение:** Читать SPIR-V в `uint32_t`-выровненный буфер:
-
-```cpp
-// Неверно
-std::vector<char> code = readFile("shader.spv");
-createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-// Верно
-std::vector<uint32_t> readSPIRV(const std::string& filename)
-{
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
-    size_t size = file.tellg();
-    assert(size % sizeof(uint32_t) == 0);
-
-    std::vector<uint32_t> buffer(size / sizeof(uint32_t));
-    file.seekg(0);
-    file.read(reinterpret_cast<char*>(buffer.data()), size);
-    return buffer;
-}
-```
-
----
-
-### Validation layer: неверные binding-номера
-
-**Симптом:** `Descriptor binding X in set Y is not bound`.
-
-**Причина:** Несоответствие binding в шейдере и `VkDescriptorSetLayout`.
-
-```slang
-// Шейдер
-[[vk::binding(0, 0)]] cbuffer Uniforms { float4x4 mvp; };
-[[vk::binding(1, 0)]] Texture2D albedo;
-[[vk::binding(2, 0)]] SamplerState sampler;
-```
-
-```cpp
-// C++ — должно точно совпадать
-VkDescriptorSetLayoutBinding bindings[] = {
-    { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
-    { 1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,  1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-    { 2, VK_DESCRIPTOR_TYPE_SAMPLER,        1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-};
-```
-
-**Рекомендация:** Используйте Slang Reflection API для автоматического получения layout.
-
----
-
-### Entry point не найден
-
-**Симптом:**
-
-```
-VkError: entry point 'main' not found in SPIR-V module
-```
-
-**Причина:** В Slang имена entry points сохраняются как есть.
-
-```cpp
-// Неверно
-shaderStageInfo.pName = "main";
-
-// Верно — имя из шейдера
-shaderStageInfo.pName = "vsMain";
-```
-
-Или переименуйте при компиляции:
-
-```bash
-slangc shader.slang -entry vsMain -stage vertex \
-    -rename-entry-point vsMain main \
-    -o vertex.spv -target spirv
-```
-
----
-
-### Push constants: неверный offset или size
-
-**Симптом:** Validation layer — `Push constant range does not match shader`.
-
-**Диагностика:**
-
-```cpp
-auto layout = linkedProgram->getLayout();
-auto pushType = layout->getPushConstantsByIndex(0);
-if (pushType) {
-    size_t expectedSize = pushType->getSizeInBytes();
-    // Сравните с вашим VkPushConstantRange.size
-}
-```
-
-**Решение:** Убедитесь, что размер совпадает:
-
-```slang
-[[vk::push_constant]]
-struct PushConstants
-{
-    float4x4 model;      // 64 байта
-    float4x4 viewProj;   // 64 байта
-    uint     index;      // 4 байта
-    float3   _pad;       // 12 байт для выравнивания
-} pc;                    // Итого: 144 байта
-```
-
-```cpp
-VkPushConstantRange range{};
-range.size = 144;  // Должно совпадать
-```
-
----
-
-## Проблемы с матрицами
-
-### Неверный порядок умножения
-
-**Симптом:** Объекты рендерятся неверно.
-
-**Решение:**
-
-```bash
-# Флаг компилятора
-slangc shader.slang -enable-slang-matrix-layout-row-major -target spirv
-```
-
-```slang
-// Явное указание в шейдере
-struct Transform
-{
-    row_major float4x4 model;
-    row_major float4x4 viewProj;
-};
-```
-
----
-
-## Отладка шейдеров
-
-### Просмотр промежуточного кода
-
-```bash
-# SPIR-V ассемблер
-slangc shader.slang -target spirv-asm -o shader.spvasm
-
-# GLSL для сравнения
-slangc shader.slang -target glsl -o shader.glsl
-
-# Дамп IR (с -target и -o)
-slangc shader.slang -dump-ir -target spirv -o shader.spv
-```
-
-### Отладочная информация
-
-```bash
-# Компиляция с debug info
-slangc shader.slang -g -O0 -target spirv -o shader.spv
-```
-
-### RenderDoc
-
-1. Компилируйте с `-g -O0`
-2. Захватите кадр в RenderDoc
-3. В Pipeline State → Shaders → View Source увидите исходный Slang код
-
----
-
-## Чеклист диагностики
-
-При возникновении проблем проверьте по порядку:
-
-- [ ] `slangc --version` — убедитесь, что slangc доступен
-- [ ] Путь поиска модулей (`-I`) настроен верно
-- [ ] Профиль SPIR-V соответствует версии Vulkan
-- [ ] Имя entry point в `VkPipelineShaderStageCreateInfo` совпадает с шейдером
-- [ ] Все binding-номера совпадают с `VkDescriptorSetLayout`
-- [ ] Размер push constants совпадает в шейдере и `VkPushConstantRange`
-- [ ] Матричный порядок согласован между C++ и шейдером
-- [ ] Validation layers Vulkan включены
-
----
-
-## Полезные команды
-
-```bash
-# Проверка синтаксиса без генерации вывода
-slangc shader.slang -dump-ir > /dev/null
-
-# Валидация SPIR-V
-export SLANG_RUN_SPIRV_VALIDATION=1
-slangc shader.slang -target spirv -o shader.spv
-
-# Подробный вывод
-slangc shader.slang -verbose -target spirv -o shader.spv
-
-# Время компиляции по фазам
-slangc shader.slang -time-phases -target spirv -o shader.spv
-
----
-
-## Сценарии использования Slang
-
-<!-- anchor: 10_use-cases -->
-
-Практические паттерны применения Slang для различных задач рендеринга.
-
----
-
-## 1. Deferred Shading G-Buffer Pass
-
-Рендер pass, записывающий геометрическую информацию в G-buffer для последующего deferred shading.
-
-```slang
-module gbuffer;
-
-struct GBufferOutput
-{
-    float4 albedoMetallic   : SV_Target0;  // RGB: albedo, A: metallic
-    float4 normalRoughness  : SV_Target1;  // RGB: world normal, A: roughness
-    float4 emissiveAO       : SV_Target2;  // RGB: emissive, A: AO
-};
-
-struct VertexInput
-{
-    float3 position : POSITION;
-    float3 normal   : NORMAL;
-    float2 uv       : TEXCOORD0;
-};
-
-struct VertexOutput
-{
-    float4 position : SV_Position;
-    float3 normal   : NORMAL;
-    float2 uv       : TEXCOORD0;
-    uint materialId : TEXCOORD1;
-};
-
-[[vk::binding(0, 0)]]
-cbuffer Uniforms
-{
-    float4x4 viewProj;
-    float3 cameraPos;
-};
-
-[[vk::push_constant]]
-struct PC
-{
-    float4x4 model;
-    uint materialId;
-} pc;
-
-[shader("vertex")]
-VertexOutput vsMain(VertexInput input)
-{
-    VertexOutput output;
-    float3 worldPos = mul(pc.model, float4(input.position, 1.0)).xyz;
-    output.position = mul(viewProj, float4(worldPos, 1.0));
-    output.normal = mul(pc.model, float4(input.normal, 0.0)).xyz;
-    output.uv = input.uv;
-    output.materialId = pc.materialId;
-    return output;
-}
+const bool ENABLE_SHADING = true;
 
 [shader("fragment")]
-GBufferOutput fsMain(VertexOutput input)
-{
-    GBufferOutput gbuf;
-    float3 N = normalize(input.normal);
-
-    gbuf.albedoMetallic = float4(0.8, 0.8, 0.8, 0.0);  // Default material
-    gbuf.normalRoughness = float4(N * 0.5 + 0.5, 0.5);
-    gbuf.emissiveAO = float4(0.0, 0.0, 0.0, 1.0);
-
-    return gbuf;
+void main() {
+    if (ENABLE_SHADING) { /* compile-time branch */ }
 }
 ```
 
----
-
-## 2. GPU Culling с Compute Shader
-
-Отсечение невидимых объектов на GPU без участия CPU.
-
-```slang
-module culling;
-
-struct Frustum
-{
-    float4 planes[6];
-};
-
-struct AABB
-{
-    float3 min;
-    float3 max;
-};
-
-[[vk::push_constant]]
-struct PC
-{
-    Frustum frustum;
-    uint objectCount;
-} pc;
-
-[[vk::binding(0, 0)]]
-StructuredBuffer<AABB> objectAABBs;
-
-[[vk::binding(1, 0)]]
-RWStructuredBuffer<uint> visibleObjects;
-
-[[vk::binding(2, 0)]]
-RWStructuredBuffer<uint> visibleCount;
-
-bool isAABBInFrustum(AABB aabb, Frustum frustum)
-{
-    for (int i = 0; i < 6; i++)
-    {
-        float3 n = frustum.planes[i].xyz;
-        float d = frustum.planes[i].w;
-        float3 pos = n >= 0 ? aabb.max : aabb.min;
-
-        if (dot(n, pos) + d < 0.0)
-            return false;
-    }
-    return true;
-}
-
-[numthreads(64, 1, 1)]
-void csMain(uint3 tid : SV_DispatchThreadID)
-{
-    uint objectId = tid.x;
-    if (objectId >= pc.objectCount) return;
-
-    AABB aabb = objectAABBs[objectId];
-
-    if (isAABBInFrustum(aabb, pc.frustum))
-    {
-        uint slot;
-        InterlockedAdd(visibleCount[0], 1, slot);
-        visibleObjects[slot] = objectId;
-    }
-}
-```
-
----
-
-## 3. Ray Marching для SDF
-
-Трассировка лучей через signed distance field.
-
-```slang
-module ray_march;
-
-[[vk::binding(0, 0)]]
-StructuredBuffer<float> sdfVolume;
-
-[[vk::binding(1, 0)]]
-RWTexture2D<float4> outputImage;
-
-[[vk::push_constant]]
-struct PC
-{
-    float4x4 invViewProj;
-    float3 cameraPos;
-    float maxDist;
-    uint2 resolution;
-    uint maxSteps;
-} pc;
-
-float sampleSDF(float3 worldPos)
-{
-    int3 coord = int3(worldPos);
-    // Bounds checking and sampling
-    return sdfVolume[coord.x + coord.y * 64 + coord.z * 64 * 64];
-}
-
-struct RayMarchResult
-{
-    bool hit;
-    float t;
-    float3 hitPos;
-    float3 normal;
-};
-
-RayMarchResult sphereTrace(float3 ro, float3 rd)
-{
-    RayMarchResult result;
-    result.hit = false;
-
-    float t = 0.0;
-    for (uint i = 0; i < pc.maxSteps; i++)
-    {
-        float3 p = ro + rd * t;
-        float dist = sampleSDF(p);
-
-        if (dist < 0.001)
-        {
-            result.hit = true;
-            result.t = t;
-            result.hitPos = p;
-
-            // Normal via central differences
-            float eps = 0.1;
-            result.normal = normalize(float3(
-                sampleSDF(p + float3(eps, 0, 0)) - sampleSDF(p - float3(eps, 0, 0)),
-                sampleSDF(p + float3(0, eps, 0)) - sampleSDF(p - float3(0, eps, 0)),
-                sampleSDF(p + float3(0, 0, eps)) - sampleSDF(p - float3(0, 0, eps))
-            ));
-            return result;
-        }
-
-        t += dist;
-        if (t > pc.maxDist) break;
-    }
-    return result;
-}
-
-[numthreads(8, 8, 1)]
-void csMain(uint3 tid : SV_DispatchThreadID)
-{
-    if (any(tid.xy >= pc.resolution)) return;
-
-    float2 uv = (float2(tid.xy) + 0.5) / float2(pc.resolution);
-    float2 ndc = uv * 2.0 - 1.0;
-
-    float4 clipPos = float4(ndc, 1.0, 1.0);
-    float4 worldPos = mul(pc.invViewProj, clipPos);
-    worldPos /= worldPos.w;
-
-    float3 rd = normalize(worldPos.xyz - pc.cameraPos);
-
-    RayMarchResult result = sphereTrace(pc.cameraPos, rd);
-
-    float4 color;
-    if (result.hit)
-    {
-        float3 lightDir = normalize(float3(1, 2, 1));
-        float NdotL = max(dot(result.normal, lightDir), 0.0);
-        color = float4(float3(0.8, 0.6, 0.4) * NdotL + 0.1, 1.0);
-    }
-    else
-    {
-        color = float4(0.1, 0.2, 0.4, 1.0);
-    }
-
-    outputImage[tid.xy] = color;
-}
-```
-
----
-
-## 4. Mesh Shader для процедурной геометрии
-
-Генерация геометрии на GPU без vertex buffer.
-
-```slang
-module mesh_shader;
-
-struct MeshVertex
-{
-    float4 position : SV_Position;
-    float3 normal : NORMAL;
-};
-
-[[vk::push_constant]]
-struct PC
-{
-    float4x4 viewProj;
-    float3 chunkOrigin;
-    uint voxelCount;
-} pc;
-
-[shader("amplification")]
-[numthreads(32, 1, 1)]
-void asMain(uint3 tid : SV_DispatchThreadID)
-{
-    // Determine which voxels need mesh generation
-    bool needsMesh = checkVoxelNeedsMesh(tid.x);
-
-    if (needsMesh)
-    {
-        DispatchMesh(1, 1, 1);
-    }
-}
-
-[shader("mesh")]
-[outputtopology("triangle")]
-[numthreads(32, 1, 1)]
-void msMain(
-    uint gid : SV_GroupIndex,
-    out vertices MeshVertex verts[24],
-    out indices uint3 tris[12])
-{
-    uint voxelId = gid;
-
-    // Generate cube vertices (6 faces * 4 vertices)
-    SetMeshOutputCounts(24, 12);
-
-    float3 origin = getVoxelPosition(voxelId) + pc.chunkOrigin;
-
-    // Generate 6 faces of the cube
-    for (uint face = 0; face < 6; face++)
-    {
-        uint base = face * 4;
-        float3 n = getFaceNormal(face);
-
-        for (uint v = 0; v < 4; v++)
-        {
-            verts[base + v].position = mul(pc.viewProj, float4(origin + getFaceVertex(face, v), 1.0));
-            verts[base + v].normal = n;
-        }
-
-        tris[face * 2 + 0] = uint3(base, base + 1, base + 2);
-        tris[face * 2 + 1] = uint3(base, base + 2, base + 3);
-    }
-}
-```
-
----
-
-## 5. Автоматическое дифференцирование
-
-Оптимизация параметров через градиенты.
-
-```slang
-module neural_sdf;
-
-[Differentiable]
-float neuralNetwork(float3 pos, float4 weights[16])
-{
-    float h[16];
-    for (int i = 0; i < 16; i++)
-    {
-        h[i] = pos.x * weights[i].x + pos.y * weights[i].y + pos.z * weights[i].z + weights[i].w;
-        h[i] = max(h[i], 0.0);  // ReLU
-    }
-
-    float result = 0.0;
-    for (int j = 0; j < 16; j++)
-    {
-        result += h[j] * weights[j].x;
-    }
-    return result;
-}
-
-[Differentiable]
-float sdfFunction(float3 pos)
-{
-    float4 weights[16];  // Would be loaded from buffer
-    return neuralNetwork(pos, weights);
-}
-
-// Compute gradient via forward mode
-float3 computeGradient(float3 pos)
-{
-    float eps = 0.001;
-    float3 grad;
-
-    grad.x = (sdfFunction(pos + float3(eps, 0, 0)) - sdfFunction(pos - float3(eps, 0, 0))) / (2 * eps);
-    grad.y = (sdfFunction(pos + float3(0, eps, 0)) - sdfFunction(pos - float3(0, eps, 0))) / (2 * eps);
-    grad.z = (sdfFunction(pos + float3(0, 0, eps)) - sdfFunction(pos - float3(0, 0, eps))) / (2 * eps);
-
-    return grad;
-}
-```
-
----
-
-## 6. Post-Processing: Tonemapping
-
-Финальный пасс с ACES tonemapping.
-
-```slang
-module tonemap;
-
-[[vk::binding(0, 0)]]
-Texture2D<float4> hdrInput;
-
-[[vk::binding(1, 0)]]
-RWTexture2D<float4> ldrOutput;
-
-[[vk::binding(2, 0)]]
-SamplerState linearSampler;
-
-[[vk::push_constant]]
-struct PC
-{
-    float exposure;
-    float gamma;
-    uint2 resolution;
-} pc;
-
-float3 acesFilmic(float3 x)
-{
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
-}
-
-[numthreads(8, 8, 1)]
-void csMain(uint3 tid : SV_DispatchThreadID)
-{
-    if (any(tid.xy >= pc.resolution)) return;
-
-    float2 uv = (float2(tid.xy) + 0.5) / float2(pc.resolution);
-    float3 hdr = hdrInput.SampleLevel(linearSampler, uv, 0).rgb;
-
-    hdr *= pc.exposure;
-    float3 ldr = acesFilmic(hdr);
-    ldr = pow(ldr, 1.0 / pc.gamma);
-
-    ldrOutput[tid.xy] = float4(ldr, 1.0);
-}
-```
-
----
-
-## 7. Bindless Rendering
-
-Динамический доступ к массиву текстур.
-
-```slang
-module bindless;
-
-[[vk::binding(0, 0)]]
-Texture2D materialTextures[];
-
-[[vk::binding(1, 0)]]
-SamplerState linearSampler;
-
-[[vk::push_constant]]
-struct PC
-{
-    float4x4 viewProj;
-    uint baseTextureIndex;
-} pc;
-
-struct VertexInput
-{
-    float3 position : POSITION;
-    float2 uv : TEXCOORD0;
-    uint materialId : TEXCOORD1;
-};
-
-struct VertexOutput
-{
-    float4 position : SV_Position;
-    float2 uv : TEXCOORD0;
-    nointerpolation uint materialId : TEXCOORD1;
-};
-
-[shader("vertex")]
-VertexOutput vsMain(VertexInput input)
-{
-    VertexOutput output;
-    output.position = mul(pc.viewProj, float4(input.position, 1.0));
-    output.uv = input.uv;
-    output.materialId = input.materialId;
-    return output;
-}
-
-[shader("fragment")]
-float4 fsMain(VertexOutput input) : SV_Target
-{
-    uint textureIndex = pc.baseTextureIndex + input.materialId;
-
-    float4 color = materialTextures[NonUniformResourceIndex(textureIndex)]
-        .Sample(linearSampler, input.uv);
-
-    return color;
-}
-
----
-
-## Decision Trees: Slang
-
-<!-- anchor: 11_decision-trees -->
-
-Выбор стратегий компиляции, организации шейдеров и интеграции.
-
----
-
-## Slang или GLSL?
-
-```
-
-Нужен шейдер
-│
-├── Размер кодобазы?
-│ ├── Один файл (< 200 строк)
-│ │ └── Нужны generics или модули?
-│ │ ├── Нет → GLSL достаточно
-│ │ └── Да → Slang
-│ │
-│ ├── Несколько файлов (200-2000 строк)
-│ │ └── Есть повторяющийся код?
-│ │ ├── Нет → GLSL + include-файлы
-│ │ └── Да → Slang (модули)
-│ │
-│ └── Большая кодобаза (2000+ строк)
-│ └── Slang (модули, generics, инкрементальная компиляция)
-
-```
-
-**Критерии выбора Slang:**
-
-- Модульная организация кода
-- Generics для параметризации шейдеров
-- Автоматическое дифференцирование
-- Инкрементальная компиляция для больших проектов
-
-**Когда GLSL достаточно:**
-
-- Небольшой проект
-- Нет потребности в модулях
-- Минимум зависимостей
-
----
-
-## Стратегия компиляции
-
-```
-
-Как компилировать шейдеры?
-│
-├── Во время сборки (CMake)
-│ ├── Преимущества:
-│ │ ├── Нет overhead в рантайме
-│ │ ├── Ошибки при сборке
-│ │ └── Оптимизированный SPIR-V
-│ └── Когда: production, CI/CD
-│
-├── Во время выполнения (Slang API)
-│ ├── Преимущества:
-│ │ ├── Горячая перезагрузка
-│ │ ├── Динамическая специализация
-│ │ └── Адаптация под GPU
-│ └── Когда: разработка, инструменты
-│
-└── Гибридный подход
-├── Production: offline компиляция
-└── Debug: runtime компиляция (ifdef DEBUG)
-
-```
-
-### Реализация гибридного подхода
+### Правило 6: Minimize descriptor set changes
 
 ```cpp
-class ShaderManager
-{
-#ifdef DEBUG_SHADER_HOT_RELOAD
-    // Runtime компиляция
-    VkShaderModule compile(const char* slangFile, const char* entry);
-#else
-    // Загрузка precompiled .spv
-    VkShaderModule load(const char* spvPath);
-#endif
-};
+// Группируем descriptor updates
+void bindFrameDescriptors(VkCommandBuffer cmd, FrameData& frame) {
+    // Один батч вместо множества отдельных bind
+    vkUpdateDescriptorSets(cmd, frame.descriptorWrites.size(),
+        frame.descriptorWrites.data(), 0, nullptr);
+}
 ```
-
----
-
-## Организация модулей
-
-```
-Как организовать шейдерные модули?
-    │
-    ├── По частоте изменений
-    │   ├── core/ — редко меняется
-    │   │   ├── types.slang
-    │   │   ├── math.slang
-    │   │   └── constants.slang
-    │   │
-    │   ├── features/ — иногда меняется
-    │   │   ├── materials.slang
-    │   │   ├── lighting.slang
-    │   │   └── shadows.slang
-    │   │
-    │   └── render/ — часто меняется
-    │       ├── main.slang
-    │       └── postprocess.slang
-    │
-    └── Иерархия зависимостей
-        core/ ← features/ ← render/
-```
-
-**Правила:**
-
-- Модули нижнего уровня не зависят от верхнего
-- Минимизировать перекрёстные зависимости
-- Экспортировать только публичный API
-
----
-
-## Offline vs Runtime специализация
-
-```
-Generic шейдер нужно специализировать
-    │
-    ├── Типы известны при сборке?
-    │   ├── Да → Offline специализация
-    │   │   ├── slangc shader.slang -D TYPE=A -o a.spv
-    │   │   └── Нет overhead в рантайме
-    │   │
-    │   └── Нет → Runtime специализация
-    │       ├── linkedProgram->specialize(args, ...)
-    │       └── Гибкость, но задержка при первой компиляции
-```
-
----
-
-## Buffer Device Address vs Descriptor Sets
-
-```
-Как передать данные в шейдер?
-    │
-    ├── Глобальные данные кадра
-    │   └── Push Constants или Uniform Buffer
-    │       └── Быстро, ограниченный размер
-    │
-    ├── Большие буферы данных
-    │   ├── Vulkan 1.2+ с BDA?
-    │   │   ├── Да → Buffer Device Address
-    │   │   │   └── Нет overhead дескрипторов
-    │   │   │
-    │   │   └── Нет → SSBO через Descriptor Sets
-    │   │
-    │   └── Много текстур (100+)
-    │       └── Bindless Descriptor Indexing
-```
-
----
-
-## Forward vs Deferred Rendering
-
-```
-Архитектура рендеринга?
-    │
-    ├── Количество источников света?
-    │   ├── 1-4 → Forward Rendering
-    │   │   └── Проще, меньше памяти
-    │   │
-    │   └── 5+ → Deferred Rendering
-    │       ├── G-buffer pass
-    │       ├── Lighting pass
-    │       └── Опционально: Clustered shading
-```
-
----
-
-## Когда использовать Automatic Differentiation
-
-```
-Нужно ли Automatic Differentiation?
-    │
-    ├── Neural SDF / NeRF
-    │   └── Да — критично для обучения
-    │
-    ├── Автотюнинг процедурной генерации
-    │   └── Полезно — градиенты по параметрам
-    │
-    └── Стандартный рендеринг
-        └── Нет — overhead без пользы
-```
-
----
-
-## Чеклист выбора стратегии
-
-**На старте проекта:**
-
-- [ ] Оценить размер шейдерной кодобазы
-- [ ] Определить потребность в модулях и generics
-- [ ] Выбрать: GLSL или Slang
-- [ ] Настроить build-time компиляцию через CMake
-
-**При масштабировании:**
-
-- [ ] Выделить core-модули с базовыми типами
-- [ ] Создать интерфейсы для параметризации
-- [ ] Настроить кэширование модулей
-- [ ] Реализовать инкрементальную компиляцию
-
-**Продвинутые техники:**
-
-- [ ] Bindless rendering для множества материалов
-- [ ] GPU-driven culling через compute shaders
-- [ ] Mesh shaders для процедурной геометрии
-- [ ] Automatic differentiation для ML-задач
-
----
-
-## Краткая сводка
-
-| Ситуация            | Рекомендация                      |
-|---------------------|-----------------------------------|
-| Маленький проект    | GLSL                              |
-| Большая кодобаза    | Slang (модули)                    |
-| Production сборка   | Offline компиляция                |
-| Активная разработка | Runtime компиляция + кэш          |
-| Много материалов    | Bindless + Descriptor Indexing    |
-| Много света         | Deferred или Clustered            |
-| Neural rendering    | Slang + Automatic Differentiation |

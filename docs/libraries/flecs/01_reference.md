@@ -1,536 +1,479 @@
-## Обзор flecs
+# Flecs: Entity Component System для C++
 
-<!-- anchor: 00_overview -->
+> **Для понимания:** Представьте, что Flecs — это высокоорганизованная база данных для вашей игры. Вместо хаотичных
+> объектов с разбросанными данными, Flecs хранит всё в аккуратных таблицах, где каждая колонка — это тип данных (
+> компонент), а каждая строка — сущность. Системы — это запросы к этой базе данных, которые обрабатывают данные пакетами
+> для максимальной производительности.
 
+## 🎯 Что такое Flecs?
 
-**Flecs** — быстрый и лёгкий Entity Component System (ECS) фреймворк для игр и симуляций. Позволяет создавать приложения
-с миллионами сущностей. Поддерживает связи между сущностями (relationships), иерархии, префабы, запросы (queries) и
-системы (systems). API на C99 и C++17, archetype-хранилище (SoA), кешируемые запросы.
+**Flecs** — это быстрый и лёгкий фреймворк Entity Component System (ECS), написанный на C с современным C++ API. Он
+спроектирован для high-performance приложений, где важны кэш-дружественность, многопоточность и минимальный overhead.
 
-Версия: **v4** (см. flecs.h)
-Исходники: [SanderMertens/flecs](https://github.com/SanderMertens/flecs)
-Документация: [flecs.dev](https://www.flecs.dev)
+## 📚 Основные концепции ECS
 
-## Основные возможности
+### Entity (Сущность)
 
-- **Entity Component System** — организация данных через сущности, компоненты и системы
-- **Archetype storage** — эффективное SoA-хранение для кеш-дружественной итерации
-- **Relationships** — связи между сущностями через pairs
-- **Иерархии** — parent-child отношения с автоматическим cleanup
-- **Префабы** — шаблоны сущностей с наследованием
-- **Queries** — кешируемые и ad-hoc запросы
-- **Observers** — реактивное программирование на событиях
-- **Модули** — организация кода в переиспользуемые блоки
-- **Многопоточность** — автоматическое распараллеливание систем
-
-## Карта заголовков
-
-| Файл                              | Назначение                                              |
-|-----------------------------------|---------------------------------------------------------|
-| flecs.h                           | Точка входа C API; при C++ подтягивает flecs.hpp        |
-| flecs/addons/flecs_c.h            | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each |
-| flecs/addons/cpp/flecs.hpp        | C++ точка входа                                         |
-| flecs/addons/cpp/entity.hpp       | Класс flecs::entity                                     |
-| flecs/addons/cpp/mixins/query/    | Query builder                                           |
-| flecs/addons/cpp/mixins/system/   | System builder                                          |
-| flecs/addons/cpp/mixins/observer/ | Observer builder                                        |
-
-## Основные понятия flecs
-
-<!-- anchor: 02_concepts -->
-
-
-Ключевые концепции ECS и архитектуры flecs.
-
-## Что такое ECS
-
-**ECS (Entity Component System)** — подход к организации кода и данных:
-
-- **Entity** — уникальный объект (юнит, здание, частица, камера). Сам по себе это просто ID.
-- **Component** — данные, привязанные к entity (Position, Velocity, Health, Mesh).
-- **System** — функция, которая выполняется для всех entities, имеющих определённый набор компонентов.
-
-### Преимущества ECS
-
-- **Разделение данных и логики** — системы получают только нужные компоненты, кеш-дружественная итерация (SoA)
-- **Гибкость** — добавление нового поведения через новые компоненты и системы без изменения старых
-- **Масштабируемость** — flecs оптимизирован под миллионы entities и многопоточность
-- **Композиция** — поведение сущности определяется набором компонентов, а не наследованием
-
----
-
-## Архитектура flecs
-
-```
-World
-├── Entities (уникальные ID)
-├── Archetypes (таблицы компонентов)
-│   ├── Archetype [Position, Velocity]
-│   ├── Archetype [Position, Health]
-│   └── ...
-├── Systems (query + callback)
-└── Pipeline (порядок выполнения систем)
-```
-
-### World
-
-Контейнер для всех данных ECS. Один world на приложение.
+> **Для понимания:** Entity — это уникальный идентификатор, как номер паспорта. Сам по себе он не содержит данных,
+> только ссылается на них. Представьте, что entity — это пустая карточка в картотеке, к которой можно прикрепить
+> различные
+> анкеты (компоненты).
 
 ```cpp
-flecs::world ecs;  // C++
-ecs_world_t* world = ecs_init();  // C
+#include <flecs.h>
+#include <print>
+
+int main() {
+    flecs::world ecs;
+
+    // Создание entity без имени
+    auto entity = ecs.entity();
+    std::println("Entity created with id: {}", entity.id());
+
+    // Создание entity с именем
+    auto player = ecs.entity("Player");
+    std::println("Entity name: {}", player.name());
+
+    return 0;
+}
 ```
 
-### Archetype
+### Component (Компонент)
 
-Таблицы, группирующие entities с одинаковым набором компонентов.
-
-**Хранение SoA (Structure of Arrays):**
-
-- Для archetype `[Position, Velocity]` — два массива: `Position[]`, `Velocity[]`
-- Итерация систем — последовательный доступ к массивам, кеш-дружественно
-- Archetype создаётся при первой entity с данной комбинацией компонентов
-
-### Entity
-
-Уникальный идентификатор (64 бита). Младшие 32 бита — ID, старшие — версия (generation).
+> **Для понимания:** Компонент — это чистые данные без логики, как анкета с полями (имя, возраст, адрес). В Flecs
+> компоненты — это обычные структуры C++. Они хранятся отдельно от сущностей в оптимизированных таблицах.
 
 ```cpp
-auto e = ecs.entity();           // Анонимная
-auto e = ecs.entity("Name");     // Именованная
-e.set<Position>({x, y});         // Добавить компонент
-e.add<Tag>();                    // Добавить тег (без данных)
-e.remove<Position>();            // Удалить компонент
-e.destruct();                    // Удалить entity
-```
+#include <flecs.h>
+#include <print>
 
-### Component
+// Компоненты — это обычные структуры
+struct Position {
+    float x, y, z;
+};
 
-Тип данных на entity. В C++ — любая структура с тривиальным конструктором копирования.
+struct Velocity {
+    float dx, dy, dz;
+};
 
-```cpp
-struct Position { float x, y; };
-struct Health { float current, max; };
-struct PlayerTag {};  // Тег (пустая структура)
+struct Health {
+    float current;
+    float max;
+};
 
-// Регистрация автоматическая при первом использовании
-e.set<Position>({10, 20});
-```
+// Тег — компонент без данных (пустая структура)
+struct Enemy {};
+struct Dead {};
 
----
+int main() {
+    flecs::world ecs;
 
-## Pipeline и фазы
+    // Регистрация происходит автоматически при первом использовании
+    auto entity = ecs.entity()
+        .set<Position>({10.0f, 5.0f, 0.0f})
+        .set<Velocity>({1.0f, 0.0f, 0.0f})
+        .set<Health>({100.0f, 100.0f})
+        .add<Enemy>();
 
-Pipeline определяет порядок выполнения систем. Системы привязываются к фазам (phase tags).
-
-### Стандартные фазы
-
-| Фаза           | Назначение                        |
-|----------------|-----------------------------------|
-| **OnLoad**     | Загрузка ресурсов                 |
-| **PostLoad**   | Постобработка после загрузки      |
-| **PreUpdate**  | Подготовка перед обновлением      |
-| **OnUpdate**   | Основная логика (движение, AI)    |
-| **OnValidate** | Проверки                          |
-| **PostUpdate** | Синхронизация после обновления    |
-| **PreStore**   | Подготовка к сохранению           |
-| **OnStore**    | Финализация, сохранение состояния |
-
-### Порядок выполнения
-
-```
-OnLoad → PostLoad → PreUpdate → OnUpdate → OnValidate → PostUpdate → PreStore → OnStore
-```
-
-Системы внутри одной фазы выполняются в порядке объявления.
-
-```cpp
-ecs.system<Position, Velocity>("Move")
-    .kind(flecs::OnUpdate)  // Фаза
-    .each([](Position& p, const Velocity& v) {
-        p.x += v.x;
-        p.y += v.y;
-    });
-```
-
----
-
-## Query
-
-Поиск и итерация entities по условиям.
-
-### Типы запросов
-
-| Тип          | Использование  | Особенности                     |
-|--------------|----------------|---------------------------------|
-| **Cached**   | Каждый кадр    | Быстрая итерация, больше памяти |
-| **Uncached** | Редкие запросы | Меньше памяти, медленнее        |
-
-### Query Builder (C++)
-
-```cpp
-// Простой запрос
-auto q = ecs.query_builder<Position, Velocity>().build();
-
-// С условием
-auto q = ecs.query_builder<Position>()
-    .with<Velocity>()           // Имеет Velocity
-    .without<Dead>()            // Без Dead
-    .term_at(1).optional()      // Velocity необязателен
-    .build();
-
-// Итерация
-q.each([](flecs::entity e, Position& p) {
-    // Обработка
-});
-
-// Iter (доступ к batch)
-q.iter([](flecs::iter& it, Position* p) {
-    for (auto i : it) {
-        // p[i] — i-я entity в batch
+    // Проверка наличия компонентов
+    if (entity.has<Position>()) {
+        std::println("Entity has Position component");
     }
-});
+
+    if (entity.has<Enemy>()) {
+        std::println("Entity is an Enemy");
+    }
+
+    return 0;
+}
 ```
 
-### Операторы
+### System (Система)
 
-| Оператор     | C++                           | Описание                         |
-|--------------|-------------------------------|----------------------------------|
-| **And**      | по умолчанию                  | Entity должна иметь компонент    |
-| **Not**      | `.with<T>().oper(flecs::Not)` | Исключить entities с компонентом |
-| **Optional** | `.with<T>().optional()`       | Компонент необязателен           |
-| **Or**       | специальный синтаксис         | Матч по одному из terms          |
-
----
-
-## System
-
-Query + callback. Выполняется каждый кадр в своей фазе.
+> **Для понимания:** Система — это чистая функция, которая обрабатывает компоненты. Представьте конвейер на заводе:
+> каждый рабочий (система) выполняет одну операцию над деталями (компонентами), которые проходят по конвейеру.
 
 ```cpp
-// each — callback по одной entity
-ecs.system<Position, Velocity>()
-    .each([](Position& p, const Velocity& v) {
-        p.x += v.x;
+#include <flecs.h>
+#include <print>
+
+struct Position { float x, y, z; };
+struct Velocity { float dx, dy, dz; };
+
+int main() {
+    flecs::world ecs;
+
+    // Создаём несколько сущностей
+    for (int i = 0; i < 5; ++i) {
+        ecs.entity()
+            .set<Position>({static_cast<float>(i), 0.0f, 0.0f})
+            .set<Velocity>({0.5f, 0.0f, 0.0f});
+    }
+
+    // Система движения: обновляет Position на основе Velocity
+    ecs.system<Position, const Velocity>("MoveSystem")
+        .each([](Position& pos, const Velocity& vel) {
+            pos.x += vel.dx;
+            pos.y += vel.dy;
+            pos.z += vel.dz;
+        });
+
+    // Запускаем один кадр симуляции
+    ecs.progress();
+
+    // Проверяем результат
+    ecs.each<Position>([](flecs::entity e, Position& pos) {
+        std::println("Entity {}: Position = ({}, {}, {})",
+                     e.id(), pos.x, pos.y, pos.z);
     });
 
-// iter — доступ к batch
-ecs.system<Position, Velocity>()
-    .iter([](flecs::iter& it, Position* p, Velocity* v) {
-        for (auto i : it) {
-            p[i].x += v[i].x * it.delta_time();
+    return 0;
+}
+```
+
+## 🏗️ Архитектура Flecs
+
+### World (Мир)
+
+> **Для понимания:** World — это контейнер для всех ECS-данных. Это как целый завод со всеми конвейерами, рабочими и
+> складами. Один World на приложение.
+
+```cpp
+#include <flecs.h>
+#include <print>
+
+int main() {
+    // Создание мира
+    flecs::world ecs;
+
+    // Настройка мира
+    ecs.set_threads(4);  // Использовать 4 потока для систем
+
+    // Установка delta_time по умолчанию
+    ecs.set_target_fps(60.0f);
+
+    std::println("World created with {} threads",
+                 ecs.get_threads());
+
+    return 0;
+}
+```
+
+### Archetype Storage (SoA)
+
+> **Для понимания:** Flecs использует Structure of Arrays (SoA) хранение. Представьте библиотеку, где все книги одного
+> жанра стоят на одной полке, а не разбросаны по разным шкафам. Это позволяет быстро обрабатывать данные пакетами.
+
+```cpp
+#include <flecs.h>
+#include <print>
+
+struct Position { float x, y; };
+struct Velocity { float dx, dy; };
+struct Health { float value; };
+
+int main() {
+    flecs::world ecs;
+
+    // Flecs автоматически создаёт archetype таблицы:
+    // Таблица 1: [Position, Velocity, Health]
+    // Таблица 2: [Position, Velocity]
+    // Таблица 3: [Position, Health]
+    // и т.д.
+
+    // Создаём сущности с разными комбинациями компонентов
+    ecs.entity().set<Position>({0, 0}).set<Velocity>({1, 0}).set<Health>({100});
+    ecs.entity().set<Position>({5, 5}).set<Velocity>({0, 1});
+    ecs.entity().set<Position>({10, 10}).set<Health>({50});
+
+    // Каждая комбинация компонентов создаёт отдельную таблицу
+    // Данные хранятся в SoA:
+    // positions: [ {0,0}, {5,5}, {10,10} ] ← непрерывный массив
+    // velocities: [ {1,0}, {0,1} ] ← другой непрерывный массив
+    // healths: [ {100}, {50} ] ← третий массив
+
+    std::println("Created entities with different component combinations");
+
+    return 0;
+}
+```
+
+## 🔍 Query (Запросы)
+
+> **Для понимания:** Query — это способ найти сущности по критериям, как поиск в базе данных. "Найди всех сотрудников из
+> отдела маркетинга старше 30 лет".
+
+### Базовые запросы
+
+```cpp
+#include <flecs.h>
+#include <print>
+
+struct Position { float x, y; };
+struct Velocity { float dx, dy; };
+struct Enemy {};
+struct Dead {};
+
+int main() {
+    flecs::world ecs;
+
+    // Создаём тестовые данные
+    for (int i = 0; i < 10; ++i) {
+        auto e = ecs.entity()
+            .set<Position>({static_cast<float>(i), static_cast<float>(i)});
+
+        if (i % 2 == 0) {
+            e.set<Velocity>({1.0f, 0.0f});
+        }
+
+        if (i < 5) {
+            e.add<Enemy>();
+        }
+
+        if (i == 2) {
+            e.add<Dead>();
+        }
+    }
+
+    // Запрос 1: Все сущности с Position
+    auto q1 = ecs.query<Position>();
+    std::println("Query 1 - Entities with Position:");
+    q1.each([](flecs::entity e, Position& pos) {
+        std::println("  Entity {}: ({}, {})", e.id(), pos.x, pos.y);
+    });
+
+    // Запрос 2: Position + Velocity
+    auto q2 = ecs.query<Position, Velocity>();
+    std::println("\nQuery 2 - Entities with Position and Velocity:");
+    q2.each([](flecs::entity e, Position& pos, Velocity& vel) {
+        std::println("  Entity {}: Pos({}, {}), Vel({}, {})",
+                     e.id(), pos.x, pos.y, vel.dx, vel.dy);
+    });
+
+    // Запрос 3: Position + Enemy, но без Dead
+    auto q3 = ecs.query_builder<Position>()
+        .with<Enemy>()
+        .without<Dead>()
+        .build();
+
+    std::println("\nQuery 3 - Enemies that are not dead:");
+    q3.each([](flecs::entity e, Position& pos) {
+        std::println("  Entity {}: ({}, {})", e.id(), pos.x, pos.y);
+    });
+
+    return 0;
+}
+```
+
+### Query Builder с продвинутыми возможностями
+
+```cpp
+#include <flecs.h>
+#include <print>
+
+struct Position { float x, y; };
+struct Velocity { float dx, dy; };
+struct Health { float value; };
+
+int main() {
+    flecs::world ecs;
+
+    // Optional компоненты
+    auto q1 = ecs.query_builder<Position, Velocity>()
+        .term_at(1).optional<Health>()  // Health необязателен
+        .build();
+
+    // Итерация с optional компонентом
+    q1.each([](flecs::entity e, Position& pos, Velocity& vel, Health* health) {
+        if (health) {
+            std::println("Entity has health: {}", health->value);
         }
     });
 
-// multi_threaded — параллельное выполнение
-ecs.system<Position, Velocity>()
-    .multi_threaded()
-    .each([](Position& p, const Velocity& v) { ... });
+    // Иерархические запросы
+    auto parent = ecs.entity("Parent");
+    auto child = ecs.entity("Child").child_of(parent);
+    child.set<Position>({5.0f, 5.0f});
+
+    // Запрос с обходом иерархии
+    auto q2 = ecs.query_builder<Position>()
+        .cascade()  // Обход от корня к листьям
+        .build();
+
+    return 0;
+}
 ```
 
----
+## 🚀 Systems (Системы)
 
-## Observer
-
-Реакция на изменения ECS, а не каждый кадр.
-
-### События
-
-| Событие      | Когда срабатывает                        |
-|--------------|------------------------------------------|
-| **OnAdd**    | Компонент добавлен к entity              |
-| **OnRemove** | Компонент удалён                         |
-| **OnSet**    | Значение компонента установлено/изменено |
-| **UnSet**    | Значение сброшено (перед удалением)      |
-
-### Использование
+### Типы систем
 
 ```cpp
-// Создание ресурса при добавлении компонента
-ecs.observer<MeshComponent>()
-    .event(flecs::OnAdd)
-    .each([](flecs::entity e, MeshComponent& mesh) {
-        mesh.buffer = create_gpu_buffer();
-    });
+#include <flecs.h>
+#include <print>
 
-// Освобождение ресурса при удалении
-ecs.observer<MeshComponent>()
-    .event(flecs::OnRemove)
-    .each([](flecs::entity e, MeshComponent& mesh) {
-        destroy_gpu_buffer(mesh.buffer);
-    });
+struct Position { float x, y; };
+struct Velocity { float dx, dy; };
+
+int main() {
+    flecs::world ecs;
+
+    // 1. Система с .each() — простой callback для каждой сущности
+    ecs.system<Position, Velocity>("MoveEach")
+        .each([](Position& pos, const Velocity& vel) {
+            pos.x += vel.dx;
+            pos.y += vel.dy;
+        });
+
+    // 2. Система с .iter() — batch обработка (быстрее для многих сущностей)
+    ecs.system<Position, Velocity>("MoveIter")
+        .iter([](flecs::iter& it, Position* pos, Velocity* vel) {
+            for (auto i : it) {
+                pos[i].x += vel[i].dx * it.delta_time();
+                pos[i].y += vel[i].dy * it.delta_time();
+            }
+        });
+
+    // 3. Многопоточная система
+    ecs.system<Position, Velocity>("MoveMultiThreaded")
+        .multi_threaded()
+        .each([](Position& pos, const Velocity& vel) {
+            pos.x += vel.dx;
+            pos.y += vel.dy;
+        });
+
+    // 4. Система с условием
+    struct Active {};
+
+    ecs.system<Position, Velocity>("MoveIfActive")
+        .with<Active>()  // Только сущности с тегом Active
+        .each([](Position& pos, const Velocity& vel) {
+            pos.x += vel.dx;
+            pos.y += vel.dy;
+        });
+
+    return 0;
+}
 ```
 
----
+### Pipeline и фазы выполнения
 
-## Иерархии и Pairs
-
-### Иерархия (ChildOf)
-
-Entities могут быть родителями и детьми.
+> **Для понимания:** Pipeline определяет порядок выполнения систем, как расписание поездов. Каждая система привязана к
+> определённой фазе (станции), и поезда (данные) проходят через станции в строгом порядке.
 
 ```cpp
-auto parent = ecs.entity("Parent");
-auto child = ecs.entity("Child").child_of(parent);
+#include <flecs.h>
+#include <print>
 
-// Путь: "Parent::Child"
-child.path();
+struct Position { float x, y; };
+struct Velocity { float dx, dy; };
+struct Rendered {};
 
-// При удалении parent удаляются все дети
-parent.destruct();
+int main() {
+    flecs::world ecs;
+
+    // Стандартные фазы Flecs:
+    // 1. OnLoad     - Загрузка ресурсов
+    // 2. PostLoad   - Постобработка после загрузки
+    // 3. PreUpdate  - Подготовка перед обновлением
+    // 4. OnUpdate   - Основная логика (по умолчанию)
+    // 5. OnValidate - Валидация
+    // 6. PostUpdate - Синхронизация после обновления
+    // 7. PreStore   - Подготовка к сохранению
+    // 8. OnStore    - Финализация
+
+    // Система в фазе PreUpdate
+    ecs.system<Position, Velocity>("Physics")
+        .kind(flecs::PreUpdate)
+        .each([](Position& pos, const Velocity& vel) {
+            pos.x += vel.dx;
+            pos.y += vel.dy;
+        });
+
+    // Система в фазе OnUpdate (по умолчанию)
+    ecs.system<Position>("AI")
+        .each([](Position& pos) {
+            // AI логика
+        });
+
+    // Система в фазе PostUpdate
+    ecs.system<Position>("Cleanup")
+        .kind(flecs::PostUpdate)
+        .each([](Position& pos) {
+            // Очистка
+        });
+
+    // Пользовательская фаза
+    auto CustomPhase = ecs.entity("CustomPhase")
+        .add(flecs::Phase)
+        .add(flecs::DependsOn, flecs::OnUpdate);  // После OnUpdate
+
+    ecs.system<Position>("CustomSystem")
+        .kind(CustomPhase)
+        .each([](Position& pos) {
+            // Пользовательская логика
+        });
+
+    // Запуск pipeline
+    for (int i = 0; i < 3; ++i) {
+        std::println("\n--- Frame {} ---", i + 1);
+        ecs.progress(0.016f);  // 60 FPS
+    }
+
+    return 0;
+}
 ```
 
-### Pairs
+## 👀 Observers (Наблюдатели)
 
-Пара (relationship, target) кодирует связь между entities.
+> **Для понимания:** Observer — это реактивный обработчик событий. Он срабатывает не каждый кадр, а только когда
+> происходят изменения: добавление компонента, изменение значения, удаление. Как датчик движения, который включает свет
+> только когда кто-то проходит.
 
 ```cpp
-auto Likes = ecs.entity();
-auto Alice = ecs.entity();
+#include <flecs.h>
+#include <print>
 
-bob.add(Likes, Alice);        // Bob likes Alice
-bob.has(Likes, Alice);        // true
-bob.target<Likes>();          // Alice (первый target)
+struct Position { float x, y; };
+struct Health { float value; };
+struct Enemy {};
+
+int main() {
+    flecs::world ecs;
+
+    // Observer для OnAdd: когда компонент добавляется
+    ecs.observer<Position>("OnPositionAdded")
+        .event(flecs::OnAdd)
+        .each([](flecs::entity e, Position& pos) {
+            std::println("Position added to entity {}", e.id());
+        });
+
+    // Observer для OnSet: когда значение компонента устанавливается/изменяется
+    ecs.observer<Position>("OnPositionChanged")
+        .event(flecs::OnSet)
+        .each([](flecs::entity e, Position& pos) {
+            std::println("Position changed for entity {}: ({}, {})",
+                         e.id(), pos.x, pos.y);
+        });
+
+    // Observer для OnRemove: когда компонент удаляется
+    ecs.observer<Health>("OnHealthRemoved")
+        .event(flecs::OnRemove)
+        .each([](flecs::entity e, Health& health) {
+            std::println("Health removed from entity {}, last value: {}",
+                         e.id(), health.value);
+        });
+
+    // Observer для нескольких событий
+    ecs.observer<Enemy>("OnEnemyEvent")
+        .event(flecs::OnAdd | flecs::OnRemove)
+        .each([](flecs::entity e, Enemy&) {
+            if (e.has<Enemy>()) {
+                std::println("Enemy added to entity {}", e.id());
+            } else {
+                std::println("Enemy removed from entity {}", e.id());
+            }
+        });
+    return 0;
+}
 ```
-
----
-
-## Singleton
-
-Глобальный экземпляр компонента. Удобно для настроек: гравитация, время, конфигурация.
-
-```cpp
-// Установка
-ecs.set<Gravity>({9.81f});
-
-// Получение
-const Gravity* g = ecs.get<Gravity>();
-
-// В системе — Gravity доступен автоматически
-ecs.system<Position, const Gravity>()
-    .each([](Position& p, const Gravity& g) {
-        // g — singleton
-    });
-```
-
----
-
-## Prefabs
-
-Entity-шаблон. Instance наследует компоненты prefab через pair `(IsA, prefab)`.
-
-```cpp
-// Создание prefab
-auto Tank = ecs.prefab("Tank")
-    .set<Health>({100})
-    .set<Attack>{20};
-
-// Создание instance
-auto unit = ecs.entity().is_a(Tank);
-
-// Instance наследует компоненты
-unit.get<Health>();  // 100
-
-// Override — переопределение значения
-unit.set<Health>({150});  // Теперь своё значение
-```
-
----
-
-## Traversal
-
-Обход иерархии в query.
-
-### Source
-
-Entity, на которой проверяется term:
-
-- **self** (по умолчанию) — сама entity
-- **parent** — компонент с родителя по ChildOf
-- **cascade** — обход иерархии breadth-first
-
-```cpp
-// Второй Transform — от родителя
-ecs.query_builder<Transform, Transform>()
-    .term_at(2).parent()
-    .cascade()  // Обход: родители → дети
-    .build()
-    .each([](Transform& local, Transform& parent) {
-        // local — локальный; parent — родительский
-    });
-```
-
----
-
-## Версионирование Entity
-
-`ecs_entity_t` — 64 бита: младшие 32 — ID, старшие — версия (generation).
-
-При удалении и переиспользовании ID версия увеличивается. Старые ссылки становятся невалидными.
-
-```cpp
-auto e = ecs.entity();
-e.destruct();
-
-e.is_alive();  // false
-```
-
----
-
-## Общая схема данных
-
-```
-Данные:
-World → Entity → Component → Archetype (таблица)
-
-Выполнение:
-progress() → Pipeline → Phases → Systems → Queries → Archetypes → Callback
-```
-
----
-
-## Глоссарий flecs
-
-<!-- anchor: 08_glossary -->
-
-
-Словарь терминов flecs. Подробные примеры — в Основных понятиях и API Reference.
-
-## Ядро ECS
-
-| Термин        | Объяснение                                                                                                             |
-|---------------|------------------------------------------------------------------------------------------------------------------------|
-| **ECS**       | Entity Component System — подход к организации кода. Entity — уникальные объекты, Component — данные, System — логика. |
-| **World**     | Контейнер всех ECS-данных. Один world на приложение. C++: `flecs::world`, C: `ecs_world_t*`.                           |
-| **Entity**    | Уникальная сущность. 64-битный id (младшие 32 бита — ID, старшие — версия). Сама по себе не несёт данных.              |
-| **Component** | Тип данных на entity. В C++ — структура, в C — регистрируется через `ECS_COMPONENT`.                                   |
-| **Tag**       | Компонент без данных. Пустая структура в C++, используется для маркировки.                                             |
-| **System**    | Query + callback. Выполняется каждый кадр для entities, матчат query.                                                  |
-| **Query**     | Поиск entities по условиям (компоненты, pairs, операторы).                                                             |
-
----
-
-## Архитектура
-
-| Термин        | Объяснение                                                                                   |
-|---------------|----------------------------------------------------------------------------------------------|
-| **Archetype** | Таблица, группирующая entities с одинаковым набором компонентов. SoA-хранение.               |
-| **SoA**       | Structure of Arrays — хранение компонентов в отдельных массивах для cache-friendly итерации. |
-| **Type**      | Список ids entity (её «архетип»). `entity.type()` возвращает тип.                            |
-| **Pipeline**  | Список фаз, определяющий порядок выполнения систем.                                          |
-| **Phase**     | Тег, определяющий порядок системы в pipeline. Фазы: OnLoad, OnUpdate, PostUpdate и др.       |
-
----
-
-## Данные
-
-| Термин           | Объяснение                                                                                        |
-|------------------|---------------------------------------------------------------------------------------------------|
-| **Id**           | 64-битный идентификатор. Кодирует component, tag или pair. Всё, что можно добавить к entity — id. |
-| **Pair**         | Пара (relationship, target) — два id. Используется для связей между entities.                     |
-| **Relationship** | Первый элемент pair — тип связи (например, `ChildOf`, `Likes`).                                   |
-| **Target**       | Второй элемент pair — цель связи (например, родитель, Alice).                                     |
-| **Singleton**    | Единственный экземпляр компонента. Доступ через `world.get<T>()`.                                 |
-| **Prefab**       | Entity-шаблон. Instance наследует компоненты через pair `(IsA, prefab)`.                          |
-| **Instance**     | Entity, созданная от prefab через `is_a()`.                                                       |
-
----
-
-## Запросы
-
-| Термин             | Объяснение                                                                           |
-|--------------------|--------------------------------------------------------------------------------------|
-| **Term**           | Элемент query — условие матчинга («имеет Position», «имеет pair (ChildOf, parent)»). |
-| **Field**          | Массив значений, возвращаемый итератором для каждого term.                           |
-| **Cached Query**   | Query с кешированным списком archetypes. Быстрая итерация, больше памяти.            |
-| **Uncached Query** | Query без кеша. Меньше памяти, медленная итерация.                                   |
-| **each**           | Callback по одной entity. Проще писать, overhead на вызов.                           |
-| **iter**           | Batch итерация. Быстрее для больших объёмов, доступ к `delta_time`.                  |
-
----
-
-## Операторы
-
-| Термин       | Объяснение                                   |
-|--------------|----------------------------------------------|
-| **And**      | По умолчанию. Entity должна иметь компонент. |
-| **Not**      | Исключить entities с компонентом.            |
-| **Optional** | Компонент необязателен (может быть nullptr). |
-| **Or**       | Матч по одному из terms.                     |
-
----
-
-## Иерархии
-
-| Термин        | Объяснение                                                                                   |
-|---------------|----------------------------------------------------------------------------------------------|
-| **ChildOf**   | Встроенный relationship для иерархии родитель-ребёнок. При удалении родителя удаляются дети. |
-| **Parent**    | Entity, к которой привязан ребёнок через `ChildOf`.                                          |
-| **Child**     | Entity, привязанная к родителю через `child_of()`.                                           |
-| **Path**      | Путь entity в иерархии (например, `"Parent::Child"`).                                        |
-| **Cascade**   | Обход иерархии breadth-first в query.                                                        |
-| **Traversal** | Обход иерархии: `parent()` — компонент с родителя, `cascade()` — breadth-first.              |
-
----
-
-## События
-
-| Термин       | Объяснение                                                          |
-|--------------|---------------------------------------------------------------------|
-| **Observer** | Query + callback, вызываемый при событиях (OnAdd, OnRemove, OnSet). |
-| **OnAdd**    | Событие: компонент добавлен к entity.                               |
-| **OnRemove** | Событие: компонент удалён.                                          |
-| **OnSet**    | Событие: значение компонента установлено/изменено.                  |
-| **UnSet**    | Событие: значение сброшено перед удалением.                         |
-
----
-
-## Версионирование
-
-| Термин         | Объяснение                                                              |
-|----------------|-------------------------------------------------------------------------|
-| **Generation** | Старшие 32 бита `ecs_entity_t`. Увеличивается при переиспользовании ID. |
-| **is_alive**   | Проверка живости entity. Удалённые entities возвращают `false`.         |
-
----
-
-## API
-
-| Термин            | Объяснение                                                           |
-|-------------------|----------------------------------------------------------------------|
-| **ecs_entity_t**  | C API: `typedef ecs_id_t ecs_entity_t`. 64-битный id entity.         |
-| **ecs_id_t**      | C API: 64-битный идентификатор (component, tag, pair).               |
-| **ecs_iter_t**    | C API: итератор. Поля: `entities`, `count`, `delta_time`, `world`.   |
-| **ecs_field**     | C макрос: `ecs_field(it, Type, index)` — получить массив компонента. |
-| **ECS_COMPONENT** | C макрос: регистрация компонента.                                    |
-| **ECS_SYSTEM**    | C макрос: создание системы.                                          |
-| **FLECS_DEBUG**   | Макрос для включения проверок и assert'ов.                           |
-
----
-
-## Модули
-
-| Термин     | Объяснение                                                                           |
-|------------|--------------------------------------------------------------------------------------|
-| **Module** | Организация кода в переиспользуемый блок. C++: `world.import<T>()`, C: `ECS_IMPORT`. |
-| **Addon**  | Опциональный модуль flecs (REST, JSON, Units и др.).                                 |
-
----
-
-## Производительность
-
-| Термин             | Объяснение                                                     |
-|--------------------|----------------------------------------------------------------|
-| **multi_threaded** | Параллельное выполнение системы. Требует `ecs.set_threads(n)`. |
-| **defer**          | Отложенные операции. Изменения применяются при `defer_end()`.  |
-| **unsafe access**  | Доступ без проверок для максимальной производительности.       |
-| **bulk_create**    | Массовое создание entities без overhead на каждую.             |
-
----
-
-## Инструменты
-
-| Термин             | Объяснение                                                                        |
-|--------------------|-----------------------------------------------------------------------------------|
-| **Flecs Explorer** | Веб-инструмент для просмотра entities, компонентов, иерархий. Требует REST addon. |
-| **Tracy**          | Профилировщик. Flecs поддерживает интеграцию через `FLECS_TRACY`.                 |

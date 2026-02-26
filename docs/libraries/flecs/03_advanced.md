@@ -1,963 +1,453 @@
-## Практические рецепты flecs
+# Flecs в ProjectV: Злые хаки и хардкор оптимизации
 
-<!-- anchor: 05_tools -->
+> **Для понимания:** Это не просто "оптимизации" — это война за каждый наносекунд. В воксельном движке, где
+> обрабатываются миллионы блоков, стандартные подходы не работают. Здесь мы используем трюки уровня "прямой доступ к
+> кэшу
+> процессора" и "обход ограничений драйвера".
 
+## 🚀 Data-Oriented Design на максимум
 
-Распространённые паттерны и рецепты использования flecs.
-
-## Query Builder
-
-### Базовый запрос
-
-```cpp
-auto q = ecs.query_builder<Position, Velocity>().build();
-```
-
-### С условием Not
+### SoA хранение компонентов для вокселей
 
 ```cpp
-// Entities с Position, но без Dead
-auto q = ecs.query_builder<Position>()
-    .without<Dead>()
-    .build();
-```
-
-### С условием Optional
-
-```cpp
-// Velocity необязателен
-auto q = ecs.query_builder<Position, Velocity>()
-    .term_at(1).optional()
-    .build();
-
-q.each([](flecs::entity e, Position& p, Velocity* v) {
-    // v может быть nullptr
-});
-```
-
-### С pair
-
-```cpp
-// Все дети parent
-auto q = ecs.query_builder<>()
-    .with(flecs::ChildOf, parent)
-    .build();
-```
-
-### С wildcard
-
-```cpp
-// Все entity с любым pair (Likes, *)
-auto q = ecs.query_builder<>()
-    .with(Likes, flecs::Wildcard)
-    .build();
-```
-
-### Cascade (обход иерархии)
-
-```cpp
-// Обход от корня к листьям
-auto q = ecs.query_builder<Transform>()
-    .cascade()
-    .build();
-```
-
----
-
-## Observers
-
-### Инициализация компонента
-
-```cpp
-ecs.observer<MeshComponent>()
-    .event(flecs::OnSet)
-    .each([](flecs::entity e, MeshComponent& mesh) {
-        // Загрузка GPU ресурса при установке компонента
-        mesh.handle = load_mesh(mesh.path);
-    });
-```
-
-### Освобождение ресурса
-
-```cpp
-ecs.observer<MeshComponent>()
-    .event(flecs::OnRemove)
-    .each([](flecs::entity e, MeshComponent& mesh) {
-        // Освобождение GPU ресурса при удалении компонента
-        unload_mesh(mesh.handle);
-    });
-```
-
-### Реакция на несколько событий
-
-```cpp
-ecs.observer<Position>()
-    .event(flecs::OnAdd | flecs::OnSet)
-    .each([](flecs::entity e, Position& p) {
-        // Компонент добавлен или изменён
-    });
-```
-
-### Передача контекста
-
-```cpp
-GPUContext ctx{device, allocator};
-
-ecs.observer<MeshComponent>()
-    .event(flecs::OnSet)
-    .ctx(&ctx)
-    .each([](flecs::entity e, MeshComponent& mesh) {
-        auto ctx = e.world().ctx<GPUContext>();
-        mesh.handle = load_mesh(ctx, mesh.path);
-    });
-```
-
----
-
-## Prefabs
-
-### Создание иерархии prefab
-
-```cpp
-// Базовый юнит
-auto Unit = ecs.prefab("Unit")
-    .set<Health>({100})
-    .set<Speed>({5.0f});
-
-// Tank наследует от Unit
-auto Tank = ecs.prefab("Tank")
-    .is_a(Unit)
-    .set<Health>({200})      // Override
-    .set<Armor>({50});
-
-// Создание instance
-auto my_tank = ecs.entity().is_a(Tank);
-```
-
-### Prefab с children
-
-```cpp
-auto Car = ecs.prefab("Car")
-    .set<Speed>({10.0f});
-
-// Ребёнок prefab
-auto Wheel = ecs.prefab("Wheel");
-auto wheel1 = ecs.prefab().child_of(Car).is_a(Wheel);
-auto wheel2 = ecs.prefab().child_of(Car).is_a(Wheel);
-
-// Instance наследует детей
-auto my_car = ecs.entity().is_a(Car);
-```
-
----
-
-## Модули
-
-### Структура модуля
-
-```cpp
-// physics_module.h
-#pragma once
 #include <flecs.h>
+#include <print>
+#include <span>
+#include <mdspan>
 
-struct PhysicsModule {
-    PhysicsModule(flecs::world& ecs);
+// ТРАДИЦИОННЫЙ ПОДХОД (AoS) — МЕДЛЕННО:
+struct ChunkAoS {
+    alignas(16) glm::vec3 position;
+    alignas(4)  uint32_t blockData[16*16*16];
+    alignas(4)  uint8_t lightLevels[16*16*16];
+    alignas(4)  bool dirtyFlags[16*16*16];
 };
 
-// physics_module.cpp
-#include "physics_module.h"
-
-struct Velocity { float x, y; };
-struct Mass { float value; };
-
-PhysicsModule::PhysicsModule(flecs::world& ecs) {
-    ecs.module<PhysicsModule>();
-
-    ecs.system<Velocity, Mass>("ApplyGravity")
-        .kind(flecs::OnUpdate)
-        .each([](Velocity& v, const Mass& m) {
-            v.y -= 9.81f * m.value;
-        });
-}
-
-// main.cpp
-#include "physics_module.h"
-
-int main() {
-    flecs::world ecs;
-    ecs.import<PhysicsModule>();
-
-    // Компоненты модуля доступны
-    ecs.entity().set<Velocity>({0, 0}).set<Mass>({1.0f});
-
-    while (ecs.progress()) {}
-}
-```
-
----
-
-## Singleton
-
-### Глобальные настройки
-
-```cpp
-struct GameConfig {
-    float gravity = 9.81f;
-    float time_scale = 1.0f;
-    bool debug_mode = false;
-};
-
-// Установка
-ecs.set<GameConfig>({9.81f, 1.0f, false});
-
-// Использование в системе
-ecs.system<Velocity>()
-    .each([](Velocity& v) {
-        const GameConfig* cfg = ecs.get<GameConfig>();
-        v.y -= cfg->gravity * cfg->time_scale;
-    });
-```
-
----
-
-## Иерархии
-
-### Transform propagation
-
-```cpp
-struct LocalTransform { float x, y; };
-struct WorldTransform { float x, y; };
-
-// Система для обновления world transform
-ecs.system<LocalTransform, WorldTransform>()
-    .kind(flecs::PreUpdate)
-    .term_at(1).parent()  // WorldTransform от родителя
-    .each([](flecs::entity e, LocalTransform& local, WorldTransform& parent_world) {
-        // Получаем свой WorldTransform
-        auto* world = e.get_mut<WorldTransform>();
-        world->x = parent_world.x + local.x;
-        world->y = parent_world.y + local.y;
-    });
-```
-
-### Удаление с детьми
-
-```cpp
-// По умолчанию дети удаляются с родителем
-auto parent = ecs.entity("Parent");
-auto child = ecs.entity("Child").child_of(parent);
-
-parent.destruct();  // Удалит и child
-```
-
----
-
-## Batch создание
-
-### Создание множества entities
-
-```cpp
-// Медленно: множество отдельных вызовов
-for (int i = 0; i < 10000; i++) {
-    ecs.entity().set<Position>({i * 1.0f, 0});
-}
-
-// Быстро: bulk creation
-auto bulk = ecs.bulk_create()
-    .add<Position>()
-    .create(10000);
-```
-
----
-
-## Deferred operations
-
-### Отложенные изменения
-
-```cpp
-ecs.defer_begin();
-
-for (int i = 0; i < 1000; i++) {
-    auto e = ecs.entity();
-    e.set<Position>({i, 0});
-    e.set<Velocity>({1, 0});
-}
-
-ecs.defer_end();  // Применит все изменения разом
-```
-
----
-
-## Phases
-
-### Пользовательская фаза
-
-```cpp
-// Создание фазы
-auto MyPhase = ecs.entity().add(flecs::Phase);
-
-// Зависимость от другой фазы
-ecs.entity()
-    .add(flecs::Phase)
-    .add(flecs::DependsOn, flecs::OnUpdate);  // После OnUpdate
-
-// Использование в системе
-ecs.system<Position>("MySystem")
-    .kind(MyPhase)
-    .each([](Position& p) { });
-```
-
----
-
-## Delta time
-
-### Доступ в системе
-
-```cpp
-ecs.system<Velocity>()
-    .each([](flecs::iter& it, size_t i, Velocity& v) {
-        float dt = it.delta_time();
-        // или использовать v.x *= dt; при each
-    });
-
-// Через each
-ecs.system<Velocity>()
-    .each([](Velocity& v) {
-        // delta_time недоступен напрямую
-        // используйте iter()
-    });
-```
-
----
-
-## Выход из игры
-
-### Из системы
-
-```cpp
-ecs.system<GameState>()
-    .kind(flecs::OnUpdate)
-    .each([](flecs::entity e, GameState& state) {
-        if (state.should_quit) {
-            e.world().quit();
-        }
-    });
-```
-
-### Из внешнего кода
-
-```cpp
-while (should_run && ecs.progress()) {}
-// ecs.quit() → progress() вернёт false
-```
-
----
-
-## Поиск entity
-
-### По имени
-
-```cpp
-auto e = ecs.lookup("Player");
-auto e = ecs.lookup("Parent::Child");
-```
-
-### По компоненту
-
-```cpp
-// Первая entity с компонентом
-auto e = ecs.lookup<GameState>();
-
-// Все entities с компонентом
-ecs.each<GameState>([](flecs::entity e, GameState& state) { });
-```
-
----
-
-## Проверка типа entity
-
-```cpp
-if (e.has<Position>() && e.has<Velocity>()) {
-    // ...
-}
-
-if (e.is_a<Tank>()) {
-    // Instance prefab Tank
-}
-
-if (e.has(flecs::ChildOf, parent)) {
-    // Ребёнок parent
-}
-
----
-
-## Производительность flecs
-
-<!-- anchor: 06_performance -->
-
-
-Оптимизации, многопоточность и unsafe доступ.
-
-## Cached vs Uncached Queries
-
-### Cached (по умолчанию)
-
-- Быстрая итерация (archetype list кешируется)
-- Больше памяти
-- Дольше создание
-- Подходит для систем и частых запросов
-
-```cpp
-// Cached query (по умолчанию)
-auto q = ecs.query_builder<Position, Velocity>().build();
-```
-
-### Uncached
-
-- Медленная итерация (поиск archetypes каждый раз)
-- Меньше памяти
-- Быстрое создание
-- Подходит для редких ad-hoc запросов
-
-```cpp
-auto q = ecs.query_builder<Position, Velocity>()
-    .cache_kind(flecs::QueryCacheNone)
-    .build();
-```
-
-### Когда что использовать
-
-| Сценарий                     | Тип query |
-|------------------------------|-----------|
-| Система (каждый кадр)        | Cached    |
-| Частый поиск                 | Cached    |
-| Разовый запрос (найти детей) | Uncached  |
-| Редкая операция              | Uncached  |
-
----
-
-## Итерация
-
-### each vs iter
-
-```cpp
-// each — callback по одной entity
-// Проще писать, но overhead на каждый вызов
-q.each([](Position& p, Velocity& v) {
-    p.x += v.x;
-});
-
-// iter — batch итерация
-// Быстрее для больших объёмов
-q.iter([](flecs::iter& it, Position* p, Velocity* v) {
-    for (auto i : it) {
-        p[i].x += v[i].x;
+// ПРАВИЛЬНЫЙ ПОДХОД (SoA) — БЫСТРО:
+struct ChunkSoA {
+    // Отдельные массивы для каждого типа данных
+    alignas(64) std::array<glm::vec3, MAX_CHUNKS> positions;      // 64-байтное выравнивание для кэш-линий
+    alignas(64) std::array<std::array<uint32_t, 4096>, MAX_CHUNKS> blockData;
+    alignas(64) std::array<std::array<uint8_t, 4096>, MAX_CHUNKS> lightLevels;
+    alignas(64) std::array<std::array<bool, 4096>, MAX_CHUNKS> dirtyFlags;
+
+    // Использование mdspan для многомерного доступа
+    auto getBlockData(size_t chunkIndex) {
+        return std::mdspan(blockData[chunkIndex].data(),
+                          std::extents<size_t, 16, 16, 16>());
     }
-});
-```
-
-**Рекомендация:** Используйте `iter` для hot paths и больших объёмов данных.
-
----
-
-## Многопоточность
-
-### Включение
-
-```cpp
-flecs::world ecs;
-ecs.set_threads(4);  // Пул из 4 потоков
-```
-
-### Параллельные системы
-
-```cpp
-ecs.system<Position, Velocity>()
-    .multi_threaded()
-    .each([](Position& p, const Velocity& v) {
-        p.x += v.x;
-    });
-```
-
-### Ограничения
-
-- Системы с `immediate = true` не могут быть `multi_threaded`
-- Изменение структуры ECS (добавление/удаление компонентов, создание/удаление entities) должно быть отложено через
-  `defer`
-- Доступ к общим данным требует синхронизации
-
-### Deferred operations в многопоточности
-
-```cpp
-ecs.system<Position>()
-    .multi_threaded()
-    .iter([](flecs::iter& it, Position* p) {
-        // Изменения структуры ECS откладываются
-        it.world().defer_begin();
-
-        for (auto i : it) {
-            if (p[i].x > 100) {
-                it.entity(i).add<Dead>();  // Отложено
-            }
-        }
-
-        it.world().defer_end();  // Применится после итерации
-    });
-```
-
----
-
-## Unsafe Access
-
-Для максимальной производительности можно обойти проверки:
-
-```cpp
-// Безопасный доступ (по умолчанию)
-Position* p = e.get_mut<Position>();
-
-// Unsafe доступ (быстрее, но без проверок)
-Position* p = e.get_mut_unsafe<Position>();
-```
-
-### Когда использовать unsafe
-
-- Горячие циклы с миллионами итераций
-- Гарантированно валидные entities
-- После профилирования
-
-**Предупреждение:** Unsafe доступ к невалидной entity = undefined behavior.
-
----
-
-## Archetype Layout
-
-### Советы по компонентам
-
-```cpp
-// Плохо: большой компонент
-struct Unit {
-    Position pos;
-    Velocity vel;
-    Health health;
-    Inventory inventory;  // Может быть большим
-    std::string name;
 };
 
-// Хорошо: разделение на компоненты
-struct Position { float x, y, z; };
-struct Velocity { float x, y, z; };
-struct Health { float current, max; };
-struct Inventory { /* ... */ };
-struct Name { std::string value; };
+// Компонент Flecs с SoA хранением
+struct alignas(64) VoxelChunkStorage {
+    ChunkSoA data;
+    size_t chunkCount{0};
+
+    // Batch операции над всеми чанками
+    void updateAllChunks(std::function<void(size_t, glm::vec3&)> processor) {
+        for (size_t i = 0; i < chunkCount; ++i) {
+            processor(i, data.positions[i]);
+        }
+    }
+};
 ```
 
-**Принцип:** Компоненты должны быть компактными. Большие данные выносите в отдельные компоненты.
-
----
-
-## Память
-
-### Таблицы (Archetypes)
-
-Каждая уникальная комбинация компонентов создаёт новую таблицу.
+### Выравнивание для избежания false sharing
 
 ```cpp
-// 1 таблица: [Position, Velocity]
-ecs.entity().set<Position>({}).set<Velocity>({});
-
-// 2 таблицы: [Position, Velocity, Health] и [Position, Velocity]
-ecs.entity().set<Position>({}).set<Velocity>({}).set<Health>({});
-```
-
-### Советы
-
-- Избегайте избыточного дробления таблиц
-- Группируйте часто используемые вместе компоненты
-- Используйте теги для маркировки без данных
-
----
-
-## Batch операции
-
-### Bulk creation
-
-```cpp
-// Медленно
-for (int i = 0; i < 10000; i++) {
-    ecs.entity().set<Position>({i * 1.0f, 0});
-}
-
-// Быстро
-auto bulk = ecs.bulk_create()
-    .add<Position>()
-    .create(10000);
-```
-
-### Deferred operations
-
-```cpp
-ecs.defer_begin();
-
-for (int i = 0; i < 1000; i++) {
-    auto e = ecs.entity();
-    e.set<Position>({i, 0});
-    e.set<Velocity>({1, 0});
-}
-
-ecs.defer_end();  // Одно обновление archetype
-```
-
----
-
-## Pipeline оптимизации
-
-### Порядок систем
-
-Системы внутри фазы выполняются в порядке объявления. Критичные системы объявляйте первыми.
-
-```cpp
-// Критичная система
-ecs.system<Input>("ProcessInput")
-    .kind(flecs::PreUpdate)
-    .each([](Input& i) { });
-
-// Менее критичная
-ecs.system<AI>("ProcessAI")
-    .kind(flecs::PreUpdate)
-    .each([](AI& a) { });
-```
-
-### Кастомные фазы
-
-```cpp
-// Фаза после OnUpdate
-auto PostProcess = ecs.entity()
-    .add(flecs::Phase)
-    .add(flecs::DependsOn, flecs::OnUpdate);
-
-ecs.system<Position>("Clamp")
-    .kind(PostProcess)
-    .each([](Position& p) { });
-```
-
----
-
-## Профилирование
-
-### Tracy
-
-Flecs поддерживает интеграцию с Tracy:
-
-```cpp
-#define FLECS_TRACY 1
 #include <flecs.h>
+#include <print>
+
+// ❌ ПЛОХО: Разные потоки пишут в одну cache line
+struct BadAlignment {
+    uint64_t counter1;  // Поток 1
+    uint64_t counter2;  // Поток 2 — в той же cache line!
+    uint64_t counter3;  // Поток 3
+    uint64_t counter4;  // Поток 4
+};
+
+// ✅ ХОРОШО: Каждый counter в отдельной cache line
+struct alignas(64) GoodAlignment {
+    alignas(64) std::atomic<uint64_t> counter1;  // 64 байта = размер cache line
+    alignas(64) std::atomic<uint64_t> counter2;
+    alignas(64) std::atomic<uint64_t> counter3;
+    alignas(64) std::atomic<uint64_t> counter4;
+
+    // Каждый поток работает со своей cache line
+    // Нет false sharing, нет инвалидации кэша
+};
+
+// Компонент для многопоточных систем
+struct alignas(64) ThreadLocalStats {
+    alignas(64) uint64_t trianglesProcessed{0};
+    alignas(64) uint64_t voxelsGenerated{0};
+    alignas(64) uint64_t memoryAllocated{0};
+    alignas(64) uint64_t cacheMisses{0};
+
+    // Сбор статистики со всех потоков
+    static ThreadLocalStats collect(const std::vector<ThreadLocalStats>& all) {
+        ThreadLocalStats total;
+        for (const auto& stat : all) {
+            total.trianglesProcessed += stat.trianglesProcessed;
+            total.voxelsGenerated += stat.voxelsGenerated;
+            total.memoryAllocated += stat.memoryAllocated;
+            total.cacheMisses += stat.cacheMisses;
+        }
+        return total;
+    }
+};
 ```
 
-### Ручное профилирование
+## ⚡ Многопоточность: M:N Job System вместо std::thread
+
+### Почему std::thread — антипаттерн для ProjectV
 
 ```cpp
-auto start = std::chrono::high_resolution_clock::now();
+// ❌ АНТИПАТТЕРН: Создание потока для каждой задачи
+void badMultithreading() {
+    std::vector<std::thread> threads;
 
-q.each([](Position& p) { });
+    for (int i = 0; i < 1000; ++i) {
+        threads.emplace_back([]() {
+            // Задача
+        });
+    }
 
-auto end = std::chrono::high_resolution_clock::now();
-auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-```
-
-### Flecs Explorer
-
-Веб-инструмент для анализа производительности:
-
-- Время выполнения систем
-- Количество entities в archetypes
-- Использование памяти
-
-Требует REST addon: [flecs.dev/explorer](https://flecs.dev/explorer)
-
----
-
-## Типичные bottleneck'и
-
-| Проблема                 | Решение                             |
-|--------------------------|-------------------------------------|
-| Медленная итерация       | Использовать `iter` вместо `each`   |
-| Много таблиц             | Уменьшить вариативность компонентов |
-| Частые создания/удаления | Использовать пулы объектов          |
-| Конкуренция за данные    | Разделить на независимые компоненты |
-| Много singleton-запросов | Кешировать указатель                |
-
----
-
-## Чеклист оптимизации
-
-1. Использовать cached queries для частых запросов
-2. Использовать `iter` для горячих путей
-3. Включить `multi_threaded` для независимых систем
-4. Компактные компоненты без лишних данных
-5. Batch операции для массового создания
-6. Профилировать перед оптимизацией
-
----
-
-## Решение проблем flecs
-
-<!-- anchor: 07_troubleshooting -->
-
-
-Частые ошибки и способы их исправления.
-
-## Сборка
-
-### undefined reference to ecs_* / flecs::*
-
-**Причина:** flecs не линкован с приложением.
-
-**Решение:**
-
-```cmake
-add_subdirectory(external/flecs)
-target_link_libraries(MyApp PRIVATE flecs::flecs_static)
-```
-
-### Не найден flecs.h
-
-**Причина:** Include-путь не добавлен.
-
-**Решение:**
-
-1. Убедитесь, что `flecs::flecs_static` в `target_link_libraries` — include передаётся транзитивно.
-2. Используйте `#include <flecs.h>` (не `flecs/flecs.h`).
-
-### C++17 требуется
-
-**Причина:** C++ API flecs требует C++17.
-
-**Решение:**
-
-```cmake
-set(CMAKE_CXX_STANDARD 17)
-```
-
----
-
-## Runtime
-
-### Query возвращает 0 entities
-
-**Причина:** Query матчит только entities, удовлетворяющие всем terms.
-
-**Решение:**
-
-1. Проверьте, что у entity есть **все** компоненты из query:
-   ```cpp
-   entity.has<Position>();  // true?
-   entity.type();           // Список компонентов
-   ```
-
-2. Проверьте операторы: `without<T>()` исключает entities с компонентом.
-3. Для singleton: `world.set<Gravity>({9.81})` — иначе query с Gravity не матчит.
-
-### Система не выполняется
-
-**Причина:** Entities не матчат query системы.
-
-**Решение:**
-
-```cpp
-// Система: Position + Velocity
-ecs.system<Position, Velocity>()...
-
-// Entity должна иметь ОБА компонента
-e.set<Position>({}).set<Velocity>({});
-```
-
-### Использование удалённой entity
-
-**Причина:** После `entity.destruct()` id переиспользуется. Старая ссылка невалидна.
-
-**Решение:**
-
-```cpp
-if (e.is_alive()) {
-    // Безопасно использовать
+    for (auto& t : threads) {
+        t.join();
+    }
+    // Проблемы:
+    // 1. Overhead на создание/уничтожение потоков
+    // 2. Нет контроля над количеством потоков
+    // 3. Cache thrashing при миграции между ядрами
+    // 4. Системные вызовы на каждую задачу
 }
-```
 
-**Отладка:** Включите `FLECS_DEBUG` для assert при обращении к удалённой entity.
+// ✅ ПРАВИЛЬНЫЙ ПОДХОД: M:N Job System
+class JobSystem {
+private:
+    std::vector<std::thread> workers;          // N hardware threads
+    moodycamel::ConcurrentQueue<Job> jobQueue; // Lock-free очередь
+    std::atomic<bool> running{true};
 
----
+public:
+    JobSystem(size_t threadCount = std::thread::hardware_concurrency()) {
+        workers.reserve(threadCount);
+        for (size_t i = 0; i < threadCount; ++i) {
+            workers.emplace_back([this, i]() { workerThread(i); });
+        }
+    }
 
-## Логика
+    ~JobSystem() {
+        running = false;
+        for (auto& t : workers) {
+            if (t.joinable()) t.join();
+        }
+    }
 
-### ecs_quit не срабатывает
+    template<typename F>
+    void schedule(F&& job) {
+        jobQueue.enqueue(std::forward<F>(job));
+    }
 
-**Причина:** `ecs_progress` возвращает `true` до вызова `ecs_quit`.
+    template<typename F>
+    void parallelFor(size_t count, F&& func) {
+        const size_t chunkSize = std::max<size_t>(1, count / workers.size());
+        std::atomic<size_t> completed{0};
 
-**Решение:**
-
-```cpp
-// Из системы или observer
-ecs.quit();
-
-// Следующий progress() вернёт false
-while (ecs.progress()) {}
-```
-
-### Компонент не найден / не зарегистрирован
-
-**Причина:** В C компоненты нужно регистрировать явно. В C++ регистрация автоматическая при первом использовании.
-
-**Решение C:**
-
-```c
-ECS_COMPONENT(world, Position);
-ecs_set(world, e, Position, {10, 20});
-```
-
-**Решение C++:**
-
-```cpp
-// Регистрация происходит автоматически
-e.set<Position>({10, 20});
-```
-
-### Дублирование entity по имени
-
-**Причина:** `world.entity("Name")` возвращает существующую entity с таким именем, а не создаёт новую.
-
-**Решение:** Используйте уникальные имена или scope:
-
-```cpp
-world.entity("Enemy1");
-world.entity("Enemy2");
-
-// Или иерархия
-auto wave1 = world.entity("Wave1");
-world.entity("Enemy").child_of(wave1);
-```
-
----
-
-## Производительность
-
-### Медленная итерация query
-
-**Причина:** Uncached query ищет archetypes при каждой итерации.
-
-**Решение:** Используйте cached query (по умолчанию) для частых запросов.
-
-```cpp
-// Cached (по умолчанию)
-auto q = ecs.query_builder<Position>().build();
-
-// Uncached — только для редких запросов
-auto q = ecs.query_builder<Position>()
-    .cache_kind(flecs::QueryCacheNone)
-    .build();
-```
-
-### Много таблиц (archetypes)
-
-**Причина:** Каждая уникальная комбинация компонентов создаёт новую таблицу.
-
-**Решение:**
-
-- Группируйте часто используемые вместе компоненты
-- Используйте теги вместо компонентов-маркеров
-- Избегайте избыточной вариативности
-
----
-
-## Отладка
-
-### FLECS_DEBUG
-
-Включает проверки и assert'ы:
-
-```cmake
-target_compile_definitions(MyApp PRIVATE FLECS_DEBUG)
-```
-
-### Flecs Explorer
-
-Веб-инструмент для просмотра:
-
-- Entities и компоненты
-- Иерархии
-- Systems и queries
-
-Требует REST addon: [flecs.dev/explorer](https://flecs.dev/explorer)
-
-### Вывод состояния
-
-```cpp
-// Вывести все entities с компонентом
-ecs.each<Position>([](flecs::entity e, Position& p) {
-    std::cout << e.name() << ": " << p.x << ", " << p.y << "\n";
-});
-
-// Тип entity
-auto type = e.type();
-for (int i = 0; i < type.count(); i++) {
-    std::cout << ecs.to_string(type.get(i)) << "\n";
-}
-```
-
----
-
-## Многопоточность
-
-### Race condition
-
-**Причина:** Параллельные системы обращаются к общим данным без синхронизации.
-
-**Решение:**
-
-- Разделите данные на независимые компоненты
-- Используйте singleton только для чтения
-- Синхронизируйте доступ к общим ресурсам
-
-### Изменение структуры ECS из параллельной системы
-
-**Причина:** Добавление/удаление компонентов из `multi_threaded` системы.
-
-**Решение:** Используйте defer:
-
-```cpp
-ecs.system<Position>()
-    .multi_threaded()
-    .iter([](flecs::iter& it, Position* p) {
-        it.world().defer_begin();
-
-        for (auto i : it) {
-            if (p[i].x > 100) {
-                it.entity(i).add<Dead>();  // Отложено
-            }
+        for (size_t start = 0; start < count; start += chunkSize) {
+            size_t end = std::min(start + chunkSize, count);
+            schedule([start, end, &func, &completed]() {
+                for (size_t i = start; i < end; ++i) {
+                    func(i);
+                }
+                completed.fetch_add(1, std::memory_order_release);
+            });
         }
 
-        it.world().defer_end();
+        // Ожидание завершения всех задач
+        while (completed.load(std::memory_order_acquire) <
+               ((count + chunkSize - 1) / chunkSize)) {
+            std::this_thread::yield();
+        }
+    }
+
+private:
+    void workerThread(size_t threadId) {
+        // Привязка потока к конкретному CPU ядру
+        setThreadAffinity(threadId);
+
+        Job job;
+        while (running) {
+            if (jobQueue.try_dequeue(job)) {
+                job();
+            } else {
+                std::this_thread::yield();
+            }
+        }
+    }
+};
+```
+
+### Интеграция Job System с Flecs
+
+```cpp
+#include <flecs.h>
+
+// Компонент для хранения Job System
+struct JobSystemComponent {
+    std::unique_ptr<JobSystem> jobSystem;
+
+    JobSystemComponent()
+        : jobSystem(std::make_unique<JobSystem>()) {}
+};
+
+// Система, использующая Job System для параллельной обработки
+ecs.system<VoxelData>("ProcessVoxelsParallel")
+    .multi_threaded()  // Flecs распределяет сущности по потокам
+    .iter([](flecs::iter& it, VoxelData* data) {
+        auto* jobSystem = it.world().ctx<JobSystemComponent>()->jobSystem.get();
+
+        // Разделяем работу на chunks для Job System
+        jobSystem->parallelFor(it.count(), [&](size_t i) {
+            processVoxelChunk(data[i]);
+        });
+
+        // Flecs ждёт завершения всех задач перед переходом к следующей системе
+    });
+
+// Специальная система для тяжёлых вычислений
+ecs.system<HeavyComputationData>("HeavyCompute")
+    .iter([](flecs::iter& it, HeavyComputationData* data) {
+        // Эта система НЕ использует multi_threaded()
+        // Вместо этого она использует Job System для fine-grained параллелизма
+
+        auto* jobSystem = it.world().ctx<JobSystemComponent>()->jobSystem.get();
+        std::vector<std::future<void>> futures;
+
+        for (auto i : it) {
+            futures.push_back(jobSystem->scheduleAsync([&data, i]() {
+                // Тяжёлые вычисления в отдельной задаче
+                performHeavyComputation(data[i]);
+            }));
+        }
+
+        // Ожидание завершения всех асинхронных задач
+        for (auto& future : futures) {
+            future.wait();
+        }
     });
 ```
 
----
+## 🎯 Unsafe доступ и zero-copy оптимизации
 
-## Частые ошибки
+### Unsafe доступ для hot paths
 
-| Ошибка               | Причина                | Решение                     |
-|----------------------|------------------------|-----------------------------|
-| Crash при entity.get | Entity удалена         | Проверить `is_alive()`      |
-| Query пустой         | Не все компоненты      | Проверить `entity.has<T>()` |
-| Система не работает  | Entity не матчит query | Добавить нужные компоненты  |
-| Медленно             | Uncached query         | Использовать cached         |
-| Зависание            | Бесконечный цикл       | Проверить условие выхода    |
+```cpp
+#include <flecs.h>
 
----
+// ❌ БЕЗОПАСНЫЙ ДОСТУП (медленно)
+ecs.system<Position, Velocity>("MoveSafe")
+    .each([](flecs::entity e, Position& pos, Velocity& vel) {
+        // Каждый вызов .each() — это виртуальный вызов + проверки
+        pos.x += vel.dx;
+        pos.y += vel.dy;
+    });
 
-## Чеклист отладки
+// ✅ UNSAFE ДОСТУП (быстро, но опасно)
+ecs.system<Position, Velocity>("MoveUnsafe")
+    .iter([](flecs::iter& it, Position* pos, Velocity* vel) {
+        // Прямой доступ к массивам, без проверок
+        // ТОЛЬКО если уверены, что данные валидны!
 
-1. Включить `FLECS_DEBUG`
-2. Проверить `entity.is_alive()`
-3. Проверить `entity.has<T>()`
-4. Вывести `entity.type()`
-5. Проверить операторы query (`without`, `optional`)
-6. Использовать Flecs Explorer
+        const size_t count = it.count();
+        Position* posArray = pos;
+        const Velocity* velArray = vel;
+
+        // Векторизация через SIMD (компилятор может оптимизировать)
+        for (size_t i = 0; i < count; ++i) {
+            posArray[i].x += velArray[i].dx;
+            posArray[i].y += velArray[i].dy;
+        }
+
+        // Ещё быстрее: ручная векторизация
+        #ifdef __AVX2__
+        processWithAVX2(posArray, velArray, count);
+        #endif
+    });
+
+// Компонент с ручным управлением памятью
+struct alignas(64) HighPerformanceComponent {
+    // Raw указатели для максимальной производительности
+    float* positionsX{nullptr};
+    float* positionsY{nullptr};
+    float* positionsZ{nullptr};
+    size_t capacity{0};
+    size_t count{0};
+
+    HighPerformanceComponent(size_t initialCapacity = 1024) {
+        capacity = initialCapacity;
+
+        // Выделяем выровненную память
+        positionsX = static_cast<float*>(aligned_alloc(64, capacity * sizeof(float)));
+        positionsY = static_cast<float*>(aligned_alloc(64, capacity * sizeof(float)));
+        positionsZ = static_cast<float*>(aligned_alloc(64, capacity * sizeof(float)));
+
+        // Инициализация
+        std::fill_n(positionsX, capacity, 0.0f);
+        std::fill_n(positionsY, capacity, 0.0f);
+        std::fill_n(positionsZ, capacity, 0.0f);
+    }
+
+    ~HighPerformanceComponent() {
+        if (positionsX) aligned_free(positionsX);
+        if (positionsY) aligned_free(positionsY);
+        if (positionsZ) aligned_free(positionsZ);
+    }
+
+    // Batch операции с SIMD
+    void translateAll(float dx, float dy, float dz) {
+        const size_t simdWidth = 8; // AVX2: 8 floats
+        const size_t alignedCount = count - (count % simdWidth);
+
+        // Векторизованная часть
+        for (size_t i = 0; i < alignedCount; i += simdWidth) {
+            // SIMD операции
+            _mm256_store_ps(&positionsX[i],
+                _mm256_add_ps(_mm256_load_ps(&positionsX[i]),
+                             _mm256_set1_ps(dx)));
+            // ... аналогично для Y и Z
+        }
+
+        // Скалярная часть для остатка
+        for (size_t i = alignedCount; i < count; ++i) {
+            positionsX[i] += dx;
+            positionsY[i] += dy;
+            positionsZ[i] += dz;
+        }
+    }
+};
+```
+
+### Zero-copy передача данных в GPU
+
+```cpp
+#include <flecs.h>
+#include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
+
+// Структура для zero-copy буферов
+struct ZeroCopyBuffer {
+    VkBuffer buffer{VK_NULL_HANDLE};
+    VmaAllocation allocation{nullptr};
+    void* mappedData{nullptr};  // CPU-видимый указатель
+    VkDeviceSize size{0};
+
+    // Создание persistently mapped buffer
+    static std::expected<ZeroCopyBuffer, std::string> create(
+        VmaAllocator allocator,
+        VkDeviceSize size,
+        VkBufferUsageFlags usage) {
+
+        ZeroCopyBuffer result;
+        result.size = size;
+
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = size;
+        bufferInfo.usage = usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        VmaAllocationInfo allocationInfo{};
+
+        VkResult vkResult = vmaCreateBuffer(
+            allocator,
+            &bufferInfo,
+            &allocInfo,
+            &result.buffer,
+            &result.allocation,
+            &allocationInfo
+        );
+
+        if (vkResult != VK_SUCCESS) {
+            return std::unexpected("Failed to create zero-copy buffer");
+        }
+
+        result.mappedData = allocationInfo.pMappedData;
+        return result;
+    }
+
+    // Прямая запись данных (без копирования)
+    template<typename T>
+    void writeDirect(size_t offset, const T& data) {
+        if (!mappedData || offset + sizeof(T) > size) return;
+
+        // Просто записываем в память — VMA обеспечивает когерентность
+        *reinterpret_cast<T*>(static_cast<char*>(mappedData) + offset) = data;
+
+        // Флаш не нужен — VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+        // гарантирует когерентность
+    }
+
+    ~ZeroCopyBuffer() {
+        if (buffer != VK_NULL_HANDLE) {
+            // VMA автоматически анмапит память при уничтожении
+        }
+    }
+};
+
+// Компонент для zero-copy рендеринга вокселей
+struct alignas(64) VoxelRenderData {
+    ZeroCopyBuffer vertexBuffer;
+    ZeroCopyBuffer indexBuffer;
+    ZeroCopyBuffer instanceBuffer;  // Для instanced rendering
+
+    // Прямое обновление данных без копирования
+    void updateVerticesDirect(const std::vector<Vertex>& vertices) {
+        if (vertices.empty()) return;
+
+        const size_t dataSize = vertices.size() * sizeof(Vertex);
+        if (dataSize > vertexBuffer.size) {
+            // Реаллокация с новым размером
+            vertexBuffer = ZeroCopyBuffer::create(/*...*/).value();
+        }
+
+        // Zero-copy запись
+        std::memcpy(vertexBuffer.mappedData, vertices.data(), dataSize);
+    }
+
+    // Batch обновление инстансов
+    template<typename InstanceData>
+    void updateInstancesDirect(const std::span<InstanceData> instances) {
+        if (instances.empty()) return;
+
+        const size_t dataSize = instances.size() * sizeof(InstanceData);
+        if (dataSize > instanceBuffer.size) {
+            instanceBuffer = ZeroCopyBuffer::create(/*...*/).value();
+        }
+
+        // Прямая запись
+        std::memcpy(instanceBuffer.mappedData, instances.data(), dataSize);
+    }
+};
+```
+
+## 🔥 GPU-Driven Rendering через Flecs
+
+### Compute shaders и indirect drawing
+
+```cpp
+#include <flecs.h>
+#include <vulkan/vulkan.h>
+
+// Компонент для GPU-driven рендеринга
+struct GPUDrivenRendering {
+    VkBuffer indirectCommands{VK_NULL_HANDLE};
+    VmaAllocation indirectCommandsAlloc{nullptr};
+
+    VkBuffer instanceData{VK_NULL_HANDLE

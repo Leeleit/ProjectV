@@ -1,19 +1,15 @@
 # Glaze — Integration
 
-<!-- anchor: 02_integration -->
-
 Подключение Glaze к ProjectV, базовые паттерны и каноничные структуры конфигурации.
 
 ---
 
 ## CMake Integration
 
-### Вариант 1: Git Submodule (рекомендуется)
+### Вариант 1: Git Submodule
 
 ```cmake
-# Добавить подмодуль
-# git submodule add https://github.com/stephenberry/glaze.git external/glaze
-
+# Add as git submodule
 add_subdirectory(external/glaze)
 
 target_link_libraries(ProjectV PRIVATE glaze::glaze)
@@ -26,8 +22,7 @@ include(FetchContent)
 
 FetchContent_Declare(
   glaze
-  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-  GIT_TAG v2.0.0  # Фиксируем версию
+  # glaze repository configuration
 )
 
 FetchContent_MakeAvailable(glaze)
@@ -545,4 +540,10 @@ bool migrate_config(EngineConfig& config, const ConfigVersion& loaded_version) {
 
         // Пример: добавление новых полей
         if (loaded_version.major == 1 && loaded_version.minor == 0) {
-            //
+            // Например, добавили новое поле в 1.1, которого не было в 1.0
+            config.render.enable_gi = false;
+            std::println("Migrated from 1.0 to 1.1: enable_gi set to false");
+        }
+    }
+    return true;
+}

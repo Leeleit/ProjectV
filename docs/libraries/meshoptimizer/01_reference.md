@@ -1,62 +1,626 @@
-## meshoptimizer
+# meshoptimizer
 
-<!-- anchor: 00_overview -->
-
-
-meshoptimizer — библиотека для оптимизации 3D-мешей, которая улучшает производительность GPU-рендеринга за счёт
-оптимизации порядка вершин и индексов, упрощения геометрии и сжатия данных.
+> Библиотека для оптимизации 3D-мешей. Повышает производительность GPU-рендеринга через оптимизацию порядка вершин,
+> упрощение геометрии и сжатие данных.
 
 ---
 
-## Возможности
+## Overview
 
-### Оптимизация рендеринга
+meshoptimizer — это набор алгоритмов для оптимизации геометрии перед рендерингом. Когда GPU рисует треугольники,
+различные этапы конвейера обрабатывают данные вершин и индексов. Эффективность этих этапов зависит от того, как данные
+организованы.
 
-- **Vertex Cache Optimization** — минимизация vertex shader invocations
-- **Overdraw Optimization** — уменьшение перерисовки пикселей
-- **Vertex Fetch Optimization** — оптимизация доступа к вершинным данным
+> **Для понимания:** Представь, что ты работаешь с документами на столе. Если часто используемые бумаги лежат сверху —
+> ты быстро их находишь. Если нужный документ в самом низу стопки — приходится рыться каждый раз. GPU работает похоже:
+> чем
+> ближе нужные вершины друг к другу в памяти, тем быстрее рендеринг.
 
-### Работа с геометрией
+### Что умеет библиотека
 
-- **Indexing** — генерация индексных буферов, удаление дублирующихся вершин
-- **Simplification** — упрощение мешей с сохранением внешнего вида
-- **Meshlets** — разбиение меши на кластеры для mesh shading
+| Категория     | Возможности                                      |
+|---------------|--------------------------------------------------|
+| **Рендеринг** | Vertex Cache, Overdraw, Vertex Fetch оптимизация |
+| **Геометрия** | Индексация, упрощение (LOD), meshlets            |
+| **Сжатие**    | Vertex, Index, Meshlet кодирование               |
 
-### Сжатие
+### Требования
 
-- **Vertex Compression** — кодирование вершинных данных
-- **Index Compression** — кодирование индексных буферов
-- **Meshlet Compression** — сжатие данных meshlet-ов
+- **C99** / **C++98** или новее (рекомендуется C++26)
+- Нет внешних зависимостей
+- SIMD: SSE4.1, AVX, AVX2, NEON, WASM SIMD (опционально)
 
 ---
 
-## Pipeline оптимизации
+## Pipeline Оптимизации
 
-Правильный порядок оптимизации меши:
+Правильный порядок — критически важен. Каждый этап создаёт основу для следующего.
 
 ```
-1. Indexing
-   meshopt_generateVertexRemap → meshopt_remapIndexBuffer → meshopt_remapVertexBuffer
-         │
-         ▼
-2. Vertex Cache Optimization
-   meshopt_optimizeVertexCache
-         │
-         ▼
-3. Overdraw Optimization (опционально)
-   meshopt_optimizeOverdraw
-         │
-         ▼
-4. Vertex Fetch Optimization
-   meshopt_optimizeVertexFetch
-         │
-         ▼
-5. Vertex Quantization
-   meshopt_quantizeHalf, meshopt_quantizeSnorm, ...
-         │
-         ▼
-6. Compression (опционально)
-   meshopt_encodeVertexBuffer, meshopt_encodeIndexBuffer
+┌─────────────────────────────────────────────────────────────┐
+│  1. INDEXING                                                │
+│     meshopt_generateVertexRemap                              │
+│     ↓                                                        │
+│  2. VERTEX CACHE                                            │
+│     meshopt_optimizeVertexCache                              │
+│     ↓                                                        │
+│  3. OVERDRAW (опционально)                                   │
+│     meshopt_optimizeOverdraw                                 │
+│     ↓                                                        │
+│  4. VERTEX FETCH                                             │
+│     meshopt_optimizeVertexFetch                              │
+│     ↓                                                        │
+│  5. QUANTIZATION (опционально)                               │
+│     meshopt_quantizeHalf / meshopt_quantizeSnorm             │
+│     ↓                                                        │
+│  6. COMPRESSION (опционально)                                │
+│     meshopt_encodeVertexBuffer / meshopt_encodeIndexBuffer   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> **Для пониманию:** Это как приготовление еды. Нельзя сначала подать блюдо, потом его готовить. Каждый шаг зависит от
+> предыдущего: сначала нарезаешь ингредиенты (indexing), потом жаришь (optimization), потом украшаешь (compression).
+
+---
+
+## Core API
+
+### Индексация
+
+Большинство алгоритмов требуют наличия индексного буфера без дублирующихся вершин.
+
+```cpp
+#include <meshoptimizer.h>
+#include <vector>
+#include <span>
+
+struct Vertex {
+    float px, py, pz;
+    float nx, ny, nz;
+    float u, v;
+};
+
+auto generateRemapTable(
+    std::span<const uint32_t> indices,
+    std::span<const Vertex> vertices
+) -> std::vector<uint32_t> {
+    std::vector<uint32_t> remap(vertices.size());
+
+    const size_t unique_count = meshopt_generateVertexRemap(
+        remap.data(),
+        nullptr,              // без исходного индексного буфера
+        indices.size(),
+        vertices.data(),
+        vertices.size(),
+        sizeof(Vertex)
+    );
+
+    remap.resize(unique_count);
+    return remap;
+}
+
+auto applyRemap(
+    std::span<const Vertex> src_vertices,
+    std::span<const uint32_t> src_indices,
+    std::span<const uint32_t> remap
+) -> std::pair<std::vector<Vertex>, std::vector<uint32_t>> {
+    std::vector<Vertex> vertices(remap.size());
+    std::vector<uint32_t> indices(src_indices.size());
+
+    meshopt_remapVertexBuffer(
+        vertices.data(),
+        src_vertices.data(),
+        src_vertices.size(),
+        sizeof(Vertex),
+        remap.data()
+    );
+
+    meshopt_remapIndexBuffer(
+        indices.data(),
+        src_indices.data(),
+        src_indices.size(),
+        remap.data()
+    );
+
+    return {std::move(vertices), std::move(indices)};
+}
+```
+
+### Vertex Cache Optimization
+
+Оптимизирует порядок треугольников для максимального переиспользования результатов vertex shader.
+
+```cpp
+auto optimizeForCache(
+    std::span<uint32_t> indices,
+    size_t vertex_count
+) -> void {
+    meshopt_optimizeVertexCache(
+        indices.data(),
+        indices.data(),
+        indices.size(),
+        vertex_count
+    );
+}
+```
+
+> **Для понимания:** Представь конвейер на фабрике. Рабочий A обрабатывает деталь и кладёт на конвейер. Если следующему
+> рабочему нужна та же деталь — она уже готова. Но если деталь увезли на склад и пришлось делать заново — это потеря
+> времени. Vertex Cache работает так же: результаты трансформации вершин кэшируются, и если вершина нужна снова — она не
+> пересчитывается.
+
+**FIFO версия** — быстрее, но хуже результат:
+
+```cpp
+// ~2x быстрее, немного хуже ACMR
+meshopt_optimizeVertexCacheFifo(
+    indices.data(),
+    indices.data(),
+    indices.size(),
+    vertex_count,
+    16  // размер кэша
+);
+```
+
+### Overdraw Optimization
+
+Переупорядочивает треугольники для минимизации перерисовки пикселей.
+
+```cpp
+auto optimizeOverdraw(
+    std::span<uint32_t> indices,
+    std::span<const Vertex> vertices,
+    float threshold = 1.05f
+) -> void {
+    meshopt_optimizeOverdraw(
+        indices.data(),
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex),
+        threshold
+    );
+}
+```
+
+> **Для понимания:** Представь, что несколько человек красят одну стену. Один красит всю стену целиком, второй подходит
+> и перекрашивает уже окрашенные участки. Это перерасход краски (overdraw). Оптимизация заставляет ближние к камере
+> треугольники рисоваться первыми — так дальние перекрываются без лишней работы.
+
+**threshold** контролирует компромисс между overdraw и vertex cache:
+
+- `1.0` — не жертвовать ACMR
+- `1.05` — допустить 5% ухудшение ACMR
+- `>1.5` — агрессивная оптимизация
+
+### Vertex Fetch Optimization
+
+Оптимизирует расположение вершин в памяти для эффективной загрузки.
+
+```cpp
+auto optimizeFetch(
+    std::span<Vertex> vertices,
+    std::span<uint32_t> indices
+) -> void {
+    meshopt_optimizeVertexFetch(
+        vertices.data(),
+        indices.data(),
+        indices.size(),
+        vertices.data(),
+        vertices.size(),
+        sizeof(Vertex)
+    );
+}
+```
+
+> **Для понимание:** Если ты идёшь по библиотеке и берёшь книги в порядке их расположения на полках — ты быстро соберёшь
+> нужные. Если скачешь туда-сюда — потратишь много времени. GPU загружает вершины пачками, и если вершины идут подряд —
+> загрузка одна. Если далеко — приходится загружать снова.
+
+---
+
+## Meshlets
+
+Meshlet — небольшой кластер треугольников (обычно 64–126) для современного mesh shading.
+
+```cpp
+struct MeshletData {
+    std::vector<meshopt_Meshlet> meshlets;
+    std::vector<uint32_t> meshlet_vertices;
+    std::vector<uint8_t> meshlet_triangles;
+    std::vector<meshopt_Bounds> bounds;
+};
+
+auto buildMeshlets(
+    std::span<const Vertex> vertices,
+    std::span<const uint32_t> indices,
+    size_t max_vertices = 64,
+    size_t max_triangles = 126,
+    float cone_weight = 0.0f
+) -> MeshletData {
+    MeshletData result;
+
+    // Оценка максимального количества meshlets
+    const size_t max_meshlets = meshopt_buildMeshletsBound(
+        indices.size(), max_vertices, max_triangles
+    );
+
+    result.meshlets.resize(max_meshlets);
+    result.meshlet_vertices.resize(max_meshlets * max_vertices);
+    result.meshlet_triangles.resize(max_meshlets * max_triangles * 3);
+
+    // Построение meshlets
+    const size_t meshlet_count = meshopt_buildMeshlets(
+        result.meshlets.data(),
+        result.meshlet_vertices.data(),
+        result.meshlet_triangles.data(),
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex),
+        max_vertices,
+        max_triangles,
+        cone_weight
+    );
+
+    result.meshlets.resize(meshlet_count);
+
+    // Обрезаем массивы до реального размера
+    const auto& last = result.meshlets.back();
+    result.meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+    result.meshlet_triangles.resize(
+        last.triangle_offset + last.triangle_count * 3
+    );
+
+    // Оптимизация каждого meshlet
+    for (auto& m : result.meshlets) {
+        meshopt_optimizeMeshlet(
+            &result.meshlet_vertices[m.vertex_offset],
+            &result.meshlet_triangles[m.triangle_offset],
+            m.triangle_count,
+            m.vertex_count
+        );
+    }
+
+    // Вычисление bounds для frustum/cone culling
+    result.bounds.resize(meshlet_count);
+    for (size_t i = 0; i < meshlet_count; ++i) {
+        const auto& m = result.meshlets[i];
+        result.bounds[i] = meshopt_computeMeshletBounds(
+            &result.meshlet_vertices[m.vertex_offset],
+            &result.meshlet_triangles[m.triangle_offset],
+            m.triangle_count,
+            &vertices[0].px,
+            vertices.size(),
+            sizeof(Vertex)
+        );
+    }
+
+    return result;
+}
+```
+
+> **Для понимания:** Бригада из 10 строителей может построить дом быстрее, чем один строитель. Но если бригада слишком
+> большая — они начинают мешать друг другу. Meshlet — это оптимальный размер "бригады" для GPU: достаточно большой для
+> эффективности, но не настолько большой, чтобы вызывать проблемы с памятью и синхронизацией.
+
+### Рекомендуемые параметры
+
+| GPU       | max_vertices | max_triangles |
+|-----------|--------------|---------------|
+| NVIDIA    | 64           | 126           |
+| AMD       | 64–128       | 64–128        |
+| Universal | 64           | 96            |
+
+### Raytracing Meshlets
+
+Для raytracing используется пространственное разбиение вместо топологического:
+
+```cpp
+auto buildRaytracingMeshlets(
+    std::span<const Vertex> vertices,
+    std::span<const uint32_t> indices
+) -> MeshletData {
+    const size_t max_vertices = 64;
+    const size_t min_triangles = 16;
+    const size_t max_triangles = 64;
+    const float fill_weight = 0.5f;
+
+    MeshletData result;
+    const size_t max_meshlets = meshopt_buildMeshletsBound(
+        indices.size(), max_vertices, min_triangles
+    );
+
+    result.meshlets.resize(max_meshlets);
+    result.meshlet_vertices.resize(max_meshlets * max_vertices);
+    result.meshlet_triangles.resize(max_meshlets * max_triangles * 3);
+
+    const size_t count = meshopt_buildMeshletsSpatial(
+        result.meshlets.data(),
+        result.meshlet_vertices.data(),
+        result.meshlet_triangles.data(),
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex),
+        max_vertices,
+        min_triangles,
+        max_triangles,
+        fill_weight
+    );
+
+    result.meshlets.resize(count);
+    // ... вычисление bounds аналогично
+
+    return result;
+}
+```
+
+---
+
+## Simplification (LOD)
+
+Упрощение меша с контролем ошибки через Quadric Error Metrics.
+
+```cpp
+struct SimplificationResult {
+    std::vector<uint32_t> indices;
+    float result_error;
+};
+
+auto simplify(
+    std::span<const Vertex> vertices,
+    std::span<const uint32_t> indices,
+    size_t target_index_count,
+    float target_error = 1e-2f,
+    int options = 0
+) -> SimplificationResult {
+    SimplificationResult result;
+    result.indices.resize(indices.size());
+
+    const size_t simplified_count = meshopt_simplify(
+        result.indices.data(),
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex),
+        target_index_count,
+        target_error,
+        options,
+        &result.result_error
+    );
+
+    result.indices.resize(simplified_count);
+    return result;
+}
+```
+
+### Attribute-aware упрощение
+
+Учитывает нормали и UV при упрощении:
+
+```cpp
+auto simplifyWithAttributes(
+    std::span<const Vertex> vertices,
+    std::span<const uint32_t> indices,
+    size_t target_count,
+    float target_error,
+    std::span<const float> attribute_weights
+) -> SimplificationResult {
+    SimplificationResult result;
+    result.indices.resize(indices.size());
+
+    const size_t count = meshopt_simplifyWithAttributes(
+        result.indices.data(),
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex),
+        &vertices[0].nx,           // normals
+        sizeof(Vertex),
+        attribute_weights.data(),   // {1.0f, 1.0f, 1.0f} для normals
+        3,                         // 3 компоненты
+        nullptr,                   // vertex_lock
+        target_count,
+        target_error,
+        0,
+        &result.result_error
+    );
+
+    result.indices.resize(count);
+    return result;
+}
+```
+
+### Опции упрощения
+
+| Опция                           | Описание                                |
+|---------------------------------|-----------------------------------------|
+| `meshopt_SimplifyLockBorder`    | Не коллапсировать граничные рёбра       |
+| `meshopt_SimplifyErrorAbsolute` | Использовать абсолютную ошибку          |
+| `meshopt_SimplifySparse`        | Оптимизация для разреженных подмножеств |
+| `meshopt_SimplifyPrune`         | Удалять изолированные компоненты        |
+| `meshopt_SimplifyRegularize`    | Более регулярные треугольники           |
+| `meshopt_SimplifyPermissive`    | Разрешить коллапс через seams           |
+
+> **Для понимания:** QEM работает как оценка "качества потерь". Представь, что ты упрощаешь карту мира. Остров может
+> быть убран без большой потери информации (маленькая ошибка), а вот удаление целого континента — это большая ошибка.
+> QEM
+> вычисляет "стоимость" каждого упрощения и выбирает наименьшую.
+
+---
+
+## Compression
+
+### Vertex Compression
+
+```cpp
+auto encodeVertexBuffer(
+    std::span<const Vertex> vertices
+) -> std::vector<uint8_t> {
+    const size_t bound = meshopt_encodeVertexBufferBound(
+        vertices.size(),
+        sizeof(Vertex)
+    );
+
+    std::vector<uint8_t> encoded(bound);
+    const size_t actual = meshopt_encodeVertexBuffer(
+        encoded.data(),
+        bound,
+        vertices.data(),
+        vertices.size(),
+        sizeof(Vertex)
+    );
+
+    encoded.resize(actual);
+    return encoded;
+}
+
+auto decodeVertexBuffer(
+    std::span<const uint8_t> encoded,
+    size_t vertex_count,
+    size_t vertex_size
+) -> std::vector<Vertex> {
+    std::vector<Vertex> vertices(vertex_count);
+
+    const int result = meshopt_decodeVertexBuffer(
+        vertices.data(),
+        vertex_count,
+        vertex_size,
+        encoded.data(),
+        encoded.size()
+    );
+
+    if (result != 0) {
+        throw std::runtime_error("Decode failed: " + std::to_string(result));
+    }
+
+    return vertices;
+}
+```
+
+### Index Compression
+
+```cpp
+auto encodeIndexBuffer(
+    std::span<const uint32_t> indices,
+    size_t vertex_count
+) -> std::vector<uint8_t> {
+    const size_t bound = meshopt_encodeIndexBufferBound(
+        indices.size(),
+        vertex_count
+    );
+
+    std::vector<uint8_t> encoded(bound);
+    const size_t actual = meshopt_encodeIndexBuffer(
+        encoded.data(),
+        bound,
+        indices.data(),
+        indices.size()
+    );
+
+    encoded.resize(actual);
+    return encoded;
+}
+```
+
+### Квантизация
+
+```cpp
+auto quantizeVertex(Vertex v) -> std::array<uint16_t, 3> {
+    return {
+        meshopt_quantizeHalf(v.px),
+        meshopt_quantizeHalf(v.py),
+        meshopt_quantizeHalf(v.pz)
+    };
+}
+
+auto quantizeNormal(Vertex v) -> uint32_t {
+    return
+        ((meshopt_quantizeSnorm(v.nx, 10) & 1023) << 20) |
+        ((meshopt_quantizeSnorm(v.ny, 10) & 1023) << 10) |
+        (meshopt_quantizeSnorm(v.nz, 10) & 1023);
+}
+```
+
+---
+
+## Метрики
+
+### ACMR (Average Cache Miss Ratio)
+
+```
+ACMR = vertex_shader_invocations / triangle_count
+```
+
+| Значение | Оценка                        |
+|----------|-------------------------------|
+| 0.5      | Идеально (регулярная сетка)   |
+| 1.0      | Хорошо                        |
+| 3.0      | Плохо (нет переиспользования) |
+
+### ATVR (Average Transformed Vertex Ratio)
+
+```
+ATVR = vertex_shader_invocations / vertex_count
+```
+
+| Значение | Оценка                               |
+|----------|--------------------------------------|
+| 1.0      | Идеально                             |
+| >1.0     | Вершины трансформируются многократно |
+
+### Overdraw
+
+```
+Overdraw = pixels_shaded / pixels_covered
+```
+
+| Значение | Оценка                             |
+|----------|------------------------------------|
+| 1.0      | Идеально                           |
+| 1.5–2.5  | Типично для непрозрачной геометрии |
+
+### Анализ
+
+```cpp
+auto analyzeMesh(
+    std::span<const uint32_t> indices,
+    std::span<const Vertex> vertices
+) -> void {
+    const auto vc_stats = meshopt_analyzeVertexCache(
+        indices.data(),
+        indices.size(),
+        vertices.size(),
+        16,  // cache size
+        0,   // transform cache size
+        0    // vertex buffer size
+    );
+
+    const auto od_stats = meshopt_analyzeOverdraw(
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex)
+    );
+
+    const auto vf_stats = meshopt_analyzeVertexFetch(
+        indices.data(),
+        indices.size(),
+        vertices.size(),
+        sizeof(Vertex)
+    );
+
+    std::println("ACMR: {:.3f}, ATVR: {:.3f}", vc_stats.acmr, vc_stats.atvr);
+    std::println("Overdraw: {:.2f}", od_stats.overdraw);
+    std::println("Overfetch: {:.2f}", vf_stats.overfetch);
+}
 ```
 
 ---
@@ -65,47 +629,137 @@ meshoptimizer — библиотека для оптимизации 3D-меше
 
 | Структура                       | Описание                                                              |
 |---------------------------------|-----------------------------------------------------------------------|
-| `meshopt_Stream`                | Поток вершинных атрибутов (data, size, stride)                        |
+| `meshopt_Stream`                | Поток вершинных атрибутов                                             |
 | `meshopt_Meshlet`               | Кластер: vertex_offset, triangle_offset, vertex_count, triangle_count |
 | `meshopt_Bounds`                | Bounding sphere + normal cone для culling                             |
 | `meshopt_VertexCacheStatistics` | ACMR, ATVR метрики                                                    |
-| `meshopt_OverdrawStatistics`    | Overdraw ratio                                                        |
-| `meshopt_VertexFetchStatistics` | Overfetch ratio                                                       |
+| `meshopt_OverdrawStatistics`    | overdraw ratio                                                        |
+| `meshopt_VertexFetchStatistics` | overfetch ratio                                                       |
 
 ---
 
-## Метрики производительности
+## Spatial Sorting
 
-### ACMR (Average Cache Miss Ratio)
+Сортировка по пространственному положению для улучшения сжатия:
 
-Среднее количество vertex shader invocations на треугольник:
+```cpp
+auto spatialSort(
+    std::span<Vertex> vertices,
+    std::span<uint32_t> indices
+) -> void {
+    std::vector<uint32_t> remap(vertices.size());
+    meshopt_spatialSortRemap(
+        remap.data(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex)
+    );
 
-- Идеально: 0.5 (каждая вершина используется в 2 треугольниках)
-- Плохо: 3.0 (нет переиспользования вершин)
-- Типично после оптимизации: 0.6–0.8
+    meshopt_remapVertexBuffer(
+        vertices.data(),
+        vertices.data(),
+        vertices.size(),
+        sizeof(Vertex),
+        remap.data()
+    );
 
-### ATVR (Average Transformed Vertex Ratio)
-
-Среднее количество vertex shader invocations на вершину:
-
-- Идеально: 1.0 (каждая вершина трансформируется один раз)
-- Плохо: 6.0
-- Типично после оптимизации: 1.0–1.2
-
-### Overdraw
-
-Отношение затенённых пикселей к покрытым:
-
-- Идеально: 1.0 (каждый пиксель шейдится один раз)
-- Типично для непрозрачной геометрии: 1.5–2.5
+    meshopt_spatialSortTriangles(
+        indices.data(),
+        indices.data(),
+        indices.size(),
+        &vertices[0].px,
+        vertices.size(),
+        sizeof(Vertex)
+    );
+}
+```
 
 ---
 
-## Требования
+## Полный пример Pipeline
 
-- **C99** / **C++98** или новее
-- Нет внешних зависимостей
-- SIMD-оптимизации: SSE4.1, AVX, AVX2, NEON, WASM SIMD (опционально)
+```cpp
+#include <meshoptimizer.h>
+#include <vector>
+#include <span>
+#include <array>
+#include <print>
+
+struct OptimizedMesh {
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    float acmr = 0.0f;
+    float atvr = 0.0f;
+};
+
+auto optimizeMesh(
+    std::span<const Vertex> src_vertices,
+    std::span<const uint32_t> src_indices
+) -> OptimizedMesh {
+    OptimizedMesh result;
+
+    // 1. Генерация remap таблицы
+    std::vector<uint32_t> remap(src_vertices.size());
+    const size_t unique_count = meshopt_generateVertexRemap(
+        remap.data(),
+        src_indices.data(),
+        src_indices.size(),
+        src_vertices.data(),
+        src_vertices.size(),
+        sizeof(Vertex)
+    );
+
+    // 2. Применение remap
+    result.indices.resize(src_indices.size());
+    result.vertices.resize(unique_count);
+
+    meshopt_remapIndexBuffer(
+        result.indices.data(),
+        src_indices.data(),
+        src_indices.size(),
+        remap.data()
+    );
+
+    meshopt_remapVertexBuffer(
+        result.vertices.data(),
+        src_vertices.data(),
+        src_vertices.size(),
+        sizeof(Vertex),
+        remap.data()
+    );
+
+    // 3. Vertex cache optimization
+    meshopt_optimizeVertexCache(
+        result.indices.data(),
+        result.indices.data(),
+        result.indices.size(),
+        unique_count
+    );
+
+    // 4. Vertex fetch optimization
+    meshopt_optimizeVertexFetch(
+        result.vertices.data(),
+        result.indices.data(),
+        result.indices.size(),
+        result.vertices.data(),
+        unique_count,
+        sizeof(Vertex)
+    );
+
+    // 5. Анализ результата
+    const auto stats = meshopt_analyzeVertexCache(
+        result.indices.data(),
+        result.indices.size(),
+        unique_count,
+        16, 0, 0
+    );
+
+    result.acmr = stats.acmr;
+    result.atvr = stats.atvr;
+
+    return result;
+}
+```
 
 ---
 
@@ -117,658 +771,6 @@ MIT License. Copyright (c) 2016-2026 Arseny Kapoulkine.
 
 ## Ссылки
 
-- **Исходный код:** [github.com/zeux/meshoptimizer](https://github.com/zeux/meshoptimizer)
-- **glTF extension:
-  ** [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md)
-- **gltfpack:** Инструмент для оптимизации glTF файлов
-
----
-
-## Концепции
-
-<!-- anchor: 03_concepts -->
-
-
-Глубокое погружение в алгоритмы meshoptimizer: vertex cache, overdraw, meshlets, simplification.
-
----
-
-## Vertex Cache Optimization
-
-### Как работает GPU vertex cache
-
-GPU кэширует результаты vertex shader для повторного использования. Когда треугольник ссылается на вершину, которая уже
-была обработана, shader не вызывается повторно.
-
-```
-Треугольники: [0,1,2] [2,1,3] [3,1,4]
-              ↓       ↓       ↓
-Вершины:      0,1,2   3       4
-              (новые) (1,2 в кэше)
-```
-
-### Post-transform cache
-
-Исторически GPU использовали FIFO-кэш фиксированного размера (16–32 вершины). Современные GPU используют более сложные
-схемы, но принцип тот же: локальность ссылок на вершины важна.
-
-### ACMR (Average Cache Miss Ratio)
-
-```
-ACMR = vertex_shader_invocations / triangle_count
-```
-
-- **0.5** — идеально (каждая вершина используется в 2 треугольниках, регулярная сетка)
-- **1.0** — хорошо (каждый треугольник добавляет 1 новую вершину)
-- **3.0** — худший случай (нет переиспользования вершин)
-
-### ATVR (Average Transformed Vertex Ratio)
-
-```
-ATVR = vertex_shader_invocations / vertex_count
-```
-
-- **1.0** — идеально (каждая вершина трансформируется один раз)
-- **>1.0** — вершины трансформируются многократно
-
-### Алгоритм meshoptimizer
-
-Использует адаптивный алгоритм, который работает хорошо на разных GPU архитектурах:
-
-1. Анализирует топологию меши
-2. Строит последовательность треугольников с максимальной локальностью
-3. Учитывает различные размеры и типы кэшей
-
----
-
-## Overdraw Optimization
-
-### Что такое overdraw
-
-Когда несколько треугольников перекрывают один пиксель, pixel shader выполняется для каждого. Это wasteful, если ранние
-треугольники полностью перекрыты поздними.
-
-```
-Пиксель (100, 100):
-  - Треугольник A (дальний) → pixel shader
-  - Треугольник B (ближний) → pixel shader
-  - Overdraw = 2.0
-```
-
-### Depth pre-pass
-
-Один из способов борьбы с overdraw — рендерить только depth в первом проходе. Но это удваивает vertex shader
-invocations.
-
-### Overdraw optimization в meshoptimizer
-
-Переупорядочивает треугольники так, чтобы ближние рисовались раньше дальних (в среднем):
-
-```cpp
-// Вход: индексы, оптимизированные для vertex cache
-// Выход: индексы, сбалансированные между vcache и overdraw
-meshopt_optimizeOverdraw(indices, indices, index_count,
-    positions, vertex_count, stride, threshold);
-```
-
-### Параметр threshold
-
-Контролирует, насколько можно ухудшить ACMR ради overdraw:
-
-- **1.0** — не ухудшать ACMR
-- **1.05** — допустить 5% ухудшение ACMR
-- **2.0** — агрессивная оптимизация overdraw
-
-### Когда НЕ использовать
-
-- Tiled deferred rendering (PowerVR, Apple GPU)
-- Меши с большим количеством вершин (vertex shader тяжёлый)
-- Уже отсортированные меши (front-to-back)
-
----
-
-## Vertex Fetch Optimization
-
-### Кэш памяти GPU
-
-При обработке вершины GPU загружает её атрибуты из памяти. Данные кэшируются, но только в пределах локальности.
-
-### Переупорядочивание вершин
-
-```
-До:  индексы [0, 100, 200, 1, 101, 201, ...]
-     вершины в памяти: v0, v1, v2, ..., v100, v101, ...
-
-После: индексы [0, 1, 2, 3, 4, 5, ...]
-      вершины в памяти: v0, v100, v200, v1, v101, ...
-```
-
-Алгоритм помещает вершины в память в порядке использования треугольниками.
-
-### Overfetch
-
-```
-Overfetch = bytes_fetched / vertex_buffer_size
-```
-
-- **1.0** — идеально (каждый байт загружен один раз)
-- **>1.0** — байты загружаются многократно
-
----
-
-## Meshlets
-
-### Что такое meshlet
-
-Meshlet — небольшой кластер треугольников (обычно 64–126 треугольников), который можно обработать одной группой потоков
-на GPU.
-
-```
-Меш → Meshlets [0..N]
-         │
-         ├── meshlet_vertices: индексы вершин меши
-         └── meshlet_triangles: micro-indices (0–255)
-```
-
-### Структура meshopt_Meshlet
-
-```cpp
-struct meshopt_Meshlet {
-    unsigned int vertex_offset;    // смещение в meshlet_vertices
-    unsigned int triangle_offset;  // смещение в meshlet_triangles
-    unsigned int vertex_count;     // количество уникальных вершин
-    unsigned int triangle_count;   // количество треугольников
-};
-```
-
-### Mesh shading pipeline
-
-```
-Task Shader (Amplification Shader)
-    │
-    ├── Выбор видимых meshlets
-    │
-    ▼
-Mesh Shader
-    │
-    ├── Загрузка meshlet_vertices
-    ├── Загрузка meshlet_triangles
-    ├── Вычисление позиций вершин
-    └── Отправка треугольников на растеризацию
-```
-
-### Cone culling
-
-Каждый meshlet имеет bounding cone:
-
-```cpp
-struct meshopt_Bounds {
-    float center[3];       // центр bounding sphere
-    float radius;          // радиус
-    float cone_apex[3];    // вершина normal cone
-    float cone_axis[3];    // направление normal cone
-    float cone_cutoff;     // cos(half_angle)
-};
-```
-
-Отброс meshlet-а (backface):
-
-```cpp
-// Perspective projection
-float d = dot(normalize(cone_apex - camera_position), cone_axis);
-if (d >= cone_cutoff) {
-    // Все треугольники meshlet-а смотрят от камеры
-    cull_meshlet();
-}
-```
-
-### Рекомендуемые параметры
-
-| GPU       | max_vertices | max_triangles |
-|-----------|--------------|---------------|
-| NVidia    | 64           | 126           |
-| AMD       | 64–128       | 64–128        |
-| Universal | 64           | 96            |
-
----
-
-## Simplification
-
-### Quadric Error Metrics
-
-Алгоритм упрощения использует метрику ошибки квадрик:
-
-1. Для каждой вершины вычисляется quadric matrix из плоскостей прилегающих треугольников
-2. Ошибка коллапса ребра — это quadric error
-3. Ребро с минимальной ошибкой коллапсирует первым
-
-### Относительная ошибка
-
-```cpp
-float target_error = 0.01f;  // 1% от размера меши
-size_t result_count = meshopt_simplify(
-    destination, indices, index_count,
-    positions, vertex_count, stride,
-    target_index_count, target_error, 0, &result_error
-);
-```
-
-Ошибка нормализована к `[0..1]` относительно размеров меши.
-
-### Attribute-aware simplification
-
-```cpp
-float weights[] = {1.0f, 1.0f, 1.0f};  // nx, ny, nz
-meshopt_simplifyWithAttributes(
-    destination, indices, index_count,
-    positions, vertex_count, stride,
-    normals, stride, weights, 3,
-    NULL,  // vertex_lock
-    target_index_count, target_error, 0, &result_error
-);
-```
-
-### Опции simplification
-
-| Флаг                            | Описание                                |
-|---------------------------------|-----------------------------------------|
-| `meshopt_SimplifyLockBorder`    | Не коллапсировать граничные рёбра       |
-| `meshopt_SimplifyErrorAbsolute` | Использовать абсолютную ошибку          |
-| `meshopt_SimplifySparse`        | Оптимизация для разреженных подмножеств |
-| `meshopt_SimplifyPrune`         | Удалять изолированные компоненты        |
-| `meshopt_SimplifyRegularize`    | Более регулярные треугольники           |
-
----
-
-## Compression
-
-### Vertex Buffer Compression
-
-```cpp
-// Кодирование
-std::vector<unsigned char> encoded(meshopt_encodeVertexBufferBound(vertex_count, sizeof(Vertex)));
-encoded.resize(meshopt_encodeVertexBuffer(encoded.data(), encoded.size(),
-    vertices, vertex_count, sizeof(Vertex)));
-
-// Декодирование (3–6 GB/s на CPU)
-int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(Vertex),
-    encoded.data(), encoded.size());
-```
-
-Кодек использует корреляцию между соседними вершинами для сжатия.
-
-### Index Buffer Compression
-
-```cpp
-// Кодирование
-std::vector<unsigned char> encoded(meshopt_encodeIndexBufferBound(index_count, vertex_count));
-encoded.resize(meshopt_encodeIndexBuffer(encoded.data(), encoded.size(),
-    indices, index_count));
-
-// Декодирование
-int result = meshopt_decodeIndexBuffer(decoded, index_count, sizeof(unsigned int),
-    encoded.data(), encoded.size());
-```
-
-Типичное сжатие: ~1 байт на треугольник (vs 12 байт для 32-bit indices).
-
-### Требования к данным
-
-Для хорошего сжатия:
-
-1. Vertex cache оптимизация (`meshopt_optimizeVertexCache`)
-2. Vertex fetch оптимизация (`meshopt_optimizeVertexFetch`)
-3. Квантизация вершин
-
----
-
-## Spatial Sorting
-
-### Зачем сортировать
-
-Для улучшения сжатия и cache locality:
-
-```cpp
-// Сортировка вершин
-std::vector<unsigned int> remap(vertex_count);
-meshopt_spatialSortRemap(remap.data(), positions, vertex_count, stride);
-meshopt_remapVertexBuffer(vertices, vertices, vertex_count, sizeof(Vertex), remap.data());
-
-// Сортировка треугольников
-meshopt_spatialSortTriangles(indices, indices, index_count, positions, vertex_count, stride);
-```
-
-### Применение
-
-- Point cloud compression
-- Улучшение сжатия vertex buffer
-- LOD generation
-
----
-
-## Глоссарий
-
-<!-- anchor: 06_glossary -->
-
-
-Термины и определения, используемые в meshoptimizer.
-
----
-
-## A
-
-### ACMR (Average Cache Miss Ratio)
-
-Среднее количество vertex shader invocations на треугольник. Метрика эффективности vertex cache.
-
-```
-ACMR = vertex_shader_invocations / triangle_count
-```
-
-Диапазон: 0.5 (идеально) — 3.0 (худший случай).
-
-### ATVR (Average Transformed Vertex Ratio)
-
-Среднее количество vertex shader invocations на вершину. Метрика повторной обработки вершин.
-
-```
-ATVR = vertex_shader_invocations / vertex_count
-```
-
-Диапазон: 1.0 (идеально) — 6.0 (худший случай).
-
----
-
-## B
-
-### Bounding Cone
-
-Конус, описывающий диапазон нормалей группы треугольников. Используется для backface culling meshlets.
-
-### Bounding Sphere
-
-Сфера, описывающая вокруг группы вершин. Используется для frustum и occlusion culling.
-
----
-
-## C
-
-### Cache Locality
-
-Свойство данных, при котором близкие по времени обращения адреса находятся близко в памяти. Важно для производительности
-GPU.
-
-### Cluster
-
-Небольшая группа треугольников (обычно 64–126). См. Meshlet.
-
-### Cone Culling
-
-Техника отбрасывания meshlets, все треугольники которых смотрят от камеры. Основана на bounding cone нормалей.
-
-### Cone Weight
-
-Параметр (0–1), контролирующий баланс между размером meshlet и эффективностью cone culling при построении meshlets.
-
----
-
-## D
-
-### DCC (Digital Content Creation)
-
-Программы для создания 3D-контента: Blender, Maya, 3ds Max.
-
-### Decoding
-
-Процесс восстановления сжатых данных в исходный формат. Декодеры meshoptimizer работают на скорости 3–10 GB/s.
-
-### Dedicated Allocation
-
-Выделение отдельного блока VkDeviceMemory для одного ресурса. VMA автоматически выбирает этот режим для больших
-ресурсов.
-
-### Deinterleaved
-
-Способ хранения вершинных данных, при котором каждый атрибут находится в отдельном буфере. См. SoA.
-
----
-
-## E
-
-### Encoding
-
-Процесс сжатия данных для хранения или передачи. Кодировщики meshoptimizer требуют предварительной оптимизации данных.
-
-### EXT_meshopt_compression
-
-glTF расширение для сжатия геометрии с помощью meshoptimizer. Поддерживается большинством glTF-загрузчиков.
-
----
-
-## F
-
-### FIFO Cache
-
-First-In-First-Out кэш с фиксированным размером. Простейшая модель vertex cache.
-
-### Frustum Culling
-
-Отбрасывание объектов вне поля зрения камеры.
-
----
-
-## G
-
-### gltfpack
-
-Инструмент командной строки для оптимизации glTF файлов. Входит в состав meshoptimizer.
-
----
-
-## I
-
-### Index Buffer
-
-Массив индексов, определяющих порядок использования вершин для формирования треугольников.
-
-### Indexing
-
-Процесс создания индексного буфера из неиндексированных вершин с удалением дубликатов.
-
----
-
-## L
-
-### LOD (Level of Detail)
-
-Техника использования разных версий меши на разных расстояниях от камеры для оптимизации производительности.
-
-### LOD Chain
-
-Последовательность LOD-ов от самого детального до самого грубого.
-
----
-
-## M
-
-### Mesh Shader
-
-Программируемый шейдер для обработки кластеров треугольников. Современная альтернатива vertex + geometry shaders.
-
-### Meshlet
-
-Небольшой кластер треугольников (обычно 64–126) для обработки в mesh shader. Содержит:
-
-- meshlet_vertices — индексы вершин меши
-- meshlet_triangles — micro-indices для треугольников
-
-### Micro-index
-
-8-битный индекс внутри meshlet, ссылающийся на локальную вершину meshlet-а.
-
----
-
-## N
-
-### Normal Cone
-
-Конус, описывающий разброс нормалей в meshlet. Используется для определения, смотрит ли весь meshlet от камеры.
-
----
-
-## O
-
-### Occlusion Culling
-
-Отбрасывание объектов, перекрытых другими объектами ближе к камере.
-
-### Overdraw
-
-Отношение количества затенённых пикселей к покрытым. Показывает, сколько раз в среднем шейдится каждый пиксель.
-
-```
-Overdraw = pixels_shaded / pixels_covered
-```
-
-### Overfetch
-
-Отношение количества загруженных байт к размеру вершинного буфера. Показывает неэффективность vertex fetch.
-
-```
-Overfetch = bytes_fetched / vertex_buffer_size
-```
-
----
-
-## P
-
-### Post-transform Cache
-
-Кэш результатов vertex shader на GPU. Позволяет переиспользовать уже трансформированные вершины.
-
-### Primitive Restart
-
-Специальное значение индекса (обычно 0xffff или 0xffffffff), обозначающее разрыв в triangle strip.
-
-### Provoking Vertex
-
-Вершина треугольника, которая определяет атрибуты для всего треугольника (например, flat shading).
-
----
-
-## Q
-
-### Quadric Error Metrics
-
-Метод оценки ошибки при упрощении мешей. Основан на сумме квадратов расстояний до плоскостей прилегающих треугольников.
-
-### Quantization
-
-Преобразование данных с уменьшением точности для экономии памяти.
-
----
-
-## R
-
-### Remap Table
-
-Массив, сопоставляющий старые индексы вершин новым. Используется при indexing.
-
----
-
-## S
-
-### SAH (Surface Area Heuristic)
-
-Эвристика для оптимизации пространственного разбиения. Используется в `meshopt_buildMeshletsSpatial` для
-raytracing-оптимизированных meshlets.
-
-### Shadow Index Buffer
-
-Отдельный индексный буфер для depth-only passes (shadow maps, z-prepass). Использует меньше атрибутов для сравнения
-вершин.
-
-### Simplification
-
-Процесс уменьшения количества треугольников в меше с сохранением внешнего вида.
-
-### SoA (Structure of Arrays)
-
-Способ организации данных, при котором каждый компонент хранится в отдельном массиве. Контраст с AoS (Array of
-Structures).
-
-### Spatial Sort
-
-Сортировка данных по пространственному положению для улучшения cache locality и сжатия.
-
-### Stripify
-
-Преобразование triangle list в triangle strip для уменьшения размера индексного буфера.
-
----
-
-## T
-
-### Task Shader (Amplification Shader)
-
-Шейдер, запускаемый перед mesh shader для определения, какие meshlets нужно обрабатывать.
-
-### Triangle List
-
-Примитивная топология, где каждые 3 индекса образуют треугольник. Наиболее универсальный формат.
-
-### Triangle Strip
-
-Примитивная топология, где каждый новый индекс образует треугольник с двумя предыдущими.
-
----
-
-## U
-
-### Unindexed Mesh
-
-Меш без индексного буфера. Вершины дублируются для каждого треугольника.
-
----
-
-## V
-
-### Vertex Cache
-
-Кэш на GPU для хранения результатов vertex shader. См. Post-transform Cache.
-
-### Vertex Fetch
-
-Процесс загрузки вершинных атрибутов из памяти GPU.
-
-### Vertex Shader
-
-Шейдер, выполняющийся для каждой вершины. Вычисляет позицию и другие атрибуты.
-
----
-
-## W
-
-### Warp
-
-Группа потоков, выполняющихся параллельно на GPU. 32 потока на NVidia (SIMT), 64 на AMD (wavefront).
-
----
-
-## Числовые параметры
-
-### max_vertices (meshlet)
-
-Максимальное количество уникальных вершин в meshlet. Ограничено hardware (обычно ≤ 256).
-
-### max_triangles (meshlet)
-
-Максимальное количество треугольников в meshlet. Ограничено hardware (обычно ≤ 512).
-
-### target_error (simplification)
-
-Допустимая ошибка упрощения, нормализованная к размерам меши (0.01 = 1%).
-
-### threshold (overdraw)
-
-Допустимое ухудшение ACMR при overdraw оптимизации (1.05 = до 5%).
+- [GitHub](https://github.com/zeux/meshoptimizer)
+- [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md)
+- [gltfpack](https://github.com/zeux/meshoptimizer/tree/master/gltf) — инструмент для оптимизации glTF

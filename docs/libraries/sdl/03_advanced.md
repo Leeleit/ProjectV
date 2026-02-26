@@ -1,535 +1,377 @@
-﻿## Решение проблем SDL3
+﻿# SDL3: Злые хаки и DOD-оптимизации
 
-<!-- anchor: 06_troubleshooting -->
+## Архитектура многопоточности
 
+### Главное правило
 
-Частые ошибки при работе с SDL3 и способы их решения.
+**SDL callbacks выполняются в одном потоке (main thread)**. Это железное правило. Любые SDL-вызовы из background
+threads — undefined behavior.
 
----
-
-## Инициализация
-
-### SDL_Init возвращает false
-
-**Причины:**
-
-- Нет дисплея (headless режим)
-- Неподходящий драйвер
-- Конфликт с другим приложением
-
-**Решение:**
-
-```cpp
-if (!SDL_Init(SDL_INIT_VIDEO)) {
-    SDL_Log("SDL_Init failed: %s", SDL_GetError());
-    return SDL_APP_FAILURE;
-}
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Main Thread                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────────┐  │
+│  │ SDL_AppEvent│───▶│  Job Queue  │───▶│ SDL_AppIterate   │  │
+│  │  (input)    │    │  (locked)   │    │  (render)        │  │
+│  └─────────────┘    └─────────────┘    └──────────────────┘  │
+│         │                  ▲                    │              │
+└─────────┼──────────────────┼────────────────────┼──────────────┘
+          │                  │
+          ▼                  │
+    ┌───────────┐            │      Worker Threads
+    │  Input    │            │    ┌─────────────────┐
+    │  Buffer   │            └────│ Voxel Update    │
+    │  (SoA)    │                 │  Physics Step   │
+    └───────────┘                 │  Mesh Gen       │
+                                  └─────────────────┘
 ```
 
-Проверьте сообщение `SDL_GetError()` для диагностики.
-
----
-
-### SDL_CreateWindow возвращает NULL
-
-**Причины:**
-
-- `SDL_Init` не был вызван или завершился ошибкой
-- Драйвер не поддерживает запрошенные флаги
-- Нехватка системных ресурсов
-
-**Решение:**
+### Zero-copy очередь событий
 
 ```cpp
-SDL_Window* window = SDL_CreateWindow("App", 1280, 720, SDL_WINDOW_VULKAN);
-if (!window) {
-    SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
-    return SDL_APP_FAILURE;
-}
-```
-
-Для диагностики попробуйте создать окно без флага `SDL_WINDOW_VULKAN`.
-
----
-
-### SDL_Vulkan_CreateSurface возвращает false
-
-**Причины:**
-
-- Окно создано без `SDL_WINDOW_VULKAN`
-- VkInstance создан без расширений от `SDL_Vulkan_GetInstanceExtensions`
-- Vulkan loader не загружен
-
-**Решение:**
-
-1. Убедитесь, что окно создано с `SDL_WINDOW_VULKAN`
-2. Добавьте все расширения от SDL при создании instance:
-
-```cpp
-Uint32 extensionCount = 0;
-const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
-
-VkInstanceCreateInfo info = {};
-info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-info.enabledExtensionCount = extensionCount;
-info.ppEnabledExtensionNames = extensions;
-```
-
-3. Убедитесь, что volk загружен (если используется):
-
-```cpp
-volkLoadInstance(instance);  // До SDL_Vulkan_CreateSurface
-```
-
----
-
-### SDL_Vulkan_GetInstanceExtensions возвращает NULL
-
-**Причина:** Vulkan loader не загружен.
-
-**Решение:**
-
-SDL загружает Vulkan loader при создании окна с `SDL_WINDOW_VULKAN`. Если окно ещё не создано:
-
-```cpp
-SDL_Vulkan_LoadLibrary(nullptr);  // Явная загрузка
-```
-
----
-
-### Окно не отображается или сразу закрывается
-
-**Причины:**
-
-- `SDL_AppInit` возвращает `SDL_APP_FAILURE` или `SDL_APP_SUCCESS`
-- `SDL_AppEvent` возвращает `SDL_APP_SUCCESS` на первом событии
-- `SDL_AppIterate` возвращает не `SDL_APP_CONTINUE`
-
-**Решение:**
-
-```cpp
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    // ...
-    return SDL_APP_CONTINUE;  // Не SUCCESS и не FAILURE
-}
-
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    if (event->type == SDL_EVENT_QUIT) {
-        return SDL_APP_SUCCESS;  // Только при намеренном выходе
-    }
-    return SDL_APP_CONTINUE;  // Для остальных событий
-}
-```
-
----
-
-## Runtime
-
-### События не приходят
-
-**Причина:** При `SDL_MAIN_USE_CALLBACKS` события доставляются в `SDL_AppEvent`, а не через `SDL_PollEvent`.
-
-**Решение:**
-
-Не используйте `SDL_PollEvent` в callback режиме:
-
-```cpp
-// НЕПРАВИЛЬНО при SDL_MAIN_USE_CALLBACKS
-while (SDL_PollEvent(&event)) { /* ... */ }
-
-// ПРАВИЛЬНО при SDL_MAIN_USE_CALLBACKS
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    // Обработка event
-    return SDL_APP_CONTINUE;
-}
-```
-
----
-
-### DLL SDL не найдена (Windows)
-
-**Причина:** `SDL3.dll` не в том же каталоге, что exe.
-
-**Решение:**
-
-1. Добавьте копирование DLL в CMake:
-
-```cmake
-if(WIN32)
-    add_custom_command(TARGET YourApp POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:SDL3::SDL3>"
-            "$<TARGET_FILE_DIR:YourApp>"
-    )
-endif()
-```
-
-2. Или скопируйте DLL вручную в каталог с exe.
-
----
-
-### Приложение зависает при закрытии
-
-**Причина:** Неверный порядок освобождения Vulkan ресурсов.
-
-**Решение:**
-
-Соблюдайте порядок cleanup:
-
-```cpp
-// 1. Ожидание GPU
-vkDeviceWaitIdle(device);
-
-// 2. Уничтожение swapchain и связанных ресурсов
-destroy_swapchain();
-
-// 3. Уничтожение surface (ДО SDL_DestroyWindow!)
-SDL_Vulkan_DestroySurface(instance, surface, nullptr);
-
-// 4. Уничтожение device и instance
-vkDestroyDevice(device, nullptr);
-vkDestroyInstance(instance, nullptr);
-
-// 5. Уничтожение окна
-SDL_DestroyWindow(window);
-```
-
----
-
-### Нужен кастомный путь к Vulkan loader
-
-**Решение:**
-
-```cpp
-SDL_SetHint(SDL_HINT_VULKAN_LIBRARY, "path/to/vulkan-1.dll");
-// До создания окна или SDL_Vulkan_LoadLibrary
-```
-
----
-
-## Сборка
-
-### undefined reference to SDL_main
-
-**Причина:** Конфликт между `SDL_MAIN_USE_CALLBACKS` и пользовательским `main()`.
-
-**Решение:**
-
-При `SDL_MAIN_USE_CALLBACKS` **не** определяйте `main()`:
-
-```cpp
-// НЕПРАВИЛЬНО
-#define SDL_MAIN_USE_CALLBACKS 1
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-
-int main(int argc, char* argv[]) {  // Конфликт!
-    // ...
-}
-
-// ПРАВИЛЬНО
-#define SDL_MAIN_USE_CALLBACKS 1
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    // Реализуйте только callbacks
-}
-```
-
----
-
-### Глобальные объекты в SDL_MAIN_USE_CALLBACKS
-
-**Проблема:** Глобальные объекты создаются до `SDL_AppInit`, когда SDL ещё не инициализирован.
-
-**Решение 1: App State Pattern**
-
-```cpp
-struct AppState {
-    SDL_Window* window;
-    // Все ресурсы приложения
-};
-
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    auto* state = new AppState();
-    state->window = SDL_CreateWindow(...);
-    *appstate = state;
-    return SDL_APP_CONTINUE;
-}
-```
-
-**Решение 2: Lazy Initialization**
-
-```cpp
-class VulkanContext {
-    SDL_Window* window_ = nullptr;
-    bool initialized_ = false;
+// Thread-safe SPSC (Single Producer Single Consumer) queue
+// Для передачи данных из background threads в main thread
+
+template<typename T, size_t Capacity>
+class alignas(64) SpscRingBuffer {
+    std::array<T, Capacity> buffer_;
+    std::atomic<size_t> writePos_{0};
+    std::atomic<size_t> readPos_{0};
 
 public:
-    void init() {
-        if (initialized_) return;
-        window_ = SDL_CreateWindow(...);
-        initialized_ = true;
+    bool push(T&& value) {
+        size_t w = writePos_.load(std::memory_order_relaxed);
+        size_t r = readPos_.load(std::memory_order_acquire);
+        if ((w + 1) % Capacity == r) return false;
+
+        buffer_[w] = std::move(value);
+        writePos_.store((w + 1) % Capacity, std::memory_order_release);
+        return true;
+    }
+
+    bool pop(T& value) {
+        size_t r = readPos_.load(std::memory_order_relaxed);
+        size_t w = writePos_.load(std::memory_order_acquire);
+        if (r == w) return false;
+
+        value = std::move(buffer_[r]);
+        readPos_.store((r + 1) % Capacity, std::memory_order_release);
+        return true;
+    }
+
+    bool empty() const {
+        return writePos_.load(std::memory_order_acquire) ==
+               readPos_.load(std::memory_order_acquire);
     }
 };
-
-VulkanContext* g_context = nullptr;  // Указатель, не объект
-
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    g_context = new VulkanContext();
-    g_context->init();
-    return SDL_APP_CONTINUE;
-}
 ```
 
----
+> **Для понимания:** `alignas(64)` выравнивает структуру по границе кэш-линии. Это предотвращает false sharing —
+> ситуацию, когда два потока модифицируют разные данные на одной кэш-линии, вызывая постоянное обновление кэша.
 
-### Множественные окна: обработка закрытия
+## Data-Oriented Design для ввода
 
-**Проблема:** Как различить окна при закрытии?
+### AoS vs SoA
 
-**Решение:**
+**AoS (Array of Structures)** — классический подход:
 
 ```cpp
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    auto* state = static_cast<AppState*>(appstate);
+// ❌ Плохо для batch processing
+struct KeyState {
+    bool pressed;
+    Uint32 timestamp;
+};
 
-    if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-        SDL_WindowID closedID = event->window.windowID;
+std::array<KeyState, 512> keys;
+```
 
-        if (closedID == SDL_GetWindowID(state->mainWindow)) {
-            return SDL_APP_SUCCESS;  // Выход при закрытии главного окна
-        } else if (closedID == SDL_GetWindowID(state->toolWindow)) {
-            SDL_DestroyWindow(state->toolWindow);
-            state->toolWindow = nullptr;
+**SoA (Structure of Arrays)** — DOD-подход:
+
+```cpp
+// ✅ Хорошо для SIMD и cache locality
+struct alignas(64) InputState {
+    std::bitset<512> pressed;       // 64 байта (одна кэш-линия!)
+    std::array<Uint32, 512> timestamps;
+};
+```
+
+### Пакетная обработка событий
+
+```cpp
+struct alignas(64) InputBatch {
+    // SoA layout для максимальной производительности
+    static constexpr size_t MAX_EVENTS = 256;
+
+    // Compact storage: только нужные данные
+    std::array<Uint8, MAX_EVENTS> keyScancodes;
+    std::array<Uint8, MAX_EVENTS> keyStates;      // 0 = up, 1 = down
+    std::array<int16_t, MAX_EVENTS> mouseX;
+    std::array<int16_t, MAX_EVENTS> mouseY;
+    std::array<int16_t, MAX_EVENTS> mouseRelX;
+    std::array<int16_t, MAX_EVENTS> mouseRelY;
+    std::array<Uint8, MAX_EVENTS> mouseButtons;
+    std::array<Uint32, MAX_EVENTS> eventTypes;
+
+    std::atomic<size_t> count{0};
+
+    void add_key(SDL_Scancode scancode, bool pressed) {
+        size_t idx = count.fetch_add(1, std::memory_order_relaxed);
+        if (idx < MAX_EVENTS) {
+            keyScancodes[idx] = static_cast<Uint8>(scancode);
+            keyStates[idx] = pressed ? 1 : 0;
+            eventTypes[idx] = pressed ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
         }
     }
+
+    void add_mouse_motion(int x, int y, int rx, int ry, Uint8 buttons) {
+        size_t idx = count.fetch_add(1, std::memory_order_relaxed);
+        if (idx < MAX_EVENTS) {
+            mouseX[idx] = static_cast<int16_t>(x);
+            mouseY[idx] = static_cast<int16_t>(y);
+            mouseRelX[idx] = static_cast<int16_t>(rx);
+            mouseRelY[idx] = static_cast<int16_t>(ry);
+            mouseButtons[idx] = buttons;
+            eventTypes[idx] = SDL_EVENT_MOUSE_MOTION;
+        }
+    }
+
+    void reset() { count.store(0, std::memory_order_relaxed); }
+};
+```
+
+### Потоковая обработка ввода
+
+```cpp
+// Main thread: только накопление
+InputBatch inputBatch;
+
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+    switch (event->type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+            inputBatch.add_key(event->key.scancode,
+                              event->type == SDL_EVENT_KEY_DOWN);
+            break;
+        case SDL_EVENT_MOUSE_MOTION:
+            inputBatch.add_mouse_motion(event->motion.x, event->motion.y,
+                                        event->motion.xrel, event->motion.yrel,
+                                        event->motion.state);
+            break;
+    }
     return SDL_APP_CONTINUE;
 }
-```
 
----
+// Worker thread: обработка (асинхронно)
+void process_input_batch(InputBatch& batch) {
+    const size_t n = batch.count.load(std::memory_order_acquire);
 
-## Многопоточность
-
-### SDL не работает из других потоков
-
-**Проблема:** Большинство SDL функций должны вызываться из main thread.
-
-**Решение:**
-
-Фоновые потоки — только для CPU работы, без SDL вызовов:
-
-```cpp
-std::thread loadingThread([&]() {
-    load_assets_to_memory();  // Только CPU работа
-    state->loadingDone = true;
-});
-loadingThread.detach();
-
-// В SDL_AppIterate (main thread):
-if (state->loadingDone) {
-    // Теперь можно использовать SDL
-    upload_to_gpu();
-}
-```
-
----
-
-## Платформенные проблемы
-
-### Linux: X11/Wayland не работает
-
-**Решение:**
-
-```cpp
-// Явный выбор драйвера
-SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");  // или "wayland"
-```
-
-Проверьте установку пакетов:
-
-```bash
-# Ubuntu/Debian
-sudo apt install libsdl3-dev
-
-# Arch
-sudo pacman -S sdl3
-```
-
----
-
-### macOS: Retina масштабирование
-
-**Проблема:** Неверный размер framebuffer на Retina дисплеях.
-
-**Решение:**
-
-Используйте `SDL_GetWindowSizeInPixels`:
-
-```cpp
-int pixelWidth, pixelHeight;
-SDL_GetWindowSizeInPixels(window, &pixelWidth, &pixelHeight);
-// Использовать для swapchain/framebuffer
-```
-
----
-
-### HiDPI: Размытое отображение
-
-**Решение:**
-
-```cpp
-// Windows: запрос DPI awareness
-SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
-
-// Обработка SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED
-```
-
----
-
-## Чеклист диагностики
-
-При проблемах с SDL:
-
-1. Проверьте возвращаемые значения всех SDL функций
-2. Вызывайте `SDL_GetError()` сразу после ошибки
-3. Убедитесь в правильном порядке инициализации
-4. Проверьте флаги окна (`SDL_WINDOW_VULKAN` и др.)
-5. Для Vulkan: убедитесь, что расширения instance получены от SDL
-6. При callbacks: не используйте `SDL_PollEvent`
-7. Проверьте порядок cleanup (surface до window)
-
----
-
-## Производительность SDL3
-
-<!-- anchor: 07_performance -->
-
-
-Оптимизация работы с SDL3 для достижения максимальной производительности.
-
----
-
-## Оптимизация ввода
-
-### Raw Input для точного позиционирования
-
-Стандартная обработка мыши может иметь ускорение и сглаживание ОС. Для приложений, требующих точности:
-
-```cpp
-void configure_raw_input() {
-    if (SDL_HasRawMouseMotion()) {
-        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
-        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SCALING, "0");
-        SDL_SetRelativeMouseMode(SDL_TRUE);
+    // Линейный проход — отличный cache utilization
+    for (size_t i = 0; i < n; ++i) {
+        switch (batch.eventTypes[i]) {
+            case SDL_EVENT_KEY_DOWN:
+                handle_key_down(batch.keyScancodes[i]);
+                break;
+            case SDL_EVENT_MOUSE_MOTION:
+                handle_mouse_move(batch.mouseRelX[i], batch.mouseRelY[i]);
+                break;
+        }
     }
 }
 ```
 
-### Относительный режим мыши
+## Job System для SDL
+
+### Паттерн: Background Loading
 
 ```cpp
-// Включение относительного режима
-SDL_SetRelativeMouseMode(SDL_TRUE);
+#include <queue>
+#include <mutex>
 
-// В SDL_AppEvent:
-if (event->type == SDL_EVENT_MOUSE_MOTION) {
-    int xrel = event->motion.xrel;  // Относительное смещение
-    int yrel = event->motion.yrel;
-    // Использовать для управления камерой
-}
+class JobSystem {
+    std::vector<std::jthread> workers_;
+    std::condition_variable cv_;
+    std::mutex mutex_;
+    std::queue<std::function<void()>> jobs_;
+    std::atomic<bool> running_{true};
+
+public:
+    explicit JobSystem(size_t threadCount) {
+        for (size_t i = 0; i < threadCount; ++i) {
+            workers_.emplace_back([this] {
+                while (running_) {
+                    std::function<void()> job;
+                    {
+                        std::unique_lock lock(mutex_);
+                        cv_.wait(lock, [this] { return !jobs_.empty() || !running_; });
+                        if (!jobs_.empty()) {
+                            job = std::move(jobs_.front());
+                            jobs_.pop();
+                        }
+                    }
+                    if (job) job();
+                }
+            });
+        }
+    }
+
+    void enqueue(std::function<void()> job) {
+        {
+            std::lock_guard lock(mutex_);
+            jobs_.push(std::move(job));
+        }
+        cv_.notify_one();
+    }
+
+    ~JobSystem() {
+        running_ = false;
+        cv_.notify_all();
+    }
+};
 ```
 
----
-
-## Обработка событий
-
-### Пакетная обработка
-
-При классическом main loop можно обрабатывать события пакетами:
+### Интеграция с ECS
 
 ```cpp
-struct BatchedInput {
-    std::vector<SDL_Event> keyboardEvents;
-    std::vector<SDL_Event> mouseEvents;
+// Воксельный движок: background mesh generation
+class VoxelMeshJob {
+    JobSystem& jobs_;
+    SpscRingBuffer<MeshTask, 256>& taskQueue_;
 
-    void collect() {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            switch (event.type) {
-                case SDL_EVENT_KEY_DOWN:
-                case SDL_EVENT_KEY_UP:
-                    keyboardEvents.push_back(event);
-                    break;
-                case SDL_EVENT_MOUSE_MOTION:
-                case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                case SDL_EVENT_MOUSE_BUTTON_UP:
-                    mouseEvents.push_back(event);
-                    break;
+public:
+    void schedule_chunk_update(VoxelChunk* chunk) {
+        // Задача в очередь — main thread не блокируется
+        taskQueue_.push(MeshTask{chunk->id, chunk->data});
+    }
+
+    void process_completed() {
+        MeshTask task;
+        while (taskQueue_.pop(task)) {
+            // Результат обратно в ECS
+            update_chunk_mesh(task.chunkId, task.vertices, task.indices);
+        }
+    }
+};
+```
+
+## GPU-Driven ввод
+
+### Vulkan-специфичные расширения
+
+```cpp
+// GPU-driven input: отправляем данные ввода напрямую в GPU буфер
+
+struct GPUInputData {
+    // Плотный layout для upload
+    alignas(16) glm::vec4 mousePosition;
+    alignas(16) glm::vec4 mouseDelta;
+    alignas(16) glm::uvec4 keyStates;  // 128 бит = 128 клавиш
+    alignas(4) uint32_t frameNumber;
+    alignas(4) uint32_t deltaTimeMs;
+};
+
+class GPUInputBuffer {
+    VmaAllocator& allocator_;
+    VkDevice device_;
+    VkBuffer buffer_ = VK_NULL_HANDLE;
+    VmaAllocation allocation_ = VK_NULL_HANDLE;
+
+public:
+    void create(VmaAllocator& allocator, VkDevice device) {
+        allocator_ = allocator;
+        device_ = device;
+
+        VkBufferCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        info.size = sizeof(GPUInputData);
+        info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        vmaCreateBuffer(&allocator_, &info, &allocInfo, &buffer_, &allocation_, nullptr);
+    }
+
+    void update(const InputBatch& batch) {
+        GPUInputData data = {};
+
+        // Компактное представление последнего состояния мыши
+        if (batch.count.load() > 0) {
+            size_t last = batch.count.load() - 1;
+            data.mousePosition = {static_cast<float>(batch.mouseX[last]),
+                                  static_cast<float>(batch.mouseY[last]), 0, 1};
+            data.mouseDelta = {static_cast<float>(batch.mouseRelX[last]),
+                               static_cast<float>(batch.mouseRelY[last]), 0, 0};
+        }
+
+        // Bitmask клавиш для шейдера
+        for (size_t i = 0; i < batch.count.load(); ++i) {
+            if (batch.eventTypes[i] == SDL_EVENT_KEY_DOWN) {
+                uint32_t scancode = batch.keyScancodes[i];
+                data.keyStates[scancode / 32] |= (1u << (scancode % 32));
             }
         }
+
+        // Copy to mapped memory
+        void* mapped;
+        vmaMapMemory(&allocator_, allocation_, &mapped);
+        std::memcpy(mapped, &data, sizeof(GPUInputData));
+        vmaUnmapMemory(&allocator_, allocation_);
     }
 
-    void process() {
-        for (const auto& e : keyboardEvents) {
-            process_keyboard(e);
-        }
-        for (const auto& e : mouseEvents) {
-            process_mouse(e);
-        }
-        keyboardEvents.clear();
-        mouseEvents.clear();
-    }
+    VkBuffer get_buffer() const { return buffer_; }
 };
 ```
 
----
-
-## Оптимизация рендеринга
-
-### Vulkan Swapchain
-
-Для минимальной задержки используйте mailbox present mode:
+### Descriptor Set для ввода
 
 ```cpp
-VkSwapchainCreateInfoKHR swapchainInfo = {};
-swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-swapchainInfo.minImageCount = 3;  // Triple buffering
-swapchainInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;  // Низкая latency
-```
+// Шейдер получает состояние ввода как uniform
+// layout(set = 0, binding = 0) uniform InputData { ... } uInput;
 
-### Обработка resize
+void update_descriptor_set(VkDescriptorSet set, GPUInputBuffer& inputBuffer) {
+    VkDescriptorBufferInfo bufferInfo = {};
+    bufferInfo.buffer = inputBuffer.get_buffer();
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(GPUInputData);
 
-Избегайте лишних пересозданий swapchain:
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = set;
+    write.dstBinding = 0;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    write.descriptorCount = 1;
+    write.pBufferInfo = &bufferInfo;
 
-```cpp
-void handle_resize(int newWidth, int newHeight) {
-    static int lastWidth = 0, lastHeight = 0;
-
-    // Обновлять только при значительном изменении
-    if (abs(newWidth - lastWidth) > 10 || abs(newHeight - lastHeight) > 10) {
-        vkDeviceWaitIdle(device);
-        recreate_swapchain(newWidth, newHeight);
-        lastWidth = newWidth;
-        lastHeight = newHeight;
-    }
+    vkUpdateDescriptorSets(device_, 1, &write, 0, nullptr);
 }
 ```
 
----
+## Cache-Olined ввод
 
-## Оптимизация памяти
-
-### Пулы памяти
-
-Избегайте аллокаций в игровом цикле:
+### False sharing предотвращение
 
 ```cpp
-template<size_t PoolSize = 64 * 1024>
+// ❌ Плохо: два потока на одной кэш-линии
+struct BadInput {
+    std::atomic<uint64_t> mouseX;
+    std::atomic<uint64_t> mouseY;  // False sharing!
+};
+
+// ✅ Хорошо: выравнивание по 64 байта
+struct alignas(64) CacheLinePaddedInput {
+    alignas(64) std::atomic<uint64_t> mouseX;
+    alignas(64) std::atomic<uint64_t> mouseY;
+    alignas(64) std::atomic<uint32_t> keyBits[16];  // 512 бит клавиш
+};
+```
+
+### Frame allocator для ввода
+
+```cpp
+template<size_t PoolSize = 256 * 1024>
 class FrameAllocator {
-    std::array<char, PoolSize> pool_;
+    std::array<std::byte, PoolSize> pool_;
     size_t offset_ = 0;
 
 public:
@@ -543,630 +385,207 @@ public:
     }
 
     void reset() { offset_ = 0; }
+
+    size_t used() const { return offset_; }
 };
 
-// Использование
-FrameAllocator<> frameAllocator;
+// Использование в SDL_AppIterate
+FrameAllocator<256 * 1024> frameAlloc;
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
-    frameAllocator.reset();
+    frameAlloc.reset();  // Начало кадра
 
-    auto* tempData = frameAllocator.allocate(sizeof(TempData));
-    // Использовать tempData в течение кадра
-    // Не нужно освобождать — сбросится в следующем кадре
+    // Аллокация временных данных — zero cost если не используется
+    auto* inputSnapshot = frameAlloc.allocate(sizeof(InputSnapshot));
+
+    // ... обработка ...
+
+    // Не нужно освобождать — сброс в начале следующего кадра
+    return SDL_APP_CONTINUE;
+}
+```
+
+## Raw Input для воксельного редактора
+
+### Конфигурация для точности
+
+```cpp
+void configure_raw_input_for_editing() {
+    // Отключение системного сглаживания
+    if (SDL_HasRawMouseMotion()) {
+        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
+        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SCALING, "0");
+    }
+
+    // Включение относительного режима для кисти
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+
+    // Захват мыши для редактора
+    SDL_CaptureMouse(SDL_TRUE);
+}
+```
+
+### Immediate mode обработка
+
+```cpp
+// Низкоуровневый путь: событие → рендер без ECS overhead
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
+    auto* app = static_cast<AppState*>(appstate);
+
+    // Кисть редактора: минимальная задержка
+    if (app->brushActive && event->type == SDL_EVENT_MOUSE_MOTION) {
+        // Прямой path: событие → preview mesh
+        update_brush_preview(event->motion.x, event->motion.y,
+                            app->brushSize, app->brushColor);
+        return SDL_APP_CONTINUE;
+    }
+
+    // Остальные события через ECS
+    app->ecs->entity().set<InputEvent>({*event});
 
     return SDL_APP_CONTINUE;
 }
 ```
 
----
+## Multi-window редактор
+
+### Менеджер окон
+
+```cpp
+class VoxelEditorWindowManager {
+    struct WindowData {
+        SDL_Window* window = nullptr;
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
+        VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+        uint32_t width = 0;
+        uint32_t height = 0;
+    };
+
+    WindowData viewport_;
+    WindowData tools_;
+    WindowData properties_;
+
+    VkInstance instance_ = VK_NULL_HANDLE;
+
+public:
+    void init(VkInstance instance) {
+        instance_ = instance;
+
+        // Viewport — главное окно
+        viewport_.window = SDL_CreateWindow(
+            "Voxel Viewport", 1280, 720,
+            SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
+        );
+        create_surface(viewport_);
+
+        // Tools panel
+        tools_.window = SDL_CreateWindow(
+            "Tools", 300, 800,
+            SDL_WINDOW_VULKAN
+        );
+        create_surface(tools_);
+    }
+
+    void handle_event(const SDL_Event& event) {
+        if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+            SDL_WindowID id = event.window.windowID;
+
+            if (id == SDL_GetWindowID(viewport_.window)) {
+                // Закрытие viewport = выход
+                appShouldExit_ = true;
+            } else {
+                // Закрытие вспомогательного окна
+                destroy_window_by_id(id);
+            }
+        }
+
+        if (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+            handle_resize(event.window.windowID,
+                         event.window.data1,
+                         event.window.data2);
+        }
+    }
+
+    void destroy_all() {
+        destroy_window(viewport_);
+        destroy_window(tools_);
+        destroy_window(properties_);
+    }
+
+private:
+    void create_surface(WindowData& data) {
+        SDL_Vulkan_CreateSurface(data.window, instance_, nullptr, &data.surface);
+    }
+
+    void destroy_window(WindowData& data) {
+        if (data.surface) {
+            SDL_Vulkan_DestroySurface(instance_, data.surface, nullptr);
+            data.surface = VK_NULL_HANDLE;
+        }
+        if (data.window) {
+            SDL_DestroyWindow(data.window);
+            data.window = nullptr;
+        }
+    }
+};
+```
 
 ## Профилирование
 
-### Измерение FPS
+### Tracy для детального анализа
 
 ```cpp
-struct FrameMetrics {
-    Uint64 frameTimes[60] = {0};
-    size_t frameIndex = 0;
-    Uint64 lastTime = 0;
-
-    void frame() {
-        Uint64 currentTime = SDL_GetPerformanceCounter();
-        if (lastTime > 0) {
-            Uint64 freq = SDL_GetPerformanceFrequency();
-            frameTimes[frameIndex] = currentTime - lastTime;
-            frameIndex = (frameIndex + 1) % 60;
-        }
-        lastTime = currentTime;
-    }
-
-    double getFPS() const {
-        Uint64 total = 0;
-        for (size_t i = 0; i < 60; i++) {
-            total += frameTimes[i];
-        }
-        Uint64 freq = SDL_GetPerformanceFrequency();
-        return 60.0 * freq / total;
-    }
-
-    double getFrameTimeMS() const {
-        size_t idx = (frameIndex + 59) % 60;
-        Uint64 freq = SDL_GetPerformanceFrequency();
-        return 1000.0 * frameTimes[idx] / freq;
-    }
-};
-```
-
-### Высокоточный таймер
-
-```cpp
-Uint64 start = SDL_GetPerformanceCounter();
-
-// Измеряемый код
-
-Uint64 end = SDL_GetPerformanceCounter();
-Uint64 freq = SDL_GetPerformanceFrequency();
-
-double seconds = (double)(end - start) / freq;
-double milliseconds = seconds * 1000.0;
-```
-
----
-
-## Платформенные оптимизации
-
-### Windows
-
-```cpp
-void windows_optimizations() {
-    // DPI awareness
-    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
-
-    // Отключение compositor для fullscreen
-    SDL_SetHint(SDL_HINT_VIDEO_FULLSCREEN_SPACES, "0");
-}
-```
-
-### Linux
-
-```cpp
-void linux_optimizations() {
-    // Предпочтительный драйвер
-    SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");  // или "wayland"
-
-    // Обход compositor
-    SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "1");
-}
-```
-
-### macOS
-
-```cpp
-void macos_optimizations() {
-    // Metal renderer
-    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "metal");
-
-    // Retina support
-    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
-}
-```
-
----
-
-## Рекомендации
-
-### Делать
-
-- Использовать `SDL_GetWindowSizeInPixels()` для Vulkan/OpenGL
-- Обрабатывать `SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED` для HiDPI
-- Использовать пулы памяти для временных данных
-- Профилировать перед оптимизацией
-- Использовать raw input для приложений с точным позиционированием
-
-### Не делать
-
-- Не вызывать `SDL_PollEvent()` в callback режиме
-- Не создавать/уничтожать окна в основном цикле
-- Не использовать `SDL_GetTicks()` для точных интервалов (лучше `SDL_GetPerformanceCounter`)
-- Не выполнять синхронные операции в рендеринге
-
----
-
-## Чеклист оптимизации
-
-1. Включить raw input при необходимости точности
-2. Настроить swapchain для низкой latency
-3. Использовать пулы памяти для кадра
-4. Обработка HiDPI корректно
-5. Платформо-специфичные оптимизации
-6. Профилирование узких мест
-
----
-
-## Сценарии использования SDL3
-
-<!-- anchor: 08_use-cases -->
-
-
-Типовые архитектурные паттерны для различных типов приложений.
-
----
-
-## Игры
-
-### Игровая петля с callbacks
-
-```cpp
-#define SDL_MAIN_USE_CALLBACKS 1
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-
-struct GameState {
-    SDL_Window* window = nullptr;
-    bool paused = false;
-};
-
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD);
-
-    auto* game = new GameState;
-    game->window = SDL_CreateWindow("Game", 1280, 720,
-                                     SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-
-    *appstate = game;
-    return SDL_APP_CONTINUE;
-}
-
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    auto* game = static_cast<GameState*>(appstate);
-
-    switch (event->type) {
-        case SDL_EVENT_QUIT:
-            return SDL_APP_SUCCESS;
-        case SDL_EVENT_KEY_DOWN:
-            if (event->key.key == SDLK_ESCAPE) {
-                game->paused = !game->paused;
-            }
-            break;
-    }
-    return SDL_APP_CONTINUE;
-}
+#include <tracy/Tracy.hpp>
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
-    auto* game = static_cast<GameState*>(appstate);
+    ZoneScopedN("Frame");
 
-    if (!game->paused) {
-        update_game();
+    // Input phase
+    {
+        ZoneScopedN("Input");
+        process_input_batch();
+    }
+
+    // Update phase (может быть multithreaded)
+    {
+        ZoneScopedN("Update");
+        auto& jobSystem = get_job_system();
+        jobSystem.process_pending();
+
+        ZoneScopedN("ECS");
+        ecs_->progress();
+    }
+
+    // Render phase
+    {
+        ZoneScopedN("Render");
         render_frame();
     }
 
+    // GPU work submission
+    {
+        ZoneScopedN("Submit");
+        submit_command_buffer();
+    }
+
+    TracyPlot("InputEvents", static_cast<int64_t>(inputBatch.count));
+    TracyPlot("DrawCalls", static_cast<int64_t>(drawCallCount));
+    TracyPlot("Voxels", static_cast<int64_t>(voxelCount));
+
+    FrameMark;
     return SDL_APP_CONTINUE;
 }
 ```
 
-### Классический main loop
-
-```cpp
-#include <SDL3/SDL.h>
-
-int main(int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
-    SDL_Window* window = SDL_CreateWindow("Game", 1280, 720, SDL_WINDOW_VULKAN);
-
-    bool running = true;
-    while (running) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event->type == SDL_EVENT_QUIT) {
-                running = false;
-            }
-        }
-
-        update_game();
-        render_frame();
-    }
-
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    return 0;
-}
-```
-
----
-
-## Графические редакторы
-
-### Multi-window архитектура
-
-```cpp
-struct EditorState {
-    SDL_Window* viewport = nullptr;      // Главное окно с 3D сценой
-    SDL_Window* tools = nullptr;         // Панель инструментов
-    SDL_Window* properties = nullptr;    // Панель свойств
-};
-
-SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO);
-
-    auto* editor = new EditorState;
-
-    editor->viewport = SDL_CreateWindow(
-        "Viewport", 1280, 720,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
-    );
-
-    editor->tools = SDL_CreateWindow(
-        "Tools", 300, 600,
-        SDL_WINDOW_VULKAN
-    );
-
-    editor->properties = SDL_CreateWindow(
-        "Properties", 400, 600,
-        SDL_WINDOW_VULKAN
-    );
-
-    *appstate = editor;
-    return SDL_APP_CONTINUE;
-}
-
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    auto* editor = static_cast<EditorState*>(appstate);
-
-    if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-        SDL_WindowID id = event->window.windowID;
-
-        if (id == SDL_GetWindowID(editor->viewport)) {
-            return SDL_APP_SUCCESS;  // Закрытие главного окна = выход
-        }
-
-        // Закрытие вспомогательных окон
-        if (id == SDL_GetWindowID(editor->tools)) {
-            SDL_DestroyWindow(editor->tools);
-            editor->tools = nullptr;
-        }
-        else if (id == SDL_GetWindowID(editor->properties)) {
-            SDL_DestroyWindow(editor->properties);
-            editor->properties = nullptr;
-        }
-    }
-
-    return SDL_APP_CONTINUE;
-}
-```
-
-### Drag & Drop файлов
-
-```cpp
-SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    if (event->type == SDL_EVENT_DROP_FILE) {
-        const char* filePath = event->drop.file;
-        load_file(filePath);
-        SDL_free((void*)filePath);
-    }
-
-    if (event->type == SDL_EVENT_DROP_COMPLETE) {
-        // Завершение операции drop
-    }
-
-    return SDL_APP_CONTINUE;
-}
-```
-
----
-
-## Медиаплееры
-
-### Fullscreen переключение
-
-```cpp
-void toggle_fullscreen(SDL_Window* window) {
-    bool isFullscreen = SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN;
-
-    if (isFullscreen) {
-        SDL_SetWindowFullscreen(window, false);
-        SDL_SetWindowSize(window, 1280, 720);
-    } else {
-        SDL_SetWindowFullscreen(window, true);
-    }
-}
-```
-
-### Borderless fullscreen
-
-```cpp
-void set_borderless_fullscreen(SDL_Window* window) {
-    SDL_SetWindowBordered(window, false);
-
-    SDL_DisplayMode mode;
-    SDL_GetCurrentDisplayMode(0, &mode);
-
-    SDL_SetWindowPosition(window, 0, 0);
-    SDL_SetWindowSize(window, mode.w, mode.h);
-}
-```
-
----
-
-## Научная визуализация
-
-### Режим реального времени
-
-```cpp
-SDL_AppResult SDL_AppIterate(void* appstate) {
-    update_simulation();
-    render_visualization();
-
-    // Ограничение FPS для стабильности
-    SDL_Delay(16);  // ~60 FPS
-
-    return SDL_APP_CONTINUE;
-}
-```
-
-### Оффлайн рендеринг
-
-```cpp
-void offline_render(int totalFrames) {
-    for (int frame = 0; frame < totalFrames; frame++) {
-        update_simulation();
-        render_frame();
-        save_frame_to_file(frame);
-        // Без задержки для максимальной скорости
-    }
-}
-```
-
----
-
-## Инструменты разработчика
-
-### Запись и воспроизведение ввода
-
-```cpp
-struct InputRecorder {
-    struct Record {
-        SDL_Event event;
-        Uint64 timestamp;
-    };
-
-    std::vector<Record> records;
-    bool recording = false;
-    bool playing = false;
-    size_t playbackIndex = 0;
-    Uint64 playbackStartTime = 0;
-
-    void record(const SDL_Event& event) {
-        if (recording) {
-            records.push_back({event, SDL_GetTicks()});
-        }
-    }
-
-    void startPlayback() {
-        playing = true;
-        playbackIndex = 0;
-        playbackStartTime = SDL_GetTicks();
-    }
-
-    SDL_Event* getNextEvent() {
-        if (!playing || playbackIndex >= records.size()) return nullptr;
-
-        Uint64 elapsed = SDL_GetTicks() - playbackStartTime;
-        if (elapsed >= records[playbackIndex].timestamp) {
-            return &records[playbackIndex++].event;
-        }
-        return nullptr;
-    }
-};
-```
-
----
-
-## Сравнение архитектур
-
-| Архитектура        | Преимущества                      | Недостатки                      | Когда использовать                              |
-|--------------------|-----------------------------------|---------------------------------|-------------------------------------------------|
-| **Callbacks**      | Кроссплатформенность, меньше кода | Меньше контроля                 | Мобильные платформы, кроссплатформенные проекты |
-| **Classic main()** | Полный контроль, простота отладки | Требует адаптации для мобильных | Десктопные игры, инструменты                    |
-| **Multi-window**   | Гибкий интерфейс                  | Сложность управления            | Редакторы, IDE                                  |
-
----
-
-## Паттерны управления окнами
-
-| Паттерн             | Описание                         | Применение                        |
-|---------------------|----------------------------------|-----------------------------------|
-| **Single-window**   | Одно главное окно                | Игры, медиаплееры                 |
-| **Multi-window**    | Несколько независимых окон       | Графические редакторы, DAW        |
-| **Document-view**   | Главное окно с вкладками         | Текстовые редакторы, браузеры     |
-| **Floating panels** | Основное окно + плавающие панели | CAD, профессиональные инструменты |
-
----
-
-## Decision Trees для SDL3
-
-<!-- anchor: 09_decision-trees -->
-
-
-Руководство по выбору архитектуры и API для проектов на SDL3.
-
----
-
-## Выбор архитектуры Event Loop
-
-### Критерии выбора
-
-| Критерий            | Callbacks               | Classic main() |
-|---------------------|-------------------------|----------------|
-| Целевые платформы   | Все (включая мобильные) | Только десктоп |
-| Контроль над циклом | Ограниченный            | Полный         |
-| Boilerplate код     | Минимум                 | Больше         |
-| Отладка             | Сложнее                 | Проще          |
-
-### Решение
-
-```
-Нужна поддержка iOS/Android?
-├── Да → SDL_MAIN_USE_CALLBACKS (обязательно)
-└── Нет → Нужен полный контроль над временем выполнения?
-           ├── Да → Classic main() + SDL_PollEvent
-           └── Нет → SDL_MAIN_USE_CALLBACKS (рекомендуется)
-```
-
----
-
-## Выбор графического API
-
-### Сравнение
-
-| API              | Производительность | Сложность | Совместимость   |
-|------------------|--------------------|-----------|-----------------|
-| **Vulkan**       | Максимальная       | Высокая   | Современные GPU |
-| **OpenGL**       | Средняя            | Средняя   | Широкая         |
-| **SDL_Renderer** | Низкая             | Низкая    | Максимальная    |
-
-### Решение
-
-```
-Каковы требования к производительности?
-├── Максимальная → Vulkan
-│                  └── Нужен volk для загрузки функций
-├── Средняя → OpenGL
-│             └── SDL_WINDOW_OPENGL + GL context
-└── Низкая / Простота разработки → SDL_Renderer
-                                    └── Встроенный 2D рендерер
-```
-
----
-
-## Выбор архитектуры окон
-
-### Решение
-
-```
-Тип приложения?
-├── Игра
-│   └── Single-window (fullscreen или windowed)
-├── Графический редактор
-│   └── Multi-window (viewport + панели)
-├── Инструмент / Утилита
-│   └── Single-window + диалоги
-└── Медиаплеер
-    └── Single-window с fullscreen toggle
-```
-
-### Паттерны окон
-
-| Паттерн             | Описание                        | Примеры        |
-|---------------------|---------------------------------|----------------|
-| **Single-window**   | Одно главное окно               | Игры, плееры   |
-| **Multi-window**    | Несколько независимых окон      | Редакторы, IDE |
-| **Floating panels** | Главное окно + плавающие панели | CAD, DAW       |
-
----
-
-## Выбор стратегии ввода
-
-### Решение
-
-```
-Требуемая точность ввода?
-├── Высокая (графические редакторы, CAD)
-│   └── Raw Input + относительный режим мыши
-├── Средняя (большинство игр)
-│   └── Стандартная обработка событий
-└── Низкая (меню, интерфейсы)
-    └── Простая обработка в SDL_AppEvent
-```
-
-### Raw Input
-
-```cpp
-// Для приложений, требующих точности
-if (SDL_HasRawMouseMotion()) {
-    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
-    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SCALING, "0");
-    SDL_SetRelativeMouseMode(SDL_TRUE);
-}
-```
-
----
-
-## Выбор стратегии оптимизации
-
-### Решение
-
-```
-Требования к производительности?
-├── Максимальная (AAA игры, движки)
-│   ├── Пулы памяти
-│   ├── Lock-free структуры
-│   ├── SIMD оптимизации
-│   └── Профилирование (Tracy)
-├── Сбалансированная (коммерческие проекты)
-│   ├── Кэширование
-│   ├── Batch processing
-│   └── Базовое профилирование
-└── Минимальная (прототипы, инструменты)
-    └── Читаемость важнее оптимизации
-```
-
-### Уровни оптимизации
-
-| Уровень         | Методы                        | Инструменты        |
-|-----------------|-------------------------------|--------------------|
-| **Агрессивный** | Пулы памяти, lock-free, SIMD  | Tracy, VTune       |
-| **Умеренный**   | Кэширование, batch processing | Встроенные таймеры |
-| **Минимальный** | Чистый код                    | —                  |
-
----
-
-## Кроссплатформенные решения
-
-### Решение
-
-```
-Сколько платформ?
-├── Одна (например, только Windows)
-│   └── Можно использовать платформо-специфичные API
-├── 2-3 платформы (desktop)
-│   └── SDL абстракция + условная компиляция
-└── Все платформы (включая мобильные)
-    ├── Только SDL API
-    ├── SDL_MAIN_USE_CALLBACKS (обязательно)
-    └── Абстракция для сложных случаев
-```
-
-### Платформенные особенности
-
-| Платформа       | Особенности    | Hints                            |
-|-----------------|----------------|----------------------------------|
-| **Windows**     | DPI, Game Mode | `SDL_HINT_WINDOWS_DPI_AWARENESS` |
-| **macOS**       | Retina, Metal  | `SDL_HINT_RENDER_DRIVER="metal"` |
-| **Linux**       | X11/Wayland    | `SDL_HINT_VIDEO_DRIVER`          |
-| **iOS/Android** | Жизненный цикл | Callbacks обязательны            |
-
----
-
-## Быстрые рекомендации по умолчанию
-
-Для нового проекта:
-
-1. **Архитектура**: `SDL_MAIN_USE_CALLBACKS` (кроссплатформенность)
-2. **Графика**: Vulkan (производительность), OpenGL (простота)
-3. **Окна**: Single-window (игры), Multi-window (редакторы)
-4. **Ввод**: Стандартный, Raw Input при необходимости точности
-5. **Профилирование**: Tracy с самого начала
-6. **Абстракция**: Platform abstraction layer для >2 платформ
-
----
-
-## Чеклист принятия решений
-
-- [ ] Определены целевые платформы
-- [ ] Выбрана архитектура event loop
-- [ ] Выбран графический API
-- [ ] Определена архитектура окон
-- [ ] Выбрана стратегия обработки ввода
-- [ ] Определён уровень оптимизации
-- [ ] Выбраны инструменты профилирования
+## Чеклист хардкорных оптимизаций
+
+- [ ] SPSC queue для background → main thread коммуникации
+- [ ] SoA layout для InputBatch (не AoS!)
+- [ ] alignas(64) для разделяемых данных между потоками
+- [ ] Frame allocator для zero-allocation в кадре
+- [ ] Job System для background mesh generation
+- [ ] GPU Input Buffer для передачи ввода в шейдеры
+- [ ] Tracy профилирование каждой фазы кадра
+- [ ] Raw Input для точного позиционирования кисти
+- [ ] Multi-window manager для редактора
+- [ ] Immediate mode path для brush preview

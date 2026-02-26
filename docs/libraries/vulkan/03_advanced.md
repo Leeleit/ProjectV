@@ -1,8 +1,6 @@
 # Vulkan Libraries — Advanced
 
-<!-- anchor: 03_advanced -->
-
-Продвинутые техники Vulkan для ProjectV: bindless rendering, timeline semaphores, async compute и GPU-driven rendering.
+Продвинутые техники Vulkan: bindless rendering, timeline semaphores, async compute и GPU-driven rendering.
 
 ---
 
@@ -528,14 +526,31 @@ private:
         return pool;
     }
 
-    uint32_t get_compute_queue_family() {
-        // Реализация получения queue family
-        return 0;
+    [[nodiscard]]
+    std::expected<uint32_t, std::string> get_compute_queue_family() {
+        uint32_t count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device_, &count, nullptr);
+
+        std::vector<VkQueueFamilyProperties> families(count);
+        vkGetPhysicalDeviceQueueFamilyProperties(device_, &count, families.data());
+
+        for (uint32_t i = 0; i < count; ++i) {
+            if (families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+                return i;
+            }
+        }
+
+        return std::unexpected("No compute queue family found");
     }
 
-    std::vector<uint32_t> compile_compute_shader() {
-        // Компиляция compute shader для генерации вокселей
-        return {}; // Заглушка
+    [[nodiscard]]
+    std::expected<std::vector<uint32_t>, std::string> compile_compute_shader() {
+        // В реальном проекте используйте Slang или glslang для компиляции
+        // Здесь возвращаем SPIR-V bytecode для примера
+
+        // Пример: базовый compute shader для генерации вокселей (пустой placeholder)
+        // В production используйте внешний компилятор шейдеров
+        return std::unexpected("Shader compilation requires external compiler (Slang/glslang)");
     }
 };
 ```
@@ -813,21 +828,61 @@ private:
     }
 
     void copy_chunk_data_to_gpu(const std::vector<ChunkInstance>& chunks) {
-        // Реализация копирования данных в GPU buffer
-        // Используйте vkCmdCopyBuffer или staging buffer
+        // Копирование данных в GPU буфер через staging буфер
+        // Используется VMA для управления памятью
+        if (chunks.empty()) return;
+
+        const size_t data_size = chunks.size() * sizeof(ChunkInstance);
+
+        // Staging буфер для записи на CPU
+        VkBuffer staging_buffer = VK_NULL_HANDLE;
+        VmaAllocation staging_allocation = VK_NULL_HANDLE;
+
+        VkBufferCreateInfo staging_info = {};
+        staging_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        staging_info.size = data_size;
+        staging_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        VmaAllocationCreateInfo staging_alloc = {};
+        staging_alloc.usage = VMA_MEMORY_USAGE_AUTO;
+        staging_alloc.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+        vmaCreateBuffer(get_vma_allocator(), &staging_info, &staging_alloc,
+                       &staging_buffer, &staging_allocation, nullptr);
+
+        // Копирование данных
+        void* mapped_data = nullptr;
+        vmaMapMemory(get_vma_allocator(), staging_allocation, &mapped_data);
+        std::memcpy(mapped_data, chunks.data(), data_size);
+        vmaUnmapMemory(get_vma_allocator(), staging_allocation);
+
+        // Копирование в GPU буфер
+        VkCommandBuffer cmd = begin_single_time_command_buffer();
+
+        VkBufferCopy copy_region = {};
+        copy_region.size = data_size;
+        vkCmdCopyBuffer(cmd, staging_buffer, cull_data_buffer_, 1, &copy_region);
+
+        end_single_time_command_buffer(cmd);
+
+        // Очистка staging ресурсов
+        vmaDestroyBuffer(get_vma_allocator(), staging_buffer, staging_allocation);
     }
 
     void generate_indirect_commands(VkCommandBuffer cmd) {
         // Compute shader для генерации indirect draw commands
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, get_indirect_gen_pipeline());
-
-        // Dispatch
-        vkCmdDispatch(cmd, 1, 1, 1);
+        // Привязываем тот же cull pipeline - он пишет в indirect буфер
+        // В production отдельный pipeline для генерации команд
+        (void)cmd; // placeholder - требует отдельного pipeline
     }
 
-    VkQueue get_compute_queue() {
-        // Получение compute queue
-        return VK_NULL_HANDLE; // Заглушка
+    [[nodiscard]]
+    std::expected<VkQueue, std::string> get_compute_queue() {
+        // Получение compute queue из очередей
+        // В реальном движке queue хранится как член класса при инициализации
+        // Здесь демонстрируем интерфейс
+        return std::unexpected("Compute queue not stored - pass during initialization");
     }
 
     void allocate_buffer_memory(VkBuffer buffer) {
@@ -836,32 +891,90 @@ private:
         alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
         VmaAllocation allocation;
-        vmaAllocateMemoryForBuffer(get_vma_allocator(), buffer, &alloc_info, &allocation, nullptr);
-        vmaBindBufferMemory(get_vma_allocator(), allocation, buffer);
+        VkResult result = vmaAllocateMemoryForBuffer(get_vma_allocator(), buffer, &alloc_info, &allocation, nullptr);
+        if (result == VK_SUCCESS) {
+            vmaBindBufferMemory(get_vma_allocator(), allocation, buffer);
+        }
     }
 
-    VmaAllocator get_vma_allocator() {
-        // Получение VMA allocator
-        return VK_NULL_HANDLE; // Заглушка
+    // Ссылка на VMA allocator - должен быть передан при инициализации
+    VmaAllocator get_vma_allocator() const {
+        // В production: return vma_allocator_;
+        // Здесь интерфейс требует внешней зависимости
+        return VK_NULL_HANDLE;
     }
 
     VkPipeline get_indirect_gen_pipeline() {
         // Получение pipeline для генерации indirect commands
-        return VK_NULL_HANDLE; // Заглушка
+        // В production: return indirect_gen_pipeline_;
+        return VK_NULL_HANDLE;
     }
 
-    std::vector<uint32_t> compile_cull_shader() {
-        // Компиляция compute shader для frustum culling
-        return {}; // Заглушка
+    [[nodiscard]]
+    std::expected<std::vector<uint32_t>, std::string> compile_cull_shader() {
+        // В реальном проекте используйте Slang или glslang
+        // SPIR-V код должен быть скомпилирован заранее
+        return std::unexpected("Shader compilation requires external compiler (Slang/glslang)");
     }
 
-    VkCommandBuffer begin_compute_command_buffer() {
-        // Начало записи command buffer
-        return VK_NULL_HANDLE; // Заглушка
+    VkCommandBuffer begin_single_time_command_buffer() {
+        VkCommandBufferAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc_info.commandBufferCount = 1;
+
+        // Используем transient pool для одноразовых команд
+        static VkCommandPool transient_pool = VK_NULL_HANDLE;
+        if (transient_pool == VK_NULL_HANDLE) {
+            VkCommandPoolCreateInfo pool_info = {};
+            pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            pool_info.queueFamilyIndex = 0; // Получить из очереди
+
+            vkCreateCommandPool(device_, &pool_info, nullptr, &transient_pool);
+        }
+        alloc_info.commandPool = transient_pool;
+
+        VkCommandBuffer cmd;
+        vkAllocateCommandBuffers(device_, &alloc_info, &cmd);
+
+        VkCommandBufferBeginInfo begin_info = {};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkBeginCommandBuffer(cmd, &begin_info);
+        return cmd;
     }
 
-    void end_compute_command_buffer(VkCommandBuffer cmd) {
-        // Завершение записи command buffer
+    void end_single_time_command_buffer(VkCommandBuffer cmd) {
+        vkEndCommandBuffer(cmd);
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &cmd;
+
+        // Получение графической или compute очереди
+        VkQueue queue;
+        vkGetDeviceQueue(device_, 0, 0, &queue);
+
+        vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(queue);
+
+        // Освобождение command buffer
+        vkFreeCommandBuffers(device_, begin_single_time_command_buffer_pool_(), 1, &cmd);
+    }
+
+    VkCommandPool begin_single_time_command_buffer_pool_() {
+        static VkCommandPool pool = VK_NULL_HANDLE;
+        if (pool == VK_NULL_HANDLE) {
+            VkCommandPoolCreateInfo pool_info = {};
+            pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            pool_info.queueFamilyIndex = 0;
+            vkCreateCommandPool(device_, &pool_info, nullptr, &pool);
+        }
+        return pool;
     }
 };
 ```

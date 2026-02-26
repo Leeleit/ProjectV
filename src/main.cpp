@@ -2,6 +2,6 @@
 
 int main()
 {
-	std::println("Hello, World!");
+	printf("Hello, World!");
 	return 0;
 }

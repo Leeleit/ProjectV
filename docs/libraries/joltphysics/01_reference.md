@@ -1,13 +1,11 @@
-﻿## Обзор JoltPhysics
-
-<!-- anchor: 00_overview -->
-
+# JoltPhysics: Чистый справочник для студентов
 
 **JoltPhysics** — современный физический движок с поддержкой детерминированной симуляции, оптимизированный для
 многопоточности и разработанный для высокой производительности в игровых проектах.
 
-Версия: **5.5.1+**
-Исходники: [jrouwe/JoltPhysics](https://github.com/jrouwe/JoltPhysics)
+> **Для понимания:** Представьте JoltPhysics как "умный конструктор LEGO для физики". Вы берёте готовые блоки (формы,
+> тела, ограничения), соединяете их по правилам, и получаете реалистичную физическую симуляцию без необходимости писать
+> сложные алгоритмы с нуля.
 
 ## Основные возможности
 
@@ -25,22 +23,6 @@
 - VR/AR приложения
 - Физические головоломки
 - Сетевые игры (детерминированная физика)
-
-## Структура библиотеки
-
-```
-JoltPhysics/
-├── Jolt.h                   # Главный заголовок
-├── Physics/
-│   ├── PhysicsSystem.h      # Основная система
-│   ├── Body/                # Тела и их свойства
-│   ├── Collision/           # Коллизии и формы
-│   └── Constraints/         # Ограничения
-├── Core/
-│   ├── JobSystem.h          # Многопоточность
-│   └── TempAllocator.h      # Временные аллокации
-└── Geometry/                # Математика и геометрия
-```
 
 ## Архитектура
 
@@ -62,9 +44,10 @@ Broad Phase → Narrow Phase → Solver → Position Update
   AABB test     GJK/EPA    Constraints
 ```
 
-## Основные понятия JoltPhysics
+> **Для понимания:** Физический движок — это как фабрика по производству. На конвейере сначала грубо сортируют детали (
+> Broad Phase), потом точно подгоняют (Narrow Phase), затем собирают (Solver), и наконец упаковывают (Position Update).
 
-<!-- anchor: 02_concepts -->
+---
 
 ## Слои объектов (Object Layers)
 
@@ -76,11 +59,15 @@ Broad Phase → Narrow Phase → Solver → Position Update
 ```cpp
 namespace Layers
 {
-    static constexpr JPH::ObjectLayer NON_MOVING = 0;  // Статические объекты
-    static constexpr JPH::ObjectLayer MOVING = 1;      // Динамические объекты
+    static constexpr JPH::ObjectLayer NON_MOVING = 0;
+    static constexpr JPH::ObjectLayer MOVING = 1;
     static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
 }
 ```
+
+> **Для понимания:** Object Layers — это как "цветные наклейки" на объектах. Красные объекты сталкиваются только с
+> синими, зелёные — со всеми, и т.д. Это позволяет создавать сложные правила взаимодействия без проверки каждого объекта
+> отдельно.
 
 ### BroadPhase Layers
 
@@ -115,9 +102,9 @@ public:
         switch (inObject1)
         {
         case Layers::NON_MOVING:
-            return inObject2 == Layers::MOVING;  // Static только с dynamic
+            return inObject2 == Layers::MOVING;
         case Layers::MOVING:
-            return true;  // Dynamic со всеми
+            return true;
         default:
             return false;
         }
@@ -187,6 +174,9 @@ public:
 2. **Реализация**: Деревья AABB для каждого BroadPhase Layer
 3. **Результат**: Список пар тел для Narrow Phase
 
+> **Для понимания:** Broad Phase — это как "быстрый поиск в телефонной книге". Вместо того чтобы звонить каждому
+> человеку (проверять каждую пару тел), вы сначала смотрите на букву фамилии (AABB-дерево), чтобы сузить круг поиска.
+
 ### Narrow Phase (Узкая фаза)
 
 1. **Назначение**: Точная проверка столкновений между конкретными формами
@@ -229,11 +219,15 @@ Candidate pairs      Contact points      Updated positions
 ```cpp
 enum class EMotionType
 {
-    Static,      // Неподвижное тело
-    Kinematic,   // Движение задаётся вручную
-    Dynamic      // Подчиняется физике
+    Static,
+    Kinematic,
+    Dynamic
 }
 ```
+
+> **Для понимания:** Представьте три типа объектов в парке аттракционов: Static — это здания (не двигаются), Kinematic —
+> это карусель (движется по заданному пути), Dynamic — это мячики в бассейне с шариками (летают куда хотят по законам
+> физики).
 
 ---
 
@@ -252,7 +246,6 @@ enum class EMotionType
 ### Включение
 
 ```cmake
-# При сборке JoltPhysics
 set(JPH_CROSS_PLATFORM_DETERMINISTIC ON CACHE BOOL "" FORCE)
 ```
 
@@ -265,9 +258,6 @@ set(JPH_CROSS_PLATFORM_DETERMINISTIC ON CACHE BOOL "" FORCE)
 ---
 
 ## Многопоточность и JobSystem
-
-> **Примечание:** Подробное объяснение паттернов многопоточности в C++ см.
-> в C++ guide.
 
 ### Архитектура
 
@@ -286,15 +276,13 @@ Jolt использует систему задач (jobs) для паралле
 ```cpp
 #include <Jolt/Core/JobSystemThreadPool.h>
 
-// Создание пула потоков
 uint32_t num_threads = std::thread::hardware_concurrency() - 1;
 JPH::JobSystemThreadPool job_system(
-    JPH::cMaxPhysicsJobs,        // Макс. задач
-    JPH::cMaxPhysicsBarriers,    // Макс. барьеров
-    num_threads                   // Рабочие потоки
+    JPH::cMaxPhysicsJobs,
+    JPH::cMaxPhysicsBarriers,
+    num_threads
 );
 
-// Использование
 physics_system.Update(delta_time, 1, &temp_allocator, &job_system);
 ```
 
@@ -316,7 +304,6 @@ physics_system.Update(delta_time, 1, &temp_allocator, &job_system);
 class MyContactListener : public JPH::ContactListener
 {
 public:
-    // Перед созданием контакта (можно отклонить)
     JPH::ValidateResult OnContactValidate(
         const JPH::Body& inBody1,
         const JPH::Body& inBody2,
@@ -326,21 +313,18 @@ public:
         return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
     }
 
-    // При добавлении контакта
     void OnContactAdded(
         const JPH::Body& inBody1,
         const JPH::Body& inBody2,
         const JPH::ContactManifold& inManifold,
         JPH::ContactSettings& ioSettings) override {}
 
-    // При сохранении контакта
     void OnContactPersisted(
         const JPH::Body& inBody1,
         const JPH::Body& inBody2,
         const JPH::ContactManifold& inManifold,
         JPH::ContactSettings& ioSettings) override {}
 
-    // При удалении контакта
     void OnContactRemoved(const JPH::SubShapeIDPair& inSubShapePair) override {}
 };
 ```
@@ -356,14 +340,146 @@ public:
 };
 ```
 
-### Установка слушателей
+---
+
+## Формы (Shapes)
+
+### BoxShape
 
 ```cpp
-MyContactListener contact_listener;
-MyBodyActivationListener activation_listener;
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
 
-physics_system.SetContactListener(&contact_listener);
-physics_system.SetBodyActivationListener(&activation_listener);
+JPH::BoxShapeSettings box_settings(JPH::Vec3(1.0f, 1.0f, 1.0f));
+JPH::ShapeRefC box_shape = box_settings.Create().Get();
+```
+
+### SphereShape
+
+```cpp
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+
+JPH::SphereShapeSettings sphere_settings(1.0f);
+JPH::ShapeRefC sphere_shape = sphere_settings.Create().Get();
+```
+
+### CapsuleShape
+
+```cpp
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+
+JPH::CapsuleShapeSettings capsule_settings(1.0f, 0.5f);
+JPH::ShapeRefC capsule_shape = capsule_settings.Create().Get();
+```
+
+### ConvexHullShape
+
+```cpp
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+
+std::vector<JPH::Vec3> points = {
+    JPH::Vec3(0, 0, 0),
+    JPH::Vec3(1, 0, 0),
+    JPH::Vec3(0, 1, 0),
+    JPH::Vec3(0, 0, 1)
+};
+
+JPH::ConvexHullShapeSettings hull_settings(points.data(), points.size(), 0.05f);
+JPH::ShapeRefC hull_shape = hull_settings.Create().Get();
+```
+
+### HeightFieldShape
+
+```cpp
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
+
+const uint32_t sample_count = 32;
+std::vector<float> heights(sample_count * sample_count);
+
+JPH::HeightFieldShapeSettings heightfield_settings(
+    heights.data(),
+    JPH::Vec3(0, 0, 0),
+    JPH::Vec3(1.0f, 1.0f, 1.0f),
+    sample_count
+);
+
+JPH::ShapeRefC heightfield_shape = heightfield_settings.Create().Get();
+```
+
+### MeshShape
+
+```cpp
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+
+JPH::MeshShapeSettings mesh_settings;
+JPH::Triangle triangle;
+triangle.mV[0] = JPH::Float3(0, 0, 0);
+triangle.mV[1] = JPH::Float3(1, 0, 0);
+triangle.mV[2] = JPH::Float3(0, 1, 0);
+mesh_settings.AddTriangle(triangle);
+
+JPH::ShapeRefC mesh_shape = mesh_settings.Create().Get();
+```
+
+---
+
+## Ограничения (Constraints)
+
+### FixedConstraint
+
+```cpp
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
+
+JPH::FixedConstraintSettings settings;
+settings.mAutoDetectPoint = true;
+
+JPH::Constraint* constraint = settings.Create(body1, body2);
+physics_system.AddConstraint(constraint);
+```
+
+### HingeConstraint
+
+```cpp
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+
+JPH::HingeConstraintSettings settings;
+settings.mPoint1 = JPH::RVec3(0, 1, 0);
+settings.mPoint2 = JPH::RVec3(0, 1, 0);
+settings.mHingeAxis1 = JPH::Vec3::sAxisY();
+settings.mHingeAxis2 = JPH::Vec3::sAxisY();
+
+JPH::Constraint* hinge = settings.Create(body1, body2);
+physics_system.AddConstraint(hinge);
+```
+
+### DistanceConstraint
+
+```cpp
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+
+JPH::DistanceConstraintSettings settings;
+settings.mPoint1 = JPH::RVec3(0, 0, 0);
+settings.mPoint2 = JPH::RVec3(0, 2, 0);
+settings.mDistance = 2.0f;
+
+JPH::Constraint* constraint = settings.Create(body1, body2);
+physics_system.AddConstraint(constraint);
+```
+
+### SwingTwistConstraint
+
+```cpp
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
+
+JPH::SwingTwistConstraintSettings settings;
+settings.mPosition1 = JPH::RVec3(0, 0, 0);
+settings.mPosition2 = JPH::RVec3(0, 0, 0);
+settings.mTwistAxis1 = JPH::Vec3::sAxisY();
+settings.mTwistAxis2 = JPH::Vec3::sAxisY();
+settings.mTwistMinAngle = -JPH::JPH_PI * 0.5f;
+settings.mTwistMaxAngle = JPH::JPH_PI * 0.5f;
+
+JPH::Constraint* constraint = settings.Create(body1, body2);
+physics_system.AddConstraint(constraint);
 ```
 
 ---
@@ -374,355 +490,28 @@ physics_system.SetBodyActivationListener(&activation_listener);
 
 ```cpp
 physics_system.Init(
-    max_bodies = 1024,           // Максимум тел
-    num_body_mutexes = 0,        // 0 = автоматически
-    max_body_pairs = 1024,       // Максимум пар в broad phase
-    max_contact_constraints = 1024  // Максимум контактов
+    1024,   // max_bodies
+    0,      // num_body_mutexes
+    1024,   // max_body_pairs
+    1024    // max_contact_constraints
 );
 ```
 
 ### Рекомендации
 
 1. **Используйте слои** — разделяйте статические и динамические объекты
-2. **Batch добавление** — добавляйте тела группами, а не по одному
+2. **Batch добавление** — добавляйте тела группами
 3. **OptimizeBroadPhase()** — вызовите после загрузки уровня
-4. **Настройте Sleep** — используйте `SetSleepSettings()` для контроля деактивации
-5. **TempAllocator** — предварительно выделяйте память
-
-### Профилирование
-
-Включите `JPH_PROFILE_ENABLED` для сбора статистики:
-
-- Время в каждой фазе
-- Количество активных тел, контактов, ограничений
-- Использование памяти
-
----
-
-## Глоссарий JoltPhysics
-
-<!-- anchor: 08_glossary -->
-
-## Основные термины
-
-### PhysicsSystem
-
-**Физическая система** — центральный объект, управляющий всей симуляцией. Хранит тела, ограничения, обрабатывает
-коллизии.
-
-### Body
-
-**Тело** — объект в физическом мире. Имеет форму, позицию, вращение, массу, скорость. Три типа движения:
-
-- **Static** — неподвижное (пол, стены)
-- **Kinematic** — движется по заданному пути (платформы)
-- **Dynamic** — подчиняется физике (предметы)
-
-### BodyInterface
-
-**Интерфейс тел** — класс для работы с телами (создание, удаление, получение/установка свойств).
-
-### Shape
-
-**Форма** — геометрия коллизий тела. Определяет, как тело сталкивается с другими.
-
----
-
-## Формы (Shapes)
-
-### BoxShape
-
-**Бокс** — параллелепипед. Определяется половиной размеров по X, Y, Z.
-
-### SphereShape
-
-**Сфера** — шар. Определяется радиусом.
-
-### CapsuleShape
-
-**Капсула** — цилиндр с полусферами на концах. Часто используется для персонажей.
-
-### CylinderShape
-
-**Цилиндр** — цилиндрическая форма.
-
-### ConvexHullShape
-
-**Выпуклая оболочка** — форма, построенная из набора точек. Все точки "натянуты" на поверхность.
-
-### HeightFieldShape
-
-**Высотное поле** — сетка высот для ландшафта. Эффективно для больших территорий.
-
-### MeshShape
-
-**Меш** — треугольная сетка. Только для статических тел.
-
-### CompoundShape
-
-**Составная форма** — комбинация нескольких подформ.
-
----
-
-## Слои (Layers)
-
-### Object Layer
-
-**Объектный слой** — логическая группа тел (0-31 или 0-255). Используется для фильтрации коллизий.
-
-### BroadPhase Layer
-
-**Слой широкой фазы** — физическая группа для оптимизации. Каждая группа имеет своё AABB-дерево.
-
-### ObjectLayerPairFilter
-
-**Фильтр пар слоёв** — определяет, могут ли два объектных слоя сталкиваться.
-
-### BroadPhaseLayerInterface
-
-**Интерфейс BP-слоёв** — маппит объектные слои на слои широкой фазы.
-
----
-
-## Фазы коллизий
-
-### Broad Phase
-
-**Широкая фаза** — быстрое определение потенциально сталкивающихся пар тел через AABB-деревья.
-
-### Narrow Phase
-
-**Узкая фаза** — точная проверка столкновений между парами тел из широкой фазы.
-
-### GJK
-
-**Gilbert-Johnson-Keerthi** — алгоритм определения расстояния между выпуклыми формами.
-
-### EPA
-
-**Expanding Polytope Algorithm** — алгоритм нахождения точки контакта и нормали после GJK.
-
----
-
-## Ограничения (Constraints)
-
-### Constraint
-
-**Ограничение** — связь между двумя телами, ограничивающая их относительное движение.
-
-### FixedConstraint
-
-**Фиксированное ограничение** — жёсткое соединение двух тел.
-
-### PointConstraint
-
-**Точечное ограничение** — тела вращаются вокруг общей точки.
-
-### HingeConstraint
-
-**Шарнирное ограничение** — вращение вокруг одной оси (как дверная петля).
-
-### SliderConstraint
-
-**Ползунковое ограничение** — движение вдоль одной оси (как поршень).
-
-### SwingTwistConstraint
-
-**Swing-Twist ограничение** — сложное ограничение для суставов (плечо, шея).
-
-### Motor
-
-**Мотор** — механизм в ограничении для управления движением (позиция, скорость, сила).
-
----
-
-## Симуляция
-
-### Delta Time
-
-**Дельта-тайм** — время между кадрами симуляции.
-
-### Collision Steps
-
-**Шаги коллизии** — количество проверок коллизий за кадр. Больше = точнее, но медленнее.
-
-### Fixed Timestep
-
-**Фиксированный шаг** — постоянное время симуляции для стабильности.
-
-### Interpolation
-
-**Интерполяция** — сглаживание между кадрами физики для рендеринга.
-
----
-
-## Состояния тел
-
-### Active
-
-**Активное** — тело участвует в симуляции, движется.
-
-### Sleeping
-
-**Спящее** — тело деактивировано для экономии ресурсов. Просыпается при столкновении.
-
-### Deactivated
-
-**Деактивированное** — тело временно не участвует в симуляции.
-
----
-
-## Память
+4. **TempAllocator** — предварительно выделяйте память
 
 ### TempAllocator
 
-**Временный аллокатор** — выделяет память на кадр симуляции. Освобождается автоматически.
-
-### JobSystem
-
-**Система задач** — управляет параллельным выполнением работы в нескольких потоках.
-
-### ShapeRefC
-
-**Ссылка на форму** — умный указатель с подсчётом ссылок. Форма удаляется когда счётчик = 0.
-
----
-
-## Коллизии
-
-### AABB
-
-**Axis-Aligned Bounding Box** — выровненный по осям ограничивающий параллелепипед.
-
-### Contact Manifold
-
-**Контактное многообразие** — набор точек контакта между двумя телами.
-
-### Contact Normal
-
-**Контактная нормаль** — направление, в котором нужно раздвинуть тела.
-
-### Penetration Depth
-
-**Глубина проникновения** — насколько одно тело проникло в другое.
-
----
-
-## Физические свойства
-
-### Mass
-
-**Масса** — количество вещества тела (кг). Определяет инерцию.
-
-### Inertia Tensor
-
-**Тензор инерции** — матрица, описывающая сопротивление вращению по осям.
-
-### Friction
-
-**Трение** — сопротивление скольжению (0 = лёд, 1 = резина).
-
-### Restitution
-
-**Упругость** — коэффициент отскока (0 = пластилин, 1 = супер-мяч).
-
-### Damping
-
-**Затухание** — потеря энергии со временем (линейное и угловое).
-
-### Center of Mass
-
-**Центр масс** — точка равновесия тела.
-
----
-
-## Слушатели (Listeners)
-
-### ContactListener
-
-**Слушатель контактов** — получает события о столкновениях тел.
-
-### BodyActivationListener
-
-**Слушатель активации** — получает события о пробуждении/усыплении тел.
-
----
-
-## Типы данных
-
-### Vec3
-
-**Vec3** — 3D вектор с одинарной точностью (float).
-
-### RVec3
-
-**RVec3** — 3D вектор с двойной точностью (double). Используется для позиций в больших мирах.
-
-### Quat
-
-**Quat** — кватернион для представления вращения.
-
-### Mat44
-
-**Mat44** — матрица 4x4 для трансформаций.
-
-### BodyID
-
-**BodyID** — уникальный идентификатор тела в системе.
-
----
-
-## Персонажи
-
-### CharacterVirtual
-
-**Виртуальный персонаж** — специальный класс для управления персонажем без физического тела.
-
-### Step Height
-
-**Высота ступеньки** — максимальная высота, которую персонаж может преодолеть.
-
-### Slope Angle
-
-**Угол склона** — максимальный наклон поверхности, на которой персонаж может стоять.
-
----
-
-## Детерминизм
-
-### Deterministic
-
-**Детерминированный** — одинаковые входные данные дают одинаковый результат.
-
-### Cross-platform Deterministic
-
-**Кроссплатформенный детерминизм** — одинаковый результат на разных платформах.
-
----
-
-## Отладка
-
-### Debug Renderer
-
-**Отладочный рендерер** — интерфейс для визуализации физики (коллайдеры, контакты, ограничения).
-
-### Validation
-
-**Валидация** — проверка целостности физической системы.
-
----
-
-## Краткий справочник
-
-| Термин       | Значение                        |
-|--------------|---------------------------------|
-| Body         | Физическое тело                 |
-| Shape        | Геометрия коллизий              |
-| Constraint   | Ограничение между телами        |
-| Layer        | Слой для фильтрации коллизий    |
-| Broad Phase  | Широкая фаза (быстрая проверка) |
-| Narrow Phase | Узкая фаза (точная проверка)    |
-| Motor        | Мотор ограничения               |
-| Sleeping     | Спящее состояние тела           |
-| AABB         | Ограничивающий объём            |
-| Contact      | Контакт между телами            |
+```cpp
+JPH::TempAllocatorImpl temp_allocator(10 * 1024 * 1024);
+```
+
+| Сложность сцены        | Размер аллокатора |
+|------------------------|-------------------|
+| Простая (< 100 тел)    | 1 MB              |
+| Средняя (100-1000 тел) | 10 MB             |
+| Сложная (> 1000 тел)   | 32 MB             |

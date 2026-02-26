@@ -9,7 +9,7 @@
 **Данный документ описывает архитектуру Post-MVP.** Мультиплеер НЕ входит в курсовой проект и будет реализован после
 успешной защиты.
 
-См. [Roadmap & Scope](../../00_roadmap_and_scope.md) для границ MVP.
+См. [Roadmap & Scope](../../architecture/roadmap_and_scope.md) для границ MVP.
 
 ---
 

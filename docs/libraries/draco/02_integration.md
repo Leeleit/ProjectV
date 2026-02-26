@@ -1,1097 +1,1152 @@
-﻿## Интеграция
+﻿## Архитектурная интеграция Draco в современные C++ проекты
 
-Подключение Draco к проекту через CMake.
+Draco интегрируется в современные C++ проекты через многоуровневую архитектуру, где каждый слой решает конкретную
+задачу: от
+низкоуровневого сжатия геометрических данных до высокоуровневой интеграции с графическими API и системами управления
+сущностями. Эта интеграция обеспечивает
+эффективное сжатие 3D моделей, point cloud данных и сетевых данных с минимальными накладными расходами.
 
-> **Для понимания:** Интеграция Draco в проект похожа на подключение библиотеки сжатия ZIP к вашему приложению. Вы не
-> пишете алгоритмы сжатия с нуля — вы используете готовое решение, которое уже оптимизировано и протестировано. Draco
-> предоставляет готовые CMake цели, которые автоматически настраивают include пути и зависимости, как установка пакета
-> через менеджер пакетов.
+**Архитектурная метафора:** Draco выступает в роли специализированного процессора геометрических данных, который
+трансформирует пространственно-коррелированные структуры (SVO, sparse voxel структуры, greedy meshes) в компактные
+битовые потоки, оптимизированные для хранения, передачи и быстрого декодирования в GPU-совместимые форматы.
 
-## CMake интеграция
+### Архитектурный жизненный цикл геометрических данных
 
-### Через add_subdirectory
-
-```cmake
-# CMakeLists.txt
-cmake_minimum_required(VERSION 3.12)
-project(MyProject)
-
-# Добавление Draco как подмодуля
-add_subdirectory(external/draco)
-
-# Ваша цель
-add_executable(my_app src/main.cpp)
-
-# Линковка
-target_link_libraries(my_app PRIVATE draco::draco)
-
-# Include directories добавляются автоматически
+```mermaid
+flowchart TD
+  A[Исходные геометрические данные<br/>Mesh / PointCloud] --> B[Структурирование<br/>подготовка для сжатия]
+  B --> C[draco::Mesh / PointCloud<br/>структурированные данные]
+  C --> D[Draco Encoder<br/>квантование + rANS]
+  D --> E["Compressed .drc файл<br/>~10-20× сжатие"]
+E --> F{Хранилище / Сеть}
+F --> G[Draco Decoder<br/>быстрое декодирование]
+G --> H[draco::Mesh<br/>восстановленные данные]
+H --> I[Графические API Buffers<br/>zero-copy загрузка]
+I --> J[Системы рендеринга<br/>графический pipeline]
 ```
 
-### Через find_package (установленный Draco)
+**Архитектурные принципы интеграции:**
 
-```cmake
-# После установки Draco в систему
-find_package(draco CONFIG REQUIRED)
+- **Data-Oriented Design** — Draco работает с SoA (Structure of Arrays) представлением геометрических данных
+- **Zero-Copy Pipeline** — прямое декодирование в GPU memory через mapped memory
+- **Asynchronous Processing** — декодирование в фоновых потоках с приоритизацией по важности данных
+- **Sparse Data Optimization** — специализированные prediction schemes для sparse структур данных
 
-add_executable(my_app src/main.cpp)
-target_link_libraries(my_app PRIVATE draco::draco)
+## Архитектурные паттерны интеграции
+
+### 1. Модульная архитектура Draco в современных C++ проектах
+
+Draco интегрируется как независимый модуль с чёткими интерфейсами, использующими современные возможности C++26:
+
+```cpp
+// Архитектурный интерфейс для работы с Draco - C++26 Deducing This
+// Заменяет виртуальные методы на статический полиморфизм для zero-cost abstraction
+class IDracoCompressionModule {
+public:
+    // Deducing This - C++26 позволяет вызывать без virtual
+    template<typename Self>
+    [[nodiscard]] std::expected<std::vector<std::byte>, CompressionError>
+    compressGeometryData(this Self&& self, const GeometryData& geometry) noexcept {
+        return self.doCompressGeometryData(geometry);
+    }
+
+    template<typename Self>
+    [[nodiscard]] std::expected<GpuMeshData, DecompressionError>
+    decompressToGpu(this Self&& self, std::span<const std::byte> compressed) noexcept {
+        return self.doDecompressToGpu(compressed);
+    }
+
+    template<typename Self>
+    void submitAsyncDecompress(
+        this Self&& self,
+        std::span<const std::byte> compressed,
+        std::function<void(std::expected<GpuMeshData, DecompressionError>)> callback) noexcept {
+        self.doSubmitAsyncDecompress(std::move(compressed), std::move(callback));
+    }
+
+protected:
+    // Protected abstract methods для реализации
+    template<typename Self>
+    std::expected<std::vector<std::byte>, CompressionError>
+    doCompressGeometryData(this Self&& self, const GeometryData& geometry) noexcept;
+
+    template<typename Self>
+    std::expected<GpuMeshData, DecompressionError>
+    doDecompressToGpu(this Self&& self, std::span<const std::byte> compressed) noexcept;
+
+    template<typename Self>
+    void doSubmitAsyncDecompress(
+        this Self&& self,
+        std::span<const std::byte> compressed,
+        std::function<void(std::expected<GpuMeshData, DecompressionError>)> callback) noexcept;
+};
 ```
 
-### FetchContent (CMake 3.14+)
+**Архитектурная метафора:** Этот интерфейс действует как универсальный адаптер, преобразующий специфичные для приложения
+структуры данных в формат, понятный Draco, подобно тому как USB-адаптер преобразует различные типы разъёмов в
+стандартный USB-интерфейс.
+
+### 2. Интеграция с системой сборки CMake
+
+Современные C++ проекты используют CMake с модульной архитектурой для внешних библиотек:
 
 ```cmake
-include(FetchContent)
+# В корневом CMakeLists.txt проекта
+include(cmake/ExternalLibraries.cmake)
 
-FetchContent_Declare(
-  draco
-  GIT_REPOSITORY https://github.com/google/draco.git
-  GIT_TAG 1.5.7
+# Draco настраивается с оптимизациями для конкретного use case
+setup_draco_library(
+  ENABLE_TRANSCODER OFF      # Отключено для минимального runtime
+  ENABLE_ANIMATION OFF       # Не требуется для статических геометрических данных
+  BUILD_EXECUTABLES OFF      # Только библиотека
+  OPTIMIZE_FOR_DECODING ON   # Оптимизация для декодирования (чаще используется)
+  USE_SIMD_OPTIMIZATIONS ON  # Использовать SIMD оптимизации
 )
 
-FetchContent_MakeAvailable(draco)
-
-add_executable(my_app src/main.cpp)
-target_link_libraries(my_app PRIVATE draco::draco)
+# Автоматическая интеграция с графическими API
+target_link_libraries(core_engine
+  PRIVATE
+  draco::draco
+  GraphicsAPI::Core          # Абстракция над Vulkan/DirectX
+  ECS::Framework            # Абстракция над flecs/entt
+)
 ```
 
-## CMake опции
+### 3. Архитектурные конфигурации Draco для различных use cases
 
-| Опция                           | Default | Описание                 |
-|---------------------------------|---------|--------------------------|
-| `BUILD_SHARED_LIBS`             | OFF     | Сборка shared library    |
-| `DRACO_TRANSCODER_SUPPORTED`    | OFF     | Включить glTF transcoder |
-| `DRACO_ANIMATION_ENCODING`      | OFF     | Поддержка анимаций       |
-| `DRACO_POINT_CLOUD_COMPRESSION` | ON      | Сжатие point cloud       |
-| `DRACO_MESH_COMPRESSION`        | ON      | Сжатие mesh              |
-| `DRACO_BUILD_EXECUTABLES`       | ON      | CLI инструменты          |
-| `DRACO_TESTS`                   | OFF     | Сборка тестов            |
+| Конфигурация        | Назначение                       | Оптимизации                                | Архитектурная метафора                         |
+|---------------------|----------------------------------|--------------------------------------------|------------------------------------------------|
+| **Runtime Decoder** | Декодирование в реальном времени | Минимальный decoder, fast SIMD, zero-copy  | Быстрый переводчик для live-переводов          |
+| **Asset Pipeline**  | Оффлайн сжатие 3D моделей        | Полный encoder/decoder, transcoder support | Архивный компрессор для долгосрочного хранения |
+| **Network Bridge**  | Сетевая синхронизация            | Delta compression, predictive coding       | Дипломатический курьер с минимальным baggage   |
 
-### Пример с опциями
-
-```cmake
-set(DRACO_TRANSCODER_SUPPORTED ON CACHE BOOL "" FORCE)
-set(DRACO_ANIMATION_ENCODING ON CACHE BOOL "" FORCE)
-set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
-set(DRACO_TESTS OFF CACHE BOOL "" FORCE)
-
-add_subdirectory(external/draco)
-```
-
-## DRACO_TRANSCODER_SUPPORTED
-
-Опция включает расширенные возможности:
-
-- glTF загрузка/сохранение
-- Materials и textures
-- Animations
-- Skins
-- Scene graph
-- EXT_mesh_features / EXT_structural_metadata
-
-> **Примечание:** Требует C++17 и дополнительные зависимости (tinygltf).
-
-### Зависимости для transcoder
-
-```cmake
-# При DRACO_TRANSCODER_SUPPORTED=ON
-# Draco автоматически подтянет:
-# - tinygltf (встроен)
-# - libpng (опционально, для текстур)
-# - libjpeg (опционально, для текстур)
-```
-
-## Минимальная конфигурация
-
-Для декодирования только mesh:
-
-```cmake
-set(DRACO_TRANSCODER_SUPPORTED OFF CACHE BOOL "" FORCE)
-set(DRACO_ANIMATION_ENCODING OFF CACHE BOOL "" FORCE)
-set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
-set(DRACO_TESTS OFF CACHE BOOL "" FORCE)
-
-add_subdirectory(external/draco)
-
-# Линкуется только decoder functionality
-target_link_libraries(my_app PRIVATE draco::draco)
-```
-
-## Структура библиотеки
-
-При сборке создаётся одна библиотека `draco`:
-
-```
-libdraco.a / draco.lib
-├── Core (decoder_buffer, encoder_buffer)
-├── Attributes (geometry_attribute, point_attribute)
-├── Compression
-│   ├── decode, encode
-│   ├── mesh (edgebreaker, sequential)
-│   └── point_cloud (kd_tree, sequential)
-├── Mesh (mesh, corner_table)
-├── PointCloud (point_cloud)
-└── IO (obj, ply, stl) - при DRACO_TRANSCODER_SUPPORTED
-```
-
-## Заголовочные файлы
-
-Основные include пути:
+### 4. Zero-Copy архитектура с GPU memory mapping
 
 ```cpp
-// Декодирование
-#include <draco/compression/decode.h>
+// Архитектурный паттерн: прямой декодирование в GPU memory
+class DracoGpuIntegration {
+    GpuAllocator allocator_;
+    draco::Decoder decoder_;
 
-// Кодирование
-#include <draco/compression/encode.h>
-#include <draco/compression/expert_encode.h>
-
-// Типы данных
-#include <draco/mesh/mesh.h>
-#include <draco/point_cloud/point_cloud.h>
-#include <draco/attributes/geometry_attribute.h>
-#include <draco/attributes/point_attribute.h>
-
-// Буферы
-#include <draco/core/decoder_buffer.h>
-#include <draco/core/encoder_buffer.h>
-
-// Опции
-#include <draco/compression/config/encoder_options.h>
-#include <draco/compression/config/decoder_options.h>
-```
-
-## CLI инструменты
-
-При `DRACO_BUILD_EXECUTABLES=ON`:
-
-| Инструмент         | Назначение                                    |
-|--------------------|-----------------------------------------------|
-| `draco_encoder`    | Кодирование OBJ/PLY/STL в .drc                |
-| `draco_decoder`    | Декодирование .drc в OBJ/PLY                  |
-| `draco_transcoder` | glTF transcoding (DRACO_TRANSCODER_SUPPORTED) |
-
-### Примеры команд
-
-```bash
-# Кодирование
-draco_encoder -i model.obj -o model.drc -qp 14
-
-# С параметрами сжатия
-draco_encoder -i model.ply -o model.drc -cl 8 -qp 12 -qt 10
-
-# Декодирование
-draco_decoder -i model.drc -o model.obj
-
-# glTF transcoding
-draco_transcoder -i scene.glb -o compressed.glb -qp 12
-```
-
-## Кросс-компиляция
-
-### Android NDK
-
-```cmake
-set(ANDROID_ABI arm64-v8a)
-set(ANDROID_PLATFORM android-24)
-
-set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(external/draco)
-```
-
-### iOS
-
-```cmake
-set(CMAKE_SYSTEM_NAME iOS)
-set(CMAKE_OSX_ARCHITECTURES arm64)
-
-set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
-add_subdirectory(external/draco)
-```
-
-### Emscripten (WebAssembly)
-
-```bash
-emcmake cmake -B build \
-    -DDRACO_BUILD_EXECUTABLES=OFF \
-    -DDRACO_TESTS=OFF
-
-emmake make -C build
-```
-
-## Sanitizers
-
-```cmake
-set(DRACO_SANITIZE address CACHE STRING "" FORCE)
-# Доступные значения: address, memory, thread, undefined
-
-add_subdirectory(external/draco)
-```
-
-## Сборка с SIMD оптимизациями
-
-Draco автоматически определяет SIMD возможности:
-
-```cmake
-# Автоопределение при конфигурации
-# Включает AVX/SSE на x86, NEON на ARM
-# Явное управление не требуется
-```
-
-## Отключение ненужных компонентов
-
-Для минимального бинарника только decoder:
-
-```cmake
-# Минимальный decoder-only build
-set(DRACO_TRANSCODER_SUPPORTED OFF CACHE BOOL "" FORCE)
-set(DRACO_MESH_COMPRESSION ON CACHE BOOL "" FORCE)
-set(DRACO_POINT_CLOUD_COMPRESSION OFF CACHE BOOL "" FORCE)
-set(DRACO_ANIMATION_ENCODING OFF CACHE BOOL "" FORCE)
-set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "" FORCE)
-set(DRACO_TESTS OFF CACHE BOOL "" FORCE)
-```
-
-## Размер библиотеки
-
-Примерные размеры (Release, x64):
-
-| Конфигурация             | Размер  |
-|--------------------------|---------|
-| Decoder only             | ~800 KB |
-| Full (encoder + decoder) | ~1.2 MB |
-| With transcoder          | ~2.5 MB |
-
-## Совместимость ABI
-
-Draco гарантирует обратную совместимость decoder:
-
-- Новый decoder читает старые bitstreams
-- Старый decoder НЕ читает новые bitstreams
-
-Версия bitstream в заголовке:
-
-```cpp
-// Mesh bitstream version: 2.2
-// Point cloud bitstream version: 2.3
-
----
-
-## glTF Transcoding
-
-Интеграция Draco с glTF через EXT_mesh_draco и draco_transcoder.
-
-## EXT_mesh_draco
-
-Официальное расширение glTF 2.0 для сжатия геометрии Draco.
-
-### Структура
-
-```json
-{
-  "meshes": [{
-    "primitives": [{
-      "attributes": {
-        "POSITION": 0,
-        "NORMAL": 1
-      },
-      "indices": 2,
-      "extensions": {
-        "KHR_draco_mesh_compression": {
-          "bufferView": 0,
-          "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1
-          }
-        }
-      }
-    }]
-  }],
-  "extensionsUsed": ["KHR_draco_mesh_compression"],
-  "extensionsRequired": ["KHR_draco_mesh_compression"]
-}
-```
-
-### Ключевые отличия
-
-| Аспект     | Без Draco                      | С Draco                  |
-|------------|--------------------------------|--------------------------|
-| BufferView | Отдельные для каждого атрибута | Один для всего primitive |
-| Размер     | Полный                         | Сжатый 10-20x            |
-| Загрузка   | Прямой доступ                  | Требуется декодирование  |
-
-## draco_transcoder
-
-CLI инструмент для добавления Draco в glTF.
-
-### Установка
-
-```bash
-# Сборка с DRACO_TRANSCODER_SUPPORTED
-cmake -DDRACO_TRANSCODER_SUPPORTED=ON ..
-make
-```
-
-### Базовое использование
-
-```bash
-# Добавление Draco сжатия
-draco_transcoder -i input.glb -o output.glb
-
-# С настройками квантования
-draco_transcoder -i input.glb -o output.glb \
-    -qp 14 \   # Position quantization
-    -qn 10 \   # Normal quantization
-    -qt 12     # Tex coord quantization
-```
-
-### Параметры командной строки
-
-| Параметр | Описание                        | Default |
-|----------|---------------------------------|---------|
-| `-i`     | Входной файл                    | —       |
-| `-o`     | Выходной файл                   | —       |
-| `-qp`    | Position quantization bits      | 11      |
-| `-qn`    | Normal quantization bits        | 8       |
-| `-qt`    | Tex coord quantization bits     | 10      |
-| `-qc`    | Color quantization bits         | 8       |
-| `-qj`    | Joint indices quantization bits | 8       |
-| `-qw`    | Joint weights quantization bits | 8       |
-| `-cl`    | Compression level (0-10)        | 7       |
-
-### Примеры
-
-```bash
-# Высокое качество
-draco_transcoder -i model.glb -o model_hq.glb -qp 16 -qn 12 -cl 10
-
-# Максимальное сжатие
-draco_transcoder -i model.glb -o model_small.glb -qp 10 -qn 6 -cl 0
-
-# Баланс для web
-draco_transcoder -i model.glb -o model_web.glb -qp 12 -qn 8 -cl 5
-```
-
-## Программный transcoding
-
-### Загрузка glTF с Draco
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-#include <draco/io/gltf_decoder.h>
-#include <draco/io/scene_io.h>
-#include <expected>
-#include <print>
-
-std::expected<std::unique_ptr<draco::Scene>, draco::Status> load_gltf_with_draco(
-    std::string_view filepath)
-{
-    draco::GltfDecoder decoder;
-    auto scene = decoder.DecodeFromFile(filepath.data());
-    if (!scene.ok()) {
-        std::println(stderr, "Ошибка загрузки glTF: {}", scene.status().error_msg());
-        return std::unexpected(scene.status());
-    }
-    return std::move(scene).value();
-}
-
-// Использование
-int main() {
-    auto scene = load_gltf_with_draco("model.glb");
-    if (!scene) {
-        std::println(stderr, "Не удалось загрузить сцену: {}", scene.error().error_msg());
-        return 1;
-    }
-
-    // Доступ к сцене
-    for (int i = 0; i < (*scene)->NumMeshes(); ++i) {
-        const draco::Mesh& mesh = (*scene)->GetMesh(i);
-        // Обработка mesh
-    }
-
-    return 0;
-}
-#endif
-```
-
-### Сохранение с Draco сжатием
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-#include <draco/io/gltf_encoder.h>
-#include <draco/compression/draco_compression_options.h>
-
-draco::GltfEncoder encoder;
-
-// Настройка сжатия
-draco::DracoCompressionOptions options;
-options.quantization_bits_position = 14;
-options.quantization_bits_normal = 10;
-options.quantization_bits_tex_coord = 12;
-options.compression_level = 7;
-
-encoder.SetCompressionOptions(options);
-
-// Сохранение
-auto status = encoder.EncodeToFile(*scene, "output.glb");
-#endif
-```
-
-## DracoCompressionOptions
-
-```cpp
-struct DracoCompressionOptions {
-    // Quantization bits
-    int quantization_bits_position = 11;
-    int quantization_bits_normal = 8;
-    int quantization_bits_tex_coord = 10;
-    int quantization_bits_color = 8;
-    int quantization_bits_generic = 8;
-    int quantization_bits_joint_index = 8;
-    int quantization_bits_joint_weight = 8;
-
-    // Encoding
-    int compression_level = 7;  // 0-10
-    bool use_expert_encoder = false;
-
-    // Method
-    draco::MeshEncoderMethod mesh_encoding = draco::MESH_EDGEBREAKER_ENCODING;
-};
-```
-
-## Обработка glTF primitives
-
-### Структура после декодирования
-
-```cpp
-// glTF primitive содержит Draco-compressed данные
-// После декодирования:
-
-draco::Mesh mesh = decodeGltfPrimitive(primitive);
-
-// Атрибуты доступны по glTF semantic
-const auto* position = mesh.GetNamedAttribute(draco::GeometryAttribute::POSITION);
-const auto* normal = mesh.GetNamedAttribute(draco::GeometryAttribute::NORMAL);
-const auto* texcoord = mesh.GetNamedAttribute(draco::GeometryAttribute::TEX_COORD);
-```
-
-### Material information
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-// При DRACO_TRANSCODER_SUPPORTED mesh содержит materials
-const draco::MaterialLibrary& materials = mesh.GetMaterialLibrary();
-
-for (int i = 0; i < materials.NumMaterials(); ++i) {
-    const draco::Material& mat = materials.GetMaterial(i);
-    // PBR properties
-    mat.GetColorFactor();
-    mat.GetMetallicFactor();
-    mat.GetRoughnessFactor();
-}
-#endif
-```
-
-## Animations
-
-### Skinning data
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-// Joints и weights
-const auto* joints = mesh.GetNamedAttribute(draco::GeometryAttribute::JOINTS);
-const auto* weights = mesh.GetNamedAttribute(draco::GeometryAttribute::WEIGHTS);
-
-// Skins
-const draco::Scene& scene = *scene_result.value();
-for (int i = 0; i < scene.NumSkins(); ++i) {
-    const draco::Skin& skin = scene.GetSkin(i);
-    // Inverse bind matrices
-    // Joint nodes
-}
-#endif
-```
-
-### Animation data
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-for (int i = 0; i < scene.NumAnimations(); ++i) {
-    const draco::Animation& anim = scene.GetAnimation(i);
-
-    // Channels
-    for (int c = 0; c < anim.NumChannels(); ++c) {
-        const auto& channel = anim.GetChannel(c);
-        // Target node, path (translation, rotation, scale)
-    }
-
-    // Samplers
-    for (int s = 0; s < anim.NumSamplers(); ++s) {
-        const auto& sampler = anim.GetSampler(s);
-        // Input (time), output (values)
-    }
-}
-#endif
-```
-
-## EXT_mesh_features
-
-Draco поддерживает EXT_mesh_features для воксельных данных.
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-// Mesh features для воксельных идентификаторов
-for (int i = 0; i < mesh.NumMeshFeatures(); ++i) {
-    const draco::MeshFeatures& features = mesh.GetMeshFeatures(draco::MeshFeaturesIndex(i));
-
-    // Feature IDs
-    // Attribute association
-    // Texture features
-}
-#endif
-```
-
-## EXT_structural_metadata
-
-Структурные метаданные для воксельных сцен.
-
-```cpp
-#ifdef DRACO_TRANSCODER_SUPPORTED
-const draco::StructuralMetadata& metadata = scene.GetStructuralMetadata();
-
-// Property tables
-// Property attributes
-// Schema definitions
-#endif
-```
-
-## Интеграция с glTF loaders
-
-### Порядок загрузки
-
-```
-1. Загрузка glTF JSON
-2. Проверка extensionsUsed
-3. Если KHR_draco_mesh_compression:
-   a. Чтение bufferView с Draco данными
-   b. Декодирование Draco
-   c. Создание vertex/index buffers
-4. Инициализация материалов и текстур
-```
-
-### Пример loader интеграции
-
-```cpp
-class GltfDracoLoader {
 public:
-    bool load(const std::string& path) {
-        // 1. Парсинг glTF JSON
-        if (!parseGltf(path)) return false;
-
-        // 2. Проверка Draco
-        bool hasDraco = checkExtension("KHR_draco_mesh_compression");
-
-        // 3. Загрузка meshes
-        for (auto& primitive : primitives_) {
-            if (hasDraco && primitive.hasDracoExtension) {
-                if (!decodeDracoPrimitive(primitive)) return false;
-            } else {
-                if (!loadStandardPrimitive(primitive)) return false;
-            }
-        }
-
-        return true;
-    }
-
-private:
-    bool decodeDracoPrimitive(Primitive& prim) {
-        // Чтение Draco buffer
-        auto data = readBufferView(prim.dracoBufferView);
-
-        // Декодирование
-        draco::DecoderBuffer buffer;
-        buffer.Init(data.data(), data.size());
-
-        draco::Decoder decoder;
-        auto result = decoder.DecodeMeshFromBuffer(&buffer);
-
-        if (!result.ok()) return false;
-
-        prim.mesh = std::move(result).value();
-        return true;
-    }
-};
-```
-
-## Best practices
-
-### Квантование
-
-| Тип контента | Position | Normal | UV |
-|--------------|----------|--------|----|
-| Characters   | 14-16    | 10-12  | 12 |
-| Props        | 12-14    | 8-10   | 10 |
-| Architecture | 11-12    | 8      | 10 |
-| Terrain      | 10-11    | 6-8    | 8  |
-
-### Compression level
-
-| Use case  | Level | Trade-off                |
-|-----------|-------|--------------------------|
-| Download  | 0-3   | Лучшее сжатие, медленное |
-| Streaming | 5-7   | Баланс                   |
-| Runtime   | 8-10  | Быстрое, хуже сжатие     |
-
-### Тестирование
-
-```bash
-# Проверка размера
-ls -la original.glb compressed.glb
-
-# Проверка качества (визуально)
-# Загрузите в glTF viewer
-
-# Benchmark декодирования
-draco_decoder -i compressed.glb -o test.obj
-time draco_decoder ...
-
----
-
-## Интеграция Draco в ProjectV
-
-Специфика интеграции Draco в воксельный движок ProjectV: работа с SVO, sparse data, интеграция с VMA и flecs.
-
-## Роль Draco в ProjectV
-
-Draco используется для:
-
-1. **Сжатие воксельных чанков** — уменьшение размера при хранении и передаче
-2. **Загрузка glTF моделей** — через KHR_draco_mesh_compression
-3. **Сетевая синхронизация** — минимальный bandwidth для multiplayer
-
-### Жизненный цикл данных
-
-```
-
-Воксельный чанк (SoA)
-↓
-VoxelMeshBuilder → draco::Mesh
-↓
-Draco Encoder
-↓
-Compressed Chunk (.drc)
-↓
-Network / Disk
-↓
-Draco Decoder
-↓
-draco::Mesh
-↓
-VMA / Vulkan Buffers
-↓
-ECS Components (flecs)
-↓
-Rendering System
-
-```
-
----
-
-## Воксельные чанки
-
-### Структура данных чанка
-
-```cpp
-#include <draco/mesh/mesh.h>
-#include <draco/attributes/geometry_attribute.h>
-
-// SoA данные воксельного чанка
-struct VoxelChunkData {
-    std::vector<uint8_t> voxelTypes;      // Тип вокселя
-    std::vector<uint8_t> occlusion;       // Ambient occlusion
-    std::vector<uint16_t> blockLight;     // Уровень света
-    // ... другие данные
-};
-
-// Конвертация в Draco Mesh
-std::unique_ptr<draco::Mesh> voxelChunkToMesh(const VoxelChunkData& chunk) {
-    auto mesh = std::make_unique<draco::Mesh>();
-
-    // Для вокселей используем Point Cloud (без connectivity)
-    // Или mesh с упрощённой геометрией для greedy meshing
-
-    // Voxel type attribute
-    draco::GeometryAttribute voxelTypeAttr;
-    voxelTypeAttr.Init(
-        draco::GeometryAttribute::GENERIC,
-        nullptr, 1, draco::DT_UINT8, false, 1, 0
-    );
-
-    int voxelTypeAttrId = mesh->AddAttribute(voxelTypeAttr, true, chunk.voxelTypes.size());
-
-    draco::PointAttribute* attr = mesh->attribute(voxelTypeAttrId);
-    for (size_t i = 0; i < chunk.voxelTypes.size(); ++i) {
-        attr->SetAttributeValue(draco::AttributeValueIndex(i), &chunk.voxelTypes[i]);
-    }
-
-    mesh->set_num_points(chunk.voxelTypes.size());
-
-    return mesh;
-}
-```
-
-### Квантование для вокселей
-
-Воксели уже дискретны, но атрибуты могут требовать разной точности:
-
-```cpp
-draco::ExpertEncoder encoder(*mesh);
-
-// Voxel type — 8 бит достаточно (256 типов)
-encoder.SetQuantizationBitsForAttribute(voxelTypeAttrId, 8);
-
-// Occlusion — 4 бита (16 уровней)
-encoder.SetQuantizationBitsForAttribute(occlusionAttrId, 4);
-
-// Light — 8 бит для точности
-encoder.SetQuantizationBitsForAttribute(lightAttrId, 8);
-
-// Скорость важна для real-time chunk loading
-encoder.SetSpeedOptions(5, 10);
-encoder.SetEncodingMethod(draco::POINT_CLOUD_SEQUENTIAL_ENCODING);
-```
-
----
-
-## Интеграция с VMA
-
-### Прямая запись в GPU buffer
-
-```cpp
-#include <draco/compression/decode.h>
-#include <vk_mem_alloc.h>
-
-struct VulkanMeshData {
-    VkBuffer vertexBuffer;
-    VmaAllocation vertexAllocation;
-    VkBuffer indexBuffer;
-    VmaAllocation indexAllocation;
-    uint32_t vertexCount;
-    uint32_t indexCount;
-};
-
-class DracoVmaDecoder {
-public:
-    DracoVmaDecoder(VmaAllocator allocator) : allocator_(allocator) {}
-
-    std::optional<VulkanMeshData> decodeToVulkan(
-        const void* data, size_t size) {
-
-        // Декодирование в CPU
-        draco::DecoderBuffer buffer;
-        buffer.Init(reinterpret_cast<const char*>(data), size);
-
-        draco::Decoder decoder;
-        auto result = decoder.DecodeMeshFromBuffer(&buffer);
-
-        if (!result.ok()) return std::nullopt;
-
-        auto mesh = std::move(result).value();
-
-        VulkanMeshData vulkanData = {};
-
-        // Создание vertex buffer
-        if (!createVertexBuffer(*mesh, vulkanData)) return std::nullopt;
-
-        // Создание index buffer
-        if (!createIndexBuffer(*mesh, vulkanData)) return std::nullopt;
-
-        return vulkanData;
-    }
-
-private:
-    VmaAllocator allocator_;
-
-    bool createVertexBuffer(const draco::Mesh& mesh, VulkanMeshData& out) {
-        const auto* posAttr = mesh.GetNamedAttribute(draco::GeometryAttribute::POSITION);
-        if (!posAttr) return false;
-
-        const size_t vertexCount = mesh.num_points();
-        const size_t vertexSize = sizeof(float) * 3;  // xyz
-        const size_t bufferSize = vertexCount * vertexSize;
-
-        VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        bufferInfo.size = bufferSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                          VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo allocCreateInfo = {};
-        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                               VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-        VmaAllocationInfo allocInfo;
-        VkResult result = vmaCreateBuffer(allocator_, &bufferInfo, &allocCreateInfo,
-            &out.vertexBuffer, &out.vertexAllocation, &allocInfo);
-
-        if (result != VK_SUCCESS) return false;
-
-        // Прямая запись в mapped memory
-        float* dst = static_cast<float*>(allocInfo.pMappedData);
-        for (draco::PointIndex i(0); i < vertexCount; ++i) {
-            std::array<float, 3> pos;
-            posAttr->GetValue(posAttr->mapped_index(i), &pos);
-            *dst++ = pos[0];
-            *dst++ = pos[1];
-            *dst++ = pos[2];
-        }
-
-        out.vertexCount = static_cast<uint32_t>(vertexCount);
-        return true;
-    }
-
-    bool createIndexBuffer(const draco::Mesh& mesh, VulkanMeshData& out) {
-        const size_t indexCount = mesh.num_faces() * 3;
-        const size_t bufferSize = indexCount * sizeof(uint32_t);
-
-        VkBufferCreateInfo bufferInfo = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-        bufferInfo.size = bufferSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                          VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VmaAllocationCreateInfo allocCreateInfo = {};
-        allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                               VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-        VmaAllocationInfo allocInfo;
-        VkResult result = vmaCreateBuffer(allocator_, &bufferInfo, &allocCreateInfo,
-            &out.indexBuffer, &out.indexAllocation, &allocInfo);
-
-        if (result != VK_SUCCESS) return false;
-
-        uint32_t* dst = static_cast<uint32_t*>(allocInfo.pMappedData);
-        for (draco::FaceIndex f(0); f < mesh.num_faces(); ++f) {
-            const auto& face = mesh.face(f);
-            *dst++ = face[0].value();
-            *dst++ = face[1].value();
-            *dst++ = face[2].value();
-        }
-
-        out.indexCount = static_cast<uint32_t>(indexCount);
-        return true;
-    }
-};
-```
-
-### Staging buffer для больших mesh
-
-```cpp
-// Для больших mesh используйте staging buffer
-// См. docs/guides/cpp/02_memory-management.md для деталей RAII
-
-class StagedMeshLoader {
-public:
-    void loadMeshWithStaging(VkDevice device, VkCommandPool cmdPool,
-                             VkQueue queue, const draco::Mesh& mesh) {
-        // 1. Создание staging buffer (HOST_VISIBLE)
-        // 2. Копирование данных из Draco в staging
-        // 3. Создание device buffer (DEVICE_LOCAL)
-        // 4. Copy command buffer
-        // 5. Submit и wait
-    }
-};
-```
-
----
-
-## Интеграция с ECS (flecs)
-
-### Компоненты для геометрии
-
-```cpp
-#include <flecs.h>
-
-// Компонент для рендеринга
-struct DracoMeshComponent {
-    VkBuffer vertexBuffer = VK_NULL_HANDLE;
-    VmaAllocation vertexAllocation = VK_NULL_HANDLE;
-    VkBuffer indexBuffer = VK_NULL_HANDLE;
-    VmaAllocation indexAllocation = VK_NULL_HANDLE;
-    uint32_t vertexCount = 0;
-    uint32_t indexCount = 0;
-};
-
-// Компонент для сжатых данных
-struct CompressedChunkComponent {
-    std::vector<char> compressedData;
-    uint32_t chunkX, chunkY, chunkZ;
-    bool needsDecompression = true;
-};
-
-// Система загрузки чанков
-void RegisterDracoSystems(flecs::world& world) {
-    // Система декомпрессии (на worker thread)
-    world.system<CompressedChunkComponent, DracoMeshComponent>("DracoDecompress")
-        .kind(flecs::OnUpdate)
-        .each([](flecs::entity e, CompressedChunkComponent& compressed,
-                 DracoMeshComponent& mesh) {
-            if (!compressed.needsDecompression) return;
-
-            // Декомпрессия в фоновом потоке
-            draco::DecoderBuffer buffer;
-            buffer.Init(compressed.compressedData.data(),
-                       compressed.compressedData.size());
-
-            draco::Decoder decoder;
-            auto result = decoder.DecodeMeshFromBuffer(&buffer);
-
-            if (result.ok()) {
-                // Создание Vulkan buffers
-                // ...
-                compressed.needsDecompression = false;
-            }
-        });
-}
-```
-
-### Асинхронная загрузка
-
-```cpp
-#include <thread>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-
-class AsyncDracoLoader {
-public:
-    struct LoadRequest {
-        std::vector<char> compressedData;
-        std::function<void(std::unique_ptr<draco::Mesh>)> callback;
+    struct DecodeResult {
+        GpuBuffer vertexBuffer;
+        GpuAllocation vertexAllocation;
+        GpuBuffer indexBuffer;
+        GpuAllocation indexAllocation;
+        uint32_t vertexCount;
+        uint32_t indexCount;
     };
 
-    void start() {
-        worker_ = std::thread([this]() { workerLoop(); });
-    }
+    [[nodiscard]] std::expected<DecodeResult, std::string>
+    decodeDirectToGpu(std::span<const std::byte> compressed) noexcept {
+        // 1. Декодирование в промежуточный буфер
+        draco::DecoderBuffer buffer;
+        buffer.Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
 
-    void stop() {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            running_ = false;
+        auto meshResult = decoder_.DecodeMeshFromBuffer(&buffer);
+        if (!meshResult.ok()) {
+            return std::unexpected(meshResult.status().error_msg());
         }
-        cv_.notify_all();
-        worker_.join();
+
+        // 2. Создание GPU буферов через абстрактный аллокатор
+        return createGpuBuffers(*std::move(meshResult).value());
     }
-
-    void submit(const std::vector<char>& data,
-                std::function<void(std::unique_ptr<draco::Mesh>)> callback) {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            queue_.push({data, callback});
-        }
-        cv_.notify_one();
-    }
-
-private:
-    void workerLoop() {
-        while (running_) {
-            LoadRequest request;
-            {
-                std::unique_lock<std::mutex> lock(mutex_);
-                cv_.wait(lock, [this]() { return !queue_.empty() || !running_; });
-
-                if (!running_) break;
-
-                request = std::move(queue_.front());
-                queue_.pop();
-            }
-
-            draco::DecoderBuffer buffer;
-            buffer.Init(request.compressedData.data(),
-                       request.compressedData.size());
-
-            draco::Decoder decoder;
-            auto result = decoder.DecodeMeshFromBuffer(&buffer);
-
-            if (result.ok()) {
-                request.callback(std::move(result).value());
-            } else {
-                request.callback(nullptr);
-            }
-        }
-    }
-
-    std::thread worker_;
-    std::queue<LoadRequest> queue_;
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    bool running_ = true;
 };
 ```
 
----
+**Архитектурная метафора:** Этот паттерн подобен доставке товаров прямо на склад без промежуточных складов — данные
+поступают непосредственно в GPU память, минуя лишние копирования.
 
-## SVO и Sparse Data
-
-### Адаптация Draco для SVO
+### 5. Интеграция с Entity Component System (ECS)
 
 ```cpp
-// SVO node data
-struct SVONodeData {
-    uint32_t childMask;      // 8-bit child existence mask
-    uint32_t firstChild;     // Index of first child
-    uint8_t voxelType;       // Leaf voxel type
+// ECS компоненты для работы с Draco
+namespace engine::components::geometry {
+
+    // Компонент сжатых геометрических данных
+    struct CompressedGeometry {
+        std::vector<std::byte> data;
+        CompressionFormat format;
+        bool needsDecompression = true;
+    };
+
+    // Компонент декодированной геометрии
+    struct GpuGeometry {
+        GpuBuffer vertexBuffer;
+        GpuAllocation vertexAllocation;
+        GpuBuffer indexBuffer;
+        GpuAllocation indexAllocation;
+        uint32_t vertexCount;
+        uint32_t indexCount;
+    };
+
+    // Система асинхронного декодирования
+    class DracoDecompressionSystem {
+    public:
+        DracoDecompressionSystem(ECS::World& world) {
+            world.system<CompressedGeometry, GpuGeometry>("DracoDecompress")
+                .kind(ECS::OnUpdate)
+                .each([this](ECS::Entity e, CompressedGeometry& compressed,
+                             GpuGeometry& geometry) {
+                    if (!compressed.needsDecompression) return;
+
+                    // Асинхронное декодирование через Job System
+                    jobSystem_.submit([e, &compressed, &geometry]() {
+                        auto result = dracoModule_.decompressToGpu(compressed.data);
+                        if (result) {
+                            geometry = std::move(*result);
+                            compressed.needsDecompression = false;
+                        }
+                    });
+                });
+        }
+    };
+}
+```
+
+### 6. Интеграция с современными Job System
+
+Современные C++ проекты используют M:N fibers или work stealing для асинхронной обработки:
+
+```cpp
+class DracoJobSystemIntegration {
+    JobSystem& jobSystem_;
+    DracoDecoderPool decoderPool_;
+
+public:
+    struct DecodeTask {
+        std::span<const std::byte> compressedData;
+        std::function<void(std::expected<GpuMeshData, std::string>)> callback;
+        Priority priority = Priority::Normal;
+    };
+
+    void submitDecodeTask(DecodeTask task) noexcept {
+        jobSystem_.submit([this, task = std::move(task)]() {
+            // Получение декодера из пула (thread-safe)
+            auto decoder = decoderPool_.acquire();
+
+            // Декодирование
+            auto result = decoder->decode(task.compressedData);
+
+            // Возврат в пул
+            decoderPool_.release(std::move(decoder));
+
+            // Вызов callback в основном потоке
+            jobSystem_.dispatchToMain([result = std::move(result), callback = task.callback]() {
+                callback(result);
+            });
+        }, task.priority);
+    }
+};
+```
+
+## Роль Draco в современных графических приложениях: архитектура сжатия геометрических данных
+
+Draco интегрируется в современные графические приложения как специализированный процессор геометрических данных,
+решающий три фундаментальные
+проблемы:
+
+1. **Сжатие структурных данных** — трансформация sparse voxel octree (SVO) структур, point clouds и greedy meshes в
+   компактные битовые
+   потоки с сохранением пространственных корреляций
+2. **Оптимизация 3D моделей** — интеграция с `KHR_draco_mesh_compression` для уменьшения размера импортируемых
+   3D-моделей на 80-90%
+3. **Сетевая синхрони
+
+## Архитектурные паттерны для специализированных данных
+
+### 1. Структурирование пользовательских данных для Draco
+
+Draco может работать с любыми структурированными данными, не только с традиционными 3D моделями. Ключевой принцип —
+преобразование пользовательских данных в формат, понятный Draco:
+
+```cpp
+#include <draco/mesh/mesh.h>
+#include <draco/attributes/geometry_attribute.h>
+
+// Пример: структура данных для научной визуализации
+struct ScientificData {
+    std::vector<float> positions;      // XYZ координаты точек
+    std::vector<float> values;         // Научные значения (температура, давление и т.д.)
+    std::vector<uint32_t> categories;  // Категории точек
+    std::vector<uint8_t> flags;        // Флаги состояния
 };
 
-// Encoding SVO as Draco point cloud
-std::unique_ptr<draco::PointCloud> svoToPointCloud(const std::vector<SVONodeData>& nodes) {
+// Конвертация пользовательских данных в Draco PointCloud
+[[nodiscard]] std::expected<std::unique_ptr<draco::PointCloud>, std::string>
+convertCustomDataToDraco(const ScientificData& data) noexcept {
     auto pc = std::make_unique<draco::PointCloud>();
-    pc->set_num_points(nodes.size());
 
-    // Child mask attribute
-    draco::GeometryAttribute childMaskAttr;
-    childMaskAttr.Init(draco::GeometryAttribute::GENERIC, nullptr, 1,
-                       draco::DT_UINT32, false, 4, 0);
-    int childMaskId = pc->AddAttribute(childMaskAttr, true, nodes.size());
+    // Устанавливаем количество точек
+    pc->set_num_points(data.positions.size() / 3);
 
-    // First child attribute
-    draco::GeometryAttribute firstChildAttr;
-    firstChildAttr.Init(draco::GeometryAttribute::GENERIC, nullptr, 1,
-                        draco::DT_UINT32, false, 4, 0);
-    int firstChildId = pc->AddAttribute(firstChildAttr, true, nodes.size());
+    // Создаём атрибут для позиций
+    draco::GeometryAttribute posAttr;
+    posAttr.Init(
+        draco::GeometryAttribute::POSITION,
+        nullptr, 3, draco::DT_FLOAT32, false, sizeof(float) * 3, 0
+    );
+    int posAttrId = pc->AddAttribute(posAttr, true, data.positions.size() / 3);
 
-    // Voxel type attribute
-    draco::GeometryAttribute voxelTypeAttr;
-    voxelTypeAttr.Init(draco::GeometryAttribute::GENERIC, nullptr, 1,
-                       draco::DT_UINT8, false, 1, 0);
-    int voxelTypeId = pc->AddAttribute(voxelTypeAttr, true, nodes.size());
+    // Создаём атрибут для научных значений
+    draco::GeometryAttribute valueAttr;
+    valueAttr.Init(
+        draco::GeometryAttribute::GENERIC,
+        nullptr, 1, draco::DT_FLOAT32, false, sizeof(float), 0
+    );
+    int valueAttrId = pc->AddAttribute(valueAttr, true, data.values.size());
 
-    // Fill attributes
-    for (size_t i = 0; i < nodes.size(); ++i) {
-        pc->attribute(childMaskId)->SetAttributeValue(
-            draco::AttributeValueIndex(i), &nodes[i].childMask);
-        pc->attribute(firstChildId)->SetAttributeValue(
-            draco::AttributeValueIndex(i), &nodes[i].firstChild);
-        pc->attribute(voxelTypeId)->SetAttributeValue(
-            draco::AttributeValueIndex(i), &nodes[i].voxelType);
+    // Заполняем атрибуты
+    for (size_t i = 0; i < data.positions.size() / 3; ++i) {
+        pc->attribute(posAttrId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &data.positions[i * 3]);
+        pc->attribute(valueAttrId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &data.values[i]);
     }
 
     return pc;
 }
 ```
 
-### Metadata для SVO структуры
+**Архитектурная метафора:** Draco действует как универсальный переводчик, который может работать с любым
+структурированным языком данных, преобразуя его в компактный бинарный формат.
+
+### 2. Оптимизация квантования для различных типов данных
+
+Разные типы данных требуют разной точности квантования:
 
 ```cpp
-void addSVOMetadata(draco::PointCloud& pc, uint32_t depth, uint32_t leafCount) {
+// Архитектурный паттерн: адаптивное квантование
+class AdaptiveQuantizationEncoder {
+    draco::ExpertEncoder encoder_;
+
+public:
+    void configureForData(const DataProfile& profile) noexcept {
+        // Научные данные: высокая точность для значений
+        if (profile.type == DataType::Scientific) {
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 14);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::GENERIC, 12);
+        }
+        // Игровые ассеты: баланс качества и размера
+        else if (profile.type == DataType::GameAsset) {
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 12);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 10);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::TEX_COORD, 10);
+        }
+        // Процедурные данные: скорость важнее качества
+        else if (profile.type == DataType::Procedural) {
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 8);
+            encoder_.SetSpeedOptions(8, 10);  // Максимальная скорость
+        }
+    }
+};
+```
+
+## Интеграция с графическими API
+
+### Архитектурный паттерн: абстракция над графическими API
+
+Draco может интегрироваться с любым графическим API через абстрактный интерфейс, что позволяет проектам поддерживать
+Vulkan, DirectX, Metal или другие API без изменения кода обработки данных:
+
+```cpp
+#include <draco/compression/decode.h>
+#include <span>
+#include <expected>
+#include <memory>
+
+// Абстрактный интерфейс для графического аллокатора
+class IGraphicsAllocator {
+public:
+    struct BufferInfo {
+        void* handle;           // API-specific handle (VkBuffer, ID3D12Resource, etc.)
+        void* allocation;       // API-specific allocation handle
+        size_t size;           // Размер буфера в байтах
+        void* mappedData;      // Mapped pointer (если поддерживается)
+    };
+
+    struct BufferCreateInfo {
+        size_t size;
+        uint32_t usageFlags;    // API-specific usage flags
+        bool hostVisible;       // Доступен ли CPU для записи
+        bool deviceLocal;       // Оптимизирован ли для GPU
+    };
+
+    [[nodiscard]] virtual std::expected<BufferInfo, std::string>
+    createBuffer(const BufferCreateInfo& info) noexcept = 0;
+
+    virtual void destroyBuffer(const BufferInfo& buffer) noexcept = 0;
+
+    virtual ~IGraphicsAllocator() = default;
+};
+
+// Абстрактная структура для графических данных
+struct GraphicsMeshData {
+    BufferInfo vertexBuffer;
+    BufferInfo indexBuffer;
+    uint32_t vertexCount;
+    uint32_t indexCount;
+};
+
+// Универсальный декодер для любого графического API
+class UniversalDracoDecoder {
+    std::unique_ptr<IGraphicsAllocator> allocator_;
+    draco::Decoder decoder_;
+
+public:
+    explicit UniversalDracoDecoder(std::unique_ptr<IGraphicsAllocator> allocator)
+        : allocator_(std::move(allocator)) {}
+
+    [[nodiscard]] std::expected<GraphicsMeshData, std::string>
+    decodeToGraphicsMemory(std::span<const std::byte> compressed) noexcept {
+        // 1. Декодирование в CPU
+        draco::DecoderBuffer buffer;
+        buffer.Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+
+        auto meshResult = decoder_.DecodeMeshFromBuffer(&buffer);
+        if (!meshResult.ok()) {
+            return std::unexpected(meshResult.status().error_msg());
+        }
+
+        auto mesh = std::move(meshResult).value();
+
+        // 2. Создание графических буферов через абстрактный аллокатор
+        return createGraphicsBuffers(*mesh);
+    }
+
+private:
+    [[nodiscard]] std::expected<GraphicsMeshData, std::string>
+    createGraphicsBuffers(const draco::Mesh& mesh) noexcept {
+        const auto* posAttr = mesh.GetNamedAttribute(draco::GeometryAttribute::POSITION);
+        if (!posAttr) {
+            return std::unexpected("Mesh has no position attribute");
+        }
+
+        GraphicsMeshData result{};
+
+        // Создание vertex buffer
+        auto vertexBufferResult = createVertexBuffer(mesh, *posAttr);
+        if (!vertexBufferResult) {
+            return std::unexpected(vertexBufferResult.error());
+        }
+        result.vertexBuffer = *vertexBufferResult;
+        result.vertexCount = static_cast<uint32_t>(mesh.num_points());
+
+        // Создание index buffer
+        auto indexBufferResult = createIndexBuffer(mesh);
+        if (!indexBufferResult) {
+            allocator_->destroyBuffer(result.vertexBuffer);
+            return std::unexpected(indexBufferResult.error());
+        }
+        result.indexBuffer = *indexBufferResult;
+        result.indexCount = static_cast<uint32_t>(mesh.num_faces() * 3);
+
+        return result;
+    }
+
+    [[nodiscard]] std::expected<BufferInfo, std::string>
+    createVertexBuffer(const draco::Mesh& mesh, const draco::PointAttribute& posAttr) noexcept {
+        const size_t vertexCount = mesh.num_points();
+        const size_t vertexSize = sizeof(float) * 3;  // xyz
+        const size_t bufferSize = vertexCount * vertexSize;
+
+        IGraphicsAllocator::BufferCreateInfo createInfo{
+            .size = bufferSize,
+            .usageFlags = 0x1 | 0x100,  // VERTEX_BUFFER_BIT | TRANSFER_DST_BIT (пример)
+            .hostVisible = true,
+            .deviceLocal = false
+        };
+
+        auto bufferResult = allocator_->createBuffer(createInfo);
+        if (!bufferResult) {
+            return std::unexpected(bufferResult.error());
+        }
+
+        auto buffer = *bufferResult;
+
+        // Запись данных в mapped memory
+        if (buffer.mappedData) {
+            float* dst = static_cast<float*>(buffer.mappedData);
+            for (draco::PointIndex i(0); i < vertexCount; ++i) {
+                std::array<float, 3> pos;
+                posAttr.GetValue(posAttr.mapped_index(i), &pos);
+                *dst++ = pos[0];
+                *dst++ = pos[1];
+                *dst++ = pos[2];
+            }
+        } else {
+            // Если нет mapped memory, нужна staging buffer стратегия
+            return std::unexpected("Allocator doesn't support mapped memory");
+        }
+
+        return buffer;
+    }
+
+    [[nodiscard]] std::expected<BufferInfo, std::string>
+    createIndexBuffer(const draco::Mesh& mesh) noexcept {
+        const size_t indexCount = mesh.num_faces() * 3;
+        const size_t bufferSize = indexCount * sizeof(uint32_t);
+
+        IGraphicsAllocator::BufferCreateInfo createInfo{
+            .size = bufferSize,
+            .usageFlags = 0x2 | 0x100,  // INDEX_BUFFER_BIT | TRANSFER_DST_BIT (пример)
+            .hostVisible = true,
+            .deviceLocal = false
+        };
+
+        auto bufferResult = allocator_->createBuffer(createInfo);
+        if (!bufferResult) {
+            return std::unexpected(bufferResult.error());
+        }
+
+        auto buffer = *bufferResult;
+
+        // Запись данных в mapped memory
+        if (buffer.mappedData) {
+            uint32_t* dst = static_cast<uint32_t*>(buffer.mappedData);
+            for (draco::FaceIndex f(0); f < mesh.num_faces(); ++f) {
+                const auto& face = mesh.face(f);
+                *dst++ = face[0].value();
+                *dst++ = face[1].value();
+                *dst++ = face[2].value();
+            }
+        }
+
+        return buffer;
+    }
+};
+```
+
+**Архитектурная метафора:** Этот паттерн подобен универсальному зарядному устройству с адаптерами для разных типов
+розеток — один интерфейс работает с любым графическим API через соответствующие реализации.
+
+### Стратегии загрузки данных в GPU
+
+```cpp
+// Архитектурный паттерн: стратегия загрузки данных
+enum class UploadStrategy {
+    DirectMapping,      // Прямая запись в mapped memory
+    StagingBuffer,      // Использование staging buffer
+    AsyncUpload,        // Асинхронная загрузка через очередь команд
+    ZeroCopy            // Zero-copy через shared memory
+};
+
+class DataUploadStrategy {
+public:
+    virtual ~DataUploadStrategy() = default;
+
+    [[nodiscard]] virtual std::expected<void, std::string>
+    uploadToGpu(const draco::Mesh& mesh, BufferInfo& targetBuffer) noexcept = 0;
+
+    [[nodiscard]] virtual UploadStrategy getStrategyType() const noexcept = 0;
+};
+
+// Пример реализации для DirectMapping стратегии
+class DirectMappingStrategy : public DataUploadStrategy {
+public:
+    [[nodiscard]] std::expected<void, std::string>
+    uploadToGpu(const draco::Mesh& mesh, BufferInfo& targetBuffer) noexcept override {
+        if (!targetBuffer.mappedData) {
+            return std::unexpected("Buffer doesn't support direct mapping");
+        }
+
+        // Прямая запись в mapped memory (как в примере выше)
+        // ...
+        return {};
+    }
+
+    [[nodiscard]] UploadStrategy getStrategyType() const noexcept override {
+        return UploadStrategy::DirectMapping;
+    }
+};
+```
+
+---
+
+## Интеграция с системами управления сущностями (ECS)
+
+### Архитектурный паттерн: абстракция над ECS
+
+Draco может интегрироваться с любой системой управления сущностями через абстрактный интерфейс, что позволяет проектам
+использовать Flecs, EnTT, или другие ECS-фреймворки без изменения кода обработки данных:
+
+```cpp
+#include <draco/compression/decode.h>
+#include <span>
+#include <expected>
+#include <memory>
+#include <functional>
+
+// Абстрактный интерфейс для ECS
+class IEntityComponentSystem {
+public:
+    // Абстрактные типы для работы с ECS
+    struct EntityHandle {
+        void* id;  // ECS-specific entity ID
+    };
+
+    struct ComponentType {
+        void* typeId;  // ECS-specific component type ID
+    };
+
+    // Абстрактные методы для работы с ECS
+    [[nodiscard]] virtual EntityHandle createEntity() noexcept = 0;
+    virtual void destroyEntity(EntityHandle entity) noexcept = 0;
+
+    template<typename Component>
+    [[nodiscard]] virtual bool hasComponent(EntityHandle entity) const noexcept = 0;
+
+    template<typename Component>
+    [[nodiscard]] virtual Component* getComponent(EntityHandle entity) noexcept = 0;
+
+    template<typename Component>
+    [[nodiscard]] virtual Component* addComponent(EntityHandle entity, Component&& component) noexcept = 0;
+
+    virtual void registerSystem(std::function<void()> system) noexcept = 0;
+
+    virtual ~IEntityComponentSystem() = default;
+};
+
+// Абстрактные компоненты для работы с Draco
+namespace ecs::components::geometry {
+
+    // Компонент сжатых геометрических данных
+    struct CompressedGeometry {
+        std::vector<std::byte> data;
+        CompressionFormat format;
+        bool needsDecompression = true;
+    };
+
+    // Компонент декодированной геометрии
+    struct GpuGeometry {
+        void* vertexBuffer;      // API-specific handle
+        void* vertexAllocation;  // API-specific allocation
+        void* indexBuffer;       // API-specific handle
+        void* indexAllocation;   // API-specific allocation
+        uint32_t vertexCount;
+        uint32_t indexCount;
+    };
+}
+
+// Универсальная система декомпрессии Draco
+class UniversalDracoDecompressionSystem {
+    std::unique_ptr<IEntityComponentSystem> ecs_;
+    std::function<std::expected<ecs::components::geometry::GpuGeometry, std::string>(
+        std::span<const std::byte>)> decompressFunc_;
+
+public:
+    UniversalDracoDecompressionSystem(
+        std::unique_ptr<IEntityComponentSystem> ecs,
+        std::function<std::expected<ecs::components::geometry::GpuGeometry, std::string>(
+            std::span<const std::byte>)> decompressFunc)
+        : ecs_(std::move(ecs)), decompressFunc_(std::move(decompressFunc)) {
+
+        // Регистрация системы декомпрессии
+        ecs_->registerSystem([this]() { processDecompression(); });
+    }
+
+private:
+    void processDecompression() noexcept {
+        // Абстрактная обработка сущностей с компонентами CompressedGeometry и GpuGeometry
+        // Реализация зависит от конкретного ECS фреймворка
+    }
+};
+```
+
+**Архитектурная метафора:** Этот паттерн подобен универсальному разъёму, который позволяет подключать Draco к любой
+ECS-системе через соответствующий адаптер, подобно тому как USB-C разъём работает с различными устройствами через
+адаптеры.
+
+### Паттерн: асинхронная загрузка с Job System
+
+```cpp
+// Архитектурный паттерн: абстрактная асинхронная загрузка
+class IAsyncLoader {
+public:
+    struct LoadRequest {
+        std::span<const std::byte> compressedData;
+        std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)> callback;
+        int priority = 0;
+    };
+
+    virtual void submitLoadRequest(LoadRequest request) noexcept = 0;
+    virtual void processCompletedRequests() noexcept = 0;
+    virtual void waitForCompletion() noexcept = 0;
+
+    virtual ~IAsyncLoader() = default;
+};
+
+// Реализация с использованием современного C++ Job System
+class ModernJobSystemLoader : public IAsyncLoader {
+    struct InternalRequest {
+        std::vector<std::byte> compressedData;
+        std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)> callback;
+        int priority;
+    };
+
+    std::vector<InternalRequest> pendingRequests_;
+    std::vector<std::pair<std::future<std::unique_ptr<draco::Mesh>>,
+                         std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)>>> activeTasks_;
+    std::mutex mutex_;
+    draco::DecoderPool decoderPool_;
+
+public:
+    void submitLoadRequest(LoadRequest request) noexcept override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Сохраняем запрос
+        pendingRequests_.push_back({
+            std::vector<std::byte>(request.compressedData.begin(), request.compressedData.end()),
+            std::move(request.callback),
+            request.priority
+        });
+
+        // Сортируем по приоритету
+        std::sort(pendingRequests_.begin(), pendingRequests_.end(),
+            [](const InternalRequest& a, const InternalRequest& b) {
+                return a.priority > b.priority;  // Высокий приоритет первый
+            });
+    }
+
+    void processCompletedRequests() noexcept override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Обрабатываем завершённые задачи
+        for (auto it = activeTasks_.begin(); it != activeTasks_.end(); ) {
+            if (it->first.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                try {
+                    auto mesh = it->first.get();
+                    it->second(std::move(mesh));
+                } catch (const std::exception& e) {
+                    it->second(std::unexpected(e.what()));
+                }
+                it = activeTasks_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Запускаем новые задачи из очереди
+        while (!pendingRequests_.empty() && activeTasks_.size() < decoderPool_.getMaxConcurrentTasks()) {
+            auto request = std::move(pendingRequests_.back());
+            pendingRequests_.pop_back();
+
+            // Запускаем асинхронную задачу
+            auto future = std::async(std::launch::async, [this, data = std::move(request.compressedData)]() {
+                auto decoder = decoderPool_.acquire();
+                draco::DecoderBuffer buffer;
+                buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
+
+                auto result = decoder->DecodeMeshFromBuffer(&buffer);
+                decoderPool_.release(std::move(decoder));
+
+                if (result.ok()) {
+                    return std::move(result).value();
+                }
+                throw std::runtime_error(result.status().error_msg());
+            });
+
+            activeTasks_.emplace_back(std::move(future), std::move(request.callback));
+        }
+    }
+
+    void waitForCompletion() noexcept override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        for (auto& task : activeTasks_) {
+            task.first.wait();
+        }
+        processCompletedRequests();
+    }
+};
+```
+
+### Паттерн: кэширование декодированных данных
+
+```cpp
+// Архитектурный паттерн: абстрактный кэш
+class IMeshCache {
+public:
+    [[nodiscard]] virtual std::shared_ptr<draco::Mesh>
+    getOrDecode(const std::string& key, std::span<const std::byte> compressed) noexcept = 0;
+
+    virtual void clear() noexcept = 0;
+    virtual size_t getSize() const noexcept = 0;
+    virtual size_t getMaxSize() const noexcept = 0;
+    virtual void setMaxSize(size_t maxSize) noexcept = 0;
+
+    virtual ~IMeshCache() = default;
+};
+
+// Реализация с LRU (Least Recently Used) стратегией
+class LruMeshCache : public IMeshCache {
+    struct CacheEntry {
+        std::shared_ptr<draco::Mesh> mesh;
+        std::chrono::steady_clock::time_point lastAccess;
+        size_t size;
+    };
+
+    std::unordered_map<std::string, CacheEntry> cache_;
+    std::mutex mutex_;
+    size_t maxSize_ = 1024 * 1024 * 1024;  // 1 GB по умолчанию
+    size_t currentSize_ = 0;
+    draco::Decoder decoder_;
+
+public:
+    [[nodiscard]] std::shared_ptr<draco::Mesh>
+    getOrDecode(const std::string& key, std::span<const std::byte> compressed) noexcept override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Проверяем кэш
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            it->second.lastAccess = std::chrono::steady_clock::now();
+            return it->second.mesh;
+        }
+
+        // Декодируем и кэшируем
+        draco::DecoderBuffer buffer;
+        buffer.Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+
+        auto result = decoder_.DecodeMeshFromBuffer(&buffer);
+        if (!result.ok()) {
+            return nullptr;
+        }
+
+        auto mesh = std::make_shared<draco::Mesh>(std::move(result).value());
+
+        // Оцениваем размер mesh
+        size_t meshSize = estimateMeshSize(*mesh);
+
+        // Освобождаем место если нужно
+        makeSpaceFor(meshSize);
+
+        // Добавляем в кэш
+        cache_[key] = {
+            .mesh = mesh,
+            .lastAccess = std::chrono::steady_clock::now(),
+            .size = meshSize
+        };
+        currentSize_ += meshSize;
+
+        return mesh;
+    }
+
+    void clear() noexcept override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        cache_.clear();
+        currentSize_ = 0;
+    }
+
+    size_t getSize() const noexcept override {
+        return currentSize_;
+    }
+
+    size_t getMaxSize() const noexcept override {
+        return maxSize_;
+    }
+
+    void setMaxSize(size_t maxSize) noexcept override {
+        maxSize_ = maxSize;
+        makeSpaceFor(0);  // Проверяем, не превышает ли текущий размер новый максимум
+    }
+
+private:
+    size_t estimateMeshSize(const draco::Mesh& mesh) const noexcept {
+        // Простая оценка размера mesh в памяти
+        size_t size = 0;
+        size += mesh.num_points() * sizeof(float) * 3;  // Позиции
+        size += mesh.num_faces() * sizeof(uint32_t) * 3; // Индексы
+
+        // Атрибуты
+        for (int i = 0; i < mesh.num_attributes(); ++i) {
+            const auto* attr = mesh.attribute(i);
+            size += attr->size() * attr->byte_stride();
+        }
+
+        return size;
+    }
+
+    void makeSpaceFor(size_t requiredSize) noexcept {
+        if (currentSize_ + requiredSize <= maxSize_) {
+            return;
+        }
+
+        // Удаляем наименее используемые элементы пока не освободим достаточно места
+        std::vector<std::pair<std::string, CacheEntry>> entries(cache_.begin(), cache_.end());
+        std::sort(entries.begin(), entries.end(),
+            [](const auto& a, const auto& b) {
+                return a.second.lastAccess < b.second.lastAccess;
+            });
+
+        for (const auto& [key, entry] : entries) {
+            if (currentSize_ + requiredSize <= maxSize_) {
+                break;
+            }
+
+            cache_.erase(key);
+            currentSize_ -= entry.size;
+        }
+    }
+};
+```
+
+---
+
+## Работа с разреженными и иерархическими данными
+
+### Архитектурный паттерн: сжатие иерархических структур
+
+Draco отлично подходит для сжатия иерархических структур данных, таких как деревья, графы и другие разреженные
+структуры. Ключевой принцип — представление иерархических данных в виде point cloud с метаданными:
+
+```cpp
+#include <draco/mesh/mesh.h>
+#include <draco/attributes/geometry_attribute.h>
+#include <draco/metadata/metadata.h>
+
+// Пример: структура данных для иерархического дерева
+struct TreeNodeData {
+    uint32_t parentId;       // ID родительского узла
+    uint32_t firstChildId;   // ID первого дочернего узла
+    uint32_t childCount;     // Количество дочерних узлов
+    uint8_t nodeType;        // Тип узла
+    float value;            // Значение узла (например, научные данные)
+};
+
+// Конвертация иерархических данных в Draco PointCloud
+[[nodiscard]] std::expected<std::unique_ptr<draco::PointCloud>, std::string>
+convertHierarchicalDataToDraco(const std::vector<TreeNodeData>& nodes) noexcept {
+    auto pc = std::make_unique<draco::PointCloud>();
+
+    // Устанавливаем количество узлов
+    pc->set_num_points(nodes.size());
+
+    // Создаём атрибуты для иерархической структуры
+    draco::GeometryAttribute parentAttr;
+    parentAttr.Init(
+        draco::GeometryAttribute::GENERIC,
+        nullptr, 1, draco::DT_UINT32, false, sizeof(uint32_t), 0
+    );
+    int parentId = pc->AddAttribute(parentAttr, true, nodes.size());
+
+    draco::GeometryAttribute firstChildAttr;
+    firstChildAttr.Init(
+        draco::GeometryAttribute::GENERIC,
+        nullptr, 1, draco::DT_UINT32, false, sizeof(uint32_t), 0
+    );
+    int firstChildId = pc->AddAttribute(firstChildAttr, true, nodes.size());
+
+    draco::GeometryAttribute childCountAttr;
+    childCountAttr.Init(
+        draco::GeometryAttribute::GENERIC,
+        nullptr, 1, draco::DT_UINT32, false, sizeof(uint32_t), 0
+    );
+    int childCountId = pc->AddAttribute(childCountAttr, true, nodes.size());
+
+    draco::GeometryAttribute nodeTypeAttr;
+    nodeTypeAttr.Init(
+        draco::GeometryAttribute::GENERIC,
+        nullptr, 1, draco::DT_UINT8, false, sizeof(uint8_t), 0
+    );
+    int nodeTypeId = pc->AddAttribute(nodeTypeAttr, true, nodes.size());
+
+    draco::GeometryAttribute valueAttr;
+    valueAttr.Init(
+        draco::GeometryAttribute::GENERIC,
+        nullptr, 1, draco::DT_FLOAT32, false, sizeof(float), 0
+    );
+    int valueId = pc->AddAttribute(valueAttr, true, nodes.size());
+
+    // Заполняем атрибуты
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        pc->attribute(parentId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &nodes[i].parentId);
+        pc->attribute(firstChildId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &nodes[i].firstChildId);
+        pc->attribute(childCountId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &nodes[i].childCount);
+        pc->attribute(nodeTypeId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &nodes[i].nodeType);
+        pc->attribute(valueId)->SetAttributeValue(
+            draco::AttributeValueIndex(i), &nodes[i].value);
+    }
+
+    return pc;
+}
+
+// Добавление метаданных для иерархической структуры
+void addHierarchicalMetadata(draco::PointCloud& pc,
+                            const std::string& structureType,
+                            uint32_t maxDepth,
+                            uint32_t totalNodes,
+                            const std::string& version = "1.0") noexcept {
     auto metadata = std::make_unique<draco::GeometryMetadata>();
-    metadata->AddEntryString("structure", "svo");
-    metadata->AddEntryInt("depth", depth);
-    metadata->AddEntryInt("leaf_count", leafCount);
-    metadata->AddEntryString("version", "1.0");
+
+    metadata->AddEntryString("structure_type", structureType);
+    metadata->AddEntryInt("max_depth", maxDepth);
+    metadata->AddEntryInt("total_nodes", totalNodes);
+    metadata->AddEntryString("version", version);
+    metadata->AddEntryString("compression_scheme", "draco_hierarchical");
 
     pc.AddMetadata(std::move(metadata));
 }
+```
+
+**Архитектурная метафора:** Draco действует как архивариус для сложных структур данных, упаковывая иерархические связи в
+компактный формат, подобно тому как архивариус организует документы в логические папки и подпапки.
+
+### Паттерн: оптимизация для разреженных данных
+
+Разреженные данные (sparse data) имеют особые характеристики, которые можно использовать для оптимизации сжатия:
+
+```cpp
+// Архитектурный паттерн: адаптивное кодирование для разреженных данных
+class SparseDataEncoder {
+    draco::ExpertEncoder encoder_;
+
+public:
+    void configureForSparseData(const SparseDataProfile& profile) noexcept {
+        // Настройка prediction schemes для разреженных данных
+        if (profile.sparsityPattern == SparsityPattern::RegularGrid) {
+            // Для регулярных сеток используем parallelogram prediction
+            encoder_.SetPredictionScheme(draco::GeometryAttribute::POSITION,
+                                        draco::PREDICTION_PARALLELOGRAM);
+        } else if (profile.sparsityPattern == SparsityPattern::Hierarchical) {
+            // Для иерархических данных используем geometric normal prediction
+            encoder_.SetPredictionScheme(draco::GeometryAttribute::GENERIC,
+                                        draco::PREDICTION_GEOMETRIC_NORMAL);
+        } else if (profile.sparsityPattern == SparsityPattern::Random) {
+            // Для случайных данных используем delta coding
+            encoder_.SetPredictionScheme(draco::GeometryAttribute::GENERIC,
+                                        draco::PREDICTION_DIFFERENCE);
+        }
+
+        // Настройка квантования в зависимости от плотности данных
+        if (profile.density < 0.1f) {
+            // Очень разреженные данные: можно использовать более агрессивное квантование
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::GENERIC, 6);
+        } else if (profile.density < 0.5f) {
+            // Умеренно разреженные данные: баланс качества и сжатия
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::GENERIC, 8);
+        } else {
+            // Плотные данные: сохраняем качество
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::GENERIC, 10);
+        }
+
+        // Настройка скорости кодирования
+        encoder_.SetSpeedOptions(profile.encodeSpeed, profile.decodeSpeed);
+    }
+
+    struct SparseDataProfile {
+        SparsityPattern sparsityPattern;
+        float density;           // Плотность данных (0.0 - 1.0)
+        int encodeSpeed;         // Скорость кодирования (0-10)
+        int decodeSpeed;         // Скорость декодирования (0-10)
+    };
+
+    enum class SparsityPattern {
+        RegularGrid,     // Регулярная сетка (например, воксельная сетка)
+        Hierarchical,    // Иерархическая структура (например, octree)
+        Random,          // Случайное распределение
+        Clustered        // Кластерное распределение
+    };
+};
+```
+
+### Паттерн: delta compression для инкрементальных обновлений
+
+```cpp
+// Архитектурный паттерн: сжатие разницы между версиями данных
+class DeltaCompressionEncoder {
+    draco::Encoder encoder_;
+
+public:
+    [[nodiscard]] std::expected<std::vector<std::byte>, std::string>
+    compressDelta(const DataVersion& oldVersion, const DataVersion& newVersion) noexcept {
+        // 1. Вычисление разницы между версиями
+        auto diff = computeDifference(oldVersion, newVersion);
+        if (diff.empty()) {
+            return std::vector<std::byte>{};  // Пустой результат если нет изменений
+        }
+
+        // 2. Структурирование diff для Draco
+        auto pointCloud = structureDiffForDraco(diff);
+
+        // 3. Кодирование diff через Draco
+        draco::EncoderBuffer buffer;
+        auto status = encoder_.EncodePointCloudToBuffer(*pointCloud, &buffer);
+
+        if (!status.ok()) {
+            return std::unexpected(status.error_msg());
+        }
+
+        // 4. Конвертация в std::vector<std::byte>
+        std::vector<std::byte> result(buffer.size());
+        std::memcpy(result.data(), buffer.data(), buffer.size());
+
+        return result;
+    }
+
+private:
+    struct DataDiff {
+        std::vector<uint32_t> changedIndices;  // Индексы изменённых элементов
+        std::vector<std::byte> newValues;      // Новые значения
+        std::vector<uint8_t> valueSizes;       // Размеры значений (для гетерогенных данных)
+    };
+
+    [[nodiscard]] DataDiff computeDifference(const DataVersion& oldVersion,
+                                            const DataVersion& newVersion) const noexcept {
+        DataDiff diff;
+
+        // Простой алгоритм сравнения (можно оптимизировать для конкретного use case)
+        for (size_t i = 0; i < newVersion.data.size(); ++i) {
+            if (i >= oldVersion.data.size() ||
+                !std::equal(newVersion.data[i].begin(), newVersion.data[i].end(),
+                           oldVersion.data[i].begin())) {
+                diff.changedIndices.push_back(static_cast<uint32_t>(i));
+                diff.newValues.insert(diff.newValues.end(),
+                                     newVersion.data[i].begin(),
+                                     newVersion.data[i].end());
+                diff.valueSizes.push_back(static_cast<uint8_t>(newVersion.data[i].size()));
+            }
+        }
+
+        return diff;
+    }
+
+    [[nodiscard]] std::unique_ptr<draco::PointCloud>
+    structureDiffForDraco(const DataDiff& diff) const noexcept {
+        auto pc = std::make_unique<draco::PointCloud>();
+        pc->set_num_points(diff.changedIndices.size());
+
+        // Атрибут для индексов
+        draco::GeometryAttribute indexAttr;
+        indexAttr.Init(draco::GeometryAttribute::GENERIC, nullptr, 1,
+                      draco::DT_UINT32, false, sizeof(uint32_t), 0);
+        int indexId = pc->AddAttribute(indexAttr, true, diff.changedIndices.size());
+
+        // Атрибут для размеров значений
+        draco::GeometryAttribute sizeAttr;
+        sizeAttr.Init(draco::GeometryAttribute::GENERIC, nullptr, 1,
+                     draco::DT_UINT8, false, sizeof(uint8_t), 0);
+        int sizeId = pc->AddAttribute(sizeAttr, true, diff.valueSizes.size());
+
+        // Заполняем атрибуты
+        for (size_t i = 0; i < diff.changedIndices.size(); ++i) {
+            pc->attribute(indexId)->SetAttributeValue(
+                draco::AttributeValueIndex(i), &diff.changedIndices[i]);
+            pc->attribute(sizeId)->SetAttributeValue(
+                draco::AttributeValueIndex(i), &diff.valueSizes[i]);
+        }
+
+        // Для значений используем generic атрибут с переменным размером
+        // (в реальной реализации нужно обработать гетерогенные данные)
+
+        return pc;
+    }
+};
 ```
 
 ---
@@ -1133,118 +1188,659 @@ public:
 
 ---
 
-## Сетевая оптимизация
+## Сетевая оптимизация и распределённые системы
 
-### Delta compression для чанков
+### Архитектурный паттерн: эффективная передача геометрических данных
+
+Draco играет ключевую роль в оптимизации сетевой передачи геометрических данных, особенно в распределённых системах и
+multiplayer приложениях:
 
 ```cpp
-// Сжатие diff между версиями чанка
-std::vector<char> compressChunkDiff(
-    const VoxelChunkData& oldChunk,
-    const VoxelChunkData& newChunk) {
+#include <draco/compression/encode.h>
+#include <draco/compression/decode.h>
+#include <span>
+#include <expected>
+#include <vector>
+#include <chrono>
 
-    // 1. Вычисление diff
-    std::vector<uint8_t> diff;
-    for (size_t i = 0; i < newChunk.voxelTypes.size(); ++i) {
-        if (oldChunk.voxelTypes[i] != newChunk.voxelTypes[i]) {
-            // Store index + new value
+// Архитектурный паттерн: адаптивное сетевое сжатие
+class AdaptiveNetworkCompressor {
+    struct CompressionProfile {
+        int targetBitrate;      // Целевой битрейт (бит/вершина)
+        int maxLatencyMs;       // Максимальная допустимая задержка
+        bool allowLossy;        // Разрешено ли lossy сжатие
+        NetworkCondition condition; // Состояние сети
+    };
+
+    draco::ExpertEncoder encoder_;
+    draco::Decoder decoder_;
+
+public:
+    [[nodiscard]] std::expected<std::vector<std::byte>, std::string>
+    compressForNetwork(const draco::Mesh& mesh, const CompressionProfile& profile) noexcept {
+        // Настройка encoder в зависимости от профиля
+        configureEncoderForProfile(profile);
+
+        // Кодирование mesh
+        draco::EncoderBuffer buffer;
+        auto status = encoder_.EncodeMeshToBuffer(mesh, &buffer);
+
+        if (!status.ok()) {
+            return std::unexpected(status.error_msg());
+        }
+
+        // Конвертация в std::vector<std::byte>
+        std::vector<std::byte> result(buffer.size());
+        std::memcpy(result.data(), buffer.data(), buffer.size());
+
+        return result;
+    }
+
+    [[nodiscard]] std::expected<std::unique_ptr<draco::Mesh>, std::string>
+    decompressFromNetwork(std::span<const std::byte> compressed) noexcept {
+        draco::DecoderBuffer buffer;
+        buffer.Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+
+        auto result = decoder_.DecodeMeshFromBuffer(&buffer);
+        if (!result.ok()) {
+            return std::unexpected(result.status().error_msg());
+        }
+
+        return std::move(result).value();
+    }
+
+private:
+    void configureEncoderForProfile(const CompressionProfile& profile) noexcept {
+        // Настройка качества в зависимости от битрейта
+        if (profile.targetBitrate < 100) {
+            // Низкий битрейт: агрессивное сжатие
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 10);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 8);
+            encoder_.SetSpeedOptions(8, 10);  // Быстрое кодирование
+        } else if (profile.targetBitrate < 500) {
+            // Средний битрейт: баланс качества и размера
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 12);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 10);
+            encoder_.SetSpeedOptions(5, 7);
+        } else {
+            // Высокий битрейт: высокое качество
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 14);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 12);
+            encoder_.SetSpeedOptions(3, 5);
+        }
+
+        // Настройка в зависимости от состояния сети
+        switch (profile.condition) {
+            case NetworkCondition::Excellent:
+                // Отличное соединение: можно отправлять больше данных
+                encoder_.SetSpeedOptions(3, 5);  // Лучшее качество
+                break;
+            case NetworkCondition::Good:
+                // Хорошее соединение: баланс
+                encoder_.SetSpeedOptions(5, 7);
+                break;
+            case NetworkCondition::Poor:
+                // Плохое соединение: приоритет скорости
+                encoder_.SetSpeedOptions(8, 10);
+                break;
+            case NetworkCondition::VeryPoor:
+                // Очень плохое соединение: максимальная скорость
+                encoder_.SetSpeedOptions(10, 10);
+                break;
         }
     }
 
-    // 2. Сжатие diff через Draco
-    // ...
+    enum class NetworkCondition {
+        Excellent,  // < 50ms latency, > 100 Mbps
+        Good,       // 50-100ms latency, 10-100 Mbps
+        Poor,       // 100-200ms latency, 1-10 Mbps
+        VeryPoor    // > 200ms latency, < 1 Mbps
+    };
+};
+```
+
+**Архитектурная метафора:** Draco действует как умный курьер, который адаптирует упаковку посылки (сжатие данных) в
+зависимости от состояния дорог (сети) и важности груза (качество данных).
+
+### Паттерн: приоритетная загрузка на основе значимости
+
+```cpp
+// Архитектурный паттерн: загрузка на основе значимости данных
+class PriorityBasedLoader {
+    struct LoadTask {
+        std::string id;
+        std::vector<std::byte> compressedData;
+        Priority priority;
+        std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)> callback;
+        std::chrono::steady_clock::time_point submitTime;
+    };
+
+    enum class Priority {
+        Critical,    // Данные, необходимые для немедленного рендеринга
+        High,        // Данные в поле зрения пользователя
+        Medium,      // Данные рядом с полем зрения
+        Low,         // Данные вдали от пользователя
+        Background   // Фоновые данные (prefetch)
+    };
+
+    std::vector<LoadTask> pendingTasks_;
+    std::vector<std::pair<std::future<std::unique_ptr<draco::Mesh>>, LoadTask>> activeTasks_;
+    std::mutex mutex_;
+    draco::DecoderPool decoderPool_;
+    size_t maxConcurrentTasks_;
+
+public:
+    explicit PriorityBasedLoader(size_t maxConcurrentTasks = 4)
+        : maxConcurrentTasks_(maxConcurrentTasks) {}
+
+    void submitLoadTask(LoadTask task) noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        task.submitTime = std::chrono::steady_clock::now();
+        pendingTasks_.push_back(std::move(task));
+
+        // Сортируем задачи по приоритету и времени отправки
+        std::sort(pendingTasks_.begin(), pendingTasks_.end(),
+            [](const LoadTask& a, const LoadTask& b) {
+                if (a.priority != b.priority) {
+                    return static_cast<int>(a.priority) < static_cast<int>(b.priority);
+                }
+                return a.submitTime < b.submitTime;  // FIFO для одинакового приоритета
+            });
+
+        processTasks();
+    }
+
+    void update() noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        processCompletedTasks();
+        processTasks();
+    }
+
+private:
+    void processTasks() noexcept {
+        while (!pendingTasks_.empty() && activeTasks_.size() < maxConcurrentTasks_) {
+            auto task = std::move(pendingTasks_.back());
+            pendingTasks_.pop_back();
+
+            // Запускаем асинхронную задачу декодирования
+            auto future = std::async(std::launch::async,
+                [this, data = std::move(task.compressedData)]() {
+                    auto decoder = decoderPool_.acquire();
+                    draco::DecoderBuffer buffer;
+                    buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
+
+                    auto result = decoder->DecodeMeshFromBuffer(&buffer);
+                    decoderPool_.release(std::move(decoder));
+
+                    if (result.ok()) {
+                        return std::move(result).value();
+                    }
+                    throw std::runtime_error(result.status().error_msg());
+                });
+
+            activeTasks_.emplace_back(std::move(future), std::move(task));
+        }
+    }
+
+    void processCompletedTasks() noexcept {
+        for (auto it = activeTasks_.begin(); it != activeTasks_.end(); ) {
+            if (it->first.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                try {
+                    auto mesh = it->first.get();
+                    it->second.callback(std::move(mesh));
+                } catch (const std::exception& e) {
+                    it->second.callback(std::unexpected(e.what()));
+                }
+                it = activeTasks_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+};
+
+// Функция для вычисления приоритета на основе расстояния и важности
+PriorityBasedLoader::Priority calculatePriority(
+    const glm::vec3& dataPosition,
+    const glm::vec3& viewerPosition,
+    float viewerFov,
+    DataImportance importance) noexcept {
+
+    // Вычисляем расстояние до данных
+    float distance = glm::distance(dataPosition, viewerPosition);
+
+    // Вычисляем угол между направлением взгляда и направлением к данным
+    glm::vec3 toData = glm::normalize(dataPosition - viewerPosition);
+    // (в реальной реализации нужно учитывать направление взгляда)
+
+    // Определяем приоритет на основе расстояния и важности
+    if (distance < 10.0f && importance == DataImportance::Critical) {
+        return PriorityBasedLoader::Priority::Critical;
+    } else if (distance < 50.0f) {
+        return PriorityBasedLoader::Priority::High;
+    } else if (distance < 100.0f) {
+        return PriorityBasedLoader::Priority::Medium;
+    } else if (distance < 500.0f) {
+        return PriorityBasedLoader::Priority::Low;
+    } else {
+        return PriorityBasedLoader::Priority::Background;
+    }
 }
 ```
 
-### Приоритет загрузки
+### Паттерн: предсказательное предзагрузка (predictive prefetching)
 
 ```cpp
-// Загрузка чанков по расстоянию до игрока
-void prioritizeChunkLoading(
-    const std::vector<CompressedChunkComponent>& chunks,
-    const glm::vec3& playerPos) {
+// Архитектурный паттерн: предсказательная предзагрузка
+class PredictivePrefetcher {
+    struct PredictionModel {
+        glm::vec3 currentPosition;
+        glm::vec3 velocity;
+        glm::vec3 acceleration;
+        std::chrono::steady_clock::time_point lastUpdate;
 
-    // Sort chunks by distance to player
-    // Load nearest chunks first with higher decode priority
-}
+        [[nodiscard]] glm::vec3 predictPosition(
+            std::chrono::milliseconds timeAhead) const noexcept {
+            float t = timeAhead.count() / 1000.0f;  // Конвертация в секунды
+            return currentPosition + velocity * t + 0.5f * acceleration * t * t;
+        }
+    };
+
+    PriorityBasedLoader& loader_;
+    PredictionModel predictionModel_;
+    std::unordered_map<std::string, glm::vec3> dataLocations_;
+    std::unordered_set<std::string> prefetchedData_;
+
+public:
+    explicit PredictivePrefetcher(PriorityBasedLoader& loader) : loader_(loader) {}
+
+    void updateViewerPosition(const glm::vec3& position,
+                             const glm::vec3& velocity,
+                             const glm::vec3& acceleration) noexcept {
+        predictionModel_.currentPosition = position;
+        predictionModel_.velocity = velocity;
+        predictionModel_.acceleration = acceleration;
+        predictionModel_.lastUpdate = std::chrono::steady_clock::now();
+
+        // Предсказываем позицию через 500ms
+        auto predictedPos = predictionModel_.predictPosition(std::chrono::milliseconds(500));
+
+        // Находим данные, которые будут нужны в предсказанной позиции
+        prefetchDataForPosition(predictedPos);
+    }
+
+    void registerData(const std::string& id, const glm::vec3& position,
+                     DataImportance importance) noexcept {
+        dataLocations_[id] = position;
+        // Можно также сохранить importance для более точного предсказания
+    }
+
+private:
+    void prefetchDataForPosition(const glm::vec3& position) noexcept {
+        for (const auto& [id, dataPos] : dataLocations_) {
+            // Если данные уже предзагружены, пропускаем
+            if (prefetchedData_.contains(id)) {
+                continue;
+            }
+
+            // Вычисляем расстояние до предсказанной позиции
+            float distance = glm::distance(position, dataPos);
+
+            // Если данные достаточно близко, предзагружаем их
+            if (distance < 100.0f) {
+                // В реальной реализации здесь нужно получить compressedData
+                // и отправить задачу в loader_
+                prefetchedData_.insert(id);
+            }
+        }
+    }
+};
 ```
 
 ---
 
-## Best Practices для ProjectV
+## Рекомендации по использованию Draco в различных сценариях
 
-### Настройки по умолчанию для вокселей
+### Архитектурный паттерн: адаптивные настройки для различных типов данных
 
-```cpp
-draco::Encoder createVoxelChunkEncoder() {
-    draco::Encoder encoder;
-
-    // Воксели уже дискретны, достаточно 8 бит
-    encoder.SetAttributeQuantization(draco::GeometryAttribute::GENERIC, 8);
-
-    // Быстрое декодирование важно для chunk loading
-    encoder.SetSpeedOptions(5, 10);
-
-    // Sequential для point cloud данных
-    encoder.SetEncodingMethod(draco::POINT_CLOUD_SEQUENTIAL_ENCODING);
-
-    return encoder;
-}
-```
-
-### Настройки для glTF моделей
+Draco предоставляет гибкие настройки для оптимизации сжатия под конкретные типы данных и use cases:
 
 ```cpp
-draco::Encoder createGltfEncoder() {
-    draco::Encoder encoder;
-
-    // Высокое качество для визуальных моделей
-    encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 14);
-    encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 10);
-    encoder.SetAttributeQuantization(draco::GeometryAttribute::TEX_COORD, 12);
-
-    // Хороший compression, разумный decode
-    encoder.SetSpeedOptions(3, 5);
-
-    // Edgebreaker для meshes
-    encoder.SetEncodingMethod(draco::MESH_EDGEBREAKER_ENCODING);
-
-    return encoder;
-}
-```
-
-### Память и кэширование
-
-```cpp
-// Кэширование декодированных mesh
-class MeshCache {
+// Архитектурный паттерн: фабрика encoder'ов для различных сценариев
+class DracoEncoderFactory {
 public:
-    std::shared_ptr<draco::Mesh> getOrDecode(const std::string& key,
-                                             const std::vector<char>& compressed) {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] static draco::Encoder createEncoderForScenario(CompressionScenario scenario) noexcept {
+        draco::Encoder encoder;
 
-        auto it = cache_.find(key);
-        if (it != cache_.end()) {
-            return it->second;
+        switch (scenario) {
+            case CompressionScenario::RealTimeStreaming:
+                // Для real-time стриминга: приоритет скорости декодирования
+                encoder.SetSpeedOptions(8, 10);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 10);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 8);
+                encoder.SetEncodingMethod(draco::MESH_EDGEBREAKER_ENCODING);
+                break;
+
+            case CompressionScenario::AssetStorage:
+                // Для хранения ассетов: баланс качества и размера
+                encoder.SetSpeedOptions(3, 5);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 14);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 10);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::TEX_COORD, 12);
+                encoder.SetEncodingMethod(draco::MESH_EDGEBREAKER_ENCODING);
+                break;
+
+            case CompressionScenario::ScientificData:
+                // Для научных данных: высокая точность
+                encoder.SetSpeedOptions(5, 7);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 16);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::GENERIC, 14);
+                encoder.SetEncodingMethod(draco::POINT_CLOUD_SEQUENTIAL_ENCODING);
+                break;
+
+            case CompressionScenario::NetworkTransmission:
+                // Для сетевой передачи: агрессивное сжатие
+                encoder.SetSpeedOptions(10, 10);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 8);
+                encoder.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 6);
+                encoder.SetEncodingMethod(draco::MESH_EDGEBREAKER_ENCODING);
+                break;
         }
 
-        // Decode and cache
-        draco::DecoderBuffer buffer;
-        buffer.Init(compressed.data(), compressed.size());
-
-        draco::Decoder decoder;
-        auto result = decoder.DecodeMeshFromBuffer(&buffer);
-
-        if (result.ok()) {
-            auto mesh = std::make_shared<draco::Mesh>(std::move(result).value());
-            cache_[key] = mesh;
-            return mesh;
-        }
-
-        return nullptr;
+        return encoder;
     }
 
-private:
-    std::unordered_map<std::string, std::shared_ptr<draco::Mesh>> cache_;
-    std::mutex mutex_;
+    enum class CompressionScenario {
+        RealTimeStreaming,   // Real-time стриминг (игры, VR)
+        AssetStorage,        // Хранение ассетов (3D модели, текстуры)
+        ScientificData,      // Научные данные (point clouds, измерения)
+        NetworkTransmission  // Сетевая передача (multiplayer, облако)
+    };
 };
+```
+
+**Архитектурная метафора:** Draco предоставляет набор "пресетов" настроек, подобно тому как фотоаппарат предоставляет
+режимы съёмки (портрет, пейзаж, спорт) — каждый режим оптимизирован под конкретную задачу.
+
+### Паттерн: стратегии кэширования для различных workload'ов
+
+```cpp
+// Архитектурный паттерн: адаптивное кэширование
+class AdaptiveCacheManager {
+public:
+    [[nodiscard]] static std::unique_ptr<IMeshCache> createCacheForWorkload(
+        CacheWorkload workload, size_t availableMemory) noexcept {
+
+        switch (workload) {
+            case CacheWorkload::MemoryConstrained:
+                // Ограниченная память: LRU с агрессивным удалением
+                return createLruCache(availableMemory * 0.5);  // Используем только 50% памяти
+
+            case CacheWorkload::PerformanceCritical:
+                // Критичная производительность: большой кэш с предзагрузкой
+                auto cache = createLruCache(availableMemory * 0.8);
+                cache->enablePrefetching(true);
+                return cache;
+
+            case CacheWorkload::DataIntensive:
+                // Data-intensive: кэш с компрессией данных
+                auto compressedCache = createCompressedCache(availableMemory);
+                compressedCache->setCompressionLevel(CompressionLevel::Balanced);
+                return compressedCache;
+
+            case CacheWorkload::MixedWorkload:
+                // Смешанный workload: адаптивный кэш
+                return createAdaptiveCache(availableMemory);
+        }
+
+        return createLruCache(availableMemory);  // По умолчанию
+    }
+
+    enum class CacheWorkload {
+        MemoryConstrained,   // Ограниченная память (мобильные устройства)
+        PerformanceCritical, // Критичная производительность (игры, VR)
+        DataIntensive,       // Data-intensive (научные вычисления)
+        MixedWorkload        // Смешанный workload (универсальные приложения)
+    };
+};
+
+// Пример реализации адаптивного кэша
+class AdaptiveMeshCache : public IMeshCache {
+    struct AdaptiveCacheEntry {
+        std::shared_ptr<draco::Mesh> mesh;
+        std::chrono::steady_clock::time_point lastAccess;
+        size_t size;
+        uint32_t accessCount;      // Количество обращений
+        float importanceScore;     // Оценка важности (на основе частоты и времени)
+    };
+
+    std::unordered_map<std::string, AdaptiveCacheEntry> cache_;
+    std::mutex mutex_;
+    size_t maxSize_;
+    size_t currentSize_;
+    draco::Decoder decoder_;
+    CacheWorkload currentWorkload_;
+
+public:
+    AdaptiveMeshCache(size_t maxSize, CacheWorkload workload)
+        : maxSize_(maxSize), currentSize_(0), currentWorkload_(workload) {}
+
+    [[nodiscard]] std::shared_ptr<draco::Mesh>
+    getOrDecode(const std::string& key, std::span<const std::byte> compressed) noexcept override {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // Проверяем кэш
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            // Обновляем статистику доступа
+            it->second.lastAccess = std::chrono::steady_clock::now();
+            it->second.accessCount++;
+            updateImportanceScore(it->second);
+
+            return it->second.mesh;
+        }
+
+        // Декодируем и кэшируем
+        auto mesh = decodeMesh(compressed);
+        if (!mesh) {
+            return nullptr;
+        }
+
+        // Оцениваем размер и важность
+        size_t meshSize = estimateMeshSize(*mesh);
+        float initialImportance = calculateInitialImportance(key);
+
+        // Освобождаем место если нужно (стратегия зависит от workload)
+        makeSpaceFor(meshSize);
+
+        // Добавляем в кэш
+        cache_[key] = {
+            .mesh = mesh,
+            .lastAccess = std::chrono::steady_clock::now(),
+            .size = meshSize,
+            .accessCount = 1,
+            .importanceScore = initialImportance
+        };
+        currentSize_ += meshSize;
+
+        return mesh;
+    }
+
+    // ... остальные методы IMeshCache ...
+
+private:
+    void updateImportanceScore(AdaptiveCacheEntry& entry) noexcept {
+        // Адаптивная оценка важности на основе workload
+        auto now = std::chrono::steady_clock::now();
+        auto timeSinceAccess = std::chrono::duration_cast<std::chrono::seconds>(
+            now - entry.lastAccess).count();
+
+        switch (currentWorkload_) {
+            case CacheWorkload::MemoryConstrained:
+                // Для ограниченной памяти: приоритет частоты обращений
+                entry.importanceScore = entry.accessCount * 0.7f +
+                                       (1.0f / (timeSinceAccess + 1)) * 0.3f;
+                break;
+
+            case CacheWorkload::PerformanceCritical:
+                // Для критичной производительности: приоритет времени доступа
+                entry.importanceScore = (1.0f / (timeSinceAccess + 1)) * 0.8f +
+                                       entry.accessCount * 0.2f;
+                break;
+
+            case CacheWorkload::DataIntensive:
+                // Для data-intensive: баланс размера и частоты
+                float sizeFactor = 1.0f - (static_cast<float>(entry.size) / maxSize_);
+                entry.importanceScore = entry.accessCount * 0.4f +
+                                       (1.0f / (timeSinceAccess + 1)) * 0.3f +
+                                       sizeFactor * 0.3f;
+                break;
+
+            case CacheWorkload::MixedWorkload:
+                // Для смешанного workload: адаптивная формула
+                entry.importanceScore = calculateMixedImportance(entry);
+                break;
+        }
+    }
+
+    void makeSpaceFor(size_t requiredSize) noexcept {
+        if (currentSize_ + requiredSize <= maxSize_) {
+            return;
+        }
+
+        // Стратегия освобождения места зависит от workload
+        switch (currentWorkload_) {
+            case CacheWorkload::MemoryConstrained:
+                // Агрессивное удаление наименее важных элементов
+                removeLeastImportantEntries(requiredSize);
+                break;
+
+            case CacheWorkload::PerformanceCritical:
+                // Удаление старых элементов, но сохранение часто используемых
+                removeOldEntries(requiredSize);
+                break;
+
+            case CacheWorkload::DataIntensive:
+                // Удаление больших элементов с низкой важностью
+                removeLargeUnimportantEntries(requiredSize);
+                break;
+
+            case CacheWorkload::MixedWorkload:
+                // Комбинированная стратегия
+                removeEntriesAdaptive(requiredSize);
+                break;
+        }
+    }
+
+    // ... вспомогательные методы для различных стратегий удаления ...
+};
+```
+
+### Паттерн: мониторинг и адаптация в runtime
+
+```cpp
+// Архитектурный паттерн: runtime мониторинг и адаптация
+class RuntimeMonitor {
+    struct PerformanceMetrics {
+        float decodeTimeMs;          // Среднее время декодирования
+        float cacheHitRate;          // Hit rate кэша
+        size_t memoryUsage;          // Использование памяти
+        float networkBandwidth;      // Доступная bandwidth сети
+        uint32_t concurrentDecodes;  // Количество concurrent декодирований
+    };
+
+    PerformanceMetrics currentMetrics_;
+    std::chrono::steady_clock::time_point lastUpdate_;
+    std::mutex mutex_;
+
+public:
+    void updateMetrics(const PerformanceMetrics& metrics) noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        currentMetrics_ = metrics;
+        lastUpdate_ = std::chrono::steady_clock::now();
+    }
+
+    [[nodiscard]] OptimizationSuggestions getSuggestions() const noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        OptimizationSuggestions suggestions;
+
+        // Анализ метрик и генерация suggestions
+        if (currentMetrics_.decodeTimeMs > 16.0f) {  // > 60 FPS threshold
+            suggestions.suggestLowerQuality();
+        }
+
+        if (currentMetrics_.cacheHitRate < 0.7f) {
+            suggestions.suggestIncreaseCacheSize();
+        }
+
+        if (currentMetrics_.memoryUsage > 0.9f * getAvailableMemory()) {
+            suggestions.suggestAggressiveCaching();
+        }
+
+        if (currentMetrics_.networkBandwidth < 10.0f) {  // < 10 Mbps
+            suggestions.suggestHigherCompression();
+        }
+
+        return suggestions;
+    }
+
+    struct OptimizationSuggestions {
+        bool lowerQuality = false;
+        bool increaseCacheSize = false;
+        bool aggressiveCaching = false;
+        bool higherCompression = false;
+        bool enablePrefetching = false;
+        bool reduceConcurrency = false;
+
+        [[nodiscard]] std::string toString() const noexcept {
+            std::string result;
+            if (lowerQuality) result += "• Снизить качество сжатия для скорости\n";
+            if (increaseCacheSize) result += "• Увеличить размер кэша\n";
+            if (aggressiveCaching) result += "• Включить агрессивное кэширование\n";
+            if (higherCompression) result += "• Увеличить уровень сжатия\n";
+            if (enablePrefetching) result += "• Включить предзагрузку\n";
+            if (reduceConcurrency) result += "• Уменьшить concurrency декодирования\n";
+            return result;
+        }
+    };
+};
+```
+
+## Архитектурные выводы: роль Draco в современных графических приложениях
+
+Draco интегрируется в современные графические приложения как специализированный процессор геометрических данных,
+решающий три фундаментальные проблемы:
+
+1. **Эффективное сжатие структурных данных** — трансформация sparse voxel octree (SVO) структур, point clouds и greedy
+   meshes в компактные битовые потоки с сохранением пространственных корреляций, обеспечивая 10-20× уменьшение размера
+   геометрических данных
+2. **Оптимизация 3D моделей** — интеграция с `KHR_draco_mesh_compression` для уменьшения размера импортируемых
+   3D-моделей на 80-90% без видимой потери качества
+3. **Сетевая синхронизация** — delta compression и адаптивное сжатие для эффективной передачи геометрических данных в
+   распределённых системах и multiplayer приложениях
+
+### Ключевые архитектурные преимущества:
+
+- **Zero-Copy Pipeline** — прямое декодирование в GPU memory через абстрактные аллокаторы, минимизирующее CPU-GPU
+  копирования
+- **Асинхронная обработка** — интеграция с современными Job System для фонового декодирования с приоритизацией по
+  значимости данных
+- **Адаптивное сжатие** — динамическая настройка параметров кодирования в зависимости от типа данных, требований к
+  качеству и доступных ресурсов
+- **Кроссплатформенность** — абстрактные интерфейсы для работы с различными графическими API (Vulkan, DirectX, Metal) и
+  ECS-фреймворками
+- **Масштабируемость** — поддержка от мобильных устройств до high-end рабочих станций через адаптивные стратегии
+  кэширования и загрузки
+
+### Архитектурная метафора: Draco как универсальный переводчик геометрических данных
+
+Draco действует как специализированный переводчик, который преобразует различные "языки" геометрических данных (mesh,
+point cloud, иерархические структуры) в универсальный компактный формат, оптимизированный для хранения, передачи и
+быстрого декодирования. Подобно тому как опытный переводчик адаптирует свой стиль в зависимости от аудитории и
+контекста, Draco адаптирует стратегии сжатия в зависимости от типа данных, требований к качеству и доступных
+вычислительных ресурсов.
+
+Эта архитектурная интеграция позволяет современным графическим приложениям эффективно работать с огромными объёмами
+геометрических данных, минимизируя требования к памяти и bandwidth, сохраняя при этом высокую производительность
+рендеринга и обеспечивая плавный пользовательский опыт даже на устройствах с ограниченными ресурсами.

@@ -1,5 +1,9 @@
 # VMA в ProjectV: Продвинутые паттерны
 
+> **Для понимания:** Продвинутые паттерны VMA — это как турбонаддув для двигателя. Базовый движок работает, но чтобы
+> выжать максимум, нужно добавить интеркулер (double buffering), турбину (пулы) и систему зажигания (Tracy). Без этого —
+> просто громкий шум без скорости.
+
 **Производительность — это не опция, а архитектурное требование.** В воксельном движке управление памятью определяет
 границы возможного.
 
@@ -497,4 +501,271 @@ To use volk, you need to define VK_NO_PROTOTYPES before including vulkan.h
 
 #### Дублирование символов VMA
 
-**Причина:** `VMA
+**Причина:** `VMA_IMPLEMENTATION` определён в нескольких .cpp файлах.
+
+**Решение:** Убедиться, что макрос определён только в одном файле. Использовать `#ifndef VMA_IMPLEMENTATION`:
+
+```cpp
+// src/vma_init.cpp
+#ifndef VMA_IMPLEMENTATION
+#define VMA_IMPLEMENTATION
+#endif
+#include "vma/vk_mem_alloc.h"
+```
+
+### Ошибки выполнения
+
+#### VMA не может найти подходящий тип памяти
+
+**Причина:** Запрошенные флаги использования несовместимы с доступными типами памяти.
+
+**Решение:** Проверить `VkPhysicalDeviceMemoryProperties` и использовать `VMA_MEMORY_USAGE_AUTO`:
+
+```cpp
+VmaAllocationCreateInfo allocInfo = {};
+allocInfo.usage = VMA_MEMORY_USAGE_AUTO;  // Пусть VMA сам выберет
+// Не указывать memoryTypeIndex вручную
+```
+
+#### Утечки памяти при использовании пулов
+
+**Причина:** Ресурсы из пула не освобождены перед уничтожением пула.
+
+**Решение:** Правильный порядок очистки:
+
+```cpp
+// 1. Уничтожить все буферы/изображения из пула
+for (auto& buffer : buffers) {
+    vmaDestroyBuffer(allocator, buffer, allocation);
+}
+
+// 2. Уничтожить пул
+vmaDestroyPool(allocator, pool);
+
+// 3. Уничтожить аллокатор (опционально)
+vmaDestroyAllocator(allocator);
+```
+
+## Современный C++26: паттерны для воксельного движка
+
+### Паттерн 6: SoA для воксельных данных с выравниванием
+
+```cpp
+#include <print>
+#include <expected>
+#include "vma/result.hpp"
+
+// SoA (Structure of Arrays) вместо AoS (Array of Structures)
+struct alignas(64) VoxelChunkSoA {
+    // Позиции вокселей (16384 вокселей * 3 float)
+    alignas(16) float positions[16384][3];  // 192KB
+
+    // Типы материалов (отдельный массив для лучшей локализации)
+    alignas(4) uint32_t materials[16384];   // 64KB
+
+    // Освещение (опционально)
+    alignas(4) float lighting[16384];       // 64KB
+
+    // Флаги (сжатые)
+    alignas(1) uint8_t flags[16384];        // 16KB
+
+    // Общий размер: ~336KB, выровнено по 64 байта
+    static constexpr size_t SIZE = 16384;
+    static constexpr size_t BYTE_SIZE = sizeof(VoxelChunkSoA);
+};
+
+class VoxelChunkBuffer {
+    VmaAllocator m_allocator;
+    VkBuffer m_buffer;
+    VmaAllocation m_allocation;
+
+public:
+    VmaResult<void> create(VmaAllocator allocator) {
+        m_allocator = allocator;
+
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = VoxelChunkSoA::BYTE_SIZE;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                          VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT;
+
+        if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+                           &m_buffer, &m_allocation, nullptr) != VK_SUCCESS) {
+            std::println(stderr, "Failed to create voxel chunk buffer");
+            return std::unexpected(VmaError::BufferCreationFailed);
+        }
+
+        std::println("Created voxel chunk buffer: {} KB aligned to 64 bytes",
+                     VoxelChunkSoA::BYTE_SIZE / 1024);
+        return {};
+    }
+
+    ~VoxelChunkBuffer() {
+        if (m_buffer) {
+            vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
+        }
+    }
+
+    VmaResult<void> upload(const VoxelChunkSoA& data) {
+        void* mapped;
+        if (vmaMapMemory(m_allocator, m_allocation, &mapped) != VK_SUCCESS) {
+            return std::unexpected(VmaError::MapFailed);
+        }
+
+        memcpy(mapped, &data, VoxelChunkSoA::BYTE_SIZE);
+        vmaFlushAllocation(m_allocator, m_allocation, 0, VK_WHOLE_SIZE);
+        vmaUnmapMemory(m_allocator, m_allocation);
+
+        return {};
+    }
+};
+```
+
+### Паттерн 7: Triple buffering для compute с timeline semaphores
+
+```cpp
+#include <array>
+#include <print>
+
+class ComputeTripleBuffer {
+    struct Frame {
+        VmaBuffer buffer;
+        uint64_t timelineValue = 0;
+        bool ready = false;
+    };
+
+    std::array<Frame, 3> m_frames;
+    size_t m_currentFrame = 0;
+    VmaAllocator m_allocator;
+
+public:
+    VmaResult<void> initialize(VmaAllocator allocator, VkDeviceSize size) {
+        m_allocator = allocator;
+
+        for (size_t i = 0; i < 3; ++i) {
+            auto result = VmaBuffer::create(allocator, size,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VMA_MEMORY_USAGE_AUTO,
+                VMA_ALLOCATION_CREATE_STRATEGY_MIN_TIME_BIT);
+
+            if (!result) {
+                std::println(stderr, "Failed to create compute buffer {}", i);
+                return std::unexpected(result.error());
+            }
+
+            m_frames[i].buffer = std::move(*result);
+            m_frames[i].timelineValue = i;
+        }
+
+        std::println("Initialized compute triple buffer: {} MB per frame",
+                     size / (1024.0 * 1024.0));
+        return {};
+    }
+
+    Frame& get_current() { return m_frames[m_currentFrame]; }
+    Frame& get_next() { return m_frames[(m_currentFrame + 1) % 3]; }
+    Frame& get_previous() { return m_frames[(m_currentFrame + 2) % 3]; }
+
+    void advance() {
+        m_currentFrame = (m_currentFrame + 1) % 3;
+    }
+
+    void wait_for_frame(size_t frameIndex, VkSemaphore semaphore, uint64_t waitValue) {
+        // Используем timeline semaphore для синхронизации
+        VkSemaphoreWaitInfo waitInfo = {};
+        waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+        waitInfo.semaphoreCount = 1;
+        waitInfo.pSemaphores = &semaphore;
+        waitInfo.pValues = &waitValue;
+
+        // Ждём, пока GPU закончит работу с этим кадром
+        vkWaitSemaphores(device, &waitInfo, UINT64_MAX);
+        m_frames[frameIndex].ready = true;
+    }
+};
+```
+
+### Паттерн 8: Memory budget с предупреждениями
+
+```cpp
+#include <chrono>
+#include <print>
+
+class MemoryBudgetMonitor {
+    VmaAllocator m_allocator;
+    std::chrono::steady_clock::time_point m_lastCheck;
+    float m_warningThreshold = 0.9f;  // 90%
+
+public:
+    MemoryBudgetMonitor(VmaAllocator allocator) : m_allocator(allocator) {
+        m_lastCheck = std::chrono::steady_clock::now();
+    }
+
+    void check_budget() {
+        auto now = std::chrono::steady_clock::now();
+        if (now - m_lastCheck < std::chrono::seconds(1)) {
+            return;  // Проверяем не чаще раза в секунду
+        }
+
+        m_lastCheck = now;
+
+        VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
+        vmaGetHeapBudgets(m_allocator, budgets);
+
+        for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+            if (budgets[i].budget > 0) {
+                float usage = float(budgets[i].usage) / float(budgets[i].budget);
+
+                if (usage > m_warningThreshold) {
+                    std::println(stderr, "WARNING: Heap {} usage: {:.1f}% (budget: {} MB)",
+                                 i, usage * 100.0f, budgets[i].budget / (1024 * 1024));
+
+                    // Можно принять меры: очистить кэш, уменьшить качество и т.д.
+                    on_memory_pressure(i, usage);
+                }
+            }
+        }
+    }
+
+private:
+    void on_memory_pressure(uint32_t heapIndex, float usage) {
+        // Реакция на нехватку памяти:
+        // 1. Очистить LRU кэш текстур
+        // 2. Уменьшить дальность прорисовки
+        // 3. Выгрузить неиспользуемые чанки
+        std::println("Memory pressure on heap {}: {:.1f}%", heapIndex, usage * 100.0f);
+    }
+};
+```
+
+## Итог: философия продвинутых паттернов
+
+1. **SoA всегда, AoS никогда** — данные должны быть выровнены для кэша и SIMD
+2. **Triple buffering для compute** — избегаем stalls между кадрами
+3. **Memory budget monitoring** — предупреждаем о нехватке памяти до её исчерпания
+4. **Timeline semaphores** — современная синхронизация вместо старых барьеров
+5. **Профилирование с Tracy** — видимость = контроль
+
+> **Почему именно так?** Потому что воксельный движок — это не про красоту, а про эффективность. Каждый лишний байт,
+> каждая лишняя синхронизация, каждый промах кэша — это потерянные FPS. Продвинутые паттерны VMA дают контроль над
+> памятью
+> на уровне, недоступном при ручном управлении.
+
+---
+
+## Что дальше?
+
+После освоения продвинутых паттернов VMA вы готовы к:
+
+1. **Интеграции с volk** — мета-лоадер для прямых вызовов драйвера
+2. **Интеграции с flecs** — ECS для управления ресурсами как компонентами
+3. **GPU-driven rendering** — вынос логики рендеринга в compute shaders
+4. **Bindless rendering** — отказ от descriptor sets в пользу giant descriptor arrays
+
+Каждый следующий шаг строится на правильном управлении памятью через VMA. Без этого фундамента — всё остальное
+бессмысленно.

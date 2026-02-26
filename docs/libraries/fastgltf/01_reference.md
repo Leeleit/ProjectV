@@ -1,23 +1,27 @@
-﻿# fastgltf
+# fastgltf: Высокопроизводительный парсер glTF 2.0 для C++26
 
-**fastgltf** — высокопроизводительная библиотека загрузки glTF 2.0 на C++17 с минимальными зависимостями. Использует
-SIMD (simdjson) для ускорения парсинга JSON и base64-декодирования. Поддерживает полную спецификацию glTF 2.0 и
-множество расширений.
+**fastgltf** — это современная библиотека загрузки glTF 2.0 на C++26, оптимизированная для производительности через
+SIMD-парсинг (simdjson) и минимальные аллокации памяти. Библиотека предоставляет типобезопасный API с поддержкой
+`std::expected`, `std::span` и других современных C++ фич.
 
-Версия: **0.9.0**
-Исходники: [spnda/fastgltf](https://github.com/spnda/fastgltf)
+> **Для понимания:** Представьте fastgltf как высокоскоростной конвейер на заводе. На входе — сырьё (glTF файлы), на
+> выходе — готовые детали (структурированные данные), которые можно сразу отправлять на сборку (рендеринг). В отличие от
+> других библиотек, fastgltf использует SIMD-инструкции процессора, как если бы на конвейере работали не отдельные
+> рабочие, а целые бригады, обрабатывающие данные параллельно.
+
+**Стандарты:** C++26, glTF 2.0, SIMD-оптимизации
 
 ---
 
 ## Возможности
 
-- **glTF 2.0** — полная поддержка спецификации (чтение и запись)
-- **SIMD-оптимизации** — ускорение парсинга в 2-20 раз по сравнению с аналогами
-- **Минимальные зависимости** — только simdjson
-- **Accessor tools** — утилиты для чтения данных, включая sparse accessors
-- **GPU-ready** — возможность прямой записи в mapped GPU buffers
-- **C++20 modules** — опциональная поддержка модулей
-- **Android** — нативная загрузка из APK assets
+- **Полная поддержка glTF 2.0** — чтение и запись всех спецификаций
+- **SIMD-оптимизации** — ускорение парсинга в 2-20 раз через simdjson
+- **Минимальные зависимости** — только simdjson, без тяжелых библиотек
+- **Типобезопасный API** — `std::optional<size_t>` вместо магических чисел
+- **Accessor tools** — утилиты для работы с данными, включая sparse accessors
+- **Современный C++** — поддержка C++20/23/26 (`std::expected`, `std::span`, `std::print`)
+- **Модульность** — опциональная поддержка C++20 modules
 
 ## Сравнение с альтернативами
 
@@ -26,104 +30,81 @@ SIMD (simdjson) для ускорения парсинга JSON и base64-дек
 | Чтение glTF 2.0           | Да       | Да       | Да       |
 | Запись glTF 2.0           | Да       | Да       | Да       |
 | Поддержка расширений      | Да       | Частично | Да       |
-| Декодирование изображений | Да       | Да       | Нет      |
-| Built-in Draco            | Нет      | Да       | Нет      |
+| SIMD-парсинг              | Нет      | Нет      | Да       |
 | Memory callbacks          | Да       | Нет      | Частично |
-| Android assets            | Нет      | Да       | Да       |
 | Accessor utilities        | Да       | Нет      | Да       |
 | Sparse accessor utilities | Частично | Нет      | Да       |
-| Matrix accessor utilities | Частично | Нет      | Да       |
-| Node transform utilities  | Да       | Нет      | Да       |
+| Типобезопасность          | Нет      | Нет      | Да       |
 
 **Когда выбрать fastgltf:**
 
 - Нужна максимальная скорость загрузки
-- Требуется современный C++ API (std::variant, std::optional)
-- Важна типобезопасность
+- Требуется современный C++ API с `std::expected`
+- Важна типобезопасность и отсутствие магических чисел
 - Нужны accessor tools для работы с данными
 
 **Когда выбрать альтернативы:**
 
-- **tinygltf** — если нужна встроенная загрузка изображений или Draco-декомпрессия
+- **tinygltf** — если нужна встроенная загрузка изображений
 - **cgltf** — если нужен C API или header-only решение
 
-## Философия
+## Архитектурная философия
 
-fastgltf следует принципу C++: "you don't pay for what you don't use".
+fastgltf реализует принцип C++: "you don't pay for what you don't use". Архитектурно библиотека разделена на два уровня:
 
-**По умолчанию:**
+1. **Ядро парсинга** — минималистичный парсер JSON с SIMD-оптимизациями
+2. **Опциональные модули** — загрузка внешних ресурсов, декомпозиция матриц, работа с расширениями
 
-- Только парсинг JSON
-- GLB-буферы загружаются в память (ByteView/Array)
-- Внешние буферы — только URI (без загрузки)
+> **Для понимания:** Это как автомобиль с базовой комплектацией и опциями. Базовая версия (ядро) — это экономичный
+> двигатель, который едет из точки А в точку Б. Опции (модули) — это кондиционер, навигация, кожаные сиденья. Вы платите
+> только за то, что используете.
 
-**Опционально (через Options):**
+**Архитектурные принципы по умолчанию:**
 
-- `LoadExternalBuffers` — загрузка внешних .bin файлов
-- `LoadExternalImages` — загрузка внешних изображений
-- `DecomposeNodeMatrices` — разложение матриц на TRS
+- **Минимальный парсинг**: Только JSON метаданные без загрузки внешних ресурсов
+- **Zero-copy для GLB**: Использование memory-mapped буферов через `ByteView`
+- **Ленивая загрузка**: Внешние буферы остаются как URI до явного запроса
 
-> **Для понимания:** fastgltf — это не кухонный комбайн, который пытается сделать всё. Это острый японский нож: делает
-> одну вещь — режет glTF — но делает это идеально. Вы сами решаете, какие ингредиенты (буферы, изображения) загружать, а
-> какие оставить на тарелке (URI).
+**Опциональные архитектурные расширения:**
+
+- `LoadExternalBuffers` — стратегия загрузки внешних .bin файлов
+- `LoadExternalImages` — стратегия загрузки внешних изображений
+- `DecomposeNodeMatrices` — архитектурное преобразование матриц в TRS
 
 ## Типобезопасность
 
-Сравнение подходов:
+Сравнение подходов к индексации:
 
 ```cpp
-// tinygltf: -1 означает "отсутствует"
+// tinygltf: -1 означает "отсутствует" (магическое число)
 if (node.mesh != -1) {
     auto& mesh = model.meshes[node.mesh];
 }
 
-// fastgltf: Optional с проверкой типа
+// fastgltf: Optional с проверкой типа (типобезопасно)
 if (node.meshIndex.has_value()) {
     auto& mesh = asset.meshes[*node.meshIndex];
 }
 ```
 
-## Проекты, использующие fastgltf
+> **Для понимания:** Представьте, что вы ищете книгу в библиотеке. Tinygltf даёт вам номер полки, но не проверяет,
+> существует ли такая полка. Fastgltf даёт вам квитанцию: "Если книга есть, её номер 42". Вы сначала проверяете
+> квитанцию,
+> и только потом идёте к полке.
 
-- [Fwog](https://github.com/JuanDiegoMontoya/Fwog) — современная абстракция OpenGL 4.6
-- [Castor3D](https://github.com/DragonJoker/Castor3D) — мультиплатформенный 3D движок
-- [Raz](https://github.com/Razakhel/RaZ) — современный игровой движок на C++17
-- [vkguide](https://vkguide.dev) — современный туториал по Vulkan
-- [lvgl](https://github.com/lvgl/lvgl) — графическая библиотека для встраиваемых систем
-- [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) — официальные примеры NVIDIA OptiX
-- [vk-gltf-viewer](https://github.com/stripe2933/vk-gltf-viewer) — высокопроизводительный glTF рендерер на Vulkan
-
-## Оригинальная документация
-
-- [fastgltf docs](https://github.com/spnda/fastgltf/tree/main/docs) — официальная документация
-- [glTF 2.0 Specification](https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html) — спецификация формата
-- [glTF Reference Guide](https://www.khronos.org/files/gltf20-reference-guide.pdf) — краткий справочник от Khronos
-
----
-
-## Основные понятия fastgltf
-
-Введение в glTF 2.0 и внутреннюю структуру fastgltf.
-
-## glTF 2.0
+## Основные понятия glTF 2.0
 
 **glTF** (GL Transmission Format) — открытый формат 3D-моделей от Khronos Group. Версия 2.0 описывает сцены, меши,
 материалы, анимации и скиннинг.
+
+> **Для понимания:** glTF — это как IKEA-инструкция для 3D-моделей. JSON — это список деталей и шагов сборки. Буферы (
+> .bin) — это сами детали (деревянные панели, винты). Изображения — это наклейки и отделочные материалы.
 
 Модель состоит из:
 
 - **JSON** — метаданные: структура сцены, ссылки на буферы и изображения
 - **Буферы** — сырые байты (вершины, индексы, анимационные ключи)
 - **Изображения** — текстуры (PNG, JPEG, KTX2 и др.)
-
-```
-glTF модель
-├── model.gltf (JSON)
-├── model.bin (буфер с геометрией)
-└── textures/
-    ├── diffuse.png
-    └── normal.png
-```
 
 ### JSON vs GLB
 
@@ -134,47 +115,55 @@ glTF модель
 
 `Parser::loadGltf()` определяет формат автоматически.
 
-## Структура Asset
+## Архитектурная модель Asset
 
-Результат парсинга — `fastgltf::Asset`:
+Результат парсинга — `fastgltf::Asset`, структура данных, представляющая декомпозицию glTF модели:
 
 ```
-Asset
-├── accessors[]      — типизированные данные (vertices, indices)
-├── buffers[]        — сырые байты с DataSource
-├── bufferViews[]    — участки буферов
-├── images[]         — изображения
-├── materials[]      — материалы (PBR)
-├── meshes[]         — меши (массивы Primitive)
-├── nodes[]          — узлы сцены
-├── scenes[]         — сцены (nodeIndices)
-├── animations[]     — анимации
-├── skins[]          — скиннинг
+Asset (корневой контейнер)
+├── accessors[]      — типизированные представления данных
+├── buffers[]        — сырые байтовые потоки с источниками данных
+├── bufferViews[]    — сегменты буферов с параметрами доступа
+├── images[]         — графические ресурсы
+├── materials[]      — PBR материалы
+├── meshes[]         — геометрические примитивы
+├── nodes[]          — иерархические узлы сцены
+├── scenes[]         — контейнеры сцен
+├── animations[]     — временные линии
+├── skins[]          — скелетные системы
 ├── cameras[]        — камеры
-├── textures[]       — текстуры
-├── samplers[]       — сэмплеры текстур
-├── assetInfo        — gltfVersion, generator, copyright
-├── defaultScene     — индекс сцены по умолчанию
-├── extensionsUsed   — используемые расширения
+├── textures[]       — текстурные ресурсы
+├── samplers[]       — параметры сэмплирования
+├── assetInfo        — метаданные версии
+├── defaultScene     — точка входа по умолчанию
+├── extensionsUsed   — расширения, используемые моделью
 └── extensionsRequired — обязательные расширения
 ```
 
-> **Для понимания:** fastgltf::Asset — это коробка с деталями из IKEA. Там есть всё: винтики (буферы), доски (меши),
-> инструкция (ноды). Но мы не живем в коробке. Мы достаем детали и собираем из них мебель (сущности в ECS). После сборки
-> коробку (Asset) мы выбрасываем (освобождаем память), а мебель (Vulkan буферы) остается.
+**Архитектурные принципы структуры Asset:**
+
+- **Иммутабельность**: Asset представляет собой неизменяемую структуру после парсинга
+- **Ссылочная целостность**: Все индексы гарантированно валидны
+- **Ленивая загрузка**: Ресурсы загружаются только при явном запросе
+- **Типобезопасность**: Все ссылки используют `std::optional<size_t>`
 
 ## Цепочка данных: Buffer → BufferView → Accessor
+
+**Архитектурная метафора:** Представьте себе логистическую цепочку доставки товаров. Buffer — это огромный склад с
+сырьём (байтами). BufferView — это конкретная партия товара, упакованная в контейнер (offset, length, stride).
+Accessor — это декларация на таможне, описывающая что внутри контейнера (тип данных, количество). Primitive — это
+конечный потребитель, который использует товар для производства.
 
 Данные геометрии идут по цепочке:
 
 ```
-Buffer (сырые байты)
+Buffer (сырые байты) → Склад с сырьём
     ↓
-BufferView (участок буфера: offset, length, stride)
+BufferView (участок буфера: offset, length, stride) → Контейнер с партией товара
     ↓
-Accessor (типизированное представление: Vec3 float, Scalar uint16)
+Accessor (типизированное представление: Vec3 float, Scalar uint16) → Таможенная декларация
     ↓
-Primitive (использование в меше)
+Primitive (использование в меше) → Конечный потребитель
 ```
 
 ### Buffer
@@ -205,78 +194,19 @@ struct BufferView {
 
 ### Accessor
 
-Типизированное описание данных:
+Типизированное представление данных:
 
 ```cpp
 struct Accessor {
     size_t byteOffset;           // Смещение в BufferView
     size_t count;                // Количество элементов
-    AccessorType type;           // Scalar, Vec2, Vec3, Vec4, Mat2, Mat3, Mat4
-    ComponentType componentType; // Byte, UnsignedShort, Float, ...
-    bool normalized;             // Нормализация в [0,1] или [-1,1]
-    Optional<size_t> bufferViewIndex;
-    Optional<SparseAccessor> sparse;
-    AccessorBoundsArray min, max;
+    AccessorType type;           // Тип данных: Scalar, Vec2, Vec3, Vec4, Mat2, Mat3, Mat4
+    ComponentType componentType; // Тип компонента: Byte, UnsignedShort, Float, ...
+    bool normalized;             // Флаг нормализации в [0,1] или [-1,1]
+    Optional<size_t> bufferViewIndex; // Ссылка на BufferView
+    Optional<SparseAccessor> sparse;  // Поддержка sparse данных
+    AccessorBoundsArray min, max;     // Границы для оптимизации
 };
-```
-
-> **Для понимания:** Buffer — это длинная колбаса сырого фарша (байты). BufferView — это нарезка этой колбасы на куски.
-> А Accessor — это этикетка, которая говорит: "В этом куске лежат vec3 позиции, читать с шагом 12 байт". Не путайте
-> этикетку с самой колбасой.
-
-### Вычисление размера
-
-```cpp
-size_t elementSize = getNumComponents(type) * getComponentByteSize(componentType);
-size_t totalSize = count * elementSize;
-```
-
-## Индексация и ссылки
-
-Ссылки между объектами — через `std::size_t` (индекс в векторе):
-
-```cpp
-// Scene → Nodes
-for (size_t nodeIdx : scene.nodeIndices) {
-    auto& node = asset.nodes[nodeIdx];
-}
-
-// Node → Mesh
-if (node.meshIndex.has_value()) {
-    auto& mesh = asset.meshes[*node.meshIndex];
-}
-
-// Primitive → Accessor (позиции)
-auto it = primitive.findAttribute("POSITION");
-if (it != primitive.attributes.cend()) {
-    auto& accessor = asset.accessors[it->accessorIndex];
-}
-```
-
-### Optional
-
-Опциональные ссылки используют `Optional<size_t>`:
-
-```cpp
-if (primitive.indicesAccessor.has_value()) {
-    auto& accessor = asset.accessors[*primitive.indicesAccessor];
-}
-```
-
-### Variant
-
-Node::transform — `std::variant<TRS, math::fmat4x4>`:
-
-```cpp
-// Матрица
-if (std::holds_alternative<fastgltf::math::fmat4x4>(node.transform)) {
-    auto& matrix = std::get<fastgltf::math::fmat4x4>(node.transform);
-}
-
-// TRS (при Options::DecomposeNodeMatrices)
-if (std::holds_alternative<fastgltf::TRS>(node.transform)) {
-    auto& trs = std::get<fastgltf::TRS>(node.transform);
-}
 ```
 
 ## DataSource
@@ -299,6 +229,7 @@ if (std::holds_alternative<fastgltf::TRS>(node.transform)) {
 
 ```cpp
 #include <print>
+#include <expected>
 #include <fastgltf/core.hpp>
 
 auto asset = parser.loadGltf(data.get(), basePath);
@@ -314,6 +245,10 @@ fastgltf::Asset& model = asset.get();
 // или
 fastgltf::Asset* model = asset.get_if();  // nullptr при ошибке
 ```
+
+> **Для понимания:** `std::expected` — это как заказ в ресторане. Вы заказываете стейк (ожидаемый результат), но иногда
+> кухня говорит "стейка нет" (ошибка). Вы не получаете невалидный стейк, вы получаете чёткий ответ: либо стейк, либо
+> причина, почему его нет.
 
 ## Primitive
 
@@ -353,48 +288,6 @@ for (const auto& primitive : mesh.primitives) {
 }
 ```
 
-## Node и Scene
-
-### Node
-
-Узел иерархии сцены:
-
-```cpp
-struct Node {
-    Optional<size_t> meshIndex;
-    Optional<size_t> skinIndex;
-    Optional<size_t> cameraIndex;
-    Optional<size_t> lightIndex;
-    std::vector<size_t> children;  // Индексы дочерних узлов
-
-    std::variant<TRS, math::fmat4x4> transform;
-    std::string name;
-};
-```
-
-### Scene
-
-Набор корневых узлов:
-
-```cpp
-struct Scene {
-    std::vector<size_t> nodeIndices;  // Корневые узлы
-    std::string name;
-};
-```
-
-### Обход иерархии
-
-```cpp
-// Используйте iterateSceneNodes из tools.hpp
-fastgltf::iterateSceneNodes(asset, sceneIndex, fastgltf::math::fmat4x4(),
-    [&](fastgltf::Node& node, fastgltf::math::fmat4x4 transform) {
-        if (node.meshIndex.has_value()) {
-            drawMesh(*node.meshIndex, transform);
-        }
-    });
-```
-
 ## Material
 
 PBR материал:
@@ -415,19 +308,6 @@ struct Material {
 };
 ```
 
-### PBRData
-
-```cpp
-struct PBRData {
-    Optional<size_t> baseColorTexture;
-    Optional<size_t> metallicRoughnessTexture;
-
-    std::array<float, 4> baseColorFactor;
-    float metallicFactor;
-    float roughnessFactor;
-};
-```
-
 ### AlphaMode
 
 ```cpp
@@ -436,67 +316,6 @@ enum class AlphaMode : std::uint8_t {
     Mask,        // Маска (alphaCutoff)
     Blend        // Смешивание
 };
-```
-
-### Текстуры
-
-Текстуры ссылаются на `asset.textures[]`, которые содержат `imageIndex` и `samplerIndex`:
-
-```cpp
-struct Texture {
-    Optional<size_t> imageIndex;
-    Optional<size_t> samplerIndex;
-    std::string name;
-};
-```
-
-### Sampler
-
-```cpp
-struct Sampler {
-    Optional<Filter> magFilter;   // Увеличение
-    Optional<Filter> minFilter;   // Уменьшение
-    Optional<Wrap> wrapS;         // U координата
-    Optional<Wrap> wrapT;         // V координата
-    std::string name;
-};
-```
-
-### Image
-
-```cpp
-struct Image {
-    std::string name;
-    DataSource data;  // URI, BufferView, ByteView, Vector
-    Optional<MimeType> mimeType;
-};
-```
-
-> **Для понимания:** Material — это рецепт для рендеринга поверхности. PBRData — это список ингредиентов (цвет,
-> металличность, шероховатость), текстуры — это фотографии ингредиентов, а sampler — это инструкция по их смешиванию (
-> фильтрация, повторение). AlphaMode — это указание, должен ли ингредиент быть прозрачным, а doubleSided — нужно ли
-> готовить обе стороны блюда.
-
-## doubleSided и unlit
-
-### doubleSided
-
-```cpp
-if (material.doubleSided) {
-    // Отключить backface culling
-    glDisable(GL_CULL_FACE);
-    // или
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
-}
-```
-
-### unlit (KHR_materials_unlit)
-
-```cpp
-if (material.unlit) {
-    // Использовать unlit шейдер (без освещения)
-    // baseColorFactor напрямую как цвет пикселя
-}
 ```
 
 ## Утилиты типов
@@ -530,71 +349,28 @@ enum class AccessorType : std::uint8_t {
 };
 ```
 
-### PrimitiveType
+## Архитектурное заключение
 
-```cpp
-enum class PrimitiveType : std::uint8_t {
-    Points,
-    Lines,
-    LineLoop,
-    LineStrip,
-    Triangles,
-    TriangleStrip,
-    TriangleFan
-};
-```
+Fastgltf представляет собой оптимизированную реализацию glTF 2.0 с фокусом на производительность, типобезопасность и
+современные C++ стандарты.
 
-### BufferTarget
+### Архитектурные особенности
 
-```cpp
-enum class BufferTarget : std::uint16_t {
-    ArrayBuffer = 34962,
-    ElementArrayBuffer = 34963
-};
-```
+1. **Производительность**: SIMD-оптимизации (simdjson), memory mapping, минимальные аллокации
+2. **Типобезопасность**: `std::optional<size_t>`, `std::variant`, compile-time проверки
+3. **Гибкость**: DataSource варианты, кастомные callbacks, модульные расширения
+4. **Современный C++**: C++17 база с поддержкой C++20/23/26 фич
 
-## Заключение
+### Архитектурная модель данных
 
-Fastgltf предоставляет полную, типобезопасную реализацию glTF 2.0 с акцентом на производительность и современный C++.
+- **Asset**: Иммутабельный корневой контейнер с гарантированной ссылочной целостностью
+- **DataSource**: Варианты источников данных (URI, BufferView, ByteView, Vector, CustomBuffer)
+- **Accessor chain**: Иерархическая цепочка Buffer → BufferView → Accessor → Primitive
 
-### Ключевые особенности
+### Архитектура обработки ошибок
 
-1. **Производительность**: SIMD-оптимизации, memory mapping, минимальные аллокации
-2. **Типобезопасность**: `std::optional`, `std::variant`, проверки во время компиляции
-3. **Гибкость**: DataSource варианты, кастомные callbacks, расширения
-4. **Современный C++**: C++17 минимум, поддержка C++20/23/26 фич
+- **Expected<T>**: Современная архитектура обработки ошибок с семантикой `std::expected`
+- **getErrorMessage()**: Человекочитаемые сообщения об ошибках
+- **getErrorName()**: Машинно-читаемые коды ошибок для логирования
 
-### Структура данных
-
-- **Asset** — корневой контейнер со всеми данными
-- **DataSource** — варианты источников данных (URI, BufferView, ByteView, etc.)
-- **Accessor chain** — Buffer → BufferView → Accessor → Primitive
-- **Иерархия сцены** — Scene → Nodes → Mesh → Primitive
-
-### Обработка ошибок
-
-- **Expected<T>** — современная обработка ошибок
-- **getErrorMessage()** — человекочитаемые сообщения
-- **getErrorName()** — машинно-читаемые коды
-
-### Расширения
-
-Fastgltf поддерживает большинство расширений glTF через битовые маски в конструкторе Parser.
-
-### Для ProjectV
-
-Fastgltf идеально подходит для ProjectV благодаря:
-
-1. **Data-Oriented Design**: Плоские массивы для преобразования в SoA
-2. **GPU-ready**: Прямая запись в mapped GPU buffers
-3. **Производительность**: Критична для воксельного рендеринга
-4. **Современный C++**: Соответствует требованиям C++26 проекта
-
-### Дальнейшее изучение
-
-- **Интеграция**: См. `02_integration.md` для подключения к ProjectV
-- **Продвинутые темы**: См. `03_advanced.md` для сложных сценариев
-- **Исходники**: `external/fastgltf/include/` для деталей реализации
-
-Fastgltf — это не просто парсер glTF, это фундамент для высокопроизводительной загрузки 3D контента в современном C++
-проекте.
+### Архитектурные направления дальней
