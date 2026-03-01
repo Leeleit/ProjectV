@@ -260,45 +260,41 @@ private:
         // Thread-local slang session для избежания contention
         thread_local auto session = createThreadLocalSession();
         
-        try {
-            // Загрузка исходного кода
-            MappedShaderSource source;
-            if (!source.load(task.sourcePath)) {
-                return std::unexpected("Failed to load shader source");
-            }
-
-            // Компиляция через slang
-            Slang::ComPtr<slang::IBlob> diagnostics;
-            auto module = session->loadModuleFromSourceString(
-                "shader_module",
-                task.entryPoint.c_str(),
-                source.getSource().data(),
-                diagnostics.writeRef()
-            );
-
-            if (!module) {
-                return std::unexpected("Compilation failed");
-            }
-
-            // Генерация SPIR-V
-            Slang::ComPtr<slang::IBlob> spirvCode;
-            module->getEntryPointCode(0, 0, spirvCode.writeRef(), diagnostics.writeRef());
-
-            // Создание VkShaderModule
-            VkShaderModuleCreateInfo createInfo{};
-            createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-            createInfo.codeSize = spirvCode->getBufferSize();
-            createInfo.pCode = spirvCode->getBufferPointer();
-
-            VkShaderModule moduleHandle;
-            if (vkCreateShaderModule(device, &createInfo, nullptr, &moduleHandle) != VK_SUCCESS) {
-                return std::unexpected("Failed to create shader module");
-            }
-
-            return moduleHandle;
-        } catch (const std::exception& e) {
-            return std::unexpected(std::format("Compilation error: {}", e.what()));
+        // Загрузка исходного кода
+        MappedShaderSource source;
+        if (!source.load(task.sourcePath)) {
+            return std::unexpected("Failed to load shader source");
         }
+
+        // Компиляция через slang
+        Slang::ComPtr<slang::IBlob> diagnostics;
+        auto module = session->loadModuleFromSourceString(
+            "shader_module",
+            task.entryPoint.c_str(),
+            source.getSource().data(),
+            diagnostics.writeRef()
+        );
+
+        if (!module) {
+            return std::unexpected("Compilation failed");
+        }
+
+        // Генерация SPIR-V
+        Slang::ComPtr<slang::IBlob> spirvCode;
+        module->getEntryPointCode(0, 0, spirvCode.writeRef(), diagnostics.writeRef());
+
+        // Создание VkShaderModule
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = spirvCode->getBufferSize();
+        createInfo.pCode = spirvCode->getBufferPointer();
+
+        VkShaderModule moduleHandle;
+        if (vkCreateShaderModule(device, &createInfo, nullptr, &moduleHandle) != VK_SUCCESS) {
+            return std::unexpected("Failed to create shader module");
+        }
+
+        return moduleHandle;
     }
 
     static Slang::ComPtr<slang::ISession> createThreadLocalSession() {
@@ -754,38 +750,177 @@ private:
 };
 ```
 
-### Batch компиляция
+### Batch компиляция через stdexec
 
 ```cpp
-class BatchShaderCompiler {
+#include <stdexec/execution.hpp>
+#include <print>
+#include <expected>
+
+namespace stdex = stdexec;
+
+class StdexecBatchShaderCompiler {
 public:
-    std::vector<std::expected<VkShaderModule, std::string>> compileAll(
-        const std::vector<ShaderSource>& sources,
-        slang::ISession* session,
-        VkDevice device)
-    {
-        std::vector<std::future<CompileResult>> futures;
+    struct ShaderSource {
+        std::string path;
+        std::string entryPoint;
+        VkShaderStageFlagBits stage;
+    };
 
-        // Параллельная отправка задач
-        for (const auto& src : sources) {
-            futures.push_back(m_threadPool.submit([=, &session] {
-                return compileOne(src, session, device);
-            }));
-        }
+    struct CompileResult {
+        std::expected<VkShaderModule, std::string> module;
+        std::string sourcePath;
+        VkShaderStageFlagBits stage;
+    };
 
-        // Сбор результатов
-        std::vector<std::expected<VkShaderModule, std::string>> results;
-        results.reserve(futures.size());
+    explicit StdexecBatchShaderCompiler(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
 
-        for (auto& f : futures) {
-            results.push_back(f.get());
-        }
+    // Пакетная компиляция через stdexec bulk
+    auto compileAll(std::span<const ShaderSource> sources,
+                   slang::ISession* session,
+                   VkDevice device)
+        -> stdex::sender auto {
+        
+        return stdex::schedule(scheduler_)
+             | stdex::bulk(sources.size(), [sources, session, device](size_t idx) {
+                    ZoneScopedN("ShaderBatchCompile");
+                    
+                    const auto& src = sources[idx];
+                    auto module = compileOne(src, session, device);
+                    
+                    return CompileResult{
+                        .module = std::move(module),
+                        .sourcePath = src.path,
+                        .stage = src.stage
+                    };
+                });
+    }
 
-        return results;
+    // Альтернатива: последовательная компиляция с then
+    auto compileAllSequential(std::span<const ShaderSource> sources,
+                             slang::ISession* session,
+                             VkDevice device)
+        -> stdex::sender auto {
+        
+        return stdex::schedule(scheduler_)
+             | stdex::then([sources, session, device]() {
+                    std::vector<CompileResult> results;
+                    results.reserve(sources.size());
+                    
+                    for (const auto& src : sources) {
+                        ZoneScopedN("ShaderSequentialCompile");
+                        auto module = compileOne(src, session, device);
+                        results.push_back(CompileResult{
+                            .module = std::move(module),
+                            .sourcePath = src.path,
+                            .stage = src.stage
+                        });
+                    }
+                    
+                    return results;
+                });
     }
 
 private:
-    ThreadPool m_threadPool;  // M:N job system
+    static std::expected<VkShaderModule, std::string> compileOne(
+        const ShaderSource& src,
+        slang::ISession* session,
+        VkDevice device)
+    {
+        // Thread-local slang session для избежания contention
+        thread_local auto threadLocalSession = createThreadLocalSession();
+        
+        // Загрузка исходного кода
+        MappedShaderSource source;
+        if (!source.load(src.path)) {
+            return std::unexpected("Failed to load shader source");
+        }
+
+        // Компиляция через slang
+        Slang::ComPtr<slang::IBlob> diagnostics;
+        auto module = session->loadModuleFromSourceString(
+            "shader_module",
+            src.entryPoint.c_str(),
+            source.getSource().data(),
+            diagnostics.writeRef()
+        );
+
+        if (!module) {
+            return std::unexpected("Compilation failed");
+        }
+
+        // Генерация SPIR-V
+        Slang::ComPtr<slang::IBlob> spirvCode;
+        module->getEntryPointCode(0, 0, spirvCode.writeRef(), diagnostics.writeRef());
+
+        // Создание VkShaderModule
+        VkShaderModuleCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        createInfo.codeSize = spirvCode->getBufferSize();
+        createInfo.pCode = spirvCode->getBufferPointer();
+
+        VkShaderModule moduleHandle;
+        if (vkCreateShaderModule(device, &createInfo, nullptr, &moduleHandle) != VK_SUCCESS) {
+            return std::unexpected("Failed to create shader module");
+        }
+
+        return moduleHandle;
+    }
+
+    static Slang::ComPtr<slang::ISession> createThreadLocalSession() {
+        // Создание thread-local сессии slang
+        Slang::ComPtr<slang::IGlobalSession> globalSession;
+        slang::createGlobalSession(globalSession.writeRef());
+
+        slang::TargetDesc targetDesc{};
+        targetDesc.format = SLANG_SPIRV;
+        targetDesc.profile = globalSession->findProfile("spirv_1_5");
+
+        slang::SessionDesc sessionDesc{};
+        sessionDesc.targets = &targetDesc;
+        sessionDesc.targetCount = 1;
+
+        Slang::ComPtr<slang::ISession> session;
+        globalSession->createSession(sessionDesc, session.writeRef());
+        
+        return session;
+    }
+
+    stdex::scheduler auto scheduler_;
+};
+
+// Интеграция с глобальным ThreadPool ProjectV
+class ProjectVBatchShaderCompiler {
+public:
+    ProjectVBatchShaderCompiler(stdex::scheduler auto global_scheduler)
+        : compiler_(global_scheduler) {}
+
+    // Интерфейс для ECS системы
+    auto compileBatchForEntities(std::span<const StdexecBatchShaderCompiler::ShaderSource> sources,
+                                slang::ISession* session,
+                                VkDevice device)
+        -> stdex::sender auto {
+        
+        return compiler_.compileAll(sources, session, device)
+             | stdex::then([](std::vector<StdexecBatchShaderCompiler::CompileResult> results) {
+                    std::vector<std::expected<VkShaderModule, std::string>> compiled;
+                    compiled.reserve(results.size());
+                    
+                    for (auto& result : results) {
+                        if (result.module) {
+                            compiled.push_back(std::move(*result.module));
+                        } else {
+                            compiled.push_back(std::unexpected(result.module.error()));
+                        }
+                    }
+                    
+                    return compiled;
+                });
+    }
+
+private:
+    StdexecBatchShaderCompiler compiler_;
 };
 ```
 

@@ -520,21 +520,33 @@ public:
     }
 };
 
-// Параллельная загрузка конфигов
-void load_configs_parallel(const std::vector<std::string>& config_files) {
-    std::vector<std::thread> threads;
-    std::vector<EngineConfig> results(config_files.size());
+// Параллельная загрузка конфигов на основе stdexec
+#include <stdexec/execution.hpp>
 
-    for (size_t i = 0; i < config_files.size(); ++i) {
-        threads.emplace_back([&, i] {
-            ThreadSafeParser parser;
-            if (auto config = parser.parse<EngineConfig>(config_files[i])) {
-                results[i] = std::move(*config);
-            }
-        });
-    }
+stdexec::sender auto load_configs_parallel_stdexec(const std::vector<std::string>& config_files) {
+    return stdexec::schedule(stdexec::get_default_scheduler())
+         | stdexec::bulk(static_cast<int>(config_files.size()),
+               [&config_files](int idx) -> std::expected<EngineConfig, std::string> {
+                   ThreadSafeParser parser;
+                   return parser.parse<EngineConfig>(config_files[idx]);
+               });
+}
 
-    for (auto& t : threads) t.join();
+// Пример использования с stdexec
+void example_usage(const std::vector<std::string>& config_files) {
+    auto load_task = load_configs_parallel_stdexec(config_files)
+                   | stdexec::then([](std::vector<std::expected<EngineConfig, std::string>> results) {
+                         std::vector<EngineConfig> valid_configs;
+                         for (auto& result : results) {
+                             if (result) {
+                                 valid_configs.push_back(std::move(*result));
+                             }
+                         }
+                         return valid_configs;
+                     });
+
+    // Запускаем асинхронно
+    stdexec::sync_wait(std::move(load_task));
 }
 ```
 

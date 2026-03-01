@@ -753,9 +753,9 @@ public:
 
     void waitForCompletion() noexcept override {
         // В stdexec можно использовать sync_wait или другие synchronization примитивы
-        // Для простоты примера ждем пока все активные задачи завершатся
+        // Для простоты примера используем stdexec::schedule для переключения контекста
         while (activeTaskCount_.load(std::memory_order_acquire) > 0) {
-            std::this_thread::yield();
+            stdexec::schedule(scheduler_);
         }
     }
 
@@ -879,28 +879,33 @@ public:
 
         // Добавляем в кэш с минимальной блокировкой
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
-            // Spin wait - в реальной реализации лучше использовать более сложный механизм
-            std::this_thread::yield();
+            // Spin wait - в stdexec архитектуре используем scheduler вместо yield
+            // Вместо yield используем stdexec::schedule для переключения контекста
+            stdexec::schedule(scheduler_);
         }
         
-        try {
-            // Проверяем еще раз (другой поток мог добавить тот же ключ)
-            auto it = cache_.find(key);
-            if (it != cache_.end()) {
-                // Ключ уже добавлен, возвращаем существующий
-                it->second->lastAccess.store(std::chrono::steady_clock::now(),
-                                           std::memory_order_release);
-                modificationFlag_.clear(std::memory_order_release);
-                return it->second->mesh;
-            }
-            
-            // Добавляем новый элемент
-            cache_[key] = std::make_unique<CacheEntry>(mesh, meshSize);
-            currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
-        } catch (...) {
+        // Проверяем еще раз (другой поток мог добавить тот же ключ)
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            // Ключ уже добавлен, возвращаем существующий
+            it->second->lastAccess.store(std::chrono::steady_clock::now(),
+                                       std::memory_order_release);
             modificationFlag_.clear(std::memory_order_release);
-            throw;
+            return it->second->mesh;
         }
+        
+        // Добавляем новый элемент без исключений
+        // Используем std::unique_ptr с явным созданием через new
+        CacheEntry* rawEntry = new (std::nothrow) CacheEntry(mesh, meshSize);
+        if (!rawEntry) {
+            // Не удалось выделить память - очищаем флаг и возвращаем nullptr
+            modificationFlag_.clear(std::memory_order_release);
+            return nullptr;
+        }
+        
+        std::unique_ptr<CacheEntry> entry(rawEntry);
+        cache_[key] = std::move(entry);
+        currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
         
         modificationFlag_.clear(std::memory_order_release);
         return mesh;
@@ -909,7 +914,8 @@ public:
     void clear() noexcept override {
         // Атомарная очистка кэша
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
-            std::this_thread::yield();
+            // Вместо yield используем stdexec::schedule для переключения контекста
+            stdexec::schedule(scheduler_);
         }
         
         cache_.clear();
@@ -955,56 +961,51 @@ private:
 
         // Получаем блокировку для модификации
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
-            std::this_thread::yield();
+            // Вместо yield используем stdexec::schedule для переключения контекста
+            stdexec::schedule(scheduler_);
         }
 
-        try {
-            // Собираем статистику использования
-            struct EntryInfo {
-                std::string key;
-                std::chrono::steady_clock::time_point lastAccess;
-                size_t size;
-            };
-            
-            std::vector<EntryInfo> entries;
-            entries.reserve(cache_.size());
-            
-            for (const auto& [key, entry] : cache_) {
-                entries.push_back({
-                    key,
-                    entry->lastAccess.load(std::memory_order_acquire),
-                    entry->size
-                });
-            }
-            
-            // Сортируем по времени доступа (старые сначала)
-            std::sort(entries.begin(), entries.end(),
-                [](const EntryInfo& a, const EntryInfo& b) {
-                    return a.lastAccess < b.lastAccess;
-                });
-            
-            // Удаляем старые элементы пока не освободим достаточно места
-            size_t spaceToFree = (current + requiredSize) - maxSize_;
-            size_t freed = 0;
-            
-            for (const auto& entry : entries) {
-                if (freed >= spaceToFree) {
-                    break;
-                }
-                
-                auto it = cache_.find(entry.key);
-                if (it != cache_.end()) {
-                    freed += it->second->size;
-                    cache_.erase(it);
-                }
-            }
-            
-            currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
-        } catch (...) {
-            modificationFlag_.clear(std::memory_order_release);
-            throw;
+        // Собираем статистику использования
+        struct EntryInfo {
+            std::string key;
+            std::chrono::steady_clock::time_point lastAccess;
+            size_t size;
+        };
+        
+        std::vector<EntryInfo> entries;
+        entries.reserve(cache_.size());
+        
+        for (const auto& [key, entry] : cache_) {
+            entries.push_back({
+                key,
+                entry->lastAccess.load(std::memory_order_acquire),
+                entry->size
+            });
         }
         
+        // Сортируем по времени доступа (старые сначала)
+        std::sort(entries.begin(), entries.end(),
+            [](const EntryInfo& a, const EntryInfo& b) {
+                return a.lastAccess < b.lastAccess;
+            });
+        
+        // Удаляем старые элементы пока не освободим достаточно места
+        size_t spaceToFree = (current + requiredSize) - maxSize_;
+        size_t freed = 0;
+        
+        for (const auto& entry : entries) {
+            if (freed >= spaceToFree) {
+                break;
+            }
+            
+            auto it = cache_.find(entry.key);
+            if (it != cache_.end()) {
+                freed += it->second->size;
+                cache_.erase(it);
+            }
+        }
+        
+        currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
         modificationFlag_.clear(std::memory_order_release);
     }
 };
@@ -1821,10 +1822,13 @@ class LockFreeAdaptiveMeshCache : public IMeshCache {
     
     // Для thread-safe операций используем reader-writer lock-free подход
     std::atomic_flag modificationFlag_ = ATOMIC_FLAG_INIT;
+    
+    // stdexec scheduler для асинхронного выполнения (вместо yield)
+    stdexec::scheduler auto scheduler_;
 
 public:
-    LockFreeAdaptiveMeshCache(size_t maxSize, CacheWorkload workload)
-        : maxSize_(maxSize), currentWorkload_(workload) {}
+    LockFreeAdaptiveMeshCache(size_t maxSize, CacheWorkload workload, stdexec::scheduler auto scheduler)
+        : maxSize_(maxSize), currentWorkload_(workload), scheduler_(scheduler) {}
 
     [[nodiscard]] std::shared_ptr<draco::Mesh>
     getOrDecode(const std::string& key, std::span<const std::byte> compressed) noexcept override {
@@ -1861,37 +1865,31 @@ public:
 
         // Добавляем в кэш с минимальной блокировкой
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
-            std::this_thread::yield();
+            stdexec::schedule(scheduler_);
         }
         
-        try {
-            // Проверяем еще раз (другой поток мог добавить тот же ключ)
-            auto it = cache_.find(key);
-            if (it != cache_.end()) {
-                // Ключ уже добавлен, возвращаем существующий
-                it->second->lastAccess.store(std::chrono::steady_clock::now(),
-                                           std::memory_order_release);
-                it->second->accessCount.fetch_add(1, std::memory_order_acq_rel);
-                updateImportanceScore(*it->second);
-                modificationFlag_.clear(std::memory_order_release);
-                return it->second->mesh;
-            }
-            
-            // Добавляем новый элемент
-            cache_[key] = std::make_unique<AdaptiveCacheEntry>(mesh, meshSize, initialImportance);
-            currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
-        } catch (...) {
+        // Проверяем еще раз (другой поток мог добавить тот же ключ)
+        auto it = cache_.find(key);
+        if (it != cache_.end()) {
+            // Ключ уже добавлен, возвращаем существующий
+            it->second->lastAccess.store(std::chrono::steady_clock::now(),
+                                       std::memory_order_release);
+            it->second->accessCount.fetch_add(1, std::memory_order_acq_rel);
+            updateImportanceScore(*it->second);
             modificationFlag_.clear(std::memory_order_release);
-            throw;
+            return it->second->mesh;
         }
         
+        // Добавляем новый элемент
+        cache_[key] = std::make_unique<AdaptiveCacheEntry>(mesh, meshSize, initialImportance);
+        currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
         modificationFlag_.clear(std::memory_order_release);
         return mesh;
     }
 
     void clear() noexcept override {
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
-            std::this_thread::yield();
+            stdexec::schedule(scheduler_);
         }
         
         cache_.clear();
@@ -1958,56 +1956,50 @@ private:
 
         // Получаем блокировку для модификации
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
-            std::this_thread::yield();
+            stdexec::schedule(scheduler_);
         }
 
-        try {
-            // Собираем статистику использования
-            struct EntryInfo {
-                std::string key;
-                float importanceScore;
-                size_t size;
-            };
-            
-            std::vector<EntryInfo> entries;
-            entries.reserve(cache_.size());
-            
-            for (const auto& [key, entry] : cache_) {
-                entries.push_back({
-                    key,
-                    entry->importanceScore.load(std::memory_order_acquire),
-                    entry->size
-                });
-            }
-            
-            // Сортируем по важности (наименее важные сначала)
-            std::sort(entries.begin(), entries.end(),
-                [](const EntryInfo& a, const EntryInfo& b) {
-                    return a.importanceScore < b.importanceScore;
-                });
-            
-            // Удаляем наименее важные элементы пока не освободим достаточно места
-            size_t spaceToFree = (current + requiredSize) - maxSize_;
-            size_t freed = 0;
-            
-            for (const auto& entry : entries) {
-                if (freed >= spaceToFree) {
-                    break;
-                }
-                
-                auto it = cache_.find(entry.key);
-                if (it != cache_.end()) {
-                    freed += it->second->size;
-                    cache_.erase(it);
-                }
-            }
-            
-            currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
-        } catch (...) {
-            modificationFlag_.clear(std::memory_order_release);
-            throw;
+        // Собираем статистику использования
+        struct EntryInfo {
+            std::string key;
+            float importanceScore;
+            size_t size;
+        };
+        
+        std::vector<EntryInfo> entries;
+        entries.reserve(cache_.size());
+        
+        for (const auto& [key, entry] : cache_) {
+            entries.push_back({
+                key,
+                entry->importanceScore.load(std::memory_order_acquire),
+                entry->size
+            });
         }
         
+        // Сортируем по важности (наименее важные сначала)
+        std::sort(entries.begin(), entries.end(),
+            [](const EntryInfo& a, const EntryInfo& b) {
+                return a.importanceScore < b.importanceScore;
+            });
+        
+        // Удаляем наименее важные элементы пока не освободим достаточно места
+        size_t spaceToFree = (current + requiredSize) - maxSize_;
+        size_t freed = 0;
+        
+        for (const auto& entry : entries) {
+            if (freed >= spaceToFree) {
+                break;
+            }
+            
+            auto it = cache_.find(entry.key);
+            if (it != cache_.end()) {
+                freed += it->second->size;
+                cache_.erase(it);
+            }
+        }
+        
+        currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
         modificationFlag_.clear(std::memory_order_release);
     }
 

@@ -104,87 +104,58 @@ struct alignas(64) ThreadLocalStats {
 
 ```cpp
 // ❌ АНТИПАТТЕРН: Создание потока для каждой задачи
-void badMultithreading() {
-    std::vector<std::thread> threads;
+// void badMultithreading() {
+//     std::vector<std::thread> threads;
+// 
+//     for (int i = 0; i < 1000; ++i) {
+//         threads.emplace_back([]() {
+//             // Задача
+//         });
+//     }
+// 
+//     for (auto& t : threads) {
+//         t.join();
+//     }
+//     // Проблемы:
+//     // 1. Overhead на создание/уничтожение потоков
+//     // 2. Нет контроля над количеством потоков
+//     // 3. Cache thrashing при миграции между ядрами
+//     // 4. Системные вызовы на каждую задачу
+// }
 
-    for (int i = 0; i < 1000; ++i) {
-        threads.emplace_back([]() {
-            // Задача
-        });
-    }
+// Вместо этого используйте stdexec Job System (см. ниже)
 
-    for (auto& t : threads) {
-        t.join();
-    }
-    // Проблемы:
-    // 1. Overhead на создание/уничтожение потоков
-    // 2. Нет контроля над количеством потоков
-    // 3. Cache thrashing при миграции между ядрами
-    // 4. Системные вызовы на каждую задачу
-}
-
-// ✅ ПРАВИЛЬНЫЙ ПОДХОД: M:N Job System
+// ✅ ПРАВИЛЬНЫЙ ПОДХОД: M:N Job System на основе stdexec
 class JobSystem {
 private:
-    std::vector<std::thread> workers;          // N hardware threads
-    moodycamel::ConcurrentQueue<Job> jobQueue; // Lock-free очередь
+    stdexec::scheduler auto scheduler;
     std::atomic<bool> running{true};
 
 public:
-    JobSystem(size_t threadCount = std::thread::hardware_concurrency()) {
-        workers.reserve(threadCount);
-        for (size_t i = 0; i < threadCount; ++i) {
-            workers.emplace_back([this, i]() { workerThread(i); });
-        }
-    }
+    JobSystem(stdexec::scheduler auto sched = stdexec::get_default_scheduler())
+        : scheduler(sched) {}
 
     ~JobSystem() {
         running = false;
-        for (auto& t : workers) {
-            if (t.joinable()) t.join();
-        }
     }
 
     template<typename F>
     void schedule(F&& job) {
-        jobQueue.enqueue(std::forward<F>(job));
+        // Используем stdexec для планирования задач
+        stdexec::start_detached(
+            stdexec::schedule(scheduler) |
+            stdexec::then(std::forward<F>(job))
+        );
     }
 
     template<typename F>
     void parallelFor(size_t count, F&& func) {
-        const size_t chunkSize = std::max<size_t>(1, count / workers.size());
-        std::atomic<size_t> completed{0};
-
-        for (size_t start = 0; start < count; start += chunkSize) {
-            size_t end = std::min(start + chunkSize, count);
-            schedule([start, end, &func, &completed]() {
-                for (size_t i = start; i < end; ++i) {
-                    func(i);
-                }
-                completed.fetch_add(1, std::memory_order_release);
-            });
-        }
-
-        // Ожидание завершения всех задач
-        while (completed.load(std::memory_order_acquire) <
-               ((count + chunkSize - 1) / chunkSize)) {
-            std::this_thread::yield();
-        }
-    }
-
-private:
-    void workerThread(size_t threadId) {
-        // Привязка потока к конкретному CPU ядру
-        setThreadAffinity(threadId);
-
-        Job job;
-        while (running) {
-            if (jobQueue.try_dequeue(job)) {
-                job();
-            } else {
-                std::this_thread::yield();
-            }
-        }
+        // Используем stdexec::bulk для параллельного выполнения
+        auto task = stdexec::schedule(scheduler) |
+                   stdexec::bulk(static_cast<int>(count), std::forward<F>(func));
+        
+        // Запускаем и ждем завершения
+        stdexec::sync_wait(std::move(task));
     }
 };
 ```
@@ -223,19 +194,12 @@ ecs.system<HeavyComputationData>("HeavyCompute")
         // Вместо этого она использует Job System для fine-grained параллелизма
 
         auto* jobSystem = it.world().ctx<JobSystemComponent>()->jobSystem.get();
-        std::vector<std::future<void>> futures;
-
-        for (auto i : it) {
-            futures.push_back(jobSystem->scheduleAsync([&data, i]() {
-                // Тяжёлые вычисления в отдельной задаче
-                performHeavyComputation(data[i]);
-            }));
-        }
-
-        // Ожидание завершения всех асинхронных задач
-        for (auto& future : futures) {
-            future.wait();
-        }
+        
+        // Используем stdexec::bulk для параллельного выполнения
+        jobSystem->parallelFor(it.count(), [&](size_t i) {
+            // Тяжёлые вычисления в отдельной задаче
+            performHeavyComputation(data[i]);
+        });
     });
 ```
 

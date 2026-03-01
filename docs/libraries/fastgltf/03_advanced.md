@@ -190,15 +190,16 @@ class AsyncGltfUploader {
     VulkanUploadContext& ctx;
     std::atomic<size_t> pendingUploadsCount{0};
     std::vector<AsyncUploadTask> pendingUploads;
-    std::mutex uploadMutex;  // Используем std::mutex вместо атомарного флага
+    // Lock-free подход: используем атомарные операции вместо мьютекса
+    alignas(64) std::atomic<size_t> processingFlag{0};
 
 public:
     AsyncGltfUploader(VulkanUploadContext& context) : ctx(context) {}
 
     void scheduleUpload(const fastgltf::Asset& asset) {
-        std::lock_guard lock(uploadMutex);
-
-        // Создание GPU буферов
+        // Lock-free добавление задач
+        std::vector<AsyncUploadTask> newTasks;
+        
         for (const auto& bufferView : asset.bufferViews) {
             const auto& buffer = asset.buffers[bufferView.bufferIndex];
 
@@ -241,7 +242,7 @@ public:
                         vkCreateFence(ctx.device, &fenceInfo, nullptr, &fence);
                         vkResetFences(ctx.device, 1, &fence);
 
-                        pendingUploads.push_back({
+                        newTasks.push_back({
                             .stagingBuffer = stagingBuffer,
                             .stagingAllocation = it->second,
                             .gpuBuffer = gpuBuffer,
@@ -249,17 +250,50 @@ public:
                             .dataSize = bufferView.byteLength,
                             .completionFence = fence
                         });
-                        pendingUploadsCount.fetch_add(1, std::memory_order_release);
                     }
                 }
             }
         }
+
+        // Атомарная замена вектора задач
+        if (!newTasks.empty()) {
+            // Используем CAS для безопасного добавления задач
+            size_t expected = 0;
+            while (!processingFlag.compare_exchange_weak(expected, 1, 
+                                                       std::memory_order_acquire,
+                                                       std::memory_order_relaxed)) {
+                expected = 0;
+                // Используем короткую паузу вместо yield для предотвращения busy-waiting
+                std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+            }
+            
+            pendingUploads.insert(pendingUploads.end(), 
+                                 std::make_move_iterator(newTasks.begin()),
+                                 std::make_move_iterator(newTasks.end()));
+            pendingUploadsCount.fetch_add(newTasks.size(), std::memory_order_release);
+            
+            processingFlag.store(0, std::memory_order_release);
+        }
     }
 
     void processUploads() {
-        std::lock_guard lock(uploadMutex);
+        // Проверяем, не обрабатывается ли уже
+        size_t expected = 0;
+        if (!processingFlag.compare_exchange_strong(expected, 1,
+                                                   std::memory_order_acquire,
+                                                   std::memory_order_relaxed)) {
+            return; // Уже обрабатывается другим потоком
+        }
 
-        for (auto& task : pendingUploads) {
+        // Безопасно копируем задачи для обработки
+        std::vector<AsyncUploadTask> tasksToProcess;
+        tasksToProcess.swap(pendingUploads);
+        size_t taskCount = tasksToProcess.size();
+        
+        processingFlag.store(0, std::memory_order_release);
+
+        // Обработка задач
+        for (auto& task : tasksToProcess) {
             // Запись команд копирования
             VkCommandBufferAllocateInfo allocInfo{
                 .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -300,8 +334,7 @@ public:
             vmaDestroyBuffer(ctx.allocator, task.stagingBuffer, task.stagingAllocation);
         }
 
-        pendingUploads.clear();
-        pendingUploadsCount.store(0, std::memory_order_release);
+        pendingUploadsCount.fetch_sub(taskCount, std::memory_order_release);
     }
 
     size_t getPendingCount() const {
@@ -727,9 +760,10 @@ class ParserPool {
     std::atomic<size_t> nextParser{0};
 
 public:
-    ParserPool(size_t poolSize = std::thread::hardware_concurrency()) 
+    ParserPool(size_t poolSize = projectv::config::get_thread_count()) 
         : parsers(poolSize) {
         // Парсеры инициализируются в конструкторе вектора
+        // Используем конфигурацию движка вместо системного вызова
     }
 
     // Получение парсера с передачей индекса через контекст

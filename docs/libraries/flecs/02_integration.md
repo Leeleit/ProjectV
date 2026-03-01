@@ -55,23 +55,25 @@ struct AppContext {
 std::expected<AppContext, std::string> initECS() {
     AppContext ctx;
 
-    try {
-        // Создание мира с настройками для high-performance
-        ctx.ecs.set_threads(std::thread::hardware_concurrency());
-        ctx.ecs.set_target_fps(144.0f);  // 144 FPS для плавного рендеринга
-
-        // Включение отладки в development builds
-        #ifdef PROJECTV_DEBUG
-        ctx.ecs.set<flecs::Rest>({});  // Для Flecs Explorer
-        #endif
-
-        std::println("[ECS] World initialized with {} threads",
-                     ctx.ecs.get_threads());
-
-        return ctx;
-    } catch (const std::exception& e) {
-        return std::unexpected(std::format("ECS initialization failed: {}", e.what()));
+    // Инициализация ECS без исключений, используя std::expected
+    // Количество потоков берется из конфигурации движка ProjectV
+    if (auto thread_count = projectv::config::get_thread_count(); thread_count > 0) {
+        ctx.ecs.set_threads(thread_count);
+    } else {
+        return std::unexpected("Invalid thread count from ProjectV config");
     }
+    
+    ctx.ecs.set_target_fps(144.0f);  // 144 FPS для плавного рендеринга
+
+    // Включение отладки в development builds
+    #ifdef PROJECTV_DEBUG
+    ctx.ecs.set<flecs::Rest>({});  // Для Flecs Explorer
+    #endif
+
+    std::println("[ECS] World initialized with {} threads",
+                 ctx.ecs.get_threads());
+
+    return ctx;
 }
 ```
 
@@ -109,7 +111,8 @@ SDL_AppResult SDL_AppInit(void** appstate) {
     }
 
     // Инициализация ECS
-    state->ecs.set_threads(std::thread::hardware_concurrency());
+    // Количество потоков берется из конфигурации движка ProjectV
+    state->ecs.set_threads(projectv::config::get_thread_count());
     state->running = true;
 
     std::println("[ProjectV] Initialized with SDL3 + Flecs");

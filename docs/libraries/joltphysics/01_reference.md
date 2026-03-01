@@ -276,7 +276,12 @@ Jolt использует систему задач (jobs) для паралле
 ```cpp
 #include <Jolt/Core/JobSystemThreadPool.h>
 
-uint32_t num_threads = std::thread::hardware_concurrency() - 1;
+// Количество потоков должно задаваться через конфигурацию движка ProjectV
+// Вместо std::thread::hardware_concurrency() используйте:
+// uint32_t num_threads = projectv::config::get_thread_count() - 1;
+
+// Пример с использованием конфигурации движка:
+uint32_t num_threads = projectv::config::get_thread_count() - 1;
 JPH::JobSystemThreadPool job_system(
     JPH::cMaxPhysicsJobs,
     JPH::cMaxPhysicsBarriers,

@@ -340,15 +340,22 @@ double milliseconds = seconds * 1000.0;
 ### Правильная многопоточность
 
 ```cpp
-// Фоновый поток — ТОЛЬКО CPU-работа, без SDL-вызовов
-std::thread loadingThread([&]() {
-    load_textures_from_disk();   // Читать файлы
-    decode_audio();               // Декодировать
-    // НИКАКИХ SDL-вызовов!
-});
+// Фоновая задача — ТОЛЬКО CPU-работа, без SDL-вызовов
+// Используем stdexec для асинхронного выполнения
+auto loadingTask = stdexec::schedule(globalThreadPool.get_scheduler())
+                 | stdexec::then([&]() {
+                     load_textures_from_disk();   // Читать файлы
+                     decode_audio();               // Декодировать
+                     // НИКАКИХ SDL-вызовов!
+                     return true;  // Сигнал о завершении
+                 });
 
-// Main thread (SDL_AppIterate)
-if (loaded) {
+// Запускаем асинхронно
+stdexec::start_detached(std::move(loadingTask));
+
+// Main thread (SDL_AppIterate) проверяет состояние через атомарные флаги
+// или получает уведомления через stdexec continuation
+if (texturesLoaded.load(std::memory_order_acquire)) {
     upload_to_gpu();  // Теперь можно
 }
 ```

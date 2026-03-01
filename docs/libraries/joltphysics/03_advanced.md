@@ -109,7 +109,8 @@ private:
 class ThreadLocalTempAllocator {
 public:
     ThreadLocalTempAllocator() {
-        m_allocators.resize(std::thread::hardware_concurrency());
+        // Количество потоков берется из конфигурации движка ProjectV
+        m_allocators.resize(projectv::config::get_thread_count());
         for (auto& alloc : m_allocators) {
             alloc = std::make_unique<JPH::TempAllocatorImpl>(1024 * 1024);
         }
@@ -492,20 +493,33 @@ private:
 
 ## Алерты и best practices
 
-### Правило 1: Минимум блокировок
+### Правило 1: Избегайте блокировок - используйте batch операции
 
 ```cpp
-// Плохо: блокировка на каждое тело
+// Плохо: последовательные вызовы с потенциальными конфликтами
 for (auto& body : bodies) {
-    std::scoped_lock lock(mutex);
-    interface.SetPosition(body.id, body.pos);
+    interface.SetPosition(body.id, body.pos);  // Может вызывать внутренние блокировки
 }
 
-// Хорошо: один вызов для всех
+// Хорошо: batch операция без блокировок
 std::vector<JPH::BodyID> ids;
 std::vector<JPH::RVec3> positions;
-interface.SetPositions(ids, positions);
+ids.reserve(bodies.size());
+positions.reserve(bodies.size());
+
+for (auto& body : bodies) {
+    ids.push_back(body.id);
+    positions.push_back(body.pos);
+}
+
+interface.SetPositions(ids, positions);  // Один атомарный вызов
 ```
+
+**Важно:** В ProjectV запрещены `std::mutex`, `std::scoped_lock`, `std::lock_guard`. Используйте:
+1. **Batch операции** - как показано выше
+2. **Lock-free структуры** - атомарные операции
+3. **Thread-local данные** - каждый поток работает со своей копией
+4. **Job System** - stdexec для асинхронной обработки
 
 ### Правило 2: Batch операции
 

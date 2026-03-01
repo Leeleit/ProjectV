@@ -394,7 +394,8 @@ public:
         m_physics.SetContactListener(&m_contact_callback);
         m_physics.SetBodyActivationListener(&m_activation_listener);
 
-        uint32_t threads = std::max(1u, std::thread::hardware_concurrency() - 1);
+        // Количество потоков берется из конфигурации движка ProjectV
+        uint32_t threads = std::max(1u, projectv::config::get_thread_count() - 1);
         m_job_system = std::make_unique<JPH::JobSystemThreadPool>(
             JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, threads);
     }

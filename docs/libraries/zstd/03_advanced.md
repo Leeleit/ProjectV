@@ -298,15 +298,13 @@ public:
                        });
     }
 
+
     // Поставить задачу в очередь и вернуть sender для отслеживания
     stdexec::sender auto enqueue(CompressionJob job) {
         const uint64_t job_id = next_job_id_++;
         
-        // Добавляем задачу в очередь
-        {
-            std::lock_guard lock(queue_mutex_);
-            pending_jobs_.emplace(job_id, std::move(job));
-        }
+        // Добавляем задачу в lock-free очередь
+        pending_jobs_queue_.push({job_id, std::move(job)});
 
         // Создаем sender для этой конкретной задачи
         return stdexec::schedule(scheduler_)
@@ -341,10 +339,10 @@ public:
     void process_results() {
         std::vector<std::pair<uint64_t, std::vector<uint8_t>>> results;
         
-        // Забираем все готовые результаты
-        {
-            std::lock_guard lock(result_mutex_);
-            results.swap(completed_results_);
+        // Забираем все готовые результаты из lock-free очереди
+        std::pair<uint64_t, std::vector<uint8_t>> result;
+        while (completed_results_queue_.pop(result)) {
+            results.push_back(std::move(result));
         }
 
         // Устанавливаем результаты в ECS
@@ -363,19 +361,31 @@ private:
     std::expected<CompressionResult, std::string> execute_single_job(uint64_t job_id) {
         std::optional<CompressionJob> job;
         
-        // Извлекаем задачу
-        {
-            std::lock_guard lock(queue_mutex_);
-            auto it = pending_jobs_.find(job_id);
-            if (it == pending_jobs_.end()) {
-                return std::unexpected("Job not found");
+        // Извлекаем задачу из lock-free очереди
+        std::pair<uint64_t, CompressionJob> queued_job;
+        if (pending_jobs_queue_.pop(queued_job) && queued_job.first == job_id) {
+            job = std::move(queued_job.second);
+        } else {
+            // Ищем задачу в очереди (в худшем случае O(n), но это редко)
+            std::pair<uint64_t, CompressionJob> temp;
+            std::vector<std::pair<uint64_t, CompressionJob>> temp_storage;
+            
+            while (pending_jobs_queue_.pop(temp)) {
+                if (temp.first == job_id) {
+                    job = std::move(temp.second);
+                    break;
+                }
+                temp_storage.push_back(std::move(temp));
             }
-            job = std::move(it->second);
-            pending_jobs_.erase(it);
+            
+            // Возвращаем остальные задачи обратно в очередь
+            for (auto& stored : temp_storage) {
+                pending_jobs_queue_.push(std::move(stored));
+            }
         }
 
         if (!job) {
-            return std::unexpected("Invalid job");
+            return std::unexpected("Job not found");
         }
 
         const size_t bound = ZSTD_compressBound(job->data.size());
@@ -393,11 +403,8 @@ private:
 
         result.resize(compressed_size);
         
-        // Сохраняем результат
-        {
-            std::lock_guard lock(result_mutex_);
-            completed_results_.emplace_back(job->chunk_key, std::move(result));
-        }
+        // Сохраняем результат в lock-free очередь
+        completed_results_queue_.push({job->chunk_key, std::move(result)});
 
         return CompressionResult{job->chunk_key, compressed_size};
     }
@@ -417,11 +424,10 @@ private:
 
     std::atomic<uint64_t> next_job_id_{0};
     
-    std::mutex queue_mutex_;
-    std::unordered_map<uint64_t, CompressionJob> pending_jobs_;
-    
-    std::mutex result_mutex_;
-    std::vector<std::pair<uint64_t, std::vector<uint8_t>>> completed_results_;
+
+    // Lock-free очереди вместо мьютексов
+    SPSCQueue<std::pair<uint64_t, CompressionJob>, 1024> pending_jobs_queue_;
+    SPSCQueue<std::pair<uint64_t, std::vector<uint8_t>>, 1024> completed_results_queue_;
 };
 
 // ECS система для обработки результатов
@@ -563,15 +569,13 @@ public:
         // Нет необходимости вручную останавливать потоки
     }
 
+
     // Асинхронное сжатие через stdexec sender
     stdexec::sender auto compress_async(CompressTask task) {
         const uint64_t task_id = next_task_id_++;
         
-        // Добавляем задачу в очередь
-        {
-            std::lock_guard lock(queue_mutex_);
-            pending_tasks_.emplace(task_id, std::move(task));
-        }
+        // Добавляем задачу в lock-free очередь
+        pending_tasks_queue_.push({task_id, std::move(task)});
 
         // Возвращаем sender для отслеживания выполнения
         return stdexec::schedule(scheduler_)
@@ -615,10 +619,13 @@ public:
     // Получение готовых результатов
     std::vector<CompressResult> get_completed_results() {
         std::vector<CompressResult> results;
-        {
-            std::lock_guard lock(result_mutex_);
-            results.swap(completed_results_);
+        
+        // Забираем все готовые результаты из lock-free очереди
+        CompressResult result;
+        while (completed_results_queue_.pop(result)) {
+            results.push_back(std::move(result));
         }
+        
         return results;
     }
 
@@ -626,19 +633,31 @@ private:
     std::expected<CompressResult, std::string> execute_compression_task(uint64_t task_id) {
         std::optional<CompressTask> task;
         
-        // Извлекаем задачу из очереди
-        {
-            std::lock_guard lock(queue_mutex_);
-            auto it = pending_tasks_.find(task_id);
-            if (it == pending_tasks_.end()) {
-                return std::unexpected("Task not found");
+        // Извлекаем задачу из lock-free очереди
+        std::pair<uint64_t, CompressTask> queued_task;
+        if (pending_tasks_queue_.pop(queued_task) && queued_task.first == task_id) {
+            task = std::move(queued_task.second);
+        } else {
+            // Ищем задачу в очереди (в худшем случае O(n), но это редко)
+            std::pair<uint64_t, CompressTask> temp;
+            std::vector<std::pair<uint64_t, CompressTask>> temp_storage;
+            
+            while (pending_tasks_queue_.pop(temp)) {
+                if (temp.first == task_id) {
+                    task = std::move(temp.second);
+                    break;
+                }
+                temp_storage.push_back(std::move(temp));
             }
-            task = std::move(it->second);
-            pending_tasks_.erase(it);
+            
+            // Возвращаем остальные задачи обратно в очередь
+            for (auto& stored : temp_storage) {
+                pending_tasks_queue_.push(std::move(stored));
+            }
         }
 
         if (!task) {
-            return std::unexpected("Invalid task");
+            return std::unexpected("Task not found");
         }
 
         const size_t bound = ZSTD_compressBound(task->data.size());
@@ -663,11 +682,8 @@ private:
             .compressed_size = compressed_size
         };
 
-        // Сохраняем результат
-        {
-            std::lock_guard lock(result_mutex_);
-            completed_results_.push_back(result);
-        }
+        // Сохраняем результат в lock-free очередь
+        completed_results_queue_.push(std::move(result));
 
         return result;
     }
@@ -691,11 +707,9 @@ private:
 
     std::atomic<uint64_t> next_task_id_{0};
     
-    std::mutex queue_mutex_;
-    std::unordered_map<uint64_t, CompressTask> pending_tasks_;
-    
-    std::mutex result_mutex_;
-    std::vector<CompressResult> completed_results_;
+    // Lock-free очереди вместо мьютексов и unordered_map
+    SPSCQueue<std::pair<uint64_t, CompressTask>, 1024> pending_tasks_queue_;
+    SPSCQueue<CompressResult, 1024> completed_results_queue_;
 };
 
 // Пример использования с ProjectV Job System

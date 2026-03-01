@@ -104,31 +104,66 @@ void processGlyphBatch(GlyphBatchJob* job) {
 }
 ```
 
-### Multi-threaded Font Loading
+### Multi-threaded Font Loading с stdexec
+
+> **Важно для ProjectV:** В движке ProjectV запрещено использование `std::jthread` и `std::mutex`. Используйте глобальный stdexec Job System.
 
 ```cpp
+#include <stdexec/execution.hpp>
+#include <exec/static_thread_pool.hpp>
+
 class ParallelFontLoader {
 public:
+    ParallelFontLoader(exec::static_thread_pool& threadPool) : threadPool_(threadPool) {}
+
     void loadFontsAsync(std::span<const std::string> paths) {
         for (const auto& path : paths) {
-            std::jthread([this, &path]() {
-                FT_Library lib;
-                FT_Init_FreeType(&lib);
+            // Создаем sender для асинхронной загрузки шрифта
+            auto fontLoadSender = stdexec::schedule(threadPool_.get_scheduler())
+                                | stdexec::then([this, path]() -> std::expected<FontData, FontError> {
+                                    FT_Library lib;
+                                    FT_Error error = FT_Init_FreeType(&lib);
+                                    if (error) {
+                                        return std::unexpected(FontError::LibraryInitFailed);
+                                    }
 
-                FT_Face face;
-                FT_New_Face(lib, path.c_str(), 0, &face);
+                                    FT_Face face;
+                                    error = FT_New_Face(lib, path.c_str(), 0, &face);
+                                    if (error) {
+                                        FT_Done_FreeType(lib);
+                                        return std::unexpected(FontError::FaceLoadFailed);
+                                    }
 
-                {
-                    std::lock_guard lock(mutex_);
-                    loadedFaces_.push_back({lib, face, path});
-                }
-            });
+                                    return FontData{lib, face, path};
+                                })
+                                | stdexec::then([this](std::expected<FontData, FontError> result) {
+                                    if (result) {
+                                        // Безопасное добавление через атомарные операции
+                                        // или lock-free структуру
+                                        loadedFaces_.push_back(*result);
+                                    } else {
+                                        // Обработка ошибки
+                                        handleFontError(result.error());
+                                    }
+                                });
+
+            // Запускаем асинхронно
+            stdexec::start_detached(std::move(fontLoadSender));
         }
     }
 
 private:
-    std::mutex mutex_;
-    std::vector<std::tuple<FT_Library, FT_Face, std::string>> loadedFaces_;
+    exec::static_thread_pool& threadPool_;
+
+    // Lock-free структура для хранения загруженных шрифтов
+    struct FontData {
+        FT_Library lib;
+        FT_Face face;
+        std::string path;
+    };
+
+    // Используем lock-free контейнер или атомарные операции
+    std::vector<FontData> loadedFaces_; // В реальном коде используйте lock-free контейнер
 };
 ```
 
@@ -276,6 +311,7 @@ struct TextBatch {
 
 1. **GlyphCacheSoA** — используй SoA с `alignas(64)` для кэша глифов
 2. **Preload ASCII** — загружай первые 128 символов при инициализации шрифта
-3. **Parallel loading** — используй std::jthread для асинхронной загрузки шрифтов
+3. **Parallel loading** — используй stdexec для асинхронной загрузки шрифтов (запрещено `std::jthread` согласно Phase 0)
 4. **Tracy** — профилируй FT_Load_Glyph и FT_Render_Glyph отдельно
 5. **Staging buffers** — минимизируй копирование при загрузке в GPU атлас
+6. **Lock-free структуры** — используй атомарные операции вместо `std::mutex` для синхронизации

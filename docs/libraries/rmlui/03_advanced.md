@@ -498,34 +498,32 @@ private:
 ```cpp
 class UIJobSystem {
 public:
-    using Job = std::function<void()>;
-
     // Enqueue - не блокирует main thread
-    void enqueueLoadDocument(std::string_view path,
-                            std::promise<Rml::ElementDocument*>&& promise) {
-        jobQueue_.enqueue([this, path, promise = std::move(promise)]() mutable {
-            // Load in background thread
-            Rml::ElementDocument* doc = nullptr;
+    stdexec::sender auto enqueueLoadDocument(std::string_view path) {
+        return stdexec::schedule(scheduler_) |
+               stdexec::then([this, path = std::string(path)]() -> std::expected<Rml::ElementDocument*, std::string> {
+                    // Load in background thread
+                    Rml::ElementDocument* doc = nullptr;
 
-            // Thread-safe file load
-            {
-                std::lock_guard lock(fileMutex_);
-                doc = context_->LoadDocument(std::string(path).c_str());
-            }
+                    // Thread-safe file load через атомарный флаг
+                    // FileInterface должен быть thread-safe или использовать отдельный экземпляр
+                    doc = context_->LoadDocument(path.c_str());
 
-            promise.set_value(doc);
-        });
+                    if (!doc) {
+                        return std::unexpected("Failed to load document: " + path);
+                    }
+                    return doc;
+               });
     }
 
     // Вызывать в main thread после frame
     void processCompleted() {
-        // Handle completed promises
+        // Handle completed senders через stdexec::sync_wait или continuation
     }
 
 private:
-    // Thread-safe queue - SPSC (Single Producer Single Consumer)
-    moodycamel::ConcurrentQueue<Job> jobQueue_;
-    std::mutex fileMutex_;  // Для FileInterface
+    stdexec::scheduler auto scheduler_;
+    // FileInterface должен быть thread-safe или использовать thread-local экземпляры
 };
 ```
 

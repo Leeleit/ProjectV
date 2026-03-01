@@ -1,4 +1,4 @@
-﻿# Интеграция meshoptimizer в ProjectV
+# Интеграция meshoptimizer в ProjectV
 
 > Как подключить meshoptimizer к воксельному движку на Vulkan 1.4 + Flecs ECS + VMA.
 
@@ -878,12 +878,20 @@ auto compressMesh(
     return result;
 }
 
+struct MeshDecodeError {
+    enum class Code {
+        VertexDecodeFailed,
+        IndexDecodeFailed
+    } code;
+    std::string message;
+};
+
 auto decompressMesh(
     std::span<const uint8_t> vertex_data,
     std::span<const uint8_t> index_data,
     uint32_t vertex_count,
     uint32_t index_count
-) -> std::pair<std::vector<Vertex>, std::vector<uint32_t>> {
+) -> std::expected<std::pair<std::vector<Vertex>, std::vector<uint32_t>>, MeshDecodeError> {
     std::vector<Vertex> vertices(vertex_count);
     std::vector<uint32_t> indices(index_count);
 
@@ -893,7 +901,10 @@ auto decompressMesh(
     );
 
     if (vres != 0) {
-        throw std::runtime_error("Vertex decode failed: " + std::to_string(vres));
+        return std::unexpected{MeshDecodeError{
+            .code = MeshDecodeError::Code::VertexDecodeFailed,
+            .message = "Vertex decode failed: " + std::to_string(vres)
+        }};
     }
 
     const int ires = meshopt_decodeIndexBuffer(
@@ -902,10 +913,13 @@ auto decompressMesh(
     );
 
     if (ires != 0) {
-        throw std::runtime_error("Index decode failed: " + std::to_string(ires));
+        return std::unexpected{MeshDecodeError{
+            .code = MeshDecodeError::Code::IndexDecodeFailed,
+            .message = "Index decode failed: " + std::to_string(ires)
+        }};
     }
 
-    return {std::move(vertices), std::move(indices)};
+    return std::make_pair(std::move(vertices), std::move(indices));
 }
 ```
 

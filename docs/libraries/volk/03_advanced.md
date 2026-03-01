@@ -177,14 +177,16 @@ struct alignas(64) ThreadLocalVulkanTable {
     }
 };
 
+
 // Job System интеграция для параллельного рендеринга вокселей
 class VulkanJobSystem {
     exec::static_thread_pool pool;
     thread_local static ThreadLocalVulkanTable threadTable;
 
 public:
-    VulkanJobSystem(size_t num_threads = std::thread::hardware_concurrency())
-        : pool(num_threads) {}
+    // Используем конфигурацию движка ProjectV вместо системного вызова
+    VulkanJobSystem(size_t num_threads = 0)  // 0 означает "использовать конфигурацию движка ProjectV"
+        : pool(num_threads > 0 ? num_threads : getEngineThreadCount()) {}
 
     // Инициализация таблиц во всех worker потоках
     std::expected<void, std::string> initializeTables(VkDevice device) {
@@ -218,6 +220,16 @@ public:
         
         return ex::sync_wait(std::move(render_task)).value();
     }
+
+private:
+    // Получение количества потоков из конфигурации движка
+    static size_t getEngineThreadCount() {
+        // В ProjectV это значение берется из конфигурации движка
+        // Например: projectv::core::config::getThreadPoolSize()
+        // Для примера возвращаем разумное значение по умолчанию
+        constexpr size_t DEFAULT_THREAD_COUNT = 4;
+        return DEFAULT_THREAD_COUNT;
+    }
 };
 
 // Использование в ProjectV с Job System
@@ -228,7 +240,6 @@ void renderVoxelsWithJobSystem(VulkanJobSystem& jobSystem, VkCommandBuffer cmd,
     }
 }
 ```
-
 ### Динамическая загрузка extensions с C++26
 
 ```cpp
@@ -316,24 +327,26 @@ public:
 
     std::expected<void, std::string> update() {
         for (auto& [shaderPath, pipeline] : pipelines) {
-            try {
-                auto currentTime = fs::last_write_time(shaderPath);
-                if (currentTime != fileTimestamps[shaderPath]) {
-                    // Пересоздание pipeline
-                    vkDestroyPipeline(device, pipeline, nullptr);
+            std::error_code ec;
+            auto currentTime = fs::last_write_time(shaderPath, ec);
+            if (ec) {
+                std::println(stderr, "Filesystem error: {}", ec.message());
+                continue;
+            }
+            
+            if (currentTime != fileTimestamps[shaderPath]) {
+                // Пересоздание pipeline
+                vkDestroyPipeline(device, pipeline, nullptr);
 
-                    auto newPipeline = createPipeline(shaderPath);
-                    if (!newPipeline) {
-                        return std::unexpected(std::format("Failed to recreate pipeline: {}", newPipeline.error()));
-                    }
-
-                    pipeline = *newPipeline;
-                    fileTimestamps[shaderPath] = currentTime;
-
-                    std::println("[HOT RELOAD] Shader reloaded: {}", shaderPath);
+                auto newPipeline = createPipeline(shaderPath);
+                if (!newPipeline) {
+                    return std::unexpected(std::format("Failed to recreate pipeline: {}", newPipeline.error()));
                 }
-            } catch (const fs::filesystem_error& e) {
-                std::println(stderr, "Filesystem error: {}", e.what());
+
+                pipeline = *newPipeline;
+                fileTimestamps[shaderPath] = currentTime;
+
+                std::println("[HOT RELOAD] Shader reloaded: {}", shaderPath);
             }
         }
         return {};
@@ -436,48 +449,104 @@ public:
 
 ## Интеграция с асинхронной загрузкой ресурсов
 
-### Параллельная инициализация Vulkan в отдельном потоке
+
+### Параллельная инициализация Vulkan с использованием stdexec
 
 ```cpp
+#include <stdexec/execution.hpp>
+#include <exec/static_thread_pool.hpp>
+#include <print>
+#include <expected>
+
+namespace ex = stdexec;
+
 class AsyncVulkanInitializer {
-    std::future<bool> initFuture;
-    std::promise<VkDevice> devicePromise;
+    exec::static_thread_pool pool;
+    std::atomic<VkDevice> device{VK_NULL_HANDLE};
     std::atomic<bool> initialized{false};
 
 public:
-    void startAsyncInitialization() {
-        initFuture = std::async(std::launch::async, [this]() -> bool {
-            // Инициализация volk в worker thread
-            if (volkInitialize() != VK_SUCCESS) {
-                return false;
-            }
+    AsyncVulkanInitializer(size_t num_threads = 1) : pool(num_threads) {}
 
-            // Создание instance и device в фоне
-            VkInstance instance = createInstance();
-            volkLoadInstance(instance);
+    // Возвращает stdexec sender вместо std::future
+    stdexec::sender auto startAsyncInitialization() {
+        auto scheduler = pool.get_scheduler();
+        
+        return ex::schedule(scheduler)
+             | ex::then([this]() -> std::expected<bool, std::string> {
+                   // Инициализация volk в worker thread
+                   if (volkInitialize() != VK_SUCCESS) {
+                       return std::unexpected("Failed to initialize volk");
+                   }
 
-            VkDevice device = createDevice(instance);
-            volkLoadDevice(device);
+                   // Создание instance и device в фоне
+                   VkInstance instance = createInstance();
+                   volkLoadInstance(instance);
 
-            devicePromise.set_value(device);
-            initialized = true;
-            return true;
-        });
+                   VkDevice dev = createDevice(instance);
+                   volkLoadDevice(dev);
+
+                   device.store(dev, std::memory_order_release);
+                   initialized.store(true, std::memory_order_release);
+                   
+                   std::println("[VOLK] Async initialization completed");
+                   return true;
+               });
     }
 
-    VkDevice getDevice() {
-        if (initialized) {
-            return devicePromise.get_future().get();
-        }
-        return VK_NULL_HANDLE;
+    VkDevice getDevice() const {
+        return device.load(std::memory_order_acquire);
     }
 
     bool isReady() const {
-        return initialized;
+        return initialized.load(std::memory_order_acquire);
+    }
+
+    // Вспомогательные функции для создания instance и device
+private:
+    VkInstance createInstance() {
+        VkInstance instance = VK_NULL_HANDLE;
+        VkInstanceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        
+        // Базовая инициализация для примера
+        if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
+            return VK_NULL_HANDLE;
+        }
+        return instance;
+    }
+
+    VkDevice createDevice(VkInstance instance) {
+        VkDevice device = VK_NULL_HANDLE;
+        VkDeviceCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        
+        // Базовая инициализация для примера
+        if (vkCreateDevice(instance, &createInfo, nullptr, &device) != VK_SUCCESS) {
+            return VK_NULL_HANDLE;
+        }
+        return device;
     }
 };
-```
 
+// Использование в ProjectV
+void initializeVulkanAsync() {
+    AsyncVulkanInitializer initializer;
+    
+    // Запуск асинхронной инициализации
+    auto init_task = initializer.startAsyncInitialization()
+                   | ex::then([](std::expected<bool, std::string> result) {
+                         if (!result) {
+                             std::println(stderr, "Initialization failed: {}", result.error());
+                             return false;
+                         }
+                         return true;
+                     });
+    
+    // Можно запустить и ждать или интегрировать в основной цикл
+    ex::sync_wait(std::move(init_task));
+}
+```
 ### Lazy-загрузка Vulkan функций
 
 ```cpp
@@ -637,7 +706,17 @@ void renderFrame(VkCommandBuffer cmd) {
     TRACY_VOLK_ZONE(cmd, "RenderFrame");
 
     // Остальной код рендеринга
-    vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    // В ProjectV используем Vulkan 1.4 Dynamic Rendering вместо устаревших render passes
+    VkRenderingInfo renderingInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = renderArea,
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachment,
+        .pDepthAttachment = &depthAttachment,
+        .pStencilAttachment = nullptr
+    };
+    vkCmdBeginRendering(cmd, &renderingInfo);
     // ...
 }
 ```
@@ -902,8 +981,8 @@ public:
             "vkCmdDispatch",
             "vkCmdCopyBuffer",
             "vkCmdCopyBufferToImage",
-            "vkCmdBeginRenderPass",
-            "vkCmdEndRenderPass",
+            "vkCmdBeginRendering",
+            "vkCmdEndRendering",
             "vkQueueSubmit",
             "vkQueueWaitIdle"
         };

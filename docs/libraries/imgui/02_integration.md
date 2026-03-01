@@ -39,7 +39,7 @@ ImGuiContext* imguiInit(VkInstance instance, VkPhysicalDevice physicalDevice,
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    // Инициализация Vulkan backend
+    // Инициализация Vulkan backend с Dynamic Rendering (Vulkan 1.4)
     ImGui_ImplVulkan_InitInfo initInfo{};
     initInfo.Instance = instance;
     initInfo.PhysicalDevice = physicalDevice;
@@ -47,10 +47,27 @@ ImGuiContext* imguiInit(VkInstance instance, VkPhysicalDevice physicalDevice,
     initInfo.QueueFamily = queueFamily;
     initInfo.Queue = queue;
     initInfo.DescriptorPool = descriptorPool;  // Создай заранее
-    initInfo.RenderPass = renderPass;
     initInfo.MinImageCount = 2;
     initInfo.ImageCount = 2;
     initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    
+    // Vulkan 1.4 Dynamic Rendering вместо устаревшего RenderPass
+    initInfo.UseDynamicRendering = true;
+    
+    // Форматы для Dynamic Rendering
+    VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;  // Пример формата
+    VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;      // Пример формата глубины
+    
+    // PipelineRenderingCreateInfo для Dynamic Rendering
+    VkPipelineRenderingCreateInfo renderingCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &colorFormat,
+        .depthAttachmentFormat = depthFormat,
+        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED
+    };
+    
+    initInfo.PipelineRenderingCreateInfo = &renderingCreateInfo;
 
     ImGui_ImplVulkan_Init(&initInfo);
 

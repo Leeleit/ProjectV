@@ -1,4 +1,4 @@
-﻿# Tracy: Хардкорные оптимизации
+# Tracy: Хардкорные оптимизации
 
 Документ описывает продвинутые техники профилирования в ProjectV: DOD-паттерны, Job System интеграцию, SoA для метрик,
 zero-overhead профилирование и GPU-driven паттерны. Всё в контексте воксельного движка с тысячами сущностей и compute
@@ -187,34 +187,55 @@ m_jobs[head] = job;
     }
 };
 
-// Worker thread — НЕ создаётся в кадре!
-class Worker {
-    alignas(64) std::jthread m_thread;
+// Worker на основе stdexec — НЕ создаёт потоки!
+class StdexecWorker {
     JobQueue& m_queue;
-    TracyLockable(std::mutex, m_wakeMutex);
-    std::condition_variable m_wakeCV;
+    stdexec::scheduler auto scheduler_;
 
 public:
-    explicit Worker(JobQueue& queue) noexcept : m_queue(queue) {
-        m_thread = std::jthread([this](std::stop_token st) {
-            TracyMessageL("Worker thread started");
-
-            while (!st.stop_requested()) {
-                JobId job;
-
-                if (m_queue.dequeue(job)) {
-                    executeJob(job);
-                } else {
-                    // Spin-wait или sleep
-                    std::this_thread::yield();
-                }
-            }
-
-            TracyMessageL("Worker thread stopped");
-        });
+    explicit StdexecWorker(JobQueue& queue, stdexec::scheduler auto scheduler = stdexec::get_default_scheduler()) 
+        : m_queue(queue), scheduler_(scheduler) {
+        
+        // Запускаем обработку задач через stdexec
+        startProcessing();
     }
 
 private:
+    void startProcessing() {
+        // Создаем sender для обработки задач
+        auto processTask = stdexec::schedule(scheduler_)
+                         | stdexec::then([this]() -> bool {
+                               JobId job;
+                               if (m_queue.dequeue(job)) {
+                                   executeJob(job);
+                                   return true;
+                               }
+                               return false;
+                           })
+                         | stdexec::then([this](bool hadWork) {
+                               // Если была работа, продолжаем немедленно
+                               // Если нет, ждем немного
+                               if (hadWork) {
+                                   return stdexec::schedule(scheduler_);
+                               } else {
+                                   return stdexec::schedule_after(scheduler_, std::chrono::microseconds(100));
+                               }
+                           });
+
+        // Запускаем циклическую обработку
+        auto loopTask = stdexec::schedule(scheduler_)
+                      | stdexec::then([this, processTask = std::move(processTask)]() mutable {
+                            // Рекурсивно перезапускаем задачу
+                            return processTask
+                                 | stdexec::then([this, processTask = std::move(processTask)]() mutable {
+                                       return loopTask;
+                                   });
+                        });
+
+        // Запускаем асинхронно
+        stdexec::start_detached(std::move(loopTask));
+    }
+
     void executeJob(JobId job) noexcept {
         ZoneScopedNC("JobExecution", 0x00FF00);
 

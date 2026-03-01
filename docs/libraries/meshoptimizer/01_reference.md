@@ -481,11 +481,18 @@ auto encodeVertexBuffer(
     return encoded;
 }
 
+struct VertexDecodeError {
+    enum class Code {
+        DecodeFailed
+    } code;
+    std::string message;
+};
+
 auto decodeVertexBuffer(
     std::span<const uint8_t> encoded,
     size_t vertex_count,
     size_t vertex_size
-) -> std::vector<Vertex> {
+) -> std::expected<std::vector<Vertex>, VertexDecodeError> {
     std::vector<Vertex> vertices(vertex_count);
 
     const int result = meshopt_decodeVertexBuffer(
@@ -497,7 +504,10 @@ auto decodeVertexBuffer(
     );
 
     if (result != 0) {
-        throw std::runtime_error("Decode failed: " + std::to_string(result));
+        return std::unexpected(VertexDecodeError{
+            .code = VertexDecodeError::Code::DecodeFailed,
+            .message = "Decode failed: " + std::to_string(result)
+        });
     }
 
     return vertices;

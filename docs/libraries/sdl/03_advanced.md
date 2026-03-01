@@ -1,4 +1,4 @@
-﻿# SDL3: Злые хаки и DOD-оптимизации
+# SDL3: Злые хаки и DOD-оптимизации
 
 ## Архитектура многопоточности
 
@@ -181,50 +181,46 @@ void process_input_batch(InputBatch& batch) {
 
 ## Job System для SDL
 
-### Паттерн: Background Loading
+### Паттерн: Background Loading с stdexec
+
+> **Важно для ProjectV:** В движке ProjectV запрещено создавать кастомные `std::jthread`, `std::mutex` и `std::condition_variable`. Используйте глобальный stdexec Job System движка.
 
 ```cpp
-#include <queue>
-#include <mutex>
+#include <stdexec/execution.hpp>
+#include <exec/static_thread_pool.hpp>
 
-class JobSystem {
-    std::vector<std::jthread> workers_;
-    std::condition_variable cv_;
-    std::mutex mutex_;
-    std::queue<std::function<void()>> jobs_;
-    std::atomic<bool> running_{true};
+// Вместо кастомного JobSystem используйте глобальный stdexec scheduler
+class SdlJobSystem {
+    // Используем глобальный thread pool движка ProjectV
+    exec::static_thread_pool& threadPool_;
 
 public:
-    explicit JobSystem(size_t threadCount) {
-        for (size_t i = 0; i < threadCount; ++i) {
-            workers_.emplace_back([this] {
-                while (running_) {
-                    std::function<void()> job;
-                    {
-                        std::unique_lock lock(mutex_);
-                        cv_.wait(lock, [this] { return !jobs_.empty() || !running_; });
-                        if (!jobs_.empty()) {
-                            job = std::move(jobs_.front());
-                            jobs_.pop();
-                        }
-                    }
-                    if (job) job();
-                }
-            });
-        }
+    explicit SdlJobSystem(exec::static_thread_pool& pool) : threadPool_(pool) {}
+
+    // Запуск задачи в background через stdexec
+    template<typename Func>
+    void enqueue(Func&& func) {
+        // Создаем sender для выполнения функции
+        auto sender = stdexec::schedule(threadPool_.get_scheduler())
+                    | stdexec::then(std::forward<Func>(func));
+
+        // Запускаем асинхронно без ожидания
+        stdexec::start_detached(std::move(sender));
     }
 
-    void enqueue(std::function<void()> job) {
-        {
-            std::lock_guard lock(mutex_);
-            jobs_.push(std::move(job));
-        }
-        cv_.notify_one();
+    // Запуск нескольких задач параллельно
+    template<typename Func>
+    void enqueue_bulk(size_t count, Func&& func) {
+        auto sender = stdexec::schedule(threadPool_.get_scheduler())
+                    | stdexec::bulk(count, std::forward<Func>(func));
+
+        stdexec::start_detached(std::move(sender));
     }
 
-    ~JobSystem() {
-        running_ = false;
-        cv_.notify_all();
+    // Ожидание завершения всех задач (для синхронизации при необходимости)
+    void wait_all() {
+        // В ProjectV используйте stdexec::sync_wait для синхронизации
+        // или проектируйте систему как полностью асинхронную
     }
 };
 ```

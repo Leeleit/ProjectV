@@ -80,9 +80,11 @@ if (!vulkan_result) {
     return std::unexpected(vulkan_result.error());
 }
 
+
 // 3. Flecs World создаётся
 flecs::world ecs;
-ecs.set_threads(std::thread::hardware_concurrency());
+// Используем конфигурацию движка вместо std::thread::hardware_concurrency()
+ecs.set_threads(get_engine_thread_count());
 
 // 4. Audio Engine создаётся ПОСЛЕ Flecs
 AudioEngine::Config audioConfig;
@@ -90,6 +92,15 @@ audioConfig.listenerCount = 1;  // Один игрок
 audioConfig.sampleRate = 48000;
 audioConfig.format = ma_format_f32;
 audioConfig.channels = 2;
+
+// Вспомогательная функция для получения количества потоков из конфигурации движка
+size_t get_engine_thread_count() {
+    // В ProjectV это значение берется из конфигурации движка
+    // Например: projectv::core::config::getThreadPoolSize()
+    // Для примера возвращаем разумное значение по умолчанию
+    constexpr size_t DEFAULT_THREAD_COUNT = 4;
+    return DEFAULT_THREAD_COUNT;
+}
 
 AudioEngine audioEngine;
 auto init_result = audioEngine.init(audioConfig);

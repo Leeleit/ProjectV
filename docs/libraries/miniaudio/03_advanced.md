@@ -36,32 +36,46 @@ class AudioProcessor {
 };
 ```
 
-### Object Pool для звуков
+
+### Object Pool для звуков (lock-free версия)
 
 ```cpp
-// Пул объектов - аллокация только при старте
+// Пул объектов - аллокация только при старте, lock-free доступ
 class SoundPool {
-    struct Node {
+    struct alignas(64) Node {
         ma_sound sound;
-        bool in_use = false;
+        std::atomic<bool> in_use{false};
         std::string name;
+        
+        // CAS операции для атомарного управления состоянием
+        bool try_acquire(const char* new_name) {
+            bool expected = false;
+            if (in_use.compare_exchange_strong(expected, true, 
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_relaxed)) {
+                name = new_name;
+                return true;
+            }
+            return false;
+        }
+        
+        void release() {
+            in_use.store(false, std::memory_order_release);
+        }
     };
 
-    std::vector<Node> m_pool;
-    std::mutex m_mutex;
+    alignas(64) std::vector<Node> m_pool;
 
 public:
     SoundPool(size_t size) {
         m_pool.resize(size);
     }
 
-    // Аллокация при старте, не в рантайме
+    // Аллокация при старте, не в рантайме (lock-free)
     ma_sound* allocate(const char* name) {
-        std::lock_guard lock(m_mutex);
+        // Пробуем найти свободный узел с помощью CAS операций
         for (auto& node : m_pool) {
-            if (!node.in_use) {
-                node.in_use = true;
-                node.name = name;
+            if (node.try_acquire(name)) {
                 return &node.sound;
             }
         }
@@ -69,17 +83,54 @@ public:
     }
 
     void deallocate(ma_sound* sound) {
-        std::lock_guard lock(m_mutex);
+        // Находим узел по указателю и освобождаем его
         for (auto& node : m_pool) {
             if (&node.sound == sound) {
-                node.in_use = false;
+                node.release();
                 return;
             }
         }
     }
+    
+    // Альтернативная версия с атомарным индексом для лучшей производительности
+    class AtomicSoundPool {
+        struct alignas(64) AtomicNode {
+            ma_sound sound;
+            std::atomic<bool> in_use{false};
+            char name[64];  // Фиксированный буфер вместо std::string
+            
+            bool try_acquire(const char* new_name) {
+                bool expected = false;
+                if (in_use.compare_exchange_strong(expected, true)) {
+                    std::strncpy(name, new_name, sizeof(name) - 1);
+                    name[sizeof(name) - 1] = '\0';
+                    return true;
+                }
+                return false;
+            }
+        };
+        
+        alignas(64) std::vector<AtomicNode> m_pool;
+        alignas(64) std::atomic<size_t> m_next_index{0};
+        
+    public:
+        AtomicSoundPool(size_t size) : m_pool(size) {}
+        
+        ma_sound* allocate(const char* name) {
+            // Round-robin поиск с атомарным индексом
+            const size_t start_idx = m_next_index.fetch_add(1, std::memory_order_relaxed) % m_pool.size();
+            
+            for (size_t i = 0; i < m_pool.size(); ++i) {
+                size_t idx = (start_idx + i) % m_pool.size();
+                if (m_pool[idx].try_acquire(name)) {
+                    return &m_pool[idx].sound;
+                }
+            }
+            return nullptr;
+        }
+    };
 };
 ```
-
 ## Cache-Line Alignment
 
 > **Для понимания:** CPU читает память «строками» по 64 байта. Если ваши данные пересекают границы этих строк — CPU
