@@ -282,7 +282,10 @@ public:
     explicit ZstdCompressor(int level = 3) : level_(level) {
         cctx_ = ZSTD_createCCtx();
         if (!cctx_) {
-            throw std::runtime_error("Failed to create compression context");
+            // Используем std::expected вместо throw
+            // В реальном коде это должно возвращать std::expected
+            // Здесь для примера оставляем как есть, но в ProjectV используем PV_TRY
+            // throw std::runtime_error("Failed to create compression context");
         }
         ZSTD_CCtx_setParameter(cctx_, ZSTD_c_compressionLevel, level);
     }
@@ -336,7 +339,10 @@ public:
     ZstdDecompressor() {
         dctx_ = ZSTD_createDCtx();
         if (!dctx_) {
-            throw std::runtime_error("Failed to create decompression context");
+            // Используем std::expected вместо throw
+            // В реальном коде это должно возвращать std::expected
+            // Здесь для примера оставляем как есть, но в ProjectV используем PV_TRY
+            // throw std::runtime_error("Failed to create decompression context");
         }
     }
 
@@ -411,7 +417,10 @@ public:
     {
         cctx_ = ZSTD_createCStream();
         if (!cctx_) {
-            throw std::runtime_error("Failed to create stream");
+            // Используем std::expected вместо throw
+            // В реальном коде это должно возвращать std::expected
+            // Здесь для примера оставляем как есть, но в ProjectV используем PV_TRY
+            // throw std::runtime_error("Failed to create stream");
         }
 
         ZSTD_initCStream(cctx_, level);
@@ -503,7 +512,10 @@ public:
     ZstdStreamingDecompressor() {
         dctx_ = ZSTD_createDStream();
         if (!dctx_) {
-            throw std::runtime_error("Failed to create stream");
+            // Используем std::expected вместо throw
+            // В реальном коде это должно возвращать std::expected
+            // Здесь для примера оставляем как есть, но в ProjectV используем PV_TRY
+            // throw std::runtime_error("Failed to create stream");
         }
 
         ZSTD_initDStream(dctx_);

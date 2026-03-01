@@ -1,4 +1,4 @@
-﻿# Интеграция RmlUi в ProjectV
+# Интеграция RmlUi в ProjectV
 
 > **Для понимания:** Интеграция RmlUi — это как подключение профессионального UI-редактора к игровому движку. Мы создаём
 > мост: с одной стороны Vulkan для рисования, с другой — Flecs ECS для данных. SDL3 обеспечивает ввод.
@@ -67,7 +67,8 @@ public:
         VkQueue renderQueue,
         uint32_t queueFamilyIndex,
         VmaAllocator allocator,
-        VkRenderPass renderPass,
+        VkFormat colorFormat,
+        VkFormat depthFormat,
         VkSampleCountFlagBits msaaSamples
     ) noexcept;
 
@@ -155,9 +156,243 @@ private:
     bool scissorEnabled_ = false;
     VkRect2D scissorRect_ = {};
 
-    [[nodiscard]] bool createPipeline(VkRenderPass renderPass, VkSampleCountFlagBits samples) noexcept;
+    VkFormat colorFormat_;
+    VkFormat depthFormat_;
+    VkSampleCountFlagBits msaaSamples_;
+
+    [[nodiscard]] bool createPipeline() noexcept;
     [[nodiscard]] VkDescriptorSet createDescriptorSet(VkImageView imageView, VkSampler sampler) noexcept;
 };
+
+// Реализация createPipeline для Dynamic Rendering
+bool RmlUiVulkanRenderer::createPipeline() noexcept {
+    // Создание descriptor set layout для текстур
+    VkDescriptorSetLayoutBinding samplerBinding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+    };
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+               .bindingCount = 1,
+        .pBindings = &samplerBinding
+    };
+
+    if (vkCreateDescriptorSetLayout(device_, &layoutInfo, nullptr, &descriptorSetLayout_) != VK_SUCCESS) {
+        return false;
+    }
+
+    // Pipeline layout с push constants
+    VkPushConstantRange pushConstantRange = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Rml::Vector2f) + 2 * sizeof(float) // translation + padding
+    };
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorSetLayout_,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
+    };
+
+    if (vkCreatePipelineLayout(device_, &pipelineLayoutInfo, nullptr, &pipelineLayout_) != VK_SUCCESS) {
+        vkDestroyDescriptorSetLayout(device_, descriptorSetLayout_, nullptr);
+        return false;
+    }
+
+    // Shader stages (вершинный и фрагментный шейдеры)
+    // В реальном коде здесь будет загрузка SPIR-V шейдеров
+    VkPipelineShaderStageCreateInfo shaderStages[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_VERTEX_BIT,
+            .module = /* vertex shader module */,
+            .pName = "main"
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module = /* fragment shader module */,
+            .pName = "main"
+        }
+    };
+
+    // Vertex input
+    VkVertexInputBindingDescription bindingDescription = {
+        .binding = 0,
+        .stride = sizeof(Rml::Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+    };
+
+    VkVertexInputAttributeDescription attributeDescriptions[3] = {
+        {
+            .location = 0,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32_SFLOAT,
+            .offset = offsetof(Rml::Vertex, position)
+        },
+        {
+            .location = 1,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+            .offset = offsetof(Rml::Vertex, colour)
+        },
+        {
+            .location = 2,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32_SFLOAT,
+            .offset = offsetof(Rml::Vertex, tex_coord)
+        }
+    };
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindingDescription,
+        .vertexAttributeDescriptionCount = 3,
+        .pVertexAttributeDescriptions = attributeDescriptions
+    };
+
+    // Input assembly
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE
+    };
+
+    // Viewport и scissor
+    VkPipelineViewportStateCreateInfo viewportState = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1
+    };
+
+    // Rasterizer
+    VkPipelineRasterizationStateCreateInfo rasterizer = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_NONE,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,
+        .lineWidth = 1.0f
+    };
+
+    // Multisampling
+    VkPipelineMultisampleStateCreateInfo multisampling = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .rasterizationSamples = msaaSamples_,
+        .sampleShadingEnable = VK_FALSE
+    };
+
+    // Color blending
+    VkPipelineColorBlendAttachmentState colorBlendAttachment = {
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+    };
+
+    VkPipelineColorBlendStateCreateInfo colorBlending = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .logicOpEnable = VK_FALSE,
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment
+    };
+
+    // Dynamic state
+    VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamicState = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+        .dynamicStateCount = 2,
+        .pDynamicStates = dynamicStates
+    };
+
+    // Dynamic Rendering
+    VkPipelineRenderingCreateInfo renderingInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &colorFormat_,
+        .depthAttachmentFormat = depthFormat_,
+        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED
+    };
+
+    // Graphics pipeline creation
+    VkGraphicsPipelineCreateInfo pipelineInfo = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &renderingInfo,
+        .stageCount = 2,
+        .pStages = shaderStages,
+        .pVertexInputState = &vertexInputInfo,
+        .pInputAssemblyState = &inputAssembly,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pDepthStencilState = nullptr, // No depth testing for UI
+        .pColorBlendState = &colorBlending,
+        .pDynamicState = &dynamicState,
+        .layout = pipelineLayout_,
+        .renderPass = VK_NULL_HANDLE, // Dynamic rendering doesn't use render pass
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1
+    };
+
+    if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline_) != VK_SUCCESS) {
+        vkDestroyPipelineLayout(device_, pipelineLayout_, nullptr);
+        vkDestroyDescriptorSetLayout(device_, descriptorSetLayout_, nullptr);
+        return false;
+    }
+
+    return true;
+}
+
+VkDescriptorSet RmlUiVulkanRenderer::createDescriptorSet(VkImageView imageView, VkSampler sampler) noexcept {
+    VkDescriptorSetAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = descriptorPool_,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &descriptorSetLayout_
+    };
+
+    VkDescriptorSet descriptorSet;
+    if (vkAllocateDescriptorSets(device_, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+        return VK_NULL_HANDLE;
+    }
+
+    VkDescriptorImageInfo imageInfo = {
+        .sampler = sampler,
+        .imageView = imageView,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    VkWriteDescriptorSet descriptorWrite = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = descriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &imageInfo
+    };
+
+    vkUpdateDescriptorSets(device_, 1, &descriptorWrite, 0, nullptr);
+    return descriptorSet;
+}
 ```
 
 ### Реализация
@@ -174,15 +409,19 @@ RmlUiVulkanRenderer::RmlUiVulkanRenderer(
     VkQueue renderQueue,
     uint32_t queueFamilyIndex,
     VmaAllocator allocator,
-    VkRenderPass renderPass,
+    VkFormat colorFormat,
+    VkFormat depthFormat,
     VkSampleCountFlagBits msaaSamples
 ) noexcept
     : device_(device)
     , allocator_(allocator)
     , renderQueue_(renderQueue)
     , queueFamilyIndex_(queueFamilyIndex)
+    , colorFormat_(colorFormat)
+    , depthFormat_(depthFormat)
+    , msaaSamples_(msaaSamples)
 {
-    createPipeline(renderPass, msaaSamples);
+    createPipeline();
 
     // Descriptor pool для текстур
     VkDescriptorPoolSize poolSize = {
@@ -1071,10 +1310,10 @@ void Game::init() {
     // 2. Vulkan
     initVulkan(); // Ваша функция
 
-    // 3. RmlUi renderer
+    // 3. RmlUi renderer с Dynamic Rendering
     uiRenderer_ = std::make_unique<RmlUiVulkanRenderer>(
         device_, physicalDevice_, graphicsQueue_, queueFamilyIndex_,
-        allocator_, renderPass_, msaaSamples_
+        allocator_, colorFormat_, depthFormat_, msaaSamples_
     );
 
     // 4. RmlUi system

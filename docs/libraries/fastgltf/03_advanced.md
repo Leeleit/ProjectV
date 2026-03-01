@@ -1,8 +1,8 @@
-# Продвинутые оптимизации fastgltf для высокопроизводительных систем
+# Продвинутые оптимизации fastgltf для ProjectV
 
 **Архитектурный контекст:** Этот документ описывает продвинутые техники оптимизации fastgltf,
-фокусируясь на Data-Oriented Design, GPU-driven рендеринге и высокопроизводительных паттернах для современных игровых
-движков.
+фокусируясь на Data-Oriented Design, GPU-driven рендеринге и высокопроизводительных паттернах для воксельного движка
+ProjectV.
 
 ## SIMD-оптимизации и производительность
 
@@ -188,8 +188,9 @@ struct AsyncUploadTask {
 
 class AsyncGltfUploader {
     VulkanUploadContext& ctx;
+    std::atomic<size_t> pendingUploadsCount{0};
     std::vector<AsyncUploadTask> pendingUploads;
-    std::mutex uploadMutex;
+    std::mutex uploadMutex;  // Используем std::mutex вместо атомарного флага
 
 public:
     AsyncGltfUploader(VulkanUploadContext& context) : ctx(context) {}
@@ -248,6 +249,7 @@ public:
                             .dataSize = bufferView.byteLength,
                             .completionFence = fence
                         });
+                        pendingUploadsCount.fetch_add(1, std::memory_order_release);
                     }
                 }
             }
@@ -299,6 +301,11 @@ public:
         }
 
         pendingUploads.clear();
+        pendingUploadsCount.store(0, std::memory_order_release);
+    }
+
+    size_t getPendingCount() const {
+        return pendingUploadsCount.load(std::memory_order_acquire);
     }
 };
 ```
@@ -406,7 +413,7 @@ struct OptimizedMeshSoA {
 
 ## Рекомендации для высокопроизводительных систем
 
-### Оптимизированный пайплайн загрузки glTF
+### Оптимизированный пайплайн загрузки glTF на основе stdexec
 
 ```cpp
 #include <print>
@@ -414,43 +421,67 @@ struct OptimizedMeshSoA {
 #include <fastgltf/core.hpp>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include <stdexec/execution.hpp>
 
 class HighPerfGltfPipeline {
     ParserPool parserPool;
     ParallelGltfLoader parallelLoader;
     AsyncGltfUploader asyncUploader;
     VulkanUploadContext& vulkanContext;
+    stdexec::scheduler auto scheduler;
 
 public:
-    HighPerfGltfPipeline(VulkanUploadContext& ctx)
-        : parserPool(std::thread::hardware_concurrency())
-        , parallelLoader(parserPool)
+    HighPerfGltfPipeline(VulkanUploadContext& ctx, stdexec::scheduler auto sched = stdexec::get_default_scheduler())
+        : parserPool(4)  // Фиксированный размер пула, можно настраивать через конфиг
+        , parallelLoader(parserPool, sched)
         , asyncUploader(ctx)
-        , vulkanContext(ctx) {}
+        , vulkanContext(ctx)
+        , scheduler(sched) {}
 
-    std::future<MeshDataDOD> loadOptimized(const std::filesystem::path& path) {
-        return std::async(std::launch::async, [this, path]() {
-            // 1. Асинхронная загрузка glTF
-            auto assetFuture = parallelLoader.loadAsync(path);
-            auto assetResult = assetFuture.get();
+    // ✅ ПРАВИЛЬНО: возвращаем Sender вместо std::future
+    stdexec::sender auto loadOptimized(const std::filesystem::path& path) {
+        return parallelLoader.loadAsync(path)
+             | stdexec::then([this](std::expected<fastgltf::Asset, fastgltf::Error> assetResult) -> MeshDataDOD {
+                    if (!assetResult) {
+                        std::println(stderr, "Failed to load glTF: {}", 
+                                     fastgltf::getErrorName(assetResult.error()));
+                        return MeshDataDOD{};
+                    }
 
-            if (!assetResult) {
-                throw std::runtime_error(fastgltf::getErrorName(assetResult.error()));
-            }
+                    // Преобразование в DOD структуры
+                    MeshDataDOD meshData;
+                    for (size_t i = 0; i < assetResult->meshes.size(); ++i) {
+                        auto mesh = loadMeshWithHotColdSeparation(*assetResult, i);
+                        mergeMeshData(meshData, std::move(mesh));
+                    }
 
-            // 2. Преобразование в DOD структуры
-            MeshDataDOD meshData;
-            for (size_t i = 0; i < assetResult->meshes.size(); ++i) {
-                auto mesh = loadMeshWithHotColdSeparation(*assetResult, i);
-                // Объединение данных для batch processing
-                mergeMeshData(meshData, std::move(mesh));
-            }
+                    // Планирование GPU загрузки
+                    asyncUploader.scheduleUpload(*assetResult);
 
-            // 3. Планирование GPU загрузки
-            asyncUploader.scheduleUpload(*assetResult);
+                    return meshData;
+                });
+    }
 
-            return meshData;
-        });
+    // Пакетная загрузка нескольких моделей
+    stdexec::sender auto loadBatchOptimized(const std::vector<std::filesystem::path>& paths) {
+        return parallelLoader.loadBatchAsync(paths)
+             | stdexec::bulk(static_cast<int>(paths.size()),
+                   [this](int idx, std::expected<fastgltf::Asset, fastgltf::Error> assetResult) -> MeshDataDOD {
+                       if (!assetResult) {
+                           std::println(stderr, "Failed to load glTF at index {}: {}", 
+                                        idx, fastgltf::getErrorName(assetResult.error()));
+                           return MeshDataDOD{};
+                       }
+
+                       MeshDataDOD meshData;
+                       for (size_t i = 0; i < assetResult->meshes.size(); ++i) {
+                           auto mesh = loadMeshWithHotColdSeparation(*assetResult, i);
+                           mergeMeshData(meshData, std::move(mesh));
+                       }
+
+                       asyncUploader.scheduleUpload(*assetResult);
+                       return meshData;
+                   });
     }
 
     void processFrame() {
@@ -471,13 +502,15 @@ private:
     }
 };
 ```
+```
 
-### Интеграция с Flecs ECS
+### Интеграция с Flecs ECS и stdexec
 
 ```cpp
 #include <flecs.h>
 #include <print>
 #include <fastgltf/core.hpp>
+#include <stdexec/execution.hpp>
 
 struct GltfMeshComponent {
     std::vector<glm::vec3> positions;
@@ -497,33 +530,32 @@ struct GltfMaterialComponent {
 class GltfLoaderSystem {
     flecs::world& world;
     HighPerfGltfPipeline& pipeline;
+    stdexec::scheduler auto scheduler;
 
 public:
-    GltfLoaderSystem(flecs::world& w, HighPerfGltfPipeline& p)
-        : world(w), pipeline(p) {
+    GltfLoaderSystem(flecs::world& w, HighPerfGltfPipeline& p, 
+                     stdexec::scheduler auto sched = stdexec::get_default_scheduler())
+        : world(w), pipeline(p), scheduler(sched) {
 
-        // Система загрузки glTF
+        // Система загрузки glTF с использованием stdexec
         world.system<GltfMeshComponent, GltfMaterialComponent>()
             .kind(flecs::OnLoad)
             .each([this](flecs::entity e, GltfMeshComponent& mesh, GltfMaterialComponent& material) {
-                // Асинхронная загрузка и обновление компонентов
-                auto future = pipeline.loadOptimized(e.name().c_str());
+                // Запускаем асинхронную загрузку через stdexec
+                auto loadTask = pipeline.loadOptimized(e.name().c_str())
+                              | stdexec::then([e, this](MeshDataDOD meshData) mutable {
+                                    // Обновление компонентов в следующем кадре
+                                    world.defer([e, meshData = std::move(meshData)]() mutable {
+                                        e.set<GltfMeshComponent>({
+                                            .positions = std::move(meshData.hot.positions),
+                                            .normals = std::move(meshData.hot.normals),
+                                            .indices = std::move(meshData.hot.indices)
+                                        });
+                                    });
+                                });
 
-                // Отложенное обновление компонентов
-                world.defer([e, future = std::move(future)]() mutable {
-                    try {
-                        auto meshData = future.get();
-
-                        // Обновление компонентов в следующем кадре
-                        e.set<GltfMeshComponent>({
-                            .positions = std::move(meshData.hot.positions),
-                            .normals = std::move(meshData.hot.normals),
-                            .indices = std::move(meshData.hot.indices)
-                        });
-                    } catch (const std::exception& e) {
-                        std::println("Failed to load glTF: {}", e.what());
-                    }
-                });
+                // Запускаем задачу асинхронно
+                stdexec::start_detached(std::move(loadTask));
             });
 
         // Система обработки GPU загрузок
@@ -535,10 +567,17 @@ public:
     }
 };
 ```
+```
 
-### Производительность и метрики
+### Производительность и метрики (lock-free версия)
 
 ```cpp
+#include <print>
+#include <chrono>
+#include <atomic>
+#include <vector>
+#include <string>
+
 struct GltfPerformanceMetrics {
     std::chrono::nanoseconds parseTime;
     std::chrono::nanoseconds uploadTime;
@@ -558,36 +597,88 @@ struct GltfPerformanceMetrics {
     }
 };
 
+// Lock-free структура для хранения метрик
+struct GltfProfilerEntry {
+    std::string name;
+    GltfPerformanceMetrics metrics;
+    std::atomic<bool> valid{false};
+};
+
 class GltfProfiler {
-    std::unordered_map<std::string, GltfPerformanceMetrics> metrics;
-    std::mutex metricsMutex;
+    // Плоский массив записей (DOD подход)
+    std::vector<GltfProfilerEntry> entries;
+    std::atomic<size_t> nextEntry{0};
+    const size_t maxEntries;
 
 public:
+    GltfProfiler(size_t maxEntries = 1024) : maxEntries(maxEntries) {
+        entries.resize(maxEntries);
+    }
+
     void recordLoad(const std::string& name,
                     std::chrono::nanoseconds parseTime,
                     std::chrono::nanoseconds uploadTime,
                     size_t vertexCount,
                     size_t triangleCount,
                     size_t memoryUsage) {
-
-        std::lock_guard lock(metricsMutex);
-        metrics[name] = {
+        
+        size_t index = nextEntry.fetch_add(1, std::memory_order_relaxed) % maxEntries;
+        
+        // Записываем данные в атомарной операции
+        entries[index].name = name;
+        entries[index].metrics = {
             .parseTime = parseTime,
             .uploadTime = uploadTime,
             .vertexCount = vertexCount,
             .triangleCount = triangleCount,
             .memoryUsage = memoryUsage
         };
+        
+        // Атомарно помечаем запись как валидную
+        entries[index].valid.store(true, std::memory_order_release);
     }
 
     void printAll() const {
-        std::lock_guard lock(metricsMutex);
-        for (const auto& [name, metric] : metrics) {
-            std::println("\n--- {} ---", name);
-            metric.print();
+        std::println("=== glTF Performance Metrics Summary ===");
+        
+        for (size_t i = 0; i < maxEntries; ++i) {
+            if (entries[i].valid.load(std::memory_order_acquire)) {
+                std::println("\n--- {} ---", entries[i].name);
+                entries[i].metrics.print();
+            }
         }
     }
+
+    // Получение статистики по всем записям
+    GltfPerformanceMetrics getAverageMetrics() const {
+        GltfPerformanceMetrics total{};
+        size_t count = 0;
+
+        for (size_t i = 0; i < maxEntries; ++i) {
+            if (entries[i].valid.load(std::memory_order_acquire)) {
+                total.parseTime += entries[i].metrics.parseTime;
+                total.uploadTime += entries[i].metrics.uploadTime;
+                total.vertexCount += entries[i].metrics.vertexCount;
+                total.triangleCount += entries[i].metrics.triangleCount;
+                total.memoryUsage += entries[i].metrics.memoryUsage;
+                ++count;
+            }
+        }
+
+        if (count > 0) {
+            return GltfPerformanceMetrics{
+                .parseTime = total.parseTime / count,
+                .uploadTime = total.uploadTime / count,
+                .vertexCount = total.vertexCount / count,
+                .triangleCount = total.triangleCount / count,
+                .memoryUsage = total.memoryUsage / count
+            };
+        }
+
+        return total;
+    }
 };
+```
 ```
 
 ## Заключение
@@ -620,128 +711,107 @@ Fastgltf предоставляет мощный набор инструмент
 Эти оптимизации позволяют загружать сложные сцены с тысячами объектов без просадок производительности, что
 критически важно для современных игровых движков.
 
-### Thread-Local Parser Pool
+### Параллельный загрузчик на основе stdexec (P2300)
 
 ```cpp
+#include <execution>
+#include <stdexec/execution.hpp>
+#include <print>
+#include <expected>
+#include <fastgltf/core.hpp>
+
+// Безопасный пул парсеров с передачей контекста
 class ParserPool {
-    std::vector<std::unique_ptr<fastgltf::Parser>> parsers;
-    std::mutex poolMutex;
-    std::condition_variable poolCV;
-    std::queue<fastgltf::Parser*> availableParsers;
+    // Плоский массив парсеров (DOD подход)
+    std::vector<fastgltf::Parser> parsers;
+    std::atomic<size_t> nextParser{0};
 
 public:
-    ParserPool(size_t poolSize = std::thread::hardware_concurrency()) {
-        for (size_t i = 0; i < poolSize; ++i) {
-            parsers.push_back(std::make_unique<fastgltf::Parser>());
-            availableParsers.push(parsers.back().get());
-        }
+    ParserPool(size_t poolSize = std::thread::hardware_concurrency()) 
+        : parsers(poolSize) {
+        // Парсеры инициализируются в конструкторе вектора
     }
 
-    fastgltf::Parser* acquire() {
-        std::unique_lock lock(poolMutex);
-        poolCV.wait(lock, [this]() { return !availableParsers.empty(); });
-
-        auto* parser = availableParsers.front();
-        availableParsers.pop();
-        return parser;
+    // Получение парсера с передачей индекса через контекст
+    fastgltf::Parser& acquire(size_t& parserIndex) {
+        parserIndex = nextParser.fetch_add(1, std::memory_order_relaxed) % parsers.size();
+        return parsers[parserIndex];
     }
 
-    void release(fastgltf::Parser* parser) {
-        std::lock_guard lock(poolMutex);
-        availableParsers.push(parser);
-        poolCV.notify_one();
+    // Освобождение не требуется - парсеры переиспользуются
+    void release(size_t /*parserIndex*/) {
+        // Ничего не делаем
     }
 };
 
+// Параллельный загрузчик на основе stdexec (правильный P2300 подход)
 class ParallelGltfLoader {
     ParserPool& parserPool;
-    std::vector<std::thread> workerThreads;
-    std::atomic<bool> stopFlag{false};
-
-    struct LoadTask {
-        std::filesystem::path path;
-        std::promise<std::expected<fastgltf::Asset, fastgltf::Error>> promise;
-    };
-
-    std::queue<LoadTask> taskQueue;
-    std::mutex queueMutex;
-    std::condition_variable queueCV;
+    stdexec::scheduler auto scheduler;
 
 public:
-    ParallelGltfLoader(ParserPool& pool, size_t threadCount = std::thread::hardware_concurrency())
-        : parserPool(pool) {
+    ParallelGltfLoader(ParserPool& pool, stdexec::scheduler auto sched = stdexec::get_default_scheduler())
+        : parserPool(pool), scheduler(sched) {}
 
-        for (size_t i = 0; i < threadCount; ++i) {
-            workerThreads.emplace_back([this, i]() { workerThread(i); });
-        }
+    // ✅ ПРАВИЛЬНО: возвращаем Sender вместо std::future
+    stdexec::sender auto loadAsync(const std::filesystem::path& path) {
+        return stdexec::schedule(scheduler)
+             | stdexec::then([this, path]() -> std::expected<fastgltf::Asset, fastgltf::Error> {
+                    size_t parserIndex = 0;
+                    auto& parser = parserPool.acquire(parserIndex);
+                    
+                    auto data = fastgltf::GltfDataBuffer::FromPath(path);
+                    if (data.error() != fastgltf::Error::None) {
+                        return std::unexpected(data.error());
+                    }
+
+                    return parser.loadGltf(data.get(), path.parent_path(),
+                                          fastgltf::Options::LoadExternalBuffers);
+                });
     }
 
-    ~ParallelGltfLoader() {
-        stopFlag = true;
-        queueCV.notify_all();
-
-        for (auto& thread : workerThreads) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
-    }
-
-    std::future<std::expected<fastgltf::Asset, fastgltf::Error>> loadAsync(const std::filesystem::path& path) {
-        std::promise<std::expected<fastgltf::Asset, fastgltf::Error>> promise;
-        auto future = promise.get_future();
-
-        {
-            std::lock_guard lock(queueMutex);
-            taskQueue.push({path, std::move(promise)});
-        }
-
-        queueCV.notify_one();
-        return future;
+    // Пакетная загрузка нескольких файлов с использованием stdexec::bulk
+    stdexec::sender auto loadBatchAsync(const std::vector<std::filesystem::path>& paths) {
+        return stdexec::schedule(scheduler)
+             | stdexec::bulk(static_cast<int>(paths.size()), 
+                   [this, &paths](int idx) -> std::expected<fastgltf::Asset, fastgltf::Error> {
+                       return loadSingleFile(paths[idx]);
+                   });
     }
 
 private:
-    void workerThread(size_t threadId) {
-        while (!stopFlag) {
-            LoadTask task;
-
-            {
-                std::unique_lock lock(queueMutex);
-                queueCV.wait(lock, [this]() { return !taskQueue.empty() || stopFlag; });
-
-                if (stopFlag && taskQueue.empty()) {
-                    return;
-                }
-
-                if (!taskQueue.empty()) {
-                    task = std::move(taskQueue.front());
-                    taskQueue.pop();
-                }
-            }
-
-            if (task.path.empty()) {
-                continue;
-            }
-
-            try {
-                auto* parser = parserPool.acquire();
-                auto data = fastgltf::GltfDataBuffer::FromPath(task.path);
-
-                if (data.error() != fastgltf::Error::None) {
-                    task.promise.set_value(std::unexpected(data.error()));
-                    parserPool.release(parser);
-                    continue;
-                }
-
-                auto asset = parser->loadGltf(data.get(), task.path.parent_path(),
-                                             fastgltf::Options::LoadExternalBuffers);
-                task.promise.set_value(std::move(asset));
-                parserPool.release(parser);
-
-            } catch (const std::exception& e) {
-                task.promise.set_exception(std::current_exception());
-            }
+    std::expected<fastgltf::Asset, fastgltf::Error> loadSingleFile(const std::filesystem::path& path) {
+        size_t parserIndex = 0;
+        auto& parser = parserPool.acquire(parserIndex);
+        
+        auto data = fastgltf::GltfDataBuffer::FromPath(path);
+        if (data.error() != fastgltf::Error::None) {
+            return std::unexpected(data.error());
         }
+
+        return parser.loadGltf(data.get(), path.parent_path(),
+                              fastgltf::Options::LoadExternalBuffers);
     }
 };
+
+// Пример использования с цепочкой Sender'ов
+stdexec::sender auto loadAndProcessGltf(const std::filesystem::path& path, 
+                                        ParallelGltfLoader& loader,
+                                        stdexec::scheduler auto scheduler) {
+    return loader.loadAsync(path)
+         | stdexec::then([](std::expected<fastgltf::Asset, fastgltf::Error> assetResult) {
+                if (!assetResult) {
+                    std::println(stderr, "Failed to load glTF: {}", 
+                                 fastgltf::getErrorName(assetResult.error()));
+                    return MeshDataDOD{};
+                }
+                return convertToMeshDataDOD(*assetResult);
+           })
+         | stdexec::then([](MeshDataDOD meshData) {
+                // Дополнительная обработка
+                optimizeMeshData(meshData);
+                return meshData;
+           });
+}
+```
 

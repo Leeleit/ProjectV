@@ -137,22 +137,23 @@ std::expected<void, std::string> renderVoxelChunks(
 
 ## Сложные паттерны использования
 
-### Table-based интерфейс для многопоточности с C++26
+### Table-based интерфейс для многопоточности с C++26 и stdexec
 
-Для безопасного доступа к Vulkan функциям из нескольких потоков в ProjectV:
+Для безопасного доступа к Vulkan функциям из нескольких потоков в ProjectV с использованием Job System:
 
 ```cpp
-#include <mutex>
 #include <print>
 #include <expected>
+#include <stdexec/execution.hpp>
+#include <exec/static_thread_pool.hpp>
 
-// Thread-safe таблица функций с выравниванием для избежания false sharing
-struct alignas(64) ThreadSafeVulkanTable {
+namespace ex = stdexec;
+
+// Thread-local таблица функций с выравниванием для избежания false sharing
+struct alignas(64) ThreadLocalVulkanTable {
     VolkDeviceTable deviceTable;
-    std::mutex mutex;
 
     std::expected<void, std::string> initialize(VkDevice device) {
-        std::lock_guard<std::mutex> lock(mutex);
         volkLoadDeviceTable(&deviceTable, device);
 
         // Проверка загрузки критических функций
@@ -160,36 +161,70 @@ struct alignas(64) ThreadSafeVulkanTable {
             return std::unexpected("Failed to load critical Vulkan functions");
         }
 
-        std::println("[VOLK] Thread-safe table initialized");
+        std::println("[VOLK] Thread-local table initialized");
         return {};
     }
 
-    // Thread-safe вызовы с проверкой
-    std::expected<void, std::string> cmdDraw(
+    // Прямые вызовы без блокировок
+    void cmdDraw(
         VkCommandBuffer cmd,
         uint32_t vertexCount,
         uint32_t instanceCount,
         uint32_t firstVertex,
         uint32_t firstInstance
     ) {
-        std::lock_guard<std::mutex> lock(mutex);
-
-        if (!deviceTable.vkCmdDraw) {
-            return std::unexpected("vkCmdDraw not loaded");
-        }
-
         deviceTable.vkCmdDraw(cmd, vertexCount, instanceCount, firstVertex, firstInstance);
-        return {};
     }
 };
 
-// Использование в worker thread'ах Job System
-void renderVoxelThread(ThreadSafeVulkanTable& table, VkCommandBuffer cmd, uint32_t chunkCount) {
-    for (uint32_t i = 0; i < chunkCount; ++i) {
-        if (auto result = table.cmdDraw(cmd, 4, 1, 0, 0); !result) {
-            std::println(stderr, "Render error: {}", result.error());
-            break;
-        }
+// Job System интеграция для параллельного рендеринга вокселей
+class VulkanJobSystem {
+    exec::static_thread_pool pool;
+    thread_local static ThreadLocalVulkanTable threadTable;
+
+public:
+    VulkanJobSystem(size_t num_threads = std::thread::hardware_concurrency())
+        : pool(num_threads) {}
+
+    // Инициализация таблиц во всех worker потоках
+    std::expected<void, std::string> initializeTables(VkDevice device) {
+        auto scheduler = pool.get_scheduler();
+        
+        // Запускаем задачу инициализации во всех потоках
+        auto init_task = ex::schedule(scheduler) 
+                       | ex::bulk(pool.available_parallelism(), [device](size_t) {
+                             threadTable.initialize(device);
+                         })
+                       | ex::then([] { return std::expected<void, std::string>{}; });
+        
+        // Синхронное выполнение для простоты примера
+        ex::sync_wait(std::move(init_task));
+        return {};
+    }
+
+    // Параллельный рендеринг воксельных чанков через Job System
+    std::expected<void, std::string> renderVoxelChunksParallel(
+        VkCommandBuffer cmd,
+        std::span<const uint32_t> chunkVertexCounts
+    ) {
+        auto scheduler = pool.get_scheduler();
+        
+        // Разделяем работу на задачи для Job System
+        auto render_task = ex::schedule(scheduler)
+                         | ex::bulk(chunkVertexCounts.size(), [cmd, chunkVertexCounts](size_t idx) {
+                               threadTable.cmdDraw(cmd, chunkVertexCounts[idx], 1, 0, 0);
+                           })
+                         | ex::then([] { return std::expected<void, std::string>{}; });
+        
+        return ex::sync_wait(std::move(render_task)).value();
+    }
+};
+
+// Использование в ProjectV с Job System
+void renderVoxelsWithJobSystem(VulkanJobSystem& jobSystem, VkCommandBuffer cmd, 
+                               const std::vector<uint32_t>& chunkSizes) {
+    if (auto result = jobSystem.renderVoxelChunksParallel(cmd, chunkSizes); !result) {
+        std::println(stderr, "Render error: {}", result.error());
     }
 }
 ```
@@ -894,14 +929,13 @@ public:
 
     static void traceFunctionCalls(VkCommandBuffer cmd, const char* operation) {
 #ifdef VOLK_TRACE_ENABLED
-        static std::unordered_map<std::string, uint64_t> callCounts;
-        static std::mutex mutex;
+        static std::unordered_map<std::string, std::atomic<uint64_t>> callCounts;
 
-        std::lock_guard<std::mutex> lock(mutex);
-        callCounts[operation]++;
+        // Атомарное увеличение счетчика без блокировок
+        uint64_t count = callCounts[operation].fetch_add(1, std::memory_order_relaxed) + 1;
 
-        if (callCounts[operation] % 1000 == 0) {
-            printf("[VOLK TRACE] %s called %llu times\n", operation, callCounts[operation]);
+        if (count % 1000 == 0) {
+            printf("[VOLK TRACE] %s called %llu times\n", operation, count);
         }
 #endif
     }

@@ -182,79 +182,193 @@ public:
 
 ## Многопоточная компиляция
 
-### Параллельная компиляция шейдеров
+### Параллельная компиляция шейдеров через stdexec
 
 ```cpp
-#include <thread>
-#include <latch>
+#include <stdexec/execution.hpp>
+#include <print>
+#include <expected>
 
-class ParallelShaderCompiler {
+namespace stdex = stdexec;
+
+class StdexecShaderCompiler {
 public:
     struct CompileTask {
         std::string sourcePath;
         std::string entryPoint;
         VkShaderStageFlagBits stage;
-        std::promise<VkShaderModule> promise;
     };
 
-    void initialize(uint32_t threadCount) {
-        m_threadCount = threadCount;
-        m_threads.resize(threadCount);
+    struct CompileResult {
+        std::expected<VkShaderModule, std::string> module;
+        std::string sourcePath;
+        VkShaderStageFlagBits stage;
+    };
 
-        for (uint32_t i = 0; i < threadCount; ++i) {
-            m_threads[i] = std::thread([this, i] { workerThread(i); });
-        }
+    explicit StdexecShaderCompiler(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
+
+    // Возвращает sender для асинхронной компиляции
+    auto compileAsync(const CompileTask& task)
+        -> stdex::sender auto {
+        
+        return stdex::schedule(scheduler_)
+             | stdex::then([task]() -> CompileResult {
+                    ZoneScopedN("ShaderCompileAsync");
+                    
+                    // Компиляция в пуле потоков
+                    auto module = compileShader(task);
+                    
+                    return CompileResult{
+                        .module = std::move(module),
+                        .sourcePath = task.sourcePath,
+                        .stage = task.stage
+                    };
+                });
     }
 
-    std::future<VkShaderModule> submitTask(CompileTask task) {
-        auto future = task.promise.get_future();
-        {
-            std::scoped_lock lock(m_queueMutex);
-            m_queue.push(std::move(task));
-        }
-        m_cv.notify_one();
-        return future;
+    // Пакетная компиляция нескольких шейдеров
+    auto compileBatch(std::span<const CompileTask> tasks)
+        -> stdex::sender auto {
+        
+        return stdex::schedule(scheduler_)
+             | stdex::bulk(tasks.size(), [tasks](size_t idx) {
+                    ZoneScopedN("ShaderBatchCompile");
+                    
+                    const auto& task = tasks[idx];
+                    auto module = compileShader(task);
+                    
+                    return CompileResult{
+                        .module = std::move(module),
+                        .sourcePath = task.sourcePath,
+                        .stage = task.stage
+                    };
+                });
     }
 
-    void shutdown() {
-        m_running = false;
-        m_cv.notify_all();
-        for (auto& t : m_threads) {
-            if (t.joinable()) t.join();
-        }
+    // Компиляция с приоритетом (например, для критичных шейдеров)
+    auto compileWithPriority(const CompileTask& task, uint32_t priority)
+        -> stdex::sender auto {
+        
+        // В реальной реализации здесь была бы логика приоритетного планирования
+        // Для примера просто передаём в обычный compileAsync
+        return compileAsync(task);
     }
 
 private:
-    void workerThread(uint32_t id) {
-        while (m_running) {
-            CompileTask task;
-            {
-                std::unique_lock lock(m_queueMutex);
-                m_cv.wait(lock, [this] { return !m_queue.empty() || !m_running; });
-
-                if (!m_running && m_queue.empty()) break;
-                task = std::move(m_queue.front());
-                m_queue.pop();
+    static std::expected<VkShaderModule, std::string> compileShader(const CompileTask& task) {
+        // Thread-local slang session для избежания contention
+        thread_local auto session = createThreadLocalSession();
+        
+        try {
+            // Загрузка исходного кода
+            MappedShaderSource source;
+            if (!source.load(task.sourcePath)) {
+                return std::unexpected("Failed to load shader source");
             }
 
-            // Компиляция в thread-local сессии
-            auto module = compileInSession(task);
-            task.promise.set_value(module);
+            // Компиляция через slang
+            Slang::ComPtr<slang::IBlob> diagnostics;
+            auto module = session->loadModuleFromSourceString(
+                "shader_module",
+                task.entryPoint.c_str(),
+                source.getSource().data(),
+                diagnostics.writeRef()
+            );
+
+            if (!module) {
+                return std::unexpected("Compilation failed");
+            }
+
+            // Генерация SPIR-V
+            Slang::ComPtr<slang::IBlob> spirvCode;
+            module->getEntryPointCode(0, 0, spirvCode.writeRef(), diagnostics.writeRef());
+
+            // Создание VkShaderModule
+            VkShaderModuleCreateInfo createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            createInfo.codeSize = spirvCode->getBufferSize();
+            createInfo.pCode = spirvCode->getBufferPointer();
+
+            VkShaderModule moduleHandle;
+            if (vkCreateShaderModule(device, &createInfo, nullptr, &moduleHandle) != VK_SUCCESS) {
+                return std::unexpected("Failed to create shader module");
+            }
+
+            return moduleHandle;
+        } catch (const std::exception& e) {
+            return std::unexpected(std::format("Compilation error: {}", e.what()));
         }
     }
 
-    VkShaderModule compileInSession(const CompileTask& task) {
-        // Thread-local slang session для избежания contention
-        thread_local auto session = createThreadLocalSession();
-        return doCompile(session, task);
+    static Slang::ComPtr<slang::ISession> createThreadLocalSession() {
+        // Создание thread-local сессии slang
+        Slang::ComPtr<slang::IGlobalSession> globalSession;
+        slang::createGlobalSession(globalSession.writeRef());
+
+        slang::TargetDesc targetDesc{};
+        targetDesc.format = SLANG_SPIRV;
+        targetDesc.profile = globalSession->findProfile("spirv_1_5");
+
+        slang::SessionDesc sessionDesc{};
+        sessionDesc.targets = &targetDesc;
+        sessionDesc.targetCount = 1;
+
+        Slang::ComPtr<slang::ISession> session;
+        globalSession->createSession(sessionDesc, session.writeRef());
+        
+        return session;
     }
 
-    std::atomic<bool> m_running{true};
-    uint32_t m_threadCount = 0;
-    std::vector<std::thread> m_threads;
-    std::mutex m_queueMutex;
-    std::condition_variable m_cv;
-    std::queue<CompileTask> m_queue;
+    stdex::scheduler auto scheduler_;
+};
+
+// Интеграция с глобальным ThreadPool ProjectV
+class ProjectVShaderCompiler {
+public:
+    ProjectVShaderCompiler(stdex::scheduler auto global_scheduler)
+        : compiler_(global_scheduler) {}
+
+    // Интерфейс для ECS системы
+    auto compileForEntity(const StdexecShaderCompiler::CompileTask& task,
+                         uint32_t priority = 0)
+        -> stdex::sender auto {
+        
+        return compiler_.compileWithPriority(task, priority)
+             | stdex::then([](StdexecShaderCompiler::CompileResult result) {
+                    if (result.module) {
+                        return std::move(*result.module);
+                    }
+                    return std::unexpected<VkShaderModule, std::string>(
+                        std::move(result.module.error())
+                    );
+                });
+    }
+
+    // Пакетная компиляция для нескольких сущностей
+    auto compileForEntities(std::span<const StdexecShaderCompiler::CompileTask> tasks,
+                           std::span<const uint32_t> priorities)
+        -> stdex::sender auto {
+        
+        return compiler_.compileBatch(tasks)
+             | stdex::then([](std::vector<StdexecShaderCompiler::CompileResult> results) {
+                    std::vector<std::expected<VkShaderModule, std::string>> compiled;
+                    compiled.reserve(results.size());
+                    
+                    for (auto& result : results) {
+                        if (result.module) {
+                            compiled.push_back(std::move(*result.module));
+                        } else {
+                            compiled.push_back(std::unexpected(result.module.error()));
+                        }
+                    }
+                    
+                    return compiled;
+                });
+    }
+
+private:
+    StdexecShaderCompiler compiler_;
 };
 ```
 

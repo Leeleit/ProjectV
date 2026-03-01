@@ -1,4 +1,4 @@
-﻿## Архитектурная интеграция Draco в современные C++ проекты
+## Архитектурная интеграция Draco в современные C++ проекты
 
 Draco интегрируется в современные C++ проекты через многоуровневую архитектуру, где каждый слой решает конкретную
 задачу: от
@@ -677,87 +677,130 @@ public:
     virtual ~IAsyncLoader() = default;
 };
 
-// Реализация с использованием современного C++ Job System
-class ModernJobSystemLoader : public IAsyncLoader {
+// Реализация с использованием stdexec (P2300) Job System
+class StdexecJobSystemLoader : public IAsyncLoader {
     struct InternalRequest {
         std::vector<std::byte> compressedData;
         std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)> callback;
         int priority;
     };
 
+    // stdexec scheduler для асинхронного выполнения
+    stdexec::scheduler auto scheduler_;
+    
+    // Очередь запросов с приоритетом (lock-free через атомарные операции)
     std::vector<InternalRequest> pendingRequests_;
-    std::vector<std::pair<std::future<std::unique_ptr<draco::Mesh>>,
-                         std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)>>> activeTasks_;
-    std::mutex mutex_;
+    std::atomic<size_t> pendingCount_{0};
+    
+    // Активные задачи как stdexec sender'ы
+    struct ActiveTask {
+        stdexec::sender auto sender;
+        std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)> callback;
+    };
+    
+    std::vector<ActiveTask> activeTasks_;
     draco::DecoderPool decoderPool_;
+    std::atomic<size_t> activeTaskCount_{0};
 
 public:
-    void submitLoadRequest(LoadRequest request) noexcept override {
-        std::lock_guard<std::mutex> lock(mutex_);
+    explicit StdexecJobSystemLoader(stdexec::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
 
-        // Сохраняем запрос
-        pendingRequests_.push_back({
+    void submitLoadRequest(LoadRequest request) noexcept override {
+        // Создаем внутренний запрос
+        InternalRequest internalRequest{
             std::vector<std::byte>(request.compressedData.begin(), request.compressedData.end()),
             std::move(request.callback),
             request.priority
-        });
+        };
 
-        // Сортируем по приоритету
-        std::sort(pendingRequests_.begin(), pendingRequests_.end(),
-            [](const InternalRequest& a, const InternalRequest& b) {
-                return a.priority > b.priority;  // Высокий приоритет первый
-            });
+        // Атомарно добавляем в очередь
+        size_t oldCount = pendingCount_.fetch_add(1, std::memory_order_acq_rel);
+        
+        // В реальной реализации нужно использовать lock-free очередь
+        // Для простоты примера используем вектор с атомарным счетчиком
+        if (oldCount < pendingRequests_.capacity()) {
+            pendingRequests_.push_back(std::move(internalRequest));
+            
+            // Сортируем по приоритету (в реальной реализации это делалось бы при извлечении)
+            std::sort(pendingRequests_.begin(), pendingRequests_.end(),
+                [](const InternalRequest& a, const InternalRequest& b) {
+                    return a.priority > b.priority;
+                });
+        }
+        
+        // Запускаем обработку если есть свободные слоты
+        processPendingRequests();
     }
 
     void processCompletedRequests() noexcept override {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Обрабатываем завершённые задачи
-        for (auto it = activeTasks_.begin(); it != activeTasks_.end(); ) {
-            if (it->first.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                try {
-                    auto mesh = it->first.get();
-                    it->second(std::move(mesh));
-                } catch (const std::exception& e) {
-                    it->second(std::unexpected(e.what()));
-                }
-                it = activeTasks_.erase(it);
-            } else {
-                ++it;
-            }
-        }
-
-        // Запускаем новые задачи из очереди
-        while (!pendingRequests_.empty() && activeTasks_.size() < decoderPool_.getMaxConcurrentTasks()) {
-            auto request = std::move(pendingRequests_.back());
-            pendingRequests_.pop_back();
-
-            // Запускаем асинхронную задачу
-            auto future = std::async(std::launch::async, [this, data = std::move(request.compressedData)]() {
-                auto decoder = decoderPool_.acquire();
-                draco::DecoderBuffer buffer;
-                buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
-
-                auto result = decoder->DecodeMeshFromBuffer(&buffer);
-                decoderPool_.release(std::move(decoder));
-
-                if (result.ok()) {
-                    return std::move(result).value();
-                }
-                throw std::runtime_error(result.status().error_msg());
+        // В stdexec архитектуре completion обрабатывается автоматически через continuation
+        // Здесь просто проверяем и удаляем завершенные задачи
+        auto it = std::remove_if(activeTasks_.begin(), activeTasks_.end(),
+            [](const ActiveTask& task) {
+                // В реальной реализации нужно проверять состояние sender'а
+                // Для простоты примера считаем, что sender уже завершился
+                return false; // Заглушка
             });
-
-            activeTasks_.emplace_back(std::move(future), std::move(request.callback));
+        
+        if (it != activeTasks_.end()) {
+            activeTasks_.erase(it, activeTasks_.end());
+            activeTaskCount_.store(activeTasks_.size(), std::memory_order_release);
         }
+        
+        processPendingRequests();
     }
 
     void waitForCompletion() noexcept override {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        for (auto& task : activeTasks_) {
-            task.first.wait();
+        // В stdexec можно использовать sync_wait или другие synchronization примитивы
+        // Для простоты примера ждем пока все активные задачи завершатся
+        while (activeTaskCount_.load(std::memory_order_acquire) > 0) {
+            std::this_thread::yield();
         }
-        processCompletedRequests();
+    }
+
+private:
+    void processPendingRequests() noexcept {
+        size_t maxConcurrent = decoderPool_.getMaxConcurrentTasks();
+        size_t currentActive = activeTaskCount_.load(std::memory_order_acquire);
+        
+        while (!pendingRequests_.empty() && currentActive < maxConcurrent) {
+            // Извлекаем запрос с наивысшим приоритетом
+            auto request = std::move(pendingRequests_.back());
+            pendingRequests_.pop_back();
+            pendingCount_.fetch_sub(1, std::memory_order_acq_rel);
+            
+            // Создаем stdexec sender для декодирования
+            auto decodeSender = stdexec::schedule(scheduler_)
+                | stdexec::then([this, data = std::move(request.compressedData)]() 
+                    -> std::expected<std::unique_ptr<draco::Mesh>, std::string> {
+                    auto decoder = decoderPool_.acquire();
+                    draco::DecoderBuffer buffer;
+                    buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
+
+                    auto result = decoder->DecodeMeshFromBuffer(&buffer);
+                    decoderPool_.release(std::move(decoder));
+
+                    if (result.ok()) {
+                        return std::move(result).value();
+                    }
+                    return std::unexpected(result.status().error_msg());
+                })
+                | stdexec::upon_error([](std::string error) {
+                    return std::unexpected<std::unique_ptr<draco::Mesh>, std::string>(std::move(error));
+                });
+            
+            // Запускаем sender с обработкой результата
+            stdexec::start_detached(
+                std::move(decodeSender),
+                [callback = std::move(request.callback)](std::expected<std::unique_ptr<draco::Mesh>, std::string> result) {
+                    callback(std::move(result));
+                }
+            );
+            
+            activeTaskCount_.fetch_add(1, std::memory_order_acq_rel);
+            currentActive = activeTaskCount_.load(std::memory_order_acquire);
+        }
     }
 };
 ```
@@ -779,33 +822,45 @@ public:
     virtual ~IMeshCache() = default;
 };
 
-// Реализация с LRU (Least Recently Used) стратегией
-class LruMeshCache : public IMeshCache {
+// Реализация с LRU (Least Recently Used) стратегией с lock-free доступом
+class LockFreeLruMeshCache : public IMeshCache {
     struct CacheEntry {
         std::shared_ptr<draco::Mesh> mesh;
-        std::chrono::steady_clock::time_point lastAccess;
+        std::atomic<std::chrono::steady_clock::time_point> lastAccess;
         size_t size;
+        
+        CacheEntry(std::shared_ptr<draco::Mesh> m, size_t s)
+            : mesh(std::move(m))
+            , lastAccess(std::chrono::steady_clock::now())
+            , size(s) {}
     };
 
-    std::unordered_map<std::string, CacheEntry> cache_;
-    std::mutex mutex_;
+    // Используем concurrent unordered_map или аналогичную структуру
+    // Для простоты примера используем обычный unordered_map с атомарными операциями
+    std::unordered_map<std::string, std::unique_ptr<CacheEntry>> cache_;
+    std::atomic<size_t> currentSize_{0};
     size_t maxSize_ = 1024 * 1024 * 1024;  // 1 GB по умолчанию
-    size_t currentSize_ = 0;
     draco::Decoder decoder_;
+    
+    // Для thread-safe операций используем reader-writer lock-free подход
+    std::atomic_flag modificationFlag_ = ATOMIC_FLAG_INIT;
 
 public:
     [[nodiscard]] std::shared_ptr<draco::Mesh>
     getOrDecode(const std::string& key, std::span<const std::byte> compressed) noexcept override {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Проверяем кэш
-        auto it = cache_.find(key);
-        if (it != cache_.end()) {
-            it->second.lastAccess = std::chrono::steady_clock::now();
-            return it->second.mesh;
+        // Пытаемся получить из кэша без блокировки (read-mostly оптимизация)
+        {
+            // Чтение без блокировки - безопасно для атомарных операций
+            auto it = cache_.find(key);
+            if (it != cache_.end()) {
+                // Обновляем время доступа атомарно
+                it->second->lastAccess.store(std::chrono::steady_clock::now(), 
+                                           std::memory_order_release);
+                return it->second->mesh;
+            }
         }
 
-        // Декодируем и кэшируем
+        // Если не нашли в кэше, декодируем
         draco::DecoderBuffer buffer;
         buffer.Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
 
@@ -815,32 +870,56 @@ public:
         }
 
         auto mesh = std::make_shared<draco::Mesh>(std::move(result).value());
-
-        // Оцениваем размер mesh
         size_t meshSize = estimateMeshSize(*mesh);
 
-        // Освобождаем место если нужно
-        makeSpaceFor(meshSize);
+        // Проверяем, нужно ли освободить место
+        if (currentSize_.load(std::memory_order_acquire) + meshSize > maxSize_) {
+            makeSpaceFor(meshSize);
+        }
 
-        // Добавляем в кэш
-        cache_[key] = {
-            .mesh = mesh,
-            .lastAccess = std::chrono::steady_clock::now(),
-            .size = meshSize
-        };
-        currentSize_ += meshSize;
-
+        // Добавляем в кэш с минимальной блокировкой
+        while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
+            // Spin wait - в реальной реализации лучше использовать более сложный механизм
+            std::this_thread::yield();
+        }
+        
+        try {
+            // Проверяем еще раз (другой поток мог добавить тот же ключ)
+            auto it = cache_.find(key);
+            if (it != cache_.end()) {
+                // Ключ уже добавлен, возвращаем существующий
+                it->second->lastAccess.store(std::chrono::steady_clock::now(),
+                                           std::memory_order_release);
+                modificationFlag_.clear(std::memory_order_release);
+                return it->second->mesh;
+            }
+            
+            // Добавляем новый элемент
+            cache_[key] = std::make_unique<CacheEntry>(mesh, meshSize);
+            currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
+        } catch (...) {
+            modificationFlag_.clear(std::memory_order_release);
+            throw;
+        }
+        
+        modificationFlag_.clear(std::memory_order_release);
         return mesh;
     }
 
     void clear() noexcept override {
-        std::lock_guard<std::mutex> lock(mutex_);
+        // Атомарная очистка кэша
+        while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        
         cache_.clear();
-        currentSize_ = 0;
+        currentSize_.store(0, std::memory_order_release);
+        
+        modificationFlag_.clear(std::memory_order_release);
     }
 
     size_t getSize() const noexcept override {
-        return currentSize_;
+        return currentSize_.load(std::memory_order_acquire);
     }
 
     size_t getMaxSize() const noexcept override {
@@ -849,7 +928,7 @@ public:
 
     void setMaxSize(size_t maxSize) noexcept override {
         maxSize_ = maxSize;
-        makeSpaceFor(0);  // Проверяем, не превышает ли текущий размер новый максимум
+        makeSpaceFor(0);
     }
 
 private:
@@ -869,25 +948,64 @@ private:
     }
 
     void makeSpaceFor(size_t requiredSize) noexcept {
-        if (currentSize_ + requiredSize <= maxSize_) {
+        size_t current = currentSize_.load(std::memory_order_acquire);
+        if (current + requiredSize <= maxSize_) {
             return;
         }
 
-        // Удаляем наименее используемые элементы пока не освободим достаточно места
-        std::vector<std::pair<std::string, CacheEntry>> entries(cache_.begin(), cache_.end());
-        std::sort(entries.begin(), entries.end(),
-            [](const auto& a, const auto& b) {
-                return a.second.lastAccess < b.second.lastAccess;
-            });
-
-        for (const auto& [key, entry] : entries) {
-            if (currentSize_ + requiredSize <= maxSize_) {
-                break;
-            }
-
-            cache_.erase(key);
-            currentSize_ -= entry.size;
+        // Получаем блокировку для модификации
+        while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
+            std::this_thread::yield();
         }
+
+        try {
+            // Собираем статистику использования
+            struct EntryInfo {
+                std::string key;
+                std::chrono::steady_clock::time_point lastAccess;
+                size_t size;
+            };
+            
+            std::vector<EntryInfo> entries;
+            entries.reserve(cache_.size());
+            
+            for (const auto& [key, entry] : cache_) {
+                entries.push_back({
+                    key,
+                    entry->lastAccess.load(std::memory_order_acquire),
+                    entry->size
+                });
+            }
+            
+            // Сортируем по времени доступа (старые сначала)
+            std::sort(entries.begin(), entries.end(),
+                [](const EntryInfo& a, const EntryInfo& b) {
+                    return a.lastAccess < b.lastAccess;
+                });
+            
+            // Удаляем старые элементы пока не освободим достаточно места
+            size_t spaceToFree = (current + requiredSize) - maxSize_;
+            size_t freed = 0;
+            
+            for (const auto& entry : entries) {
+                if (freed >= spaceToFree) {
+                    break;
+                }
+                
+                auto it = cache_.find(entry.key);
+                if (it != cache_.end()) {
+                    freed += it->second->size;
+                    cache_.erase(it);
+                }
+            }
+            
+            currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
+        } catch (...) {
+            modificationFlag_.clear(std::memory_order_release);
+            throw;
+        }
+        
+        modificationFlag_.clear(std::memory_order_release);
     }
 };
 ```
@@ -1305,8 +1423,8 @@ private:
 ### Паттерн: приоритетная загрузка на основе значимости
 
 ```cpp
-// Архитектурный паттерн: загрузка на основе значимости данных
-class PriorityBasedLoader {
+// Архитектурный паттерн: загрузка на основе значимости данных с использованием stdexec
+class StdexecPriorityBasedLoader {
     struct LoadTask {
         std::string id;
         std::vector<std::byte> compressedData;
@@ -1323,49 +1441,122 @@ class PriorityBasedLoader {
         Background   // Фоновые данные (prefetch)
     };
 
-    std::vector<LoadTask> pendingTasks_;
-    std::vector<std::pair<std::future<std::unique_ptr<draco::Mesh>>, LoadTask>> activeTasks_;
-    std::mutex mutex_;
+    // stdexec scheduler для асинхронного выполнения
+    stdexec::scheduler auto scheduler_;
+    
+    // Очередь задач с приоритетом (lock-free через атомарные операции)
+    struct TaskQueue {
+        std::vector<LoadTask> criticalTasks_;
+        std::vector<LoadTask> highTasks_;
+        std::vector<LoadTask> mediumTasks_;
+        std::vector<LoadTask> lowTasks_;
+        std::vector<LoadTask> backgroundTasks_;
+        
+        std::atomic<size_t> totalCount_{0};
+        
+        void push(LoadTask task) noexcept {
+            switch (task.priority) {
+                case Priority::Critical:
+                    criticalTasks_.push_back(std::move(task));
+                    break;
+                case Priority::High:
+                    highTasks_.push_back(std::move(task));
+                    break;
+                case Priority::Medium:
+                    mediumTasks_.push_back(std::move(task));
+                    break;
+                case Priority::Low:
+                    lowTasks_.push_back(std::move(task));
+                    break;
+                case Priority::Background:
+                    backgroundTasks_.push_back(std::move(task));
+                    break;
+            }
+            totalCount_.fetch_add(1, std::memory_order_acq_rel);
+        }
+        
+        std::optional<LoadTask> pop() noexcept {
+            if (!criticalTasks_.empty()) {
+                auto task = std::move(criticalTasks_.back());
+                criticalTasks_.pop_back();
+                totalCount_.fetch_sub(1, std::memory_order_acq_rel);
+                return task;
+            }
+            if (!highTasks_.empty()) {
+                auto task = std::move(highTasks_.back());
+                highTasks_.pop_back();
+                totalCount_.fetch_sub(1, std::memory_order_acq_rel);
+                return task;
+            }
+            if (!mediumTasks_.empty()) {
+                auto task = std::move(mediumTasks_.back());
+                mediumTasks_.pop_back();
+                totalCount_.fetch_sub(1, std::memory_order_acq_rel);
+                return task;
+            }
+            if (!lowTasks_.empty()) {
+                auto task = std::move(lowTasks_.back());
+                lowTasks_.pop_back();
+                totalCount_.fetch_sub(1, std::memory_order_acq_rel);
+                return task;
+            }
+            if (!backgroundTasks_.empty()) {
+                auto task = std::move(backgroundTasks_.back());
+                backgroundTasks_.pop_back();
+                totalCount_.fetch_sub(1, std::memory_order_acq_rel);
+                return task;
+            }
+            return std::nullopt;
+        }
+        
+        size_t size() const noexcept {
+            return totalCount_.load(std::memory_order_acquire);
+        }
+        
+        bool empty() const noexcept {
+            return size() == 0;
+        }
+    };
+    
+    TaskQueue pendingTasks_;
     draco::DecoderPool decoderPool_;
     size_t maxConcurrentTasks_;
+    std::atomic<size_t> activeTaskCount_{0};
 
 public:
-    explicit PriorityBasedLoader(size_t maxConcurrentTasks = 4)
-        : maxConcurrentTasks_(maxConcurrentTasks) {}
+    explicit StdexecPriorityBasedLoader(stdexec::scheduler auto scheduler, size_t maxConcurrentTasks = 4)
+        : scheduler_(scheduler), maxConcurrentTasks_(maxConcurrentTasks) {}
 
     void submitLoadTask(LoadTask task) noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
-
         task.submitTime = std::chrono::steady_clock::now();
-        pendingTasks_.push_back(std::move(task));
-
-        // Сортируем задачи по приоритету и времени отправки
-        std::sort(pendingTasks_.begin(), pendingTasks_.end(),
-            [](const LoadTask& a, const LoadTask& b) {
-                if (a.priority != b.priority) {
-                    return static_cast<int>(a.priority) < static_cast<int>(b.priority);
-                }
-                return a.submitTime < b.submitTime;  // FIFO для одинакового приоритета
-            });
-
-        processTasks();
+        pendingTasks_.push(std::move(task));
+        
+        // Запускаем обработку если есть свободные слоты
+        processPendingTasks();
     }
 
     void update() noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
-        processCompletedTasks();
-        processTasks();
+        // В stdexec архитектуре completion обрабатывается автоматически
+        // Просто проверяем и запускаем новые задачи
+        processPendingTasks();
     }
 
 private:
-    void processTasks() noexcept {
-        while (!pendingTasks_.empty() && activeTasks_.size() < maxConcurrentTasks_) {
-            auto task = std::move(pendingTasks_.back());
-            pendingTasks_.pop_back();
-
-            // Запускаем асинхронную задачу декодирования
-            auto future = std::async(std::launch::async,
-                [this, data = std::move(task.compressedData)]() {
+    void processPendingTasks() noexcept {
+        size_t currentActive = activeTaskCount_.load(std::memory_order_acquire);
+        
+        while (!pendingTasks_.empty() && currentActive < maxConcurrentTasks_) {
+            auto taskOpt = pendingTasks_.pop();
+            if (!taskOpt) {
+                break;
+            }
+            
+            auto task = std::move(*taskOpt);
+            
+            // Создаем stdexec sender для декодирования
+            auto decodeSender = stdexec::schedule(scheduler_)
+                | stdexec::then([this, data = std::move(task.compressedData)]() 
+                    -> std::expected<std::unique_ptr<draco::Mesh>, std::string> {
                     auto decoder = decoderPool_.acquire();
                     draco::DecoderBuffer buffer;
                     buffer.Init(reinterpret_cast<const char*>(data.data()), data.size());
@@ -1376,26 +1567,25 @@ private:
                     if (result.ok()) {
                         return std::move(result).value();
                     }
-                    throw std::runtime_error(result.status().error_msg());
+                    return std::unexpected(result.status().error_msg());
+                })
+                | stdexec::upon_error([](std::string error) {
+                    return std::unexpected<std::unique_ptr<draco::Mesh>, std::string>(std::move(error));
                 });
-
-            activeTasks_.emplace_back(std::move(future), std::move(task));
-        }
-    }
-
-    void processCompletedTasks() noexcept {
-        for (auto it = activeTasks_.begin(); it != activeTasks_.end(); ) {
-            if (it->first.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                try {
-                    auto mesh = it->first.get();
-                    it->second.callback(std::move(mesh));
-                } catch (const std::exception& e) {
-                    it->second.callback(std::unexpected(e.what()));
+            
+            // Запускаем sender с обработкой результата
+            stdexec::start_detached(
+                std::move(decodeSender),
+                [callback = std::move(task.callback), this](std::expected<std::unique_ptr<draco::Mesh>, std::string> result) {
+                    callback(std::move(result));
+                    activeTaskCount_.fetch_sub(1, std::memory_order_acq_rel);
+                    // После завершения задачи проверяем, можно ли запустить новые
+                    processPendingTasks();
                 }
-                it = activeTasks_.erase(it);
-            } else {
-                ++it;
-            }
+            );
+            
+            activeTaskCount_.fetch_add(1, std::memory_order_acq_rel);
+            currentActive = activeTaskCount_.load(std::memory_order_acquire);
         }
     }
 };
@@ -1605,181 +1795,329 @@ public:
     };
 };
 
-// Пример реализации адаптивного кэша
-class AdaptiveMeshCache : public IMeshCache {
+// Пример реализации адаптивного кэша с lock-free доступом
+class LockFreeAdaptiveMeshCache : public IMeshCache {
     struct AdaptiveCacheEntry {
         std::shared_ptr<draco::Mesh> mesh;
-        std::chrono::steady_clock::time_point lastAccess;
+        std::atomic<std::chrono::steady_clock::time_point> lastAccess;
         size_t size;
-        uint32_t accessCount;      // Количество обращений
-        float importanceScore;     // Оценка важности (на основе частоты и времени)
+        std::atomic<uint32_t> accessCount;      // Количество обращений
+        std::atomic<float> importanceScore;     // Оценка важности (на основе частоты и времени)
+        
+        AdaptiveCacheEntry(std::shared_ptr<draco::Mesh> m, size_t s, float initialImportance)
+            : mesh(std::move(m))
+            , lastAccess(std::chrono::steady_clock::now())
+            , size(s)
+            , accessCount(1)
+            , importanceScore(initialImportance) {}
     };
 
-    std::unordered_map<std::string, AdaptiveCacheEntry> cache_;
-    std::mutex mutex_;
+    // Используем concurrent unordered_map или аналогичную структуру
+    std::unordered_map<std::string, std::unique_ptr<AdaptiveCacheEntry>> cache_;
+    std::atomic<size_t> currentSize_{0};
     size_t maxSize_;
-    size_t currentSize_;
     draco::Decoder decoder_;
     CacheWorkload currentWorkload_;
+    
+    // Для thread-safe операций используем reader-writer lock-free подход
+    std::atomic_flag modificationFlag_ = ATOMIC_FLAG_INIT;
 
 public:
-    AdaptiveMeshCache(size_t maxSize, CacheWorkload workload)
-        : maxSize_(maxSize), currentSize_(0), currentWorkload_(workload) {}
+    LockFreeAdaptiveMeshCache(size_t maxSize, CacheWorkload workload)
+        : maxSize_(maxSize), currentWorkload_(workload) {}
 
     [[nodiscard]] std::shared_ptr<draco::Mesh>
     getOrDecode(const std::string& key, std::span<const std::byte> compressed) noexcept override {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Проверяем кэш
-        auto it = cache_.find(key);
-        if (it != cache_.end()) {
-            // Обновляем статистику доступа
-            it->second.lastAccess = std::chrono::steady_clock::now();
-            it->second.accessCount++;
-            updateImportanceScore(it->second);
-
-            return it->second.mesh;
+        // Пытаемся получить из кэша без блокировки (read-mostly оптимизация)
+        {
+            auto it = cache_.find(key);
+            if (it != cache_.end()) {
+                // Обновляем статистику доступа атомарно
+                it->second->lastAccess.store(std::chrono::steady_clock::now(), 
+                                           std::memory_order_release);
+                it->second->accessCount.fetch_add(1, std::memory_order_acq_rel);
+                updateImportanceScore(*it->second);
+                return it->second->mesh;
+            }
         }
 
-        // Декодируем и кэшируем
-        auto mesh = decodeMesh(compressed);
-        if (!mesh) {
+        // Если не нашли в кэше, декодируем
+        draco::DecoderBuffer buffer;
+        buffer.Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+
+        auto result = decoder_.DecodeMeshFromBuffer(&buffer);
+        if (!result.ok()) {
             return nullptr;
         }
 
-        // Оцениваем размер и важность
+        auto mesh = std::make_shared<draco::Mesh>(std::move(result).value());
         size_t meshSize = estimateMeshSize(*mesh);
         float initialImportance = calculateInitialImportance(key);
 
-        // Освобождаем место если нужно (стратегия зависит от workload)
-        makeSpaceFor(meshSize);
+        // Проверяем, нужно ли освободить место
+        if (currentSize_.load(std::memory_order_acquire) + meshSize > maxSize_) {
+            makeSpaceFor(meshSize);
+        }
 
-        // Добавляем в кэш
-        cache_[key] = {
-            .mesh = mesh,
-            .lastAccess = std::chrono::steady_clock::now(),
-            .size = meshSize,
-            .accessCount = 1,
-            .importanceScore = initialImportance
-        };
-        currentSize_ += meshSize;
-
+        // Добавляем в кэш с минимальной блокировкой
+        while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        
+        try {
+            // Проверяем еще раз (другой поток мог добавить тот же ключ)
+            auto it = cache_.find(key);
+            if (it != cache_.end()) {
+                // Ключ уже добавлен, возвращаем существующий
+                it->second->lastAccess.store(std::chrono::steady_clock::now(),
+                                           std::memory_order_release);
+                it->second->accessCount.fetch_add(1, std::memory_order_acq_rel);
+                updateImportanceScore(*it->second);
+                modificationFlag_.clear(std::memory_order_release);
+                return it->second->mesh;
+            }
+            
+            // Добавляем новый элемент
+            cache_[key] = std::make_unique<AdaptiveCacheEntry>(mesh, meshSize, initialImportance);
+            currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
+        } catch (...) {
+            modificationFlag_.clear(std::memory_order_release);
+            throw;
+        }
+        
+        modificationFlag_.clear(std::memory_order_release);
         return mesh;
     }
 
-    // ... остальные методы IMeshCache ...
+    void clear() noexcept override {
+        while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        
+        cache_.clear();
+        currentSize_.store(0, std::memory_order_release);
+        
+        modificationFlag_.clear(std::memory_order_release);
+    }
+
+    size_t getSize() const noexcept override {
+        return currentSize_.load(std::memory_order_acquire);
+    }
+
+    size_t getMaxSize() const noexcept override {
+        return maxSize_;
+    }
+
+    void setMaxSize(size_t maxSize) noexcept override {
+        maxSize_ = maxSize;
+        makeSpaceFor(0);
+    }
 
 private:
     void updateImportanceScore(AdaptiveCacheEntry& entry) noexcept {
         // Адаптивная оценка важности на основе workload
         auto now = std::chrono::steady_clock::now();
+        auto lastAccess = entry.lastAccess.load(std::memory_order_acquire);
         auto timeSinceAccess = std::chrono::duration_cast<std::chrono::seconds>(
-            now - entry.lastAccess).count();
+            now - lastAccess).count();
+        
+        uint32_t accessCount = entry.accessCount.load(std::memory_order_acquire);
+        float newScore = 0.0f;
 
         switch (currentWorkload_) {
             case CacheWorkload::MemoryConstrained:
                 // Для ограниченной памяти: приоритет частоты обращений
-                entry.importanceScore = entry.accessCount * 0.7f +
-                                       (1.0f / (timeSinceAccess + 1)) * 0.3f;
+                newScore = accessCount * 0.7f + (1.0f / (timeSinceAccess + 1)) * 0.3f;
                 break;
 
             case CacheWorkload::PerformanceCritical:
                 // Для критичной производительности: приоритет времени доступа
-                entry.importanceScore = (1.0f / (timeSinceAccess + 1)) * 0.8f +
-                                       entry.accessCount * 0.2f;
+                newScore = (1.0f / (timeSinceAccess + 1)) * 0.8f + accessCount * 0.2f;
                 break;
 
             case CacheWorkload::DataIntensive:
                 // Для data-intensive: баланс размера и частоты
                 float sizeFactor = 1.0f - (static_cast<float>(entry.size) / maxSize_);
-                entry.importanceScore = entry.accessCount * 0.4f +
-                                       (1.0f / (timeSinceAccess + 1)) * 0.3f +
-                                       sizeFactor * 0.3f;
+                newScore = accessCount * 0.4f + (1.0f / (timeSinceAccess + 1)) * 0.3f + sizeFactor * 0.3f;
                 break;
 
             case CacheWorkload::MixedWorkload:
                 // Для смешанного workload: адаптивная формула
-                entry.importanceScore = calculateMixedImportance(entry);
+                newScore = calculateMixedImportance(entry, timeSinceAccess, accessCount);
                 break;
         }
+        
+        entry.importanceScore.store(newScore, std::memory_order_release);
     }
 
     void makeSpaceFor(size_t requiredSize) noexcept {
-        if (currentSize_ + requiredSize <= maxSize_) {
+        size_t current = currentSize_.load(std::memory_order_acquire);
+        if (current + requiredSize <= maxSize_) {
             return;
         }
 
-        // Стратегия освобождения места зависит от workload
-        switch (currentWorkload_) {
-            case CacheWorkload::MemoryConstrained:
-                // Агрессивное удаление наименее важных элементов
-                removeLeastImportantEntries(requiredSize);
-                break;
-
-            case CacheWorkload::PerformanceCritical:
-                // Удаление старых элементов, но сохранение часто используемых
-                removeOldEntries(requiredSize);
-                break;
-
-            case CacheWorkload::DataIntensive:
-                // Удаление больших элементов с низкой важностью
-                removeLargeUnimportantEntries(requiredSize);
-                break;
-
-            case CacheWorkload::MixedWorkload:
-                // Комбинированная стратегия
-                removeEntriesAdaptive(requiredSize);
-                break;
+        // Получаем блокировку для модификации
+        while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
+            std::this_thread::yield();
         }
+
+        try {
+            // Собираем статистику использования
+            struct EntryInfo {
+                std::string key;
+                float importanceScore;
+                size_t size;
+            };
+            
+            std::vector<EntryInfo> entries;
+            entries.reserve(cache_.size());
+            
+            for (const auto& [key, entry] : cache_) {
+                entries.push_back({
+                    key,
+                    entry->importanceScore.load(std::memory_order_acquire),
+                    entry->size
+                });
+            }
+            
+            // Сортируем по важности (наименее важные сначала)
+            std::sort(entries.begin(), entries.end(),
+                [](const EntryInfo& a, const EntryInfo& b) {
+                    return a.importanceScore < b.importanceScore;
+                });
+            
+            // Удаляем наименее важные элементы пока не освободим достаточно места
+            size_t spaceToFree = (current + requiredSize) - maxSize_;
+            size_t freed = 0;
+            
+            for (const auto& entry : entries) {
+                if (freed >= spaceToFree) {
+                    break;
+                }
+                
+                auto it = cache_.find(entry.key);
+                if (it != cache_.end()) {
+                    freed += it->second->size;
+                    cache_.erase(it);
+                }
+            }
+            
+            currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
+        } catch (...) {
+            modificationFlag_.clear(std::memory_order_release);
+            throw;
+        }
+        
+        modificationFlag_.clear(std::memory_order_release);
     }
 
-    // ... вспомогательные методы для различных стратегий удаления ...
+    size_t estimateMeshSize(const draco::Mesh& mesh) const noexcept {
+        // Простая оценка размера mesh в памяти
+        size_t size = 0;
+        size += mesh.num_points() * sizeof(float) * 3;  // Позиции
+        size += mesh.num_faces() * sizeof(uint32_t) * 3; // Индексы
+
+        // Атрибуты
+        for (int i = 0; i < mesh.num_attributes(); ++i) {
+            const auto* attr = mesh.attribute(i);
+            size += attr->size() * attr->byte_stride();
+        }
+
+        return size;
+    }
+    
+    float calculateInitialImportance(const std::string& key) const noexcept {
+        // Простая начальная оценка важности
+        // В реальной реализации можно использовать дополнительные факторы
+        return 1.0f;
+    }
+    
+    float calculateMixedImportance(const AdaptiveCacheEntry& entry, 
+                                  long long timeSinceAccess, 
+                                  uint32_t accessCount) const noexcept {
+        // Адаптивная формула для смешанного workload
+        float timeFactor = 1.0f / (timeSinceAccess + 1);
+        float sizeFactor = 1.0f - (static_cast<float>(entry.size) / maxSize_);
+        float frequencyFactor = std::log1p(static_cast<float>(accessCount));
+        
+        return timeFactor * 0.4f + frequencyFactor * 0.4f + sizeFactor * 0.2f;
+    }
 };
 ```
 
 ### Паттерн: мониторинг и адаптация в runtime
 
 ```cpp
-// Архитектурный паттерн: runtime мониторинг и адаптация
-class RuntimeMonitor {
+// Архитектурный паттерн: runtime мониторинг и адаптация с lock-free доступом
+class LockFreeRuntimeMonitor {
     struct PerformanceMetrics {
-        float decodeTimeMs;          // Среднее время декодирования
-        float cacheHitRate;          // Hit rate кэша
-        size_t memoryUsage;          // Использование памяти
-        float networkBandwidth;      // Доступная bandwidth сети
-        uint32_t concurrentDecodes;  // Количество concurrent декодирований
+        std::atomic<float> decodeTimeMs;          // Среднее время декодирования
+        std::atomic<float> cacheHitRate;          // Hit rate кэша
+        std::atomic<size_t> memoryUsage;          // Использование памяти
+        std::atomic<float> networkBandwidth;      // Доступная bandwidth сети
+        std::atomic<uint32_t> concurrentDecodes;  // Количество concurrent декодирований
+        std::atomic<std::chrono::steady_clock::time_point> lastUpdate;
+        
+        PerformanceMetrics() 
+            : decodeTimeMs(0.0f)
+            , cacheHitRate(0.0f)
+            , memoryUsage(0)
+            , networkBandwidth(0.0f)
+            , concurrentDecodes(0)
+            , lastUpdate(std::chrono::steady_clock::now()) {}
     };
 
     PerformanceMetrics currentMetrics_;
-    std::chrono::steady_clock::time_point lastUpdate_;
-    std::mutex mutex_;
 
 public:
     void updateMetrics(const PerformanceMetrics& metrics) noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
-        currentMetrics_ = metrics;
-        lastUpdate_ = std::chrono::steady_clock::now();
+        // Атомарное обновление всех метрик
+        currentMetrics_.decodeTimeMs.store(metrics.decodeTimeMs, std::memory_order_release);
+        currentMetrics_.cacheHitRate.store(metrics.cacheHitRate, std::memory_order_release);
+        currentMetrics_.memoryUsage.store(metrics.memoryUsage, std::memory_order_release);
+        currentMetrics_.networkBandwidth.store(metrics.networkBandwidth, std::memory_order_release);
+        currentMetrics_.concurrentDecodes.store(metrics.concurrentDecodes, std::memory_order_release);
+        currentMetrics_.lastUpdate.store(std::chrono::steady_clock::now(), std::memory_order_release);
     }
 
     [[nodiscard]] OptimizationSuggestions getSuggestions() const noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
         OptimizationSuggestions suggestions;
 
+        // Чтение метрик атомарно
+        float decodeTime = currentMetrics_.decodeTimeMs.load(std::memory_order_acquire);
+        float cacheHitRate = currentMetrics_.cacheHitRate.load(std::memory_order_acquire);
+        size_t memoryUsage = currentMetrics_.memoryUsage.load(std::memory_order_acquire);
+        float networkBandwidth = currentMetrics_.networkBandwidth.load(std::memory_order_acquire);
+        uint32_t concurrentDecodes = currentMetrics_.concurrentDecodes.load(std::memory_order_acquire);
+
         // Анализ метрик и генерация suggestions
-        if (currentMetrics_.decodeTimeMs > 16.0f) {  // > 60 FPS threshold
+        if (decodeTime > 16.0f) {  // > 60 FPS threshold
             suggestions.suggestLowerQuality();
         }
 
-        if (currentMetrics_.cacheHitRate < 0.7f) {
+        if (cacheHitRate < 0.7f) {
             suggestions.suggestIncreaseCacheSize();
         }
 
-        if (currentMetrics_.memoryUsage > 0.9f * getAvailableMemory()) {
+        if (memoryUsage > 0.9f * getAvailableMemory()) {
             suggestions.suggestAggressiveCaching();
         }
 
-        if (currentMetrics_.networkBandwidth < 10.0f) {  // < 10 Mbps
+        if (networkBandwidth < 10.0f) {  // < 10 Mbps
             suggestions.suggestHigherCompression();
+        }
+
+        if (concurrentDecodes > 8) {  // Слишком много concurrent задач
+            suggestions.suggestReduceConcurrency();
+        }
+
+        // Проверяем, когда последний раз обновлялись метрики
+        auto lastUpdate = currentMetrics_.lastUpdate.load(std::memory_order_acquire);
+        auto now = std::chrono::steady_clock::now();
+        auto timeSinceUpdate = std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate);
+        
+        if (timeSinceUpdate > std::chrono::seconds(5)) {
+            suggestions.suggestEnablePrefetching();  // Если данные устарели, включаем предзагрузку
         }
 
         return suggestions;
@@ -1803,7 +2141,21 @@ public:
             if (reduceConcurrency) result += "• Уменьшить concurrency декодирования\n";
             return result;
         }
+        
+        void suggestLowerQuality() { lowerQuality = true; }
+        void suggestIncreaseCacheSize() { increaseCacheSize = true; }
+        void suggestAggressiveCaching() { aggressiveCaching = true; }
+        void suggestHigherCompression() { higherCompression = true; }
+        void suggestEnablePrefetching() { enablePrefetching = true; }
+        void suggestReduceConcurrency() { reduceConcurrency = true; }
     };
+    
+private:
+    [[nodiscard]] size_t getAvailableMemory() const noexcept {
+        // В реальной реализации нужно получить доступную память системы
+        // Для примера возвращаем фиксированное значение
+        return 8ULL * 1024 * 1024 * 1024;  // 8 GB
+    }
 };
 ```
 

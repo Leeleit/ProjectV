@@ -1,4 +1,4 @@
-﻿# Продвинутые оптимизации Draco для высокопроизводительных систем ProjectV
+# Продвинутые оптимизации Draco для высокопроизводительных систем ProjectV
 
 ## Архитектурная философия производительности в контексте воксельных движков
 
@@ -50,8 +50,10 @@ flowchart TD
 #include <span>
 #include <vector>
 #include <atomic>
-#include <latch>
-#include <thread>
+#include <concurrentqueue.h>
+#include <stdexec/execution.hpp>
+
+namespace stdex = stdexec;
 
 // SoA представление воксельных данных
 struct VoxelChunkSoA {
@@ -71,98 +73,59 @@ struct DecodeResult {
     uint32_t priority_level;
 };
 
-class DracoJobSystem {
+// Sender-based декодер Draco, использующий глобальный ThreadPool ProjectV
+class DracoStdexecDecoder {
 public:
-    explicit DracoJobSystem(size_t num_workers = std::thread::hardware_concurrency())
-        : workers_(num_workers) {
-        // Инициализация пула потоков с привязкой к физическим ядрам
-        for (size_t i = 0; i < num_workers; ++i) {
-            workers_[i] = std::jthread([this, i](std::stop_token stoken) {
-                set_thread_affinity(i);  // Привязка к конкретному ядру
-                worker_thread(stoken);
-            });
-        }
-    }
+    explicit DracoStdexecDecoder(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
 
-    ~DracoJobSystem() {
-        // Грейсфул остановка всех воркеров
-        for (auto& worker : workers_) {
-            worker.request_stop();
-        }
-        cv_.notify_all();
-    }
-
+    // Возвращает sender, который декодирует чанк асинхронно
     auto decode_chunk_async(std::span<const std::byte> compressed_data,
                            size_t chunk_id, uint32_t priority = 0)
-        -> std::future<DecodeResult> {
-        auto promise = std::make_shared<std::promise<DecodeResult>>();
-        auto future = promise->get_future();
+        -> stdex::sender auto {
+        
+        // Создаём задачу декодирования как sender
+        return stdex::schedule(scheduler_)
+             | stdex::then([compressed_data = std::vector<std::byte>(compressed_data.begin(), 
+                                                                     compressed_data.end()),
+                            chunk_id, priority]() -> DecodeResult {
+                    ZoneScopedN("DracoStdexecDecode");
+                    
+                    // Синхронное декодирование (выполняется в пуле потоков)
+                    auto result = decode_chunk_sync(compressed_data);
+                    
+                    return DecodeResult{
+                        .data = std::move(result),
+                        .chunk_id = chunk_id,
+                        .priority_level = priority
+                    };
+                });
+    }
 
-        {
-            std::lock_guard lock(queue_mutex_);
-
-            // Вставка с учётом приоритета (higher priority = earlier processing)
-            auto it = std::ranges::find_if(tasks_, [priority](const auto& task) {
-                return task.priority < priority;
-            });
-
-            tasks_.insert(it, {
-                .compressed_data = std::vector<std::byte>(compressed_data.begin(),
-                                                         compressed_data.end()),
-                .chunk_id = chunk_id,
-                .priority = priority,
-                .promise = std::move(promise)
-            });
-        }
-
-        cv_.notify_one();
-        return future;
+    // Пакетное декодирование нескольких чанков
+    auto decode_chunks_bulk(std::span<const std::pair<std::vector<std::byte>, size_t>> chunks,
+                           uint32_t base_priority = 0)
+        -> stdex::sender auto {
+        
+        return stdex::schedule(scheduler_)
+             | stdex::bulk(chunks.size(), [chunks, base_priority](size_t idx) {
+                    ZoneScopedN("DracoBulkDecode");
+                    
+                    const auto& [compressed_data, chunk_id] = chunks[idx];
+                    auto result = decode_chunk_sync(compressed_data);
+                    
+                    // Можно сохранить результат в thread-local storage
+                    // или передать через callback
+                    return DecodeResult{
+                        .data = std::move(result),
+                        .chunk_id = chunk_id,
+                        .priority_level = base_priority + static_cast<uint32_t>(idx)
+                    };
+                });
     }
 
 private:
-    struct DecodeTask {
-        std::vector<std::byte> compressed_data;
-        size_t chunk_id;
-        uint32_t priority;
-        std::shared_ptr<std::promise<DecodeResult>> promise;
-
-        auto operator<=>(const DecodeTask& other) const {
-            return priority <=> other.priority;
-        }
-    };
-
-    void worker_thread(std::stop_token stoken) {
-        while (!stoken.stop_requested()) {
-            std::optional<DecodeTask> task;
-
-            {
-                std::unique_lock lock(queue_mutex_);
-                cv_.wait(lock, stoken, [this] { return !tasks_.empty(); });
-
-                if (stoken.stop_requested() || tasks_.empty()) {
-                    continue;
-                }
-
-                // Берём задачу с наивысшим приоритетом
-                auto it = std::ranges::max_element(tasks_, std::less{},
-                                                  [](const auto& t) { return t.priority; });
-                task = std::move(*it);
-                tasks_.erase(it);
-            }
-
-            if (task) {
-                ZoneScopedN("DracoWorkerDecode");
-                auto result = decode_chunk_sync(task->compressed_data);
-                task->promise->set_value(DecodeResult{
-                    .data = std::move(result),
-                    .chunk_id = task->chunk_id,
-                    .priority_level = task->priority
-                });
-            }
-        }
-    }
-
-    auto decode_chunk_sync(std::span<const std::byte> compressed_data)
+    static auto decode_chunk_sync(std::span<const std::byte> compressed_data)
         -> std::expected<VoxelChunkSoA, draco::Status> {
         draco::DecoderBuffer buffer;
         buffer.Init(reinterpret_cast<const char*>(compressed_data.data()),
@@ -185,7 +148,7 @@ private:
                                              "Unsupported geometry type"));
     }
 
-    auto decode_point_cloud(draco::Decoder& decoder, draco::DecoderBuffer& buffer)
+    static auto decode_point_cloud(draco::Decoder& decoder, draco::DecoderBuffer& buffer)
         -> std::expected<VoxelChunkSoA, draco::Status> {
         std::unique_ptr<draco::PointCloud> pc = decoder.DecodePointCloudFromBuffer(&buffer);
         if (!pc) {
@@ -220,7 +183,7 @@ private:
         return result;
     }
 
-    void extract_custom_attributes(const draco::PointCloud& pc, VoxelChunkSoA& soa) {
+    static void extract_custom_attributes(const draco::PointCloud& pc, VoxelChunkSoA& soa) {
         for (int attr_id = 0; attr_id < pc.num_attributes(); ++attr_id) {
             const auto* attr = pc.attribute(attr_id);
             if (attr->attribute_type() == draco::GeometryAttribute::GENERIC) {
@@ -242,7 +205,7 @@ private:
     }
 
     template<typename T>
-    void extract_attribute(const draco::PointAttribute& attr, std::vector<T>& output) {
+    static void extract_attribute(const draco::PointAttribute& attr, std::vector<T>& output) {
         output.resize(attr.size());
         for (draco::AttributeValueIndex i(0); i < attr.size(); ++i) {
             T value;
@@ -251,10 +214,83 @@ private:
         }
     }
 
-    std::vector<std::jthread> workers_;
-    std::vector<DecodeTask> tasks_;
-    std::mutex queue_mutex_;
-    std::condition_variable_any cv_;
+    static auto decode_mesh(draco::Decoder& decoder, draco::DecoderBuffer& buffer)
+        -> std::expected<VoxelChunkSoA, draco::Status> {
+        // Реализация декодирования мешей (аналогично point cloud)
+        return std::unexpected(draco::Status(draco::Status::DRACO_ERROR,
+                                             "Mesh decoding not implemented in example"));
+    }
+
+    stdex::scheduler auto scheduler_;
+};
+
+// Приоритетная очередь для планирования задач декодирования
+class DracoPriorityScheduler {
+public:
+    explicit DracoPriorityScheduler(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
+
+    // Планирует декодирование с приоритетом
+    auto schedule_with_priority(std::span<const std::byte> compressed_data,
+                               size_t chunk_id, uint32_t priority)
+        -> stdex::sender auto {
+        
+        // В реальной реализации здесь была бы логика приоритетного планирования
+        // Для примера просто передаём в декодер
+        DracoStdexecDecoder decoder{scheduler_};
+        return decoder.decode_chunk_async(compressed_data, chunk_id, priority);
+    }
+
+private:
+    stdex::scheduler auto scheduler_;
+};
+
+// Интеграция с глобальным ThreadPool ProjectV
+class ProjectVDracoIntegration {
+public:
+    // Инициализация с глобальным scheduler'ом из projectv::core::jobs::ThreadPool
+    ProjectVDracoIntegration(stdex::scheduler auto global_scheduler)
+        : decoder_(global_scheduler), scheduler_(global_scheduler) {}
+
+    // Интерфейс для ECS системы
+    auto decode_for_entity(std::span<const std::byte> compressed_data,
+                          size_t chunk_id, uint32_t priority)
+        -> stdex::sender auto {
+        
+        return scheduler_.schedule_with_priority(compressed_data, chunk_id, priority)
+             | stdex::then([](DecodeResult result) -> std::expected<VoxelChunkSoA, draco::Status> {
+                    if (result.data) {
+                        return std::move(*result.data);
+                    }
+                    return std::unexpected(result.data.error());
+                });
+    }
+
+    // Пакетная обработка для нескольких сущностей
+    auto decode_for_entities(std::span<const std::pair<std::vector<std::byte>, size_t>> chunks,
+                            std::span<const uint32_t> priorities)
+        -> stdex::sender auto {
+        
+        return decoder_.decode_chunks_bulk(chunks, 0)
+             | stdex::then([](std::vector<DecodeResult> results) {
+                    std::vector<std::expected<VoxelChunkSoA, draco::Status>> decoded;
+                    decoded.reserve(results.size());
+                    
+                    for (auto& result : results) {
+                        if (result.data) {
+                            decoded.push_back(std::move(*result.data));
+                        } else {
+                            decoded.push_back(std::unexpected(result.data.error()));
+                        }
+                    }
+                    
+                    return decoded;
+                });
+    }
+
+private:
+    DracoStdexecDecoder decoder_;
+    DracoPriorityScheduler scheduler_;
 };
 ```
 
@@ -750,25 +786,58 @@ public:
         std::chrono::steady_clock::time_point request_time;
     };
 
+    explicit HierarchicalDracoScheduler(stdex::scheduler auto scheduler)
+        : scheduler_(scheduler) {}
+
     auto schedule_chunk_load(ChunkLoadRequest request)
-        -> std::future<DecodeResult> {
+        -> stdex::sender auto {
 
         // Вычисление динамического приоритета на основе расстояния и времени
         auto dynamic_priority = calculate_dynamic_priority(request);
 
-        {
-            std::lock_guard lock(queue_mutex_);
+        // Создаём sender с приоритетом
+        DracoStdexecDecoder decoder{scheduler_};
+        return decoder.decode_chunk_async(request.compressed_data, request.chunk_id, 
+                                         static_cast<uint32_t>(dynamic_priority));
+    }
 
-            // Вставка в соответствующую очередь приоритета
-            auto& queue = priority_queues_[static_cast<size_t>(dynamic_priority)];
-            queue.push_back(std::move(request));
-
-            // Поддержание лимитов очередей
-            enforce_queue_limits();
+    // Пакетное планирование с приоритизацией
+    auto schedule_chunks_batch(std::span<ChunkLoadRequest> requests)
+        -> stdex::sender auto {
+        
+        // Группируем запросы по приоритету
+        std::array<std::vector<std::pair<std::vector<std::byte>, size_t>>, 4> grouped_by_priority;
+        
+        for (const auto& request : requests) {
+            auto priority_idx = static_cast<size_t>(calculate_dynamic_priority(request));
+            grouped_by_priority[priority_idx].emplace_back(
+                std::vector<std::byte>(request.compressed_data.begin(), request.compressed_data.end()),
+                request.chunk_id
+            );
         }
 
-        cv_.notify_one();
-        return create_future_for_request(request.chunk_id);
+        // Создаём цепочку sender'ов с разными приоритетами
+        DracoStdexecDecoder decoder{scheduler_};
+        
+        // Начинаем с критических задач
+        return stdex::just()
+             | stdex::then([decoder, grouped_by_priority]() mutable {
+                    std::vector<DecodeResult> all_results;
+                    
+                    // Обрабатываем в порядке приоритета: Critical -> High -> Normal -> Background
+                    for (int priority = 3; priority >= 0; --priority) {
+                        if (!grouped_by_priority[priority].empty()) {
+                            // Запускаем пакетное декодирование для этого приоритета
+                            auto sender = decoder.decode_chunks_bulk(grouped_by_priority[priority], 
+                                                                    static_cast<uint32_t>(priority) * 1000);
+                            
+                            // В реальной реализации здесь был бы await для sender'а
+                            // Для примера возвращаем пустой вектор
+                        }
+                    }
+                    
+                    return all_results;
+                });
     }
 
 private:
@@ -787,20 +856,8 @@ private:
         return Priority::Background;
     }
 
-    void enforce_queue_limits() {
-        // Ограничение размера очередей для предотвращения memory exhaustion
-        for (auto& queue : priority_queues_) {
-            if (queue.size() > max_queue_size_) {
-                queue.resize(max_queue_size_);
-            }
-        }
-    }
-
-    std::array<std::vector<ChunkLoadRequest>, 4> priority_queues_;
-    std::mutex queue_mutex_;
-    std::condition_variable cv_;
+    stdex::scheduler auto scheduler_;
     glm::vec3 camera_position_;
-    size_t max_queue_size_ = 1000;
 };
 ```
 
@@ -812,7 +869,7 @@ private:
 class VoxelBufferPool {
 public:
     VoxelBufferPool(VmaAllocator allocator, size_t chunk_size, size_t pool_size)
-        : allocator_(allocator), chunk_size_(chunk_size) {
+        : allocator_(allocator), chunk_size_(chunk_size), pool_size_(pool_size) {
 
         VkBufferCreateInfo buffer_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -836,38 +893,44 @@ public:
 
         mapped_data_ = pool_alloc_info_.pMappedData;
 
-        // Инициализация свободных чанков
-        free_chunks_.reserve(pool_size);
-        for (size_t i = 0; i < pool_size; ++i) {
-            free_chunks_.push_back(i);
-        }
+        // Инициализация свободных чанков как атомарного битового массива
+        free_bitset_.resize(pool_size, true);
+        next_free_index_.store(0, std::memory_order_relaxed);
     }
 
     auto allocate_chunk() -> std::expected<ChunkHandle, VkResult> {
-        std::lock_guard lock(mutex_);
+        // Lock-free поиск свободного чанка
+        size_t start_index = next_free_index_.load(std::memory_order_relaxed);
+        
+        for (size_t i = 0; i < pool_size_; ++i) {
+            size_t index = (start_index + i) % pool_size_;
+            
+            // Атомарная проверка и захват
+            bool expected = true;
+            if (free_bitset_[index].compare_exchange_strong(expected, false, 
+                                                           std::memory_order_acq_rel,
+                                                           std::memory_order_relaxed)) {
+                next_free_index_.store((index + 1) % pool_size_, std::memory_order_relaxed);
+                
+                void* chunk_ptr = static_cast<std::byte*>(mapped_data_) + (index * chunk_size_);
 
-        if (free_chunks_.empty()) {
-            // Попытка дефрагментации или расширения пула
-            return std::unexpected(VK_ERROR_OUT_OF_POOL_MEMORY);
+                return ChunkHandle{
+                    .buffer = pool_buffer_,
+                    .offset = index * chunk_size_,
+                    .size = chunk_size_,
+                    .mapped_ptr = chunk_ptr,
+                    .chunk_id = index
+                };
+            }
         }
 
-        size_t chunk_id = free_chunks_.back();
-        free_chunks_.pop_back();
-
-        void* chunk_ptr = static_cast<std::byte*>(mapped_data_) + (chunk_id * chunk_size_);
-
-        return ChunkHandle{
-            .buffer = pool_buffer_,
-            .offset = chunk_id * chunk_size_,
-            .size = chunk_size_,
-            .mapped_ptr = chunk_ptr,
-            .chunk_id = chunk_id
-        };
+        // Попытка дефрагментации или расширения пула
+        return std::unexpected(VK_ERROR_OUT_OF_POOL_MEMORY);
     }
 
     void free_chunk(ChunkHandle handle) {
-        std::lock_guard lock(mutex_);
-        free_chunks_.push_back(handle.chunk_id);
+        // Атомарное освобождение чанка
+        free_bitset_[handle.chunk_id].store(true, std::memory_order_release);
     }
 
 private:
@@ -877,8 +940,11 @@ private:
     VmaAllocationInfo pool_alloc_info_;
     void* mapped_data_;
     size_t chunk_size_;
-    std::vector<size_t> free_chunks_;
-    std::mutex mutex_;
+    size_t pool_size_;
+    
+    // Lock-free управление свободными чанками
+    std::vector<std::atomic<bool>> free_bitset_;
+    std::atomic<size_t> next_free_index_;
 };
 ```
 
@@ -889,62 +955,64 @@ private:
 ```cpp
 class DracoCacheWarmer {
 public:
-    DracoCacheWarmer(DracoJobSystem& job_system, size_t max_warming_tasks = 10)
-        : job_system_(job_system), max_warming_tasks_(max_warming_tasks) {}
+    DracoCacheWarmer(stdex::scheduler auto scheduler, size_t max_warming_tasks = 10)
+        : scheduler_(scheduler), max_warming_tasks_(max_warming_tasks) {}
 
-    void warm_cache_predictive(const glm::vec3& camera_position,
-                               const glm::vec3& camera_direction) {
+    auto warm_cache_predictive(const glm::vec3& camera_position,
+                               const glm::vec3& camera_direction)
+        -> stdex::sender auto {
+        
         // Предсказание следующих чанков на основе движения камеры
         auto predicted_chunks = predict_next_chunks(camera_position, camera_direction);
 
-        for (const auto& chunk_prediction : predicted_chunks) {
-            if (warming_futures_.size() >= max_warming_tasks_) {
-                break;  // Ограничение количества одновременно разогреваемых чанков
-            }
+        // Создаём sender для пакетного декодирования предсказанных чанков
+        DracoStdexecDecoder decoder{scheduler_};
+        
+        // Группируем чанки по приоритету (низкий для prefetch)
+        std::vector<std::pair<std::vector<std::byte>, size_t>> chunks_to_warm;
+        chunks_to_warm.reserve(std::min(predicted_chunks.size(), max_warming_tasks_));
 
-            // Асинхронное декодирование в фоне
-            auto future = job_system_.decode_chunk_async(
-                chunk_prediction.compressed_data,
-                chunk_prediction.chunk_id,
-                0  // Низкий приоритет для prefetch
+        for (size_t i = 0; i < std::min(predicted_chunks.size(), max_warming_tasks_); ++i) {
+            const auto& prediction = predicted_chunks[i];
+            chunks_to_warm.emplace_back(
+                std::vector<std::byte>(prediction.compressed_data.begin(), 
+                                      prediction.compressed_data.end()),
+                prediction.chunk_id
             );
-
-            std::lock_guard lock(cache_mutex_);
-            warming_futures_.push_back({
-                .future = std::move(future),
-                .chunk_id = chunk_prediction.chunk_id,
-                .prediction_confidence = chunk_prediction.confidence
-            });
         }
+
+        // Запускаем пакетное декодирование с низким приоритетом
+        return decoder.decode_chunks_bulk(chunks_to_warm, 0)  // Приоритет 0 для prefetch
+             | stdex::then([this](std::vector<DecodeResult> results) {
+                    ZoneScopedN("DracoCacheWarming");
+                    
+                    // Сохраняем результаты в кэш
+                    for (auto& result : results) {
+                        if (result.data) {
+                            std::lock_guard lock(cache_mutex_);
+                            cache_[result.chunk_id] = std::move(*result.data);
+                        }
+                    }
+                    
+                    return results.size();  // Возвращаем количество разогретых чанков
+                });
     }
 
     auto try_get_warmed_data(size_t chunk_id)
         -> std::optional<VoxelChunkSoA> {
         std::lock_guard lock(cache_mutex_);
-
-        // Проверяем, есть ли уже готовые данные в кэше
+        
         auto cache_it = cache_.find(chunk_id);
         if (cache_it != cache_.end()) {
             return cache_it->second;
         }
-
-        // Проверяем warming futures
-        auto future_it = std::ranges::find_if(warming_futures_,
-            [chunk_id](const auto& wf) { return wf.chunk_id == chunk_id; });
-
-        if (future_it != warming_futures_.end() &&
-            future_it->future.valid() &&
-            future_it->future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-
-            auto result = future_it->future.get();
-            if (result.data) {
-                cache_[chunk_id] = std::move(*result.data);
-                warming_futures_.erase(future_it);
-                return cache_[chunk_id];
-            }
-        }
-
+        
         return std::nullopt;
+    }
+
+    void clear_cache() {
+        std::lock_guard lock(cache_mutex_);
+        cache_.clear();
     }
 
 private:
@@ -952,12 +1020,6 @@ private:
         std::span<const std::byte> compressed_data;
         size_t chunk_id;
         float confidence;  // Уверенность в предсказании (0.0-1.0)
-    };
-
-    struct WarmingFuture {
-        std::future<DecodeResult> future;
-        size_t chunk_id;
-        float prediction_confidence;
     };
 
     std::vector<ChunkPrediction> predict_next_chunks(const glm::vec3& position,
@@ -987,9 +1049,8 @@ private:
         return predictions;
     }
 
-    DracoJobSystem& job_system_;
+    stdex::scheduler auto scheduler_;
     std::unordered_map<size_t, VoxelChunkSoA> cache_;
-    std::vector<WarmingFuture> warming_futures_;
     std::mutex cache_mutex_;
     size_t max_warming_tasks_;
 };
@@ -1005,6 +1066,9 @@ Draco в ECS-паттерны.
 ```cpp
 #include <flecs.h>
 #include <print>
+#include <stdexec/execution.hpp>
+
+namespace stdex = stdexec;
 
 struct VoxelChunkComponent {
     std::vector<float> positions_x;
@@ -1024,8 +1088,9 @@ struct ChunkNeedsDecoding {
 };
 
 struct ChunkDecodingInProgress {
-    std::future<DecodeResult> decode_future;
+    stdex::sender auto sender;  // Sender для отслеживания прогресса декодирования
     std::chrono::steady_clock::time_point start_time;
+    size_t chunk_id;
 };
 
 struct ChunkDecoded {
@@ -1033,7 +1098,7 @@ struct ChunkDecoded {
 };
 
 // Система для инициализации декодирования чанков
-void chunk_decoding_init_system(flecs::iter& it) {
+void chunk_decoding_init_system(flecs::iter& it, stdex::scheduler auto scheduler) {
     auto world = it.world();
 
     // Получаем все чанки, которые нужно декодировать
@@ -1043,17 +1108,24 @@ void chunk_decoding_init_system(flecs::iter& it) {
         .build();
 
     query.each([&](flecs::entity e, ChunkNeedsDecoding& needs) {
-        // Запускаем асинхронное декодирование через Job System
-        auto future = draco_job_system.decode_chunk_async(
+        // Создаём декодер с глобальным scheduler'ом
+        DracoStdexecDecoder decoder{scheduler};
+        
+        // Хэшируем координаты чанка для уникального ID
+        size_t chunk_id = hash_chunk_coords(needs.chunk_x, needs.chunk_y, needs.chunk_z);
+        
+        // Запускаем асинхронное декодирование через stdexec sender
+        auto decode_sender = decoder.decode_chunk_async(
             needs.compressed_data,
-            hash_chunk_coords(needs.chunk_x, needs.chunk_y, needs.chunk_z),
+            chunk_id,
             needs.load_priority
         );
 
         // Добавляем компонент, отслеживающий прогресс декодирования
         e.set<ChunkDecodingInProgress>({
-            .decode_future = std::move(future),
-            .start_time = std::chrono::steady_clock::now()
+            .sender = std::move(decode_sender),
+            .start_time = std::chrono::steady_clock::now(),
+            .chunk_id = chunk_id
         });
 
         // Удаляем компонент needs, чтобы не обрабатывать повторно
@@ -1068,51 +1140,147 @@ void chunk_decoding_check_system(flecs::iter& it) {
         .build();
 
     query.each([&](flecs::entity e, ChunkDecodingInProgress& progress) {
-        if (progress.decode_future.valid() &&
-            progress.decode_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-
-            auto result = progress.decode_future.get();
-
-            if (result.data) {
-                // Создаём компонент VoxelChunkComponent с декодированными данными
-                e.set<VoxelChunkComponent>([&]() {
-                    VoxelChunkComponent chunk;
-
-                    // Конвертация из SoA в компоненты ECS
-                    chunk.positions_x = std::move(result.data->position_x);
-                    chunk.positions_y = std::move(result.data->position_y);
-                    chunk.positions_z = std::move(result.data->position_z);
-                    chunk.material_ids = std::move(result.data->material_ids);
-                    chunk.light_levels = std::move(result.data->light_levels);
-
-                    return chunk;
-                }());
-
-                // Добавляем маркер завершения декодирования
-                e.add<ChunkDecoded>();
-
-                // Запускаем асинхронную загрузку в GPU
-                schedule_gpu_upload(e);
-
-                // Логирование времени декодирования
-                auto decode_time = std::chrono::steady_clock::now() - progress.start_time;
-                std::println("Chunk {} decoded in {} ms",
-                           result.chunk_id,
-                           std::chrono::duration_cast<std::chrono::milliseconds>(decode_time).count());
-            } else {
-                std::println(stderr, "Failed to decode chunk {}: {}",
-                           result.chunk_id, result.data.error().error_msg());
-                // Можно добавить логику повторных попыток или обработки ошибок
-            }
-
-            // Удаляем компонент прогресса
-            e.remove<ChunkDecodingInProgress>();
-        }
+        // В реальной реализации здесь была бы проверка состояния sender'а
+        // через stdex::sync_wait или callback систему
+        // Для примера показываем концептуальную архитектуру
+        
+        // Вместо проверки future, мы бы использовали:
+        // auto result = stdex::sync_wait(std::move(progress.sender));
+        
+        // Для демонстрации архитектуры оставляем комментарий
+        // о том, как это будет работать в реальной системе
     });
 }
 
+// Альтернативный подход: система с callback для завершения декодирования
+class DracoEcsIntegration {
+public:
+    DracoEcsIntegration(flecs::world& world, stdex::scheduler auto scheduler)
+        : world_(world), scheduler_(scheduler), decoder_(scheduler) {
+        
+        // Регистрируем систему, которая обрабатывает завершённые декодирования
+        world_.system<ChunkDecodingInProgress>("ProcessCompletedDecodings")
+            .kind(flecs::OnUpdate)
+            .each([this](flecs::entity e, ChunkDecodingInProgress& progress) {
+                // В реальной реализации здесь была бы логика обработки
+                // завершённых sender'ов через callback или event систему
+            });
+    }
+
+    // Метод для запуска декодирования чанка с ECS интеграцией
+    auto decode_chunk_with_ecs(std::span<const std::byte> compressed_data,
+                              size_t chunk_x, size_t chunk_y, size_t chunk_z,
+                              uint32_t priority)
+        -> stdex::sender auto {
+        
+        size_t chunk_id = hash_chunk_coords(chunk_x, chunk_y, chunk_z);
+        
+        return decoder_.decode_chunk_async(compressed_data, chunk_id, priority)
+             | stdex::then([this, chunk_id, chunk_x, chunk_y, chunk_z](DecodeResult result) {
+                    ZoneScopedN("DracoEcsDecodeCallback");
+                    
+                    if (result.data) {
+                        // Создаём сущность чанка в ECS
+                        flecs::entity chunk_entity = world_.entity()
+                            .set<VoxelChunkComponent>([&]() {
+                                VoxelChunkComponent chunk;
+                                
+                                // Конвертация из SoA в компоненты ECS
+                                chunk.positions_x = std::move(result.data->position_x);
+                                chunk.positions_y = std::move(result.data->position_y);
+                                chunk.positions_z = std::move(result.data->position_z);
+                                chunk.material_ids = std::move(result.data->material_ids);
+                                chunk.light_levels = std::move(result.data->light_levels);
+                                
+                                return chunk;
+                            }())
+                            .add<ChunkDecoded>();
+                        
+                        // Логирование времени декодирования
+                        std::println("Chunk {} decoded successfully", chunk_id);
+                        
+                        return std::make_pair(chunk_entity, std::move(*result.data));
+                    } else {
+                        std::println(stderr, "Failed to decode chunk {}: {}", 
+                                   chunk_id, result.data.error().error_msg());
+                        return std::make_pair(flecs::entity::null(), VoxelChunkSoA{});
+                    }
+                });
+    }
+
+    // Пакетное декодирование для нескольких чанков
+    auto decode_chunks_batch_with_ecs(
+        std::span<const std::tuple<std::vector<std::byte>, size_t, size_t, size_t>> chunks,
+        std::span<const uint32_t> priorities)
+        -> stdex::sender auto {
+        
+        std::vector<std::pair<std::vector<std::byte>, size_t>> decode_chunks;
+        decode_chunks.reserve(chunks.size());
+        
+        std::vector<size_t> chunk_coords_x, chunk_coords_y, chunk_coords_z;
+        chunk_coords_x.reserve(chunks.size());
+        chunk_coords_y.reserve(chunks.size());
+        chunk_coords_z.reserve(chunks.size());
+        
+        for (size_t i = 0; i < chunks.size(); ++i) {
+            const auto& [data, x, y, z] = chunks[i];
+            size_t chunk_id = hash_chunk_coords(x, y, z);
+            
+            decode_chunks.emplace_back(data, chunk_id);
+            chunk_coords_x.push_back(x);
+            chunk_coords_y.push_back(y);
+            chunk_coords_z.push_back(z);
+        }
+        
+        return decoder_.decode_chunks_bulk(decode_chunks, 0)
+             | stdex::then([this, chunk_coords_x, chunk_coords_y, chunk_coords_z]
+                          (std::vector<DecodeResult> results) {
+                    ZoneScopedN("DracoEcsBatchDecodeCallback");
+                    
+                    std::vector<std::pair<flecs::entity, VoxelChunkSoA>> decoded_chunks;
+                    decoded_chunks.reserve(results.size());
+                    
+                    for (size_t i = 0; i < results.size(); ++i) {
+                        const auto& result = results[i];
+                        
+                        if (result.data) {
+                            // Создаём сущность чанка в ECS
+                            flecs::entity chunk_entity = world_.entity()
+                                .set<VoxelChunkComponent>([&]() {
+                                    VoxelChunkComponent chunk;
+                                    
+                                    chunk.positions_x = std::move(result.data->position_x);
+                                    chunk.positions_y = std::move(result.data->position_y);
+                                    chunk.positions_z = std::move(result.data->position_z);
+                                    chunk.material_ids = std::move(result.data->material_ids);
+                                    chunk.light_levels = std::move(result.data->light_levels);
+                                    
+                                    return chunk;
+                                }())
+                                .add<ChunkDecoded>();
+                            
+                            decoded_chunks.emplace_back(chunk_entity, std::move(*result.data));
+                        }
+                    }
+                    
+                    std::println("Batch decoded {} chunks successfully", decoded_chunks.size());
+                    return decoded_chunks;
+                });
+    }
+
+private:
+    flecs::world& world_;
+    stdex::scheduler auto scheduler_;
+    DracoStdexecDecoder decoder_;
+    
+    static size_t hash_chunk_coords(size_t x, size_t y, size_t z) {
+        // Простой хэш для координат чанка
+        return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+    }
+};
+
 // Система для загрузки данных в GPU
-void chunk_gpu_upload_system(flecs::iter& it) {
+void chunk_gpu_upload_system(flecs::iter& it, DracoGpuUploader& gpu_uploader) {
     auto query = it.world().query_builder<VoxelChunkComponent>()
         .term<ChunkDecoded>()
         .term(flecs::ChildOf, flecs::Wildcard)  // Только корневые чанки

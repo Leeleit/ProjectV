@@ -274,7 +274,45 @@ std::expected<void, std::string> VulkanContext::createInstance() {
 
 ```cpp
 std::expected<void, std::string> VulkanContext::createDevice() {
-    // ... поиск queue families, создание device
+    // Поиск queue families и создание device
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+    // Поиск graphics queue family
+    for (uint32_t i = 0; i < queueFamilyCount; ++i) {
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            m_graphicsQueueFamily = i;
+            break;
+        }
+    }
+
+    // Поиск present queue family
+    VkBool32 presentSupport = false;
+    for (uint32_t i = 0; i < queueFamilyCount; ++i) {
+        vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, i, m_surface, &presentSupport);
+        if (presentSupport) {
+            m_presentQueueFamily = i;
+            break;
+        }
+    }
+
+    // Создание device
+    float queuePriority = 1.0f;
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = m_graphicsQueueFamily;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.queueCreateInfoCount = 1;
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.enabledExtensionCount = 1;
+    createInfo.ppEnabledExtensionNames = deviceExtensions;
 
     if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS) {
         return std::unexpected("vkCreateDevice failed");
