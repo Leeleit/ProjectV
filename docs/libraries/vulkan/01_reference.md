@@ -59,6 +59,45 @@ vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer, &allocation, nullpt
 
 **Метафора:** VMA — это "менеджер склада", который эффективно использует каждый квадратный метр VRAM.
 
+### 4. Dynamic Rendering: Смерть legacy render passes
+
+**Проблема legacy render passes:** Vulkan 1.0-1.2 требовали создания `VkRenderPass` и `VkFramebuffer` — сложных,
+статичных объектов, которые описывали весь проход рендеринга заранее. Это создавало boilerplate и ограничивало
+гибкость.
+
+**Решение VK_KHR_dynamic_rendering (Vulkan 1.3+):** Рендеринг "на лету" без предварительных объектов. Всё описывается
+прямо в командном буфере через `VkRenderingInfo`.
+
+```cpp
+// Legacy (Vulkan 1.2): сложно и статично
+VkRenderPass renderPass = createRenderPass(...);
+VkFramebuffer framebuffer = createFramebuffer(...);
+vkCmdBeginRenderPass(cmd, &beginInfo);
+// Рендеринг...
+vkCmdEndRenderPass(cmd);
+
+// Dynamic Rendering (Vulkan 1.4): просто и гибко
+VkRenderingInfo renderingInfo = {};
+renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+renderingInfo.renderArea = {{0, 0}, {width, height}};
+renderingInfo.layerCount = 1;
+renderingInfo.colorAttachmentCount = 1;
+renderingInfo.pColorAttachments = &colorAttachment;
+
+vkCmdBeginRendering(cmd, &renderingInfo);
+// Рендеринг...
+vkCmdEndRendering(cmd);
+```
+
+**Преимущества для ProjectV:**
+- **Гибкость:** Можно менять attachments между кадрами без пересоздания объектов
+- **Производительность:** Меньше объектов Vulkan для управления
+- **Простота:** Нет boilerplate с `VkRenderPass` и `VkFramebuffer`
+- **Совместимость:** Работает с mesh shaders, ray tracing и другими современными фичами
+
+**Метафора:** Dynamic Rendering — это "живопись маслом" вместо "раскраски по номерам". Вы рисуете то, что нужно, когда
+нужно, без заранее заданных шаблонов.
+
 ---
 
 ## Сравнение с альтернативами

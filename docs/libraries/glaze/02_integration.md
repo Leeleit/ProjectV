@@ -383,7 +383,15 @@ void render_system(flecs::iter& it, ConfigComponent* configs) {
         // Используем актуальные настройки рендеринга
         float voxel_size = config.render.voxel_size;
         uint32_t ray_steps = config.render.max_ray_steps;
-        // ...
+        bool enable_soft_shadows = config.render.enable_soft_shadows;
+        bool enable_gi = config.render.enable_gi;
+        bool enable_fog = config.render.enable_fog;
+        glm::vec3 ambient_light = config.render.ambient_light;
+        float exposure = config.render.exposure;
+        
+        // Пример использования настроек в рендеринге
+        // Здесь будет реальный код рендеринга с использованием конфигурации
+        // Например: setup_rendering_parameters(voxel_size, ray_steps, enable_soft_shadows, ambient_light, exposure);
     }
 }
 

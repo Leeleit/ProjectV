@@ -192,9 +192,11 @@ class AsyncGltfUploader {
     std::vector<AsyncUploadTask> pendingUploads;
     // Lock-free подход: используем атомарные операции вместо мьютекса
     alignas(64) std::atomic<size_t> processingFlag{0};
+    stdexec::scheduler auto scheduler;
 
 public:
-    AsyncGltfUploader(VulkanUploadContext& context) : ctx(context) {}
+    AsyncGltfUploader(VulkanUploadContext& context, stdexec::scheduler auto sched = stdexec::get_default_scheduler()) 
+        : ctx(context), scheduler(sched) {}
 
     void scheduleUpload(const fastgltf::Asset& asset) {
         // Lock-free добавление задач
@@ -263,8 +265,8 @@ public:
                                                        std::memory_order_acquire,
                                                        std::memory_order_relaxed)) {
                 expected = 0;
-                // Используем короткую паузу вместо yield для предотвращения busy-waiting
-                std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+                // Используем stdexec scheduler вместо sleep для предотвращения busy-waiting
+                stdexec::schedule(scheduler_);
             }
             
             pendingUploads.insert(pendingUploads.end(), 

@@ -767,8 +767,23 @@ public:
             }
         }
 
-        // Compact pending array
-        // ...
+        // Compact pending array - удаляем завершенные задачи и сдвигаем оставшиеся
+        size_t new_read_pos = read_pos_;
+        size_t new_pending_count = 0;
+        
+        for (size_t i = 0; i < pending_count; ++i) {
+            const size_t idx = (read_pos_ + i) % MAX_PENDING;
+            if (pending_[idx].fence != VK_NULL_HANDLE) {  // задача еще не завершена
+                if (new_pending_count != i) {  // нужно сдвинуть
+                    pending_[(new_read_pos + new_pending_count) % MAX_PENDING] = std::move(pending_[idx]);
+                }
+                new_pending_count++;
+            }
+        }
+        
+        read_pos_ = new_read_pos;
+        pending_count = new_pending_count;
+        write_pos_ = (read_pos_ + pending_count) % MAX_PENDING;
     }
 
 private:

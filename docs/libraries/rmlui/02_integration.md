@@ -550,7 +550,56 @@ void RmlUiVulkanRenderer::RenderGeometry(
     // Очистка staging
     vmaDestroyBuffer(allocator_, stagingBuffer, stagingAllocation);
 
-    // Аналогично для index buffer...
+    // Аналогично для index buffer
+    // Создание staging buffer для индексов
+    VkBuffer indexStagingBuffer;
+    VmaAllocation indexStagingAllocation;
+    
+    VkBufferCreateInfo ibInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = static_cast<VkDeviceSize>(numIndices * sizeof(int)),
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+    
+    VmaAllocationCreateInfo ibAllocInfo = {
+        .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY
+    };
+    
+    vmaCreateBuffer(allocator_, &ibInfo, &ibAllocInfo,
+                    &indexStagingBuffer, &indexStagingAllocation, nullptr);
+    
+    // Копирование данных индексов
+    void* indexData;
+    vmaMapMemory(allocator_, indexStagingAllocation, &indexData);
+    std::memcpy(indexData, indices, numIndices * sizeof(int));
+    vmaUnmapMemory(allocator_, indexStagingAllocation);
+    
+    // Создание index buffer
+    VkBuffer indexBuffer;
+    VmaAllocation indexAllocation;
+    
+    VkBufferCreateInfo dstIbInfo = ibInfo;
+    dstIbInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    
+    VmaAllocationCreateInfo dstIbAllocInfo = {
+        .usage = VMA_MEMORY_USAGE_GPU_ONLY
+    };
+    
+    vmaCreateBuffer(allocator_, &dstIbInfo, &dstIbAllocInfo,
+                    &indexBuffer, &indexAllocation, nullptr);
+    
+    // Copy staging → index buffer
+    VkBufferCopy indexCopyRegion = {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = static_cast<VkDeviceSize>(numIndices * sizeof(int))
+    };
+    vkCmdCopyBuffer(copyCmd, indexStagingBuffer, indexBuffer, 1, &indexCopyRegion);
+    
+    // Очистка staging для индексов
+    vmaDestroyBuffer(allocator_, indexStagingBuffer, indexStagingAllocation);
 
     // Рендеринг
     vkCmdBindPipeline(currentCmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
@@ -816,7 +865,60 @@ Rml::CompiledGeometryHandle RmlUiVulkanRenderer::CompileGeometry(
                     &geom.indexBuffer, &geom.indexAllocation, nullptr);
 
     // Заполнение данными (через staging)
-    // ...
+    // Создание staging buffer для вершин
+    VkBuffer vertexStagingBuffer;
+    VmaAllocation vertexStagingAllocation;
+    
+    VkBufferCreateInfo vertexStagingInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = static_cast<VkDeviceSize>(numVertices * sizeof(Rml::Vertex)),
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+    };
+    
+    VmaAllocationCreateInfo vertexStagingAllocInfo = {
+        .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY
+    };
+    
+    vmaCreateBuffer(allocator_, &vertexStagingInfo, &vertexStagingAllocInfo,
+                    &vertexStagingBuffer, &vertexStagingAllocation, nullptr);
+    
+    // Копирование вершин
+    void* vertexData;
+    vmaMapMemory(allocator_, vertexStagingAllocation, &vertexData);
+    std::memcpy(vertexData, vertices, numVertices * sizeof(Rml::Vertex));
+    vmaUnmapMemory(allocator_, vertexStagingAllocation);
+    
+    // Создание staging buffer для индексов
+    VkBuffer indexStagingBuffer;
+    VmaAllocation indexStagingAllocation;
+    
+    VkBufferCreateInfo indexStagingInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = static_cast<VkDeviceSize>(numIndices * sizeof(int)),
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+    };
+    
+    VmaAllocationCreateInfo indexStagingAllocInfo = {
+        .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_CPU_ONLY
+    };
+    
+    vmaCreateBuffer(allocator_, &indexStagingInfo, &indexStagingAllocInfo,
+                    &indexStagingBuffer, &indexStagingAllocation, nullptr);
+    
+    // Копирование индексов
+    void* indexData;
+    vmaMapMemory(allocator_, indexStagingAllocation, &indexData);
+    std::memcpy(indexData, indices, numIndices * sizeof(int));
+    vmaUnmapMemory(allocator_, indexStagingAllocation);
+    
+    // Копирование staging → GPU буферы через command buffer
+    // (реализация аналогична методу RenderGeometry)
+    
+    // Очистка staging буферов
+    vmaDestroyBuffer(allocator_, vertexStagingBuffer, vertexStagingAllocation);
+    vmaDestroyBuffer(allocator_, indexStagingBuffer, indexStagingAllocation);
 
     geometries_.push_back(geom);
     return static_cast<Rml::CompiledGeometryHandle>(geometries_.size());

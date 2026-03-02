@@ -572,7 +572,29 @@ struct AudioCullingSystem {
 
         // Direction culling (внутри ли конуса)
         // Dot product для угла
-        // ...
+        // Вычисляем вектор от слушателя к источнику звука
+        float to_sound[3] = {
+            sound_pos[0] - listener.position[0],
+            sound_pos[1] - listener.position[1],
+            sound_pos[2] - listener.position[2]
+        };
+        
+        // Нормализуем вектор
+        float dist_to_sound = std::sqrt(to_sound[0]*to_sound[0] + to_sound[1]*to_sound[1] + to_sound[2]*to_sound[2]);
+        if (dist_to_sound > 0.0f) {
+            to_sound[0] /= dist_to_sound;
+            to_sound[1] /= dist_to_sound;
+            to_sound[2] /= dist_to_sound;
+        }
+        
+        // Вычисляем dot product между forward вектором слушателя и направлением к звуку
+        float dot = listener.forward[0]*to_sound[0] + listener.forward[1]*to_sound[1] + listener.forward[2]*to_sound[2];
+        
+        // Проверяем, находится ли звук в пределах FOV
+        float cos_half_fov = std::cos(listener.fov_angle / 2.0f);
+        if (dot < cos_half_fov) {
+            return false;  // Звук вне поля слышимости
+        }
 
         return true;
     }

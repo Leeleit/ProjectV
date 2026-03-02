@@ -353,7 +353,20 @@ auto buildRaytracingMeshlets(
     );
 
     result.meshlets.resize(count);
-    // ... вычисление bounds аналогично
+    
+    // Вычисление bounds для frustum/cone culling (аналогично обычным meshlets)
+    result.bounds.resize(count);
+    for (size_t i = 0; i < count; ++i) {
+        const auto& m = result.meshlets[i];
+        result.bounds[i] = meshopt_computeMeshletBounds(
+            &result.meshlet_vertices[m.vertex_offset],
+            &result.meshlet_triangles[m.triangle_offset],
+            m.triangle_count,
+            &vertices[0].px,
+            vertices.size(),
+            sizeof(Vertex)
+        );
+    }
 
     return result;
 }

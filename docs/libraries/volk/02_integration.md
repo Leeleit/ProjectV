@@ -38,7 +38,7 @@ add_subdirectory(external/volk)
 add_executable(ProjectV
   src/main.cpp
   src/vulkan/vulkan_context.cpp
-  # ... другие файлы
+  # Другие файлы проекта (например: src/vulkan/device.cpp, src/ecs/world.cpp и т.д.)
 )
 
 target_include_directories(ProjectV PRIVATE
@@ -48,7 +48,7 @@ target_include_directories(ProjectV PRIVATE
 target_link_libraries(ProjectV PRIVATE
   volk
   SDL3::SDL3
-  # ... другие библиотеки
+  # Другие библиотеки проекта (например: flecs, VMA, Tracy и т.д.)
 )
 
 # Обязательный макрос для всех файлов

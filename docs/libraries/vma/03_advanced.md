@@ -259,8 +259,12 @@ public:
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 VMA_MEMORY_USAGE_AUTO);
 
-            // Выделение descriptor set
-            // ...
+            // Выделение descriptor set для storage buffer
+            // В ProjectV это делается через DescriptorSetAllocator:
+            // 1. Создаём VkDescriptorSetLayout с VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+            // 2. Выделяем descriptor set из пула
+            // 3. Записываем descriptor с нашим буфером
+            // Пример кода находится в src/vulkan/descriptor_allocator.cpp
         }
     }
 
@@ -749,57 +753,246 @@ public:
 };
 ```
 
-### Паттерн 8: Memory budget с предупреждениями
+### Паттерн 8: Memory budget с предупреждениями и автоматической реакцией
 
 ```cpp
 #include <chrono>
 #include <print>
+#include <expected>
+#include <functional>
+#include <vector>
+
+namespace projectv::memory {
+
+enum class MemoryPressureAction {
+    ClearTextureCache,      // Очистить кэш текстур
+    ReduceRenderDistance,   // Уменьшить дальность прорисовки
+    UnloadUnusedChunks,     // Выгрузить неиспользуемые чанки
+    ReduceTextureQuality,   // Уменьшить качество текстур
+    FlushStagingBuffers     // Очистить staging буферы
+};
+
+struct MemoryPressureEvent {
+    uint32_t heapIndex;
+    float usagePercent;
+    std::chrono::steady_clock::time_point timestamp;
+    std::vector<MemoryPressureAction> suggestedActions;
+};
 
 class MemoryBudgetMonitor {
     VmaAllocator m_allocator;
     std::chrono::steady_clock::time_point m_lastCheck;
-    float m_warningThreshold = 0.9f;  // 90%
+    float m_warningThreshold = 0.85f;  // 85% - предупреждение
+    float m_criticalThreshold = 0.95f; // 95% - критический уровень
+    std::vector<MemoryPressureEvent> m_pressureHistory;
+    
+    // Callback для реакции на нехватку памяти
+    std::function<void(const MemoryPressureEvent&)> m_pressureCallback;
 
 public:
-    MemoryBudgetMonitor(VmaAllocator allocator) : m_allocator(allocator) {
+    MemoryBudgetMonitor(VmaAllocator allocator) 
+        : m_allocator(allocator) 
+    {
         m_lastCheck = std::chrono::steady_clock::now();
     }
 
-    void check_budget() {
+    // Конструктор с callback'ом для автоматической реакции
+    MemoryBudgetMonitor(VmaAllocator allocator, 
+                       std::function<void(const MemoryPressureEvent&)> callback)
+        : m_allocator(allocator), m_pressureCallback(std::move(callback))
+    {
+        m_lastCheck = std::chrono::steady_clock::now();
+    }
+
+    // Метод с использованием C++26 Deducing This для цепочки вызовов
+    MemoryBudgetMonitor& check_budget(this MemoryBudgetMonitor& self) {
         auto now = std::chrono::steady_clock::now();
-        if (now - m_lastCheck < std::chrono::seconds(1)) {
-            return;  // Проверяем не чаще раза в секунду
+        if (now - self.m_lastCheck < std::chrono::milliseconds(500)) {
+            return self;  // Проверяем не чаще 2 раза в секунду
         }
 
-        m_lastCheck = now;
+        self.m_lastCheck = now;
 
+        VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
+        vmaGetHeapBudgets(self.m_allocator, budgets);
+
+        for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
+            if (budgets[i].budget > 0) {
+                float usage = float(budgets[i].usage) / float(budgets[i].budget);
+                float usagePercent = usage * 100.0f;
+
+                if (usage > self.m_criticalThreshold) {
+                    self.handle_critical_pressure(i, usagePercent, budgets[i]);
+                } else if (usage > self.m_warningThreshold) {
+                    self.handle_warning_pressure(i, usagePercent, budgets[i]);
+                }
+            }
+        }
+
+        return self;
+    }
+
+    // Получение статистики для Tracy
+    void update_tracy_stats() const {
+#ifdef TRACY_ENABLE
         VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
         vmaGetHeapBudgets(m_allocator, budgets);
 
         for (uint32_t i = 0; i < VK_MAX_MEMORY_HEAPS; ++i) {
             if (budgets[i].budget > 0) {
-                float usage = float(budgets[i].usage) / float(budgets[i].budget);
+                float usagePercent = float(budgets[i].usage) / float(budgets[i].budget) * 100.0f;
+                TracyPlot(std::format("VMA_Heap{}_Usage", i).c_str(), usagePercent);
+                TracyPlot(std::format("VMA_Heap{}_BudgetMB", i).c_str(), 
+                         int64_t(budgets[i].budget / (1024 * 1024)));
+            }
+        }
+#endif
+    }
 
-                if (usage > m_warningThreshold) {
-                    std::println(stderr, "WARNING: Heap {} usage: {:.1f}% (budget: {} MB)",
-                                 i, usage * 100.0f, budgets[i].budget / (1024 * 1024));
+    // Получение истории событий давления памяти
+    const std::vector<MemoryPressureEvent>& get_pressure_history() const {
+        return m_pressureHistory;
+    }
 
-                    // Можно принять меры: очистить кэш, уменьшить качество и т.д.
-                    on_memory_pressure(i, usage);
-                }
+    // Настройка порогов
+    MemoryBudgetMonitor& set_thresholds(float warning, float critical) {
+        m_warningThreshold = warning;
+        m_criticalThreshold = critical;
+        return *this;
+    }
+
+private:
+    void handle_warning_pressure(uint32_t heapIndex, float usagePercent, const VmaBudget& budget) {
+        std::println(stderr, "⚠️  WARNING: Heap {} usage: {:.1f}% (budget: {} MB, usage: {} MB)",
+                     heapIndex, usagePercent, 
+                     budget.budget / (1024 * 1024),
+                     budget.usage / (1024 * 1024));
+
+        MemoryPressureEvent event{
+            .heapIndex = heapIndex,
+            .usagePercent = usagePercent,
+            .timestamp = std::chrono::steady_clock::now(),
+            .suggestedActions = {
+                MemoryPressureAction::ClearTextureCache,
+                MemoryPressureAction::FlushStagingBuffers
+            }
+        };
+
+        m_pressureHistory.push_back(event);
+        
+        if (m_pressureCallback) {
+            m_pressureCallback(event);
+        }
+    }
+
+    void handle_critical_pressure(uint32_t heapIndex, float usagePercent, const VmaBudget& budget) {
+        std::println(stderr, "🚨 CRITICAL: Heap {} usage: {:.1f}% (budget: {} MB, usage: {} MB)",
+                     heapIndex, usagePercent,
+                     budget.budget / (1024 * 1024),
+                     budget.usage / (1024 * 1024));
+
+        MemoryPressureEvent event{
+            .heapIndex = heapIndex,
+            .usagePercent = usagePercent,
+            .timestamp = std::chrono::steady_clock::now(),
+            .suggestedActions = {
+                MemoryPressureAction::ClearTextureCache,
+                MemoryPressureAction::ReduceRenderDistance,
+                MemoryPressureAction::UnloadUnusedChunks,
+                MemoryPressureAction::ReduceTextureQuality,
+                MemoryPressureAction::FlushStagingBuffers
+            }
+        };
+
+        m_pressureHistory.push_back(event);
+        
+        if (m_pressureCallback) {
+            m_pressureCallback(event);
+        }
+    }
+};
+
+// Пример использования с stdexec для периодической проверки
+class MemoryBudgetMonitorSystem {
+    MemoryBudgetMonitor m_monitor;
+    
+public:
+    MemoryBudgetMonitorSystem(VmaAllocator allocator)
+        : m_monitor(allocator, [this](const MemoryPressureEvent& event) {
+            handle_memory_pressure(event);
+        })
+    {}
+
+    // Запуск мониторинга через stdexec scheduler
+    stdexec::sender auto start_monitoring(stdexec::scheduler auto scheduler) {
+        return stdexec::schedule(scheduler)
+             | stdexec::then([this]() {
+                   // Инициализация Tracy
+                   m_monitor.update_tracy_stats();
+               })
+             | stdexec::let_value([this]() {
+                   return stdexec::schedule_after(std::chrono::milliseconds(500))
+                        | stdexec::then([this]() {
+                              m_monitor.check_budget().update_tracy_stats();
+                          })
+                        | stdexec::repeat();
+               });
+    }
+
+private:
+    void handle_memory_pressure(const MemoryPressureEvent& event) {
+        std::println("Handling memory pressure on heap {}: {:.1f}%", 
+                     event.heapIndex, event.usagePercent);
+        
+        // Автоматическая реакция на нехватку памяти
+        for (auto action : event.suggestedActions) {
+            switch (action) {
+                case MemoryPressureAction::ClearTextureCache:
+                    clear_texture_cache();
+                    break;
+                case MemoryPressureAction::ReduceRenderDistance:
+                    reduce_render_distance();
+                    break;
+                case MemoryPressureAction::UnloadUnusedChunks:
+                    unload_unused_chunks();
+                    break;
+                case MemoryPressureAction::ReduceTextureQuality:
+                    reduce_texture_quality();
+                    break;
+                case MemoryPressureAction::FlushStagingBuffers:
+                    flush_staging_buffers();
+                    break;
             }
         }
     }
 
-private:
-    void on_memory_pressure(uint32_t heapIndex, float usage) {
-        // Реакция на нехватку памяти:
-        // 1. Очистить LRU кэш текстур
-        // 2. Уменьшить дальность прорисовки
-        // 3. Выгрузить неиспользуемые чанки
-        std::println("Memory pressure on heap {}: {:.1f}%", heapIndex, usage * 100.0f);
+    void clear_texture_cache() {
+        // Реализация очистки кэша текстур
+        std::println("Clearing texture cache...");
+    }
+
+    void reduce_render_distance() {
+        // Реализация уменьшения дальности прорисовки
+        std::println("Reducing render distance...");
+    }
+
+    void unload_unused_chunks() {
+        // Реализация выгрузки неиспользуемых чанков
+        std::println("Unloading unused chunks...");
+    }
+
+    void reduce_texture_quality() {
+        // Реализация уменьшения качества текстур
+        std::println("Reducing texture quality...");
+    }
+
+    void flush_staging_buffers() {
+        // Реализация очистки staging буферов
+        std::println("Flushing staging buffers...");
     }
 };
+
+} // namespace projectv::memory
 ```
 
 ## Итог: философия продвинутых паттернов

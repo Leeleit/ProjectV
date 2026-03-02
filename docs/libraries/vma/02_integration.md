@@ -329,6 +329,20 @@ public:
     VmaAllocator get() const { return m_allocator; }
     operator VmaAllocator() const { return m_allocator; }
 
+    // C++26 Deducing This для цепочечных вызовов
+    VmaAllocatorWrapper& set_debug_name(this VmaAllocatorWrapper& self, const char* name) {
+        // В реальном коде здесь можно установить debug name для аллокатора
+        // через VMA_DEBUG_ANNOTATION или пользовательские данные
+        return self;
+    }
+
+    VmaAllocatorWrapper& enable_memory_budget(this VmaAllocatorWrapper& self) {
+        // Метод для включения мониторинга бюджета памяти
+        // В реальной реализации нужно пересоздать аллокатор с флагом
+        // VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT
+        return self;
+    }
+
 private:
     VmaAllocator m_allocator = VK_NULL_HANDLE;
 };
@@ -419,6 +433,25 @@ public:
 
     void invalidate() {
         vmaInvalidateAllocation(m_allocator, m_allocation, 0, VK_WHOLE_SIZE);
+    }
+
+    // C++26 Deducing This для цепочечных вызовов
+    VmaBuffer& set_debug_name(this VmaBuffer& self, const char* name) {
+        // Установка debug name для буфера через VMA_DEBUG_ANNOTATION
+        // В реальном коде: vmaSetAllocationUserData(self.m_allocator, self.m_allocation, (void*)name);
+        return self;
+    }
+
+    VmaBuffer& set_persistent_mapping(this VmaBuffer& self) {
+        // Метод для настройки persistent mapping
+        // В реальном коде нужно пересоздать буфер с флагом VMA_ALLOCATION_CREATE_MAPPED_BIT
+        return self;
+    }
+
+    VmaBuffer& with_strategy(this VmaBuffer& self, VmaAllocationCreateFlags strategy) {
+        // Метод для установки стратегии аллокации
+        // В реальном коде нужно пересоздать буфер с указанной стратегией
+        return self;
     }
 
 private:

@@ -223,7 +223,12 @@ void CompiledGeometryPool::uploadToGPU(
     vmaUnmapMemory(allocator_, stagingAllocation_);
 
     // Transfer to GPU (simplified - in real code use command buffer)
-    // ...
+    // В реальном коде используйте command buffer для копирования данных
+    // Пример:
+    // VkCommandBuffer copyCmd = beginSingleTimeCommands();
+    // VkBufferCopy copyRegion = {0, 0, vertices.size_bytes() + indices.size_bytes()};
+    // vkCmdCopyBuffer(copyCmd, stagingBuffer_, batch.vertexBuffer, 1, &copyRegion);
+    // endSingleTimeCommands(copyCmd);
 }
 
 size_t CompiledGeometryPool::compile(
@@ -463,7 +468,15 @@ public:
                 data_.health[*it] = player.health;
                 dirtyFlags_[*it] = true;
             }
-            // ... similar for other fields
+            // Аналогично для других полей
+            if (data_.maxHealth[*it] != player.maxHealth) {
+                data_.maxHealth[*it] = player.maxHealth;
+                dirtyFlags_[*it] = true;
+            }
+            if (data_.stamina[*it] != player.stamina) {
+                data_.stamina[*it] = player.stamina;
+                dirtyFlags_[*it] = true;
+            }
         });
 
         // Notify RmlUi - только для dirty переменных
@@ -597,7 +610,12 @@ public:
 private:
     // Pre-allocated buffers
     std::vector<StagingBuffer> buffers_;
-    // ... implementation
+    // Реализация методов acquire и release
+    VmaAllocator allocator_;
+    VkDevice device_;
+    uint32_t queueFamilyIndex_;
+    VkQueue transferQueue_;
+    VkCommandPool commandPool_;
 };
 ```
 
@@ -626,12 +644,22 @@ void UISystem::render(VkCommandBuffer cmd) {
     ZoneScopedN("RmlUi Render");
 
     // Начало render pass для UI
-    // ...
+    // В реальном коде здесь будет начало render pass для UI
+    // Пример:
+    // VkRenderingInfo renderingInfo = {
+    //     .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+    //     .renderArea = {.offset = {0, 0}, .extent = swapchainExtent},
+    //     .layerCount = 1,
+    //     .colorAttachmentCount = 1,
+    //     .pColorAttachments = &colorAttachment
+    // };
+    // vkCmdBeginRendering(cmd, &renderingInfo);
 
     context_->Render();
 
     // Конец render pass
-    // ...
+    // В реальном коде здесь будет конец render pass
+    // vkCmdEndRendering(cmd);
 }
 ```
 

@@ -717,7 +717,9 @@ void renderFrame(VkCommandBuffer cmd) {
         .pStencilAttachment = nullptr
     };
     vkCmdBeginRendering(cmd, &renderingInfo);
-    // ...
+    // Здесь должен быть код рендеринга вокселей (draw calls, compute dispatch и т.д.)
+    // В ProjectV это включает: vkCmdDraw для воксельных чанков, vkCmdDispatch для compute шейдеров
+    // и другие операции рендеринга, специфичные для воксельного движка
 }
 ```
 
