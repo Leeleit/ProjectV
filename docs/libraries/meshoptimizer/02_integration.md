@@ -1,6 +1,6 @@
 # Интеграция meshoptimizer в ProjectV
 
-> Как подключить meshoptimizer к воксельному движку на Vulkan 1.4 + Flecs ECS + VMA.
+> Как подключить meshoptimizer к воксельному движку на Vulkan 1.4 + Flecs ECS + VMA с интеграцией ProjectV MemoryManager, Logging и Profiling.
 
 ---
 
@@ -12,25 +12,291 @@
 # root CMakeLists.txt
 add_subdirectory(external/meshoptimizer)
 
+# Отключаем ненужные опции для ProjectV
+set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "Disable demo for ProjectV")
+set(MESHOPT_BUILD_EXAMPLES OFF CACHE BOOL "Disable examples for ProjectV")
+
 target_link_libraries(ProjectV PRIVATE meshoptimizer)
+
+# Подключение ProjectV модулей
+target_link_libraries(ProjectV PRIVATE
+    projectv_core_memory
+    projectv_core_logging
+    projectv_core_profiling
+)
 ```
 
 ### Опции сборки
 
-| Опция                       | По умолчанию | Описание                             |
-|-----------------------------|--------------|--------------------------------------|
-| `MESHOPT_BUILD_SHARED_LIBS` | OFF          | Собирать как shared library          |
-| `MESHOPT_BUILD_DEMO`        | OFF          | Сборка демо                          |
-| `MESHOPT_BUILD_EXAMPLES`    | OFF          | Сборка примеров                      |
-| `MESHOPT_STABLE_EXPORTS`    | OFF          | Экспортировать только стабильные API |
+| Опция                       | По умолчанию | Описание                             | ProjectV рекомендация |
+|-----------------------------|--------------|--------------------------------------|-----------------------|
+| `MESHOPT_BUILD_SHARED_LIBS` | OFF          | Собирать как shared library          | OFF (static)          |
+| `MESHOPT_BUILD_DEMO`        | OFF          | Сборка демо                          | OFF                   |
+| `MESHOPT_BUILD_EXAMPLES`    | OFF          | Сборка примеров                      | OFF                   |
+| `MESHOPT_STABLE_EXPORTS`    | OFF          | Экспортировать только стабильные API | OFF                   |
 
 ### Требования к компилятору
 
-| Компилятор | Минимальная версия |
-|------------|--------------------|
-| GCC        | 11 (для C++26)     |
-| Clang      | 16                 |
-| MSVC       | 2022 (19.x)        |
+| Компилятор | Минимальная версия | ProjectV версия |
+|------------|--------------------|-----------------|
+| GCC        | 11 (для C++26)     | 13+             |
+| Clang      | 16                 | 17+             |
+| MSVC       | 2022 (19.x)        | 2022 17.8+      |
+
+---
+
+## C++26 Module
+
+### Global Module Fragment для изоляции заголовков
+
+```cpp
+// meshoptimizer.ixx
+module;
+
+// Global Module Fragment: изоляция сторонних заголовков
+#include <meshoptimizer.h>
+#include <vk_mem_alloc.h>
+#include <flecs.h>
+
+export module projectv.meshoptimizer;
+
+import projectv.core.memory;
+import projectv.core.logging;
+import projectv.core.profiling;
+
+export {
+    // Re-export meshoptimizer типы
+    using meshopt_Meshlet = ::meshopt_Meshlet;
+    using meshopt_Bounds = ::meshopt_Bounds;
+    using meshopt_Stream = ::meshopt_Stream;
+    
+    // Re-export meshoptimizer функции
+    using ::meshopt_generateVertexRemap;
+    using ::meshopt_remapVertexBuffer;
+    using ::meshopt_remapIndexBuffer;
+    using ::meshopt_optimizeVertexCache;
+    using ::meshopt_optimizeVertexFetch;
+    using ::meshopt_optimizeOverdraw;
+    using ::meshopt_simplify;
+    using ::meshopt_buildMeshlets;
+    using ::meshopt_optimizeMeshlet;
+    using ::meshopt_computeMeshletBounds;
+    using ::meshopt_encodeVertexBuffer;
+    using ::meshopt_decodeVertexBuffer;
+    using ::meshopt_encodeIndexBuffer;
+    using ::meshopt_decodeIndexBuffer;
+    using ::meshopt_analyzeVertexCache;
+    using ::meshopt_analyzeOverdraw;
+    using ::meshopt_analyzeVertexFetch;
+}
+```
+
+### MemoryManager Integration
+
+meshoptimizer — stateless библиотека, работающая с предоставленными буферами. ProjectV использует ArenaAllocator для временных данных.
+
+```cpp
+export namespace projectv::meshoptimizer {
+
+struct MeshOptimizerArena {
+    projectv::core::memory::ArenaAllocator& arena;
+    
+    // Выделение временного буфера для remap таблицы
+    [[nodiscard]]
+    auto allocateRemapTable(size_t vertex_count) -> std::span<uint32_t> {
+        return arena.allocate<uint32_t>(vertex_count);
+    }
+    
+    // Выделение временного буфера для индексов
+    [[nodiscard]]
+    auto allocateIndices(size_t index_count) -> std::span<uint32_t> {
+        return arena.allocate<uint32_t>(index_count);
+    }
+    
+    // Выделение временного буфера для вершин
+    template<typename Vertex>
+    [[nodiscard]]
+    auto allocateVertices(size_t vertex_count) -> std::span<Vertex> {
+        return arena.allocate<Vertex>(vertex_count);
+    }
+    
+    // Сброс арены (вызывается в конце кадра/задачи)
+    void reset() {
+        arena.reset();
+    }
+};
+
+// Оптимизация с использованием ArenaAllocator
+template<typename Vertex>
+struct OptimizedMeshData {
+    std::span<Vertex> vertices;
+    std::span<uint32_t> indices;
+    float acmr = 0.0f;
+    float atvr = 0.0f;
+};
+
+template<typename Vertex>
+[[nodiscard]]
+auto optimizeMeshWithArena(
+    std::span<const Vertex> src_vertices,
+    std::span<const uint32_t> src_indices,
+    MeshOptimizerArena& arena
+) -> std::expected<OptimizedMeshData<Vertex>, std::string> {
+    ZoneScopedN("meshoptimizer::optimizeMeshWithArena");
+    
+    // 1. Выделение временных буферов из арены
+    auto remap = arena.allocateRemapTable(src_vertices.size());
+    if (remap.empty()) {
+        return std::unexpected("Failed to allocate remap table");
+    }
+    
+    // 2. Генерация remap таблицы
+    const size_t unique_count = meshopt_generateVertexRemap(
+        remap.data(),
+        src_indices.data(),
+        src_indices.size(),
+        src_vertices.data(),
+        src_vertices.size(),
+        sizeof(Vertex)
+    );
+    
+    if (unique_count == 0) {
+        return std::unexpected("Failed to generate remap table");
+    }
+    
+    // 3. Выделение буферов для результата
+    auto vertices = arena.allocateVertices<Vertex>(unique_count);
+    auto indices = arena.allocateIndices(src_indices.size());
+    
+    if (vertices.empty() || indices.empty()) {
+        return std::unexpected("Failed to allocate result buffers");
+    }
+    
+    // 4. Применение remap
+    meshopt_remapVertexBuffer(
+        vertices.data(),
+        src_vertices.data(),
+        src_vertices.size(),
+        sizeof(Vertex),
+        remap.data()
+    );
+    
+    meshopt_remapIndexBuffer(
+        indices.data(),
+        src_indices.data(),
+        src_indices.size(),
+        remap.data()
+    );
+    
+    // 5. Vertex cache optimization
+    meshopt_optimizeVertexCache(
+        indices.data(),
+        indices.data(),
+        indices.size(),
+        unique_count
+    );
+    
+    // 6. Vertex fetch optimization
+    meshopt_optimizeVertexFetch(
+        vertices.data(),
+        indices.data(),
+        indices.size(),
+        vertices.data(),
+        unique_count,
+        sizeof(Vertex)
+    );
+    
+    // 7. Анализ результата
+    const auto stats = meshopt_analyzeVertexCache(
+        indices.data(),
+        indices.size(),
+        unique_count,
+        16, 0, 0
+    );
+    
+    return OptimizedMeshData<Vertex>{
+        .vertices = vertices,
+        .indices = indices,
+        .acmr = stats.acmr,
+        .atvr = stats.atvr
+    };
+}
+
+} // namespace projectv::meshoptimizer
+```
+
+### Logging Integration
+
+Все сообщения meshoptimizer перенаправляются в ProjectV Logging System:
+
+```cpp
+export namespace projectv::meshoptimizer {
+
+class MeshOptimizerLogger {
+public:
+    static void logOptimizationStart(size_t vertex_count, size_t index_count) {
+        projectv::core::Log::info("MeshOptimizer",
+            "Starting optimization: {} vertices, {} indices",
+            vertex_count, index_count);
+    }
+    
+    static void logOptimizationResult(float acmr, float atvr, size_t unique_vertices) {
+        projectv::core::Log::debug("MeshOptimizer",
+            "Optimization complete: ACMR={:.3f}, ATVR={:.3f}, unique={}",
+            acmr, atvr, unique_vertices);
+    }
+    
+    static void logError(std::string_view message) {
+        projectv::core::Log::error("MeshOptimizer", "{}", message);
+    }
+    
+    static void logWarning(std::string_view message) {
+        projectv::core::Log::warning("MeshOptimizer", "{}", message);
+    }
+};
+
+} // namespace projectv::meshoptimizer
+```
+
+### Profiling Integration
+
+Tracy hooks для всех операций meshoptimizer:
+
+```cpp
+export namespace projectv::meshoptimizer {
+
+class MeshOptimizerProfiler {
+public:
+    struct Scope {
+        Scope(std::string_view name) {
+            ZoneScopedN(name.data());
+            TracyPlot("MeshOptimizer/ActiveOperations", 1);
+        }
+        
+        ~Scope() {
+            TracyPlot("MeshOptimizer/ActiveOperations", -1);
+        }
+    };
+    
+    static void plotVertexCount(size_t count) {
+        TracyPlot("MeshOptimizer/VertexCount", static_cast<int64_t>(count));
+    }
+    
+    static void plotIndexCount(size_t count) {
+        TracyPlot("MeshOptimizer/IndexCount", static_cast<int64_t>(count));
+    }
+    
+    static void plotAcmr(float acmr) {
+        TracyPlot("MeshOptimizer/ACMR", static_cast<double>(acmr));
+    }
+    
+    static void plotAtvr(float atvr) {
+        TracyPlot("MeshOptimizer/ATVR", static_cast<double>(atvr));
+    }
+};
+
+} // namespace projectv::meshoptimizer
+```
 
 ---
 
@@ -113,16 +379,21 @@ struct NeedsMeshletsTag {};
 
 ---
 
-## Vulkan Интеграция
+## Vulkan Интеграция с ProjectV
 
-### Оптимизация и загрузка меши
+### Оптимизация и загрузка меши с интеграцией ProjectV
 
 ```cpp
-#include <meshoptimizer.h>
+// Использование ProjectV Module
+import projectv.meshoptimizer;
+import projectv.core.memory;
+import projectv.core.logging;
+import projectv.core.profiling;
+import projectv.vulkan;
+
 #include <vk_mem_alloc.h>
 #include <span>
 #include <expected>
-#include <print>
 
 struct Vertex {
     float px, py, pz;
@@ -152,26 +423,58 @@ struct OptimizedMesh {
 
 class MeshOptimizer {
 public:
-    MeshOptimizer(VmaAllocator allocator, VkDevice device,
-                  VkQueue transfer_queue, VkCommandPool transfer_pool)
+    MeshOptimizer(
+        VmaAllocator allocator, 
+        VkDevice device,
+        VkQueue transfer_queue, 
+        VkCommandPool transfer_pool,
+        projectv::core::memory::ArenaAllocator& arena
+    )
         : allocator_(allocator)
         , device_(device)
         , transfer_queue_(transfer_queue)
-        , transfer_pool_(transfer_pool) {}
+        , transfer_pool_(transfer_pool)
+        , arena_(arena) 
+    {
+        projectv::core::Log::info("MeshOptimizer", 
+            "Initialized with arena capacity: {} bytes", arena.capacity());
+    }
 
     [[nodiscard]]
     auto optimizeAndUpload(
         std::span<const Vertex> src_vertices,
         std::span<const uint32_t> src_indices
     ) -> std::expected<OptimizedMesh, MeshCreationError> {
-        // CPU: оптимизация
-        auto optimized = optimizeCPU(src_vertices, src_indices);
+        ZoneScopedN("MeshOptimizer::optimizeAndUpload");
+        
+        projectv::meshoptimizer::MeshOptimizerLogger::logOptimizationStart(
+            src_vertices.size(), src_indices.size());
+        
+        TracyPlot("MeshOptimizer/InputVertices", static_cast<int64_t>(src_vertices.size()));
+        TracyPlot("MeshOptimizer/InputIndices", static_cast<int64_t>(src_indices.size()));
+
+        // CPU: оптимизация с использованием ArenaAllocator
+        auto optimized = optimizeCPUWithArena(src_vertices, src_indices);
         if (!optimized) {
+            projectv::meshoptimizer::MeshOptimizerLogger::logError(
+                "CPU optimization failed: " + optimized.error().message);
             return std::unexpected(optimized.error());
         }
 
         // GPU: загрузка
-        return uploadToGPU(*optimized);
+        auto result = uploadToGPU(*optimized);
+        if (result) {
+            projectv::meshoptimizer::MeshOptimizerLogger::logOptimizationResult(
+                result->acmr, result->atvr, result->vertex_count);
+            
+            projectv::meshoptimizer::MeshOptimizerProfiler::plotAcmr(result->acmr);
+            projectv::meshoptimizer::MeshOptimizerProfiler::plotAtvr(result->atvr);
+        }
+
+        // Сброс арены для следующей задачи
+        arena_.reset();
+
+        return result;
     }
 
 private:
@@ -179,88 +482,41 @@ private:
     VkDevice device_;
     VkQueue transfer_queue_;
     VkCommandPool transfer_pool_;
+    projectv::core::memory::ArenaAllocator& arena_;
 
     struct CPUOptimizedData {
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
+        std::span<Vertex> vertices;
+        std::span<uint32_t> indices;
         float acmr = 0.0f;
         float atvr = 0.0f;
     };
 
     [[nodiscard]]
-    auto optimizeCPU(
+    auto optimizeCPUWithArena(
         std::span<const Vertex> src_vertices,
         std::span<const uint32_t> src_indices
     ) -> std::expected<CPUOptimizedData, MeshCreationError> {
-        CPUOptimizedData result;
-
-        // 1. Генерация remap таблицы
-        std::vector<uint32_t> remap(src_vertices.size());
-        const size_t unique_count = meshopt_generateVertexRemap(
-            remap.data(),
-            src_indices.data(),
-            src_indices.size(),
-            src_vertices.data(),
-            src_vertices.size(),
-            sizeof(Vertex)
-        );
-
-        if (unique_count == 0) {
+        ZoneScopedN("MeshOptimizer::optimizeCPUWithArena");
+        
+        // Используем ProjectV meshoptimizer интеграцию с ArenaAllocator
+        projectv::meshoptimizer::MeshOptimizerArena mesh_arena{arena_};
+        
+        auto result = projectv::meshoptimizer::optimizeMeshWithArena<Vertex>(
+            src_vertices, src_indices, mesh_arena);
+        
+        if (!result) {
             return std::unexpected{MeshCreationError{
                 .code = MeshCreationError::Code::InvalidData,
-                .message = "Failed to generate remap table"
+                .message = std::string(result.error())
             }};
         }
 
-        // 2. Применение remap
-        result.indices.resize(src_indices.size());
-        result.vertices.resize(unique_count);
-
-        meshopt_remapIndexBuffer(
-            result.indices.data(),
-            src_indices.data(),
-            src_indices.size(),
-            remap.data()
-        );
-
-        meshopt_remapVertexBuffer(
-            result.vertices.data(),
-            src_vertices.data(),
-            src_vertices.size(),
-            sizeof(Vertex),
-            remap.data()
-        );
-
-        // 3. Vertex cache optimization
-        meshopt_optimizeVertexCache(
-            result.indices.data(),
-            result.indices.data(),
-            result.indices.size(),
-            unique_count
-        );
-
-        // 4. Vertex fetch optimization
-        meshopt_optimizeVertexFetch(
-            result.vertices.data(),
-            result.indices.data(),
-            result.indices.size(),
-            result.vertices.data(),
-            unique_count,
-            sizeof(Vertex)
-        );
-
-        // 5. Анализ
-        const auto stats = meshopt_analyzeVertexCache(
-            result.indices.data(),
-            result.indices.size(),
-            unique_count,
-            16, 0, 0
-        );
-
-        result.acmr = stats.acmr;
-        result.atvr = stats.atvr;
-
-        return result;
+        return CPUOptimizedData{
+            .vertices = result->vertices,
+            .indices = result->indices,
+            .acmr = result->acmr,
+            .atvr = result->atvr
+        };
     }
 
     [[nodiscard]]
@@ -418,11 +674,14 @@ private:
 
 ---
 
-## ECS Системы
+## ECS Системы с ProjectV Integration
 
-### Система оптимизации при загрузке
+### Система оптимизации при загрузке с ProjectV Logging
 
 ```cpp
+import projectv.core.logging;
+import projectv.core.profiling;
+
 class MeshOptimizationSystem {
 public:
     MeshOptimizationSystem(flecs::world& world,
@@ -433,6 +692,8 @@ public:
         world.system<StaticMesh, NeedsOptimizationTag>("OptimizeMesh")
             .kind(flecs::OnLoad)
             .each([this](flecs::entity e, StaticMesh& mesh) {
+                ZoneScopedN("MeshOptimizationSystem::OptimizeMesh");
+                
                 if (mesh.vertex_buffer != VK_NULL_HANDLE) {
                     return; // Уже загружено
                 }
@@ -440,8 +701,9 @@ public:
                 // Получаем исходные данные (из кэша или loader)
                 auto source = getSourceMeshData(e);
                 if (!source) {
-                    std::println("Failed to get source mesh data: {}",
-                                source.error().message);
+                    projectv::core::Log::error("MeshOptimizationSystem",
+                        "Failed to get source mesh data for entity {}: {}",
+                        e.name(), source.error().message);
                     return;
                 }
 
@@ -454,9 +716,14 @@ public:
                     mesh = std::move(*result);
                     e.remove<NeedsOptimizationTag>();
                     e.add<OptimizedTag>();
+                    
+                    projectv::core::Log::debug("MeshOptimizationSystem",
+                        "Mesh optimized for entity {}: {} vertices, {} indices, ACMR={:.3f}",
+                        e.name(), mesh.vertex_count, mesh.index_count, mesh.acmr);
                 } else {
-                    std::println("Mesh optimization failed: {}",
-                                result.error().message);
+                    projectv::core::Log::error("MeshOptimizationSystem",
+                        "Mesh optimization failed for entity {}: {}",
+                        e.name(), result.error().message);
                 }
             });
 
@@ -465,12 +732,17 @@ public:
             .kind(flecs::OnLoad)
             .with<NeedsOptimizationTag>()  // После оптимизации
             .each([this](flecs::entity e, StaticMesh& base, MeshLODs& lods) {
+                ZoneScopedN("MeshOptimizationSystem::GenerateLODs");
+                
                 if (lods.lod_count > 0) return; // Уже сгенерировано
 
                 // Генерация LOD цепочки
                 auto result = generateLODs(e, base);
                 if (result) {
                     lods = std::move(*result);
+                    
+                    projectv::core::Log::debug("MeshOptimizationSystem",
+                        "Generated {} LODs for entity {}", lods.lod_count, e.name());
                 }
             });
     }

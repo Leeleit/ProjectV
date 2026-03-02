@@ -133,13 +133,18 @@ import projectv.core.profiling;
 
 namespace projectv::platform::sdl {
 
+// Константы для категорий логгера
+constexpr auto LOG_CATEGORY = projectv::core::logging::LogCategory::Platform;
+
 // --- Обработка ошибок через std::expected ---
 enum class SdlError {
     InitFailed,
     WindowCreationFailed,
     VulkanSurfaceFailed,
     MemoryAllocationFailed,
-    EventProcessingFailed
+    EventProcessingFailed,
+    SurfaceNotSupported,
+    InvalidWindowHandle
 };
 
 template<typename T>
@@ -152,6 +157,8 @@ inline std::string to_string(SdlError error) {
         case SdlError::VulkanSurfaceFailed: return "SDL Vulkan surface creation failed";
         case SdlError::MemoryAllocationFailed: return "Memory allocation failed (ProjectV MemoryManager)";
         case SdlError::EventProcessingFailed: return "SDL event processing failed";
+        case SdlError::SurfaceNotSupported: return "Vulkan surface not supported by selected device";
+        case SdlError::InvalidWindowHandle: return "Invalid SDL window handle";
         default: return "Unknown SDL error";
     }
 }
@@ -160,17 +167,28 @@ inline std::string to_string(SdlError error) {
 class SdlAllocator {
 public:
     static void* allocate(size_t size) noexcept {
-        ZoneScopedN("SdlAllocation");
+        PROJECTV_PROFILE_ZONE("SdlAllocator::allocate");
 
         // Используем ProjectV MemoryManager для SDL аллокаций
         auto& memoryManager = projectv::core::memory::getGlobalMemoryManager();
 
         // Для SDL объектов используем PoolAllocator (часто создаются/удаляются)
-        return memoryManager.createPool(size, 100).allocate();
+        void* ptr = memoryManager.getThreadArena().allocate(size);
+
+        if (ptr) {
+            PROJECTV_PROFILE_ALLOC(ptr, size);
+            projectv::core::Log::trace(LOG_CATEGORY,
+                "SDL allocation: {} bytes at {}", size, ptr);
+        } else {
+            projectv::core::Log::error(LOG_CATEGORY,
+                "Failed to allocate {} bytes for SDL", size);
+        }
+
+        return ptr;
     }
 
     static void* reallocate(void* ptr, size_t new_size) noexcept {
-        ZoneScopedN("SdlReallocation");
+        PROJECTV_PROFILE_ZONE("SdlAllocator::reallocate");
 
         if (!ptr) return allocate(new_size);
 
@@ -185,16 +203,21 @@ public:
     }
 
     static void deallocate(void* ptr) noexcept {
-        if (!ptr) return;
+        PROJECTV_PROFILE_ZONE("SdlAllocator::deallocate");
 
-        // В реальной реализации нужно определить, из какого аллокатора выделена память
-        // и вернуть её туда. Для простоты примера - игнорируем.
-        // В production коде используется allocation tracking.
+        if (ptr) {
+            PROJECTV_PROFILE_FREE(ptr);
+            // В реальной реализации нужно определить, из какого аллокатора выделена память
+            // и вернуть её туда
+        }
     }
 
     static void setAsGlobalAllocator() noexcept {
+        PROJECTV_PROFILE_ZONE("SdlAllocator::setAsGlobalAllocator");
+
         SDL_SetMemoryFunctions(&allocate, &reallocate, &deallocate);
-        projectv::core::Log::info("SDL", "Custom memory allocator set (ProjectV MemoryManager)");
+        projectv::core::Log::info(LOG_CATEGORY,
+            "Custom memory allocator set (ProjectV MemoryManager)");
     }
 };
 
@@ -203,7 +226,7 @@ class SdlContext {
 public:
     SdlContext() = default;
     ~SdlContext() {
-        ZoneScopedN("SdlContextDestructor");
+        PROJECTV_PROFILE_ZONE("SdlContext::~SdlContext");
         shutdown();
     }
 
@@ -261,7 +284,7 @@ private:
 #include "context.hpp"
 
 SdlResult<void> SdlContext::initialize(const char* title, int width, int height, uint32_t flags) {
-    ZoneScopedN("SdlContextInitialize");
+    PROJECTV_PROFILE_ZONE("SdlContext::initialize");
 
     // 1. Устанавливаем кастомные аллокаторы ProjectV
     if (!custom_allocator_set_) {
@@ -271,11 +294,11 @@ SdlResult<void> SdlContext::initialize(const char* title, int width, int height,
 
     // 2. Инициализация SDL
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-        projectv::core::Log::error("SDL", "SDL_Init failed: {}", SDL_GetError());
+        projectv::core::Log::error(LOG_CATEGORY, "SDL_Init failed: {}", SDL_GetError());
         return std::unexpected(SdlError::InitFailed);
     }
 
-    projectv::core::Log::info("SDL", "SDL initialized successfully");
+    projectv::core::Log::info(LOG_CATEGORY, "SDL initialized successfully");
 
     // 3. Создание окна
     if (auto result = create_window(title, width, height, flags); !result) {
@@ -286,26 +309,26 @@ SdlResult<void> SdlContext::initialize(const char* title, int width, int height,
     // 4. Настройка Vulkan surface (если требуется)
     if (flags & SDL_WINDOW_VULKAN) {
         if (auto result = setup_vulkan_surface(); !result) {
-            projectv::core::Log::warning("SDL", "Vulkan surface setup failed: {}", to_string(result.error()));
+            projectv::core::Log::warning(LOG_CATEGORY, "Vulkan surface setup failed: {}", to_string(result.error()));
             // Продолжаем без Vulkan
         }
     }
 
     initialized_ = true;
-    projectv::core::Log::info("SDL", "SDL context initialized: {}x{} {}", width, height, title);
+    projectv::core::Log::info(LOG_CATEGORY, "SDL context initialized: {}x{} {}", width, height, title);
     return {};
 }
 
 SdlResult<void> SdlContext::create_window(const char* title, int width, int height, uint32_t flags) {
-    ZoneScopedN("SdlCreateWindow");
+    PROJECTV_PROFILE_ZONE("SdlContext::create_window");
 
     window_ = SDL_CreateWindow(title, width, height, flags);
     if (!window_) {
-        projectv::core::Log::error("SDL", "SDL_CreateWindow failed: {}", SDL_GetError());
+        projectv::core::Log::error(LOG_CATEGORY, "SDL_CreateWindow failed: {}", SDL_GetError());
         return std::unexpected(SdlError::WindowCreationFailed);
     }
 
-    projectv::core::Log::info("SDL", "Window created: {}x{} {}", width, height, title);
+    projectv::core::Log::info(LOG_CATEGORY, "Window created: {}x{} {}", width, height, title);
     return {};
 }
 
@@ -316,25 +339,25 @@ SdlResult<void> SdlContext::setup_vulkan_surface() {
 }
 
 SdlResult<void> SdlContext::process_events() {
-    ZoneScopedN("SdlProcessEvents");
+    PROJECTV_PROFILE_ZONE("SdlContext::process_events");
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         switch (event.type) {
             case SDL_EVENT_QUIT:
                 running_ = false;
-                projectv::core::Log::info("SDL", "Quit event received");
+                projectv::core::Log::info(LOG_CATEGORY, "Quit event received");
                 break;
 
             case SDL_EVENT_KEY_DOWN:
                 if (event.key.key == SDLK_ESCAPE) {
                     running_ = false;
-                    projectv::core::Log::info("SDL", "Escape key pressed, quitting");
+                    projectv::core::Log::info(LOG_CATEGORY, "Escape key pressed, quitting");
                 }
                 break;
 
             case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-                projectv::core::Log::info("SDL", "Window resized: {}x{}",
+                projectv::core::Log::info(LOG_CATEGORY, "Window resized: {}x{}",
                     event.window.data1, event.window.data2);
                 break;
 
@@ -348,7 +371,7 @@ SdlResult<void> SdlContext::process_events() {
 }
 
 void SdlContext::shutdown() {
-    ZoneScopedN("SdlContextShutdown");
+    PROJECTV_PROFILE_ZONE("SdlContext::shutdown");
 
     if (!initialized_) return;
 
@@ -362,12 +385,12 @@ void SdlContext::shutdown() {
     if (window_) {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
-        projectv::core::Log::info("SDL", "Window destroyed");
+        projectv::core::Log::info(LOG_CATEGORY, "Window destroyed");
     }
 
     // Завершаем SDL
     SDL_Quit();
-    projectv::core::Log::info("SDL", "SDL shutdown complete");
+    projectv::core::Log::info(LOG_CATEGORY, "SDL shutdown complete");
 
     initialized_ = false;
 }
@@ -440,37 +463,40 @@ public:
     Application() = default;
 
     SdlResult<void> run() {
-        ZoneScopedN("ApplicationRun");
+        PROJECTV_PROFILE_ZONE("Application::run");
 
         // 1. Инициализация SDL
-        projectv::core::Log::info("App", "Initializing SDL context...");
+        projectv::core::Log::info(projectv::core::logging::LogCategory::Core, 
+            "Initializing SDL context...");
         if (auto result = sdl_context_.initialize("ProjectV", 1280, 720,
                                                  SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
             !result) {
-            projectv::core::Log::error("App", "SDL initialization failed: {}",
-                                      to_string(result.error()));
+            projectv::core::Log::error(projectv::core::logging::LogCategory::Core,
+                "SDL initialization failed: {}", to_string(result.error()));
             return std::unexpected(result.error());
         }
 
         // 2. Инициализация Vulkan (если требуется)
-        projectv::core::Log::info("App", "Initializing Vulkan context...");
+        projectv::core::Log::info(projectv::core::logging::LogCategory::Core,
+            "Initializing Vulkan context...");
         if (auto result = vulkan_context_.initialize(sdl_context_.window());
             !result) {
-            projectv::core::Log::error("App", "Vulkan initialization failed: {}",
-                                      to_string(result.error()));
+            projectv::core::Log::error(projectv::core::logging::LogCategory::Core,
+                "Vulkan initialization failed: {}", to_string(result.error()));
             sdl_context_.shutdown();
             return std::unexpected(result.error());
         }
 
         // 3. Главный цикл приложения
-        projectv::core::Log::info("App", "Entering main loop...");
+        projectv::core::Log::info(projectv::core::logging::LogCategory::Core,
+            "Entering main loop...");
         while (sdl_context_.is_running()) {
             sdl_context_.begin_frame_zone("Frame");
 
             // Обработка событий
             if (auto result = sdl_context_.process_events(); !result) {
-                projectv::core::Log::warning("App", "Event processing failed: {}",
-                                           to_string(result.error()));
+                projectv::core::Log::warning(projectv::core::logging::LogCategory::Core,
+                    "Event processing failed: {}", to_string(result.error()));
             }
 
             // Обновление логики
@@ -485,11 +511,13 @@ public:
         }
 
         // 4. Завершение работы
-        projectv::core::Log::info("App", "Shutting down...");
+        projectv::core::Log::info(projectv::core::logging::LogCategory::Core,
+            "Shutting down...");
         vulkan_context_.shutdown();
         sdl_context_.shutdown();
 
-        projectv::core::Log::info("App", "Application terminated successfully");
+        projectv::core::Log::info(projectv::core::logging::LogCategory::Core,
+            "Application terminated successfully");
         return {};
     }
 
@@ -512,12 +540,12 @@ private:
 
 // Точка входа с callback-архитектурой SDL3
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-    ZoneScopedN("SDL_AppInit");
+    PROJECTV_PROFILE_ZONE("SDL_AppInit");
 
     auto app = std::make_unique<projectv::Application>();
     if (auto result = app->run(); !result) {
-        projectv::core::Log::error("App", "Application failed to run: {}",
-                                  to_string(result.error()));
+        projectv::core::Log::error(projectv::core::logging::LogCategory::Core,
+            "Application failed to run: {}", to_string(result.error()));
         return SDL_APP_FAILURE;
     }
 
@@ -526,7 +554,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    ZoneScopedN("SDL_AppEvent");
+    PROJECTV_PROFILE_ZONE("SDL_AppEvent");
 
     auto* app = static_cast<projectv::Application*>(appstate);
     // События уже обрабатываются в SdlContext::process_events()
@@ -534,20 +562,21 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
-    ZoneScopedN("SDL_AppIterate");
+    PROJECTV_PROFILE_ZONE("SDL_AppIterate");
 
     // Итерации уже обрабатываются в Application::run()
     return SDL_APP_CONTINUE;
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
-    ZoneScopedN("SDL_AppQuit");
+    PROJECTV_PROFILE_ZONE("SDL_AppQuit");
 
     auto* app = static_cast<projectv::Application*>(appstate);
     delete app;
 
-    projectv::core::Log::info("App", "SDL application quit with result: {}",
-                             result == SDL_APP_SUCCESS ? "SUCCESS" : "FAILURE");
+    projectv::core::Log::info(projectv::core::logging::LogCategory::Core,
+        "SDL application quit with result: {}",
+        result == SDL_APP_SUCCESS ? "SUCCESS" : "FAILURE");
 }
 ```
 
