@@ -1,7 +1,7 @@
-#include <print>
+import std;
 
 int main()
 {
-	printf("Hello, World!");
+	std::print("Hello, World!");
 	return 0;
 }
