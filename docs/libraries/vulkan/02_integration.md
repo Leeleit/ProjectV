@@ -6,16 +6,23 @@
 
 ## CMake конфигурация
 
-### Git Submodules (рекомендуется для ProjectV)
+### Git Submodules с интеграцией ProjectV
 
-ProjectV использует подмодули для внешних зависимостей. Структура:
+ProjectV использует подмодули с полной интеграцией в архитектуру движка:
 
 ```
 ProjectV/
 ├── external/
-│   ├── volk/                    # Мета-лоадер
-│   ├── VulkanMemoryAllocator/   # Аллокатор памяти
-│   └── SDL/                     # Оконная система
+│   ├── volk/                    # Мета-лоадер (Vulkan 1.4)
+│   ├── VulkanMemoryAllocator/   # Аллокатор памяти GPU (интегрирован с MemoryManager)
+│   └── SDL/                     # Оконная система (с кастомными аллокаторами)
+├── src/
+│   ├── core/                    # Ядро движка
+│   │   ├── memory/              # DOD-аллокаторы
+│   │   ├── logging/             # Lock-free логгер
+│   │   └── profiling/           # Tracy hooks
+│   └── graphics/
+│       └── vulkan/              # Vulkan интеграция
 └── CMakeLists.txt
 ```
 
@@ -31,42 +38,127 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Обязательные макросы для Vulkan
 add_compile_definitions(VK_NO_PROTOTYPES)
 
+# --- Внешние зависимости (только подмодули) ---
+# Отключаем всё лишнее в подмодулях
+set(VOLK_BUILD_STATIC ON CACHE BOOL "Build volk as static library" FORCE)
+set(VOLK_BUILD_TESTS OFF CACHE BOOL "Disable volk tests" FORCE)
+set(VOLK_BUILD_EXAMPLES OFF CACHE BOOL "Disable volk examples" FORCE)
+
+set(VMA_BUILD_SAMPLE OFF CACHE BOOL "Disable VMA samples" FORCE)
+set(VMA_BUILD_TESTS OFF CACHE BOOL "Disable VMA tests" FORCE)
+set(VMA_STATIC_VULKAN_FUNCTIONS OFF CACHE BOOL "Use dynamic Vulkan functions" FORCE)
+
+set(SDL_STATIC ON CACHE BOOL "Build SDL as static library" FORCE)
+set(SDL_SHARED OFF CACHE BOOL "Disable SDL shared library" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "Disable SDL tests" FORCE)
+
 # Подключение подмодулей
 add_subdirectory(external/volk)
 add_subdirectory(external/VulkanMemoryAllocator)
 add_subdirectory(external/SDL)
 
-# Наш движок
+# --- Ядро ProjectV ---
+# MemoryManager модуль
+add_library(projectv_core_memory STATIC
+    src/core/memory/page_allocator.cpp
+    src/core/memory/global_manager.cpp
+    src/core/memory/arena_allocator.cpp
+    src/core/memory/pool_allocator.cpp
+    src/core/memory/linear_allocator.cpp
+)
+
+target_compile_features(projectv_core_memory PUBLIC cxx_std_26)
+target_include_directories(projectv_core_memory PUBLIC src/core)
+
+# Logging модуль
+add_library(projectv_core_logging STATIC
+    src/core/logging/logger.cpp
+    src/core/logging/ring_buffer.cpp
+)
+
+target_compile_features(projectv_core_logging PUBLIC cxx_std_26)
+target_include_directories(projectv_core_logging PUBLIC src/core)
+target_link_libraries(projectv_core_logging PRIVATE projectv_core_memory)
+
+# Profiling модуль (только для Profile конфигурации)
+if(PROJECTV_ENABLE_PROFILING)
+    add_library(projectv_core_profiling STATIC
+        src/core/profiling/tracy_hooks.cpp
+        src/core/profiling/vulkan_profiler.cpp
+    )
+    target_compile_features(projectv_core_profiling PUBLIC cxx_std_26)
+    target_include_directories(projectv_core_profiling PUBLIC src/core)
+    target_link_libraries(projectv_core_profiling PRIVATE projectv_core_memory projectv_core_logging)
+    target_compile_definitions(projectv_core_profiling PRIVATE TRACY_ENABLE)
+endif()
+
+# --- Vulkan модуль движка ---
+add_library(projectv_graphics_vulkan STATIC
+    src/graphics/vulkan/context.cpp
+    src/graphics/vulkan/device.cpp
+    src/graphics/vulkan/memory_integration.cpp
+)
+
+target_compile_features(projectv_graphics_vulkan PUBLIC cxx_std_26)
+target_include_directories(projectv_graphics_vulkan PUBLIC src/graphics)
+target_link_libraries(projectv_graphics_vulkan PRIVATE
+    projectv_core_memory
+    projectv_core_logging
+    volk::volk
+    GPUOpen::VulkanMemoryAllocator
+)
+
+if(PROJECTV_ENABLE_PROFILING)
+    target_link_libraries(projectv_graphics_vulkan PRIVATE projectv_core_profiling)
+endif()
+
+# --- Исполняемый файл ProjectV ---
 add_executable(ProjectV
     src/main.cpp
-    src/vulkan/context.cpp
-    src/vulkan/device.cpp
 )
 
 target_link_libraries(ProjectV PRIVATE
-    volk::volk
-    GPUOpen::VulkanMemoryAllocator
+    projectv_graphics_vulkan
     SDL3::SDL3
 )
 
 # Для отладки
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(ProjectV PRIVATE DEBUG)
     target_compile_definitions(ProjectV PRIVATE VK_VALIDATION)
+endif()
+
+# Profile конфигурация
+if(PROJECTV_ENABLE_PROFILING)
+    target_compile_definitions(ProjectV PRIVATE TRACY_ENABLE)
+    target_link_libraries(ProjectV PRIVATE Tracy::TracyClient)
 endif()
 ```
 
 ## Инициализация Modern Vulkan 1.4
 
-### 1. Обработка ошибок через std::expected
+### 1. C++26 Module с Global Module Fragment
 
 ```cpp
-// vulkan/error.hpp
-#pragma once
-#include <expected>
-#include <print>
-#include <string>
+// src/graphics/vulkan/context.cppm - Primary Module Interface
+module;
+// Global Module Fragment: изолируем заголовки Vulkan и SDL
+#define VK_NO_PROTOTYPES
+#include <volk.h>
+#include <vk_mem_alloc.h>
+#include <SDL3/SDL_video.h>
+#include <SDL3/SDL_vulkan.h>
 
+export module projectv.graphics.vulkan.context;
+
+import std;
+import projectv.core.memory;
+import projectv.core.log;
+import projectv.core.profiling;
+
+namespace projectv::graphics::vulkan {
+
+// --- Обработка ошибок через std::expected ---
 enum class VulkanError {
     VolkInitFailed,
     InstanceCreationFailed,
@@ -74,7 +166,9 @@ enum class VulkanError {
     VmaInitFailed,
     SurfaceCreationFailed,
     SwapchainCreationFailed,
-    NoSuitableDevice
+    NoSuitableDevice,
+    MemoryAllocationFailed,
+    DebugMessengerFailed
 };
 
 template<typename T>
@@ -89,28 +183,166 @@ inline std::string to_string(VulkanError error) {
         case VulkanError::SurfaceCreationFailed: return "Surface creation failed";
         case VulkanError::SwapchainCreationFailed: return "Swapchain creation failed";
         case VulkanError::NoSuitableDevice: return "No suitable Vulkan device found";
+        case VulkanError::MemoryAllocationFailed: return "Memory allocation failed (ProjectV MemoryManager)";
+        case VulkanError::DebugMessengerFailed: return "Debug messenger creation failed";
         default: return "Unknown Vulkan error";
     }
 }
+
+// --- MemoryManager интеграция через VkAllocationCallbacks ---
+class VulkanAllocator {
+public:
+    static VkAllocationCallbacks getAllocationCallbacks() noexcept {
+        return VkAllocationCallbacks{
+            .pUserData = nullptr,
+            .pfnAllocation = &vulkanAllocation,
+            .pfnReallocation = &vulkanReallocation,
+            .pfnFree = &vulkanFree,
+            .pfnInternalAllocation = nullptr,
+            .pfnInternalFree = nullptr,
+        };
+    }
+
+private:
+    static void* VKAPI_CALL vulkanAllocation(
+        void* pUserData, size_t size, size_t alignment,
+        VkSystemAllocationScope allocationScope) {
+
+        ZoneScopedN("VulkanAllocation");
+
+        // Используем ProjectV MemoryManager в зависимости от scope
+        auto& memoryManager = projectv::core::memory::getGlobalMemoryManager();
+
+        switch (allocationScope) {
+            case VK_SYSTEM_ALLOCATION_SCOPE_COMMAND:
+                // Временные данные команды - LinearAllocator из thread arena
+                return memoryManager.getThreadArena().allocate(size, alignment);
+
+            case VK_SYSTEM_ALLOCATION_SCOPE_OBJECT:
+            case VK_SYSTEM_ALLOCATION_SCOPE_CACHE:
+                // Объекты Vulkan - PoolAllocator
+                return memoryManager.createPool(size, 100).allocate();
+
+            case VK_SYSTEM_ALLOCATION_SCOPE_DEVICE:
+            case VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE:
+                // Долгоживущие объекты - PageAllocator
+                auto result = projectv::core::memory::PageAllocator::allocatePage(size, alignment);
+                if (result) {
+                    return *result;
+                }
+                projectv::core::Log::error("Vulkan", "Page allocation failed: size={}, alignment={}", size, alignment);
+                return nullptr;
+
+            default:
+                return nullptr;
+        }
+    }
+
+    static void* VKAPI_CALL vulkanReallocation(
+        void* pUserData, void* pOriginal, size_t size,
+        size_t alignment, VkSystemAllocationScope allocationScope) {
+
+        ZoneScopedN("VulkanReallocation");
+
+        // В реальной реализации нужно копировать данные и отслеживать оригинальный аллокатор
+        void* newPtr = vulkanAllocation(pUserData, size, alignment, allocationScope);
+        if (newPtr && pOriginal) {
+            // В реальном коде нужно знать оригинальный размер
+            std::memcpy(newPtr, pOriginal, std::min(size, /* original size */));
+            vulkanFree(pUserData, pOriginal);
+        }
+        return newPtr;
+    }
+
+    static void VKAPI_CALL vulkanFree(
+        void* pUserData, void* pMemory) {
+
+        if (!pMemory) return;
+
+        // В реальной реализации нужно определить, из какого аллокатора выделена память
+        // и вернуть её туда. Для простоты примера - игнорируем.
+        // В production коде используется allocation tracking.
+    }
+};
+
+// --- Debug Messenger с интеграцией в ProjectV Log ---
+class VulkanDebugMessenger {
+public:
+    static VkDebugUtilsMessengerCreateInfoEXT getCreateInfo() noexcept {
+        return VkDebugUtilsMessengerCreateInfoEXT{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                              VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                          VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                          VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+            .pfnUserCallback = &debugCallback,
+            .pUserData = nullptr
+        };
+    }
+
+private:
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+        VkDebugUtilsMessageTypeFlagsEXT messageType,
+        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+        void* pUserData) {
+
+        // Преобразуем Vulkan severity в ProjectV Log level
+        projectv::core::Log::Level level;
+        switch (messageSeverity) {
+            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+                level = projectv::core::Log::Level::Info;
+                break;
+            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+                level = projectv::core::Log::Level::Warning;
+                break;
+            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+                level = projectv::core::Log::Level::Error;
+                break;
+            default:
+                level = projectv::core::Log::Level::Info;
+        }
+
+        // Форматируем сообщение в UNIX-way стиле
+        std::string messageTypeStr;
+        if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
+            messageTypeStr = "General";
+        } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
+            messageTypeStr = "Validation";
+        } else if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
+            messageTypeStr = "Performance";
+        }
+
+        // Логируем через ProjectV Log
+        projectv::core::Log::log(level, "Vulkan",
+            "[{}] {} (ID: {}, Name: {})",
+            messageTypeStr,
+            pCallbackData->pMessage,
+            pCallbackData->messageIdNumber,
+            pCallbackData->pMessageIdName ? pCallbackData->pMessageIdName : "N/A");
+
+        return VK_FALSE;  // Не прерываем выполнение
+    }
+};
 ```
 
-### 2. Vulkan Context с RAII
+### 2. Vulkan Context с интеграцией ProjectV
 
 ```cpp
-// vulkan/context.hpp
-#pragma once
-#define VK_NO_PROTOTYPES
-#include <volk.h>
-#include <vk_mem_alloc.h>
-#include <SDL3/SDL_video.h>
-#include <print>
-#include <expected>
-#include "error.hpp"
+// Продолжение модуля projectv.graphics.vulkan.context
+// (в том же файле context.cppm после VulkanAllocator и VulkanDebugMessenger)
 
 class VulkanContext {
 public:
     VulkanContext() = default;
-    ~VulkanContext() { shutdown(); }
+    ~VulkanContext() {
+        ZoneScopedN("VulkanContextDestructor");
+        shutdown();
+    }
 
     // Non-copyable
     VulkanContext(const VulkanContext&) = delete;
@@ -120,15 +352,22 @@ public:
     VulkanContext(VulkanContext&& other) noexcept;
     VulkanContext& operator=(VulkanContext&& other) noexcept;
 
+    // Инициализация с интеграцией ProjectV
     VulkanResult<void> initialize(SDL_Window* window);
     void shutdown();
 
-    VkInstance instance() const { return instance_; }
-    VkPhysicalDevice physical_device() const { return physical_device_; }
-    VkDevice device() const { return device_; }
-    VmaAllocator allocator() const { return allocator_; }
-    VkQueue graphics_queue() const { return graphics_queue_; }
-    VkQueue compute_queue() const { return compute_queue_; }
+    // Getters
+    VkInstance instance() const noexcept { return instance_; }
+    VkPhysicalDevice physical_device() const noexcept { return physical_device_; }
+    VkDevice device() const noexcept { return device_; }
+    VmaAllocator allocator() const noexcept { return allocator_; }
+    VkQueue graphics_queue() const noexcept { return graphics_queue_; }
+    VkQueue compute_queue() const noexcept { return compute_queue_; }
+    VkQueue transfer_queue() const noexcept { return transfer_queue_; }
+
+    // Profiling helpers
+    void begin_gpu_zone(VkCommandBuffer cmd, const char* name, uint32_t color = 0xFFFFFF) const noexcept;
+    void end_gpu_zone(VkCommandBuffer cmd) const noexcept;
 
 private:
     VulkanResult<void> create_instance();
@@ -137,7 +376,9 @@ private:
     VulkanResult<void> create_device();
     VulkanResult<void> create_allocator();
     VulkanResult<void> get_queues();
+    VulkanResult<void> setup_debug_messenger();
 
+    // Vulkan handles
     VkInstance instance_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
@@ -146,12 +387,21 @@ private:
     VkQueue graphics_queue_ = VK_NULL_HANDLE;
     VkQueue compute_queue_ = VK_NULL_HANDLE;
     VkQueue transfer_queue_ = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
 
+    // Queue families
     uint32_t graphics_family_ = 0;
     uint32_t compute_family_ = 0;
     uint32_t transfer_family_ = 0;
 
+    // ProjectV интеграция
     VmaVulkanFunctions vulkan_functions_ = {};
+    VkAllocationCallbacks allocation_callbacks_ = VulkanAllocator::getAllocationCallbacks();
+
+    // Profiling
+#ifdef TRACY_ENABLE
+    TracyVkCtx tracy_vk_context_ = nullptr;
+#endif
 };
 ```
 
@@ -162,14 +412,16 @@ private:
 #include "context.hpp"
 
 VulkanResult<void> VulkanContext::initialize(SDL_Window* window) {
+    ZoneScopedN("VulkanContextInitialize");
+
     // 1. Инициализация volk (ПЕРВЫМ делом!)
     if (volkInitialize() != VK_SUCCESS) {
-        std::println(stderr, "volkInitialize failed");
+        projectv::core::Log::error("Vulkan", "volkInitialize failed");
         return std::unexpected(VulkanError::VolkInitFailed);
     }
 
     uint32_t version = volkGetInstanceVersion();
-    std::println("Vulkan loader version: {}.{}.{}",
+    projectv::core::Log::info("Vulkan", "Vulkan loader version: {}.{}.{}",
                  VK_VERSION_MAJOR(version),
                  VK_VERSION_MINOR(version),
                  VK_VERSION_PATCH(version));
@@ -210,7 +462,20 @@ VulkanResult<void> VulkanContext::initialize(SDL_Window* window) {
         return std::unexpected(result.error());
     }
 
-    std::println("Vulkan context initialized successfully");
+    // 10. Настройка debug messenger (только в Debug)
+#ifdef DEBUG
+    if (auto result = setup_debug_messenger(); !result) {
+        projectv::core::Log::warning("Vulkan", "Debug messenger setup failed, continuing without debug");
+    }
+#endif
+
+    // 11. Инициализация Tracy Vulkan context (только в Profile)
+#ifdef TRACY_ENABLE
+    tracy_vk_context_ = TracyVkContext(physical_device_, device_, graphics_queue_, graphics_family_);
+    projectv::core::Log::info("Vulkan", "Tracy Vulkan context initialized");
+#endif
+
+    projectv::core::Log::info("Vulkan", "Vulkan context initialized successfully");
     return {};
 }
 
@@ -461,7 +726,7 @@ VulkanResult<void> VulkanContext::create_allocator() {
         return std::unexpected(VulkanError::VmaInitFailed);
     }
 
-    std::println("VMA allocator created with BDA support");
+    projectv::core::Log::info("Vulkan", "VMA allocator created with BDA support");
     return {};
 }
 
@@ -470,7 +735,7 @@ VulkanResult<void> VulkanContext::get_queues() {
     vkGetDeviceQueue(device_, compute_family_, 0, &compute_queue_);
     vkGetDeviceQueue(device_, transfer_family_, 0, &transfer_queue_);
 
-    std::println("Queues acquired: graphics={}, compute={}, transfer={}",
+    projectv::core::Log::info("Vulkan", "Queues acquired: graphics={}, compute={}, transfer={}",
                  static_cast<void*>(graphics_queue_),
                  static_cast<void*>(compute_queue_),
                  static_cast<void*>(transfer_queue_));
@@ -479,7 +744,7 @@ VulkanResult<void> VulkanContext::get_queues() {
 
 VulkanResult<void> VulkanContext::create_surface(SDL_Window* window) {
     if (!SDL_Vulkan_CreateSurface(window, instance_, nullptr, &surface_)) {
-        std::println(stderr, "SDL_Vulkan_CreateSurface failed");
+        projectv::core::Log::error("Vulkan", "SDL_Vulkan_CreateSurface failed");
         return std::unexpected(VulkanError::SurfaceCreationFailed);
     }
 
@@ -490,39 +755,94 @@ VulkanResult<void> VulkanContext::create_surface(SDL_Window* window) {
     if (!supported) {
         vkDestroySurfaceKHR(instance_, surface_, nullptr);
         surface_ = VK_NULL_HANDLE;
+        projectv::core::Log::error("Vulkan", "Surface not supported by selected device");
         return std::unexpected(VulkanError::SurfaceCreationFailed);
     }
 
-    std::println("Vulkan surface created successfully");
+    projectv::core::Log::info("Vulkan", "Vulkan surface created successfully");
     return {};
 }
 
 void VulkanContext::shutdown() {
+    ZoneScopedN("VulkanContextShutdown");
+
+    // Освобождаем Tracy Vulkan context (только в Profile)
+#ifdef TRACY_ENABLE
+    if (tracy_vk_context_ != nullptr) {
+        TracyVkDestroy(tracy_vk_context_);
+        tracy_vk_context_ = nullptr;
+        projectv::core::Log::info("Vulkan", "Tracy Vulkan context destroyed");
+    }
+#endif
+
     if (allocator_ != VK_NULL_HANDLE) {
         vmaDestroyAllocator(allocator_);
         allocator_ = VK_NULL_HANDLE;
+        projectv::core::Log::info("Vulkan", "VMA allocator destroyed");
     }
 
     if (device_ != VK_NULL_HANDLE) {
         vkDestroyDevice(device_, nullptr);
         device_ = VK_NULL_HANDLE;
+        projectv::core::Log::info("Vulkan", "Vulkan device destroyed");
     }
 
     if (surface_ != VK_NULL_HANDLE) {
         vkDestroySurfaceKHR(instance_, surface_, nullptr);
         surface_ = VK_NULL_HANDLE;
+        projectv::core::Log::info("Vulkan", "Vulkan surface destroyed");
     }
 
     if (instance_ != VK_NULL_HANDLE) {
         vkDestroyInstance(instance_, nullptr);
         instance_ = VK_NULL_HANDLE;
+        projectv::core::Log::info("Vulkan", "Vulkan instance destroyed");
     }
 
     graphics_queue_ = VK_NULL_HANDLE;
     compute_queue_ = VK_NULL_HANDLE;
     transfer_queue_ = VK_NULL_HANDLE;
 
-    std::println("Vulkan context shutdown complete");
+    projectv::core::Log::info("Vulkan", "Vulkan context shutdown complete");
+}
+
+VulkanResult<void> VulkanContext::setup_debug_messenger() {
+#ifdef DEBUG
+    auto create_info = VulkanDebugMessenger::getCreateInfo();
+
+    auto vkCreateDebugUtilsMessengerEXT =
+        reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT"));
+
+    if (!vkCreateDebugUtilsMessengerEXT) {
+        projectv::core::Log::warning("Vulkan", "vkCreateDebugUtilsMessengerEXT not available");
+        return std::unexpected(VulkanError::DebugMessengerFailed);
+    }
+
+    if (vkCreateDebugUtilsMessengerEXT(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS) {
+        projectv::core::Log::warning("Vulkan", "Failed to create debug messenger");
+        return std::unexpected(VulkanError::DebugMessengerFailed);
+    }
+
+    projectv::core::Log::info("Vulkan", "Debug messenger created successfully");
+#endif
+    return {};
+}
+
+void VulkanContext::begin_gpu_zone(VkCommandBuffer cmd, const char* name, uint32_t color) const noexcept {
+#ifdef TRACY_ENABLE
+    if (tracy_vk_context_ != nullptr) {
+        TracyVkZone(tracy_vk_context_, cmd, name);
+    }
+#endif
+}
+
+void VulkanContext::end_gpu_zone(VkCommandBuffer cmd) const noexcept {
+#ifdef TRACY_ENABLE
+    if (tracy_vk_context_ != nullptr) {
+        TracyVkZoneEnd(tracy_vk_context_, cmd);
+    }
+#endif
 }
 
 VulkanContext::VulkanContext(VulkanContext&& other) noexcept
