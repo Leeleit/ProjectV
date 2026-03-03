@@ -1,34 +1,269 @@
 # Zstd: Интеграция в ProjectV
 
-## CMake-конфигурация
+## C++26 Module Integration
 
-### Вариант 1: FetchContent
+```cpp
+// ProjectV.Compression.Zstd.cpp - C++26 Module для интеграции Zstd
+module;
+
+// Global Module Fragment: изоляция сторонних заголовков
+#include <zstd.h>
+#include <projectv/core/memory_manager.hxx>
+#include <projectv/core/log.hxx>
+#include <projectv/core/profiling.hxx>
+
+export module ProjectV.Compression.Zstd;
+
+import ProjectV.Core.Memory;
+import ProjectV.Core.Log;
+import ProjectV.Core.Profiling;
+
+namespace projectv::compression {
+
+// Класс-интегратор Zstd для ProjectV
+class ZstdDecompressor {
+public:
+    struct Config {
+        int compression_level = 5;
+        bool use_dictionary = false;
+        std::span<const uint8_t> dictionary;
+        projectv::core::memory::PoolAllocator* pool_allocator = nullptr;
+    };
+
+    explicit ZstdDecompressor(Config config)
+        : config_(config)
+        , pool_allocator_(config.pool_allocator
+            ? config.pool_allocator
+            : &projectv::core::memory::get_default_pool_allocator())
+    {
+        PV_PROFILE_FUNCTION();
+
+        if (auto result = init(); !result) {
+            PV_LOG_ERROR("Failed to initialize ZstdDecompressor: {}", result.error());
+        }
+    }
+
+    ~ZstdDecompressor() {
+        cleanup();
+    }
+
+    // Декомпрессия с использованием MemoryManager
+    std::expected<std::span<uint8_t>, std::string> decompress(
+        std::span<const uint8_t> compressed_data
+    ) {
+        PV_PROFILE_FUNCTION();
+
+        if (!dctx_) {
+            return std::unexpected("Decompressor not initialized");
+        }
+
+        // Определяем размер оригинальных данных
+        const unsigned long long original_size = ZSTD_getFrameContentSize(
+            compressed_data.data(), compressed_data.size()
+        );
+
+        if (original_size == ZSTD_CONTENTSIZE_ERROR) {
+            PV_LOG_ERROR("Invalid compressed data frame");
+            return std::unexpected("Invalid compressed data");
+        }
+
+        if (original_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+            PV_LOG_ERROR("Unknown content size - streaming decompression required");
+            return std::unexpected("Unknown content size");
+        }
+
+        // Выделяем память через PoolAllocator
+        auto* arena = pool_allocator_->allocate_arena(
+            "ZstdDecompression",
+            static_cast<size_t>(original_size)
+        );
+
+        if (!arena) {
+            PV_LOG_ERROR("Failed to allocate arena for decompression");
+            return std::unexpected("Memory allocation failed");
+        }
+
+        auto* decompressed_data = arena->allocate<uint8_t>(original_size);
+        if (!decompressed_data) {
+            PV_LOG_ERROR("Failed to allocate decompression buffer");
+            return std::unexpected("Buffer allocation failed");
+        }
+
+        // Выполняем декомпрессию
+        const size_t result = ZSTD_decompressDCtx(
+            dctx_,
+            decompressed_data, original_size,
+            compressed_data.data(), compressed_data.size()
+        );
+
+        if (ZSTD_isError(result)) {
+            PV_LOG_ERROR("Decompression failed: {}", ZSTD_getErrorName(result));
+            arena->deallocate(decompressed_data);
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        if (result != original_size) {
+            PV_LOG_WARN("Decompressed size mismatch: expected {}, got {}",
+                       original_size, result);
+        }
+
+        PV_LOG_DEBUG("Decompressed {} bytes to {} bytes",
+                    compressed_data.size(), result);
+
+        return std::span<uint8_t>(decompressed_data, result);
+    }
+
+    // Сжатие с использованием MemoryManager
+    std::expected<std::span<uint8_t>, std::string> compress(
+        std::span<const uint8_t> data,
+        int level = -1
+    ) {
+        PV_PROFILE_FUNCTION();
+
+        if (!cctx_) {
+            return std::unexpected("Compressor not initialized");
+        }
+
+        const size_t bound = ZSTD_compressBound(data.size());
+
+        // Выделяем память через PoolAllocator
+        auto* arena = pool_allocator_->allocate_arena(
+            "ZstdCompression",
+            bound
+        );
+
+        if (!arena) {
+            PV_LOG_ERROR("Failed to allocate arena for compression");
+            return std::unexpected("Memory allocation failed");
+        }
+
+        auto* compressed_data = arena->allocate<uint8_t>(bound);
+        if (!compressed_data) {
+            PV_LOG_ERROR("Failed to allocate compression buffer");
+            return std::unexpected("Buffer allocation failed");
+        }
+
+        // Настраиваем уровень сжатия если указан
+        if (level != -1) {
+            ZSTD_CCtx_setParameter(cctx_, ZSTD_c_compressionLevel, level);
+        }
+
+        // Выполняем сжатие
+        const size_t result = ZSTD_compress2(
+            cctx_,
+            compressed_data, bound,
+            data.data(), data.size()
+        );
+
+        if (ZSTD_isError(result)) {
+            PV_LOG_ERROR("Compression failed: {}", ZSTD_getErrorName(result));
+            arena->deallocate(compressed_data);
+            return std::unexpected(ZSTD_getErrorName(result));
+        }
+
+        PV_LOG_DEBUG("Compressed {} bytes to {} bytes (ratio: {:.2f}%)",
+                    data.size(), result,
+                    (static_cast<double>(result) / data.size()) * 100.0);
+
+        return std::span<uint8_t>(compressed_data, result);
+    }
+
+private:
+    std::expected<void, std::string> init() {
+        cctx_ = ZSTD_createCCtx();
+        dctx_ = ZSTD_createDCtx();
+
+        if (!cctx_ || !dctx_) {
+            cleanup();
+            return std::unexpected("Failed to create Zstd contexts");
+        }
+
+        // Настраиваем контекст сжатия
+        ZSTD_CCtx_setParameter(cctx_, ZSTD_c_compressionLevel, config_.compression_level);
+        ZSTD_CCtx_setParameter(cctx_, ZSTD_c_checksumFlag, 1);
+
+        // Настраиваем словарь если требуется
+        if (config_.use_dictionary && !config_.dictionary.empty()) {
+            cdict_ = ZSTD_createCDict(
+                config_.dictionary.data(),
+                config_.dictionary.size(),
+                config_.compression_level
+            );
+
+            ddict_ = ZSTD_createDDict(
+                config_.dictionary.data(),
+                config_.dictionary.size()
+            );
+
+            if (!cdict_ || !ddict_) {
+                cleanup();
+                return std::unexpected("Failed to create Zstd dictionaries");
+            }
+
+            ZSTD_CCtx_refCDict(cctx_, cdict_);
+            ZSTD_DCtx_refDDict(dctx_, ddict_);
+        }
+
+        PV_LOG_INFO("ZstdDecompressor initialized with level {}", config_.compression_level);
+        return {};
+    }
+
+    void cleanup() {
+        if (cdict_) ZSTD_freeCDict(cdict_);
+        if (ddict_) ZSTD_freeDDict(ddict_);
+        if (cctx_) ZSTD_freeCCtx(cctx_);
+        if (dctx_) ZSTD_freeDCtx(dctx_);
+
+        cdict_ = nullptr;
+        ddict_ = nullptr;
+        cctx_ = nullptr;
+        dctx_ = nullptr;
+    }
+
+    Config config_;
+    projectv::core::memory::PoolAllocator* pool_allocator_;
+    ZSTD_CCtx* cctx_ = nullptr;
+    ZSTD_DCtx* dctx_ = nullptr;
+    ZSTD_CDict* cdict_ = nullptr;
+    ZSTD_DDict* ddict_ = nullptr;
+};
+
+} // namespace projectv::compression
+```
+
+## CMake-конфигурация для ProjectV
+
+### Интеграция через add_subdirectory
 
 ```cmake
-include(FetchContent)
+# В ProjectV/CMakeLists.txt
+add_subdirectory(external/zstd/build/cmake)
 
-FetchContent_Declare(
-    zstd
-    # zstd repository configuration
-)
-
+# Настройка Zstd для ProjectV
 set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "No CLI tools")
-set(ZSTD_BUILD_SHARED OFF CACHE BOOL "Static only")
+set(ZSTD_BUILD_TESTS OFF CACHE BOOL "No tests")
+set(ZSTD_BUILD_CONTRIB OFF CACHE BOOL "No contrib")
+set(ZSTD_BUILD_STATIC ON CACHE BOOL "Static only")
+set(ZSTD_BUILD_SHARED OFF CACHE BOOL "No shared libs")
 set(ZSTD_MULTITHREAD_SUPPORT ON CACHE BOOL "Enable threading")
 
-FetchContent_MakeAvailable(zstd)
-
-target_link_libraries(ProjectV PRIVATE
+# Подключение модулей ProjectV
+target_link_libraries(ProjectV.PRIVATE
     libzstd_static
+  projectv_core_memory
+  projectv_core_log
+  projectv_core_profiling
 )
 
-target_include_directories(ProjectV PRIVATE
-    ${zstd_SOURCE_DIR}/lib
-    ${zstd_SOURCE_DIR}/lib/common
-)
-
-target_compile_definitions(ProjectV PRIVATE
+target_compile_definitions(ProjectV.PRIVATE
+  ZSTD_MULTITHREAD
     ZSTD_STATIC_LINKING
+)
+
+# Подключение заголовков
+target_include_directories(ProjectV.PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/zstd/lib
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/zstd/lib/common
 )
 ```
 
@@ -85,206 +320,338 @@ endif()
 ### Сценарий: Сжатие GPU-буферов перед передачей
 
 ```cpp
-#include <zstd.h>
+// Использование ZstdDecompressor для Vulkan-буферов
+#include <projectv/compression/zstd.hxx>
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 #include <span>
-#include <vector>
 #include <expected>
 
-// Сжатие данных из Vulkan-буфера (GPU -> CPU -> сжатие)
+namespace projectv::vulkan {
+
+// Bridge для сжатия Vulkan-буферов с использованием ProjectV MemoryManager
 class VulkanBufferCompressor {
 public:
     struct Config {
         int compression_level = 5;
-        bool use_dictionary = true;
+        bool use_dictionary = false;
         std::span<const uint8_t> dictionary;
+        projectv::core::memory::PoolAllocator* pool_allocator = nullptr;
     };
 
     explicit VulkanBufferCompressor(Config config)
-        : config_(config)
+        : zstd_decompressor_({
+            .compression_level = config.compression_level,
+            .use_dictionary = config.use_dictionary,
+            .dictionary = config.dictionary,
+            .pool_allocator = config.pool_allocator
+        })
     {
-        init_compressor();
+        PV_PROFILE_FUNCTION();
+        PV_LOG_INFO("VulkanBufferCompressor initialized with level {}",
+                   config.compression_level);
     }
 
     // Сжатие данных после чтения из GPU-буфера
-    std::expected<std::vector<uint8_t>, std::string> compress(
-        std::span<const uint8_t> src
+    std::expected<std::span<uint8_t>, std::string> compress_gpu_buffer(
+        VmaAllocator allocator,
+        VkBuffer src_buffer,
+        VkDeviceSize buffer_size
     ) {
-        if (!cctx_) {
-            return std::unexpected("Compressor not initialized");
+        PV_PROFILE_FUNCTION();
+
+        // 1. Чтение данных из GPU-буфера
+        void* mapped_data = nullptr;
+        if (auto result = vmaMapMemory(allocator,
+                                      vmaGetAllocationInfo(allocator, src_buffer).allocation,
+                                      &mapped_data);
+            result != VK_SUCCESS) {
+            PV_LOG_ERROR("Failed to map GPU buffer: {}", result);
+            return std::unexpected("Failed to map GPU buffer");
         }
 
-        if (config_.use_dictionary && cdict_) {
-            ZSTD_CCtx_refCDict(cctx_, cdict_);
-        }
-
-        const size_t bound = ZSTD_compressBound(src.size());
-        std::vector<uint8_t> dst(bound);
-
-        const size_t result = ZSTD_compress2(
-            cctx_,
-            dst.data(), bound,
-            src.data(), src.size()
+        // 2. Сжатие данных
+        std::span<const uint8_t> gpu_data(
+            static_cast<const uint8_t*>(mapped_data),
+            static_cast<size_t>(buffer_size)
         );
 
-        if (ZSTD_isError(result)) {
-            return std::unexpected(ZSTD_getErrorName(result));
+        auto compressed_result = zstd_decompressor_.compress(gpu_data);
+
+        // 3. Размапирование буфера
+        vmaUnmapMemory(allocator,
+                      vmaGetAllocationInfo(allocator, src_buffer).allocation);
+
+        if (!compressed_result) {
+            PV_LOG_ERROR("GPU buffer compression failed: {}", compressed_result.error());
+            return std::unexpected(compressed_result.error());
         }
 
-        dst.resize(result);
-        return dst;
+        PV_LOG_DEBUG("Compressed GPU buffer: {} bytes -> {} bytes",
+                    buffer_size, compressed_result->size());
+
+        return compressed_result;
     }
 
     // Декомпрессия перед записью в GPU-буфер
-    std::expected<std::vector<uint8_t>, std::string> decompress(
-        std::span<const uint8_t> src
+    std::expected<void, std::string> decompress_to_gpu_buffer(
+        VmaAllocator allocator,
+        VkBuffer dst_buffer,
+        std::span<const uint8_t> compressed_data
     ) {
-        if (!dctx_) {
-            return std::unexpected("Decompressor not initialized");
+        PV_PROFILE_FUNCTION();
+
+        // 1. Декомпрессия данных
+        auto decompressed_result = zstd_decompressor_.decompress(compressed_data);
+        if (!decompressed_result) {
+            PV_LOG_ERROR("GPU buffer decompression failed: {}", decompressed_result.error());
+            return std::unexpected(decompressed_result.error());
         }
 
-        if (config_.use_dictionary && ddict_) {
-            ZSTD_DCtx_refDDict(dctx_, ddict_);
+        // 2. Запись данных в GPU-буфер
+        void* mapped_data = nullptr;
+        if (auto result = vmaMapMemory(allocator,
+                                      vmaGetAllocationInfo(allocator, dst_buffer).allocation,
+                                      &mapped_data);
+            result != VK_SUCCESS) {
+            PV_LOG_ERROR("Failed to map GPU buffer for writing: {}", result);
+            return std::unexpected("Failed to map GPU buffer");
         }
 
-        const unsigned long long original_size = ZSTD_getFrameContentSize(
-            src.data(), src.size()
-        );
+        std::memcpy(mapped_data, decompressed_result->data(), decompressed_result->size());
 
-        if (original_size == ZSTD_CONTENTSIZE_ERROR) {
-            return std::unexpected("Invalid compressed data");
+        // 3. Размапирование буфера
+        vmaUnmapMemory(allocator,
+                      vmaGetAllocationInfo(allocator, dst_buffer).allocation);
+
+        PV_LOG_DEBUG("Decompressed to GPU buffer: {} bytes -> {} bytes",
+                    compressed_data.size(), decompressed_result->size());
+
+        return {};
+    }
+
+    // Пакетное сжатие нескольких буферов
+    std::expected<std::vector<std::span<uint8_t>>, std::string> compress_gpu_buffers(
+        VmaAllocator allocator,
+        std::span<const std::pair<VkBuffer, VkDeviceSize>> buffers
+    ) {
+        PV_PROFILE_FUNCTION();
+
+        std::vector<std::span<uint8_t>> results;
+        results.reserve(buffers.size());
+
+        for (size_t i = 0; i < buffers.size(); ++i) {
+            const auto& [buffer, size] = buffers[i];
+
+            PV_PROFILE_SCOPE("CompressSingleBuffer");
+
+            auto result = compress_gpu_buffer(allocator, buffer, size);
+            if (!result) {
+                PV_LOG_ERROR("Failed to compress buffer {}: {}", i, result.error());
+                return std::unexpected(result.error());
+            }
+
+            results.push_back(*result);
         }
 
-        std::vector<uint8_t> dst(static_cast<size_t>(original_size));
-
-        const size_t result = ZSTD_decompressDCtx(
-            dctx_,
-            dst.data(), dst.size(),
-            src.data(), src.size()
-        );
-
-        if (ZSTD_isError(result)) {
-            return std::unexpected(ZSTD_getErrorName(result));
-        }
-
-        dst.resize(result);
-        return dst;
+        PV_LOG_INFO("Compressed {} GPU buffers", buffers.size());
+        return results;
     }
 
 private:
-    void init_compressor() {
-        cctx_ = ZSTD_createCCtx();
-        dctx_ = ZSTD_createDCtx();
-
-        if (cctx_) {
-            ZSTD_CCtx_setParameter(cctx_, ZSTD_c_compressionLevel, config_.compression_level);
-            ZSTD_CCtx_setParameter(cctx_, ZSTD_c_checksumFlag, 1);
-        }
-
-        if (config_.use_dictionary && !config_.dictionary.empty()) {
-            cdict_ = ZSTD_createCDict(
-                config_.dictionary.data(),
-                config_.dictionary.size(),
-                config_.compression_level
-            );
-
-            ddict_ = ZSTD_createDDict(
-                config_.dictionary.data(),
-                config_.dictionary.size()
-            );
-        }
-    }
-
-    Config config_;
-    ZSTD_CCtx* cctx_ = nullptr;
-    ZSTD_DCtx* dctx_ = nullptr;
-    ZSTD_CDict* cdict_ = nullptr;
-    ZSTD_DDict* ddict_ = nullptr;
+    projectv::compression::ZstdDecompressor zstd_decompressor_;
 };
+
+} // namespace projectv::vulkan
 ```
 
-### Интеграция с VMA
+### Интеграция с VMA и ProjectV MemoryManager
 
 ```cpp
+// VMA-интеграция с использованием ProjectV MemoryManager
+#include <projectv/compression/zstd.hxx>
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
-#include <zstd.h>
-#include <vector>
 #include <span>
 #include <expected>
 
-// Сжатие данных в VMA-аллокации
-class VMAAwareCompressor {
+namespace projectv::vulkan {
+
+// Bridge для VMA-аллокаций с использованием ZstdDecompressor
+class VMACompressedAllocator {
 public:
-    // Аллоцировать сжатый буфер через VMA
-    std::expected<VmaAllocation, std::string> compress_to_vma(
+    struct Config {
+        int compression_level = 5;
+        bool use_dictionary = false;
+        std::span<const uint8_t> dictionary;
+        projectv::core::memory::PoolAllocator* pool_allocator = nullptr;
+    };
+
+    explicit VMACompressedAllocator(Config config)
+        : zstd_decompressor_({
+            .compression_level = config.compression_level,
+            .use_dictionary = config.use_dictionary,
+            .dictionary = config.dictionary,
+            .pool_allocator = config.pool_allocator
+        })
+    {
+        PV_PROFILE_FUNCTION();
+        PV_LOG_INFO("VMACompressedAllocator initialized");
+    }
+
+    // Создание сжатого буфера через VMA с использованием MemoryManager
+    std::expected<CompressedAllocation, std::string> create_compressed_buffer(
         VmaAllocator allocator,
-        std::span<const uint8_t> src,
-        int level = 5
+        std::span<const uint8_t> data,
+        VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        int level = -1
     ) {
-        // Сжатие
-        const size_t bound = ZSTD_compressBound(src.size());
-        std::vector<uint8_t> compressed(bound);
+        PV_PROFILE_FUNCTION();
 
-        const size_t compressed_size = ZSTD_compress(
-            compressed.data(), bound,
-            src.data(), src.size(),
-            level
-        );
-
-        if (ZSTD_isError(compressed_size)) {
-            return std::unexpected(ZSTD_getErrorName(compressed_size));
+        // 1. Сжатие данных через ZstdDecompressor
+        auto compressed_result = zstd_decompressor_.compress(data, level);
+        if (!compressed_result) {
+            PV_LOG_ERROR("Failed to compress data for VMA buffer: {}", compressed_result.error());
+            return std::unexpected(compressed_result.error());
         }
 
-        compressed.resize(compressed_size);
-
-        // VMA аллокация
+        // 2. Создание VMA-буфера
         VkBufferCreateInfo buffer_info = {};
         buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_info.size = compressed_size;
-        buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        buffer_info.size = compressed_result->size();
+        buffer_info.usage = usage;
 
         VmaAllocationCreateInfo alloc_info = {};
-        alloc_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+        alloc_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
         alloc_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
         VkBuffer buffer = VK_NULL_HANDLE;
         VmaAllocation allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo allocation_info = {};
 
-        const VkResult result = vmaCreateBuffer(
+        const VkResult vma_result = vmaCreateBuffer(
             allocator,
             &buffer_info,
             &alloc_info,
             &buffer,
             &allocation,
-            nullptr
+            &allocation_info
         );
 
-        if (result != VK_SUCCESS) {
+        if (vma_result != VK_SUCCESS) {
+            PV_LOG_ERROR("VMA buffer creation failed: {}", vma_result);
             return std::unexpected("VMA allocation failed");
         }
 
-        // Копирование сжатых данных
-        void* mapped = nullptr;
-        vmaMapMemory(allocator, allocation, &mapped);
-        std::memcpy(mapped, compressed.data(), compressed_size);
+        // 3. Копирование сжатых данных в GPU-буфер
+        void* mapped_data = nullptr;
+        if (auto map_result = vmaMapMemory(allocator, allocation, &mapped_data);
+            map_result != VK_SUCCESS) {
+            PV_LOG_ERROR("Failed to map VMA buffer: {}", map_result);
+            vmaDestroyBuffer(allocator, buffer, allocation);
+            return std::unexpected("Failed to map VMA buffer");
+        }
+
+        std::memcpy(mapped_data, compressed_result->data(), compressed_result->size());
         vmaUnmapMemory(allocator, allocation);
 
-        // Возвращаем структуру с буфером
-        CompressedAllocation result_alloc;
-        result_alloc.buffer = buffer;
-        result_alloc.allocation = allocation;
-        result_alloc.compressed_size = compressed_size;
-        result_alloc.original_size = src.size();
+        // 4. Возвращаем результат
+        CompressedAllocation result;
+        result.buffer = buffer;
+        result.allocation = allocation;
+        result.compressed_size = compressed_result->size();
+        result.original_size = data.size();
+        result.compression_ratio = static_cast<double>(compressed_result->size()) / data.size();
 
-        return result_alloc;
+        PV_LOG_DEBUG("Created compressed VMA buffer: {} bytes -> {} bytes (ratio: {:.2f}%)",
+                    data.size(), compressed_result->size(), result.compression_ratio * 100.0);
+
+        return result;
     }
 
-    void free_vma(VmaAllocator allocator, CompressedAllocation& alloc) {
+    // Декомпрессия VMA-буфера в CPU-память
+    std::expected<std::span<uint8_t>, std::string> decompress_vma_buffer(
+        VmaAllocator allocator,
+        const CompressedAllocation& compressed_alloc
+    ) {
+        PV_PROFILE_FUNCTION();
+
+        // 1. Чтение сжатых данных из GPU-буфера
+        void* mapped_data = nullptr;
+        if (auto result = vmaMapMemory(allocator, compressed_alloc.allocation, &mapped_data);
+            result != VK_SUCCESS) {
+            PV_LOG_ERROR("Failed to map compressed VMA buffer: {}", result);
+            return std::unexpected("Failed to map VMA buffer");
+        }
+
+        std::span<const uint8_t> compressed_data(
+            static_cast<const uint8_t*>(mapped_data),
+            compressed_alloc.compressed_size
+        );
+
+        // 2. Декомпрессия через ZstdDecompressor
+        auto decompressed_result = zstd_decompressor_.decompress(compressed_data);
+
+        // 3. Размапирование буфера
+        vmaUnmapMemory(allocator, compressed_alloc.allocation);
+
+        if (!decompressed_result) {
+            PV_LOG_ERROR("Failed to decompress VMA buffer: {}", decompressed_result.error());
+            return std::unexpected(decompressed_result.error());
+        }
+
+        PV_LOG_DEBUG("Decompressed VMA buffer: {} bytes -> {} bytes",
+                    compressed_alloc.compressed_size, decompressed_result->size());
+
+        return decompressed_result;
+    }
+
+    // Освобождение сжатого VMA-буфера
+    void destroy_compressed_buffer(
+        VmaAllocator allocator,
+        CompressedAllocation& alloc
+    ) {
+        PV_PROFILE_FUNCTION();
+
         if (alloc.buffer != VK_NULL_HANDLE) {
             vmaDestroyBuffer(allocator, alloc.buffer, alloc.allocation);
+            alloc = {};
+            PV_LOG_DEBUG("Destroyed compressed VMA buffer");
         }
-        alloc = {};
+    }
+
+    // Пакетное создание сжатых буферов
+    std::expected<std::vector<CompressedAllocation>, std::string> create_compressed_buffers(
+        VmaAllocator allocator,
+        std::span<const std::pair<std::span<const uint8_t>, VkBufferUsageFlags>> buffers_config
+    ) {
+        PV_PROFILE_FUNCTION();
+
+        std::vector<CompressedAllocation> results;
+        results.reserve(buffers_config.size());
+
+        for (size_t i = 0; i < buffers_config.size(); ++i) {
+            const auto& [data, usage] = buffers_config[i];
+
+            PV_PROFILE_SCOPE("CreateCompressedBuffer");
+
+            auto result = create_compressed_buffer(allocator, data, usage);
+            if (!result) {
+                PV_LOG_ERROR("Failed to create compressed buffer {}: {}", i, result.error());
+
+                // Освобождаем уже созданные буферы
+                for (auto& alloc : results) {
+                    destroy_compressed_buffer(allocator, alloc);
+                }
+
+                return std::unexpected(result.error());
+            }
+
+            results.push_back(*result);
+        }
+
+        PV_LOG_INFO("Created {} compressed VMA buffers", buffers_config.size());
+        return results;
     }
 
     struct CompressedAllocation {
@@ -292,199 +659,345 @@ public:
         VmaAllocation allocation = VK_NULL_HANDLE;
         size_t compressed_size = 0;
         size_t original_size = 0;
+        double compression_ratio = 0.0;
     };
 
 private:
-    Config config_;
+    projectv::compression::ZstdDecompressor zstd_decompressor_;
 };
+
+} // namespace projectv::vulkan
 ```
 
 ---
 
-## Интеграция с Flecs ECS
+## Интеграция с Flecs ECS и ProjectV MemoryManager
 
-### Компоненты для ECS
+### Компоненты для ECS с использованием ZstdDecompressor
 
 ```cpp
+// ECS-интеграция с использованием ProjectV MemoryManager
+#include <projectv/compression/zstd.hxx>
 #include <flecs.h>
-#include <zstd.h>
-#include <vector>
 #include <span>
+#include <expected>
 
-// Компонент: сжатые данные
+namespace projectv::ecs {
+
+// Компонент: сжатые данные с использованием MemoryManager
 struct CompressedData {
-    std::vector<uint8_t> data;
+    std::span<uint8_t> data;
     size_t original_size = 0;
     int compression_level = 5;
+    projectv::core::memory::ArenaAllocator* arena = nullptr;
 };
 
 // Тег: данные готовы к отправке по сети
 struct NetworkReadyTag {};
 
-// Система: сжатие данных сущности
-struct CompressionSystem {
-    // Сжатие данных компонента
-    static void compress(
-        flecs::world& world,
-        int level = 5,
-        std::span<const uint8_t> dictionary = {}
-    ) {
-        auto cctx = ZSTD_createCCtx();
-        auto ddict = !dictionary.empty()
-            ? ZSTD_createCDict(dictionary.data(), dictionary.size(), level)
-            : nullptr;
+// Bridge для ECS-интеграции сжатия
+class ZstdEcsBridge {
+public:
+    struct Config {
+        int default_compression_level = 5;
+        bool use_dictionary = false;
+        std::span<const uint8_t> dictionary;
+        projectv::core::memory::PoolAllocator* pool_allocator = nullptr;
+    };
 
-        if (ddict) {
-            ZSTD_CCtx_refCDict(cctx, ddict);
+    explicit ZstdEcsBridge(flecs::world& world, Config config)
+        : world_(world)
+        , zstd_decompressor_({
+            .compression_level = config.default_compression_level,
+            .use_dictionary = config.use_dictionary,
+            .dictionary = config.dictionary,
+            .pool_allocator = config.pool_allocator
+        })
+    {
+        PV_PROFILE_FUNCTION();
+        setup_ecs_systems();
+        PV_LOG_INFO("ZstdEcsBridge initialized for ECS world");
+    }
+
+    // Система: сжатие данных сущности
+    void compress_entity_data(flecs::entity e, std::span<const uint8_t> data, int level = -1) {
+        PV_PROFILE_FUNCTION();
+
+        auto compressed_result = zstd_decompressor_.compress(data, level);
+        if (!compressed_result) {
+            PV_LOG_ERROR("Failed to compress entity data: {}", compressed_result.error());
+            return;
         }
 
-        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+        // Создаем компонент с сжатыми данными
+        auto* arena = zstd_decompressor_.get_pool_allocator()->allocate_arena(
+            "ECSCompressedData",
+            compressed_result->size()
+        );
 
-        world.each([&](flecs::entity e, CompressedData& data) {
-            const size_t bound = ZSTD_compressBound(data.original_size);
-            data.data.resize(bound);
+        if (!arena) {
+            PV_LOG_ERROR("Failed to allocate arena for ECS compressed data");
+            return;
+        }
 
-            const size_t result = ZSTD_compress2(
-                cctx,
-                data.data.data(), bound,
-                nullptr, data.original_size
-            );
+        // Копируем данные в arena
+        auto* compressed_data = arena->allocate<uint8_t>(compressed_result->size());
+        if (!compressed_data) {
+            PV_LOG_ERROR("Failed to allocate compressed data buffer");
+            return;
+        }
 
-            if (!ZSTD_isError(result)) {
-                data.data.resize(result);
-                data.compression_level = level;
+        std::memcpy(compressed_data, compressed_result->data(), compressed_result->size());
+
+        // Устанавливаем компонент
+        world_.set(e, CompressedData{
+            .data = std::span<uint8_t>(compressed_data, compressed_result->size()),
+            .original_size = data.size(),
+            .compression_level = (level == -1) ? zstd_decompressor_.get_config().compression_level : level,
+            .arena = arena
+        });
+
+        PV_LOG_DEBUG("Compressed entity data: {} bytes -> {} bytes",
+                    data.size(), compressed_result->size());
+    }
+
+    // Система: декомпрессия данных сущности
+    std::expected<std::span<uint8_t>, std::string> decompress_entity_data(flecs::entity e) {
+        PV_PROFILE_FUNCTION();
+
+        auto* compressed_data = world_.get<CompressedData>(e);
+        if (!compressed_data) {
+            return std::unexpected("Entity has no compressed data");
+        }
+
+        auto decompressed_result = zstd_decompressor_.decompress(compressed_data->data);
+        if (!decompressed_result) {
+            PV_LOG_ERROR("Failed to decompress entity data: {}", decompressed_result.error());
+            return std::unexpected(decompressed_result.error());
+        }
+
+        PV_LOG_DEBUG("Decompressed entity data: {} bytes -> {} bytes",
+                    compressed_data->data.size(), decompressed_result->size());
+
+        return decompressed_result;
+    }
+
+    // Система: пакетное сжатие всех сущностей с определенным тегом
+    void compress_all_with_tag(flecs::entity tag, int level = -1) {
+        PV_PROFILE_FUNCTION();
+
+        world_.each([&](flecs::entity e) {
+            if (e.has(tag)) {
+                // Получаем данные для сжатия (зависит от конкретной реализации)
+                // Здесь предполагается, что данные доступны через другой компонент
+                PV_PROFILE_SCOPE("CompressEntity");
+                // Реализация зависит от структуры данных сущности
             }
         });
 
-        if (cctx) ZSTD_freeCCtx(cctx);
-        if (ddict) ZSTD_freeCDict(ddict);
+        PV_LOG_INFO("Compressed all entities with tag");
     }
 
-    // Декомпрессия данных компонента
-    static void decompress(flecs::world& world) {
-        auto dctx = ZSTD_createDCtx();
+    // Система: очистка сжатых данных сущности
+    void cleanup_entity_data(flecs::entity e) {
+        PV_PROFILE_FUNCTION();
 
-        world.each([&](flecs::entity e, CompressedData& data) {
-            const unsigned long long original = ZSTD_getFrameContentSize(
-                data.data.data(), data.data.size()
-            );
-
-            if (original == ZSTD_CONTENTSIZE_ERROR) return;
-
-            std::vector<uint8_t> decompressed(original);
-
-            const size_t result = ZSTD_decompressDCtx(
-                dctx,
-                decompressed.data(), decompressed.size(),
-                data.data.data(), data.data.size()
-            );
-
-            if (!ZSTD_isError(result)) {
-                data.data.assign(decompressed.begin(), decompressed.end());
-                data.original_size = result;
-            }
-        });
-
-        if (dctx) ZSTD_freeDCtx(dctx);
+        auto* compressed_data = world_.get<CompressedData>(e);
+        if (compressed_data && compressed_data->arena) {
+            // Освобождаем arena через MemoryManager
+            compressed_data->arena->reset();
+            world_.remove<CompressedData>(e);
+            PV_LOG_DEBUG("Cleaned up compressed data for entity");
+        }
     }
+
+private:
+    void setup_ecs_systems() {
+        // Система обработки очереди сжатия
+        world_.system<CompressedData>("ProcessCompressionQueue")
+            .kind(flecs::OnUpdate)
+            .each([&](flecs::entity e, CompressedData& data) {
+                PV_PROFILE_SCOPE("ProcessCompressionQueue");
+                // Обработка очереди сжатия
+            });
+
+        // Система автоматической очистки устаревших данных
+        world_.system<CompressedData>("CleanupOldCompressedData")
+            .kind(flecs::PostUpdate)
+            .interval(5.0) // Каждые 5 секунд
+            .each([&](flecs::entity e, CompressedData& data) {
+                PV_PROFILE_SCOPE("CleanupOldCompressedData");
+                // Логика очистки старых данных
+            });
+
+        // Система мониторинга сжатия
+        world_.system<>("CompressionMonitoring")
+            .kind(flecs::OnStore)
+            .iter([&](flecs::iter& it) {
+                PV_PROFILE_SCOPE("CompressionMonitoring");
+
+                size_t total_compressed = 0;
+                size_t total_original = 0;
+
+                it.world().each([&](flecs::entity e, const CompressedData& data) {
+                    total_compressed += data.data.size();
+                    total_original += data.original_size;
+                });
+
+                if (total_original > 0) {
+                    double compression_ratio = static_cast<double>(total_compressed) / total_original;
+                    PV_LOG_DEBUG("ECS compression stats: {} entities, ratio: {:.2f}%",
+                                it.world().count<CompressedData>(), compression_ratio * 100.0);
+                }
+            });
+
+        PV_LOG_DEBUG("Setup {} ECS systems for Zstd integration", 3);
+    }
+
+    flecs::world& world_;
+    projectv::compression::ZstdDecompressor zstd_decompressor_;
 };
-```
-
-### Интеграция с системой событий Flecs
-
-```cpp
-#include <flecs.h>
-#include <zstd.h>
 
 // Событие: сжатие завершено
 struct CompressionCompleteEvent {
     flecs::entity entity;
     size_t original_size;
     size_t compressed_size;
+    double compression_ratio;
 };
 
 // Событие: декомпрессия завершена
 struct DecompressionCompleteEvent {
     flecs::entity entity;
+    size_t decompressed_size;
 };
 
-// Bridge: асинхронное сжатие через Flecs worker threads
-class ZstdEcsBridge {
+} // namespace projectv::ecs
+```
+
+### Интеграция с системой событий Flecs и stdexec
+
+```cpp
+// Асинхронная обработка сжатия через stdexec
+#include <projectv/compression/zstd.hxx>
+#include <flecs.h>
+#include <stdexec/execution.hpp>
+#include <span>
+#include <expected>
+
+namespace projectv::ecs::async {
+
+// Асинхронный Bridge для ECS-сжатия с использованием stdexec
+class AsyncZstdEcsBridge {
 public:
-    ZstdEcsBridge(flecs::world& world)
-        : world_(world)
-    {
-        // Регистрация событий
-        world_.event<CompressionCompleteEvent>()
-            .desc("Fired when compression completes");
-        world_.event<DecompressionCompleteEvent>()
-            .desc("Fired when decompression completes");
-
-        // Система обработки очереди сжатия
-        world_.system("ProcessCompressionQueue")
-            .kind(flecs::OnUpdate)
-            .each([&](CompressionQueue& queue) {
-                while (!queue.pending.empty()) {
-                    auto task = queue.pending.front();
-                    queue.pending.pop();
-
-                    process_compression_task(task);
-                }
-            });
-    }
-
-    void queue_compression(flecs::entity e, std::span<const uint8_t> data, int level) {
-        CompressionTask task;
-        task.entity = e;
-        task.data.assign(data.begin(), data.end());
-        task.level = level;
-
-        compression_queue_.pending.push(task);
-    }
-
-private:
-    void process_compression_task(CompressionTask& task) {
-        const size_t bound = ZSTD_compressBound(task.data.size());
-        std::vector<uint8_t> compressed(bound);
-
-        const size_t result = ZSTD_compress(
-            compressed.data(), bound,
-            task.data.data(), task.data.size(),
-            task.level
-        );
-
-        if (!ZSTD_isError(result)) {
-            compressed.resize(result);
-
-            // Установка компонента
-            world_.set(task.entity, CompressedData{
-                .data = std::move(compressed),
-                .original_size = task.data.size(),
-                .compression_level = task.level
-            });
-
-            // Emit событие
-            world_.event().emit<CompressionCompleteEvent>({
-                .entity = task.entity,
-                .original_size = task.data.size(),
-                .compressed_size = result
-            });
-        }
-    }
-
-    flecs::world& world_;
-
-    struct CompressionTask {
-        flecs::entity entity;
-        std::vector<uint8_t> data;
-        int level;
+    struct Config {
+        int default_compression_level = 5;
+        bool use_dictionary = false;
+        std::span<const uint8_t> dictionary;
+        projectv::core::memory::PoolAllocator* pool_allocator = nullptr;
+        stdexec::scheduler auto scheduler = stdexec::schedule();
     };
 
-    struct CompressionQueue {
-        std::queue<CompressionTask> pending;
-    } compression_queue_;
-};
-```
+    explicit AsyncZstdEcsBridge(flecs::world& world, Config config)
+        : world_(world)
+        , zstd_decompressor_({
+            .compression_level = config.default_compression_level,
+            .use_dictionary = config.use_dictionary,
+            .dictionary = config.dictionary,
+            .pool_allocator = config.pool_allocator
+        })
+        , scheduler_(config.scheduler)
+    {
+        PV_PROFILE_FUNCTION();
+        setup_async_systems();
+        PV_LOG_INFO("AsyncZstdEcsBridge initialized with stdexec scheduler");
+    }
+
+    // Асинхронное сжатие данных сущности
+    stdexec::sender auto async_compress_entity(
+        flecs::entity e,
+        std::span<const uint8_t> data,
+        int level = -1
+    ) {
+        return stdexec::schedule(scheduler_)
+             | stdexec::then([this, e, data, level]() -> std::expected<void, std::string> {
+                PV_PROFILE_SCOPE("AsyncCompressEntity");
+
+                auto compressed_result = zstd_decompressor_.compress(data, level);
+                if (!compressed_result) {
+                    PV_LOG_ERROR("Async compression failed for entity: {}", compressed_result.error());
+                    return std::unexpected(compressed_result.error());
+                }
+
+                // Создаем компонент в основном потоке ECS
+                world_.defer([this, e, data, compressed = *compressed_result, level]() {
+                    PV_PROFILE_SCOPE("CreateECSComponent");
+
+                    auto* arena = zstd_decompressor_.get_pool_allocator()->allocate_arena(
+                        "AsyncECSCompressedData",
+                        compressed.size()
+                    );
+
+                    if (!arena) {
+                        PV_LOG_ERROR("Failed to allocate arena for async compressed data");
+                        return;
+                    }
+
+                    auto* compressed_data = arena->allocate<uint8_t>(compressed.size());
+                    if (!compressed_data) {
+                        PV_LOG_ERROR("Failed to allocate async compressed data buffer");
+                        return;
+                    }
+
+                    std::memcpy(compressed_data, compressed.data(), compressed.size());
+
+                    world_.set(e, CompressedData{
+                        .data = std::span<uint8_t>(compressed_data, compressed.size()),
+                        .original_size = data.size(),
+                        .compression_level = (level == -1) ? zstd_decompressor_.get_config().compression_level : level,
+                        .arena = arena
+                    });
+
+                    // Emit событие
+                    world_.event().emit<CompressionCompleteEvent>({
+                        .entity = e,
+                        .original_size = data.size(),
+                        .compressed_size = compressed.size(),
+                        .compression_ratio = static_cast<double>(compressed.size()) / data.size()
+                    });
+
+                    PV_LOG_DEBUG("Async compressed entity data: {} bytes -> {} bytes",
+                                data.size(), compressed.size());
+                });
+
+                return {};
+             });
+    }
+
+    // Асинхронная пакетная обработка
+    stdexec::sender auto async_batch_compress(
+        std::span<const std::pair<flecs::entity, std::span<const uint8_t>>> entities_data,
+        int level = -1
+    ) {
+        return stdexec::schedule(scheduler_)
+             | stdexec::then([this, entities_data, level]() -> std::expected<size_t, std::string> {
+                PV_PROFILE_FUNCTION();
+
+                size_t success_count = 0;
+                size_t total_compressed = 0;
+                size_t total_original = 0;
+
+                for (const auto& [entity, data] : entities_data) {
+                    PV_PROFILE_SCOPE("BatchCompressSingle");
+
+                    auto compressed_result = zstd_decompressor_.compress(data, level);
+                    if (!compressed_result) {
+                        PV_LOG_WARN("Batch compression failed for entity: {}", compressed_result.error());
+                        continue;
+                    }
+
+                    world_.defer([this, entity, data, compressed = *compressed_result, level]() {
+                        // Аналогично async_
 
 ---
 

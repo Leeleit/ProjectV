@@ -1,14 +1,180 @@
-## Архитектурная интеграция Draco в современные C++ проекты
+## Архитектурная интеграция Draco в ProjectV
 
-Draco интегрируется в современные C++ проекты через многоуровневую архитектуру, где каждый слой решает конкретную
-задачу: от
-низкоуровневого сжатия геометрических данных до высокоуровневой интеграции с графическими API и системами управления
-сущностями. Эта интеграция обеспечивает
-эффективное сжатие 3D моделей, point cloud данных и сетевых данных с минимальными накладными расходами.
+Draco интегрируется в ProjectV через специализированный класс-интегратор `DracoLoader`, который обеспечивает полную
+интеграцию с архитектурой движка: MemoryManager для аллокации временных буферов, системой логирования для мониторинга
+операций и Tracy для профилирования производительности.
 
-**Архитектурная метафора:** Draco выступает в роли специализированного процессора геометрических данных, который
-трансформирует пространственно-коррелированные структуры (SVO, sparse voxel структуры, greedy meshes) в компактные
-битовые потоки, оптимизированные для хранения, передачи и быстрого декодирования в GPU-совместимые форматы.
+### C++26 Module интеграция с ProjectV
+
+```cpp
+// ProjectV.Core.Draco - C++26 Module с Global Module Fragment для изоляции заголовков
+module;
+
+// Global Module Fragment: изоляция сторонних заголовков
+#include <draco/compression/decode.h>
+#include <draco/compression/encode.h>
+#include <draco/mesh/mesh.h>
+#include <draco/point_cloud/point_cloud.h>
+
+// ProjectV заголовки
+#include <projectv/core/memory/allocator.h>
+#include <projectv/core/logging/log.h>
+#include <projectv/core/profiling/tracy.h>
+
+export module ProjectV.Core.Draco;
+
+import ProjectV.Core.Memory;
+import ProjectV.Core.Logging;
+import ProjectV.Core.Profiling;
+
+import std;
+import stdexec;
+
+namespace projectv::voxels {
+
+// Класс-интегратор Draco для ProjectV
+class DracoLoader {
+    projectv::core::memory::ArenaAllocator arena_;  // Arena аллокатор для временных буферов
+    draco::Decoder decoder_;
+    draco::Encoder encoder_;
+
+public:
+    explicit DracoLoader(projectv::core::memory::Allocator& parentAllocator) noexcept
+        : arena_(parentAllocator, "DracoArena", 16 * 1024 * 1024)  // 16MB арена для временных данных
+    {
+        PV_LOG_INFO("DracoLoader", "Инициализирован с ArenaAllocator (16MB)");
+    }
+
+    // Декодирование сжатых данных в mesh с интеграцией MemoryManager
+    [[nodiscard]] std::expected<std::unique_ptr<draco::Mesh>, std::string>
+    decodeMesh(std::span<const std::byte> compressed) noexcept {
+        ZoneScopedN("DracoDecodeMesh");
+        PV_LOG_DEBUG("DracoLoader", "Начало декодирования mesh ({} байт)", compressed.size());
+
+        // Используем ArenaAllocator для временного буфера декодирования
+        auto buffer = arena_.allocateAligned<draco::DecoderBuffer>(alignof(draco::DecoderBuffer));
+        if (!buffer) {
+            PV_LOG_ERROR("DracoLoader", "Не удалось выделить память для DecoderBuffer");
+            return std::unexpected("Memory allocation failed for DecoderBuffer");
+        }
+
+        buffer->Init(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+
+        auto result = decoder_.DecodeMeshFromBuffer(buffer.get());
+        arena_.deallocate(buffer.release());  // Освобождаем память обратно в арену
+
+        if (!result.ok()) {
+            PV_LOG_ERROR("DracoLoader", "Ошибка декодирования: {}", result.status().error_msg());
+            return std::unexpected(result.status().error_msg());
+        }
+
+        auto mesh = std::move(result).value();
+        PV_LOG_INFO("DracoLoader", "Успешно декодирован mesh: {} вершин, {} граней",
+                   mesh->num_points(), mesh->num_faces());
+
+        TracyPlot("Draco/VertexCount", static_cast<int64_t>(mesh->num_points()));
+        TracyPlot("Draco/FaceCount", static_cast<int64_t>(mesh->num_faces()));
+
+        return mesh;
+    }
+
+    // Асинхронное декодирование через stdexec
+    [[nodiscard]] stdexec::sender auto decodeMeshAsync(std::span<const std::byte> compressed) noexcept {
+        return stdexec::schedule(stdexec::get_scheduler())
+             | stdexec::then([this, data = std::vector<std::byte>(compressed.begin(), compressed.end())]()
+                   -> std::expected<std::unique_ptr<draco::Mesh>, std::string> {
+                return decodeMesh(data);
+             })
+             | stdexec::upon_error([](std::string error) {
+                PV_LOG_ERROR("DracoLoader", "Асинхронное декодирование завершилось ошибкой: {}", error);
+                return std::unexpected<std::unique_ptr<draco::Mesh>, std::string>(std::move(error));
+             });
+    }
+
+    // Кодирование mesh с адаптивными настройками для воксельных данных
+    [[nodiscard]] std::expected<std::vector<std::byte>, std::string>
+    encodeMesh(const draco::Mesh& mesh, bool optimizeForVoxels = true) noexcept {
+        ZoneScopedN("DracoEncodeMesh");
+        PV_LOG_DEBUG("DracoLoader", "Начало кодирования mesh: {} вершин, {} граней",
+                    mesh.num_points(), mesh.num_faces());
+
+        // Адаптивные настройки для воксельных данных
+        if (optimizeForVoxels) {
+            // Для воксельных данных используем более агрессивное квантование
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 10);  // 10 бит
+            encoder_.SetSpeedOptions(8, 10);  // Приоритет скорости декодирования
+            encoder_.SetEncodingMethod(draco::MESH_EDGEBREAKER_ENCODING);
+        } else {
+            // Для обычных 3D моделей
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::POSITION, 12);
+            encoder_.SetAttributeQuantization(draco::GeometryAttribute::NORMAL, 10);
+            encoder_.SetSpeedOptions(5, 7);
+        }
+
+        draco::EncoderBuffer buffer;
+        auto status = encoder_.EncodeMeshToBuffer(mesh, &buffer);
+
+        if (!status.ok()) {
+            PV_LOG_ERROR("DracoLoader", "Ошибка кодирования: {}", status.error_msg());
+            return std::unexpected(status.error_msg());
+        }
+
+        std::vector<std::byte> result(buffer.size());
+        std::memcpy(result.data(), buffer.data(), buffer.size());
+
+        float compressionRatio = static_cast<float>(mesh.num_points() * sizeof(float) * 3) / buffer.size();
+        PV_LOG_INFO("DracoLoader", "Успешно закодирован mesh: {} → {} байт (коэффициент сжатия: {:.1f}x)",
+                   mesh.num_points() * sizeof(float) * 3, buffer.size(), compressionRatio);
+
+        TracyPlot("Draco/CompressionRatio", static_cast<int64_t>(compressionRatio * 100));
+
+        return result;
+    }
+
+    // Очистка временных буферов в арене
+    void clearTemporaryBuffers() noexcept {
+        arena_.reset();
+        PV_LOG_DEBUG("DracoLoader", "Очищены временные буферы ArenaAllocator");
+    }
+
+    // Получение статистики использования памяти
+    [[nodiscard]] projectv::core::memory::AllocationStats getMemoryStats() const noexcept {
+        return arena_.getStats();
+    }
+};
+
+} // namespace projectv::voxels
+```
+
+**Архитектурная интеграция с ProjectV:**
+
+1. **C++26 Module:** Изоляция заголовков Draco через Global Module Fragment
+2. **MemoryManager Integration:** ArenaAllocator для временных буферов декодирования
+3. **Logging Integration:** `PV_LOG_*` макросы для мониторинга операций
+4. **Profiling Integration:** Tracy hooks для всех операций сжатия/распаковки
+5. **stdexec Integration:** Асинхронное декодирование через sender-based архитектуру
+
+### Архитектурный жизненный цикл геометрических данных в ProjectV
+
+```mermaid
+flowchart TD
+  A[Исходные геометрические данные<br/>Voxel Mesh / PointCloud] --> B[ProjectV DracoLoader<br/>ArenaAllocator для временных буферов]
+  B --> C[Draco Encoder<br/>адаптивное квантование для вокселей]
+  C --> D["Compressed .drc файл<br/>~10-20× сжатие с Tracy profiling"]
+  D --> E{Хранилище / Сеть}
+  E --> F[ProjectV DracoLoader<br/>асинхронное декодирование через stdexec]
+  F --> G[draco::Mesh<br/>восстановленные данные]
+  G --> H[Vulkan GPU Buffers<br/>zero-copy через VMA]
+  H --> I[ProjectV Render System<br/>графический pipeline с Flecs ECS]
+```
+
+**Архитектурные принципы интеграции в ProjectV:**
+
+- **Data-Oriented Design** — Draco работает с SoA (Structure of Arrays) представлением геометрических данных
+- **Zero-Copy Pipeline** — прямое декодирование в GPU memory через VMA аллокатор
+- **Asynchronous Processing** — декодирование через stdexec с приоритизацией по важности данных
+- **Sparse Data Optimization** — специализированные prediction schemes для sparse voxel структур
+- **MemoryManager Integration** — ArenaAllocator для временных буферов, PoolAllocator для частых операций
 
 ### Архитектурный жизненный цикл геометрических данных
 
@@ -86,29 +252,82 @@ protected:
 структуры данных в формат, понятный Draco, подобно тому как USB-адаптер преобразует различные типы разъёмов в
 стандартный USB-интерфейс.
 
-### 2. Интеграция с системой сборки CMake
+### 2. Интеграция с системой сборки CMake ProjectV
 
-Современные C++ проекты используют CMake с модульной архитектурой для внешних библиотек:
+ProjectV использует CMake с модульной архитектурой и полной интеграцией с MemoryManager, Logging и Profiling системами:
 
 ```cmake
-# В корневом CMakeLists.txt проекта
-include(cmake/ExternalLibraries.cmake)
+# В корневом CMakeLists.txt проекта ProjectV
+include(cmake/ProjectVExternalLibraries.cmake)
 
-# Draco настраивается с оптимизациями для конкретного use case
+# Настройка Draco с оптимизациями для воксельного движка
 setup_draco_library(
   ENABLE_TRANSCODER OFF      # Отключено для минимального runtime
   ENABLE_ANIMATION OFF       # Не требуется для статических геометрических данных
-  BUILD_EXECUTABLES OFF      # Только библиотека
-  OPTIMIZE_FOR_DECODING ON   # Оптимизация для декодирования (чаще используется)
-  USE_SIMD_OPTIMIZATIONS ON  # Использовать SIMD оптимизации
+  BUILD_EXECUTABLES OFF      # Только библиотека (без утилит командной строки)
+  OPTIMIZE_FOR_DECODING ON   # Оптимизация для декодирования (чаще используется в runtime)
+  USE_SIMD_OPTIMIZATIONS ON  # Использовать SIMD оптимизации для производительности
+  ENABLE_BACKWARDS_COMPATIBILITY OFF  # Отключить совместимость со старыми версиями
 )
 
-# Автоматическая интеграция с графическими API
-target_link_libraries(core_engine
+# Интеграция с ProjectV Core модулями
+target_link_libraries(projectv_core_draco
   PRIVATE
   draco::draco
-  GraphicsAPI::Core          # Абстракция над Vulkan/DirectX
-  ECS::Framework            # Абстракция над flecs/entt
+  projectv_core_memory      # MemoryManager для аллокации временных буферов
+  projectv_core_logging     # Система логирования для мониторинга операций
+  projectv_core_profiling   # Tracy для профилирования производительности
+  projectv_core_math        # Математические операции для воксельных данных
+  projectv_core_async       # stdexec для асинхронной обработки
+)
+
+# Настройка компилятора для C++26
+target_compile_features(projectv_core_draco PRIVATE cxx_std_26)
+target_compile_options(projectv_core_draco PRIVATE
+  /permissive-           # Строгий режим компиляции
+  /Zc:__cplusplus        # Корректный макрос __cplusplus
+  /Zc:inline             # Удаление неиспользуемых функций
+  /Zc:throwingNew        # Безопасный new с std::bad_alloc
+)
+
+# Интеграция с основным движком
+target_link_libraries(projectv_engine
+  PRIVATE
+  projectv_core_draco     # Draco интеграция
+  projectv_core_vulkan    # Vulkan 1.4 для GPU memory
+  projectv_core_flecs     # ECS для управления сущностями
+  projectv_core_voxels    # Воксельные алгоритмы
+)
+
+# Настройка аллокаторов памяти для Draco
+if (PROJECTV_ENABLE_MEMORY_MANAGER)
+  target_compile_definitions(projectv_core_draco PRIVATE
+    PROJECTV_DRACO_USE_MEMORY_MANAGER=1
+    PROJECTV_DRACO_ARENA_SIZE=16777216  # 16MB арена для временных буферов
+    PROJECTV_DRACO_POOL_SIZE=4194304    # 4MB пул для частых операций
+  )
+endif ()
+
+# Интеграция с Tracy профайлером
+if (PROJECTV_ENABLE_PROFILING)
+  target_compile_definitions(projectv_core_draco PRIVATE
+    PROJECTV_DRACO_ENABLE_PROFILING=1
+    TRACY_ENABLE=1
+    TRACY_ON_DEMAND=1
+  )
+  target_link_libraries(projectv_core_draco PRIVATE Tracy::TracyClient)
+endif ()
+
+# Настройка логирования
+target_compile_definitions(projectv_core_draco PRIVATE
+  PROJECTV_DRACO_LOG_LEVEL=2  # Info level по умолчанию
+  PROJECTV_DRACO_LOG_PREFIX="Draco"
+)
+
+# Экспорт модуля для использования в других частях проекта
+set_target_properties(projectv_core_draco PROPERTIES
+  CXX_MODULE_STD_INTERFACE ON
+  CXX_MODULE_EXPORT_ALL ON
 )
 ```
 
@@ -687,17 +906,17 @@ class StdexecJobSystemLoader : public IAsyncLoader {
 
     // stdexec scheduler для асинхронного выполнения
     stdexec::scheduler auto scheduler_;
-    
+
     // Очередь запросов с приоритетом (lock-free через атомарные операции)
     std::vector<InternalRequest> pendingRequests_;
     std::atomic<size_t> pendingCount_{0};
-    
+
     // Активные задачи как stdexec sender'ы
     struct ActiveTask {
         stdexec::sender auto sender;
         std::function<void(std::expected<std::unique_ptr<draco::Mesh>, std::string>)> callback;
     };
-    
+
     std::vector<ActiveTask> activeTasks_;
     draco::DecoderPool decoderPool_;
     std::atomic<size_t> activeTaskCount_{0};
@@ -716,19 +935,19 @@ public:
 
         // Атомарно добавляем в очередь
         size_t oldCount = pendingCount_.fetch_add(1, std::memory_order_acq_rel);
-        
+
         // В реальной реализации нужно использовать lock-free очередь
         // Для простоты примера используем вектор с атомарным счетчиком
         if (oldCount < pendingRequests_.capacity()) {
             pendingRequests_.push_back(std::move(internalRequest));
-            
+
             // Сортируем по приоритету (в реальной реализации это делалось бы при извлечении)
             std::sort(pendingRequests_.begin(), pendingRequests_.end(),
                 [](const InternalRequest& a, const InternalRequest& b) {
                     return a.priority > b.priority;
                 });
         }
-        
+
         // Запускаем обработку если есть свободные слоты
         processPendingRequests();
     }
@@ -742,12 +961,12 @@ public:
                 // Для простоты примера считаем, что sender уже завершился
                 return false; // Заглушка
             });
-        
+
         if (it != activeTasks_.end()) {
             activeTasks_.erase(it, activeTasks_.end());
             activeTaskCount_.store(activeTasks_.size(), std::memory_order_release);
         }
-        
+
         processPendingRequests();
     }
 
@@ -763,16 +982,16 @@ private:
     void processPendingRequests() noexcept {
         size_t maxConcurrent = decoderPool_.getMaxConcurrentTasks();
         size_t currentActive = activeTaskCount_.load(std::memory_order_acquire);
-        
+
         while (!pendingRequests_.empty() && currentActive < maxConcurrent) {
             // Извлекаем запрос с наивысшим приоритетом
             auto request = std::move(pendingRequests_.back());
             pendingRequests_.pop_back();
             pendingCount_.fetch_sub(1, std::memory_order_acq_rel);
-            
+
             // Создаем stdexec sender для декодирования
             auto decodeSender = stdexec::schedule(scheduler_)
-                | stdexec::then([this, data = std::move(request.compressedData)]() 
+                | stdexec::then([this, data = std::move(request.compressedData)]()
                     -> std::expected<std::unique_ptr<draco::Mesh>, std::string> {
                     auto decoder = decoderPool_.acquire();
                     draco::DecoderBuffer buffer;
@@ -789,7 +1008,7 @@ private:
                 | stdexec::upon_error([](std::string error) {
                     return std::unexpected<std::unique_ptr<draco::Mesh>, std::string>(std::move(error));
                 });
-            
+
             // Запускаем sender с обработкой результата
             stdexec::start_detached(
                 std::move(decodeSender),
@@ -797,7 +1016,7 @@ private:
                     callback(std::move(result));
                 }
             );
-            
+
             activeTaskCount_.fetch_add(1, std::memory_order_acq_rel);
             currentActive = activeTaskCount_.load(std::memory_order_acquire);
         }
@@ -828,7 +1047,7 @@ class LockFreeLruMeshCache : public IMeshCache {
         std::shared_ptr<draco::Mesh> mesh;
         std::atomic<std::chrono::steady_clock::time_point> lastAccess;
         size_t size;
-        
+
         CacheEntry(std::shared_ptr<draco::Mesh> m, size_t s)
             : mesh(std::move(m))
             , lastAccess(std::chrono::steady_clock::now())
@@ -841,7 +1060,7 @@ class LockFreeLruMeshCache : public IMeshCache {
     std::atomic<size_t> currentSize_{0};
     size_t maxSize_ = 1024 * 1024 * 1024;  // 1 GB по умолчанию
     draco::Decoder decoder_;
-    
+
     // Для thread-safe операций используем reader-writer lock-free подход
     std::atomic_flag modificationFlag_ = ATOMIC_FLAG_INIT;
 
@@ -854,7 +1073,7 @@ public:
             auto it = cache_.find(key);
             if (it != cache_.end()) {
                 // Обновляем время доступа атомарно
-                it->second->lastAccess.store(std::chrono::steady_clock::now(), 
+                it->second->lastAccess.store(std::chrono::steady_clock::now(),
                                            std::memory_order_release);
                 return it->second->mesh;
             }
@@ -883,7 +1102,7 @@ public:
             // Вместо yield используем stdexec::schedule для переключения контекста
             stdexec::schedule(scheduler_);
         }
-        
+
         // Проверяем еще раз (другой поток мог добавить тот же ключ)
         auto it = cache_.find(key);
         if (it != cache_.end()) {
@@ -893,7 +1112,7 @@ public:
             modificationFlag_.clear(std::memory_order_release);
             return it->second->mesh;
         }
-        
+
         // Добавляем новый элемент без исключений
         // Используем std::unique_ptr с явным созданием через new
         CacheEntry* rawEntry = new (std::nothrow) CacheEntry(mesh, meshSize);
@@ -902,11 +1121,11 @@ public:
             modificationFlag_.clear(std::memory_order_release);
             return nullptr;
         }
-        
+
         std::unique_ptr<CacheEntry> entry(rawEntry);
         cache_[key] = std::move(entry);
         currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
-        
+
         modificationFlag_.clear(std::memory_order_release);
         return mesh;
     }
@@ -917,10 +1136,10 @@ public:
             // Вместо yield используем stdexec::schedule для переключения контекста
             stdexec::schedule(scheduler_);
         }
-        
+
         cache_.clear();
         currentSize_.store(0, std::memory_order_release);
-        
+
         modificationFlag_.clear(std::memory_order_release);
     }
 
@@ -971,10 +1190,10 @@ private:
             std::chrono::steady_clock::time_point lastAccess;
             size_t size;
         };
-        
+
         std::vector<EntryInfo> entries;
         entries.reserve(cache_.size());
-        
+
         for (const auto& [key, entry] : cache_) {
             entries.push_back({
                 key,
@@ -982,29 +1201,29 @@ private:
                 entry->size
             });
         }
-        
+
         // Сортируем по времени доступа (старые сначала)
         std::sort(entries.begin(), entries.end(),
             [](const EntryInfo& a, const EntryInfo& b) {
                 return a.lastAccess < b.lastAccess;
             });
-        
+
         // Удаляем старые элементы пока не освободим достаточно места
         size_t spaceToFree = (current + requiredSize) - maxSize_;
         size_t freed = 0;
-        
+
         for (const auto& entry : entries) {
             if (freed >= spaceToFree) {
                 break;
             }
-            
+
             auto it = cache_.find(entry.key);
             if (it != cache_.end()) {
                 freed += it->second->size;
                 cache_.erase(it);
             }
         }
-        
+
         currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
         modificationFlag_.clear(std::memory_order_release);
     }
@@ -1444,7 +1663,7 @@ class StdexecPriorityBasedLoader {
 
     // stdexec scheduler для асинхронного выполнения
     stdexec::scheduler auto scheduler_;
-    
+
     // Очередь задач с приоритетом (lock-free через атомарные операции)
     struct TaskQueue {
         std::vector<LoadTask> criticalTasks_;
@@ -1452,9 +1671,9 @@ class StdexecPriorityBasedLoader {
         std::vector<LoadTask> mediumTasks_;
         std::vector<LoadTask> lowTasks_;
         std::vector<LoadTask> backgroundTasks_;
-        
+
         std::atomic<size_t> totalCount_{0};
-        
+
         void push(LoadTask task) noexcept {
             switch (task.priority) {
                 case Priority::Critical:
@@ -1475,7 +1694,7 @@ class StdexecPriorityBasedLoader {
             }
             totalCount_.fetch_add(1, std::memory_order_acq_rel);
         }
-        
+
         std::optional<LoadTask> pop() noexcept {
             if (!criticalTasks_.empty()) {
                 auto task = std::move(criticalTasks_.back());
@@ -1509,16 +1728,16 @@ class StdexecPriorityBasedLoader {
             }
             return std::nullopt;
         }
-        
+
         size_t size() const noexcept {
             return totalCount_.load(std::memory_order_acquire);
         }
-        
+
         bool empty() const noexcept {
             return size() == 0;
         }
     };
-    
+
     TaskQueue pendingTasks_;
     draco::DecoderPool decoderPool_;
     size_t maxConcurrentTasks_;
@@ -1531,7 +1750,7 @@ public:
     void submitLoadTask(LoadTask task) noexcept {
         task.submitTime = std::chrono::steady_clock::now();
         pendingTasks_.push(std::move(task));
-        
+
         // Запускаем обработку если есть свободные слоты
         processPendingTasks();
     }
@@ -1545,18 +1764,18 @@ public:
 private:
     void processPendingTasks() noexcept {
         size_t currentActive = activeTaskCount_.load(std::memory_order_acquire);
-        
+
         while (!pendingTasks_.empty() && currentActive < maxConcurrentTasks_) {
             auto taskOpt = pendingTasks_.pop();
             if (!taskOpt) {
                 break;
             }
-            
+
             auto task = std::move(*taskOpt);
-            
+
             // Создаем stdexec sender для декодирования
             auto decodeSender = stdexec::schedule(scheduler_)
-                | stdexec::then([this, data = std::move(task.compressedData)]() 
+                | stdexec::then([this, data = std::move(task.compressedData)]()
                     -> std::expected<std::unique_ptr<draco::Mesh>, std::string> {
                     auto decoder = decoderPool_.acquire();
                     draco::DecoderBuffer buffer;
@@ -1573,7 +1792,7 @@ private:
                 | stdexec::upon_error([](std::string error) {
                     return std::unexpected<std::unique_ptr<draco::Mesh>, std::string>(std::move(error));
                 });
-            
+
             // Запускаем sender с обработкой результата
             stdexec::start_detached(
                 std::move(decodeSender),
@@ -1584,7 +1803,7 @@ private:
                     processPendingTasks();
                 }
             );
-            
+
             activeTaskCount_.fetch_add(1, std::memory_order_acq_rel);
             currentActive = activeTaskCount_.load(std::memory_order_acquire);
         }
@@ -1804,7 +2023,7 @@ class LockFreeAdaptiveMeshCache : public IMeshCache {
         size_t size;
         std::atomic<uint32_t> accessCount;      // Количество обращений
         std::atomic<float> importanceScore;     // Оценка важности (на основе частоты и времени)
-        
+
         AdaptiveCacheEntry(std::shared_ptr<draco::Mesh> m, size_t s, float initialImportance)
             : mesh(std::move(m))
             , lastAccess(std::chrono::steady_clock::now())
@@ -1819,10 +2038,10 @@ class LockFreeAdaptiveMeshCache : public IMeshCache {
     size_t maxSize_;
     draco::Decoder decoder_;
     CacheWorkload currentWorkload_;
-    
+
     // Для thread-safe операций используем reader-writer lock-free подход
     std::atomic_flag modificationFlag_ = ATOMIC_FLAG_INIT;
-    
+
     // stdexec scheduler для асинхронного выполнения (вместо yield)
     stdexec::scheduler auto scheduler_;
 
@@ -1837,7 +2056,7 @@ public:
             auto it = cache_.find(key);
             if (it != cache_.end()) {
                 // Обновляем статистику доступа атомарно
-                it->second->lastAccess.store(std::chrono::steady_clock::now(), 
+                it->second->lastAccess.store(std::chrono::steady_clock::now(),
                                            std::memory_order_release);
                 it->second->accessCount.fetch_add(1, std::memory_order_acq_rel);
                 updateImportanceScore(*it->second);
@@ -1867,7 +2086,7 @@ public:
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
             stdexec::schedule(scheduler_);
         }
-        
+
         // Проверяем еще раз (другой поток мог добавить тот же ключ)
         auto it = cache_.find(key);
         if (it != cache_.end()) {
@@ -1879,7 +2098,7 @@ public:
             modificationFlag_.clear(std::memory_order_release);
             return it->second->mesh;
         }
-        
+
         // Добавляем новый элемент
         cache_[key] = std::make_unique<AdaptiveCacheEntry>(mesh, meshSize, initialImportance);
         currentSize_.fetch_add(meshSize, std::memory_order_acq_rel);
@@ -1891,10 +2110,10 @@ public:
         while (modificationFlag_.test_and_set(std::memory_order_acquire)) {
             stdexec::schedule(scheduler_);
         }
-        
+
         cache_.clear();
         currentSize_.store(0, std::memory_order_release);
-        
+
         modificationFlag_.clear(std::memory_order_release);
     }
 
@@ -1918,7 +2137,7 @@ private:
         auto lastAccess = entry.lastAccess.load(std::memory_order_acquire);
         auto timeSinceAccess = std::chrono::duration_cast<std::chrono::seconds>(
             now - lastAccess).count();
-        
+
         uint32_t accessCount = entry.accessCount.load(std::memory_order_acquire);
         float newScore = 0.0f;
 
@@ -1944,7 +2163,7 @@ private:
                 newScore = calculateMixedImportance(entry, timeSinceAccess, accessCount);
                 break;
         }
-        
+
         entry.importanceScore.store(newScore, std::memory_order_release);
     }
 
@@ -1965,10 +2184,10 @@ private:
             float importanceScore;
             size_t size;
         };
-        
+
         std::vector<EntryInfo> entries;
         entries.reserve(cache_.size());
-        
+
         for (const auto& [key, entry] : cache_) {
             entries.push_back({
                 key,
@@ -1976,29 +2195,29 @@ private:
                 entry->size
             });
         }
-        
+
         // Сортируем по важности (наименее важные сначала)
         std::sort(entries.begin(), entries.end(),
             [](const EntryInfo& a, const EntryInfo& b) {
                 return a.importanceScore < b.importanceScore;
             });
-        
+
         // Удаляем наименее важные элементы пока не освободим достаточно места
         size_t spaceToFree = (current + requiredSize) - maxSize_;
         size_t freed = 0;
-        
+
         for (const auto& entry : entries) {
             if (freed >= spaceToFree) {
                 break;
             }
-            
+
             auto it = cache_.find(entry.key);
             if (it != cache_.end()) {
                 freed += it->second->size;
                 cache_.erase(it);
             }
         }
-        
+
         currentSize_.fetch_sub(freed, std::memory_order_acq_rel);
         modificationFlag_.clear(std::memory_order_release);
     }
@@ -2017,21 +2236,21 @@ private:
 
         return size;
     }
-    
+
     float calculateInitialImportance(const std::string& key) const noexcept {
         // Простая начальная оценка важности
         // В реальной реализации можно использовать дополнительные факторы
         return 1.0f;
     }
-    
-    float calculateMixedImportance(const AdaptiveCacheEntry& entry, 
-                                  long long timeSinceAccess, 
+
+    float calculateMixedImportance(const AdaptiveCacheEntry& entry,
+                                  long long timeSinceAccess,
                                   uint32_t accessCount) const noexcept {
         // Адаптивная формула для смешанного workload
         float timeFactor = 1.0f / (timeSinceAccess + 1);
         float sizeFactor = 1.0f - (static_cast<float>(entry.size) / maxSize_);
         float frequencyFactor = std::log1p(static_cast<float>(accessCount));
-        
+
         return timeFactor * 0.4f + frequencyFactor * 0.4f + sizeFactor * 0.2f;
     }
 };
@@ -2049,8 +2268,8 @@ class LockFreeRuntimeMonitor {
         std::atomic<float> networkBandwidth;      // Доступная bandwidth сети
         std::atomic<uint32_t> concurrentDecodes;  // Количество concurrent декодирований
         std::atomic<std::chrono::steady_clock::time_point> lastUpdate;
-        
-        PerformanceMetrics() 
+
+        PerformanceMetrics()
             : decodeTimeMs(0.0f)
             , cacheHitRate(0.0f)
             , memoryUsage(0)
@@ -2107,7 +2326,7 @@ public:
         auto lastUpdate = currentMetrics_.lastUpdate.load(std::memory_order_acquire);
         auto now = std::chrono::steady_clock::now();
         auto timeSinceUpdate = std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate);
-        
+
         if (timeSinceUpdate > std::chrono::seconds(5)) {
             suggestions.suggestEnablePrefetching();  // Если данные устарели, включаем предзагрузку
         }
@@ -2133,7 +2352,7 @@ public:
             if (reduceConcurrency) result += "• Уменьшить concurrency декодирования\n";
             return result;
         }
-        
+
         void suggestLowerQuality() { lowerQuality = true; }
         void suggestIncreaseCacheSize() { increaseCacheSize = true; }
         void suggestAggressiveCaching() { aggressiveCaching = true; }
@@ -2141,7 +2360,7 @@ public:
         void suggestEnablePrefetching() { enablePrefetching = true; }
         void suggestReduceConcurrency() { reduceConcurrency = true; }
     };
-    
+
 private:
     [[nodiscard]] size_t getAvailableMemory() const noexcept {
         // В реальной реализации нужно получить доступную память системы
