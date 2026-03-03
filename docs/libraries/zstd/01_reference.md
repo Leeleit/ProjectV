@@ -282,9 +282,8 @@ public:
     explicit ZstdCompressor(int level = 3) : level_(level) {
         cctx_ = ZSTD_createCCtx();
         if (!cctx_) {
-            // В ProjectV используем std::expected вместо throw
-            // Пример правильного подхода:
-            // return std::unexpected("Failed to create compression context");
+            // Обработка ошибки создания контекста
+            // В реальном коде следует вернуть ошибку через std::expected
         }
         ZSTD_CCtx_setParameter(cctx_, ZSTD_c_compressionLevel, level);
     }
@@ -338,9 +337,8 @@ public:
     ZstdDecompressor() {
         dctx_ = ZSTD_createDCtx();
         if (!dctx_) {
-            // В ProjectV используем std::expected вместо throw
-            // Пример правильного подхода:
-            // return std::unexpected("Failed to create decompression context");
+            // Обработка ошибки создания контекста
+            // В реальном коде следует вернуть ошибку через std::expected
         }
     }
 
@@ -415,9 +413,8 @@ public:
     {
         cctx_ = ZSTD_createCStream();
         if (!cctx_) {
-            // В ProjectV используем std::expected вместо throw
-            // Пример правильного подхода:
-            // return std::unexpected("Failed to create stream");
+            // Обработка ошибки создания контекста
+            // В реальном коде следует вернуть ошибку через std::expected
         }
 
         ZSTD_initCStream(cctx_, level);
@@ -509,9 +506,8 @@ public:
     ZstdStreamingDecompressor() {
         dctx_ = ZSTD_createDStream();
         if (!dctx_) {
-            // В ProjectV используем std::expected вместо throw
-            // Пример правильного подхода:
-            // return std::unexpected("Failed to create stream");
+            // Обработка ошибки создания контекста
+            // В реальном коде следует вернуть ошибку через std::expected
         }
 
         ZSTD_initDStream(dctx_);
