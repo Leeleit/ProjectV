@@ -46,3 +46,6 @@
 [submodule "external/freetype"]
 	path = external/freetype
 	url = https://github.com/freetype/freetype.git
+[submodule "external/stdexec"]
+	path = external/stdexec
+	url = https://github.com/NVIDIA/stdexec.git
