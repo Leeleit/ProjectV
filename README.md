@@ -5,7 +5,8 @@
 1. Установить [Clion](https://www.jetbrains.com/clion/download/download-thanks.html?platform=windows) (нужен VPN) (это
    платная программа. Чтобы активировать, следуйте инструкции на [сайте](https://306.antroot.ru/jetbrains-activation)) (
    вы можете использовать любой другой редактор/IDE, но Clion, я считаю, – лучший вариант)
-2. Установить [LLVM](https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-win64.exe)
+2. Установить [LLVM](https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-win64.exe)  (
+   можно сначала 2, а потом 1)
 3. Установить [Microsoft Visual Studio Build Tools 2026](https://aka.ms/vs/stable/vs_BuildTools.exe)
 4. Установить Ninja (через PowerShell):
 
@@ -36,4 +37,4 @@ git clone --recurse-submodules https://github.com/Leeleit/ProjectV
 
 ---
 
-### Вопросы? Пишите мне, так называемому тимлиду.
+### Вопросы? Пишите мне, так называемому тимлиду...

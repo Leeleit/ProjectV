@@ -14,6 +14,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 #----------------------------------------------------------
 
+set(SDL_STATIC ON CACHE BOOL "Static linking for SDL3" FORCE)
+set(SDL_SHARED OFF CACHE BOOL "Disable shared library" FORCE)
+add_subdirectory(external/SDL)
+
+#----------------------------------------------------------
+
 add_executable(ProjectV
         src/main.cpp
         # Add new files here
@@ -26,11 +32,11 @@ target_sources(ProjectV
 
 target_compile_options(ProjectV PRIVATE
         /W4
-        /WX
+        #/WX
         /permissive-
         /utf-8
 )
 
 target_link_libraries(ProjectV PRIVATE
-        # Add new libs here
+        SDL3::SDL3
 )
