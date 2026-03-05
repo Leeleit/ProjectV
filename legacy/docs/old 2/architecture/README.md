@@ -45,17 +45,19 @@
 
 ### 📦 01_core/ — Базовая архитектура
 
-| # | Документ                                                      | Описание                                    |
-|---|---------------------------------------------------------------|---------------------------------------------|
-| 1 | [Engine Structure](practice/01_core/01_engine_structure.md)   | Структура движка, C++26 Modules             |
-| 2 | [Core Loop](practice/01_core/02_core_loop.md)                 | Гибридный игровой цикл с SDL, Vulkan, Flecs |
-| 3 | [Engine Bootstrap](practice/01_core/03_engine_bootstrap.md)   | Инициализация и запуск движка               |
-| 4 | [Custom Allocators](practice/01_core/04_custom_allocators.md) | Аллокаторы для горячих путей                |
-| 5 | [Job System](practice/01_core/05_job_system.md)               | P2300 std::execution integration            |
-| 6 | [Zero Copy Memory](practice/01_core/06_zero_copy_memory.md)   | Разделение памяти CPU/GPU                   |
-| 7 | [Error Handling](practice/01_core/07_error_handling.md)       | std::expected, error propagation            |
-| 8 | [Shutdown Sequence](practice/01_core/08_shutdown_sequence.md) | Корректное завершение работы                |
-| 9 | [C++26 Reality](practice/01_core/09_cpp26_reality.md)         | Glaze/PFR, PIMPL, modules workarounds       |
+| #  | Документ                                                      | Описание                                    |
+|----|---------------------------------------------------------------|---------------------------------------------|
+| 0a | [Engine Structure](practice/00_engine-structure.md)           | Структура движка, C++26 Modules             |
+| 0b | [SVO Architecture](practice/00_svo-architecture.md)           | SVO + Chunks hybrid, std::mdspan 🔴         |
+| 1  | [Engine Structure](practice/01_core/01_engine_structure.md)   | Структура движка, C++26 Modules             |
+| 2  | [Core Loop](practice/01_core/02_core_loop.md)                 | Гибридный игровой цикл с SDL, Vulkan, Flecs |
+| 3  | [Engine Bootstrap](practice/01_core/03_engine_bootstrap.md)   | Инициализация и запуск движка               |
+| 4  | [Custom Allocators](practice/01_core/04_custom_allocators.md) | Аллокаторы для горячих путей                |
+| 5  | [Job System](practice/01_core/05_job_system.md)               | P2300 std::execution integration            |
+| 6  | [Zero Copy Memory](practice/01_core/06_zero_copy_memory.md)   | Разделение памяти CPU/GPU                   |
+| 7  | [Error Handling](practice/01_core/07_error_handling.md)       | std::expected, error propagation            |
+| 8  | [Shutdown Sequence](practice/01_core/08_shutdown_sequence.md) | Корректное завершение работы                |
+| 9  | [C++26 Reality](practice/01_core/09_cpp26_reality.md)         | Glaze/PFR, PIMPL, modules workarounds       |
 
 ### 🎨 02_render/ — Vulkan и рендеринг
 
@@ -77,15 +79,16 @@
 
 ### ⚡ 04_physics_ca/ — Физика и Cellular Automata
 
-| # | Документ                                                                            | Описание                             |
-|---|-------------------------------------------------------------------------------------|--------------------------------------|
-| 1 | [Jolt-Vulkan Bridge](practice/04_physics_ca/01_jolt_vulkan_bridge.md)               | Синхронизация физики и рендеринга    |
-| 2 | [Physics-Voxel Integration](practice/04_physics_ca/02_physics_voxel_integration.md) | Интеграция физики с вокселями        |
-| 3 | [GPU Cellular Automata](practice/04_physics_ca/03_gpu_cellular_automata.md)         | CA для жидкостей/сыпучих/огня 🔴     |
-| 4 | [CPU-GPU Physics Sync](practice/04_physics_ca/04_cpu_gpu_physics_sync.md)           | Синхронизация физики между CPU и GPU |
-| 5 | [Destruction Physics](practice/04_physics_ca/05_destruction_physics.md)             | Разрушение воксельных объектов       |
-| 6 | [CA-Physics Bridge](practice/04_physics_ca/06_ca_physics_bridge.md)                 | Мост между CA и физикой              |
-| 7 | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты 🔴   |
+| #  | Документ                                                                            | Описание                             |
+|----|-------------------------------------------------------------------------------------|--------------------------------------|
+| 1  | [Jolt-Vulkan Bridge](practice/04_physics_ca/01_jolt_vulkan_bridge.md)               | Синхронизация физики и рендеринга    |
+| 2  | [Physics-Voxel Integration](practice/04_physics_ca/02_physics_voxel_integration.md) | Интеграция физики с вокселями        |
+| 3  | [GPU Cellular Automata](practice/04_physics_ca/03_gpu_cellular_automata.md)         | CA для жидкостей/сыпучих/огня 🔴     |
+| 4  | [CPU-GPU Physics Sync](practice/04_physics_ca/04_cpu_gpu_physics_sync.md)           | Синхронизация физики между CPU и GPU |
+| 15 | [GPU Debugging](practice/15_gpu-debugging.md)                                       | RenderDoc, NVIDIA Nsight 🔴          |
+| 5  | [Destruction Physics](practice/04_physics_ca/05_destruction_physics.md)             | Разрушение воксельных объектов       |
+| 6  | [CA-Physics Bridge](practice/04_physics_ca/06_ca_physics_bridge.md)                 | Мост между CA и физикой              |
+| 7  | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты 🔴   |
 
 ### 🎮 05_ecs_gameplay/ — ECS и Gameplay
 
@@ -167,6 +170,11 @@ practice/03_voxel/02_voxel_pipeline.md → practice/04_physics_ca/03_gpu_cellula
 |------------|---------------------------------------------------------------------------|
 | SDL3       | [sdl_integration_spec.md](../libraries/sdl/sdl_integration_spec.md)       |
 | Slang      | [slang_integration_spec.md](../libraries/slang/slang_integration_spec.md) |
+
+### Руководства
+
+- **[C++ Handbook](../guides/cpp/00_overview.md)** — Modern C++ для движка
+- **[CMake Guide](../guides/cmake/00_overview.md)** — Сборка проекта
 
 ### Философия
 
