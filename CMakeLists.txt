@@ -32,5 +32,5 @@ target_compile_options(ProjectV PRIVATE
 )
 
 target_link_libraries(ProjectV PRIVATE
-        # Add new files here
+        # Add new libs here
 )
