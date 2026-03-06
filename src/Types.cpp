@@ -8,7 +8,7 @@ AppState::~AppState()
 	if (device)
 		vkDeviceWaitIdle(device);
 
-	// Очищаем swapchain (тут можно вставить логику из твоей CleanupSwapchain)
+	// Очищаем swapchain
 	if (device) {
 		for (const auto iv : swapchainImageViews)
 			vkDestroyImageView(device, iv, nullptr);

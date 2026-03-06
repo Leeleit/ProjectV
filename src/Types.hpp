@@ -2,11 +2,10 @@
 #define TYPES_HPP
 
 // ------ include--блок ------
-
-#define SDL_MAIN_USE_CALLBACKS 1 // Чтобы обходиться без main()
-#include "SDL3/SDL.h"			 // SDL3 тАУ ╨▒╨╕╨▒╨╗╨╕╨╛╤В╨╡╨║╨░ ╨┤╨╗╤П ╤А╨╕╤Б╨╛╨▓╨░╨╜╨╕╤П ╨╛╨║╨╛╨╜ ╨╕ ╨║╨╛╤Б╤В╤П╨║ ╨┤╨╗╤П ╨╛╨▒╤А╨░╨▒╨╛╤В╨║╨╕ ╤А╨╡╨╜╨┤╨╡╤А╨░ (╤Б ╨┐╨╛╨╝╨╛╤Й╤М╤О ╨╜╨╡╨│╨╛ ╤Б╨╛╨╖╨┤╨░╤О╤В╤Б╤П ╨▒╨░╨╖╨╛╨▓╤Л╨╡ ╤Д╤Г╨╜╨║╤Ж╨╕╨╕: event, iterate)
-#include "SDL3/SDL_vulkan.h"	 // ╨е╤Н╨┤╨╡╤А╤Л ╨┤╨╗╤П ╨┐╨╛╨┤╨┤╨╡╤А╨╢╨║╨╕ ╤А╨░╨▒╨╛╤В╤Л ╤Б Vulkan
-#include "volk.h"				 // Volk. ╨Т ╨╜╤С╨╝ ╤Г╨╢╨╡ ╨╕╨╜╨║╨╗╤О╨┤╨╕╤В╤Б╤П Vulkan
+#define SDL_MAIN_USE_CALLBACKS 1 // А надо ли?
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_vulkan.h"
+#include "volk.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #include "vma/vk_mem_alloc.h" // Хэдеры VMA
@@ -26,21 +25,22 @@ struct AppState {
 	bool windowResized = false;	  // Флаг-сигнализатор. Когда пользователь тянет за край окна, SDL шлёт событие. Мы меняем этот флаг на true, чтобы в следующей итерации SDL_AppIterate понять: "Опа, размер изменился, нужно пересоздать Swapchain (цепочку образов)"
 
 	// 2. Ядро Vulkan (Инфраструктура). Эти объекты — основа Vulkan. Без них ничего не работает
-	VkInstance instance = VK_NULL_HANDLE; // Точка входа в библиотеку Vulkan
-	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;			  // Связующее звено между Vulkan и окном (SDL)
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE; // Физическая видеокарта
-	VkDevice device = VK_NULL_HANDLE;				  // и её логическое представление в программе
-	VkQueue queue = VK_NULL_HANDLE;					  // Очередь команд. Видеокарта работает асинхронно, мы «кидаем» ей приказы в эту очередь
-	uint32_t queueFamilyIndex = 0;
-	VmaAllocator allocator = VK_NULL_HANDLE; // Вспомогательный инструмент для управления памятью видеокарты (аллокатор)
+	VkInstance instance = VK_NULL_HANDLE;					  // Точка входа в библиотеку Vulkan
+	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE; // Поле для дебага с помощью Validation Layers
+	VkSurfaceKHR surface = VK_NULL_HANDLE;					  // Связующее звено между Vulkan и окном (SDL)
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;		  // Физическая видеокарта
+	VkDevice device = VK_NULL_HANDLE;						  // и её логическое представление в программе
+	VkQueue queue = VK_NULL_HANDLE;							  // Очередь команд. Видеокарта работает асинхронно, мы «кидаем» ей приказы в эту очередь
+	uint32_t queueFamilyIndex = 0;							  // индекс семейства очередей на видеокарте, который говорит Vulkan: “вот из какого типа очередей я хочу создавать queue, commandPool и с какими очередями будут совместимы мои command buffer’ы”
+	VmaAllocator allocator = VK_NULL_HANDLE;				  // Вспомогательный инструмент для управления памятью видеокарты (аллокатор)
 
-	VkSwapchainKHR swapchain = VK_NULL_HANDLE;		// Сама цепочка (обычно 2 или 3 изображения, которые мы «крутим» перед пользователем)
-	VkFormat swapchainFormat = VK_FORMAT_UNDEFINED; // Информация о формате пикселей (например, RGBA)
-	VkColorSpaceKHR swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	VkExtent2D extent = {};				  // Текущее разрешение окна в пикселях
-	std::vector<VkImage> swapchainImages; // Массивы изображений, куда мы рисуем, и их «виды» (view), через которые мы получаем доступ к пикселям
-	std::vector<VkImageView> swapchainImageViews;
+	// 3. Цепь изображений
+	VkSwapchainKHR swapchain = VK_NULL_HANDLE;								 // Сама цепочка (обычно 2 или 3 изображения, которые мы «крутим» перед пользователем)
+	VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;							 // Информация о формате пикселей (например, RGBA)
+	VkColorSpaceKHR swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR; // Цветовое пространство sRGB
+	VkExtent2D extent = {};													 // Текущее разрешение окна в пикселях
+	std::vector<VkImage> swapchainImages;									 // Массивы изображений, куда мы рисуем
+	std::vector<VkImageView> swapchainImageViews;							 // и их «виды» (view), через которые мы получаем доступ к пикселям
 
 	// 4. Отрисовка
 	VkCommandPool commandPool = VK_NULL_HANDLE; // "Бассейн" для хранения команд отрисовки
