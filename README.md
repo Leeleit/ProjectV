@@ -33,7 +33,15 @@ git clone --recurse-submodules https://github.com/Leeleit/ProjectV
 9. ???
 10. PROFIT!
 
-### **Данный гайд был успешно проверен на компе Пети, поэтому у остальных всё тоже должно работать**
+#### Опционально:
+
+1. Настроить clang-format и clang-tidy (снизу справа в нижней панели)
+2. Настроить быстрый reformat (Настройки -> Keymap -> ищем Reformat Code, назначаем комбинацию для быстрого реформата)
+3. Настроить красивые шрифт и тему (Я
+   использую [Monocraft](https://github.com/IdreesInc/Monocraft/releases/download/v4.2.1/Monocraft-ttf.zip) и
+   тему [Islands] Gerry Violet (в плагинах Clion устанавливается, называется Gerry Themes))
+
+### **Данный гайд был успешно проверен на компе Пети, поэтому у остальных всё тоже должно работать.**
 
 ---
 
