@@ -2,11 +2,15 @@
 #include "VulkanInit.hpp"
 
 // STL блок (стандартные библиотеки)
-#include <algorithm> // Для std::clamp, std::max
-#include <cstring>	 // Для std::strcmp
+#include <algorithm> // std::clamp, std::max
+#include <array>
+#include <cstring> // std::strcmp
 #include <memory>
+#include <string>
 #include <vector>
 // --- Конец include-блока ---
+
+inline constexpr char PROJECT_NAME[] = "ProjectV v0.0.1";
 
 #ifndef NDEBUG
 static constexpr bool kEnableValidation = true;
@@ -14,14 +18,9 @@ static constexpr bool kEnableValidation = true;
 static constexpr bool kEnableValidation = false;
 #endif
 
-static const std::vector<const char *> kValidationLayers = {
-	"VK_LAYER_KHRONOS_validation"};
+static constexpr std::array<const char *, 1> kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
-	const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-	const VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-	const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-	void *)
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, const VkDebugUtilsMessageTypeFlagsEXT messageTypes, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *)
 {
 	SDL_Log("Vulkan validation: [%u][%u] %s",
 			static_cast<unsigned>(messageSeverity),
@@ -109,7 +108,7 @@ void CleanupSwapchain(AppState *state)
 // Эта функция — «сердце» графического конвейера Vulkan. Именно здесь создаются поверхности для рисования, которые мы видим на мониторе. В Vulkan нельзя рисовать прямо «в окно» — нужно создавать Swapchain (цепочку образов), куда GPU будет записывать готовые кадры
 bool createSwapchain(AppState *state)
 {
-	VkSurfaceCapabilitiesKHR caps = {}; // Мы запрашиваем у видеодрайвера, что он вообще умеет делать с нашим окном (например, минимальный/максимальный размер, поддерживаемые трансформации — поворот экрана, отражение и т.д.)
+	VkSurfaceCapabilitiesKHR caps; // Мы запрашиваем у видеодрайвера, что он вообще умеет делать с нашим окном (например, минимальный/максимальный размер, поддерживаемые трансформации — поворот экрана, отражение и т.д.)
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(state->physicalDevice, state->surface, &caps);
 
 	if (caps.currentExtent.width != 0xFFFFFFFF) { // Если width не равен 0xFFFFFFFF, значит, оконный менеджер (ОС) жестко диктует нам размер. Мы обязаны его принять
@@ -131,8 +130,7 @@ bool createSwapchain(AppState *state)
 	uint32_t presentModeCount = 0;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(state->physicalDevice, state->surface, &presentModeCount, nullptr);
 	std::vector<VkPresentModeKHR> presentModes(presentModeCount);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(state->physicalDevice, state->surface, &presentModeCount,
-											  presentModes.data());
+	vkGetPhysicalDeviceSurfacePresentModesKHR(state->physicalDevice, state->surface, &presentModeCount, presentModes.data());
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
 	for (const VkPresentModeKHR pm : presentModes) {
 		if (pm == VK_PRESENT_MODE_MAILBOX_KHR) {
@@ -147,7 +145,7 @@ bool createSwapchain(AppState *state)
 		imageCount = caps.maxImageCount;
 	}
 
-	VkSwapchainCreateInfoKHR swapchainInfo = {};
+	VkSwapchainCreateInfoKHR swapchainInfo;
 	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchainInfo.surface = state->surface;							  // К какому окну привязываем
 	swapchainInfo.minImageCount = imageCount;						  // Сколько картинок в конвейере
@@ -223,8 +221,7 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 
-	state->window = SDL_CreateWindow("ProjectV v0.0.1", 1280, 720,
-									 SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+	state->window = SDL_CreateWindow(PROJECT_NAME, 1280, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 	if (!state->window) {
 		SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
 		return false;
@@ -274,7 +271,7 @@ bool InitVulkan(AppState *state)
 		instanceCreateInfo.pNext = &debugCreateInfo;
 	}
 
-	if (vkCreateInstance(&instanceCreateInfo, nullptr, &state->instance) != VK_SUCCESS) { // Первый аргумент — наша заполненная "анкета" (instanceCreateInfo). Второй (nullptr) — это аллокатор памяти (мы разрешаем Vulkan самому выделять память, поэтому nullptr). Третий (&state->instance) — это указатель, куда Vulkan запишет хэндл (уникальный идентификатор) созданного инстанса. Если результат не VK_SUCCESS, значит, инстанс создать не удалось (например, нет нужных драйверов)
+	if (vkCreateInstance(&instanceCreateInfo, nullptr, &state->instance) != VK_SUCCESS) { // Первый аргумент — наша заполненная "анкета" (instanceCreateInfo). Второй (nullptr) — это аллокатор памяти (мы разрешаем Vulkan самому выделять память, поэтому nullptr). Третий (&state->instance) — это указатель, куда Vulkan запишет хэндл (уникальный идентификатор) созданного инстанса
 		SDL_Log("vkCreateInstance failed");
 		return false;
 	}
@@ -350,10 +347,10 @@ bool InitVulkan(AppState *state)
 	state->swapchainColorSpace = formats[0].colorSpace;
 
 	// Перебираем все доступные варианты. Ищем VK_FORMAT_B8G8R8A8_SRGB для автоматической гамма-коррекции при записи в Swapchain
-	for (const auto &f : formats) {
-		if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-			state->swapchainFormat = f.format;
-			state->swapchainColorSpace = f.colorSpace;
+	for (const auto &[format, colorSpace] : formats) {
+		if (format == VK_FORMAT_B8G8R8A8_SRGB && colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			state->swapchainFormat = format;
+			state->swapchainColorSpace = colorSpace;
 			break;
 		}
 	}
@@ -369,8 +366,8 @@ bool InitVulkan(AppState *state)
 
 	// Ищем среди расширений специальное: "VK_KHR_portability_subset"
 	bool hasPortabilitySubset = false;
-	for (const auto &ext : availableDevExts) {
-		if (std::strcmp(ext.extensionName, "VK_KHR_portability_subset") == 0) {
+	for (const auto &[extensionName, specVersion] : availableDevExts) {
+		if (std::strcmp(extensionName, "VK_KHR_portability_subset") == 0) {
 			hasPortabilitySubset = true;
 			break;
 		}
@@ -389,7 +386,7 @@ bool InitVulkan(AppState *state)
 	queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	queueInfo.queueFamilyIndex = state->queueFamilyIndex; // выбранное семейство очередей (из шага 5)
 	queueInfo.queueCount = 1;							  // создаём 1 очередь из этого семейства
-	queueInfo.pQueuePriorities = &queuePriority;		  // указатель на массив приоритетов (длина = queueCount)
+	queueInfo.pQueuePriorities = &queuePriority;		  // указатель на массив приоритетов
 
 	// Параметры создания логического устройства VkDevice. В Vulkan 1.4 фичи Dynamic Rendering и Synchronization2 встроены в ядро, но по умолчанию они выключены. Мы создаём структуру для их активации
 	VkPhysicalDeviceVulkan13Features features13 = {};
@@ -402,11 +399,9 @@ bool InitVulkan(AppState *state)
 	deviceCreateInfo.pNext = &features13; // <--- Привязываем структуру фич к созданию устройства
 	deviceCreateInfo.queueCreateInfoCount = 1;
 
-	deviceCreateInfo.pQueueCreateInfos = &queueInfo; // указатель на queueInfo
-	deviceCreateInfo.enabledExtensionCount =
-		static_cast<uint32_t>(deviceExtensions.size()); // сколько device-расширений включаем
-	deviceCreateInfo.ppEnabledExtensionNames =
-		deviceExtensions.data(); // массив C-строк с именами расширений
+	deviceCreateInfo.pQueueCreateInfos = &queueInfo;										 // указатель на queueInfo
+	deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size()); // сколько device-расширений включаем
+	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();						 // массив C-строк с именами расширений
 
 	// 8. Создание логического устройства (Device). // Создаём логическое устройство VkDevice из выбранной видеокарты (VkPhysicalDevice) и заранее подготовленного VkDeviceCreateInfo (очереди, расширения, фичи и т.д.)
 	if (vkCreateDevice(state->physicalDevice, &deviceCreateInfo, nullptr, &state->device) != VK_SUCCESS) {
@@ -424,7 +419,6 @@ bool InitVulkan(AppState *state)
 	allocInfo.instance = state->instance;			  // Также нужен VkInstance (часть VMA-запросов и интеграций использует инстанс)
 	allocInfo.vulkanApiVersion = VK_API_VERSION_1_4;  // Какая версия Vulkan считается целевой для VMA
 
-#ifdef VOLK_HEADER_VERSION
 	VmaVulkanFunctions vulkanFunctions = {}; // Структура с указателями на Vulkan-функции, которые VMA будет вызывать внутри себя (создание буферов/изображений, выделение/привязка памяти, etc.)
 
 	// Хелпер из VMA: заполняет vulkanFunctions, используя Volk как источник адресов функций. Обычно это избавляет от ручного заполнения vkGetInstanceProcAddr/vkGetDeviceProcAddr
@@ -433,7 +427,6 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 	allocInfo.pVulkanFunctions = &vulkanFunctions; // Кладём указатель на таблицу функций в allocInfo, чтобы vmaCreateAllocator мог её использовать
-#endif
 
 	// Создаём сам аллокатор VMA. На выходе получаем state->allocator, который потом используешь для vmaCreateBuffer/vmaCreateImage и т.п.
 	if (vmaCreateAllocator(&allocInfo, &state->allocator) != VK_SUCCESS) {
@@ -448,11 +441,10 @@ bool InitVulkan(AppState *state)
 		return false;
 
 	// 12. Создание Command Pool и Buffer. В Vulkan мы не отправляем команды отрисовки напрямую видеокарте. Мы записываем их в Command Buffer, а потом отправляем целиком. Command Buffer выделяется из Command Pool
-	// 12. Создание Command Pool и Buffer
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = state->queueFamilyIndex;
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // command buffer’ы, выделенные из этого pool, можно сбрасывать по одному отдельно, а не только целиком через reset всего pool’а
 
 	if (vkCreateCommandPool(state->device, &poolInfo, nullptr, &state->commandPool) != VK_SUCCESS) {
 		SDL_Log("vkCreateCommandPool failed");
