@@ -7,7 +7,8 @@
    вы можете использовать любой другой редактор/IDE, но Clion, я считаю, – лучший вариант).
 2. Установить [LLVM](https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-win64.exe)  (
    можно сначала 2, а потом 1).
-3. Установить [Vulkan SDK](https://sdk.lunarg.com/sdk/download/1.4.341.1/windows/vulkansdk-windows-X64-1.4.341.1.exe)
+3. Установить [Vulkan SDK](https://sdk.lunarg.com/sdk/download/1.4.341.1/windows/vulkansdk-windows-X64-1.4.341.1.exe) (
+   при установке выбрать All, все компоненты)
 4. Установить [Microsoft Visual Studio Build Tools 2026](https://aka.ms/vs/stable/vs_BuildTools.exe).
 5. Установить Ninja (через PowerShell):
 
