@@ -67,7 +67,7 @@ static void cleanupSwapchain(AppState *state)
 	}
 }
 
-static bool createSwapchainAndFramebuffers(AppState *state)
+static bool createSwapchain(AppState *state)
 {
 	VkSurfaceCapabilitiesKHR caps = {};
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(state->physicalDevice, state->surface, &caps);
@@ -181,7 +181,7 @@ static bool recreateSwapchain(AppState *state)
 
 	vkDeviceWaitIdle(state->device);
 	cleanupSwapchain(state);
-	return createSwapchainAndFramebuffers(state);
+	return createSwapchain(state);
 }
 
 // --- Инициализация и очистка основного стейта ---
@@ -428,7 +428,7 @@ static bool InitVulkan(AppState *state)
 		return false;
 	}
 
-	if (!createSwapchainAndFramebuffers(state))
+	if (!createSwapchain(state))
 		return false;
 
 	VkCommandPoolCreateInfo poolInfo = {};

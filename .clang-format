@@ -22,7 +22,7 @@ BraceWrapping:
   SplitEmptyRecord: true
 PointerAlignment: Right
 AllowShortFunctionsOnASingleLine: Inline
-ColumnLimit: 120
+ColumnLimit: 0
 SpaceInEmptyParentheses: false
 SpacesInCStyleCastParentheses: false
 SpaceAfterCStyleCast: false
