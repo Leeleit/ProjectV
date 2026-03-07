@@ -42,8 +42,12 @@ struct AppState {
 	std::vector<VkImage> swapchainImages;									 // Массивы изображений, куда мы рисуем
 	std::vector<VkImageView> swapchainImageViews;							 // и их «виды» (view), через которые мы получаем доступ к пикселям
 
-	// 4. Отрисовка
+	// 4.1 Отрисовка
 	VkCommandPool commandPool = VK_NULL_HANDLE; // "Бассейн" для хранения команд отрисовки
+
+	// 4.2 Пайплайны отрисовки
+	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE; // Описание данных, передаваемых в шейдеры
+	VkPipeline graphicsPipeline = VK_NULL_HANDLE;	  // Сам графический конвейер
 
 	// 5. Синхронизация (Самое важное для CPU/GPU). Поскольку CPU и GPU работают параллельно, нам нужны «светофоры» и «заборы», чтобы они не столкнулись
 	uint32_t currentFrame = 0; // Добавляем индекс текущего кадра

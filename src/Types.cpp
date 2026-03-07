@@ -10,6 +10,11 @@ AppState::~AppState()
 
 	// Очищаем swapchain
 	if (device) {
+		if (graphicsPipeline)
+			vkDestroyPipeline(device, graphicsPipeline, nullptr);
+		if (pipelineLayout)
+			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
 		for (const auto iv : swapchainImageViews)
 			vkDestroyImageView(device, iv, nullptr);
 		if (swapchain)
