@@ -5,8 +5,7 @@
 #include <algorithm> // std::clamp, std::max
 #include <array>
 #include <cstring> // std::strcmp
-#include <memory>
-#include <string>
+#include <fstream>
 #include <vector>
 // --- Конец include-блока ---
 
@@ -69,9 +68,8 @@ static VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 
 static bool CreateDebugMessenger(AppState *state)
 {
-	// if (!kEnableValidation) {
-	// 	return true;
-	// }
+	if (!kEnableValidation)
+		return true;
 
 	const VkDebugUtilsMessengerCreateInfoEXT info = MakeDebugMessengerCreateInfo();
 	if (vkCreateDebugUtilsMessengerEXT(state->instance, &info, nullptr, &state->debugMessenger) != VK_SUCCESS) {
@@ -145,20 +143,25 @@ bool createSwapchain(AppState *state)
 		imageCount = caps.maxImageCount;
 	}
 
-	VkSwapchainCreateInfoKHR swapchainInfo;
-	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapchainInfo.surface = state->surface;							  // К какому окну привязываем
-	swapchainInfo.minImageCount = imageCount;						  // Сколько картинок в конвейере
-	swapchainInfo.imageFormat = state->swapchainFormat;				  // Формат цвета
-	swapchainInfo.imageColorSpace = state->swapchainColorSpace;		  // Пространство цвета (sRGB)
-	swapchainInfo.imageExtent = state->extent;						  // Размеры
-	swapchainInfo.imageArrayLayers = 1;								  // Только 1 слой (не стерео)
-	swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;	  // Будем рисовать на них
-	swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;		  // Изображения принадлежат только этой очереди
-	swapchainInfo.preTransform = caps.currentTransform;				  // Поворот экрана (если мобилка)
-	swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // Игнорировать альфа-канал окна
-	swapchainInfo.presentMode = presentMode;						  // Режим презентации (Mailbox или FIFO)
-	swapchainInfo.clipped = VK_TRUE;								  // Не считай пиксели, которые не видны (за другими окнами)
+	const VkSwapchainCreateInfoKHR swapchainInfo{
+		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		.pNext = nullptr,
+		.flags = 0,
+		.surface = state->surface,						   // К какому окну привязываем
+		.minImageCount = imageCount,					   // Сколько картинок в конвейере
+		.imageFormat = state->swapchainFormat,			   // Формат цвета
+		.imageColorSpace = state->swapchainColorSpace,	   // Пространство цвета (sRGB)
+		.imageExtent = state->extent,					   // Размеры
+		.imageArrayLayers = 1,							   // Только 1 слой (не стерео)
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // Будем рисовать на них
+		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,	   // Изображения принадлежат только этой очереди
+		.queueFamilyIndexCount = 0,
+		.pQueueFamilyIndices = nullptr,
+		.preTransform = caps.currentTransform,				 // Поворот экрана (если мобилка)
+		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, // Игнорировать альфа-канал окна
+		.presentMode = presentMode,							 // Режим презентации (Mailbox или FIFO)
+		.clipped = VK_TRUE,									 // Не считай пиксели, которые не видны (за другими окнами)
+		.oldSwapchain = nullptr};
 
 	// Здесь мы отправляем данные в драйвер. Если он скажет «не могу», вернем false
 	if (vkCreateSwapchainKHR(state->device, &swapchainInfo, nullptr, &state->swapchain) != VK_SUCCESS) {
@@ -210,6 +213,162 @@ bool RecreateSwapchain(AppState *state)
 }
 
 // ------------------------------------
+
+// Вспомогательная функция для чтения файлов
+static std::vector<char> ReadFile(const std::string &filename)
+{
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+	if (!file.is_open()) {
+		SDL_Log("Failed to open file: %s", filename.c_str());
+		return {};
+	}
+
+	const std::streamsize fileSize = file.tellg();
+	if (fileSize <= 0)
+		return {};
+
+	std::vector<char> buffer(static_cast<size_t>(fileSize));
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+	return buffer;
+}
+
+// Вспомогательная функция создания шейдерного модуля
+static VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char> &code)
+{
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+		return VK_NULL_HANDLE;
+	}
+	return shaderModule;
+}
+
+static bool CreateGraphicsPipeline(AppState *state)
+{
+	auto vertShaderCode = ReadFile("triangle.vert.spv");
+	auto fragShaderCode = ReadFile("triangle.frag.spv");
+	if (vertShaderCode.empty() || fragShaderCode.empty())
+		return false;
+
+	VkShaderModule vertShaderModule = CreateShaderModule(state->device, vertShaderCode);
+	VkShaderModule fragShaderModule = CreateShaderModule(state->device, fragShaderCode);
+
+	// ?
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_VERTEX_BIT,
+		.module = vertShaderModule,
+		.pName = "main",
+		.pSpecializationInfo = nullptr};
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = fragShaderModule,
+		.pName = "main",
+		.pSpecializationInfo = nullptr};
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+	// Так как вершины зашиты в шейдере, структура ввода пустая
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{}; // ?
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; // ?
+	inputAssembly.primitiveRestartEnable = VK_FALSE;			  // ?
+
+	// Viewport и Scissor сделаем динамическими, чтобы не пересоздавать пайплайн при ресайзе
+	std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	VkPipelineDynamicStateCreateInfo dynamicState{};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicState.pDynamicStates = dynamicStates.data();
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.scissorCount = 1;
+
+	// Физика и геометрия (Петя любит)
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.0f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+	VkPipelineMultisampleStateCreateInfo multisampling{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.sampleShadingEnable = VK_FALSE,
+		.minSampleShading = 1.0f,
+		.pSampleMask = nullptr,
+		.alphaToCoverageEnable = VK_FALSE,
+		.alphaToOneEnable = VK_FALSE};
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_FALSE;
+
+	VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+	if (vkCreatePipelineLayout(state->device, &pipelineLayoutInfo, nullptr, &state->pipelineLayout) != VK_SUCCESS) {
+		return false;
+	}
+
+	// СВЯЗКА С DYNAMIC RENDERING: Мы должны указать формат цвета!
+	VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{};
+	pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+	pipelineRenderingCreateInfo.colorAttachmentCount = 1;
+	pipelineRenderingCreateInfo.pColorAttachmentFormats = &state->swapchainFormat; // Формат цвета из Swapchain
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.pNext = &pipelineRenderingCreateInfo; // Подключаем Dynamic Rendering
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicState;
+	pipelineInfo.layout = state->pipelineLayout;
+	pipelineInfo.renderPass = VK_NULL_HANDLE; // Не используем RenderPass!
+
+	if (vkCreateGraphicsPipelines(state->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &state->graphicsPipeline) != VK_SUCCESS) {
+		return false;
+	}
+
+	// Модули можно удалять сразу после создания пайплайна
+	vkDestroyShaderModule(state->device, fragShaderModule, nullptr);
+	vkDestroyShaderModule(state->device, vertShaderModule, nullptr);
+
+	return true;
+}
 // --- Инициализация и очистка основного стейта ---
 
 // InitVulkan — это самый масштабный этап подготовки. Здесь мы «знакомим» наше приложение с видеокартой, создаем «холсты» для рисования и подготавливаем инструменты синхронизации
@@ -480,6 +639,11 @@ bool InitVulkan(AppState *state)
 			vkCreateFence(state->device, &fenceInfo, nullptr, &state->inFlightFences[i]) != VK_SUCCESS) {
 			return false;
 		}
+	}
+
+	if (!CreateGraphicsPipeline(state)) {
+		SDL_Log("CreateGraphicsPipeline failed");
+		return false;
 	}
 	return true;
 }
