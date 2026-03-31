@@ -30,6 +30,10 @@ target_sources(ProjectV PRIVATE
         main.cpp
         Types.cpp
         Renderer.cpp
+        VulkanBootstrap.cpp
+        VulkanMesh.cpp
+        VulkanPipeline.cpp
+        VulkanSwapchain.cpp
         VulkanInit.cpp
         # Add new files here
 )
@@ -49,7 +53,7 @@ target_compile_options(ProjectV PRIVATE
 target_link_libraries(ProjectV PRIVATE
         # Vulkan не добавляем, потому что volk его инклюдит в себе
         volk
-        GPUOpen::VulkanMemoryAllocator
+        # GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
 )
 

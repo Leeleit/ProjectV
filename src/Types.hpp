@@ -2,7 +2,6 @@
 #define TYPES_HPP
 
 // ------ include--блок ------
-#define SDL_MAIN_USE_CALLBACKS 1 // А надо ли?
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_vulkan.h"
 #include "volk.h"
@@ -12,11 +11,59 @@
 #pragma clang diagnostic pop
 
 // STL блок (стандартные библиотеки)
+#include <array>
+#include <cstddef>
 #include <memory>
 #include <vector>
 // --- Конец include-блока ---
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2; // Оптимум для двойной буферизации
+
+struct Vertex {
+	float position[2];
+	float color[3];
+
+	static VkVertexInputBindingDescription GetBindingDescription()
+	{
+		VkVertexInputBindingDescription binding{};
+		binding.binding = 0;
+		binding.stride = sizeof(Vertex);
+		binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+		return binding;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+	{
+		std::array<VkVertexInputAttributeDescription, 2> attributes{};
+
+		attributes[0].binding = 0;
+		attributes[0].location = 0;
+		attributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributes[0].offset = static_cast<uint32_t>(offsetof(Vertex, position));
+
+		attributes[1].binding = 0;
+		attributes[1].location = 1;
+		attributes[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributes[1].offset = static_cast<uint32_t>(offsetof(Vertex, color));
+
+		return attributes;
+	}
+};
+
+struct MeshGpu {
+	VkBuffer vertexBuffer = VK_NULL_HANDLE;
+	VmaAllocation vertexAllocation = VK_NULL_HANDLE;
+	uint32_t vertexCount = 0;
+
+	VkBuffer indexBuffer = VK_NULL_HANDLE;
+	VmaAllocation indexAllocation = VK_NULL_HANDLE;
+	uint32_t indexCount = 0;
+};
+
+struct MeshCpu {
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+};
 
 // AppState – это структура данных состояния приложения (State Object). В Vulkan нет "глобального контекста" (как в OpenGL, где всё хранится внутри драйвера), поэтому разработчик обязан хранить все объекты Vulkan и ресурсы вручную. Почему это сделано в виде struct? Чистота кода: вы передаете одну переменную (AppState *state) в функции, вместо того чтобы передавать 20 отдельных аргументов. Пожизненное владение: если вы захотите создать второе окно или вторую графическую сцену, вы просто создадите второй экземпляр этой структуры. Безопасность: вы можете легко реализовать функцию очистки (cleanupAppState), которая последовательно уничтожит все ресурсы, указанные в этой структуре, в правильном порядке. Главный принцип Vulkan: всё, что вы создали (vkCreate...), должно быть уничтожено (vkDestroy...) в строго обратном порядке. Эта структура помогает не забыть ни один ресурс.
 struct AppState {
@@ -49,6 +96,9 @@ struct AppState {
 	VkPipelineLayout pipelineLayout = VK_NULL_HANDLE; // Описание данных, передаваемых в шейдеры
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;	  // Сам графический конвейер
 
+	// MeshGpu triangleMesh;
+	MeshGpu sceneMesh;
+
 	// 5. Синхронизация (Самое важное для CPU/GPU). Поскольку CPU и GPU работают параллельно, нам нужны «светофоры» и «заборы», чтобы они не столкнулись
 	uint32_t currentFrame = 0; // Добавляем индекс текущего кадра
 
@@ -58,7 +108,11 @@ struct AppState {
 	std::vector<VkSemaphore> renderFinishedSemaphores; // Говорит GPU: "подожди, пока я закончу рисовать, прежде чем показывать кадр на мониторе"
 	std::vector<VkFence> inFlightFences;			   // "Забор", который блокирует CPU, пока GPU не закончит отрисовку текущего кадра полностью. Это предотвращает отправку новой команды, пока не выполнена старая
 
+	bool shutdownDone = false;
+
 	~AppState();
 };
+
+void ShutdownVulkan(AppState *state);
 
 #endif
