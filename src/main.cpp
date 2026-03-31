@@ -50,5 +50,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) // Главный итерацио�
 
 void SDL_AppQuit(void *appstate, SDL_AppResult) // Функция завершения работы
 {
-	delete static_cast<AppState *>(appstate);
+	auto *state = static_cast<AppState *>(appstate);
+	ShutdownVulkan(state);
+	delete state;
 }
