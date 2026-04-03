@@ -1,7 +1,6 @@
 #include "VulkanMesh.hpp"
 
 #include <cstddef>
-#include <cstring>
 
 namespace {
 bool CreateBuffer(
@@ -123,8 +122,8 @@ bool UploadMeshToGpu(AppState *state, const MeshCpu &cpuMesh, MeshGpu *outMesh)
 	}
 
 	auto *bytes = static_cast<std::byte *>(mappedData);
-	std::memcpy(bytes, cpuMesh.vertices.data(), static_cast<size_t>(vertexBufferSize));
-	std::memcpy(bytes + vertexBufferSize, cpuMesh.indices.data(), static_cast<size_t>(indexBufferSize));
+	std::memcpy(bytes, cpuMesh.vertices.data(), vertexBufferSize);
+	std::memcpy(bytes + vertexBufferSize, cpuMesh.indices.data(), indexBufferSize);
 	vmaUnmapMemory(state->allocator, stagingAllocation);
 
 	MeshGpu mesh{};
