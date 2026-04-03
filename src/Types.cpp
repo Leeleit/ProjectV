@@ -2,24 +2,7 @@
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #include "Types.hpp"
-#include "VulkanPipeline.hpp"
-
-static void DestroyMeshGpu(const VmaAllocator allocator, MeshGpu &mesh)
-{
-	if (allocator && mesh.vertexBuffer) {
-		vmaDestroyBuffer(allocator, mesh.vertexBuffer, mesh.vertexAllocation);
-		mesh.vertexBuffer = VK_NULL_HANDLE;
-		mesh.vertexAllocation = VK_NULL_HANDLE;
-		mesh.vertexCount = 0;
-	}
-
-	if (allocator && mesh.indexBuffer) {
-		vmaDestroyBuffer(allocator, mesh.indexBuffer, mesh.indexAllocation);
-		mesh.indexBuffer = VK_NULL_HANDLE;
-		mesh.indexAllocation = VK_NULL_HANDLE;
-		mesh.indexCount = 0;
-	}
-}
+#include "VulkanComputePipeline.hpp"
 
 void ShutdownVulkan(AppState *state)
 {
@@ -30,7 +13,7 @@ void ShutdownVulkan(AppState *state)
 
 	if (state->device) {
 		vkDeviceWaitIdle(state->device);
-		DestroyGraphicsPipeline(state);
+		DestroyComputePipeline(state);
 	}
 
 	if (state->device) {
@@ -57,8 +40,6 @@ void ShutdownVulkan(AppState *state)
 			vkDestroyCommandPool(state->device, state->commandPool, nullptr);
 		}
 	}
-
-	DestroyMeshGpu(state->allocator, state->sceneMesh);
 
 	if (state->allocator) {
 		vmaDestroyAllocator(state->allocator);

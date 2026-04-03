@@ -1,6 +1,6 @@
 #include "VulkanSwapchain.hpp"
 
-#include "VulkanPipeline.hpp"
+#include "VulkanComputePipeline.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -50,15 +50,33 @@ bool QuerySwapchainSupport(
 	return !outDetails->formats.empty() && !outDetails->presentModes.empty();
 }
 
-VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &formats)
+bool SupportsStorageImage(const VkPhysicalDevice physicalDevice, const VkFormat format)
+{
+	VkFormatProperties props{};
+	vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+	return (props.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0;
+}
+
+VkSurfaceFormatKHR ChooseSurfaceFormat(
+	const VkPhysicalDevice physicalDevice,
+	const std::vector<VkSurfaceFormatKHR> &formats)
 {
 	for (const auto &fmt : formats) {
-		if (fmt.format == VK_FORMAT_B8G8R8A8_SRGB &&
-			fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+		if (fmt.format == VK_FORMAT_R8G8B8A8_UNORM &&
+			fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR &&
+			SupportsStorageImage(physicalDevice, fmt.format)) {
 			return fmt;
 		}
 	}
-	return formats.front();
+
+	for (const auto &fmt : formats) {
+		if (fmt.format == VK_FORMAT_R8G8B8A8_UNORM &&
+			SupportsStorageImage(physicalDevice, fmt.format)) {
+			return fmt;
+		}
+	}
+
+	return {};
 }
 
 VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &presentModes)
@@ -98,7 +116,17 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		return false;
 	}
 
-	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
+	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) == 0) {
+		SDL_Log("Surface does not support VK_IMAGE_USAGE_STORAGE_BIT for swapchain images");
+		return false;
+	}
+
+	const auto [format, colorSpace] = ChooseSurfaceFormat(state->physicalDevice, support.formats);
+	if (format == VK_FORMAT_UNDEFINED) {
+		SDL_Log("No swapchain surface format supports storage image usage");
+		return false;
+	}
+
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
 	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, state->window);
 
@@ -116,21 +144,26 @@ bool CreateOrRecreateSwapchain(AppState *state)
 	VkSwapchainKHR oldSwapchain = state->swapchain;
 	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
 
-	VkSwapchainCreateInfoKHR createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	createInfo.surface = state->surface;
-	createInfo.minImageCount = imageCount;
-	createInfo.imageFormat = format;
-	createInfo.imageColorSpace = colorSpace;
-	createInfo.imageExtent = chosenExtent;
-	createInfo.imageArrayLayers = 1;
-	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	createInfo.preTransform = support.capabilities.currentTransform;
-	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	createInfo.presentMode = chosenPresentMode;
-	createInfo.clipped = VK_TRUE;
-	createInfo.oldSwapchain = oldSwapchain;
+	VkSwapchainCreateInfoKHR createInfo{
+		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		.pNext = nullptr,
+		.flags = 0,
+		.surface = state->surface,
+		.minImageCount = imageCount,
+		.imageFormat = format,
+		.imageColorSpace = colorSpace,
+		.imageExtent = chosenExtent,
+		.imageArrayLayers = 1,
+		.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT,
+		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = 0,
+		.pQueueFamilyIndices = nullptr,
+		.preTransform = support.capabilities.currentTransform,
+		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+		.presentMode = chosenPresentMode,
+		.clipped = VK_TRUE,
+		.oldSwapchain = oldSwapchain,
+	};
 
 	if (vkCreateSwapchainKHR(state->device, &createInfo, nullptr, &newSwapchain) != VK_SUCCESS) {
 		SDL_Log("vkCreateSwapchainKHR failed");
@@ -202,36 +235,33 @@ bool CreateOrRecreateSwapchain(AppState *state)
 
 bool RecreateSwapchain(AppState *state)
 {
-	// Если окно свернуто, real size становится нулевым, и пересоздавать swapchain бессмысленно.
 	int w = 0;
 	int h = 0;
 	SDL_GetWindowSizeInPixels(state->window, &w, &h);
 
 	if (w == 0 || h == 0) {
-		// Помечаем swapchain как "пауза", а реальное пересоздание отложим до восстановления окна.
 		state->extent = {0, 0};
 		return true;
 	}
 
-	// Перед пересозданием ждем, пока GPU закончит работу со старой цепочкой изображений.
 	vkDeviceWaitIdle(state->device);
 
-	// Запоминаем старый формат, чтобы понять, нужно ли перестраивать pipeline.
-	const VkFormat oldFormat = state->swapchainFormat;
-	const bool hadPipeline =
-		state->graphicsPipeline != VK_NULL_HANDLE ||
-		state->pipelineLayout != VK_NULL_HANDLE;
+	const bool hadComputePipeline =
+		state->computePipeline != VK_NULL_HANDLE ||
+		state->computePipelineLayout != VK_NULL_HANDLE ||
+		!state->computeDescriptorSets.empty();
+
+	if (hadComputePipeline) {
+		DestroyComputePipeline(state);
+	}
 
 	if (!CreateOrRecreateSwapchain(state)) {
 		return false;
 	}
 
-	// На первом старте формат часто меняется с UNDEFINED, но pipeline ещё не существует.
-	// Пересобирать его имеет смысл только если он уже был создан ранее.
-	if (hadPipeline && state->swapchainFormat != oldFormat) {
-		DestroyGraphicsPipeline(state);
-		if (!CreateGraphicsPipeline(state)) {
-			SDL_Log("CreateGraphicsPipeline failed after format change");
+	if (hadComputePipeline) {
+		if (!CreateComputePipeline(state)) {
+			SDL_Log("CreateComputePipeline failed after swapchain recreation");
 			return false;
 		}
 	}
