@@ -43,7 +43,8 @@ SDL_AppResult DrawFrame(AppState *state) // Функция нарисовани�
 		if (!RecreateSwapchain(state))
 			return SDL_APP_FAILURE;
 		return SDL_APP_CONTINUE; // Начинаем кадр заново уже с новым swapchain
-	} else if (acquireRes != VK_SUCCESS && acquireRes != VK_SUBOPTIMAL_KHR) {
+	}
+	if (acquireRes != VK_SUCCESS && acquireRes != VK_SUBOPTIMAL_KHR) {
 		return SDL_APP_CONTINUE; // Произошла другая ошибка, пробуем в следующем кадре
 	}
 
@@ -59,7 +60,7 @@ SDL_AppResult DrawFrame(AppState *state) // Функция нарисовани�
 		return SDL_APP_FAILURE;
 	}
 
-	// 6 Dynamic Rendering?
+	// 6 Dynamic Rendering
 	// 6.1. БАРЬЕР: Переводим картинку из состояния UNDEFINED (какой она пришла из Swapchain) в состояние COLOR_ATTACHMENT_OPTIMAL (в которое можно безопасно рисовать).
 	VkImageMemoryBarrier2 imageBarrier = {};
 	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
