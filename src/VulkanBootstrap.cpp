@@ -81,16 +81,17 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 // Создаём сам messenger после instance.
 bool CreateDebugMessenger(AppState *state)
 {
-	if constexpr (!kEnableValidation) {
-		return true;
-	}
-
+#ifdef NDEBUG
+	(void)state;
+	return true;
+#else
 	const VkDebugUtilsMessengerCreateInfoEXT info = MakeDebugMessengerCreateInfo();
 	if (vkCreateDebugUtilsMessengerEXT(state->instance, &info, nullptr, &state->debugMessenger) != VK_SUCCESS) {
 		SDL_Log("vkCreateDebugUtilsMessengerEXT failed");
 		return false;
 	}
 	return true;
+#endif
 }
 
 // Проверяем, что у физического устройства есть нужные расширения.
@@ -209,7 +210,7 @@ bool CheckRequiredFeatures(
 	return true;
 }
 
-// Кандидат на выбор физического устройства: сам девайс, его очередь и поддерживаемые фичи.
+// Кандидат на выбор физического устройства: сам устройство, его очередь и поддерживаемые фичи.
 struct PhysicalDeviceCandidate {
 	VkPhysicalDevice device = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = UINT32_MAX;
@@ -291,7 +292,7 @@ bool InitializeVulkanBase(AppState *state)
 		return false;
 	}
 
-	std::vector<const char *> instanceExtensions(sdlExtNames, sdlExtNames + extCount);
+	std::vector instanceExtensions(sdlExtNames, sdlExtNames + extCount);
 	if (kEnableValidation) {
 		instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		if (!CheckValidationLayerSupport()) {
@@ -376,7 +377,7 @@ bool InitializeVulkanBase(AppState *state)
 	queueInfo.queueCount = 1;
 	queueInfo.pQueuePriorities = &queuePriority;
 
-	std::vector<const char *> deviceExtensions(
+	std::vector deviceExtensions(
 		kRequiredDeviceExtensions.begin(),
 		kRequiredDeviceExtensions.end());
 
