@@ -1,9 +1,8 @@
 #include "VulkanSwapchain.hpp"
 
-#include "VulkanComputePipeline.hpp"
+#include "VulkanGraphicsPipeline.hpp"
 
 #include <algorithm>
-#include <utility>
 #include <vector>
 
 namespace {
@@ -50,33 +49,23 @@ bool QuerySwapchainSupport(
 	return !outDetails->formats.empty() && !outDetails->presentModes.empty();
 }
 
-bool SupportsStorageImage(const VkPhysicalDevice physicalDevice, const VkFormat format)
-{
-	VkFormatProperties props{};
-	vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
-	return (props.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0;
-}
-
-VkSurfaceFormatKHR ChooseSurfaceFormat(
-	const VkPhysicalDevice physicalDevice,
-	const std::vector<VkSurfaceFormatKHR> &formats)
+VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &formats)
 {
 	for (const auto &fmt : formats) {
-		if (fmt.format == VK_FORMAT_R8G8B8A8_UNORM &&
-			fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR &&
-			SupportsStorageImage(physicalDevice, fmt.format)) {
+		if (fmt.format == VK_FORMAT_B8G8R8A8_UNORM &&
+			fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 			return fmt;
 		}
 	}
 
 	for (const auto &fmt : formats) {
 		if (fmt.format == VK_FORMAT_R8G8B8A8_UNORM &&
-			SupportsStorageImage(physicalDevice, fmt.format)) {
+			fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 			return fmt;
 		}
 	}
 
-	return {};
+	return formats.front();
 }
 
 VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &presentModes)
@@ -101,7 +90,8 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &caps, SDL_Window *window
 
 	VkExtent2D extent{
 		static_cast<uint32_t>(w),
-		static_cast<uint32_t>(h)};
+		static_cast<uint32_t>(h),
+	};
 
 	extent.width = std::clamp(extent.width, caps.minImageExtent.width, caps.maxImageExtent.width);
 	extent.height = std::clamp(extent.height, caps.minImageExtent.height, caps.maxImageExtent.height);
@@ -116,17 +106,12 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		return false;
 	}
 
-	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) == 0) {
-		SDL_Log("Surface does not support VK_IMAGE_USAGE_STORAGE_BIT for swapchain images");
+	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) == 0) {
+		SDL_Log("Surface does not support VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT for swapchain images");
 		return false;
 	}
 
-	const auto [format, colorSpace] = ChooseSurfaceFormat(state->physicalDevice, support.formats);
-	if (format == VK_FORMAT_UNDEFINED) {
-		SDL_Log("No swapchain surface format supports storage image usage");
-		return false;
-	}
-
+	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
 	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, state->window);
 
@@ -136,15 +121,13 @@ bool CreateOrRecreateSwapchain(AppState *state)
 	}
 
 	uint32_t imageCount = std::max(2u, support.capabilities.minImageCount);
-	if (support.capabilities.maxImageCount > 0 &&
-		imageCount > support.capabilities.maxImageCount) {
+	if (support.capabilities.maxImageCount > 0 && imageCount > support.capabilities.maxImageCount) {
 		imageCount = support.capabilities.maxImageCount;
 	}
 
 	VkSwapchainKHR oldSwapchain = state->swapchain;
 	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
-
-	VkSwapchainCreateInfoKHR createInfo{
+	const VkSwapchainCreateInfoKHR createInfo{
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.pNext = nullptr,
 		.flags = 0,
@@ -154,7 +137,7 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		.imageColorSpace = colorSpace,
 		.imageExtent = chosenExtent,
 		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_STORAGE_BIT,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = 0,
 		.pQueueFamilyIndices = nullptr,
@@ -199,9 +182,9 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		viewInfo.subresourceRange.layerCount = 1;
 
 		if (vkCreateImageView(state->device, &viewInfo, nullptr, &newViews[i]) != VK_SUCCESS) {
-			for (VkImageView iv : newViews) {
-				if (iv) {
-					vkDestroyImageView(state->device, iv, nullptr);
+			for (VkImageView imageView : newViews) {
+				if (imageView) {
+					vkDestroyImageView(state->device, imageView, nullptr);
 				}
 			}
 			vkDestroySwapchainKHR(state->device, newSwapchain, nullptr);
@@ -210,9 +193,9 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		}
 	}
 
-	for (VkImageView iv : state->swapchainImageViews) {
-		if (iv) {
-			vkDestroyImageView(state->device, iv, nullptr);
+	for (VkImageView imageView : state->swapchainImageViews) {
+		if (imageView) {
+			vkDestroyImageView(state->device, imageView, nullptr);
 		}
 	}
 	state->swapchainImageViews.clear();
@@ -228,7 +211,6 @@ bool CreateOrRecreateSwapchain(AppState *state)
 	state->extent = chosenExtent;
 	state->swapchainImages = std::move(newImages);
 	state->swapchainImageViews = std::move(newViews);
-
 	return true;
 }
 } // namespace
@@ -246,22 +228,20 @@ bool RecreateSwapchain(AppState *state)
 
 	vkDeviceWaitIdle(state->device);
 
-	const bool hadComputePipeline =
-		state->computePipeline != VK_NULL_HANDLE ||
-		state->computePipelineLayout != VK_NULL_HANDLE ||
-		!state->computeDescriptorSets.empty();
-
-	if (hadComputePipeline) {
-		DestroyComputePipeline(state);
+	const bool hadGraphicsPipeline =
+		state->graphicsPipeline != VK_NULL_HANDLE ||
+		state->graphicsPipelineLayout != VK_NULL_HANDLE;
+	if (hadGraphicsPipeline) {
+		DestroyGraphicsPipeline(state);
 	}
 
 	if (!CreateOrRecreateSwapchain(state)) {
 		return false;
 	}
 
-	if (hadComputePipeline) {
-		if (!CreateComputePipeline(state)) {
-			SDL_Log("CreateComputePipeline failed after swapchain recreation");
+	if (hadGraphicsPipeline) {
+		if (!CreateGraphicsPipeline(state)) {
+			SDL_Log("CreateGraphicsPipeline failed after swapchain recreation");
 			return false;
 		}
 	}

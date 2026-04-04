@@ -4,7 +4,7 @@
 #include "Types.hpp"
 #include "SceneResources.hpp"
 #include "VoxelWorld.hpp"
-#include "VulkanComputePipeline.hpp"
+#include "VulkanGraphicsPipeline.hpp"
 
 void ShutdownVulkan(AppState *state)
 {
@@ -15,7 +15,7 @@ void ShutdownVulkan(AppState *state)
 
 	if (state->device) {
 		vkDeviceWaitIdle(state->device);
-		DestroyComputePipeline(state);
+		DestroyGraphicsPipeline(state);
 		DestroySceneResources(state);
 	}
 

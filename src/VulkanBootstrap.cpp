@@ -1,7 +1,6 @@
 #include "VulkanBootstrap.hpp"
 
 #include <array>
-#include <cstring>
 #include <vector>
 
 namespace {

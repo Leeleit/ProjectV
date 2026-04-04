@@ -1,6 +1,7 @@
 #ifndef VOXEL_WORLD_HPP
 #define VOXEL_WORLD_HPP
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -20,6 +21,19 @@ struct Int3 {
 	int z = 0;
 };
 
+struct VoxelChunkMeshVertex {
+	std::array<float, 3> position{};
+	std::array<float, 3> normal{};
+	VoxelMaterial material = VoxelMaterial::Air;
+};
+
+struct VoxelChunk {
+	Int3 min{};
+	Int3 maxExclusive{};
+	bool dirty = true;
+	std::vector<VoxelChunkMeshVertex> meshVertices;
+};
+
 struct VoxelLabConfig {
 	int floorSize = 18;
 	int sphereRadius = 6;
@@ -28,6 +42,7 @@ struct VoxelLabConfig {
 	float fluidFillLevel = 0.7f;
 	int floorY = 0;
 	int padding = 3;
+	int chunkSize = 8;
 };
 
 struct VoxelWorld {
@@ -38,11 +53,18 @@ struct VoxelWorld {
 	int height = 0;
 	int depth = 0;
 	std::vector<uint8_t> voxels;
+	int chunkSize = 0;
+	int chunkCountX = 0;
+	int chunkCountY = 0;
+	int chunkCountZ = 0;
+	std::vector<VoxelChunk> chunks;
 };
 
 bool CreateVoxelLabWorld(AppState *state);
 void DestroyVoxelLabWorld(AppState *state);
 bool IsInsideVoxelWorld(const VoxelWorld &world, Int3 position);
 VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
+size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);
+void MarkAllVoxelChunksDirty(VoxelWorld *world);
 
 #endif

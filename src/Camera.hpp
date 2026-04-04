@@ -6,5 +6,6 @@
 void InitializeCamera(AppState *state);
 void HandleCameraEvent(AppState *state, const SDL_Event *event);
 void UpdateCamera(AppState *state);
+GraphicsPushConstants BuildGraphicsPushConstants(const AppState &state);
 
 #endif

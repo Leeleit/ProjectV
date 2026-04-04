@@ -5,7 +5,8 @@ find_program(GLSLC glslc REQUIRED)
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADERS
-        ${SHADER_DIR}/triangle.comp
+        ${SHADER_DIR}/voxel.vert
+        ${SHADER_DIR}/voxel.frag
 )
 
 foreach (SHADER ${SHADERS})
@@ -32,9 +33,10 @@ target_sources(ProjectV PRIVATE
         Types.cpp
         Renderer.cpp
         VulkanBootstrap.cpp
-        VulkanComputePipeline.cpp
+        VulkanGraphicsPipeline.cpp
         VulkanSwapchain.cpp
         VulkanInit.cpp
+        VoxelMaterials.cpp
         VoxelWorld.cpp
         # Add new files here
 )
