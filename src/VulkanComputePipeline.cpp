@@ -279,7 +279,7 @@ bool CreateComputePipeline(AppState *state)
 		return false;
 	}
 
-	std::vector<VkDescriptorSetLayout> layouts(descriptorSetCount, descriptorSetLayout);
+	std::vector layouts(descriptorSetCount, descriptorSetLayout);
 	std::vector<VkDescriptorSet> descriptorSets(descriptorSetCount, VK_NULL_HANDLE);
 
 	VkDescriptorSetAllocateInfo allocInfo{};

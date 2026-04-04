@@ -3,6 +3,8 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_vulkan.h"
+#include "VoxelWorld.hpp"
+// ReSharper disable once CppUnusedIncludeDirective
 #include "volk.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -18,6 +20,17 @@ constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 struct ComputeVertex {
 	std::array<float, 4> position{};
 	std::array<float, 4> color{};
+};
+
+struct CameraState {
+	std::array<float, 3> position{0.0f, 8.0f, 24.0f};
+	float yawRadians = 0.0f;
+	float pitchRadians = -0.2f;
+	float moveSpeed = 10.0f;
+	float mouseSensitivity = 0.0025f;
+	float verticalFovRadians = 1.0471976f;
+	float nearPlane = 0.1f;
+	float farPlane = 128.0f;
 };
 
 struct ComputePushConstants {
@@ -51,6 +64,10 @@ struct AppState {
 	VkDescriptorPool computeDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout computeDescriptorSetLayout = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
+	std::unique_ptr<VoxelWorld> voxelWorld;
+	CameraState camera{};
+	void *sceneVertexMappedData = nullptr;
+	uint32_t sceneVertexCapacity = 0;
 	VkBuffer sceneVertexBuffer = VK_NULL_HANDLE;
 	VmaAllocation sceneVertexAllocation = VK_NULL_HANDLE;
 	uint32_t sceneTriangleCount = 0;
@@ -66,6 +83,10 @@ struct AppState {
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
 	std::vector<VkFence> inFlightFences;
+	Uint64 lastFrameCounter = 0;
+	float deltaTimeSeconds = 0.0f;
+	float mouseDeltaX = 0.0f;
+	float mouseDeltaY = 0.0f;
 
 	bool shutdownDone = false;
 

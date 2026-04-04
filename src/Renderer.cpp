@@ -1,4 +1,6 @@
 #include "Renderer.hpp"
+#include "Camera.hpp"
+#include "SceneResources.hpp"
 #include "VulkanInit.hpp"
 
 namespace {
@@ -67,7 +69,18 @@ SDL_AppResult DrawFrame(AppState *state)
 	const VkSemaphore imageAvailableSemaphore = state->imageAvailableSemaphores[currentFrame];
 	const VkSemaphore renderFinishedSemaphore = state->renderFinishedSemaphores[currentFrame];
 
-	vkWaitForFences(state->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	vkWaitForFences(
+		state->device,
+		static_cast<uint32_t>(state->inFlightFences.size()),
+		state->inFlightFences.data(),
+		VK_TRUE,
+		UINT64_MAX);
+
+	UpdateCamera(state);
+	if (!UpdateSceneResources(state)) {
+		SDL_Log("UpdateSceneResources failed");
+		return SDL_APP_FAILURE;
+	}
 
 	uint32_t imageIndex = 0;
 	const VkResult acquireRes = vkAcquireNextImageKHR(
