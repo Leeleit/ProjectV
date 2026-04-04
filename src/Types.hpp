@@ -22,6 +22,13 @@ struct ComputeVertex {
 	std::array<float, 4> color{};
 };
 
+struct RenderVertex {
+	std::array<float, 3> position{};
+	std::array<float, 3> normal{};
+	std::array<float, 4> color{};
+	float materialKind = 0.0f;
+};
+
 struct CameraState {
 	std::array<float, 3> position{0.0f, 8.0f, 24.0f};
 	float yawRadians = 0.0f;
@@ -31,6 +38,10 @@ struct CameraState {
 	float verticalFovRadians = 1.0471976f;
 	float nearPlane = 0.1f;
 	float farPlane = 128.0f;
+};
+
+struct GraphicsPushConstants {
+	std::array<float, 16> viewProjection{};
 };
 
 struct ComputePushConstants {
@@ -68,9 +79,20 @@ struct AppState {
 	CameraState camera{};
 	void *sceneVertexMappedData = nullptr;
 	uint32_t sceneVertexCapacity = 0;
+	uint32_t sceneVertexCount = 0;
+	uint32_t sceneOpaqueVertexCount = 0;
+	uint32_t sceneTransparentVertexCount = 0;
+	bool sceneVertexBufferDirty = true;
 	VkBuffer sceneVertexBuffer = VK_NULL_HANDLE;
 	VmaAllocation sceneVertexAllocation = VK_NULL_HANDLE;
 	uint32_t sceneTriangleCount = 0;
+	VkImage depthImage = VK_NULL_HANDLE;
+	VkImageView depthImageView = VK_NULL_HANDLE;
+	VmaAllocation depthAllocation = VK_NULL_HANDLE;
+	bool depthImageNeedsInit = false;
+	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
 	VkImage computeDepthImage = VK_NULL_HANDLE;
 	VkImageView computeDepthImageView = VK_NULL_HANDLE;
 	VmaAllocation computeDepthAllocation = VK_NULL_HANDLE;

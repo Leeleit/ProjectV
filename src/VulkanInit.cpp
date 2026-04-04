@@ -2,7 +2,7 @@
 #include "SceneResources.hpp"
 #include "VoxelWorld.hpp"
 #include "VulkanBootstrap.hpp"
-#include "VulkanComputePipeline.hpp"
+#include "VulkanGraphicsPipeline.hpp"
 #include "VulkanSwapchain.hpp"
 
 bool InitVulkan(AppState *state)
@@ -27,8 +27,8 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 
-	if (!CreateComputePipeline(state)) {
-		SDL_Log("CreateComputePipeline failed");
+	if (!CreateGraphicsPipeline(state)) {
+		SDL_Log("CreateGraphicsPipeline failed");
 		return false;
 	}
 

@@ -7,6 +7,7 @@ namespace {
 void TransitionImage(
 	const VkCommandBuffer cmd,
 	const VkImage image,
+	const VkImageAspectFlags aspectMask,
 	const VkImageLayout oldLayout,
 	const VkImageLayout newLayout,
 	const VkPipelineStageFlags2 srcStageMask,
@@ -23,7 +24,7 @@ void TransitionImage(
 	imageBarrier.oldLayout = oldLayout;
 	imageBarrier.newLayout = newLayout;
 	imageBarrier.image = image;
-	imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+	imageBarrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
 
 	VkDependencyInfo depInfo{};
 	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -33,19 +34,134 @@ void TransitionImage(
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-void PushComputeConstants(AppState *state, const VkCommandBuffer cmd)
+void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const uint32_t imageIndex)
 {
-	ComputePushConstants pushConstants{};
-	pushConstants.clearColor = {0.08f, 0.10f, 0.14f, 1.0f};
-	pushConstants.triangleCount = state->sceneTriangleCount;
+	TransitionImage(
+		cmd,
+		state->swapchainImages[imageIndex],
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_PIPELINE_STAGE_2_NONE,
+		0,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
+	const VkImageLayout oldDepthLayout =
+		state->depthImageNeedsInit ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+	const VkPipelineStageFlags2 oldDepthStage =
+		state->depthImageNeedsInit ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+	const VkAccessFlags2 oldDepthAccess =
+		state->depthImageNeedsInit ? 0 : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	TransitionImage(
+		cmd,
+		state->depthImage,
+		VK_IMAGE_ASPECT_DEPTH_BIT,
+		oldDepthLayout,
+		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		oldDepthStage,
+		oldDepthAccess,
+		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+	state->depthImageNeedsInit = false;
+
+	constexpr VkClearValue clearColorValue{.color = {{0.73f, 0.84f, 0.96f, 1.0f}}};
+	constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
+	const VkRenderingAttachmentInfo colorAttachment{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.pNext = nullptr,
+		.imageView = state->swapchainImageViews[imageIndex],
+		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_NONE,
+		.resolveImageView = VK_NULL_HANDLE,
+		.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = clearColorValue,
+	};
+	const VkRenderingAttachmentInfo depthAttachment{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.pNext = nullptr,
+		.imageView = state->depthImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_NONE,
+		.resolveImageView = VK_NULL_HANDLE,
+		.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.clearValue = clearDepthValue,
+	};
+	const VkRenderingInfo renderingInfo{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.renderArea = {{0, 0}, state->extent},
+		.layerCount = 1,
+		.viewMask = 0,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachment,
+		.pDepthAttachment = &depthAttachment,
+		.pStencilAttachment = nullptr,
+	};
+
+	vkCmdBeginRendering(cmd, &renderingInfo);
+
+	const VkViewport viewport{
+		.x = 0.0f,
+		.y = 0.0f,
+		.width = static_cast<float>(state->extent.width),
+		.height = static_cast<float>(state->extent.height),
+		.minDepth = 0.0f,
+		.maxDepth = 1.0f,
+	};
+	const VkRect2D scissor{
+		.offset = {0, 0},
+		.extent = state->extent,
+	};
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+	const GraphicsPushConstants pushConstants = BuildGraphicsPushConstants(*state);
+	const VkBuffer vertexBuffers[] = {state->sceneVertexBuffer};
+	constexpr VkDeviceSize offsets[] = {0};
+	vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->graphicsPipeline);
 	vkCmdPushConstants(
 		cmd,
-		state->computePipelineLayout,
-		VK_SHADER_STAGE_COMPUTE_BIT,
+		state->graphicsPipelineLayout,
+		VK_SHADER_STAGE_VERTEX_BIT,
 		0,
 		sizeof(pushConstants),
 		&pushConstants);
+	if (state->sceneOpaqueVertexCount > 0) {
+		vkCmdDraw(cmd, state->sceneOpaqueVertexCount, 1, 0, 0);
+	}
+
+	if (state->transparentGraphicsPipeline && state->sceneTransparentVertexCount > 0) {
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->transparentGraphicsPipeline);
+		vkCmdPushConstants(
+			cmd,
+			state->graphicsPipelineLayout,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			0,
+			sizeof(pushConstants),
+			&pushConstants);
+		vkCmdDraw(cmd, state->sceneTransparentVertexCount, 1, state->sceneOpaqueVertexCount, 0);
+	}
+
+	vkCmdEndRendering(cmd);
+
+	TransitionImage(
+		cmd,
+		state->swapchainImages[imageIndex],
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_NONE,
+		0);
 }
 } // namespace
 
@@ -63,12 +179,6 @@ SDL_AppResult DrawFrame(AppState *state)
 		return SDL_APP_CONTINUE;
 	}
 
-	const uint32_t currentFrame = state->currentFrame;
-	const VkCommandBuffer cmd = state->commandBuffers[currentFrame];
-	const VkFence inFlightFence = state->inFlightFences[currentFrame];
-	const VkSemaphore imageAvailableSemaphore = state->imageAvailableSemaphores[currentFrame];
-	const VkSemaphore renderFinishedSemaphore = state->renderFinishedSemaphores[currentFrame];
-
 	vkWaitForFences(
 		state->device,
 		static_cast<uint32_t>(state->inFlightFences.size()),
@@ -81,6 +191,12 @@ SDL_AppResult DrawFrame(AppState *state)
 		SDL_Log("UpdateSceneResources failed");
 		return SDL_APP_FAILURE;
 	}
+
+	const uint32_t currentFrame = state->currentFrame;
+	const VkCommandBuffer cmd = state->commandBuffers[currentFrame];
+	const VkFence inFlightFence = state->inFlightFences[currentFrame];
+	const VkSemaphore imageAvailableSemaphore = state->imageAvailableSemaphores[currentFrame];
+	const VkSemaphore renderFinishedSemaphore = state->renderFinishedSemaphores[currentFrame];
 
 	uint32_t imageIndex = 0;
 	const VkResult acquireRes = vkAcquireNextImageKHR(
@@ -110,54 +226,7 @@ SDL_AppResult DrawFrame(AppState *state)
 		return SDL_APP_FAILURE;
 	}
 
-	TransitionImage(
-		cmd,
-		state->swapchainImages[imageIndex],
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_PIPELINE_STAGE_2_NONE,
-		0,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-
-	if (state->computeDepthImageNeedsInit) {
-		TransitionImage(
-			cmd,
-			state->computeDepthImage,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_GENERAL,
-			VK_PIPELINE_STAGE_2_NONE,
-			0,
-			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
-		state->computeDepthImageNeedsInit = false;
-	}
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, state->computePipeline);
-	vkCmdBindDescriptorSets(
-		cmd,
-		VK_PIPELINE_BIND_POINT_COMPUTE,
-		state->computePipelineLayout,
-		0,
-		1,
-		&state->computeDescriptorSets[imageIndex],
-		0,
-		nullptr);
-	PushComputeConstants(state, cmd);
-
-	const uint32_t groupCountX = (state->extent.width + 7) / 8;
-	const uint32_t groupCountY = (state->extent.height + 7) / 8;
-	vkCmdDispatch(cmd, groupCountX, groupCountY, 1);
-
-	TransitionImage(
-		cmd,
-		state->swapchainImages[imageIndex],
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_NONE,
-		0);
+	RecordGraphicsCommands(state, cmd, imageIndex);
 
 	if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
 		SDL_Log("vkEndCommandBuffer failed");
@@ -167,12 +236,12 @@ SDL_AppResult DrawFrame(AppState *state)
 	VkSemaphoreSubmitInfo waitSemaphoreInfo{};
 	waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 	waitSemaphoreInfo.semaphore = imageAvailableSemaphore;
-	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
 	signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 	signalSemaphoreInfo.semaphore = renderFinishedSemaphore;
-	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 	VkCommandBufferSubmitInfo cmdBufferInfo{};
 	cmdBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
@@ -186,7 +255,6 @@ SDL_AppResult DrawFrame(AppState *state)
 	submitInfo2.pCommandBufferInfos = &cmdBufferInfo;
 	submitInfo2.signalSemaphoreInfoCount = 1;
 	submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
-
 	if (vkQueueSubmit2(state->queue, 1, &submitInfo2, inFlightFence) != VK_SUCCESS) {
 		SDL_Log("vkQueueSubmit2 failed");
 		return SDL_APP_FAILURE;

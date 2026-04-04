@@ -1,25 +1,21 @@
 #include "SceneResources.hpp"
 
+#include "VoxelMaterials.hpp"
 #include "VoxelWorld.hpp"
 
-#include <algorithm>
 #include <array>
-#include <cmath>
-#include <cstring>
 #include <vector>
 
 namespace {
-constexpr uint32_t kMaxSceneTriangles = 8192;
+constexpr uint32_t kMaxSceneVertices = 262144;
+constexpr float kRenderMaterialOpaque = 0.0f;
+constexpr float kRenderMaterialGlass = 1.0f;
+constexpr float kRenderMaterialFluid = 2.0f;
 
 struct Float3 {
 	float x = 0.0f;
 	float y = 0.0f;
 	float z = 0.0f;
-};
-
-struct ProjectedVertex {
-	ComputeVertex vertex{};
-	bool valid = false;
 };
 
 bool CreateBuffer(
@@ -48,189 +44,57 @@ bool CreateBuffer(
 			   outAllocationInfo) == VK_SUCCESS;
 }
 
-Float3 Normalize(const Float3 vector)
+bool ShouldEmitVoxelFace(const VoxelMaterial material, const VoxelMaterial neighborMaterial)
 {
-	const float length = std::sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
-	if (length <= 0.00001f) {
-		return {};
+	if (material == VoxelMaterial::Air) {
+		return false;
 	}
 
-	return {vector.x / length, vector.y / length, vector.z / length};
-}
-
-float Dot(const Float3 a, const Float3 b)
-{
-	return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-Float3 Cross(const Float3 a, const Float3 b)
-{
-	return {
-		a.y * b.z - a.z * b.y,
-		a.z * b.x - a.x * b.z,
-		a.x * b.y - a.y * b.x,
-	};
-}
-
-Float3 Subtract(const Float3 a, const Float3 b)
-{
-	return {a.x - b.x, a.y - b.y, a.z - b.z};
-}
-
-Float3 GetForwardVector(const CameraState &camera)
-{
-	return {
-		std::cos(camera.pitchRadians) * std::sin(camera.yawRadians),
-		std::sin(camera.pitchRadians),
-		-std::cos(camera.pitchRadians) * std::cos(camera.yawRadians),
-	};
-}
-
-Float3 GetRightVector(const CameraState &camera)
-{
-	return Normalize(Cross(GetForwardVector(camera), Float3{0.0f, 1.0f, 0.0f}));
-}
-
-Float3 GetUpVector(const CameraState &camera)
-{
-	return Normalize(Cross(GetRightVector(camera), GetForwardVector(camera)));
-}
-
-std::array<float, 4> GetMaterialColor(const VoxelMaterial material)
-{
-	switch (material) {
-	case VoxelMaterial::Glass:
-		return {0.94f, 0.96f, 1.00f, 1.0f};
-	case VoxelMaterial::Fluid:
-		return {0.00f, 0.60f, 1.00f, 1.0f};
-	case VoxelMaterial::FloorWhite:
-		return {1.00f, 1.00f, 1.00f, 1.0f};
-	case VoxelMaterial::FloorGray:
-		return {0.78f, 0.80f, 0.82f, 1.0f};
-	case VoxelMaterial::Air:
-	default:
-		return {0.0f, 0.0f, 0.0f, 1.0f};
-	}
-}
-
-Float3 ApplyLighting(const std::array<float, 4> &baseColor, const Float3 normal)
-{
-	const auto [x, y, z] = Normalize(Float3{0.35f, -0.80f, 0.45f});
-	const float diffuse = std::max(0.0f, Dot(normal, Float3{-x, -y, -z}));
-	const float light = 0.30f + diffuse * 0.70f;
-	return {
-		baseColor[0] * light,
-		baseColor[1] * light,
-		baseColor[2] * light,
-	};
-}
-
-ProjectedVertex ProjectVertex(AppState &state, const Float3 worldPosition, const Float3 color)
-{
-	const Float3 cameraPosition{
-		state.camera.position[0],
-		state.camera.position[1],
-		state.camera.position[2],
-	};
-	const Float3 forward = Normalize(GetForwardVector(state.camera));
-	const Float3 right = GetRightVector(state.camera);
-	const Float3 up = GetUpVector(state.camera);
-	const Float3 relative = Subtract(worldPosition, cameraPosition);
-	const float viewX = Dot(relative, right);
-	const float viewY = Dot(relative, up);
-	const float viewZ = Dot(relative, forward);
-	if (viewZ <= state.camera.nearPlane || viewZ >= state.camera.farPlane) {
-		return {};
+	if (material == VoxelMaterial::Fluid) {
+		return neighborMaterial == VoxelMaterial::Air || neighborMaterial == VoxelMaterial::Glass;
 	}
 
-	const float aspect = static_cast<float>(state.extent.width) / static_cast<float>(state.extent.height);
-	const float tanHalfFov = std::tan(state.camera.verticalFovRadians * 0.5f);
-	const float ndcX = viewX / (viewZ * tanHalfFov * aspect);
-	const float ndcY = viewY / (viewZ * tanHalfFov);
-	if (std::abs(ndcX) > 1.5f || std::abs(ndcY) > 1.5f) {
-		return {};
-	}
-
-	ProjectedVertex projected{};
-	projected.vertex.position = {
-		ndcX,
-		ndcY,
-		(viewZ - state.camera.nearPlane) / (state.camera.farPlane - state.camera.nearPlane),
-		1.0f,
-	};
-	projected.vertex.color = {color.x, color.y, color.z, 1.0f};
-	projected.valid = true;
-	return projected;
+	return neighborMaterial == VoxelMaterial::Air;
 }
 
-void EmitTriangle(
-	std::vector<ComputeVertex> &vertices,
-	const ProjectedVertex &a,
-	const ProjectedVertex &b,
-	const ProjectedVertex &c)
-{
-	if (!a.valid || !b.valid || !c.valid) {
-		return;
-	}
-
-	vertices.push_back(a.vertex);
-	vertices.push_back(b.vertex);
-	vertices.push_back(c.vertex);
-}
-
-void EmitVoxelFace(
-	AppState &state,
-	std::vector<ComputeVertex> &vertices,
-	const Int3 voxelPosition,
+void EmitFaceToChunkMesh(
+	VoxelChunk &chunk,
 	const VoxelMaterial material,
 	const Float3 normal,
 	const std::array<Float3, 4> &corners)
 {
-	if (vertices.size() + 6 > state.sceneVertexCapacity) {
-		return;
-	}
-
-	const Float3 faceCenter{
-		static_cast<float>(voxelPosition.x) + 0.5f + normal.x * 0.5f,
-		static_cast<float>(voxelPosition.y) + 0.5f + normal.y * 0.5f,
-		static_cast<float>(voxelPosition.z) + 0.5f + normal.z * 0.5f,
+	const VoxelChunkMeshVertex v0{
+		.position = {corners[0].x, corners[0].y, corners[0].z},
+		.normal = {normal.x, normal.y, normal.z},
+		.material = material,
 	};
-	const Float3 cameraPosition{
-		state.camera.position[0],
-		state.camera.position[1],
-		state.camera.position[2],
+	const VoxelChunkMeshVertex v1{
+		.position = {corners[1].x, corners[1].y, corners[1].z},
+		.normal = {normal.x, normal.y, normal.z},
+		.material = material,
 	};
-	const Float3 toCamera = Subtract(cameraPosition, faceCenter);
-	if (Dot(normal, toCamera) <= 0.0f) {
-		return;
-	}
+	const VoxelChunkMeshVertex v2{
+		.position = {corners[2].x, corners[2].y, corners[2].z},
+		.normal = {normal.x, normal.y, normal.z},
+		.material = material,
+	};
+	const VoxelChunkMeshVertex v3{
+		.position = {corners[3].x, corners[3].y, corners[3].z},
+		.normal = {normal.x, normal.y, normal.z},
+		.material = material,
+	};
 
-	const Float3 litColor = ApplyLighting(GetMaterialColor(material), normal);
-	const ProjectedVertex projected0 = ProjectVertex(state, corners[0], litColor);
-	const ProjectedVertex projected1 = ProjectVertex(state, corners[1], litColor);
-	const ProjectedVertex projected2 = ProjectVertex(state, corners[2], litColor);
-	const ProjectedVertex projected3 = ProjectVertex(state, corners[3], litColor);
-	if (!projected0.valid || !projected1.valid || !projected2.valid || !projected3.valid) {
-		return;
-	}
-
-	EmitTriangle(vertices, projected0, projected1, projected2);
-	EmitTriangle(vertices, projected0, projected2, projected3);
+	chunk.meshVertices.push_back(v0);
+	chunk.meshVertices.push_back(v1);
+	chunk.meshVertices.push_back(v2);
+	chunk.meshVertices.push_back(v0);
+	chunk.meshVertices.push_back(v2);
+	chunk.meshVertices.push_back(v3);
 }
 
-bool RebuildSceneBuffer(AppState *state)
+void RebuildChunkMesh(const VoxelWorld &world, VoxelChunk &chunk)
 {
-	if (!state || !state->voxelWorld || !state->sceneVertexMappedData) {
-		return false;
-	}
-
-	if (state->extent.width == 0 || state->extent.height == 0) {
-		state->sceneTriangleCount = 0;
-		return true;
-	}
-
-	std::vector<ComputeVertex> vertices;
-	vertices.reserve(state->sceneVertexCapacity);
+	chunk.meshVertices.clear();
 
 	constexpr std::array<Int3, 6> neighborOffsets{{
 		{1, 0, 0},
@@ -249,11 +113,11 @@ bool RebuildSceneBuffer(AppState *state)
 		{0.0f, 0.0f, -1.0f},
 	}};
 
-	for (int z = state->voxelWorld->min.z; z < state->voxelWorld->maxExclusive.z; ++z) {
-		for (int y = state->voxelWorld->min.y; y < state->voxelWorld->maxExclusive.y; ++y) {
-			for (int x = state->voxelWorld->min.x; x < state->voxelWorld->maxExclusive.x; ++x) {
+	for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
+		for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
+			for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
 				const Int3 position{x, y, z};
-				const VoxelMaterial material = GetVoxelMaterial(*state->voxelWorld, position);
+				const VoxelMaterial material = GetVoxelMaterial(world, position);
 				if (material == VoxelMaterial::Air) {
 					continue;
 				}
@@ -280,31 +144,71 @@ bool RebuildSceneBuffer(AppState *state)
 						y + neighborOffsets[faceIndex].y,
 						z + neighborOffsets[faceIndex].z,
 					};
-					if (GetVoxelMaterial(*state->voxelWorld, neighbor) != VoxelMaterial::Air) {
+					if (!ShouldEmitVoxelFace(material, GetVoxelMaterial(world, neighbor))) {
 						continue;
 					}
 
-					if (vertices.size() + 6 > state->sceneVertexCapacity) {
-						break;
-					}
-
-					EmitVoxelFace(
-						*state,
-						vertices,
-						position,
-						material,
-						normals[faceIndex],
-						faceCorners[faceIndex]);
+					EmitFaceToChunkMesh(chunk, material, normals[faceIndex], faceCorners[faceIndex]);
 				}
 			}
 		}
 	}
 
-	const size_t byteSize = vertices.size() * sizeof(ComputeVertex);
-	if (byteSize > 0) {
-		std::memcpy(state->sceneVertexMappedData, vertices.data(), byteSize);
+	chunk.dirty = false;
+}
+
+bool RebuildCombinedSceneVertexBuffer(AppState &state)
+{
+	if (!state.voxelWorld || !state.sceneVertexMappedData) {
+		return false;
 	}
-	state->sceneTriangleCount = static_cast<uint32_t>(vertices.size() / 3);
+
+	RenderVertex *mappedVertices = static_cast<RenderVertex *>(state.sceneVertexMappedData);
+	uint32_t opaqueVertexCount = 0;
+	std::vector<RenderVertex> transparentVertices;
+	transparentVertices.reserve(state.sceneVertexCapacity / 4);
+
+	for (const VoxelChunk &chunk : state.voxelWorld->chunks) {
+		for (const auto &[position, normal, material] : chunk.meshVertices) {
+			if (opaqueVertexCount + transparentVertices.size() >= state.sceneVertexCapacity) {
+				break;
+			}
+
+			const VoxelMaterialVisual visual = GetVoxelMaterialVisual(material);
+			const float materialKind =
+				material == VoxelMaterial::Glass   ? kRenderMaterialGlass
+				: material == VoxelMaterial::Fluid ? kRenderMaterialFluid
+												   : kRenderMaterialOpaque;
+			const RenderVertex renderVertex{
+				.position = position,
+				.normal = normal,
+				.color = visual.baseColor,
+				.materialKind = materialKind,
+			};
+			if (material == VoxelMaterial::Glass) {
+				transparentVertices.push_back(renderVertex);
+			} else {
+				mappedVertices[opaqueVertexCount++] = renderVertex;
+			}
+		}
+
+		if (opaqueVertexCount + transparentVertices.size() >= state.sceneVertexCapacity) {
+			break;
+		}
+	}
+
+	if (!transparentVertices.empty()) {
+		std::memcpy(
+			mappedVertices + opaqueVertexCount,
+			transparentVertices.data(),
+			transparentVertices.size() * sizeof(RenderVertex));
+	}
+
+	state.sceneOpaqueVertexCount = opaqueVertexCount;
+	state.sceneTransparentVertexCount = static_cast<uint32_t>(transparentVertices.size());
+	state.sceneVertexCount = opaqueVertexCount + state.sceneTransparentVertexCount;
+	state.sceneTriangleCount = state.sceneVertexCount / 3;
+	state.sceneVertexBufferDirty = false;
 	return true;
 }
 } // namespace
@@ -323,12 +227,16 @@ void DestroySceneResources(AppState *state)
 
 	state->sceneVertexMappedData = nullptr;
 	state->sceneVertexCapacity = 0;
+	state->sceneVertexCount = 0;
+	state->sceneOpaqueVertexCount = 0;
+	state->sceneTransparentVertexCount = 0;
 	state->sceneTriangleCount = 0;
+	state->sceneVertexBufferDirty = true;
 }
 
 bool CreateSceneResources(AppState *state)
 {
-	if (!state || !state->allocator) {
+	if (!state || !state->allocator || !state->voxelWorld) {
 		return false;
 	}
 
@@ -343,8 +251,8 @@ bool CreateSceneResources(AppState *state)
 	VmaAllocationInfo allocationResultInfo{};
 	if (!CreateBuffer(
 			state,
-			sizeof(ComputeVertex) * kMaxSceneTriangles * 3ull,
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			sizeof(RenderVertex) * static_cast<VkDeviceSize>(kMaxSceneVertices),
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			allocationInfo,
 			&state->sceneVertexBuffer,
 			&state->sceneVertexAllocation,
@@ -353,11 +261,27 @@ bool CreateSceneResources(AppState *state)
 	}
 
 	state->sceneVertexMappedData = allocationResultInfo.pMappedData;
-	state->sceneVertexCapacity = kMaxSceneTriangles * 3;
-	return RebuildSceneBuffer(state);
+	state->sceneVertexCapacity = kMaxSceneVertices;
+	state->sceneVertexBufferDirty = true;
+	return UpdateSceneResources(state);
 }
 
 bool UpdateSceneResources(AppState *state)
 {
-	return RebuildSceneBuffer(state);
+	if (!state || !state->voxelWorld) {
+		return false;
+	}
+
+	for (VoxelChunk &chunk : state->voxelWorld->chunks) {
+		if (chunk.dirty) {
+			RebuildChunkMesh(*state->voxelWorld, chunk);
+			state->sceneVertexBufferDirty = true;
+		}
+	}
+
+	if (!state->sceneVertexBufferDirty) {
+		return true;
+	}
+
+	return RebuildCombinedSceneVertexBuffer(*state);
 }

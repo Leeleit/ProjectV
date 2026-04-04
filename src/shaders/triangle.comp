@@ -66,13 +66,13 @@ void main() {
         barycentric.x * va.position.z +
         barycentric.y * vb.position.z +
         barycentric.z * vc.position.z;
+        const vec4 candidateColor =
+        barycentric.x * va.color +
+        barycentric.y * vb.color +
+        barycentric.z * vc.color;
         if (depth < nearestDepth) {
             nearestDepth = depth;
-            color = vec4(
-            barycentric.x * va.color.rgb +
-            barycentric.y * vb.color.rgb +
-            barycentric.z * vc.color.rgb,
-            1.0);
+            color = vec4(candidateColor.rgb, 1.0);
         }
     }
 

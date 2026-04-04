@@ -44,6 +44,28 @@ void AddScaled(std::array<float, 3> *target, const Float3 vector, const float sc
 	target->at(1) += vector.y * scale;
 	target->at(2) += vector.z * scale;
 }
+
+float Dot(const Float3 a, const Float3 b)
+{
+	return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+std::array<float, 16> MultiplyMatrices(
+	const std::array<float, 16> &a,
+	const std::array<float, 16> &b)
+{
+	std::array<float, 16> result{};
+	for (int column = 0; column < 4; ++column) {
+		for (int row = 0; row < 4; ++row) {
+			float value = 0.0f;
+			for (int index = 0; index < 4; ++index) {
+				value += a[index * 4 + row] * b[column * 4 + index];
+			}
+			result[column * 4 + row] = value;
+		}
+	}
+	return result;
+}
 } // namespace
 
 void InitializeCamera(AppState *state)
@@ -132,4 +154,63 @@ void UpdateCamera(AppState *state)
 	if (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]) {
 		state->camera.position[1] -= moveStep;
 	}
+}
+
+GraphicsPushConstants BuildGraphicsPushConstants(const AppState &state)
+{
+	const Float3 cameraPosition{
+		state.camera.position[0],
+		state.camera.position[1],
+		state.camera.position[2],
+	};
+	const Float3 forward = Normalize(GetForwardVector(state.camera));
+	const Float3 right = Normalize(Cross(forward, Float3{0.0f, 1.0f, 0.0f}));
+	const Float3 up = Normalize(Cross(right, forward));
+
+	const std::array view{
+		right.x,
+		up.x,
+		-forward.x,
+		0.0f,
+		right.y,
+		up.y,
+		-forward.y,
+		0.0f,
+		right.z,
+		up.z,
+		-forward.z,
+		0.0f,
+		-Dot(right, cameraPosition),
+		-Dot(up, cameraPosition),
+		Dot(forward, cameraPosition),
+		1.0f,
+	};
+
+	const float aspect = static_cast<float>(state.extent.width) / static_cast<float>(state.extent.height);
+	const float tanHalfFov = std::tan(state.camera.verticalFovRadians * 0.5f);
+	const float nearPlane = state.camera.nearPlane;
+	const float farPlane = state.camera.farPlane;
+
+	const std::array projection{
+		1.0f / (aspect * tanHalfFov),
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		-1.0f / tanHalfFov,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		farPlane / (nearPlane - farPlane),
+		-1.0f,
+		0.0f,
+		0.0f,
+		nearPlane * farPlane / (nearPlane - farPlane),
+		0.0f,
+	};
+
+	GraphicsPushConstants pushConstants{};
+	pushConstants.viewProjection = MultiplyMatrices(projection, view);
+	return pushConstants;
 }
