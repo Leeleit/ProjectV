@@ -7,11 +7,11 @@
 
 bool InitVulkan(AppState *state)
 {
-	if (!InitializeVulkanBase(state)) {
+	if (!InitializeVulkanBase(&state->platform, &state->context, &state->frame)) {
 		return false;
 	}
 
-	if (!RecreateSwapchain(state)) {
+	if (!RecreateSwapchain(&state->platform, &state->context, &state->swapchain, &state->render)) {
 		return false;
 	}
 
@@ -20,14 +20,14 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 
-	InitializeCamera(state);
+	InitializeCamera(&state->camera, &state->simulation, &state->input);
 
-	if (!CreateSceneResources(state)) {
+	if (!CreateSceneResources(&state->context, &state->world, &state->render)) {
 		SDL_Log("CreateSceneResources failed");
 		return false;
 	}
 
-	if (!CreateGraphicsPipeline(state)) {
+	if (!CreateGraphicsPipeline(&state->context, &state->swapchain, &state->render)) {
 		SDL_Log("CreateGraphicsPipeline failed");
 		return false;
 	}

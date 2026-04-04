@@ -2,8 +2,10 @@
 
 #include "VoxelMaterials.hpp"
 #include "VoxelWorld.hpp"
+#include "VulkanDebug.hpp"
 
 #include <array>
+#include <cstdio>
 #include <vector>
 
 namespace {
@@ -19,7 +21,7 @@ struct Float3 {
 };
 
 bool CreateBuffer(
-	AppState *state,
+	VulkanContextState *context,
 	// ReSharper disable once CppDFAConstantParameter
 	const VkDeviceSize size,
 	// ReSharper disable once CppDFAConstantParameter
@@ -36,7 +38,7 @@ bool CreateBuffer(
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	return vmaCreateBuffer(
-			   state->allocator,
+			   context->allocator,
 			   &bufferInfo,
 			   &allocationInfo,
 			   outBuffer,
@@ -58,43 +60,43 @@ bool ShouldEmitVoxelFace(const VoxelMaterial material, const VoxelMaterial neigh
 }
 
 void EmitFaceToChunkMesh(
-	VoxelChunk &chunk,
+	SceneChunkRenderCache &chunkRenderCache,
 	const VoxelMaterial material,
 	const Float3 normal,
 	const std::array<Float3, 4> &corners)
 {
-	const VoxelChunkMeshVertex v0{
+	const SceneChunkMeshVertex v0{
 		.position = {corners[0].x, corners[0].y, corners[0].z},
 		.normal = {normal.x, normal.y, normal.z},
 		.material = material,
 	};
-	const VoxelChunkMeshVertex v1{
+	const SceneChunkMeshVertex v1{
 		.position = {corners[1].x, corners[1].y, corners[1].z},
 		.normal = {normal.x, normal.y, normal.z},
 		.material = material,
 	};
-	const VoxelChunkMeshVertex v2{
+	const SceneChunkMeshVertex v2{
 		.position = {corners[2].x, corners[2].y, corners[2].z},
 		.normal = {normal.x, normal.y, normal.z},
 		.material = material,
 	};
-	const VoxelChunkMeshVertex v3{
+	const SceneChunkMeshVertex v3{
 		.position = {corners[3].x, corners[3].y, corners[3].z},
 		.normal = {normal.x, normal.y, normal.z},
 		.material = material,
 	};
 
-	chunk.meshVertices.push_back(v0);
-	chunk.meshVertices.push_back(v1);
-	chunk.meshVertices.push_back(v2);
-	chunk.meshVertices.push_back(v0);
-	chunk.meshVertices.push_back(v2);
-	chunk.meshVertices.push_back(v3);
+	chunkRenderCache.meshVertices.push_back(v0);
+	chunkRenderCache.meshVertices.push_back(v1);
+	chunkRenderCache.meshVertices.push_back(v2);
+	chunkRenderCache.meshVertices.push_back(v0);
+	chunkRenderCache.meshVertices.push_back(v2);
+	chunkRenderCache.meshVertices.push_back(v3);
 }
 
-void RebuildChunkMesh(const VoxelWorld &world, VoxelChunk &chunk)
+void RebuildChunkMesh(const VoxelWorld &world, const VoxelChunk &chunk, SceneChunkRenderCache &chunkRenderCache)
 {
-	chunk.meshVertices.clear();
+	chunkRenderCache.meshVertices.clear();
 
 	constexpr std::array<Int3, 6> neighborOffsets{{
 		{1, 0, 0},
@@ -148,29 +150,35 @@ void RebuildChunkMesh(const VoxelWorld &world, VoxelChunk &chunk)
 						continue;
 					}
 
-					EmitFaceToChunkMesh(chunk, material, normals[faceIndex], faceCorners[faceIndex]);
+					EmitFaceToChunkMesh(chunkRenderCache, material, normals[faceIndex], faceCorners[faceIndex]);
 				}
 			}
 		}
 	}
-
-	chunk.dirty = false;
 }
 
-bool RebuildCombinedSceneVertexBuffer(AppState &state)
+struct SceneUploadCounts {
+	uint32_t vertexCount = 0;
+	uint32_t opaqueVertexCount = 0;
+	uint32_t transparentVertexCount = 0;
+};
+
+bool BuildCombinedSceneVertices(
+	const RenderState &render,
+	RenderVertex *mappedVertices,
+	SceneUploadCounts *outCounts)
 {
-	if (!state.voxelWorld || !state.sceneVertexMappedData) {
+	if (!mappedVertices || !outCounts) {
 		return false;
 	}
 
-	RenderVertex *mappedVertices = static_cast<RenderVertex *>(state.sceneVertexMappedData);
 	uint32_t opaqueVertexCount = 0;
 	std::vector<RenderVertex> transparentVertices;
-	transparentVertices.reserve(state.sceneVertexCapacity / 4);
+	transparentVertices.reserve(render.sceneVertexCapacity / 4);
 
-	for (const VoxelChunk &chunk : state.voxelWorld->chunks) {
-		for (const auto &[position, normal, material] : chunk.meshVertices) {
-			if (opaqueVertexCount + transparentVertices.size() >= state.sceneVertexCapacity) {
+	for (const auto &[meshVertices] : render.sceneChunkRenderCaches) {
+		for (const auto &[position, normal, material] : meshVertices) {
+			if (opaqueVertexCount + transparentVertices.size() >= render.sceneVertexCapacity) {
 				break;
 			}
 
@@ -192,7 +200,7 @@ bool RebuildCombinedSceneVertexBuffer(AppState &state)
 			}
 		}
 
-		if (opaqueVertexCount + transparentVertices.size() >= state.sceneVertexCapacity) {
+		if (opaqueVertexCount + transparentVertices.size() >= render.sceneVertexCapacity) {
 			break;
 		}
 	}
@@ -204,43 +212,49 @@ bool RebuildCombinedSceneVertexBuffer(AppState &state)
 			transparentVertices.size() * sizeof(RenderVertex));
 	}
 
-	state.sceneOpaqueVertexCount = opaqueVertexCount;
-	state.sceneTransparentVertexCount = static_cast<uint32_t>(transparentVertices.size());
-	state.sceneVertexCount = opaqueVertexCount + state.sceneTransparentVertexCount;
-	state.sceneTriangleCount = state.sceneVertexCount / 3;
-	state.sceneVertexBufferDirty = false;
+	outCounts->opaqueVertexCount = opaqueVertexCount;
+	outCounts->transparentVertexCount = static_cast<uint32_t>(transparentVertices.size());
+	outCounts->vertexCount = opaqueVertexCount + outCounts->transparentVertexCount;
 	return true;
 }
 } // namespace
 
-void DestroySceneResources(AppState *state)
+void DestroySceneResources(
+	VulkanContextState *context,
+	RenderState *render)
 {
-	if (!state || !state->allocator) {
+	if (!context || !render || !context->allocator) {
 		return;
 	}
 
-	if (state->sceneVertexBuffer && state->sceneVertexAllocation) {
-		vmaDestroyBuffer(state->allocator, state->sceneVertexBuffer, state->sceneVertexAllocation);
-		state->sceneVertexBuffer = VK_NULL_HANDLE;
-		state->sceneVertexAllocation = VK_NULL_HANDLE;
+	for (auto &[mappedData, vertexBuffer, vertexAllocation, vertexCount, opaqueVertexCount, transparentVertexCount] : render->sceneFrameResources) {
+		if (vertexBuffer && vertexAllocation) {
+			vmaDestroyBuffer(context->allocator, vertexBuffer, vertexAllocation);
+			vertexBuffer = VK_NULL_HANDLE;
+			vertexAllocation = VK_NULL_HANDLE;
+		}
+		mappedData = nullptr;
+		vertexCount = 0;
+		opaqueVertexCount = 0;
+		transparentVertexCount = 0;
 	}
 
-	state->sceneVertexMappedData = nullptr;
-	state->sceneVertexCapacity = 0;
-	state->sceneVertexCount = 0;
-	state->sceneOpaqueVertexCount = 0;
-	state->sceneTransparentVertexCount = 0;
-	state->sceneTriangleCount = 0;
-	state->sceneVertexBufferDirty = true;
+	render->sceneVertexCapacity = 0;
+	render->sceneTriangleCount = 0;
+	render->sceneVertexBufferDirty = true;
+	render->sceneChunkRenderCaches.clear();
 }
 
-bool CreateSceneResources(AppState *state)
+bool CreateSceneResources(
+	VulkanContextState *context,
+	WorldState *world,
+	RenderState *render)
 {
-	if (!state || !state->allocator || !state->voxelWorld) {
+	if (!context || !world || !render || !context->allocator || !world->voxelWorld) {
 		return false;
 	}
 
-	DestroySceneResources(state);
+	DestroySceneResources(context, render);
 
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.flags =
@@ -248,40 +262,95 @@ bool CreateSceneResources(AppState *state)
 		VMA_ALLOCATION_CREATE_MAPPED_BIT;
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
-	VmaAllocationInfo allocationResultInfo{};
-	if (!CreateBuffer(
-			state,
-			sizeof(RenderVertex) * static_cast<VkDeviceSize>(kMaxSceneVertices),
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			allocationInfo,
-			&state->sceneVertexBuffer,
-			&state->sceneVertexAllocation,
-			&allocationResultInfo)) {
-		return false;
+	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
+		VmaAllocationInfo allocationResultInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(RenderVertex) * static_cast<VkDeviceSize>(kMaxSceneVertices),
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.vertexBuffer,
+				&frameResources.vertexAllocation,
+				&allocationResultInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.mappedData = allocationResultInfo.pMappedData;
+
+		char bufferName[64]{};
+		std::snprintf(bufferName, sizeof(bufferName), "SceneVertexBuffer[%zu]", static_cast<size_t>(&frameResources - render->sceneFrameResources.data()));
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.vertexBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
 	}
 
-	state->sceneVertexMappedData = allocationResultInfo.pMappedData;
-	state->sceneVertexCapacity = kMaxSceneVertices;
-	state->sceneVertexBufferDirty = true;
-	return UpdateSceneResources(state);
+	render->sceneVertexCapacity = kMaxSceneVertices;
+	render->sceneVertexBufferDirty = true;
+	render->sceneChunkRenderCaches.clear();
+	render->sceneChunkRenderCaches.resize(world->voxelWorld->chunks.size());
+	return UpdateSceneResources(world, render);
 }
 
-bool UpdateSceneResources(AppState *state)
+bool UpdateSceneResources(
+	WorldState *world,
+	RenderState *render)
 {
-	if (!state || !state->voxelWorld) {
+	if (!world || !render || !world->voxelWorld) {
 		return false;
 	}
 
-	for (VoxelChunk &chunk : state->voxelWorld->chunks) {
+	if (render->sceneChunkRenderCaches.size() != world->voxelWorld->chunks.size()) {
+		render->sceneChunkRenderCaches.clear();
+		render->sceneChunkRenderCaches.resize(world->voxelWorld->chunks.size());
+		render->sceneVertexBufferDirty = true;
+	}
+
+	for (size_t chunkIndex = 0; chunkIndex < world->voxelWorld->chunks.size(); ++chunkIndex) {
+		VoxelChunk &chunk = world->voxelWorld->chunks[chunkIndex];
 		if (chunk.dirty) {
-			RebuildChunkMesh(*state->voxelWorld, chunk);
-			state->sceneVertexBufferDirty = true;
+			RebuildChunkMesh(*world->voxelWorld, chunk, render->sceneChunkRenderCaches[chunkIndex]);
+			chunk.dirty = false;
+			if (world->voxelWorld->stats.dirtyChunkCount > 0) {
+				--world->voxelWorld->stats.dirtyChunkCount;
+			}
+			render->sceneVertexBufferDirty = true;
 		}
 	}
 
-	if (!state->sceneVertexBufferDirty) {
+	if (!render->sceneVertexBufferDirty) {
 		return true;
 	}
 
-	return RebuildCombinedSceneVertexBuffer(*state);
+	render->sceneVertexBufferDirty = false;
+	return true;
+}
+
+bool UploadSceneFrameResources(
+	const WorldState *world,
+	RenderState *render,
+	const uint32_t frameIndex)
+{
+	if (!world || !render || frameIndex >= render->sceneFrameResources.size()) {
+		return false;
+	}
+	if (!world->voxelWorld) {
+		return false;
+	}
+
+	SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
+	SceneUploadCounts uploadCounts{};
+	if (!BuildCombinedSceneVertices(
+			*render,
+			static_cast<RenderVertex *>(frameResources.mappedData),
+			&uploadCounts)) {
+		return false;
+	}
+
+	frameResources.vertexCount = uploadCounts.vertexCount;
+	frameResources.opaqueVertexCount = uploadCounts.opaqueVertexCount;
+	frameResources.transparentVertexCount = uploadCounts.transparentVertexCount;
+	render->sceneTriangleCount = uploadCounts.vertexCount / 3;
+	return true;
 }

@@ -13,64 +13,64 @@ void ShutdownVulkan(AppState *state)
 	}
 	state->shutdownDone = true;
 
-	if (state->device) {
-		vkDeviceWaitIdle(state->device);
-		DestroyGraphicsPipeline(state);
-		DestroySceneResources(state);
+	if (state->context.device) {
+		vkDeviceWaitIdle(state->context.device);
+		DestroyGraphicsPipeline(&state->context, &state->render);
+		DestroySceneResources(&state->context, &state->render);
 	}
 
 	DestroyVoxelLabWorld(state);
 
-	if (state->device) {
-		for (const auto iv : state->swapchainImageViews) {
-			vkDestroyImageView(state->device, iv, nullptr);
+	if (state->context.device) {
+		for (const auto iv : state->swapchain.imageViews) {
+			vkDestroyImageView(state->context.device, iv, nullptr);
 		}
-		if (state->swapchain) {
-			vkDestroySwapchainKHR(state->device, state->swapchain, nullptr);
-		}
-	}
-
-	if (state->device) {
-		for (const auto sem : state->imageAvailableSemaphores) {
-			vkDestroySemaphore(state->device, sem, nullptr);
-		}
-		for (const auto sem : state->renderFinishedSemaphores) {
-			vkDestroySemaphore(state->device, sem, nullptr);
-		}
-		for (const auto fence : state->inFlightFences) {
-			vkDestroyFence(state->device, fence, nullptr);
-		}
-
-		if (state->commandPool) {
-			vkDestroyCommandPool(state->device, state->commandPool, nullptr);
+		if (state->swapchain.handle) {
+			vkDestroySwapchainKHR(state->context.device, state->swapchain.handle, nullptr);
 		}
 	}
 
-	if (state->allocator) {
-		vmaDestroyAllocator(state->allocator);
-		state->allocator = VK_NULL_HANDLE;
-	}
-	if (state->device) {
-		vkDestroyDevice(state->device, nullptr);
-		state->device = VK_NULL_HANDLE;
-	}
-	if (state->surface && state->instance) {
-		vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
-		state->surface = VK_NULL_HANDLE;
+	if (state->context.device) {
+		for (const auto sem : state->frame.imageAvailableSemaphores) {
+			vkDestroySemaphore(state->context.device, sem, nullptr);
+		}
+		for (const auto sem : state->frame.renderFinishedSemaphores) {
+			vkDestroySemaphore(state->context.device, sem, nullptr);
+		}
+		for (const auto fence : state->frame.inFlightFences) {
+			vkDestroyFence(state->context.device, fence, nullptr);
+		}
+
+		if (state->context.commandPool) {
+			vkDestroyCommandPool(state->context.device, state->context.commandPool, nullptr);
+		}
 	}
 
-	if (state->debugMessenger && state->instance) {
-		vkDestroyDebugUtilsMessengerEXT(state->instance, state->debugMessenger, nullptr);
-		state->debugMessenger = VK_NULL_HANDLE;
+	if (state->context.allocator) {
+		vmaDestroyAllocator(state->context.allocator);
+		state->context.allocator = VK_NULL_HANDLE;
+	}
+	if (state->context.device) {
+		vkDestroyDevice(state->context.device, nullptr);
+		state->context.device = VK_NULL_HANDLE;
+	}
+	if (state->context.surface && state->context.instance) {
+		vkDestroySurfaceKHR(state->context.instance, state->context.surface, nullptr);
+		state->context.surface = VK_NULL_HANDLE;
 	}
 
-	if (state->window) {
-		SDL_DestroyWindow(state->window);
-		state->window = nullptr;
+	if (state->context.debugMessenger && state->context.instance) {
+		vkDestroyDebugUtilsMessengerEXT(state->context.instance, state->context.debugMessenger, nullptr);
+		state->context.debugMessenger = VK_NULL_HANDLE;
 	}
-	if (state->instance) {
-		vkDestroyInstance(state->instance, nullptr);
-		state->instance = VK_NULL_HANDLE;
+
+	if (state->platform.window) {
+		SDL_DestroyWindow(state->platform.window);
+		state->platform.window = nullptr;
+	}
+	if (state->context.instance) {
+		vkDestroyInstance(state->context.instance, nullptr);
+		state->context.instance = VK_NULL_HANDLE;
 	}
 }
 

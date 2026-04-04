@@ -1,6 +1,8 @@
 #include "VulkanBootstrap.hpp"
+#include "VulkanDebug.hpp"
 
 #include <array>
+#include <cstdio>
 #include <vector>
 
 namespace {
@@ -78,14 +80,14 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 }
 
 // Создаём сам messenger после instance.
-bool CreateDebugMessenger(AppState *state)
+bool CreateDebugMessenger(VulkanContextState *context)
 {
 #ifdef NDEBUG
-	(void)state;
+	(void)context;
 	return true;
 #else
 	const VkDebugUtilsMessengerCreateInfoEXT info = MakeDebugMessengerCreateInfo();
-	if (vkCreateDebugUtilsMessengerEXT(state->instance, &info, nullptr, &state->debugMessenger) != VK_SUCCESS) {
+	if (vkCreateDebugUtilsMessengerEXT(context->instance, &info, nullptr, &context->debugMessenger) != VK_SUCCESS) {
 		SDL_Log("vkCreateDebugUtilsMessengerEXT failed");
 		return false;
 	}
@@ -263,7 +265,10 @@ bool TryPickPhysicalDevice(
 }
 } // namespace
 
-bool InitializeVulkanBase(AppState *state)
+bool InitializeVulkanBase(
+	PlatformState *platform,
+	VulkanContextState *context,
+	FrameState *frame)
 {
 	// SDL нужен нам до Vulkan, потому что именно он создаёт окно и surface-совместимость.
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -271,8 +276,8 @@ bool InitializeVulkanBase(AppState *state)
 		return false;
 	}
 
-	state->window = SDL_CreateWindow(PROJECT_NAME, 1280, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-	if (!state->window) {
+	platform->window = SDL_CreateWindow(PROJECT_NAME, 1280, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+	if (!platform->window) {
 		SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
 		return false;
 	}
@@ -320,32 +325,32 @@ bool InitializeVulkanBase(AppState *state)
 	}
 
 	// Instance — это верхний объект Vulkan, от которого стартует вся остальная графическая жизнь.
-	if (vkCreateInstance(&instanceCreateInfo, nullptr, &state->instance) != VK_SUCCESS) {
+	if (vkCreateInstance(&instanceCreateInfo, nullptr, &context->instance) != VK_SUCCESS) {
 		SDL_Log("vkCreateInstance failed");
 		return false;
 	}
 
-	volkLoadInstance(state->instance);
+	volkLoadInstance(context->instance);
 
-	if (!CreateDebugMessenger(state)) {
+	if (!CreateDebugMessenger(context)) {
 		return false;
 	}
 
 	// Surface связывает окно SDL и Vulkan-instance в один канал вывода.
-	if (!SDL_Vulkan_CreateSurface(state->window, state->instance, nullptr, &state->surface)) {
+	if (!SDL_Vulkan_CreateSurface(platform->window, context->instance, nullptr, &context->surface)) {
 		SDL_Log("SDL_Vulkan_CreateSurface failed: %s", SDL_GetError());
 		return false;
 	}
 
 	// Ищем физическое устройство, которое вообще умеет работать с нашим surface.
 	uint32_t deviceCount = 0;
-	if (vkEnumeratePhysicalDevices(state->instance, &deviceCount, nullptr) != VK_SUCCESS || deviceCount == 0) {
+	if (vkEnumeratePhysicalDevices(context->instance, &deviceCount, nullptr) != VK_SUCCESS || deviceCount == 0) {
 		SDL_Log("No physical devices found");
 		return false;
 	}
 
 	std::vector<VkPhysicalDevice> devices(deviceCount);
-	if (vkEnumeratePhysicalDevices(state->instance, &deviceCount, devices.data()) != VK_SUCCESS) {
+	if (vkEnumeratePhysicalDevices(context->instance, &deviceCount, devices.data()) != VK_SUCCESS) {
 		SDL_Log("vkEnumeratePhysicalDevices failed");
 		return false;
 	}
@@ -353,7 +358,7 @@ bool InitializeVulkanBase(AppState *state)
 	PhysicalDeviceCandidate selected{};
 	for (VkPhysicalDevice physicalDevice : devices) {
 		PhysicalDeviceCandidate candidate{};
-		if (TryPickPhysicalDevice(physicalDevice, state->surface, &candidate)) {
+		if (TryPickPhysicalDevice(physicalDevice, context->surface, &candidate)) {
 			selected = candidate;
 			break;
 		}
@@ -365,14 +370,14 @@ bool InitializeVulkanBase(AppState *state)
 	}
 
 	// Фиксируем выбранную видеокарту и семейство очереди в общем состоянии.
-	state->physicalDevice = selected.device;
-	state->queueFamilyIndex = selected.queueFamilyIndex;
+	context->physicalDevice = selected.device;
+	context->queueFamilyIndex = selected.queueFamilyIndex;
 
 	// Логическое устройство создаёт то API, которым мы будем реально пользоваться.
 	float queuePriority = 1.0f;
 	VkDeviceQueueCreateInfo queueInfo{};
 	queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueInfo.queueFamilyIndex = state->queueFamilyIndex;
+	queueInfo.queueFamilyIndex = context->queueFamilyIndex;
 	queueInfo.queueCount = 1;
 	queueInfo.pQueuePriorities = &queuePriority;
 
@@ -389,20 +394,25 @@ bool InitializeVulkanBase(AppState *state)
 	deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
 	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-	if (vkCreateDevice(state->physicalDevice, &deviceCreateInfo, nullptr, &state->device) != VK_SUCCESS) {
+	if (vkCreateDevice(context->physicalDevice, &deviceCreateInfo, nullptr, &context->device) != VK_SUCCESS) {
 		SDL_Log("vkCreateDevice failed");
 		return false;
 	}
 
 	// После создания device Vulkan-вызывам нужен device-level loader.
-	volkLoadDevice(state->device);
-	vkGetDeviceQueue(state->device, state->queueFamilyIndex, 0, &state->queue);
+	volkLoadDevice(context->device);
+	vkGetDeviceQueue(context->device, context->queueFamilyIndex, 0, &context->queue);
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(context->queue),
+		VK_OBJECT_TYPE_QUEUE,
+		"GraphicsPresentQueue");
 
 	// VMA берет на себя буферы и аллокации памяти, чтобы не писать это руками в каждом месте.
 	VmaAllocatorCreateInfo allocInfo{};
-	allocInfo.physicalDevice = state->physicalDevice;
-	allocInfo.device = state->device;
-	allocInfo.instance = state->instance;
+	allocInfo.physicalDevice = context->physicalDevice;
+	allocInfo.device = context->device;
+	allocInfo.instance = context->instance;
 	allocInfo.vulkanApiVersion = VK_API_VERSION_1_4;
 
 	VmaVulkanFunctions vulkanFunctions{};
@@ -412,7 +422,7 @@ bool InitializeVulkanBase(AppState *state)
 	}
 	allocInfo.pVulkanFunctions = &vulkanFunctions;
 
-	if (vmaCreateAllocator(&allocInfo, &state->allocator) != VK_SUCCESS) {
+	if (vmaCreateAllocator(&allocInfo, &context->allocator) != VK_SUCCESS) {
 		SDL_Log("vmaCreateAllocator failed");
 		return false;
 	}
@@ -420,30 +430,44 @@ bool InitializeVulkanBase(AppState *state)
 	// Command pool хранит временные command buffer'ы.
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.queueFamilyIndex = state->queueFamilyIndex;
+	poolInfo.queueFamilyIndex = context->queueFamilyIndex;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-	if (vkCreateCommandPool(state->device, &poolInfo, nullptr, &state->commandPool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->commandPool) != VK_SUCCESS) {
 		SDL_Log("vkCreateCommandPool failed");
 		return false;
 	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(context->commandPool),
+		VK_OBJECT_TYPE_COMMAND_POOL,
+		"MainCommandPool");
 
 	// На каждый кадр держим отдельный primary command buffer.
-	state->commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	frame->commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	VkCommandBufferAllocateInfo cmdAllocInfo{};
 	cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cmdAllocInfo.commandPool = state->commandPool;
+	cmdAllocInfo.commandPool = context->commandPool;
 	cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	cmdAllocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
 
-	if (vkAllocateCommandBuffers(state->device, &cmdAllocInfo, state->commandBuffers.data()) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(context->device, &cmdAllocInfo, frame->commandBuffers.data()) != VK_SUCCESS) {
 		return false;
+	}
+	for (size_t i = 0; i < frame->commandBuffers.size(); ++i) {
+		char name[64]{};
+		std::snprintf(name, sizeof(name), "FrameCommandBuffer[%zu]", i);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frame->commandBuffers[i]),
+			VK_OBJECT_TYPE_COMMAND_BUFFER,
+			name);
 	}
 
 	// Семафоры и fence'ы синхронизируют CPU и GPU между кадрами.
-	state->imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	state->renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-	state->inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	frame->imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	frame->renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	frame->inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -452,11 +476,35 @@ bool InitializeVulkanBase(AppState *state)
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		if (vkCreateSemaphore(state->device, &semaphoreInfo, nullptr, &state->imageAvailableSemaphores[i]) != VK_SUCCESS ||
-			vkCreateSemaphore(state->device, &semaphoreInfo, nullptr, &state->renderFinishedSemaphores[i]) != VK_SUCCESS ||
-			vkCreateFence(state->device, &fenceInfo, nullptr, &state->inFlightFences[i]) != VK_SUCCESS) {
+		if (vkCreateSemaphore(context->device, &semaphoreInfo, nullptr, &frame->imageAvailableSemaphores[i]) != VK_SUCCESS ||
+			vkCreateSemaphore(context->device, &semaphoreInfo, nullptr, &frame->renderFinishedSemaphores[i]) != VK_SUCCESS ||
+			vkCreateFence(context->device, &fenceInfo, nullptr, &frame->inFlightFences[i]) != VK_SUCCESS) {
 			return false;
 		}
+
+		char imageAvailableName[64]{};
+		std::snprintf(imageAvailableName, sizeof(imageAvailableName), "ImageAvailableSemaphore[%d]", i);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frame->imageAvailableSemaphores[i]),
+			VK_OBJECT_TYPE_SEMAPHORE,
+			imageAvailableName);
+
+		char renderFinishedName[64]{};
+		std::snprintf(renderFinishedName, sizeof(renderFinishedName), "RenderFinishedSemaphore[%d]", i);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frame->renderFinishedSemaphores[i]),
+			VK_OBJECT_TYPE_SEMAPHORE,
+			renderFinishedName);
+
+		char fenceName[64]{};
+		std::snprintf(fenceName, sizeof(fenceName), "InFlightFence[%d]", i);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frame->inFlightFences[i]),
+			VK_OBJECT_TYPE_FENCE,
+			fenceName);
 	}
 
 	return true;

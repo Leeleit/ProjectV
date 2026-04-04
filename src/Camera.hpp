@@ -3,9 +3,22 @@
 
 #include "Types.hpp"
 
-void InitializeCamera(AppState *state);
-void HandleCameraEvent(AppState *state, const SDL_Event *event);
-void UpdateCamera(AppState *state);
-GraphicsPushConstants BuildGraphicsPushConstants(const AppState &state);
+void InitializeCamera(
+	CameraState *camera,
+	SimulationState *simulation,
+	InputState *input);
+void HandleCameraEvent(
+	CameraState *camera,
+	InputState *input,
+	const SDL_Event *event);
+void ConsumeCameraLookInput(
+	CameraState *camera,
+	InputState *input);
+void TickCamera(
+	CameraState *camera,
+	float deltaSeconds);
+GraphicsPushConstants BuildGraphicsPushConstants(
+	const CameraState &camera,
+	VkExtent2D extent);
 
 #endif

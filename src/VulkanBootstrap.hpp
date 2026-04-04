@@ -3,6 +3,9 @@
 
 #include "Types.hpp"
 
-bool InitializeVulkanBase(AppState *state);
+bool InitializeVulkanBase(
+	PlatformState *platform,
+	VulkanContextState *context,
+	FrameState *frame);
 
 #endif
