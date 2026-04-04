@@ -9,10 +9,22 @@
 #include "vma/vk_mem_alloc.h"
 #pragma clang diagnostic pop
 
+#include <array>
 #include <memory>
 #include <vector>
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
+struct ComputeVertex {
+	std::array<float, 4> position{};
+	std::array<float, 4> color{};
+};
+
+struct ComputePushConstants {
+	std::array<float, 4> clearColor{0.08f, 0.10f, 0.14f, 1.0f};
+	uint32_t triangleCount = 0;
+	std::array<uint32_t, 3> padding{};
+};
 
 struct AppState {
 	SDL_Window *window = nullptr;
@@ -39,6 +51,13 @@ struct AppState {
 	VkDescriptorPool computeDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout computeDescriptorSetLayout = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> computeDescriptorSets;
+	VkBuffer sceneVertexBuffer = VK_NULL_HANDLE;
+	VmaAllocation sceneVertexAllocation = VK_NULL_HANDLE;
+	uint32_t sceneTriangleCount = 0;
+	VkImage computeDepthImage = VK_NULL_HANDLE;
+	VkImageView computeDepthImageView = VK_NULL_HANDLE;
+	VmaAllocation computeDepthAllocation = VK_NULL_HANDLE;
+	bool computeDepthImageNeedsInit = false;
 	VkPipelineLayout computePipelineLayout = VK_NULL_HANDLE;
 	VkPipeline computePipeline = VK_NULL_HANDLE;
 

@@ -3,6 +3,21 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0, rgba8) uniform image2D outImage;
+layout(set = 0, binding = 2, r32f) uniform image2D depthImage;
+
+struct ComputeVertex {
+    vec4 position;
+    vec4 color;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer SceneVertices {
+    ComputeVertex vertices[];
+} sceneData;
+
+layout(push_constant) uniform PushConstants {
+    vec4 clearColor;
+    uint triangleCount;
+} pushConstants;
 
 float EdgeFunction(const vec2 a, const vec2 b, const vec2 p) {
     return (p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x);
@@ -19,26 +34,48 @@ void main() {
     const vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
     const vec2 p = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
 
-    const vec2 a = vec2(0.0, 0.60);
-    const vec2 b = vec2(-0.65, -0.55);
-    const vec2 c = vec2(0.65, -0.55);
-    const vec3 colorA = vec3(1.0, 0.0, 0.0);
-    const vec3 colorB = vec3(0.0, 0.0, 1.0);
-    const vec3 colorC = vec3(0.0, 1.0, 0.0);
+    vec4 color = pushConstants.clearColor;
+    float nearestDepth = 1.0;
 
-    const float area = EdgeFunction(a, b, c);
-    const float w0 = EdgeFunction(b, c, p);
-    const float w1 = EdgeFunction(c, a, p);
-    const float w2 = EdgeFunction(a, b, p);
+    for (uint triangleIndex = 0; triangleIndex < pushConstants.triangleCount; ++triangleIndex) {
+        const uint baseVertex = triangleIndex * 3u;
+        const ComputeVertex va = sceneData.vertices[baseVertex + 0u];
+        const ComputeVertex vb = sceneData.vertices[baseVertex + 1u];
+        const ComputeVertex vc = sceneData.vertices[baseVertex + 2u];
 
-    vec3 color = vec3(0.0);
-    if ((w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 && area > 0.0) ||
-    (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0 && area < 0.0)) {
+        const vec2 a = va.position.xy;
+        const vec2 b = vb.position.xy;
+        const vec2 c = vc.position.xy;
+        const float area = EdgeFunction(a, b, c);
+        if (abs(area) < 0.00001) {
+            continue;
+        }
+
+        const float w0 = EdgeFunction(b, c, p);
+        const float w1 = EdgeFunction(c, a, p);
+        const float w2 = EdgeFunction(a, b, p);
+        const bool insideTriangle =
+        (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 && area > 0.0) ||
+        (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0 && area < 0.0);
+        if (!insideTriangle) {
+            continue;
+        }
+
         const vec3 barycentric = vec3(w0, w1, w2) / area;
-        color = barycentric.x * colorA +
-        barycentric.y * colorB +
-        barycentric.z * colorC;
+        const float depth =
+        barycentric.x * va.position.z +
+        barycentric.y * vb.position.z +
+        barycentric.z * vc.position.z;
+        if (depth < nearestDepth) {
+            nearestDepth = depth;
+            color = vec4(
+            barycentric.x * va.color.rgb +
+            barycentric.y * vb.color.rgb +
+            barycentric.z * vc.color.rgb,
+            1.0);
+        }
     }
 
-    imageStore(outImage, pixel, vec4(color, 1.0));
+    imageStore(outImage, pixel, color);
+    imageStore(depthImage, pixel, vec4(nearestDepth, 0.0, 0.0, 0.0));
 }

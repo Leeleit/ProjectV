@@ -2,6 +2,7 @@
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #include "Types.hpp"
+#include "SceneResources.hpp"
 #include "VulkanComputePipeline.hpp"
 
 void ShutdownVulkan(AppState *state)
@@ -14,6 +15,7 @@ void ShutdownVulkan(AppState *state)
 	if (state->device) {
 		vkDeviceWaitIdle(state->device);
 		DestroyComputePipeline(state);
+		DestroySceneResources(state);
 	}
 
 	if (state->device) {

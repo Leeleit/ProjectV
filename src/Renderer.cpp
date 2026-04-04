@@ -30,6 +30,21 @@ void TransitionImage(
 
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
+
+void PushComputeConstants(AppState *state, const VkCommandBuffer cmd)
+{
+	ComputePushConstants pushConstants{};
+	pushConstants.clearColor = {0.08f, 0.10f, 0.14f, 1.0f};
+	pushConstants.triangleCount = state->sceneTriangleCount;
+
+	vkCmdPushConstants(
+		cmd,
+		state->computePipelineLayout,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		0,
+		sizeof(pushConstants),
+		&pushConstants);
+}
 } // namespace
 
 SDL_AppResult DrawFrame(AppState *state)
@@ -92,6 +107,19 @@ SDL_AppResult DrawFrame(AppState *state)
 		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 		VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 
+	if (state->computeDepthImageNeedsInit) {
+		TransitionImage(
+			cmd,
+			state->computeDepthImage,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_GENERAL,
+			VK_PIPELINE_STAGE_2_NONE,
+			0,
+			VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+		state->computeDepthImageNeedsInit = false;
+	}
+
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, state->computePipeline);
 	vkCmdBindDescriptorSets(
 		cmd,
@@ -102,6 +130,7 @@ SDL_AppResult DrawFrame(AppState *state)
 		&state->computeDescriptorSets[imageIndex],
 		0,
 		nullptr);
+	PushComputeConstants(state, cmd);
 
 	const uint32_t groupCountX = (state->extent.width + 7) / 8;
 	const uint32_t groupCountY = (state->extent.height + 7) / 8;
