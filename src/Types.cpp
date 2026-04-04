@@ -3,6 +3,7 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #include "Types.hpp"
 #include "SceneResources.hpp"
+#include "VoxelWorld.hpp"
 #include "VulkanComputePipeline.hpp"
 
 void ShutdownVulkan(AppState *state)
@@ -17,6 +18,8 @@ void ShutdownVulkan(AppState *state)
 		DestroyComputePipeline(state);
 		DestroySceneResources(state);
 	}
+
+	DestroyVoxelLabWorld(state);
 
 	if (state->device) {
 		for (const auto iv : state->swapchainImageViews) {

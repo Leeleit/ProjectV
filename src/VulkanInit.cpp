@@ -1,4 +1,6 @@
+#include "Camera.hpp"
 #include "SceneResources.hpp"
+#include "VoxelWorld.hpp"
 #include "VulkanBootstrap.hpp"
 #include "VulkanComputePipeline.hpp"
 #include "VulkanSwapchain.hpp"
@@ -12,6 +14,13 @@ bool InitVulkan(AppState *state)
 	if (!RecreateSwapchain(state)) {
 		return false;
 	}
+
+	if (!CreateVoxelLabWorld(state)) {
+		SDL_Log("CreateVoxelLabWorld failed");
+		return false;
+	}
+
+	InitializeCamera(state);
 
 	if (!CreateSceneResources(state)) {
 		SDL_Log("CreateSceneResources failed");

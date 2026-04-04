@@ -26,6 +26,7 @@ add_dependencies(ProjectV Shaders)
 # --- КОНЕЦ БЛОКА ШЕЙДЕРОВ ---
 
 target_sources(ProjectV PRIVATE
+        Camera.cpp
         main.cpp
         SceneResources.cpp
         Types.cpp
@@ -34,6 +35,7 @@ target_sources(ProjectV PRIVATE
         VulkanComputePipeline.cpp
         VulkanSwapchain.cpp
         VulkanInit.cpp
+        VoxelWorld.cpp
         # Add new files here
 )
 
