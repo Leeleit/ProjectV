@@ -1,7 +1,6 @@
 #ifndef VOXEL_WORLD_HPP
 #define VOXEL_WORLD_HPP
 
-#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -21,17 +20,21 @@ struct Int3 {
 	int z = 0;
 };
 
-struct VoxelChunkMeshVertex {
-	std::array<float, 3> position{};
-	std::array<float, 3> normal{};
-	VoxelMaterial material = VoxelMaterial::Air;
-};
-
 struct VoxelChunk {
 	Int3 min{};
 	Int3 maxExclusive{};
 	bool dirty = true;
-	std::vector<VoxelChunkMeshVertex> meshVertices;
+	uint32_t nonAirVoxelCount = 0;
+};
+
+struct VoxelWorldStats {
+	uint32_t dirtyChunkCount = 0;
+	uint32_t activeChunkCount = 0;
+	uint32_t nonAirVoxelCount = 0;
+	uint32_t glassVoxelCount = 0;
+	uint32_t fluidVoxelCount = 0;
+	uint32_t floorWhiteVoxelCount = 0;
+	uint32_t floorGrayVoxelCount = 0;
 };
 
 struct VoxelLabConfig {
@@ -58,6 +61,7 @@ struct VoxelWorld {
 	int chunkCountY = 0;
 	int chunkCountZ = 0;
 	std::vector<VoxelChunk> chunks;
+	VoxelWorldStats stats{};
 };
 
 bool CreateVoxelLabWorld(AppState *state);
@@ -65,6 +69,12 @@ void DestroyVoxelLabWorld(AppState *state);
 bool IsInsideVoxelWorld(const VoxelWorld &world, Int3 position);
 VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
 size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);
+void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material);
+void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);
+void MarkVoxelRegionDirty(VoxelWorld &world, Int3 min, Int3 maxExclusive);
 void MarkAllVoxelChunksDirty(VoxelWorld *world);
+uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
+uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
+uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
 
 #endif

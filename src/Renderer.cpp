@@ -36,9 +36,13 @@ void TransitionImage(
 
 void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const uint32_t imageIndex)
 {
+	RenderState &render = state->render;
+	const SwapchainState &swapchain = state->swapchain;
+	const SceneFrameResources &frameResources = render.sceneFrameResources[state->frame.currentFrame];
+
 	TransitionImage(
 		cmd,
-		state->swapchainImages[imageIndex],
+		swapchain.images[imageIndex],
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -48,14 +52,14 @@ void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const ui
 		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 	const VkImageLayout oldDepthLayout =
-		state->depthImageNeedsInit ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		render.depthImageNeedsInit ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 	const VkPipelineStageFlags2 oldDepthStage =
-		state->depthImageNeedsInit ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+		render.depthImageNeedsInit ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
 	const VkAccessFlags2 oldDepthAccess =
-		state->depthImageNeedsInit ? 0 : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		render.depthImageNeedsInit ? 0 : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	TransitionImage(
 		cmd,
-		state->depthImage,
+		render.depthImage,
 		VK_IMAGE_ASPECT_DEPTH_BIT,
 		oldDepthLayout,
 		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -63,14 +67,14 @@ void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const ui
 		oldDepthAccess,
 		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-	state->depthImageNeedsInit = false;
+	render.depthImageNeedsInit = false;
 
 	constexpr VkClearValue clearColorValue{.color = {{0.73f, 0.84f, 0.96f, 1.0f}}};
 	constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
 	const VkRenderingAttachmentInfo colorAttachment{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 		.pNext = nullptr,
-		.imageView = state->swapchainImageViews[imageIndex],
+		.imageView = swapchain.imageViews[imageIndex],
 		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.resolveMode = VK_RESOLVE_MODE_NONE,
 		.resolveImageView = VK_NULL_HANDLE,
@@ -82,7 +86,7 @@ void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const ui
 	const VkRenderingAttachmentInfo depthAttachment{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 		.pNext = nullptr,
-		.imageView = state->depthImageView,
+		.imageView = render.depthImageView,
 		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		.resolveMode = VK_RESOLVE_MODE_NONE,
 		.resolveImageView = VK_NULL_HANDLE,
@@ -95,7 +99,7 @@ void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const ui
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.pNext = nullptr,
 		.flags = 0,
-		.renderArea = {{0, 0}, state->extent},
+		.renderArea = {{0, 0}, swapchain.extent},
 		.layerCount = 1,
 		.viewMask = 0,
 		.colorAttachmentCount = 1,
@@ -109,52 +113,52 @@ void RecordGraphicsCommands(AppState *state, const VkCommandBuffer cmd, const ui
 	const VkViewport viewport{
 		.x = 0.0f,
 		.y = 0.0f,
-		.width = static_cast<float>(state->extent.width),
-		.height = static_cast<float>(state->extent.height),
+		.width = static_cast<float>(swapchain.extent.width),
+		.height = static_cast<float>(swapchain.extent.height),
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f,
 	};
 	const VkRect2D scissor{
 		.offset = {0, 0},
-		.extent = state->extent,
+		.extent = swapchain.extent,
 	};
 	vkCmdSetViewport(cmd, 0, 1, &viewport);
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-	const GraphicsPushConstants pushConstants = BuildGraphicsPushConstants(*state);
-	const VkBuffer vertexBuffers[] = {state->sceneVertexBuffer};
+	const GraphicsPushConstants pushConstants = BuildGraphicsPushConstants(state->camera, swapchain.extent);
+	const VkBuffer vertexBuffers[] = {frameResources.vertexBuffer};
 	constexpr VkDeviceSize offsets[] = {0};
 	vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->graphicsPipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.graphicsPipeline);
 	vkCmdPushConstants(
 		cmd,
-		state->graphicsPipelineLayout,
+		render.graphicsPipelineLayout,
 		VK_SHADER_STAGE_VERTEX_BIT,
 		0,
 		sizeof(pushConstants),
 		&pushConstants);
-	if (state->sceneOpaqueVertexCount > 0) {
-		vkCmdDraw(cmd, state->sceneOpaqueVertexCount, 1, 0, 0);
+	if (frameResources.opaqueVertexCount > 0) {
+		vkCmdDraw(cmd, frameResources.opaqueVertexCount, 1, 0, 0);
 	}
 
-	if (state->transparentGraphicsPipeline && state->sceneTransparentVertexCount > 0) {
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, state->transparentGraphicsPipeline);
+	if (render.transparentGraphicsPipeline && frameResources.transparentVertexCount > 0) {
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.transparentGraphicsPipeline);
 		vkCmdPushConstants(
 			cmd,
-			state->graphicsPipelineLayout,
+			render.graphicsPipelineLayout,
 			VK_SHADER_STAGE_VERTEX_BIT,
 			0,
 			sizeof(pushConstants),
 			&pushConstants);
-		vkCmdDraw(cmd, state->sceneTransparentVertexCount, 1, state->sceneOpaqueVertexCount, 0);
+		vkCmdDraw(cmd, frameResources.transparentVertexCount, 1, frameResources.opaqueVertexCount, 0);
 	}
 
 	vkCmdEndRendering(cmd);
 
 	TransitionImage(
 		cmd,
-		state->swapchainImages[imageIndex],
+		swapchain.images[imageIndex],
 		VK_IMAGE_ASPECT_COLOR_BIT,
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -171,43 +175,37 @@ SDL_AppResult DrawFrame(AppState *state)
 		return SDL_APP_CONTINUE;
 	}
 
-	if (state->extent.width == 0 || state->extent.height == 0) {
-		if (!RecreateSwapchain(state)) {
+	if (state->swapchain.extent.width == 0 || state->swapchain.extent.height == 0) {
+		if (!RecreateSwapchain(&state->platform, &state->context, &state->swapchain, &state->render)) {
 			SDL_Log("RecreateSwapchain failed");
 			return SDL_APP_FAILURE;
 		}
 		return SDL_APP_CONTINUE;
 	}
 
-	vkWaitForFences(
-		state->device,
-		static_cast<uint32_t>(state->inFlightFences.size()),
-		state->inFlightFences.data(),
-		VK_TRUE,
-		UINT64_MAX);
+	const uint32_t currentFrame = state->frame.currentFrame;
+	const VkCommandBuffer cmd = state->frame.commandBuffers[currentFrame];
+	const VkFence inFlightFence = state->frame.inFlightFences[currentFrame];
+	const VkSemaphore imageAvailableSemaphore = state->frame.imageAvailableSemaphores[currentFrame];
+	const VkSemaphore renderFinishedSemaphore = state->frame.renderFinishedSemaphores[currentFrame];
 
-	UpdateCamera(state);
-	if (!UpdateSceneResources(state)) {
-		SDL_Log("UpdateSceneResources failed");
+	vkWaitForFences(state->context.device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+
+	if (!UploadSceneFrameResources(&state->world, &state->render, currentFrame)) {
+		SDL_Log("UploadSceneFrameResources failed");
 		return SDL_APP_FAILURE;
 	}
 
-	const uint32_t currentFrame = state->currentFrame;
-	const VkCommandBuffer cmd = state->commandBuffers[currentFrame];
-	const VkFence inFlightFence = state->inFlightFences[currentFrame];
-	const VkSemaphore imageAvailableSemaphore = state->imageAvailableSemaphores[currentFrame];
-	const VkSemaphore renderFinishedSemaphore = state->renderFinishedSemaphores[currentFrame];
-
 	uint32_t imageIndex = 0;
 	const VkResult acquireRes = vkAcquireNextImageKHR(
-		state->device,
-		state->swapchain,
+		state->context.device,
+		state->swapchain.handle,
 		UINT64_MAX,
 		imageAvailableSemaphore,
 		VK_NULL_HANDLE,
 		&imageIndex);
 	if (acquireRes == VK_ERROR_OUT_OF_DATE_KHR) {
-		if (!RecreateSwapchain(state)) {
+		if (!RecreateSwapchain(&state->platform, &state->context, &state->swapchain, &state->render)) {
 			return SDL_APP_FAILURE;
 		}
 		return SDL_APP_CONTINUE;
@@ -216,7 +214,7 @@ SDL_AppResult DrawFrame(AppState *state)
 		return SDL_APP_CONTINUE;
 	}
 
-	vkResetFences(state->device, 1, &inFlightFence);
+	vkResetFences(state->context.device, 1, &inFlightFence);
 	vkResetCommandBuffer(cmd, 0);
 
 	VkCommandBufferBeginInfo beginInfo{};
@@ -255,7 +253,7 @@ SDL_AppResult DrawFrame(AppState *state)
 	submitInfo2.pCommandBufferInfos = &cmdBufferInfo;
 	submitInfo2.signalSemaphoreInfoCount = 1;
 	submitInfo2.pSignalSemaphoreInfos = &signalSemaphoreInfo;
-	if (vkQueueSubmit2(state->queue, 1, &submitInfo2, inFlightFence) != VK_SUCCESS) {
+	if (vkQueueSubmit2(state->context.queue, 1, &submitInfo2, inFlightFence) != VK_SUCCESS) {
 		SDL_Log("vkQueueSubmit2 failed");
 		return SDL_APP_FAILURE;
 	}
@@ -265,13 +263,13 @@ SDL_AppResult DrawFrame(AppState *state)
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &state->swapchain;
+	presentInfo.pSwapchains = &state->swapchain.handle;
 	presentInfo.pImageIndices = &imageIndex;
 
-	const VkResult presentRes = vkQueuePresentKHR(state->queue, &presentInfo);
-	if (presentRes == VK_ERROR_OUT_OF_DATE_KHR || presentRes == VK_SUBOPTIMAL_KHR || state->windowResized) {
-		state->windowResized = false;
-		if (!RecreateSwapchain(state)) {
+	const VkResult presentRes = vkQueuePresentKHR(state->context.queue, &presentInfo);
+	if (presentRes == VK_ERROR_OUT_OF_DATE_KHR || presentRes == VK_SUBOPTIMAL_KHR || state->platform.windowResized) {
+		state->platform.windowResized = false;
+		if (!RecreateSwapchain(&state->platform, &state->context, &state->swapchain, &state->render)) {
 			SDL_Log("RecreateSwapchain failed");
 			return SDL_APP_FAILURE;
 		}
@@ -280,6 +278,6 @@ SDL_AppResult DrawFrame(AppState *state)
 		return SDL_APP_FAILURE;
 	}
 
-	state->currentFrame = (state->currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+	state->frame.currentFrame = (state->frame.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	return SDL_APP_CONTINUE;
 }

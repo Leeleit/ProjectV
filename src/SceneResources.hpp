@@ -3,8 +3,19 @@
 
 #include "Types.hpp"
 
-bool CreateSceneResources(AppState *state);
-bool UpdateSceneResources(AppState *state);
-void DestroySceneResources(AppState *state);
+bool CreateSceneResources(
+	VulkanContextState *context,
+	WorldState *world,
+	RenderState *render);
+bool UpdateSceneResources(
+	WorldState *world,
+	RenderState *render);
+bool UploadSceneFrameResources(
+	const WorldState *world,
+	RenderState *render,
+	uint32_t frameIndex);
+void DestroySceneResources(
+	VulkanContextState *context,
+	RenderState *render);
 
 #endif

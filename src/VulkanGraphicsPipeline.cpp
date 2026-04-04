@@ -1,4 +1,5 @@
 #include "VulkanGraphicsPipeline.hpp"
+#include "VulkanDebug.hpp"
 
 #include <array>
 #include <fstream>
@@ -81,9 +82,12 @@ VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 	return VK_FORMAT_UNDEFINED;
 }
 
-bool CreateDepthResources(AppState *state)
+bool CreateDepthResources(
+	VulkanContextState *context,
+	const SwapchainState *swapchain,
+	RenderState *render)
 {
-	const VkFormat depthFormat = ChooseDepthFormat(state->physicalDevice);
+	const VkFormat depthFormat = ChooseDepthFormat(context->physicalDevice);
 	if (depthFormat == VK_FORMAT_UNDEFINED) {
 		SDL_Log("No supported depth format found");
 		return false;
@@ -95,7 +99,7 @@ bool CreateDepthResources(AppState *state)
 		.flags = 0,
 		.imageType = VK_IMAGE_TYPE_2D,
 		.format = depthFormat,
-		.extent = {state->extent.width, state->extent.height, 1},
+		.extent = {swapchain->extent.width, swapchain->extent.height, 1},
 		.mipLevels = 1,
 		.arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -112,18 +116,18 @@ bool CreateDepthResources(AppState *state)
 	allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	if (vmaCreateImage(
-			state->allocator,
+			context->allocator,
 			&imageInfo,
 			&allocationInfo,
-			&state->depthImage,
-			&state->depthAllocation,
+			&render->depthImage,
+			&render->depthAllocation,
 			nullptr) != VK_SUCCESS) {
 		return false;
 	}
 
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = state->depthImage;
+	viewInfo.image = render->depthImage;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = depthFormat;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -131,81 +135,95 @@ bool CreateDepthResources(AppState *state)
 	viewInfo.subresourceRange.levelCount = 1;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
-	if (vkCreateImageView(state->device, &viewInfo, nullptr, &state->depthImageView) != VK_SUCCESS) {
-		vmaDestroyImage(state->allocator, state->depthImage, state->depthAllocation);
-		state->depthImage = VK_NULL_HANDLE;
-		state->depthAllocation = VK_NULL_HANDLE;
+	if (vkCreateImageView(context->device, &viewInfo, nullptr, &render->depthImageView) != VK_SUCCESS) {
+		vmaDestroyImage(context->allocator, render->depthImage, render->depthAllocation);
+		render->depthImage = VK_NULL_HANDLE;
+		render->depthAllocation = VK_NULL_HANDLE;
 		return false;
 	}
 
-	state->depthImageNeedsInit = true;
-	state->swapchainColorSpace = state->swapchainColorSpace;
+	render->depthImageNeedsInit = true;
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->depthImage),
+		VK_OBJECT_TYPE_IMAGE,
+		"DepthImage");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->depthImageView),
+		VK_OBJECT_TYPE_IMAGE_VIEW,
+		"DepthImageView");
 	return true;
 }
 } // namespace
 
-void DestroyGraphicsPipeline(AppState *state)
+void DestroyGraphicsPipeline(
+	VulkanContextState *context,
+	RenderState *render)
 {
-	if (!state || !state->device) {
+	if (!context || !render || !context->device) {
 		return;
 	}
 
-	if (state->transparentGraphicsPipeline) {
-		vkDestroyPipeline(state->device, state->transparentGraphicsPipeline, nullptr);
-		state->transparentGraphicsPipeline = VK_NULL_HANDLE;
+	if (render->transparentGraphicsPipeline) {
+		vkDestroyPipeline(context->device, render->transparentGraphicsPipeline, nullptr);
+		render->transparentGraphicsPipeline = VK_NULL_HANDLE;
 	}
 
-	if (state->graphicsPipeline) {
-		vkDestroyPipeline(state->device, state->graphicsPipeline, nullptr);
-		state->graphicsPipeline = VK_NULL_HANDLE;
+	if (render->graphicsPipeline) {
+		vkDestroyPipeline(context->device, render->graphicsPipeline, nullptr);
+		render->graphicsPipeline = VK_NULL_HANDLE;
 	}
 
-	if (state->graphicsPipelineLayout) {
-		vkDestroyPipelineLayout(state->device, state->graphicsPipelineLayout, nullptr);
-		state->graphicsPipelineLayout = VK_NULL_HANDLE;
+	if (render->graphicsPipelineLayout) {
+		vkDestroyPipelineLayout(context->device, render->graphicsPipelineLayout, nullptr);
+		render->graphicsPipelineLayout = VK_NULL_HANDLE;
 	}
 
-	if (state->depthImageView) {
-		vkDestroyImageView(state->device, state->depthImageView, nullptr);
-		state->depthImageView = VK_NULL_HANDLE;
+	if (render->depthImageView) {
+		vkDestroyImageView(context->device, render->depthImageView, nullptr);
+		render->depthImageView = VK_NULL_HANDLE;
 	}
 
-	if (state->depthImage && state->depthAllocation) {
-		vmaDestroyImage(state->allocator, state->depthImage, state->depthAllocation);
-		state->depthImage = VK_NULL_HANDLE;
-		state->depthAllocation = VK_NULL_HANDLE;
+	if (render->depthImage && render->depthAllocation) {
+		vmaDestroyImage(context->allocator, render->depthImage, render->depthAllocation);
+		render->depthImage = VK_NULL_HANDLE;
+		render->depthAllocation = VK_NULL_HANDLE;
 	}
 
-	state->depthImageNeedsInit = false;
+	render->depthImageNeedsInit = false;
 }
 
-bool CreateGraphicsPipeline(AppState *state)
+bool CreateGraphicsPipeline(
+	VulkanContextState *context,
+	const SwapchainState *swapchain,
+	RenderState *render)
 {
-	if (!state || !state->device || state->swapchainImageViews.empty()) {
+	if (!context || !swapchain || !render || !context->device || swapchain->imageViews.empty()) {
 		return false;
 	}
 
-	if (!CreateDepthResources(state)) {
+	if (!CreateDepthResources(context, swapchain, render)) {
 		return false;
 	}
 
 	const std::vector<char> vertexShaderCode = ReadFile("voxel.vert.spv");
 	const std::vector<char> fragmentShaderCode = ReadFile("voxel.frag.spv");
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty()) {
-		DestroyGraphicsPipeline(state);
+		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
 
-	VkShaderModule vertexShaderModule = CreateShaderModule(state->device, vertexShaderCode);
-	VkShaderModule fragmentShaderModule = CreateShaderModule(state->device, fragmentShaderCode);
+	VkShaderModule vertexShaderModule = CreateShaderModule(context->device, vertexShaderCode);
+	VkShaderModule fragmentShaderModule = CreateShaderModule(context->device, fragmentShaderCode);
 	if (!vertexShaderModule || !fragmentShaderModule) {
 		if (vertexShaderModule) {
-			vkDestroyShaderModule(state->device, vertexShaderModule, nullptr);
+			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
 		}
 		if (fragmentShaderModule) {
-			vkDestroyShaderModule(state->device, fragmentShaderModule, nullptr);
+			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
 		}
-		DestroyGraphicsPipeline(state);
+		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
 
@@ -349,20 +367,25 @@ bool CreateGraphicsPipeline(AppState *state)
 	pipelineLayoutInfo.pushConstantRangeCount = 1;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
-	if (vkCreatePipelineLayout(state->device, &pipelineLayoutInfo, nullptr, &state->graphicsPipelineLayout) != VK_SUCCESS) {
-		vkDestroyShaderModule(state->device, vertexShaderModule, nullptr);
-		vkDestroyShaderModule(state->device, fragmentShaderModule, nullptr);
-		DestroyGraphicsPipeline(state);
+	if (vkCreatePipelineLayout(context->device, &pipelineLayoutInfo, nullptr, &render->graphicsPipelineLayout) != VK_SUCCESS) {
+		vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
+		vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->graphicsPipelineLayout),
+		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+		"VoxelGraphicsPipelineLayout");
 
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
 		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &state->swapchainFormat,
-		.depthAttachmentFormat = ChooseDepthFormat(state->physicalDevice),
+		.pColorAttachmentFormats = &swapchain->format,
+		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
 
@@ -379,32 +402,42 @@ bool CreateGraphicsPipeline(AppState *state)
 	pipelineInfo.pDepthStencilState = &depthStencil;
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.layout = state->graphicsPipelineLayout;
+	pipelineInfo.layout = render->graphicsPipelineLayout;
 
-	if (vkCreateGraphicsPipelines(state->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &state->graphicsPipeline) != VK_SUCCESS) {
-		vkDestroyShaderModule(state->device, vertexShaderModule, nullptr);
-		vkDestroyShaderModule(state->device, fragmentShaderModule, nullptr);
-		DestroyGraphicsPipeline(state);
+	if (vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &render->graphicsPipeline) != VK_SUCCESS) {
+		vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
+		vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->graphicsPipeline),
+		VK_OBJECT_TYPE_PIPELINE,
+		"VoxelOpaquePipeline");
 
 	VkGraphicsPipelineCreateInfo transparentPipelineInfo = pipelineInfo;
 	transparentPipelineInfo.pDepthStencilState = &transparentDepthStencil;
 	transparentPipelineInfo.pColorBlendState = &transparentColorBlending;
 	if (vkCreateGraphicsPipelines(
-			state->device,
+			context->device,
 			VK_NULL_HANDLE,
 			1,
 			&transparentPipelineInfo,
 			nullptr,
-			&state->transparentGraphicsPipeline) != VK_SUCCESS) {
-		vkDestroyShaderModule(state->device, vertexShaderModule, nullptr);
-		vkDestroyShaderModule(state->device, fragmentShaderModule, nullptr);
-		DestroyGraphicsPipeline(state);
+			&render->transparentGraphicsPipeline) != VK_SUCCESS) {
+		vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
+		vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->transparentGraphicsPipeline),
+		VK_OBJECT_TYPE_PIPELINE,
+		"VoxelTransparentPipeline");
 
-	vkDestroyShaderModule(state->device, vertexShaderModule, nullptr);
-	vkDestroyShaderModule(state->device, fragmentShaderModule, nullptr);
+	vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
+	vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
 	return true;
 }

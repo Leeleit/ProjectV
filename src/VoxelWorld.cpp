@@ -23,24 +23,33 @@ Int3 GetChunkCoord(const VoxelWorld &world, const Int3 position)
 	};
 }
 
-void MarkVoxelChunkDirty(VoxelWorld *world, const Int3 position)
+void AccumulateMaterialCount(VoxelWorldStats &stats, const VoxelMaterial material, const int delta)
 {
-	if (!world || !IsInsideVoxelWorld(*world, position)) {
-		return;
+	switch (material) {
+	case VoxelMaterial::Air:
+		break;
+	case VoxelMaterial::Glass:
+		stats.glassVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.glassVoxelCount) + delta);
+		stats.nonAirVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.nonAirVoxelCount) + delta);
+		break;
+	case VoxelMaterial::Fluid:
+		stats.fluidVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.fluidVoxelCount) + delta);
+		stats.nonAirVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.nonAirVoxelCount) + delta);
+		break;
+	case VoxelMaterial::FloorWhite:
+		stats.floorWhiteVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.floorWhiteVoxelCount) + delta);
+		stats.nonAirVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.nonAirVoxelCount) + delta);
+		break;
+	case VoxelMaterial::FloorGray:
+		stats.floorGrayVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.floorGrayVoxelCount) + delta);
+		stats.nonAirVoxelCount = static_cast<uint32_t>(static_cast<int64_t>(stats.nonAirVoxelCount) + delta);
+		break;
 	}
-
-	const Int3 chunkCoord = GetChunkCoord(*world, position);
-	world->chunks[GetVoxelChunkIndex(*world, chunkCoord)].dirty = true;
 }
 
-void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMaterial material)
+bool IsAirMaterial(const VoxelMaterial material)
 {
-	if (!IsInsideVoxelWorld(world, position)) {
-		return;
-	}
-
-	world.voxels[ToVoxelIndex(world, position)] = static_cast<uint8_t>(material);
-	MarkVoxelChunkDirty(&world, position);
+	return material == VoxelMaterial::Air;
 }
 
 std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
@@ -96,6 +105,7 @@ std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
 			}
 		}
 	}
+	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->chunks.size());
 
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
@@ -147,8 +157,8 @@ bool CreateVoxelLabWorld(AppState *state)
 		return false;
 	}
 
-	state->voxelWorld = BuildVoxelLabWorld({});
-	return static_cast<bool>(state->voxelWorld);
+	state->world.voxelWorld = BuildVoxelLabWorld({});
+	return static_cast<bool>(state->world.voxelWorld);
 }
 
 void DestroyVoxelLabWorld(AppState *state)
@@ -157,7 +167,7 @@ void DestroyVoxelLabWorld(AppState *state)
 		return;
 	}
 
-	state->voxelWorld.reset();
+	state->world.voxelWorld.reset();
 }
 
 bool IsInsideVoxelWorld(const VoxelWorld &world, const Int3 position)
@@ -184,6 +194,86 @@ size_t GetVoxelChunkIndex(const VoxelWorld &world, const Int3 chunkCoord)
 				static_cast<size_t>(world.chunkCountY) * static_cast<size_t>(chunkCoord.z));
 }
 
+void MarkVoxelChunkDirty(VoxelWorld &world, const Int3 position)
+{
+	if (!IsInsideVoxelWorld(world, position)) {
+		return;
+	}
+
+	const Int3 chunkCoord = GetChunkCoord(world, position);
+	VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, chunkCoord)];
+	if (!chunk.dirty) {
+		chunk.dirty = true;
+		++world.stats.dirtyChunkCount;
+	}
+}
+
+void MarkVoxelRegionDirty(VoxelWorld &world, const Int3 min, const Int3 maxExclusive)
+{
+	const Int3 clampedMin{
+		std::max(min.x, world.min.x),
+		std::max(min.y, world.min.y),
+		std::max(min.z, world.min.z),
+	};
+	const Int3 clampedMax{
+		std::min(maxExclusive.x, world.maxExclusive.x),
+		std::min(maxExclusive.y, world.maxExclusive.y),
+		std::min(maxExclusive.z, world.maxExclusive.z),
+	};
+	if (clampedMin.x >= clampedMax.x || clampedMin.y >= clampedMax.y || clampedMin.z >= clampedMax.z) {
+		return;
+	}
+
+	const Int3 firstChunk = GetChunkCoord(world, clampedMin);
+	const Int3 lastChunk = GetChunkCoord(world, {clampedMax.x - 1, clampedMax.y - 1, clampedMax.z - 1});
+
+	for (int chunkZ = firstChunk.z; chunkZ <= lastChunk.z; ++chunkZ) {
+		for (int chunkY = firstChunk.y; chunkY <= lastChunk.y; ++chunkY) {
+			for (int chunkX = firstChunk.x; chunkX <= lastChunk.x; ++chunkX) {
+				VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ})];
+				if (!chunk.dirty) {
+					chunk.dirty = true;
+					++world.stats.dirtyChunkCount;
+				}
+			}
+		}
+	}
+}
+
+void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMaterial material)
+{
+	if (!IsInsideVoxelWorld(world, position)) {
+		return;
+	}
+
+	const size_t voxelIndex = ToVoxelIndex(world, position);
+	const VoxelMaterial previousMaterial = static_cast<VoxelMaterial>(world.voxels[voxelIndex]);
+	if (previousMaterial == material) {
+		return;
+	}
+
+	world.voxels[voxelIndex] = static_cast<uint8_t>(material);
+	AccumulateMaterialCount(world.stats, previousMaterial, -1);
+	AccumulateMaterialCount(world.stats, material, 1);
+
+	VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetChunkCoord(world, position))];
+	const bool wasActive = chunk.nonAirVoxelCount > 0;
+	if (!IsAirMaterial(previousMaterial)) {
+		--chunk.nonAirVoxelCount;
+	}
+	if (!IsAirMaterial(material)) {
+		++chunk.nonAirVoxelCount;
+	}
+	const bool isActive = chunk.nonAirVoxelCount > 0;
+	if (!wasActive && isActive) {
+		++world.stats.activeChunkCount;
+	} else if (wasActive && !isActive) {
+		--world.stats.activeChunkCount;
+	}
+
+	MarkVoxelChunkDirty(world, position);
+}
+
 void MarkAllVoxelChunksDirty(VoxelWorld *world)
 {
 	if (!world) {
@@ -193,4 +283,33 @@ void MarkAllVoxelChunksDirty(VoxelWorld *world)
 	for (VoxelChunk &chunk : world->chunks) {
 		chunk.dirty = true;
 	}
+	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->chunks.size());
+}
+
+uint32_t CountDirtyVoxelChunks(const VoxelWorld &world)
+{
+	return world.stats.dirtyChunkCount;
+}
+
+uint32_t CountActiveVoxelChunks(const VoxelWorld &world)
+{
+	return world.stats.activeChunkCount;
+}
+
+uint32_t CountVoxelsByMaterial(const VoxelWorld &world, const VoxelMaterial material)
+{
+	switch (material) {
+	case VoxelMaterial::Air:
+		return static_cast<uint32_t>(world.voxels.size()) - world.stats.nonAirVoxelCount;
+	case VoxelMaterial::Glass:
+		return world.stats.glassVoxelCount;
+	case VoxelMaterial::Fluid:
+		return world.stats.fluidVoxelCount;
+	case VoxelMaterial::FloorWhite:
+		return world.stats.floorWhiteVoxelCount;
+	case VoxelMaterial::FloorGray:
+		return world.stats.floorGrayVoxelCount;
+	}
+
+	return 0;
 }

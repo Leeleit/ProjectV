@@ -13,20 +13,29 @@
 
 #include <array>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
-
-struct ComputeVertex {
-	std::array<float, 4> position{};
-	std::array<float, 4> color{};
-};
 
 struct RenderVertex {
 	std::array<float, 3> position{};
 	std::array<float, 3> normal{};
 	std::array<float, 4> color{};
 	float materialKind = 0.0f;
+};
+static_assert(std::is_standard_layout_v<RenderVertex>);
+static_assert(std::is_trivially_copyable_v<RenderVertex>);
+static_assert(sizeof(RenderVertex) == 44);
+
+struct SceneChunkMeshVertex {
+	std::array<float, 3> position{};
+	std::array<float, 3> normal{};
+	VoxelMaterial material = VoxelMaterial::Air;
+};
+
+struct SceneChunkRenderCache {
+	std::vector<SceneChunkMeshVertex> meshVertices;
 };
 
 struct CameraState {
@@ -44,16 +53,78 @@ struct GraphicsPushConstants {
 	std::array<float, 16> viewProjection{};
 };
 
-struct ComputePushConstants {
-	std::array<float, 4> clearColor{0.08f, 0.10f, 0.14f, 1.0f};
-	uint32_t triangleCount = 0;
-	std::array<uint32_t, 3> padding{};
+struct DebugStats {
+	uint32_t simulationStepsLastFrame = 0;
+	uint32_t dirtyChunkCount = 0;
+	uint32_t activeChunkCount = 0;
+	uint32_t nonAirVoxelCount = 0;
+	uint32_t glassVoxelCount = 0;
+	uint32_t fluidVoxelCount = 0;
+	uint32_t floorVoxelCount = 0;
+	uint32_t sceneTriangleCount = 0;
 };
 
-struct AppState {
+struct SceneFrameResources {
+	void *mappedData = nullptr;
+	VkBuffer vertexBuffer = VK_NULL_HANDLE;
+	VmaAllocation vertexAllocation = VK_NULL_HANDLE;
+	uint32_t vertexCount = 0;
+	uint32_t opaqueVertexCount = 0;
+	uint32_t transparentVertexCount = 0;
+};
+
+struct WorldState {
+	std::unique_ptr<VoxelWorld> voxelWorld;
+};
+
+struct RenderState {
+	std::vector<SceneChunkRenderCache> sceneChunkRenderCaches;
+	uint32_t sceneVertexCapacity = 0;
+	bool sceneVertexBufferDirty = true;
+	uint32_t sceneTriangleCount = 0;
+	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
+	VkImage depthImage = VK_NULL_HANDLE;
+	VkImageView depthImageView = VK_NULL_HANDLE;
+	VmaAllocation depthAllocation = VK_NULL_HANDLE;
+	bool depthImageNeedsInit = false;
+	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
+};
+
+struct FrameState {
+	uint32_t currentFrame = 0;
+	std::vector<VkCommandBuffer> commandBuffers;
+	std::vector<VkSemaphore> imageAvailableSemaphores;
+	std::vector<VkSemaphore> renderFinishedSemaphores;
+	std::vector<VkFence> inFlightFences;
+};
+
+struct SimulationState {
+	Uint64 lastFrameCounter = 0;
+	float frameDeltaSeconds = 0.0f;
+	float simulationAccumulatorSeconds = 0.0f;
+	float fixedSimulationDeltaSeconds = 1.0f / 60.0f;
+	uint32_t simulationStepsLastFrame = 0;
+	uint64_t simulationTick = 0;
+};
+
+struct InputState {
+	float mouseDeltaX = 0.0f;
+	float mouseDeltaY = 0.0f;
+};
+
+struct DebugState {
+	DebugStats stats{};
+	float titleUpdateAccumulatorSeconds = 0.0f;
+};
+
+struct PlatformState {
 	SDL_Window *window = nullptr;
 	bool windowResized = false;
+};
 
+struct VulkanContextState {
 	VkInstance instance = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -62,53 +133,29 @@ struct AppState {
 	VkQueue queue = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = 0;
 	VmaAllocator allocator = VK_NULL_HANDLE;
-
-	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-	VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;
-	VkColorSpaceKHR swapchainColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-	VkExtent2D extent = {};
-	std::vector<VkImage> swapchainImages;
-	std::vector<VkImageView> swapchainImageViews;
-
 	VkCommandPool commandPool = VK_NULL_HANDLE;
+};
 
-	VkDescriptorPool computeDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSetLayout computeDescriptorSetLayout = VK_NULL_HANDLE;
-	std::vector<VkDescriptorSet> computeDescriptorSets;
-	std::unique_ptr<VoxelWorld> voxelWorld;
+struct SwapchainState {
+	VkSwapchainKHR handle = VK_NULL_HANDLE;
+	VkFormat format = VK_FORMAT_UNDEFINED;
+	VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	VkExtent2D extent = {};
+	std::vector<VkImage> images;
+	std::vector<VkImageView> imageViews;
+};
+
+struct AppState {
+	PlatformState platform{};
+	VulkanContextState context{};
+	SwapchainState swapchain{};
+	WorldState world{};
+	RenderState render{};
+	FrameState frame{};
+	SimulationState simulation{};
+	InputState input{};
+	DebugState debug{};
 	CameraState camera{};
-	void *sceneVertexMappedData = nullptr;
-	uint32_t sceneVertexCapacity = 0;
-	uint32_t sceneVertexCount = 0;
-	uint32_t sceneOpaqueVertexCount = 0;
-	uint32_t sceneTransparentVertexCount = 0;
-	bool sceneVertexBufferDirty = true;
-	VkBuffer sceneVertexBuffer = VK_NULL_HANDLE;
-	VmaAllocation sceneVertexAllocation = VK_NULL_HANDLE;
-	uint32_t sceneTriangleCount = 0;
-	VkImage depthImage = VK_NULL_HANDLE;
-	VkImageView depthImageView = VK_NULL_HANDLE;
-	VmaAllocation depthAllocation = VK_NULL_HANDLE;
-	bool depthImageNeedsInit = false;
-	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
-	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
-	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
-	VkImage computeDepthImage = VK_NULL_HANDLE;
-	VkImageView computeDepthImageView = VK_NULL_HANDLE;
-	VmaAllocation computeDepthAllocation = VK_NULL_HANDLE;
-	bool computeDepthImageNeedsInit = false;
-	VkPipelineLayout computePipelineLayout = VK_NULL_HANDLE;
-	VkPipeline computePipeline = VK_NULL_HANDLE;
-
-	uint32_t currentFrame = 0;
-	std::vector<VkCommandBuffer> commandBuffers;
-	std::vector<VkSemaphore> imageAvailableSemaphores;
-	std::vector<VkSemaphore> renderFinishedSemaphores;
-	std::vector<VkFence> inFlightFences;
-	Uint64 lastFrameCounter = 0;
-	float deltaTimeSeconds = 0.0f;
-	float mouseDeltaX = 0.0f;
-	float mouseDeltaY = 0.0f;
 
 	bool shutdownDone = false;
 

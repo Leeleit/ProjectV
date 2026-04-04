@@ -3,7 +3,12 @@
 
 #include "Types.hpp"
 
-bool CreateGraphicsPipeline(AppState *state);
-void DestroyGraphicsPipeline(AppState *state);
+bool CreateGraphicsPipeline(
+	VulkanContextState *context,
+	const SwapchainState *swapchain,
+	RenderState *render);
+void DestroyGraphicsPipeline(
+	VulkanContextState *context,
+	RenderState *render);
 
 #endif

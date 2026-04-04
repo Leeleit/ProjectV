@@ -3,6 +3,10 @@
 
 #include "Types.hpp"
 
-bool RecreateSwapchain(AppState *state);
+bool RecreateSwapchain(
+	PlatformState *platform,
+	VulkanContextState *context,
+	SwapchainState *swapchain,
+	RenderState *render);
 
 #endif

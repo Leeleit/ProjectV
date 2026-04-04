@@ -1,8 +1,10 @@
 #include "VulkanSwapchain.hpp"
 
+#include "VulkanDebug.hpp"
 #include "VulkanGraphicsPipeline.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <vector>
 
 namespace {
@@ -98,10 +100,13 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &caps, SDL_Window *window
 	return extent;
 }
 
-bool CreateOrRecreateSwapchain(AppState *state)
+bool CreateOrRecreateSwapchain(
+	PlatformState *platform,
+	VulkanContextState *context,
+	SwapchainState *swapchain)
 {
 	SwapchainSupportDetails support;
-	if (!QuerySwapchainSupport(state->physicalDevice, state->surface, &support)) {
+	if (!QuerySwapchainSupport(context->physicalDevice, context->surface, &support)) {
 		SDL_Log("QuerySwapchainSupport failed");
 		return false;
 	}
@@ -113,10 +118,10 @@ bool CreateOrRecreateSwapchain(AppState *state)
 
 	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
-	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, state->window);
+	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, platform->window);
 
 	if (chosenExtent.width == 0 || chosenExtent.height == 0) {
-		state->extent = chosenExtent;
+		swapchain->extent = chosenExtent;
 		return true;
 	}
 
@@ -125,13 +130,13 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		imageCount = support.capabilities.maxImageCount;
 	}
 
-	VkSwapchainKHR oldSwapchain = state->swapchain;
+	VkSwapchainKHR oldSwapchain = swapchain->handle;
 	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
 	const VkSwapchainCreateInfoKHR createInfo{
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.pNext = nullptr,
 		.flags = 0,
-		.surface = state->surface,
+		.surface = context->surface,
 		.minImageCount = imageCount,
 		.imageFormat = format,
 		.imageColorSpace = colorSpace,
@@ -148,22 +153,22 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		.oldSwapchain = oldSwapchain,
 	};
 
-	if (vkCreateSwapchainKHR(state->device, &createInfo, nullptr, &newSwapchain) != VK_SUCCESS) {
+	if (vkCreateSwapchainKHR(context->device, &createInfo, nullptr, &newSwapchain) != VK_SUCCESS) {
 		SDL_Log("vkCreateSwapchainKHR failed");
 		return false;
 	}
 
 	uint32_t actualImageCount = 0;
-	if (vkGetSwapchainImagesKHR(state->device, newSwapchain, &actualImageCount, nullptr) != VK_SUCCESS ||
+	if (vkGetSwapchainImagesKHR(context->device, newSwapchain, &actualImageCount, nullptr) != VK_SUCCESS ||
 		actualImageCount == 0) {
-		vkDestroySwapchainKHR(state->device, newSwapchain, nullptr);
+		vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 		SDL_Log("vkGetSwapchainImagesKHR failed");
 		return false;
 	}
 
 	std::vector<VkImage> newImages(actualImageCount);
-	if (vkGetSwapchainImagesKHR(state->device, newSwapchain, &actualImageCount, newImages.data()) != VK_SUCCESS) {
-		vkDestroySwapchainKHR(state->device, newSwapchain, nullptr);
+	if (vkGetSwapchainImagesKHR(context->device, newSwapchain, &actualImageCount, newImages.data()) != VK_SUCCESS) {
+		vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 		SDL_Log("vkGetSwapchainImagesKHR failed");
 		return false;
 	}
@@ -181,66 +186,93 @@ bool CreateOrRecreateSwapchain(AppState *state)
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
 
-		if (vkCreateImageView(state->device, &viewInfo, nullptr, &newViews[i]) != VK_SUCCESS) {
+		if (vkCreateImageView(context->device, &viewInfo, nullptr, &newViews[i]) != VK_SUCCESS) {
 			for (VkImageView imageView : newViews) {
 				if (imageView) {
-					vkDestroyImageView(state->device, imageView, nullptr);
+					vkDestroyImageView(context->device, imageView, nullptr);
 				}
 			}
-			vkDestroySwapchainKHR(state->device, newSwapchain, nullptr);
+			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 			SDL_Log("vkCreateImageView failed");
 			return false;
 		}
 	}
 
-	for (VkImageView imageView : state->swapchainImageViews) {
+	for (VkImageView imageView : swapchain->imageViews) {
 		if (imageView) {
-			vkDestroyImageView(state->device, imageView, nullptr);
+			vkDestroyImageView(context->device, imageView, nullptr);
 		}
 	}
-	state->swapchainImageViews.clear();
-	state->swapchainImages.clear();
+	swapchain->imageViews.clear();
+	swapchain->images.clear();
 
 	if (oldSwapchain) {
-		vkDestroySwapchainKHR(state->device, oldSwapchain, nullptr);
+		vkDestroySwapchainKHR(context->device, oldSwapchain, nullptr);
 	}
 
-	state->swapchain = newSwapchain;
-	state->swapchainFormat = format;
-	state->swapchainColorSpace = colorSpace;
-	state->extent = chosenExtent;
-	state->swapchainImages = std::move(newImages);
-	state->swapchainImageViews = std::move(newViews);
+	swapchain->handle = newSwapchain;
+	swapchain->format = format;
+	swapchain->colorSpace = colorSpace;
+	swapchain->extent = chosenExtent;
+	swapchain->images = std::move(newImages);
+	swapchain->imageViews = std::move(newViews);
+
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(swapchain->handle),
+		VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+		"MainSwapchain");
+	for (size_t i = 0; i < swapchain->imageViews.size(); ++i) {
+		char imageName[64]{};
+		std::snprintf(imageName, sizeof(imageName), "SwapchainImage[%zu]", i);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(swapchain->images[i]),
+			VK_OBJECT_TYPE_IMAGE,
+			imageName);
+
+		char viewName[64]{};
+		std::snprintf(viewName, sizeof(viewName), "SwapchainImageView[%zu]", i);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(swapchain->imageViews[i]),
+			VK_OBJECT_TYPE_IMAGE_VIEW,
+			viewName);
+	}
 	return true;
 }
 } // namespace
 
-bool RecreateSwapchain(AppState *state)
+bool RecreateSwapchain(
+	PlatformState *platform,
+	VulkanContextState *context,
+	SwapchainState *swapchain,
+	RenderState *render)
 {
 	int w = 0;
 	int h = 0;
-	SDL_GetWindowSizeInPixels(state->window, &w, &h);
+	SDL_GetWindowSizeInPixels(platform->window, &w, &h);
 
 	if (w == 0 || h == 0) {
-		state->extent = {0, 0};
+		swapchain->extent = {0, 0};
 		return true;
 	}
 
-	vkDeviceWaitIdle(state->device);
+	vkDeviceWaitIdle(context->device);
 
 	const bool hadGraphicsPipeline =
-		state->graphicsPipeline != VK_NULL_HANDLE ||
-		state->graphicsPipelineLayout != VK_NULL_HANDLE;
+		render->graphicsPipeline != VK_NULL_HANDLE ||
+		render->graphicsPipelineLayout != VK_NULL_HANDLE;
 	if (hadGraphicsPipeline) {
-		DestroyGraphicsPipeline(state);
+		DestroyGraphicsPipeline(context, render);
 	}
 
-	if (!CreateOrRecreateSwapchain(state)) {
+	if (!CreateOrRecreateSwapchain(platform, context, swapchain)) {
 		return false;
 	}
 
 	if (hadGraphicsPipeline) {
-		if (!CreateGraphicsPipeline(state)) {
+		if (!CreateGraphicsPipeline(context, swapchain, render)) {
 			SDL_Log("CreateGraphicsPipeline failed after swapchain recreation");
 			return false;
 		}
