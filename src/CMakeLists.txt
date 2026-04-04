@@ -27,6 +27,7 @@ add_dependencies(ProjectV Shaders)
 
 target_sources(ProjectV PRIVATE
         main.cpp
+        SceneResources.cpp
         Types.cpp
         Renderer.cpp
         VulkanBootstrap.cpp

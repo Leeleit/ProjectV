@@ -1,3 +1,4 @@
+#include "SceneResources.hpp"
 #include "VulkanBootstrap.hpp"
 #include "VulkanComputePipeline.hpp"
 #include "VulkanSwapchain.hpp"
@@ -9,6 +10,11 @@ bool InitVulkan(AppState *state)
 	}
 
 	if (!RecreateSwapchain(state)) {
+		return false;
+	}
+
+	if (!CreateSceneResources(state)) {
+		SDL_Log("CreateSceneResources failed");
 		return false;
 	}
 
