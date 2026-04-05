@@ -29,6 +29,7 @@ add_dependencies(ProjectV Shaders)
 target_sources(ProjectV PRIVATE
         AppUpdate.cpp
         Camera.cpp
+        FramePreparation.cpp
         main.cpp
         SceneResources.cpp
         Types.cpp
@@ -48,6 +49,10 @@ target_compile_definitions(ProjectV PRIVATE
         VK_NO_PROTOTYPES
 )
 
+if (PROJECTV_ENABLE_TRACY)
+    target_compile_definitions(ProjectV PRIVATE PROJECTV_ENABLE_TRACY=1)
+endif ()
+
 target_compile_options(ProjectV PRIVATE
         /W4
         /WX
@@ -61,6 +66,10 @@ target_link_libraries(ProjectV PRIVATE
         # GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
 )
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectV PRIVATE Tracy::TracyClient)
+endif ()
 
 add_custom_command(TARGET ProjectV POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

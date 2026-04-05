@@ -11,8 +11,7 @@ bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render);
 bool UploadSceneFrameResources(
-	const WorldState *world,
-	RenderState *render,
+	RenderState &render,
 	uint32_t frameIndex);
 void DestroySceneResources(
 	VulkanContextState *context,

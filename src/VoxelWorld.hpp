@@ -2,6 +2,8 @@
 #define VOXEL_WORLD_HPP
 
 #include <cstdint>
+#include <cstddef>
+#include <type_traits>
 #include <vector>
 
 struct AppState;
@@ -13,19 +15,30 @@ enum class VoxelMaterial : uint8_t {
 	FloorWhite = 3,
 	FloorGray = 4,
 };
+static_assert(sizeof(VoxelMaterial) == sizeof(uint8_t));
 
 struct Int3 {
 	int x = 0;
 	int y = 0;
 	int z = 0;
 };
+static_assert(std::is_standard_layout_v<Int3>);
+static_assert(std::is_trivially_copyable_v<Int3>);
+static_assert(sizeof(Int3) == 12);
 
 struct VoxelChunk {
 	Int3 min{};
 	Int3 maxExclusive{};
-	bool dirty = true;
+	bool rebuildQueued = true;
 	uint32_t nonAirVoxelCount = 0;
 };
+static_assert(std::is_standard_layout_v<VoxelChunk>);
+static_assert(std::is_trivially_copyable_v<VoxelChunk>);
+static_assert(sizeof(VoxelChunk) == 32);
+static_assert(offsetof(VoxelChunk, min) == 0);
+static_assert(offsetof(VoxelChunk, maxExclusive) == 12);
+static_assert(offsetof(VoxelChunk, rebuildQueued) == 24);
+static_assert(offsetof(VoxelChunk, nonAirVoxelCount) == 28);
 
 struct VoxelWorldStats {
 	uint32_t dirtyChunkCount = 0;
@@ -61,6 +74,7 @@ struct VoxelWorld {
 	int chunkCountY = 0;
 	int chunkCountZ = 0;
 	std::vector<VoxelChunk> chunks;
+	std::vector<size_t> pendingChunkRebuildIndices;
 	VoxelWorldStats stats{};
 };
 
@@ -73,6 +87,8 @@ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material);
 void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);
 void MarkVoxelRegionDirty(VoxelWorld &world, Int3 min, Int3 maxExclusive);
 void MarkAllVoxelChunksDirty(VoxelWorld *world);
+void CollectDirtyVoxelChunkRebuildRequests(VoxelWorld &world, std::vector<size_t> *outChunkIndices);
+void CommitDirtyVoxelChunkRebuildRequests(VoxelWorld &world, const std::vector<size_t> &rebuiltChunkIndices);
 uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
 uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
 uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);

@@ -3,6 +3,11 @@
 
 #include "Types.hpp"
 
-SDL_AppResult DrawFrame(AppState *state); // Функция, которая делает всю работу внутри SDL_AppIterate
+SDL_AppResult DrawFrame(
+	PlatformState *platform,
+	VulkanContextState *context,
+	SwapchainState *swapchain,
+	RenderState *render,
+	FrameState *frame);
 
 #endif

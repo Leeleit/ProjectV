@@ -1,24 +1,36 @@
 #include "SceneResources.hpp"
 
-#include "VoxelMaterials.hpp"
+#include "Profiling.hpp"
 #include "VoxelWorld.hpp"
 #include "VulkanDebug.hpp"
+#include "VulkanGraphicsPipeline.hpp"
 
 #include <array>
 #include <cstdio>
+// ReSharper disable once CppUnusedIncludeDirective
+#include <cstring>
 #include <vector>
 
 namespace {
 constexpr uint32_t kMaxSceneVertices = 262144;
-constexpr float kRenderMaterialOpaque = 0.0f;
-constexpr float kRenderMaterialGlass = 1.0f;
-constexpr float kRenderMaterialFluid = 2.0f;
 
-struct Float3 {
-	float x = 0.0f;
-	float y = 0.0f;
-	float z = 0.0f;
-};
+uint32_t PackLocalPositionMaterial(
+	const uint32_t localX,
+	const uint32_t localY,
+	const uint32_t localZ,
+	const VoxelMaterial material)
+{
+	const uint32_t packedLocalX = localX & 0xFFu;
+	const uint32_t packedLocalY = (localY & 0xFFu) << 8u;
+	const uint32_t packedLocalZ = (localZ & 0xFFu) << 16u;
+	const uint32_t packedMaterial = static_cast<uint32_t>(material) << 24u;
+	return packedLocalX | packedLocalY | packedLocalZ | packedMaterial;
+}
+
+VoxelMaterial UnpackMaterial(const SceneChunkMeshVertex packedVertex)
+{
+	return static_cast<VoxelMaterial>(packedVertex.localPositionMaterial >> 24u & 0xFFu);
+}
 
 bool CreateBuffer(
 	VulkanContextState *context,
@@ -62,28 +74,24 @@ bool ShouldEmitVoxelFace(const VoxelMaterial material, const VoxelMaterial neigh
 void EmitFaceToChunkMesh(
 	SceneChunkRenderCache &chunkRenderCache,
 	const VoxelMaterial material,
-	const Float3 normal,
-	const std::array<Float3, 4> &corners)
+	const uint32_t faceIndex,
+	const std::array<std::array<uint32_t, 3>, 4> &corners)
 {
 	const SceneChunkMeshVertex v0{
-		.position = {corners[0].x, corners[0].y, corners[0].z},
-		.normal = {normal.x, normal.y, normal.z},
-		.material = material,
+		.localPositionMaterial = PackLocalPositionMaterial(corners[0][0], corners[0][1], corners[0][2], material),
+		.faceIndex = faceIndex,
 	};
 	const SceneChunkMeshVertex v1{
-		.position = {corners[1].x, corners[1].y, corners[1].z},
-		.normal = {normal.x, normal.y, normal.z},
-		.material = material,
+		.localPositionMaterial = PackLocalPositionMaterial(corners[1][0], corners[1][1], corners[1][2], material),
+		.faceIndex = faceIndex,
 	};
 	const SceneChunkMeshVertex v2{
-		.position = {corners[2].x, corners[2].y, corners[2].z},
-		.normal = {normal.x, normal.y, normal.z},
-		.material = material,
+		.localPositionMaterial = PackLocalPositionMaterial(corners[2][0], corners[2][1], corners[2][2], material),
+		.faceIndex = faceIndex,
 	};
 	const SceneChunkMeshVertex v3{
-		.position = {corners[3].x, corners[3].y, corners[3].z},
-		.normal = {normal.x, normal.y, normal.z},
-		.material = material,
+		.localPositionMaterial = PackLocalPositionMaterial(corners[3][0], corners[3][1], corners[3][2], material),
+		.faceIndex = faceIndex,
 	};
 
 	chunkRenderCache.meshVertices.push_back(v0);
@@ -96,6 +104,7 @@ void EmitFaceToChunkMesh(
 
 void RebuildChunkMesh(const VoxelWorld &world, const VoxelChunk &chunk, SceneChunkRenderCache &chunkRenderCache)
 {
+	PV_PROFILE_ZONE_N("RebuildChunkMesh");
 	chunkRenderCache.meshVertices.clear();
 
 	constexpr std::array<Int3, 6> neighborOffsets{{
@@ -105,14 +114,6 @@ void RebuildChunkMesh(const VoxelWorld &world, const VoxelChunk &chunk, SceneChu
 		{0, -1, 0},
 		{0, 0, 1},
 		{0, 0, -1},
-	}};
-	constexpr std::array<Float3, 6> normals{{
-		{1.0f, 0.0f, 0.0f},
-		{-1.0f, 0.0f, 0.0f},
-		{0.0f, 1.0f, 0.0f},
-		{0.0f, -1.0f, 0.0f},
-		{0.0f, 0.0f, 1.0f},
-		{0.0f, 0.0f, -1.0f},
 	}};
 
 	for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
@@ -124,20 +125,20 @@ void RebuildChunkMesh(const VoxelWorld &world, const VoxelChunk &chunk, SceneChu
 					continue;
 				}
 
-				const float x0 = static_cast<float>(x);
-				const float x1 = x0 + 1.0f;
-				const float y0 = static_cast<float>(y);
-				const float y1 = y0 + 1.0f;
-				const float z0 = static_cast<float>(z);
-				const float z1 = z0 + 1.0f;
+				const uint32_t localX = static_cast<uint32_t>(x - chunk.min.x);
+				const uint32_t localX1 = localX + 1u;
+				const uint32_t localY = static_cast<uint32_t>(y - chunk.min.y);
+				const uint32_t localY1 = localY + 1u;
+				const uint32_t localZ = static_cast<uint32_t>(z - chunk.min.z);
+				const uint32_t localZ1 = localZ + 1u;
 
-				const std::array<std::array<Float3, 4>, 6> faceCorners{{
-					{{{x1, y0, z0}, {x1, y1, z0}, {x1, y1, z1}, {x1, y0, z1}}},
-					{{{x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}, {x0, y0, z0}}},
-					{{{x0, y1, z0}, {x0, y1, z1}, {x1, y1, z1}, {x1, y1, z0}}},
-					{{{x0, y0, z1}, {x0, y0, z0}, {x1, y0, z0}, {x1, y0, z1}}},
-					{{{x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}, {x0, y0, z1}}},
-					{{{x0, y0, z0}, {x0, y1, z0}, {x1, y1, z0}, {x1, y0, z0}}},
+				const std::array<std::array<std::array<uint32_t, 3>, 4>, 6> faceCorners{{
+					{{{localX1, localY, localZ}, {localX1, localY1, localZ}, {localX1, localY1, localZ1}, {localX1, localY, localZ1}}},
+					{{{localX, localY, localZ1}, {localX, localY1, localZ1}, {localX, localY1, localZ}, {localX, localY, localZ}}},
+					{{{localX, localY1, localZ}, {localX, localY1, localZ1}, {localX1, localY1, localZ1}, {localX1, localY1, localZ}}},
+					{{{localX, localY, localZ1}, {localX, localY, localZ}, {localX1, localY, localZ}, {localX1, localY, localZ1}}},
+					{{{localX1, localY, localZ1}, {localX1, localY1, localZ1}, {localX, localY1, localZ1}, {localX, localY, localZ1}}},
+					{{{localX, localY, localZ}, {localX, localY1, localZ}, {localX1, localY1, localZ}, {localX1, localY, localZ}}},
 				}};
 
 				for (size_t faceIndex = 0; faceIndex < neighborOffsets.size(); ++faceIndex) {
@@ -150,10 +151,32 @@ void RebuildChunkMesh(const VoxelWorld &world, const VoxelChunk &chunk, SceneChu
 						continue;
 					}
 
-					EmitFaceToChunkMesh(chunkRenderCache, material, normals[faceIndex], faceCorners[faceIndex]);
+					EmitFaceToChunkMesh(
+						chunkRenderCache,
+						material,
+						static_cast<uint32_t>(faceIndex),
+						faceCorners[faceIndex]);
 				}
 			}
 		}
+	}
+}
+
+void InitializeSceneChunkDescriptors(
+	const VoxelWorld &world,
+	RenderState &render)
+{
+	render.sceneChunkDescriptors.clear();
+	render.sceneChunkDescriptors.resize(world.chunks.size());
+	for (size_t chunkIndex = 0; chunkIndex < world.chunks.size(); ++chunkIndex) {
+		const VoxelChunk &chunk = world.chunks[chunkIndex];
+		render.sceneChunkDescriptors[chunkIndex].chunkOrigin = {
+			chunk.min.x,
+			chunk.min.y,
+			chunk.min.z,
+			0,
+		};
+		render.sceneChunkDescriptors[chunkIndex].drawRanges = {0u, 0u, 0u, 0u};
 	}
 }
 
@@ -163,59 +186,131 @@ struct SceneUploadCounts {
 	uint32_t transparentVertexCount = 0;
 };
 
-bool BuildCombinedSceneVertices(
-	const RenderState &render,
-	RenderVertex *mappedVertices,
-	SceneUploadCounts *outCounts)
+SceneUploadCounts BuildSceneUploadCache(RenderState &render)
 {
-	if (!mappedVertices || !outCounts) {
-		return false;
-	}
+	PV_PROFILE_ZONE_N("BuildSceneUploadCache");
+	SceneUploadCounts outCounts{};
 
 	uint32_t opaqueVertexCount = 0;
-	std::vector<RenderVertex> transparentVertices;
-	transparentVertices.reserve(render.sceneVertexCapacity / 4);
+	std::vector<SceneChunkMeshVertex> &packedVertexPayload = render.scenePackedVertexPayload;
+	packedVertexPayload.clear();
+	if (packedVertexPayload.capacity() < render.sceneVertexCapacity) {
+		packedVertexPayload.reserve(render.sceneVertexCapacity);
+	}
 
-	for (const auto &[meshVertices] : render.sceneChunkRenderCaches) {
-		for (const auto &[position, normal, material] : meshVertices) {
-			if (opaqueVertexCount + transparentVertices.size() >= render.sceneVertexCapacity) {
+	std::vector<SceneChunkMeshVertex> &transparentPackedVertices = render.transparentPackedVertexScratch;
+	transparentPackedVertices.clear();
+	if (transparentPackedVertices.capacity() < render.sceneVertexCapacity / 4) {
+		transparentPackedVertices.reserve(render.sceneVertexCapacity / 4);
+	}
+
+	std::vector<SceneChunkDrawRange> &opaqueChunkDrawRanges = render.opaqueChunkDrawRanges;
+	opaqueChunkDrawRanges.clear();
+	if (opaqueChunkDrawRanges.capacity() < render.sceneChunkRenderCaches.size()) {
+		opaqueChunkDrawRanges.reserve(render.sceneChunkRenderCaches.size());
+	}
+
+	std::vector<SceneChunkDrawRange> &transparentChunkDrawRanges = render.transparentChunkDrawRanges;
+	transparentChunkDrawRanges.clear();
+	if (transparentChunkDrawRanges.capacity() < render.sceneChunkRenderCaches.size()) {
+		transparentChunkDrawRanges.reserve(render.sceneChunkRenderCaches.size());
+	}
+
+	for (size_t chunkDescriptorIndex = 0; chunkDescriptorIndex < render.sceneChunkDescriptors.size();
+		 ++chunkDescriptorIndex) {
+		render.sceneChunkDescriptors[chunkDescriptorIndex].drawRanges = {0u, 0u, 0u, 0u};
+	}
+
+	bool reachedVertexCapacity = false;
+	for (size_t chunkIndex = 0; chunkIndex < render.sceneChunkRenderCaches.size(); ++chunkIndex) {
+		const std::vector<SceneChunkMeshVertex> &meshVertices = render.sceneChunkRenderCaches[chunkIndex].meshVertices;
+		const uint32_t chunkOpaqueFirstVertex = opaqueVertexCount;
+		const uint32_t chunkTransparentFirstVertex = static_cast<uint32_t>(transparentPackedVertices.size());
+		uint32_t chunkOpaqueVertexCount = 0;
+		uint32_t chunkTransparentVertexCount = 0;
+
+		for (const SceneChunkMeshVertex &packedVertex : meshVertices) {
+			if (opaqueVertexCount + transparentPackedVertices.size() >= render.sceneVertexCapacity) {
+				reachedVertexCapacity = true;
 				break;
 			}
 
-			const VoxelMaterialVisual visual = GetVoxelMaterialVisual(material);
-			const float materialKind =
-				material == VoxelMaterial::Glass   ? kRenderMaterialGlass
-				: material == VoxelMaterial::Fluid ? kRenderMaterialFluid
-												   : kRenderMaterialOpaque;
-			const RenderVertex renderVertex{
-				.position = position,
-				.normal = normal,
-				.color = visual.baseColor,
-				.materialKind = materialKind,
-			};
+			const VoxelMaterial material = UnpackMaterial(packedVertex);
 			if (material == VoxelMaterial::Glass) {
-				transparentVertices.push_back(renderVertex);
+				transparentPackedVertices.push_back(packedVertex);
+				++chunkTransparentVertexCount;
 			} else {
-				mappedVertices[opaqueVertexCount++] = renderVertex;
+				packedVertexPayload.push_back(packedVertex);
+				++opaqueVertexCount;
+				++chunkOpaqueVertexCount;
 			}
 		}
 
-		if (opaqueVertexCount + transparentVertices.size() >= render.sceneVertexCapacity) {
+		if (chunkIndex < render.sceneChunkDescriptors.size()) {
+			std::array<uint32_t, 4> &drawRanges = render.sceneChunkDescriptors[chunkIndex].drawRanges;
+			drawRanges[0] = chunkOpaqueFirstVertex;
+			drawRanges[1] = chunkOpaqueVertexCount;
+			drawRanges[2] = chunkTransparentFirstVertex;
+			drawRanges[3] = chunkTransparentVertexCount;
+		}
+
+		if (chunkOpaqueVertexCount > 0) {
+			opaqueChunkDrawRanges.push_back({
+				.firstVertex = chunkOpaqueFirstVertex,
+				.vertexCount = chunkOpaqueVertexCount,
+				.chunkIndex = static_cast<uint32_t>(chunkIndex),
+			});
+		}
+		if (chunkTransparentVertexCount > 0) {
+			transparentChunkDrawRanges.push_back({
+				.firstVertex = chunkTransparentFirstVertex,
+				.vertexCount = chunkTransparentVertexCount,
+				.chunkIndex = static_cast<uint32_t>(chunkIndex),
+			});
+		}
+
+		if (reachedVertexCapacity) {
 			break;
 		}
 	}
 
-	if (!transparentVertices.empty()) {
-		std::memcpy(
-			mappedVertices + opaqueVertexCount,
-			transparentVertices.data(),
-			transparentVertices.size() * sizeof(RenderVertex));
+	const uint32_t transparentBaseVertex = opaqueVertexCount;
+	if (!transparentPackedVertices.empty()) {
+		packedVertexPayload.insert(
+			packedVertexPayload.end(),
+			transparentPackedVertices.begin(),
+			transparentPackedVertices.end());
+	}
+	for (SceneChunkDrawRange &transparentChunkDrawRange : transparentChunkDrawRanges) {
+		transparentChunkDrawRange.firstVertex += transparentBaseVertex;
+	}
+	for (size_t chunkDescriptorIndex = 0; chunkDescriptorIndex < render.sceneChunkDescriptors.size();
+		 ++chunkDescriptorIndex) {
+		std::array<uint32_t, 4> &drawRanges = render.sceneChunkDescriptors[chunkDescriptorIndex].drawRanges;
+		if (drawRanges[3] > 0) {
+			drawRanges[2] += transparentBaseVertex;
+		}
 	}
 
-	outCounts->opaqueVertexCount = opaqueVertexCount;
-	outCounts->transparentVertexCount = static_cast<uint32_t>(transparentVertices.size());
-	outCounts->vertexCount = opaqueVertexCount + outCounts->transparentVertexCount;
-	return true;
+	outCounts.opaqueVertexCount = opaqueVertexCount;
+	outCounts.transparentVertexCount = static_cast<uint32_t>(transparentPackedVertices.size());
+	outCounts.vertexCount = opaqueVertexCount + outCounts.transparentVertexCount;
+	return outCounts;
+}
+
+void EnsureSceneUploadCache(RenderState &render)
+{
+	if (!render.sceneUploadCacheDirty) {
+		return;
+	}
+
+	const auto [vertexCount, opaqueVertexCount, transparentVertexCount] = BuildSceneUploadCache(render);
+	render.sceneUploadVertexCount = vertexCount;
+	render.sceneUploadOpaqueVertexCount = opaqueVertexCount;
+	render.sceneUploadTransparentVertexCount = transparentVertexCount;
+	render.sceneTriangleCount = vertexCount / 3;
+	++render.sceneUploadVersion;
+	render.sceneUploadCacheDirty = false;
 }
 } // namespace
 
@@ -227,13 +322,24 @@ void DestroySceneResources(
 		return;
 	}
 
-	for (auto &[mappedData, vertexBuffer, vertexAllocation, vertexCount, opaqueVertexCount, transparentVertexCount] : render->sceneFrameResources) {
-		if (vertexBuffer && vertexAllocation) {
-			vmaDestroyBuffer(context->allocator, vertexBuffer, vertexAllocation);
-			vertexBuffer = VK_NULL_HANDLE;
-			vertexAllocation = VK_NULL_HANDLE;
+	for (auto &[packedVertexMappedData, packedVertexBuffer, packedVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, graphicsDescriptorSet, uploadedSceneVersion, chunkDescriptorCount, vertexCount, opaqueVertexCount, transparentVertexCount] : render->sceneFrameResources) {
+		if (packedVertexBuffer && packedVertexAllocation) {
+			profiling::RecordFree(packedVertexAllocation, "ScenePackedVertexBufferAllocation");
+			vmaDestroyBuffer(context->allocator, packedVertexBuffer, packedVertexAllocation);
+			packedVertexBuffer = VK_NULL_HANDLE;
+			packedVertexAllocation = VK_NULL_HANDLE;
 		}
-		mappedData = nullptr;
+		if (chunkDescriptorBuffer && chunkDescriptorAllocation) {
+			profiling::RecordFree(chunkDescriptorAllocation, "SceneChunkDescriptorBufferAllocation");
+			vmaDestroyBuffer(context->allocator, chunkDescriptorBuffer, chunkDescriptorAllocation);
+			chunkDescriptorBuffer = VK_NULL_HANDLE;
+			chunkDescriptorAllocation = VK_NULL_HANDLE;
+		}
+		packedVertexMappedData = nullptr;
+		chunkDescriptorMappedData = nullptr;
+		graphicsDescriptorSet = VK_NULL_HANDLE;
+		uploadedSceneVersion = 0;
+		chunkDescriptorCount = 0;
 		vertexCount = 0;
 		opaqueVertexCount = 0;
 		transparentVertexCount = 0;
@@ -241,8 +347,19 @@ void DestroySceneResources(
 
 	render->sceneVertexCapacity = 0;
 	render->sceneTriangleCount = 0;
-	render->sceneVertexBufferDirty = true;
+	render->sceneUploadVertexCount = 0;
+	render->sceneUploadOpaqueVertexCount = 0;
+	render->sceneUploadTransparentVertexCount = 0;
+	render->sceneUploadVersion = 0;
+	render->sceneUploadCacheDirty = true;
 	render->sceneChunkRenderCaches.clear();
+	render->scenePackedVertexPayload.clear();
+	render->transparentPackedVertexScratch.clear();
+	render->sceneChunkDescriptors.clear();
+	render->opaqueChunkDrawRanges.clear();
+	render->transparentChunkDrawRanges.clear();
+	render->pendingChunkRebuildIndices.clear();
+	render->completedChunkRebuildIndices.clear();
 }
 
 bool CreateSceneResources(
@@ -251,6 +368,10 @@ bool CreateSceneResources(
 	RenderState *render)
 {
 	if (!context || !world || !render || !context->allocator || !world->voxelWorld) {
+		return false;
+	}
+	if (world->voxelWorld->chunkSize > 255) {
+		SDL_Log("Chunk size %d exceeds packed scene payload limit", world->voxelWorld->chunkSize);
 		return false;
 	}
 
@@ -263,94 +384,183 @@ bool CreateSceneResources(
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
 	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
-		VmaAllocationInfo allocationResultInfo{};
+		VmaAllocationInfo packedVertexAllocationInfo{};
 		if (!CreateBuffer(
 				context,
-				sizeof(RenderVertex) * static_cast<VkDeviceSize>(kMaxSceneVertices),
-				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				sizeof(SceneChunkMeshVertex) * static_cast<VkDeviceSize>(kMaxSceneVertices),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 				allocationInfo,
-				&frameResources.vertexBuffer,
-				&frameResources.vertexAllocation,
-				&allocationResultInfo)) {
+				&frameResources.packedVertexBuffer,
+				&frameResources.packedVertexAllocation,
+				&packedVertexAllocationInfo)) {
 			DestroySceneResources(context, render);
 			return false;
 		}
-		frameResources.mappedData = allocationResultInfo.pMappedData;
+		frameResources.packedVertexMappedData = packedVertexAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.packedVertexAllocation,
+			packedVertexAllocationInfo.size,
+			"ScenePackedVertexBufferAllocation");
+
+		VmaAllocationInfo chunkDescriptorAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(PackedSceneChunkDescriptor) * world->voxelWorld->chunks.size(),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.chunkDescriptorBuffer,
+				&frameResources.chunkDescriptorAllocation,
+				&chunkDescriptorAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.chunkDescriptorMappedData = chunkDescriptorAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.chunkDescriptorAllocation,
+			chunkDescriptorAllocationInfo.size,
+			"SceneChunkDescriptorBufferAllocation");
 
 		char bufferName[64]{};
-		std::snprintf(bufferName, sizeof(bufferName), "SceneVertexBuffer[%zu]", static_cast<size_t>(&frameResources - render->sceneFrameResources.data()));
+		std::snprintf(bufferName, sizeof(bufferName), "ScenePackedVertexBuffer[%zu]", static_cast<size_t>(&frameResources - render->sceneFrameResources.data()));
 		SetVulkanObjectName(
 			*context,
-			reinterpret_cast<uint64_t>(frameResources.vertexBuffer),
+			reinterpret_cast<uint64_t>(frameResources.packedVertexBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneChunkDescriptorBuffer[%zu]", static_cast<size_t>(&frameResources - render->sceneFrameResources.data()));
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.chunkDescriptorBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
 	}
 
 	render->sceneVertexCapacity = kMaxSceneVertices;
-	render->sceneVertexBufferDirty = true;
+	render->sceneUploadVertexCount = 0;
+	render->sceneUploadOpaqueVertexCount = 0;
+	render->sceneUploadTransparentVertexCount = 0;
+	render->sceneUploadVersion = 0;
+	render->sceneUploadCacheDirty = true;
 	render->sceneChunkRenderCaches.clear();
 	render->sceneChunkRenderCaches.resize(world->voxelWorld->chunks.size());
-	return UpdateSceneResources(world, render);
+	render->scenePackedVertexPayload.clear();
+	render->scenePackedVertexPayload.reserve(kMaxSceneVertices);
+	render->transparentPackedVertexScratch.clear();
+	render->transparentPackedVertexScratch.reserve(kMaxSceneVertices / 4);
+	InitializeSceneChunkDescriptors(*world->voxelWorld, *render);
+	render->opaqueChunkDrawRanges.clear();
+	render->opaqueChunkDrawRanges.reserve(world->voxelWorld->chunks.size());
+	render->transparentChunkDrawRanges.clear();
+	render->transparentChunkDrawRanges.reserve(world->voxelWorld->chunks.size());
+	render->pendingChunkRebuildIndices.clear();
+	render->pendingChunkRebuildIndices.reserve(world->voxelWorld->chunks.size());
+	render->completedChunkRebuildIndices.clear();
+	render->completedChunkRebuildIndices.reserve(world->voxelWorld->chunks.size());
+	if (!RefreshGraphicsResourceBindings(context, render)) {
+		DestroySceneResources(context, render);
+		return false;
+	}
+	return true;
 }
 
 bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render)
 {
+	PV_PROFILE_ZONE_N("UpdateSceneResources");
 	if (!world || !render || !world->voxelWorld) {
 		return false;
 	}
 
+	const uint32_t dirtyChunkCount = world->voxelWorld->stats.dirtyChunkCount;
+	const uint32_t activeChunkCount = world->voxelWorld->stats.activeChunkCount;
+	uint32_t rebuiltChunkCount = 0;
+	uint64_t rebuiltMeshVertexCount = 0;
+
 	if (render->sceneChunkRenderCaches.size() != world->voxelWorld->chunks.size()) {
 		render->sceneChunkRenderCaches.clear();
 		render->sceneChunkRenderCaches.resize(world->voxelWorld->chunks.size());
-		render->sceneVertexBufferDirty = true;
+		InitializeSceneChunkDescriptors(*world->voxelWorld, *render);
+		render->sceneUploadCacheDirty = true;
 	}
 
-	for (size_t chunkIndex = 0; chunkIndex < world->voxelWorld->chunks.size(); ++chunkIndex) {
-		VoxelChunk &chunk = world->voxelWorld->chunks[chunkIndex];
-		if (chunk.dirty) {
-			RebuildChunkMesh(*world->voxelWorld, chunk, render->sceneChunkRenderCaches[chunkIndex]);
-			chunk.dirty = false;
-			if (world->voxelWorld->stats.dirtyChunkCount > 0) {
-				--world->voxelWorld->stats.dirtyChunkCount;
-			}
-			render->sceneVertexBufferDirty = true;
+	render->completedChunkRebuildIndices.clear();
+	for (const size_t chunkIndex : render->pendingChunkRebuildIndices) {
+		if (chunkIndex >= world->voxelWorld->chunks.size() ||
+			chunkIndex >= render->sceneChunkRenderCaches.size()) {
+			continue;
 		}
-	}
 
-	if (!render->sceneVertexBufferDirty) {
-		return true;
+		const VoxelChunk &chunk = world->voxelWorld->chunks[chunkIndex];
+		RebuildChunkMesh(*world->voxelWorld, chunk, render->sceneChunkRenderCaches[chunkIndex]);
+		++rebuiltChunkCount;
+		rebuiltMeshVertexCount += render->sceneChunkRenderCaches[chunkIndex].meshVertices.size();
+		render->completedChunkRebuildIndices.push_back(chunkIndex);
+		render->sceneUploadCacheDirty = true;
 	}
+	render->pendingChunkRebuildIndices.clear();
 
-	render->sceneVertexBufferDirty = false;
+	profiling::PlotValue("Dirty Chunks", static_cast<int64_t>(dirtyChunkCount));
+	profiling::PlotValue("Active Chunks", static_cast<int64_t>(activeChunkCount));
+	profiling::PlotValue("Rebuilt Chunks", static_cast<int64_t>(rebuiltChunkCount));
+	profiling::PlotValue("Rebuilt Mesh Vertices", static_cast<int64_t>(rebuiltMeshVertexCount));
 	return true;
 }
 
 bool UploadSceneFrameResources(
-	const WorldState *world,
-	RenderState *render,
+	RenderState &render,
 	const uint32_t frameIndex)
 {
-	if (!world || !render || frameIndex >= render->sceneFrameResources.size()) {
+	PV_PROFILE_ZONE_N("UploadSceneFrameResources");
+	if (static_cast<size_t>(frameIndex) >= render.sceneFrameResources.size()) {
 		return false;
 	}
-	if (!world->voxelWorld) {
-		return false;
+	EnsureSceneUploadCache(render);
+
+	SceneFrameResources &frameResources = render.sceneFrameResources[frameIndex];
+	uint32_t uploadedVertexCount = 0;
+	uint32_t uploadedOpaqueVertexCount = 0;
+	uint32_t uploadedTransparentVertexCount = 0;
+	uint32_t uploadedChunkDescriptorCount = 0;
+
+	if (frameResources.uploadedSceneVersion != render.sceneUploadVersion) {
+		if (!render.scenePackedVertexPayload.empty()) {
+			std::memcpy(
+				frameResources.packedVertexMappedData,
+				render.scenePackedVertexPayload.data(),
+				render.scenePackedVertexPayload.size() * sizeof(SceneChunkMeshVertex));
+		}
+		if (!render.sceneChunkDescriptors.empty()) {
+			std::memcpy(
+				frameResources.chunkDescriptorMappedData,
+				render.sceneChunkDescriptors.data(),
+				render.sceneChunkDescriptors.size() * sizeof(PackedSceneChunkDescriptor));
+		}
+		frameResources.uploadedSceneVersion = render.sceneUploadVersion;
+		uploadedChunkDescriptorCount = static_cast<uint32_t>(render.sceneChunkDescriptors.size());
+		uploadedVertexCount = render.sceneUploadVertexCount;
+		uploadedOpaqueVertexCount = render.sceneUploadOpaqueVertexCount;
+		uploadedTransparentVertexCount = render.sceneUploadTransparentVertexCount;
 	}
 
-	SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
-	SceneUploadCounts uploadCounts{};
-	if (!BuildCombinedSceneVertices(
-			*render,
-			static_cast<RenderVertex *>(frameResources.mappedData),
-			&uploadCounts)) {
-		return false;
-	}
-
-	frameResources.vertexCount = uploadCounts.vertexCount;
-	frameResources.opaqueVertexCount = uploadCounts.opaqueVertexCount;
-	frameResources.transparentVertexCount = uploadCounts.transparentVertexCount;
-	render->sceneTriangleCount = uploadCounts.vertexCount / 3;
+	frameResources.chunkDescriptorCount = static_cast<uint32_t>(render.sceneChunkDescriptors.size());
+	frameResources.vertexCount = render.sceneUploadVertexCount;
+	frameResources.opaqueVertexCount = render.sceneUploadOpaqueVertexCount;
+	frameResources.transparentVertexCount = render.sceneUploadTransparentVertexCount;
+	profiling::PlotValue("Scene Triangles", static_cast<int64_t>(render.sceneTriangleCount));
+	profiling::PlotValue("Opaque Chunk Draws", static_cast<int64_t>(render.opaqueChunkDrawRanges.size()));
+	profiling::PlotValue("Transparent Chunk Draws", static_cast<int64_t>(render.transparentChunkDrawRanges.size()));
+	profiling::PlotValue("Uploaded Vertices", static_cast<int64_t>(uploadedVertexCount));
+	profiling::PlotValue("Uploaded Chunk Descriptors", static_cast<int64_t>(uploadedChunkDescriptorCount));
+	profiling::PlotValue("Uploaded Opaque Vertices", static_cast<int64_t>(uploadedOpaqueVertexCount));
+	profiling::PlotValue(
+		"Uploaded Transparent Vertices",
+		static_cast<int64_t>(uploadedTransparentVertexCount));
+	profiling::PlotValue(
+		"Upload Vertex Bytes",
+		static_cast<int64_t>(uploadedVertexCount * sizeof(SceneChunkMeshVertex)));
+	profiling::PlotValue(
+		"Upload Descriptor Bytes",
+		static_cast<int64_t>(uploadedChunkDescriptorCount * sizeof(PackedSceneChunkDescriptor)));
 	return true;
 }

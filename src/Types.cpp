@@ -1,6 +1,7 @@
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
+#include "ProfilingGpu.hpp"
 #include "Types.hpp"
 #include "SceneResources.hpp"
 #include "VoxelWorld.hpp"
@@ -15,6 +16,10 @@ void ShutdownVulkan(AppState *state)
 
 	if (state->context.device) {
 		vkDeviceWaitIdle(state->context.device);
+		profiling::CollectVulkanGpuHost(state->render.tracyGraphicsContext);
+		profiling::DestroyVulkanGpuContext(state->render.tracyGraphicsContext);
+		state->render.tracyGraphicsContext = nullptr;
+		state->render.tracyGraphicsContextCalibrated = false;
 		DestroyGraphicsPipeline(&state->context, &state->render);
 		DestroySceneResources(&state->context, &state->render);
 	}

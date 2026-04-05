@@ -2,6 +2,7 @@
 
 #include "Types.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 
@@ -50,6 +51,18 @@ void AccumulateMaterialCount(VoxelWorldStats &stats, const VoxelMaterial materia
 bool IsAirMaterial(const VoxelMaterial material)
 {
 	return material == VoxelMaterial::Air;
+}
+
+void QueueChunkRebuildRequest(VoxelWorld &world, const size_t chunkIndex)
+{
+	VoxelChunk &chunk = world.chunks[chunkIndex];
+	if (chunk.rebuildQueued) {
+		return;
+	}
+
+	chunk.rebuildQueued = true;
+	world.pendingChunkRebuildIndices.push_back(chunkIndex);
+	++world.stats.dirtyChunkCount;
 }
 
 std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
@@ -101,11 +114,15 @@ std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
 					std::min(chunk.min.y + world->chunkSize, world->maxExclusive.y),
 					std::min(chunk.min.z + world->chunkSize, world->maxExclusive.z),
 				};
-				chunk.dirty = true;
+				chunk.rebuildQueued = true;
 			}
 		}
 	}
-	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->chunks.size());
+	world->pendingChunkRebuildIndices.reserve(world->chunks.size());
+	for (size_t chunkIndex = 0; chunkIndex < world->chunks.size(); ++chunkIndex) {
+		world->pendingChunkRebuildIndices.push_back(chunkIndex);
+	}
+	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->pendingChunkRebuildIndices.size());
 
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
@@ -201,11 +218,7 @@ void MarkVoxelChunkDirty(VoxelWorld &world, const Int3 position)
 	}
 
 	const Int3 chunkCoord = GetChunkCoord(world, position);
-	VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, chunkCoord)];
-	if (!chunk.dirty) {
-		chunk.dirty = true;
-		++world.stats.dirtyChunkCount;
-	}
+	QueueChunkRebuildRequest(world, GetVoxelChunkIndex(world, chunkCoord));
 }
 
 void MarkVoxelRegionDirty(VoxelWorld &world, const Int3 min, const Int3 maxExclusive)
@@ -224,17 +237,14 @@ void MarkVoxelRegionDirty(VoxelWorld &world, const Int3 min, const Int3 maxExclu
 		return;
 	}
 
-	const Int3 firstChunk = GetChunkCoord(world, clampedMin);
-	const Int3 lastChunk = GetChunkCoord(world, {clampedMax.x - 1, clampedMax.y - 1, clampedMax.z - 1});
+	const auto [firstChunkX, firstChunkY, firstChunkZ] = GetChunkCoord(world, clampedMin);
+	const auto [lastChunkX, lastChunkY, lastChunkZ] =
+		GetChunkCoord(world, {clampedMax.x - 1, clampedMax.y - 1, clampedMax.z - 1});
 
-	for (int chunkZ = firstChunk.z; chunkZ <= lastChunk.z; ++chunkZ) {
-		for (int chunkY = firstChunk.y; chunkY <= lastChunk.y; ++chunkY) {
-			for (int chunkX = firstChunk.x; chunkX <= lastChunk.x; ++chunkX) {
-				VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ})];
-				if (!chunk.dirty) {
-					chunk.dirty = true;
-					++world.stats.dirtyChunkCount;
-				}
+	for (int chunkZ = firstChunkZ; chunkZ <= lastChunkZ; ++chunkZ) {
+		for (int chunkY = firstChunkY; chunkY <= lastChunkY; ++chunkY) {
+			for (int chunkX = firstChunkX; chunkX <= lastChunkX; ++chunkX) {
+				QueueChunkRebuildRequest(world, GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ}));
 			}
 		}
 	}
@@ -281,9 +291,46 @@ void MarkAllVoxelChunksDirty(VoxelWorld *world)
 	}
 
 	for (VoxelChunk &chunk : world->chunks) {
-		chunk.dirty = true;
+		chunk.rebuildQueued = true;
 	}
-	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->chunks.size());
+	world->pendingChunkRebuildIndices.clear();
+	world->pendingChunkRebuildIndices.reserve(world->chunks.size());
+	for (size_t chunkIndex = 0; chunkIndex < world->chunks.size(); ++chunkIndex) {
+		world->pendingChunkRebuildIndices.push_back(chunkIndex);
+	}
+	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->pendingChunkRebuildIndices.size());
+}
+
+void CollectDirtyVoxelChunkRebuildRequests(VoxelWorld &world, std::vector<size_t> *outChunkIndices)
+{
+	if (!outChunkIndices || world.pendingChunkRebuildIndices.empty()) {
+		return;
+	}
+
+	outChunkIndices->insert(
+		outChunkIndices->end(),
+		world.pendingChunkRebuildIndices.begin(),
+		world.pendingChunkRebuildIndices.end());
+	world.pendingChunkRebuildIndices.clear();
+}
+
+void CommitDirtyVoxelChunkRebuildRequests(VoxelWorld &world, const std::vector<size_t> &rebuiltChunkIndices)
+{
+	for (const size_t chunkIndex : rebuiltChunkIndices) {
+		if (chunkIndex >= world.chunks.size()) {
+			continue;
+		}
+
+		VoxelChunk &chunk = world.chunks[chunkIndex];
+		if (!chunk.rebuildQueued) {
+			continue;
+		}
+
+		chunk.rebuildQueued = false;
+		if (world.stats.dirtyChunkCount > 0) {
+			--world.stats.dirtyChunkCount;
+		}
+	}
 }
 
 uint32_t CountDirtyVoxelChunks(const VoxelWorld &world)

@@ -4,12 +4,18 @@
 
 #include "AppUpdate.hpp"
 #include "Camera.hpp"
+#include "FramePreparation.hpp"
+#include "Profiling.hpp"
 #include "Renderer.hpp"
 #include "Types.hpp"
 #include "VulkanInit.hpp"
 
 SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 {
+	PV_PROFILE_ZONE_N("SDL_AppInit");
+	profiling::SetThreadName("Main Thread");
+	profiling::ConfigureDefaultPlots();
+
 	auto state = std::make_unique<AppState>();
 	if (!InitVulkan(state.get())) {
 		return SDL_APP_FAILURE;
@@ -45,7 +51,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
+	PV_PROFILE_ZONE_N("SDL_AppIterate");
 	auto *state = static_cast<AppState *>(appstate);
+	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(
 			&state->platform,
 			&state->simulation,
@@ -55,9 +63,25 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->render,
 			&state->debug)) {
 		SDL_Log("UpdateApp failed");
-		return SDL_APP_FAILURE;
+	} else if (!PrepareFrameRenderData(
+				   &state->context,
+				   &state->swapchain,
+				   &state->camera,
+				   &state->world,
+				   &state->render,
+				   &state->frame)) {
+		SDL_Log("PrepareFrameRenderData failed");
+	} else {
+		result = DrawFrame(
+			&state->platform,
+			&state->context,
+			&state->swapchain,
+			&state->render,
+			&state->frame);
 	}
-	return DrawFrame(state);
+
+	PV_PROFILE_FRAME_MARK();
+	return result;
 }
 
 void SDL_AppQuit(void *appstate, SDL_AppResult)

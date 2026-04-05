@@ -5,6 +5,13 @@ project(ProjectV
         LANGUAGES C CXX
 )
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(ProjectVThirdParty)
+include(CTest)
+
+option(PROJECTV_ENABLE_TRACY "Enable Tracy profiling instrumentation" ON)
+option(PROJECTV_BUILD_TRACY_PROFILER "Build bundled Tracy profiler UI" OFF)
+
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_C_STANDARD 23)
 
@@ -18,6 +25,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(SDL_STATIC ON CACHE BOOL "Static linking for SDL" FORCE)
 set(SDL_SHARED OFF CACHE BOOL "Disable shared library" FORCE)
 add_subdirectory(external/SDL)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/SDL")
 
 # --- Vulkan Stack ---
 
@@ -31,9 +39,15 @@ add_subdirectory(external/volk)
 # Vulkan Memory Allocator
 add_subdirectory(external/VulkanMemoryAllocator)
 
+projectv_add_tracy()
+
 # --- Vulkan Stack End ---
 
 
 #------------------------Submodules-End----------------------
 
 add_subdirectory(src)
+
+if (BUILD_TESTING)
+    add_subdirectory(tests)
+endif ()

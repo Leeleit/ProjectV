@@ -21,6 +21,7 @@ constexpr bool kEnableValidation = false;
 constexpr std::array<const char *, 1> kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 // Для нашего рендера достаточно swapchain-расширения.
 constexpr std::array<const char *, 1> kRequiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+constexpr char kOptionalTracyCalibratedTimestampsExtension[] = VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME;
 
 // Callback, через который Vulkan присылает предупреждения и ошибки прямо в SDL-лог.
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -131,6 +132,38 @@ bool CheckDeviceExtensionSupport(const VkPhysicalDevice physicalDevice)
 }
 
 // Ищем очередь, которая умеет и рисовать, и презентовать изображение в окно.
+bool HasDeviceExtension(
+	const VkPhysicalDevice physicalDevice,
+	const char *extensionName)
+{
+	if (!extensionName) {
+		return false;
+	}
+
+	uint32_t extensionCount = 0;
+	if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr) != VK_SUCCESS) {
+		return false;
+	}
+
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	if (vkEnumerateDeviceExtensionProperties(
+			physicalDevice,
+			nullptr,
+			&extensionCount,
+			availableExtensions.data()) != VK_SUCCESS) {
+		return false;
+	}
+
+	for (const auto &[availableExtensionName, specVersion] : availableExtensions) {
+		(void)specVersion;
+		if (std::strcmp(extensionName, availableExtensionName) == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool FindGraphicsPresentQueueFamily(
 	const VkPhysicalDevice physicalDevice,
 	const VkSurfaceKHR surface,
@@ -216,6 +249,7 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDevice device = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = UINT32_MAX;
 	VkPhysicalDeviceVulkan13Features features13{};
+	bool supportsTracyCalibratedTimestamps = false;
 };
 
 // Переносим в enabled только те фичи, которые реально поддержаны устройством.
@@ -261,6 +295,8 @@ bool TryPickPhysicalDevice(
 	outCandidate->device = physicalDevice;
 	outCandidate->queueFamilyIndex = queueFamilyIndex;
 	outCandidate->features13 = supportedFeatures13;
+	outCandidate->supportsTracyCalibratedTimestamps =
+		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
 	return true;
 }
 } // namespace
@@ -384,6 +420,9 @@ bool InitializeVulkanBase(
 	std::vector deviceExtensions(
 		kRequiredDeviceExtensions.begin(),
 		kRequiredDeviceExtensions.end());
+	if (selected.supportsTracyCalibratedTimestamps) {
+		deviceExtensions.push_back(kOptionalTracyCalibratedTimestampsExtension);
+	}
 
 	VkPhysicalDeviceVulkan13Features enabledFeatures13 = BuildEnabledFeatures13(selected);
 	VkDeviceCreateInfo deviceCreateInfo{};

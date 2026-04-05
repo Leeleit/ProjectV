@@ -1,7 +1,7 @@
 #include "AppUpdate.hpp"
 
 #include "Camera.hpp"
-#include "SceneResources.hpp"
+#include "Profiling.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -36,6 +36,7 @@ bool UpdateApp(
 	RenderState *render,
 	DebugState *debug)
 {
+	PV_PROFILE_ZONE_N("UpdateApp");
 	if (!platform || !simulation || !camera || !input || !world || !render || !debug) {
 		return false;
 	}
@@ -61,9 +62,11 @@ bool UpdateApp(
 			std::fmod(simulation->simulationAccumulatorSeconds, simulation->fixedSimulationDeltaSeconds);
 	}
 
-	if (!UpdateSceneResources(world, render)) {
-		return false;
-	}
+	profiling::PlotValue("Frame Delta (ms)", simulation->frameDeltaSeconds * 1000.0f);
+	profiling::PlotValue(
+		"Simulation Accumulator (ms)",
+		simulation->simulationAccumulatorSeconds * 1000.0f);
+	profiling::PlotValue("Simulation Steps", static_cast<int64_t>(simulation->simulationStepsLastFrame));
 
 	if (world->voxelWorld) {
 		debug->stats.simulationStepsLastFrame = simulation->simulationStepsLastFrame;
