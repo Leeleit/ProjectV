@@ -73,14 +73,17 @@ inline void ConfigureDefaultPlots()
 	ConfigurePlot("Dirty Chunks", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Active Chunks", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Rebuilt Chunks", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Rebuilt Mesh Vertices", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Repacked Chunk Voxels", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Scene Triangles", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Uploaded Vertices", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Generated Opaque Faces", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Generated Transparent Faces", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Meshing Dirty Chunks", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Chunk Voxel Words", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Uploaded Chunk Descriptors", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Uploaded Opaque Vertices", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Uploaded Transparent Vertices", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Upload Vertex Bytes", ProfilingPlotFormat::Memory, true);
+	ConfigurePlot("Uploaded Voxel Payload Chunks", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Uploaded Chunk Voxel Words", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Upload Descriptor Bytes", ProfilingPlotFormat::Memory, true);
+	ConfigurePlot("Upload Chunk Voxel Bytes", ProfilingPlotFormat::Memory, true);
 #endif
 }
 

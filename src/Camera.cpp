@@ -222,5 +222,11 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 
 	GraphicsPushConstants pushConstants{};
 	pushConstants.viewProjection = MultiplyMatrices(projection, view);
+	pushConstants.cameraPosition = {
+		camera.position[0],
+		camera.position[1],
+		camera.position[2],
+		0.0f,
+	};
 	return pushConstants;
 }

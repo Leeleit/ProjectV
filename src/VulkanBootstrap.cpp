@@ -184,7 +184,9 @@ bool FindGraphicsPresentQueueFamily(
 			continue;
 		}
 
-		if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 && presentSupport) {
+		if ((families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 &&
+			(families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 &&
+			presentSupport) {
 			*outQueueFamilyIndex = i;
 			return true;
 		}
@@ -220,15 +222,41 @@ bool CheckSwapchainSurfaceSupport(const VkPhysicalDevice physicalDevice, const V
 // Проверяем фичи Vulkan 1.3, которые использует рендерер.
 bool CheckRequiredFeatures(
 	const VkPhysicalDevice physicalDevice,
+	VkPhysicalDeviceFeatures *outFeatures,
+	VkPhysicalDeviceVulkan12Features *outFeatures12,
 	VkPhysicalDeviceVulkan13Features *outFeatures13)
 {
+	VkPhysicalDeviceVulkan12Features features12{};
+	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 	VkPhysicalDeviceVulkan13Features features13{};
 	features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+	features13.pNext = &features12;
 
 	VkPhysicalDeviceFeatures2 features2{};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	features2.pNext = &features13;
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+	const VkPhysicalDeviceFeatures supportedFeatures = features2.features;
+
+	if (!supportedFeatures.multiDrawIndirect) {
+		SDL_Log("Device does not support multiDrawIndirect");
+		return false;
+	}
+
+	if (!supportedFeatures.drawIndirectFirstInstance) {
+		SDL_Log("Device does not support drawIndirectFirstInstance");
+		return false;
+	}
+
+	if (!features12.drawIndirectCount) {
+		SDL_Log("Device does not support drawIndirectCount");
+		return false;
+	}
+
+	if (!features12.hostQueryReset) {
+		SDL_Log("Device does not support hostQueryReset");
+		return false;
+	}
 
 	if (!features13.dynamicRendering) {
 		SDL_Log("Device does not support dynamicRendering");
@@ -240,6 +268,8 @@ bool CheckRequiredFeatures(
 		return false;
 	}
 
+	*outFeatures = supportedFeatures;
+	*outFeatures12 = features12;
 	*outFeatures13 = features13;
 	return true;
 }
@@ -248,9 +278,28 @@ bool CheckRequiredFeatures(
 struct PhysicalDeviceCandidate {
 	VkPhysicalDevice device = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = UINT32_MAX;
+	VkPhysicalDeviceFeatures features{};
+	VkPhysicalDeviceVulkan12Features features12{};
 	VkPhysicalDeviceVulkan13Features features13{};
 	bool supportsTracyCalibratedTimestamps = false;
 };
+
+VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
+{
+	VkPhysicalDeviceFeatures enabled{};
+	enabled.multiDrawIndirect = selected.features.multiDrawIndirect ? VK_TRUE : VK_FALSE;
+	enabled.drawIndirectFirstInstance = selected.features.drawIndirectFirstInstance ? VK_TRUE : VK_FALSE;
+	return enabled;
+}
+
+VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCandidate &selected)
+{
+	VkPhysicalDeviceVulkan12Features enabled{};
+	enabled.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	enabled.drawIndirectCount = selected.features12.drawIndirectCount ? VK_TRUE : VK_FALSE;
+	enabled.hostQueryReset = selected.features12.hostQueryReset ? VK_TRUE : VK_FALSE;
+	return enabled;
+}
 
 // Переносим в enabled только те фичи, которые реально поддержаны устройством.
 VkPhysicalDeviceVulkan13Features BuildEnabledFeatures13(const PhysicalDeviceCandidate &selected)
@@ -287,13 +336,17 @@ bool TryPickPhysicalDevice(
 		return false;
 	}
 
+	VkPhysicalDeviceFeatures supportedFeatures{};
+	VkPhysicalDeviceVulkan12Features supportedFeatures12{};
 	VkPhysicalDeviceVulkan13Features supportedFeatures13{};
-	if (!CheckRequiredFeatures(physicalDevice, &supportedFeatures13)) {
+	if (!CheckRequiredFeatures(physicalDevice, &supportedFeatures, &supportedFeatures12, &supportedFeatures13)) {
 		return false;
 	}
 
 	outCandidate->device = physicalDevice;
 	outCandidate->queueFamilyIndex = queueFamilyIndex;
+	outCandidate->features = supportedFeatures;
+	outCandidate->features12 = supportedFeatures12;
 	outCandidate->features13 = supportedFeatures13;
 	outCandidate->supportsTracyCalibratedTimestamps =
 		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
@@ -424,10 +477,14 @@ bool InitializeVulkanBase(
 		deviceExtensions.push_back(kOptionalTracyCalibratedTimestampsExtension);
 	}
 
+	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
+	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
 	VkPhysicalDeviceVulkan13Features enabledFeatures13 = BuildEnabledFeatures13(selected);
+	enabledFeatures13.pNext = &enabledFeatures12;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;
+	deviceCreateInfo.pEnabledFeatures = &enabledFeatures;
 	deviceCreateInfo.queueCreateInfoCount = 1;
 	deviceCreateInfo.pQueueCreateInfos = &queueInfo;
 	deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());

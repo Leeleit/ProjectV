@@ -11,7 +11,7 @@ namespace {
 constexpr uint32_t kGraphicsDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr VkDescriptorPoolSize kGraphicsDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kGraphicsDescriptorSetCount * 2u,
+	.descriptorCount = kGraphicsDescriptorSetCount * 3u,
 };
 constexpr std::array kGraphicsDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -26,6 +26,13 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 2,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
 };
@@ -259,13 +266,18 @@ bool RefreshGraphicsResourceBindings(
 		SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
 		frameResources.graphicsDescriptorSet = descriptorSets[frameIndex];
 
-		const VkDescriptorBufferInfo packedVertexBufferInfo{
-			.buffer = frameResources.packedVertexBuffer,
+		const VkDescriptorBufferInfo packedFaceBufferInfo{
+			.buffer = frameResources.packedFaceBuffer,
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
 		const VkDescriptorBufferInfo chunkDescriptorBufferInfo{
 			.buffer = frameResources.chunkDescriptorBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
+		const VkDescriptorBufferInfo materialVisualBufferInfo{
+			.buffer = render->materialVisualBuffer,
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
@@ -279,7 +291,7 @@ bool RefreshGraphicsResourceBindings(
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
-				.pBufferInfo = &packedVertexBufferInfo,
+				.pBufferInfo = &packedFaceBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 			VkWriteDescriptorSet{
@@ -292,6 +304,18 @@ bool RefreshGraphicsResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
 				.pBufferInfo = &chunkDescriptorBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &materialVisualBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 		};
@@ -498,7 +522,7 @@ bool CreateGraphicsPipeline(
 	transparentDepthStencil.depthWriteEnable = VK_FALSE;
 
 	VkPushConstantRange pushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
 	pushConstantRange.size = sizeof(GraphicsPushConstants);
 

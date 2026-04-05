@@ -5,30 +5,6 @@
 #include "VulkanInit.hpp"
 
 namespace {
-void DrawChunkRanges(
-	const VkCommandBuffer cmd,
-	const SceneChunkDrawRange *chunkDrawRanges,
-	const uint32_t chunkDrawRangeCount)
-{
-	if (!chunkDrawRanges || chunkDrawRangeCount == 0) {
-		return;
-	}
-
-	for (uint32_t drawIndex = 0; drawIndex < chunkDrawRangeCount; ++drawIndex) {
-		const auto [firstVertex, vertexCount, chunkIndex] = chunkDrawRanges[drawIndex];
-		if (vertexCount == 0) {
-			continue;
-		}
-
-		vkCmdDraw(
-			cmd,
-			vertexCount,
-			1,
-			firstVertex,
-			chunkIndex);
-	}
-}
-
 void TransitionImage(
 	const VkCommandBuffer cmd,
 	const VkImage image,
@@ -59,6 +35,70 @@ void TransitionImage(
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
+void RecordVoxelMeshingCommands(
+	RenderState &render,
+	const FrameRenderData &frameRenderData,
+	const VkCommandBuffer cmd)
+{
+	PV_PROFILE_ZONE_N("RecordVoxelMeshingCommands");
+	if (render.voxelMeshingPipeline == VK_NULL_HANDLE ||
+		render.voxelMeshingPipelineLayout == VK_NULL_HANDLE ||
+		frameRenderData.voxelMeshingDescriptorSet == VK_NULL_HANDLE ||
+		frameRenderData.packedFaceBuffer == VK_NULL_HANDLE ||
+		frameRenderData.opaqueIndirectBuffer == VK_NULL_HANDLE ||
+		frameRenderData.transparentIndirectBuffer == VK_NULL_HANDLE ||
+		frameRenderData.dirtyChunkCount == 0) {
+		return;
+	}
+
+	PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Voxel Meshing");
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, render.voxelMeshingPipeline);
+	vkCmdBindDescriptorSets(
+		cmd,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		render.voxelMeshingPipelineLayout,
+		0,
+		1,
+		&frameRenderData.voxelMeshingDescriptorSet,
+		0,
+		nullptr);
+	vkCmdPushConstants(
+		cmd,
+		render.voxelMeshingPipelineLayout,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		0,
+		sizeof(frameRenderData.voxelMeshingPushConstants),
+		&frameRenderData.voxelMeshingPushConstants);
+	vkCmdDispatch(cmd, frameRenderData.dirtyChunkCount, 1, 1);
+
+	VkBufferMemoryBarrier2 bufferBarriers[3]{};
+	bufferBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	bufferBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	bufferBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	bufferBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+	bufferBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+	bufferBarriers[0].buffer = frameRenderData.packedFaceBuffer;
+	bufferBarriers[0].offset = 0;
+	bufferBarriers[0].size = VK_WHOLE_SIZE;
+
+	bufferBarriers[1] = bufferBarriers[0];
+	bufferBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+	bufferBarriers[1].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+	bufferBarriers[1].buffer = frameRenderData.opaqueIndirectBuffer;
+
+	bufferBarriers[2] = bufferBarriers[0];
+	bufferBarriers[2].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+	bufferBarriers[2].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+	bufferBarriers[2].buffer = frameRenderData.transparentIndirectBuffer;
+
+	VkDependencyInfo depInfo{};
+	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	depInfo.bufferMemoryBarrierCount = 3;
+	depInfo.pBufferMemoryBarriers = bufferBarriers;
+	vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
 void RecordGraphicsCommands(
 	RenderState &render,
 	const SwapchainState &swapchain,
@@ -69,6 +109,8 @@ void RecordGraphicsCommands(
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	{
 		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Graphics Frame");
+
+		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 
 		TransitionImage(
 			cmd,
@@ -167,38 +209,47 @@ void RecordGraphicsCommands(
 				nullptr);
 		}
 
-		if (frameRenderData.opaqueVertexCount > 0 && frameRenderData.opaqueChunkDrawRangeCount > 0) {
+		if (frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE &&
+			frameRenderData.chunkDescriptorCount > 0 &&
+			frameRenderData.opaqueIndirectBuffer != VK_NULL_HANDLE &&
+			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Opaque Pass");
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.graphicsPipeline);
 			vkCmdPushConstants(
 				cmd,
 				render.graphicsPipelineLayout,
-				VK_SHADER_STAGE_VERTEX_BIT,
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				0,
 				sizeof(frameRenderData.graphicsPushConstants),
 				&frameRenderData.graphicsPushConstants);
-			DrawChunkRanges(
+			vkCmdDrawIndirect(
 				cmd,
-				frameRenderData.opaqueChunkDrawRanges,
-				frameRenderData.opaqueChunkDrawRangeCount);
+				frameRenderData.opaqueIndirectBuffer,
+				0,
+				frameRenderData.chunkDescriptorCount,
+				sizeof(VkDrawIndirectCommand));
 		}
 
 		if (render.transparentGraphicsPipeline &&
-			frameRenderData.transparentVertexCount > 0 &&
-			frameRenderData.transparentChunkDrawRangeCount > 0) {
+			frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE &&
+			frameRenderData.chunkDescriptorCount > 0 &&
+			frameRenderData.transparentIndirectBuffer != VK_NULL_HANDLE &&
+			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Transparent Pass");
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.transparentGraphicsPipeline);
 			vkCmdPushConstants(
 				cmd,
 				render.graphicsPipelineLayout,
-				VK_SHADER_STAGE_VERTEX_BIT,
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				0,
 				sizeof(frameRenderData.graphicsPushConstants),
 				&frameRenderData.graphicsPushConstants);
-			DrawChunkRanges(
+			vkCmdDrawIndirect(
 				cmd,
-				frameRenderData.transparentChunkDrawRanges,
-				frameRenderData.transparentChunkDrawRangeCount);
+				frameRenderData.transparentIndirectBuffer,
+				0,
+				frameRenderData.chunkDescriptorCount,
+				sizeof(VkDrawIndirectCommand));
 		}
 
 		vkCmdEndRendering(cmd);

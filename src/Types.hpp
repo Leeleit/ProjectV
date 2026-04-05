@@ -3,7 +3,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_vulkan.h"
-#include "VoxelWorld.hpp"
+#include "VoxelMaterials.hpp"
 // ReSharper disable once CppUnusedIncludeDirective
 #include "volk.h"
 #pragma clang diagnostic push
@@ -19,41 +19,44 @@
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
-struct SceneChunkMeshVertex {
-	uint32_t localPositionMaterial = 0;
-	uint32_t faceIndex = 0;
-};
-static_assert(std::is_standard_layout_v<SceneChunkMeshVertex>);
-static_assert(std::is_trivially_copyable_v<SceneChunkMeshVertex>);
-static_assert(sizeof(SceneChunkMeshVertex) == 8);
-static_assert(offsetof(SceneChunkMeshVertex, localPositionMaterial) == 0);
-static_assert(offsetof(SceneChunkMeshVertex, faceIndex) == 4);
+struct VoxelWorld;
 
-struct SceneChunkRenderCache {
-	std::vector<SceneChunkMeshVertex> meshVertices;
+struct PackedSceneVoxelFace {
+	uint32_t localVoxelFace = 0;
+	uint32_t chunkIndexMaterial = 0;
 };
+static_assert(std::is_standard_layout_v<PackedSceneVoxelFace>);
+static_assert(std::is_trivially_copyable_v<PackedSceneVoxelFace>);
+static_assert(sizeof(PackedSceneVoxelFace) == 8);
+static_assert(offsetof(PackedSceneVoxelFace, localVoxelFace) == 0);
+static_assert(offsetof(PackedSceneVoxelFace, chunkIndexMaterial) == 4);
 
 struct PackedSceneChunkDescriptor {
 	std::array<int32_t, 4> chunkOrigin{};
+	std::array<uint32_t, 4> chunkExtentAndNonAir{};
+	std::array<uint32_t, 4> voxelDataInfo{};
 	std::array<uint32_t, 4> drawRanges{};
 };
 static_assert(std::is_standard_layout_v<PackedSceneChunkDescriptor>);
 static_assert(std::is_trivially_copyable_v<PackedSceneChunkDescriptor>);
-static_assert(sizeof(PackedSceneChunkDescriptor) == 32);
+static_assert(sizeof(PackedSceneChunkDescriptor) == 64);
 static_assert(offsetof(PackedSceneChunkDescriptor, chunkOrigin) == 0);
-static_assert(offsetof(PackedSceneChunkDescriptor, drawRanges) == 16);
+static_assert(offsetof(PackedSceneChunkDescriptor, chunkExtentAndNonAir) == 16);
+static_assert(offsetof(PackedSceneChunkDescriptor, voxelDataInfo) == 32);
+static_assert(offsetof(PackedSceneChunkDescriptor, drawRanges) == 48);
 
-struct SceneChunkDrawRange {
-	uint32_t firstVertex = 0;
-	uint32_t vertexCount = 0;
-	uint32_t chunkIndex = 0;
+struct SceneChunkVoxelPayloadRange {
+	uint32_t wordOffset = 0;
+	uint32_t voxelCount = 0;
+	uint32_t wordCount = 0;
+	uint32_t reserved = 0;
 };
-static_assert(std::is_standard_layout_v<SceneChunkDrawRange>);
-static_assert(std::is_trivially_copyable_v<SceneChunkDrawRange>);
-static_assert(sizeof(SceneChunkDrawRange) == 12);
-static_assert(offsetof(SceneChunkDrawRange, firstVertex) == 0);
-static_assert(offsetof(SceneChunkDrawRange, vertexCount) == 4);
-static_assert(offsetof(SceneChunkDrawRange, chunkIndex) == 8);
+static_assert(std::is_standard_layout_v<SceneChunkVoxelPayloadRange>);
+static_assert(std::is_trivially_copyable_v<SceneChunkVoxelPayloadRange>);
+static_assert(sizeof(SceneChunkVoxelPayloadRange) == 16);
+static_assert(offsetof(SceneChunkVoxelPayloadRange, wordOffset) == 0);
+static_assert(offsetof(SceneChunkVoxelPayloadRange, voxelCount) == 4);
+static_assert(offsetof(SceneChunkVoxelPayloadRange, wordCount) == 8);
 
 struct CameraState {
 	std::array<float, 3> position{0.0f, 8.0f, 24.0f};
@@ -68,22 +71,43 @@ struct CameraState {
 
 struct GraphicsPushConstants {
 	std::array<float, 16> viewProjection{};
+	std::array<float, 4> cameraPosition{};
 };
+static_assert(std::is_standard_layout_v<GraphicsPushConstants>);
+static_assert(std::is_trivially_copyable_v<GraphicsPushConstants>);
+static_assert(sizeof(GraphicsPushConstants) == 80);
+static_assert(offsetof(GraphicsPushConstants, viewProjection) == 0);
+static_assert(offsetof(GraphicsPushConstants, cameraPosition) == 64);
+
+struct VoxelMeshingPushConstants {
+	std::array<int32_t, 4> worldMinAndChunkSize{};
+	std::array<int32_t, 4> worldMaxExclusiveAndChunkCount{};
+	std::array<uint32_t, 4> chunkGridAndTransparentFaceBase{};
+	std::array<uint32_t, 4> faceCapacities{};
+};
+static_assert(std::is_standard_layout_v<VoxelMeshingPushConstants>);
+static_assert(std::is_trivially_copyable_v<VoxelMeshingPushConstants>);
+static_assert(sizeof(VoxelMeshingPushConstants) == 64);
+static_assert(offsetof(VoxelMeshingPushConstants, worldMinAndChunkSize) == 0);
+static_assert(offsetof(VoxelMeshingPushConstants, worldMaxExclusiveAndChunkCount) == 16);
+static_assert(offsetof(VoxelMeshingPushConstants, chunkGridAndTransparentFaceBase) == 32);
+static_assert(offsetof(VoxelMeshingPushConstants, faceCapacities) == 48);
 
 struct FrameRenderData {
 	uint32_t frameIndex = 0;
-	VkBuffer packedVertexBuffer = VK_NULL_HANDLE;
+	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
+	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
+	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
+	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
 	uint32_t chunkDescriptorCount = 0;
-	uint32_t vertexCount = 0;
-	uint32_t opaqueVertexCount = 0;
-	uint32_t transparentVertexCount = 0;
-	const SceneChunkDrawRange *opaqueChunkDrawRanges = nullptr;
-	uint32_t opaqueChunkDrawRangeCount = 0;
-	const SceneChunkDrawRange *transparentChunkDrawRanges = nullptr;
-	uint32_t transparentChunkDrawRangeCount = 0;
+	uint32_t dirtyChunkCount = 0;
+	uint32_t opaqueFaceCount = 0;
+	uint32_t transparentFaceCount = 0;
 	GraphicsPushConstants graphicsPushConstants{};
+	VoxelMeshingPushConstants voxelMeshingPushConstants{};
 };
 
 struct DebugStats {
@@ -98,18 +122,33 @@ struct DebugStats {
 };
 
 struct SceneFrameResources {
-	void *packedVertexMappedData = nullptr;
-	VkBuffer packedVertexBuffer = VK_NULL_HANDLE;
-	VmaAllocation packedVertexAllocation = VK_NULL_HANDLE;
+	void *packedFaceMappedData = nullptr;
+	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
+	VmaAllocation packedFaceAllocation = VK_NULL_HANDLE;
 	void *chunkDescriptorMappedData = nullptr;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
 	VmaAllocation chunkDescriptorAllocation = VK_NULL_HANDLE;
+	void *chunkVoxelPayloadMappedData = nullptr;
+	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
+	VmaAllocation chunkVoxelPayloadAllocation = VK_NULL_HANDLE;
+	void *opaqueIndirectMappedData = nullptr;
+	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
+	VmaAllocation opaqueIndirectAllocation = VK_NULL_HANDLE;
+	void *transparentIndirectMappedData = nullptr;
+	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
+	VmaAllocation transparentIndirectAllocation = VK_NULL_HANDLE;
+	void *dirtyChunkIndexMappedData = nullptr;
+	VkBuffer dirtyChunkIndexBuffer = VK_NULL_HANDLE;
+	VmaAllocation dirtyChunkIndexAllocation = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;
+	uint64_t uploadedVoxelPayloadVersion = 0;
+	uint64_t meshedSceneVersion = 0;
 	uint32_t chunkDescriptorCount = 0;
-	uint32_t vertexCount = 0;
-	uint32_t opaqueVertexCount = 0;
-	uint32_t transparentVertexCount = 0;
+	uint32_t dirtyChunkCount = 0;
+	uint32_t opaqueFaceCount = 0;
+	uint32_t transparentFaceCount = 0;
 };
 
 struct WorldState {
@@ -117,25 +156,29 @@ struct WorldState {
 };
 
 struct RenderState {
-	std::vector<SceneChunkRenderCache> sceneChunkRenderCaches;
-	std::vector<SceneChunkMeshVertex> scenePackedVertexPayload;
-	std::vector<SceneChunkMeshVertex> transparentPackedVertexScratch;
 	std::vector<PackedSceneChunkDescriptor> sceneChunkDescriptors;
-	std::vector<SceneChunkDrawRange> opaqueChunkDrawRanges;
-	std::vector<SceneChunkDrawRange> transparentChunkDrawRanges;
+	std::vector<SceneChunkVoxelPayloadRange> sceneChunkVoxelPayloadRanges;
+	std::vector<uint32_t> sceneChunkVoxelPayloadWords;
+	std::vector<size_t> latestVoxelPayloadChunkIndices;
 	std::vector<size_t> pendingChunkRebuildIndices;
 	std::vector<size_t> completedChunkRebuildIndices;
-	uint32_t sceneVertexCapacity = 0;
-	uint32_t sceneUploadVertexCount = 0;
-	uint32_t sceneUploadOpaqueVertexCount = 0;
-	uint32_t sceneUploadTransparentVertexCount = 0;
+	uint32_t sceneFaceCapacity = 0;
+	uint32_t sceneTransparentFaceBase = 0;
+	uint32_t sceneOpaqueFaceCount = 0;
+	uint32_t sceneTransparentFaceCount = 0;
+	uint32_t sceneChunkVoxelPayloadWordCount = 0;
 	uint64_t sceneUploadVersion = 0;
-	bool sceneUploadCacheDirty = true;
+	uint64_t sceneVoxelPayloadVersion = 0;
 	uint32_t sceneTriangleCount = 0;
 	void *tracyGraphicsContext = nullptr;
 	bool tracyGraphicsContextCalibrated = false;
+	void *materialVisualMappedData = nullptr;
+	VkBuffer materialVisualBuffer = VK_NULL_HANDLE;
+	VmaAllocation materialVisualAllocation = VK_NULL_HANDLE;
 	VkDescriptorSetLayout graphicsDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool graphicsDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout voxelMeshingDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool voxelMeshingDescriptorPool = VK_NULL_HANDLE;
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
@@ -144,6 +187,8 @@ struct RenderState {
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
+	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
 };
 
 struct FrameState {

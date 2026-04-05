@@ -1,0 +1,182 @@
+#version 460
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+struct DrawCommand {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+};
+
+layout(set = 0, binding = 0, std430) buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer PackedChunkVoxelPayload {
+    uint chunkVoxelWords[];
+};
+
+layout(set = 0, binding = 2, std430) writeonly buffer PackedFacePayload {
+    uvec2 packedFaces[];
+};
+
+layout(set = 0, binding = 3, std430) readonly buffer DirtyChunkIndexBuffer {
+    uint dirtyChunkIndices[];
+};
+
+layout(set = 0, binding = 4, std430) buffer OpaqueIndirectCommands {
+    DrawCommand opaqueCommands[];
+};
+
+layout(set = 0, binding = 5, std430) buffer TransparentIndirectCommands {
+    DrawCommand transparentCommands[];
+};
+
+layout(push_constant) uniform PushConstants {
+    ivec4 worldMinAndChunkSize;
+    ivec4 worldMaxExclusiveAndChunkCount;
+    uvec4 chunkGridAndTransparentFaceBase;
+    uvec4 faceCapacities;
+} pushConstants;
+
+const ivec3 kNeighborOffsets[6] = ivec3[](
+ivec3(1, 0, 0),
+ivec3(-1, 0, 0),
+ivec3(0, 1, 0),
+ivec3(0, -1, 0),
+ivec3(0, 0, 1),
+ivec3(0, 0, -1)
+);
+
+uint PackLocalVoxelFace(const uvec3 localVoxelCoord, const uint faceIndex) {
+    return (localVoxelCoord.x & 0xFFu) |
+    ((localVoxelCoord.y & 0xFFu) << 8u) |
+    ((localVoxelCoord.z & 0xFFu) << 16u) |
+    ((faceIndex & 0xFFu) << 24u);
+}
+
+uint PackChunkIndexMaterial(const uint chunkIndex, const uint materialIndex) {
+    return (chunkIndex & 0x00FFFFFFu) | ((materialIndex & 0xFFu) << 24u);
+}
+
+uint DecodeChunkVoxelMaterial(const ChunkDescriptor chunkDescriptor, const uvec3 localCoord) {
+    const uint localIndex =
+    localCoord.x +
+    chunkDescriptor.chunkExtentAndNonAir.x *
+    (localCoord.y + chunkDescriptor.chunkExtentAndNonAir.y * localCoord.z);
+    if (localIndex >= chunkDescriptor.voxelDataInfo.y) {
+        return 0u;
+    }
+
+    const uint wordIndex = chunkDescriptor.voxelDataInfo.x + localIndex / 4u;
+    const uint shift = (localIndex & 3u) * 8u;
+    return (chunkVoxelWords[wordIndex] >> shift) & 0xFFu;
+}
+
+uint ReadVoxelMaterial(const ivec3 worldPosition) {
+    const ivec3 worldMin = pushConstants.worldMinAndChunkSize.xyz;
+    const ivec3 worldMaxExclusive = pushConstants.worldMaxExclusiveAndChunkCount.xyz;
+    if (worldPosition.x < worldMin.x || worldPosition.y < worldMin.y || worldPosition.z < worldMin.z ||
+    worldPosition.x >= worldMaxExclusive.x ||
+    worldPosition.y >= worldMaxExclusive.y ||
+    worldPosition.z >= worldMaxExclusive.z) {
+        return 0u;
+    }
+
+    const uint chunkSize = uint(pushConstants.worldMinAndChunkSize.w);
+    const uvec3 chunkGrid = pushConstants.chunkGridAndTransparentFaceBase.xyz;
+    const ivec3 localWorldPosition = worldPosition - worldMin;
+    const uvec3 chunkCoord = uvec3(localWorldPosition) / chunkSize;
+    const uint chunkIndex =
+    chunkCoord.x +
+    chunkGrid.x * (chunkCoord.y + chunkGrid.y * chunkCoord.z);
+    const ChunkDescriptor chunkDescriptor = chunkDescriptors[chunkIndex];
+    const uvec3 localChunkCoord = uvec3(worldPosition - chunkDescriptor.chunkOrigin.xyz);
+    return DecodeChunkVoxelMaterial(chunkDescriptor, localChunkCoord);
+}
+
+bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIndex) {
+    if (materialIndex == 0u) {
+        return false;
+    }
+
+    if (materialIndex == 2u) {
+        return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
+    }
+
+    return neighborMaterialIndex == 0u;
+}
+
+void main() {
+    const uint dirtyChunkListIndex = gl_GlobalInvocationID.x;
+    if (dirtyChunkListIndex >= pushConstants.faceCapacities.z) {
+        return;
+    }
+    const uint chunkIndex = dirtyChunkIndices[dirtyChunkListIndex];
+    if (chunkIndex >= uint(pushConstants.worldMaxExclusiveAndChunkCount.w)) {
+        return;
+    }
+
+    ChunkDescriptor chunkDescriptor = chunkDescriptors[chunkIndex];
+    const uint opaqueFirstFace = chunkDescriptor.drawRanges.x;
+    const uint transparentFirstFace = chunkDescriptor.drawRanges.z;
+    const uint maxChunkFaceCount = chunkDescriptor.voxelDataInfo.y * 6u;
+    if (chunkDescriptor.chunkExtentAndNonAir.w == 0u) {
+        chunkDescriptors[chunkIndex].drawRanges.y = 0u;
+        chunkDescriptors[chunkIndex].drawRanges.w = 0u;
+        opaqueCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
+        transparentCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, transparentFirstFace);
+        return;
+    }
+
+    uint opaqueFaceCount = 0u;
+    uint transparentFaceCount = 0u;
+    for (uint localZ = 0u; localZ < chunkDescriptor.chunkExtentAndNonAir.z; ++localZ) {
+        for (uint localY = 0u; localY < chunkDescriptor.chunkExtentAndNonAir.y; ++localY) {
+            for (uint localX = 0u; localX < chunkDescriptor.chunkExtentAndNonAir.x; ++localX) {
+                const uvec3 localVoxelCoord = uvec3(localX, localY, localZ);
+                const uint materialIndex = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                if (materialIndex == 0u) {
+                    continue;
+                }
+
+                const ivec3 worldVoxelPosition = chunkDescriptor.chunkOrigin.xyz + ivec3(localVoxelCoord);
+                for (uint faceIndex = 0u; faceIndex < 6u; ++faceIndex) {
+                    const uint neighborMaterialIndex = ReadVoxelMaterial(worldVoxelPosition + kNeighborOffsets[faceIndex]);
+                    if (!ShouldEmitVoxelFace(materialIndex, neighborMaterialIndex)) {
+                        continue;
+                    }
+
+                    const uvec2 packedFace = uvec2(
+                    PackLocalVoxelFace(localVoxelCoord, faceIndex),
+                    PackChunkIndexMaterial(chunkIndex, materialIndex));
+
+                    if (materialIndex == 1u) {
+                        if (transparentFaceCount < maxChunkFaceCount) {
+                            packedFaces[transparentFirstFace + transparentFaceCount] = packedFace;
+                            ++transparentFaceCount;
+                        }
+                    } else {
+                        if (opaqueFaceCount < maxChunkFaceCount) {
+                            packedFaces[opaqueFirstFace + opaqueFaceCount] = packedFace;
+                            ++opaqueFaceCount;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    chunkDescriptors[chunkIndex].drawRanges.y = opaqueFaceCount;
+    chunkDescriptors[chunkIndex].drawRanges.w = transparentFaceCount;
+    opaqueCommands[chunkIndex] = DrawCommand(6u, opaqueFaceCount, 0u, opaqueFirstFace);
+    transparentCommands[chunkIndex] = DrawCommand(6u, transparentFaceCount, 0u, transparentFirstFace);
+}

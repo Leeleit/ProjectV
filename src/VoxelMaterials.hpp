@@ -23,6 +23,8 @@ static_assert(offsetof(VoxelMaterialVisual, diffuse) == 20);
 static_assert(offsetof(VoxelMaterialVisual, specular) == 24);
 static_assert(offsetof(VoxelMaterialVisual, specularPower) == 28);
 
+constexpr size_t kVoxelMaterialCount = 5;
+
 VoxelMaterialVisual GetVoxelMaterialVisual(VoxelMaterial material);
 
 #endif

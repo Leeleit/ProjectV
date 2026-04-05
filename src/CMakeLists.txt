@@ -7,6 +7,7 @@ set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADERS
         ${SHADER_DIR}/voxel.vert
         ${SHADER_DIR}/voxel.frag
+        ${SHADER_DIR}/voxel_mesh.comp
 )
 
 foreach (SHADER ${SHADERS})
@@ -39,6 +40,7 @@ target_sources(ProjectV PRIVATE
         VulkanGraphicsPipeline.cpp
         VulkanSwapchain.cpp
         VulkanInit.cpp
+        VulkanVoxelMeshingPipeline.cpp
         VoxelMaterials.cpp
         VoxelWorld.cpp
         # Add new files here

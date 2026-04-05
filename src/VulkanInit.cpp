@@ -6,6 +6,7 @@
 #include "VulkanBootstrap.hpp"
 #include "VulkanGraphicsPipeline.hpp"
 #include "VulkanSwapchain.hpp"
+#include "VulkanVoxelMeshingPipeline.hpp"
 
 namespace {
 bool TryCreateCalibratedTracyGpuContext(
@@ -116,6 +117,10 @@ bool InitVulkan(AppState *state)
 
 	if (!CreateGraphicsPipeline(&state->context, &state->swapchain, &state->render)) {
 		SDL_Log("CreateGraphicsPipeline failed");
+		return false;
+	}
+	if (!CreateVoxelMeshingPipeline(&state->context, &state->render)) {
+		SDL_Log("CreateVoxelMeshingPipeline failed");
 		return false;
 	}
 

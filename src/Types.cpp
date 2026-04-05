@@ -6,6 +6,7 @@
 #include "SceneResources.hpp"
 #include "VoxelWorld.hpp"
 #include "VulkanGraphicsPipeline.hpp"
+#include "VulkanVoxelMeshingPipeline.hpp"
 
 void ShutdownVulkan(AppState *state)
 {
@@ -20,6 +21,7 @@ void ShutdownVulkan(AppState *state)
 		profiling::DestroyVulkanGpuContext(state->render.tracyGraphicsContext);
 		state->render.tracyGraphicsContext = nullptr;
 		state->render.tracyGraphicsContextCalibrated = false;
+		DestroyVoxelMeshingPipeline(&state->context, &state->render);
 		DestroyGraphicsPipeline(&state->context, &state->render);
 		DestroySceneResources(&state->context, &state->render);
 	}

@@ -50,23 +50,47 @@ bool PrepareFrameRenderData(
 
 	const SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
 	frame->renderData.frameIndex = frame->currentFrame;
-	frame->renderData.packedVertexBuffer = sceneFrameResources.packedVertexBuffer;
+	frame->renderData.packedFaceBuffer = sceneFrameResources.packedFaceBuffer;
 	frame->renderData.chunkDescriptorBuffer = sceneFrameResources.chunkDescriptorBuffer;
+	frame->renderData.chunkVoxelPayloadBuffer = sceneFrameResources.chunkVoxelPayloadBuffer;
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
+	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
+	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
+	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
-	frame->renderData.vertexCount = sceneFrameResources.vertexCount;
-	frame->renderData.opaqueVertexCount = sceneFrameResources.opaqueVertexCount;
-	frame->renderData.transparentVertexCount = sceneFrameResources.transparentVertexCount;
-	frame->renderData.opaqueChunkDrawRanges =
-		render->opaqueChunkDrawRanges.empty() ? nullptr : render->opaqueChunkDrawRanges.data();
-	frame->renderData.opaqueChunkDrawRangeCount = static_cast<uint32_t>(render->opaqueChunkDrawRanges.size());
-	frame->renderData.transparentChunkDrawRanges =
-		render->transparentChunkDrawRanges.empty() ? nullptr : render->transparentChunkDrawRanges.data();
-	frame->renderData.transparentChunkDrawRangeCount =
-		static_cast<uint32_t>(render->transparentChunkDrawRanges.size());
+	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;
+	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;
+	frame->renderData.transparentFaceCount = sceneFrameResources.transparentFaceCount;
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(*camera, swapchain->extent);
+	}
+	frame->renderData.voxelMeshingPushConstants = {};
+	if (world->voxelWorld) {
+		frame->renderData.voxelMeshingPushConstants.worldMinAndChunkSize = {
+			world->voxelWorld->min.x,
+			world->voxelWorld->min.y,
+			world->voxelWorld->min.z,
+			world->voxelWorld->chunkSize,
+		};
+		frame->renderData.voxelMeshingPushConstants.worldMaxExclusiveAndChunkCount = {
+			world->voxelWorld->maxExclusive.x,
+			world->voxelWorld->maxExclusive.y,
+			world->voxelWorld->maxExclusive.z,
+			static_cast<int32_t>(sceneFrameResources.chunkDescriptorCount),
+		};
+		frame->renderData.voxelMeshingPushConstants.chunkGridAndTransparentFaceBase = {
+			static_cast<uint32_t>(world->voxelWorld->chunkCountX),
+			static_cast<uint32_t>(world->voxelWorld->chunkCountY),
+			static_cast<uint32_t>(world->voxelWorld->chunkCountZ),
+			render->sceneTransparentFaceBase,
+		};
+		frame->renderData.voxelMeshingPushConstants.faceCapacities = {
+			render->sceneFaceCapacity,
+			render->sceneFaceCapacity,
+			sceneFrameResources.dirtyChunkCount,
+			0u,
+		};
 	}
 
 	return true;
