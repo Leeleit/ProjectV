@@ -29,20 +29,36 @@ HUD рисуется внутри приложения отдельным debug 
 - triangle count;
 - dirty/active chunks;
 - non-air voxels и memory usage;
+- текущий editor tool;
+- состояние `chunk bounds` / `dirty chunk overlay`;
 - camera telemetry;
 - selection telemetry;
+- выбранный chunk и его dirty/active summary;
 - текущий control mode.
 
 Полезные hotkeys:
 
 - двойной `Space` — quick toggle `creative / walk`
-- `F1` — весь debug UI on/off: HUD, selection highlight и crosshair
+- `F1` — весь debug UI on/off: HUD, selection/inspect highlight, chunk overlays и crosshair
 - `F2` — cycle placement material
 - `F3` — reset camera
 - `F4` — cycle `creative / spectator / walk`
 - `F5` — cycle builtin scene preset в рантайме
+- `F6` — сохранить current world snapshot
+- `F7` — загрузить world snapshot
+- `F8` — cycle editor tool: `OFF -> PAINT -> ERASE -> FILL -> INSPECT`
+- `F9` — toggle `chunk bounds`
+- `F10` — toggle `dirty chunk overlay`
 - `P` — pause
 - `Tab` — relative mouse mode
+
+Editor-tool contract:
+
+- `OFF` сохраняет старый `LMB remove / RMB place` path;
+- `PAINT` красит hit voxel по `LMB` и ставит adjacent voxel по `RMB`;
+- `ERASE` удаляет hit voxel обеими кнопками;
+- `FILL` flood-fill'ит connected region материала hit voxel в выбранный placement material;
+- `INSPECT` оставляет raycast/read-only path и добавляет chunk-oriented telemetry/overlay.
 
 ## Runtime diagnostics
 
@@ -151,7 +167,7 @@ GPU зоны размечаются через:
 3. Запусти profiler и подключись к приложению.
 4. Смотри:
    - CPU zones вокруг `UpdateApp`, `PrepareFrameRenderData`, `DrawFrame`;
-   - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Selection Overlay`, `Debug HUD`;
+   - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Debug Overlay`, `Debug HUD`;
    - plot'ы по dirty chunks, face counts и upload bytes.
 
 ### Важная оговорка

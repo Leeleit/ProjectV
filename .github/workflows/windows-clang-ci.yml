@@ -1,0 +1,51 @@
+name: windows-clang-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  windows-clang-debug:
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.341.1
+          cache: true
+
+      - name: Toolchain sanity
+        shell: pwsh
+        run: |
+          clang-cl --version
+          cmake --version
+          ninja --version
+          if (Get-Command glslc -ErrorAction SilentlyContinue) {
+            glslc --version
+          } elseif (Get-Command glslangValidator -ErrorAction SilentlyContinue) {
+            glslangValidator --version
+          } else {
+            throw "Neither glslc nor glslangValidator is available in PATH."
+          }
+
+      - name: Configure, build and test
+        shell: pwsh
+        run: |
+          ./tools/windows/Invoke-ProjectVBuildChecks.ps1 `
+            -ConfigurePreset windows-clang-debug-ci `
+            -BuildPreset windows-clang-debug-ci-build `
+            -TestPreset windows-clang-debug-ci-tests

@@ -62,6 +62,24 @@ CameraState::ControlMode GetNextControlMode(const CameraState::ControlMode contr
 	return CameraState::ControlMode::Creative;
 }
 
+DebugEditorTool GetNextDebugEditorTool(const DebugEditorTool tool)
+{
+	switch (tool) {
+	case DebugEditorTool::Classic:
+		return DebugEditorTool::Paint;
+	case DebugEditorTool::Paint:
+		return DebugEditorTool::Erase;
+	case DebugEditorTool::Erase:
+		return DebugEditorTool::Fill;
+	case DebugEditorTool::Fill:
+		return DebugEditorTool::Inspect;
+	case DebugEditorTool::Inspect:
+		return DebugEditorTool::Classic;
+	}
+
+	return DebugEditorTool::Classic;
+}
+
 float ComputeFrameDeltaSeconds(SimulationState &simulation)
 {
 	const Uint64 now = SDL_GetPerformanceCounter();
@@ -233,13 +251,37 @@ bool UpdateApp(
 		world->scenePresetReloadRequested = true;
 		ClearInteractionClickActions(*input);
 	}
+	if (ConsumeInputActionPressed(*input, InputAction::SaveWorldSnapshot) &&
+		world->voxelWorld &&
+		!world->scenePresetReloadRequested &&
+		!world->snapshotLoadRequested) {
+		world->snapshotSaveRequested = true;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::LoadWorldSnapshot) &&
+		world->voxelWorld &&
+		!world->scenePresetReloadRequested) {
+		world->snapshotLoadRequested = true;
+		ClearInteractionClickActions(*input);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleEditorTool)) {
+		interaction->editorTool = GetNextDebugEditorTool(interaction->editorTool);
+		ClearInteractionClickActions(*input);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleChunkBounds)) {
+		debug->showChunkBounds = !debug->showChunkBounds;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleDirtyChunkOverlay)) {
+		debug->showDirtyChunkOverlay = !debug->showDirtyChunkOverlay;
+	}
 
 	const bool creativeMode = IsCreativeMode(*camera);
 	const bool spectatorMode = IsSpectatorMode(*camera);
 	const bool walkMode = IsWalkMode(*camera);
 	const bool cameraCanUpdate = spectatorMode || !simulation->paused;
 	const bool allowWorldEditing =
-		(creativeMode || walkMode) && !world->scenePresetReloadRequested;
+		(creativeMode || walkMode) &&
+		!world->scenePresetReloadRequested &&
+		!world->snapshotLoadRequested;
 
 	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
@@ -354,6 +396,8 @@ bool UpdateApp(
 	}
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.simulationPaused = simulation->paused;
+	debug->stats.showChunkBounds = debug->showChunkBounds;
+	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
 
 	return true;
 }

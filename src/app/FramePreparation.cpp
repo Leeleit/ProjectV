@@ -2,6 +2,7 @@
 
 #include "app/Camera.hpp"
 #include "debug/DebugHud.hpp"
+#include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/SceneResources.hpp"
@@ -109,6 +110,11 @@ bool PrepareFrameRenderData(
 	frame->renderData.debugHudVertexCount = sceneFrameResources.debugHudVertexCount;
 	frame->renderData.debugUiVisible = debug->hudVisible;
 	frame->renderData.interactionSelection = debug->hudVisible ? interaction->selection : InteractionSelectionState{};
+	BuildDebugOverlayBoxes(
+		world->voxelWorld.get(),
+		*interaction,
+		*debug,
+		&frame->renderData.debugOverlayBoxes);
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(*camera, swapchain->extent);

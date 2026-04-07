@@ -81,6 +81,11 @@ enum class InputAction : uint8_t {
 	ToggleControlMode,
 	ToggleWalkCreativeMode,
 	CycleScenePreset,
+	SaveWorldSnapshot,
+	LoadWorldSnapshot,
+	CycleEditorTool,
+	ToggleChunkBounds,
+	ToggleDirtyChunkOverlay,
 	Count,
 };
 
@@ -152,20 +157,41 @@ static_assert(offsetof(DebugHudVertex, color) == 8);
 
 constexpr uint32_t DEBUG_HUD_MAX_VERTEX_COUNT = 65536;
 
+enum class DebugEditorTool : uint8_t {
+	Classic = 0,
+	Paint,
+	Erase,
+	Fill,
+	Inspect,
+};
+
 struct InteractionSelectionState {
 	bool hasHit = false;
 	bool hasPlacementVoxel = false;
+	bool hasTargetChunk = false;
 	Int3 targetVoxel{};
 	Int3 placementVoxel{};
 	Int3 hitNormal{};
+	Int3 targetChunkCoord{};
+	Int3 targetChunkMin{};
+	Int3 targetChunkMaxExclusive{};
 	VoxelMaterial targetMaterial = VoxelMaterial::Air;
 	float hitDistance = 0.0f;
+	bool targetChunkDirty = false;
+	bool targetChunkActive = false;
 };
 
 struct InteractionState {
 	InteractionSelectionState selection{};
 	VoxelMaterial placementMaterial = VoxelMaterial::FloorWhite;
 	float maxInteractionDistance = 12.0f;
+	DebugEditorTool editorTool = DebugEditorTool::Classic;
+};
+
+struct DebugOverlayBox {
+	Int3 min{};
+	Int3 maxExclusive{};
+	std::array<float, 4> color{};
 };
 
 struct VoxelMeshingPushConstants {
@@ -215,6 +241,7 @@ struct FrameRenderData {
 	GraphicsPushConstants graphicsPushConstants{};
 	VoxelMeshingPushConstants voxelMeshingPushConstants{};
 	InteractionSelectionState interactionSelection{};
+	std::vector<DebugOverlayBox> debugOverlayBoxes;
 };
 
 struct DebugStats {
@@ -232,6 +259,8 @@ struct DebugStats {
 	VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
 	CameraState::ControlMode controlMode = CameraState::ControlMode::Creative;
 	bool simulationPaused = false;
+	bool showChunkBounds = false;
+	bool showDirtyChunkOverlay = false;
 };
 
 struct SceneFrameResources {
@@ -275,6 +304,8 @@ struct WorldState {
 	std::unique_ptr<VoxelWorld> voxelWorld;
 	bool scenePresetReloadRequested = false;
 	VoxelScenePreset requestedScenePreset = VoxelScenePreset::VoxelLab;
+	bool snapshotSaveRequested = false;
+	bool snapshotLoadRequested = false;
 };
 
 struct RenderState {
@@ -298,6 +329,9 @@ struct RenderState {
 	void *materialVisualMappedData = nullptr;
 	VkBuffer materialVisualBuffer = VK_NULL_HANDLE;
 	VmaAllocation materialVisualAllocation = VK_NULL_HANDLE;
+	void *sceneLightingMappedData = nullptr;
+	VkBuffer sceneLightingBuffer = VK_NULL_HANDLE;
+	VmaAllocation sceneLightingAllocation = VK_NULL_HANDLE;
 	VkDescriptorSetLayout graphicsDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool graphicsDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout voxelMeshingDescriptorSetLayout = VK_NULL_HANDLE;
@@ -353,6 +387,8 @@ struct DebugState {
 	DebugStats stats{};
 	float titleUpdateAccumulatorSeconds = 0.0f;
 	bool hudVisible = true;
+	bool showChunkBounds = false;
+	bool showDirtyChunkOverlay = false;
 };
 
 struct PlatformState {

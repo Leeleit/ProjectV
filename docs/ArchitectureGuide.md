@@ -128,9 +128,11 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 - Tracy glue;
 - GPU profiling glue;
-- HUD generation.
+- HUD generation;
+- CPU planning для lightweight debug overlay boxes.
 
-Это intentional lightweight debug layer, а не editor framework.
+Это intentional lightweight debug layer, а не editor framework: editor-like tooling остаётся keyboard-driven и сидит на
+том же CPU `VoxelRaycast`/overlay path без `imgui` и без отдельного UI-стека.
 
 ## Как идёт кадр
 
@@ -141,7 +143,7 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
    - применяет hotkeys;
    - крутит control modes;
    - тикает `creative`, `spectator` или `walk`;
-   - делает runtime interaction;
+   - делает runtime interaction через `classic` remove/place или активный debug editor tool;
    - синхронизирует physics после world edits.
 3. `SyncEcsWorldState` обновляет ECS summary.
 4. `PrepareFrameRenderData`:
@@ -149,13 +151,13 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
    - обновляет CPU-side scene resources;
    - ждёт fence текущего кадра;
    - загружает актуальные scene buffers в per-frame mapped buffers;
-   - строит HUD vertices и push constants.
+   - строит HUD vertices, selection state и debug overlay boxes.
 5. `DrawFrame`:
    - acquire image;
    - при необходимости recreates swapchain;
    - dispatch compute meshing;
    - рисует opaque/transparent passes;
-   - рисует selection overlay, crosshair и HUD;
+   - рисует debug overlay boxes, crosshair и HUD;
    - present.
 
 ## Control modes
@@ -176,7 +178,7 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 - полного ownership мира через ECS;
 - “настоящего” player/game object stack;
 - сложного editor UI;
-- save/load pipeline.
+- полноценного persistence stack beyond world-only snapshots.
 
 Если в коде есть `flecs` и `Jolt`, это не означает, что `ProjectV` уже стал полноценным ECS-first physics engine. Пока
 это practical mainline slices.

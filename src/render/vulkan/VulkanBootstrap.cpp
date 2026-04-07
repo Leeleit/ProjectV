@@ -11,14 +11,6 @@ namespace {
 // Имя приложения видно и в заголовке окна, и в логах Vulkan.
 inline constexpr char PROJECT_NAME[] = "ProjectV v0.0.1";
 
-#ifndef NDEBUG
-// В debug-сборке просим Vulkan включить валидацию.
-constexpr bool kEnableValidation = true;
-#else
-// В release-сборке лишние слои не нужны.
-constexpr bool kEnableValidation = false;
-#endif
-
 // Базовый набор слоёв для отладки.
 constexpr std::array<const char *, 1> kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 // Для нашего рендера достаточно swapchain-расширения.
@@ -88,10 +80,7 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 // Создаём сам messenger после instance.
 bool CreateDebugMessenger(VulkanContextState *context)
 {
-#ifdef NDEBUG
-	(void)context;
-	return true;
-#else
+#if PROJECTV_ENABLE_VALIDATION
 	const VkDebugUtilsMessengerCreateInfoEXT info = MakeDebugMessengerCreateInfo();
 	const VkResult createDebugMessengerResult =
 		vkCreateDebugUtilsMessengerEXT(context->instance, &info, nullptr, &context->debugMessenger);
@@ -99,6 +88,9 @@ bool CreateDebugMessenger(VulkanContextState *context)
 		runtime::LogVkFailure("CreateDebugMessenger.vkCreateDebugUtilsMessengerEXT", createDebugMessengerResult);
 		return false;
 	}
+	return true;
+#else
+	(void)context;
 	return true;
 #endif
 }
@@ -446,8 +438,13 @@ bool InitializeVulkanBase(
 	}
 
 	std::vector instanceExtensions(sdlExtNames, sdlExtNames + extCount);
-	if (kEnableValidation) {
+#if PROJECTV_ENABLE_VALIDATION || PROJECTV_ENABLE_RENDERDOC_MARKERS
+	{
 		instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+#endif
+#if PROJECTV_ENABLE_VALIDATION
+	{
 		if (!CheckValidationLayerSupport()) {
 			runtime::LogRuntimeFailure(
 				"Init",
@@ -456,6 +453,7 @@ bool InitializeVulkanBase(
 			return false;
 		}
 	}
+#endif
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -469,12 +467,14 @@ bool InitializeVulkanBase(
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-	if (kEnableValidation) {
+#if PROJECTV_ENABLE_VALIDATION
+	{
 		instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
 		instanceCreateInfo.ppEnabledLayerNames = kValidationLayers.data();
 		debugCreateInfo = MakeDebugMessengerCreateInfo();
 		instanceCreateInfo.pNext = &debugCreateInfo;
 	}
+#endif
 
 	// Instance — это верхний объект Vulkan, от которого стартует вся остальная графическая жизнь.
 	const VkResult createInstanceResult = vkCreateInstance(&instanceCreateInfo, nullptr, &context->instance);

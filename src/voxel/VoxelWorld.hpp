@@ -3,6 +3,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -91,13 +93,18 @@ bool TryParseVoxelScenePreset(std::string_view text, VoxelScenePreset *outPreset
 const char *VoxelScenePresetToString(VoxelScenePreset preset);
 VoxelScenePreset GetNextVoxelScenePreset(VoxelScenePreset preset);
 VoxelScenePreset GetRequestedVoxelScenePreset();
+std::string GetVoxelWorldSnapshotPath();
 bool CreateVoxelSceneWorld(AppState *state);
 bool CreateVoxelSceneWorld(AppState *state, VoxelScenePreset preset);
 void DestroyVoxelSceneWorld(AppState *state);
+bool SaveVoxelWorldSnapshot(const VoxelWorld &world, std::string_view snapshotPath);
+std::unique_ptr<VoxelWorld> LoadVoxelWorldSnapshot(std::string_view snapshotPath);
 bool IsInsideVoxelWorld(const VoxelWorld &world, Int3 position);
 VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
+Int3 GetVoxelChunkCoord(const VoxelWorld &world, Int3 position);
 size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);
 void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material);
+uint32_t FillVoxelMaterial(VoxelWorld &world, Int3 start, VoxelMaterial material);
 void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);
 void MarkVoxelRegionDirty(VoxelWorld &world, Int3 min, Int3 maxExclusive);
 void MarkAllVoxelChunksDirty(VoxelWorld *world);

@@ -9,23 +9,25 @@
 #include "fmt/format.h"
 
 namespace {
-DebugOverlayPushConstants BuildSelectionOverlayPushConstants(const FrameRenderData &frameRenderData)
+DebugOverlayPushConstants BuildBoxOverlayPushConstants(
+	const FrameRenderData &frameRenderData,
+	const DebugOverlayBox &box)
 {
 	DebugOverlayPushConstants pushConstants{};
 	pushConstants.viewProjection = frameRenderData.graphicsPushConstants.viewProjection;
 	pushConstants.overlayData0 = {
-		static_cast<float>(frameRenderData.interactionSelection.targetVoxel.x) - 0.01f,
-		static_cast<float>(frameRenderData.interactionSelection.targetVoxel.y) - 0.01f,
-		static_cast<float>(frameRenderData.interactionSelection.targetVoxel.z) - 0.01f,
+		static_cast<float>(box.min.x) - 0.01f,
+		static_cast<float>(box.min.y) - 0.01f,
+		static_cast<float>(box.min.z) - 0.01f,
 		0.0f,
 	};
 	pushConstants.overlayData1 = {
-		static_cast<float>(frameRenderData.interactionSelection.targetVoxel.x + 1) + 0.01f,
-		static_cast<float>(frameRenderData.interactionSelection.targetVoxel.y + 1) + 0.01f,
-		static_cast<float>(frameRenderData.interactionSelection.targetVoxel.z + 1) + 0.01f,
+		static_cast<float>(box.maxExclusive.x) + 0.01f,
+		static_cast<float>(box.maxExclusive.y) + 0.01f,
+		static_cast<float>(box.maxExclusive.z) + 0.01f,
 		0.0f,
 	};
-	pushConstants.overlayColor = {1.0f, 0.82f, 0.22f, 0.95f};
+	pushConstants.overlayColor = box.color;
 	return pushConstants;
 }
 
@@ -89,18 +91,20 @@ void RecordDebugOverlayCommands(
 	}
 
 	if (render.debugOverlayPipeline != VK_NULL_HANDLE &&
-		frameRenderData.interactionSelection.hasHit) {
-		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Selection Overlay");
+		!frameRenderData.debugOverlayBoxes.empty()) {
+		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Debug Overlay");
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugOverlayPipeline);
-		const DebugOverlayPushConstants pushConstants = BuildSelectionOverlayPushConstants(frameRenderData);
-		vkCmdPushConstants(
-			cmd,
-			render.debugOverlayPipelineLayout,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-			0,
-			sizeof(pushConstants),
-			&pushConstants);
-		vkCmdDraw(cmd, 24, 1, 0, 0);
+		for (const DebugOverlayBox &box : frameRenderData.debugOverlayBoxes) {
+			const DebugOverlayPushConstants pushConstants = BuildBoxOverlayPushConstants(frameRenderData, box);
+			vkCmdPushConstants(
+				cmd,
+				render.debugOverlayPipelineLayout,
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				sizeof(pushConstants),
+				&pushConstants);
+			vkCmdDraw(cmd, 24, 1, 0, 0);
+		}
 	}
 
 	if (render.debugCrosshairPipeline != VK_NULL_HANDLE &&

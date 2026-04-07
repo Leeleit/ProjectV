@@ -82,6 +82,23 @@
 
 - текущий `clang-cl + CMake + MSVC STL` стек не даёт безопасной module migration и плохо переносит hidden control flow.
 
+### Build/automation contract
+
+Решение:
+
+- mainline repeatable build path живёт на двух preset'ах: `windows-clang-debug` для локальной разработки и `windows-clang-debug-ci` для automation/CI;
+- repeatable automation loop фиксируется через CMake build/test presets и `tools/windows/Invoke-ProjectVBuildChecks.ps1`, а не через ad-hoc набор локальных команд;
+- runtime smoke остаётся Windows GUI-проверкой, но поднимается как явный target `ProjectVRuntimeSmoke` поверх существующего PowerShell script;
+- `windows-clang-debug-tracy-profiler` остаётся opt-in tooling preset и не должен блокировать основной CI contour;
+- shader compile path принимает `glslc` или `glslangValidator`, чтобы mainline не зависел от одного конкретного имени Vulkan SDK tool.
+
+Почему:
+
+- build hygiene нужна mainline MVP прямо сейчас, а profiler-side FetchContent graph не должен быть обязательным проходом для каждого изменения;
+- один scriptable entrypoint для configure/build/tests уменьшает drift между локальной проверкой и CI;
+- smoke должен оставаться воспроизводимым и вызываемым из build system, но windowed runtime automation пока всё ещё отдельный слой относительно headless CI;
+- fallback на `glslangValidator` убирает ненужную хрупкость вокруг конкретного shader compiler binary name.
+
 ### Meshing visibility contract
 
 Решение:
@@ -111,3 +128,50 @@
 - helper legend уже содержит строки длиннее старой константы `244px`, и фиксированная ширина визуально выталкивает текст за рамку даже при корректном screen-space positioning;
 - content-driven sizing сохраняет лёгкий CPU-built HUD path без перехода на полноценную UI-систему;
 - разные независимые ширины у верхней и нижней панели дают рваный силуэт в одном и том же HUD stack, хотя информационно это один блок.
+
+### Debug editor contract
+
+Решение:
+
+- debug editor остаётся lightweight keyboard-driven слоем поверх текущего interaction path, а не отдельным editor/UI framework;
+- `OFF` сохраняет старый `LMB remove / RMB place` contract;
+- `F8` циклически переключает `OFF -> PAINT -> ERASE -> FILL -> INSPECT`;
+- `F9` включает global `chunk bounds`, а `F10` — `dirty chunk overlay`;
+- `INSPECT` использует тот же CPU `VoxelRaycast` и chunk metadata из `VoxelWorld`, а не отдельный selection/scene graph.
+
+Почему:
+
+- это закрывает `10.4` без раннего входа в сложный editor stack и без конфликта с mainline MVP;
+- keyboard-driven path легко держать reproducible, testable и совместимым с текущим HUD/overlay/render pipeline;
+- сохранение `OFF` как дефолта не ломает уже существующий remove/place runtime contract.
+
+### World snapshot contract
+
+Решение:
+
+- save/load пока сериализует только `VoxelWorld` truth: preset id, config, world bounds, voxel payload и `editVersion`;
+- binary snapshot header держит reserved-поля внутри layout для будущего versioning; writer обязан явно zero-init'ить их, а reader до format bump обязан отклонять non-zero reserved bytes;
+- camera state, control mode, physics internals и GPU scene resources в snapshot не входят;
+- `F6/F7` работают по пути из `PROJECTV_SNAPSHOT_PATH`, а fallback — `ProjectV.snapshot.bin` рядом с executable;
+- load snapshot проходит через тот же явный ECS/render/physics reload path, что и reload scene preset, и сбрасывает камеру.
+
+Почему:
+
+- ближайшая практическая ценность — persistence мира для mainline MVP, а не полный session/savegame stack;
+- сериализация только source-of-truth слоя не плодит дубли между CPU world, physics и GPU staging;
+- reset камеры и полный reload path убирают скрытые зависимые состояния после подмены мира.
+
+### Material and scene-lighting contract
+
+Решение:
+
+- material response живёт в CPU-authored `VoxelMaterialVisual` table, а не в hardcoded числах внутри `voxel.frag`;
+- scene-wide lighting/fog/sun параметры живут в отдельном CPU-authored `VoxelSceneLighting` buffer, который выбирается по `VoxelScenePreset`;
+- текущий `VoxelScenePreset` задаёт и world geometry, и reproducible visual look;
+- стекло остаётся единственным transparent voxel material в текущем meshing path, а `Fluid` пока не переводится в transparent/sorted pipeline и получает richer look через lighting/fresnel/emissive terms.
+
+Почему:
+
+- это закрывает `10.3` без раннего перехода к asset/editor stack и без data-driven material system, которая пока не нужна mainline MVP;
+- CPU-authored visual contract легче проверять через tests/smoke/docs, чем набор shader-only magic numbers;
+- transparent sorting остаётся отдельной render-quality задачей и не должен блокировать базовое улучшение материалов уже сейчас.

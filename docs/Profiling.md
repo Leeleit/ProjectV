@@ -58,6 +58,8 @@ build/windows-clang-debug-tracy-profiler/bin/ProjectV.exe
 Remove-Item Env:PROJECTV_SCENE_PRESET
 ```
 
+Это opt-in tooling path, а не основной automation preset.
+
 ## Зафиксированный Tracy metrics pack
 
 Текущий plot pack считается частью profiling contract и конфигурируется в `src/debug/Profiling.hpp`.
@@ -159,7 +161,8 @@ generated opaque/transparent faces, visibility pressure и upload sizes.
 - Это ещё не automated benchmark suite.
 - Scene presets пока builtin и code-driven, а не save/load/data-driven assets.
 - HUD сам по себе стоит CPU/GPU времени, поэтому для честного renderer baseline его лучше выключать.
-- `windows-clang-debug` уже instrumented Tracy по умолчанию; специальный Tracy preset нужен в основном для bundled profiler UI.
+- `windows-clang-debug` и `windows-clang-debug-ci` уже instrumented Tracy по умолчанию; специальный Tracy preset нужен в
+  основном для bundled profiler UI.
 
 ## Связанные документы
 

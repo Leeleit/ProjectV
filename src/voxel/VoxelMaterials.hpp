@@ -9,22 +9,37 @@
 
 struct VoxelMaterialVisual {
 	std::array<float, 4> baseColor{};
-	float ambient = 0.3f;
-	float diffuse = 0.7f;
-	float specular = 0.0f;
-	float specularPower = 1.0f;
+	std::array<float, 4> lighting{};
+	std::array<float, 4> edgeTintAndPower{};
+	std::array<float, 4> shadingExtras{};
 };
 static_assert(std::is_standard_layout_v<VoxelMaterialVisual>);
 static_assert(std::is_trivially_copyable_v<VoxelMaterialVisual>);
-static_assert(sizeof(VoxelMaterialVisual) == 32);
+static_assert(sizeof(VoxelMaterialVisual) == 64);
 static_assert(offsetof(VoxelMaterialVisual, baseColor) == 0);
-static_assert(offsetof(VoxelMaterialVisual, ambient) == 16);
-static_assert(offsetof(VoxelMaterialVisual, diffuse) == 20);
-static_assert(offsetof(VoxelMaterialVisual, specular) == 24);
-static_assert(offsetof(VoxelMaterialVisual, specularPower) == 28);
+static_assert(offsetof(VoxelMaterialVisual, lighting) == 16);
+static_assert(offsetof(VoxelMaterialVisual, edgeTintAndPower) == 32);
+static_assert(offsetof(VoxelMaterialVisual, shadingExtras) == 48);
+
+struct VoxelSceneLighting {
+	std::array<float, 4> skyColorAndFogDensity{};
+	std::array<float, 4> horizonColorAndFogStart{};
+	std::array<float, 4> groundColorAndFogMax{};
+	std::array<float, 4> sunColorAndIntensity{};
+	std::array<float, 4> sunDirectionAndWrap{};
+};
+static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
+static_assert(std::is_trivially_copyable_v<VoxelSceneLighting>);
+static_assert(sizeof(VoxelSceneLighting) == 80);
+static_assert(offsetof(VoxelSceneLighting, skyColorAndFogDensity) == 0);
+static_assert(offsetof(VoxelSceneLighting, horizonColorAndFogStart) == 16);
+static_assert(offsetof(VoxelSceneLighting, groundColorAndFogMax) == 32);
+static_assert(offsetof(VoxelSceneLighting, sunColorAndIntensity) == 48);
+static_assert(offsetof(VoxelSceneLighting, sunDirectionAndWrap) == 64);
 
 constexpr size_t kVoxelMaterialCount = 5;
 
 VoxelMaterialVisual GetVoxelMaterialVisual(VoxelMaterial material);
+VoxelSceneLighting GetVoxelSceneLighting(VoxelScenePreset preset);
 
 #endif

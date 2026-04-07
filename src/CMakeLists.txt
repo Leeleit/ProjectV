@@ -1,7 +1,18 @@
 add_executable(ProjectV)
 
 # --- БЛОК АВТОКОМПИЛЯЦИИ ШЕЙДЕРОВ ---
-find_program(GLSLC glslc REQUIRED)
+find_program(PROJECTV_GLSLC_EXECUTABLE glslc)
+find_program(PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
+
+if (PROJECTV_GLSLC_EXECUTABLE)
+    set(PROJECTV_SHADER_COMPILER "${PROJECTV_GLSLC_EXECUTABLE}")
+    set(PROJECTV_SHADER_COMPILER_ARGS)
+elseif (PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE)
+    set(PROJECTV_SHADER_COMPILER "${PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE}")
+    set(PROJECTV_SHADER_COMPILER_ARGS -V)
+else ()
+    message(FATAL_ERROR "ProjectV requires either glslc or glslangValidator from the Vulkan SDK in PATH")
+endif ()
 
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADERS
@@ -20,8 +31,9 @@ foreach (SHADER ${SHADERS})
 
     add_custom_command(
             OUTPUT ${SPV}
-            COMMAND ${GLSLC} ${SHADER} -o ${SPV}
+            COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS} ${SHADER} -o ${SPV}
             DEPENDS ${SHADER}
+            COMMAND_EXPAND_LISTS
             VERBATIM
     )
     list(APPEND SPV_SHADERS ${SPV})
@@ -44,6 +56,7 @@ target_sources(ProjectV PRIVATE
         core/ShaderIO.cpp
         core/Types.cpp
         debug/DebugHud.cpp
+        debug/DebugOverlays.cpp
         platform/PlatformEvents.cpp
         render/Renderer.cpp
         render/SceneResources.cpp
@@ -65,21 +78,7 @@ target_include_directories(ProjectV PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_compile_definitions(ProjectV PRIVATE
-        NOMINMAX
-        VK_NO_PROTOTYPES
-)
-
-if (PROJECTV_ENABLE_TRACY)
-    target_compile_definitions(ProjectV PRIVATE PROJECTV_ENABLE_TRACY=1)
-endif ()
-
-target_compile_options(ProjectV PRIVATE
-        /W4
-        /WX
-        /permissive-
-        /utf-8
-)
+target_link_libraries(ProjectV PRIVATE projectv_build_options)
 
 target_link_libraries(ProjectV PRIVATE
         # Vulkan не добавляем, потому что volk его инклюдит в себе
@@ -100,3 +99,21 @@ add_custom_command(TARGET ProjectV POST_BUILD
         ${SPV_SHADERS}
         $<TARGET_FILE_DIR:ProjectV>
 )
+
+if (WIN32)
+    find_program(PROJECTV_POWERSHELL_EXECUTABLE NAMES pwsh powershell REQUIRED)
+
+    add_custom_target(ProjectVRuntimeSmoke
+            COMMAND
+            "${PROJECTV_POWERSHELL_EXECUTABLE}"
+            -ExecutionPolicy
+            Bypass
+            -File
+            "${CMAKE_SOURCE_DIR}/tools/windows/Invoke-ProjectVRuntimeSmoke.ps1"
+            -ExePath
+            "$<TARGET_FILE:ProjectV>"
+            DEPENDS ProjectV
+            USES_TERMINAL
+            VERBATIM
+    )
+endif ()

@@ -25,6 +25,11 @@ std::array<VoxelMaterialVisual, kVoxelMaterialCount> BuildMaterialVisualTable()
 	};
 }
 
+VoxelSceneLighting BuildSceneLighting(const VoxelWorld &world)
+{
+	return GetVoxelSceneLighting(world.scenePreset);
+}
+
 bool CreateBuffer(
 	VulkanContextState *context,
 	const VkDeviceSize size,
@@ -379,6 +384,14 @@ void DestroySceneResources(
 	render->materialVisualBuffer = VK_NULL_HANDLE;
 	render->materialVisualAllocation = VK_NULL_HANDLE;
 
+	if (render->sceneLightingBuffer && render->sceneLightingAllocation) {
+		profiling::RecordFree(render->sceneLightingAllocation, "VoxelSceneLightingBufferAllocation");
+		vmaDestroyBuffer(context->allocator, render->sceneLightingBuffer, render->sceneLightingAllocation);
+	}
+	render->sceneLightingMappedData = nullptr;
+	render->sceneLightingBuffer = VK_NULL_HANDLE;
+	render->sceneLightingAllocation = VK_NULL_HANDLE;
+
 	render->sceneFaceCapacity = 0;
 	render->sceneTransparentFaceBase = 0;
 	render->sceneOpaqueFaceCount = 0;
@@ -450,6 +463,37 @@ bool CreateSceneResources(
 			reinterpret_cast<uint64_t>(render->materialVisualBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			"VoxelMaterialVisualBuffer");
+	}
+
+	{
+		VmaAllocationInfo sceneLightingAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(VoxelSceneLighting),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&render->sceneLightingBuffer,
+				&render->sceneLightingAllocation,
+				&sceneLightingAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		render->sceneLightingMappedData = sceneLightingAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			render->sceneLightingAllocation,
+			sceneLightingAllocationInfo.size,
+			"VoxelSceneLightingBufferAllocation");
+		render->sceneMemoryBytes += sceneLightingAllocationInfo.size;
+		const VoxelSceneLighting sceneLighting = BuildSceneLighting(*world->voxelWorld);
+		std::memcpy(
+			render->sceneLightingMappedData,
+			&sceneLighting,
+			sizeof(sceneLighting));
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(render->sceneLightingBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			"VoxelSceneLightingBuffer");
 	}
 
 	for (SceneFrameResources &frameResources : render->sceneFrameResources) {

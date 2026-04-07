@@ -51,6 +51,9 @@ function(projectv_cleanup_ninja_subbuild_state build_root)
             GLOB_RECURSE
             projectv_ninja_temp_logs
             LIST_DIRECTORIES FALSE
+            "${build_root}/_deps/*-subbuild/.ninja_deps"
+            "${build_root}/_deps/*-subbuild/.ninja_lock"
+            "${build_root}/_deps/*-subbuild/.ninja_log"
             "${build_root}/_deps/*-subbuild/.ninja_*.recompact"
             "${build_root}/_deps/*-subbuild/.ninja_*.restat"
     )

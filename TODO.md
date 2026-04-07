@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата фиксации: `2026-04-07`
+Дата фиксации: `2026-04-08`
 Статус документа: `живой roadmap`
 
 ---
@@ -76,9 +76,8 @@
 
 ### 1.4. Чего пока нет или не хватает до настоящего MVP
 
-- save/load мира
-- CI и автоматического smoke-контура
-- чёткого разделения между mainline MVP и R&D-веткой
+- self-hosted/headless runtime smoke-контура без зависимости от интерактивного desktop session
+- дополированного `walk` ground-sticking / edge-slide
 
 ### 1.5. Главный вывод
 
@@ -205,7 +204,6 @@
 
 Но пока ещё не хватает следующего слоя полезности уровня MVP:
 
-- save/load мира,
 - следующего gameplay/debug слоя поверх уже существующих interaction + ECS + physics.
 
 ### 5.3. Есть сильный соблазн уйти в R&D слишком рано
@@ -584,16 +582,25 @@ src/
 - Современность: `4/5`
 - Оптимизационная отдача: `2/5`
 
+Статус на `2026-04-07`:
+
+- mainline build contract теперь опирается на `windows-clang-debug` и `windows-clang-debug-ci`, а
+  `windows-clang-debug-tracy-profiler` остаётся opt-in tooling preset;
+- repeatable automation path теперь зафиксирован через CMake build/test presets,
+  `tools/windows/Invoke-ProjectVBuildChecks.ps1` и `.github/workflows/windows-clang-ci.yml`;
+- shader compile path теперь принимает `glslc` с fallback на `glslangValidator`, а runtime smoke вызывается и напрямую
+  через PowerShell script, и через target `ProjectVRuntimeSmoke`.
+
 Задачи:
 
-- [ ] Довести оба основных CMake preset до полностью повторяемого состояния.
-- [ ] Следить, чтобы тесты реально собирались во всех нужных пресетах.
-- [ ] Добавить CI хотя бы на:
+- [x] Довести оба основных CMake preset до полностью повторяемого состояния.
+- [x] Следить, чтобы тесты реально собирались во всех нужных пресетах.
+- [x] Добавить CI хотя бы на:
 - configure
 - build
 - tests
-- [ ] Подготовить smoke target/script.
-- [ ] Ввести понятные опции:
+- [x] Подготовить smoke target/script.
+- [x] Ввести понятные опции:
 - `PROJECTV_ENABLE_VALIDATION`
 - `PROJECTV_ENABLE_TRACY`
 - `PROJECTV_ENABLE_IMGUI`
@@ -614,8 +621,11 @@ src/
 
 Задачи:
 
-- [ ] Добавить сохранение snapshot мира.
-- [ ] Добавить загрузку snapshot мира.
+- [x] Добавить сохранение snapshot мира.
+- [x] Добавить загрузку snapshot мира.
+- [x] Зафиксировать binary snapshot header как явный contract: reserved-поля сохраняются в layout для future versioning,
+  на save обязаны zero-init'иться, а на load оставаться нулевыми; latest analyzer noise вокруг snapshot header,
+  duplicate chunk-grid precondition и Vulkan validation path закрыт без suppress-патчей.
 - [x] Развести общий `VoxelWorldConfig` и dedicated `VoxelLab` builder, чтобы scene presets не делили один и тот же
   искусственно общий
   конфиг и не плодили мёртвые analyzer-ветки вокруг lab-only геометрии, включая residual `switch`-arms в non-`VoxelLab`
@@ -661,11 +671,11 @@ src/
 
 Задачи:
 
-- [ ] Сделать более осмысленный material pipeline.
-- [ ] Улучшить стекло.
-- [ ] Улучшить жидкость.
-- [ ] Вынести lighting/material parameters из hardcode.
-- [ ] Добавить scene presets с разным освещением.
+- [x] Сделать более осмысленный material pipeline.
+- [x] Улучшить стекло.
+- [x] Улучшить жидкость.
+- [x] Вынести lighting/material parameters из hardcode.
+- [x] Добавить scene presets с разным освещением.
 
 ## 10.4. Debug editor mode
 
@@ -678,12 +688,64 @@ src/
 
 Задачи:
 
-- [ ] Режим paint.
-- [ ] Режим erase.
-- [ ] Режим fill.
-- [ ] Режим inspect.
-- [ ] Отображение chunk bounds.
-- [ ] Отображение dirty chunk overlay.
+- [x] Режим paint.
+- [x] Режим erase.
+- [x] Режим fill.
+- [x] Режим inspect.
+- [x] Отображение chunk bounds.
+- [x] Отображение dirty chunk overlay.
+
+## 10.5. Lighting и shadows
+
+Оценка:
+
+- Необходимость: `3/5`
+- Целесообразность: `4/5`
+- Современность: `5/5`
+- Оптимизационная отдача: `2/5`
+
+Статус на `2026-04-08`:
+
+- `10.3` уже закрыл базовый visual/material slice: lighting/fog/sun параметры вынесены из shader hardcode, а
+  `VoxelScenePreset` уже задаёт воспроизводимый lighting look;
+- новый слой здесь — не “сразу full RT renderer”, а физически внятный, стабильный и поэтапно внедряемый
+  lighting/shadow stack поверх текущего voxel mainline.
+
+Задачи:
+
+- [ ] Зафиксировать корректный linear HDR workflow end-to-end: scene lighting считается в linear space, SDR/sRGB
+  conversion остаётся только в финальном выводе.
+- [ ] Добавить tone mapping, базовый color grading и автоэкспозицию, чтобы яркие источники и тёмные зоны не жили в
+  magic-number экспозиции.
+- [ ] Зафиксировать единицы интенсивности света, масштаб сцены и physically plausible falloff; для `point`/`spot`
+  baseline — inverse-square attenuation вместо произвольных кривых.
+- [ ] Расширить voxel material model до PBR-friendly контракта: `albedo/base color`, `roughness`, `metallic`,
+  `emissive`, опциональный `AO` и `normal`-ready hooks там, где это не ломает текущий meshing/material path.
+- [ ] Довести direct lighting BRDF до современного baseline (`GGX` + `Fresnel-Schlick` + `Smith`), чтобы стекло,
+  жидкость и твёрдые материалы сходились в одном согласованном shading contract.
+- [ ] Добавить ambient/indirect fill так, чтобы тени не были абсолютно чёрными: sky/horizon/ground contribution,
+  ambient term и environment lighting должны поддерживать читаемость формы без “грязной серости”.
+- [ ] Добавить `IBL` для диффузного и specular окружения как основной non-RT источник непрямого света и отражённого
+  окружения.
+- [ ] Добавить для солнца `Cascaded Shadow Maps` с вменяемым split scheme, стабилизацией каскадов и привязкой к texel
+  grid, чтобы убрать shimmering при движении камеры.
+- [ ] Довести shadow stability: bias, slope bias, debug views, cascade visualization и понятный tuning path против
+  acne, peter-panning и temporal shimmer.
+- [ ] Добавить локальные тени: классический shadow map для `spot`-источников и shadow cubemap для `point`-источников.
+- [ ] Ввести `PCF` как baseline filtering path; `PCSS` оставить как более дорогой, но всё ещё mainline-целесообразный
+  quality follow-up после стабилизации базовых shadow maps.
+- [ ] Добавить contact shadows / screen-space shadows для мелкого контакта геометрии с поверхностью, где обычных
+  shadow maps недостаточно.
+- [ ] Добавить `SSAO`/`GTAO` как baseline contact-occlusion слой и отдельно рассмотреть `SSGI` как следующий шаг
+  непрямого света без немедленного ухода в тяжёлый GI stack.
+- [ ] Добавить `SSR` с внятным fallback на `IBL`/sky reflection path, чтобы зеркальные материалы не зависели только
+  от brute-force R&D рендера.
+- [ ] Добавить volumetric fog и light shafts как практический atmospheric слой для demo scenes, а не только как
+  одноразовый “красивый скриншот”.
+- [ ] Добавить `TAA` и temporal stabilization/denoising для shadow/SSR/SSGI noise, чтобы картинка не мерцала при
+  движении и scene preset switching.
+- [ ] Зафиксировать reproducible quality ladder для lighting stack: debug views, quality tiers и benchmark/demo scenes
+  для HDR, shadows, reflections, fog и temporal passes.
 
 ---
 
@@ -755,7 +817,7 @@ src/
 
 - [x] Подключить минимальный ECS.
 - [x] Подключить MVP physics raycast/collision.
-- [ ] Добавить save/load.
+- [x] Добавить save/load.
 - [x] Добавить benchmark scene presets.
 - [x] Начать authored docs в `docs/`.
 
@@ -774,8 +836,8 @@ src/
 - [ ] assert/check layer
 - [ ] filesystem abstraction
 - [ ] project settings persistence
-- [ ] CI
-- [ ] smoke automation
+- [x] CI
+- [x] smoke automation
 - [ ] benchmark automation
 - [x] reproducible debug scenes
 
@@ -806,7 +868,7 @@ src/
 - [ ] chunk neighbors bookkeeping
 - [x] dirty region tracking
 - [x] scene presets
-- [ ] world snapshots
+- [x] world snapshots
 - [ ] world editing tools
 - [ ] multi-material test scenes
 - [ ] chunk-level fixtures for tests
@@ -863,7 +925,6 @@ src/
 ### 15.2. Визуальные штуки
 
 - [ ] мягкое небо / gradient sky
-- [ ] volumetric-like fog lite
 - [ ] хорошие материалы стекла
 - [ ] вода с лучшим shading
 - [ ] day/night preset transitions
@@ -900,6 +961,12 @@ src/
 - [ ] software occlusion culling prototype
 - [ ] hierarchical Z / occlusion experiment
 - [ ] ray query / hybrid visibility experiments
+- [ ] `DDGI` / probe-based dynamic GI experiment
+- [ ] hardware ray-traced shadows для солнца и локальных источников
+- [ ] hardware ray-traced reflections
+- [ ] hardware ray-traced GI
+- [ ] hybrid raster + hardware RT lighting path
+- [ ] spatial/temporal denoiser для RT shadows/reflections/GI
 
 ## 16.2. Hardcore voxel representations
 

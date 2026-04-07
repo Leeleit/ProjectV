@@ -24,8 +24,8 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kStatsLineCount = 10;
-constexpr size_t kHelperLineCount = 4;
+constexpr size_t kStatsLineCount = 12;
+constexpr size_t kHelperLineCount = 7;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -346,6 +346,39 @@ const char *GetScenePresetLabel(const VoxelScenePreset scenePreset)
 	return "VOXELLAB";
 }
 
+const char *GetDebugEditorToolLabel(const DebugEditorTool tool)
+{
+	switch (tool) {
+	case DebugEditorTool::Classic:
+		return "OFF";
+	case DebugEditorTool::Paint:
+		return "PAINT";
+	case DebugEditorTool::Erase:
+		return "ERASE";
+	case DebugEditorTool::Fill:
+		return "FILL";
+	case DebugEditorTool::Inspect:
+		return "INSPECT";
+	}
+
+	return "OFF";
+}
+
+const char *GetBoolLabel(const bool value)
+{
+	return value ? "ON" : "OFF";
+}
+
+const char *GetChunkDirtyLabel(const bool dirty)
+{
+	return dirty ? "DIRTY" : "CLEAN";
+}
+
+const char *GetChunkActivityLabel(const bool active)
+{
+	return active ? "ACTIVE" : "EMPTY";
+}
+
 void BuildStatsLines(
 	const DebugStats &stats,
 	const CameraState &camera,
@@ -388,12 +421,19 @@ void BuildStatsLines(
 	std::snprintf(
 		outLines.at(6).data(),
 		kHudLineBufferSize,
+		"EDIT %s  BND %s  DIRTY %s",
+		GetDebugEditorToolLabel(interaction.editorTool),
+		GetBoolLabel(stats.showChunkBounds),
+		GetBoolLabel(stats.showDirtyChunkOverlay));
+	std::snprintf(
+		outLines.at(7).data(),
+		kHudLineBufferSize,
 		"CAM %.1f %.1f %.1f",
 		camera.position[0],
 		camera.position[1],
 		camera.position[2]);
 	std::snprintf(
-		outLines.at(7).data(),
+		outLines.at(8).data(),
 		kHudLineBufferSize,
 		"LOOK %.2f %.2f %.2f",
 		forward[0],
@@ -402,20 +442,21 @@ void BuildStatsLines(
 
 	if (interaction.selection.hasHit) {
 		std::snprintf(
-			outLines.at(8).data(),
+			outLines.at(9).data(),
 			kHudLineBufferSize,
-			"SEL %d %d %d %s",
+			"SEL %d %d %d %s %.1f",
 			interaction.selection.targetVoxel.x,
 			interaction.selection.targetVoxel.y,
 			interaction.selection.targetVoxel.z,
-			GetVoxelMaterialLabel(interaction.selection.targetMaterial));
+			GetVoxelMaterialLabel(interaction.selection.targetMaterial),
+			interaction.selection.hitDistance);
 	} else {
-		std::snprintf(outLines.at(8).data(), kHudLineBufferSize, "SEL NONE");
+		std::snprintf(outLines.at(9).data(), kHudLineBufferSize, "SEL NONE");
 	}
 
 	if (interaction.selection.hasPlacementVoxel) {
 		std::snprintf(
-			outLines.at(9).data(),
+			outLines.at(10).data(),
 			kHudLineBufferSize,
 			"PUT %d %d %d %s",
 			interaction.selection.placementVoxel.x,
@@ -424,10 +465,24 @@ void BuildStatsLines(
 			GetVoxelMaterialLabel(interaction.placementMaterial));
 	} else {
 		std::snprintf(
-			outLines.at(9).data(),
+			outLines.at(10).data(),
 			kHudLineBufferSize,
 			"PUT NONE %s",
 			GetVoxelMaterialLabel(interaction.placementMaterial));
+	}
+
+	if (interaction.selection.hasTargetChunk) {
+		std::snprintf(
+			outLines.at(11).data(),
+			kHudLineBufferSize,
+			"CHK %d %d %d %s %s",
+			interaction.selection.targetChunkCoord.x,
+			interaction.selection.targetChunkCoord.y,
+			interaction.selection.targetChunkCoord.z,
+			GetChunkDirtyLabel(interaction.selection.targetChunkDirty),
+			GetChunkActivityLabel(interaction.selection.targetChunkActive));
+	} else {
+		std::snprintf(outLines.at(11).data(), kHudLineBufferSize, "CHK NONE");
 	}
 }
 
@@ -435,8 +490,11 @@ void BuildHelperLines(std::array<std::array<char, kHudLineBufferSize>, kHelperLi
 {
 	std::snprintf(outLines.at(0).data(), kHudLineBufferSize, "F1 UI  F2 MAT  F3 CAM");
 	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "F4 MODE  F5 SCENE");
-	std::snprintf(outLines.at(2).data(), kHudLineBufferSize, "SPACE2 WALK/CRT  LMB CUT");
-	std::snprintf(outLines.at(3).data(), kHudLineBufferSize, "RMB PUT  TAB MOUSE  P PAUSE");
+	std::snprintf(outLines.at(2).data(), kHudLineBufferSize, "F6 SAVE  F7 LOAD");
+	std::snprintf(outLines.at(3).data(), kHudLineBufferSize, "F8 TOOL  F9 BND");
+	std::snprintf(outLines.at(4).data(), kHudLineBufferSize, "F10 DIRTY  TAB MOUSE");
+	std::snprintf(outLines.at(5).data(), kHudLineBufferSize, "SPACE2 WALK CRT");
+	std::snprintf(outLines.at(6).data(), kHudLineBufferSize, "LMB TOOL  RMB ALT  P");
 }
 } // namespace
 

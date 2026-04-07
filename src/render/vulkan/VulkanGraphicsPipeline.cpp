@@ -11,7 +11,7 @@ namespace {
 constexpr uint32_t kGraphicsDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr VkDescriptorPoolSize kGraphicsDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kGraphicsDescriptorSetCount * 3u,
+	.descriptorCount = kGraphicsDescriptorSetCount * 4u,
 };
 constexpr std::array kGraphicsDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -30,6 +30,13 @@ constexpr std::array kGraphicsDescriptorBindings{
 	},
 	VkDescriptorSetLayoutBinding{
 		.binding = 2,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 3,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -725,6 +732,11 @@ bool RefreshGraphicsResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
+		const VkDescriptorBufferInfo sceneLightingBufferInfo{
+			.buffer = render->sceneLightingBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
 		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -760,6 +772,18 @@ bool RefreshGraphicsResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
 				.pBufferInfo = &materialVisualBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 3,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &sceneLightingBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 		};

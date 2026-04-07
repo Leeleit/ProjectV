@@ -18,6 +18,8 @@
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+#include <string>
+
 namespace {
 bool WaitForDeviceIdle(VulkanContextState &context)
 {
@@ -34,31 +36,16 @@ bool WaitForDeviceIdle(VulkanContextState &context)
 	return true;
 }
 
-bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
+bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view operationStep)
 {
-	PV_PROFILE_ZONE_N("ReloadActiveVoxelScene");
-	PV_CHECK_OR_RETURN(state != nullptr, "App", "ReloadActiveVoxelScene.Preconditions", "AppState is null");
-
 	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
 	DebugState *debug = GetDebugState(state->ecs.get());
 	WorldState *world = GetWorldState(state->ecs.get());
 	PV_CHECK_OR_RETURN(
-		camera && debug && world,
+		camera && debug && world && world->voxelWorld,
 		"App",
-		"ReloadActiveVoxelScene.EcsAccess",
-		"primary camera, debug singleton or world singleton is unavailable");
-
-	if (!WaitForDeviceIdle(state->context)) {
-		return false;
-	}
-
-	if (!CreateVoxelSceneWorld(state, preset)) {
-		runtime::LogRuntimeFailure(
-			"App",
-			"ReloadActiveVoxelScene.CreateVoxelSceneWorld",
-			"CreateVoxelSceneWorld returned false");
-		return false;
-	}
+		operationStep,
+		"primary camera, debug singleton or active voxel world is unavailable");
 
 	ResetCameraState(camera);
 	state->input.mouseDeltaX = 0.0f;
@@ -73,15 +60,15 @@ bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
 	if (!SyncEcsWorldState(state->ecs.get())) {
 		runtime::LogRuntimeFailure(
 			"App",
-			"ReloadActiveVoxelScene.SyncEcsWorldState",
-			"SyncEcsWorldState returned false after scene reload");
+			std::string(operationStep) + ".SyncEcsWorldState",
+			"SyncEcsWorldState returned false after world reload");
 		return false;
 	}
 
 	if (!CreateSceneResources(&state->context, world, &state->render)) {
 		runtime::LogRuntimeFailure(
 			"App",
-			"ReloadActiveVoxelScene.CreateSceneResources",
+			std::string(operationStep) + ".CreateSceneResources",
 			"CreateSceneResources returned false");
 		return false;
 	}
@@ -90,8 +77,8 @@ bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
 		!SyncPhysicsWorld(state->physics.get(), world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
 			"App",
-			"ReloadActiveVoxelScene.SyncPhysicsWorld",
-			"SyncPhysicsWorld returned false after scene reload");
+			std::string(operationStep) + ".SyncPhysicsWorld",
+			"SyncPhysicsWorld returned false after world reload");
 		return false;
 	}
 
@@ -100,16 +87,16 @@ bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
 		if (!SnapWalkCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
 			runtime::LogRuntimeFailure(
 				"App",
-				"ReloadActiveVoxelScene.SnapWalkCharacterToCamera",
-				"SnapWalkCharacterToCamera returned false after scene reload");
+				std::string(operationStep) + ".SnapWalkCharacterToCamera",
+				"SnapWalkCharacterToCamera returned false after world reload");
 			return false;
 		}
 	} else if (camera->controlMode == CameraState::ControlMode::Creative) {
 		if (!SnapCreativeCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
 			runtime::LogRuntimeFailure(
 				"App",
-				"ReloadActiveVoxelScene.SnapCreativeCharacterToCamera",
-				"SnapCreativeCharacterToCamera returned false after scene reload");
+				std::string(operationStep) + ".SnapCreativeCharacterToCamera",
+				"SnapCreativeCharacterToCamera returned false after world reload");
 			return false;
 		}
 	} else {
@@ -118,7 +105,78 @@ bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
 
 	debug->stats.scenePreset = world->voxelWorld ? world->voxelWorld->scenePreset : VoxelScenePreset::VoxelLab;
 	world->scenePresetReloadRequested = false;
+	world->snapshotSaveRequested = false;
+	world->snapshotLoadRequested = false;
 	return true;
+}
+
+bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
+{
+	PV_PROFILE_ZONE_N("ReloadActiveVoxelScene");
+	PV_CHECK_OR_RETURN(state != nullptr, "App", "ReloadActiveVoxelScene.Preconditions", "AppState is null");
+
+	if (!WaitForDeviceIdle(state->context)) {
+		return false;
+	}
+
+	if (!CreateVoxelSceneWorld(state, preset)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"ReloadActiveVoxelScene.CreateVoxelSceneWorld",
+			"CreateVoxelSceneWorld returned false");
+		return false;
+	}
+
+	return FinalizeActiveVoxelWorldReload(state, "ReloadActiveVoxelScene");
+}
+
+bool SaveActiveVoxelWorldSnapshot(AppState *state)
+{
+	PV_PROFILE_ZONE_N("SaveActiveVoxelWorldSnapshot");
+	PV_CHECK_OR_RETURN(state != nullptr, "App", "SaveActiveVoxelWorldSnapshot.Preconditions", "AppState is null");
+
+	WorldState *world = GetWorldState(state->ecs.get());
+	PV_CHECK_OR_RETURN(
+		world && world->voxelWorld,
+		"App",
+		"SaveActiveVoxelWorldSnapshot.World",
+		"active voxel world is unavailable");
+
+	const std::string snapshotPath = GetVoxelWorldSnapshotPath();
+	if (!SaveVoxelWorldSnapshot(*world->voxelWorld, snapshotPath)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SaveActiveVoxelWorldSnapshot.SaveVoxelWorldSnapshot",
+			"SaveVoxelWorldSnapshot returned false");
+		return false;
+	}
+
+	world->snapshotSaveRequested = false;
+	return true;
+}
+
+bool LoadActiveVoxelWorldSnapshot(AppState *state)
+{
+	PV_PROFILE_ZONE_N("LoadActiveVoxelWorldSnapshot");
+	PV_CHECK_OR_RETURN(state != nullptr, "App", "LoadActiveVoxelWorldSnapshot.Preconditions", "AppState is null");
+
+	if (!WaitForDeviceIdle(state->context)) {
+		return false;
+	}
+
+	const std::string snapshotPath = GetVoxelWorldSnapshotPath();
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(snapshotPath);
+	if (!loadedWorld) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"LoadActiveVoxelWorldSnapshot.LoadVoxelWorldSnapshot",
+			"LoadVoxelWorldSnapshot returned null");
+		return false;
+	}
+
+	state->world.voxelWorld = std::move(loadedWorld);
+	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
+	return FinalizeActiveVoxelWorldReload(state, "LoadActiveVoxelWorldSnapshot");
 }
 } // namespace
 
@@ -209,12 +267,24 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->render,
 			debug)) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");
+	} else if (world->snapshotSaveRequested &&
+			   !SaveActiveVoxelWorldSnapshot(state)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SDL_AppIterate.SaveActiveVoxelWorldSnapshot",
+			"SaveActiveVoxelWorldSnapshot returned false");
 	} else if (world->scenePresetReloadRequested &&
 			   !ReloadActiveVoxelScene(state, world->requestedScenePreset)) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"SDL_AppIterate.ReloadActiveVoxelScene",
 			"ReloadActiveVoxelScene returned false");
+	} else if (world->snapshotLoadRequested &&
+			   !LoadActiveVoxelWorldSnapshot(state)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SDL_AppIterate.LoadActiveVoxelWorldSnapshot",
+			"LoadActiveVoxelWorldSnapshot returned false");
 	} else if (!SyncEcsWorldState(state->ecs.get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.SyncEcsWorldState", "SyncEcsWorldState returned false");
 	} else if (!PrepareFrameRenderData(

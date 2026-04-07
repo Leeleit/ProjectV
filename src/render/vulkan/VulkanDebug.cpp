@@ -6,6 +6,13 @@ void SetVulkanObjectName(
 	const VkObjectType objectType,
 	const char *name)
 {
+#if !PROJECTV_ENABLE_RENDERDOC_MARKERS
+	(void)context;
+	(void)handle;
+	(void)objectType;
+	(void)name;
+	return;
+#else
 	if (!context.device || !handle || !name || !vkSetDebugUtilsObjectNameEXT) {
 		return;
 	}
@@ -16,4 +23,5 @@ void SetVulkanObjectName(
 	nameInfo.objectHandle = handle;
 	nameInfo.pObjectName = name;
 	vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo);
+#endif
 }

@@ -4,6 +4,7 @@
 #include "core/RuntimeProbe.hpp"
 #include "core/Types.hpp"
 #include "debug/DebugHud.hpp"
+#include "debug/DebugOverlays.hpp"
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
@@ -17,6 +18,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string_view>
 #include <vector>
 
@@ -118,6 +120,19 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 
 	return world;
 }
+
+std::filesystem::path GetTestVoxelWorldSnapshotPath()
+{
+	std::error_code error;
+	const std::filesystem::path tempDirectory = std::filesystem::temp_directory_path(error);
+	if (error) {
+		return std::filesystem::path("ProjectV-VoxelWorldSnapshotTest.bin");
+	}
+
+	return tempDirectory / "ProjectV-VoxelWorldSnapshotTest.bin";
+}
+
+void ResetDirtyFlags(VoxelWorld &world);
 
 PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
 	const Int3 min,
@@ -233,6 +248,71 @@ void TestCreateVoxelSceneWorldReadsEnvironmentPreset(TestContext &context)
 	EXPECT_EQ(context, VoxelScenePreset::ChunkGrid, state.world.voxelWorld->scenePreset);
 
 	SDL_unsetenv_unsafe("PROJECTV_SCENE_PRESET");
+}
+
+void TestVoxelWorldSnapshotPathUsesEnvironmentOverride(TestContext &context)
+{
+	constexpr const char *snapshotPath = "C:/ProjectVTests/ProjectV.snapshot.bin";
+	SDL_setenv_unsafe("PROJECTV_SNAPSHOT_PATH", snapshotPath, 1);
+	EXPECT_TRUE(context, GetVoxelWorldSnapshotPath() == snapshotPath);
+	SDL_unsetenv_unsafe("PROJECTV_SNAPSHOT_PATH");
+}
+
+void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({-4, 1, -4}, {12, 9, 12}, 4);
+	world.scenePreset = VoxelScenePreset::TransparencyStress;
+	world.config.floorSize = 20;
+	world.config.floorY = 1;
+	world.config.worldTopY = 12;
+	world.config.padding = 5;
+	world.config.chunkSize = 4;
+	SetVoxelMaterial(world, {-4, 1, -4}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {-1, 2, 3}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {5, 4, 6}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {11, 8, 11}, VoxelMaterial::FloorGray);
+	world.editVersion = 77;
+	ResetDirtyFlags(world);
+
+	const std::filesystem::path snapshotPath = GetTestVoxelWorldSnapshotPath();
+	std::error_code removeError;
+	std::filesystem::remove(snapshotPath, removeError);
+
+	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()));
+	const std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(snapshotPath.string());
+	EXPECT_TRUE(context, loadedWorld != nullptr);
+	if (!loadedWorld) {
+		return;
+	}
+
+	EXPECT_EQ(context, world.scenePreset, loadedWorld->scenePreset);
+	EXPECT_EQ(context, world.config.floorSize, loadedWorld->config.floorSize);
+	EXPECT_EQ(context, world.config.floorY, loadedWorld->config.floorY);
+	EXPECT_EQ(context, world.config.worldTopY, loadedWorld->config.worldTopY);
+	EXPECT_EQ(context, world.config.padding, loadedWorld->config.padding);
+	EXPECT_EQ(context, world.config.chunkSize, loadedWorld->config.chunkSize);
+	EXPECT_EQ(context, world.min.x, loadedWorld->min.x);
+	EXPECT_EQ(context, world.min.y, loadedWorld->min.y);
+	EXPECT_EQ(context, world.min.z, loadedWorld->min.z);
+	EXPECT_EQ(context, world.maxExclusive.x, loadedWorld->maxExclusive.x);
+	EXPECT_EQ(context, world.maxExclusive.y, loadedWorld->maxExclusive.y);
+	EXPECT_EQ(context, world.maxExclusive.z, loadedWorld->maxExclusive.z);
+	EXPECT_EQ(context, world.editVersion, loadedWorld->editVersion);
+	EXPECT_TRUE(context, world.voxels == loadedWorld->voxels);
+	EXPECT_EQ(context, world.stats.nonAirVoxelCount, loadedWorld->stats.nonAirVoxelCount);
+	EXPECT_EQ(context, world.stats.glassVoxelCount, loadedWorld->stats.glassVoxelCount);
+	EXPECT_EQ(context, world.stats.fluidVoxelCount, loadedWorld->stats.fluidVoxelCount);
+	EXPECT_EQ(context, world.stats.floorWhiteVoxelCount, loadedWorld->stats.floorWhiteVoxelCount);
+	EXPECT_EQ(context, world.stats.floorGrayVoxelCount, loadedWorld->stats.floorGrayVoxelCount);
+	EXPECT_EQ(context, world.stats.activeChunkCount, loadedWorld->stats.activeChunkCount);
+	EXPECT_EQ(context, static_cast<uint32_t>(loadedWorld->chunks.size()), CountDirtyVoxelChunks(*loadedWorld));
+	EXPECT_EQ(context, loadedWorld->chunks.size(), loadedWorld->pendingChunkRebuildIndices.size());
+	for (size_t chunkIndex = 0; chunkIndex < loadedWorld->chunks.size(); ++chunkIndex) {
+		EXPECT_TRUE(context, loadedWorld->chunks[chunkIndex].rebuildQueued);
+		EXPECT_EQ(context, world.chunks[chunkIndex].nonAirVoxelCount, loadedWorld->chunks[chunkIndex].nonAirVoxelCount);
+	}
+
+	std::filesystem::remove(snapshotPath, removeError);
 }
 
 void TestMarkVoxelRegionDirtyQueuesExpectedChunks(TestContext &context)
@@ -382,10 +462,24 @@ void TestVoxelMaterialVisuals(TestContext &context)
 {
 	const VoxelMaterialVisual air = GetVoxelMaterialVisual(VoxelMaterial::Air);
 	const VoxelMaterialVisual glass = GetVoxelMaterialVisual(VoxelMaterial::Glass);
+	const VoxelMaterialVisual fluid = GetVoxelMaterialVisual(VoxelMaterial::Fluid);
 
 	EXPECT_TRUE(context, air.baseColor[3] == 0.0f);
 	EXPECT_TRUE(context, glass.baseColor[3] < 1.0f);
-	EXPECT_TRUE(context, glass.specular > 0.0f);
+	EXPECT_TRUE(context, glass.lighting[2] > 0.0f);
+	EXPECT_TRUE(context, glass.shadingExtras[1] > 0.0f);
+	EXPECT_TRUE(context, fluid.shadingExtras[3] > 0.0f);
+}
+
+void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
+{
+	const VoxelSceneLighting voxelLab = GetVoxelSceneLighting(VoxelScenePreset::VoxelLab);
+	const VoxelSceneLighting chunkGrid = GetVoxelSceneLighting(VoxelScenePreset::ChunkGrid);
+
+	EXPECT_TRUE(context, !ColorsMatch(voxelLab.skyColorAndFogDensity, chunkGrid.skyColorAndFogDensity));
+	EXPECT_TRUE(context, voxelLab.sunColorAndIntensity[3] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.horizonColorAndFogStart[3] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.groundColorAndFogMax[3] > 0.0f);
 }
 
 void ExpectInt3Equal(
@@ -583,6 +677,27 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F5);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleScenePreset));
 
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::SaveWorldSnapshot));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::LoadWorldSnapshot));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F8);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleEditorTool));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F9);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleChunkBounds));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F10);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleDirtyChunkOverlay));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::SaveWorldSnapshot));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::LoadWorldSnapshot));
+
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(100));
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveUp));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(160));
@@ -749,14 +864,22 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F3);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_P);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F8);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F9);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F10);
 
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, !debug.hudVisible);
 	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.placementMaterial);
+	EXPECT_EQ(context, DebugEditorTool::Paint, interaction.editorTool);
 	EXPECT_TRUE(context, simulation.paused);
 	EXPECT_EQ(context, CameraState::ControlMode::Spectator, camera.controlMode);
 	EXPECT_EQ(context, CameraState::ControlMode::Spectator, debug.stats.controlMode);
 	EXPECT_TRUE(context, debug.stats.simulationPaused);
+	EXPECT_TRUE(context, debug.showChunkBounds);
+	EXPECT_TRUE(context, debug.showDirtyChunkOverlay);
+	EXPECT_TRUE(context, debug.stats.showChunkBounds);
+	EXPECT_TRUE(context, debug.stats.showDirtyChunkOverlay);
 	EXPECT_NEAR(context, 0.0f, simulation.simulationAccumulatorSeconds);
 	EXPECT_NEAR(context, 0.0f, camera.position[0]);
 	EXPECT_NEAR(context, 8.0f, camera.position[1]);
@@ -1070,6 +1193,43 @@ void TestUpdateAppRequestsScenePresetReload(TestContext &context)
 	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, world.requestedScenePreset);
 }
 
+void TestUpdateAppRequestsWorldSnapshotSave(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	RenderState render{};
+	DebugState debug{};
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+	EXPECT_TRUE(context, world.snapshotSaveRequested);
+	EXPECT_TRUE(context, !world.snapshotLoadRequested);
+}
+
+void TestUpdateAppRequestsWorldSnapshotLoad(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	RenderState render{};
+	DebugState debug{};
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+	EXPECT_TRUE(context, world.snapshotLoadRequested);
+}
+
 void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
@@ -1140,6 +1300,153 @@ void TestUpdateVoxelInteractionSkipsEditingWhenDisabled(TestContext &context)
 	EXPECT_TRUE(context, interaction.selection.hasHit);
 	EXPECT_TRUE(context, !input.removePressed);
 	EXPECT_EQ(context, static_cast<uint32_t>(0), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionPaintModePaintsTargetedBlock(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	input.removePressed = true;
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Paint;
+	interaction.placementMaterial = VoxelMaterial::FloorGray;
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction,
+		true);
+
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_TRUE(context, interaction.selection.hasTargetChunk);
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.selection.targetMaterial);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.targetChunkCoord);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	input.placePressed = true;
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Erase;
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction,
+		true);
+
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_TRUE(context, !interaction.selection.hasHit);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionFillModeFloodFillsConnectedRegion(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {4, 1, 1}, VoxelMaterial::Fluid);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	input.removePressed = true;
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Fill;
+	interaction.placementMaterial = VoxelMaterial::FloorWhite;
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction,
+		true);
+
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {2, 1, 1}));
+	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {4, 1, 1}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, interaction.selection.targetMaterial);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+	MarkVoxelChunkDirty(world, {1, 1, 1});
+
+	InputState input{};
+	input.removePressed = true;
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Inspect;
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction,
+		true);
+
+	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_TRUE(context, interaction.selection.hasTargetChunk);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.targetChunkCoord);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.targetChunkMin);
+	EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), interaction.selection.targetChunkMaxExclusive);
+	EXPECT_TRUE(context, interaction.selection.targetChunkDirty);
+	EXPECT_TRUE(context, interaction.selection.targetChunkActive);
+	EXPECT_TRUE(context, !input.removePressed);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+	MarkVoxelChunkDirty(world, {1, 1, 1});
+
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Inspect;
+	interaction.selection.hasHit = true;
+	interaction.selection.targetVoxel = {1, 1, 1};
+	interaction.selection.hasTargetChunk = true;
+	interaction.selection.targetChunkCoord = {0, 0, 0};
+	interaction.selection.targetChunkMin = {0, 0, 0};
+	interaction.selection.targetChunkMaxExclusive = {4, 4, 4};
+	interaction.selection.targetChunkDirty = true;
+	interaction.selection.targetChunkActive = true;
+
+	DebugState debug{};
+	debug.hudVisible = true;
+	debug.showChunkBounds = true;
+	debug.showDirtyChunkOverlay = true;
+
+	std::vector<DebugOverlayBox> boxes;
+	BuildDebugOverlayBoxes(&world, interaction, debug, &boxes);
+
+	EXPECT_EQ(context, static_cast<size_t>(11), boxes.size());
+	if (boxes.size() >= 11) {
+		EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), boxes.front().min);
+		EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), boxes.front().maxExclusive);
+		EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), boxes[9].min);
+		EXPECT_INT3_EQ(context, (Int3{2, 2, 2}), boxes[9].maxExclusive);
+		EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), boxes[10].min);
+		EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), boxes[10].maxExclusive);
+	}
 }
 
 void TestBuildDebugHudVerticesReturnsZeroWhenHidden(TestContext &context)
@@ -1288,6 +1595,8 @@ int main()
 	TestVoxelScenePresetParsingAcceptsCanonicalAndFlexibleNames(context);
 	TestCreateVoxelSceneWorldBuildsExpectedBaselineScenes(context);
 	TestCreateVoxelSceneWorldReadsEnvironmentPreset(context);
+	TestVoxelWorldSnapshotPathUsesEnvironmentOverride(context);
+	TestVoxelWorldSnapshotRoundTripsWorldState(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
 	TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(context);
@@ -1298,6 +1607,7 @@ int main()
 	TestVkResultToStringCoversCommonRuntimeResults(context);
 	TestInitFailureStageParsing(context);
 	TestVoxelMaterialVisuals(context);
+	TestVoxelSceneLightingPresetsProvideDistinctLooks(context);
 	TestInputActionBindingsTrackPressedAndReleasedKeys(context);
 	TestConsumeCameraLookInputAllowsNearVerticalPitch(context);
 	TestTickCameraUsesActionStateAndSpeedModifiers(context);
@@ -1318,12 +1628,19 @@ int main()
 	TestCreativeCharacterCollidesWithVoxelWall(context);
 	TestGetNextVoxelScenePresetCyclesAllBuiltinPresets(context);
 	TestUpdateAppRequestsScenePresetReload(context);
+	TestUpdateAppRequestsWorldSnapshotSave(context);
+	TestUpdateAppRequestsWorldSnapshotLoad(context);
 	TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(context);
 	TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(context);
 	TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(context);
 	TestUpdateVoxelInteractionRemovesTargetedBlock(context);
 	TestUpdateVoxelInteractionPlacesConfiguredBlock(context);
 	TestUpdateVoxelInteractionSkipsEditingWhenDisabled(context);
+	TestUpdateVoxelInteractionPaintModePaintsTargetedBlock(context);
+	TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(context);
+	TestUpdateVoxelInteractionFillModeFloodFillsConnectedRegion(context);
+	TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(context);
+	TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(context);
 	TestBuildDebugHudVerticesReturnsZeroWhenHidden(context);
 	TestBuildDebugHudVerticesProducesGeometryWhenVisible(context);
 	TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(context);

@@ -6,6 +6,7 @@ add_executable(ProjectVTests
         ../src/ecs/EcsWorld.cpp
         ../src/physics/PhysicsWorld.cpp
         ../src/debug/DebugHud.cpp
+        ../src/debug/DebugOverlays.cpp
         ../src/platform/PlatformEvents.cpp
         ../src/core/RuntimeDiagnostics.cpp
         ../src/core/RuntimeProbe.cpp
@@ -20,17 +21,7 @@ target_include_directories(ProjectVTests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
 )
 
-target_compile_definitions(ProjectVTests PRIVATE
-        NOMINMAX
-        VK_NO_PROTOTYPES
-)
-
-target_compile_options(ProjectVTests PRIVATE
-        /W4
-        /WX
-        /permissive-
-        /utf-8
-)
+target_link_libraries(ProjectVTests PRIVATE projectv_build_options)
 
 target_link_libraries(ProjectVTests PRIVATE
         volk
@@ -41,4 +32,9 @@ target_link_libraries(ProjectVTests PRIVATE
         GPUOpen::VulkanMemoryAllocator
 )
 
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVTests PRIVATE Tracy::TracyClient)
+endif ()
+
 add_test(NAME ProjectVTests COMMAND ProjectVTests)
+set_tests_properties(ProjectVTests PROPERTIES LABELS "unit")

@@ -27,13 +27,16 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 - indirect buffers для opaque и transparent draw;
 - dirty chunk index buffer;
 - отдельный per-frame vertex buffer для HUD;
-- material visual table.
+- material visual table;
+- scene lighting buffer для sky/horizon/ground/sun/fog look текущего `VoxelScenePreset`.
 
 Основной смысл:
 
 - мир остаётся плотным и простым для mutation;
 - renderer получает уже подготовленные и компактные буферы;
 - dirty world edits не заставляют пересобирать всё дерево абстракций.
+- lighting/material response теперь тоже описывается на CPU и уходит в scene resources как явные буферы, а не как shader
+  hardcode.
 - CPU descriptor versioning не должен стирать GPU-сгенерированные face counts: динамические `drawRanges` считаются
   runtime mesh state, а не authored scene layout.
 
@@ -115,7 +118,7 @@ Graphics path записывается в [Renderer.cpp](../src/render/Renderer.
 3. `vkCmdBeginRendering`
 4. opaque indirect pass
 5. transparent indirect pass
-6. selection overlay
+6. debug overlay boxes
 7. crosshair overlay
 8. debug HUD
 9. `vkCmdEndRendering`
@@ -137,12 +140,13 @@ Scene triangle count сейчас считается из generated face counts 
 
 ## Overlay и HUD
 
-Selection highlight и crosshair рисуются отдельным debug overlay pipeline.
+Selection highlight, inspect chunk bounds, optional global chunk bounds и dirty-chunk overlay рисуются через один и тот
+же debug overlay pipeline.
 
 Особенности:
 
 - overlay не вмешивается в voxel material/render path;
-- selection box генерируется из `gl_VertexIndex`;
+- line-box геометрия генерируется из `gl_VertexIndex`, а CPU only подготавливает список world-space box bounds/colors;
 - crosshair тоже рисуется отдельным overlay draw call.
 
 HUD живёт отдельным pipeline и отдельным CPU-built vertex buffer:

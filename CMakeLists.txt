@@ -9,7 +9,21 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(ProjectVThirdParty)
 include(CTest)
 
+set(PROJECTV_DEFAULT_ENABLE_VALIDATION OFF)
+set(PROJECTV_DEFAULT_ENABLE_RENDERDOC_MARKERS OFF)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(PROJECTV_DEFAULT_ENABLE_VALIDATION ON)
+    set(PROJECTV_DEFAULT_ENABLE_RENDERDOC_MARKERS ON)
+endif ()
+
+option(PROJECTV_ENABLE_VALIDATION "Enable Vulkan validation layers" ${PROJECTV_DEFAULT_ENABLE_VALIDATION})
 option(PROJECTV_ENABLE_TRACY "Enable Tracy profiling instrumentation" ON)
+option(PROJECTV_ENABLE_IMGUI "Build bundled Dear ImGui support library" OFF)
+option(
+        PROJECTV_ENABLE_RENDERDOC_MARKERS
+        "Enable Vulkan debug names and markers for tools like RenderDoc"
+        ${PROJECTV_DEFAULT_ENABLE_RENDERDOC_MARKERS}
+)
 option(PROJECTV_BUILD_TRACY_PROFILER "Build bundled Tracy profiler UI" OFF)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -47,6 +61,16 @@ set(FMT_MODULE OFF CACHE BOOL "Disable fmt module target" FORCE)
 add_subdirectory(external/fmt)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/fmt")
 
+if (PROJECTV_ENABLE_IMGUI)
+    add_library(projectv_imgui STATIC
+            external/imgui/imgui.cpp
+            external/imgui/imgui_draw.cpp
+            external/imgui/imgui_tables.cpp
+            external/imgui/imgui_widgets.cpp
+    )
+    target_include_directories(projectv_imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui")
+endif ()
+
 # flecs
 set(FLECS_STATIC ON CACHE BOOL "Build static flecs lib" FORCE)
 set(FLECS_SHARED OFF CACHE BOOL "Disable shared flecs lib" FORCE)
@@ -71,6 +95,48 @@ add_subdirectory(external/JoltPhysics/Build)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/JoltPhysics/Build")
 
 projectv_add_tracy()
+
+add_library(projectv_build_options INTERFACE)
+target_compile_options(projectv_build_options INTERFACE
+        /W4
+        /WX
+        /permissive-
+        /utf-8
+)
+target_compile_definitions(projectv_build_options INTERFACE
+        NOMINMAX
+        VK_NO_PROTOTYPES
+)
+
+if (PROJECTV_ENABLE_VALIDATION)
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_VALIDATION=1)
+else ()
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_VALIDATION=0)
+endif ()
+
+if (PROJECTV_ENABLE_RENDERDOC_MARKERS)
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_RENDERDOC_MARKERS=1)
+else ()
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_RENDERDOC_MARKERS=0)
+endif ()
+
+if (PROJECTV_ENABLE_IMGUI)
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_IMGUI=1)
+    target_link_libraries(projectv_build_options INTERFACE projectv_imgui)
+else ()
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_IMGUI=0)
+endif ()
+
+if (PROJECTV_ENABLE_TRACY)
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_TRACY=1)
+endif ()
+
+message(STATUS "ProjectV options:")
+message(STATUS "  validation           = ${PROJECTV_ENABLE_VALIDATION}")
+message(STATUS "  tracy instrumentation = ${PROJECTV_ENABLE_TRACY}")
+message(STATUS "  imgui support         = ${PROJECTV_ENABLE_IMGUI}")
+message(STATUS "  renderdoc markers     = ${PROJECTV_ENABLE_RENDERDOC_MARKERS}")
+message(STATUS "  tracy profiler ui     = ${PROJECTV_BUILD_TRACY_PROFILER}")
 
 # --- Vulkan Stack End ---
 

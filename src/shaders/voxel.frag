@@ -2,15 +2,22 @@
 
 struct MaterialVisual {
     vec4 baseColor;
-    float ambient;
-    float diffuse;
-    float specular;
-    float specularPower;
+    vec4 lighting;
+    vec4 edgeTintAndPower;
+    vec4 shadingExtras;
 };
 
 layout(set = 0, binding = 2, std430) readonly buffer MaterialVisualBuffer {
     MaterialVisual materials[];
 };
+
+layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
+    vec4 skyColorAndFogDensity;
+    vec4 horizonColorAndFogStart;
+    vec4 groundColorAndFogMax;
+    vec4 sunColorAndIntensity;
+    vec4 sunDirectionAndWrap;
+} sceneLighting;
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
@@ -31,44 +38,62 @@ bool IsFluid(const uint materialIndex) {
     return materialIndex == 2u;
 }
 
+vec3 SampleAmbientGradient(const vec3 normal) {
+    const float skyBlend = clamp(normal.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 ambient = mix(
+    sceneLighting.groundColorAndFogMax.rgb,
+    sceneLighting.skyColorAndFogDensity.rgb,
+    skyBlend);
+    const float horizonBlend = clamp(1.0 - abs(normal.y), 0.0, 1.0);
+    ambient = mix(ambient, sceneLighting.horizonColorAndFogStart.rgb, horizonBlend * 0.55);
+    return ambient;
+}
+
 void main() {
     const MaterialVisual material = materials[inMaterialIndex];
     const vec3 normal = normalize(inNormal);
-    const vec3 skyColor = vec3(0.73, 0.84, 0.96);
-    const vec3 groundColor = vec3(0.34, 0.36, 0.40);
-    const vec3 sunColor = vec3(1.00, 0.97, 0.92);
-    const vec3 lightDirection = normalize(vec3(-0.35, 0.80, -0.45));
-    const vec3 viewDirection = normalize(pushConstants.cameraPosition.xyz - inWorldPosition);
-    const vec3 halfVector = normalize(lightDirection + viewDirection);
-
-    const float hemisphere = normal.y * 0.5 + 0.5;
-    const vec3 hemisphereAmbient = mix(groundColor, skyColor, hemisphere);
-
-    float wrappedDiffuse = clamp((dot(normal, lightDirection) + 0.35) / 1.35, 0.0, 1.0);
-    if (IsFluid(inMaterialIndex)) {
-        wrappedDiffuse = clamp((dot(normal, lightDirection) + 0.85) / 1.85, 0.0, 1.0);
-    }
+    const vec3 sunDirection = normalize(sceneLighting.sunDirectionAndWrap.xyz);
+    const vec3 sunColor = sceneLighting.sunColorAndIntensity.rgb * sceneLighting.sunColorAndIntensity.w;
+    const vec3 viewDirection = normalize(pushConstants.cameraPosition.xyz - inWorldPosition + vec3(0.0001));
+    const vec3 halfVector = normalize(sunDirection + viewDirection);
+    const float diffuseWrap = max(sceneLighting.sunDirectionAndWrap.w, 0.0);
+    const float wrappedDiffuse = clamp((dot(normal, sunDirection) + diffuseWrap) / (1.0 + diffuseWrap), 0.0, 1.0);
+    const float fresnelPower = max(material.edgeTintAndPower.w, 1.0);
+    const float fresnel = pow(clamp(1.0 - max(dot(normal, viewDirection), 0.0), 0.0, 1.0), fresnelPower);
 
     float specular = 0.0;
-    if (material.specular > 0.0) {
-        specular = pow(max(dot(normal, halfVector), 0.0), material.specularPower) * material.specular;
+    if (material.lighting.z > 0.0) {
+        specular = pow(max(dot(normal, halfVector), 0.0), material.lighting.w) * material.lighting.z;
     }
 
-    vec3 lighting =
-    hemisphereAmbient * material.ambient +
-    sunColor * (wrappedDiffuse * material.diffuse) +
-    sunColor * specular;
+    const vec3 ambient = SampleAmbientGradient(normal) * material.lighting.x;
+    vec3 color =
+    material.baseColor.rgb * (ambient + sunColor * (wrappedDiffuse * material.lighting.y + specular));
+    color += material.edgeTintAndPower.rgb * (material.shadingExtras.x * fresnel);
 
-    if (IsGlass(inMaterialIndex)) {
-        lighting += skyColor * 0.08;
-    } else if (IsFluid(inMaterialIndex)) {
-        lighting += skyColor * 0.14;
+    if (material.shadingExtras.y > 0.0) {
+        float transmission = material.shadingExtras.y * mix(0.35, 1.0, wrappedDiffuse);
+        if (IsGlass(inMaterialIndex)) {
+            transmission *= mix(0.75, 1.15, fresnel);
+        } else if (IsFluid(inMaterialIndex)) {
+            transmission *= 0.60 + fresnel * 0.40;
+        }
+        color += sceneLighting.horizonColorAndFogStart.rgb * transmission;
     }
 
-    vec3 color = material.baseColor.rgb * lighting;
+    if (material.shadingExtras.w > 0.0) {
+        color += material.baseColor.rgb * material.shadingExtras.w;
+    }
 
-    const vec3 fogColor = skyColor;
-    const float fog = clamp((gl_FragCoord.z + 0.05) * 0.12, 0.0, 0.35);
+    const float viewDistance = length(pushConstants.cameraPosition.xyz - inWorldPosition);
+    const float fogDensity = max(sceneLighting.skyColorAndFogDensity.w, 0.0);
+    const float fogStart = max(sceneLighting.horizonColorAndFogStart.w, 0.0);
+    const float fogMax = clamp(sceneLighting.groundColorAndFogMax.w, 0.0, 1.0);
+    const vec3 fogColor = mix(
+    sceneLighting.horizonColorAndFogStart.rgb,
+    sceneLighting.skyColorAndFogDensity.rgb,
+    clamp(normal.y * 0.5 + 0.5, 0.0, 1.0));
+    const float fog = clamp(max(viewDistance - fogStart, 0.0) * fogDensity, 0.0, fogMax) * material.shadingExtras.z;
     color = mix(color, fogColor, fog);
 
     outColor = vec4(color, material.baseColor.a);

@@ -110,6 +110,11 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::TogglePause, SDL_SCANCODE_P);
 	BindAction(input, InputAction::ToggleControlMode, SDL_SCANCODE_F4);
 	BindAction(input, InputAction::CycleScenePreset, SDL_SCANCODE_F5);
+	BindAction(input, InputAction::SaveWorldSnapshot, SDL_SCANCODE_F6);
+	BindAction(input, InputAction::LoadWorldSnapshot, SDL_SCANCODE_F7);
+	BindAction(input, InputAction::CycleEditorTool, SDL_SCANCODE_F8);
+	BindAction(input, InputAction::ToggleChunkBounds, SDL_SCANCODE_F9);
+	BindAction(input, InputAction::ToggleDirtyChunkOverlay, SDL_SCANCODE_F10);
 }
 
 void HandleInputActionEvent(

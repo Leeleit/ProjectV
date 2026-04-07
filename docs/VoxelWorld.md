@@ -38,6 +38,11 @@ ECS, renderer и physics читают этот state, но ownership мира о
 
 `Air` и `Fluid` коллизии не дают.
 
+Render-facing material response теперь живёт в [VoxelMaterials.cpp](../src/voxel/VoxelMaterials.cpp): цвет, lighting
+response,
+fresnel/transmission/emissive параметры и scene-lighting presets описываются на CPU, а не как жёстко зашитые константы в
+shader.
+
 ## Границы и координаты
 
 Мир хранит:
@@ -105,6 +110,10 @@ Chunk bookkeeping сейчас нужен не ради gameplay, а ради re
 Они выбираются через `PROJECTV_SCENE_PRESET` и сейчас нужны в первую очередь для profiling/benchmark work, а не как полноценная save/load
 система.
 
+Теперь preset задаёт не только геометрию, но и reproducible visual look: `SceneResources` загружает matching
+lighting/fog/sun
+параметры для `voxel.frag`, поэтому `F5` циклично меняет и scene layout, и освещение.
+
 `VoxelLab` по-прежнему создаёт текущую основную demo-scene:
 
 - шахматный пол;
@@ -121,6 +130,32 @@ Chunk bookkeeping сейчас нужен не ради gameplay, а ради re
 
 Это сделано намеренно: `FlatBenchmark`, `TransparencyStress`, `ChunkGrid` и `MeshingStress` больше не таскают по коду фиктивные поля вроде
 `sphereRadius = 0` только ради совместимости с одним `VoxelLab`.
+
+## World snapshots
+
+Поверх builtin presets `VoxelWorld` теперь поддерживает file-backed snapshot path.
+
+Snapshot сохраняет:
+
+- `scenePreset`;
+- `VoxelWorldConfig`;
+- world bounds;
+- voxel payload;
+- `editVersion`.
+
+Snapshot намеренно **не** сохраняет:
+
+- camera state;
+- control mode;
+- runtime physics internals;
+- GPU-side scene resources.
+
+Практический contract:
+
+- `F6` пишет snapshot по пути из `PROJECTV_SNAPSHOT_PATH` или, если env var не задан, в `ProjectV.snapshot.bin` рядом с
+  executable;
+- `F7` читает тот же файл;
+- после load весь мир считается dirty заново, чтобы render/meshing/ECS/physics синхронизировались от fresh CPU truth.
 
 ## Dirty queue
 
@@ -229,8 +264,8 @@ Physics sync сейчас завязан на `editVersion`.
 ## Известные ограничения current slice
 
 - мир по-прежнему фиксирован по границам и размеру procedural lab scene;
-- save/load ещё нет;
-- richer chunk model и world snapshots ещё не сделаны;
+- current snapshot path покрывает только `VoxelWorld`, а не полный game/session state;
+- richer chunk model ещё не сделан;
 - `walk` controller пока без отдельного ground-sticking / edge-slide tuning;
 - `Fluid` пока лишь visual/world material, а не полноценная simulation or collision system.
 
