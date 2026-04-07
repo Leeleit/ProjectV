@@ -100,7 +100,7 @@ src/
 - минимальный physics glue layer на `JoltPhysics`;
 - static voxel collision world;
 - physics raycast;
-- `CharacterVirtual` walk controller и sync с voxel edits.
+- `CharacterVirtual` controller для `creative` / `walk` и sync с voxel edits.
 
 Ключевые файлы:
 
@@ -157,6 +157,12 @@ src/
 
 ## Связанные документы
 
+- [Build And Run](BuildAndRun.md)
+- [Architecture Guide](ArchitectureGuide.md)
+- [Render Architecture](RenderArchitecture.md)
+- [VoxelWorld](VoxelWorld.md)
+- [Debugging](Debugging.md)
+- [Profiling](Profiling.md)
 - [README_NEW](../README_NEW.md)
 - [Voxel MVP Smoke Checklist](voxel_mvp_smoke_checklist.md)
 - [TODO](../TODO.md)

@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -16,6 +17,15 @@ enum class VoxelMaterial : uint8_t {
 	FloorGray = 4,
 };
 static_assert(sizeof(VoxelMaterial) == sizeof(uint8_t));
+
+enum class VoxelScenePreset : uint8_t {
+	VoxelLab = 0,
+	FlatBenchmark,
+	TransparencyStress,
+	ChunkGrid,
+	MeshingStress,
+};
+static_assert(sizeof(VoxelScenePreset) == sizeof(uint8_t));
 
 struct Int3 {
 	int x = 0;
@@ -50,19 +60,17 @@ struct VoxelWorldStats {
 	uint32_t floorGrayVoxelCount = 0;
 };
 
-struct VoxelLabConfig {
+struct VoxelWorldConfig {
 	int floorSize = 18;
-	int sphereRadius = 6;
-	Int3 sphereCenter{0, 8, 0};
-	int shellThickness = 1;
-	float fluidFillLevel = 0.7f;
 	int floorY = 0;
+	int worldTopY = 14;
 	int padding = 3;
 	int chunkSize = 8;
 };
 
 struct VoxelWorld {
-	VoxelLabConfig config{};
+	VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
+	VoxelWorldConfig config{};
 	Int3 min{};
 	Int3 maxExclusive{};
 	int width = 0;
@@ -79,8 +87,13 @@ struct VoxelWorld {
 	VoxelWorldStats stats{};
 };
 
-bool CreateVoxelLabWorld(AppState *state);
-void DestroyVoxelLabWorld(AppState *state);
+bool TryParseVoxelScenePreset(std::string_view text, VoxelScenePreset *outPreset);
+const char *VoxelScenePresetToString(VoxelScenePreset preset);
+VoxelScenePreset GetNextVoxelScenePreset(VoxelScenePreset preset);
+VoxelScenePreset GetRequestedVoxelScenePreset();
+bool CreateVoxelSceneWorld(AppState *state);
+bool CreateVoxelSceneWorld(AppState *state, VoxelScenePreset preset);
+void DestroyVoxelSceneWorld(AppState *state);
 bool IsInsideVoxelWorld(const VoxelWorld &world, Int3 position);
 VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
 size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);

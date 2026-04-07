@@ -41,6 +41,9 @@ constexpr float kWalkBoostMultiplier = 1.8f;
 constexpr float kWalkSlowMultiplier = 0.35f;
 constexpr float kWalkJumpSpeed = 6.5f;
 constexpr float kWalkSpawnClearance = 0.05f;
+constexpr float kCreativeMoveSpeedMultiplier = 1.0f;
+constexpr float kCreativeBoostMultiplier = 3.0f;
+constexpr float kCreativeSlowMultiplier = 0.25f;
 constexpr uint32_t kMaxPhysicsBodies = 32;
 constexpr uint32_t kMaxBodyPairs = 64;
 constexpr uint32_t kMaxContactConstraints = 64;
@@ -60,6 +63,8 @@ struct Float3 {
 	float y = 0.0f;
 	float z = 0.0f;
 };
+
+Int3 FloorToVoxel(const std::array<float, 3> &position);
 
 class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
   public:
@@ -189,6 +194,12 @@ bool IsPhysicsSolidMaterial(const VoxelMaterial material)
 	}
 
 	return false;
+}
+
+bool IsSolidAtPosition(const VoxelWorld &world, const std::array<float, 3> &position)
+{
+	const Int3 voxel = FloorToVoxel(position);
+	return IsInsideVoxelWorld(world, voxel) && IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel));
 }
 
 Float3 Normalize(const Float3 vector)
@@ -392,13 +403,21 @@ bool TryBuildWalkSpawnFromRay(
 	return true;
 }
 
-std::array<float, 3> BuildFallbackWalkFeetPosition(const VoxelWorld &world)
+std::array<float, 3> BuildFallbackWalkFeetPosition(const CameraState &camera)
 {
 	return {
-		(static_cast<float>(world.min.x) + static_cast<float>(world.maxExclusive.x)) * 0.5f,
-		static_cast<float>(world.config.floorY + 1) + kWalkSpawnClearance,
-		(static_cast<float>(world.min.z) + static_cast<float>(world.maxExclusive.z)) * 0.5f,
+		camera.position[0],
+		camera.position[1] - kWalkEyeHeight,
+		camera.position[2],
 	};
+}
+
+bool CameraNeedsGroundRecovery(const VoxelWorld &world, const CameraState &camera)
+{
+	const std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(camera);
+	return IsSolidAtPosition(world, feetPosition) ||
+		   IsSolidAtPosition(world, {feetPosition[0], feetPosition[1] + 0.9f, feetPosition[2]}) ||
+		   IsSolidAtPosition(world, camera.position);
 }
 
 void ApplyWalkCharacterState(PhysicsState &physics, CameraState &camera, const std::array<float, 3> &feetPosition)
@@ -410,7 +429,7 @@ void ApplyWalkCharacterState(PhysicsState &physics, CameraState &camera, const s
 	UpdateCameraFromWalkCharacter(physics, camera);
 }
 
-bool RebuildWalkSpawnFromCamera(
+bool RebuildCharacterFromCamera(
 	PhysicsState &physics,
 	const VoxelWorld &world,
 	CameraState &camera)
@@ -419,31 +438,36 @@ bool RebuildWalkSpawnFromCamera(
 		return false;
 	}
 
-	std::array<float, 3> feetPosition{};
-	if (TryBuildWalkSpawnFromRay(
-			physics,
-			{
-				camera.position[0],
-				camera.position[1] + 0.5f,
-				camera.position[2],
-			},
-			std::max(32.0f, static_cast<float>(world.height) + 16.0f),
-			&feetPosition)) {
-		ApplyWalkCharacterState(physics, camera, feetPosition);
-		return true;
+	std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(camera);
+	if (CameraNeedsGroundRecovery(world, camera)) {
+		if (TryBuildWalkSpawnFromRay(
+				physics,
+				{
+					camera.position[0],
+					camera.position[1] + 0.5f,
+					camera.position[2],
+				},
+				std::max(32.0f, static_cast<float>(world.height) + 16.0f),
+				&feetPosition)) {
+			ApplyWalkCharacterState(physics, camera, feetPosition);
+			return true;
+		}
+
+		const std::array topDownProbeOrigin{
+			camera.position[0],
+			std::max(camera.position[1] + 16.0f, static_cast<float>(world.maxExclusive.y) + 16.0f),
+			camera.position[2],
+		};
+		if (TryBuildWalkSpawnFromRay(
+				physics,
+				topDownProbeOrigin,
+				std::max(48.0f, static_cast<float>(world.height) + 48.0f),
+				&feetPosition)) {
+			ApplyWalkCharacterState(physics, camera, feetPosition);
+			return true;
+		}
 	}
 
-	feetPosition = BuildFallbackWalkFeetPosition(world);
-	const std::array fallbackProbeOrigin{
-		feetPosition[0],
-		static_cast<float>(world.maxExclusive.y) + 16.0f,
-		feetPosition[2],
-	};
-	TryBuildWalkSpawnFromRay(
-		physics,
-		fallbackProbeOrigin,
-		std::max(32.0f, static_cast<float>(world.height) + 32.0f),
-		&feetPosition);
 	ApplyWalkCharacterState(physics, camera, feetPosition);
 	return true;
 }
@@ -469,6 +493,19 @@ Float3 ComputeWalkMoveDirection(const CameraState &camera, const InputState &inp
 	if (IsInputActionDown(input, InputAction::MoveLeft)) {
 		moveDirection.x -= right.x;
 		moveDirection.z -= right.z;
+	}
+
+	return Normalize(moveDirection);
+}
+
+Float3 ComputeCreativeMoveDirection(const CameraState &camera, const InputState &input)
+{
+	Float3 moveDirection = ComputeWalkMoveDirection(camera, input);
+	if (IsInputActionDown(input, InputAction::MoveUp)) {
+		moveDirection.y += 1.0f;
+	}
+	if (IsInputActionDown(input, InputAction::MoveDown)) {
+		moveDirection.y -= 1.0f;
 	}
 
 	return Normalize(moveDirection);
@@ -613,7 +650,19 @@ bool SnapWalkCharacterToCamera(
 		return false;
 	}
 
-	return RebuildWalkSpawnFromCamera(*physics, *world, *camera);
+	return RebuildCharacterFromCamera(*physics, *world, *camera);
+}
+
+bool SnapCreativeCharacterToCamera(
+	PhysicsState *physics,
+	const VoxelWorld *world,
+	CameraState *camera)
+{
+	if (!physics || !world || !camera) {
+		return false;
+	}
+
+	return RebuildCharacterFromCamera(*physics, *world, *camera);
 }
 
 bool TickWalkCharacter(
@@ -628,7 +677,7 @@ bool TickWalkCharacter(
 	}
 
 	if (!physics->walkCharacterInitialized) {
-		if (!RebuildWalkSpawnFromCamera(*physics, *world, *camera)) {
+		if (!RebuildCharacterFromCamera(*physics, *world, *camera)) {
 			return false;
 		}
 	}
@@ -671,6 +720,56 @@ bool TickWalkCharacter(
 	character->ExtendedUpdate(
 		deltaSeconds,
 		gravity,
+		updateSettings,
+		physics->physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
+		physics->physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),
+		{},
+		{},
+		physics->tempAllocator);
+
+	UpdateCameraFromWalkCharacter(*physics, *camera);
+	return true;
+}
+
+bool TickCreativeCharacter(
+	PhysicsState *physics,
+	const VoxelWorld *world,
+	CameraState *camera,
+	const InputState *input,
+	const float deltaSeconds)
+{
+	if (!physics || !world || !camera || !input) {
+		return false;
+	}
+
+	if (!physics->walkCharacterInitialized) {
+		if (!RebuildCharacterFromCamera(*physics, *world, *camera)) {
+			return false;
+		}
+	}
+
+	if (deltaSeconds <= 0.0f) {
+		UpdateCameraFromWalkCharacter(*physics, *camera);
+		return true;
+	}
+
+	const auto [x, y, z] = ComputeCreativeMoveDirection(*camera, *input);
+	float moveSpeed = camera->moveSpeed * kCreativeMoveSpeedMultiplier;
+	if (IsInputActionDown(*input, InputAction::SpeedBoost)) {
+		moveSpeed *= kCreativeBoostMultiplier;
+	}
+	if (IsInputActionDown(*input, InputAction::SpeedSlow)) {
+		moveSpeed *= kCreativeSlowMultiplier;
+	}
+
+	JPH::CharacterVirtual *character = physics->walkCharacter.GetPtr();
+	character->SetLinearVelocity(moveSpeed * JPH::Vec3(x, y, z));
+	character->SetRotation(JPH::Quat::sRotation(JPH::Vec3::sAxisY(), camera->yawRadians));
+
+	const JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings;
+	character->ExtendedUpdate(
+		deltaSeconds,
+		JPH::Vec3::sZero(),
 		updateSettings,
 		physics->physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
 		physics->physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),

@@ -1,12 +1,24 @@
 #include "voxel/VoxelWorld.hpp"
 
+#include "SDL3/SDL_log.h"
+#include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <memory>
 
 namespace {
+constexpr VoxelScenePreset kDefaultVoxelScenePreset = VoxelScenePreset::VoxelLab;
+
+struct VoxelLabShellConfig {
+	int radius = 6;
+	Int3 center{0, 8, 0};
+	int shellThickness = 1;
+	float fluidFillLevel = 0.7f;
+};
+
 size_t ToVoxelIndex(const VoxelWorld &world, const Int3 position)
 {
 	const size_t localX = static_cast<size_t>(position.x - world.min.x);
@@ -65,13 +77,75 @@ void QueueChunkRebuildRequest(VoxelWorld &world, const size_t chunkIndex)
 	++world.stats.dirtyChunkCount;
 }
 
-std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
+char NormalizePresetCharacter(const char character)
+{
+	if (character == '_' || character == '-' || character == ' ') {
+		return '\0';
+	}
+
+	return static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+}
+
+bool MatchesPresetName(const std::string_view text, const std::string_view canonical)
+{
+	size_t textIndex = 0;
+	size_t canonicalIndex = 0;
+	while (true) {
+		while (textIndex < text.size() && NormalizePresetCharacter(text[textIndex]) == '\0') {
+			++textIndex;
+		}
+		while (canonicalIndex < canonical.size() && NormalizePresetCharacter(canonical[canonicalIndex]) == '\0') {
+			++canonicalIndex;
+		}
+
+		const char normalizedText =
+			textIndex < text.size() ? NormalizePresetCharacter(text[textIndex]) : '\0';
+		const char normalizedCanonical =
+			canonicalIndex < canonical.size() ? NormalizePresetCharacter(canonical[canonicalIndex]) : '\0';
+		if (normalizedText != normalizedCanonical) {
+			return false;
+		}
+		if (normalizedText == '\0') {
+			return true;
+		}
+
+		++textIndex;
+		++canonicalIndex;
+	}
+}
+
+int ResolveWorldTopY(const VoxelWorldConfig &config)
+{
+	const int configuredTopY = std::max(config.worldTopY, config.floorY + 1);
+	return configuredTopY;
+}
+
+int GetHalfFloorSize(const VoxelWorldConfig &config)
+{
+	return config.floorSize / 2;
+}
+
+VoxelLabShellConfig GetVoxelLabShellConfig()
+{
+	return {};
+}
+
+VoxelWorldConfig GetVoxelLabWorldConfig()
+{
+	const VoxelLabShellConfig shellConfig = GetVoxelLabShellConfig();
+	VoxelWorldConfig config{};
+	config.worldTopY = std::max(config.worldTopY, shellConfig.center.y + shellConfig.radius);
+	return config;
+}
+
+std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(const VoxelWorldConfig &config, const VoxelScenePreset scenePreset)
 {
 	auto world = std::make_unique<VoxelWorld>();
+	world->scenePreset = scenePreset;
 	world->config = config;
 	world->chunkSize = config.chunkSize;
 
-	const int halfFloor = config.floorSize / 2;
+	const int halfFloor = GetHalfFloorSize(config);
 	world->min = {
 		-halfFloor - config.padding,
 		config.floorY,
@@ -79,7 +153,7 @@ std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
 	};
 	world->maxExclusive = {
 		halfFloor + config.padding,
-		config.sphereCenter.y + config.sphereRadius + config.padding,
+		ResolveWorldTopY(config) + config.padding,
 		halfFloor + config.padding,
 	};
 	world->width = world->maxExclusive.x - world->min.x;
@@ -124,67 +198,333 @@ std::unique_ptr<VoxelWorld> BuildVoxelLabWorld(const VoxelLabConfig &config)
 	}
 	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->pendingChunkRebuildIndices.size());
 
+	return world;
+}
+
+void BuildCheckerboardFloor(VoxelWorld &world, const VoxelWorldConfig &config)
+{
+	const int halfFloor = GetHalfFloorSize(config);
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
 			const VoxelMaterial material = (x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray;
-			SetVoxelMaterial(*world, {x, config.floorY, z}, material);
+			SetVoxelMaterial(world, {x, config.floorY, z}, material);
 		}
 	}
+}
 
-	const int outerRadiusSquared = config.sphereRadius * config.sphereRadius;
-	const int innerRadius = config.sphereRadius - config.shellThickness;
+void BuildVoxelLabShellAndFluid(VoxelWorld &world, const VoxelLabShellConfig &config)
+{
+	PV_ASSERT(config.radius > 0, "VoxelWorld", "BuildVoxelLabShellAndFluid", "VoxelLab shell radius must stay positive");
+
+	const int outerRadiusSquared = config.radius * config.radius;
+	const int innerRadius = std::max(config.radius - std::max(config.shellThickness, 0), 0);
 	const int innerRadiusSquared = innerRadius * innerRadius;
-	const int fluidTop = config.sphereCenter.y - innerRadius +
+	const int fluidTop = config.center.y - innerRadius +
 						 static_cast<int>(std::round(2.0f * static_cast<float>(innerRadius) * config.fluidFillLevel));
 
-	for (int dz = -config.sphereRadius; dz <= config.sphereRadius; ++dz) {
-		for (int dy = -config.sphereRadius; dy <= config.sphereRadius; ++dy) {
-			for (int dx = -config.sphereRadius; dx <= config.sphereRadius; ++dx) {
+	for (int dz = -config.radius; dz <= config.radius; ++dz) {
+		for (int dy = -config.radius; dy <= config.radius; ++dy) {
+			for (int dx = -config.radius; dx <= config.radius; ++dx) {
 				const int distanceSquared = dx * dx + dy * dy + dz * dz;
 				if (distanceSquared > outerRadiusSquared) {
 					continue;
 				}
 
 				const Int3 position{
-					config.sphereCenter.x + dx,
-					config.sphereCenter.y + dy,
-					config.sphereCenter.z + dz,
+					config.center.x + dx,
+					config.center.y + dy,
+					config.center.z + dz,
 				};
 
 				if (distanceSquared > innerRadiusSquared) {
-					SetVoxelMaterial(*world, position, VoxelMaterial::Glass);
+					SetVoxelMaterial(world, position, VoxelMaterial::Glass);
 					continue;
 				}
 
-				if (position.y <= fluidTop) {
-					SetVoxelMaterial(*world, position, VoxelMaterial::Fluid);
+				if (innerRadius > 0 && position.y <= fluidTop) {
+					SetVoxelMaterial(world, position, VoxelMaterial::Fluid);
 				}
 			}
 		}
 	}
+}
+
+void BuildTransparencyStressColumns(VoxelWorld &world, const VoxelWorldConfig &config)
+{
+	const int halfFloor = GetHalfFloorSize(config);
+	for (int z = -halfFloor + 2; z < halfFloor - 2; z += 2) {
+		for (int x = -halfFloor + 2; x < halfFloor - 2; x += 2) {
+			const int columnHeight = 4 + (std::abs(x) + std::abs(z)) % 8;
+			for (int y = config.floorY + 1; y <= config.floorY + columnHeight; ++y) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass);
+			}
+		}
+	}
+}
+
+void BuildChunkGridMarkers(VoxelWorld &world, const VoxelWorldConfig &config)
+{
+	for (int chunkZ = 0; chunkZ < world.chunkCountZ; ++chunkZ) {
+		for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
+			const int markerX = world.min.x + chunkX * world.chunkSize;
+			const int markerZ = world.min.z + chunkZ * world.chunkSize;
+			const VoxelMaterial material = (chunkX + chunkZ & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray;
+			for (int y = config.floorY + 1; y < world.maxExclusive.y; ++y) {
+				SetVoxelMaterial(world, {markerX, y, markerZ}, material);
+			}
+		}
+	}
+}
+
+void BuildMeshingStressVolume(VoxelWorld &world, const VoxelWorldConfig &config)
+{
+	const int halfFloor = GetHalfFloorSize(config);
+	const int topY = std::min(config.floorY + 16, world.maxExclusive.y - 1);
+	for (int z = -halfFloor + 1; z < halfFloor - 1; ++z) {
+		for (int y = config.floorY + 1; y <= topY; ++y) {
+			for (int x = -halfFloor + 1; x < halfFloor - 1; ++x) {
+				if ((x + y + z & 1) != 0) {
+					continue;
+				}
+
+				const VoxelMaterial material = (x + z & 2) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray;
+				SetVoxelMaterial(world, {x, y, z}, material);
+			}
+		}
+	}
+}
+
+VoxelWorldConfig GetFlatBenchmarkWorldConfig()
+{
+	VoxelWorldConfig config{};
+	config.floorSize = 64;
+	config.worldTopY = 18;
+	config.padding = 8;
+	return config;
+}
+
+VoxelWorldConfig GetTransparencyStressWorldConfig()
+{
+	VoxelWorldConfig config{};
+	config.floorSize = 48;
+	config.worldTopY = 18;
+	config.padding = 8;
+	return config;
+}
+
+VoxelWorldConfig GetChunkGridWorldConfig()
+{
+	VoxelWorldConfig config{};
+	config.floorSize = 48;
+	config.worldTopY = 24;
+	config.padding = 8;
+	return config;
+}
+
+VoxelWorldConfig GetMeshingStressWorldConfig()
+{
+	VoxelWorldConfig config{};
+	config.floorSize = 48;
+	config.worldTopY = 20;
+	config.padding = 8;
+	return config;
+}
+
+std::unique_ptr<VoxelWorld> CreateSceneWorldWithFloor(
+	const VoxelScenePreset scenePreset,
+	const VoxelWorldConfig &worldConfig)
+{
+	std::unique_ptr<VoxelWorld> world = CreateEmptyVoxelWorld(worldConfig, scenePreset);
+	BuildCheckerboardFloor(*world, worldConfig);
+	return world;
+}
+
+std::unique_ptr<VoxelWorld> BuildVoxelLabSceneWorld()
+{
+	const VoxelWorldConfig worldConfig = GetVoxelLabWorldConfig();
+	const VoxelLabShellConfig voxelLabShell = GetVoxelLabShellConfig();
+	std::unique_ptr<VoxelWorld> world = CreateSceneWorldWithFloor(VoxelScenePreset::VoxelLab, worldConfig);
+	BuildVoxelLabShellAndFluid(*world, voxelLabShell);
 
 	MarkAllVoxelChunksDirty(world.get());
 	return world;
 }
+
+std::unique_ptr<VoxelWorld> BuildFlatBenchmarkSceneWorld()
+{
+	const VoxelWorldConfig worldConfig = GetFlatBenchmarkWorldConfig();
+	std::unique_ptr<VoxelWorld> world = CreateSceneWorldWithFloor(VoxelScenePreset::FlatBenchmark, worldConfig);
+	MarkAllVoxelChunksDirty(world.get());
+	return world;
+}
+
+std::unique_ptr<VoxelWorld> BuildTransparencyStressSceneWorld()
+{
+	const VoxelWorldConfig worldConfig = GetTransparencyStressWorldConfig();
+	std::unique_ptr<VoxelWorld> world = CreateSceneWorldWithFloor(VoxelScenePreset::TransparencyStress, worldConfig);
+	BuildTransparencyStressColumns(*world, worldConfig);
+	MarkAllVoxelChunksDirty(world.get());
+	return world;
+}
+
+std::unique_ptr<VoxelWorld> BuildChunkGridSceneWorld()
+{
+	const VoxelWorldConfig worldConfig = GetChunkGridWorldConfig();
+	std::unique_ptr<VoxelWorld> world = CreateSceneWorldWithFloor(VoxelScenePreset::ChunkGrid, worldConfig);
+	BuildChunkGridMarkers(*world, worldConfig);
+	MarkAllVoxelChunksDirty(world.get());
+	return world;
+}
+
+std::unique_ptr<VoxelWorld> BuildMeshingStressSceneWorld()
+{
+	const VoxelWorldConfig worldConfig = GetMeshingStressWorldConfig();
+	std::unique_ptr<VoxelWorld> world = CreateSceneWorldWithFloor(VoxelScenePreset::MeshingStress, worldConfig);
+	BuildMeshingStressVolume(*world, worldConfig);
+	MarkAllVoxelChunksDirty(world.get());
+	return world;
+}
+
+std::unique_ptr<VoxelWorld> BuildVoxelSceneWorld(const VoxelScenePreset scenePreset)
+{
+	switch (scenePreset) {
+	case VoxelScenePreset::VoxelLab:
+		return BuildVoxelLabSceneWorld();
+	case VoxelScenePreset::FlatBenchmark:
+		return BuildFlatBenchmarkSceneWorld();
+	case VoxelScenePreset::TransparencyStress:
+		return BuildTransparencyStressSceneWorld();
+	case VoxelScenePreset::ChunkGrid:
+		return BuildChunkGridSceneWorld();
+	case VoxelScenePreset::MeshingStress:
+		return BuildMeshingStressSceneWorld();
+	}
+
+	return BuildVoxelLabSceneWorld();
+}
 } // namespace
 
-bool CreateVoxelLabWorld(AppState *state)
+bool TryParseVoxelScenePreset(const std::string_view text, VoxelScenePreset *outPreset)
+{
+	if (!outPreset || text.empty()) {
+		return false;
+	}
+
+	if (MatchesPresetName(text, "voxellab")) {
+		*outPreset = VoxelScenePreset::VoxelLab;
+		return true;
+	}
+	if (MatchesPresetName(text, "flatbenchmark")) {
+		*outPreset = VoxelScenePreset::FlatBenchmark;
+		return true;
+	}
+	if (MatchesPresetName(text, "transparencystress")) {
+		*outPreset = VoxelScenePreset::TransparencyStress;
+		return true;
+	}
+	if (MatchesPresetName(text, "chunkgrid")) {
+		*outPreset = VoxelScenePreset::ChunkGrid;
+		return true;
+	}
+	if (MatchesPresetName(text, "meshingstress")) {
+		*outPreset = VoxelScenePreset::MeshingStress;
+		return true;
+	}
+
+	return false;
+}
+
+const char *VoxelScenePresetToString(const VoxelScenePreset preset)
+{
+	switch (preset) {
+	case VoxelScenePreset::VoxelLab:
+		return "VoxelLab";
+	case VoxelScenePreset::FlatBenchmark:
+		return "FlatBenchmark";
+	case VoxelScenePreset::TransparencyStress:
+		return "TransparencyStress";
+	case VoxelScenePreset::ChunkGrid:
+		return "ChunkGrid";
+	case VoxelScenePreset::MeshingStress:
+		return "MeshingStress";
+	}
+
+	return "VoxelLab";
+}
+
+VoxelScenePreset GetNextVoxelScenePreset(const VoxelScenePreset preset)
+{
+	switch (preset) {
+	case VoxelScenePreset::VoxelLab:
+		return VoxelScenePreset::FlatBenchmark;
+	case VoxelScenePreset::FlatBenchmark:
+		return VoxelScenePreset::TransparencyStress;
+	case VoxelScenePreset::TransparencyStress:
+		return VoxelScenePreset::ChunkGrid;
+	case VoxelScenePreset::ChunkGrid:
+		return VoxelScenePreset::MeshingStress;
+	case VoxelScenePreset::MeshingStress:
+		return VoxelScenePreset::VoxelLab;
+	}
+
+	return VoxelScenePreset::VoxelLab;
+}
+
+VoxelScenePreset GetRequestedVoxelScenePreset()
+{
+	const char *requestedPreset = SDL_getenv("PROJECTV_SCENE_PRESET");
+	if (!requestedPreset || !*requestedPreset) {
+		return kDefaultVoxelScenePreset;
+	}
+
+	VoxelScenePreset scenePreset = kDefaultVoxelScenePreset;
+	if (TryParseVoxelScenePreset(requestedPreset, &scenePreset)) {
+		return scenePreset;
+	}
+
+	SDL_Log(
+		"Unknown PROJECTV_SCENE_PRESET='%s'; using %s",
+		requestedPreset,
+		VoxelScenePresetToString(kDefaultVoxelScenePreset));
+	return kDefaultVoxelScenePreset;
+}
+
+bool CreateVoxelSceneWorld(AppState *state)
+{
+	return CreateVoxelSceneWorld(state, GetRequestedVoxelScenePreset());
+}
+
+bool CreateVoxelSceneWorld(AppState *state, const VoxelScenePreset preset)
 {
 	if (!state) {
 		return false;
 	}
 
-	state->world.voxelWorld = BuildVoxelLabWorld({});
+	std::unique_ptr<VoxelWorld> world = BuildVoxelSceneWorld(preset);
+	if (!world) {
+		return false;
+	}
+
+	state->world.voxelWorld = std::move(world);
+	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
+	state->world.scenePresetReloadRequested = false;
+	if (state->world.voxelWorld) {
+		SDL_Log(
+			"Using voxel scene preset: %s",
+			VoxelScenePresetToString(state->world.voxelWorld->scenePreset));
+	}
 	return static_cast<bool>(state->world.voxelWorld);
 }
 
-void DestroyVoxelLabWorld(AppState *state)
+void DestroyVoxelSceneWorld(AppState *state)
 {
 	if (!state) {
 		return;
 	}
 
 	state->world.voxelWorld.reset();
+	state->world.scenePresetReloadRequested = false;
+	state->world.requestedScenePreset = kDefaultVoxelScenePreset;
 }
 
 bool IsInsideVoxelWorld(const VoxelWorld &world, const Int3 position)

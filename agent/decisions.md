@@ -263,6 +263,22 @@
 - сохранение CPU interaction raycast не ломает уже работающий remove/place loop и keeps mainline stable, пока physics
   добавляет только то, что реально нужно сейчас: collision, walk и базовый physics raycast.
 
+### Authored docs как набор entry guides в `docs/`
+
+Решение:
+
+- authored documentation для current mainline живёт не в одном разрастающемся корневом overview, а в отдельных документах
+  по ролям: `ArchitectureGuide`, `RenderArchitecture`, `VoxelWorld`, `BuildAndRun`, `Debugging`;
+- `README_NEW.md` остаётся короткой root-facing точкой входа и ведёт в эти guides, а `README.md` не трогается без
+  отдельного разрешения пользователя.
+
+Почему:
+
+- такой split лучше соответствует текущей физической раскладке `src/` и позволяет обновлять subsystem docs без giant
+  monolithic rewrite;
+- это убирает скрытую зависимость от “знания кода наизусть” и делает mainline MVP воспроизводимым для нового участника;
+- отдельные entry docs проще держать в sync с roadmap, чем один перегруженный обзорный файл.
+
 ### Явный lifecycle cleanup вместо hidden cleanup в `AppState::~AppState`
 
 Решение:
@@ -276,3 +292,95 @@
 - это сохраняет lifecycle explicit и тестопригодным;
 - test target не должен тянуть половину Vulkan runtime только ради implicit-деструктора `AppState`;
 - явный shutdown лучше соответствует проектному правилу "explicit control > hidden magic".
+
+### Builtin profiling scene presets и benchmark contract
+
+Решение:
+
+- первый practical profiling layer строится не на save/load, а на небольшом builtin наборе `VoxelScenePreset` в `VoxelWorld`;
+- baseline scene выбирается через runtime env var `PROJECTV_SCENE_PRESET`, а не через отдельный editor/config framework;
+- текущий Tracy plot pack в `src/debug/Profiling.hpp` и методика в `docs/Profiling.md` считаются benchmark contract для mainline.
+
+Почему:
+
+- проекту нужна измеримость уже сейчас, а не после полноценного data-driven world layer;
+- env-driven builtin presets дают reproducible perf scenes без блокировки на snapshot/save-load работу;
+- фиксированный metrics pack убирает спор о том, "что именно мерить", и соответствует правилу `measure first, optimize second`.
+
+### Double-space walk toggle и runtime scene cycling
+
+Решение:
+
+- double-tap `Space` не заменяет общий `F4` cycle, а добавляет отдельный fast-path только для `free-fly <-> walk`;
+- builtin `VoxelScenePreset` больше не ограничены env var на старте: `F5` запрашивает runtime scene reload в живом приложении;
+- scene reload идёт через явный app-level path: `vkDeviceWaitIdle` -> новый `VoxelWorld` -> `SyncEcsWorldState` -> `CreateSceneResources` -> `SyncPhysicsWorld` -> optional `SnapWalkCharacterToCamera`.
+
+Почему:
+
+- это даёт Minecraft-like ergonomics для частого переключения между полётом и ходьбой, не ломая уже существующий `F4` mode cycle с `spectator`;
+- runtime scene cycling нужен уже сейчас для profiling/debug loops и честно усиливает `9.1`, не дожидаясь `save/load`;
+- явный reload path лучше соответствует проектному правилу `explicit control > hidden magic`, чем попытка прятать live scene reset внутри bootstrap/init логики.
+
+### Debug UI как единый overlay layer
+
+Решение:
+
+- `F1` теперь трактуется как toggle всего debug UI, а не только текста HUD: вместе с HUD скрываются block highlight и crosshair;
+- HUD остаётся CPU-built и без `imgui`, но layout больше не монолитный: он разбит на отдельные stats/helpers panels с меньшим footprint;
+- crosshair вынесен в отдельный graphics pipeline поверх того же overlay shader, но с XOR logic-op только когда устройство реально поддерживает и включает `logicOp`; иначе pipeline автоматически откатывается на обычный alpha-blended fallback без validation noise.
+
+Почему:
+
+- для пользователя debug UI воспринимается как единый слой, поэтому частичное скрытие только текста выглядело непоследовательно;
+- два маленьких panel-блока легче читаются, чем один длинный список строк, особенно на высоком FPS и при частом движении камеры;
+- отдельный XOR crosshair pipeline даёт нужный visual result без компромисса для selection outline, который по-прежнему удобнее держать на обычном alpha-blended path.
+
+### `creative` / `spectator` / `walk` mode contract
+
+Решение:
+
+- старый `free-fly` больше не считается отдельным mainline-режимом; его место занимает `creative` как physics-backed flight mode с collision;
+- double-tap `Space` переключает только между `creative` и `walk`, а `F4` остаётся общим циклом `creative -> spectator -> walk -> creative`;
+- `spectator` остаётся observe-only noclip mode без `remove/place`, который по-прежнему подчиняется `pause`;
+- `creative` использует тот же capsule/controller, что и `walk`, но летает без гравитации и поэтому больше не проходит сквозь voxel-геометрию;
+- переход в `walk` больше не снапает камеру к полу по умолчанию: physics-character сначала принимает текущую позицию камеры, а ground recovery нужен только как fallback для явно некорректного/врезанного в world положения.
+
+Почему:
+
+- это даёт Minecraft-like ergonomics без логической путаницы, где один и тот же быстрый toggle раньше вёл в debug-noclip вместо player-facing flight mode;
+- collision-backed `creative` полезнее для честного sandbox MVP, чем ещё один noclip-режим рядом с уже существующим `spectator`;
+- сохранение текущей позиции при возврате в `walk` убирает раздражающий телепорт в центр/на пол и делает mode switch предсказуемым во время реальной интеракции с миром.
+
+### Root-cause fixes вместо warning suppression
+
+Решение:
+
+- static-analysis/runtime warning cleanup в `ProjectV` должен лечить причину, а не только симптом;
+- если warning указывает на мёртвую ветку, фальшивую generic-обёртку или кривую границу ответственности, код надо рефакторить до честного
+  контракта;
+- suppress/workaround допустимы только после явного согласования с пользователем.
+
+Почему:
+
+- warning'и здесь часто показывают не "шум IDE", а реальную архитектурную ложь в коде;
+- быстрая заглушка сохраняет шум в контрактах и делает следующий рефактор дороже;
+- это лучше соответствует проектным принципам `data > code` и `explicit control > hidden magic`.
+
+### Scene preset config split после `9.1`
+
+Решение:
+
+- общий runtime мир хранит только `VoxelWorldConfig` с параметрами пола, высоты, padding и chunk size;
+- `VoxelLab`-специфичный купол/жидкость больше не живут в общем конфиге всех сцен, а собираются из отдельного shell config внутри
+  `VoxelWorld.cpp`;
+- non-`VoxelLab` сцены тоже не должны притворяться generic enum-helper'ом: для `FlatBenchmark`, `TransparencyStress`, `ChunkGrid` и
+  `MeshingStress` используются отдельные config builders вместо `GetNonVoxelLabWorldConfig(scenePreset)`;
+- double-tap `Space` синтезирует `ToggleWalkCreativeMode` через явный detection path в `InputActions`, без fake-generic helper'а
+  `TriggerActionPressed(...)`.
+
+Почему:
+
+- `FlatBenchmark`, `TransparencyStress`, `ChunkGrid` и `MeshingStress` не должны тащить фиктивные поля вроде `sphereRadius = 0` только ради
+  совместимости с `VoxelLab`;
+- отдельный preset-specific builder убирает мёртвую ветку `sphereRadius <= 0` из `VoxelLab`-only path и делает инварианты сцены явными;
+- у `InputActions` больше нет ложной абстракции, которая притворялась универсальной, но реально обслуживала один special-case.

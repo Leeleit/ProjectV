@@ -134,11 +134,11 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 
-	if (!CreateVoxelLabWorld(state)) {
+	if (!CreateVoxelSceneWorld(state)) {
 		runtime::LogRuntimeFailure(
 			"Init",
-			"InitVulkan.CreateVoxelLabWorld",
-			"CreateVoxelLabWorld returned false");
+			"InitVulkan.CreateVoxelSceneWorld",
+			"CreateVoxelSceneWorld returned false");
 		return false;
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterWorld)) {

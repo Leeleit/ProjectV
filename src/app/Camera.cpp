@@ -10,6 +10,7 @@ constexpr float kMinMoveSpeed = 2.0f;
 constexpr float kMaxMoveSpeed = 40.0f;
 constexpr float kBoostMoveSpeedMultiplier = 3.0f;
 constexpr float kSlowMoveSpeedMultiplier = 0.25f;
+constexpr float kMaxLookPitchRadians = 1.553343f;
 
 struct Float3 {
 	float x = 0.0f;
@@ -143,7 +144,7 @@ void ConsumeCameraLookInput(
 
 	camera->yawRadians += input->mouseDeltaX * camera->mouseSensitivity;
 	camera->pitchRadians -= input->mouseDeltaY * camera->mouseSensitivity;
-	camera->pitchRadians = std::clamp(camera->pitchRadians, -1.4f, 1.4f);
+	camera->pitchRadians = std::clamp(camera->pitchRadians, -kMaxLookPitchRadians, kMaxLookPitchRadians);
 	input->mouseDeltaX = 0.0f;
 	input->mouseDeltaY = 0.0f;
 }

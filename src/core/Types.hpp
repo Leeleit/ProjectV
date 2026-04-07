@@ -79,6 +79,8 @@ enum class InputAction : uint8_t {
 	ResetCamera,
 	TogglePause,
 	ToggleControlMode,
+	ToggleWalkCreativeMode,
+	CycleScenePreset,
 	Count,
 };
 
@@ -108,10 +110,10 @@ struct CameraState {
 	float nearPlane = 0.1f;
 	float farPlane = 128.0f;
 	enum class ControlMode : uint8_t {
-		FreeFly,
+		Creative,
 		Spectator,
 		Walk,
-	} controlMode = ControlMode::FreeFly;
+	} controlMode = ControlMode::Creative;
 };
 
 struct GraphicsPushConstants {
@@ -195,6 +197,7 @@ struct FrameRenderData {
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
 	uint32_t debugHudVertexCount = 0;
+	bool debugUiVisible = true;
 	GraphicsPushConstants graphicsPushConstants{};
 	VoxelMeshingPushConstants voxelMeshingPushConstants{};
 	InteractionSelectionState interactionSelection{};
@@ -212,7 +215,8 @@ struct DebugStats {
 	uint32_t floorVoxelCount = 0;
 	uint32_t sceneTriangleCount = 0;
 	uint64_t sceneMemoryBytes = 0;
-	CameraState::ControlMode controlMode = CameraState::ControlMode::FreeFly;
+	VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
+	CameraState::ControlMode controlMode = CameraState::ControlMode::Creative;
 	bool simulationPaused = false;
 };
 
@@ -252,6 +256,8 @@ struct SceneFrameResources {
 
 struct WorldState {
 	std::unique_ptr<VoxelWorld> voxelWorld;
+	bool scenePresetReloadRequested = false;
+	VoxelScenePreset requestedScenePreset = VoxelScenePreset::VoxelLab;
 };
 
 struct RenderState {
@@ -289,6 +295,7 @@ struct RenderState {
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;
+	VkPipeline debugCrosshairPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout debugHudPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
@@ -320,6 +327,7 @@ struct InputState {
 	bool removePressed = false;
 	bool placePressed = false;
 	bool relativeMouseModeEnabled = true;
+	Uint64 lastMoveUpPressedTimestampNs = 0;
 	std::array<InputActionButtonState, kInputActionCount> actions{};
 	std::array<InputActionBinding, kInputActionCount> bindings{};
 };

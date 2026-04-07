@@ -10,10 +10,117 @@
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
 #include "ecs/EcsWorld.hpp"
+#include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
 #include "render/Renderer.hpp"
+#include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "voxel/VoxelInteraction.hpp"
+#include "voxel/VoxelWorld.hpp"
+
+namespace {
+bool WaitForDeviceIdle(VulkanContextState &context)
+{
+	if (context.device == VK_NULL_HANDLE) {
+		return true;
+	}
+
+	const VkResult waitResult = vkDeviceWaitIdle(context.device);
+	if (waitResult != VK_SUCCESS) {
+		runtime::LogVkFailure("SDL_AppIterate.SceneReload.vkDeviceWaitIdle", waitResult);
+		return false;
+	}
+
+	return true;
+}
+
+bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
+{
+	PV_PROFILE_ZONE_N("ReloadActiveVoxelScene");
+	PV_CHECK_OR_RETURN(state != nullptr, "App", "ReloadActiveVoxelScene.Preconditions", "AppState is null");
+
+	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
+	DebugState *debug = GetDebugState(state->ecs.get());
+	WorldState *world = GetWorldState(state->ecs.get());
+	PV_CHECK_OR_RETURN(
+		camera && debug && world,
+		"App",
+		"ReloadActiveVoxelScene.EcsAccess",
+		"primary camera, debug singleton or world singleton is unavailable");
+
+	if (!WaitForDeviceIdle(state->context)) {
+		return false;
+	}
+
+	if (!CreateVoxelSceneWorld(state, preset)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"ReloadActiveVoxelScene.CreateVoxelSceneWorld",
+			"CreateVoxelSceneWorld returned false");
+		return false;
+	}
+
+	ResetCameraState(camera);
+	state->input.mouseDeltaX = 0.0f;
+	state->input.mouseDeltaY = 0.0f;
+	state->input.removePressed = false;
+	state->input.placePressed = false;
+	state->interaction.selection = {};
+	state->frame.renderData.interactionSelection = {};
+	state->simulation.simulationAccumulatorSeconds = 0.0f;
+	state->simulation.simulationStepsLastFrame = 0;
+
+	if (!SyncEcsWorldState(state->ecs.get())) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"ReloadActiveVoxelScene.SyncEcsWorldState",
+			"SyncEcsWorldState returned false after scene reload");
+		return false;
+	}
+
+	if (!CreateSceneResources(&state->context, world, &state->render)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"ReloadActiveVoxelScene.CreateSceneResources",
+			"CreateSceneResources returned false");
+		return false;
+	}
+
+	if (state->physics &&
+		!SyncPhysicsWorld(state->physics.get(), world->voxelWorld.get())) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"ReloadActiveVoxelScene.SyncPhysicsWorld",
+			"SyncPhysicsWorld returned false after scene reload");
+		return false;
+	}
+
+	if (camera->controlMode == CameraState::ControlMode::Walk) {
+		ConsumeInputActionPressed(state->input, InputAction::MoveUp);
+		if (!SnapWalkCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"ReloadActiveVoxelScene.SnapWalkCharacterToCamera",
+				"SnapWalkCharacterToCamera returned false after scene reload");
+			return false;
+		}
+	} else if (camera->controlMode == CameraState::ControlMode::Creative) {
+		if (!SnapCreativeCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"ReloadActiveVoxelScene.SnapCreativeCharacterToCamera",
+				"SnapCreativeCharacterToCamera returned false after scene reload");
+			return false;
+		}
+	} else {
+		ResetWalkCharacter(state->physics.get());
+	}
+
+	debug->stats.scenePreset = world->voxelWorld ? world->voxelWorld->scenePreset : VoxelScenePreset::VoxelLab;
+	world->scenePresetReloadRequested = false;
+	return true;
+}
+} // namespace
 
 SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 {
@@ -102,6 +209,12 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->render,
 			debug)) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");
+	} else if (world->scenePresetReloadRequested &&
+			   !ReloadActiveVoxelScene(state, world->requestedScenePreset)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SDL_AppIterate.ReloadActiveVoxelScene",
+			"ReloadActiveVoxelScene returned false");
 	} else if (!SyncEcsWorldState(state->ecs.get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.SyncEcsWorldState", "SyncEcsWorldState returned false");
 	} else if (!PrepareFrameRenderData(

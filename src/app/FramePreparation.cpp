@@ -93,7 +93,8 @@ bool PrepareFrameRenderData(
 	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;
 	frame->renderData.transparentFaceCount = sceneFrameResources.transparentFaceCount;
 	frame->renderData.debugHudVertexCount = sceneFrameResources.debugHudVertexCount;
-	frame->renderData.interactionSelection = interaction->selection;
+	frame->renderData.debugUiVisible = debug->hudVisible;
+	frame->renderData.interactionSelection = debug->hudVisible ? interaction->selection : InteractionSelectionState{};
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(*camera, swapchain->extent);

@@ -34,13 +34,16 @@ DebugOverlayPushConstants BuildCrosshairOverlayPushConstants(const SwapchainStat
 	DebugOverlayPushConstants pushConstants{};
 	const float halfWidthNdc = 9.0f * 2.0f / static_cast<float>(swapchain.extent.width);
 	const float halfHeightNdc = 9.0f * 2.0f / static_cast<float>(swapchain.extent.height);
+	const float halfThicknessXNdc = 1.5f * 2.0f / static_cast<float>(swapchain.extent.width);
+	const float halfThicknessYNdc = 1.5f * 2.0f / static_cast<float>(swapchain.extent.height);
 	pushConstants.overlayData0 = {
 		halfWidthNdc,
 		halfHeightNdc,
-		0.0f,
+		halfThicknessXNdc,
 		1.0f,
 	};
-	pushConstants.overlayColor = {0.97f, 0.97f, 0.97f, 0.92f};
+	pushConstants.overlayData1 = {halfThicknessYNdc, 0.0f, 0.0f, 0.0f};
+	pushConstants.overlayColor = {1.0f, 1.0f, 1.0f, 1.0f};
 	return pushConstants;
 }
 
@@ -81,14 +84,14 @@ void RecordDebugOverlayCommands(
 	const VkCommandBuffer cmd)
 {
 	PV_PROFILE_ZONE_N("RecordDebugOverlayCommands");
-	if (render.debugOverlayPipeline == VK_NULL_HANDLE || render.debugOverlayPipelineLayout == VK_NULL_HANDLE) {
+	if (!frameRenderData.debugUiVisible || render.debugOverlayPipelineLayout == VK_NULL_HANDLE) {
 		return;
 	}
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugOverlayPipeline);
-
-	if (frameRenderData.interactionSelection.hasHit) {
+	if (render.debugOverlayPipeline != VK_NULL_HANDLE &&
+		frameRenderData.interactionSelection.hasHit) {
 		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Selection Overlay");
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugOverlayPipeline);
 		const DebugOverlayPushConstants pushConstants = BuildSelectionOverlayPushConstants(frameRenderData);
 		vkCmdPushConstants(
 			cmd,
@@ -100,8 +103,11 @@ void RecordDebugOverlayCommands(
 		vkCmdDraw(cmd, 24, 1, 0, 0);
 	}
 
-	if (swapchain.extent.width > 0 && swapchain.extent.height > 0) {
+	if (render.debugCrosshairPipeline != VK_NULL_HANDLE &&
+		swapchain.extent.width > 0 &&
+		swapchain.extent.height > 0) {
 		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Crosshair Overlay");
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugCrosshairPipeline);
 		const DebugOverlayPushConstants pushConstants = BuildCrosshairOverlayPushConstants(swapchain);
 		vkCmdPushConstants(
 			cmd,
@@ -110,7 +116,7 @@ void RecordDebugOverlayCommands(
 			0,
 			sizeof(pushConstants),
 			&pushConstants);
-		vkCmdDraw(cmd, 4, 1, 0, 0);
+		vkCmdDraw(cmd, 18, 1, 0, 0);
 	}
 }
 

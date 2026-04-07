@@ -54,7 +54,7 @@
 - материалы мира: воздух, стекло, жидкость, белый/серый пол
 - procedural demo-scene в духе `Voxel Laboratory`
 - минимальный `flecs` ECS slice
-- free-fly / spectator / walk control modes
+- creative / spectator / walk control modes
 - MVP physics layer на `JoltPhysics` поверх voxel world
 - fixed-step simulation loop
 - indirect draw для opaque/transparent проходов
@@ -74,8 +74,6 @@
 
 - save/load мира
 - CI и автоматического smoke-контура
-- актуальной authored-документации в `docs/`
-- benchmark/profile scene presets
 - чёткого разделения между mainline MVP и R&D-веткой
 
 ### 1.5. Главный вывод
@@ -94,7 +92,7 @@
 Ближайший честный milestone:
 
 - окно стабильно запускается и закрывается
-- есть free-fly и базовый walk mode с collision
+- есть creative flight, spectator и базовый walk mode с collision
 - есть voxel world из нескольких чанков
 - можно поставить и удалить блок
 - изменённые чанки корректно перестраиваются
@@ -126,6 +124,9 @@
 - Сложные подсистемы не должны блокировать MVP.
 - Любая крупная идея должна иметь минимальную реализацию.
 - Если задачу можно быстро поменять позже, не надо полировать её неделю сейчас.
+- Warning cleanup не должен сводиться к заглушкам ради тишины: если анализатор нашёл мёртвую ветку, фальшивую
+  generic-обёртку или кривую
+  границу ответственности, чинить нужно структуру данных/контракта, а не только симптом.
 
 ### 3.2. Практическая интерпретация
 
@@ -166,7 +167,7 @@
 
 ## 5. Самые важные проблемы текущего состояния
 
-### 5.1. Рассинхрон документации и кода
+### 5.1. Документацию всё ещё нужно держать в sync с кодом
 
 Сейчас код ушёл вперёд относительно части старых документов.
 
@@ -175,7 +176,8 @@
 - старые legacy-планы всё ещё местами описывают состояние уровня triangle/foundation;
 - актуальный root-facing overview уже живёт в `README_NEW.md`, а `README.md` сознательно не трогается без отдельного
   разрешения пользователя;
-- проектных документов в `docs/` всё ещё недостаточно для текущего interaction/runtime/ECS/physics slice.
+- базовый authored-docs набор в `docs/` уже создан, но его теперь нельзя снова оставлять устаревать по мере развития
+  mainline.
 
 Следствие:
 
@@ -200,8 +202,6 @@
 Но пока ещё не хватает следующего слоя полезности уровня MVP:
 
 - save/load мира,
-- benchmark/profile scene presets,
-- authored docs для build/run/architecture/debugging,
 - следующего gameplay/debug слоя поверх уже существующих interaction + ECS + physics.
 
 ### 5.3. Есть сильный соблазн уйти в R&D слишком рано
@@ -328,6 +328,10 @@
 - [x] Сделать toggle HUD по hotkey.
 - [x] Добавить overlay для camera position / look direction.
 - [x] Добавить overlay для выбранного блока.
+- [x] Сделать так, чтобы `F1` скрывал весь debug UI, а не только текстовый HUD.
+- [x] Уменьшить HUD и разнести его на отдельные stats/helpers panels вместо одного монолитного блока.
+- [x] Сделать crosshair толще и через inverted/XOR-style overlay вместо обычной тонкой белой линии.
+- [x] Убрать XOR-артефакт в центре crosshair, сохранив нормальное пересечение `+` без дырки посередине.
 - [x] Исправить screen-space ориентацию HUD для Vulkan viewport, чтобы overlay оставался в верхнем левом углу без вертикального переворота.
 - [x] Убрать очевидные static-analysis warning'и в HUD hotkey path, test helper'ах и chunk-fixture world setup.
 
@@ -376,9 +380,16 @@
 
 Статус на `2026-04-07`:
 
-- action-layer и `free-fly` / `spectator` modes уже закрыты;
-- default free-fly layout подправлен под более привычный Minecraft-like полёт: `Space/Shift` для вертикали, `Ctrl` для ускорения, `Alt` для slow modifier.
-- runtime `TickCamera` теперь действительно держит `WASD` в плоскости `XZ`; высота в free-fly/spectator меняется только от `Space/Shift`, а не от pitch камеры.
+- action-layer и explicit control modes уже закрыты;
+- creative flight layout подправлен под более привычный Minecraft-like полёт: `Space/Shift` для вертикали, `Ctrl` для
+  ускорения, `Alt` для slow modifier.
+- runtime movement теперь действительно держит `WASD` в плоскости `XZ`; высота в `creative`/`spectator` меняется только
+  от `Space/Shift`, а не от pitch камеры.
+- `double-space` теперь даёт быстрый toggle только между `creative` и `walk`, near-vertical pitch clamp доведён почти до
+  `89°`, а `F5` циклически переключает builtin scene presets прямо в рантайме через безопасный world/resource reload
+  path.
+- `creative` больше не noclip: это physics-backed flight mode с collision, а переход обратно в `walk` сохраняет текущую
+  позицию и не телепортирует камеру в центр/на пол, если под ней нет опоры.
 
 Задачи:
 
@@ -387,7 +398,7 @@
 - [x] Добавить toggle relative mouse mode.
 - [x] Добавить debug hotkeys.
 - [x] Добавить pause toggle.
-- [x] Добавить explicit free-fly / spectator modes поверх нового action layer.
+- [x] Добавить explicit creative / spectator / walk modes поверх нового action layer.
 - [x] Добавить speed modifiers.
 
 ## 8.2. Структурирование `src/`
@@ -478,8 +489,9 @@ src/
   плодил unreachable/static-analysis noise.
 - Синхронизация physics с voxel edits уже идёт через `VoxelWorld::editVersion`, без отдельного gameplay ownership
   rewrite.
-- Control modes теперь образуют practical MVP-тройку: `free-fly` как noclip/debug mode, `spectator` как observe-only
-  mode и `walk` как collision-based player mode поверх того же input/app loop.
+- Control modes теперь образуют practical MVP-тройку: `creative` как collision-backed flight/edit mode, `spectator` как
+  observe-only
+  noclip mode и `walk` как grounded collision-based player mode поверх того же input/app loop.
 - Runtime `remove/place` interaction сознательно остаётся на CPU `VoxelRaycast`; physics усиливает MVP, а не заменяет
   уже
   работающий interaction loop.
@@ -491,7 +503,7 @@ src/
 - [x] Подключить `JoltPhysics`.
 - [x] Сделать базовый raycast.
 - [x] Добавить простую collision-модель игрока.
-- [x] Добавить режим walk/clip.
+- [x] Добавить режимы walk / creative / spectator поверх physics slice.
 - [x] Связать interaction с world edits.
 
 Важно:
@@ -507,14 +519,22 @@ src/
 - Современность: `3/5`
 - Оптимизационная отдача: `1/5`
 
+Статус на `2026-04-07`:
+
+- authored-docs entry set уже создан в `docs/`: `ArchitectureGuide`, `RenderArchitecture`, `VoxelWorld`,
+  `BuildAndRun` и `Debugging`;
+- документация теперь честно описывает текущий interaction/runtime/ECS/physics loop, scene resources, meshing path,
+  Tracy, smoke и failure probes;
+- `README_NEW.md` и `docs/source_layout.md` уже переключены на эти документы как на основные entry points.
+
 Задачи:
 
-- [ ] Создать `docs/ArchitectureGuide.md`.
-- [ ] Создать `docs/RenderArchitecture.md`.
-- [ ] Создать `docs/VoxelWorld.md`.
-- [ ] Создать `docs/BuildAndRun.md`.
-- [ ] Создать `docs/Debugging.md`.
-- [ ] Зафиксировать:
+- [x] Создать `docs/ArchitectureGuide.md`.
+- [x] Создать `docs/RenderArchitecture.md`.
+- [x] Создать `docs/VoxelWorld.md`.
+- [x] Создать `docs/BuildAndRun.md`.
+- [x] Создать `docs/Debugging.md`.
+- [x] Зафиксировать:
 - как собирается проект;
 - как идёт кадр;
 - как устроен `VoxelWorld`;
@@ -538,17 +558,17 @@ src/
 
 Задачи:
 
-- [ ] Сделать baseline-сцены для профилирования.
-- [ ] Зафиксировать набор Tracy-графиков.
-- [ ] Снимать:
+- [x] Сделать baseline-сцены для профилирования.
+- [x] Зафиксировать набор Tracy-графиков.
+- [x] Снимать:
 - frame time
 - chunk rebuild count
 - repacked voxel count
 - generated opaque faces
 - generated transparent faces
 - upload sizes
-- [ ] Добавить benchmark methodology.
-- [ ] Описать, как воспроизводить замеры.
+- [x] Добавить benchmark methodology.
+- [x] Описать, как воспроизводить замеры.
 
 ## 9.2. Build и automation hygiene
 
@@ -591,8 +611,14 @@ src/
 
 - [ ] Добавить сохранение snapshot мира.
 - [ ] Добавить загрузку snapshot мира.
-- [ ] Вынести `VoxelLabConfig` в конфиг/preset.
-- [ ] Сделать несколько сцен:
+- [x] Развести общий `VoxelWorldConfig` и dedicated `VoxelLab` builder, чтобы scene presets не делили один и тот же
+  искусственно общий
+  конфиг и не плодили мёртвые analyzer-ветки вокруг lab-only геометрии, включая residual `switch`-arms в non-`VoxelLab`
+  helper path.
+- [x] Убрать псевдо-generic helper `GetNonVoxelLabWorldConfig(scenePreset)`: каждый non-`VoxelLab` preset теперь держит
+  свой dedicated
+  config builder, чтобы interprocedural analyzer не видел ложные always-true/always-false ветки по enum-dispatch.
+- [x] Сделать несколько сцен как builtin presets через `PROJECTV_SCENE_PRESET`:
 - `VoxelLab`
 - `FlatBenchmark`
 - `TransparencyStress`
@@ -722,8 +748,8 @@ src/
 - [x] Подключить минимальный ECS.
 - [x] Подключить MVP physics raycast/collision.
 - [ ] Добавить save/load.
-- [ ] Добавить benchmark scene presets.
-- [ ] Начать authored docs в `docs/`.
+- [x] Добавить benchmark scene presets.
+- [x] Начать authored docs в `docs/`.
 
 ---
 
@@ -743,7 +769,7 @@ src/
 - [ ] CI
 - [ ] smoke automation
 - [ ] benchmark automation
-- [ ] reproducible debug scenes
+- [x] reproducible debug scenes
 
 ### 14.2. Platform / Input / UX
 
@@ -752,13 +778,13 @@ src/
 - [x] mouse capture toggle
 - [x] debug hotkeys
 - [x] spectator mode
-- [x] walk / noclip modes
+- [x] walk / creative / spectator modes
 - [ ] screenshot hotkey
 - [ ] frame-step / slow-motion debug modes
 
 ### 14.3. Camera / Space / Interaction
 
-- [ ] free-fly camera polish
+- [ ] creative flight polish
 - [ ] player controller
 - [x] block picking
 - [x] block interaction
@@ -771,7 +797,7 @@ src/
 - [ ] richer chunk model
 - [ ] chunk neighbors bookkeeping
 - [ ] dirty region tracking
-- [ ] scene presets
+- [x] scene presets
 - [ ] world snapshots
 - [ ] world editing tools
 - [ ] multi-material test scenes
@@ -791,12 +817,12 @@ src/
 ### 14.6. Debug / Profiling
 
 - [x] in-app HUD
-- [ ] Tracy metrics pack
+- [x] Tracy metrics pack
 - [ ] per-pass timings
 - [ ] chunk update timings
 - [ ] upload bandwidth metrics
 - [ ] validation status reporting
-- [ ] debug scene toggles
+- [x] debug scene toggles
 
 ### 14.7. Gameplay / MVP Extensions
 

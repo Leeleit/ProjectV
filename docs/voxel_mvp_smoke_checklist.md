@@ -47,18 +47,20 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 
 1. Запустить `build/windows-clang-debug/bin/ProjectV.exe`.
 2. Проверить, что сцена рендерится, HUD виден, crosshair и highlight работают.
-3. Нажать `F4` и убедиться, что HUD циклически переключает `MODE FREEFLY` / `MODE SPECTATOR` / `MODE WALK`.
-4. В `free-fly` режиме ПКМ поставить блок рядом с существующим voxel.
-5. В `free-fly` режиме ЛКМ удалить выбранный voxel.
-6. Переключиться в `spectator` и убедиться, что selection остаётся, но `remove/place` больше не меняют мир.
-7. Переключиться в `walk` и убедиться, что камера снапается к полу, не проваливается сквозь платформу и не проходит
-   сквозь voxel-геометрию.
-8. В `walk` режиме нажать `Space` и проверить, что jump работает, а затем ЛКМ/ПКМ проверить, что edits по-прежнему
-   меняют мир и collision остаётся консистентной после world edits.
-9. Нажать `Tab`, проверить toggle relative mouse mode, затем вернуть захват мыши обратно.
-10. Во время интеракций выполнить resize окна в несколько размеров.
-11. Свернуть окно и восстановить его.
-12. Закрыть окно обычным способом.
+3. Нажать `F4` и убедиться, что HUD циклически переключает `MODE CREATIVE` / `MODE SPECTATOR` / `MODE WALK`.
+4. В `creative` режиме ПКМ поставить блок рядом с существующим voxel.
+5. В `creative` режиме ЛКМ удалить выбранный voxel.
+6. В `creative` режиме упереться в voxel-геометрию и убедиться, что полёт больше не проходит сквозь блоки.
+7. Дважды нажать `Space` и убедиться, что быстрый toggle переводит только между `creative` и `walk`.
+8. Переключиться в `spectator` и убедиться, что selection остаётся, но `remove/place` больше не меняют мир.
+9. Переключиться в `walk` и убедиться, что камера не телепортируется в центр/на пол без необходимости, не проваливается
+   сквозь платформу и не проходит сквозь voxel-геометрию.
+10. В `walk` режиме нажать `Space` и проверить, что jump работает, а затем ЛКМ/ПКМ проверить, что edits по-прежнему
+    меняют мир и collision остаётся консистентной после world edits.
+11. Нажать `Tab`, проверить toggle relative mouse mode, затем вернуть захват мыши обратно.
+12. Во время интеракций выполнить resize окна в несколько размеров.
+13. Свернуть окно и восстановить его.
+14. Закрыть окно обычным способом.
 
 Ожидаемый результат:
 
@@ -66,7 +68,7 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 - нет зависания на restore/shutdown;
 - swapchain recreate не ломает voxel pass, overlay и HUD;
 - интерактивные edits продолжают работать после restore/resize;
-- `free-fly`, `spectator` и `walk` ведут себя по-разному и HUD это честно показывает;
+- `creative`, `spectator` и `walk` ведут себя по-разному и HUD это честно показывает;
 - walk collision остаётся рабочей после прыжка, voxel edits и window lifecycle-событий.
 
 ## Остаток runtime-stability backlog

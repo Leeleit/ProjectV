@@ -12,12 +12,17 @@ namespace {
 constexpr float kPanelPaddingPx = 8.0f;
 constexpr float kPanelOriginXPx = 12.0f;
 constexpr float kPanelOriginYPx = 12.0f;
-constexpr float kGlyphPixelSizePx = 2.0f;
-constexpr float kGlyphAdvancePx = 12.0f;
-constexpr float kLineAdvancePx = 18.0f;
-constexpr float kPanelWidthPx = 320.0f;
+constexpr float kPanelGapPx = 8.0f;
+constexpr float kPanelShadowOffsetPx = 3.0f;
+constexpr float kAccentStripHeightPx = 3.0f;
+constexpr float kGlyphPixelSizePx = 1.75f;
+constexpr float kGlyphAdvancePx = 10.0f;
+constexpr float kLineAdvancePx = 14.0f;
+constexpr float kStatsPanelWidthPx = 276.0f;
+constexpr float kHelperPanelWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kHudLineCount = 14;
+constexpr size_t kStatsLineCount = 10;
+constexpr size_t kHelperLineCount = 4;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -212,6 +217,52 @@ void AppendShadowedTextLine(
 		color);
 }
 
+void AppendPanel(
+	DebugHudVertex *outVertices,
+	uint32_t &vertexCount,
+	const uint32_t maxVertexCount,
+	const VkExtent2D extent,
+	const float minYPx,
+	const float panelWidthPx,
+	const float panelHeightPx,
+	const std::array<float, 4> &panelColor,
+	const std::array<float, 4> &accentColor)
+{
+	constexpr float minXPx = kPanelOriginXPx;
+	const float maxXPx = minXPx + panelWidthPx;
+	const float maxYPx = minYPx + panelHeightPx;
+	AppendQuad(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		minXPx + kPanelShadowOffsetPx,
+		minYPx + kPanelShadowOffsetPx,
+		maxXPx + kPanelShadowOffsetPx,
+		maxYPx + kPanelShadowOffsetPx,
+		{0.0f, 0.0f, 0.0f, 0.18f});
+	AppendQuad(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		minXPx,
+		minYPx,
+		maxXPx,
+		maxYPx,
+		panelColor);
+	AppendQuad(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		minXPx,
+		minYPx,
+		maxXPx,
+		minYPx + kAccentStripHeightPx,
+		accentColor);
+}
+
 const char *GetVoxelMaterialLabel(const VoxelMaterial material)
 {
 	switch (material) {
@@ -233,8 +284,8 @@ const char *GetVoxelMaterialLabel(const VoxelMaterial material)
 const char *GetControlModeLabel(const CameraState::ControlMode controlMode)
 {
 	switch (controlMode) {
-	case CameraState::ControlMode::FreeFly:
-		return "FREEFLY";
+	case CameraState::ControlMode::Creative:
+		return "CREATIVE";
 	case CameraState::ControlMode::Spectator:
 		return "SPECTATOR";
 	case CameraState::ControlMode::Walk:
@@ -244,43 +295,87 @@ const char *GetControlModeLabel(const CameraState::ControlMode controlMode)
 	return "UNKNOWN";
 }
 
-void BuildHudLines(
+const char *GetScenePresetLabel(const VoxelScenePreset scenePreset)
+{
+	switch (scenePreset) {
+	case VoxelScenePreset::VoxelLab:
+		return "VOXELLAB";
+	case VoxelScenePreset::FlatBenchmark:
+		return "FLATBENCH";
+	case VoxelScenePreset::TransparencyStress:
+		return "TRANSTRESS";
+	case VoxelScenePreset::ChunkGrid:
+		return "CHUNKGRID";
+	case VoxelScenePreset::MeshingStress:
+		return "MESHSTRESS";
+	}
+
+	return "VOXELLAB";
+}
+
+void BuildStatsLines(
 	const DebugStats &stats,
 	const CameraState &camera,
 	const InteractionState &interaction,
-	std::array<std::array<char, kHudLineBufferSize>, kHudLineCount> &outLines)
+	std::array<std::array<char, kHudLineBufferSize>, kStatsLineCount> &outLines)
 {
 	const std::array<float, 3> forward = GetCameraForwardVector(camera);
 
-	std::snprintf(outLines.at(0).data(), kHudLineBufferSize, "FPS %.1f", stats.framesPerSecond);
-	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "MS %.2f", stats.frameTimeMilliseconds);
-	std::snprintf(outLines.at(2).data(), kHudLineBufferSize, "SIM %u TRI %u", stats.simulationStepsLastFrame, stats.sceneTriangleCount);
-	std::snprintf(outLines.at(3).data(), kHudLineBufferSize, "DIRTY %u ACTIVE %u", stats.dirtyChunkCount, stats.activeChunkCount);
-	std::snprintf(outLines.at(4).data(), kHudLineBufferSize, "VOX %u MEM %.1f KB", stats.nonAirVoxelCount, static_cast<double>(stats.sceneMemoryBytes) / 1024.0);
-#if defined(PROJECTV_ENABLE_TRACY)
-	constexpr const char *tracyFlag = "ON";
-#else
-	constexpr const char *tracyFlag = "OFF";
-#endif
-#if !defined(NDEBUG)
-	constexpr const char *validationFlag = "ON";
-#else
-	constexpr const char *validationFlag = "OFF";
-#endif
-	std::snprintf(outLines.at(5).data(), kHudLineBufferSize, "VAL %s TRACY %s", validationFlag, tracyFlag);
-	std::snprintf(outLines.at(6).data(), kHudLineBufferSize, "POS %.1f %.1f %.1f", camera.position[0], camera.position[1], camera.position[2]);
-	std::snprintf(outLines.at(7).data(), kHudLineBufferSize, "DIR %.2f %.2f %.2f", forward[0], forward[1], forward[2]);
+	std::snprintf(
+		outLines.at(0).data(),
+		kHudLineBufferSize,
+		"FPS %.1f  MS %.2f",
+		stats.framesPerSecond,
+		stats.frameTimeMilliseconds);
+	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "SCENE %s", GetScenePresetLabel(stats.scenePreset));
+	std::snprintf(
+		outLines.at(2).data(),
+		kHudLineBufferSize,
+		"MODE %s  PAUSE %s",
+		GetControlModeLabel(stats.controlMode),
+		stats.simulationPaused ? "ON" : "OFF");
+	std::snprintf(
+		outLines.at(3).data(),
+		kHudLineBufferSize,
+		"SIM %u  TRI %u",
+		stats.simulationStepsLastFrame,
+		stats.sceneTriangleCount);
+	std::snprintf(
+		outLines.at(4).data(),
+		kHudLineBufferSize,
+		"DIRTY %u  ACT %u",
+		stats.dirtyChunkCount,
+		stats.activeChunkCount);
+	std::snprintf(
+		outLines.at(5).data(),
+		kHudLineBufferSize,
+		"VOX %u  MEM %.1f",
+		stats.nonAirVoxelCount,
+		static_cast<double>(stats.sceneMemoryBytes) / 1024.0);
+	std::snprintf(
+		outLines.at(6).data(),
+		kHudLineBufferSize,
+		"CAM %.1f %.1f %.1f",
+		camera.position[0],
+		camera.position[1],
+		camera.position[2]);
+	std::snprintf(
+		outLines.at(7).data(),
+		kHudLineBufferSize,
+		"LOOK %.2f %.2f %.2f",
+		forward[0],
+		forward[1],
+		forward[2]);
 
 	if (interaction.selection.hasHit) {
 		std::snprintf(
 			outLines.at(8).data(),
 			kHudLineBufferSize,
-			"SEL %d %d %d %s %.2f",
+			"SEL %d %d %d %s",
 			interaction.selection.targetVoxel.x,
 			interaction.selection.targetVoxel.y,
 			interaction.selection.targetVoxel.z,
-			GetVoxelMaterialLabel(interaction.selection.targetMaterial),
-			interaction.selection.hitDistance);
+			GetVoxelMaterialLabel(interaction.selection.targetMaterial));
 	} else {
 		std::snprintf(outLines.at(8).data(), kHudLineBufferSize, "SEL NONE");
 	}
@@ -289,7 +384,7 @@ void BuildHudLines(
 		std::snprintf(
 			outLines.at(9).data(),
 			kHudLineBufferSize,
-			"PLACE %d %d %d %s",
+			"PUT %d %d %d %s",
 			interaction.selection.placementVoxel.x,
 			interaction.selection.placementVoxel.y,
 			interaction.selection.placementVoxel.z,
@@ -298,19 +393,17 @@ void BuildHudLines(
 		std::snprintf(
 			outLines.at(9).data(),
 			kHudLineBufferSize,
-			"PLACE NONE %s",
+			"PUT NONE %s",
 			GetVoxelMaterialLabel(interaction.placementMaterial));
 	}
+}
 
-	std::snprintf(outLines.at(10).data(), kHudLineBufferSize, "GLASS %u FLUID %u", stats.glassVoxelCount, stats.fluidVoxelCount);
-	std::snprintf(outLines.at(11).data(), kHudLineBufferSize, "FLOOR %u SPD %.1f", stats.floorVoxelCount, camera.moveSpeed);
-	std::snprintf(
-		outLines.at(12).data(),
-		kHudLineBufferSize,
-		"MODE %s PAUSE %s",
-		GetControlModeLabel(stats.controlMode),
-		stats.simulationPaused ? "ON" : "OFF");
-	std::snprintf(outLines.at(13).data(), kHudLineBufferSize, "HUD F1 MAT F2 MODE F4");
+void BuildHelperLines(std::array<std::array<char, kHudLineBufferSize>, kHelperLineCount> &outLines)
+{
+	std::snprintf(outLines.at(0).data(), kHudLineBufferSize, "F1 UI  F2 MAT  F3 CAM");
+	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "F4 MODE  F5 SCENE");
+	std::snprintf(outLines.at(2).data(), kHudLineBufferSize, "SPACE2 WALK/CRT  LMB CUT");
+	std::snprintf(outLines.at(3).data(), kHudLineBufferSize, "RMB PUT  TAB MOUSE  P PAUSE");
 }
 } // namespace
 
@@ -328,33 +421,86 @@ uint32_t BuildDebugHudVertices(
 	}
 
 	uint32_t vertexCount = 0;
-	constexpr std::array panelColor{0.06f, 0.08f, 0.10f, 0.78f};
-	constexpr std::array textColor{0.96f, 0.97f, 0.98f, 0.96f};
-	constexpr float panelHeightPx = kPanelPaddingPx * 2.0f + static_cast<float>(kHudLineCount) * kLineAdvancePx - 4.0f;
-	AppendQuad(
+	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
+	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
+	constexpr std::array accentColor{0.96f, 0.79f, 0.31f, 0.95f};
+	constexpr std::array titleColor{0.98f, 0.96f, 0.88f, 0.98f};
+	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
+	constexpr std::array helperTextColor{0.77f, 0.84f, 0.90f, 0.94f};
+	constexpr float titleOffsetPx = 2.0f;
+	constexpr float statsPanelHeightPx =
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kStatsLineCount + 1) * kLineAdvancePx;
+	constexpr float helperPanelHeightPx =
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kHelperLineCount + 1) * kLineAdvancePx;
+	constexpr float statsPanelMinY = kPanelOriginYPx;
+	constexpr float statsPanelMaxY = statsPanelMinY + statsPanelHeightPx;
+	constexpr float helperPanelMinY = statsPanelMaxY + kPanelGapPx;
+	AppendPanel(
 		outVertices,
 		vertexCount,
 		maxVertexCount,
 		extent,
-		kPanelOriginXPx,
-		kPanelOriginYPx,
-		kPanelOriginXPx + kPanelWidthPx,
-		kPanelOriginYPx + panelHeightPx,
-		panelColor);
+		statsPanelMinY,
+		kStatsPanelWidthPx,
+		statsPanelHeightPx,
+		statsPanelColor,
+		accentColor);
+	AppendPanel(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		helperPanelMinY,
+		kHelperPanelWidthPx,
+		helperPanelHeightPx,
+		helperPanelColor,
+		accentColor);
 
-	std::array<std::array<char, kHudLineBufferSize>, kHudLineCount> lines{};
-	BuildHudLines(stats, camera, interaction, lines);
+	AppendShadowedTextLine(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		statsPanelMinY + kPanelPaddingPx + titleOffsetPx,
+		"STAT",
+		titleColor);
+	AppendShadowedTextLine(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		helperPanelMinY + kPanelPaddingPx + titleOffsetPx,
+		"HELP",
+		titleColor);
 
-	for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
-		const float originYPx = kPanelOriginYPx + kPanelPaddingPx + static_cast<float>(lineIndex) * kLineAdvancePx;
+	std::array<std::array<char, kHudLineBufferSize>, kStatsLineCount> statsLines{};
+	BuildStatsLines(stats, camera, interaction, statsLines);
+	for (size_t lineIndex = 0; lineIndex < statsLines.size(); ++lineIndex) {
+		const float originYPx =
+			statsPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;
 		AppendShadowedTextLine(
 			outVertices,
 			vertexCount,
 			maxVertexCount,
 			extent,
 			originYPx,
-			lines[lineIndex].data(),
+			statsLines[lineIndex].data(),
 			textColor);
+	}
+
+	std::array<std::array<char, kHudLineBufferSize>, kHelperLineCount> helperLines{};
+	BuildHelperLines(helperLines);
+	for (size_t lineIndex = 0; lineIndex < helperLines.size(); ++lineIndex) {
+		const float originYPx =
+			helperPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;
+		AppendShadowedTextLine(
+			outVertices,
+			vertexCount,
+			maxVertexCount,
+			extent,
+			originYPx,
+			helperLines[lineIndex].data(),
+			helperTextColor);
 	}
 
 	return std::min(vertexCount, maxVertexCount);

@@ -38,13 +38,43 @@ vec4 BuildSelectionVertexPosition() {
 vec4 BuildCrosshairVertexPosition() {
     const float halfWidth = pushConstants.overlayData0.x;
     const float halfHeight = pushConstants.overlayData0.y;
+    const float halfThicknessX = pushConstants.overlayData0.z;
+    const float halfThicknessY = pushConstants.overlayData1.x;
 
-    switch (gl_VertexIndex) {
-        case 0: return vec4(-halfWidth, 0.0, 0.0, 1.0);
-        case 1: return vec4(halfWidth, 0.0, 0.0, 1.0);
-        case 2: return vec4(0.0, -halfHeight, 0.0, 1.0);
-        default : return vec4(0.0, halfHeight, 0.0, 1.0);
+    const vec2 horizontalQuad[6] = vec2[](
+    vec2(-halfWidth, -halfThicknessY),
+    vec2(halfWidth, -halfThicknessY),
+    vec2(halfWidth, halfThicknessY),
+    vec2(-halfWidth, -halfThicknessY),
+    vec2(halfWidth, halfThicknessY),
+    vec2(-halfWidth, halfThicknessY)
+    );
+    const vec2 topVerticalQuad[6] = vec2[](
+    vec2(-halfThicknessX, -halfHeight),
+    vec2(halfThicknessX, -halfHeight),
+    vec2(halfThicknessX, -halfThicknessY),
+    vec2(-halfThicknessX, -halfHeight),
+    vec2(halfThicknessX, -halfThicknessY),
+    vec2(-halfThicknessX, -halfThicknessY)
+    );
+    const vec2 bottomVerticalQuad[6] = vec2[](
+    vec2(-halfThicknessX, halfThicknessY),
+    vec2(halfThicknessX, halfThicknessY),
+    vec2(halfThicknessX, halfHeight),
+    vec2(-halfThicknessX, halfThicknessY),
+    vec2(halfThicknessX, halfHeight),
+    vec2(-halfThicknessX, halfHeight)
+    );
+
+    if (gl_VertexIndex < 6) {
+        return vec4(horizontalQuad[gl_VertexIndex], 0.0, 1.0);
     }
+
+    if (gl_VertexIndex < 12) {
+        return vec4(topVerticalQuad[gl_VertexIndex - 6], 0.0, 1.0);
+    }
+
+    return vec4(bottomVerticalQuad[gl_VertexIndex - 12], 0.0, 1.0);
 }
 
 void main() {

@@ -11,10 +11,11 @@ path.
 - Vulkan bootstrap, swapchain recreate и controlled shutdown;
 - CPU `VoxelWorld` с чанками, dirty queue и chunk rebuild bookkeeping;
 - минимальный `flecs` ECS slice с primary camera/player entities, `world`/`debug` singleton data и chunk mirror summary;
-- минимальный `JoltPhysics` slice со static voxel collision world, physics raycast и walk controller;
+- минимальный `JoltPhysics` slice со static voxel collision world, physics raycast и общим controller для `creative` /
+  `walk`;
 - compute voxel meshing и opaque/transparent indirect draw;
 - CPU raycast, block picking, `remove/place` edits и корректное dirty-neighbor обновление;
-- `free-fly`, `spectator` и `walk` control modes;
+- `creative`, `spectator` и `walk` control modes;
 - block highlight, crosshair и in-app HUD;
 - runtime smoke и failure probes через скрипты в `tools/windows/`.
 
@@ -54,27 +55,37 @@ build/windows-clang-debug/bin/ProjectV.exe
 ## Управление
 
 - `WASD` — движение в плоскости.
-- `Space / Shift` — вверх / вниз в `free-fly`.
+- `Space / Shift` — вверх / вниз в `creative` и `spectator`.
 - `Ctrl / Alt` — ускорение / замедление камеры.
 - `Tab` — toggle relative mouse mode.
-- `F1` — показать или скрыть HUD.
+- двойной `Space` — переключение `creative` / `walk`.
+- `F1` — показать или скрыть весь debug UI: HUD, highlight и crosshair.
 - `F2` — сменить placement material.
 - `F3` — reset camera.
-- `F4` — переключение `free-fly` / `spectator` / `walk`.
+- `F4` — переключение `creative` / `spectator` / `walk`.
+- `F5` — cycle builtin scene preset без перезапуска приложения.
 - `P` — pause simulation.
-- `LMB` — удалить voxel в `free-fly` и `walk`.
-- `RMB` — поставить voxel в `free-fly` и `walk`.
+- `LMB` — удалить voxel в `creative` и `walk`.
+- `RMB` — поставить voxel в `creative` и `walk`.
 
 Поведение control modes:
 
-- `free-fly` — debug/tool mode: noclip-камера двигается даже при `pause`, `Space/Shift` двигают по вертикали, а edits
-  разрешены;
-- `spectator` — observe-only mode: edits отключены, а камера подчиняется `pause`;
-- `walk` — physics-driven mode: камера снапается к полу, движение подчиняется collision, `Space` работает как jump, а
-  edits по-прежнему разрешены.
+- `creative` — physics-backed flight mode: камера летает с collision, двигается даже при `pause`, `Space/Shift` двигают
+  по
+  вертикали, а edits разрешены;
+- `spectator` — observe-only noclip mode: edits отключены, а камера подчиняется `pause`;
+- `walk` — grounded physics-driven mode: движение подчиняется collision, `Space` работает как jump, а edits по-прежнему
+  разрешены; при переходе из `creative`/`spectator` камера не телепортируется в центр и не снапается к полу без
+  необходимости.
 
 ## Где смотреть дальше
 
+- [Build And Run](docs/BuildAndRun.md)
+- [Architecture Guide](docs/ArchitectureGuide.md)
+- [Render Architecture](docs/RenderArchitecture.md)
+- [VoxelWorld](docs/VoxelWorld.md)
+- [Debugging](docs/Debugging.md)
+- [Profiling](docs/Profiling.md)
 - [Source Layout Guide](docs/source_layout.md)
 - [Voxel MVP Smoke Checklist](docs/voxel_mvp_smoke_checklist.md)
 - [TODO](TODO.md)
@@ -82,8 +93,8 @@ build/windows-clang-debug/bin/ProjectV.exe
 
 ## Текущий фокус
 
-Ближайший mainline-фокус после закрытия `8.4`:
+Ближайший mainline-фокус после закрытия `9.1`:
 
-1. закрыть authored docs в `docs/` под текущий interaction/runtime/ECS/physics loop;
-2. после этого двигаться в `save/load` и benchmark scene presets;
-3. параллельно дочищать player/debug tooling уже поверх связки `InputActions + ECS + physics`.
+1. добить `9.2` build/automation hygiene;
+2. вернуться к `10.1` и добавить `save/load` поверх уже существующих builtin scene presets;
+3. потом дочищать player/debug tooling уже поверх связки `InputActions + ECS + physics`.

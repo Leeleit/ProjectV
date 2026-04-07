@@ -27,7 +27,7 @@ void ShutdownVulkan(AppState *state)
 	}
 
 	state->physics.reset();
-	DestroyVoxelLabWorld(state);
+	DestroyVoxelSceneWorld(state);
 
 	if (state->context.device) {
 		for (const auto iv : state->swapchain.imageViews) {

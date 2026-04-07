@@ -31,11 +31,21 @@ bool SnapWalkCharacterToCamera(
 	PhysicsState *physics,
 	const VoxelWorld *world,
 	CameraState *camera);
+bool SnapCreativeCharacterToCamera(
+	PhysicsState *physics,
+	const VoxelWorld *world,
+	CameraState *camera);
 bool TickWalkCharacter(
 	PhysicsState *physics,
 	const VoxelWorld *world,
 	CameraState *camera,
 	InputState *input,
+	float deltaSeconds);
+bool TickCreativeCharacter(
+	PhysicsState *physics,
+	const VoxelWorld *world,
+	CameraState *camera,
+	const InputState *input,
 	float deltaSeconds);
 uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics);
 

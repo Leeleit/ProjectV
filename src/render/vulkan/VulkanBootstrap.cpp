@@ -342,6 +342,7 @@ VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &sel
 	VkPhysicalDeviceFeatures enabled{};
 	enabled.multiDrawIndirect = selected.features.multiDrawIndirect ? VK_TRUE : VK_FALSE;
 	enabled.drawIndirectFirstInstance = selected.features.drawIndirectFirstInstance ? VK_TRUE : VK_FALSE;
+	enabled.logicOp = selected.features.logicOp ? VK_TRUE : VK_FALSE;
 	return enabled;
 }
 

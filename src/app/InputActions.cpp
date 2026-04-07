@@ -3,6 +3,8 @@
 #include <array>
 
 namespace {
+constexpr Uint64 kMoveUpDoubleTapWindowNs = SDL_MS_TO_NS(300);
+
 constexpr size_t GetInputActionIndex(const InputAction action)
 {
 	return static_cast<size_t>(action);
@@ -40,6 +42,27 @@ void SetActionState(
 	}
 }
 
+Uint64 GetEventTimestampNs(const SDL_Event &event)
+{
+	return event.key.timestamp != 0 ? event.key.timestamp : SDL_GetTicksNS();
+}
+
+bool DetectMoveUpDoubleTap(
+	InputState &input,
+	const Uint64 pressedTimestampNs)
+{
+	const Uint64 previousPressedTimestampNs = input.lastMoveUpPressedTimestampNs;
+	input.lastMoveUpPressedTimestampNs = pressedTimestampNs;
+	if (previousPressedTimestampNs != 0 &&
+		pressedTimestampNs >= previousPressedTimestampNs &&
+		pressedTimestampNs - previousPressedTimestampNs <= kMoveUpDoubleTapWindowNs) {
+		input.lastMoveUpPressedTimestampNs = 0;
+		return true;
+	}
+
+	return false;
+}
+
 void ResetBindingStates(InputState &input)
 {
 	for (auto &[scancodes, downStates] : input.bindings) {
@@ -62,6 +85,7 @@ void InitializeInputState(InputState &input)
 	input.removePressed = false;
 	input.placePressed = false;
 	input.relativeMouseModeEnabled = true;
+	input.lastMoveUpPressedTimestampNs = 0;
 	ResetActionStates(input);
 	ResetBindingStates(input);
 	for (auto &[scancodes, downStates] : input.bindings) {
@@ -85,6 +109,7 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::ResetCamera, SDL_SCANCODE_F3);
 	BindAction(input, InputAction::TogglePause, SDL_SCANCODE_P);
 	BindAction(input, InputAction::ToggleControlMode, SDL_SCANCODE_F4);
+	BindAction(input, InputAction::CycleScenePreset, SDL_SCANCODE_F5);
 }
 
 void HandleInputActionEvent(
@@ -107,6 +132,12 @@ void HandleInputActionEvent(
 			}
 
 			SetActionState(input, action, slotIndex, isDown, event->key.repeat);
+			if (action == InputAction::MoveUp &&
+				isDown &&
+				!event->key.repeat &&
+				DetectMoveUpDoubleTap(input, GetEventTimestampNs(*event))) {
+				input.actions[GetInputActionIndex(InputAction::ToggleWalkCreativeMode)].pressed = true;
+			}
 			break;
 		}
 	}

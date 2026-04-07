@@ -13,9 +13,9 @@ namespace {
 constexpr uint32_t kMaxSimulationStepsPerFrame = 5;
 constexpr float kMaxFrameDeltaSeconds = 0.25f;
 
-bool IsFreeFlyMode(const CameraState &camera)
+bool IsCreativeMode(const CameraState &camera)
 {
-	return camera.controlMode == CameraState::ControlMode::FreeFly;
+	return camera.controlMode == CameraState::ControlMode::Creative;
 }
 
 bool IsWalkMode(const CameraState &camera)
@@ -23,18 +23,38 @@ bool IsWalkMode(const CameraState &camera)
 	return camera.controlMode == CameraState::ControlMode::Walk;
 }
 
+bool UsesPhysicsCharacter(const CameraState::ControlMode controlMode)
+{
+	return controlMode == CameraState::ControlMode::Creative ||
+		   controlMode == CameraState::ControlMode::Walk;
+}
+
+CameraState::ControlMode GetNextWalkCreativeMode(const CameraState::ControlMode controlMode)
+{
+	switch (controlMode) {
+	case CameraState::ControlMode::Walk:
+		return CameraState::ControlMode::Creative;
+	case CameraState::ControlMode::Creative:
+		return CameraState::ControlMode::Walk;
+	case CameraState::ControlMode::Spectator:
+		return CameraState::ControlMode::Spectator;
+	}
+
+	return CameraState::ControlMode::Creative;
+}
+
 CameraState::ControlMode GetNextControlMode(const CameraState::ControlMode controlMode)
 {
 	switch (controlMode) {
-	case CameraState::ControlMode::FreeFly:
+	case CameraState::ControlMode::Creative:
 		return CameraState::ControlMode::Spectator;
 	case CameraState::ControlMode::Spectator:
 		return CameraState::ControlMode::Walk;
 	case CameraState::ControlMode::Walk:
-		return CameraState::ControlMode::FreeFly;
+		return CameraState::ControlMode::Creative;
 	}
 
-	return CameraState::ControlMode::FreeFly;
+	return CameraState::ControlMode::Creative;
 }
 
 float ComputeFrameDeltaSeconds(SimulationState &simulation)
@@ -77,6 +97,65 @@ void ClearInteractionClickActions(InputState &input)
 {
 	input.removePressed = false;
 	input.placePressed = false;
+}
+
+bool ApplyControlModeTransition(
+	CameraState *camera,
+	InputState *input,
+	WorldState *world,
+	PhysicsState *physics,
+	const CameraState::ControlMode nextMode,
+	const char *logStep)
+{
+	PV_CHECK_OR_RETURN(
+		camera && input,
+		"App",
+		logStep,
+		"camera/input is null");
+
+	const CameraState::ControlMode previousMode = camera->controlMode;
+	if (previousMode == nextMode) {
+		return true;
+	}
+
+	camera->controlMode = nextMode;
+	ClearInteractionClickActions(*input);
+	if (UsesPhysicsCharacter(previousMode)) {
+		ResetWalkCharacter(physics);
+	}
+
+	if (!UsesPhysicsCharacter(camera->controlMode)) {
+		return true;
+	}
+
+	PV_CHECK_OR_RETURN(
+		physics && world && world->voxelWorld,
+		"App",
+		logStep,
+		"creative/walk mode requires initialized physics and voxel world");
+	if (camera->controlMode == CameraState::ControlMode::Walk) {
+		ConsumeInputActionPressed(*input, InputAction::MoveUp);
+	}
+	if (!SyncPhysicsWorld(physics, world->voxelWorld.get())) {
+		runtime::LogRuntimeFailure(
+			"App",
+			logStep,
+			"failed to sync physics world for creative/walk transition");
+		return false;
+	}
+	const bool snapped =
+		camera->controlMode == CameraState::ControlMode::Walk
+			? SnapWalkCharacterToCamera(physics, world->voxelWorld.get(), camera)
+			: SnapCreativeCharacterToCamera(physics, world->voxelWorld.get(), camera);
+	if (!snapped) {
+		runtime::LogRuntimeFailure(
+			"App",
+			logStep,
+			"failed to initialize creative/walk physics state");
+		return false;
+	}
+
+	return true;
 }
 } // namespace
 
@@ -121,34 +200,40 @@ bool UpdateApp(
 		simulation->paused = !simulation->paused;
 		simulation->simulationAccumulatorSeconds = 0.0f;
 	}
-	if (ConsumeInputActionPressed(*input, InputAction::ToggleControlMode)) {
-		const CameraState::ControlMode previousMode = camera->controlMode;
-		camera->controlMode = GetNextControlMode(previousMode);
-		ClearInteractionClickActions(*input);
-		if (previousMode == CameraState::ControlMode::Walk) {
-			ResetWalkCharacter(physics);
-		}
-		if (camera->controlMode == CameraState::ControlMode::Walk) {
-			PV_CHECK_OR_RETURN(
-				physics && world->voxelWorld,
-				"App",
-				"UpdateApp.ToggleControlMode",
-				"Walk mode requires initialized physics and voxel world");
-			if (!SyncPhysicsWorld(physics, world->voxelWorld.get()) ||
-				!SnapWalkCharacterToCamera(physics, world->voxelWorld.get(), camera)) {
-				runtime::LogRuntimeFailure(
-					"App",
-					"UpdateApp.ToggleControlMode",
-					"failed to initialize walk mode physics state");
-				return false;
-			}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkCreativeMode)) {
+		if (!ApplyControlModeTransition(
+				camera,
+				input,
+				world,
+				physics,
+				GetNextWalkCreativeMode(camera->controlMode),
+				"UpdateApp.ToggleWalkCreativeMode")) {
+			return false;
 		}
 	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleControlMode)) {
+		if (!ApplyControlModeTransition(
+				camera,
+				input,
+				world,
+				physics,
+				GetNextControlMode(camera->controlMode),
+				"UpdateApp.ToggleControlMode")) {
+			return false;
+		}
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleScenePreset) &&
+		world->voxelWorld) {
+		world->requestedScenePreset = GetNextVoxelScenePreset(world->voxelWorld->scenePreset);
+		world->scenePresetReloadRequested = true;
+		ClearInteractionClickActions(*input);
+	}
 
-	const bool freeFlyMode = IsFreeFlyMode(*camera);
+	const bool creativeMode = IsCreativeMode(*camera);
 	const bool walkMode = IsWalkMode(*camera);
-	const bool cameraCanUpdate = freeFlyMode || !simulation->paused;
-	const bool allowWorldEditing = freeFlyMode || walkMode;
+	const bool cameraCanUpdate = creativeMode || !simulation->paused;
+	const bool allowWorldEditing =
+		(creativeMode || walkMode) && !world->scenePresetReloadRequested;
 
 	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
@@ -192,6 +277,24 @@ bool UpdateApp(
 					"TickWalkCharacter returned false");
 				return false;
 			}
+		} else if (creativeMode) {
+			PV_CHECK_OR_RETURN(
+				physics && world->voxelWorld,
+				"App",
+				"UpdateApp.TickCreativeCharacter",
+				"creative mode requires initialized physics and voxel world");
+			if (!TickCreativeCharacter(
+					physics,
+					world->voxelWorld.get(),
+					camera,
+					input,
+					simulation->fixedSimulationDeltaSeconds)) {
+				runtime::LogRuntimeFailure(
+					"App",
+					"UpdateApp.TickCreativeCharacter",
+					"TickCreativeCharacter returned false");
+				return false;
+			}
 		} else {
 			TickCamera(camera, *input, simulation->fixedSimulationDeltaSeconds);
 		}
@@ -205,8 +308,24 @@ bool UpdateApp(
 			std::fmod(simulation->simulationAccumulatorSeconds, simulation->fixedSimulationDeltaSeconds);
 	}
 
-	if (simulation->paused && freeFlyMode && simulation->frameDeltaSeconds > 0.0f) {
-		TickCamera(camera, *input, simulation->frameDeltaSeconds);
+	if (simulation->paused && creativeMode && simulation->frameDeltaSeconds > 0.0f) {
+		PV_CHECK_OR_RETURN(
+			physics && world->voxelWorld,
+			"App",
+			"UpdateApp.TickCreativeCharacterWhilePaused",
+			"creative mode requires initialized physics and voxel world");
+		if (!TickCreativeCharacter(
+				physics,
+				world->voxelWorld.get(),
+				camera,
+				input,
+				simulation->frameDeltaSeconds)) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"UpdateApp.TickCreativeCharacterWhilePaused",
+				"TickCreativeCharacter returned false while paused");
+			return false;
+		}
 	}
 
 	const uint64_t worldEditVersionBeforeInteraction =
@@ -241,6 +360,7 @@ bool UpdateApp(
 		debug->stats.nonAirVoxelCount = world->voxelWorld->stats.nonAirVoxelCount;
 		debug->stats.sceneTriangleCount = render->sceneTriangleCount;
 		debug->stats.sceneMemoryBytes = render->sceneMemoryBytes;
+		debug->stats.scenePreset = world->voxelWorld->scenePreset;
 	}
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.simulationPaused = simulation->paused;

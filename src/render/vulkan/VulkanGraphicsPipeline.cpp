@@ -218,6 +218,11 @@ void DestroyDebugOverlayPipeline(
 	VulkanContextState &context,
 	RenderState &render)
 {
+	if (render.debugCrosshairPipeline) {
+		vkDestroyPipeline(context.device, render.debugCrosshairPipeline, nullptr);
+		render.debugCrosshairPipeline = VK_NULL_HANDLE;
+	}
+
 	if (render.debugOverlayPipeline) {
 		vkDestroyPipeline(context.device, render.debugOverlayPipeline, nullptr);
 		render.debugOverlayPipeline = VK_NULL_HANDLE;
@@ -328,6 +333,30 @@ bool CreateDebugOverlayPipeline(
 	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = &kAlphaBlendAttachmentState;
 
+	constexpr VkPipelineColorBlendAttachmentState kCrosshairLogicOpAttachmentState{
+		.blendEnable = VK_FALSE,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
+		.colorWriteMask =
+			VK_COLOR_COMPONENT_R_BIT |
+			VK_COLOR_COMPONENT_G_BIT |
+			VK_COLOR_COMPONENT_B_BIT,
+	};
+	VkPipelineInputAssemblyStateCreateInfo crosshairInputAssembly = inputAssembly;
+	crosshairInputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	VkPhysicalDeviceFeatures supportedFeatures{};
+	vkGetPhysicalDeviceFeatures(context.physicalDevice, &supportedFeatures);
+	const bool useLogicOpCrosshair = supportedFeatures.logicOp == VK_TRUE;
+	VkPipelineColorBlendStateCreateInfo crosshairColorBlending = colorBlending;
+	crosshairColorBlending.logicOpEnable = useLogicOpCrosshair ? VK_TRUE : VK_FALSE;
+	crosshairColorBlending.logicOp = VK_LOGIC_OP_XOR;
+	crosshairColorBlending.pAttachments =
+		useLogicOpCrosshair ? &kCrosshairLogicOpAttachmentState : &kAlphaBlendAttachmentState;
+
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
@@ -378,10 +407,29 @@ bool CreateDebugOverlayPipeline(
 		&pipelineInfo,
 		nullptr,
 		&render.debugOverlayPipeline);
+	if (debugOverlayPipelineResult != VK_SUCCESS) {
+		vkDestroyShaderModule(context.device, vertexShaderModule, nullptr);
+		vkDestroyShaderModule(context.device, fragmentShaderModule, nullptr);
+		LogGraphicsPipelineVkFailure("CreateDebugOverlayPipeline.vkCreateGraphicsPipelines", debugOverlayPipelineResult);
+		DestroyDebugOverlayPipeline(context, render);
+		return false;
+	}
+
+	pipelineInfo.pInputAssemblyState = &crosshairInputAssembly;
+	pipelineInfo.pColorBlendState = &crosshairColorBlending;
+	const VkResult debugCrosshairPipelineResult = vkCreateGraphicsPipelines(
+		context.device,
+		VK_NULL_HANDLE,
+		1,
+		&pipelineInfo,
+		nullptr,
+		&render.debugCrosshairPipeline);
 	vkDestroyShaderModule(context.device, vertexShaderModule, nullptr);
 	vkDestroyShaderModule(context.device, fragmentShaderModule, nullptr);
-	if (debugOverlayPipelineResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure("CreateDebugOverlayPipeline.vkCreateGraphicsPipelines", debugOverlayPipelineResult);
+	if (debugCrosshairPipelineResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure(
+			"CreateDebugOverlayPipeline.vkCreateGraphicsPipelines.Crosshair",
+			debugCrosshairPipelineResult);
 		DestroyDebugOverlayPipeline(context, render);
 		return false;
 	}
@@ -396,6 +444,11 @@ bool CreateDebugOverlayPipeline(
 		reinterpret_cast<uint64_t>(render.debugOverlayPipeline),
 		VK_OBJECT_TYPE_PIPELINE,
 		"DebugOverlayPipeline");
+	SetVulkanObjectName(
+		context,
+		reinterpret_cast<uint64_t>(render.debugCrosshairPipeline),
+		VK_OBJECT_TYPE_PIPELINE,
+		"DebugCrosshairPipeline");
 	return true;
 }
 
