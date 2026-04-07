@@ -1,11 +1,12 @@
 #include "app/AppUpdate.hpp"
 #include "app/Camera.hpp"
-#include "debug/DebugHud.hpp"
 #include "app/InputActions.hpp"
-#include "ecs/EcsWorld.hpp"
-#include "platform/PlatformEvents.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "core/Types.hpp"
+#include "debug/DebugHud.hpp"
+#include "ecs/EcsWorld.hpp"
+#include "physics/PhysicsWorld.hpp"
+#include "platform/PlatformEvents.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -426,6 +427,18 @@ void ResetDirtyFlags(VoxelWorld &world)
 	}
 }
 
+VoxelWorld MakeWalkTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+		}
+	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
 void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 {
 	InputState input{};
@@ -463,6 +476,18 @@ void TestTickCameraUsesActionStateAndSpeedModifiers(TestContext &context)
 		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
 		TickCamera(&camera, input, 1.0f);
 		EXPECT_NEAR(context, -10.0f, camera.position[2]);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+		CameraState camera = MakeTestCamera({0.0f, 5.0f, 0.0f});
+		camera.pitchRadians = 0.9f;
+		TickCamera(&camera, input, 1.0f);
+		EXPECT_NEAR(context, 5.0f, camera.position[1]);
+		EXPECT_TRUE(context, camera.position[2] < 0.0f);
 	}
 
 	{
@@ -535,7 +560,7 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_P);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
 
-	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, !debug.hudVisible);
 	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.placementMaterial);
 	EXPECT_TRUE(context, simulation.paused);
@@ -575,7 +600,7 @@ void TestResetCameraPreservesControlMode(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_EQ(context, CameraState::ControlMode::Spectator, camera.controlMode);
 	EXPECT_EQ(context, CameraState::ControlMode::Spectator, debug.stats.controlMode);
 	EXPECT_NEAR(context, 0.0f, camera.position[0]);
@@ -601,7 +626,7 @@ void TestFreeFlyCameraMovesWhileSimulationIsPaused(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, camera.position[2] < -0.5f);
 	EXPECT_TRUE(context, camera.position[2] > -2.0f);
 	EXPECT_TRUE(context, debug.stats.simulationPaused);
@@ -629,13 +654,125 @@ void TestSpectatorModeBlocksEditsAndPausedMovement(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_NEAR(context, 4.5f, camera.position[2]);
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(*world.voxelWorld, {1, 1, 1}));
 	EXPECT_TRUE(context, interaction.selection.hasHit);
 	EXPECT_EQ(context, VoxelMaterial::Glass, interaction.selection.targetMaterial);
 	EXPECT_TRUE(context, !input.removePressed);
 	EXPECT_EQ(context, CameraState::ControlMode::Spectator, debug.stats.controlMode);
+}
+
+void TestPhysicsRaycastHitsStaticVoxelCollision(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	const PhysicsRaycastHit hit = RaycastPhysicsWorld(
+		physics.get(),
+		{1.5f, 4.5f, 1.5f},
+		{0.0f, -1.0f, 0.0f},
+		8.0f);
+
+	EXPECT_TRUE(context, hit.hasHit);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), hit.voxel);
+	EXPECT_NEAR(context, 2.5f, hit.distance);
+	EXPECT_NEAR(context, 1.0f, hit.normal[1]);
+}
+
+void TestPhysicsWorldSyncTracksVoxelEdits(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	PhysicsRaycastHit hit = RaycastPhysicsWorld(
+		physics.get(),
+		{1.5f, 4.5f, 1.5f},
+		{0.0f, -1.0f, 0.0f},
+		8.0f);
+	EXPECT_TRUE(context, !hit.hasHit);
+
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	EXPECT_EQ(context, world.editVersion, GetPhysicsWorldSyncVersion(physics.get()));
+
+	hit = RaycastPhysicsWorld(
+		physics.get(),
+		{1.5f, 4.5f, 1.5f},
+		{0.0f, -1.0f, 0.0f},
+		8.0f);
+	EXPECT_TRUE(context, hit.hasHit);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), hit.voxel);
+
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	hit = RaycastPhysicsWorld(
+		physics.get(),
+		{1.5f, 4.5f, 1.5f},
+		{0.0f, -1.0f, 0.0f},
+		8.0f);
+	EXPECT_TRUE(context, !hit.hasHit);
+}
+
+void TestUpdateAppCyclesIntoWalkModeAndSnapsCameraToFloor(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.5f, 6.0f, 4.5f});
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_EQ(context, CameraState::ControlMode::Spectator, camera.controlMode);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_EQ(context, CameraState::ControlMode::Walk, camera.controlMode);
+	EXPECT_EQ(context, CameraState::ControlMode::Walk, debug.stats.controlMode);
+	EXPECT_TRUE(context, camera.position[1] > 2.5f);
+	EXPECT_TRUE(context, camera.position[1] < 3.0f);
+}
+
+void TestWalkCharacterCollidesWithVoxelWall(TestContext &context)
+{
+	VoxelWorld world = MakeWalkTestWorld();
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Glass);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 6.0f, 4.5f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 120; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > 3.2f);
+	EXPECT_TRUE(context, camera.position[2] < 4.5f);
+	EXPECT_TRUE(context, camera.position[1] > 2.4f);
 }
 
 void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
@@ -843,6 +980,10 @@ int main()
 	TestResetCameraPreservesControlMode(context);
 	TestFreeFlyCameraMovesWhileSimulationIsPaused(context);
 	TestSpectatorModeBlocksEditsAndPausedMovement(context);
+	TestPhysicsRaycastHitsStaticVoxelCollision(context);
+	TestPhysicsWorldSyncTracksVoxelEdits(context);
+	TestUpdateAppCyclesIntoWalkModeAndSnapsCameraToFloor(context);
+	TestWalkCharacterCollidesWithVoxelWall(context);
 	TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(context);
 	TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(context);
 	TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(context);

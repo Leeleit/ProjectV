@@ -38,6 +38,7 @@ target_sources(ProjectV PRIVATE
         app/InputActions.cpp
         app/main.cpp
         ecs/EcsWorld.cpp
+        physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
         core/RuntimeProbe.cpp
         core/ShaderIO.cpp
@@ -85,6 +86,7 @@ target_link_libraries(ProjectV PRIVATE
         volk
         fmt::fmt
         flecs::flecs_static
+        Jolt::Jolt
         # GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
 )

@@ -21,8 +21,11 @@ constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 struct VoxelWorld;
 struct EcsState;
+struct PhysicsState;
 void DestroyEcsState(EcsState *ecs);
+void DestroyPhysicsState(PhysicsState *physics);
 using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
+using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
 
 struct PackedSceneVoxelFace {
 	uint32_t localVoxelFace = 0;
@@ -107,6 +110,7 @@ struct CameraState {
 	enum class ControlMode : uint8_t {
 		FreeFly,
 		Spectator,
+		Walk,
 	} controlMode = ControlMode::FreeFly;
 };
 
@@ -363,6 +367,7 @@ struct AppState {
 	InputState input{};
 	InteractionState interaction{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
+	PhysicsStatePtr physics{nullptr, DestroyPhysicsState};
 
 	bool shutdownDone = false;
 

@@ -36,6 +36,11 @@ Float3 Normalize(const Float3 vector)
 	return {vector.x / length, vector.y / length, vector.z / length};
 }
 
+Float3 FlattenToPlane(const Float3 vector)
+{
+	return Normalize(Float3{vector.x, 0.0f, vector.z});
+}
+
 Float3 Cross(const Float3 a, const Float3 b)
 {
 	return {
@@ -153,8 +158,9 @@ void TickCamera(
 	}
 
 	const Float3 forward = Normalize(GetForwardVector(*camera));
+	const Float3 planarForward = FlattenToPlane(forward);
 	constexpr Float3 worldUp{0.0f, 1.0f, 0.0f};
-	const Float3 right = Normalize(Cross(forward, worldUp));
+	const Float3 right = Normalize(Cross(planarForward, worldUp));
 	float moveSpeed = camera->moveSpeed;
 	if (IsInputActionDown(input, InputAction::SpeedBoost)) {
 		moveSpeed *= kBoostMoveSpeedMultiplier;
@@ -165,10 +171,10 @@ void TickCamera(
 	const float moveStep = moveSpeed * deltaSeconds;
 
 	if (IsInputActionDown(input, InputAction::MoveForward)) {
-		AddScaled(&camera->position, forward, moveStep);
+		AddScaled(&camera->position, planarForward, moveStep);
 	}
 	if (IsInputActionDown(input, InputAction::MoveBackward)) {
-		AddScaled(&camera->position, forward, -moveStep);
+		AddScaled(&camera->position, planarForward, -moveStep);
 	}
 	if (IsInputActionDown(input, InputAction::MoveRight)) {
 		AddScaled(&camera->position, right, moveStep);

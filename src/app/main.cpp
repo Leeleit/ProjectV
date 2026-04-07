@@ -6,12 +6,12 @@
 #include "app/Camera.hpp"
 #include "app/FramePreparation.hpp"
 #include "app/InputActions.hpp"
-#include "ecs/EcsWorld.hpp"
-#include "platform/PlatformEvents.hpp"
-#include "debug/Profiling.hpp"
-#include "render/Renderer.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
+#include "debug/Profiling.hpp"
+#include "ecs/EcsWorld.hpp"
+#include "platform/PlatformEvents.hpp"
+#include "render/Renderer.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "voxel/VoxelInteraction.hpp"
 
@@ -98,6 +98,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->input,
 			&state->interaction,
 			world,
+			state->physics.get(),
 			&state->render,
 			debug)) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");

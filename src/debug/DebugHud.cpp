@@ -237,6 +237,8 @@ const char *GetControlModeLabel(const CameraState::ControlMode controlMode)
 		return "FREEFLY";
 	case CameraState::ControlMode::Spectator:
 		return "SPECTATOR";
+	case CameraState::ControlMode::Walk:
+		return "WALK";
 	}
 
 	return "UNKNOWN";
@@ -308,7 +310,7 @@ void BuildHudLines(
 		"MODE %s PAUSE %s",
 		GetControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "ON" : "OFF");
-	std::snprintf(outLines.at(13).data(), kHudLineBufferSize, "HUD F1 MAT F2 CTRL F4");
+	std::snprintf(outLines.at(13).data(), kHudLineBufferSize, "HUD F1 MAT F2 MODE F4");
 }
 } // namespace
 

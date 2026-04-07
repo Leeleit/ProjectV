@@ -10,6 +10,7 @@ bool UpdateApp(
 	InputState *input,
 	InteractionState *interaction,
 	WorldState *world,
+	PhysicsState *physics,
 	RenderState *render,
 	DebugState *debug);
 

@@ -53,11 +53,13 @@
 - чанки, dirty queue, chunk rebuild bookkeeping
 - материалы мира: воздух, стекло, жидкость, белый/серый пол
 - procedural demo-scene в духе `Voxel Laboratory`
-- free-fly камера
+- минимальный `flecs` ECS slice
+- free-fly / spectator / walk control modes
+- MVP physics layer на `JoltPhysics` поверх voxel world
 - fixed-step simulation loop
 - indirect draw для opaque/transparent проходов
 - Tracy profiling hooks
-- unit tests для `VoxelWorld` и базовой логики материалов
+- unit tests для `VoxelWorld`, interaction/physics glue и базовой логики материалов
 
 ### 1.3. Что уже показывает проект
 
@@ -70,12 +72,10 @@
 
 ### 1.4. Чего пока нет или не хватает до настоящего MVP
 
-- проверенных `resize / restore / shutdown` после интерактивных world edits
-- MVP physics layer поверх уже подключённого минимального ECS slice
-- physics integration уровня MVP
 - save/load мира
 - CI и автоматического smoke-контура
-- актуальной проектной документации в `docs/`
+- актуальной authored-документации в `docs/`
+- benchmark/profile scene presets
 - чёткого разделения между mainline MVP и R&D-веткой
 
 ### 1.5. Главный вывод
@@ -94,7 +94,7 @@
 Ближайший честный milestone:
 
 - окно стабильно запускается и закрывается
-- есть free-fly камера
+- есть free-fly и базовый walk mode с collision
 - есть voxel world из нескольких чанков
 - можно поставить и удалить блок
 - изменённые чанки корректно перестраиваются
@@ -173,8 +173,9 @@
 Наблюдаемая проблема:
 
 - старые legacy-планы всё ещё местами описывают состояние уровня triangle/foundation;
-- `README` уже описывает voxel scene;
-- проектных документов в `docs/` пока практически нет.
+- актуальный root-facing overview уже живёт в `README_NEW.md`, а `README.md` сознательно не трогается без отдельного
+  разрешения пользователя;
+- проектных документов в `docs/` всё ещё недостаточно для текущего interaction/runtime/ECS/physics slice.
 
 Следствие:
 
@@ -182,7 +183,7 @@
 - дорожная карта легко уходит в неверную сторону;
 - есть риск параллельно реализовывать уже решённые или неактуальные вещи.
 
-### 5.2. Есть рендер мира, но пока мало интерактивности
+### 5.2. Есть интерактивный slice, но ещё не хватает следующего слоя MVP
 
 Проект уже умеет:
 
@@ -190,15 +191,18 @@
 - паковать данные чанков,
 - rebuildить dirty chunks,
 - мешить faces compute-шейдером,
-- рендерить opaque/transparent geometry.
+- рендерить opaque/transparent geometry,
+- выбирать блок,
+- удалять и ставить блок,
+- моментально видеть корректное обновление мира,
+- использовать это как основу для physics/debug demo с базовым walk collision.
 
-Но пока ещё не умеет в полноценно полезный gameplay loop уровня MVP:
+Но пока ещё не хватает следующего слоя полезности уровня MVP:
 
-- выбрать блок,
-- удалить блок,
-- поставить блок,
-- моментально увидеть корректное обновление мира,
-- использовать это как основу для physics/gameplay/debug demo.
+- save/load мира,
+- benchmark/profile scene presets,
+- authored docs для build/run/architecture/debugging,
+- следующего gameplay/debug слоя поверх уже существующих interaction + ECS + physics.
 
 ### 5.3. Есть сильный соблазн уйти в R&D слишком рано
 
@@ -254,7 +258,8 @@
 Задачи:
 
 - [ ] Создать и поддерживать в корне актуальный `TODO.md`.
-- [ ] Переписать `README.md` под реальное текущее состояние проекта.
+- [x] Создать актуальный root-facing overview в `README_NEW.md`; `README.md` без отдельного разрешения пользователя не
+  трогать.
 - [ ] Зафиксировать current milestone и ближайший next milestone.
 - [ ] Убрать рассинхрон между корневой документацией и `legacy/docs/latest`.
 - [ ] Отдельно обозначить, что является `mainline MVP`, а что `R&D`.
@@ -373,6 +378,7 @@
 
 - action-layer и `free-fly` / `spectator` modes уже закрыты;
 - default free-fly layout подправлен под более привычный Minecraft-like полёт: `Space/Shift` для вертикали, `Ctrl` для ускорения, `Alt` для slow modifier.
+- runtime `TickCamera` теперь действительно держит `WASD` в плоскости `XZ`; высота в free-fly/spectator меняется только от `Space/Shift`, а не от pitch камеры.
 
 Задачи:
 
@@ -462,13 +468,31 @@ src/
 - Современность: `4/5`
 - Оптимизационная отдача: `3/5`
 
+Статус на `2026-04-07`:
+
+- `JoltPhysics` уже подключён в main build и test target как vendored dependency.
+- В `src/physics` уже поднят минимальный physics slice: static voxel collision world, physics raycast и
+  `CharacterVirtual`
+  walk controller.
+- lifecycle helper для Jolt runtime уже упрощён до non-failing API без фиктивного bool-return, чтобы physics slice не
+  плодил unreachable/static-analysis noise.
+- Синхронизация physics с voxel edits уже идёт через `VoxelWorld::editVersion`, без отдельного gameplay ownership
+  rewrite.
+- Control modes теперь образуют practical MVP-тройку: `free-fly` как noclip/debug mode, `spectator` как observe-only
+  mode и `walk` как collision-based player mode поверх того же input/app loop.
+- Runtime `remove/place` interaction сознательно остаётся на CPU `VoxelRaycast`; physics усиливает MVP, а не заменяет
+  уже
+  работающий interaction loop.
+- Текущий walk slice всё ещё использует минимальный `CharacterVirtual` без отдельного ground-sticking / ledge-stability
+  tuning, поэтому лёгкое скатывание с краёв блоков пока считается ожидаемым follow-up, а не багом mainline-стабильности.
+
 Задачи:
 
-- [ ] Подключить `JoltPhysics`.
-- [ ] Сделать базовый raycast.
-- [ ] Добавить простую collision-модель игрока.
-- [ ] Добавить режим walk/clip.
-- [ ] Связать interaction с world edits.
+- [x] Подключить `JoltPhysics`.
+- [x] Сделать базовый raycast.
+- [x] Добавить простую collision-модель игрока.
+- [x] Добавить режим walk/clip.
+- [x] Связать interaction с world edits.
 
 Важно:
 
@@ -636,8 +660,8 @@ src/
 - [x] `fmt` — vendored formatting dependency для будущего logging layer без ввода тяжёлого logging framework.
 - [x] `tracy` — bundled submodule синхронизирован с upstream HEAD и очищен от локальных ad-hoc patch'ей внутри `external/tracy`.
 - [x] `flecs`
+- [x] `JoltPhysics`
 - [ ] `imgui`
-- [ ] `JoltPhysics`
 - [ ] `glaze` — только когда схема данных стабилизируется
 
 ### Позже, когда появится практический кейс
@@ -696,7 +720,7 @@ src/
 ### Sprint B — после Sprint A
 
 - [x] Подключить минимальный ECS.
-- [ ] Подключить MVP physics raycast/collision.
+- [x] Подключить MVP physics raycast/collision.
 - [ ] Добавить save/load.
 - [ ] Добавить benchmark scene presets.
 - [ ] Начать authored docs в `docs/`.
@@ -728,7 +752,7 @@ src/
 - [x] mouse capture toggle
 - [x] debug hotkeys
 - [x] spectator mode
-- [ ] walk / noclip modes
+- [x] walk / noclip modes
 - [ ] screenshot hotkey
 - [ ] frame-step / slow-motion debug modes
 
@@ -738,6 +762,7 @@ src/
 - [ ] player controller
 - [x] block picking
 - [x] block interaction
+- [ ] walk controller polish: ground sticking / edge-slide tuning
 - [ ] inspect tools
 - [ ] gizmo/debug overlays
 
@@ -776,9 +801,9 @@ src/
 ### 14.7. Gameplay / MVP Extensions
 
 - [x] ECS glue
-- [ ] physics raycast
-- [ ] collision
-- [ ] walk controller
+- [x] physics raycast
+- [x] collision
+- [x] walk controller
 - [ ] simple sandbox interactions
 - [ ] debug tools for world mutation
 

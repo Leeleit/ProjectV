@@ -1,15 +1,16 @@
 #include "app/Camera.hpp"
-#include "ecs/EcsWorld.hpp"
-#include "debug/Profiling.hpp"
-#include "debug/ProfilingGpu.hpp"
-#include "render/SceneResources.hpp"
-#include "voxel/VoxelWorld.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/RuntimeProbe.hpp"
+#include "debug/Profiling.hpp"
+#include "debug/ProfilingGpu.hpp"
+#include "ecs/EcsWorld.hpp"
+#include "physics/PhysicsWorld.hpp"
+#include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 namespace {
 bool TryCreateCalibratedTracyGpuContext(
@@ -154,6 +155,15 @@ bool InitVulkan(AppState *state)
 			"Init",
 			"InitVulkan.SyncEcsWorldState",
 			"SyncEcsWorldState returned false after world creation");
+		return false;
+	}
+	state->physics.reset(CreatePhysicsState());
+	if (!state->physics ||
+		!SyncPhysicsWorld(state->physics.get(), world->voxelWorld.get())) {
+		runtime::LogRuntimeFailure(
+			"Init",
+			"InitVulkan.CreatePhysicsState",
+			"failed to create or sync physics state");
 		return false;
 	}
 

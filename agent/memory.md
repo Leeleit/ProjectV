@@ -31,10 +31,20 @@
 - чанки, dirty queue и bookkeeping перестроения;
 - compute meshing path;
 - opaque/transparent indirect draw path;
-- explicit control modes поверх камеры: `free-fly` как debug/tool mode с движением и edits даже при `pause`, и `spectator` как observe-only mode без `remove/place`, который подчиняется `pause`;
+- explicit control modes поверх камеры: `free-fly` как noclip/debug mode с движением и edits даже при `pause`, `spectator`
+  как observe-only mode без `remove/place`, который подчиняется `pause`, и `walk` как collision-based mode поверх physics,
+  который тоже подчиняется `pause`;
+- в flying modes (`free-fly` и `spectator`) `WASD` теперь двигают только по плоскости `XZ`; высота меняется только от
+  `Space/Shift`, а не от pitch камеры;
 - явный `InputActions` слой поверх SDL keyboard input с bindable scancode slots, edge-triggered hotkeys и default controls: `WASD + Space/Shift`, `Ctrl` boost, `Alt` slow, `F1` HUD, `F2` cycle placement material, `F3` reset camera, `F4` control mode toggle, `P` pause, `Tab` mouse capture toggle;
 - CPU voxel raycast от камеры;
 - runtime block picking и remove/place interaction через `VoxelWorld::SetVoxelMaterial`;
+- минимальный `JoltPhysics` slice в `src/physics`: static voxel collision world, physics raycast и `CharacterVirtual` walk
+  controller без полного gameplay-framework rewrite;
+- синхронизация voxel edits и physics идёт через `VoxelWorld::editVersion`: при реальном изменении материала physics world
+  пересобирается из актуального набора solid voxels;
+- текущий `walk` controller всё ещё минималистичный: лёгкое скатывание с краёв блоков считается ожидаемым follow-up до
+  отдельного ground-sticking / ledge-stability tuning;
 - block highlight и crosshair через отдельный debug overlay graphics pipeline;
 - in-app debug HUD через отдельный graphics pipeline и CPU-built vertex buffer без `imgui`;
 - минимальный `flecs` ECS slice в `src/ecs`, где primary camera/player сущности и `world`/`debug` singleton data уже встроены в main loop, а chunk state зеркалится в ECS entity summary без полного переноса ownership `VoxelWorld`;
@@ -43,12 +53,13 @@
 - controlled failure probes для missing shader и incomplete init через `PROJECTV_SHADER_BASE_DIR`, `PROJECTV_FAIL_INIT_STAGE` и `tools/windows/Invoke-ProjectVFailureProbes.ps1`;
 - минимальный `RuntimeDiagnostics` layer на `fmt` для unified runtime error logs и `PV_CHECK_OR_RETURN` / `PV_ASSERT` в bootstrap/render/pipeline path;
 - `RuntimeDiagnostics` log helpers теперь трактуются как side-effect-only logging API без bool-return contract; failure path в mainline коде должен оставаться явным как `log + return false`, а не скрываться в `return Log...`;
-- физически структурированное `src/` с каталогами `app/`, `core/`, `platform/`, `render/`, `render/vulkan/`, `voxel/` и `debug/`;
+- физически структурированное `src/` с каталогами `app/`, `core/`, `debug/`, `ecs/`, `physics/`, `platform/`,
+  `render/`, `render/vulkan/` и `voxel/`;
 - project и test targets теперь используют только корень `src/` как include boundary; внутренние project headers подключаются qualified-путями вида `app/Camera.hpp`, `core/Types.hpp`, `render/vulkan/VulkanInit.hpp`;
 - fixed-step update loop;
 - процедурная demo-scene;
 - Tracy hooks;
-- unit tests для `VoxelWorld`, raycast и dirty-neighbor инвариантов.
+- unit tests для `VoxelWorld`, raycast, dirty-neighbor инвариантов и physics/walk glue.
 - ECS chunk mirror в `src/ecs` сейчас хранит только `rebuildQueued` и `nonAirVoxelCount`, то есть ровно тот summary state, который реально читает debug/world sync path; `min/maxExclusive` не дублируются до появления практического потребителя.
 
 ---
@@ -58,9 +69,9 @@
 Главные пробелы:
 
 - save/load;
-- walk / noclip layer поверх уже существующих `free-fly` и `spectator` modes;
 - CI и интеграция локального smoke path в автоматический контур;
 - актуальная authored documentation в `docs/`;
+- benchmark/profile scene presets;
 - внятное разделение mainline MVP и R&D.
 
 ---
@@ -71,7 +82,7 @@
 
 1. Довести текущий voxel vertical slice до интерактивного MVP.
 2. Стабилизировать interaction/rendering/documentation loop.
-3. Потом расширяться в ECS, physics, save/load и tooling.
+3. Потом расширяться в save/load, benchmark/profiling tooling и следующий gameplay/debug layer поверх уже существующих ECS и physics slices.
 
 Mainline сейчас не должен ломаться и тормозиться ради:
 
@@ -129,6 +140,8 @@ Mainline сейчас не должен ломаться и тормозитьс
 - `README.md` уже был изменён в рабочем дереве;
 - `external/tracy` синхронизирован с upstream HEAD на `2026-04-07` и очищен от локальных ad-hoc правок внутри сабмодуля;
 - `external/fmt` добавлен как git submodule и подключён в root CMake через `add_subdirectory`, но пока не навязывает новый logging layer;
+- `JoltPhysics` на `2026-04-07` подключён в build через `external/JoltPhysics/Build`; для текущего `clang-cl` debug toolchain
+  он должен собираться с `USE_STATIC_MSVC_RUNTIME_LIBRARY=OFF`, иначе проект и библиотека расходятся по CRT;
 - clean submodules в `external/`, включая уже очищенный `external/tracy`, были обновлены до upstream HEAD на `2026-04-07`;
 - `external/draco` на `2026-04-07` не bump'ался на новый upstream commit, но был возвращён к clean recursive состоянию: nested `third_party/*` submodules внутри него должны совпадать с gitlinks, записанными самим `draco`;
 - `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1` и `docs/voxel_mvp_smoke_checklist.md` подтверждают рабочий runtime path на `2026-04-07`: `resize -> minimize -> restore -> maximize -> restore -> graceful shutdown`;

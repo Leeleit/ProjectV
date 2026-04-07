@@ -54,6 +54,22 @@ set(FLECS_TESTS OFF CACHE BOOL "Disable flecs tests" FORCE)
 add_subdirectory(external/flecs)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/flecs")
 
+# JoltPhysics
+set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "Disable Jolt warnings-as-errors" FORCE)
+set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "Keep parent compiler flags for Jolt" FORCE)
+set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "Disable Jolt IPO" FORCE)
+set(ENABLE_INSTALL OFF CACHE BOOL "Disable Jolt install target" FORCE)
+set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "Use shared MSVC runtime for Jolt" FORCE)
+set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "Disable Jolt debug renderer" FORCE)
+set(PROFILER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "Disable Jolt profiler" FORCE)
+set(JPH_BUILD_SHARED_LIBS OFF CACHE BOOL "Build static Jolt lib" FORCE)
+set(JPH_USE_DX12 OFF CACHE BOOL "Disable Jolt DX12 compute" FORCE)
+set(JPH_USE_VK OFF CACHE BOOL "Disable Jolt Vulkan compute" FORCE)
+set(JPH_USE_MTL OFF CACHE BOOL "Disable Jolt Metal compute" FORCE)
+set(JPH_USE_CPU_COMPUTE OFF CACHE BOOL "Disable Jolt CPU compute path" FORCE)
+add_subdirectory(external/JoltPhysics/Build)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/JoltPhysics/Build")
+
 projectv_add_tracy()
 
 # --- Vulkan Stack End ---

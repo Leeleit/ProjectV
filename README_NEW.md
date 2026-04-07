@@ -2,16 +2,19 @@
 
 Актуальный обзор проекта на `2026-04-07`.
 
-`ProjectV` сейчас находится в стадии `pre-MVP alpha / ранний vertical slice`: это уже не triangle-prototype, а ранний voxel sandbox renderer с интерактивным editing loop, HUD и проверенным runtime stability path.
+`ProjectV` сейчас находится в стадии `pre-MVP alpha / ранний vertical slice`: это уже не triangle-prototype, а ранний
+voxel sandbox renderer с интерактивным editing loop, HUD, базовым ECS/physics slice и проверенным runtime stability
+path.
 
 ## Что уже работает
 
 - Vulkan bootstrap, swapchain recreate и controlled shutdown;
 - CPU `VoxelWorld` с чанками, dirty queue и chunk rebuild bookkeeping;
 - минимальный `flecs` ECS slice с primary camera/player entities, `world`/`debug` singleton data и chunk mirror summary;
+- минимальный `JoltPhysics` slice со static voxel collision world, physics raycast и walk controller;
 - compute voxel meshing и opaque/transparent indirect draw;
 - CPU raycast, block picking, `remove/place` edits и корректное dirty-neighbor обновление;
-- `free-fly` и `spectator` control modes;
+- `free-fly`, `spectator` и `walk` control modes;
 - block highlight, crosshair и in-app HUD;
 - runtime smoke и failure probes через скрипты в `tools/windows/`.
 
@@ -51,21 +54,24 @@ build/windows-clang-debug/bin/ProjectV.exe
 ## Управление
 
 - `WASD` — движение в плоскости.
-- `Space / Shift` — вверх / вниз.
+- `Space / Shift` — вверх / вниз в `free-fly`.
 - `Ctrl / Alt` — ускорение / замедление камеры.
 - `Tab` — toggle relative mouse mode.
 - `F1` — показать или скрыть HUD.
 - `F2` — сменить placement material.
 - `F3` — reset camera.
-- `F4` — переключение `free-fly` / `spectator`.
+- `F4` — переключение `free-fly` / `spectator` / `walk`.
 - `P` — pause simulation.
-- `LMB` — удалить voxel в `free-fly`.
-- `RMB` — поставить voxel в `free-fly`.
+- `LMB` — удалить voxel в `free-fly` и `walk`.
+- `RMB` — поставить voxel в `free-fly` и `walk`.
 
 Поведение control modes:
 
-- `free-fly` — debug/tool mode: камера двигается даже при `pause`, а edits разрешены;
-- `spectator` — observe-only mode: edits отключены, а камера подчиняется `pause`.
+- `free-fly` — debug/tool mode: noclip-камера двигается даже при `pause`, `Space/Shift` двигают по вертикали, а edits
+  разрешены;
+- `spectator` — observe-only mode: edits отключены, а камера подчиняется `pause`;
+- `walk` — physics-driven mode: камера снапается к полу, движение подчиняется collision, `Space` работает как jump, а
+  edits по-прежнему разрешены.
 
 ## Где смотреть дальше
 
@@ -76,8 +82,8 @@ build/windows-clang-debug/bin/ProjectV.exe
 
 ## Текущий фокус
 
-Ближайший mainline-фокус после закрытия `8.3`:
+Ближайший mainline-фокус после закрытия `8.4`:
 
-1. связать новый ECS slice с MVP physics raycast/collision;
-2. после этого двигаться в `walk / noclip`, player controller и save/load;
-3. параллельно дочищать authored docs под обновлённую app/world/ECS раскладку.
+1. закрыть authored docs в `docs/` под текущий interaction/runtime/ECS/physics loop;
+2. после этого двигаться в `save/load` и benchmark scene presets;
+3. параллельно дочищать player/debug tooling уже поверх связки `InputActions + ECS + physics`.

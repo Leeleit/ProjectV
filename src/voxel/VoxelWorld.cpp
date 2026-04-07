@@ -263,6 +263,7 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMateria
 	}
 
 	world.voxels[voxelIndex] = static_cast<uint8_t>(material);
+	++world.editVersion;
 	AccumulateMaterialCount(world.stats, previousMaterial, -1);
 	AccumulateMaterialCount(world.stats, material, 1);
 

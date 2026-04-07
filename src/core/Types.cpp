@@ -1,12 +1,12 @@
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
-#include "debug/ProfilingGpu.hpp"
 #include "core/Types.hpp"
+#include "debug/ProfilingGpu.hpp"
 #include "render/SceneResources.hpp"
-#include "voxel/VoxelWorld.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 void ShutdownVulkan(AppState *state)
 {
@@ -26,6 +26,7 @@ void ShutdownVulkan(AppState *state)
 		DestroySceneResources(&state->context, &state->render);
 	}
 
+	state->physics.reset();
 	DestroyVoxelLabWorld(state);
 
 	if (state->context.device) {

@@ -2,8 +2,9 @@
 
 #include "app/Camera.hpp"
 #include "app/InputActions.hpp"
-#include "debug/Profiling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
+#include "debug/Profiling.hpp"
+#include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelInteraction.hpp"
 
 #include <cmath>
@@ -15,6 +16,25 @@ constexpr float kMaxFrameDeltaSeconds = 0.25f;
 bool IsFreeFlyMode(const CameraState &camera)
 {
 	return camera.controlMode == CameraState::ControlMode::FreeFly;
+}
+
+bool IsWalkMode(const CameraState &camera)
+{
+	return camera.controlMode == CameraState::ControlMode::Walk;
+}
+
+CameraState::ControlMode GetNextControlMode(const CameraState::ControlMode controlMode)
+{
+	switch (controlMode) {
+	case CameraState::ControlMode::FreeFly:
+		return CameraState::ControlMode::Spectator;
+	case CameraState::ControlMode::Spectator:
+		return CameraState::ControlMode::Walk;
+	case CameraState::ControlMode::Walk:
+		return CameraState::ControlMode::FreeFly;
+	}
+
+	return CameraState::ControlMode::FreeFly;
 }
 
 float ComputeFrameDeltaSeconds(SimulationState &simulation)
@@ -67,6 +87,7 @@ bool UpdateApp(
 	InputState *input,
 	InteractionState *interaction,
 	WorldState *world,
+	PhysicsState *physics,
 	RenderState *render,
 	DebugState *debug)
 {
@@ -101,16 +122,41 @@ bool UpdateApp(
 		simulation->simulationAccumulatorSeconds = 0.0f;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleControlMode)) {
-		camera->controlMode =
-			IsFreeFlyMode(*camera)
-				? CameraState::ControlMode::Spectator
-				: CameraState::ControlMode::FreeFly;
+		const CameraState::ControlMode previousMode = camera->controlMode;
+		camera->controlMode = GetNextControlMode(previousMode);
 		ClearInteractionClickActions(*input);
+		if (previousMode == CameraState::ControlMode::Walk) {
+			ResetWalkCharacter(physics);
+		}
+		if (camera->controlMode == CameraState::ControlMode::Walk) {
+			PV_CHECK_OR_RETURN(
+				physics && world->voxelWorld,
+				"App",
+				"UpdateApp.ToggleControlMode",
+				"Walk mode requires initialized physics and voxel world");
+			if (!SyncPhysicsWorld(physics, world->voxelWorld.get()) ||
+				!SnapWalkCharacterToCamera(physics, world->voxelWorld.get(), camera)) {
+				runtime::LogRuntimeFailure(
+					"App",
+					"UpdateApp.ToggleControlMode",
+					"failed to initialize walk mode physics state");
+				return false;
+			}
+		}
 	}
 
 	const bool freeFlyMode = IsFreeFlyMode(*camera);
+	const bool walkMode = IsWalkMode(*camera);
 	const bool cameraCanUpdate = freeFlyMode || !simulation->paused;
-	const bool allowWorldEditing = freeFlyMode;
+	const bool allowWorldEditing = freeFlyMode || walkMode;
+
+	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"UpdateApp.SyncPhysicsWorld",
+			"SyncPhysicsWorld returned false before simulation tick");
+		return false;
+	}
 
 	if (!simulation->paused) {
 		simulation->simulationAccumulatorSeconds += simulation->frameDeltaSeconds;
@@ -128,7 +174,27 @@ bool UpdateApp(
 	while (simulation->simulationAccumulatorSeconds >= simulation->fixedSimulationDeltaSeconds &&
 		   simulation->simulationStepsLastFrame < kMaxSimulationStepsPerFrame &&
 		   !simulation->paused) {
-		TickCamera(camera, *input, simulation->fixedSimulationDeltaSeconds);
+		if (walkMode) {
+			PV_CHECK_OR_RETURN(
+				physics && world->voxelWorld,
+				"App",
+				"UpdateApp.TickWalkCharacter",
+				"walk mode requires initialized physics and voxel world");
+			if (!TickWalkCharacter(
+					physics,
+					world->voxelWorld.get(),
+					camera,
+					input,
+					simulation->fixedSimulationDeltaSeconds)) {
+				runtime::LogRuntimeFailure(
+					"App",
+					"UpdateApp.TickWalkCharacter",
+					"TickWalkCharacter returned false");
+				return false;
+			}
+		} else {
+			TickCamera(camera, *input, simulation->fixedSimulationDeltaSeconds);
+		}
 		simulation->simulationAccumulatorSeconds -= simulation->fixedSimulationDeltaSeconds;
 		++simulation->simulationStepsLastFrame;
 		++simulation->simulationTick;
@@ -143,7 +209,19 @@ bool UpdateApp(
 		TickCamera(camera, *input, simulation->frameDeltaSeconds);
 	}
 
+	const uint64_t worldEditVersionBeforeInteraction =
+		world->voxelWorld ? world->voxelWorld->editVersion : 0;
 	UpdateVoxelInteraction(*camera, input, world->voxelWorld.get(), interaction, allowWorldEditing);
+	if (physics &&
+		world->voxelWorld &&
+		world->voxelWorld->editVersion != worldEditVersionBeforeInteraction &&
+		!SyncPhysicsWorld(physics, world->voxelWorld.get())) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"UpdateApp.PostInteractionPhysicsSync",
+			"SyncPhysicsWorld returned false after voxel edit");
+		return false;
+	}
 
 	profiling::PlotValue("Frame Delta (ms)", simulation->frameDeltaSeconds * 1000.0f);
 	profiling::PlotValue(

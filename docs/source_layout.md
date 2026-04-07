@@ -3,7 +3,7 @@
 Дата фиксации: `2026-04-07`
 
 Этот документ описывает текущую физическую раскладку `src/` и правило include boundaries после закрытия `8.2`, включая
-добавленный в `8.3` минимальный `src/ecs` slice.
+добавленные позже practical slices `src/ecs` из `8.3` и `src/physics` из `8.4`.
 
 ## Правило include paths
 
@@ -15,6 +15,7 @@
 #include "app/Camera.hpp"
 #include "core/Types.hpp"
 #include "ecs/EcsWorld.hpp"
+#include "physics/PhysicsWorld.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "voxel/VoxelWorld.hpp"
 ```
@@ -33,6 +34,7 @@ src/
   core/
   debug/
   ecs/
+  physics/
   platform/
   render/
     vulkan/
@@ -92,6 +94,18 @@ src/
 
 - `ecs/EcsWorld.cpp`
 - `ecs/EcsWorld.hpp`
+
+### `src/physics/`
+
+- минимальный physics glue layer на `JoltPhysics`;
+- static voxel collision world;
+- physics raycast;
+- `CharacterVirtual` walk controller и sync с voxel edits.
+
+Ключевые файлы:
+
+- `physics/PhysicsWorld.cpp`
+- `physics/PhysicsWorld.hpp`
 
 ### `src/platform/`
 

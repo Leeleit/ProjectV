@@ -1,8 +1,8 @@
 #ifndef VOXEL_WORLD_HPP
 #define VOXEL_WORLD_HPP
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 #include <vector>
 
@@ -73,6 +73,7 @@ struct VoxelWorld {
 	int chunkCountX = 0;
 	int chunkCountY = 0;
 	int chunkCountZ = 0;
+	uint64_t editVersion = 0;
 	std::vector<VoxelChunk> chunks;
 	std::vector<size_t> pendingChunkRebuildIndices;
 	VoxelWorldStats stats{};

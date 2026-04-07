@@ -244,6 +244,25 @@
 - chunk mirror полезен уже сейчас как bridge между существующим dense-world slice и будущими ECS/physics/debug systems.
 - mirror-компоненты должны хранить только реально читаемый summary state; дублирование `min/maxExclusive` без потребителя создаёт лишний maintenance/static-analysis шум и не даёт текущей mainline-пользы.
 
+### MVP physics поверх voxel world
+
+Решение:
+
+- `JoltPhysics` вводится как минимальный physics layer в `src/physics`, а не как большой gameplay framework;
+- collision world строится как один static compound body из solid voxels текущего `VoxelWorld`;
+- physics world синхронизируется по `VoxelWorld::editVersion`, то есть только после реального world edit;
+- CPU `VoxelRaycast` остаётся источником истины для runtime block interaction, а physics raycast и `CharacterVirtual`
+  используются для walk/collision slice;
+- `free-fly` остаётся noclip/debug mode, а `walk` становится отдельным collision-based mode поверх того же
+  `InputActions + ECS + app loop`.
+
+Почему:
+
+- это закрывает `8.4` без renderer rewrite и без premature переноса ownership мира в physics/gameplay слой;
+- static compound + `editVersion` дают явную и дешёвую схему синхронизации для текущего MVP;
+- сохранение CPU interaction raycast не ломает уже работающий remove/place loop и keeps mainline stable, пока physics
+  добавляет только то, что реально нужно сейчас: collision, walk и базовый physics raycast.
+
 ### Явный lifecycle cleanup вместо hidden cleanup в `AppState::~AppState`
 
 Решение:

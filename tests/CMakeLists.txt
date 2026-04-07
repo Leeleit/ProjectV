@@ -4,6 +4,7 @@ add_executable(ProjectVTests
         ../src/app/Camera.cpp
         ../src/app/InputActions.cpp
         ../src/ecs/EcsWorld.cpp
+        ../src/physics/PhysicsWorld.cpp
         ../src/debug/DebugHud.cpp
         ../src/platform/PlatformEvents.cpp
         ../src/core/RuntimeDiagnostics.cpp
@@ -35,6 +36,7 @@ target_link_libraries(ProjectVTests PRIVATE
         volk
         fmt::fmt
         flecs::flecs_static
+        Jolt::Jolt
         SDL3::SDL3
         GPUOpen::VulkanMemoryAllocator
 )
