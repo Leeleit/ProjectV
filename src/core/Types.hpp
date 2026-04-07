@@ -182,6 +182,20 @@ static_assert(offsetof(VoxelMeshingPushConstants, worldMaxExclusiveAndChunkCount
 static_assert(offsetof(VoxelMeshingPushConstants, chunkGridAndTransparentFaceBase) == 32);
 static_assert(offsetof(VoxelMeshingPushConstants, faceCapacities) == 48);
 
+struct ChunkCullingParameters {
+	std::array<float, 4> cameraPositionAndMaxDistance{};
+	std::array<float, 4> cameraForwardAndTanHalfVerticalFov{};
+	std::array<float, 4> cameraRightAndTanHalfHorizontalFov{};
+	std::array<float, 4> cameraUpAndNearPlane{};
+};
+static_assert(std::is_standard_layout_v<ChunkCullingParameters>);
+static_assert(std::is_trivially_copyable_v<ChunkCullingParameters>);
+static_assert(sizeof(ChunkCullingParameters) == 64);
+static_assert(offsetof(ChunkCullingParameters, cameraPositionAndMaxDistance) == 0);
+static_assert(offsetof(ChunkCullingParameters, cameraForwardAndTanHalfVerticalFov) == 16);
+static_assert(offsetof(ChunkCullingParameters, cameraRightAndTanHalfHorizontalFov) == 32);
+static_assert(offsetof(ChunkCullingParameters, cameraUpAndNearPlane) == 48);
+
 struct FrameRenderData {
 	uint32_t frameIndex = 0;
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
@@ -242,6 +256,9 @@ struct SceneFrameResources {
 	void *dirtyChunkIndexMappedData = nullptr;
 	VkBuffer dirtyChunkIndexBuffer = VK_NULL_HANDLE;
 	VmaAllocation dirtyChunkIndexAllocation = VK_NULL_HANDLE;
+	void *chunkCullingMappedData = nullptr;
+	VkBuffer chunkCullingBuffer = VK_NULL_HANDLE;
+	VmaAllocation chunkCullingAllocation = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;

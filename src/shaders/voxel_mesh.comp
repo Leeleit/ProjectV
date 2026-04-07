@@ -40,6 +40,13 @@ layout(set = 0, binding = 5, std430) buffer TransparentIndirectCommands {
     DrawCommand transparentCommands[];
 };
 
+layout(set = 0, binding = 6, std430) readonly buffer ChunkCullingParameters {
+    vec4 cameraPositionAndMaxDistance;
+    vec4 cameraForwardAndTanHalfVerticalFov;
+    vec4 cameraRightAndTanHalfHorizontalFov;
+    vec4 cameraUpAndNearPlane;
+} chunkCulling;
+
 layout(push_constant) uniform PushConstants {
     ivec4 worldMinAndChunkSize;
     ivec4 worldMaxExclusiveAndChunkCount;
@@ -115,6 +122,55 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
     return neighborMaterialIndex == 0u;
 }
 
+bool IsChunkVisible(const ChunkDescriptor chunkDescriptor) {
+    if (chunkDescriptor.chunkExtentAndNonAir.w == 0u) {
+        return false;
+    }
+
+    const vec3 chunkHalfExtent = vec3(chunkDescriptor.chunkExtentAndNonAir.xyz) * 0.5;
+    const vec3 chunkCenter = vec3(chunkDescriptor.chunkOrigin.xyz) + chunkHalfExtent;
+    const vec3 toChunkCenter = chunkCenter - chunkCulling.cameraPositionAndMaxDistance.xyz;
+    const vec3 cameraForward = chunkCulling.cameraForwardAndTanHalfVerticalFov.xyz;
+    const vec3 cameraRight = chunkCulling.cameraRightAndTanHalfHorizontalFov.xyz;
+    const vec3 cameraUp = chunkCulling.cameraUpAndNearPlane.xyz;
+    const float tanHalfVerticalFov = max(chunkCulling.cameraForwardAndTanHalfVerticalFov.w, 0.0);
+    const float tanHalfHorizontalFov = max(chunkCulling.cameraRightAndTanHalfHorizontalFov.w, 0.0);
+    const float projectedRadiusAlongForward = dot(abs(cameraForward), chunkHalfExtent);
+    const float chunkRadius = length(chunkHalfExtent);
+    const float nearPlane = max(chunkCulling.cameraUpAndNearPlane.w, 0.0);
+    const float forwardDistance = dot(toChunkCenter, cameraForward);
+    if (forwardDistance + projectedRadiusAlongForward < nearPlane) {
+        return false;
+    }
+
+    const float maxDistance = chunkCulling.cameraPositionAndMaxDistance.w;
+    if (maxDistance > 0.0) {
+        const float maxCenterDistance = maxDistance + chunkRadius;
+        if (dot(toChunkCenter, toChunkCenter) > maxCenterDistance * maxCenterDistance) {
+            return false;
+        }
+    }
+
+    const vec3 leftPlane = cameraForward * tanHalfHorizontalFov + cameraRight;
+    const vec3 rightPlane = cameraForward * tanHalfHorizontalFov - cameraRight;
+    const vec3 bottomPlane = cameraForward * tanHalfVerticalFov + cameraUp;
+    const vec3 topPlane = cameraForward * tanHalfVerticalFov - cameraUp;
+    if (dot(toChunkCenter, leftPlane) + dot(abs(leftPlane), chunkHalfExtent) < 0.0) {
+        return false;
+    }
+    if (dot(toChunkCenter, rightPlane) + dot(abs(rightPlane), chunkHalfExtent) < 0.0) {
+        return false;
+    }
+    if (dot(toChunkCenter, bottomPlane) + dot(abs(bottomPlane), chunkHalfExtent) < 0.0) {
+        return false;
+    }
+    if (dot(toChunkCenter, topPlane) + dot(abs(topPlane), chunkHalfExtent) < 0.0) {
+        return false;
+    }
+
+    return true;
+}
+
 void main() {
     const uint dirtyChunkListIndex = gl_GlobalInvocationID.x;
     if (dirtyChunkListIndex >= pushConstants.faceCapacities.z) {
@@ -129,6 +185,7 @@ void main() {
     const uint opaqueFirstFace = chunkDescriptor.drawRanges.x;
     const uint transparentFirstFace = chunkDescriptor.drawRanges.z;
     const uint maxChunkFaceCount = chunkDescriptor.voxelDataInfo.y * 6u;
+    const bool chunkVisible = IsChunkVisible(chunkDescriptor);
     if (chunkDescriptor.chunkExtentAndNonAir.w == 0u) {
         chunkDescriptors[chunkIndex].drawRanges.y = 0u;
         chunkDescriptors[chunkIndex].drawRanges.w = 0u;
@@ -177,6 +234,6 @@ void main() {
 
     chunkDescriptors[chunkIndex].drawRanges.y = opaqueFaceCount;
     chunkDescriptors[chunkIndex].drawRanges.w = transparentFaceCount;
-    opaqueCommands[chunkIndex] = DrawCommand(6u, opaqueFaceCount, 0u, opaqueFirstFace);
-    transparentCommands[chunkIndex] = DrawCommand(6u, transparentFaceCount, 0u, transparentFirstFace);
+    opaqueCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? opaqueFaceCount : 0u, 0u, opaqueFirstFace);
+    transparentCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? transparentFaceCount : 0u, 0u, transparentFirstFace);
 }

@@ -78,6 +78,8 @@ inline void ConfigureDefaultPlots()
 	ConfigurePlot("Generated Opaque Faces", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Generated Transparent Faces", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Meshing Dirty Chunks", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Visible Chunks", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Culled Chunks", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Chunk Voxel Words", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Uploaded Chunk Descriptors", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Uploaded Voxel Payload Chunks", ProfilingPlotFormat::Number, true);

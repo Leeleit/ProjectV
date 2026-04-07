@@ -7,6 +7,8 @@
 #include "render/SceneResources.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+#include <algorithm>
+
 bool PrepareFrameRenderData(
 	VulkanContextState *context,
 	const SwapchainState *swapchain,
@@ -64,6 +66,18 @@ bool PrepareFrameRenderData(
 			"Frame",
 			"PrepareFrameRenderData.UploadSceneFrameResources",
 			"UploadSceneFrameResources returned false");
+		return false;
+	}
+
+	const ChunkCullingParameters chunkCullingParameters = BuildChunkCullingParameters(
+		*camera,
+		swapchain->extent,
+		std::min(camera->farPlane, 64.0f));
+	if (!UpdateSceneFrameChunkVisibility(*render, frame->currentFrame, chunkCullingParameters)) {
+		runtime::LogRuntimeFailure(
+			"Frame",
+			"PrepareFrameRenderData.UpdateSceneFrameChunkVisibility",
+			"UpdateSceneFrameChunkVisibility returned false");
 		return false;
 	}
 

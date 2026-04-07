@@ -13,7 +13,7 @@ constexpr uint32_t kVoxelMeshingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kVoxelMeshingShaderFilename[] = "voxel_mesh.comp.spv";
 constexpr VkDescriptorPoolSize kVoxelMeshingDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kVoxelMeshingDescriptorSetCount * 6u,
+	.descriptorCount = kVoxelMeshingDescriptorSetCount * 7u,
 };
 constexpr std::array kVoxelMeshingDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -53,6 +53,13 @@ constexpr std::array kVoxelMeshingDescriptorBindings{
 	},
 	VkDescriptorSetLayoutBinding{
 		.binding = 5,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 6,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -192,6 +199,11 @@ bool RefreshVoxelMeshingResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
+		const VkDescriptorBufferInfo chunkCullingBufferInfo{
+			.buffer = frameResources.chunkCullingBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
 
 		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
@@ -264,6 +276,18 @@ bool RefreshVoxelMeshingResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
 				.pBufferInfo = &transparentIndirectBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.voxelMeshingDescriptorSet,
+				.dstBinding = 6,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &chunkCullingBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 		};

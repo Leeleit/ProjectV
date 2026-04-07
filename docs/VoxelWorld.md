@@ -157,12 +157,13 @@ Renderer не должен сам вычислять dirty state “по пам�
 
 Текущая стратегия dirty region после edit:
 
-- помечается окно `3x3x3` вокруг изменённого voxel.
+- всегда помечается chunk самого voxel;
+- дополнительно помечаются только те соседние chunks, чью общую грань/ребро/угол voxel реально затронул на boundary.
 
 Причина проста:
 
-- один edit на границе chunk может менять видимые faces соседних chunks;
-- current mainline выбирает border-safe rebuild path, а не слишком раннюю микрооптимизацию.
+- edit внутри chunk больше не должен триггерить лишние rebuild'ы соседей;
+- edit на границе chunk всё ещё обязан безопасно обновлять видимые faces across-chunk без пропущенных border cases.
 
 ## Interaction path
 

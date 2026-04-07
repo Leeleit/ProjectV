@@ -34,6 +34,8 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 - мир остаётся плотным и простым для mutation;
 - renderer получает уже подготовленные и компактные буферы;
 - dirty world edits не заставляют пересобирать всё дерево абстракций.
+- CPU descriptor versioning не должен стирать GPU-сгенерированные face counts: динамические `drawRanges` считаются
+  runtime mesh state, а не authored scene layout.
 
 ## Жизненный цикл dirty chunk
 
@@ -42,10 +44,17 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 1. `VoxelWorld` ставит chunk или регион в dirty queue.
 2. `PrepareFrameRenderData` вызывает `CollectDirtyVoxelChunkRebuildRequests`.
 3. `UpdateSceneResources` repack'ает voxel payload только для dirty chunks.
-4. `UploadSceneFrameResources` либо patch'ит latest dirty chunks, либо перезаливает всё, если version gap неинкрементальный.
-5. `PrepareDirtyChunkMeshingList` формирует compute-dispatch список чанков.
-6. `RecordVoxelMeshingCommands` запускает compute meshing только для этих dirty chunks.
-7. После CPU-side scene update `CommitDirtyVoxelChunkRebuildRequests` снимает rebuildQueued с реально завершённых chunks.
+4. `UploadSceneFrameResources` либо patch'ит latest dirty chunks, либо перезаливает всё, если version gap
+   неинкрементальный. Upload path сохраняет уже сгенерированные GPU-side `drawRanges` counts и меняет на CPU только
+   descriptor layout/static fields плюс `nonAir` summary.
+5. `UpdateSceneFrameChunkVisibility` каждый кадр пересобирает indirect draw commands под текущие frustum/distance
+   условия и кладёт chunk-culling параметры в отдельный buffer. Frustum visibility при этом использует консервативную
+   проверку chunk AABB против near/left/right/top/bottom planes, а не только центр+bounding-sphere приближение.
+6. `PrepareDirtyChunkMeshingList` формирует compute-dispatch список dirty чанков.
+7. `RecordVoxelMeshingCommands` запускает compute meshing только для этих dirty chunks и поверх свежих face counts
+   перезаписывает их indirect-команды с учётом текущей visibility.
+8. После CPU-side scene update `CommitDirtyVoxelChunkRebuildRequests` снимает rebuildQueued с реально завершённых
+   chunks.
 
 Это и есть current “meshing path”.
 
@@ -59,6 +68,7 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 - `UpdateSceneResources`;
 - `vkWaitForFences` для текущего кадра;
 - `UploadSceneFrameResources`;
+- `UpdateSceneFrameChunkVisibility`;
 - сбор HUD vertices;
 - заполнение `FrameRenderData`:
   - descriptor sets;
@@ -77,7 +87,7 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 
 Compute meshing pipeline создаётся и биндуется в [VulkanVoxelMeshingPipeline.cpp](../src/render/vulkan/VulkanVoxelMeshingPipeline.cpp).
 
-Descriptor set сейчас связывает шесть storage buffers:
+Descriptor set сейчас связывает семь storage buffers:
 
 1. chunk descriptors
 2. chunk voxel payload
@@ -85,6 +95,7 @@ Descriptor set сейчас связывает шесть storage buffers:
 4. dirty chunk index buffer
 5. opaque indirect buffer
 6. transparent indirect buffer
+7. chunk culling parameters buffer
 
 Compute dispatch идёт по количеству dirty chunks, не по всему миру.
 
@@ -138,6 +149,7 @@ HUD живёт отдельным pipeline и отдельным CPU-built verte
 
 - текст собирается на CPU;
 - vertex buffer host-mapped;
+- panel bounds считаются от реально измеренных HUD-строк, а не от fixed width констант;
 - draw идёт после основных voxel passes.
 
 Это сознательно проще и дешевле, чем тащить `imgui` в current MVP.
@@ -168,6 +180,8 @@ Render path уже размечен Tracy-зонами:
 - `Generated Opaque Faces`
 - `Generated Transparent Faces`
 - `Meshing Dirty Chunks`
+- `Visible Chunks`
+- `Culled Chunks`
 - `Uploaded Chunk Descriptors`
 - `Uploaded Voxel Payload Chunks`
 - `Upload Descriptor Bytes`
@@ -179,8 +193,6 @@ Render path уже размечен Tracy-зонами:
 
 Пока в current mainline ещё нет:
 
-- frustum culling;
-- distance culling;
 - greedy meshing;
 - advanced transparent sorting;
 - scene streaming;

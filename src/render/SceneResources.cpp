@@ -63,6 +63,19 @@ uint32_t GetChunkVoxelWordCount(const VoxelChunk &chunk)
 	return (voxelCount + kVoxelMaterialsPerWord - 1u) / kVoxelMaterialsPerWord;
 }
 
+VkDrawIndirectCommand BuildChunkIndirectCommand(
+	const uint32_t firstInstance,
+	const uint32_t faceCount,
+	const bool visible)
+{
+	return {
+		.vertexCount = 6u,
+		.instanceCount = visible ? faceCount : 0u,
+		.firstVertex = 0u,
+		.firstInstance = firstInstance,
+	};
+}
+
 uint32_t GetMaxSceneFaceCount(const VoxelWorld &world)
 {
 	return static_cast<uint32_t>(world.voxels.size()) * 6u;
@@ -189,6 +202,40 @@ void UpdateGeneratedFaceStatsFromFrameResources(
 	render.sceneTriangleCount = (render.sceneOpaqueFaceCount + render.sceneTransparentFaceCount) * 2u;
 }
 
+uint32_t UpdateChunkVisibilityAndIndirectCommands(
+	SceneFrameResources &frameResources,
+	const ChunkCullingParameters &parameters)
+{
+	if (!frameResources.chunkDescriptorMappedData ||
+		!frameResources.opaqueIndirectMappedData ||
+		!frameResources.transparentIndirectMappedData) {
+		return 0;
+	}
+
+	const auto *chunkDescriptors = static_cast<const PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
+	auto *opaqueCommands = static_cast<VkDrawIndirectCommand *>(frameResources.opaqueIndirectMappedData);
+	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
+	uint32_t visibleChunkCount = 0;
+	for (uint32_t chunkIndex = 0; chunkIndex < frameResources.chunkDescriptorCount; ++chunkIndex) {
+		const PackedSceneChunkDescriptor &chunkDescriptor = chunkDescriptors[chunkIndex];
+		const bool visible = IsSceneChunkVisible(chunkDescriptor, parameters);
+		if (visible) {
+			++visibleChunkCount;
+		}
+
+		opaqueCommands[chunkIndex] = BuildChunkIndirectCommand(
+			chunkDescriptor.drawRanges[0],
+			chunkDescriptor.drawRanges[1],
+			visible);
+		transparentCommands[chunkIndex] = BuildChunkIndirectCommand(
+			chunkDescriptor.drawRanges[2],
+			chunkDescriptor.drawRanges[3],
+			visible);
+	}
+
+	return visibleChunkCount;
+}
+
 uint32_t PrepareDirtyChunkMeshingList(
 	const RenderState &render,
 	SceneFrameResources &frameResources)
@@ -222,6 +269,30 @@ uint32_t PrepareDirtyChunkMeshingList(
 }
 } // namespace
 
+bool UpdateSceneFrameChunkVisibility(
+	RenderState &render,
+	const uint32_t frameIndex,
+	const ChunkCullingParameters &parameters)
+{
+	if (static_cast<size_t>(frameIndex) >= render.sceneFrameResources.size()) {
+		return false;
+	}
+
+	SceneFrameResources &frameResources = render.sceneFrameResources[frameIndex];
+	if (frameResources.chunkCullingMappedData) {
+		std::memcpy(frameResources.chunkCullingMappedData, &parameters, sizeof(parameters));
+	}
+
+	const uint32_t visibleChunkCount = UpdateChunkVisibilityAndIndirectCommands(frameResources, parameters);
+	const uint32_t culledChunkCount =
+		frameResources.chunkDescriptorCount > visibleChunkCount
+			? frameResources.chunkDescriptorCount - visibleChunkCount
+			: 0u;
+	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(visibleChunkCount));
+	profiling::PlotValue("Culled Chunks", static_cast<int64_t>(culledChunkCount));
+	return true;
+}
+
 void DestroySceneResources(
 	VulkanContextState *context,
 	RenderState *render)
@@ -230,7 +301,7 @@ void DestroySceneResources(
 		return;
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, graphicsDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, graphicsDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -259,6 +330,10 @@ void DestroySceneResources(
 			profiling::RecordFree(dirtyChunkIndexAllocation, "SceneDirtyChunkIndexBufferAllocation");
 			vmaDestroyBuffer(context->allocator, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation);
 		}
+		if (chunkCullingBuffer && chunkCullingAllocation) {
+			profiling::RecordFree(chunkCullingAllocation, "SceneChunkCullingBufferAllocation");
+			vmaDestroyBuffer(context->allocator, chunkCullingBuffer, chunkCullingAllocation);
+		}
 
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
@@ -281,6 +356,9 @@ void DestroySceneResources(
 		dirtyChunkIndexMappedData = nullptr;
 		dirtyChunkIndexBuffer = VK_NULL_HANDLE;
 		dirtyChunkIndexAllocation = VK_NULL_HANDLE;
+		chunkCullingMappedData = nullptr;
+		chunkCullingBuffer = VK_NULL_HANDLE;
+		chunkCullingAllocation = VK_NULL_HANDLE;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
 		voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 		uploadedSceneVersion = 0;
@@ -521,6 +599,26 @@ bool CreateSceneResources(
 			0,
 			sizeof(uint32_t) * world->voxelWorld->chunks.size());
 
+		VmaAllocationInfo chunkCullingAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(ChunkCullingParameters),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.chunkCullingBuffer,
+				&frameResources.chunkCullingAllocation,
+				&chunkCullingAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.chunkCullingMappedData = chunkCullingAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.chunkCullingAllocation,
+			chunkCullingAllocationInfo.size,
+			"SceneChunkCullingBufferAllocation");
+		render->sceneMemoryBytes += chunkCullingAllocationInfo.size;
+		std::memset(frameResources.chunkCullingMappedData, 0, sizeof(ChunkCullingParameters));
+
 		char bufferName[64]{};
 		const size_t frameResourceIndex = static_cast<size_t>(&frameResources - render->sceneFrameResources.data());
 
@@ -566,13 +664,20 @@ bool CreateSceneResources(
 			reinterpret_cast<uint64_t>(frameResources.dirtyChunkIndexBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneChunkCullingBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.chunkCullingBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
 		frameResources.debugHudVertexCount = 0;
 	}
 
 	render->sceneOpaqueFaceCount = 0;
 	render->sceneTransparentFaceCount = 0;
 	render->sceneTriangleCount = 0;
-	render->sceneUploadVersion = 0;
+	// Force the first frame on each swapchain image to upload descriptor layout/state once.
+	render->sceneUploadVersion = 1;
 	render->sceneVoxelPayloadVersion = 0;
 	render->latestVoxelPayloadChunkIndices.clear();
 	render->latestVoxelPayloadChunkIndices.reserve(world->voxelWorld->chunks.size());
@@ -631,7 +736,8 @@ bool UpdateSceneResources(
 	render->pendingChunkRebuildIndices.clear();
 
 	if (!render->completedChunkRebuildIndices.empty()) {
-		++render->sceneUploadVersion;
+		// Per-voxel edits only change payload data plus the dirty chunks' non-air counts.
+		// Full descriptor reuploads would wipe GPU-generated drawRanges for every chunk.
 		++render->sceneVoxelPayloadVersion;
 	}
 
@@ -661,11 +767,18 @@ bool UploadSceneFrameResources(
 	bool descriptorBufferUploaded = false;
 
 	if (frameResources.uploadedSceneVersion != render.sceneUploadVersion) {
-		if (!render.sceneChunkDescriptors.empty()) {
-			std::memcpy(
-				frameResources.chunkDescriptorMappedData,
-				render.sceneChunkDescriptors.data(),
-				render.sceneChunkDescriptors.size() * sizeof(PackedSceneChunkDescriptor));
+		if (!render.sceneChunkDescriptors.empty() && frameResources.chunkDescriptorMappedData) {
+			auto *uploadedChunkDescriptors =
+				static_cast<PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
+			const bool preserveGeneratedFaceCounts =
+				frameResources.chunkDescriptorCount == render.sceneChunkDescriptors.size();
+			for (size_t chunkIndex = 0; chunkIndex < render.sceneChunkDescriptors.size(); ++chunkIndex) {
+				const PackedSceneChunkDescriptor *existingDescriptor =
+					preserveGeneratedFaceCounts ? &uploadedChunkDescriptors[chunkIndex] : nullptr;
+				uploadedChunkDescriptors[chunkIndex] = MakeUploadedSceneChunkDescriptor(
+					render.sceneChunkDescriptors[chunkIndex],
+					existingDescriptor);
+			}
 			uploadedChunkDescriptorCount = static_cast<uint32_t>(render.sceneChunkDescriptors.size());
 			descriptorBufferUploaded = true;
 		}
@@ -696,12 +809,12 @@ bool UploadSceneFrameResources(
 					uploadedChunkVoxelWordCount += payloadRange.wordCount;
 				}
 
-				if (!descriptorBufferUploaded) {
-					std::memcpy(
-						static_cast<char *>(frameResources.chunkDescriptorMappedData) +
-							chunkIndex * sizeof(PackedSceneChunkDescriptor),
-						&render.sceneChunkDescriptors[chunkIndex],
-						sizeof(PackedSceneChunkDescriptor));
+				if (!descriptorBufferUploaded && frameResources.chunkDescriptorMappedData) {
+					auto *uploadedChunkDescriptors =
+						static_cast<PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
+					uploadedChunkDescriptors[chunkIndex] = MakeUploadedSceneChunkDescriptor(
+						render.sceneChunkDescriptors[chunkIndex],
+						&uploadedChunkDescriptors[chunkIndex]);
 				}
 
 				++uploadedVoxelChunkCount;
@@ -715,11 +828,20 @@ bool UploadSceneFrameResources(
 				uploadedChunkVoxelWordCount = render.sceneChunkVoxelPayloadWordCount;
 			}
 
-			if (!descriptorBufferUploaded && !render.sceneChunkDescriptors.empty()) {
-				std::memcpy(
-					frameResources.chunkDescriptorMappedData,
-					render.sceneChunkDescriptors.data(),
-					render.sceneChunkDescriptors.size() * sizeof(PackedSceneChunkDescriptor));
+			if (!descriptorBufferUploaded &&
+				!render.sceneChunkDescriptors.empty() &&
+				frameResources.chunkDescriptorMappedData) {
+				auto *uploadedChunkDescriptors =
+					static_cast<PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
+				const bool preserveGeneratedFaceCounts =
+					frameResources.chunkDescriptorCount == render.sceneChunkDescriptors.size();
+				for (size_t chunkIndex = 0; chunkIndex < render.sceneChunkDescriptors.size(); ++chunkIndex) {
+					const PackedSceneChunkDescriptor *existingDescriptor =
+						preserveGeneratedFaceCounts ? &uploadedChunkDescriptors[chunkIndex] : nullptr;
+					uploadedChunkDescriptors[chunkIndex] = MakeUploadedSceneChunkDescriptor(
+						render.sceneChunkDescriptors[chunkIndex],
+						existingDescriptor);
+				}
 			}
 
 			uploadedVoxelChunkCount = static_cast<uint32_t>(render.sceneChunkVoxelPayloadRanges.size());

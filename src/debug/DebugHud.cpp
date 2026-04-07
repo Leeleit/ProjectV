@@ -15,11 +15,14 @@ constexpr float kPanelOriginYPx = 12.0f;
 constexpr float kPanelGapPx = 8.0f;
 constexpr float kPanelShadowOffsetPx = 3.0f;
 constexpr float kAccentStripHeightPx = 3.0f;
+constexpr float kTextShadowOffsetPx = 1.0f;
 constexpr float kGlyphPixelSizePx = 1.75f;
 constexpr float kGlyphAdvancePx = 10.0f;
 constexpr float kLineAdvancePx = 14.0f;
-constexpr float kStatsPanelWidthPx = 276.0f;
-constexpr float kHelperPanelWidthPx = 244.0f;
+constexpr float kGlyphWidthPx = 5.0f * kGlyphPixelSizePx;
+constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
+constexpr float kStatsPanelMinWidthPx = 276.0f;
+constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
 constexpr size_t kStatsLineCount = 10;
 constexpr size_t kHelperLineCount = 4;
@@ -203,10 +206,10 @@ void AppendShadowedTextLine(
 		vertexCount,
 		maxVertexCount,
 		extent,
-		originYPx + 1.0f,
+		originYPx + kTextShadowOffsetPx,
 		text,
 		{0.0f, 0.0f, 0.0f, color[3] * 0.65f},
-		1.0f);
+		kTextShadowOffsetPx);
 	AppendTextLine(
 		outVertices,
 		vertexCount,
@@ -261,6 +264,36 @@ void AppendPanel(
 		maxXPx,
 		minYPx + kAccentStripHeightPx,
 		accentColor);
+}
+
+float MeasureTextWidthPx(const std::string_view text)
+{
+	float widthPx = 0.0f;
+	float cursorXPx = 0.0f;
+	for (const char character : text) {
+		if (character != ' ') {
+			widthPx = std::max(widthPx, cursorXPx + kGlyphWidthPx);
+		}
+		cursorXPx += kGlyphAdvancePx;
+	}
+
+	return widthPx;
+}
+
+template <size_t TLineCount>
+float ComputePanelWidthPx(
+	const std::array<std::array<char, kHudLineBufferSize>, TLineCount> &lines,
+	const std::string_view title,
+	const float minimumWidthPx)
+{
+	float contentWidthPx = MeasureTextWidthPx(title);
+	for (const auto &line : lines) {
+		contentWidthPx = std::max(contentWidthPx, MeasureTextWidthPx(line.data()));
+	}
+
+	return std::max(
+		minimumWidthPx,
+		kPanelPaddingPx * 2.0f + contentWidthPx + kTextShadowOffsetPx);
 }
 
 const char *GetVoxelMaterialLabel(const VoxelMaterial material)
@@ -428,10 +461,18 @@ uint32_t BuildDebugHudVertices(
 	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
 	constexpr std::array helperTextColor{0.77f, 0.84f, 0.90f, 0.94f};
 	constexpr float titleOffsetPx = 2.0f;
+	constexpr float textBoundsHeightPx = kGlyphHeightPx + kTextShadowOffsetPx;
+	std::array<std::array<char, kHudLineBufferSize>, kStatsLineCount> statsLines{};
+	BuildStatsLines(stats, camera, interaction, statsLines);
+	std::array<std::array<char, kHudLineBufferSize>, kHelperLineCount> helperLines{};
+	BuildHelperLines(helperLines);
+	const float statsPanelWidthPx = ComputePanelWidthPx(statsLines, "STAT", kStatsPanelMinWidthPx);
+	const float helperPanelWidthPx = ComputePanelWidthPx(helperLines, "HELP", kHelperPanelMinWidthPx);
+	const float hudStackWidthPx = std::max(statsPanelWidthPx, helperPanelWidthPx);
 	constexpr float statsPanelHeightPx =
-		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kStatsLineCount + 1) * kLineAdvancePx;
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kStatsLineCount) * kLineAdvancePx + textBoundsHeightPx;
 	constexpr float helperPanelHeightPx =
-		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kHelperLineCount + 1) * kLineAdvancePx;
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kHelperLineCount) * kLineAdvancePx + textBoundsHeightPx;
 	constexpr float statsPanelMinY = kPanelOriginYPx;
 	constexpr float statsPanelMaxY = statsPanelMinY + statsPanelHeightPx;
 	constexpr float helperPanelMinY = statsPanelMaxY + kPanelGapPx;
@@ -441,7 +482,7 @@ uint32_t BuildDebugHudVertices(
 		maxVertexCount,
 		extent,
 		statsPanelMinY,
-		kStatsPanelWidthPx,
+		hudStackWidthPx,
 		statsPanelHeightPx,
 		statsPanelColor,
 		accentColor);
@@ -451,7 +492,7 @@ uint32_t BuildDebugHudVertices(
 		maxVertexCount,
 		extent,
 		helperPanelMinY,
-		kHelperPanelWidthPx,
+		hudStackWidthPx,
 		helperPanelHeightPx,
 		helperPanelColor,
 		accentColor);
@@ -473,8 +514,6 @@ uint32_t BuildDebugHudVertices(
 		"HELP",
 		titleColor);
 
-	std::array<std::array<char, kHudLineBufferSize>, kStatsLineCount> statsLines{};
-	BuildStatsLines(stats, camera, interaction, statsLines);
 	for (size_t lineIndex = 0; lineIndex < statsLines.size(); ++lineIndex) {
 		const float originYPx =
 			statsPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;
@@ -488,8 +527,6 @@ uint32_t BuildDebugHudVertices(
 			textColor);
 	}
 
-	std::array<std::array<char, kHudLineBufferSize>, kHelperLineCount> helperLines{};
-	BuildHelperLines(helperLines);
 	for (size_t lineIndex = 0; lineIndex < helperLines.size(); ++lineIndex) {
 		const float originYPx =
 			helperPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;

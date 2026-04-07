@@ -18,6 +18,10 @@
 - Агент не должен хранить важный план только в переписке; если мысль переживает текущую сессию, она должна попасть либо сюда, либо в `agent/`.
 - Перед заметной работой агент обязан читать `TODO.md`, `agent/memory.md` и `agent/status.md`.
 - После заметной работы агент обязан обновлять `TODO.md` и `agent/status.md`, а при необходимости и `agent/memory.md` / `agent/decisions.md`.
+- `AGENTS.md` хранит только протокол работы агента; roadmap и текущий статус проекта не должны жить там как дубликат
+  `TODO.md` или `agent/`.
+- `agent/` хранит только delta-контекст поверх `TODO.md` и `AGENTS.md`; roadmap и обязательный протокол туда не
+  дублируются.
 - `legacy/docs/latest/philosophy` — источник инженерных принципов, а не замена актуального roadmap.
 - `legacy/docs/latest/TODO.md` и старые академические планы — исторический контекст и источник идей, но не основной план реализации.
 
@@ -491,7 +495,8 @@ src/
   rewrite.
 - Control modes теперь образуют practical MVP-тройку: `creative` как collision-backed flight/edit mode, `spectator` как
   observe-only
-  noclip mode и `walk` как grounded collision-based player mode поверх того же input/app loop.
+  noclip mode и `walk` как grounded collision-based player mode поверх того же input/app loop; `creative` подчиняется
+  `pause` вместе с physics, а `spectator` остаётся свободной noclip-камерой даже при остановленной симуляции.
 - Runtime `remove/place` interaction сознательно остаётся на CPU `VoxelRaycast`; physics усиливает MVP, а не заменяет
   уже
   работающий interaction loop.
@@ -636,11 +641,14 @@ src/
 
 Задачи:
 
-- [ ] Доделать текущий face culling path до уверенного production-like состояния.
-- [ ] Добавить нормальную обработку border cases между чанками.
-- [ ] Рассмотреть greedy meshing как следующий шаг.
-- [ ] Добавить frustum/distance culling чанков.
-- [ ] Уменьшить число rebuild'ов при локальном изменении мира.
+- [x] Доделать текущий face culling path до уверенного production-like состояния.
+- [x] Добавить нормальную обработку border cases между чанками.
+- [x] Рассмотреть greedy meshing как следующий шаг: пока оставляем его отдельным follow-up после visibility/culling,
+  потому что текущий transparent/material split всё ещё опирается на per-face path.
+- [x] Добавить frustum/distance culling чанков.
+- [x] Сделать frustum culling консервативным на краях экрана, чтобы chunk AABB не отрезался раньше видимой геометрии.
+- [x] Зафиксировать upload path chunk descriptors так, чтобы voxel edit не обнулял draw commands у не-dirty чанков.
+- [x] Уменьшить число rebuild'ов при локальном изменении мира.
 
 ## 10.3. Материалы и визуальная выразительность
 
@@ -796,7 +804,7 @@ src/
 
 - [ ] richer chunk model
 - [ ] chunk neighbors bookkeeping
-- [ ] dirty region tracking
+- [x] dirty region tracking
 - [x] scene presets
 - [ ] world snapshots
 - [ ] world editing tools
@@ -807,8 +815,8 @@ src/
 
 - [ ] stable chunk rendering
 - [ ] transparent pass quality
-- [ ] frustum culling
-- [ ] distance culling
+- [x] frustum culling
+- [x] distance culling
 - [ ] greedy meshing
 - [ ] visual debug modes
 - [ ] render stats
@@ -817,6 +825,8 @@ src/
 ### 14.6. Debug / Profiling
 
 - [x] in-app HUD
+- [x] HUD panel autosizing / bounds safety
+- [x] HUD stacked panel width alignment
 - [x] Tracy metrics pack
 - [ ] per-pass timings
 - [ ] chunk update timings

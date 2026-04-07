@@ -162,8 +162,8 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 Семантика режимов сейчас такая:
 
-- `creative` — collision-backed flight mode, работает даже при `pause`, edits разрешены;
-- `spectator` — observe-only noclip mode, подчиняется `pause`, edits запрещены;
+- `creative` — collision-backed flight mode, подчиняется `pause` вместе с physics, edits разрешены;
+- `spectator` — observe-only noclip mode, не зависит от `pause` для camera movement, edits запрещены;
 - `walk` — grounded collision-based mode, использует physics controller и разрешает edits.
 
 Это не финальная gameplay-модель. Это честный MVP split между debug camera, observe mode и базовым player-like mode.

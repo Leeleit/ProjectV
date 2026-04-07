@@ -1,386 +1,113 @@
 # Decisions
 
-Краткий журнал решений, которые должны переживать отдельные сессии.
+Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
 ---
 
 ## 2026-04-07
 
-### Источник истины для планирования
+### Границы `agent/`
 
 Решение:
 
-- главным roadmap считается корневой `TODO.md`;
-- `agent/` хранит постоянную память агента;
-- legacy-планы больше не считаются главным планом реализации.
+- `TODO.md` хранит roadmap и приоритеты.
+- `AGENTS.md` хранит обязательный протокол.
+- `AGENTS.md` не пересказывает roadmap, статус проекта и длинный исторический журнал.
+- `agent/memory.md` хранит только долговечные repo-specific факты и ограничения.
+- `agent/status.md` хранит только короткий active snapshot.
+- `agent/decisions.md` хранит только ещё действующие контракты, а не подробный журнал всех прошлых шагов.
 
 Почему:
 
-- legacy-документы уже расходятся с реальным состоянием кода;
-- проекту нужен один живой backlog, а не несколько конкурирующих.
+- дубль roadmap/protocol раздувает обязательное чтение каждой сессии и увеличивает цену контекста без новой информации.
 
-### Главный путь проекта
+### Mainline vs R&D
 
 Решение:
 
-- mainline проекта — интерактивный graphics-based voxel MVP;
-- большие эксперименты живут отдельно как R&D backlog.
+- mainline = reproducible interactive voxel MVP;
+- `SVO`, mesh shaders, heavy simulation, big-world systems, complex editor и похожие темы живут только как отдельный R&D backlog.
 
 Почему:
 
-- проект уже имеет работающий vertical slice;
-- ближайшая наибольшая ценность — не новый фундамент, а живая интерактивность и стабильная демонстрация.
+- ближайшая ценность проекта — демонстрируемый и измеримый MVP, а не новый фундамент.
 
-### Обязательная постоянная память агента
+### Root-cause fixes
 
 Решение:
 
-- в репозитории создаётся папка `agent/`, и агент обязан читать и обновлять её на каждой заметной сессии.
+- warning cleanup и runtime cleanup лечат причину: мёртвую ветку, ложную абстракцию, скрытый control flow или кривой contract;
+- suppress/workaround допустим только по явному согласованию с пользователем.
 
 Почему:
 
-- без этого агент будет терять контекст между задачами;
-- статус проекта, инженерные решения и рабочий фокус должны переживать один ответ и одну сессию.
+- в этом проекте warning noise обычно указывает на реальную структурную проблему, а не на косметику.
 
-### Философия внедрения новых систем
+### Control-mode contract
 
 Решение:
 
-- новые зависимости, подсистемы и архитектурные слои добавляются только по факту практической пользы;
-- философия проекта применяется прагматично, а не догматично.
+- `creative` = collision-backed flight/edit mode;
+- `creative` подчиняется `pause`, потому что движение идёт через physics character;
+- `spectator` = observe-only noclip без world edits и без подчинения `pause` для camera movement/look;
+- `walk` = grounded physics mode;
+- double-tap `Space` переключает только `creative <-> walk`;
+- `F4` остаётся общим циклом `creative -> spectator -> walk`;
+- переход в `walk` сохраняет текущую позицию, а ground recovery используется только как fallback.
 
 Почему:
 
-- проекту нужен живой MVP, а не коллекция заготовленных абстракций;
-- даже хорошие идеи вредны, если появляются раньше своего времени.
+- режимы должны быть явными и предсказуемыми во время реальной интеракции с миром;
+- если режим объявлен как physics-backed, он не должен получать special-case movement мимо paused physics, а noclip-наблюдение наоборот не должно замораживаться вместе с миром.
 
-### Интерактивное редактирование мира
+### Repro contract
 
 Решение:
 
-- интерактивный mainline использует отдельный CPU `VoxelRaycast` на плотном `VoxelWorld` и явный `InteractionState`;
-- runtime remove/place block идёт напрямую через `SetVoxelMaterial`, без нового gameplay/framework слоя;
-- один voxel edit помечает dirty регион `3x3x3`, чтобы rebuild гарантированно захватывал соседние чанки на границах.
+- perf baseline и scene switching строятся на builtin presets через `PROJECTV_SCENE_PRESET`, а не на editor/config stack;
+- smoke и failure checks должны оставаться scriptable и env-driven.
 
 Почему:
 
-- это закрывает честный interactive slice без нового renderer/gameplay refactor;
-- явный `InteractionState` сохраняет данные selection/placement для следующего шага с highlight/HUD;
-- border-safe dirty marking важнее микроэкономии на этом этапе, потому что устраняет визуально неверные chunk rebuild'ы на границах.
+- проекту нужна воспроизводимая проверка и измеримость уже сейчас, до save/load и editor layer.
 
-### Visual feedback для interaction
+### Build/toolchain contract
 
 Решение:
 
-- block highlight и crosshair реализуются отдельным debug overlay pipeline поверх основного voxel pass;
-- selection прокидывается в `FrameRenderData`, а overlay-геометрия генерируется в shader'е из `gl_VertexIndex`, без новых vertex/index buffers и без вмешательства в meshing path.
+- mainline пока не мигрирует на C++ named modules;
+- `RuntimeDiagnostics` остаётся явным logging/check слоем без bool-returning logger helpers.
 
 Почему:
 
-- это даёт видимый feedback для picking, не трогая packed scene buffers и compute meshing;
-- overlay path хорошо переживает swapchain recreate и остаётся изолированным от main voxel rendering;
-- для mainline MVP это дешевле и безопаснее, чем встраивать selection-highlight в основной voxel material/render path.
+- текущий `clang-cl + CMake + MSVC STL` стек не даёт безопасной module migration и плохо переносит hidden control flow.
 
-### Debug HUD без `imgui`
+### Meshing visibility contract
 
 Решение:
 
-- debug HUD реализуется как фиксированный read-only overlay поверх существующего voxel/debug pass, без подключения `imgui`;
-- текст HUD собирается на CPU в host-mapped vertex buffer из встроенного bitmap/stroke-подобного шрифта и рисуется отдельным graphics pipeline;
-- HUD использует уже существующие `DebugStats`, `CameraState` и `InteractionState`, плюс hotkey toggle, вместо новой UI-системы.
-- screen-space координаты HUD мапятся в Vulkan NDC с учётом обычного positive-height viewport, поэтому верх экрана соответствует отрицательному `Y` в NDC.
+- локальный voxel edit помечает dirty только для своего chunk и реально затронутых boundary-neighbors, а не для blanket `3x3x3`;
+- chunk frustum/distance visibility обновляется каждый кадр в CPU frame-prep через indirect-команды;
+- frustum visibility для чанков проверяет не только центр+радиус, а консервативный chunk AABB против near/left/right/top/bottom planes, чтобы геометрия не исчезала на краях экрана;
+- CPU-side patch/full upload chunk descriptors сохраняет GPU-сгенерированные `drawRanges` counts; `sceneUploadVersion` нужен для layout/static descriptor changes, а не для каждого voxel edit;
+- compute meshing всё равно домешивает dirty chunks даже вне кадра и затем перезаписывает их draw commands с учётом текущей visibility.
 
 Почему:
 
-- это закрывает ближайший mainline milestone из `TODO.md` без ввода новой тяжёлой зависимости;
-- отдельный HUD pipeline не вмешивается в meshing path и легко переживает swapchain recreate;
-- для текущего объёма UI фиксированный overlay проще, дешевле и честнее, чем тащить editor/debug framework раньше времени.
-- это убирает перевёрнутый/bottom-anchored HUD без ввода negative viewport или отдельной матрицы для overlay.
+- visibility зависит от камеры каждый кадр, а `drawRanges` должны оставаться в sync с voxel payload независимо от того, виден chunk сейчас или нет;
+- side-plane тест вида `abs(center) <= depth * tan + sphereRadius` оказался слишком агрессивным на наклонённых ракурсах; chunk-level culling должен предпочитать plane-vs-AABB проверку;
+- если CPU reupload сотрёт face counts у не-dirty чанков, текущий indirect path начнёт мигать на edit'ах, потому что compute в этот кадр домешивает только dirty subset;
+- это уменьшает rebuild cost без возврата border cracks и без stale mesh state, когда ранее culled chunk снова попадает в кадр.
 
-### Vendoring `fmt` и обновление submodules
+### Debug HUD layout contract
 
 Решение:
 
-- `fmt` добавляется как обычный git submodule в `external/fmt` и подключается в root CMake через `add_subdirectory`, как и другие реально используемые зависимости;
-- `fmt` интегрируется без module-target, чтобы не тащить CMake/C++20 modules проблемы в текущий toolchain;
-- массовое обновление third-party делается только для clean submodules; если bundled submodule грязный, его сначала нужно явно очистить, и только потом bump'ать.
+- HUD panels не полагаются на fixed width для legend/stats строк; panel width считается от реально измеренного текста с учётом glyph advance и shadow offset.
+- Вертикально стэкнутые stats/helper panels используют общую stack width по максимальной из двух content-driven ширин, а не две независимые правые границы.
 
 Почему:
 
-- проекту полезен лёгкий typed-formatting backend для будущего logging layer, но пока не нужен тяжёлый logging framework;
-- отключение `FMT_MODULE` сохраняет современную версию `fmt`, не ломая текущую сборку на `clang-cl` + Ninja;
-- `ProjectV` не должен зависеть от скрытых локальных one-off патчей внутри vendored profiler submodule; `external/tracy` после очистки и bump'а должен оставаться чистым и проверяемым через обычный build/test/smoke проход.
-- то же правило распространяется и на vendored submodules с вложенными submodules: если `external/draco` грязный только из-за nested `third_party/*`, его нужно возвращать к recorded recursive state через `git submodule update --init --recursive --force`, а не оставлять случайные локальные checkout'ы как "норму".
-
-### Swapchain recreate при transient `0x0` extent
-
-Решение:
-
-- `RecreateSwapchain` не должен уничтожать graphics/depth resources до тех пор, пока surface действительно не подтвердил ненулевой pixel extent;
-- если lifecycle-событие даёт временный `0x0` extent во время `minimize/restore`, старый graphics pipeline сохраняется, а полноценный destroy/recreate откладывается до следующего валидного размера;
-- runtime smoke для `resize -> minimize -> restore -> maximize -> restore -> graceful shutdown` фиксируется отдельным Windows script и checklist'ом в `docs/`.
-
-Почему:
-
-- ранний destroy pipeline на transient `0x0` surface ломал recreate через `CreateDepthResources`, потому что depth image пытался создаться для нулевого extent;
-- сохранение старого pipeline до подтверждённого ненулевого размера делает window lifecycle устойчивым без лишней хрупкости;
-- reproducible smoke path важнее ручных догадок и позволяет повторяемо проверять `7.4` после дальнейших изменений render/runtime слоя.
-
-### Runtime diagnostics и controlled failure probes
-
-Решение:
-
-- для bootstrap/render/pipeline runtime-path вводится минимальный `RuntimeDiagnostics` слой с единым форматом логов `[ProjectV][Subsystem][Step] ...`, плюс `PV_CHECK_OR_RETURN` и `PV_ASSERT`;
-- missing shader проверяется не через ручные переименования `.spv`, а через `PROJECTV_SHADER_BASE_DIR`, который переопределяет shader search base directory;
-- intentional incomplete init проверяется не через временную порчу кода, а через `PROJECTV_FAIL_INIT_STAGE`, который позволяет воспроизводимо оборвать `InitVulkan` на явных стадиях;
-- runtime smoke и failure probes фиксируются отдельными Windows scripts в `tools/windows/`.
-
-Почему:
-
-- unified runtime diagnostics даёт читаемый stderr в failure probes и убирает разношёрстные `SDL_Log`-сообщения в критическом init/render path;
-- env-driven probes воспроизводимы, не мутируют build outputs и не требуют ручного вмешательства в рабочее дерево;
-- минимальные checks/asserts полезнее сейчас, чем полноценный logging framework, потому что закрывают `7.4` без отдельного архитектурного рефактора.
-- bool-returning log helpers размывают control flow и плодят static-analysis noise, тогда как явный `runtime::Log...; return false;` лучше соответствует проектному правилу "explicit control > hidden magic".
-
-### Постепенное структурирование `src/`
-
-Решение:
-
-- первый `8.2` slice делает физическую раскладку `src/` по зонам ответственности: `app/`, `core/`, `platform/`, `render/`, `render/vulkan/`, `voxel/`, `debug/`;
-- в этом же проходе не делается массовый rewrite include-строк; совместимость сохраняется через `target_include_directories` в `src/CMakeLists.txt` и `tests/CMakeLists.txt`;
-- `src/shaders/` пока остаётся на старом месте до отдельной практической необходимости.
-
-Почему:
-
-- это даёт более явные responsibility boundaries уже сейчас, не смешивая file moves с semantic refactor;
-- такой bridge сохраняет рабочую сборку и снижает риск поломать mainline на ровном месте;
-- это соответствует TODO: сделать постепенный перенос, а не гигантский rewrite всего `src/` одним махом.
-
-### Последовательный build/run для одного build tree
-
-Решение:
-
-- для одного `build/windows-clang-debug` нельзя запускать несколько независимых `cmake --build` процессов одновременно; build/test verification этого дерева должна идти последовательно.
-
-Почему:
-
-- параллельные процессы могут столкнуться в CMake regeneration и дать ложные ошибки конфигурации на сторонних зависимостях;
-- это workflow-ограничение среды, а не дефект текущего кода, и его лучше держать зафиксированным в памяти проекта.
-
-### C++ modules в текущем `clang-cl` toolchain
-
-Решение:
-
-- не переводить mainline `ProjectV` на C++ named modules в текущем `clang-cl + CMake 4.3.0-rc1 + Ninja + MSVC STL` стеке;
-- считать named modules здесь пока `toolchain R&D`, а не практической задачей mainline;
-- вернуться к теме только после released CMake с рабочим module scanning для `clang-cl` или после явной смены toolchain на вариант, где и build graph, и `import std` реально поддержаны.
-
-Почему:
-
-- direct compiler probe показал, что сам `clang-cl 21.1.8` named modules уже компилирует и линкует, то есть проблема не в языке и не в фронтенде как таковом;
-- но установленный CMake 4.3.0-rc1 на Windows включает clang module scanning только для `GNU` frontend variant, а не для `clang-cl`/`MSVC` frontend, поэтому нормальная CMake-managed миграция сейчас упирается в build-system gap;
-- `import std` в этом окружении тоже не готов: текущий `clang-cl` использует MSVC STL, а CMake-путь для Clang `import std` поддерживает только `libc++` и `libstdc++`, что подтверждается и локальным direct probe с `module 'std' not found`.
-
-### Input action layer поверх SDL keyboard input
-
-Решение:
-
-- keyboard input переводится с прямого `SDL_GetKeyboardState` polling на явный `InputActions` слой с per-action `down/pressed` state и bindable scancode slots;
-- camera movement, speed modifiers и runtime hotkeys потребляют только этот слой, а не raw SDL keyboard state;
-- mouse buttons для `remove/place` пока остаются отдельным edge-triggered interaction path, чтобы не раздувать первый `8.1` slice в общий full-input refactor;
-- default controls фиксируются так: `WASD + Space/Shift`, `Ctrl` boost, `Alt` slow, `F1` HUD, `F2` cycle placement material, `F3` reset camera, `P` pause, `Tab` relative mouse toggle;
-- `pause` добавляется уже сейчас как часть debug/control glue, а explicit `free-fly / spectator / walk` mode system остаётся следующим follow-up поверх этого foundation.
-
-Почему:
-
-- action-layer делает input path тестируемым и убирает скрытую связку камеры с глобальным SDL keyboard state;
-- bindable scancode slots дают честную основу для дальнейших control modes без преждевременной конфиг-системы;
-- relative mouse toggle, debug hotkeys и speed modifiers полезны уже на текущем MVP этапе и не требуют отдельного UI/framework слоя;
-- оставление mouse remove/place вне общего action refactor держит `8.1` в разумном practical scope и не мешает mainline.
-
-### Разведение `free-fly` и `spectator`
-
-Решение:
-
-- `free-fly` и `spectator` не считаются синонимами: это два явных control mode поверх одного camera/input backend;
-- `free-fly` трактуется как debug/tool mode: камера может двигаться и смотреть даже при `pause`, а world edits (`remove/place`) остаются разрешены;
-- `spectator` трактуется как observe-only mode: те же базовые camera controls работают только вне `pause`, а `remove/place` отключены, но selection/raycast остаются для inspection;
-- control mode переключается отдельным hotkey (`F4`), виден в HUD и не сбрасывается `ResetCameraState`.
-
-Почему:
-
-- это создаёт реальную поведенческую разницу между режимами, а не дублирование названий;
-- такой split соответствует текущему состоянию проекта: debug-camera уже нужна сейчас, а полноценный player/controller layer ещё не существует;
-- spectator без world edits полезен как честный observe mode уже на MVP этапе, не требуя вводить walk/collision/player stack раньше времени.
-
-### Qualified include paths от корня `src/`
-
-Решение:
-
-- transitional include directories `src/app`, `src/core`, `src/render` и другие убираются из `src/CMakeLists.txt` и `tests/CMakeLists.txt`;
-- production и test targets используют только корневой include dir `src/`;
-- project headers всегда подключаются qualified-путями от корня `src/`, например `app/Camera.hpp`, `core/Types.hpp`, `render/vulkan/VulkanInit.hpp`, `voxel/VoxelWorld.hpp`.
-
-Почему:
-
-- это превращает физическую раскладку `src/` в реальную архитектурную границу, а не просто в cosmetic file move;
-- такой include style сразу показывает subsystem ownership и не даёт незаметно возвращаться к flat-source layout;
-- одинаковое правило для production и tests убирает скрытые зависимости от широких include paths.
-
-### Минимальный ECS slice поверх текущего voxel MVP
-
-Решение:
-
-- `flecs` вводится не как общий "движок будущего", а как минимальный data-layer в `src/ecs`;
-- primary camera и primary player живут как ECS entities;
-- `WorldState` и `DebugState` доступны через ECS singleton data, но ownership `VoxelWorld` пока остаётся в `AppState::world`, а ECS хранит явный binding на этот state;
-- chunk entities создаются только как practical mirror текущего `VoxelWorld`, чтобы иметь ECS-level world summary без full world migration;
-- `SDL_AppEvent`, `SDL_AppIterate` и `InitVulkan` читают camera/debug/world через ECS glue helpers, а не напрямую из старого app-owned camera/debug state.
-
-Почему:
-
-- это даёт первый честный ECS slice в реальном main loop без большого gameplay-framework rewrite;
-- такой split сохраняет явный ownership и не заставляет переносить весь voxel world в ECS раньше времени;
-- chunk mirror полезен уже сейчас как bridge между существующим dense-world slice и будущими ECS/physics/debug systems.
-- mirror-компоненты должны хранить только реально читаемый summary state; дублирование `min/maxExclusive` без потребителя создаёт лишний maintenance/static-analysis шум и не даёт текущей mainline-пользы.
-
-### MVP physics поверх voxel world
-
-Решение:
-
-- `JoltPhysics` вводится как минимальный physics layer в `src/physics`, а не как большой gameplay framework;
-- collision world строится как один static compound body из solid voxels текущего `VoxelWorld`;
-- physics world синхронизируется по `VoxelWorld::editVersion`, то есть только после реального world edit;
-- CPU `VoxelRaycast` остаётся источником истины для runtime block interaction, а physics raycast и `CharacterVirtual`
-  используются для walk/collision slice;
-- `free-fly` остаётся noclip/debug mode, а `walk` становится отдельным collision-based mode поверх того же
-  `InputActions + ECS + app loop`.
-
-Почему:
-
-- это закрывает `8.4` без renderer rewrite и без premature переноса ownership мира в physics/gameplay слой;
-- static compound + `editVersion` дают явную и дешёвую схему синхронизации для текущего MVP;
-- сохранение CPU interaction raycast не ломает уже работающий remove/place loop и keeps mainline stable, пока physics
-  добавляет только то, что реально нужно сейчас: collision, walk и базовый physics raycast.
-
-### Authored docs как набор entry guides в `docs/`
-
-Решение:
-
-- authored documentation для current mainline живёт не в одном разрастающемся корневом overview, а в отдельных документах
-  по ролям: `ArchitectureGuide`, `RenderArchitecture`, `VoxelWorld`, `BuildAndRun`, `Debugging`;
-- `README_NEW.md` остаётся короткой root-facing точкой входа и ведёт в эти guides, а `README.md` не трогается без
-  отдельного разрешения пользователя.
-
-Почему:
-
-- такой split лучше соответствует текущей физической раскладке `src/` и позволяет обновлять subsystem docs без giant
-  monolithic rewrite;
-- это убирает скрытую зависимость от “знания кода наизусть” и делает mainline MVP воспроизводимым для нового участника;
-- отдельные entry docs проще держать в sync с roadmap, чем один перегруженный обзорный файл.
-
-### Явный lifecycle cleanup вместо hidden cleanup в `AppState::~AppState`
-
-Решение:
-
-- `ShutdownVulkan(AppState*)` остаётся явной точкой очистки runtime;
-- `AppState` больше не запускает teardown из деструктора автоматически;
-- `SDL_AppInit` при раннем failure сам вызывает `ShutdownVulkan(state.get())`, а `SDL_AppQuit` по-прежнему делает controlled shutdown перед `delete state`.
-
-Почему:
-
-- это сохраняет lifecycle explicit и тестопригодным;
-- test target не должен тянуть половину Vulkan runtime только ради implicit-деструктора `AppState`;
-- явный shutdown лучше соответствует проектному правилу "explicit control > hidden magic".
-
-### Builtin profiling scene presets и benchmark contract
-
-Решение:
-
-- первый practical profiling layer строится не на save/load, а на небольшом builtin наборе `VoxelScenePreset` в `VoxelWorld`;
-- baseline scene выбирается через runtime env var `PROJECTV_SCENE_PRESET`, а не через отдельный editor/config framework;
-- текущий Tracy plot pack в `src/debug/Profiling.hpp` и методика в `docs/Profiling.md` считаются benchmark contract для mainline.
-
-Почему:
-
-- проекту нужна измеримость уже сейчас, а не после полноценного data-driven world layer;
-- env-driven builtin presets дают reproducible perf scenes без блокировки на snapshot/save-load работу;
-- фиксированный metrics pack убирает спор о том, "что именно мерить", и соответствует правилу `measure first, optimize second`.
-
-### Double-space walk toggle и runtime scene cycling
-
-Решение:
-
-- double-tap `Space` не заменяет общий `F4` cycle, а добавляет отдельный fast-path только для `free-fly <-> walk`;
-- builtin `VoxelScenePreset` больше не ограничены env var на старте: `F5` запрашивает runtime scene reload в живом приложении;
-- scene reload идёт через явный app-level path: `vkDeviceWaitIdle` -> новый `VoxelWorld` -> `SyncEcsWorldState` -> `CreateSceneResources` -> `SyncPhysicsWorld` -> optional `SnapWalkCharacterToCamera`.
-
-Почему:
-
-- это даёт Minecraft-like ergonomics для частого переключения между полётом и ходьбой, не ломая уже существующий `F4` mode cycle с `spectator`;
-- runtime scene cycling нужен уже сейчас для profiling/debug loops и честно усиливает `9.1`, не дожидаясь `save/load`;
-- явный reload path лучше соответствует проектному правилу `explicit control > hidden magic`, чем попытка прятать live scene reset внутри bootstrap/init логики.
-
-### Debug UI как единый overlay layer
-
-Решение:
-
-- `F1` теперь трактуется как toggle всего debug UI, а не только текста HUD: вместе с HUD скрываются block highlight и crosshair;
-- HUD остаётся CPU-built и без `imgui`, но layout больше не монолитный: он разбит на отдельные stats/helpers panels с меньшим footprint;
-- crosshair вынесен в отдельный graphics pipeline поверх того же overlay shader, но с XOR logic-op только когда устройство реально поддерживает и включает `logicOp`; иначе pipeline автоматически откатывается на обычный alpha-blended fallback без validation noise.
-
-Почему:
-
-- для пользователя debug UI воспринимается как единый слой, поэтому частичное скрытие только текста выглядело непоследовательно;
-- два маленьких panel-блока легче читаются, чем один длинный список строк, особенно на высоком FPS и при частом движении камеры;
-- отдельный XOR crosshair pipeline даёт нужный visual result без компромисса для selection outline, который по-прежнему удобнее держать на обычном alpha-blended path.
-
-### `creative` / `spectator` / `walk` mode contract
-
-Решение:
-
-- старый `free-fly` больше не считается отдельным mainline-режимом; его место занимает `creative` как physics-backed flight mode с collision;
-- double-tap `Space` переключает только между `creative` и `walk`, а `F4` остаётся общим циклом `creative -> spectator -> walk -> creative`;
-- `spectator` остаётся observe-only noclip mode без `remove/place`, который по-прежнему подчиняется `pause`;
-- `creative` использует тот же capsule/controller, что и `walk`, но летает без гравитации и поэтому больше не проходит сквозь voxel-геометрию;
-- переход в `walk` больше не снапает камеру к полу по умолчанию: physics-character сначала принимает текущую позицию камеры, а ground recovery нужен только как fallback для явно некорректного/врезанного в world положения.
-
-Почему:
-
-- это даёт Minecraft-like ergonomics без логической путаницы, где один и тот же быстрый toggle раньше вёл в debug-noclip вместо player-facing flight mode;
-- collision-backed `creative` полезнее для честного sandbox MVP, чем ещё один noclip-режим рядом с уже существующим `spectator`;
-- сохранение текущей позиции при возврате в `walk` убирает раздражающий телепорт в центр/на пол и делает mode switch предсказуемым во время реальной интеракции с миром.
-
-### Root-cause fixes вместо warning suppression
-
-Решение:
-
-- static-analysis/runtime warning cleanup в `ProjectV` должен лечить причину, а не только симптом;
-- если warning указывает на мёртвую ветку, фальшивую generic-обёртку или кривую границу ответственности, код надо рефакторить до честного
-  контракта;
-- suppress/workaround допустимы только после явного согласования с пользователем.
-
-Почему:
-
-- warning'и здесь часто показывают не "шум IDE", а реальную архитектурную ложь в коде;
-- быстрая заглушка сохраняет шум в контрактах и делает следующий рефактор дороже;
-- это лучше соответствует проектным принципам `data > code` и `explicit control > hidden magic`.
-
-### Scene preset config split после `9.1`
-
-Решение:
-
-- общий runtime мир хранит только `VoxelWorldConfig` с параметрами пола, высоты, padding и chunk size;
-- `VoxelLab`-специфичный купол/жидкость больше не живут в общем конфиге всех сцен, а собираются из отдельного shell config внутри
-  `VoxelWorld.cpp`;
-- non-`VoxelLab` сцены тоже не должны притворяться generic enum-helper'ом: для `FlatBenchmark`, `TransparencyStress`, `ChunkGrid` и
-  `MeshingStress` используются отдельные config builders вместо `GetNonVoxelLabWorldConfig(scenePreset)`;
-- double-tap `Space` синтезирует `ToggleWalkCreativeMode` через явный detection path в `InputActions`, без fake-generic helper'а
-  `TriggerActionPressed(...)`.
-
-Почему:
-
-- `FlatBenchmark`, `TransparencyStress`, `ChunkGrid` и `MeshingStress` не должны тащить фиктивные поля вроде `sphereRadius = 0` только ради
-  совместимости с `VoxelLab`;
-- отдельный preset-specific builder убирает мёртвую ветку `sphereRadius <= 0` из `VoxelLab`-only path и делает инварианты сцены явными;
-- у `InputActions` больше нет ложной абстракции, которая притворялась универсальной, но реально обслуживала один special-case.
+- helper legend уже содержит строки длиннее старой константы `244px`, и фиксированная ширина визуально выталкивает текст за рамку даже при корректном screen-space positioning;
+- content-driven sizing сохраняет лёгкий CPU-built HUD path без перехода на полноценную UI-систему;
+- разные независимые ширины у верхней и нижней панели дают рваный силуэт в одном и том же HUD stack, хотя информационно это один блок.

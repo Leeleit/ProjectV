@@ -7,6 +7,7 @@
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
+#include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -52,6 +53,20 @@ void ExpectTrue(TestContext &context, const bool condition, const int line, cons
 	if (!condition) {
 		context.Fail(line, expr);
 	}
+}
+
+bool ColorsMatch(
+	const std::array<float, 4> &expected,
+	const std::array<float, 4> &actual)
+{
+	constexpr float kColorEpsilon = 0.0001f;
+	for (size_t index = 0; index < expected.size(); ++index) {
+		if (std::abs(expected[index] - actual[index]) > kColorEpsilon) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 #define EXPECT_TRUE(context, expr) ExpectTrue(context, (expr), __LINE__, #expr)
@@ -102,6 +117,23 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 	}
 
 	return world;
+}
+
+PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
+	const Int3 min,
+	const Int3 maxExclusive,
+	const uint32_t nonAirVoxelCount = 1u)
+{
+	const uint32_t extentX = static_cast<uint32_t>(maxExclusive.x - min.x);
+	const uint32_t extentY = static_cast<uint32_t>(maxExclusive.y - min.y);
+	const uint32_t extentZ = static_cast<uint32_t>(maxExclusive.z - min.z);
+	const uint32_t voxelCount = extentX * extentY * extentZ;
+	return {
+		.chunkOrigin = {min.x, min.y, min.z, 0},
+		.chunkExtentAndNonAir = {extentX, extentY, extentZ, nonAirVoxelCount},
+		.voxelDataInfo = {0u, voxelCount, (voxelCount + 3u) / 4u, 0u},
+		.drawRanges = {0u, 0u, 0u, 0u},
+	};
 }
 
 void ExpectChunkBoundsAreValid(TestContext &context, const VoxelWorld &world)
@@ -268,6 +300,30 @@ void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &conte
 	for (size_t chunkIndex = 0; chunkIndex < 8; ++chunkIndex) {
 		EXPECT_EQ(context, chunkIndex, world.pendingChunkRebuildIndices[chunkIndex]);
 	}
+}
+
+void TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 16, 16}, 8);
+
+	SetVoxelMaterial(world, {7, 4, 4}, VoxelMaterial::Glass);
+
+	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
+	EXPECT_EQ(context, static_cast<size_t>(2), world.pendingChunkRebuildIndices.size());
+	std::ranges::sort(world.pendingChunkRebuildIndices);
+	EXPECT_EQ(context, static_cast<size_t>(0), world.pendingChunkRebuildIndices[0]);
+	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices[1]);
+}
+
+void TestSetVoxelMaterialDoesNotQueueMissingWorldNeighbors(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 16, 16}, 8);
+
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::Glass);
+
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices.size());
+	EXPECT_EQ(context, static_cast<size_t>(0), world.pendingChunkRebuildIndices[0]);
 }
 
 void TestMarkAllVoxelChunksDirtyResetsQueue(TestContext &context)
@@ -623,6 +679,57 @@ void TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(TestContext &
 	EXPECT_NEAR(context, 0.0f, input.mouseDeltaY);
 }
 
+void TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(TestContext &context)
+{
+	const CameraState camera = MakeTestCamera({4.0f, 4.0f, 20.0f});
+	const ChunkCullingParameters parameters = BuildChunkCullingParameters(camera, {1280u, 720u}, 64.0f);
+
+	EXPECT_TRUE(context, IsSceneChunkVisible(
+							 MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}),
+							 parameters));
+	EXPECT_TRUE(context, !IsSceneChunkVisible(
+							 MakePackedSceneChunkDescriptor({0, 0, 28}, {8, 8, 36}),
+							 parameters));
+	EXPECT_TRUE(context, !IsSceneChunkVisible(
+							 MakePackedSceneChunkDescriptor({0, 0, -84}, {8, 8, -76}),
+							 parameters));
+	EXPECT_TRUE(context, !IsSceneChunkVisible(
+							 MakePackedSceneChunkDescriptor({80, 0, 0}, {88, 8, 8}),
+							 parameters));
+}
+
+void TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(TestContext &context)
+{
+	CameraState camera = MakeTestCamera({20.0f, 18.0f, 20.0f});
+	camera.yawRadians = -0.45f;
+	camera.pitchRadians = -1.15f;
+	const ChunkCullingParameters parameters = BuildChunkCullingParameters(camera, {1280u, 720u}, 64.0f);
+
+	EXPECT_TRUE(context, IsSceneChunkVisible(
+							 MakePackedSceneChunkDescriptor({34, 0, -8}, {42, 8, 0}),
+							 parameters));
+	EXPECT_TRUE(context, !IsSceneChunkVisible(
+							 MakePackedSceneChunkDescriptor({42, 0, -8}, {50, 8, 0}),
+							 parameters));
+}
+
+void TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(TestContext &context)
+{
+	PackedSceneChunkDescriptor sourceDescriptor = MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}, 11u);
+	sourceDescriptor.drawRanges = {32u, 0u, 96u, 0u};
+	PackedSceneChunkDescriptor existingDescriptor = sourceDescriptor;
+	existingDescriptor.drawRanges = {32u, 17u, 96u, 9u};
+
+	const PackedSceneChunkDescriptor uploadedDescriptor =
+		MakeUploadedSceneChunkDescriptor(sourceDescriptor, &existingDescriptor);
+
+	EXPECT_EQ(context, sourceDescriptor.chunkExtentAndNonAir[3], uploadedDescriptor.chunkExtentAndNonAir[3]);
+	EXPECT_EQ(context, sourceDescriptor.drawRanges[0], uploadedDescriptor.drawRanges[0]);
+	EXPECT_EQ(context, static_cast<uint32_t>(17), uploadedDescriptor.drawRanges[1]);
+	EXPECT_EQ(context, sourceDescriptor.drawRanges[2], uploadedDescriptor.drawRanges[2]);
+	EXPECT_EQ(context, static_cast<uint32_t>(9), uploadedDescriptor.drawRanges[3]);
+}
+
 void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 {
 	PlatformState platform{};
@@ -692,7 +799,7 @@ void TestResetCameraPreservesControlMode(TestContext &context)
 	EXPECT_NEAR(context, 10.0f, camera.moveSpeed);
 }
 
-void TestCreativeCameraMovesWhileSimulationIsPaused(TestContext &context)
+void TestCreativeModeBlocksPausedMovement(TestContext &context)
 {
 	VoxelWorld voxelWorld = MakeWalkTestWorld();
 	WorldState world{};
@@ -716,14 +823,13 @@ void TestCreativeCameraMovesWhileSimulationIsPaused(TestContext &context)
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
-	EXPECT_TRUE(context, camera.position[2] < 4.0f);
-	EXPECT_TRUE(context, camera.position[2] > 3.0f);
+	EXPECT_NEAR(context, 4.5f, camera.position[2]);
 	EXPECT_NEAR(context, 3.0f, camera.position[1]);
 	EXPECT_TRUE(context, debug.stats.simulationPaused);
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, debug.stats.controlMode);
 }
 
-void TestSpectatorModeBlocksEditsAndPausedMovement(TestContext &context)
+void TestSpectatorModeAllowsPausedMovementButBlocksEdits(TestContext &context)
 {
 	VoxelWorld voxelWorld = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
 	SetVoxelMaterial(voxelWorld, {1, 1, 1}, VoxelMaterial::Glass);
@@ -732,6 +838,8 @@ void TestSpectatorModeBlocksEditsAndPausedMovement(TestContext &context)
 	PlatformState platform{};
 	SimulationState simulation{};
 	simulation.paused = true;
+	const Uint64 frequency = SDL_GetPerformanceFrequency();
+	simulation.lastFrameCounter = SDL_GetPerformanceCounter() - frequency / 10;
 	CameraState camera = MakeTestCamera({1.5f, 1.5f, 4.5f});
 	camera.controlMode = CameraState::ControlMode::Spectator;
 	InputState input{};
@@ -745,7 +853,8 @@ void TestSpectatorModeBlocksEditsAndPausedMovement(TestContext &context)
 	DebugState debug{};
 
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-	EXPECT_NEAR(context, 4.5f, camera.position[2]);
+	EXPECT_TRUE(context, camera.position[2] < 4.0f);
+	EXPECT_TRUE(context, camera.position[2] > 3.0f);
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(*world.voxelWorld, {1, 1, 1}));
 	EXPECT_TRUE(context, interaction.selection.hasHit);
 	EXPECT_EQ(context, VoxelMaterial::Glass, interaction.selection.targetMaterial);
@@ -1050,7 +1159,7 @@ void TestBuildDebugHudVerticesReturnsZeroWhenHidden(TestContext &context)
 
 void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 {
-	std::vector<DebugHudVertex> vertices(4096);
+	std::vector<DebugHudVertex> vertices(65536);
 	DebugStats stats{};
 	stats.framesPerSecond = 120.0f;
 	stats.frameTimeMilliseconds = 8.33f;
@@ -1090,6 +1199,31 @@ void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 	EXPECT_TRUE(context, vertices[0].positionNdc[1] <= 1.0f);
 	EXPECT_TRUE(context, vertices[0].positionNdc[0] < 0.0f);
 	EXPECT_TRUE(context, vertices[0].positionNdc[1] < 0.0f);
+
+	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
+	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
+	constexpr std::array helperTextColor{0.77f, 0.84f, 0.90f, 0.94f};
+	float statsPanelMaxX = -1.0f;
+	float helperPanelMaxX = -1.0f;
+	float helperTextMaxX = -1.0f;
+	for (uint32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+		const auto &[positionNdc, color] = vertices[vertexIndex];
+		if (ColorsMatch(statsPanelColor, color)) {
+			statsPanelMaxX = std::max(statsPanelMaxX, positionNdc[0]);
+		}
+		if (ColorsMatch(helperPanelColor, color)) {
+			helperPanelMaxX = std::max(helperPanelMaxX, positionNdc[0]);
+		}
+		if (ColorsMatch(helperTextColor, color)) {
+			helperTextMaxX = std::max(helperTextMaxX, positionNdc[0]);
+		}
+	}
+
+	EXPECT_TRUE(context, statsPanelMaxX > -1.0f);
+	EXPECT_TRUE(context, helperPanelMaxX > -1.0f);
+	EXPECT_TRUE(context, helperTextMaxX > -1.0f);
+	EXPECT_TRUE(context, std::abs(statsPanelMaxX - helperPanelMaxX) <= 0.0001f);
+	EXPECT_TRUE(context, helperTextMaxX <= helperPanelMaxX);
 }
 
 void TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(TestContext &context)
@@ -1157,6 +1291,8 @@ int main()
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
 	TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(context);
+	TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(context);
+	TestSetVoxelMaterialDoesNotQueueMissingWorldNeighbors(context);
 	TestMarkAllVoxelChunksDirtyResetsQueue(context);
 	TestSwapchainRefreshWindowEventClassification(context);
 	TestVkResultToStringCoversCommonRuntimeResults(context);
@@ -1166,11 +1302,14 @@ int main()
 	TestConsumeCameraLookInputAllowsNearVerticalPitch(context);
 	TestTickCameraUsesActionStateAndSpeedModifiers(context);
 	TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(context);
+	TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(context);
+	TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(context);
+	TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(context);
 	TestUpdateAppConsumesDebugInputActions(context);
 	TestPlacementMaterialCycleCoversAllDebugMaterials(context);
 	TestResetCameraPreservesControlMode(context);
-	TestCreativeCameraMovesWhileSimulationIsPaused(context);
-	TestSpectatorModeBlocksEditsAndPausedMovement(context);
+	TestCreativeModeBlocksPausedMovement(context);
+	TestSpectatorModeAllowsPausedMovementButBlocksEdits(context);
 	TestPhysicsRaycastHitsStaticVoxelCollision(context);
 	TestPhysicsWorldSyncTracksVoxelEdits(context);
 	TestUpdateAppCyclesCreativeSpectatorAndWalkModes(context);

@@ -75,6 +75,8 @@ Remove-Item Env:PROJECTV_SCENE_PRESET
 - `Generated Opaque Faces`
 - `Generated Transparent Faces`
 - `Meshing Dirty Chunks`
+- `Visible Chunks`
+- `Culled Chunks`
 - `Chunk Voxel Words`
 - `Uploaded Chunk Descriptors`
 - `Uploaded Voxel Payload Chunks`
@@ -83,7 +85,7 @@ Remove-Item Env:PROJECTV_SCENE_PRESET
 - `Upload Chunk Voxel Bytes`
 
 Это покрывает ровно тот minimum pack, который сейчас нужен по `TODO`: frame time, chunk rebuild count, repacked voxel count,
-generated opaque/transparent faces и upload sizes.
+generated opaque/transparent faces, visibility pressure и upload sizes.
 
 ## Recommended measurement methodology
 
@@ -105,7 +107,7 @@ generated opaque/transparent faces и upload sizes.
 5. Дай сцене прогреться несколько секунд после запуска или после first-frame rebuild.
 6. Не редактируй мир во время capture, если меряешь steady-state render/update.
 7. Для interaction/meshing path отдельно делай controlled edit sequence и смотри `Dirty Chunks`, `Rebuilt Chunks`,
-   `Repacked Chunk Voxels`, `Generated * Faces` и upload bytes.
+   `Repacked Chunk Voxels`, `Generated * Faces`, `Visible/Culled Chunks` и upload bytes.
 8. Снимай не один кадр, а небольшой непрерывный промежуток времени.
 
 ## Как интерпретировать текущие сцены

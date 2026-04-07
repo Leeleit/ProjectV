@@ -24,5 +24,9 @@ std::array<float, 3> GetCameraForwardVector(
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
 	VkExtent2D extent);
+ChunkCullingParameters BuildChunkCullingParameters(
+	const CameraState &camera,
+	VkExtent2D extent,
+	float maxDistance);
 
 #endif

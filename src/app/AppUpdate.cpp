@@ -18,6 +18,11 @@ bool IsCreativeMode(const CameraState &camera)
 	return camera.controlMode == CameraState::ControlMode::Creative;
 }
 
+bool IsSpectatorMode(const CameraState &camera)
+{
+	return camera.controlMode == CameraState::ControlMode::Spectator;
+}
+
 bool IsWalkMode(const CameraState &camera)
 {
 	return camera.controlMode == CameraState::ControlMode::Walk;
@@ -230,8 +235,9 @@ bool UpdateApp(
 	}
 
 	const bool creativeMode = IsCreativeMode(*camera);
+	const bool spectatorMode = IsSpectatorMode(*camera);
 	const bool walkMode = IsWalkMode(*camera);
-	const bool cameraCanUpdate = creativeMode || !simulation->paused;
+	const bool cameraCanUpdate = spectatorMode || !simulation->paused;
 	const bool allowWorldEditing =
 		(creativeMode || walkMode) && !world->scenePresetReloadRequested;
 
@@ -308,24 +314,8 @@ bool UpdateApp(
 			std::fmod(simulation->simulationAccumulatorSeconds, simulation->fixedSimulationDeltaSeconds);
 	}
 
-	if (simulation->paused && creativeMode && simulation->frameDeltaSeconds > 0.0f) {
-		PV_CHECK_OR_RETURN(
-			physics && world->voxelWorld,
-			"App",
-			"UpdateApp.TickCreativeCharacterWhilePaused",
-			"creative mode requires initialized physics and voxel world");
-		if (!TickCreativeCharacter(
-				physics,
-				world->voxelWorld.get(),
-				camera,
-				input,
-				simulation->frameDeltaSeconds)) {
-			runtime::LogRuntimeFailure(
-				"App",
-				"UpdateApp.TickCreativeCharacterWhilePaused",
-				"TickCreativeCharacter returned false while paused");
-			return false;
-		}
+	if (simulation->paused && spectatorMode && simulation->frameDeltaSeconds > 0.0f) {
+		TickCamera(camera, *input, simulation->frameDeltaSeconds);
 	}
 
 	const uint64_t worldEditVersionBeforeInteraction =

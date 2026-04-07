@@ -77,6 +77,46 @@ void QueueChunkRebuildRequest(VoxelWorld &world, const size_t chunkIndex)
 	++world.stats.dirtyChunkCount;
 }
 
+void MarkChunksTouchedByVoxelEditDirty(VoxelWorld &world, const Int3 position)
+{
+	const Int3 chunkCoord = GetChunkCoord(world, position);
+	const VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, chunkCoord)];
+
+	int minChunkX = chunkCoord.x;
+	int maxChunkX = chunkCoord.x;
+	int minChunkY = chunkCoord.y;
+	int maxChunkY = chunkCoord.y;
+	int minChunkZ = chunkCoord.z;
+	int maxChunkZ = chunkCoord.z;
+
+	if (position.x == chunk.min.x && chunkCoord.x > 0) {
+		--minChunkX;
+	}
+	if (position.x == chunk.maxExclusive.x - 1 && chunkCoord.x + 1 < world.chunkCountX) {
+		++maxChunkX;
+	}
+	if (position.y == chunk.min.y && chunkCoord.y > 0) {
+		--minChunkY;
+	}
+	if (position.y == chunk.maxExclusive.y - 1 && chunkCoord.y + 1 < world.chunkCountY) {
+		++maxChunkY;
+	}
+	if (position.z == chunk.min.z && chunkCoord.z > 0) {
+		--minChunkZ;
+	}
+	if (position.z == chunk.maxExclusive.z - 1 && chunkCoord.z + 1 < world.chunkCountZ) {
+		++maxChunkZ;
+	}
+
+	for (int dirtyChunkZ = minChunkZ; dirtyChunkZ <= maxChunkZ; ++dirtyChunkZ) {
+		for (int dirtyChunkY = minChunkY; dirtyChunkY <= maxChunkY; ++dirtyChunkY) {
+			for (int dirtyChunkX = minChunkX; dirtyChunkX <= maxChunkX; ++dirtyChunkX) {
+				QueueChunkRebuildRequest(world, GetVoxelChunkIndex(world, {dirtyChunkX, dirtyChunkY, dirtyChunkZ}));
+			}
+		}
+	}
+}
+
 char NormalizePresetCharacter(const char character)
 {
 	if (character == '_' || character == '-' || character == ' ') {
@@ -622,11 +662,8 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMateria
 		--world.stats.activeChunkCount;
 	}
 
-	// A single voxel edit can change visible faces in adjacent chunks along every axis.
-	MarkVoxelRegionDirty(
-		world,
-		{position.x - 1, position.y - 1, position.z - 1},
-		{position.x + 2, position.y + 2, position.z + 2});
+	// A voxel edit only needs its own chunk plus face-sharing border neighbors.
+	MarkChunksTouchedByVoxelEditDirty(world, position);
 }
 
 void MarkAllVoxelChunksDirty(VoxelWorld *world)

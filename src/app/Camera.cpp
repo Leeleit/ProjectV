@@ -268,3 +268,55 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	};
 	return pushConstants;
 }
+
+ChunkCullingParameters BuildChunkCullingParameters(
+	const CameraState &camera,
+	const VkExtent2D extent,
+	const float maxDistance)
+{
+	const Float3 cameraPosition{
+		camera.position[0],
+		camera.position[1],
+		camera.position[2],
+	};
+	const std::array<float, 3> forwardVector = GetCameraForwardVector(camera);
+	const Float3 forward{
+		forwardVector[0],
+		forwardVector[1],
+		forwardVector[2],
+	};
+	const Float3 right = Normalize(Cross(forward, Float3{0.0f, 1.0f, 0.0f}));
+	const auto [x, y, z] = Normalize(Cross(right, forward));
+	const float aspect = extent.height > 0
+							 ? static_cast<float>(extent.width) / static_cast<float>(extent.height)
+							 : 1.0f;
+	const float tanHalfVerticalFov = std::tan(camera.verticalFovRadians * 0.5f);
+	const float tanHalfHorizontalFov = tanHalfVerticalFov * aspect;
+
+	ChunkCullingParameters parameters{};
+	parameters.cameraPositionAndMaxDistance = {
+		cameraPosition.x,
+		cameraPosition.y,
+		cameraPosition.z,
+		maxDistance,
+	};
+	parameters.cameraForwardAndTanHalfVerticalFov = {
+		forward.x,
+		forward.y,
+		forward.z,
+		tanHalfVerticalFov,
+	};
+	parameters.cameraRightAndTanHalfHorizontalFov = {
+		right.x,
+		right.y,
+		right.z,
+		tanHalfHorizontalFov,
+	};
+	parameters.cameraUpAndNearPlane = {
+		x,
+		y,
+		z,
+		camera.nearPlane,
+	};
+	return parameters;
+}
