@@ -1,9 +1,16 @@
-#include "DebugHud.hpp"
-#include "Types.hpp"
-#include "VoxelInteraction.hpp"
-#include "VoxelMaterials.hpp"
-#include "VoxelRaycast.hpp"
-#include "VoxelWorld.hpp"
+#include "app/AppUpdate.hpp"
+#include "app/Camera.hpp"
+#include "debug/DebugHud.hpp"
+#include "app/InputActions.hpp"
+#include "platform/PlatformEvents.hpp"
+#include "core/RuntimeDiagnostics.hpp"
+#include "core/RuntimeProbe.hpp"
+#include "core/Types.hpp"
+#include "render/vulkan/VulkanResult.hpp"
+#include "voxel/VoxelInteraction.hpp"
+#include "voxel/VoxelMaterials.hpp"
+#include "voxel/VoxelRaycast.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -219,6 +226,44 @@ void TestMarkAllVoxelChunksDirtyResetsQueue(TestContext &context)
 	}
 }
 
+void TestSwapchainRefreshWindowEventClassification(TestContext &context)
+{
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_RESIZED));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_MINIMIZED));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_MAXIMIZED));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_RESTORED));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_ENTER_FULLSCREEN));
+	EXPECT_TRUE(context, ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_LEAVE_FULLSCREEN));
+	EXPECT_TRUE(context, !ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_EXPOSED));
+	EXPECT_TRUE(context, !ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_WINDOW_HIDDEN));
+	EXPECT_TRUE(context, !ShouldRequestSwapchainRefreshForWindowEvent(SDL_EVENT_KEY_DOWN));
+}
+
+void TestVkResultToStringCoversCommonRuntimeResults(TestContext &context)
+{
+	EXPECT_TRUE(context, std::string_view(VkResultToString(VK_SUCCESS)) == "VK_SUCCESS");
+	EXPECT_TRUE(context, std::string_view(VkResultToString(VK_ERROR_OUT_OF_DATE_KHR)) == "VK_ERROR_OUT_OF_DATE_KHR");
+	EXPECT_TRUE(context, std::string_view(VkResultToString(VK_SUBOPTIMAL_KHR)) == "VK_SUBOPTIMAL_KHR");
+	EXPECT_TRUE(context, std::string_view(VkResultToString(static_cast<VkResult>(0x7fffffff))) == "VK_RESULT_UNKNOWN");
+}
+
+void TestInitFailureStageParsing(TestContext &context)
+{
+	InitFailureStage stage = InitFailureStage::None;
+	EXPECT_TRUE(context, TryParseInitFailureStage("after_bootstrap", &stage));
+	EXPECT_EQ(context, InitFailureStage::AfterBootstrap, stage);
+	EXPECT_TRUE(context, TryParseInitFailureStage("after_scene_resources", &stage));
+	EXPECT_EQ(context, InitFailureStage::AfterSceneResources, stage);
+	EXPECT_TRUE(context, TryParseInitFailureStage("before_voxel_meshing_pipeline", &stage));
+	EXPECT_EQ(context, InitFailureStage::BeforeVoxelMeshingPipeline, stage);
+	EXPECT_TRUE(context, !TryParseInitFailureStage("unknown", &stage));
+	EXPECT_EQ(context, InitFailureStage::None, stage);
+	EXPECT_TRUE(context, std::string_view(InitFailureStageToString(InitFailureStage::AfterWorld)) == "after_world");
+	EXPECT_TRUE(context, std::string_view(InitFailureStageToString(InitFailureStage::None)) == "none");
+}
+
 void TestVoxelMaterialVisuals(TestContext &context)
 {
 	const VoxelMaterialVisual air = GetVoxelMaterialVisual(VoxelMaterial::Air);
@@ -350,6 +395,19 @@ void TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::Air, hit.material);
 }
 
+void SendKeyEvent(
+	InputState *input,
+	const Uint32 eventType,
+	const SDL_Scancode scancode,
+	const bool repeat = false)
+{
+	SDL_Event event{};
+	event.type = eventType;
+	event.key.scancode = scancode;
+	event.key.repeat = repeat;
+	HandleInputActionEvent(input, &event);
+}
+
 CameraState MakeTestCamera(const std::array<float, 3> &position)
 {
 	CameraState camera{};
@@ -368,6 +426,218 @@ void ResetDirtyFlags(VoxelWorld &world)
 	}
 }
 
+void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
+{
+	InputState input{};
+	InitializeInputState(&input);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveForward));
+	EXPECT_TRUE(context, ConsumeInputActionPressed(&input, InputAction::MoveForward));
+	EXPECT_TRUE(context, !ConsumeInputActionPressed(&input, InputAction::MoveForward));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W, true);
+	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveForward));
+	EXPECT_TRUE(context, !ConsumeInputActionPressed(&input, InputAction::MoveForward));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, !IsInputActionDown(input, InputAction::MoveForward));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveDown));
+	EXPECT_TRUE(context, ConsumeInputActionPressed(&input, InputAction::MoveDown));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+	EXPECT_TRUE(context, !IsInputActionDown(input, InputAction::MoveDown));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(&input, InputAction::ToggleControlMode));
+}
+
+void TestTickCameraUsesActionStateAndSpeedModifiers(TestContext &context)
+{
+	{
+		InputState input{};
+		InitializeInputState(&input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+		TickCamera(&camera, input, 1.0f);
+		EXPECT_NEAR(context, -10.0f, camera.position[2]);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(&input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LCTRL);
+
+		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+		TickCamera(&camera, input, 1.0f);
+		EXPECT_NEAR(context, -30.0f, camera.position[2]);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(&input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LALT);
+
+		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+		TickCamera(&camera, input, 1.0f);
+		EXPECT_NEAR(context, -2.5f, camera.position[2]);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(&input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+
+		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+		TickCamera(&camera, input, 1.0f);
+		EXPECT_NEAR(context, -10.0f, camera.position[1]);
+	}
+}
+
+void TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(TestContext &context)
+{
+	CameraState camera{};
+	InputState input{};
+	InitializeInputState(&input);
+	input.relativeMouseModeEnabled = false;
+
+	SDL_Event event{};
+	event.type = SDL_EVENT_MOUSE_MOTION;
+	event.motion.xrel = 12.0f;
+	event.motion.yrel = -8.0f;
+	HandleCameraEvent(&camera, &input, &event);
+
+	EXPECT_NEAR(context, 0.0f, input.mouseDeltaX);
+	EXPECT_NEAR(context, 0.0f, input.mouseDeltaY);
+}
+
+void TestUpdateAppConsumesDebugInputActions(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
+	camera.moveSpeed = 17.0f;
+	InputState input{};
+	InitializeInputState(&input);
+	InteractionState interaction{};
+	interaction.placementMaterial = VoxelMaterial::FloorWhite;
+	WorldState world{};
+	RenderState render{};
+	DebugState debug{};
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F2);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F3);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_P);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_TRUE(context, !debug.hudVisible);
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.placementMaterial);
+	EXPECT_TRUE(context, simulation.paused);
+	EXPECT_EQ(context, CameraState::ControlMode::Spectator, camera.controlMode);
+	EXPECT_EQ(context, CameraState::ControlMode::Spectator, debug.stats.controlMode);
+	EXPECT_TRUE(context, debug.stats.simulationPaused);
+	EXPECT_NEAR(context, 0.0f, simulation.simulationAccumulatorSeconds);
+	EXPECT_NEAR(context, 0.0f, camera.position[0]);
+	EXPECT_NEAR(context, 8.0f, camera.position[1]);
+	EXPECT_NEAR(context, 24.0f, camera.position[2]);
+	EXPECT_NEAR(context, 10.0f, camera.moveSpeed);
+	EXPECT_NEAR(context, 0.0f, camera.yawRadians);
+	EXPECT_NEAR(context, -0.2f, camera.pitchRadians);
+}
+
+void TestPlacementMaterialCycleCoversAllDebugMaterials(TestContext &context)
+{
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetNextPlacementMaterial(VoxelMaterial::FloorWhite));
+	EXPECT_EQ(context, VoxelMaterial::Glass, GetNextPlacementMaterial(VoxelMaterial::FloorGray));
+	EXPECT_EQ(context, VoxelMaterial::Fluid, GetNextPlacementMaterial(VoxelMaterial::Glass));
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetNextPlacementMaterial(VoxelMaterial::Fluid));
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetNextPlacementMaterial(VoxelMaterial::Air));
+}
+
+void TestResetCameraPreservesControlMode(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({5.0f, 6.0f, 7.0f});
+	camera.controlMode = CameraState::ControlMode::Spectator;
+	camera.moveSpeed = 22.0f;
+	InputState input{};
+	InitializeInputState(&input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F3);
+	InteractionState interaction{};
+	WorldState world{};
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_EQ(context, CameraState::ControlMode::Spectator, camera.controlMode);
+	EXPECT_EQ(context, CameraState::ControlMode::Spectator, debug.stats.controlMode);
+	EXPECT_NEAR(context, 0.0f, camera.position[0]);
+	EXPECT_NEAR(context, 8.0f, camera.position[1]);
+	EXPECT_NEAR(context, 24.0f, camera.position[2]);
+	EXPECT_NEAR(context, 10.0f, camera.moveSpeed);
+}
+
+void TestFreeFlyCameraMovesWhileSimulationIsPaused(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	simulation.paused = true;
+	const Uint64 frequency = SDL_GetPerformanceFrequency();
+	simulation.lastFrameCounter = SDL_GetPerformanceCounter() - frequency / 10;
+	CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+	camera.controlMode = CameraState::ControlMode::FreeFly;
+	InputState input{};
+	InitializeInputState(&input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	InteractionState interaction{};
+	WorldState world{};
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_TRUE(context, camera.position[2] < -0.5f);
+	EXPECT_TRUE(context, camera.position[2] > -2.0f);
+	EXPECT_TRUE(context, debug.stats.simulationPaused);
+	EXPECT_EQ(context, CameraState::ControlMode::FreeFly, debug.stats.controlMode);
+}
+
+void TestSpectatorModeBlocksEditsAndPausedMovement(TestContext &context)
+{
+	VoxelWorld voxelWorld = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(voxelWorld, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(voxelWorld);
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	simulation.paused = true;
+	CameraState camera = MakeTestCamera({1.5f, 1.5f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Spectator;
+	InputState input{};
+	InitializeInputState(&input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	input.removePressed = true;
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(std::move(voxelWorld));
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, &render, &debug));
+	EXPECT_NEAR(context, 4.5f, camera.position[2]);
+	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(*world.voxelWorld, {1, 1, 1}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_EQ(context, VoxelMaterial::Glass, interaction.selection.targetMaterial);
+	EXPECT_TRUE(context, !input.removePressed);
+	EXPECT_EQ(context, CameraState::ControlMode::Spectator, debug.stats.controlMode);
+}
+
 void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
@@ -382,7 +652,8 @@ void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
 		MakeTestCamera({1.5f, 1.5f, 4.5f}),
 		&input,
 		&world,
-		&interaction);
+		&interaction,
+		true);
 
 	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, !input.removePressed);
@@ -405,7 +676,8 @@ void TestUpdateVoxelInteractionPlacesConfiguredBlock(TestContext &context)
 		MakeTestCamera({1.5f, 1.5f, 4.5f}),
 		&input,
 		&world,
-		&interaction);
+		&interaction,
+		true);
 
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {1, 1, 2}));
 	EXPECT_TRUE(context, !input.placePressed);
@@ -413,6 +685,29 @@ void TestUpdateVoxelInteractionPlacesConfiguredBlock(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, interaction.selection.targetMaterial);
 	EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), interaction.selection.targetVoxel);
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionSkipsEditingWhenDisabled(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	input.removePressed = true;
+	InteractionState interaction{};
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction,
+		false);
+
+	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_TRUE(context, !input.removePressed);
+	EXPECT_EQ(context, static_cast<uint32_t>(0), CountDirtyVoxelChunks(world));
 }
 
 void TestBuildDebugHudVerticesReturnsZeroWhenHidden(TestContext &context)
@@ -483,12 +778,24 @@ int main()
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
 	TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(context);
 	TestMarkAllVoxelChunksDirtyResetsQueue(context);
+	TestSwapchainRefreshWindowEventClassification(context);
+	TestVkResultToStringCoversCommonRuntimeResults(context);
+	TestInitFailureStageParsing(context);
 	TestVoxelMaterialVisuals(context);
+	TestInputActionBindingsTrackPressedAndReleasedKeys(context);
+	TestTickCameraUsesActionStateAndSpeedModifiers(context);
+	TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(context);
+	TestUpdateAppConsumesDebugInputActions(context);
+	TestPlacementMaterialCycleCoversAllDebugMaterials(context);
+	TestResetCameraPreservesControlMode(context);
+	TestFreeFlyCameraMovesWhileSimulationIsPaused(context);
+	TestSpectatorModeBlocksEditsAndPausedMovement(context);
 	TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(context);
 	TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(context);
 	TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(context);
 	TestUpdateVoxelInteractionRemovesTargetedBlock(context);
 	TestUpdateVoxelInteractionPlacesConfiguredBlock(context);
+	TestUpdateVoxelInteractionSkipsEditingWhenDisabled(context);
 	TestBuildDebugHudVerticesReturnsZeroWhenHidden(context);
 	TestBuildDebugHudVerticesProducesGeometryWhenVisible(context);
 

@@ -32,25 +32,35 @@ add_dependencies(ProjectV Shaders)
 # --- КОНЕЦ БЛОКА ШЕЙДЕРОВ ---
 
 target_sources(ProjectV PRIVATE
-        AppUpdate.cpp
-        Camera.cpp
-        DebugHud.cpp
-        FramePreparation.cpp
-        main.cpp
-        SceneResources.cpp
-        Types.cpp
-        Renderer.cpp
-        VulkanBootstrap.cpp
-        VulkanDebug.cpp
-        VulkanGraphicsPipeline.cpp
-        VulkanSwapchain.cpp
-        VulkanInit.cpp
-        VulkanVoxelMeshingPipeline.cpp
-        VoxelInteraction.cpp
-        VoxelMaterials.cpp
-        VoxelRaycast.cpp
-        VoxelWorld.cpp
+        app/AppUpdate.cpp
+        app/Camera.cpp
+        app/FramePreparation.cpp
+        app/InputActions.cpp
+        app/main.cpp
+        core/RuntimeDiagnostics.cpp
+        core/RuntimeProbe.cpp
+        core/ShaderIO.cpp
+        core/Types.cpp
+        debug/DebugHud.cpp
+        platform/PlatformEvents.cpp
+        render/Renderer.cpp
+        render/SceneResources.cpp
+        render/vulkan/VulkanBootstrap.cpp
+        render/vulkan/VulkanDebug.cpp
+        render/vulkan/VulkanGraphicsPipeline.cpp
+        render/vulkan/VulkanInit.cpp
+        render/vulkan/VulkanResult.cpp
+        render/vulkan/VulkanSwapchain.cpp
+        render/vulkan/VulkanVoxelMeshingPipeline.cpp
+        voxel/VoxelInteraction.cpp
+        voxel/VoxelMaterials.cpp
+        voxel/VoxelRaycast.cpp
+        voxel/VoxelWorld.cpp
         # Add new files here
+)
+
+target_include_directories(ProjectV PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_compile_definitions(ProjectV PRIVATE
@@ -72,6 +82,7 @@ target_compile_options(ProjectV PRIVATE
 target_link_libraries(ProjectV PRIVATE
         # Vulkan не добавляем, потому что volk его инклюдит в себе
         volk
+        fmt::fmt
         # GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
 )

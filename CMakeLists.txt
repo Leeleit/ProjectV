@@ -39,6 +39,14 @@ add_subdirectory(external/volk)
 # Vulkan Memory Allocator
 add_subdirectory(external/VulkanMemoryAllocator)
 
+# fmt
+set(FMT_DOC OFF CACHE BOOL "Disable fmt docs" FORCE)
+set(FMT_TEST OFF CACHE BOOL "Disable fmt tests" FORCE)
+set(FMT_INSTALL OFF CACHE BOOL "Disable fmt install target" FORCE)
+set(FMT_MODULE OFF CACHE BOOL "Disable fmt module target" FORCE)
+add_subdirectory(external/fmt)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/fmt")
+
 projectv_add_tracy()
 
 # --- Vulkan Stack End ---

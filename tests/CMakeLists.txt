@@ -1,11 +1,17 @@
 add_executable(ProjectVTests
         VoxelWorldTests.cpp
-        ../src/Camera.cpp
-        ../src/DebugHud.cpp
-        ../src/VoxelInteraction.cpp
-        ../src/VoxelMaterials.cpp
-        ../src/VoxelRaycast.cpp
-        ../src/VoxelWorld.cpp
+        ../src/app/AppUpdate.cpp
+        ../src/app/Camera.cpp
+        ../src/app/InputActions.cpp
+        ../src/debug/DebugHud.cpp
+        ../src/platform/PlatformEvents.cpp
+        ../src/core/RuntimeDiagnostics.cpp
+        ../src/core/RuntimeProbe.cpp
+        ../src/render/vulkan/VulkanResult.cpp
+        ../src/voxel/VoxelInteraction.cpp
+        ../src/voxel/VoxelMaterials.cpp
+        ../src/voxel/VoxelRaycast.cpp
+        ../src/voxel/VoxelWorld.cpp
 )
 
 target_include_directories(ProjectVTests PRIVATE
@@ -26,6 +32,7 @@ target_compile_options(ProjectVTests PRIVATE
 
 target_link_libraries(ProjectVTests PRIVATE
         volk
+        fmt::fmt
         SDL3::SDL3
         GPUOpen::VulkanMemoryAllocator
 )

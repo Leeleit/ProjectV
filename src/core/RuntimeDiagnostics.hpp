@@ -1,0 +1,47 @@
+#ifndef RUNTIME_DIAGNOSTICS_HPP
+#define RUNTIME_DIAGNOSTICS_HPP
+
+#include "volk.h"
+
+#include <string_view>
+
+namespace runtime {
+bool LogRuntimeFailure(std::string_view subsystem, std::string_view step, std::string_view detail);
+bool LogVkFailure(std::string_view step, VkResult result);
+bool LogVmaFailure(std::string_view step, VkResult result);
+bool LogSdlFailure(std::string_view step);
+bool LogCheckFailure(
+	std::string_view subsystem,
+	std::string_view step,
+	std::string_view condition,
+	std::string_view detail,
+	const char *file,
+	int line);
+[[noreturn]] void AbortAssertFailure(
+	std::string_view subsystem,
+	std::string_view step,
+	std::string_view condition,
+	std::string_view detail,
+	const char *file,
+	int line);
+} // namespace runtime
+
+#define PV_CHECK_OR_RETURN(condition, subsystem, step, detail) \
+	do { \
+		if (!(condition)) { \
+			return ::runtime::LogCheckFailure(subsystem, step, #condition, detail, __FILE__, __LINE__); \
+		} \
+	} while (0)
+
+#if !defined(NDEBUG)
+#define PV_ASSERT(condition, subsystem, step, detail) \
+	do { \
+		if (!(condition)) { \
+			::runtime::AbortAssertFailure(subsystem, step, #condition, detail, __FILE__, __LINE__); \
+		} \
+	} while (0)
+#else
+#define PV_ASSERT(condition, subsystem, step, detail) ((void)0)
+#endif
+
+#endif

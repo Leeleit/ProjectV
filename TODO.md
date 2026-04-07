@@ -258,7 +258,7 @@
 - [ ] Зафиксировать current milestone и ближайший next milestone.
 - [ ] Убрать рассинхрон между корневой документацией и `legacy/docs/latest`.
 - [ ] Отдельно обозначить, что является `mainline MVP`, а что `R&D`.
-- [ ] Описать актуальный smoke checklist:
+- [x] Описать актуальный smoke checklist:
 - configure
 - build
 - test
@@ -341,14 +341,16 @@
 
 Задачи:
 
-- [ ] Перепроверить resize path.
-- [ ] Перепроверить minimize/restore path.
-- [ ] Перепроверить shutdown path.
-- [ ] Проверить controlled failure при отсутствии `.spv`.
-- [ ] Проверить controlled failure при неполной инициализации.
-- [ ] Привести логирование ошибок Vulkan/SDL к единому стилю.
-- [ ] Добавить helper для `VkResult -> readable message`.
-- [ ] Добавить минимальные debug asserts/check macros.
+- [x] Перепроверить resize path.
+- [x] Перепроверить minimize/restore path.
+- [x] Перепроверить shutdown path.
+- [x] Добавить reproducible Windows smoke script для `resize -> minimize -> restore -> maximize -> restore -> graceful shutdown`.
+- [x] Проверить controlled failure при отсутствии `.spv`.
+- [x] Проверить controlled failure при неполной инициализации.
+- [x] Добавить reproducible failure-probe script для `PROJECTV_SHADER_BASE_DIR` и `PROJECTV_FAIL_INIT_STAGE`.
+- [x] Привести логирование ошибок Vulkan/SDL к единому стилю в bootstrap/render/pipeline/runtime-stability path.
+- [x] Добавить helper для `VkResult -> readable message`.
+- [x] Добавить минимальные debug asserts/check macros.
 
 Критерий готовности:
 
@@ -367,14 +369,20 @@
 - Современность: `4/5`
 - Оптимизационная отдача: `2/5`
 
+Статус на `2026-04-07`:
+
+- action-layer и `free-fly` / `spectator` modes уже закрыты;
+- default free-fly layout подправлен под более привычный Minecraft-like полёт: `Space/Shift` для вертикали, `Ctrl` для ускорения, `Alt` для slow modifier.
+
 Задачи:
 
-- [ ] Вынести action mapping слой поверх SDL input.
-- [ ] Добавить bindable actions.
-- [ ] Добавить toggle relative mouse mode.
-- [ ] Добавить debug hotkeys.
-- [ ] Добавить pause / free-fly / spectator modes.
-- [ ] Добавить speed modifiers.
+- [x] Вынести action mapping слой поверх SDL input.
+- [x] Добавить bindable actions.
+- [x] Добавить toggle relative mouse mode.
+- [x] Добавить debug hotkeys.
+- [x] Добавить pause toggle.
+- [x] Добавить explicit free-fly / spectator modes поверх нового action layer.
+- [x] Добавить speed modifiers.
 
 ## 8.2. Структурирование `src/`
 
@@ -385,9 +393,17 @@
 - Современность: `4/5`
 - Оптимизационная отдача: `3/5`
 
+Статус на `2026-04-07`:
+
+- Первый practical slice уже выполнен: код разложен по `src/app`, `src/core`, `src/platform`, `src/render`, `src/render/vulkan`, `src/voxel` и `src/debug`.
+- `src/CMakeLists.txt` и `tests/CMakeLists.txt` уже переключены на новую физическую раскладку файлов.
+- Следующий cleanup slice уже выполнен: project headers теперь подключаются только через qualified include paths от корня `src/`, а transitional include directories из `src/CMakeLists.txt` и `tests/CMakeLists.txt` убраны.
+- Документация под новую раскладку уже синхронизирована через `README_NEW.md`, `docs/source_layout.md` и обновлённый smoke checklist; legacy `README.md` при этом сознательно не трогался.
+- `src/shaders/` пока оставлен на месте как отдельный follow-up, потому что это не блокирует текущий mainline.
+
 Задачи:
 
-- [ ] Начать постепенный перенос в структуру:
+- [x] Выполнить первый перенос в структуру:
 
 ```text
 src/
@@ -400,9 +416,10 @@ src/
   debug/
 ```
 
-- [ ] Не делать гигантский refactor одним коммитом.
-- [ ] Переносить файлы по мере работы над подсистемами.
-- [ ] Выделить более узкие responsibility boundaries.
+- [x] Сохранить low-risk migration path без giant refactor: сначала file moves + CMake include directories, потом semantic cleanup.
+- [x] Выделить более узкие responsibility boundaries на уровне физической раскладки файлов.
+- [x] Дальше сужать include boundaries и убирать transitional include directories по мере работы над подсистемами.
+- [x] Обновить корневую и authored documentation под новую раскладку `src/`.
 
 ## 8.3. ECS — минимально и по делу
 
@@ -605,6 +622,8 @@ src/
 
 ### В ближайшей перспективе
 
+- [x] `fmt` — vendored formatting dependency для будущего logging layer без ввода тяжёлого logging framework.
+- [x] `tracy` — bundled submodule синхронизирован с upstream HEAD и очищен от локальных ad-hoc patch'ей внутри `external/tracy`.
 - [ ] `flecs`
 - [ ] `imgui`
 - [ ] `JoltPhysics`
@@ -645,15 +664,15 @@ src/
 
 ### Sprint A — добить интерактивный voxel MVP
 
-- [ ] Актуализировать корневую документацию.
+- [x] Актуализировать корневую документацию.
 - [x] Добавить block picking.
 - [x] Добавить удаление блока.
 - [x] Добавить постановку блока.
 - [x] Добавить correct dirty-neighbor handling.
 - [x] Добавить block highlight + crosshair.
 - [x] Вынести debug stats в HUD.
-- [ ] Проверить resize / restore / shutdown.
-- [ ] Подготовить smoke checklist.
+- [x] Проверить resize / restore / shutdown.
+- [x] Подготовить smoke checklist.
 
 ### Sprint A — результат
 
@@ -680,6 +699,7 @@ src/
 - [ ] App layer
 - [ ] config system
 - [ ] logging system
+- [ ] C++ named modules pilot — только после released CMake с рабочим `clang-cl` module scanning или после осознанной смены toolchain; в текущем `clang-cl + MSVC STL` окружении `import std` не готов.
 - [ ] assert/check layer
 - [ ] filesystem abstraction
 - [ ] project settings persistence
@@ -690,11 +710,12 @@ src/
 
 ### 14.2. Platform / Input / UX
 
-- [ ] action mapping
-- [ ] rebindable controls
-- [ ] mouse capture toggle
-- [ ] debug hotkeys
-- [ ] spectator / walk / noclip modes
+- [x] action mapping
+- [x] rebindable controls
+- [x] mouse capture toggle
+- [x] debug hotkeys
+- [x] spectator mode
+- [ ] walk / noclip modes
 - [ ] screenshot hotkey
 - [ ] frame-step / slow-motion debug modes
 
