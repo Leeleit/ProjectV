@@ -37,16 +37,19 @@
 - runtime block picking и remove/place interaction через `VoxelWorld::SetVoxelMaterial`;
 - block highlight и crosshair через отдельный debug overlay graphics pipeline;
 - in-app debug HUD через отдельный graphics pipeline и CPU-built vertex buffer без `imgui`;
+- минимальный `flecs` ECS slice в `src/ecs`, где primary camera/player сущности и `world`/`debug` singleton data уже встроены в main loop, а chunk state зеркалится в ECS entity summary без полного переноса ownership `VoxelWorld`;
 - корректное dirty-neighbor обновление чанков при редактировании блока у границы;
 - reproducible Windows runtime smoke path для `resize / minimize / restore / maximize / graceful shutdown` и отдельный smoke checklist в `docs/`;
 - controlled failure probes для missing shader и incomplete init через `PROJECTV_SHADER_BASE_DIR`, `PROJECTV_FAIL_INIT_STAGE` и `tools/windows/Invoke-ProjectVFailureProbes.ps1`;
 - минимальный `RuntimeDiagnostics` layer на `fmt` для unified runtime error logs и `PV_CHECK_OR_RETURN` / `PV_ASSERT` в bootstrap/render/pipeline path;
+- `RuntimeDiagnostics` log helpers теперь трактуются как side-effect-only logging API без bool-return contract; failure path в mainline коде должен оставаться явным как `log + return false`, а не скрываться в `return Log...`;
 - физически структурированное `src/` с каталогами `app/`, `core/`, `platform/`, `render/`, `render/vulkan/`, `voxel/` и `debug/`;
 - project и test targets теперь используют только корень `src/` как include boundary; внутренние project headers подключаются qualified-путями вида `app/Camera.hpp`, `core/Types.hpp`, `render/vulkan/VulkanInit.hpp`;
 - fixed-step update loop;
 - процедурная demo-scene;
 - Tracy hooks;
 - unit tests для `VoxelWorld`, raycast и dirty-neighbor инвариантов.
+- ECS chunk mirror в `src/ecs` сейчас хранит только `rebuildQueued` и `nonAirVoxelCount`, то есть ровно тот summary state, который реально читает debug/world sync path; `min/maxExclusive` не дублируются до появления практического потребителя.
 
 ---
 
@@ -127,6 +130,7 @@ Mainline сейчас не должен ломаться и тормозитьс
 - `external/tracy` синхронизирован с upstream HEAD на `2026-04-07` и очищен от локальных ad-hoc правок внутри сабмодуля;
 - `external/fmt` добавлен как git submodule и подключён в root CMake через `add_subdirectory`, но пока не навязывает новый logging layer;
 - clean submodules в `external/`, включая уже очищенный `external/tracy`, были обновлены до upstream HEAD на `2026-04-07`;
+- `external/draco` на `2026-04-07` не bump'ался на новый upstream commit, но был возвращён к clean recursive состоянию: nested `third_party/*` submodules внутри него должны совпадать с gitlinks, записанными самим `draco`;
 - `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1` и `docs/voxel_mvp_smoke_checklist.md` подтверждают рабочий runtime path на `2026-04-07`: `resize -> minimize -> restore -> maximize -> restore -> graceful shutdown`;
 - `tools/windows/Invoke-ProjectVFailureProbes.ps1` на `2026-04-07` подтверждает controlled failure path для empty shader override и intentional init failure injection;
 - корневой `TODO.md` создан как новый актуальный roadmap;

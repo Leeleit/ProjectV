@@ -40,10 +40,11 @@ bool PrepareFrameRenderData(
 	}
 
 	if (!UpdateSceneResources(world, render)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Frame",
 			"PrepareFrameRenderData.UpdateSceneResources",
 			"UpdateSceneResources returned false");
+		return false;
 	}
 
 	if (world->voxelWorld && !render->completedChunkRebuildIndices.empty()) {
@@ -54,14 +55,16 @@ bool PrepareFrameRenderData(
 	const VkFence inFlightFence = frame->inFlightFences[frameIndex];
 	const VkResult waitResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 	if (waitResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("PrepareFrameRenderData.vkWaitForFences", waitResult);
+		runtime::LogVkFailure("PrepareFrameRenderData.vkWaitForFences", waitResult);
+		return false;
 	}
 
 	if (!UploadSceneFrameResources(*render, frame->currentFrame)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Frame",
 			"PrepareFrameRenderData.UploadSceneFrameResources",
 			"UploadSceneFrameResources returned false");
+		return false;
 	}
 
 	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];

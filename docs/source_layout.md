@@ -2,7 +2,8 @@
 
 Дата фиксации: `2026-04-07`
 
-Этот документ описывает текущую физическую раскладку `src/` и правило include boundaries после закрытия `8.2`.
+Этот документ описывает текущую физическую раскладку `src/` и правило include boundaries после закрытия `8.2`, включая
+добавленный в `8.3` минимальный `src/ecs` slice.
 
 ## Правило include paths
 
@@ -13,6 +14,7 @@
 ```cpp
 #include "app/Camera.hpp"
 #include "core/Types.hpp"
+#include "ecs/EcsWorld.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "voxel/VoxelWorld.hpp"
 ```
@@ -30,6 +32,7 @@ src/
   app/
   core/
   debug/
+  ecs/
   platform/
   render/
     vulkan/
@@ -77,6 +80,18 @@ src/
 - `debug/DebugHud.cpp`
 - `debug/Profiling.hpp`
 - `debug/ProfilingGpu.hpp`
+
+### `src/ecs/`
+
+- минимальный `flecs` glue layer;
+- primary camera/player entities;
+- `world`/`debug` singleton data;
+- on-demand chunk mirror entities и world summary для текущего voxel slice.
+
+Ключевые файлы:
+
+- `ecs/EcsWorld.cpp`
+- `ecs/EcsWorld.hpp`
 
 ### `src/platform/`
 

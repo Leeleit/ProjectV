@@ -53,14 +53,10 @@ bool SetRelativeMouseMode(
 	return true;
 }
 
-void ClearInteractionClickActions(InputState *input)
+void ClearInteractionClickActions(InputState &input)
 {
-	if (!input) {
-		return;
-	}
-
-	input->removePressed = false;
-	input->placePressed = false;
+	input.removePressed = false;
+	input.placePressed = false;
 }
 } // namespace
 
@@ -86,30 +82,30 @@ bool UpdateApp(
 	debug->stats.simulationStepsLastFrame = 0;
 	debug->stats.sceneTriangleCount = render->sceneTriangleCount;
 
-	if (ConsumeInputActionPressed(input, InputAction::ToggleHud)) {
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleHud)) {
 		debug->hudVisible = !debug->hudVisible;
 	}
-	if (ConsumeInputActionPressed(input, InputAction::ToggleRelativeMouseMode)) {
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleRelativeMouseMode)) {
 		SetRelativeMouseMode(*platform, *input, !input->relativeMouseModeEnabled);
 	}
-	if (ConsumeInputActionPressed(input, InputAction::CyclePlacementMaterial)) {
+	if (ConsumeInputActionPressed(*input, InputAction::CyclePlacementMaterial)) {
 		interaction->placementMaterial = GetNextPlacementMaterial(interaction->placementMaterial);
 	}
-	if (ConsumeInputActionPressed(input, InputAction::ResetCamera)) {
+	if (ConsumeInputActionPressed(*input, InputAction::ResetCamera)) {
 		ResetCameraState(camera);
 		input->mouseDeltaX = 0.0f;
 		input->mouseDeltaY = 0.0f;
 	}
-	if (ConsumeInputActionPressed(input, InputAction::TogglePause)) {
+	if (ConsumeInputActionPressed(*input, InputAction::TogglePause)) {
 		simulation->paused = !simulation->paused;
 		simulation->simulationAccumulatorSeconds = 0.0f;
 	}
-	if (ConsumeInputActionPressed(input, InputAction::ToggleControlMode)) {
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleControlMode)) {
 		camera->controlMode =
 			IsFreeFlyMode(*camera)
 				? CameraState::ControlMode::Spectator
 				: CameraState::ControlMode::FreeFly;
-		ClearInteractionClickActions(input);
+		ClearInteractionClickActions(*input);
 	}
 
 	const bool freeFlyMode = IsFreeFlyMode(*camera);

@@ -37,6 +37,7 @@ target_sources(ProjectV PRIVATE
         app/FramePreparation.cpp
         app/InputActions.cpp
         app/main.cpp
+        ecs/EcsWorld.cpp
         core/RuntimeDiagnostics.cpp
         core/RuntimeProbe.cpp
         core/ShaderIO.cpp
@@ -83,6 +84,7 @@ target_link_libraries(ProjectV PRIVATE
         # Vulkan не добавляем, потому что volk его инклюдит в себе
         volk
         fmt::fmt
+        flecs::flecs_static
         # GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
 )

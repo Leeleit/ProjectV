@@ -6,6 +6,7 @@
 #include "app/Camera.hpp"
 #include "app/FramePreparation.hpp"
 #include "app/InputActions.hpp"
+#include "ecs/EcsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
 #include "debug/Profiling.hpp"
 #include "render/Renderer.hpp"
@@ -21,8 +22,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	profiling::ConfigureDefaultPlots();
 
 	auto state = std::make_unique<AppState>();
+	if (!InitializeAppEcs(state.get())) {
+		runtime::LogRuntimeFailure("App", "SDL_AppInit.InitializeAppEcs", "InitializeAppEcs returned false");
+		ShutdownVulkan(state.get());
+		return SDL_APP_FAILURE;
+	}
 	if (!InitVulkan(state.get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppInit.InitVulkan", "InitVulkan returned false");
+		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
 
@@ -56,8 +63,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		state->platform.windowResized = true;
 	}
 
-	HandleInputActionEvent(&state->input, event);
-	HandleCameraEvent(&state->camera, &state->input, event);
+	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
+	HandleInputActionEvent(state->input, event);
+	HandleCameraEvent(camera, &state->input, event);
 	HandleInteractionEvent(&state->input, event);
 	return SDL_APP_CONTINUE;
 }
@@ -70,24 +78,38 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate", "appstate is null");
 		return SDL_APP_FAILURE;
 	}
+
+	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
+	DebugState *debug = GetDebugState(state->ecs.get());
+	WorldState *world = GetWorldState(state->ecs.get());
+	if (!camera || !debug || !world) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SDL_AppIterate.EcsAccess",
+			"primary camera, debug singleton or world singleton is unavailable");
+		return SDL_APP_FAILURE;
+	}
+
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(
 			&state->platform,
 			&state->simulation,
-			&state->camera,
+			camera,
 			&state->input,
 			&state->interaction,
-			&state->world,
+			world,
 			&state->render,
-			&state->debug)) {
+			debug)) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");
+	} else if (!SyncEcsWorldState(state->ecs.get())) {
+		runtime::LogRuntimeFailure("App", "SDL_AppIterate.SyncEcsWorldState", "SyncEcsWorldState returned false");
 	} else if (!PrepareFrameRenderData(
 				   &state->context,
 				   &state->swapchain,
-				   &state->camera,
+				   camera,
 				   &state->interaction,
-				   &state->debug,
-				   &state->world,
+				   debug,
+				   world,
 				   &state->render,
 				   &state->frame)) {
 		runtime::LogRuntimeFailure(

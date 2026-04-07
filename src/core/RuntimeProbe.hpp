@@ -1,9 +1,10 @@
 #ifndef RUNTIME_PROBE_HPP
 #define RUNTIME_PROBE_HPP
 
+#include <cstdint>
 #include <string_view>
 
-enum class InitFailureStage {
+enum class InitFailureStage : std::uint8_t {
 	None = 0,
 	AfterBootstrap,
 	AfterWorld,

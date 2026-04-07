@@ -1,4 +1,5 @@
 #include "app/Camera.hpp"
+#include "ecs/EcsWorld.hpp"
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/SceneResources.hpp"
@@ -62,9 +63,10 @@ bool CreateTracyGpuContext(
 	const VkResult allocateCommandBuffersResult =
 		vkAllocateCommandBuffers(context->device, &allocateInfo, &temporaryCommandBuffer);
 	if (allocateCommandBuffersResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"CreateTracyGpuContext.vkAllocateCommandBuffers",
 			allocateCommandBuffersResult);
+		return false;
 	}
 
 	render->tracyGraphicsContext = nullptr;
@@ -81,10 +83,11 @@ bool CreateTracyGpuContext(
 	vkFreeCommandBuffers(context->device, context->commandPool, 1, &temporaryCommandBuffer);
 
 	if (!render->tracyGraphicsContext) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CreateTracyGpuContext.CreateVulkanGpuContext",
 			"CreateVulkanGpuContext returned null");
+		return false;
 	}
 
 	SDL_Log(
@@ -100,14 +103,22 @@ bool InitVulkan(AppState *state)
 {
 	PV_PROFILE_ZONE_N("InitVulkan");
 	PV_CHECK_OR_RETURN(state != nullptr, "Init", "InitVulkan.Preconditions", "AppState is null");
+	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
+	WorldState *world = GetWorldState(state->ecs.get());
+	PV_CHECK_OR_RETURN(
+		camera && world,
+		"Init",
+		"InitVulkan.EcsAccess",
+		"primary camera or world singleton is unavailable");
 	if (!InitializeVulkanBase(&state->platform, &state->context, &state->frame)) {
 		return false;
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterBootstrap)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitVulkan",
 			"intentional failure probe requested after bootstrap");
+		return false;
 	}
 
 	if (!CreateTracyGpuContext(&state->context, &state->render)) {
@@ -130,15 +141,23 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterWorld)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitVulkan",
 			"intentional failure probe requested after world creation");
+		return false;
 	}
 
-	InitializeCamera(&state->camera, &state->simulation, &state->input);
+	InitializeCamera(camera, &state->simulation, &state->input);
+	if (!SyncEcsWorldState(state->ecs.get())) {
+		runtime::LogRuntimeFailure(
+			"Init",
+			"InitVulkan.SyncEcsWorldState",
+			"SyncEcsWorldState returned false after world creation");
+		return false;
+	}
 
-	if (!CreateSceneResources(&state->context, &state->world, &state->render)) {
+	if (!CreateSceneResources(&state->context, world, &state->render)) {
 		runtime::LogRuntimeFailure(
 			"Init",
 			"InitVulkan.CreateSceneResources",
@@ -146,16 +165,18 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterSceneResources)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitVulkan",
 			"intentional failure probe requested after scene resources");
+		return false;
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::BeforeGraphicsPipeline)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitVulkan",
 			"intentional failure probe requested before graphics pipeline creation");
+		return false;
 	}
 
 	if (!CreateGraphicsPipeline(&state->context, &state->swapchain, &state->render)) {
@@ -166,10 +187,11 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::BeforeVoxelMeshingPipeline)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitVulkan",
 			"intentional failure probe requested before voxel meshing pipeline creation");
+		return false;
 	}
 	if (!CreateVoxelMeshingPipeline(&state->context, &state->render)) {
 		runtime::LogRuntimeFailure(

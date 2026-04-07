@@ -9,83 +9,63 @@ constexpr size_t GetInputActionIndex(const InputAction action)
 }
 
 void BindAction(
-	InputState *input,
+	InputState &input,
 	const InputAction action,
 	const SDL_Scancode primaryScancode,
 	const SDL_Scancode secondaryScancode = SDL_SCANCODE_UNKNOWN)
 {
-	if (!input) {
-		return;
-	}
-
-	input->bindings[GetInputActionIndex(action)].scancodes = {
+	input.bindings[GetInputActionIndex(action)].scancodes = {
 		primaryScancode,
 		secondaryScancode,
 	};
 }
 
 void SetActionState(
-	InputState *input,
+	InputState &input,
 	const InputAction action,
 	const size_t bindingSlot,
 	const bool isDown,
 	const bool isRepeat)
 {
-	if (!input) {
-		return;
-	}
+	auto &[scancodes, downStates] = input.bindings[GetInputActionIndex(action)];
+	downStates[bindingSlot] = isDown;
 
-	InputActionBinding &binding = input->bindings[GetInputActionIndex(action)];
-	binding.downStates[bindingSlot] = isDown;
-
-	InputActionButtonState &buttonState = input->actions[GetInputActionIndex(action)];
-	buttonState.down = false;
-	for (const bool slotDown : binding.downStates) {
-		buttonState.down = buttonState.down || slotDown;
+	auto &[down, pressed] = input.actions[GetInputActionIndex(action)];
+	down = false;
+	for (const bool slotDown : downStates) {
+		down = down || slotDown;
 	}
 	if (isDown && !isRepeat) {
-		buttonState.pressed = true;
+		pressed = true;
 	}
 }
 
-void ResetBindingStates(InputState *input)
+void ResetBindingStates(InputState &input)
 {
-	if (!input) {
-		return;
-	}
-
-	for (InputActionBinding &binding : input->bindings) {
-		binding.downStates = {};
+	for (auto &[scancodes, downStates] : input.bindings) {
+		downStates = {};
 	}
 }
 
-void ResetActionStates(InputState *input)
+void ResetActionStates(InputState &input)
 {
-	if (!input) {
-		return;
-	}
-
-	for (InputActionButtonState &buttonState : input->actions) {
+	for (InputActionButtonState &buttonState : input.actions) {
 		buttonState = {};
 	}
 }
 } // namespace
 
-void InitializeInputState(InputState *input)
+void InitializeInputState(InputState &input)
 {
-	if (!input) {
-		return;
-	}
-
-	input->mouseDeltaX = 0.0f;
-	input->mouseDeltaY = 0.0f;
-	input->removePressed = false;
-	input->placePressed = false;
-	input->relativeMouseModeEnabled = true;
+	input.mouseDeltaX = 0.0f;
+	input.mouseDeltaY = 0.0f;
+	input.removePressed = false;
+	input.placePressed = false;
+	input.relativeMouseModeEnabled = true;
 	ResetActionStates(input);
 	ResetBindingStates(input);
-	for (InputActionBinding &binding : input->bindings) {
-		binding.scancodes = {
+	for (auto &[scancodes, downStates] : input.bindings) {
+		scancodes = {
 			SDL_SCANCODE_UNKNOWN,
 			SDL_SCANCODE_UNKNOWN,
 		};
@@ -108,20 +88,20 @@ void InitializeInputState(InputState *input)
 }
 
 void HandleInputActionEvent(
-	InputState *input,
+	InputState &input,
 	const SDL_Event *event)
 {
-	if (!input || !event ||
+	if (!event ||
 		(event->type != SDL_EVENT_KEY_DOWN && event->type != SDL_EVENT_KEY_UP)) {
 		return;
 	}
 
 	const SDL_Scancode scancode = event->key.scancode;
 	const bool isDown = event->type == SDL_EVENT_KEY_DOWN;
-	for (size_t actionIndex = 0; actionIndex < input->bindings.size(); ++actionIndex) {
+	for (size_t actionIndex = 0; actionIndex < input.bindings.size(); ++actionIndex) {
 		const InputAction action = static_cast<InputAction>(actionIndex);
-		for (size_t slotIndex = 0; slotIndex < input->bindings[actionIndex].scancodes.size(); ++slotIndex) {
-			const SDL_Scancode boundScancode = input->bindings[actionIndex].scancodes[slotIndex];
+		for (size_t slotIndex = 0; slotIndex < input.bindings[actionIndex].scancodes.size(); ++slotIndex) {
+			const SDL_Scancode boundScancode = input.bindings[actionIndex].scancodes[slotIndex];
 			if (boundScancode == SDL_SCANCODE_UNKNOWN || boundScancode != scancode) {
 				continue;
 			}
@@ -140,16 +120,12 @@ bool IsInputActionDown(
 }
 
 bool ConsumeInputActionPressed(
-	InputState *input,
+	InputState &input,
 	const InputAction action)
 {
-	if (!input) {
-		return false;
-	}
-
-	InputActionButtonState &buttonState = input->actions[GetInputActionIndex(action)];
-	const bool wasPressed = buttonState.pressed;
-	buttonState.pressed = false;
+	auto &[down, pressed] = input.actions[GetInputActionIndex(action)];
+	const bool wasPressed = pressed;
+	pressed = false;
 	return wasPressed;
 }
 

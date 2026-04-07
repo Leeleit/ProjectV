@@ -71,7 +71,7 @@
 ### 1.4. Чего пока нет или не хватает до настоящего MVP
 
 - проверенных `resize / restore / shutdown` после интерактивных world edits
-- ECS, встроенного в реальный gameplay loop
+- MVP physics layer поверх уже подключённого минимального ECS slice
 - physics integration уровня MVP
 - save/load мира
 - CI и автоматического smoke-контура
@@ -430,17 +430,28 @@ src/
 - Современность: `4/5`
 - Оптимизационная отдача: `3/5`
 
+Статус на `2026-04-07`:
+
+- `flecs` уже подключён в main build и test target.
+- Минимальный ECS slice уже поднят в `src/ecs`: primary camera entity, primary player entity, `world`/`debug` singleton
+  data и chunk mirror entities.
+- Main loop уже читает camera/debug/world через ECS glue, но `VoxelWorld` пока сознательно остаётся owned через
+  `WorldState`, а ECS держит на него явный binding вместо premature full migration.
+- Полный ECS scheduler, gameplay systems и physics-layer по-прежнему не являются частью `8.3`.
+
 Задачи:
 
-- [ ] Подключить `flecs` только когда уже есть интерактивный world loop.
-- [ ] Ввести минимальные сущности:
+- [x] Подключить `flecs` только когда уже есть интерактивный world loop.
+- [x] Ввести минимальные сущности:
 - camera
 - player
 - world singleton
 - debug singleton
 - chunk entity при необходимости
-- [ ] Не строить большой ECS-каркас “на будущее”.
-- [ ] Держать компоненты как данные, системы как трансформации.
+- [x] Не строить большой ECS-каркас “на будущее”.
+- [x] Держать компоненты как данные, системы как трансформации.
+- [x] Убрать post-`8.3` static-analysis warning'и в `RuntimeDiagnostics`, `InputActions`, HUD helper'ах, voxel raycast и
+  ECS chunk mirror.
 
 ## 8.4. Physics для MVP
 
@@ -624,7 +635,7 @@ src/
 
 - [x] `fmt` — vendored formatting dependency для будущего logging layer без ввода тяжёлого logging framework.
 - [x] `tracy` — bundled submodule синхронизирован с upstream HEAD и очищен от локальных ad-hoc patch'ей внутри `external/tracy`.
-- [ ] `flecs`
+- [x] `flecs`
 - [ ] `imgui`
 - [ ] `JoltPhysics`
 - [ ] `glaze` — только когда схема данных стабилизируется
@@ -634,6 +645,8 @@ src/
 - [ ] `fastgltf`
 - [ ] `meshoptimizer`
 - [ ] `draco`
+  - before actual adoption, `external/draco` must stay recursively clean: nested `third_party/*` submodules should match
+    the commits recorded by `draco`, not random local checkouts.
 
 ### Не тащить в mainline слишком рано
 
@@ -682,7 +695,7 @@ src/
 
 ### Sprint B — после Sprint A
 
-- [ ] Подключить минимальный ECS.
+- [x] Подключить минимальный ECS.
 - [ ] Подключить MVP physics raycast/collision.
 - [ ] Добавить save/load.
 - [ ] Добавить benchmark scene presets.
@@ -762,7 +775,7 @@ src/
 
 ### 14.7. Gameplay / MVP Extensions
 
-- [ ] ECS glue
+- [x] ECS glue
 - [ ] physics raycast
 - [ ] collision
 - [ ] walk controller

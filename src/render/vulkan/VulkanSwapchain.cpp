@@ -1,8 +1,7 @@
 #include "render/vulkan/VulkanSwapchain.hpp"
 
-#include "debug/Profiling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
-#include "render/vulkan/VulkanResult.hpp"
+#include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 
@@ -26,21 +25,24 @@ bool QuerySwapchainSupport(
 	const VkResult capabilitiesResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
 		physicalDevice, surface, &outDetails->capabilities);
 	if (capabilitiesResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("QuerySwapchainSupport.vkGetPhysicalDeviceSurfaceCapabilitiesKHR", capabilitiesResult);
+		runtime::LogVkFailure("QuerySwapchainSupport.vkGetPhysicalDeviceSurfaceCapabilitiesKHR", capabilitiesResult);
+		return false;
 	}
 
 	uint32_t formatCount = 0;
 	const VkResult formatCountResult =
 		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
 	if (formatCountResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("QuerySwapchainSupport.vkGetPhysicalDeviceSurfaceFormatsKHR(count)", formatCountResult);
+		runtime::LogVkFailure("QuerySwapchainSupport.vkGetPhysicalDeviceSurfaceFormatsKHR(count)", formatCountResult);
+		return false;
 	}
 	outDetails->formats.resize(formatCount);
 	if (formatCount > 0) {
 		const VkResult formatsResult =
 			vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, outDetails->formats.data());
 		if (formatsResult != VK_SUCCESS) {
-			return runtime::LogVkFailure("QuerySwapchainSupport.vkGetPhysicalDeviceSurfaceFormatsKHR(data)", formatsResult);
+			runtime::LogVkFailure("QuerySwapchainSupport.vkGetPhysicalDeviceSurfaceFormatsKHR(data)", formatsResult);
+			return false;
 		}
 	}
 
@@ -48,9 +50,10 @@ bool QuerySwapchainSupport(
 	const VkResult presentModeCountResult =
 		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
 	if (presentModeCountResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"QuerySwapchainSupport.vkGetPhysicalDeviceSurfacePresentModesKHR(count)",
 			presentModeCountResult);
+		return false;
 	}
 	outDetails->presentModes.resize(presentModeCount);
 	if (presentModeCount > 0) {
@@ -61,9 +64,10 @@ bool QuerySwapchainSupport(
 				&presentModeCount,
 				outDetails->presentModes.data());
 		if (presentModesResult != VK_SUCCESS) {
-			return runtime::LogVkFailure(
+			runtime::LogVkFailure(
 				"QuerySwapchainSupport.vkGetPhysicalDeviceSurfacePresentModesKHR(data)",
 				presentModesResult);
+			return false;
 		}
 	}
 
@@ -127,17 +131,19 @@ bool CreateOrRecreateSwapchain(
 	PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain");
 	SwapchainSupportDetails support;
 	if (!QuerySwapchainSupport(context->physicalDevice, context->surface, &support)) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Swapchain",
 			"CreateOrRecreateSwapchain.QuerySwapchainSupport",
 			"QuerySwapchainSupport returned false");
+		return false;
 	}
 
 	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) == 0) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Swapchain",
 			"CreateOrRecreateSwapchain.SurfaceUsage",
 			"surface does not support VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT for swapchain images");
+		return false;
 	}
 
 	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
@@ -181,7 +187,8 @@ bool CreateOrRecreateSwapchain(
 		PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain.CreateSwapchain");
 		const VkResult createSwapchainResult = vkCreateSwapchainKHR(context->device, &createInfo, nullptr, &newSwapchain);
 		if (createSwapchainResult != VK_SUCCESS) {
-			return runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateSwapchainKHR", createSwapchainResult);
+			runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateSwapchainKHR", createSwapchainResult);
+			return false;
 		}
 	}
 
@@ -192,12 +199,14 @@ bool CreateOrRecreateSwapchain(
 		if (imageCountResult != VK_SUCCESS || actualImageCount == 0) {
 			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 			if (imageCountResult != VK_SUCCESS) {
-				return runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)", imageCountResult);
+				runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)", imageCountResult);
+				return false;
 			}
-			return runtime::LogRuntimeFailure(
+			runtime::LogRuntimeFailure(
 				"Swapchain",
 				"CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)",
 				"swapchain returned zero images");
+			return false;
 		}
 	}
 
@@ -208,7 +217,8 @@ bool CreateOrRecreateSwapchain(
 			vkGetSwapchainImagesKHR(context->device, newSwapchain, &actualImageCount, newImages.data());
 		if (fetchImagesResult != VK_SUCCESS) {
 			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
-			return runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(data)", fetchImagesResult);
+			runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(data)", fetchImagesResult);
+			return false;
 		}
 	}
 
@@ -235,7 +245,8 @@ bool CreateOrRecreateSwapchain(
 					}
 				}
 				vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
-				return runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateImageView", createImageViewResult);
+				runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateImageView", createImageViewResult);
+				return false;
 			}
 		}
 	}
@@ -312,7 +323,8 @@ bool RecreateSwapchain(
 		PV_PROFILE_ZONE_N("RecreateSwapchain.WaitDeviceIdle");
 		const VkResult waitIdleResult = vkDeviceWaitIdle(context->device);
 		if (waitIdleResult != VK_SUCCESS) {
-			return runtime::LogVkFailure("RecreateSwapchain.vkDeviceWaitIdle", waitIdleResult);
+			runtime::LogVkFailure("RecreateSwapchain.vkDeviceWaitIdle", waitIdleResult);
+			return false;
 		}
 	}
 
@@ -338,10 +350,11 @@ bool RecreateSwapchain(
 	if (hadGraphicsPipeline) {
 		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateGraphicsPipeline");
 		if (!CreateGraphicsPipeline(context, swapchain, render)) {
-			return runtime::LogRuntimeFailure(
+			runtime::LogRuntimeFailure(
 				"Swapchain",
 				"RecreateSwapchain.CreateGraphicsPipeline",
 				"CreateGraphicsPipeline returned false after swapchain recreation");
+			return false;
 		}
 	}
 

@@ -5,7 +5,7 @@
 
 #include "fmt/format.h"
 
-#include <cstdlib>
+#include <cstdlib> // IWYU pragma: keep
 
 namespace {
 void LogFormattedMessage(
@@ -19,41 +19,40 @@ void LogFormattedMessage(
 } // namespace
 
 namespace runtime {
-bool LogRuntimeFailure(
+void LogRuntimeFailure(
 	const std::string_view subsystem,
 	const std::string_view step,
 	const std::string_view detail)
 {
 	LogFormattedMessage(subsystem, step, detail);
-	return false;
 }
 
-bool LogVkFailure(const std::string_view step, const VkResult result)
+void LogVkFailure(const std::string_view step, const VkResult result)
 {
-	return LogRuntimeFailure(
+	LogRuntimeFailure(
 		"Vulkan",
 		step,
 		fmt::format("{} ({})", VkResultToString(result), static_cast<int>(result)));
 }
 
-bool LogVmaFailure(const std::string_view step, const VkResult result)
+void LogVmaFailure(const std::string_view step, const VkResult result)
 {
-	return LogRuntimeFailure(
+	LogRuntimeFailure(
 		"VMA",
 		step,
 		fmt::format("{} ({})", VkResultToString(result), static_cast<int>(result)));
 }
 
-bool LogSdlFailure(const std::string_view step)
+void LogSdlFailure(const std::string_view step)
 {
 	const char *error = SDL_GetError();
-	return LogRuntimeFailure(
+	LogRuntimeFailure(
 		"SDL",
 		step,
-		(error && *error) ? error : "SDL_GetError returned an empty message");
+		error && *error ? error : "SDL_GetError returned an empty message");
 }
 
-bool LogCheckFailure(
+void LogCheckFailure(
 	const std::string_view subsystem,
 	const std::string_view step,
 	const std::string_view condition,
@@ -61,7 +60,7 @@ bool LogCheckFailure(
 	const char *file,
 	const int line)
 {
-	return LogRuntimeFailure(
+	LogRuntimeFailure(
 		subsystem,
 		step,
 		fmt::format(

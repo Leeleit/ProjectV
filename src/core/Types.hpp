@@ -13,7 +13,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -21,6 +20,9 @@
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
 struct VoxelWorld;
+struct EcsState;
+void DestroyEcsState(EcsState *ecs);
+using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
 
 struct PackedSceneVoxelFace {
 	uint32_t localVoxelFace = 0;
@@ -360,12 +362,11 @@ struct AppState {
 	SimulationState simulation{};
 	InputState input{};
 	InteractionState interaction{};
-	DebugState debug{};
-	CameraState camera{};
+	EcsStatePtr ecs{nullptr, DestroyEcsState};
 
 	bool shutdownDone = false;
 
-	~AppState();
+	~AppState() = default;
 };
 
 void ShutdownVulkan(AppState *state);

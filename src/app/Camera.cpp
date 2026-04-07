@@ -91,7 +91,7 @@ void InitializeCamera(
 	simulation->simulationStepsLastFrame = 0;
 	simulation->simulationTick = 0;
 	simulation->paused = false;
-	InitializeInputState(input);
+	InitializeInputState(*input);
 }
 
 void ResetCameraState(CameraState *camera)

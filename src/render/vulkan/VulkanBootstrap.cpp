@@ -1,12 +1,10 @@
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/VulkanResult.hpp"
 
 #include "fmt/format.h"
 
 #include <array>
-#include <cstdio>
 #include <vector>
 
 namespace {
@@ -59,12 +57,13 @@ bool CheckValidationLayerSupport()
 			}
 		}
 
-			if (!found) {
-				return runtime::LogRuntimeFailure(
-					"Init",
-					"CheckValidationLayerSupport",
-					fmt::format("missing validation layer: {}", requiredLayer));
-			}
+		if (!found) {
+			runtime::LogRuntimeFailure(
+				"Init",
+				"CheckValidationLayerSupport",
+				fmt::format("missing validation layer: {}", requiredLayer));
+			return false;
+		}
 	}
 
 	return true;
@@ -97,7 +96,8 @@ bool CreateDebugMessenger(VulkanContextState *context)
 	const VkResult createDebugMessengerResult =
 		vkCreateDebugUtilsMessengerEXT(context->instance, &info, nullptr, &context->debugMessenger);
 	if (createDebugMessengerResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("CreateDebugMessenger.vkCreateDebugUtilsMessengerEXT", createDebugMessengerResult);
+		runtime::LogVkFailure("CreateDebugMessenger.vkCreateDebugUtilsMessengerEXT", createDebugMessengerResult);
+		return false;
 	}
 	return true;
 #endif
@@ -130,10 +130,11 @@ bool CheckDeviceExtensionSupport(const VkPhysicalDevice physicalDevice)
 		}
 
 		if (!found) {
-			return runtime::LogRuntimeFailure(
+			runtime::LogRuntimeFailure(
 				"Init",
 				"CheckDeviceExtensionSupport",
 				fmt::format("missing device extension: {}", required));
+			return false;
 		}
 	}
 
@@ -153,9 +154,10 @@ bool HasDeviceExtension(
 	const VkResult enumerateExtensionCountResult =
 		vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
 	if (enumerateExtensionCountResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"CheckDeviceExtensionSupport.vkEnumerateDeviceExtensionProperties(count)",
 			enumerateExtensionCountResult);
+		return false;
 	}
 
 	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
@@ -165,9 +167,10 @@ bool HasDeviceExtension(
 		&extensionCount,
 		availableExtensions.data());
 	if (enumerateExtensionDataResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"CheckDeviceExtensionSupport.vkEnumerateDeviceExtensionProperties(data)",
 			enumerateExtensionDataResult);
+		return false;
 	}
 
 	for (const auto &[availableExtensionName, specVersion] : availableExtensions) {
@@ -218,30 +221,34 @@ bool CheckSwapchainSurfaceSupport(const VkPhysicalDevice physicalDevice, const V
 	const VkResult formatCountResult =
 		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
 	if (formatCountResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"CheckSwapchainSurfaceSupport.vkGetPhysicalDeviceSurfaceFormatsKHR(count)",
 			formatCountResult);
+		return false;
 	}
 	if (formatCount == 0) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckSwapchainSurfaceSupport.SurfaceFormats",
 			"no surface formats found");
+		return false;
 	}
 
 	uint32_t presentModeCount = 0;
 	const VkResult presentModeCountResult =
 		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
 	if (presentModeCountResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"CheckSwapchainSurfaceSupport.vkGetPhysicalDeviceSurfacePresentModesKHR(count)",
 			presentModeCountResult);
+		return false;
 	}
 	if (presentModeCount == 0) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckSwapchainSurfaceSupport.PresentModes",
 			"no present modes found");
+		return false;
 	}
 
 	return true;
@@ -267,45 +274,51 @@ bool CheckRequiredFeatures(
 	const VkPhysicalDeviceFeatures supportedFeatures = features2.features;
 
 	if (!supportedFeatures.multiDrawIndirect) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckRequiredFeatures.multiDrawIndirect",
 			"device does not support multiDrawIndirect");
+		return false;
 	}
 
 	if (!supportedFeatures.drawIndirectFirstInstance) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckRequiredFeatures.drawIndirectFirstInstance",
 			"device does not support drawIndirectFirstInstance");
+		return false;
 	}
 
 	if (!features12.drawIndirectCount) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckRequiredFeatures.drawIndirectCount",
 			"device does not support drawIndirectCount");
+		return false;
 	}
 
 	if (!features12.hostQueryReset) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckRequiredFeatures.hostQueryReset",
 			"device does not support hostQueryReset");
+		return false;
 	}
 
 	if (!features13.dynamicRendering) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckRequiredFeatures.dynamicRendering",
 			"device does not support dynamicRendering");
+		return false;
 	}
 
 	if (!features13.synchronization2) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"CheckRequiredFeatures.synchronization2",
 			"device does not support synchronization2");
+		return false;
 	}
 
 	*outFeatures = supportedFeatures;
@@ -406,35 +419,40 @@ bool InitializeVulkanBase(
 		"platform/context/frame is null");
 	// SDL нужен нам до Vulkan, потому что именно он создаёт окно и surface-совместимость.
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		return runtime::LogSdlFailure("InitializeVulkanBase.SDL_Init");
+		runtime::LogSdlFailure("InitializeVulkanBase.SDL_Init");
+		return false;
 	}
 
 	platform->window = SDL_CreateWindow(PROJECT_NAME, 1280, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 	if (!platform->window) {
-		return runtime::LogSdlFailure("InitializeVulkanBase.SDL_CreateWindow");
+		runtime::LogSdlFailure("InitializeVulkanBase.SDL_CreateWindow");
+		return false;
 	}
 
 	// Volk поднимает таблицу функций Vulkan, чтобы дальше не делать ручной загрузки указателей.
 	const VkResult volkInitializeResult = volkInitialize();
 	if (volkInitializeResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("InitializeVulkanBase.volkInitialize", volkInitializeResult);
+		runtime::LogVkFailure("InitializeVulkanBase.volkInitialize", volkInitializeResult);
+		return false;
 	}
 
 	// SDL сообщает, какие instance extensions нужны именно для этого окна и платформы.
 	Uint32 extCount = 0;
 	const char *const *sdlExtNames = SDL_Vulkan_GetInstanceExtensions(&extCount);
 	if (!sdlExtNames) {
-		return runtime::LogSdlFailure("InitializeVulkanBase.SDL_Vulkan_GetInstanceExtensions");
+		runtime::LogSdlFailure("InitializeVulkanBase.SDL_Vulkan_GetInstanceExtensions");
+		return false;
 	}
 
 	std::vector instanceExtensions(sdlExtNames, sdlExtNames + extCount);
 	if (kEnableValidation) {
 		instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		if (!CheckValidationLayerSupport()) {
-			return runtime::LogRuntimeFailure(
+			runtime::LogRuntimeFailure(
 				"Init",
 				"InitializeVulkanBase.ValidationLayers",
 				"validation layers requested, but not available");
+			return false;
 		}
 	}
 
@@ -460,7 +478,8 @@ bool InitializeVulkanBase(
 	// Instance — это верхний объект Vulkan, от которого стартует вся остальная графическая жизнь.
 	const VkResult createInstanceResult = vkCreateInstance(&instanceCreateInfo, nullptr, &context->instance);
 	if (createInstanceResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("InitializeVulkanBase.vkCreateInstance", createInstanceResult);
+		runtime::LogVkFailure("InitializeVulkanBase.vkCreateInstance", createInstanceResult);
+		return false;
 	}
 
 	volkLoadInstance(context->instance);
@@ -471,7 +490,8 @@ bool InitializeVulkanBase(
 
 	// Surface связывает окно SDL и Vulkan-instance в один канал вывода.
 	if (!SDL_Vulkan_CreateSurface(platform->window, context->instance, nullptr, &context->surface)) {
-		return runtime::LogSdlFailure("InitializeVulkanBase.SDL_Vulkan_CreateSurface");
+		runtime::LogSdlFailure("InitializeVulkanBase.SDL_Vulkan_CreateSurface");
+		return false;
 	}
 
 	// Ищем физическое устройство, которое вообще умеет работать с нашим surface.
@@ -479,24 +499,27 @@ bool InitializeVulkanBase(
 	const VkResult enumeratePhysicalDevicesCountResult =
 		vkEnumeratePhysicalDevices(context->instance, &deviceCount, nullptr);
 	if (enumeratePhysicalDevicesCountResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"InitializeVulkanBase.vkEnumeratePhysicalDevices(count)",
 			enumeratePhysicalDevicesCountResult);
+		return false;
 	}
 	if (deviceCount == 0) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitializeVulkanBase.PhysicalDevices",
 			"no physical devices found");
+		return false;
 	}
 
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	const VkResult enumeratePhysicalDevicesDataResult =
 		vkEnumeratePhysicalDevices(context->instance, &deviceCount, devices.data());
 	if (enumeratePhysicalDevicesDataResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"InitializeVulkanBase.vkEnumeratePhysicalDevices(data)",
 			enumeratePhysicalDevicesDataResult);
+		return false;
 	}
 
 	PhysicalDeviceCandidate selected{};
@@ -509,10 +532,11 @@ bool InitializeVulkanBase(
 	}
 
 	if (selected.device == VK_NULL_HANDLE) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Init",
 			"InitializeVulkanBase.PhysicalDeviceSelection",
 			"no suitable physical device found");
+		return false;
 	}
 
 	// Фиксируем выбранную видеокарту и семейство очереди в общем состоянии.
@@ -550,7 +574,8 @@ bool InitializeVulkanBase(
 	const VkResult createDeviceResult =
 		vkCreateDevice(context->physicalDevice, &deviceCreateInfo, nullptr, &context->device);
 	if (createDeviceResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("InitializeVulkanBase.vkCreateDevice", createDeviceResult);
+		runtime::LogVkFailure("InitializeVulkanBase.vkCreateDevice", createDeviceResult);
+		return false;
 	}
 
 	// После создания device Vulkan-вызывам нужен device-level loader.
@@ -572,15 +597,17 @@ bool InitializeVulkanBase(
 	VmaVulkanFunctions vulkanFunctions{};
 	const VkResult importFunctionsResult = vmaImportVulkanFunctionsFromVolk(&allocInfo, &vulkanFunctions);
 	if (importFunctionsResult != VK_SUCCESS) {
-		return runtime::LogVmaFailure(
+		runtime::LogVmaFailure(
 			"InitializeVulkanBase.vmaImportVulkanFunctionsFromVolk",
 			importFunctionsResult);
+		return false;
 	}
 	allocInfo.pVulkanFunctions = &vulkanFunctions;
 
 	const VkResult createAllocatorResult = vmaCreateAllocator(&allocInfo, &context->allocator);
 	if (createAllocatorResult != VK_SUCCESS) {
-		return runtime::LogVmaFailure("InitializeVulkanBase.vmaCreateAllocator", createAllocatorResult);
+		runtime::LogVmaFailure("InitializeVulkanBase.vmaCreateAllocator", createAllocatorResult);
+		return false;
 	}
 
 	// Command pool хранит временные command buffer'ы.
@@ -592,7 +619,8 @@ bool InitializeVulkanBase(
 	const VkResult createCommandPoolResult =
 		vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->commandPool);
 	if (createCommandPoolResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("InitializeVulkanBase.vkCreateCommandPool", createCommandPoolResult);
+		runtime::LogVkFailure("InitializeVulkanBase.vkCreateCommandPool", createCommandPoolResult);
+		return false;
 	}
 	SetVulkanObjectName(
 		*context,
@@ -611,7 +639,8 @@ bool InitializeVulkanBase(
 	const VkResult allocateCommandBuffersResult =
 		vkAllocateCommandBuffers(context->device, &cmdAllocInfo, frame->commandBuffers.data());
 	if (allocateCommandBuffersResult != VK_SUCCESS) {
-		return runtime::LogVkFailure("InitializeVulkanBase.vkAllocateCommandBuffers", allocateCommandBuffersResult);
+		runtime::LogVkFailure("InitializeVulkanBase.vkAllocateCommandBuffers", allocateCommandBuffersResult);
+		return false;
 	}
 	for (size_t i = 0; i < frame->commandBuffers.size(); ++i) {
 		char name[64]{};
@@ -638,21 +667,24 @@ bool InitializeVulkanBase(
 		const VkResult imageAvailableSemaphoreResult =
 			vkCreateSemaphore(context->device, &semaphoreInfo, nullptr, &frame->imageAvailableSemaphores[i]);
 		if (imageAvailableSemaphoreResult != VK_SUCCESS) {
-			return runtime::LogVkFailure(
+			runtime::LogVkFailure(
 				"InitializeVulkanBase.vkCreateSemaphore(imageAvailable)",
 				imageAvailableSemaphoreResult);
+			return false;
 		}
 		const VkResult renderFinishedSemaphoreResult =
 			vkCreateSemaphore(context->device, &semaphoreInfo, nullptr, &frame->renderFinishedSemaphores[i]);
 		if (renderFinishedSemaphoreResult != VK_SUCCESS) {
-			return runtime::LogVkFailure(
+			runtime::LogVkFailure(
 				"InitializeVulkanBase.vkCreateSemaphore(renderFinished)",
 				renderFinishedSemaphoreResult);
+			return false;
 		}
 		const VkResult inFlightFenceResult =
 			vkCreateFence(context->device, &fenceInfo, nullptr, &frame->inFlightFences[i]);
 		if (inFlightFenceResult != VK_SUCCESS) {
-			return runtime::LogVkFailure("InitializeVulkanBase.vkCreateFence", inFlightFenceResult);
+			runtime::LogVkFailure("InitializeVulkanBase.vkCreateFence", inFlightFenceResult);
+			return false;
 		}
 
 		char imageAvailableName[64]{};

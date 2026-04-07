@@ -8,6 +8,7 @@
 
 - Vulkan bootstrap, swapchain recreate и controlled shutdown;
 - CPU `VoxelWorld` с чанками, dirty queue и chunk rebuild bookkeeping;
+- минимальный `flecs` ECS slice с primary camera/player entities, `world`/`debug` singleton data и chunk mirror summary;
 - compute voxel meshing и opaque/transparent indirect draw;
 - CPU raycast, block picking, `remove/place` edits и корректное dirty-neighbor обновление;
 - `free-fly` и `spectator` control modes;
@@ -75,8 +76,8 @@ build/windows-clang-debug/bin/ProjectV.exe
 
 ## Текущий фокус
 
-Ближайший mainline-фокус после закрытия `8.2`:
+Ближайший mainline-фокус после закрытия `8.3`:
 
-1. дочистить remaining authored docs и корневую документацию;
-2. решить, что из runtime diagnostics нужно расширять дальше;
-3. после этого двигаться в `walk / noclip`, player controller, ECS/physics/save-load.
+1. связать новый ECS slice с MVP physics raycast/collision;
+2. после этого двигаться в `walk / noclip`, player controller и save/load;
+3. параллельно дочищать authored docs под обновлённую app/world/ECS раскладку.

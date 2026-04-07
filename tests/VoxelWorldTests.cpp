@@ -2,8 +2,8 @@
 #include "app/Camera.hpp"
 #include "debug/DebugHud.hpp"
 #include "app/InputActions.hpp"
+#include "ecs/EcsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
-#include "core/RuntimeDiagnostics.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "core/Types.hpp"
 #include "render/vulkan/VulkanResult.hpp"
@@ -405,7 +405,7 @@ void SendKeyEvent(
 	event.type = eventType;
 	event.key.scancode = scancode;
 	event.key.repeat = repeat;
-	HandleInputActionEvent(input, &event);
+	HandleInputActionEvent(*input, &event);
 }
 
 CameraState MakeTestCamera(const std::array<float, 3> &position)
@@ -429,35 +429,35 @@ void ResetDirtyFlags(VoxelWorld &world)
 void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 {
 	InputState input{};
-	InitializeInputState(&input);
+	InitializeInputState(input);
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveForward));
-	EXPECT_TRUE(context, ConsumeInputActionPressed(&input, InputAction::MoveForward));
-	EXPECT_TRUE(context, !ConsumeInputActionPressed(&input, InputAction::MoveForward));
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveForward));
+	EXPECT_TRUE(context, !ConsumeInputActionPressed(input, InputAction::MoveForward));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W, true);
 	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveForward));
-	EXPECT_TRUE(context, !ConsumeInputActionPressed(&input, InputAction::MoveForward));
+	EXPECT_TRUE(context, !ConsumeInputActionPressed(input, InputAction::MoveForward));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 	EXPECT_TRUE(context, !IsInputActionDown(input, InputAction::MoveForward));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveDown));
-	EXPECT_TRUE(context, ConsumeInputActionPressed(&input, InputAction::MoveDown));
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveDown));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
 	EXPECT_TRUE(context, !IsInputActionDown(input, InputAction::MoveDown));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(&input, InputAction::ToggleControlMode));
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleControlMode));
 }
 
 void TestTickCameraUsesActionStateAndSpeedModifiers(TestContext &context)
 {
 	{
 		InputState input{};
-		InitializeInputState(&input);
+		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 
 		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
@@ -467,7 +467,7 @@ void TestTickCameraUsesActionStateAndSpeedModifiers(TestContext &context)
 
 	{
 		InputState input{};
-		InitializeInputState(&input);
+		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LCTRL);
 
@@ -478,7 +478,7 @@ void TestTickCameraUsesActionStateAndSpeedModifiers(TestContext &context)
 
 	{
 		InputState input{};
-		InitializeInputState(&input);
+		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LALT);
 
@@ -489,7 +489,7 @@ void TestTickCameraUsesActionStateAndSpeedModifiers(TestContext &context)
 
 	{
 		InputState input{};
-		InitializeInputState(&input);
+		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 
 		CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
@@ -502,7 +502,7 @@ void TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(TestContext &
 {
 	CameraState camera{};
 	InputState input{};
-	InitializeInputState(&input);
+	InitializeInputState(input);
 	input.relativeMouseModeEnabled = false;
 
 	SDL_Event event{};
@@ -522,7 +522,7 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
 	camera.moveSpeed = 17.0f;
 	InputState input{};
-	InitializeInputState(&input);
+	InitializeInputState(input);
 	InteractionState interaction{};
 	interaction.placementMaterial = VoxelMaterial::FloorWhite;
 	WorldState world{};
@@ -568,7 +568,7 @@ void TestResetCameraPreservesControlMode(TestContext &context)
 	camera.controlMode = CameraState::ControlMode::Spectator;
 	camera.moveSpeed = 22.0f;
 	InputState input{};
-	InitializeInputState(&input);
+	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F3);
 	InteractionState interaction{};
 	WorldState world{};
@@ -594,7 +594,7 @@ void TestFreeFlyCameraMovesWhileSimulationIsPaused(TestContext &context)
 	CameraState camera = MakeTestCamera({0.0f, 0.0f, 0.0f});
 	camera.controlMode = CameraState::ControlMode::FreeFly;
 	InputState input{};
-	InitializeInputState(&input);
+	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	InteractionState interaction{};
 	WorldState world{};
@@ -620,7 +620,7 @@ void TestSpectatorModeBlocksEditsAndPausedMovement(TestContext &context)
 	CameraState camera = MakeTestCamera({1.5f, 1.5f, 4.5f});
 	camera.controlMode = CameraState::ControlMode::Spectator;
 	InputState input{};
-	InitializeInputState(&input);
+	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	input.removePressed = true;
 	InteractionState interaction{};
@@ -767,6 +767,59 @@ void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 	EXPECT_TRUE(context, vertices[0].positionNdc[0] < 0.0f);
 	EXPECT_TRUE(context, vertices[0].positionNdc[1] < 0.0f);
 }
+
+void TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(TestContext &context)
+{
+	AppState state{};
+
+	EXPECT_TRUE(context, InitializeAppEcs(&state));
+	EXPECT_TRUE(context, state.ecs != nullptr);
+	EXPECT_TRUE(context, GetPrimaryCameraEntityId(state.ecs.get()) != 0u);
+	EXPECT_TRUE(context, GetPrimaryPlayerEntityId(state.ecs.get()) != 0u);
+	EXPECT_EQ(context, GetPrimaryCameraEntityId(state.ecs.get()), GetPlayerControlledCameraEntityId(state.ecs.get()));
+
+	CameraState *camera = GetPrimaryCameraState(state.ecs.get());
+	const DebugState *debug = GetDebugState(state.ecs.get());
+	const WorldState *world = GetWorldState(state.ecs.get());
+
+	EXPECT_TRUE(context, camera != nullptr);
+	EXPECT_TRUE(context, debug != nullptr);
+	EXPECT_TRUE(context, world == &state.world);
+
+	camera->moveSpeed = 17.0f;
+	EXPECT_NEAR(context, 17.0f, GetPrimaryCameraState(state.ecs.get())->moveSpeed);
+	EXPECT_TRUE(context, debug->hudVisible);
+}
+
+void TestSyncEcsWorldStateMirrorsVoxelChunksAndWorldSummary(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, InitializeAppEcs(&state));
+
+	state.world.voxelWorld = std::make_unique<VoxelWorld>(MakeTestWorld({0, 0, 0}, {16, 8, 16}, 8));
+	SetVoxelMaterial(*state.world.voxelWorld, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(*state.world.voxelWorld, {9, 1, 1}, VoxelMaterial::Fluid);
+
+	DebugState *debug = GetDebugState(state.ecs.get());
+	EXPECT_TRUE(context, debug != nullptr);
+	debug->stats.dirtyChunkCount = 99;
+	debug->stats.activeChunkCount = 99;
+	debug->stats.nonAirVoxelCount = 99;
+
+	EXPECT_TRUE(context, SyncEcsWorldState(state.ecs.get()));
+
+	VoxelWorldStats summary{};
+	size_t chunkEntityCount = 0;
+	EXPECT_TRUE(context, GetEcsWorldChunkSummary(state.ecs.get(), &summary, &chunkEntityCount));
+
+	EXPECT_EQ(context, state.world.voxelWorld->chunks.size(), chunkEntityCount);
+	EXPECT_EQ(context, state.world.voxelWorld->stats.dirtyChunkCount, summary.dirtyChunkCount);
+	EXPECT_EQ(context, state.world.voxelWorld->stats.activeChunkCount, summary.activeChunkCount);
+	EXPECT_EQ(context, state.world.voxelWorld->stats.nonAirVoxelCount, summary.nonAirVoxelCount);
+	EXPECT_EQ(context, summary.dirtyChunkCount, debug->stats.dirtyChunkCount);
+	EXPECT_EQ(context, summary.activeChunkCount, debug->stats.activeChunkCount);
+	EXPECT_EQ(context, summary.nonAirVoxelCount, debug->stats.nonAirVoxelCount);
+}
 } // namespace
 
 int main()
@@ -798,6 +851,8 @@ int main()
 	TestUpdateVoxelInteractionSkipsEditingWhenDisabled(context);
 	TestBuildDebugHudVerticesReturnsZeroWhenHidden(context);
 	TestBuildDebugHudVerticesProducesGeometryWhenVisible(context);
+	TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(context);
+	TestSyncEcsWorldStateMirrorsVoxelChunksAndWorldSummary(context);
 
 	if (context.failures != 0) {
 		return EXIT_FAILURE;

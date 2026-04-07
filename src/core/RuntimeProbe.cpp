@@ -5,7 +5,7 @@
 namespace {
 struct InitFailureStageMapping {
 	InitFailureStage stage = InitFailureStage::None;
-	std::string_view name{};
+	std::string_view name;
 };
 
 constexpr InitFailureStageMapping kInitFailureStageMappings[]{
@@ -23,9 +23,9 @@ bool TryParseInitFailureStage(const std::string_view value, InitFailureStage *ou
 		return false;
 	}
 
-	for (const InitFailureStageMapping &mapping : kInitFailureStageMappings) {
-		if (mapping.name == value) {
-			*outStage = mapping.stage;
+	for (const auto &[mappedStage, name] : kInitFailureStageMappings) {
+		if (name == value) {
+			*outStage = mappedStage;
 			return true;
 		}
 	}
@@ -36,9 +36,9 @@ bool TryParseInitFailureStage(const std::string_view value, InitFailureStage *ou
 
 const char *InitFailureStageToString(const InitFailureStage stage)
 {
-	for (const InitFailureStageMapping &mapping : kInitFailureStageMappings) {
-		if (mapping.stage == stage) {
-			return mapping.name.data();
+	for (const auto &[mappedStage, name] : kInitFailureStageMappings) {
+		if (mappedStage == stage) {
+			return name.data();
 		}
 	}
 

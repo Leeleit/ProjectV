@@ -47,6 +47,13 @@ set(FMT_MODULE OFF CACHE BOOL "Disable fmt module target" FORCE)
 add_subdirectory(external/fmt)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/fmt")
 
+# flecs
+set(FLECS_STATIC ON CACHE BOOL "Build static flecs lib" FORCE)
+set(FLECS_SHARED OFF CACHE BOOL "Disable shared flecs lib" FORCE)
+set(FLECS_TESTS OFF CACHE BOOL "Disable flecs tests" FORCE)
+add_subdirectory(external/flecs)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/flecs")
+
 projectv_add_tracy()
 
 # --- Vulkan Stack End ---

@@ -100,20 +100,20 @@ bool IntersectRayAabb(
 	return true;
 }
 
-float ComputeAxisStepDistance(const float sampleAxis, const int voxelAxis, const float directionAxis, const int step)
+float ComputeAxisStepDistance(const float sampleAxis, const int voxelAxis, const float directionAxis)
 {
-	if (step > 0) {
+	if (directionAxis > kDirectionEpsilon) {
 		return (static_cast<float>(voxelAxis + 1) - sampleAxis) / directionAxis;
 	}
-	if (step < 0) {
+	if (directionAxis < -kDirectionEpsilon) {
 		return (sampleAxis - static_cast<float>(voxelAxis)) / -directionAxis;
 	}
 	return std::numeric_limits<float>::infinity();
 }
 
-float ComputeAxisDeltaDistance(const float directionAxis, const int step)
+float ComputeAxisDeltaDistance(const float directionAxis)
 {
-	if (step == 0) {
+	if (std::abs(directionAxis) <= kDirectionEpsilon) {
 		return std::numeric_limits<float>::infinity();
 	}
 	return 1.0f / std::abs(directionAxis);
@@ -180,20 +180,23 @@ VoxelRaycastHit RaycastVoxelWorld(
 		return result;
 	}
 
-	const int stepX = rayDirection.x > kDirectionEpsilon ? 1 : rayDirection.x < -kDirectionEpsilon ? -1 : 0;
-	const int stepY = rayDirection.y > kDirectionEpsilon ? 1 : rayDirection.y < -kDirectionEpsilon ? -1 : 0;
-	const int stepZ = rayDirection.z > kDirectionEpsilon ? 1 : rayDirection.z < -kDirectionEpsilon ? -1 : 0;
+	const int stepX = rayDirection.x > kDirectionEpsilon ? 1 : rayDirection.x < -kDirectionEpsilon ? -1
+																								   : 0;
+	const int stepY = rayDirection.y > kDirectionEpsilon ? 1 : rayDirection.y < -kDirectionEpsilon ? -1
+																								   : 0;
+	const int stepZ = rayDirection.z > kDirectionEpsilon ? 1 : rayDirection.z < -kDirectionEpsilon ? -1
+																								   : 0;
 
-	float tMaxX = ComputeAxisStepDistance(sampleOrigin.x, currentVoxel.x, rayDirection.x, stepX);
-	float tMaxY = ComputeAxisStepDistance(sampleOrigin.y, currentVoxel.y, rayDirection.y, stepY);
-	float tMaxZ = ComputeAxisStepDistance(sampleOrigin.z, currentVoxel.z, rayDirection.z, stepZ);
-	const float tDeltaX = ComputeAxisDeltaDistance(rayDirection.x, stepX);
-	const float tDeltaY = ComputeAxisDeltaDistance(rayDirection.y, stepY);
-	const float tDeltaZ = ComputeAxisDeltaDistance(rayDirection.z, stepZ);
+	float tMaxX = ComputeAxisStepDistance(sampleOrigin.x, currentVoxel.x, rayDirection.x);
+	float tMaxY = ComputeAxisStepDistance(sampleOrigin.y, currentVoxel.y, rayDirection.y);
+	float tMaxZ = ComputeAxisStepDistance(sampleOrigin.z, currentVoxel.z, rayDirection.z);
+	const float tDeltaX = ComputeAxisDeltaDistance(rayDirection.x);
+	const float tDeltaY = ComputeAxisDeltaDistance(rayDirection.y);
+	const float tDeltaZ = ComputeAxisDeltaDistance(rayDirection.z);
 
 	while (true) {
-		Int3 previousVoxel = currentVoxel;
-		Int3 hitNormal{};
+		const Int3 previousVoxel = currentVoxel;
+		Int3 hitNormal;
 		float localDistance = tMaxX;
 
 		if (tMaxY < localDistance) {

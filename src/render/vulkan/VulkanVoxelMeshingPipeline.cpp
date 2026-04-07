@@ -1,10 +1,9 @@
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 
-#include "debug/Profiling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
+#include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/VulkanResult.hpp"
 
 #include <array>
 #include <vector>
@@ -135,9 +134,10 @@ bool RefreshVoxelMeshingResourceBindings(
 	const VkResult descriptorPoolResult =
 		vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->voxelMeshingDescriptorPool);
 	if (descriptorPoolResult != VK_SUCCESS) {
-		return runtime::LogVkFailure(
+		runtime::LogVkFailure(
 			"RefreshVoxelMeshingResourceBindings.vkCreateDescriptorPool",
 			descriptorPoolResult);
+		return false;
 	}
 
 	const std::vector setLayouts(render->sceneFrameResources.size(), render->voxelMeshingDescriptorSetLayout);

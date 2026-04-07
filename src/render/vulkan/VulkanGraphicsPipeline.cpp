@@ -1,9 +1,8 @@
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
-#include "debug/Profiling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
+#include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/VulkanResult.hpp"
 
 #include <array>
 #include <vector>
@@ -59,14 +58,14 @@ constexpr VkPipelineColorBlendAttachmentState kAlphaBlendAttachmentState{
 		VK_COLOR_COMPONENT_A_BIT,
 };
 
-bool LogGraphicsPipelineVkFailure(const char *step, const VkResult result)
+void LogGraphicsPipelineVkFailure(const char *step, const VkResult result)
 {
-	return runtime::LogVkFailure(step, result);
+	runtime::LogVkFailure(step, result);
 }
 
-bool LogGraphicsPipelineTextFailure(const char *step, const char *detail)
+void LogGraphicsPipelineTextFailure(const char *step, const char *detail)
 {
-	return runtime::LogRuntimeFailure("Graphics", step, detail);
+	runtime::LogRuntimeFailure("Graphics", step, detail);
 }
 
 VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char> &code)
@@ -116,10 +115,11 @@ bool CreateDepthResources(
 	PV_PROFILE_ZONE_N("CreateDepthResources");
 	const VkFormat depthFormat = ChooseDepthFormat(context->physicalDevice);
 	if (depthFormat == VK_FORMAT_UNDEFINED) {
-		return runtime::LogRuntimeFailure(
+		runtime::LogRuntimeFailure(
 			"Graphics",
 			"CreateDepthResources.ChooseDepthFormat",
 			"no supported depth format found");
+		return false;
 	}
 
 	const VkImageCreateInfo imageInfo{

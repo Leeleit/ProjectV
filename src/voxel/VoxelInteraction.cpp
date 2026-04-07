@@ -62,7 +62,7 @@ void UpdateVoxelInteraction(
 	}
 
 	const std::array<float, 3> direction = GetCameraForwardVector(camera);
-	const auto raycast = [&]() {
+	const auto raycast = [&] {
 		return RaycastVoxelWorld(*world, camera.position, direction, interaction->maxInteractionDistance);
 	};
 

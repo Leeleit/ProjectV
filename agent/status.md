@@ -18,14 +18,17 @@
 - debug stats уже перенесены в in-app HUD с hotkey toggle, camera/selection telemetry, корректной top-left screen-space привязкой и базовым static-analysis cleanup в input/test glue, включая test fixture setup.
 - `8.1` закрыт: keyboard input больше не завязан на `SDL_GetKeyboardState`, а идёт через bindable `InputActions` слой с relative mouse toggle, debug hotkeys, pause toggle, speed modifiers и явными `free-fly` / `spectator` control modes; актуальная default-схема полёта теперь `Space/Shift` вверх-вниз, `Ctrl` boost, `Alt` slow.
 - `fmt` уже vendored в `external/`, а весь текущий набор `external/*` submodules, включая `external/tracy`, синхронизирован с upstream HEAD; root build, `ctest` и короткий runtime smoke проходят на этом наборе.
+- `external/draco` на `2026-04-07` приведён к clean recursive state без локального nested-submodule drift: `third_party/eigen`, `filesystem`, `googletest` и `tinygltf` возвращены к gitlinks, записанным самим `draco`.
 - `resize / minimize / restore / maximize / graceful shutdown` теперь подтверждены отдельным Windows smoke script; transient `0x0` surface extent больше не ломает swapchain recreate, а smoke checklist вынесен в `docs/`.
 - controlled failure для missing `.spv` и intentional incomplete init теперь подтверждён отдельным failure-probe script; bootstrap/render/pipeline path переведён на единый runtime diagnostics стиль с `PV_CHECK_OR_RETURN` / `PV_ASSERT`.
 - `8.2` закрыт целиком: `src/` физически разложен на `app/core/platform/render/render/vulkan/voxel/debug`, build/test targets используют только корень `src/`, project headers подключаются qualified include-путями, а doc entry points синхронизированы через `README_NEW.md` и `docs/source_layout.md`.
+- `8.3` закрыт минимальным practical slice: `flecs` подключён в build/test, `src/ecs` держит primary camera/player entities, `world`/`debug` singleton data и chunk mirror summary, а `SDL_AppEvent` / `SDL_AppIterate` / `InitVulkan` уже читают camera/debug/world через ECS glue без большого gameplay-framework rewrite.
+- follow-up static-analysis cleanup после `8.3` тоже закрыт: `RuntimeDiagnostics` больше не маскирует `return false` через bool-returning logger'ы, `InputActions` и HUD internal helper'ы используют честные reference-based/non-null сигнатуры, voxel raycast helper'ы теперь опираются на знак `directionAxis` вместо отдельного `step`-параметра, `InitFailureStageToString` починен, а ECS chunk mirror держит только реально используемые summary fields.
 - исследование `clang-cl + Windows + C++ modules` показало: direct compiler named modules уже работают, но текущий `CMake 4.3.0-rc1 + Ninja` не умеет module scanning для `clang-cl` MSVC-frontend, а `import std` недоступен на MSVC STL.
 
 Главный разрыв:
 
-- после закрытия `8.1` и `8.2` главный ближайший разрыв уже не в input/layout glue, а в следующем функциональном слое mainline: либо идти в минимальный `8.3` ECS slice, либо расширять authored docs из `8.5` до более подробного architecture/render/world уровня.
+- после закрытия `8.3` главный ближайший разрыв уже не в app/runtime glue, а в следующем mainline-слое: MVP physics (`8.4`) поверх уже существующего interaction + ECS slice, плюс последующая authored documentation синхронизация из `8.5`.
 
 ---
 
@@ -53,9 +56,9 @@
 
 Приоритетный порядок:
 
-1. Решить, идти ли следующим practical slice в `8.3` минимальный ECS или сначала расширять authored docs из `8.5`.
-2. Отдельно решить, что из runtime diagnostics стоит расширить на remaining helper/world modules, а что оставить до полноценного logging layer.
-3. После этого заходить в `walk / noclip`, player controller, physics и save/load.
+1. Идти следующим practical slice в `8.4`: MVP physics raycast/collision поверх уже существующего interaction + ECS glue.
+2. После этого добивать `walk / noclip`, player controller и save/load уже поверх связки `InputActions + ECS + physics`.
+3. Отдельно решать, что из runtime diagnostics стоит расширять дальше, а что оставить до полноценного logging layer.
 
 ---
 

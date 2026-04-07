@@ -110,6 +110,7 @@
 - проекту полезен лёгкий typed-formatting backend для будущего logging layer, но пока не нужен тяжёлый logging framework;
 - отключение `FMT_MODULE` сохраняет современную версию `fmt`, не ломая текущую сборку на `clang-cl` + Ninja;
 - `ProjectV` не должен зависеть от скрытых локальных one-off патчей внутри vendored profiler submodule; `external/tracy` после очистки и bump'а должен оставаться чистым и проверяемым через обычный build/test/smoke проход.
+- то же правило распространяется и на vendored submodules с вложенными submodules: если `external/draco` грязный только из-за nested `third_party/*`, его нужно возвращать к recorded recursive state через `git submodule update --init --recursive --force`, а не оставлять случайные локальные checkout'ы как "норму".
 
 ### Swapchain recreate при transient `0x0` extent
 
@@ -139,6 +140,7 @@
 - unified runtime diagnostics даёт читаемый stderr в failure probes и убирает разношёрстные `SDL_Log`-сообщения в критическом init/render path;
 - env-driven probes воспроизводимы, не мутируют build outputs и не требуют ручного вмешательства в рабочее дерево;
 - минимальные checks/asserts полезнее сейчас, чем полноценный logging framework, потому что закрывают `7.4` без отдельного архитектурного рефактора.
+- bool-returning log helpers размывают control flow и плодят static-analysis noise, тогда как явный `runtime::Log...; return false;` лучше соответствует проектному правилу "explicit control > hidden magic".
 
 ### Постепенное структурирование `src/`
 
@@ -224,3 +226,34 @@
 - это превращает физическую раскладку `src/` в реальную архитектурную границу, а не просто в cosmetic file move;
 - такой include style сразу показывает subsystem ownership и не даёт незаметно возвращаться к flat-source layout;
 - одинаковое правило для production и tests убирает скрытые зависимости от широких include paths.
+
+### Минимальный ECS slice поверх текущего voxel MVP
+
+Решение:
+
+- `flecs` вводится не как общий "движок будущего", а как минимальный data-layer в `src/ecs`;
+- primary camera и primary player живут как ECS entities;
+- `WorldState` и `DebugState` доступны через ECS singleton data, но ownership `VoxelWorld` пока остаётся в `AppState::world`, а ECS хранит явный binding на этот state;
+- chunk entities создаются только как practical mirror текущего `VoxelWorld`, чтобы иметь ECS-level world summary без full world migration;
+- `SDL_AppEvent`, `SDL_AppIterate` и `InitVulkan` читают camera/debug/world через ECS glue helpers, а не напрямую из старого app-owned camera/debug state.
+
+Почему:
+
+- это даёт первый честный ECS slice в реальном main loop без большого gameplay-framework rewrite;
+- такой split сохраняет явный ownership и не заставляет переносить весь voxel world в ECS раньше времени;
+- chunk mirror полезен уже сейчас как bridge между существующим dense-world slice и будущими ECS/physics/debug systems.
+- mirror-компоненты должны хранить только реально читаемый summary state; дублирование `min/maxExclusive` без потребителя создаёт лишний maintenance/static-analysis шум и не даёт текущей mainline-пользы.
+
+### Явный lifecycle cleanup вместо hidden cleanup в `AppState::~AppState`
+
+Решение:
+
+- `ShutdownVulkan(AppState*)` остаётся явной точкой очистки runtime;
+- `AppState` больше не запускает teardown из деструктора автоматически;
+- `SDL_AppInit` при раннем failure сам вызывает `ShutdownVulkan(state.get())`, а `SDL_AppQuit` по-прежнему делает controlled shutdown перед `delete state`.
+
+Почему:
+
+- это сохраняет lifecycle explicit и тестопригодным;
+- test target не должен тянуть половину Vulkan runtime только ради implicit-деструктора `AppState`;
+- явный shutdown лучше соответствует проектному правилу "explicit control > hidden magic".

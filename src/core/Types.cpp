@@ -80,8 +80,3 @@ void ShutdownVulkan(AppState *state)
 		state->context.instance = VK_NULL_HANDLE;
 	}
 }
-
-AppState::~AppState()
-{
-	ShutdownVulkan(this);
-}
