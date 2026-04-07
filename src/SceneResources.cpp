@@ -230,10 +230,14 @@ void DestroySceneResources(
 		return;
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, graphicsDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, graphicsDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
+		}
+		if (debugHudVertexBuffer && debugHudVertexAllocation) {
+			profiling::RecordFree(debugHudVertexAllocation, "SceneDebugHudVertexBufferAllocation");
+			vmaDestroyBuffer(context->allocator, debugHudVertexBuffer, debugHudVertexAllocation);
 		}
 		if (chunkDescriptorBuffer && chunkDescriptorAllocation) {
 			profiling::RecordFree(chunkDescriptorAllocation, "SceneChunkDescriptorBufferAllocation");
@@ -259,6 +263,9 @@ void DestroySceneResources(
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
 		packedFaceAllocation = VK_NULL_HANDLE;
+		debugHudVertexMappedData = nullptr;
+		debugHudVertexBuffer = VK_NULL_HANDLE;
+		debugHudVertexAllocation = VK_NULL_HANDLE;
 		chunkDescriptorMappedData = nullptr;
 		chunkDescriptorBuffer = VK_NULL_HANDLE;
 		chunkDescriptorAllocation = VK_NULL_HANDLE;
@@ -283,6 +290,7 @@ void DestroySceneResources(
 		dirtyChunkCount = 0;
 		opaqueFaceCount = 0;
 		transparentFaceCount = 0;
+		debugHudVertexCount = 0;
 	}
 
 	if (render->materialVisualBuffer && render->materialVisualAllocation) {
@@ -301,6 +309,7 @@ void DestroySceneResources(
 	render->sceneUploadVersion = 0;
 	render->sceneVoxelPayloadVersion = 0;
 	render->sceneTriangleCount = 0;
+	render->sceneMemoryBytes = 0;
 	render->sceneChunkDescriptors.clear();
 	render->sceneChunkVoxelPayloadRanges.clear();
 	render->sceneChunkVoxelPayloadWords.clear();
@@ -326,6 +335,7 @@ bool CreateSceneResources(
 	render->sceneFaceCapacity = GetMaxSceneFaceCount(*world->voxelWorld);
 	render->sceneTransparentFaceBase = render->sceneFaceCapacity;
 	InitializeSceneChunkDescriptorsAndVoxelPayloadLayout(*world->voxelWorld, *render);
+	render->sceneMemoryBytes = 0;
 
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.flags =
@@ -351,6 +361,7 @@ bool CreateSceneResources(
 			render->materialVisualAllocation,
 			materialVisualAllocationInfo.size,
 			"VoxelMaterialVisualBufferAllocation");
+		render->sceneMemoryBytes += materialVisualAllocationInfo.size;
 		const auto materialVisuals = BuildMaterialVisualTable();
 		std::memcpy(
 			render->materialVisualMappedData,
@@ -382,6 +393,26 @@ bool CreateSceneResources(
 			frameResources.packedFaceAllocation,
 			packedFaceAllocationInfo.size,
 			"ScenePackedFaceBufferAllocation");
+		render->sceneMemoryBytes += packedFaceAllocationInfo.size;
+
+		VmaAllocationInfo debugHudVertexAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(DebugHudVertex) * static_cast<VkDeviceSize>(DEBUG_HUD_MAX_VERTEX_COUNT),
+				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.debugHudVertexBuffer,
+				&frameResources.debugHudVertexAllocation,
+				&debugHudVertexAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.debugHudVertexMappedData = debugHudVertexAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.debugHudVertexAllocation,
+			debugHudVertexAllocationInfo.size,
+			"SceneDebugHudVertexBufferAllocation");
+		render->sceneMemoryBytes += debugHudVertexAllocationInfo.size;
 
 		VmaAllocationInfo chunkDescriptorAllocationInfo{};
 		if (!CreateBuffer(
@@ -400,6 +431,7 @@ bool CreateSceneResources(
 			frameResources.chunkDescriptorAllocation,
 			chunkDescriptorAllocationInfo.size,
 			"SceneChunkDescriptorBufferAllocation");
+		render->sceneMemoryBytes += chunkDescriptorAllocationInfo.size;
 
 		VmaAllocationInfo chunkVoxelPayloadAllocationInfo{};
 		if (!CreateBuffer(
@@ -418,6 +450,7 @@ bool CreateSceneResources(
 			frameResources.chunkVoxelPayloadAllocation,
 			chunkVoxelPayloadAllocationInfo.size,
 			"SceneChunkVoxelPayloadBufferAllocation");
+		render->sceneMemoryBytes += chunkVoxelPayloadAllocationInfo.size;
 
 		VmaAllocationInfo opaqueIndirectAllocationInfo{};
 		if (!CreateBuffer(
@@ -436,6 +469,7 @@ bool CreateSceneResources(
 			frameResources.opaqueIndirectAllocation,
 			opaqueIndirectAllocationInfo.size,
 			"SceneOpaqueIndirectBufferAllocation");
+		render->sceneMemoryBytes += opaqueIndirectAllocationInfo.size;
 		std::memset(
 			frameResources.opaqueIndirectMappedData,
 			0,
@@ -458,6 +492,7 @@ bool CreateSceneResources(
 			frameResources.transparentIndirectAllocation,
 			transparentIndirectAllocationInfo.size,
 			"SceneTransparentIndirectBufferAllocation");
+		render->sceneMemoryBytes += transparentIndirectAllocationInfo.size;
 		std::memset(
 			frameResources.transparentIndirectMappedData,
 			0,
@@ -480,6 +515,7 @@ bool CreateSceneResources(
 			frameResources.dirtyChunkIndexAllocation,
 			dirtyChunkIndexAllocationInfo.size,
 			"SceneDirtyChunkIndexBufferAllocation");
+		render->sceneMemoryBytes += dirtyChunkIndexAllocationInfo.size;
 		std::memset(
 			frameResources.dirtyChunkIndexMappedData,
 			0,
@@ -492,6 +528,12 @@ bool CreateSceneResources(
 		SetVulkanObjectName(
 			*context,
 			reinterpret_cast<uint64_t>(frameResources.packedFaceBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneDebugHudVertexBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.debugHudVertexBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
 		std::snprintf(bufferName, sizeof(bufferName), "SceneChunkDescriptorBuffer[%zu]", frameResourceIndex);
@@ -524,6 +566,7 @@ bool CreateSceneResources(
 			reinterpret_cast<uint64_t>(frameResources.dirtyChunkIndexBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
+		frameResources.debugHudVertexCount = 0;
 	}
 
 	render->sceneOpaqueFaceCount = 0;

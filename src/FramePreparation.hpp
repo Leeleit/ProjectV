@@ -7,6 +7,8 @@ bool PrepareFrameRenderData(
 	VulkanContextState *context,
 	const SwapchainState *swapchain,
 	const CameraState *camera,
+	const InteractionState *interaction,
+	const DebugState *debug,
 	WorldState *world,
 	RenderState *render,
 	FrameState *frame);

@@ -8,6 +8,7 @@ bool UpdateApp(
 	SimulationState *simulation,
 	CameraState *camera,
 	InputState *input,
+	InteractionState *interaction,
 	WorldState *world,
 	RenderState *render,
 	DebugState *debug);

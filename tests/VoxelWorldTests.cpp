@@ -1,5 +1,8 @@
+#include "DebugHud.hpp"
 #include "Types.hpp"
+#include "VoxelInteraction.hpp"
 #include "VoxelMaterials.hpp"
+#include "VoxelRaycast.hpp"
 #include "VoxelWorld.hpp"
 
 #include <algorithm>
@@ -72,6 +75,7 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
+				// ReSharper disable once CppUseStructuredBinding
 				VoxelChunk &chunk = world.chunks[chunkIndex];
 				chunk.min = {
 					world.min.x + chunkX * world.chunkSize,
@@ -187,6 +191,20 @@ void TestSetVoxelMaterialTracksCountsAndQueuesRebuild(TestContext &context)
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices.size());
 }
 
+void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 16, 16}, 8);
+
+	SetVoxelMaterial(world, {7, 7, 7}, VoxelMaterial::Glass);
+
+	EXPECT_EQ(context, static_cast<uint32_t>(8), CountDirtyVoxelChunks(world));
+	EXPECT_EQ(context, static_cast<size_t>(8), world.pendingChunkRebuildIndices.size());
+	std::ranges::sort(world.pendingChunkRebuildIndices);
+	for (size_t chunkIndex = 0; chunkIndex < 8; ++chunkIndex) {
+		EXPECT_EQ(context, chunkIndex, world.pendingChunkRebuildIndices[chunkIndex]);
+	}
+}
+
 void TestMarkAllVoxelChunksDirtyResetsQueue(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 8, 16}, 8);
@@ -210,6 +228,250 @@ void TestVoxelMaterialVisuals(TestContext &context)
 	EXPECT_TRUE(context, glass.baseColor[3] < 1.0f);
 	EXPECT_TRUE(context, glass.specular > 0.0f);
 }
+
+void ExpectInt3Equal(
+	TestContext &context,
+	const Int3 expected,
+	const Int3 actual,
+	const int line,
+	const std::string_view expr)
+{
+	if (expected.x == actual.x && expected.y == actual.y && expected.z == actual.z) {
+		return;
+	}
+
+	char buffer[256]{};
+	std::snprintf(
+		buffer,
+		sizeof(buffer),
+		"%.*s (expected {%d, %d, %d}, got {%d, %d, %d})",
+		static_cast<int>(expr.size()),
+		expr.data(),
+		expected.x,
+		expected.y,
+		expected.z,
+		actual.x,
+		actual.y,
+		actual.z);
+	context.Fail(line, buffer);
+}
+
+#undef EXPECT_EQ
+#define EXPECT_EQ(context, expected, actual) ExpectEqual(context, (expected), (actual), __LINE__, #actual)
+#define EXPECT_INT3_EQ(context, expected, actual) ExpectInt3Equal(context, (expected), (actual), __LINE__, #actual)
+
+void ExpectNear(
+	TestContext &context,
+	const float expected,
+	const float actual,
+	const int line,
+	const std::string_view expr)
+{
+	constexpr float kFloatTolerance = 0.001f;
+	if (std::abs(expected - actual) <= kFloatTolerance) {
+		return;
+	}
+
+	char buffer[256]{};
+	std::snprintf(
+		buffer,
+		sizeof(buffer),
+		"%.*s (expected %.3f, got %.3f)",
+		static_cast<int>(expr.size()),
+		expr.data(),
+		expected,
+		actual);
+	context.Fail(line, buffer);
+}
+
+#define EXPECT_NEAR(context, expected, actual) ExpectNear(context, (expected), (actual), __LINE__, #actual)
+
+void TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	world.pendingChunkRebuildIndices.clear();
+	world.stats.dirtyChunkCount = 0;
+	for (VoxelChunk &chunk : world.chunks) {
+		chunk.rebuildQueued = false;
+	}
+
+	const auto [hasHit, hasPlacementVoxel, voxel, placementVoxel, hitNormal, material, distance] = RaycastVoxelWorld(
+		world,
+		{1.5f, 1.5f, 4.5f},
+		{0.0f, 0.0f, -1.0f},
+		10.0f);
+
+	EXPECT_TRUE(context, hasHit);
+	EXPECT_TRUE(context, hasPlacementVoxel);
+	EXPECT_EQ(context, VoxelMaterial::Glass, material);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), voxel);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), placementVoxel);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 1}), hitNormal);
+	EXPECT_NEAR(context, 2.5f, distance);
+}
+
+void TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {4, 4, 4}, 4);
+	SetVoxelMaterial(world, {0, 1, 1}, VoxelMaterial::Fluid);
+	world.pendingChunkRebuildIndices.clear();
+	world.stats.dirtyChunkCount = 0;
+	for (VoxelChunk &chunk : world.chunks) {
+		chunk.rebuildQueued = false;
+	}
+
+	const auto [hasHit, hasPlacementVoxel, voxel, placementVoxel, hitNormal, material, distance] = RaycastVoxelWorld(
+		world,
+		{-2.0f, 1.5f, 1.5f},
+		{1.0f, 0.0f, 0.0f},
+		10.0f);
+
+	EXPECT_TRUE(context, hasHit);
+	EXPECT_TRUE(context, !hasPlacementVoxel);
+	EXPECT_EQ(context, VoxelMaterial::Fluid, material);
+	EXPECT_INT3_EQ(context, (Int3{0, 1, 1}), voxel);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), placementVoxel);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), hitNormal);
+	EXPECT_NEAR(context, 2.0f, distance);
+}
+
+void TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(TestContext &context)
+{
+	const VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	const VoxelRaycastHit hit = RaycastVoxelWorld(
+		world,
+		{1.5f, 1.5f, 1.5f},
+		{1.0f, 0.0f, 0.0f},
+		4.0f);
+
+	EXPECT_TRUE(context, !hit.hasHit);
+	EXPECT_TRUE(context, !hit.hasPlacementVoxel);
+	EXPECT_EQ(context, VoxelMaterial::Air, hit.material);
+}
+
+CameraState MakeTestCamera(const std::array<float, 3> &position)
+{
+	CameraState camera{};
+	camera.position = position;
+	camera.yawRadians = 0.0f;
+	camera.pitchRadians = 0.0f;
+	return camera;
+}
+
+void ResetDirtyFlags(VoxelWorld &world)
+{
+	world.pendingChunkRebuildIndices.clear();
+	world.stats.dirtyChunkCount = 0;
+	for (VoxelChunk &chunk : world.chunks) {
+		chunk.rebuildQueued = false;
+	}
+}
+
+void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	input.removePressed = true;
+	InteractionState interaction{};
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction);
+
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_TRUE(context, !input.removePressed);
+	EXPECT_TRUE(context, !interaction.selection.hasHit);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionPlacesConfiguredBlock(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	input.placePressed = true;
+	InteractionState interaction{};
+	interaction.placementMaterial = VoxelMaterial::FloorWhite;
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction);
+
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {1, 1, 2}));
+	EXPECT_TRUE(context, !input.placePressed);
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, interaction.selection.targetMaterial);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), interaction.selection.targetVoxel);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestBuildDebugHudVerticesReturnsZeroWhenHidden(TestContext &context)
+{
+	std::vector<DebugHudVertex> vertices(64);
+	const uint32_t vertexCount = BuildDebugHudVertices(
+		DebugStats{},
+		CameraState{},
+		InteractionState{},
+		false,
+		VkExtent2D{1280, 720},
+		vertices.data(),
+		static_cast<uint32_t>(vertices.size()));
+
+	EXPECT_EQ(context, 0u, vertexCount);
+}
+
+void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
+{
+	std::vector<DebugHudVertex> vertices(4096);
+	DebugStats stats{};
+	stats.framesPerSecond = 120.0f;
+	stats.frameTimeMilliseconds = 8.33f;
+	stats.simulationStepsLastFrame = 1;
+	stats.sceneTriangleCount = 42;
+	stats.dirtyChunkCount = 2;
+	stats.activeChunkCount = 4;
+	stats.nonAirVoxelCount = 128;
+	stats.glassVoxelCount = 16;
+	stats.fluidVoxelCount = 8;
+	stats.floorVoxelCount = 104;
+	stats.sceneMemoryBytes = 4096;
+
+	InteractionState interaction{};
+	interaction.selection.hasHit = true;
+	interaction.selection.hasPlacementVoxel = true;
+	interaction.selection.targetVoxel = {1, 2, 3};
+	interaction.selection.placementVoxel = {1, 2, 4};
+	interaction.selection.targetMaterial = VoxelMaterial::Glass;
+	interaction.selection.hitDistance = 3.5f;
+
+	const uint32_t vertexCount = BuildDebugHudVertices(
+		stats,
+		MakeTestCamera({2.0f, 3.0f, 4.0f}),
+		interaction,
+		true,
+		VkExtent2D{1280, 720},
+		vertices.data(),
+		static_cast<uint32_t>(vertices.size()));
+
+	EXPECT_TRUE(context, vertexCount > 6u);
+	EXPECT_TRUE(context, vertexCount <= static_cast<uint32_t>(vertices.size()));
+	EXPECT_TRUE(context, vertices[0].positionNdc[0] >= -1.0f);
+	EXPECT_TRUE(context, vertices[0].positionNdc[0] <= 1.0f);
+	EXPECT_TRUE(context, vertices[0].positionNdc[1] >= -1.0f);
+	EXPECT_TRUE(context, vertices[0].positionNdc[1] <= 1.0f);
+	EXPECT_TRUE(context, vertices[0].positionNdc[0] < 0.0f);
+	EXPECT_TRUE(context, vertices[0].positionNdc[1] < 0.0f);
+}
 } // namespace
 
 int main()
@@ -219,8 +481,16 @@ int main()
 	TestWorldBoundsAndChunkIndexing(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
+	TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(context);
 	TestMarkAllVoxelChunksDirtyResetsQueue(context);
 	TestVoxelMaterialVisuals(context);
+	TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(context);
+	TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(context);
+	TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(context);
+	TestUpdateVoxelInteractionRemovesTargetedBlock(context);
+	TestUpdateVoxelInteractionPlacesConfiguredBlock(context);
+	TestBuildDebugHudVerticesReturnsZeroWhenHidden(context);
+	TestBuildDebugHudVerticesProducesGeometryWhenVisible(context);
 
 	if (context.failures != 0) {
 		return EXIT_FAILURE;

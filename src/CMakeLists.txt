@@ -8,6 +8,10 @@ set(SHADERS
         ${SHADER_DIR}/voxel.vert
         ${SHADER_DIR}/voxel.frag
         ${SHADER_DIR}/voxel_mesh.comp
+        ${SHADER_DIR}/debug_overlay.vert
+        ${SHADER_DIR}/debug_overlay.frag
+        ${SHADER_DIR}/debug_hud.vert
+        ${SHADER_DIR}/debug_hud.frag
 )
 
 foreach (SHADER ${SHADERS})
@@ -30,6 +34,7 @@ add_dependencies(ProjectV Shaders)
 target_sources(ProjectV PRIVATE
         AppUpdate.cpp
         Camera.cpp
+        DebugHud.cpp
         FramePreparation.cpp
         main.cpp
         SceneResources.cpp
@@ -41,7 +46,9 @@ target_sources(ProjectV PRIVATE
         VulkanSwapchain.cpp
         VulkanInit.cpp
         VulkanVoxelMeshingPipeline.cpp
+        VoxelInteraction.cpp
         VoxelMaterials.cpp
+        VoxelRaycast.cpp
         VoxelWorld.cpp
         # Add new files here
 )

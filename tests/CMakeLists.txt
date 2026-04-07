@@ -1,6 +1,10 @@
 add_executable(ProjectVTests
         VoxelWorldTests.cpp
+        ../src/Camera.cpp
+        ../src/DebugHud.cpp
+        ../src/VoxelInteraction.cpp
         ../src/VoxelMaterials.cpp
+        ../src/VoxelRaycast.cpp
         ../src/VoxelWorld.cpp
 )
 

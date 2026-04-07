@@ -2,9 +2,9 @@
 
 #include "Camera.hpp"
 #include "Profiling.hpp"
+#include "VoxelInteraction.hpp"
 
 #include <cmath>
-#include <cstdio>
 
 namespace {
 constexpr uint32_t kMaxSimulationStepsPerFrame = 5;
@@ -32,20 +32,28 @@ bool UpdateApp(
 	SimulationState *simulation,
 	CameraState *camera,
 	InputState *input,
+	InteractionState *interaction,
 	WorldState *world,
 	RenderState *render,
 	DebugState *debug)
 {
 	PV_PROFILE_ZONE_N("UpdateApp");
-	if (!platform || !simulation || !camera || !input || !world || !render || !debug) {
+	if (!platform || !simulation || !camera || !input || !interaction || !world || !render || !debug) {
 		return false;
 	}
 
 	simulation->frameDeltaSeconds = ComputeFrameDeltaSeconds(*simulation);
 	simulation->simulationAccumulatorSeconds += simulation->frameDeltaSeconds;
 	simulation->simulationStepsLastFrame = 0;
+	debug->stats.framesPerSecond = simulation->frameDeltaSeconds > 0.0f ? 1.0f / simulation->frameDeltaSeconds : 0.0f;
+	debug->stats.frameTimeMilliseconds = simulation->frameDeltaSeconds * 1000.0f;
 	debug->stats.simulationStepsLastFrame = 0;
 	debug->stats.sceneTriangleCount = render->sceneTriangleCount;
+
+	if (input->toggleHudPressed) {
+		debug->hudVisible = !debug->hudVisible;
+		input->toggleHudPressed = false;
+	}
 
 	ConsumeCameraLookInput(camera, input);
 
@@ -61,6 +69,8 @@ bool UpdateApp(
 		simulation->simulationAccumulatorSeconds =
 			std::fmod(simulation->simulationAccumulatorSeconds, simulation->fixedSimulationDeltaSeconds);
 	}
+
+	UpdateVoxelInteraction(*camera, input, world->voxelWorld.get(), interaction);
 
 	profiling::PlotValue("Frame Delta (ms)", simulation->frameDeltaSeconds * 1000.0f);
 	profiling::PlotValue(
@@ -79,23 +89,7 @@ bool UpdateApp(
 			world->voxelWorld->stats.floorGrayVoxelCount;
 		debug->stats.nonAirVoxelCount = world->voxelWorld->stats.nonAirVoxelCount;
 		debug->stats.sceneTriangleCount = render->sceneTriangleCount;
-	}
-
-	debug->titleUpdateAccumulatorSeconds += simulation->frameDeltaSeconds;
-	if (platform->window && debug->titleUpdateAccumulatorSeconds >= 0.25f) {
-		debug->titleUpdateAccumulatorSeconds = 0.0f;
-		const float fps = simulation->frameDeltaSeconds > 0.0f ? 1.0f / simulation->frameDeltaSeconds : 0.0f;
-		char windowTitle[192]{};
-		std::snprintf(
-			windowTitle,
-			sizeof(windowTitle),
-			"ProjectV v0.0.1 | FPS %.1f | Tri %u | Dirty %u | Active %u | Voxels %u",
-			fps,
-			debug->stats.sceneTriangleCount,
-			debug->stats.dirtyChunkCount,
-			debug->stats.activeChunkCount,
-			debug->stats.nonAirVoxelCount);
-		SDL_SetWindowTitle(platform->window, windowTitle);
+		debug->stats.sceneMemoryBytes = render->sceneMemoryBytes;
 	}
 
 	return true;

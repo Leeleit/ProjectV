@@ -31,8 +31,8 @@ git clone --recurse-submodules https://github.com/Leeleit/ProjectV
 8. Запустить Clion, настроить под себя. В настройках Toolchains (Build, Execution, Deployment -> Toolchains) удалить все
    тулчейны, также в Cmake (Build, Execution, Deployment -> Cmake) удалить базовый Cmake профиль. Включить профиль
    windows-clang-debug.
-9. Сконфигурировать Cmake, скомпилировать код, запустить. Программа должна вывести Vulkan "Hello, World!" треугольник (
-   на текущий момент).
+9. Сконфигурировать Cmake, скомпилировать код, запустить. Программа должна вывести одночанковую сцену с полом,
+   стеклянным шаром и водой внутри него (на текущий момент).
 10. ???
 11. PROFIT!
 

@@ -1,6 +1,7 @@
 #include "FramePreparation.hpp"
 
 #include "Camera.hpp"
+#include "DebugHud.hpp"
 #include "Profiling.hpp"
 #include "SceneResources.hpp"
 #include "VoxelWorld.hpp"
@@ -9,12 +10,14 @@ bool PrepareFrameRenderData(
 	VulkanContextState *context,
 	const SwapchainState *swapchain,
 	const CameraState *camera,
+	const InteractionState *interaction,
+	const DebugState *debug,
 	WorldState *world,
 	RenderState *render,
 	FrameState *frame)
 {
 	PV_PROFILE_ZONE_N("PrepareFrameRenderData");
-	if (!context || !swapchain || !camera || !world || !render || !frame) {
+	if (!context || !swapchain || !camera || !interaction || !debug || !world || !render || !frame) {
 		return false;
 	}
 	const size_t frameIndex = frame->currentFrame;
@@ -48,11 +51,23 @@ bool PrepareFrameRenderData(
 		return false;
 	}
 
-	const SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
+	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
+	sceneFrameResources.debugHudVertexCount = 0;
+	if (sceneFrameResources.debugHudVertexMappedData) {
+		sceneFrameResources.debugHudVertexCount = BuildDebugHudVertices(
+			debug->stats,
+			*camera,
+			*interaction,
+			debug->hudVisible,
+			swapchain->extent,
+			static_cast<DebugHudVertex *>(sceneFrameResources.debugHudVertexMappedData),
+			DEBUG_HUD_MAX_VERTEX_COUNT);
+	}
 	frame->renderData.frameIndex = frame->currentFrame;
 	frame->renderData.packedFaceBuffer = sceneFrameResources.packedFaceBuffer;
 	frame->renderData.chunkDescriptorBuffer = sceneFrameResources.chunkDescriptorBuffer;
 	frame->renderData.chunkVoxelPayloadBuffer = sceneFrameResources.chunkVoxelPayloadBuffer;
+	frame->renderData.debugHudVertexBuffer = sceneFrameResources.debugHudVertexBuffer;
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
@@ -61,6 +76,8 @@ bool PrepareFrameRenderData(
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;
 	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;
 	frame->renderData.transparentFaceCount = sceneFrameResources.transparentFaceCount;
+	frame->renderData.debugHudVertexCount = sceneFrameResources.debugHudVertexCount;
+	frame->renderData.interactionSelection = interaction->selection;
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(*camera, swapchain->extent);

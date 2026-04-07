@@ -281,7 +281,11 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMateria
 		--world.stats.activeChunkCount;
 	}
 
-	MarkVoxelChunkDirty(world, position);
+	// A single voxel edit can change visible faces in adjacent chunks along every axis.
+	MarkVoxelRegionDirty(
+		world,
+		{position.x - 1, position.y - 1, position.z - 1},
+		{position.x + 2, position.y + 2, position.z + 2});
 }
 
 void MarkAllVoxelChunksDirty(VoxelWorld *world)

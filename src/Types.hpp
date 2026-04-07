@@ -79,6 +79,48 @@ static_assert(sizeof(GraphicsPushConstants) == 80);
 static_assert(offsetof(GraphicsPushConstants, viewProjection) == 0);
 static_assert(offsetof(GraphicsPushConstants, cameraPosition) == 64);
 
+struct DebugOverlayPushConstants {
+	std::array<float, 16> viewProjection{};
+	std::array<float, 4> overlayData0{};
+	std::array<float, 4> overlayData1{};
+	std::array<float, 4> overlayColor{};
+};
+static_assert(std::is_standard_layout_v<DebugOverlayPushConstants>);
+static_assert(std::is_trivially_copyable_v<DebugOverlayPushConstants>);
+static_assert(sizeof(DebugOverlayPushConstants) == 112);
+static_assert(offsetof(DebugOverlayPushConstants, viewProjection) == 0);
+static_assert(offsetof(DebugOverlayPushConstants, overlayData0) == 64);
+static_assert(offsetof(DebugOverlayPushConstants, overlayData1) == 80);
+static_assert(offsetof(DebugOverlayPushConstants, overlayColor) == 96);
+
+struct DebugHudVertex {
+	std::array<float, 2> positionNdc{};
+	std::array<float, 4> color{};
+};
+static_assert(std::is_standard_layout_v<DebugHudVertex>);
+static_assert(std::is_trivially_copyable_v<DebugHudVertex>);
+static_assert(sizeof(DebugHudVertex) == 24);
+static_assert(offsetof(DebugHudVertex, positionNdc) == 0);
+static_assert(offsetof(DebugHudVertex, color) == 8);
+
+constexpr uint32_t DEBUG_HUD_MAX_VERTEX_COUNT = 65536;
+
+struct InteractionSelectionState {
+	bool hasHit = false;
+	bool hasPlacementVoxel = false;
+	Int3 targetVoxel{};
+	Int3 placementVoxel{};
+	Int3 hitNormal{};
+	VoxelMaterial targetMaterial = VoxelMaterial::Air;
+	float hitDistance = 0.0f;
+};
+
+struct InteractionState {
+	InteractionSelectionState selection{};
+	VoxelMaterial placementMaterial = VoxelMaterial::FloorWhite;
+	float maxInteractionDistance = 12.0f;
+};
+
 struct VoxelMeshingPushConstants {
 	std::array<int32_t, 4> worldMinAndChunkSize{};
 	std::array<int32_t, 4> worldMaxExclusiveAndChunkCount{};
@@ -98,6 +140,7 @@ struct FrameRenderData {
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
+	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
@@ -106,11 +149,15 @@ struct FrameRenderData {
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
+	uint32_t debugHudVertexCount = 0;
 	GraphicsPushConstants graphicsPushConstants{};
 	VoxelMeshingPushConstants voxelMeshingPushConstants{};
+	InteractionSelectionState interactionSelection{};
 };
 
 struct DebugStats {
+	float framesPerSecond = 0.0f;
+	float frameTimeMilliseconds = 0.0f;
 	uint32_t simulationStepsLastFrame = 0;
 	uint32_t dirtyChunkCount = 0;
 	uint32_t activeChunkCount = 0;
@@ -119,12 +166,16 @@ struct DebugStats {
 	uint32_t fluidVoxelCount = 0;
 	uint32_t floorVoxelCount = 0;
 	uint32_t sceneTriangleCount = 0;
+	uint64_t sceneMemoryBytes = 0;
 };
 
 struct SceneFrameResources {
 	void *packedFaceMappedData = nullptr;
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
 	VmaAllocation packedFaceAllocation = VK_NULL_HANDLE;
+	void *debugHudVertexMappedData = nullptr;
+	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
+	VmaAllocation debugHudVertexAllocation = VK_NULL_HANDLE;
 	void *chunkDescriptorMappedData = nullptr;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
 	VmaAllocation chunkDescriptorAllocation = VK_NULL_HANDLE;
@@ -149,6 +200,7 @@ struct SceneFrameResources {
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
+	uint32_t debugHudVertexCount = 0;
 };
 
 struct WorldState {
@@ -170,6 +222,7 @@ struct RenderState {
 	uint64_t sceneUploadVersion = 0;
 	uint64_t sceneVoxelPayloadVersion = 0;
 	uint32_t sceneTriangleCount = 0;
+	uint64_t sceneMemoryBytes = 0;
 	void *tracyGraphicsContext = nullptr;
 	bool tracyGraphicsContextCalibrated = false;
 	void *materialVisualMappedData = nullptr;
@@ -187,6 +240,10 @@ struct RenderState {
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
+	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;
+	VkPipelineLayout debugHudPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
 };
@@ -212,11 +269,15 @@ struct SimulationState {
 struct InputState {
 	float mouseDeltaX = 0.0f;
 	float mouseDeltaY = 0.0f;
+	bool removePressed = false;
+	bool placePressed = false;
+	bool toggleHudPressed = false;
 };
 
 struct DebugState {
 	DebugStats stats{};
 	float titleUpdateAccumulatorSeconds = 0.0f;
+	bool hudVisible = true;
 };
 
 struct PlatformState {
@@ -254,6 +315,7 @@ struct AppState {
 	FrameState frame{};
 	SimulationState simulation{};
 	InputState input{};
+	InteractionState interaction{};
 	DebugState debug{};
 	CameraState camera{};
 

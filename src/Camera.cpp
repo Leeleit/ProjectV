@@ -85,6 +85,9 @@ void InitializeCamera(
 	simulation->simulationTick = 0;
 	input->mouseDeltaX = 0.0f;
 	input->mouseDeltaY = 0.0f;
+	input->removePressed = false;
+	input->placePressed = false;
+	input->toggleHudPressed = false;
 }
 
 void HandleCameraEvent(
@@ -164,6 +167,12 @@ void TickCamera(
 	}
 }
 
+std::array<float, 3> GetCameraForwardVector(const CameraState &camera)
+{
+	const auto [x, y, z] = Normalize(GetForwardVector(camera));
+	return {x, y, z};
+}
+
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
 	const VkExtent2D extent)
@@ -173,7 +182,12 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 		camera.position[1],
 		camera.position[2],
 	};
-	const Float3 forward = Normalize(GetForwardVector(camera));
+	const std::array<float, 3> forwardVector = GetCameraForwardVector(camera);
+	const Float3 forward{
+		forwardVector[0],
+		forwardVector[1],
+		forwardVector[2],
+	};
 	const Float3 right = Normalize(Cross(forward, Float3{0.0f, 1.0f, 0.0f}));
 	const Float3 up = Normalize(Cross(right, forward));
 

@@ -9,6 +9,7 @@
 #include "Renderer.hpp"
 #include "Types.hpp"
 #include "VulkanInit.hpp"
+#include "VoxelInteraction.hpp"
 
 SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 {
@@ -31,7 +32,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
-	AppState *state = static_cast<AppState *>(appstate);
+	if (!event) {
+		return SDL_APP_CONTINUE;
+	}
 
 	if (event->type == SDL_EVENT_QUIT ||
 		event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
@@ -39,13 +42,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		return SDL_APP_SUCCESS;
 	}
 
+	AppState *state = static_cast<AppState *>(appstate);
+	if (!state) {
+		return SDL_APP_CONTINUE;
+	}
+
 	if (event->type == SDL_EVENT_WINDOW_RESIZED || event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
-		if (state) {
-			state->platform.windowResized = true;
-		}
+		state->platform.windowResized = true;
+	}
+
+	if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_F1) {
+		state->input.toggleHudPressed = true;
 	}
 
 	HandleCameraEvent(&state->camera, &state->input, event);
+	HandleInteractionEvent(&state->input, event);
 	return SDL_APP_CONTINUE;
 }
 
@@ -59,6 +70,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->simulation,
 			&state->camera,
 			&state->input,
+			&state->interaction,
 			&state->world,
 			&state->render,
 			&state->debug)) {
@@ -67,6 +79,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 				   &state->context,
 				   &state->swapchain,
 				   &state->camera,
+				   &state->interaction,
+				   &state->debug,
 				   &state->world,
 				   &state->render,
 				   &state->frame)) {
