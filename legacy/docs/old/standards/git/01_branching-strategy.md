@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-GIT-002
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет стратегию ветвления Git для проекта ProjectV. Все операции создания и слияния ветвей
@@ -25,7 +31,6 @@ develop     ──●───●─●─●─●─●───●─●─�
 feature/*   │   ┌───┘   └───┐ ┌───┘   └───┐
              │   │         │ │         │
             ──●─●─●─────●─●─●─●─────●─●─●──────────
-```
 
 ### 3.2 Типы ветвей
 
@@ -100,7 +105,6 @@ feature/<идентификатор>-<краткое-описание>
 feature/PROJ-123-vulkan-renderer
 feature/PROJ-456-voxel-world-gen
 feature/core-event-system
-```
 
 **Правила:**
 
@@ -120,7 +124,6 @@ bugfix/<идентификатор>-<краткое-описание>
 Примеры:
 bugfix/PROJ-789-memory-leak-pool
 bugfix/vulkan-validation-errors
-```
 
 **Правила:**
 
@@ -139,7 +142,6 @@ refactor/<идентификатор>-<краткое-описание>
 Примеры:
 refactor/ecs-iteration-optimization
 refactor/core-memory-layout
-```
 
 ### 5.4 Release-ветви
 
@@ -163,7 +165,6 @@ release/<версия>
 release/0.1.0
 release/1.0.0
 release/2.0.0
-```
 
 **Правила:**
 
@@ -190,7 +191,6 @@ hotfix/<версия>-<краткое-описание>
 Примеры:
 hotfix/1.0.1-crash-fix
 hotfix/1.0.2-vulkan-validation
-```
 
 ---
 
@@ -199,6 +199,15 @@ hotfix/1.0.2-vulkan-validation
 ### 6.1 Начало работы над функциональностью
 
 ```bash
+
+## 2. Нормативные ссылки
+
+- Git Flow (Vincent Driessen)
+- Trunk-Based Development
+- СТВ-GIT-001: Стандарт контроля версий
+
+---
+
 # Переключиться на develop
 git checkout develop
 
@@ -216,6 +225,7 @@ git commit -m "feat(core): добавить новую функциональн�
 ### 6.2 Синхронизация с develop
 
 ```bash
+
 # Получить последние изменения из develop
 git fetch origin develop
 
@@ -228,6 +238,7 @@ git rebase origin/develop
 ### 6.3 Создание Pull Request
 
 ```bash
+
 # Отправить ветвь в remote
 git push -u origin feature/PROJ-123-new-feature
 
@@ -240,6 +251,7 @@ gh pr create --base develop --head feature/PROJ-123-new-feature \
 ### 6.4 После слияния
 
 ```bash
+
 # Переключиться на develop
 git checkout develop
 
@@ -260,6 +272,7 @@ git push origin --delete feature/PROJ-123-new-feature
 ### 7.1 Конфликты при rebase
 
 ```bash
+
 # При возникновении конфликта
 git status
 
@@ -280,6 +293,7 @@ git rebase --abort
 ### 7.2 Конфликты при слиянии PR
 
 ```bash
+
 # Обновить ветвь относительно develop
 git checkout feature/PROJ-123-new-feature
 git fetch origin develop
@@ -313,3 +327,18 @@ git push origin feature/PROJ-123-new-feature
 2. Долгоживущие feature-ветви (> 2 недель без синхронизации)
 3. Прямые коммиты в `main` и `develop`
 4. Force-push в любую ветвь без крайней необходимости
+
+---
+
+## 9. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 10. Связанные документы
+
+- [СТВ-GIT-001: Стандарт контроля версий](00_version-control-standard.md)
+- [СТВ-GIT-003: Стандарт Pull Request](02_pull-request-process.md)

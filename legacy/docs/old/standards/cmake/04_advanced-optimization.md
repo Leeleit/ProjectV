@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-005
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет методы расширенной оптимизации для сборок ProjectV. Все конфигурации оптимизации,
@@ -17,6 +23,16 @@ ProjectV устанавливает ThinLTO как обязательный ме
 времени линковки с пониженным потреблением памяти.
 
 ```cmake
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- Документация CMake 3.30
+- Руководство по оптимизации Clang 18+
+- СТВ-CMAKE-004: Стандарт конфигурации сборки
+
+---
+
 # Конфигурация ThinLTO для сборок Release
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     include(CheckIPOSupported)
@@ -32,21 +48,18 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
             -flto=thin
             -ffunction-sections
             -fdata-sections
-        )
 
         target_link_options(ProjectV.Core PRIVATE
-            -flto=thin
             -Wl,--gc-sections
-        )
     else()
         message(WARNING "ThinLTO не поддерживается: ${LTO_ERROR}")
     endif()
-endif()
 ```
 
 ### 3.2 Конфигурация кэша LTO
 
 ```cmake
+
 # Кэш LTO для ускорения инкрементальных сборок
 set(LTO_CACHE_DIR "${CMAKE_BINARY_DIR}/lto-cache")
 file(MAKE_DIRECTORY ${LTO_CACHE_DIR})
@@ -72,6 +85,7 @@ Profile-Guided Optimization требует трёхэтапного процес
 ### 4.2 Конфигурация инструментированной сборки
 
 ```cmake
+
 # Этап 1: Инструментированная сборка
 option(PGO_GENERATE "Генерировать данные PGO-профилирования" OFF)
 
@@ -85,14 +99,16 @@ if(PGO_GENERATE)
     )
 
     target_link_options(ProjectV.Core PRIVATE
-        -fprofile-generate=${PGO_DIR}
-    )
 endif()
 ```
+
+cmake -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=Release -DPGO_GENERATE=ON
+cmake --build ${BUILD_DIR} --parallel
 
 ### 4.3 Конфигурация оптимизированной сборки
 
 ```cmake
+
 # Этап 3: Использование данных PGO-профилирования
 option(PGO_USE "Использовать данные PGO-профилирования" OFF)
 
@@ -109,15 +125,13 @@ if(PGO_USE)
     )
 
     target_link_options(ProjectV.Core PRIVATE
-        -fprofile-use=${PGO_DIR}
-    )
-endif()
 ```
 
 ### 4.4 Скрипт сборки PGO
 
 ```bash
 #!/bin/bash
+
 # scripts/pgo_build.sh
 
 set -e
@@ -143,6 +157,7 @@ cmake --build ${BUILD_DIR} --parallel
 ### 5.1 Конфигурация SIMD
 
 ```cmake
+
 # Флаги автовекторизации
 target_compile_options(ProjectV.Core PRIVATE
     $<$<CONFIG:Release>:-O3>
@@ -159,9 +174,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
         $<$<CONFIG:Release>:-march=native>
     )
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
-    target_compile_options(ProjectV.Core PRIVATE
         -march=armv8-a+simd
-    )
 endif()
 ```
 
@@ -193,7 +206,6 @@ export [[nodiscard]] auto cross(vec4f const& a, vec4f const& b) noexcept -> vec4
         a[0] * b[1] - a[1] * b[0],
         0.0f
     };
-}
 
 } // namespace projectv::math
 ```
@@ -222,13 +234,13 @@ if(ENABLE_UNITY_BUILD)
     set_source_files_properties(
         src/core/special_file.cpp
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
-    )
 endif()
 ```
 
 ### 6.2 Размер пакета Unity-сборки
 
 ```cmake
+
 # Рекомендуемые размеры пакетов в зависимости от размера проекта
 set(UNITY_BATCH_SIZE_SMALL 8)    # < 50 файлов
 set(UNITY_BATCH_SIZE_MEDIUM 16)  # 50-200 файлов
@@ -290,6 +302,7 @@ endif()
 ### 7.2 Повторное использование PCH между целевыми объектами
 
 ```cmake
+
 # Совместное использование PCH между несколькими целевыми объектами
 target_precompile_headers(ProjectV.Core PUBLIC
     <algorithm>
@@ -309,6 +322,7 @@ target_precompile_headers(ProjectV.Voxel REUSE_FROM ProjectV.Core)
 ### 8.1 Параллельная компиляция
 
 ```cmake
+
 # Параллельные задачи компиляции
 include(ProcessorCount)
 ProcessorCount(NPROC)
@@ -327,6 +341,7 @@ endif()
 ### 8.2 Оптимизация генератора Ninja
 
 ```cmake
+
 # Специфичные для Ninja оптимизации
 if(CMAKE_GENERATOR STREQUAL "Ninja")
     # Отображение прогресса компиляции
@@ -344,6 +359,7 @@ endif()
 ### 9.1 Пулы памяти
 
 ```cmake
+
 # Пользовательские пулы памяти для VMA
 target_compile_definitions(ProjectV.Render PRIVATE
     VMA_DEBUG_INITIALIZE_ALLOCATIONS=0
@@ -366,6 +382,7 @@ endif()
 ### 10.1 Оптимизация constexpr
 
 ```cmake
+
 # Включение расширенного constexpr
 target_compile_options(ProjectV.Core PRIVATE
     -fconstexpr-ops-limit=10000000000
@@ -376,6 +393,7 @@ target_compile_options(ProjectV.Core PRIVATE
 ### 10.2 Инстанциация шаблонов
 
 ```cmake
+
 # Явное управление инстанциацией шаблонов
 target_compile_options(ProjectV.Core PRIVATE
     -ftemplate-depth=1024
@@ -390,6 +408,7 @@ target_compile_options(ProjectV.Core PRIVATE
 ### 11.1 Измерение времени сборки
 
 ```cmake
+
 # Включение измерения времени сборки
 option(ENABLE_BUILD_TIMING "Включить измерение времени сборки" ON)
 
@@ -402,6 +421,7 @@ endif()
 ### 11.2 База данных компиляции
 
 ```cmake
+
 # Генерация compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 ```
@@ -423,3 +443,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 2. `-O0` в сборках Release
 3. Отключение LTO в сборках Release без одобрения Архитектурного совета
 4. Размеры пакетов, превышающие 64 для unity-сборок
+
+---
+
+## 13. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 14. Связанные документы
+
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](00_specification.md)
+- [СТВ-CMAKE-004: Стандарт конфигурации сборки](03_build-configuration.md)
+- [СТВ-CPP-001: Стандарт языка C++](../cpp/00_language-standard.md)

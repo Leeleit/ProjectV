@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-006
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет требования к кросс-платформенной сборке ProjectV. Все платформенно-зависимые конфигурации,
@@ -22,6 +28,16 @@ toolchain-файлы и вопросы переносимости ДОЛЖНЫ �
 ### 3.2 Определение платформы
 
 ```cmake
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- Документация CMake 3.30
+- Руководство по компилятору Clang 18+
+- Спецификация Vulkan 1.4
+
+---
+
 # Идентификация платформы
 if(WIN32)
     set(PROJECTV_PLATFORM "windows")
@@ -49,6 +65,7 @@ endif()
 ### 4.1 Windows (Clang 18+)
 
 ```cmake
+
 # Конфигурация Clang для Windows
 if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # Совместимость с MSVC ABI не требуется
@@ -69,6 +86,7 @@ endif()
 ### 4.2 Linux (Clang 18+)
 
 ```cmake
+
 # Конфигурация Clang для Linux
 if(UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++26 -stdlib=libc++")
@@ -90,6 +108,7 @@ endif()
 ### 4.3 macOS (Clang 18+)
 
 ```cmake
+
 # Конфигурация Clang для macOS
 if(APPLE)
     # Минимальная версия macOS
@@ -135,7 +154,6 @@ if(WIN32)
     # Специфичные для Windows определения Vulkan
     target_compile_definitions(ProjectV.Render PRIVATE
         VK_USE_PLATFORM_WIN32_KHR
-    )
 endif()
 ```
 
@@ -161,14 +179,10 @@ if(UNIX AND NOT APPLE)
     endif()
 
     if(Wayland_FOUND)
-        target_compile_definitions(ProjectV.Render PRIVATE
             VK_USE_PLATFORM_WAYLAND_KHR
-        )
         target_link_libraries(ProjectV.Render PRIVATE Wayland::client)
-    endif()
 
     target_link_libraries(ProjectV.Render PRIVATE volk::volk Vulkan::Vulkan)
-endif()
 ```
 
 ### 5.3 Vulkan для macOS (MoltenVK)
@@ -195,6 +209,7 @@ endif()
 ### 6.1 Платформенно-зависимая настройка SDL
 
 ```cmake
+
 # Конфигурация SDL3
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 
@@ -205,14 +220,10 @@ if(WIN32)
     )
 elseif(UNIX AND NOT APPLE)
     # SDL для Linux
-    target_compile_definitions(ProjectV.Core.Platform PRIVATE
         SDL_PLATFORM_LINUX
-    )
 elseif(APPLE)
     # SDL для macOS
-    target_compile_definitions(ProjectV.Core.Platform PRIVATE
         SDL_PLATFORM_MACOS
-    )
 endif()
 
 target_link_libraries(ProjectV.Core.Platform PRIVATE SDL3::SDL3)
@@ -225,6 +236,7 @@ target_link_libraries(ProjectV.Core.Platform PRIVATE SDL3::SDL3)
 ### 7.1 Toolchain Clang (Linux/macOS)
 
 ```cmake
+
 # cmake/toolchains/Clang.cmake
 set(CMAKE_C_COMPILER clang)
 set(CMAKE_CXX_COMPILER clang++)
@@ -249,6 +261,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror")
 ### 7.2 Toolchain Clang (Windows)
 
 ```cmake
+
 # cmake/toolchains/Clang-Windows.cmake
 set(CMAKE_C_COMPILER clang-cl)
 set(CMAKE_CXX_COMPILER clang-cl)
@@ -276,6 +289,7 @@ add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX)
 ### 8.1 Условный выбор источников
 
 ```cmake
+
 # Платформенно-зависимые файлы реализации
 set(PLATFORM_SOURCES)
 
@@ -285,15 +299,11 @@ if(WIN32)
         src/core/platform/windows/thread_win32.cpp
     )
 elseif(UNIX AND NOT APPLE)
-    list(APPEND PLATFORM_SOURCES
         src/core/platform/linux/window_linux.cpp
         src/core/platform/linux/thread_linux.cpp
-    )
 elseif(APPLE)
-    list(APPEND PLATFORM_SOURCES
         src/core/platform/macos/window_macos.cpp
         src/core/platform/macos/thread_macos.cpp
-    )
 endif()
 
 target_sources(ProjectV.Core.Platform PRIVATE ${PLATFORM_SOURCES})
@@ -317,11 +327,9 @@ elseif(UNIX)
     # Пути установки для Linux/macOS (соответствие FHS)
     include(GNUInstallDirs)
 
-    install(TARGETS ProjectV.Core
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    )
 endif()
 ```
 
@@ -332,6 +340,7 @@ endif()
 ### 10.1 Поддержка кросс-компиляции
 
 ```cmake
+
 # Обнаружение кросс-компиляции
 if(CMAKE_CROSSCOMPILING)
     message(STATUS "Кросс-компиляция для ${CMAKE_SYSTEM_NAME} (${CMAKE_SYSTEM_PROCESSOR})")
@@ -347,6 +356,7 @@ endif()
 ### 10.2 Toolchain для кросс-компиляции
 
 ```cmake
+
 # cmake/toolchains/Linux-ARM64.cmake
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
@@ -375,3 +385,19 @@ set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu)
 2. Жёстко заданные пути для внешних зависимостей
 3. Зависимость от платформенно-зависимых расширений компилятора
 4. Условная компиляция на основе идентификатора компилятора (использовать определение возможностей)
+
+---
+
+## 12. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 13. Связанные документы
+
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](00_specification.md)
+- [СТВ-CMAKE-002: Стандарт структуры проекта CMake](01_basics-structure.md)
+- [ADR-0001: Рендерер Vulkan](../../architecture/adr/0001-vulkan-renderer.md)

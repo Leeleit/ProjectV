@@ -4,6 +4,8 @@
 
 ---
 
+**🟡 Уровень 2: Средний** — Система материалов для воксельного рендеринга.
+
 ## Концепция
 
 ### Что такое Material?
@@ -25,7 +27,6 @@ Material — это набор параметров, определяющих в
 Material File (.mat) → Material Compiler → GPU Material Buffer
        ↓                                           ↓
    Slang Shader → Slang Compiler → SPIR-V → Pipeline
-```
 
 ---
 
@@ -43,29 +44,21 @@ Material File (.mat) → Material Compiler → GPU Material Buffer
             "value": "textures/stone_bricks_diffuse"
         },
         "normal": {
-            "type": "texture",
             "value": "textures/stone_bricks_normal"
-        },
         "roughness": {
             "type": "float",
             "value": 0.85
-        },
         "metallic": {
-            "type": "float",
             "value": 0.0
-        },
         "albedoColor": {
             "type": "color",
             "value": [1.0, 1.0, 1.0, 1.0]
         }
-    },
     "renderState": {
         "cullMode": "back",
         "depthTest": true,
         "depthWrite": true,
         "blend": "opaque"
-    }
-}
 ```
 
 ### Примеры материалов
@@ -83,37 +76,24 @@ Material File (.mat) → Material Compiler → GPU Material Buffer
         },
         "roughness": 0.05,
         "metallic": 0.0
-    },
     "renderState": {
         "cullMode": "none",
         "depthTest": true,
         "depthWrite": false,
         "blend": "alpha"
     }
-}
 ```
 
 **Emissive (светящийся):**
 
-```json
-{
     "name": "lava",
     "shader": "unlit_emissive",
-    "parameters": {
         "emissiveColor": {
-            "type": "color",
             "value": [1.0, 0.3, 0.1, 1.0]
-        },
         "emissiveIntensity": 5.0
-    },
-    "renderState": {
         "cullMode": "back",
-        "depthTest": true,
         "depthWrite": true,
         "blend": "additive"
-    }
-}
-```
 
 ---
 
@@ -165,15 +145,12 @@ private:
     // Текстуры
     std::unordered_map<std::string, TextureHandle> textures_;
 
-    // Параметры
     std::unordered_map<std::string, float> floatParams_;
     std::unordered_map<std::string, glm::vec4> colorParams_;
 
-    // Render state
     VkPipeline pipeline_;
     VkPipelineLayout pipelineLayout_;
     VkDescriptorSet descriptorSet_;
-};
 ```
 
 ### Material Manager
@@ -280,15 +257,10 @@ float GeometrySchlickGGX(float NdotV, float roughness) {
     float num = NdotV;
     float denom = NdotV * (1.0 - k) + k;
 
-    return num / denom;
-}
-
 float3 fresnelSchlick(float cosTheta, float3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-}
 ```
 
-```slang
 // shaders/pbr_static.slang
 import pbr_common;
 
@@ -298,7 +270,6 @@ cbuffer PushConstants {
     float4x4 viewProj;
     float3 cameraPos;
     uint materialIndex;
-};
 
 // Bindless textures
 [[vk::binding(0, 0)]]
@@ -315,7 +286,6 @@ struct VSInput {
     [[vk::location(0)]] float3 position : POSITION;
     [[vk::location(1)]] float3 normal : NORMAL;
     [[vk::location(2)]] float2 texCoord : TEXCOORD0;
-};
 
 // Vertex output
 struct VSOutput {
@@ -323,7 +293,6 @@ struct VSOutput {
     float3 worldPos : WorldPos;
     float3 normal : Normal;
     float2 texCoord : TexCoord;
-};
 
 VSOutput vertexMain(VSInput input) {
     VSOutput output;
@@ -332,7 +301,6 @@ VSOutput vertexMain(VSInput input) {
     output.normal = input.normal;
     output.texCoord = input.texCoord;
     return output;
-}
 
 float4 fragmentMain(VSOutput input) : SV_Target {
     MaterialData mat = materials[materialIndex];
@@ -341,7 +309,6 @@ float4 fragmentMain(VSOutput input) : SV_Target {
     float3 albedo = mat.albedoColor.rgb;
     if (mat.flags & 0x01) {  // Has albedo texture
         albedo *= textures[mat.albedoTextureIndex].Sample(sampler_, input.texCoord).rgb;
-    }
 
     // Normal
     float3 N = normalize(input.normal);
@@ -349,7 +316,6 @@ float4 fragmentMain(VSOutput input) : SV_Target {
         float3 normalMap = textures[mat.normalTextureIndex].Sample(sampler_, input.texCoord).rgb;
         normalMap = normalMap * 2.0 - 1.0;
         N = normalize(N + normalMap * 0.5);
-    }
 
     // Roughness/Metallic
     float roughness = mat.roughness;
@@ -385,8 +351,6 @@ float4 fragmentMain(VSOutput input) : SV_Target {
     float3 emissive = mat.emissiveColor.rgb * mat.emissiveIntensity;
 
     return float4(ambient + Lo + emissive, 1.0);
-}
-```
 
 ### Компиляция Slang → SPIR-V
 
@@ -438,7 +402,6 @@ public:
         const uint32_t* data = static_cast<const uint32_t*>(spirvCode->getBufferPointer());
         size_t size = spirvCode->getBufferSize() / sizeof(uint32_t);
         return std::vector<uint32_t>(data, data + size);
-    }
 
 private:
     slang::IGlobalSession* session_;
@@ -478,7 +441,6 @@ public:
         VkPipeline pipeline = createPipeline(material);
         cache_[hash] = pipeline;
         return pipeline;
-    }
 
 private:
     size_t computePipelineHash(const Material& material) {
@@ -488,7 +450,6 @@ private:
         hashCombine(hash, std::hash<int>{}(material.getBlendMode()));
         hashCombine(hash, std::hash<bool>{}(material.getDepthWrite()));
         return hash;
-    }
 
     VkPipeline createPipeline(const Material& material) {
         // Загрузка шейдера
@@ -509,22 +470,16 @@ private:
         VkPipelineRasterizationStateCreateInfo rasterization = {
             .cullMode = vkCullMode(material.getCullMode()),
             // ...
-        };
 
         VkPipelineColorBlendStateCreateInfo blend = {
             .attachmentCount = 1,
             .pAttachments = &blendAttachment(material.getBlendMode()),
-        };
 
         VkPipeline pipeline;
         vkCreateGraphicsPipelines(device_, pipelineCache_, 1, &createInfo, nullptr, &pipeline);
 
-        return pipeline;
-    }
-
     std::unordered_map<size_t, VkPipeline> cache_;
     VkPipelineCache pipelineCache_;
-};
 ```
 
 ---
@@ -554,7 +509,6 @@ struct VoxelBlock {
     uint8_t health;            // Для разрушаемых блоков
     uint8_t light;             // Освещение
     uint8_t variant;           // Вариант текстуры
-};
 
 // Texture Atlas для вокселей
 class VoxelTextureAtlas {
@@ -580,37 +534,29 @@ public:
 
             // Копирование текстуры в atlas
             copyTextureToAtlas(textures_[i].path, x, y, TILE_SIZE);
-        }
 
         // Загрузка atlas в GPU
         uploadToGPU();
 
         dirty_ = false;
-    }
 
     glm::vec4 getUVRect(uint8_t textureIndex) const {
-        constexpr int ATLAS_SIZE = 4096;
-        constexpr int TILE_SIZE = 16;
-        int tilesPerRow = ATLAS_SIZE / TILE_SIZE;
 
         float u = (textureIndex % tilesPerRow) * TILE_SIZE / float(ATLAS_SIZE);
         float v = (textureIndex / tilesPerRow) * TILE_SIZE / float(ATLAS_SIZE);
         float s = TILE_SIZE / float(ATLAS_SIZE);
 
         return glm::vec4(u, v, u + s, v + s);
-    }
 
 private:
     struct TextureEntry {
         std::string name;
         std::filesystem::path path;
-    };
 
     std::vector<TextureEntry> textures_;
     VkImage atlasImage_;
     VkImageView atlasView_;
     bool dirty_ = false;
-};
 ```
 
 ---
@@ -627,8 +573,6 @@ public:
                 lastWriteTimes_[entry.path()] =
                     std::filesystem::last_write_time(entry.path());
             }
-        }
-    }
 
     void checkForChanges() {
         for (const auto& [path, lastTime] : lastWriteTimes_) {
@@ -636,9 +580,6 @@ public:
             if (currentTime != lastTime) {
                 reloadMaterial(path);
                 lastWriteTimes_[path] = currentTime;
-            }
-        }
-    }
 
 private:
     void reloadMaterial(const std::filesystem::path& path) {
@@ -649,7 +590,6 @@ private:
         materialManager_->reloadMaterial(materialName);
 
         SDL_Log("Material reloaded: %s", materialName.c_str());
-    }
 
     std::filesystem::path watchPath_;
     std::unordered_map<std::filesystem::path,
@@ -689,7 +629,6 @@ textures/
 ├── stone_bricks_diffuse.png
 ├── stone_bricks_normal.png
 └── ...
-```
 
 ---
 

@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Спецификация
+**Уровень:** 🔴 Продвинутый
+**Дата:** 2026-02-22
+
 ## Обзор
 
 Документ описывает систему **GPU Cellular Automata (CA)** для симуляции:
@@ -57,7 +61,6 @@ export enum class CellMaterial : uint32_t {
     Steam,
     Acid,
     Custom  // Для пользовательских материалов
-};
 
 /// Флаги ячейки
 export enum class CellFlags : uint32_t {
@@ -68,7 +71,6 @@ export enum class CellFlags : uint32_t {
     Static = 1 << 3,       ///< Статичная (не двигается)
     Explosive = 1 << 4,    ///< Взрывоопасная
     Corrosive = 1 << 5,    ///< Разъедает окружение
-};
 
 } // namespace projectv::simulation
 ```
@@ -177,9 +179,7 @@ struct CADispatchConfig {
             (grid_size.x + workgroup_size_x - 1) / workgroup_size_x,
             (grid_size.y + workgroup_size_y - 1) / workgroup_size_y,
             (grid_size.z + workgroup_size_z - 1) / workgroup_size_z
-        };
     }
-};
 
 } // namespace projectv::simulation
 ```
@@ -222,7 +222,6 @@ StructuredBuffer<MaterialProperties> materials;
 
 struct MaterialProperties {
     float density;        // kg/m³
-    float viscosity;
     float flammability;
     float conductivity;
     uint type;
@@ -236,7 +235,6 @@ uint cellIndex(uint3 pos) {
 
 bool inBounds(int3 pos) {
     return all(pos >= params.boundary_min) && all(pos <= params.boundary_max);
-}
 
 // Liquid simulation step
 [numthreads(8, 8, 8)]
@@ -250,7 +248,6 @@ void csLiquidStep(uint3 tid: SV_DispatchThreadID) {
     if (current.density <= 0.0 || (current.flags & STATIC_CELL)) {
         nextCells[idx] = current;
         return;
-    }
 
     // Apply gravity
     current.velocity_y += params.gravity * params.delta_time;
@@ -263,7 +260,6 @@ void csLiquidStep(uint3 tid: SV_DispatchThreadID) {
         int3(1, 0, 0), int3(-1, 0, 0),
         int3(0, 1, 0), int3(0, -1, 0),
         int3(0, 0, 1), int3(0, 0, -1)
-    };
 
     float total_pressure = current.pressure;
     int valid_neighbors = 0;
@@ -282,17 +278,14 @@ void csLiquidStep(uint3 tid: SV_DispatchThreadID) {
             // Equalize pressure
             float pressure_diff = current.pressure - neighbor.pressure;
             flow_dir += float3(neighbors[i]) * pressure_diff * 0.5;
-        }
 
         total_pressure += neighbor.pressure;
         valid_neighbors++;
-    }
 
     // Normalize flow
     float flow_len = length(flow_dir);
     if (flow_len > 0.001) {
         flow_dir /= flow_len;
-    }
 
     // Apply velocity
     current.velocity_x += flow_dir.x * params.diffusion * params.delta_time;
@@ -311,24 +304,11 @@ void csLiquidStep(uint3 tid: SV_DispatchThreadID) {
     current.temperature *= (1.0 - params.temperature_decay * params.delta_time);
 
     // Write result
-    nextCells[idx] = current;
-}
 
 // Sand/granular simulation step
-[numthreads(8, 8, 8)]
 void csGranularStep(uint3 tid: SV_DispatchThreadID) {
-    if (any(tid >= params.grid_size)) return;
-
-    uint idx = cellIndex(tid);
-    CellState current = currentCells[idx];
-
-    if (current.density <= 0.0 || (current.flags & STATIC_CELL)) {
-        nextCells[idx] = current;
-        return;
-    }
 
     // Granular materials fall straight down
-    current.velocity_y += params.gravity * params.delta_time;
 
     // Check if can fall down
     int3 below_pos = int3(tid) + int3(0, -1, 0);
@@ -341,7 +321,6 @@ void csGranularStep(uint3 tid: SV_DispatchThreadID) {
             int3 diag_positions[4] = {
                 int3(1, -1, 0), int3(-1, -1, 0),
                 int3(0, -1, 1), int3(0, -1, -1)
-            };
 
             for (int i = 0; i < 4; ++i) {
                 int3 diag_pos = int3(tid) + diag_positions[i];
@@ -353,25 +332,13 @@ void csGranularStep(uint3 tid: SV_DispatchThreadID) {
                     current.velocity_x = float(diag_positions[i].x) * 2.0;
                     current.velocity_z = float(diag_positions[i].z) * 2.0;
                     break;
-                }
-            }
-        }
-    }
 
     // Apply friction
     current.velocity_x *= (1.0 - params.friction);
     current.velocity_z *= (1.0 - params.friction);
 
-    nextCells[idx] = current;
-}
-
 // Fire spreading step
-[numthreads(8, 8, 8)]
 void csFireStep(uint3 tid: SV_DispatchThreadID) {
-    if (any(tid >= params.grid_size)) return;
-
-    uint idx = cellIndex(tid);
-    CellState current = currentCells[idx];
 
     if (current.flags & BURNING_FLAG) {
         // Reduce density (fuel consumption)
@@ -379,37 +346,18 @@ void csFireStep(uint3 tid: SV_DispatchThreadID) {
         current.temperature = min(current.temperature + 10.0, 1500.0);
 
         // Spread fire to neighbors
-        int3 neighbors[6] = {
-            int3(1, 0, 0), int3(-1, 0, 0),
-            int3(0, 1, 0), int3(0, -1, 0),
-            int3(0, 0, 1), int3(0, 0, -1)
-        };
-
-        for (int i = 0; i < 6; ++i) {
-            int3 neighbor_pos = int3(tid) + neighbors[i];
-            if (!inBounds(neighbor_pos)) continue;
-
-            uint neighbor_idx = cellIndex(uint3(neighbor_pos));
-            CellState neighbor = currentCells[neighbor_idx];
 
             MaterialProperties mat = materials[neighbor.material_type];
             if (mat.flammability > 0.5 && neighbor.temperature > 200.0) {
                 // Ignite
                 neighbor.flags |= BURNING_FLAG;
                 nextCells[neighbor_idx] = neighbor;
-            }
-        }
 
         // Burn out
         if (current.density <= 0.0) {
             current.material_type = AIR_MATERIAL;
             current.flags = 0;
             current.density = 0.0;
-        }
-    }
-
-    nextCells[idx] = current;
-}
 
 // Constants
 static const uint AIR_MATERIAL = 0;
@@ -468,10 +416,8 @@ private:
         uint64_t body_id;
         float radius;
         glm::vec3 last_position;
-    };
 
     std::vector<RegisteredBody> registered_bodies_;
-};
 
 } // namespace projectv::simulation
 ```
@@ -513,7 +459,6 @@ auto update_simulation(
     };
     vkCmdPipelineBarrier(cmd,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0, 1, &barrier, 0, nullptr, 0, nullptr
     );
 
@@ -551,7 +496,6 @@ public:
         glm::ivec3 min = ca_pos * static_cast<int>(VOXELS_PER_CELL);
         glm::ivec3 max = min + static_cast<int>(VOXELS_PER_CELL) - 1;
         return {min, max};
-    }
 
     /// Создаёт CA ячейку из воксельных данных.
     [[nodiscard]] static auto voxels_to_cell(
@@ -563,7 +507,6 @@ public:
     static auto cell_to_voxels(
         CellState const& cell,
         std::span<VoxelData> voxels,
-        glm::uvec3 voxel_extent
     ) noexcept -> void;
 };
 
@@ -584,3 +527,11 @@ public:
 | Fire Shader             | Специфицирован | P1        |
 | Jolt Integration        | Специфицирован | P1        |
 | Voxel Mapping           | Специфицирован | P2        |
+
+---
+
+## Ссылки
+
+- [ADR-0002: SVO Storage](../adr/0002-svo-storage.md)
+- [SVO Architecture](../03_voxel/01_svo_architecture.md)
+- [Network-Ready ECS](../05_ecs_gameplay/07_network_ready_ecs.md)

@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 2.0
+**Дата:** 2026-02-22
+
 ## Обзор
 
 Flecs-Vulkan Bridge — интеграционный слой между ECS (Flecs) и Vulkan 1.4 для высокопроизводительного воксельного
@@ -26,17 +30,13 @@ Flecs-Vulkan Bridge — интеграционный слой между ECS (Fl
 │  Layer 1: Data (DOD)                                                     │
 │  ───────────────────                                                     │
 │  VoxelData[], Transform[], MaterialData[] — сырые массивы для SIMD      │
-│                                                                          │
 │  Layer 2: Logic (ECS)                                                    │
 │  ────────────────────                                                    │
 │  Flecs entities, components, systems, observers                          │
-│                                                                          │
 │  Layer 3: Graphics (Vulkan)                                              │
 │  ─────────────────────────                                               │
 │  Buffers, Images, Pipelines, Descriptor Sets                             │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -69,15 +69,12 @@ export struct VkBufferComponent {
 export struct VkImageComponent {
     VkImage image{VK_NULL_HANDLE};
     VkImageView view{VK_NULL_HANDLE};
-    VmaAllocation allocation{VK_NULL_HANDLE};
 
-    bool is_sparse{false};
     VkFormat format{VK_FORMAT_R8G8B8A8_UNORM};
     uint32_t width{0}, height{0}, depth{1};
     uint32_t mip_levels{1};
     uint32_t array_layers{1};
     VkImageLayout current_layout{VK_IMAGE_LAYOUT_UNDEFINED};
-};
 
 /// Компонент Vulkan пайплайна.
 export struct VkPipelineComponent {
@@ -86,13 +83,9 @@ export struct VkPipelineComponent {
 
     bool use_mesh_shaders{false};
     bool use_dynamic_rendering{true};
-};
 
 /// Компонент descriptor buffer (Vulkan 1.4 bindless).
 export struct VkDescriptorBufferComponent {
-    VkBuffer buffer{VK_NULL_HANDLE};
-    VmaAllocation allocation{VK_NULL_HANDLE};
-    VkDeviceAddress device_address{0};
 
     uint32_t descriptor_count{0};
     uint32_t descriptor_size{0};
@@ -101,9 +94,7 @@ export struct VkDescriptorBufferComponent {
         bool allocated{false};
         uint32_t index{0};
         uint64_t last_access_frame{0};
-    };
     std::vector<Slot> slots;
-};
 
 } // namespace projectv::ecs::vulkan
 ```
@@ -152,23 +143,15 @@ export struct BufferCreationObserver {
 
 /// Observer для уничтожения буферов.
 export struct BufferDestructionObserver {
-    static auto register_with(flecs::world& world) -> void;
-};
 
 /// Observer для создания изображений.
 export struct ImageCreationObserver {
-    static auto register_with(flecs::world& world) -> void;
-};
 
 /// Observer для уничтожения изображений.
 export struct ImageDestructionObserver {
-    static auto register_with(flecs::world& world) -> void;
-};
 
 /// Observer для обновления буферов.
 export struct BufferUpdateObserver {
-    static auto register_with(flecs::world& world) -> void;
-};
 
 } // namespace projectv::ecs::vulkan
 ```
@@ -223,11 +206,7 @@ private:
 
 /// Manager для thread-local контекстов.
 export class ThreadContextManager {
-public:
     /// Создаёт manager.
-    [[nodiscard]] static auto create(
-        VkDevice device,
-        uint32_t queue_family,
         uint32_t thread_count
     ) noexcept -> std::expected<ThreadContextManager, VulkanError>;
 
@@ -250,11 +229,7 @@ public:
     /// Собирает все command buffers.
     [[nodiscard]] auto collect_command_buffers() noexcept -> std::vector<VkCommandBuffer>;
 
-private:
     ThreadContextManager() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::ecs::vulkan
 ```
@@ -296,16 +271,12 @@ export auto register_render_phases(flecs::world& world) -> void;
 │                                                                          │
 │  PreUpdate     OnUpdate      PreStore       OnStore       PostStore     │
 │  ─────────     ─────────     ─────────      ─────────     ─────────     │
-│                                                                          │
 │  Input         Game          Prepare        Record        Sync          │
 │  AI            Logic         Cull           Compute       Present       │
 │                              Compute                                     │
-│                                                                          │
 │  Phase:        Phase:        Phase:         Phase:         Phase:       │
 │  PREPARE       COMPUTE       CULL+COMPUTE   RECORD         SYNC+PRESENT │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -400,7 +371,6 @@ export struct GPUCullingComponent {
     VkBuffer draw_command_buffer{VK_NULL_HANDLE}; ///< Output draw commands
     uint32_t chunk_count{0};
     bool needs_cull{true};
-};
 
 /// Система GPU-driven culling.
 export class GPUCullingSystem {
@@ -422,7 +392,6 @@ private:
     GPUCullingSystem() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::ecs::vulkan
 ```
@@ -466,7 +435,6 @@ export struct VoxelMaterialComponent {
 
     bool is_transparent{false};
     bool needs_descriptor_update{true};
-};
 
 /// Компонент трансформации.
 export struct TransformComponent {
@@ -475,15 +443,12 @@ export struct TransformComponent {
     glm::vec3 scale{1.0f};
     glm::mat4 world_matrix{1.0f};
     bool dirty{true};
-};
 
 /// Компонент состояния рендеринга.
 export struct RenderStateComponent {
-    bool is_visible{true};
     bool casts_shadow{true};
     bool receives_shadow{true};
     float distance_to_camera{0.0f};
-};
 
 } // namespace projectv::ecs::voxel
 ```
@@ -518,7 +483,6 @@ export struct TextureAtlasComponent {
     std::vector<Tile> tiles;
 
     std::queue<uint32_t> upload_queue;  ///< Texture IDs to upload
-};
 
 /// Manager texture atlas.
 export class TextureAtlasManager {
@@ -561,7 +525,6 @@ private:
     TextureAtlasManager() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::ecs::vulkan
 ```
@@ -640,7 +603,6 @@ private:
 │                                                                          │
 │  Compute Queue                     Graphics Queue                        │
 │  ─────────────                     ──────────────                        │
-│                                                                          │
 │  ┌─────────────┐                   ┌─────────────┐                      │
 │  │ Compute     │                   │ Graphics    │                      │
 │  │ Dispatch    │                   │ Rendering   │                      │
@@ -651,15 +613,12 @@ private:
 │  ┌─────────────────────────────────────────────────────────┐            │
 │  │           Timeline Semaphore (compute→graphics)          │            │
 │  └─────────────────────────────────────────────────────────┘            │
-│                                                                          │
 │  Timeline Values:                                                        │
 │  ────────────────                                                        │
 │  Frame 1: compute=1, graphics=1                                         │
 │  Frame 2: compute=2, graphics=2                                         │
 │  Frame N: compute=N, graphics=N                                         │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -689,3 +648,11 @@ private:
 | Thread context switch | < 0.01 ms     |
 | Descriptor allocation | < 0.1 ms      |
 | Timeline wait         | < 1 ms        |
+
+---
+
+## Ссылки
+
+- [Vulkan Backend](../02_render/01_vulkan_spec.md)
+- [Engine Structure](../01_core/01_engine_structure.md)
+- [Core Loop](../01_core/02_core_loop.md)

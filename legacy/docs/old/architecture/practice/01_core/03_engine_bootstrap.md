@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 2.0 (Enterprise)
+**Дата:** 2026-02-22
+
 ## Обзор
 
 Документ определяет спецификацию холодного старта (Bootstrapping) движка ProjectV. Ключевые принципы:
@@ -27,53 +31,29 @@ Bootstrap DAG (инициализация сверху вниз)
 └────────┬────────┘
          │
          ▼
-┌─────────────────┐
 │     Memory      │ Level 1 — Memory Management
 │   (VMA, Pools)  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
 │  Vulkan Device  │ Level 2 — GPU Context
 │   (Instance,    │
 │    Device)      │
-└────────┬────────┘
-         │
     ┌────┴────┬────────────┐
     ▼         ▼            ▼
 ┌────────┐ ┌────────┐ ┌─────────────┐
 │  VMA   │ │ Swap-  │ │  Command    │ Level 3
 │ Alloc. │ │ chain  │ │  Pools      │
 └────────┘ └────────┘ └─────────────┘
-         │
-         ▼
-┌─────────────────┐
 │    JobSystem    │ Level 4 — Concurrency
 │ (std::execution)│
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
 │   ECS (Flecs)   │ Level 5 — Entity System
 │   (World)       │
-└────────┬────────┘
-         │
-    ┌────┴────┬────────────┐
-    ▼         ▼            ▼
-┌────────┐ ┌────────┐ ┌─────────────┐
 │Physics │ │ Render │ │    Audio    │ Level 6
 │ (Jolt) │ │ System │ │ (miniaudio) │
-└────────┘ └────────┘ └─────────────┘
-         │
-         ▼
-┌─────────────────┐
 │    Gameplay     │ Level 7 — Game Systems
 │   (Player, UI)  │
 └─────────────────┘
 
 Shutdown (обратный порядок):
 Level 7 → 6 → 5 → 4 → 3 → 2 → 1 → 0
-```
 
 ---
 
@@ -104,7 +84,6 @@ EngineContext (PIMPL)
 └─────────────────────────────────────────────────────────────┘
 
 EngineConfig
-┌─────────────────────────────────────────────────────────────┐
 │  window_width: uint32_t (4 bytes)                           │
 │  window_height: uint32_t (4 bytes)                          │
 │  vsync: bool (1 byte)                                       │
@@ -119,10 +98,8 @@ EngineConfig
 │  max_bodies: uint32_t (4 bytes)                             │
 │  padding: 20 bytes                                          │
 │  Total: 64 bytes (aligned to 64)                            │
-└─────────────────────────────────────────────────────────────┘
 
 SubsystemEntry
-┌─────────────────────────────────────────────────────────────┐
 │  name: std::string_view (16 bytes)                          │
 │  init_func: void(*)(EngineContext&) (8 bytes)               │
 │  shutdown_func: void(*)(EngineContext&) (8 bytes)           │
@@ -132,8 +109,6 @@ SubsystemEntry
 │  is_initialized: bool (1 byte)                              │
 │  padding: 3 bytes                                           │
 │  Total: 60 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -148,40 +123,25 @@ Engine Lifecycle
          └─────┬──────┘
                │ create()
                ▼
-         ┌────────────┐
          │  CREATED   │ ←── EngineContext allocated
-         └─────┬──────┘
                │ initialize()
-               ▼
     ┌────────────────────┐
     │   INITIALIZING     │ ←── Subsystems being created
     │   (DAG traversal)  │
     └─────────┬──────────┘
               │ success
-              ▼
-    ┌────────────────────┐
     │     READY          │ ←── All subsystems ready
-    └─────────┬──────────┘
               │ run()
-              ▼
-    ┌────────────────────┐
     │     RUNNING        │ ←── Main loop active
     │   (game loop)      │
-    └─────────┬──────────┘
               │ request_exit()
-              ▼
-    ┌────────────────────┐
     │    SHUTTING_DOWN   │ ←── Graceful shutdown
-    └─────────┬──────────┘
               │
-              ▼
-    ┌────────────────────┐
     │    TERMINATED      │ ←── All subsystems destroyed
     └────────────────────┘
 
 Error Path:
     INITIALIZING ──(error)──▶ ERROR ──▶ cleanup() ──▶ TERMINATED
-```
 
 ### Subsystem Init State
 
@@ -193,16 +153,13 @@ Subsystem Initialization State
      └──────┬──────┘
             │ all dependencies ready
             ▼
-     ┌─────────────┐
      │ INITIALIZING│ ←── init() in progress
-     └──────┬──────┘
             │
     ┌───────┴───────┐
     ▼               ▼
 ┌─────────┐   ┌─────────┐
 │  READY  │   │  ERROR  │
 └─────────┘   └─────────┘
-```
 
 ---
 
@@ -251,7 +208,6 @@ export enum class EngineState : uint8_t {
     ShuttingDown,   ///< Graceful shutdown
     Terminated,     ///< All subsystems destroyed
     Error           ///< Initialization failed
-};
 
 /// Конфигурация движка.
 export struct EngineConfig {
@@ -269,7 +225,6 @@ export struct EngineConfig {
     uint32_t max_bodies{65536};
     std::string application_name{"ProjectV"};
     std::string log_level{"info"};
-};
 
 /// Результат инициализации подсистемы.
 export struct SubsystemInitResult {
@@ -277,7 +232,6 @@ export struct SubsystemInitResult {
     bool success{false};
     std::string error_message;
     std::chrono::milliseconds init_duration{0};
-};
 
 /// Engine Context — корневой владелец всех подсистем.
 ///
@@ -285,13 +239,11 @@ export struct SubsystemInitResult {
 /// - Владеет всеми подсистемами через unique_ptr
 /// - Гарантирует разрушение в обратном порядке инициализации
 /// - Изолирует клиентский код от деталей реализации
-///
 /// ## Thread Safety
 /// - initialize(): main thread only
 /// - run(): main thread only
 /// - request_exit(): thread-safe
 /// - get_*(): thread-safe for const access
-///
 /// ## Invariants
 /// - Подсистемы инициализируются строго по DAG
 /// - Shutdown происходит в обратном порядке
@@ -299,15 +251,12 @@ export struct SubsystemInitResult {
 export class EngineContext {
 public:
     /// Создаёт EngineContext.
-    ///
     /// @param config Конфигурация
-    ///
     /// @pre config.window_width > 0 && config.window_height > 0
     /// @post state() == EngineState::Created
     explicit EngineContext(EngineConfig const& config = {}) noexcept;
 
     /// Разрушает EngineContext и все подсистемы.
-    ///
     /// @post state() == EngineState::Terminated
     /// @post Все подсистемы уничтожены
     ~EngineContext() noexcept;
@@ -319,26 +268,20 @@ public:
     EngineContext& operator=(const EngineContext&) = delete;
 
     /// Инициализирует все подсистемы.
-    ///
     /// @pre state() == EngineState::Created
     /// @post state() == EngineState::Ready или EngineState::Error
-    ///
     /// @return void или ошибку инициализации
     [[nodiscard]] auto initialize() noexcept
         -> std::expected<void, BootstrapError>;
 
     /// Запускает главный цикл.
-    ///
     /// @pre state() == EngineState::Ready
     /// @post state() == EngineState::Terminated после выхода
-    ///
     /// @return Код возврата (0 = успех)
     [[nodiscard]] auto run() noexcept -> int;
 
     /// Запрашивает остановку.
-    ///
     /// @param exit_code Код возврата
-    ///
     /// @post is_exit_requested() == true
     auto request_exit(int exit_code = 0) noexcept -> void;
 
@@ -363,7 +306,6 @@ public:
     /// @}
 
     /// Получает subsystem handles (mutable).
-    /// @{
     [[nodiscard]] auto platform() noexcept -> platform::PlatformSubsystem&;
     [[nodiscard]] auto memory() noexcept -> core::MemoryManager&;
     [[nodiscard]] auto vulkan() noexcept -> render::VulkanContext&;
@@ -371,7 +313,6 @@ public:
     [[nodiscard]] auto ecs_world() noexcept -> ecs::World&;
     [[nodiscard]] auto physics() noexcept -> physics::PhysicsSystem&;
     [[nodiscard]] auto renderer() noexcept -> render::RenderSystem&;
-    /// @}
 
     /// Получает статистику инициализации.
     [[nodiscard]] auto init_stats() const noexcept
@@ -389,7 +330,6 @@ private:
 
     /// Инициализация подсистем по уровням.
     auto initialize_level(uint32_t level) noexcept
-        -> std::expected<void, BootstrapError>;
 
     /// Shutdown подсистем уровня.
     auto shutdown_level(uint32_t level) noexcept -> void;
@@ -397,7 +337,6 @@ private:
     /// Проверка зависимостей подсистемы.
     [[nodiscard]] auto check_dependencies(uint32_t subsystem_index) const noexcept
         -> bool;
-};
 
 /// Получает строковое представление состояния.
 [[nodiscard]] auto to_string(EngineState state) noexcept -> std::string_view;
@@ -438,7 +377,6 @@ struct SubsystemDescriptor {
 /// - Определяет DAG подсистем
 /// - Проверяет циклические зависимости
 /// - Выполняет топологическую сортировку
-///
 /// ## Invariants
 /// - Нет циклических зависимостей
 /// - Все зависимости удовлетворены перед init
@@ -459,7 +397,6 @@ public:
 
     /// Выполняет инициализацию всех подсистем.
     auto initialize_all(EngineContext& ctx) noexcept
-        -> std::expected<void, BootstrapError>;
 
     /// Выполняет shutdown всех подсистем.
     auto shutdown_all(EngineContext& ctx) noexcept -> void;
@@ -474,7 +411,6 @@ private:
     /// Топологическая сортировка.
     [[nodiscard]] auto topological_sort() const noexcept
         -> std::vector<size_t>;
-};
 
 /// Предустановленные подсистемы ProjectV.
 auto create_default_subsystems() noexcept -> BootstrapSequencer;
@@ -549,13 +485,11 @@ EngineContext::~EngineContext() noexcept {
     if (impl_->state.load(std::memory_order_acquire) == EngineState::Running) {
         request_exit();
         // Wait for main loop to finish
-    }
 
     // Shutdown in reverse order
     impl_->sequencer.shutdown_all(*this);
 
     impl_->state.store(EngineState::Terminated, std::memory_order_release);
-}
 
 EngineContext::EngineContext(EngineContext&&) noexcept = default;
 EngineContext& EngineContext::operator=(EngineContext&&) noexcept = default;
@@ -571,9 +505,7 @@ auto EngineContext::initialize() noexcept
     )) {
         if (expected_state == EngineState::Initializing) {
             return std::unexpected(BootstrapError::AlreadyRunning);
-        }
         return std::unexpected(BootstrapError::InvalidConfig);
-    }
 
     impl_->start_time = std::chrono::steady_clock::now();
 
@@ -583,29 +515,20 @@ auto EngineContext::initialize() noexcept
     if (!result) {
         impl_->state.store(EngineState::Error, std::memory_order_release);
         return result;
-    }
 
     impl_->state.store(EngineState::Ready, std::memory_order_release);
     return {};
-}
 
 auto EngineContext::run() noexcept -> int {
     auto expected_state = EngineState::Ready;
-    if (!impl_->state.compare_exchange_strong(
-        expected_state,
         EngineState::Running,
-        std::memory_order_acq_rel
-    )) {
         return -1;  // Invalid state
-    }
 
     // Main loop
     while (!impl_->exit_requested.load(std::memory_order_acquire)) {
         // Process platform events
         if (!impl_->platform->process_events()) {
-            request_exit();
             break;
-        }
 
         // Update frame time
         auto const frame_start = std::chrono::steady_clock::now();
@@ -614,89 +537,59 @@ auto EngineContext::run() noexcept -> int {
         // (delegated to GameLoop class)
 
         impl_->frame_count.fetch_add(1, std::memory_order_relaxed);
-    }
 
     impl_->state.store(EngineState::ShuttingDown, std::memory_order_release);
 
     return impl_->exit_code;
-}
 
 auto EngineContext::request_exit(int exit_code) noexcept -> void {
     impl_->exit_code = exit_code;
     impl_->exit_requested.store(true, std::memory_order_release);
-}
 
 auto EngineContext::is_exit_requested() const noexcept -> bool {
     return impl_->exit_requested.load(std::memory_order_acquire);
-}
 
 auto EngineContext::state() const noexcept -> EngineState {
     return impl_->state.load(std::memory_order_acquire);
-}
 
 auto EngineContext::config() const noexcept -> EngineConfig const& {
     return impl_->config;
-}
 
 // Subsystem accessors (const)
 auto EngineContext::platform() const noexcept -> platform::PlatformSubsystem const& {
     return *impl_->platform;
-}
 auto EngineContext::memory() const noexcept -> core::MemoryManager const& {
     return *impl_->memory;
-}
 auto EngineContext::vulkan() const noexcept -> render::VulkanContext const& {
     return *impl_->vulkan;
-}
 auto EngineContext::job_system() const noexcept -> core::JobSystem const& {
     return *impl_->job_system;
-}
 auto EngineContext::ecs_world() const noexcept -> ecs::World const& {
     return *impl_->ecs_world;
-}
 auto EngineContext::physics() const noexcept -> physics::PhysicsSystem const& {
     return *impl_->physics;
-}
 auto EngineContext::renderer() const noexcept -> render::RenderSystem const& {
     return *impl_->renderer;
-}
 
 // Subsystem accessors (mutable)
 auto EngineContext::platform() noexcept -> platform::PlatformSubsystem& {
-    return *impl_->platform;
-}
 auto EngineContext::memory() noexcept -> core::MemoryManager& {
-    return *impl_->memory;
-}
 auto EngineContext::vulkan() noexcept -> render::VulkanContext& {
-    return *impl_->vulkan;
-}
 auto EngineContext::job_system() noexcept -> core::JobSystem& {
-    return *impl_->job_system;
-}
 auto EngineContext::ecs_world() noexcept -> ecs::World& {
-    return *impl_->ecs_world;
-}
 auto EngineContext::physics() noexcept -> physics::PhysicsSystem& {
-    return *impl_->physics;
-}
 auto EngineContext::renderer() noexcept -> render::RenderSystem& {
-    return *impl_->renderer;
-}
 
 auto EngineContext::init_stats() const noexcept
     -> std::vector<SubsystemInitResult> const& {
     return impl_->init_stats;
-}
 
 auto EngineContext::uptime() const noexcept -> std::chrono::seconds {
     auto now = std::chrono::steady_clock::now();
     return std::chrono::duration_cast<std::chrono::seconds>(now - impl_->start_time);
-}
 
 auto EngineContext::frame_count() const noexcept -> uint64_t {
     return impl_->frame_count.load(std::memory_order_relaxed);
-}
 
 auto to_string(EngineState state) noexcept -> std::string_view {
     switch (state) {
@@ -709,8 +602,6 @@ auto to_string(EngineState state) noexcept -> std::string_view {
         case EngineState::Terminated: return "Terminated";
         case EngineState::Error: return "Error";
         default: return "Unknown";
-    }
-}
 
 auto to_string(BootstrapError error) noexcept -> std::string_view {
     switch (error) {
@@ -727,9 +618,6 @@ auto to_string(BootstrapError error) noexcept -> std::string_view {
         case BootstrapError::AlreadyRunning: return "AlreadyRunning";
         case BootstrapError::DependencyNotReady: return "DependencyNotReady";
         case BootstrapError::SubsystemCrashed: return "SubsystemCrashed";
-        default: return "Unknown";
-    }
-}
 
 } // namespace projectv::engine
 ```
@@ -757,7 +645,6 @@ auto BootstrapSequencer::register_subsystem(SubsystemDescriptor descriptor) noex
     subsystems_.push_back(std::move(descriptor));
 
     return {};
-}
 
 auto BootstrapSequencer::has_cycles() const noexcept -> bool {
     // DFS-based cycle detection
@@ -778,8 +665,6 @@ auto BootstrapSequencer::has_cycles() const noexcept -> bool {
                 if (dfs(dep_index)) return true;
             } else if (rec_stack[dep_index]) {
                 return true;  // Cycle found
-            }
-        }
 
         rec_stack[index] = false;
         return false;
@@ -788,11 +673,6 @@ auto BootstrapSequencer::has_cycles() const noexcept -> bool {
     for (size_t i = 0; i < subsystems_.size(); ++i) {
         if (!visited[i]) {
             if (dfs(i)) return true;
-        }
-    }
-
-    return false;
-}
 
 auto BootstrapSequencer::initialization_order() const noexcept
     -> std::vector<std::string_view> {
@@ -803,10 +683,8 @@ auto BootstrapSequencer::initialization_order() const noexcept
 
     for (size_t index : order) {
         result.push_back(subsystems_[index].name);
-    }
 
     return result;
-}
 
 auto BootstrapSequencer::topological_sort() const noexcept
     -> std::vector<size_t> {
@@ -814,34 +692,22 @@ auto BootstrapSequencer::topological_sort() const noexcept
     std::vector<size_t> result;
     result.reserve(subsystems_.size());
 
-    std::vector<bool> visited(subsystems_.size(), false);
     std::vector<size_t> order(subsystems_.size());
 
     // Sort by level first
-    for (size_t i = 0; i < subsystems_.size(); ++i) {
         order[i] = i;
-    }
 
     std::stable_sort(order.begin(), order.end(),
         [this](size_t a, size_t b) {
             return subsystems_[a].level < subsystems_[b].level;
-        }
     );
 
     result = order;
-    return result;
-}
 
 auto BootstrapSequencer::initialize_all(EngineContext& ctx) noexcept
-    -> std::expected<void, BootstrapError> {
 
     if (has_cycles()) {
-        return std::unexpected(BootstrapError::InvalidConfig);
-    }
 
-    auto order = topological_sort();
-
-    for (size_t index : order) {
         auto const& subsystem = subsystems_[index];
 
         auto start = std::chrono::steady_clock::now();
@@ -850,42 +716,27 @@ auto BootstrapSequencer::initialize_all(EngineContext& ctx) noexcept
 
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start
-        );
 
         SubsystemInitResult stat{
             .subsystem_name = subsystem.name,
             .success = result.has_value(),
             .init_duration = duration
-        };
 
         if (!result) {
             stat.error_message = std::string(to_string(result.error()));
             // Store stat before returning error
             // ctx.init_stats().push_back(stat);
-            return result;
-        }
-
-        // ctx.init_stats().push_back(stat);
-    }
-
-    return {};
-}
 
 auto BootstrapSequencer::shutdown_all(EngineContext& ctx) noexcept -> void {
-    auto order = topological_sort();
 
     // Shutdown in reverse order
     for (auto it = order.rbegin(); it != order.rend(); ++it) {
         auto const& subsystem = subsystems_[*it];
         if (subsystem.shutdown) {
             subsystem.shutdown(ctx);
-        }
-    }
-}
 
 auto BootstrapSequencer::subsystem_count() const noexcept -> size_t {
     return subsystems_.size();
-}
 
 /// Создаёт стандартный набор подсистем ProjectV.
 auto create_default_subsystems() noexcept -> BootstrapSequencer {
@@ -903,112 +754,62 @@ auto create_default_subsystems() noexcept -> BootstrapSequencer {
         },
         .shutdown = [](EngineContext& ctx) {
             ctx.platform() = {};
-        }
     });
 
     // Level 1: Memory
-    seq.register_subsystem({
         .name = "Memory",
         .level = 1,
-        .dependencies = {},
-        .init = [](EngineContext& ctx) -> std::expected<void, BootstrapError> {
             ctx.memory() = core::MemoryManager::create()
                 .or_else([](auto) { return std::unexpected(BootstrapError::MemoryInitFailed); });
-            return {};
-        },
-        .shutdown = [](EngineContext& ctx) {
             ctx.memory() = {};
-        }
-    });
 
     // Level 2: Vulkan
-    seq.register_subsystem({
         .name = "Vulkan",
         .level = 2,
         .dependencies = {"Platform", "Memory"},
-        .init = [](EngineContext& ctx) -> std::expected<void, BootstrapError> {
             render::VulkanConfig config{
                 .enable_validation = ctx.config().enable_validation
-            };
 
             ctx.vulkan() = render::VulkanContext::create(config)
                 .or_else([](auto) { return std::unexpected(BootstrapError::VulkanInitFailed); });
-            return {};
-        },
-        .shutdown = [](EngineContext& ctx) {
             ctx.vulkan() = {};
-        }
-    });
 
     // Level 4: JobSystem
-    seq.register_subsystem({
         .name = "JobSystem",
         .level = 4,
-        .dependencies = {},
-        .init = [](EngineContext& ctx) -> std::expected<void, BootstrapError> {
             uint32_t threads = ctx.config().thread_count;
             if (threads == 0) {
                 threads = std::thread::hardware_concurrency();
-            }
             ctx.job_system() = core::JobSystem{threads};
-            return {};
-        },
-        .shutdown = [](EngineContext& ctx) {
             ctx.job_system().shutdown();
             ctx.job_system() = {};
-        }
-    });
 
     // Level 5: ECS
-    seq.register_subsystem({
         .name = "ECS",
         .level = 5,
         .dependencies = {"JobSystem"},
-        .init = [](EngineContext& ctx) -> std::expected<void, BootstrapError> {
             ctx.ecs_world() = ecs::World{ctx.config().thread_count};
-            return {};
-        },
-        .shutdown = [](EngineContext& ctx) {
             ctx.ecs_world() = {};
-        }
-    });
 
     // Level 6: Physics
-    seq.register_subsystem({
         .name = "Physics",
         .level = 6,
         .dependencies = {"ECS", "JobSystem"},
-        .init = [](EngineContext& ctx) -> std::expected<void, BootstrapError> {
             physics::PhysicsConfig config{
                 .max_bodies = ctx.config().max_bodies
-            };
 
             ctx.physics() = physics::PhysicsSystem::create(config)
                 .or_else([](auto) { return std::unexpected(BootstrapError::PhysicsInitFailed); });
-            return {};
-        },
-        .shutdown = [](EngineContext& ctx) {
             ctx.physics() = {};
-        }
-    });
 
     // Level 6: Render
-    seq.register_subsystem({
         .name = "Render",
-        .level = 6,
         .dependencies = {"Vulkan"},
-        .init = [](EngineContext& ctx) -> std::expected<void, BootstrapError> {
             ctx.renderer() = render::RenderSystem::create(ctx.vulkan())
                 .or_else([](auto) { return std::unexpected(BootstrapError::RenderInitFailed); });
-            return {};
-        },
-        .shutdown = [](EngineContext& ctx) {
             ctx.renderer() = {};
-        }
-    });
 
     return seq;
-}
 
 } // namespace projectv::engine::bootstrap
 ```
@@ -1050,15 +851,11 @@ auto main(int argc, char* argv[]) -> int {
 
     // 6. Context automatically destroyed with RAII
     return exit_code;
-}
 
 // === Game Loop (isolated) ===
 
 // ProjectV.Game.GameLoop.cppm
 export module ProjectV.Game.GameLoop;
-
-import std;
-import ProjectV.Engine.Context;
 
 export namespace projectv::game {
 
@@ -1090,3 +887,12 @@ private:
 | ECS Init                | < 50ms   | Tracy CPU |
 | Physics Init            | < 200ms  | Tracy CPU |
 | Memory Peak during Init | < 512 MB | VMA stats |
+
+---
+
+## Ссылки
+
+- [Engine Structure](../01_core/01_engine_structure.md)
+- [Core Loop Specification](../01_core/02_core_loop.md)
+- [Vulkan 1.4 Specification](../02_render/01_vulkan_spec.md)
+- [Jolt-Vulkan Bridge](../04_physics_ca/01_jolt_vulkan_bridge.md)

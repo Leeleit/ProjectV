@@ -3,6 +3,8 @@
 Руководство по импорту воксельных моделей из MagicaVoxel (.VOX формат) в ProjectV с использованием fastgltf для
 конвертации в glTF.
 
+**🟡 Уровень 2: Средний**
+
 ## Оглавление
 
 - [1. Обзор .VOX формата](#1-обзор-vox-формата)
@@ -71,7 +73,6 @@
 
 ```
 .VOX файл → Парсинг → Mesh генерация → glTF экспорт → fastgltf загрузка
-```
 
 ---
 
@@ -110,7 +111,6 @@ public:
 private:
     VoxelData voxelData;
     // ... внутренние методы
-};
 
 } // namespace ProjectV::Voxel
 ```
@@ -118,6 +118,7 @@ private:
 ### CMake конфигурация
 
 ```cmake
+
 # Добавление библиотеки для .VOX импорта
 add_library(voxel_importer STATIC
     src/voxel_importer.cpp
@@ -126,7 +127,6 @@ add_library(voxel_importer STATIC
 
 target_link_libraries(voxel_importer PRIVATE
     fastgltf::fastgltf
-)
 
 # Подключение к основному проекту
 target_link_libraries(ProjectV PRIVATE voxel_importer)
@@ -172,11 +172,8 @@ std::vector<Face> greedyMeshing(const VoxelData& data) {
                     .direction = static_cast<Face::Direction>(dir)
                 });
             }
-        }
-    }
 
     return faces;
-}
 ```
 
 ### LOD система
@@ -202,10 +199,8 @@ std::vector<LODLevel> generateLODs(const VoxelData& data) {
             auto simplified = downsampleVoxels(data, scale);
             lods.push_back(createLOD(simplified, scale));
         }
-    }
 
     return lods;
-}
 ```
 
 ---
@@ -259,14 +254,11 @@ int main() {
 
             vertexBuffers.push_back(vertexBuffer);
             indexBuffers.push_back(indexBuffer);
-        }
-    }
 
     std::cout << "Successfully imported .VOX model with "
               << vertexBuffers.size() << " meshes\n";
 
     return 0;
-}
 ```
 
 ### Интеграция с ECS (flecs)
@@ -296,9 +288,6 @@ void loadVoxelModelSystem(flecs::iter& it) {
 
                 std::cout << "Loaded voxel model: " << model.filename << "\n";
             }
-        }
-    }
-}
 ```
 
 ---
@@ -345,7 +334,6 @@ public:
         auto model = loadVoxelModel(filename);
         cache[filename] = model;
         return model;
-    }
 };
 ```
 
@@ -362,7 +350,6 @@ class StreamingVoxelLoader {
             auto chunk = loadVoxelChunk(chunkX, chunkY, chunkZ);
             scheduleForRendering(chunk);
         }
-    }
 };
 ```
 
@@ -406,7 +393,6 @@ public:
     JPH::ShapeSettings createVoxelShape(const VoxelData& data) {
         // Создание heightfield или mesh shape
         return createHeightfieldShape(data);
-    }
 };
 ```
 
@@ -426,7 +412,6 @@ public:
     void exportToVox(const fastgltf::Asset& gltfAsset) {
         // Конвертация glTF → .VOX (для round-trip workflow)
         saveAsVoxFile(gltfAsset, "exported.vox");
-    }
 };
 ```
 
@@ -455,4 +440,3 @@ public:
 2. Добавление поддержки .VOX палитр
 3. Оптимизация для streaming загрузки
 4. Интеграция с системой физики
-

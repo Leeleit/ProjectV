@@ -2,6 +2,11 @@
 
 ---
 
+**Статус:** Technical Specification
+**Уровень:** 🔴 Продвинутый
+**Дата:** 2026-02-22
+**Версия:** 2.0
+
 ## Обзор
 
 Документ описывает интеграцию **JoltPhysics** с **Vulkan 1.4** для высокопроизводительной физической симуляции
@@ -157,11 +162,9 @@ public:
 
         // 5. Обновление debug визуализации
         update_debug_renderer();
-    }
 
     void render_debug(VkCommandBuffer cmd) {
         debug_renderer.render(cmd, physics_system);
-    }
 };
 ```
 
@@ -188,7 +191,6 @@ classDiagram
         +bool is_sensor
         +apply_force()
         +apply_impulse()
-    }
 
     class VoxelCollider {
         +ColliderType type
@@ -197,7 +199,6 @@ classDiagram
         +JPH::ShapeRefC shape
         +rebuild()
         +update()
-    }
 
     class PhysicsDebugInfo {
         +bool show_colliders
@@ -205,7 +206,6 @@ classDiagram
         +bool show_velocities
         +Color debug_color
         +render()
-    }
 
     PhysicsBody --|> ECSComponent
     PhysicsProperties --|> ECSComponent
@@ -237,7 +237,6 @@ struct PhysicsPhase {
             .each(sync_kinematic_to_physics);
 
         world.system<PhysicsBody, PhysicsProperties>("ForceApplicationSystem")
-            .kind(flecs::PreUpdate)
             .each(apply_forces_and_impulses);
 
         // Phase 2: Simulation (выполняется в отдельном потоке)
@@ -252,7 +251,6 @@ struct PhysicsPhase {
             .each(sync_physics_to_ecs);
 
         world.system<PhysicsBody>("CollisionResponseSystem")
-            .kind(flecs::PostUpdate)
             .each(process_collision_responses);
 
         // Phase 4: Debug Render
@@ -260,7 +258,6 @@ struct PhysicsPhase {
             .kind(flecs::PostStore)
             .each(render_physics_debug);
     }
-};
 ```
 
 ---
@@ -293,54 +290,40 @@ struct PhysicsBody {
         JPH::BodyInterface& interface = get_physics_system().GetBodyInterface();
         id = interface.CreateBody(settings);
 
-        if (id != JPH::BodyID::cInvalidBodyID) {
             interface.AddBody(id, is_active ?
                 JPH::EActivation::Activate :
                 JPH::EActivation::DontActivate);
             is_in_world = true;
             return true;
-        }
 
         return false;
-    }
 
     // Уничтожение тела
     void destroy() {
-        if (id != JPH::BodyID::cInvalidBodyID) {
-            JPH::BodyInterface& interface = get_physics_system().GetBodyInterface();
 
             if (is_in_world) {
                 interface.RemoveBody(id);
-            }
             interface.DestroyBody(id);
 
             id = JPH::BodyID::cInvalidBodyID;
             is_in_world = false;
-        }
-    }
 
     // Активация/деактивация
     void activate() {
         if (id != JPH::BodyID::cInvalidBodyID && !is_active) {
             get_physics_system().GetBodyInterface().ActivateBody(id);
             is_active = true;
-        }
-    }
 
     void deactivate() {
         if (id != JPH::BodyID::cInvalidBodyID && is_active) {
             get_physics_system().GetBodyInterface().DeactivateBody(id);
             is_active = false;
-        }
-    }
 
     // Получение трансформации
     Transform get_transform() const {
         if (id == JPH::BodyID::cInvalidBodyID) {
             return Transform{};
-        }
 
-        JPH::BodyInterface& interface = get_physics_system().GetBodyInterface();
         JPH::Vec3 position = interface.GetCenterOfMassPosition(id);
         JPH::Quat rotation = interface.GetRotation(id);
 
@@ -350,13 +333,11 @@ struct PhysicsBody {
                         rotation.GetZ(), rotation.GetW()},
             .scale = {1.0f, 1.0f, 1.0f}
         };
-    }
 
     // Установка трансформации
     void set_transform(const Transform& transform, bool activate = true) {
         if (id == JPH::BodyID::cInvalidBodyID) return;
 
-        JPH::BodyInterface& interface = get_physics_system().GetBodyInterface();
         interface.SetPositionAndRotation(
             id,
             JPH::Vec3(transform.position.x, transform.position.y, transform.position.z),
@@ -364,8 +345,6 @@ struct PhysicsBody {
                      transform.rotation.z, transform.rotation.w),
             activate ? JPH::EActivation::Activate : JPH::EActivation::DontActivate
         );
-    }
-};
 
 // Компонент для свойств физики
 struct PhysicsProperties {
@@ -393,21 +372,16 @@ struct PhysicsProperties {
         glm::vec3 force;
         glm::vec3 point;              // Точка приложения (локальные координаты)
         bool is_impulse = false;      // Импульс вместо силы
-    };
     std::vector<AppliedForce> pending_forces;
 
     void apply_force(const glm::vec3& force, const glm::vec3& point = {0,0,0}) {
         pending_forces.push_back({force, point, false});
-    }
 
     void apply_impulse(const glm::vec3& impulse, const glm::vec3& point = {0,0,0}) {
         pending_forces.push_back({impulse, point, true});
-    }
 
     void clear_pending_forces() {
         pending_forces.clear();
-    }
-};
 ```
 
 ### Компоненты для воксельной физики
@@ -444,7 +418,6 @@ struct VoxelCollider {
         uint32_t sample_count = 0;
         float voxel_size = 1.0f;
         float height_scale = 1.0f;
-    };
     std::optional<HeightFieldData> heightfield_data;
 
     // Для Mesh/Compound
@@ -452,7 +425,6 @@ struct VoxelCollider {
         std::vector<glm::vec3> vertices;
         std::vector<uint32_t> indices;
         std::vector<uint32_t> materials;
-    };
     std::optional<MeshData> mesh_data;
 
     // Методы
@@ -471,7 +443,6 @@ struct VoxelCollider {
             default:
                 return false;
         }
-    }
 
     bool rebuild_heightfield() {
         if (!heightfield_data) return false;
@@ -495,10 +466,6 @@ struct VoxelCollider {
             needs_rebuild = false;
             last_rebuild_frame = current_frame;
             return true;
-        }
-
-        return false;
-    }
 
     void update_from_voxels(const VoxelChunk& chunk_data) {
         // Обновление данных на основе изменений вокселей
@@ -506,11 +473,9 @@ struct VoxelCollider {
             update_heightfield_from_voxels(chunk_data);
         } else if (type == MESH) {
             update_mesh_from_voxels(chunk_data);
-        }
 
         needs_rebuild = true;
         mark_for_async_rebuild();
-    }
 
     void mark_for_async_rebuild() {
         // Добавление в очередь для асинхронной перестройки
@@ -518,10 +483,7 @@ struct VoxelCollider {
             .entity = owning_entity,
             .collider = this,
             .priority = ColliderRebuildPriority::MEDIUM
-        };
         collider_rebuild_queue->push(task);
-    }
-};
 
 // Компонент для разрушаемых воксельных объектов
 struct DestructibleVoxelObject {
@@ -530,7 +492,6 @@ struct DestructibleVoxelObject {
     float fracture_threshold = 50.0f; // Порог начала разрушения
     float debris_lifetime = 10.0f;    // Время жизни обломков
 
-    // Состояние
     float current_damage = 0.0f;
     bool is_fractured = false;
     std::vector<VoxelFragment> fragments;
@@ -539,14 +500,11 @@ struct DestructibleVoxelObject {
     uint32_t fracture_seed = 0;
     bool fracture_dirty = false;
 
-    // Методы
     void apply_damage(float damage, const glm::vec3& point) {
         current_damage += damage;
 
         if (current_damage >= fracture_threshold && !is_fractured) {
             fracture(point);
-        }
-    }
 
     void fracture(const glm::vec3& impact_point) {
         TracyZoneScopedN("VoxelFracture");
@@ -565,16 +523,12 @@ struct DestructibleVoxelObject {
         update_collider_after_fracture();
 
         TracyPlot("VoxelFractures", 1.0f);
-    }
 
     void update_collider_after_fracture() {
         // Обновление коллайдера для оставшейся части объекта
         if (auto* collider = owning_entity.get<VoxelCollider>()) {
             collider->needs_rebuild = true;
             collider->mark_for_async_rebuild();
-        }
-    }
-};
 ```
 
 ### Компоненты для жидкостей и сыпучих материалов
@@ -626,17 +580,12 @@ struct VoxelFluid {
 
             TracyPlot("FluidSimulationSteps", 1.0f);
         }
-    }
 
     void interact_with_voxels() {
         // Эрозия/осаждение материала
         for (auto& cell : cells) {
             if (cell.amount > 0.0f) {
                 erode_or_deposit_voxel(cell.position, cell.amount);
-            }
-        }
-    }
-};
 
 // Компонент для сыпучих материалов (песок, гравий)
 struct GranularMaterial {
@@ -646,7 +595,6 @@ struct GranularMaterial {
     float cohesion = 0.1f;            // Сцепление между зёрнами
     float friction = 0.5f;            // Трение
 
-    // Состояние
     std::vector<GrainParticle> particles;
     uint32_t max_particles = 10000;
 
@@ -655,7 +603,6 @@ struct GranularMaterial {
     VkBufferComponent particle_buffer;
     VkBufferComponent indirect_buffer;
 
-    // Методы
     void initialize_gpu_resources() {
         if (use_gpu_simulation) {
             // Создание compute пайплайна для симуляции
@@ -664,16 +611,10 @@ struct GranularMaterial {
             // Создание буферов частиц
             particle_buffer.create(...);
             indirect_buffer.create(...);
-        }
-    }
 
-    void simulate(float delta_time) {
-        if (use_gpu_simulation) {
             simulate_on_gpu(delta_time);
         } else {
             simulate_on_cpu(delta_time);
-        }
-    }
 
     void simulate_on_gpu(float delta_time) {
         TracyZoneScopedN("GranularMaterialGPU");
@@ -693,7 +634,6 @@ struct GranularMaterial {
             .delta_time = delta_time,
             .gravity = -9.81f,
             .particle_count = static_cast<uint32_t>(particles.size())
-        };
 
         vkCmdPushConstants(cmd, granular_pipeline_layout,
                           VK_SHADER_STAGE_COMPUTE_BIT, 0,
@@ -706,8 +646,6 @@ struct GranularMaterial {
         end_compute_command_buffer(cmd);
 
         TracyPlot("GranularParticlesSimulated", (float)particles.size());
-    }
-};
 ```
 
 ---
@@ -776,14 +714,11 @@ void create_heightfield_body(flecs::entity e, VoxelCollider& collider) {
         // Связывание трансформации чанка
         if (auto* transform = e.get<Transform>()) {
             physics_body.set_transform(*transform, false);
-        }
 
         log_debug("Created heightfield physics body for chunk ({}, {}, {})",
                  collider.chunk_x, collider.chunk_y, collider.chunk_z);
     } else {
         log_error("Failed to create physics body for entity {}", e.name());
-    }
-}
 ```
 
 ### Динамическое обновление HeightField
@@ -818,8 +753,6 @@ world.system<VoxelCollider>("HeightFieldUpdateSystem")
         } else {
             // Если не успели, откладываем на следующий кадр
             log_warning("HeightField rebuild timed out for entity {}", e.name());
-        }
-    });
 
 // Функция обновления shape тела
 void update_body_shape(PhysicsBody& body, JPH::ShapeRefC new_shape) {
@@ -859,8 +792,6 @@ void update_body_shape(PhysicsBody& body, JPH::ShapeRefC new_shape) {
             JPH::EActivation::DontActivate);
 
         log_debug("Updated body shape for body {}", new_id.GetIndex());
-    }
-}
 ```
 
 ### Оптимизации HeightField для вокселей
@@ -900,13 +831,11 @@ public:
         // Добавление в кэш
         if (cache.size() >= max_cache_size) {
             cleanup_old_entries();
-        }
 
         cache[hash] = {hash, shape, current_frame, 1};
         TracyPlot("HeightFieldCacheMisses", 1.0f);
 
         return shape;
-    }
 
     // Создание оптимизированного HeightField
     JPH::ShapeRefC create_heightfield_shape(const HeightFieldData& data) {
@@ -931,23 +860,19 @@ public:
             // Крупные чанки: оптимизация памяти
             settings.mBlockSize = 8;
             settings.mBitsPerSample = 8;
-        }
 
         // Material mapping для разных типов вокселей
         if (!data.materials.empty()) {
             settings.mMaterialIndices = data.materials.data();
             settings.mMaterials = create_voxel_material_list();
-        }
 
         // Создание с проверкой ошибок
         JPH::ShapeSettings::ShapeResult result = settings.Create();
         if (!result.IsValid()) {
             log_error("Failed to create HeightFieldShape: {}", result.GetError());
             return nullptr;
-        }
 
         return result.Get();
-    }
 
     void cleanup_old_entries(uint64_t age_threshold = 60 * 10) { // 10 секунд
         for (auto it = cache.begin(); it != cache.end(); ) {
@@ -955,12 +880,7 @@ public:
                 it->second.use_count < 5) { // Редко используемые
                 it = cache.erase(it);
                 TracyPlot("HeightFieldCacheEvictions", 1.0f);
-            } else {
                 ++it;
-            }
-        }
-    }
-};
 ```
 
 ---
@@ -987,7 +907,6 @@ struct DoubleBufferedTransform {
         if (!interpolate) {
             current = new_transform;
         }
-    }
 
     // Интерполяция для плавного рендеринга
     void interpolate_transform(float alpha) {
@@ -996,8 +915,6 @@ struct DoubleBufferedTransform {
             current.position = glm::mix(previous.position, physics.position, alpha);
             current.rotation = glm::slerp(previous.rotation, physics.rotation, alpha);
             current.scale = glm::mix(previous.scale, physics.scale, alpha);
-        }
-    }
 
     // Получение матрицы для рендеринга
     glm::mat4 get_render_matrix() const {
@@ -1005,7 +922,6 @@ struct DoubleBufferedTransform {
         glm::mat4 rotation = glm::mat4_cast(current.rotation);
         glm::mat4 scale = glm::scale(glm::mat4(1.0f), current.scale);
         return translation * rotation * scale;
-    }
 };
 
 // Система синхронизации Physics -> ECS
@@ -1028,7 +944,6 @@ world.system<DoubleBufferedTransform, const PhysicsBody>("PhysicsToECSSyncSystem
 // Система интерполяции трансформаций
 world.system<DoubleBufferedTransform>("TransformInterpolationSystem")
     .kind(flecs::PreStore)
-    .each( {
         // Интерполяция между физическими кадрами
         // alpha: 0 = предыдущий физический кадр, 1 = текущий физический кадр
         float alpha = calculate_interpolation_alpha();
@@ -1036,7 +951,6 @@ world.system<DoubleBufferedTransform>("TransformInterpolationSystem")
 
         // Обновление Vulkan трансформационного буфера
         update_vulkan_transform_buffer(db_transform.get_render_matrix());
-    });
 ```
 
 ### GPU трансформационные буферы
@@ -1073,7 +987,6 @@ void update_transform_storage_buffer(const std::vector<glm::mat4>& matrices) {
         // Реаллокация с запасом
         VkDeviceSize new_size = buffer_size * 2;
         recreate_transform_buffer(new_size);
-    }
 
     // Отображение памяти и копирование данных
     void* mapped_data;
@@ -1095,10 +1008,8 @@ void update_transform_storage_buffer(const std::vector<glm::mat4>& matrices) {
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .bufferMemoryBarrierCount = 1,
         .pBufferMemoryBarriers = &barrier
-    };
 
     vkCmdPipelineBarrier2(command_buffer, &dependency_info);
-}
 ```
 
 ### Синхронизация ECS -> Physics для кинематических тел
@@ -1128,25 +1039,19 @@ world.system<const Transform, PhysicsBody>("ECSToPhysicsSyncSystem")
             // (использовать с осторожностью, может нарушить симуляцию)
             if (body.allow_teleport) {
                 body.set_transform(transform, false);
-                body.transform_dirty = false;
             }
-        }
     });
 
 // Observer для отслеживания изменений трансформаций
 world.observer<Transform>("TransformChangeObserver")
     .event(flecs::OnSet)
-    .each( {
         // Помечаем PhysicsBody для обновления
         if (auto* body = e.get<PhysicsBody>()) {
             body->transform_dirty = true;
-        }
 
         // Помечаем DoubleBufferedTransform для обновления
         if (auto* db_transform = e.get<DoubleBufferedTransform>()) {
             db_transform->current = transform;
-        }
-    });
 ```
 
 ---
@@ -1189,21 +1094,16 @@ void check_collision_damage(DestructibleVoxelObject& destructible, const Physics
                                      to_glm_vec3(manifold.GetWorldContactPointOnBody(0)));
 
             TracyPlot("VoxelDamageApplied", impact_force);
-        }
-    }
-}
 
 // Система создания обломков
 world.system<DestructibleVoxelObject>("DebrisSystem")
     .kind(flecs::OnUpdate)
     .term<DestructibleVoxelObject>().with<IsFractured>()
-    .each( {
         TracyZoneScopedN("DebrisManagement");
 
         // Создание физических тел для фрагментов
         for (auto& fragment : destructible.fragments) {
             create_debris_entity(e.world(), fragment, destructible.debris_lifetime);
-        }
 
         // Очистка фрагментов
         destructible.fragments.clear();
@@ -1211,10 +1111,8 @@ world.system<DestructibleVoxelObject>("DebrisSystem")
         // Деактивация основного тела
         if (auto* body = e.get<PhysicsBody>()) {
             body->deactivate();
-        }
 
         TracyPlot("DebrisCreated", (float)destructible.fragments.size());
-    });
 ```
 
 ### Система жидкостей с SPH
@@ -1253,7 +1151,6 @@ void simulate_sph(VoxelFluid& fluid) {
 
     // 2. Вычисление плотности и давления
     #pragma omp parallel for
-    for (size_t i = 0; i < particle_count; i++) {
         auto& particle = fluid.cells[i];
 
         // Поиск соседей
@@ -1263,13 +1160,8 @@ void simulate_sph(VoxelFluid& fluid) {
         float density = calculate_density(particle, neighbors, fluid.cells);
         particle.density = density;
         particle.pressure = calculate_pressure(density, fluid.density);
-    }
 
     // 3. Вычисление сил
-    #pragma omp parallel for
-    for (size_t i = 0; i < particle_count; i++) {
-        auto& particle = fluid.cells[i];
-        auto neighbors = grid.query_neighbors(particle.position, fluid.voxel_size * 2.0f);
 
         glm::vec3 pressure_force = calculate_pressure_force(particle, neighbors, fluid.cells);
         glm::vec3 viscosity_force = calculate_viscosity_force(particle, neighbors, fluid.cells);
@@ -1286,14 +1178,9 @@ void simulate_sph(VoxelFluid& fluid) {
 
         // Коллизия с вокселями
         handle_voxel_collision(particle, fluid.voxel_size);
-    }
 
     // 4. Обновление сетки для следующей итерации
     grid.clear();
-    for (size_t i = 0; i < particle_count; i++) {
-        grid.insert(fluid.cells[i].position, i);
-    }
-}
 ```
 
 ### GPU-ускоренная симуляции сыпучих материалов
@@ -1347,7 +1234,6 @@ world.system<GranularMaterial>("GranularMaterialGPUSystem")
             .grain_cohesion = material.cohesion,
             .particle_count = static_cast<uint32_t>(material.particles.size()),
             .frame_number = current_frame
-        };
 
         vkCmdPushConstants(cmd, granular_pipeline_layout,
                           VK_SHADER_STAGE_COMPUTE_BIT, 0,
@@ -1359,19 +1245,15 @@ world.system<GranularMaterial>("GranularMaterialGPUSystem")
 
         // Барьер для чтения результатов
         VkBufferMemoryBarrier2 post_barrier = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
             .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT,
-            .buffer = material.particle_buffer.buffer
-        };
 
         VkDependencyInfo dependency_info = {
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .bufferMemoryBarrierCount = 1,
             .pBufferMemoryBarriers = &post_barrier
-        };
 
         vkCmdPipelineBarrier2(cmd, &dependency_info);
 
@@ -1442,20 +1324,16 @@ world.system<>("GPUCollisionDetectionSystem")
             .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT
-        };
 
         VkDependencyInfo dependency_info = {
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .memoryBarrierCount = 1,
             .pMemoryBarriers = &barrier
-        };
 
         vkCmdPipelineBarrier2(cmd, &dependency_info);
 
         // Dispatch для узкой фазы
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                          collision_narrow_phase_pipeline);
-        vkCmdDispatch(cmd, group_count, 1, 1);
 
         end_compute_command_buffer(cmd);
 
@@ -1490,7 +1368,6 @@ world.system<>("AsyncPhysicsSystem")
                 sync_async_physics_results();
                 TracyPlot("AsyncPhysicsCompleted", 1.0f);
             }
-        }
 
         // Если симуляция не запущена и пришло время для следующего шага
         if (!physics_running && should_run_physics_step()) {
@@ -1506,8 +1383,6 @@ world.system<>("AsyncPhysicsSystem")
 
             physics_running = true;
             TracyPlot("AsyncPhysicsStarted", 1.0f);
-        }
-    });
 
 // Функция выполнения шага физической симуляции
 void execute_physics_simulation_step() {
@@ -1526,7 +1401,6 @@ void execute_physics_simulation_step() {
 
     // Запись результатов в thread-safe буфер
     physics_results_buffer->write(results);
-}
 ```
 
 ---
@@ -1564,17 +1438,13 @@ void activate_physics_chunk(VoxelChunkComponent& chunk) {
     for (auto& body : chunk.physics_bodies) {
         if (auto* physics_body = body.get<PhysicsBody>()) {
             physics_body->activate();
-        }
-    }
 
     // Активация коллайдеров
     if (auto* collider = chunk.entity.get<VoxelCollider>()) {
         collider->is_active = true;
-    }
 
     chunk.is_physics_active = true;
     TracyPlot("PhysicsChunksActivated", 1.0f);
-}
 
 void deactivate_physics_chunk(VoxelChunkComponent& chunk) {
     if (!chunk.is_physics_active) return;
@@ -1582,20 +1452,13 @@ void deactivate_physics_chunk(VoxelChunkComponent& chunk) {
     TracyZoneScopedN("Physics Chunk Deactivation");
 
     // Деактивация физических тел чанка
-    for (auto& body : chunk.physics_bodies) {
-        if (auto* physics_body = body.get<PhysicsBody>()) {
             physics_body->deactivate();
-        }
-    }
 
     // Деактивация коллайдеров
-    if (auto* collider = chunk.entity.get<VoxelCollider>()) {
         collider->is_active = false;
-    }
 
     chunk.is_physics_active = false;
     TracyPlot("PhysicsChunksDeactivated", 1.0f);
-}
 ```
 
 ### Spatial partitioning для оптимизации коллизий
@@ -1651,15 +1514,9 @@ public:
                         // Проверка точного пересечения AABB
                         if (check_aabb_intersection(body_id, region)) {
                             result.push_back(body_id);
-                        }
-                    }
-                }
                 it->second.last_accessed = current_frame;
-            }
-        }
 
         return result;
-    }
 
     // Очистка старых ячеек
     void cleanup_old_cells(uint64_t age_threshold = 60 * 5) { // 5 секунд
@@ -1669,10 +1526,6 @@ public:
                 it = grid.erase(it);
             } else {
                 ++it;
-            }
-        }
-    }
-};
 ```
 
 ### Memory pooling для физических тел
@@ -1710,7 +1563,6 @@ public:
 
             TracyPlot("PhysicsBodyPoolHits", 1.0f);
             return pool[index].id;
-        }
 
         // Создание нового тела если пул не полон
         if (pool.size() < max_bodies) {
@@ -1719,7 +1571,6 @@ public:
 
             TracyPlot("PhysicsBodyPoolExpansions", 1.0f);
             return new_id;
-        }
 
         // Пул полон - найти наименее используемое тело для переиспользования
         auto oldest = std::min_element(pool.begin(), pool.end(),
@@ -1735,10 +1586,8 @@ public:
 
             TracyPlot("PhysicsBodyPoolReuses", 1.0f);
             return oldest->id;
-        }
 
         return std::nullopt;
-    }
 
     // Освобождение тела
     void free_body(JPH::BodyID body_id) {
@@ -1753,8 +1602,6 @@ public:
             deactivate_body(body_id);
 
             TracyPlot("PhysicsBodyPoolFrees", 1.0f);
-        }
-    }
 
     // Очистка неиспользуемых тел
     void cleanup_unused(uint64_t age_threshold = 60 * 30) { // 30 секунд
@@ -1764,10 +1611,6 @@ public:
                 // Полное уничтожение старого тела
                 destroy_body(entry.id);
                 entry.id = JPH::BodyID::cInvalidBodyID;
-            }
-        }
-    }
-};
 ```
 
 ---
@@ -1815,7 +1658,6 @@ world.system<>("PhysicsProfilingSystem")
         // Логирование аномалий
         if (stats.mNumActiveBodies > 1000) {
             log_warning("High active body count: {}", stats.mNumActiveBodies);
-        }
     });
 ```
 
@@ -1840,17 +1682,14 @@ world.system<const PhysicsDebugInfo>("PhysicsDebugRenderSystem")
         // Рендеринг контактов
         if (debug_info.show_contacts) {
             render_contact_points(cmd, debug_info);
-        }
 
         // Рендеринг скоростей
         if (debug_info.show_velocities) {
             render_velocity_vectors(cmd, debug_info);
-        }
 
         // Рендеринг AABB
         if (debug_info.show_aabbs) {
             render_aabb_debug(cmd, debug_info);
-        }
 
         TracyPlot("PhysicsDebugRendered", 1.0f);
     });
@@ -1888,19 +1727,12 @@ void render_collider_debug(VkCommandBuffer cmd, const PhysicsDebugInfo& debug_in
                 break;
             case JPH::EShapeType::Mesh:
                 render_mesh_debug(cmd, shape, transform);
-                break;
             case JPH::EShapeType::Convex:
                 render_convex_debug(cmd, shape, transform);
-                break;
             case JPH::EShapeType::Sphere:
                 render_sphere_debug(cmd, shape, transform);
-                break;
             case JPH::EShapeType::Box:
                 render_box_debug(cmd, shape, transform);
-                break;
-        }
-    }
-}
 ```
 
 ### Логирование и мониторинг физики
@@ -1914,17 +1746,12 @@ world.observer<PhysicsBody>("PhysicsEventLogger")
                 e.name(), body.id.GetIndex());
     });
 
-world.observer<PhysicsBody>("PhysicsEventLogger")
     .event(flecs::OnRemove)
-    .each( {
         log_info("Physics body destroyed for entity {}: body_id={}",
-                e.name(), body.id.GetIndex());
-    });
 
 // Система для мониторинга критических событий
 world.system<DestructibleVoxelObject>("PhysicsEventMonitor")
     .kind(flecs::OnUpdate)
-    .each( {
         if (destructible.is_fractured && !destructible.was_fractured) {
             log_warning("Voxel object fractured: damage={}, strength={}",
                        destructible.current_damage, destructible.strength);
@@ -1935,9 +1762,7 @@ world.system<DestructibleVoxelObject>("PhysicsEventMonitor")
                 {"damage", destructible.current_damage},
                 {"strength", destructible.strength},
                 {"position", get_entity_position(destructible.entity)}
-            });
         }
-    });
 ```
 
 ---
@@ -1973,9 +1798,6 @@ void create_voxel_chunk_with_physics(flecs::world& world,
     VoxelCollider collider = {
         .type = VoxelCollider::HEIGHTFIELD,
         .chunk = chunk_entity,
-        .chunk_x = chunk_data.x,
-        .chunk_y = chunk_data.y,
-        .chunk_z = chunk_data.z,
         .needs_rebuild = true,
         .heightfield_data = heightfield_data
     };
@@ -1997,7 +1819,6 @@ void create_voxel_chunk_with_physics(flecs::world& world,
         if (auto* transform = chunk_entity.get_mut<Transform>()) {
             physics_body.set_transform(*transform, false);
         }
-    }
 
     // 4. Настройка двойной буферизации трансформаций
     chunk_entity.set<DoubleBufferedTransform>({
@@ -2005,7 +1826,6 @@ void create_voxel_chunk_with_physics(flecs::world& world,
         .previous = chunk_entity.get<Transform>()->value(),
         .physics = chunk_entity.get<Transform>()->value(),
         .interpolate = true
-    });
 
     // 5. Регистрация в spatial partitioning
     register_chunk_in_spatial_grid(chunk_entity, chunk_data.world_position);
@@ -2015,7 +1835,6 @@ void create_voxel_chunk_with_physics(flecs::world& world,
              chunk_data.voxels.size());
 
     TracyPlot("PhysicsChunksCreated", 1.0f);
-}
 ```
 
 ### Пример: Интерактивный воксельный объект
@@ -2077,7 +1896,6 @@ void create_destructible_voxel_wall(flecs::world& world,
         .fracture_threshold = 250.0f,
         .debris_lifetime = 15.0f,
         .fracture_seed = generate_random_seed()
-    });
 
     // 6. Настройка двойной буферизации
     wall_entity.set<DoubleBufferedTransform>({
@@ -2085,13 +1903,11 @@ void create_destructible_voxel_wall(flecs::world& world,
         .previous = wall_entity.get<Transform>()->value(),
         .physics = wall_entity.get<Transform>()->value(),
         .interpolate = true
-    });
 
     log_info("Created destructible voxel wall at {} with size {}",
              glm::to_string(position), glm::to_string(size));
 
     TracyPlot("DestructibleObjectsCreated", 1.0f);
-}
 ```
 
 ### Пример: Жидкость в воксельном мире
@@ -2136,7 +1952,6 @@ void create_voxel_fluid(flecs::world& world,
         .material = get_fluid_material(fluid_type),
         .is_transparent = true,
         .blend_mode = BlendMode::ALPHA_BLEND
-    });
 
     // 5. Создание физического представления (particle-based)
     initialize_fluid_physics(fluid_entity, fluid);
@@ -2153,7 +1968,6 @@ void create_voxel_fluid(flecs::world& world,
              fluid.cells.size());
 
     TracyPlot("FluidVolumesCreated", 1.0f);
-}
 ```
 
 ---
@@ -2189,7 +2003,6 @@ void validate_and_fix_heightfield(VoxelCollider& collider) {
                  expected_samples, data.heights.size());
         // Автоматическая коррекция
         data.heights.resize(expected_samples, 0.0f);
-    }
 
     // 3. Проверка значений "no collision"
     constexpr float NO_COLLISION = std::numeric_limits<float>::max();
@@ -2199,13 +2012,10 @@ void validate_and_fix_heightfield(VoxelCollider& collider) {
         if (height != NO_COLLISION) {
             has_valid_collision = true;
             break;
-        }
-    }
 
     if (!has_valid_collision) {
         log_warning("HeightField has no collision values, adding default");
         data.heights[0] = 0.0f; // Добавляем хотя бы одну точку коллизии
-    }
 
     // 4. Проверка block_size
     if (data.sample_count % data.block_size != 0) {
@@ -2213,14 +2023,11 @@ void validate_and_fix_heightfield(VoxelCollider& collider) {
                    data.sample_count, data.block_size);
         // Находим ближайший подходящий block_size
         data.block_size = find_suitable_block_size(data.sample_count);
-    }
 
     // 5. Перестройка коллайдера
     collider.needs_rebuild = true;
     if (!collider.rebuild()) {
         log_error("Failed to rebuild HeightField after validation");
-    }
-}
 ```
 
 ### Проблема: Производительность при большом количестве тел
@@ -2267,12 +2074,10 @@ void adjust_physics_parameters() {
     } else if (active_bodies > 500) {
         // Умеренная оптимизация
         get_physics_system().SetNumVelocitySteps(2);
-        get_physics_system().SetNumPositionSteps(1);
     } else {
         // Высокая точность для низкой нагрузки
         get_physics_system().SetNumVelocitySteps(4);
         get_physics_system().SetNumPositionSteps(2);
-    }
 
     // Настройка шага симуляции на основе FPS
     float target_fps = 60.0f;
@@ -2281,11 +2086,8 @@ void adjust_physics_parameters() {
     if (current_fps < target_fps * 0.8f) {
         // Увеличение шага симуляции для повышения производительности
         set_physics_fixed_delta_time(1.0f / 30.0f); // 30 FPS physics
-    } else {
         // Нормальный шаг симуляции
         set_physics_fixed_delta_time(1.0f / 60.0f); // 60 FPS physics
-    }
-}
 ```
 
 ### Проблема: Рассинхронизация физики и рендеринга
@@ -2329,7 +2131,6 @@ void implement_frame_interpolation() {
     if (physics_frame_completed) {
         std::swap(previous_physics_frame, current_physics_frame);
         physics_frame_completed = false;
-    }
 
     // Интерполяция для рендеринга
     float interpolation_alpha = calculate_interpolation_alpha();
@@ -2342,8 +2143,6 @@ void implement_frame_interpolation() {
         );
 
         update_render_transform(i, interpolated);
-    }
-}
 
 float calculate_interpolation_alpha() {
     // alpha = (current_time - last_physics_time) / physics_delta_time
@@ -2354,7 +2153,6 @@ float calculate_interpolation_alpha() {
     auto elapsed = std::chrono::duration<float>(current_time - last_physics_time).count();
 
     return glm::clamp(elapsed / physics_delta_time, 0.0f, 1.0f);
-}
 ```
 
 ### Проблема: Сетевые рассинхронизации в мультиплеере
@@ -2407,14 +2205,12 @@ void implement_prediction_and_reconciliation() {
             .velocity = current_velocity,
             .input_sequence = input_sequence,
             .physics_tick = current_physics_tick
-        };
 
         // Симуляция предсказания
         simulate_prediction(state);
 
         predicted_states.push_back(state);
         apply_predicted_state(state);
-    }
 
     // Коррекция при получении серверного состояния
     void reconcile_state(const ServerState& server_state) {
@@ -2432,13 +2228,9 @@ void implement_prediction_and_reconciliation() {
 
                 // Ресимуляция последующих состояний
                 resimulate_from_state(server_state);
-            }
 
             // Удаление обработанных состояний
             predicted_states.erase(predicted_states.begin(), it + 1);
-        }
-    }
-}
 ```
 
 ---
@@ -2463,27 +2255,18 @@ double-buffering**.
 │  │  │ P:HIGH  │ │ P:HIGH  │ │ P:MED   │ │ P:MED   │ │ P:LOW   │         │  │
 │  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘         │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                               │
-│                              ▼                                               │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │                    Jolt JobSystem Thread Pool                          │  │
 │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐         │  │
 │  │  │  Thread 1  │ │  Thread 2  │ │  Thread 3  │ │  Thread 4  │         │  │
 │  │  │ Building   │ │ Building   │ │ Building   │ │ Idle       │         │  │
 │  │  │ MeshShape  │ │ MeshShape  │ │ MeshShape  │ │            │         │  │
 │  │  └────────────┘ └────────────┘ └────────────┘ └────────────┘         │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-│                              │                                               │
-│                              ▼                                               │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
 │  │                    Double-Buffered Collider Swap                       │  │
 │  │  ┌─────────────────┐                    ┌─────────────────┐           │  │
 │  │  │ Current Shape   │ ◄──── Swap ──────► │ Pending Shape   │           │  │
 │  │  │ (Active/Used)   │                    │ (Ready/New)     │           │  │
 │  │  └─────────────────┘                    └─────────────────┘           │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
 
 ### Double-Buffered Collider Component
 
@@ -2513,7 +2296,6 @@ export struct ColliderRebuildTask {
     RebuildPriority priority{RebuildPriority::Medium};
     uint64_t submit_frame{0};
     std::function<void(JPH::RefConst<JPH::Shape>)> callback;
-};
 
 /// Double-buffered коллайдер для воксельных объектов
 export class DoubleBufferedCollider {
@@ -2555,11 +2337,9 @@ private:
     JPH::RefConst<JPH::Shape> pending_shape_;
     std::atomic<bool> rebuild_in_progress_{false};
     std::future<JPH::RefConst<JPH::Shape>> rebuild_future_;
-};
 
 /// Система асинхронной перестройки коллайдеров
 export class AsyncColliderRebuildSystem {
-public:
     /// Создаёт систему с заданным количеством потоков.
     [[nodiscard]] static auto create(
         uint32_t thread_count = 4,
@@ -2568,7 +2348,6 @@ public:
 
     ~AsyncColliderRebuildSystem() noexcept;
 
-    // Move-only
     AsyncColliderRebuildSystem(AsyncColliderRebuildSystem&&) noexcept;
     AsyncColliderRebuildSystem& operator=(AsyncColliderRebuildSystem&&) noexcept;
     AsyncColliderRebuildSystem(const AsyncColliderRebuildSystem&) = delete;
@@ -2586,7 +2365,6 @@ public:
     /// Получает количество активных потоков.
     [[nodiscard]] auto active_thread_count() const noexcept -> uint32_t;
 
-private:
     explicit AsyncColliderRebuildSystem(
         uint32_t thread_count,
         uint32_t max_queue_size
@@ -2594,7 +2372,6 @@ private:
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::physics
 ```
@@ -2630,7 +2407,6 @@ auto DoubleBufferedCollider::request_rebuild(
         // Уже идёт перестройка, новая задача будет отклонена
         // или можно добавить в очередь (depends on requirements)
         return;
-    }
 
     rebuild_in_progress_.store(true, std::memory_order_release);
 
@@ -2647,7 +2423,6 @@ auto DoubleBufferedCollider::request_rebuild(
 
         for (auto const& v : vertices) {
             jolt_vertices.push_back({v.x, v.y, v.z});
-        }
 
         // Создание MeshShape
         JPH::MeshShapeSettings settings(
@@ -2660,29 +2435,21 @@ auto DoubleBufferedCollider::request_rebuild(
         auto result = settings.Create();
         if (result.IsValid()) {
             return result.Get();
-        }
 
         return nullptr;
     });
-}
 
 auto DoubleBufferedCollider::current_shape() const noexcept -> JPH::RefConst<JPH::Shape> {
     return current_shape_;
-}
 
 auto DoubleBufferedCollider::try_swap() noexcept -> bool {
     if (!rebuild_in_progress_.load(std::memory_order_acquire)) {
         return false;
-    }
 
     if (!rebuild_future_.valid()) {
-        return false;
-    }
 
     auto status = rebuild_future_.wait_for(std::chrono::milliseconds(0));
     if (status != std::future_status::ready) {
-        return false;
-    }
 
     // Получаем результат
     pending_shape_ = rebuild_future_.get();
@@ -2693,18 +2460,12 @@ auto DoubleBufferedCollider::try_swap() noexcept -> bool {
         std::swap(current_shape_, pending_shape_);
         pending_shape_ = nullptr;
         return true;
-    }
-
-    return false;
-}
 
 auto DoubleBufferedCollider::has_pending() const noexcept -> bool {
     return pending_shape_ != nullptr;
-}
 
 auto DoubleBufferedCollider::is_rebuilding() const noexcept -> bool {
     return rebuild_in_progress_.load(std::memory_order_acquire);
-}
 
 // === AsyncColliderRebuildSystem ===
 
@@ -2713,7 +2474,6 @@ struct AsyncColliderRebuildSystem::Impl {
     struct TaskCompare {
         bool operator()(ColliderRebuildTask const& a, ColliderRebuildTask const& b) const {
             return static_cast<uint8_t>(a.priority) < static_cast<uint8_t>(b.priority);
-        }
     };
 
     std::priority_queue<
@@ -2735,7 +2495,6 @@ struct AsyncColliderRebuildSystem::Impl {
 
     uint32_t max_queue_size{1000};
     std::atomic<uint32_t> active_threads{0};
-};
 
 AsyncColliderRebuildSystem::AsyncColliderRebuildSystem(
     uint32_t thread_count,
@@ -2753,60 +2512,41 @@ AsyncColliderRebuildSystem::AsyncColliderRebuildSystem(
             while (impl_->running.load(std::memory_order_acquire)) {
                 ColliderRebuildTask task;
 
-                {
                     std::unique_lock lock(impl_->queue_mutex);
                     impl_->cv.wait(lock, [this]() {
                         return !impl_->task_queue.empty() ||
                                !impl_->running.load(std::memory_order_acquire);
-                    });
 
                     if (!impl_->running.load(std::memory_order_acquire)) {
                         break;
-                    }
 
                     if (impl_->task_queue.empty()) {
                         continue;
-                    }
 
                     task = std::move(const_cast<ColliderRebuildTask&>(impl_->task_queue.top()));
                     impl_->task_queue.pop();
-                }
 
                 impl_->active_threads.fetch_add(1, std::memory_order_relaxed);
 
                 // Build MeshShape
                 TracyZoneScopedN("BuildMeshShape");
 
-                std::vector<JPH::Float3> jolt_vertices;
                 jolt_vertices.reserve(task.vertices.size());
 
                 for (auto const& v : task.vertices) {
-                    jolt_vertices.push_back({v.x, v.y, v.z});
-                }
 
-                JPH::MeshShapeSettings settings(
-                    jolt_vertices.data(),
-                    static_cast<uint32_t>(jolt_vertices.size()),
                     reinterpret_cast<JPH::IndexedTriangle const*>(task.indices.data()),
                     static_cast<uint32_t>(task.indices.size() / 3)
-                );
 
-                auto result = settings.Create();
                 JPH::RefConst<JPH::Shape> shape = result.IsValid() ? result.Get() : nullptr;
 
                 // Store result
-                {
                     std::lock_guard lock(impl_->completed_mutex);
                     impl_->completed_shapes.emplace_back(task.entity_id, shape);
-                }
 
                 impl_->active_threads.fetch_sub(1, std::memory_order_relaxed);
 
                 TracyPlot("MeshShapesBuilt", 1.0f);
-            }
-        });
-    }
-}
 
 AsyncColliderRebuildSystem::~AsyncColliderRebuildSystem() noexcept {
     if (impl_) {
@@ -2816,66 +2556,45 @@ AsyncColliderRebuildSystem::~AsyncColliderRebuildSystem() noexcept {
         for (auto& thread : impl_->worker_threads) {
             if (thread.joinable()) {
                 thread.join();
-            }
-        }
-    }
-}
 
 AsyncColliderRebuildSystem::AsyncColliderRebuildSystem(AsyncColliderRebuildSystem&&) noexcept = default;
 AsyncColliderRebuildSystem& AsyncColliderRebuildSystem::operator=(AsyncColliderRebuildSystem&&) noexcept = default;
 
 auto AsyncColliderRebuildSystem::create(
-    uint32_t thread_count,
-    uint32_t max_queue_size
 ) noexcept -> std::expected<AsyncColliderRebuildSystem, RebuildError> {
     return AsyncColliderRebuildSystem(thread_count, max_queue_size);
-}
 
 auto AsyncColliderRebuildSystem::submit_task(ColliderRebuildTask&& task) noexcept -> void {
-    {
         std::lock_guard lock(impl_->queue_mutex);
 
         if (impl_->task_queue.size() >= impl_->max_queue_size) {
             // Drop lowest priority tasks
             // For now, just drop the new task
             TracyPlot("ColliderTasksDropped", 1.0f);
-            return;
-        }
 
         impl_->task_queue.push(std::move(task));
-    }
 
     impl_->cv.notify_one();
-}
 
 auto AsyncColliderRebuildSystem::process_completed_tasks() noexcept -> void {
     std::vector<std::pair<uint64_t, JPH::RefConst<JPH::Shape>>> completed;
 
-    {
-        std::lock_guard lock(impl_->completed_mutex);
         completed = std::move(impl_->completed_shapes);
         impl_->completed_shapes.clear();
-    }
 
     for (auto& [entity_id, shape] : completed) {
         if (shape) {
             // Find entity and update collider
             // This would integrate with ECS
             update_entity_collider(entity_id, shape);
-        }
-    }
 
     TracyPlot("ColliderTasksCompleted", static_cast<float>(completed.size()));
-}
 
 auto AsyncColliderRebuildSystem::queue_size() const noexcept -> size_t {
-    std::lock_guard lock(impl_->queue_mutex);
     return impl_->task_queue.size();
-}
 
 auto AsyncColliderRebuildSystem::active_thread_count() const noexcept -> uint32_t {
     return impl_->active_threads.load(std::memory_order_relaxed);
-}
 
 } // namespace projectv::physics
 ```
@@ -2902,14 +2621,11 @@ void register_collider_rebuild_systems(flecs::world& world) {
 
     // System: Try swap double-buffered colliders
     world.system<DoubleBufferedCollider, PhysicsBody>("ColliderSwapSystem")
-        .kind(flecs::PostUpdate)
         .each([](DoubleBufferedCollider& collider, PhysicsBody& body) {
             if (collider.try_swap()) {
                 // Update physics body with new shape
                 update_body_shape(body, collider.current_shape());
                 TracyPlot("ColliderSwaps", 1.0f);
-            }
-        });
 
     // Observer: Request rebuild on voxel modification
     world.observer<VoxelCollider>("VoxelColliderRebuildObserver")
@@ -2925,8 +2641,6 @@ void register_collider_rebuild_systems(flecs::world& world) {
             if (auto* destructible = e.get<DestructibleVoxelObject>()) {
                 if (destructible->is_fractured) {
                     priority = RebuildPriority::High;
-                }
-            }
 
             // Submit rebuild task
             ColliderRebuildTask task{
@@ -2941,8 +2655,6 @@ void register_collider_rebuild_systems(flecs::world& world) {
             vc.needs_rebuild = false;
 
             TracyPlot("ColliderRebuildRequested", 1.0f);
-        });
-}
 ```
 
 ### Explosion Handler Example
@@ -2988,14 +2700,11 @@ auto handle_explosion(
                 .submit_frame = current_frame
             };
             rebuild_system->submit_task(std::move(task));
-        }
-    }
 
     // 3. Create debris entities
     create_explosion_debris(world, epicenter, radius, force);
 
     TracyPlot("ExplosionChunksAffected", static_cast<float>(affected_chunks.size()));
-}
 ```
 
 ### Performance Metrics
@@ -3028,3 +2737,12 @@ auto handle_explosion(
 | Flecs Integration         | Специфицирован | P1        |
 | Explosion Handler         | Специфицирован | P1        |
 | Performance Optimization  | Специфицирован | P1        |
+
+---
+
+## Ссылки
+
+- [ADR-0003: ECS Architecture](../adr/0003-ecs-architecture.md)
+- [ADR-0004: Build & Modules](../adr/0004-build-and-modules-spec.md)
+- [CPU-GPU Physics Sync](../04_physics_ca/04_cpu_gpu_physics_sync.md)
+- [GPU Cellular Automata](../04_physics_ca/03_gpu_cellular_automata.md)

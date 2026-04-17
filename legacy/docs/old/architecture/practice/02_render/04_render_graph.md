@@ -2,6 +2,11 @@
 
 ---
 
+**Статус:** Спецификация
+**Уровень:** 🔴 Продвинутый
+**Дата:** 2026-02-22
+**Версия:** 1.0
+
 ## Обзор
 
 Render Graph — автоматическая система управления ресурсами и барьерами поверх Vulkan 1.4 Dynamic Rendering.
@@ -35,7 +40,6 @@ RenderGraph (PIMPL)
 │      └── compiled_: bool (1 byte)                           │
 │  Total: 8 bytes (external) + ~2KB (internal)                │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ### PassNode
 
@@ -52,7 +56,6 @@ PassNode
 │  pipeline_flags: VkPipelineStageFlags2 (8 bytes)            │
 │  Total: ~176 bytes per pass                                 │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ### ResourceNode
 
@@ -70,7 +73,6 @@ ResourceNode
 │  alias_of: uint32_t (4 bytes) → aliased resource            │
 │  Total: ~72 bytes per resource                              │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -84,31 +86,19 @@ ResourceNode
          └───────┬──────┘
                  │ add_pass() / add_resource()
                  ▼
-         ┌──────────────┐
          │  BUILDING    │ ←── Adding passes and resources
-         └───────┬──────┘
                  │ compile()
-                 ▼
-         ┌──────────────┐
          │   COMPILED   │ ←── Dependencies resolved
-         └───────┬──────┘
                  │ execute()
-                 ▼
     ┌────────────────────────┐
     │      EXECUTING         │ ←── Running passes
     │  (per-frame state)     │
     └───────────┬────────────┘
                 │ frame complete
-                ▼
-    ┌────────────────────────┐
     │   READY_FOR_FRAME      │ ←── Reset for next frame
-    └───────────┬────────────┘
                 │ resize / invalidate
-                ▼
-         ┌──────────────┐
          │   INVALID    │ ←── Needs recompile
          └──────────────┘
-```
 
 ### Resource State
 
@@ -120,30 +110,16 @@ Resource State Transitions
     └────────┬────────┘
              │ first pass uses it
              ▼
-    ┌─────────────────┐
     │    CREATED      │ ←── Physical allocation done
-    └────────┬────────┘
              │ pass writes
-             ▼
-    ┌─────────────────┐
     │    WRITTEN      │ ←── Data in resource valid
-    └────────┬────────┘
              │ pass reads
-             ▼
-    ┌─────────────────┐
     │    READ         │ ←── Resource being used
-    └────────┬────────┘
              │ last use
-             ▼
-    ┌─────────────────┐
     │   TRANSITIONED  │ ←── Layout transition for next use
-    └────────┬────────┘
              │ frame end
-             ▼
-    ┌─────────────────┐
     │    RECYCLED     │ ←── Available for aliasing
     └─────────────────┘
-```
 
 ### Barrier Generation
 
@@ -157,20 +133,13 @@ Pass A writes Resource X
     │  Find all passes that read X after A      │
     │  Find all passes that write X after A     │
     └───────────────────────────────────────────┘
-        │
-        ▼
-    ┌───────────────────────────────────────────┐
     │  For each dependent pass B:               │
     │    barrier.srcStage = A.pipelineStage     │
     │    barrier.srcAccess = A.accessMask       │
     │    barrier.dstStage = B.pipelineStage     │
     │    barrier.dstAccess = B.accessMask       │
     │    barrier.layout = X.optimalLayout       │
-    └───────────────────────────────────────────┘
-        │
-        ▼
     Insert barrier before first dependent pass
-```
 
 ---
 
@@ -209,7 +178,6 @@ export struct ResourceDesc {
     VkImageUsageFlags image_usage{0};
     VkBufferUsageFlags buffer_usage{0};
     bool transient{false};  ///< Может быть алиасен с другими
-};
 
 /// Хендл ресурса.
 export struct ResourceHandle {
@@ -218,7 +186,6 @@ export struct ResourceHandle {
     [[nodiscard]] auto valid() const noexcept -> bool {
         return index != UINT32_MAX;
     }
-};
 
 /// Флаги pass.
 export enum class PassFlags : uint32_t {
@@ -227,7 +194,6 @@ export enum class PassFlags : uint32_t {
     Transfer = 1 << 1,      ///< Transfer pass
     Present = 1 << 2,       ///< Конечный pass для present
     External = 1 << 3,      ///< Внешний ресурс (swapchain)
-};
 
 /// Контекст выполнения pass.
 export struct PassContext {
@@ -246,24 +212,20 @@ export struct PassContext {
 
     /// Получает descriptor для bindless.
     [[nodiscard]] auto get_descriptor_index(ResourceHandle handle) const noexcept -> uint32_t;
-};
 
 /// Описание pass.
 export struct PassDesc {
-    std::string name;
     std::function<void(PassContext const&)> execute;
     std::vector<ResourceHandle> reads;
     std::vector<ResourceHandle> writes;
     std::vector<ResourceHandle> creates;  ///< Создаёт новый ресурс
     PassFlags flags{PassFlags::None};
-};
 
 /// Render Graph.
 ///
 /// ## Thread Safety
 /// - build() не thread-safe
 /// - execute() вызывает passes из одного потока
-///
 /// ## Invariants
 /// - После compile() граф не может быть изменён
 /// - Все зависимости должны быть ацикличными (DAG)
@@ -279,18 +241,15 @@ public:
     RenderGraph& operator=(const RenderGraph&) = delete;
 
     /// Объявляет ресурс.
-    ///
     /// @param desc Описание ресурса
     /// @return Хендл для использования в passes
     [[nodiscard]] auto declare_resource(ResourceDesc const& desc) noexcept
         -> ResourceHandle;
 
     /// Объявляет внешний ресурс (swapchain image).
-    ///
     /// @param name Имя ресурса
     /// @param image External image
     /// @param view External image view
-    /// @return Хендл для использования в passes
     [[nodiscard]] auto declare_external(
         std::string_view name,
         VkImage image,
@@ -298,28 +257,21 @@ public:
     ) noexcept -> ResourceHandle;
 
     /// Добавляет pass в граф.
-    ///
     /// @param desc Описание pass
     /// @pre Все ресурсы из reads/writes/creates объявлены
     auto add_pass(PassDesc const& desc) noexcept -> void;
 
     /// Компилирует граф.
-    ///
     /// @param context Vulkan context
     /// @return void или ошибка
-    ///
     /// @pre Хоть один pass добавлен
     /// @post Граф готов к execute()
-    ///
     /// @note Вычисляет барьеры, алиасинг, порядок выполнения
     [[nodiscard]] auto compile(VulkanContext const& context) noexcept
         -> std::expected<void, GraphError>;
 
     /// Выполняет граф.
-    ///
     /// @param cmd Command buffer
-    /// @param context Vulkan context
-    ///
     /// @pre compile() успешно вызван
     /// @post Все passes выполнены в оптимальном порядке
     auto execute(VkCommandBuffer cmd, VulkanContext const& context) noexcept -> void;
@@ -351,7 +303,6 @@ private:
 
     /// Алиасинг ресурсов.
     auto compute_resource_aliasing() noexcept -> void;
-};
 
 /// Коды ошибок Render Graph.
 export enum class GraphError : uint8_t {
@@ -360,7 +311,6 @@ export enum class GraphError : uint8_t {
     InvalidPass,
     CompilationFailed,
     ResourceAllocationFailed
-};
 
 } // namespace projectv::render
 ```
@@ -454,7 +404,6 @@ struct AliasedResource {
 ///
 /// ## Memory Efficiency
 /// Ресурсы с непересекающимися lifetimes разделяют одну память.
-///
 /// ## Invariants
 /// - Один physical resource используется только одним logical resource за раз
 /// - Memory aliasing происходит через vkBindImageMemory2
@@ -474,7 +423,6 @@ public:
     ResourcePool& operator=(const ResourcePool&) = delete;
 
     /// Аллоцирует ресурс.
-    ///
     /// @param desc Описание ресурса
     /// @param first_use Индекс первого использующего pass
     /// @param last_use Индекс последнего использующего pass
@@ -504,7 +452,6 @@ private:
     ResourcePool() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render
 ```
@@ -539,7 +486,6 @@ function GENERATE_BARRIERS(graph):
                 barriers.append((use_b.pass_index, barrier))
 
     return barriers
-```
 
 ### Complexity
 
@@ -577,22 +523,13 @@ auto depth = graph.declare_resource({
 
 auto albedo = graph.declare_resource({
     .name = "gbuffer_albedo",
-    .type = ResourceType::Texture2D,
     .format = VK_FORMAT_R8G8B8A8_SRGB,
-    .extent = {1920, 1080, 1},
     .image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT,
-    .transient = true
-});
 
 auto lighting = graph.declare_resource({
     .name = "lighting_output",
-    .type = ResourceType::Texture2D,
     .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-    .extent = {1920, 1080, 1},
-    .image_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                    VK_IMAGE_USAGE_SAMPLED_BIT
-});
 
 auto output = graph.declare_external("swapchain", swapchain_image, swapchain_view);
 
@@ -615,28 +552,18 @@ graph.add_pass(
 );
 
 // Lighting Pass
-graph.add_pass(
     PassBuilder("lighting")
         .read(depth)
         .read(albedo)
         .write(lighting)
-        .execute([&](PassContext const& ctx) {
             // Lighting calculation
-        })
-        .build()
-);
 
 // Present Pass
-graph.add_pass(
     PassBuilder("present")
         .read(lighting)
         .write(output)
         .present(output)
-        .execute([&](PassContext const& ctx) {
             // Copy to swapchain
-        })
-        .build()
-);
 
 // Компиляция
 auto result = graph.compile(context);
@@ -664,8 +591,6 @@ graph.execute(cmd, context);
 │  │  │Resource │    │ Passes  │    │ Graph   │    │ Frame   │        │  │
 │  │  └─────────┘    └─────────┘    └─────────┘    └─────────┘        │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │                        Compilation Phase                           │  │
 │  │                                                                    │  │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │  │
@@ -678,28 +603,25 @@ graph.execute(cmd, context);
 │  │  │   Resource   │                   │   Barrier    │            │  │
 │  │  │   Aliasing   │                   │   Queue      │            │  │
 │  │  └──────────────┘                   └──────────────┘            │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
 │  │                        Execution Phase                             │  │
-│  │                                                                    │  │
 │  │  ┌─────────────────────────────────────────────────────────────┐  │  │
 │  │  │  Pass 0 (G-Buffer)                                          │  │  │
 │  │  │  [Write depth, albedo]                                      │  │  │
 │  │  └───────────────────────────┬─────────────────────────────────┘  │  │
 │  │                              │ Barrier: COLOR → SHADER_READ       │  │
 │  │                              ▼                                    │  │
-│  │  ┌─────────────────────────────────────────────────────────────┐  │  │
 │  │  │  Pass 1 (Lighting)                                          │  │  │
 │  │  │  [Read depth, albedo] → [Write lighting]                    │  │  │
-│  │  └───────────────────────────┬─────────────────────────────────┘  │  │
 │  │                              │ Barrier: COLOR → TRANSFER_SRC      │  │
-│  │                              ▼                                    │  │
-│  │  ┌─────────────────────────────────────────────────────────────┐  │  │
 │  │  │  Pass 2 (Present)                                           │  │  │
 │  │  │  [Read lighting] → [Write swapchain]                        │  │  │
 │  │  └─────────────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
+
+---
+
+## Ссылки
+
+- [Vulkan 1.4 Specification](../02_render/01_vulkan_spec.md)
+- [Dynamic Rendering](../02_render/01_vulkan_spec.md#dynamic-rendering)
+- [Synchronization2 Barriers](../02_render/01_vulkan_spec.md#synchronization2)

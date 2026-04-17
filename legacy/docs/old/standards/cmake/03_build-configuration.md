@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-004
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет обязательные настройки конфигурации сборки для ProjectV. Все типы сборки, флаги
@@ -25,6 +31,16 @@ ProjectV распознаёт четыре стандартных типа сб�
 ### 3.2 Выбор типа сборки
 
 ```cmake
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- Документация CMake 3.30
+- Руководство по компилятору Clang 18+
+- СТВ-CMAKE-001: Спецификация системы сборки CMake
+
+---
+
 # Тип сборки по умолчанию
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Тип сборки" FORCE)
@@ -48,6 +64,7 @@ endif()
 ### 4.1 Базовые флаги (все конфигурации)
 
 ```cmake
+
 # ОБЯЗАТЕЛЬНО: Базовые флаги компилятора для Clang 18+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_options(
@@ -66,6 +83,7 @@ endif()
 ### 4.2 Конфигурация Debug
 
 ```cmake
+
 # Флаги конфигурации Debug
 set(CMAKE_CXX_FLAGS_DEBUG ""
     CACHE STRING "Флаги Debug" FORCE
@@ -74,8 +92,6 @@ set(CMAKE_CXX_FLAGS_DEBUG ""
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS_DEBUG
         "-O0 -g3 -gsplit-dwarf"
-        CACHE STRING "Флаги Debug" FORCE
-    )
 
     # AddressSanitizer и UndefinedBehaviorSanitizer
     option(ENABLE_ASAN "Включить AddressSanitizer" ON)
@@ -83,12 +99,12 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         add_compile_options(-fsanitize=address,undefined)
         add_link_options(-fsanitize=address,undefined)
     endif()
-endif()
 ```
 
 ### 4.3 Конфигурация Release
 
 ```cmake
+
 # Флаги конфигурации Release
 set(CMAKE_CXX_FLAGS_RELEASE ""
     CACHE STRING "Флаги Release" FORCE
@@ -97,8 +113,6 @@ set(CMAKE_CXX_FLAGS_RELEASE ""
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS_RELEASE
         "-O3 -DNDEBUG -flto=thin -ffunction-sections -fdata-sections"
-        CACHE STRING "Флаги Release" FORCE
-    )
 
     # Оптимизация времени линковки
     add_link_options(-flto=thin)
@@ -108,12 +122,12 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if(ENABLE_NATIVE_ARCH)
         add_compile_options(-march=native)
     endif()
-endif()
 ```
 
 ### 4.4 Конфигурация RelWithDebInfo
 
 ```cmake
+
 # Флаги конфигурации RelWithDebInfo
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO ""
     CACHE STRING "Флаги RelWithDebInfo" FORCE
@@ -122,14 +136,13 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO ""
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO
         "-O2 -g2 -DNDEBUG"
-        CACHE STRING "Флаги RelWithDebInfo" FORCE
-    )
 endif()
 ```
 
 ### 4.5 Конфигурация MinSizeRel
 
 ```cmake
+
 # Флаги конфигурации MinSizeRel
 set(CMAKE_CXX_FLAGS_MINSIZEREL ""
     CACHE STRING "Флаги MinSizeRel" FORCE
@@ -138,8 +151,6 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL ""
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS_MINSIZEREL
         "-Os -DNDEBUG -ffunction-sections -fdata-sections"
-        CACHE STRING "Флаги MinSizeRel" FORCE
-    )
 endif()
 ```
 
@@ -150,6 +161,7 @@ endif()
 ### 5.1 Базовые флаги линковщика
 
 ```cmake
+
 # ОБЯЗАТЕЛЬНО: Линковка с libc++
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_link_options(
@@ -162,6 +174,7 @@ endif()
 ### 5.2 Платформенно-зависимые флаги линковщика
 
 ```cmake
+
 # Windows
 if(WIN32)
     add_link_options(
@@ -192,6 +205,7 @@ endif()
 ### 6.1 Глобальные определения
 
 ```cmake
+
 # Определения версии
 target_compile_definitions(ProjectV.Core
     PUBLIC
@@ -221,6 +235,7 @@ target_compile_definitions(ProjectV.Core
 ### 6.2 Специфичные для конфигурации определения
 
 ```cmake
+
 # Определения для Debug
 target_compile_definitions(ProjectV.Core
     PRIVATE
@@ -241,6 +256,7 @@ target_compile_definitions(ProjectV.Core
 ### 7.1 Link-Time Optimization (LTO)
 
 ```cmake
+
 # Конфигурация LTO
 option(ENABLE_LTO "Включить Link-Time Optimization" ON)
 
@@ -256,13 +272,12 @@ if(ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
         else()
             message(WARNING "LTO не поддерживается: ${LTO_ERROR}")
         endif()
-    endif()
-endif()
 ```
 
 ### 7.2 Profile-Guided Optimization (PGO)
 
 ```cmake
+
 # Конфигурация PGO
 option(ENABLE_PGO "Включить Profile-Guided Optimization" OFF)
 
@@ -276,7 +291,6 @@ if(ENABLE_PGO)
         add_compile_options(-fprofile-use=${CMAKE_BINARY_DIR}/pgo)
         add_link_options(-fprofile-use=${CMAKE_BINARY_DIR}/pgo)
     endif()
-endif()
 ```
 
 ---
@@ -299,7 +313,6 @@ if(ENABLE_ASAN)
         -fno-optimize-sibling-calls
     )
     add_link_options(-fsanitize=address)
-endif()
 ```
 
 ### 8.2 UndefinedBehaviorSanitizer (UBSan)
@@ -331,7 +344,6 @@ if(ENABLE_TSAN)
         -fno-omit-frame-pointer
     )
     add_link_options(-fsanitize=thread)
-endif()
 ```
 
 ### 8.4 MemorySanitizer (MSan)
@@ -349,7 +361,6 @@ if(ENABLE_MSAN)
         -fno-omit-frame-pointer
     )
     add_link_options(-fsanitize=memory)
-endif()
 ```
 
 ---
@@ -371,10 +382,6 @@ if(ENABLE_COVERAGE)
         -fcoverage-mapping
     )
     add_link_options(
-        -fprofile-instr-generate
-        -fcoverage-mapping
-    )
-endif()
 ```
 
 ---
@@ -401,7 +408,6 @@ if(ENABLE_UNITY_BUILD)
     set_source_files_properties(
         src/core/special_file.cpp
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
-    )
 endif()
 ```
 
@@ -423,7 +429,6 @@ if(ENABLE_CCACHE)
     else()
         message(WARNING "ccache не найден")
     endif()
-endif()
 ```
 
 ---
@@ -445,3 +450,19 @@ endif()
 3. Отключение предупреждений в любом типе сборки
 4. Санитайзеры в сборках Release
 5. `-fno-exceptions` или `-fno-rtti` (исключения и RTTI обязательны)
+
+---
+
+## 13. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 14. Связанные документы
+
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](00_specification.md)
+- [СТВ-CMAKE-002: Стандарт структуры проекта CMake](01_basics-structure.md)
+- [СТВ-CMAKE-003: Стандарт управления зависимостями](02_dependencies.md)

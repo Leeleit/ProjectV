@@ -2,6 +2,11 @@
 
 ---
 
+**Статус:** Утверждено
+**Уровень:** 🔴 Продвинутый
+**Дата:** 2026-02-22
+**Версия:** 3.0 (Enterprise)
+
 ## Обзор
 
 ProjectV использует **Floating Origin** архитектуру для поддержки гигантских миров (64+ км) с точностью до миллиметра.
@@ -31,7 +36,6 @@ IEEE 754 Single Precision (float):
 - На 1000 км: точность ≈ 0.12 метров (12 см!)
 
 Результат: Z-fighting, jitter, некорректная физика
-```
 
 ### Решение: Floating Origin
 
@@ -46,7 +50,6 @@ Origin offset: (0, 0, 0)          Origin offset: (5, 0, 5)
 
 Физическая позиция объекта (абсолютная):
 (5, 50, 5) + (95, 50, 195) = (100, 50, 200) — неизменна
-```
 
 ---
 
@@ -67,7 +70,6 @@ WorldCoordinate (16 bytes, 128-bit)
 
 Sector Size = 4096 метров (relocatable unit)
 Sector Coordinates: int32_t (±2^15 секторов = ±134 миллионов км)
-```
 
 ### FloatingOrigin
 
@@ -83,7 +85,6 @@ FloatingOrigin (PIMPL)
 │      └── on_origin_shift_: callback (32 bytes)              │
 │  Total: 8 bytes (external) + ~100 bytes (internal)          │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ### Transform (GPU-aligned)
 
@@ -98,7 +99,6 @@ TransformComponent (64 bytes, GPU-aligned)
 │  padding1: 4 bytes                                           │
 │  Total: 64 bytes (cache-line friendly)                      │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -115,26 +115,13 @@ Origin Shift Decision
              │ |local_pos| > threshold?
              │ YES
              ▼
-    ┌──────────────────┐
     │   CALCULATE_NEW  │
     │     ORIGIN       │
-    └────────┬─────────┘
              │
-             ▼
-    ┌──────────────────┐
     │ SHIFT_ALL_ENTITIES│ ←── Вычесть offset из всех позиций
-    └────────┬─────────┘
-             │
-             ▼
-    ┌──────────────────┐
     │ UPDATE_SECTOR    │ ←── Обновить current_sector_
-    └────────┬─────────┘
-             │
-             ▼
-    ┌──────────────────┐
     │ NOTIFY_SYSTEMS   │ ←── Callback для физики, рендера
     └──────────────────┘
-```
 
 ### Sector Loading State
 
@@ -146,25 +133,14 @@ Sector Lifecycle
     └──────┬──────┘
            │ player enters load radius
            ▼
-    ┌─────────────┐
     │   LOADING   │ ←── Генерация/загрузка данных
-    └──────┬──────┘
            │ data ready
-           ▼
-    ┌─────────────┐
     │   ACTIVE    │ ←── Сектор полностью загружен
-    └──────┬──────┘
            │ player exits unload radius
-           ▼
-    ┌─────────────┐
     │  UNLOADING  │ ←── Сохранение/освобождение
-    └──────┬──────┘
            │ cleanup complete
-           ▼
-    ┌─────────────┐
     │   UNLOADED  │ ←── Сектор удалён из памяти
     └─────────────┘
-```
 
 ---
 
@@ -215,7 +191,6 @@ export struct SectorCoord {
 /// ## Precision
 /// - Сектор: int32_t → ±2^15 секторов = ±134M км
 /// - Локальная позиция: float → точность < 1мм при SECTOR_SIZE=4096
-///
 /// ## Invariants
 /// - local_position всегда в пределах [-SECTOR_SIZE/2, SECTOR_SIZE/2]
 export struct WorldCoordinate {
@@ -233,7 +208,6 @@ export struct WorldCoordinate {
 
     /// Нормализует local_position (держит в пределах сектора).
     auto normalize() noexcept -> void;
-};
 
 } // namespace projectv::world
 ```
@@ -260,11 +234,9 @@ export using OriginShiftCallback = std::move_only_function<void(glm::vec3 const&
 ///
 /// ## Purpose
 /// Поддерживает камеру в (0, 0, 0), сдвигая все объекты при необходимости.
-///
 /// ## Thread Safety
 /// - update() вызывается из main thread
 /// - callbacks вызываются синхронно
-///
 /// ## Invariants
 /// - Камера всегда в local_position (0, 0, 0)
 /// - current_sector_ отражает сектор камеры
@@ -280,16 +252,13 @@ public:
     FloatingOrigin& operator=(const FloatingOrigin&) = delete;
 
     /// Обновляет origin при необходимости.
-    ///
     /// @param camera_local_position Позиция камеры в локальных координатах
     /// @return true если произошёл сдвиг origin
-    ///
     /// @pre camera_local_position — позиция относительно текущего origin
     /// @post Если |position| > threshold, все позиции сдвинуты
     auto update(glm::vec3 const& camera_local_position) noexcept -> bool;
 
     /// Регистрирует callback для сдвига origin.
-    ///
     /// @param callback Функция, вызываемая при сдвиге
     auto on_origin_shift(OriginShiftCallback callback) noexcept -> void;
 
@@ -339,12 +308,9 @@ export namespace coord_convert {
 /// Преобразует позицию Jolt → Vulkan.
 [[nodiscard]] inline auto jolt_to_vulkan(glm::vec3 const& pos) noexcept -> glm::vec3 {
     return {pos.x, -pos.y, pos.z};
-}
 
 /// Преобразует позицию Vulkan → Jolt.
 [[nodiscard]] inline auto vulkan_to_jolt(glm::vec3 const& pos) noexcept -> glm::vec3 {
-    return {pos.x, -pos.y, pos.z};
-}
 
 /// Преобразует quaternion Jolt → Vulkan.
 [[nodiscard]] auto jolt_to_vulkan_quat(glm::quat const& q) noexcept -> glm::quat;
@@ -371,7 +337,6 @@ export namespace coord_convert {
         0.0f,  0.0f,  0.5f,  1.0f
     };
     return correction * proj;
-}
 
 } // namespace coord_convert
 
@@ -396,12 +361,9 @@ export namespace coord_convert {
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                    │                                     │
 │                                    ▼                                     │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                    Floating Origin Space                          │    │
 │  │  Camera always at (0, 0, 0)                                       │    │
 │  │  All entities positioned relative to camera                      │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                    │                                     │
 │           ┌────────────────────────┼────────────────────────┐           │
 │           ▼                        ▼                        ▼           │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
@@ -410,24 +372,15 @@ export namespace coord_convert {
 │  │ Sector-relative │ │ Sector-relative │ │ Pixels          │          │
 │  └────────┬────────┘  └────────┬────────┘  └─────────────────┘          │
 │           │                    │                                        │
-│           │                    │                                        │
 │           ▼                    ▼                                        │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                    Render Transform                               │    │
 │  │  Y-flip for Vulkan NDC                                           │    │
 │  │  FrontFace = CLOCKWISE (due to Y-flip)                           │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                    │                                     │
-│                                    ▼                                     │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                    Vulkan NDC                                     │    │
 │  │  X: [-1, 1] left → right                                         │    │
 │  │  Y: [-1, 1] top → bottom (Y-DOWN!)                               │    │
 │  │  Z: [0, 1] near → far                                            │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ### Transformation Pipeline
 
@@ -453,7 +406,6 @@ Entity Position Flow:
 5. GPU Submission:
    MVP = projection * view * model
    gl_Position = MVP * vertex_position
-```
 
 ---
 
@@ -473,7 +425,6 @@ With Floating Origin:
 - SVO depth per sector = 12
 - Entities can span multiple sectors
 - Seamless transitions via sector loading
-```
 
 ### Sector-based SVO
 
@@ -513,7 +464,6 @@ public:
 private:
     std::unordered_map<SectorCoord, SVOTree, SectorCoordHash> sectors_;
     SectorSVOConfig config_;
-};
 ```
 
 ---
@@ -532,7 +482,6 @@ private:
   B----C                            B----C
 
 Winding: A→B→C = CCW                 Winding: A→B→C = CW
-```
 
 ### Vulkan Configuration
 
@@ -566,3 +515,11 @@ VkPipelineRasterizationStateCreateInfo rasterization{
 | Jolt → Vulkan   | `scale(1, -1, 1)`                                           |
 | Vulkan → Jolt   | `scale(1, -1, 1)` (инволюция)                               |
 | OpenGL → Vulkan | `scale(1, -1, 1) × translate(0, 0, 0.5) × scale(1, 1, 0.5)` |
+
+---
+
+## Ссылки
+
+- [SVO Architecture](../03_voxel/01_svo_architecture.md)
+- [Vulkan 1.4 Specification](../02_render/01_vulkan_spec.md)
+- [Physics Bridge](../04_physics_ca/01_jolt_vulkan_bridge.md)

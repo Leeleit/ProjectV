@@ -4,6 +4,8 @@
 
 ---
 
+**🔴 Уровень 3: Продвинутый** — Отладка Vulkan шейдеров и GPU-кода.
+
 ## Проблема
 
 Вы написали шейдер, но экран черный. `std::cout` на GPU не работает. Без инструментов отладки вы не сможете:
@@ -46,8 +48,6 @@ void init_renderdoc() {
         if (RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_6_0, (void**)&rdoc_api) == 1) {
             rdoc_api->SetCaptureFilePathTemplate("captures/projectv_");
         }
-    }
-}
 #endif
 ```
 
@@ -67,7 +67,6 @@ void capture_frame() {
         // Рендеринг...
         rdoc_api->EndFrameCapture(nullptr, nullptr);
     }
-}
 ```
 
 ---
@@ -127,7 +126,6 @@ VkShaderModule create_shader_module(const std::vector<char>& code) {
         throw std::runtime_error("Failed to create shader module!");
     }
     return shaderModule;
-}
 ```
 
 ### Проблема 2: Артефакты рендеринга
@@ -146,8 +144,6 @@ void validate_indices(const std::vector<uint32_t>& indices, uint32_t vertexCount
         if (index >= vertexCount) {
             std::cerr << "Invalid index: " << index << " >= " << vertexCount << std::endl;
         }
-    }
-}
 ```
 
 ### Проблема 3: Низкая производительность
@@ -174,7 +170,6 @@ void render_frame() {
 
     TracyPlot("DrawCalls", drawCallCount);
     TracyPlot("TriangleCount", triangleCount);
-}
 ```
 
 ---
@@ -207,11 +202,8 @@ void render_scene() {
         // Обновление...
     }
 
-    {
         nvtx3::scoped_range range2{"DrawMeshes"};
         // Отрисовка...
-    }
-}
 #endif
 ```
 
@@ -232,5 +224,3 @@ captures/
 ├── 2025-02-18_voxel_shader_debug.rdc
 ├── 2025-02-18_pipeline_barrier_fix.rdc
 └── README.md  # Описание каждого захвата
-```
-

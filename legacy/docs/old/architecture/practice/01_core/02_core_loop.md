@@ -1,6 +1,10 @@
-﻿# Спецификация игрового цикла ProjectV
+# Спецификация игрового цикла ProjectV
 
 ---
+
+**Статус:** Утверждено
+**Версия:** 3.0 (Enterprise)
+**Дата:** 2026-02-22
 
 ## Обзор
 
@@ -33,7 +37,6 @@ GameLoop (PIMPL)
 └─────────────────────────────────────────────────────────────┘
 
 FrameTime
-┌─────────────────────────────────────────────────────────────┐
 │  total_time: double (8 bytes)                               │
 │  delta_time: double (8 bytes)                               │
 │  interpolation_alpha: double (8 bytes)                      │
@@ -41,17 +44,13 @@ FrameTime
 │  physics_steps: uint32_t (4 bytes)                          │
 │  padding: 4 bytes                                           │
 │  Total: 40 bytes (aligned to 8)                             │
-└─────────────────────────────────────────────────────────────┘
 
 InputState
-┌─────────────────────────────────────────────────────────────┐
 │  keyboard: KeyboardState (512 bytes)                        │
 │  keyboard_prev: KeyboardState (512 bytes)                   │
 │  mouse: MouseState (40 bytes)                               │
 │  mouse_prev: MouseState (40 bytes)                          │
 │  Total: 1104 bytes (aligned to 16)                          │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### State Machine
 
@@ -62,23 +61,15 @@ GameLoop Lifecycle
        └─────┬──────┘
              │ initialize()
              ▼
-       ┌────────────┐
        │ INITIALIZED│ ←── Subsystems registered
-       └─────┬──────┘
              │ run()
-             ▼
     ┌────────────────┐
     │    RUNNING     │ ←── Main loop active
     │  (loop state)  │
     └───────┬────────┘
             │ request_exit() or error
-            ▼
-    ┌────────────────┐
     │   SHUTDOWN     │ ←── Cleaning up
-    └───────┬────────┘
             │
-            ▼
-    ┌────────────────┐
     │   TERMINATED   │ ←── Final state
     └────────────────┘
 
@@ -87,19 +78,12 @@ Physics Update State (within frame)
     │  ACCUMULATE │ ←── accumulator += delta_time
     └──────┬──────┘
            │ accumulator >= fixed_delta
-           ▼
-    ┌─────────────┐
     │ STEP_PHYSICS│ ←── One physics step
-    └──────┬──────┘
            │ steps < max_steps && accumulator >= fixed_delta
            │ (loop back to STEP_PHYSICS)
-           │
            │ steps >= max_steps || accumulator < fixed_delta
-           ▼
-    ┌─────────────┐
     │ INTERPOLATE │ ←── alpha = accumulator / fixed_delta
     └─────────────┘
-```
 
 ---
 
@@ -136,17 +120,14 @@ export struct FrameTime {
     double interpolation_alpha{0.0};
     uint64_t frame_number{0};
     uint32_t physics_steps{0};
-};
 
 /// Результат выполнения кадра.
 export enum class FrameResult : uint8_t {
     Continue,
     Exit,
     Error
-};
 
 /// Концепт для подсистемы.
-///
 /// ## Requirements
 /// - must have `auto init() -> std::expected<void, SubsystemError>`
 /// - must have `auto shutdown() -> void`
@@ -156,21 +137,16 @@ concept GameLoopSubsystem = requires(T t, FrameTime const& ft) {
     { t.init() } -> std::same_as<std::expected<void, SubsystemError>>;
     { t.shutdown() } -> std::same_as<void>;
     { t.update(ft) } -> std::execution::sender<FrameResult>;
-};
 
 /// Главный игровой цикл на std::execution.
-///
 /// ## Thread Safety
 /// - run() должен вызываться из одного потока
 /// - request_exit() thread-safe
-///
-/// ## Invariants
 /// - accumulator_ всегда < fixed_delta_time * max_physics_steps_per_frame
 /// - exit_code_ валиден только после run() вернул управление
 export class GameLoop {
 public:
     /// Создаёт игровой цикл.
-    ///
     /// @pre config.fixed_delta_time > 0
     /// @pre config.max_frame_time > config.fixed_delta_time
     explicit GameLoop(GameLoopConfig const& config = {}) noexcept;
@@ -183,31 +159,25 @@ public:
     GameLoop& operator=(const GameLoop&) = delete;
 
     /// Регистрирует подсистему.
-    ///
     /// @tparam S тип, удовлетворяющий GameLoopSubsystem
     /// @param priority Порядок выполнения (меньше = раньше)
-    ///
     /// @pre Должен быть вызван до initialize()
     template<GameLoopSubsystem S>
     auto register_subsystem(uint32_t priority = 100) noexcept -> void;
 
     /// Инициализирует все подсистемы.
-    ///
     /// @return void или ошибку
     [[nodiscard]] auto initialize() noexcept
         -> std::expected<void, GameLoopError>;
 
     /// Запускает главный цикл.
-    ///
     /// @pre initialize() был успешно вызван
     /// @post Все подсистемы shutdown при выходе
     /// @return Код возврата (0 = успех)
     [[nodiscard]] auto run() noexcept -> int;
 
     /// Запрашивает остановку цикла.
-    ///
     /// @param exit_code Код возврата
-    ///
     /// @post is_exit_requested() == true
     auto request_exit(int exit_code = 0) noexcept -> void;
 
@@ -230,7 +200,6 @@ private:
     /// Variable step update sender.
     [[nodiscard]] auto variable_step_update() noexcept
         -> std::execution::sender<FrameResult>;
-};
 
 /// Коды ошибок GameLoop.
 export enum class GameLoopError : uint8_t {
@@ -238,7 +207,6 @@ export enum class GameLoopError : uint8_t {
     NotInitialized,
     SubsystemInitFailed,
     InvalidConfig
-};
 
 } // namespace projectv::core
 ```
@@ -274,7 +242,6 @@ export enum class MouseButton : uint8_t {
     Left = 1,
     Middle = 2,
     Right = 3
-};
 
 /// Состояние клавиатуры.
 ///
@@ -285,7 +252,6 @@ export struct KeyboardState {
     std::array<bool, 512> keys{false};
 
     /// Проверяет, нажата ли клавиша.
-    ///
     /// @pre key < keys.size()
     [[nodiscard]] auto is_pressed(KeyCode key) const noexcept -> bool;
 
@@ -295,8 +261,6 @@ export struct KeyboardState {
 
     /// Проверяет, была ли клавиша только что отпущена.
     [[nodiscard]] auto just_released(KeyCode key, KeyboardState const& prev) const noexcept
-        -> bool;
-};
 
 /// Состояние мыши.
 export struct alignas(16) MouseState {
@@ -307,8 +271,6 @@ export struct alignas(16) MouseState {
 
     [[nodiscard]] auto is_pressed(MouseButton button) const noexcept -> bool;
     [[nodiscard]] auto just_pressed(MouseButton button, MouseState const& prev) const noexcept
-        -> bool;
-};
 
 /// Input event.
 export struct InputEvent {
@@ -319,7 +281,6 @@ export struct InputEvent {
         MousePress,
         MouseRelease,
         MouseScroll
-    };
 
     Type type;
     uint64_t timestamp_ns;
@@ -330,10 +291,8 @@ export struct InputEvent {
         glm::vec2 motion;
         glm::vec2 scroll;
     } data;
-};
 
 /// Полное состояние ввода.
-///
 /// ## Invariants
 /// - keyboard_prev содержит состояние предыдущего кадра
 /// - mouse_prev содержит состояние предыдущего кадра
@@ -344,18 +303,14 @@ export struct InputState {
     MouseState mouse_prev;
 
     /// Копирует текущее состояние в prev.
-    ///
     /// @post keyboard_prev == keyboard (до вызова)
     /// @post mouse_prev == mouse (до вызова)
     auto advance() noexcept -> void;
-};
 
 /// Input subsystem.
-///
 /// ## Performance
 /// - Event processing: O(n) где n = количество событий
 /// - State queries: O(1)
-///
 /// ## Thread Safety
 /// - update() вызывается из main thread
 /// - state() thread-safe для чтения после update()
@@ -365,7 +320,6 @@ public:
     ~InputSubsystem() noexcept;
 
     /// Инициализация.
-    ///
     /// @pre SDL инициализирован
     /// @post state() валиден
     [[nodiscard]] auto init() noexcept
@@ -375,7 +329,6 @@ public:
     auto shutdown() noexcept -> void;
 
     /// Обновление состояния.
-    ///
     /// @param ft Временные данные кадра
     /// @pre init() был успешно вызван
     /// @post state() отражает текущий ввод
@@ -398,13 +351,11 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Коды ошибок ввода.
 export enum class InputError : uint8_t {
     SDLNotInitialized,
     EventQueueOverflow
-};
 
 } // namespace projectv::input
 ```
@@ -437,7 +388,6 @@ export struct InterpolatedTransform {
     glm::quat curr_rotation{1.0f, 0.0f, 0.0f, 0.0f};
 
     /// Вычисляет интерполированный transform.
-    ///
     /// @param alpha Фактор интерполяции ∈ [0.0, 1.0]
     /// @return Пара (position, rotation)
     [[nodiscard]] auto interpolate(float alpha) const noexcept
@@ -452,14 +402,11 @@ export struct PhysicsConfig {
     glm::vec3 gravity{0.0f, -15.0f, 0.0f};
     uint32_t collision_steps{1};
     uint32_t integration_substeps{1};
-};
 
 /// Physics subsystem.
-///
 /// ## Fixed Step Guarantee
 /// - step() всегда вызывается с одинаковым delta_time
 /// - Количество шагов ограничено max_physics_steps_per_frame
-///
 /// ## Thread Safety
 /// - update() использует JobSystem для параллельных вычислений
 /// - Interpolation buffers lock-free для чтения
@@ -476,7 +423,6 @@ public:
     auto shutdown() noexcept -> void;
 
     /// Шаг физики (fixed delta).
-    ///
     /// @param ft FrameTime с delta_time = fixed_delta_time
     /// @pre init() успешно вызван
     /// @post Физическое состояние обновлено
@@ -485,7 +431,6 @@ public:
         -> std::execution::sender<core::FrameResult>;
 
     /// Получает интерполированный transform.
-    ///
     /// @param body_id ID тела
     /// @param alpha Фактор интерполяции
     /// @return Пара (position, rotation) или ошибка
@@ -508,7 +453,6 @@ private:
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::physics
 ```
@@ -546,7 +490,6 @@ export struct RenderStats {
 /// - Dynamic Rendering (no VkRenderPass)
 /// - Synchronization2
 /// - Timeline Semaphores
-///
 /// ## Thread Safety
 /// - update() вызывает begin_frame/end_frame из одного потока
 /// - Resource creation thread-safe через external synchronization
@@ -556,7 +499,6 @@ public:
     ~RenderSubsystem() noexcept;
 
     /// Инициализация.
-    ///
     /// @param native_window_handle HWND или equivalent
     /// @pre Vulkan 1.4 support available
     [[nodiscard]] auto init(void* native_window_handle) noexcept
@@ -566,7 +508,6 @@ public:
     auto shutdown() noexcept -> void;
 
     /// Рендеринг кадра.
-    ///
     /// @param ft Временные данные кадра
     /// @pre init() успешно вызван
     /// @post Кадр представлен на экран
@@ -588,7 +529,6 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Коды ошибок рендеринга.
 export enum class RenderError : uint8_t {
@@ -596,7 +536,6 @@ export enum class RenderError : uint8_t {
     SwapchainCreationFailed,
     OutOfMemory,
     DeviceLost
-};
 
 } // namespace projectv::render
 ```
@@ -617,12 +556,9 @@ TimelineSemaphore
 └─────────────────────────────────────────────────────────────┘
 
 ComputeGraphicsSync
-┌─────────────────────────────────────────────────────────────┐
 │  semaphore_: TimelineSemaphore (24 bytes)                   │
 │  frame_value_: uint64_t (8 bytes)                           │
 │  Total: 32 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### API Contracts
 
@@ -643,10 +579,8 @@ export namespace projectv::render {
 export class TimelineSemaphore {
 public:
     /// Создаёт timeline semaphore.
-    ///
     /// @param device Vulkan device
     /// @param initial_value Начальное значение
-    ///
     /// @pre device != VK_NULL_HANDLE
     /// @post value() == initial_value
     [[nodiscard]] static auto create(
@@ -662,14 +596,12 @@ public:
     TimelineSemaphore& operator=(const TimelineSemaphore&) = delete;
 
     /// Сигнализирует semaphore.
-    ///
     /// @param value Новое значение
     /// @pre value > current value
     /// @post value() == value
     auto signal(uint64_t value) noexcept -> void;
 
     /// Ожидает достижения значения.
-    ///
     /// @param value Значение для ожидания
     /// @param timeout_ns Таймаут (UINT64_MAX = бесконечно)
     /// @return true если значение достигнуто
@@ -692,13 +624,11 @@ private:
 };
 
 /// Синхронизация Compute ↔ Graphics.
-///
 /// ## Usage Pattern
 /// 1. Compute signals value = frame_index
 /// 2. Graphics waits for value = frame_index
 /// 3. Advance to next frame
 export class ComputeGraphicsSync {
-public:
     /// Создаёт объект синхронизации.
     [[nodiscard]] static auto create(VkDevice device) noexcept
         -> std::expected<ComputeGraphicsSync, VulkanError>;
@@ -711,28 +641,22 @@ public:
     ComputeGraphicsSync& operator=(const ComputeGraphicsSync&) = delete;
 
     /// Подготавливает wait для graphics queue.
-    ///
     /// @return VkSemaphoreSubmitInfo для VkSubmitInfo2
     [[nodiscard]] auto prepare_graphics_wait() noexcept -> VkSemaphoreSubmitInfo;
 
     /// Подготавливает signal после compute.
-    ///
-    /// @return VkSemaphoreSubmitInfo для VkSubmitInfo2
     [[nodiscard]] auto prepare_compute_signal() noexcept -> VkSemaphoreSubmitInfo;
 
     /// Увеличивает значение для следующего кадра.
-    ///
     /// @post current_value() == old current_value() + 1
     auto advance_frame() noexcept -> void;
 
     /// @return Текущее значение
     [[nodiscard]] auto current_value() const noexcept -> uint64_t;
 
-private:
     ComputeGraphicsSync() noexcept = default;
     TimelineSemaphore semaphore_;
     uint64_t frame_value_{0};
-};
 
 } // namespace projectv::render
 ```
@@ -751,7 +675,6 @@ private:
 │ ├── sdl_pump_events() → sender                                            │
 │ ├── process_events() → sender                                             │
 │ └── update_state() → sender<FrameResult>                                  │
-├──────────────────────────────────────────────────────────────────────────┤
 │ Physics (Fixed Step, parallel_for)                                        │
 │ ├── accumulator += delta_time                                             │
 │ ├── while (accumulator >= fixed_delta && steps < max):                    │
@@ -760,19 +683,16 @@ private:
 │ │   ├── update_current_transforms() // parallel_for                       │
 │ │   └── accumulator -= fixed_delta                                        │
 │ └── alpha = accumulator / fixed_delta                                     │
-├──────────────────────────────────────────────────────────────────────────┤
 │ Render (Variable Step)                                                    │
 │ ├── begin_frame()                                                         │
 │ ├── record_commands() // sender chain                                     │
 │ ├── submit() // Timeline Semaphore                                        │
 │ └── end_frame()                                                           │
-├──────────────────────────────────────────────────────────────────────────┤
 │ Async Compute (Parallel, Timeline Semaphore)                              │
 │ ├── wait(frame_n - 1)                                                     │
 │ ├── dispatch_voxel_generation()                                           │
 │ └── signal(frame_n)                                                       │
 └──────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -820,7 +740,6 @@ private:
 
 /// Scheduler wrapper for thread pool.
 export class ThreadPoolScheduler {
-public:
     explicit ThreadPoolScheduler(JobSystem& jobs) noexcept;
 
     /// Планирует выполнение на thread pool.
@@ -830,9 +749,7 @@ public:
     template<typename Range, typename Func>
     [[nodiscard]] auto parallel_for(Range&& range, Func&& func) const noexcept;
 
-private:
     JobSystem* jobs_;
-};
 
 } // namespace projectv::core::exec
 ```
@@ -858,16 +775,13 @@ auto InputSubsystem::update(core::FrameTime const& ft) noexcept
                     update_mouse_state();
                     return core::FrameResult::Continue;
                 });
-        });
 }
 
 // === Physics Update Sender Chain ===
 
 auto PhysicsSubsystem::update(core::FrameTime const& ft) noexcept
-    -> std::execution::sender<core::FrameResult> {
 
     return std::execution::schedule(thread_pool_scheduler_)
-        | std::execution::let_value([this, ft]() {
             // Store previous transforms for interpolation
             return store_previous_transforms()
                 | std::execution::then([this, ft]() {
@@ -877,37 +791,22 @@ auto PhysicsSubsystem::update(core::FrameTime const& ft) noexcept
                         collision_steps_,
                         integration_substeps_
                     );
-                    return core::FrameResult::Continue;
                 })
-                | std::execution::then([this]() {
                     // Update current transforms
                     update_current_transforms();
-                });
-        });
-}
 
 // === Render Update Sender Chain ===
 
 auto RenderSubsystem::update(core::FrameTime const& ft) noexcept
-    -> std::execution::sender<core::FrameResult> {
 
-    return std::execution::schedule(main_thread_scheduler_)
-        | std::execution::let_value([this, ft]() {
             // Begin frame
             return begin_frame_sender()
-                | std::execution::let_value([this, ft]() {
                     // Record commands
                     return record_commands_sender(ft)
                         | std::execution::let_value([this]() {
                             // Submit and present
                             return submit_and_present_sender();
-                        });
-                });
-        })
         | std::execution::then([]() {
-            return core::FrameResult::Continue;
-        });
-}
 ```
 
 ### Parallel_for Implementation
@@ -969,57 +868,34 @@ template<typename Scheduler, typename Range, typename Func>
                     | std::execution::then([it, chunk_end, &func]() {
                         for (auto i = it; i != chunk_end; ++i) {
                             func(*i);
-                        }
                     })
                 );
 
                 it = chunk_end;
-            }
 
             return std::execution::when_all(std::move(senders));
         });
-}
 
 /// parallel_transform sender.
-///
-/// ## Usage
-/// ```cpp
 /// auto results = co_await parallel_transform(scheduler, inputs,
 ///     [](Input const& in) { return process(in); });
-/// ```
-template<typename Scheduler, typename Range, typename Func>
 [[nodiscard]] auto parallel_transform(
-    Scheduler&& sched,
-    Range&& range,
-    Func&& func
-) noexcept -> std::execution::sender auto {
 
-    using std::begin, std::end, std::size;
     using Result = std::invoke_result_t<Func, decltype(*begin(range))>;
 
-    auto count = size(range);
-
-    if (count == 0) {
         return std::execution::just(std::vector<Result>{});
-    }
 
-    return std::execution::transfer_just(std::forward<Scheduler>(sched))
         | std::execution::let_value([&range, count, func = std::forward<Func>(func)]() {
 
             std::vector<Result> results(count);
-            auto first = begin(range);
 
             return parallel_for(
                 thread_pool_scheduler(),
                 std::views::iota(0u, count),
                 [&results, first, &func](size_t index) {
                     results[index] = func(*(first + index));
-                }
             ) | std::execution::then([results = std::move(results)]() mutable {
                 return std::move(results);
-            });
-        });
-}
 
 } // namespace projectv::core::exec
 ```
@@ -1061,9 +937,7 @@ private:
 
 /// Adapter для std::execution scheduler concept.
 export class JobSystemSchedulerAdapter {
-public:
     explicit JobSystemSchedulerAdapter(JobSystem& jobs) noexcept
-        : jobs_(&jobs) {}
 
     /// Schedule operation.
     struct ScheduleOperation {
@@ -1074,14 +948,11 @@ public:
                 // Complete the operation
                 continuation_.resume();
             });
-        }
 
         std::coroutine_handle<> continuation_;
-    };
 
     /// Sender type.
     struct Sender {
-        JobSystem* jobs;
 
         using value_types = std::tuple<>;
         using error_types = std::tuple<std::exception_ptr>;
@@ -1089,30 +960,16 @@ public:
 
         template<typename Receiver>
         struct Operation {
-            JobSystem* jobs;
             Receiver receiver;
 
-            auto start() noexcept -> void {
-                jobs->submit([this]() {
                     std::execution::set_value(std::move(receiver));
-                });
-            }
-        };
 
-        template<typename Receiver>
         auto connect(Receiver r) const noexcept -> Operation<Receiver> {
             return {jobs, std::move(r)};
-        }
-    };
 
     /// Creates sender.
     [[nodiscard]] auto schedule() const noexcept -> Sender {
         return {jobs_};
-    }
-
-private:
-    JobSystem* jobs_;
-};
 
 } // namespace projectv::core
 ```
@@ -1155,111 +1012,74 @@ auto GameLoop::frame_sender() noexcept -> std::execution::sender auto {
         | std::execution::let_value([this]() {
             // Input phase (latency-critical)
             return input_phase_sender();
-        })
-        | std::execution::let_value([this]() {
             // Physics phase (fixed step)
             return physics_phase_sender();
-        })
-        | std::execution::let_value([this]() {
             // Render phase (variable step)
             return render_phase_sender();
-        })
-        | std::execution::then([this]() {
             // Advance frame counter
             ++impl_->frame_time_.frame_number;
             return FrameResult::Continue;
         });
-}
 
 auto GameLoop::input_phase_sender() noexcept -> std::execution::sender auto {
     std::vector<std::execution::sender auto> input_senders;
 
     for (auto& subsystem : input_subsystems_) {
         input_senders.push_back(subsystem.update(impl_->frame_time_));
-    }
 
     return std::execution::when_all(std::move(input_senders))
         | std::execution::then([](auto... results) {
             // Check for exit requests
             if (((results == FrameResult::Exit) || ...)) {
                 return FrameResult::Exit;
-            }
-            return FrameResult::Continue;
-        });
-}
 
 auto GameLoop::physics_phase_sender() noexcept -> std::execution::sender auto {
     return std::execution::just()
-        | std::execution::then([this]() {
             // Accumulate time
             impl_->accumulator_ += impl_->frame_time_.delta_time;
 
             // Clamp accumulator
             if (impl_->accumulator_ > impl_->config_.max_frame_time) {
                 impl_->accumulator_ = impl_->config_.max_frame_time;
-            }
-        })
-        | std::execution::let_value([this]() {
             // Fixed step loop
             return fixed_step_loop_sender();
-        });
-}
 
 auto GameLoop::fixed_step_loop_sender() noexcept -> std::execution::sender auto {
-    return std::execution::repeat_effect_until(
         std::execution::then([this]() {
             // Step physics
             return physics_step_sender();
-        }),
         [this]() {
             // Continue while accumulator >= fixed_delta
             // and steps < max_steps
             return impl_->accumulator_ < impl_->config_.fixed_delta_time
                 || impl_->frame_time_.physics_steps >=
                    impl_->config_.max_physics_steps_per_frame;
-        }
     )
-    | std::execution::then([this]() {
         // Calculate interpolation alpha
         impl_->frame_time_.interpolation_alpha =
             impl_->accumulator_ / impl_->config_.fixed_delta_time;
-    });
-}
 
 auto GameLoop::physics_step_sender() noexcept -> std::execution::sender auto {
     std::vector<std::execution::sender auto> physics_senders;
 
     for (auto& subsystem : physics_subsystems_) {
         physics_senders.push_back(subsystem.update(impl_->frame_time_));
-    }
 
     return std::execution::when_all(std::move(physics_senders))
-        | std::execution::then([this]() {
             impl_->accumulator_ -= impl_->config_.fixed_delta_time;
             ++impl_->frame_time_.physics_steps;
-        });
-}
 
 auto GameLoop::render_phase_sender() noexcept -> std::execution::sender auto {
     std::vector<std::execution::sender auto> render_senders;
 
     for (auto& subsystem : render_subsystems_) {
         render_senders.push_back(subsystem.update(impl_->frame_time_));
-    }
 
     return std::execution::when_all(std::move(render_senders))
-        | std::execution::then([](auto... results) {
-            if (((results == FrameResult::Exit) || ...)) {
-                return FrameResult::Exit;
-            }
-            return FrameResult::Continue;
-        });
-}
 
 auto GameLoop::run() noexcept -> int {
     if (impl_->state_ != LoopState::Initialized) {
         return -1;
-    }
 
     impl_->state_ = LoopState::Running;
     impl_->start_time_ = std::chrono::steady_clock::now();
@@ -1272,10 +1092,8 @@ auto GameLoop::run() noexcept -> int {
     // Shutdown subsystems
     for (auto& subsystem : impl_->subsystems_) {
         subsystem.shutdown();
-    }
 
     return impl_->exit_code_.load(std::memory_order_acquire);
-}
 
 } // namespace projectv::core
 ```
@@ -1306,7 +1124,6 @@ export namespace projectv::render {
 ///                │
 ///                ▼
 /// [Compute]◄──wait(N-1)──►dispatch──►signal(N)
-/// ```
 export class AsyncComputeManager {
 public:
     /// Создаёт async compute manager.
@@ -1332,7 +1149,6 @@ public:
             | std::execution::then([cmd, record_func]() {
                 // Record commands
                 record_func(cmd);
-            })
             | std::execution::then([this]() {
                 // Signal completion
                 compute_semaphore_.signal(frame_value_);
@@ -1345,7 +1161,6 @@ public:
 
     /// Подготавливает signal после compute.
     [[nodiscard]] auto prepare_compute_signal() noexcept
-        -> VkSemaphoreSubmitInfo;
 
     /// Advance to next frame.
     auto advance_frame() noexcept -> void;
@@ -1384,7 +1199,6 @@ auto instrumented_sender(Sender&& sender, std::string_view name) {
             return std::execution::just(std::forward<Args>(args)...);
         }
     );
-}
 
 // Usage in GameLoop
 auto GameLoop::frame_sender() noexcept -> std::execution::sender auto {
@@ -1396,7 +1210,6 @@ auto GameLoop::frame_sender() noexcept -> std::execution::sender auto {
         | instrumented_sender(input_phase_sender(), "Input")
         | instrumented_sender(physics_phase_sender(), "Physics")
         | instrumented_sender(render_phase_sender(), "Render");
-}
 ```
 
 ---
@@ -1413,3 +1226,14 @@ auto GameLoop::frame_sender() noexcept -> std::execution::sender auto {
 | Memory              | < 4GB    | VMA Stats  | > 6GB   |
 | Job Queue Depth     | < 100    | Tracy      | > 500   |
 | Sender Chain Length | < 20     | Debug      | > 50    |
+
+---
+
+## Ссылки
+
+- [ADR-0004: Build System & C++26 Modules](../adr/0004-build-and-modules-spec.md)
+- [Physics Specification](../04_physics_ca/01_jolt_vulkan_bridge.md)
+- [Vulkan 1.4 Specification](../02_render/01_vulkan_spec.md)
+- [GPU Staging Contracts](../02_render/02_gpu_staging.md)
+- [Engine Bootstrap Specification](../01_core/03_engine_bootstrap.md)
+- [Physics-Voxel Integration](../04_physics_ca/02_physics_voxel_integration.md)

@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 2.0
+**Дата:** 2026-02-22
+
 ## Обзор
 
 SVO (Sparse Voxel Octree) — **архитектурный паттерн** ProjectV, который **сосуществует с чанками**:
@@ -57,7 +61,6 @@ export struct SVOVoxelData {
     uint16_t material_id{0};
     uint8_t density{0};
     uint8_t flags{0};
-};
 
 /// Конфигурация SVO.
 export struct SVOConfig {
@@ -65,7 +68,6 @@ export struct SVOConfig {
     uint32_t initial_node_capacity{1024 * 1024};
     uint32_t initial_voxel_capacity{4 * 1024 * 1024};
     bool enable_dag_compression{true};  ///< Объединение одинаковых subtree
-};
 
 } // namespace projectv::voxel::svo
 ```
@@ -103,7 +105,6 @@ export struct SVOBuildResult {
     uint32_t root_index{0};
     uint32_t max_depth{0};
     size_t memory_usage{0};
-};
 
 /// Sparse Voxel Octree.
 export class SVOTree {
@@ -128,8 +129,6 @@ public:
 
     /// Строит SVO асинхронно.
     [[nodiscard]] auto build_async(
-        std::span<VoxelData const> data,
-        glm::uvec3 extent
     ) noexcept -> std::future<std::expected<SVOBuildResult, SVOError>>;
 
     // ========== Query API ==========
@@ -177,7 +176,6 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel::svo
 ```
@@ -242,13 +240,9 @@ private:
 
 /// Double-buffered GPU manager.
 export class SVODoubleBufferManager {
-public:
     /// Создаёт manager.
-    [[nodiscard]] static auto create(
         VkDevice device,
         VmaAllocator allocator,
-        uint32_t max_nodes,
-        uint32_t max_voxels
     ) noexcept -> std::expected<SVODoubleBufferManager, SVOError>;
 
     ~SVODoubleBufferManager() noexcept;
@@ -260,9 +254,6 @@ public:
 
     /// Запускает асинхронную перестройку.
     auto start_async_rebuild(
-        std::span<VoxelData const> source,
-        glm::uvec3 extent
-    ) noexcept -> void;
 
     /// Обновление каждый кадр.
     /// @returns true если произошло обновление буферов
@@ -272,11 +263,7 @@ public:
     [[nodiscard]] auto get_current_buffers() const noexcept
         -> std::pair<VkBuffer, VkBuffer>;
 
-private:
     SVODoubleBufferManager() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel::svo
 ```
@@ -338,11 +325,9 @@ public:
 
     /// GPU trace для набора лучей.
     auto dispatch_trace_rays(
-        VkCommandBuffer cmd,
         VkBuffer ray_buffer,
         VkBuffer result_buffer,
         uint32_t ray_count
-    ) noexcept -> void;
 
     /// Получает pipeline.
     [[nodiscard]] auto pipeline() const noexcept -> VkPipeline;
@@ -351,7 +336,6 @@ private:
     SVORayTracer() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel::svo
 ```
@@ -387,7 +371,6 @@ export struct HybridChunk {
     uint8_t lod_level{0};
     bool needs_mesh_rebuild{true};
     bool needs_svo_rebuild{false};
-};
 
 /// Глобальный SVO менеджер.
 export class GlobalSVOManager {
@@ -423,7 +406,6 @@ private:
     GlobalSVOManager() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Выбирает стратегию по расстоянию.
 [[nodiscard]] auto select_lod_strategy(
@@ -447,19 +429,15 @@ private:
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  Distance    0m ─────────────── 50m ─────────── 200m ──────────── ∞    │
-│                                                                          │
 │  Strategy    ChunkMesh            ChunkSVO         GlobalSVO            │
 │              ──────────           ─────────        ──────────           │
 │              Greedy Mesh          Local SVO        Ray Marching         │
 │              JoltPhysics          Simplified       Shadows/GI           │
 │              Fast Updates         LOD 1-2          LOD 3+               │
-│                                                                          │
 │  Memory      High                 Medium           Low                  │
 │  Update      Fast                 Medium           Slow                 │
 │  Physics     Yes                  No               No                   │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ### SVO Node Layout
 
@@ -474,13 +452,9 @@ private:
 │  │   Bit 1: -X+Y+Z  Bit 5: -X+Y-Z                                      │
 │  │   Bit 2: +X-Y+Z  Bit 6: +X-Y-Z                                      │
 │  │   Bit 3: -X-Y+Z  Bit 7: -X-Y-Z                                      │
-│  │                                                                      │
 │  [55:28] child_ptr (28 bit) - индекс первого дочернего узла            │
-│  │                                                                      │
 │  [27:0]  voxel_ptr (28 bit) - индекс данных вокселя (для leaf)         │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -510,3 +484,11 @@ private:
 | GPU Upload            | < 5 ms        |
 | Ray Trace (1920x1080) | < 5 ms        |
 | DAG Compression       | < 20 ms       |
+
+---
+
+## Ссылки
+
+- [Voxel Pipeline](../03_voxel/02_voxel_pipeline.md)
+- [Vulkan Backend](../02_render/01_vulkan_spec.md)
+- [Physics Integration](../04_physics_ca/01_jolt_vulkan_bridge.md)

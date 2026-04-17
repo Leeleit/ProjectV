@@ -4,6 +4,8 @@
 
 ---
 
+**🟡 Уровень 2: Средний** — Абстракция ввода для поддержки клавиатуры, мыши и геймпада.
+
 ## Концепция
 
 ### Проблема
@@ -50,7 +52,6 @@ if (input.isActionPressed(Action::Attack)) attack();
 [Game Logic] → [Action System] → [Input Bindings] → [SDL3 / Gamepad]
                       ↑
                [Config JSON]
-```
 
 ### Компоненты
 
@@ -109,7 +110,6 @@ enum class ActionType {
     Button,    // Мгновенное нажатие (Jump, Attack)
     Axis1D,    // Одномерная ось (MoveForward/Backward)
     Axis2D     // Двумерная ось (Movement, Camera)
-};
 ```
 
 ### Bindings
@@ -130,19 +130,16 @@ struct InputBinding {
         uint8_t mouseButton;       // Для мыши
         SDL_GamepadButton button;  // Для геймпада
         SDL_GamepadAxis axis;      // Для осей геймпада
-    };
 
     // Для осей: направление
     float axisScale = 1.0f;        // 1.0 или -1.0 для инверсии
     float deadZone = 0.15f;        // Мёртвая зона для осей
-};
 
 // Связка Action → Bindings
 struct ActionBinding {
     Action action;
     ActionType type;
     std::vector<InputBinding> bindings;  // Несколько bindings на один action
-};
 ```
 
 ---
@@ -248,7 +245,6 @@ bool InputManager::initialize() {
     if (!SDL_Init(SDL_INIT_GAMEPAD)) {
         SDL_Log("Failed to initialize gamepad subsystem: %s", SDL_GetError());
         return false;
-    }
 
     // Подключение первого доступного геймпада
     int numGamepads = 0;
@@ -257,15 +253,12 @@ bool InputManager::initialize() {
         gamepad_ = SDL_OpenGamepad(gamepads[0]);
         if (gamepad_) {
             SDL_Log("Gamepad connected: %s", SDL_GetGamepadName(gamepad_));
-        }
-    }
     SDL_free(gamepads);
 
     // Загрузка default bindings
     loadDefaultBindings();
 
     return true;
-}
 
 void InputManager::processEvent(const SDL_Event& event) {
     switch (event.type) {
@@ -274,35 +267,25 @@ void InputManager::processEvent(const SDL_Event& event) {
             auto scancode = event.key.keysym.scancode;
             if (scancode < SDL_NUM_SCANCODES) {
                 keyState_[scancode] = (event.type == SDL_EVENT_KEY_DOWN);
-            }
             break;
-        }
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             uint8_t button = event.button.button;
             if (button < mouseButtonState_.size()) {
                 mouseButtonState_[button] = (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
-            }
-            break;
-        }
 
         case SDL_EVENT_MOUSE_MOTION: {
             mouseDelta_.x += event.motion.xrel;
             mouseDelta_.y += event.motion.yrel;
             mousePos_.x = event.motion.x;
             mousePos_.y = event.motion.y;
-            break;
-        }
 
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
         case SDL_EVENT_GAMEPAD_BUTTON_UP: {
             auto button = event.gbutton.button;
             if (button < gamepadButtonState_.size()) {
                 gamepadButtonState_[button] = (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
-            }
-            break;
-        }
 
         case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
             auto axis = event.gaxis.axis;
@@ -310,35 +293,19 @@ void InputManager::processEvent(const SDL_Event& event) {
                 // Нормализация [-32768, 32767] → [-1.0, 1.0]
                 float value = event.gaxis.value / 32768.0f;
                 gamepadAxis_[axis] = value;
-            }
-            break;
-        }
 
         case SDL_EVENT_GAMEPAD_ADDED: {
             if (!gamepad_) {
                 gamepad_ = SDL_OpenGamepad(event.gdevice.which);
-                if (gamepad_) {
-                    SDL_Log("Gamepad connected: %s", SDL_GetGamepadName(gamepad_));
-                }
-            }
-            break;
-        }
 
         case SDL_EVENT_GAMEPAD_REMOVED: {
             if (gamepad_ && SDL_GetGamepadID(gamepad_) == event.gdevice.which) {
                 SDL_CloseGamepad(gamepad_);
                 gamepad_ = nullptr;
                 SDL_Log("Gamepad disconnected");
-            }
-            break;
-        }
-    }
-}
 
 void InputManager::update(float deltaTime) {
     // Очистка мгновенных состояний
-    actionPressed_.fill(false);
-    actionReleased_.fill(false);
     mouseDelta_ = glm::vec2(0.0f);
 
     // Обновление action states на основе bindings
@@ -353,27 +320,15 @@ void InputManager::update(float deltaTime) {
                     if (scancode < SDL_NUM_SCANCODES && keyState_[scancode]) {
                         pressed = true;
                         value = 1.0f;
-                    }
-                    break;
-                }
 
                 case InputSource::Mouse: {
                     if (input.mouseButton < mouseButtonState_.size() &&
                         mouseButtonState_[input.mouseButton]) {
-                        pressed = true;
-                        value = 1.0f;
-                    }
-                    break;
-                }
 
                 case InputSource::Gamepad: {
-                    if (gamepad_) {
                         if (binding.type == ActionType::Button) {
                             if (input.button < gamepadButtonState_.size() &&
                                 gamepadButtonState_[input.button]) {
-                                pressed = true;
-                                value = 1.0f;
-                            }
                         } else {
                             // Axis
                             if (input.axis < gamepadAxis_.size()) {
@@ -381,14 +336,6 @@ void InputManager::update(float deltaTime) {
                                 // Применение dead zone
                                 if (std::abs(axisValue) > input.deadZone) {
                                     value = axisValue;
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-        }
 
         auto actionIdx = static_cast<size_t>(action);
         bool wasHeld = actionHeld_[actionIdx];
@@ -397,45 +344,35 @@ void InputManager::update(float deltaTime) {
         actionPressed_[actionIdx] = actionHeld_[actionIdx] && !wasHeld;
         actionReleased_[actionIdx] = !actionHeld_[actionIdx] && wasHeld;
         actionAxis_[actionIdx] = value;
-    }
 
     // Сохранение предыдущего состояния для next frame
     keyPrevState_ = keyState_;
     mouseButtonPrevState_ = mouseButtonState_;
     gamepadButtonPrevState_ = gamepadButtonState_;
-}
 
 bool InputManager::isActionPressed(Action action) const {
     return actionPressed_[static_cast<size_t>(action)];
-}
 
 bool InputManager::isActionHeld(Action action) const {
     return actionHeld_[static_cast<size_t>(action)];
-}
 
 bool InputManager::isActionReleased(Action action) const {
     return actionReleased_[static_cast<size_t>(action)];
-}
 
 float InputManager::getActionAxis1D(Action action) const {
     return actionAxis_[static_cast<size_t>(action)];
-}
 
 glm::vec2 InputManager::getActionAxis2D(Action actionX, Action actionY) const {
     return glm::vec2(
         getActionAxis1D(actionX),
         getActionAxis1D(actionY)
     );
-}
 
 void InputManager::rumble(float intensity, float duration) {
-    if (gamepad_) {
         Uint16 lowFreq = static_cast<Uint16>(intensity * 65535);
         Uint16 highFreq = static_cast<Uint16>(intensity * 65535);
         SDL_RumbleGamepad(gamepad_, lowFreq, highFreq,
                          static_cast<Uint32>(duration * 1000));
-    }
-}
 ```
 
 ---
@@ -457,63 +394,39 @@ void InputManager::loadDefaultBindings() {
 
     actionBindings_[Action::MoveBackward] = {
         .action = Action::MoveBackward,
-        .type = ActionType::Axis1D,
-        .bindings = {
             {InputSource::Keyboard, .key = SDLK_S},
             {InputSource::Keyboard, .key = SDLK_DOWN},
             {InputSource::Gamepad, .axis = SDL_GAMEPAD_AXIS_LEFTY, .axisScale = 1.0f}
-        }
-    };
 
     actionBindings_[Action::MoveLeft] = {
         .action = Action::MoveLeft,
-        .type = ActionType::Axis1D,
-        .bindings = {
             {InputSource::Keyboard, .key = SDLK_A},
             {InputSource::Keyboard, .key = SDLK_LEFT},
             {InputSource::Gamepad, .axis = SDL_GAMEPAD_AXIS_LEFTX, .axisScale = -1.0f}
-        }
-    };
 
     actionBindings_[Action::MoveRight] = {
         .action = Action::MoveRight,
-        .type = ActionType::Axis1D,
-        .bindings = {
             {InputSource::Keyboard, .key = SDLK_D},
             {InputSource::Keyboard, .key = SDLK_RIGHT},
             {InputSource::Gamepad, .axis = SDL_GAMEPAD_AXIS_LEFTX, .axisScale = 1.0f}
-        }
-    };
 
     actionBindings_[Action::Jump] = {
         .action = Action::Jump,
         .type = ActionType::Button,
-        .bindings = {
             {InputSource::Keyboard, .key = SDLK_SPACE},
             {InputSource::Gamepad, .button = SDL_GAMEPAD_BUTTON_SOUTH}  // A on Xbox
-        }
-    };
 
     actionBindings_[Action::Attack] = {
         .action = Action::Attack,
-        .type = ActionType::Button,
-        .bindings = {
             {InputSource::Mouse, .mouseButton = SDL_BUTTON_LEFT},
             {InputSource::Gamepad, .button = SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER}  // RB
-        }
-    };
 
     actionBindings_[Action::Pause] = {
         .action = Action::Pause,
-        .type = ActionType::Button,
-        .bindings = {
             {InputSource::Keyboard, .key = SDLK_ESCAPE},
             {InputSource::Gamepad, .button = SDL_GAMEPAD_BUTTON_START}
-        }
-    };
 
     // ... остальные bindings
-}
 ```
 
 ---
@@ -535,17 +448,14 @@ void InputManager::loadDefaultBindings() {
             {"source": "keyboard", "key": "S"},
             {"source": "keyboard", "key": "Down"},
             {"source": "gamepad", "axis": "LeftY", "scale": 1.0, "deadZone": 0.15}
-        ],
         "Jump": [
             {"source": "keyboard", "key": "Space"},
             {"source": "gamepad", "button": "A"}
-        ],
         "Attack": [
             {"source": "mouse", "button": "Left"},
             {"source": "gamepad", "button": "RB"}
         ]
     }
-}
 ```
 
 ### Загрузка
@@ -588,17 +498,12 @@ bool InputManager::loadConfig(const std::string& path) {
                     input.axisScale = b.value("scale", 1.0f);
                     input.deadZone = b.value("deadZone", 0.15f);
                     binding.type = ActionType::Axis1D;
-                }
-            }
 
             binding.bindings.push_back(input);
-        }
 
         actionBindings_[action] = binding;
-    }
 
     return true;
-}
 ```
 
 ---
@@ -636,8 +541,6 @@ void PlayerInputSystem(flecs::iter& it) {
         inputs[i].jumpPressed = input.isActionPressed(Action::Jump);
         inputs[i].attackPressed = input.isActionPressed(Action::Attack);
         inputs[i].aimHeld = input.isActionHeld(Action::Aim);
-    }
-}
 ```
 
 ### Main Loop
@@ -664,7 +567,6 @@ int main() {
                 running = false;
             }
             input.processEvent(event);
-        }
 
         // Обновление input state
         input.update(deltaTime);
@@ -673,11 +575,9 @@ int main() {
         ecs.progress(deltaTime);
 
         // Рендеринг...
-    }
 
     input.shutdown();
     return 0;
-}
 ```
 
 ---
@@ -706,16 +606,12 @@ public:
                 ImGui::SameLine();
                 if (ImGui::Button("X")) {
                     input.unbindAction(action, binding.bindings[i]);
-                }
 
                 ImGui::PopID();
-            }
 
             ImGui::Separator();
-        }
 
         ImGui::End();
-    }
 
     void handleRebind(const SDL_Event& event, InputManager& input) {
         if (!waitingForInput_) return;
@@ -733,11 +629,9 @@ public:
             newBinding.button = event.gbutton.button;
         } else {
             return;  // Не тот тип события
-        }
 
         input.bindAction(remappingAction_, newBinding);
         waitingForInput_ = false;
-    }
 
 private:
     bool waitingForInput_ = false;
@@ -774,7 +668,6 @@ glm::vec2 getMovementDirection(InputManager& input) {
     }
 
     return dir;
-}
 ```
 
 ---

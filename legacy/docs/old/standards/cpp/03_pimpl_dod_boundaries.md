@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CPP-004
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет **строгие границы** использования паттерна PIMPL (Pointer to Implementation) в ProjectV.
@@ -86,7 +92,6 @@ export namespace projectv::render::vulkan {
 /// - Скрывает VkDevice, VkPhysicalDevice, VmaAllocator
 /// - Изолирует от изменений Vulkan API
 /// - Уменьшает время компиляции зависимого кода
-///
 /// ## Thread Safety
 /// - create(): main thread only
 /// - destroy(): main thread only
@@ -128,12 +133,10 @@ private:
     // PIMPL — всегда unique_ptr
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render::vulkan
 ```
 
-```cpp
 // ProjectV.Render.Vulkan.Device.cpp
 module ProjectV.Render.Vulkan.Device;
 
@@ -141,7 +144,6 @@ module ProjectV.Render.Vulkan.Device;
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
-import std;
 import ProjectV.Render.Vulkan.Device;
 
 namespace projectv::render::vulkan {
@@ -166,15 +168,10 @@ struct RenderDevice::Impl {
         }
         if (allocator) {
             vmaDestroyAllocator(allocator);
-        }
         if (device) {
             vkDestroyDevice(device, nullptr);
-        }
         if (instance) {
             vkDestroyInstance(instance, nullptr);
-        }
-    }
-};
 
 auto RenderDevice::create(Config const& config) noexcept
     -> std::expected<RenderDevice, DeviceError> {
@@ -186,7 +183,6 @@ auto RenderDevice::create(Config const& config) noexcept
     // (implementation details omitted for brevity)
 
     return result;
-}
 
 RenderDevice::~RenderDevice() noexcept = default;
 RenderDevice::RenderDevice(RenderDevice&&) noexcept = default;
@@ -194,20 +190,13 @@ RenderDevice& RenderDevice::operator=(RenderDevice&&) noexcept = default;
 
 auto RenderDevice::native_device() const noexcept -> VkDevice {
     return impl_->device;
-}
 
 auto RenderDevice::allocator() const noexcept -> VmaAllocator {
     return impl_->allocator;
-}
 
 auto RenderDevice::wait_idle() const noexcept -> void {
     if (impl_ && impl_->device) {
         vkDeviceWaitIdle(impl_->device);
-    }
-}
-
-} // namespace projectv::render::vulkan
-```
 
 ### 4.3 Пример: PhysicsWorld с PIMPL
 
@@ -263,12 +252,10 @@ private:
     PhysicsWorld() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::physics
 ```
 
-```cpp
 // ProjectV.Physics.World.cpp
 module ProjectV.Physics.World;
 
@@ -279,8 +266,6 @@ module ProjectV.Physics.World;
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 
-import std;
-import glm;
 import ProjectV.Physics.World;
 
 namespace projectv::physics {
@@ -293,7 +278,6 @@ struct PhysicsWorld::Impl {
     std::unique_ptr<JPH::BroadPhaseLayerInterface> bp_layer_interface;
     std::unique_ptr<JPH::ObjectLayerPairFilter> object_layer_filter;
     std::unique_ptr<JPH::ObjectVsBroadPhaseLayerFilter> bp_layer_filter;
-};
 
 auto PhysicsWorld::create(Config const& config) noexcept
     -> std::expected<PhysicsWorld, PhysicsError> {
@@ -308,9 +292,6 @@ auto PhysicsWorld::create(Config const& config) noexcept
 }
 
 // ... implementation methods
-
-} // namespace projectv::physics
-```
 
 ---
 
@@ -374,7 +355,6 @@ export namespace projectv::ecs {
 /// - Trivially destructible — нет деструктора
 /// - Alignment ≤ 64 bytes — влезает в cache line
 /// - No virtual functions — нет vtable overhead
-///
 /// ## Why?
 /// Эти требования гарантируют:
 /// - SoA layout без overhead
@@ -388,14 +368,9 @@ concept HotPathComponent =
     !std::is_polymorphic_v<T>;
 
 /// Концепт: ECS Component (может иметь деструктор).
-export template<typename T>
 concept ECSComponent =
-    std::is_trivially_copyable_v<T> &&
-    alignof(T) <= 64 &&
-    !std::is_polymorphic_v<T>;
 
 /// Концепт: Tag Component (пустой, для marking entities).
-export template<typename T>
 concept TagComponent =
     std::is_empty_v<T> &&
     std::is_trivially_copyable_v<T>;
@@ -423,7 +398,6 @@ export namespace projectv::ecs {
 
 // ============================================================================
 // HOT PATH COMPONENTS — PIMPL ЗАПРЕЩЁН
-// ============================================================================
 
 /// Transform component — обрабатывается каждый кадр.
 /// Размер: 48 bytes (3× vec3 + padding)
@@ -440,7 +414,6 @@ STATIC_ASSERT_HOT_PATH_COMPONENT(TransformComponent);
 export struct VelocityComponent {
     glm::vec3 linear{0.0f};
     glm::vec3 angular{0.0f};
-};
 STATIC_ASSERT_HOT_PATH_COMPONENT(VelocityComponent);
 
 /// Voxel chunk data component.
@@ -451,7 +424,6 @@ export struct VoxelChunkComponent {
     uint8_t state{0};
     uint8_t flags{0};
     uint8_t _padding[6];
-};
 STATIC_ASSERT_HOT_PATH_COMPONENT(VoxelChunkComponent);
 
 /// Mesh instance component (for rendering).
@@ -462,7 +434,6 @@ export struct MeshInstanceComponent {
     uint32_t index_buffer_offset{0};
     uint32_t vertex_count{0};
     uint32_t index_count{0};
-};
 STATIC_ASSERT_HOT_PATH_COMPONENT(MeshInstanceComponent);
 
 /// Physics body reference component.
@@ -470,19 +441,15 @@ export struct PhysicsBodyComponent {
     uint64_t body_id{0};              ///< Jolt BodyID
     uint32_t collision_layer{0};
     uint32_t flags{0};
-};
 STATIC_ASSERT_HOT_PATH_COMPONENT(PhysicsBodyComponent);
 
 /// Bounding box component.
 export struct BoundingBoxComponent {
     glm::vec3 min{0.0f};
     glm::vec3 max{0.0f};
-};
 STATIC_ASSERT_HOT_PATH_COMPONENT(BoundingBoxComponent);
 
-// ============================================================================
 // TAG COMPONENTS — пустые, для marking entities
-// ============================================================================
 
 /// Tag: entity is visible this frame.
 export struct VisibleTag {};
@@ -496,9 +463,7 @@ static_assert(TagComponent<NeedsCleanupTag>);
 export struct PlayerControlledTag {};
 static_assert(TagComponent<PlayerControlledTag>);
 
-// ============================================================================
 // COLD PATH COMPONENTS — PIMPL опционален
-// ============================================================================
 
 /// Metadata component — используется редко.
 export struct MetadataComponent {
@@ -506,7 +471,6 @@ export struct MetadataComponent {
     std::string description;
     uint64_t created_at{0};
     uint64_t modified_at{0};
-};
 // NOT a HotPathComponent — std::string has destructor
 
 /// Script component — Lua/WASM reference.
@@ -514,7 +478,6 @@ export struct ScriptComponent {
     uint32_t script_id{0};
     void* script_state{nullptr};       // Opaque pointer to script VM
     // NOT trivially destructible if script_state needs cleanup
-};
 
 } // namespace projectv::ecs
 ```
@@ -564,7 +527,6 @@ concept NoHeapAllocation =
 export template<typename T>
 concept AllocatorAware = requires {
     typename T::allocator_type;
-};
 
 } // namespace projectv::core
 ```
@@ -620,8 +582,6 @@ private:
             transforms[i].rotation = glm::normalize(transforms[i].rotation * dq);
 
             transforms[i].dirty = 1;
-        }
-    }
 };
 
 } // namespace projectv::ecs
@@ -644,21 +604,16 @@ export namespace projectv::core::memory {
 /// ## Usage
 /// ```cpp
 /// ArenaAllocator arena(64 * 1024);  // 64 KB scratch buffer
-///
 /// void hot_path_function(ArenaAllocator& arena) {
 ///     // Allocate temporary data
 ///     auto* temp_data = arena.allocate<glm::vec3>(1024);
-///
 ///     // Use temp_data...
-///
 ///     // Reset arena at end of frame (not individual free!)
 ///     arena.reset();
 /// }
 /// ```
-///
 /// ## Thread Safety
 /// NOT thread-safe. Each thread should have its own arena.
-///
 /// ## Memory Model
 /// - Pre-allocated buffer
 /// - Linear bump allocation
@@ -692,38 +647,31 @@ public:
         if (new_offset > capacity_) {
             // Arena overflow — critical error
             std::terminate();
-        }
 
         offset_ = new_offset;
         return buffer_ + aligned_offset;
-    }
 
     /// Выделяет массив типа T.
     template<typename T>
     [[nodiscard]] auto allocate(size_t count) noexcept -> T* {
         return static_cast<T*>(allocate(count * sizeof(T), alignof(T)));
-    }
 
     /// Сбрасывает arena — O(1).
     /// Вся память становится доступна для переиспользования.
     auto reset() noexcept -> void {
         offset_ = 0;
-    }
 
     /// Получает использованный размер.
     [[nodiscard]] auto used() const noexcept -> size_t {
         return offset_;
-    }
 
     /// Получает общий размер.
     [[nodiscard]] auto capacity() const noexcept -> size_t {
         return capacity_;
-    }
 
 private:
     static constexpr auto align_up(size_t offset, size_t alignment) noexcept -> size_t {
         return (offset + alignment - 1) & ~(alignment - 1);
-    }
 
     std::byte* buffer_;
     size_t capacity_;
@@ -737,7 +685,6 @@ export thread_local inline ArenaAllocator scratch_arena{1024 * 1024};
 /// Получает scratch arena для текущего потока.
 [[nodiscard]] export auto get_scratch_arena() noexcept -> ArenaAllocator& {
     return scratch_arena;
-}
 
 } // namespace projectv::core::memory
 ```
@@ -770,12 +717,10 @@ export namespace projectv::core {
 /// - No heap allocation
 /// - No pointer indirection (same cache line)
 /// - Known memory footprint
-///
 /// ## Disadvantages
 /// - Fixed size
 /// - Requires manual alignment
 /// - Header must know size (breaks complete encapsulation)
-///
 /// ## Usage
 /// ```cpp
 /// class MyType {
@@ -801,34 +746,23 @@ public:
     FastPimpl(FastPimpl&& other) noexcept {
         std::memcpy(storage_, other.storage_, Size);
         std::memset(other.storage_, 0, Size);
-    }
 
     FastPimpl& operator=(FastPimpl&& other) noexcept {
-        std::memcpy(storage_, other.storage_, Size);
-        std::memset(other.storage_, 0, Size);
         return *this;
-    }
 
     ~FastPimpl() noexcept = default;
 
     /// Получает указатель на Impl.
     template<typename T>
-        requires (sizeof(T) <= Size && alignof(T) <= Alignment)
     [[nodiscard]] auto get() noexcept -> T* {
         return std::launder(reinterpret_cast<T*>(storage_));
-    }
 
-    template<typename T>
-        requires (sizeof(T) <= Size && alignof(T) <= Alignment)
     [[nodiscard]] auto get() const noexcept -> T const* {
         return std::launder(reinterpret_cast<T const*>(storage_));
-    }
 
     /// Destruct текущий Impl.
-    template<typename T>
     auto destruct() noexcept -> void {
         get<T>()->~T();
-    }
 
 private:
     alignas(Alignment) std::byte storage_[Size];
@@ -851,11 +785,9 @@ public:
 
     ~SmallSystem() noexcept {
         impl_.destruct<Impl>();
-    }
 
     auto do_work() noexcept -> void {
         impl_.get<Impl>()->do_work_internal();
-    }
 
 private:
     struct Impl {
@@ -864,14 +796,12 @@ private:
 
         auto do_work_internal() noexcept -> void {
             // Implementation
-        }
     };
 
     // 64 bytes достаточно для Impl
     static_assert(sizeof(Impl) <= 64);
 
     FastPimpl<64, 16> impl_;
-};
 ```
 
 ---
@@ -920,6 +850,17 @@ static_assert(projectv::ecs::TagComponent<MyTag>);
 ### 8.3 Clang-Tidy Rules
 
 ```yaml
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- СТВ-CPP-001: Стандарт языка C++
+- СТВ-CPP-003: Стандарт управления памятью
+- СТВ-CMAKE-003: Стандарт управления зависимостями
+- DOD Philosophy (docs/philosophy/03_dod-philosophy.md)
+
+---
+
 # .clang-tidy
 Checks: >
   -*,
@@ -978,3 +919,21 @@ WarnOnHeapAllocationInHotPath: true
 4. `virtual` функции в компонентах
 5. `new`/`delete` в ECS systems
 6. PIMPL для математических типов
+
+---
+
+## 11. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 12. Связанные документы
+
+- [СТВ-CPP-001: Стандарт языка C++](00_language-standard.md)
+- [СТВ-CPP-002: Стандарт структуры кода](01_code-structure.md)
+- [СТВ-CMAKE-003: Стандарт управления зависимостями](../cmake/02_dependencies.md)
+- [DOD Philosophy](../../philosophy/03_dod-philosophy.md)
+- [ECS Philosophy](../../philosophy/04_ecs-philosophy.md)

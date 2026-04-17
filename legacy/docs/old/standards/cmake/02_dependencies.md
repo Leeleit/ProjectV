@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-003
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет обязательные требования к управлению внешними зависимостями в ProjectV. Все сторонние
@@ -49,11 +55,20 @@ external/
 ├── fastgltf/         # Загрузчик glTF — C++ библиотека (требуется PIMPL)
 ├── miniaudio/        # Аудио — C-библиотека
 └── doctest/          # Тестирование — header-only C++
-```
 
 ### 4.2 Команды управления сабмодулями
 
 ```bash
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- Документация CMake 3.30
+- СТВ-CMAKE-001: Спецификация системы сборки CMake
+- ADR-0004: Спецификация сборки и модулей
+
+---
+
 # Добавление сабмодуля
 git submodule add https://github.com/libsdl-org/SDL external/SDL
 
@@ -72,6 +87,7 @@ git rm -f external/SDL
 ### 4.3 Интеграция с CMake
 
 ```cmake
+
 # C-библиотека — прямая интеграция (Global Module Fragment разрешён)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(external/volk EXCLUDE_FROM_ALL)
@@ -125,6 +141,7 @@ FetchContent_Declare(
 ### 5.2 Активация FetchContent
 
 ```cmake
+
 # Активация всех объявленных зависимостей
 FetchContent_MakeAvailable(volk glm flecs)
 
@@ -139,6 +156,7 @@ endif()
 ### 5.3 Переопределение конфигурации
 
 ```cmake
+
 # Переопределение опций перед FetchContent_MakeAvailable
 set(FLECS_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -153,6 +171,7 @@ FetchContent_MakeAvailable(flecs)
 ### 6.1 Vulkan SDK
 
 ```cmake
+
 # ОБЯЗАТЕЛЬНО: Vulkan 1.4
 find_package(Vulkan 1.4 REQUIRED)
 
@@ -164,6 +183,36 @@ endif()
 # Использование
 target_link_libraries(MyTarget PRIVATE Vulkan::Vulkan)
 
+verify_dependency_version("Vulkan" "1.4" ${Vulkan_VERSION})
+```
+
+---
+
+## 10. Требования соответствия
+
+### 10.1 Обязательные требования
+
+1. Все внешние зависимости ДОЛЖНЫ располагаться в директории `external/`
+2. C++ библиотеки с шаблонами ДОЛЖНЫ использовать паттерн PIMPL
+3. `#include` для C++ библиотек НЕ ДОЛЖНЫ появляться в файлах `.cppm`
+4. Макросы Glaze ДОЛЖНЫ быть изолированы в файлах реализации `.cpp`
+5. Версии зависимостей ДОЛЖНЫ соответствовать минимальным требованиям
+
+### 10.2 Запрещённые практики
+
+1. `#include <Jolt/Jolt.h>` в файлах `.cppm`
+2. `#include <flecs.h>` в файлах `.cppm`
+3. `#include <imgui.h>` в файлах `.cppm`
+4. `#include <glaze/glaze.hpp>` в файлах `.cppm`
+5. Прямое раскрытие типов C++ библиотек в интерфейсах модулей
+
+---
+
+## 11. Конфигурация флагов Clang для C++26 экспериментальных фич
+
+### 11.1 Обязательные флаги компилятора
+
+```cmake
 # Путь к Vulkan SDK
 set(VULKAN_SDK $ENV{VULKAN_SDK})
 if(NOT VULKAN_SDK)
@@ -174,6 +223,7 @@ endif()
 ### 6.2 Пользовательские модули поиска
 
 ```cmake
+
 # cmake/FindVulkan.cmake (расширенный)
 find_package(Vulkan QUIET)
 
@@ -212,19 +262,16 @@ C++ библиотеки с шаблонами и макросами НЕ ДОЛ
                           │
                           │ import
                           ▼
-┌─────────────────────────────────────────────────────────────┐
 │  Реализация модуля (.cpp)                                   │
-│  ─────────────────────                                      │
 │  • module ProjectV.ModuleName;                              │
 │  • #include <Jolt/Jolt.h>                                   │
 │  • #include <flecs.h>                                       │
 │  • Полное определение struct Impl                           │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### 7.3 Пример интеграции Flecs
 
 ```cmake
+
 # CMakeLists.txt для обёртки Flecs
 add_library(ProjectV.ECS.Flecs)
 
@@ -236,9 +283,7 @@ target_sources(ProjectV.ECS.Flecs
 )
 
 target_link_libraries(ProjectV.ECS.Flecs
-    PRIVATE
         flecs::flecs_static
-)
 
 # PIMPL: Заголовки Flecs видны только в .cpp
 target_include_directories(ProjectV.ECS.Flecs
@@ -250,6 +295,7 @@ target_include_directories(ProjectV.ECS.Flecs
 ### 7.4 Пример интеграции JoltPhysics
 
 ```cmake
+
 # CMakeLists.txt для обёртки Jolt
 add_library(ProjectV.Physics.Jolt)
 
@@ -261,9 +307,7 @@ target_sources(ProjectV.Physics.Jolt
 )
 
 target_link_libraries(ProjectV.Physics.Jolt
-    PRIVATE
         Jolt
-)
 
 # PIMPL: Заголовки Jolt видны только в .cpp
 target_include_directories(ProjectV.Physics.Jolt
@@ -275,6 +319,7 @@ target_include_directories(ProjectV.Physics.Jolt
 ### 7.5 Пример интеграции ImGui
 
 ```cmake
+
 # CMakeLists.txt для обёртки ImGui
 add_library(ProjectV.UI.ImGui)
 
@@ -308,6 +353,7 @@ Glaze использует макросы для рефлексии (`glz::objec
 ### 8.2 Архитектура интеграции Glaze
 
 ```cmake
+
 # CMakeLists.txt для модуля сериализации
 add_library(ProjectV.Core.Serialization)
 
@@ -345,7 +391,6 @@ export template<typename T>
 using SerializeResult = std::expected<std::string, SerializationError>;
 
 /// Тип результата десериализации
-export template<typename T>
 using DeserializeResult = std::expected<T, SerializationError>;
 
 /// JSON-сериализатор — обёртка PIMPL
@@ -363,7 +408,6 @@ public:
     [[nodiscard]] auto serialize(T const& value) const noexcept
         -> SerializeResult<T>;
 
-    template<typename T>
     [[nodiscard]] auto deserialize(std::string_view json) const noexcept
         -> DeserializeResult<T>;
 
@@ -375,20 +419,16 @@ private:
 } // namespace projectv::core
 ```
 
-```cpp
 // ProjectV.Core.Serialization.cpp
 module ProjectV.Core.Serialization;
 
 // Заголовок Glaze ЗДЕСЬ — не в .cppm
 #include <glaze/glaze.hpp>
 
-import std;
-
 namespace projectv::core {
 
 struct JsonSerializer::Impl {
     glz::context ctx;
-};
 
 JsonSerializer::JsonSerializer() noexcept
     : impl_(std::make_unique<Impl>()) {}
@@ -398,7 +438,6 @@ JsonSerializer::~JsonSerializer() noexcept = default;
 JsonSerializer::JsonSerializer(JsonSerializer&&) noexcept = default;
 JsonSerializer& JsonSerializer::operator=(JsonSerializer&&) noexcept = default;
 
-template<typename T>
 auto JsonSerializer::serialize(T const& value) const noexcept
     -> SerializeResult<T> {
     std::string buffer;
@@ -408,32 +447,20 @@ auto JsonSerializer::serialize(T const& value) const noexcept
             .code = static_cast<uint32_t>(err),
             .message = "Ошибка сериализации"
         });
-    }
     return buffer;
-}
 
-template<typename T>
 auto JsonSerializer::deserialize(std::string_view json) const noexcept
     -> DeserializeResult<T> {
     T value;
     auto err = glz::read_json(value, json);
-    if (err) {
-        return std::unexpected(SerializationError{
-            .code = static_cast<uint32_t>(err),
             .message = "Ошибка десериализации"
-        });
-    }
     return value;
-}
 
 // Явные инстанциации шаблонов
 template auto JsonSerializer::serialize<glm::vec3>(glm::vec3 const&) const noexcept
     -> SerializeResult<glm::vec3>;
 template auto JsonSerializer::deserialize<glm::vec3>(std::string_view) const noexcept
     -> DeserializeResult<glm::vec3>;
-
-} // namespace projectv::core
-```
 
 ### 8.4 Сериализация компонентов с Glaze
 
@@ -468,7 +495,6 @@ struct meta<projectv::gameplay::TransformComponent> {
         "rotation", &T::rotation,
         "scale", &T::scale
     );
-};
 
 } // namespace glz
 ```
@@ -497,6 +523,7 @@ struct meta<projectv::gameplay::TransformComponent> {
 ### 9.2 Верификация версий
 
 ```cmake
+
 # Функция верификации версии зависимости
 function(verify_dependency_version NAME MIN_VERSION ACTUAL_VERSION)
     if(ACTUAL_VERSION VERSION_LESS MIN_VERSION)
@@ -553,38 +580,32 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     )
 
     # Модули C++26
-    add_compile_options(
         -fmodules                     # Включение поддержки модулей
         -fmodule-file=std=std.pcm     # Предкомпилированный модуль std
         -fprebuilt-module-path=${CMAKE_BINARY_DIR}/modules  # Путь к PCM файлам
-    )
 
     # Предупреждения
-    add_compile_options(
         -Wall                         # Все базовые предупреждения
         -Wextra                       # Дополнительные предупреждения
         -Wpedantic                    # Строгое соответствие ISO C++
         -Werror                       # Предупреждения как ошибки
         -Wno-unused-command-line-argument  # Обход для модулей
-    )
 
     # Экспериментальные фичи C++26
-    add_compile_options(
         -fexperimental-library        # Экспериментные возможности libc++
         -freflection                  # P2996 Static Reflection (экспериментально)
-    )
 
     # Линковка
     add_link_options(
         -stdlib=libc++
         -lc++abi
-    )
 endif()
 ```
 
 ### 11.2 Конфигурация для Debug/Release
 
 ```cmake
+
 # Debug-специфичные флаги
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g3 -O0")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address,undefined")
@@ -605,6 +626,7 @@ endif()
 ### 11.3 Предкомпиляция модуля std
 
 ```cmake
+
 # cmake/StdModule.cmake
 
 function(precompile_std_module)
@@ -634,11 +656,9 @@ export module std;
         DEPENDS "${STD_MODULE_SOURCE}"
         COMMENT "Precompiling std module"
         VERBATIM
-    )
 
     add_custom_target(std_module
         DEPENDS "${CMAKE_BINARY_DIR}/std.pcm"
-    )
 endfunction()
 ```
 
@@ -649,6 +669,7 @@ endfunction()
 ### 12.1 Корневой CMakeLists.txt
 
 ```cmake
+
 # CMakeLists.txt (root)
 cmake_minimum_required(VERSION 3.30)
 
@@ -720,6 +741,7 @@ install(TARGETS ProjectV.Runtime
 ### 12.2 CMakeLists.txt для модуля
 
 ```cmake
+
 # src/core/CMakeLists.txt
 
 add_library(ProjectV.Core)
@@ -796,8 +818,6 @@ Level 3 (Domain):
 
 Level 4 (Application):
     ProjectV.App              ── Level 3
-─────────────────────────────────────────────────────────────
-```
 
 ---
 
@@ -861,7 +881,6 @@ public:
     auto set(EntityId id, T const& component) noexcept -> void;
 
     /// Получает компонент.
-    template<typename T>
     [[nodiscard]] auto get(EntityId id) const noexcept -> T const*;
 
 private:
@@ -872,7 +891,6 @@ private:
 } // namespace projectv::ecs
 ```
 
-```cpp
 // === ProjectV.ECS.Flecs.cpp (Implementation) ===
 module ProjectV.ECS.Flecs;
 
@@ -880,8 +898,6 @@ module ProjectV.ECS.Flecs;
 #include <flecs.h>
 #include <flecs/addons/cpp/world.hpp>
 #include <flecs/addons/cpp/entity.hpp>
-
-import std;
 
 namespace projectv::ecs {
 
@@ -893,7 +909,6 @@ struct World::Impl {
     explicit Impl(uint32_t thread_count)
         : world(flecs::world().set_threads(thread_count))
     {}
-};
 
 World::World() noexcept
     : impl_(std::make_unique<Impl>()) {}
@@ -912,22 +927,16 @@ auto World::entity() noexcept -> EntityId {
 
 auto World::entity(std::string_view name) noexcept -> EntityId {
     return impl_->world.entity(name.data()).id();
-}
 
 auto World::destroy(EntityId id) noexcept -> void {
     impl_->world.entity(static_cast<flecs::entity_t>(id)).destruct();
-}
 
 auto World::progress(float delta_time) noexcept -> bool {
     return impl_->world.progress(delta_time);
-}
 
 // Явные инстанциации для известных типов компонентов
 template auto World::set<TransformComponent>(EntityId, TransformComponent const&) noexcept -> void;
 template auto World::get<TransformComponent>(EntityId) const noexcept -> TransformComponent const*;
-
-} // namespace projectv::ecs
-```
 
 ### 13.3 Техника: Global Module Fragment для C-библиотек
 
@@ -960,6 +969,7 @@ export class VulkanContext {
 ### 13.4 Техника: Compile Definitions Isolation
 
 ```cmake
+
 # Изоляция макросов через target_compile_definitions
 
 # Flecs требует FLECS_NO_CPP17 для совместимости
@@ -1025,8 +1035,6 @@ auto World::register_component_type(std::string_view name,
     impl_->world.component(name.data());
     for (auto const& m : members) {
         // ...
-    }
-}
 
 } // namespace projectv::ecs
 ```
@@ -1068,7 +1076,6 @@ export struct WindowConfig {
     bool fullscreen{false};
     bool vsync{true};
     bool resizable{true};
-};
 
 /// Window handle (opaque).
 export struct WindowHandle {
@@ -1077,14 +1084,12 @@ export struct WindowHandle {
     [[nodiscard]] auto is_valid() const noexcept -> bool {
         return native != nullptr;
     }
-};
 
 /// Platform subsystem — wrapper для SDL3.
 ///
 /// ## Invariants
 /// - SDL инициализирован после успешного init()
 /// - window_ валиден после успешного create_window()
-///
 /// ## Thread Safety
 /// - event processing должен вызываться из main thread
 /// - window operations могут вызываться из любого потока (SDL thread-safe)
@@ -1099,34 +1104,28 @@ public:
     PlatformSubsystem& operator=(const PlatformSubsystem&) = delete;
 
     /// Инициализирует SDL3.
-    ///
     /// @pre SDL не инициализирован
     /// @post SDL готов к использованию
     [[nodiscard]] auto init() noexcept
         -> std::expected<void, PlatformError>;
 
     /// Создаёт окно.
-    ///
     /// @pre init() успешно вызван
     /// @post window() возвращает валидный handle
     [[nodiscard]] auto create_window(WindowConfig const& config) noexcept
         -> std::expected<WindowHandle, PlatformError>;
 
     /// Обрабатывает события.
-    ///
     /// @return true если приложение должно продолжаться
     [[nodiscard]] auto process_events() noexcept -> bool;
 
     /// Получает Vulkan extensions для SDL.
-    ///
     /// @pre create_window() успешно вызван
     [[nodiscard]] auto get_vulkan_extensions() const noexcept
         -> std::expected<std::vector<char const*>, PlatformError>;
 
     /// Создаёт Vulkan surface.
-    ///
     /// @param instance Vulkan instance
-    /// @pre create_window() успешно вызван
     [[nodiscard]] auto create_vulkan_surface(VkInstance instance) noexcept
         -> std::expected<VkSurfaceKHR, PlatformError>;
 
@@ -1139,7 +1138,6 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::platform
 ```
@@ -1174,8 +1172,6 @@ PlatformSubsystem::~PlatformSubsystem() noexcept {
     }
     if (impl_->sdl_initialized) {
         SDL_Quit();
-    }
-}
 
 PlatformSubsystem::PlatformSubsystem(PlatformSubsystem&&) noexcept = default;
 PlatformSubsystem& PlatformSubsystem::operator=(PlatformSubsystem&&) noexcept = default;
@@ -1183,33 +1179,24 @@ PlatformSubsystem& PlatformSubsystem::operator=(PlatformSubsystem&&) noexcept = 
 auto PlatformSubsystem::init() noexcept
     -> std::expected<void, PlatformError> {
 
-    if (impl_->sdl_initialized) {
         return {};
-    }
 
     // SDL3 initialization
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         return std::unexpected(PlatformError::SDLInitFailed);
-    }
 
     impl_->sdl_initialized = true;
-    return {};
-}
 
 auto PlatformSubsystem::create_window(WindowConfig const& config) noexcept
     -> std::expected<WindowHandle, PlatformError> {
 
     if (!impl_->sdl_initialized) {
-        return std::unexpected(PlatformError::SDLInitFailed);
-    }
 
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN;
     if (config.resizable) {
         flags |= SDL_WINDOW_RESIZABLE;
-    }
     if (config.fullscreen) {
         flags |= SDL_WINDOW_FULLSCREEN;
-    }
 
     impl_->window = SDL_CreateWindow(
         config.title.c_str(),
@@ -1220,10 +1207,8 @@ auto PlatformSubsystem::create_window(WindowConfig const& config) noexcept
 
     if (!impl_->window) {
         return std::unexpected(PlatformError::WindowCreationFailed);
-    }
 
     return WindowHandle{impl_->window};
-}
 
 auto PlatformSubsystem::process_events() noexcept -> bool {
     SDL_Event event;
@@ -1238,45 +1223,31 @@ auto PlatformSubsystem::process_events() noexcept -> bool {
                 break;
 
             default:
-                break;
-        }
-    }
     return !impl_->should_quit;
-}
 
 auto PlatformSubsystem::get_vulkan_extensions() const noexcept
     -> std::expected<std::vector<char const*>, PlatformError> {
-
-    if (!impl_->window) {
-        return std::unexpected(PlatformError::WindowCreationFailed);
-    }
 
     Uint32 count;
     char const* const* extensions = SDL_Vulkan_GetInstanceExtensions(&count);
 
     if (!extensions) {
         return std::unexpected(PlatformError::VulkanSurfaceFailed);
-    }
 
     return std::vector<char const*>(extensions, extensions + count);
-}
 
 auto PlatformSubsystem::create_vulkan_surface(VkInstance instance) noexcept
     -> std::expected<VkSurfaceKHR, PlatformError> {
 
     VkSurfaceKHR surface;
     if (!SDL_Vulkan_CreateSurface(impl_->window, instance, nullptr, &surface)) {
-        return std::unexpected(PlatformError::VulkanSurfaceFailed);
-    }
 
     return surface;
-}
 
 auto PlatformSubsystem::window_size() const noexcept -> glm::ivec2 {
     int w, h;
     SDL_GetWindowSize(impl_->window, &w, &h);
     return {w, h};
-}
 
 auto PlatformSubsystem::native_window_handle() const noexcept -> void* {
     SDL_SysWMinfo wmInfo;
@@ -1289,7 +1260,6 @@ auto PlatformSubsystem::native_window_handle() const noexcept -> void* {
 #else
     return nullptr;
 #endif
-}
 
 } // namespace projectv::platform
 ```
@@ -1297,6 +1267,7 @@ auto PlatformSubsystem::native_window_handle() const noexcept -> void* {
 ### 14.3 CMakeLists.txt для Platform
 
 ```cmake
+
 # src/core/platform/CMakeLists.txt
 
 add_library(ProjectV.Core.Platform)
@@ -1333,9 +1304,19 @@ if(WIN32)
         setupapi
     )
 elseif(UNIX AND NOT APPLE)
-    target_link_libraries(ProjectV.Core.Platform PRIVATE
         dl
         pthread
-    )
 endif()
 ```
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 12. Связанные документы
+
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](00_specification.md)
+- [СТВ-CMAKE-002: Стандарт структуры проекта CMake](01_basics-structure.md)
+- [ADR-0004: Спецификация сборки и модулей](../../architecture/adr/0004-build-and-modules-spec.md)

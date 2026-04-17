@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 2.0
+**Дата:** 2026-02-22
+
 ## Обзор
 
 ProjectV обрабатывает огромные объёмы ресурсов:
@@ -54,7 +58,6 @@ export enum class ResourceType : uint8_t {
     Mesh,
     AudioClip,
     ConfigFile
-};
 
 /// Состояние загрузки ресурса.
 export enum class LoadState : uint8_t {
@@ -63,7 +66,6 @@ export enum class LoadState : uint8_t {
     Loaded,
     Failed,
     Unloading
-};
 
 /// Приоритет загрузки.
 export enum class LoadPriority : uint8_t {
@@ -71,7 +73,6 @@ export enum class LoadPriority : uint8_t {
     Normal = 1,
     High = 2,
     Critical = 3
-};
 
 /// Коды ошибок ResourceManager.
 export enum class ResourceError : uint8_t {
@@ -83,7 +84,6 @@ export enum class ResourceError : uint8_t {
     OutOfMemory,
     StillInUse,
     DependencyFailed
-};
 
 /// Конфигурация ResourceManager.
 export struct ResourceManagerConfig {
@@ -92,7 +92,6 @@ export struct ResourceManagerConfig {
     size_t cpu_budget_mb{512};
     bool enable_hot_reload{false};
     bool enable_defragmentation{true};
-};
 
 /// Метаданные ресурса.
 export struct ResourceMetadata {
@@ -102,7 +101,6 @@ export struct ResourceMetadata {
     size_t memory_usage{0};
     uint32_t ref_count{0};
     uint64_t last_access_frame{0};
-};
 
 /// Главный менеджер ресурсов (PIMPL).
 export class ResourceManager {
@@ -134,7 +132,6 @@ public:
 
     /// Асинхронная загрузка ресурса.
     [[nodiscard]] auto load_async(
-        std::string_view path,
         ResourceType type,
         LoadPriority priority = LoadPriority::Normal
     ) noexcept -> std::future<std::expected<ResourceHandle, ResourceError>>;
@@ -201,7 +198,6 @@ private:
     ResourceManager() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::resource
 ```
@@ -256,11 +252,9 @@ private:
     ResourceManager& manager_;
     BufferConfig config_;
     std::string name_;
-};
 
 /// Утилиты для работы с буферами.
 export class BufferUtils {
-public:
     /// Копирует данные в буфер (staging).
     [[nodiscard]] static auto upload(
         ResourceManager& manager,
@@ -272,25 +266,16 @@ public:
 
     /// Копирует данные из буфера.
     [[nodiscard]] static auto download(
-        ResourceManager& manager,
-        ResourceHandle buffer,
         void* data,
-        VkDeviceSize size,
-        VkDeviceSize offset = 0
-    ) noexcept -> std::expected<void, ResourceError>;
 
     /// Получает mapped pointer.
     [[nodiscard]] static auto map(
-        ResourceManager& manager,
         ResourceHandle buffer
     ) noexcept -> std::expected<void*, ResourceError>;
 
     /// Освобождает mapped pointer.
     static auto unmap(
-        ResourceManager& manager,
-        ResourceHandle buffer
     ) noexcept -> void;
-};
 
 } // namespace projectv::resource
 ```
@@ -329,7 +314,6 @@ export struct ImageConfig {
     VkImageUsageFlags usage{VK_IMAGE_USAGE_SAMPLED_BIT};
     VmaMemoryUsage memory_usage{VMA_MEMORY_USAGE_GPU_ONLY};
     VkImageLayout initial_layout{VK_IMAGE_LAYOUT_UNDEFINED};
-};
 
 /// Builder для создания изображений.
 export class ImageBuilder {
@@ -358,11 +342,9 @@ private:
     ResourceManager& manager_;
     ImageConfig config_;
     std::string name_;
-};
 
 /// Утилиты для работы с изображениями.
 export class ImageUtils {
-public:
     /// Загружает текстуру из файла.
     [[nodiscard]] static auto load_from_file(
         ResourceManager& manager,
@@ -371,7 +353,6 @@ public:
 
     /// Загружает данные в изображение.
     [[nodiscard]] static auto upload(
-        ResourceManager& manager,
         ResourceHandle image,
         void const* data,
         VkDeviceSize size
@@ -379,21 +360,15 @@ public:
 
     /// Генерирует mip maps.
     static auto generate_mips(
-        ResourceManager& manager,
-        ResourceHandle image,
         VkCommandBuffer cmd
     ) noexcept -> void;
 
     /// Переходит в layout.
     static auto transition_layout(
-        ResourceManager& manager,
-        ResourceHandle image,
         VkCommandBuffer cmd,
         VkImageLayout new_layout,
         VkPipelineStageFlags2 src_stage,
         VkPipelineStageFlags2 dst_stage
-    ) noexcept -> void;
-};
 
 } // namespace projectv::resource
 ```
@@ -469,7 +444,6 @@ private:
     TextureAtlasManager() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::resource
 ```
@@ -507,7 +481,6 @@ export struct SubmeshData {
     uint32_t material_index{0};
     glm::vec3 bounds_min{};
     glm::vec3 bounds_max{};
-};
 
 /// Материал GLTF.
 export struct GLTFMaterial {
@@ -522,7 +495,6 @@ export struct GLTFMaterial {
     float roughness_factor{1.0f};
     float alpha_cutoff{0.5f};
     uint32_t alpha_mode{0}; // 0 = Opaque, 1 = Mask, 2 = Blend
-};
 
 /// Данные GLTF модели.
 export class GLTFModelData {
@@ -539,11 +511,9 @@ private:
     friend class GLTFLoader;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Загрузчик GLTF моделей.
 export class GLTFLoader {
-public:
     /// Загружает GLTF модель.
     [[nodiscard]] static auto load(
         ResourceManager& manager,
@@ -553,17 +523,13 @@ public:
     /// Загружает GLTF с custom vertex processing.
     template<typename VertexProcessor>
     [[nodiscard]] static auto load_with_processor(
-        ResourceManager& manager,
         std::string_view path,
         VertexProcessor&& processor
-    ) noexcept -> std::expected<ResourceHandle, ResourceError>;
 
     /// Получает данные модели.
     [[nodiscard]] static auto get_data(
-        ResourceManager& manager,
         ResourceHandle handle
     ) noexcept -> GLTFModelData const*;
-};
 
 } // namespace projectv::resource
 ```
@@ -600,14 +566,12 @@ export struct MaterialComponent {
     glm::vec4 tint{1.0f};
     float roughness_override{-1.0f}; // -1 = use material default
     float metallic_override{-1.0f};
-};
 
 /// Компонент текстуры.
 export struct TextureComponent {
     ResourceHandle texture_handle;
     glm::vec4 tintColor{1.0f};
     uint32_t bindless_index{UINT32_MAX};
-};
 
 /// Система управления ресурсами в ECS.
 export class ResourceECSSystem {
@@ -624,7 +588,6 @@ private:
 
     /// Система обновления кэша.
     static auto update_cache(ecs::World& world, ResourceManager& manager) noexcept -> void;
-};
 
 } // namespace projectv::resource
 ```
@@ -679,7 +642,6 @@ private:
 
 /// Менеджер пулов памяти.
 export class MemoryPoolManager {
-public:
     /// Создаёт manager.
     [[nodiscard]] static auto create(ResourceManager& resource_manager) noexcept
         -> std::expected<MemoryPoolManager, ResourceError>;
@@ -706,14 +668,9 @@ public:
         size_t total_used{0};
         uint32_t pool_count{0};
         uint32_t buffer_count{0};
-    };
     [[nodiscard]] auto stats() const noexcept -> Stats;
 
-private:
     MemoryPoolManager() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::resource
 ```
@@ -750,7 +707,6 @@ export struct LoadingStats {
     uint32_t cache_misses{0};
     double total_load_time_ms{0.0};
     size_t bytes_uploaded{0};
-};
 
 /// Сборщик статистики ресурсов.
 export class ResourceStats {
@@ -762,14 +718,11 @@ public:
 
     /// Собирает статистику загрузки.
     [[nodiscard]] static auto collect_loading_stats(
-        ResourceManager const& manager
     ) noexcept -> LoadingStats;
 
     /// Выводит статистику в лог.
     static auto log_stats(
-        ResourceManager const& manager
     ) noexcept -> void;
-};
 
 } // namespace projectv::resource
 ```
@@ -800,9 +753,7 @@ public:
 │   └──────────┘                     ┌──────────┐                         │
 │                                    │ Destroyed │                        │
 │                                    └──────────┘                         │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ### Архитектура ResourceManager
 
@@ -820,7 +771,6 @@ public:
 │  ┌─────────────────────────────────────────────────────────────┐       │
 │  │                    VMA Allocator (PIMPL)                     │       │
 │  └─────────────────────────────────────────────────────────────┘       │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                     ┌───────────────┼───────────────┐
@@ -829,7 +779,6 @@ public:
              │ Buffers  │    │ Images   │    │ Models   │
              │(VkBuffer)│    │(VkImage) │    │(GLTF)    │
              └──────────┘    └──────────┘    └──────────┘
-```
 
 ---
 
@@ -851,3 +800,11 @@ public:
 | Buffer allocation (pooled) | < 0.5ms       |
 | Image upload (1MB)         | < 5ms         |
 | GLTF load (small)          | < 50ms        |
+
+---
+
+## Ссылки
+
+- [ADR-0004: Build System & C++26 Modules](../adr/0004-build-and-modules-spec.md)
+- [Engine Structure](../01_core/01_engine_structure.md)
+- [Vulkan Specification](../02_render/01_vulkan_spec.md)

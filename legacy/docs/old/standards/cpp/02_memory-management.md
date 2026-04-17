@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CPP-003
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет требования к управлению памятью в ProjectV. Все операции выделения и освобождения памяти
@@ -51,7 +57,6 @@ struct AllocationResult
 
 /// Интерфейс аллокатора памяти
 export class IAllocator
-{
 public:
     virtual ~IAllocator() = default;
 
@@ -74,7 +79,6 @@ public:
 
     /// Выделить память с результатом
     [[nodiscard]] auto allocate_aligned(
-        std::size_t size,
         std::size_t alignment
     ) -> std::expected<AllocationResult, Error>;
 
@@ -84,10 +88,8 @@ public:
         std::size_t total_freed;
         std::size_t current_usage;
         std::size_t peak_usage;
-    };
 
     [[nodiscard]] virtual auto get_stats() const noexcept -> Stats = 0;
-};
 
 } // namespace projectv::core::memory
 ```
@@ -110,26 +112,19 @@ public:
 
     [[nodiscard]] auto allocate(std::size_t size, std::size_t alignment)
         -> void* override
-    {
         return std::aligned_alloc(alignment, size);
     }
 
     auto deallocate(void* ptr, std::size_t size) noexcept -> void override
-    {
         std::free(ptr);
-    }
 
     [[nodiscard]] auto get_stats() const noexcept -> Stats override
-    {
         return Stats{};
-    }
 };
 
 /// Пуловый аллокатор для однотипных объектов
 export template<typename T, std::size_t PoolSize = 1024>
 class ObjectPool final
-{
-public:
     ObjectPool();
     ~ObjectPool() noexcept;
 
@@ -145,17 +140,13 @@ private:
     struct Block {
         alignas(T) std::byte storage[sizeof(T)];
         Block* next;
-    };
 
     Block* free_list_;
     std::unique_ptr<Block[]> blocks_;
     std::size_t capacity_;
-};
 
 /// Стековый аллокатор для временных выделений
 export class StackAllocator final : public IAllocator
-{
-public:
     explicit StackAllocator(std::size_t size);
     ~StackAllocator() noexcept override;
 
@@ -168,11 +159,9 @@ public:
     /// Сбросить весь аллокатор
     auto reset() noexcept -> void;
 
-private:
     std::byte* buffer_;
     std::size_t size_;
     std::size_t offset_;
-};
 
 } // namespace projectv::core::memory
 ```
@@ -208,30 +197,21 @@ export namespace projectv::core::memory {
 /// Проверить выравнивание указателя
 [[nodiscard]] constexpr auto is_aligned(
     const void* ptr,
-    std::size_t alignment
 ) noexcept -> bool
-{
     return (reinterpret_cast<std::uintptr_t>(ptr) & (alignment - 1)) == 0;
-}
 
 /// Получить выравнивание для типа
 template<typename T>
 [[nodiscard]] constexpr auto alignment_for() noexcept -> std::size_t
-{
     return alignof(T);
-}
 
 /// Выравнивание для SIMD-операций
 [[nodiscard]] constexpr auto simd_alignment() noexcept -> std::size_t
-{
     return 32;  // AVX2
-}
 
 /// Выравнивание для cache-line
 [[nodiscard]] constexpr auto cache_line_alignment() noexcept -> std::size_t
-{
     return 64;
-}
 
 } // namespace projectv::core::memory
 ```
@@ -252,9 +232,7 @@ export struct alignas(16) Vec4
 
 /// Выровненная 4x4 матрица
 export struct alignas(64) Mat4
-{
     float m[16];
-};
 
 static_assert(alignof(Vec4) == 16, "Vec4 должен быть выровнен по 16 байт");
 static_assert(alignof(Mat4) == 64, "Mat4 должен быть выровнен по 64 байта");
@@ -289,16 +267,13 @@ struct AllocatorDeleter
     Allocator* allocator;
 
     auto operator()(T* ptr) noexcept -> void
-    {
         if (ptr) {
             ptr->~T();
             allocator->deallocate(ptr, sizeof(T));
         }
-    }
 };
 
 /// Пользовательский unique_ptr с аллокатором
-export template<typename T, typename Allocator>
 using UniquePtr = std::unique_ptr<T, AllocatorDeleter<T, Allocator>>;
 
 /// Создать объект с аллокатором
@@ -307,24 +282,19 @@ export template<typename T, typename Allocator, typename... Args>
     Allocator& allocator,
     Args&&... args
 ) -> UniquePtr<T, Allocator>
-{
     auto* ptr = allocator.allocate(sizeof(T), alignof(T));
     if (!ptr) {
         throw std::bad_alloc();
-    }
 
     try {
         new (ptr) T(std::forward<Args>(args)...);
     } catch (...) {
         allocator.deallocate(ptr, sizeof(T));
         throw;
-    }
 
     return UniquePtr<T, Allocator>{
         reinterpret_cast<T*>(ptr),
         AllocatorDeleter<T, Allocator>{&allocator}
-    };
-}
 ```
 
 ---
@@ -353,7 +323,6 @@ export enum class MemoryUsage : uint32_t
 
 /// Выделение GPU-памяти
 export class VulkanAllocator
-{
 public:
     explicit VulkanAllocator(VkInstance instance, VkPhysicalDevice physical, VkDevice device);
     ~VulkanAllocator() noexcept;
@@ -368,7 +337,6 @@ public:
     /// Создать изображение
     [[nodiscard]] auto create_image(
         const VkImageCreateInfo& info,
-        MemoryUsage memory_usage
     ) -> std::expected<Image, Error>;
 
     /// Отобразить память в CPU
@@ -379,7 +347,6 @@ public:
 
 private:
     VmaAllocator allocator_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -437,7 +404,6 @@ private:
     std::unordered_map<void*, Allocation> allocations_;
     std::atomic<std::size_t> total_allocated_{0};
     std::atomic<std::size_t> total_freed_{0};
-};
 
 } // namespace projectv::core::memory
 ```
@@ -479,3 +445,27 @@ private:
 2. Прямые вызовы `malloc`/`free` (использовать аллокаторы)
 3. Сырые указатели для владения (использовать умные указатели)
 4. Ручное управление временем жизни без RAII
+
+---
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- СТВ-CPP-001: Стандарт языка C++
+- Vulkan Memory Allocator (VMA) Documentation
+
+---
+
+## 10. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 11. Связанные документы
+
+- [СТВ-CPP-001: Стандарт языка C++](00_language-standard.md)
+- [СТВ-CPP-002: Стандарт структуры кода](01_code-structure.md)
+- [СТВ-CMAKE-003: Стандарт управления зависимостями](../cmake/02_dependencies.md)

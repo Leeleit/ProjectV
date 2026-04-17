@@ -2,6 +2,8 @@
 
 Архитектурный документ ProjectV
 
+**🟡 Уровень 2: Средний** — Архитектурный документ ProjectV
+
 ## Оглавление
 
 - [Введение](#введение)
@@ -119,9 +121,7 @@ struct TransformComponent {
             .viewProj   = viewProj,
             .cameraPos  = glm::vec4(cam.position, 0.0f),
             .nearFarFov = glm::vec4(cam.nearPlane, cam.farPlane, cam.fov, aspect)
-        };
     }
-};
 ```
 
 ### CameraSettingsComponent
@@ -192,25 +192,16 @@ struct FrustumComponent {
             if (glm::dot(plane.normal, center) + plane.distance + radius < 0.0f) {
                 return false;
             }
-        }
         return true;
-    }
 
     // Проверка AABB на пересечение
     bool intersectsAABB(const glm::vec3& min, const glm::vec3& max) const {
-        for (const auto& plane : planes) {
             glm::vec3 positive = min;
             if (plane.normal.x >= 0) positive.x = max.x;
             if (plane.normal.y >= 0) positive.y = max.y;
             if (plane.normal.z >= 0) positive.z = max.z;
 
             if (glm::dot(plane.normal, positive) + plane.distance < 0.0f) {
-                return false;
-            }
-        }
-        return true;
-    }
-};
 ```
 
 ---
@@ -259,7 +250,6 @@ world.system<CameraComponent, const InputStateComponent, const CameraSettingsCom
             const auto* time = cam.world().get<TimeComponent>();
             cam.position += glm::normalize(moveDir) * speed *
                              static_cast<float>(time->deltaTime);
-        }
 
         // 3. Прокрутка — изменение FOV или скорости
         if (std::abs(input.scrollDelta) > 0.001f) {
@@ -268,7 +258,6 @@ world.system<CameraComponent, const InputStateComponent, const CameraSettingsCom
                 glm::radians(10.0f),
                 glm::radians(120.0f)
             );
-        }
     });
 ```
 
@@ -352,7 +341,6 @@ void extractFrustumPlanes(const glm::mat4& vp, FrustumComponent& frustum) {
         plane.normal   /= len;
         plane.distance /= len;
     }
-}
 ```
 
 ### CameraUniformUpdateSystem
@@ -422,23 +410,15 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
                     if (pressed && settings->mouseCaptured) {
                         settings->mouseCaptured = false;
                         SDL_SetRelativeMouseMode(SDL_FALSE);
-                    }
-                    break;
-            }
-            break;
-        }
 
         // --- Мышь ---
         case SDL_EVENT_MOUSE_MOTION:
             if (settings->mouseCaptured) {
                 input->mouseDeltaX += event->motion.xrel;
                 input->mouseDeltaY += event->motion.yrel;
-            }
-            break;
 
         case SDL_EVENT_MOUSE_WHEEL:
             input->scrollDelta += event->wheel.y;
-            break;
 
         // --- Изменение размера окна ---
         case SDL_EVENT_WINDOW_RESIZED: {
@@ -446,15 +426,11 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
             window->width  = event->window.data1;
             window->height = event->window.data2;
             // Матрицы пересчитаются на следующем кадре автоматически
-            break;
-        }
 
         case SDL_EVENT_QUIT:
             return SDL_APP_SUCCESS;
-    }
 
     return SDL_APP_CONTINUE;
-}
 ```
 
 ### SDL_AppIterate: порядок систем
@@ -522,9 +498,7 @@ world.system<VoxelChunkComponent, const FrustumComponent>(
 
         // Статистика
         int visible = 0;
-        for (int i = 0; i < it.count(); i++) {
             if (chunks[i].isVisible) visible++;
-        }
         TracyPlot("VisibleChunks",  (float)visible);
         TracyPlot("TotalChunks",    (float)it.count());
         TracyPlot("CulledPercent",  100.0f * (1.0f - (float)visible / it.count()));
@@ -565,7 +539,6 @@ world.system<VoxelChunkComponent, const CameraComponent>(
                 chunks[i].lodLevel     = newLOD;
                 chunks[i].needsRemesh  = true;
             }
-        }
     });
 ```
 
@@ -628,9 +601,7 @@ bool isChunkVisible(vec3 chunkMin, vec3 chunkMax) {
         if (dot(normal, positive) + dist < 0.0) {
             return false;  // Чанк вне фрустума
         }
-    }
     return true;
-}
 ```
 
 ---
@@ -655,7 +626,6 @@ void setCameraMode(flecs::entity cameraEntity, CameraMode mode) {
         case CameraMode::Orbit:  cameraEntity.add<OrbitCamera>();  break;
         case CameraMode::Editor: cameraEntity.add<EditorCamera>(); break;
     }
-}
 ```
 
 ### FPS Camera System
@@ -720,7 +690,6 @@ world.system<CameraComponent, OrbitCameraState,
                 orbit.distance - input.scrollDelta * 2.0f,
                 orbit.minDist, orbit.maxDist
             );
-        }
 
         // Позиция камеры = target + сферические координаты
         glm::quat rot = cam.getRotation();
@@ -811,7 +780,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
         .set<CameraSettingsComponent>({
             .movementSpeed = 15.0f,
             .chunkLoadRadius = 8.0f
-        })
         .set<FrustumComponent>({})
         .add<FPSCamera>();  // Режим по умолчанию
 
@@ -848,18 +816,12 @@ void cameraMatrixUpdate(flecs::entity e, TransformComponent& t, CameraComponent&
         ZoneScopedN("VectorRecalc");
         // Пересчёт forward/right/up
     }
-    {
         ZoneScopedN("ViewMatrix");
         t.view = glm::lookAt(cam.position, cam.position + cam.forward, {0,1,0});
-    }
-    {
         ZoneScopedN("ProjMatrix");
         // Матрица проекции с Vulkan Y-flip
-    }
-    {
         ZoneScopedN("FrustumExtract");
         extractFrustumPlanes(t.viewProj, f);
-    }
 
     TracyPlot("CameraYaw",      cam.yaw);
     TracyPlot("CameraPitch",    cam.pitch);
@@ -867,7 +829,6 @@ void cameraMatrixUpdate(flecs::entity e, TransformComponent& t, CameraComponent&
     TracyPlot("CameraPosX",     cam.position.x);
     TracyPlot("CameraPosY",     cam.position.y);
     TracyPlot("CameraPosZ",     cam.position.z);
-}
 ```
 
 ---
@@ -1015,7 +976,6 @@ graph TD
         F[InputStateComponent\nkeys, deltas]
         G[WindowState\nwidth, height]
         H[TimeComponent\ndeltaTime]
-    end
 
     A --> B
     B --> D
@@ -1023,4 +983,3 @@ graph TD
     G --> B
     H --> A
 ```
-

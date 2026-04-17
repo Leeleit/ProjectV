@@ -1,6 +1,11 @@
-﻿# Спецификация Job System на базе P2300 (std::execution)
+# Спецификация Job System на базе P2300 (std::execution)
 
 ---
+
+**Статус:** Technical Specification
+**Уровень:** 🔴 Продвинутый
+**Дата:** 2026-02-22
+**Версия:** 1.0
 
 ## Обзор
 
@@ -69,6 +74,7 @@ $$S_1 \triangleright S_2 = \text{let\_value}(S_1, \lambda v. S_2(v))$$
 ### 2.1 FetchContent конфигурация
 
 ```cmake
+
 # cmake/Dependencies/stdexec.cmake
 
 # === stdexec (NVIDIA reference implementation of P2300) ===
@@ -92,6 +98,7 @@ FetchContent_MakeAvailable(stdexec)
 ### 2.2 Интеграция в модуль Job System
 
 ```cmake
+
 # src/core/jobs/CMakeLists.txt
 
 add_library(ProjectV.Core.Jobs)
@@ -120,14 +127,13 @@ target_include_directories(ProjectV.Core.Jobs
 )
 
 target_compile_definitions(ProjectV.Core.Jobs
-    PRIVATE
         $<$<CONFIG:Debug>:TRACY_ENABLE>
-)
 ```
 
 ### 2.3 Корневой CMakeLists.txt обновление
 
 ```cmake
+
 # CMakeLists.txt (добавить после других зависимостей)
 
 # === stdexec (P2300 reference implementation) ===
@@ -173,25 +179,21 @@ export struct ThreadPoolStats {
     uint64_t tasks_pending{0};
     float avg_task_time_us{0.0f};
     uint64_t total_idle_time_us{0};
-};
 
 /// Thread Pool — обёртка над std::execution scheduler.
 ///
 /// ## P2300 Compliance
 /// Публичный API использует std::execution (C++26).
 /// Внутренняя реализация использует stdexec::static_thread_pool (PIMPL).
-///
 /// ## Thread Safety
 /// - schedule(): thread-safe
 /// - shutdown(): NOT thread-safe, вызывать только из main thread
-///
 /// ## Invariants
 /// - После shutdown() новые задачи не принимаются
 /// - Все pending задачи завершаются перед destruction
 export class ThreadPool {
 public:
     /// Создаёт Thread Pool.
-    ///
     /// @param config Конфигурация
     /// @pre thread_count > 0 или thread_count == 0 (auto-detect)
     /// @post size() == config.thread_count или hardware_concurrency
@@ -206,16 +208,13 @@ public:
     ThreadPool& operator=(const ThreadPool&) = delete;
 
     /// Получает scheduler для использования с sender algorithms.
-    ///
     /// @return Scheduler для stdexec algorithms
     /// @pre !is_shutdown()
     [[nodiscard]] auto scheduler() noexcept -> stdexec::scheduler auto;
 
     /// Планирует выполнение задачи.
-    ///
     /// @param f Функция для выполнения
     /// @return Sender, который можно скомбинировать с другими
-    ///
     /// ## Example
     /// ```cpp
     /// auto sender = pool.schedule_on([] { return 42; })
@@ -230,7 +229,6 @@ public:
     /// Планирует выполнение sender'а на этом pool.
     template<stdexec::sender S>
     [[nodiscard]] auto execute(S&& sender) noexcept
-        -> stdexec::sender auto;
 
     /// Получает количество потоков.
     [[nodiscard]] auto size() const noexcept -> uint32_t;
@@ -249,7 +247,6 @@ private:
     ThreadPool() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Глобальный Thread Pool для движка.
 /// Инициализируется при старте, уничтожается при shutdown.
@@ -300,7 +297,6 @@ auto ThreadPool::create(ThreadPoolConfig const& config) noexcept
             if (threads > 4) {
                 threads -= 2;
             }
-        }
 
         result.impl_ = std::make_unique<Impl>(threads);
 
@@ -309,26 +305,20 @@ auto ThreadPool::create(ThreadPoolConfig const& config) noexcept
             // Windows: SetThreadAffinityMask
             // Linux: pthread_setaffinity_np
             // TODO: Implement in platform-specific code
-        }
 
         return result;
     } catch (std::exception const& e) {
         return std::unexpected(JobError::ThreadPoolCreationFailed);
-    }
-}
 
 ThreadPool::~ThreadPool() noexcept {
     if (impl_) {
         shutdown();
-    }
-}
 
 ThreadPool::ThreadPool(ThreadPool&&) noexcept = default;
 ThreadPool& ThreadPool::operator=(ThreadPool&&) noexcept = default;
 
 auto ThreadPool::scheduler() noexcept -> stdexec::scheduler auto {
     return impl_->pool.get_scheduler();
-}
 
 template<stdexec::sender F>
 auto ThreadPool::schedule_on(F&& f) noexcept -> stdexec::sender auto {
@@ -336,22 +326,17 @@ auto ThreadPool::schedule_on(F&& f) noexcept -> stdexec::sender auto {
 
     return schedule(scheduler())
          | then(std::forward<F>(f));
-}
 
 auto ThreadPool::size() const noexcept -> uint32_t {
     return static_cast<uint32_t>(impl_->pool.available_parallelism());
-}
 
 auto ThreadPool::is_shutdown() const noexcept -> bool {
     return impl_->shutdown.load(std::memory_order_acquire);
-}
 
 auto ThreadPool::shutdown() noexcept -> void {
     if (impl_->shutdown.exchange(true, std::memory_order_acq_rel)) {
         return; // Already shutdown
-    }
     impl_->pool.request_stop();
-}
 
 auto ThreadPool::stats() const noexcept -> ThreadPoolStats {
     return {
@@ -360,8 +345,6 @@ auto ThreadPool::stats() const noexcept -> ThreadPoolStats {
         .tasks_pending = 0, // stdexec doesn't expose this directly
         .avg_task_time_us = 0.0f, // Computed from total_task_time_ns
         .total_idle_time_us = 0
-    };
-}
 
 // Global thread pool
 namespace global {
@@ -370,25 +353,17 @@ namespace global {
     auto thread_pool() noexcept -> ThreadPool& {
         if (!g_thread_pool) {
             init_thread_pool();
-        }
         return *g_thread_pool;
-    }
 
     auto init_thread_pool(ThreadPoolConfig const& config) noexcept -> void {
-        if (!g_thread_pool) {
             g_thread_pool = std::make_unique<ThreadPool>(
                 ThreadPool::create(config).value()
             );
-        }
-    }
 
     auto shutdown_thread_pool() noexcept -> void {
         if (g_thread_pool) {
             g_thread_pool->shutdown();
             g_thread_pool.reset();
-        }
-    }
-}
 
 } // namespace projectv::core::jobs
 ```
@@ -430,7 +405,6 @@ export struct TaskNode {
 /// 1. Топологическая сортировка
 /// 2. Параллельный запуск независимых задач
 /// 3. WhenAll для синхронизации зависимостей
-///
 /// ## Complexity
 /// - add_task(): O(1)
 /// - build(): O(V + E)
@@ -446,7 +420,6 @@ public:
     TaskGraph& operator=(const TaskGraph&) = delete;
 
     /// Добавляет задачу в граф.
-    ///
     /// @param name Имя задачи (для профилирования)
     /// @param sender Sender для выполнения
     /// @param dependencies Список ID задач, от которых зависит эта
@@ -457,25 +430,20 @@ public:
         -> TaskId;
 
     /// Добавляет функцию как задачу.
-    ///
     /// @param name Имя задачи
     /// @param f Функция для выполнения
     /// @param dependencies Зависимости
     /// @return TaskId
     template<std::invocable F>
     auto add_task(std::string_view name, F&& f,
-                  std::span<TaskId const> dependencies = {}) noexcept
-        -> TaskId;
 
     /// Строит граф для выполнения.
     /// Вызывает topological sort и готовит sender'ы.
-    ///
     /// @pre Есть хотя бы одна задача
     /// @return Ошибка если есть цикл
     auto build() noexcept -> std::expected<void, JobError>;
 
     /// Выполняет граф задач.
-    ///
     /// @param pool Thread pool для выполнения
     /// @return Sender, завершающийся когда все задачи выполнены
     [[nodiscard]] auto execute(ThreadPool& pool) noexcept
@@ -497,7 +465,6 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Примеры Task Graph построения.
 export namespace task_graph_examples {
@@ -511,9 +478,7 @@ auto parallel_chunk_processing(
 
 /// Pipeline обработки: Load → Process → Upload.
 auto processing_pipeline(
-    ThreadPool& pool,
     std::vector<VoxelData> data
-) noexcept -> stdexec::sender auto;
 
 } // namespace task_graph_examples
 
@@ -559,15 +524,11 @@ struct TaskGraph::Impl {
                 if (task_index.contains(dep)) {
                     in_degree[task_index[dep]]++;
                 }
-            }
-        }
 
         std::queue<size_t> queue;
         for (size_t i = 0; i < in_degree.size(); ++i) {
             if (in_degree[i] == 0) {
                 queue.push(i);
-            }
-        }
 
         topological_order.clear();
         topological_order.reserve(tasks.size());
@@ -579,29 +540,20 @@ struct TaskGraph::Impl {
             topological_order.push_back(tasks[idx].id);
 
             for (auto dep : tasks[idx].dependencies) {
-                if (task_index.contains(dep)) {
                     size_t dep_idx = task_index[dep];
                     if (--in_degree[dep_idx] == 0) {
                         queue.push(dep_idx);
-                    }
-                }
-            }
-        }
 
         if (topological_order.size() != tasks.size()) {
             return std::unexpected(JobError::TaskGraphHasCycle);
-        }
 
         return {};
-    }
-};
 
 TaskGraph::TaskGraph() noexcept
     : impl_(std::make_unique<Impl>()) {}
 
 auto TaskGraph::build() noexcept -> std::expected<void, JobError> {
     return impl_->topological_sort();
-}
 
 auto TaskGraph::execute(ThreadPool& pool) noexcept
     -> stdexec::sender auto {
@@ -627,37 +579,28 @@ auto TaskGraph::execute(ThreadPool& pool) noexcept
             // Dependent task, wait for dependencies
             // Build when_all for dependencies
             // ...
-        }
-    }
 
     return when_all(std::move(independent_senders));
-}
 
 auto TaskGraph::execute_sync(ThreadPool& pool) noexcept
     -> std::expected<void, JobError> {
     try {
         auto sender = execute(pool);
         stdexec::sync_wait(std::move(sender));
-        return {};
     } catch (std::exception const&) {
         return std::unexpected(JobError::TaskExecutionFailed);
-    }
-}
 
 auto TaskGraph::clear() noexcept -> void {
     impl_->tasks.clear();
     impl_->task_index.clear();
     impl_->topological_order.clear();
     impl_->next_id = 0;
-}
 
 auto TaskGraph::size() const noexcept -> size_t {
     return impl_->tasks.size();
-}
 
 auto TaskGraph::empty() const noexcept -> bool {
     return impl_->tasks.empty();
-}
 
 // Example implementations
 namespace task_graph_examples {
@@ -666,9 +609,6 @@ auto parallel_chunk_processing(
     ThreadPool& pool,
     std::span<ChunkData> chunks
 ) noexcept -> stdexec::sender auto {
-    using namespace stdexec;
-
-    auto scheduler = pool.scheduler();
 
     // Use bulk for parallel processing
     return schedule(scheduler)
@@ -676,44 +616,26 @@ auto parallel_chunk_processing(
                // Process chunk i
                process_chunk(chunks[i]);
            });
-}
 
 auto processing_pipeline(
-    ThreadPool& pool,
     std::vector<VoxelData> data
-) noexcept -> stdexec::sender auto {
-    using namespace stdexec;
-
-    auto scheduler = pool.scheduler();
 
     // Stage 1: Load (parallel)
     auto load_stage = schedule(scheduler)
                     | bulk(data.size(), [&](size_t i) {
                           load_voxel_data(data[i]);
-                      });
 
     // Stage 2: Process (depends on load)
     auto process_stage = load_stage
                        | then([&]() {
-                             return schedule(scheduler)
-                                  | bulk(data.size(), [&](size_t i) {
                                         process_voxel_data(data[i]);
-                                    });
-                         })
                        | let_value([](auto s) { return s; });
 
     // Stage 3: Upload (depends on process)
     auto upload_stage = process_stage
-                      | then([&]() {
-                            return schedule(scheduler)
-                                 | bulk(data.size(), [&](size_t i) {
                                        upload_voxel_data(data[i]);
-                                   });
-                        })
-                      | let_value([](auto s) { return s; });
 
     return upload_stage;
-}
 
 } // namespace task_graph_examples
 
@@ -755,7 +677,6 @@ auto example_simple_async(ThreadPool& pool) -> int {
 
 /// Пример 2: Цепочка трансформаций.
 auto example_chain(ThreadPool& pool) -> int {
-    using namespace stdexec;
 
     auto pipeline = schedule(pool.scheduler())
                   | then([] { return 10; })              // 10
@@ -763,12 +684,9 @@ auto example_chain(ThreadPool& pool) -> int {
                   | then([](int x) { return x + 5; });   // 25
 
     auto [result] = sync_wait(pipeline).value();
-    return result;
-}
 
 /// Пример 3: Параллельное выполнение (when_all).
 auto example_parallel(ThreadPool& pool) -> std::tuple<int, double, std::string> {
-    using namespace stdexec;
 
     auto task1 = schedule(pool.scheduler()) | then([] { return 1; });
     auto task2 = schedule(pool.scheduler()) | then([] { return 2.0; });
@@ -779,65 +697,42 @@ auto example_parallel(ThreadPool& pool) -> std::tuple<int, double, std::string> 
 
     auto [r1, r2, r3] = sync_wait(all).value();
     return {r1, r2, r3};
-}
 
 /// Пример 4: Bulk параллелизм для обхода чанков.
 auto example_bulk_chunks(ThreadPool& pool, std::span<Chunk> chunks) -> void {
-    using namespace stdexec;
 
     // bulk автоматически распараллеливает итерации
-    auto work = schedule(pool.scheduler())
               | bulk(chunks.size(), [&](size_t i) {
                     update_chunk(chunks[i]);
-                });
 
     sync_wait(work);
-}
 
 /// Пример 5: Условное выполнение (let_value).
 auto example_conditional(ThreadPool& pool, bool condition) -> int {
-    using namespace stdexec;
 
-    auto work = schedule(pool.scheduler())
               | then([&] { return condition ? 1 : 0; })
               | let_value([](int flag) -> sender_of<int> {
                     if (flag == 1) {
                         return just(100);
                     } else {
                         return just(0);
-                    }
-                });
-
-    auto [result] = sync_wait(work).value();
-    return result;
-}
 
 /// Пример 6: Обработка ошибок.
 auto example_error_handling(ThreadPool& pool) -> std::expected<int, JobError> {
-    using namespace stdexec;
 
-    auto work = schedule(pool.scheduler())
               | then([] -> int {
                     if (should_fail()) {
                         throw std::runtime_error("Failed");
-                    }
-                    return 42;
-                });
 
     try {
-        auto [result] = sync_wait(work).value();
-        return result;
     } catch (std::exception const&) {
         return std::unexpected(JobError::TaskExecutionFailed);
-    }
-}
 
 /// Пример 7: Комплексный pipeline для voxel updates.
 auto example_voxel_pipeline(
     ThreadPool& pool,
     std::span<VoxelChunk const> dirty_chunks
 ) -> stdexec::sender auto {
-    using namespace stdexec;
 
     auto scheduler = pool.scheduler();
 
@@ -845,26 +740,20 @@ auto example_voxel_pipeline(
     auto simulate = schedule(scheduler)
                   | bulk(dirty_chunks.size(), [&](size_t i) {
                         simulate_chunk(dirty_chunks[i]);
-                    });
 
     // Phase 2: Mesh generation (parallel per chunk)
     auto generate_meshes = simulate
                          | then([&]() {
                                return schedule(scheduler)
-                                    | bulk(dirty_chunks.size(), [&](size_t i) {
                                           generate_chunk_mesh(dirty_chunks[i]);
-                                      });
                            })
                          | let_value([](auto s) { return s; });
 
     // Phase 3: Upload to GPU (serial, single thread)
     auto upload = generate_meshes
-                | then([&]() {
                       upload_all_meshes(dirty_chunks);
-                  });
 
     return upload;
-}
 
 } // namespace projectv::core::jobs::examples
 ```
@@ -881,7 +770,6 @@ export namespace projectv::core::jobs {
 /// 1. Разделение dirty чанков на batches по worker count
 /// 2. bulk параллельное выполнение batch updates
 /// 3. Синхронизация результатов
-///
 /// ## Complexity
 /// $T_{\text{parallel}} = O(n / p)$ где $p$ = thread count
 auto parallel_ca_update(
@@ -903,19 +791,13 @@ auto parallel_ca_update(
 
 /// Параллельная генерация mesh для чанков.
 auto parallel_mesh_generation(
-    ThreadPool& pool,
     std::span<voxel::ChunkData const> chunks,
     std::span<render::ChunkMesh> output_meshes
-) noexcept -> stdexec::sender auto {
-    using namespace stdexec;
 
     assert(chunks.size() == output_meshes.size());
 
     return schedule(pool.scheduler())
-         | bulk(chunks.size(), [&](size_t i) {
                output_meshes[i] = generate_greedy_mesh(chunks[i]);
-           });
-}
 
 } // namespace projectv::core::jobs
 ```
@@ -947,15 +829,11 @@ auto parallel_mesh_generation(
 │  │                     │ (set_threads)│                             │    │
 │  │                     └──────────────┘                             │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
-│                                                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                   Job System (stdexec)                           │    │
-│  │                                                                   │    │
 │  │  ┌─────────────────────────────────────────────────────────────┐│    │
 │  │  │              stdexec::static_thread_pool                    ││    │
 │  │  │                                                             ││    │
 │  │  │  Worker 0 ──▶ Worker 1 ──▶ Worker 2 ──▶ Worker N           ││    │
-│  │  │                                                             ││    │
 │  │  │  ┌─────────────────────────────────────────────────────┐   ││    │
 │  │  │  │ Task Graph (DAG)                                    │   ││    │
 │  │  │  │                                                     │   ││    │
@@ -964,10 +842,7 @@ auto parallel_mesh_generation(
 │  │  │  │       └──────────────┴──▶ [Physics Sync]           │   ││    │
 │  │  │  └─────────────────────────────────────────────────────┘   ││    │
 │  │  └─────────────────────────────────────────────────────────────┘│    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ### 6.2 Код интеграции
 
@@ -995,12 +870,10 @@ export struct HybridSchedulerConfig {
 /// ## Architecture
 /// - Flecs: управляет entity/component lifetime, sequenced systems
 /// - stdexec: параллельные алгоритмы (bulk, when_all)
-///
 /// ## Thread Distribution
 /// При 8 потоках:
 /// - 2 потока: Flecs workers (ecs.set_threads(2))
 /// - 6 потоков: stdexec static_thread_pool
-///
 /// ## When to use which?
 /// - Flecs: Systems с component iteration, queries
 /// - stdexec: Parallel loops, independent tasks, pipelines
@@ -1022,7 +895,6 @@ public:
     /// Выполняет ECS frame.
     /// 1. Flecs ecs.progress() на Flecs threads
     /// 2. Pending stdexec tasks на job system threads
-    ///
     /// @param delta_time Время кадра
     /// @return true если успешно
     auto progress(float delta_time) noexcept -> bool;
@@ -1044,10 +916,8 @@ private:
     HybridScheduler() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Flecs System Builder с интеграцией stdexec.
-///
 /// ## Example: Parallel iteration over chunks
 /// ```cpp
 /// world.system<ChunkComponent>("UpdateChunks")
@@ -1057,11 +927,9 @@ private:
 ///     });
 /// ```
 export class FlecsStdexecBridge {
-public:
     /// Регистрирует систему с параллельной итерацией.
     /// Использует stdexec::bulk вместо Flecs built-in threading.
     static auto register_parallel_system(
-        flecs::world& world,
         std::string_view name,
         auto component_types,
         auto&& update_func,
@@ -1071,11 +939,9 @@ public:
     /// Выполняет Flecs query параллельно через stdexec.
     template<typename... Components>
     static auto parallel_query(
-        flecs::world& world,
         jobs::ThreadPool& pool,
         auto&& func
     ) -> stdexec::sender auto;
-};
 
 } // namespace projectv::ecs
 ```
@@ -1126,7 +992,6 @@ auto HybridScheduler::create(
             job_threads = hw_threads > config.flecs_threads
                         ? hw_threads - config.flecs_threads
                         : 1;
-        }
 
         auto pool_result = jobs::ThreadPool::create({
             .thread_count = job_threads,
@@ -1135,15 +1000,12 @@ auto HybridScheduler::create(
 
         if (!pool_result) {
             return std::unexpected(pool_result.error());
-        }
 
         result.impl_->job_pool = std::make_unique<jobs::ThreadPool>(
             std::move(*pool_result)
         );
-    }
 
     return result;
-}
 
 HybridScheduler::~HybridScheduler() noexcept = default;
 HybridScheduler::HybridScheduler(HybridScheduler&&) noexcept = default;
@@ -1157,29 +1019,23 @@ auto HybridScheduler::progress(float delta_time) noexcept -> bool {
 
         // Non-blocking start
         // TODO: Store operation state for later sync
-    }
 
     // 2. Flecs progress на Flecs threads
     return impl_->world->progress(delta_time);
-}
 
 auto HybridScheduler::job_pool() noexcept -> jobs::ThreadPool& {
     return *impl_->job_pool;
-}
 
 auto HybridScheduler::world() noexcept -> flecs::world& {
     return *impl_->world;
-}
 
 auto HybridScheduler::wait_parallel_tasks() noexcept -> void {
     // Sync all pending stdexec tasks
     // TODO: Implement with stored operation states
-}
 
 // FlecsStdexecBridge implementation
 template<typename... Components>
 auto FlecsStdexecBridge::parallel_query(
-    flecs::world& world,
     jobs::ThreadPool& pool,
     auto&& func
 ) -> stdexec::sender auto {
@@ -1191,14 +1047,11 @@ auto FlecsStdexecBridge::parallel_query(
 
     query.each([&](Components&... comps) {
         components.emplace_back(&comps...);
-    });
 
     // Параллельная обработка через bulk
     return schedule(pool.scheduler())
          | bulk(components.size(), [&](size_t i) {
                std::apply(func, components[i]);
-           });
-}
 
 } // namespace projectv::ecs
 ```
@@ -1259,7 +1112,6 @@ public:
     };
 
     static auto frame_stats() noexcept -> FrameStats;
-};
 
 /// RAII scoped profiler для задач.
 export struct ScopedTaskProfile {
@@ -1268,12 +1120,9 @@ export struct ScopedTaskProfile {
     explicit ScopedTaskProfile(std::string_view task_name) noexcept
         : name(task_name) {
         JobSystemProfiler::task_start(name);
-    }
 
     ~ScopedTaskProfile() noexcept {
         JobSystemProfiler::task_end(name);
-    }
-};
 
 } // namespace projectv::core::jobs
 
@@ -1337,7 +1186,6 @@ export enum class JobError : uint8_t {
         default:
             return "Unknown error";
     }
-}
 
 } // namespace projectv::core::jobs
 ```
@@ -1361,3 +1209,6 @@ export enum class JobError : uint8_t {
 - [P2300: std::execution](https://wg21.link/p2300)
 - [stdexec (NVIDIA)](https://github.com/NVIDIA/stdexec)
 - [Flecs Threading](https://www.flecs.dev/flecs/md_docs_2Multithreading.html)
+
+- [Voxel Pipeline](../03_voxel/02_voxel_pipeline.md)
+- [CA-Physics Bridge](../04_physics_ca/06_ca_physics_bridge.md)

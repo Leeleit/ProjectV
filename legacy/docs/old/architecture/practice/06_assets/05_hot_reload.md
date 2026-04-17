@@ -1,8 +1,10 @@
-﻿# Hot-Reload: Шейдеры и Ассеты
+# Hot-Reload: Шейдеры и Ассеты
 
 Быстрая итерация без перезапуска приложения.
 
 ---
+
+**🟡 Уровень 2: Средний** — Быстрая итерация без перезапуска приложения.
 
 ## Концепция
 
@@ -10,13 +12,11 @@
 
 ```
 Изменение шейдера → Компиляция SPIR-V (2 сек) → Перезапуск приложения (5 сек) → Тест
-```
 
 ### Решение
 
 ```
 Изменение шейдера → Компиляция SPIR-V (2 сек) → Hot-Reload (<0.1 сек)
-```
 
 **Результат:** Итерации в 10-50 раз быстрее. Актуально для графических программистов и технических художников.
 
@@ -46,24 +46,18 @@ public:
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
         });
-    }
 
     ~ShaderHotReloader() {
         running_ = false;
         if (watcher_thread_.joinable()) {
             watcher_thread_.join();
-        }
-    }
 
     void register_shader(const std::string& path, VkShaderModule* module) {
         auto last_write = std::filesystem::last_write_time(path);
         shaders_[path] = {module, last_write};
-    }
 
     void register_slang_shader(const std::string& path, VkShaderModule* module) {
-        auto last_write = std::filesystem::last_write_time(path);
         slang_shaders_[path] = {module, last_write};
-    }
 
 private:
     void check_for_changes() {
@@ -75,20 +69,11 @@ private:
                 info.last_write = current_write;
                 reload_glsl_shader(path, info.module);
                 SDL_Log("Shader reloaded: %s", path.c_str());
-            }
-        }
 
         for (auto& [path, info] : slang_shaders_) {
-            if (!std::filesystem::exists(path)) continue;
 
-            auto current_write = std::filesystem::last_write_time(path);
-            if (current_write != info.last_write) {
-                info.last_write = current_write;
                 reload_slang_shader(path, info.module);
                 SDL_Log("Slang shader reloaded: %s", path.c_str());
-            }
-        }
-    }
 
     void reload_glsl_shader(const std::string& path, VkShaderModule* module) {
         // Компиляция GLSL → SPIR-V
@@ -100,28 +85,16 @@ private:
             SDL_LogError(SDL_LOG_CATEGORY_RENDER,
                         "Shader compilation failed: %s", path.c_str());
             return;
-        }
 
         // Пересоздание VkShaderModule
         vkDestroyShaderModule(device_, *module, nullptr);
         *module = create_shader_module(path + ".spv");
-    }
 
     void reload_slang_shader(const std::string& path, VkShaderModule* module) {
         // Компиляция Slang → SPIR-V
-        std::string compile_cmd =
             "slangc " + path + " -o " + path + ".spv";
-        int result = system(compile_cmd.c_str());
 
-        if (result != 0) {
-            SDL_LogError(SDL_LOG_CATEGORY_RENDER,
                         "Slang compilation failed: %s", path.c_str());
-            return;
-        }
-
-        vkDestroyShaderModule(device_, *module, nullptr);
-        *module = create_shader_module(path + ".spv");
-    }
 
     VkShaderModule create_shader_module(const std::string& spv_path) {
         std::ifstream file(spv_path, std::ios::binary | std::ios::ate);
@@ -140,7 +113,6 @@ private:
         VkShaderModule module;
         vkCreateShaderModule(device_, &create_info, nullptr, &module);
         return module;
-    }
 
     VkDevice device_;
     std::atomic<bool> running_{true};
@@ -149,11 +121,9 @@ private:
     struct ShaderInfo {
         VkShaderModule* module;
         std::filesystem::file_time_type last_write;
-    };
 
     std::unordered_map<std::string, ShaderInfo> shaders_;
     std::unordered_map<std::string, ShaderInfo> slang_shaders_;
-};
 ```
 
 ### Использование
@@ -179,7 +149,6 @@ public:
         // Вызывается после hot-reload для пересборки pipeline
         vkDestroyPipeline(device_, pipeline_, nullptr);
         pipeline_ = create_pipeline(vert_shader_, frag_shader_);
-    }
 };
 ```
 
@@ -209,9 +178,6 @@ struct VSInput {
 
 struct PSInput {
     float4 position : SV_Position;
-    float3 normal : NORMAL;
-    float2 uv : TEXCOORD;
-};
 
 [shader("vertex")]
 PSInput vertexMain(VSInput input) {
@@ -226,10 +192,10 @@ PSInput vertexMain(VSInput input) {
 float4 fragmentMain(PSInput input) : SV_Target {
     Material mat = materials[materialIndex];
     return float4(mat.baseColor * calculateLighting(input.normal), 1.0);
-}
-```
 
 ---
+
+```glsl
 
 ## Часть 2: Hot-Reload Ассетов
 
@@ -252,9 +218,6 @@ public:
                 info.last_write = current_write;
                 reload_texture(device, allocator, path, info);
                 SDL_Log("Texture reloaded: %s", path.c_str());
-            }
-        }
-    }
 
 private:
     void reload_texture(VkDevice device, VmaAllocator allocator,
@@ -269,7 +232,6 @@ private:
         *info.image = new_image;
         *info.view = new_view;
         info.allocation = new_allocation;
-    }
 
     struct TextureInfo {
         VkImageView* view;
@@ -279,7 +241,6 @@ private:
     };
 
     std::unordered_map<std::string, TextureInfo> textures_;
-};
 ```
 
 ### Параметры в JSON
@@ -302,9 +263,6 @@ public:
         for (auto& [name, info] : params_) {
             if (json.contains(name)) {
                 apply_value(name, info, json[name]);
-            }
-        }
-    }
 
     void watch_and_reload(const std::string& path) {
         if (!std::filesystem::exists(path)) return;
@@ -314,8 +272,6 @@ public:
             last_write_ = current_write;
             load_from_file(path);
             SDL_Log("Parameters reloaded from %s", path.c_str());
-        }
-    }
 
 private:
     void apply_value(const std::string& name, ParamInfo& info, const nlohmann::json& value) {
@@ -328,8 +284,6 @@ private:
         } else if (info.type_hash == typeid(glm::vec3).hash_code()) {
             auto arr = value.get<std::vector<float>>();
             *static_cast<glm::vec3*>(info.ptr) = glm::vec3(arr[0], arr[1], arr[2]);
-        }
-    }
 
     struct ParamInfo {
         void* ptr;
@@ -338,7 +292,6 @@ private:
 
     std::unordered_map<std::string, ParamInfo> params_;
     std::filesystem::file_time_type last_write_;
-};
 ```
 
 ### Пример файла параметров
@@ -367,7 +320,6 @@ namespace RenderParams {
 
 namespace PhysicsParams {
     float gravity = -9.81f;
-}
 
 void setup_live_params() {
     LiveParameters live_params;
@@ -380,8 +332,6 @@ void setup_live_params() {
     while (running) {
         live_params.watch_and_reload("config/render_params.json");
         // ... рендеринг
-    }
-}
 ```
 
 ---
@@ -404,7 +354,6 @@ void render_voxels(VkCommandBuffer cmd) {
     for (int i = 0; i < draw_distance; ++i) {
         render_chunk_at_distance(i, lod_bias);
     }
-}
 ```
 
 Tracy позволяет менять `static` переменные через UI без перезапуска приложения.

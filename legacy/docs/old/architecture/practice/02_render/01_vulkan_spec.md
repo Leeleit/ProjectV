@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 3.0 (Enterprise)
+**Дата:** 2026-02-22
+
 ## Обзор
 
 ProjectV использует **Vulkan 1.4** с архитектурой **Dynamic Rendering** (без legacy VkRenderPass/VkFramebuffer).
@@ -45,16 +49,13 @@ VulkanContext (PIMPL)
 └─────────────────────────────────────────────────────────────┘
 
 QueueFamilyIndices
-┌─────────────────────────────────────────────────────────────┐
 │  graphics: uint32_t (4 bytes)                               │
 │  compute: uint32_t (4 bytes)                                │
 │  transfer: uint32_t (4 bytes)                               │
 │  present: uint32_t (4 bytes)                                │
 │  Total: 16 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
 
 DeviceExtensions (bitfield)
-┌─────────────────────────────────────────────────────────────┐
 │  dynamic_rendering: 1 bit                                   │
 │  mesh_shader: 1 bit                                         │
 │  descriptor_buffer: 1 bit                                   │
@@ -65,8 +66,6 @@ DeviceExtensions (bitfield)
 │  buffer_device_address: 1 bit                               │
 │  padding: 8 bits                                            │
 │  Total: 2 bytes (uint16_t)                                  │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### RenderingInfo
 
@@ -87,9 +86,6 @@ VkRenderingInfo (Vulkan 1.4)
 └─────────────────────────────────────────────────────────────┘
 
 VkRenderingAttachmentInfo
-┌─────────────────────────────────────────────────────────────┐
-│  sType: VkStructureType (4 bytes)                           │
-│  pNext: const void* (8 bytes)                               │
 │  imageView: VkImageView (8 bytes)                           │
 │  imageLayout: VkImageLayout (4 bytes)                       │
 │  resolveMode: VkResolveModeFlagBits (4 bytes)               │
@@ -99,8 +95,6 @@ VkRenderingAttachmentInfo
 │  storeOp: VkAttachmentStoreOp (4 bytes)                     │
 │  clearValue: VkClearValue (16 bytes)                        │
 │  Total: 64 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### Synchronization2
 
@@ -120,16 +114,11 @@ VkDependencyInfo (Synchronization2)
 └─────────────────────────────────────────────────────────────┘
 
 VkMemoryBarrier2
-┌─────────────────────────────────────────────────────────────┐
-│  sType: VkStructureType (4 bytes)                           │
-│  pNext: const void* (8 bytes)                               │
 │  srcStageMask: VkPipelineStageFlags2 (8 bytes)              │
 │  srcAccessMask: VkAccessFlags2 (8 bytes)                    │
 │  dstStageMask: VkPipelineStageFlags2 (8 bytes)              │
 │  dstAccessMask: VkAccessFlags2 (8 bytes)                    │
 │  Total: 48 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -143,25 +132,16 @@ VkMemoryBarrier2
          └─────┬──────┘
                │ create()
                ▼
-         ┌────────────┐
          │  CREATED   │ ←── Instance + Device ready
-         └─────┬──────┘
                │ window surface attached
-               ▼
     ┌────────────────────┐
     │ SURFACE_ATTACHED   │ ←── Swapchain can be created
     └─────────┬──────────┘
               │ swapchain created
-              ▼
-    ┌────────────────────┐
     │     READY          │ ←── Rendering possible
-    └─────────┬──────────┘
               │ wait_idle() + destroy
-              ▼
-    ┌────────────────────┐
     │    DESTROYED       │ ←── Terminal state
     └────────────────────┘
-```
 
 ### Command Buffer Lifecycle
 
@@ -171,30 +151,16 @@ VkMemoryBarrier2
     └──────┬──────┘
            │ allocate()
            ▼
-    ┌─────────────┐
     │  ALLOCATED  │ ←── Ready for recording
-    └──────┬──────┘
            │ begin()
-           ▼
-    ┌─────────────┐
     │  RECORDING  │ ←── Commands being recorded
-    └──────┬──────┘
            │ end()
-           ▼
-    ┌─────────────┐
     │  EXECUTABLE │ ←── Ready for submit
-    └──────┬──────┘
            │ submit()
-           ▼
-    ┌─────────────┐
     │   PENDING   │ ←── Submitted, awaiting completion
-    └──────┬──────┘
            │ signal/fence
-           ▼
-    ┌─────────────┐
     │   COMPLETE  │ ←── Can be reset/reused
     └─────────────┘
-```
 
 ### Timeline Semaphore State
 
@@ -210,10 +176,8 @@ VkMemoryBarrier2
      40 ─┼─────────────────● (GPU wait)
          │                ╱
      20 ─┼───────────────● (Initial value)
-         │
       0 ─┼─────────────────────────────────► Time
          │  T1    T2    T3    T4    T5
-```
 
 ---
 
@@ -249,7 +213,6 @@ export struct DeviceExtensions {
     bool sparse_binding{false};
     bool shader_object{false};
     bool buffer_device_address{false};
-};
 
 /// Queue family indices.
 export struct QueueFamilyIndices {
@@ -268,18 +231,14 @@ export struct QueueFamilyIndices {
 
     /// Проверяет наличие выделенной transfer queue.
     [[nodiscard]] auto has_dedicated_transfer() const noexcept -> bool;
-};
 
 /// Vulkan 1.4 контекст.
-///
 /// ## Vulkan Version Requirement
 /// - Minimum: Vulkan 1.4
 /// - Required features: dynamic_rendering, synchronization2, timeline_semaphore
-///
 /// ## Thread Safety
 /// - Device creation/destruction: external synchronization
 /// - Queue submission: external synchronization per queue
-///
 /// ## Invariants
 /// - instance_ валиден после успешного create()
 /// - device_ валиден после успешного create()
@@ -287,16 +246,12 @@ export struct QueueFamilyIndices {
 export class VulkanContext {
 public:
     /// Создаёт Vulkan 1.4 контекст.
-    ///
     /// @param config Конфигурация
-    ///
     /// @pre volkInitialize() уже вызван
     /// @pre Vulkan 1.4 support available
-    ///
     /// @post instance() != VK_NULL_HANDLE
     /// @post device() != VK_NULL_HANDLE
     /// @post allocator() != VK_NULL_HANDLE
-    ///
     /// @return Контекст или ошибка
     [[nodiscard]] static auto create(VulkanConfig const& config = {}) noexcept
         -> std::expected<VulkanContext, VulkanError>;
@@ -342,7 +297,6 @@ private:
     VulkanContext() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -373,10 +327,8 @@ export struct AttachmentInfo {
 };
 
 /// Rendering info builder для vkCmdBeginRendering.
-///
 /// ## Vulkan 1.4
 /// Dynamic Rendering — core feature, не требует расширения.
-///
 /// ## Invariants
 /// - render_area не превышает attachment dimensions
 /// - color_attachments не более maxColorAttachments
@@ -385,7 +337,6 @@ public:
     RenderingInfo() noexcept;
 
     /// Устанавливает render area.
-    ///
     /// @param area Область рендеринга
     /// @pre area.extent.width > 0 && area.extent.height > 0
     auto set_render_area(VkRect2D area) noexcept -> RenderingInfo&;
@@ -394,7 +345,6 @@ public:
     auto set_render_area(VkExtent2D extent) noexcept -> RenderingInfo&;
 
     /// Добавляет color attachment.
-    ///
     /// @param attachment Информация об attachment
     /// @pre attachment.view != VK_NULL_HANDLE
     /// @pre color_count < maxColorAttachments
@@ -413,7 +363,6 @@ public:
     auto set_view_mask(uint32_t mask) noexcept -> RenderingInfo&;
 
     /// Получает VkRenderingInfo для vkCmdBeginRendering.
-    ///
     /// @pre Хотя бы один attachment добавлен
     [[nodiscard]] auto get() const noexcept -> VkRenderingInfo const*;
 
@@ -425,11 +374,8 @@ private:
     std::vector<VkRenderingAttachmentInfo> color_attachments_;
     VkRenderingAttachmentInfo depth_attachment_{};
     VkRenderingAttachmentInfo stencil_attachment_{};
-};
 
 /// RAII wrapper для begin/end rendering.
-///
-/// ## Usage
 /// ```cpp
 /// {
 ///     ScopedRendering scope(cmd, rendering_info);
@@ -437,9 +383,7 @@ private:
 /// } // vkCmdEndRendering called automatically
 /// ```
 export class ScopedRendering {
-public:
     /// Начинает rendering pass.
-    ///
     /// @param cmd Command buffer
     /// @param info Rendering info
     /// @pre cmd в recording state
@@ -447,16 +391,13 @@ public:
     ScopedRendering(VkCommandBuffer cmd, RenderingInfo const& info) noexcept;
 
     /// Заканчивает rendering pass.
-    ///
     /// @post vkCmdEndRendering вызван
     ~ScopedRendering() noexcept;
 
     ScopedRendering(const ScopedRendering&) = delete;
     ScopedRendering& operator=(const ScopedRendering&) = delete;
 
-private:
     VkCommandBuffer cmd_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -482,10 +423,8 @@ export namespace projectv::render::vulkan {
 export class TimelineSemaphore {
 public:
     /// Создаёт timeline semaphore.
-    ///
     /// @param device Vulkan device
     /// @param initial_value Начальное значение
-    ///
     /// @pre device != VK_NULL_HANDLE
     /// @post value() == initial_value
     [[nodiscard]] static auto create(
@@ -507,14 +446,12 @@ public:
     [[nodiscard]] auto native() const noexcept -> VkSemaphore;
 
     /// Signal на CPU.
-    ///
     /// @param value Новое значение
     /// @pre value > current value
     /// @post value() == value
     auto signal(uint64_t value) noexcept -> void;
 
     /// Wait на CPU.
-    ///
     /// @param value Значение для ожидания
     /// @param timeout_ns Таймаут
     /// @return true если значение достигнуто
@@ -530,11 +467,9 @@ private:
 };
 
 /// Submit info builder для vkQueueSubmit2.
-///
 /// ## Vulkan 1.4
 /// vkQueueSubmit2 — core, не требует VK_KHR_synchronization2.
 export class SubmitInfoBuilder {
-public:
     SubmitInfoBuilder() noexcept;
 
     /// Добавляет command buffer.
@@ -543,16 +478,11 @@ public:
     /// Добавляет wait semaphore.
     auto add_wait_semaphore(
         VkSemaphore semaphore,
-        uint64_t value,
         VkPipelineStageFlags2 stage
     ) noexcept -> SubmitInfoBuilder&;
 
     /// Добавляет signal semaphore.
     auto add_signal_semaphore(
-        VkSemaphore semaphore,
-        uint64_t value,
-        VkPipelineStageFlags2 stage
-    ) noexcept -> SubmitInfoBuilder&;
 
     /// Получает VkSubmitInfo2.
     [[nodiscard]] auto build() noexcept -> VkSubmitInfo2;
@@ -560,23 +490,18 @@ public:
     /// Сбрасывает builder.
     auto reset() noexcept -> void;
 
-private:
     VkSubmitInfo2 info_{};
     std::vector<VkCommandBufferSubmitInfo> command_buffers_;
     std::vector<VkSemaphoreSubmitInfo> wait_semaphores_;
     std::vector<VkSemaphoreSubmitInfo> signal_semaphores_;
-};
 
 /// Memory barrier builder для vkCmdPipelineBarrier2.
-///
 /// ## Synchronization2
 /// Использует VkDependencyInfo вместо legacy barrier structs.
 export class BarrierBuilder {
-public:
     BarrierBuilder() noexcept;
 
     /// Добавляет memory barrier.
-    ///
     /// @param src_stage Source pipeline stage
     /// @param src_access Source access flags
     /// @param dst_stage Destination pipeline stage
@@ -591,51 +516,31 @@ public:
     /// Добавляет buffer barrier.
     auto add_buffer_barrier(
         VkBuffer buffer,
-        VkPipelineStageFlags2 src_stage,
-        VkAccessFlags2 src_access,
-        VkPipelineStageFlags2 dst_stage,
         VkAccessFlags2 dst_access,
         uint32_t src_queue_family = VK_QUEUE_FAMILY_IGNORED,
         uint32_t dst_queue_family = VK_QUEUE_FAMILY_IGNORED
-    ) noexcept -> BarrierBuilder&;
 
     /// Добавляет image barrier.
-    ///
     /// @param image Image
-    /// @param src_stage Source pipeline stage
-    /// @param src_access Source access flags
-    /// @param dst_stage Destination pipeline stage
-    /// @param dst_access Destination access flags
     /// @param old_layout Current layout
     /// @param new_layout New layout
     /// @param range Subresource range
     auto add_image_barrier(
         VkImage image,
-        VkPipelineStageFlags2 src_stage,
-        VkAccessFlags2 src_access,
-        VkPipelineStageFlags2 dst_stage,
-        VkAccessFlags2 dst_access,
         VkImageLayout old_layout,
         VkImageLayout new_layout,
         VkImageSubresourceRange range
-    ) noexcept -> BarrierBuilder&;
 
     /// Выполняет barrier на command buffer.
-    ///
     /// @param cmd Command buffer
     /// @pre cmd в recording state
     /// @post vkCmdPipelineBarrier2 вызван
     auto execute(VkCommandBuffer cmd) noexcept -> void;
 
-    /// Сбрасывает builder.
-    auto reset() noexcept -> void;
-
-private:
     VkDependencyInfo info_{};
     std::vector<VkMemoryBarrier2> memory_barriers_;
     std::vector<VkBufferMemoryBarrier2> buffer_barriers_;
     std::vector<VkImageMemoryBarrier2> image_barriers_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -659,14 +564,12 @@ export namespace projectv::render::vulkan {
 /// - No descriptor pool management
 /// - Direct memory access via device address
 /// - Can be updated on CPU without command buffer
-///
 /// ## Requirements
 /// - VK_EXT_descriptor_buffer
 /// - bufferDeviceAddress feature
 export class DescriptorBuffer {
 public:
     /// Создаёт descriptor buffer.
-    ///
     /// @param device Vulkan device
     /// @param allocator VMA allocator
     /// @param size Размер в байтах
@@ -687,7 +590,6 @@ public:
     DescriptorBuffer& operator=(const DescriptorBuffer&) = delete;
 
     /// Записывает combined image sampler.
-    ///
     /// @param index Индекс в buffer
     /// @param view Image view
     /// @param sampler Sampler
@@ -701,26 +603,16 @@ public:
 
     /// Записывает storage image.
     auto write_storage_image(
-        size_t index,
-        VkImageView view,
         VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL
-    ) noexcept -> void;
 
     /// Записывает uniform buffer.
     auto write_uniform_buffer(
-        size_t index,
         VkBuffer buffer,
         VkDeviceSize offset = 0,
         VkDeviceSize range = VK_WHOLE_SIZE
-    ) noexcept -> void;
 
     /// Записывает storage buffer.
     auto write_storage_buffer(
-        size_t index,
-        VkBuffer buffer,
-        VkDeviceSize offset = 0,
-        VkDeviceSize range = VK_WHOLE_SIZE
-    ) noexcept -> void;
 
     /// Получает device address.
     [[nodiscard]] auto address() const noexcept -> VkDeviceAddress;
@@ -739,13 +631,10 @@ private:
 
 /// Bindless descriptor manager.
 export class BindlessDescriptorManager {
-public:
     /// Создаёт manager.
-    ///
     /// @param context Vulkan context
     /// @param max_textures Максимум texture slots
     /// @param max_buffers Максимум buffer slots
-    [[nodiscard]] static auto create(
         VulkanContext const& context,
         uint32_t max_textures = 65536,
         uint32_t max_buffers = 4096
@@ -759,10 +648,8 @@ public:
     BindlessDescriptorManager& operator=(const BindlessDescriptorManager&) = delete;
 
     /// Регистрирует texture.
-    ///
     /// @return Index или ошибка
     [[nodiscard]] auto register_texture(
-        VkImageView view,
         VkSampler sampler
     ) noexcept -> std::expected<uint32_t, VulkanError>;
 
@@ -772,10 +659,6 @@ public:
 
     /// Регистрирует buffer.
     [[nodiscard]] auto register_buffer(
-        VkBuffer buffer,
-        VkDeviceSize offset = 0,
-        VkDeviceSize range = VK_WHOLE_SIZE
-    ) noexcept -> std::expected<uint32_t, VulkanError>;
 
     /// Удаляет texture.
     auto unregister_texture(uint32_t index) noexcept -> void;
@@ -792,11 +675,7 @@ public:
     /// Получает descriptor buffer для buffers.
     [[nodiscard]] auto buffer_buffer() const noexcept -> DescriptorBuffer const&;
 
-private:
     BindlessDescriptorManager() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -819,7 +698,6 @@ export namespace projectv::render::vulkan {
 /// ## Requirements
 /// - VK_EXT_mesh_shader
 /// - Task shader optional (taskCount = 1 if omitted)
-///
 /// ## Advantages over Vertex Shaders
 /// - GPU-driven culling
 /// - Variable output size
@@ -827,7 +705,6 @@ export namespace projectv::render::vulkan {
 export class MeshShaderPipeline {
 public:
     /// Создаёт pipeline.
-    ///
     /// @param device Vulkan device
     /// @param task_shader Optional task shader
     /// @param mesh_shader Mesh shader (required)
@@ -856,7 +733,6 @@ public:
     auto bind(VkCommandBuffer cmd) noexcept -> void;
 
     /// Draw mesh tasks.
-    ///
     /// @param group_count_x Y Z Workgroup dimensions
     auto draw(
         VkCommandBuffer cmd,
@@ -867,12 +743,10 @@ public:
 
     /// Draw mesh tasks indirect.
     auto draw_indirect(
-        VkCommandBuffer cmd,
         VkBuffer indirect_buffer,
         VkDeviceSize offset,
         uint32_t draw_count,
         uint32_t stride = sizeof(VkDrawMeshTasksIndirectCommandEXT)
-    ) noexcept -> void;
 
     /// Получает pipeline.
     [[nodiscard]] auto pipeline() const noexcept -> VkPipeline;
@@ -932,7 +806,6 @@ VkRenderingInputAttachmentIndexInfo (Vulkan 1.4)
 │  pStencilInputAttachmentIndex: uint32_t const* (8 bytes)    │
 │  Total: 48 bytes                                            │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ### API Contract
 
@@ -957,7 +830,6 @@ export struct InputAttachmentInfo {
 /// ## Vulkan 1.4 Core
 /// Dynamic Rendering Local Read позволяет читать attachments
 /// из fragment shader без VkRenderPass subpass dependency.
-///
 /// ## Pipeline Requirements
 /// - pipelineStage >= FRAGMENT_SHADER
 /// - access |= INPUT_ATTACHMENT_READ_BIT
@@ -991,7 +863,6 @@ private:
     uint32_t depth_index_{VK_ATTACHMENT_UNUSED};
     uint32_t stencil_index_{VK_ATTACHMENT_UNUSED};
     VkRenderingInputAttachmentIndexInfo info_{};
-};
 
 /// G-Buffer Layout для deferred shading.
 export struct GBufferLayout {
@@ -1000,20 +871,16 @@ export struct GBufferLayout {
     VkImageView material{VK_NULL_HANDLE};    ///< R: metallic, G: roughness, B: ao
     VkImageView depth{VK_NULL_HANDLE};       ///< Depth buffer
     VkImageView emission{VK_NULL_HANDLE};    ///< RGB: emission
-};
 
 /// Deferred Shading Pipeline.
-///
 /// ## Pass 1: G-Buffer Fill
 /// - Write albedo, normal, material, depth, emission
 /// - Layout: COLOR_ATTACHMENT_OPTIMAL / DEPTH_ATTACHMENT_OPTIMAL
-///
 /// ## Pass 2: Lighting
 /// - Read G-Buffer as input attachments
 /// - Layout: RENDERING_LOCAL_READ
 /// - Barrier: COLOR_ATTACHMENT -> INPUT_ATTACHMENT_READ
 export class DeferredPipeline {
-public:
     /// Создаёт deferred pipeline.
     [[nodiscard]] static auto create(
         VulkanContext const& ctx,
@@ -1052,11 +919,9 @@ public:
     auto resize(VkExtent2D new_resolution) noexcept
         -> std::expected<void, VulkanError>;
 
-private:
     DeferredPipeline() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -1129,7 +994,6 @@ float4 fsLighting(float2 uv: SV_Position) : SV_Target {
     Lo += gbuffer.emission;
 
     return float4(Lo, 1.0);
-}
 ```
 
 ---
@@ -1169,12 +1033,10 @@ export namespace projectv::render::vulkan {
 ///
 /// ## Vulkan 1.4 Core
 /// Push Descriptors — core feature, не требует VK_KHR_push_descriptor.
-///
 /// ## Advantages
 /// - No descriptor pool management
 /// - No descriptor set allocation
 /// - Immediate update in command buffer
-///
 /// ## Limitations
 /// - Max 256 bytes per push descriptor block (implementation defined)
 /// - Not suitable for large arrays
@@ -1196,26 +1058,16 @@ public:
 
     /// Добавляет storage buffer.
     auto add_storage_buffer(
-        uint32_t binding,
-        VkBuffer buffer,
-        VkDeviceSize offset = 0,
-        VkDeviceSize range = VK_WHOLE_SIZE
-    ) noexcept -> PushDescriptorBuilder&;
 
     /// Добавляет combined image sampler.
     auto add_combined_image_sampler(
-        uint32_t binding,
         VkImageView view,
         VkSampler sampler,
         VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    ) noexcept -> PushDescriptorBuilder&;
 
     /// Добавляет storage image.
     auto add_storage_image(
-        uint32_t binding,
-        VkImageView view,
         VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL
-    ) noexcept -> PushDescriptorBuilder&;
 
     /// Пушит descriptors в command buffer.
     /// @param cmd Command buffer
@@ -1249,7 +1101,6 @@ export struct alignas(16) FrameData {
     float delta_time;
     uint32_t frame_index;
     uint32_t padding;
-};
 
 static_assert(sizeof(FrameData) == 256, "FrameData must be 256 bytes");
 
@@ -1321,7 +1172,6 @@ export namespace projectv::render::vulkan {
 ///
 /// ## Vulkan 1.4 Core
 /// Buffer Device Address — core feature.
-///
 /// ## Requirements
 /// - bufferDeviceAddress feature enabled
 /// - VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
@@ -1364,16 +1214,12 @@ private:
 };
 
 /// Bindless Buffer Array Manager.
-///
 /// ## Architecture
 /// - Single large buffer для всех mesh data
 /// - Offset-based access в shaders
 /// - No descriptor set changes between draws
 export class BindlessBufferManager {
-public:
     /// Создаёт manager.
-    [[nodiscard]] static auto create(
-        VulkanContext const& ctx,
         VkDeviceSize initial_capacity = 256 * 1024 * 1024  // 256 MB
     ) noexcept -> std::expected<BindlessBufferManager, VulkanError>;
 
@@ -1388,7 +1234,6 @@ public:
     /// Выделяет память под данные.
     /// @return Offset в buffer или ошибка
     [[nodiscard]] auto allocate(
-        VkDeviceSize size,
         VkDeviceSize alignment = 16
     ) noexcept -> std::expected<VkDeviceSize, VulkanError>;
 
@@ -1402,17 +1247,7 @@ public:
         VkDeviceSize size
     ) noexcept -> std::expected<void, VulkanError>;
 
-    /// Получает device address.
-    [[nodiscard]] auto address() const noexcept -> VkDeviceAddress;
-
-    /// Получает buffer.
-    [[nodiscard]] auto buffer() const noexcept -> VkBuffer;
-
-private:
     BindlessBufferManager() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -1447,7 +1282,6 @@ struct MeshDrawCommand {
     uint64_t index_buffer_address;   // Device address
     uint64_t material_index;
     uint padding;
-};
 
 /// Vertex fetch по device address.
 Vertex fetch_vertex(
@@ -1463,10 +1297,8 @@ Vertex fetch_vertex(
 uint fetch_index(
     uint64_t index_buffer_addr,
     uint index_index
-) {
     DevicePointer<uint> ptr = devicePointerFromAddress<uint>(index_buffer_addr);
     return ptr[index_index];
-}
 
 /// Mesh shader для bindless rendering.
 [numthreads(64, 1, 1)]
@@ -1476,7 +1308,6 @@ void msBindless(
     // Mesh output
     out indices uint3 triangles[64],
     out vertices Vertex verts[192]
-) {
     // Load mesh command from indirect buffer
     MeshDrawCommand cmd = mesh_commands[tid.x];
 
@@ -1486,13 +1317,10 @@ void msBindless(
     // Fetch vertices directly by address
     for (uint i = 0; i < cmd.vertex_count; ++i) {
         verts[i] = fetch_vertex(cmd.vertex_buffer_address, i);
-    }
 
     // Generate triangle indices
     for (uint i = 0; i < cmd.vertex_count / 3; ++i) {
         triangles[i] = uint3(i * 3, i * 3 + 1, i * 3 + 2);
-    }
-}
 ```
 
 ---
@@ -1519,13 +1347,10 @@ void msBindless(
 │                                    │                                     │
 │           ┌────────────────────────┼────────────────────────┐           │
 │           ▼                        ▼                        ▼           │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐          │
 │  │ MeshShader      │  │ DescriptorBuffer│  │ BarrierBuilder  │          │
 │  │ Pipeline        │  │ (Bindless)      │  │ (Synchronization2)         │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘          │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -1567,3 +1392,12 @@ export enum class VulkanError : uint8_t {
 
 } // namespace projectv::render::vulkan
 ```
+
+---
+
+## Ссылки
+
+- [ADR-0004: Build System & C++26 Modules](../adr/0004-build-and-modules-spec.md)
+- [Engine Structure](../01_core/01_engine_structure.md)
+- [Voxel Pipeline](../03_voxel/02_voxel_pipeline.md)
+- [Render Graph Specification](../02_render/04_render_graph.md)

@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-007
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Техническое руководство
+
 ## 1. Область применения
 
 Настоящий документ содержит решения типичных проблем, возникающих при настройке IDE и системы сборки для ProjectV. Все
@@ -31,20 +37,18 @@ Settings → Build → Toolchains
 - C++ Compiler: /usr/bin/clang++-18
 - CMake: /usr/bin/cmake (3.30+)
 - Build Tool: /usr/bin/ninja
-```
 
 3. Добавить переменные окружения CMake:
 
-```
 Settings → Build → CMake
 - CMake options: -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_CXX_FLAGS="-std=c++26 -fmodules -stdlib=libc++"
-```
 
 #### Проблема: Ошибки линковки с libc++
 
 **Решение:**
 
 ```cmake
+
 # Убедиться, что libc++abi подключена
 target_link_options(MyTarget PRIVATE -stdlib=libc++ -lc++abi)
 ```
@@ -67,7 +71,6 @@ target_link_options(MyTarget PRIVATE -stdlib=libc++ -lc++abi)
 ```json
 {
     "configurations": [
-        {
             "name": "Linux-Clang",
             "compilerPath": "/usr/bin/clang++-18",
             "cStandard": "c23",
@@ -80,9 +83,7 @@ target_link_options(MyTarget PRIVATE -stdlib=libc++ -lc++abi)
             ],
             "compileCommands": "${workspaceFolder}/build/compile_commands.json"
         }
-    ],
     "version": 4
-}
 ```
 
 #### Проблема: CMake Tools не обнаруживает Clang
@@ -128,7 +129,6 @@ target_link_options(MyTarget PRIVATE -stdlib=libc++ -lc++abi)
 ```
 Tools → Options → Text Editor → C/C++ → Advanced
 - Disable IntelliSense: True
-```
 
 ---
 
@@ -151,7 +151,6 @@ clang++ -std=c++26 -stdlib=libc++ -c -x c++ std.cppm -o std.pcm
 
 ```cmake
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprebuilt-module-path=${CMAKE_BINARY_DIR}")
-```
 
 ### 3.2 Ошибка: "BMI file is corrupt"
 
@@ -181,9 +180,7 @@ namespace mylib {
 
 // ПРАВИЛЬНО
 import std;
-namespace mylib {
     // ...
-}
 ```
 
 ---
@@ -199,6 +196,7 @@ namespace mylib {
 Проверить порядок компиляции в CMakeLists.txt:
 
 ```cmake
+
 # Модули должны быть объявлены в порядке зависимостей
 add_subdirectory(external/volk)      # Уровень 0
 add_subdirectory(src/core)           # Уровень 1
@@ -231,7 +229,6 @@ module ProjectV.Physics;
 
 struct PhysicsWorld::Impl {
     JPH::PhysicsSystem system;
-};
 ```
 
 ### 4.3 Ошибка: "relocation truncated to fit"
@@ -249,7 +246,6 @@ target_compile_options(MyTarget PRIVATE
 )
 target_link_options(MyTarget PRIVATE
     -Wl,--gc-sections
-)
 ```
 
 ---
@@ -272,7 +268,6 @@ Windows (PowerShell):
 
 ```powershell
 $env:VULKAN_SDK = "C:\VulkanSDK\1.4.341.1"
-```
 
 ### 5.2 Ошибка: "Could not find SDL3"
 
@@ -301,24 +296,19 @@ if(ENABLE_CCACHE)
     if(CCACHE_PROGRAM)
         set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
     endif()
-endif()
 ```
 
 2. Использовать предкомпилированные заголовки:
 
-```cmake
 target_precompile_headers(MyTarget PRIVATE
     <vector>
     <string>
     <memory>
 )
-```
 
 3. Включить unity-сборку:
 
-```cmake
 set_target_properties(MyTarget PROPERTIES UNITY_BUILD ON)
-```
 
 ### 6.2 Медленная линковка
 
@@ -368,3 +358,19 @@ dot -Tpng deps.dot -o dependencies.png
 1. Создать issue в репозитории проекта
 2. Приложить вывод команд диагностики (раздел 7)
 3. Описать шаги для воспроизведения проблемы
+
+---
+
+## 9. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 10. Связанные документы
+
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](00_specification.md)
+- [СТВ-CMAKE-002: Стандарт структуры проекта CMake](01_basics-structure.md)
+- [СТВ-CPP-001: Стандарт языка C++](../cpp/00_language-standard.md)

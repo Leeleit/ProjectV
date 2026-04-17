@@ -78,7 +78,6 @@ The Voxel Laboratory
      │               ╲           ╱                          │
      │                 ╲_______╱                            │
      │                                                      │
-     │                                                      │
      ├──────────────────────────────────────────────────────┤
      │     □ ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ ■     │
      │     ■ □ ■ □ ■ □ ■ □ ■ ■ □ ■ □ ■ □ ■ □ ■ □ ■ □ ■     │
@@ -97,7 +96,6 @@ Scene Dimensions:
 Total Voxels: ~1.5M (optimized via SVO)
 Active Chunks: ~64 (smaller world for showcase)
 Memory Estimate: ~256 MB (SVO + Mesh + Physics)
-```
 
 ### 2.2 Материалы
 
@@ -139,7 +137,6 @@ export struct LabConfig {
     uint32_t shell_thickness{2};      ///< Толщина оболочки
     float fluid_fill_level{0.7f};     ///< Уровень жидкости (0-1)
     int32_t floor_y{0};               ///< Высота пола
-};
 
 /// Генерирует сцену "The Voxel Laboratory".
 ///
@@ -147,7 +144,6 @@ export struct LabConfig {
 /// 1. Checkerboard floor: 512×512 voxels
 /// 2. Hollow sphere: radius 64, glass material
 /// 3. Fluid inside sphere: blue voxels, fill 70%
-///
 /// ## Algorithm
 /// - Floor: O(n²) where n = floor_size
 /// - Sphere shell: O(r³) where r = sphere_radius
@@ -180,7 +176,6 @@ export auto generate_voxel_lab(
 
             world.set_voxel({x, c.floor_y, z}, VoxelData{.material_id = material});
         }
-    }
 
     // === PHASE 2: Hollow Sphere with Fluid ===
     for (int32_t dz = -r; dz <= r; ++dz) {
@@ -212,26 +207,14 @@ export auto generate_voxel_lab(
                             static_cast<int32_t>(2 * r_inner * c.fluid_fill_level);
 
                         if (world_y <= fluid_level) {
-                            world.set_voxel(pos, VoxelData{
                                 .material_id = static_cast<uint8_t>(LabMaterial::Fluid)
-                            });
-                        }
                         // Else: air (leave empty)
-                    }
-                }
-            }
-        }
-    }
 
     TracyMessageL("Voxel Laboratory generated successfully");
-}
 
 /// Альтернативная генерация с оптимизацией для SVO.
 /// Использует mid-point circle algorithm для сферы.
 export auto generate_voxel_lab_optimized(
-    VoxelWorld& world,
-    LabConfig const& config = {}
-) noexcept -> void {
 
     ZoneScopedN("GenerateVoxelLabOptimized");
 
@@ -240,17 +223,11 @@ export auto generate_voxel_lab_optimized(
 
     // Phase 2: Sphere using iterative refinement
     // For each Y slice, draw a circle
-    auto const& c = config;
-    int32_t r = static_cast<int32_t>(c.sphere_radius);
-    int32_t r_inner = r - static_cast<int32_t>(c.shell_thickness);
 
-    for (int32_t dy = -r; dy <= r; ++dy) {
         int32_t slice_radius = static_cast<int32_t>(
             std::sqrt(static_cast<float>(r * r - dy * dy))
-        );
         int32_t slice_radius_inner = static_cast<int32_t>(
             std::sqrt(static_cast<float>(r_inner * r_inner - dy * dy))
-        );
 
         int32_t world_y = c.sphere_center.y + dy;
 
@@ -259,36 +236,15 @@ export auto generate_voxel_lab_optimized(
             for (int32_t dx = -slice_radius; dx <= slice_radius; ++dx) {
                 int32_t dist_sq = dx * dx + dz * dz;
 
-                glm::ivec3 pos = c.sphere_center + glm::ivec3(dx, dy, dz);
-
                 if (dist_sq <= slice_radius * slice_radius) {
                     if (dist_sq > slice_radius_inner * slice_radius_inner) {
                         // Shell
-                        world.set_voxel(pos, VoxelData{
-                            .material_id = static_cast<uint8_t>(LabMaterial::Glass)
-                        });
-                    } else {
                         // Interior: fluid or air
-                        int32_t fluid_level = c.sphere_center.y - r_inner +
                             static_cast<int32_t>(2 * r_inner * config.fluid_fill_level);
-
-                        if (world_y <= fluid_level) {
-                            world.set_voxel(pos, VoxelData{
-                                .material_id = static_cast<uint8_t>(LabMaterial::Fluid)
-                            });
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 /// Генерирует только checkerboard пол.
 auto generate_checkerboard_floor(
-    VoxelWorld& world,
     LabConfig const& config
-) noexcept -> void {
 
     ZoneScopedN("GenerateCheckerboardFloor");
 
@@ -296,19 +252,12 @@ auto generate_checkerboard_floor(
 
     for (int32_t z = -half; z < half; ++z) {
         for (int32_t x = -half; x < half; ++x) {
-            bool is_white = ((x + z) & 1) == 0;
 
             world.set_voxel(
                 {x, config.floor_y, z},
                 VoxelData{
                     .material_id = is_white
-                        ? static_cast<uint8_t>(LabMaterial::FloorWhite)
                         : static_cast<uint8_t>(LabMaterial::FloorGray)
-                }
-            );
-        }
-    }
-}
 
 } // namespace projectv::demo
 ```
@@ -328,61 +277,41 @@ Frame 0 (Startup):
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
-┌─────────────────────────────────────────────────────────────┐
 │ 2. Create ECS World                                          │
 │    - Flecs initialization                                    │
 │    - Register components                                     │
 │    - Register systems                                        │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
 │ 3. Create Job System                                         │
 │    - stdexec::static_thread_pool (6 workers)                 │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
 │ 4. Create Physics World (Jolt)                               │
 │    - PhysicsSystem initialization                            │
 │    - Static floor collision                                  │
-└─────────────────────────────────────────────────────────────┘
 
 Frame 1 (Scene Generation):
-┌─────────────────────────────────────────────────────────────┐
 │ generate_voxel_lab(world)                                    │
 │                                                              │
 │ Phase 1: Checkerboard Floor                                  │
 │   ████████████████████ 100% (262K voxels)                   │
 │   Time: ~50 ms                                               │
-│                                                              │
 │ Phase 2: Hollow Sphere                                       │
 │   ████████████████████ 100% (~1M voxels)                    │
 │   Time: ~100 ms                                              │
-│                                                              │
 │ Phase 3: Fluid Fill                                          │
 │   ████████████████████ 100% (~300K voxels)                  │
 │   Time: ~30 ms                                               │
-│                                                              │
 │ Total Generation Time: < 200 ms                              │
 │ SVO Build + Mesh: < 500 ms                                   │
-└─────────────────────────────────────────────────────────────┘
 
 Frame 2+ (Ready):
-┌─────────────────────────────────────────────────────────────┐
 │ The Voxel Laboratory Ready!                                  │
-│                                                              │
 │ Statistics:                                                  │
 │   - 64 active chunks                                         │
 │   - ~1.5M voxels total                                       │
 │   - Sphere: 64³ voxels, glass shell + fluid interior        │
 │   - Floor: 512×512 checkerboard                              │
 │   - Physics: 1 static body (floor)                          │
-│                                                              │
 │ Camera spawns at (0, 150, 200)                               │
 │ Looking at sphere center...                                   │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -451,18 +380,13 @@ private:
     static auto on_collision(
         physics::BodyId projectile,
         glm::vec3 const& hit_point
-    ) noexcept -> void;
 
     static physics::PhysicsWorld* physics_;
     static voxel::ChunkRegistry* registry_;
     static ProjectileConfig config_;
-};
 
 // Implementation
 auto ProjectileSystem::update(
-    flecs::iter& it,
-    TransformComponent const* transforms,
-    CameraComponent const* cameras
 ) noexcept -> void {
     ZoneScopedN("ProjectileSystem");
 
@@ -483,12 +407,8 @@ auto ProjectileSystem::update(
         });
 
         break;
-    }
-}
 
 auto ProjectileSystem::spawn_projectile(
-    glm::vec3 const& origin,
-    glm::vec3 const& direction
 ) noexcept -> physics::BodyId {
 
     glm::vec3 velocity = direction * config_.speed;
@@ -504,15 +424,10 @@ auto ProjectileSystem::spawn_projectile(
         .restitution = 0.1f,
         .friction = 0.5f,
         .is_projectile = true
-    });
 
     return body.value();
-}
 
 auto ProjectileSystem::on_collision(
-    physics::BodyId projectile,
-    glm::vec3 const& hit_point
-) noexcept -> void {
 
     ZoneScopedN("ProjectileImpact");
 
@@ -535,7 +450,6 @@ auto ProjectileSystem::on_collision(
         std::to_string(hit_point.x) + ", " +
         std::to_string(hit_point.y) + ", " +
         std::to_string(hit_point.z)).c_str());
-}
 
 } // namespace projectv::demo
 ```
@@ -558,7 +472,6 @@ auto check_sphere_breach(glm::vec3 const& impact_point) noexcept -> void {
 
         TracyMessageL("Sphere breached! Fluid release activated.");
     }
-}
 ```
 
 ### 3.4 Cellular Automata для жидкости
@@ -595,8 +508,6 @@ private:
 };
 
 auto FluidCASystem::update_fluid(
-    voxel::ChunkData& chunk,
-    glm::ivec3 const& pos
 ) noexcept -> bool {
 
     auto& voxel = chunk.get(pos);
@@ -613,8 +524,6 @@ auto FluidCASystem::update_fluid(
         if (below.material_id == AIR_ID) {
             std::swap(voxel, below);
             return true;
-        }
-    }
 
     // Try to flow horizontally (lower priority)
     static thread_local std::mt19937 gen(std::random_device{}());
@@ -640,15 +549,6 @@ auto FluidCASystem::update_fluid(
                     if (floor.material_id == FLOOR_WHITE ||
                         floor.material_id == FLOOR_GRAY) {
                         std::swap(voxel, neighbor_voxel);
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-
-    return false;
-}
 
 } // namespace projectv::demo
 ```
@@ -678,24 +578,19 @@ Tech Showcase Demo Script (5 minutes)
 │   │                    ▼                                │   │
 │   │              □ ■ □ ■ □ Floor                        │   │
 │   └─────────────────────────────────────────────────────┘   │
-│                                                              │
 │   Actions:                                                   │
 │   - Smooth camera orbit around sphere                       │
 │   - Show glass material reflections                         │
 │   - Show fluid shimmer inside                               │
 │   - Tracy metrics: Frame Time ~8ms (120+ FPS)               │
-│                                                              │
 │   Commentary:                                                │
 │   "SVO rendering with Vulkan Mesh Shaders -                 │
 │    1.5M voxels at 120 FPS"                                  │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
-┌─────────────────────────────────────────────────────────────┐
 │ PHASE 2: PHYSICS DESTRUCTION (1:15 - 2:30)                   │
 │ "Projectile Impact - Jolt Physics Integration"               │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
 │   Before:                    After:                         │
 │   ┌─────────────────┐       ┌─────────────────┐            │
 │   │      ◯         │       │      ◯          │            │
@@ -704,75 +599,42 @@ Tech Showcase Demo Script (5 minutes)
 │   │    ╲___╱       │       │    ╲___╱ debris │            │
 │   │                 │       │       * * *    │            │
 │   └─────────────────┘       └─────────────────┘            │
-│                                                              │
-│   Actions:                                                   │
 │   1. Player fires projectile (LMB)                          │
 │   2. Projectile hits sphere shell                           │
 │   3. Explosion creates breach                               │
 │   4. Glass debris spawns (Jolt Physics)                     │
 │   5. Tracy spike: Frame Time 15-20ms                        │
-│                                                              │
-│   Commentary:                                                │
 │   "Jolt Physics handles debris simulation -                 │
 │    30 rigid bodies per impact"                              │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
 │ PHASE 3: FLUID SIMULATION (2:30 - 3:45)                      │
 │ "Cellular Automata - Fluid Dynamics"                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
 │   Breach Created:            Fluid Flowing:                 │
-│   ┌─────────────────┐       ┌─────────────────┐            │
-│   │      ◯         │       │      ◯          │            │
-│   │    ╱   ╲       │       │    ╱   ╲        │            │
 │   │   │~~~~│ breach│  ──▶  │   │    ╲~~~     │            │
 │   │    ╲___╱       │       │    ╲___╱        │            │
 │   │                 │       │      ~~~~       │            │
 │   │   □ ■ □ ■ □    │       │   □ ■~■ □ ■    │            │
-│   └─────────────────┘       └─────────────────┘            │
-│                                                              │
-│   Actions:                                                   │
 │   1. Fluid detects breach in shell                          │
 │   2. Fluid flows through hole (gravity)                     │
 │   3. Fluid falls to floor                                   │
 │   4. Fluid spreads on checkerboard (CA)                     │
 │   5. Tracy: CA Update < 2ms per frame                       │
-│                                                              │
-│   Commentary:                                                │
 │   "Cellular Automata simulates fluid -                      │
 │    < 2ms per frame for 300K active voxels"                  │
-└─────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
 │ PHASE 4: STRESS TEST (3:45 - 5:00)                           │
 │ "Structural Collapse - Full System Integration"              │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   Before:                    After:                         │
-│   ┌─────────────────┐       ┌─────────────────┐            │
 │   │      ◯         │       │                 │            │
 │   │    ╱   ╲       │       │     debris      │            │
 │   │   │~~~~│      │  ──▶  │    * * * *     │            │
 │   │    ╲___╱       │       │   * SPLASH *   │            │
 │   │                 │       │  ~~~~~~~~~~~~  │            │
 │   │   □ ■ □ ■ □    │       │   □ ■~■~■ ■    │            │
-│   └─────────────────┘       └─────────────────┘            │
-│                                                              │
-│   Actions:                                                   │
 │   1. Player shoots sphere base                              │
 │   2. Entire shell becomes debris (Jolt activation island)   │
 │   3. Massive debris falls into fluid                        │
 │   4. Splash effects, fluid displacement                     │
 │   5. Tracy peak: Frame Time 25-30ms (still < 33ms)          │
-│                                                              │
-│   Commentary:                                                │
 │   "Full destruction: 200+ debris objects,                   │
 │    fluid simulation, no frame drops below 30 FPS"           │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### 4.2 Детальный скрипт
 
@@ -781,7 +643,6 @@ Defense Demo Script (5 minutes)
 ─────────────────────────────────────────────────────────────
 
 [0:00 - 0:30] Startup & Scene Generation
-─────────────────────────────────────────────────────────────
 - Launch application
 - Loading screen: "Generating The Voxel Laboratory..."
 - Tracy overlay visible from start
@@ -791,7 +652,6 @@ Defense Demo Script (5 minutes)
   * Fluid: ████████████████████ 100%
 
 [0:30 - 1:15] PHASE 1: Static Orbit
-─────────────────────────────────────────────────────────────
 - Camera auto-orbits around sphere
 - Show glass material with reflections
 - Show fluid shimmer inside sphere
@@ -801,7 +661,6 @@ Defense Demo Script (5 minutes)
   * Draw calls: ~10 (mesh shader batches)
 
 [1:15 - 2:30] PHASE 2: Physics Destruction
-─────────────────────────────────────────────────────────────
 - Switch to player control
 - Crosshair appears
 - Player fires 2-3 projectiles at sphere
@@ -812,7 +671,6 @@ Defense Demo Script (5 minutes)
 - Tracy shows frame spikes (15-20ms) with quick recovery
 
 [2:30 - 3:45] PHASE 3: Fluid Simulation
-─────────────────────────────────────────────────────────────
 - Breach in sphere visible
 - Blue fluid begins flowing through hole
 - Fluid falls to floor
@@ -821,7 +679,6 @@ Defense Demo Script (5 minutes)
 - No visible frame drops
 
 [3:45 - 5:00] PHASE 4: Stress Test - Structural Collapse
-─────────────────────────────────────────────────────────────
 - Player targets sphere base/support
 - Large explosion destroys structural integrity
 - Entire sphere shell collapses (Jolt activation island)
@@ -831,7 +688,6 @@ Defense Demo Script (5 minutes)
 - Recovery to normal frame time
 
 [5:00] Final Metrics Summary
-─────────────────────────────────────────────────────────────
 - Freeze frame
 - Display Tracy summary overlay:
   * Average frame time: < 16 ms ✓
@@ -839,7 +695,6 @@ Defense Demo Script (5 minutes)
   * Physics step: < 3 ms ✓
   * Memory: < 512 MB ✓
 - "60 FPS maintained throughout demo"
-```
 
 ---
 
@@ -898,7 +753,6 @@ export struct FrutigerAeroLightingConfig {
 
     /// Volumetric Fog.
     struct VolumetricFog {
-        bool enabled{true};
         glm::vec3 color{0.85f, 0.92f, 1.0f};  ///< Цвет тумана (светло-голубой)
         float density{0.002f};                 ///< Плотность
         float height_falloff{0.01f};           ///< Затухание по высоте
@@ -928,7 +782,6 @@ export auto apply_frutiger_aero_lighting(
     lighting.set_ambient({
         .color = config.ambient_color,
         .intensity = config.ambient_intensity
-    });
 
     // 3. GTAO (Ground Truth Ambient Occlusion)
     if (config.gtao.enabled) {
@@ -936,7 +789,6 @@ export auto apply_frutiger_aero_lighting(
             .radius = config.gtao.radius,
             .intensity = config.gtao.intensity,
             .power = config.gtao.power
-        });
     }
 
     // 4. Volumetric Fog (for "dream" atmosphere)
@@ -946,9 +798,6 @@ export auto apply_frutiger_aero_lighting(
             .density = config.fog.density,
             .height_falloff = config.fog.height_falloff,
             .scattering = config.fog.scattering
-        });
-    }
-}
 
 } // namespace projectv::demo
 ```
@@ -969,11 +818,8 @@ struct GlassMaterial {
 
 /// Fluid material для жидкости.
 struct FluidMaterial {
-    float3 base_color;
-    float transparency;
     float refraction_strength;
     float caustics_intensity;
-};
 
 // Material presets
 static const GlassMaterial kSphereGlass = {
@@ -982,14 +828,12 @@ static const GlassMaterial kSphereGlass = {
     .metalness = 0.0,
     .transparency = 0.3,    // Slightly transparent
     .ior = 1.5              // Glass IOR
-};
 
 static const FluidMaterial kFluid = {
     .base_color = float3(0.0, 0.6, 1.0),
     .transparency = 0.7,
     .refraction_strength = 0.5,
     .caustics_intensity = 0.3
-};
 ```
 
 ---
@@ -1045,7 +889,6 @@ Tracy Profiler Window Layout (Tech Showcase)
 │ └─────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────┤
 │ Zone Statistics                                             │
-│ ┌─────────────────────────────────────────────────────────┐ │
 │ │ Zone Name              │ Time (ms) │ % of Frame │ Calls │ │
 │ ├─────────────────────────┼───────────┼─────────────┼───────┤ │
 │ │ InputSystem            │    0.10   │    0.6%     │   1   │ │
@@ -1054,34 +897,22 @@ Tracy Profiler Window Layout (Tech Showcase)
 │ │ PhysicsStep            │    2.20   │   13.8%     │   1   │ │
 │ │ RenderSystem           │    6.00   │   37.5%     │   1   │ │
 │ │ BufferSwap             │    0.40   │    2.5%     │   1   │ │
-│ ├─────────────────────────┼───────────┼─────────────┼───────┤ │
 │ │ TOTAL                  │   11.00   │   68.8%     │   6   │ │
-│ └─────────────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────────────┤
 │ GPU Counters                                                │
-│ ┌─────────────────────────────────────────────────────────┐ │
 │ │ Draw Calls: 12 (mesh shader batches)                    │ │
 │ │ Triangles: ~500,000                                     │ │
 │ │ ACMR: 0.65                                              │ │
 │ │ GPU Time: 7.2 ms                                        │ │
-│ └─────────────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────────────┤
 │ Demo Counters                                               │
-│ ┌─────────────────────────────────────────────────────────┐ │
 │ │ Active Fluid Voxels: 45,230                             │ │
 │ │ Debris Objects: 87                                      │ │
 │ │ Sphere Integrity: 78%                                   │ │
-│ └─────────────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────────────┤
 │ Memory Usage                                                │
-│ ┌─────────────────────────────────────────────────────────┐ │
 │ │ SVO Data:      180 MB                                   │ │
 │ │ Mesh Buffers:  120 MB                                   │ │
 │ │ Physics:        64 MB                                   │ │
 │ │ TOTAL:         364 MB                                   │ │
-│ └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -1127,3 +958,13 @@ Tracy Profiler Window Layout (Tech Showcase)
 - [ ] Tracy overlay отображается
 - [ ] Все зоны профилируются
 - [ ] Memory tracking работает
+
+---
+
+## Ссылки
+
+- [Project Defense Model](./01_project_defense_model.md)
+- [Job System P2300 Spec](../practice/31_job_system_p2300_spec.md)
+- [Voxel Sync Pipeline](../practice/32_voxel_sync_pipeline.md)
+- [Vulkan 1.4 Spec](../practice/04_vulkan_spec.md)
+- [CA-Physics Bridge](../practice/30_ca_physics_bridge.md)

@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Принято
+**Дата:** 2026-02-22
+**Автор:** Architecture Team
+
 ## Контекст
 
 ProjectV требует архитектуры для:
@@ -48,50 +52,36 @@ public:
     /// Возвращает ID entity.
     [[nodiscard]] auto id() const noexcept -> uint64_t {
         return entity_.id();
-    }
 
     /// Добавляет компонент к entity.
     template<typename T>
     auto add() noexcept -> Entity& {
         entity_.add<T>();
         return *this;
-    }
 
     /// Устанавливает компонент.
-    template<typename T>
     auto set(T const& component) noexcept -> Entity& {
         entity_.set<T>(component);
-        return *this;
-    }
 
     /// Получает компонент (mutable).
-    template<typename T>
     [[nodiscard]] auto get_mut() noexcept -> T* {
         return entity_.get_mut<T>();
-    }
 
     /// Получает компонент (const).
-    template<typename T>
     [[nodiscard]] auto get() const noexcept -> T const* {
         return entity_.get<T>();
-    }
 
     /// Удаляет компонент.
-    template<typename T>
     auto remove() noexcept -> Entity& {
         entity_.remove<T>();
-        return *this;
-    }
 
     /// Удаляет entity.
     auto destroy() noexcept -> void {
         entity_.destruct();
-    }
 
     /// Возвращает нативный flecs::entity.
     [[nodiscard]] auto native() const noexcept -> flecs::entity {
         return entity_;
-    }
 
     auto operator<=>(Entity const&) const = default;
 
@@ -116,7 +106,6 @@ export namespace projectv::ecs {
 
 // ============================================================================
 // Transform Components
-// ============================================================================
 
 /// Позиция в мире (float3)
 struct TransformComponent {
@@ -140,25 +129,17 @@ struct TransformComponent {
             "scale", &T::scale
         );
     };
-};
 
 /// Скорость (для physics integration)
 struct VelocityComponent {
     glm::vec3 linear{0.0f, 0.0f, 0.0f};
     glm::vec3 angular{0.0f, 0.0f, 0.0f};
 
-    struct glaze {
         using T = VelocityComponent;
-        static constexpr auto value = glz::object(
             "linear", &T::linear,
             "angular", &T::angular
-        );
-    };
-};
 
-// ============================================================================
 // Physics Components
-// ============================================================================
 
 /// Ссылка на физическое тело в Jolt
 struct PhysicsBodyComponent {
@@ -167,16 +148,11 @@ struct PhysicsBodyComponent {
     bool is_kinematic{false};
     float mass{1.0f};
 
-    struct glaze {
         using T = PhysicsBodyComponent;
-        static constexpr auto value = glz::object(
             "body_id", &T::body_id,
             "is_dynamic", &T::is_dynamic,
             "is_kinematic", &T::is_kinematic,
             "mass", &T::mass
-        );
-    };
-};
 
 /// Коллайдер (shape для Jolt)
 struct ColliderComponent {
@@ -187,27 +163,19 @@ struct ColliderComponent {
         Cylinder,
         Mesh,
         VoxelChunk
-    };
 
     ShapeType shape_type{ShapeType::Box};
     glm::vec3 half_extents{0.5f, 0.5f, 0.5f};  // Для box
     float radius{0.5f};                         // Для sphere/capsule
     float height{1.0f};                         // Для capsule/cylinder
 
-    struct glaze {
         using T = ColliderComponent;
-        static constexpr auto value = glz::object(
             "shape_type", &T::shape_type,
             "half_extents", &T::half_extents,
             "radius", &T::radius,
             "height", &T::height
-        );
-    };
-};
 
-// ============================================================================
 // Rendering Components
-// ============================================================================
 
 /// Визуальная геометрия
 struct MeshComponent {
@@ -217,17 +185,12 @@ struct MeshComponent {
     bool receive_shadows{true};
     bool visible{true};
 
-    struct glaze {
         using T = MeshComponent;
-        static constexpr auto value = glz::object(
             "mesh_id", &T::mesh_id,
             "material_id", &T::material_id,
             "cast_shadows", &T::cast_shadows,
             "receive_shadows", &T::receive_shadows,
             "visible", &T::visible
-        );
-    };
-};
 
 /// Bounds для frustum culling
 struct BoundsComponent {
@@ -239,19 +202,14 @@ struct BoundsComponent {
         return point.x >= min.x && point.x <= max.x &&
                point.y >= min.y && point.y <= max.y &&
                point.z >= min.z && point.z <= max.z;
-    }
-};
 
 /// Видимость для frustum culling (tag + result)
 struct VisibleComponent {
     bool in_frustum{true};
     uint32_t lod_level{0};
     float distance_to_camera{0.0f};
-};
 
-// ============================================================================
 // Voxel Components
-// ============================================================================
 
 /// Ссылка на чанк в мире
 struct VoxelChunkComponent {
@@ -264,8 +222,6 @@ struct VoxelChunkComponent {
 
     [[nodiscard]] auto chunk_coord() const noexcept -> glm::ivec3 {
         return {chunk_x, chunk_y, chunk_z};
-    }
-};
 
 /// Изменение вокселя (для events)
 struct VoxelChangeComponent {
@@ -275,11 +231,8 @@ struct VoxelChangeComponent {
     uint16_t old_material{0};
     uint16_t new_material{0};
     uint64_t timestamp{0};
-};
 
-// ============================================================================
 // Gameplay Components
-// ============================================================================
 
 /// Игрок
 struct PlayerComponent {
@@ -290,7 +243,6 @@ struct PlayerComponent {
     bool is_grounded{false};
     bool is_sprinting{false};
     bool is_crouching{false};
-};
 
 /// AI агент
 struct AIComponent {
@@ -301,7 +253,6 @@ struct AIComponent {
     float attack_cooldown{0.0f};
     float patrol_radius{5.0f};
     uint8_t state{0};  // Idle, Patrol, Chase, Attack
-};
 
 /// Здоровье
 struct HealthComponent {
@@ -312,34 +263,23 @@ struct HealthComponent {
 
     [[nodiscard]] auto is_dead() const noexcept -> bool {
         return current <= 0.0f && !invulnerable;
-    }
 
     auto apply_damage(float damage) noexcept -> void {
         if (!invulnerable) {
             current = std::max(0.0f, current - damage);
-        }
-    }
 
-    struct glaze {
         using T = HealthComponent;
-        static constexpr auto value = glz::object(
             "current", &T::current,
             "max", &T::max,
             "regeneration", &T::regeneration,
             "invulnerable", &T::invulnerable
-        );
-    };
-};
 
 /// Тег для имени (debug purposes)
 struct NameComponent {
     std::string name;
 
-    struct glaze {
         using T = NameComponent;
         static constexpr auto value = glz::object("name", &T::name);
-    };
-};
 
 } // namespace projectv::ecs
 ```
@@ -369,7 +309,6 @@ public:
 
 /// Регистратор всех систем.
 class SystemRegistry final {
-public:
     /// Регистрирует все системы в world.
     static auto register_all(flecs::world& world) -> void;
 
@@ -379,15 +318,12 @@ public:
         T system;
         system.register_system(world);
     }
-};
 
 // ============================================================================
 // Примеры систем
-// ============================================================================
 
 /// Система обновления transform на основе velocity.
 class TransformSystem final : public SystemBase {
-public:
     auto name() const -> std::string_view override { return "TransformSystem"; }
 
     auto register_system(flecs::world& world) -> void override {
@@ -397,15 +333,11 @@ public:
                 t.position += v.linear * 0.016f; // TODO: delta_time
                 // TODO: rotation integration
             });
-    }
-};
 
 /// Система синхронизации физики.
 class PhysicsSyncSystem final : public SystemBase {
-public:
     auto name() const -> std::string_view override { return "PhysicsSyncSystem"; }
 
-    auto register_system(flecs::world& world) -> void override {
         // Синхронизация Transform ← Physics (после шага физики)
         world.system<TransformComponent, PhysicsBodyComponent>("SyncPhysicsToTransform")
             .kind(flecs::PreStore)  // После физики, до рендеринга
@@ -419,18 +351,11 @@ public:
                         auto rot = physics->get_body_rotation(p[i].body_id);
                         t[i].position = pos;
                         t[i].rotation = rot;
-                    }
-                }
-            });
-    }
-};
 
 /// Система frustum culling.
 class FrustumCullingSystem final : public SystemBase {
-public:
     auto name() const -> std::string_view override { return "FrustumCullingSystem"; }
 
-    auto register_system(flecs::world& world) -> void override {
         world.system<TransformComponent, BoundsComponent, VisibleComponent>("FrustumCull")
             .kind(flecs::PreUpdate)
             .iter([](flecs::iter& it, TransformComponent const* t, BoundsComponent const* b, VisibleComponent* v) {
@@ -439,7 +364,6 @@ public:
 
                 auto frustum = camera->get_frustum();
 
-                for (auto i : it) {
                     // Transform bounds to world space
                     auto world_bounds = transform_bounds(b[i], t[i]);
 
@@ -449,9 +373,6 @@ public:
 
                     // Calculate LOD
                     v[i].lod_level = calculate_lod(v[i].distance_to_camera);
-                }
-            });
-    }
 
 private:
     static auto calculate_lod(float distance) -> uint32_t {
@@ -459,37 +380,24 @@ private:
         if (distance < 100.0f) return 1;
         if (distance < 200.0f) return 2;
         return 3;
-    }
-};
 
 /// Система здоровья.
 class HealthSystem final : public SystemBase {
-public:
     auto name() const -> std::string_view override { return "HealthSystem"; }
 
-    auto register_system(flecs::world& world) -> void override {
         // Регенерация здоровья
         world.system<HealthComponent>("HealthRegen")
-            .kind(flecs::OnUpdate)
             .each([](HealthComponent& h) {
                 if (h.regeneration > 0.0f && h.current < h.max) {
                     h.current = std::min(h.max, h.current + h.regeneration * 0.016f);
-                }
-            });
 
         // Обработка смерти
         world.system<HealthComponent>("HandleDeath")
             .kind(flecs::PostUpdate)
             .iter([](flecs::iter& it, HealthComponent* h) {
-                for (auto i : it) {
                     if (h[i].is_dead()) {
                         // Emit death event
                         it.world().entity(it.entity(i)).add<DeadTag>();
-                    }
-                }
-            });
-    }
-};
 
 /// Тег для мёртвых сущностей.
 struct DeadTag {};
@@ -565,10 +473,8 @@ public:
     }
 
     /// Получает контекстный объект.
-    template<typename T>
     [[nodiscard]] auto get_context() const noexcept -> T* {
         return world_.get<T*>();
-    }
 
     // --- Simulation ---
 
@@ -587,7 +493,6 @@ private:
     explicit ECSWorld(flecs::world&& world) noexcept;
 
     flecs::world world_;
-};
 
 /// Коды ошибок ECS
 export enum class ECSError : uint8_t {
@@ -595,7 +500,6 @@ export enum class ECSError : uint8_t {
     InvalidEntity,          ///< Entity не валидна
     ComponentNotFound,      ///< Компонент не найден
     SystemRegistrationFailed ///< Ошибка регистрации системы
-};
 
 } // namespace projectv::ecs
 ```
@@ -616,7 +520,6 @@ export namespace projectv::ecs {
 
 // ============================================================================
 // Event Types
-// ============================================================================
 
 /// Событие создания entity
 struct EntityCreatedEvent {
@@ -626,22 +529,16 @@ struct EntityCreatedEvent {
 
 /// Событие уничтожения entity
 struct EntityDestroyedEvent {
-    uint64_t entity_id;
-};
 
 /// Событие изменения здоровья
 struct HealthChangedEvent {
-    uint64_t entity_id;
     float old_health;
     float new_health;
     float damage;
-};
 
 /// Событие смерти
 struct EntityDiedEvent {
-    uint64_t entity_id;
     uint64_t killer_id;  // 0 = unknown
-};
 
 /// Событие изменения вокселя
 struct VoxelChangedEvent {
@@ -649,11 +546,8 @@ struct VoxelChangedEvent {
     uint16_t old_material;
     uint16_t new_material;
     uint64_t entity_id;  // Кто изменил
-};
 
-// ============================================================================
 // Event Manager
-// ============================================================================
 
 /// Менеджер событий.
 /// Использует Flecs observers для событийной модели.
@@ -672,21 +566,15 @@ public:
     static auto on_component_changed(flecs::world& world, Func&& callback) -> void {
         world.observer<T>()
             .event(flecs::OnSet)
-            .each(std::forward<Func>(callback));
-    }
 
     /// Эмитит событие.
     template<typename T>
     static auto emit(flecs::world& world, T const& event) -> void {
         world.event<T>().emit(event);
-    }
 
     /// Эмитит событие для entity.
-    template<typename T>
     static auto emit_for(flecs::world& world, uint64_t entity_id, T const& event) -> void {
         world.event<T>().entity(world.entity(entity_id)).emit(event);
-    }
-};
 
 } // namespace projectv::ecs
 ```
@@ -720,7 +608,6 @@ struct PrefabDefinition {
             "data", &T::json_data
         );
     };
-};
 
 /// Менеджер prefab'ов.
 class PrefabManager final {
@@ -746,18 +633,15 @@ public:
 
 private:
     std::unordered_map<std::string, PrefabDefinition> prefabs_;
-};
 
 export enum class PrefabError : uint8_t {
     NotFound,           ///< Prefab не найден
     InvalidJSON,        ///< Ошибка парсинга JSON
     ComponentNotFound,  ///< Компонент не зарегистрирован
     InstantiationFailed ///< Ошибка создания entity
-};
 
 // ============================================================================
 // Builtin Prefabs
-// ============================================================================
 
 /// Создаёт prefab игрока.
 auto create_player_prefab(flecs::world& world) -> flecs::entity;
@@ -839,14 +723,12 @@ private:
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 export enum class PhysicsError : uint8_t {
     InitializationFailed,
     BodyCreationFailed,
     InvalidBodyID,
     ShapeCreationFailed
-};
 
 } // namespace projectv::ecs
 ```
@@ -880,3 +762,12 @@ export enum class PhysicsError : uint8_t {
 
 - Flecs — C-библиотека, требует Global Module Fragment
 - Prefab-система требует регистрации типов компонентов
+
+---
+
+## Ссылки
+
+- [ADR-0001: Vulkan Renderer](./0001-vulkan-renderer.md)
+- [ADR-0002: SVO Storage](./0002-svo-storage.md)
+- [ADR-0004: Build System & C++26 Modules](./0004-build-and-modules-spec.md)
+- [Network-Ready ECS](../practice/24_network-ready-ecs.md)

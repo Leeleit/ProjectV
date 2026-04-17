@@ -4,6 +4,8 @@
 
 ---
 
+**🟡 Уровень 2: Средний** — Стратегия пользовательского интерфейса для ProjectV.
+
 ## Концепция
 
 ### Разделение UI на два типа
@@ -75,12 +77,10 @@ public:
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-    }
 
     void endFrame(VkCommandBuffer cmd) {
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-    }
 
     void drawDebugOverlay(const GameStats& stats) {
         ImGui::Begin("Debug Overlay", nullptr,
@@ -94,7 +94,6 @@ public:
         ImGui::Text("Voxels Visible: %d", stats.visibleVoxels);
 
         ImGui::End();
-    }
 
     void drawEntityInspector(flecs::entity entity) {
         ImGui::Begin("Entity Inspector");
@@ -108,11 +107,7 @@ public:
             if (ImGui::CollapsingHeader(typeName)) {
                 // Рефлексия для редактирования компонента
                 // ... кастомный код для каждого типа
-            }
         });
-
-        ImGui::End();
-    }
 
     void drawPerformanceGraph(const std::vector<float>& frameTimes) {
         ImGui::Begin("Performance");
@@ -122,14 +117,10 @@ public:
         ImGui::PlotLines("Frame Time", frameTimes.data(), frameTimes.size(),
                         0, overlay, 0.0f, 50.0f, ImVec2(0, 80));
 
-        ImGui::End();
-    }
-
 private:
     SDL_Window* window_;
     VkDescriptorPool descriptorPool_;
     VkRenderPass renderPass_;
-};
 ```
 
 ### Debug Features
@@ -160,8 +151,6 @@ void Game::update(float deltaTime) {
         debugUI_.drawPerformanceGraph(frameTimes_);
 
         debugUI_.endFrame(commandBuffer_);
-    }
-}
 ```
 
 ---
@@ -214,7 +203,6 @@ public:
     void renderCrosshair(VkCommandBuffer cmd, const glm::vec2& screenCenter) {
         // Простой прицел (4 линии или текстурированный quad)
         // ...
-    }
 
 private:
     struct UIVertex {
@@ -234,13 +222,11 @@ private:
 
         indices.insert(indices.end(), {baseIndex, baseIndex + 1, baseIndex + 2,
                                        baseIndex, baseIndex + 2, baseIndex + 3});
-    }
 
     VkPipeline uiPipeline_;
     VkBuffer vertexBuffer_;
     VkBuffer indexBuffer_;
     VkDeviceSize vertexOffset_;
-};
 ```
 
 ### Вариант 2: RmlUi (для сложного HUD)
@@ -275,15 +261,12 @@ public:
         // Конвертация RmlUi vertices в Vulkan vertex buffer
         // Установка scissor rectangle
         // Вызов vkCmdDrawIndexed
-    }
 
     void EnableScissorRegion(bool enable) override {
         scissorEnabled_ = enable;
-    }
 
     void SetScissorRegion(int x, int y, int width, int height) override {
         scissorRect_ = {{x, y}, {width, height}};
-    }
 
 private:
     VkDevice device_;
@@ -293,7 +276,6 @@ private:
 };
 
 class GameHUD {
-public:
     GameHUD() {
         // Инициализация RmlUi
         Rml::SetRenderInterface(&renderer_);
@@ -309,7 +291,6 @@ public:
         // Загрузка HUD документа
         document_ = context_->LoadDocument("ui/hud.rml");
         document_->Show();
-    }
 
     void update(float deltaTime, const PlayerState& player) {
         // Обновление данных в UI
@@ -317,29 +298,23 @@ public:
         if (healthElement) {
             healthElement->SetAttribute("value",
                 Rml::ToString(static_cast<int>(player.health)));
-        }
 
         auto staminaBar = document_->GetElementById("stamina-bar");
         if (staminaBar) {
             staminaBar->SetAttribute("style",
                 Rml::String("width: ") + Rml::ToString(player.stamina * 100) + "%;");
-        }
 
         // Обновление контекста RmlUi
         context_->Update();
-    }
 
     void render(VkCommandBuffer cmd) {
         context_->Render();
         // renderer_ уже записывает команды в cmd
-    }
 
-private:
     RmlUiRenderer renderer_;
     RmlUiSystem system_;
     Rml::Context* context_;
     Rml::ElementDocument* document_;
-};
 ```
 
 **Пример RmlUi документа:**
@@ -359,19 +334,15 @@ private:
                 <div id="health-bar" style="width: 100%;">
                     <span id="health-value">100</span>
                 </div>
-            </div>
-        </div>
 
         <!-- Stamina Bar -->
         <div id="stamina-section">
             <div id="stamina-bar"></div>
-        </div>
 
         <!-- Crosshair -->
         <div id="crosshair">
             <div class="crosshair-line horizontal"></div>
             <div class="crosshair-line vertical"></div>
-        </div>
 
         <!-- Inventory Quick Access -->
         <div id="quick-inventory">
@@ -379,11 +350,8 @@ private:
             <div class="slot" id="slot-2">2</div>
             <div class="slot" id="slot-3">3</div>
             <div class="slot" id="slot-4">4</div>
-        </div>
-    </div>
 </body>
 </rml>
-```
 
 ```css
 /* ui/hud.css */
@@ -391,12 +359,8 @@ body {
     width: 100%;
     height: 100%;
     background-color: transparent;
-}
 
 #hud-container {
-    width: 100%;
-    height: 100%;
-}
 
 #health-section {
     position: absolute;
@@ -404,7 +368,6 @@ body {
     bottom: 20px;
     display: flex;
     align-items: center;
-}
 
 #health-bar-bg {
     width: 200px;
@@ -412,13 +375,10 @@ body {
     background-color: rgba(0, 0, 0, 0.5);
     border-radius: 4px;
     overflow: hidden;
-}
 
 #health-bar {
-    height: 100%;
     background: linear-gradient(to right, #ff4444, #44ff44);
     transition: width 0.3s ease-out;
-}
 
 #health-value {
     display: block;
@@ -427,65 +387,40 @@ body {
     font-size: 16px;
     font-weight: bold;
     line-height: 24px;
-}
 
 #crosshair {
-    position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 20px;
     height: 20px;
-}
 
 .crosshair-line {
-    position: absolute;
     background-color: rgba(255, 255, 255, 0.8);
-}
 
 .crosshair-line.horizontal {
-    width: 20px;
     height: 2px;
-    top: 50%;
     left: 0;
     transform: translateY(-50%);
-}
 
 .crosshair-line.vertical {
     width: 2px;
-    height: 20px;
-    left: 50%;
     top: 0;
     transform: translateX(-50%);
-}
 
 #quick-inventory {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
     gap: 8px;
-}
 
 .slot {
     width: 48px;
     height: 48px;
-    background-color: rgba(0, 0, 0, 0.5);
     border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
     justify-content: center;
-    color: white;
     font-size: 14px;
-}
 
 .slot.selected {
     border-color: #44ff44;
     background-color: rgba(68, 255, 68, 0.2);
-}
-```
 
 ---
 
@@ -562,11 +497,9 @@ public:
                                    layout_, 0, 1, &batch.descriptorSet, 0, nullptr);
             vkCmdDrawIndexed(cmd, batch.indexCount, 1, batch.firstIndex, 0, 0);
         }
-    }
 
 private:
     std::vector<UIBatch> batches_;
-};
 ```
 
 ### Memory footprint сравнение
@@ -586,7 +519,6 @@ Chromium/CEF:
 - Базовый overhead: ~100 MB
 - На кадр: переменный (GC, reflow)
 - Общий: ~150-500 MB
-```
 
 ---
 
@@ -597,7 +529,6 @@ Chromium/CEF:
 ```
 Debug UI: ImGui (всегда)
 Game HUD: ImGui (временно, для простоты)
-```
 
 **Обоснование**: MVP требует минимальных затрат времени. ImGui достаточен для демонстрации.
 
@@ -606,7 +537,6 @@ Game HUD: ImGui (временно, для простоты)
 ```
 Debug UI: ImGui (только debug builds)
 Game HUD: RmlUi (полноценный HUD с инвентарём, меню)
-```
 
 **Обоснование**: RmlUi требует времени на интеграцию, но даёт профессиональный вид.
 
@@ -629,7 +559,6 @@ ui/
 
 compiled/ui/
 └── ui_atlas.tex       # Все UI текстуры в одном файле
-```
 
 ### Font Loading
 
@@ -648,7 +577,6 @@ public:
         // Поиск glyph-ов в кэше
         // Генерация quads для каждого символа
         // Batch rendering
-    }
 
 private:
     struct Font {
@@ -658,7 +586,6 @@ private:
     };
 
     std::unordered_map<std::string, Font> fonts_;
-};
 ```
 
 ---
@@ -681,17 +608,13 @@ void HUDUpdateSystem(flecs::iter& it) {
     for (auto i : it) {
         huds[i].update(it.delta_time(), players[i]);
     }
-}
 
 // Система рендеринга HUD (после основного рендеринга)
 void HUDRenderSystem(flecs::iter& it) {
     auto* huds = it.field<GameHUD>(0);
     auto cmd = static_cast<VkCommandBuffer>(it.ctx);
 
-    for (auto i : it) {
         huds[i].render(cmd);
-    }
-}
 ```
 
 ---

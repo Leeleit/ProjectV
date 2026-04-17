@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-001
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящая спецификация определяет обязательные требования к конфигурации системы сборки CMake в проекте ProjectV. Все
@@ -19,6 +25,16 @@ ProjectV устанавливает **Clang 18.0+** в качестве этал
 ### 3.2 Конфигурация стандарта C++
 
 ```cmake
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- Документация CMake 3.30+
+- Требования к компилятору Clang 18+
+- Спецификация Vulkan 1.4
+
+---
+
 # ОБЯЗАТЕЛЬНО: Стандарт C++26 со строгим соответствием
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +62,7 @@ endif()
 ### 3.3 Флаги компиляции модулей
 
 ```cmake
+
 # Поддержка модулей C++26 в Clang 18+
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
@@ -80,7 +97,6 @@ ProjectV/
 ├── external/                   # Git-сабмодули
 └── tests/
     └── CMakeLists.txt
-```
 
 ### 4.2 Структура корневого CMakeLists.txt
 
@@ -121,6 +137,7 @@ add_subdirectory(tests)
 ### 5.1 Объявление модульного целевого объекта
 
 ```cmake
+
 # Объявление библиотеки с модулями C++26
 add_library(ProjectV.Core)
 
@@ -174,6 +191,7 @@ target_link_libraries(ProjectV.Core
 Внешние зависимости ДОЛЖНЫ размещаться в директории `external/`:
 
 ```cmake
+
 # Интеграция сабмодулей
 add_subdirectory(external/volk EXCLUDE_FROM_ALL)
 add_subdirectory(external/VMA EXCLUDE_FROM_ALL)
@@ -204,6 +222,7 @@ FetchContent_MakeAvailable(volk)
 Для системно установленных библиотек:
 
 ```cmake
+
 # Vulkan SDK 1.4
 find_package(Vulkan 1.4 REQUIRED)
 
@@ -227,6 +246,7 @@ target_link_libraries(MyTarget PRIVATE Vulkan::Vulkan)
 ### 7.2 Специфичные флаги конфигурации
 
 ```cmake
+
 # Конфигурация Debug
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -fsanitize=address,undefined")
 
@@ -246,6 +266,7 @@ endif()
 ### 8.1 Требования к Vulkan SDK
 
 ```cmake
+
 # ОБЯЗАТЕЛЬНО: Vulkan 1.4
 find_package(Vulkan 1.4 REQUIRED)
 
@@ -266,6 +287,7 @@ target_link_libraries(MyTarget PRIVATE GPUOpen::VulkanMemoryAllocator)
 ### 8.2 Требуемые расширения Vulkan
 
 ```cmake
+
 # Обязательные расширения Vulkan
 set(VULKAN_REQUIRED_FEATURES
     VK_KHR_dynamic_rendering
@@ -289,6 +311,7 @@ endforeach()
 ### 9.1 Clang.cmake
 
 ```cmake
+
 # cmake/toolchains/Clang.cmake
 # Конфигурация toolchain для Clang 18+
 
@@ -331,3 +354,19 @@ set(CMAKE_CXX_CLANG_FORMAT "clang-format;-style=file")
 3. Глобальные `add_definitions()` — использовать `target_compile_definitions()`
 4. Ручное управление файлами `.pcm` — CMake должен управлять компиляцией модулей
 5. `#include` в интерфейсных файлах модулей (`.cppm`) для C++ библиотек
+
+---
+
+## 11. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 12. Связанные документы
+
+- [СТВ-CPP-001: Стандарт языка C++](../cpp/00_language-standard.md)
+- [СТВ-GIT-001: Стандарт контроля версий](../git/00_version-control-standard.md)
+- [ADR-0004: Спецификация сборки и модулей](../../architecture/adr/0004-build-and-modules-spec.md)

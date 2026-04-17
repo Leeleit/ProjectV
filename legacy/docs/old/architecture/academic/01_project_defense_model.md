@@ -2,6 +2,11 @@
 
 ---
 
+**Документ:** Научно-техническое обоснование
+**Авторы:** ProjectV Team
+**Дата:** 2026-02-22
+**Уровень:** 🎓 Академический
+
 ## Аннотация
 
 Документ представляет формальное обоснование архитектурных решений ProjectV — воксельного игрового движка нового
@@ -43,8 +48,6 @@ s_v & \text{otherwise}
 $$f_{\text{spread}}(s_v, \vec{n}_L, \vec{n}_R) = \begin{cases}
 \text{swap}(s_v, s_L) & \text{with prob. } p_L \\
 \text{swap}(s_v, s_R) & \text{with prob. } p_R \\
-s_v & \text{otherwise}
-\end{cases}$$
 
 где вероятности определяются углом естественного откоса:
 
@@ -97,18 +100,12 @@ export auto update_chunk_simd(
         );
 
         auto velocity_y = simd::simd<float, simd::simd_abi::fixed_size<W>>(
-            [&](auto idx) {
                 return (i + idx < chunk_size) ? current[i + idx].velocity_y : 0.0f;
-            }
-        );
 
         // Load density from cells below (gather)
         auto density_below = simd::simd<float, simd::simd_abi::fixed_size<W>>(
-            [&](auto idx) {
                 size_t below_idx = i + idx + CHUNK_SIZE_X;
                 return (below_idx < chunk_size) ? current[below_idx].density : 1.0f;
-            }
-        );
 
         // Apply update rule: new_density = density - dt * velocity_y * (density - density_below)
         auto new_density = density - delta_time * velocity_y * (density - density_below);
@@ -119,9 +116,6 @@ export auto update_chunk_simd(
         // Store results
         for (size_t j = 0; j < W && i + j < chunk_size; ++j) {
             next[i + j].density = new_density[j];
-        }
-    }
-}
 
 } // namespace projectv::simulation
 ```
@@ -155,22 +149,17 @@ Size = 48 bytes per component
 - Useful data per line = 12 bytes (position)
 - Wasted data = 52 bytes
 - Cache utilization = 12/64 = 18.75%
-```
 
 **Модель для SoA (Structure of Arrays):**
 
-```
 TransformComponent_SoA:
 positions: contiguous array of vec3
 rotations: contiguous array of quat
 scales: contiguous array of vec3
 
-При итерации по positions:
-- Cache line = 64 bytes
 - Useful data per line = 64 bytes (5.33 positions)
 - Wasted data = 0 bytes
 - Cache utilization = 100%
-```
 
 ### 2.3 Формула оценки кэш-промахов
 
@@ -229,7 +218,6 @@ auto prefetch_ahead(T const* ptr, size_t distance) noexcept -> void {
     #elif defined(__aarch64__)
         __builtin_prefetch(ptr + distance, 0, 3);
     #endif
-}
 
 } // namespace projectv::core
 
@@ -268,7 +256,6 @@ struct RayMarchParams {
     float max_distance;     ///< Максимальная дистанция
     uint max_steps;         ///< Максимальное число шагов
     float epsilon;          ///< Пороговое расстояние
-};
 
 /// SVO Descriptor для GPU доступа.
 struct SVODescriptor {
@@ -279,7 +266,6 @@ struct SVODescriptor {
     uint root_offset;                               ///< Смещение корня
     float3 world_min;                              ///< Минимальная точка AABB
     float3 world_max;                              ///< Максимальная точка AABB
-};
 
 /// SVO Ray Marching — основной интерфейс.
 /// Сложность: O(d) где d = max_depth
@@ -336,8 +322,6 @@ RayMarchResult svo_ray_march(
             } else {
                 // Child doesn't exist, advance
                 // ... advance logic
-            }
-        } else {
             // At leaf level, check voxel
             VoxelData voxel = svo.leaf_data[current_node];
 
@@ -348,8 +332,6 @@ RayMarchResult svo_ray_march(
                 result.voxel_coord = uint3(pos / cell_size);
                 result.normal = compute_normal(pos, dir, side_dist, delta_dist);
                 return result;
-            }
-        }
 
         // Advance along DDA
         float min_dist = min(side_dist.x, min(side_dist.y, side_dist.z));
@@ -360,23 +342,11 @@ RayMarchResult svo_ray_march(
             if (side_dist.x < side_dist.z) {
                 side_dist.x += delta_dist.x;
                 pos += dir * delta_dist.x;
-            } else {
                 side_dist.z += delta_dist.z;
                 pos += dir * delta_dist.z;
-            }
-        } else {
             if (side_dist.y < side_dist.z) {
                 side_dist.y += delta_dist.y;
                 pos += dir * delta_dist.y;
-            } else {
-                side_dist.z += delta_dist.z;
-                pos += dir * delta_dist.z;
-            }
-        }
-    }
-
-    return result;
-}
 
 /// Вычисление нормали по DDA пересечению.
 float3 compute_normal(
@@ -384,27 +354,21 @@ float3 compute_normal(
     float3 dir,
     float3 side_dist,
     float3 delta_dist
-) {
     // Normal is perpendicular to the face we hit
     if (side_dist.x - delta_dist.x < side_dist.y &&
         side_dist.x - delta_dist.x < side_dist.z) {
         return float3(-sign(dir.x), 0, 0);
     } else if (side_dist.y - delta_dist.y < side_dist.z) {
         return float3(0, -sign(dir.y), 0);
-    } else {
         return float3(0, 0, -sign(dir.z));
-    }
-}
 
 /// Ray Marching dispatch kernel.
 [numthreads(8, 8, 1)]
 void csRayMarch(
     uint3 tid: SV_DispatchThreadID,
     uint3 gidx: SV_GroupIndex
-) {
     // One thread per pixel
     // ... dispatch logic
-}
 ```
 
 **Сложность:**
@@ -452,18 +416,15 @@ concept SVOConcept = requires(T const svo, glm::ivec3 coord, uint32_t depth) {
     { svo.set(coord, std::declval<typename T::VoxelType>()) } -> std::same_as<void>;
     { svo.max_depth() } -> std::same_as<uint32_t>;
     { svo.node_count() } -> std::same_as<size_t>;
-};
 
 /// Sparse Voxel Octree с $O(\log_8 n)$ запросами.
 ///
 /// ## Complexity
 /// - get: $O(\log_8 n)$ worst case
 /// - set: $O(\log_8 n)$ amortized
-///
 /// ## Thread Safety
 /// - Concurrent reads: safe
 /// - Concurrent writes: requires external synchronization
-export template<typename VoxelType>
 class SparseVoxelOctree {
 public:
     using Voxel = VoxelType;
@@ -493,35 +454,20 @@ public:
             }
 
             node = node->children[child_idx].get();
-        }
 
         result.found = true;
         result.data = node->voxel;
         result.depth = max_depth_;
         return result;
-    }
 
     /// Устанавливает воксель по координатам.
-    /// @param coord Координаты в воксельном пространстве
     /// @param voxel Данные вокселя
     auto set(glm::ivec3 coord, VoxelType const& voxel) -> void {
         Node* node = root_.get();
 
-        for (uint32_t depth = 0; depth < max_depth_; ++depth) {
-            uint32_t shift = max_depth_ - depth - 1;
-            uint32_t child_idx = ((coord.x >> shift) & 1) << 2 |
-                                 ((coord.y >> shift) & 1) << 1 |
-                                 ((coord.z >> shift) & 1);
-
-            if (!node->children[child_idx]) {
                 node->children[child_idx] = std::make_unique<Node>();
-            }
-
-            node = node->children[child_idx].get();
-        }
 
         node->voxel = voxel;
-    }
 
     [[nodiscard]] auto max_depth() const noexcept -> uint32_t { return max_depth_; }
     [[nodiscard]] auto node_count() const noexcept -> size_t { return node_count_; }
@@ -530,12 +476,10 @@ private:
     struct Node {
         std::array<std::unique_ptr<Node>, 8> children{};
         VoxelType voxel{};
-    };
 
     uint32_t max_depth_;
     std::unique_ptr<Node> root_;
     size_t node_count_{1};
-};
 
 static_assert(SVOConcept<SparseVoxelOctree<int>>);
 
@@ -588,7 +532,6 @@ export auto hash_node(
     result.data_hash = murmur_hash_64(&voxel, sizeof(VoxelType), 0xDEADBEEF);
 
     return result;
-}
 
 /// DAG Compression Result.
 export struct DAGCompressResult {
@@ -596,7 +539,6 @@ export struct DAGCompressResult {
     size_t compressed_nodes{0};
     size_t unique_subtrees{0};
     double compression_ratio{0.0};
-};
 
 /// DAG компрессия SVO.
 ///
@@ -604,11 +546,9 @@ export struct DAGCompressResult {
 /// 1. Post-order traversal для хеширования всех поддеревьев
 /// 2. Hash map для deduplication одинаковых поддеревьев
 /// 3. Перелинковка указателей на уникальные узлы
-///
 /// ## Complexity
 /// - Time: $O(n \log n)$ worst case, $O(n)$ average
 /// - Space: $O(n)$ для hash map
-///
 /// ## Memory Savings
 /// $$S_{\text{DAG}} = 1 - \frac{|\text{unique subtrees}|}{|\text{total nodes}|}$$
 /// Типичные savings для природного ландшафта: 70-90%
@@ -635,17 +575,11 @@ public:
                 for (size_t i = 1; i < nodes.size(); ++i) {
                     // Redirect children to first node's children
                     nodes[i]->children = nodes[0]->children;
-                }
                 result.unique_subtrees++;
-            }
-        }
 
         result.compressed_nodes = count_unique_nodes(svo.root_);
         result.compression_ratio = static_cast<double>(result.compressed_nodes) /
                                    static_cast<double>(result.original_nodes);
-
-        return result;
-    }
 
 private:
     auto hash_subtree(
@@ -660,7 +594,6 @@ private:
         for (size_t i = 0; i < 8; ++i) {
             NodeHash child_hash = hash_subtree(node->children[i].get(), hash_map);
             child_hashes[i] = child_hash.children_hash ^ child_hash.data_hash;
-        }
 
         // Combine child hashes
         hash.children_hash = combine_hashes(child_hashes);
@@ -668,17 +601,12 @@ private:
 
         hash_map[hash].push_back(node);
         return hash;
-    }
 
     static auto combine_hashes(std::span<uint64_t const> hashes) -> uint64_t {
         uint64_t result = 0;
         for (uint64_t h : hashes) {
             result ^= h;
             result *= 0x100000001b3ULL;
-        }
-        return result;
-    }
-};
 
 } // namespace projectv::render::voxel
 ```
@@ -716,7 +644,6 @@ struct GreedyMeshParams {
     uint3 chunk_max;        ///< Максимальные координаты чанка
     uint chunk_stride;      ///< Stride для следующего чанка
     uint output_offset;     ///< Смещение в output buffer
-};
 
 /// Greedy Meshing для одной оси.
 ///
@@ -725,10 +652,8 @@ struct GreedyMeshParams {
 /// 2. Поиск максимального прямоугольника
 /// 3. Маркировка использованных вокселей
 /// 4. Повторение до исчерпания слоя
-///
 /// ## Complexity
 /// $T(n) = O(n)$ для $n$ вокселей
-///
 /// ## Triangle Count
 /// $N_{\text{triangles}} \leq 6 \cdot \sqrt[3]{n^2}$ в худшем случае
 /// vs $12n$ для наивного подхода
@@ -754,14 +679,12 @@ bool is_face_visible(uint3 pos, uint axis, bool positive) {
     // Boundary check
     if (any(neighbor_pos < uint3(0, 0, 0)) || any(neighbor_pos >= CHUNK_SIZE)) {
         return true; // Boundary face is always visible
-    }
 
     // Check if neighbor is empty (air)
     uint neighbor_idx = neighbor_pos.x + neighbor_pos.y * CHUNK_SIZE_X
                       + neighbor_pos.z * CHUNK_SIZE_X * CHUNK_SIZE_Y;
 
     return voxelGrid[neighbor_idx].material_id == 0;
-}
 
 /// Greedy meshing для оси X (Y-Z plane).
 [numthreads(8, 8, 1)]
@@ -786,7 +709,6 @@ void csGreedyMeshX(uint3 tid: SV_DispatchThreadID) {
             if (voxelGrid[next_idx].material_id != voxel.material_id) break;
             if (!is_face_visible(uint3(x, y + height, z), 0, true)) break;
             height++;
-        }
 
         // Try to extend quad in Z direction
         uint width = 1;
@@ -797,14 +719,8 @@ void csGreedyMeshX(uint3 tid: SV_DispatchThreadID) {
                 if (voxelGrid[next_idx].material_id != voxel.material_id) {
                     can_extend = false;
                     break;
-                }
                 if (!is_face_visible(uint3(x, y + dy, z + width), 0, true)) {
-                    can_extend = false;
-                    break;
-                }
-            }
             if (can_extend) width++;
-        }
 
         // Emit quad
         uint quad_idx;
@@ -818,9 +734,6 @@ void csGreedyMeshX(uint3 tid: SV_DispatchThreadID) {
                 voxel.material_id,
                 0                          // Axis X
             );
-        }
-    }
-}
 
 /// Dispatch для всех трёх осей.
 void dispatchGreedyMesh(VkCommandBuffer cmd, VkExtent3D chunk_size) {
@@ -829,12 +742,9 @@ void dispatchGreedyMesh(VkCommandBuffer cmd, VkExtent3D chunk_size) {
         (chunk_size.width + 7) / 8,
         (chunk_size.height + 7) / 8,
         chunk_size.depth
-    );
     // Dispatch Y faces
     // ... similar pattern
     // Dispatch Z faces
-    // ... similar pattern
-}
 ```
 
 **Сложность:**

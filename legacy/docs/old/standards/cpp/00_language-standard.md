@@ -2,10 +2,18 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CPP-001
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет требования к использованию языка C++ в проекте ProjectV. Весь код на C++ ДОЛЖЕН
 соответствовать данной спецификации.
+
+---
 
 ## 3. Версия стандарта
 
@@ -17,6 +25,15 @@ ProjectV устанавливает **C++26** в качестве обязате
 ### 3.2 Конфигурация компилятора
 
 ```cmake
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- C++ Core Guidelines (ISO C++ Foundation)
+- СТВ-CMAKE-001: Спецификация системы сборки CMake
+
+---
+
 # ОБЯЗАТЕЛЬНО: Стандарт C++26
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -92,26 +109,20 @@ public:
 
 /// Фабрика аллокаторов
 export class AllocatorFactory {
-public:
     [[nodiscard]] static auto create_pool(std::size_t pool_size)
         -> std::unique_ptr<IAllocator>;
-};
 
 } // namespace projectv::core::memory
 ```
 
 **Файл реализации (`.cpp`):**
 
-```cpp
 // ProjectV.Core.Memory.cpp
 module ProjectV.Core.Memory;
-
-import std;
 
 namespace projectv::core::memory {
 
 class PoolAllocator final : public IAllocator {
-public:
     explicit PoolAllocator(std::size_t pool_size);
     ~PoolAllocator() override;
 
@@ -123,7 +134,6 @@ private:
     std::byte* pool_;
     std::size_t pool_size_;
     std::size_t offset_;
-};
 
 // Реализация методов...
 
@@ -131,9 +141,6 @@ auto AllocatorFactory::create_pool(std::size_t pool_size)
     -> std::unique_ptr<IAllocator> {
     return std::make_unique<PoolAllocator>(pool_size);
 }
-
-} // namespace projectv::core::memory
-```
 
 ### 4.4 Запрещённые практики с модулями
 
@@ -174,7 +181,6 @@ export struct Error {
     [[nodiscard]] auto operator bool() const noexcept -> bool {
         return code == ErrorCode::Success;
     }
-};
 
 /// Пример функции с обработкой ошибок
 export [[nodiscard]] auto create_buffer(std::size_t size)
@@ -184,18 +190,13 @@ export [[nodiscard]] auto create_buffer(std::size_t size)
             .code = ErrorCode::InvalidArgument,
             .message = "Размер буфера должен быть больше нуля"
         });
-    }
 
     auto* ptr = allocate(size);
     if (!ptr) {
-        return std::unexpected(Error{
             .code = ErrorCode::OutOfMemory,
             .message = "Не удалось выделить память"
-        });
-    }
 
     return Buffer{ptr, size};
-}
 
 } // namespace projectv::core
 ```
@@ -277,7 +278,6 @@ struct alignas(16) Vec4 {
 struct alignas(64) CacheLineAligned {
     std::atomic<uint32_t> counter;
     char padding[60];  // Дополнение до 64 байт
-};
 
 // Проверка выравнивания
 static_assert(alignof(Vec4) == 16);
@@ -361,6 +361,7 @@ auto result = create_buffer(
 Использовать `.clang-format`:
 
 ```yaml
+
 # .clang-format
 BasedOnStyle: LLVM
 Language: Cpp
@@ -397,3 +398,19 @@ SortUsingDeclarations: true
 3. Си-стиль приведений `(type)expr`
 4. `goto` (кроме обоснованных случаев)
 5. Глобальные переменные с внешней связью
+
+---
+
+## 10. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 11. Связанные документы
+
+- [СТВ-CPP-002: Стандарт структуры кода](01_code-structure.md)
+- [СТВ-CPP-003: Стандарт управления памятью](02_memory-management.md)
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](../cmake/00_specification.md)

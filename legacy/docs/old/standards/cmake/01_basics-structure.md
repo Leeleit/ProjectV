@@ -2,6 +2,12 @@
 
 ---
 
+**Идентификатор документа:** СТВ-CMAKE-002
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
+
 ## 1. Область применения
 
 Настоящий стандарт определяет обязательную структуру проектов CMake в ProjectV. Все файлы CMakeLists.txt и связанные
@@ -18,6 +24,15 @@
 **Обязательный паттерн:**
 
 ```cmake
+
+## 2. Нормативные ссылки
+
+- ISO/IEC 14882:2026 (C++26)
+- Документация CMake 3.30
+- СТВ-CMAKE-001: Спецификация системы сборки CMake
+
+---
+
 # ПРАВИЛЬНО: Конфигурация на основе целевого объекта
 target_compile_features(MyTarget PRIVATE cxx_std_26)
 target_include_directories(MyTarget PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -47,7 +62,95 @@ add_definitions(-DPROJECTV_DEBUG)  # ЗАПРЕЩЕНО
 Все файлы CMakeLists.txt ДОЛЖНЫ соответствовать следующей структуре:
 
 ```cmake
+
 # =============================================================================
+
+cmake_minimum_required(VERSION 3.30)
+
+project(<ИмяПроекта>
+    VERSION <major>.<minor>.<patch>
+    LANGUAGES CXX
+    DESCRIPTION "<описание проекта>"
+)
+
+option(PROJECTV_BUILD_TESTS "Сборка набора тестов" ON)
+option(PROJECTV_ENABLE_SANITIZERS "Включить санитайзеры" OFF)
+
+find_package(Vulkan 1.4 REQUIRED)
+
+add_library(ProjectV.<ИмяМодуля>)
+
+target_sources(ProjectV.<ИмяМодуля>
+    PUBLIC FILE_SET CXX_MODULES FILES
+        <интерфейсные_файлы_модулей>
+    PRIVATE
+        <файлы_реализации>
+
+target_compile_features(ProjectV.<ИмяМодуля> PUBLIC cxx_std_26)
+
+target_link_libraries(ProjectV.<ИмяМодуля>
+    PUBLIC
+        <публичные_зависимости>
+        <приватные_зависимости>
+
+install(TARGETS ProjectV.<ИмяМодуля>
+    EXPORT ProjectVTargets
+    FILE_SET CXX_MODULES
+```
+
+---
+
+### 4.2 Шаблон заголовка
+
+```cmake
+## 5. Организация исходных файлов
+
+### 5.1 Интерфейсные файлы модулей (.cppm)
+
+Интерфейсные файлы модулей ДОЛЖНЫ объявляться с использованием `FILE_SET CXX_MODULES`:
+
+```cmake
+target_sources(ProjectV.Core
+    PUBLIC FILE_SET CXX_MODULES FILES
+        src/core/ProjectV.Core.cppm
+        src/core/ProjectV.Core.Memory.cppm
+        src/core/ProjectV.Core.Containers.cppm
+        src/core/ProjectV.Math.cppm
+)
+```
+
+### 5.2 Файлы реализации (.cpp)
+
+Файлы реализации ДОЛЖНЫ объявляться как `PRIVATE` источники:
+
+```cmake
+target_sources(ProjectV.Core
+    PRIVATE
+        src/core/ProjectV.Core.Memory.cpp
+        src/core/ProjectV.Core.Containers.cpp
+        src/core/ProjectV.Math.cpp
+)
+```
+
+### 5.3 Заголовочные файлы
+
+Для обёрток C-библиотек и совместимости с legacy-кодом:
+
+```cmake
+target_sources(ProjectV.Core
+    PUBLIC FILE_SET HEADERS FILES
+        include/projectv/core/export.h
+        include/projectv/core/types.h
+)
+```
+
+---
+
+## 6. Свойства целевых объектов
+
+### 6.1 Обязательные свойства целевого объекта
+
+```cmake
 # Раздел 1: Заголовок и документация
 # =============================================================================
 # Модуль ProjectV: <имя_модуля>
@@ -217,6 +320,7 @@ endif()
 ### 7.1 Определение платформы
 
 ```cmake
+
 # Определение платформы
 if(WIN32)
     target_compile_definitions(ProjectV.Core PRIVATE PROJECTV_PLATFORM_WINDOWS)
@@ -230,6 +334,7 @@ endif()
 ### 7.2 Конфигурация сборки
 
 ```cmake
+
 # Специфичная для Debug конфигурация
 target_compile_definitions(ProjectV.Core
     PRIVATE
@@ -245,9 +350,6 @@ if(PROJECTV_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             -fno-omit-frame-pointer
     )
     target_link_options(ProjectV.Core
-        PRIVATE
-            -fsanitize=address,undefined
-    )
 endif()
 ```
 
@@ -258,6 +360,7 @@ endif()
 ### 8.1 Генерируемые заголовки
 
 ```cmake
+
 # Генерация заголовка версии
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in"
@@ -268,12 +371,12 @@ configure_file(
 target_include_directories(ProjectV.Core
     PUBLIC
         "${CMAKE_CURRENT_BINARY_DIR}/include"
-)
 ```
 
 ### 8.2 Шаблон версии
 
 ```cmake
+
 # cmake/version.h.in
 #pragma once
 
@@ -292,6 +395,7 @@ target_include_directories(ProjectV.Core
 ### 9.1 Паттерн добавления подкаталогов
 
 ```cmake
+
 # Структура подкаталогов
 add_subdirectory(core)       # Уровень 1: Фундамент
 add_subdirectory(math)       # Уровень 1: Математика
@@ -308,6 +412,7 @@ add_subdirectory(app)        # Уровень 4: Приложение
 Родительские директории НЕ ДОЛЖНЫ напрямую управлять зависимостями дочерних:
 
 ```cmake
+
 # ПРАВИЛЬНО: Дочерний модуль управляет своими зависимостями
 # В src/physics/CMakeLists.txt:
 target_link_libraries(ProjectV.Physics
@@ -330,6 +435,7 @@ target_link_libraries(ProjectV.Physics PRIVATE Jolt)  # ЗАПРЕЩЕНО
 ### 10.1 Структура целевого объекта тестов
 
 ```cmake
+
 # tests/CMakeLists.txt
 enable_testing()
 
@@ -345,10 +451,8 @@ target_sources(ProjectV.Tests
 )
 
 target_link_libraries(ProjectV.Tests
-    PRIVATE
         ProjectV.Core
         doctest::doctest
-)
 
 # Обнаружение тестов
 include(GoogleTest)
@@ -358,6 +462,7 @@ gtest_discover_tests(ProjectV.Tests)
 ### 10.2 Регистрация тестов
 
 ```cmake
+
 # Регистрация теста в CTest
 add_test(NAME ProjectV.Core.Tests
     COMMAND ProjectV.Tests --test-suite=Core
@@ -409,7 +514,6 @@ write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/ProjectVConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
-)
 ```
 
 ---
@@ -431,3 +535,19 @@ write_basic_package_version_file(
 3. `add_compile_options()` уровня директории — использовать `target_compile_options()`
 4. `aux_source_directory()` — явно перечислять все исходные файлы
 5. `file(GLOB ...)` для исходных файлов — требуется явное перечисление источников
+
+---
+
+## 13. История редакций
+
+| Версия | Дата       | Автор                 | Изменения                   |
+|--------|------------|-----------------------|-----------------------------|
+| 1.0.0  | 22.02.2026 | Архитектурная команда | Первоначальная спецификация |
+
+---
+
+## 14. Связанные документы
+
+- [СТВ-CMAKE-001: Спецификация системы сборки CMake](00_specification.md)
+- [СТВ-CMAKE-003: Стандарт управления зависимостями](02_dependencies.md)
+- [ADR-0004: Спецификация сборки и модулей](../../architecture/adr/0004-build-and-modules-spec.md)

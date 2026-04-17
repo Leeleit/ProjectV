@@ -1,6 +1,12 @@
-﻿# СТВ-CPP-002: Стандарт структуры кода
+# СТВ-CPP-002: Стандарт структуры кода
 
 ---
+
+**Идентификатор документа:** СТВ-CPP-002
+**Версия:** 1.0.0
+**Статус:** Утверждён
+**Дата введения:** 22.02.2026
+**Классификация:** Технический стандарт
 
 ## 1. Область применения
 
@@ -46,7 +52,6 @@ src/
 └── app/                     # Приложение
     ├── ProjectV.App.cppm
     └── main.cpp             # Точка входа
-```
 
 ### 3.2 Именование файлов
 
@@ -93,7 +98,6 @@ export namespace projectv::core::memory {
 }
 
 // Экспорт реализации
-export namespace projectv::core::memory {
 
 /// Интерфейс аллокатора памяти
 export class IAllocator
@@ -146,34 +150,25 @@ public:
         : pool_(static_cast<std::byte*>(std::aligned_alloc(64, pool_size)))
         , pool_size_(pool_size)
         , offset_(0)
-    {
         if (!pool_) {
             throw std::bad_alloc();
-        }
-    }
 
     ~PoolAllocator() noexcept override {
         std::free(pool_);
-    }
 
     [[nodiscard]] auto allocate(std::size_t size, std::size_t alignment)
         -> void* override
-    {
         auto aligned_offset = align_up(offset_, alignment);
         auto new_offset = aligned_offset + size;
 
         if (new_offset > pool_size_) {
             return nullptr;
-        }
 
         offset_ = new_offset;
         return pool_ + aligned_offset;
-    }
 
     auto deallocate(void* ptr, std::size_t size) noexcept -> void override
-    {
         // Stack allocator: dealloc не освобождает память
-    }
 
 private:
     std::byte* pool_;
@@ -251,8 +246,6 @@ private:
 
 // Правило пяти: класс управляет ресурсами
 class ResourceOwner
-{
-public:
     explicit ResourceOwner(std::size_t size);
     ~ResourceOwner() noexcept;
 
@@ -262,10 +255,8 @@ public:
     ResourceOwner(ResourceOwner&& other) noexcept;
     auto operator=(ResourceOwner&& other) noexcept -> ResourceOwner&;
 
-private:
     void* resource_;
     std::size_t size_;
-};
 ```
 
 ---
@@ -301,7 +292,6 @@ private:
 ) -> std::expected<VertexBuffer, Error>;
 
 /// Обработать данные
-///
 /// @param data Входные данные
 /// @param output Выходной буфер
 /// @return Количество обработанных элементов
@@ -328,7 +318,6 @@ projectv::                    // Корневое пространство
 ├── physics::                 // Физика
 ├── ecs::                     // Entity Component System
 └── ui::                      // Пользовательский интерфейс
-```
 
 ### 7.2 Использование пространств имён
 
@@ -388,20 +377,15 @@ namespace projectv::core {
     #else
         #define PROJECTV_CORE_API __declspec(dllimport)
     #endif
-#else
     #define PROJECTV_CORE_API __attribute__((visibility("default")))
-#endif
 
 #ifdef __cplusplus
 extern "C" {
-#endif
 
 PROJECTV_CORE_API void projectv_init();
 PROJECTV_CORE_API void projectv_shutdown();
 
-#ifdef __cplusplus
 }
-#endif
 ```
 
 ---

@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 2.0 (Enterprise)
+**Дата:** 2026-02-22
+
 ## Обзор
 
 Документ определяет спецификацию интеграции разрушаемых воксельных чанков с JoltPhysics. Ключевые принципы:
@@ -58,7 +62,6 @@ VoxelCollisionProxy (PIMPL)
 └─────────────────────────────────────────────────────────────┘
 
 CollisionSyncTask
-┌─────────────────────────────────────────────────────────────┐
 │  chunk_id: uint64_t (8 bytes)                               │
 │  voxel_changes: std::vector<VoxelDelta> (24 bytes)          │
 │  priority: RebuildPriority (1 byte)                         │
@@ -66,10 +69,8 @@ CollisionSyncTask
 │  submit_frame: uint64_t (8 bytes)                           │
 │  callback: std::function<void(Result)> (32 bytes)           │
 │  Total: 80 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
 
 VoxelDelta
-┌─────────────────────────────────────────────────────────────┐
 │  local_x: uint8_t (1 byte)                                  │
 │  local_y: uint8_t (1 byte)                                  │
 │  local_z: uint8_t (1 byte)                                  │
@@ -77,18 +78,14 @@ VoxelDelta
 │  new_material: uint8_t (1 byte)                             │
 │  padding: 3 bytes                                           │
 │  Total: 8 bytes                                             │
-└─────────────────────────────────────────────────────────────┘
 
 GreedyMeshData
-┌─────────────────────────────────────────────────────────────┐
 │  vertices: std::vector<JPH::Float3> (24 bytes)              │
 │  indices: std::vector<uint32_t> (24 bytes)                  │
 │  face_count: uint32_t (4 bytes)                             │
 │  vertex_count: uint32_t (4 bytes)                           │
 │  material_ranges: std::vector<MaterialRange> (24 bytes)     │
 │  Total: 80 bytes (without data)                             │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -103,19 +100,11 @@ CollisionState
        └─────┬──────┘
              │ voxels_changed()
              ▼
-       ┌────────────┐
        │   DIRTY    │ ←── Changes pending
-       └─────┬──────┘
              │ queue_rebuild()
-             ▼
-       ┌────────────┐
        │  QUEUED    │ ←── In rebuild queue
-       └─────┬──────┘
              │ begin_rebuild()
-             ▼
-       ┌────────────┐
        │ REBUILDING │ ←── Async mesh generation
-       └─────┬──────┘
              │
     ┌────────┴────────┐
     ▼                 ▼
@@ -124,11 +113,8 @@ CollisionState
 │ (swap)  │     │  (retry) │
 └────┬────┘     └──────────┘
      │ swap_complete()
-     ▼
-┌────────────┐
 │   IDLE     │
 └────────────┘
-```
 
 ### Rebuild Pipeline
 
@@ -140,27 +126,16 @@ Rebuild Pipeline (Async)
      │                           │                           │
      │  1. Voxel Changed         │                           │
      ├──────────────────────────►│                           │
-     │                           │                           │
      │  2. Queue Task            │                           │
-     ├──────────────────────────►│                           │
-     │                           │                           │
      │                           │  3. Extract Voxel Data    │
      │                           ├──────────────────────────►│
-     │                           │                           │
      │                           │  4. Greedy Meshing        │
-     │                           ├──────────────────────────►│
-     │                           │                           │
      │                           │  5. Build JPH::MeshShape  │
-     │                           ├──────────────────────────►│
-     │                           │                           │
      │  6. Callback (swap)       │                           │
      │◄──────────────────────────┤                           │
-     │                           │                           │
      │  7. Update Body Shape     │                           │
      ├──────────────────────────────────────────────────────►│
-     │                           │                           │
      ▼                           ▼                           ▼
-```
 
 ---
 
@@ -195,7 +170,6 @@ export enum class CollisionState : uint8_t {
     Rebuilding,    ///< Перестраивается
     Ready,         ///< Готов к swap
     Failed         ///< Ошибка rebuild
-};
 
 /// Результат перестройки коллизии.
 export struct RebuildResult {
@@ -205,7 +179,6 @@ export struct RebuildResult {
     uint32_t vertex_count{0};
     std::chrono::milliseconds duration{0};
     std::string error_message;
-};
 
 /// Конфигурация collision manager.
 export struct CollisionConfig {
@@ -214,7 +187,6 @@ export struct CollisionConfig {
     uint32_t batch_size{16};             ///< Размер batch для обработки
     bool enable_greedy_meshing{true};    ///< Использовать greedy meshing
     float simplification_threshold{0.0f}; ///< Порог упрощения (0 = отключено)
-};
 
 /// Voxel Collision Manager — управление коллизиями воксельных чанков.
 ///
@@ -222,12 +194,10 @@ export struct CollisionConfig {
 /// - Асинхронная перестройка MeshShape
 /// - Приоритизация задач
 /// - Batch-обработка для эффективности
-///
 /// ## Thread Safety
 /// - mark_dirty(): thread-safe
 /// - process_queue(): main thread
 /// - rebuild_worker(): worker threads
-///
 /// ## Invariants
 /// - Не более одного активного rebuild на chunk
 /// - Priority queue обрабатывается корректно
@@ -235,7 +205,6 @@ export struct CollisionConfig {
 export class VoxelCollisionManager {
 public:
     /// Создаёт Collision Manager.
-    ///
     /// @param physics JoltPhysics system
     /// @param config Конфигурация
     [[nodiscard]] static auto create(
@@ -251,10 +220,8 @@ public:
     VoxelCollisionManager& operator=(const VoxelCollisionManager&) = delete;
 
     /// Регистрирует chunk для отслеживания коллизий.
-    ///
     /// @param chunk_id ID чанка
     /// @param chunk_reference Ссылка на данные чанка
-    ///
     /// @pre chunk_id не зарегистрирован
     /// @post chunk имеет collision body
     [[nodiscard]] auto register_chunk(
@@ -263,39 +230,25 @@ public:
     ) noexcept -> std::expected<void, CollisionError>;
 
     /// Отменяет регистрацию chunk.
-    ///
-    /// @param chunk_id ID чанка
     /// @post Body удалён из физического мира
     auto unregister_chunk(uint64_t chunk_id) noexcept -> void;
 
     /// Помечает chunk как dirty.
-    ///
-    /// @param chunk_id ID чанка
     /// @param delta Изменение вокселя
     /// @param priority Приоритет
-    ///
     /// @post Chunk добавлен в rebuild queue
     auto mark_dirty(
-        uint64_t chunk_id,
         VoxelDelta const& delta,
         RebuildPriority priority = RebuildPriority::Normal
     ) noexcept -> void;
 
     /// Помечает chunk как dirty (batch).
-    ///
-    /// @param chunk_id ID чанка
     /// @param deltas Изменения вокселей
-    /// @param priority Приоритет
     auto mark_dirty_batch(
-        uint64_t chunk_id,
         std::span<VoxelDelta const> deltas,
-        RebuildPriority priority = RebuildPriority::Normal
-    ) noexcept -> void;
 
     /// Обрабатывает очередь перестроек.
-    ///
     /// @param max_tasks Максимум задач за вызов
-    ///
     /// @return Количество обработанных задач
     auto process_queue(uint32_t max_tasks = UINT32_MAX) noexcept -> uint32_t;
 
@@ -342,8 +295,6 @@ private:
     auto update_body_shape(
         JPH::BodyID body_id,
         JPH::RefConst<JPH::Shape> new_shape
-    ) noexcept -> void;
-};
 
 } // namespace projectv::voxel
 ```
@@ -375,7 +326,6 @@ export struct VoxelPhysicsBodyComponent {
     JPH::BodyID body_id;
     bool is_static{true};
     bool is_active{true};
-};
 
 /// ECS система синхронизации Voxel ↔ Collision.
 ///
@@ -397,20 +347,14 @@ private:
         flecs::entity e,
         VoxelChunkComponent& chunk,
         VoxelCollisionComponent& collision
-    ) noexcept -> void;
 
     /// Система: Обработка rebuild queue.
     static auto process_collision_queue(
         flecs::iter& it,
         VoxelCollisionManager& manager
-    ) noexcept -> void;
 
     /// Система: Swap completed shapes.
     static auto swap_collision_shapes(
-        flecs::iter& it,
-        VoxelCollisionManager& manager
-    ) noexcept -> void;
-};
 
 } // namespace projectv::voxel::sync
 ```
@@ -447,7 +391,6 @@ export struct GreedyFace {
     uint16_t width, height; ///< Размеры в плоскости
     FaceDirection direction;
     uint16_t material_id;
-};
 
 /// Greedy Meshing Generator.
 ///
@@ -459,10 +402,8 @@ export struct GreedyFace {
 export class GreedyMeshGenerator {
 public:
     /// Генерирует quads для chunk.
-    ///
     /// @param chunk_data Данные вокселей
     /// @param chunk_size Размер чанка (обычно 16)
-    ///
     /// @return Вектор граней
     [[nodiscard]] auto generate_quads(
         ChunkData const& chunk_data,
@@ -470,10 +411,8 @@ public:
     ) const noexcept -> std::vector<GreedyFace>;
 
     /// Конвертирует quads в triangle mesh.
-    ///
     /// @param quads Грани
     /// @param chunk_offset Мировой offset чанка
-    ///
     /// @return Vertices и indices для Jolt MeshShape
     [[nodiscard]] auto quads_to_mesh(
         std::vector<GreedyFace> const& quads,
@@ -491,25 +430,18 @@ private:
 
     /// Находит материал voxel.
     [[nodiscard]] auto get_material(
-        ChunkData const& data,
         uint32_t x, uint32_t y, uint32_t z
     ) const noexcept -> uint16_t;
 
     /// Scan line для greedy merge.
     auto scan_plane(
-        ChunkData const& data,
         uint32_t slice,
-        FaceDirection dir,
         uint32_t chunk_size,
         std::vector<std::vector<bool>>& mask
-    ) const noexcept -> std::vector<GreedyFace>;
-};
 
 // === Implementation ===
 
 auto GreedyMeshGenerator::generate_quads(
-    ChunkData const& chunk_data,
-    uint32_t chunk_size
 ) const noexcept -> std::vector<GreedyFace> {
 
     std::vector<GreedyFace> quads;
@@ -540,17 +472,13 @@ auto GreedyMeshGenerator::generate_quads(
                         case FaceDirection::PositiveY:
                         case FaceDirection::NegativeY:
                             vx = x; vy = slice; vz = y;
-                            break;
                         case FaceDirection::PositiveZ:
                         case FaceDirection::NegativeZ:
                             vx = x; vy = y; vz = slice;
-                            break;
                     }
 
                     mask[y][x] = is_face_visible(
                         chunk_data, vx, vy, vz, face_dir, chunk_size);
-                }
-            }
 
             // Greedy merge в маске
             for (uint32_t y = 0; y < chunk_size; ) {
@@ -558,13 +486,11 @@ auto GreedyMeshGenerator::generate_quads(
                     if (!mask[y][x]) {
                         ++x;
                         continue;
-                    }
 
                     // Находим ширину
                     uint32_t width = 1;
                     while (x + width < chunk_size && mask[y][x + width]) {
                         ++width;
-                    }
 
                     // Находим высоту
                     uint32_t height = 1;
@@ -573,34 +499,12 @@ auto GreedyMeshGenerator::generate_quads(
                         for (uint32_t w = 0; w < width; ++w) {
                             if (!mask[y + height][x + w]) {
                                 can_extend = false;
-                                break;
-                            }
-                        }
                         if (can_extend) ++height;
-                    }
 
                     // Создаём quad
-                    uint32_t vx, vy, vz;
-                    switch (face_dir) {
-                        case FaceDirection::PositiveX:
-                            vx = slice; vy = y; vz = x;
-                            break;
-                        case FaceDirection::NegativeX:
                             vx = slice + 1; vy = y; vz = x;
-                            break;
-                        case FaceDirection::PositiveY:
-                            vx = x; vy = slice; vz = y;
-                            break;
-                        case FaceDirection::NegativeY:
                             vx = x; vy = slice + 1; vz = y;
-                            break;
-                        case FaceDirection::PositiveZ:
-                            vx = x; vy = y; vz = slice;
-                            break;
-                        case FaceDirection::NegativeZ:
                             vx = x; vy = y; vz = slice + 1;
-                            break;
-                    }
 
                     auto material = get_material(chunk_data,
                         vx, vy, vz);
@@ -619,22 +523,13 @@ auto GreedyMeshGenerator::generate_quads(
                     for (uint32_t dy = 0; dy < height; ++dy) {
                         for (uint32_t dx = 0; dx < width; ++dx) {
                             mask[y + dy][x + dx] = false;
-                        }
-                    }
 
                     x += width;
-                }
                 ++y;
-            }
-        }
-    }
 
     return quads;
-}
 
 auto GreedyMeshGenerator::quads_to_mesh(
-    std::vector<GreedyFace> const& quads,
-    glm::ivec3 chunk_offset
 ) const noexcept -> GreedyMeshData {
 
     GreedyMeshData result;
@@ -655,77 +550,37 @@ auto GreedyMeshGenerator::quads_to_mesh(
         float h = static_cast<float>(quad.height);
 
         switch (quad.direction) {
-            case FaceDirection::PositiveX:
                 result.vertices.push_back({x, y, z});
                 result.vertices.push_back({x, y + h, z});
                 result.vertices.push_back({x, y + h, z + w});
                 result.vertices.push_back({x, y, z + w});
-                break;
-            case FaceDirection::NegativeX:
-                result.vertices.push_back({x, y, z});
-                result.vertices.push_back({x, y, z + w});
-                result.vertices.push_back({x, y + h, z + w});
-                result.vertices.push_back({x, y + h, z});
-                break;
-            case FaceDirection::PositiveY:
-                result.vertices.push_back({x, y, z});
                 result.vertices.push_back({x + w, y, z});
                 result.vertices.push_back({x + w, y, z + h});
                 result.vertices.push_back({x, y, z + h});
-                break;
-            case FaceDirection::NegativeY:
-                result.vertices.push_back({x, y, z});
-                result.vertices.push_back({x, y, z + h});
-                result.vertices.push_back({x + w, y, z + h});
-                result.vertices.push_back({x + w, y, z});
-                break;
-            case FaceDirection::PositiveZ:
-                result.vertices.push_back({x, y, z});
-                result.vertices.push_back({x, y + h, z});
                 result.vertices.push_back({x + w, y + h, z});
-                result.vertices.push_back({x + w, y, z});
-                break;
-            case FaceDirection::NegativeZ:
-                result.vertices.push_back({x, y, z});
-                result.vertices.push_back({x + w, y, z});
-                result.vertices.push_back({x + w, y + h, z});
-                result.vertices.push_back({x, y + h, z});
-                break;
-        }
 
         // 2 triangles (CCW winding)
         result.indices.push_back(base_vertex + 0);
         result.indices.push_back(base_vertex + 1);
         result.indices.push_back(base_vertex + 2);
 
-        result.indices.push_back(base_vertex + 0);
-        result.indices.push_back(base_vertex + 2);
         result.indices.push_back(base_vertex + 3);
-    }
 
     result.vertex_count = static_cast<uint32_t>(result.vertices.size());
     result.face_count = static_cast<uint32_t>(result.indices.size() / 3);
 
     return result;
-}
 
 auto GreedyMeshGenerator::is_face_visible(
-    ChunkData const& data,
-    uint32_t x, uint32_t y, uint32_t z,
-    FaceDirection dir,
-    uint32_t chunk_size
 ) const noexcept -> bool {
 
     // Проверка границ
     if (x >= chunk_size || y >= chunk_size || z >= chunk_size) {
         return false;
-    }
 
     // Текущий voxel должен быть solid
     auto current = get_material(data, x, y, z);
     if (current == 0) {  // Air
-        return false;
-    }
 
     // Соседний voxel должен быть air или outside chunk
     uint32_t nx = x, ny = y, nz = z;
@@ -736,24 +591,18 @@ auto GreedyMeshGenerator::is_face_visible(
         case FaceDirection::NegativeY: if (y == 0) return true; --ny; break;
         case FaceDirection::PositiveZ: ++nz; break;
         case FaceDirection::NegativeZ: if (z == 0) return true; --nz; break;
-    }
 
     if (nx >= chunk_size || ny >= chunk_size || nz >= chunk_size) {
         return true;  // Edge of chunk
-    }
 
     auto neighbor = get_material(data, nx, ny, nz);
     return neighbor == 0;  // Air neighbor
-}
 
 auto GreedyMeshGenerator::get_material(
-    ChunkData const& data,
-    uint32_t x, uint32_t y, uint32_t z
 ) const noexcept -> uint16_t {
     // Implementation depends on ChunkData structure
     // Assuming data.voxels[x][y][z].material_id
     return data.get_voxel(x, y, z).material_id;
-}
 
 } // namespace projectv::voxel
 ```
@@ -819,38 +668,24 @@ auto VoxelCollisionSyncSystem::register_systems(
         .singleton()
         .iter([&collision_manager](flecs::iter& it) {
             collision_manager.process_queue();
-        });
 
     // System: Update Collision State (after physics step)
     world.system<VoxelCollisionComponent>("UpdateCollisionStateSystem")
         .kind(flecs::PostUpdate)
-        .each([&collision_manager](
-            flecs::entity e,
-            VoxelCollisionComponent& collision
-        ) {
             auto new_state = collision_manager.get_state(collision.chunk_id);
             collision.state = new_state;
 
             if (new_state == CollisionState::Idle) {
                 collision.pending_changes = 0;
-            }
-        });
 
     // System: Sync Physics Body Transform
     world.system<VoxelCollisionComponent, VoxelPhysicsBodyComponent>("SyncPhysicsTransformSystem")
-        .kind(flecs::PostUpdate)
-        .each([&collision_manager](
-            flecs::entity e,
             VoxelCollisionComponent& collision,
             VoxelPhysicsBodyComponent& body
-        ) {
             if (body.is_active) {
                 // Update transform from physics body
                 // auto transform = physics::get_body_transform(body.body_id);
                 // e.set<TransformComponent>(transform);
-            }
-        });
-}
 
 } // namespace projectv::voxel::sync
 ```
@@ -911,7 +746,6 @@ struct VoxelCollisionManager::Impl {
 
     // Greedy mesh generator
     GreedyMeshGenerator mesh_generator;
-};
 
 auto VoxelCollisionManager::rebuild_worker() noexcept -> void {
     TracySetThreadName("CollisionRebuild");
@@ -928,24 +762,18 @@ auto VoxelCollisionManager::rebuild_worker() noexcept -> void {
 
             if (!impl_->running.load(std::memory_order_acquire)) {
                 break;
-            }
 
             if (impl_->rebuild_queue.empty()) {
                 continue;
-            }
 
             task = std::move(const_cast<RebuildTask&>(impl_->rebuild_queue.top()));
             impl_->rebuild_queue.pop();
-        }
 
         // Update state to rebuilding
-        {
             std::shared_lock lock(impl_->proxies_mutex);
             if (auto it = impl_->proxies.find(task.chunk_id);
                 it != impl_->proxies.end()) {
                 it->second.state_ = CollisionState::Rebuilding;
-            }
-        }
 
         auto start = std::chrono::steady_clock::now();
 
@@ -960,7 +788,6 @@ auto VoxelCollisionManager::rebuild_worker() noexcept -> void {
 
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start
-        );
 
         RebuildResult result{
             .chunk_id = task.chunk_id,
@@ -968,7 +795,6 @@ auto VoxelCollisionManager::rebuild_worker() noexcept -> void {
             .face_count = mesh_data.face_count,
             .vertex_count = mesh_data.vertex_count,
             .duration = duration
-        };
 
         if (shape_result) {
             // Queue for main thread processing
@@ -980,16 +806,9 @@ auto VoxelCollisionManager::rebuild_worker() noexcept -> void {
             result.error_message = "Failed to create MeshShape";
 
             // Mark as failed
-            std::shared_lock lock(impl_->proxies_mutex);
-            if (auto it = impl_->proxies.find(task.chunk_id);
-                it != impl_->proxies.end()) {
                 it->second.state_ = CollisionState::Failed;
-            }
-        }
 
         task.promise.set_value(result);
-    }
-}
 
 auto VoxelCollisionManager::process_queue(uint32_t max_tasks) noexcept -> uint32_t {
     uint32_t processed = 0;
@@ -997,27 +816,19 @@ auto VoxelCollisionManager::process_queue(uint32_t max_tasks) noexcept -> uint32
     // Process completed tasks
     while (true) {
         std::pair<uint64_t, JPH::RefConst<JPH::Shape>> completed;
-        {
-            std::lock_guard lock(impl_->completed_mutex);
             if (impl_->completed.empty()) break;
             completed = std::move(impl_->completed.front());
             impl_->completed.pop();
-        }
 
         // Update body shape (must be on main thread)
-        std::shared_lock lock(impl_->proxies_mutex);
         if (auto it = impl_->proxies.find(completed.first);
-            it != impl_->proxies.end()) {
             update_body_shape(it->second.body_id_, completed.second);
             it->second.state_ = CollisionState::Idle;
-        }
 
         ++processed;
         if (processed >= max_tasks) break;
-    }
 
     return processed;
-}
 
 auto VoxelCollisionManager::create_mesh_shape(
     GreedyMeshData const& mesh_data
@@ -1032,8 +843,6 @@ auto VoxelCollisionManager::create_mesh_shape(
             mesh_data.vertices[i].x,
             mesh_data.vertices[i].y,
             mesh_data.vertices[i].z
-        };
-    }
 
     settings.mTriangles.resize(mesh_data.face_count);
     for (uint32_t i = 0; i < mesh_data.face_count; ++i) {
@@ -1042,16 +851,12 @@ auto VoxelCollisionManager::create_mesh_shape(
             static_cast<int>(mesh_data.indices[base + 0]),
             static_cast<int>(mesh_data.indices[base + 1]),
             static_cast<int>(mesh_data.indices[base + 2])
-        };
-    }
 
     auto result = settings.Create();
     if (result.IsValid()) {
         return result.Get();
-    }
 
     return std::unexpected(CollisionError::ShapeCreationFailed);
-}
 
 auto VoxelCollisionManager::update_body_shape(
     JPH::BodyID body_id,
@@ -1071,7 +876,6 @@ auto VoxelCollisionManager::update_body_shape(
         rotation,
         JPH::EMotionType::Static,
         JPH::ObjectLayer::Static
-    );
 
     // Note: Jolt doesn't support direct shape replacement
     // Must create new body and remove old one
@@ -1081,8 +885,6 @@ auto VoxelCollisionManager::update_body_shape(
         body_interface.RemoveBody(body_id);
         body_interface.DestroyBody(body_id);
         body_interface.AddBody(new_body_id, JPH::EActivation::DontActivate);
-    }
-}
 
 } // namespace projectv::voxel
 ```
@@ -1098,3 +900,12 @@ auto VoxelCollisionManager::update_body_shape(
 | Greedy Mesh Reduction    | 4-10x       | Face count       |
 | Queue Processing         | < 1ms/frame | Tracy CPU        |
 | Memory per Proxy         | < 1KB       | Custom allocator |
+
+---
+
+## Ссылки
+
+- [Jolt-Vulkan Bridge](../04_physics_ca/01_jolt_vulkan_bridge.md)
+- [Destruction Physics Spec](../04_physics_ca/05_destruction_physics.md)
+- [GPU Staging Contracts](../02_render/02_gpu_staging.md)
+- [SVO Architecture](../03_voxel/01_svo_architecture.md)

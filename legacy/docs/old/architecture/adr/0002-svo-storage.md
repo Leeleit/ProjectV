@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Принято
+**Дата:** 2026-02-22
+**Автор:** Architecture Team
+
 ## Контекст
 
 ProjectV требует эффективного хранения и рендеринга воксельных миров размером до 1 км³ (~30 млрд вокселей). Традиционные
@@ -50,43 +54,34 @@ struct SVONode {
 
     [[nodiscard]] auto child_ptr() const noexcept -> uint32_t {
         return static_cast<uint32_t>((data >> 28) & 0x0FFFFFFF);
-    }
 
     [[nodiscard]] auto voxel_ptr() const noexcept -> uint32_t {
         return static_cast<uint32_t>(data & 0x0FFFFFFF);
-    }
 
     // --- Setters ---
 
     auto set_child_mask(uint8_t mask) noexcept -> void {
         data = (data & ~(0xFFULL << 56)) | (static_cast<uint64_t>(mask) << 56);
-    }
 
     auto set_child_ptr(uint32_t ptr) noexcept -> void {
         data = (data & ~(0x0FFFFFFFULL << 28)) | (static_cast<uint64_t>(ptr) << 28);
-    }
 
     auto set_voxel_ptr(uint32_t ptr) noexcept -> void {
         data = (data & ~0x0FFFFFFFULL) | static_cast<uint64_t>(ptr);
-    }
 
     // --- Predicates ---
 
     [[nodiscard]] auto has_children() const noexcept -> bool {
         return child_mask() != 0;
-    }
 
     [[nodiscard]] auto is_leaf() const noexcept -> bool {
         return child_mask() == 0 && voxel_ptr() != 0;
-    }
 
     [[nodiscard]] auto is_empty() const noexcept -> bool {
         return data == 0;
-    }
 
     [[nodiscard]] auto has_child(uint8_t index) const noexcept -> bool {
         return (child_mask() & (1 << index)) != 0;
-    }
 
     // --- Child Index Calculation ---
 
@@ -99,7 +94,6 @@ struct SVONode {
         uint8_t mask_before = child_mask() & ((1 << octant) - 1);
         uint8_t offset = std::popcount(mask_before);
         return child_ptr() + offset;
-    }
 };
 
 static_assert(sizeof(SVONode) == 8, "SVONode must be 8 bytes");
@@ -136,7 +130,6 @@ struct alignas(4) GPUVoxelData {
     uint16_t material_id{0};    ///< ID материала
     uint8_t density{0};         ///< Плотность (для физики)
     uint8_t flags{0};           ///< Флаги (solid, transparent, etc.)
-};
 
 static_assert(sizeof(GPUVoxelData) == 4);
 
@@ -145,7 +138,6 @@ struct alignas(16) GPUVoxelMaterial {
     glm::vec4 base_color{1.0f, 1.0f, 1.0f, 1.0f};     ///< RGBA
     glm::vec4 emissive{0.0f, 0.0f, 0.0f, 0.0f};      ///< Emissive RGB + intensity
     glm::vec4 pbr_params{0.5f, 0.0f, 0.0f, 0.0f};    ///< roughness, metallic, transmission, flags
-};
 
 static_assert(sizeof(GPUVoxelMaterial) == 48);
 static_assert(alignof(GPUVoxelMaterial) == 16);
@@ -179,11 +171,9 @@ struct VoxelData {
 
     [[nodiscard]] auto is_transparent() const noexcept -> bool {
         return (flags & static_cast<uint8_t>(VoxelFlags::Transparent)) != 0;
-    }
 
     [[nodiscard]] auto is_liquid() const noexcept -> bool {
         return (flags & static_cast<uint8_t>(VoxelFlags::Liquid)) != 0;
-    }
 
     /// Сериализация через Glaze
     struct glaze {
@@ -194,7 +184,6 @@ struct VoxelData {
             "flags", &T::flags
         );
     };
-};
 
 static_assert(sizeof(VoxelData) == 4);
 
@@ -207,7 +196,6 @@ export enum class VoxelFlags : uint8_t {
     Destructible = 1 << 3,  ///< Можно разрушить
     Gravity     = 1 << 4,   ///< Подвержен гравитации (сыпучие)
     Organic     = 1 << 5,   ///< Органический (растения)
-};
 
 /// Материал вокселя
 struct VoxelMaterial {
@@ -220,9 +208,7 @@ struct VoxelMaterial {
     uint32_t flags{0};
     uint32_t texture_id{0};  ///< ID текстуры (0 = procedural)
 
-    struct glaze {
         using T = VoxelMaterial;
-        static constexpr auto value = glz::object(
             "base_color", &T::base_color,
             "emissive", &T::emissive,
             "roughness", &T::roughness,
@@ -231,9 +217,6 @@ struct VoxelMaterial {
             "ior", &T::ior,
             "flags", &T::flags,
             "texture_id", &T::texture_id
-        );
-    };
-};
 
 } // namespace projectv::voxel
 ```
@@ -333,7 +316,6 @@ public:
     /// Загружает SVO на GPU для ray marching.
     [[nodiscard]] auto upload_to_gpu(
         GPUAllocator const& allocator
-    ) noexcept -> std::expected<void, SVOError>;
 
     /// Освобождает GPU ресурсы.
     auto release_gpu() noexcept -> void;
@@ -359,7 +341,6 @@ private:
     // GPU data
     struct GPUData;
     std::unique_ptr<GPUData> gpu_data_;
-};
 
 /// Результат raycast
 struct RaycastHit {
@@ -368,7 +349,6 @@ struct RaycastHit {
     glm::vec3 hit_normal;       ///< Нормаль грани
     float distance;             ///< Расстояние от origin
     VoxelData voxel_data;       ///< Данные вокселя
-};
 
 } // namespace projectv::voxel
 ```
@@ -407,10 +387,8 @@ struct ChunkCoord {
             static_cast<int32_t>(std::floor(world_pos.y / CHUNK_SIZE)),
             static_cast<int32_t>(std::floor(world_pos.z / CHUNK_SIZE))
         };
-    }
 
     auto operator<=>(ChunkCoord const&) const = default;
-};
 
 /// Хэш для ChunkCoord (для unordered_map)
 struct ChunkCoordHash {
@@ -421,8 +399,6 @@ struct ChunkCoordHash {
             (static_cast<uint64_t>(static_cast<uint32_t>(c.y)) << 16) |
             static_cast<uint64_t>(static_cast<uint32_t>(c.z));
         return std::hash<uint64_t>{}(combined);
-    }
-};
 
 /// Гибридный чанк: плотные данные + локальное SVO + Mesh
 struct HybridChunk {
@@ -441,19 +417,16 @@ struct HybridChunk {
         return std::mdspan<VoxelData, std::dextents<size_t, 3>>(
             voxels->data(), CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE
         );
-    }
 
     /// Получение вокселя по локальным координатам
     [[nodiscard]] auto get(uint32_t x, uint32_t y, uint32_t z) const noexcept
         -> VoxelData const& {
         return (*voxels)[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE];
-    }
 
     /// Установка вокселя по локальным координатам
     auto set(uint32_t x, uint32_t y, uint32_t z, VoxelData data) noexcept -> void {
         (*voxels)[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE] = data;
         dirty = true;
-    }
 
     // --- State Flags ---
 
@@ -461,7 +434,6 @@ struct HybridChunk {
     bool svo_dirty{false};         ///< Требует перестроения SVO
     bool loaded{false};            ///< Загружен с диска
     bool gpu_uploaded{false};      ///< Загружен на GPU
-};
 
 /// Менеджер чанков
 class ChunkManager final {
@@ -503,7 +475,6 @@ private:
 
     auto load_chunk(ChunkCoord coord) noexcept -> HybridChunk*;
     auto unload_chunk(ChunkCoord coord) noexcept -> void;
-};
 
 export enum class ChunkError : uint8_t {
     ChunkNotLoaded,         ///< Чанк не загружен
@@ -511,7 +482,6 @@ export enum class ChunkError : uint8_t {
     AllocationFailed,       ///< Не удалось выделить память
     GenerationFailed,       ///< Ошибка генерации чанка
     IOFailed               ///< Ошибка чтения/записи
-};
 
 } // namespace projectv::voxel
 ```
@@ -539,14 +509,12 @@ struct VoxelData {
     uint8_t density;
     uint8_t flags;
     // Padded to 4 bytes
-};
 
 /// Материал вокселя (std430 layout)
 struct VoxelMaterial {
     float4 base_color;    // offset 0
     float4 emissive;      // offset 16
     float4 pbr_params;    // offset 32: roughness, metallic, transmission, flags
-};
 
 /// SVO данные для ray marching
 [[vk::binding(0, 0)]]
@@ -569,7 +537,6 @@ struct RayMarchParams {
     float voxel_size;
     uint32_t pad0;
     uint32_t pad1;
-};
 ```
 
 ---
@@ -616,7 +583,6 @@ struct SVOGPUBuffers {
     [[nodiscard]] auto total_size() const noexcept -> size_t {
         return node_buffer.size + voxel_buffer.size + material_buffer.size;
     }
-};
 
 /// Загрузчик SVO на GPU
 class SVOGPUUploader final {
@@ -632,11 +598,8 @@ public:
     /// Обновляет часть узлов (инкрементальное обновление).
     [[nodiscard]] static auto update_nodes(
         SVOGPUBuffers& buffers,
-        GPUAllocator const& allocator,
-        std::span<SVONode const> nodes,
         uint32_t offset
     ) noexcept -> std::expected<void, SVOError>;
-};
 
 } // namespace projectv::voxel
 ```
@@ -670,3 +633,11 @@ public:
 
 - DAG-сжатие требует дополнительного прохода
 - Инкрементальные обновления SVO сложнее чем для чанков
+
+---
+
+## Ссылки
+
+- [ADR-0001: Vulkan Renderer](./0001-vulkan-renderer.md)
+- [SVO Architecture (практика)](../practice/00_svo-architecture.md)
+- [GPU Cellular Automata](../practice/23_gpu-cellular-automata.md)

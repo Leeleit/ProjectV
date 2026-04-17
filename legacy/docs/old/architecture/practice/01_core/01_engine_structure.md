@@ -1,6 +1,10 @@
-﻿# Спецификация структуры движка ProjectV
+# Спецификация структуры движка ProjectV
 
 ---
+
+**Статус:** Утверждено
+**Версия:** 3.0 (Enterprise)
+**Дата:** 2026-02-22
 
 ## Обзор
 
@@ -27,40 +31,32 @@ src/
 │   ├── ProjectV.Render.Vulkan.cpp      # Implementation
 │   ├── ProjectV.Render.SVO.cppm        # SVO rendering submodule
 │   └── ProjectV.Render.Mesh.cppm       # Mesh generation submodule
-│
 ├── voxel/
 │   ├── ProjectV.Voxel.cppm             # Primary voxel module interface
 │   ├── ProjectV.Voxel.SVO.cppm         # SVO data structures submodule
 │   ├── ProjectV.Voxel.Chunk.cppm       # Chunk management submodule
 │   └── ProjectV.Voxel.Generation.cppm  # Procedural generation submodule
-│
 ├── physics/
 │   ├── ProjectV.Physics.cppm           # Primary physics module interface
 │   ├── ProjectV.Physics.Jolt.cppm      # JoltPhysics PIMPL wrapper
 │   └── ProjectV.Physics.Jolt.cpp       # Implementation
-│
 ├── ecs/
 │   ├── ProjectV.ECS.cppm               # Primary ECS module interface
 │   ├── ProjectV.ECS.Flecs.cppm         # Flecs PIMPL wrapper
 │   └── ProjectV.ECS.Flecs.cpp          # Implementation
-│
 ├── audio/
 │   ├── ProjectV.Audio.cppm             # Primary audio module interface
 │   └── ProjectV.Audio.Miniaudio.cppm   # Miniaudio wrapper
-│
 ├── ui/
 │   ├── ProjectV.UI.cppm                # Primary UI module interface
 │   ├── ProjectV.UI.ImGui.cppm          # ImGui PIMPL wrapper
 │   └── ProjectV.UI.ImGui.cpp           # Implementation
-│
 ├── profile/
 │   ├── ProjectV.Profile.cppm           # Profiling module interface
 │   ├── ProjectV.Profile.Tracy.cppm     # Tracy PIMPL wrapper
 │   └── ProjectV.Profile.Tracy.cpp      # Implementation
-│
 └── app/
     └── ProjectV.App.cppm               # Application layer module
-```
 
 ---
 
@@ -73,17 +69,13 @@ src/
 ├─────────────────────────────────────────────────────────────────┤
 │                       Voxel Layer                                │
 │  (SVO, Chunks, Mesh Generation, Editing)                       │
-├─────────────────────────────────────────────────────────────────┤
 │                      Physics Layer                               │
 │  (JoltPhysics PIMPL, Colliders, Queries)                       │
-├─────────────────────────────────────────────────────────────────┤
 │                      Render Layer                                │
 │  (Vulkan 1.4, Dynamic Rendering, Synchronization2)            │
-├─────────────────────────────────────────────────────────────────┤
 │                       Core Layer                                 │
 │  (Memory, Containers, std::execution Jobs, IO, Platform)       │
 └─────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -106,17 +98,10 @@ LinearArena (PIMPL)
 └─────────────────────────────────────────────────────────────┘
 
 PoolAllocator<T> (PIMPL)
-┌─────────────────────────────────────────────────────────────┐
-│  std::unique_ptr<Impl> (8 bytes)                            │
-│  └── Impl:                                                  │
-│      ├── buffer_: void* (8 bytes)                           │
 │      ├── free_list_: void** (8 bytes)                       │
-│      ├── capacity_: size_t (8 bytes)                        │
 │      ├── available_: size_t (8 bytes)                       │
 │      └── object_size_: size_t (8 bytes)                     │
 │  Total: 8 bytes (external) + 40 bytes (internal)            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -142,24 +127,19 @@ export enum class AllocationError : uint8_t {
 /// - `offset_ <= capacity_` всегда
 /// - `buffer_ != nullptr` после успешной инициализации
 /// - Все аллокации выровнены по указанному alignment
-///
 /// ## Thread Safety
 /// - НЕ thread-safe. Каждый поток ДОЛЖЕН иметь свой LinearArena.
-///
 /// ## Lifetime
 /// - ДОЛЖЕН пережить все аллокации из него.
 /// - reset() НЕ вызывает деструкторы объектов.
 export class LinearArena {
 public:
     /// Создаёт arena заданного размера.
-    ///
     /// @param capacity Размер буфера в байтах
-    ///
     /// @pre capacity > 0
     /// @post capacity() == capacity
     /// @post used() == 0
     /// @post remaining() == capacity
-    ///
     /// @throws std::bad_alloc если не удалось выделить память
     explicit LinearArena(size_t capacity) noexcept;
 
@@ -172,17 +152,13 @@ public:
     LinearArena& operator=(const LinearArena&) = delete;
 
     /// Выделяет память из arena.
-    ///
     /// @param size Размер в байтах
     /// @param alignment Выравнивание (по умолчанию 8 байт)
-    ///
     /// @pre size > 0
     /// @pre alignment is power of 2
     /// @pre alignment <= alignof(std::max_align_t)
-    ///
     /// @post returned pointer is aligned to `alignment`
     /// @post used() >= old used() + size (rounded to alignment)
-    ///
     /// @return Указатель на память или ошибку
     [[nodiscard]] auto allocate(
         size_t size,
@@ -190,10 +166,7 @@ public:
     ) noexcept -> std::expected<void*, AllocationError>;
 
     /// Сбрасывает arena, освобождая всю память.
-    ///
-    /// @post used() == 0
     /// @post remaining() == capacity()
-    ///
     /// @warning НЕ вызывает деструкторы объектов!
     auto reset() noexcept -> void;
 
@@ -209,31 +182,20 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Pool allocator для объектов одинакового размера.
-///
 /// ## Requirements
 /// - T ДОЛЖЕН быть trivially destructible
-///
-/// ## Invariants
 /// - `available_ <= capacity_` всегда
 /// - Все свободные слоты связаны через free list
 /// - Каждый слот имеет размер `max(sizeof(T), sizeof(void*))`
-///
-/// ## Thread Safety
 /// - НЕ thread-safe.
 export template<typename T>
 requires std::is_trivially_destructible_v<T>
 class PoolAllocator {
-public:
     /// Создаёт pool на заданное количество объектов.
-    ///
     /// @param capacity Количество объектов
-    ///
-    /// @pre capacity > 0
     /// @post available() == capacity
-    /// @post capacity() == capacity
     explicit PoolAllocator(size_t capacity) noexcept;
 
     ~PoolAllocator() noexcept;
@@ -244,17 +206,13 @@ public:
     PoolAllocator& operator=(const PoolAllocator&) = delete;
 
     /// Выделяет один объект.
-    ///
     /// @pre available() > 0 (иначе nullptr)
     /// @post available() == old available() - 1
-    ///
     /// @return Указатель на объект или nullptr если pool полон
     [[nodiscard]] auto allocate() noexcept -> T*;
 
     /// Освобождает объект.
-    ///
     /// @param ptr Указатель на объект из этого pool
-    ///
     /// @pre ptr != nullptr
     /// @pre ptr был получен из этого pool
     /// @pre ptr не был освобождён ранее
@@ -265,12 +223,6 @@ public:
     [[nodiscard]] auto available() const noexcept -> size_t;
 
     /// @return Общее количество слотов
-    [[nodiscard]] auto capacity() const noexcept -> size_t;
-
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::core
 ```
@@ -293,7 +245,6 @@ JobSystem (PIMPL)
 │      └── worker_count_: uint32_t (4 bytes)                  │
 │  Total: 8 bytes (external) + ~128 bytes (internal)          │
 └─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -313,19 +264,15 @@ export namespace projectv::core {
 /// - `std::execution::schedule()` — создаёт sender для планирования
 /// - `std::execution::then()` — цепочка continuation
 /// - `std::execution::when_all()` — параллельное выполнение
-///
 /// ## Invariants
 /// - `active_jobs_` корректно отражает количество активных задач
 /// - После shutdown() новые задачи не принимаются
-///
 /// ## Thread Safety
 /// - Все методы thread-safe.
 export class JobSystem {
 public:
     /// Создаёт Job System.
-    ///
     /// @param thread_count Количество worker потоков (0 = hardware_concurrency)
-    ///
     /// @pre thread_count > 0 или thread_count == 0 (auto)
     /// @post thread_count() возвращает актуальное количество
     explicit JobSystem(uint32_t thread_count = 0) noexcept;
@@ -338,26 +285,20 @@ public:
     JobSystem& operator=(const JobSystem&) = delete;
 
     /// Планирует задачу для асинхронного выполнения.
-    ///
     /// @tparam Fun callable, возвращающий void или sender
     /// @param fun Функция для выполнения
-    ///
     /// @pre !shutdown_requested()
     /// @post active_jobs() >= old active_jobs()
-    ///
     /// @return sender, который можно синхронизировать
     template<std::execution::sender Fun>
     [[nodiscard]] auto schedule(Fun&& fun) noexcept
         -> std::execution::sender auto;
 
     /// Параллельное выполнение диапазона.
-    ///
     /// @param count Количество итераций
     /// @param func Функция, принимающая индекс итерации
-    ///
     /// @pre count > 0
     /// @post Все итерации выполнены при возврате
-    ///
     /// @return sender для синхронизации
     template<typename Fun>
     [[nodiscard]] auto parallel_for(
@@ -366,7 +307,6 @@ public:
     ) noexcept -> std::execution::sender auto;
 
     /// Блокирует до завершения всех активных задач.
-    ///
     /// @post active_jobs() == 0
     auto wait() noexcept -> void;
 
@@ -389,16 +329,13 @@ private:
 
 /// RAII scope guard для задач.
 export class JobScope {
-public:
     explicit JobScope(JobSystem& system) noexcept;
     ~JobScope() noexcept;  // Вызывает wait()
 
     JobScope(JobScope const&) = delete;
     JobScope& operator=(JobScope const&) = delete;
 
-private:
     JobSystem& system_;
-};
 
 } // namespace projectv::core
 ```
@@ -431,7 +368,6 @@ VulkanRenderer (PIMPL)
 └─────────────────────────────────────────────────────────────┘
 
 FrameData (per frame in flight)
-┌─────────────────────────────────────────────────────────────┐
 │  command_pool_: VkCommandPool (8 bytes)                     │
 │  command_buffer_: VkCommandBuffer (8 bytes)                 │
 │  image_available_: VkSemaphore (8 bytes)                    │
@@ -440,8 +376,6 @@ FrameData (per frame in flight)
 │  descriptor_pool_: VkDescriptorPool (8 bytes)               │
 │  staging_buffer_: BufferAllocation (~24 bytes)              │
 │  Total: ~80 bytes per frame                                 │
-└─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -479,7 +413,6 @@ export struct RendererConfig {
     bool vsync{true};
     bool enable_validation{false};
     uint32_t max_frames_in_flight{2};
-};
 
 /// Главный класс Vulkan 1.4 рендерера.
 ///
@@ -488,22 +421,18 @@ export struct RendererConfig {
 /// - VK_KHR_dynamic_rendering (core in 1.4)
 /// - VK_KHR_synchronization2 (core in 1.4)
 /// - VK_EXT_descriptor_indexing
-///
 /// ## Invariants
 /// - device_ всегда валиден после успешного create()
 /// - current_frame_ < max_frames_in_flight
 /// - Все command buffers сброшены перед begin_frame()
-///
 /// ## Thread Safety
 /// - begin_frame()/end_frame() вызываются из одного потока
 /// - Resource creation thread-safe через external synchronization
 export class VulkanRenderer {
 public:
     /// Инициализирует рендерер.
-    ///
     /// @param config Конфигурация
     /// @param native_window_handle HWND или equivalent
-    ///
     /// @pre native_window_handle валиден
     /// @post device() возвращает валидный Device
     /// @post current_command_buffer() возвращает валидный command buffer после begin_frame()
@@ -520,28 +449,22 @@ public:
     VulkanRenderer& operator=(const VulkanRenderer&) = delete;
 
     /// Начинает кадр.
-    ///
     /// @pre !in_frame()
     /// @post in_frame() == true
     /// @post current_command_buffer() возвращает валидный command buffer
-    ///
     /// @return void или ошибку
     [[nodiscard]] auto begin_frame() noexcept
         -> std::expected<void, VulkanError>;
 
     /// Заканчивает кадр и представляет.
-    ///
     /// @pre in_frame()
     /// @post in_frame() == false
     /// @post current_frame_ = (current_frame_ + 1) % max_frames_in_flight
     auto end_frame() noexcept -> void;
 
     /// Обрабатывает resize окна.
-    ///
     /// @param new_width Новый размер
     /// @param new_height Новый размер
-    ///
-    /// @pre !in_frame()
     auto on_resize(uint32_t new_width, uint32_t new_height) noexcept -> void;
 
     /// @return Device для создания ресурсов
@@ -563,7 +486,6 @@ private:
     VulkanRenderer() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::render::vulkan
 ```
@@ -586,7 +508,6 @@ RenderingAttachmentInfo
 └─────────────────────────────────────────────────────────────┘
 
 RenderingInfo
-┌─────────────────────────────────────────────────────────────┐
 │  sType: VkStructureType (4 bytes)                           │
 │  pNext: const void* (8 bytes)                               │
 │  flags: VkRenderingFlags (4 bytes)                          │
@@ -598,8 +519,6 @@ RenderingInfo
 │  pDepthAttachment: VkRenderingAttachmentInfo* (8 bytes)     │
 │  pStencilAttachment: VkRenderingAttachmentInfo* (8 bytes)   │
 │  Total: 72 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -629,10 +548,8 @@ export struct RenderingAttachmentInfo {
 
     /// Создаёт depth attachment.
     static auto depth(
-        VkImageView view,
         VkImageLayout layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         float depth_clear = 1.0f
-    ) noexcept -> RenderingAttachmentInfo;
 };
 
 /// Dynamic rendering pass builder.
@@ -649,19 +566,16 @@ public:
 
     /// Устанавливает depth attachment.
     auto set_depth(RenderingAttachmentInfo const& attachment) noexcept
-        -> DynamicRenderPass&;
 
     /// Устанавливает render area.
     auto set_render_area(VkRect2D area) noexcept -> DynamicRenderPass&;
 
     /// Начинает rendering pass.
-    ///
     /// @pre cmd в recording state
     /// @post rendering pass active
     auto begin() noexcept -> void;
 
     /// Заканчивает rendering pass.
-    ///
     /// @post rendering pass inactive
     auto end() noexcept -> void;
 
@@ -671,7 +585,6 @@ private:
     std::array<RenderingAttachmentInfo, 8> color_attachments_;
     size_t color_count_{0};
     std::optional<RenderingAttachmentInfo> depth_attachment_;
-};
 
 } // namespace projectv::render
 ```
@@ -711,28 +624,18 @@ public:
     /// Добавляет buffer barrier.
     auto add_buffer_barrier(
         VkBuffer buffer,
-        VkPipelineStageFlags2 src_stage,
-        VkPipelineStageFlags2 dst_stage,
-        VkAccessFlags2 src_access,
         VkAccessFlags2 dst_access,
         uint32_t src_queue_family = VK_QUEUE_FAMILY_IGNORED,
         uint32_t dst_queue_family = VK_QUEUE_FAMILY_IGNORED
-    ) noexcept -> BarrierBuilder&;
 
     /// Добавляет image barrier.
     auto add_image_barrier(
         VkImage image,
-        VkPipelineStageFlags2 src_stage,
-        VkPipelineStageFlags2 dst_stage,
-        VkAccessFlags2 src_access,
-        VkAccessFlags2 dst_access,
         VkImageLayout old_layout,
         VkImageLayout new_layout,
         VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT
-    ) noexcept -> BarrierBuilder&;
 
     /// Выполняет все барьеры.
-    ///
     /// @pre cmd в recording state
     /// @post все барьеры применены
     auto execute() noexcept -> void;
@@ -775,20 +678,15 @@ SVONode (16 bytes, std430 aligned)
 └─────────────────────────────────────────────────────────────┘
 
 VoxelData (4 bytes)
-┌─────────────────────────────────────────────────────────────┐
 │  material_id: uint16_t (2 bytes)                            │
 │  flags: uint8_t (1 byte)                                    │
 │  light: uint8_t (1 byte)                                    │
 │  Total: 4 bytes                                             │
-└─────────────────────────────────────────────────────────────┘
 
 SVOTree GPU Buffers
-┌─────────────────────────────────────────────────────────────┐
 │  node_buffer: VkBuffer (node_count * sizeof(SVONode))       │
 │  voxel_buffer: VkBuffer (voxel_count * sizeof(VoxelData))   │
 │  indirect_buffer: VkBuffer (for indirect draw calls)        │
-└─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -819,14 +717,12 @@ export enum class SVOError : uint8_t {
     UploadFailed,
     CompressionFailed,
     GPUBufferCreationFailed
-};
 
 /// Конфигурация SVO.
 export struct SVOConfig {
     uint32_t max_depth{16};           ///< Максимальная глубина дерева (max_depth=16 → 2^16 = 65536³ voxels)
     uint32_t initial_capacity{1024};  ///< Начальная ёмкость узлов
     bool enable_dag_compression{true}; ///< Включить DAG сжатие
-};
 
 /// Sparse Voxel Octree.
 ///
@@ -834,7 +730,6 @@ export struct SVOConfig {
 /// - depth <= max_depth
 /// - Все children indices либо валидны, либо равны INVALID_INDEX
 /// - voxel_index валиден только для leaf nodes
-///
 /// ## Complexity
 /// - get(): O(depth) = O(log n)
 /// - set(): O(depth) + amortized O(1) for allocation
@@ -842,7 +737,6 @@ export struct SVOConfig {
 export class SVOTree {
 public:
     /// Создаёт пустое SVO.
-    ///
     /// @pre config.max_depth > 0 && config.max_depth <= 24
     /// @post node_count() == 1 (root only)
     explicit SVOTree(SVOConfig const& config = {}) noexcept;
@@ -855,33 +749,25 @@ public:
     SVOTree& operator=(const SVOTree&) = delete;
 
     /// Получает воксель по координатам.
-    ///
     /// @param coord Координаты в мировом пространстве
-    ///
     /// @pre coord в пределах [0, 2^max_depth)
-    ///
     /// @return Данные вокселя или ошибка
     [[nodiscard]] auto get(glm::ivec3 coord) const noexcept
         -> std::expected<VoxelData, SVOError>;
 
     /// Устанавливает воксель по координатам.
-    ///
     /// @param coord Координаты
     /// @param data Данные вокселя
-    ///
-    /// @pre coord в пределах [0, 2^max_depth)
     /// @post get(coord) == data
     [[nodiscard]] auto set(glm::ivec3 coord, VoxelData data) noexcept
         -> std::expected<void, SVOError>;
 
     /// Выполняет DAG сжатие.
-    ///
     /// @post node_count() <= old node_count()
     /// @return Количество сэкономленных узлов
     [[nodiscard]] auto compress_dag() noexcept -> size_t;
 
     /// Загружает SVO на GPU.
-    ///
     /// @pre gpu_node_buffer() == VK_NULL_HANDLE
     /// @post gpu_node_buffer() != VK_NULL_HANDLE
     [[nodiscard]] auto upload_to_gpu(
@@ -907,7 +793,6 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -932,14 +817,11 @@ TransformComponent (48 bytes)
 └─────────────────────────────────────────────────────────────┘
 
 VoxelChunkComponent (16 bytes)
-┌─────────────────────────────────────────────────────────────┐
 │  chunk_x: int32_t (4 bytes)                                 │
 │  chunk_y: int32_t (4 bytes)                                 │
 │  chunk_z: int32_t (4 bytes)                                 │
 │  flags: uint32_t (4 bytes)                                  │
 │  Total: 16 bytes                                            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -978,19 +860,16 @@ static_assert(alignof(TransformComponent) == 16);
 export struct VelocityComponent {
     glm::vec3 linear{0.0f};
     glm::vec3 angular{0.0f};
-};
 
 /// Physics body компонент (opaque ID).
 export struct PhysicsBodyComponent {
     uint64_t body_id{0};
     bool is_dynamic{true};
-};
 
 /// Mesh компонент.
 export struct MeshComponent {
     uint64_t mesh_handle{0};
     uint64_t material_handle{0};
-};
 
 /// Voxel chunk компонент.
 export struct VoxelChunkComponent {
@@ -1001,7 +880,6 @@ export struct VoxelChunkComponent {
 
     static constexpr uint32_t FLAG_NEEDS_REBUILD = 1 << 0;
     static constexpr uint32_t FLAG_IS_DIRTY = 1 << 1;
-};
 
 /// Player компонент.
 export struct PlayerComponent {
@@ -1009,7 +887,6 @@ export struct PlayerComponent {
     float jump_force{8.0f};
     float mouse_sensitivity{0.1f};
     bool is_grounded{false};
-};
 
 } // namespace projectv::gameplay
 ```
@@ -1031,16 +908,10 @@ Entity Lifecycle
 │ INITIALIZED     │ ←── Components added
 └────────┬────────┘
          │ progress() processes entity
-         ▼
-┌─────────────────┐
 │ ACTIVE          │ ←── Normal operation
-└────────┬────────┘
          │ destroy() called
-         ▼
-┌─────────────────┐
 │ DESTROYED       │ ←── Entity removed
 └─────────────────┘
-```
 
 #### API Contracts
 
@@ -1058,7 +929,6 @@ export namespace projectv::ecs {
 /// ## Invariants
 /// - Entity IDs уникальны
 /// - Component данные contiguous в памяти (DOD)
-///
 /// ## Thread Safety
 /// - progress() — single-threaded
 /// - get/set — thread-safe для разных entities
@@ -1074,13 +944,11 @@ public:
     World& operator=(const World&) = delete;
 
     /// Выполняет шаг симуляции ECS.
-    ///
     /// @param delta_time Временной шаг
     /// @return true если симуляция продолжается
     [[nodiscard]] auto progress(float delta_time) noexcept -> bool;
 
     /// Создаёт новую сущность.
-    ///
     /// @post exists(id) == true
     /// @return ID сущности
     [[nodiscard]] auto entity() noexcept -> uint64_t;
@@ -1089,7 +957,6 @@ public:
     [[nodiscard]] auto entity(std::string_view name) noexcept -> uint64_t;
 
     /// Уничтожает сущность.
-    ///
     /// @pre exists(entity_id)
     /// @post exists(entity_id) == false
     auto destroy(uint64_t entity_id) noexcept -> void;
@@ -1098,25 +965,18 @@ public:
     [[nodiscard]] auto exists(uint64_t entity_id) const noexcept -> bool;
 
     /// Устанавливает компонент.
-    ///
-    /// @pre exists(entity_id)
     /// @post get<T>(entity_id) != nullptr
     template<typename T>
     auto set(uint64_t entity_id, T const& component) noexcept -> void;
 
     /// Получает компонент.
-    ///
-    /// @pre exists(entity_id)
     /// @return Указатель или nullptr если компонент отсутствует
-    template<typename T>
     [[nodiscard]] auto get(uint64_t entity_id) const noexcept -> T const*;
 
     /// Получает mutable компонент.
-    template<typename T>
     [[nodiscard]] auto get_mut(uint64_t entity_id) noexcept -> T*;
 
     /// Удаляет компонент.
-    template<typename T>
     auto remove(uint64_t entity_id) noexcept -> void;
 
 private:
@@ -1150,12 +1010,9 @@ CellState (32 bytes, GPU-aligned)
 └─────────────────────────────────────────────────────────────┘
 
 CellChunk (for SIMD processing)
-┌─────────────────────────────────────────────────────────────┐
 │  cells: std::array<CellState, CHUNK_SIZE³>                  │
 │  CHUNK_SIZE = 8 → 512 cells = 16 KB per chunk               │
 │  Fits in L1 cache (32 KB typical)                           │
-└─────────────────────────────────────────────────────────────┘
-```
 
 #### API Contracts
 
@@ -1192,7 +1049,6 @@ static_assert(sizeof(CellState) == 32);
 /// - Uses std::simd for vectorized updates
 /// - Processes cells in cache-friendly chunks
 /// - Lock-free with std::hazard_pointer for concurrent reads
-///
 /// ## Complexity
 /// - step(): O(n) where n = cell_count
 /// - Memory bandwidth: ~32 bytes * cell_count per step
@@ -1202,7 +1058,6 @@ public:
     explicit CASimulator(uint32_t size_x, uint32_t size_y, uint32_t size_z) noexcept;
 
     /// Выполняет шаг симуляции.
-    ///
     /// @param delta_time Временной шаг
     /// @post Все cells обновлены
     auto step(float delta_time) noexcept -> void;
@@ -1224,7 +1079,6 @@ private:
     /// SIMD-векторизованное обновление.
     auto update_velocity_simd(float delta_time) noexcept -> void;
     auto update_density_simd(float delta_time) noexcept -> void;
-};
 
 } // namespace projectv::simulation
 ```
@@ -1238,6 +1092,7 @@ private:
 **MVP Mode** — минимальная конфигурация сборки для быстрого получения первого рабочего прототипа.
 
 ```bash
+
 # Сборка в MVP режиме
 cmake -B build -DPROJECTV_MVP_MODE=ON
 cmake --build build --config Release
@@ -1288,11 +1143,11 @@ MVP_MODULES = [
     Game.Settings,
     Game.Serialization
 ]
-```
 
 ### 6.4 CMake Configuration
 
 ```cmake
+
 # cmake/MVPMode.cmake
 
 option(PROJECTV_MVP_MODE "Build only MVP features" OFF)
@@ -1332,3 +1187,13 @@ endif()
 - [ ] Camera movement (WASD + mouse) работает
 - [ ] Chunk generation при движении camera
 - [ ] Graceful shutdown без утечек памяти (проверить через Valgrind/ASan)
+
+---
+
+## Ссылки
+
+- [ADR-0004: Build System & C++26 Modules](../adr/0004-build-and-modules-spec.md)
+- [DOD Philosophy](../../philosophy/03_dod-philosophy.md)
+- [ECS Philosophy](../../philosophy/04_ecs-philosophy.md)
+- [SVO Architecture](../03_voxel/01_svo_architecture.md)
+- [Vulkan 1.4 Dynamic Rendering](../02_render/04_render_graph.md)

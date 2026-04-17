@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Принято
+**Дата:** 2026-02-22
+**Автор:** Architecture Team
+
 ## Контекст
 
 ProjectV требует высокопроизводительного рендерера для воксельного мира с поддержкой:
@@ -54,7 +58,6 @@ export enum class LoaderError : uint8_t {
     VolkInitializeFailed,    ///< volkInitialize() вернул ошибку
     VersionNotSupported,     ///< Требуется Vulkan 1.4+
     DriverNotAvailable       ///< Драйвер не найден
-};
 
 } // namespace projectv::render
 ```
@@ -115,7 +118,6 @@ public:
 private:
     explicit GPUAllocator(VmaAllocator allocator) noexcept;
     VmaAllocator allocator_{VK_NULL_HANDLE};
-};
 
 /// Результат выделения буфера
 struct BufferAllocation {
@@ -133,7 +135,6 @@ struct BufferAllocation {
     /// Копирует данные в буфер (для CPU-visible памяти).
     [[nodiscard]] auto write(std::span<const std::byte> data) const noexcept
         -> std::expected<void, MapError>;
-};
 
 /// Коды ошибок аллокации
 export enum class AllocatorError : uint8_t {
@@ -141,7 +142,6 @@ export enum class AllocatorError : uint8_t {
     InvalidInstance,        ///< VkInstance is VK_NULL_HANDLE
     InvalidDevice,          ///< VkDevice is VK_NULL_HANDLE
     InvalidPhysicalDevice   ///< VkPhysicalDevice is VK_NULL_HANDLE
-};
 
 export enum class AllocationError : uint8_t {
     OutOfMemory,            ///< GPU memory exhausted
@@ -149,12 +149,10 @@ export enum class AllocationError : uint8_t {
     AllocationFailed,       ///< vmaAllocateMemoryForBuffer() failed
     BindFailed,             ///< vmaBindBufferMemory() failed
     InvalidSize             ///< size == 0
-};
 
 export enum class MapError : uint8_t {
     MemoryNotMappable,      ///< Memory type is not CPU-visible
     MapFailed               ///< vmaMapMemory() failed
-};
 
 } // namespace projectv::render
 ```
@@ -193,7 +191,6 @@ struct PhysicalDeviceInfo {
     bool supports_mesh_shaders{false};
     bool supports_ray_tracing{false};
     bool supports_descriptor_indexing{false};
-};
 
 /// Очереди устройства
 struct DeviceQueues {
@@ -205,7 +202,6 @@ struct DeviceQueues {
     VkQueue compute_queue{VK_NULL_HANDLE};
     VkQueue transfer_queue{VK_NULL_HANDLE};
     VkQueue present_queue{VK_NULL_HANDLE};
-};
 
 /// RAII-обёртка над VkDevice + VkPhysicalDevice
 class RenderDevice final {
@@ -258,7 +254,6 @@ private:
     DeviceQueues queues_;
     GPUAllocator allocator_;
     PhysicalDeviceInfo device_info_;
-};
 
 /// Коды ошибок устройства
 export enum class DeviceError : uint8_t {
@@ -269,7 +264,6 @@ export enum class DeviceError : uint8_t {
     QueueFamilyNotFound,       ///< Required queue family not available
     ExtensionNotSupported,     ///< Required extension not available
     AllocatorCreateFailed      ///< GPUAllocator::create() failed
-};
 
 } // namespace projectv::render
 ```
@@ -328,10 +322,8 @@ private:
 
 /// Командный буфер (RAII)
 class CommandBuffer final {
-public:
     ~CommandBuffer() noexcept;
 
-    // Move-only
     CommandBuffer(CommandBuffer&& other) noexcept;
     CommandBuffer& operator=(CommandBuffer&& other) noexcept;
     CommandBuffer(const CommandBuffer&) = delete;
@@ -345,30 +337,22 @@ public:
     auto end() const noexcept -> void;
 
     /// Сбрасывает буфер для повторного использования.
-    auto reset() const noexcept -> void;
 
-    /// Возвращает нативный дескриптор.
     [[nodiscard]] auto native() const noexcept -> VkCommandBuffer { return cmd_buffer_; }
 
-private:
     friend class CommandPool;
     explicit CommandBuffer(VkCommandBuffer cmd, VkCommandPool pool, RenderDevice const* device) noexcept;
     VkCommandBuffer cmd_buffer_{VK_NULL_HANDLE};
-    VkCommandPool pool_{VK_NULL_HANDLE};
-    RenderDevice const* device_{nullptr};
-};
 
 /// Коды ошибок
 export enum class CommandPoolError : uint8_t {
     CreateFailed,        ///< vkCreateCommandPool() failed
     InvalidDevice,       ///< device.native() == VK_NULL_HANDLE
     InvalidQueueFamily   ///< queue_family_index invalid
-};
 
 export enum class CommandBufferError : uint8_t {
     AllocateFailed,      ///< vkAllocateCommandBuffers() failed
     PoolNotValid         ///< pool.native() == VK_NULL_HANDLE
-};
 
 } // namespace projectv::render
 ```
@@ -396,10 +380,8 @@ public:
     /// Загружает шейдер из Slang-файла с компиляцией в SPIR-V.
     /// Требует интеграции с slangc.
     [[nodiscard]] static auto from_slang(
-        RenderDevice const& device,
         std::filesystem::path const& slang_path,
         std::string_view entry_point = "main"
-    ) noexcept -> std::expected<ShaderModule, ShaderError>;
 
     ~ShaderModule() noexcept;
 
@@ -426,17 +408,14 @@ struct PipelineShaderStage {
     ShaderModule const* shader{nullptr};
     std::string_view entry_point{"main"};
     VkSpecializationInfo const* specialization{nullptr};
-};
 
 /// Описание вертексного ввода (для graphics pipelines)
 struct VertexInputDescription {
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> attributes;
-};
 
 /// Builder для graphics pipeline
 class GraphicsPipelineBuilder final {
-public:
     explicit GraphicsPipelineBuilder() = default;
 
     auto add_shader_stage(PipelineShaderStage stage) -> GraphicsPipelineBuilder&;
@@ -453,7 +432,6 @@ public:
     [[nodiscard]] auto build(RenderDevice const& device) const noexcept
         -> std::expected<VkPipeline, PipelineError>;
 
-private:
     std::vector<PipelineShaderStage> shader_stages_;
     VertexInputDescription vertex_input_;
     VkPrimitiveTopology topology_{VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST};
@@ -469,26 +447,18 @@ private:
     VkPipelineLayout layout_{VK_NULL_HANDLE};
     VkRenderPass render_pass_{VK_NULL_HANDLE};
     uint32_t subpass_{0};
-};
 
 /// Builder для compute pipeline
 class ComputePipelineBuilder final {
-public:
     explicit ComputePipelineBuilder() = default;
 
     auto set_shader(ShaderModule const* shader, std::string_view entry = "main") -> ComputePipelineBuilder&;
     auto set_layout(VkPipelineLayout layout) -> ComputePipelineBuilder&;
     auto set_specialization(VkSpecializationInfo const* spec) -> ComputePipelineBuilder&;
 
-    [[nodiscard]] auto build(RenderDevice const& device) const noexcept
-        -> std::expected<VkPipeline, PipelineError>;
-
-private:
     ShaderModule const* shader_{nullptr};
     std::string_view entry_point_{"main"};
-    VkPipelineLayout layout_{VK_NULL_HANDLE};
     VkSpecializationInfo const* specialization_{nullptr};
-};
 
 /// Коды ошибок
 export enum class ShaderError : uint8_t {
@@ -497,7 +467,6 @@ export enum class ShaderError : uint8_t {
     SlangCompileFailed,   ///< slangc compilation failed
     ModuleCreateFailed,   ///< vkCreateShaderModule() failed
     InvalidStage          ///< Cannot determine shader stage
-};
 
 export enum class PipelineError : uint8_t {
     NoShaderStages,       ///< No shader stages provided
@@ -505,7 +474,6 @@ export enum class PipelineError : uint8_t {
     InvalidRenderPass,    ///< render_pass == VK_NULL_HANDLE (graphics only)
     CreateFailed,         ///< vkCreateGraphicsPipelines() / vkCreateComputePipelines() failed
     NoShaderModule        ///< shader == nullptr (compute only)
-};
 
 } // namespace projectv::render
 ```
@@ -538,3 +506,11 @@ export enum class PipelineError : uint8_t {
 
 - Требуется компилятор с поддержкой C++26 (`import std;`)
 - Интеграция с Slang требует отдельного ADR для шейдерной системы
+
+---
+
+## Ссылки
+
+- [ADR-0002: SVO Storage Architecture](./0002-svo-storage.md)
+- [ADR-0004: Build System & C++26 Modules](./0004-build-and-modules-spec.md)
+- [Slang Integration Spec](../../libraries/slang/slang_integration_spec.md)

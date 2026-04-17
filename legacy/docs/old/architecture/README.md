@@ -11,6 +11,8 @@
 
 ---
 
+**[Roadmap & Scope](00_roadmap_and_scope.md)** — MVP vs Vision, границы проекта, фазы разработки.
+
 ## Architecture Decision Records (`adr/`)
 
 Ключевые архитектурные решения с обоснованием:
@@ -63,6 +65,20 @@ TODO
 | 8 | [Shutdown Sequence](practice/01_core/08_shutdown_sequence.md) | Корректное завершение работы                |
 | 9 | [C++26 Reality](practice/01_core/09_cpp26_reality.md)         | Glaze/PFR, PIMPL, modules workarounds       |
 
+| #  | Документ                                                      | Описание                                    |
+|----|---------------------------------------------------------------|---------------------------------------------|
+| 0a | [Engine Structure](practice/00_engine-structure.md)           | Структура движка, C++26 Modules             |
+| 0b | [SVO Architecture](practice/00_svo-architecture.md)           | SVO + Chunks hybrid, std::mdspan 🔴         |
+| 1  | [Engine Structure](practice/01_core/01_engine_structure.md)   | Структура движка, C++26 Modules             |
+| 2  | [Core Loop](practice/01_core/02_core_loop.md)                 | Гибридный игровой цикл с SDL, Vulkan, Flecs |
+| 3  | [Engine Bootstrap](practice/01_core/03_engine_bootstrap.md)   | Инициализация и запуск движка               |
+| 4  | [Custom Allocators](practice/01_core/04_custom_allocators.md) | Аллокаторы для горячих путей                |
+| 5  | [Job System](practice/01_core/05_job_system.md)               | P2300 std::execution integration            |
+| 6  | [Zero Copy Memory](practice/01_core/06_zero_copy_memory.md)   | Разделение памяти CPU/GPU                   |
+| 7  | [Error Handling](practice/01_core/07_error_handling.md)       | std::expected, error propagation            |
+| 8  | [Shutdown Sequence](practice/01_core/08_shutdown_sequence.md) | Корректное завершение работы                |
+| 9  | [C++26 Reality](practice/01_core/09_cpp26_reality.md)         | Glaze/PFR, PIMPL, modules workarounds       |
+
 ### 🎨 02_render/ — Vulkan и рендеринг
 
 | # | Документ                                                | Описание                                    |
@@ -72,6 +88,8 @@ TODO
 | 3 | [GPU Debugging](practice/02_render/03_gpu_debugging.md) | RenderDoc, NVIDIA Nsight                    |
 | 4 | [Render Graph](practice/02_render/04_render_graph.md)   | Frame graph, pass management                |
 
+| 3 | [GPU Debugging](practice/02_render/03_gpu_debugging.md) | RenderDoc, NVIDIA Nsight 🔴                 |
+
 ### 🧊 03_voxel/ — Воксельная система
 
 | # | Документ                                                           | Описание                                |
@@ -80,6 +98,9 @@ TODO
 | 2 | [Voxel Pipeline](practice/03_voxel/02_voxel_pipeline.md)           | GPU-driven рендеринг вокселей           |
 | 3 | [Voxel Sync Pipeline](practice/03_voxel/03_voxel_sync_pipeline.md) | Синхронизация CPU/GPU воксельных данных |
 | 4 | [SVO-CA Bridge](practice/03_voxel/04_svo_ca_bridge.md)             | Memory bridge для Cellular Automata     |
+
+| 1 | [SVO Architecture](practice/03_voxel/01_svo_architecture.md)       | SVO + Chunks hybrid, std::mdspan 🔴     |
+| 2 | [Voxel Pipeline](practice/03_voxel/02_voxel_pipeline.md)           | GPU-driven рендеринг вокселей 🔴        |
 
 ### ⚡ 04_physics_ca/ — Физика и Cellular Automata
 
@@ -93,6 +114,17 @@ TODO
 | 6 | [Multithreading Contracts](practice/04_physics_ca/06_multithreading_contracts.md)   | TODO                                 |
 | 7 | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты      |
 
+| #  | Документ                                                                            | Описание                             |
+|----|-------------------------------------------------------------------------------------|--------------------------------------|
+| 1  | [Jolt-Vulkan Bridge](practice/04_physics_ca/01_jolt_vulkan_bridge.md)               | Синхронизация физики и рендеринга    |
+| 2  | [Physics-Voxel Integration](practice/04_physics_ca/02_physics_voxel_integration.md) | Интеграция физики с вокселями        |
+| 3  | [GPU Cellular Automata](practice/04_physics_ca/03_gpu_cellular_automata.md)         | CA для жидкостей/сыпучих/огня 🔴     |
+| 4  | [CPU-GPU Physics Sync](practice/04_physics_ca/04_cpu_gpu_physics_sync.md)           | Синхронизация физики между CPU и GPU |
+| 15 | [GPU Debugging](practice/15_gpu-debugging.md)                                       | RenderDoc, NVIDIA Nsight 🔴          |
+| 5  | [Destruction Physics](practice/04_physics_ca/05_destruction_physics.md)             | Разрушение воксельных объектов       |
+| 6  | [CA-Physics Bridge](practice/04_physics_ca/06_ca_physics_bridge.md)                 | Мост между CA и физикой              |
+| 7  | [Dynamic Voxel Entities](practice/04_physics_ca/07_dynamic_voxel_entities.md)       | Динамические воксельные объекты 🔴   |
+
 ### 🎮 05_ecs_gameplay/ — ECS и Gameplay
 
 | # | Документ                                                                  | Описание                               |
@@ -103,6 +135,9 @@ TODO
 | 4 | [Input System](practice/05_ecs_gameplay/04_input_system.md)               | Стек слоёв ввода: ImGui, debug-консоль |
 | 5 | [Input Actions](practice/05_ecs_gameplay/05_input_actions.md)             | Action Mapping система                 |
 | 6 | [Game UI](practice/05_ecs_gameplay/06_game_ui.md)                         | UI Strategy (ImGui/RmlUi)              |
+
+| 7 | [Network-Ready ECS](practice/05_ecs_gameplay/07_network_ready_ecs.md)     | Репликация, Rollback/Prediction 🔴     |
+| 8 | [Non-Euclidean Geometry](practice/05_ecs_gameplay/08_non_euclidean.md)    | SCP-style неевклидова геометрия 🔴     |
 
 ### 📁 06_assets/ — Ресурсы и материалы
 
@@ -117,6 +152,9 @@ TODO
 | 7 | [Material System](practice/06_assets/07_material_system.md)         | PBR материалы для вокселей                   |
 | 8 | [Asset Pipeline](practice/06_assets/08_asset_pipeline.md)           | Offline Compiler для ассетов                 |
 
+| 8 | [Networking Concept](practice/06_assets/08_networking_concept.md)   | Networking (Post-MVP Vision) 🔴              |
+| 9 | [Asset Pipeline](practice/06_assets/09_asset_pipeline.md)           | Offline Compiler для ассетов                 |
+
 ### 📋 07_meta/ — Meta-документация
 
 | # | Документ                                                            | Описание                   |
@@ -127,6 +165,10 @@ TODO
 
 ---
 
+| 2 | [Modding API](practice/07_meta/02_modding_api.md)                   | API для модификаций        |
+| 3 | [Implementation Order](practice/07_meta/03_implementation_order.md) | Порядок имплементации      |
+| 4 | [Testing Architecture](practice/07_meta/04_testing_architecture.md) | Архитектура тестирования   |
+
 ## Рекомендуемый путь изучения
 
 ### Для новых разработчиков
@@ -135,9 +177,7 @@ TODO
 ADR (0001-0004) → theory/01_ecs-concepts.md → theory/02_memory-layout.md
               ↓
 practice/01_core/01_engine_structure.md → practice/01_core/02_core_loop.md
-              ↓
 practice/03_voxel/01_svo_architecture.md → practice/05_ecs_gameplay/02_coordinate_systems.md
-```
 
 ### Для опытных разработчиков
 
@@ -145,9 +185,7 @@ practice/03_voxel/01_svo_architecture.md → practice/05_ecs_gameplay/02_coordin
 ADR (0001-0004) → practice/02_render/01_vulkan_spec.md
               ↓
 practice/05_ecs_gameplay/01_flecs_vulkan_bridge.md → practice/04_physics_ca/01_jolt_vulkan_bridge.md
-              ↓
 practice/03_voxel/02_voxel_pipeline.md → practice/04_physics_ca/03_gpu_cellular_automata.md
-```
 
 ---
 
@@ -192,3 +230,34 @@ practice/03_voxel/02_voxel_pipeline.md → practice/04_physics_ca/03_gpu_cellula
 - `import std;` без fallback
 - `module; #include <...>` для C headers
 - Module partitions для внутренней организации
+
+## Уровни сложности
+
+| Уровень    | Обозначение | Описание                                            |
+|------------|-------------|-----------------------------------------------------|
+| 🟢 Level 1 | Начальный   | Базовые концепции, введение в архитектуру           |
+| 🟡 Level 2 | Средний     | Практическая реализация, интеграция компонентов     |
+| 🔴 Level 3 | Продвинутый | Специфичные для ProjectV сценарии, GPU optimization |
+
+---
+
+## Связи с другими разделами
+
+### Библиотеки (Integration Specifications)
+
+| Библиотека | Спецификация                                                              |
+|------------|---------------------------------------------------------------------------|
+| SDL3       | [sdl_integration_spec.md](../libraries/sdl/sdl_integration_spec.md)       |
+| Slang      | [slang_integration_spec.md](../libraries/slang/slang_integration_spec.md) |
+
+### Руководства
+
+- **[C++ Handbook](../guides/cpp/00_overview.md)** — Modern C++ для движка
+- **[CMake Guide](../guides/cmake/00_overview.md)** — Сборка проекта
+
+### Философия
+
+- **[DOD Philosophy](../philosophy/03_dod-philosophy.md)** — Data-Oriented Design
+- **[ECS Philosophy](../philosophy/04_ecs-philosophy.md)** — Entity Component System
+
+---

@@ -2,6 +2,10 @@
 
 ---
 
+**Статус:** Утверждено
+**Версия:** 2.0
+**Дата:** 2026-02-22
+
 ## Обзор
 
 ProjectV рендерит миллионы вокселей в реальном времени через полностью **GPU-Driven pipeline**:
@@ -37,7 +41,6 @@ export struct VoxelData {
 
     [[nodiscard]] auto is_transparent() const noexcept -> bool {
         return (flags & 0x01) != 0;
-    }
 };
 
 /// Константы чанка.
@@ -56,12 +59,10 @@ export struct ChunkCoord {
 
     [[nodiscard]] auto operator==(ChunkCoord const& other) const noexcept -> bool = default;
     [[nodiscard]] auto operator<=>(ChunkCoord const& other) const noexcept = default;
-};
 
 /// Hash для ChunkCoord.
 export struct ChunkCoordHash {
     [[nodiscard]] auto operator()(ChunkCoord const& c) const noexcept -> size_t;
-};
 
 } // namespace projectv::voxel
 ```
@@ -134,7 +135,6 @@ private:
 
 /// Утилиты для работы с координатами.
 export class CoordUtils {
-public:
     /// Конвертирует мировые координаты в координаты чанка.
     [[nodiscard]] static auto world_to_chunk(glm::vec3 world_pos) noexcept -> ChunkCoord;
 
@@ -152,7 +152,6 @@ public:
 
     /// Проверяет валидность координат.
     [[nodiscard]] static auto is_valid(VoxelCoord coord, uint32_t size) noexcept -> bool;
-};
 
 } // namespace projectv::voxel
 ```
@@ -187,14 +186,12 @@ public:
 
     /// Векторизованная проверка на пустоту.
     [[nodiscard]] static auto is_empty_simd(
-        std::mdspan<VoxelData const, std::dextents<size_t, 3>> data
     ) noexcept -> bool;
 
     /// Векторизованное копирование чанка.
     static auto copy_simd(
         std::mdspan<VoxelData const, std::dextents<size_t, 3>> src,
         std::mdspan<VoxelData, std::dextents<size_t, 3>> dst
-    ) noexcept -> void;
 
     /// Векторизованная проверка соседей для mesh generation.
     struct NeighborMask {
@@ -208,11 +205,9 @@ public:
 
 private:
     static constexpr size_t SIMD_WIDTH = std::simd_abi::native<uint8_t>::size;
-};
 
 /// Векторизованный итератор чанка.
 export class ChunkIteratorSIMD {
-public:
     explicit ChunkIteratorSIMD(uint32_t size) noexcept;
 
     /// Обрабатывает batch вокселей.
@@ -226,11 +221,9 @@ public:
     /// @return Количество обработанных вокселей
     [[nodiscard]] auto processed_count() const noexcept -> size_t;
 
-private:
     uint32_t size_;
     size_t current_index_{0};
     size_t total_count_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -269,7 +262,6 @@ export struct MeshGenResult {
     glm::vec3 bounds_max{};
     uint32_t opaque_face_count{0};
     uint32_t transparent_face_count{0};
-};
 
 /// Алгоритмы генерации мешей.
 export enum class MeshGenAlgorithm : uint8_t {
@@ -277,7 +269,6 @@ export enum class MeshGenAlgorithm : uint8_t {
     Greedy,         ///< Объединение граней (50-90% меньше вершин)
     MarchingCubes,  ///< Плавные поверхности из density field
     DualContouring  ///< Острые углы + плавные поверхности
-};
 
 /// Конфигурация генератора.
 export struct MeshGenConfig {
@@ -285,7 +276,6 @@ export struct MeshGenConfig {
     bool calculate_ao{true};        ///< Вычислять ambient occlusion
     bool separate_transparent{true}; ///< Отдельные меши для прозрачных
     float voxel_size{1.0f};
-};
 
 /// Коды ошибок генерации.
 export enum class MeshGenError : uint8_t {
@@ -293,7 +283,6 @@ export enum class MeshGenError : uint8_t {
     EmptyChunk,
     AllocationFailed,
     GpuUploadFailed
-};
 
 /// CPU генератор мешей.
 export class CPUMeshGenerator {
@@ -322,13 +311,11 @@ private:
     auto generate_naive(ChunkStorage const& chunk) noexcept -> MeshGenResult;
     auto generate_greedy(ChunkStorage const& chunk) noexcept -> MeshGenResult;
     auto calculate_vertex_ao(
-        ChunkStorage const& chunk,
         VoxelCoord coord,
         glm::ivec3 normal
     ) noexcept -> uint8_t;
 
     MeshGenConfig config_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -384,14 +371,10 @@ public:
 
     /// Генерирует меш на GPU.
     auto dispatch_generation(
-        VkCommandBuffer cmd,
-        ChunkCoord coord
     ) noexcept -> void;
 
     /// Получает результаты генерации.
     [[nodiscard]] auto read_results(
-        VkCommandBuffer cmd,
-        ChunkCoord coord
     ) noexcept -> std::expected<MeshGenResult, MeshGenError>;
 
     /// Получает indirect draw command.
@@ -406,14 +389,10 @@ private:
     GPUMeshGenerator() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Mesh Shader генератор (VK_EXT_mesh_shader).
 export class MeshShaderGenerator {
-public:
     /// Создаёт генератор.
-    [[nodiscard]] static auto create(
-        VkDevice device,
         VkPhysicalDevice physical_device
     ) noexcept -> std::expected<MeshShaderGenerator, MeshGenError>;
 
@@ -429,19 +408,13 @@ public:
 
     /// Генерирует и рендерит чанк через mesh shaders.
     auto render_chunk(
-        VkCommandBuffer cmd,
         ChunkCoord coord,
         ChunkStorage const& chunk
-    ) noexcept -> void;
 
     /// Получает pipeline.
     [[nodiscard]] auto pipeline() const noexcept -> VkPipeline;
 
-private:
     MeshShaderGenerator() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -487,7 +460,6 @@ export struct SVOConfig {
     uint32_t max_depth{10};            ///< Максимальная глубина (1024³ max size)
     uint32_t initial_node_capacity{65536};
     bool enable_dag_compression{true}; ///< Сжатие одинаковых subtree
-};
 
 /// Sparse Voxel Octree.
 export class SVOTree {
@@ -536,14 +508,11 @@ public:
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// GPU SVO traversal для ray tracing.
 export class SVORayTracer {
-public:
     /// Создаёт ray tracer.
     [[nodiscard]] static auto create(
-        VkDevice device,
         SVOTree const& svo
     ) noexcept -> std::expected<SVORayTracer, SVOError>;
 
@@ -561,7 +530,6 @@ public:
         glm::vec3 hit_normal{0.0f};
         float distance{0.0f};
         VoxelData voxel{};
-    };
 
     [[nodiscard]] auto trace_ray(
         glm::vec3 origin,
@@ -575,13 +543,8 @@ public:
         VkBuffer ray_buffer,
         VkBuffer result_buffer,
         uint32_t ray_count
-    ) noexcept -> void;
 
-private:
     SVORayTracer() noexcept = default;
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -629,36 +592,26 @@ public:
     /// Выполняет raycast через мир (несколько чанков).
     template<typename WorldAccessor>
     [[nodiscard]] static auto cast_world(
-        glm::vec3 origin,
-        glm::vec3 direction,
-        float max_distance,
         WorldAccessor&& world
-    ) noexcept -> VoxelHit;
 
 private:
     /// Вычисляет расстояние до следующей границы сетки.
     [[nodiscard]] static auto intbound(float s, float ds) noexcept -> float;
-};
 
 /// SIMD версия raycast для множества лучей.
 export class DDARaycastSIMD {
-public:
     /// Результат для 8 лучей.
     struct HitBatch {
         std::array<bool, 8> hits{};
         std::array<VoxelCoord, 8> positions{};
         std::array<VoxelCoord, 8> normals{};
         std::array<float, 8> distances{};
-    };
 
     /// Raycast для 8 лучей одновременно.
     [[nodiscard]] static auto cast_batch(
         std::array<glm::vec3, 8> const& origins,
         std::array<glm::vec3, 8> const& directions,
-        float max_distance,
-        ChunkStorage const& chunk
     ) noexcept -> HitBatch;
-};
 
 } // namespace projectv::voxel
 ```
@@ -696,7 +649,6 @@ export struct VoxelRendererConfig {
     bool use_bindless_textures{true};
     bool enable_lod{true};
     float lod_distances[4] = {50.0f, 100.0f, 200.0f, 400.0f};
-};
 
 /// Воксельный рендерер.
 export class VoxelRenderer {
@@ -723,9 +675,6 @@ public:
 
     /// Обновляет данные чанка.
     [[nodiscard]] auto update_chunk(
-        ChunkCoord coord,
-        ChunkStorage const& storage
-    ) noexcept -> std::expected<void, VoxelError>;
 
     /// Удаляет чанк.
     auto unregister_chunk(ChunkCoord coord) noexcept -> void;
@@ -738,10 +687,8 @@ public:
 
     /// Рендерит все видимые чанки.
     auto render(
-        VkCommandBuffer cmd,
         glm::mat4 const& view_proj,
         glm::vec3 const& camera_position
-    ) noexcept -> void;
 
     /// Получает статистику.
     struct Stats {
@@ -749,7 +696,6 @@ public:
         uint32_t total_vertices{0};
         uint32_t draw_calls{0};
         float gpu_time_ms{0.0f};
-    };
     [[nodiscard]] auto stats() const noexcept -> Stats;
 
     /// Включает/выключает LOD.
@@ -759,7 +705,6 @@ private:
     VoxelRenderer() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -835,7 +780,6 @@ private:
     IndirectDrawManager() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -905,7 +849,6 @@ private:
     VoxelTextureManager() noexcept = default;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 } // namespace projectv::voxel
 ```
@@ -955,7 +898,6 @@ export struct VoxelFrameUniforms {
     float sun_intensity{1.0f};
     glm::vec3 ambient_color{0.2f};
     uint32_t frame_index{0};
-};
 
 /// Storage buffer для материалов.
 export struct VoxelMaterialBuffer {
@@ -971,10 +913,8 @@ export struct VoxelMaterialBuffer {
         uint32_t roughness_index{0};
         uint32_t ao_index{0};
         uint32_t _pad[2];
-    };
 
     std::array<MaterialData, 256> materials;
-};
 
 } // namespace projectv::voxel
 ```
@@ -995,26 +935,15 @@ export struct VoxelMaterialBuffer {
 │  VoxelData ──────────────────────▶ SSBO (Voxels)                        │
 │                                    │                                     │
 │  ChunkCoord ─────────────────────▶ Culling Compute                      │
-│                                    │                                     │
 │                                    ▼                                     │
 │                              Mesh Generation                             │
 │                              (Compute/Mesh Shader)                       │
-│                                    │                                     │
-│                                    ▼                                     │
 │                              Indirect Buffer                            │
 │                              Vertex/Index Buffer                        │
-│                                    │                                     │
-│                                    ▼                                     │
 │                              Bindless Textures                          │
-│                                    │                                     │
-│                                    ▼                                     │
 │                              vkCmdDrawIndexedIndirect                   │
-│                                    │                                     │
-│                                    ▼                                     │
 │                              Graphics Queue                             │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ### LOD System
 
@@ -1025,17 +954,13 @@ export struct VoxelMaterialBuffer {
 │                                                                          │
 │  Distance    LOD Level    Resolution    Vertices per Chunk              │
 │  ────────    ─────────    ──────────    ──────────────────              │
-│                                                                          │
 │  0 - 50m     LOD 0        32³           ~50K vertices                   │
 │  50 - 100m   LOD 1        16³           ~12K vertices                   │
 │  100 - 200m  LOD 2        8³            ~3K vertices                    │
 │  200 - 400m  LOD 3        4³            ~500 vertices                   │
 │  > 400m      Culled       -             0                               │
-│                                                                          │
 │  Memory: LOD 0 = 100% → LOD 1 = 25% → LOD 2 = 6% → LOD 3 = 1%          │
-│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
@@ -1057,3 +982,11 @@ export struct VoxelMaterialBuffer {
 | Indirect Draw         | < 0.1ms           |
 | DDA Raycast           | < 0.01ms          |
 | LOD Update            | < 0.5ms           |
+
+---
+
+## Ссылки
+
+- [ADR-0004: Build System & C++26 Modules](../adr/0004-build-and-modules-spec.md)
+- [Engine Structure](../01_core/01_engine_structure.md)
+- [Resource Management](../06_assets/01_resource_management.md)

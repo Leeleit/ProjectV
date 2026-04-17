@@ -2,6 +2,11 @@
 
 ---
 
+**Статус:** Technical Specification
+**Уровень:** 🔴 Продвинутый
+**Дата:** 2026-02-22
+**Версия:** 1.0
+
 ## Обзор
 
 Документ описывает архитектуру синхронизации между **GPU Cellular Automata (CA)** и **CPU JoltPhysics** для:
@@ -35,10 +40,8 @@
 └──────────────────────────────│────────────────────│──────────────────────────┘
                                │                    │
                                │    VkCommandBuffer │
-                               │                    │
 └──────────────────────────────│────────────────────│──────────────────────────┐
 │                           CPU (JoltPhysics)     │                          │
-│  ┌───────────────┐           │           ┌───────────────┐                  │
 │  │  Physics      │◀──────────┘           │   Readback    │                  │
 │  │   System      │    memcpy             │   Manager     │                  │
 │  │  [Jolt]       │                       │   [Ring]      │                  │
@@ -49,9 +52,7 @@
 │  ┌───────────────┐                       ┌───────────────┐                  │
 │  │   Rigid       │                       │   Density     │                  │
 │  │   Bodies      │                       │   Field       │                  │
-│  └───────────────┘                       └───────────────┘                  │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
 
 ### 1.2 Key Components
 
@@ -94,7 +95,6 @@ export struct ReadbackFrame {
     uint64_t timeline_value{0};         ///< Timeline semaphore value
     bool is_available{true};            ///< Ready for new transfer
     bool has_pending_data{false};       ///< Data ready for CPU read
-};
 
 /// Ring buffer for asynchronous GPU→CPU readback
 export class CAReadbackRing {
@@ -140,16 +140,12 @@ public:
 
     [[nodiscard]] auto cell_count() const noexcept -> size_t {
         return config_.grid_size_x * config_.grid_size_y * config_.grid_size_z;
-    }
 
     [[nodiscard]] auto frame_size_bytes() const noexcept -> size_t {
         return cell_count() * config_.cell_size_bytes;
-    }
 
 private:
     explicit CAReadbackRing(
-        VkDevice device,
-        VmaAllocator allocator,
         CAReadbackConfig config,
         std::vector<ReadbackFrame> frames,
         VkSemaphore timeline_semaphore
@@ -164,7 +160,6 @@ private:
     uint32_t current_frame_{0};
     uint32_t oldest_readable_frame_{0};
     void* mapped_ptr_{nullptr};
-};
 
 } // namespace projectv::simulation
 ```
@@ -205,7 +200,6 @@ auto CAReadbackRing::create(
         .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
         .preferredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    };
 
     std::vector<ReadbackFrame> frames;
     frames.reserve(config.frame_count);
@@ -231,25 +225,17 @@ auto CAReadbackRing::create(
                 vkDestroyFence(device, f.fence, nullptr);
             }
             return std::unexpected(ReadbackError::BufferCreationFailed);
-        }
 
         // Create fence for transfer completion
         VkFenceCreateInfo fence_info{
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .flags = VK_FENCE_CREATE_SIGNALED_BIT  // Initially signaled
-        };
 
         VkFence fence;
         result = vkCreateFence(device, &fence_info, nullptr, &fence);
 
-        if (result != VK_SUCCESS) {
             vmaDestroyBuffer(allocator, buffer, allocation);
-            for (auto& f : frames) {
-                vmaDestroyBuffer(allocator, f.buffer, f.allocation);
-                vkDestroyFence(device, f.fence, nullptr);
-            }
             return std::unexpected(ReadbackError::FenceCreationFailed);
-        }
 
         frames.push_back({
             .buffer = buffer,
@@ -259,37 +245,25 @@ auto CAReadbackRing::create(
             .is_available = true,
             .has_pending_data = false
         });
-    }
 
     // Create timeline semaphore
     VkSemaphoreTypeCreateInfo timeline_info{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
         .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
         .initialValue = 0
-    };
 
     VkSemaphoreCreateInfo sem_info{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = &timeline_info
-    };
 
     VkSemaphore timeline_semaphore;
     VkResult result = vkCreateSemaphore(device, &sem_info, nullptr, &timeline_semaphore);
 
-    if (result != VK_SUCCESS) {
-        for (auto& f : frames) {
-            vmaDestroyBuffer(allocator, f.buffer, f.allocation);
-            vkDestroyFence(device, f.fence, nullptr);
-        }
         return std::unexpected(ReadbackError::SemaphoreCreationFailed);
-    }
 
     return CAReadbackRing(device, allocator, config, std::move(frames), timeline_semaphore);
-}
 
 CAReadbackRing::CAReadbackRing(
-    VkDevice device,
-    VmaAllocator allocator,
     CAReadbackConfig config,
     std::vector<ReadbackFrame> frames,
     VkSemaphore timeline_semaphore
@@ -305,19 +279,15 @@ CAReadbackRing::~CAReadbackRing() noexcept {
     if (mapped_ptr_) {
         vmaUnmapMemory(allocator_, frames_[oldest_readable_frame_].allocation);
         mapped_ptr_ = nullptr;
-    }
 
     for (auto& f : frames_) {
         vmaDestroyBuffer(allocator_, f.buffer, f.allocation);
         vkDestroyFence(device_, f.fence, nullptr);
-    }
 
     vkDestroySemaphore(device_, timeline_semaphore_, nullptr);
-}
 
 auto CAReadbackRing::get_current_buffer() const noexcept -> VkBuffer {
     return frames_[current_frame_].buffer;
-}
 
 auto CAReadbackRing::advance_frame(VkCommandBuffer cmd, VkQueue queue) noexcept -> void {
     // Submit transfer command
@@ -330,13 +300,11 @@ auto CAReadbackRing::advance_frame(VkCommandBuffer cmd, VkQueue queue) noexcept 
         .buffer = frames_[current_frame_].buffer,
         .offset = 0,
         .size = VK_WHOLE_SIZE
-    };
 
     VkDependencyInfo dep_info{
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
         .bufferMemoryBarrierCount = 1,
         .pBufferMemoryBarriers = &barrier
-    };
 
     vkCmdPipelineBarrier2(cmd, &dep_info);
 
@@ -351,29 +319,23 @@ auto CAReadbackRing::advance_frame(VkCommandBuffer cmd, VkQueue queue) noexcept 
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
         .semaphore = timeline_semaphore_,
         .value = current_timeline_value_
-    };
 
     // Move to next frame
     current_frame_ = (current_frame_ + 1) % frames_.size();
-}
 
 auto CAReadbackRing::has_available_data() const noexcept -> bool {
     // Check if oldest frame is signaled
     return frames_[oldest_readable_frame_].has_pending_data;
-}
 
 auto CAReadbackRing::map_oldest_frame(uint64_t timeout_ns) noexcept
     -> std::expected<std::span<std::byte const>, ReadbackError> {
 
-    if (mapped_ptr_) {
         return std::unexpected(ReadbackError::AlreadyMapped);
-    }
 
     ReadbackFrame& frame = frames_[oldest_readable_frame_];
 
     if (!frame.has_pending_data) {
         return std::unexpected(ReadbackError::NoPendingData);
-    }
 
     // Wait for timeline semaphore
     VkSemaphoreWaitInfo wait_info{
@@ -382,23 +344,17 @@ auto CAReadbackRing::map_oldest_frame(uint64_t timeout_ns) noexcept
         .semaphoreCount = 1,
         .pSemaphores = &timeline_semaphore_,
         .pValues = &frame.timeline_value
-    };
 
     VkResult result = vkWaitSemaphores(device_, &wait_info, timeout_ns);
 
     if (result == VK_TIMEOUT) {
         return std::unexpected(ReadbackError::Timeout);
-    }
-    if (result != VK_SUCCESS) {
         return std::unexpected(ReadbackError::WaitFailed);
-    }
 
     // Map memory
     result = vmaMapMemory(allocator_, frame.allocation, &mapped_ptr_);
 
-    if (result != VK_SUCCESS) {
         return std::unexpected(ReadbackError::MapFailed);
-    }
 
     // Invalidate cache (for non-coherent memory)
     vmaInvalidateAllocation(allocator_, frame.allocation, 0, VK_WHOLE_SIZE);
@@ -406,24 +362,17 @@ auto CAReadbackRing::map_oldest_frame(uint64_t timeout_ns) noexcept
     return std::span<std::byte const>(
         static_cast<std::byte const*>(mapped_ptr_),
         frame_size_bytes()
-    );
-}
 
 auto CAReadbackRing::unmap_and_release() noexcept -> void {
     if (!mapped_ptr_) return;
-
-    vmaUnmapMemory(allocator_, frames_[oldest_readable_frame_].allocation);
-    mapped_ptr_ = nullptr;
 
     frames_[oldest_readable_frame_].has_pending_data = false;
     frames_[oldest_readable_frame_].is_available = true;
 
     oldest_readable_frame_ = (oldest_readable_frame_ + 1) % frames_.size();
-}
 
 auto CAReadbackRing::timeline_semaphore() const noexcept -> VkSemaphore {
     return timeline_semaphore_;
-}
 
 } // namespace projectv::simulation
 ```
@@ -466,7 +415,6 @@ export struct MaterialPhysicsProps {
     float viscosity{0.001f};        ///< Dynamic viscosity (Pa·s)
     float drag_coefficient{0.47f};  ///< Shape-dependent
     float buoyancy_factor{1.0f};    ///< Multiplier for buoyancy
-};
 
 /// Cell state from GPU (must match std430 layout in Slang)
 export struct alignas(16) CellStateCPU {
@@ -481,7 +429,6 @@ export struct alignas(16) CellStateCPU {
 
     // Padding to match 32-byte GPU layout
     // Total: 32 bytes
-};
 
 static_assert(sizeof(CellStateCPU) == 32, "CellStateCPU must match GPU layout");
 static_assert(alignof(CellStateCPU) == 16, "CellStateCPU alignment must match GPU");
@@ -496,7 +443,6 @@ export struct PhysicsBridgeConfig {
     float buoyancy_update_rate{60.0f};      ///< Updates per second
     float max_buoyancy_force{1000.0f};      ///< N
     float max_drag_force{500.0f};           ///< N
-};
 
 /// Bridge between GPU CA and CPU JoltPhysics
 export class PhysicsBridge {
@@ -529,7 +475,6 @@ public:
         BodyID body_id,
         float radius,
         float density
-    ) noexcept -> void;
 
     /// Unregisters a body.
     auto unregister_body(BodyID body_id) noexcept -> void;
@@ -542,7 +487,6 @@ public:
     auto set_material_props(
         CellMaterial material,
         MaterialPhysicsProps const& props
-    ) noexcept -> void;
 
 private:
     explicit PhysicsBridge(
@@ -556,17 +500,13 @@ private:
 
     /// Calculates buoyancy force on a body.
     [[nodiscard]] auto calculate_buoyancy(
-        BodyID body_id,
         float body_volume,
         float body_density
     ) const noexcept -> glm::vec3;
 
     /// Calculates drag force from fluid velocity.
     [[nodiscard]] auto calculate_drag(
-        BodyID body_id,
-        float radius,
         glm::vec3 const& fluid_velocity
-    ) const noexcept -> glm::vec3;
 
     /// Checks if position is inside fluid (density > threshold).
     [[nodiscard]] auto is_in_fluid(glm::vec3 const& world_pos) const noexcept -> bool;
@@ -584,12 +524,10 @@ private:
         float radius;
         float density;      ///< Body density (kg/m³)
         float volume;       ///< Body volume (m³)
-    };
     std::vector<RegisteredBody> registered_bodies_;
 
     /// Material properties lookup
     std::unordered_map<CellMaterial, MaterialPhysicsProps> material_props_;
-};
 
 } // namespace projectv::simulation
 ```
@@ -625,30 +563,23 @@ PhysicsBridge::PhysicsBridge(
     material_props_[CellMaterial::Water] = {
         .density = 1000.0f,          // kg/m³
         .viscosity = 0.001f,         // Water at 20°C
-        .drag_coefficient = 0.47f,
         .buoyancy_factor = 1.0f
-    };
 
     material_props_[CellMaterial::Oil] = {
         .density = 900.0f,
         .viscosity = 0.03f,
-        .drag_coefficient = 0.47f,
         .buoyancy_factor = 0.9f
-    };
 
     material_props_[CellMaterial::Lava] = {
         .density = 3100.0f,          // Basaltic lava
         .viscosity = 100.0f,         // Very viscous
-        .drag_coefficient = 0.47f,
         .buoyancy_factor = 3.1f
-    };
 
     material_props_[CellMaterial::Sand] = {
         .density = 1600.0f,          // Dry sand
         .viscosity = 0.0f,           // Granular, not fluid
         .drag_coefficient = 0.0f,
         .buoyancy_factor = 0.0f
-    };
 }
 
 auto PhysicsBridge::create(
@@ -656,7 +587,6 @@ auto PhysicsBridge::create(
     PhysicsSystem& physics
 ) noexcept -> std::expected<PhysicsBridge, BridgeError> {
     return PhysicsBridge(config, &physics);
-}
 
 auto PhysicsBridge::update_from_readback(
     std::span<std::byte const> readback_data,
@@ -673,13 +603,11 @@ auto PhysicsBridge::update_from_readback(
         readback_data.data(),
         std::min(readback_data.size(), cell_count * sizeof(CellStateCPU))
     );
-}
 
 auto PhysicsBridge::register_body(
     BodyID body_id,
     float radius,
     float density
-) noexcept -> void {
     float volume = (4.0f / 3.0f) * glm::pi<float>() * radius * radius * radius;
 
     registered_bodies_.push_back({
@@ -688,13 +616,10 @@ auto PhysicsBridge::register_body(
         .density = density,
         .volume = volume
     });
-}
 
 auto PhysicsBridge::unregister_body(BodyID body_id) noexcept -> void {
     std::erase_if(registered_bodies_, [body_id](auto const& rb) {
         return rb.body_id.native() == body_id.native();
-    });
-}
 
 auto PhysicsBridge::apply_fluid_forces(float delta_time) noexcept -> void {
     if (!physics_ || cell_grid_.empty()) return;
@@ -722,7 +647,6 @@ auto PhysicsBridge::apply_fluid_forces(float delta_time) noexcept -> void {
         float buoyancy_mag = glm::length(buoyancy);
         if (buoyancy_mag > config_.max_buoyancy_force) {
             buoyancy = glm::normalize(buoyancy) * config_.max_buoyancy_force;
-        }
 
         physics_->apply_force(rb.body_id, buoyancy);
 
@@ -731,7 +655,6 @@ auto PhysicsBridge::apply_fluid_forces(float delta_time) noexcept -> void {
             cell->velocity_x,
             cell->velocity_y,
             cell->velocity_z
-        );
 
         // Calculate and apply drag
         if (glm::length(fluid_vel) > 0.01f) {
@@ -741,10 +664,8 @@ auto PhysicsBridge::apply_fluid_forces(float delta_time) noexcept -> void {
             float drag_mag = glm::length(drag);
             if (drag_mag > config_.max_drag_force) {
                 drag = glm::normalize(drag) * config_.max_drag_force;
-            }
 
             physics_->apply_force(rb.body_id, drag);
-        }
 
         // Apply viscous damping
         if (props.viscosity > 0.0f) {
@@ -758,10 +679,6 @@ auto PhysicsBridge::apply_fluid_forces(float delta_time) noexcept -> void {
                                         * rb.radius * relative_vel;
 
                 physics_->apply_force(rb.body_id, viscous_drag);
-            }
-        }
-    }
-}
 
 auto PhysicsBridge::get_cell_at(glm::vec3 const& world_pos) const noexcept
     -> CellStateCPU const* {
@@ -769,14 +686,12 @@ auto PhysicsBridge::get_cell_at(glm::vec3 const& world_pos) const noexcept
     // Convert world position to grid coordinates
     glm::ivec3 grid_pos = glm::ivec3(
         (world_pos - glm::vec3(config_.grid_origin)) / config_.voxel_size
-    );
 
     // Check bounds
     if (grid_pos.x < 0 || grid_pos.x >= static_cast<int>(config_.grid_size_x) ||
         grid_pos.y < 0 || grid_pos.y >= static_cast<int>(config_.grid_size_y) ||
         grid_pos.z < 0 || grid_pos.z >= static_cast<int>(config_.grid_size_z)) {
         return nullptr;
-    }
 
     // Calculate linear index
     size_t index = grid_pos.x
@@ -786,10 +701,8 @@ auto PhysicsBridge::get_cell_at(glm::vec3 const& world_pos) const noexcept
     if (index >= cell_grid_.size()) return nullptr;
 
     return &cell_grid_[index];
-}
 
 auto PhysicsBridge::calculate_buoyancy(
-    BodyID body_id,
     float body_volume,
     float body_density
 ) const noexcept -> glm::vec3 {
@@ -800,9 +713,6 @@ auto PhysicsBridge::calculate_buoyancy(
 
     CellStateCPU const* cell = get_cell_at(*pos_result);
     if (!cell || cell->density < 0.1f) return glm::vec3{0.0f};
-
-    CellMaterial material = static_cast<CellMaterial>(cell->material_type);
-    MaterialPhysicsProps const& props = get_material_props(material);
 
     // Buoyancy: F = ρ_fluid * V * g * (ρ_fluid / ρ_body - 1) for submerged body
     // Simplified: F = (ρ_fluid - ρ_body) * V * g
@@ -818,18 +728,13 @@ auto PhysicsBridge::calculate_buoyancy(
 
     // Direction: upward (positive Y in ProjectV)
     return glm::vec3{0.0f, buoyancy_magnitude, 0.0f};
-}
 
 auto PhysicsBridge::calculate_drag(
-    BodyID body_id,
-    float radius,
     glm::vec3 const& fluid_velocity
-) const noexcept -> glm::vec3 {
 
     auto vel_result = physics_->get_body_velocity(body_id);
     if (!vel_result) return glm::vec3{0.0f};
 
-    glm::vec3 body_vel = *vel_result;
     glm::vec3 relative_vel = fluid_velocity - body_vel;
 
     float rel_speed = glm::length(relative_vel);
@@ -840,22 +745,16 @@ auto PhysicsBridge::calculate_drag(
     float cross_section_area = glm::pi<float>() * radius * radius;
 
     // Get fluid density at body position
-    auto pos_result = physics_->get_body_position(body_id);
     float fluid_density = 1000.0f;  // Default water
     if (pos_result) {
-        CellStateCPU const* cell = get_cell_at(*pos_result);
         if (cell && cell->density > 0.1f) {
-            CellMaterial material = static_cast<CellMaterial>(cell->material_type);
             fluid_density = get_material_props(material).density * cell->density;
-        }
-    }
 
     float drag_magnitude = 0.5f * fluid_density * rel_speed * rel_speed
                           * 0.47f * cross_section_area;  // 0.47 = sphere Cd
 
     // Drag opposes relative motion
     return glm::normalize(relative_vel) * drag_magnitude;
-}
 
 auto PhysicsBridge::get_material_props(CellMaterial material) const noexcept
     -> MaterialPhysicsProps const& {
@@ -865,21 +764,16 @@ auto PhysicsBridge::get_material_props(CellMaterial material) const noexcept
     auto it = material_props_.find(material);
     if (it != material_props_.end()) {
         return it->second;
-    }
     return default_props;
-}
 
 auto PhysicsBridge::set_material_props(
     CellMaterial material,
     MaterialPhysicsProps const& props
-) noexcept -> void {
     material_props_[material] = props;
-}
 
 auto PhysicsBridge::is_in_fluid(glm::vec3 const& world_pos) const noexcept -> bool {
     CellStateCPU const* cell = get_cell_at(world_pos);
     return cell && cell->density > 0.1f;
-}
 
 } // namespace projectv::simulation
 ```
@@ -940,13 +834,11 @@ auto update_simulation(
             .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT
-        };
 
         VkDependencyInfo dep{
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
             .memoryBarrierCount = 1,
             .pMemoryBarriers = &barrier
-        };
 
         vkCmdPipelineBarrier2(compute_cmd, &dep);
 
@@ -955,7 +847,6 @@ auto update_simulation(
             .srcOffset = 0,
             .dstOffset = 0,
             .size = readback_ring.frame_size_bytes()
-        };
 
         vkCmdCopyBuffer(compute_cmd,
                        ca_grid.current_buffer(),
@@ -967,13 +858,10 @@ auto update_simulation(
     }
 
     // 2. Step physics (in parallel with GPU)
-    {
         TracyZoneScopedN("Physics Step");
         physics.step(delta_time);
-    }
 
     // 3. Process available readback data
-    {
         TracyZoneScopedN("Readback Processing");
 
         if (readback_ring.has_available_data()) {
@@ -990,13 +878,9 @@ auto update_simulation(
                 readback_ring.unmap_and_release();
 
                 TracyPlot("CA Readback Latency", delta_time);
-            }
-        }
-    }
 
     // 4. Swap CA buffers
     ca_grid.swap_buffers();
-}
 ```
 
 ### 4.2 Timeline Semaphore Synchronization
@@ -1027,19 +911,14 @@ auto submit_frame(
         .semaphore = sync.graphics_finished,
         .value = sync.frame_number - 1,
         .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
-    };
 
     VkSemaphoreSubmitInfo compute_signal{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .semaphore = sync.compute_finished,
         .value = sync.frame_number,
-        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
-    };
 
     VkCommandBufferSubmitInfo compute_cmd_info{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
         .commandBuffer = compute_cmd
-    };
 
     VkSubmitInfo2 compute_submit{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
@@ -1049,39 +928,23 @@ auto submit_frame(
         .pCommandBufferInfos = &compute_cmd_info,
         .signalSemaphoreInfoCount = 1,
         .pSignalSemaphoreInfos = &compute_signal
-    };
 
     vkQueueSubmit2(compute_queue, 1, &compute_submit, VK_NULL_HANDLE);
 
     // Graphics submission (waits for compute)
     VkSemaphoreSubmitInfo graphics_wait{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = sync.compute_finished,
-        .value = sync.frame_number,
         .stageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT
-    };
 
     VkSemaphoreSubmitInfo graphics_signal{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = sync.graphics_finished,
-        .value = sync.frame_number,
         .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
-    };
 
     VkCommandBufferSubmitInfo graphics_cmd_info{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
         .commandBuffer = graphics_cmd
-    };
 
     VkSubmitInfo2 graphics_submit{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-        .waitSemaphoreInfoCount = 1,
         .pWaitSemaphoreInfos = &graphics_wait,
-        .commandBufferInfoCount = 1,
         .pCommandBufferInfos = &graphics_cmd_info,
-        .signalSemaphoreInfoCount = 1,
         .pSignalSemaphoreInfos = &graphics_signal
-    };
 
     vkQueueSubmit2(graphics_queue, 1, &graphics_submit, VK_NULL_HANDLE);
 }
@@ -1161,11 +1024,8 @@ export auto validate_cell_state_layout() noexcept -> bool {
     if (alignof(CellStateGPU) != 16) {
         std::println(stderr, "ERROR: CellStateGPU alignment = {}, expected 16",
                     alignof(CellStateGPU));
-        valid = false;
-    }
 
     return valid;
-}
 
 } // namespace projectv::simulation
 ```
@@ -1220,7 +1080,6 @@ struct alignas(16) CASimulationParams {
     float burn_rate;
     int3 boundary_min;
     int3 boundary_max;
-};
 
 [[vk::binding(2, 0)]]
 uniform CASimulationParams params;
@@ -1284,3 +1143,11 @@ VkSemaphoreSubmitInfo signal{
 | Timeline Synchronization | Специфицирован | P0        |
 | Memory Layout Validation | Специфицирован | P0        |
 | Main Loop Integration    | Специфицирован | P1        |
+
+---
+
+## Ссылки
+
+- [GPU Cellular Automata Specification](../04_physics_ca/03_gpu_cellular_automata.md)
+- [Jolt-Vulkan Bridge](../04_physics_ca/01_jolt_vulkan_bridge.md)
+- [ADR-0004: Build & Modules](../adr/0004-build-and-modules-spec.md)

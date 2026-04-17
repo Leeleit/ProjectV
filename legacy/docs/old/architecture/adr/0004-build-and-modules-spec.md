@@ -2,6 +2,11 @@
 
 ---
 
+**Статус:** Принято
+**Дата:** 2026-02-22
+**Автор:** Architecture Team
+**Версия:** 2.0
+
 ## Контекст
 
 ProjectV использует **C++26** как основной язык с **Vulkan 1.4** для рендеринга. Требуется:
@@ -40,40 +45,32 @@ src/
 │   ├── ProjectV.Render.Vulkan.cpp      # Implementation (Vulkan/VMA includes)
 │   ├── ProjectV.Render.SVO.cppm        # SVO rendering submodule
 │   └── ProjectV.Render.Mesh.cppm       # Mesh generation submodule
-│
 ├── voxel/
 │   ├── ProjectV.Voxel.cppm             # Primary voxel module interface
 │   ├── ProjectV.Voxel.SVO.cppm         # SVO data structures submodule
 │   ├── ProjectV.Voxel.Chunk.cppm       # Chunk management submodule
 │   └── ProjectV.Voxel.Generation.cppm  # Procedural generation submodule
-│
 ├── physics/
 │   ├── ProjectV.Physics.cppm           # Primary physics module interface
 │   ├── ProjectV.Physics.Jolt.cppm      # JoltPhysics PIMPL wrapper
 │   └── ProjectV.Physics.Jolt.cpp       # Implementation (Jolt headers HERE)
-│
 ├── ecs/
 │   ├── ProjectV.ECS.cppm               # Primary ECS module interface
 │   ├── ProjectV.ECS.Flecs.cppm         # Flecs PIMPL wrapper
 │   └── ProjectV.ECS.Flecs.cpp          # Implementation (Flecs headers HERE)
-│
 ├── audio/
 │   ├── ProjectV.Audio.cppm             # Primary audio module interface
 │   └── ProjectV.Audio.Miniaudio.cppm   # Miniaudio wrapper (C library)
-│
 ├── ui/
 │   ├── ProjectV.UI.cppm                # Primary UI module interface
 │   ├── ProjectV.UI.ImGui.cppm          # ImGui PIMPL wrapper
 │   └── ProjectV.UI.ImGui.cpp           # Implementation (ImGui headers HERE)
-│
 ├── profile/
 │   ├── ProjectV.Profile.cppm           # Profiling module interface
 │   ├── ProjectV.Profile.Tracy.cppm     # Tracy PIMPL wrapper
 │   └── ProjectV.Profile.Tracy.cpp      # Implementation (Tracy headers HERE)
-│
 └── app/
     └── ProjectV.App.cppm               # Application layer module
-```
 
 ---
 
@@ -138,23 +135,15 @@ public:
         if (instance_ != VK_NULL_HANDLE) {
             vkDestroyInstance(instance_, nullptr);
         }
-    }
 
     // Move-only
     Instance(Instance&& other) noexcept : instance_(other.instance_) {
         other.instance_ = VK_NULL_HANDLE;
-    }
 
     Instance& operator=(Instance&& other) noexcept {
         if (this != &other) {
-            if (instance_ != VK_NULL_HANDLE) {
-                vkDestroyInstance(instance_, nullptr);
-            }
             instance_ = other.instance_;
-            other.instance_ = VK_NULL_HANDLE;
-        }
         return *this;
-    }
 
     Instance(const Instance&) = delete;
     Instance& operator=(const Instance&) = delete;
@@ -169,18 +158,13 @@ private:
 
 /// RAII wrapper for VkDevice
 class Device {
-public:
-    [[nodiscard]] static auto create(
         VkPhysicalDevice physical_device,
-        std::span<const char* const> extensions,
         std::span<uint32_t const> queue_families
     ) noexcept -> std::expected<Device, DeviceError>;
 
     ~Device() noexcept {
         if (device_ != VK_NULL_HANDLE) {
             vkDestroyDevice(device_, nullptr);
-        }
-    }
 
     Device(Device&&) noexcept;
     Device& operator=(Device&&) noexcept;
@@ -190,10 +174,8 @@ public:
     [[nodiscard]] auto native() const noexcept -> VkDevice { return device_; }
     auto wait_idle() const noexcept -> void { vkDeviceWaitIdle(device_); }
 
-private:
     explicit Device(VkDevice device) noexcept : device_(device) {}
     VkDevice device_{VK_NULL_HANDLE};
-};
 
 // Additional RAII wrappers: Buffer, Image, CommandPool, etc.
 
@@ -230,22 +212,14 @@ public:
         if (window_ != nullptr) {
             SDL_DestroyWindow(window_);
         }
-    }
 
     Window(Window&& other) noexcept : window_(other.window_) {
         other.window_ = nullptr;
-    }
 
     Window& operator=(Window&& other) noexcept {
         if (this != &other) {
-            if (window_ != nullptr) {
-                SDL_DestroyWindow(window_);
-            }
             window_ = other.window_;
-            other.window_ = nullptr;
-        }
         return *this;
-    }
 
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
@@ -265,7 +239,6 @@ private:
 
 /// SDL subsystem initializer (RAII)
 class SDLContext {
-public:
     [[nodiscard]] static auto init(uint32_t flags = SDL_INIT_VIDEO) noexcept
         -> std::expected<SDLContext, SDLError>;
 
@@ -276,9 +249,7 @@ public:
     SDLContext(const SDLContext&) = delete;
     SDLContext& operator=(const SDLContext&) = delete;
 
-private:
     SDLContext() = default;
-};
 
 } // namespace projectv::platform
 ```
@@ -321,15 +292,12 @@ export module ProjectV.Physics.Jolt;
                           │
                           │ import
                           ▼
-┌─────────────────────────────────────────────────────────────┐
 │  Module Implementation (.cpp)                               │
 │  ───────────────────────────                                │
 │  • #include <Jolt/Jolt.h> — здесь!                          │
 │  • Полные определения классов                               │
 │  • Внутренние Jolt types скрыты                             │
 │  • Изменения Jolt не триггерят recompile модулей            │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ### 3.3 JoltPhysics PIMPL Implementation
 
@@ -370,19 +338,15 @@ export struct BodyID {
 
     [[nodiscard]] auto valid() const noexcept -> bool {
         return index != 0xFFFFFFFF;
-    }
 
     [[nodiscard]] auto native() const noexcept -> uint64_t {
         return (uint64_t{generation} << 32) | index;
-    }
-};
 
 /// Motion type for physics bodies
 export enum class MotionType : uint8_t {
     Static,     ///< Never moves
     Kinematic,  ///< Moved by code, not physics
     Dynamic     ///< Full physics simulation
-};
 
 /// Shape types
 export enum class ShapeType : uint8_t {
@@ -393,7 +357,6 @@ export enum class ShapeType : uint8_t {
     ConvexHull,
     Mesh,
     HeightField
-};
 
 /// Physics body creation settings
 export struct BodySettings {
@@ -404,7 +367,6 @@ export struct BodySettings {
     float friction{0.5f};
     float restitution{0.2f};
     bool is_sensor{false};
-};
 
 /// Physics system — PIMPL wrapper
 export class PhysicsSystem {
@@ -460,39 +422,30 @@ private:
     // PIMPL: Implementation hidden in .cpp
     struct Impl;
     std::unique_ptr<Impl> impl_;
-};
 
 /// Shape factory — static methods for creating shapes
 export class ShapeFactory {
-public:
     [[nodiscard]] static auto create_sphere(float radius) noexcept
         -> std::expected<ShapeHandle, PhysicsError>;
 
     [[nodiscard]] static auto create_box(glm::vec3 const& half_extents) noexcept
-        -> std::expected<ShapeHandle, PhysicsError>;
 
     [[nodiscard]] static auto create_capsule(float half_height, float radius) noexcept
-        -> std::expected<ShapeHandle, PhysicsError>;
 
     [[nodiscard]] static auto create_mesh(
         std::span<glm::vec3 const> vertices,
         std::span<uint32_t const> indices
     ) noexcept -> std::expected<ShapeHandle, PhysicsError>;
-};
 
 /// Opaque shape handle
 export struct ShapeHandle {
     uint64_t internal_id{0};
 
-    [[nodiscard]] auto valid() const noexcept -> bool {
         return internal_id != 0;
-    }
-};
 
 } // namespace projectv::physics
 ```
 
-```cpp
 // ProjectV.Physics.Jolt.cpp — Module Implementation
 // Jolt headers HERE, not in .cppm
 
@@ -510,9 +463,6 @@ module ProjectV.Physics.Jolt;
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
 
-import std;
-import glm;
-
 namespace projectv::physics {
 
 // PIMPL Implementation — fully hidden from module interface
@@ -524,7 +474,6 @@ struct PhysicsSystem::Impl {
 
     uint32_t max_bodies{0};
     std::unordered_map<uint64_t, JPH::BodyID> body_map;
-};
 
 auto PhysicsSystem::create(
     uint32_t max_bodies,
@@ -566,13 +515,11 @@ auto PhysicsSystem::create(
         *system.impl_->broad_phase_layer,
         g_object_vs_broadphase_layer_filter,
         g_object_vs_object_layer_filter
-    );
 
     // Configure gravity for voxel world
     system.impl_->physics_system->SetGravity(JPH::Vec3(0, -15.0f, 0));
 
     return system;
-}
 
 PhysicsSystem::~PhysicsSystem() noexcept {
     if (impl_) {
@@ -581,8 +528,6 @@ PhysicsSystem::~PhysicsSystem() noexcept {
         delete impl_->temp_allocator;
         delete impl_->broad_phase_layer;
         impl_.reset();
-    }
-}
 
 PhysicsSystem::PhysicsSystem(PhysicsSystem&& other) noexcept
     : impl_(std::move(other.impl_)) {}
@@ -590,9 +535,7 @@ PhysicsSystem::PhysicsSystem(PhysicsSystem&& other) noexcept
 PhysicsSystem& PhysicsSystem::operator=(PhysicsSystem&& other) noexcept {
     if (this != &other) {
         impl_ = std::move(other.impl_);
-    }
     return *this;
-}
 
 auto PhysicsSystem::step(float delta_time) noexcept -> void {
     if (!impl_ || !impl_->physics_system) return;
@@ -602,17 +545,11 @@ auto PhysicsSystem::step(float delta_time) noexcept -> void {
         JPH::cCollisionSteps,
         *impl_->temp_allocator,
         *impl_->job_system
-    );
-}
 
 auto PhysicsSystem::create_body(
-    BodySettings const& settings,
-    ShapeType shape_type,
-    glm::vec3 const& shape_size
 ) noexcept -> std::expected<BodyID, PhysicsError> {
     if (!impl_ || !impl_->physics_system) {
         return std::unexpected(PhysicsError::InitializationFailed);
-    }
 
     // Create shape based on type
     JPH::RefConst<JPH::Shape> shape;
@@ -623,24 +560,18 @@ auto PhysicsSystem::create_body(
             break;
         case ShapeType::Box:
             shape = new JPH::BoxShape(JPH::Vec3(shape_size.x, shape_size.y, shape_size.z));
-            break;
         default:
             return std::unexpected(PhysicsError::ShapeCreationFailed);
-    }
 
     // Determine motion type
     JPH::EMotionType motion_type;
     switch (settings.motion_type) {
         case MotionType::Static:
             motion_type = JPH::EMotionType::Static;
-            break;
         case MotionType::Kinematic:
             motion_type = JPH::EMotionType::Kinematic;
-            break;
         case MotionType::Dynamic:
             motion_type = JPH::EMotionType::Dynamic;
-            break;
-    }
 
     // Create body settings
     JPH::BodyCreationSettings body_settings(
@@ -650,7 +581,6 @@ auto PhysicsSystem::create_body(
                   settings.rotation.z, settings.rotation.w),
         motion_type,
         Layers::MOVING
-    );
 
     body_settings.mFriction = settings.friction;
     body_settings.mRestitution = settings.restitution;
@@ -658,7 +588,6 @@ auto PhysicsSystem::create_body(
 
     if (settings.motion_type == MotionType::Dynamic) {
         body_settings.mMassPropertiesOverride.mMass = settings.mass;
-    }
 
     // Create body
     JPH::BodyInterface& interface = impl_->physics_system->GetBodyInterface();
@@ -666,41 +595,29 @@ auto PhysicsSystem::create_body(
 
     if (!body) {
         return std::unexpected(PhysicsError::BodyCreationFailed);
-    }
 
     interface.AddBody(body->GetID(), JPH::EActivation::Activate);
 
     BodyID result{
         .index = body->GetID().GetIndex(),
         .generation = body->GetID().GetSequenceNumber()
-    };
 
     impl_->body_map[result.native()] = body->GetID();
 
     return result;
-}
 
 auto PhysicsSystem::get_body_position(BodyID id) const noexcept
     -> std::expected<glm::vec3, PhysicsError> {
-    if (!impl_ || !impl_->physics_system) {
-        return std::unexpected(PhysicsError::InitializationFailed);
-    }
 
     auto it = impl_->body_map.find(id.native());
     if (it == impl_->body_map.end()) {
         return std::unexpected(PhysicsError::InvalidBodyID);
-    }
 
-    JPH::BodyInterface& interface = impl_->physics_system->GetBodyInterface();
     JPH::RVec3 pos = interface.GetCenterOfMassPosition(it->second);
 
     return glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
-}
 
 // Additional method implementations...
-
-} // namespace projectv::physics
-```
 
 ### 3.4 Flecs PIMPL Implementation
 
@@ -751,11 +668,9 @@ public:
     auto set(uint64_t entity_id, T const& component) noexcept -> void;
 
     /// Gets component from entity.
-    template<typename T>
     [[nodiscard]] auto get(uint64_t entity_id) const noexcept -> T const*;
 
     /// Gets mutable component reference.
-    template<typename T>
     [[nodiscard]] auto get_mut(uint64_t entity_id) noexcept -> T*;
 
 private:
@@ -765,25 +680,20 @@ private:
 
 /// Entity builder for fluent API
 export class EntityBuilder {
-public:
     explicit EntityBuilder(World& world) noexcept;
 
     auto with_name(std::string_view name) noexcept -> EntityBuilder&;
 
-    template<typename T>
     auto with(T const& component) noexcept -> EntityBuilder&;
 
     [[nodiscard]] auto build() noexcept -> uint64_t;
 
-private:
     World& world_;
     uint64_t entity_id_{0};
-};
 
 } // namespace projectv::ecs
 ```
 
-```cpp
 // ProjectV.ECS.Flecs.cpp — Module Implementation
 
 module ProjectV.ECS.Flecs;
@@ -791,9 +701,6 @@ module ProjectV.ECS.Flecs;
 // Flecs header HERE, not in .cppm
 #include <flecs.h>
 #include <flecs/addons/flecs_cpp.h>
-
-import std;
-import glm;
 
 namespace projectv::ecs {
 
@@ -805,9 +712,6 @@ struct World::Impl {
     explicit Impl(int32_t thread_count) {
         if (thread_count > 1) {
             world.set_threads(thread_count);
-        }
-    }
-};
 
 World::World() noexcept : impl_(std::make_unique<Impl>()) {}
 
@@ -821,46 +725,32 @@ World& World::operator=(World&&) noexcept = default;
 
 auto World::progress(float delta_time) noexcept -> bool {
     return impl_->world.progress(delta_time);
-}
 
 auto World::entity() noexcept -> uint64_t {
     return impl_->world.entity().id();
-}
 
 auto World::entity(std::string_view name) noexcept -> uint64_t {
     return impl_->world.entity(name.data()).id();
-}
 
 auto World::destroy(uint64_t entity_id) noexcept -> void {
     impl_->world.entity(entity_id).destruct();
-}
 
 auto World::exists(uint64_t entity_id) const noexcept -> bool {
     return impl_->world.entity(entity_id).is_alive();
-}
 
-template<typename T>
 auto World::set(uint64_t entity_id, T const& component) noexcept -> void {
     impl_->world.entity(entity_id).set<T>(component);
-}
 
-template<typename T>
 auto World::get(uint64_t entity_id) const noexcept -> T const* {
     return impl_->world.entity(entity_id).get<T>();
-}
 
-template<typename T>
 auto World::get_mut(uint64_t entity_id) noexcept -> T* {
     return impl_->world.entity(entity_id).get_mut<T>();
-}
 
 // Explicit template instantiations for common components
 template auto World::set<glm::vec3>(uint64_t, glm::vec3 const&) noexcept -> void;
 template auto World::get<glm::vec3>(uint64_t) const noexcept -> glm::vec3 const*;
 template auto World::get_mut<glm::vec3>(uint64_t) noexcept -> glm::vec3*;
-
-} // namespace projectv::ecs
-```
 
 ### 3.5 ImGui PIMPL Implementation
 
@@ -903,7 +793,6 @@ private:
 
 /// Scoped ImGui window
 export class ScopedWindow {
-public:
     explicit ScopedWindow(std::string_view name) noexcept;
     ~ScopedWindow() noexcept;
 
@@ -912,9 +801,7 @@ public:
 
     [[nodiscard]] auto is_open() const noexcept -> bool;
 
-private:
     bool is_open_{false};
-};
 
 /// Input widgets
 export auto input_float3(std::string_view label, glm::vec3& value, float speed = 0.1f) noexcept -> bool;
@@ -924,7 +811,6 @@ export auto color_picker(std::string_view label, glm::vec4& value) noexcept -> b
 } // namespace projectv::ui
 ```
 
-```cpp
 // ProjectV.UI.ImGui.cpp — Module Implementation
 
 module ProjectV.UI.ImGui;
@@ -933,14 +819,10 @@ module ProjectV.UI.ImGui;
 #include <imgui.h>
 #include <imgui_internal.h>
 
-import std;
-import glm;
-
 namespace projectv::ui {
 
 struct ImGuiContext::Impl {
     ::ImGuiContext* context{nullptr};
-};
 
 ImGuiContext::ImGuiContext() noexcept
     : impl_(std::make_unique<Impl>()) {
@@ -957,53 +839,37 @@ ImGuiContext::ImGuiContext() noexcept
 ImGuiContext::~ImGuiContext() noexcept {
     if (impl_ && impl_->context) {
         ::ImGui::DestroyContext(impl_->context);
-    }
-}
 
 ImGuiContext::ImGuiContext(ImGuiContext&&) noexcept = default;
 ImGuiContext& ImGuiContext::operator=(ImGuiContext&&) noexcept = default;
 
 auto ImGuiContext::new_frame() noexcept -> void {
-    ::ImGui::SetCurrentContext(impl_->context);
     ::ImGui::NewFrame();
-}
 
 auto ImGuiContext::render() noexcept -> void {
-    ::ImGui::SetCurrentContext(impl_->context);
     ::ImGui::Render();
-}
 
 auto input_float3(std::string_view label, glm::vec3& value, float speed) noexcept -> bool {
     return ::ImGui::DragFloat3(label.data(), &value.x, speed);
-}
 
 auto input_quat(std::string_view label, glm::quat& value) noexcept -> bool {
     glm::vec3 euler = glm::degrees(glm::eulerAngles(value));
     if (::ImGui::DragFloat3(label.data(), &euler.x, 1.0f)) {
         value = glm::quat(glm::radians(euler));
         return true;
-    }
     return false;
-}
 
 auto color_picker(std::string_view label, glm::vec4& value) noexcept -> bool {
     return ::ImGui::ColorEdit4(label.data(), &value.x);
-}
 
 ScopedWindow::ScopedWindow(std::string_view name) noexcept {
     is_open_ = ::ImGui::Begin(name.data());
-}
 
 ScopedWindow::~ScopedWindow() noexcept {
     ::ImGui::End();
-}
 
 auto ScopedWindow::is_open() const noexcept -> bool {
     return is_open_;
-}
-
-} // namespace projectv::ui
-```
 
 ---
 
@@ -1012,6 +878,7 @@ auto ScopedWindow::is_open() const noexcept -> bool {
 ### 4.1 Minimum CMake Configuration
 
 ```cmake
+
 # CMakeLists.txt (root)
 
 cmake_minimum_required(VERSION 3.30)
@@ -1039,13 +906,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "18.0")
         message(FATAL_ERROR "ProjectV requires Clang 18+ for C++26 modules")
-    endif()
     add_compile_options(-fmodules)
 elseif(MSVC)
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "19.40")
         message(FATAL_ERROR "ProjectV requires MSVC 19.40+ for C++26 modules")
-    endif()
-endif()
 
 # Vulkan 1.4
 find_package(Vulkan 1.4 REQUIRED)
@@ -1078,7 +942,6 @@ find_package(Vulkan 1.4 REQUIRED)
    - module; (перед любым #include)
    - Только для C-заголовков
    - Не может экспортироваться
-```
 
 ### 4.3 Module Dependencies Order
 
@@ -1109,7 +972,6 @@ Level 3 (зависит от Level 2):
 
 Level 4 (зависит от Level 3):
   - ProjectV.App (агрегирует всё)
-```
 
 ---
 
@@ -1224,3 +1086,11 @@ export enum class Error : uint8_t {
 - CMake support for modules в развитии
 - IDE support может быть ограничен
 - PIMPL добавляет один уровень indirection (minimal overhead)
+
+---
+
+## Ссылки
+
+- [ADR-0001: Vulkan Renderer](./0001-vulkan-renderer.md)
+- [ADR-0002: SVO Storage](./0002-svo-storage.md)
+- [ADR-0003: ECS Architecture](./0003-ecs-architecture.md)
