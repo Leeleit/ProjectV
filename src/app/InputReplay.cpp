@@ -8,10 +8,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 
 namespace {
 constexpr std::string_view kInputReplayMagic = "PROJECTV_INPUT_REPLAY";
-constexpr int kInputReplayVersion = 1;
+constexpr int kInputReplayVersion = 2;
 
 std::filesystem::path GetInputReplayDirectoryPath()
 {
@@ -99,6 +100,7 @@ bool WriteReplayCapture(std::ostream &stream, const InputReplayCapture &capture)
 		   << static_cast<int>(capture.initialInteraction.editorTool) << '\n';
 	stream << "walk "
 		   << static_cast<int>(capture.walkAirControlMode) << ' '
+		   << static_cast<int>(capture.walkAutoJumpEnabled) << ' '
 		   << static_cast<int>(capture.walkAutoJumpDelayEnabled) << '\n';
 	stream << "frame_count " << capture.frames.size() << '\n';
 	for (const auto &[deltaSeconds, mouseDeltaX, mouseDeltaY, actionDownMask, actionPressedMask, removePressed, placePressed] : capture.frames) {
@@ -126,7 +128,7 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 	int version = 0;
 	if (!(stream >> magic >> version) ||
 		magic != kInputReplayMagic ||
-		version != kInputReplayVersion) {
+		(version != 1 && version != kInputReplayVersion)) {
 		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Header", "invalid replay header");
 		return false;
 	}
@@ -163,10 +165,20 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 			capture.initialInteraction.placementMaterial = static_cast<VoxelMaterial>(placementMaterial);
 			capture.initialInteraction.editorTool = static_cast<DebugEditorTool>(editorTool);
 		} else if (key == "walk") {
+			std::string walkLine;
+			std::getline(stream >> std::ws, walkLine);
+			std::istringstream walkStream(walkLine);
 			int walkAirControlMode = 0;
+			int autoJumpEnabled = version == 1 ? 1 : 0;
 			int autoJumpDelayEnabled = 0;
-			stream >> walkAirControlMode >> autoJumpDelayEnabled;
+			walkStream >> walkAirControlMode;
+			if (version == 1) {
+				walkStream >> autoJumpDelayEnabled;
+			} else {
+				walkStream >> autoJumpEnabled >> autoJumpDelayEnabled;
+			}
 			capture.walkAirControlMode = static_cast<WalkAirControlMode>(walkAirControlMode);
+			capture.walkAutoJumpEnabled = autoJumpEnabled != 0;
 			capture.walkAutoJumpDelayEnabled = autoJumpDelayEnabled != 0;
 		} else if (key == "frame_count") {
 			stream >> expectedFrameCount;
@@ -263,6 +275,7 @@ bool StartInputReplayRecording(
 	const CameraState &camera,
 	const InteractionState &interaction,
 	const WalkAirControlMode walkAirControlMode,
+	const bool walkAutoJumpEnabled,
 	const bool walkAutoJumpDelayEnabled)
 {
 	if (!input) {
@@ -275,6 +288,7 @@ bool StartInputReplayRecording(
 	capture.initialCamera = camera;
 	capture.initialInteraction = interaction;
 	capture.walkAirControlMode = walkAirControlMode;
+	capture.walkAutoJumpEnabled = walkAutoJumpEnabled;
 	capture.walkAutoJumpDelayEnabled = walkAutoJumpDelayEnabled;
 	capture.frames.reserve(512);
 

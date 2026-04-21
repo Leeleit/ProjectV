@@ -15,13 +15,16 @@
 - В flying modes `WASD` двигают только по `XZ`; `Space/Shift` отвечают за высоту. В `walk` `Shift` — это sneak/crouch, а не descend.
 - Double-tap `Space` переключает только `creative <-> walk`.
 - Block interaction остаётся на CPU `VoxelRaycast` + `VoxelWorld::SetVoxelMaterial`; physics raycast не является источником истины для world edit.
+- Lightweight debug editing now includes read-only inspect telemetry plus two mutation helpers: `X` toggles a box anchor for paint/erase tools, and `M` copies the currently hit voxel material into the placement material.
 - После successful `SyncPhysicsWorld` на world edit walk-контроллер обязан сбрасывать cached support ownership (`edge/takeoff/sneak/anchors`), иначе удалённая геометрия может ещё тик-два жить как fake grounded support.
 - Один voxel edit помечает dirty только для своего chunk и реально затронутых boundary-neighbors.
 - Chunk visibility обновляется каждый кадр через frustum/distance culling; dirty chunks всё равно домешиваются даже вне кадра.
 - `VoxelScenePreset` теперь задаёт и builtin geometry, и lighting look.
-- HUD остаётся лёгким CPU-built overlay path без `imgui`.
+- HUD остаётся лёгким CPU-built overlay path без `imgui`; `G` now switches between a normal HUD and a detailed HUD, and the noisy selection/mutation/replay counters plus the green placement preview stay detailed-only.
 
 ## 2. Walk / traversal facts
+
+- Meshing transparency contract: opaque voxels still emit faces against `Glass`, while `Glass` keeps the internal shared face culled; otherwise covered blocks lose their visible top face.
 
 - Static-world `walk` в этом репо voxel-authoritative и живёт в `src/physics/PhysicsWorld.cpp`; `CharacterVirtual` остаётся proxy/stance carrier, а не главным автором grounded motion.
 - `UpdateApp` гонит `walk` через fixed-step accumulator (`1/60`), даже если render FPS значительно выше.
@@ -40,7 +43,7 @@
 - Jump-on-block late rise сейчас трактуется как camera-side smoothing issue; broad airborne `step-up` path остаётся активным, потому что его заужение уже ломало established regressions.
 - `WalkAirControlMode::MinecraftLike` — default; `WalkAirControlMode::Realistic` оставляет direction-lock + scalar brake.
 - `walk` jump input больше не `pressed`-only: held `Space` снова должен давать повторный jump request после возвращения в grounded-like state.
-- One-block auto-jump — часть активного traversal contract; default delay сейчас `40` fixed frames, `F12` переключает только `delay on/off`.
+- One-block auto-jump is now default-off and runtime-toggleable via `J`; if enabled, `F12` still toggles only `delay on/off`, and the delay countdown starts only once the immediate one-block rise is actually reachable.
 
 ## 3. Runtime debug / repro facts
 
@@ -58,5 +61,6 @@
 - В одном build tree нельзя запускать несколько независимых `cmake --build` / `ctest` / smoke одновременно.
 - Для `.cpp`, которые тянут Jolt internals, `<Jolt/Jolt.h>` должен идти раньше остальных Jolt headers; иначе рушатся `JPH_*` macros/typedefs и `PhysicsWorld.cpp` перестаёт собираться.
 - `ProjectVRuntimeSmoke` — официальный target поверх `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1`.
+- `ProjectVRuntimeSmoke` remains a developer-only GUI smoke check for now, not the current CI contract.
 - Shader compile path принимает либо `glslc`, либо `glslangValidator`.
 - `README_NEW.md` — текущий root-facing overview; `README.md` не трогать без явного запроса пользователя.

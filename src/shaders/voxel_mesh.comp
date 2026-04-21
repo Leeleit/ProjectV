@@ -115,6 +115,12 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
         return false;
     }
 
+    // Opaque voxels must still emit against glass so the covered top face remains
+    // visible through the transparent block above it.
+    if (materialIndex >= 3u) {
+        return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
+    }
+
     if (materialIndex == 2u) {
         return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
     }

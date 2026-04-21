@@ -250,6 +250,7 @@ bool StartLastInputReplayPlayback(AppState *state)
 	state->input.placePressed = false;
 	ApplyInputActionSnapshot(state->input, 0u, 0u);
 	SetPhysicsWalkAirControlMode(state->physics.get(), state->input.replay.capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpDelayEnabled);
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
 		ConsumeInputActionPressed(state->input, InputAction::MoveUp);

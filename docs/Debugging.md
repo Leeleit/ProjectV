@@ -1,6 +1,6 @@
 # ProjectV Debugging
 
-Дата фиксации: `2026-04-07`
+Дата фиксации: `2026-04-21`
 
 Этот документ описывает текущий debugging/tooling path в `ProjectV`: HUD, runtime diagnostics, Tracy, smoke scripts и
 failure probes.
@@ -28,13 +28,21 @@ HUD рисуется внутри приложения отдельным debug 
 - simulation steps;
 - triangle count;
 - dirty/active chunks;
-- non-air voxels и memory usage;
+- non-air voxels, memory usage и `world edit version`;
 - текущий editor tool;
 - состояние `chunk bounds` / `dirty chunk overlay`;
 - camera telemetry;
 - selection telemetry;
-- выбранный chunk и его dirty/active summary;
+- локальные voxel coords / hit normal;
+- target/placement chunk summary;
+- mutation anchor / preview box;
 - текущий control mode.
+
+HUD verbosity contract:
+
+- `G` toggles `normal / detailed` HUD;
+- normal HUD keeps only high-level control/sandbox facts;
+- detailed HUD keeps low-level walk/selection/chunk/mutation/replay telemetry and the green placement preview.
 
 Полезные hotkeys:
 
@@ -49,16 +57,30 @@ HUD рисуется внутри приложения отдельным debug 
 - `F8` — cycle editor tool: `OFF -> PAINT -> ERASE -> FILL -> INSPECT`
 - `F9` — toggle `chunk bounds`
 - `F10` — toggle `dirty chunk overlay`
+- `F11` — toggle `walk` air-control mode (`MinecraftLike / Realistic`)
+- `J` — toggle one-block auto-jump on/off (`off` by default)
+- `F12` — toggle one-block auto-jump micro-delay on/off when auto-jump is enabled
+- `R` — записать latest input replay вместе со snapshot
+- `Y` — проиграть latest input replay
+- `X` — toggle mutation anchor для box paint/erase helper
+- `M` — pick material из текущего hit voxel в placement material
 - `P` — pause
 - `Tab` — relative mouse mode
 
 Editor-tool contract:
 
 - `OFF` сохраняет старый `LMB remove / RMB place` path;
-- `PAINT` красит hit voxel по `LMB` и ставит adjacent voxel по `RMB`;
-- `ERASE` удаляет hit voxel обеими кнопками;
+- `PAINT` красит hit voxel по `LMB` и ставит adjacent voxel по `RMB`; при активном anchor заполняет весь box между anchor и текущим target/placement voxel;
+- `ERASE` удаляет hit voxel обеими кнопками; при активном anchor стирает весь box между anchor и текущим target voxel;
 - `FILL` flood-fill'ит connected region материала hit voxel в выбранный placement material;
-- `INSPECT` оставляет raycast/read-only path и добавляет chunk-oriented telemetry/overlay.
+- `INSPECT` оставляет raycast/read-only path и добавляет chunk-oriented target/placement telemetry/overlay.
+
+Anchor contract:
+
+- `X` ставит или снимает anchor на логически текущем voxel для активного tool;
+- для `PAINT` / `INSPECT` anchor обычно идёт по `placementVoxel`, для `ERASE` — по `targetVoxel`;
+- overlay показывает и сам anchor voxel, и preview box до текущего target/placement voxel;
+- `M` не меняет мир, а только синхронизирует placement material с текущим hit material.
 
 ## Runtime diagnostics
 
@@ -89,6 +111,8 @@ Editor-tool contract:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmoke.ps1
 ```
+
+Это developer-only GUI smoke: он остаётся частью локального verification loop, но пока не считается CI/headless contour.
 
 Проверяет:
 
@@ -170,6 +194,8 @@ GPU зоны размечаются через:
 - `Walk Sneak Support Grace`
 - `Walk Ledge Release Grace`
 - `Walk Ground Return Anchor`
+- `Walk Auto Jump Delay`
+- `Walk Auto Jump Delay Frames`
 
 Отдельная practical methodology и baseline scene presets описаны в [Profiling](Profiling.md).
 

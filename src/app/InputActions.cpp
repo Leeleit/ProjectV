@@ -116,6 +116,7 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::SpeedBoost, SDL_SCANCODE_LCTRL, SDL_SCANCODE_RCTRL);
 	BindAction(input, InputAction::SpeedSlow, SDL_SCANCODE_LALT, SDL_SCANCODE_RALT);
 	BindAction(input, InputAction::ToggleHud, SDL_SCANCODE_F1);
+	BindAction(input, InputAction::ToggleDetailedHud, SDL_SCANCODE_G);
 	BindAction(input, InputAction::ToggleRelativeMouseMode, SDL_SCANCODE_TAB);
 	BindAction(input, InputAction::CyclePlacementMaterial, SDL_SCANCODE_F2);
 	BindAction(input, InputAction::ResetCamera, SDL_SCANCODE_F3);
@@ -128,9 +129,12 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::ToggleChunkBounds, SDL_SCANCODE_F9);
 	BindAction(input, InputAction::ToggleDirtyChunkOverlay, SDL_SCANCODE_F10);
 	BindAction(input, InputAction::ToggleWalkAirControlMode, SDL_SCANCODE_F11);
+	BindAction(input, InputAction::ToggleWalkAutoJump, SDL_SCANCODE_J);
 	BindAction(input, InputAction::ToggleWalkAutoJumpDelay, SDL_SCANCODE_F12);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
 	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
+	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);
+	BindAction(input, InputAction::PickTargetMaterial, SDL_SCANCODE_M);
 }
 
 void HandleInputActionEvent(

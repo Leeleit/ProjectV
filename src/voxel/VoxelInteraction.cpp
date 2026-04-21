@@ -1,11 +1,64 @@
 #include "voxel/VoxelInteraction.hpp"
 
 #include "app/Camera.hpp"
+#include "app/InputActions.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelRaycast.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+#include <algorithm>
+
 namespace {
+bool IsSolidInteractionMaterial(const VoxelMaterial material)
+{
+	switch (material) {
+	case VoxelMaterial::Glass:
+	case VoxelMaterial::FloorWhite:
+	case VoxelMaterial::FloorGray:
+		return true;
+	case VoxelMaterial::Air:
+	case VoxelMaterial::Fluid:
+		return false;
+	}
+
+	return false;
+}
+
+void PopulateChunkSelectionInfo(
+	const VoxelWorld &world,
+	const Int3 voxel,
+	bool &outHasChunk,
+	Int3 &outChunkCoord,
+	Int3 &outChunkMin,
+	Int3 &outChunkMaxExclusive,
+	bool &outChunkDirty,
+	bool &outChunkActive,
+	uint32_t &outChunkIndex,
+	uint32_t &outChunkNonAirVoxelCount,
+	Int3 &outVoxelInChunk)
+{
+	if (!IsInsideVoxelWorld(world, voxel)) {
+		return;
+	}
+
+	const Int3 chunkCoord = GetVoxelChunkCoord(world, voxel);
+	const size_t chunkIndex = GetVoxelChunkIndex(world, chunkCoord);
+	const auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+	outHasChunk = true;
+	outChunkCoord = chunkCoord;
+	outChunkMin = min;
+	outChunkMaxExclusive = maxExclusive;
+	outChunkDirty = rebuildQueued;
+	outChunkActive = nonAirVoxelCount > 0;
+	outChunkIndex = static_cast<uint32_t>(chunkIndex);
+	outChunkNonAirVoxelCount = nonAirVoxelCount;
+	outVoxelInChunk = {
+		voxel.x - min.x,
+		voxel.y - min.y,
+		voxel.z - min.z,
+	};
+}
+
 InteractionSelectionState BuildInteractionSelection(
 	const VoxelRaycastHit &hit,
 	const VoxelWorld *world)
@@ -18,15 +71,34 @@ InteractionSelectionState BuildInteractionSelection(
 	selection.hitNormal = hit.hitNormal;
 	selection.targetMaterial = hit.material;
 	selection.hitDistance = hit.distance;
+	selection.targetSolid = IsSolidInteractionMaterial(hit.material);
 	if (world && hit.hasHit && IsInsideVoxelWorld(*world, hit.voxel)) {
-		const Int3 chunkCoord = GetVoxelChunkCoord(*world, hit.voxel);
-		const auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world->chunks[GetVoxelChunkIndex(*world, chunkCoord)];
-		selection.hasTargetChunk = true;
-		selection.targetChunkCoord = chunkCoord;
-		selection.targetChunkMin = min;
-		selection.targetChunkMaxExclusive = maxExclusive;
-		selection.targetChunkDirty = rebuildQueued;
-		selection.targetChunkActive = nonAirVoxelCount > 0;
+		PopulateChunkSelectionInfo(
+			*world,
+			hit.voxel,
+			selection.hasTargetChunk,
+			selection.targetChunkCoord,
+			selection.targetChunkMin,
+			selection.targetChunkMaxExclusive,
+			selection.targetChunkDirty,
+			selection.targetChunkActive,
+			selection.targetChunkIndex,
+			selection.targetChunkNonAirVoxelCount,
+			selection.targetVoxelInChunk);
+	}
+	if (world && hit.hasPlacementVoxel && IsInsideVoxelWorld(*world, hit.placementVoxel)) {
+		PopulateChunkSelectionInfo(
+			*world,
+			hit.placementVoxel,
+			selection.hasPlacementChunk,
+			selection.placementChunkCoord,
+			selection.placementChunkMin,
+			selection.placementChunkMaxExclusive,
+			selection.placementChunkDirty,
+			selection.placementChunkActive,
+			selection.placementChunkIndex,
+			selection.placementChunkNonAirVoxelCount,
+			selection.placementVoxelInChunk);
 	}
 	return selection;
 }
@@ -48,6 +120,157 @@ bool CanPlaceInteractionVoxel(
 {
 	return hit.hasPlacementVoxel &&
 		   !DoesPhysicsCharacterOverlapVoxel(physics, camera, hit.placementVoxel);
+}
+
+bool CanPlaceInteractionVoxelBox(
+	const Int3 first,
+	const Int3 second,
+	const CameraState &camera,
+	const PhysicsState *physics)
+{
+	const Int3 min{
+		std::min(first.x, second.x),
+		std::min(first.y, second.y),
+		std::min(first.z, second.z),
+	};
+	const Int3 max{
+		std::max(first.x, second.x),
+		std::max(first.y, second.y),
+		std::max(first.z, second.z),
+	};
+	for (int z = min.z; z <= max.z; ++z) {
+		for (int y = min.y; y <= max.y; ++y) {
+			for (int x = min.x; x <= max.x; ++x) {
+				if (DoesPhysicsCharacterOverlapVoxel(physics, camera, {x, y, z})) {
+					return false;
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+bool TryGetDefaultMutationAnchor(
+	const InteractionSelectionState &selection,
+	const DebugEditorTool tool,
+	Int3 &outVoxel,
+	bool &outUsesPlacementVoxel)
+{
+	switch (tool) {
+	case DebugEditorTool::Erase:
+		if (!selection.hasHit) {
+			return false;
+		}
+		outVoxel = selection.targetVoxel;
+		outUsesPlacementVoxel = false;
+		return true;
+	case DebugEditorTool::Classic:
+	case DebugEditorTool::Paint:
+	case DebugEditorTool::Fill:
+	case DebugEditorTool::Inspect:
+		if (selection.hasPlacementVoxel) {
+			outVoxel = selection.placementVoxel;
+			outUsesPlacementVoxel = true;
+			return true;
+		}
+		if (!selection.hasHit) {
+			return false;
+		}
+		outVoxel = selection.targetVoxel;
+		outUsesPlacementVoxel = false;
+		return true;
+	}
+
+	return false;
+}
+
+void UpdateMutationAnchorState(InputState &input, InteractionState &interaction)
+{
+	if (!ConsumeInputActionPressed(input, InputAction::ToggleMutationAnchor)) {
+		return;
+	}
+
+	Int3 anchorVoxel{};
+	bool usesPlacementVoxel = false;
+	if (!TryGetDefaultMutationAnchor(interaction.selection, interaction.editorTool, anchorVoxel, usesPlacementVoxel)) {
+		interaction.mutationAnchorValid = false;
+		interaction.mutationAnchorVoxel = {};
+		interaction.mutationAnchorUsesPlacementVoxel = false;
+		return;
+	}
+
+	const bool sameAnchor =
+		interaction.mutationAnchorValid &&
+		interaction.mutationAnchorUsesPlacementVoxel == usesPlacementVoxel &&
+		interaction.mutationAnchorVoxel.x == anchorVoxel.x &&
+		interaction.mutationAnchorVoxel.y == anchorVoxel.y &&
+		interaction.mutationAnchorVoxel.z == anchorVoxel.z;
+	if (sameAnchor) {
+		interaction.mutationAnchorValid = false;
+		interaction.mutationAnchorVoxel = {};
+		interaction.mutationAnchorUsesPlacementVoxel = false;
+		return;
+	}
+
+	interaction.mutationAnchorValid = true;
+	interaction.mutationAnchorVoxel = anchorVoxel;
+	interaction.mutationAnchorUsesPlacementVoxel = usesPlacementVoxel;
+}
+
+void RefreshPickedPlacementMaterial(
+	InputState &input,
+	const VoxelRaycastHit &hit,
+	InteractionState &interaction)
+{
+	if (ConsumeInputActionPressed(input, InputAction::PickTargetMaterial) &&
+		hit.hasHit) {
+		interaction.placementMaterial = hit.material;
+	}
+}
+
+bool ApplyAnchoredPaintInteraction(
+	const VoxelRaycastHit &hit,
+	const CameraState &camera,
+	const InputState &input,
+	const PhysicsState *physics,
+	VoxelWorld &world,
+	const InteractionState &interaction)
+{
+	// Caller only reaches this helper for a concrete hit and a non-air placement material.
+	if (!interaction.mutationAnchorValid) {
+		return false;
+	}
+
+	if (input.removePressed &&
+		!interaction.mutationAnchorUsesPlacementVoxel) {
+		return FillVoxelBox(world, interaction.mutationAnchorVoxel, hit.voxel, interaction.placementMaterial) > 0;
+	}
+
+	if (input.placePressed &&
+		interaction.mutationAnchorUsesPlacementVoxel &&
+		hit.hasPlacementVoxel &&
+		CanPlaceInteractionVoxelBox(interaction.mutationAnchorVoxel, hit.placementVoxel, camera, physics)) {
+		return FillVoxelBox(world, interaction.mutationAnchorVoxel, hit.placementVoxel, interaction.placementMaterial) > 0;
+	}
+
+	return false;
+}
+
+bool ApplyAnchoredEraseInteraction(
+	const VoxelRaycastHit &hit,
+	const InputState &input,
+	VoxelWorld &world,
+	const InteractionState &interaction)
+{
+	if (!interaction.mutationAnchorValid ||
+		interaction.mutationAnchorUsesPlacementVoxel ||
+		!(input.removePressed || input.placePressed) ||
+		!hit.hasHit) {
+		return false;
+	}
+
+	return FillVoxelBox(world, interaction.mutationAnchorVoxel, hit.voxel, VoxelMaterial::Air) > 0;
 }
 
 bool ApplyClassicInteraction(
@@ -87,6 +310,10 @@ bool ApplyPaintInteraction(
 		return false;
 	}
 
+	if (ApplyAnchoredPaintInteraction(hit, camera, input, physics, world, interaction)) {
+		return true;
+	}
+
 	if (input.removePressed &&
 		GetVoxelMaterial(world, hit.voxel) != interaction.placementMaterial) {
 		SetVoxelMaterial(world, hit.voxel, interaction.placementMaterial);
@@ -106,8 +333,13 @@ bool ApplyPaintInteraction(
 bool ApplyEraseInteraction(
 	const VoxelRaycastHit &hit,
 	const InputState &input,
-	VoxelWorld &world)
+	VoxelWorld &world,
+	const InteractionState &interaction)
 {
+	if (ApplyAnchoredEraseInteraction(hit, input, world, interaction)) {
+		return true;
+	}
+
 	if ((input.removePressed || input.placePressed) && hit.hasHit) {
 		SetVoxelMaterial(world, hit.voxel, VoxelMaterial::Air);
 		return true;
@@ -145,7 +377,7 @@ bool ApplyEditorInteraction(
 	case DebugEditorTool::Paint:
 		return ApplyPaintInteraction(hit, camera, input, physics, world, interaction);
 	case DebugEditorTool::Erase:
-		return ApplyEraseInteraction(hit, input, world);
+		return ApplyEraseInteraction(hit, input, world, interaction);
 	case DebugEditorTool::Fill:
 		return ApplyFillInteraction(hit, input, world, interaction);
 	case DebugEditorTool::Inspect:
@@ -194,8 +426,17 @@ void UpdateVoxelInteraction(
 		return RaycastVoxelWorld(*world, camera.position, direction, interaction->maxInteractionDistance);
 	};
 
+	if (interaction->mutationAnchorValid &&
+		!IsInsideVoxelWorld(*world, interaction->mutationAnchorVoxel)) {
+		interaction->mutationAnchorValid = false;
+		interaction->mutationAnchorVoxel = {};
+		interaction->mutationAnchorUsesPlacementVoxel = false;
+	}
+
 	VoxelRaycastHit hit = raycast();
 	interaction->selection = BuildInteractionSelection(hit, world);
+	UpdateMutationAnchorState(*input, *interaction);
+	RefreshPickedPlacementMaterial(*input, hit, *interaction);
 
 	if (allowEditing && ApplyEditorInteraction(hit, camera, *input, physics, *world, *interaction)) {
 		hit = raycast();

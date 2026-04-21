@@ -24,8 +24,8 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kStatsLineCount = 17;
-constexpr size_t kHelperLineCount = 8;
+constexpr size_t kMaxStatsLineCount = 21;
+constexpr size_t kMaxHelperLineCount = 11;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -48,6 +48,8 @@ std::array<uint8_t, 7> GetGlyphRows(const char character)
 		return {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11};
 	case 'I':
 		return {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x1F};
+	case 'J':
+		return {0x01, 0x01, 0x01, 0x01, 0x11, 0x11, 0x0E};
 	case 'K':
 		return {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11};
 	case 'L':
@@ -296,6 +298,28 @@ float ComputePanelWidthPx(
 		kPanelPaddingPx * 2.0f + contentWidthPx + kTextShadowOffsetPx);
 }
 
+template <size_t TLineCount>
+char *BeginHudLine(
+	std::array<std::array<char, kHudLineBufferSize>, TLineCount> &outLines,
+	size_t &lineCount)
+{
+	if (lineCount >= outLines.size()) {
+		return nullptr;
+	}
+
+	char *line = outLines.at(lineCount).data();
+	line[0] = '\0';
+	++lineCount;
+	return line;
+}
+
+#define PV_APPEND_HUD_LINE(outLines, lineCount, ...)                 \
+	do {                                                             \
+		if (char *hudLine = BeginHudLine(outLines, lineCount)) {     \
+			std::snprintf(hudLine, kHudLineBufferSize, __VA_ARGS__); \
+		}                                                            \
+	} while (false)
+
 const char *GetVoxelMaterialLabel(const VoxelMaterial material)
 {
 	switch (material) {
@@ -369,14 +393,9 @@ const char *GetBoolLabel(const bool value)
 	return value ? "ON" : "OFF";
 }
 
-const char *GetChunkDirtyLabel(const bool dirty)
+const char *GetAnchorKindLabel(const bool usesPlacementVoxel)
 {
-	return dirty ? "DIRTY" : "CLEAN";
-}
-
-const char *GetChunkActivityLabel(const bool active)
-{
-	return active ? "ACTIVE" : "EMPTY";
+	return usesPlacementVoxel ? "PLC" : "TGT";
 }
 
 const char *GetWalkSupportStateLabel(const uint8_t state)
@@ -403,110 +422,127 @@ const char *GetWalkAirControlModeLabel(const WalkAirControlMode mode)
 	return "MC";
 }
 
-void BuildStatsLines(
+size_t BuildStatsLines(
 	const DebugStats &stats,
 	const CameraState &camera,
 	const InteractionState &interaction,
-	std::array<std::array<char, kHudLineBufferSize>, kStatsLineCount> &outLines)
+	std::array<std::array<char, kHudLineBufferSize>, kMaxStatsLineCount> &outLines)
 {
 	const std::array<float, 3> forward = GetCameraForwardVector(camera);
+	const bool detailedHudVisible = stats.detailedHudVisible;
+	size_t lineCount = 0;
 
-	std::snprintf(
-		outLines.at(0).data(),
-		kHudLineBufferSize,
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"FPS %.1f  MS %.2f",
 		stats.framesPerSecond,
 		stats.frameTimeMilliseconds);
-	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "SCENE %s", GetScenePresetLabel(stats.scenePreset));
-	std::snprintf(
-		outLines.at(2).data(),
-		kHudLineBufferSize,
-		"MODE %s  PAUSE %s  AIR %s  AJD %s",
+	PV_APPEND_HUD_LINE(outLines, lineCount, "SCENE %s", GetScenePresetLabel(stats.scenePreset));
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"MODE %s  PAUSE %s  AIR %s",
 		GetControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "ON" : "OFF",
-		GetWalkAirControlModeLabel(stats.walkAirControlMode),
+		GetWalkAirControlModeLabel(stats.walkAirControlMode));
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"AUTO %s  DELAY %s",
+		GetBoolLabel(stats.walkAutoJumpEnabled),
 		GetBoolLabel(stats.walkAutoJumpDelayEnabled));
-	std::snprintf(
-		outLines.at(3).data(),
-		kHudLineBufferSize,
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"SIM %u  TRI %u",
 		stats.simulationStepsLastFrame,
 		stats.sceneTriangleCount);
-	std::snprintf(
-		outLines.at(4).data(),
-		kHudLineBufferSize,
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"DIRTY %u  ACT %u",
 		stats.dirtyChunkCount,
 		stats.activeChunkCount);
-	std::snprintf(
-		outLines.at(5).data(),
-		kHudLineBufferSize,
-		"VOX %u  MEM %.1f",
-		stats.nonAirVoxelCount,
-		static_cast<double>(stats.sceneMemoryBytes) / 1024.0);
-	std::snprintf(
-		outLines.at(6).data(),
-		kHudLineBufferSize,
+	if (detailedHudVisible) {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"VOX %u  MEM %.1f  VER %llu",
+			stats.nonAirVoxelCount,
+			static_cast<double>(stats.sceneMemoryBytes) / 1024.0,
+			static_cast<unsigned long long>(stats.worldEditVersion));
+	} else {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"VOX %u  MEM %.1f",
+			stats.nonAirVoxelCount,
+			static_cast<double>(stats.sceneMemoryBytes) / 1024.0);
+	}
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"EDIT %s  BND %s  DIRTY %s",
 		GetDebugEditorToolLabel(interaction.editorTool),
 		GetBoolLabel(stats.showChunkBounds),
 		GetBoolLabel(stats.showDirtyChunkOverlay));
-	std::snprintf(
-		outLines.at(7).data(),
-		kHudLineBufferSize,
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"CAM %.3f %.3f %.3f",
 		camera.position[0],
 		camera.position[1],
 		camera.position[2]);
 
 	if (stats.walkDebugValid) {
-		std::snprintf(
-			outLines.at(8).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"FEET %.3f %.3f %.3f",
 			stats.walkFeetPosition[0],
 			stats.walkFeetPosition[1],
 			stats.walkFeetPosition[2]);
 	} else {
-		std::snprintf(outLines.at(8).data(), kHudLineBufferSize, "FEET NONE");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "FEET NONE");
 	}
 
-	std::snprintf(
-		outLines.at(9).data(),
-		kHudLineBufferSize,
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"LOOK %.2f %.2f %.2f",
 		forward[0],
 		forward[1],
 		forward[2]);
 
 	if (stats.walkDebugValid) {
-		std::snprintf(
-			outLines.at(10).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"SUP %s %.3f %u %u",
 			GetWalkSupportStateLabel(stats.walkSupportState),
 			stats.walkFootSupportScore,
 			stats.walkFootSupportHitSamples,
 			stats.walkFootSupportTotalSamples);
 	} else {
-		std::snprintf(
-			outLines.at(10).data(),
-			kHudLineBufferSize,
-			"SUP NONE");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "SUP NONE");
 	}
 
-	std::snprintf(
-		outLines.at(11).data(),
-		kHudLineBufferSize,
+	if (!detailedHudVisible) {
+		return lineCount;
+	}
+
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"FLG TCK %s SNK %s LCK %s PSL %s",
 		GetBoolLabel(stats.walkGroundTakeoffCached),
 		GetBoolLabel(stats.walkSneakActive),
 		GetBoolLabel(stats.walkJumpLockActive),
 		GetBoolLabel(stats.walkSuppressPassiveSlide));
-
-	std::snprintf(
-		outLines.at(12).data(),
-		kHudLineBufferSize,
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"GRC %u TGR %u SGR %u LGR %u AJR %u",
 		stats.walkEdgeGraceFramesRemaining,
 		stats.walkGroundTakeoffGraceFramesRemaining,
@@ -515,9 +551,9 @@ void BuildStatsLines(
 		stats.walkAutoJumpDelayFramesRemaining);
 
 	if (interaction.selection.hasHit) {
-		std::snprintf(
-			outLines.at(13).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"SEL %d %d %d %s %.1f",
 			interaction.selection.targetVoxel.x,
 			interaction.selection.targetVoxel.y,
@@ -525,74 +561,135 @@ void BuildStatsLines(
 			GetVoxelMaterialLabel(interaction.selection.targetMaterial),
 			interaction.selection.hitDistance);
 	} else {
-		std::snprintf(outLines.at(13).data(), kHudLineBufferSize, "SEL NONE");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "SEL NONE");
 	}
 
 	if (interaction.selection.hasPlacementVoxel) {
-		std::snprintf(
-			outLines.at(14).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"PUT %d %d %d %s",
 			interaction.selection.placementVoxel.x,
 			interaction.selection.placementVoxel.y,
 			interaction.selection.placementVoxel.z,
 			GetVoxelMaterialLabel(interaction.placementMaterial));
 	} else {
-		std::snprintf(
-			outLines.at(14).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"PUT NONE %s",
 			GetVoxelMaterialLabel(interaction.placementMaterial));
 	}
 
+	if (interaction.selection.hasHit) {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"LOC %d %d %d  NRM %d %d %d",
+			interaction.selection.targetVoxelInChunk.x,
+			interaction.selection.targetVoxelInChunk.y,
+			interaction.selection.targetVoxelInChunk.z,
+			interaction.selection.hitNormal.x,
+			interaction.selection.hitNormal.y,
+			interaction.selection.hitNormal.z);
+	} else {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "LOC NONE");
+	}
+
+	if (interaction.selection.hasTargetChunk) {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"CHK %d %d %d  I %u  C %u  D %d A %d",
+			interaction.selection.targetChunkCoord.x,
+			interaction.selection.targetChunkCoord.y,
+			interaction.selection.targetChunkCoord.z,
+			interaction.selection.targetChunkIndex,
+			interaction.selection.targetChunkNonAirVoxelCount,
+			interaction.selection.targetChunkDirty ? 1 : 0,
+			interaction.selection.targetChunkActive ? 1 : 0);
+	} else {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "CHK NONE");
+	}
+
+	if (interaction.selection.hasPlacementChunk) {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"PCH %d %d %d  I %u  C %u  D %d A %d",
+			interaction.selection.placementChunkCoord.x,
+			interaction.selection.placementChunkCoord.y,
+			interaction.selection.placementChunkCoord.z,
+			interaction.selection.placementChunkIndex,
+			interaction.selection.placementChunkNonAirVoxelCount,
+			interaction.selection.placementChunkDirty ? 1 : 0,
+			interaction.selection.placementChunkActive ? 1 : 0);
+	} else {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "PCH NONE");
+	}
+
+	if (interaction.mutationAnchorValid) {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"BOX %s %d %d %d",
+			GetAnchorKindLabel(interaction.mutationAnchorUsesPlacementVoxel),
+			interaction.mutationAnchorVoxel.x,
+			interaction.mutationAnchorVoxel.y,
+			interaction.mutationAnchorVoxel.z);
+	} else {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "BOX NONE");
+	}
+
 	if (stats.inputReplayPlaybackActive) {
-		std::snprintf(
-			outLines.at(15).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"REP PLAY %u OF %u",
 			stats.inputReplayPlaybackFrameIndex,
 			stats.inputReplayFrameCount);
 	} else if (stats.inputReplayRecording) {
-		std::snprintf(
-			outLines.at(15).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"REP REC %u",
 			stats.inputReplayFrameCount);
 	} else if (stats.inputReplayReady) {
-		std::snprintf(
-			outLines.at(15).data(),
-			kHudLineBufferSize,
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
 			"REP READY %u",
 			stats.inputReplayFrameCount);
 	} else {
-		std::snprintf(outLines.at(15).data(), kHudLineBufferSize, "REP NONE");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "REP NONE");
 	}
 
-	if (interaction.selection.hasTargetChunk) {
-		std::snprintf(
-			outLines.at(16).data(),
-			kHudLineBufferSize,
-			"CHK %d %d %d %s %s",
-			interaction.selection.targetChunkCoord.x,
-			interaction.selection.targetChunkCoord.y,
-			interaction.selection.targetChunkCoord.z,
-			GetChunkDirtyLabel(interaction.selection.targetChunkDirty),
-			GetChunkActivityLabel(interaction.selection.targetChunkActive));
-	} else {
-		std::snprintf(outLines.at(16).data(), kHudLineBufferSize, "CHK NONE");
-	}
+	return lineCount;
 }
 
-void BuildHelperLines(std::array<std::array<char, kHudLineBufferSize>, kHelperLineCount> &outLines)
+size_t BuildHelperLines(
+	const DebugStats &stats,
+	std::array<std::array<char, kHudLineBufferSize>, kMaxHelperLineCount> &outLines)
 {
-	std::snprintf(outLines.at(0).data(), kHudLineBufferSize, "F1 UI  F2 MAT  F3 CAM");
-	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "F4 MODE  F5 SCENE");
-	std::snprintf(outLines.at(2).data(), kHudLineBufferSize, "F6 SAVE  F7 LOAD");
-	std::snprintf(outLines.at(3).data(), kHudLineBufferSize, "F8 TOOL  F9 BND");
-	std::snprintf(outLines.at(4).data(), kHudLineBufferSize, "F10 DIRTY  F11 AIR");
-	std::snprintf(outLines.at(5).data(), kHudLineBufferSize, "F12 AJDLY  R REC");
-	std::snprintf(outLines.at(6).data(), kHudLineBufferSize, "Y PLAY  TAB MOUSE");
-	std::snprintf(outLines.at(7).data(), kHudLineBufferSize, "LMB TOOL  RMB ALT  P");
+	size_t lineCount = 0;
+	PV_APPEND_HUD_LINE(outLines, lineCount, "F1 UI  G DETAIL");
+	PV_APPEND_HUD_LINE(outLines, lineCount, "F2 MAT  F3 CAM");
+	PV_APPEND_HUD_LINE(outLines, lineCount, "F4 MODE  F5 SCENE");
+	PV_APPEND_HUD_LINE(outLines, lineCount, "F6 SAVE  F7 LOAD");
+	if (stats.detailedHudVisible) {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "F8 TOOL  F9 BND");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "F10 DIRTY  F11 AIR");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "J AUTOJUMP  F12 DELAY");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
+	} else {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "F12 DELAY");
+	}
+	PV_APPEND_HUD_LINE(outLines, lineCount, "LMB TOOL  RMB ALT");
+	return lineCount;
 }
 } // namespace
 
@@ -615,23 +712,22 @@ uint32_t BuildDebugHudVertices(
 	constexpr std::array accentColor{0.96f, 0.79f, 0.31f, 0.95f};
 	constexpr std::array titleColor{0.98f, 0.96f, 0.88f, 0.98f};
 	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
-	constexpr std::array helperTextColor{0.77f, 0.84f, 0.90f, 0.94f};
 	constexpr float titleOffsetPx = 2.0f;
 	constexpr float textBoundsHeightPx = kGlyphHeightPx + kTextShadowOffsetPx;
-	std::array<std::array<char, kHudLineBufferSize>, kStatsLineCount> statsLines{};
-	BuildStatsLines(stats, camera, interaction, statsLines);
-	std::array<std::array<char, kHudLineBufferSize>, kHelperLineCount> helperLines{};
-	BuildHelperLines(helperLines);
+	std::array<std::array<char, kHudLineBufferSize>, kMaxStatsLineCount> statsLines{};
+	const size_t statsLineCount = BuildStatsLines(stats, camera, interaction, statsLines);
+	std::array<std::array<char, kHudLineBufferSize>, kMaxHelperLineCount> helperLines{};
+	const size_t helperLineCount = BuildHelperLines(stats, helperLines);
 	const float statsPanelWidthPx = ComputePanelWidthPx(statsLines, "STAT", kStatsPanelMinWidthPx);
 	const float helperPanelWidthPx = ComputePanelWidthPx(helperLines, "HELP", kHelperPanelMinWidthPx);
 	const float hudStackWidthPx = std::max(statsPanelWidthPx, helperPanelWidthPx);
-	constexpr float statsPanelHeightPx =
-		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kStatsLineCount) * kLineAdvancePx + textBoundsHeightPx;
-	constexpr float helperPanelHeightPx =
-		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(kHelperLineCount) * kLineAdvancePx + textBoundsHeightPx;
+	const float statsPanelHeightPx =
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(statsLineCount) * kLineAdvancePx + textBoundsHeightPx;
+	const float helperPanelHeightPx =
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(helperLineCount) * kLineAdvancePx + textBoundsHeightPx;
 	constexpr float statsPanelMinY = kPanelOriginYPx;
-	constexpr float statsPanelMaxY = statsPanelMinY + statsPanelHeightPx;
-	constexpr float helperPanelMinY = statsPanelMaxY + kPanelGapPx;
+	const float statsPanelMaxY = statsPanelMinY + statsPanelHeightPx;
+	const float helperPanelMinY = statsPanelMaxY + kPanelGapPx;
 	AppendPanel(
 		outVertices,
 		vertexCount,
@@ -670,7 +766,7 @@ uint32_t BuildDebugHudVertices(
 		"HELP",
 		titleColor);
 
-	for (size_t lineIndex = 0; lineIndex < statsLines.size(); ++lineIndex) {
+	for (size_t lineIndex = 0; lineIndex < statsLineCount; ++lineIndex) {
 		const float originYPx =
 			statsPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;
 		AppendShadowedTextLine(
@@ -683,7 +779,7 @@ uint32_t BuildDebugHudVertices(
 			textColor);
 	}
 
-	for (size_t lineIndex = 0; lineIndex < helperLines.size(); ++lineIndex) {
+	for (size_t lineIndex = 0; lineIndex < helperLineCount; ++lineIndex) {
 		const float originYPx =
 			helperPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;
 		AppendShadowedTextLine(
@@ -693,8 +789,10 @@ uint32_t BuildDebugHudVertices(
 			extent,
 			originYPx,
 			helperLines[lineIndex].data(),
-			helperTextColor);
+			textColor);
 	}
 
 	return std::min(vertexCount, maxVertexCount);
 }
+
+#undef PV_APPEND_HUD_LINE

@@ -59,18 +59,15 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [ ] Finish the current refactor/lint/static-analysis sweep before starting the next gameplay/debug slice; during that pass prefer warning cleanup, invariant fixes, and code-health follow-ups over new feature work.
 - [ ] Re-export `Problems/` before the next warning-cleanup pass; the checked-in JetBrains XML is a point-in-time snapshot and should not be treated as ground truth after more code edits.
 - [ ] Держать `TODO.md`, `AGENTS.md` и `agent/` короткими, role-based и без дублей.
-- [ ] Решить, нужен ли self-hosted/headless runtime smoke в CI, или текущий GUI smoke остаётся developer-only.
+- [x] GUI runtime smoke stays developer-only for now; do not block the current mainline on CI headless/self-hosted smoke.
 - [ ] Держать `walk` / `creative` controller work narrow and replay-driven: после закрытия текущего collision-gestalt не возвращаться к broad heuristics без нового live repro, HUD/Tracy evidence и точного regression capture.
 
 ### P1
 
-- [ ] После текущего refactor/lint/static-analysis pass взять следующий gameplay/debug slice поверх уже существующего sandbox; приоритетный первый кандидат:
-  - `inspect tools`;
-- [ ] Следующими кандидатами после `inspect tools` остаются:
-  - simple sandbox interactions;
-  - debug world-mutation helpers.
+- [x] Первый post-refactor gameplay/debug tooling slice закрыт: runtime inspect telemetry, chunk-oriented overlays, material pick, и anchored world-mutation helpers уже живут в sandbox.
+- [ ] Следующий практический gameplay/debug slice поверх текущего sandbox: `simple sandbox interactions`.
 - [ ] Дотюнить `walk` feel только в узких местах:
-  - auto-jump / `F12` delay;
+  - любые будущие auto-jump follow-up держать replay/HUD-driven; текущий `J/F12` path уже runtime-toggleable, а задержка теперь arms only on the immediate rise;
   - `MinecraftLike` air-control;
   - creative flight polish;
   - player-controller polish.
@@ -92,9 +89,9 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 
 ### Gameplay / Debug
 
-- [ ] inspect tools;
+- [x] inspect tools;
 - [ ] simple sandbox interactions;
-- [ ] debug tools for world mutation;
+- [x] debug tools for world mutation;
 - [ ] screenshot hotkey;
 - [ ] frame-step / slow-motion debug modes;
 - [ ] gizmo/debug overlays.
@@ -157,6 +154,10 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [x] dual air-control modes (`F11`);
 - [x] placement/body overlap guard;
 - [x] delayed auto-jump toggle (`F12`);
+- [x] inspect tooling now exposes target/placement chunk facts, local voxel coords, hit normal, mutation anchor state, preview box, and world-edit version directly in the HUD/overlay path.
+- [x] lightweight world-mutation helpers now include `X` anchor-based cuboid paint/erase and `M` material pick, covered by fixed tests instead of ad-hoc runtime checks.
+- [x] one-block auto-jump is now runtime-toggleable (`J`) and defaults off; when enabled, the `F12` micro-delay arms only once the immediate one-block rise is actually reachable instead of pre-arming from a distant probe.
+- [x] debug HUD now has basic vs detailed modes (`G`): normal HUD hides low-level walk/selection/replay counters and the green placement preview, while detailed HUD keeps the full diagnosis surface.
 - [x] held-jump repeat restored.
 - [x] moving narrow-edge traversal with held `W` no longer drops `walk` into synthetic `Air`; jump can still commit from partial edge support (`5.tracy` case).
 - [x] exact first jump press on the thinnest edge support no longer depends on pre-tick `supportState`: the replay fixture now proves the jump still launches from remaining support hits, while ordinary walk-off without jump is no longer kept alive by the same rule.
@@ -169,6 +170,8 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [x] replay-driven crouch wall-cling no longer authorizes grounded support at the caller's midair `feetY`; sneak support is now anchored to the sampled top-plane and the strengthened two-block regression stays green.
 - [x] replay-driven stacked placed-block wall climb no longer reacquires foreign ground-takeoff planes or midair crouch support from too far below the support plane; the same live replay now stays at `feetY=1.050` instead of climbing to `2.050/3.050`.
 - [x] replay-driven boosted creative flight through `TransparencyStress` no longer wedges on glass columns or exact glass-corner hits at high speed; `TickCreativeCharacter` now substeps long boosted travel more aggressively and the exact captures live in `tests/fixtures/creative_transparency_boost_stuck.*` and `creative_transparency_boost_corner_stuck.*`.
+- [x] opaque voxel faces under glass no longer disappear: the meshing shader now emits opaque faces against `Glass` neighbors while still culling the internal glass face on the same plane.
 - [x] Problems-driven warning cleanup removed the remaining current `clang-tidy` findings around `InputActions`, `Types`, `EcsWorld`, and `PhysicsWorld`; `build -> tests -> smoke` is green again, and the next warning pass now has an explicit reminder to regenerate `Problems/` instead of trusting stale XML line numbers.
 - [x] refreshed JetBrains `Problems/` export no longer points at the old stale-pointer helpers in `PhysicsWorld.cpp`: internal walk helpers now use reference contracts where `nullptr` was never meaningful, dead descending-ledge/jump-lock DFA-only paths were removed, and `build -> tests -> smoke` remains green after the refactor.
 - [x] follow-up `Problems/` + `problems/tools/` cleanup removed the remaining live switch/default warning in `PhysicsWorld.cpp`, collapsed several test-only inspection nits in `VoxelWorldTests.cpp` (bitmask helpers, constexpr/deduced arrays, structured bindings, integer scan loop), and kept `build -> tests -> smoke` green; the leftover `CppDFAUnreachableFunctionCall` rows in the checked-in tools export still need a fresh re-export because the current `main()` already calls those tests directly.
+- [x] follow-up DFA cleanup in `VoxelInteraction.cpp` / `DebugOverlays.cpp` removed more stale nullable-out-param and redundant-branch warnings by switching file-local helpers to reference contracts and by tightening anchored-paint preconditions without changing runtime behavior.

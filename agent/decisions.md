@@ -51,7 +51,7 @@
 
 - Mainline repeatable build path живёт на `windows-clang-debug` и `windows-clang-debug-ci`.
 - Verification loop выполняется только последовательно: `build -> tests -> smoke`.
-- Runtime smoke остаётся отдельной GUI-проверкой, но вызывается как официальный target.
+- Runtime smoke остаётся отдельной developer-only GUI-проверкой и вызывается как официальный target.
 - Shader compile path принимает `glslc` или `glslangValidator`.
 - Для translation units с Jolt include-contract начинается с `<Jolt/Jolt.h>`; auto-refactor не должен поднимать другие Jolt headers выше него.
 
@@ -66,6 +66,7 @@
 - World edit остаётся CPU-authored через `VoxelRaycast` и `VoxelWorld`.
 - Постановка блока запрещается до мутации мира, если `placementVoxel` пересекает текущий physics-character volume.
 - После successful world-edit rebuild через `SyncPhysicsWorld` cached walk support ownership надо инвалидировать до следующего walk tick.
+- Lightweight debug world-mutation stays keyboard-driven on the same interaction path: `X` toggles a box anchor for paint/erase tools, `M` picks the current hit material, and the HUD/overlay path stays the source of truth for preview/debug facts.
 
 Почему:
 
@@ -110,16 +111,28 @@
 
 Решение:
 
-- One-block auto-jump остаётся частью active traversal path.
-- Default path держит micro-delay (`40` fixed frames).
-- `F12` переключает только `delay on/off`, а не existence auto-jump.
+- One-block auto-jump остаётся optional traversal path, а не always-on movement baseline.
+- Runtime default for auto-jump is `off`; `J` переключает existence auto-jump.
+- Если auto-jump включён, `F12` переключает только `delay on/off`, а countdown starts only once the immediate one-block rise is actually reachable.
 - Manual held jump обнуляет pending auto-jump delay countdown.
 
 Почему:
 
-- Нужны оба режима: delayed Minecraft-like traversal и instant response для будущих bunny-hop experiments.
+- Нужны оба режима: manual baseline without silent auto-step, plus delayed Minecraft-like traversal и instant response для будущих bunny-hop experiments.
 
-## 9. Debug / repro contract
+## 9. HUD verbosity contract
+
+Решение:
+
+- `F1` по-прежнему переключает весь debug UI.
+- `G` переключает normal HUD и detailed HUD.
+- Normal HUD держит только high-level sandbox/control facts; low-level walk grace counters, selection/chunk/mutation/replay telemetry и зелёный placement preview показываются только в detailed HUD.
+
+Почему:
+
+- Обычный runtime screen должен оставаться читаемым, а диагностическая перегрузка нужна только когда агент или пользователь реально разбирает баг.
+
+## 10. Debug / repro contract
 
 - When a live walk bug diverges from synthetic fixtures, the preferred artifact is an input replay capture over another handwritten `SendKeyEvent` sequence.
 
@@ -132,7 +145,7 @@
 
 - Этот проект уже несколько раз платил за попытки чинить live runtime bug только по synthetic-case тестам.
 
-## 10. Creative flight collision contract
+## 11. Creative flight collision contract
 
 Решение:
 
@@ -145,7 +158,7 @@
 - Normal-speed creative collision уже скользил корректно; ломался только high-speed coarse-step path, включая точные corner hits.
 - Exact replay здесь надёжнее выдуманного теста, потому что старый synthetic-case уже давал ложный red/green сигнал и не совпадал ни с реальным клином на стеклянных колоннах, ни с клином ровно в угол.
 
-## 11. Static-analysis cleanup contract
+## 12. Static-analysis cleanup contract
 
 Решение:
 
@@ -156,3 +169,13 @@
 Почему:
 
 - The current refactor/lint sweep already made several exported line-based findings stale mid-pass, and blindly following them risks fixing the wrong code.
+
+## 13. Transparency meshing contract
+
+Решение:
+
+- Transparent-neighbor meshing is intentionally asymmetric: opaque voxels emit faces against `Glass`, but `Glass` keeps the internal shared face culled against opaque neighbors.
+
+Почему:
+
+- Иначе блок под стеклом теряет видимую верхнюю грань, а double-face на одной плоскости дало бы z-fighting и лишнюю transparent geometry.

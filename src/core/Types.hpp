@@ -75,6 +75,7 @@ enum class InputAction : uint8_t {
 	SpeedBoost,
 	SpeedSlow,
 	ToggleHud,
+	ToggleDetailedHud,
 	ToggleRelativeMouseMode,
 	CyclePlacementMaterial,
 	ResetCamera,
@@ -88,9 +89,12 @@ enum class InputAction : uint8_t {
 	ToggleChunkBounds,
 	ToggleDirtyChunkOverlay,
 	ToggleWalkAirControlMode,
+	ToggleWalkAutoJump,
 	ToggleWalkAutoJumpDelay,
 	ToggleInputReplayRecording,
 	PlayLastInputReplay,
+	ToggleMutationAnchor,
+	PickTargetMaterial,
 	Count,
 };
 
@@ -179,16 +183,29 @@ struct InteractionSelectionState {
 	bool hasHit = false;
 	bool hasPlacementVoxel = false;
 	bool hasTargetChunk = false;
+	bool hasPlacementChunk = false;
+	bool targetSolid = false;
 	Int3 targetVoxel{};
 	Int3 placementVoxel{};
 	Int3 hitNormal{};
+	Int3 targetVoxelInChunk{};
+	Int3 placementVoxelInChunk{};
 	Int3 targetChunkCoord{};
 	Int3 targetChunkMin{};
 	Int3 targetChunkMaxExclusive{};
+	Int3 placementChunkCoord{};
+	Int3 placementChunkMin{};
+	Int3 placementChunkMaxExclusive{};
 	VoxelMaterial targetMaterial = VoxelMaterial::Air;
 	float hitDistance = 0.0f;
 	bool targetChunkDirty = false;
 	bool targetChunkActive = false;
+	bool placementChunkDirty = false;
+	bool placementChunkActive = false;
+	uint32_t targetChunkIndex = 0;
+	uint32_t placementChunkIndex = 0;
+	uint32_t targetChunkNonAirVoxelCount = 0;
+	uint32_t placementChunkNonAirVoxelCount = 0;
 };
 
 struct InteractionState {
@@ -196,6 +213,9 @@ struct InteractionState {
 	VoxelMaterial placementMaterial = VoxelMaterial::FloorWhite;
 	float maxInteractionDistance = 12.0f;
 	DebugEditorTool editorTool = DebugEditorTool::Classic;
+	bool mutationAnchorValid = false;
+	Int3 mutationAnchorVoxel{};
+	bool mutationAnchorUsesPlacementVoxel = false;
 };
 
 struct InputReplayFrame {
@@ -213,6 +233,7 @@ struct InputReplayCapture {
 	CameraState initialCamera{};
 	InteractionState initialInteraction{};
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	bool walkAutoJumpEnabled = false;
 	bool walkAutoJumpDelayEnabled = true;
 	std::vector<InputReplayFrame> frames;
 };
@@ -295,9 +316,12 @@ struct DebugStats {
 	uint32_t floorVoxelCount = 0;
 	uint32_t sceneTriangleCount = 0;
 	uint64_t sceneMemoryBytes = 0;
+	uint64_t worldEditVersion = 0;
 	VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
 	CameraState::ControlMode controlMode = CameraState::ControlMode::Creative;
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	bool detailedHudVisible = false;
+	bool walkAutoJumpEnabled = false;
 	bool walkAutoJumpDelayEnabled = true;
 	bool simulationPaused = false;
 	bool showChunkBounds = false;
@@ -449,6 +473,7 @@ struct DebugState {
 	DebugStats stats{};
 	float titleUpdateAccumulatorSeconds = 0.0f;
 	bool hudVisible = true;
+	bool detailedHudVisible = false;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 };

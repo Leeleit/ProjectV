@@ -10,19 +10,19 @@ Updated: `2026-04-21`
 
 - Project phase: `pre-MVP alpha / working vertical slice`.
 - Mainline still has the runnable voxel sandbox slice with interaction, control modes, snapshots, lightweight editor, profiling, smoke probes, and the current `walk` controller.
-- Latest closed slice: narrow-edge jump replay coverage now matches the real player-visible contract again. The controller only keeps ultra-thin edge support alive under an active jump request, so ordinary walk-off fall timing is back to normal, while the replay fixture still proves the edge jump launches. `build -> tests -> smoke` is green on that state.
+- Latest closed slice: inspect/world-mutation tooling is now materially better in the live sandbox (`INSPECT` chunk telemetry, `X` box anchor, `M` material pick), the HUD now splits into basic vs detailed modes (`G`), one-block auto-jump is runtime-toggleable (`J`) with a delay that only arms on the immediate rise, the glass-neighbor meshing regression is closed so opaque blocks stay visible under glass, and the remaining local DFA warnings in `VoxelInteraction.cpp` / `DebugOverlays.cpp` were cleaned by tightening helper contracts. `build -> tests -> smoke` is green on that state.
 
 ## 2. Nearest Gap
 
-- The next controller loop should still stay replay-first; the stacked placed-block wall-climb capture and both boosted creative-flight wedge captures are closed on the current build.
+- The next controller loop should still stay replay-first; the stacked placed-block wall-climb capture, both boosted creative-flight wedge captures, and the current auto-jump delay regression are closed on the current build.
 - If another warning-cleanup pass is needed, regenerate `Problems/` first instead of continuing from the current XML export.
-- After this tooling slice, the next practical layer is still gameplay/debug follow-up on top of the current sandbox, not a broad architectural rewrite.
+- After this tooling slice, the next practical layer is still `simple sandbox interactions` on top of the current sandbox, not a broad architectural rewrite.
 
 ## 3. Next Steps
 
 1. Wait for the next live walk repro on the current build before adding more broad heuristics; prefer another replay capture if runtime behavior still diverges from tests.
-2. Pick the next gameplay/debug slice after `walk`: `inspect tools`, simple sandbox interactions, or debug world-mutation helpers.
-3. Decide whether headless/self-hosted smoke should exist in CI.
+2. Pick `simple sandbox interactions` as the next gameplay/debug slice unless a new live controller repro interrupts it.
+3. Keep runtime smoke developer-only until there is an explicit reason to add a separate CI/headless path.
 
 ## 4. Risks
 

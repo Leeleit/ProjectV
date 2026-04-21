@@ -35,6 +35,7 @@ struct PhysicsWalkDebugInfo {
 	bool sneakActive = false;
 	bool jumpLockActive = false;
 	bool suppressPassiveSlide = false;
+	bool autoJumpEnabled = false;
 	bool autoJumpDelayEnabled = true;
 	float cachedSneakSupportReferenceFeetY = 0.0f;
 };
@@ -82,6 +83,8 @@ bool DoesPhysicsCharacterOverlapVoxel(
 	const Int3 &voxel);
 void SetPhysicsWalkAirControlMode(PhysicsState *physics, WalkAirControlMode mode);
 WalkAirControlMode GetPhysicsWalkAirControlMode(const PhysicsState *physics);
+void SetPhysicsWalkAutoJumpEnabled(PhysicsState *physics, bool enabled);
+bool IsPhysicsWalkAutoJumpEnabled(const PhysicsState *physics);
 void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, bool enabled);
 bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics);
 PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics);

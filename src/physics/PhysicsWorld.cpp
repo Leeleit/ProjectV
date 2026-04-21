@@ -13,8 +13,8 @@
 #pragma warning(push, 0)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
-#include <Jolt/Core/Factory.h>
 #include <Jolt/Jolt.h>
+#include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
@@ -51,7 +51,7 @@ constexpr float kWalkJumpRealisticAirBrakeDeceleration = 14.0f;
 constexpr float kWalkJumpRealisticAirReacceleration = 10.0f;
 constexpr float kWalkJumpMinecraftAirBrakeDeceleration = 14.0f;
 constexpr float kWalkJumpMinecraftAirControlAcceleration = 12.0f;
-constexpr uint32_t kWalkAutoJumpDelayFrames = 40;
+constexpr uint32_t kWalkAutoJumpDelayFrames = 12;
 constexpr float kWalkStickToFloorDistance = 0.25f;
 constexpr float kWalkStairsStepUpHeight = 0.4f;
 constexpr float kWalkAutoJumpMinRise = kWalkStairsStepUpHeight + 0.05f;
@@ -320,6 +320,7 @@ struct PhysicsState {
 	float walkJumpBallisticHorizontalTakeoffSpeed = 0.0f;
 	bool walkJumpBallisticHorizontalVelocityActive = false;
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	bool walkAutoJumpEnabled = false;
 	uint32_t walkAutoJumpDelayFramesRemaining = 0;
 	bool walkAutoJumpDelayEnabled = true;
 	WalkSupportContactKey walkPassiveSlideContact{};
@@ -644,6 +645,7 @@ void PlotWalkProfilingState(
 	profiling::PlotValue("Walk Feet Y", feetPosition[1]);
 	profiling::PlotValue("Walk Velocity Y", velocity.GetY());
 	profiling::PlotValue("Walk Air Control Mode", ToWalkAirControlProfilingValue(physics.walkAirControlMode));
+	profiling::PlotValue("Walk Auto Jump", physics.walkAutoJumpEnabled ? int64_t{1} : int64_t{0});
 	profiling::PlotValue("Walk Auto Jump Delay", physics.walkAutoJumpDelayEnabled ? int64_t{1} : int64_t{0});
 	profiling::PlotValue("Walk Auto Jump Delay Frames", static_cast<int64_t>(physics.walkAutoJumpDelayFramesRemaining));
 	profiling::PlotValue("Walk Sneak Active", physics.walkSneakActive ? int64_t{1} : int64_t{0});
@@ -1479,6 +1481,12 @@ WalkTopSupportCandidate FindWalkTopSupportCandidate(
 	candidate.region = ComputeWalkSneakSupportRegion(world, candidate.feetPosition);
 	candidate.valid = candidate.region.valid;
 	return candidate;
+}
+
+bool IsWalkAutoJumpRiseInRange(const float rise)
+{
+	return rise >= kWalkAutoJumpMinRise - kWalkCollisionEpsilon &&
+		   rise <= kWalkAutoJumpMaxRise + kWalkCollisionEpsilon;
 }
 
 bool ResolveWalkCharacterPenetration(
@@ -3255,7 +3263,8 @@ bool TickWalkCharacter(
 				desiredFeetPosition,
 				kWalkStairsStepUpHeight,
 				physics->walkSneakActive);
-			if (!physics->walkSneakActive &&
+			if (physics->walkAutoJumpEnabled &&
+				!physics->walkSneakActive &&
 				!hasActiveSneakSupportRegion &&
 				physics->walkSupportState == WalkSupportState::Grounded &&
 				!hasJumpLockedSupport) {
@@ -3269,7 +3278,8 @@ bool TickWalkCharacter(
 	}
 	bool autoJumpPressed = false;
 	const float autoJumpRise = autoJumpTopSupport.valid ? autoJumpTopSupport.feetPosition[1] - feetPosition[1] : 0.0f;
-	const bool hasAutoJumpCandidate =
+	const bool hasAutoJumpReadyCandidate =
+		physics->walkAutoJumpEnabled &&
 		!jumpPressed &&
 		hasMovementInput &&
 		!physics->walkSneakActive &&
@@ -3277,18 +3287,19 @@ bool TickWalkCharacter(
 		physics->walkSupportState == WalkSupportState::Grounded &&
 		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
 		autoJumpTopSupport.valid &&
-		autoJumpRise >= kWalkAutoJumpMinRise - kWalkCollisionEpsilon &&
-		autoJumpRise <= kWalkAutoJumpMaxRise + kWalkCollisionEpsilon;
-	if (jumpPressed || jumpHeld || !hasAutoJumpCandidate) {
+		IsWalkAutoJumpRiseInRange(autoJumpRise);
+	if (jumpPressed || jumpHeld || !hasAutoJumpReadyCandidate) {
 		physics->walkAutoJumpDelayFramesRemaining = 0;
 	} else {
 		if (!physics->walkAutoJumpDelayEnabled) {
-			autoJumpPressed = true;
+			autoJumpPressed = hasAutoJumpReadyCandidate;
 		} else if (physics->walkAutoJumpDelayFramesRemaining == 0) {
 			physics->walkAutoJumpDelayFramesRemaining = kWalkAutoJumpDelayFrames;
 		} else {
 			--physics->walkAutoJumpDelayFramesRemaining;
-			autoJumpPressed = physics->walkAutoJumpDelayFramesRemaining == 0;
+			autoJumpPressed =
+				hasAutoJumpReadyCandidate &&
+				physics->walkAutoJumpDelayFramesRemaining == 0;
 		}
 	}
 	const bool wantsJump = (jumpPressed || jumpHeld || autoJumpPressed) && (isGroundedLike || hasJumpTakeoffFeetPosition);
@@ -3621,6 +3632,21 @@ WalkAirControlMode GetPhysicsWalkAirControlMode(const PhysicsState *physics)
 	return physics != nullptr ? physics->walkAirControlMode : WalkAirControlMode::MinecraftLike;
 }
 
+void SetPhysicsWalkAutoJumpEnabled(PhysicsState *physics, const bool enabled)
+{
+	if (physics == nullptr) {
+		return;
+	}
+
+	physics->walkAutoJumpEnabled = enabled;
+	physics->walkAutoJumpDelayFramesRemaining = 0;
+}
+
+bool IsPhysicsWalkAutoJumpEnabled(const PhysicsState *physics)
+{
+	return physics != nullptr ? physics->walkAutoJumpEnabled : false;
+}
+
 void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, const bool enabled)
 {
 	if (physics == nullptr) {
@@ -3663,6 +3689,7 @@ PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics)
 	info.sneakActive = physics->walkSneakActive;
 	info.jumpLockActive = physics->walkJumpLockedSupport.valid;
 	info.suppressPassiveSlide = physics->walkSuppressPassiveSlide;
+	info.autoJumpEnabled = physics->walkAutoJumpEnabled;
 	info.autoJumpDelayEnabled = physics->walkAutoJumpDelayEnabled;
 	info.cachedSneakSupportReferenceFeetY =
 		physics->walkCachedSneakSupportRegion.valid ? physics->walkCachedSneakSupportRegion.referenceFeetPosition[1] : 0.0f;

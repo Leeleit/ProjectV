@@ -225,6 +225,9 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleHud)) {
 		debug->hudVisible = !debug->hudVisible;
 	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleDetailedHud)) {
+		debug->detailedHudVisible = !debug->detailedHudVisible;
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleRelativeMouseMode)) {
 		SetRelativeMouseMode(*platform, *input, !input->relativeMouseModeEnabled);
 	}
@@ -266,6 +269,7 @@ bool UpdateApp(
 		world->voxelWorld) {
 		world->requestedScenePreset = GetNextVoxelScenePreset(world->voxelWorld->scenePreset);
 		world->scenePresetReloadRequested = true;
+		interaction->mutationAnchorValid = false;
 		ClearInteractionClickActions(*input);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::SaveWorldSnapshot) &&
@@ -278,10 +282,12 @@ bool UpdateApp(
 		world->voxelWorld &&
 		!world->scenePresetReloadRequested) {
 		world->snapshotLoadRequested = true;
+		interaction->mutationAnchorValid = false;
 		ClearInteractionClickActions(*input);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::CycleEditorTool)) {
 		interaction->editorTool = GetNextDebugEditorTool(interaction->editorTool);
+		interaction->mutationAnchorValid = false;
 		ClearInteractionClickActions(*input);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleChunkBounds)) {
@@ -292,6 +298,9 @@ bool UpdateApp(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAirControlMode)) {
 		SetPhysicsWalkAirControlMode(physics, GetNextWalkAirControlMode(GetPhysicsWalkAirControlMode(physics)));
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJump)) {
+		SetPhysicsWalkAutoJumpEnabled(physics, !IsPhysicsWalkAutoJumpEnabled(physics));
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJumpDelay)) {
 		SetPhysicsWalkAutoJumpDelayEnabled(physics, !IsPhysicsWalkAutoJumpDelayEnabled(physics));
@@ -313,6 +322,7 @@ bool UpdateApp(
 					*camera,
 					*interaction,
 					GetPhysicsWalkAirControlMode(physics),
+					IsPhysicsWalkAutoJumpEnabled(physics),
 					IsPhysicsWalkAutoJumpDelayEnabled(physics))) {
 				return false;
 			}
@@ -442,10 +452,13 @@ bool UpdateApp(
 		debug->stats.nonAirVoxelCount = world->voxelWorld->stats.nonAirVoxelCount;
 		debug->stats.sceneTriangleCount = render->sceneTriangleCount;
 		debug->stats.sceneMemoryBytes = render->sceneMemoryBytes;
+		debug->stats.worldEditVersion = world->voxelWorld->editVersion;
 		debug->stats.scenePreset = world->voxelWorld->scenePreset;
 	}
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
+	debug->stats.detailedHudVisible = debug->detailedHudVisible;
+	debug->stats.walkAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics);
 	debug->stats.walkAutoJumpDelayEnabled = IsPhysicsWalkAutoJumpDelayEnabled(physics);
 	debug->stats.simulationPaused = simulation->paused;
 	debug->stats.showChunkBounds = debug->showChunkBounds;

@@ -797,6 +797,7 @@ int RunReplayAnalysisFromEnvironment()
 		return EXIT_FAILURE;
 	}
 	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
 	if (camera.controlMode == CameraState::ControlMode::Walk) {
 		if (!SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera)) {
@@ -1112,6 +1113,10 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAirControlMode));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_G);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleDetailedHud));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_J);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAutoJump));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAutoJumpDelay));
@@ -1119,6 +1124,10 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleInputReplayRecording));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Y);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::PlayLastInputReplay));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_X);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleMutationAnchor));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_M);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::PickTargetMaterial));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::SaveWorldSnapshot));
@@ -1295,9 +1304,11 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F8);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F9);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F10);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_G);
 
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, !debug.hudVisible);
+	EXPECT_TRUE(context, debug.detailedHudVisible);
 	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.placementMaterial);
 	EXPECT_EQ(context, DebugEditorTool::Paint, interaction.editorTool);
 	EXPECT_TRUE(context, simulation.paused);
@@ -1306,6 +1317,7 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	EXPECT_TRUE(context, debug.stats.simulationPaused);
 	EXPECT_TRUE(context, debug.showChunkBounds);
 	EXPECT_TRUE(context, debug.showDirtyChunkOverlay);
+	EXPECT_TRUE(context, debug.stats.detailedHudVisible);
 	EXPECT_TRUE(context, debug.stats.showChunkBounds);
 	EXPECT_TRUE(context, debug.stats.showDirtyChunkOverlay);
 	EXPECT_NEAR(context, 0.0f, simulation.simulationAccumulatorSeconds);
@@ -1348,6 +1360,39 @@ void TestUpdateAppTogglesWalkAirControlMode(TestContext &context)
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, GetPhysicsWalkAirControlMode(physics.get()));
 	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, debug.stats.walkAirControlMode);
+}
+
+void TestUpdateAppTogglesWalkAutoJump(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
+
+	const bool initialAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics.get());
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_J);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpEnabled(physics.get()) != initialAutoJumpEnabled);
+	EXPECT_TRUE(context, debug.stats.walkAutoJumpEnabled == IsPhysicsWalkAutoJumpEnabled(physics.get()));
+
+	InputState secondInput{};
+	InitializeInputState(secondInput);
+	SendKeyEvent(&secondInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_J);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpEnabled(physics.get()) == initialAutoJumpEnabled);
+	EXPECT_TRUE(context, debug.stats.walkAutoJumpEnabled == initialAutoJumpEnabled);
 }
 
 void TestUpdateAppTogglesWalkAutoJumpDelay(TestContext &context)
@@ -1395,6 +1440,7 @@ void TestInputReplayCaptureRoundTripsFile(TestContext &context)
 	capture.initialInteraction.maxInteractionDistance = 9.5f;
 	capture.initialInteraction.editorTool = DebugEditorTool::Erase;
 	capture.walkAirControlMode = WalkAirControlMode::Realistic;
+	capture.walkAutoJumpEnabled = true;
 	capture.walkAutoJumpDelayEnabled = false;
 	capture.frames.push_back({
 		.deltaSeconds = 1.0f / 60.0f,
@@ -1433,6 +1479,7 @@ void TestInputReplayCaptureRoundTripsFile(TestContext &context)
 	EXPECT_EQ(context, capture.initialInteraction.placementMaterial, loaded.initialInteraction.placementMaterial);
 	EXPECT_EQ(context, capture.initialInteraction.editorTool, loaded.initialInteraction.editorTool);
 	EXPECT_EQ(context, capture.walkAirControlMode, loaded.walkAirControlMode);
+	EXPECT_TRUE(context, capture.walkAutoJumpEnabled == loaded.walkAutoJumpEnabled);
 	EXPECT_TRUE(context, capture.walkAutoJumpDelayEnabled == loaded.walkAutoJumpDelayEnabled);
 	EXPECT_EQ(context, capture.frames.size(), loaded.frames.size());
 	EXPECT_NEAR(context, capture.frames[0].deltaSeconds, loaded.frames[0].deltaSeconds);
@@ -1459,6 +1506,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	capture.initialCamera = MakeTestCamera({4.0f, 2.65f, 2.0f});
 	capture.initialCamera.controlMode = CameraState::ControlMode::Walk;
 	capture.walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	capture.walkAutoJumpEnabled = true;
 	capture.walkAutoJumpDelayEnabled = true;
 	for (int frameIndex = 0; frameIndex < 30; ++frameIndex) {
 		InputReplayFrame frame{};
@@ -1497,6 +1545,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
 	SetPhysicsWalkAirControlMode(physics.get(), loaded.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(physics.get(), loaded.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), loaded.walkAutoJumpDelayEnabled);
 	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
 
@@ -3457,11 +3506,14 @@ void TestWalkCharacterHeldJumpDoesNotAcquireForeignWallTopNearTwoBlockWall(TestC
 void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContext &context)
 {
 	constexpr float kPi = 3.1415926535f;
-	constexpr int kMinimumDelayFrameGap = 6;
+	constexpr int kMinimumDelayFrameGap = 4;
+	constexpr int kMinimumArmedFrameGap = 4;
 	constexpr int kSimulationFrames = 120;
 	struct AutoJumpResult {
+		int delayArmedFrame = -1;
 		int jumpStartFrame = -1;
 		int topTouchFrame = -1;
+		uint32_t maxDelayFramesRemaining = 0;
 		float maxY = 0.0f;
 		float finalY = 0.0f;
 		float finalZ = 0.0f;
@@ -3473,6 +3525,7 @@ void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContex
 		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 		EXPECT_TRUE(context, physics != nullptr);
 		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+		SetPhysicsWalkAutoJumpEnabled(physics.get(), true);
 		SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), delayEnabled);
 
 		CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
@@ -3489,6 +3542,11 @@ void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContex
 		result.maxY = camera.position[1];
 		for (int step = 0; step < kSimulationFrames; ++step) {
 			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			result.maxDelayFramesRemaining = std::max(result.maxDelayFramesRemaining, info.autoJumpDelayFramesRemaining);
+			if (result.delayArmedFrame < 0 && info.autoJumpDelayFramesRemaining > 0) {
+				result.delayArmedFrame = step;
+			}
 			result.maxY = std::max(result.maxY, camera.position[1]);
 			if (result.jumpStartFrame < 0 && camera.position[1] > startY + 0.03f) {
 				result.jumpStartFrame = step;
@@ -3508,10 +3566,14 @@ void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContex
 		return result;
 	};
 
-	const auto [delayedJumpStartFrame, delayedTopTouchFrame, delayedMaxY, delayedFinalY, delayedFinalZ] = runCase(true);
-	const auto [instantJumpStartFrame, instantTopTouchFrame, instantMaxY, instantFinalY, instantFinalZ] = runCase(false);
-	if (!(instantJumpStartFrame >= 0 &&
+	const auto [delayedDelayArmedFrame, delayedJumpStartFrame, delayedTopTouchFrame, delayedMaxDelayFramesRemaining, delayedMaxY, delayedFinalY, delayedFinalZ] = runCase(true);
+	const auto [instantDelayArmedFrame, instantJumpStartFrame, instantTopTouchFrame, instantMaxDelayFramesRemaining, instantMaxY, instantFinalY, instantFinalZ] = runCase(false);
+	if (!(delayedDelayArmedFrame >= 0 &&
+		  delayedMaxDelayFramesRemaining >= static_cast<uint32_t>(kMinimumArmedFrameGap) &&
 		  delayedJumpStartFrame >= 0 &&
+		  delayedJumpStartFrame - delayedDelayArmedFrame >= kMinimumArmedFrameGap &&
+		  instantMaxDelayFramesRemaining == 0 &&
+		  instantJumpStartFrame >= 0 &&
 		  delayedJumpStartFrame - instantJumpStartFrame >= kMinimumDelayFrameGap &&
 		  instantTopTouchFrame >= 0 &&
 		  delayedTopTouchFrame >= 0 &&
@@ -3522,17 +3584,94 @@ void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContex
 		std::snprintf(
 			buffer,
 			sizeof(buffer),
-			"auto-jump delay toggle regressed (delayedJump=%d instantJump=%d delayedTop=%d instantTop=%d delayedMaxY=%.3f instantMaxY=%.3f delayedFinal=(%.3f, %.3f) instantFinal=(%.3f, %.3f))",
+			"auto-jump delay toggle regressed (delayedArm=%d delayedJump=%d instantArm=%d instantJump=%d delayedTop=%d instantTop=%d delayedDelay=%u instantDelay=%u delayedMaxY=%.3f instantMaxY=%.3f delayedFinal=(%.3f, %.3f) instantFinal=(%.3f, %.3f))",
+			delayedDelayArmedFrame,
 			delayedJumpStartFrame,
+			instantDelayArmedFrame,
 			instantJumpStartFrame,
 			delayedTopTouchFrame,
 			instantTopTouchFrame,
+			delayedMaxDelayFramesRemaining,
+			instantMaxDelayFramesRemaining,
 			delayedMaxY,
 			instantMaxY,
 			delayedFinalY,
 			delayedFinalZ,
 			instantFinalY,
 			instantFinalZ);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterAutoJumpToggleControlsOneBlockTraversal(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	constexpr int kSimulationFrames = 120;
+	struct TraversalResult {
+		float maxY = 0.0f;
+		float finalY = 0.0f;
+		float finalZ = 0.0f;
+		bool touchedBlockTop = false;
+	};
+
+	const auto runCase = [&](const bool autoJumpEnabled) -> TraversalResult {
+		const VoxelWorld world = MakeWalkPositiveSingleBlockTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+		SetPhysicsWalkAutoJumpEnabled(physics.get(), autoJumpEnabled);
+		SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), false);
+
+		CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+		TraversalResult result{};
+		result.maxY = camera.position[1];
+		for (int step = 0; step < kSimulationFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			result.maxY = std::max(result.maxY, camera.position[1]);
+			if (camera.position[1] > 3.3f &&
+				camera.position[2] > 5.75f &&
+				camera.position[2] < 7.1f &&
+				camera.position[0] > 5.05f &&
+				camera.position[0] < 5.95f) {
+				result.touchedBlockTop = true;
+			}
+		}
+
+		result.finalY = camera.position[1];
+		result.finalZ = camera.position[2];
+		return result;
+	};
+
+	const auto [maxY1, finalY1, finalZ1, touchedBlockTop1] = runCase(false);
+	const auto [maxY, finalY, finalZ, touchedBlockTop] = runCase(true);
+	if (!(maxY1 < 3.05f &&
+		  !touchedBlockTop1 &&
+		  finalZ1 < 6.0f &&
+		  maxY > 3.8f &&
+		  touchedBlockTop &&
+		  finalZ > finalZ1 + 0.5f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"auto-jump toggle regressed (off maxY=%.3f final=(%.3f, %.3f) top=%u; on maxY=%.3f final=(%.3f, %.3f) top=%u)",
+			maxY1,
+			finalY1,
+			finalZ1,
+			touchedBlockTop1 ? 1u : 0u,
+			maxY,
+			finalY,
+			finalZ,
+			touchedBlockTop ? 1u : 0u);
 		context.Fail(__LINE__, buffer);
 	}
 }
@@ -5437,6 +5576,7 @@ void TestCreativeCharacterBoostedFlightSlidesAlongTransparencyStressColumns(Test
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
 	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
 	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
@@ -5527,6 +5667,7 @@ void TestWalkCharacterReplayKeepsEdgeJumpGroundedLikeSupport(TestContext &contex
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
 	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
 	EXPECT_EQ(context, CameraState::ControlMode::Walk, camera.controlMode);
 	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
@@ -5621,6 +5762,7 @@ void TestCreativeCharacterBoostedFlightDoesNotWedgeOnTransparencyStressCorner(Te
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
 	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
 	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
@@ -5968,13 +6110,144 @@ void TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(TestCon
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, interaction.selection.hasHit);
 	EXPECT_TRUE(context, interaction.selection.hasTargetChunk);
+	EXPECT_TRUE(context, interaction.selection.hasPlacementVoxel);
+	EXPECT_TRUE(context, interaction.selection.hasPlacementChunk);
+	EXPECT_TRUE(context, interaction.selection.targetSolid);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), interaction.selection.targetVoxelInChunk);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), interaction.selection.placementVoxelInChunk);
 	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.targetChunkCoord);
 	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.targetChunkMin);
 	EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), interaction.selection.targetChunkMaxExclusive);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.placementChunkCoord);
+	EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), interaction.selection.placementChunkMin);
+	EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), interaction.selection.placementChunkMaxExclusive);
 	EXPECT_TRUE(context, interaction.selection.targetChunkDirty);
 	EXPECT_TRUE(context, interaction.selection.targetChunkActive);
+	EXPECT_TRUE(context, interaction.selection.placementChunkDirty);
+	EXPECT_TRUE(context, interaction.selection.placementChunkActive);
+	EXPECT_EQ(context, static_cast<uint32_t>(0), interaction.selection.targetChunkIndex);
+	EXPECT_EQ(context, static_cast<uint32_t>(0), interaction.selection.placementChunkIndex);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), interaction.selection.targetChunkNonAirVoxelCount);
+	EXPECT_EQ(context, static_cast<uint32_t>(1), interaction.selection.placementChunkNonAirVoxelCount);
 	EXPECT_TRUE(context, !input.removePressed);
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionPickTargetMaterialCopiesSelectedVoxelMaterial(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_M);
+
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Inspect;
+	interaction.placementMaterial = VoxelMaterial::FloorWhite;
+
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&input,
+		&world,
+		&interaction,
+		false,
+		nullptr);
+
+	EXPECT_EQ(context, VoxelMaterial::Glass, interaction.placementMaterial);
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_EQ(context, VoxelMaterial::Glass, interaction.selection.targetMaterial);
+	EXPECT_EQ(context, static_cast<uint32_t>(0), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionPaintModeAnchoredPlacementFillsVoxelBox(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {3, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Paint;
+	interaction.placementMaterial = VoxelMaterial::FloorGray;
+
+	InputState anchorInput{};
+	InitializeInputState(anchorInput);
+	SendKeyEvent(&anchorInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_X);
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&anchorInput,
+		&world,
+		&interaction,
+		true,
+		nullptr);
+
+	EXPECT_TRUE(context, interaction.mutationAnchorValid);
+	EXPECT_TRUE(context, interaction.mutationAnchorUsesPlacementVoxel);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), interaction.mutationAnchorVoxel);
+
+	InputState paintInput{};
+	InitializeInputState(paintInput);
+	paintInput.placePressed = true;
+	UpdateVoxelInteraction(
+		MakeTestCamera({3.5f, 1.5f, 4.5f}),
+		&paintInput,
+		&world,
+		&interaction,
+		true,
+		nullptr);
+
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(world, {1, 1, 2}));
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(world, {2, 1, 2}));
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(world, {3, 1, 2}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.selection.targetMaterial);
+	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionEraseModeAnchoredRemovalClearsVoxelBox(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {3, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Erase;
+
+	InputState anchorInput{};
+	InitializeInputState(anchorInput);
+	SendKeyEvent(&anchorInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_X);
+	UpdateVoxelInteraction(
+		MakeTestCamera({1.5f, 1.5f, 4.5f}),
+		&anchorInput,
+		&world,
+		&interaction,
+		true,
+		nullptr);
+
+	EXPECT_TRUE(context, interaction.mutationAnchorValid);
+	EXPECT_TRUE(context, !interaction.mutationAnchorUsesPlacementVoxel);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), interaction.mutationAnchorVoxel);
+
+	InputState eraseInput{};
+	InitializeInputState(eraseInput);
+	eraseInput.placePressed = true;
+	UpdateVoxelInteraction(
+		MakeTestCamera({3.5f, 1.5f, 4.5f}),
+		&eraseInput,
+		&world,
+		&interaction,
+		true,
+		nullptr);
+
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {2, 1, 1}));
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {3, 1, 1}));
+	EXPECT_TRUE(context, !interaction.selection.hasHit);
+	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
 }
 
 void TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(TestContext &context)
@@ -5988,29 +6261,77 @@ void TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(TestContext &con
 	interaction.editorTool = DebugEditorTool::Inspect;
 	interaction.selection.hasHit = true;
 	interaction.selection.targetVoxel = {1, 1, 1};
+	interaction.selection.hasPlacementVoxel = true;
+	interaction.selection.placementVoxel = {1, 1, 2};
 	interaction.selection.hasTargetChunk = true;
 	interaction.selection.targetChunkCoord = {0, 0, 0};
 	interaction.selection.targetChunkMin = {0, 0, 0};
 	interaction.selection.targetChunkMaxExclusive = {4, 4, 4};
 	interaction.selection.targetChunkDirty = true;
 	interaction.selection.targetChunkActive = true;
+	interaction.mutationAnchorValid = true;
+	interaction.mutationAnchorUsesPlacementVoxel = true;
+	interaction.mutationAnchorVoxel = {3, 1, 2};
 
 	DebugState debug{};
 	debug.hudVisible = true;
+	debug.detailedHudVisible = true;
 	debug.showChunkBounds = true;
 	debug.showDirtyChunkOverlay = true;
 
 	std::vector<DebugOverlayBox> boxes;
 	BuildDebugOverlayBoxes(&world, interaction, debug, &boxes);
 
-	EXPECT_EQ(context, static_cast<size_t>(11), boxes.size());
-	if (boxes.size() >= 11) {
+	EXPECT_EQ(context, static_cast<size_t>(14), boxes.size());
+	if (boxes.size() >= 14) {
 		EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), boxes.front().min);
 		EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), boxes.front().maxExclusive);
 		EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), boxes[9].min);
 		EXPECT_INT3_EQ(context, (Int3{2, 2, 2}), boxes[9].maxExclusive);
-		EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), boxes[10].min);
-		EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), boxes[10].maxExclusive);
+		EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), boxes[10].min);
+		EXPECT_INT3_EQ(context, (Int3{2, 2, 3}), boxes[10].maxExclusive);
+		EXPECT_INT3_EQ(context, (Int3{3, 1, 2}), boxes[11].min);
+		EXPECT_INT3_EQ(context, (Int3{4, 2, 3}), boxes[11].maxExclusive);
+		EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), boxes[12].min);
+		EXPECT_INT3_EQ(context, (Int3{4, 2, 3}), boxes[12].maxExclusive);
+		EXPECT_INT3_EQ(context, (Int3{0, 0, 0}), boxes[13].min);
+		EXPECT_INT3_EQ(context, (Int3{4, 4, 4}), boxes[13].maxExclusive);
+	}
+}
+
+void TestBuildDebugOverlayBoxesHidesDetailedSelectionOverlaysInBasicHud(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+	MarkVoxelChunkDirty(world, {1, 1, 1});
+
+	InteractionState interaction{};
+	interaction.editorTool = DebugEditorTool::Inspect;
+	interaction.selection.hasHit = true;
+	interaction.selection.targetVoxel = {1, 1, 1};
+	interaction.selection.hasPlacementVoxel = true;
+	interaction.selection.placementVoxel = {1, 1, 2};
+	interaction.selection.hasTargetChunk = true;
+	interaction.selection.targetChunkMin = {0, 0, 0};
+	interaction.selection.targetChunkMaxExclusive = {4, 4, 4};
+	interaction.mutationAnchorValid = true;
+	interaction.mutationAnchorUsesPlacementVoxel = true;
+	interaction.mutationAnchorVoxel = {3, 1, 2};
+
+	DebugState debug{};
+	debug.hudVisible = true;
+	debug.detailedHudVisible = false;
+	debug.showChunkBounds = true;
+	debug.showDirtyChunkOverlay = true;
+
+	std::vector<DebugOverlayBox> boxes;
+	BuildDebugOverlayBoxes(&world, interaction, debug, &boxes);
+
+	EXPECT_EQ(context, static_cast<size_t>(10), boxes.size());
+	if (boxes.size() >= 10) {
+		EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), boxes[9].min);
+		EXPECT_INT3_EQ(context, (Int3{2, 2, 2}), boxes[9].maxExclusive);
 	}
 }
 
@@ -6031,7 +6352,6 @@ void TestBuildDebugHudVerticesReturnsZeroWhenHidden(TestContext &context)
 
 void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 {
-	std::vector<DebugHudVertex> vertices(65536);
 	DebugStats stats{};
 	stats.framesPerSecond = 120.0f;
 	stats.frameTimeMilliseconds = 8.33f;
@@ -6054,48 +6374,62 @@ void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 	interaction.selection.targetMaterial = VoxelMaterial::Glass;
 	interaction.selection.hitDistance = 3.5f;
 
-	const uint32_t vertexCount = BuildDebugHudVertices(
+	std::vector<DebugHudVertex> basicVertices(65536);
+	const uint32_t basicVertexCount = BuildDebugHudVertices(
 		stats,
 		MakeTestCamera({2.0f, 3.0f, 4.0f}),
 		interaction,
 		true,
 		VkExtent2D{1280, 720},
-		vertices.data(),
-		static_cast<uint32_t>(vertices.size()));
+		basicVertices.data(),
+		static_cast<uint32_t>(basicVertices.size()));
 
-	EXPECT_TRUE(context, vertexCount > 6u);
-	EXPECT_TRUE(context, vertexCount <= static_cast<uint32_t>(vertices.size()));
-	EXPECT_TRUE(context, vertices[0].positionNdc[0] >= -1.0f);
-	EXPECT_TRUE(context, vertices[0].positionNdc[0] <= 1.0f);
-	EXPECT_TRUE(context, vertices[0].positionNdc[1] >= -1.0f);
-	EXPECT_TRUE(context, vertices[0].positionNdc[1] <= 1.0f);
-	EXPECT_TRUE(context, vertices[0].positionNdc[0] < 0.0f);
-	EXPECT_TRUE(context, vertices[0].positionNdc[1] < 0.0f);
+	DebugStats detailedStats = stats;
+	detailedStats.detailedHudVisible = true;
+	std::vector<DebugHudVertex> detailedVertices(65536);
+	const uint32_t detailedVertexCount = BuildDebugHudVertices(
+		detailedStats,
+		MakeTestCamera({2.0f, 3.0f, 4.0f}),
+		interaction,
+		true,
+		VkExtent2D{1280, 720},
+		detailedVertices.data(),
+		static_cast<uint32_t>(detailedVertices.size()));
+
+	EXPECT_TRUE(context, basicVertexCount > 6u);
+	EXPECT_TRUE(context, basicVertexCount <= static_cast<uint32_t>(basicVertices.size()));
+	EXPECT_TRUE(context, basicVertices[0].positionNdc[0] >= -1.0f);
+	EXPECT_TRUE(context, basicVertices[0].positionNdc[0] <= 1.0f);
+	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] >= -1.0f);
+	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] <= 1.0f);
+	EXPECT_TRUE(context, basicVertices[0].positionNdc[0] < 0.0f);
+	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] < 0.0f);
+	EXPECT_TRUE(context, detailedVertexCount > basicVertexCount);
 
 	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
 	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
-	constexpr std::array helperTextColor{0.77f, 0.84f, 0.90f, 0.94f};
+	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
 	float statsPanelMaxX = -1.0f;
 	float helperPanelMaxX = -1.0f;
-	float helperTextMaxX = -1.0f;
-	for (uint32_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-		const auto &[positionNdc, color] = vertices[vertexIndex];
+	float textMaxX = -1.0f;
+	for (uint32_t vertexIndex = 0; vertexIndex < detailedVertexCount; ++vertexIndex) {
+		const auto &[positionNdc, color] = detailedVertices[vertexIndex];
 		if (ColorsMatch(statsPanelColor, color)) {
 			statsPanelMaxX = std::max(statsPanelMaxX, positionNdc[0]);
 		}
 		if (ColorsMatch(helperPanelColor, color)) {
 			helperPanelMaxX = std::max(helperPanelMaxX, positionNdc[0]);
 		}
-		if (ColorsMatch(helperTextColor, color)) {
-			helperTextMaxX = std::max(helperTextMaxX, positionNdc[0]);
+		if (ColorsMatch(textColor, color)) {
+			textMaxX = std::max(textMaxX, positionNdc[0]);
 		}
 	}
 
 	EXPECT_TRUE(context, statsPanelMaxX > -1.0f);
 	EXPECT_TRUE(context, helperPanelMaxX > -1.0f);
-	EXPECT_TRUE(context, helperTextMaxX > -1.0f);
+	EXPECT_TRUE(context, textMaxX > -1.0f);
 	EXPECT_TRUE(context, std::abs(statsPanelMaxX - helperPanelMaxX) <= 0.0001f);
-	EXPECT_TRUE(context, helperTextMaxX <= helperPanelMaxX);
+	EXPECT_TRUE(context, textMaxX <= helperPanelMaxX);
 }
 
 void TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(TestContext &context)
@@ -6187,6 +6521,7 @@ int main()
 	TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(context);
 	TestUpdateAppConsumesDebugInputActions(context);
 	TestUpdateAppTogglesWalkAirControlMode(context);
+	TestUpdateAppTogglesWalkAutoJump(context);
 	TestUpdateAppTogglesWalkAutoJumpDelay(context);
 	TestInputReplayCaptureRoundTripsFile(context);
 	TestInputReplayCanDriveWalkSequence(context);
@@ -6261,6 +6596,7 @@ int main()
 	TestWalkCharacterHeldJumpDoesNotAcquireForeignWallTopNearTwoBlockWall(context);
 	TestWalkCharacterFallsAfterEditedSupportIsRemoved(context);
 	TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(context);
+	TestWalkCharacterAutoJumpToggleControlsOneBlockTraversal(context);
 	TestWalkCharacterCanJumpOntoCornerSideFromPerpendicularApproach(context);
 	TestWalkCharacterSneakCanMoveAlongNegativeSingleBlockEdge(context);
 	TestWalkCharacterSneakCanMoveAlongIsolatedCornerEdge(context);
@@ -6284,7 +6620,11 @@ int main()
 	TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(context);
 	TestUpdateVoxelInteractionFillModeFloodFillsConnectedRegion(context);
 	TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(context);
+	TestUpdateVoxelInteractionPickTargetMaterialCopiesSelectedVoxelMaterial(context);
+	TestUpdateVoxelInteractionPaintModeAnchoredPlacementFillsVoxelBox(context);
+	TestUpdateVoxelInteractionEraseModeAnchoredRemovalClearsVoxelBox(context);
 	TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(context);
+	TestBuildDebugOverlayBoxesHidesDetailedSelectionOverlaysInBasicHud(context);
 	TestBuildDebugHudVerticesReturnsZeroWhenHidden(context);
 	TestBuildDebugHudVerticesProducesGeometryWhenVisible(context);
 	TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(context);

@@ -105,6 +105,7 @@ Int3 GetVoxelChunkCoord(const VoxelWorld &world, Int3 position);
 size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);
 void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material);
 uint32_t FillVoxelMaterial(VoxelWorld &world, Int3 start, VoxelMaterial material);
+uint32_t FillVoxelBox(VoxelWorld &world, Int3 first, Int3 second, VoxelMaterial material);
 void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);
 void MarkVoxelRegionDirty(VoxelWorld &world, Int3 min, Int3 maxExclusive);
 void MarkAllVoxelChunksDirty(VoxelWorld *world);

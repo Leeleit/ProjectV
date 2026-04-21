@@ -1130,6 +1130,52 @@ uint32_t FillVoxelMaterial(VoxelWorld &world, const Int3 start, const VoxelMater
 	return static_cast<uint32_t>(queue.size());
 }
 
+uint32_t FillVoxelBox(VoxelWorld &world, const Int3 first, const Int3 second, const VoxelMaterial material)
+{
+	const Int3 min{
+		std::min(first.x, second.x),
+		std::min(first.y, second.y),
+		std::min(first.z, second.z),
+	};
+	const Int3 max{
+		std::max(first.x, second.x),
+		std::max(first.y, second.y),
+		std::max(first.z, second.z),
+	};
+	const Int3 clampedMin{
+		std::max(min.x, world.min.x),
+		std::max(min.y, world.min.y),
+		std::max(min.z, world.min.z),
+	};
+	const Int3 clampedMax{
+		std::min(max.x, world.maxExclusive.x - 1),
+		std::min(max.y, world.maxExclusive.y - 1),
+		std::min(max.z, world.maxExclusive.z - 1),
+	};
+	if (clampedMin.x > clampedMax.x ||
+		clampedMin.y > clampedMax.y ||
+		clampedMin.z > clampedMax.z) {
+		return 0;
+	}
+
+	uint32_t changedVoxelCount = 0;
+	for (int z = clampedMin.z; z <= clampedMax.z; ++z) {
+		for (int y = clampedMin.y; y <= clampedMax.y; ++y) {
+			for (int x = clampedMin.x; x <= clampedMax.x; ++x) {
+				const Int3 position{x, y, z};
+				if (GetVoxelMaterial(world, position) == material) {
+					continue;
+				}
+
+				SetVoxelMaterial(world, position, material);
+				++changedVoxelCount;
+			}
+		}
+	}
+
+	return changedVoxelCount;
+}
+
 void MarkAllVoxelChunksDirty(VoxelWorld *world)
 {
 	if (!world) {
