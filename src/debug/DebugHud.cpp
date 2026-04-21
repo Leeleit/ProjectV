@@ -24,8 +24,8 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kStatsLineCount = 12;
-constexpr size_t kHelperLineCount = 7;
+constexpr size_t kStatsLineCount = 17;
+constexpr size_t kHelperLineCount = 8;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -379,6 +379,30 @@ const char *GetChunkActivityLabel(const bool active)
 	return active ? "ACTIVE" : "EMPTY";
 }
 
+const char *GetWalkSupportStateLabel(const uint8_t state)
+{
+	switch (state) {
+	case 1:
+		return "GROUND";
+	case 2:
+		return "EDGE";
+	default:
+		return "AIR";
+	}
+}
+
+const char *GetWalkAirControlModeLabel(const WalkAirControlMode mode)
+{
+	switch (mode) {
+	case WalkAirControlMode::MinecraftLike:
+		return "MC";
+	case WalkAirControlMode::Realistic:
+		return "REAL";
+	}
+
+	return "MC";
+}
+
 void BuildStatsLines(
 	const DebugStats &stats,
 	const CameraState &camera,
@@ -397,9 +421,11 @@ void BuildStatsLines(
 	std::snprintf(
 		outLines.at(2).data(),
 		kHudLineBufferSize,
-		"MODE %s  PAUSE %s",
+		"MODE %s  PAUSE %s  AIR %s  AJD %s",
 		GetControlModeLabel(stats.controlMode),
-		stats.simulationPaused ? "ON" : "OFF");
+		stats.simulationPaused ? "ON" : "OFF",
+		GetWalkAirControlModeLabel(stats.walkAirControlMode),
+		GetBoolLabel(stats.walkAutoJumpDelayEnabled));
 	std::snprintf(
 		outLines.at(3).data(),
 		kHudLineBufferSize,
@@ -428,21 +454,69 @@ void BuildStatsLines(
 	std::snprintf(
 		outLines.at(7).data(),
 		kHudLineBufferSize,
-		"CAM %.1f %.1f %.1f",
+		"CAM %.3f %.3f %.3f",
 		camera.position[0],
 		camera.position[1],
 		camera.position[2]);
+
+	if (stats.walkDebugValid) {
+		std::snprintf(
+			outLines.at(8).data(),
+			kHudLineBufferSize,
+			"FEET %.3f %.3f %.3f",
+			stats.walkFeetPosition[0],
+			stats.walkFeetPosition[1],
+			stats.walkFeetPosition[2]);
+	} else {
+		std::snprintf(outLines.at(8).data(), kHudLineBufferSize, "FEET NONE");
+	}
+
 	std::snprintf(
-		outLines.at(8).data(),
+		outLines.at(9).data(),
 		kHudLineBufferSize,
 		"LOOK %.2f %.2f %.2f",
 		forward[0],
 		forward[1],
 		forward[2]);
 
+	if (stats.walkDebugValid) {
+		std::snprintf(
+			outLines.at(10).data(),
+			kHudLineBufferSize,
+			"SUP %s %.3f %u %u",
+			GetWalkSupportStateLabel(stats.walkSupportState),
+			stats.walkFootSupportScore,
+			stats.walkFootSupportHitSamples,
+			stats.walkFootSupportTotalSamples);
+	} else {
+		std::snprintf(
+			outLines.at(10).data(),
+			kHudLineBufferSize,
+			"SUP NONE");
+	}
+
+	std::snprintf(
+		outLines.at(11).data(),
+		kHudLineBufferSize,
+		"FLG TCK %s SNK %s LCK %s PSL %s",
+		GetBoolLabel(stats.walkGroundTakeoffCached),
+		GetBoolLabel(stats.walkSneakActive),
+		GetBoolLabel(stats.walkJumpLockActive),
+		GetBoolLabel(stats.walkSuppressPassiveSlide));
+
+	std::snprintf(
+		outLines.at(12).data(),
+		kHudLineBufferSize,
+		"GRC %u TGR %u SGR %u LGR %u AJR %u",
+		stats.walkEdgeGraceFramesRemaining,
+		stats.walkGroundTakeoffGraceFramesRemaining,
+		stats.walkSneakSupportGraceFramesRemaining,
+		stats.walkLedgeReleaseGraceFramesRemaining,
+		stats.walkAutoJumpDelayFramesRemaining);
+
 	if (interaction.selection.hasHit) {
 		std::snprintf(
-			outLines.at(9).data(),
+			outLines.at(13).data(),
 			kHudLineBufferSize,
 			"SEL %d %d %d %s %.1f",
 			interaction.selection.targetVoxel.x,
@@ -451,12 +525,12 @@ void BuildStatsLines(
 			GetVoxelMaterialLabel(interaction.selection.targetMaterial),
 			interaction.selection.hitDistance);
 	} else {
-		std::snprintf(outLines.at(9).data(), kHudLineBufferSize, "SEL NONE");
+		std::snprintf(outLines.at(13).data(), kHudLineBufferSize, "SEL NONE");
 	}
 
 	if (interaction.selection.hasPlacementVoxel) {
 		std::snprintf(
-			outLines.at(10).data(),
+			outLines.at(14).data(),
 			kHudLineBufferSize,
 			"PUT %d %d %d %s",
 			interaction.selection.placementVoxel.x,
@@ -465,15 +539,38 @@ void BuildStatsLines(
 			GetVoxelMaterialLabel(interaction.placementMaterial));
 	} else {
 		std::snprintf(
-			outLines.at(10).data(),
+			outLines.at(14).data(),
 			kHudLineBufferSize,
 			"PUT NONE %s",
 			GetVoxelMaterialLabel(interaction.placementMaterial));
 	}
 
+	if (stats.inputReplayPlaybackActive) {
+		std::snprintf(
+			outLines.at(15).data(),
+			kHudLineBufferSize,
+			"REP PLAY %u OF %u",
+			stats.inputReplayPlaybackFrameIndex,
+			stats.inputReplayFrameCount);
+	} else if (stats.inputReplayRecording) {
+		std::snprintf(
+			outLines.at(15).data(),
+			kHudLineBufferSize,
+			"REP REC %u",
+			stats.inputReplayFrameCount);
+	} else if (stats.inputReplayReady) {
+		std::snprintf(
+			outLines.at(15).data(),
+			kHudLineBufferSize,
+			"REP READY %u",
+			stats.inputReplayFrameCount);
+	} else {
+		std::snprintf(outLines.at(15).data(), kHudLineBufferSize, "REP NONE");
+	}
+
 	if (interaction.selection.hasTargetChunk) {
 		std::snprintf(
-			outLines.at(11).data(),
+			outLines.at(16).data(),
 			kHudLineBufferSize,
 			"CHK %d %d %d %s %s",
 			interaction.selection.targetChunkCoord.x,
@@ -482,7 +579,7 @@ void BuildStatsLines(
 			GetChunkDirtyLabel(interaction.selection.targetChunkDirty),
 			GetChunkActivityLabel(interaction.selection.targetChunkActive));
 	} else {
-		std::snprintf(outLines.at(11).data(), kHudLineBufferSize, "CHK NONE");
+		std::snprintf(outLines.at(16).data(), kHudLineBufferSize, "CHK NONE");
 	}
 }
 
@@ -492,9 +589,10 @@ void BuildHelperLines(std::array<std::array<char, kHudLineBufferSize>, kHelperLi
 	std::snprintf(outLines.at(1).data(), kHudLineBufferSize, "F4 MODE  F5 SCENE");
 	std::snprintf(outLines.at(2).data(), kHudLineBufferSize, "F6 SAVE  F7 LOAD");
 	std::snprintf(outLines.at(3).data(), kHudLineBufferSize, "F8 TOOL  F9 BND");
-	std::snprintf(outLines.at(4).data(), kHudLineBufferSize, "F10 DIRTY  TAB MOUSE");
-	std::snprintf(outLines.at(5).data(), kHudLineBufferSize, "SPACE2 WALK CRT");
-	std::snprintf(outLines.at(6).data(), kHudLineBufferSize, "LMB TOOL  RMB ALT  P");
+	std::snprintf(outLines.at(4).data(), kHudLineBufferSize, "F10 DIRTY  F11 AIR");
+	std::snprintf(outLines.at(5).data(), kHudLineBufferSize, "F12 AJDLY  R REC");
+	std::snprintf(outLines.at(6).data(), kHudLineBufferSize, "Y PLAY  TAB MOUSE");
+	std::snprintf(outLines.at(7).data(), kHudLineBufferSize, "LMB TOOL  RMB ALT  P");
 }
 } // namespace
 

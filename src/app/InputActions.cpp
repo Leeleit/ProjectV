@@ -10,6 +10,18 @@ constexpr size_t GetInputActionIndex(const InputAction action)
 	return static_cast<size_t>(action);
 }
 
+constexpr bool IsInputActionReplayRecordable(const InputAction action)
+{
+	switch (action) {
+	case InputAction::ToggleInputReplayRecording:
+	case InputAction::PlayLastInputReplay:
+	case InputAction::Count:
+		return false;
+	default:
+		return true;
+	}
+}
+
 void BindAction(
 	InputState &input,
 	const InputAction action,
@@ -115,6 +127,10 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::CycleEditorTool, SDL_SCANCODE_F8);
 	BindAction(input, InputAction::ToggleChunkBounds, SDL_SCANCODE_F9);
 	BindAction(input, InputAction::ToggleDirtyChunkOverlay, SDL_SCANCODE_F10);
+	BindAction(input, InputAction::ToggleWalkAirControlMode, SDL_SCANCODE_F11);
+	BindAction(input, InputAction::ToggleWalkAutoJumpDelay, SDL_SCANCODE_F12);
+	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
+	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
 }
 
 void HandleInputActionEvent(
@@ -163,6 +179,56 @@ bool ConsumeInputActionPressed(
 	const bool wasPressed = pressed;
 	pressed = false;
 	return wasPressed;
+}
+
+uint32_t GetInputActionDownMask(const InputState &input)
+{
+	uint32_t mask = 0;
+	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
+		const InputAction action = static_cast<InputAction>(actionIndex);
+		if (!IsInputActionReplayRecordable(action) || !input.actions[actionIndex].down) {
+			continue;
+		}
+
+		mask |= 1u << actionIndex;
+	}
+
+	return mask;
+}
+
+uint32_t GetInputActionPressedMask(const InputState &input)
+{
+	uint32_t mask = 0;
+	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
+		const InputAction action = static_cast<InputAction>(actionIndex);
+		if (!IsInputActionReplayRecordable(action) || !input.actions[actionIndex].pressed) {
+			continue;
+		}
+
+		mask |= 1u << actionIndex;
+	}
+
+	return mask;
+}
+
+void ApplyInputActionSnapshot(
+	InputState &input,
+	const uint32_t downMask,
+	const uint32_t pressedMask)
+{
+	input.lastMoveUpPressedTimestampNs = 0;
+	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
+		const InputAction action = static_cast<InputAction>(actionIndex);
+		const bool isRecordable = IsInputActionReplayRecordable(action);
+		const bool isDown = isRecordable && (downMask & 1u << actionIndex) != 0u;
+		const bool isPressed = isRecordable && (pressedMask & 1u << actionIndex) != 0u;
+		input.actions[actionIndex].down = isDown;
+		input.actions[actionIndex].pressed = isPressed;
+		input.bindings[actionIndex].downStates = {};
+		if (isDown && input.bindings[actionIndex].scancodes[0] != SDL_SCANCODE_UNKNOWN) {
+			input.bindings[actionIndex].downStates[0] = true;
+		}
+	}
 }
 
 VoxelMaterial GetNextPlacementMaterial(const VoxelMaterial currentMaterial)

@@ -35,7 +35,9 @@ struct WorldChunkSummary {
 };
 
 struct EcsStateImpl {
-	flecs::world world{};
+	EcsStateImpl() = default;
+
+	flecs::world world;
 	uint64_t primaryCameraEntity = 0;
 	uint64_t primaryPlayerEntity = 0;
 	std::vector<uint64_t> chunkEntities;
@@ -113,7 +115,7 @@ void ResetWorldChunkSummary(EcsStateImpl &ecs)
 } // namespace
 
 struct EcsState {
-	EcsStateImpl impl{};
+	EcsStateImpl impl;
 };
 
 void DestroyEcsState(EcsState *ecs)

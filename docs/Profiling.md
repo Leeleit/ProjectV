@@ -52,9 +52,10 @@ Remove-Item Env:PROJECTV_SCENE_PRESET
 
 ```powershell
 cmake --preset windows-clang-debug-tracy-profiler
-cmake --build build/windows-clang-debug-tracy-profiler --target ProjectV
+cmake --build build/windows-clang-debug-tracy-profiler --target ProjectV tracy-profiler.exe
 $env:PROJECTV_SCENE_PRESET = "TransparencyStress"
 build/windows-clang-debug-tracy-profiler/bin/ProjectV.exe
+build/windows-clang-debug-tracy-profiler/bin/tracy-profiler.exe
 Remove-Item Env:PROJECTV_SCENE_PRESET
 ```
 
@@ -85,9 +86,22 @@ Remove-Item Env:PROJECTV_SCENE_PRESET
 - `Uploaded Chunk Voxel Words`
 - `Upload Descriptor Bytes`
 - `Upload Chunk Voxel Bytes`
+- `Walk Support State`
+- `Walk Support Score`
+- `Walk Feet Y`
+- `Walk Velocity Y`
+- `Walk Sneak Active`
+- `Walk Jump Lock`
+- `Walk Cached Sneak Support`
+- `Walk Feet Inside Sneak Cache`
+- `Walk Edge Grace`
+- `Walk Ground Takeoff Grace`
+- `Walk Sneak Support Grace`
+- `Walk Ledge Release Grace`
+- `Walk Ground Return Anchor`
 
 Это покрывает ровно тот minimum pack, который сейчас нужен по `TODO`: frame time, chunk rebuild count, repacked voxel count,
-generated opaque/transparent faces, visibility pressure и upload sizes.
+generated opaque/transparent faces, visibility pressure, upload sizes и live `walk` state drift.
 
 ## Recommended measurement methodology
 

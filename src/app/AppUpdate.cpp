@@ -2,6 +2,7 @@
 
 #include "app/Camera.hpp"
 #include "app/InputActions.hpp"
+#include "app/InputReplay.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
@@ -60,6 +61,18 @@ CameraState::ControlMode GetNextControlMode(const CameraState::ControlMode contr
 	}
 
 	return CameraState::ControlMode::Creative;
+}
+
+WalkAirControlMode GetNextWalkAirControlMode(const WalkAirControlMode mode)
+{
+	switch (mode) {
+	case WalkAirControlMode::MinecraftLike:
+		return WalkAirControlMode::Realistic;
+	case WalkAirControlMode::Realistic:
+		return WalkAirControlMode::MinecraftLike;
+	}
+
+	return WalkAirControlMode::MinecraftLike;
 }
 
 DebugEditorTool GetNextDebugEditorTool(const DebugEditorTool tool)
@@ -205,6 +218,10 @@ bool UpdateApp(
 	debug->stats.simulationStepsLastFrame = 0;
 	debug->stats.sceneTriangleCount = render->sceneTriangleCount;
 
+	if (input->replay.recording) {
+		RecordInputReplayFrame(input, simulation->frameDeltaSeconds);
+	}
+
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleHud)) {
 		debug->hudVisible = !debug->hudVisible;
 	}
@@ -272,6 +289,39 @@ bool UpdateApp(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleDirtyChunkOverlay)) {
 		debug->showDirtyChunkOverlay = !debug->showDirtyChunkOverlay;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAirControlMode)) {
+		SetPhysicsWalkAirControlMode(physics, GetNextWalkAirControlMode(GetPhysicsWalkAirControlMode(physics)));
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJumpDelay)) {
+		SetPhysicsWalkAutoJumpDelayEnabled(physics, !IsPhysicsWalkAutoJumpDelayEnabled(physics));
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleInputReplayRecording)) {
+		if (input->replay.recording) {
+			if (!StopInputReplayRecording(input)) {
+				return false;
+			}
+		} else {
+			PV_CHECK_OR_RETURN(
+				world->voxelWorld,
+				"App",
+				"UpdateApp.StartInputReplayRecording",
+				"input replay recording requires an active voxel world");
+			if (!StartInputReplayRecording(
+					input,
+					*world->voxelWorld,
+					*camera,
+					*interaction,
+					GetPhysicsWalkAirControlMode(physics),
+					IsPhysicsWalkAutoJumpDelayEnabled(physics))) {
+				return false;
+			}
+		}
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::PlayLastInputReplay) &&
+		!input->replay.recording &&
+		!input->replay.playbackActive) {
+		input->replay.playbackRequested = true;
 	}
 
 	const bool creativeMode = IsCreativeMode(*camera);
@@ -362,7 +412,7 @@ bool UpdateApp(
 
 	const uint64_t worldEditVersionBeforeInteraction =
 		world->voxelWorld ? world->voxelWorld->editVersion : 0;
-	UpdateVoxelInteraction(*camera, input, world->voxelWorld.get(), interaction, allowWorldEditing);
+	UpdateVoxelInteraction(*camera, input, world->voxelWorld.get(), interaction, allowWorldEditing, physics);
 	if (physics &&
 		world->voxelWorld &&
 		world->voxelWorld->editVersion != worldEditVersionBeforeInteraction &&
@@ -395,9 +445,32 @@ bool UpdateApp(
 		debug->stats.scenePreset = world->voxelWorld->scenePreset;
 	}
 	debug->stats.controlMode = camera->controlMode;
+	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
+	debug->stats.walkAutoJumpDelayEnabled = IsPhysicsWalkAutoJumpDelayEnabled(physics);
 	debug->stats.simulationPaused = simulation->paused;
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
+	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
+	debug->stats.walkDebugValid = walkDebugInfo.valid;
+	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);
+	debug->stats.walkFeetPosition = walkDebugInfo.feetPosition;
+	debug->stats.walkFootSupportScore = walkDebugInfo.footSupportScore;
+	debug->stats.walkFootSupportHitSamples = walkDebugInfo.footSupportHitSamples;
+	debug->stats.walkFootSupportTotalSamples = walkDebugInfo.footSupportTotalSamples;
+	debug->stats.walkEdgeGraceFramesRemaining = walkDebugInfo.edgeGraceFramesRemaining;
+	debug->stats.walkGroundTakeoffGraceFramesRemaining = walkDebugInfo.groundTakeoffGraceFramesRemaining;
+	debug->stats.walkSneakSupportGraceFramesRemaining = walkDebugInfo.sneakSupportGraceFramesRemaining;
+	debug->stats.walkLedgeReleaseGraceFramesRemaining = walkDebugInfo.ledgeReleaseGraceFramesRemaining;
+	debug->stats.walkAutoJumpDelayFramesRemaining = walkDebugInfo.autoJumpDelayFramesRemaining;
+	debug->stats.walkGroundTakeoffCached = walkDebugInfo.groundTakeoffCached;
+	debug->stats.walkSneakActive = walkDebugInfo.sneakActive;
+	debug->stats.walkJumpLockActive = walkDebugInfo.jumpLockActive;
+	debug->stats.walkSuppressPassiveSlide = walkDebugInfo.suppressPassiveSlide;
+	debug->stats.inputReplayRecording = input->replay.recording;
+	debug->stats.inputReplayPlaybackActive = input->replay.playbackActive;
+	debug->stats.inputReplayReady = input->replay.captureAvailable;
+	debug->stats.inputReplayFrameCount = static_cast<uint32_t>(input->replay.capture.frames.size());
+	debug->stats.inputReplayPlaybackFrameIndex = static_cast<uint32_t>(input->replay.playbackFrameIndex);
 
 	return true;
 }

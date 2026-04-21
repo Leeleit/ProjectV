@@ -26,20 +26,20 @@ void LogCheckFailure(
 	int line);
 } // namespace runtime
 
-#define PV_CHECK_OR_RETURN(condition, subsystem, step, detail) \
-	do { \
+#define PV_CHECK_OR_RETURN(condition, subsystem, step, detail)                                   \
+	do {                                                                                         \
 		if (!(condition)) {                                                                      \
 			::runtime::LogCheckFailure(subsystem, step, #condition, detail, __FILE__, __LINE__); \
 			return false;                                                                        \
-		} \
+		}                                                                                        \
 	} while (0)
 
 #if !defined(NDEBUG)
-#define PV_ASSERT(condition, subsystem, step, detail) \
-	do { \
-		if (!(condition)) { \
+#define PV_ASSERT(condition, subsystem, step, detail)                                               \
+	do {                                                                                            \
+		if (!(condition)) {                                                                         \
 			::runtime::AbortAssertFailure(subsystem, step, #condition, detail, __FILE__, __LINE__); \
-		} \
+		}                                                                                           \
 	} while (0)
 #else
 #define PV_ASSERT(condition, subsystem, step, detail) ((void)0)

@@ -13,6 +13,12 @@ bool IsInputActionDown(
 bool ConsumeInputActionPressed(
 	InputState &input,
 	InputAction action);
+uint32_t GetInputActionDownMask(const InputState &input);
+uint32_t GetInputActionPressedMask(const InputState &input);
+void ApplyInputActionSnapshot(
+	InputState &input,
+	uint32_t downMask,
+	uint32_t pressedMask);
 VoxelMaterial GetNextPlacementMaterial(VoxelMaterial currentMaterial);
 
 #endif

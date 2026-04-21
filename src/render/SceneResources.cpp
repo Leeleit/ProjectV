@@ -1,11 +1,11 @@
 #include "render/SceneResources.hpp"
 
 #include "debug/Profiling.hpp"
-#include "voxel/VoxelMaterials.hpp"
-#include "voxel/VoxelWorld.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
+#include "voxel/VoxelMaterials.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
 #include <array>

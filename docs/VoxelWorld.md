@@ -266,7 +266,20 @@ Physics sync сейчас завязан на `editVersion`.
 - мир по-прежнему фиксирован по границам и размеру procedural lab scene;
 - current snapshot path покрывает только `VoxelWorld`, а не полный game/session state;
 - richer chunk model ещё не сделан;
-- `walk` controller пока без отдельного ground-sticking / edge-slide tuning;
+- `walk` controller уже использует continuous foot-support score на block edges и не магнитит персонажа к нижнему floor после
+  полной потери опоры; passive edge-slide без input дополнительно режется через `CharacterVirtual` contact listener как
+  selective downhill removal только на одном best floor-like contact за кадр, edge-jump кратко лочит sample-based
+  regrounding, а jump-on-ledge остаётся физическим без отдельного `Y`-snap helper'а и использует только узкий
+  non-rising ledge catch против top-edge snag. `Shift` в `walk` включает отдельный sneak/crouch path с lower
+  stance и непрерывной face-based support geometry для центра стопы: pre-move safe-walk проектирует `desired feet XZ`
+  в объединение walkable top-face support area, cached support-region grace и post-solve correction используют ту же
+  область, так что вдоль края можно идти и
+  заходить почти в corner, не сваливаясь вниз при зажатом `Shift`; если `feet XZ` всё ещё остаётся внутри cached
+  support-region, sneak может вернуть небольшой solver-driven drop обратно к cached top-face height, чтобы не копить
+  wall-cling по `Y`. Отпускание `Shift` на уже безопасной кромке теперь не должно мгновенно ронять персонажа, пока он
+  не делает новый unsafe шаг наружу. Сам ledge catch для jump теперь смотрит не только центральный probe, но и lateral
+  offsets, и разрешён только из pre-step grounded support, чтобы dead-pixel на single-block edge/corner не был привязан
+  к одному точному попаданию.
 - `Fluid` пока лишь visual/world material, а не полноценная simulation or collision system.
 
 ## Связанные документы

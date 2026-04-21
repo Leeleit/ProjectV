@@ -3,6 +3,7 @@ add_executable(ProjectVTests
         ../src/app/AppUpdate.cpp
         ../src/app/Camera.cpp
         ../src/app/InputActions.cpp
+        ../src/app/InputReplay.cpp
         ../src/ecs/EcsWorld.cpp
         ../src/physics/PhysicsWorld.cpp
         ../src/debug/DebugHud.cpp
@@ -15,6 +16,11 @@ add_executable(ProjectVTests
         ../src/voxel/VoxelMaterials.cpp
         ../src/voxel/VoxelRaycast.cpp
         ../src/voxel/VoxelWorld.cpp
+)
+
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" PROJECTV_TESTS_SOURCE_DIR_CMAKE)
+target_compile_definitions(ProjectVTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
 )
 
 target_include_directories(ProjectVTests PRIVATE

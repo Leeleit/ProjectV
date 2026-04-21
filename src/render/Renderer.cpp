@@ -1,10 +1,10 @@
 #include "render/Renderer.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
-#include "core/RuntimeDiagnostics.hpp"
-#include "render/vulkan/VulkanResult.hpp"
 #include "render/vulkan/VulkanInit.hpp"
+#include "render/vulkan/VulkanResult.hpp"
 
 #include "fmt/format.h"
 

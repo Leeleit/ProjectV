@@ -3,16 +3,18 @@
 #include "app/InputActions.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
+#include "debug/Profiling.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <mutex>
 
 #pragma warning(push, 0)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
-#include <Jolt/Jolt.h>
 #include <Jolt/Core/Factory.h>
+#include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
@@ -36,14 +38,70 @@ constexpr float kPhysicsRaycastVoxelEpsilon = 0.001f;
 constexpr float kWalkCapsuleRadius = 0.35f;
 constexpr float kWalkCapsuleHalfHeight = 0.55f;
 constexpr float kWalkEyeHeight = 1.6f;
+constexpr float kWalkSneakCapsuleHalfHeight = 0.45f;
+constexpr float kWalkSneakEyeHeight = 1.45f;
 constexpr float kWalkMoveSpeed = 4.5f;
+constexpr float kWalkSneakMoveSpeedMultiplier = 0.45f;
 constexpr float kWalkBoostMultiplier = 1.8f;
 constexpr float kWalkSlowMultiplier = 0.35f;
-constexpr float kWalkJumpSpeed = 6.5f;
+constexpr float kWalkJumpSpeed = 8.0f;
 constexpr float kWalkSpawnClearance = 0.05f;
+constexpr float kWalkSneakShapeMaxPenetrationDepth = 0.05f;
+constexpr float kWalkJumpRealisticAirBrakeDeceleration = 14.0f;
+constexpr float kWalkJumpRealisticAirReacceleration = 10.0f;
+constexpr float kWalkJumpMinecraftAirBrakeDeceleration = 14.0f;
+constexpr float kWalkJumpMinecraftAirControlAcceleration = 12.0f;
+constexpr uint32_t kWalkAutoJumpDelayFrames = 40;
+constexpr float kWalkStickToFloorDistance = 0.25f;
+constexpr float kWalkStairsStepUpHeight = 0.4f;
+constexpr float kWalkAutoJumpMinRise = kWalkStairsStepUpHeight + 0.05f;
+constexpr float kWalkAutoJumpMaxRise = 1.05f;
+constexpr float kWalkCameraAirRiseSmoothingMaxPerTick = 0.12f;
+constexpr float kWalkPredictiveContactDistance = 0.02f;
+constexpr float kWalkFootSupportSampleRadius = kWalkCapsuleRadius * 0.8f;
+constexpr float kWalkFootSupportProbeDepth = 0.08f;
+constexpr uint32_t kWalkFootSupportSampleGridResolution = 4;
+constexpr float kWalkFootSupportGroundedScore = 0.7f;
+constexpr float kWalkFootSupportEdgeGraceScore = 0.2f;
+constexpr float kWalkFootSupportMovingEdgeGraceScore = 0.5f;
+constexpr float kWalkGroundSupportRadius = 0.2f;
+constexpr float kWalkGroundTakeoffSupportRadius = kWalkCapsuleRadius + 0.05f;
+constexpr float kWalkGroundTakeoffSnapMaxDrop = 0.05f;
+constexpr float kWalkRestingEdgeHoldMaxHorizontalDrift = 0.02f;
+constexpr float kWalkSneakSupportSampleRadius = kWalkFootSupportSampleRadius;
+[[maybe_unused]] constexpr float kWalkSneakSupportProbeDepth = 0.08f;
+constexpr float kWalkSneakSupportRegionExtent = 0.39f;
+constexpr float kWalkSneakBackoffInset = 0.01f;
+constexpr float kWalkSneakOutwardDriftEpsilon = 0.001f;
+constexpr float kWalkSneakStickProbeLift = 0.05f;
+constexpr float kWalkSneakStickToFloorDistance = 0.08f;
+constexpr float kWalkSneakStickPositiveVelocityEpsilon = 0.15f;
+constexpr float kWalkSneakStickMinimumDrop = 0.01f;
+constexpr float kWalkJumpLockedSupportCeilingReprojectMaxDistance = kWalkCapsuleRadius + kWalkSneakStickToFloorDistance;
+constexpr float kWalkJumpLockedSupportMaxRiseAboveReference = 2.5f;
+constexpr float kWalkJumpLockedSupportMaxDropBelowReference = 0.45f;
+constexpr float kWalkJumpLockedSupportSourceWallMaxUpDot = 0.55f;
+constexpr float kWalkJumpLockedSupportContactVoxelEpsilon = 0.02f;
+constexpr float kWalkCollisionEpsilon = 0.001f;
+constexpr float kWalkPenetrationResolveEpsilon = 0.0005f;
+constexpr float kWalkGroundProbeEpsilon = 0.001f;
+constexpr float kWalkHorizontalSubstepDistance = 0.05f;
+constexpr uint32_t kWalkEdgeGraceFrames = 4;
+constexpr uint32_t kWalkGroundTakeoffGraceFrames = 12;
+constexpr uint32_t kWalkGroundReturnAnchorFrames = 48;
+constexpr float kWalkGroundReturnRestoreMaxDrop = 0.65f;
+constexpr float kWalkGroundReturnSnapMaxDrop = 0.05f;
+constexpr float kWalkGroundReturnSupportMaxRise = 0.08f;
+constexpr uint32_t kWalkSneakSupportGraceFrames = 3;
+constexpr uint32_t kWalkLedgeReleaseGraceFrames = 4;
+constexpr float kWalkGroundTakeoffGraceMaxDrift = 0.65f;
+constexpr float kWalkGroundTakeoffLandingMaxDrift = 0.25f;
+constexpr float kWalkSupportContactMaxHeightAboveFeet = 0.1f;
 constexpr float kCreativeMoveSpeedMultiplier = 1.0f;
 constexpr float kCreativeBoostMultiplier = 3.0f;
 constexpr float kCreativeSlowMultiplier = 0.25f;
+constexpr float kCreativeCollisionMaxStepDistance = 0.05f;
+constexpr uint32_t kCreativeCollisionMaxSubsteps = 32;
 constexpr uint32_t kMaxPhysicsBodies = 32;
 constexpr uint32_t kMaxBodyPairs = 64;
 constexpr uint32_t kMaxContactConstraints = 64;
@@ -64,7 +122,82 @@ struct Float3 {
 	float z = 0.0f;
 };
 
+enum class WalkSupportState : uint8_t {
+	Air = 0,
+	Grounded,
+	EdgeGrace,
+};
+
+struct WalkFootSupportInfo {
+	float score = 0.0f;
+	uint32_t hitSamples = 0;
+	uint32_t totalSamples = 0;
+	std::array<float, 3> centroid{};
+};
+
+bool HasInputActionMaskBit(const uint32_t mask, const InputAction action)
+{
+	return (mask & (1u << static_cast<uint32_t>(action))) != 0u;
+}
+
+struct WalkSneakSupportFace {
+	std::array<float, 2> min{};
+	std::array<float, 2> max{};
+};
+
+struct WalkSneakSupportRegion {
+	std::array<WalkSneakSupportFace, 36> faces{};
+	uint32_t faceCount = 0;
+	float sampleRadius = kWalkSneakSupportSampleRadius;
+	std::array<float, 2> boundsMin{};
+	std::array<float, 2> boundsMax{};
+	std::array<float, 3> referenceFeetPosition{};
+	bool valid = false;
+};
+
+struct WalkJumpLockedSupportState {
+	WalkSneakSupportRegion region{};
+	std::array<float, 3> anchorFeetPosition{};
+	std::array<float, 3> constrainedFeetPosition{};
+	bool constrainMovementWhileSneakHeld = false;
+	bool valid = false;
+};
+
+struct WalkTopSupportCandidate {
+	WalkSneakSupportRegion region{};
+	std::array<float, 3> feetPosition{};
+	bool valid = false;
+};
+
+struct WalkSupportContactKey {
+	JPH::BodyID bodyId;
+	JPH::SubShapeID subShapeId;
+	bool valid = false;
+};
+
 Int3 FloorToVoxel(const std::array<float, 3> &position);
+WalkSneakSupportRegion ComputeWalkSneakSupportRegion(
+	const VoxelWorld &world,
+	const std::array<float, 3> &feetPosition);
+bool IsWalkFeetInsideSneakSupportRegion(
+	const WalkSneakSupportRegion &region,
+	const std::array<float, 3> &feetPosition);
+std::array<float, 2> ProjectWalkFeetToSneakSupportRegion(
+	const WalkSneakSupportRegion &region,
+	const std::array<float, 3> &feetPosition);
+bool FindWalkBestSupportFeetYAtXZ(
+	const VoxelWorld &world,
+	const std::array<float, 3> &referenceFeetPosition,
+	float maxRise,
+	float maxDrop,
+	bool sneakActive,
+	float footprintRadius,
+	float &outFeetY);
+bool IsWalkCharacterClearAt(
+	const VoxelWorld &world,
+	const std::array<float, 3> &feetPosition,
+	bool sneakActive);
+bool HasWalkSneakSupport(const VoxelWorld &world, const std::array<float, 3> &feetPosition);
 
 class BroadPhaseLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
   public:
@@ -124,6 +257,22 @@ class ObjectVsBroadPhaseLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLa
 	}
 };
 
+class WalkCharacterContactListener final : public JPH::CharacterContactListener {
+  public:
+	PhysicsState *physics = nullptr;
+
+	void OnContactSolve(
+		const JPH::CharacterVirtual *inCharacter,
+		const JPH::BodyID &inBodyID2,
+		const JPH::SubShapeID &inSubShapeID2,
+		JPH::RVec3Arg inContactPosition,
+		JPH::Vec3Arg inContactNormal,
+		JPH::Vec3Arg inContactVelocity,
+		const JPH::PhysicsMaterial *inContactMaterial,
+		JPH::Vec3Arg inCharacterVelocity,
+		JPH::Vec3 &ioNewCharacterVelocity) override;
+};
+
 struct JoltRuntimeState {
 	std::mutex mutex;
 	uint32_t refCount = 0;
@@ -140,14 +289,46 @@ struct PhysicsState {
 	BroadPhaseLayerInterfaceImpl broadPhaseLayerInterface{};
 	ObjectVsBroadPhaseLayerFilterImpl objectVsBroadPhaseLayerFilter{};
 	ObjectLayerPairFilterImpl objectLayerPairFilter{};
-	JPH::PhysicsSystem physicsSystem{};
+	JPH::PhysicsSystem physicsSystem;
 	JPH::TempAllocatorImpl tempAllocator{static_cast<unsigned int>(kPhysicsTempAllocatorBytes)};
 	JPH::BodyID staticWorldBodyId;
 	JPH::RefConst<JPH::Shape> staticWorldShape;
+	JPH::RefConst<JPH::Shape> walkStandingShape;
+	JPH::RefConst<JPH::Shape> walkSneakShape;
 	JPH::Ref<JPH::CharacterVirtual> walkCharacter;
+	WalkCharacterContactListener walkContactListener{};
 	const VoxelWorld *syncedWorld = nullptr;
 	uint64_t syncedWorldEditVersion = 0;
 	bool walkCharacterInitialized = false;
+	WalkSupportState walkSupportState = WalkSupportState::Air;
+	uint32_t walkEdgeGraceFramesRemaining = 0;
+	uint32_t walkGroundTakeoffGraceFramesRemaining = 0;
+	float walkFootSupportScore = 0.0f;
+	uint32_t walkFootSupportHitSamples = 0;
+	uint32_t walkFootSupportTotalSamples = 0;
+	std::array<float, 3> walkFootSupportCentroid{};
+	std::array<float, 3> walkCachedGroundTakeoffFeetPosition{};
+	bool walkCachedGroundTakeoffValid = false;
+	std::array<float, 3> walkGroundReturnAnchorFeetPosition{};
+	uint32_t walkGroundReturnAnchorFramesRemaining = 0;
+	bool walkGroundReturnAnchorValid = false;
+	std::array<float, 3> walkPreviousSupportFeetPosition{};
+	bool walkPreviousSupportFeetPositionValid = false;
+	bool walkHadHorizontalMotionLastStep = false;
+	JPH::Vec3 walkJumpBallisticHorizontalDirection = JPH::Vec3::sZero();
+	JPH::Vec3 walkJumpBallisticHorizontalVelocity = JPH::Vec3::sZero();
+	float walkJumpBallisticHorizontalTakeoffSpeed = 0.0f;
+	bool walkJumpBallisticHorizontalVelocityActive = false;
+	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	uint32_t walkAutoJumpDelayFramesRemaining = 0;
+	bool walkAutoJumpDelayEnabled = true;
+	WalkSupportContactKey walkPassiveSlideContact{};
+	bool walkSneakActive = false;
+	WalkSneakSupportRegion walkCachedSneakSupportRegion{};
+	WalkJumpLockedSupportState walkJumpLockedSupport{};
+	uint32_t walkSneakSupportGraceFramesRemaining = 0;
+	uint32_t walkLedgeReleaseGraceFramesRemaining = 0;
+	bool walkSuppressPassiveSlide = false;
 };
 
 namespace {
@@ -181,6 +362,167 @@ void ReleaseJoltRuntime()
 	}
 }
 
+int GetWalkSneakSupportVoxelY(const WalkSneakSupportRegion &region)
+{
+	return FloorToVoxel(
+			   {
+				   region.referenceFeetPosition[0],
+				   region.referenceFeetPosition[1] - kWalkSpawnClearance - kWalkGroundProbeEpsilon,
+				   region.referenceFeetPosition[2],
+			   })
+		.y;
+}
+
+bool DoesWalkSneakSupportRegionContainVoxel(
+	const WalkSneakSupportRegion &region,
+	const int voxelX,
+	const int voxelZ)
+{
+	for (uint32_t faceIndex = 0; faceIndex < region.faceCount; ++faceIndex) {
+		const auto &[min, max] = region.faces[faceIndex];
+		if (min[0] <= static_cast<float>(voxelX) + kWalkSneakOutwardDriftEpsilon &&
+			max[0] >= static_cast<float>(voxelX + 1) - kWalkSneakOutwardDriftEpsilon &&
+			min[1] <= static_cast<float>(voxelZ) + kWalkSneakOutwardDriftEpsilon &&
+			max[1] >= static_cast<float>(voxelZ + 1) - kWalkSneakOutwardDriftEpsilon) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool IsWalkJumpLockedSupportTargetInsideRegion(const PhysicsState &physics)
+{
+	std::array<float, 3> constrainedFeetPosition = physics.walkJumpLockedSupport.constrainedFeetPosition;
+	const std::array<float, 2> projectedFeetXZ =
+		ProjectWalkFeetToSneakSupportRegion(physics.walkJumpLockedSupport.region, constrainedFeetPosition);
+	constrainedFeetPosition[0] = projectedFeetXZ[0];
+	constrainedFeetPosition[2] = projectedFeetXZ[1];
+	return IsWalkFeetInsideSneakSupportRegion(physics.walkJumpLockedSupport.region, constrainedFeetPosition);
+}
+
+bool IsWalkJumpLockedSourceSupportSideWallContact(
+	const PhysicsState &physics,
+	const JPH::BodyID &bodyId,
+	JPH::RVec3Arg contactPosition,
+	JPH::Vec3Arg contactNormal)
+{
+	if (!physics.walkJumpLockedSupport.valid || bodyId != physics.staticWorldBodyId) {
+		return false;
+	}
+
+	const JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr || !IsWalkJumpLockedSupportTargetInsideRegion(physics)) {
+		return false;
+	}
+
+	const JPH::Vec3 up = character->GetUp();
+	const JPH::Vec3 normalizedContactNormal = contactNormal.NormalizedOr(JPH::Vec3::sZero());
+	if (normalizedContactNormal.IsNearZero() ||
+		std::abs(normalizedContactNormal.Dot(up)) >= kWalkJumpLockedSupportSourceWallMaxUpDot) {
+		return false;
+	}
+
+	const JPH::RVec3 samplePoint =
+		contactPosition -
+		JPH::RVec3(normalizedContactNormal * kWalkJumpLockedSupportContactVoxelEpsilon) -
+		JPH::RVec3(up * kWalkJumpLockedSupportContactVoxelEpsilon);
+	const Int3 contactVoxel{
+		static_cast<int>(std::floor(samplePoint.GetX())),
+		static_cast<int>(std::floor(samplePoint.GetY())),
+		static_cast<int>(std::floor(samplePoint.GetZ())),
+	};
+	return contactVoxel.y == GetWalkSneakSupportVoxelY(physics.walkJumpLockedSupport.region) &&
+		   DoesWalkSneakSupportRegionContainVoxel(
+			   physics.walkJumpLockedSupport.region,
+			   contactVoxel.x,
+			   contactVoxel.z);
+}
+
+void WalkCharacterContactListener::OnContactSolve(
+	const JPH::CharacterVirtual *inCharacter,
+	const JPH::BodyID &inBodyID2,
+	const JPH::SubShapeID &inSubShapeID2,
+	JPH::RVec3Arg inContactPosition,
+	JPH::Vec3Arg inContactNormal,
+	JPH::Vec3Arg inContactVelocity,
+	const JPH::PhysicsMaterial *inContactMaterial,
+	JPH::Vec3Arg inCharacterVelocity,
+	JPH::Vec3 &ioNewCharacterVelocity)
+{
+	(void)inSubShapeID2;
+	(void)inContactMaterial;
+
+	if (physics != nullptr &&
+		IsWalkJumpLockedSourceSupportSideWallContact(*physics, inBodyID2, inContactPosition, inContactNormal)) {
+		const JPH::Vec3 wallNormal = inContactNormal.NormalizedOr(JPH::Vec3::sZero());
+		if (wallNormal.IsNearZero()) {
+			ioNewCharacterVelocity = inCharacterVelocity;
+			return;
+		}
+
+		const float intoWallVelocity = ioNewCharacterVelocity.Dot(wallNormal);
+		if (intoWallVelocity < 0.0f) {
+			ioNewCharacterVelocity -= wallNormal * intoWallVelocity;
+		}
+
+		const JPH::Vec3 up = inCharacter->GetUp();
+		const float preSolveUpVelocity = inCharacterVelocity.Dot(up);
+		const float postSolveUpVelocity = ioNewCharacterVelocity.Dot(up);
+		if (postSolveUpVelocity < preSolveUpVelocity) {
+			ioNewCharacterVelocity += up * (preSolveUpVelocity - postSolveUpVelocity);
+		}
+		return;
+	}
+
+	if (physics == nullptr || !physics->walkSuppressPassiveSlide) {
+		return;
+	}
+
+	if (physics->walkJumpLockedSupport.valid ||
+		physics->walkFootSupportScore < kWalkFootSupportEdgeGraceScore ||
+		physics->walkSupportState == WalkSupportState::Air) {
+		return;
+	}
+
+	if (!physics->walkPassiveSlideContact.valid ||
+		physics->walkPassiveSlideContact.bodyId != inBodyID2 ||
+		physics->walkPassiveSlideContact.subShapeId != inSubShapeID2) {
+		return;
+	}
+
+	if (!inContactVelocity.IsNearZero() || inCharacter->IsSlopeTooSteep(inContactNormal)) {
+		return;
+	}
+
+	const JPH::Vec3 up = inCharacter->GetUp();
+	if (inCharacterVelocity.Dot(up) > 0.1f) {
+		return;
+	}
+	if (inContactPosition.GetY() >
+		inCharacter->GetPosition().GetY() + kWalkSupportContactMaxHeightAboveFeet) {
+		return;
+	}
+
+	const JPH::Vec3 contactNormal = inContactNormal.Normalized();
+	const float upDot = contactNormal.Dot(up);
+	if (upDot <= 0.5f) {
+		return;
+	}
+
+	const JPH::Vec3 uphill = up - contactNormal * upDot;
+	const float uphillLengthSq = uphill.LengthSq();
+	if (uphillLengthSq <= 1.0e-6f) {
+		return;
+	}
+
+	const JPH::Vec3 downhill = -uphill * (1.0f / std::sqrt(uphillLengthSq));
+	const float downhillVelocity = ioNewCharacterVelocity.Dot(downhill);
+	if (downhillVelocity > 0.0f) {
+		ioNewCharacterVelocity -= downhill * downhillVelocity;
+	}
+}
+
 bool IsPhysicsSolidMaterial(const VoxelMaterial material)
 {
 	switch (material) {
@@ -200,6 +542,11 @@ bool IsSolidAtPosition(const VoxelWorld &world, const std::array<float, 3> &posi
 {
 	const Int3 voxel = FloorToVoxel(position);
 	return IsInsideVoxelWorld(world, voxel) && IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel));
+}
+
+float GetWalkEyeHeight(const PhysicsState &physics, const CameraState::ControlMode controlMode)
+{
+	return controlMode == CameraState::ControlMode::Walk && physics.walkSneakActive ? kWalkSneakEyeHeight : kWalkEyeHeight;
 }
 
 Float3 Normalize(const Float3 vector)
@@ -259,6 +606,73 @@ std::array<float, 3> ToArray(const Vector3 &value)
 		static_cast<float>(value.GetY()),
 		static_cast<float>(value.GetZ()),
 	};
+}
+
+int64_t ToWalkSupportProfilingValue(const WalkSupportState state)
+{
+	switch (state) {
+	case WalkSupportState::Air:
+		return 0;
+	case WalkSupportState::EdgeGrace:
+		return 1;
+	case WalkSupportState::Grounded:
+		return 2;
+	}
+
+	return 0;
+}
+
+int64_t ToWalkAirControlProfilingValue(const WalkAirControlMode mode)
+{
+	switch (mode) {
+	case WalkAirControlMode::MinecraftLike:
+		return 0;
+	case WalkAirControlMode::Realistic:
+		return 1;
+	}
+
+	return 0;
+}
+
+void PlotWalkProfilingState(
+	const PhysicsState &physics,
+	const std::array<float, 3> &feetPosition,
+	const JPH::Vec3 &velocity)
+{
+	profiling::PlotValue("Walk Support State", ToWalkSupportProfilingValue(physics.walkSupportState));
+	profiling::PlotValue("Walk Support Score", physics.walkFootSupportScore);
+	profiling::PlotValue("Walk Feet Y", feetPosition[1]);
+	profiling::PlotValue("Walk Velocity Y", velocity.GetY());
+	profiling::PlotValue("Walk Air Control Mode", ToWalkAirControlProfilingValue(physics.walkAirControlMode));
+	profiling::PlotValue("Walk Auto Jump Delay", physics.walkAutoJumpDelayEnabled ? int64_t{1} : int64_t{0});
+	profiling::PlotValue("Walk Auto Jump Delay Frames", static_cast<int64_t>(physics.walkAutoJumpDelayFramesRemaining));
+	profiling::PlotValue("Walk Sneak Active", physics.walkSneakActive ? int64_t{1} : int64_t{0});
+	profiling::PlotValue("Walk Jump Lock", physics.walkJumpLockedSupport.valid ? int64_t{1} : int64_t{0});
+	profiling::PlotValue(
+		"Walk Jump Ballistic Lock",
+		physics.walkJumpBallisticHorizontalVelocityActive ? int64_t{1} : int64_t{0});
+	profiling::PlotValue(
+		"Walk Cached Sneak Support",
+		physics.walkCachedSneakSupportRegion.valid ? int64_t{1} : int64_t{0});
+	profiling::PlotValue(
+		"Walk Feet Inside Sneak Cache",
+		physics.walkCachedSneakSupportRegion.valid &&
+				IsWalkFeetInsideSneakSupportRegion(physics.walkCachedSneakSupportRegion, feetPosition)
+			? int64_t{1}
+			: int64_t{0});
+	profiling::PlotValue("Walk Edge Grace", static_cast<int64_t>(physics.walkEdgeGraceFramesRemaining));
+	profiling::PlotValue(
+		"Walk Ground Takeoff Grace",
+		static_cast<int64_t>(physics.walkGroundTakeoffGraceFramesRemaining));
+	profiling::PlotValue(
+		"Walk Sneak Support Grace",
+		static_cast<int64_t>(physics.walkSneakSupportGraceFramesRemaining));
+	profiling::PlotValue(
+		"Walk Ledge Release Grace",
+		static_cast<int64_t>(physics.walkLedgeReleaseGraceFramesRemaining));
+	profiling::PlotValue(
+		"Walk Ground Return Anchor",
+		physics.walkGroundReturnAnchorValid ? int64_t{1} : int64_t{0});
 }
 
 void DestroyStaticWorldBody(PhysicsState &physics)
@@ -342,22 +756,42 @@ bool EnsureWalkCharacter(PhysicsState &physics)
 		return true;
 	}
 
-	const JPH::RotatedTranslatedShapeSettings characterShapeSettings(
-		JPH::Vec3(0.0f, kWalkCapsuleHalfHeight + kWalkCapsuleRadius, 0.0f),
-		JPH::Quat::sIdentity(),
-		new JPH::CapsuleShape(kWalkCapsuleHalfHeight, kWalkCapsuleRadius));
-	const JPH::ShapeSettings::ShapeResult characterShapeResult = characterShapeSettings.Create();
-	if (!characterShapeResult.IsValid()) {
-		runtime::LogRuntimeFailure(
-			"Physics",
-			"EnsureWalkCharacter.CreateShape",
-			characterShapeResult.GetError());
+	const auto ensureShape = [&](const float capsuleHalfHeight,
+								 JPH::RefConst<JPH::Shape> &outShape,
+								 const char *step) -> bool {
+		if (outShape != nullptr) {
+			return true;
+		}
+
+		const JPH::RotatedTranslatedShapeSettings characterShapeSettings(
+			JPH::Vec3(0.0f, capsuleHalfHeight + kWalkCapsuleRadius, 0.0f),
+			JPH::Quat::sIdentity(),
+			new JPH::CapsuleShape(capsuleHalfHeight, kWalkCapsuleRadius));
+		const JPH::ShapeSettings::ShapeResult characterShapeResult = characterShapeSettings.Create();
+		if (!characterShapeResult.IsValid()) {
+			runtime::LogRuntimeFailure(
+				"Physics",
+				step,
+				characterShapeResult.GetError());
+			return false;
+		}
+
+		outShape = characterShapeResult.Get();
+		return true;
+	};
+
+	if (!ensureShape(kWalkCapsuleHalfHeight, physics.walkStandingShape, "EnsureWalkCharacter.CreateStandingShape")) {
+		return false;
+	}
+	if (!ensureShape(kWalkSneakCapsuleHalfHeight, physics.walkSneakShape, "EnsureWalkCharacter.CreateSneakShape")) {
 		return false;
 	}
 
 	const JPH::Ref characterSettings = new JPH::CharacterVirtualSettings();
-	characterSettings->mShape = characterShapeResult.Get();
+	characterSettings->mShape = physics.walkStandingShape.GetPtr();
 	characterSettings->mSupportingVolume = JPH::Plane(JPH::Vec3::sAxisY(), -kWalkCapsuleRadius);
+	characterSettings->mEnhancedInternalEdgeRemoval = true;
+	characterSettings->mPredictiveContactDistance = kWalkPredictiveContactDistance;
 	characterSettings->mMaxStrength = 0.0f;
 	characterSettings->mMass = 80.0f;
 
@@ -366,8 +800,1828 @@ bool EnsureWalkCharacter(PhysicsState &physics)
 		JPH::RVec3(0.0, 0.0, 0.0),
 		JPH::Quat::sIdentity(),
 		&physics.physicsSystem);
+	physics.walkContactListener.physics = &physics;
+	physics.walkCharacter->SetListener(&physics.walkContactListener);
 	physics.walkCharacterInitialized = false;
+	physics.walkSneakActive = false;
 	return physics.walkCharacter != nullptr;
+}
+
+[[maybe_unused]] JPH::CharacterVirtual::ExtendedUpdateSettings BuildWalkUpdateSettings()
+{
+	JPH::CharacterVirtual::ExtendedUpdateSettings settings;
+	settings.mStickToFloorStepDown = JPH::Vec3(0.0f, -kWalkStickToFloorDistance, 0.0f);
+	settings.mWalkStairsStepUp = JPH::Vec3(0.0f, kWalkStairsStepUpHeight, 0.0f);
+	return settings;
+}
+
+JPH::CharacterVirtual::ExtendedUpdateSettings BuildCreativeUpdateSettings()
+{
+	JPH::CharacterVirtual::ExtendedUpdateSettings settings;
+	settings.mStickToFloorStepDown = JPH::Vec3::sZero();
+	settings.mWalkStairsStepUp = JPH::Vec3::sZero();
+	settings.mWalkStairsStepDownExtra = JPH::Vec3::sZero();
+	return settings;
+}
+
+[[maybe_unused]] JPH::CharacterVirtual::ExtendedUpdateSettings BuildWalkEdgeGraceUpdateSettings()
+{
+	JPH::CharacterVirtual::ExtendedUpdateSettings settings;
+	settings.mStickToFloorStepDown = JPH::Vec3::sZero();
+	settings.mWalkStairsStepUp = JPH::Vec3::sZero();
+	settings.mWalkStairsStepDownExtra = JPH::Vec3::sZero();
+	return settings;
+}
+
+bool SetWalkSneakActive(
+	PhysicsState &physics,
+	const bool sneakActive)
+{
+	JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr || physics.walkSneakActive == sneakActive) {
+		physics.walkSneakActive = sneakActive;
+		return true;
+	}
+
+	const JPH::Shape *targetShape = sneakActive ? physics.walkSneakShape.GetPtr() : physics.walkStandingShape.GetPtr();
+	if (targetShape == nullptr) {
+		return false;
+	}
+
+	if (!character->SetShape(
+			targetShape,
+			sneakActive ? std::numeric_limits<float>::max() : kWalkSneakShapeMaxPenetrationDepth,
+			physics.physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
+			physics.physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),
+			{},
+			{},
+			physics.tempAllocator)) {
+		return false;
+	}
+
+	character->SetInnerBodyShape(targetShape);
+	physics.walkSneakActive = sneakActive;
+	return true;
+}
+
+void ClearWalkSneakSupportCache(PhysicsState &physics)
+{
+	physics.walkCachedSneakSupportRegion = {};
+	physics.walkSneakSupportGraceFramesRemaining = 0;
+	physics.walkLedgeReleaseGraceFramesRemaining = 0;
+}
+
+void ClearWalkJumpLockedSupport(PhysicsState &physics)
+{
+	physics.walkJumpLockedSupport = {};
+}
+
+void ClearWalkJumpBallisticHorizontalVelocity(PhysicsState &physics)
+{
+	physics.walkJumpBallisticHorizontalDirection = JPH::Vec3::sZero();
+	physics.walkJumpBallisticHorizontalVelocity = JPH::Vec3::sZero();
+	physics.walkJumpBallisticHorizontalTakeoffSpeed = 0.0f;
+	physics.walkJumpBallisticHorizontalVelocityActive = false;
+}
+
+JPH::Vec3 MoveWalkJumpHorizontalVelocityTowards(
+	const JPH::Vec3 &currentVelocity,
+	const JPH::Vec3 &targetVelocity,
+	const float maxSpeedDelta)
+{
+	const JPH::Vec3 deltaVelocity = targetVelocity - currentVelocity;
+	const float deltaLength = deltaVelocity.Length();
+	if (deltaLength <= kPhysicsDirectionEpsilon || deltaLength <= maxSpeedDelta) {
+		return targetVelocity;
+	}
+
+	return currentVelocity + deltaVelocity * (maxSpeedDelta / deltaLength);
+}
+
+bool IsWalkJumpLockedSupportActive(const PhysicsState &physics)
+{
+	return physics.walkJumpLockedSupport.valid;
+}
+
+bool ShouldApplyWalkJumpLockedConstraint(const PhysicsState &physics)
+{
+	return physics.walkJumpLockedSupport.valid &&
+		   physics.walkJumpLockedSupport.constrainMovementWhileSneakHeld &&
+		   physics.walkSneakActive;
+}
+
+void UpdateWalkJumpLockedSupportTarget(
+	PhysicsState &physics,
+	const std::array<float, 3> &feetPosition)
+{
+	if (!physics.walkJumpLockedSupport.valid) {
+		return;
+	}
+
+	physics.walkJumpLockedSupport.constrainedFeetPosition = feetPosition;
+}
+
+void PrimeWalkJumpLockedSupport(
+	PhysicsState &physics,
+	const WalkSneakSupportRegion &supportRegion,
+	const std::array<float, 3> &anchorFeetPosition,
+	const bool constrainMovementWhileSneakHeld)
+{
+	if (!supportRegion.valid) {
+		ClearWalkJumpLockedSupport(physics);
+		return;
+	}
+
+	physics.walkJumpLockedSupport.region = supportRegion;
+	physics.walkJumpLockedSupport.anchorFeetPosition = anchorFeetPosition;
+	physics.walkJumpLockedSupport.constrainedFeetPosition = anchorFeetPosition;
+	physics.walkJumpLockedSupport.constrainMovementWhileSneakHeld = constrainMovementWhileSneakHeld;
+	physics.walkJumpLockedSupport.valid = true;
+}
+
+void UpdateWalkJumpLockedSupportLifetime(PhysicsState &physics, const VoxelWorld &world)
+{
+	if (!physics.walkJumpLockedSupport.valid) {
+		return;
+	}
+
+	const JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr) {
+		ClearWalkJumpLockedSupport(physics);
+		return;
+	}
+
+	if (physics.walkJumpLockedSupport.constrainMovementWhileSneakHeld && !physics.walkSneakActive) {
+		ClearWalkJumpLockedSupport(physics);
+		return;
+	}
+
+	const std::array<float, 3> currentFeetPosition = ToArray(character->GetPosition());
+	const JPH::Vec3 velocity = character->GetLinearVelocity();
+	const float referenceFeetY = physics.walkJumpLockedSupport.region.referenceFeetPosition[1];
+	const float riseAboveReference = currentFeetPosition[1] - referenceFeetY;
+	const float dropBelowReference = referenceFeetY - currentFeetPosition[1];
+	const std::array<float, 2> projectedFeetXZ =
+		ProjectWalkFeetToSneakSupportRegion(physics.walkJumpLockedSupport.region, currentFeetPosition);
+	const float outsideX = projectedFeetXZ[0] - currentFeetPosition[0];
+	const float outsideZ = projectedFeetXZ[1] - currentFeetPosition[2];
+	const float outsideDistanceSq = outsideX * outsideX + outsideZ * outsideZ;
+	float landedFeetY = 0.0f;
+	const bool landed =
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		FindWalkBestSupportFeetYAtXZ(
+			world,
+			currentFeetPosition,
+			0.0f,
+			kWalkStickToFloorDistance,
+			physics.walkSneakActive,
+			kWalkGroundSupportRadius,
+			landedFeetY) &&
+		std::abs(landedFeetY - currentFeetPosition[1]) <= kWalkStickToFloorDistance + kWalkCollisionEpsilon;
+	std::array<float, 3> landedOnSupportRegionFeetPosition = currentFeetPosition;
+	landedOnSupportRegionFeetPosition[1] = referenceFeetY;
+	const bool landedOnSupportRegion =
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		riseAboveReference <= kWalkCollisionEpsilon &&
+		dropBelowReference <= kWalkJumpLockedSupportMaxDropBelowReference + kWalkCollisionEpsilon &&
+		IsWalkFeetInsideSneakSupportRegion(
+			physics.walkJumpLockedSupport.region,
+			landedOnSupportRegionFeetPosition) &&
+		IsWalkCharacterClearAt(world, landedOnSupportRegionFeetPosition, physics.walkSneakActive) &&
+		HasWalkSneakSupport(world, landedOnSupportRegionFeetPosition);
+	if (!physics.walkSneakActive && landedOnSupportRegion) {
+		physics.walkGroundReturnAnchorFeetPosition = landedOnSupportRegionFeetPosition;
+		physics.walkGroundReturnAnchorFramesRemaining = kWalkGroundReturnAnchorFrames;
+		physics.walkGroundReturnAnchorValid = true;
+		physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+	}
+	if (landed ||
+		landedOnSupportRegion ||
+		riseAboveReference > kWalkJumpLockedSupportMaxRiseAboveReference ||
+		dropBelowReference > kWalkJumpLockedSupportMaxDropBelowReference ||
+		outsideDistanceSq >
+			kWalkJumpLockedSupportCeilingReprojectMaxDistance * kWalkJumpLockedSupportCeilingReprojectMaxDistance) {
+		ClearWalkJumpLockedSupport(physics);
+	}
+}
+
+void ReleaseWalkSneakSupportCacheIfUnused(PhysicsState &physics)
+{
+	if (physics.walkSneakSupportGraceFramesRemaining == 0 && physics.walkLedgeReleaseGraceFramesRemaining == 0) {
+		physics.walkCachedSneakSupportRegion = {};
+	}
+}
+
+void RefreshWalkCharacterContacts(PhysicsState &physics)
+{
+	JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr) {
+		return;
+	}
+
+	character->RefreshContacts(
+		physics.physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
+		physics.physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),
+		{},
+		{},
+		physics.tempAllocator);
+	character->UpdateGroundVelocity();
+}
+
+WalkFootSupportInfo ComputeVoxelFootSupportInfo(const VoxelWorld &world, const std::array<float, 3> &feetPosition)
+{
+	WalkFootSupportInfo info{};
+	constexpr float sampleRadius = kWalkFootSupportSampleRadius;
+	constexpr float probeDepth = kWalkFootSupportProbeDepth;
+	constexpr uint32_t sampleGridResolution = kWalkFootSupportSampleGridResolution;
+	const float probeY = feetPosition[1] - probeDepth;
+	std::array<float, 3> accumulatedSupport{};
+	for (uint32_t gridZ = 0; gridZ < sampleGridResolution; ++gridZ) {
+		for (uint32_t gridX = 0; gridX < sampleGridResolution; ++gridX) {
+			const float normalizedX =
+				(static_cast<float>(gridX) + 0.5f) / static_cast<float>(sampleGridResolution) * 2.0f -
+				1.0f;
+			const float normalizedZ =
+				(static_cast<float>(gridZ) + 0.5f) / static_cast<float>(sampleGridResolution) * 2.0f -
+				1.0f;
+			const float sampleOffsetX = normalizedX * sampleRadius;
+			const float sampleOffsetZ = normalizedZ * sampleRadius;
+			if (sampleOffsetX * sampleOffsetX + sampleOffsetZ * sampleOffsetZ > sampleRadius * sampleRadius) {
+				continue;
+			}
+
+			++info.totalSamples;
+			const std::array samplePosition{
+				feetPosition[0] + sampleOffsetX,
+				probeY,
+				feetPosition[2] + sampleOffsetZ,
+			};
+			if (!IsSolidAtPosition(world, samplePosition)) {
+				continue;
+			}
+
+			++info.hitSamples;
+			accumulatedSupport[0] += samplePosition[0];
+			accumulatedSupport[1] += samplePosition[1];
+			accumulatedSupport[2] += samplePosition[2];
+		}
+	}
+
+	if (info.totalSamples > 0) {
+		info.score = static_cast<float>(info.hitSamples) / static_cast<float>(info.totalSamples);
+	}
+
+	info.centroid = {
+		feetPosition[0],
+		probeY,
+		feetPosition[2],
+	};
+	if (info.hitSamples > 0) {
+		const float inverseHitCount = 1.0f / static_cast<float>(info.hitSamples);
+		info.centroid = {
+			accumulatedSupport[0] * inverseHitCount,
+			accumulatedSupport[1] * inverseHitCount,
+			accumulatedSupport[2] * inverseHitCount,
+		};
+	}
+
+	return info;
+}
+
+std::array<float, 3> OffsetWalkFeetPosition(
+	const std::array<float, 3> &feetPosition,
+	const JPH::Vec3 &horizontalDelta)
+{
+	return {
+		feetPosition[0] + horizontalDelta.GetX(),
+		feetPosition[1],
+		feetPosition[2] + horizontalDelta.GetZ(),
+	};
+}
+
+float GetWalkCapsuleHalfHeight(const bool sneakActive)
+{
+	return sneakActive ? kWalkSneakCapsuleHalfHeight : kWalkCapsuleHalfHeight;
+}
+
+bool IsWalkCharacterClearAt(
+	const VoxelWorld &world,
+	const std::array<float, 3> &feetPosition,
+	const bool sneakActive)
+{
+	const float totalHeight = 2.0f * (GetWalkCapsuleHalfHeight(sneakActive) + kWalkCapsuleRadius);
+	const float minX = feetPosition[0] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+	const float maxX = feetPosition[0] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+	const float minY = feetPosition[1] + kWalkCollisionEpsilon;
+	const float maxY = feetPosition[1] + totalHeight - kWalkCollisionEpsilon;
+	const float minZ = feetPosition[2] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+	const float maxZ = feetPosition[2] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+	const int minVoxelX = static_cast<int>(std::floor(minX));
+	const int maxVoxelX = static_cast<int>(std::floor(maxX));
+	const int minVoxelY = static_cast<int>(std::floor(minY));
+	const int maxVoxelY = static_cast<int>(std::floor(maxY));
+	const int minVoxelZ = static_cast<int>(std::floor(minZ));
+	const int maxVoxelZ = static_cast<int>(std::floor(maxZ));
+	for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; ++voxelZ) {
+		for (int voxelY = minVoxelY; voxelY <= maxVoxelY; ++voxelY) {
+			for (int voxelX = minVoxelX; voxelX <= maxVoxelX; ++voxelX) {
+				const Int3 voxel{voxelX, voxelY, voxelZ};
+				if (!IsInsideVoxelWorld(world, voxel) || !IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+					continue;
+				}
+
+				const float voxelMinX = static_cast<float>(voxelX);
+				const float voxelMaxX = voxelMinX + 1.0f;
+				const float voxelMinY = static_cast<float>(voxelY);
+				const float voxelMaxY = voxelMinY + 1.0f;
+				const float voxelMinZ = static_cast<float>(voxelZ);
+				const float voxelMaxZ = voxelMinZ + 1.0f;
+				if (maxX <= voxelMinX + kWalkCollisionEpsilon ||
+					minX >= voxelMaxX - kWalkCollisionEpsilon ||
+					maxY <= voxelMinY + kWalkCollisionEpsilon ||
+					minY >= voxelMaxY - kWalkCollisionEpsilon ||
+					maxZ <= voxelMinZ + kWalkCollisionEpsilon ||
+					minZ >= voxelMaxZ - kWalkCollisionEpsilon) {
+					continue;
+				}
+
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool HasWalkSneakSupport(const VoxelWorld &world, const std::array<float, 3> &feetPosition)
+{
+	const WalkSneakSupportRegion supportRegion = ComputeWalkSneakSupportRegion(world, feetPosition);
+	return supportRegion.valid && IsWalkFeetInsideSneakSupportRegion(supportRegion, feetPosition);
+}
+
+[[maybe_unused]] float GetWalkSneakDistanceOutsideInterval(const float value, const float minBound, const float maxBound)
+{
+	if (value < minBound) {
+		return minBound - value;
+	}
+
+	if (value > maxBound) {
+		return value - maxBound;
+	}
+
+	return 0.0f;
+}
+
+bool IsWalkFeetInsideSneakBackoffRegion(
+	const WalkSneakSupportRegion &region,
+	const std::array<float, 3> &feetPosition)
+{
+	if (feetPosition[0] < region.boundsMin[0] + kWalkSneakBackoffInset ||
+		feetPosition[0] > region.boundsMax[0] - kWalkSneakBackoffInset ||
+		feetPosition[2] < region.boundsMin[1] + kWalkSneakBackoffInset ||
+		feetPosition[2] > region.boundsMax[1] - kWalkSneakBackoffInset) {
+		return false;
+	}
+
+	for (uint32_t faceIndex = 0; faceIndex < region.faceCount; ++faceIndex) {
+		const auto &[min, max] = region.faces[faceIndex];
+		if (feetPosition[0] >= min[0] + kWalkSneakBackoffInset &&
+			feetPosition[0] <= max[0] - kWalkSneakBackoffInset &&
+			feetPosition[2] >= min[1] + kWalkSneakBackoffInset &&
+			feetPosition[2] <= max[1] - kWalkSneakBackoffInset) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool IsWalkFeetInsideSneakSupportFace(
+	const WalkSneakSupportFace &face,
+	const float sampleRadius,
+	const std::array<float, 3> &feetPosition)
+{
+	// Sneak support must come from a top face that is physically under the capsule footprint.
+	// Using the fully expanded region here lets a side-adjacent wall voxel masquerade as
+	// support while crouching in midair next to it.
+	const float supportRadius = std::max(sampleRadius, kWalkCapsuleRadius);
+	const float minX = face.min[0] + kWalkSneakSupportRegionExtent - supportRadius;
+	const float maxX = face.max[0] - kWalkSneakSupportRegionExtent + supportRadius;
+	const float minZ = face.min[1] + kWalkSneakSupportRegionExtent - supportRadius;
+	const float maxZ = face.max[1] - kWalkSneakSupportRegionExtent + supportRadius;
+	return feetPosition[0] >= minX - kWalkSneakOutwardDriftEpsilon &&
+		   feetPosition[0] <= maxX + kWalkSneakOutwardDriftEpsilon &&
+		   feetPosition[2] >= minZ - kWalkSneakOutwardDriftEpsilon &&
+		   feetPosition[2] <= maxZ + kWalkSneakOutwardDriftEpsilon;
+}
+
+std::array<float, 2> ProjectWalkFeetToSneakSupportFace(
+	const WalkSneakSupportFace &face,
+	const float sampleRadius,
+	const std::array<float, 2> &feetXZ)
+{
+	const float supportRadius = std::max(sampleRadius, kWalkCapsuleRadius);
+	const float minX = face.min[0] + kWalkSneakSupportRegionExtent - supportRadius;
+	const float maxX = face.max[0] - kWalkSneakSupportRegionExtent + supportRadius;
+	const float minZ = face.min[1] + kWalkSneakSupportRegionExtent - supportRadius;
+	const float maxZ = face.max[1] - kWalkSneakSupportRegionExtent + supportRadius;
+	return {
+		std::clamp(feetXZ[0], minX, maxX),
+		std::clamp(feetXZ[1], minZ, maxZ),
+	};
+}
+
+std::array<float, 2> ProjectWalkFeetToSneakSupportRegion(
+	const WalkSneakSupportRegion &region,
+	const std::array<float, 3> &feetPosition)
+{
+	const std::array feetXZ{
+		feetPosition[0],
+		feetPosition[2],
+	};
+	if (!region.valid || region.faceCount == 0) {
+		return feetXZ;
+	}
+
+	if (IsWalkFeetInsideSneakSupportRegion(region, feetPosition)) {
+		return feetXZ;
+	}
+
+	std::array<float, 2> bestProjection = feetXZ;
+	float bestDistanceSq = std::numeric_limits<float>::max();
+	bool hasBestProjection = false;
+	for (uint32_t faceIndex = 0; faceIndex < region.faceCount; ++faceIndex) {
+		const std::array<float, 2> projection =
+			ProjectWalkFeetToSneakSupportFace(region.faces[faceIndex], region.sampleRadius, feetXZ);
+		const float distanceX = projection[0] - feetXZ[0];
+		const float distanceZ = projection[1] - feetXZ[1];
+		const float distanceSq = distanceX * distanceX + distanceZ * distanceZ;
+		if (!hasBestProjection || distanceSq < bestDistanceSq) {
+			bestProjection = projection;
+			bestDistanceSq = distanceSq;
+			hasBestProjection = true;
+		}
+	}
+
+	return hasBestProjection ? bestProjection : feetXZ;
+}
+
+WalkSneakSupportRegion ComputeWalkSneakSupportRegion(
+	const VoxelWorld &world,
+	const std::array<float, 3> &feetPosition)
+{
+	WalkSneakSupportRegion region{};
+	region.referenceFeetPosition = feetPosition;
+	constexpr float searchExtent = kWalkSneakSupportRegionExtent + kWalkCapsuleRadius;
+	const int supportVoxelY = FloorToVoxel(
+								  {
+									  feetPosition[0],
+									  feetPosition[1] - kWalkSpawnClearance - kWalkGroundProbeEpsilon,
+									  feetPosition[2],
+								  })
+								  .y;
+	const int minVoxelX = static_cast<int>(std::floor(feetPosition[0] - searchExtent)) - 1;
+	const int maxVoxelX = static_cast<int>(std::floor(feetPosition[0] + searchExtent)) + 1;
+	const int minVoxelZ = static_cast<int>(std::floor(feetPosition[2] - searchExtent)) - 1;
+	const int maxVoxelZ = static_cast<int>(std::floor(feetPosition[2] + searchExtent)) + 1;
+	bool hasBounds = false;
+	for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; ++voxelZ) {
+		for (int voxelX = minVoxelX; voxelX <= maxVoxelX; ++voxelX) {
+			const Int3 voxel{voxelX, supportVoxelY, voxelZ};
+			if (!IsInsideVoxelWorld(world, voxel) || !IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+				continue;
+			}
+
+			if (region.faceCount >= region.faces.size()) {
+				continue;
+			}
+
+			auto &[min, max] = region.faces[region.faceCount++];
+			min = {
+				static_cast<float>(voxelX) - kWalkSneakSupportRegionExtent,
+				static_cast<float>(voxelZ) - kWalkSneakSupportRegionExtent,
+			};
+			max = {
+				static_cast<float>(voxelX + 1) + kWalkSneakSupportRegionExtent,
+				static_cast<float>(voxelZ + 1) + kWalkSneakSupportRegionExtent,
+			};
+
+			if (!hasBounds) {
+				region.boundsMin = min;
+				region.boundsMax = max;
+				hasBounds = true;
+			} else {
+				region.boundsMin[0] = std::min(region.boundsMin[0], min[0]);
+				region.boundsMin[1] = std::min(region.boundsMin[1], min[1]);
+				region.boundsMax[0] = std::max(region.boundsMax[0], max[0]);
+				region.boundsMax[1] = std::max(region.boundsMax[1], max[1]);
+			}
+		}
+	}
+
+	if (region.faceCount > 0) {
+		// Sneak support is anchored to the actual top plane of the sampled support voxels,
+		// not to the caller's current feet height, otherwise a midair crouch beside a wall
+		// can incorrectly authorize grounded support at an arbitrary Y.
+		region.referenceFeetPosition[1] = static_cast<float>(supportVoxelY + 1) + kWalkSpawnClearance;
+	}
+	region.valid = region.faceCount > 0;
+	return region;
+}
+
+bool IsWalkFeetInsideSneakSupportRegion(
+	const WalkSneakSupportRegion &region,
+	const std::array<float, 3> &feetPosition)
+{
+	if (!region.valid) {
+		return false;
+	}
+
+	if (feetPosition[0] < region.boundsMin[0] - kWalkSneakOutwardDriftEpsilon ||
+		feetPosition[0] > region.boundsMax[0] + kWalkSneakOutwardDriftEpsilon ||
+		feetPosition[2] < region.boundsMin[1] - kWalkSneakOutwardDriftEpsilon ||
+		feetPosition[2] > region.boundsMax[1] + kWalkSneakOutwardDriftEpsilon) {
+		return false;
+	}
+	if (feetPosition[1] + kWalkSneakStickToFloorDistance <
+		region.referenceFeetPosition[1] - kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	for (uint32_t faceIndex = 0; faceIndex < region.faceCount; ++faceIndex) {
+		if (IsWalkFeetInsideSneakSupportFace(region.faces[faceIndex], region.sampleRadius, feetPosition)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+float GetWalkBodyHeight(const bool sneakActive)
+{
+	return 2.0f * (GetWalkCapsuleHalfHeight(sneakActive) + kWalkCapsuleRadius);
+}
+
+float GetWalkSupportPlaneY(const float feetY)
+{
+	return feetY - kWalkSpawnClearance;
+}
+
+bool DoesWalkFootprintOverlapVoxel(
+	const float centerX,
+	const float centerZ,
+	const int voxelX,
+	const int voxelZ,
+	const float footprintRadius)
+{
+	const float minX = centerX - footprintRadius + kWalkCollisionEpsilon;
+	const float maxX = centerX + footprintRadius - kWalkCollisionEpsilon;
+	const float minZ = centerZ - footprintRadius + kWalkCollisionEpsilon;
+	const float maxZ = centerZ + footprintRadius - kWalkCollisionEpsilon;
+	const float voxelMinX = static_cast<float>(voxelX);
+	const float voxelMaxX = voxelMinX + 1.0f;
+	const float voxelMinZ = static_cast<float>(voxelZ);
+	const float voxelMaxZ = voxelMinZ + 1.0f;
+	return maxX > voxelMinX + kWalkCollisionEpsilon &&
+		   minX < voxelMaxX - kWalkCollisionEpsilon &&
+		   maxZ > voxelMinZ + kWalkCollisionEpsilon &&
+		   minZ < voxelMaxZ - kWalkCollisionEpsilon;
+}
+
+bool FindWalkBestSupportFeetYAtXZ(
+	const VoxelWorld &world,
+	const std::array<float, 3> &referenceFeetPosition,
+	const float maxRise,
+	const float maxDrop,
+	const bool sneakActive,
+	const float footprintRadius,
+	float &outFeetY)
+{
+	const float supportPlaneY = GetWalkSupportPlaneY(referenceFeetPosition[1]);
+	const int minVoxelX = static_cast<int>(std::floor(referenceFeetPosition[0] - kWalkCapsuleRadius));
+	const int maxVoxelX = static_cast<int>(std::floor(referenceFeetPosition[0] + kWalkCapsuleRadius));
+	const int minVoxelZ = static_cast<int>(std::floor(referenceFeetPosition[2] - kWalkCapsuleRadius));
+	const int maxVoxelZ = static_cast<int>(std::floor(referenceFeetPosition[2] + kWalkCapsuleRadius));
+	const int minVoxelY = static_cast<int>(std::floor(supportPlaneY - maxDrop - 1.0f));
+	const int maxVoxelY = static_cast<int>(std::floor(supportPlaneY + maxRise + 1.0f));
+	float bestFeetY = 0.0f;
+	bool hasBestFeetY = false;
+	for (int voxelY = minVoxelY; voxelY <= maxVoxelY; ++voxelY) {
+		for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; ++voxelZ) {
+			for (int voxelX = minVoxelX; voxelX <= maxVoxelX; ++voxelX) {
+				const Int3 voxel{voxelX, voxelY, voxelZ};
+				if (!IsInsideVoxelWorld(world, voxel) || !IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+					continue;
+				}
+
+				if (!DoesWalkFootprintOverlapVoxel(
+						referenceFeetPosition[0],
+						referenceFeetPosition[2],
+						voxelX,
+						voxelZ,
+						footprintRadius)) {
+					continue;
+				}
+
+				const float candidateFeetY = static_cast<float>(voxelY + 1) + kWalkSpawnClearance;
+				const float rise = candidateFeetY - referenceFeetPosition[1];
+				const float drop = referenceFeetPosition[1] - candidateFeetY;
+				if (rise > maxRise + kWalkCollisionEpsilon || drop > maxDrop + kWalkCollisionEpsilon) {
+					continue;
+				}
+
+				const std::array candidateFeetPosition{
+					referenceFeetPosition[0],
+					candidateFeetY,
+					referenceFeetPosition[2],
+				};
+				if (!IsWalkCharacterClearAt(world, candidateFeetPosition, sneakActive)) {
+					continue;
+				}
+
+				if (!hasBestFeetY || candidateFeetY > bestFeetY + kWalkCollisionEpsilon) {
+					bestFeetY = candidateFeetY;
+					hasBestFeetY = true;
+				}
+			}
+		}
+	}
+
+	if (!hasBestFeetY) {
+		return false;
+	}
+
+	outFeetY = bestFeetY;
+	return true;
+}
+
+WalkTopSupportCandidate FindWalkTopSupportCandidate(
+	const VoxelWorld &world,
+	const std::array<float, 3> &desiredFeetPosition,
+	const float maxRise,
+	const bool sneakActive)
+{
+	WalkTopSupportCandidate candidate{};
+	float candidateFeetY = 0.0f;
+	if (!FindWalkBestSupportFeetYAtXZ(
+			world,
+			desiredFeetPosition,
+			maxRise,
+			0.0f,
+			sneakActive,
+			kWalkCapsuleRadius,
+			candidateFeetY)) {
+		return candidate;
+	}
+
+	candidate.feetPosition = desiredFeetPosition;
+	candidate.feetPosition[1] = candidateFeetY;
+	candidate.region = ComputeWalkSneakSupportRegion(world, candidate.feetPosition);
+	candidate.valid = candidate.region.valid;
+	return candidate;
+}
+
+bool ResolveWalkCharacterPenetration(
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	const bool sneakActive,
+	const bool allowUpwardResolve)
+{
+	bool changed = false;
+	for (int iteration = 0; iteration < 4; ++iteration) {
+		if (IsWalkCharacterClearAt(world, feetPosition, sneakActive)) {
+			return changed;
+		}
+
+		const float totalHeight = GetWalkBodyHeight(sneakActive);
+		const float minX = feetPosition[0] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+		const float maxX = feetPosition[0] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+		const float minY = feetPosition[1] + kWalkCollisionEpsilon;
+		const float maxY = feetPosition[1] + totalHeight - kWalkCollisionEpsilon;
+		const float minZ = feetPosition[2] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+		const float maxZ = feetPosition[2] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+		const int minVoxelX = static_cast<int>(std::floor(minX));
+		const int maxVoxelX = static_cast<int>(std::floor(maxX));
+		const int minVoxelY = static_cast<int>(std::floor(minY));
+		const int maxVoxelY = static_cast<int>(std::floor(maxY));
+		const int minVoxelZ = static_cast<int>(std::floor(minZ));
+		const int maxVoxelZ = static_cast<int>(std::floor(maxZ));
+
+		float bestTranslation = 0.0f;
+		int bestAxis = -1;
+		for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; ++voxelZ) {
+			for (int voxelY = minVoxelY; voxelY <= maxVoxelY; ++voxelY) {
+				for (int voxelX = minVoxelX; voxelX <= maxVoxelX; ++voxelX) {
+					const Int3 voxel{voxelX, voxelY, voxelZ};
+					if (!IsInsideVoxelWorld(world, voxel) || !IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+						continue;
+					}
+
+					const float voxelMinX = static_cast<float>(voxelX);
+					const float voxelMaxX = voxelMinX + 1.0f;
+					const float voxelMinY = static_cast<float>(voxelY);
+					const float voxelMaxY = voxelMinY + 1.0f;
+					const float voxelMinZ = static_cast<float>(voxelZ);
+					const float voxelMaxZ = voxelMinZ + 1.0f;
+					if (maxX <= voxelMinX + kWalkCollisionEpsilon ||
+						minX >= voxelMaxX - kWalkCollisionEpsilon ||
+						maxY <= voxelMinY + kWalkCollisionEpsilon ||
+						minY >= voxelMaxY - kWalkCollisionEpsilon ||
+						maxZ <= voxelMinZ + kWalkCollisionEpsilon ||
+						minZ >= voxelMaxZ - kWalkCollisionEpsilon) {
+						continue;
+					}
+
+					const std::array translations{
+						voxelMinX - maxX - kWalkPenetrationResolveEpsilon,
+						voxelMaxX - minX + kWalkPenetrationResolveEpsilon,
+						voxelMinY - maxY - kWalkPenetrationResolveEpsilon,
+						voxelMaxY - minY + kWalkPenetrationResolveEpsilon,
+						voxelMinZ - maxZ - kWalkPenetrationResolveEpsilon,
+						voxelMaxZ - minZ + kWalkPenetrationResolveEpsilon,
+					};
+					for (int axisIndex = 0; axisIndex < static_cast<int>(translations.size()); ++axisIndex) {
+						if (!allowUpwardResolve && axisIndex == 3) {
+							continue;
+						}
+
+						const float translation = translations[axisIndex];
+						if (bestAxis < 0 || std::abs(translation) < std::abs(bestTranslation)) {
+							bestTranslation = translation;
+							bestAxis = axisIndex;
+						}
+					}
+				}
+			}
+		}
+
+		if (bestAxis < 0 || std::abs(bestTranslation) <= kWalkPenetrationResolveEpsilon) {
+			return changed;
+		}
+
+		const int translationComponent = bestAxis / 2;
+		if (translationComponent < 0 || translationComponent >= static_cast<int>(feetPosition.size())) {
+			return changed;
+		}
+		feetPosition[translationComponent] += bestTranslation;
+		changed = true;
+	}
+
+	return changed;
+}
+
+bool TryBuildWalkSupportCorrectedFeetPosition(
+	const PhysicsState &physics,
+	const VoxelWorld &world,
+	const WalkSneakSupportRegion &supportRegion,
+	const std::array<float, 3> &sourceFeetPosition,
+	const float maxHorizontalCorrection,
+	const float maxUpwardRestore,
+	std::array<float, 3> &outFeetPosition)
+{
+	if (!supportRegion.valid) {
+		return false;
+	}
+
+	const JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr) {
+		return false;
+	}
+
+	const std::array<float, 2> projectedFeetXZ = ProjectWalkFeetToSneakSupportRegion(supportRegion, sourceFeetPosition);
+	const float correctionX = projectedFeetXZ[0] - sourceFeetPosition[0];
+	const float correctionZ = projectedFeetXZ[1] - sourceFeetPosition[2];
+	if (correctionX * correctionX + correctionZ * correctionZ >
+		maxHorizontalCorrection * maxHorizontalCorrection) {
+		return false;
+	}
+
+	std::array<float, 3> correctedFeetPosition = sourceFeetPosition;
+	correctedFeetPosition[0] = projectedFeetXZ[0];
+	correctedFeetPosition[2] = projectedFeetXZ[1];
+
+	const float referenceFeetY = supportRegion.referenceFeetPosition[1];
+	const float upwardRestore = referenceFeetY - sourceFeetPosition[1];
+	if (upwardRestore > kWalkSneakOutwardDriftEpsilon) {
+		if (upwardRestore > maxUpwardRestore) {
+			return false;
+		}
+
+		correctedFeetPosition[1] = referenceFeetY;
+	}
+
+	if (!IsWalkFeetInsideSneakSupportRegion(supportRegion, correctedFeetPosition) ||
+		!HasWalkSneakSupport(world, correctedFeetPosition) ||
+		!IsWalkCharacterClearAt(world, correctedFeetPosition, physics.walkSneakActive)) {
+		return false;
+	}
+
+	outFeetPosition = correctedFeetPosition;
+	return true;
+}
+
+bool TryBuildWalkJumpTakeoffFeetPosition(
+	const PhysicsState &physics,
+	const VoxelWorld &world,
+	const WalkSneakSupportRegion &supportRegion,
+	std::array<float, 3> &outFeetPosition)
+{
+	const JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr) {
+		return false;
+	}
+
+	return TryBuildWalkSupportCorrectedFeetPosition(
+		physics,
+		world,
+		supportRegion,
+		ToArray(character->GetPosition()),
+		kWalkSneakStickToFloorDistance,
+		kWalkSneakStickToFloorDistance,
+		outFeetPosition);
+}
+
+bool TryReacquireWalkSneakGroundSupport(
+	PhysicsState &physics,
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity)
+{
+	if (!physics.walkSneakActive) {
+		return false;
+	}
+
+	if (velocity.GetY() > kWalkSneakStickPositiveVelocityEpsilon) {
+		return false;
+	}
+
+	std::array<WalkSneakSupportRegion, 2> candidateRegions{};
+	uint32_t candidateCount = 0;
+	if (physics.walkCachedSneakSupportRegion.valid) {
+		candidateRegions[candidateCount++] = physics.walkCachedSneakSupportRegion;
+	}
+
+	const WalkSneakSupportRegion currentSupportRegion = ComputeWalkSneakSupportRegion(world, feetPosition);
+	if (currentSupportRegion.valid) {
+		candidateRegions[candidateCount++] = currentSupportRegion;
+	}
+
+	for (uint32_t candidateIndex = 0; candidateIndex < candidateCount; ++candidateIndex) {
+		const WalkSneakSupportRegion &candidateRegion = candidateRegions[candidateIndex];
+		std::array<float, 3> correctedFeetPosition{};
+		if (!TryBuildWalkSupportCorrectedFeetPosition(
+				physics,
+				world,
+				candidateRegion,
+				feetPosition,
+				kWalkCapsuleRadius,
+				kWalkSneakStickToFloorDistance,
+				correctedFeetPosition)) {
+			continue;
+		}
+
+		feetPosition = correctedFeetPosition;
+		if (velocity.GetY() < 0.0f) {
+			velocity.SetY(0.0f);
+		}
+		physics.walkCachedSneakSupportRegion = candidateRegion;
+		physics.walkSneakSupportGraceFramesRemaining = kWalkSneakSupportGraceFrames;
+		return true;
+	}
+
+	return false;
+}
+
+bool CanWalkSneakMoveInsideSupportRegion(
+	const VoxelWorld &world,
+	const WalkSneakSupportRegion &supportRegion,
+	const std::array<float, 3> &feetPosition,
+	const bool sneakActive)
+{
+	if (!supportRegion.valid) {
+		return true;
+	}
+
+	std::array<float, 3> candidateFeetPosition = feetPosition;
+	candidateFeetPosition[1] = supportRegion.referenceFeetPosition[1];
+	return IsWalkFeetInsideSneakBackoffRegion(supportRegion, candidateFeetPosition) &&
+		   IsWalkCharacterClearAt(world, candidateFeetPosition, sneakActive) &&
+		   HasWalkSneakSupport(world, candidateFeetPosition);
+}
+
+float BackOffWalkSneakDeltaComponent(const float delta)
+{
+	if (std::abs(delta) <= kWalkHorizontalSubstepDistance + kWalkCollisionEpsilon) {
+		return 0.0f;
+	}
+
+	return delta - std::copysign(kWalkHorizontalSubstepDistance, delta);
+}
+
+JPH::Vec3 ApplyWalkSneakBackoff(
+	const VoxelWorld &world,
+	const WalkSneakSupportRegion &supportRegion,
+	const std::array<float, 3> &feetPosition,
+	const JPH::Vec3 &desiredHorizontalDelta,
+	const bool sneakActive)
+{
+	if (desiredHorizontalDelta.IsNearZero()) {
+		return desiredHorizontalDelta;
+	}
+
+	const auto canMoveTo = [&](const float deltaX, const float deltaZ) -> bool {
+		std::array<float, 3> candidateFeetPosition = feetPosition;
+		candidateFeetPosition[0] += deltaX;
+		candidateFeetPosition[2] += deltaZ;
+		return CanWalkSneakMoveInsideSupportRegion(world, supportRegion, candidateFeetPosition, sneakActive);
+	};
+
+	float deltaX = desiredHorizontalDelta.GetX();
+	float deltaZ = desiredHorizontalDelta.GetZ();
+	if (canMoveTo(deltaX, deltaZ)) {
+		return desiredHorizontalDelta;
+	}
+
+	while (std::abs(deltaX) > kWalkCollisionEpsilon && !canMoveTo(deltaX, 0.0f)) {
+		deltaX = BackOffWalkSneakDeltaComponent(deltaX);
+	}
+
+	while (std::abs(deltaZ) > kWalkCollisionEpsilon && !canMoveTo(0.0f, deltaZ)) {
+		deltaZ = BackOffWalkSneakDeltaComponent(deltaZ);
+	}
+
+	while ((std::abs(deltaX) > kWalkCollisionEpsilon || std::abs(deltaZ) > kWalkCollisionEpsilon) &&
+		   !canMoveTo(deltaX, deltaZ)) {
+		deltaX = BackOffWalkSneakDeltaComponent(deltaX);
+		deltaZ = BackOffWalkSneakDeltaComponent(deltaZ);
+	}
+
+	return JPH::Vec3(deltaX, 0.0f, deltaZ);
+}
+
+bool TryRestoreWalkSupportRegionPlane(
+	const VoxelWorld &world,
+	const WalkSneakSupportRegion &supportRegion,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity,
+	const bool sneakActive)
+{
+	const float targetFeetY = supportRegion.referenceFeetPosition[1];
+	if (feetPosition[1] >= targetFeetY - kWalkCollisionEpsilon) {
+		if (feetPosition[1] > targetFeetY + kWalkCollisionEpsilon) {
+			return false;
+		}
+		feetPosition[1] = targetFeetY;
+		if (velocity.GetY() < 0.0f) {
+			velocity.SetY(0.0f);
+		}
+		return true;
+	}
+
+	std::array<float, 3> candidateFeetPosition = feetPosition;
+	candidateFeetPosition[1] = targetFeetY;
+	if (!IsWalkCharacterClearAt(world, candidateFeetPosition, sneakActive)) {
+		return false;
+	}
+
+	feetPosition = candidateFeetPosition;
+	if (velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+	}
+	return true;
+}
+
+bool SweepWalkVertical(
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity,
+	const float deltaSeconds,
+	const bool sneakActive)
+{
+	if (deltaSeconds <= 0.0f) {
+		return false;
+	}
+
+	const float deltaY = velocity.GetY() * deltaSeconds;
+	if (std::abs(deltaY) <= kPhysicsDirectionEpsilon) {
+		return false;
+	}
+
+	const float totalHeight = GetWalkBodyHeight(sneakActive);
+	const float footprintMinX = feetPosition[0] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+	const float footprintMaxX = feetPosition[0] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+	const float footprintMinZ = feetPosition[2] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+	const float footprintMaxZ = feetPosition[2] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+	const int minVoxelX = static_cast<int>(std::floor(footprintMinX));
+	const int maxVoxelX = static_cast<int>(std::floor(footprintMaxX));
+	const int minVoxelZ = static_cast<int>(std::floor(footprintMinZ));
+	const int maxVoxelZ = static_cast<int>(std::floor(footprintMaxZ));
+
+	if (deltaY > 0.0f) {
+		const float currentTopY = feetPosition[1] + totalHeight;
+		const float targetTopY = currentTopY + deltaY;
+		const int minVoxelY = static_cast<int>(std::floor(currentTopY));
+		const int maxVoxelY = static_cast<int>(std::floor(targetTopY));
+		float clampedFeetY = feetPosition[1] + deltaY;
+		bool hitCeiling = false;
+		for (int voxelZ = minVoxelZ; voxelZ <= maxVoxelZ; ++voxelZ) {
+			for (int voxelY = minVoxelY; voxelY <= maxVoxelY; ++voxelY) {
+				for (int voxelX = minVoxelX; voxelX <= maxVoxelX; ++voxelX) {
+					const Int3 voxel{voxelX, voxelY, voxelZ};
+					if (!IsInsideVoxelWorld(world, voxel) || !IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+						continue;
+					}
+
+					const float voxelMinY = static_cast<float>(voxelY);
+					if (voxelMinY < currentTopY - kWalkCollisionEpsilon ||
+						voxelMinY > targetTopY + kWalkCollisionEpsilon) {
+						continue;
+					}
+
+					const float candidateFeetY = voxelMinY - totalHeight - kWalkCollisionEpsilon;
+					if (!hitCeiling || candidateFeetY < clampedFeetY) {
+						clampedFeetY = candidateFeetY;
+						hitCeiling = true;
+					}
+				}
+			}
+		}
+
+		feetPosition[1] = clampedFeetY;
+		if (hitCeiling && velocity.GetY() > 0.0f) {
+			velocity.SetY(0.0f);
+		}
+		return hitCeiling;
+	}
+
+	const std::array referenceFeetPosition{
+		feetPosition[0],
+		feetPosition[1],
+		feetPosition[2],
+	};
+	float candidateFeetY = 0.0f;
+	if (FindWalkBestSupportFeetYAtXZ(
+			world,
+			referenceFeetPosition,
+			0.0f,
+			-deltaY + kWalkCollisionEpsilon,
+			sneakActive,
+			kWalkGroundSupportRadius,
+			candidateFeetY) &&
+		feetPosition[1] + deltaY < candidateFeetY - kWalkCollisionEpsilon) {
+		feetPosition[1] = candidateFeetY;
+		if (velocity.GetY() < 0.0f) {
+			velocity.SetY(0.0f);
+		}
+		return true;
+	}
+
+	feetPosition[1] += deltaY;
+	return false;
+}
+
+template <bool tAllowStepUp>
+bool TryMoveWalkSubstep(
+	const VoxelWorld &world,
+	const std::array<float, 3> &currentFeetPosition,
+	const JPH::Vec3 &substepDelta,
+	const bool sneakActive,
+	std::array<float, 3> &outFeetPosition)
+{
+	const auto tryMoveTo = [&](const std::array<float, 3> &targetFeetPosition, std::array<float, 3> &outCandidate) -> bool {
+		if (IsWalkCharacterClearAt(world, targetFeetPosition, sneakActive)) {
+			outCandidate = targetFeetPosition;
+			return true;
+		}
+
+		if constexpr (!tAllowStepUp) {
+			return false;
+		}
+
+		const WalkTopSupportCandidate topCandidate =
+			FindWalkTopSupportCandidate(world, targetFeetPosition, kWalkStairsStepUpHeight, sneakActive);
+		if (!topCandidate.valid) {
+			return false;
+		}
+
+		outCandidate = topCandidate.feetPosition;
+		return true;
+	};
+
+	const std::array<float, 3> desiredFeetPosition = OffsetWalkFeetPosition(currentFeetPosition, substepDelta);
+	if (tryMoveTo(desiredFeetPosition, outFeetPosition)) {
+		return true;
+	}
+
+	const auto scoreProgress = [&](const std::array<float, 3> &candidateFeetPosition) -> float {
+		const float deltaX = candidateFeetPosition[0] - currentFeetPosition[0];
+		const float deltaZ = candidateFeetPosition[2] - currentFeetPosition[2];
+		return deltaX * deltaX + deltaZ * deltaZ;
+	};
+
+	std::array<float, 3> bestFeetPosition = currentFeetPosition;
+	float bestProgress = 0.0f;
+	for (int order = 0; order < 2; ++order) {
+		std::array<float, 3> candidateFeetPosition = currentFeetPosition;
+		const float firstDelta = order == 0 ? substepDelta.GetX() : substepDelta.GetZ();
+		const float secondDelta = order == 0 ? substepDelta.GetZ() : substepDelta.GetX();
+
+		if (std::abs(firstDelta) > kPhysicsDirectionEpsilon) {
+			std::array<float, 3> axisTarget = candidateFeetPosition;
+			if (order == 0) {
+				axisTarget[0] += firstDelta;
+			} else {
+				axisTarget[2] += firstDelta;
+			}
+
+			std::array<float, 3> axisResult{};
+			if (tryMoveTo(axisTarget, axisResult)) {
+				candidateFeetPosition = axisResult;
+			}
+		}
+
+		if (std::abs(secondDelta) > kPhysicsDirectionEpsilon) {
+			std::array<float, 3> axisTarget = candidateFeetPosition;
+			if (order == 0) {
+				axisTarget[2] += secondDelta;
+			} else {
+				axisTarget[0] += secondDelta;
+			}
+
+			std::array<float, 3> axisResult{};
+			if (tryMoveTo(axisTarget, axisResult)) {
+				candidateFeetPosition = axisResult;
+			}
+		}
+
+		const float progress = scoreProgress(candidateFeetPosition);
+		if (order == 0 || progress > bestProgress + kWalkCollisionEpsilon) {
+			bestFeetPosition = candidateFeetPosition;
+			bestProgress = progress;
+		}
+	}
+
+	if (bestProgress <= kWalkCollisionEpsilon * kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	outFeetPosition = bestFeetPosition;
+	return true;
+}
+
+template <bool tAllowStepUp>
+void MoveWalkHorizontally(
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	const JPH::Vec3 &desiredHorizontalDelta,
+	const bool sneakActive)
+{
+	if (desiredHorizontalDelta.IsNearZero()) {
+		return;
+	}
+
+	const float maxComponent =
+		std::max(std::abs(desiredHorizontalDelta.GetX()), std::abs(desiredHorizontalDelta.GetZ()));
+	const int substepCount = std::max(1, static_cast<int>(std::ceil(maxComponent / kWalkHorizontalSubstepDistance)));
+	const JPH::Vec3 substepDelta = desiredHorizontalDelta / static_cast<float>(substepCount);
+	for (int substepIndex = 0; substepIndex < substepCount; ++substepIndex) {
+		std::array<float, 3> candidateFeetPosition{};
+		if (TryMoveWalkSubstep<tAllowStepUp>(world, feetPosition, substepDelta, sneakActive, candidateFeetPosition)) {
+			feetPosition = candidateFeetPosition;
+		}
+	}
+
+	ResolveWalkCharacterPenetration(world, feetPosition, sneakActive, false);
+}
+
+bool SnapWalkToFloor(
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity,
+	const bool sneakActive,
+	const float maxDrop)
+{
+	if (maxDrop <= 0.0f) {
+		return false;
+	}
+
+	float candidateFeetY = 0.0f;
+	if (!FindWalkBestSupportFeetYAtXZ(
+			world,
+			feetPosition,
+			0.0f,
+			maxDrop,
+			sneakActive,
+			kWalkGroundSupportRadius,
+			candidateFeetY)) {
+		return false;
+	}
+
+	if (feetPosition[1] - candidateFeetY <= kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	feetPosition[1] = candidateFeetY;
+	if (velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+	}
+	return true;
+}
+
+bool TrySnapWalkToGroundTakeoffAnchor(
+	const PhysicsState &physics,
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity,
+	const float maxDrop)
+{
+	if (maxDrop <= 0.0f ||
+		!physics.walkCachedGroundTakeoffValid ||
+		physics.walkGroundTakeoffGraceFramesRemaining == 0 ||
+		physics.walkSneakActive) {
+		return false;
+	}
+
+	const float driftX = feetPosition[0] - physics.walkCachedGroundTakeoffFeetPosition[0];
+	const float driftZ = feetPosition[2] - physics.walkCachedGroundTakeoffFeetPosition[2];
+	if (driftX * driftX + driftZ * driftZ >
+		kWalkGroundTakeoffLandingMaxDrift * kWalkGroundTakeoffLandingMaxDrift + kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	const float candidateFeetY = physics.walkCachedGroundTakeoffFeetPosition[1];
+	const float drop = feetPosition[1] - candidateFeetY;
+	if (drop <= kWalkCollisionEpsilon ||
+		drop > maxDrop + kWalkCollisionEpsilon ||
+		drop > kWalkGroundTakeoffSnapMaxDrop + kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	std::array<float, 3> candidateFeetPosition = feetPosition;
+	candidateFeetPosition[1] = candidateFeetY;
+	if (!IsWalkCharacterClearAt(world, candidateFeetPosition, false)) {
+		return false;
+	}
+
+	feetPosition = candidateFeetPosition;
+	if (velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+	}
+	return true;
+}
+
+bool TrySnapWalkToGroundReturnAnchor(
+	const PhysicsState &physics,
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity,
+	const float maxDrop)
+{
+	if (maxDrop <= 0.0f ||
+		!physics.walkGroundReturnAnchorValid ||
+		physics.walkGroundReturnAnchorFramesRemaining == 0 ||
+		physics.walkSneakActive) {
+		return false;
+	}
+
+	const float driftX = feetPosition[0] - physics.walkGroundReturnAnchorFeetPosition[0];
+	const float driftZ = feetPosition[2] - physics.walkGroundReturnAnchorFeetPosition[2];
+	if (driftX * driftX + driftZ * driftZ >
+		kWalkGroundTakeoffLandingMaxDrift * kWalkGroundTakeoffLandingMaxDrift + kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	const float candidateFeetY = physics.walkGroundReturnAnchorFeetPosition[1];
+	const float drop = feetPosition[1] - candidateFeetY;
+	if (drop <= kWalkCollisionEpsilon ||
+		drop > maxDrop + kWalkCollisionEpsilon ||
+		drop > kWalkGroundReturnSnapMaxDrop + kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	std::array<float, 3> candidateFeetPosition = feetPosition;
+	candidateFeetPosition[1] = candidateFeetY;
+	if (!IsWalkCharacterClearAt(world, candidateFeetPosition, false)) {
+		return false;
+	}
+
+	feetPosition = candidateFeetPosition;
+	if (velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+	}
+	return true;
+}
+
+bool TryRestoreWalkGroundReturnAnchorPlane(
+	const PhysicsState &physics,
+	const VoxelWorld &world,
+	std::array<float, 3> &feetPosition,
+	JPH::Vec3 &velocity)
+{
+	if (!physics.walkGroundReturnAnchorValid ||
+		physics.walkGroundReturnAnchorFramesRemaining == 0 ||
+		physics.walkSneakActive) {
+		return false;
+	}
+
+	const float driftX = feetPosition[0] - physics.walkGroundReturnAnchorFeetPosition[0];
+	const float driftZ = feetPosition[2] - physics.walkGroundReturnAnchorFeetPosition[2];
+	if (driftX * driftX + driftZ * driftZ >
+		kWalkGroundTakeoffLandingMaxDrift * kWalkGroundTakeoffLandingMaxDrift + kWalkCollisionEpsilon) {
+		return false;
+	}
+
+	const float targetFeetY = physics.walkGroundReturnAnchorFeetPosition[1];
+	const float upwardRestore = targetFeetY - feetPosition[1];
+	if (upwardRestore <= kWalkCollisionEpsilon || upwardRestore > kWalkGroundReturnRestoreMaxDrop) {
+		return false;
+	}
+
+	std::array<float, 3> candidateFeetPosition = feetPosition;
+	candidateFeetPosition[1] = targetFeetY;
+	if (!IsWalkCharacterClearAt(world, candidateFeetPosition, false)) {
+		return false;
+	}
+
+	feetPosition = candidateFeetPosition;
+	if (velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+	}
+	return true;
+}
+
+[[maybe_unused]] bool TryStickWalkSneakToFloor(
+	PhysicsState &physics,
+	const VoxelWorld &world,
+	const WalkSneakSupportRegion &supportRegion)
+{
+	JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	const bool holdEdgeSupportActive =
+		physics.walkSneakActive ||
+		physics.walkLedgeReleaseGraceFramesRemaining > 0;
+	if (character == nullptr || !holdEdgeSupportActive || physics.walkJumpLockedSupport.valid || !supportRegion.valid) {
+		return false;
+	}
+
+	JPH::Vec3 velocity = character->GetLinearVelocity();
+	if (velocity.GetY() > kWalkSneakStickPositiveVelocityEpsilon) {
+		return false;
+	}
+
+	const std::array<float, 3> currentFeetPosition = ToArray(character->GetPosition());
+	if (!IsWalkFeetInsideSneakSupportRegion(supportRegion, currentFeetPosition)) {
+		return false;
+	}
+
+	const float referenceFeetY = supportRegion.referenceFeetPosition[1];
+	const float restoreDistance = referenceFeetY - currentFeetPosition[1];
+	if (restoreDistance > kWalkSneakOutwardDriftEpsilon &&
+		restoreDistance <= kWalkSneakStickToFloorDistance) {
+		const std::array restoredFeetPosition{
+			currentFeetPosition[0],
+			referenceFeetY,
+			currentFeetPosition[2],
+		};
+		if (IsWalkCharacterClearAt(world, restoredFeetPosition, physics.walkSneakActive) &&
+			HasWalkSneakSupport(world, restoredFeetPosition)) {
+			character->SetPosition(ToRVec3(restoredFeetPosition));
+			if (velocity.GetY() < 0.0f) {
+				velocity.SetY(0.0f);
+				character->SetLinearVelocity(velocity);
+			}
+			RefreshWalkCharacterContacts(physics);
+			return true;
+		}
+	}
+
+	const std::array probeOrigin{
+		currentFeetPosition[0],
+		currentFeetPosition[1] + kWalkSneakStickProbeLift,
+		currentFeetPosition[2],
+	};
+	const PhysicsRaycastHit hit = RaycastPhysicsWorld(
+		&physics,
+		probeOrigin,
+		{0.0f, -1.0f, 0.0f},
+		kWalkSneakStickProbeLift + kWalkSneakStickToFloorDistance + kWalkSpawnClearance);
+	if (!hit.hasHit || hit.normal[1] < 0.5f) {
+		return false;
+	}
+
+	const float candidateFeetY = hit.position[1] + kWalkSpawnClearance;
+	const float upwardRestore = candidateFeetY - currentFeetPosition[1];
+	const float downwardDrop = currentFeetPosition[1] - candidateFeetY;
+	if (upwardRestore > kWalkSneakOutwardDriftEpsilon) {
+		// Sneak hold is allowed to undo tiny solver-induced drops back to the same top face,
+		// but it must never step up onto a higher ledge.
+		if (candidateFeetY > referenceFeetY + kWalkSneakOutwardDriftEpsilon ||
+			upwardRestore > kWalkSneakStickToFloorDistance) {
+			return false;
+		}
+	} else {
+		if (downwardDrop > kWalkSneakStickToFloorDistance) {
+			return false;
+		}
+
+		if (candidateFeetY >= referenceFeetY - kWalkSneakStickMinimumDrop ||
+			downwardDrop < kWalkSneakStickMinimumDrop) {
+			return false;
+		}
+	}
+
+	const std::array candidateFeetPosition{
+		currentFeetPosition[0],
+		candidateFeetY,
+		currentFeetPosition[2],
+	};
+	if (!IsWalkFeetInsideSneakSupportRegion(supportRegion, candidateFeetPosition) ||
+		!HasWalkSneakSupport(world, candidateFeetPosition)) {
+		return false;
+	}
+
+	if (std::abs(candidateFeetY - currentFeetPosition[1]) <= kWalkSneakOutwardDriftEpsilon) {
+		return false;
+	}
+
+	character->SetPosition(ToRVec3(candidateFeetPosition));
+	if (velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+		character->SetLinearVelocity(velocity);
+	}
+	RefreshWalkCharacterContacts(physics);
+	return true;
+}
+
+[[maybe_unused]] WalkSupportContactKey SelectWalkPassiveSlideContact(
+	const PhysicsState &physics,
+	const WalkFootSupportInfo &supportInfo)
+{
+	WalkSupportContactKey bestContact{};
+	const JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr || supportInfo.hitSamples == 0) {
+		return bestContact;
+	}
+
+	const JPH::Vec3 up = character->GetUp();
+	const float feetY = character->GetPosition().GetY();
+	float bestUpDot = -std::numeric_limits<float>::infinity();
+	float bestCentroidDistanceSq = std::numeric_limits<float>::infinity();
+	float bestContactY = std::numeric_limits<float>::infinity();
+	for (const JPH::CharacterVirtual::Contact &contact : character->GetActiveContacts()) {
+		if (!contact.mHadCollision ||
+			contact.mBodyB.IsInvalid() ||
+			contact.mMotionTypeB != JPH::EMotionType::Static ||
+			contact.mIsSensorB ||
+			!contact.mLinearVelocity.IsNearZero()) {
+			continue;
+		}
+
+		const JPH::Vec3 contactNormal = contact.mContactNormal.NormalizedOr(JPH::Vec3::sZero());
+		if (contactNormal.IsNearZero() || character->IsSlopeTooSteep(contactNormal)) {
+			continue;
+		}
+
+		const float upDot = contactNormal.Dot(up);
+		if (upDot <= 0.5f) {
+			continue;
+		}
+
+		const float contactY = contact.mPosition.GetY();
+		if (contactY > feetY + kWalkSupportContactMaxHeightAboveFeet) {
+			continue;
+		}
+
+		const float distanceX = contact.mPosition.GetX() - supportInfo.centroid[0];
+		const float distanceZ = contact.mPosition.GetZ() - supportInfo.centroid[2];
+		const float centroidDistanceSq = distanceX * distanceX + distanceZ * distanceZ;
+		if (!bestContact.valid ||
+			upDot > bestUpDot + 1.0e-4f ||
+			(std::abs(upDot - bestUpDot) <= 1.0e-4f &&
+			 (centroidDistanceSq < bestCentroidDistanceSq - 1.0e-4f ||
+			  (std::abs(centroidDistanceSq - bestCentroidDistanceSq) <= 1.0e-4f && contactY < bestContactY)))) {
+			bestContact.bodyId = contact.mBodyB;
+			bestContact.subShapeId = contact.mSubShapeIDB;
+			bestContact.valid = true;
+			bestUpDot = upDot;
+			bestCentroidDistanceSq = centroidDistanceSq;
+			bestContactY = contactY;
+		}
+	}
+
+	return bestContact;
+}
+
+void UpdateWalkGroundSupport(
+	PhysicsState &physics,
+	const VoxelWorld &world,
+	const bool allowNarrowJumpEdgeSupport = false)
+{
+	PV_PROFILE_ZONE_N("UpdateWalkGroundSupport");
+	JPH::CharacterVirtual *character = physics.walkCharacter.GetPtr();
+	if (character == nullptr) {
+		physics.walkSupportState = WalkSupportState::Air;
+		physics.walkEdgeGraceFramesRemaining = 0;
+		physics.walkGroundTakeoffGraceFramesRemaining = 0;
+		physics.walkCachedGroundTakeoffValid = false;
+		physics.walkFootSupportScore = 0.0f;
+		physics.walkFootSupportHitSamples = 0;
+		physics.walkFootSupportTotalSamples = 0;
+		physics.walkFootSupportCentroid = {};
+		physics.walkPreviousSupportFeetPosition = {};
+		physics.walkPreviousSupportFeetPositionValid = false;
+		physics.walkHadHorizontalMotionLastStep = false;
+		ClearWalkJumpBallisticHorizontalVelocity(physics);
+		physics.walkPassiveSlideContact = {};
+		return;
+	}
+
+	const JPH::Vec3 velocity = character->GetLinearVelocity();
+	const std::array<float, 3> currentFeetPosition = ToArray(character->GetPosition());
+	const auto rememberCurrentFeetPosition = [&physics, &currentFeetPosition] {
+		physics.walkPreviousSupportFeetPosition = currentFeetPosition;
+		physics.walkPreviousSupportFeetPositionValid = true;
+	};
+	if (physics.walkJumpLockedSupport.valid) {
+		physics.walkSupportState = WalkSupportState::Air;
+		physics.walkEdgeGraceFramesRemaining = 0;
+		physics.walkGroundTakeoffGraceFramesRemaining = 0;
+		physics.walkCachedGroundTakeoffValid = false;
+		physics.walkFootSupportScore = 0.0f;
+		physics.walkFootSupportHitSamples = 0;
+		physics.walkFootSupportTotalSamples = 0;
+		physics.walkFootSupportCentroid = {};
+		physics.walkPassiveSlideContact = {};
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	if (velocity.GetY() > 0.1f) {
+		physics.walkSupportState = WalkSupportState::Air;
+		physics.walkEdgeGraceFramesRemaining = 0;
+		physics.walkFootSupportScore = 0.0f;
+		physics.walkFootSupportHitSamples = 0;
+		physics.walkFootSupportTotalSamples = 0;
+		physics.walkFootSupportCentroid = {};
+		physics.walkPassiveSlideContact = {};
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	if (velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		physics.walkGroundReturnAnchorValid) {
+		const float anchorDriftX = currentFeetPosition[0] - physics.walkGroundReturnAnchorFeetPosition[0];
+		const float anchorDriftZ = currentFeetPosition[2] - physics.walkGroundReturnAnchorFeetPosition[2];
+		const float anchorFeetY = physics.walkGroundReturnAnchorFeetPosition[1];
+		if (anchorDriftX * anchorDriftX + anchorDriftZ * anchorDriftZ <=
+				kWalkGroundTakeoffLandingMaxDrift * kWalkGroundTakeoffLandingMaxDrift + kWalkCollisionEpsilon &&
+			currentFeetPosition[1] + kWalkCollisionEpsilon >= anchorFeetY &&
+			currentFeetPosition[1] - anchorFeetY <= kWalkGroundReturnSupportMaxRise + kWalkCollisionEpsilon) {
+			physics.walkFootSupportScore = kWalkFootSupportEdgeGraceScore;
+			physics.walkFootSupportHitSamples = 0;
+			physics.walkFootSupportTotalSamples = 0;
+			physics.walkFootSupportCentroid = currentFeetPosition;
+			physics.walkPassiveSlideContact = {};
+			physics.walkSupportState = WalkSupportState::EdgeGrace;
+			physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+			if (velocity.GetY() < 0.0f) {
+				JPH::Vec3 correctedVelocity = velocity;
+				correctedVelocity.SetY(0.0f);
+				character->SetLinearVelocity(correctedVelocity);
+			}
+			rememberCurrentFeetPosition();
+			return;
+		}
+	}
+
+	const bool canUseSneakGroundSupport =
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		(physics.walkSneakActive || physics.walkLedgeReleaseGraceFramesRemaining > 0);
+	if (canUseSneakGroundSupport) {
+		WalkSneakSupportRegion sneakGroundSupportRegion{};
+		if (physics.walkCachedSneakSupportRegion.valid &&
+			IsWalkFeetInsideSneakSupportRegion(physics.walkCachedSneakSupportRegion, currentFeetPosition)) {
+			sneakGroundSupportRegion = physics.walkCachedSneakSupportRegion;
+		} else if (physics.walkSneakActive) {
+			const WalkSneakSupportRegion currentSneakSupportRegion =
+				ComputeWalkSneakSupportRegion(world, currentFeetPosition);
+			if (currentSneakSupportRegion.valid &&
+				IsWalkFeetInsideSneakSupportRegion(currentSneakSupportRegion, currentFeetPosition)) {
+				sneakGroundSupportRegion = currentSneakSupportRegion;
+			}
+		}
+
+		if (sneakGroundSupportRegion.valid) {
+			const float supportFeetY = sneakGroundSupportRegion.referenceFeetPosition[1];
+			const float aboveReference = currentFeetPosition[1] - supportFeetY;
+			const float belowReference = supportFeetY - currentFeetPosition[1];
+			std::array<float, 3> supportFeetPosition = currentFeetPosition;
+			supportFeetPosition[1] = supportFeetY;
+			if (aboveReference <= kWalkCollisionEpsilon &&
+				belowReference <= kWalkSneakStickToFloorDistance + kWalkCollisionEpsilon &&
+				IsWalkCharacterClearAt(world, supportFeetPosition, true) &&
+				HasWalkSneakSupport(world, supportFeetPosition)) {
+				physics.walkFootSupportScore = kWalkFootSupportGroundedScore;
+				physics.walkFootSupportHitSamples = 0;
+				physics.walkFootSupportTotalSamples = 0;
+				physics.walkFootSupportCentroid = supportFeetPosition;
+				physics.walkPassiveSlideContact = {};
+				physics.walkSupportState = WalkSupportState::Grounded;
+				physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+				if (velocity.GetY() < 0.0f) {
+					JPH::Vec3 correctedVelocity = velocity;
+					correctedVelocity.SetY(0.0f);
+					character->SetLinearVelocity(correctedVelocity);
+				}
+				rememberCurrentFeetPosition();
+				return;
+			}
+		}
+	}
+
+	const WalkSupportState previousSupportState = physics.walkSupportState;
+	const auto [score, hitSamples, totalSamples, centroid] = ComputeVoxelFootSupportInfo(world, currentFeetPosition);
+	physics.walkFootSupportScore = score;
+	physics.walkFootSupportHitSamples = hitSamples;
+	physics.walkFootSupportTotalSamples = totalSamples;
+	physics.walkFootSupportCentroid = centroid;
+	physics.walkPassiveSlideContact = {};
+
+	float supportedFeetY = 0.0f;
+	const bool hasSupportUnderFeet =
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		FindWalkBestSupportFeetYAtXZ(
+			world,
+			currentFeetPosition,
+			0.0f,
+			kWalkStickToFloorDistance,
+			physics.walkSneakActive,
+			kWalkGroundSupportRadius,
+			supportedFeetY);
+	float groundTakeoffSupportedFeetY = 0.0f;
+	const bool hasGroundTakeoffSupport =
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		FindWalkBestSupportFeetYAtXZ(
+			world,
+			currentFeetPosition,
+			0.0f,
+			kWalkStickToFloorDistance,
+			physics.walkSneakActive,
+			kWalkGroundTakeoffSupportRadius,
+			groundTakeoffSupportedFeetY);
+	const bool canRefreshGroundTakeoffCache =
+		hasGroundTakeoffSupport &&
+		!physics.walkJumpBallisticHorizontalVelocityActive;
+	if (canRefreshGroundTakeoffCache) {
+		physics.walkGroundTakeoffGraceFramesRemaining = kWalkGroundTakeoffGraceFrames;
+		physics.walkCachedGroundTakeoffFeetPosition = currentFeetPosition;
+		physics.walkCachedGroundTakeoffFeetPosition[1] = groundTakeoffSupportedFeetY;
+		physics.walkCachedGroundTakeoffValid = true;
+	}
+	if (hasSupportUnderFeet &&
+		std::abs(supportedFeetY - currentFeetPosition[1]) <= kWalkStickToFloorDistance + kWalkCollisionEpsilon &&
+		score >= kWalkFootSupportGroundedScore) {
+		physics.walkSupportState = WalkSupportState::Grounded;
+		physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+		if (velocity.GetY() < 0.0f) {
+			JPH::Vec3 correctedVelocity = velocity;
+			correctedVelocity.SetY(0.0f);
+			character->SetLinearVelocity(correctedVelocity);
+		}
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	const bool landedBackOnGroundTakeoffSupport =
+		physics.walkJumpBallisticHorizontalVelocityActive &&
+		physics.walkCachedGroundTakeoffValid &&
+		physics.walkGroundTakeoffGraceFramesRemaining > 0 &&
+		hasGroundTakeoffSupport &&
+		std::abs(groundTakeoffSupportedFeetY - physics.walkCachedGroundTakeoffFeetPosition[1]) <=
+			kWalkCollisionEpsilon &&
+		[&] {
+			const float cachedDriftX = currentFeetPosition[0] - physics.walkCachedGroundTakeoffFeetPosition[0];
+			const float cachedDriftZ = currentFeetPosition[2] - physics.walkCachedGroundTakeoffFeetPosition[2];
+			return cachedDriftX * cachedDriftX + cachedDriftZ * cachedDriftZ <=
+				   kWalkGroundTakeoffLandingMaxDrift * kWalkGroundTakeoffLandingMaxDrift +
+					   kWalkCollisionEpsilon;
+		}() &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		currentFeetPosition[1] + kWalkCollisionEpsilon >= groundTakeoffSupportedFeetY &&
+		currentFeetPosition[1] - groundTakeoffSupportedFeetY <= kWalkGroundTakeoffSnapMaxDrop + kWalkCollisionEpsilon;
+	if (landedBackOnGroundTakeoffSupport) {
+		physics.walkSupportState = WalkSupportState::EdgeGrace;
+		physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+		physics.walkFootSupportScore = std::max(physics.walkFootSupportScore, kWalkFootSupportEdgeGraceScore);
+		if (velocity.GetY() < 0.0f) {
+			JPH::Vec3 correctedVelocity = velocity;
+			correctedVelocity.SetY(0.0f);
+			character->SetLinearVelocity(correctedVelocity);
+		}
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	float horizontalFeetDriftSq = std::numeric_limits<float>::max();
+	float horizontalFeetDriftX = 0.0f;
+	float horizontalFeetDriftZ = 0.0f;
+	if (physics.walkPreviousSupportFeetPositionValid) {
+		horizontalFeetDriftX = currentFeetPosition[0] - physics.walkPreviousSupportFeetPosition[0];
+		horizontalFeetDriftZ = currentFeetPosition[2] - physics.walkPreviousSupportFeetPosition[2];
+		horizontalFeetDriftSq =
+			horizontalFeetDriftX * horizontalFeetDriftX + horizontalFeetDriftZ * horizontalFeetDriftZ;
+	}
+	const bool isRestingOnPartialEdgeSupport =
+		hasSupportUnderFeet &&
+		previousSupportState != WalkSupportState::Air &&
+		!physics.walkHadHorizontalMotionLastStep &&
+		physics.walkPreviousSupportFeetPositionValid &&
+		hitSamples > 0 &&
+		std::abs(supportedFeetY - currentFeetPosition[1]) <= kWalkStickToFloorDistance + kWalkCollisionEpsilon &&
+		horizontalFeetDriftSq <=
+			kWalkRestingEdgeHoldMaxHorizontalDrift * kWalkRestingEdgeHoldMaxHorizontalDrift + kWalkCollisionEpsilon;
+	if (isRestingOnPartialEdgeSupport) {
+		physics.walkSupportState = WalkSupportState::EdgeGrace;
+		physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+		physics.walkFootSupportScore = std::max(physics.walkFootSupportScore, kWalkFootSupportEdgeGraceScore);
+		if (velocity.GetY() < 0.0f) {
+			JPH::Vec3 correctedVelocity = velocity;
+			correctedVelocity.SetY(0.0f);
+			character->SetLinearVelocity(correctedVelocity);
+		}
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	const bool isMovingOnPartialEdgeSupport =
+		hasSupportUnderFeet &&
+		score >= kWalkFootSupportMovingEdgeGraceScore &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		std::abs(supportedFeetY - currentFeetPosition[1]) <= kWalkStickToFloorDistance + kWalkCollisionEpsilon;
+	if (isMovingOnPartialEdgeSupport) {
+		physics.walkSupportState = WalkSupportState::EdgeGrace;
+		physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+		if (velocity.GetY() < 0.0f) {
+			JPH::Vec3 correctedVelocity = velocity;
+			correctedVelocity.SetY(0.0f);
+			character->SetLinearVelocity(correctedVelocity);
+		}
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	bool movingAwayFromRemainingSupport = false;
+	if (physics.walkPreviousSupportFeetPositionValid && hitSamples > 0) {
+		const float supportBiasX = centroid[0] - currentFeetPosition[0];
+		const float supportBiasZ = centroid[2] - currentFeetPosition[2];
+		const float supportBiasSq = supportBiasX * supportBiasX + supportBiasZ * supportBiasZ;
+		const float driftSupportDot = horizontalFeetDriftX * supportBiasX + horizontalFeetDriftZ * supportBiasZ;
+		movingAwayFromRemainingSupport =
+			driftSupportDot < 0.0f &&
+			driftSupportDot * driftSupportDot > 0.25f * horizontalFeetDriftSq * supportBiasSq;
+	}
+
+	const bool isMovingOnNarrowEdgeSupport =
+		allowNarrowJumpEdgeSupport &&
+		hasGroundTakeoffSupport &&
+		hitSamples > 0 &&
+		!movingAwayFromRemainingSupport &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		currentFeetPosition[1] + kWalkCollisionEpsilon >= groundTakeoffSupportedFeetY &&
+		currentFeetPosition[1] - groundTakeoffSupportedFeetY <= kWalkGroundTakeoffSnapMaxDrop + kWalkCollisionEpsilon;
+	if (isMovingOnNarrowEdgeSupport) {
+		physics.walkSupportState = WalkSupportState::EdgeGrace;
+		physics.walkEdgeGraceFramesRemaining = kWalkEdgeGraceFrames;
+		physics.walkFootSupportScore = std::max(physics.walkFootSupportScore, kWalkFootSupportEdgeGraceScore);
+		if (velocity.GetY() < 0.0f) {
+			JPH::Vec3 correctedVelocity = velocity;
+			correctedVelocity.SetY(0.0f);
+			character->SetLinearVelocity(correctedVelocity);
+		}
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	if (previousSupportState != WalkSupportState::Air &&
+		physics.walkEdgeGraceFramesRemaining > 0) {
+		physics.walkSupportState = WalkSupportState::EdgeGrace;
+		physics.walkEdgeGraceFramesRemaining -= 1;
+		if (physics.walkGroundTakeoffGraceFramesRemaining > 0) {
+			physics.walkGroundTakeoffGraceFramesRemaining -= 1;
+		} else {
+			physics.walkCachedGroundTakeoffValid = false;
+		}
+		rememberCurrentFeetPosition();
+		return;
+	}
+
+	physics.walkSupportState = WalkSupportState::Air;
+	physics.walkEdgeGraceFramesRemaining = 0;
+	if (physics.walkGroundTakeoffGraceFramesRemaining > 0) {
+		physics.walkGroundTakeoffGraceFramesRemaining -= 1;
+	} else {
+		physics.walkCachedGroundTakeoffValid = false;
+	}
+	rememberCurrentFeetPosition();
 }
 
 void UpdateCameraFromWalkCharacter(const PhysicsState &physics, CameraState &camera)
@@ -377,9 +2631,18 @@ void UpdateCameraFromWalkCharacter(const PhysicsState &physics, CameraState &cam
 	}
 
 	const std::array<float, 3> feetPosition = ToArray(physics.walkCharacter->GetPosition());
+	const float eyeHeight = GetWalkEyeHeight(physics, camera.controlMode);
+	const float targetCameraY = feetPosition[1] + eyeHeight;
+	float cameraY = targetCameraY;
+	if (camera.controlMode == CameraState::ControlMode::Walk &&
+		physics.walkSupportState == WalkSupportState::Air &&
+		targetCameraY > camera.position[1] + kWalkCameraAirRiseSmoothingMaxPerTick &&
+		targetCameraY <= camera.position[1] + kWalkStairsStepUpHeight + kWalkCollisionEpsilon) {
+		cameraY = camera.position[1] + kWalkCameraAirRiseSmoothingMaxPerTick;
+	}
 	camera.position = {
 		feetPosition[0],
-		feetPosition[1] + kWalkEyeHeight,
+		cameraY,
 		feetPosition[2],
 	};
 }
@@ -403,29 +2666,75 @@ bool TryBuildWalkSpawnFromRay(
 	return true;
 }
 
-std::array<float, 3> BuildFallbackWalkFeetPosition(const CameraState &camera)
+std::array<float, 3> BuildFallbackWalkFeetPosition(const PhysicsState &physics, const CameraState &camera)
 {
+	const float eyeHeight = GetWalkEyeHeight(physics, camera.controlMode);
 	return {
 		camera.position[0],
-		camera.position[1] - kWalkEyeHeight,
+		camera.position[1] - eyeHeight,
 		camera.position[2],
 	};
 }
 
-bool CameraNeedsGroundRecovery(const VoxelWorld &world, const CameraState &camera)
+bool DoesWalkCharacterBodyOverlapVoxel(
+	const std::array<float, 3> &feetPosition,
+	const bool sneakActive,
+	const Int3 &voxel)
 {
-	const std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(camera);
+	const float totalHeight = 2.0f * (GetWalkCapsuleHalfHeight(sneakActive) + kWalkCapsuleRadius);
+	const float minX = feetPosition[0] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+	const float maxX = feetPosition[0] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+	const float minY = feetPosition[1] + kWalkCollisionEpsilon;
+	const float maxY = feetPosition[1] + totalHeight - kWalkCollisionEpsilon;
+	const float minZ = feetPosition[2] - kWalkCapsuleRadius + kWalkCollisionEpsilon;
+	const float maxZ = feetPosition[2] + kWalkCapsuleRadius - kWalkCollisionEpsilon;
+	const float voxelMinX = static_cast<float>(voxel.x);
+	const float voxelMaxX = voxelMinX + 1.0f;
+	const float voxelMinY = static_cast<float>(voxel.y);
+	const float voxelMaxY = voxelMinY + 1.0f;
+	const float voxelMinZ = static_cast<float>(voxel.z);
+	const float voxelMaxZ = voxelMinZ + 1.0f;
+	return !(maxX <= voxelMinX + kWalkCollisionEpsilon ||
+			 minX >= voxelMaxX - kWalkCollisionEpsilon ||
+			 maxY <= voxelMinY + kWalkCollisionEpsilon ||
+			 minY >= voxelMaxY - kWalkCollisionEpsilon ||
+			 maxZ <= voxelMinZ + kWalkCollisionEpsilon ||
+			 minZ >= voxelMaxZ - kWalkCollisionEpsilon);
+}
+
+bool CameraNeedsGroundRecovery(const PhysicsState &physics, const VoxelWorld &world, const CameraState &camera)
+{
+	const std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(physics, camera);
 	return IsSolidAtPosition(world, feetPosition) ||
 		   IsSolidAtPosition(world, {feetPosition[0], feetPosition[1] + 0.9f, feetPosition[2]}) ||
 		   IsSolidAtPosition(world, camera.position);
 }
 
-void ApplyWalkCharacterState(PhysicsState &physics, CameraState &camera, const std::array<float, 3> &feetPosition)
+void ApplyWalkCharacterState(
+	PhysicsState &physics,
+	const VoxelWorld &world,
+	CameraState &camera,
+	const std::array<float, 3> &feetPosition)
 {
 	physics.walkCharacter->SetPosition(ToRVec3(feetPosition));
 	physics.walkCharacter->SetRotation(JPH::Quat::sRotation(JPH::Vec3::sAxisY(), camera.yawRadians));
 	physics.walkCharacter->SetLinearVelocity(JPH::Vec3::sZero());
 	physics.walkCharacterInitialized = true;
+	physics.walkCachedGroundTakeoffFeetPosition = {};
+	physics.walkCachedGroundTakeoffValid = false;
+	physics.walkGroundReturnAnchorFeetPosition = {};
+	physics.walkGroundReturnAnchorFramesRemaining = 0;
+	physics.walkGroundReturnAnchorValid = false;
+	physics.walkPreviousSupportFeetPosition = {};
+	physics.walkPreviousSupportFeetPositionValid = false;
+	physics.walkHadHorizontalMotionLastStep = false;
+	physics.walkAutoJumpDelayFramesRemaining = 0;
+	ClearWalkJumpBallisticHorizontalVelocity(physics);
+	ClearWalkSneakSupportCache(physics);
+	ClearWalkJumpLockedSupport(physics);
+	physics.walkSuppressPassiveSlide = false;
+	RefreshWalkCharacterContacts(physics);
+	UpdateWalkGroundSupport(physics, world, false);
 	UpdateCameraFromWalkCharacter(physics, camera);
 }
 
@@ -438,8 +2747,8 @@ bool RebuildCharacterFromCamera(
 		return false;
 	}
 
-	std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(camera);
-	if (CameraNeedsGroundRecovery(world, camera)) {
+	std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(physics, camera);
+	if (CameraNeedsGroundRecovery(physics, world, camera)) {
 		if (TryBuildWalkSpawnFromRay(
 				physics,
 				{
@@ -449,7 +2758,7 @@ bool RebuildCharacterFromCamera(
 				},
 				std::max(32.0f, static_cast<float>(world.height) + 16.0f),
 				&feetPosition)) {
-			ApplyWalkCharacterState(physics, camera, feetPosition);
+			ApplyWalkCharacterState(physics, world, camera, feetPosition);
 			return true;
 		}
 
@@ -463,12 +2772,12 @@ bool RebuildCharacterFromCamera(
 				topDownProbeOrigin,
 				std::max(48.0f, static_cast<float>(world.height) + 48.0f),
 				&feetPosition)) {
-			ApplyWalkCharacterState(physics, camera, feetPosition);
+			ApplyWalkCharacterState(physics, world, camera, feetPosition);
 			return true;
 		}
 	}
 
-	ApplyWalkCharacterState(physics, camera, feetPosition);
+	ApplyWalkCharacterState(physics, world, camera, feetPosition);
 	return true;
 }
 
@@ -520,6 +2829,8 @@ Int3 FloorToVoxel(const std::array<float, 3> &position)
 	};
 }
 } // namespace
+
+void InvalidateWalkSupportStateForWorldEdit(PhysicsState &physics);
 
 PhysicsState *CreatePhysicsState()
 {
@@ -577,6 +2888,10 @@ bool SyncPhysicsWorld(PhysicsState *physics, const VoxelWorld *world)
 
 	physics->syncedWorld = world;
 	physics->syncedWorldEditVersion = world->editVersion;
+	if (physics->walkCharacterInitialized && physics->walkCharacter.GetPtr() != nullptr) {
+		RefreshWalkCharacterContacts(*physics);
+		InvalidateWalkSupportStateForWorldEdit(*physics);
+	}
 	return true;
 }
 
@@ -639,6 +2954,51 @@ void ResetWalkCharacter(PhysicsState *physics)
 
 	physics->walkCharacter = nullptr;
 	physics->walkCharacterInitialized = false;
+	physics->walkSupportState = WalkSupportState::Air;
+	physics->walkEdgeGraceFramesRemaining = 0;
+	physics->walkGroundTakeoffGraceFramesRemaining = 0;
+	physics->walkFootSupportScore = 0.0f;
+	physics->walkFootSupportHitSamples = 0;
+	physics->walkFootSupportTotalSamples = 0;
+	physics->walkFootSupportCentroid = {};
+	physics->walkCachedGroundTakeoffFeetPosition = {};
+	physics->walkCachedGroundTakeoffValid = false;
+	physics->walkGroundReturnAnchorFeetPosition = {};
+	physics->walkGroundReturnAnchorFramesRemaining = 0;
+	physics->walkGroundReturnAnchorValid = false;
+	physics->walkPreviousSupportFeetPosition = {};
+	physics->walkPreviousSupportFeetPositionValid = false;
+	physics->walkHadHorizontalMotionLastStep = false;
+	physics->walkAutoJumpDelayFramesRemaining = 0;
+	physics->walkPassiveSlideContact = {};
+	physics->walkSneakActive = false;
+	ClearWalkSneakSupportCache(*physics);
+	ClearWalkJumpLockedSupport(*physics);
+	physics->walkSuppressPassiveSlide = false;
+}
+
+void InvalidateWalkSupportStateForWorldEdit(PhysicsState &physics)
+{
+	physics.walkSupportState = WalkSupportState::Air;
+	physics.walkEdgeGraceFramesRemaining = 0;
+	physics.walkGroundTakeoffGraceFramesRemaining = 0;
+	physics.walkFootSupportScore = 0.0f;
+	physics.walkFootSupportHitSamples = 0;
+	physics.walkFootSupportTotalSamples = 0;
+	physics.walkFootSupportCentroid = {};
+	physics.walkCachedGroundTakeoffFeetPosition = {};
+	physics.walkCachedGroundTakeoffValid = false;
+	physics.walkGroundReturnAnchorFeetPosition = {};
+	physics.walkGroundReturnAnchorFramesRemaining = 0;
+	physics.walkGroundReturnAnchorValid = false;
+	physics.walkPreviousSupportFeetPosition = {};
+	physics.walkPreviousSupportFeetPositionValid = false;
+	physics.walkHadHorizontalMotionLastStep = false;
+	physics.walkAutoJumpDelayFramesRemaining = 0;
+	physics.walkPassiveSlideContact = {};
+	ClearWalkSneakSupportCache(physics);
+	ClearWalkJumpLockedSupport(physics);
+	physics.walkSuppressPassiveSlide = false;
 }
 
 bool SnapWalkCharacterToCamera(
@@ -672,6 +3032,7 @@ bool TickWalkCharacter(
 	InputState *input,
 	const float deltaSeconds)
 {
+	PV_PROFILE_ZONE_N("TickWalkCharacter");
 	if (!physics || !world || !camera || !input) {
 		return false;
 	}
@@ -682,51 +3043,478 @@ bool TickWalkCharacter(
 		}
 	}
 
+	JPH::CharacterVirtual *character = physics->walkCharacter.GetPtr();
+	if (character == nullptr) {
+		return false;
+	}
+
+	const std::array<float, 3> currentFeetPosition = ToArray(character->GetPosition());
+	const bool wantsSneak = IsInputActionDown(*input, InputAction::MoveDown);
+	const bool previousSneakActive = physics->walkSneakActive;
+	bool nextSneakActive = wantsSneak;
+	if (!nextSneakActive && !IsWalkCharacterClearAt(*world, currentFeetPosition, false)) {
+		nextSneakActive = true;
+	}
+	if (!SetWalkSneakActive(*physics, nextSneakActive)) {
+		physics->walkSneakActive = previousSneakActive;
+	}
+	if (physics->walkSneakActive != previousSneakActive) {
+		if (physics->walkSneakActive) {
+			physics->walkLedgeReleaseGraceFramesRemaining = 0;
+		} else {
+			physics->walkSneakSupportGraceFramesRemaining = 0;
+			physics->walkLedgeReleaseGraceFramesRemaining =
+				physics->walkCachedSneakSupportRegion.valid ? kWalkLedgeReleaseGraceFrames : 0;
+			ReleaseWalkSneakSupportCacheIfUnused(*physics);
+		}
+	}
+
+	const bool jumpHeld = IsInputActionDown(*input, InputAction::MoveUp);
+	const bool jumpPressedForSupport =
+		HasInputActionMaskBit(GetInputActionPressedMask(*input), InputAction::MoveUp);
+	UpdateWalkGroundSupport(*physics, *world, jumpHeld || jumpPressedForSupport);
+
 	if (deltaSeconds <= 0.0f) {
+		physics->walkHadHorizontalMotionLastStep = false;
 		UpdateCameraFromWalkCharacter(*physics, *camera);
 		return true;
 	}
 
 	const Float3 moveDirection = ComputeWalkMoveDirection(*camera, *input);
 	float moveSpeed = kWalkMoveSpeed;
+	if (physics->walkSneakActive) {
+		moveSpeed *= kWalkSneakMoveSpeedMultiplier;
+	}
 	if (IsInputActionDown(*input, InputAction::SpeedBoost)) {
 		moveSpeed *= kWalkBoostMultiplier;
 	}
 	if (IsInputActionDown(*input, InputAction::SpeedSlow)) {
 		moveSpeed *= kWalkSlowMultiplier;
 	}
+	const bool hasMovementInput = !IsZeroVector(moveDirection);
+	if (physics->walkGroundReturnAnchorValid && hasMovementInput) {
+		physics->walkGroundReturnAnchorFeetPosition = {};
+		physics->walkGroundReturnAnchorFramesRemaining = 0;
+		physics->walkGroundReturnAnchorValid = false;
+	}
+	const bool jumpPressed = ConsumeInputActionPressed(*input, InputAction::MoveUp);
 
-	JPH::CharacterVirtual *character = physics->walkCharacter.GetPtr();
-	JPH::Vec3 newVelocity = character->GetLinearVelocity();
-	if (character->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround &&
-		newVelocity.GetY() < 0.1f) {
-		newVelocity = JPH::Vec3::sZero();
+	const bool hasJumpLockedSupport = IsWalkJumpLockedSupportActive(*physics);
+	const bool isGrounded = physics->walkSupportState != WalkSupportState::Air;
+	std::array<float, 3> feetPosition = ToArray(character->GetPosition());
+	JPH::Vec3 velocity = character->GetLinearVelocity();
+	const JPH::Vec3 requestedHorizontalVelocity =
+		moveSpeed * JPH::Vec3(moveDirection.x, 0.0f, moveDirection.z);
+	if (isGrounded) {
+		ClearWalkJumpBallisticHorizontalVelocity(*physics);
+	}
+	if (physics->walkJumpBallisticHorizontalVelocityActive) {
+		switch (physics->walkAirControlMode) {
+		case WalkAirControlMode::Realistic: {
+			const JPH::Vec3 lockedDirection = physics->walkJumpBallisticHorizontalDirection;
+			float alignedIntent = 0.0f;
+			if (!lockedDirection.IsNearZero() && !requestedHorizontalVelocity.IsNearZero()) {
+				const JPH::Vec3 requestedDirection = requestedHorizontalVelocity.NormalizedOr(JPH::Vec3::sZero());
+				alignedIntent = std::clamp(requestedDirection.Dot(lockedDirection), 0.0f, 1.0f);
+			}
+
+			const float currentSpeed = physics->walkJumpBallisticHorizontalVelocity.Length();
+			const float targetSpeed = physics->walkJumpBallisticHorizontalTakeoffSpeed * alignedIntent;
+			const float maxSpeedDelta =
+				(targetSpeed < currentSpeed ? kWalkJumpRealisticAirBrakeDeceleration : kWalkJumpRealisticAirReacceleration) *
+				deltaSeconds;
+			const float updatedSpeed =
+				targetSpeed < currentSpeed ? std::max(targetSpeed, currentSpeed - maxSpeedDelta)
+										   : std::min(targetSpeed, currentSpeed + maxSpeedDelta);
+			physics->walkJumpBallisticHorizontalVelocity = lockedDirection * updatedSpeed;
+			break;
+		}
+		case WalkAirControlMode::MinecraftLike: {
+			const float currentSpeed = physics->walkJumpBallisticHorizontalVelocity.Length();
+			const float targetSpeed = requestedHorizontalVelocity.Length();
+			const float maxSpeedDelta =
+				(targetSpeed < currentSpeed ? kWalkJumpMinecraftAirBrakeDeceleration
+											: kWalkJumpMinecraftAirControlAcceleration) *
+				deltaSeconds;
+			physics->walkJumpBallisticHorizontalVelocity = MoveWalkJumpHorizontalVelocityTowards(
+				physics->walkJumpBallisticHorizontalVelocity,
+				requestedHorizontalVelocity,
+				maxSpeedDelta);
+			break;
+		}
+		}
+	}
+	const JPH::Vec3 desiredHorizontalVelocity =
+		physics->walkJumpBallisticHorizontalVelocityActive ? physics->walkJumpBallisticHorizontalVelocity
+														   : requestedHorizontalVelocity;
+	const JPH::Vec3 desiredHorizontalDelta = desiredHorizontalVelocity * deltaSeconds;
+	WalkSneakSupportRegion currentSneakSupportRegion{};
+	if (physics->walkSneakActive && !hasJumpLockedSupport) {
+		currentSneakSupportRegion = ComputeWalkSneakSupportRegion(*world, feetPosition);
+	}
+	WalkSneakSupportRegion activeSneakSupportRegion{};
+	bool hasCurrentSneakSupport = false;
+	if (currentSneakSupportRegion.valid) {
+		hasCurrentSneakSupport =
+			IsWalkFeetInsideSneakSupportRegion(currentSneakSupportRegion, feetPosition);
+	}
+	if (physics->walkSneakActive && !hasJumpLockedSupport) {
+		if (hasCurrentSneakSupport) {
+			activeSneakSupportRegion = currentSneakSupportRegion;
+			physics->walkCachedSneakSupportRegion = activeSneakSupportRegion;
+			physics->walkSneakSupportGraceFramesRemaining = kWalkSneakSupportGraceFrames;
+		}
+
+		if (!activeSneakSupportRegion.valid &&
+			physics->walkSneakSupportGraceFramesRemaining > 0 &&
+			physics->walkCachedSneakSupportRegion.valid) {
+			activeSneakSupportRegion = physics->walkCachedSneakSupportRegion;
+		}
+	}
+	const bool canHoldReleasedLedge =
+		!physics->walkSneakActive &&
+		physics->walkLedgeReleaseGraceFramesRemaining > 0 &&
+		physics->walkCachedSneakSupportRegion.valid &&
+		!hasJumpLockedSupport &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon;
+	std::array<float, 3> jumpTakeoffFeetPosition{};
+	bool hasJumpTakeoffFeetPosition = false;
+	if (!activeSneakSupportRegion.valid && canHoldReleasedLedge) {
+		const std::array<float, 3> releaseTargetFeetPosition =
+			OffsetWalkFeetPosition(feetPosition, desiredHorizontalDelta);
+		const bool currentInsideCachedReleaseRegion =
+			IsWalkFeetInsideSneakSupportRegion(physics->walkCachedSneakSupportRegion, feetPosition);
+		const bool targetInsideCachedReleaseRegion =
+			!hasMovementInput ||
+			IsWalkFeetInsideSneakSupportRegion(physics->walkCachedSneakSupportRegion, releaseTargetFeetPosition);
+		const bool canCommitReleasedLedgeJumpTakeoff =
+			jumpPressed &&
+			TryBuildWalkJumpTakeoffFeetPosition(
+				*physics,
+				*world,
+				physics->walkCachedSneakSupportRegion,
+				jumpTakeoffFeetPosition);
+		if ((currentInsideCachedReleaseRegion && (jumpPressed || targetInsideCachedReleaseRegion)) ||
+			canCommitReleasedLedgeJumpTakeoff) {
+			activeSneakSupportRegion = physics->walkCachedSneakSupportRegion;
+			hasJumpTakeoffFeetPosition = canCommitReleasedLedgeJumpTakeoff;
+		}
+	}
+	const bool hasActiveSneakSupportRegion = activeSneakSupportRegion.valid;
+	const bool holdingReleasedLedge =
+		!physics->walkSneakActive &&
+		hasActiveSneakSupportRegion &&
+		physics->walkLedgeReleaseGraceFramesRemaining > 0;
+	if (jumpPressed && hasActiveSneakSupportRegion && !hasJumpTakeoffFeetPosition) {
+		hasJumpTakeoffFeetPosition =
+			TryBuildWalkJumpTakeoffFeetPosition(*physics, *world, activeSneakSupportRegion, jumpTakeoffFeetPosition);
+	}
+	if (jumpPressed && !hasJumpTakeoffFeetPosition && !hasActiveSneakSupportRegion &&
+		!physics->walkJumpBallisticHorizontalVelocityActive &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		physics->walkCachedGroundTakeoffValid &&
+		physics->walkGroundTakeoffGraceFramesRemaining > 0) {
+		const float cachedDriftX = feetPosition[0] - physics->walkCachedGroundTakeoffFeetPosition[0];
+		const float cachedDriftZ = feetPosition[2] - physics->walkCachedGroundTakeoffFeetPosition[2];
+		const float cachedDriftDistanceSq = cachedDriftX * cachedDriftX + cachedDriftZ * cachedDriftZ;
+		if (cachedDriftDistanceSq <=
+			kWalkGroundTakeoffGraceMaxDrift * kWalkGroundTakeoffGraceMaxDrift + kWalkCollisionEpsilon) {
+			jumpTakeoffFeetPosition = feetPosition;
+			jumpTakeoffFeetPosition[1] =
+				std::max(feetPosition[1], physics->walkCachedGroundTakeoffFeetPosition[1]);
+			hasJumpTakeoffFeetPosition = true;
+		}
+	}
+	if (jumpPressed && !hasJumpTakeoffFeetPosition && !hasActiveSneakSupportRegion &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		physics->walkFootSupportScore >= kWalkFootSupportEdgeGraceScore) {
+		float groundedTakeoffFeetY = 0.0f;
+		if (FindWalkBestSupportFeetYAtXZ(
+				*world,
+				feetPosition,
+				0.0f,
+				kWalkStickToFloorDistance,
+				physics->walkSneakActive,
+				kWalkGroundSupportRadius,
+				groundedTakeoffFeetY)) {
+			jumpTakeoffFeetPosition = feetPosition;
+			jumpTakeoffFeetPosition[1] = groundedTakeoffFeetY;
+			hasJumpTakeoffFeetPosition = true;
+		}
+	}
+	const bool isGroundedLike = isGrounded || hasCurrentSneakSupport || hasActiveSneakSupportRegion;
+	JPH::Vec3 appliedHorizontalDelta = desiredHorizontalDelta;
+	WalkTopSupportCandidate targetTopSupport{};
+	WalkTopSupportCandidate autoJumpTopSupport{};
+	if (hasMovementInput) {
+		if (velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon) {
+			const std::array<float, 3> desiredFeetPosition =
+				OffsetWalkFeetPosition(feetPosition, desiredHorizontalDelta);
+			targetTopSupport = FindWalkTopSupportCandidate(
+				*world,
+				desiredFeetPosition,
+				kWalkStairsStepUpHeight,
+				physics->walkSneakActive);
+			if (!physics->walkSneakActive &&
+				!hasActiveSneakSupportRegion &&
+				physics->walkSupportState == WalkSupportState::Grounded &&
+				!hasJumpLockedSupport) {
+				autoJumpTopSupport = FindWalkTopSupportCandidate(
+					*world,
+					desiredFeetPosition,
+					kWalkAutoJumpMaxRise,
+					false);
+			}
+		}
+	}
+	bool autoJumpPressed = false;
+	const float autoJumpRise = autoJumpTopSupport.valid ? autoJumpTopSupport.feetPosition[1] - feetPosition[1] : 0.0f;
+	const bool hasAutoJumpCandidate =
+		!jumpPressed &&
+		hasMovementInput &&
+		!physics->walkSneakActive &&
+		!hasActiveSneakSupportRegion &&
+		physics->walkSupportState == WalkSupportState::Grounded &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		autoJumpTopSupport.valid &&
+		autoJumpRise >= kWalkAutoJumpMinRise - kWalkCollisionEpsilon &&
+		autoJumpRise <= kWalkAutoJumpMaxRise + kWalkCollisionEpsilon;
+	if (jumpPressed || jumpHeld || !hasAutoJumpCandidate) {
+		physics->walkAutoJumpDelayFramesRemaining = 0;
 	} else {
-		newVelocity = newVelocity * JPH::Vec3(0.0f, 1.0f, 0.0f);
+		if (!physics->walkAutoJumpDelayEnabled) {
+			autoJumpPressed = true;
+		} else if (physics->walkAutoJumpDelayFramesRemaining == 0) {
+			physics->walkAutoJumpDelayFramesRemaining = kWalkAutoJumpDelayFrames;
+		} else {
+			--physics->walkAutoJumpDelayFramesRemaining;
+			autoJumpPressed = physics->walkAutoJumpDelayFramesRemaining == 0;
+		}
+	}
+	const bool wantsJump = (jumpPressed || jumpHeld || autoJumpPressed) && (isGroundedLike || hasJumpTakeoffFeetPosition);
+	if (physics->walkSneakActive && hasMovementInput) {
+		const WalkSneakSupportRegion *constraintRegion = nullptr;
+		if (hasActiveSneakSupportRegion) {
+			constraintRegion = targetTopSupport.valid ? &targetTopSupport.region : &activeSneakSupportRegion;
+		} else if (ShouldApplyWalkJumpLockedConstraint(*physics)) {
+			constraintRegion = &physics->walkJumpLockedSupport.region;
+		}
+
+		if (constraintRegion != nullptr) {
+			const JPH::Vec3 constrainedHorizontalDelta = ApplyWalkSneakBackoff(
+				*world,
+				*constraintRegion,
+				feetPosition,
+				desiredHorizontalDelta,
+				physics->walkSneakActive);
+			appliedHorizontalDelta = constrainedHorizontalDelta;
+			if (ShouldApplyWalkJumpLockedConstraint(*physics)) {
+				UpdateWalkJumpLockedSupportTarget(
+					*physics,
+					OffsetWalkFeetPosition(feetPosition, constrainedHorizontalDelta));
+			}
+		}
 	}
 
-	newVelocity += moveSpeed * JPH::Vec3(moveDirection.x, 0.0f, moveDirection.z);
-	if (ConsumeInputActionPressed(*input, InputAction::MoveUp) &&
-		character->GetGroundState() == JPH::CharacterVirtual::EGroundState::OnGround) {
-		newVelocity.SetY(kWalkJumpSpeed);
+	if (isGroundedLike && velocity.GetY() < 0.1f) {
+		velocity.SetY(0.0f);
+	}
+
+	if (wantsJump) {
+		if (hasMovementInput) {
+			appliedHorizontalDelta = desiredHorizontalDelta;
+		}
+		const std::array<float, 3> jumpLockAnchorFeetPosition =
+			hasJumpTakeoffFeetPosition ? jumpTakeoffFeetPosition : feetPosition;
+		if (hasActiveSneakSupportRegion) {
+			PrimeWalkJumpLockedSupport(
+				*physics,
+				activeSneakSupportRegion,
+				jumpLockAnchorFeetPosition,
+				physics->walkSneakActive && !hasMovementInput);
+			UpdateWalkJumpLockedSupportTarget(*physics, OffsetWalkFeetPosition(jumpLockAnchorFeetPosition, appliedHorizontalDelta));
+		} else {
+			ClearWalkJumpLockedSupport(*physics);
+		}
+		if (hasJumpTakeoffFeetPosition) {
+			feetPosition = jumpTakeoffFeetPosition;
+		}
+		if (!hasActiveSneakSupportRegion && !hasMovementInput) {
+			physics->walkGroundReturnAnchorFeetPosition =
+				hasJumpTakeoffFeetPosition ? jumpTakeoffFeetPosition : feetPosition;
+			physics->walkGroundReturnAnchorFramesRemaining = kWalkGroundReturnAnchorFrames;
+			physics->walkGroundReturnAnchorValid = true;
+		} else {
+			physics->walkGroundReturnAnchorFeetPosition = {};
+			physics->walkGroundReturnAnchorFramesRemaining = 0;
+			physics->walkGroundReturnAnchorValid = false;
+		}
+		physics->walkSupportState = WalkSupportState::Air;
+		physics->walkEdgeGraceFramesRemaining = 0;
+		if (hasActiveSneakSupportRegion) {
+			physics->walkGroundTakeoffGraceFramesRemaining = 0;
+			physics->walkCachedGroundTakeoffValid = false;
+		}
+		ClearWalkSneakSupportCache(*physics);
+		physics->walkJumpBallisticHorizontalVelocity =
+			deltaSeconds > kPhysicsDirectionEpsilon ? appliedHorizontalDelta / deltaSeconds : JPH::Vec3::sZero();
+		physics->walkJumpBallisticHorizontalDirection =
+			physics->walkJumpBallisticHorizontalVelocity.NormalizedOr(JPH::Vec3::sZero());
+		physics->walkJumpBallisticHorizontalTakeoffSpeed = physics->walkJumpBallisticHorizontalVelocity.Length();
+		physics->walkJumpBallisticHorizontalVelocity.SetY(0.0f);
+		physics->walkJumpBallisticHorizontalVelocityActive = true;
+		velocity.SetY(kWalkJumpSpeed);
 	}
 
 	const JPH::Vec3 gravity = physics->physicsSystem.GetGravity();
-	newVelocity += gravity * deltaSeconds;
-	character->SetLinearVelocity(newVelocity);
+	const bool holdSneakGroundSupport =
+		hasActiveSneakSupportRegion &&
+		isGroundedLike &&
+		!wantsJump &&
+		(physics->walkSneakActive || holdingReleasedLedge);
+	if (holdSneakGroundSupport && velocity.GetY() < 0.0f) {
+		velocity.SetY(0.0f);
+	} else {
+		velocity += gravity * deltaSeconds;
+	}
+
+	const bool allowStepUp = !wantsJump && velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon;
+
+	SweepWalkVertical(*world, feetPosition, velocity, deltaSeconds, physics->walkSneakActive);
+	if (allowStepUp) {
+		MoveWalkHorizontally<true>(*world, feetPosition, appliedHorizontalDelta, physics->walkSneakActive);
+	} else {
+		MoveWalkHorizontally<false>(*world, feetPosition, appliedHorizontalDelta, physics->walkSneakActive);
+	}
+	if (!wantsJump &&
+		!hasMovementInput &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon) {
+		TryRestoreWalkGroundReturnAnchorPlane(*physics, *world, feetPosition, velocity);
+	}
+	if (!wantsJump &&
+		physics->walkJumpLockedSupport.valid &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon) {
+		std::array<float, 3> correctedJumpLockedFeetPosition{};
+		if (TryBuildWalkSupportCorrectedFeetPosition(
+				*physics,
+				*world,
+				physics->walkJumpLockedSupport.region,
+				feetPosition,
+				kWalkCapsuleRadius,
+				kWalkJumpLockedSupportMaxDropBelowReference,
+				correctedJumpLockedFeetPosition)) {
+			feetPosition = correctedJumpLockedFeetPosition;
+			if (velocity.GetY() < 0.0f) {
+				velocity.SetY(0.0f);
+			}
+		}
+	}
+	if (physics->walkSneakActive &&
+		!hasMovementInput &&
+		!wantsJump &&
+		!hasActiveSneakSupportRegion &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon) {
+		TryReacquireWalkSneakGroundSupport(*physics, *world, feetPosition, velocity);
+	}
+	if ((holdingReleasedLedge || physics->walkSneakActive) &&
+		hasActiveSneakSupportRegion &&
+		!wantsJump &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon) {
+		const std::array<float, 2> projectedFeetXZ = ProjectWalkFeetToSneakSupportRegion(activeSneakSupportRegion, feetPosition);
+		feetPosition[0] = projectedFeetXZ[0];
+		feetPosition[2] = projectedFeetXZ[1];
+		TryRestoreWalkSupportRegionPlane(
+			*world,
+			activeSneakSupportRegion,
+			feetPosition,
+			velocity,
+			physics->walkSneakActive);
+	}
+
+	const float snapDropDistance =
+		!wantsJump && velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon
+			? (hasActiveSneakSupportRegion || physics->walkJumpLockedSupport.valid || holdingReleasedLedge ? kWalkSneakStickToFloorDistance
+																										   : kWalkStickToFloorDistance) +
+				  std::max(0.0f, -velocity.GetY() * deltaSeconds)
+			: 0.0f;
+	const bool allowPlainFloorSnap =
+		!wantsJump &&
+		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+		(physics->walkSupportState != WalkSupportState::Air ||
+		 hasCurrentSneakSupport ||
+		 hasActiveSneakSupportRegion ||
+		 physics->walkJumpLockedSupport.valid ||
+		 holdingReleasedLedge);
+	bool snappedToFloor = allowPlainFloorSnap &&
+						  SnapWalkToFloor(*world, feetPosition, velocity, physics->walkSneakActive, snapDropDistance);
+	if (!snappedToFloor) {
+		snappedToFloor = TrySnapWalkToGroundReturnAnchor(*physics, *world, feetPosition, velocity, snapDropDistance);
+	}
+	if (!snappedToFloor) {
+		TrySnapWalkToGroundTakeoffAnchor(*physics, *world, feetPosition, velocity, snapDropDistance);
+	}
+	const bool allowUpwardPenetrationResolve =
+		!wantsJump &&
+		(physics->walkSupportState != WalkSupportState::Air ||
+		 hasActiveSneakSupportRegion ||
+		 physics->walkJumpLockedSupport.valid ||
+		 holdingReleasedLedge);
+	ResolveWalkCharacterPenetration(*world, feetPosition, physics->walkSneakActive, allowUpwardPenetrationResolve);
+
+	character->SetPosition(ToRVec3(feetPosition));
+	character->SetLinearVelocity(velocity);
 	character->SetRotation(JPH::Quat::sRotation(JPH::Vec3::sAxisY(), camera->yawRadians));
 
-	const JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings;
-	character->ExtendedUpdate(
-		deltaSeconds,
-		gravity,
-		updateSettings,
-		physics->physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
-		physics->physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),
-		{},
-		{},
-		physics->tempAllocator);
+	UpdateWalkJumpLockedSupportTarget(*physics, feetPosition);
+	UpdateWalkJumpLockedSupportLifetime(*physics, *world);
 
+	if (physics->walkSneakActive && !physics->walkJumpLockedSupport.valid && !wantsJump) {
+		const WalkSneakSupportRegion postUpdateSupportRegion = ComputeWalkSneakSupportRegion(*world, feetPosition);
+		if (postUpdateSupportRegion.valid &&
+			IsWalkFeetInsideSneakSupportRegion(postUpdateSupportRegion, feetPosition)) {
+			physics->walkCachedSneakSupportRegion = postUpdateSupportRegion;
+			physics->walkSneakSupportGraceFramesRemaining = kWalkSneakSupportGraceFrames;
+		} else if (physics->walkSneakSupportGraceFramesRemaining > 0) {
+			--physics->walkSneakSupportGraceFramesRemaining;
+		}
+		physics->walkLedgeReleaseGraceFramesRemaining = 0;
+		ReleaseWalkSneakSupportCacheIfUnused(*physics);
+	} else if (!physics->walkSneakActive && !wantsJump) {
+		physics->walkSneakSupportGraceFramesRemaining = 0;
+		const bool canRefreshReleaseHold =
+			physics->walkCachedSneakSupportRegion.valid &&
+			!physics->walkJumpLockedSupport.valid &&
+			velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
+			IsWalkFeetInsideSneakSupportRegion(physics->walkCachedSneakSupportRegion, feetPosition);
+		if (canRefreshReleaseHold) {
+			physics->walkLedgeReleaseGraceFramesRemaining = kWalkLedgeReleaseGraceFrames;
+		} else if (physics->walkLedgeReleaseGraceFramesRemaining > 0) {
+			--physics->walkLedgeReleaseGraceFramesRemaining;
+		}
+		ReleaseWalkSneakSupportCacheIfUnused(*physics);
+	} else {
+		ClearWalkSneakSupportCache(*physics);
+	}
+
+	physics->walkHadHorizontalMotionLastStep = !appliedHorizontalDelta.IsNearZero();
+	UpdateWalkGroundSupport(*physics, *world, jumpHeld);
+	if (physics->walkSupportState != WalkSupportState::Air) {
+		ClearWalkJumpBallisticHorizontalVelocity(*physics);
+	}
+	PlotWalkProfilingState(*physics, feetPosition, velocity);
+	if (physics->walkGroundReturnAnchorValid) {
+		const float anchorDriftX = feetPosition[0] - physics->walkGroundReturnAnchorFeetPosition[0];
+		const float anchorDriftZ = feetPosition[2] - physics->walkGroundReturnAnchorFeetPosition[2];
+		if (anchorDriftX * anchorDriftX + anchorDriftZ * anchorDriftZ >
+				kWalkGroundTakeoffLandingMaxDrift * kWalkGroundTakeoffLandingMaxDrift + kWalkCollisionEpsilon ||
+			physics->walkGroundReturnAnchorFramesRemaining == 0) {
+			physics->walkGroundReturnAnchorFeetPosition = {};
+			physics->walkGroundReturnAnchorFramesRemaining = 0;
+			physics->walkGroundReturnAnchorValid = false;
+		} else if (physics->walkSupportState == WalkSupportState::Air) {
+			--physics->walkGroundReturnAnchorFramesRemaining;
+		}
+	}
 	UpdateCameraFromWalkCharacter(*physics, *camera);
 	return true;
 }
@@ -763,22 +3551,136 @@ bool TickCreativeCharacter(
 	}
 
 	JPH::CharacterVirtual *character = physics->walkCharacter.GetPtr();
-	character->SetLinearVelocity(moveSpeed * JPH::Vec3(x, y, z));
+	const JPH::Vec3 desiredVelocity = moveSpeed * JPH::Vec3(x, y, z);
 	character->SetRotation(JPH::Quat::sRotation(JPH::Vec3::sAxisY(), camera->yawRadians));
 
-	const JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings;
-	character->ExtendedUpdate(
-		deltaSeconds,
-		JPH::Vec3::sZero(),
-		updateSettings,
-		physics->physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
-		physics->physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),
-		{},
-		{},
-		physics->tempAllocator);
+	const JPH::CharacterVirtual::ExtendedUpdateSettings updateSettings = BuildCreativeUpdateSettings();
+	uint32_t substepCount = 1;
+	const float desiredTravelDistance = desiredVelocity.Length() * deltaSeconds;
+	if (desiredTravelDistance > kCreativeCollisionMaxStepDistance + kWalkCollisionEpsilon) {
+		substepCount = static_cast<uint32_t>(std::ceil(desiredTravelDistance / kCreativeCollisionMaxStepDistance));
+		substepCount = std::clamp(substepCount, 1u, kCreativeCollisionMaxSubsteps);
+	}
+
+	const float substepDeltaSeconds = deltaSeconds / static_cast<float>(substepCount);
+	for (uint32_t substepIndex = 0; substepIndex < substepCount; ++substepIndex) {
+		character->SetLinearVelocity(desiredVelocity);
+		character->ExtendedUpdate(
+			substepDeltaSeconds,
+			JPH::Vec3::sZero(),
+			updateSettings,
+			physics->physicsSystem.GetDefaultBroadPhaseLayerFilter(PhysicsLayers::Moving),
+			physics->physicsSystem.GetDefaultLayerFilter(PhysicsLayers::Moving),
+			{},
+			{},
+			physics->tempAllocator);
+	}
 
 	UpdateCameraFromWalkCharacter(*physics, *camera);
 	return true;
+}
+
+bool DoesPhysicsCharacterOverlapVoxel(
+	const PhysicsState *physics,
+	const CameraState &camera,
+	const Int3 &voxel)
+{
+	if (physics == nullptr) {
+		return false;
+	}
+
+	const bool sneakActive =
+		camera.controlMode == CameraState::ControlMode::Walk && physics->walkSneakActive;
+	const std::array<float, 3> feetPosition =
+		physics->walkCharacterInitialized && physics->walkCharacter.GetPtr() != nullptr
+			? ToArray(physics->walkCharacter->GetPosition())
+			: BuildFallbackWalkFeetPosition(*physics, camera);
+	return DoesWalkCharacterBodyOverlapVoxel(feetPosition, sneakActive, voxel);
+}
+
+void SetPhysicsWalkAirControlMode(PhysicsState *physics, const WalkAirControlMode mode)
+{
+	if (physics == nullptr) {
+		return;
+	}
+
+	physics->walkAirControlMode = mode;
+	if (!physics->walkJumpBallisticHorizontalVelocityActive) {
+		return;
+	}
+
+	JPH::Vec3 horizontalVelocity = physics->walkJumpBallisticHorizontalVelocity;
+	horizontalVelocity.SetY(0.0f);
+	physics->walkJumpBallisticHorizontalVelocity = horizontalVelocity;
+	physics->walkJumpBallisticHorizontalDirection = horizontalVelocity.NormalizedOr(JPH::Vec3::sZero());
+	physics->walkJumpBallisticHorizontalTakeoffSpeed = horizontalVelocity.Length();
+}
+
+WalkAirControlMode GetPhysicsWalkAirControlMode(const PhysicsState *physics)
+{
+	return physics != nullptr ? physics->walkAirControlMode : WalkAirControlMode::MinecraftLike;
+}
+
+void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, const bool enabled)
+{
+	if (physics == nullptr) {
+		return;
+	}
+
+	physics->walkAutoJumpDelayEnabled = enabled;
+	physics->walkAutoJumpDelayFramesRemaining = 0;
+}
+
+bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics)
+{
+	return physics != nullptr ? physics->walkAutoJumpDelayEnabled : true;
+}
+
+PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics)
+{
+	PhysicsWalkDebugInfo info{};
+	if (physics == nullptr ||
+		!physics->walkCharacterInitialized ||
+		physics->walkCharacter.GetPtr() == nullptr) {
+		return info;
+	}
+
+	info.valid = true;
+	info.feetPosition = ToArray(physics->walkCharacter->GetPosition());
+	info.footSupportScore = physics->walkFootSupportScore;
+	info.footSupportHitSamples = physics->walkFootSupportHitSamples;
+	info.footSupportTotalSamples = physics->walkFootSupportTotalSamples;
+	info.edgeGraceFramesRemaining = physics->walkEdgeGraceFramesRemaining;
+	info.groundTakeoffGraceFramesRemaining = physics->walkGroundTakeoffGraceFramesRemaining;
+	info.sneakSupportGraceFramesRemaining = physics->walkSneakSupportGraceFramesRemaining;
+	info.ledgeReleaseGraceFramesRemaining = physics->walkLedgeReleaseGraceFramesRemaining;
+	info.autoJumpDelayFramesRemaining = physics->walkAutoJumpDelayFramesRemaining;
+	info.groundTakeoffCached = physics->walkCachedGroundTakeoffValid;
+	info.cachedSneakSupportValid = physics->walkCachedSneakSupportRegion.valid;
+	info.feetInsideCachedSneakSupport =
+		physics->walkCachedSneakSupportRegion.valid &&
+		IsWalkFeetInsideSneakSupportRegion(physics->walkCachedSneakSupportRegion, info.feetPosition);
+	info.sneakActive = physics->walkSneakActive;
+	info.jumpLockActive = physics->walkJumpLockedSupport.valid;
+	info.suppressPassiveSlide = physics->walkSuppressPassiveSlide;
+	info.autoJumpDelayEnabled = physics->walkAutoJumpDelayEnabled;
+	info.cachedSneakSupportReferenceFeetY =
+		physics->walkCachedSneakSupportRegion.valid ? physics->walkCachedSneakSupportRegion.referenceFeetPosition[1] : 0.0f;
+
+	switch (physics->walkSupportState) {
+	case WalkSupportState::Grounded:
+		info.supportState = PhysicsWalkSupportDebugState::Grounded;
+		break;
+	case WalkSupportState::EdgeGrace:
+		info.supportState = PhysicsWalkSupportDebugState::EdgeGrace;
+		break;
+	case WalkSupportState::Air:
+	default:
+		info.supportState = PhysicsWalkSupportDebugState::Air;
+		break;
+	}
+
+	return info;
 }
 
 uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics)

@@ -202,8 +202,13 @@ Remove-Item Env:PROJECTV_SCENE_PRESET
 
 ```powershell
 cmake --preset windows-clang-debug-tracy-profiler
-cmake --build build/windows-clang-debug-tracy-profiler --target ProjectV
+cmake --build build/windows-clang-debug-tracy-profiler --target ProjectV tracy-profiler.exe
 ```
+
+Бинарники после этого лежат здесь:
+
+- `build/windows-clang-debug-tracy-profiler/bin/ProjectV.exe`
+- `build/windows-clang-debug-tracy-profiler/bin/tracy-profiler.exe`
 
 Важно:
 

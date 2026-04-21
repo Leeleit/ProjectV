@@ -14,6 +14,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -86,6 +87,10 @@ enum class InputAction : uint8_t {
 	CycleEditorTool,
 	ToggleChunkBounds,
 	ToggleDirtyChunkOverlay,
+	ToggleWalkAirControlMode,
+	ToggleWalkAutoJumpDelay,
+	ToggleInputReplayRecording,
+	PlayLastInputReplay,
 	Count,
 };
 
@@ -119,6 +124,11 @@ struct CameraState {
 		Spectator,
 		Walk,
 	} controlMode = ControlMode::Creative;
+};
+
+enum class WalkAirControlMode : uint8_t {
+	MinecraftLike = 0,
+	Realistic,
 };
 
 struct GraphicsPushConstants {
@@ -186,6 +196,35 @@ struct InteractionState {
 	VoxelMaterial placementMaterial = VoxelMaterial::FloorWhite;
 	float maxInteractionDistance = 12.0f;
 	DebugEditorTool editorTool = DebugEditorTool::Classic;
+};
+
+struct InputReplayFrame {
+	float deltaSeconds = 0.0f;
+	float mouseDeltaX = 0.0f;
+	float mouseDeltaY = 0.0f;
+	uint32_t actionDownMask = 0;
+	uint32_t actionPressedMask = 0;
+	bool removePressed = false;
+	bool placePressed = false;
+};
+
+struct InputReplayCapture {
+	std::string snapshotPath;
+	CameraState initialCamera{};
+	InteractionState initialInteraction{};
+	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	bool walkAutoJumpDelayEnabled = true;
+	std::vector<InputReplayFrame> frames;
+};
+
+struct InputReplayState {
+	InputReplayCapture capture{};
+	std::string replayPath;
+	bool recording = false;
+	bool playbackRequested = false;
+	bool playbackActive = false;
+	bool captureAvailable = false;
+	size_t playbackFrameIndex = 0;
 };
 
 struct DebugOverlayBox {
@@ -258,9 +297,31 @@ struct DebugStats {
 	uint64_t sceneMemoryBytes = 0;
 	VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
 	CameraState::ControlMode controlMode = CameraState::ControlMode::Creative;
+	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	bool walkAutoJumpDelayEnabled = true;
 	bool simulationPaused = false;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
+	bool walkDebugValid = false;
+	uint8_t walkSupportState = 0;
+	std::array<float, 3> walkFeetPosition{};
+	float walkFootSupportScore = 0.0f;
+	uint32_t walkFootSupportHitSamples = 0;
+	uint32_t walkFootSupportTotalSamples = 0;
+	uint32_t walkEdgeGraceFramesRemaining = 0;
+	uint32_t walkGroundTakeoffGraceFramesRemaining = 0;
+	uint32_t walkSneakSupportGraceFramesRemaining = 0;
+	uint32_t walkLedgeReleaseGraceFramesRemaining = 0;
+	uint32_t walkAutoJumpDelayFramesRemaining = 0;
+	bool walkGroundTakeoffCached = false;
+	bool walkSneakActive = false;
+	bool walkJumpLockActive = false;
+	bool walkSuppressPassiveSlide = false;
+	bool inputReplayRecording = false;
+	bool inputReplayPlaybackActive = false;
+	bool inputReplayReady = false;
+	uint32_t inputReplayFrameCount = 0;
+	uint32_t inputReplayPlaybackFrameIndex = 0;
 };
 
 struct SceneFrameResources {
@@ -381,6 +442,7 @@ struct InputState {
 	Uint64 lastMoveUpPressedTimestampNs = 0;
 	std::array<InputActionButtonState, kInputActionCount> actions{};
 	std::array<InputActionBinding, kInputActionCount> bindings{};
+	InputReplayState replay{};
 };
 
 struct DebugState {

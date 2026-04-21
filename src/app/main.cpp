@@ -6,6 +6,7 @@
 #include "app/Camera.hpp"
 #include "app/FramePreparation.hpp"
 #include "app/InputActions.hpp"
+#include "app/InputReplay.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
@@ -178,6 +179,109 @@ bool LoadActiveVoxelWorldSnapshot(AppState *state)
 	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
 	return FinalizeActiveVoxelWorldReload(state, "LoadActiveVoxelWorldSnapshot");
 }
+
+bool IsInteractiveInputEvent(const SDL_Event &event)
+{
+	switch (event.type) {
+	case SDL_EVENT_KEY_DOWN:
+	case SDL_EVENT_KEY_UP:
+	case SDL_EVENT_MOUSE_MOTION:
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
+	case SDL_EVENT_MOUSE_BUTTON_UP:
+	case SDL_EVENT_MOUSE_WHEEL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool StartLastInputReplayPlayback(AppState *state)
+{
+	PV_PROFILE_ZONE_N("StartLastInputReplayPlayback");
+	PV_CHECK_OR_RETURN(state != nullptr, "App", "StartLastInputReplayPlayback.Preconditions", "AppState is null");
+
+	if (!LoadLatestInputReplay(&state->input)) {
+		return false;
+	}
+	if (!state->input.replay.captureAvailable) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"StartLastInputReplayPlayback.Capture",
+			"no replay capture is available");
+		return false;
+	}
+	if (!WaitForDeviceIdle(state->context)) {
+		return false;
+	}
+
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath);
+	if (!loadedWorld) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"StartLastInputReplayPlayback.LoadVoxelWorldSnapshot",
+			"LoadVoxelWorldSnapshot returned null");
+		return false;
+	}
+
+	state->world.voxelWorld = std::move(loadedWorld);
+	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
+	if (!FinalizeActiveVoxelWorldReload(state, "StartLastInputReplayPlayback")) {
+		return false;
+	}
+
+	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
+	const WorldState *const world = GetWorldState(state->ecs.get());
+	PV_CHECK_OR_RETURN(
+		camera && world && world->voxelWorld,
+		"App",
+		"StartLastInputReplayPlayback.World",
+		"playback requires initialized camera and voxel world");
+
+	*camera = state->input.replay.capture.initialCamera;
+	state->interaction = state->input.replay.capture.initialInteraction;
+	state->simulation.lastFrameCounter = 0;
+	state->simulation.frameDeltaSeconds = 0.0f;
+	state->simulation.simulationAccumulatorSeconds = 0.0f;
+	state->simulation.simulationStepsLastFrame = 0;
+	state->simulation.simulationTick = 0;
+	state->input.mouseDeltaX = 0.0f;
+	state->input.mouseDeltaY = 0.0f;
+	state->input.removePressed = false;
+	state->input.placePressed = false;
+	ApplyInputActionSnapshot(state->input, 0u, 0u);
+	SetPhysicsWalkAirControlMode(state->physics.get(), state->input.replay.capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpDelayEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpDelayEnabled);
+	if (camera->controlMode == CameraState::ControlMode::Walk) {
+		ConsumeInputActionPressed(state->input, InputAction::MoveUp);
+		if (!SnapWalkCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"StartLastInputReplayPlayback.SnapWalkCharacterToCamera",
+				"SnapWalkCharacterToCamera returned false");
+			return false;
+		}
+	} else if (camera->controlMode == CameraState::ControlMode::Creative) {
+		if (!SnapCreativeCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"StartLastInputReplayPlayback.SnapCreativeCharacterToCamera",
+				"SnapCreativeCharacterToCamera returned false");
+			return false;
+		}
+	} else {
+		ResetWalkCharacter(state->physics.get());
+	}
+
+	state->input.replay.recording = false;
+	state->input.replay.playbackRequested = false;
+	state->input.replay.playbackActive = !state->input.replay.capture.frames.empty();
+	state->input.replay.playbackFrameIndex = 0;
+	SDL_Log(
+		"[ProjectV][InputReplay] playback started replay=%s frames=%zu",
+		state->input.replay.replayPath.c_str(),
+		state->input.replay.capture.frames.size());
+	return true;
+}
 } // namespace
 
 SDL_AppResult SDL_AppInit(void **appstate, int, char **)
@@ -227,6 +331,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	if (ShouldRequestSwapchainRefreshForWindowEvent(event->type)) {
 		state->platform.windowResized = true;
 	}
+	if (state->input.replay.playbackActive && IsInteractiveInputEvent(*event)) {
+		return SDL_APP_CONTINUE;
+	}
 
 	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
 	HandleInputActionEvent(state->input, event);
@@ -253,6 +360,18 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"SDL_AppIterate.EcsAccess",
 			"primary camera, debug singleton or world singleton is unavailable");
 		return SDL_APP_FAILURE;
+	}
+	if (state->input.replay.playbackRequested &&
+		!StartLastInputReplayPlayback(state)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SDL_AppIterate.StartLastInputReplayPlayback",
+			"StartLastInputReplayPlayback returned false");
+		return SDL_APP_FAILURE;
+	}
+	if (state->input.replay.playbackActive &&
+		!PrepareNextInputReplayPlaybackFrame(&state->input, &state->simulation)) {
+		StopInputReplayPlayback(&state->input);
 	}
 
 	SDL_AppResult result = SDL_APP_FAILURE;
@@ -307,6 +426,10 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->swapchain,
 			&state->render,
 			&state->frame);
+	}
+	if (state->input.replay.playbackActive &&
+		state->input.replay.playbackFrameIndex >= state->input.replay.capture.frames.size()) {
+		StopInputReplayPlayback(&state->input);
 	}
 
 	PV_PROFILE_FRAME_MARK();

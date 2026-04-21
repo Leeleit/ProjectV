@@ -10,7 +10,6 @@ struct EcsState;
 struct VoxelWorldStats;
 struct WorldState;
 
-void DestroyEcsState(EcsState *ecs);
 bool InitializeAppEcs(AppState *state);
 CameraState *GetPrimaryCameraState(EcsState *ecs);
 const CameraState *GetPrimaryCameraState(const EcsState *ecs);

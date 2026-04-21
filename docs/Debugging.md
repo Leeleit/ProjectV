@@ -157,18 +157,31 @@ GPU зоны размечаются через:
 - `Uploaded Voxel Payload Chunks`
 - `Upload Descriptor Bytes`
 - `Upload Chunk Voxel Bytes`
+- `Walk Support State`
+- `Walk Support Score`
+- `Walk Feet Y`
+- `Walk Velocity Y`
+- `Walk Sneak Active`
+- `Walk Jump Lock`
+- `Walk Cached Sneak Support`
+- `Walk Feet Inside Sneak Cache`
+- `Walk Edge Grace`
+- `Walk Ground Takeoff Grace`
+- `Walk Sneak Support Grace`
+- `Walk Ledge Release Grace`
+- `Walk Ground Return Anchor`
 
 Отдельная practical methodology и baseline scene presets описаны в [Profiling](Profiling.md).
 
 ### Как смотреть Tracy
 
 1. Собери и запусти `ProjectV`.
-2. Если нужен bundled profiler UI, используй preset `windows-clang-debug-tracy-profiler`.
+2. Если нужен bundled profiler UI, используй preset `windows-clang-debug-tracy-profiler` и отдельно собери target `tracy-profiler.exe`.
 3. Запусти profiler и подключись к приложению.
 4. Смотри:
-   - CPU zones вокруг `UpdateApp`, `PrepareFrameRenderData`, `DrawFrame`;
+   - CPU zones вокруг `UpdateApp`, `TickWalkCharacter`, `UpdateWalkGroundSupport`, `PrepareFrameRenderData`, `DrawFrame`;
    - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Debug Overlay`, `Debug HUD`;
-   - plot'ы по dirty chunks, face counts и upload bytes.
+   - plot'ы по dirty chunks, face counts, upload bytes и `walk` state drift.
 
 ### Важная оговорка
 

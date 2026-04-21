@@ -91,9 +91,7 @@ VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char>
 	return shaderModule;
 }
 
-void DestroyVoxelMeshingResourceBindings(
-	VulkanContextState &context,
-	RenderState &render)
+void DestroyVoxelMeshingResourceBindings(VulkanContextState &context, RenderState &render)
 {
 	for (SceneFrameResources &frameResources : render.sceneFrameResources) {
 		frameResources.voxelMeshingDescriptorSet = VK_NULL_HANDLE;

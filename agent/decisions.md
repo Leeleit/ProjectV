@@ -2,176 +2,157 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
+Дата обновления: `2026-04-21`
+
 ---
 
-## 2026-04-07
-
-### Границы `agent/`
+## 1. Document boundaries
 
 Решение:
 
-- `TODO.md` хранит roadmap и приоритеты.
-- `AGENTS.md` хранит обязательный протокол.
-- `AGENTS.md` не пересказывает roadmap, статус проекта и длинный исторический журнал.
+- `TODO.md` хранит roadmap, приоритеты, backlog и риски.
+- `AGENTS.md` хранит только обязательный протокол работы агента.
 - `agent/memory.md` хранит только долговечные repo-specific факты и ограничения.
-- `agent/status.md` хранит только короткий active snapshot.
-- `agent/decisions.md` хранит только ещё действующие контракты, а не подробный журнал всех прошлых шагов.
+- `agent/status.md` хранит только короткий активный снимок.
+- `agent/decisions.md` хранит только действующие инженерные договорённости.
 
 Почему:
 
-- дубль roadmap/protocol раздувает обязательное чтение каждой сессии и увеличивает цену контекста без новой информации.
+- Иначе цена обязательного чтения растёт быстрее полезного контекста, а документы начинают пересказывать друг друга.
 
-### Mainline vs R&D
+## 2. Mainline vs R&D
 
 Решение:
 
-- mainline = reproducible interactive voxel MVP;
-- `SVO`, mesh shaders, heavy simulation, big-world systems, complex editor и похожие темы живут только как отдельный R&D backlog.
+- Mainline = reproducible interactive voxel MVP.
+- Тяжёлый R&D (`SVO`, mesh shaders, heavy simulation, big-world systems, большой editor, multiplayer, plugin stack) не должен блокировать ближайший practical milestone.
 
 Почему:
 
-- ближайшая ценность проекта — демонстрируемый и измеримый MVP, а не новый фундамент.
+- Ближайшая ценность проекта — живой, измеримый и расширяемый sandbox slice, а не новый фундамент.
 
-### Root-cause fixes
+## 3. Control-mode contract
 
 Решение:
 
-- warning cleanup и runtime cleanup лечат причину: мёртвую ветку, ложную абстракцию, скрытый control flow или кривой contract;
-- suppress/workaround допустим только по явному согласованию с пользователем.
+- `creative` = collision-backed flight/edit mode и подчиняется `pause`.
+- `spectator` = observe-only noclip без world edits и без подчинения `pause` для movement/look.
+- `walk` = grounded physics mode.
+- Double-tap `Space` переключает только `creative <-> walk`.
+- `F4` остаётся общим циклом control modes.
 
 Почему:
 
-- в этом проекте warning noise обычно указывает на реальную структурную проблему, а не на косметику.
+- Режимы должны быть явными и предсказуемыми, а physics-backed path не должен обходить paused simulation.
 
-### Control-mode contract
+## 4. Build / verification contract
 
 Решение:
 
-- `creative` = collision-backed flight/edit mode;
-- `creative` подчиняется `pause`, потому что движение идёт через physics character;
-- `spectator` = observe-only noclip без world edits и без подчинения `pause` для camera movement/look;
-- `walk` = grounded physics mode;
-- double-tap `Space` переключает только `creative <-> walk`;
-- `F4` остаётся общим циклом `creative -> spectator -> walk`;
-- переход в `walk` сохраняет текущую позицию, а ground recovery используется только как fallback.
+- Mainline repeatable build path живёт на `windows-clang-debug` и `windows-clang-debug-ci`.
+- Verification loop выполняется только последовательно: `build -> tests -> smoke`.
+- Runtime smoke остаётся отдельной GUI-проверкой, но вызывается как официальный target.
+- Shader compile path принимает `glslc` или `glslangValidator`.
+- Для translation units с Jolt include-contract начинается с `<Jolt/Jolt.h>`; auto-refactor не должен поднимать другие Jolt headers выше него.
 
 Почему:
 
-- режимы должны быть явными и предсказуемыми во время реальной интеракции с миром;
-- если режим объявлен как physics-backed, он не должен получать special-case movement мимо paused physics, а noclip-наблюдение наоборот не должно замораживаться вместе с миром.
+- Это минимальный reproducible contour для mainline без лишней хрупкости и конфликтов build tree.
 
-### Repro contract
+## 5. Interaction contract
 
 Решение:
 
-- perf baseline и scene switching строятся на builtin presets через `PROJECTV_SCENE_PRESET`, а не на editor/config stack;
-- smoke и failure checks должны оставаться scriptable и env-driven.
+- World edit остаётся CPU-authored через `VoxelRaycast` и `VoxelWorld`.
+- Постановка блока запрещается до мутации мира, если `placementVoxel` пересекает текущий physics-character volume.
+- После successful world-edit rebuild через `SyncPhysicsWorld` cached walk support ownership надо инвалидировать до следующего walk tick.
 
 Почему:
 
-- проекту нужна воспроизводимая проверка и измеримость уже сейчас, до save/load и editor layer.
+- Physics помогает interaction path, но не заменяет его как source of truth.
+- Reject-before-mutate проще и устойчивее, чем разрешать edit и потом выталкивать игрока из нового блока.
+- Stale support/anchors после удаления блока не считаются допустимым контрактом.
 
-### Build/toolchain contract
+## 6. Walk authority contract
 
 Решение:
 
-- mainline пока не мигрирует на C++ named modules;
-- `RuntimeDiagnostics` остаётся явным logging/check слоем без bool-returning logger helpers.
+- Static-world `walk` в этом репо авторится voxel solver'ом из `PhysicsWorld.cpp`, а не `CharacterVirtual::ExtendedUpdate`.
+- `CharacterVirtual` остаётся proxy/stance carrier и частью collision/contact infrastructure, но не главным источником grounded ownership.
+- Для live walk diagnosis приоритетны fixed-step tests, HUD и Tracy.
 
 Почему:
 
-- текущий `clang-cl + CMake + MSVC STL` стек не даёт безопасной module migration и плохо переносит hidden control flow.
+- Именно этот path сейчас покрыт regression suite и соответствует текущему runtime behavior.
 
-### Build/automation contract
+## 7. Walk jump / air-control contract
 
 Решение:
 
-- mainline repeatable build path живёт на двух preset'ах: `windows-clang-debug` для локальной разработки и `windows-clang-debug-ci` для automation/CI;
-- repeatable automation loop фиксируется через CMake build/test presets и `tools/windows/Invoke-ProjectVBuildChecks.ps1`, а не через ad-hoc набор локальных команд;
-- runtime smoke остаётся Windows GUI-проверкой, но поднимается как явный target `ProjectVRuntimeSmoke` поверх существующего PowerShell script;
-- `windows-clang-debug-tracy-profiler` остаётся opt-in tooling preset и не должен блокировать основной CI contour;
-- shader compile path принимает `glslc` или `glslangValidator`, чтобы mainline не зависел от одного конкретного имени Vulkan SDK tool.
+- Rising jump не должен использовать voxel top-promotion.
+- `WalkAirControlMode::MinecraftLike` — default; `Realistic` сохраняет older direction-lock behavior.
+- Held `Space` снова считается валидным manual jump request после возвращения в grounded-like state.
+- Ordinary `walk` horizontal motion нельзя анализировать по `velocity.xz`; для него нужны explicit walk-step facts.
+- Cached ground-takeoff grace может авторизовать coyote/takeoff handoff только до первого jump commit; после того как ballistic jump уже active, она не даёт second airborne jump.
+- Cached ground-takeoff plane не переобновляется во время active ballistic jump, а landing-back handoff разрешён только на тот же cached takeoff plane в пределах cached drift; широкий support вокруг стоп не считается достаточным сам по себе.
+- Moving partial edge support при активном ходе тоже считается grounded-like handoff: если `footSupportScore` держится примерно на половине footprint, `feetY` стабилен и `velY` не растёт вверх, `UpdateWalkGroundSupport` должен выдавать `EdgeGrace`, а не `Air`.
+- Ultra-thin edge support не превращается в generic sticky ledge hold: дополнительный handoff для `footSupportScore < 0.2` разрешён только под активный jump request и только чтобы первый jump press на самой кромке всё ещё мог стартовать с оставшихся support hits.
+- Landing обратно на recent ground-takeoff plane после jump ballistic path тоже считается grounded-like handoff: если широкий takeoff-support ещё валиден и стопы уже вернулись на ту же top-plane, `UpdateWalkGroundSupport` должен вернуть хотя бы `EdgeGrace`, а не оставлять `Air`.
+- Sneak-support region не должен считать боковой wall voxel опорой сам по себе: crouch-grounded ownership разрешён только когда capsule footprint реально перекрывает top-face support voxel, а не просто попадает в расширенный `XZ`-region рядом со стеной.
+- Sneak-support region anchor по `Y` должен быть реальной sampled top-plane, а не текущей высотой стоп вызывающего path; иначе crouch wall-cling может получить fake grounded в midair.
+- Sneak-support region membership требует не только `XZ` overlap, но и близость стоп к sampled support plane; если стопы ощутимо ниже `referenceFeetPosition[1]`, crouch не должен получать grounded ownership на более высокой поверхности.
 
 Почему:
 
-- build hygiene нужна mainline MVP прямо сейчас, а profiler-side FetchContent graph не должен быть обязательным проходом для каждого изменения;
-- один scriptable entrypoint для configure/build/tests уменьшает drift между локальной проверкой и CI;
-- smoke должен оставаться воспроизводимым и вызываемым из build system, но windowed runtime automation пока всё ещё отдельный слой относительно headless CI;
-- fallback на `glslangValidator` убирает ненужную хрупкость вокруг конкретного shader compiler binary name.
+- Это текущий минимально устойчивый контракт, который не ломает established edge/jump regressions и остаётся достаточно понятным для дальнейшего тюнинга.
 
-### Meshing visibility contract
+## 8. Auto-jump contract
 
 Решение:
 
-- локальный voxel edit помечает dirty только для своего chunk и реально затронутых boundary-neighbors, а не для blanket `3x3x3`;
-- chunk frustum/distance visibility обновляется каждый кадр в CPU frame-prep через indirect-команды;
-- frustum visibility для чанков проверяет не только центр+радиус, а консервативный chunk AABB против near/left/right/top/bottom planes, чтобы геометрия не исчезала на краях экрана;
-- CPU-side patch/full upload chunk descriptors сохраняет GPU-сгенерированные `drawRanges` counts; `sceneUploadVersion` нужен для layout/static descriptor changes, а не для каждого voxel edit;
-- compute meshing всё равно домешивает dirty chunks даже вне кадра и затем перезаписывает их draw commands с учётом текущей visibility.
+- One-block auto-jump остаётся частью active traversal path.
+- Default path держит micro-delay (`40` fixed frames).
+- `F12` переключает только `delay on/off`, а не existence auto-jump.
+- Manual held jump обнуляет pending auto-jump delay countdown.
 
 Почему:
 
-- visibility зависит от камеры каждый кадр, а `drawRanges` должны оставаться в sync с voxel payload независимо от того, виден chunk сейчас или нет;
-- side-plane тест вида `abs(center) <= depth * tan + sphereRadius` оказался слишком агрессивным на наклонённых ракурсах; chunk-level culling должен предпочитать plane-vs-AABB проверку;
-- если CPU reupload сотрёт face counts у не-dirty чанков, текущий indirect path начнёт мигать на edit'ах, потому что compute в этот кадр домешивает только dirty subset;
-- это уменьшает rebuild cost без возврата border cracks и без stale mesh state, когда ранее culled chunk снова попадает в кадр.
+- Нужны оба режима: delayed Minecraft-like traversal и instant response для будущих bunny-hop experiments.
 
-### Debug HUD layout contract
+## 9. Debug / repro contract
+
+- When a live walk bug diverges from synthetic fixtures, the preferred artifact is an input replay capture over another handwritten `SendKeyEvent` sequence.
 
 Решение:
 
-- HUD panels не полагаются на fixed width для legend/stats строк; panel width считается от реально измеренного текста с учётом glyph advance и shadow offset.
-- Вертикально стэкнутые stats/helper panels используют общую stack width по максимальной из двух content-driven ширин, а не две независимые правые границы.
+- Claims о walk/runtime regressions сначала проверяются через live repro + `PhysicsWalkDebugInfo`/HUD/Tracy, а не через blind heuristic patch.
+- Высокий render FPS сам по себе не считается доказанной причиной walk bugs, пока это не подтверждено через real fixed-step path.
 
 Почему:
 
-- helper legend уже содержит строки длиннее старой константы `244px`, и фиксированная ширина визуально выталкивает текст за рамку даже при корректном screen-space positioning;
-- content-driven sizing сохраняет лёгкий CPU-built HUD path без перехода на полноценную UI-систему;
-- разные независимые ширины у верхней и нижней панели дают рваный силуэт в одном и том же HUD stack, хотя информационно это один блок.
+- Этот проект уже несколько раз платил за попытки чинить live runtime bug только по synthetic-case тестам.
 
-### Debug editor contract
+## 10. Creative flight collision contract
 
 Решение:
 
-- debug editor остаётся lightweight keyboard-driven слоем поверх текущего interaction path, а не отдельным editor/UI framework;
-- `OFF` сохраняет старый `LMB remove / RMB place` contract;
-- `F8` циклически переключает `OFF -> PAINT -> ERASE -> FILL -> INSPECT`;
-- `F9` включает global `chunk bounds`, а `F10` — `dirty chunk overlay`;
-- `INSPECT` использует тот же CPU `VoxelRaycast` и chunk metadata из `VoxelWorld`, а не отдельный selection/scene graph.
+- `creative` остаётся на `CharacterVirtual::ExtendedUpdate`, но boosted flight не делает один длинный collision step.
+- `TickCreativeCharacter` делит длинный boosted travel на capped substeps по расстоянию (`~0.05 m`, максимум `32` substeps) и повторяет `ExtendedUpdate` на каждом substep.
+- Regression для этого path держится на exact replay fixtures `tests/fixtures/creative_transparency_boost_stuck.*` и `creative_transparency_boost_corner_stuck.*`, а не на коротком synthetic-case приближении.
 
 Почему:
 
-- это закрывает `10.4` без раннего входа в сложный editor stack и без конфликта с mainline MVP;
-- keyboard-driven path легко держать reproducible, testable и совместимым с текущим HUD/overlay/render pipeline;
-- сохранение `OFF` как дефолта не ломает уже существующий remove/place runtime contract.
+- Normal-speed creative collision уже скользил корректно; ломался только high-speed coarse-step path, включая точные corner hits.
+- Exact replay здесь надёжнее выдуманного теста, потому что старый synthetic-case уже давал ложный red/green сигнал и не совпадал ни с реальным клином на стеклянных колоннах, ни с клином ровно в угол.
 
-### World snapshot contract
+## 11. Static-analysis cleanup contract
 
 Решение:
 
-- save/load пока сериализует только `VoxelWorld` truth: preset id, config, world bounds, voxel payload и `editVersion`;
-- binary snapshot header держит reserved-поля внутри layout для будущего versioning; writer обязан явно zero-init'ить их, а reader до format bump обязан отклонять non-zero reserved bytes;
-- camera state, control mode, physics internals и GPU scene resources в snapshot не входят;
-- `F6/F7` работают по пути из `PROJECTV_SNAPSHOT_PATH`, а fallback — `ProjectV.snapshot.bin` рядом с executable;
-- load snapshot проходит через тот же явный ECS/render/physics reload path, что и reload scene preset, и сбрасывает камеру.
+- Checked-in `Problems/*.xml` inspection exports are treated as hints, not as the source of truth for live code.
+- During warning cleanup, only issues that still reproduce on the current source, or are trivially visible in the current code, should be patched immediately.
+- After a meaningful cleanup pass, regenerate `Problems/` before starting the next pass.
 
 Почему:
 
-- ближайшая практическая ценность — persistence мира для mainline MVP, а не полный session/savegame stack;
-- сериализация только source-of-truth слоя не плодит дубли между CPU world, physics и GPU staging;
-- reset камеры и полный reload path убирают скрытые зависимые состояния после подмены мира.
-
-### Material and scene-lighting contract
-
-Решение:
-
-- material response живёт в CPU-authored `VoxelMaterialVisual` table, а не в hardcoded числах внутри `voxel.frag`;
-- scene-wide lighting/fog/sun параметры живут в отдельном CPU-authored `VoxelSceneLighting` buffer, который выбирается по `VoxelScenePreset`;
-- текущий `VoxelScenePreset` задаёт и world geometry, и reproducible visual look;
-- стекло остаётся единственным transparent voxel material в текущем meshing path, а `Fluid` пока не переводится в transparent/sorted pipeline и получает richer look через lighting/fresnel/emissive terms.
-
-Почему:
-
-- это закрывает `10.3` без раннего перехода к asset/editor stack и без data-driven material system, которая пока не нужна mainline MVP;
-- CPU-authored visual contract легче проверять через tests/smoke/docs, чем набор shader-only magic numbers;
-- transparent sorting остаётся отдельной render-quality задачей и не должен блокировать базовое улучшение материалов уже сейчас.
+- The current refactor/lint sweep already made several exported line-based findings stale mid-pass, and blindly following them risks fixing the wrong code.

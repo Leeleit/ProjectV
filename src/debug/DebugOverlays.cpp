@@ -3,10 +3,10 @@
 #include "voxel/VoxelWorld.hpp"
 
 namespace {
-constexpr std::array<float, 4> kSelectionOverlayColor{1.0f, 0.82f, 0.22f, 0.95f};
-constexpr std::array<float, 4> kInspectChunkOverlayColor{0.27f, 0.87f, 1.0f, 0.90f};
-constexpr std::array<float, 4> kChunkBoundsOverlayColor{0.16f, 0.52f, 0.95f, 0.32f};
-constexpr std::array<float, 4> kDirtyChunkOverlayColor{1.0f, 0.33f, 0.16f, 0.78f};
+constexpr std::array kSelectionOverlayColor{1.0f, 0.82f, 0.22f, 0.95f};
+constexpr std::array kInspectChunkOverlayColor{0.27f, 0.87f, 1.0f, 0.90f};
+constexpr std::array kChunkBoundsOverlayColor{0.16f, 0.52f, 0.95f, 0.32f};
+constexpr std::array kDirtyChunkOverlayColor{1.0f, 0.33f, 0.16f, 0.78f};
 
 void AppendOverlayBox(
 	std::vector<DebugOverlayBox> &outBoxes,

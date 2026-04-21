@@ -2,50 +2,61 @@
 
 Долговечный delta-контекст поверх `TODO.md` и `AGENTS.md`.
 
-Дата последнего обновления: `2026-04-07`
+Дата обновления: `2026-04-21`
 
 ---
 
-## 1. Runtime contract
+## 1. Runtime facts
 
-- `creative` — physics-backed flight/edit mode с collision на том же `CharacterVirtual`, что и `walk`, но без гравитации; как physics-bound режим, подчиняется `pause`.
-- `spectator` — observe-only noclip mode: не даёт `remove/place`, но оставляет inspection/raycast и продолжает camera movement/look даже при `pause`.
-- Возврат в `walk` сначала сохраняет текущую позицию камеры; ground recovery нужен только как fallback для явно некорректной world-позиции.
-- В flying modes `WASD` двигают только по `XZ`; `Space/Shift` отвечают за высоту; double-tap `Space` переключает только `creative <-> walk`.
-- `F1` скрывает весь debug UI; `F5` циклически перезагружает builtin scene presets без рестарта приложения.
-- Block interaction остаётся на CPU `VoxelRaycast` + `VoxelWorld::SetVoxelMaterial`; physics raycast нужен для walk/collision slice, а не как источник истины для world edit.
-- Один voxel edit помечает dirty только для своего chunk и реально затронутых boundary-neighbors; interior edits не должны rebuild'ить лишние чанки.
-- Chunk visibility обновляется каждый кадр через frustum/distance culling в indirect-командах; frustum test должен оставаться консервативным и проверять chunk AABB против боковых/верхней/нижней плоскостей, а dirty chunks всё равно домешиваются даже вне кадра, чтобы `drawRanges` не отставали от voxel payload.
-- CPU upload path для `PackedSceneChunkDescriptor` обязан сохранять GPU-сгенерированные `drawRanges.y/.w` face counts при patch/full upload; voxel edit не должен гасить draw commands у не-dirty чанков.
-- Визуальный voxel contract теперь split на два CPU-authored буфера: `VoxelMaterialVisual` задаёт per-material color/lighting/fresnel/transmission/emissive response, а `VoxelSceneLighting` задаёт sky/horizon/ground/sun/fog параметры для текущего `VoxelScenePreset`; `voxel.frag` больше не хранит эти числа как hardcode.
-- `VoxelScenePreset` теперь задаёт не только геометрию builtin world, но и соответствующий lighting look; при этом стекло остаётся единственным transparent-материалом текущего meshing path, а `Fluid` пока всё ещё идёт через opaque pass с richer shading вместо отдельной transparent/simulation системы.
-- Debug UI остаётся лёгким overlay path: block highlight + crosshair + CPU-built HUD без `imgui`; crosshair использует XOR/logic-op path там, где GPU это поддерживает, и alpha fallback в остальных случаях. HUD panel bounds должны считаться от реально измеренного текста, а не от fixed width констант; вертикальный stack stats/helpers должен брать общую ширину по самой широкой панели, чтобы верх и низ не расходились по правому краю.
-- Лёгкое edge-slide у краёв блоков в `walk` пока считается известным polish debt до отдельного ground-sticking / ledge-stability tuning.
-- `F6` сохраняет, а `F7` загружает world snapshot по пути из `PROJECTV_SNAPSHOT_PATH` или, если env var не задан, из `ProjectV.snapshot.bin` рядом с `ProjectV.exe`; snapshot покрывает только `VoxelWorld` truth и при load гонит полный ECS/render/physics reload с reset камеры.
-- `F8` циклически переключает lightweight debug editor tools `OFF -> PAINT -> ERASE -> FILL -> INSPECT`; `OFF` сохраняет старый `LMB remove / RMB place`, `F9` включает global `chunk bounds`, а `F10` включает `dirty chunk overlay`.
+- `creative` — physics-backed flight/edit mode на том же `CharacterVirtual`, что и `walk`, но без гравитации; подчиняется `pause`.
+- Boosted `creative` collision path now substeps long `CharacterVirtual::ExtendedUpdate` travel much more finely (`~0.05 m` cap, max `32` substeps); normal speed already slid correctly, but high-speed coarse steps could wedge both against dense voxel columns and on exact glass-corner hits.
+- `spectator` — observe-only noclip mode: не даёт world edits, но оставляет movement/look даже при `pause`.
+- Возврат в `walk` сначала сохраняет текущую позицию камеры; ground recovery — только fallback.
+- В flying modes `WASD` двигают только по `XZ`; `Space/Shift` отвечают за высоту. В `walk` `Shift` — это sneak/crouch, а не descend.
+- Double-tap `Space` переключает только `creative <-> walk`.
+- Block interaction остаётся на CPU `VoxelRaycast` + `VoxelWorld::SetVoxelMaterial`; physics raycast не является источником истины для world edit.
+- После successful `SyncPhysicsWorld` на world edit walk-контроллер обязан сбрасывать cached support ownership (`edge/takeoff/sneak/anchors`), иначе удалённая геометрия может ещё тик-два жить как fake grounded support.
+- Один voxel edit помечает dirty только для своего chunk и реально затронутых boundary-neighbors.
+- Chunk visibility обновляется каждый кадр через frustum/distance culling; dirty chunks всё равно домешиваются даже вне кадра.
+- `VoxelScenePreset` теперь задаёт и builtin geometry, и lighting look.
+- HUD остаётся лёгким CPU-built overlay path без `imgui`.
 
----
+## 2. Walk / traversal facts
 
-## 2. Repro и diagnostics
+- Static-world `walk` в этом репо voxel-authoritative и живёт в `src/physics/PhysicsWorld.cpp`; `CharacterVirtual` остаётся proxy/stance carrier, а не главным автором grounded motion.
+- `UpdateApp` гонит `walk` через fixed-step accumulator (`1/60`), даже если render FPS значительно выше.
+- `walk` использует continuous foot-support sampling и separate `Shift` safe-walk path.
+- `Shift` safe-walk grounded-only: если crouch jump реально уходит с края с movement input, airborne path не должен превращаться в generic edge cling.
+- Sneak-support faces должны подтверждать реальный overlap capsule footprint с top-face; одного расширенного `XZ`-region недостаточно, иначе боковой wall voxel может ложно стать grounded-support при crouch-jump рядом со стеной.
+- Sneak-support region `referenceFeetPosition[1]` должен означать реальную sampled top-plane (`voxelY + 1 + clearance`), а не текущий `feetY` вызывающего кода; иначе midair crouch у stacked wall может ложно стать grounded на произвольной высоте.
+- Sneak-support region membership требует не только `XZ` overlap, но и разумную близость стоп к `referenceFeetPosition[1]`; если стопы заметно ниже sampled support plane, midair crouch не должен активировать grounded support на более высокой top-plane.
+- Ordinary `walk` horizontal motion здесь не авторится через `velocity.xz`; `X/Z` двигаются вручную через feet-position deltas.
+- Moving partial edge support тоже может быть валидным grounded-like состоянием: при стабильном `feetY`, невосходящем `velY` и `footSupportScore≈0.5` контроллер должен держать `EdgeGrace`, а не падать в synthetic `Air`.
+- Самый узкий edge-jump case не должен требовать, чтобы `supportState` уже был grounded-like до применения текущего `Space`: если под стопой ещё есть реальные support samples на takeoff-plane, jump может переавторизоваться в этом же тике, но этот fallback нельзя оставлять включённым для обычного walk-off без jump request.
+- После ballistic jump возврат на recent ground-takeoff plane тоже должен уметь reacquire `EdgeGrace`, даже если обычный footprint score на самой кромке уже низкий; иначе возможен late drop при `feetY` уже на support plane.
+- Cached ground-takeoff grace — это pre-jump/coyote helper, а не airborne retry authority: когда ballistic jump уже active, этот cache не должен давать second jump commit в воздухе.
+- Cached ground-takeoff support должен оставаться привязанным к recent takeoff plane: во время active ballistic jump его нельзя переобновлять на чужую top-plane, а `landedBackOnGroundTakeoffSupport` обязан совпадать с cached plane и drift, а не с любым широким support под стопами.
+- Rising jump motion не должен выполнять voxel top-promotion.
+- Jump-on-block late rise сейчас трактуется как camera-side smoothing issue; broad airborne `step-up` path остаётся активным, потому что его заужение уже ломало established regressions.
+- `WalkAirControlMode::MinecraftLike` — default; `WalkAirControlMode::Realistic` оставляет direction-lock + scalar brake.
+- `walk` jump input больше не `pressed`-only: held `Space` снова должен давать повторный jump request после возвращения в grounded-like state.
+- One-block auto-jump — часть активного traversal contract; default delay сейчас `40` fixed frames, `F12` переключает только `delay on/off`.
 
+## 3. Runtime debug / repro facts
+
+- Runtime input replay is now first-class: `R` records the current sandbox into a snapshot plus per-frame input file, `Y` replays the latest capture, and the same replay file can be loaded by tests.
+- The high-speed creative-flight wedge regressions are pinned by repo fixtures `tests/fixtures/creative_transparency_boost_stuck.*` and `creative_transparency_boost_corner_stuck.*`; prefer those exact captures over another synthetic approximation.
+
+- Live walk diagnosis нужно делать по `PhysicsWalkDebugInfo`, HUD (`CAM/FEET/support/grace`) и Tracy, а не по округлённой камере.
 - Perf/repro scenes задаются через `PROJECTV_SCENE_PRESET`: `VoxelLab`, `FlatBenchmark`, `TransparencyStress`, `ChunkGrid`, `MeshingStress`.
-- Benchmark contract живёт в `docs/Profiling.md` и `src/debug/Profiling.hpp`.
-- Runtime smoke path: `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1` + `docs/voxel_mvp_smoke_checklist.md`.
-- Failure probes: `PROJECTV_SHADER_BASE_DIR`, `PROJECTV_FAIL_INIT_STAGE`, `tools/windows/Invoke-ProjectVFailureProbes.ps1`.
-- `RuntimeDiagnostics` — side-effect-only logging layer; failure path в mainline пишется явно как `log + return false`, а не прячется в bool-returning logger.
+- Tracy UI в этом репо — отдельный build target: `tracy-profiler.exe` не появляется от `--target ProjectV`.
 
----
+## 4. Build / repo constraints
 
-## 3. Repo/build constraints
-
-- `src/` — единственная include-boundary для project/test targets; внутренние headers подключаются qualified-путями (`app/...`, `render/vulkan/...`).
-- ECS chunk mirror специально хранит только реально читаемый summary state: `rebuildQueued` и `nonAirVoxelCount`.
-- Human-facing docs живут в `docs/*.md`; `README_NEW.md` — текущий root-facing overview, `README.md` не трогать без явного запроса пользователя.
-- При работе с vendored submodules важно держать recursive-clean state; для `external/draco` nested `third_party/*` должны совпадать с записанными gitlinks.
-- Массовые third-party обновления валидируются через build/test/smoke; простого `git status` недостаточно.
-- В `build/windows-clang-debug` нельзя гонять два независимых `cmake --build` параллельно.
-- Mainline build/automation contract идёт через `windows-clang-debug` и `windows-clang-debug-ci`, их build/test presets и `tools/windows/Invoke-ProjectVBuildChecks.ps1`; `windows-clang-debug-tracy-profiler` остаётся opt-in tooling path и не входит в базовый CI contour.
-- Shader compile path принимает либо `glslc`, либо `glslangValidator` из Vulkan SDK; жёсткая зависимость только от одного имени бинарника больше не считается допустимой для mainline.
-- `ProjectVRuntimeSmoke` — официальный CMake target-обёртка над `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1`; smoke verification можно вызывать и через build preset `windows-clang-debug-smoke`.
-- Текущий `JoltPhysics` build в `clang-cl` debug toolchain требует `USE_STATIC_MSVC_RUNTIME_LIBRARY=OFF`.
-- Ограничение по C++ modules проверялось на `clang-cl 21.1.8 + CMake 4.3.0-rc1 + Ninja 1.13.2 + MSVC STL`; direct probe работает, но CMake module scanning и `import std` для mainline пока не готовы.
+- `Problems/*.xml` from JetBrains inspections are point-in-time snapshots; during warning cleanup they must be validated against the current source or local `clang-tidy` before applying edits, because line-based entries go stale quickly during the same refactor pass.
+- Mainline repeatable path идёт через `windows-clang-debug` и `windows-clang-debug-ci`.
+- В одном build tree нельзя запускать несколько независимых `cmake --build` / `ctest` / smoke одновременно.
+- Для `.cpp`, которые тянут Jolt internals, `<Jolt/Jolt.h>` должен идти раньше остальных Jolt headers; иначе рушатся `JPH_*` macros/typedefs и `PhysicsWorld.cpp` перестаёт собираться.
+- `ProjectVRuntimeSmoke` — официальный target поверх `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1`.
+- Shader compile path принимает либо `glslc`, либо `glslangValidator`.
+- `README_NEW.md` — текущий root-facing overview; `README.md` не трогать без явного запроса пользователя.

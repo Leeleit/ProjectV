@@ -9,6 +9,35 @@
 struct CameraState;
 struct InputState;
 struct PhysicsState;
+enum class WalkAirControlMode : uint8_t;
+
+enum class PhysicsWalkSupportDebugState : uint8_t {
+	Air = 0,
+	Grounded,
+	EdgeGrace,
+};
+
+struct PhysicsWalkDebugInfo {
+	bool valid = false;
+	PhysicsWalkSupportDebugState supportState = PhysicsWalkSupportDebugState::Air;
+	std::array<float, 3> feetPosition{};
+	float footSupportScore = 0.0f;
+	uint32_t footSupportHitSamples = 0;
+	uint32_t footSupportTotalSamples = 0;
+	uint32_t edgeGraceFramesRemaining = 0;
+	uint32_t groundTakeoffGraceFramesRemaining = 0;
+	uint32_t sneakSupportGraceFramesRemaining = 0;
+	uint32_t ledgeReleaseGraceFramesRemaining = 0;
+	uint32_t autoJumpDelayFramesRemaining = 0;
+	bool groundTakeoffCached = false;
+	bool cachedSneakSupportValid = false;
+	bool feetInsideCachedSneakSupport = false;
+	bool sneakActive = false;
+	bool jumpLockActive = false;
+	bool suppressPassiveSlide = false;
+	bool autoJumpDelayEnabled = true;
+	float cachedSneakSupportReferenceFeetY = 0.0f;
+};
 
 struct PhysicsRaycastHit {
 	bool hasHit = false;
@@ -47,6 +76,15 @@ bool TickCreativeCharacter(
 	CameraState *camera,
 	const InputState *input,
 	float deltaSeconds);
+bool DoesPhysicsCharacterOverlapVoxel(
+	const PhysicsState *physics,
+	const CameraState &camera,
+	const Int3 &voxel);
+void SetPhysicsWalkAirControlMode(PhysicsState *physics, WalkAirControlMode mode);
+WalkAirControlMode GetPhysicsWalkAirControlMode(const PhysicsState *physics);
+void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, bool enabled);
+bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics);
+PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics);
 uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics);
 
 #endif

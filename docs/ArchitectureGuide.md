@@ -166,7 +166,7 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 - `creative` — collision-backed flight mode, подчиняется `pause` вместе с physics, edits разрешены;
 - `spectator` — observe-only noclip mode, не зависит от `pause` для camera movement, edits запрещены;
-- `walk` — grounded collision-based mode, использует physics controller и разрешает edits.
+- `walk` — grounded collision-based mode, использует physics controller с continuous voxel foot-support score под стопой, коротким `stick-to-floor` step-down и `OnContactSolve` anti-slide listener'ом, который при partial support без input режет downhill-компоненту только на одном best floor-like static contact за кадр; после полной потери опоры режим переходит в обычный gravity fall без lower-floor snap, jump кратко лочит sample-based regrounding и остаётся физическим без `Y`-snap helper'ов, при этом top-edge snag допускает только узкий non-rising ledge catch без upward snap, но уже с lateral probes по ширине капсулы и только из pre-step grounded support, а `Shift` включает отдельный lower-stance sneak path с непрерывной face-based support geometry: pre-move safe-walk проектирует `desired feet XZ` в объединение walkable top-face support area, cached support-region grace и post-solve correction/stick-to-floor используют ту же область; если `feet XZ` остаётся внутри cached support-region, sneak может вернуть небольшой solver-driven drop обратно к cached top-face height, а отпускание `Shift` на уже безопасной кромке удерживается коротким `ledge release` hold вместо мгновенного off-edge drop.
 
 Это не финальная gameplay-модель. Это честный MVP split между debug camera, observe mode и базовым player-like mode.
 

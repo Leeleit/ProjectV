@@ -48,6 +48,7 @@ target_sources(ProjectV PRIVATE
         app/Camera.cpp
         app/FramePreparation.cpp
         app/InputActions.cpp
+        app/InputReplay.cpp
         app/main.cpp
         ecs/EcsWorld.cpp
         physics/PhysicsWorld.cpp

@@ -2,3 +2,5 @@ build
 .idea
 /docs/cpp-draft-main/
 /docs/vulkan-sdk_docs_1.4.341.1/
+/problems/
+/tests/fixtures/

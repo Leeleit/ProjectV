@@ -3,6 +3,8 @@
 
 #include "core/Types.hpp"
 
+struct PhysicsState;
+
 void HandleInteractionEvent(
 	InputState *input,
 	const SDL_Event *event);
@@ -11,6 +13,7 @@ void UpdateVoxelInteraction(
 	InputState *input,
 	VoxelWorld *world,
 	InteractionState *interaction,
-	bool allowEditing);
+	bool allowEditing,
+	const PhysicsState *physics);
 
 #endif

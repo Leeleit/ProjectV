@@ -1,6 +1,7 @@
 #include "app/AppUpdate.hpp"
 #include "app/Camera.hpp"
 #include "app/InputActions.hpp"
+#include "app/InputReplay.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "core/Types.hpp"
 #include "debug/DebugHud.hpp"
@@ -23,6 +24,10 @@
 #include <vector>
 
 namespace {
+#ifndef PROJECTV_TESTS_SOURCE_DIR
+#define PROJECTV_TESTS_SOURCE_DIR "."
+#endif
+
 struct TestContext {
 	int failures = 0;
 
@@ -130,6 +135,33 @@ std::filesystem::path GetTestVoxelWorldSnapshotPath()
 	}
 
 	return tempDirectory / "ProjectV-VoxelWorldSnapshotTest.bin";
+}
+
+std::filesystem::path GetTestInputReplayPath()
+{
+	std::error_code error;
+	const std::filesystem::path tempDirectory = std::filesystem::temp_directory_path(error);
+	if (error) {
+		return std::filesystem::path("ProjectV-InputReplayTest.replay");
+	}
+
+	return tempDirectory / "ProjectV-InputReplayTest.replay";
+}
+
+std::filesystem::path GetTestInputReplaySnapshotPath()
+{
+	std::error_code error;
+	const std::filesystem::path tempDirectory = std::filesystem::temp_directory_path(error);
+	if (error) {
+		return std::filesystem::path("ProjectV-InputReplayTest.snapshot.bin");
+	}
+
+	return tempDirectory / "ProjectV-InputReplayTest.snapshot.bin";
+}
+
+std::filesystem::path GetTestFixturePath(const std::string_view filename)
+{
+	return std::filesystem::path(PROJECTV_TESTS_SOURCE_DIR) / "fixtures" / std::filesystem::path(filename);
 }
 
 void ResetDirtyFlags(VoxelWorld &world);
@@ -627,6 +659,273 @@ CameraState MakeTestCamera(const std::array<float, 3> &position)
 	return camera;
 }
 
+bool AdvanceUpdateAppWithSimulatedFrameDelta(
+	PlatformState *platform,
+	SimulationState *simulation,
+	CameraState *camera,
+	InputState *input,
+	InteractionState *interaction,
+	WorldState *world,
+	PhysicsState *physics,
+	RenderState *render,
+	DebugState *debug,
+	const float deltaSeconds)
+{
+	const Uint64 frequency = SDL_GetPerformanceFrequency();
+	const Uint64 deltaCounter = std::max<Uint64>(
+		1,
+		static_cast<Uint64>(static_cast<double>(deltaSeconds) * static_cast<double>(frequency)));
+	simulation->lastFrameCounter = SDL_GetPerformanceCounter() - deltaCounter;
+	return UpdateApp(platform, simulation, camera, input, interaction, world, physics, render, debug);
+}
+
+const char *ToString(const CameraState::ControlMode mode)
+{
+	switch (mode) {
+	case CameraState::ControlMode::Creative:
+		return "Creative";
+	case CameraState::ControlMode::Spectator:
+		return "Spectator";
+	case CameraState::ControlMode::Walk:
+		return "Walk";
+	}
+
+	return "Unknown";
+}
+
+const char *ToString(const PhysicsWalkSupportDebugState state)
+{
+	switch (state) {
+	case PhysicsWalkSupportDebugState::Air:
+		return "Air";
+	case PhysicsWalkSupportDebugState::Grounded:
+		return "Grounded";
+	case PhysicsWalkSupportDebugState::EdgeGrace:
+		return "EdgeGrace";
+	}
+
+	return "Unknown";
+}
+
+std::string DescribeInputActionMask(const uint32_t mask)
+{
+	std::string text;
+	const auto appendAction = [&text](const char *label) {
+		if (!text.empty()) {
+			text += '|';
+		}
+		text += label;
+	};
+
+	const auto hasAction = [mask](const InputAction action) {
+		return (mask & 1u << static_cast<uint32_t>(action)) != 0u;
+	};
+
+	if (hasAction(InputAction::MoveForward)) {
+		appendAction("W");
+	}
+	if (hasAction(InputAction::MoveBackward)) {
+		appendAction("S");
+	}
+	if (hasAction(InputAction::MoveLeft)) {
+		appendAction("A");
+	}
+	if (hasAction(InputAction::MoveRight)) {
+		appendAction("D");
+	}
+	if (hasAction(InputAction::MoveUp)) {
+		appendAction("SPACE");
+	}
+	if (hasAction(InputAction::MoveDown)) {
+		appendAction("SHIFT");
+	}
+	if (hasAction(InputAction::SpeedBoost)) {
+		appendAction("CTRL");
+	}
+	if (hasAction(InputAction::ToggleWalkCreativeMode)) {
+		appendAction("DBLSPACE");
+	}
+	if (text.empty()) {
+		text = "-";
+	}
+
+	return text;
+}
+
+bool HasInputActionMaskBit(const uint32_t mask, const InputAction action)
+{
+	return (mask & 1u << static_cast<uint32_t>(action)) != 0u;
+}
+
+int RunReplayAnalysisFromEnvironment()
+{
+	const char *requestedReplayPath = SDL_getenv("PROJECTV_ANALYZE_REPLAY_PATH");
+	if (requestedReplayPath == nullptr || *requestedReplayPath == '\0') {
+		return -1;
+	}
+
+	const std::string replayPath = requestedReplayPath;
+	InputReplayCapture capture{};
+	if (!LoadInputReplayCapture(replayPath, &capture)) {
+		std::fprintf(stderr, "[ReplayAnalysis] failed to load replay: %s\n", replayPath.c_str());
+		return EXIT_FAILURE;
+	}
+
+	std::unique_ptr<VoxelWorld> world = LoadVoxelWorldSnapshot(capture.snapshotPath);
+	if (!world) {
+		std::fprintf(stderr, "[ReplayAnalysis] failed to load snapshot: %s\n", capture.snapshotPath.c_str());
+		return EXIT_FAILURE;
+	}
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = capture.initialCamera;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction = capture.initialInteraction;
+	WorldState worldState{};
+	worldState.voxelWorld = std::move(world);
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+	if (!physics) {
+		std::fprintf(stderr, "[ReplayAnalysis] failed to create physics state\n");
+		return EXIT_FAILURE;
+	}
+	if (!SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get())) {
+		std::fprintf(stderr, "[ReplayAnalysis] SyncPhysicsWorld failed\n");
+		return EXIT_FAILURE;
+	}
+	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
+	if (camera.controlMode == CameraState::ControlMode::Walk) {
+		if (!SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera)) {
+			std::fprintf(stderr, "[ReplayAnalysis] SnapWalkCharacterToCamera failed\n");
+			return EXIT_FAILURE;
+		}
+	} else if (camera.controlMode == CameraState::ControlMode::Creative) {
+		if (!SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera)) {
+			std::fprintf(stderr, "[ReplayAnalysis] SnapCreativeCharacterToCamera failed\n");
+			return EXIT_FAILURE;
+		}
+	}
+
+	std::fprintf(
+		stderr,
+		"[ReplayAnalysis] replay=%s frames=%zu snapshot=%s initialMode=%s\n",
+		replayPath.c_str(),
+		capture.frames.size(),
+		capture.snapshotPath.c_str(),
+		ToString(camera.controlMode));
+
+	PhysicsWalkDebugInfo previousInfo = GetPhysicsWalkDebugInfo(physics.get());
+	CameraState::ControlMode previousMode = camera.controlMode;
+	uint32_t previousDownMask = 0u;
+	float maxFeetY = previousInfo.feetPosition[1];
+	float maxCameraY = camera.position[1];
+	int lastPlacedEditVersion = static_cast<int>(worldState.voxelWorld->editVersion);
+	for (size_t frameIndex = 0; frameIndex < capture.frames.size(); ++frameIndex) {
+		const InputReplayFrame &frame = capture.frames[frameIndex];
+		const bool downMaskChanged = frame.actionDownMask != previousDownMask;
+		const bool jumpPressed = HasInputActionMaskBit(frame.actionPressedMask, InputAction::MoveUp);
+		const bool toggleWalkCreativePressed =
+			HasInputActionMaskBit(frame.actionPressedMask, InputAction::ToggleWalkCreativeMode);
+		const bool toggleControlModePressed =
+			HasInputActionMaskBit(frame.actionPressedMask, InputAction::ToggleControlMode);
+		const bool interestingInput =
+			downMaskChanged ||
+			frame.placePressed ||
+			frame.removePressed ||
+			jumpPressed ||
+			toggleWalkCreativePressed ||
+			toggleControlModePressed;
+
+		ApplyInputReplayFrame(&input, frame);
+		if (!AdvanceUpdateAppWithSimulatedFrameDelta(
+				&platform,
+				&simulation,
+				&camera,
+				&input,
+				&interaction,
+				&worldState,
+				physics.get(),
+				&render,
+				&debug,
+				frame.deltaSeconds)) {
+			std::fprintf(stderr, "[ReplayAnalysis] UpdateApp failed at frame %zu\n", frameIndex);
+			return EXIT_FAILURE;
+		}
+
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		const bool supportChanged =
+			info.valid != previousInfo.valid ||
+			info.supportState != previousInfo.supportState ||
+			info.sneakActive != previousInfo.sneakActive ||
+			info.jumpLockActive != previousInfo.jumpLockActive;
+		const bool modeChanged = camera.controlMode != previousMode;
+		const bool newFeetPeak = info.valid && info.feetPosition[1] > maxFeetY + 0.02f;
+		const bool newCameraPeak = camera.position[1] > maxCameraY + 0.02f;
+		const bool suspiciousUpperSupport =
+			info.valid &&
+			info.supportState != PhysicsWalkSupportDebugState::Air &&
+			info.feetPosition[1] >= previousInfo.feetPosition[1] + 0.20f;
+		const bool worldEdited = static_cast<int>(worldState.voxelWorld->editVersion) != lastPlacedEditVersion;
+
+		if (interestingInput || supportChanged || modeChanged || newFeetPeak || newCameraPeak || suspiciousUpperSupport || worldEdited) {
+			std::fprintf(
+				stderr,
+				"[ReplayAnalysis] frame=%zu mode=%s cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) support=%s score=%.3f input=%s pressSpace=%u dblSpace=%u place=%u remove=%u editVersion=%llu placement=(%d,%d,%d) target=(%d,%d,%d)\n",
+				frameIndex,
+				ToString(camera.controlMode),
+				camera.position[0],
+				camera.position[1],
+				camera.position[2],
+				info.feetPosition[0],
+				info.feetPosition[1],
+				info.feetPosition[2],
+				ToString(info.supportState),
+				info.footSupportScore,
+				DescribeInputActionMask(frame.actionDownMask).c_str(),
+				jumpPressed ? 1u : 0u,
+				toggleWalkCreativePressed ? 1u : 0u,
+				frame.placePressed ? 1u : 0u,
+				frame.removePressed ? 1u : 0u,
+				static_cast<unsigned long long>(worldState.voxelWorld->editVersion),
+				interaction.selection.placementVoxel.x,
+				interaction.selection.placementVoxel.y,
+				interaction.selection.placementVoxel.z,
+				interaction.selection.targetVoxel.x,
+				interaction.selection.targetVoxel.y,
+				interaction.selection.targetVoxel.z);
+		}
+
+		maxFeetY = std::max(maxFeetY, info.feetPosition[1]);
+		maxCameraY = std::max(maxCameraY, camera.position[1]);
+		previousInfo = info;
+		previousMode = camera.controlMode;
+		previousDownMask = frame.actionDownMask;
+		lastPlacedEditVersion = static_cast<int>(worldState.voxelWorld->editVersion);
+	}
+
+	const PhysicsWalkDebugInfo finalInfo = GetPhysicsWalkDebugInfo(physics.get());
+	std::fprintf(
+		stderr,
+		"[ReplayAnalysis] final mode=%s cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) support=%s score=%.3f maxFeetY=%.3f maxCameraY=%.3f editVersion=%llu\n",
+		ToString(camera.controlMode),
+		camera.position[0],
+		camera.position[1],
+		camera.position[2],
+		finalInfo.feetPosition[0],
+		finalInfo.feetPosition[1],
+		finalInfo.feetPosition[2],
+		ToString(finalInfo.supportState),
+		finalInfo.footSupportScore,
+		maxFeetY,
+		maxCameraY,
+		static_cast<unsigned long long>(worldState.voxelWorld->editVersion));
+	return EXIT_SUCCESS;
+}
+
 void ResetDirtyFlags(VoxelWorld &world)
 {
 	world.pendingChunkRebuildIndices.clear();
@@ -644,6 +943,125 @@ VoxelWorld MakeWalkTestWorld()
 			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
 		}
 	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkLedgeTestWorld()
+{
+	VoxelWorld world = MakeWalkTestWorld();
+	for (int z = 4; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray);
+		}
+	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkLongLedgeTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {32, 8, 12}, 8);
+	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+		}
+	}
+	for (int z = 4; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray);
+		}
+	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkCornerLedgeTestWorld()
+{
+	VoxelWorld world = MakeWalkTestWorld();
+	for (int z = 4; z < world.maxExclusive.z; ++z) {
+		for (int x = 4; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray);
+		}
+	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkCornerLedgeLowCeilingTestWorld()
+{
+	VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+	for (int z = 4; z < world.maxExclusive.z; ++z) {
+		for (int x = 4; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 4, z}, VoxelMaterial::FloorGray);
+		}
+	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkNegativeSingleBlockTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({-8, 0, 0}, {8, 8, 12}, 4);
+	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+		}
+	}
+	SetVoxelMaterial(world, {-6, 1, 6}, VoxelMaterial::FloorGray);
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkPositiveSingleBlockTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {12, 8, 12}, 4);
+	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+		}
+	}
+	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::FloorGray);
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkPositiveTwoBlockTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {12, 10, 12}, 4);
+	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+		}
+	}
+	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {5, 2, 6}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkGlassColumnWallTestWorld()
+{
+	VoxelWorld world = MakeWalkTestWorld();
+	for (int y = 1; y <= 4; ++y) {
+		SetVoxelMaterial(world, {4, y, 5}, VoxelMaterial::Glass);
+	}
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkNegativeSingleBlockSneakTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({-12, 0, 0}, {8, 8, 8}, 4);
+	SetVoxelMaterial(world, {-8, 3, 3}, VoxelMaterial::FloorGray);
+	ResetDirtyFlags(world);
+	return world;
+}
+
+VoxelWorld MakeWalkIsolatedCornerSingleBlockTestWorld()
+{
+	VoxelWorld world = MakeTestWorld({-4, 0, -4}, {8, 24, 8}, 4);
+	SetVoxelMaterial(world, {-1, 15, 0}, VoxelMaterial::FloorGray);
 	ResetDirtyFlags(world);
 	return world;
 }
@@ -691,6 +1109,16 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F10);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleDirtyChunkOverlay));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAirControlMode));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAutoJumpDelay));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_R);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleInputReplayRecording));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Y);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::PlayLastInputReplay));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::SaveWorldSnapshot));
@@ -887,6 +1315,213 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	EXPECT_NEAR(context, 10.0f, camera.moveSpeed);
 	EXPECT_NEAR(context, 0.0f, camera.yawRadians);
 	EXPECT_NEAR(context, -0.2f, camera.pitchRadians);
+}
+
+void TestUpdateAppTogglesWalkAirControlMode(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
+	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, GetPhysicsWalkAirControlMode(physics.get()));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_EQ(context, WalkAirControlMode::Realistic, GetPhysicsWalkAirControlMode(physics.get()));
+	EXPECT_EQ(context, WalkAirControlMode::Realistic, debug.stats.walkAirControlMode);
+
+	InputState secondInput{};
+	InitializeInputState(secondInput);
+	SendKeyEvent(&secondInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, GetPhysicsWalkAirControlMode(physics.get()));
+	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, debug.stats.walkAirControlMode);
+}
+
+void TestUpdateAppTogglesWalkAutoJumpDelay(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_TRUE(context, !IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
+	EXPECT_TRUE(context, !debug.stats.walkAutoJumpDelayEnabled);
+
+	InputState secondInput{};
+	InitializeInputState(secondInput);
+	SendKeyEvent(&secondInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
+	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
+	EXPECT_TRUE(context, debug.stats.walkAutoJumpDelayEnabled);
+}
+
+void TestInputReplayCaptureRoundTripsFile(TestContext &context)
+{
+	InputReplayCapture capture{};
+	capture.snapshotPath = GetTestInputReplaySnapshotPath().string();
+	capture.initialCamera = MakeTestCamera({1.25f, 2.5f, 3.75f});
+	capture.initialCamera.controlMode = CameraState::ControlMode::Walk;
+	capture.initialCamera.yawRadians = 0.25f;
+	capture.initialCamera.pitchRadians = -0.4f;
+	capture.initialInteraction.placementMaterial = VoxelMaterial::Glass;
+	capture.initialInteraction.maxInteractionDistance = 9.5f;
+	capture.initialInteraction.editorTool = DebugEditorTool::Erase;
+	capture.walkAirControlMode = WalkAirControlMode::Realistic;
+	capture.walkAutoJumpDelayEnabled = false;
+	capture.frames.push_back({
+		.deltaSeconds = 1.0f / 60.0f,
+		.mouseDeltaX = 3.5f,
+		.mouseDeltaY = -1.25f,
+		.actionDownMask = 0x15u,
+		.actionPressedMask = 0x04u,
+		.removePressed = true,
+		.placePressed = false,
+	});
+	capture.frames.push_back({
+		.deltaSeconds = 1.0f / 120.0f,
+		.mouseDeltaX = 0.0f,
+		.mouseDeltaY = 0.0f,
+		.actionDownMask = 0x02u,
+		.actionPressedMask = 0x00u,
+		.removePressed = false,
+		.placePressed = true,
+	});
+
+	const std::filesystem::path replayPath = GetTestInputReplayPath();
+	std::error_code removeError;
+	std::filesystem::remove(replayPath, removeError);
+
+	EXPECT_TRUE(context, SaveInputReplayCapture(capture, replayPath.string()));
+
+	InputReplayCapture loaded{};
+	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &loaded));
+	EXPECT_TRUE(context, loaded.snapshotPath == capture.snapshotPath);
+	EXPECT_EQ(context, capture.initialCamera.controlMode, loaded.initialCamera.controlMode);
+	EXPECT_NEAR(context, capture.initialCamera.position[0], loaded.initialCamera.position[0]);
+	EXPECT_NEAR(context, capture.initialCamera.position[1], loaded.initialCamera.position[1]);
+	EXPECT_NEAR(context, capture.initialCamera.position[2], loaded.initialCamera.position[2]);
+	EXPECT_NEAR(context, capture.initialCamera.yawRadians, loaded.initialCamera.yawRadians);
+	EXPECT_NEAR(context, capture.initialCamera.pitchRadians, loaded.initialCamera.pitchRadians);
+	EXPECT_EQ(context, capture.initialInteraction.placementMaterial, loaded.initialInteraction.placementMaterial);
+	EXPECT_EQ(context, capture.initialInteraction.editorTool, loaded.initialInteraction.editorTool);
+	EXPECT_EQ(context, capture.walkAirControlMode, loaded.walkAirControlMode);
+	EXPECT_TRUE(context, capture.walkAutoJumpDelayEnabled == loaded.walkAutoJumpDelayEnabled);
+	EXPECT_EQ(context, capture.frames.size(), loaded.frames.size());
+	EXPECT_NEAR(context, capture.frames[0].deltaSeconds, loaded.frames[0].deltaSeconds);
+	EXPECT_EQ(context, capture.frames[0].actionDownMask, loaded.frames[0].actionDownMask);
+	EXPECT_EQ(context, capture.frames[0].actionPressedMask, loaded.frames[0].actionPressedMask);
+	EXPECT_TRUE(context, capture.frames[0].removePressed == loaded.frames[0].removePressed);
+	EXPECT_TRUE(context, capture.frames[1].placePressed == loaded.frames[1].placePressed);
+
+	std::filesystem::remove(replayPath, removeError);
+}
+
+void TestInputReplayCanDriveWalkSequence(TestContext &context)
+{
+	VoxelWorld world = MakeWalkTestWorld();
+	const std::filesystem::path snapshotPath = GetTestInputReplaySnapshotPath();
+	const std::filesystem::path replayPath = GetTestInputReplayPath();
+	std::error_code removeError;
+	std::filesystem::remove(snapshotPath, removeError);
+	std::filesystem::remove(replayPath, removeError);
+	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()));
+
+	InputReplayCapture capture{};
+	capture.snapshotPath = snapshotPath.string();
+	capture.initialCamera = MakeTestCamera({4.0f, 2.65f, 2.0f});
+	capture.initialCamera.controlMode = CameraState::ControlMode::Walk;
+	capture.walkAirControlMode = WalkAirControlMode::MinecraftLike;
+	capture.walkAutoJumpDelayEnabled = true;
+	for (int frameIndex = 0; frameIndex < 30; ++frameIndex) {
+		InputReplayFrame frame{};
+		frame.deltaSeconds = 1.0f / 60.0f;
+		frame.actionDownMask = 1u << static_cast<size_t>(InputAction::MoveForward);
+		if (frameIndex == 4) {
+			frame.actionPressedMask |= 1u << static_cast<size_t>(InputAction::MoveUp);
+		}
+		if (frameIndex >= 4 && frameIndex < 8) {
+			frame.actionDownMask |= 1u << static_cast<size_t>(InputAction::MoveUp);
+		}
+		capture.frames.push_back(frame);
+	}
+	EXPECT_TRUE(context, SaveInputReplayCapture(capture, replayPath.string()));
+
+	InputReplayCapture loaded{};
+	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &loaded));
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(loaded.snapshotPath);
+	EXPECT_TRUE(context, loadedWorld != nullptr);
+	if (!loadedWorld) {
+		return;
+	}
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = loaded.initialCamera;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction = loaded.initialInteraction;
+	WorldState worldState{};
+	worldState.voxelWorld = std::move(loadedWorld);
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
+	SetPhysicsWalkAirControlMode(physics.get(), loaded.walkAirControlMode);
+	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), loaded.walkAutoJumpDelayEnabled);
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
+
+	float maxCameraY = camera.position[1];
+	for (const InputReplayFrame &frame : loaded.frames) {
+		ApplyInputReplayFrame(&input, frame);
+		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
+								 &platform,
+								 &simulation,
+								 &camera,
+								 &input,
+								 &interaction,
+								 &worldState,
+								 physics.get(),
+								 &render,
+								 &debug,
+								 frame.deltaSeconds));
+		maxCameraY = std::max(maxCameraY, camera.position[1]);
+	}
+
+	EXPECT_TRUE(context, camera.position[2] < loaded.initialCamera.position[2] - 0.5f);
+	EXPECT_TRUE(context, maxCameraY > loaded.initialCamera.position[1] + 0.2f);
+
+	std::filesystem::remove(snapshotPath, removeError);
+	std::filesystem::remove(replayPath, removeError);
 }
 
 void TestPlacementMaterialCycleCoversAllDebugMaterials(TestContext &context)
@@ -1138,6 +1773,3612 @@ void TestWalkCharacterCollidesWithVoxelWall(TestContext &context)
 	EXPECT_TRUE(context, camera.position[1] < 2.9f);
 }
 
+void TestGetPhysicsWalkDebugInfoReportsGroundedSupport(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	EXPECT_TRUE(context, info.valid);
+	EXPECT_EQ(context, PhysicsWalkSupportDebugState::Grounded, info.supportState);
+	EXPECT_NEAR(context, 2.5f, info.feetPosition[0]);
+	EXPECT_NEAR(context, 1.05f, info.feetPosition[1]);
+	EXPECT_NEAR(context, 4.5f, info.feetPosition[2]);
+	EXPECT_TRUE(context, info.footSupportScore >= 0.7f);
+	EXPECT_TRUE(context, info.footSupportTotalSamples > 0u);
+	EXPECT_TRUE(context, info.edgeGraceFramesRemaining > 0u);
+}
+
+void TestVoxelLabWalkDebugInfoMatchesLiveCenterReference(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	EXPECT_TRUE(context, info.valid);
+	EXPECT_EQ(context, PhysicsWalkSupportDebugState::Grounded, info.supportState);
+	EXPECT_NEAR(context, -8.5f, info.feetPosition[0]);
+	EXPECT_NEAR(context, 1.05f, info.feetPosition[1]);
+	EXPECT_NEAR(context, 8.5f, info.feetPosition[2]);
+	EXPECT_EQ(context, 12u, info.footSupportHitSamples);
+	EXPECT_EQ(context, 12u, info.footSupportTotalSamples);
+	EXPECT_TRUE(context, info.edgeGraceFramesRemaining > 0u);
+}
+
+void TestVoxelLabWalkJumpFromSideEdgeDoesNotImmediatelyDrop(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, camera.position[2] > 9.25f);
+	EXPECT_TRUE(context, camera.position[2] < 9.55f);
+
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	const PhysicsWalkDebugInfo beforeJump = GetPhysicsWalkDebugInfo(physics.get());
+	const float jumpStartY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	if (!(afterJumpTickY > jumpStartY + 0.03f && minY > jumpStartY - 0.02f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab side-edge jump regressed (before state=%u score=%.3f hits=%u/%u tgr=%u tck=%u, afterY=%.3f, minY=%.3f)",
+			static_cast<unsigned>(beforeJump.supportState),
+			beforeJump.footSupportScore,
+			beforeJump.footSupportHitSamples,
+			beforeJump.footSupportTotalSamples,
+			beforeJump.groundTakeoffGraceFramesRemaining,
+			beforeJump.groundTakeoffCached ? 1u : 0u,
+			afterJumpTickY,
+			minY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkJumpFromCornerEdgeDoesNotImmediatelyDrop(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -2.35619449f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 17; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, camera.position[0] < -9.2f);
+	EXPECT_TRUE(context, camera.position[2] > 9.2f);
+
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	const PhysicsWalkDebugInfo beforeJump = GetPhysicsWalkDebugInfo(physics.get());
+	const float jumpStartY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	if (!(afterJumpTickY > jumpStartY + 0.03f && minY > jumpStartY - 0.02f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab corner-edge jump regressed (before state=%u score=%.3f hits=%u/%u tgr=%u tck=%u, afterY=%.3f, minY=%.3f)",
+			static_cast<unsigned>(beforeJump.supportState),
+			beforeJump.footSupportScore,
+			beforeJump.footSupportHitSamples,
+			beforeJump.footSupportTotalSamples,
+			beforeJump.groundTakeoffGraceFramesRemaining,
+			beforeJump.groundTakeoffCached ? 1u : 0u,
+			afterJumpTickY,
+			minY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const auto runSideCase = [&](const int outwardFrames) -> bool {
+		AppState state{};
+		EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+		EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+		CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		for (int step = 0; step < 12; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		}
+
+		const float jumpStartY = camera.position[1];
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		for (int step = 0; step < outwardFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		}
+
+		camera.yawRadians = 0.0f;
+		for (int step = 0; step < 24; ++step) {
+			const std::array<float, 3> previousPosition = camera.position;
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
+			const float horizontalDeltaZ = camera.position[2] - previousPosition[2];
+			const float horizontalDeltaSq = horizontalDeltaX * horizontalDeltaX + horizontalDeltaZ * horizontalDeltaZ;
+			if ((camera.position[1] > jumpStartY + 0.3f &&
+				 info.supportState == PhysicsWalkSupportDebugState::Grounded &&
+				 info.feetPosition[1] < 1.15f) ||
+				horizontalDeltaSq > 0.020f) {
+				char buffer[256]{};
+				std::snprintf(
+					buffer,
+					sizeof(buffer),
+					"VoxelLab side reapproach magnet snap (outwardFrames=%d step=%d cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) d2=%.4f state=%u score=%.3f)",
+					outwardFrames,
+					step,
+					camera.position[0],
+					camera.position[1],
+					camera.position[2],
+					info.feetPosition[0],
+					info.feetPosition[1],
+					info.feetPosition[2],
+					horizontalDeltaSq,
+					static_cast<unsigned>(info.supportState),
+					info.footSupportScore);
+				context.Fail(__LINE__, buffer);
+				return false;
+			}
+		}
+
+		return true;
+	};
+
+	const auto runCornerCase = [&](const int outwardFrames) -> bool {
+		AppState state{};
+		EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+		EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+		CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = -2.35619449f;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		for (int step = 0; step < 17; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		}
+
+		const float jumpStartY = camera.position[1];
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		for (int step = 0; step < outwardFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		}
+
+		camera.yawRadians = 0.78539816f;
+		for (int step = 0; step < 24; ++step) {
+			const std::array<float, 3> previousPosition = camera.position;
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
+			const float horizontalDeltaZ = camera.position[2] - previousPosition[2];
+			const float horizontalDeltaSq = horizontalDeltaX * horizontalDeltaX + horizontalDeltaZ * horizontalDeltaZ;
+			if ((camera.position[1] > jumpStartY + 0.3f &&
+				 info.supportState == PhysicsWalkSupportDebugState::Grounded &&
+				 info.feetPosition[1] < 1.15f) ||
+				horizontalDeltaSq > 0.020f) {
+				char buffer[256]{};
+				std::snprintf(
+					buffer,
+					sizeof(buffer),
+					"VoxelLab corner reapproach magnet snap (outwardFrames=%d step=%d cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) d2=%.4f state=%u score=%.3f)",
+					outwardFrames,
+					step,
+					camera.position[0],
+					camera.position[1],
+					camera.position[2],
+					info.feetPosition[0],
+					info.feetPosition[1],
+					info.feetPosition[2],
+					horizontalDeltaSq,
+					static_cast<unsigned>(info.supportState),
+					info.footSupportScore);
+				context.Fail(__LINE__, buffer);
+				return false;
+			}
+		}
+
+		return true;
+	};
+
+	for (int outwardFrames = 0; outwardFrames <= 8; ++outwardFrames) {
+		if (!runSideCase(outwardFrames)) {
+			return;
+		}
+		if (!runCornerCase(outwardFrames)) {
+			return;
+		}
+	}
+}
+
+void TestVoxelLabWalkFreeFallDoesNotSnapToTopPlaneTooEarly(TestContext &context)
+{
+	constexpr std::array startXZ{
+		std::array{-8.5f, 8.5f},
+		std::array{-8.5f, 9.39f},
+		std::array{-9.39f, 9.39f},
+	};
+	constexpr std::array startCameraY{3.2f, 3.3f, 3.4f, 3.8f};
+
+	for (const std::array<float, 2> xz : startXZ) {
+		for (const float cameraY : startCameraY) {
+			AppState state{};
+			EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+			EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+			const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+			EXPECT_TRUE(context, physics != nullptr);
+			EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+			CameraState camera = MakeTestCamera({xz[0], cameraY, xz[1]});
+			camera.controlMode = CameraState::ControlMode::Walk;
+			EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+			InputState input{};
+			InitializeInputState(input);
+			float previousCameraY = camera.position[1];
+			for (int step = 0; step < 20; ++step) {
+				EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+				const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+				const float cameraDrop = previousCameraY - camera.position[1];
+				if (previousCameraY > 3.0f && cameraDrop > 0.18f) {
+					char buffer[256]{};
+					std::snprintf(
+						buffer,
+						sizeof(buffer),
+						"VoxelLab freefall teleported downward at xz=(%.2f, %.2f) startY=%.2f step=%d prevCamY=%.3f cam=(%.3f, %.3f, %.3f) feetY=%.3f state=%u score=%.3f",
+						xz[0],
+						xz[1],
+						cameraY,
+						step,
+						previousCameraY,
+						camera.position[0],
+						camera.position[1],
+						camera.position[2],
+						info.feetPosition[1],
+						static_cast<unsigned>(info.supportState),
+						info.footSupportScore);
+					context.Fail(__LINE__, buffer);
+					return;
+				}
+				if (camera.position[1] > 2.85f &&
+					info.supportState == PhysicsWalkSupportDebugState::Grounded &&
+					info.feetPosition[1] < 1.15f) {
+					char buffer[256]{};
+					std::snprintf(
+						buffer,
+						sizeof(buffer),
+						"VoxelLab freefall snapped too early at xz=(%.2f, %.2f) startY=%.2f step=%d cam=(%.3f, %.3f, %.3f) feetY=%.3f score=%.3f",
+						xz[0],
+						xz[1],
+						cameraY,
+						step,
+						camera.position[0],
+						camera.position[1],
+						camera.position[2],
+						info.feetPosition[1],
+						info.footSupportScore);
+					context.Fail(__LINE__, buffer);
+					return;
+				}
+				previousCameraY = camera.position[1];
+			}
+		}
+	}
+}
+
+void TestVoxelLabWalkJumpInPlaceDoesNotMagnetSnapToCenterTopPlane(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float previousCameraY = camera.position[1];
+	float maxFrameDrop = 0.0f;
+	float maxDropPreviousCameraY = camera.position[1];
+	float maxDropCurrentCameraY = camera.position[1];
+	int maxDropStep = -1;
+	PhysicsWalkDebugInfo maxDropInfo{};
+	for (int step = 0; step < 60; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		const float frameDrop = previousCameraY - camera.position[1];
+		if (frameDrop > maxFrameDrop) {
+			maxFrameDrop = frameDrop;
+			maxDropPreviousCameraY = previousCameraY;
+			maxDropCurrentCameraY = camera.position[1];
+			maxDropStep = step;
+			maxDropInfo = info;
+		}
+		previousCameraY = camera.position[1];
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(maxFrameDrop < 0.18f &&
+		  camera.position[1] > 2.60f &&
+		  camera.position[1] < 2.70f &&
+		  info.feetPosition[1] > 1.0f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab center jump magnet snap regressed (step=%d prevCamY=%.3f cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f maxDrop=%.3f grc=%u tgr=%u tck=%u)",
+			maxDropStep,
+			maxDropPreviousCameraY,
+			camera.position[0],
+			maxDropCurrentCameraY,
+			camera.position[2],
+			maxDropInfo.feetPosition[0],
+			maxDropInfo.feetPosition[1],
+			maxDropInfo.feetPosition[2],
+			static_cast<unsigned>(maxDropInfo.supportState),
+			maxDropInfo.footSupportScore,
+			maxFrameDrop,
+			maxDropInfo.edgeGraceFramesRemaining,
+			maxDropInfo.groundTakeoffGraceFramesRemaining,
+			maxDropInfo.groundTakeoffCached ? 1u : 0u);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkJumpFromSideEdgeLandsBackOnTopPlane(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minCameraY = camera.position[1];
+	float maxCameraY = camera.position[1];
+	for (int step = 0; step < 75; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+		maxCameraY = std::max(maxCameraY, camera.position[1]);
+	}
+
+	float postLandingMinCameraY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		postLandingMinCameraY = std::min(postLandingMinCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.55f &&
+		  camera.position[1] < 2.75f &&
+		  camera.position[2] > 9.2f &&
+		  camera.position[2] < 9.5f &&
+		  postLandingMinCameraY > 2.40f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.feetPosition[1] > 0.95f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab side-edge landing regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f maxY=%.3f postLandingMinY=%.3f)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			maxCameraY,
+			postLandingMinCameraY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkJumpFromCornerEdgeLandsBackOnTopPlane(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -2.35619449f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 17; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minCameraY = camera.position[1];
+	float maxCameraY = camera.position[1];
+	for (int step = 0; step < 75; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+		maxCameraY = std::max(maxCameraY, camera.position[1]);
+	}
+
+	float postLandingMinCameraY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		postLandingMinCameraY = std::min(postLandingMinCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.55f &&
+		  camera.position[1] < 2.75f &&
+		  camera.position[0] < -9.2f &&
+		  camera.position[2] > 9.2f &&
+		  postLandingMinCameraY > 2.40f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.feetPosition[1] > 0.95f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab corner-edge landing regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f maxY=%.3f postLandingMinY=%.3f)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			maxCameraY,
+			postLandingMinCameraY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkSneakJumpFromSideEdgeLandsBackOnTopPlane(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 26; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, camera.position[2] > 9.25f);
+	EXPECT_TRUE(context, camera.position[2] < 9.5f);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minCameraY = camera.position[1];
+	float maxCameraY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+		maxCameraY = std::max(maxCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.60f &&
+		  camera.position[2] > 9.2f &&
+		  camera.position[2] < 9.5f &&
+		  info.sneakActive &&
+		  info.feetPosition[1] > 0.95f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab sneak side-edge landing regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f maxY=%.3f)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			maxCameraY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkJumpFromSideEdgeCanMoveAfterLanding(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+	for (int step = 0; step < 75; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float landedZ = camera.position[2];
+	const float landedY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_S);
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_S);
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[2] < landedZ - 0.12f &&
+		  camera.position[1] > 2.45f &&
+		  info.feetPosition[1] > 0.95f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab side-edge landing froze movement (landed=(%.3f, %.3f) final cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f)",
+			landedY,
+			landedZ,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkJumpFromExactSideEdgeWithHeldWDoesNotLoseSupportOnLanding(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 0.0f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 6; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	int touchedSupportPlaneFrames = 0;
+	int consecutiveAirOnSupportPlane = 0;
+	int maxConsecutiveAirOnSupportPlane = 0;
+	float minCameraY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		EXPECT_TRUE(context, info.valid);
+		const bool onSupportPlane =
+			camera.position[1] >= 2.40f &&
+			camera.position[1] <= 2.70f &&
+			info.feetPosition[1] > 0.95f &&
+			info.feetPosition[1] < 1.10f;
+		if (onSupportPlane) {
+			++touchedSupportPlaneFrames;
+			if (info.supportState == PhysicsWalkSupportDebugState::Air) {
+				++consecutiveAirOnSupportPlane;
+				maxConsecutiveAirOnSupportPlane = std::max(maxConsecutiveAirOnSupportPlane, consecutiveAirOnSupportPlane);
+			} else {
+				consecutiveAirOnSupportPlane = 0;
+			}
+		} else {
+			consecutiveAirOnSupportPlane = 0;
+		}
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(touchedSupportPlaneFrames > 0 &&
+		  maxConsecutiveAirOnSupportPlane <= 1 &&
+		  camera.position[1] > 2.40f &&
+		  camera.position[2] < 9.25f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.feetPosition[1] > 0.95f)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab exact side-edge W+jump landing regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f planeFrames=%d airPlane=%d)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			touchedSupportPlaneFrames,
+			maxConsecutiveAirOnSupportPlane);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkSneakJumpFromSideEdgeStillHoldsEdgeAfterLanding(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 26; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+	for (int step = 0; step < 120; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 18; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.60f &&
+		  camera.position[2] < 9.55f &&
+		  info.feetPosition[1] > 0.95f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.sneakActive)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab sneak edge hold regressed after landing (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f jl=%u csk=%u csi=%u cref=%.3f sgr=%u lgr=%u)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			info.jumpLockActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			info.feetInsideCachedSneakSupport ? 1u : 0u,
+			info.cachedSneakSupportReferenceFeetY,
+			info.sneakSupportGraceFramesRemaining,
+			info.ledgeReleaseGraceFramesRemaining);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkSneakJumpInPlaceFromExactSideEdgeStaysGrounded(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minCameraY = camera.position[1];
+	for (int step = 0; step < 240; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.60f &&
+		  minCameraY > 2.35f &&
+		  std::abs(camera.position[0] + 8.5f) < 0.08f &&
+		  std::abs(camera.position[2] - 9.39f) < 0.12f &&
+		  info.feetPosition[1] > 0.95f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.sneakActive)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab exact side-edge sneak idle regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f jl=%u csk=%u csi=%u)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			info.jumpLockActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			info.feetInsideCachedSneakSupport ? 1u : 0u);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabWalkSneakJumpInPlaceFromExactCornerEdgeStaysGrounded(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-9.39f, 2.65f, 9.39f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minCameraY = camera.position[1];
+	for (int step = 0; step < 240; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.60f &&
+		  minCameraY > 2.35f &&
+		  std::abs(camera.position[0] + 9.39f) < 0.12f &&
+		  std::abs(camera.position[2] - 9.39f) < 0.12f &&
+		  info.feetPosition[1] > 0.95f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.sneakActive)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab exact corner-edge sneak idle regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f jl=%u csk=%u csi=%u)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			info.jumpLockActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			info.feetInsideCachedSneakSupport ? 1u : 0u);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void RunUpdateAppVoxelLabSneakJumpInPlaceFromExactEdgeAtHighRenderRate(
+	TestContext &context,
+	const std::array<float, 3> &cameraStart,
+	const std::string_view label)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera(cameraStart);
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+
+	InteractionState interaction{};
+	RenderState render{};
+	DebugState debug{};
+	float minCameraY = camera.position[1];
+	constexpr int kRenderFrames = 1200;
+	for (int frame = 0; frame < kRenderFrames; ++frame) {
+		if (frame == 20) {
+			SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+		}
+		EXPECT_TRUE(
+			context,
+			AdvanceUpdateAppWithSimulatedFrameDelta(
+				&platform,
+				&simulation,
+				&camera,
+				&input,
+				&interaction,
+				&state.world,
+				physics.get(),
+				&render,
+				&debug,
+				1.0f / 1000.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(simulation.simulationTick >= 60 &&
+		  simulation.simulationTick <= 90 &&
+		  camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.60f &&
+		  minCameraY > 2.35f &&
+		  info.feetPosition[1] > 0.95f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  info.sneakActive)) {
+		char buffer[384]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"%.*s high-render-rate UpdateApp regressed (tick=%llu cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f jl=%u csk=%u csi=%u egr=%u sgr=%u lgr=%u)",
+			static_cast<int>(label.size()),
+			label.data(),
+			static_cast<unsigned long long>(simulation.simulationTick),
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			info.jumpLockActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			info.feetInsideCachedSneakSupport ? 1u : 0u,
+			info.edgeGraceFramesRemaining,
+			info.sneakSupportGraceFramesRemaining,
+			info.ledgeReleaseGraceFramesRemaining);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestUpdateAppVoxelLabSneakJumpInPlaceFromExactSideEdgeStaysGroundedAtHighRenderRate(TestContext &context)
+{
+	RunUpdateAppVoxelLabSneakJumpInPlaceFromExactEdgeAtHighRenderRate(
+		context,
+		{-8.5f, 2.65f, 9.39f},
+		"VoxelLab exact side-edge sneak idle");
+}
+
+void TestUpdateAppVoxelLabSneakJumpInPlaceFromExactCornerEdgeStaysGroundedAtHighRenderRate(TestContext &context)
+{
+	RunUpdateAppVoxelLabSneakJumpInPlaceFromExactEdgeAtHighRenderRate(
+		context,
+		{-9.39f, 2.65f, 9.39f},
+		"VoxelLab exact corner-edge sneak idle");
+}
+
+void TestWalkCharacterClimbsOneBlockWithoutSlowWallSlide(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const VoxelWorld world = MakeWalkPositiveSingleBlockTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	int firstTopTouchFrame = -1;
+	int wallSlideFrames = 0;
+	int maxWallSlideFrames = 0;
+	float previousZ = camera.position[2];
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		if (firstTopTouchFrame < 0 &&
+			camera.position[1] > 3.3f &&
+			camera.position[2] > 5.75f &&
+			camera.position[2] < 7.1f &&
+			camera.position[0] > 5.05f &&
+			camera.position[0] < 5.95f) {
+			firstTopTouchFrame = step;
+		}
+
+		const float zProgress = camera.position[2] - previousZ;
+		if (firstTopTouchFrame < 0 &&
+			camera.position[1] > 2.95f &&
+			camera.position[1] < 3.75f &&
+			zProgress < 0.015f) {
+			++wallSlideFrames;
+			maxWallSlideFrames = std::max(maxWallSlideFrames, wallSlideFrames);
+		} else {
+			wallSlideFrames = 0;
+		}
+
+		previousZ = camera.position[2];
+	}
+
+	if (!(firstTopTouchFrame >= 0 &&
+		  firstTopTouchFrame <= 18 &&
+		  maxWallSlideFrames <= 3)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"one-block climb regressed into slow wall slide (touchFrame=%d maxWallSlide=%d final cam=(%.3f, %.3f, %.3f))",
+			firstTopTouchFrame,
+			maxWallSlideFrames,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2]);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterSneakJumpAgainstGlassColumnDoesNotSlowWallSlide(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	constexpr int kSimulationFrames = 60;
+	struct WallJumpResult {
+		int landingFrame = -1;
+		float finalY = 0.0f;
+		float finalZ = 0.0f;
+		float maxY = 0.0f;
+		PhysicsWalkDebugInfo finalInfo{};
+	};
+
+	const auto runCase = [&](const bool withWall) -> WallJumpResult {
+		VoxelWorld world = withWall ? MakeWalkGlassColumnWallTestWorld() : MakeWalkTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({4.5f, 2.65f, 3.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		const float startY = camera.position[1];
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+
+		WallJumpResult result{};
+		result.maxY = camera.position[1];
+		for (int step = 1; step <= kSimulationFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			result.maxY = std::max(result.maxY, camera.position[1]);
+			if (result.landingFrame < 0 &&
+				info.supportState != PhysicsWalkSupportDebugState::Air &&
+				camera.position[1] <= startY + 0.05f) {
+				result.landingFrame = step;
+			}
+			result.finalInfo = info;
+		}
+
+		result.finalY = camera.position[1];
+		result.finalZ = camera.position[2];
+		return result;
+	};
+
+	const WallJumpResult controlResult = runCase(false);
+	const WallJumpResult wallResult = runCase(true);
+	if (!(controlResult.landingFrame >= 0 &&
+		  wallResult.landingFrame >= 0 &&
+		  wallResult.landingFrame <= controlResult.landingFrame + 3 &&
+		  wallResult.finalY <= controlResult.finalY + 0.08f)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"sneak glass-column wall slide regressed (control landing=%d final cam=(%.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u; wall landing=%d final cam=(%.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f sneak=%u)",
+			controlResult.landingFrame,
+			controlResult.finalY,
+			controlResult.finalZ,
+			controlResult.finalInfo.feetPosition[0],
+			controlResult.finalInfo.feetPosition[1],
+			controlResult.finalInfo.feetPosition[2],
+			static_cast<unsigned>(controlResult.finalInfo.supportState),
+			wallResult.landingFrame,
+			wallResult.finalY,
+			wallResult.finalZ,
+			wallResult.finalInfo.feetPosition[0],
+			wallResult.finalInfo.feetPosition[1],
+			wallResult.finalInfo.feetPosition[2],
+			static_cast<unsigned>(wallResult.finalInfo.supportState),
+			wallResult.finalInfo.footSupportScore,
+			wallResult.finalInfo.sneakActive ? 1u : 0u);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterJumpAgainstGlassColumnDoesNotWallStepUp(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	VoxelWorld world = MakeWalkGlassColumnWallTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.5f, 2.65f, 3.45f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	const float startY = camera.position[1];
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float maxY = camera.position[1];
+	for (int step = 0; step < 60; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		maxY = std::max(maxY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] <= startY + 0.02f &&
+		  info.feetPosition[1] <= 1.10f &&
+		  maxY < 4.2f)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"glass-column wall step-up regressed (final cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f maxY=%.3f)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			maxY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterHeldJumpAgainstGlassColumnDoesNotGetSecondJumpFromWallTop(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	struct WallCaseResult {
+		float startX = 0.0f;
+		float maxFeetY = 0.0f;
+		float maxCameraY = 0.0f;
+		bool wallTopSupportWindowFound = false;
+		bool secondJumpPressed = false;
+		PhysicsWalkDebugInfo finalInfo{};
+		CameraState finalCamera{};
+	};
+
+	const auto runCase = [&](const float startX) -> WallCaseResult {
+		VoxelWorld world = MakeWalkGlassColumnWallTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({startX, 2.65f, 3.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		WallCaseResult result{};
+		result.startX = startX;
+		result.maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
+		result.maxCameraY = camera.position[1];
+		for (int step = 0; step < 120; ++step) {
+			const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
+			const bool hasWallTopSupportWindow =
+				infoBeforeTick.supportState != PhysicsWalkSupportDebugState::Air &&
+				infoBeforeTick.feetPosition[1] >= 2.0f - 0.02f &&
+				infoBeforeTick.feetPosition[1] <= 2.2f &&
+				infoBeforeTick.feetPosition[0] >= 4.0f - 0.02f &&
+				infoBeforeTick.feetPosition[0] <= 5.0f + 0.02f &&
+				infoBeforeTick.feetPosition[2] >= 4.60f &&
+				infoBeforeTick.feetPosition[2] <= 5.35f;
+			if (hasWallTopSupportWindow) {
+				result.wallTopSupportWindowFound = true;
+			}
+			if (hasWallTopSupportWindow && !result.secondJumpPressed) {
+				SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+			}
+
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+
+			if (hasWallTopSupportWindow && !result.secondJumpPressed) {
+				SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+				result.secondJumpPressed = true;
+			}
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			result.maxFeetY = std::max(result.maxFeetY, info.feetPosition[1]);
+			result.maxCameraY = std::max(result.maxCameraY, camera.position[1]);
+			result.finalInfo = info;
+			result.finalCamera = camera;
+		}
+
+		return result;
+	};
+
+	constexpr std::array startXs{
+		4.324f,
+		4.352f,
+		4.380f,
+		4.500f,
+		4.620f,
+		4.648f,
+		4.676f,
+	};
+
+	for (const float startX : startXs) {
+		const auto [caseStartX, maxFeetY, maxCameraY, wallTopSupportWindowFound, secondJumpPressed, finalInfo, finalCamera] =
+			runCase(startX);
+		if (!(wallTopSupportWindowFound == false &&
+			  maxFeetY < 3.0f &&
+			  maxCameraY < 4.6f &&
+			  finalInfo.feetPosition[1] <= 1.10f)) {
+			char buffer[384]{};
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"wall top/second jump regressed (startX=%.3f final cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f maxFeetY=%.3f maxCameraY=%.3f wallTop=%u secondJump=%u)",
+				caseStartX,
+				finalCamera.position[0],
+				finalCamera.position[1],
+				finalCamera.position[2],
+				finalInfo.feetPosition[0],
+				finalInfo.feetPosition[1],
+				finalInfo.feetPosition[2],
+				static_cast<unsigned>(finalInfo.supportState),
+				finalInfo.footSupportScore,
+				maxFeetY,
+				maxCameraY,
+				wallTopSupportWindowFound ? 1u : 0u,
+				secondJumpPressed ? 1u : 0u);
+			context.Fail(__LINE__, buffer);
+		}
+	}
+}
+
+void TestWalkCharacterMidairSneakDoesNotAcquireTwoBlockWallTop(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	for (int step = 0; step < 8; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	float maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
+	bool touchedTwoBlockTop = false;
+	bool touchedMidairWallSupport = false;
+	for (int step = 0; step < 40; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		maxFeetY = std::max(maxFeetY, info.feetPosition[1]);
+		if (info.supportState != PhysicsWalkSupportDebugState::Air &&
+			info.feetPosition[1] >= 2.0f - 0.02f) {
+			touchedMidairWallSupport = true;
+		}
+		if (info.supportState != PhysicsWalkSupportDebugState::Air &&
+			info.feetPosition[1] >= 3.0f - 0.01f) {
+			touchedTwoBlockTop = true;
+		}
+	}
+
+	if (!(maxFeetY < 3.0f && !touchedTwoBlockTop && !touchedMidairWallSupport)) {
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"midair sneak acquired wall support (maxFeetY=%.3f final cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f sneak=%u csk=%u wallSupport=%u top=%u)",
+			maxFeetY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			info.sneakActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			touchedMidairWallSupport ? 1u : 0u,
+			touchedTwoBlockTop ? 1u : 0u);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterFallsAfterEditedSupportIsRemoved(TestContext &context)
+{
+	VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
+	SetVoxelMaterial(world, {8, 1, 8}, VoxelMaterial::Glass);
+	ResetDirtyFlags(world);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({5.5f, 4.65f, 6.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	const PhysicsWalkDebugInfo beforeEdit = GetPhysicsWalkDebugInfo(physics.get());
+	EXPECT_TRUE(context, beforeEdit.valid);
+	EXPECT_TRUE(context, beforeEdit.feetPosition[1] > 3.0f);
+
+	SetVoxelMaterial(world, {8, 1, 8}, VoxelMaterial::Air);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetVoxelMaterial(world, {5, 2, 6}, VoxelMaterial::Air);
+	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::Air);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	InputState input{};
+	InitializeInputState(input);
+	float minFeetY = beforeEdit.feetPosition[1];
+	for (int step = 0; step < 15; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		minFeetY = std::min(minFeetY, info.feetPosition[1]);
+	}
+
+	if (!(minFeetY < beforeEdit.feetPosition[1] - 0.2f)) {
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"edited support removal did not make walk fall (startFeetY=%.3f minFeetY=%.3f final cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f)",
+			beforeEdit.feetPosition[1],
+			minFeetY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterCannotDoubleJumpWhileAirborneNearWall(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	struct JumpResult {
+		float maxFeetY = 0.0f;
+		float finalFeetY = 0.0f;
+		float finalCameraY = 0.0f;
+		int retryJumpPressCount = 0;
+		PhysicsWalkDebugInfo finalInfo{};
+	};
+
+	const auto runCase = [&](const bool pressSecondJump) -> JumpResult {
+		VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		JumpResult result{};
+		result.maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
+		int retryJumpPressCount = 0;
+		for (int step = 0; step < 40; ++step) {
+			const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
+			const bool canRetryAirborneJump =
+				pressSecondJump &&
+				infoBeforeTick.supportState == PhysicsWalkSupportDebugState::Air &&
+				infoBeforeTick.groundTakeoffCached &&
+				infoBeforeTick.groundTakeoffGraceFramesRemaining > 0 &&
+				infoBeforeTick.feetPosition[1] > 1.15f;
+			if (canRetryAirborneJump) {
+				SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+			}
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			if (canRetryAirborneJump) {
+				SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+				++retryJumpPressCount;
+			}
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			result.maxFeetY = std::max(result.maxFeetY, info.feetPosition[1]);
+			result.finalInfo = info;
+		}
+
+		result.retryJumpPressCount = retryJumpPressCount;
+		result.finalFeetY = result.finalInfo.feetPosition[1];
+		result.finalCameraY = camera.position[1];
+		return result;
+	};
+
+	const JumpResult controlResult = runCase(false);
+	const JumpResult retryResult = runCase(true);
+	if (!(retryResult.maxFeetY <= controlResult.maxFeetY + 0.05f &&
+		  retryResult.finalFeetY <= controlResult.finalFeetY + 0.05f)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"airborne retry jump regressed near wall (control maxFeetY=%.3f finalFeetY=%.3f state=%u; retry presses=%d maxFeetY=%.3f finalFeetY=%.3f state=%u score=%.3f)",
+			controlResult.maxFeetY,
+			controlResult.finalFeetY,
+			static_cast<unsigned>(controlResult.finalInfo.supportState),
+			retryResult.retryJumpPressCount,
+			retryResult.maxFeetY,
+			retryResult.finalFeetY,
+			static_cast<unsigned>(retryResult.finalInfo.supportState),
+			retryResult.finalInfo.footSupportScore);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterHeldJumpDoesNotAcquireForeignWallTopNearTwoBlockWall(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	struct WallCatchResult {
+		float startX = 0.0f;
+		float maxFeetY = 0.0f;
+		bool touchedFirstWallTop = false;
+		bool touchedSecondWallTop = false;
+		PhysicsWalkDebugInfo finalInfo{};
+		CameraState finalCamera{};
+	};
+
+	const auto runCase = [&](const float startX) -> WallCatchResult {
+		VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({startX, 2.65f, 4.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+		WallCatchResult result{};
+		result.startX = startX;
+		result.maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
+		for (int step = 0; step < 120; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+			result.maxFeetY = std::max(result.maxFeetY, info.feetPosition[1]);
+			if (info.supportState != PhysicsWalkSupportDebugState::Air &&
+				info.feetPosition[1] >= 2.0f - 0.02f &&
+				info.feetPosition[1] < 3.0f - 0.02f) {
+				result.touchedFirstWallTop = true;
+			}
+			if (info.supportState != PhysicsWalkSupportDebugState::Air &&
+				info.feetPosition[1] >= 3.0f - 0.02f) {
+				result.touchedSecondWallTop = true;
+			}
+			result.finalInfo = info;
+			result.finalCamera = camera;
+		}
+
+		return result;
+	};
+
+	constexpr std::array startXs{
+		5.324f,
+		5.352f,
+		5.380f,
+		5.500f,
+		5.620f,
+		5.648f,
+		5.676f,
+	};
+
+	for (const float startX : startXs) {
+		const auto [caseStartX, maxFeetY, touchedFirstWallTop, touchedSecondWallTop, finalInfo, finalCamera] =
+			runCase(startX);
+		if (!(touchedFirstWallTop == false &&
+			  touchedSecondWallTop == false)) {
+			char buffer[384]{};
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"foreign wall-top catch regressed near two-block wall (startX=%.3f final cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f maxFeetY=%.3f firstTop=%u secondTop=%u)",
+				caseStartX,
+				finalCamera.position[0],
+				finalCamera.position[1],
+				finalCamera.position[2],
+				finalInfo.feetPosition[0],
+				finalInfo.feetPosition[1],
+				finalInfo.feetPosition[2],
+				static_cast<unsigned>(finalInfo.supportState),
+				finalInfo.footSupportScore,
+				maxFeetY,
+				touchedFirstWallTop ? 1u : 0u,
+				touchedSecondWallTop ? 1u : 0u);
+			context.Fail(__LINE__, buffer);
+		}
+	}
+}
+
+void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	constexpr int kMinimumDelayFrameGap = 6;
+	constexpr int kSimulationFrames = 120;
+	struct AutoJumpResult {
+		int jumpStartFrame = -1;
+		int topTouchFrame = -1;
+		float maxY = 0.0f;
+		float finalY = 0.0f;
+		float finalZ = 0.0f;
+	};
+
+	const auto runCase = [&](const bool delayEnabled) -> AutoJumpResult {
+		const VoxelWorld world = MakeWalkPositiveSingleBlockTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+		SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), delayEnabled);
+
+		CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		const float startY = camera.position[1];
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+		AutoJumpResult result{};
+		result.maxY = camera.position[1];
+		for (int step = 0; step < kSimulationFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			result.maxY = std::max(result.maxY, camera.position[1]);
+			if (result.jumpStartFrame < 0 && camera.position[1] > startY + 0.03f) {
+				result.jumpStartFrame = step;
+			}
+			if (result.topTouchFrame < 0 &&
+				camera.position[1] > 3.3f &&
+				camera.position[2] > 5.75f &&
+				camera.position[2] < 7.1f &&
+				camera.position[0] > 5.05f &&
+				camera.position[0] < 5.95f) {
+				result.topTouchFrame = step;
+			}
+		}
+
+		result.finalY = camera.position[1];
+		result.finalZ = camera.position[2];
+		return result;
+	};
+
+	const auto [delayedJumpStartFrame, delayedTopTouchFrame, delayedMaxY, delayedFinalY, delayedFinalZ] = runCase(true);
+	const auto [instantJumpStartFrame, instantTopTouchFrame, instantMaxY, instantFinalY, instantFinalZ] = runCase(false);
+	if (!(instantJumpStartFrame >= 0 &&
+		  delayedJumpStartFrame >= 0 &&
+		  delayedJumpStartFrame - instantJumpStartFrame >= kMinimumDelayFrameGap &&
+		  instantTopTouchFrame >= 0 &&
+		  delayedTopTouchFrame >= 0 &&
+		  delayedTopTouchFrame >= instantTopTouchFrame &&
+		  delayedMaxY > 3.8f &&
+		  instantMaxY > 3.8f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"auto-jump delay toggle regressed (delayedJump=%d instantJump=%d delayedTop=%d instantTop=%d delayedMaxY=%.3f instantMaxY=%.3f delayedFinal=(%.3f, %.3f) instantFinal=(%.3f, %.3f))",
+			delayedJumpStartFrame,
+			instantJumpStartFrame,
+			delayedTopTouchFrame,
+			instantTopTouchFrame,
+			delayedMaxY,
+			instantMaxY,
+			delayedFinalY,
+			delayedFinalZ,
+			instantFinalY,
+			instantFinalZ);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterFallsSmoothlyAfterLeavingLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 10; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] < 3.45f);
+	EXPECT_TRUE(context, camera.position[2] > 3.0f);
+	EXPECT_TRUE(context, camera.position[1] < 3.6f);
+	EXPECT_TRUE(context, camera.position[1] > 3.0f);
+
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[1] > 2.45f);
+	EXPECT_TRUE(context, camera.position[1] < 2.85f);
+}
+
+void TestWalkCharacterDoesNotPassivelySlideOffLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > 4.08f);
+	EXPECT_TRUE(context, camera.position[2] < 4.28f);
+	EXPECT_TRUE(context, camera.position[1] > 3.55f);
+	EXPECT_TRUE(context, camera.position[1] < 3.75f);
+}
+
+void TestWalkCharacterDoesNotSlideFromNarrowEdgeBand(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.05f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > 3.95f);
+	EXPECT_TRUE(context, camera.position[2] < 4.15f);
+	EXPECT_TRUE(context, camera.position[1] > 3.5f);
+	EXPECT_TRUE(context, camera.position[1] < 3.75f);
+}
+
+void TestWalkCharacterCanJumpFromNarrowEdgeBandWithoutSneak(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.05f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	const float jumpStartY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	EXPECT_TRUE(context, afterJumpTickY > jumpStartY + 0.03f);
+	EXPECT_TRUE(context, minY > jumpStartY - 0.02f);
+	EXPECT_TRUE(context, camera.position[1] > jumpStartY + 0.12f);
+}
+
+void TestWalkCharacterCanJumpWhileMovingAcrossNarrowEdgeBandWithoutSneak(TestContext &context)
+{
+	VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+	bool foundMovingEdgeBand = false;
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+		EXPECT_TRUE(context, preJumpInfo.valid);
+		if (preJumpInfo.supportState == PhysicsWalkSupportDebugState::EdgeGrace &&
+			preJumpInfo.footSupportScore >= 0.45f &&
+			preJumpInfo.footSupportScore <= 0.55f) {
+			foundMovingEdgeBand = true;
+			break;
+		}
+	}
+
+	if (!foundMovingEdgeBand) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"failed to reach moving narrow edge band before jump (cam=(%.3f, %.3f, %.3f) state=%u score=%.3f hits=%u/%u)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			static_cast<unsigned>(preJumpInfo.supportState),
+			preJumpInfo.footSupportScore,
+			preJumpInfo.footSupportHitSamples,
+			preJumpInfo.footSupportTotalSamples);
+		context.Fail(__LINE__, buffer);
+		return;
+	}
+
+	const float jumpStartY = camera.position[1];
+	const float jumpStartZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	float maxY = afterJumpTickY;
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+		maxY = std::max(maxY, camera.position[1]);
+	}
+
+	if (!(afterJumpTickY > jumpStartY + 0.03f &&
+		  minY > jumpStartY - 0.02f &&
+		  maxY > jumpStartY + 0.12f &&
+		  camera.position[2] < jumpStartZ - 0.08f)) {
+		const PhysicsWalkDebugInfo postJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"moving narrow-edge jump regressed (startY=%.3f startZ=%.3f afterY=%.3f maxY=%.3f minY=%.3f final=(%.3f, %.3f, %.3f) preState=%u preScore=%.3f postState=%u postScore=%.3f)",
+			jumpStartY,
+			jumpStartZ,
+			afterJumpTickY,
+			maxY,
+			minY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			static_cast<unsigned>(preJumpInfo.supportState),
+			preJumpInfo.footSupportScore,
+			static_cast<unsigned>(postJumpInfo.supportState),
+			postJumpInfo.footSupportScore);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterCanJumpWhileBoostingAlongStraightEdgeWithoutSneak(TestContext &context)
+{
+	constexpr float kHalfPi = 1.5707963268f;
+	const VoxelWorld world = MakeWalkLongLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.324f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kHalfPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LCTRL);
+
+	float minY = camera.position[1];
+	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+	for (int step = 0; step < 120; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+		preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+		EXPECT_TRUE(context, preJumpInfo.valid);
+	}
+
+	const float jumpStartY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	if (!(minY > jumpStartY - 0.02f &&
+		  preJumpInfo.supportState != PhysicsWalkSupportDebugState::Air &&
+		  preJumpInfo.footSupportHitSamples > 0 &&
+		  preJumpInfo.feetPosition[1] > 1.0f &&
+		  afterJumpTickY > jumpStartY + 0.03f)) {
+		const PhysicsWalkDebugInfo postJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+		char buffer[384]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"boosted straight-edge jump regressed (minY=%.3f jumpStartY=%.3f afterJumpY=%.3f preFeet=(%.3f, %.3f, %.3f) preState=%u preScore=%.3f preHits=%u/%u postState=%u postScore=%.3f finalCam=(%.3f, %.3f, %.3f))",
+			minY,
+			jumpStartY,
+			afterJumpTickY,
+			preJumpInfo.feetPosition[0],
+			preJumpInfo.feetPosition[1],
+			preJumpInfo.feetPosition[2],
+			static_cast<unsigned>(preJumpInfo.supportState),
+			preJumpInfo.footSupportScore,
+			preJumpInfo.footSupportHitSamples,
+			preJumpInfo.footSupportTotalSamples,
+			static_cast<unsigned>(postJumpInfo.supportState),
+			postJumpInfo.footSupportScore,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2]);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterJumpHeightMatchesMinecraftLikeApex(TestContext &context)
+{
+	VoxelWorld world = MakeWalkTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	const PhysicsWalkDebugInfo startInfo = GetPhysicsWalkDebugInfo(physics.get());
+	EXPECT_TRUE(context, startInfo.valid);
+	const float startFeetY = startInfo.feetPosition[1];
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	EXPECT_TRUE(context, info.valid);
+	float maxFeetY = info.feetPosition[1];
+	float minFeetY = info.feetPosition[1];
+	for (int step = 0; step < 40; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		info = GetPhysicsWalkDebugInfo(physics.get());
+		EXPECT_TRUE(context, info.valid);
+		maxFeetY = std::max(maxFeetY, info.feetPosition[1]);
+		minFeetY = std::min(minFeetY, info.feetPosition[1]);
+	}
+
+	const float apexGain = maxFeetY - startFeetY;
+	if (!(apexGain > 1.20f && apexGain < 1.33f && minFeetY > startFeetY - 0.02f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"walk jump height regressed (startFeetY=%.3f maxFeetY=%.3f minFeetY=%.3f apexGain=%.3f finalCamY=%.3f)",
+			startFeetY,
+			maxFeetY,
+			minFeetY,
+			apexGain,
+			camera.position[1]);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterHoldingJumpRepeatsOnLanding(TestContext &context)
+{
+	VoxelWorld world = MakeWalkTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+
+	const float groundCamY = camera.position[1];
+	bool airborne = false;
+	int jumpCount = 0;
+	int landingCount = 0;
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+		EXPECT_TRUE(context, info.valid);
+		const bool groundedLike = info.supportState != PhysicsWalkSupportDebugState::Air;
+		if (!airborne && camera.position[1] > groundCamY + 0.06f) {
+			++jumpCount;
+			airborne = true;
+		}
+		if (airborne && groundedLike && camera.position[1] <= groundCamY + 0.03f) {
+			++landingCount;
+			airborne = false;
+		}
+	}
+
+	if (!(jumpCount >= 2 && landingCount >= 1)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"held jump no longer repeats after landing (jumpCount=%d landingCount=%d finalCam=(%.3f, %.3f, %.3f))",
+			jumpCount,
+			landingCount,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2]);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterJumpInPlaceIgnoresAirborneMoveInput(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	const float startX = camera.position[0];
+	const float startZ = camera.position[2];
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+
+	for (int step = 0; step < 12; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	if (!(std::abs(camera.position[0] - startX) < 0.03f && std::abs(camera.position[2] - startZ) < 0.03f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"jump-in-place airborne input regressed (start=(%.3f, %.3f) final=(%.3f, %.3f, %.3f))",
+			startX,
+			startZ,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2]);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterAirborneInputDoesNotBendJumpTrajectory(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	struct JumpAirCaseResult {
+		float afterJumpX = 0.0f;
+		float afterJumpZ = 0.0f;
+		float finalX = 0.0f;
+		float finalY = 0.0f;
+		float finalZ = 0.0f;
+	};
+
+	const auto runCase = [&](const bool releaseForwardAndPressStrafe) -> JumpAirCaseResult {
+		const VoxelWorld world = MakeWalkTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+		SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+		CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		JumpAirCaseResult result{};
+		result.afterJumpX = camera.position[0];
+		result.afterJumpZ = camera.position[2];
+		if (releaseForwardAndPressStrafe) {
+			SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+			SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_A);
+		}
+
+		for (int step = 0; step < 12; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		}
+
+		result.finalX = camera.position[0];
+		result.finalY = camera.position[1];
+		result.finalZ = camera.position[2];
+		return result;
+	};
+
+	const auto [holdAfterJumpX, holdAfterJumpZ, holdFinalX, holdFinalY, holdFinalZ] = runCase(false);
+	const auto [releaseAfterJumpX, releaseAfterJumpZ, releaseFinalX, releaseFinalY, releaseFinalZ] = runCase(true);
+	const float holdForwardGain = holdFinalZ - holdAfterJumpZ;
+	const float releaseForwardGain = releaseFinalZ - releaseAfterJumpZ;
+	const float releaseLateralDrift = std::abs(releaseFinalX - releaseAfterJumpX);
+	if (!(releaseLateralDrift < 0.05f &&
+		  holdForwardGain > 0.60f &&
+		  releaseForwardGain > 0.15f &&
+		  releaseForwardGain < holdForwardGain - 0.15f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"airborne direction lock/brake regressed (holdGain=%.3f releaseGain=%.3f releaseLateral=%.3f holdFinal=(%.3f, %.3f, %.3f) releaseFinal=(%.3f, %.3f, %.3f))",
+			holdForwardGain,
+			releaseForwardGain,
+			releaseLateralDrift,
+			holdFinalX,
+			holdFinalY,
+			holdFinalZ,
+			releaseFinalX,
+			releaseFinalY,
+			releaseFinalZ);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterMinecraftAirControlDefaultUsesLateWASDSteering(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	struct JumpAirCaseResult {
+		float afterJumpX = 0.0f;
+		float afterJumpZ = 0.0f;
+		float finalX = 0.0f;
+		float finalY = 0.0f;
+		float finalZ = 0.0f;
+	};
+
+	const auto runCase = [&](const bool switchToStrafe) -> JumpAirCaseResult {
+		const VoxelWorld world = MakeWalkTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+		EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, GetPhysicsWalkAirControlMode(physics.get()));
+
+		CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		JumpAirCaseResult result{};
+		result.afterJumpX = camera.position[0];
+		result.afterJumpZ = camera.position[2];
+		if (switchToStrafe) {
+			SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+			SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_A);
+		}
+
+		for (int step = 0; step < 12; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		}
+
+		result.finalX = camera.position[0];
+		result.finalY = camera.position[1];
+		result.finalZ = camera.position[2];
+		return result;
+	};
+
+	const auto [holdAfterJumpX, holdAfterJumpZ, holdFinalX, holdFinalY, holdFinalZ] = runCase(false);
+	const auto [strafeAfterJumpX, strafeAfterJumpZ, strafeFinalX, strafeFinalY, strafeFinalZ] = runCase(true);
+	const float holdForwardGain = holdFinalZ - holdAfterJumpZ;
+	const float strafeForwardGain = strafeFinalZ - strafeAfterJumpZ;
+	const float strafeLateralDrift = std::abs(strafeFinalX - strafeAfterJumpX);
+	if (!(strafeLateralDrift > 0.08f &&
+		  holdForwardGain > 0.60f &&
+		  strafeForwardGain > 0.05f &&
+		  strafeForwardGain < holdForwardGain - 0.08f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"minecraft-like air steering/brake regressed (holdGain=%.3f strafeGain=%.3f strafeLateral=%.3f holdFinal=(%.3f, %.3f, %.3f) strafeFinal=(%.3f, %.3f, %.3f))",
+			holdForwardGain,
+			strafeForwardGain,
+			strafeLateralDrift,
+			holdFinalX,
+			holdFinalY,
+			holdFinalZ,
+			strafeFinalX,
+			strafeFinalY,
+			strafeFinalZ);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterSneakLowersCameraHeight(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+	const float standingHeight = camera.position[1];
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, camera.position[1] < standingHeight - 0.1f);
+	EXPECT_TRUE(context, camera.position[1] > standingHeight - 0.25f);
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, camera.position[1] > standingHeight - 0.05f);
+	EXPECT_TRUE(context, camera.position[1] < standingHeight + 0.05f);
+}
+
+void TestWalkCharacterSneakPreventsLeavingLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > 3.6f);
+	EXPECT_TRUE(context, camera.position[2] < 3.85f);
+	EXPECT_TRUE(context, camera.position[1] > 3.05f);
+	EXPECT_TRUE(context, camera.position[1] < 3.6f);
+}
+
+void TestWalkCharacterSneakCanStrafeAlongLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.05f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_D);
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[0] > 3.0f);
+	EXPECT_TRUE(context, camera.position[2] > 3.95f);
+	EXPECT_TRUE(context, camera.position[2] < 4.15f);
+	EXPECT_TRUE(context, camera.position[1] > 3.25f);
+	EXPECT_TRUE(context, camera.position[1] < 3.55f);
+}
+
+void TestWalkCharacterSneakCanMoveDiagonallyAlongLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.12f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 0.35f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[0] > 2.75f);
+	EXPECT_TRUE(context, camera.position[2] > 3.6f);
+	EXPECT_TRUE(context, camera.position[2] < 3.85f);
+	EXPECT_TRUE(context, camera.position[1] > 3.05f);
+	EXPECT_TRUE(context, camera.position[1] < 3.6f);
+}
+
+void TestWalkCharacterSneakHoldsDiagonalEdgeOverTime(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.12f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 0.35f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	float minY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	EXPECT_TRUE(context, minY > 3.0f);
+	EXPECT_TRUE(context, camera.position[0] > 3.0f);
+	EXPECT_TRUE(context, camera.position[2] > 3.45f);
+	EXPECT_TRUE(context, camera.position[2] < 3.9f);
+}
+
+void TestWalkCharacterSneakHoldsStraightEdgeOverTime(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	float minY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	EXPECT_TRUE(context, minY > 3.0f);
+	EXPECT_TRUE(context, camera.position[2] > 3.55f);
+	EXPECT_TRUE(context, camera.position[2] < 3.9f);
+}
+
+void TestWalkCharacterReleasingSneakDoesNotImmediatelyDropFromLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+	float minY = camera.position[1];
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	EXPECT_TRUE(context, minY > 3.0f);
+	EXPECT_TRUE(context, camera.position[2] > 3.55f);
+	EXPECT_TRUE(context, camera.position[2] < 3.95f);
+}
+
+void TestVoxelLabReleasingSneakOnExactSideEdgeDoesNotDrop(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	for (int step = 0; step < 5; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+
+	float minCameraY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.70f &&
+		  minCameraY > 2.35f &&
+		  std::abs(camera.position[0] + 8.5f) < 0.08f &&
+		  std::abs(camera.position[2] - 9.39f) < 0.12f &&
+		  info.feetPosition[1] > 0.95f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  !info.sneakActive)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab release-sneak exact side-edge regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f sneak=%u csk=%u csi=%u lgr=%u)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			info.sneakActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			info.feetInsideCachedSneakSupport ? 1u : 0u,
+			info.ledgeReleaseGraceFramesRemaining);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestVoxelLabReleaseSneakThenJumpInPlaceFromExactSideEdgeLandsAndHolds(TestContext &context)
+{
+	AppState state{};
+	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
+	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+
+	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = 3.1415926535f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	for (int step = 0; step < 5; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+	for (int step = 0; step < 25; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minCameraY = camera.position[1];
+	for (int step = 0; step < 240; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		minCameraY = std::min(minCameraY, camera.position[1]);
+	}
+
+	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
+	if (!(camera.position[1] > 2.40f &&
+		  camera.position[1] < 2.70f &&
+		  minCameraY > 2.35f &&
+		  std::abs(camera.position[0] + 8.5f) < 0.08f &&
+		  std::abs(camera.position[2] - 9.39f) < 0.12f &&
+		  info.feetPosition[1] > 0.95f &&
+		  info.supportState != PhysicsWalkSupportDebugState::Air &&
+		  !info.sneakActive)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"VoxelLab release-sneak->jump exact side-edge regressed (cam=(%.3f, %.3f, %.3f) feet=(%.3f, %.3f, %.3f) state=%u score=%.3f minY=%.3f sneak=%u jl=%u csk=%u lgr=%u)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			info.feetPosition[0],
+			info.feetPosition[1],
+			info.feetPosition[2],
+			static_cast<unsigned>(info.supportState),
+			info.footSupportScore,
+			minCameraY,
+			info.sneakActive ? 1u : 0u,
+			info.jumpLockActive ? 1u : 0u,
+			info.cachedSneakSupportValid ? 1u : 0u,
+			info.ledgeReleaseGraceFramesRemaining);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterReleasingSneakThenJumpingFromStraightLedgeKeepsTakeoff(TestContext &context)
+{
+	for (int releaseDelayFrames = 0; releaseDelayFrames <= 1; ++releaseDelayFrames) {
+		VoxelWorld world = MakeWalkLedgeTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		for (int step = 0; step < 30; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		}
+
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+		for (int step = 0; step < releaseDelayFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		}
+
+		const float jumpStartY = camera.position[1];
+		const float jumpStartZ = camera.position[2];
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		const float afterJumpTickY = camera.position[1];
+		const float afterJumpTickZ = camera.position[2];
+		float minY = afterJumpTickY;
+		float previousZ = afterJumpTickZ;
+		int stalledForwardFrames = 0;
+		int maxStalledForwardFrames = 0;
+		for (int step = 0; step < 12; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			minY = std::min(minY, camera.position[1]);
+			const float forwardProgress = previousZ - camera.position[2];
+			if (camera.position[1] > jumpStartY - 0.02f && forwardProgress < 0.0025f) {
+				++stalledForwardFrames;
+				maxStalledForwardFrames = std::max(maxStalledForwardFrames, stalledForwardFrames);
+			} else {
+				stalledForwardFrames = 0;
+			}
+			previousZ = camera.position[2];
+		}
+
+		const bool keptTakeoff =
+			afterJumpTickY > jumpStartY + 0.03f &&
+			minY > jumpStartY - 0.02f &&
+			camera.position[1] > jumpStartY + 0.12f &&
+			camera.position[2] < jumpStartZ - 0.12f &&
+			maxStalledForwardFrames <= 2;
+		if (!keptTakeoff) {
+			char buffer[256]{};
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"release->jump straight ledge regressed (delay=%d, start=%.3f/%.3f, after=%.3f/%.3f, final=%.3f/%.3f, minY=%.3f, max stall=%d)",
+				releaseDelayFrames,
+				jumpStartY,
+				jumpStartZ,
+				afterJumpTickY,
+				afterJumpTickZ,
+				camera.position[1],
+				camera.position[2],
+				minY,
+				maxStalledForwardFrames);
+			context.Fail(__LINE__, buffer);
+		}
+	}
+}
+
+void TestWalkCharacterReleasingSneakThenJumpingFromCornerLedgeKeepsTakeoff(TestContext &context)
+{
+	constexpr float kPiOverFour = 0.785398163f;
+	for (int releaseDelayFrames = 0; releaseDelayFrames <= 1; ++releaseDelayFrames) {
+		VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = -kPiOverFour;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		for (int step = 0; step < 30; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		}
+
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
+		for (int step = 0; step < releaseDelayFrames; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		}
+
+		const float jumpStartX = camera.position[0];
+		const float jumpStartY = camera.position[1];
+		const float jumpStartZ = camera.position[2];
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+		const float afterJumpTickX = camera.position[0];
+		const float afterJumpTickY = camera.position[1];
+		const float afterJumpTickZ = camera.position[2];
+		float minY = afterJumpTickY;
+		float previousX = afterJumpTickX;
+		float previousZ = afterJumpTickZ;
+		int stalledForwardFrames = 0;
+		int maxStalledForwardFrames = 0;
+		for (int step = 0; step < 12; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			minY = std::min(minY, camera.position[1]);
+			const float stepX = previousX - camera.position[0];
+			const float stepZ = previousZ - camera.position[2];
+			const float forwardProgress = std::sqrt(stepX * stepX + stepZ * stepZ);
+			if (camera.position[1] > jumpStartY - 0.02f && forwardProgress < 0.0025f) {
+				++stalledForwardFrames;
+				maxStalledForwardFrames = std::max(maxStalledForwardFrames, stalledForwardFrames);
+			} else {
+				stalledForwardFrames = 0;
+			}
+			previousX = camera.position[0];
+			previousZ = camera.position[2];
+		}
+
+		const float finalHorizontalProgress =
+			std::sqrt(
+				(jumpStartX - camera.position[0]) * (jumpStartX - camera.position[0]) +
+				(jumpStartZ - camera.position[2]) * (jumpStartZ - camera.position[2]));
+		const bool keptTakeoff =
+			afterJumpTickY > jumpStartY + 0.03f &&
+			minY > jumpStartY - 0.02f &&
+			camera.position[1] > jumpStartY + 0.12f &&
+			finalHorizontalProgress > 0.14f &&
+			maxStalledForwardFrames <= 2;
+		if (!keptTakeoff) {
+			char buffer[256]{};
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"release->jump corner ledge regressed (delay=%d, start=%.3f/%.3f/%.3f, after=%.3f/%.3f/%.3f, final=%.3f/%.3f/%.3f, minY=%.3f, max stall=%d)",
+				releaseDelayFrames,
+				jumpStartX,
+				jumpStartY,
+				jumpStartZ,
+				afterJumpTickX,
+				afterJumpTickY,
+				afterJumpTickZ,
+				camera.position[0],
+				camera.position[1],
+				camera.position[2],
+				minY,
+				maxStalledForwardFrames);
+			context.Fail(__LINE__, buffer);
+		}
+	}
+}
+
+void TestWalkCharacterJumpingInPlaceAtCornerKeepsTopFaceOwnership(TestContext &context)
+{
+	constexpr float kPiOverFour = 0.785398163f;
+	const VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -kPiOverFour;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	const float cornerX = camera.position[0];
+	const float cornerY = camera.position[1];
+	const float cornerZ = camera.position[2];
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minY = camera.position[1];
+	float maxHorizontalDrift = 0.0f;
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+		const float driftX = camera.position[0] - cornerX;
+		const float driftZ = camera.position[2] - cornerZ;
+		maxHorizontalDrift = std::max(maxHorizontalDrift, std::sqrt(driftX * driftX + driftZ * driftZ));
+	}
+
+	EXPECT_TRUE(context, minY > cornerY - 0.35f);
+	EXPECT_TRUE(context, camera.position[1] > cornerY - 0.25f);
+	EXPECT_TRUE(context, camera.position[0] > 3.45f);
+	EXPECT_TRUE(context, camera.position[2] > 3.45f);
+	EXPECT_TRUE(context, maxHorizontalDrift < 0.22f);
+}
+
+void TestWalkCharacterSneakJumpUnderLowCeilingKeepsSupport(TestContext &context)
+{
+	constexpr float kPiOverFour = 0.785398163f;
+	const VoxelWorld world = MakeWalkCornerLedgeLowCeilingTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -kPiOverFour;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	const float cornerX = camera.position[0];
+	const float cornerY = camera.position[1];
+	const float cornerZ = camera.position[2];
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float minY = camera.position[1];
+	float maxHorizontalDrift = 0.0f;
+	for (int step = 0; step < 24; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+		const float driftX = camera.position[0] - cornerX;
+		const float driftZ = camera.position[2] - cornerZ;
+		maxHorizontalDrift = std::max(maxHorizontalDrift, std::sqrt(driftX * driftX + driftZ * driftZ));
+	}
+
+	EXPECT_TRUE(context, minY > cornerY - 0.35f);
+	EXPECT_TRUE(context, camera.position[1] > cornerY - 0.25f);
+	EXPECT_TRUE(context, camera.position[0] > 3.45f);
+	EXPECT_TRUE(context, camera.position[2] > 3.45f);
+	EXPECT_TRUE(context, maxHorizontalDrift < 0.2f);
+}
+
+void TestWalkCharacterSneakJumpFromStraightEdgeWithOutwardInputFallsOffEdge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float jumpStartY = camera.position[1];
+	const float jumpStartZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	for (int step = 0; step < 60; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	const bool fellOffEdge =
+		afterJumpTickY > jumpStartY + 0.03f &&
+		minY < jumpStartY - 0.35f &&
+		camera.position[1] < jumpStartY - 0.15f &&
+		camera.position[2] < jumpStartZ - 0.08f;
+	if (!fellOffEdge) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"sneak jump outward edge fall regressed (startY=%.3f, startZ=%.3f, afterY=%.3f, finalY=%.3f, finalZ=%.3f, minY=%.3f)",
+			jumpStartY,
+			jumpStartZ,
+			afterJumpTickY,
+			camera.position[1],
+			camera.position[2],
+			minY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterSneakJumpFromStraightEdgeWithAlongAndOutwardInputLeavesEdge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float jumpStartX = camera.position[0];
+	const float jumpStartY = camera.position[1];
+	const float jumpStartZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_D);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	for (int step = 0; step < 60; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	const bool leftEdgeWithMotion =
+		afterJumpTickY > jumpStartY + 0.03f &&
+		minY < jumpStartY - 0.35f &&
+		camera.position[1] < jumpStartY - 0.15f &&
+		camera.position[0] > jumpStartX + 0.08f &&
+		camera.position[2] < jumpStartZ - 0.05f;
+	if (!leftEdgeWithMotion) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"sneak jump edge exit regressed (start=%.3f/%.3f/%.3f, afterY=%.3f, final=%.3f/%.3f/%.3f, minY=%.3f)",
+			jumpStartX,
+			jumpStartY,
+			jumpStartZ,
+			afterJumpTickY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			minY);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterSneakJumpIntoCeilingCornerEdgeCanStillLeaveEdge(TestContext &context)
+{
+	constexpr float kPiOverFour = 0.785398163f;
+	const VoxelWorld world = MakeWalkCornerLedgeLowCeilingTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -kPiOverFour;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float jumpStartX = camera.position[0];
+	const float jumpStartY = camera.position[1];
+	const float jumpStartZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	const float afterJumpTickY = camera.position[1];
+	float minY = afterJumpTickY;
+	float maxOutwardSlip = 0.0f;
+	for (int step = 0; step < 60; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+		const float slipX = std::max(0.0f, jumpStartX - camera.position[0]);
+		const float slipZ = std::max(0.0f, jumpStartZ - camera.position[2]);
+		maxOutwardSlip = std::max(maxOutwardSlip, std::sqrt(slipX * slipX + slipZ * slipZ));
+	}
+
+	const bool leftEdge =
+		afterJumpTickY > jumpStartY + 0.03f &&
+		minY < jumpStartY - 0.35f &&
+		camera.position[0] < jumpStartX - 0.08f &&
+		camera.position[2] < jumpStartZ - 0.08f &&
+		maxOutwardSlip > 0.08f;
+	if (!leftEdge) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"sneak jump ceiling edge exit regressed (start=%.3f/%.3f/%.3f, afterY=%.3f, final=%.3f/%.3f/%.3f, minY=%.3f, maxSlip=%.3f)",
+			jumpStartX,
+			jumpStartY,
+			jumpStartZ,
+			afterJumpTickY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			minY,
+			maxOutwardSlip);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterSneakCanMoveAlongCornerZEdge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -0.785398163f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float cornerX = camera.position[0];
+	const float cornerZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_A);
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > cornerZ + 0.12f);
+	EXPECT_TRUE(context, camera.position[0] > 3.45f);
+	EXPECT_TRUE(context, camera.position[0] < cornerX + 0.05f);
+	EXPECT_TRUE(context, camera.position[1] > 3.2f);
+}
+
+void TestWalkCharacterSneakCanMoveAlongCornerXEdge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -0.785398163f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float cornerX = camera.position[0];
+	const float cornerZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_D);
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[0] > cornerX + 0.12f);
+	EXPECT_TRUE(context, camera.position[2] > 3.45f);
+	EXPECT_TRUE(context, camera.position[2] < cornerZ + 0.05f);
+	EXPECT_TRUE(context, camera.position[1] > 3.2f);
+}
+
+void TestWalkCharacterSneakCanReachCornerLedge(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -0.785398163f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[0] > 3.6f);
+	EXPECT_TRUE(context, camera.position[0] < 3.85f);
+	EXPECT_TRUE(context, camera.position[2] > 3.6f);
+	EXPECT_TRUE(context, camera.position[2] < 3.85f);
+	EXPECT_TRUE(context, camera.position[1] > 3.25f);
+	EXPECT_TRUE(context, camera.position[1] < 3.6f);
+}
+
+void TestWalkCharacterSneakDoesNotIdleSlideDownFromCorner(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 3.65f, 4.18f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = -0.785398163f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 30; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	const float idleCornerX = camera.position[0];
+	const float idleCornerZ = camera.position[2];
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
+	float minY = camera.position[1];
+	for (int step = 0; step < 180; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		minY = std::min(minY, camera.position[1]);
+	}
+
+	EXPECT_TRUE(context, minY > 3.2f);
+	EXPECT_TRUE(context, camera.position[0] > idleCornerX - 0.08f);
+	EXPECT_TRUE(context, camera.position[0] < idleCornerX + 0.08f);
+	EXPECT_TRUE(context, camera.position[2] > idleCornerZ - 0.08f);
+	EXPECT_TRUE(context, camera.position[2] < idleCornerZ + 0.08f);
+}
+
+void TestWalkCharacterLedgeJumpWithoutTakeoffMomentumIgnoresLateForwardInput(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.5f, 3.65f, 4.18f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+	const float startX = camera.position[0];
+	const float startZ = camera.position[2];
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 15; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[1] > 2.9f);
+	EXPECT_TRUE(context, std::abs(camera.position[0] - startX) < 0.03f);
+	EXPECT_TRUE(context, std::abs(camera.position[2] - startZ) < 0.03f);
+}
+
+void TestWalkCharacterOffsetLedgeJumpWithoutTakeoffMomentumIgnoresLateForwardInput(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+	SetPhysicsWalkAirControlMode(physics.get(), WalkAirControlMode::Realistic);
+
+	CameraState camera = MakeTestCamera({2.83f, 3.65f, 4.07f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+	const float startX = camera.position[0];
+	const float startZ = camera.position[2];
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	for (int step = 0; step < 15; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[1] > 2.9f);
+	EXPECT_TRUE(context, std::abs(camera.position[0] - startX) < 0.03f);
+	EXPECT_TRUE(context, std::abs(camera.position[2] - startZ) < 0.03f);
+}
+
+void TestWalkCharacterJumpApproachDoesNotTeleportAcrossOffsets(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	for (int startXStep = 0; startXStep <= 55; ++startXStep) {
+		const float startX = 1.25f + static_cast<float>(startXStep) * 0.1f;
+		VoxelWorld world = MakeWalkLedgeTestWorld();
+
+		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+		EXPECT_TRUE(context, physics != nullptr);
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+		CameraState camera = MakeTestCamera({startX, 2.65f, 2.45f});
+		camera.controlMode = CameraState::ControlMode::Walk;
+		camera.yawRadians = kPi;
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		const float afterJumpTickY = camera.position[1];
+		const float afterJumpTickZ = camera.position[2];
+		float previousZ = afterJumpTickZ;
+		int stalledTopEdgeFrames = 0;
+		int maxStalledTopEdgeFrames = 0;
+		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+		for (int step = 0; step < 25; ++step) {
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+			const float zProgress = camera.position[2] - previousZ;
+			if (camera.position[1] > 2.95f && camera.position[1] < 3.55f && zProgress < 0.0025f) {
+				++stalledTopEdgeFrames;
+				maxStalledTopEdgeFrames = std::max(maxStalledTopEdgeFrames, stalledTopEdgeFrames);
+			} else {
+				stalledTopEdgeFrames = 0;
+			}
+			previousZ = camera.position[2];
+		}
+
+		const bool jumpedNaturallyWithoutTeleport =
+			afterJumpTickY < 3.05f &&
+			afterJumpTickZ > 2.48f &&
+			camera.position[1] > 3.35f &&
+			camera.position[2] > 4.05f &&
+			maxStalledTopEdgeFrames <= 2;
+		if (!jumpedNaturallyWithoutTeleport) {
+			char buffer[256]{};
+			std::snprintf(
+				buffer,
+				sizeof(buffer),
+				"jump approach regressed at x=%.2f (after first tick=%.3f, %.3f, final=%.3f, %.3f, %.3f, max stall=%d)",
+				startX,
+				afterJumpTickY,
+				afterJumpTickZ,
+				camera.position[0],
+				camera.position[1],
+				camera.position[2],
+				maxStalledTopEdgeFrames);
+			context.Fail(__LINE__, buffer);
+		}
+	}
+}
+
+void TestWalkCharacterCanJumpOntoNegativeSingleBlockEdge(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const VoxelWorld world = MakeWalkNegativeSingleBlockTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({-5.5f, 2.65f, 4.45f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	const float afterJumpTickY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	bool touchedBlockTop = false;
+	float previousZ = camera.position[2];
+	float previousY = camera.position[1];
+	int stalledTopEdgeFrames = 0;
+	int maxStalledTopEdgeFrames = 0;
+	float maxLateFrameRise = 0.0f;
+	for (int step = 0; step < 25; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		if (camera.position[1] > 3.3f &&
+			camera.position[2] > 5.75f &&
+			camera.position[2] < 7.1f &&
+			camera.position[0] > -5.95f &&
+			camera.position[0] < -5.05f) {
+			touchedBlockTop = true;
+		}
+
+		const float zProgress = camera.position[2] - previousZ;
+		maxLateFrameRise = std::max(maxLateFrameRise, camera.position[1] - previousY);
+		if (camera.position[1] > 2.95f && camera.position[1] < 3.7f && zProgress < 0.0025f) {
+			++stalledTopEdgeFrames;
+			maxStalledTopEdgeFrames = std::max(maxStalledTopEdgeFrames, stalledTopEdgeFrames);
+		} else {
+			stalledTopEdgeFrames = 0;
+		}
+		previousZ = camera.position[2];
+		previousY = camera.position[1];
+	}
+
+	EXPECT_TRUE(context, afterJumpTickY < 3.05f);
+	EXPECT_TRUE(context, touchedBlockTop);
+	EXPECT_TRUE(context, maxStalledTopEdgeFrames <= 2);
+	if (!(maxLateFrameRise < 0.13f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"negative single-block jump late snap regressed (afterJumpY=%.3f final cam=(%.3f, %.3f, %.3f) maxLateRise=%.3f max stall=%d)",
+			afterJumpTickY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			maxLateFrameRise,
+			maxStalledTopEdgeFrames);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterCanJumpOntoPositiveSingleBlockEdge(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const VoxelWorld world = MakeWalkPositiveSingleBlockTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	const float afterJumpTickY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	bool touchedBlockTop = false;
+	float previousZ = camera.position[2];
+	float previousY = camera.position[1];
+	int stalledTopEdgeFrames = 0;
+	int maxStalledTopEdgeFrames = 0;
+	float maxLateFrameRise = 0.0f;
+	for (int step = 0; step < 25; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		if (camera.position[1] > 3.3f &&
+			camera.position[2] > 5.75f &&
+			camera.position[2] < 7.1f &&
+			camera.position[0] > 5.05f &&
+			camera.position[0] < 5.95f) {
+			touchedBlockTop = true;
+		}
+
+		const float zProgress = camera.position[2] - previousZ;
+		maxLateFrameRise = std::max(maxLateFrameRise, camera.position[1] - previousY);
+		if (camera.position[1] > 2.95f && camera.position[1] < 3.7f && zProgress < 0.0025f) {
+			++stalledTopEdgeFrames;
+			maxStalledTopEdgeFrames = std::max(maxStalledTopEdgeFrames, stalledTopEdgeFrames);
+		} else {
+			stalledTopEdgeFrames = 0;
+		}
+		previousZ = camera.position[2];
+		previousY = camera.position[1];
+	}
+
+	EXPECT_TRUE(context, afterJumpTickY < 3.05f);
+	EXPECT_TRUE(context, touchedBlockTop);
+	EXPECT_TRUE(context, maxStalledTopEdgeFrames <= 2);
+	if (!(maxLateFrameRise < 0.13f)) {
+		char buffer[256]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"positive single-block jump late snap regressed (afterJumpY=%.3f final cam=(%.3f, %.3f, %.3f) maxLateRise=%.3f max stall=%d)",
+			afterJumpTickY,
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			maxLateFrameRise,
+			maxStalledTopEdgeFrames);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterCanJumpOntoCornerSideFromPerpendicularApproach(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const VoxelWorld world = MakeWalkCornerLedgeTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({4.18f, 2.65f, 3.45f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	const float jumpStartY = camera.position[1];
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	const float afterJumpTickY = camera.position[1];
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
+
+	float maxY = afterJumpTickY;
+	bool touchedCornerTop = false;
+	for (int step = 0; step < 25; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+		maxY = std::max(maxY, camera.position[1]);
+		if (camera.position[1] > 3.25f &&
+			camera.position[0] > 4.02f &&
+			camera.position[0] < 4.35f &&
+			camera.position[2] > 4.02f) {
+			touchedCornerTop = true;
+		}
+	}
+
+	EXPECT_TRUE(context, afterJumpTickY > jumpStartY + 0.03f);
+	EXPECT_TRUE(context, maxY > jumpStartY + 0.2f);
+	EXPECT_TRUE(context, touchedCornerTop);
+}
+
+void TestWalkCharacterSneakCanMoveAlongNegativeSingleBlockEdge(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const VoxelWorld world = MakeWalkNegativeSingleBlockSneakTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({-6.82f, 5.65f, 3.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	const float startX = camera.position[0];
+	const float startZ = camera.position[2];
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > startZ + 0.35f);
+	EXPECT_TRUE(context, camera.position[0] > startX - 0.05f);
+	EXPECT_TRUE(context, camera.position[0] < startX + 0.08f);
+	EXPECT_TRUE(context, camera.position[1] > 5.3f);
+}
+
+void TestWalkCharacterSneakCanMoveAlongIsolatedCornerEdge(TestContext &context)
+{
+	constexpr float kPi = 3.1415926535f;
+	const VoxelWorld world = MakeWalkIsolatedCornerSingleBlockTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({-0.2f, 17.65f, 0.2f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.yawRadians = kPi;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
+	const float startX = camera.position[0];
+	const float startZ = camera.position[2];
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[2] > startZ + 0.3f);
+	EXPECT_TRUE(context, camera.position[0] > startX - 0.08f);
+	EXPECT_TRUE(context, camera.position[0] < startX + 0.08f);
+	EXPECT_TRUE(context, camera.position[1] > 17.3f);
+}
+
+void TestWalkCharacterDoesNotMagnetSnapDuringFreeFall(TestContext &context)
+{
+	const VoxelWorld world = MakeWalkTestWorld();
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({2.5f, 5.0f, 4.5f});
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	InitializeInputState(input);
+	for (int step = 0; step < 20; ++step) {
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
+	}
+
+	EXPECT_TRUE(context, camera.position[1] < 4.5f);
+	EXPECT_TRUE(context, camera.position[1] > 3.2f);
+}
+
 void TestCreativeCharacterCollidesWithVoxelWall(TestContext &context)
 {
 	VoxelWorld world = MakeWalkTestWorld();
@@ -1162,6 +5403,284 @@ void TestCreativeCharacterCollidesWithVoxelWall(TestContext &context)
 	EXPECT_TRUE(context, camera.position[2] > 3.2f);
 	EXPECT_TRUE(context, camera.position[2] < 4.5f);
 	EXPECT_NEAR(context, 3.0f, camera.position[1]);
+}
+
+void TestCreativeCharacterBoostedFlightSlidesAlongTransparencyStressColumns(TestContext &context)
+{
+	const std::filesystem::path replayPath = GetTestFixturePath("creative_transparency_boost_stuck.projectv.replay");
+	const std::filesystem::path snapshotPath = GetTestFixturePath("creative_transparency_boost_stuck.snapshot.bin");
+	EXPECT_TRUE(context, std::filesystem::exists(replayPath));
+	EXPECT_TRUE(context, std::filesystem::exists(snapshotPath));
+
+	InputReplayCapture capture{};
+	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &capture));
+	capture.snapshotPath = snapshotPath.string();
+
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(capture.snapshotPath);
+	EXPECT_TRUE(context, loadedWorld != nullptr);
+	if (!loadedWorld) {
+		return;
+	}
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = capture.initialCamera;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction = capture.initialInteraction;
+	WorldState worldState{};
+	worldState.voxelWorld = std::move(loadedWorld);
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
+	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
+	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
+	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
+
+	float furthestForwardZ = camera.position[2];
+	int consecutiveStalledFramesInOldWedgeBand = 0;
+	int maxConsecutiveStalledFramesInOldWedgeBand = 0;
+	for (const InputReplayFrame &frame : capture.frames) {
+		const std::array<float, 3> previousPosition = camera.position;
+		ApplyInputReplayFrame(&input, frame);
+		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
+								 &platform,
+								 &simulation,
+								 &camera,
+								 &input,
+								 &interaction,
+								 &worldState,
+								 physics.get(),
+								 &render,
+								 &debug,
+								 frame.deltaSeconds));
+		furthestForwardZ = std::min(furthestForwardZ, camera.position[2]);
+
+		const float deltaX = camera.position[0] - previousPosition[0];
+		const float deltaY = camera.position[1] - previousPosition[1];
+		const float deltaZ = camera.position[2] - previousPosition[2];
+		const float movementSq = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+		const bool insideOldWedgeBand =
+			camera.position[0] >= 13.0f &&
+			camera.position[0] <= 14.5f &&
+			camera.position[2] <= -4.0f &&
+			camera.position[2] >= -5.3f;
+		if (insideOldWedgeBand && movementSq <= 0.0001f * 0.0001f) {
+			++consecutiveStalledFramesInOldWedgeBand;
+			maxConsecutiveStalledFramesInOldWedgeBand = std::max(
+				maxConsecutiveStalledFramesInOldWedgeBand,
+				consecutiveStalledFramesInOldWedgeBand);
+		} else {
+			consecutiveStalledFramesInOldWedgeBand = 0;
+		}
+	}
+
+	if (!(furthestForwardZ < -50.0f && maxConsecutiveStalledFramesInOldWedgeBand < 8)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"boosted creative replay still wedges near the old transparency-stress column (final cam=(%.3f, %.3f, %.3f) furthestZ=%.3f maxStalledFrames=%d)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			furthestForwardZ,
+			maxConsecutiveStalledFramesInOldWedgeBand);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestWalkCharacterReplayKeepsEdgeJumpGroundedLikeSupport(TestContext &context)
+{
+	constexpr float kExpectedNarrowEdgeScore = 2.0f / 12.0f;
+	const std::filesystem::path replayPath = GetTestFixturePath("walk_edge_jump_regression.projectv.replay");
+	const std::filesystem::path snapshotPath = GetTestFixturePath("walk_edge_jump_regression.snapshot.bin");
+	EXPECT_TRUE(context, std::filesystem::exists(replayPath));
+	EXPECT_TRUE(context, std::filesystem::exists(snapshotPath));
+
+	InputReplayCapture capture{};
+	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &capture));
+	capture.snapshotPath = snapshotPath.string();
+
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(capture.snapshotPath);
+	EXPECT_TRUE(context, loadedWorld != nullptr);
+	if (!loadedWorld) {
+		return;
+	}
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = capture.initialCamera;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction = capture.initialInteraction;
+	WorldState worldState{};
+	worldState.voxelWorld = std::move(loadedWorld);
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
+	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
+	EXPECT_EQ(context, CameraState::ControlMode::Walk, camera.controlMode);
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
+
+	bool foundEdgeJumpAttempt = false;
+	PhysicsWalkDebugInfo preJumpInfo{};
+	float preJumpCameraY = 0.0f;
+	float maxCameraYAfterAttempt = 0.0f;
+	for (const InputReplayFrame &frame : capture.frames) {
+		const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
+		if (!foundEdgeJumpAttempt &&
+			HasInputActionMaskBit(frame.actionPressedMask, InputAction::MoveUp) &&
+			infoBeforeTick.valid &&
+			infoBeforeTick.footSupportHitSamples > 0 &&
+			std::abs(infoBeforeTick.feetPosition[1] - 1.05f) <= 0.05f) {
+			foundEdgeJumpAttempt = true;
+			preJumpInfo = infoBeforeTick;
+			preJumpCameraY = camera.position[1];
+			maxCameraYAfterAttempt = camera.position[1];
+		}
+
+		ApplyInputReplayFrame(&input, frame);
+		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
+								 &platform,
+								 &simulation,
+								 &camera,
+								 &input,
+								 &interaction,
+								 &worldState,
+								 physics.get(),
+								 &render,
+								 &debug,
+								 frame.deltaSeconds));
+
+		if (foundEdgeJumpAttempt) {
+			maxCameraYAfterAttempt = std::max(maxCameraYAfterAttempt, camera.position[1]);
+		}
+	}
+
+	if (!(foundEdgeJumpAttempt &&
+		  preJumpInfo.footSupportHitSamples > 0 &&
+		  preJumpInfo.footSupportScore >= kExpectedNarrowEdgeScore - 0.001f &&
+		  maxCameraYAfterAttempt > preJumpCameraY + 0.12f)) {
+		char buffer[384]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"replay narrow-edge jump regressed (foundAttempt=%u preState=%u preScore=%.3f preHits=%u/%u preFeet=(%.3f, %.3f, %.3f) preCamY=%.3f maxCameraYAfter=%.3f)",
+			foundEdgeJumpAttempt ? 1u : 0u,
+			static_cast<unsigned>(preJumpInfo.supportState),
+			preJumpInfo.footSupportScore,
+			preJumpInfo.footSupportHitSamples,
+			preJumpInfo.footSupportTotalSamples,
+			preJumpInfo.feetPosition[0],
+			preJumpInfo.feetPosition[1],
+			preJumpInfo.feetPosition[2],
+			preJumpCameraY,
+			maxCameraYAfterAttempt);
+		context.Fail(__LINE__, buffer);
+	}
+}
+
+void TestCreativeCharacterBoostedFlightDoesNotWedgeOnTransparencyStressCorner(TestContext &context)
+{
+	const std::filesystem::path replayPath = GetTestFixturePath("creative_transparency_boost_corner_stuck.projectv.replay");
+	const std::filesystem::path snapshotPath = GetTestFixturePath("creative_transparency_boost_corner_stuck.snapshot.bin");
+	EXPECT_TRUE(context, std::filesystem::exists(replayPath));
+	EXPECT_TRUE(context, std::filesystem::exists(snapshotPath));
+
+	InputReplayCapture capture{};
+	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &capture));
+	capture.snapshotPath = snapshotPath.string();
+
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(capture.snapshotPath);
+	EXPECT_TRUE(context, loadedWorld != nullptr);
+	if (!loadedWorld) {
+		return;
+	}
+
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = capture.initialCamera;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction = capture.initialInteraction;
+	WorldState worldState{};
+	worldState.voxelWorld = std::move(loadedWorld);
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
+	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
+	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
+	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
+
+	constexpr float kOldCornerWedgeX = 17.234f;
+	constexpr float kOldCornerWedgeZ = -8.259f;
+	int consecutiveStalledFramesInOldCornerBand = 0;
+	int maxConsecutiveStalledFramesInOldCornerBand = 0;
+	for (const InputReplayFrame &frame : capture.frames) {
+		const std::array<float, 3> previousPosition = camera.position;
+		ApplyInputReplayFrame(&input, frame);
+		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
+								 &platform,
+								 &simulation,
+								 &camera,
+								 &input,
+								 &interaction,
+								 &worldState,
+								 physics.get(),
+								 &render,
+								 &debug,
+								 frame.deltaSeconds));
+
+		const float deltaX = camera.position[0] - previousPosition[0];
+		const float deltaY = camera.position[1] - previousPosition[1];
+		const float deltaZ = camera.position[2] - previousPosition[2];
+		const float movementSq = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+		const bool insideOldCornerBand =
+			camera.position[0] >= 16.7f &&
+			camera.position[0] <= 17.8f &&
+			camera.position[2] >= -8.9f &&
+			camera.position[2] <= -7.6f;
+		if (frame.actionDownMask != 0u &&
+			insideOldCornerBand &&
+			movementSq <= 0.0001f * 0.0001f) {
+			++consecutiveStalledFramesInOldCornerBand;
+			maxConsecutiveStalledFramesInOldCornerBand = std::max(
+				maxConsecutiveStalledFramesInOldCornerBand,
+				consecutiveStalledFramesInOldCornerBand);
+		} else {
+			consecutiveStalledFramesInOldCornerBand = 0;
+		}
+	}
+
+	const float planarDistanceFromOldCornerWedge = std::sqrt(
+		(camera.position[0] - kOldCornerWedgeX) * (camera.position[0] - kOldCornerWedgeX) +
+		(camera.position[2] - kOldCornerWedgeZ) * (camera.position[2] - kOldCornerWedgeZ));
+	if (!(planarDistanceFromOldCornerWedge > 12.0f && maxConsecutiveStalledFramesInOldCornerBand < 8)) {
+		char buffer[320]{};
+		std::snprintf(
+			buffer,
+			sizeof(buffer),
+			"boosted creative replay still wedges on the old transparency-stress corner (final cam=(%.3f, %.3f, %.3f) planarDistanceFromOldCorner=%.3f maxStalledFrames=%d)",
+			camera.position[0],
+			camera.position[1],
+			camera.position[2],
+			planarDistanceFromOldCornerWedge,
+			maxConsecutiveStalledFramesInOldCornerBand);
+		context.Fail(__LINE__, buffer);
+	}
 }
 
 void TestGetNextVoxelScenePresetCyclesAllBuiltinPresets(TestContext &context)
@@ -1245,7 +5764,8 @@ void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
 		&input,
 		&world,
 		&interaction,
-		true);
+		true,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, !input.removePressed);
@@ -1269,7 +5789,8 @@ void TestUpdateVoxelInteractionPlacesConfiguredBlock(TestContext &context)
 		&input,
 		&world,
 		&interaction,
-		true);
+		true,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {1, 1, 2}));
 	EXPECT_TRUE(context, !input.placePressed);
@@ -1277,6 +5798,45 @@ void TestUpdateVoxelInteractionPlacesConfiguredBlock(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, interaction.selection.targetMaterial);
 	EXPECT_INT3_EQ(context, (Int3{1, 1, 2}), interaction.selection.targetVoxel);
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
+}
+
+void TestUpdateVoxelInteractionRejectsPlacementInsidePhysicsCharacter(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+		}
+	}
+	ResetDirtyFlags(world);
+
+	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
+	EXPECT_TRUE(context, physics != nullptr);
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
+
+	CameraState camera = MakeTestCamera({1.5f, 2.65f, 1.5f});
+	camera.controlMode = CameraState::ControlMode::Walk;
+	camera.pitchRadians = -1.45f;
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
+
+	InputState input{};
+	input.placePressed = true;
+	InteractionState interaction{};
+	interaction.placementMaterial = VoxelMaterial::FloorGray;
+
+	UpdateVoxelInteraction(
+		camera,
+		&input,
+		&world,
+		&interaction,
+		true,
+		physics.get());
+
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
+	EXPECT_TRUE(context, interaction.selection.hasHit);
+	EXPECT_TRUE(context, interaction.selection.hasPlacementVoxel);
+	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), interaction.selection.placementVoxel);
+	EXPECT_EQ(context, static_cast<uint32_t>(0), CountDirtyVoxelChunks(world));
 }
 
 void TestUpdateVoxelInteractionSkipsEditingWhenDisabled(TestContext &context)
@@ -1294,7 +5854,8 @@ void TestUpdateVoxelInteractionSkipsEditingWhenDisabled(TestContext &context)
 		&input,
 		&world,
 		&interaction,
-		false);
+		false,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, interaction.selection.hasHit);
@@ -1319,7 +5880,8 @@ void TestUpdateVoxelInteractionPaintModePaintsTargetedBlock(TestContext &context
 		&input,
 		&world,
 		&interaction,
-		true);
+		true,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, interaction.selection.hasHit);
@@ -1345,7 +5907,8 @@ void TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(TestContext &contex
 		&input,
 		&world,
 		&interaction,
-		true);
+		true,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, !interaction.selection.hasHit);
@@ -1371,7 +5934,8 @@ void TestUpdateVoxelInteractionFillModeFloodFillsConnectedRegion(TestContext &co
 		&input,
 		&world,
 		&interaction,
-		true);
+		true,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {2, 1, 1}));
@@ -1398,7 +5962,8 @@ void TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(TestCon
 		&input,
 		&world,
 		&interaction,
-		true);
+		true,
+		nullptr);
 
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {1, 1, 1}));
 	EXPECT_TRUE(context, interaction.selection.hasHit);
@@ -1589,6 +6154,11 @@ void TestSyncEcsWorldStateMirrorsVoxelChunksAndWorldSummary(TestContext &context
 
 int main()
 {
+	if (const int replayAnalysisExitCode = RunReplayAnalysisFromEnvironment();
+		replayAnalysisExitCode >= 0) {
+		return replayAnalysisExitCode;
+	}
+
 	TestContext context{};
 
 	TestWorldBoundsAndChunkIndexing(context);
@@ -1616,6 +6186,10 @@ int main()
 	TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(context);
 	TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(context);
 	TestUpdateAppConsumesDebugInputActions(context);
+	TestUpdateAppTogglesWalkAirControlMode(context);
+	TestUpdateAppTogglesWalkAutoJumpDelay(context);
+	TestInputReplayCaptureRoundTripsFile(context);
+	TestInputReplayCanDriveWalkSequence(context);
 	TestPlacementMaterialCycleCoversAllDebugMaterials(context);
 	TestResetCameraPreservesControlMode(context);
 	TestCreativeModeBlocksPausedMovement(context);
@@ -1625,7 +6199,76 @@ int main()
 	TestUpdateAppCyclesCreativeSpectatorAndWalkModes(context);
 	TestUpdateAppDoubleSpaceTogglesCreativeAndWalk(context);
 	TestWalkCharacterCollidesWithVoxelWall(context);
+	TestGetPhysicsWalkDebugInfoReportsGroundedSupport(context);
+	TestVoxelLabWalkDebugInfoMatchesLiveCenterReference(context);
+	TestVoxelLabWalkJumpFromSideEdgeDoesNotImmediatelyDrop(context);
+	TestVoxelLabWalkJumpFromCornerEdgeDoesNotImmediatelyDrop(context);
+	TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(context);
+	TestVoxelLabWalkFreeFallDoesNotSnapToTopPlaneTooEarly(context);
+	TestVoxelLabWalkJumpInPlaceDoesNotMagnetSnapToCenterTopPlane(context);
+	TestVoxelLabWalkJumpFromSideEdgeLandsBackOnTopPlane(context);
+	TestVoxelLabWalkJumpFromCornerEdgeLandsBackOnTopPlane(context);
+	TestVoxelLabWalkSneakJumpFromSideEdgeLandsBackOnTopPlane(context);
+	TestVoxelLabWalkJumpFromSideEdgeCanMoveAfterLanding(context);
+	TestVoxelLabWalkJumpFromExactSideEdgeWithHeldWDoesNotLoseSupportOnLanding(context);
+	TestVoxelLabWalkSneakJumpFromSideEdgeStillHoldsEdgeAfterLanding(context);
+	TestVoxelLabWalkSneakJumpInPlaceFromExactSideEdgeStaysGrounded(context);
+	TestVoxelLabWalkSneakJumpInPlaceFromExactCornerEdgeStaysGrounded(context);
+	TestUpdateAppVoxelLabSneakJumpInPlaceFromExactSideEdgeStaysGroundedAtHighRenderRate(context);
+	TestUpdateAppVoxelLabSneakJumpInPlaceFromExactCornerEdgeStaysGroundedAtHighRenderRate(context);
+	TestWalkCharacterFallsSmoothlyAfterLeavingLedge(context);
+	TestWalkCharacterDoesNotPassivelySlideOffLedge(context);
+	TestWalkCharacterDoesNotSlideFromNarrowEdgeBand(context);
+	TestWalkCharacterCanJumpFromNarrowEdgeBandWithoutSneak(context);
+	TestWalkCharacterCanJumpWhileMovingAcrossNarrowEdgeBandWithoutSneak(context);
+	TestWalkCharacterCanJumpWhileBoostingAlongStraightEdgeWithoutSneak(context);
+	TestWalkCharacterJumpHeightMatchesMinecraftLikeApex(context);
+	TestWalkCharacterHoldingJumpRepeatsOnLanding(context);
+	TestWalkCharacterJumpInPlaceIgnoresAirborneMoveInput(context);
+	TestWalkCharacterAirborneInputDoesNotBendJumpTrajectory(context);
+	TestWalkCharacterMinecraftAirControlDefaultUsesLateWASDSteering(context);
+	TestWalkCharacterSneakLowersCameraHeight(context);
+	TestWalkCharacterSneakPreventsLeavingLedge(context);
+	TestWalkCharacterSneakCanStrafeAlongLedge(context);
+	TestWalkCharacterSneakCanMoveDiagonallyAlongLedge(context);
+	TestWalkCharacterSneakHoldsDiagonalEdgeOverTime(context);
+	TestWalkCharacterSneakHoldsStraightEdgeOverTime(context);
+	TestWalkCharacterReleasingSneakDoesNotImmediatelyDropFromLedge(context);
+	TestVoxelLabReleasingSneakOnExactSideEdgeDoesNotDrop(context);
+	TestVoxelLabReleaseSneakThenJumpInPlaceFromExactSideEdgeLandsAndHolds(context);
+	TestWalkCharacterReleasingSneakThenJumpingFromStraightLedgeKeepsTakeoff(context);
+	TestWalkCharacterReleasingSneakThenJumpingFromCornerLedgeKeepsTakeoff(context);
+	TestWalkCharacterJumpingInPlaceAtCornerKeepsTopFaceOwnership(context);
+	TestWalkCharacterSneakJumpUnderLowCeilingKeepsSupport(context);
+	TestWalkCharacterSneakJumpFromStraightEdgeWithOutwardInputFallsOffEdge(context);
+	TestWalkCharacterSneakJumpFromStraightEdgeWithAlongAndOutwardInputLeavesEdge(context);
+	TestWalkCharacterSneakJumpIntoCeilingCornerEdgeCanStillLeaveEdge(context);
+	TestWalkCharacterSneakCanMoveAlongCornerZEdge(context);
+	TestWalkCharacterSneakCanMoveAlongCornerXEdge(context);
+	TestWalkCharacterSneakCanReachCornerLedge(context);
+	TestWalkCharacterSneakDoesNotIdleSlideDownFromCorner(context);
+	TestWalkCharacterLedgeJumpWithoutTakeoffMomentumIgnoresLateForwardInput(context);
+	TestWalkCharacterOffsetLedgeJumpWithoutTakeoffMomentumIgnoresLateForwardInput(context);
+	TestWalkCharacterJumpApproachDoesNotTeleportAcrossOffsets(context);
+	TestWalkCharacterCanJumpOntoNegativeSingleBlockEdge(context);
+	TestWalkCharacterCanJumpOntoPositiveSingleBlockEdge(context);
+	TestWalkCharacterClimbsOneBlockWithoutSlowWallSlide(context);
+	TestWalkCharacterSneakJumpAgainstGlassColumnDoesNotSlowWallSlide(context);
+	TestWalkCharacterJumpAgainstGlassColumnDoesNotWallStepUp(context);
+	TestWalkCharacterHeldJumpAgainstGlassColumnDoesNotGetSecondJumpFromWallTop(context);
+	TestWalkCharacterMidairSneakDoesNotAcquireTwoBlockWallTop(context);
+	TestWalkCharacterCannotDoubleJumpWhileAirborneNearWall(context);
+	TestWalkCharacterHeldJumpDoesNotAcquireForeignWallTopNearTwoBlockWall(context);
+	TestWalkCharacterFallsAfterEditedSupportIsRemoved(context);
+	TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(context);
+	TestWalkCharacterCanJumpOntoCornerSideFromPerpendicularApproach(context);
+	TestWalkCharacterSneakCanMoveAlongNegativeSingleBlockEdge(context);
+	TestWalkCharacterSneakCanMoveAlongIsolatedCornerEdge(context);
+	TestWalkCharacterDoesNotMagnetSnapDuringFreeFall(context);
 	TestCreativeCharacterCollidesWithVoxelWall(context);
+	TestCreativeCharacterBoostedFlightSlidesAlongTransparencyStressColumns(context);
+	TestWalkCharacterReplayKeepsEdgeJumpGroundedLikeSupport(context);
+	TestCreativeCharacterBoostedFlightDoesNotWedgeOnTransparencyStressCorner(context);
 	TestGetNextVoxelScenePresetCyclesAllBuiltinPresets(context);
 	TestUpdateAppRequestsScenePresetReload(context);
 	TestUpdateAppRequestsWorldSnapshotSave(context);
@@ -1635,6 +6278,7 @@ int main()
 	TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(context);
 	TestUpdateVoxelInteractionRemovesTargetedBlock(context);
 	TestUpdateVoxelInteractionPlacesConfiguredBlock(context);
+	TestUpdateVoxelInteractionRejectsPlacementInsidePhysicsCharacter(context);
 	TestUpdateVoxelInteractionSkipsEditingWhenDisabled(context);
 	TestUpdateVoxelInteractionPaintModePaintsTargetedBlock(context);
 	TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(context);

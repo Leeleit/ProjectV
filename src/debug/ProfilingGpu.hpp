@@ -22,10 +22,10 @@
 	TracyVkZone(static_cast<TracyVkCtx>(contextHandle), commandBuffer, name)
 #else
 #define PV_PROFILE_GPU_ZONE(contextHandle, commandBuffer, name) \
-	do { \
-		(void)(contextHandle); \
-		(void)(commandBuffer); \
-		(void)sizeof(name); \
+	do {                                                        \
+		(void)(contextHandle);                                  \
+		(void)(commandBuffer);                                  \
+		(void)sizeof(name);                                     \
 	} while (false)
 #endif
 

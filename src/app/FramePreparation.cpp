@@ -1,10 +1,10 @@
 #include "app/FramePreparation.hpp"
 
 #include "app/Camera.hpp"
+#include "core/RuntimeDiagnostics.hpp"
 #include "debug/DebugHud.hpp"
 #include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
-#include "core/RuntimeDiagnostics.hpp"
 #include "render/SceneResources.hpp"
 #include "voxel/VoxelWorld.hpp"
 

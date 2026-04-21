@@ -1,6 +1,7 @@
 #include "voxel/VoxelInteraction.hpp"
 
 #include "app/Camera.hpp"
+#include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelRaycast.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -40,9 +41,20 @@ void ClearInteractionActions(InputState *input)
 	input->placePressed = false;
 }
 
+bool CanPlaceInteractionVoxel(
+	const VoxelRaycastHit &hit,
+	const CameraState &camera,
+	const PhysicsState *physics)
+{
+	return hit.hasPlacementVoxel &&
+		   !DoesPhysicsCharacterOverlapVoxel(physics, camera, hit.placementVoxel);
+}
+
 bool ApplyClassicInteraction(
 	const VoxelRaycastHit &hit,
+	const CameraState &camera,
 	const InputState &input,
+	const PhysicsState *physics,
 	VoxelWorld &world,
 	const InteractionState &interaction)
 {
@@ -53,7 +65,7 @@ bool ApplyClassicInteraction(
 
 	if (input.placePressed &&
 		hit.hasHit &&
-		hit.hasPlacementVoxel &&
+		CanPlaceInteractionVoxel(hit, camera, physics) &&
 		GetVoxelMaterial(world, hit.placementVoxel) == VoxelMaterial::Air &&
 		interaction.placementMaterial != VoxelMaterial::Air) {
 		SetVoxelMaterial(world, hit.placementVoxel, interaction.placementMaterial);
@@ -65,7 +77,9 @@ bool ApplyClassicInteraction(
 
 bool ApplyPaintInteraction(
 	const VoxelRaycastHit &hit,
+	const CameraState &camera,
 	const InputState &input,
+	const PhysicsState *physics,
 	VoxelWorld &world,
 	const InteractionState &interaction)
 {
@@ -80,7 +94,7 @@ bool ApplyPaintInteraction(
 	}
 
 	if (input.placePressed &&
-		hit.hasPlacementVoxel &&
+		CanPlaceInteractionVoxel(hit, camera, physics) &&
 		GetVoxelMaterial(world, hit.placementVoxel) == VoxelMaterial::Air) {
 		SetVoxelMaterial(world, hit.placementVoxel, interaction.placementMaterial);
 		return true;
@@ -119,15 +133,17 @@ bool ApplyFillInteraction(
 
 bool ApplyEditorInteraction(
 	const VoxelRaycastHit &hit,
+	const CameraState &camera,
 	const InputState &input,
+	const PhysicsState *physics,
 	VoxelWorld &world,
 	const InteractionState &interaction)
 {
 	switch (interaction.editorTool) {
 	case DebugEditorTool::Classic:
-		return ApplyClassicInteraction(hit, input, world, interaction);
+		return ApplyClassicInteraction(hit, camera, input, physics, world, interaction);
 	case DebugEditorTool::Paint:
-		return ApplyPaintInteraction(hit, input, world, interaction);
+		return ApplyPaintInteraction(hit, camera, input, physics, world, interaction);
 	case DebugEditorTool::Erase:
 		return ApplyEraseInteraction(hit, input, world);
 	case DebugEditorTool::Fill:
@@ -160,7 +176,8 @@ void UpdateVoxelInteraction(
 	InputState *input,
 	VoxelWorld *world,
 	InteractionState *interaction,
-	const bool allowEditing)
+	const bool allowEditing,
+	const PhysicsState *physics)
 {
 	if (!input || !interaction) {
 		return;
@@ -180,7 +197,7 @@ void UpdateVoxelInteraction(
 	VoxelRaycastHit hit = raycast();
 	interaction->selection = BuildInteractionSelection(hit, world);
 
-	if (allowEditing && ApplyEditorInteraction(hit, *input, *world, *interaction)) {
+	if (allowEditing && ApplyEditorInteraction(hit, camera, *input, physics, *world, *interaction)) {
 		hit = raycast();
 		interaction->selection = BuildInteractionSelection(hit, world);
 	}

@@ -24,9 +24,16 @@ enum class ProfilingPlotFormat : uint8_t {
 #define PV_PROFILE_ZONE_N(name) ZoneScopedN(name)
 #define PV_PROFILE_FRAME_MARK() FrameMark
 #else
-#define PV_PROFILE_ZONE() do { } while (false)
-#define PV_PROFILE_ZONE_N(name) do { (void)sizeof(name); } while (false)
-#define PV_PROFILE_FRAME_MARK() do { } while (false)
+#define PV_PROFILE_ZONE() \
+	do {                  \
+	} while (false)
+#define PV_PROFILE_ZONE_N(name) \
+	do {                        \
+		(void)sizeof(name);     \
+	} while (false)
+#define PV_PROFILE_FRAME_MARK() \
+	do {                        \
+	} while (false)
 #endif
 
 namespace profiling {
@@ -86,6 +93,19 @@ inline void ConfigureDefaultPlots()
 	ConfigurePlot("Uploaded Chunk Voxel Words", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Upload Descriptor Bytes", ProfilingPlotFormat::Memory, true);
 	ConfigurePlot("Upload Chunk Voxel Bytes", ProfilingPlotFormat::Memory, true);
+	ConfigurePlot("Walk Support State", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Support Score", ProfilingPlotFormat::Number);
+	ConfigurePlot("Walk Feet Y", ProfilingPlotFormat::Number);
+	ConfigurePlot("Walk Velocity Y", ProfilingPlotFormat::Number);
+	ConfigurePlot("Walk Sneak Active", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Jump Lock", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Cached Sneak Support", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Feet Inside Sneak Cache", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Edge Grace", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Ground Takeoff Grace", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Sneak Support Grace", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Ledge Release Grace", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Walk Ground Return Anchor", ProfilingPlotFormat::Number, true);
 #endif
 }
 
