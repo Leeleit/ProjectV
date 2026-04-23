@@ -182,6 +182,7 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 
 Держать здесь только крупные факты, которые влияют на ближайший roadmap:
 
+- [x] legacy docs больше не split между параллельными `latest` / `old` roots: теперь это один унифицированный `legacy/docs` tree с явной навигацией, `archive/roadmaps` для исторических планов, обновлёнными ссылками из `AGENTS.md` / `agent/session-checklist.md`, восстановленным полным library corpus и возвращёнными `guides/`, `tutorials/`, `examples/`, `architecture/future/` + missing `theory` notes.
 - [x] `TODO.md` / `AGENTS.md` / `agent/` снова синхронизированы по ролям и очищены от длинного исторического дубляжа;
 - [x] snapshots (`F6/F7`);
 - [x] lightweight debug editor (`F8/F9/F10`);

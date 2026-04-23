@@ -2,7 +2,7 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-04-22`
+Дата обновления: `2026-04-24`
 
 ---
 
@@ -222,3 +222,21 @@ Update `2026-04-22`:
 - The shadow pass still stays intentionally simple, but it must have its own opaque occluder command source; reusing camera-visible indirect draws is not acceptable because it makes shadow presence depend on the current view frustum.
 - Так shadow slice остаётся совместимым с нынешним explicit CPU scene contract и dynamic-rendering path, а следующий шаг — тюнинг bias/stability/debug, а не новый lighting framework.
 - Так текущий shadow slice становится достаточно читаемым и настраиваемым для mainline look-dev без раннего перехода к cascades, render graph или отдельному tooling stack.
+
+## 16. Legacy docs structure
+
+Решение:
+
+- Legacy documentation now lives in one unified `legacy/docs` tree; parallel `latest` and `old` roots are retired.
+- Active reference material belongs under `legacy/docs/philosophy`, `legacy/docs/standards`, and `legacy/docs/libraries`.
+- `legacy/docs/libraries` should preserve the full useful per-library corpus inside that unified tree. Canonical entry points may come from the newer `01_reference.md` / `02_integration.md` docs, but deeper topical files should be removed only after a content-level merge proves they are redundant.
+- Older learning/support sections such as `guides/`, `tutorials/`, and text-based `examples/` should live in the same unified tree rather than being discarded just because they are not part of the stricter standards/reference layer.
+- `legacy/docs/architecture` keeps design material, but documents there should carry explicit status (`reference`, `historical`, `speculative`) instead of silently mixing active guidance with archival notes.
+- Historical plans and cleanup artefacts belong under `legacy/docs/archive/`, currently `legacy/docs/archive/roadmaps/`, rather than competing with active reference roots.
+- Project-facing links should target only unified `legacy/docs/...` paths (`AGENTS.md`, `agent/session-checklist.md`, future docs cross-links).
+
+Почему:
+
+- Parallel `latest` / `old` trees were creating duplicated content, contradictory status, and broken navigation for the same topics.
+- The previous two-file library reduction destroyed too much useful material; for this repo, careful curation has to prefer completeness until duplicate sections are proven safely mergeable.
+- A single tree with explicit status labels keeps the legacy corpus readable and searchable without letting historical planning documents masquerade as current project guidance.

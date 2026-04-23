@@ -84,3 +84,4 @@ Shadow-path update `2026-04-22`:
 - `ProjectVRuntimeSmoke` remains a developer-only GUI smoke check for now, not the current CI contract.
 - Shader compile path принимает либо `glslc`, либо `glslangValidator`.
 - `README_NEW.md` — текущий root-facing overview; `README.md` не трогать без явного запроса пользователя.
+- `legacy/docs` is now the only supported legacy-doc root: engineering principles live under `legacy/docs/philosophy`, unified reference material lives under `legacy/docs/{standards,libraries,architecture}`, restored learning/support material lives under `legacy/docs/{guides,tutorials,examples}`, and historical planning stays under `legacy/docs/archive/roadmaps`. In `legacy/docs/libraries`, keep the canonical `01_reference.md` / `02_integration.md` entry docs plus the deeper per-library corpus when it still carries useful material. Do not recreate parallel `latest` / `old` trees.
