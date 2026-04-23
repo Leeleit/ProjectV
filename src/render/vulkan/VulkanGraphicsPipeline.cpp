@@ -9,9 +9,18 @@
 
 namespace {
 constexpr uint32_t kGraphicsDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-constexpr VkDescriptorPoolSize kGraphicsDescriptorPoolSize{
+constexpr uint32_t kShadowDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+constexpr VkDescriptorPoolSize kGraphicsStorageDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 	.descriptorCount = kGraphicsDescriptorSetCount * 4u,
+};
+constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
+	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+	.descriptorCount = kGraphicsDescriptorSetCount,
+};
+constexpr std::array kGraphicsDescriptorPoolSizes{
+	kGraphicsStorageDescriptorPoolSize,
+	kGraphicsShadowSamplerDescriptorPoolSize,
 };
 constexpr std::array kGraphicsDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -39,6 +48,13 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.binding = 3,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 4,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
@@ -49,6 +65,43 @@ constexpr VkDescriptorSetLayoutCreateInfo kGraphicsDescriptorSetLayoutInfo{
 	.flags = 0,
 	.bindingCount = static_cast<uint32_t>(kGraphicsDescriptorBindings.size()),
 	.pBindings = kGraphicsDescriptorBindings.data(),
+};
+constexpr VkDescriptorPoolSize kShadowStorageDescriptorPoolSize{
+	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+	.descriptorCount = kShadowDescriptorSetCount * 3u,
+};
+constexpr std::array kShadowDescriptorPoolSizes{
+	kShadowStorageDescriptorPoolSize,
+};
+constexpr std::array kShadowDescriptorBindings{
+	VkDescriptorSetLayoutBinding{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 3,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+};
+constexpr VkDescriptorSetLayoutCreateInfo kShadowDescriptorSetLayoutInfo{
+	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+	.pNext = nullptr,
+	.flags = 0,
+	.bindingCount = static_cast<uint32_t>(kShadowDescriptorBindings.size()),
+	.pBindings = kShadowDescriptorBindings.data(),
 };
 constexpr VkPipelineColorBlendAttachmentState kAlphaBlendAttachmentState{
 	.blendEnable = VK_TRUE,
@@ -99,6 +152,13 @@ bool SupportsDepthAttachment(const VkPhysicalDevice physicalDevice, const VkForm
 	return (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0;
 }
 
+bool SupportsSampledImage(const VkPhysicalDevice physicalDevice, const VkFormat format)
+{
+	VkFormatProperties props{};
+	vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+	return (props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
+}
+
 VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 {
 	constexpr std::array candidates{
@@ -108,6 +168,22 @@ VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 	};
 	for (const VkFormat candidate : candidates) {
 		if (SupportsDepthAttachment(physicalDevice, candidate)) {
+			return candidate;
+		}
+	}
+	return VK_FORMAT_UNDEFINED;
+}
+
+VkFormat ChooseShadowDepthFormat(const VkPhysicalDevice physicalDevice)
+{
+	constexpr std::array candidates{
+		VK_FORMAT_D32_SFLOAT,
+		VK_FORMAT_D32_SFLOAT_S8_UINT,
+		VK_FORMAT_D24_UNORM_S8_UINT,
+	};
+	for (const VkFormat candidate : candidates) {
+		if (SupportsDepthAttachment(physicalDevice, candidate) &&
+			SupportsSampledImage(physicalDevice, candidate)) {
 			return candidate;
 		}
 	}
@@ -202,12 +278,219 @@ bool CreateDepthResources(
 	return true;
 }
 
+bool CreateShadowResources(
+	VulkanContextState *context,
+	RenderState *render)
+{
+	PV_PROFILE_ZONE_N("CreateShadowResources");
+	const VkFormat shadowDepthFormat = ChooseShadowDepthFormat(context->physicalDevice);
+	if (shadowDepthFormat == VK_FORMAT_UNDEFINED) {
+		runtime::LogRuntimeFailure(
+			"Graphics",
+			"CreateShadowResources.ChooseShadowDepthFormat",
+			"no supported sampled depth format found");
+		return false;
+	}
+
+	render->shadowDepthFormat = shadowDepthFormat;
+
+	const VkImageCreateInfo imageInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = shadowDepthFormat,
+		.extent = {render->shadowMapExtent.width, render->shadowMapExtent.height, 1},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = 0,
+		.pQueueFamilyIndices = nullptr,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+
+	VmaAllocationCreateInfo allocationInfo{};
+	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	VmaAllocationInfo allocationResultInfo{};
+
+	const VkResult createShadowImageResult = vmaCreateImage(
+		context->allocator,
+		&imageInfo,
+		&allocationInfo,
+		&render->shadowImage,
+		&render->shadowAllocation,
+		&allocationResultInfo);
+	if (createShadowImageResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure("CreateShadowResources.vmaCreateImage", createShadowImageResult);
+		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+		return false;
+	}
+	profiling::RecordAllocation(
+		render->shadowAllocation,
+		allocationResultInfo.size,
+		"ShadowImageAllocation");
+
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = render->shadowImage;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = shadowDepthFormat;
+	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+	const VkResult shadowImageViewResult = vkCreateImageView(context->device, &viewInfo, nullptr, &render->shadowImageView);
+	if (shadowImageViewResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateImageView", shadowImageViewResult);
+		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
+		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
+		render->shadowImage = VK_NULL_HANDLE;
+		render->shadowAllocation = VK_NULL_HANDLE;
+		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+		return false;
+	}
+
+	constexpr VkSamplerCreateInfo samplerInfo{
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.magFilter = VK_FILTER_NEAREST,
+		.minFilter = VK_FILTER_NEAREST,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.mipLodBias = 0.0f,
+		.anisotropyEnable = VK_FALSE,
+		.maxAnisotropy = 1.0f,
+		.compareEnable = VK_TRUE,
+		.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.minLod = 0.0f,
+		.maxLod = 0.0f,
+		.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+		.unnormalizedCoordinates = VK_FALSE,
+	};
+	const VkResult shadowSamplerResult = vkCreateSampler(context->device, &samplerInfo, nullptr, &render->shadowSampler);
+	if (shadowSamplerResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateSampler", shadowSamplerResult);
+		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
+		render->shadowImageView = VK_NULL_HANDLE;
+		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
+		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
+		render->shadowImage = VK_NULL_HANDLE;
+		render->shadowAllocation = VK_NULL_HANDLE;
+		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+		return false;
+	}
+
+	render->shadowImageNeedsInit = true;
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->shadowImage),
+		VK_OBJECT_TYPE_IMAGE,
+		"ShadowImage");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->shadowImageView),
+		VK_OBJECT_TYPE_IMAGE_VIEW,
+		"ShadowImageView");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->shadowSampler),
+		VK_OBJECT_TYPE_SAMPLER,
+		"ShadowSampler");
+	return true;
+}
+
+bool CreateScreenshotReadbackResources(
+	VulkanContextState *context,
+	const SwapchainState *swapchain,
+	RenderState *render)
+{
+	PV_PROFILE_ZONE_N("CreateScreenshotReadbackResources");
+	if (!swapchain->supportsTransferSrc) {
+		render->screenshotCaptureSupported = false;
+		return true;
+	}
+
+	const uint64_t requiredSize =
+		static_cast<uint64_t>(swapchain->extent.width) *
+		static_cast<uint64_t>(swapchain->extent.height) *
+		4u;
+	if (requiredSize == 0u) {
+		render->screenshotCaptureSupported = false;
+		return true;
+	}
+
+	const VkBufferCreateInfo bufferInfo{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.size = requiredSize,
+		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = 0,
+		.pQueueFamilyIndices = nullptr,
+	};
+
+	VmaAllocationCreateInfo allocationInfo{};
+	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+	allocationInfo.flags =
+		VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+		VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+
+	VmaAllocationInfo allocationResultInfo{};
+	const VkResult createBufferResult = vmaCreateBuffer(
+		context->allocator,
+		&bufferInfo,
+		&allocationInfo,
+		&render->screenshotReadbackBuffer,
+		&render->screenshotReadbackAllocation,
+		&allocationResultInfo);
+	if (createBufferResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure("CreateScreenshotReadbackResources.vmaCreateBuffer", createBufferResult);
+		render->screenshotCaptureSupported = false;
+		return false;
+	}
+	if (!allocationResultInfo.pMappedData) {
+		LogGraphicsPipelineTextFailure(
+			"CreateScreenshotReadbackResources.MappedData",
+			"screenshot readback allocation is not mapped");
+		vmaDestroyBuffer(context->allocator, render->screenshotReadbackBuffer, render->screenshotReadbackAllocation);
+		render->screenshotReadbackBuffer = VK_NULL_HANDLE;
+		render->screenshotReadbackAllocation = VK_NULL_HANDLE;
+		render->screenshotCaptureSupported = false;
+		return false;
+	}
+
+	render->screenshotReadbackMappedData = allocationResultInfo.pMappedData;
+	render->screenshotReadbackBufferSize = allocationResultInfo.size;
+	render->screenshotCaptureSupported = true;
+	profiling::RecordAllocation(
+		render->screenshotReadbackAllocation,
+		allocationResultInfo.size,
+		"ScreenshotReadbackAllocation");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->screenshotReadbackBuffer),
+		VK_OBJECT_TYPE_BUFFER,
+		"ScreenshotReadbackBuffer");
+	return true;
+}
+
 void DestroyGraphicsResourceBindings(
 	VulkanContextState &context,
 	RenderState &render)
 {
 	for (SceneFrameResources &frameResources : render.sceneFrameResources) {
 		frameResources.graphicsDescriptorSet = VK_NULL_HANDLE;
+		frameResources.shadowDescriptorSet = VK_NULL_HANDLE;
 	}
 
 	if (render.graphicsDescriptorPool) {
@@ -215,9 +498,19 @@ void DestroyGraphicsResourceBindings(
 		render.graphicsDescriptorPool = VK_NULL_HANDLE;
 	}
 
+	if (render.shadowDescriptorPool) {
+		vkDestroyDescriptorPool(context.device, render.shadowDescriptorPool, nullptr);
+		render.shadowDescriptorPool = VK_NULL_HANDLE;
+	}
+
 	if (render.graphicsDescriptorSetLayout) {
 		vkDestroyDescriptorSetLayout(context.device, render.graphicsDescriptorSetLayout, nullptr);
 		render.graphicsDescriptorSetLayout = VK_NULL_HANDLE;
+	}
+
+	if (render.shadowDescriptorSetLayout) {
+		vkDestroyDescriptorSetLayout(context.device, render.shadowDescriptorSetLayout, nullptr);
+		render.shadowDescriptorSetLayout = VK_NULL_HANDLE;
 	}
 }
 
@@ -685,8 +978,8 @@ bool RefreshGraphicsResourceBindings(
 		.pNext = nullptr,
 		.flags = 0,
 		.maxSets = kGraphicsDescriptorSetCount,
-		.poolSizeCount = 1,
-		.pPoolSizes = &kGraphicsDescriptorPoolSize,
+		.poolSizeCount = static_cast<uint32_t>(kGraphicsDescriptorPoolSizes.size()),
+		.pPoolSizes = kGraphicsDescriptorPoolSizes.data(),
 	};
 	const VkResult descriptorPoolResult =
 		vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->graphicsDescriptorPool);
@@ -737,6 +1030,11 @@ bool RefreshGraphicsResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
+		const VkDescriptorImageInfo shadowImageInfo{
+			.sampler = render->shadowSampler,
+			.imageView = render->shadowImageView,
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+		};
 		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -786,11 +1084,130 @@ bool RefreshGraphicsResourceBindings(
 				.pBufferInfo = &sceneLightingBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 4,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &shadowImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			},
 		};
 		vkUpdateDescriptorSets(
 			context->device,
 			static_cast<uint32_t>(descriptorWrites.size()),
 			descriptorWrites.data(),
+			0,
+			nullptr);
+	}
+
+	if (!render->shadowDescriptorSetLayout) {
+		return true;
+	}
+
+	if (render->shadowDescriptorPool) {
+		vkDestroyDescriptorPool(context->device, render->shadowDescriptorPool, nullptr);
+		render->shadowDescriptorPool = VK_NULL_HANDLE;
+	}
+
+	constexpr VkDescriptorPoolCreateInfo shadowPoolInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.maxSets = kShadowDescriptorSetCount,
+		.poolSizeCount = static_cast<uint32_t>(kShadowDescriptorPoolSizes.size()),
+		.pPoolSizes = kShadowDescriptorPoolSizes.data(),
+	};
+	const VkResult shadowDescriptorPoolResult =
+		vkCreateDescriptorPool(context->device, &shadowPoolInfo, nullptr, &render->shadowDescriptorPool);
+	if (shadowDescriptorPoolResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure("RefreshGraphicsResourceBindings.vkCreateShadowDescriptorPool", shadowDescriptorPoolResult);
+		return false;
+	}
+
+	const std::vector shadowSetLayouts(render->sceneFrameResources.size(), render->shadowDescriptorSetLayout);
+	std::vector<VkDescriptorSet> shadowDescriptorSets(render->sceneFrameResources.size(), VK_NULL_HANDLE);
+	VkDescriptorSetAllocateInfo shadowAllocateInfo{};
+	shadowAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	shadowAllocateInfo.descriptorPool = render->shadowDescriptorPool;
+	shadowAllocateInfo.descriptorSetCount = static_cast<uint32_t>(shadowSetLayouts.size());
+	shadowAllocateInfo.pSetLayouts = shadowSetLayouts.data();
+	const VkResult allocateShadowDescriptorSetsResult =
+		vkAllocateDescriptorSets(context->device, &shadowAllocateInfo, shadowDescriptorSets.data());
+	if (allocateShadowDescriptorSetsResult != VK_SUCCESS) {
+		LogGraphicsPipelineVkFailure(
+			"RefreshGraphicsResourceBindings.vkAllocateShadowDescriptorSets",
+			allocateShadowDescriptorSetsResult);
+		vkDestroyDescriptorPool(context->device, render->shadowDescriptorPool, nullptr);
+		render->shadowDescriptorPool = VK_NULL_HANDLE;
+		return false;
+	}
+
+	for (size_t frameIndex = 0; frameIndex < render->sceneFrameResources.size(); ++frameIndex) {
+		SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
+		frameResources.shadowDescriptorSet = shadowDescriptorSets[frameIndex];
+
+		const VkDescriptorBufferInfo packedFaceBufferInfo{
+			.buffer = frameResources.packedFaceBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
+		const VkDescriptorBufferInfo chunkDescriptorBufferInfo{
+			.buffer = frameResources.chunkDescriptorBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
+		const VkDescriptorBufferInfo sceneLightingBufferInfo{
+			.buffer = render->sceneLightingBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
+		const std::array shadowDescriptorWrites{
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.shadowDescriptorSet,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &packedFaceBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.shadowDescriptorSet,
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &chunkDescriptorBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.shadowDescriptorSet,
+				.dstBinding = 3,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &sceneLightingBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+		};
+		vkUpdateDescriptorSets(
+			context->device,
+			static_cast<uint32_t>(shadowDescriptorWrites.size()),
+			shadowDescriptorWrites.data(),
 			0,
 			nullptr);
 	}
@@ -815,6 +1232,12 @@ void DestroyGraphicsPipeline(
 		render->transparentGraphicsPipeline = VK_NULL_HANDLE;
 	}
 
+	if (render->shadowGraphicsPipeline) {
+		PV_PROFILE_ZONE_N("DestroyShadowGraphicsPipeline");
+		vkDestroyPipeline(context->device, render->shadowGraphicsPipeline, nullptr);
+		render->shadowGraphicsPipeline = VK_NULL_HANDLE;
+	}
+
 	DestroyDebugOverlayPipeline(*context, *render);
 	DestroyDebugHudPipeline(*context, *render);
 
@@ -830,10 +1253,36 @@ void DestroyGraphicsPipeline(
 		render->graphicsPipelineLayout = VK_NULL_HANDLE;
 	}
 
+	if (render->shadowPipelineLayout) {
+		PV_PROFILE_ZONE_N("DestroyShadowPipelineLayout");
+		vkDestroyPipelineLayout(context->device, render->shadowPipelineLayout, nullptr);
+		render->shadowPipelineLayout = VK_NULL_HANDLE;
+	}
+
 	if (render->depthImageView) {
 		PV_PROFILE_ZONE_N("DestroyDepthImageView");
 		vkDestroyImageView(context->device, render->depthImageView, nullptr);
 		render->depthImageView = VK_NULL_HANDLE;
+	}
+
+	if (render->shadowSampler) {
+		PV_PROFILE_ZONE_N("DestroyShadowSampler");
+		vkDestroySampler(context->device, render->shadowSampler, nullptr);
+		render->shadowSampler = VK_NULL_HANDLE;
+	}
+
+	if (render->shadowImageView) {
+		PV_PROFILE_ZONE_N("DestroyShadowImageView");
+		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
+		render->shadowImageView = VK_NULL_HANDLE;
+	}
+
+	if (render->shadowImage && render->shadowAllocation) {
+		PV_PROFILE_ZONE_N("DestroyShadowImage");
+		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
+		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
+		render->shadowImage = VK_NULL_HANDLE;
+		render->shadowAllocation = VK_NULL_HANDLE;
 	}
 
 	if (render->depthImage && render->depthAllocation) {
@@ -843,8 +1292,23 @@ void DestroyGraphicsPipeline(
 		render->depthImage = VK_NULL_HANDLE;
 		render->depthAllocation = VK_NULL_HANDLE;
 	}
+	if (render->screenshotReadbackBuffer && render->screenshotReadbackAllocation) {
+		PV_PROFILE_ZONE_N("DestroyScreenshotReadbackBuffer");
+		profiling::RecordFree(render->screenshotReadbackAllocation, "ScreenshotReadbackAllocation");
+		vmaDestroyBuffer(
+			context->allocator,
+			render->screenshotReadbackBuffer,
+			render->screenshotReadbackAllocation);
+		render->screenshotReadbackBuffer = VK_NULL_HANDLE;
+		render->screenshotReadbackAllocation = VK_NULL_HANDLE;
+	}
 
 	render->depthImageNeedsInit = false;
+	render->shadowImageNeedsInit = false;
+	render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+	render->screenshotReadbackMappedData = nullptr;
+	render->screenshotReadbackBufferSize = 0;
+	render->screenshotCaptureSupported = false;
 }
 
 bool CreateGraphicsPipeline(
@@ -865,16 +1329,31 @@ bool CreateGraphicsPipeline(
 			LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DepthResources", "depth resource creation failed");
 			return false;
 		}
+		if (!CreateShadowResources(context, render)) {
+			LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ShadowResources", "shadow resource creation failed");
+			DestroyGraphicsPipeline(context, render);
+			return false;
+		}
+		if (!CreateScreenshotReadbackResources(context, swapchain, render)) {
+			LogGraphicsPipelineTextFailure(
+				"CreateGraphicsPipeline.ScreenshotResources",
+				"screenshot readback buffer creation failed");
+		}
 	}
 
 	std::vector<char> vertexShaderCode;
 	std::vector<char> fragmentShaderCode;
+	std::vector<char> shadowVertexShaderCode;
+	std::vector<char> shadowFragmentShaderCode;
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ReadShaders");
 		vertexShaderCode = ReadShaderFile("voxel.vert.spv");
 		fragmentShaderCode = ReadShaderFile("voxel.frag.spv");
+		shadowVertexShaderCode = ReadShaderFile("voxel_shadow.vert.spv");
+		shadowFragmentShaderCode = ReadShaderFile("voxel_shadow.frag.spv");
 	}
-	if (vertexShaderCode.empty() || fragmentShaderCode.empty()) {
+	if (vertexShaderCode.empty() || fragmentShaderCode.empty() ||
+		shadowVertexShaderCode.empty() || shadowFragmentShaderCode.empty()) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ReadShaders", "voxel shader blob is empty");
 		DestroyGraphicsPipeline(context, render);
 		return false;
@@ -882,21 +1361,39 @@ bool CreateGraphicsPipeline(
 
 	VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
+	VkShaderModule shadowVertexShaderModule = VK_NULL_HANDLE;
+	VkShaderModule shadowFragmentShaderModule = VK_NULL_HANDLE;
+	const auto destroyShaderModules = [&] {
+		if (shadowFragmentShaderModule) {
+			vkDestroyShaderModule(context->device, shadowFragmentShaderModule, nullptr);
+			shadowFragmentShaderModule = VK_NULL_HANDLE;
+		}
+		if (shadowVertexShaderModule) {
+			vkDestroyShaderModule(context->device, shadowVertexShaderModule, nullptr);
+			shadowVertexShaderModule = VK_NULL_HANDLE;
+		}
+		if (fragmentShaderModule) {
+			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+			fragmentShaderModule = VK_NULL_HANDLE;
+		}
+		if (vertexShaderModule) {
+			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
+			vertexShaderModule = VK_NULL_HANDLE;
+		}
+	};
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.CreateShaderModules");
 		vertexShaderModule = CreateShaderModule(context->device, vertexShaderCode);
 		fragmentShaderModule = CreateShaderModule(context->device, fragmentShaderCode);
+		shadowVertexShaderModule = CreateShaderModule(context->device, shadowVertexShaderCode);
+		shadowFragmentShaderModule = CreateShaderModule(context->device, shadowFragmentShaderCode);
 	}
-	if (!vertexShaderModule || !fragmentShaderModule) {
+	if (!vertexShaderModule || !fragmentShaderModule ||
+		!shadowVertexShaderModule || !shadowFragmentShaderModule) {
 		LogGraphicsPipelineTextFailure(
 			"CreateGraphicsPipeline.CreateShaderModules",
 			"voxel shader module creation returned null");
-		if (vertexShaderModule) {
-			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-		}
-		if (fragmentShaderModule) {
-			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
-		}
+		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
@@ -917,6 +1414,26 @@ bool CreateGraphicsPipeline(
 			.flags = 0,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 			.module = fragmentShaderModule,
+			.pName = "main",
+			.pSpecializationInfo = nullptr,
+		},
+	};
+	const std::array shadowShaderStages{
+		VkPipelineShaderStageCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = shadowVertexShaderModule,
+			.pName = "main",
+			.pSpecializationInfo = nullptr,
+		},
+		VkPipelineShaderStageCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = shadowFragmentShaderModule,
 			.pName = "main",
 			.pSpecializationInfo = nullptr,
 		},
@@ -988,9 +1505,15 @@ bool CreateGraphicsPipeline(
 
 	VkPipelineColorBlendStateCreateInfo transparentColorBlending = colorBlending;
 	transparentColorBlending.pAttachments = &transparentColorBlendAttachment;
+	VkPipelineColorBlendStateCreateInfo shadowColorBlending{};
+	shadowColorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	shadowColorBlending.attachmentCount = 0;
+	shadowColorBlending.pAttachments = nullptr;
 
 	VkPipelineDepthStencilStateCreateInfo transparentDepthStencil = depthStencil;
 	transparentDepthStencil.depthWriteEnable = VK_FALSE;
+	VkPipelineDepthStencilStateCreateInfo shadowDepthStencil = depthStencil;
+	shadowDepthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -1008,8 +1531,7 @@ bool CreateGraphicsPipeline(
 			LogGraphicsPipelineVkFailure(
 				"CreateGraphicsPipeline.vkCreateDescriptorSetLayout",
 				descriptorSetLayoutResult);
-			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
@@ -1019,6 +1541,27 @@ bool CreateGraphicsPipeline(
 		reinterpret_cast<uint64_t>(render->graphicsDescriptorSetLayout),
 		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
 		"VoxelGraphicsDescriptorSetLayout");
+	{
+		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowDescriptorSetLayout");
+		const VkResult shadowDescriptorSetLayoutResult = vkCreateDescriptorSetLayout(
+			context->device,
+			&kShadowDescriptorSetLayoutInfo,
+			nullptr,
+			&render->shadowDescriptorSetLayout);
+		if (shadowDescriptorSetLayoutResult != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure(
+				"CreateGraphicsPipeline.vkCreateShadowDescriptorSetLayout",
+				shadowDescriptorSetLayoutResult);
+			destroyShaderModules();
+			DestroyGraphicsPipeline(context, render);
+			return false;
+		}
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->shadowDescriptorSetLayout),
+		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+		"VoxelShadowDescriptorSetLayout");
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1033,8 +1576,7 @@ bool CreateGraphicsPipeline(
 			vkCreatePipelineLayout(context->device, &pipelineLayoutInfo, nullptr, &render->graphicsPipelineLayout);
 		if (pipelineLayoutResult != VK_SUCCESS) {
 			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.vkCreatePipelineLayout", pipelineLayoutResult);
-			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
@@ -1044,6 +1586,29 @@ bool CreateGraphicsPipeline(
 		reinterpret_cast<uint64_t>(render->graphicsPipelineLayout),
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelGraphicsPipelineLayout");
+	VkPipelineLayoutCreateInfo shadowPipelineLayoutInfo{};
+	shadowPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	shadowPipelineLayoutInfo.setLayoutCount = 1;
+	shadowPipelineLayoutInfo.pSetLayouts = &render->shadowDescriptorSetLayout;
+
+	{
+		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowPipelineLayout");
+		const VkResult shadowPipelineLayoutResult =
+			vkCreatePipelineLayout(context->device, &shadowPipelineLayoutInfo, nullptr, &render->shadowPipelineLayout);
+		if (shadowPipelineLayoutResult != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure(
+				"CreateGraphicsPipeline.vkCreateShadowPipelineLayout",
+				shadowPipelineLayoutResult);
+			destroyShaderModules();
+			DestroyGraphicsPipeline(context, render);
+			return false;
+		}
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->shadowPipelineLayout),
+		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+		"VoxelShadowPipelineLayout");
 
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -1052,6 +1617,15 @@ bool CreateGraphicsPipeline(
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &swapchain->format,
 		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
+		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+	};
+	const VkPipelineRenderingCreateInfo shadowRenderingInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.pNext = nullptr,
+		.viewMask = 0,
+		.colorAttachmentCount = 0,
+		.pColorAttachmentFormats = nullptr,
+		.depthAttachmentFormat = render->shadowDepthFormat,
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
 
@@ -1076,8 +1650,7 @@ bool CreateGraphicsPipeline(
 			vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &render->graphicsPipeline);
 		if (opaquePipelineResult != VK_SUCCESS) {
 			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.Opaque.vkCreateGraphicsPipelines", opaquePipelineResult);
-			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
@@ -1104,8 +1677,7 @@ bool CreateGraphicsPipeline(
 			LogGraphicsPipelineVkFailure(
 				"CreateGraphicsPipeline.Transparent.vkCreateGraphicsPipelines",
 				transparentPipelineResult);
-			vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
@@ -1116,33 +1688,60 @@ bool CreateGraphicsPipeline(
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelTransparentPipeline");
 
+	VkGraphicsPipelineCreateInfo shadowPipelineInfo = pipelineInfo;
+	shadowPipelineInfo.pNext = &shadowRenderingInfo;
+	shadowPipelineInfo.stageCount = static_cast<uint32_t>(shadowShaderStages.size());
+	shadowPipelineInfo.pStages = shadowShaderStages.data();
+	shadowPipelineInfo.pDepthStencilState = &shadowDepthStencil;
+	shadowPipelineInfo.pColorBlendState = &shadowColorBlending;
+	shadowPipelineInfo.layout = render->shadowPipelineLayout;
+	{
+		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowPipeline");
+		const VkResult shadowPipelineResult = vkCreateGraphicsPipelines(
+			context->device,
+			VK_NULL_HANDLE,
+			1,
+			&shadowPipelineInfo,
+			nullptr,
+			&render->shadowGraphicsPipeline);
+		if (shadowPipelineResult != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure(
+				"CreateGraphicsPipeline.Shadow.vkCreateGraphicsPipelines",
+				shadowPipelineResult);
+			destroyShaderModules();
+			DestroyGraphicsPipeline(context, render);
+			return false;
+		}
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->shadowGraphicsPipeline),
+		VK_OBJECT_TYPE_PIPELINE,
+		"VoxelShadowPipeline");
+
 	if (!RefreshGraphicsResourceBindings(context, render)) {
 		LogGraphicsPipelineTextFailure(
 			"CreateGraphicsPipeline.RefreshGraphicsResourceBindings",
 			"graphics descriptor rebinding failed");
-		vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-		vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
 
 	if (!CreateDebugOverlayPipeline(*context, *swapchain, *render)) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugOverlay", "debug overlay pipeline creation failed");
-		vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-		vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
 
 	if (!CreateDebugHudPipeline(*context, *swapchain, *render)) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugHud", "debug HUD pipeline creation failed");
-		vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-		vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);
 		return false;
 	}
 
-	vkDestroyShaderModule(context->device, vertexShaderModule, nullptr);
-	vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
+	destroyShaderModules();
 	return true;
 }

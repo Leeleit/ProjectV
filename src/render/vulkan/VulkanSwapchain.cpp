@@ -145,6 +145,8 @@ bool CreateOrRecreateSwapchain(
 			"surface does not support VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT for swapchain images");
 		return false;
 	}
+	const bool supportsTransferSrc =
+		(support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
 
 	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
@@ -152,12 +154,18 @@ bool CreateOrRecreateSwapchain(
 
 	if (chosenExtent.width == 0 || chosenExtent.height == 0) {
 		swapchain->extent = chosenExtent;
+		swapchain->supportsTransferSrc = false;
 		return true;
 	}
 
 	uint32_t imageCount = std::max(2u, support.capabilities.minImageCount);
 	if (support.capabilities.maxImageCount > 0 && imageCount > support.capabilities.maxImageCount) {
 		imageCount = support.capabilities.maxImageCount;
+	}
+
+	VkImageUsageFlags imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	if (supportsTransferSrc) {
+		imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	}
 
 	VkSwapchainKHR oldSwapchain = swapchain->handle;
@@ -172,7 +180,7 @@ bool CreateOrRecreateSwapchain(
 		.imageColorSpace = colorSpace,
 		.imageExtent = chosenExtent,
 		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		.imageUsage = imageUsage,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = 0,
 		.pQueueFamilyIndices = nullptr,
@@ -271,6 +279,7 @@ bool CreateOrRecreateSwapchain(
 	swapchain->format = format;
 	swapchain->colorSpace = colorSpace;
 	swapchain->extent = chosenExtent;
+	swapchain->supportsTransferSrc = supportsTransferSrc;
 	swapchain->images = std::move(newImages);
 	swapchain->imageViews = std::move(newViews);
 
@@ -316,6 +325,7 @@ bool RecreateSwapchain(
 
 	if (w == 0 || h == 0) {
 		swapchain->extent = {0, 0};
+		swapchain->supportsTransferSrc = false;
 		return true;
 	}
 

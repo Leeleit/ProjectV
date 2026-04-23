@@ -3,10 +3,14 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
+#include "render/ScreenshotCapture.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanResult.hpp"
+#include "voxel/VoxelMaterials.hpp"
 
 #include "fmt/format.h"
+
+#include <filesystem>
 
 namespace {
 DebugOverlayPushConstants BuildBoxOverlayPushConstants(
@@ -77,6 +81,251 @@ void TransitionImage(
 	depInfo.pImageMemoryBarriers = &imageBarrier;
 
 	vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
+bool ShouldCaptureScreenshot(const RenderState &render)
+{
+	return render.screenshotCaptureRequested &&
+		   render.screenshotCaptureSupported &&
+		   render.screenshotReadbackBuffer != VK_NULL_HANDLE &&
+		   render.screenshotReadbackAllocation != VK_NULL_HANDLE &&
+		   render.screenshotReadbackMappedData != nullptr;
+}
+
+void RecordSwapchainScreenshotCopy(
+	const SwapchainState &swapchain,
+	RenderState &render,
+	const VkCommandBuffer cmd,
+	const uint32_t imageIndex)
+{
+	PV_PROFILE_ZONE_N("RecordSwapchainScreenshotCopy");
+	if (!ShouldCaptureScreenshot(render) || imageIndex >= swapchain.images.size()) {
+		return;
+	}
+
+	TransitionImage(
+		cmd,
+		swapchain.images[imageIndex],
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_READ_BIT);
+
+	const VkBufferImageCopy copyRegion{
+		.bufferOffset = 0u,
+		.bufferRowLength = 0u,
+		.bufferImageHeight = 0u,
+		.imageSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.mipLevel = 0u,
+			.baseArrayLayer = 0u,
+			.layerCount = 1u,
+		},
+		.imageOffset = {0, 0, 0},
+		.imageExtent = {swapchain.extent.width, swapchain.extent.height, 1u},
+	};
+	vkCmdCopyImageToBuffer(
+		cmd,
+		swapchain.images[imageIndex],
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		render.screenshotReadbackBuffer,
+		1,
+		&copyRegion);
+
+	TransitionImage(
+		cmd,
+		swapchain.images[imageIndex],
+		VK_IMAGE_ASPECT_COLOR_BIT,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_READ_BIT,
+		VK_PIPELINE_STAGE_2_NONE,
+		0);
+}
+
+bool SaveRequestedScreenshot(
+	VulkanContextState &context,
+	RenderState &render,
+	const VkFence inFlightFence,
+	const VkExtent2D captureExtent,
+	const VkFormat captureFormat)
+{
+	PV_PROFILE_ZONE_N("SaveRequestedScreenshot");
+	if (!ShouldCaptureScreenshot(render)) {
+		return true;
+	}
+
+	const VkResult waitResult = vkWaitForFences(context.device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	if (waitResult != VK_SUCCESS) {
+		runtime::LogVkFailure("DrawFrame.ScreenshotWaitFence", waitResult);
+		render.screenshotCaptureRequested = false;
+		return false;
+	}
+
+	const uint64_t requiredSize =
+		static_cast<uint64_t>(captureExtent.width) *
+		static_cast<uint64_t>(captureExtent.height) *
+		4u;
+	if (requiredSize > render.screenshotReadbackBufferSize) {
+		runtime::LogRuntimeFailure(
+			"Capture",
+			"DrawFrame.ScreenshotBufferSize",
+			"screenshot readback buffer is smaller than the captured frame");
+		render.screenshotCaptureRequested = false;
+		return true;
+	}
+	const VkResult invalidateResult =
+		vmaInvalidateAllocation(context.allocator, render.screenshotReadbackAllocation, 0u, requiredSize);
+	if (invalidateResult != VK_SUCCESS) {
+		runtime::LogVmaFailure("DrawFrame.ScreenshotInvalidate", invalidateResult);
+		render.screenshotCaptureRequested = false;
+		return true;
+	}
+
+	const std::filesystem::path screenshotPath =
+		BuildScreenshotCapturePath(render.currentScenePreset, ++render.screenshotCaptureSequence);
+	const std::filesystem::path metadataPath = BuildScreenshotCaptureMetadataPath(screenshotPath.string());
+	const bool savedImage = SaveScreenshotCaptureBmp(
+		render.screenshotReadbackMappedData,
+		captureExtent.width,
+		captureExtent.height,
+		captureFormat,
+		screenshotPath.string());
+	const bool savedMetadata = savedImage &&
+							   SaveScreenshotCaptureMetadata(
+								   render,
+								   render.currentScenePreset,
+								   screenshotPath.string(),
+								   metadataPath.string());
+	if (savedImage && savedMetadata) {
+		SDL_Log(
+			"[ProjectV][Capture][SaveRequestedScreenshot] saved image=%s metadata=%s",
+			screenshotPath.string().c_str(),
+			metadataPath.string().c_str());
+	}
+
+	render.screenshotCaptureRequested = false;
+	return true;
+}
+
+void RecordShadowCommands(
+	RenderState &render,
+	const FrameRenderData &frameRenderData,
+	const VkCommandBuffer cmd)
+{
+	PV_PROFILE_ZONE_N("RecordShadowCommands");
+	if (render.shadowGraphicsPipeline == VK_NULL_HANDLE ||
+		render.shadowPipelineLayout == VK_NULL_HANDLE ||
+		render.shadowImage == VK_NULL_HANDLE ||
+		render.shadowImageView == VK_NULL_HANDLE) {
+		return;
+	}
+
+	const VkImageLayout oldShadowLayout =
+		render.shadowImageNeedsInit ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+	const VkPipelineStageFlags2 oldShadowStage =
+		render.shadowImageNeedsInit ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	const VkAccessFlags2 oldShadowAccess =
+		render.shadowImageNeedsInit ? 0 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+	TransitionImage(
+		cmd,
+		render.shadowImage,
+		VK_IMAGE_ASPECT_DEPTH_BIT,
+		oldShadowLayout,
+		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		oldShadowStage,
+		oldShadowAccess,
+		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+	render.shadowImageNeedsInit = false;
+
+	constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
+	const VkRenderingAttachmentInfo shadowDepthAttachment{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.pNext = nullptr,
+		.imageView = render.shadowImageView,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.resolveMode = VK_RESOLVE_MODE_NONE,
+		.resolveImageView = VK_NULL_HANDLE,
+		.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = clearDepthValue,
+	};
+	const VkRenderingInfo shadowRenderingInfo{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.renderArea = {{0, 0}, render.shadowMapExtent},
+		.layerCount = 1,
+		.viewMask = 0,
+		.colorAttachmentCount = 0,
+		.pColorAttachments = nullptr,
+		.pDepthAttachment = &shadowDepthAttachment,
+		.pStencilAttachment = nullptr,
+	};
+
+	vkCmdBeginRendering(cmd, &shadowRenderingInfo);
+
+	const VkViewport shadowViewport{
+		.x = 0.0f,
+		.y = 0.0f,
+		.width = static_cast<float>(render.shadowMapExtent.width),
+		.height = static_cast<float>(render.shadowMapExtent.height),
+		.minDepth = 0.0f,
+		.maxDepth = 1.0f,
+	};
+	const VkRect2D shadowScissor{
+		.offset = {0, 0},
+		.extent = render.shadowMapExtent,
+	};
+	vkCmdSetViewport(cmd, 0, 1, &shadowViewport);
+	vkCmdSetScissor(cmd, 0, 1, &shadowScissor);
+
+	if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE) {
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.shadowGraphicsPipeline);
+		vkCmdBindDescriptorSets(
+			cmd,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			render.shadowPipelineLayout,
+			0,
+			1,
+			&frameRenderData.shadowDescriptorSet,
+			0,
+			nullptr);
+	}
+
+	if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE &&
+		frameRenderData.chunkDescriptorCount > 0 &&
+		frameRenderData.shadowIndirectBuffer != VK_NULL_HANDLE &&
+		frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
+		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Shadow Pass");
+		// Shadows must follow sparse per-chunk face ranges, but they also need
+		// all opaque occluders rather than camera-visible chunks only.
+		vkCmdDrawIndirect(
+			cmd,
+			frameRenderData.shadowIndirectBuffer,
+			0,
+			frameRenderData.chunkDescriptorCount,
+			sizeof(VkDrawIndirectCommand));
+	}
+
+	vkCmdEndRendering(cmd);
+
+	TransitionImage(
+		cmd,
+		render.shadowImage,
+		VK_IMAGE_ASPECT_DEPTH_BIT,
+		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 void RecordDebugOverlayCommands(
@@ -154,6 +403,7 @@ void RecordVoxelMeshingCommands(
 		frameRenderData.voxelMeshingDescriptorSet == VK_NULL_HANDLE ||
 		frameRenderData.packedFaceBuffer == VK_NULL_HANDLE ||
 		frameRenderData.opaqueIndirectBuffer == VK_NULL_HANDLE ||
+		frameRenderData.shadowIndirectBuffer == VK_NULL_HANDLE ||
 		frameRenderData.transparentIndirectBuffer == VK_NULL_HANDLE ||
 		frameRenderData.dirtyChunkCount == 0) {
 		return;
@@ -180,7 +430,7 @@ void RecordVoxelMeshingCommands(
 		&frameRenderData.voxelMeshingPushConstants);
 	vkCmdDispatch(cmd, frameRenderData.dirtyChunkCount, 1, 1);
 
-	VkBufferMemoryBarrier2 bufferBarriers[3]{};
+	VkBufferMemoryBarrier2 bufferBarriers[4]{};
 	bufferBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
 	bufferBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
 	bufferBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
@@ -198,11 +448,16 @@ void RecordVoxelMeshingCommands(
 	bufferBarriers[2] = bufferBarriers[0];
 	bufferBarriers[2].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
 	bufferBarriers[2].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-	bufferBarriers[2].buffer = frameRenderData.transparentIndirectBuffer;
+	bufferBarriers[2].buffer = frameRenderData.shadowIndirectBuffer;
+
+	bufferBarriers[3] = bufferBarriers[0];
+	bufferBarriers[3].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+	bufferBarriers[3].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+	bufferBarriers[3].buffer = frameRenderData.transparentIndirectBuffer;
 
 	VkDependencyInfo depInfo{};
 	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	depInfo.bufferMemoryBarrierCount = 3;
+	depInfo.bufferMemoryBarrierCount = 4;
 	depInfo.pBufferMemoryBarriers = bufferBarriers;
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
@@ -219,6 +474,7 @@ void RecordGraphicsCommands(
 		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Graphics Frame");
 
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
+		RecordShadowCommands(render, frameRenderData, cmd);
 
 		TransitionImage(
 			cmd,
@@ -249,7 +505,16 @@ void RecordGraphicsCommands(
 			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 		render.depthImageNeedsInit = false;
 
-		constexpr VkClearValue clearColorValue{.color = {{0.73f, 0.84f, 0.96f, 1.0f}}};
+		const std::array<float, 4> sceneClearColor = GetVoxelSceneClearColor(render.currentSceneLighting);
+		VkClearValue clearColorValue{};
+		clearColorValue.color = {
+			{
+				sceneClearColor[0],
+				sceneClearColor[1],
+				sceneClearColor[2],
+				sceneClearColor[3],
+			},
+		};
 		constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
 		const VkRenderingAttachmentInfo colorAttachment{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -365,16 +630,20 @@ void RecordGraphicsCommands(
 
 		vkCmdEndRendering(cmd);
 
-		TransitionImage(
-			cmd,
-			swapchain.images[imageIndex],
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-			VK_PIPELINE_STAGE_2_NONE,
-			0);
+		if (ShouldCaptureScreenshot(render)) {
+			RecordSwapchainScreenshotCopy(swapchain, render, cmd, imageIndex);
+		} else {
+			TransitionImage(
+				cmd,
+				swapchain.images[imageIndex],
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_PIPELINE_STAGE_2_NONE,
+				0);
+		}
 	}
 
 	profiling::CollectVulkanGpu(render.tracyGraphicsContext, cmd);
@@ -408,6 +677,13 @@ SDL_AppResult DrawFrame(
 		runtime::LogRuntimeFailure("Render", "DrawFrame.SwapchainHandle", "swapchain handle is null");
 		return SDL_APP_FAILURE;
 	}
+	if (render->screenshotCaptureRequested && !render->screenshotCaptureSupported) {
+		runtime::LogRuntimeFailure(
+			"Capture",
+			"DrawFrame.ScreenshotSupport",
+			"screenshot capture is unavailable for the current swapchain");
+		render->screenshotCaptureRequested = false;
+	}
 
 	const uint32_t currentFrame = frame->currentFrame;
 	const size_t currentFrameIndex = currentFrame;
@@ -430,6 +706,8 @@ SDL_AppResult DrawFrame(
 	const VkFence inFlightFence = frame->inFlightFences[currentFrameIndex];
 	const VkSemaphore imageAvailableSemaphore = frame->imageAvailableSemaphores[currentFrameIndex];
 	const VkSemaphore renderFinishedSemaphore = frame->renderFinishedSemaphores[currentFrameIndex];
+	const VkExtent2D captureExtent = swapchain->extent;
+	const VkFormat captureFormat = swapchain->format;
 
 	uint32_t imageIndex = 0;
 	const VkResult acquireRes = vkAcquireNextImageKHR(
@@ -522,6 +800,9 @@ SDL_AppResult DrawFrame(
 	presentInfo.pImageIndices = &imageIndex;
 
 	const VkResult presentRes = vkQueuePresentKHR(context->queue, &presentInfo);
+	if (!SaveRequestedScreenshot(*context, *render, inFlightFence, captureExtent, captureFormat)) {
+		return SDL_APP_FAILURE;
+	}
 	if (presentRes == VK_ERROR_OUT_OF_DATE_KHR || presentRes == VK_SUBOPTIMAL_KHR || platform->windowResized) {
 		if (!RecreateSwapchain(platform, context, swapchain, render)) {
 			runtime::LogRuntimeFailure(

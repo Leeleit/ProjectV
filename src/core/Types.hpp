@@ -91,10 +91,19 @@ enum class InputAction : uint8_t {
 	ToggleWalkAirControlMode,
 	ToggleWalkAutoJump,
 	ToggleWalkAutoJumpDelay,
+	DecreaseLightingExposure,
+	IncreaseLightingExposure,
+	CycleToneMapOperator,
+	CycleLightingDebugView,
+	ResetLightingDebugControls,
+	CycleShadowTuningTarget,
+	DecreaseShadowTuningValue,
+	IncreaseShadowTuningValue,
 	ToggleInputReplayRecording,
 	PlayLastInputReplay,
 	ToggleMutationAnchor,
 	PickTargetMaterial,
+	CaptureScreenshot,
 	Count,
 };
 
@@ -169,7 +178,7 @@ static_assert(sizeof(DebugHudVertex) == 24);
 static_assert(offsetof(DebugHudVertex, positionNdc) == 0);
 static_assert(offsetof(DebugHudVertex, color) == 8);
 
-constexpr uint32_t DEBUG_HUD_MAX_VERTEX_COUNT = 65536;
+constexpr uint32_t DEBUG_HUD_MAX_VERTEX_COUNT = 262144;
 
 enum class DebugEditorTool : uint8_t {
 	Classic = 0,
@@ -289,8 +298,10 @@ struct FrameRenderData {
 	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
 	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
+	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
 	uint32_t chunkDescriptorCount = 0;
 	uint32_t dirtyChunkCount = 0;
@@ -341,6 +352,18 @@ struct DebugStats {
 	bool walkSneakActive = false;
 	bool walkJumpLockActive = false;
 	bool walkSuppressPassiveSlide = false;
+	float sceneExposure = 1.0f;
+	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
+	LightingDebugView lightingDebugView = LightingDebugView::Final;
+	std::array<float, 3> sunDirection{};
+	float sunIntensity = 0.0f;
+	float sunShadowStrength = 0.0f;
+	float sunShadowDepthBias = 0.0f;
+	float sunShadowNormalBias = 0.0f;
+	float sunShadowFilterRadius = 0.0f;
+	float sunShadowCoverageScale = 1.0f;
+	uint32_t shadowMapResolution = 0;
+	ShadowTuningTarget shadowTuningTarget = ShadowTuningTarget::Strength;
 	bool inputReplayRecording = false;
 	bool inputReplayPlaybackActive = false;
 	bool inputReplayReady = false;
@@ -364,6 +387,9 @@ struct SceneFrameResources {
 	void *opaqueIndirectMappedData = nullptr;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
 	VmaAllocation opaqueIndirectAllocation = VK_NULL_HANDLE;
+	void *shadowIndirectMappedData = nullptr;
+	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
+	VmaAllocation shadowIndirectAllocation = VK_NULL_HANDLE;
 	void *transparentIndirectMappedData = nullptr;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
 	VmaAllocation transparentIndirectAllocation = VK_NULL_HANDLE;
@@ -374,6 +400,7 @@ struct SceneFrameResources {
 	VkBuffer chunkCullingBuffer = VK_NULL_HANDLE;
 	VmaAllocation chunkCullingAllocation = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;
 	uint64_t uploadedVoxelPayloadVersion = 0;
@@ -411,6 +438,16 @@ struct RenderState {
 	uint64_t sceneMemoryBytes = 0;
 	void *tracyGraphicsContext = nullptr;
 	bool tracyGraphicsContextCalibrated = false;
+	VoxelLightingDebugControls lightingDebugControls{};
+	VoxelSceneLighting currentSceneLighting{};
+	VoxelScenePreset currentScenePreset = VoxelScenePreset::VoxelLab;
+	bool screenshotCaptureRequested = false;
+	bool screenshotCaptureSupported = false;
+	uint64_t screenshotCaptureSequence = 0;
+	void *screenshotReadbackMappedData = nullptr;
+	VkBuffer screenshotReadbackBuffer = VK_NULL_HANDLE;
+	VmaAllocation screenshotReadbackAllocation = VK_NULL_HANDLE;
+	uint64_t screenshotReadbackBufferSize = 0;
 	void *materialVisualMappedData = nullptr;
 	VkBuffer materialVisualBuffer = VK_NULL_HANDLE;
 	VmaAllocation materialVisualAllocation = VK_NULL_HANDLE;
@@ -419,16 +456,27 @@ struct RenderState {
 	VmaAllocation sceneLightingAllocation = VK_NULL_HANDLE;
 	VkDescriptorSetLayout graphicsDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool graphicsDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout shadowDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool shadowDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout voxelMeshingDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool voxelMeshingDescriptorPool = VK_NULL_HANDLE;
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
 	VmaAllocation depthAllocation = VK_NULL_HANDLE;
+	VkFormat shadowDepthFormat = VK_FORMAT_UNDEFINED;
+	VkExtent2D shadowMapExtent{2048u, 2048u};
+	VkImage shadowImage = VK_NULL_HANDLE;
+	VkImageView shadowImageView = VK_NULL_HANDLE;
+	VmaAllocation shadowAllocation = VK_NULL_HANDLE;
+	VkSampler shadowSampler = VK_NULL_HANDLE;
 	bool depthImageNeedsInit = false;
+	bool shadowImageNeedsInit = false;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
+	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline shadowGraphicsPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;
 	VkPipeline debugCrosshairPipeline = VK_NULL_HANDLE;
@@ -500,6 +548,7 @@ struct SwapchainState {
 	VkFormat format = VK_FORMAT_UNDEFINED;
 	VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	VkExtent2D extent = {};
+	bool supportsTransferSrc = false;
 	std::vector<VkImage> images;
 	std::vector<VkImageView> imageViews;
 };

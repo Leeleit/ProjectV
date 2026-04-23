@@ -2,7 +2,7 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-04-21`
+Дата обновления: `2026-04-22`
 
 ---
 
@@ -25,7 +25,9 @@
 Решение:
 
 - Mainline = reproducible interactive voxel MVP.
+- Near-term mainline emphasis for this repo is demo-scene graphics/look-dev plus foundational mechanics, not gameplay-loop expansion.
 - Тяжёлый R&D (`SVO`, mesh shaders, heavy simulation, big-world systems, большой editor, multiplayer, plugin stack) не должен блокировать ближайший practical milestone.
+- Gameplay-facing sandbox interactions can live in R&D/backlog until the lighting/look-dev foundation is stronger.
 
 Почему:
 
@@ -165,10 +167,12 @@
 - Checked-in `Problems/*.xml` inspection exports are treated as hints, not as the source of truth for live code.
 - During warning cleanup, only issues that still reproduce on the current source, or are trivially visible in the current code, should be patched immediately.
 - After a meaningful cleanup pass, regenerate `Problems/` before starting the next pass.
+- For the bespoke single-TU runner in `tests/VoxelWorldTests.cpp`, file-level JetBrains suppression of `CppDFAUnreachableFunctionCall` is acceptable: the custom harness still builds and runs correctly, but JetBrains DFA does not model its reachability graph reliably enough to make that inspection actionable there.
 
 Почему:
 
 - The current refactor/lint sweep already made several exported line-based findings stale mid-pass, and blindly following them risks fixing the wrong code.
+- The remaining `CppDFAUnreachableFunctionCall` rows in a fresh `problems/tests/` export were not pointing at dead code; they were pointing at directly called tests/helpers inside the custom harness.
 
 ## 13. Transparency meshing contract
 
@@ -179,3 +183,42 @@
 Почему:
 
 - Иначе блок под стеклом теряет видимую верхнюю грань, а double-face на одной плоскости дало бы z-fighting и лишнюю transparent geometry.
+
+## 14. Lighting look-dev contract
+
+Решение:
+
+- Первый lighting contract живёт в `VoxelSceneLighting`: sky/horizon/ground/sun/fog плюс baseline exposure/tone-map/debug-view post-process.
+- `UpdateSceneResources` освежает current scene lighting из `VoxelScenePreset` и runtime look-dev controls каждый кадр, а renderer clear color использует тот же contract вместо отдельной hardcoded sky-константы.
+- Current look-dev ladder остаётся keyboard-first внутри живого sandbox loop: `B` cycles lighting debug views, `N` cycles tone-map, `H/K` adjust exposure, `V` resets to preset baseline.
+- Reproducible look-dev capture stays inside the same runtime path too: `C` saves a `.bmp` of the current frame plus a sidecar metadata file with preset/exposure/shadow tuning, instead of treating screenshot capture as an external-tool-only workflow.
+
+Почему:
+
+- Так lighting/look-dev остаётся reproducible внутри текущего MVP loop без отдельного editor path и без скрытого shader-only состояния, которое трудно отлаживать и сравнивать между сценами.
+
+## 15. First sun-shadow path
+Update `2026-04-22`:
+
+- The earlier "render the whole opaque face prefix with a direct draw" version of this path is obsolete. Packed opaque faces live in sparse per-chunk ranges, and the dense-prefix assumption caused `VK_ERROR_DEVICE_LOST` when switching into `TransparencyStress`.
+- The shadow pass now binds its own descriptor/pipeline layout; it must not reuse the main graphics descriptor set that already samples the shadow image while that image is simultaneously written as a depth attachment.
+- The current stability-first baseline now uses a dedicated all-occluder `shadowIndirectBuffer`. Compute meshing updates that buffer for dirty chunks, CPU keeps it warm for unchanged chunks, and the shadow pass no longer inherits camera-frustum culling from the main opaque visibility commands.
+- The remaining limitation is now explicit rather than accidental: the current sun-shadow baseline is still opaque-only, so transparent-heavy demo scenes like `VoxelLab` can look almost shadowless even when the opaque shadow path is functioning correctly.
+
+
+Решение:
+
+- Первый practical shadow path для mainline — один scene-wide orthographic sun shadow map, а не cascades, RT shadows или более тяжёлый lighting stack.
+- Shadow contract живёт в том же `VoxelSceneLighting`: per-preset shadow tuning (`strength/bias/normal-bias`) плюс `sunShadowViewProjection`, который CPU собирает из bounds активных chunk-ов и направления солнца, с fallback на полные `VoxelWorld` bounds только для пустой сцены.
+- `sunDirectionAndWrap.xyz` remains the authored vector toward the sun for the main shading pass. The CPU shadow fit must invert it to the actual light-travel direction when building `sunShadowViewProjection`; this sign is part of the stable lighting contract, not an implementation detail.
+- Shader-side receiver bias stays on the same authored `depth-bias` / `normal-bias` controls, but it should respond to sun angle instead of acting like one flat offset everywhere. The current baseline therefore scales those authored bias values by `N.L` in the voxel shader instead of adding a second hidden bias ladder.
+- The first practical direct-light BRDF upgrade should stay within the current material buffer and shader path instead of introducing a separate PBR framework. `VoxelMaterialVisual` therefore now packs `AO/roughness/metallic/reflectance` plus transmission tint and fog/emissive/ambient/direct-response hooks in the same 64-byte table, and the main voxel shader consumes that contract with a `GGX + Fresnel-Schlick + Smith` sun-light baseline while still honoring authored ambient/diffuse response weights inside the existing ambient gradient, fog and shadow integration path.
+- Shadow depth pass consumes a dedicated all-occluder opaque indirect buffer instead of the main camera-culling visibility commands; main voxel pass потом семплирует shadow map только для direct sun.
+- Первый quality/debug follow-up для этого path тоже остаётся прагматичным: baseline shadow map держится на `2048x2048`, main voxel shader использует лёгкий `3x3` PCF, а shadow tuning/debug живёт внутри уже существующего lighting loop (`B` debug views + detailed HUD), а не в отдельном editor/debug framework.
+
+Почему:
+
+- Текущие built-in demo scenes конечные и компактные, поэтому scene-wide orthographic projection даёт дешёвый и понятный первый baseline без раннего ухода в R&D.
+- The shadow pass still stays intentionally simple, but it must have its own opaque occluder command source; reusing camera-visible indirect draws is not acceptable because it makes shadow presence depend on the current view frustum.
+- Так shadow slice остаётся совместимым с нынешним explicit CPU scene contract и dynamic-rendering path, а следующий шаг — тюнинг bias/stability/debug, а не новый lighting framework.
+- Так текущий shadow slice становится достаточно читаемым и настраиваемым для mainline look-dev без раннего перехода к cascades, render graph или отдельному tooling stack.

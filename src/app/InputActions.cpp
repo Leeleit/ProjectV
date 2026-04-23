@@ -13,6 +13,15 @@ constexpr size_t GetInputActionIndex(const InputAction action)
 constexpr bool IsInputActionReplayRecordable(const InputAction action)
 {
 	switch (action) {
+	case InputAction::DecreaseLightingExposure:
+	case InputAction::IncreaseLightingExposure:
+	case InputAction::CycleToneMapOperator:
+	case InputAction::CycleLightingDebugView:
+	case InputAction::ResetLightingDebugControls:
+	case InputAction::CycleShadowTuningTarget:
+	case InputAction::DecreaseShadowTuningValue:
+	case InputAction::IncreaseShadowTuningValue:
+	case InputAction::CaptureScreenshot:
 	case InputAction::ToggleInputReplayRecording:
 	case InputAction::PlayLastInputReplay:
 	case InputAction::Count:
@@ -131,6 +140,15 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::ToggleWalkAirControlMode, SDL_SCANCODE_F11);
 	BindAction(input, InputAction::ToggleWalkAutoJump, SDL_SCANCODE_J);
 	BindAction(input, InputAction::ToggleWalkAutoJumpDelay, SDL_SCANCODE_F12);
+	BindAction(input, InputAction::CaptureScreenshot, SDL_SCANCODE_C);
+	BindAction(input, InputAction::DecreaseLightingExposure, SDL_SCANCODE_H);
+	BindAction(input, InputAction::IncreaseLightingExposure, SDL_SCANCODE_K);
+	BindAction(input, InputAction::CycleToneMapOperator, SDL_SCANCODE_N);
+	BindAction(input, InputAction::CycleLightingDebugView, SDL_SCANCODE_B);
+	BindAction(input, InputAction::ResetLightingDebugControls, SDL_SCANCODE_V);
+	BindAction(input, InputAction::CycleShadowTuningTarget, SDL_SCANCODE_O);
+	BindAction(input, InputAction::DecreaseShadowTuningValue, SDL_SCANCODE_U);
+	BindAction(input, InputAction::IncreaseShadowTuningValue, SDL_SCANCODE_I);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
 	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
 	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);

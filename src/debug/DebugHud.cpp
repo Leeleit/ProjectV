@@ -24,8 +24,8 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kMaxStatsLineCount = 21;
-constexpr size_t kMaxHelperLineCount = 11;
+constexpr size_t kMaxStatsLineCount = 28;
+constexpr size_t kMaxHelperLineCount = 16;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -442,6 +442,13 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
+		"LGT %s  %s  %.2f",
+		LightingDebugViewToString(stats.lightingDebugView),
+		ToneMapOperatorToString(stats.toneMapOperator),
+		stats.sceneExposure);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"MODE %s  PAUSE %s  AIR %s",
 		GetControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "ON" : "OFF",
@@ -532,6 +539,33 @@ size_t BuildStatsLines(
 		return lineCount;
 	}
 
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"SUN %.2f %.2f %.2f %.2f",
+		stats.sunDirection[0],
+		stats.sunDirection[1],
+		stats.sunDirection[2],
+		stats.sunIntensity);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"SHDW %u STR %.2f FLT %.2f",
+		stats.shadowMapResolution,
+		stats.sunShadowStrength,
+		stats.sunShadowFilterRadius);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"BIAS %.4f NRM %.4f",
+		stats.sunShadowDepthBias,
+		stats.sunShadowNormalBias);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"COV %.2f TUNE %s",
+		stats.sunShadowCoverageScale,
+		ShadowTuningTargetToString(stats.shadowTuningTarget));
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
@@ -680,6 +714,10 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F8 TOOL  F9 BND");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F10 DIRTY  F11 AIR");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "J AUTOJUMP  F12 DELAY");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  N TMAP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "H EXP-  K EXPUP  V RESET");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "O SHDW  U DEC  I INC");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
@@ -687,6 +725,8 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F12 DELAY");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  H K EXP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 	}
 	PV_APPEND_HUD_LINE(outLines, lineCount, "LMB TOOL  RMB ALT");
 	return lineCount;

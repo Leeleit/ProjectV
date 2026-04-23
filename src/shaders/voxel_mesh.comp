@@ -40,7 +40,11 @@ layout(set = 0, binding = 5, std430) buffer TransparentIndirectCommands {
     DrawCommand transparentCommands[];
 };
 
-layout(set = 0, binding = 6, std430) readonly buffer ChunkCullingParameters {
+layout(set = 0, binding = 6, std430) buffer ShadowIndirectCommands {
+    DrawCommand shadowCommands[];
+};
+
+layout(set = 0, binding = 7, std430) readonly buffer ChunkCullingParameters {
     vec4 cameraPositionAndMaxDistance;
     vec4 cameraForwardAndTanHalfVerticalFov;
     vec4 cameraRightAndTanHalfHorizontalFov;
@@ -197,6 +201,7 @@ void main() {
         chunkDescriptors[chunkIndex].drawRanges.w = 0u;
         opaqueCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
         transparentCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, transparentFirstFace);
+        shadowCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
         return;
     }
 
@@ -242,4 +247,5 @@ void main() {
     chunkDescriptors[chunkIndex].drawRanges.w = transparentFaceCount;
     opaqueCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? opaqueFaceCount : 0u, 0u, opaqueFirstFace);
     transparentCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? transparentFaceCount : 0u, 0u, transparentFirstFace);
+    shadowCommands[chunkIndex] = DrawCommand(6u, opaqueFaceCount, 0u, opaqueFirstFace);
 }

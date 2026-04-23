@@ -18,6 +18,8 @@ set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADERS
         ${SHADER_DIR}/voxel.vert
         ${SHADER_DIR}/voxel.frag
+        ${SHADER_DIR}/voxel_shadow.vert
+        ${SHADER_DIR}/voxel_shadow.frag
         ${SHADER_DIR}/voxel_mesh.comp
         ${SHADER_DIR}/debug_overlay.vert
         ${SHADER_DIR}/debug_overlay.frag
@@ -60,7 +62,9 @@ target_sources(ProjectV PRIVATE
         debug/DebugOverlays.cpp
         platform/PlatformEvents.cpp
         render/Renderer.cpp
+        render/ScreenshotCapture.cpp
         render/SceneResources.cpp
+        render/ShadowProjection.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp

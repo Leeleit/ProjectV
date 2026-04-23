@@ -11,6 +11,8 @@ add_executable(ProjectVTests
         ../src/platform/PlatformEvents.cpp
         ../src/core/RuntimeDiagnostics.cpp
         ../src/core/RuntimeProbe.cpp
+        ../src/render/ScreenshotCapture.cpp
+        ../src/render/ShadowProjection.cpp
         ../src/render/vulkan/VulkanResult.cpp
         ../src/voxel/VoxelInteraction.cpp
         ../src/voxel/VoxelMaterials.cpp

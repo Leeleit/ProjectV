@@ -8,11 +8,30 @@
 #include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelInteraction.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
 constexpr uint32_t kMaxSimulationStepsPerFrame = 5;
 constexpr float kMaxFrameDeltaSeconds = 0.25f;
+constexpr float kLightingExposureStepStops = 0.25f;
+constexpr float kMinLightingExposureBiasStops = -4.0f;
+constexpr float kMaxLightingExposureBiasStops = 4.0f;
+constexpr float kShadowStrengthStep = 0.05f;
+constexpr float kShadowDepthBiasStep = 0.0001f;
+constexpr float kShadowNormalBiasStep = 0.0005f;
+constexpr float kShadowFilterRadiusStep = 0.10f;
+constexpr float kShadowCoverageScaleStep = 0.10f;
+constexpr float kMinShadowStrengthOffset = -1.0f;
+constexpr float kMaxShadowStrengthOffset = 1.0f;
+constexpr float kMinShadowDepthBiasOffset = -0.01f;
+constexpr float kMaxShadowDepthBiasOffset = 0.01f;
+constexpr float kMinShadowNormalBiasOffset = -0.05f;
+constexpr float kMaxShadowNormalBiasOffset = 0.05f;
+constexpr float kMinShadowFilterRadiusOffset = -4.0f;
+constexpr float kMaxShadowFilterRadiusOffset = 4.0f;
+constexpr float kMinShadowCoverageScale = 0.5f;
+constexpr float kMaxShadowCoverageScale = 3.0f;
 
 bool IsCreativeMode(const CameraState &camera)
 {
@@ -193,6 +212,60 @@ bool ApplyControlModeTransition(
 
 	return true;
 }
+
+void AdjustLightingExposure(
+	RenderState &render,
+	const float deltaStops)
+{
+	render.lightingDebugControls.exposureBiasStops = std::clamp(
+		render.lightingDebugControls.exposureBiasStops + deltaStops,
+		kMinLightingExposureBiasStops,
+		kMaxLightingExposureBiasStops);
+}
+
+void ResetLightingDebugControls(RenderState &render)
+{
+	render.lightingDebugControls = {};
+}
+
+void AdjustShadowTuning(
+	RenderState &render,
+	const float delta)
+{
+	VoxelLightingDebugControls &controls = render.lightingDebugControls;
+	switch (controls.shadowTuningTarget) {
+	case ShadowTuningTarget::Strength:
+		controls.shadowStrengthOffset = std::clamp(
+			controls.shadowStrengthOffset + delta * kShadowStrengthStep,
+			kMinShadowStrengthOffset,
+			kMaxShadowStrengthOffset);
+		break;
+	case ShadowTuningTarget::DepthBias:
+		controls.shadowDepthBiasOffset = std::clamp(
+			controls.shadowDepthBiasOffset + delta * kShadowDepthBiasStep,
+			kMinShadowDepthBiasOffset,
+			kMaxShadowDepthBiasOffset);
+		break;
+	case ShadowTuningTarget::NormalBias:
+		controls.shadowNormalBiasOffset = std::clamp(
+			controls.shadowNormalBiasOffset + delta * kShadowNormalBiasStep,
+			kMinShadowNormalBiasOffset,
+			kMaxShadowNormalBiasOffset);
+		break;
+	case ShadowTuningTarget::FilterRadius:
+		controls.shadowFilterRadiusOffset = std::clamp(
+			controls.shadowFilterRadiusOffset + delta * kShadowFilterRadiusStep,
+			kMinShadowFilterRadiusOffset,
+			kMaxShadowFilterRadiusOffset);
+		break;
+	case ShadowTuningTarget::Coverage:
+		controls.shadowCoverageScale = std::clamp(
+			controls.shadowCoverageScale + delta * kShadowCoverageScaleStep,
+			kMinShadowCoverageScale,
+			kMaxShadowCoverageScale);
+		break;
+	}
+}
 } // namespace
 
 bool UpdateApp(
@@ -285,6 +358,12 @@ bool UpdateApp(
 		interaction->mutationAnchorValid = false;
 		ClearInteractionClickActions(*input);
 	}
+	if (ConsumeInputActionPressed(*input, InputAction::CaptureScreenshot) &&
+		world->voxelWorld &&
+		!world->scenePresetReloadRequested &&
+		!world->snapshotLoadRequested) {
+		render->screenshotCaptureRequested = true;
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::CycleEditorTool)) {
 		interaction->editorTool = GetNextDebugEditorTool(interaction->editorTool);
 		interaction->mutationAnchorValid = false;
@@ -304,6 +383,33 @@ bool UpdateApp(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJumpDelay)) {
 		SetPhysicsWalkAutoJumpDelayEnabled(physics, !IsPhysicsWalkAutoJumpDelayEnabled(physics));
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::DecreaseLightingExposure)) {
+		AdjustLightingExposure(*render, -kLightingExposureStepStops);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::IncreaseLightingExposure)) {
+		AdjustLightingExposure(*render, kLightingExposureStepStops);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleToneMapOperator)) {
+		render->lightingDebugControls.toneMapOperator =
+			GetNextToneMapOperator(render->lightingDebugControls.toneMapOperator);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleLightingDebugView)) {
+		render->lightingDebugControls.debugView =
+			GetNextLightingDebugView(render->lightingDebugControls.debugView);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ResetLightingDebugControls)) {
+		ResetLightingDebugControls(*render);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleShadowTuningTarget)) {
+		render->lightingDebugControls.shadowTuningTarget =
+			GetNextShadowTuningTarget(render->lightingDebugControls.shadowTuningTarget);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::DecreaseShadowTuningValue)) {
+		AdjustShadowTuning(*render, -1.0f);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::IncreaseShadowTuningValue)) {
+		AdjustShadowTuning(*render, 1.0f);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleInputReplayRecording)) {
 		if (input->replay.recording) {
@@ -463,6 +569,22 @@ bool UpdateApp(
 	debug->stats.simulationPaused = simulation->paused;
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
+	debug->stats.sceneExposure = render->currentSceneLighting.postProcess[0];
+	debug->stats.toneMapOperator = render->lightingDebugControls.toneMapOperator;
+	debug->stats.lightingDebugView = render->lightingDebugControls.debugView;
+	debug->stats.sunDirection = {
+		render->currentSceneLighting.sunDirectionAndWrap[0],
+		render->currentSceneLighting.sunDirectionAndWrap[1],
+		render->currentSceneLighting.sunDirectionAndWrap[2],
+	};
+	debug->stats.sunIntensity = render->currentSceneLighting.sunColorAndIntensity[3];
+	debug->stats.sunShadowStrength = render->currentSceneLighting.sunShadowParams[0];
+	debug->stats.sunShadowDepthBias = render->currentSceneLighting.sunShadowParams[1];
+	debug->stats.sunShadowNormalBias = render->currentSceneLighting.sunShadowParams[2];
+	debug->stats.sunShadowFilterRadius = render->currentSceneLighting.sunShadowParams[3];
+	debug->stats.sunShadowCoverageScale = render->lightingDebugControls.shadowCoverageScale;
+	debug->stats.shadowMapResolution = render->shadowMapExtent.width;
+	debug->stats.shadowTuningTarget = render->lightingDebugControls.shadowTuningTarget;
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;
 	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);

@@ -100,8 +100,10 @@ bool PrepareFrameRenderData(
 	frame->renderData.chunkVoxelPayloadBuffer = sceneFrameResources.chunkVoxelPayloadBuffer;
 	frame->renderData.debugHudVertexBuffer = sceneFrameResources.debugHudVertexBuffer;
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
+	frame->renderData.shadowDescriptorSet = sceneFrameResources.shadowDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
+	frame->renderData.shadowIndirectBuffer = sceneFrameResources.shadowIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;

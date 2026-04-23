@@ -1,6 +1,7 @@
 #include "render/SceneResources.hpp"
 
 #include "debug/Profiling.hpp"
+#include "render/ShadowProjection.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
@@ -25,9 +26,34 @@ std::array<VoxelMaterialVisual, kVoxelMaterialCount> BuildMaterialVisualTable()
 	};
 }
 
-VoxelSceneLighting BuildSceneLighting(const VoxelWorld &world)
+VoxelSceneLighting BuildSceneLighting(
+	const VoxelWorld &world,
+	const RenderState &render)
 {
-	return GetVoxelSceneLighting(world.scenePreset);
+	return BuildVoxelSceneLighting(world.scenePreset, render.lightingDebugControls);
+}
+
+void RefreshSceneLightingBuffer(
+	const VoxelWorld &world,
+	RenderState &render)
+{
+	render.currentScenePreset = world.scenePreset;
+	render.currentSceneLighting = BuildSceneLighting(world, render);
+	const auto [lightViewProjection] = BuildSunShadowProjection(
+		world,
+		{
+			render.currentSceneLighting.sunDirectionAndWrap[0],
+			render.currentSceneLighting.sunDirectionAndWrap[1],
+			render.currentSceneLighting.sunDirectionAndWrap[2],
+		},
+		render.lightingDebugControls.shadowCoverageScale);
+	render.currentSceneLighting.sunShadowViewProjection = lightViewProjection;
+	if (render.sceneLightingMappedData) {
+		std::memcpy(
+			render.sceneLightingMappedData,
+			&render.currentSceneLighting,
+			sizeof(render.currentSceneLighting));
+	}
 }
 
 bool CreateBuffer(
@@ -213,12 +239,14 @@ uint32_t UpdateChunkVisibilityAndIndirectCommands(
 {
 	if (!frameResources.chunkDescriptorMappedData ||
 		!frameResources.opaqueIndirectMappedData ||
+		!frameResources.shadowIndirectMappedData ||
 		!frameResources.transparentIndirectMappedData) {
 		return 0;
 	}
 
 	const auto *chunkDescriptors = static_cast<const PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
 	auto *opaqueCommands = static_cast<VkDrawIndirectCommand *>(frameResources.opaqueIndirectMappedData);
+	auto *shadowCommands = static_cast<VkDrawIndirectCommand *>(frameResources.shadowIndirectMappedData);
 	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
 	uint32_t visibleChunkCount = 0;
 	for (uint32_t chunkIndex = 0; chunkIndex < frameResources.chunkDescriptorCount; ++chunkIndex) {
@@ -232,6 +260,10 @@ uint32_t UpdateChunkVisibilityAndIndirectCommands(
 			chunkDescriptor.drawRanges[0],
 			chunkDescriptor.drawRanges[1],
 			visible);
+		shadowCommands[chunkIndex] = BuildChunkIndirectCommand(
+			chunkDescriptor.drawRanges[0],
+			chunkDescriptor.drawRanges[1],
+			true);
 		transparentCommands[chunkIndex] = BuildChunkIndirectCommand(
 			chunkDescriptor.drawRanges[2],
 			chunkDescriptor.drawRanges[3],
@@ -306,7 +338,7 @@ void DestroySceneResources(
 		return;
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, graphicsDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -326,6 +358,10 @@ void DestroySceneResources(
 		if (opaqueIndirectBuffer && opaqueIndirectAllocation) {
 			profiling::RecordFree(opaqueIndirectAllocation, "SceneOpaqueIndirectBufferAllocation");
 			vmaDestroyBuffer(context->allocator, opaqueIndirectBuffer, opaqueIndirectAllocation);
+		}
+		if (shadowIndirectBuffer && shadowIndirectAllocation) {
+			profiling::RecordFree(shadowIndirectAllocation, "SceneShadowIndirectBufferAllocation");
+			vmaDestroyBuffer(context->allocator, shadowIndirectBuffer, shadowIndirectAllocation);
 		}
 		if (transparentIndirectBuffer && transparentIndirectAllocation) {
 			profiling::RecordFree(transparentIndirectAllocation, "SceneTransparentIndirectBufferAllocation");
@@ -355,6 +391,9 @@ void DestroySceneResources(
 		opaqueIndirectMappedData = nullptr;
 		opaqueIndirectBuffer = VK_NULL_HANDLE;
 		opaqueIndirectAllocation = VK_NULL_HANDLE;
+		shadowIndirectMappedData = nullptr;
+		shadowIndirectBuffer = VK_NULL_HANDLE;
+		shadowIndirectAllocation = VK_NULL_HANDLE;
 		transparentIndirectMappedData = nullptr;
 		transparentIndirectBuffer = VK_NULL_HANDLE;
 		transparentIndirectAllocation = VK_NULL_HANDLE;
@@ -365,6 +404,7 @@ void DestroySceneResources(
 		chunkCullingBuffer = VK_NULL_HANDLE;
 		chunkCullingAllocation = VK_NULL_HANDLE;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
+		shadowDescriptorSet = VK_NULL_HANDLE;
 		voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 		uploadedSceneVersion = 0;
 		uploadedVoxelPayloadVersion = 0;
@@ -391,6 +431,7 @@ void DestroySceneResources(
 	render->sceneLightingMappedData = nullptr;
 	render->sceneLightingBuffer = VK_NULL_HANDLE;
 	render->sceneLightingAllocation = VK_NULL_HANDLE;
+	render->currentSceneLighting = {};
 
 	render->sceneFaceCapacity = 0;
 	render->sceneTransparentFaceBase = 0;
@@ -484,11 +525,11 @@ bool CreateSceneResources(
 			sceneLightingAllocationInfo.size,
 			"VoxelSceneLightingBufferAllocation");
 		render->sceneMemoryBytes += sceneLightingAllocationInfo.size;
-		const VoxelSceneLighting sceneLighting = BuildSceneLighting(*world->voxelWorld);
+		render->currentSceneLighting = BuildSceneLighting(*world->voxelWorld, *render);
 		std::memcpy(
 			render->sceneLightingMappedData,
-			&sceneLighting,
-			sizeof(sceneLighting));
+			&render->currentSceneLighting,
+			sizeof(render->currentSceneLighting));
 		SetVulkanObjectName(
 			*context,
 			reinterpret_cast<uint64_t>(render->sceneLightingBuffer),
@@ -597,6 +638,29 @@ bool CreateSceneResources(
 			0,
 			sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
 
+		VmaAllocationInfo shadowIndirectAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size(),
+				VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.shadowIndirectBuffer,
+				&frameResources.shadowIndirectAllocation,
+				&shadowIndirectAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.shadowIndirectMappedData = shadowIndirectAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.shadowIndirectAllocation,
+			shadowIndirectAllocationInfo.size,
+			"SceneShadowIndirectBufferAllocation");
+		render->sceneMemoryBytes += shadowIndirectAllocationInfo.size;
+		std::memset(
+			frameResources.shadowIndirectMappedData,
+			0,
+			sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
+
 		VmaAllocationInfo transparentIndirectAllocationInfo{};
 		if (!CreateBuffer(
 				context,
@@ -696,6 +760,12 @@ bool CreateSceneResources(
 			reinterpret_cast<uint64_t>(frameResources.opaqueIndirectBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneShadowIndirectBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.shadowIndirectBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
 		std::snprintf(bufferName, sizeof(bufferName), "SceneTransparentIndirectBuffer[%zu]", frameResourceIndex);
 		SetVulkanObjectName(
 			*context,
@@ -785,10 +855,15 @@ bool UpdateSceneResources(
 		++render->sceneVoxelPayloadVersion;
 	}
 
+	RefreshSceneLightingBuffer(*world->voxelWorld, *render);
+
 	profiling::PlotValue("Dirty Chunks", static_cast<int64_t>(dirtyChunkCount));
 	profiling::PlotValue("Active Chunks", static_cast<int64_t>(activeChunkCount));
 	profiling::PlotValue("Rebuilt Chunks", static_cast<int64_t>(rebuiltChunkCount));
 	profiling::PlotValue("Repacked Chunk Voxels", static_cast<int64_t>(repackedVoxelCount));
+	profiling::PlotValue(
+		"Scene Exposure x100",
+		static_cast<int64_t>(render->currentSceneLighting.postProcess[0] * 100.0f));
 	return true;
 }
 

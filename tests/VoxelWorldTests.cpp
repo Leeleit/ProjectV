@@ -9,7 +9,9 @@
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
+#include "render/ScreenshotCapture.hpp"
 #include "render/SceneResources.hpp"
+#include "render/ShadowProjection.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -20,8 +22,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string_view>
 #include <vector>
+
+// ReSharper disable CppDFAUnreachableFunctionCall
 
 namespace {
 #ifndef PROJECTV_TESTS_SOURCE_DIR
@@ -74,6 +80,27 @@ bool ColorsMatch(
 	}
 
 	return true;
+}
+
+std::array<float, 4> TransformPoint(
+	const std::array<float, 16> &matrix,
+	const std::array<float, 3> &point)
+{
+	return {
+		matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
+		matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+		matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
+		matrix[3] * point[0] + matrix[7] * point[1] + matrix[11] * point[2] + matrix[15],
+	};
+}
+
+uint32_t ReadLe32(const std::vector<uint8_t> &bytes, const size_t offset)
+{
+	const uint32_t byte0 = bytes[offset];
+	const uint32_t byte1 = bytes[offset + 1];
+	const uint32_t byte2 = bytes[offset + 2];
+	const uint32_t byte3 = bytes[offset + 3];
+	return byte0 | byte1 << 8u | byte2 << 16u | byte3 << 24u;
 }
 
 #define EXPECT_TRUE(context, expr) ExpectTrue(context, (expr), __LINE__, #expr)
@@ -157,6 +184,17 @@ std::filesystem::path GetTestInputReplaySnapshotPath()
 	}
 
 	return tempDirectory / "ProjectV-InputReplayTest.snapshot.bin";
+}
+
+std::filesystem::path GetTestScreenshotPath()
+{
+	std::error_code error;
+	const std::filesystem::path tempDirectory = std::filesystem::temp_directory_path(error);
+	if (error) {
+		return std::filesystem::path("ProjectV-ScreenshotTest.bmp");
+	}
+
+	return tempDirectory / "ProjectV-ScreenshotTest.bmp";
 }
 
 std::filesystem::path GetTestFixturePath(const std::string_view filename)
@@ -288,6 +326,101 @@ void TestVoxelWorldSnapshotPathUsesEnvironmentOverride(TestContext &context)
 	SDL_setenv_unsafe("PROJECTV_SNAPSHOT_PATH", snapshotPath, 1);
 	EXPECT_TRUE(context, GetVoxelWorldSnapshotPath() == snapshotPath);
 	SDL_unsetenv_unsafe("PROJECTV_SNAPSHOT_PATH");
+}
+
+void TestScreenshotCapturePathUsesEnvironmentOverride(TestContext &context)
+{
+	constexpr const char *screenshotDirectory = "C:/ProjectVTests/Captures";
+	SDL_setenv_unsafe("PROJECTV_SCREENSHOT_DIR", screenshotDirectory, 1);
+
+	const std::filesystem::path screenshotPath = BuildScreenshotCapturePath(VoxelScenePreset::ChunkGrid, 7u);
+	EXPECT_TRUE(context, screenshotPath.parent_path() == std::filesystem::path(screenshotDirectory));
+	EXPECT_TRUE(context, screenshotPath.extension() == ".bmp");
+	EXPECT_TRUE(context, screenshotPath.filename().string().find("ChunkGrid") != std::string::npos);
+
+	const std::filesystem::path metadataPath = BuildScreenshotCaptureMetadataPath(screenshotPath.string());
+	EXPECT_TRUE(context, metadataPath.parent_path() == std::filesystem::path(screenshotDirectory));
+	EXPECT_TRUE(context, metadataPath.extension() == ".txt");
+	EXPECT_TRUE(context, metadataPath.stem() == screenshotPath.stem());
+
+	SDL_unsetenv_unsafe("PROJECTV_SCREENSHOT_DIR");
+}
+
+void TestSaveScreenshotCaptureBmpWritesExpectedBmp(TestContext &context)
+{
+	const std::filesystem::path screenshotPath = GetTestScreenshotPath();
+	std::error_code removeError;
+	std::filesystem::remove(screenshotPath, removeError);
+
+	constexpr std::array<uint8_t, 16> pixels{
+		255u, 0u, 0u, 255u,
+		0u, 255u, 0u, 255u,
+		0u, 0u, 255u, 255u,
+		255u, 255u, 255u, 255u,
+	};
+
+	EXPECT_TRUE(context, SaveScreenshotCaptureBmp(
+		pixels.data(),
+		2u,
+		2u,
+		VK_FORMAT_R8G8B8A8_UNORM,
+		screenshotPath.string()));
+	EXPECT_TRUE(context, std::filesystem::exists(screenshotPath));
+
+	std::ifstream stream(screenshotPath, std::ios::binary);
+	const std::vector<uint8_t> bytes(std::istreambuf_iterator(stream), {});
+	EXPECT_TRUE(context, bytes.size() == 70u);
+	if (bytes.size() >= 70u) {
+		EXPECT_TRUE(context, bytes[0] == static_cast<uint8_t>('B'));
+		EXPECT_TRUE(context, bytes[1] == static_cast<uint8_t>('M'));
+		EXPECT_EQ(context, 70u, ReadLe32(bytes, 2u));
+		EXPECT_EQ(context, 2u, ReadLe32(bytes, 18u));
+		EXPECT_EQ(context, 2u, ReadLe32(bytes, 22u));
+		EXPECT_TRUE(context, bytes[54] == 255u);
+		EXPECT_TRUE(context, bytes[55] == 0u);
+		EXPECT_TRUE(context, bytes[56] == 0u);
+	}
+
+	std::filesystem::remove(screenshotPath, removeError);
+}
+
+void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
+{
+	RenderState render{};
+	render.currentSceneLighting.postProcess[0] = 1.25f;
+	render.currentSceneLighting.sunDirectionAndWrap = {-0.58f, 0.62f, -0.31f, 0.10f};
+	render.currentSceneLighting.sunColorAndIntensity = {0.95f, 0.90f, 0.82f, 1.30f};
+	render.currentSceneLighting.sunShadowParams = {0.72f, 0.0012f, 0.0035f, 1.40f};
+	render.shadowMapExtent = {2048u, 2048u};
+	render.lightingDebugControls.exposureBiasStops = 0.25f;
+	render.lightingDebugControls.toneMapOperator = ToneMapOperator::AcesApprox;
+	render.lightingDebugControls.debugView = LightingDebugView::Shadow;
+	render.lightingDebugControls.shadowCoverageScale = 1.30f;
+	render.lightingDebugControls.shadowTuningTarget = ShadowTuningTarget::Coverage;
+	render.lightingDebugControls.shadowStrengthOffset = 0.10f;
+	render.lightingDebugControls.shadowDepthBiasOffset = 0.0002f;
+	render.lightingDebugControls.shadowNormalBiasOffset = 0.0010f;
+	render.lightingDebugControls.shadowFilterRadiusOffset = 0.25f;
+
+	const std::filesystem::path metadataPath = GetTestScreenshotPath().replace_extension(".txt");
+	std::error_code removeError;
+	std::filesystem::remove(metadataPath, removeError);
+
+	EXPECT_TRUE(context, SaveScreenshotCaptureMetadata(
+		render,
+		VoxelScenePreset::MeshingStress,
+		"C:/ProjectVTests/Captures/sample.bmp",
+		metadataPath.string()));
+	EXPECT_TRUE(context, std::filesystem::exists(metadataPath));
+
+	std::ifstream stream(metadataPath);
+	const std::string text(std::istreambuf_iterator(stream), {});
+	EXPECT_TRUE(context, text.find("scene_preset=MeshingStress") != std::string::npos);
+	EXPECT_TRUE(context, text.find("debug_view=SHDW") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_tuning_target=COV") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_coverage_scale=1.300000") != std::string::npos);
+
+	std::filesystem::remove(metadataPath, removeError);
 }
 
 void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
@@ -493,14 +626,18 @@ void TestInitFailureStageParsing(TestContext &context)
 void TestVoxelMaterialVisuals(TestContext &context)
 {
 	const VoxelMaterialVisual air = GetVoxelMaterialVisual(VoxelMaterial::Air);
-	const VoxelMaterialVisual glass = GetVoxelMaterialVisual(VoxelMaterial::Glass);
+	const auto [glassBaseColor, glassSurface, glassMedium, glassShading] =
+		GetVoxelMaterialVisual(VoxelMaterial::Glass);
 	const VoxelMaterialVisual fluid = GetVoxelMaterialVisual(VoxelMaterial::Fluid);
 
 	EXPECT_TRUE(context, air.baseColor[3] == 0.0f);
-	EXPECT_TRUE(context, glass.baseColor[3] < 1.0f);
-	EXPECT_TRUE(context, glass.lighting[2] > 0.0f);
-	EXPECT_TRUE(context, glass.shadingExtras[1] > 0.0f);
-	EXPECT_TRUE(context, fluid.shadingExtras[3] > 0.0f);
+	EXPECT_TRUE(context, glassBaseColor[3] < 1.0f);
+	EXPECT_TRUE(context, glassSurface[1] < 0.2f);
+	EXPECT_TRUE(context, glassMedium[3] > 0.0f);
+	EXPECT_TRUE(context, fluid.shading[1] > 0.0f);
+	EXPECT_TRUE(context, glassShading[2] > 0.0f);
+	EXPECT_TRUE(context, fluid.shading[3] > 0.0f);
+	EXPECT_TRUE(context, fluid.surface[2] == 0.0f);
 }
 
 void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
@@ -512,6 +649,148 @@ void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
 	EXPECT_TRUE(context, voxelLab.sunColorAndIntensity[3] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.horizonColorAndFogStart[3] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.groundColorAndFogMax[3] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.postProcess[0] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.postProcess[0] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.postProcess[2] == static_cast<float>(ToneMapOperator::AcesApprox));
+	EXPECT_TRUE(context, voxelLab.sunShadowParams[0] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.sunShadowParams[1] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.sunShadowParams[2] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.sunShadowParams[3] > 0.0f);
+}
+
+void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
+{
+	const VoxelSceneLighting baseLighting = GetVoxelSceneLighting(VoxelScenePreset::VoxelLab);
+	VoxelLightingDebugControls controls{};
+	controls.exposureBiasStops = 1.0f;
+	controls.toneMapOperator = ToneMapOperator::Reinhard;
+	controls.debugView = LightingDebugView::Direct;
+	controls.shadowStrengthOffset = 0.10f;
+	controls.shadowDepthBiasOffset = 0.0002f;
+	controls.shadowNormalBiasOffset = 0.0010f;
+	controls.shadowFilterRadiusOffset = 0.25f;
+
+	const VoxelSceneLighting tunedLighting = BuildVoxelSceneLighting(VoxelScenePreset::VoxelLab, controls);
+	EXPECT_TRUE(context, tunedLighting.postProcess[0] > baseLighting.postProcess[0]);
+	EXPECT_TRUE(context, tunedLighting.postProcess[2] == static_cast<float>(ToneMapOperator::Reinhard));
+	EXPECT_TRUE(context, tunedLighting.postProcess[3] == static_cast<float>(LightingDebugView::Direct));
+	EXPECT_TRUE(context, tunedLighting.sunShadowParams[0] > baseLighting.sunShadowParams[0]);
+	EXPECT_TRUE(context, tunedLighting.sunShadowParams[1] > baseLighting.sunShadowParams[1]);
+	EXPECT_TRUE(context, tunedLighting.sunShadowParams[2] > baseLighting.sunShadowParams[2]);
+	EXPECT_TRUE(context, tunedLighting.sunShadowParams[3] > baseLighting.sunShadowParams[3]);
+
+	const std::array<float, 4> clearColor = GetVoxelSceneClearColor(tunedLighting);
+	EXPECT_TRUE(context, clearColor[0] >= 0.0f && clearColor[0] <= 1.0f);
+	EXPECT_TRUE(context, clearColor[1] >= 0.0f && clearColor[1] <= 1.0f);
+	EXPECT_TRUE(context, clearColor[2] >= 0.0f && clearColor[2] <= 1.0f);
+	EXPECT_TRUE(context, clearColor[3] == 1.0f);
+}
+
+void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
+{
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Shadow)) == "SHDW");
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Shadow);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Shadow) == LightingDebugView::Fog);
+}
+
+void TestShadowTuningTargetCycleAndLabels(TestContext &context)
+{
+	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::Strength)) == "STR");
+	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::Coverage)) == "COV");
+	EXPECT_TRUE(
+		context,
+		GetNextShadowTuningTarget(ShadowTuningTarget::Strength) == ShadowTuningTarget::DepthBias);
+	EXPECT_TRUE(
+		context,
+		GetNextShadowTuningTarget(ShadowTuningTarget::FilterRadius) == ShadowTuningTarget::Coverage);
+	EXPECT_TRUE(
+		context,
+		GetNextShadowTuningTarget(ShadowTuningTarget::Coverage) == ShadowTuningTarget::Strength);
+}
+
+void TestBuildSunShadowProjectionFitsSceneBounds(TestContext &context)
+{
+	const VoxelWorld world = MakeTestWorld({-6, 2, -4}, {11, 19, 13}, 4);
+	const auto [lightViewProjection] = BuildSunShadowProjection(world, {0.35f, 0.88f, 0.22f}, 1.25f);
+	constexpr float kClipEpsilon = 0.02f;
+
+	for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+		const std::array corner{
+			static_cast<float>((cornerIndex & 1) != 0 ? world.maxExclusive.x : world.min.x),
+			static_cast<float>((cornerIndex & 2) != 0 ? world.maxExclusive.y : world.min.y),
+			static_cast<float>((cornerIndex & 4) != 0 ? world.maxExclusive.z : world.min.z),
+		};
+		const std::array<float, 4> clipCorner = TransformPoint(lightViewProjection, corner);
+		EXPECT_TRUE(context, std::abs(clipCorner[3]) > 0.0001f);
+		const float inverseW = 1.0f / clipCorner[3];
+		const float clipX = clipCorner[0] * inverseW;
+		const float clipY = clipCorner[1] * inverseW;
+		const float clipZ = clipCorner[2] * inverseW;
+		EXPECT_TRUE(context, clipX >= -1.0f - kClipEpsilon && clipX <= 1.0f + kClipEpsilon);
+		EXPECT_TRUE(context, clipY >= -1.0f - kClipEpsilon && clipY <= 1.0f + kClipEpsilon);
+		EXPECT_TRUE(context, clipZ >= -kClipEpsilon && clipZ <= 1.0f + kClipEpsilon);
+	}
+}
+
+void TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(TestContext &context)
+{
+	VoxelWorld compactWorld = MakeTestWorld({-8, 0, -8}, {8, 16, 8}, 8);
+	VoxelWorld paddedWorld = MakeTestWorld({-24, 0, -24}, {24, 16, 24}, 8);
+	SetVoxelMaterial(compactWorld, {-1, 0, -1}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(paddedWorld, {-1, 0, -1}, VoxelMaterial::FloorWhite);
+
+	const auto [compactLightViewProjection] =
+		BuildSunShadowProjection(compactWorld, {0.35f, 0.88f, 0.22f}, 1.10f);
+	const auto [paddedLightViewProjection] =
+		BuildSunShadowProjection(paddedWorld, {0.35f, 0.88f, 0.22f}, 1.10f);
+
+	for (size_t matrixIndex = 0; matrixIndex < compactLightViewProjection.size(); ++matrixIndex) {
+		EXPECT_TRUE(
+			context,
+			std::abs(
+				compactLightViewProjection[matrixIndex] -
+				paddedLightViewProjection[matrixIndex]) <= 0.001f);
+	}
+
+	constexpr std::array activeChunkMin{-8.0f, 0.0f, -8.0f};
+	constexpr std::array activeChunkMax{0.0f, 8.0f, 0.0f};
+	constexpr float kClipEpsilon = 0.02f;
+	for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+		const std::array corner{
+			(cornerIndex & 1) != 0 ? activeChunkMax[0] : activeChunkMin[0],
+			(cornerIndex & 2) != 0 ? activeChunkMax[1] : activeChunkMin[1],
+			(cornerIndex & 4) != 0 ? activeChunkMax[2] : activeChunkMin[2],
+		};
+		const std::array<float, 4> clipCorner = TransformPoint(compactLightViewProjection, corner);
+		EXPECT_TRUE(context, std::abs(clipCorner[3]) > 0.0001f);
+		const float inverseW = 1.0f / clipCorner[3];
+		const float clipX = clipCorner[0] * inverseW;
+		const float clipY = clipCorner[1] * inverseW;
+		const float clipZ = clipCorner[2] * inverseW;
+		EXPECT_TRUE(context, clipX >= -1.0f - kClipEpsilon && clipX <= 1.0f + kClipEpsilon);
+		EXPECT_TRUE(context, clipY >= -1.0f - kClipEpsilon && clipY <= 1.0f + kClipEpsilon);
+		EXPECT_TRUE(context, clipZ >= -kClipEpsilon && clipZ <= 1.0f + kClipEpsilon);
+	}
+}
+
+void TestBuildSunShadowProjectionInterpretsSunDirectionAsTowardsSun(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({-1, 0, -1}, {1, 2, 1}, 2);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+
+	const auto [lightViewProjection] = BuildSunShadowProjection(world, {0.0f, 1.0f, 0.0f}, 1.0f);
+	const std::array<float, 4> topClip = TransformPoint(lightViewProjection, {0.0f, 2.0f, 0.0f});
+	const std::array<float, 4> bottomClip = TransformPoint(lightViewProjection, {0.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(context, std::abs(topClip[3]) > 0.0001f);
+	EXPECT_TRUE(context, std::abs(bottomClip[3]) > 0.0001f);
+	const float topDepth = topClip[2] / topClip[3];
+	const float bottomDepth = bottomClip[2] / bottomClip[3];
+
+	EXPECT_TRUE(context, topDepth < bottomDepth);
 }
 
 void ExpectInt3Equal(
@@ -635,12 +914,12 @@ void TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::Air, hit.material);
 }
 
-void SendKeyEvent(
+void DispatchKeyEvent(
 	InputState *input,
 	const Uint32 eventType,
 	const SDL_Scancode scancode,
-	const bool repeat = false,
-	const Uint64 timestamp = 0)
+	const bool repeat,
+	const Uint64 timestamp)
 {
 	SDL_Event event{};
 	event.type = eventType;
@@ -648,6 +927,24 @@ void SendKeyEvent(
 	event.key.repeat = repeat;
 	event.key.timestamp = timestamp;
 	HandleInputActionEvent(*input, &event);
+}
+
+void SendKeyEvent(
+	InputState *input,
+	const Uint32 eventType,
+	const SDL_Scancode scancode,
+	const Uint64 timestamp = 0)
+{
+	DispatchKeyEvent(input, eventType, scancode, false, timestamp);
+}
+
+void SendRepeatedKeyEvent(
+	InputState *input,
+	const Uint32 eventType,
+	const SDL_Scancode scancode,
+	const Uint64 timestamp = 0)
+{
+	DispatchKeyEvent(input, eventType, scancode, true, timestamp);
 }
 
 CameraState MakeTestCamera(const std::array<float, 3> &position)
@@ -752,11 +1049,6 @@ std::string DescribeInputActionMask(const uint32_t mask)
 	return text;
 }
 
-bool HasInputActionMaskBit(const uint32_t mask, const InputAction action)
-{
-	return (mask & 1u << static_cast<uint32_t>(action)) != 0u;
-}
-
 int RunReplayAnalysisFromEnvironment()
 {
 	const char *requestedReplayPath = SDL_getenv("PROJECTV_ANALYZE_REPLAY_PATH");
@@ -828,11 +1120,12 @@ int RunReplayAnalysisFromEnvironment()
 	for (size_t frameIndex = 0; frameIndex < capture.frames.size(); ++frameIndex) {
 		const InputReplayFrame &frame = capture.frames[frameIndex];
 		const bool downMaskChanged = frame.actionDownMask != previousDownMask;
-		const bool jumpPressed = HasInputActionMaskBit(frame.actionPressedMask, InputAction::MoveUp);
+		const bool jumpPressed =
+			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::MoveUp)) != 0u;
 		const bool toggleWalkCreativePressed =
-			HasInputActionMaskBit(frame.actionPressedMask, InputAction::ToggleWalkCreativeMode);
+			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::ToggleWalkCreativeMode)) != 0u;
 		const bool toggleControlModePressed =
-			HasInputActionMaskBit(frame.actionPressedMask, InputAction::ToggleControlMode);
+			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::ToggleControlMode)) != 0u;
 		const bool interestingInput =
 			downMaskChanged ||
 			frame.placePressed ||
@@ -1077,7 +1370,7 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveForward));
 	EXPECT_TRUE(context, !ConsumeInputActionPressed(input, InputAction::MoveForward));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W, true);
+	SendRepeatedKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	EXPECT_TRUE(context, IsInputActionDown(input, InputAction::MoveForward));
 	EXPECT_TRUE(context, !ConsumeInputActionPressed(input, InputAction::MoveForward));
 
@@ -1120,6 +1413,24 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAutoJumpDelay));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_H);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::DecreaseLightingExposure));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_K);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::IncreaseLightingExposure));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_N);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleToneMapOperator));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_B);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleLightingDebugView));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_V);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ResetLightingDebugControls));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleShadowTuningTarget));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_U);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::DecreaseShadowTuningValue));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::IncreaseShadowTuningValue));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_C);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CaptureScreenshot));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_R);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleInputReplayRecording));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Y);
@@ -1135,10 +1446,10 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::LoadWorldSnapshot));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(100));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(100));
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveUp));
-	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(160));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(320));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(160));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(320));
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkCreativeMode));
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveUp));
 }
@@ -1778,18 +2089,18 @@ void TestUpdateAppDoubleSpaceTogglesCreativeAndWalk(TestContext &context)
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(100));
-	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(160));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(260));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(100));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(160));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(260));
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, CameraState::ControlMode::Walk, camera.controlMode);
 	EXPECT_EQ(context, CameraState::ControlMode::Walk, debug.stats.controlMode);
 	EXPECT_NEAR(context, 6.0f, camera.position[1]);
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(320));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(500));
-	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(560));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, false, SDL_MS_TO_NS(680));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(320));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(500));
+	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(560));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(680));
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, debug.stats.controlMode);
@@ -3803,7 +4114,7 @@ void TestWalkCharacterCanJumpWhileMovingAcrossNarrowEdgeBandWithoutSneak(TestCon
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 
-	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+	PhysicsWalkDebugInfo preJumpInfo{};
 	bool foundMovingEdgeBand = false;
 	for (int step = 0; step < 30; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
@@ -3896,7 +4207,7 @@ void TestWalkCharacterCanJumpWhileBoostingAlongStraightEdgeWithoutSneak(TestCont
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LCTRL);
 
 	float minY = camera.position[1];
-	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+	PhysicsWalkDebugInfo preJumpInfo{};
 	for (int step = 0; step < 120; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
 		minY = std::min(minY, camera.position[1]);
@@ -5679,7 +5990,7 @@ void TestWalkCharacterReplayKeepsEdgeJumpGroundedLikeSupport(TestContext &contex
 	for (const InputReplayFrame &frame : capture.frames) {
 		const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
 		if (!foundEdgeJumpAttempt &&
-			HasInputActionMaskBit(frame.actionPressedMask, InputAction::MoveUp) &&
+			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::MoveUp)) != 0u &&
 			infoBeforeTick.valid &&
 			infoBeforeTick.footSupportHitSamples > 0 &&
 			std::abs(infoBeforeTick.feetPosition[1] - 1.05f) <= 0.05f) {
@@ -5889,6 +6200,84 @@ void TestUpdateAppRequestsWorldSnapshotLoad(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, world.snapshotLoadRequested);
+}
+
+void TestUpdateAppRequestsScreenshotCapture(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	RenderState render{};
+	DebugState debug{};
+
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_C);
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+	EXPECT_TRUE(context, render.screenshotCaptureRequested);
+}
+
+void TestUpdateAppAdjustsShadowTuningControls(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
+	InteractionState interaction{};
+	WorldState world{};
+	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
+	RenderState render{};
+	DebugState debug{};
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_EQ(context, ShadowTuningTarget::DepthBias, render.lightingDebugControls.shadowTuningTarget);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_U);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_TRUE(context, render.lightingDebugControls.shadowDepthBiasOffset < 0.0f);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_EQ(context, ShadowTuningTarget::Coverage, render.lightingDebugControls.shadowTuningTarget);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_TRUE(context, render.lightingDebugControls.shadowCoverageScale > 1.0f);
+		EXPECT_TRUE(context, debug.stats.shadowTuningTarget == ShadowTuningTarget::Coverage);
+		EXPECT_TRUE(context, debug.stats.sunShadowCoverageScale == render.lightingDebugControls.shadowCoverageScale);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_V);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_TRUE(context, render.lightingDebugControls.shadowDepthBiasOffset == 0.0f);
+		EXPECT_TRUE(context, render.lightingDebugControls.shadowCoverageScale == 1.0f);
+		EXPECT_EQ(context, ShadowTuningTarget::Strength, render.lightingDebugControls.shadowTuningTarget);
+	}
 }
 
 void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
@@ -6430,6 +6819,88 @@ void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 	EXPECT_TRUE(context, textMaxX > -1.0f);
 	EXPECT_TRUE(context, std::abs(statsPanelMaxX - helperPanelMaxX) <= 0.0001f);
 	EXPECT_TRUE(context, textMaxX <= helperPanelMaxX);
+
+	DebugStats stressStats = detailedStats;
+	stressStats.framesPerSecond = 9999.9f;
+	stressStats.frameTimeMilliseconds = 99.99f;
+	stressStats.simulationStepsLastFrame = 9999;
+	stressStats.dirtyChunkCount = 4096;
+	stressStats.activeChunkCount = 4096;
+	stressStats.nonAirVoxelCount = 16777215;
+	stressStats.sceneTriangleCount = 999999;
+	stressStats.sceneMemoryBytes = 987654321;
+	stressStats.worldEditVersion = 18446744073709551615ull;
+	stressStats.controlMode = CameraState::ControlMode::Walk;
+	stressStats.walkAirControlMode = WalkAirControlMode::Realistic;
+	stressStats.walkAutoJumpEnabled = true;
+	stressStats.walkAutoJumpDelayEnabled = true;
+	stressStats.simulationPaused = true;
+	stressStats.showChunkBounds = true;
+	stressStats.showDirtyChunkOverlay = true;
+	stressStats.walkDebugValid = true;
+	stressStats.walkSupportState = 2;
+	stressStats.walkFeetPosition = {-128.875f, 4096.125f, 2048.625f};
+	stressStats.walkFootSupportScore = 0.987f;
+	stressStats.walkFootSupportHitSamples = 16;
+	stressStats.walkFootSupportTotalSamples = 16;
+	stressStats.walkEdgeGraceFramesRemaining = 999;
+	stressStats.walkGroundTakeoffGraceFramesRemaining = 999;
+	stressStats.walkSneakSupportGraceFramesRemaining = 999;
+	stressStats.walkLedgeReleaseGraceFramesRemaining = 999;
+	stressStats.walkAutoJumpDelayFramesRemaining = 999;
+	stressStats.walkGroundTakeoffCached = true;
+	stressStats.walkSneakActive = true;
+	stressStats.walkJumpLockActive = true;
+	stressStats.walkSuppressPassiveSlide = true;
+	stressStats.sceneExposure = 3.75f;
+	stressStats.toneMapOperator = ToneMapOperator::AcesApprox;
+	stressStats.lightingDebugView = LightingDebugView::Direct;
+	stressStats.sunDirection = {-0.58f, 0.62f, -0.31f};
+	stressStats.sunIntensity = 1.30f;
+	stressStats.inputReplayPlaybackActive = true;
+	stressStats.inputReplayReady = true;
+	stressStats.inputReplayFrameCount = 9999;
+	stressStats.inputReplayPlaybackFrameIndex = 7777;
+
+	InteractionState stressInteraction = interaction;
+	stressInteraction.editorTool = DebugEditorTool::Inspect;
+	stressInteraction.placementMaterial = VoxelMaterial::FloorGray;
+	stressInteraction.selection.targetVoxel = {-512, 128, 2048};
+	stressInteraction.selection.placementVoxel = {-512, 129, 2048};
+	stressInteraction.selection.targetVoxelInChunk = {63, 31, 15};
+	stressInteraction.selection.hitNormal = {-1, 1, 0};
+	stressInteraction.selection.hasTargetChunk = true;
+	stressInteraction.selection.targetChunkCoord = {-8, 2, 32};
+	stressInteraction.selection.targetChunkMin = {-512, 128, 2048};
+	stressInteraction.selection.targetChunkMaxExclusive = {-448, 192, 2112};
+	stressInteraction.selection.targetChunkDirty = true;
+	stressInteraction.selection.targetChunkActive = true;
+	stressInteraction.selection.targetChunkIndex = 999;
+	stressInteraction.selection.targetChunkNonAirVoxelCount = 32768;
+	stressInteraction.selection.hasPlacementChunk = true;
+	stressInteraction.selection.placementChunkCoord = {-8, 2, 32};
+	stressInteraction.selection.placementChunkMin = {-512, 128, 2048};
+	stressInteraction.selection.placementChunkMaxExclusive = {-448, 192, 2112};
+	stressInteraction.selection.placementChunkDirty = true;
+	stressInteraction.selection.placementChunkActive = true;
+	stressInteraction.selection.placementChunkIndex = 999;
+	stressInteraction.selection.placementChunkNonAirVoxelCount = 32768;
+	stressInteraction.mutationAnchorValid = true;
+	stressInteraction.mutationAnchorUsesPlacementVoxel = true;
+	stressInteraction.mutationAnchorVoxel = {-520, 128, 2056};
+
+	std::vector<DebugHudVertex> stressVertices(static_cast<size_t>(DEBUG_HUD_MAX_VERTEX_COUNT) * 2u);
+	const uint32_t stressVertexCount = BuildDebugHudVertices(
+		stressStats,
+		MakeTestCamera({-128.875f, 4097.725f, 2048.625f}),
+		stressInteraction,
+		true,
+		VkExtent2D{1280, 720},
+		stressVertices.data(),
+		static_cast<uint32_t>(stressVertices.size()));
+
+	EXPECT_TRUE(context, stressVertexCount > detailedVertexCount);
+	EXPECT_TRUE(context, stressVertexCount < DEBUG_HUD_MAX_VERTEX_COUNT);
 }
 
 void TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(TestContext &context)
@@ -6500,6 +6971,9 @@ int main()
 	TestCreateVoxelSceneWorldBuildsExpectedBaselineScenes(context);
 	TestCreateVoxelSceneWorldReadsEnvironmentPreset(context);
 	TestVoxelWorldSnapshotPathUsesEnvironmentOverride(context);
+	TestScreenshotCapturePathUsesEnvironmentOverride(context);
+	TestSaveScreenshotCaptureBmpWritesExpectedBmp(context);
+	TestSaveScreenshotCaptureMetadataWritesLookDevState(context);
 	TestVoxelWorldSnapshotRoundTripsWorldState(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
@@ -6512,6 +6986,12 @@ int main()
 	TestInitFailureStageParsing(context);
 	TestVoxelMaterialVisuals(context);
 	TestVoxelSceneLightingPresetsProvideDistinctLooks(context);
+	TestBuildVoxelSceneLightingAppliesLookDevControls(context);
+	TestLightingDebugViewCycleIncludesShadow(context);
+	TestShadowTuningTargetCycleAndLabels(context);
+	TestBuildSunShadowProjectionFitsSceneBounds(context);
+	TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(context);
+	TestBuildSunShadowProjectionInterpretsSunDirectionAsTowardsSun(context);
 	TestInputActionBindingsTrackPressedAndReleasedKeys(context);
 	TestConsumeCameraLookInputAllowsNearVerticalPitch(context);
 	TestTickCameraUsesActionStateAndSpeedModifiers(context);
@@ -6609,6 +7089,8 @@ int main()
 	TestUpdateAppRequestsScenePresetReload(context);
 	TestUpdateAppRequestsWorldSnapshotSave(context);
 	TestUpdateAppRequestsWorldSnapshotLoad(context);
+	TestUpdateAppRequestsScreenshotCapture(context);
+	TestUpdateAppAdjustsShadowTuningControls(context);
 	TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(context);
 	TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(context);
 	TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(context);

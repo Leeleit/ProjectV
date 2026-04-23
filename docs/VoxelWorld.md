@@ -1,6 +1,6 @@
 # ProjectV VoxelWorld
 
-Дата фиксации: `2026-04-07`
+Дата фиксации: `2026-04-22`
 
 Этот документ описывает current `VoxelWorld` в `ProjectV`: его структуру данных, dirty queue, interaction path и связь с
 render/physics слоями.
@@ -38,10 +38,16 @@ ECS, renderer и physics читают этот state, но ownership мира о
 
 `Air` и `Fluid` коллизии не дают.
 
-Render-facing material response теперь живёт в [VoxelMaterials.cpp](../src/voxel/VoxelMaterials.cpp): цвет, lighting
-response,
-fresnel/transmission/emissive параметры и scene-lighting presets описываются на CPU, а не как жёстко зашитые константы в
-shader.
+Render-facing material response теперь живёт в [VoxelMaterials.cpp](../src/voxel/VoxelMaterials.cpp): `base color`,
+`AO`, `roughness`, `metallic`, `reflectance`, transmission и fog/emissive/ambient/direct-response hooks, scene-lighting
+presets и первый
+exposure/tone-mapping contract описываются на CPU, а не как жёстко зашитые константы в shader.
+Там же теперь живёт и первый sun-shadow baseline: per-preset shadow tuning, а `SceneResources` дополняет его
+scene-wide `sunShadowViewProjection`, собранной из bounds активных chunk-ов (с fallback на полные границы `VoxelWorld`
+для пустой сцены) и направления солнца.
+Current `voxel.frag` больше не держит direct sun на ad-hoc `spec power + shininess`: direct-light BRDF теперь базово
+следует `GGX + Fresnel-Schlick + Smith`, но остаётся встроенным в тот же forward voxel path без отдельного PBR framework
+или IBL stack.
 
 ## Границы и координаты
 
@@ -112,7 +118,28 @@ Chunk bookkeeping сейчас нужен не ради gameplay, а ради re
 
 Теперь preset задаёт не только геометрию, но и reproducible visual look: `SceneResources` загружает matching
 lighting/fog/sun
-параметры для `voxel.frag`, поэтому `F5` циклично меняет и scene layout, и освещение.
+параметры и baseline post-process для `voxel.frag`, поэтому `F5` циклично меняет и scene layout, и освещение.
+Первый sun-shadow path следует тому же принципу: при смене preset сохраняется reproducible baseline для силы и bias
+теней, а shadow projection каждый кадр пересчитывается от актуальных bounds активной сцены, а не от камеры; если сцена
+пуста, path fallback'ается на полные world bounds. Authored sun vector при этом по-прежнему указывает к солнцу для
+shading, а shadow fit инвертирует его во внутреннее light-travel direction, чтобы direct light и shadow placement
+читались от одного и того же preset.
+
+Поверх preset-baseline current live look-dev ladder остаётся keyboard-driven и не требует отдельного editor path:
+
+- `B` циклично переключает lighting debug views;
+- `N` циклично переключает tone-map operator;
+- `H/K` двигают exposure вниз/вверх;
+- `V` сбрасывает lighting debug controls к baseline preset;
+- `C` сохраняет текущий кадр в `.bmp` плюс sidecar metadata-файл с preset/exposure/shadow state.
+
+По умолчанию такие look-dev captures пишутся в `ProjectVScreenshots` рядом с executable, а `PROJECTV_SCREENSHOT_DIR`
+может переопределить директорию вывода.
+
+После первого sun-shadow quality follow-up `B` теперь включает и dedicated `Shadow` view, а detailed HUD показывает
+current
+shadow resolution / strength / filter radius / bias, так что базовый shadow look-dev остаётся reproducible внутри
+runtime.
 
 `VoxelLab` по-прежнему создаёт текущую основную demo-scene:
 
