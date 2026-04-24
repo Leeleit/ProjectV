@@ -427,6 +427,28 @@ void BuildVoxelLabShellAndFluid(VoxelWorld &world, const VoxelLabShellConfig &co
 	}
 }
 
+void BuildVoxelLabOpaqueAnchors(VoxelWorld &world, const VoxelWorldConfig &config)
+{
+	const int baseY = config.floorY + 1;
+	for (int z = 4; z <= 6; ++z) {
+		for (int x = 5; x <= 8; ++x) {
+			SetVoxelMaterial(world, {x, baseY, z}, VoxelMaterial::FloorGray);
+		}
+	}
+
+	for (int y = baseY + 1; y <= baseY + 5; ++y) {
+		for (int z = 4; z <= 5; ++z) {
+			for (int x = 6; x <= 7; ++x) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::FloorWhite);
+			}
+		}
+	}
+
+	for (int y = baseY + 1; y <= baseY + 3; ++y) {
+		SetVoxelMaterial(world, {5, y, 6}, VoxelMaterial::FloorWhite);
+	}
+}
+
 void BuildTransparencyStressColumns(VoxelWorld &world, const VoxelWorldConfig &config)
 {
 	const int halfFloor = GetHalfFloorSize(config);
@@ -523,6 +545,7 @@ std::unique_ptr<VoxelWorld> BuildVoxelLabSceneWorld()
 	const VoxelLabShellConfig voxelLabShell = GetVoxelLabShellConfig();
 	std::unique_ptr<VoxelWorld> world = CreateSceneWorldWithFloor(VoxelScenePreset::VoxelLab, worldConfig);
 	BuildVoxelLabShellAndFluid(*world, voxelLabShell);
+	BuildVoxelLabOpaqueAnchors(*world, worldConfig);
 
 	MarkAllVoxelChunksDirty(world.get());
 	return world;

@@ -6,9 +6,30 @@
 
 namespace {
 constexpr float kMinSceneExposure = 0.05f;
+constexpr float kDefaultMaxSceneExposure = 4.0f;
+constexpr float kMinSceneKey = 0.001f;
+constexpr float kMinExposureTargetKey = 0.05f;
+constexpr float kMaxExposureTargetKey = 4.0f;
+constexpr float kMinEnvironmentIntensity = 0.0f;
+constexpr float kMaxEnvironmentIntensity = 2.0f;
+constexpr float kMinColorGradeWhitePoint = 0.25f;
+constexpr float kMaxColorGradeWhitePoint = 4.0f;
+constexpr float kMinColorGradeContrast = 0.0f;
+constexpr float kMaxColorGradeContrast = 2.0f;
+constexpr float kMinColorGradeSaturation = 0.0f;
+constexpr float kMaxColorGradeSaturation = 2.0f;
+constexpr float kMinColorGradeLift = -0.25f;
+constexpr float kMaxColorGradeLift = 0.25f;
 constexpr float kMaxShadowDepthBias = 0.02f;
 constexpr float kMaxShadowNormalBias = 0.05f;
 constexpr float kMaxShadowFilterRadius = 8.0f;
+constexpr float kDefaultShadowCascadeBlend = 0.15f;
+constexpr float kMaxShadowCascadeBlend = 0.50f;
+
+float ComputeLuminance(const std::array<float, 4> &color)
+{
+	return color[0] * 0.2126f + color[1] * 0.7152f + color[2] * 0.0722f;
+}
 
 std::array<float, 3> ApplyToneMap(
 	const std::array<float, 3> &linearColor,
@@ -45,11 +66,60 @@ std::array<float, 3> ApplyToneMap(
 	}
 }
 
+std::array<float, 3> ApplyColorGrading(
+	const std::array<float, 3> &mappedColor,
+	const std::array<float, 4> &colorGrading)
+{
+	const float whitePoint =
+		std::clamp(colorGrading[0], kMinColorGradeWhitePoint, kMaxColorGradeWhitePoint);
+	const float contrast =
+		std::clamp(colorGrading[1], kMinColorGradeContrast, kMaxColorGradeContrast);
+	const float saturation =
+		std::clamp(colorGrading[2], kMinColorGradeSaturation, kMaxColorGradeSaturation);
+	const float lift =
+		std::clamp(colorGrading[3], kMinColorGradeLift, kMaxColorGradeLift);
+	const std::array normalizedColor{
+		mappedColor[0] / whitePoint,
+		mappedColor[1] / whitePoint,
+		mappedColor[2] / whitePoint,
+	};
+	const float luma =
+		normalizedColor[0] * 0.2126f +
+		normalizedColor[1] * 0.7152f +
+		normalizedColor[2] * 0.0722f;
+	return {
+		std::clamp((luma + (normalizedColor[0] - luma) * saturation - 0.5f) * contrast + 0.5f + lift, 0.0f, 1.0f),
+		std::clamp((luma + (normalizedColor[1] - luma) * saturation - 0.5f) * contrast + 0.5f + lift, 0.0f, 1.0f),
+		std::clamp((luma + (normalizedColor[2] - luma) * saturation - 0.5f) * contrast + 0.5f + lift, 0.0f, 1.0f),
+	};
+}
+
+std::array<float, 4> ClampColorGrading(const std::array<float, 4> &colorGrading)
+{
+	return {
+		std::clamp(colorGrading[0], kMinColorGradeWhitePoint, kMaxColorGradeWhitePoint),
+		std::clamp(colorGrading[1], kMinColorGradeContrast, kMaxColorGradeContrast),
+		std::clamp(colorGrading[2], kMinColorGradeSaturation, kMaxColorGradeSaturation),
+		std::clamp(colorGrading[3], kMinColorGradeLift, kMaxColorGradeLift),
+	};
+}
+
 float BuildExposure(
-	const float baseExposure,
+	const VoxelSceneLighting &lighting,
 	const float exposureBiasStops)
 {
-	return std::max(baseExposure * std::exp2(exposureBiasStops), kMinSceneExposure);
+	const ExposureMeteringMode meteringMode =
+		static_cast<ExposureMeteringMode>(std::lround(lighting.exposureControl[0]));
+	const float minExposure = std::max(lighting.exposureControl[2], kMinSceneExposure);
+	const float maxExposure = std::max(lighting.exposureControl[3], minExposure);
+	float meteredExposure = std::clamp(lighting.postProcess[0], minExposure, maxExposure);
+	if (meteringMode == ExposureMeteringMode::SceneKey) {
+		const float exposureKey = EstimateVoxelSceneExposureKey(lighting);
+		const float targetKey =
+			std::clamp(lighting.exposureControl[1], kMinExposureTargetKey, kMaxExposureTargetKey);
+		meteredExposure = std::clamp(targetKey / std::max(exposureKey, kMinSceneKey), minExposure, maxExposure);
+	}
+	return std::clamp(meteredExposure * std::exp2(exposureBiasStops), minExposure, maxExposure);
 }
 } // namespace
 
@@ -100,8 +170,11 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.groundColorAndFogMax = {0.30f, 0.31f, 0.34f, 0.22f},
 			.sunColorAndIntensity = {0.98f, 0.99f, 1.00f, 0.55f},
 			.sunDirectionAndWrap = {-0.20f, 0.95f, -0.24f, 0.55f},
-			.postProcess = {1.20f, 1.0f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			.postProcess = {1.20f, 0.90f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.72f, 0.0009f, 0.0060f, 1.10f},
+			.colorGrading = {1.00f, 1.00f, 0.98f, 0.00f},
+			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.785f, 0.45f, 2.50f},
+			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
 		};
 	case VoxelScenePreset::TransparencyStress:
 		return {
@@ -110,8 +183,11 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.groundColorAndFogMax = {0.08f, 0.11f, 0.16f, 0.38f},
 			.sunColorAndIntensity = {1.00f, 0.93f, 0.84f, 1.30f},
 			.sunDirectionAndWrap = {-0.58f, 0.62f, -0.31f, 0.20f},
-			.postProcess = {0.95f, 1.0f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			.postProcess = {0.95f, 1.05f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.64f, 0.0008f, 0.0055f, 1.25f},
+			.colorGrading = {1.00f, 1.02f, 1.05f, 0.00f},
+			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.705f, 0.40f, 2.40f},
+			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
 		};
 	case VoxelScenePreset::ChunkGrid:
 		return {
@@ -120,8 +196,11 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.groundColorAndFogMax = {0.24f, 0.18f, 0.14f, 0.28f},
 			.sunColorAndIntensity = {1.00f, 0.74f, 0.46f, 1.15f},
 			.sunDirectionAndWrap = {-0.15f, 0.72f, -0.68f, 0.24f},
-			.postProcess = {1.05f, 1.0f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			.postProcess = {1.05f, 0.92f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.76f, 0.0010f, 0.0040f, 1.30f},
+			.colorGrading = {1.00f, 1.03f, 1.04f, -0.01f},
+			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.755f, 0.45f, 2.60f},
+			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
 		};
 	case VoxelScenePreset::MeshingStress:
 		return {
@@ -130,8 +209,11 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.groundColorAndFogMax = {0.14f, 0.16f, 0.18f, 0.40f},
 			.sunColorAndIntensity = {1.00f, 0.88f, 0.76f, 1.45f},
 			.sunDirectionAndWrap = {-0.70f, 0.48f, -0.18f, 0.18f},
-			.postProcess = {0.90f, 1.0f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			.postProcess = {0.90f, 0.88f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.80f, 0.0010f, 0.0070f, 1.50f},
+			.colorGrading = {1.00f, 1.04f, 0.96f, -0.01f},
+			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.651f, 0.40f, 2.50f},
+			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
 		};
 	case VoxelScenePreset::VoxelLab:
 	default:
@@ -141,8 +223,11 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.groundColorAndFogMax = {0.22f, 0.25f, 0.30f, 0.32f},
 			.sunColorAndIntensity = {1.00f, 0.96f, 0.90f, 0.95f},
 			.sunDirectionAndWrap = {-0.35f, 0.80f, -0.45f, 0.30f},
-			.postProcess = {1.10f, 1.0f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			.postProcess = {1.10f, 0.96f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.74f, 0.0009f, 0.0060f, 1.35f},
+			.colorGrading = {1.00f, 1.02f, 1.03f, 0.00f},
+			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.867f, 0.45f, 2.60f},
+			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
 		};
 	}
 }
@@ -152,9 +237,19 @@ VoxelSceneLighting BuildVoxelSceneLighting(
 	const VoxelLightingDebugControls &controls)
 {
 	VoxelSceneLighting lighting = GetVoxelSceneLighting(preset);
-	lighting.postProcess[0] = BuildExposure(lighting.postProcess[0], controls.exposureBiasStops);
+	lighting.postProcess[1] = std::clamp(
+		lighting.postProcess[1],
+		kMinEnvironmentIntensity,
+		kMaxEnvironmentIntensity);
 	lighting.postProcess[2] = static_cast<float>(controls.toneMapOperator);
 	lighting.postProcess[3] = static_cast<float>(controls.debugView);
+	lighting.colorGrading = ClampColorGrading(lighting.colorGrading);
+	lighting.exposureControl[2] = std::max(lighting.exposureControl[2], kMinSceneExposure);
+	if (lighting.exposureControl[3] <= 0.0f) {
+		lighting.exposureControl[3] = kDefaultMaxSceneExposure;
+	}
+	lighting.exposureControl[3] = std::max(lighting.exposureControl[3], lighting.exposureControl[2]);
+	lighting.postProcess[0] = BuildExposure(lighting, controls.exposureBiasStops);
 	lighting.sunShadowParams[0] = std::clamp(
 		lighting.sunShadowParams[0] + controls.shadowStrengthOffset,
 		0.0f,
@@ -171,7 +266,30 @@ VoxelSceneLighting BuildVoxelSceneLighting(
 		lighting.sunShadowParams[3] + controls.shadowFilterRadiusOffset,
 		0.0f,
 		kMaxShadowFilterRadius);
+	lighting.shadowCascadeBlendParams[0] = std::clamp(
+		lighting.shadowCascadeBlendParams[0] + controls.shadowCascadeBlendOffset,
+		0.0f,
+		kMaxShadowCascadeBlend);
+	lighting.shadowCascadeBlendParams[1] = 0.0f;
+	lighting.shadowCascadeBlendParams[2] = 0.0f;
+	lighting.shadowCascadeBlendParams[3] = 0.0f;
 	return lighting;
+}
+
+float EstimateVoxelSceneExposureKey(const VoxelSceneLighting &lighting)
+{
+	const float environmentIntensity =
+		std::clamp(lighting.postProcess[1], kMinEnvironmentIntensity, kMaxEnvironmentIntensity);
+	const float environmentKey =
+		(ComputeLuminance(lighting.skyColorAndFogDensity) * 0.35f +
+		 ComputeLuminance(lighting.horizonColorAndFogStart) * 0.35f +
+		 ComputeLuminance(lighting.groundColorAndFogMax) * 0.20f) *
+		environmentIntensity;
+	const float sunKey =
+		ComputeLuminance(lighting.sunColorAndIntensity) *
+		std::max(lighting.sunColorAndIntensity[3], 0.0f) *
+		0.18f;
+	return std::max(environmentKey + sunKey, kMinSceneKey);
 }
 
 std::array<float, 4> GetVoxelSceneClearColor(const VoxelSceneLighting &lighting)
@@ -184,7 +302,8 @@ std::array<float, 4> GetVoxelSceneClearColor(const VoxelSceneLighting &lighting)
 		lighting.skyColorAndFogDensity[2] * exposure,
 	};
 	const std::array<float, 3> mappedSkyColor = ApplyToneMap(exposedSkyColor, toneMapOperator);
-	return {mappedSkyColor[0], mappedSkyColor[1], mappedSkyColor[2], 1.0f};
+	const std::array<float, 3> gradedSkyColor = ApplyColorGrading(mappedSkyColor, lighting.colorGrading);
+	return {gradedSkyColor[0], gradedSkyColor[1], gradedSkyColor[2], 1.0f};
 }
 
 const char *ToneMapOperatorToString(const ToneMapOperator toneMapOperator)
@@ -200,6 +319,17 @@ const char *ToneMapOperatorToString(const ToneMapOperator toneMapOperator)
 	}
 }
 
+const char *ExposureMeteringModeToString(const ExposureMeteringMode meteringMode)
+{
+	switch (meteringMode) {
+	case ExposureMeteringMode::Manual:
+		return "MANUAL";
+	case ExposureMeteringMode::SceneKey:
+	default:
+		return "SCENEKEY";
+	}
+}
+
 const char *LightingDebugViewToString(const LightingDebugView debugView)
 {
 	switch (debugView) {
@@ -209,6 +339,8 @@ const char *LightingDebugViewToString(const LightingDebugView debugView)
 		return "DIR";
 	case LightingDebugView::Shadow:
 		return "SHDW";
+	case LightingDebugView::Cascade:
+		return "CSM";
 	case LightingDebugView::Fog:
 		return "FOG";
 	case LightingDebugView::Final:
@@ -229,8 +361,10 @@ const char *ShadowTuningTargetToString(const ShadowTuningTarget target)
 	case ShadowTuningTarget::FilterRadius:
 		return "FLT";
 	case ShadowTuningTarget::Coverage:
-	default:
 		return "COV";
+	case ShadowTuningTarget::CascadeBlend:
+	default:
+		return "BLND";
 	}
 }
 
@@ -257,6 +391,8 @@ LightingDebugView GetNextLightingDebugView(const LightingDebugView debugView)
 	case LightingDebugView::Direct:
 		return LightingDebugView::Shadow;
 	case LightingDebugView::Shadow:
+		return LightingDebugView::Cascade;
+	case LightingDebugView::Cascade:
 		return LightingDebugView::Fog;
 	case LightingDebugView::Fog:
 	default:
@@ -276,6 +412,8 @@ ShadowTuningTarget GetNextShadowTuningTarget(const ShadowTuningTarget target)
 	case ShadowTuningTarget::FilterRadius:
 		return ShadowTuningTarget::Coverage;
 	case ShadowTuningTarget::Coverage:
+		return ShadowTuningTarget::CascadeBlend;
+	case ShadowTuningTarget::CascadeBlend:
 	default:
 		return ShadowTuningTarget::Strength;
 	}

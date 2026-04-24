@@ -1,7 +1,13 @@
 #version 460
 
+struct PackedFace {
+    uint localVoxelFace;
+    uint chunkIndexMaterial;
+    uint lightingData;
+};
+
 layout(set = 0, binding = 0, std430) readonly buffer PackedFacePayload {
-    uvec2 packedFaces[];
+    PackedFace packedFaces[];
 };
 
 struct ChunkDescriptor {
@@ -18,11 +24,13 @@ layout(set = 0, binding = 1, std430) readonly buffer PackedChunkDescriptors {
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
     vec4 cameraPosition;
+    vec4 cameraForward;
 } pushConstants;
 
 layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec3 outWorldPosition;
 layout(location = 2) flat out uint outMaterialIndex;
+layout(location = 3) flat out float outAmbientVisibility;
 
 vec3 DecodeFaceNormal(const uint faceIndex) {
     switch (faceIndex) {
@@ -82,9 +90,9 @@ uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
 }
 
 void main() {
-    const uvec2 packedFace = packedFaces[uint(gl_InstanceIndex)];
-    const uint localVoxelFace = packedFace.x;
-    const uint chunkIndexMaterial = packedFace.y;
+    const PackedFace packedFace = packedFaces[uint(gl_InstanceIndex)];
+    const uint localVoxelFace = packedFace.localVoxelFace;
+    const uint chunkIndexMaterial = packedFace.chunkIndexMaterial;
 
     const uint faceIndex = (localVoxelFace >> 24u) & 0xFFu;
     const uint materialIndex = (chunkIndexMaterial >> 24u) & 0xFFu;
@@ -103,4 +111,5 @@ void main() {
     outNormal = DecodeFaceNormal(faceIndex);
     outWorldPosition = worldPosition;
     outMaterialIndex = materialIndex;
+    outAmbientVisibility = float(packedFace.lightingData & 0xFFu) / 255.0;
 }

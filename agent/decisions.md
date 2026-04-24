@@ -52,14 +52,18 @@
 Решение:
 
 - Mainline repeatable build path живёт на `windows-clang-debug` и `windows-clang-debug-ci`.
-- Verification loop выполняется только последовательно: `build -> tests -> smoke`.
-- Runtime smoke остаётся отдельной developer-only GUI-проверкой и вызывается как официальный target.
+- Verification loop выполняется только последовательно: build/test/smoke-команды не запускать параллельно в одном build tree.
+- Runtime smoke остаётся отдельной developer-only GUI-проверкой и вызывается как официальный target, но это targeted
+  lifecycle check, а не mandatory DoD для каждой задачи.
+- `ProjectVRuntimeSmoke` запускать после изменений в Vulkan/bootstrap/swapchain/window lifecycle/present/screenshot sync
+  или при риске device-lost/hang. Для shader/material/lighting tuning, docs и unit-testable логики использовать
+  build/tests плюс task-specific validation вроде scripted captures.
 - Shader compile path принимает `glslc` или `glslangValidator`.
 - Для translation units с Jolt include-contract начинается с `<Jolt/Jolt.h>`; auto-refactor не должен поднимать другие Jolt headers выше него.
 
 Почему:
 
-- Это минимальный reproducible contour для mainline без лишней хрупкости и конфликтов build tree.
+- Это сохраняет reproducible contour для mainline без лишней хрупкости, конфликтов build tree и пустых smoke-ритуалов.
 
 ## 5. Interaction contract
 
@@ -189,32 +193,113 @@
 Решение:
 
 - Первый lighting contract живёт в `VoxelSceneLighting`: sky/horizon/ground/sun/fog плюс baseline exposure/tone-map/debug-view post-process.
+- `postProcess.y` in `VoxelSceneLighting` is reserved for per-preset environment diffuse intensity. It is not a generic scratch slot.
+- Ambient/environment fill must not stay purely normal-based once it causes sealed voxel cavities to read as open sky.
+  The current bounded fix is a cheap meshing-side local visibility term in `PackedSceneVoxelFace::lightingData`, which
+  the main voxel shader multiplies into sky/horizon/ground fill. Current blocker policy for that term is
+  `Air/Open`, `Glass/Open`, `Fluid/Occluder`, `Opaque/Occluder`; this is not `SSAO/GTAO`.
+- `colorGrading` in `VoxelSceneLighting` is reserved for the minimal grading contract: white point, contrast,
+  saturation, lift. It is applied after tone mapping and the clear color must use the same grading path.
+- `exposureControl` in `VoxelSceneLighting` is reserved for exposure metering mode, target scene key, minimum exposure,
+  and maximum exposure. Current mainline policy is CPU-side `SceneKey`, not GPU histogram/adaptive exposure.
 - `UpdateSceneResources` освежает current scene lighting из `VoxelScenePreset` и runtime look-dev controls каждый кадр, а renderer clear color использует тот же contract вместо отдельной hardcoded sky-константы.
 - Current look-dev ladder остаётся keyboard-first внутри живого sandbox loop: `B` cycles lighting debug views, `N` cycles tone-map, `H/K` adjust exposure, `V` resets to preset baseline.
 - Reproducible look-dev capture stays inside the same runtime path too: `C` saves a `.bmp` of the current frame plus a sidecar metadata file with preset/exposure/shadow tuning, instead of treating screenshot capture as an external-tool-only workflow.
+- Baseline refreshes that need exact camera/view reproducibility should use the env-driven startup camera and capture automation (`PROJECTV_START_CAMERA_POSITION`, `PROJECTV_START_CAMERA_LOOK`, `PROJECTV_LOOKDEV_CAPTURE_VIEWS`, warmup/interval/quit knobs) instead of manual key timing.
+- Screenshot capture is part of the frame command stream. If capture copy commands are recorded after color rendering, the render-finished semaphore must not be signaled at `COLOR_ATTACHMENT_OUTPUT`; present has to wait for all recorded commands so the transfer copy and final layout transition cannot race presentation.
 
 Почему:
 
 - Так lighting/look-dev остаётся reproducible внутри текущего MVP loop без отдельного editor path и без скрытого shader-only состояния, которое трудно отлаживать и сравнивать между сценами.
+- Так scripted captures become a real baseline artifact rather than a best-effort manual screenshot, and screenshot readback remains deterministic enough for visual comparisons.
+- Explicit environment intensity keeps ambient readability tunable per scene without treating indirect fill as hidden shader magic or faking it through shadow strength.
+- The first cavity-darkening fix should stay inside the existing voxel meshing + forward shading contract instead of
+  jumping straight to screen-space AO. A local voxel-neighborhood visibility term solves the obvious "closed niche still
+  sees full sky" bug without adding another heavy pass or pretending mainline already has real GI.
+- Minimal grading is a fixed per-preset contract for now; auto exposure remains a separate follow-up and should not be
+  smuggled in as hidden shader state.
+- The first auto-exposure policy should stay deterministic and cheap until the renderer has a real HDR/luminance path:
+  `SceneKey` estimates authored scene brightness from sky/horizon/ground/sun terms on CPU, then manual exposure bias is
+  applied on top.
 
 ## 15. First sun-shadow path
 Update `2026-04-22`:
 
 - The earlier "render the whole opaque face prefix with a direct draw" version of this path is obsolete. Packed opaque faces live in sparse per-chunk ranges, and the dense-prefix assumption caused `VK_ERROR_DEVICE_LOST` when switching into `TransparencyStress`.
 - The shadow pass now binds its own descriptor/pipeline layout; it must not reuse the main graphics descriptor set that already samples the shadow image while that image is simultaneously written as a depth attachment.
-- The current stability-first baseline now uses a dedicated all-occluder `shadowIndirectBuffer`. Compute meshing updates that buffer for dirty chunks, CPU keeps it warm for unchanged chunks, and the shadow pass no longer inherits camera-frustum culling from the main opaque visibility commands.
-- The remaining limitation is now explicit rather than accidental: the current sun-shadow baseline is still opaque-only, so transparent-heavy demo scenes like `VoxelLab` can look almost shadowless even when the opaque shadow path is functioning correctly.
+- The current stability-first baseline now uses a dedicated all-occluder `shadowIndirectBuffer` for opaque casters. Compute meshing updates that buffer for dirty chunks, CPU keeps it warm for unchanged chunks, and the shadow pass no longer inherits camera-frustum culling from the main opaque visibility commands.
+- Transparent shadow policy is explicit: the current mainline sun-shadow path uses `GLASS_IGNORED_FLUID_CASTS`. `Glass`
+  does not cast shadows until a separate tinted/transmission or RT-oriented path exists; `Fluid` casts through the
+  current opaque shadow-map path.
+- Because `Fluid` still uses the main opaque draw range for forward rendering, the shadow fragment shader must only
+  discard `Glass`. Discarding `Fluid` makes water incorrectly shadowless.
+- `VoxelLab` may contain opaque anchor geometry for look-dev readability. This is scene composition for the current
+  opaque-only shadow path, not a decision that glass/fluid should cast into the shadow map.
+- CSM entered mainline as explicit bounded stages. The current accepted stage is the first real renderer hookup:
+  4 cascades, practical split lambda `0.80`, 4-layer Vulkan depth array, per-cascade light matrices,
+  `sampler2DArrayShadow` sampling selected by camera view-depth, HUD/sidecar/test visibility, and `CSM` debug view.
+  Cascade projection centers snap to the shadow texel grid using the active shadow-map resolution. The next accepted
+  bounded stage on top of that is coverage diagnostics, not another shadow feature: per-cascade view ranges, ortho
+  extents, and texel density are runtime-visible in HUD/sidecar/test output before any deeper caster culling or
+  split-edge tuning is attempted.
+  The first actual split-edge stability follow-up after that diagnostics stage is a rotation-stable sphere fit for the
+  cascade `XY` extent, not another opaque hidden AABB heuristic.
+  The next accepted split-edge follow-up after that stable fit is shader-side split transition blending, but only as an
+  explicit runtime contract: blend width is tunable via the same shadow ladder/HUD/sidecar loop, not a hidden shader
+  constant. The next accepted coverage follow-up after that is cascade-specific caster depth coverage: build per-cascade
+  caster bounds from the current receiver slice extruded upstream along the sun direction, not from blindly reusing full
+  active-scene bounds for every cascade.
 
 
 Решение:
 
-- Первый practical shadow path для mainline — один scene-wide orthographic sun shadow map, а не cascades, RT shadows или более тяжёлый lighting stack.
-- Shadow contract живёт в том же `VoxelSceneLighting`: per-preset shadow tuning (`strength/bias/normal-bias`) плюс `sunShadowViewProjection`, который CPU собирает из bounds активных chunk-ов и направления солнца, с fallback на полные `VoxelWorld` bounds только для пустой сцены.
-- `sunDirectionAndWrap.xyz` remains the authored vector toward the sun for the main shading pass. The CPU shadow fit must invert it to the actual light-travel direction when building `sunShadowViewProjection`; this sign is part of the stable lighting contract, not an implementation detail.
-- Shader-side receiver bias stays on the same authored `depth-bias` / `normal-bias` controls, but it should respond to sun angle instead of acting like one flat offset everywhere. The current baseline therefore scales those authored bias values by `N.L` in the voxel shader instead of adding a second hidden bias ladder.
+- Первый practical CSM shadow path для mainline — 4-layer sun shadow depth array, not RT shadows or a heavier lighting stack.
+- Shadow contract живёт в том же `VoxelSceneLighting`: per-preset shadow tuning (`strength/bias/normal-bias`) плюс
+  `sunShadowViewProjections[4]` and `shadowCascadeDepthSplits`, которые CPU собирает из camera view slices, active
+  scene bounds, and sun direction.
+- `sunDirectionAndWrap.xyz` remains the authored vector toward the sun for the main shading pass. The CPU shadow fit must invert it to the actual light-travel direction when building sun-shadow projections; this sign is part of the stable lighting contract, not an implementation detail.
+- Shader-side receiver bias stays on the same authored `depth-bias` / `normal-bias` controls, but it should respond to sun angle instead of acting like one flat offset everywhere. The current baseline therefore scales those authored bias values by `N.L`, adds a small world-space receiver offset toward the sun, and avoids shadow sampling on nearly unlit/backfacing surfaces instead of adding a second hidden bias ladder.
+- Shadow-map writes also need caster-side polygon depth bias. One-sided triangular acne on a lit voxel face means the
+  caster surface is re-sampling its own rasterized shadow-map triangles; increasing PCF alone is the wrong fix.
 - The first practical direct-light BRDF upgrade should stay within the current material buffer and shader path instead of introducing a separate PBR framework. `VoxelMaterialVisual` therefore now packs `AO/roughness/metallic/reflectance` plus transmission tint and fog/emissive/ambient/direct-response hooks in the same 64-byte table, and the main voxel shader consumes that contract with a `GGX + Fresnel-Schlick + Smith` sun-light baseline while still honoring authored ambient/diffuse response weights inside the existing ambient gradient, fog and shadow integration path.
 - Shadow depth pass consumes a dedicated all-occluder opaque indirect buffer instead of the main camera-culling visibility commands; main voxel pass потом семплирует shadow map только для direct sun.
-- Первый quality/debug follow-up для этого path тоже остаётся прагматичным: baseline shadow map держится на `2048x2048`, main voxel shader использует лёгкий `3x3` PCF, а shadow tuning/debug живёт внутри уже существующего lighting loop (`B` debug views + detailed HUD), а не в отдельном editor/debug framework.
+- Fake frame-only glass shadows are rejected for mainline because they read as noisy geometry, not as glass. Keep glass
+  ignored until there is a real transparent-shadow design, but do not suppress `Fluid` shadows.
+- Первый quality/debug follow-up для этого path тоже остаётся прагматичным: baseline shadow map держится на `2048x2048`, main voxel shader использует weighted `5x5` PCF, а shadow tuning/debug живёт внутри уже существующего lighting loop (`B` debug views + detailed HUD), а не в отдельном editor/debug framework.
+- Cascades must not be smuggled into the shader as hidden constants: split depths and lambda are runtime-visible state
+  before the renderer starts sampling multiple shadow maps.
+- Cascade receiver planning must stay aligned with the actual visible-scene contract too. In current mainline, chunk
+  visibility already caps receiver distance to `min(camera.farPlane, 64)`, so CSM split planning must use that same
+  receiver max distance instead of the raw camera far plane; otherwise near cascades waste texel budget on receivers
+  that scene culling never draws.
+- The current mainline default split distribution is intentionally more near-biased than the original first CSM hookup:
+  live `MeshingStress` repro showed that `0.65` kept too much quality in far receivers, so the default lambda is now
+  `0.80` until a better data-backed scheme or more cascades replaces it.
+- CSM stabilization belongs in the CPU projection contract first: small camera movement below one shadow texel should
+  not continuously slide the cascade projection across the world.
+- CSM quality follow-up should stay measurement-first too: before changing cascade culling, blend policy, or heavier
+  filtering, the runtime must expose per-cascade coverage data in the same HUD/capture loop that artists already use.
+- Once that data exists, prefer deterministic CPU-fit improvements first. The current chosen follow-up is sphere-fit
+  cascade extents because it reduces camera-rotation-driven extent churn without adding another shader-side feature.
+- Once split transition blending is introduced, keep it in the same explicit contract too: the shader may blend current
+  and next cascades near a split, but the blend width must stay runtime-visible/tunable (`BLD` in HUD, sidecar
+  metadata), not another hidden hardcoded threshold.
+- Once caster coverage tuning is introduced, keep that explicit too: per-cascade diagnostics must expose the resulting
+  caster light-depth ranges, so follow-up tuning compares real capture numbers rather than another invisible CPU-fit
+  heuristic.
+- Caster coverage must influence more than cascade light-depth. If a nearer cascade only expands `Z` for upstream casters
+  but keeps `XY` from the receiver slice alone, tall/upstream casters can disappear exactly at cascade transitions. The
+  current baseline therefore lets caster coverage expand light-space `XY` extents too.
+- Expanded caster coverage must also stay in front of the cascade shadow near plane. If the light camera stays anchored
+  only to the receiver sphere after caster coverage grows upstream, mid/far cascades can still clip those casters before
+  the shadow map is sampled. The current baseline therefore also moves the cascade light camera upstream enough to keep
+  the expanded caster range positive in light depth.
+- The first real post-fit culling step for CSM is chunk-level per-cascade draw culling, not another projection tweak:
+  the shadow indirect buffer now carries one draw-command slice per cascade, CPU visibility tests chunk AABBs against the
+  current cascade clip volumes, and dirty-chunk meshing patches those same per-cascade commands on the GPU for current-frame correctness.
+- Empty-cascade draw skipping is acceptable only when it is deterministic for the current frame. The current bounded
+  policy therefore skips a cascade shadow draw only when CPU culling reports zero casters and there is no dirty meshing
+  work that could still patch shadow commands later in the frame.
 
 Почему:
 

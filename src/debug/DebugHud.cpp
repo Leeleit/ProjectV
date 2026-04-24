@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
-#include <cstring>
 #include <string_view>
 
 namespace {
@@ -24,7 +23,7 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kMaxStatsLineCount = 28;
+constexpr size_t kMaxStatsLineCount = 32;
 constexpr size_t kMaxHelperLineCount = 16;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
@@ -145,7 +144,7 @@ void AppendQuad(
 		{{PixelToNdcX(minXPx, width), PixelToNdcY(maxYPx, height)}, color},
 	};
 
-	std::memcpy(outVertices + vertexCount, quadVertices, sizeof(quadVertices));
+	std::copy_n(quadVertices, 6u, outVertices + vertexCount);
 	vertexCount += 6;
 }
 
@@ -550,6 +549,28 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
+		"ENV %.2f",
+		stats.sceneEnvironmentIntensity);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"GRD WP %.2f CON %.2f SAT %.2f LFT %.2f",
+		stats.sceneColorGradeWhitePoint,
+		stats.sceneColorGradeContrast,
+		stats.sceneColorGradeSaturation,
+		stats.sceneColorGradeLift);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"EXP %s KEY %.2f TGT %.2f RNG %.2f %.2f",
+		ExposureMeteringModeToString(stats.sceneExposureMeteringMode),
+		stats.sceneExposureKey,
+		stats.sceneExposureTargetKey,
+		stats.sceneMinExposure,
+		stats.sceneMaxExposure);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"SHDW %u STR %.2f FLT %.2f",
 		stats.shadowMapResolution,
 		stats.sunShadowStrength,
@@ -563,9 +584,39 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"COV %.2f TUNE %s",
+		"COV %.2f BLD %.2f TUNE %s",
 		stats.sunShadowCoverageScale,
+		stats.sunShadowCascadeBlend,
 		ShadowTuningTargetToString(stats.shadowTuningTarget));
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"CSM %u L %.2f %.1f %.1f %.1f %.1f",
+		kSunShadowCascadeCount,
+		stats.sunShadowCascadeSplitLambda,
+		stats.sunShadowCascadeDepthSplits[0],
+		stats.sunShadowCascadeDepthSplits[1],
+		stats.sunShadowCascadeDepthSplits[2],
+		stats.sunShadowCascadeDepthSplits[3]);
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"C%u VD %.1f %.1f EXT %.1f %.1f TX %.4f CD %.1f %.1f",
+			cascadeIndex,
+			stats.sunShadowCascadeDiagnostics.viewNearDepths[cascadeIndex],
+			stats.sunShadowCascadeDiagnostics.viewFarDepths[cascadeIndex],
+			stats.sunShadowCascadeDiagnostics.orthoWidths[cascadeIndex],
+			stats.sunShadowCascadeDiagnostics.orthoHeights[cascadeIndex],
+			stats.sunShadowCascadeDiagnostics.texelWorldSizes[cascadeIndex],
+			stats.sunShadowCascadeDiagnostics.casterLightNearDepths[cascadeIndex],
+			stats.sunShadowCascadeDiagnostics.casterLightFarDepths[cascadeIndex]);
+	}
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"TSHD %s",
+		TransparentShadowPolicyToString(stats.transparentShadowPolicy));
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,

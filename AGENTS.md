@@ -63,6 +63,11 @@
 4. Обновить `agent/decisions.md`, если принято решение, которое должно пережить текущую задачу.
 5. Выполнить базовую проверку результата, если она применима.
 
+`ProjectVRuntimeSmoke` не является обязательной проверкой после каждой заметной задачи. Запускать его нужно targeted:
+если менялись Vulkan/bootstrap/swapchain/window lifecycle/present/screenshot sync или есть риск device-lost/hang. Для
+lighting/material/look-dev изменений основной сигнал — build/tests плюс scripted captures/metadata или ручная визуальная
+проверка по задаче.
+
 Если код или проектный процесс изменились, а это не отражено в `TODO.md` и `agent/`, работа завершена не полностью.
 
 ---

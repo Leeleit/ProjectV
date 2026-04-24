@@ -8,8 +8,6 @@
 #include "render/SceneResources.hpp"
 #include "voxel/VoxelWorld.hpp"
 
-#include <algorithm>
-
 bool PrepareFrameRenderData(
 	VulkanContextState *context,
 	const SwapchainState *swapchain,
@@ -42,7 +40,12 @@ bool PrepareFrameRenderData(
 		CollectDirtyVoxelChunkRebuildRequests(*world->voxelWorld, &render->pendingChunkRebuildIndices);
 	}
 
-	if (!UpdateSceneResources(world, render)) {
+	const ChunkCullingParameters chunkCullingParameters = BuildChunkCullingParameters(
+		*camera,
+		swapchain->extent,
+		GetCameraVisibleSceneMaxDistance(*camera));
+
+	if (!UpdateSceneResources(world, render, chunkCullingParameters)) {
 		runtime::LogRuntimeFailure(
 			"Frame",
 			"PrepareFrameRenderData.UpdateSceneResources",
@@ -70,10 +73,6 @@ bool PrepareFrameRenderData(
 		return false;
 	}
 
-	const ChunkCullingParameters chunkCullingParameters = BuildChunkCullingParameters(
-		*camera,
-		swapchain->extent,
-		std::min(camera->farPlane, 64.0f));
 	if (!UpdateSceneFrameChunkVisibility(*render, frame->currentFrame, chunkCullingParameters)) {
 		runtime::LogRuntimeFailure(
 			"Frame",
@@ -106,6 +105,8 @@ bool PrepareFrameRenderData(
 	frame->renderData.shadowIndirectBuffer = sceneFrameResources.shadowIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
+	frame->renderData.shadowIndirectCommandCount = sceneFrameResources.shadowIndirectCommandCount;
+	frame->renderData.shadowCascadeVisibleChunkCounts = sceneFrameResources.shadowCascadeVisibleChunkCounts;
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;
 	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;
 	frame->renderData.transparentFaceCount = sceneFrameResources.transparentFaceCount;

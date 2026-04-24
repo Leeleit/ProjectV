@@ -2,7 +2,12 @@
 
 Дата фиксации: `2026-04-07`
 
-## Автоматический Windows smoke
+## Targeted Windows smoke
+
+`Invoke-ProjectVRuntimeSmoke.ps1` — это targeted GUI lifecycle check, а не универсальный DoD. Его имеет смысл запускать
+после изменений в Vulkan/bootstrap/swapchain/window lifecycle/present/screenshot sync или при риске device-lost/hang.
+Для lighting/material/shader tuning основной сигнал — build/tests, scripted captures, sidecar metadata и визуальное
+сравнение.
 
 1. Собрать `ProjectV`:
 

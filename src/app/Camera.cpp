@@ -11,6 +11,7 @@ constexpr float kMaxMoveSpeed = 40.0f;
 constexpr float kBoostMoveSpeedMultiplier = 3.0f;
 constexpr float kSlowMoveSpeedMultiplier = 0.25f;
 constexpr float kMaxLookPitchRadians = 1.553343f;
+constexpr float kMainlineVisibleSceneMaxDistance = 64.0f;
 
 struct Float3 {
 	float x = 0.0f;
@@ -197,6 +198,13 @@ std::array<float, 3> GetCameraForwardVector(const CameraState &camera)
 	return {x, y, z};
 }
 
+float GetCameraVisibleSceneMaxDistance(const CameraState &camera)
+{
+	return std::max(
+		camera.nearPlane,
+		std::min(camera.farPlane, kMainlineVisibleSceneMaxDistance));
+}
+
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
 	const VkExtent2D extent)
@@ -260,10 +268,17 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 
 	GraphicsPushConstants pushConstants{};
 	pushConstants.viewProjection = MultiplyMatrices(projection, view);
+	const std::array<float, 3> cameraForward = GetCameraForwardVector(camera);
 	pushConstants.cameraPosition = {
 		camera.position[0],
 		camera.position[1],
 		camera.position[2],
+		0.0f,
+	};
+	pushConstants.cameraForward = {
+		cameraForward[0],
+		cameraForward[1],
+		cameraForward[2],
 		0.0f,
 	};
 	return pushConstants;

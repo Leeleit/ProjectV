@@ -6,6 +6,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
+#include "render/ShadowProjection.hpp"
 #include "voxel/VoxelInteraction.hpp"
 
 #include <algorithm>
@@ -22,6 +23,7 @@ constexpr float kShadowDepthBiasStep = 0.0001f;
 constexpr float kShadowNormalBiasStep = 0.0005f;
 constexpr float kShadowFilterRadiusStep = 0.10f;
 constexpr float kShadowCoverageScaleStep = 0.10f;
+constexpr float kShadowCascadeBlendStep = 0.02f;
 constexpr float kMinShadowStrengthOffset = -1.0f;
 constexpr float kMaxShadowStrengthOffset = 1.0f;
 constexpr float kMinShadowDepthBiasOffset = -0.01f;
@@ -32,6 +34,8 @@ constexpr float kMinShadowFilterRadiusOffset = -4.0f;
 constexpr float kMaxShadowFilterRadiusOffset = 4.0f;
 constexpr float kMinShadowCoverageScale = 0.5f;
 constexpr float kMaxShadowCoverageScale = 3.0f;
+constexpr float kMinShadowCascadeBlendOffset = -0.50f;
+constexpr float kMaxShadowCascadeBlendOffset = 0.50f;
 
 bool IsCreativeMode(const CameraState &camera)
 {
@@ -263,6 +267,12 @@ void AdjustShadowTuning(
 			controls.shadowCoverageScale + delta * kShadowCoverageScaleStep,
 			kMinShadowCoverageScale,
 			kMaxShadowCoverageScale);
+		break;
+	case ShadowTuningTarget::CascadeBlend:
+		controls.shadowCascadeBlendOffset = std::clamp(
+			controls.shadowCascadeBlendOffset + delta * kShadowCascadeBlendStep,
+			kMinShadowCascadeBlendOffset,
+			kMaxShadowCascadeBlendOffset);
 		break;
 	}
 }
@@ -570,6 +580,17 @@ bool UpdateApp(
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
 	debug->stats.sceneExposure = render->currentSceneLighting.postProcess[0];
+	debug->stats.sceneEnvironmentIntensity = render->currentSceneLighting.postProcess[1];
+	debug->stats.sceneColorGradeWhitePoint = render->currentSceneLighting.colorGrading[0];
+	debug->stats.sceneColorGradeContrast = render->currentSceneLighting.colorGrading[1];
+	debug->stats.sceneColorGradeSaturation = render->currentSceneLighting.colorGrading[2];
+	debug->stats.sceneColorGradeLift = render->currentSceneLighting.colorGrading[3];
+	debug->stats.sceneExposureMeteringMode =
+		static_cast<ExposureMeteringMode>(std::lround(render->currentSceneLighting.exposureControl[0]));
+	debug->stats.sceneExposureKey = EstimateVoxelSceneExposureKey(render->currentSceneLighting);
+	debug->stats.sceneExposureTargetKey = render->currentSceneLighting.exposureControl[1];
+	debug->stats.sceneMinExposure = render->currentSceneLighting.exposureControl[2];
+	debug->stats.sceneMaxExposure = render->currentSceneLighting.exposureControl[3];
 	debug->stats.toneMapOperator = render->lightingDebugControls.toneMapOperator;
 	debug->stats.lightingDebugView = render->lightingDebugControls.debugView;
 	debug->stats.sunDirection = {
@@ -583,7 +604,17 @@ bool UpdateApp(
 	debug->stats.sunShadowNormalBias = render->currentSceneLighting.sunShadowParams[2];
 	debug->stats.sunShadowFilterRadius = render->currentSceneLighting.sunShadowParams[3];
 	debug->stats.sunShadowCoverageScale = render->lightingDebugControls.shadowCoverageScale;
+	debug->stats.sunShadowCascadeBlend = render->currentSceneLighting.shadowCascadeBlendParams[0];
+	const float sunShadowReceiverMaxDistance = GetCameraVisibleSceneMaxDistance(*camera);
+	render->currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
+		camera->nearPlane,
+		sunShadowReceiverMaxDistance,
+		render->sunShadowCascadeSplitLambda);
+	debug->stats.sunShadowCascadeSplitLambda = render->currentSunShadowCascadeSplits.splitLambda;
+	debug->stats.sunShadowCascadeDepthSplits = render->currentSunShadowCascadeSplits.viewDepthSplits;
+	debug->stats.sunShadowCascadeDiagnostics = render->currentSunShadowCascadeDiagnostics;
 	debug->stats.shadowMapResolution = render->shadowMapExtent.width;
+	debug->stats.transparentShadowPolicy = render->transparentShadowPolicy;
 	debug->stats.shadowTuningTarget = render->lightingDebugControls.shadowTuningTarget;
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;

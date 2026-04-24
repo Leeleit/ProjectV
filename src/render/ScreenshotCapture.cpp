@@ -7,6 +7,7 @@
 #include "fmt/format.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <system_error>
@@ -42,24 +43,24 @@ void StoreLittleEndianU16(
 	std::ofstream &stream,
 	const uint16_t value)
 {
-	const std::array<uint8_t, 2> bytes{
+	const std::array bytes{
 		static_cast<uint8_t>(value & 0xFFu),
-		static_cast<uint8_t>((value >> 8u) & 0xFFu),
+		static_cast<uint8_t>(value >> 8u & 0xFFu),
 	};
-	stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	stream.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
 }
 
 void StoreLittleEndianU32(
 	std::ofstream &stream,
 	const uint32_t value)
 {
-	const std::array<uint8_t, 4> bytes{
+	const std::array bytes{
 		static_cast<uint8_t>(value & 0xFFu),
-		static_cast<uint8_t>((value >> 8u) & 0xFFu),
-		static_cast<uint8_t>((value >> 16u) & 0xFFu),
-		static_cast<uint8_t>((value >> 24u) & 0xFFu),
+		static_cast<uint8_t>(value >> 8u & 0xFFu),
+		static_cast<uint8_t>(value >> 16u & 0xFFu),
+		static_cast<uint8_t>(value >> 24u & 0xFFu),
 	};
-	stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	stream.write(reinterpret_cast<const char *>(bytes.data()), bytes.size());
 }
 
 bool IsSupportedScreenshotFormat(const VkFormat format)
@@ -173,7 +174,7 @@ bool SaveScreenshotCaptureBmp(
 	StoreLittleEndianU32(stream, 0u);
 	StoreLittleEndianU32(stream, 0u);
 
-	std::vector<uint8_t> rowBuffer(static_cast<size_t>(fileRowStride), 0u);
+	std::vector<uint8_t> rowBuffer(fileRowStride, 0u);
 	const uint8_t *const sourcePixels = static_cast<const uint8_t *>(pixels);
 	for (uint32_t sourceRow = 0; sourceRow < height; ++sourceRow) {
 		const uint32_t flippedRow = height - 1u - sourceRow;
@@ -231,6 +232,16 @@ bool SaveScreenshotCaptureMetadata(
 		"tone_map={}\n"
 		"debug_view={}\n"
 		"exposure={:.6f}\n"
+		"environment_intensity={:.6f}\n"
+		"grading_white_point={:.6f}\n"
+		"grading_contrast={:.6f}\n"
+		"grading_saturation={:.6f}\n"
+		"grading_lift={:.6f}\n"
+		"exposure_metering={}\n"
+		"exposure_key={:.6f}\n"
+		"exposure_target_key={:.6f}\n"
+		"exposure_min={:.6f}\n"
+		"exposure_max={:.6f}\n"
 		"exposure_bias_stops={:.6f}\n"
 		"sun_direction={:.6f} {:.6f} {:.6f}\n"
 		"sun_intensity={:.6f}\n"
@@ -240,16 +251,37 @@ bool SaveScreenshotCaptureMetadata(
 		"shadow_normal_bias={:.6f}\n"
 		"shadow_filter_radius={:.6f}\n"
 		"shadow_coverage_scale={:.6f}\n"
+		"shadow_cascade_blend={:.6f}\n"
+		"shadow_cascade_count={}\n"
+		"shadow_cascade_lambda={:.6f}\n"
+		"shadow_cascade_splits={:.6f} {:.6f} {:.6f} {:.6f}\n"
+		"shadow_cascade_view_ranges={:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f}\n"
+		"shadow_cascade_ortho_extents={:.6f}x{:.6f} {:.6f}x{:.6f} {:.6f}x{:.6f} {:.6f}x{:.6f}\n"
+		"shadow_cascade_texel_world={:.6f} {:.6f} {:.6f} {:.6f}\n"
+		"shadow_cascade_caster_light_ranges={:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f}\n"
+		"transparent_shadow_policy={}\n"
 		"shadow_tuning_target={}\n"
 		"shadow_strength_offset={:.6f}\n"
 		"shadow_depth_bias_offset={:.6f}\n"
 		"shadow_normal_bias_offset={:.6f}\n"
-		"shadow_filter_radius_offset={:.6f}\n",
+		"shadow_filter_radius_offset={:.6f}\n"
+		"shadow_cascade_blend_offset={:.6f}\n",
 		screenshotPath,
 		VoxelScenePresetToString(scenePreset),
 		ToneMapOperatorToString(render.lightingDebugControls.toneMapOperator),
 		LightingDebugViewToString(render.lightingDebugControls.debugView),
 		render.currentSceneLighting.postProcess[0],
+		render.currentSceneLighting.postProcess[1],
+		render.currentSceneLighting.colorGrading[0],
+		render.currentSceneLighting.colorGrading[1],
+		render.currentSceneLighting.colorGrading[2],
+		render.currentSceneLighting.colorGrading[3],
+		ExposureMeteringModeToString(static_cast<ExposureMeteringMode>(
+			std::lround(render.currentSceneLighting.exposureControl[0]))),
+		EstimateVoxelSceneExposureKey(render.currentSceneLighting),
+		render.currentSceneLighting.exposureControl[1],
+		render.currentSceneLighting.exposureControl[2],
+		render.currentSceneLighting.exposureControl[3],
 		render.lightingDebugControls.exposureBiasStops,
 		render.currentSceneLighting.sunDirectionAndWrap[0],
 		render.currentSceneLighting.sunDirectionAndWrap[1],
@@ -261,11 +293,48 @@ bool SaveScreenshotCaptureMetadata(
 		render.currentSceneLighting.sunShadowParams[2],
 		render.currentSceneLighting.sunShadowParams[3],
 		render.lightingDebugControls.shadowCoverageScale,
+		render.currentSceneLighting.shadowCascadeBlendParams[0],
+		kSunShadowCascadeCount,
+		render.currentSunShadowCascadeSplits.splitLambda,
+		render.currentSunShadowCascadeSplits.viewDepthSplits[0],
+		render.currentSunShadowCascadeSplits.viewDepthSplits[1],
+		render.currentSunShadowCascadeSplits.viewDepthSplits[2],
+		render.currentSunShadowCascadeSplits.viewDepthSplits[3],
+		render.currentSunShadowCascadeDiagnostics.viewNearDepths[0],
+		render.currentSunShadowCascadeDiagnostics.viewFarDepths[0],
+		render.currentSunShadowCascadeDiagnostics.viewNearDepths[1],
+		render.currentSunShadowCascadeDiagnostics.viewFarDepths[1],
+		render.currentSunShadowCascadeDiagnostics.viewNearDepths[2],
+		render.currentSunShadowCascadeDiagnostics.viewFarDepths[2],
+		render.currentSunShadowCascadeDiagnostics.viewNearDepths[3],
+		render.currentSunShadowCascadeDiagnostics.viewFarDepths[3],
+		render.currentSunShadowCascadeDiagnostics.orthoWidths[0],
+		render.currentSunShadowCascadeDiagnostics.orthoHeights[0],
+		render.currentSunShadowCascadeDiagnostics.orthoWidths[1],
+		render.currentSunShadowCascadeDiagnostics.orthoHeights[1],
+		render.currentSunShadowCascadeDiagnostics.orthoWidths[2],
+		render.currentSunShadowCascadeDiagnostics.orthoHeights[2],
+		render.currentSunShadowCascadeDiagnostics.orthoWidths[3],
+		render.currentSunShadowCascadeDiagnostics.orthoHeights[3],
+		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[0],
+		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[1],
+		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[2],
+		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[3],
+		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[0],
+		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[0],
+		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[1],
+		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[1],
+		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[2],
+		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[2],
+		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[3],
+		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[3],
+		TransparentShadowPolicyToString(render.transparentShadowPolicy),
 		ShadowTuningTargetToString(render.lightingDebugControls.shadowTuningTarget),
 		render.lightingDebugControls.shadowStrengthOffset,
 		render.lightingDebugControls.shadowDepthBiasOffset,
 		render.lightingDebugControls.shadowNormalBiasOffset,
-		render.lightingDebugControls.shadowFilterRadiusOffset);
+		render.lightingDebugControls.shadowFilterRadiusOffset,
+		render.lightingDebugControls.shadowCascadeBlendOffset);
 
 	if (!stream) {
 		runtime::LogRuntimeFailure("Capture", "SaveScreenshotCaptureMetadata.Write", resolvedPath.string());

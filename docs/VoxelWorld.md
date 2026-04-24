@@ -41,10 +41,35 @@ ECS, renderer и physics читают этот state, но ownership мира о
 Render-facing material response теперь живёт в [VoxelMaterials.cpp](../src/voxel/VoxelMaterials.cpp): `base color`,
 `AO`, `roughness`, `metallic`, `reflectance`, transmission и fog/emissive/ambient/direct-response hooks, scene-lighting
 presets и первый
-exposure/tone-mapping contract описываются на CPU, а не как жёстко зашитые константы в shader.
-Там же теперь живёт и первый sun-shadow baseline: per-preset shadow tuning, а `SceneResources` дополняет его
-scene-wide `sunShadowViewProjection`, собранной из bounds активных chunk-ов (с fallback на полные границы `VoxelWorld`
-для пустой сцены) и направления солнца.
+exposure/tone-mapping/color-grading/scene-key metering contract описываются на CPU, а не как жёстко зашитые константы в
+shader.
+Local cavity ambient visibility now also rides on the same voxel render path instead of pretending that an upward
+normal automatically sees the whole sky: compute meshing bakes a cheap per-face visibility byte into
+`PackedSceneVoxelFace`, `voxel.vert` forwards it flat, and `voxel.frag` multiplies sky/horizon/ground fill by it.
+Current blocker policy for that term is `Air/Open`, `Glass/Open`, `Fluid/Occluder`, `Opaque/Occluder`; this is a
+bounded voxel-neighborhood visibility term, not `SSAO/GTAO`.
+Там же теперь живёт и первый CSM sun-shadow baseline: per-preset shadow tuning, 4-cascade split state, а
+`SceneResources` дополняет его `sunShadowViewProjections[4]`, собранными из camera view slices, active scene bounds и
+направления солнца. Projection centers snap to the shadow texel grid, so sub-texel camera movement does not continuously
+slide cascades across world-space receivers. The same path now also records per-cascade view ranges, ortho extents, and
+effective world-space texel size for debug HUD / capture metadata. Cascade `XY` fit now uses a stable sphere extent per
+slice too, so camera yaw no longer changes cascade width/height and texel density just because the frustum rotated.
+`voxel.frag` now also blends current/next cascades across a small runtime-visible split band instead of hard-switching
+right at the split edge. Caster-depth coverage is no longer full-scene for every cascade either: each cascade extrudes
+its current receiver slice upstream along the sun direction before intersecting with active scene bounds.
+Split planning itself now follows the same visible-scene receiver horizon as current mainline chunk visibility
+(`min(camera.farPlane, 64)`), so tower-top receivers do not get pushed into lower-density cascades only because the raw
+far plane is larger than the part of the scene we actually draw. The current default split lambda is `0.80`, so this
+first mainline CSM baseline is deliberately near-biased rather than keeping the original softer `0.65` distribution.
+The caster-coverage follow-up now expands cascade `XY` extents too, not just caster light-depth, so a nearer cascade
+does not simply lose a tall tower's shadow because the tower projects outside the receiver-only footprint.
+The cascade light camera now also moves upstream enough to keep that expanded caster range in front of the shadow near
+plane, so mid/far cascades do not silently clip the tower before the map is even sampled. Shadow draw submission is now
+per cascade too: the shadow indirect buffer stores one chunk-command slice per cascade, CPU chunk visibility rebuilds
+those slices against the current cascade clip
+volumes, and dirty-chunk meshing patches the same per-cascade commands for current-frame correctness instead of drawing
+every opaque chunk into every cascade. When a frame has no dirty meshing work and CPU culling already knows a cascade is
+empty, the renderer also skips the empty shadow draw call for that cascade.
 Current `voxel.frag` больше не держит direct sun на ad-hoc `spec power + shininess`: direct-light BRDF теперь базово
 следует `GGX + Fresnel-Schlick + Smith`, но остаётся встроенным в тот же forward voxel path без отдельного PBR framework
 или IBL stack.
@@ -131,7 +156,8 @@ shading, а shadow fit инвертирует его во внутреннее l
 - `N` циклично переключает tone-map operator;
 - `H/K` двигают exposure вниз/вверх;
 - `V` сбрасывает lighting debug controls к baseline preset;
-- `C` сохраняет текущий кадр в `.bmp` плюс sidecar metadata-файл с preset/exposure/shadow state.
+- `C` сохраняет текущий кадр в `.bmp` плюс sidecar metadata-файл с preset/exposure/metering/grading/shadow state,
+  including the active CSM split plan, per-cascade coverage diagnostics, and transparent-shadow policy.
 
 По умолчанию такие look-dev captures пишутся в `ProjectVScreenshots` рядом с executable, а `PROJECTV_SCREENSHOT_DIR`
 может переопределить директорию вывода.
@@ -140,12 +166,19 @@ shading, а shadow fit инвертирует его во внутреннее l
 current
 shadow resolution / strength / filter radius / bias, так что базовый shadow look-dev остаётся reproducible внутри
 runtime.
+Detailed HUD also shows the current 4-cascade split plan (`CSM ...`) plus per-cascade view range / extent / texel-size
+diagnostics, while `COV ... BLD ... TUNE ...` shows the current coverage scale and split-blend width. Per-cascade lines
+now also include `CD` caster light-depth ranges. `B` cycles through a dedicated `CSM` debug view that visualizes
+cascade selection and the transition band near split edges.
+Detailed HUD also reports `TSHD GLASS_IGNORED_FLUID_CASTS`: glass is not a sun-shadow caster in the current mainline
+renderer, while `Fluid` casts through the current opaque shadow-map path.
 
 `VoxelLab` по-прежнему создаёт текущую основную demo-scene:
 
 - шахматный пол;
-- стеклянную сферу;
-- жидкость внутри;
+- непрозрачный right-side stepped anchor для читаемых sun shadows;
+- стеклянную сферу, которая не кастит sun shadow в текущей policy;
+- жидкость внутри, которая кастит sun shadow через текущий opaque shadow-map path;
 - padding вокруг сцены;
 - initial dirty state для всех chunks.
 

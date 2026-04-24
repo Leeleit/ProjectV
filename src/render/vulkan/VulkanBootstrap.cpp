@@ -2,6 +2,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
+#include "SDL3/SDL_vulkan.h"
 #include "fmt/format.h"
 
 #include <array>

@@ -1,4 +1,5 @@
 #include "app/Camera.hpp"
+#include "app/LookDevCaptureAutomation.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "debug/Profiling.hpp"
@@ -150,6 +151,7 @@ bool InitVulkan(AppState *state)
 	}
 
 	InitializeCamera(camera, &state->simulation, &state->input);
+	ApplyStartupCameraOverrideFromEnvironment(camera);
 	if (!SyncEcsWorldState(state->ecs.get())) {
 		runtime::LogRuntimeFailure(
 			"Init",

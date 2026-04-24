@@ -2,7 +2,7 @@
 #define TYPES_HPP
 
 #include "SDL3/SDL.h"
-#include "SDL3/SDL_vulkan.h"
+#include "render/ShadowTypes.hpp"
 #include "voxel/VoxelMaterials.hpp"
 // ReSharper disable once CppUnusedIncludeDirective
 #include "volk.h"
@@ -19,6 +19,7 @@
 #include <vector>
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+constexpr uint32_t MAX_LOOK_DEV_CAPTURE_VIEW_COUNT = 8;
 
 struct VoxelWorld;
 struct EcsState;
@@ -31,12 +32,14 @@ using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
 struct PackedSceneVoxelFace {
 	uint32_t localVoxelFace = 0;
 	uint32_t chunkIndexMaterial = 0;
+	uint32_t lightingData = 0;
 };
 static_assert(std::is_standard_layout_v<PackedSceneVoxelFace>);
 static_assert(std::is_trivially_copyable_v<PackedSceneVoxelFace>);
-static_assert(sizeof(PackedSceneVoxelFace) == 8);
+static_assert(sizeof(PackedSceneVoxelFace) == 12);
 static_assert(offsetof(PackedSceneVoxelFace, localVoxelFace) == 0);
 static_assert(offsetof(PackedSceneVoxelFace, chunkIndexMaterial) == 4);
+static_assert(offsetof(PackedSceneVoxelFace, lightingData) == 8);
 
 struct PackedSceneChunkDescriptor {
 	std::array<int32_t, 4> chunkOrigin{};
@@ -147,12 +150,21 @@ enum class WalkAirControlMode : uint8_t {
 struct GraphicsPushConstants {
 	std::array<float, 16> viewProjection{};
 	std::array<float, 4> cameraPosition{};
+	std::array<float, 4> cameraForward{};
 };
 static_assert(std::is_standard_layout_v<GraphicsPushConstants>);
 static_assert(std::is_trivially_copyable_v<GraphicsPushConstants>);
-static_assert(sizeof(GraphicsPushConstants) == 80);
+static_assert(sizeof(GraphicsPushConstants) == 96);
 static_assert(offsetof(GraphicsPushConstants, viewProjection) == 0);
 static_assert(offsetof(GraphicsPushConstants, cameraPosition) == 64);
+static_assert(offsetof(GraphicsPushConstants, cameraForward) == 80);
+
+struct ShadowPushConstants {
+	uint32_t cascadeIndex = 0;
+};
+static_assert(std::is_standard_layout_v<ShadowPushConstants>);
+static_assert(std::is_trivially_copyable_v<ShadowPushConstants>);
+static_assert(sizeof(ShadowPushConstants) == 4);
 
 struct DebugOverlayPushConstants {
 	std::array<float, 16> viewProjection{};
@@ -304,6 +316,8 @@ struct FrameRenderData {
 	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
 	uint32_t chunkDescriptorCount = 0;
+	uint32_t shadowIndirectCommandCount = 0;
+	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
@@ -353,6 +367,16 @@ struct DebugStats {
 	bool walkJumpLockActive = false;
 	bool walkSuppressPassiveSlide = false;
 	float sceneExposure = 1.0f;
+	float sceneEnvironmentIntensity = 1.0f;
+	float sceneColorGradeWhitePoint = 1.0f;
+	float sceneColorGradeContrast = 1.0f;
+	float sceneColorGradeSaturation = 1.0f;
+	float sceneColorGradeLift = 0.0f;
+	ExposureMeteringMode sceneExposureMeteringMode = ExposureMeteringMode::SceneKey;
+	float sceneExposureKey = 1.0f;
+	float sceneExposureTargetKey = 1.0f;
+	float sceneMinExposure = 0.05f;
+	float sceneMaxExposure = 4.0f;
 	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
 	LightingDebugView lightingDebugView = LightingDebugView::Final;
 	std::array<float, 3> sunDirection{};
@@ -362,7 +386,12 @@ struct DebugStats {
 	float sunShadowNormalBias = 0.0f;
 	float sunShadowFilterRadius = 0.0f;
 	float sunShadowCoverageScale = 1.0f;
+	float sunShadowCascadeBlend = 0.0f;
+	float sunShadowCascadeSplitLambda = 0.80f;
+	std::array<float, kSunShadowCascadeCount> sunShadowCascadeDepthSplits{};
+	SunShadowCascadeDiagnostics sunShadowCascadeDiagnostics{};
 	uint32_t shadowMapResolution = 0;
+	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	ShadowTuningTarget shadowTuningTarget = ShadowTuningTarget::Strength;
 	bool inputReplayRecording = false;
 	bool inputReplayPlaybackActive = false;
@@ -406,6 +435,8 @@ struct SceneFrameResources {
 	uint64_t uploadedVoxelPayloadVersion = 0;
 	uint64_t meshedSceneVersion = 0;
 	uint32_t chunkDescriptorCount = 0;
+	uint32_t shadowIndirectCommandCount = 0;
+	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
@@ -440,6 +471,10 @@ struct RenderState {
 	bool tracyGraphicsContextCalibrated = false;
 	VoxelLightingDebugControls lightingDebugControls{};
 	VoxelSceneLighting currentSceneLighting{};
+	SunShadowCascadeSplits currentSunShadowCascadeSplits{};
+	SunShadowCascadeDiagnostics currentSunShadowCascadeDiagnostics{};
+	float sunShadowCascadeSplitLambda = 0.80f;
+	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	VoxelScenePreset currentScenePreset = VoxelScenePreset::VoxelLab;
 	bool screenshotCaptureRequested = false;
 	bool screenshotCaptureSupported = false;
@@ -468,6 +503,7 @@ struct RenderState {
 	VkExtent2D shadowMapExtent{2048u, 2048u};
 	VkImage shadowImage = VK_NULL_HANDLE;
 	VkImageView shadowImageView = VK_NULL_HANDLE;
+	std::array<VkImageView, kSunShadowCascadeCount> shadowCascadeImageViews{};
 	VmaAllocation shadowAllocation = VK_NULL_HANDLE;
 	VkSampler shadowSampler = VK_NULL_HANDLE;
 	bool depthImageNeedsInit = false;
@@ -484,6 +520,18 @@ struct RenderState {
 	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
+};
+
+struct LookDevCaptureAutomationState {
+	bool active = false;
+	bool quitWhenDone = false;
+	bool completed = false;
+	uint32_t warmupFramesRemaining = 0;
+	uint32_t intervalFrames = 2;
+	uint32_t intervalFramesRemaining = 0;
+	std::array<LightingDebugView, MAX_LOOK_DEV_CAPTURE_VIEW_COUNT> views{};
+	uint32_t viewCount = 0;
+	uint32_t nextViewIndex = 0;
 };
 
 struct FrameState {
@@ -563,6 +611,7 @@ struct AppState {
 	SimulationState simulation{};
 	InputState input{};
 	InteractionState interaction{};
+	LookDevCaptureAutomationState lookDevCapture{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
 	PhysicsStatePtr physics{nullptr, DestroyPhysicsState};
 

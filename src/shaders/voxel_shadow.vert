@@ -1,7 +1,13 @@
 #version 460
 
+struct PackedFace {
+    uint localVoxelFace;
+    uint chunkIndexMaterial;
+    uint lightingData;
+};
+
 layout(set = 0, binding = 0, std430) readonly buffer PackedFacePayload {
-    uvec2 packedFaces[];
+    PackedFace packedFaces[];
 };
 
 struct ChunkDescriptor {
@@ -23,8 +29,18 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 sunDirectionAndWrap;
     vec4 postProcess;
     vec4 sunShadowParams;
-    mat4 sunShadowViewProjection;
+    mat4 sunShadowViewProjections[4];
+    vec4 colorGrading;
+    vec4 exposureControl;
+    vec4 shadowCascadeDepthSplits;
+    vec4 shadowCascadeBlendParams;
 } sceneLighting;
+
+layout(push_constant) uniform ShadowPushConstants {
+    uint cascadeIndex;
+} pushConstants;
+
+layout(location = 0) flat out uint outMaterialIndex;
 
 uint DecodeTriangleCornerIndex(const uint triangleVertexIndex) {
     switch (triangleVertexIndex) {
@@ -73,12 +89,13 @@ uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
 }
 
 void main() {
-    const uvec2 packedFace = packedFaces[uint(gl_InstanceIndex)];
-    const uint localVoxelFace = packedFace.x;
-    const uint chunkIndexMaterial = packedFace.y;
+    const PackedFace packedFace = packedFaces[uint(gl_InstanceIndex)];
+    const uint localVoxelFace = packedFace.localVoxelFace;
+    const uint chunkIndexMaterial = packedFace.chunkIndexMaterial;
 
     const uint faceIndex = (localVoxelFace >> 24u) & 0xFFu;
     const uint chunkIndex = chunkIndexMaterial & 0x00FFFFFFu;
+    const uint materialIndex = (chunkIndexMaterial >> 24u) & 0xFFu;
     const uvec3 localVoxelCoord = uvec3(
     localVoxelFace & 0xFFu,
     (localVoxelFace >> 8u) & 0xFFu,
@@ -89,5 +106,6 @@ void main() {
     const vec3 localCornerPosition = vec3(localVoxelCoord + GetFaceCornerOffset(faceIndex, cornerIndex));
     const vec3 worldPosition = vec3(chunkDescriptors[chunkIndex].chunkOrigin.xyz) + localCornerPosition;
 
-    gl_Position = sceneLighting.sunShadowViewProjection * vec4(worldPosition, 1.0);
+    outMaterialIndex = materialIndex;
+    gl_Position = sceneLighting.sunShadowViewProjections[pushConstants.cascadeIndex] * vec4(worldPosition, 1.0);
 }

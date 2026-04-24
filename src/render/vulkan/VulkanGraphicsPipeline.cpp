@@ -5,6 +5,7 @@
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
+#include <cstdio>
 #include <vector>
 
 namespace {
@@ -302,7 +303,7 @@ bool CreateShadowResources(
 		.format = shadowDepthFormat,
 		.extent = {render->shadowMapExtent.width, render->shadowMapExtent.height, 1},
 		.mipLevels = 1,
-		.arrayLayers = 1,
+		.arrayLayers = kSunShadowCascadeCount,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -337,13 +338,13 @@ bool CreateShadowResources(
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	viewInfo.image = render->shadowImage;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 	viewInfo.format = shadowDepthFormat;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 	viewInfo.subresourceRange.baseMipLevel = 0;
 	viewInfo.subresourceRange.levelCount = 1;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
+	viewInfo.subresourceRange.layerCount = kSunShadowCascadeCount;
 	const VkResult shadowImageViewResult = vkCreateImageView(context->device, &viewInfo, nullptr, &render->shadowImageView);
 	if (shadowImageViewResult != VK_SUCCESS) {
 		LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateImageView", shadowImageViewResult);
@@ -353,6 +354,35 @@ bool CreateShadowResources(
 		render->shadowAllocation = VK_NULL_HANDLE;
 		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
 		return false;
+	}
+
+	VkImageViewCreateInfo cascadeViewInfo = viewInfo;
+	cascadeViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	cascadeViewInfo.subresourceRange.layerCount = 1;
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		cascadeViewInfo.subresourceRange.baseArrayLayer = cascadeIndex;
+		const VkResult cascadeViewResult = vkCreateImageView(
+			context->device,
+			&cascadeViewInfo,
+			nullptr,
+			&render->shadowCascadeImageViews[cascadeIndex]);
+		if (cascadeViewResult != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateImageView.Cascade", cascadeViewResult);
+			for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
+				if (cascadeImageView != VK_NULL_HANDLE) {
+					vkDestroyImageView(context->device, cascadeImageView, nullptr);
+					cascadeImageView = VK_NULL_HANDLE;
+				}
+			}
+			vkDestroyImageView(context->device, render->shadowImageView, nullptr);
+			render->shadowImageView = VK_NULL_HANDLE;
+			profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
+			vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
+			render->shadowImage = VK_NULL_HANDLE;
+			render->shadowAllocation = VK_NULL_HANDLE;
+			render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+			return false;
+		}
 	}
 
 	constexpr VkSamplerCreateInfo samplerInfo{
@@ -378,6 +408,12 @@ bool CreateShadowResources(
 	const VkResult shadowSamplerResult = vkCreateSampler(context->device, &samplerInfo, nullptr, &render->shadowSampler);
 	if (shadowSamplerResult != VK_SUCCESS) {
 		LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateSampler", shadowSamplerResult);
+		for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
+			if (cascadeImageView != VK_NULL_HANDLE) {
+				vkDestroyImageView(context->device, cascadeImageView, nullptr);
+				cascadeImageView = VK_NULL_HANDLE;
+			}
+		}
 		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
 		render->shadowImageView = VK_NULL_HANDLE;
 		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
@@ -399,6 +435,15 @@ bool CreateShadowResources(
 		reinterpret_cast<uint64_t>(render->shadowImageView),
 		VK_OBJECT_TYPE_IMAGE_VIEW,
 		"ShadowImageView");
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		char viewName[64]{};
+		std::snprintf(viewName, sizeof(viewName), "ShadowCascadeImageView[%u]", cascadeIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(render->shadowCascadeImageViews[cascadeIndex]),
+			VK_OBJECT_TYPE_IMAGE_VIEW,
+			viewName);
+	}
 	SetVulkanObjectName(
 		*context,
 		reinterpret_cast<uint64_t>(render->shadowSampler),
@@ -1271,6 +1316,14 @@ void DestroyGraphicsPipeline(
 		render->shadowSampler = VK_NULL_HANDLE;
 	}
 
+	for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
+		if (cascadeImageView) {
+			PV_PROFILE_ZONE_N("DestroyShadowCascadeImageView");
+			vkDestroyImageView(context->device, cascadeImageView, nullptr);
+			cascadeImageView = VK_NULL_HANDLE;
+		}
+	}
+
 	if (render->shadowImageView) {
 		PV_PROFILE_ZONE_N("DestroyShadowImageView");
 		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
@@ -1470,6 +1523,10 @@ bool CreateGraphicsPipeline(
 	rasterizer.lineWidth = 1.0f;
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	VkPipelineRasterizationStateCreateInfo shadowRasterizer = rasterizer;
+	shadowRasterizer.depthBiasEnable = VK_TRUE;
+	shadowRasterizer.depthBiasConstantFactor = 1.25f;
+	shadowRasterizer.depthBiasSlopeFactor = 1.75f;
 
 	constexpr VkPipelineMultisampleStateCreateInfo multisampling{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -1590,6 +1647,12 @@ bool CreateGraphicsPipeline(
 	shadowPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	shadowPipelineLayoutInfo.setLayoutCount = 1;
 	shadowPipelineLayoutInfo.pSetLayouts = &render->shadowDescriptorSetLayout;
+	VkPushConstantRange shadowPushConstantRange{};
+	shadowPushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	shadowPushConstantRange.offset = 0;
+	shadowPushConstantRange.size = sizeof(ShadowPushConstants);
+	shadowPipelineLayoutInfo.pushConstantRangeCount = 1;
+	shadowPipelineLayoutInfo.pPushConstantRanges = &shadowPushConstantRange;
 
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowPipelineLayout");
@@ -1692,6 +1755,7 @@ bool CreateGraphicsPipeline(
 	shadowPipelineInfo.pNext = &shadowRenderingInfo;
 	shadowPipelineInfo.stageCount = static_cast<uint32_t>(shadowShaderStages.size());
 	shadowPipelineInfo.pStages = shadowShaderStages.data();
+	shadowPipelineInfo.pRasterizationState = &shadowRasterizer;
 	shadowPipelineInfo.pDepthStencilState = &shadowDepthStencil;
 	shadowPipelineInfo.pColorBlendState = &shadowColorBlending;
 	shadowPipelineInfo.layout = render->shadowPipelineLayout;

@@ -2,6 +2,7 @@
 #include "app/Camera.hpp"
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
+#include "app/LookDevCaptureAutomation.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "core/Types.hpp"
 #include "debug/DebugHud.hpp"
@@ -9,8 +10,8 @@
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
-#include "render/ScreenshotCapture.hpp"
 #include "render/SceneResources.hpp"
+#include "render/ScreenshotCapture.hpp"
 #include "render/ShadowProjection.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelInteraction.hpp"
@@ -19,6 +20,8 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -221,6 +224,83 @@ PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
 	};
 }
 
+Int3 AddInt3(const Int3 a, const Int3 b)
+{
+	return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+
+bool IsAmbientOccluderMaterial(const VoxelMaterial material)
+{
+	return material != VoxelMaterial::Air && material != VoxelMaterial::Glass;
+}
+
+void GetFaceCornerAmbientOffsets(
+	const uint32_t faceIndex,
+	const uint32_t cornerIndex,
+	Int3 &outSideOffsetA,
+	Int3 &outSideOffsetB,
+	Int3 &outDiagonalOffset)
+{
+	switch (faceIndex) {
+	case 0u:
+		outSideOffsetA = cornerIndex == 1u || cornerIndex == 2u ? Int3{0, 1, 0} : Int3{0, -1, 0};
+		outSideOffsetB = cornerIndex >= 2u ? Int3{0, 0, 1} : Int3{0, 0, -1};
+		break;
+	case 1u:
+		outSideOffsetA = cornerIndex == 1u || cornerIndex == 2u ? Int3{0, 1, 0} : Int3{0, -1, 0};
+		outSideOffsetB = cornerIndex == 0u || cornerIndex == 1u ? Int3{0, 0, 1} : Int3{0, 0, -1};
+		break;
+	case 2u:
+		outSideOffsetA = cornerIndex >= 2u ? Int3{1, 0, 0} : Int3{-1, 0, 0};
+		outSideOffsetB = cornerIndex == 1u || cornerIndex == 2u ? Int3{0, 0, 1} : Int3{0, 0, -1};
+		break;
+	case 3u:
+		outSideOffsetA = cornerIndex >= 2u ? Int3{1, 0, 0} : Int3{-1, 0, 0};
+		outSideOffsetB = cornerIndex == 0u || cornerIndex == 3u ? Int3{0, 0, 1} : Int3{0, 0, -1};
+		break;
+	case 4u:
+		outSideOffsetA = cornerIndex <= 1u ? Int3{1, 0, 0} : Int3{-1, 0, 0};
+		outSideOffsetB = cornerIndex == 1u || cornerIndex == 2u ? Int3{0, 1, 0} : Int3{0, -1, 0};
+		break;
+	default:
+		outSideOffsetA = cornerIndex >= 2u ? Int3{1, 0, 0} : Int3{-1, 0, 0};
+		outSideOffsetB = cornerIndex == 1u || cornerIndex == 2u ? Int3{0, 1, 0} : Int3{0, -1, 0};
+		break;
+	}
+
+	outDiagonalOffset = AddInt3(outSideOffsetA, outSideOffsetB);
+}
+
+uint32_t ReadAmbientOccluder(const VoxelWorld &world, const Int3 position)
+{
+	return IsAmbientOccluderMaterial(GetVoxelMaterial(world, position)) ? 1u : 0u;
+}
+
+uint32_t ComputeVoxelFaceAmbientVisibilityByte(
+	const VoxelWorld &world,
+	const Int3 voxelPosition,
+	const uint32_t faceIndex)
+{
+	uint32_t visibilityLevels = 0u;
+	for (uint32_t cornerIndex = 0u; cornerIndex < 4u; ++cornerIndex) {
+		Int3 sideOffsetA{};
+		Int3 sideOffsetB{};
+		Int3 diagonalOffset{};
+		GetFaceCornerAmbientOffsets(faceIndex, cornerIndex, sideOffsetA, sideOffsetB, diagonalOffset);
+
+		const uint32_t sideA = ReadAmbientOccluder(world, AddInt3(voxelPosition, sideOffsetA));
+		const uint32_t sideB = ReadAmbientOccluder(world, AddInt3(voxelPosition, sideOffsetB));
+		if (sideA != 0u && sideB != 0u) {
+			continue;
+		}
+
+		const uint32_t diagonal = ReadAmbientOccluder(world, AddInt3(voxelPosition, diagonalOffset));
+		visibilityLevels += 3u - std::min(sideA + sideB + diagonal, 3u);
+	}
+
+	return (visibilityLevels * 255u + 6u) / 12u;
+}
+
 void ExpectChunkBoundsAreValid(TestContext &context, const VoxelWorld &world)
 {
 	EXPECT_TRUE(context, world.chunkSize > 0);
@@ -290,6 +370,9 @@ void TestCreateVoxelSceneWorldBuildsExpectedBaselineScenes(TestContext &context)
 	EXPECT_TRUE(context, state.world.voxelWorld->config.worldTopY >= 14);
 	EXPECT_TRUE(context, state.world.voxelWorld->stats.glassVoxelCount > 0);
 	EXPECT_TRUE(context, state.world.voxelWorld->stats.fluidVoxelCount > 0);
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(*state.world.voxelWorld, {8, 1, 4}));
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(*state.world.voxelWorld, {7, 6, 4}));
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(*state.world.voxelWorld, {5, 5, 6}));
 
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::FlatBenchmark));
 	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
@@ -388,19 +471,36 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 {
 	RenderState render{};
 	render.currentSceneLighting.postProcess[0] = 1.25f;
+	render.currentSceneLighting.postProcess[1] = 0.85f;
+	render.currentSceneLighting.colorGrading = {1.10f, 1.05f, 0.95f, -0.02f};
+	render.currentSceneLighting.exposureControl = {
+		static_cast<float>(ExposureMeteringMode::SceneKey),
+		0.75f,
+		0.40f,
+		2.50f};
 	render.currentSceneLighting.sunDirectionAndWrap = {-0.58f, 0.62f, -0.31f, 0.10f};
 	render.currentSceneLighting.sunColorAndIntensity = {0.95f, 0.90f, 0.82f, 1.30f};
 	render.currentSceneLighting.sunShadowParams = {0.72f, 0.0012f, 0.0035f, 1.40f};
+	render.currentSceneLighting.shadowCascadeBlendParams = {0.19f, 0.10f, 0.0f, 0.0f};
+	render.currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(0.10f, 128.0f, 0.65f);
+	render.currentSunShadowCascadeDiagnostics.viewNearDepths = {0.10f, 8.0f, 24.0f, 56.0f};
+	render.currentSunShadowCascadeDiagnostics.viewFarDepths = {8.0f, 24.0f, 56.0f, 128.0f};
+	render.currentSunShadowCascadeDiagnostics.orthoWidths = {12.0f, 20.0f, 36.0f, 64.0f};
+	render.currentSunShadowCascadeDiagnostics.orthoHeights = {10.0f, 18.0f, 30.0f, 52.0f};
+	render.currentSunShadowCascadeDiagnostics.texelWorldSizes = {0.0059f, 0.0098f, 0.0176f, 0.0313f};
+	render.currentSunShadowCascadeDiagnostics.casterLightNearDepths = {1.5f, 4.0f, 9.5f, 18.0f};
+	render.currentSunShadowCascadeDiagnostics.casterLightFarDepths = {15.5f, 28.0f, 60.0f, 132.0f};
 	render.shadowMapExtent = {2048u, 2048u};
 	render.lightingDebugControls.exposureBiasStops = 0.25f;
 	render.lightingDebugControls.toneMapOperator = ToneMapOperator::AcesApprox;
 	render.lightingDebugControls.debugView = LightingDebugView::Shadow;
 	render.lightingDebugControls.shadowCoverageScale = 1.30f;
-	render.lightingDebugControls.shadowTuningTarget = ShadowTuningTarget::Coverage;
+	render.lightingDebugControls.shadowTuningTarget = ShadowTuningTarget::CascadeBlend;
 	render.lightingDebugControls.shadowStrengthOffset = 0.10f;
 	render.lightingDebugControls.shadowDepthBiasOffset = 0.0002f;
 	render.lightingDebugControls.shadowNormalBiasOffset = 0.0010f;
 	render.lightingDebugControls.shadowFilterRadiusOffset = 0.25f;
+	render.lightingDebugControls.shadowCascadeBlendOffset = 0.04f;
 
 	const std::filesystem::path metadataPath = GetTestScreenshotPath().replace_extension(".txt");
 	std::error_code removeError;
@@ -417,10 +517,61 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 	const std::string text(std::istreambuf_iterator(stream), {});
 	EXPECT_TRUE(context, text.find("scene_preset=MeshingStress") != std::string::npos);
 	EXPECT_TRUE(context, text.find("debug_view=SHDW") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_tuning_target=COV") != std::string::npos);
+	EXPECT_TRUE(context, text.find("environment_intensity=0.850000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("grading_white_point=1.100000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("grading_contrast=1.050000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("grading_saturation=0.950000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("grading_lift=-0.020000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("exposure_metering=SCENEKEY") != std::string::npos);
+	EXPECT_TRUE(context, text.find("exposure_target_key=0.750000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("exposure_min=0.400000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("exposure_max=2.500000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_tuning_target=BLND") != std::string::npos);
 	EXPECT_TRUE(context, text.find("shadow_coverage_scale=1.300000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_blend=0.190000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_count=4") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_lambda=0.650000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_splits=") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_view_ranges=0.100000:8.000000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_ortho_extents=12.000000x10.000000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_texel_world=0.005900 0.009800 0.017600 0.031300") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_caster_light_ranges=1.500000:15.500000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("transparent_shadow_policy=GLASS_IGNORED_FLUID_CASTS") != std::string::npos);
+	EXPECT_TRUE(context, text.find("shadow_cascade_blend_offset=0.040000") != std::string::npos);
 
 	std::filesystem::remove(metadataPath, removeError);
+}
+
+void TestVoxelFaceAmbientVisibilityStaysOpenForExposedTopFace(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {4, 4, 4}, 4);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::FloorWhite);
+
+	EXPECT_EQ(context, 255u, ComputeVoxelFaceAmbientVisibilityByte(world, {1, 1, 1}, 2u));
+}
+
+void TestVoxelFaceAmbientVisibilityDarkensEnclosedTopFace(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {5, 5, 5}, 5);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::FloorGray);
+
+	EXPECT_EQ(context, 0u, ComputeVoxelFaceAmbientVisibilityByte(world, {2, 1, 2}, 2u));
+}
+
+void TestVoxelFaceAmbientVisibilityTreatsGlassAsNonOccluder(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {5, 5, 5}, 5);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::Glass);
+
+	EXPECT_EQ(context, 255u, ComputeVoxelFaceAmbientVisibilityByte(world, {2, 1, 2}, 2u));
 }
 
 void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
@@ -650,12 +801,23 @@ void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
 	EXPECT_TRUE(context, chunkGrid.horizonColorAndFogStart[3] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.groundColorAndFogMax[3] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.postProcess[0] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.postProcess[1] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.postProcess[0] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.postProcess[1] < voxelLab.postProcess[1]);
 	EXPECT_TRUE(context, voxelLab.postProcess[2] == static_cast<float>(ToneMapOperator::AcesApprox));
+	EXPECT_TRUE(context, voxelLab.colorGrading[0] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.colorGrading[1] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.colorGrading[2] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.colorGrading[1] >= voxelLab.colorGrading[1]);
+	EXPECT_TRUE(context, voxelLab.exposureControl[0] == static_cast<float>(ExposureMeteringMode::SceneKey));
+	EXPECT_TRUE(context, voxelLab.exposureControl[1] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.exposureControl[2] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.exposureControl[3] > voxelLab.exposureControl[2]);
 	EXPECT_TRUE(context, voxelLab.sunShadowParams[0] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.sunShadowParams[1] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.sunShadowParams[2] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.sunShadowParams[3] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.shadowCascadeBlendParams[0] > 0.0f);
 }
 
 void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
@@ -669,15 +831,22 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 	controls.shadowDepthBiasOffset = 0.0002f;
 	controls.shadowNormalBiasOffset = 0.0010f;
 	controls.shadowFilterRadiusOffset = 0.25f;
+	controls.shadowCascadeBlendOffset = 0.04f;
 
 	const VoxelSceneLighting tunedLighting = BuildVoxelSceneLighting(VoxelScenePreset::VoxelLab, controls);
 	EXPECT_TRUE(context, tunedLighting.postProcess[0] > baseLighting.postProcess[0]);
+	EXPECT_TRUE(context, EstimateVoxelSceneExposureKey(tunedLighting) > 0.0f);
+	EXPECT_TRUE(
+		context,
+		std::string_view(ExposureMeteringModeToString(static_cast<ExposureMeteringMode>(
+			std::lround(tunedLighting.exposureControl[0])))) == "SCENEKEY");
 	EXPECT_TRUE(context, tunedLighting.postProcess[2] == static_cast<float>(ToneMapOperator::Reinhard));
 	EXPECT_TRUE(context, tunedLighting.postProcess[3] == static_cast<float>(LightingDebugView::Direct));
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[0] > baseLighting.sunShadowParams[0]);
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[1] > baseLighting.sunShadowParams[1]);
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[2] > baseLighting.sunShadowParams[2]);
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[3] > baseLighting.sunShadowParams[3]);
+	EXPECT_TRUE(context, tunedLighting.shadowCascadeBlendParams[0] > baseLighting.shadowCascadeBlendParams[0]);
 
 	const std::array<float, 4> clearColor = GetVoxelSceneClearColor(tunedLighting);
 	EXPECT_TRUE(context, clearColor[0] >= 0.0f && clearColor[0] <= 1.0f);
@@ -689,18 +858,23 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 {
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Shadow)) == "SHDW");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Cascade)) == "CSM");
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Shadow);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::Shadow) == LightingDebugView::Fog);
+		GetNextLightingDebugView(LightingDebugView::Shadow) == LightingDebugView::Cascade);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Cascade) == LightingDebugView::Fog);
 }
 
 void TestShadowTuningTargetCycleAndLabels(TestContext &context)
 {
 	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::Strength)) == "STR");
 	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::Coverage)) == "COV");
+	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::CascadeBlend)) == "BLND");
 	EXPECT_TRUE(
 		context,
 		GetNextShadowTuningTarget(ShadowTuningTarget::Strength) == ShadowTuningTarget::DepthBias);
@@ -709,7 +883,10 @@ void TestShadowTuningTargetCycleAndLabels(TestContext &context)
 		GetNextShadowTuningTarget(ShadowTuningTarget::FilterRadius) == ShadowTuningTarget::Coverage);
 	EXPECT_TRUE(
 		context,
-		GetNextShadowTuningTarget(ShadowTuningTarget::Coverage) == ShadowTuningTarget::Strength);
+		GetNextShadowTuningTarget(ShadowTuningTarget::Coverage) == ShadowTuningTarget::CascadeBlend);
+	EXPECT_TRUE(
+		context,
+		GetNextShadowTuningTarget(ShadowTuningTarget::CascadeBlend) == ShadowTuningTarget::Strength);
 }
 
 void TestBuildSunShadowProjectionFitsSceneBounds(TestContext &context)
@@ -793,6 +970,232 @@ void TestBuildSunShadowProjectionInterpretsSunDirectionAsTowardsSun(TestContext 
 	EXPECT_TRUE(context, topDepth < bottomDepth);
 }
 
+void TestBuildSunShadowCascadeSplitsUsesStablePracticalSplitScheme(TestContext &context)
+{
+	const auto [normalizedSplits, viewDepthSplits, splitLambda, nearPlane, farPlane] = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
+
+	EXPECT_TRUE(context, nearPlane == 0.1f);
+	EXPECT_TRUE(context, farPlane == 128.0f);
+	EXPECT_TRUE(context, splitLambda == 0.65f);
+	EXPECT_EQ(context, kSunShadowCascadeCount, static_cast<uint32_t>(viewDepthSplits.size()));
+	EXPECT_TRUE(context, viewDepthSplits.back() == 128.0f);
+	EXPECT_TRUE(context, normalizedSplits.back() == 1.0f);
+
+	float previousDepth = nearPlane;
+	float previousNormalized = 0.0f;
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		EXPECT_TRUE(context, viewDepthSplits[cascadeIndex] > previousDepth);
+		EXPECT_TRUE(context, normalizedSplits[cascadeIndex] > previousNormalized);
+		EXPECT_TRUE(context, normalizedSplits[cascadeIndex] <= 1.0f);
+		previousDepth = viewDepthSplits[cascadeIndex];
+		previousNormalized = normalizedSplits[cascadeIndex];
+	}
+}
+
+void TestBuildSunShadowCascadeSplitsHonorsUniformAndLogarithmicLimits(TestContext &context)
+{
+	const SunShadowCascadeSplits uniformSplits = BuildSunShadowCascadeSplits(1.0f, 101.0f, 0.0f);
+	const SunShadowCascadeSplits logarithmicSplits = BuildSunShadowCascadeSplits(1.0f, 101.0f, 1.0f);
+	const SunShadowCascadeSplits practicalSplits = BuildSunShadowCascadeSplits(1.0f, 101.0f, 0.65f);
+
+	EXPECT_TRUE(context, std::abs(uniformSplits.viewDepthSplits[0] - 26.0f) <= 0.001f);
+	EXPECT_TRUE(context, logarithmicSplits.viewDepthSplits[0] < practicalSplits.viewDepthSplits[0]);
+	EXPECT_TRUE(context, practicalSplits.viewDepthSplits[0] < uniformSplits.viewDepthSplits[0]);
+	EXPECT_TRUE(context, logarithmicSplits.viewDepthSplits[1] < practicalSplits.viewDepthSplits[1]);
+	EXPECT_TRUE(context, practicalSplits.viewDepthSplits[1] < uniformSplits.viewDepthSplits[1]);
+}
+
+void TestBuildSunShadowCascadeSplitsClampsInvalidInputs(TestContext &context)
+{
+	const auto [normalizedSplits, viewDepthSplits, splitLambda, nearPlane, farPlane] = BuildSunShadowCascadeSplits(-10.0f, -1.0f, 4.0f);
+
+	EXPECT_TRUE(context, nearPlane >= 0.01f);
+	EXPECT_TRUE(context, farPlane > nearPlane);
+	EXPECT_TRUE(context, splitLambda == 1.0f);
+	EXPECT_TRUE(context, viewDepthSplits.back() == farPlane);
+	EXPECT_TRUE(context, normalizedSplits.back() == 1.0f);
+}
+
+void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({-32, 0, -32}, {32, 32, 96}, 16);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
+	const SunShadowCascadeProjectionInputs inputs{
+		.cameraPosition = {0.0f, 8.0f, -20.0f},
+		.cameraForward = {0.0f, 0.0f, 1.0f},
+		.cameraRight = {1.0f, 0.0f, 0.0f},
+		.cameraUp = {0.0f, 1.0f, 0.0f},
+		.tanHalfVerticalFov = 0.75f,
+		.tanHalfHorizontalFov = 1.0f,
+		.splits = splits,
+	};
+	const auto [lightViewProjections, diagnostics] =
+		BuildSunShadowCascadeProjections(world, {0.35f, 0.88f, 0.22f}, inputs, 1.0f);
+
+	float previousDepth = splits.nearPlane;
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		std::array<float, 16> cascadeMatrix{};
+		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * cascadeMatrix.size();
+		std::copy_n(
+			lightViewProjections.data() + matrixOffset,
+			cascadeMatrix.size(),
+			cascadeMatrix.begin());
+		const float centerDepth = (previousDepth + splits.viewDepthSplits[cascadeIndex]) * 0.5f;
+		const std::array sliceCenter{
+			inputs.cameraPosition[0] + inputs.cameraForward[0] * centerDepth,
+			inputs.cameraPosition[1] + inputs.cameraForward[1] * centerDepth,
+			inputs.cameraPosition[2] + inputs.cameraForward[2] * centerDepth,
+		};
+		const std::array<float, 4> clipCenter = TransformPoint(cascadeMatrix, sliceCenter);
+		EXPECT_TRUE(context, std::abs(clipCenter[3]) > 0.0001f);
+		const float inverseW = 1.0f / clipCenter[3];
+		EXPECT_TRUE(context, std::abs(clipCenter[0] * inverseW) <= 1.0f);
+		EXPECT_TRUE(context, std::abs(clipCenter[1] * inverseW) <= 1.0f);
+		EXPECT_TRUE(context, clipCenter[2] * inverseW >= -0.02f);
+		EXPECT_TRUE(context, clipCenter[2] * inverseW <= 1.02f);
+		previousDepth = splits.viewDepthSplits[cascadeIndex];
+	}
+
+	EXPECT_TRUE(
+		context,
+		std::abs(lightViewProjections[0] - lightViewProjections[16]) > 0.0001f);
+}
+
+void TestBuildSunShadowCascadeProjectionsSnapToShadowTexelGrid(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({-32, 0, -32}, {32, 32, 96}, 16);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
+	const SunShadowCascadeProjectionInputs baseInputs{
+		.cameraPosition = {0.0f, 8.0f, -20.0f},
+		.cameraForward = {0.0f, 0.0f, 1.0f},
+		.cameraRight = {1.0f, 0.0f, 0.0f},
+		.cameraUp = {0.0f, 1.0f, 0.0f},
+		.tanHalfVerticalFov = 0.75f,
+		.tanHalfHorizontalFov = 1.0f,
+		.shadowMapResolution = 2048u,
+		.splits = splits,
+	};
+	SunShadowCascadeProjectionInputs nudgedInputs = baseInputs;
+	nudgedInputs.cameraPosition[0] += 0.001f;
+
+	const auto [lightViewProjections1, diagnostics1] =
+		BuildSunShadowCascadeProjections(world, {0.0f, 1.0f, 0.0f}, baseInputs, 1.0f);
+	const auto [lightViewProjections, diagnostics] =
+		BuildSunShadowCascadeProjections(world, {0.0f, 1.0f, 0.0f}, nudgedInputs, 1.0f);
+
+	for (uint32_t matrixIndex = 0; matrixIndex < 16u; ++matrixIndex) {
+		EXPECT_TRUE(
+			context,
+			std::abs(lightViewProjections1[matrixIndex] -
+					 lightViewProjections[matrixIndex]) <= 0.000001f);
+	}
+
+	EXPECT_TRUE(context, diagnostics1.viewNearDepths[0] == splits.nearPlane);
+	EXPECT_TRUE(context, diagnostics1.viewFarDepths[3] == splits.viewDepthSplits[3]);
+	EXPECT_TRUE(context, diagnostics1.orthoWidths[0] > 0.0f);
+	EXPECT_TRUE(context, diagnostics1.orthoHeights[0] > 0.0f);
+	EXPECT_TRUE(context, diagnostics1.texelWorldSizes[0] > 0.0f);
+	EXPECT_TRUE(context, diagnostics1.casterLightNearDepths[0] < diagnostics1.casterLightFarDepths[0]);
+	EXPECT_TRUE(
+		context,
+		diagnostics1.texelWorldSizes[0] <= diagnostics1.texelWorldSizes[1]);
+}
+
+void TestBuildSunShadowCascadeProjectionsUseCascadeSpecificCasterCoverage(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({-32, 0, -256}, {32, 32, 256}, 16);
+	SetVoxelMaterial(world, {-32, 0, -256}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {31, 31, 255}, VoxelMaterial::FloorWhite);
+	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.65f);
+	const SunShadowCascadeProjectionInputs inputs{
+		.cameraPosition = {0.0f, 8.0f, 0.0f},
+		.cameraForward = {0.0f, 0.0f, 1.0f},
+		.cameraRight = {1.0f, 0.0f, 0.0f},
+		.cameraUp = {0.0f, 1.0f, 0.0f},
+		.tanHalfVerticalFov = 0.70f,
+		.tanHalfHorizontalFov = 0.95f,
+		.splits = splits,
+	};
+	const auto [unusedLightViewProjections, diagnostics] =
+		BuildSunShadowCascadeProjections(world, {0.0f, 0.0f, -1.0f}, inputs, 1.0f);
+	static_cast<void>(unusedLightViewProjections);
+
+	const float nearCascadeCasterRange =
+		diagnostics.casterLightFarDepths[0] - diagnostics.casterLightNearDepths[0];
+	const float farCascadeCasterRange =
+		diagnostics.casterLightFarDepths[3] - diagnostics.casterLightNearDepths[3];
+	EXPECT_TRUE(context, diagnostics.casterLightNearDepths[0] < diagnostics.casterLightFarDepths[0]);
+	EXPECT_TRUE(context, nearCascadeCasterRange > 0.0f);
+	EXPECT_TRUE(context, nearCascadeCasterRange < 350.0f);
+	EXPECT_TRUE(context, farCascadeCasterRange > nearCascadeCasterRange);
+}
+
+void TestBuildSunShadowCascadeProjectionsExpandOrthoExtentForTallCasters(TestContext &context)
+{
+	VoxelWorld lowWorld = MakeTestWorld({-32, 0, -32}, {32, 40, 64}, 16);
+	SetVoxelMaterial(lowWorld, {0, 0, 20}, VoxelMaterial::FloorWhite);
+
+	VoxelWorld tallWorld = lowWorld;
+	SetVoxelMaterial(tallWorld, {0, 31, 20}, VoxelMaterial::FloorWhite);
+
+	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.80f);
+	const SunShadowCascadeProjectionInputs inputs{
+		.cameraPosition = {0.0f, 2.0f, -6.0f},
+		.cameraForward = {0.0f, 0.0f, 1.0f},
+		.cameraRight = {1.0f, 0.0f, 0.0f},
+		.cameraUp = {0.0f, 1.0f, 0.0f},
+		.tanHalfVerticalFov = 0.70f,
+		.tanHalfHorizontalFov = 0.95f,
+		.splits = splits,
+	};
+
+	const auto [lowLightViewProjections, lowDiagnostics] =
+		BuildSunShadowCascadeProjections(lowWorld, {-0.70f, 0.48f, -0.18f}, inputs, 1.0f);
+	const auto [tallLightViewProjections, tallDiagnostics] =
+		BuildSunShadowCascadeProjections(tallWorld, {-0.70f, 0.48f, -0.18f}, inputs, 1.0f);
+	static_cast<void>(lowLightViewProjections);
+	static_cast<void>(tallLightViewProjections);
+
+	EXPECT_TRUE(
+		context,
+		tallDiagnostics.orthoWidths[2] > lowDiagnostics.orthoWidths[2] ||
+			tallDiagnostics.orthoHeights[2] > lowDiagnostics.orthoHeights[2]);
+	EXPECT_TRUE(
+		context,
+		tallDiagnostics.texelWorldSizes[2] >= lowDiagnostics.texelWorldSizes[2]);
+}
+
+void TestBuildSunShadowCascadeProjectionsKeepExpandedCastersAheadOfNearPlane(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({-96, 0, -96}, {96, 72, 224}, 16);
+	SetVoxelMaterial(world, {-96, 0, -96}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {95, 71, 223}, VoxelMaterial::FloorWhite);
+
+	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.80f);
+	const SunShadowCascadeProjectionInputs inputs{
+		.cameraPosition = {0.0f, 2.0f, -6.0f},
+		.cameraForward = {0.0f, 0.0f, 1.0f},
+		.cameraRight = {1.0f, 0.0f, 0.0f},
+		.cameraUp = {0.0f, 1.0f, 0.0f},
+		.tanHalfVerticalFov = 0.70f,
+		.tanHalfHorizontalFov = 0.95f,
+		.splits = splits,
+	};
+
+	const auto [unusedLightViewProjections, diagnostics] =
+		BuildSunShadowCascadeProjections(world, {-0.70f, 0.48f, -0.18f}, inputs, 1.0f);
+	static_cast<void>(unusedLightViewProjections);
+
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		EXPECT_TRUE(context, diagnostics.casterLightNearDepths[cascadeIndex] >= 0.099f);
+		EXPECT_TRUE(
+			context,
+			diagnostics.casterLightFarDepths[cascadeIndex] > diagnostics.casterLightNearDepths[cascadeIndex]);
+	}
+}
+
 void ExpectInt3Equal(
 	TestContext &context,
 	const Int3 expected,
@@ -849,6 +1252,63 @@ void ExpectNear(
 }
 
 #define EXPECT_NEAR(context, expected, actual) ExpectNear(context, (expected), (actual), __LINE__, #actual)
+
+void TestStartupCameraOverrideReadsEnvironment(TestContext &context)
+{
+	CameraState camera{};
+	SDL_setenv_unsafe("PROJECTV_START_CAMERA_POSITION", "-25 19 25", 1);
+	SDL_setenv_unsafe("PROJECTV_START_CAMERA_LOOK", "0.62 -0.48 -0.62", 1);
+
+	ApplyStartupCameraOverrideFromEnvironment(&camera);
+
+	EXPECT_NEAR(context, -25.0f, camera.position[0]);
+	EXPECT_NEAR(context, 19.0f, camera.position[1]);
+	EXPECT_NEAR(context, 25.0f, camera.position[2]);
+
+	const std::array<float, 3> forward = GetCameraForwardVector(camera);
+	const float lookLength = std::sqrt(0.62f * 0.62f + -0.48f * -0.48f + -0.62f * -0.62f);
+	EXPECT_NEAR(context, 0.62f / lookLength, forward[0]);
+	EXPECT_NEAR(context, -0.48f / lookLength, forward[1]);
+	EXPECT_NEAR(context, -0.62f / lookLength, forward[2]);
+
+	SDL_unsetenv_unsafe("PROJECTV_START_CAMERA_POSITION");
+	SDL_unsetenv_unsafe("PROJECTV_START_CAMERA_LOOK");
+}
+
+void TestLookDevCaptureAutomationRequestsConfiguredViews(TestContext &context)
+{
+	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_VIEWS", "FINAL,SHDW", 1);
+	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_WARMUP_FRAMES", "1", 1);
+	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_INTERVAL_FRAMES", "1", 1);
+	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_QUIT", "1", 1);
+
+	LookDevCaptureAutomationState automation{};
+	ConfigureLookDevCaptureAutomationFromEnvironment(&automation);
+	EXPECT_TRUE(context, automation.active);
+	EXPECT_EQ(context, 2u, automation.viewCount);
+
+	RenderState render{};
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_TRUE(context, !render.screenshotCaptureRequested);
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_EQ(context, LightingDebugView::Final, render.lightingDebugControls.debugView);
+	EXPECT_TRUE(context, render.screenshotCaptureRequested);
+	render.screenshotCaptureRequested = false;
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_TRUE(context, !render.screenshotCaptureRequested);
+
+	EXPECT_TRUE(context, UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_EQ(context, LightingDebugView::Shadow, render.lightingDebugControls.debugView);
+	EXPECT_TRUE(context, render.screenshotCaptureRequested);
+	EXPECT_TRUE(context, automation.completed);
+
+	SDL_unsetenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_VIEWS");
+	SDL_unsetenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_WARMUP_FRAMES");
+	SDL_unsetenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_INTERVAL_FRAMES");
+	SDL_unsetenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_QUIT");
+}
 
 void TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(TestContext &context)
 {
@@ -914,28 +1374,18 @@ void TestVoxelRaycastMissesWhenNoSolidVoxelIsReached(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::Air, hit.material);
 }
 
-void DispatchKeyEvent(
-	InputState *input,
-	const Uint32 eventType,
-	const SDL_Scancode scancode,
-	const bool repeat,
-	const Uint64 timestamp)
-{
-	SDL_Event event{};
-	event.type = eventType;
-	event.key.scancode = scancode;
-	event.key.repeat = repeat;
-	event.key.timestamp = timestamp;
-	HandleInputActionEvent(*input, &event);
-}
-
 void SendKeyEvent(
 	InputState *input,
 	const Uint32 eventType,
 	const SDL_Scancode scancode,
 	const Uint64 timestamp = 0)
 {
-	DispatchKeyEvent(input, eventType, scancode, false, timestamp);
+	SDL_Event event{};
+	event.type = eventType;
+	event.key.scancode = scancode;
+	event.key.repeat = false;
+	event.key.timestamp = timestamp;
+	HandleInputActionEvent(*input, &event);
 }
 
 void SendRepeatedKeyEvent(
@@ -944,7 +1394,12 @@ void SendRepeatedKeyEvent(
 	const SDL_Scancode scancode,
 	const Uint64 timestamp = 0)
 {
-	DispatchKeyEvent(input, eventType, scancode, true, timestamp);
+	SDL_Event event{};
+	event.type = eventType;
+	event.key.scancode = scancode;
+	event.key.repeat = true;
+	event.key.timestamp = timestamp;
+	HandleInputActionEvent(*input, &event);
 }
 
 CameraState MakeTestCamera(const std::array<float, 3> &position)
@@ -1542,6 +1997,24 @@ void TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(TestContext &
 	EXPECT_NEAR(context, 0.0f, input.mouseDeltaY);
 }
 
+void TestGetCameraVisibleSceneMaxDistanceClampsToMainlineRange(TestContext &context)
+{
+	CameraState farCamera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+	farCamera.nearPlane = 0.1f;
+	farCamera.farPlane = 128.0f;
+	EXPECT_NEAR(context, 64.0f, GetCameraVisibleSceneMaxDistance(farCamera));
+
+	CameraState shortCamera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+	shortCamera.nearPlane = 0.1f;
+	shortCamera.farPlane = 48.0f;
+	EXPECT_NEAR(context, 48.0f, GetCameraVisibleSceneMaxDistance(shortCamera));
+
+	CameraState invalidCamera = MakeTestCamera({0.0f, 0.0f, 0.0f});
+	invalidCamera.nearPlane = 2.0f;
+	invalidCamera.farPlane = 1.0f;
+	EXPECT_NEAR(context, 2.0f, GetCameraVisibleSceneMaxDistance(invalidCamera));
+}
+
 void TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(TestContext &context)
 {
 	const CameraState camera = MakeTestCamera({4.0f, 4.0f, 20.0f});
@@ -1574,6 +2047,41 @@ void TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(TestContext &conte
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
 							 MakePackedSceneChunkDescriptor({42, 0, -8}, {50, 8, 0}),
 							 parameters));
+}
+
+void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &context)
+{
+	constexpr std::array identityProjection{
+		1.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		1.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		1.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		1.0f,
+	};
+
+	EXPECT_TRUE(context, IsSceneChunkVisibleInShadowCascade(
+							 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}),
+							 identityProjection));
+	EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
+							 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}),
+							 identityProjection));
+	EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
+							 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
+							 identityProjection));
+	EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
+							 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 0u),
+							 identityProjection));
 }
 
 void TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(TestContext &context)
@@ -1638,6 +2146,32 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	EXPECT_NEAR(context, 10.0f, camera.moveSpeed);
 	EXPECT_NEAR(context, 0.0f, camera.yawRadians);
 	EXPECT_NEAR(context, -0.2f, camera.pitchRadians);
+}
+
+void TestUpdateAppUsesVisibleSceneDistanceForSunShadowCascadeSplits(TestContext &context)
+{
+	PlatformState platform{};
+	SimulationState simulation{};
+	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
+	camera.nearPlane = 0.1f;
+	camera.farPlane = 128.0f;
+	InputState input{};
+	InitializeInputState(input);
+	InteractionState interaction{};
+	WorldState world{};
+	RenderState render{};
+	DebugState debug{};
+
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+	EXPECT_NEAR(context, 0.80f, render.currentSunShadowCascadeSplits.splitLambda);
+	EXPECT_NEAR(context, 64.0f, render.currentSunShadowCascadeSplits.farPlane);
+	EXPECT_NEAR(context, 64.0f, debug.stats.sunShadowCascadeDepthSplits.back());
+
+	camera.farPlane = 40.0f;
+	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+	EXPECT_NEAR(context, 0.80f, render.currentSunShadowCascadeSplits.splitLambda);
+	EXPECT_NEAR(context, 40.0f, render.currentSunShadowCascadeSplits.farPlane);
+	EXPECT_NEAR(context, 40.0f, debug.stats.sunShadowCascadeDepthSplits.back());
 }
 
 void TestUpdateAppTogglesWalkAirControlMode(TestContext &context)
@@ -4114,7 +4648,7 @@ void TestWalkCharacterCanJumpWhileMovingAcrossNarrowEdgeBandWithoutSneak(TestCon
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 
-	PhysicsWalkDebugInfo preJumpInfo{};
+	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
 	bool foundMovingEdgeBand = false;
 	for (int step = 0; step < 30; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
@@ -4207,7 +4741,7 @@ void TestWalkCharacterCanJumpWhileBoostingAlongStraightEdgeWithoutSneak(TestCont
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LCTRL);
 
 	float minY = camera.position[1];
-	PhysicsWalkDebugInfo preJumpInfo{};
+	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
 	for (int step = 0; step < 120; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
 		minY = std::min(minY, camera.position[1]);
@@ -6272,10 +6806,28 @@ void TestUpdateAppAdjustsShadowTuningControls(TestContext &context)
 	{
 		InputState input{};
 		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_EQ(context, ShadowTuningTarget::CascadeBlend, render.lightingDebugControls.shadowTuningTarget);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
+		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
+		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
+		EXPECT_TRUE(context, render.lightingDebugControls.shadowCascadeBlendOffset > 0.0f);
+		EXPECT_TRUE(context, debug.stats.shadowTuningTarget == ShadowTuningTarget::CascadeBlend);
+	}
+
+	{
+		InputState input{};
+		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_V);
 		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 		EXPECT_TRUE(context, render.lightingDebugControls.shadowDepthBiasOffset == 0.0f);
 		EXPECT_TRUE(context, render.lightingDebugControls.shadowCoverageScale == 1.0f);
+		EXPECT_TRUE(context, render.lightingDebugControls.shadowCascadeBlendOffset == 0.0f);
 		EXPECT_EQ(context, ShadowTuningTarget::Strength, render.lightingDebugControls.shadowTuningTarget);
 	}
 }
@@ -6957,7 +7509,7 @@ void TestSyncEcsWorldStateMirrorsVoxelChunksAndWorldSummary(TestContext &context
 }
 } // namespace
 
-int main()
+int main() // NOLINT(*-exception-escape)
 {
 	if (const int replayAnalysisExitCode = RunReplayAnalysisFromEnvironment();
 		replayAnalysisExitCode >= 0) {
@@ -6974,6 +7526,9 @@ int main()
 	TestScreenshotCapturePathUsesEnvironmentOverride(context);
 	TestSaveScreenshotCaptureBmpWritesExpectedBmp(context);
 	TestSaveScreenshotCaptureMetadataWritesLookDevState(context);
+	TestVoxelFaceAmbientVisibilityStaysOpenForExposedTopFace(context);
+	TestVoxelFaceAmbientVisibilityDarkensEnclosedTopFace(context);
+	TestVoxelFaceAmbientVisibilityTreatsGlassAsNonOccluder(context);
 	TestVoxelWorldSnapshotRoundTripsWorldState(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
@@ -6988,18 +7543,31 @@ int main()
 	TestVoxelSceneLightingPresetsProvideDistinctLooks(context);
 	TestBuildVoxelSceneLightingAppliesLookDevControls(context);
 	TestLightingDebugViewCycleIncludesShadow(context);
+	TestStartupCameraOverrideReadsEnvironment(context);
+	TestLookDevCaptureAutomationRequestsConfiguredViews(context);
 	TestShadowTuningTargetCycleAndLabels(context);
 	TestBuildSunShadowProjectionFitsSceneBounds(context);
 	TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(context);
 	TestBuildSunShadowProjectionInterpretsSunDirectionAsTowardsSun(context);
+	TestBuildSunShadowCascadeSplitsUsesStablePracticalSplitScheme(context);
+	TestBuildSunShadowCascadeSplitsHonorsUniformAndLogarithmicLimits(context);
+	TestBuildSunShadowCascadeSplitsClampsInvalidInputs(context);
+	TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(context);
+	TestBuildSunShadowCascadeProjectionsSnapToShadowTexelGrid(context);
+	TestBuildSunShadowCascadeProjectionsUseCascadeSpecificCasterCoverage(context);
+	TestBuildSunShadowCascadeProjectionsExpandOrthoExtentForTallCasters(context);
+	TestBuildSunShadowCascadeProjectionsKeepExpandedCastersAheadOfNearPlane(context);
 	TestInputActionBindingsTrackPressedAndReleasedKeys(context);
 	TestConsumeCameraLookInputAllowsNearVerticalPitch(context);
 	TestTickCameraUsesActionStateAndSpeedModifiers(context);
 	TestHandleCameraEventIgnoresLookInputWithoutRelativeMouseMode(context);
+	TestGetCameraVisibleSceneMaxDistanceClampsToMainlineRange(context);
 	TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(context);
 	TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(context);
+	TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(context);
 	TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(context);
 	TestUpdateAppConsumesDebugInputActions(context);
+	TestUpdateAppUsesVisibleSceneDistanceForSunShadowCascadeSplits(context);
 	TestUpdateAppTogglesWalkAirControlMode(context);
 	TestUpdateAppTogglesWalkAutoJump(context);
 	TestUpdateAppTogglesWalkAutoJumpDelay(context);

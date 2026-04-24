@@ -28,7 +28,8 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 
 - `PackedSceneChunkDescriptor` для каждого чанка;
 - packed voxel payload, где материалы упакованы по четыре в `uint32_t`;
-- `PackedSceneVoxelFace` buffer для результатов meshing;
+- `PackedSceneVoxelFace` buffer для результатов meshing; each face now also carries a cheap local ambient-visibility
+  byte in addition to voxel/material identity;
 - indirect buffers for opaque, shadow, and transparent draw;
 - dirty chunk index buffer;
 - отдельный per-frame vertex buffer для HUD;
@@ -36,11 +37,34 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
   `TRANSFER_SRC`;
 - material visual table;
 - scene lighting buffer для sky/horizon/ground/sun/fog look текущего `VoxelScenePreset` плюс
-  exposure/tone-map/debug-view post-process contract;
-- первый sun-shadow contract: per-preset shadow tuning и scene-wide `sunShadowViewProjection`, который CPU собирает из
-  bounds активных chunk-ов и только fallback'ает на полные границы `VoxelWorld`, если сцена пуста.
+  exposure/environment/tone-map/debug-view, minimal color-grading, and CPU-side scene-key exposure metering contract;
+- first CSM sun-shadow contract: per-preset shadow tuning, explicit 4-cascade split state, and
+  `sunShadowViewProjections[4]` in `VoxelSceneLighting`. CPU builds per-cascade light projections from camera view
+  slices, active scene bounds, and the authored sun direction; the shadow pass renders a 4-layer depth array and the
+  final shader samples it with `sampler2DArrayShadow`. Cascade projection centers are snapped to the shadow texel grid
+  using the active shadow-map resolution to avoid continuous sub-texel projection drift during small camera movement.
+  Split planning now also follows the same visible-scene receiver contract as main-pass chunk visibility instead of the
+  raw camera far plane: current mainline uses camera near plus `min(farPlane, 64)` as the receiver depth horizon. The
+  current default split lambda is `0.80`, not the older `0.65`, because live MeshingStress repro showed the first
+  baseline was still too generous to far receivers.
+  The same CPU fit now also emits per-cascade coverage diagnostics: view-depth ranges, ortho extents, and effective
+  world-space texel size flow into runtime debug state and screenshot sidecars. The current `XY` receiver fit also uses
+  a rotation-stable sphere extent per slice instead of a tight light-space AABB, so camera yaw does not churn cascade
+  width/height and texel density every frame. Split edges no longer hard-switch either: `voxel.frag` now blends current
+  and next cascades over a small runtime-visible band, and that blend width is part of the same tuning/HUD/capture
+  contract rather than a hidden shader constant. Caster-depth coverage is also per-cascade now: the CPU fit extrudes the
+  current receiver slice upstream along the sun direction before intersecting with active scene bounds, instead of
+  feeding every cascade the full active-scene AABB. That caster coverage now expands the cascade's projected `XY`
+  footprint too, not only its light-depth range, so nearer cascades do not clip tall/upstream casters at split
+  transitions. The cascade light camera also moves upstream far enough to keep that expanded caster range in front of
+  the
+  shadow near plane; otherwise mid/far cascades can still lose casters even with correct `XY` coverage. Shadow draw
+  submission is now per-cascade too: the indirect shadow buffer stores one chunk-command slice per cascade, CPU chunk
+  visibility rebuilds those slices against the current cascade clip volumes, and dirty-chunk meshing patches the same
+  per-cascade commands on the GPU. Empty cascades can then skip the shadow draw call entirely when the frame has no
+  dirty meshing work and CPU culling already knows the cascade is empty.
   `sunDirectionAndWrap.xyz` на этом уровне остаётся authored-вектором к солнцу для shading, а shadow fit инвертирует его
-  в реальное направление хода света перед сборкой shadow camera.
+  в реальное направление хода света перед сборкой shadow projections.
 
 Основной смысл:
 
@@ -52,6 +76,12 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
   явные буферы, а не как shader hardcode.
 - first sun shadow follows the same rule: shadow projection и baseline tuning описываются на CPU, а не собираются как
   скрытое shader-only состояние.
+- CSM follows the same rule too: cascade count, lambda, split depths, image-array storage, and shader debug view are
+  explicit runtime state instead of hidden shader constants. Stabilization starts in the CPU projection contract via
+  texel-grid snapping, coverage diagnostics are part of that contract too rather than private CPU math, and split
+  blending is exposed the same way through the runtime `BLD` control and capture metadata. Caster coverage diagnostics
+  (`shadow_cascade_caster_light_ranges`) are part of that same explicit contract, and split planning must stay aligned
+  with the visible-scene receiver horizon rather than silently drifting back to raw far-plane math.
 - CPU descriptor versioning не должен стирать GPU-сгенерированные face counts: динамические `drawRanges` считаются
   runtime mesh state, а не authored scene layout.
 
@@ -105,7 +135,8 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
 
 ## Compute meshing
 
-Compute meshing pipeline создаётся и биндуется в [VulkanVoxelMeshingPipeline.cpp](../src/render/vulkan/VulkanVoxelMeshingPipeline.cpp).
+Compute meshing pipeline создаётся и биндуется
+в [VulkanVoxelMeshingPipeline.cpp](../src/render/vulkan/VulkanVoxelMeshingPipeline.cpp).
 
 Descriptor set сейчас связывает восемь storage buffers:
 
@@ -132,9 +163,11 @@ Shadow-path update `2026-04-22`:
 - The shadow pass now uses a dedicated descriptor/pipeline layout instead of binding the main graphics descriptor set
   while the shadow image is being written as depth.
 - The current stable shadow baseline uses a dedicated all-occluder `shadowIndirectBuffer`, so shadow draws follow the
-  renderer's sparse per-chunk face layout without inheriting camera-frustum culling from the main opaque pass.
-- The remaining limitation is now explicit: the current shadow path is opaque-only, so transparent-heavy scenes can
-  still look largely shadowless.
+  renderer's sparse per-chunk opaque face layout without inheriting camera-frustum culling from the main opaque pass.
+- Transparent-shadow policy is `GLASS_IGNORED_FLUID_CASTS`: glass does not cast sun shadows until a separate
+  tinted/transmission or RT-oriented path exists, while `Fluid` casts through the current opaque shadow-map path.
+- `Fluid` may still live in the main opaque draw range for forward rendering, so the shadow fragment shader must only
+  reject `Glass`; rejecting `Fluid` makes water incorrectly shadowless.
 
 Graphics path записывается в [Renderer.cpp](../src/render/Renderer.cpp).
 
@@ -161,15 +194,23 @@ Dynamic rendering используется вместо старого render pa
 - shadow depth pass не использует camera-culling indirect buffers как source of truth;
 - он читает dedicated all-occluder `shadowIndirectBuffer`, чтобы тени от opaque geometry не зависели от текущего view
   frustum;
+- glass geometry is not part of the current sun-shadow caster set; `Fluid` remains a caster in the current shadow path;
 - main voxel shader семплирует эту карту только для direct sun, не для local lights или более сложного GI;
-- current quality baseline для этого path — `2048x2048` depth map плюс лёгкий shader-side `3x3` PCF, а не single hard
-  compare sample, и angle-aware receiver biasing from the authored depth/normal bias controls instead of one flat
-  brute-force offset for every sun angle.
+- current quality baseline для этого path — `2048x2048` depth map плюс weighted shader-side `5x5` PCF, а не single hard
+  compare sample, и angle-aware receiver biasing from the authored depth/normal bias controls плюс a small
+  sun-direction receiver offset instead of one flat brute-force offset for every sun angle
+- shadow-map writes use static Vulkan polygon depth bias in the shadow graphics pipeline. This is the caster-side fix
+  for one-sided voxel-face self-shadow acne. PCF only filters the result and should not be treated as the root solution.
 - render-facing material response in the same pass is now PBR-friendlier than the old ad-hoc
   ambient/diffuse/spec/shininess knobs: the CPU material table packs `base color`, `AO`, `roughness`, `metallic`,
-  `reflectance`, transmission tint and fog/emissive/ambient/direct-response hooks, while `voxel.frag` evaluates direct
-  sun with a `GGX + Fresnel-Schlick + Smith` baseline on top of the existing ambient gradient and shadow visibility term
+  `reflectance`, transmission tint, and fog/emissive/ambient/direct-response hooks.
+  `voxel.frag` evaluates direct sun with a `GGX + Fresnel-Schlick + Smith` baseline on top of the existing ambient
+  gradient and shadow visibility term
   without dropping authored shadow contrast.
+- environment fill is no longer only a normal-based sky gradient either: compute meshing writes a cheap per-face local
+  ambient-visibility term into `PackedSceneVoxelFace`, `voxel.vert` forwards it flat, and `voxel.frag` multiplies
+  sky/horizon/ground fill by it so sealed voxel cavities stop reading as if they still saw full sky. This is a bounded
+  voxel-neighborhood visibility term, not `SSAO/GTAO`.
 - when the surface supports swapchain `TRANSFER_SRC`, the same frame loop can also copy the final color image into a
   host-visible readback buffer and save a `.bmp` plus sidecar metadata for reproducible look-dev capture.
 

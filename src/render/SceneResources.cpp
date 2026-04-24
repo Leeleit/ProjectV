@@ -33,12 +33,86 @@ VoxelSceneLighting BuildSceneLighting(
 	return BuildVoxelSceneLighting(world.scenePreset, render.lightingDebugControls);
 }
 
+void StoreSunShadowProjection(
+	VoxelSceneLighting &lighting,
+	const uint32_t cascadeIndex,
+	const std::array<float, 16> &projection)
+{
+	const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * projection.size();
+	std::copy_n(
+		projection.begin(),
+		projection.size(),
+		lighting.sunShadowViewProjections.data() + matrixOffset);
+}
+
+void StoreSunShadowCascadeProjections(
+	VoxelSceneLighting &lighting,
+	const SunShadowCascadeProjections &projections)
+{
+	lighting.sunShadowViewProjections = projections.lightViewProjections;
+}
+
+void StoreSunShadowCascadeSplits(
+	VoxelSceneLighting &lighting,
+	const SunShadowCascadeSplits &splits)
+{
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		lighting.shadowCascadeDepthSplits[cascadeIndex] = splits.viewDepthSplits[cascadeIndex];
+	}
+	lighting.shadowCascadeBlendParams[1] = splits.nearPlane;
+	lighting.shadowCascadeBlendParams[2] = 0.0f;
+	lighting.shadowCascadeBlendParams[3] = 0.0f;
+}
+
+SunShadowCascadeProjectionInputs BuildSunShadowCascadeProjectionInputs(
+	const ChunkCullingParameters &parameters,
+	const SunShadowCascadeSplits &splits,
+	const uint32_t shadowMapResolution)
+{
+	return {
+		.cameraPosition = {
+			parameters.cameraPositionAndMaxDistance[0],
+			parameters.cameraPositionAndMaxDistance[1],
+			parameters.cameraPositionAndMaxDistance[2],
+		},
+		.cameraForward = {
+			parameters.cameraForwardAndTanHalfVerticalFov[0],
+			parameters.cameraForwardAndTanHalfVerticalFov[1],
+			parameters.cameraForwardAndTanHalfVerticalFov[2],
+		},
+		.cameraRight = {
+			parameters.cameraRightAndTanHalfHorizontalFov[0],
+			parameters.cameraRightAndTanHalfHorizontalFov[1],
+			parameters.cameraRightAndTanHalfHorizontalFov[2],
+		},
+		.cameraUp = {
+			parameters.cameraUpAndNearPlane[0],
+			parameters.cameraUpAndNearPlane[1],
+			parameters.cameraUpAndNearPlane[2],
+		},
+		.tanHalfVerticalFov = parameters.cameraForwardAndTanHalfVerticalFov[3],
+		.tanHalfHorizontalFov = parameters.cameraRightAndTanHalfHorizontalFov[3],
+		.shadowMapResolution = shadowMapResolution,
+		.splits = splits,
+	};
+}
+
 void RefreshSceneLightingBuffer(
 	const VoxelWorld &world,
-	RenderState &render)
+	RenderState &render,
+	const ChunkCullingParameters &shadowProjectionParameters)
 {
+	const float shadowReceiverNearPlane =
+		std::max(shadowProjectionParameters.cameraUpAndNearPlane[3], 0.01f);
+	const float shadowReceiverFarPlane = std::max(
+		shadowReceiverNearPlane,
+		shadowProjectionParameters.cameraPositionAndMaxDistance[3]);
 	render.currentScenePreset = world.scenePreset;
 	render.currentSceneLighting = BuildSceneLighting(world, render);
+	render.currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
+		shadowReceiverNearPlane,
+		shadowReceiverFarPlane,
+		render.sunShadowCascadeSplitLambda);
 	const auto [lightViewProjection] = BuildSunShadowProjection(
 		world,
 		{
@@ -47,7 +121,25 @@ void RefreshSceneLightingBuffer(
 			render.currentSceneLighting.sunDirectionAndWrap[2],
 		},
 		render.lightingDebugControls.shadowCoverageScale);
-	render.currentSceneLighting.sunShadowViewProjection = lightViewProjection;
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		StoreSunShadowProjection(render.currentSceneLighting, cascadeIndex, lightViewProjection);
+	}
+	const SunShadowCascadeProjectionInputs cascadeInputs = BuildSunShadowCascadeProjectionInputs(
+		shadowProjectionParameters,
+		render.currentSunShadowCascadeSplits,
+		render.shadowMapExtent.width);
+	const SunShadowCascadeProjections cascadeProjections = BuildSunShadowCascadeProjections(
+		world,
+		{
+			render.currentSceneLighting.sunDirectionAndWrap[0],
+			render.currentSceneLighting.sunDirectionAndWrap[1],
+			render.currentSceneLighting.sunDirectionAndWrap[2],
+		},
+		cascadeInputs,
+		render.lightingDebugControls.shadowCoverageScale);
+	StoreSunShadowCascadeProjections(render.currentSceneLighting, cascadeProjections);
+	render.currentSunShadowCascadeDiagnostics = cascadeProjections.diagnostics;
+	StoreSunShadowCascadeSplits(render.currentSceneLighting, render.currentSunShadowCascadeSplits);
 	if (render.sceneLightingMappedData) {
 		std::memcpy(
 			render.sceneLightingMappedData,
@@ -105,6 +197,16 @@ VkDrawIndirectCommand BuildChunkIndirectCommand(
 		.firstVertex = 0u,
 		.firstInstance = firstInstance,
 	};
+}
+
+uint32_t GetShadowIndirectCommandCount(const uint32_t chunkDescriptorCount)
+{
+	return chunkDescriptorCount;
+}
+
+uint32_t GetShadowIndirectBufferCommandCount(const uint32_t chunkDescriptorCount)
+{
+	return chunkDescriptorCount * kSunShadowCascadeCount;
 }
 
 uint32_t GetMaxSceneFaceCount(const VoxelWorld &world)
@@ -234,8 +336,10 @@ void UpdateGeneratedFaceStatsFromFrameResources(
 }
 
 uint32_t UpdateChunkVisibilityAndIndirectCommands(
+	const RenderState &render,
 	SceneFrameResources &frameResources,
-	const ChunkCullingParameters &parameters)
+	const ChunkCullingParameters &parameters,
+	std::array<uint32_t, kSunShadowCascadeCount> &outShadowCascadeVisibleChunkCounts)
 {
 	if (!frameResources.chunkDescriptorMappedData ||
 		!frameResources.opaqueIndirectMappedData ||
@@ -248,6 +352,16 @@ uint32_t UpdateChunkVisibilityAndIndirectCommands(
 	auto *opaqueCommands = static_cast<VkDrawIndirectCommand *>(frameResources.opaqueIndirectMappedData);
 	auto *shadowCommands = static_cast<VkDrawIndirectCommand *>(frameResources.shadowIndirectMappedData);
 	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
+	outShadowCascadeVisibleChunkCounts.fill(0u);
+	std::array<std::array<float, 16>, kSunShadowCascadeCount> shadowCascadeMatrices{};
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * shadowCascadeMatrices[cascadeIndex].size();
+		std::copy_n(
+			render.currentSceneLighting.sunShadowViewProjections.data() + matrixOffset,
+			shadowCascadeMatrices[cascadeIndex].size(),
+			shadowCascadeMatrices[cascadeIndex].begin());
+	}
+	const uint32_t shadowCommandStride = frameResources.chunkDescriptorCount;
 	uint32_t visibleChunkCount = 0;
 	for (uint32_t chunkIndex = 0; chunkIndex < frameResources.chunkDescriptorCount; ++chunkIndex) {
 		const PackedSceneChunkDescriptor &chunkDescriptor = chunkDescriptors[chunkIndex];
@@ -260,10 +374,18 @@ uint32_t UpdateChunkVisibilityAndIndirectCommands(
 			chunkDescriptor.drawRanges[0],
 			chunkDescriptor.drawRanges[1],
 			visible);
-		shadowCommands[chunkIndex] = BuildChunkIndirectCommand(
-			chunkDescriptor.drawRanges[0],
-			chunkDescriptor.drawRanges[1],
-			true);
+		for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+			const bool shadowVisible = IsSceneChunkVisibleInShadowCascade(
+				chunkDescriptor,
+				shadowCascadeMatrices[cascadeIndex]);
+			if (shadowVisible) {
+				++outShadowCascadeVisibleChunkCounts[cascadeIndex];
+			}
+			shadowCommands[static_cast<size_t>(cascadeIndex) * shadowCommandStride + chunkIndex] = BuildChunkIndirectCommand(
+				chunkDescriptor.drawRanges[0],
+				chunkDescriptor.drawRanges[1],
+				shadowVisible);
+		}
 		transparentCommands[chunkIndex] = BuildChunkIndirectCommand(
 			chunkDescriptor.drawRanges[2],
 			chunkDescriptor.drawRanges[3],
@@ -320,7 +442,13 @@ bool UpdateSceneFrameChunkVisibility(
 		std::memcpy(frameResources.chunkCullingMappedData, &parameters, sizeof(parameters));
 	}
 
-	const uint32_t visibleChunkCount = UpdateChunkVisibilityAndIndirectCommands(frameResources, parameters);
+	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
+	const uint32_t visibleChunkCount = UpdateChunkVisibilityAndIndirectCommands(
+		render,
+		frameResources,
+		parameters,
+		shadowCascadeVisibleChunkCounts);
+	frameResources.shadowCascadeVisibleChunkCounts = shadowCascadeVisibleChunkCounts;
 	const uint32_t culledChunkCount =
 		frameResources.chunkDescriptorCount > visibleChunkCount
 			? frameResources.chunkDescriptorCount - visibleChunkCount
@@ -338,7 +466,7 @@ void DestroySceneResources(
 		return;
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -410,6 +538,8 @@ void DestroySceneResources(
 		uploadedVoxelPayloadVersion = 0;
 		meshedSceneVersion = 0;
 		chunkDescriptorCount = 0;
+		shadowIndirectCommandCount = 0;
+		shadowCascadeVisibleChunkCounts = {};
 		dirtyChunkCount = 0;
 		opaqueFaceCount = 0;
 		transparentFaceCount = 0;
@@ -526,6 +656,22 @@ bool CreateSceneResources(
 			"VoxelSceneLightingBufferAllocation");
 		render->sceneMemoryBytes += sceneLightingAllocationInfo.size;
 		render->currentSceneLighting = BuildSceneLighting(*world->voxelWorld, *render);
+		render->currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
+			render->currentSunShadowCascadeSplits.nearPlane,
+			render->currentSunShadowCascadeSplits.farPlane,
+			render->sunShadowCascadeSplitLambda);
+		const auto [initialLightViewProjection] = BuildSunShadowProjection(
+			*world->voxelWorld,
+			{
+				render->currentSceneLighting.sunDirectionAndWrap[0],
+				render->currentSceneLighting.sunDirectionAndWrap[1],
+				render->currentSceneLighting.sunDirectionAndWrap[2],
+			},
+			render->lightingDebugControls.shadowCoverageScale);
+		for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+			StoreSunShadowProjection(render->currentSceneLighting, cascadeIndex, initialLightViewProjection);
+		}
+		StoreSunShadowCascadeSplits(render->currentSceneLighting, render->currentSunShadowCascadeSplits);
 		std::memcpy(
 			render->sceneLightingMappedData,
 			&render->currentSceneLighting,
@@ -641,7 +787,9 @@ bool CreateSceneResources(
 		VmaAllocationInfo shadowIndirectAllocationInfo{};
 		if (!CreateBuffer(
 				context,
-				sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size(),
+				sizeof(VkDrawIndirectCommand) *
+					static_cast<VkDeviceSize>(GetShadowIndirectBufferCommandCount(
+						static_cast<uint32_t>(world->voxelWorld->chunks.size()))),
 				VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 				allocationInfo,
 				&frameResources.shadowIndirectBuffer,
@@ -659,7 +807,9 @@ bool CreateSceneResources(
 		std::memset(
 			frameResources.shadowIndirectMappedData,
 			0,
-			sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
+			sizeof(VkDrawIndirectCommand) *
+				static_cast<size_t>(GetShadowIndirectBufferCommandCount(
+					static_cast<uint32_t>(world->voxelWorld->chunks.size()))));
 
 		VmaAllocationInfo transparentIndirectAllocationInfo{};
 		if (!CreateBuffer(
@@ -813,7 +963,8 @@ bool CreateSceneResources(
 
 bool UpdateSceneResources(
 	WorldState *world,
-	RenderState *render)
+	RenderState *render,
+	const ChunkCullingParameters &shadowProjectionParameters)
 {
 	PV_PROFILE_ZONE_N("UpdateSceneResources");
 	if (!world || !render || !world->voxelWorld) {
@@ -855,7 +1006,7 @@ bool UpdateSceneResources(
 		++render->sceneVoxelPayloadVersion;
 	}
 
-	RefreshSceneLightingBuffer(*world->voxelWorld, *render);
+	RefreshSceneLightingBuffer(*world->voxelWorld, *render, shadowProjectionParameters);
 
 	profiling::PlotValue("Dirty Chunks", static_cast<int64_t>(dirtyChunkCount));
 	profiling::PlotValue("Active Chunks", static_cast<int64_t>(activeChunkCount));
@@ -970,6 +1121,7 @@ bool UploadSceneFrameResources(
 	}
 
 	frameResources.chunkDescriptorCount = static_cast<uint32_t>(render.sceneChunkDescriptors.size());
+	frameResources.shadowIndirectCommandCount = GetShadowIndirectCommandCount(frameResources.chunkDescriptorCount);
 	frameResources.dirtyChunkCount = PrepareDirtyChunkMeshingList(render, frameResources);
 	frameResources.opaqueFaceCount = render.sceneOpaqueFaceCount;
 	frameResources.transparentFaceCount = render.sceneTransparentFaceCount;

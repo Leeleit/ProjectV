@@ -111,13 +111,70 @@ inline bool IsSceneChunkVisible(
 	return true;
 }
 
+inline bool IsSceneChunkVisibleInShadowCascade(
+	const PackedSceneChunkDescriptor &chunkDescriptor,
+	const std::array<float, 16> &lightViewProjection)
+{
+	if (chunkDescriptor.chunkExtentAndNonAir[3] == 0u) {
+		return false;
+	}
+
+	const std::array chunkMin{
+		static_cast<float>(chunkDescriptor.chunkOrigin[0]),
+		static_cast<float>(chunkDescriptor.chunkOrigin[1]),
+		static_cast<float>(chunkDescriptor.chunkOrigin[2]),
+	};
+	const std::array chunkMax{
+		chunkMin[0] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]),
+		chunkMin[1] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[1]),
+		chunkMin[2] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[2]),
+	};
+
+	bool outsideLeft = true;
+	bool outsideRight = true;
+	bool outsideBottom = true;
+	bool outsideTop = true;
+	bool outsideNear = true;
+	bool outsideFar = true;
+	for (uint32_t cornerIndex = 0; cornerIndex < 8u; ++cornerIndex) {
+		const std::array corner{
+			(cornerIndex & 1u) != 0u ? chunkMax[0] : chunkMin[0],
+			(cornerIndex & 2u) != 0u ? chunkMax[1] : chunkMin[1],
+			(cornerIndex & 4u) != 0u ? chunkMax[2] : chunkMin[2],
+		};
+		const std::array clipCorner{
+			lightViewProjection[0] * corner[0] + lightViewProjection[4] * corner[1] + lightViewProjection[8] * corner[2] + lightViewProjection[12],
+			lightViewProjection[1] * corner[0] + lightViewProjection[5] * corner[1] + lightViewProjection[9] * corner[2] + lightViewProjection[13],
+			lightViewProjection[2] * corner[0] + lightViewProjection[6] * corner[1] + lightViewProjection[10] * corner[2] + lightViewProjection[14],
+			lightViewProjection[3] * corner[0] + lightViewProjection[7] * corner[1] + lightViewProjection[11] * corner[2] + lightViewProjection[15],
+		};
+		outsideLeft = outsideLeft && clipCorner[0] < -clipCorner[3];
+		outsideRight = outsideRight && clipCorner[0] > clipCorner[3];
+		outsideBottom = outsideBottom && clipCorner[1] < -clipCorner[3];
+		outsideTop = outsideTop && clipCorner[1] > clipCorner[3];
+		outsideNear = outsideNear && clipCorner[2] < 0.0f;
+		outsideFar = outsideFar && clipCorner[2] > clipCorner[3];
+		if (!outsideLeft &&
+			!outsideRight &&
+			!outsideBottom &&
+			!outsideTop &&
+			!outsideNear &&
+			!outsideFar) {
+			return true;
+		}
+	}
+
+	return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
+}
+
 bool CreateSceneResources(
 	VulkanContextState *context,
 	WorldState *world,
 	RenderState *render);
 bool UpdateSceneResources(
 	WorldState *world,
-	RenderState *render);
+	RenderState *render,
+	const ChunkCullingParameters &shadowProjectionParameters);
 bool UploadSceneFrameResources(
 	RenderState &render,
 	uint32_t frameIndex);

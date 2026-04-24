@@ -118,7 +118,9 @@ build/windows-clang-debug/bin/ProjectV.exe
 
 ## Runtime smoke
 
-Smoke по-прежнему живёт как PowerShell script, но теперь у него есть и явный build target:
+Smoke по-прежнему живёт как PowerShell script и build target, но это targeted lifecycle check, а не обязательная
+проверка после каждого изменения. Используй его, когда менялись Vulkan/bootstrap/swapchain/window lifecycle,
+present/screenshot sync или есть риск device-lost/hang.
 
 ```powershell
 cmake --build --preset windows-clang-debug-smoke
@@ -141,6 +143,9 @@ Smoke проверяет:
 - minimize/restore;
 - maximize/restore;
 - graceful shutdown.
+
+Smoke почти не доказывает корректность gameplay, lighting/material look, shadow quality или shader tuning. Для таких
+изменений основной сигнал — unit tests, replay/scripted captures, sidecar metadata и осмысленная визуальная проверка.
 
 Manual checklist живёт отдельно в [voxel_mvp_smoke_checklist.md](voxel_mvp_smoke_checklist.md).
 

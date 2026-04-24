@@ -62,7 +62,8 @@ void TransitionImage(
 	const VkPipelineStageFlags2 srcStageMask,
 	const VkAccessFlags2 srcAccessMask,
 	const VkPipelineStageFlags2 dstStageMask,
-	const VkAccessFlags2 dstAccessMask)
+	const VkAccessFlags2 dstAccessMask,
+	const uint32_t layerCount = 1u)
 {
 	VkImageMemoryBarrier2 imageBarrier{};
 	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -73,7 +74,7 @@ void TransitionImage(
 	imageBarrier.oldLayout = oldLayout;
 	imageBarrier.newLayout = newLayout;
 	imageBarrier.image = image;
-	imageBarrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
+	imageBarrier.subresourceRange = {aspectMask, 0, 1, 0, layerCount};
 
 	VkDependencyInfo depInfo{};
 	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -81,6 +82,16 @@ void TransitionImage(
 	depInfo.pImageMemoryBarriers = &imageBarrier;
 
 	vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
+bool HasShadowCascadeImageViews(const RenderState &render)
+{
+	for (const VkImageView cascadeImageView : render.shadowCascadeImageViews) {
+		if (cascadeImageView == VK_NULL_HANDLE) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool ShouldCaptureScreenshot(const RenderState &render)
@@ -221,7 +232,8 @@ void RecordShadowCommands(
 	if (render.shadowGraphicsPipeline == VK_NULL_HANDLE ||
 		render.shadowPipelineLayout == VK_NULL_HANDLE ||
 		render.shadowImage == VK_NULL_HANDLE ||
-		render.shadowImageView == VK_NULL_HANDLE) {
+		render.shadowImageView == VK_NULL_HANDLE ||
+		!HasShadowCascadeImageViews(render)) {
 		return;
 	}
 
@@ -240,37 +252,11 @@ void RecordShadowCommands(
 		oldShadowStage,
 		oldShadowAccess,
 		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		kSunShadowCascadeCount);
 	render.shadowImageNeedsInit = false;
 
 	constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
-	const VkRenderingAttachmentInfo shadowDepthAttachment{
-		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-		.pNext = nullptr,
-		.imageView = render.shadowImageView,
-		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		.resolveMode = VK_RESOLVE_MODE_NONE,
-		.resolveImageView = VK_NULL_HANDLE,
-		.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.clearValue = clearDepthValue,
-	};
-	const VkRenderingInfo shadowRenderingInfo{
-		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.renderArea = {{0, 0}, render.shadowMapExtent},
-		.layerCount = 1,
-		.viewMask = 0,
-		.colorAttachmentCount = 0,
-		.pColorAttachments = nullptr,
-		.pDepthAttachment = &shadowDepthAttachment,
-		.pStencilAttachment = nullptr,
-	};
-
-	vkCmdBeginRendering(cmd, &shadowRenderingInfo);
-
 	const VkViewport shadowViewport{
 		.x = 0.0f,
 		.y = 0.0f,
@@ -283,11 +269,9 @@ void RecordShadowCommands(
 		.offset = {0, 0},
 		.extent = render.shadowMapExtent,
 	};
-	vkCmdSetViewport(cmd, 0, 1, &shadowViewport);
-	vkCmdSetScissor(cmd, 0, 1, &shadowScissor);
 
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.shadowGraphicsPipeline);
 	if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE) {
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.shadowGraphicsPipeline);
 		vkCmdBindDescriptorSets(
 			cmd,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -299,22 +283,72 @@ void RecordShadowCommands(
 			nullptr);
 	}
 
-	if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE &&
-		frameRenderData.chunkDescriptorCount > 0 &&
-		frameRenderData.shadowIndirectBuffer != VK_NULL_HANDLE &&
-		frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
-		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Shadow Pass");
-		// Shadows must follow sparse per-chunk face ranges, but they also need
-		// all opaque occluders rather than camera-visible chunks only.
-		vkCmdDrawIndirect(
-			cmd,
-			frameRenderData.shadowIndirectBuffer,
-			0,
-			frameRenderData.chunkDescriptorCount,
-			sizeof(VkDrawIndirectCommand));
-	}
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		const VkRenderingAttachmentInfo shadowDepthAttachment{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.pNext = nullptr,
+			.imageView = render.shadowCascadeImageViews[cascadeIndex],
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.resolveImageView = VK_NULL_HANDLE,
+			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue = clearDepthValue,
+		};
+		const VkRenderingInfo shadowRenderingInfo{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.renderArea = {{0, 0}, render.shadowMapExtent},
+			.layerCount = 1,
+			.viewMask = 0,
+			.colorAttachmentCount = 0,
+			.pColorAttachments = nullptr,
+			.pDepthAttachment = &shadowDepthAttachment,
+			.pStencilAttachment = nullptr,
+		};
 
-	vkCmdEndRendering(cmd);
+		vkCmdBeginRendering(cmd, &shadowRenderingInfo);
+		vkCmdSetViewport(cmd, 0, 1, &shadowViewport);
+		vkCmdSetScissor(cmd, 0, 1, &shadowScissor);
+
+		const ShadowPushConstants shadowPushConstants{
+			.cascadeIndex = cascadeIndex,
+		};
+		vkCmdPushConstants(
+			cmd,
+			render.shadowPipelineLayout,
+			VK_SHADER_STAGE_VERTEX_BIT,
+			0,
+			sizeof(shadowPushConstants),
+			&shadowPushConstants);
+
+		const bool canSkipEmptyCascadeDraw =
+			frameRenderData.dirtyChunkCount == 0 &&
+			frameRenderData.shadowCascadeVisibleChunkCounts[cascadeIndex] == 0u;
+		if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE &&
+			frameRenderData.shadowIndirectCommandCount > 0 &&
+			!canSkipEmptyCascadeDraw &&
+			frameRenderData.shadowIndirectBuffer != VK_NULL_HANDLE &&
+			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
+			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Shadow Cascade");
+			// Shadows follow sparse per-chunk opaque face ranges. Transparent
+			// casters follow the current material policy encoded by the shadow shader.
+			const VkDeviceSize shadowIndirectOffset =
+				static_cast<VkDeviceSize>(cascadeIndex) *
+				static_cast<VkDeviceSize>(frameRenderData.shadowIndirectCommandCount) *
+				sizeof(VkDrawIndirectCommand);
+			vkCmdDrawIndirect(
+				cmd,
+				frameRenderData.shadowIndirectBuffer,
+				shadowIndirectOffset,
+				frameRenderData.shadowIndirectCommandCount,
+				sizeof(VkDrawIndirectCommand));
+		}
+
+		vkCmdEndRendering(cmd);
+	}
 
 	TransitionImage(
 		cmd,
@@ -325,7 +359,8 @@ void RecordShadowCommands(
 		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
 		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+		kSunShadowCascadeCount);
 }
 
 void RecordDebugOverlayCommands(
@@ -771,7 +806,9 @@ SDL_AppResult DrawFrame(
 	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
 	signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 	signalSemaphoreInfo.semaphore = renderFinishedSemaphore;
-	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+	// Screenshot capture records a transfer copy after color rendering; present
+	// must not observe the swapchain image before that copy and layout transition finish.
+	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
 	VkCommandBufferSubmitInfo cmdBufferInfo{};
 	cmdBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;

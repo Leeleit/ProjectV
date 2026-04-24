@@ -16,6 +16,12 @@ struct DrawCommand {
     uint firstInstance;
 };
 
+struct PackedFace {
+    uint localVoxelFace;
+    uint chunkIndexMaterial;
+    uint lightingData;
+};
+
 layout(set = 0, binding = 0, std430) buffer PackedChunkDescriptors {
     ChunkDescriptor chunkDescriptors[];
 };
@@ -25,7 +31,7 @@ layout(set = 0, binding = 1, std430) readonly buffer PackedChunkVoxelPayload {
 };
 
 layout(set = 0, binding = 2, std430) writeonly buffer PackedFacePayload {
-    uvec2 packedFaces[];
+    PackedFace packedFaces[];
 };
 
 layout(set = 0, binding = 3, std430) readonly buffer DirtyChunkIndexBuffer {
@@ -51,6 +57,17 @@ layout(set = 0, binding = 7, std430) readonly buffer ChunkCullingParameters {
     vec4 cameraUpAndNearPlane;
 } chunkCulling;
 
+layout(set = 0, binding = 8, std430) readonly buffer SceneLightingBuffer {
+    vec4 skyColorAndFogDensity;
+    vec4 horizonColorAndFogStart;
+    vec4 groundColorAndFogMax;
+    vec4 sunColorAndIntensity;
+    vec4 sunDirectionAndWrap;
+    vec4 postProcess;
+    vec4 sunShadowParams;
+    mat4 sunShadowViewProjections[4];
+} sceneLighting;
+
 layout(push_constant) uniform PushConstants {
     ivec4 worldMinAndChunkSize;
     ivec4 worldMaxExclusiveAndChunkCount;
@@ -66,6 +83,7 @@ ivec3(0, -1, 0),
 ivec3(0, 0, 1),
 ivec3(0, 0, -1)
 );
+const uint kSunShadowCascadeCount = 4u;
 
 uint PackLocalVoxelFace(const uvec3 localVoxelCoord, const uint faceIndex) {
     return (localVoxelCoord.x & 0xFFu) |
@@ -132,6 +150,75 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
     return neighborMaterialIndex == 0u;
 }
 
+bool IsAmbientOccluder(const uint materialIndex) {
+    if (materialIndex == 0u || materialIndex == 1u) {
+        return false;
+    }
+
+    return true;
+}
+
+uint ReadAmbientOccluder(const ivec3 worldPosition) {
+    return IsAmbientOccluder(ReadVoxelMaterial(worldPosition)) ? 1u : 0u;
+}
+
+void GetFaceCornerAmbientOffsets(
+const uint faceIndex,
+const uint cornerIndex,
+out ivec3 sideOffsetA,
+out ivec3 sideOffsetB,
+out ivec3 diagonalOffset) {
+    if (faceIndex == 0u) {
+        sideOffsetA = cornerIndex == 1u || cornerIndex == 2u ? ivec3(0, 1, 0) : ivec3(0, -1, 0);
+        sideOffsetB = cornerIndex >= 2u ? ivec3(0, 0, 1) : ivec3(0, 0, -1);
+    } else if (faceIndex == 1u) {
+        sideOffsetA = cornerIndex == 1u || cornerIndex == 2u ? ivec3(0, 1, 0) : ivec3(0, -1, 0);
+        sideOffsetB = cornerIndex == 0u || cornerIndex == 1u ? ivec3(0, 0, 1) : ivec3(0, 0, -1);
+    } else if (faceIndex == 2u) {
+        sideOffsetA = cornerIndex >= 2u ? ivec3(1, 0, 0) : ivec3(-1, 0, 0);
+        sideOffsetB = cornerIndex == 1u || cornerIndex == 2u ? ivec3(0, 0, 1) : ivec3(0, 0, -1);
+    } else if (faceIndex == 3u) {
+        sideOffsetA = cornerIndex >= 2u ? ivec3(1, 0, 0) : ivec3(-1, 0, 0);
+        sideOffsetB = cornerIndex == 0u || cornerIndex == 3u ? ivec3(0, 0, 1) : ivec3(0, 0, -1);
+    } else if (faceIndex == 4u) {
+        sideOffsetA = cornerIndex <= 1u ? ivec3(1, 0, 0) : ivec3(-1, 0, 0);
+        sideOffsetB = cornerIndex == 1u || cornerIndex == 2u ? ivec3(0, 1, 0) : ivec3(0, -1, 0);
+    } else {
+        sideOffsetA = cornerIndex >= 2u ? ivec3(1, 0, 0) : ivec3(-1, 0, 0);
+        sideOffsetB = cornerIndex == 1u || cornerIndex == 2u ? ivec3(0, 1, 0) : ivec3(0, -1, 0);
+    }
+
+    diagonalOffset = sideOffsetA + sideOffsetB;
+}
+
+uint ComputeFaceCornerAmbientLevel(
+const ivec3 worldVoxelPosition,
+const uint faceIndex,
+const uint cornerIndex) {
+    ivec3 sideOffsetA = ivec3(0);
+    ivec3 sideOffsetB = ivec3(0);
+    ivec3 diagonalOffset = ivec3(0);
+    GetFaceCornerAmbientOffsets(faceIndex, cornerIndex, sideOffsetA, sideOffsetB, diagonalOffset);
+
+    const uint sideA = ReadAmbientOccluder(worldVoxelPosition + sideOffsetA);
+    const uint sideB = ReadAmbientOccluder(worldVoxelPosition + sideOffsetB);
+    if (sideA != 0u && sideB != 0u) {
+        return 0u;
+    }
+
+    const uint diagonal = ReadAmbientOccluder(worldVoxelPosition + diagonalOffset);
+    return 3u - min(sideA + sideB + diagonal, 3u);
+}
+
+uint ComputeFaceAmbientVisibilityByte(const ivec3 worldVoxelPosition, const uint faceIndex) {
+    uint visibilityLevels = 0u;
+    for (uint cornerIndex = 0u; cornerIndex < 4u; ++cornerIndex) {
+        visibilityLevels += ComputeFaceCornerAmbientLevel(worldVoxelPosition, faceIndex, cornerIndex);
+    }
+
+    return (visibilityLevels * 255u + 6u) / 12u;
+}
+
 bool IsChunkVisible(const ChunkDescriptor chunkDescriptor) {
     if (chunkDescriptor.chunkExtentAndNonAir.w == 0u) {
         return false;
@@ -181,6 +268,41 @@ bool IsChunkVisible(const ChunkDescriptor chunkDescriptor) {
     return true;
 }
 
+bool IsChunkInsideShadowCascade(const ChunkDescriptor chunkDescriptor, const uint cascadeIndex) {
+    bool outsideLeft = true;
+    bool outsideRight = true;
+    bool outsideBottom = true;
+    bool outsideTop = true;
+    bool outsideNear = true;
+    bool outsideFar = true;
+
+    const vec3 chunkMin = vec3(chunkDescriptor.chunkOrigin.xyz);
+    const vec3 chunkMax = chunkMin + vec3(chunkDescriptor.chunkExtentAndNonAir.xyz);
+    for (uint cornerIndex = 0u; cornerIndex < 8u; ++cornerIndex) {
+        const vec3 corner = vec3(
+        (cornerIndex & 1u) != 0u ? chunkMax.x : chunkMin.x,
+        (cornerIndex & 2u) != 0u ? chunkMax.y : chunkMin.y,
+        (cornerIndex & 4u) != 0u ? chunkMax.z : chunkMin.z);
+        const vec4 clipCorner = sceneLighting.sunShadowViewProjections[cascadeIndex] * vec4(corner, 1.0);
+        outsideLeft = outsideLeft && clipCorner.x < -clipCorner.w;
+        outsideRight = outsideRight && clipCorner.x > clipCorner.w;
+        outsideBottom = outsideBottom && clipCorner.y < -clipCorner.w;
+        outsideTop = outsideTop && clipCorner.y > clipCorner.w;
+        outsideNear = outsideNear && clipCorner.z < 0.0;
+        outsideFar = outsideFar && clipCorner.z > clipCorner.w;
+        if (!outsideLeft &&
+        !outsideRight &&
+        !outsideBottom &&
+        !outsideTop &&
+        !outsideNear &&
+        !outsideFar) {
+            return true;
+        }
+    }
+
+    return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
+}
+
 void main() {
     const uint dirtyChunkListIndex = gl_GlobalInvocationID.x;
     if (dirtyChunkListIndex >= pushConstants.faceCapacities.z) {
@@ -201,7 +323,10 @@ void main() {
         chunkDescriptors[chunkIndex].drawRanges.w = 0u;
         opaqueCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
         transparentCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, transparentFirstFace);
-        shadowCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
+        const uint chunkCount = uint(pushConstants.worldMaxExclusiveAndChunkCount.w);
+        for (uint cascadeIndex = 0u; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+            shadowCommands[cascadeIndex * chunkCount + chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
+        }
         return;
     }
 
@@ -223,9 +348,10 @@ void main() {
                         continue;
                     }
 
-                    const uvec2 packedFace = uvec2(
+                    const PackedFace packedFace = PackedFace(
                     PackLocalVoxelFace(localVoxelCoord, faceIndex),
-                    PackChunkIndexMaterial(chunkIndex, materialIndex));
+                    PackChunkIndexMaterial(chunkIndex, materialIndex),
+                    ComputeFaceAmbientVisibilityByte(worldVoxelPosition, faceIndex));
 
                     if (materialIndex == 1u) {
                         if (transparentFaceCount < maxChunkFaceCount) {
@@ -247,5 +373,10 @@ void main() {
     chunkDescriptors[chunkIndex].drawRanges.w = transparentFaceCount;
     opaqueCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? opaqueFaceCount : 0u, 0u, opaqueFirstFace);
     transparentCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? transparentFaceCount : 0u, 0u, transparentFirstFace);
-    shadowCommands[chunkIndex] = DrawCommand(6u, opaqueFaceCount, 0u, opaqueFirstFace);
+    const uint chunkCount = uint(pushConstants.worldMaxExclusiveAndChunkCount.w);
+    for (uint cascadeIndex = 0u; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+        const bool shadowVisible = IsChunkInsideShadowCascade(chunkDescriptor, cascadeIndex);
+        shadowCommands[cascadeIndex * chunkCount + chunkIndex] =
+        DrawCommand(6u, shadowVisible ? opaqueFaceCount : 0u, 0u, opaqueFirstFace);
+    }
 }

@@ -21,6 +21,8 @@ void TickCamera(
 	float deltaSeconds);
 std::array<float, 3> GetCameraForwardVector(
 	const CameraState &camera);
+float GetCameraVisibleSceneMaxDistance(
+	const CameraState &camera);
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
 	VkExtent2D extent);

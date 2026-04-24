@@ -112,7 +112,8 @@ Anchor contract:
 powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmoke.ps1
 ```
 
-Это developer-only GUI smoke: он остаётся частью локального verification loop, но пока не считается CI/headless contour.
+Это developer-only GUI smoke: он остаётся официальным targeted lifecycle check, но не считается CI/headless contour и
+не является обязательным DoD после каждого изменения.
 
 Проверяет:
 
@@ -121,6 +122,19 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmo
 - minimize/restore;
 - maximize/restore;
 - graceful shutdown.
+
+Использовать его стоит после изменений в Vulkan/bootstrap/swapchain/window lifecycle/present/screenshot sync или при
+риске device-lost/hang. Для lighting/material/shader tuning он даёт слабый сигнал; там важнее build/tests,
+scripted captures, sidecar metadata и визуальное сравнение.
+
+For shadow work, sidecar metadata now includes the active CSM split plan plus per-cascade view ranges, ortho extents,
+world-space texel size, and the current split-blend width (`shadow_cascade_blend` / `_offset`).
+The runtime `CSM` debug view visualizes which cascade the final shader selected for each visible receiver and where the
+transition band starts blending into the next cascade. Sidecars now also include
+`shadow_cascade_caster_light_ranges`, and detailed HUD prints the same per-cascade `CD` ranges.
+Caster-depth coverage changes are no longer hidden inside CPU fit math.
+Sidecar metadata also includes `transparent_shadow_policy`; the current mainline value is
+`GLASS_IGNORED_FLUID_CASTS`.
 
 ### Failure probes
 
@@ -220,7 +234,7 @@ bundled profiler UI, а не для самого факта instrumentation.
 
 - смотри HUD;
 - проверяй `UpdateApp` и `InputActions`;
-- проверяй manual smoke.
+- проверяй replay/unit tests или manual interaction по конкретному сценарию.
 
 Если проблема в world edits / raycast / chunk rebuild:
 

@@ -7,6 +7,7 @@
 #include "app/FramePreparation.hpp"
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
+#include "app/LookDevCaptureAutomation.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
@@ -302,6 +303,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
+	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
 
 	if (!SDL_SetWindowRelativeMouseMode(state->platform.window, state->input.relativeMouseModeEnabled)) {
 		runtime::LogSdlFailure("SDL_AppInit.SDL_SetWindowRelativeMouseMode");
@@ -374,6 +376,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		!PrepareNextInputReplayPlaybackFrame(&state->input, &state->simulation)) {
 		StopInputReplayPlayback(&state->input);
 	}
+	const bool quitAfterLookDevCaptureFrame =
+		UpdateLookDevCaptureAutomation(&state->lookDevCapture, &state->render);
 
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(
@@ -427,6 +431,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->swapchain,
 			&state->render,
 			&state->frame);
+		if (quitAfterLookDevCaptureFrame && result == SDL_APP_CONTINUE) {
+			result = SDL_APP_SUCCESS;
+		}
 	}
 	if (state->input.replay.playbackActive &&
 		state->input.replay.playbackFrameIndex >= state->input.replay.capture.frames.size()) {

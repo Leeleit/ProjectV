@@ -4,6 +4,7 @@ add_executable(ProjectVTests
         ../src/app/Camera.cpp
         ../src/app/InputActions.cpp
         ../src/app/InputReplay.cpp
+        ../src/app/LookDevCaptureAutomation.cpp
         ../src/ecs/EcsWorld.cpp
         ../src/physics/PhysicsWorld.cpp
         ../src/debug/DebugHud.cpp
