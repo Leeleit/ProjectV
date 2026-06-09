@@ -122,6 +122,20 @@ bool PrepareFrameRenderData(
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(*camera, swapchain->extent);
 	}
+	if (world->voxelWorld) {
+		frame->renderData.graphicsPushConstants.worldMinAndChunkSize = {
+			world->voxelWorld->min.x,
+			world->voxelWorld->min.y,
+			world->voxelWorld->min.z,
+			world->voxelWorld->chunkSize,
+		};
+		frame->renderData.graphicsPushConstants.chunkGridAndFlags = {
+			static_cast<uint32_t>(world->voxelWorld->chunkCountX),
+			static_cast<uint32_t>(world->voxelWorld->chunkCountY),
+			static_cast<uint32_t>(world->voxelWorld->chunkCountZ),
+			0u,
+		};
+	}
 	frame->renderData.voxelMeshingPushConstants = {};
 	if (world->voxelWorld) {
 		frame->renderData.voxelMeshingPushConstants.worldMinAndChunkSize = {

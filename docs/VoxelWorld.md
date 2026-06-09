@@ -70,6 +70,21 @@ those slices against the current cascade clip
 volumes, and dirty-chunk meshing patches the same per-cascade commands for current-frame correctness instead of drawing
 every opaque chunk into every cascade. When a frame has no dirty meshing work and CPU culling already knows a cascade is
 empty, the renderer also skips the empty shadow draw call for that cascade.
+The first contact-shadow follow-up now also stays inside that same forward voxel path: `voxel.frag` binds chunk
+descriptors plus the packed voxel payload, uses graphics push-constant world layout to address the scene in fragment
+space, and traces a short voxel DDA ray toward the sun through explicit
+`sunContactShadowParams={strength,maxDistance}`. `Glass` still stays ignored for that local layer, while `Fluid`
+remains a valid occluder just like in the current mainline transparent-shadow policy.
+The first `AOCC` follow-up uses the same payload for a short hemisphere voxel trace controlled by
+`ambientOcclusionParams={strength,radius,minVisibility}`. It is a small forward-path local occlusion term, not full
+screen-space `SSAO/GTAO`.
+The first local point-light contract now lives in `VoxelSceneLighting` too: each preset can author
+`localPointLightPositionAndRadius`, `localPointLightColorAndIntensity`, and
+`localPointLightParams={enabled,sourceRadius,shadowStrength,shadowBias}`, and `voxel.frag` adds the inverse-square
+point light through the same GGX direct-light path plus a short opaque-only voxel DDA visibility term. That trace now
+starts from a stabilized point on the owning voxel face so fully blocked faces stay visually stable instead of
+producing per-face fractal patterns, while wide flat receivers no longer collapse into one constant local visibility per
+voxel. `LOCL` visualizes this contribution; real local shadow maps/cubemaps are still deliberately deferred.
 Current `voxel.frag` больше не держит direct sun на ad-hoc `spec power + shininess`: direct-light BRDF теперь базово
 следует `GGX + Fresnel-Schlick + Smith`, но остаётся встроенным в тот же forward voxel path без отдельного PBR framework
 или IBL stack.
@@ -172,6 +187,9 @@ now also include `CD` caster light-depth ranges. `B` cycles through a dedicated 
 cascade selection and the transition band near split edges.
 Detailed HUD also reports `TSHD GLASS_IGNORED_FLUID_CASTS`: glass is not a sun-shadow caster in the current mainline
 renderer, while `Fluid` casts through the current opaque shadow-map path.
+Detailed HUD also reports the current local point light as `LOCL`/`LCLR`/`LSHD`, and capture metadata writes
+`local_point_light_*` including shadow strength/bias. `B` includes a dedicated `LOCL` debug view for checking the
+shadowed local-light contribution separately from sun shadows and contact/AO layers.
 
 `VoxelLab` по-прежнему создаёт текущую основную demo-scene:
 
@@ -215,7 +233,9 @@ Snapshot намеренно **не** сохраняет:
 - `F6` пишет snapshot по пути из `PROJECTV_SNAPSHOT_PATH` или, если env var не задан, в `ProjectV.snapshot.bin` рядом с
   executable;
 - `F7` читает тот же файл;
-- после load весь мир считается dirty заново, чтобы render/meshing/ECS/physics синхронизировались от fresh CPU truth.
+- после load весь мир считается dirty заново, чтобы render/meshing/ECS/physics синхронизировались от fresh CPU truth;
+- если заданы `PROJECTV_START_CAMERA_POSITION` / `PROJECTV_START_CAMERA_LOOK`, они теперь reapplied и после world reload
+  тоже, а не только при startup, so snapshot-driven look-dev repros can keep the requested camera after `F7`.
 
 ## Dirty queue
 

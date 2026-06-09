@@ -740,11 +740,19 @@ SDL_AppResult DrawFrame(
 	const VkCommandBuffer cmd = frame->commandBuffers[currentFrameIndex];
 	const VkFence inFlightFence = frame->inFlightFences[currentFrameIndex];
 	const VkSemaphore imageAvailableSemaphore = frame->imageAvailableSemaphores[currentFrameIndex];
-	const VkSemaphore renderFinishedSemaphore = frame->renderFinishedSemaphores[currentFrameIndex];
 	const VkExtent2D captureExtent = swapchain->extent;
 	const VkFormat captureFormat = swapchain->format;
 
 	uint32_t imageIndex = 0;
+	// `vkAcquireNextImageKHR` is given the per-in-flight-frame
+	// `imageAvailableSemaphore`. The driver signals it when the
+	// returned `imageIndex` becomes writable. The submit pipeline (below)
+	// waits on this same handle, so the command buffer does not start
+	// rendering before the swapchain image is actually writable. The
+	// guide `swapchain_semaphore_reuse.html` uses *exactly* this pattern:
+	// per-frame acquire-semaphore, per-image submit-semaphore, no
+	// per-image acquire fence (the fence pattern requires
+	// `VK_KHR_swapchain_maintenance1`).
 	const VkResult acquireRes = vkAcquireNextImageKHR(
 		context->device,
 		swapchain->handle,
@@ -800,12 +808,27 @@ SDL_AppResult DrawFrame(
 
 	VkSemaphoreSubmitInfo waitSemaphoreInfo{};
 	waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+	// `pWaitSemaphores[0]` is the per-in-flight-frame `imageAvailableSemaphore`,
+	// signaled by the `vkAcquireNextImageKHR` call above when the swapchain
+	// image became available. The submit pipeline waits on it so the
+	// command buffer does not start rendering before the swapchain image
+	// is actually writable.
 	waitSemaphoreInfo.semaphore = imageAvailableSemaphore;
 	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
+	// `pSignalSemaphores[0]` is the per-swapchain-image `submitSemaphore`,
+	// *not* the per-in-flight-frame `renderFinishedSemaphore`. The
+	// canonical Vulkan pattern (per the SDK 1.4 guide
+	// `swapchain_semaphore_reuse.html`) is to index the submit-finished
+	// semaphore by `imageIndex` rather than by frame counter, because
+	// two consecutive in-flight frames can be handed the same
+	// `imageIndex` before the first one's present has retired its
+	// `pWaitSemaphores`. We then present the same `submitSemaphore`
+	// below in `presentInfo.pWaitSemaphores`.
+	const VkSemaphore submitSemaphore = swapchain->submitSemaphores[imageIndex];
 	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
 	signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-	signalSemaphoreInfo.semaphore = renderFinishedSemaphore;
+	signalSemaphoreInfo.semaphore = submitSemaphore;
 	// Screenshot capture records a transfer copy after color rendering; present
 	// must not observe the swapchain image before that copy and layout transition finish.
 	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -831,7 +854,7 @@ SDL_AppResult DrawFrame(
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+	presentInfo.pWaitSemaphores = &submitSemaphore;
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &swapchain->handle;
 	presentInfo.pImageIndices = &imageIndex;

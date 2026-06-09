@@ -92,7 +92,7 @@ target_link_libraries(ProjectV PRIVATE
         fmt::fmt
         flecs::flecs_static
         Jolt::Jolt
-        # GPUOpen::VulkanMemoryAllocator
+        GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
 )
 

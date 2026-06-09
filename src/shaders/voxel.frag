@@ -7,6 +7,17 @@ struct MaterialVisual {
     vec4 shading;
 };
 
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
 layout(set = 0, binding = 2, std430) readonly buffer MaterialVisualBuffer {
     MaterialVisual materials[];
 };
@@ -19,19 +30,30 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 sunDirectionAndWrap;
     vec4 postProcess;
     vec4 sunShadowParams;
+    vec4 sunContactShadowParams;
+    vec4 ambientOcclusionParams;
     mat4 sunShadowViewProjections[4];
     vec4 colorGrading;
     vec4 exposureControl;
     vec4 shadowCascadeDepthSplits;
     vec4 shadowCascadeBlendParams;
+    vec4 localPointLightPositionAndRadius;
+    vec4 localPointLightColorAndIntensity;
+    vec4 localPointLightParams;
 } sceneLighting;
 
 layout(set = 0, binding = 4) uniform sampler2DArrayShadow sunShadowMap;
+
+layout(set = 0, binding = 5, std430) readonly buffer PackedChunkVoxelPayload {
+    uint chunkVoxelWords[];
+};
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
     vec4 cameraPosition;
     vec4 cameraForward;
+    ivec4 worldMinAndChunkSize;
+    uvec4 chunkGridAndFlags;
 } pushConstants;
 
 layout(location = 0) in vec3 inNormal;
@@ -42,6 +64,16 @@ layout(location = 3) flat in float inAmbientVisibility;
 layout(location = 0) out vec4 outColor;
 
 const uint kSunShadowCascadeCount = 4u;
+const uint kSunContactShadowMaxSteps = 12u;
+// AOCC and local-light DDA caps were tuned down from 6 and 32 to 4 and 12 after a
+// 2026-06-09 fragment-budget review. The previous values ran a 252-read budget on
+// a worst-case lit fragment (12 contact + 5*6 AOCC + 5*32 local-light + 50 PCF) and
+// left VoxelLab hovering around 120 FPS. Local-light sourceRadius presets never
+// reach beyond ~3m, so 12 DDA steps is more than enough headroom; AOCC's tuned
+// radius is ~1.5m, so 4 steps is enough. Visual parity preserved.
+const uint kAmbientOcclusionMaxSteps = 4u;
+const uint kLocalPointLightShadowMaxSteps = 12u;
+const float kHugeRayT = 1e20;
 
 bool IsGlass(const uint materialIndex) {
     return materialIndex == 1u;
@@ -49,6 +81,441 @@ bool IsGlass(const uint materialIndex) {
 
 bool IsFluid(const uint materialIndex) {
     return materialIndex == 2u;
+}
+
+uint DecodeChunkVoxelMaterial(const ChunkDescriptor chunkDescriptor, const uvec3 localCoord) {
+    if (any(greaterThanEqual(localCoord, chunkDescriptor.chunkExtentAndNonAir.xyz))) {
+        return 0u;
+    }
+
+    const uint localIndex =
+    localCoord.x +
+    chunkDescriptor.chunkExtentAndNonAir.x *
+    (localCoord.y + chunkDescriptor.chunkExtentAndNonAir.y * localCoord.z);
+    if (localIndex >= chunkDescriptor.voxelDataInfo.y) {
+        return 0u;
+    }
+
+    const uint wordIndex = chunkDescriptor.voxelDataInfo.x + localIndex / 4u;
+    const uint shift = (localIndex & 3u) * 8u;
+    return (chunkVoxelWords[wordIndex] >> shift) & 0xFFu;
+}
+
+uint ReadVoxelMaterial(const ivec3 worldPosition) {
+    const int chunkSize = pushConstants.worldMinAndChunkSize.w;
+    if (chunkSize <= 0) {
+        return 0u;
+    }
+
+    const ivec3 worldMin = pushConstants.worldMinAndChunkSize.xyz;
+    const ivec3 localWorldPosition = worldPosition - worldMin;
+    if (any(lessThan(localWorldPosition, ivec3(0)))) {
+        return 0u;
+    }
+
+    const uvec3 chunkGrid = pushConstants.chunkGridAndFlags.xyz;
+    const uvec3 chunkCoord = uvec3(localWorldPosition) / uint(chunkSize);
+    if (any(greaterThanEqual(chunkCoord, chunkGrid))) {
+        return 0u;
+    }
+
+    const uint chunkIndex =
+    chunkCoord.x +
+    chunkGrid.x * (chunkCoord.y + chunkGrid.y * chunkCoord.z);
+    const ChunkDescriptor chunkDescriptor = chunkDescriptors[chunkIndex];
+    const ivec3 localChunkPosition = worldPosition - chunkDescriptor.chunkOrigin.xyz;
+    if (any(lessThan(localChunkPosition, ivec3(0)))) {
+        return 0u;
+    }
+
+    return DecodeChunkVoxelMaterial(chunkDescriptor, uvec3(localChunkPosition));
+}
+
+bool IsSunContactShadowOccluder(const uint materialIndex) {
+    return materialIndex != 0u && !IsGlass(materialIndex);
+}
+
+bool IsAmbientOcclusionOccluder(const uint materialIndex) {
+    return materialIndex != 0u && !IsGlass(materialIndex);
+}
+
+bool IsLocalPointLightShadowOccluder(const uint materialIndex) {
+    return materialIndex != 0u && !IsGlass(materialIndex) && !IsFluid(materialIndex);
+}
+
+vec3 QuantizeVoxelFaceNormal(const vec3 normal) {
+    return vec3(
+    normal.x > 0.5 ? 1.0 : (normal.x < -0.5 ? -1.0 : 0.0),
+    normal.y > 0.5 ? 1.0 : (normal.y < -0.5 ? -1.0 : 0.0),
+    normal.z > 0.5 ? 1.0 : (normal.z < -0.5 ? -1.0 : 0.0));
+}
+
+vec3 ComputeStableVoxelFacePoint(const vec3 worldPosition, const vec3 normal) {
+    const vec3 faceNormal = QuantizeVoxelFaceNormal(normal);
+    const ivec3 surfaceVoxel = ivec3(floor(worldPosition - faceNormal * 0.5));
+    const vec3 voxelMin = vec3(surfaceVoxel);
+    const vec3 voxelMax = voxelMin + vec3(1.0);
+    const float faceInset = 0.001;
+    vec3 stablePoint = clamp(worldPosition, voxelMin + vec3(faceInset), voxelMax - vec3(faceInset));
+    if (faceNormal.x > 0.5) {
+        stablePoint.x = voxelMax.x - faceInset;
+    } else if (faceNormal.x < -0.5) {
+        stablePoint.x = voxelMin.x + faceInset;
+    }
+    if (faceNormal.y > 0.5) {
+        stablePoint.y = voxelMax.y - faceInset;
+    } else if (faceNormal.y < -0.5) {
+        stablePoint.y = voxelMin.y + faceInset;
+    }
+    if (faceNormal.z > 0.5) {
+        stablePoint.z = voxelMax.z - faceInset;
+    } else if (faceNormal.z < -0.5) {
+        stablePoint.z = voxelMin.z + faceInset;
+    }
+    return stablePoint;
+}
+
+vec3 ComputeRayStepTMax(
+const vec3 origin,
+const ivec3 currentVoxel,
+const ivec3 stepDirection,
+const vec3 rayDirection) {
+    vec3 tMax = vec3(kHugeRayT);
+    if (abs(rayDirection.x) > 0.00001) {
+        const float nextBoundaryX = stepDirection.x > 0 ? float(currentVoxel.x + 1) : float(currentVoxel.x);
+        tMax.x = (nextBoundaryX - origin.x) / rayDirection.x;
+    }
+    if (abs(rayDirection.y) > 0.00001) {
+        const float nextBoundaryY = stepDirection.y > 0 ? float(currentVoxel.y + 1) : float(currentVoxel.y);
+        tMax.y = (nextBoundaryY - origin.y) / rayDirection.y;
+    }
+    if (abs(rayDirection.z) > 0.00001) {
+        const float nextBoundaryZ = stepDirection.z > 0 ? float(currentVoxel.z + 1) : float(currentVoxel.z);
+        tMax.z = (nextBoundaryZ - origin.z) / rayDirection.z;
+    }
+    return tMax;
+}
+
+void BuildLocalPointLightSampleBasis(const vec3 direction, out vec3 tangentA, out vec3 tangentB) {
+    const vec3 referenceAxis = abs(direction.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    tangentA = normalize(cross(referenceAxis, direction));
+    tangentB = normalize(cross(direction, tangentA));
+}
+
+float TraceLocalPointLightShadowRay(
+const vec3 stableFacePoint,
+const vec3 faceNormal,
+const vec3 rayDirection,
+const float maxDistance,
+const float shadowStrength,
+const float bias) {
+    const float surfaceOffset = max(bias, 0.02);
+    // Push the ray origin *along the face normal only*, never along rayDirection. The
+    // old `+ rayDirection * surfaceOffset` term pushed the start voxel into the next
+    // neighbor when the light approached from a low angle, which made the DDA start
+    // inside the local-light source's own voxel when the direction had a downward
+    // component and the receiver was the *top* face of an opaque voxel. That first
+    // DDA cell would then be classified as an occluder by the local-light policy and
+    // produce a hard "self-shadow" patch on what should be a fully lit face. Pushing
+    // along the face normal only keeps the start voxel strictly on the lit side of
+    // the receiver plane regardless of light direction.
+    const vec3 rayOrigin = stableFacePoint + faceNormal * surfaceOffset;
+    ivec3 currentVoxel = ivec3(floor(rayOrigin));
+    const ivec3 stepDirection = ivec3(
+    rayDirection.x > 0.0 ? 1 : (rayDirection.x < 0.0 ? -1 : 0),
+    rayDirection.y > 0.0 ? 1 : (rayDirection.y < 0.0 ? -1 : 0),
+    rayDirection.z > 0.0 ? 1 : (rayDirection.z < 0.0 ? -1 : 0));
+    const vec3 tDelta = vec3(
+    abs(rayDirection.x) > 0.00001 ? abs(1.0 / rayDirection.x) : kHugeRayT,
+    abs(rayDirection.y) > 0.00001 ? abs(1.0 / rayDirection.y) : kHugeRayT,
+    abs(rayDirection.z) > 0.00001 ? abs(1.0 / rayDirection.z) : kHugeRayT);
+    vec3 tMax = ComputeRayStepTMax(rayOrigin, currentVoxel, stepDirection, rayDirection);
+    const uint maxSteps = uint(clamp(ceil(maxDistance * 2.0), 1.0, float(kLocalPointLightShadowMaxSteps)));
+    float traveled = 0.0;
+
+    for (uint stepIndex = 0u; stepIndex < kLocalPointLightShadowMaxSteps; ++stepIndex) {
+        if (stepIndex >= maxSteps) {
+            break;
+        }
+
+        if (tMax.x < tMax.y) {
+            if (tMax.x < tMax.z) {
+                traveled = tMax.x;
+                currentVoxel.x += stepDirection.x;
+                tMax.x += tDelta.x;
+            } else {
+                traveled = tMax.z;
+                currentVoxel.z += stepDirection.z;
+                tMax.z += tDelta.z;
+            }
+        } else if (tMax.y < tMax.z) {
+            traveled = tMax.y;
+            currentVoxel.y += stepDirection.y;
+            tMax.y += tDelta.y;
+        } else {
+            traveled = tMax.z;
+            currentVoxel.z += stepDirection.z;
+            tMax.z += tDelta.z;
+        }
+
+        if (traveled >= maxDistance) {
+            break;
+        }
+
+        const uint hitMaterial = ReadVoxelMaterial(currentVoxel);
+        if (IsLocalPointLightShadowOccluder(hitMaterial)) {
+            return 1.0 - shadowStrength;
+        }
+    }
+
+    return 1.0;
+}
+
+float ComputeSunContactVisibility(const vec3 worldPosition, const vec3 normal, const vec3 sunDirection) {
+    const float contactStrength = clamp(sceneLighting.sunContactShadowParams.x, 0.0, 1.0);
+    const float maxDistance = max(sceneLighting.sunContactShadowParams.y, 0.0);
+    if (contactStrength <= 0.0 || maxDistance <= 0.0) {
+        return 1.0;
+    }
+
+    const vec3 rayDirection = normalize(sunDirection);
+    const vec3 rayOrigin = worldPosition + normal * 0.05 + rayDirection * 0.05;
+    ivec3 currentVoxel = ivec3(floor(rayOrigin));
+    const ivec3 stepDirection = ivec3(
+    rayDirection.x > 0.0 ? 1 : (rayDirection.x < 0.0 ? -1 : 0),
+    rayDirection.y > 0.0 ? 1 : (rayDirection.y < 0.0 ? -1 : 0),
+    rayDirection.z > 0.0 ? 1 : (rayDirection.z < 0.0 ? -1 : 0));
+    const vec3 tDelta = vec3(
+    abs(rayDirection.x) > 0.00001 ? abs(1.0 / rayDirection.x) : kHugeRayT,
+    abs(rayDirection.y) > 0.00001 ? abs(1.0 / rayDirection.y) : kHugeRayT,
+    abs(rayDirection.z) > 0.00001 ? abs(1.0 / rayDirection.z) : kHugeRayT);
+    vec3 tMax = ComputeRayStepTMax(rayOrigin, currentVoxel, stepDirection, rayDirection);
+    float traveled = 0.0;
+
+    for (uint stepIndex = 0u; stepIndex < kSunContactShadowMaxSteps; ++stepIndex) {
+        if (tMax.x < tMax.y) {
+            if (tMax.x < tMax.z) {
+                traveled = tMax.x;
+                currentVoxel.x += stepDirection.x;
+                tMax.x += tDelta.x;
+            } else {
+                traveled = tMax.z;
+                currentVoxel.z += stepDirection.z;
+                tMax.z += tDelta.z;
+            }
+        } else if (tMax.y < tMax.z) {
+            traveled = tMax.y;
+            currentVoxel.y += stepDirection.y;
+            tMax.y += tDelta.y;
+        } else {
+            traveled = tMax.z;
+            currentVoxel.z += stepDirection.z;
+            tMax.z += tDelta.z;
+        }
+
+        if (traveled > maxDistance) {
+            break;
+        }
+
+        const uint hitMaterial = ReadVoxelMaterial(currentVoxel);
+        if (IsSunContactShadowOccluder(hitMaterial)) {
+            const float distanceFade = 1.0 - clamp(traveled / maxDistance, 0.0, 1.0);
+            return 1.0 - contactStrength * distanceFade;
+        }
+    }
+
+    return 1.0;
+}
+
+float TraceAmbientOcclusionRay(
+const vec3 rayOrigin,
+const vec3 rayDirection,
+const float maxDistance,
+const uint maxSteps) {
+    if (maxDistance <= 0.0) {
+        return 0.0;
+    }
+
+    ivec3 currentVoxel = ivec3(floor(rayOrigin));
+    const ivec3 stepDirection = ivec3(
+    rayDirection.x > 0.0 ? 1 : (rayDirection.x < 0.0 ? -1 : 0),
+    rayDirection.y > 0.0 ? 1 : (rayDirection.y < 0.0 ? -1 : 0),
+    rayDirection.z > 0.0 ? 1 : (rayDirection.z < 0.0 ? -1 : 0));
+    const vec3 tDelta = vec3(
+    abs(rayDirection.x) > 0.00001 ? abs(1.0 / rayDirection.x) : kHugeRayT,
+    abs(rayDirection.y) > 0.00001 ? abs(1.0 / rayDirection.y) : kHugeRayT,
+    abs(rayDirection.z) > 0.00001 ? abs(1.0 / rayDirection.z) : kHugeRayT);
+    vec3 tMax = ComputeRayStepTMax(rayOrigin, currentVoxel, stepDirection, rayDirection);
+    float traveled = 0.0;
+
+    for (uint stepIndex = 0u; stepIndex < kAmbientOcclusionMaxSteps; ++stepIndex) {
+        if (stepIndex >= maxSteps) {
+            break;
+        }
+
+        if (tMax.x < tMax.y) {
+            if (tMax.x < tMax.z) {
+                traveled = tMax.x;
+                currentVoxel.x += stepDirection.x;
+                tMax.x += tDelta.x;
+            } else {
+                traveled = tMax.z;
+                currentVoxel.z += stepDirection.z;
+                tMax.z += tDelta.z;
+            }
+        } else if (tMax.y < tMax.z) {
+            traveled = tMax.y;
+            currentVoxel.y += stepDirection.y;
+            tMax.y += tDelta.y;
+        } else {
+            traveled = tMax.z;
+            currentVoxel.z += stepDirection.z;
+            tMax.z += tDelta.z;
+        }
+
+        if (traveled > maxDistance) {
+            break;
+        }
+
+        const uint hitMaterial = ReadVoxelMaterial(currentVoxel);
+        if (IsAmbientOcclusionOccluder(hitMaterial)) {
+            const float distanceFade = 1.0 - clamp(traveled / maxDistance, 0.0, 1.0);
+            return distanceFade * distanceFade;
+        }
+    }
+
+    return 0.0;
+}
+
+void BuildSurfaceTangentBasis(const vec3 normal, out vec3 tangentA, out vec3 tangentB) {
+    const vec3 absNormal = abs(normal);
+    if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z) {
+        tangentA = vec3(1.0, 0.0, 0.0);
+        tangentB = vec3(0.0, 0.0, 1.0);
+    } else if (absNormal.x >= absNormal.z) {
+        tangentA = vec3(0.0, 1.0, 0.0);
+        tangentB = vec3(0.0, 0.0, 1.0);
+    } else {
+        tangentA = vec3(1.0, 0.0, 0.0);
+        tangentB = vec3(0.0, 1.0, 0.0);
+    }
+}
+
+float SampleAmbientOcclusionDirection(
+const vec3 worldPosition,
+const vec3 normal,
+const vec3 direction,
+const float radius,
+const uint maxSteps) {
+    const vec3 rayDirection = normalize(direction);
+    const vec3 rayOrigin = worldPosition + normal * 0.14 + rayDirection * 0.03;
+    return TraceAmbientOcclusionRay(rayOrigin, rayDirection, radius, maxSteps);
+}
+
+float ComputeAmbientOcclusionVisibility(const vec3 worldPosition, const vec3 normal) {
+    const float strength = clamp(sceneLighting.ambientOcclusionParams.x, 0.0, 1.0);
+    const float radius = max(sceneLighting.ambientOcclusionParams.y, 0.0);
+    const float minVisibility = clamp(sceneLighting.ambientOcclusionParams.z, 0.0, 1.0);
+    if (strength <= 0.0 || radius <= 0.0) {
+        return 1.0;
+    }
+
+    vec3 tangentA = vec3(1.0, 0.0, 0.0);
+    vec3 tangentB = vec3(0.0, 0.0, 1.0);
+    BuildSurfaceTangentBasis(normal, tangentA, tangentB);
+
+    const float normalWeight = 0.5;
+    const float sideWeight = 0.25;
+    const float normalLift = 0.90;
+    const float sideSpread = 0.55;
+    float occlusion = 0.0;
+    float weight = 0.0;
+    // Three-tap AOCC: the surface normal plus two side rays. The previous five-tap
+    // configuration sampled tangentA± and tangentB± separately, which doubled the
+    // fragment budget on AOCC for no visible quality difference at the tuned
+    // strength/radius. The new direction set keeps a strong normal axis and a single
+    // lateral pair, which still produces a readable cavity layer.
+    occlusion += SampleAmbientOcclusionDirection(worldPosition, normal, normal, radius, kAmbientOcclusionMaxSteps) * normalWeight;
+    weight += normalWeight;
+    occlusion += SampleAmbientOcclusionDirection(worldPosition, normal, normal * normalLift + tangentA * sideSpread, radius, kAmbientOcclusionMaxSteps) * sideWeight;
+    occlusion += SampleAmbientOcclusionDirection(worldPosition, normal, normal * normalLift - tangentA * sideSpread, radius, kAmbientOcclusionMaxSteps) * sideWeight;
+    weight += sideWeight * 2.0;
+
+    const float normalizedOcclusion = clamp(occlusion / max(weight, 0.0001), 0.0, 1.0);
+    return clamp(1.0 - strength * normalizedOcclusion, minVisibility, 1.0);
+}
+
+float ComputeLocalPointLightVisibility(
+const vec3 worldPosition,
+const vec3 normal) {
+    const float shadowStrength = clamp(sceneLighting.localPointLightParams.z, 0.0, 1.0);
+    if (shadowStrength <= 0.0) {
+        return 1.0;
+    }
+
+    const float bias = max(sceneLighting.localPointLightParams.w, 0.0);
+    const vec3 stableFacePoint = ComputeStableVoxelFacePoint(worldPosition, normal);
+    const vec3 faceNormal = QuantizeVoxelFaceNormal(normal);
+    // Local-light visibility must stay tied to the owning voxel face without collapsing to one constant value
+    // for the whole face. A stabilized face-plane point keeps close-range traces continuous across a face while
+    // still preventing the old sub-voxel DDA leaks from raw interpolated boundary positions.
+    const vec3 lightCenter = sceneLighting.localPointLightPositionAndRadius.xyz;
+    const vec3 centerDelta = lightCenter - stableFacePoint;
+    const float centerDistanceSq = dot(centerDelta, centerDelta);
+    if (centerDistanceSq <= 0.000001) {
+        return 1.0;
+    }
+
+    const float centerDistance = sqrt(centerDistanceSq);
+    const vec3 centerDirection = centerDelta / centerDistance;
+    float visibility = TraceLocalPointLightShadowRay(
+    stableFacePoint,
+    faceNormal,
+    centerDirection,
+    centerDistance,
+    shadowStrength,
+    bias) * 0.4;
+    float weight = 0.4;
+
+    const float sourceRadius = max(sceneLighting.localPointLightParams.y, 0.0);
+    const float sampleRadius = min(sourceRadius * 0.6, centerDistance * 0.35);
+    if (sampleRadius <= 0.0001) {
+        return visibility / max(weight, 0.0001);
+    }
+
+    vec3 tangentA = vec3(1.0, 0.0, 0.0);
+    vec3 tangentB = vec3(0.0, 0.0, 1.0);
+    BuildLocalPointLightSampleBasis(centerDirection, tangentA, tangentB);
+    const vec2 sampleOffsets[4] = vec2[4](
+    vec2(1.0, 0.0),
+    vec2(-1.0, 0.0),
+    vec2(0.0, 1.0),
+    vec2(0.0, -1.0));
+
+    for (uint sampleIndex = 0u; sampleIndex < 4u; ++sampleIndex) {
+        const vec3 sampleLightPosition =
+        lightCenter +
+        tangentA * (sampleOffsets[sampleIndex].x * sampleRadius) +
+        tangentB * (sampleOffsets[sampleIndex].y * sampleRadius);
+        const vec3 sampleDelta = sampleLightPosition - stableFacePoint;
+        const float sampleDistanceSq = dot(sampleDelta, sampleDelta);
+        if (sampleDistanceSq <= 0.000001) {
+            continue;
+        }
+
+        const float sampleDistance = sqrt(sampleDistanceSq);
+        const vec3 sampleDirection = sampleDelta / sampleDistance;
+        visibility += TraceLocalPointLightShadowRay(
+        stableFacePoint,
+        faceNormal,
+        sampleDirection,
+        sampleDistance,
+        shadowStrength,
+        bias) * 0.15;
+        weight += 0.15;
+    }
+
+    return visibility / max(weight, 0.0001);
 }
 
 vec3 SampleEnvironmentDiffuse(const vec3 normal) {
@@ -107,6 +574,90 @@ float GeometrySmith(const float nDotV, const float nDotL, const float roughness)
 
 vec3 FresnelSchlick(const float cosTheta, const vec3 f0) {
     return f0 + (1.0 - f0) * pow(1.0 - clamp(cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 EvaluateDirectLighting(
+const vec3 lightDirection,
+const vec3 lightRadiance,
+const vec3 normal,
+const vec3 viewDirection,
+const vec3 albedo,
+const float roughness,
+const float metallic,
+const float reflectance,
+const float directDiffuseStrength,
+const float diffuseWrap) {
+    const float nDotL = max(dot(normal, lightDirection), 0.0);
+    const float nDotV = max(dot(normal, viewDirection), 0.0);
+    const float wrappedDiffuse = clamp((dot(normal, lightDirection) + diffuseWrap) / (1.0 + diffuseWrap), 0.0, 1.0);
+    const vec3 halfVector = normalize(lightDirection + viewDirection + vec3(0.0001));
+    const float nDotH = max(dot(normal, halfVector), 0.0);
+    const float hDotV = max(dot(halfVector, viewDirection), 0.0);
+    const vec3 f0 = mix(vec3(0.16 * reflectance * reflectance), albedo, metallic);
+    const vec3 fresnel = FresnelSchlick(hDotV, f0);
+    const float distribution = DistributionGGX(nDotH, roughness);
+    const float geometry = GeometrySmith(nDotV, nDotL, roughness);
+    const vec3 specular = (distribution * geometry * fresnel) / max(4.0 * nDotL * nDotV, 0.0001);
+    const vec3 diffuse = (vec3(1.0) - fresnel) * (1.0 - metallic) * albedo;
+    return diffuse * lightRadiance * wrappedDiffuse * directDiffuseStrength + specular * lightRadiance * nDotL;
+}
+
+vec3 ComputeLocalPointLightDirect(
+const vec3 worldPosition,
+const vec3 normal,
+const vec3 viewDirection,
+const vec3 albedo,
+const float roughness,
+const float metallic,
+const float reflectance,
+const float directDiffuseStrength) {
+    if (sceneLighting.localPointLightParams.x <= 0.5) {
+        return vec3(0.0);
+    }
+
+    const float radius = max(sceneLighting.localPointLightPositionAndRadius.w, 0.0);
+    if (radius <= 0.0) {
+        return vec3(0.0);
+    }
+
+    const vec3 lightDelta = sceneLighting.localPointLightPositionAndRadius.xyz - worldPosition;
+    const float distanceSq = dot(lightDelta, lightDelta);
+    const float radiusSq = radius * radius;
+    if (distanceSq <= 0.000001 || distanceSq >= radiusSq) {
+        return vec3(0.0);
+    }
+
+    const float distance = sqrt(distanceSq);
+    const vec3 lightDirection = lightDelta / distance;
+    if (dot(normal, lightDirection) <= 0.0) {
+        return vec3(0.0);
+    }
+
+    const float normalizedDistance = clamp(distance / radius, 0.0, 1.0);
+    const float rangeFade = 1.0 - smoothstep(0.75, 1.0, normalizedDistance);
+    const float sourceRadius = max(sceneLighting.localPointLightParams.y, 0.05);
+    const float attenuation = rangeFade / max(distanceSq, sourceRadius * sourceRadius);
+    if (attenuation <= 0.00001) {
+        return vec3(0.0);
+    }
+
+    const float visibility = ComputeLocalPointLightVisibility(worldPosition, normal);
+    const vec3 lightRadiance =
+    sceneLighting.localPointLightColorAndIntensity.rgb *
+    sceneLighting.localPointLightColorAndIntensity.w *
+    attenuation *
+    visibility;
+    return EvaluateDirectLighting(
+    lightDirection,
+    lightRadiance,
+    normal,
+    viewDirection,
+    albedo,
+    roughness,
+    metallic,
+    reflectance,
+    directDiffuseStrength,
+    0.0);
 }
 
 float GetCameraViewDepth(const vec3 worldPosition) {
@@ -201,21 +752,33 @@ const float shadowStrength) {
     return vec2(mix(1.0 - shadowStrength, 1.0, lit), 1.0);
 }
 
-vec3 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
+vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
     const float viewDepth = GetCameraViewDepth(worldPosition);
     const uint cascadeIndex = SelectSunShadowCascadeByViewDepth(viewDepth);
     const float shadowStrength = clamp(sceneLighting.sunShadowParams.x, 0.0, 1.0);
     if (shadowStrength <= 0.0) {
-        return vec3(1.0, 1.0, float(cascadeIndex));
+        const float contactVisibility = ComputeSunContactVisibility(
+        worldPosition,
+        normal,
+        normalize(sceneLighting.sunDirectionAndWrap.xyz));
+        return vec4(contactVisibility, contactVisibility < 0.999 ? 1.0 : 0.0, float(cascadeIndex), contactVisibility);
     }
 
     const vec3 sunDirection = normalize(sceneLighting.sunDirectionAndWrap.xyz);
     const float depthBias = max(sceneLighting.sunShadowParams.y, 0.0);
     const float normalBias = max(sceneLighting.sunShadowParams.z, 0.0);
-    const float filterRadius = max(sceneLighting.sunShadowParams.w, 0.0);
+    // The PCF kernel is `5 * 5` taps with `pcfStepScale = filterRadius * 0.75` texels
+    // per tap. Preset values land in [1.10, 1.50] (roughly ±1.5 texels from center),
+    // which is the visual sweet spot. The debug-ladder `H/K` controls let the user
+    // push the authored filter radius up to 8.0, which expands the kernel to ±12
+    // texels (roughly 50% of a cascade's texel budget at 2048). That over-blooms
+    // adjacent casters into each other and starts to *erase* the contact-shadow
+    // detail. Clamp to a sane upper bound here so the runtime never produces a
+    // visually broken filter, even with the debug controls at their extreme.
+    const float filterRadius = clamp(sceneLighting.sunShadowParams.w, 0.0, 2.0);
     const float nDotL = clamp(dot(normal, sunDirection), 0.0, 1.0);
     if (nDotL <= 0.02) {
-        return vec3(1.0, 1.0, float(cascadeIndex));
+        return vec4(1.0, 1.0, float(cascadeIndex), 1.0);
     }
 
     const float shadowSlope = 1.0 - nDotL;
@@ -249,7 +812,10 @@ vec3 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
             shadowSample.y = 1.0;
         }
     }
-    return vec3(shadowSample, float(cascadeIndex));
+    const float contactVisibility = ComputeSunContactVisibility(receiverPosition, normal, sunDirection);
+    shadowSample.x *= contactVisibility;
+    const float anyShadowCoverage = shadowSample.y > 0.5 || contactVisibility < 0.999 ? 1.0 : 0.0;
+    return vec4(shadowSample.x, anyShadowCoverage, float(cascadeIndex), contactVisibility);
 }
 
 void main() {
@@ -257,10 +823,11 @@ void main() {
     const vec3 normal = normalize(inNormal);
     const vec3 sunDirection = normalize(sceneLighting.sunDirectionAndWrap.xyz);
     const vec3 sunColor = sceneLighting.sunColorAndIntensity.rgb * sceneLighting.sunColorAndIntensity.w;
-    const vec3 sunShadowSample = ComputeSunShadowSample(inWorldPosition, normal);
+    const vec4 sunShadowSample = ComputeSunShadowSample(inWorldPosition, normal);
     const float sunVisibility = sunShadowSample.x;
     const bool shadowCovered = sunShadowSample.y > 0.5;
     const uint sunShadowCascadeIndex = uint(sunShadowSample.z + 0.5);
+    const float sunContactVisibility = sunShadowSample.w;
     const float sunShadowViewDepth = GetCameraViewDepth(inWorldPosition);
     const vec3 shadowedSunColor = sunColor * sunVisibility;
     const vec3 viewDirection = normalize(pushConstants.cameraPosition.xyz - inWorldPosition + vec3(0.0001));
@@ -271,34 +838,44 @@ void main() {
     const float reflectance = clamp(material.surface.w, 0.0, 1.0);
     const float ambientStrength = clamp(material.shading.z, 0.0, 1.0);
     const float directDiffuseStrength = clamp(material.shading.w, 0.0, 1.0);
-    const float nDotL = max(dot(normal, sunDirection), 0.0);
     const float nDotV = max(dot(normal, viewDirection), 0.0);
     const float wrappedDiffuse = clamp((dot(normal, sunDirection) + diffuseWrap) / (1.0 + diffuseWrap), 0.0, 1.0);
-    const vec3 halfVector = normalize(sunDirection + viewDirection + vec3(0.0001));
-    const float nDotH = max(dot(normal, halfVector), 0.0);
-    const float hDotV = max(dot(halfVector, viewDirection), 0.0);
     const vec3 albedo = material.baseColor.rgb;
-    const vec3 f0 = mix(vec3(0.16 * reflectance * reflectance), albedo, metallic);
-    const vec3 fresnel = FresnelSchlick(hDotV, f0);
-    const float distribution = DistributionGGX(nDotH, roughness);
-    const float geometry = GeometrySmith(nDotV, nDotL, roughness);
-    const vec3 specular = (distribution * geometry * fresnel) / max(4.0 * nDotL * nDotV, 0.0001);
-    const vec3 diffuse = (vec3(1.0) - fresnel) * (1.0 - metallic) * albedo;
     const float ambientOcclusion = mix(0.35, 1.0, ao);
     // This is the cheap meshing-side local sky-visibility term, not screen-space AO/GI.
     const float geometryAmbientVisibility = clamp(inAmbientVisibility, 0.0, 1.0);
+    const float localAmbientOcclusionVisibility = ComputeAmbientOcclusionVisibility(inWorldPosition, normal);
+    const float ambientVisibility = geometryAmbientVisibility * localAmbientOcclusionVisibility;
     const vec3 ambient =
     SampleEnvironmentDiffuse(normal) *
     albedo *
     ambientStrength *
     ambientOcclusion *
-    geometryAmbientVisibility;
-    const vec3 directDiffuse = diffuse * shadowedSunColor * wrappedDiffuse * directDiffuseStrength;
-    const vec3 directSpecular = specular * shadowedSunColor * nDotL;
+    ambientVisibility;
+    const vec3 directSun = EvaluateDirectLighting(
+    sunDirection,
+    shadowedSunColor,
+    normal,
+    viewDirection,
+    albedo,
+    roughness,
+    metallic,
+    reflectance,
+    directDiffuseStrength,
+    diffuseWrap);
+    const vec3 localDirect = ComputeLocalPointLightDirect(
+    inWorldPosition,
+    normal,
+    viewDirection,
+    albedo,
+    roughness,
+    metallic,
+    reflectance,
+    directDiffuseStrength);
     const float grazing = pow(1.0 - nDotV, 5.0);
     const vec3 mediumTint = material.medium.rgb;
     const vec3 grazingTint = mediumTint * material.medium.w * grazing * (1.0 - metallic) * 0.12;
-    vec3 color = ambient + directDiffuse + directSpecular + grazingTint;
+    vec3 color = ambient + directSun + localDirect + grazingTint;
 
     if (material.medium.w > 0.0) {
         float transmission = material.medium.w * mix(0.35, 1.0, wrappedDiffuse);
@@ -328,11 +905,13 @@ void main() {
     if (lightingDebugView == 1u) {
         color = ambient;
     } else if (lightingDebugView == 2u) {
-        color = directDiffuse + directSpecular + grazingTint;
+        color = directSun + localDirect + grazingTint;
     } else if (lightingDebugView == 3u) {
+        color = localDirect;
+    } else if (lightingDebugView == 4u) {
         outColor = vec4(shadowCovered ? vec3(sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
-    } else if (lightingDebugView == 4u) {
+    } else if (lightingDebugView == 5u) {
         vec3 cascadeColor = GetSunShadowCascadeDebugColor(sunShadowCascadeIndex);
         const float cascadeBlendWeight = ComputeSunShadowCascadeBlendWeight(sunShadowViewDepth, sunShadowCascadeIndex);
         if (cascadeBlendWeight > 0.0 && sunShadowCascadeIndex + 1u < kSunShadowCascadeCount) {
@@ -343,11 +922,15 @@ void main() {
         }
         outColor = vec4(shadowCovered ? mix(cascadeColor * 0.28, cascadeColor, sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
-    } else if (lightingDebugView == 5u) {
+    } else if (lightingDebugView == 6u) {
+        color = vec3(sunContactVisibility);
+    } else if (lightingDebugView == 7u) {
+        color = vec3(localAmbientOcclusionVisibility);
+    } else if (lightingDebugView == 8u) {
         color = vec3(fog);
     }
 
-    if (lightingDebugView != 5u) {
+    if (lightingDebugView != 8u) {
         color = mix(color, fogColor, fog);
     }
     color *= max(sceneLighting.postProcess.x, 0.0);

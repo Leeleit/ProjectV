@@ -1,6 +1,7 @@
 #ifndef ECS_WORLD_HPP
 #define ECS_WORLD_HPP
 
+#include <cstddef>
 #include <cstdint>
 
 struct AppState;

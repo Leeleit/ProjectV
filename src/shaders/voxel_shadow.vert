@@ -29,11 +29,16 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 sunDirectionAndWrap;
     vec4 postProcess;
     vec4 sunShadowParams;
+    vec4 sunContactShadowParams;
+    vec4 ambientOcclusionParams;
     mat4 sunShadowViewProjections[4];
     vec4 colorGrading;
     vec4 exposureControl;
     vec4 shadowCascadeDepthSplits;
     vec4 shadowCascadeBlendParams;
+    vec4 localPointLightPositionAndRadius;
+    vec4 localPointLightColorAndIntensity;
+    vec4 localPointLightParams;
 } sceneLighting;
 
 layout(push_constant) uniform ShadowPushConstants {

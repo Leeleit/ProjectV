@@ -23,7 +23,7 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kMaxStatsLineCount = 32;
+constexpr size_t kMaxStatsLineCount = 36;
 constexpr size_t kMaxHelperLineCount = 16;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
@@ -581,6 +581,43 @@ size_t BuildStatsLines(
 		"BIAS %.4f NRM %.4f",
 		stats.sunShadowDepthBias,
 		stats.sunShadowNormalBias);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"CTSH STR %.2f DST %.2f",
+		stats.sunContactShadowStrength,
+		stats.sunContactShadowDistance);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"AOCC STR %.2f RAD %.2f MIN %.2f",
+		stats.ambientOcclusionStrength,
+		stats.ambientOcclusionRadius,
+		stats.ambientOcclusionMinVisibility);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"LOCL %.1f %.1f %.1f R %.1f E %.0f",
+		stats.localPointLightPosition[0],
+		stats.localPointLightPosition[1],
+		stats.localPointLightPosition[2],
+		stats.localPointLightRadius,
+		stats.localPointLightEnabled);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"LCLR %.2f %.2f %.2f I %.2f S %.2f",
+		stats.localPointLightColor[0],
+		stats.localPointLightColor[1],
+		stats.localPointLightColor[2],
+		stats.localPointLightIntensity,
+		stats.localPointLightSourceRadius);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"LSHD STR %.2f B %.3f",
+		stats.localPointLightShadowStrength,
+		stats.localPointLightShadowBias);
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,

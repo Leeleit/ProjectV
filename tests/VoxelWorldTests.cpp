@@ -481,6 +481,11 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 	render.currentSceneLighting.sunDirectionAndWrap = {-0.58f, 0.62f, -0.31f, 0.10f};
 	render.currentSceneLighting.sunColorAndIntensity = {0.95f, 0.90f, 0.82f, 1.30f};
 	render.currentSceneLighting.sunShadowParams = {0.72f, 0.0012f, 0.0035f, 1.40f};
+	render.currentSceneLighting.sunContactShadowParams = {0.46f, 3.25f, 0.0f, 0.0f};
+	render.currentSceneLighting.ambientOcclusionParams = {0.37f, 2.75f, 0.55f, 0.0f};
+	render.currentSceneLighting.localPointLightPositionAndRadius = {1.0f, 2.0f, 3.0f, 9.0f};
+	render.currentSceneLighting.localPointLightColorAndIntensity = {0.70f, 0.80f, 0.90f, 12.0f};
+	render.currentSceneLighting.localPointLightParams = {1.0f, 1.50f, 0.85f, 0.08f};
 	render.currentSceneLighting.shadowCascadeBlendParams = {0.19f, 0.10f, 0.0f, 0.0f};
 	render.currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(0.10f, 128.0f, 0.65f);
 	render.currentSunShadowCascadeDiagnostics.viewNearDepths = {0.10f, 8.0f, 24.0f, 56.0f};
@@ -527,6 +532,19 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 	EXPECT_TRUE(context, text.find("exposure_min=0.400000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("exposure_max=2.500000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("shadow_tuning_target=BLND") != std::string::npos);
+	EXPECT_TRUE(context, text.find("contact_shadow_strength=0.460000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("contact_shadow_distance=3.250000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("ambient_occlusion_strength=0.370000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("ambient_occlusion_radius=2.750000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("ambient_occlusion_min_visibility=0.550000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_position=1.000000 2.000000 3.000000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_radius=9.000000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_color=0.700000 0.800000 0.900000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_intensity=12.000000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_enabled=1.000000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_source_radius=1.500000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_shadow_strength=0.850000") != std::string::npos);
+	EXPECT_TRUE(context, text.find("local_point_light_shadow_bias=0.080000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("shadow_coverage_scale=1.300000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("shadow_cascade_blend=0.190000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("shadow_cascade_count=4") != std::string::npos);
@@ -803,7 +821,8 @@ void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
 	EXPECT_TRUE(context, voxelLab.postProcess[0] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.postProcess[1] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.postProcess[0] > 0.0f);
-	EXPECT_TRUE(context, chunkGrid.postProcess[1] < voxelLab.postProcess[1]);
+	EXPECT_TRUE(context, chunkGrid.postProcess[1] > 0.0f);
+	EXPECT_TRUE(context, std::abs(chunkGrid.postProcess[1] - voxelLab.postProcess[1]) > 0.001f);
 	EXPECT_TRUE(context, voxelLab.postProcess[2] == static_cast<float>(ToneMapOperator::AcesApprox));
 	EXPECT_TRUE(context, voxelLab.colorGrading[0] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.colorGrading[1] > 0.0f);
@@ -817,12 +836,24 @@ void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
 	EXPECT_TRUE(context, voxelLab.sunShadowParams[1] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.sunShadowParams[2] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.sunShadowParams[3] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.sunContactShadowParams[0] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.sunContactShadowParams[1] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.ambientOcclusionParams[0] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.ambientOcclusionParams[1] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.ambientOcclusionParams[2] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.localPointLightParams[0] == 0.0f);
+	EXPECT_TRUE(context, voxelLab.localPointLightPositionAndRadius[3] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.localPointLightColorAndIntensity[3] > 0.0f);
+	EXPECT_TRUE(context, voxelLab.localPointLightParams[2] > 0.0f);
+	EXPECT_TRUE(context, chunkGrid.localPointLightParams[3] > 0.0f);
+	EXPECT_TRUE(context, !ColorsMatch(voxelLab.localPointLightColorAndIntensity, chunkGrid.localPointLightColorAndIntensity));
 	EXPECT_TRUE(context, voxelLab.shadowCascadeBlendParams[0] > 0.0f);
 }
 
 void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 {
-	const VoxelSceneLighting baseLighting = GetVoxelSceneLighting(VoxelScenePreset::VoxelLab);
+	const VoxelSceneLighting authoredLighting = GetVoxelSceneLighting(VoxelScenePreset::VoxelLab);
+	const VoxelSceneLighting baseLighting = BuildVoxelSceneLighting(VoxelScenePreset::VoxelLab, {});
 	VoxelLightingDebugControls controls{};
 	controls.exposureBiasStops = 1.0f;
 	controls.toneMapOperator = ToneMapOperator::Reinhard;
@@ -834,7 +865,7 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 	controls.shadowCascadeBlendOffset = 0.04f;
 
 	const VoxelSceneLighting tunedLighting = BuildVoxelSceneLighting(VoxelScenePreset::VoxelLab, controls);
-	EXPECT_TRUE(context, tunedLighting.postProcess[0] > baseLighting.postProcess[0]);
+	EXPECT_TRUE(context, tunedLighting.postProcess[0] > authoredLighting.postProcess[0]);
 	EXPECT_TRUE(context, EstimateVoxelSceneExposureKey(tunedLighting) > 0.0f);
 	EXPECT_TRUE(
 		context,
@@ -846,6 +877,17 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[1] > baseLighting.sunShadowParams[1]);
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[2] > baseLighting.sunShadowParams[2]);
 	EXPECT_TRUE(context, tunedLighting.sunShadowParams[3] > baseLighting.sunShadowParams[3]);
+	EXPECT_TRUE(context, tunedLighting.sunContactShadowParams[0] == baseLighting.sunContactShadowParams[0]);
+	EXPECT_TRUE(context, tunedLighting.sunContactShadowParams[1] == baseLighting.sunContactShadowParams[1]);
+	EXPECT_TRUE(context, tunedLighting.ambientOcclusionParams[0] == baseLighting.ambientOcclusionParams[0]);
+	EXPECT_TRUE(context, tunedLighting.ambientOcclusionParams[1] == baseLighting.ambientOcclusionParams[1]);
+	EXPECT_TRUE(context, tunedLighting.ambientOcclusionParams[2] == baseLighting.ambientOcclusionParams[2]);
+	EXPECT_TRUE(context, tunedLighting.localPointLightParams[0] == baseLighting.localPointLightParams[0]);
+	EXPECT_TRUE(context, tunedLighting.localPointLightParams[1] == baseLighting.localPointLightParams[1]);
+	EXPECT_TRUE(context, tunedLighting.localPointLightParams[2] == baseLighting.localPointLightParams[2]);
+	EXPECT_TRUE(context, tunedLighting.localPointLightParams[3] == baseLighting.localPointLightParams[3]);
+	EXPECT_TRUE(context, tunedLighting.localPointLightPositionAndRadius[3] == baseLighting.localPointLightPositionAndRadius[3]);
+	EXPECT_TRUE(context, tunedLighting.localPointLightColorAndIntensity[3] == baseLighting.localPointLightColorAndIntensity[3]);
 	EXPECT_TRUE(context, tunedLighting.shadowCascadeBlendParams[0] > baseLighting.shadowCascadeBlendParams[0]);
 
 	const std::array<float, 4> clearColor = GetVoxelSceneClearColor(tunedLighting);
@@ -859,15 +901,27 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 {
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Shadow)) == "SHDW");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Cascade)) == "CSM");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Local)) == "LOCL");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Contact)) == "CTSH");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Occlusion)) == "AOCC");
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Shadow);
+		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Local);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Local) == LightingDebugView::Shadow);
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Shadow) == LightingDebugView::Cascade);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::Cascade) == LightingDebugView::Fog);
+		GetNextLightingDebugView(LightingDebugView::Cascade) == LightingDebugView::Contact);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Contact) == LightingDebugView::Occlusion);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Occlusion) == LightingDebugView::Fog);
 }
 
 void TestShadowTuningTargetCycleAndLabels(TestContext &context)
@@ -1277,7 +1331,7 @@ void TestStartupCameraOverrideReadsEnvironment(TestContext &context)
 
 void TestLookDevCaptureAutomationRequestsConfiguredViews(TestContext &context)
 {
-	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_VIEWS", "FINAL,SHDW", 1);
+	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_VIEWS", "FINAL,LOCL,CTSH,AOCC,SHDW", 1);
 	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_WARMUP_FRAMES", "1", 1);
 	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_INTERVAL_FRAMES", "1", 1);
 	SDL_setenv_unsafe("PROJECTV_LOOKDEV_CAPTURE_QUIT", "1", 1);
@@ -1285,7 +1339,7 @@ void TestLookDevCaptureAutomationRequestsConfiguredViews(TestContext &context)
 	LookDevCaptureAutomationState automation{};
 	ConfigureLookDevCaptureAutomationFromEnvironment(&automation);
 	EXPECT_TRUE(context, automation.active);
-	EXPECT_EQ(context, 2u, automation.viewCount);
+	EXPECT_EQ(context, 5u, automation.viewCount);
 
 	RenderState render{};
 	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
@@ -1293,6 +1347,30 @@ void TestLookDevCaptureAutomationRequestsConfiguredViews(TestContext &context)
 
 	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
 	EXPECT_EQ(context, LightingDebugView::Final, render.lightingDebugControls.debugView);
+	EXPECT_TRUE(context, render.screenshotCaptureRequested);
+	render.screenshotCaptureRequested = false;
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_TRUE(context, !render.screenshotCaptureRequested);
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_EQ(context, LightingDebugView::Local, render.lightingDebugControls.debugView);
+	EXPECT_TRUE(context, render.screenshotCaptureRequested);
+	render.screenshotCaptureRequested = false;
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_TRUE(context, !render.screenshotCaptureRequested);
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_EQ(context, LightingDebugView::Contact, render.lightingDebugControls.debugView);
+	EXPECT_TRUE(context, render.screenshotCaptureRequested);
+	render.screenshotCaptureRequested = false;
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_TRUE(context, !render.screenshotCaptureRequested);
+
+	EXPECT_TRUE(context, !UpdateLookDevCaptureAutomation(&automation, &render));
+	EXPECT_EQ(context, LightingDebugView::Occlusion, render.lightingDebugControls.debugView);
 	EXPECT_TRUE(context, render.screenshotCaptureRequested);
 	render.screenshotCaptureRequested = false;
 

@@ -163,12 +163,24 @@ bool TryParseDebugViewToken(
 		*outView = LightingDebugView::Direct;
 		return true;
 	}
+	if (normalized == "locl" || normalized == "local" || normalized == "locallight" || normalized == "pointlight") {
+		*outView = LightingDebugView::Local;
+		return true;
+	}
 	if (normalized == "shdw" || normalized == "shadow") {
 		*outView = LightingDebugView::Shadow;
 		return true;
 	}
 	if (normalized == "csm" || normalized == "cascade" || normalized == "cascades") {
 		*outView = LightingDebugView::Cascade;
+		return true;
+	}
+	if (normalized == "ctsh" || normalized == "contact" || normalized == "contactshadow") {
+		*outView = LightingDebugView::Contact;
+		return true;
+	}
+	if (normalized == "aocc" || normalized == "ao" || normalized == "occlusion" || normalized == "ambientocclusion") {
+		*outView = LightingDebugView::Occlusion;
 		return true;
 	}
 	if (normalized == "fog") {

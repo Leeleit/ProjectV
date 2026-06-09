@@ -283,6 +283,58 @@ bool CreateOrRecreateSwapchain(
 	swapchain->images = std::move(newImages);
 	swapchain->imageViews = std::move(newViews);
 
+	// Per-swapchain-image submit-finished semaphores, created here so
+	// the size always matches the current swapchain image count. See
+	// `SwapchainState::submitSemaphores` for the contract; the
+	// per-swapchain-image indexing is the canonical fix for the
+	// "semaphore may still be in use by VkSwapchainKHR" validation
+	// warning (per the Vulkan SDK 1.4
+	// `swapchain_semaphore_reuse.html` guide, chapter "Swapchain
+	// Semaphore Reuse").
+	{
+		PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain.CreatePerImageSemaphores");
+		VkSemaphoreCreateInfo semaphoreInfo{};
+		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		std::vector<VkSemaphore> newSubmitSemaphores(actualImageCount, VK_NULL_HANDLE);
+		bool perImageSemaphoresOk = true;
+		for (uint32_t i = 0; i < actualImageCount; ++i) {
+			const VkResult createSemaphoreResult = vkCreateSemaphore(
+				context->device, &semaphoreInfo, nullptr, &newSubmitSemaphores[i]);
+			if (createSemaphoreResult != VK_SUCCESS) {
+				runtime::LogVkFailure(
+					"CreateOrRecreateSwapchain.vkCreateSemaphore(submitSemaphore)",
+					createSemaphoreResult);
+				perImageSemaphoresOk = false;
+				break;
+			}
+		}
+		if (!perImageSemaphoresOk) {
+			for (VkSemaphore semaphore : newSubmitSemaphores) {
+				if (semaphore != VK_NULL_HANDLE) {
+					vkDestroySemaphore(context->device, semaphore, nullptr);
+				}
+			}
+			// The imageViews and swapchain itself were already created;
+			// we cannot roll them back here, so just return false and
+			// let the caller handle the failure.
+			runtime::LogRuntimeFailure(
+				"Swapchain",
+				"CreateOrRecreateSwapchain.PerImageSemaphores",
+				"failed to create per-swapchain-image submit semaphores");
+			return false;
+		}
+		// Destroy the previous per-image semaphores before overwriting
+		// the vector. The earlier `vkDeviceWaitIdle` in
+		// `RecreateSwapchain` should have retired any in-flight work
+		// that referenced them.
+		for (VkSemaphore semaphore : swapchain->submitSemaphores) {
+			if (semaphore != VK_NULL_HANDLE) {
+				vkDestroySemaphore(context->device, semaphore, nullptr);
+			}
+		}
+		swapchain->submitSemaphores = std::move(newSubmitSemaphores);
+	}
+
 	{
 		PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain.NameObjects");
 		SetVulkanObjectName(

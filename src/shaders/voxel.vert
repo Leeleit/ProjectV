@@ -25,6 +25,8 @@ layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
     vec4 cameraPosition;
     vec4 cameraForward;
+    ivec4 worldMinAndChunkSize;
+    uvec4 chunkGridAndFlags;
 } pushConstants;
 
 layout(location = 0) out vec3 outNormal;

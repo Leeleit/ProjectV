@@ -8,7 +8,7 @@
 #include "volk.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
-#include "vma/vk_mem_alloc.h"
+#include "vk_mem_alloc.h"
 #pragma clang diagnostic pop
 
 #include <array>
@@ -151,13 +151,17 @@ struct GraphicsPushConstants {
 	std::array<float, 16> viewProjection{};
 	std::array<float, 4> cameraPosition{};
 	std::array<float, 4> cameraForward{};
+	std::array<int32_t, 4> worldMinAndChunkSize{};
+	std::array<uint32_t, 4> chunkGridAndFlags{};
 };
 static_assert(std::is_standard_layout_v<GraphicsPushConstants>);
 static_assert(std::is_trivially_copyable_v<GraphicsPushConstants>);
-static_assert(sizeof(GraphicsPushConstants) == 96);
+static_assert(sizeof(GraphicsPushConstants) == 128);
 static_assert(offsetof(GraphicsPushConstants, viewProjection) == 0);
 static_assert(offsetof(GraphicsPushConstants, cameraPosition) == 64);
 static_assert(offsetof(GraphicsPushConstants, cameraForward) == 80);
+static_assert(offsetof(GraphicsPushConstants, worldMinAndChunkSize) == 96);
+static_assert(offsetof(GraphicsPushConstants, chunkGridAndFlags) == 112);
 
 struct ShadowPushConstants {
 	uint32_t cascadeIndex = 0;
@@ -393,6 +397,19 @@ struct DebugStats {
 	uint32_t shadowMapResolution = 0;
 	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	ShadowTuningTarget shadowTuningTarget = ShadowTuningTarget::Strength;
+	float sunContactShadowStrength = 0.0f;
+	float sunContactShadowDistance = 0.0f;
+	float ambientOcclusionStrength = 0.0f;
+	float ambientOcclusionRadius = 0.0f;
+	float ambientOcclusionMinVisibility = 0.0f;
+	std::array<float, 3> localPointLightPosition{};
+	std::array<float, 3> localPointLightColor{};
+	float localPointLightRadius = 0.0f;
+	float localPointLightIntensity = 0.0f;
+	bool localPointLightEnabled = false;
+	float localPointLightSourceRadius = 0.0f;
+	float localPointLightShadowStrength = 0.0f;
+	float localPointLightShadowBias = 0.0f;
 	bool inputReplayRecording = false;
 	bool inputReplayPlaybackActive = false;
 	bool inputReplayReady = false;
@@ -599,6 +616,24 @@ struct SwapchainState {
 	bool supportsTransferSrc = false;
 	std::vector<VkImage> images;
 	std::vector<VkImageView> imageViews;
+	// Per-swapchain-image "submit finished" semaphores. Indexed by the
+	// `imageIndex` returned by `vkAcquireNextImageKHR`, *not* by the
+	// in-flight frame counter. The submit pipeline signals
+	// `submitSemaphores[imageIndex]` and the present pipeline waits on
+	// the same handle. The canonical Vulkan pattern (per the SDK 1.4
+	// guide `swapchain_semaphore_reuse.html`) requires this indexing —
+	// a per-in-flight-frame array is what triggers the validation
+	// layer's "semaphore may still be in use by VkSwapchainKHR" warning
+	// because two consecutive in-flight frames can be handed the same
+	// `imageIndex` before the first one's present has retired its
+	// `pWaitSemaphores`. Created in `CreateOrRecreateSwapchain` so the
+	// size always matches the current swapchain image count.
+	//
+	// Note: the per-in-flight-frame `imageAvailableSemaphore` in
+	// `FrameState` (the `acquire_semaphore` in the guide's pseudocode)
+	// stays per-frame. The guide uses a per-frame *semaphore* for
+	// acquire and a per-image *semaphore* for submit; we do the same.
+	std::vector<VkSemaphore> submitSemaphores;
 };
 
 struct AppState {

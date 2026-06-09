@@ -24,8 +24,11 @@ enum class LightingDebugView : uint8_t {
 	Final = 0,
 	Ambient,
 	Direct,
+	Local,
 	Shadow,
 	Cascade,
+	Contact,
+	Occlusion,
 	Fog,
 };
 
@@ -79,6 +82,10 @@ struct VoxelSceneLighting {
 	// exposure, environment diffuse intensity, tone-map operator, lighting debug view
 	std::array<float, 4> postProcess{};
 	std::array<float, 4> sunShadowParams{};
+	// contact shadow strength, max distance, reserved, reserved
+	std::array<float, 4> sunContactShadowParams{};
+	// ambient occlusion strength, radius, minimum visibility, reserved
+	std::array<float, 4> ambientOcclusionParams{};
 	std::array<float, kSunShadowMatrixElementCount> sunShadowViewProjections{};
 	// white point, contrast, saturation, lift
 	std::array<float, 4> colorGrading{};
@@ -87,10 +94,16 @@ struct VoxelSceneLighting {
 	std::array<float, 4> shadowCascadeDepthSplits{};
 	// cascade blend fraction, first cascade near plane, reserved, reserved
 	std::array<float, 4> shadowCascadeBlendParams{};
+	// position xyz, radius
+	std::array<float, 4> localPointLightPositionAndRadius{};
+	// color rgb, intensity
+	std::array<float, 4> localPointLightColorAndIntensity{};
+	// enabled, source radius, shadow strength, shadow bias
+	std::array<float, 4> localPointLightParams{};
 };
 static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
 static_assert(std::is_trivially_copyable_v<VoxelSceneLighting>);
-static_assert(sizeof(VoxelSceneLighting) == 432);
+static_assert(sizeof(VoxelSceneLighting) == 512);
 static_assert(offsetof(VoxelSceneLighting, skyColorAndFogDensity) == 0);
 static_assert(offsetof(VoxelSceneLighting, horizonColorAndFogStart) == 16);
 static_assert(offsetof(VoxelSceneLighting, groundColorAndFogMax) == 32);
@@ -98,11 +111,16 @@ static_assert(offsetof(VoxelSceneLighting, sunColorAndIntensity) == 48);
 static_assert(offsetof(VoxelSceneLighting, sunDirectionAndWrap) == 64);
 static_assert(offsetof(VoxelSceneLighting, postProcess) == 80);
 static_assert(offsetof(VoxelSceneLighting, sunShadowParams) == 96);
-static_assert(offsetof(VoxelSceneLighting, sunShadowViewProjections) == 112);
-static_assert(offsetof(VoxelSceneLighting, colorGrading) == 368);
-static_assert(offsetof(VoxelSceneLighting, exposureControl) == 384);
-static_assert(offsetof(VoxelSceneLighting, shadowCascadeDepthSplits) == 400);
-static_assert(offsetof(VoxelSceneLighting, shadowCascadeBlendParams) == 416);
+static_assert(offsetof(VoxelSceneLighting, sunContactShadowParams) == 112);
+static_assert(offsetof(VoxelSceneLighting, ambientOcclusionParams) == 128);
+static_assert(offsetof(VoxelSceneLighting, sunShadowViewProjections) == 144);
+static_assert(offsetof(VoxelSceneLighting, colorGrading) == 400);
+static_assert(offsetof(VoxelSceneLighting, exposureControl) == 416);
+static_assert(offsetof(VoxelSceneLighting, shadowCascadeDepthSplits) == 432);
+static_assert(offsetof(VoxelSceneLighting, shadowCascadeBlendParams) == 448);
+static_assert(offsetof(VoxelSceneLighting, localPointLightPositionAndRadius) == 464);
+static_assert(offsetof(VoxelSceneLighting, localPointLightColorAndIntensity) == 480);
+static_assert(offsetof(VoxelSceneLighting, localPointLightParams) == 496);
 
 constexpr size_t kVoxelMaterialCount = 5;
 

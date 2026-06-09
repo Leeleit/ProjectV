@@ -50,6 +50,7 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 		"primary camera, debug singleton or active voxel world is unavailable");
 
 	ResetCameraState(camera);
+	ApplyStartupCameraOverrideFromEnvironment(camera);
 	state->input.mouseDeltaX = 0.0f;
 	state->input.mouseDeltaY = 0.0f;
 	state->input.removePressed = false;

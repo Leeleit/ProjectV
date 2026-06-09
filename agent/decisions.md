@@ -265,6 +265,41 @@ Update `2026-04-22`:
 - Shadow depth pass consumes a dedicated all-occluder opaque indirect buffer instead of the main camera-culling visibility commands; main voxel pass потом семплирует shadow map только для direct sun.
 - Fake frame-only glass shadows are rejected for mainline because they read as noisy geometry, not as glass. Keep glass
   ignored until there is a real transparent-shadow design, but do not suppress `Fluid` shadows.
+- The first contact-shadow follow-up should also stay inside the existing forward voxel path instead of adding a second
+  shadow pass or a fake screen-space surrogate immediately. The current bounded baseline therefore binds the same chunk
+  descriptors + packed voxel payload in `voxel.frag`, traces a short voxel DDA ray toward the sun, and exposes only an
+  explicit `sunContactShadowParams={strength,maxDistance}` contract plus `CTSH` debug visibility.
+- The first ambient-occlusion follow-up follows the same bounded rule. It is a forward voxel-space `AOCC` layer driven
+  by explicit `ambientOcclusionParams={strength,radius,minVisibility}`, not a claim that mainline already has full
+  screen-space `SSAO/GTAO`. Keep it low-strength, short-radius, and distance-faded until a real depth/normal
+  screen-space pipeline exists.
+- The first local-light step should still stay bounded before real local shadow maps. Current mainline therefore
+  supports one per-preset inverse-square point light in `VoxelSceneLighting`, evaluates it through the same GGX
+  direct-light helper as the sun, and now gates it with a short opaque-only voxel DDA visibility term driven by
+  `localPointLightParams={enabled,sourceRadius,shadowStrength,shadowBias}`. Spot shadow maps, point-light cubemaps,
+  and local-light culling remain separate follow-ups, not hidden inside this contract step.
+- That bounded local-light DDA must stay stable per voxel face too: the visibility ray is anchored to a stable
+  point on the owning voxel face before bias is applied, instead of starting from the interpolated fragment position.
+  Do not collapse that to one constant face-center sample: it fixes one defect but creates visible per-voxel shadow
+  bucketing on large flat receivers. On top of that, close-range visibility must not stay a single hard ray to the
+  emitter center either: partially occluded faces produce visible binary speckle. Current accepted bounded fix is a
+  tiny emitter-disk average around the authored `sourceRadius`, still inside the same forward voxel DDA path.
+- The current local-light transparent policy is stricter than the sun/contact baseline on purpose: `Glass` and `Fluid`
+  are both ignored as local-light shadow occluders until there is a separately scoped transmission/tinted-shadow path.
+- `PROJECTV_START_CAMERA_POSITION/LOOK` are no longer startup-only in practice. For reproducible look-dev/snapshot
+  repros, camera overrides must also survive world reload paths (`F7`, replay snapshot load, preset reload), so
+  `FinalizeActiveVoxelWorldReload` reapplies them before snapping the active control-mode character state.
+- Until shared shader includes exist for lighting state, every `SceneLightingBuffer` declaration must stay byte-identical
+  across `voxel.frag`, `voxel_shadow.vert`, and `voxel_mesh.comp` whenever `VoxelSceneLighting` changes. Breaking that
+  contract is not a cosmetic bug: the shadow pass starts sampling shifted cascade matrices immediately.
+- Contact shadows follow the same transparent policy as the current mainline sun-shadow path: `Glass` stays ignored as a
+  local occluder, while `Fluid` remains a valid contact-shadow occluder.
+- Local voxel AO follows the same local transparent policy for now: `Glass` stays ignored, `Fluid` remains an occluder,
+  and broad transparent/tinted occlusion is deferred to a separate future path instead of faking glass shadows here.
+- Sun/contact/AO/local-light changes are not considered validated from build/tests or screenshot sidecars alone anymore.
+  The close-out artifact must include inspected runtime frames for `FINAL` plus the relevant debug views (`SHDW`, `CSM`,
+  `CTSH`, `AOCC`, `LOCL` when applicable), because the contact-shadow landing already produced a passing metadata path
+  while the actual `VoxelLab` shadow frame was nearly white.
 - Первый quality/debug follow-up для этого path тоже остаётся прагматичным: baseline shadow map держится на `2048x2048`, main voxel shader использует weighted `5x5` PCF, а shadow tuning/debug живёт внутри уже существующего lighting loop (`B` debug views + detailed HUD), а не в отдельном editor/debug framework.
 - Cascades must not be smuggled into the shader as hidden constants: split depths and lambda are runtime-visible state
   before the renderer starts sampling multiple shadow maps.
@@ -325,3 +360,26 @@ Update `2026-04-22`:
 - Parallel `latest` / `old` trees were creating duplicated content, contradictory status, and broken navigation for the same topics.
 - The previous two-file library reduction destroyed too much useful material; for this repo, careful curation has to prefer completeness until duplicate sections are proven safely mergeable.
 - A single tree with explicit status labels keeps the legacy corpus readable and searchable without letting historical planning documents masquerade as current project guidance.
+
+## 17. Multiplatform baseline (Linux-port инициализация `2026-06-09`)
+
+Решение:
+
+- `ProjectV` теперь expected to build and run on both `windows-clang-debug` (existing) and `linux-clang-debug` (new). Arch Linux — active Linux dev host. Linux toolchain — **clang 22.1.6 native (not clang-cl) + lld 22.1.6 + libstdc++ 16.1.1 + SDL3 3.4.10 + Vulkan 1.4.350**.
+- `linux-clang-debug` preset mirrors `windows-clang-debug` shape (BUILD_TESTING=ON, Debug, Tracy instrumentation, validation=ON), но pins native clang, `CMAKE_LINKER_TYPE=LLD`, and explicitly does **not** set clang-cl-only variables (`/W4 /WX /permissive- /utf-8 /EHsc /D_CRT_SECURE_NO_WARNINGS`).
+- Windows presets are untouched.
+- `CMakeLists.txt` gates Windows-specific options за `if (MSVC) ... endif()`: `/W4 /WX /permissive- /utf-8` и `NOMINMAX` теперь только для MSVC. `VK_NO_PROTOTYPES` остаётся глобально (volk требует). `VOLK_STATIC_DEFINES` теперь platform-gated: `WIN32 -> VK_USE_PLATFORM_WIN32_KHR`, `APPLE -> VK_USE_PLATFORM_MACOS_MVK`, `ANDROID -> VK_USE_PLATFORM_ANDROID_KHR`, иначе `VK_USE_PLATFORM_XCB_KHR`.
+- Non-MSVC `else ()` branch добавляет два INTERFACE options:
+  - `-Wno-deprecated-declarations` — libstdc++ 16 пометил `std::is_trivial` deprecated, `external/flecs 2.2.0` (lines 66, 93) его ещё использует. Это `flecs` upstream lag, не project bug.
+  - `-include cstring` — legacy `std::memcpy` / `std::memset` / `std::strcmp` calls без explicit `<cstring>` include. MSVC transitive include через `<cstdint>`/`<cstdlib>`, libstdc++ нет.
+- `src/CMakeLists.txt` — `GPUOpen::VulkanMemoryAllocator` uncommented in `ProjectV` link block. Причина: на Windows-CLion `ProjectV` собирался без explicit VMA link, и `#include "vma/vk_mem_alloc.h"` резолвился через Vulkan SDK (Windows-SDK layout: `vma/vk_mem_alloc.h` под `C:\VulkanSDK\...\include\`). На Linux Vulkan SDK нет; единственный путь — `external/VulkanMemoryAllocator/include/vk_mem_alloc.h` (submodule layout, no `vma/` subdir на pinned SHA `b3cbbb43`). Uncomment делает обе платформы consistent через submodule copy.
+- `src/core/Types.hpp` — `#include "vma/vk_mem_alloc.h"` → `#include "vk_mem_alloc.h"` под pinned submodule-VMA layout. Header резолвится на обеих платформах через submodule.
+- `src/ecs/EcsWorld.hpp` — `#include <cstddef>` добавлен перед `<cstdint>`. На libstdc++ 16 `size_t` не transitively тянется из `<cstdint>`. MSVC transitive включает — Windows не affected.
+- `src/render/SceneResources.cpp` — `#include <cstring>` добавлен для симметрии (covered и глобальным `-include cstring`, но local include чище и позволяет MSVC keep current transitive story).
+
+Почему:
+
+- Mainline — reproducible interactive voxel MVP. `AGENTS.md` §4 не запрещает multiplatform dev setup, и «использовать такие технологии, что можно себе не только ногу отстрелить» из user intent означает native Linux toolchain, а не «выкинь Windows». Мультиплатформенность — это второй dev-контур, **не** поджигание мостов с Windows.
+- `AGENTS.md` §3 требует sync `agent/` после заметной работы — Linux-факты идут в `agent/memory.md` (долговечный context) и `agent/status.md` (сжатый snapshot), roadmap follow-up — в `TODO.md`.
+- Submodule-VMA `b3cbbb43` уже 8+ месяцев без обновления в репо. На текущей upstream `v3.4.0` header остаётся `include/vk_mem_alloc.h` (не `vma/vk_mem_alloc.h`). `vma/vk_mem_alloc.h` — Windows-Vulkan-SDK layout. Поправка include path — минимальное вмешательство, фиксит обе платформы. Upstream submodule bump — отдельный follow-up.
+- Build options `if (MSVC) ... endif()` + Linux `else()` branch — кросс-платформенный contract. На Windows ничего не меняется (MSVC истинен); на Linux clang-native flags применяются корректно.

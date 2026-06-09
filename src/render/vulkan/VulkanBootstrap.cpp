@@ -5,6 +5,22 @@
 #include "SDL3/SDL_vulkan.h"
 #include "fmt/format.h"
 
+// `volk.h` does not enable extension-specific feature structs (only the
+// function pointers) and `<vulkan/vulkan.h>` requires the extension
+// preprocessor `#define` to be set *before* its own include. We need
+// `VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR` and
+// `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR`
+// unconditionally, even on devices that do not have the extension, so
+// that the optional `pNext` chain in `VkDeviceCreateInfo` can compile
+// without an `#ifdef`. The feature struct itself is a no-op when the
+// extension is not enabled (the loader only acts on `sType`).
+// `volk.h` is transitively included via `core/Types.hpp`; we re-include
+// it here *after* the `#define` so the extension function pointers stay
+// visible.
+#define VK_KHR_swapchain_maintenance1 1
+#include <vulkan/vulkan.h>
+#include "volk.h" // IWYU pragma: keep — see the comment above
+
 #include <array>
 #include <vector>
 
@@ -17,6 +33,16 @@ constexpr std::array<const char *, 1> kValidationLayers{"VK_LAYER_KHRONOS_valida
 // Для нашего рендера достаточно swapchain-расширения.
 constexpr std::array<const char *, 1> kRequiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr char kOptionalTracyCalibratedTimestampsExtension[] = VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME;
+// `VK_KHR_swapchain_maintenance1` lets us use a `VkFence` for both the
+// `vkAcquireNextImageKHR` "image available" signal and the present wait
+// (instead of the in-use-by-swapchain semaphore that was the previous
+// 20-per-smoke-run validation warning). Enabled opportunistically when
+// supported; the fallback path (no maintenance1) is to use a single
+// `imageInFlightFences[imageIndex]` ownership tracker and wait on the
+// *previous* in-flight frame's fence after acquire.
+// `volk.h` does not define `VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME`
+// at the C-preprocessor level, so we use the literal name string.
+constexpr char kOptionalSwapchainMaintenance1Extension[] = "VK_KHR_swapchain_maintenance1";
 
 // Callback, через который Vulkan присылает предупреждения и ошибки прямо в SDL-лог.
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -252,14 +278,26 @@ bool CheckRequiredFeatures(
 	const VkPhysicalDevice physicalDevice,
 	VkPhysicalDeviceFeatures *outFeatures,
 	VkPhysicalDeviceVulkan12Features *outFeatures12,
-	VkPhysicalDeviceVulkan13Features *outFeatures13)
+	VkPhysicalDeviceVulkan13Features *outFeatures13,
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR *outSwapchainMaintenance1Features)
 {
 	VkPhysicalDeviceVulkan12Features features12{};
 	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 	VkPhysicalDeviceVulkan13Features features13{};
 	features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+	// The swapchain-maintenance1 features struct is *optionally* queried
+	// (only when the extension is enabled on the device, see the caller's
+	// pre-check). When the caller's `outSwapchainMaintenance1Features` is
+	// non-null, the caller *has already* enabled the extension and we can
+	// safely chain the struct; otherwise we omit it (VUID-04025 says we
+	// cannot query a features struct for an extension the device does
+	// not have).
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenanceFeatures{};
+	if (outSwapchainMaintenance1Features != nullptr) {
+		maintenanceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+		features12.pNext = &maintenanceFeatures;
+	}
 	features13.pNext = &features12;
-
 	VkPhysicalDeviceFeatures2 features2{};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	features2.pNext = &features13;
@@ -317,6 +355,9 @@ bool CheckRequiredFeatures(
 	*outFeatures = supportedFeatures;
 	*outFeatures12 = features12;
 	*outFeatures13 = features13;
+	if (outSwapchainMaintenance1Features != nullptr) {
+		*outSwapchainMaintenance1Features = maintenanceFeatures;
+	}
 	return true;
 }
 
@@ -327,7 +368,9 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDeviceFeatures features{};
 	VkPhysicalDeviceVulkan12Features features12{};
 	VkPhysicalDeviceVulkan13Features features13{};
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenance1Features{};
 	bool supportsTracyCalibratedTimestamps = false;
+	bool supportsSwapchainMaintenance1 = false;
 };
 
 VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
@@ -386,7 +429,14 @@ bool TryPickPhysicalDevice(
 	VkPhysicalDeviceFeatures supportedFeatures{};
 	VkPhysicalDeviceVulkan12Features supportedFeatures12{};
 	VkPhysicalDeviceVulkan13Features supportedFeatures13{};
-	if (!CheckRequiredFeatures(physicalDevice, &supportedFeatures, &supportedFeatures12, &supportedFeatures13)) {
+	const bool deviceHasSwapchainMaintenance1 = HasDeviceExtension(physicalDevice, kOptionalSwapchainMaintenance1Extension);
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR supportedSwapchainMaintenance1Features{};
+	if (!CheckRequiredFeatures(
+			physicalDevice,
+			&supportedFeatures,
+			&supportedFeatures12,
+			&supportedFeatures13,
+			deviceHasSwapchainMaintenance1 ? &supportedSwapchainMaintenance1Features : nullptr)) {
 		return false;
 	}
 
@@ -395,8 +445,10 @@ bool TryPickPhysicalDevice(
 	outCandidate->features = supportedFeatures;
 	outCandidate->features12 = supportedFeatures12;
 	outCandidate->features13 = supportedFeatures13;
+	outCandidate->swapchainMaintenance1Features = supportedSwapchainMaintenance1Features;
 	outCandidate->supportsTracyCalibratedTimestamps =
 		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
+	outCandidate->supportsSwapchainMaintenance1 = deviceHasSwapchainMaintenance1;
 	return true;
 }
 } // namespace
@@ -444,6 +496,17 @@ bool InitializeVulkanBase(
 		instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 #endif
+	// `VK_KHR_surface_maintenance1` is the instance-level dependency of
+	// the (optional) device extension `VK_KHR_swapchain_maintenance1`.
+	// It itself depends on `VK_KHR_get_surface_capabilities2` and
+	// `VK_KHR_surface`. `VK_KHR_surface` is in `sdlExtNames` already; we
+	// add `VK_KHR_get_surface_capabilities2` next. Every NVIDIA / AMD /
+	// Intel Vulkan 1.3+ driver in `vulkaninfo` (including the one on
+	// this host) reports both extensions.
+	// The literals are used because `volk.h` does not define the
+	// matching `VK_KHR_*_EXTENSION_NAME` macros.
+	instanceExtensions.push_back("VK_KHR_get_surface_capabilities2");
+	instanceExtensions.push_back("VK_KHR_surface_maintenance1");
 #if PROJECTV_ENABLE_VALIDATION
 	{
 		if (!CheckValidationLayerSupport()) {
@@ -559,11 +622,31 @@ bool InitializeVulkanBase(
 	if (selected.supportsTracyCalibratedTimestamps) {
 		deviceExtensions.push_back(kOptionalTracyCalibratedTimestampsExtension);
 	}
+	if (selected.supportsSwapchainMaintenance1) {
+		deviceExtensions.push_back(kOptionalSwapchainMaintenance1Extension);
+	}
 
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
 	VkPhysicalDeviceVulkan13Features enabledFeatures13 = BuildEnabledFeatures13(selected);
+	// Chain the swapchain-maintenance1 features struct at the end of the
+	// pNext list when the extension is enabled. There is no extra feature
+	// bit to enable beyond "the extension exists"; we just need the
+	// struct present in the chain so the loader treats it as an
+	// enabled-extension request. The `swapchainMaintenance1` field is
+	// intentionally left at its default-constructed value (zero, which
+	// is also the only valid value for a feature bit that does not
+	// exist on this extension).
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR enabledSwapchainMaintenance1Features{};
+	if (selected.supportsSwapchainMaintenance1) {
+		enabledSwapchainMaintenance1Features.sType =
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+	}
 	enabledFeatures13.pNext = &enabledFeatures12;
+	enabledFeatures12.pNext = selected.supportsSwapchainMaintenance1
+		? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
+		: nullptr;
+	enabledSwapchainMaintenance1Features.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;

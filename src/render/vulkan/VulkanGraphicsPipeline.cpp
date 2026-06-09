@@ -13,7 +13,7 @@ constexpr uint32_t kGraphicsDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr uint32_t kShadowDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr VkDescriptorPoolSize kGraphicsStorageDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kGraphicsDescriptorSetCount * 4u,
+	.descriptorCount = kGraphicsDescriptorSetCount * 5u,
 };
 constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -35,7 +35,7 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.binding = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
 	VkDescriptorSetLayoutBinding{
@@ -55,6 +55,13 @@ constexpr std::array kGraphicsDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 4,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 5,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
@@ -1070,6 +1077,11 @@ bool RefreshGraphicsResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
+		const VkDescriptorBufferInfo chunkVoxelPayloadBufferInfo{
+			.buffer = frameResources.chunkVoxelPayloadBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
 		const VkDescriptorBufferInfo sceneLightingBufferInfo{
 			.buffer = render->sceneLightingBuffer,
 			.offset = 0,
@@ -1139,6 +1151,18 @@ bool RefreshGraphicsResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.pImageInfo = &shadowImageInfo,
 				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 5,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &chunkVoxelPayloadBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 		};
@@ -1524,6 +1548,13 @@ bool CreateGraphicsPipeline(
 	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	VkPipelineRasterizationStateCreateInfo shadowRasterizer = rasterizer;
+	// Shadow camera looks from the light toward the scene, so a face whose normal points
+	// away from the light is a *back* face from the main pass's view, but a *front* face
+	// from the shadow pass's view. With VK_CULL_MODE_BACK_BIT inherited from the main
+	// rasterizer, the shadow pass culls faces that it actually needs to write, which
+	// produces a checkerboard of holes in the shadow map and shows up as stair-stepped
+	// patches in the receiver pass. Disable face culling for the shadow pass.
+	shadowRasterizer.cullMode = VK_CULL_MODE_NONE;
 	shadowRasterizer.depthBiasEnable = VK_TRUE;
 	shadowRasterizer.depthBiasConstantFactor = 1.25f;
 	shadowRasterizer.depthBiasSlopeFactor = 1.75f;

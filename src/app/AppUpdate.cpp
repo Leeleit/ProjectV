@@ -603,6 +603,27 @@ bool UpdateApp(
 	debug->stats.sunShadowDepthBias = render->currentSceneLighting.sunShadowParams[1];
 	debug->stats.sunShadowNormalBias = render->currentSceneLighting.sunShadowParams[2];
 	debug->stats.sunShadowFilterRadius = render->currentSceneLighting.sunShadowParams[3];
+	debug->stats.sunContactShadowStrength = render->currentSceneLighting.sunContactShadowParams[0];
+	debug->stats.sunContactShadowDistance = render->currentSceneLighting.sunContactShadowParams[1];
+	debug->stats.ambientOcclusionStrength = render->currentSceneLighting.ambientOcclusionParams[0];
+	debug->stats.ambientOcclusionRadius = render->currentSceneLighting.ambientOcclusionParams[1];
+	debug->stats.ambientOcclusionMinVisibility = render->currentSceneLighting.ambientOcclusionParams[2];
+	debug->stats.localPointLightPosition = {
+		render->currentSceneLighting.localPointLightPositionAndRadius[0],
+		render->currentSceneLighting.localPointLightPositionAndRadius[1],
+		render->currentSceneLighting.localPointLightPositionAndRadius[2],
+	};
+	debug->stats.localPointLightColor = {
+		render->currentSceneLighting.localPointLightColorAndIntensity[0],
+		render->currentSceneLighting.localPointLightColorAndIntensity[1],
+		render->currentSceneLighting.localPointLightColorAndIntensity[2],
+	};
+	debug->stats.localPointLightRadius = render->currentSceneLighting.localPointLightPositionAndRadius[3];
+	debug->stats.localPointLightIntensity = render->currentSceneLighting.localPointLightColorAndIntensity[3];
+	debug->stats.localPointLightEnabled = render->currentSceneLighting.localPointLightParams[0];
+	debug->stats.localPointLightSourceRadius = render->currentSceneLighting.localPointLightParams[1];
+	debug->stats.localPointLightShadowStrength = render->currentSceneLighting.localPointLightParams[2];
+	debug->stats.localPointLightShadowBias = render->currentSceneLighting.localPointLightParams[3];
 	debug->stats.sunShadowCoverageScale = render->lightingDebugControls.shadowCoverageScale;
 	debug->stats.sunShadowCascadeBlend = render->currentSceneLighting.shadowCascadeBlendParams[0];
 	const float sunShadowReceiverMaxDistance = GetCameraVisibleSceneMaxDistance(*camera);

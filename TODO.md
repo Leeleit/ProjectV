@@ -211,11 +211,106 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
       micro-shadows.
       Verification capture lives under
       `build/windows-clang-debug/lookdev-captures/20260424-shadow-acne-caster-bias-v1/`.
+    - [x] first contact-shadow baseline now lives on top of the current sun path without another render pass:
+      the main voxel shader binds the same chunk descriptors + packed voxel payload as meshing, traces a short
+      voxel DDA ray toward the sun, and attenuates direct sun locally through explicit
+      `sunContactShadowParams={strength,maxDistance}` in `VoxelSceneLighting`.
+      - `B` now also cycles a dedicated `CTSH` debug view, detailed HUD shows `CTSH STR/DST`, and screenshot sidecars
+        write `contact_shadow_strength` / `contact_shadow_distance`.
+      - current occluder policy matches the mainline transparent-shadow contract: `Glass` stays ignored, `Fluid`
+        remains a contact-shadow occluder.
+      - refreshed scripted verification captures live under
+        `build/windows-clang-debug/lookdev-captures/20260424-contact-shadow-v1/` with `FINAL` / `SHDW` / `CTSH`.
+      - the first post-landing regression is fixed too: `voxel_shadow.vert` now matches the updated
+        `SceneLightingBuffer` layout after `sunContactShadowParams` was inserted, so the shadow pass again reads the
+        correct cascade matrices instead of shifted data.
+    - [x] contact-shadow landing was revalidated with real runtime captures after the first failed `VoxelLab` check:
+      `build/windows-clang-debug/lookdev-captures/20260424-contact-shadow-v4/` and the user-facing
+      `build/windows-clang-debug-tracy-profiler/lookdev-captures/20260424-contact-shadow-tracy-v2/` both contain
+      inspected `FINAL` / `SHDW` / `CSM` / `CTSH` frames. `FINAL` now shows the actual game frame, `SHDW` and `CSM`
+      show the same visible sun-shadow region, and `CTSH` stays a local contact-only layer instead of replacing CSM.
+    - [x] first ambient/contact-occlusion follow-up now exists as a bounded voxel-space `AOCC` baseline, not a full
+      `SSAO/GTAO` pass: `VoxelSceneLighting.ambientOcclusionParams={strength,radius,minVisibility}` controls a short
+      hemisphere DDA in `voxel.frag`, `B` cycles the dedicated `AOCC` debug view, HUD/sidecars expose the authored
+      values, and the tuned baseline uses stronger normal weighting plus distance-squared falloff so large transparent
+      volumes do not turn into broad fake shadows.
+      - refreshed inspected captures live under
+        `build/windows-clang-debug/lookdev-captures/20260424-aocc-baseline-v2/`,
+        `build/windows-clang-debug/lookdev-captures/20260424-aocc-meshing-v1/`, and
+        `build/windows-clang-debug-tracy-profiler/lookdev-captures/20260424-aocc-tracy-v1/`.
+      - full screen-space `SSAO/GTAO` remains a later quality pass if the renderer grows the right depth/normal pipeline;
+        this slice only gives the current forward voxel path a small local occlusion layer.
+    - [x] first authored local point-light contract now exists before local shadow maps/cubemaps: `VoxelSceneLighting`
+      appends `localPointLightPositionAndRadius`, `localPointLightColorAndIntensity`, and `localPointLightParams`,
+      presets author one inverse-square point light, and `voxel.frag` adds that light to the same GGX direct-light path.
+      The current follow-up is a bounded local-shadow baseline inside that same forward voxel path:
+      `localPointLightParams={enabled,sourceRadius,shadowStrength,shadowBias}` now drive a short opaque-only voxel DDA
+      visibility term before any separate local shadow-map/cubemap resource exists. `Glass` and `Fluid` are both ignored
+      as local-light shadow occluders for now; full local shadow maps/cubemaps remain the later quality layer.
+      - `B` now also cycles `LOCL`, detailed HUD shows `LOCL` / `LCLR` / `LSHD`, screenshot sidecars write
+        `local_point_light_*`, and scripted captures accept `PROJECTV_LOOKDEV_CAPTURE_VIEWS=LOCL`.
+      - inspected captures live under
+        `build/windows-clang-debug/lookdev-captures/20260424-local-shadow-v1/` and
+        `build/windows-clang-debug/lookdev-captures/20260424-local-shadow-meshing-v1/`.
+      - blocked-face local-light artifacts are now bounded too: the visibility ray no longer starts from the raw
+        interpolated fragment position. It is first clamped onto a stable point on the owning voxel face, which removes
+        the visible per-face fractal/moire pattern that appeared when opaque blocks fully enclosed the light. Close-up
+        verification lives under
+        `build/windows-clang-debug/lookdev-captures/20260424-local-shadow-fractal-fix-v1/`.
+      - the same local-light fix is now also rechecked against the user-provided live repro angle instead of only a
+        synthetic close-up: loading `latest.projectv.replay.snapshot.bin` through `PROJECTV_SNAPSHOT_PATH` plus the
+        screenshot-sidecar camera (`cam -0.077 2.650 7.830`, `look 0.93 0.28 -0.22`) produces clean `FINAL` / `LOCL`
+        captures under `build/windows-clang-debug/lookdev-captures/20260424-user-snapshot-camera-v1/`.
+      - the next real close-range aliasing follow-up landed on top of that blocked-face fix too: local-light visibility
+        no longer uses one hard per-pixel ray to the emitter center. `voxel.frag` now traces from a stable point on the
+        owning voxel face and averages a small emitter disk around the authored `sourceRadius`, which removes the visible
+        binary speckle that appeared on partially occluded faces in the user-provided `FINAL/LOCL` layer set.
+      - refreshed close-up verification against the saved `F6` world snapshot lives under
+        `build/windows-clang-debug/lookdev-captures/20260424-user-f6-close-angle1-v2/` and
+        `build/windows-clang-debug/lookdev-captures/20260424-user-f6-close-angle2-v2/`.
+      - that same local-light path no longer collapses to one constant visibility value per voxel face either: replacing
+        the old face-center sample with a stabilized in-face point removes the obvious “every floor voxel has its own
+        shadow bucket” artifact in close ground-level shots. Refreshed verification lives under
+        `build/windows-clang-debug/lookdev-captures/20260424-user-floor-voxel-shadow-v2/`.
 - [x] Текущий узкий `walk` / `creative` feel-tuning slice закрыт на нынешнем наборе live repro: `MinecraftLike`
   air-control уже baseline, high-speed creative flight wedges закрыты, held-jump restored, а auto-jump path теперь
   runtime-toggleable и replay-covered.
 - [x] HUD/debug counter policy уже codified в runtime: normal vs detailed HUD split введён, а новые low-level counters
   не должны возвращаться в обычный экран без явной диагностической пользы.
+- [x] **Multiplatform dev baseline (`2026-06-09`)** теперь живёт: `ProjectV` is expected to build and run on both
+  `windows-clang-debug` (existing) и `linux-clang-debug` (new). Arch Linux — active Linux dev host. Linux toolchain:
+  clang 22.1.6 native + lld 22.1.6 + libstdc++ 16.1.1 + SDL3 3.4.10 + Vulkan 1.4.350. Configure / build / ctest зелёные
+  на `linux-clang-debug`. Source-side fixes, которые приземлились как часть baseline: `src/CMakeLists.txt`
+  (`GPUOpen::VulkanMemoryAllocator` uncommented), `src/core/Types.hpp` (VMA include path), `src/ecs/EcsWorld.hpp`
+  (`<cstddef>`). Root `CMakeLists.txt` Windows-жёсткие опции теперь platform-gated. `CMakePresets.json` получил
+  `linux-clang-debug*` семейство. Подробное описание и follow-up риски — в `agent/memory.md` §5-8 и `agent/decisions.md`
+  §17.
+- [x] **Shadow-quality audit + targeted fix pass (`2026-06-09`, same-day)** закрыт в ответ на «тени лесенкой, 120 FPS,
+  иногда пропадают». Шесть фиксов: A1 — `shadowRasterizer.cullMode = VK_CULL_MODE_NONE` в `VulkanGraphicsPipeline.cpp`
+  (back-face cull от main pass чопал shadow map); A2 — local-light DDA теперь стартует вдоль faceNormal only
+  (`voxel.frag`), self-shadow на lit-гранях уходит; A3 — frustum-cull near-check восстановлен и снабжён
+  длинным комментарием (`SceneResources.hpp`), убранный по ошибке во время первой попытки и пойманный
+  `TestIsSceneChunkVisibleInShadowCascade` в `tests/VoxelWorldTests.cpp:2157`; A5 — `filterRadius` clamp к `[0, 2]`
+  в `voxel.frag` (debug-ladder `H/K` ceiling 8.0 раздувал PCF kernel); B1a/b/c — fragment-budget culling:
+  AOCC directions 5→3, AOCC steps 6→4, local-light DDA steps 32→12. Worst-case per-pixel budget
+  на лит-voxel: 252 → 134 reads (-47%). **Visual verification** через новый
+  `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` (counterpart `Invoke-ProjectVRuntimeSmoke.ps1`): 6/6 captures
+  на `cam -25 19 25 look 0.62 -0.48 -0.62` (`VoxelLab`), HUD FPS 121.7/123.2/116.4 для FINAL/CSM/SHDW,
+  shadows continuous, no holes, contact/AOCC/local-light слои живые. Deferred: B2 (shadow map 2048→1536)
+  и B3 (per-frame chunk visibility cache) — отдельные задачи. Подробный diff и lesson-learned — в
+  `agent/memory.md` §10.
+- [x] **Swapchain semaphore reuse fix (`2026-06-09`, same-day)** закрыт через **per-frame *acquire*-semaphore +
+  per-image *submit*-semaphore** pattern из Vulkan SDK 1.4 guide `swapchain_semaphore_reuse.html` (документы
+  в `docs/VulkanSDK-Linux-Docs-1.4.350.1/`, агент должен читать их **до** grep'а headers). Root cause: per-frame
+  `imageAvailableSemaphores[2]` и `renderFinishedSemaphores[2]` индексировались по `currentFrame % MAX_FRAMES_IN_FLIGHT`
+  вместо swapchain `imageIndex`. Сделано: `submitSemaphores[imageIndex]` per-swapchain-image в `SwapchainState`,
+  создаются в `CreateOrRecreateSwapchain`; `vkQueueSubmit2::pSignalSemaphores[0]` и
+  `vkQueuePresentKHR::pWaitSemaphores[0]` оба используют `submitSemaphores[imageIndex]`. Также opportunistically
+  enabled `VK_KHR_swapchain_maintenance1` (+ dependency instance extensions
+  `VK_KHR_get_surface_capabilities2` + `VK_KHR_surface_maintenance1`). Финальный warning count: **0**
+  (-100% от 20), build green, ctest 1/1, smoke 6/6, vision verify FINAL view — continuous soft sun shadow,
+  no staircasing, no full-floor dark. **Working rule записан в `agent/memory.md` §10.7**: для Vulkan
+  semantic вопросов — docs first, headers/vulkaninfo second.
 
 ### P2
 

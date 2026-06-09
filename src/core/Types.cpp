@@ -30,6 +30,11 @@ void ShutdownVulkan(AppState *state)
 	DestroyVoxelSceneWorld(state);
 
 	if (state->context.device) {
+		for (VkSemaphore semaphore : state->swapchain.submitSemaphores) {
+			if (semaphore != VK_NULL_HANDLE) {
+				vkDestroySemaphore(state->context.device, semaphore, nullptr);
+			}
+		}
 		for (const auto iv : state->swapchain.imageViews) {
 			vkDestroyImageView(state->context.device, iv, nullptr);
 		}

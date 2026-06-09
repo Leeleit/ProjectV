@@ -63,6 +63,24 @@ CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/Scen
   visibility rebuilds those slices against the current cascade clip volumes, and dirty-chunk meshing patches the same
   per-cascade commands on the GPU. Empty cascades can then skip the shadow draw call entirely when the frame has no
   dirty meshing work and CPU culling already knows the cascade is empty.
+  A first contact-shadow baseline now also lives in the same forward path instead of another pass: the graphics shader
+  binds chunk descriptors plus the packed chunk voxel payload, addresses the voxel world through
+  `GraphicsPushConstants.worldMinAndChunkSize/chunkGridAndFlags`, and traces a short voxel DDA ray toward the sun using
+  `sunContactShadowParams={strength,maxDistance}`. `CTSH` is the dedicated debug view for that local layer.
+  The first ambient/contact-occlusion baseline is similarly bounded: `ambientOcclusionParams` drives a short
+  hemisphere voxel DDA in `voxel.frag`, and `AOCC` visualizes that local visibility term. This is not a full
+  screen-space `SSAO/GTAO` pass.
+  The first local-light contract is authored in the same scene lighting buffer before adding real local shadow maps:
+  `localPointLightPositionAndRadius`, `localPointLightColorAndIntensity`, and
+  `localPointLightParams={enabled,sourceRadius,shadowStrength,shadowBias}` describe one per-preset inverse-square point
+  light. The forward shader evaluates it through the same GGX direct-light helper as the sun and then applies a short
+  opaque-only voxel DDA visibility term to get a bounded local-shadow baseline without a separate cubemap/shadow-map
+  resource yet. That visibility trace is anchored to a stabilized point on the owning voxel face rather than the raw
+  interpolated fragment boundary position, so fully blocked faces do not turn into per-face moire/fractal patterns
+  while large flat receivers also avoid obvious per-voxel visibility bucketing. Partially occluded faces also use a
+  tiny emitter-disk average around the authored `sourceRadius` instead of one hard ray to the emitter center, which
+  keeps close-up local-light response from degenerating into binary speckle. `LOCL` is the dedicated debug view for this
+  contribution; `Glass` and `Fluid` are both ignored as local-light occluders in the current policy.
   `sunDirectionAndWrap.xyz` на этом уровне остаётся authored-вектором к солнцу для shading, а shadow fit инвертирует его
   в реальное направление хода света перед сборкой shadow projections.
 
@@ -207,6 +225,10 @@ Dynamic rendering используется вместо старого render pa
   `voxel.frag` evaluates direct sun with a `GGX + Fresnel-Schlick + Smith` baseline on top of the existing ambient
   gradient and shadow visibility term
   without dropping authored shadow contrast.
+- local point lights currently reuse that same direct-light BRDF, use inverse-square attenuation with authored
+  radius/source-radius clamps, and apply a bounded opaque-only voxel DDA visibility term in the forward shader. They
+  still do not use dedicated local shadow-map resources; adding spot shadow maps or point-light cubemaps is the next
+  separate local-light quality step.
 - environment fill is no longer only a normal-based sky gradient either: compute meshing writes a cheap per-face local
   ambient-visibility term into `PackedSceneVoxelFace`, `voxel.vert` forwards it flat, and `voxel.frag` multiplies
   sky/horizon/ground fill by it so sealed voxel cavities stop reading as if they still saw full sky. This is a bounded

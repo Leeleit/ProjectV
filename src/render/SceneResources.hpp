@@ -130,6 +130,22 @@ inline bool IsSceneChunkVisibleInShadowCascade(
 		chunkMin[2] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[2]),
 	};
 
+	// Two valid contracts feed this culling, both rely on `clip.z < 0` for the
+	// near-plane test:
+	//   1. The real shadow projection, which uses an inverted light-space Z
+	//      (`lightView` row 2 has `-lightForward.xyz`, and the orthographic
+	//      `m[2][2] = 1/(near - far)` is negative). For points in front of the
+	//      light `clip.z > 0`; for points *behind* the near plane `clip.z < 0`.
+	//   2. A vanilla identity projection (used in unit tests). In that case
+	//      `clip.z = corner.z` and standard NDC applies, so `clip.z < 0` culls
+	//      behind the near plane as expected.
+	// Both contracts want the same predicate here, so we keep it. A near-only
+	// visibility test was previously proposed and removed because it read as
+	// a no-op under the inverted-Z contract, but the analysis was wrong: the
+	// inversion is in `lightView`'s row 2 only, *not* in the resulting `clip.z`
+	// sign. Removing the test regresses `TestIsSceneChunkVisibleInShadowCascade`
+	// (line 2157 of `tests/VoxelWorldTests.cpp`), which feeds an identity
+	// projection and expects a chunk at z=-2..-1 to be culled by the near plane.
 	bool outsideLeft = true;
 	bool outsideRight = true;
 	bool outsideBottom = true;

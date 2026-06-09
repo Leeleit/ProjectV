@@ -23,6 +23,13 @@ constexpr float kMaxColorGradeLift = 0.25f;
 constexpr float kMaxShadowDepthBias = 0.02f;
 constexpr float kMaxShadowNormalBias = 0.05f;
 constexpr float kMaxShadowFilterRadius = 8.0f;
+constexpr float kMaxContactShadowDistance = 12.0f;
+constexpr float kMaxAmbientOcclusionRadius = 6.0f;
+constexpr float kMaxLocalPointLightRadius = 96.0f;
+constexpr float kMaxLocalPointLightColor = 4.0f;
+constexpr float kMaxLocalPointLightIntensity = 128.0f;
+constexpr float kMaxLocalPointLightSourceRadius = 6.0f;
+constexpr float kMaxLocalPointLightShadowBias = 0.25f;
 constexpr float kDefaultShadowCascadeBlend = 0.15f;
 constexpr float kMaxShadowCascadeBlend = 0.50f;
 
@@ -172,9 +179,14 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.sunDirectionAndWrap = {-0.20f, 0.95f, -0.24f, 0.55f},
 			.postProcess = {1.20f, 0.90f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.72f, 0.0009f, 0.0060f, 1.10f},
+			.sunContactShadowParams = {0.28f, 2.25f, 0.0f, 0.0f},
+			.ambientOcclusionParams = {0.16f, 1.25f, 0.78f, 0.0f},
 			.colorGrading = {1.00f, 1.00f, 0.98f, 0.00f},
 			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.785f, 0.45f, 2.50f},
 			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
+			.localPointLightPositionAndRadius = {0.0f, 4.5f, 0.0f, 8.0f},
+			.localPointLightColorAndIntensity = {1.00f, 0.96f, 0.86f, 12.0f},
+			.localPointLightParams = {0.0f, 1.25f, 1.0f, 0.08f},
 		};
 	case VoxelScenePreset::TransparencyStress:
 		return {
@@ -185,9 +197,14 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.sunDirectionAndWrap = {-0.58f, 0.62f, -0.31f, 0.20f},
 			.postProcess = {0.95f, 1.05f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.64f, 0.0008f, 0.0055f, 1.25f},
+			.sunContactShadowParams = {0.34f, 2.75f, 0.0f, 0.0f},
+			.ambientOcclusionParams = {0.18f, 1.35f, 0.74f, 0.0f},
 			.colorGrading = {1.00f, 1.02f, 1.05f, 0.00f},
 			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.705f, 0.40f, 2.40f},
 			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
+			.localPointLightPositionAndRadius = {0.0f, 6.0f, 0.0f, 10.0f},
+			.localPointLightColorAndIntensity = {0.50f, 0.80f, 1.00f, 18.0f},
+			.localPointLightParams = {0.0f, 1.50f, 0.95f, 0.08f},
 		};
 	case VoxelScenePreset::ChunkGrid:
 		return {
@@ -198,9 +215,14 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.sunDirectionAndWrap = {-0.15f, 0.72f, -0.68f, 0.24f},
 			.postProcess = {1.05f, 0.92f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.76f, 0.0010f, 0.0040f, 1.30f},
+			.sunContactShadowParams = {0.42f, 3.00f, 0.0f, 0.0f},
+			.ambientOcclusionParams = {0.22f, 1.50f, 0.70f, 0.0f},
 			.colorGrading = {1.00f, 1.03f, 1.04f, -0.01f},
 			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.755f, 0.45f, 2.60f},
 			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
+			.localPointLightPositionAndRadius = {-8.0f, 6.0f, 8.0f, 14.0f},
+			.localPointLightColorAndIntensity = {1.00f, 0.76f, 0.48f, 28.0f},
+			.localPointLightParams = {0.0f, 1.75f, 1.0f, 0.06f},
 		};
 	case VoxelScenePreset::MeshingStress:
 		return {
@@ -211,9 +233,14 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.sunDirectionAndWrap = {-0.70f, 0.48f, -0.18f, 0.18f},
 			.postProcess = {0.90f, 0.88f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
 			.sunShadowParams = {0.80f, 0.0010f, 0.0070f, 1.50f},
+			.sunContactShadowParams = {0.48f, 3.50f, 0.0f, 0.0f},
+			.ambientOcclusionParams = {0.24f, 1.75f, 0.68f, 0.0f},
 			.colorGrading = {1.00f, 1.04f, 0.96f, -0.01f},
 			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.651f, 0.40f, 2.50f},
 			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
+			.localPointLightPositionAndRadius = {-22.0f, 20.0f, 22.0f, 24.0f},
+			.localPointLightColorAndIntensity = {1.00f, 0.84f, 0.62f, 64.0f},
+			.localPointLightParams = {0.0f, 2.00f, 1.0f, 0.05f},
 		};
 	case VoxelScenePreset::VoxelLab:
 	default:
@@ -223,11 +250,16 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.groundColorAndFogMax = {0.22f, 0.25f, 0.30f, 0.32f},
 			.sunColorAndIntensity = {1.00f, 0.96f, 0.90f, 0.95f},
 			.sunDirectionAndWrap = {-0.35f, 0.80f, -0.45f, 0.30f},
-			.postProcess = {1.10f, 0.96f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
-			.sunShadowParams = {0.74f, 0.0009f, 0.0060f, 1.35f},
+			.postProcess = {1.10f, 0.88f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			.sunShadowParams = {0.88f, 0.0009f, 0.0060f, 1.35f},
+			.sunContactShadowParams = {0.50f, 3.25f, 0.0f, 0.0f},
+			.ambientOcclusionParams = {0.20f, 1.30f, 0.74f, 0.0f},
 			.colorGrading = {1.00f, 1.02f, 1.03f, 0.00f},
 			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.867f, 0.45f, 2.60f},
 			.shadowCascadeBlendParams = {kDefaultShadowCascadeBlend, 0.0f, 0.0f, 0.0f},
+			.localPointLightPositionAndRadius = {4.5f, 4.0f, 7.0f, 10.0f},
+			.localPointLightColorAndIntensity = {0.64f, 0.84f, 1.00f, 24.0f},
+			.localPointLightParams = {0.0f, 1.50f, 1.0f, 0.08f},
 		};
 	}
 }
@@ -266,6 +298,63 @@ VoxelSceneLighting BuildVoxelSceneLighting(
 		lighting.sunShadowParams[3] + controls.shadowFilterRadiusOffset,
 		0.0f,
 		kMaxShadowFilterRadius);
+	lighting.sunContactShadowParams[0] = std::clamp(
+		lighting.sunContactShadowParams[0],
+		0.0f,
+		1.0f);
+	lighting.sunContactShadowParams[1] = std::clamp(
+		lighting.sunContactShadowParams[1],
+		0.0f,
+		kMaxContactShadowDistance);
+	lighting.sunContactShadowParams[2] = 0.0f;
+	lighting.sunContactShadowParams[3] = 0.0f;
+	lighting.ambientOcclusionParams[0] = std::clamp(
+		lighting.ambientOcclusionParams[0],
+		0.0f,
+		1.0f);
+	lighting.ambientOcclusionParams[1] = std::clamp(
+		lighting.ambientOcclusionParams[1],
+		0.0f,
+		kMaxAmbientOcclusionRadius);
+	lighting.ambientOcclusionParams[2] = std::clamp(
+		lighting.ambientOcclusionParams[2],
+		0.0f,
+		1.0f);
+	lighting.ambientOcclusionParams[3] = 0.0f;
+	lighting.localPointLightPositionAndRadius[3] = std::clamp(
+		lighting.localPointLightPositionAndRadius[3],
+		0.0f,
+		kMaxLocalPointLightRadius);
+	lighting.localPointLightColorAndIntensity[0] = std::clamp(
+		lighting.localPointLightColorAndIntensity[0],
+		0.0f,
+		kMaxLocalPointLightColor);
+	lighting.localPointLightColorAndIntensity[1] = std::clamp(
+		lighting.localPointLightColorAndIntensity[1],
+		0.0f,
+		kMaxLocalPointLightColor);
+	lighting.localPointLightColorAndIntensity[2] = std::clamp(
+		lighting.localPointLightColorAndIntensity[2],
+		0.0f,
+		kMaxLocalPointLightColor);
+	lighting.localPointLightColorAndIntensity[3] = std::clamp(
+		lighting.localPointLightColorAndIntensity[3],
+		0.0f,
+		kMaxLocalPointLightIntensity);
+	const bool localPointLightEnabled =
+		lighting.localPointLightParams[0] > 0.0f &&
+		lighting.localPointLightPositionAndRadius[3] > 0.0f &&
+		lighting.localPointLightColorAndIntensity[3] > 0.0f;
+	lighting.localPointLightParams[0] = localPointLightEnabled ? 1.0f : 0.0f;
+	lighting.localPointLightParams[1] = localPointLightEnabled
+		? std::clamp(lighting.localPointLightParams[1], 0.05f, kMaxLocalPointLightSourceRadius)
+		: 0.0f;
+	lighting.localPointLightParams[2] = localPointLightEnabled
+		? std::clamp(lighting.localPointLightParams[2], 0.0f, 1.0f)
+		: 0.0f;
+	lighting.localPointLightParams[3] = localPointLightEnabled
+		? std::clamp(lighting.localPointLightParams[3], 0.0f, kMaxLocalPointLightShadowBias)
+		: 0.0f;
 	lighting.shadowCascadeBlendParams[0] = std::clamp(
 		lighting.shadowCascadeBlendParams[0] + controls.shadowCascadeBlendOffset,
 		0.0f,
@@ -337,10 +426,16 @@ const char *LightingDebugViewToString(const LightingDebugView debugView)
 		return "AMB";
 	case LightingDebugView::Direct:
 		return "DIR";
+	case LightingDebugView::Local:
+		return "LOCL";
 	case LightingDebugView::Shadow:
 		return "SHDW";
 	case LightingDebugView::Cascade:
 		return "CSM";
+	case LightingDebugView::Contact:
+		return "CTSH";
+	case LightingDebugView::Occlusion:
+		return "AOCC";
 	case LightingDebugView::Fog:
 		return "FOG";
 	case LightingDebugView::Final:
@@ -389,10 +484,16 @@ LightingDebugView GetNextLightingDebugView(const LightingDebugView debugView)
 	case LightingDebugView::Ambient:
 		return LightingDebugView::Direct;
 	case LightingDebugView::Direct:
+		return LightingDebugView::Local;
+	case LightingDebugView::Local:
 		return LightingDebugView::Shadow;
 	case LightingDebugView::Shadow:
 		return LightingDebugView::Cascade;
 	case LightingDebugView::Cascade:
+		return LightingDebugView::Contact;
+	case LightingDebugView::Contact:
+		return LightingDebugView::Occlusion;
+	case LightingDebugView::Occlusion:
 		return LightingDebugView::Fog;
 	case LightingDebugView::Fog:
 	default:

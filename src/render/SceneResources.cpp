@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <cstring>
 
 namespace {
 constexpr uint32_t kVoxelMaterialsPerWord = 4u;

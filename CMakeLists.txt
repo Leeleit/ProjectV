@@ -47,7 +47,15 @@ projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/SDL")
 find_package(Vulkan REQUIRED)
 
 # Volk
-set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WIN32_KHR)
+if (WIN32)
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WIN32_KHR)
+elseif (APPLE)
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_MACOS_MVK)
+elseif (ANDROID)
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_ANDROID_KHR)
+else ()
+    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_XCB_KHR)
+endif ()
 add_subdirectory(external/volk)
 
 # Vulkan Memory Allocator
@@ -97,14 +105,34 @@ projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/JoltPh
 projectv_add_tracy()
 
 add_library(projectv_build_options INTERFACE)
-target_compile_options(projectv_build_options INTERFACE
-        /W4
-        /WX
-        /permissive-
-        /utf-8
-)
+if (MSVC)
+    target_compile_options(projectv_build_options INTERFACE
+            /W4
+            /WX
+            /permissive-
+            /utf-8
+    )
+    target_compile_definitions(projectv_build_options INTERFACE
+            NOMINMAX
+    )
+else ()
+    # libstdc++ 16+ marks std::is_trivial deprecated; flecs 2.2.0 still uses it.
+    # Suppress that one deprecation at the build-options layer so external
+    # targets (flecs, ...) and our own code stay warning-clean until we either
+    # move to libc++ or upgrade flecs.
+    target_compile_options(projectv_build_options INTERFACE
+            -Wno-deprecated-declarations
+    )
+    # Force-include <cstring> because legacy project code uses std::memcpy /
+    # std::memset / std::strcmp without an explicit <cstring> include; on
+    # MSVC these come in transitively via <cstdint>/<cstdlib>, but on
+    # libstdc++ they do not, so the namespace-qualified calls break.
+    target_compile_options(projectv_build_options INTERFACE
+            -include
+            cstring
+    )
+endif ()
 target_compile_definitions(projectv_build_options INTERFACE
-        NOMINMAX
         VK_NO_PROTOTYPES
 )
 

@@ -250,6 +250,19 @@ bool SaveScreenshotCaptureMetadata(
 		"shadow_depth_bias={:.6f}\n"
 		"shadow_normal_bias={:.6f}\n"
 		"shadow_filter_radius={:.6f}\n"
+		"contact_shadow_strength={:.6f}\n"
+		"contact_shadow_distance={:.6f}\n"
+		"ambient_occlusion_strength={:.6f}\n"
+		"ambient_occlusion_radius={:.6f}\n"
+		"ambient_occlusion_min_visibility={:.6f}\n"
+		"local_point_light_position={:.6f} {:.6f} {:.6f}\n"
+		"local_point_light_radius={:.6f}\n"
+		"local_point_light_color={:.6f} {:.6f} {:.6f}\n"
+		"local_point_light_intensity={:.6f}\n"
+		"local_point_light_enabled={:.6f}\n"
+		"local_point_light_source_radius={:.6f}\n"
+		"local_point_light_shadow_strength={:.6f}\n"
+		"local_point_light_shadow_bias={:.6f}\n"
 		"shadow_coverage_scale={:.6f}\n"
 		"shadow_cascade_blend={:.6f}\n"
 		"shadow_cascade_count={}\n"
@@ -292,6 +305,23 @@ bool SaveScreenshotCaptureMetadata(
 		render.currentSceneLighting.sunShadowParams[1],
 		render.currentSceneLighting.sunShadowParams[2],
 		render.currentSceneLighting.sunShadowParams[3],
+		render.currentSceneLighting.sunContactShadowParams[0],
+		render.currentSceneLighting.sunContactShadowParams[1],
+		render.currentSceneLighting.ambientOcclusionParams[0],
+		render.currentSceneLighting.ambientOcclusionParams[1],
+		render.currentSceneLighting.ambientOcclusionParams[2],
+		render.currentSceneLighting.localPointLightPositionAndRadius[0],
+		render.currentSceneLighting.localPointLightPositionAndRadius[1],
+		render.currentSceneLighting.localPointLightPositionAndRadius[2],
+		render.currentSceneLighting.localPointLightPositionAndRadius[3],
+		render.currentSceneLighting.localPointLightColorAndIntensity[0],
+		render.currentSceneLighting.localPointLightColorAndIntensity[1],
+		render.currentSceneLighting.localPointLightColorAndIntensity[2],
+		render.currentSceneLighting.localPointLightColorAndIntensity[3],
+		render.currentSceneLighting.localPointLightParams[0],
+		render.currentSceneLighting.localPointLightParams[1],
+		render.currentSceneLighting.localPointLightParams[2],
+		render.currentSceneLighting.localPointLightParams[3],
 		render.lightingDebugControls.shadowCoverageScale,
 		render.currentSceneLighting.shadowCascadeBlendParams[0],
 		kSunShadowCascadeCount,
