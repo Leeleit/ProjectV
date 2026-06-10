@@ -576,6 +576,15 @@ struct InputState {
 	bool removePressed = false;
 	bool placePressed = false;
 	bool relativeMouseModeEnabled = true;
+	// When `SDL_SetWindowRelativeMouseMode(true)` is first enabled (or
+	// re-enabled after a tab-toggle) the first SDL_EVENT_MOUSE_MOTION can carry
+	// a very large `xrel` / `yrel` because the cursor was still at its
+	// pre-capture screen position. Without this flag, that one event
+	// yanks the camera sharply (typically pitching the look down to the
+	// floor) the moment the program starts. Defaulted to true so the first
+	// capture-mode motion on launch is silently dropped; reset to true from
+	// `SetRelativeMouseMode` whenever the user re-toggles relative mode.
+	bool skipFirstMouseMotion = true;
 	Uint64 lastMoveUpPressedTimestampNs = 0;
 	std::array<InputActionButtonState, kInputActionCount> actions{};
 	std::array<InputActionBinding, kInputActionCount> bindings{};

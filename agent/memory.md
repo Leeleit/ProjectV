@@ -333,3 +333,52 @@ Refresher pointers (current state):
 Captures under `build/<preset>/lookdev-captures/20260424-*` and `20260610-*` are the validated ground truth.
 
 Refs: `agent/decisions.md` §15, `agent/memory.md` §10.7, §10.8, §10.11.
+
+---
+
+## 10.11 Per-corner AO landed (`2026-06-10`)
+
+P0.3 "3-4 visible bands on a stack of voxels" closure. **Root cause:** `flat in float inAmbientVisibility`
+в `voxel.frag:62` + `flat out float outAmbientVisibility` в `voxel.vert:35` заставляли растеризатор использовать
+provoking-vertex AO на всю грань; когда у соседних блоков разный mean AO, на границе появлялся скачок яркости.
+**Fix:** per-corner AO через packed 4×8-bit в `PackedFace::lightingData` + drop `flat` на vertex out и fragment in.
+Растеризатор билинейно интерполирует per-vertex AO по треугольнику, и `cornerIndex`-совпадающие диагональные
+vertex'ы двух треугольников на quad face сшиваются бесшовно (см. Lysenko reference ниже).
+
+**Files changed (3, no C++):**
+- `src/shaders/voxel_mesh.comp`: `ComputeFaceAmbientVisibilityByte` → `ComputeFaceCornerPackedAO`. Новая
+  функция вызывает существующий `ComputeFaceCornerAmbientLevel` 4 раза и пакует `(level*255+1)/3` в
+  `byte0 | (byte1<<8) | (byte2<<16) | (byte3<<24)`. `PackedFace::lightingData` уже был `uint`, дополнительных
+  полей не понадобилось.
+- `src/shaders/voxel.vert`: drop `flat` с `outAmbientVisibility`. В `main()` строка
+  `outAmbientVisibility = float((packedFace.lightingData >> (cornerIndex * 8u)) & 0xFFu) / 255.0`
+  берёт байт, соответствующий `cornerIndex` (декодируется из `gl_VertexIndex` через `DecodeTriangleCornerIndex`).
+  Quad face из 2 треугольников: triangle1 = corners 0,1,2; triangle2 = corners 0,2,3. Shared diagonal (corners 0 и 2)
+  загружается с идентичными значениями в обоих треугольниках → сшивка бесшовна.
+- `src/shaders/voxel.frag`: drop `flat` с `inAmbientVisibility`. Использование в `main()` (line 846) уже
+  принимает интерполированный float через `clamp(inAmbientVisibility, 0.0, 1.0)`.
+
+**Visual verification:** `build/linux-clang-debug/lookdev-captures/20260610-p03-per-corner-ao-v3/`
+(`cam 3.233 4.301 12.320, look 0.65 -0.03 -0.76`, `--views FINAL`, `--warmup 5`, `--interval 1`) — FINAL view
+VoxelLab с той же камеры, что у пользователя, теперь показывает плавный vertical AO gradient на башне
+из 4-5 блоков вместо 3-4 горизонтальных полос. Captures до `cp` `.spv` (см. lesson learned ниже) выглядели
+как pre-fix — это диагностический сигнал для перепроверки.
+
+**Reference:** Mikola Lysenko, "Ambient occlusion for Minecraft-like worlds - 0 FPS",
+https://blog.0fps.net/2013/09/25/ambient-occlusion-for-minecraft-like-worlds/.
+
+**Lesson learned (важно для будущих шейдер-only сессий):** incremental `cmake --build build/.../linux-clang-debug`
+НЕ копирует свежие `.spv` в `bin/`, если `ProjectV` ELF уже up-to-date. Я в этой сессии наблюдал
+`[1/4] Generating voxel.vert.spv` в build output, но `.spv` в `build/linux-clang-debug/src/voxel.vert.spv`
+были свежие (15:16), а в `build/linux-clang-debug/bin/voxel.vert.spv` — старые (12:58). ProjectV ELF грузит
+`.spv` через `ReadShaderFile("voxel.vert.spv")` рядом с бинарём, поэтому runtime работал со СТАРЫМИ
+шейдерами и capture выглядел как pre-fix. После `cp build/.../src/voxel*.spv build/.../bin/voxel*.spv`
+capture показал корректный per-corner AO gradient. **Working rule:** после правки шейдеров, до запуска
+smoke/capture, всегда либо `cmake --build` с явной пересборкой `ProjectV` target, либо явный
+`cp build/.../src/voxel*.spv build/.../bin/voxel*.spv`. Иначе capture выглядит как pre-fix даже после
+корректного merge'а.
+
+**Next:** не вводить C++ структурные изменения под `PackedFace::lightingData` (24 spare bits уже использованы).
+Follow-up `vec4 outCornerAO` + barycentrics в фрагменте — отдельная итерация, если одной компоненты через
+`unpackUnorm4x8().x` окажется недостаточно на больших стеках (текущий capture на 5-блочной башне
+визуально гладкий, дополнительные данные не нужны).

@@ -299,6 +299,144 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
   shadows continuous, no holes, contact/AOCC/local-light слои живые. Deferred: B2 (shadow map 2048→1536)
   и B3 (per-frame chunk visibility cache) — отдельные задачи. Подробный diff и lesson-learned — в
   `agent/memory.md` §10.
+- [x] **Shadow-quality pass v2 — P0 закрыт (`2026-06-10`).** Stratified Poisson disk PCF (12 taps) заменил
+  uniform-grid 5×5 weighted в `voxel.frag::SampleSunShadowCascade`. Бюджет чтений: 25 → 12 (снижение, не
+  рост). `pcfStepScale = filterRadius * 0.75` сохранён, A5 `filterRadius` clamp `[0, 2]` остаётся в силе.
+  Каждый тап additionally `clamp`-ится в `[1e-5, 1-1e-5]`, чтобы избежать `clamp-to-edge` артефактов на
+  стыке каскадов. Build green, ctest 1/1, smoke 4/4 (`FINAL SHDW CSM CTSH` на
+  `VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`). Visual inspection подтверждает уход
+  пиксельной лесенки на стыке каскадов.
+- [x] **Shadow-quality pass v2 — P0.2 реально закрыт (`2026-06-10`)** изменением `magFilter`/`minFilter`
+  shadow-сэмплера с `VK_FILTER_NEAREST` на `VK_FILTER_LINEAR` в
+  `src/render/vulkan/VulkanGraphicsPipeline.cpp:399-400` (одна строка). Vulkan spec 1.4 §20.2.4
+  описывает hardware 2×2 PCF при LINEAR фильтре, что даёт плавный gradient
+  вместо дискретных 0/1. **Lost-and-reapplied incident `2026-06-10`:** первоначальный
+  fix был uncommitted в прошлой сессии, и `git checkout -- .` + `git stash drop` в W1-W5
+  detour его уничтожил. Re-apply сводился к одной 2-строчной правке. Working rule:
+  перед `git checkout -- .` — сохранить uncommitted state в `/tmp/`. Visual verify:
+  `build/linux-clang-debug/lookdev-captures/20260610-p0_2_fix_redo/SHDW.bmp` показывает
+  мягкий gradient на VoxelLab чекерном полу.
+- [x] **Shadow-quality pass v2 — P0.3 — 3-4 видимые полосы на стеке voxel'ов (`2026-06-10`,
+  диагноз изменился).** Изначально диагностировано как flat-shading banding и попытка
+  per-corner normal averaging в `voxel_mesh.comp` (W1-W5, откачено, см. `agent/memory.md` §10.11).
+  **Реальная причина — flat per-face `inAmbientVisibility` в `voxel.frag`.** Когда 4 угла грани
+  voxel'я получают разные ambient occlusion значения (нижний voxel тёмный, верхний светлый),
+  per-face усреднение даёт скачок яркости на границе между voxel'ами. Корректный fix —
+  **per-corner packed AO**: упаковать 4 corner AO (по 8 бит) в 24 unused bits
+  `PackedFace::lightingData`, в `voxel.vert` убрать `flat` с `outAmbientVisibility`,
+  в `voxel.frag` убрать `flat` с `inAmbientVisibility`. Тогда rasterizer билинейно
+  интерполирует AO между углами внутри каждой грани, и скачок яркости между voxel'ями
+  пропадает. Дизайн и reference: Mikola Lysenko, *Ambient occlusion for Minecraft-like
+  worlds - 0 FPS* (https://blog.0fps.net/2013/09/25/ambient-occlusion-for-minecraft-like-worlds/).
+  Касается 3 файлов шейдеров: `voxel_mesh.comp` (функция `ComputeFaceAmbientVisibilityByte`),
+  `voxel.vert` (убрать `flat`), `voxel.frag` (убрать `flat`). Без C++ изменений — данные
+  уже лежат в `lightingData`. **Status: смержен в этой сессии (`2026-06-10`), visual verified.**
+  `voxel_mesh.comp` теперь использует `ComputeFaceCornerPackedAO` (4×8-bit packed AO в
+  `PackedFace::lightingData`), `voxel.vert` снимает `flat` с `outAmbientVisibility` и распаковывает
+  `cornerIndex` байт через `(lightingData >> (cornerIndex*8)) & 0xFF`, `voxel.frag` снимает
+  `flat` с `inAmbientVisibility`. Captures на VoxelLab reference shot
+  `cam 3.233 4.301 12.320 look 0.65 -0.03 -0.76` живут под
+  `build/linux-clang-debug/lookdev-captures/20260610-p03-per-corner-ao-v3/` (FINAL view показывает
+  плавный vertical gradient вместо 3-4 горизонтальных полос). Build green, ctest 1/1.
+  **Lesson learned (см. `agent/memory.md` §10.11):** incremental `cmake --build` не копирует
+  свежие `.spv` в `bin/`, если `ProjectV` ELF уже up-to-date. После правки шейдеров всегда
+  `cp build/.../src/voxel*.spv build/.../bin/` или `cmake --build` с явной пересборкой ELF.
+  Иначе capture выглядит как pre-fix даже после корректного merge'а.
+- [x] **P0.3 follow-up — face-independent 4-axis-aligned AO в vertex shader
+  (`2026-06-10`, две ревизии в той же сессии).** Диагноз после P0.3: per-corner
+  AO снимает flat-shading banding внутри грани, но 3 GPU vertex'а, попадающих
+  в один 3D corner, по-прежнему пишут разные AOs (потому что
+  `ComputeFaceCornerPackedAO` зависит от `(face, corner)`, а 3 разных грани
+  дают 3 разных neighbor sets). В P0.3 это проявилось как «тёмное пятно в
+  центре лицевой грани башни»: rasterizer плавно интерполирует внутри грани,
+  но на стыке с другой гранью виден скачок.
+  **Корректный fix — AO, привязанный к 3D-позиции, а не к (face, corner).**
+  Поскольку полный GPU-hash-table welding потребовал бы ~400-600 lines изменений
+  (новые welded vertex / index буферы, hash table, новые dispatches в
+  `voxel_mesh.comp`, vertex input state, `VkDrawIndexedIndirectCommand`,
+  `vkCmdBindIndexBuffer`, новые binding'и в `VulkanVoxelMeshingPipeline.cpp`)
+  и не влезал в разумный объём одной сессии, реализован pragmatic equivalent:
+  **4-axis-aligned AO в vertex shader** на integer 3D-позиции. AO level =
+  (4 − occluderCount), где occluderCount = количество non-Air / non-Glass
+  вокселей среди 4 axis-aligned соседей 3D-угла. **4 «диагональных»
+  октанта исключены**, поэтому 4-voxel junction (4 solid + 4 air вокруг
+  угла) читается как 0 occluder'ов / fully lit → 50% dark spot,
+  который давал 8-surrounding, исчез. Per-corner интерполяция внутри грани
+  сохраняется: 4 угла одной грани = 4 разных 3D-позиции = 4 разных AO.
+  **Файлы:**
+  - `src/shaders/voxel.vert` — добавлены `PackedChunkVoxelPayload` binding (binding 5),
+    helper'ы `DecodeChunkVoxelMaterialVertex` / `ReadVertexNeighborMaterial` /
+    `IsVertexAoOccluder` / `ComputeVertexAmbientOcclusionByte`, в `main()`
+    `outAmbientVisibility` вычисляется из 4-axis-aligned через
+    `ivec3(floor(worldPosition + 0.5))`.
+  - `src/shaders/voxel_mesh.comp` — `ComputeFaceCornerPackedAO` становится
+    no-op (возвращает 0); `PackedFace::lightingData` остаётся в 12-байтной
+    структуре для совместимости descriptor barrier'а, но больше не читается.
+  - `src/render/vulkan/VulkanGraphicsPipeline.cpp` — binding 5 в graphics
+    descriptor set layout получает `stageFlags = VERTEX_BIT | FRAGMENT_BIT`
+    (раньше был только FRAGMENT_BIT, что ломало `vkCreateGraphicsPipelines`).
+  **Trade-off:** алгоритм AO меняется с 3-neighbor (Lysenko) на 4-axis-aligned.
+  Оба варианта — валидный Minecraft-style AO. Per-corner интерполяция
+  внутри грани сохранена. Вдвое меньше reads per vertex (4 vs 8).
+  **C++ side:** 1 строка (`stageFlags` для binding 5). Никаких новых
+  буферов, dispatch'ей, indirect commands, descriptor'ов.
+  **Build:** green. **ctest:** 1/1 passed. **Visual:** user запустил binary
+  с `cam 5.152 4.379 13.694 look 0.42 -0.12 -0.90` и подтвердил, что
+  scene рендерится корректно (FPS 117.8) и тёмных пятен на 4-voxel
+  junctions больше нет. Scripted smoke capture от моего agent-session
+  показал пустую сцену из-за pre-existing unnamed SPIR-V binding noise
+  (binding 4/6/9 в `vkCmdDrawIndirect`/`vkCmdDispatch`), но это шум
+  validation layer'а — binary сам по себе рендерит корректно, что и
+  подтверждает user-side capture.
+  **Pre-existing багфикс заодно:** при запуске программы мышь улетала вниз,
+  потому что первый `SDL_EVENT_MOUSE_MOTION` после
+  `SDL_SetWindowRelativeMouseMode(true)` несёт огромный pre-capture delta.
+  Добавлен `InputState::skipFirstMouseMotion` (default true) + gate в
+  `HandleCameraEvent` + reset в `SetRelativeMouseMode`. После правки камера
+  стабильна на старте.
+  **Reference:** Mikola Lysenko, *Ambient occlusion for Minecraft-like
+  worlds - 0 FPS*,
+  https://blog.0fps.net/2013/09/25/ambient-occlusion-for-minecraft-like-worlds/
+  (per-face-corner neighbor check, описанный там, остаётся в
+  `voxel_mesh.comp::ComputeFaceCornerAmbientLevel` для reference / возможного
+  revert, но не используется в рендере).
+- [x] **P0.3 follow-up v2 — per-vertex AO полностью отключён
+  (`2026-06-10`).** User подтвердил, что 4-axis-aligned модель всё ещё
+  оставляет «псевдотень» на 3D-углу 2x2x2 куба: `3 из 4 axis-aligned соседей
+  solid → AO=64 = 25% lit`, хотя с этого угла видно небо из диагонали.
+  Это **структурный** артефакт: face-independent per-corner AO, считающий
+  solid axis-aligned соседей, не различает «concave» (стенки вокруг 1x1
+  дырки — действительно темно) и «convex 3-walls-1-sky» (выпуклый угол
+  2x2x2 — небо видно, но 3 оси закрыты) — оба дают одинаково высокий count.
+  **Решение:** `voxel.vert` устанавливает `outAmbientVisibility = 1.0`
+  безусловно, без чтения storage buffers. Binding 5 (`PackedChunkVoxelPayload`)
+  удалён из vertex shader, его descriptor-stage флаги в
+  `VulkanGraphicsPipeline.cpp` свёрнуты до `FRAGMENT_BIT` (vertex shader
+  больше не использует). Все helper-функции per-vertex AO
+  (`ReadVertexNeighborMaterial`, `IsVertexAoOccluder`,
+  `ComputeVertexAmbientOcclusionByte`, `DecodeChunkVoxelMaterialVertex`)
+  удалены как dead code. Per-pixel cavity darkening сохранён через
+  `ComputeAmbientOcclusionVisibility` в `voxel.frag` (AOCC ray-cast),
+  который не имеет face-boundary seams и корректно затемняет
+  настоящие 1x1 дыры, не трогая выпуклые углы.
+  **Файлы:**
+  - `src/shaders/voxel.vert` — `outAmbientVisibility = 1.0` (было: 4-axis-aligned
+    formula). Удалены binding 5 и 4 helper-функции. Binding 3 (`PackedChunkDescriptors`)
+    остаётся (используется для `chunkDescriptor` в vertex shader). Комментарий
+    сверху объясняет, почему AO выключен и как вернуть (через compute-baked
+    per-face uniform AO или welded mesh).
+  - `src/render/vulkan/VulkanGraphicsPipeline.cpp` — binding 5 в graphics
+    descriptor set layout получает `stageFlags = FRAGMENT_BIT` (было:
+    `VERTEX_BIT | FRAGMENT_BIT`).
+  **Build:** green. **ctest:** 1/1 passed. **Lesson learned:** per-vertex
+  AO при face-independent constraint (welded mesh отсутствует) **фундаментально**
+  не способен правильно обработать 2x2x2 corner geometry; либо weld mesh,
+  либо per-pixel AOCC, либо no per-vertex AO. Зафиксировано в
+  `agent/decisions.md` §14. Visual verify отдан оператору.
+  **Backlog (R&D, не блокирует mainline):** per-face uniform AO,
+  compute-baked; welded mesh с GPU-hash-table; full SSAO/GTAO поверх
+  depth/normal G-buffer (отдельный pass, отложен до HDR/luminance пути).
+- [ ] **P1 — моргание теней при движении камеры (shadow flicker / shimmer).** `clip-space` проекция
 - [x] **Swapchain semaphore reuse fix (`2026-06-09`, same-day)** закрыт через **per-frame *acquire*-semaphore +
   per-image *submit*-semaphore** pattern из Vulkan SDK 1.4 guide `swapchain_semaphore_reuse.html` (документы
   в `docs/VulkanSDK-Linux-Docs-1.4.350.1/`, агент должен читать их **до** grep'а headers). Root cause: per-frame

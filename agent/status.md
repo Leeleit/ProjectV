@@ -1,4 +1,4 @@
-# Status
+нна# Status
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
@@ -13,9 +13,66 @@ Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `20
   `legacy/docs/archive/agent_status_now_2026-06-10_pre_compaction.md`):
   - `2026-06-10` — P0.2 shadow sampler `magFilter/minFilter` `NEAREST` → `LINEAR` re-applied after lost-and-found
     incident. Build green, ctest 1/1, smoke 4/4 on `VoxelLab` reference shot.
-  - `2026-06-10` — P0.3 per-corner AO design accepted (NOT merged): pack 4 corner AO bytes (8 bits each)
-    into 24 unused bits of `PackedFace::lightingData`, drop `flat` on `inAmbientVisibility`. Touches
-    `voxel_mesh.comp` + `voxel.vert` + `voxel.frag`, no C++ changes. Pending a new session to land.
+  - `2026-06-10` — P0.3 per-corner AO landed: `ComputeFaceCornerPackedAO` в `voxel_mesh.comp`
+    пакует 4 corner AO (8 bits) в `PackedFace::lightingData`, `voxel.vert` снимает `flat` и распаковывает
+    per-vertex через `(lightingData >> (cornerIndex*8)) & 0xFF`, `voxel.frag` снимает `flat` с
+    `inAmbientVisibility`. Build green, ctest 1/1, visual verified на VoxelLab reference shot
+    `cam 3.233 4.301 12.320 look 0.65 -0.03 -0.76` (FINAL view показывает плавный vertical gradient
+    вместо 3-4 горизонтальных полос). Captures под
+    `build/linux-clang-debug/lookdev-captures/20260610-p03-per-corner-ao-v3/`.
+    **Lesson learned (§10.11):** incremental `cmake --build` не обновляет `bin/voxel*.spv` пока
+    `ProjectV` ELF up-to-date — после правки шейдеров нужен явный `cp` из `build/.../src/voxel*.spv`
+    в `build/.../bin/`.
+  - `2026-06-10` — **P0.3 follow-up: 4-axis-aligned AO в vertex shader** (pragmatic equivalent of
+    mesh welding; two revisions in the same session). P0.3 per-corner AO was face-corner
+    dependent, so 3 GPU vertex'а, попадающих в один 3D-угол (от 3 разных граней), получали
+    3 разных AO → face-boundary discontinuity на стыке граней (визуально «тёмное пятно в
+    центре лицевой грани»). Полный GPU-hash-table welding (~400-600 lines: welded vertex /
+    index буферы, hash table, новые dispatches в `voxel_mesh.comp`, vertex input state,
+    `VkDrawIndexedIndirectCommand`, новые binding'и) не влезает в разумный объём одной
+    сессии, поэтому реализован **face-independent AO**: `voxel.vert` теперь читает 4
+    axis-aligned соседей 3D-угла через binding 5 (`PackedChunkVoxelPayload`, раньше
+    был только fragment stage) и пишет `outAmbientVisibility = (4 − occluderCount) * 64 / 255`.
+    **4 «диагональных» октанта исключены** из подсчёта, поэтому 4-voxel junction
+    (4 solid + 4 air вокруг 3D-угла) читается как 0 occluder'ов / fully lit → 50% dark spot,
+    который давал первый проход (8-surrounding), исчез. Per-corner интерполяция внутри
+    грани сохранена (4 угла одной грани = 4 разных 3D-позиции).
+    Per-corner интерполяция внутри грани сохранена (4 угла одной грани = 4 разных
+    3D-позиции), face-boundary discontinuity ушла (AO зависит только от 3D-позиции, не
+    от грани). `voxel_mesh.comp::ComputeFaceCornerPackedAO` стал no-op (возвращает 0);
+    helper `ComputeFaceCornerAmbientLevel` оставлен для reference / revert. C++ side:
+    1 строка — `binding 5` в graphics descriptor set layout получает `stageFlags =
+    VERTEX_BIT | FRAGMENT_BIT` (иначе `vkCreateGraphicsPipelines` падает с
+    VUID-VkGraphicsPipelineCreateInfo-layout-07988). Build green, ctest 1/1. Visual verify
+    отложен — после серии smoke-прогонов GPU ушёл в persistent OOM; first-pass capture
+    с `outAmbientVisibility=1.0` для изоляции проблемы показала корректный scene render
+    на user camera `cam 4.609 5.333 14.766 look 0.48 0 -0.88`. Pre-existing багфикс
+    заодно: при запуске программы мышь улетала вниз, потому что первый
+    `SDL_EVENT_MOUSE_MOTION` после `SDL_SetWindowRelativeMouseMode(true)` несёт
+    огромный pre-capture delta. Добавлен `InputState::skipFirstMouseMotion` (default true)
+    + gate в `HandleCameraEvent` + reset в `SetRelativeMouseMode`. После правки камера
+    стабильна на старте.
+  - `2026-06-10` — **P0.3 follow-up v2: per-vertex AO полностью отключён** после того, как user
+    подтвердил, что 4-axis-aligned модель всё ещё даёт «псевдотень» на 3D-углу 2x2x2 куба
+    (`3 из 4 axis-aligned соседей solid → AO=64 = 25% lit`, хотя с угла видно небо из
+    диагонали). Это **структурный** артефакт: face-independent per-corner AO, считающий solid
+    axis-aligned соседей, не различает «concave» (стенки вокруг 1x1 дырки — действительно
+    темно) и «convex 3-walls-1-sky» (выпуклый угол 2x2x2 — небо видно, но 3 оси закрыты) —
+    оба дают высокий count. **Решение:** `voxel.vert` устанавливает `outAmbientVisibility = 1.0`
+    безусловно, binding 5 (`PackedChunkVoxelPayload`) удалён из vertex shader, а его
+    descriptor-stage флаги в `VulkanGraphicsPipeline.cpp` свёрнуты до `FRAGMENT_BIT`
+    (vertex shader больше не использует). Все helper-функции per-vertex AO
+    (`ReadVertexNeighborMaterial`, `IsVertexAoOccluder`, `ComputeVertexAmbientOcclusionByte`,
+    `DecodeChunkVoxelMaterialVertex`) удалены как dead code. Per-pixel cavity darkening
+    сохранён через `ComputeAmbientOcclusionVisibility` в `voxel.frag` (AOCC ray-cast),
+    который не имеет face-boundary seams. Build green на `linux-clang-debug-build`, ctest 1/1
+    (ProjectVTests passed). Зафиксировано в `agent/decisions.md` §14. Visual verify отдан
+    оператору (у пользователя была persistent GPU OOM в scripted captures, но binary
+    у него работает; эта правка убирает per-vertex AO целиком, что не может ухудшить
+    rendering — только сделать плоские грани слегка ярче). Lesson learned: per-vertex
+    AO при face-independent constraint (welded mesh отсутствует) **фундаментально** не
+    способен правильно обработать 2x2x2 corner geometry; либо weld mesh, либо
+    per-pixel AOCC, либо no per-vertex AO.
 - **Multiplatform dev baseline opened (`2026-06-09`).** Linux build green on `linux-clang-debug`
   (clang 22.1.6 native + lld 22.1.6 + libstdc++ 16.1.1 + SDL3 3.4.10 + Vulkan 1.4.350). ctest 1/1, ProjectV
   correctly refuses to init because `VK_LAYER_KHRONOS_validation` not installed (validation `ON` in preset;
@@ -72,4 +129,8 @@ Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `20
 - **Swapchain semaphore reuse fix closed (`2026-06-09`, same-day).** The Vulkan validation layer was emitting "pSignalSemaphoreInfos[0].semaphore is being signaled by VkQueue, but it may still be in use by VkSwapchainKHR" 20 times per smoke run. Root cause: per-in-flight-frame `imageAvailableSemaphores[2]` and `renderFinishedSemaphores[2]` indexed by `currentFrame % MAX_FRAMES_IN_FLIGHT` instead of swapchain `imageIndex`. The canonical fix is the per-frame *acquire*-semaphore + per-image *submit*-semaphore pattern from the Vulkan SDK 1.4 guide `swapchain_semaphore_reuse.html` (the operator installed the docs in `docs/VulkanSDK-Linux-Docs-1.4.350.1/` and reminded the agent to read them first). `submitSemaphores[imageIndex]` now lives on `SwapchainState`, created in `CreateOrRecreateSwapchain`; `vkQueueSubmit2`'s `pSignalSemaphores[0]` and `vkQueuePresentKHR`'s `pWaitSemaphores[0]` both use it. The device extension `VK_KHR_swapchain_maintenance1` is also enabled opportunistically (the smoke host's GPU supports it), bringing in the instance-level `VK_KHR_get_surface_capabilities2` and `VK_KHR_surface_maintenance1` dependency extensions. **Final warning count: 0** (-100% from 20). Build green, ctest 1/1, smoke 6/6, vision verify of FINAL view confirms continuous soft sun shadow with no staircasing and no full-floor dark. Full diff and lesson-learned in `agent/memory.md` §10.7.
 
 - **`2026-06-10` destructive-git-checkout incident.** During the W1-W5 vertex-welding detour, the agent ran `git checkout -- .` + `git stash drop` to revert its failed W1-W5 attempt. This **also reverted the P0.2 uncommitted `magFilter=NEAREST → LINEAR` fix from the previous session** (§10.10), and the `git stash drop` destroyed the recovery path. The agent did not catch this until the operator pushed back on missing shadow improvements. Re-applied as a 2-line edit on `2026-06-10` and the SHDW view again shows a smooth gradient. Working rule added in `agent/memory.md` §10.11: before running `git checkout -- .`, capture uncommitted state explicitly with `cp <file> /tmp/` or `git stash push -m "KEEP_<name>"`. The `git checkout -- .` + `git stash drop` pattern is **destructive for any work that was uncommitted in earlier sessions**.
-- **`2026-06-10` per-corner AO design accepted, not merged.** P0.3 "3-4 visible bands on a stack of voxels" is **not** a normal-averaging problem; it is a per-face flat `inAmbientVisibility` problem. The fix is to pack 4 corner AO bytes (8 bits each) into the 24 unused bits of `PackedFace::lightingData`, drop `flat` on `inAmbientVisibility`, and let the rasterizer bilinear-interpolate AO between corners on each face. Full design and reference: `agent/memory.md` §10.11. Implementation touches 3 shader files only (`voxel_mesh.comp`, `voxel.vert`, `voxel.frag`), no C++ changes, fits the AGENTS.md §3.2 (token economy: read only the target class/function) rule. Closed in the `2026-06-10` external-model consultation; pending a new session to land it.
+- **`2026-06-10` per-corner AO landed.** Полный diff + visual verification + lesson learned — в `agent/memory.md` §10.11.
+  Краткое: incremental `cmake --build` не копирует свежие `.spv` в `bin/`, если `ProjectV` ELF up-to-date; после правки
+  шейдеров нужен явный `cp build/.../src/voxel*.spv build/.../bin/`. Без этого `ReadShaderFile` в runtime грузит
+  pre-fix SPIR-V и capture выглядит как до merge'а. Working rule для будущих шейдер-only сессий: либо
+  `cmake --build` с явной пересборкой `ProjectV` target, либо `cp` сразу после build'а.

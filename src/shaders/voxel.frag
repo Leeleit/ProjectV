@@ -56,10 +56,14 @@ layout(push_constant) uniform PushConstants {
     uvec4 chunkGridAndFlags;
 } pushConstants;
 
+// P0.3: inAmbientVisibility is no longer `flat` so the rasterizer bilinearly
+// interpolates the four per-corner AO values written by voxel.vert across the
+// face, removing the per-voxel brightness step that used to be visible on
+// stacks of voxels (see voxel_mesh.comp::ComputeFaceCornerPackedAO).
 layout(location = 0) in vec3 inNormal;
 layout(location = 1) in vec3 inWorldPosition;
 layout(location = 2) flat in uint inMaterialIndex;
-layout(location = 3) flat in float inAmbientVisibility;
+layout(location = 3) in float inAmbientVisibility;
 
 layout(location = 0) out vec4 outColor;
 

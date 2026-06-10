@@ -1,6 +1,6 @@
 build
 .idea
-/docs/cpp-draft-main/
-/docs/vulkan-sdk_docs_1.4.341.1/
-/problems/
-/tests/fixtures/
+docs/cpp-draft-main/
+docs/VulkanSDK-Linux-Docs-1.4.350.1
+problems/
+tests/fixtures/

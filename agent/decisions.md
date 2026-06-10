@@ -198,6 +198,19 @@
   The current bounded fix is a cheap meshing-side local visibility term in `PackedSceneVoxelFace::lightingData`, which
   the main voxel shader multiplies into sky/horizon/ground fill. Current blocker policy for that term is
   `Air/Open`, `Glass/Open`, `Fluid/Occluder`, `Opaque/Occluder`; this is not `SSAO/GTAO`.
+- **Per-vertex ambient occlusion is disabled (`2026-06-10`, P0.3 follow-up v2).** The earlier 3-neighbor
+  (Lysenko), 8-surrounding and 4-axis-aligned variants all produced a visible
+  "pseudo-shadow" on the 3D-угол of a 2x2x2 cube (or any 4-voxel junction) because
+  the count of solid axis-aligned neighbors peaks at convex corners with three
+  abutting voxels (3 of 4 = AO 64 = 25% lit), even though sky is visible from
+  the outward diagonal direction. A face-independent model cannot distinguish
+  "concave" from "convex" from a single neighbor count, so any per-corner AO
+  will always have a discrete darkening at cube-corner junctions of a 2x2x2
+  mass. Mainline now writes `outAmbientVisibility = 1.0` in `voxel.vert` and
+  the AOCC term (`ComputeAmbientOcclusionVisibility` in `voxel.frag`) supplies
+  all per-pixel cavity darkening, which has no face-boundary seams. Re-introducing
+  per-vertex AO requires a per-face uniform AO (compute-shader-baked) or a real
+  weld/duplication-aware welded mesh; both are deferred to a future R&D pass.
 - `colorGrading` in `VoxelSceneLighting` is reserved for the minimal grading contract: white point, contrast,
   saturation, lift. It is applied after tone mapping and the clear color must use the same grading path.
 - `exposureControl` in `VoxelSceneLighting` is reserved for exposure metering mode, target scene key, minimum exposure,
@@ -303,10 +316,39 @@ Update `2026-04-22`:
 - Первый quality/debug follow-up для этого path тоже остаётся прагматичным: baseline shadow map держится на `2048x2048`, main voxel shader использует weighted `5x5` PCF, а shadow tuning/debug живёт внутри уже существующего lighting loop (`B` debug views + detailed HUD), а не в отдельном editor/debug framework.
 - Cascades must not be smuggled into the shader as hidden constants: split depths and lambda are runtime-visible state
   before the renderer starts sampling multiple shadow maps.
-- Cascade receiver planning must stay aligned with the actual visible-scene contract too. In current mainline, chunk
+  - Cascade receiver planning must stay aligned with the actual visible-scene contract too. In current mainline, chunk
   visibility already caps receiver distance to `min(camera.farPlane, 64)`, so CSM split planning must use that same
   receiver max distance instead of the raw camera far plane; otherwise near cascades waste texel budget on receivers
   that scene culling never draws.
+- The P0.3 per-corner AO contract is face-corner dependent on purpose, but the rasterizer's face-boundary
+  interpolation now runs into a discrete step at every 3D-угол because 3 different faces touching the same
+  corner each store their own per-(face, corner) AO. A full GPU-hash-table mesh welding (welded vertex /
+  index buffers driven by `voxel_mesh.comp`, `vkCmdBindIndexBuffer`, `VkDrawIndexedIndirectCommand`, vertex
+  input state in the graphics pipeline) would re-merge them at the 3D-position level, but the change is
+  large enough to dominate a single session. The pragmatic equivalent chosen for mainline is **face-independent
+  AO computed in the vertex shader from the eight voxels surrounding the integer 3D corner position**.
+  `voxel.vert` therefore binds `PackedChunkVoxelPayload` at descriptor-set binding 5 in the vertex stage as well
+  as the fragment stage, and the graphics descriptor set layout must list `VERTEX_BIT | FRAGMENT_BIT` for that
+  binding (VUID-VkGraphicsPipelineCreateInfo-layout-07988 otherwise). The 3-neighbor per-face-corner algorithm
+  (Mikola Lysenko, *Ambient occlusion for Minecraft-like worlds - 0 FPS*) is preserved as a reference helper
+  in `voxel_mesh.comp::ComputeFaceCornerAmbientLevel` for a possible revert, but the mainline renderer no longer
+  reads `PackedFace::lightingData` for AO. Per-corner interpolation inside a face is preserved because the four
+  corners of one face are four different 3D positions, each with its own 4-axis-aligned AO (the 4
+  face-sharing neighbors at the 3D-угол, excluding the 4 diagonal octants). The first pass
+  (8-surrounding) produced a 50% dark spot at every 4-voxel junction, which the 4-axis-aligned
+  variant removes. Until a real welding
+  path lands, this is the agreed contract for new face-vertex AO work.
+  - While the per-corner AO is face-independent, the *material* at a welded 3D-угол is still per-face (a
+  voxel-emitted face picks one `materialIndex` from its own PackedFace, not from a shared vertex). If a future
+  welding pass needs to merge materials, it must pick a deterministic rule (e.g. take the owning voxel's
+  material at that 3D-угол via `ReadVertexNeighborMaterial`); do not silently average, because Glass and
+  Opaque read very differently in `voxel.frag` and a blended value would give neither.
+- The `InputState::skipFirstMouseMotion` flag exists because `SDL_SetWindowRelativeMouseMode(true)` does
+  not reset the cursor position: the first `SDL_EVENT_MOUSE_MOTION` after enabling it carries a delta from
+  the unrestrained pre-capture position, which yanks the camera look on launch (typically pitching it
+  sharply to the floor in walk / creative / spectator modes). The flag is defaulted to true in
+  `InputState` so the first motion on launch is dropped, and `SetRelativeMouseMode` resets it on every
+  (re-)enable so tab-toggle in-flight also gets a clean first frame.
 - The current mainline default split distribution is intentionally more near-biased than the original first CSM hookup:
   live `MeshingStress` repro showed that `0.65` kept too much quality in far receivers, so the default lambda is now
   `0.80` until a better data-backed scheme or more cascades replaces it.

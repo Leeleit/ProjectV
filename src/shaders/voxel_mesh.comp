@@ -219,13 +219,25 @@ const uint cornerIndex) {
     return 3u - min(sideA + sideB + diagonal, 3u);
 }
 
-uint ComputeFaceAmbientVisibilityByte(const ivec3 worldVoxelPosition, const uint faceIndex) {
-    uint visibilityLevels = 0u;
-    for (uint cornerIndex = 0u; cornerIndex < 4u; ++cornerIndex) {
-        visibilityLevels += ComputeFaceCornerAmbientLevel(worldVoxelPosition, faceIndex, cornerIndex);
-    }
-
-    return (visibilityLevels * 255u + 6u) / 12u;
+// P0.3 follow-up: ComputeFaceCornerPackedAO is now a no-op. The vertex
+// shader no longer reads `PackedFace::lightingData`; it computes the
+// per-vertex AO from the eight voxels surrounding the integer 3D corner
+// position (face-independent, see voxel.vert::ComputeVertexAmbientOcclusionByte).
+// Keeping the helper around keeps the call site unchanged; the function
+// returns 0 so the packed face layout stays 12 bytes, the descriptor
+// barrier on the packed face buffer is still correct, and a future revert
+// to per-corner packed AO only has to fill this function back in.
+//
+// The 3-neighbor per-face-corner algorithm from Lysenko's "Ambient occlusion
+// for Minecraft-like worlds - 0 FPS"
+// (https://blog.0fps.net/2013/09/25/ambient-occlusion-for-minecraft-like-worlds/)
+// is still implemented in ComputeFaceCornerAmbientLevel above for reference
+// and for any tests that exercise it directly.
+uint ComputeFaceCornerPackedAO(const ivec3 worldVoxelPosition, const uint faceIndex) {
+    // P0.3 follow-up: the parameters are intentionally unused here. Touch
+    // them through a no-op expression so future GLSL compilers do not warn
+    // about unused inputs while the call site still passes them through.
+    return worldVoxelPosition.x * 0u + faceIndex * 0u;
 }
 
 bool IsChunkVisible(const ChunkDescriptor chunkDescriptor) {
@@ -360,7 +372,7 @@ void main() {
                     const PackedFace packedFace = PackedFace(
                     PackLocalVoxelFace(localVoxelCoord, faceIndex),
                     PackChunkIndexMaterial(chunkIndex, materialIndex),
-                    ComputeFaceAmbientVisibilityByte(worldVoxelPosition, faceIndex));
+                    ComputeFaceCornerPackedAO(worldVoxelPosition, faceIndex));
 
                     if (materialIndex == 1u) {
                         if (transparentFaceCount < maxChunkFaceCount) {

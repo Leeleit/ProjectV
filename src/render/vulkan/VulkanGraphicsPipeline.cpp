@@ -63,6 +63,12 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.binding = 5,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
+		// P0.3 follow-up (final): per-vertex AO was removed (see voxel.vert
+		// header for the full rationale). The fragment stage still consumes
+		// this storage buffer for the local-light / AOCC / contact-shadow
+		// DDA reads, so we keep FRAGMENT_BIT. The vertex shader no longer
+		// needs access because the `inAmbientVisibility` interpolator is
+		// driven from a constant 1.0.
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
@@ -396,8 +402,8 @@ bool CreateShadowResources(
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
-		.magFilter = VK_FILTER_NEAREST,
-		.minFilter = VK_FILTER_NEAREST,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
 		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
 		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
 		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,

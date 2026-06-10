@@ -29,10 +29,23 @@ layout(push_constant) uniform PushConstants {
     uvec4 chunkGridAndFlags;
 } pushConstants;
 
+// Per-vertex ambient occlusion has been **disabled** as a deliberate follow-up
+// to P0.3. The earlier face-corner AO (Lysenko 3-neighbor), the 8-surrounding
+// formula, and the 4-axis-aligned variant all produced a "pseudo-shadow" at
+// 3D-угол 2x2x2 cube (or any 4-voxel junction) because the count of solid
+// axis-aligned neighbors peaks at convex corners with three abutting voxels
+// (3 of 4 = AO 64 = 25% lit), even though sky is visible from the outward
+// diagonal direction. A face-independent model cannot distinguish "concave"
+// from "convex" from a single neighbor count, so any per-corner AO will
+// always have a discrete darkening at the cube-corner junctions of a 2x2x2
+// mass. AO is now supplied entirely by the fragment shader's
+// `ComputeAmbientOcclusionVisibility` ray-cast AOCC, which evaluates sky
+// visibility per-pixel from a stable face-plane origin and produces smooth
+// cavity darkening without face-boundary seams.
 layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec3 outWorldPosition;
 layout(location = 2) flat out uint outMaterialIndex;
-layout(location = 3) flat out float outAmbientVisibility;
+layout(location = 3) out float outAmbientVisibility;
 
 vec3 DecodeFaceNormal(const uint faceIndex) {
     switch (faceIndex) {
@@ -113,5 +126,13 @@ void main() {
     outNormal = DecodeFaceNormal(faceIndex);
     outWorldPosition = worldPosition;
     outMaterialIndex = materialIndex;
-    outAmbientVisibility = float(packedFace.lightingData & 0xFFu) / 255.0;
+    // Per-vertex AO is now a no-op: the AO term is supplied entirely by the
+    // fragment shader's `ComputeAmbientOcclusionVisibility` (per-pixel ray-cast
+    // AOCC, see voxel.frag), which has no face-boundary discontinuities and
+    // produces smooth cavity darkening for genuine concavities (e.g. a 1x1
+    // hole) while leaving flat voxel faces and convex cube corners at full
+    // brightness. The `inAmbientVisibility` interpolator is kept non-`flat` so
+    // a future per-vertex AO term can be re-introduced without re-plumbing
+    // the input layout.
+    outAmbientVisibility = 1.0;
 }

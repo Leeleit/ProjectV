@@ -149,6 +149,13 @@ bool SetRelativeMouseMode(
 	input.relativeMouseModeEnabled = enableRelativeMouseMode;
 	input.mouseDeltaX = 0.0f;
 	input.mouseDeltaY = 0.0f;
+	// P0.3 follow-up: any (re-)enable of relative mouse mode risks a large
+	// spurious first MOUSE_MOTION because the cursor was unrestrained
+	// between the previous disable and this enable, so the next relative
+	// delta is measured from the unrestrained position. Drop the first
+	// motion after each (re-)enable. The init path already defaults the
+	// flag to true, so this line is what protects tab-toggle in-flight.
+	input.skipFirstMouseMotion = true;
 	return true;
 }
 

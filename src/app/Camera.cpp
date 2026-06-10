@@ -122,6 +122,15 @@ void HandleCameraEvent(
 	}
 
 	if (event->type == SDL_EVENT_MOUSE_MOTION && input->relativeMouseModeEnabled) {
+		// P0.3 follow-up: drop the first MOUSE_MOTION event after relative
+		// mode is enabled. The pre-capture cursor position can be many
+		// hundred pixels away from the window center, so the first
+		// relative delta after `SDL_SetWindowRelativeMouseMode(true)` is
+		// huge and would otherwise yank the camera look on launch.
+		if (input->skipFirstMouseMotion) {
+			input->skipFirstMouseMotion = false;
+			return;
+		}
 		input->mouseDeltaX += event->motion.xrel;
 		input->mouseDeltaY += event->motion.yrel;
 		return;
