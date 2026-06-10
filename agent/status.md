@@ -2,7 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `2026-06-10` P0.2 fix re-apply + per-corner AO design (P0.3 next session, not merged).
+Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `2026-06-10` P0.2 fix re-apply + per-corner AO design (P0.3 next session, not merged) + `2026-06-10` P0.4 VoxelLab peter-pan fix (uncommitted, see session notes).
 
 ---
 
