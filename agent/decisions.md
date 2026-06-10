@@ -379,7 +379,7 @@ Update `2026-04-22`:
 
 Почему:
 
-- Mainline — reproducible interactive voxel MVP. `AGENTS.md` §4 не запрещает multiplatform dev setup, и «использовать такие технологии, что можно себе не только ногу отстрелить» из user intent означает native Linux toolchain, а не «выкинь Windows». Мультиплатформенность — это второй dev-контур, **не** поджигание мостов с Windows.
-- `AGENTS.md` §3 требует sync `agent/` после заметной работы — Linux-факты идут в `agent/memory.md` (долговечный context) и `agent/status.md` (сжатый snapshot), roadmap follow-up — в `TODO.md`.
+- Mainline — reproducible interactive voxel MVP. `AGENTS.md` §2 (Project metadata, platforms) explicitly enumerates Windows + Linux dev trees and does not forbid multiplatform, и «использовать такие технологии, что можно себе не только ногу отстрелить» из user intent означает native Linux toolchain, а не «выкинь Windows». Мультиплатформенность — это второй dev-контур, **не** поджигание мостов с Windows.
+- `AGENTS.md` §7.4 (Synchronization) requires sync `agent/` после заметной работы — Linux-факты идут в `agent/memory.md` (долговечный context) и `agent/status.md` (сжатый snapshot), roadmap follow-up — в `TODO.md`.
 - Submodule-VMA `b3cbbb43` уже 8+ месяцев без обновления в репо. На текущей upstream `v3.4.0` header остаётся `include/vk_mem_alloc.h` (не `vma/vk_mem_alloc.h`). `vma/vk_mem_alloc.h` — Windows-Vulkan-SDK layout. Поправка include path — минимальное вмешательство, фиксит обе платформы. Upstream submodule bump — отдельный follow-up.
 - Build options `if (MSVC) ... endif()` + Linux `else()` branch — кросс-платформенный contract. На Windows ничего не меняется (MSVC истинен); на Linux clang-native flags применяются корректно.
