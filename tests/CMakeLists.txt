@@ -47,3 +47,33 @@ endif ()
 
 add_test(NAME ProjectVTests COMMAND ProjectVTests)
 set_tests_properties(ProjectVTests PROPERTIES LABELS "unit")
+
+# Asset-pipeline test executable (M1). Separate from `ProjectVTests`
+# so its `main()` does not collide with the existing harness, and so
+# it can link `fastgltf` and `glm` without dragging the full
+# voxel-test link line in. The test fixture `tests/fixtures/box.glb`
+# is referenced through `PROJECTV_TESTS_SOURCE_DIR`.
+add_executable(ProjectVAssetTests
+        AssetLoaderTests.cpp
+        ../src/asset/AssetLoader.cpp
+        ../src/asset/AssetManifest.cpp
+        ../src/asset/AssetRegistry.cpp
+)
+
+target_compile_definitions(ProjectVAssetTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVAssetTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVAssetTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVAssetTests PRIVATE
+        fastgltf::fastgltf
+        glm
+)
+
+add_test(NAME ProjectVAssetTests COMMAND ProjectVAssetTests)
+set_tests_properties(ProjectVAssetTests PROPERTIES LABELS "unit")
+

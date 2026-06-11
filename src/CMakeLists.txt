@@ -56,6 +56,9 @@ target_sources(ProjectV PRIVATE
         app/LookDevCaptureAutomation.cpp
         app/main.cpp
         asset/AssetStub.cpp
+        asset/AssetLoader.cpp
+        asset/AssetManifest.cpp
+        asset/AssetRegistry.cpp
         ecs/EcsWorld.cpp
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
@@ -104,6 +107,7 @@ target_link_libraries(ProjectV PRIVATE
         # `src/` include dir through the INTERFACE property, so the rest of
         # the project picks up `<meshoptimizer.h>` automatically.
         meshoptimizer
+        glm
         fastgltf::fastgltf
         draco::draco
 )

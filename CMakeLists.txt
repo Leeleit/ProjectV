@@ -108,6 +108,17 @@ projectv_add_tracy()
 #     these are wired in for the new polygon-model pipeline, see
 #     agent/active-sessions.md session 2026-06-11-asset-pipeline-m0-m5) ---
 
+# glm (header-only math types, used by the new model pipeline and by
+# fastgltf's glm element traits). The submodule is at `external/glm/`
+# but is not yet wired in; we add it as a subdirectory and disable
+# the optional static-library / test / install targets so it stays a
+# pure include-path dependency.
+set(GLM_BUILD_LIBRARY OFF CACHE BOOL "Use GLM as header-only" FORCE)
+set(GLM_BUILD_TESTS OFF CACHE BOOL "Disable GLM tests" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "Disable GLM install" FORCE)
+add_subdirectory(external/glm)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/glm")
+
 # meshoptimizer (header-only API; we link the static lib to keep the include
 # path attached through the INTERFACE property and to avoid pulling in
 # the demo/gltfpack tools).

@@ -1,0 +1,44 @@
+#ifndef ASSET_LOADER_HPP
+#define ASSET_LOADER_HPP
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <glm/glm.hpp>
+
+namespace projectv::asset {
+
+struct PrimitiveData {
+	std::vector<glm::vec3> positions;
+	std::vector<glm::vec3> normals;
+	std::vector<glm::vec2> uvs;
+	std::vector<uint32_t> indices;
+	std::optional<size_t> materialIndex;
+};
+
+struct LoadedAsset {
+	std::string sourcePath;
+	std::vector<PrimitiveData> primitives;
+	glm::vec3 aabbMin{0.0f};
+	glm::vec3 aabbMax{0.0f};
+	uint32_t totalVertexCount = 0;
+	uint32_t totalTriangleCount = 0;
+};
+
+struct LoadAssetError {
+	std::string message;
+};
+
+std::unique_ptr<LoadedAsset> LoadGlb(
+	const std::string &path,
+	LoadAssetError *outError = nullptr);
+
+std::string_view GetAssetLoaderLastErrorMessage();
+
+} // namespace projectv::asset
+
+#endif
