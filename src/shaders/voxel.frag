@@ -72,10 +72,13 @@ layout(location = 1) in vec3 inWorldPosition;
 layout(location = 2) flat in uint inMaterialIndex;
 layout(location = 3) in float inAmbientVisibility;
 
-layout(constant_id = 0) const int kRendererTaaMode = 0;
-
-layout(location = 0) out vec4 outColor;
+#ifdef TAA_ENABLED
 layout(location = 1) out vec4 outSceneColor;
+#define OUT_COLOR outSceneColor
+#else
+layout(location = 0) out vec4 outColor;
+#define OUT_COLOR outColor
+#endif
 
 const uint kSunShadowCascadeCount = 4u;
 const uint kSunContactShadowMaxSteps = 12u;
@@ -926,12 +929,7 @@ void main() {
     } else if (lightingDebugView == 3u) {
         color = localDirect;
     } else if (lightingDebugView == 4u) {
-        if (kRendererTaaMode == 0) {
-            outColor = vec4(shadowCovered ? vec3(sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
-        }
-        if (kRendererTaaMode != 0) {
-            outSceneColor = vec4(shadowCovered ? vec3(sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
-        }
+        OUT_COLOR = vec4(shadowCovered ? vec3(sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
     } else if (lightingDebugView == 5u) {
         vec3 cascadeColor = GetSunShadowCascadeDebugColor(sunShadowCascadeIndex);
@@ -942,13 +940,7 @@ void main() {
             GetSunShadowCascadeDebugColor(sunShadowCascadeIndex + 1u),
             cascadeBlendWeight);
         }
-        const vec4 cascadeDebugColor = vec4(shadowCovered ? mix(cascadeColor * 0.28, cascadeColor, sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
-        if (kRendererTaaMode == 0) {
-            outColor = cascadeDebugColor;
-        }
-        if (kRendererTaaMode != 0) {
-            outSceneColor = cascadeDebugColor;
-        }
+        OUT_COLOR = vec4(shadowCovered ? mix(cascadeColor * 0.28, cascadeColor, sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
     } else if (lightingDebugView == 6u) {
         color = vec3(sunContactVisibility);
@@ -966,10 +958,9 @@ void main() {
     color = ApplyToneMap(color);
     color = ApplyColorGrading(color);
 
-    if (kRendererTaaMode == 0) {
-        outColor = vec4(color, material.baseColor.a);
-    }
-    if (kRendererTaaMode != 0) {
-        outSceneColor = vec4(linearColor, material.baseColor.a);
-    }
+#ifdef TAA_ENABLED
+    outSceneColor = vec4(linearColor, material.baseColor.a);
+#else
+    outColor = vec4(color, material.baseColor.a);
+#endif
 }

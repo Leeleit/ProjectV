@@ -1449,16 +1449,19 @@ bool CreateGraphicsPipeline(
 
 	std::vector<char> vertexShaderCode;
 	std::vector<char> fragmentShaderCode;
+	std::vector<char> fragmentShaderCodeTaaOn;
 	std::vector<char> shadowVertexShaderCode;
 	std::vector<char> shadowFragmentShaderCode;
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ReadShaders");
 		vertexShaderCode = ReadShaderFile("voxel.vert.spv");
 		fragmentShaderCode = ReadShaderFile("voxel.frag.spv");
+		fragmentShaderCodeTaaOn = ReadShaderFile("voxel.frag.taa_on.spv");
 		shadowVertexShaderCode = ReadShaderFile("voxel_shadow.vert.spv");
 		shadowFragmentShaderCode = ReadShaderFile("voxel_shadow.frag.spv");
 	}
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty() ||
+		fragmentShaderCodeTaaOn.empty() ||
 		shadowVertexShaderCode.empty() || shadowFragmentShaderCode.empty()) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ReadShaders", "voxel shader blob is empty");
 		DestroyGraphicsPipeline(context, render);
@@ -1467,6 +1470,7 @@ bool CreateGraphicsPipeline(
 
 	VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
+	VkShaderModule fragmentShaderModuleTaaOn = VK_NULL_HANDLE;
 	VkShaderModule shadowVertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule shadowFragmentShaderModule = VK_NULL_HANDLE;
 	const auto destroyShaderModules = [&] {
@@ -1477,6 +1481,10 @@ bool CreateGraphicsPipeline(
 		if (shadowVertexShaderModule) {
 			vkDestroyShaderModule(context->device, shadowVertexShaderModule, nullptr);
 			shadowVertexShaderModule = VK_NULL_HANDLE;
+		}
+		if (fragmentShaderModuleTaaOn) {
+			vkDestroyShaderModule(context->device, fragmentShaderModuleTaaOn, nullptr);
+			fragmentShaderModuleTaaOn = VK_NULL_HANDLE;
 		}
 		if (fragmentShaderModule) {
 			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
@@ -1491,10 +1499,11 @@ bool CreateGraphicsPipeline(
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.CreateShaderModules");
 		vertexShaderModule = CreateShaderModule(context->device, vertexShaderCode);
 		fragmentShaderModule = CreateShaderModule(context->device, fragmentShaderCode);
+		fragmentShaderModuleTaaOn = CreateShaderModule(context->device, fragmentShaderCodeTaaOn);
 		shadowVertexShaderModule = CreateShaderModule(context->device, shadowVertexShaderCode);
 		shadowFragmentShaderModule = CreateShaderModule(context->device, shadowFragmentShaderCode);
 	}
-	if (!vertexShaderModule || !fragmentShaderModule ||
+	if (!vertexShaderModule || !fragmentShaderModule || !fragmentShaderModuleTaaOn ||
 		!shadowVertexShaderModule || !shadowFragmentShaderModule) {
 		LogGraphicsPipelineTextFailure(
 			"CreateGraphicsPipeline.CreateShaderModules",
@@ -1504,24 +1513,6 @@ bool CreateGraphicsPipeline(
 		return false;
 	}
 
-	int32_t taaSpecializationData[2] = {0, 1};
-	const VkSpecializationMapEntry taaSpecializationMapEntry{
-		.constantID = 0,
-		.offset = 0,
-		.size = sizeof(int32_t),
-	};
-	const VkSpecializationInfo taaSpecializationInfoTaaOff{
-		.mapEntryCount = 1,
-		.pMapEntries = &taaSpecializationMapEntry,
-		.dataSize = sizeof(int32_t),
-		.pData = &taaSpecializationData[0],
-	};
-	const VkSpecializationInfo taaSpecializationInfoTaaOn{
-		.mapEntryCount = 1,
-		.pMapEntries = &taaSpecializationMapEntry,
-		.dataSize = sizeof(int32_t),
-		.pData = &taaSpecializationData[1],
-	};
 	const VkPipelineShaderStageCreateInfo vertexStageInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.pNext = nullptr,
@@ -1538,16 +1529,16 @@ bool CreateGraphicsPipeline(
 		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.module = fragmentShaderModule,
 		.pName = "main",
-		.pSpecializationInfo = &taaSpecializationInfoTaaOff,
+		.pSpecializationInfo = nullptr,
 	};
 	const VkPipelineShaderStageCreateInfo fragStageTaaOn{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
 		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.module = fragmentShaderModule,
+		.module = fragmentShaderModuleTaaOn,
 		.pName = "main",
-		.pSpecializationInfo = &taaSpecializationInfoTaaOn,
+		.pSpecializationInfo = nullptr,
 	};
 	const std::array shaderStagesTaaOff{ vertexStageInfo, fragStageTaaOff };
 	const std::array shaderStagesTaaOn{ vertexStageInfo, fragStageTaaOn };

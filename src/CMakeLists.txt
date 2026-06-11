@@ -43,6 +43,19 @@ foreach (SHADER ${SHADERS})
     list(APPEND SPV_SHADERS ${SPV})
 endforeach ()
 
+# TAA-on variant of voxel.frag: declares outSceneColor (Location 1) instead
+# of outColor (Location 0), eliminating unused MRT write warnings.
+set(VOXEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/voxel.frag.taa_on.spv)
+add_custom_command(
+        OUTPUT ${VOXEL_FRAG_TAA_SPV}
+        COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
+            -DTAA_ENABLED ${SHADER_DIR}/voxel.frag -o ${VOXEL_FRAG_TAA_SPV}
+        DEPENDS ${SHADER_DIR}/voxel.frag
+        COMMAND_EXPAND_LISTS
+        VERBATIM
+)
+list(APPEND SPV_SHADERS ${VOXEL_FRAG_TAA_SPV})
+
 add_custom_target(Shaders ALL DEPENDS ${SPV_SHADERS})
 add_dependencies(ProjectV Shaders)
 # --- КОНЕЦ БЛОКА ШЕЙДЕРОВ ---
