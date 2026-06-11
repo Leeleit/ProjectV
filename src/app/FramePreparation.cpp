@@ -46,7 +46,7 @@ bool PrepareFrameRenderData(
 		swapchain->extent,
 		GetCameraVisibleSceneMaxDistance(*camera));
 
-	if (!UpdateSceneResources(world, render, chunkCullingParameters)) {
+	if (!UpdateSceneResources(world, render, chunkCullingParameters, swapchain->extent)) {
 		runtime::LogRuntimeFailure(
 			"Frame",
 			"PrepareFrameRenderData.UpdateSceneResources",

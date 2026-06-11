@@ -190,7 +190,8 @@ bool CreateSceneResources(
 bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render,
-	const ChunkCullingParameters &shadowProjectionParameters);
+	const ChunkCullingParameters &shadowProjectionParameters,
+	const VkExtent2D swapchainExtent);
 bool UploadSceneFrameResources(
 	RenderState &render,
 	uint32_t frameIndex);

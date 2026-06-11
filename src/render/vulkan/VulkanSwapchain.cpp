@@ -427,6 +427,8 @@ bool RecreateSwapchain(
 		*render->taaHistoryColorTarget,
 		render->taaLinearSampler);
 	render->taaHistoryValid = false;
+	render->taaSceneColorNeedsInit = true;
+	render->taaHistoryNeedsInit = true;
 	render->taaFrameCounter = 0u;
 	render->taaPrevViewProjectionMatrix = {};
 

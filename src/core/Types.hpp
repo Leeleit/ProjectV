@@ -345,6 +345,7 @@ struct FrameRenderData {
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet taaResolveDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
@@ -596,6 +597,8 @@ struct RenderState {
 	float taaBlend = 0.10f;
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
+	bool taaSceneColorNeedsInit = true;
+	bool taaHistoryNeedsInit = true;
 	std::array<float, 16> taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;

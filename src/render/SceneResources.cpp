@@ -102,7 +102,8 @@ SunShadowCascadeProjectionInputs BuildSunShadowCascadeProjectionInputs(
 void RefreshSceneLightingBuffer(
 	const VoxelWorld &world,
 	RenderState &render,
-	const ChunkCullingParameters &shadowProjectionParameters)
+	const ChunkCullingParameters &shadowProjectionParameters,
+	const VkExtent2D renderExtent)
 {
 	const float shadowReceiverNearPlane =
 		std::max(shadowProjectionParameters.cameraUpAndNearPlane[3], 0.01f);
@@ -999,7 +1000,8 @@ bool CreateSceneResources(
 bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render,
-	const ChunkCullingParameters &shadowProjectionParameters)
+	const ChunkCullingParameters &shadowProjectionParameters,
+	const VkExtent2D swapchainExtent)
 {
 	PV_PROFILE_ZONE_N("UpdateSceneResources");
 	if (!world || !render || !world->voxelWorld) {
@@ -1041,7 +1043,7 @@ bool UpdateSceneResources(
 		++render->sceneVoxelPayloadVersion;
 	}
 
-	RefreshSceneLightingBuffer(*world->voxelWorld, *render, shadowProjectionParameters);
+	RefreshSceneLightingBuffer(*world->voxelWorld, *render, shadowProjectionParameters, swapchainExtent);
 
 	profiling::PlotValue("Dirty Chunks", static_cast<int64_t>(dirtyChunkCount));
 	profiling::PlotValue("Active Chunks", static_cast<int64_t>(activeChunkCount));
