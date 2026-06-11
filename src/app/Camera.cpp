@@ -129,6 +129,8 @@ void HandleCameraEvent(
 		// huge and would otherwise yank the camera look on launch.
 		if (input->skipFirstMouseMotion) {
 			input->skipFirstMouseMotion = false;
+			input->mouseDeltaX = 0.0f;
+			input->mouseDeltaY = 0.0f;
 			return;
 		}
 		input->mouseDeltaX += event->motion.xrel;
