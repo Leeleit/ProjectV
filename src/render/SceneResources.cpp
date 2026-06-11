@@ -2,6 +2,7 @@
 
 #include "debug/Profiling.hpp"
 #include "render/ShadowProjection.hpp"
+#include "render/Taa.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
@@ -141,6 +142,39 @@ void RefreshSceneLightingBuffer(
 	StoreSunShadowCascadeProjections(render.currentSceneLighting, cascadeProjections);
 	render.currentSunShadowCascadeDiagnostics = cascadeProjections.diagnostics;
 	StoreSunShadowCascadeSplits(render.currentSceneLighting, render.currentSunShadowCascadeSplits);
+	// TAA fields: `taaParams` carries the runtime gate (`enabled` = 1 / 0), the
+	// current-frame sub-pixel jitter in *pixel* units (jitterX/jitterY) and the
+	// per-frame history blend factor. `prevViewProjectionMatrix` is the previous
+	// frame's viewProjection, sampled from `render.taaPrevViewProjectionMatrix`
+	// (FramePreparation stashes that *after* BuildGraphicsPushConstants so it
+	// matches the matrix the voxel pass actually rendered with). `taaHistoryParams`
+	// exposes texel size + a one-frame validity flag. The first frame is treated
+	// as invalid because `taaPrevViewProjectionMatrix` is zero-initialised and
+	// would reproject every fragment to a single pixel.
+	// The taaHistoryParams texel-size cells default to 0 in this refresh path
+	// because `RefreshSceneLightingBuffer` is only called from the CPU side
+	// and has no direct view of the swapchain extent. The TAA resolve pass
+	// (and the TAA contract documented in `VoxelSceneLighting`) treat 0-sized
+	// texels as "skip the per-pixel reprojection step" and instead fall back
+	// to a direct current-pixel sample, which is the correct behaviour on
+	// frames where the swapchain is being recreated or the TAA path is
+	// temporarily disabled. The actual texel size for the *next* frame is
+	// patched in by `FramePreparation` via `UploadSceneFrameResources` once
+	// the swapchain extent is known; until then this zeroed value is the
+	// conservative correct choice.
+	render.currentSceneLighting.taaParams = {
+		render.taaJitterX,
+		render.taaJitterY,
+		render.taaEnabled ? render.taaBlend : 0.0f,
+		render.taaEnabled ? 1.0f : 0.0f,
+	};
+	render.currentSceneLighting.prevViewProjectionMatrix = render.taaPrevViewProjectionMatrix;
+	render.currentSceneLighting.taaHistoryParams = {
+		0.0f,
+		0.0f,
+		render.taaHistoryValid ? 1.0f : 0.0f,
+		0.0f,
+	};
 	if (render.sceneLightingMappedData) {
 		std::memcpy(
 			render.sceneLightingMappedData,

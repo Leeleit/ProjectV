@@ -508,6 +508,38 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [ ] destruction playground;
 - [ ] большой editor / plugin stack / multiplayer.
 
+### Post-TAA follow-ups (отложено из `2026-06-11` TAA сессии)
+
+Улучшения качества поверх текущего TAA baseline (RGB 3×3 clamp, motion vectors через
+depth-reconstruct, 8-tap Halton(2,3), HDR linear scene color). Не блокируют mainline, не
+влияют на anti-jitter цель, но дадут заметный прирост чистоты/производительности:
+
+- [ ] **YCoCg neighbourhood clamp** в TAA resolve вместо RGB clamp (лучше clamps bright
+      highlights и не теряет chroma, цена — 1 vec3 unpack/pack на пиксель).
+- [ ] **Mesh-side motion vectors** через `gl_PrimitiveID` / per-face velocity (избавляет от
+      depth-reconstruct, открывает путь к dilated motion для прозрачных граней).
+- [ ] **Adaptive sharpening / CAS после TAA** (`tdrx`/`ffx-cas` style sharpening intensity
+      от `1 - blend`, чтобы скомпенсировать perceived blur от temporal accumulation).
+- [ ] **DLSS / FSR 2 / XeSS** (отдельная работа, R&D); потребует per-frame motion vectors в
+      R16G16 формате, depth/normal G-buffer и UI для quality tier (Perf / Balanced / Quality).
+- [ ] **Per-pass TAA tuning HUD ladder** (как у `B` debug views / `H/K` exposure): runtime
+      `jitter scale`, `blend`, `neighbourhood radius`, `valid` — отдельные горячие клавиши
+      + sidecar metadata.
+- [ ] **Variable-rate shading** (VRS) для каскадов shadow / AOCC / contact shadow — экономия
+      fragment bandwidth в зонах, где TAA уже гарантирует temporal stability.
+- [ ] **Camera-cut detection** (резкий скачок `viewProjDelta` > threshold → автоматически
+      invalidates history на 1+ кадров, чтобы не было «smear» артефакта при instant teleport).
+- [ ] **Anti-flicker для contact / AOCC / local light** через тот же history buffer
+      (отдельный mini-TAA проход на этих слоях, blend factor поменьше).
+- [ ] **Velocity buffer для diffuse irradiance / specular probes** (отложено до deferred
+      pass; current forward path не имеет G-buffer, поэтому diffuse TAA не применим).
+- [ ] **Halton(2,3) → longer cycle (16-tap)** если 8-tap покажет visible shimmer-pattern
+      на slow-look сценах; trade-off — больше aliasing frequency, но плавнее converge.
+- [ ] **HDR scene color → R11G11B10_UFloat** как эксперимент bandwidth saving (текущий
+      R16G16B16A16_SFLOAT — самый дорогой формат; на 1440p ~24MB на target).
+- [ ] **Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`) с
+      presets, runtime switchable через debug ladder (отдельный P-уровень от `taaEnabled`).
+
 ---
 
 ## 6. Риски

@@ -21,6 +21,8 @@ set(SHADERS
         ${SHADER_DIR}/voxel_shadow.vert
         ${SHADER_DIR}/voxel_shadow.frag
         ${SHADER_DIR}/voxel_mesh.comp
+        ${SHADER_DIR}/taa_resolve.vert
+        ${SHADER_DIR}/taa_resolve.frag
         ${SHADER_DIR}/debug_overlay.vert
         ${SHADER_DIR}/debug_overlay.frag
         ${SHADER_DIR}/debug_hud.vert
@@ -66,6 +68,7 @@ target_sources(ProjectV PRIVATE
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
         render/ShadowProjection.cpp
+        render/Taa.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp

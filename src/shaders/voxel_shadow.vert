@@ -39,6 +39,13 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
+    // TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
+    // Currently shadow pass only consumes sceneLighting fields it already uses;
+    // the TAA fields are present for byte-layout parity with voxel.frag /
+    // voxel_mesh.comp. Layout is enforced by static_assert on the C++ side.
+    vec4 taaParams;
+    mat4 prevViewProjectionMatrix;
+    vec4 taaHistoryParams;
 } sceneLighting;
 
 layout(push_constant) uniform ShadowPushConstants {

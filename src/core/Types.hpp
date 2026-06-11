@@ -107,6 +107,7 @@ enum class InputAction : uint8_t {
 	ToggleMutationAnchor,
 	PickTargetMaterial,
 	CaptureScreenshot,
+	ToggleTaa,
 	Count,
 };
 
@@ -383,6 +384,20 @@ struct DebugStats {
 	float sceneMaxExposure = 4.0f;
 	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
 	LightingDebugView lightingDebugView = LightingDebugView::Final;
+	// TAA defaults to off until the offscreen scene-color / history ping-pong
+	// resolve pipeline lands. The CPU-side Halton jitter is plumbed all the
+	// way through `BuildGraphicsPushConstants` / `FramePreparation` / scene
+	// lighting buffer, but the resolve pass that converts jitter into stable
+	// output is still future work. Leaving `taaEnabled` off here means
+	// turning the Taa debug view on or pressing the Taa toggle does not
+	// introduce sub-pixel wobble on the main pass before the resolve
+	// pass exists. See `agent/status.md` 2026-06-11 entry for the
+	// resolved Taa contract + the deferred offscreen-target work.
+	bool taaEnabled = false;
+	float taaJitterX = 0.0f;
+	float taaJitterY = 0.0f;
+	float taaBlend = 0.10f;
+	bool taaHistoryValid = false;
 	std::array<float, 3> sunDirection{};
 	float sunIntensity = 0.0f;
 	float sunShadowStrength = 0.0f;
@@ -537,6 +552,51 @@ struct RenderState {
 	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
+	// TAA (Temporal Anti-Aliasing) runtime state. `taaEnabled` is the master
+	// gate; when false, the main pass writes straight to the swapchain and
+	// no TAA resolve runs. `taaBlend` is the per-frame history blend factor
+	// (lower = more ghosting on moving silhouettes, higher = less stable on
+	// stationary detail). `taaFrameCounter` advances an 8-tap Halton(2,3)
+	// sequence so the projection-matrix jitter spans the full sub-pixel
+	// neighbourhood over eight frames before repeating. `taaHistoryValid`
+	// drops to false for one frame after resize / world reload / preset
+	// change / pause toggle / Taa toggle so the next resolve takes the
+	// current scene as the only sample instead of the stale history.
+	// `taaPrevViewProjectionMatrix` is the previous frame's viewProjection,
+	// uploaded as the `prevViewProjectionMatrix` field of `VoxelSceneLighting`
+	// and consumed by the TAA resolve pass for depth-based reprojection.
+	// `taaJitterX/Y` are the current frame's NDC sub-pixel offsets and are
+	// written into `VoxelSceneLighting.taaParams` for the same resolve pass.
+	bool taaEnabled = false;
+	float taaBlend = 0.10f;
+	uint32_t taaFrameCounter = 0u;
+	bool taaHistoryValid = false;
+	std::array<float, 16> taaPrevViewProjectionMatrix{};
+	float taaJitterX = 0.0f;
+	float taaJitterY = 0.0f;
+	// TAA resolve pass resources. The pipeline is intentionally left as
+	// a follow-up because wiring the offscreen scene color + history
+	// ping-pong + fullscreen resolve pass is a separate, larger change
+	// that needs to land alongside depth-format / sample-count decisions.
+	// Until then these fields stay null and the main pass writes straight
+	// to the swapchain so the existing `voxel.frag` output reaches the
+	// screen unchanged. The shaderc list and the scene-lighting
+	// `taaParams` / `prevViewProjectionMatrix` / `taaHistoryParams`
+	// contract are already in place; the resolve pipeline is a
+	// drop-in addition on top.
+	VkImage taaSceneColorImage = VK_NULL_HANDLE;
+	VkImageView taaSceneColorImageView = VK_NULL_HANDLE;
+	VmaAllocation taaSceneColorAllocation = VK_NULL_HANDLE;
+	VkImage taaHistoryColorImage = VK_NULL_HANDLE;
+	VkImageView taaHistoryColorImageView = VK_NULL_HANDLE;
+	VmaAllocation taaHistoryColorAllocation = VK_NULL_HANDLE;
+	VkSampler taaLinearSampler = VK_NULL_HANDLE;
+	VkImageView taaResolveAttachmentImageView = VK_NULL_HANDLE;
+	VkPipelineLayout taaResolvePipelineLayout = VK_NULL_HANDLE;
+	VkPipeline taaResolvePipeline = VK_NULL_HANDLE;
+	VkDescriptorSetLayout taaResolveDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool taaResolveDescriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> taaResolveDescriptorSets{};
 };
 
 struct LookDevCaptureAutomationState {

@@ -30,6 +30,7 @@ enum class LightingDebugView : uint8_t {
 	Contact,
 	Occlusion,
 	Fog,
+	Taa,
 };
 
 enum class ShadowTuningTarget : uint8_t {
@@ -100,10 +101,28 @@ struct VoxelSceneLighting {
 	std::array<float, 4> localPointLightColorAndIntensity{};
 	// enabled, source radius, shadow strength, shadow bias
 	std::array<float, 4> localPointLightParams{};
+	// TAA (Temporal Anti-Aliasing) contract. Layout byte-for-byte matches
+	// the three shader-side `SceneLightingBuffer` declarations
+	// (`voxel.frag`, `voxel_shadow.vert`, `voxel_mesh.comp`); see
+	// `agent/decisions.md` §18 — `taaEnabled` is the runtime gate
+	// (1.0 = on, 0.0 = off), `taaBlend` is the history blend factor
+	// (lower = more ghosting, higher = less stable). `taaJitterX/Y` carry
+	// the current-frame sub-pixel Halton offset in NDC. `prevViewProjectionMatrix`
+	// is the previous frame's viewProjection, used by the TAA resolve pass to
+	// reproject the current pixel into the history buffer. `taaHistoryParams`
+	// exposes texel size + a one-frame validity flag set to 0 after
+	// resize / world reload / preset change / pause.
+	std::array<float, 4> taaParams{};
+	// previous frame's viewProjection (column-major, same layout as
+	// `GraphicsPushConstants::viewProjection`). Reused by the TAA resolve
+	// pass for depth-based reprojection; zeroed on the first frame.
+	std::array<float, 16> prevViewProjectionMatrix{};
+	// texel size x, texel size y, history valid (0/1), reserved
+	std::array<float, 4> taaHistoryParams{};
 };
 static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
 static_assert(std::is_trivially_copyable_v<VoxelSceneLighting>);
-static_assert(sizeof(VoxelSceneLighting) == 512);
+static_assert(sizeof(VoxelSceneLighting) == 608);
 static_assert(offsetof(VoxelSceneLighting, skyColorAndFogDensity) == 0);
 static_assert(offsetof(VoxelSceneLighting, horizonColorAndFogStart) == 16);
 static_assert(offsetof(VoxelSceneLighting, groundColorAndFogMax) == 32);
@@ -121,6 +140,9 @@ static_assert(offsetof(VoxelSceneLighting, shadowCascadeBlendParams) == 448);
 static_assert(offsetof(VoxelSceneLighting, localPointLightPositionAndRadius) == 464);
 static_assert(offsetof(VoxelSceneLighting, localPointLightColorAndIntensity) == 480);
 static_assert(offsetof(VoxelSceneLighting, localPointLightParams) == 496);
+static_assert(offsetof(VoxelSceneLighting, taaParams) == 512);
+static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528);
+static_assert(offsetof(VoxelSceneLighting, taaHistoryParams) == 592);
 
 constexpr size_t kVoxelMaterialCount = 5;
 

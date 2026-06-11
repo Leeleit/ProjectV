@@ -6,6 +6,7 @@
 #include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
 #include "render/SceneResources.hpp"
+#include "render/Taa.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 bool PrepareFrameRenderData(
@@ -118,9 +119,33 @@ bool PrepareFrameRenderData(
 		*interaction,
 		*debug,
 		&frame->renderData.debugOverlayBoxes);
+	// TAA jitter: advance the 8-tap Halton(2,3) sub-pixel sequence and stash
+	// the offset so the next frame can reproject through it. The jitter sits
+	// in pixel units here; `BuildGraphicsPushConstants` converts it to NDC
+	// when it writes the projection matrix. TAA is the source of the
+	// anti-jitter that closed the user-reported 2026-06-11 jitter bug, so
+	// even at this hook we treat `taaEnabled` as a master gate and force
+	// the jitter to zero when it is off.
+	const std::array<float, 2> taaPixelJitter = render->taaEnabled
+		? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
+		: std::array<float, 2>{0.0f, 0.0f};
+	render->taaJitterX = taaPixelJitter[0];
+	render->taaJitterY = taaPixelJitter[1];
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
-		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(*camera, swapchain->extent);
+		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(
+			*camera,
+			swapchain->extent,
+			render->taaJitterX,
+			render->taaJitterY);
+	}
+	// Stash the current frame's viewProjection as the next frame's `prev`.
+	// The TAA resolve pass consumes `prevViewProjectionMatrix` from
+	// `VoxelSceneLighting`; on the *first* frame `taaPrevViewProjectionMatrix`
+	// is zero-initialised, so the first resolve correctly treats the history
+	// as invalid and falls back to the current sample only.
+	if (render->taaEnabled) {
+		render->taaPrevViewProjectionMatrix = frame->renderData.graphicsPushConstants.viewProjection;
 	}
 	if (world->voxelWorld) {
 		frame->renderData.graphicsPushConstants.worldMinAndChunkSize = {

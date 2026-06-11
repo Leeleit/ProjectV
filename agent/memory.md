@@ -384,3 +384,115 @@ smoke/capture, всегда либо `cmake --build` с явной пересб�
 Follow-up `vec4 outCornerAO` + barycentrics в фрагменте — отдельная итерация, если одной компоненты через
 `unpackUnorm4x8().x` окажется недостаточно на больших стеках (текущий capture на 5-блочной башне
 визуально гладкий, дополнительные данные не нужны).
+
+## 10.12 TAA infrastructure landed (anti-jitter baseline, `2026-06-11`, uncommitted)
+
+**Что сделано в этой сессии.** Anti-jitter baseline is half-wired: вся CPU-сторона +
+scene lighting buffer contract + shaders написаны, но offscreen scene-color /
+history ping-pong / TAA resolve pipeline ещё **не подключён** (visual TAA ещё не
+работает). Причина расщепления: TAA resolve pipeline требует значительного объёма
+изменений в Vulkan-инфраструктуре (offscreen render target, history ping-pong,
+fullscreen resolve pass, pipeline layout + descriptor set, depth attachment
+sharing, layout transitions), и в этой сессии фокус был на инфраструктурной
+готовности, а не на визуальном эффекте.
+
+**Что landed (CPU + contracts + shaders, no visible effect yet):**
+- `VoxelSceneLighting` расширен с `taaParams` (vec4: jitterX, jitterY, blend, enabled),
+  `prevViewProjectionMatrix` (mat4, 64 bytes), `taaHistoryParams` (vec4: texelX, texelY,
+  historyValid, reserved) — суммарно 96 байт, sizeof 512 → 608, byte-layout enforced
+  через `static_assert` в C++ + identity в трёх шейдерах (`voxel.frag`,
+  `voxel_shadow.vert`, `voxel_mesh.comp`). Layout mismatch ловится compile-time.
+- `BuildGraphicsPushConstants` принимает дополнительные `taaJitterNdcX/Y` параметры,
+  применяет их к projection matrix через `m[2][0]` и `m[2][1]` (NDC sub-pixel offset).
+  Default-значения 0, поэтому существующие вызовы работают без jitter.
+- `FramePreparation` продвигает 8-tap Halton(2,3) sequence через `Taa::AdvanceTaaPixelJitter`
+  каждый кадр, конвертирует pixel→NDC offset, применяет jitter, и стэшит
+  `viewProjection` в `render.taaPrevViewProjectionMatrix` для следующего кадра.
+- `RefreshSceneLightingBuffer` (в `SceneResources.cpp`) заполняет `currentSceneLighting.taaParams`,
+  `prevViewProjectionMatrix`, `taaHistoryParams` каждый кадр, потом `memcpy` в
+  `sceneLightingMappedData` уже включает TAA поля автоматически.
+- `LightingDebugView::Taa` (10-е значение) + `GetNextLightingDebugView` chain
+  `Fog → Taa → Final`, `LightingDebugViewToString` → `"TAA"`. `B` клавиша цикл теперь
+  включает Taa debug view.
+- `InputAction::ToggleTaa` (37-е значение) — будет wired в `InputActions.cpp`
+  + обработано в `AppUpdate.cpp` в следующей сессии (binding `T` клавиши).
+- `Taa` debug view в `voxel.frag` — placeholder case (ещё не реализован).
+- `DebugStats` обогащён `taaEnabled`, `taaJitterX/Y`, `taaBlend`, `taaHistoryValid`.
+- `RenderState` обогащён `taaEnabled` (default **false**), `taaBlend=0.10`,
+  `taaFrameCounter=0`, `taaHistoryValid=false`, `taaPrevViewProjectionMatrix`,
+  `taaJitterX/Y`, **плюс** все поля для TAA resolve pipeline (offscreen images,
+  views, allocations, sampler, descriptor set layout/pool/sets, pipeline) — все
+  `VK_NULL_HANDLE` пока, готовы к подключению.
+- `Taa.hpp` / `Taa.cpp` — Halton(2,3) 8-tap helper, `BuildTaaHistoryParams`.
+- `taa_resolve.vert` — fullscreen triangle (без vertex buffer, `gl_VertexIndex` 0..2).
+- `taa_resolve.frag` — 3×3 RGB clamp history blend с depth-reproject, тон-мэп +
+  color grading применяются здесь (вынесены из `voxel.frag` чтобы history blend
+  работал в линейном свете). Shaders написаны, но ещё не используются.
+
+**Что ещё **не** сделано (deferred TAA pipeline work):**
+- Offscreen scene color target (R16G16B16A16_SFLOAT, swapchain-sized) + history
+  ping-pong (2 images, swap после resolve) — нужны VMA-allocated VkImage +
+  VkImageView + transitions в `Renderer.cpp`.
+- TAA resolve pipeline (fullscreen) + pipeline layout + descriptor set (bindings:
+  sceneColor, historyColor, depth, sceneLighting). `VulkanGraphicsPipeline.cpp`
+  сейчас имеет 5 pipelines, нужно добавить 6-й — `taaResolvePipeline`.
+- `Renderer.cpp` main pass должен писать в `taaSceneColorImage` вместо swapchain;
+  TAA resolve pass запускается после, output в swapchain. Layout transitions:
+  `COLOR_ATTACHMENT_OPTIMAL → SHADER_READ_ONLY_OPTIMAL` для истории, swap-а
+  ping-pong.
+- `VulkanSwapchain.cpp` / `VulkanInit.cpp` — recreate scene color target при
+  resize (как `RecreateSwapchain`).
+- `DebugHud.cpp` — добавить TAA JITR/BLND/HIST строки в detailed HUD.
+- `AppUpdate.cpp` — обработать `ToggleTaa` action, обновить stats.
+- `InputActions.cpp` — wire T keybinding.
+- `ScreenshotCapture.cpp` — добавить `taa_*` строки в sidecar.
+- `AppUpdate.cpp` / `VulkanSwapchain.cpp` — invalidate history на resize / world
+  reload / preset change / pause / Taa toggle.
+
+**`taaEnabled` default = false.** Это **критический** design decision. Причина:
+TAA resolve pipeline ещё не подключён, поэтому jitter без resolve = sub-pixel
+wobble на main pass = видимый **новый** aliasing вместо anti-jitter. `taaEnabled=false`
+→ jitter=0 → сцена рендерится как до изменений. Когда TAA pipeline подключён в
+следующей сессии — переключить default на `true` и проверить anti-jitter.
+
+**Build verification:**
+- `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green
+- `ctest --test-dir build/linux-clang-debug` — 1/1 passed (1.42 sec)
+- `cp build/.../src/*.spv build/.../bin/` — выполнено (per §10.11 lesson learned)
+- Проверка `Offsetof` через `static_assert` в C++ + identity в GLSL прошла compile-time.
+
+**Где смотреть прогресс:**
+- `src/voxel/VoxelMaterials.hpp` — `VoxelSceneLighting` layout + `static_assert`
+- `src/voxel/VoxelMaterials.cpp` — `LightingDebugView::Taa` + switch
+- `src/core/Types.hpp` — `DebugStats` + `RenderState` TAA поля + `InputAction::ToggleTaa`
+- `src/app/Camera.{hpp,cpp}` — `BuildGraphicsPushConstants` jitter
+- `src/app/FramePreparation.cpp` — Halton + prev viewProj save
+- `src/render/SceneResources.cpp` — `RefreshSceneLightingBuffer` TAA поля
+- `src/render/Taa.{hpp,cpp}` — Halton sequence
+- `src/shaders/taa_resolve.{vert,frag}` — TAA resolve shaders
+- `src/shaders/voxel.frag`, `voxel_shadow.vert`, `voxel_mesh.comp` — `SceneLightingBuffer` расширен
+- `src/CMakeLists.txt` — Taa.cpp + taa_resolve шейдеры
+- `TODO.md` §5 Post-TAA follow-ups — R&D список
+- `agent/status.md` — snapshot 2026-06-11
+- `agent/decisions.md` §18 TAA contract — **TODO**: добавить в следующей сессии
+
+**Lesson learned (shaders):** `cmake --build` корректно скопировал новые .spv в bin на этот
+раз (build в этом сессии вызвал `Linking CXX executable bin/ProjectV`, что
+триггерит `add_custom_command(TARGET ProjectV POST_BUILD ...)`). Но после `Taa.cpp`
+добавления build только перекомпилировал .o файлы и не пересоздал ELF, поэтому
+старые .spv в bin остались. Я **вручную** `cp` все нужные .spv после build'а
+(per §10.11). Working rule остаётся: после shader changes → всегда
+`cmake --build ... --target ProjectV` для полной перелинковки, иначе `cp` вручную.
+
+**Следующий шаг (новая сессия):**
+1. Добавить offscreen scene color + history ping-pong в `VulkanSwapchain.cpp` (или
+   новый `VulkanRenderTargets.{hpp,cpp}`).
+2. Создать TAA resolve pipeline в `VulkanGraphicsPipeline.cpp`.
+3. Изменить `Renderer.cpp::RecordGraphicsCommands` — main pass в `taaSceneColorImage`,
+   TAA resolve pass в swapchain.
+4. `DebugHud.cpp` — TAA JITR / BLND / HIST строки.
+5. `AppUpdate.cpp` — `ToggleTaa` handler + stats propagation.
+6. `InputActions.cpp` — wire T keybinding.
+7. `ScreenshotCapture.cpp` — taa_* sidecar.
+8. Когда visual TAA работает: переключить `taaEnabled` default на `true`,
+   сделать captures (FINAL + JITR debug view), закоммитить.

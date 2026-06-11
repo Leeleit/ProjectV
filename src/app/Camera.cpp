@@ -216,7 +216,9 @@ float GetCameraVisibleSceneMaxDistance(const CameraState &camera)
 
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
-	const VkExtent2D extent)
+	const VkExtent2D extent,
+	float taaJitterNdcX,
+	float taaJitterNdcY)
 {
 	const Float3 cameraPosition{
 		camera.position[0],
@@ -256,14 +258,23 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	const float nearPlane = camera.nearPlane;
 	const float farPlane = camera.farPlane;
 
+	// TAA jitter: the projection matrix translates NDC X/Y by `2 * jitterNdc / extent`
+	// in clip space (because the GPU does `ndc.xy = clip.xy / clip.w`, and on the
+	// standard column-major `MultiplyMatrices(projection, view)` used below the
+	// `m[2]` and `m[6]` cells become the third column's first/second row). This
+	// shifts the entire rasterization of the current frame by a sub-pixel amount
+	// so successive frames can be averaged out to a stable image. Caller passes
+	// zero when TAA is disabled or the camera is static for diagnostics.
+	const float jitterNdcX = extent.width > 0 ? taaJitterNdcX * 2.0f / static_cast<float>(extent.width) : 0.0f;
+	const float jitterNdcY = extent.height > 0 ? taaJitterNdcY * 2.0f / static_cast<float>(extent.height) : 0.0f;
 	const std::array projection{
 		1.0f / (aspect * tanHalfFov),
 		0.0f,
-		0.0f,
+		jitterNdcX,
 		0.0f,
 		0.0f,
 		-1.0f / tanHalfFov,
-		0.0f,
+		jitterNdcY,
 		0.0f,
 		0.0f,
 		0.0f,
