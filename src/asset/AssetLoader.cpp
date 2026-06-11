@@ -1,5 +1,7 @@
 #include "asset/AssetLoader.hpp"
 
+#include "asset/DracoMeshDecoder.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -192,7 +194,7 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 		return nullptr;
 	}
 
-	fastgltf::Parser parser(fastgltf::Extensions::None);
+	fastgltf::Parser parser(fastgltf::Extensions::KHR_draco_mesh_compression);
 	constexpr fastgltf::Options options = fastgltf::Options::None;
 	constexpr fastgltf::Category categories = fastgltf::Category::OnlyRenderable;
 
@@ -226,19 +228,21 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 
 	for (const auto &mesh : asset.meshes) {
 		for (const auto &primitive : mesh.primitives) {
-			if (primitive.dracoCompression != nullptr) {
-				SetLastError("draco-compressed primitive not yet supported (M3)");
-				if (outError) {
-					outError->message = gLastErrorMessage;
-				}
-				return nullptr;
-			}
 			if (primitive.type != fastgltf::PrimitiveType::Triangles) {
 				continue;
 			}
 
 			PrimitiveData primitiveData;
-			if (!LoadPrimitive(asset, primitive, primitiveData)) {
+			if (primitive.dracoCompression != nullptr) {
+				std::string dracoError;
+				if (!DecodeDracoPrimitive(asset, primitive, primitiveData, &dracoError)) {
+					SetLastError("draco decode failed: " + dracoError);
+					if (outError) {
+						outError->message = gLastErrorMessage;
+					}
+					return nullptr;
+				}
+			} else if (!LoadPrimitive(asset, primitive, primitiveData)) {
 				if (outError) {
 					outError->message = gLastErrorMessage;
 				}

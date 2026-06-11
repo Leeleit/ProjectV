@@ -72,6 +72,7 @@ target_sources(ProjectV PRIVATE
         asset/AssetLoader.cpp
         asset/AssetManifest.cpp
         asset/AssetRegistry.cpp
+        asset/DracoMeshDecoder.cpp
         asset/MeshBaker.cpp
         asset/MeshGpuResources.cpp
         ecs/EcsWorld.cpp

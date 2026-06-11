@@ -58,6 +58,7 @@ add_executable(ProjectVAssetTests
         ../src/asset/AssetLoader.cpp
         ../src/asset/AssetManifest.cpp
         ../src/asset/AssetRegistry.cpp
+        ../src/asset/DracoMeshDecoder.cpp
 )
 
 target_compile_definitions(ProjectVAssetTests PRIVATE
@@ -71,6 +72,7 @@ target_include_directories(ProjectVAssetTests PRIVATE
 target_link_libraries(ProjectVAssetTests PRIVATE projectv_build_options)
 target_link_libraries(ProjectVAssetTests PRIVATE
         fastgltf::fastgltf
+        draco::draco
         glm
 )
 
@@ -83,6 +85,7 @@ set_tests_properties(ProjectVAssetTests PROPERTIES LABELS "unit")
 add_executable(ProjectVMeshBakerTests
         MeshBakerTests.cpp
         ../src/asset/AssetLoader.cpp
+        ../src/asset/DracoMeshDecoder.cpp
         ../src/asset/MeshBaker.cpp
 )
 
@@ -97,11 +100,46 @@ target_include_directories(ProjectVMeshBakerTests PRIVATE
 target_link_libraries(ProjectVMeshBakerTests PRIVATE projectv_build_options)
 target_link_libraries(ProjectVMeshBakerTests PRIVATE
         fastgltf::fastgltf
+        draco::draco
         meshoptimizer
         glm
 )
 
 add_test(NAME ProjectVMeshBakerTests COMMAND ProjectVMeshBakerTests)
 set_tests_properties(ProjectVMeshBakerTests PROPERTIES LABELS "unit")
+
+# Draco decoder test executable (M3). Like the asset-loader test,
+# it's a separate executable to keep its own `main()` and its
+# own draco / fastgltf link line. The draco-compressed fixture
+# `tests/fixtures/box_draco.glb` is the smallest self-contained
+# draco file we have; the non-draco Box.glb is also loaded
+# through the same code path to verify the M3 change did not
+# regress M1.
+add_executable(ProjectVDracoTests
+        DracoDecoderTests.cpp
+        ../src/asset/AssetLoader.cpp
+        ../src/asset/DracoMeshDecoder.cpp
+        ../src/asset/MeshBaker.cpp
+)
+
+target_compile_definitions(ProjectVDracoTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVDracoTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVDracoTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVDracoTests PRIVATE
+        fastgltf::fastgltf
+        draco::draco
+        meshoptimizer
+        glm
+)
+
+add_test(NAME ProjectVDracoTests COMMAND ProjectVDracoTests)
+set_tests_properties(ProjectVDracoTests PROPERTIES LABELS "unit")
+
 
 

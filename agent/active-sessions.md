@@ -57,6 +57,18 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-11-taa-tooling-1.4-5.1-6.x
+
+- **id:** `2026-06-11T20:55Z-taa-tooling-1.4-5.1-6.x`
+- **started-at:** 2026-06-11T20:55:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** Mini-plan 1.4 + 5.1 + 6.x: (A) TAA tuning HUD ladder — `J` jitter, `M` blend, `K` neighbourhood radius, `L` history-invalidate hotkeys + DebugHud lines + sidecar keys; (B) 5.1 RenderDoc markers — `vkCmdBeginDebugUtilsLabelEXT/End` на hot sites в `Renderer.cpp`, gated `PROJECTV_ENABLE_RENDERDOC_MARKERS`; (C) 6.x doc sync — TODO close, memory TAA section, decisions TAA contract, vulkan addendum. 3 связных коммита в одной сессии по выбору оператора.
+- **files-touched-intent:** `src/app/InputActions.cpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, `src/render/Renderer.cpp`, `src/render/vulkan/VulkanBootstrap.cpp` (marker fn loaders), `src/core/Types.hpp` (DebugStats / TaaTuning fields), `agent/memory.md` (TAA section), `agent/decisions.md` (TAA contract), `agent/active-sessions.md` (close), `agent/status.md` (snapshot), `TODO.md` (close 1.4 + 5.1), `legacy/docs/libraries/vulkan/` (dual-MRT addendum)
+- **status:** open
+- **notes:** Mini-plan по выбору оператора. **Asset-pipeline parallel** — M3 draco landed в working tree (`src/asset/DracoMeshDecoder.{cpp,hpp}`, `src/asset/AssetLoader.cpp`, `src/CMakeLists.txt`, `tests/CMakeLists.txt`, `tests/DracoDecoderTests.cpp`); non-overlapping scope с моими файлами. YCoCg sub-task (1.1) уже в `a2972fa`, запись закрыта ниже в этой сессии.
+
 ### session-2026-06-11-taa-a2-flip
 
 - **id:** `2026-06-11T23:44Z-taa-a2-flip`
@@ -94,8 +106,8 @@ Append-only ledger активных и недавно завершённых AI-
 - **branch:** master
 - **scope:** M0–M5: импорт полигональных моделей через `fastgltf` + `draco` + `meshoptimizer`. M0 = CMake wiring + smoke build. M1 = sync `AssetLoader` (`.glb` → `fastgltf::Asset`) + `AssetRegistry` + env-var manifest `PROJECTV_MODELS=path.glb@x,y,z;...`. M2 = `MeshBaker` + `MeshGpuResources` (interleaved vertex, meshopt vcache+vfetch, VMA upload). M3 = draco path (`KHR_draco_mesh_compression`). M4 = model graphics pass + `model.vert/frag` + shared GLSL helper для `SceneLightingBuffer` (Q6=U3=b) + `MeshComponent`/`ModelTransformComponent` ECS + Jolt static AABB body. M5 = multi-instance + frustum cull.
 - **files-touched-intent:** `CMakeLists.txt`, `src/CMakeLists.txt`, `src/asset/AssetLoader.{hpp,cpp}` (M1+), `src/asset/MeshBaker.{hpp,cpp}` (M2+), `src/asset/MeshGpuResources.{hpp,cpp}` (M2+), `src/asset/DracoMeshDecoder.{hpp,cpp}` (M3+), `src/asset/ModelPass.{hpp,cpp}` (M4+), `src/asset/ModelComponent.hpp` (M4+), `src/asset/AssetRegistry.{hpp,cpp}` (M1+), `src/asset/AssetStub.cpp` (M0), `src/render/Renderer.cpp` (M4 — `RecordModelCommands` between opaque and transparent), `src/render/SceneResources.cpp` (M4 — `ModelRenderState` slot), `src/core/Types.hpp` (M4 — `ModelRenderState` field), `src/app/FramePreparation.cpp` (M4+ — build model draw list), `src/ecs/EcsWorld.cpp` (M4+ — register components), `src/app/AppUpdate.cpp` (M1+ — manifest load), `src/shaders/model.vert`, `src/shaders/model.frag`, `src/shaders/lighting.glsl` (M4 — shared GGX helper + `SceneLightingBuffer` GLSL declaration, U3=b), `tests/AssetLoaderTests.cpp` (M1+), `tests/fixtures/box.glb` (M1). **Не трогаю:** `src/render/vulkan/VulkanBootstrap.cpp`, `src/render/vulkan/VulkanGraphicsPipeline.cpp`, `src/render/vulkan/TaaResolvePipeline.cpp`, `src/render/Taa.*`, `src/render/TaaRenderTargets.cpp` (TAA-сессия scope, см. ниже).
-- **status:** open (M2 just completed, awaiting M2 commit operator approval; M3-M5 pending)
-- **notes:** Решения зафиксированы в диалоге `2026-06-11`: Q1=2, Q2=1 (→ план 3), Q3=1 (→ план 3), Q4=2, Q5=2 (receive-only, выровнено с RTX-будущим), Q6=1 (universal PBR SSBO, GGX reuse), Q7=1 (без save), Q8=2 (можно трогать `SceneLightingBuffer`), U1=c, U2=c, U3=b, U4=b. **Прогресс:** M0 = `1c72a4b` (CMake wiring + stub TU) — closed. M1 = `8b112e7 feat(asset): sync .glb loader, manifest parser, and asset registry (M1)` — closed. M2 = MeshBaker + MeshGpuResources (meshopt vcache+vfetch, VMA staging→device upload) — closed-pending-commit. TAA-сессия продвинулась через `98fb391`, `9764463`, `ee82c6f`, `b7e672f`, `b0fcd9b`, `02c297c`, `3c87f21`; visual TAA flipped on by default в `ee82c6f`. Все TAA-коммиты имеют непересекающийся scope с asset-pipeline (только shared: `src/CMakeLists.txt` shared static lib list).
+- **status:** open (M3 just completed, awaiting M3 commit operator approval; M4-M5 pending)
+- **notes:** Решения зафиксированы в диалоге `2026-06-11`: Q1=2, Q2=1 (→ план 3), Q3=1 (→ план 3), Q4=2, Q5=2 (receive-only, выровнено с RTX-будущим), Q6=1 (universal PBR SSBO, GGX reuse), Q7=1 (без save), Q8=2 (можно трогать `SceneLightingBuffer`), U1=c, U2=c, U3=b, U4=b. **Прогресс:** M0 = `1c72a4b` (CMake wiring + stub TU) — closed. M1 = `8b112e7 feat(asset): sync .glb loader, manifest parser, and asset registry (M1)` — closed. M2 = `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA GPU upload (M2)` — closed. M3 = draco path (`KHR_draco_mesh_compression`, fastgltf extension flag + `draco::Decoder` → `PrimitiveData`) — closed-pending-commit. TAA-сессия продвинулась через `98fb391` → `a2972fa` (YCoCg clamp); все TAA-коммиты имеют непересекающийся scope с asset-pipeline.
 
 ### session-2026-06-11-taa-renderer-wiring
 
@@ -117,6 +129,20 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Недавние закрытые сессии (последние ~10). Старые можно переносить
      в `legacy/docs/archive/agent-sessions/` для сохранения истории. -->
+
+### session-2026-06-11-taa-ycocg-clamp
+
+- **id:** `2026-06-11T20:45Z-taa-ycocg-clamp`
+- **started-at:** 2026-06-11T20:45:00Z
+- **closed-at:** 2026-06-11T20:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** TAA Блок 1 / 1.1 — YCoCg neighbourhood clamp в TAA resolve (замена RGB clamp). Lossless transform Y/Co/Cg, chroma highlight'ов не вымывается в grey. Sidecar metadata `taa_clamp_color_space=YCoCg`.
+- **files-touched-intent:** `src/shaders/taa_resolve.frag`, `src/render/ScreenshotCapture.cpp`, `TODO.md`
+- **status:** closed
+- **commit-hash:** `a2972fa` — `fix(taa): clamp history in YCoCg space to preserve chroma on bright highlights`
+- **notes:** Resumed session, YCoCg sub-task complete. Build / ctest / smoke **не перепрогонял** в resumed-сессии по решению оператора (поверхность маленькая, baseline из A1/A2 chain 6/6 clean). Visual verify остаётся в TODO §5 Блок-0 (`Confirm 02c297c` etc). Operator явно сказал «сессию не закрываем, будем ещё работать» — закрыт только этот sub-task (1.1), сама resumed-сессия продолжается как `session-2026-06-11-taa-tooling-1.4-5.1-6.x`.
 
 ### session-2026-06-11-multi-agent-policy
 
