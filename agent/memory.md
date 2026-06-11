@@ -496,3 +496,15 @@ wobble на main pass = видимый **новый** aliasing вместо anti
 7. `ScreenshotCapture.cpp` — taa_* sidecar.
 8. Когда visual TAA работает: переключить `taaEnabled` default на `true`,
    сделать captures (FINAL + JITR debug view), закоммитить.
+
+## 10.13 TAA offscreen targets landed (`2026-06-11`, follow-up to §10.12, committed `d9830c2`)
+
+TAA render targets (`projectv::taa::OffscreenColorTarget`) теперь **аллоцированы** в `VulkanSwapchain::RecreateSwapchain` — пара R16G16B16A16_SFLOAT images (scene + history) + linear sampler. Recreate path сбрасывает `taaHistoryValid = false` каждый раз, что отключает history-blend на один кадр после resize. Targets pre-allocated даже когда `taaEnabled=false` (~24 MiB на 1440p) чтобы runtime toggle не требовал swapchain recreate.
+
+**Forward-declaration dance:** `core/Types.hpp` forward-declares `projectv::taa::OffscreenColorTarget`, чтобы использовать указатель на incomplete type в `RenderState`. `TaaRenderTargets.hpp` имеет **own** forward decl `struct VulkanContextState` потому что `core/Types.hpp` сам включает `TaaRenderTargets.hpp` **до** своего `struct VulkanContextState;` forward-declaration line. `VmaAllocation` объявлен в `.hpp` как `void*` (через `using VmaAllocationHandle = void*;`) и кастится в `VmaAllocation` в `.cpp` где `vk_mem_alloc.h` уже включён — это держит `vk_mem_alloc.h` от утечки в каждый translation unit который включает `core/Types.hpp`. Полезный паттерн для будущих opaque types в render state.
+
+**Lesson learned (header forward decl в cyclic include):** Когда header A включён в header B, и B определяет тип C, но A использует C — добавь forward decl C **в A** перед `#include B`. Guard предотвращает recursive include, но порядок объявлений теряется, так что forward decl в A становится необходим для парсинга до того, как B объявит C.
+
+**Что осталось до visual TAA:** TAA resolve pipeline в `VulkanGraphicsPipeline.cpp` (6-й pipeline, fullscreen, descriptor set с bindings sceneColor/historyColor/depth/sceneLighting), `Renderer.cpp` main pass → offscreen, TAA resolve pass → swapchain (через `vkCmdBlitImage` для format conversion R16G16B16A16_SFLOAT → B8G8R8A8_UNORM), `AppUpdate.cpp` ToggleTaa handler, `DebugHud.cpp` TAA строки, `ScreenshotCapture.cpp` `taa_*` sidecar entries, history invalidation на resize / world reload / preset change / pause / Taa toggle, `taaEnabled` default flip на `true`. После этого — captures (FINAL + JITR debug view) и `agent/decisions.md` §18 TAA contract.
+
+Время: каждый из этих подзадач — 30-300 строк кода. Следующая сессия может довести до визуального TAA за 1-2 часа фокусированной работы.

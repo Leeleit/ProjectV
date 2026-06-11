@@ -134,3 +134,14 @@ Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `20
   шейдеров нужен явный `cp build/.../src/voxel*.spv build/.../bin/`. Без этого `ReadShaderFile` в runtime грузит
   pre-fix SPIR-V и capture выглядит как до merge'а. Working rule для будущих шейдер-only сессий: либо
   `cmake --build` с явной пересборкой `ProjectV` target, либо `cp` сразу после build'а.
+
+## 5. TAA off-target allocation committed (this session, `2026-06-11`)
+
+Two commits landed this session:
+
+- `52b130f` — TAA infrastructure baseline (CPU side, scene lighting contract, jitter, prev viewProj save, TAA debug view, `ToggleTaa` action, `Taa.cpp` Halton helper, `taa_resolve.{vert,frag}` shaders, doc updates).
+- `d9830c2` — TAA offscreen render target allocation (`OffscreenColorTarget` struct, R16G16B16A16_SFLOAT scene + history images, linear sampler, integration with `VulkanSwapchain::RecreateSwapchain` so resize-time lifecycle stays in one place, history invalidation on every (re)allocation).
+
+Both commits: `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` green, `ctest --test-dir build/linux-clang-debug -C Debug` 1/1 passed, .spv скопированы в `bin/`.
+
+**Still deferred (visual TAA ещё не работает):** offscreen scene color → main pass, fullscreen TAA resolve pipeline, `Renderer.cpp` integration, `DebugHud.cpp` TAA HUD lines, `AppUpdate.cpp` `ToggleTaa` handler, `ScreenshotCapture.cpp` `taa_*` sidecar entries, history invalidation triggers, `taaEnabled` default flip from `false` → `true`. Сейчас `taaEnabled` остаётся `false` чтобы main pass рендерился без jitter (resolve pipeline ещё не существует, иначе jitter без resolve = новый visible aliasing).

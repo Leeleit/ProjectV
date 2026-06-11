@@ -55,9 +55,8 @@
    - `list_code_definition_names` для быстрого overview классов/функций по директории.
 2. **Перед модификацией** файла >100 строк: прочитать только целевой класс/функцию и связанные интерфейсы. Не «полистать весь файл ради контекста».
 3. **Subagent delegation** для разведки по 3+ связанным файлам: `use_subagents` даёт **до 5 параллельных read-only агентов** без сжигания основного контекста. Политика — §7.2.1.
-4. **Не вызывать MCP filesystem (`cCUIJ00mcp0*`)** в этом репозитории — песочница блокирует доступ (`Access denied - path outside allowed directories`). Если инструмент вернул эту ошибку — пользоваться `read_file` / `execute_command` и **не повторять** ту же MCP-команду.
-5. **Context7 / web / vision** — для внешних библиотек и визуальной диагностики. Не злоупотреблять web: при наличии в `docs/` или `legacy/docs/libraries/` — сначала локально.
-6. Каждая сессия решает **строго одну атомарную подзадачу**. По завершении — принудительный перезапуск с очисткой истории; что записать перед перезапуском — §8 (session-end protocol).
+4. **Context7 / web / vision** — для внешних библиотек и визуальной диагностики. Не злоупотреблять web: при наличии в `docs/` или `legacy/docs/libraries/` — сначала локально.
+5. Каждая сессия решает **строго одну атомарную подзадачу**. По завершении — принудительный перезапуск с очисткой истории; что записать перед перезапуском — §8 (session-end protocol).
 
 ---
 
@@ -106,6 +105,8 @@
 ---
 
 ## 6. Anti-duplication / classification
+
+Tactical rules (verification policy, smoke policy, tracy build policy, warning-cleanup policy) живут в `decisions.md §4` (Build / verification contract). AGENTS.md хранит **только инварианты**, не повторяющие `decisions.md`, `TODO.md` или `agent/*`. Если возникает сомнение «писать ли это в AGENTS.md?» — это сигнал, что писать надо в `decisions.md` или в один из `agent/*`, а здесь оставить ссылку.
 
 Перед записью новой информации — **классифицировать** её по матрице:
 
@@ -262,20 +263,9 @@ Refs: agent/memory.md §10.11
 
 ### 7.3 Verification (закрытие подзадачи)
 
-**Обязательные проверки:**
+Tactical verification rules (build/test policy, smoke policy, tracy build policy, warning-cleanup policy) живут в `decisions.md §4` (Build / verification contract) и `agent/session-checklist.md` (старт/завершение). Здесь фиксируем только **формальный инвариант**: build green на охватываемой платформе; `ctest` / scripted captures / `ProjectVRuntimeSmoke` применять по решению, принятому в `decisions.md §4`, а не как ритуал на каждое закрытие.
 
-1. **Build green** целевым тулчейном. Если задача затрагивает обе платформы — build на обеих, **последовательно**.
-2. **Тесты**: `ctest` (или эквивалент) — pass, без регрессий.
-3. **Warnings**: новых предупреждений компилятора нет. Метрика «новое» = warning, который не появлялся на HEAD и не помечен как baseline noise (см. `agent/memory.md §4` про `Problems/*.xml`).
-4. **Vulkan validation layers**: 0 новых сообщений (если рендер-таска). Известный baseline noise — фиксируется в `agent/memory.md`, новый noise — регрессия.
-5. **`clang-format`**: запустить `clang-format --dry-run --Werror` на изменённых файлах, или эквивалентную pre-commit проверку. Diff соблюдает `.clang-format`.
-6. **`.editorconfig`**: соблюдён.
-7. **Smoke** (только если применимо — см. `agent/memory.md` smoke_test_policy):
-   - `ProjectVRuntimeSmoke` — только для изменений в Vulkan-bootstrap, swapchain, window lifecycle, present, screenshot sync, либо при риске `VK_ERROR_DEVICE_LOST`.
-   - Для lighting/material/look-dev — достаточно build + tests + scripted captures.
-8. **Tracy build tree**: `build/windows-clang-debug-tracy-profiler` собирать **только** при изменениях Tracy-конфигурации или по явной директиве пользователя. На Linux: `linux-clang-debug-tracy-profiler` пока не существует, не создавать молча.
-
-**Visual / render tasks (дополнительно):**
+**Visual / render tasks (дополнительно, не ритуал):**
 
 - Инспектировать **финальный кадр** и релевантные debug-view frames (`SHDW`, `CSM`, `CTSH`, `AOCC`, `LOCL`, `AMB`). Только sidecar metadata — недостаточно (см. `agent/memory.md §1` про contact-shadow landing).
 - Captures под `build/<preset>/lookdev-captures/<name>/`.
@@ -298,34 +288,28 @@ Refs: agent/memory.md §10.11
 
 ## 8. Session-end protocol
 
-Перед перезапуском сессии (принудительная очистка истории) **обязательно**:
+Перед принудительным перезапуском сессии: см. `agent/session-checklist.md` →
+секция «Завершение сессии». Этот документ фиксирует только два **обязательных инварианта**:
 
-1. **Code state:** `git status -uall`, `git diff --stat`. Убедиться, что либо дерево чистое, либо uncommitted work **сохранён** в patch'е (`/tmp/*.patch`) или stash с именем.
-2. **`TODO.md`:** отметить выполненные чекбоксы, добавить новые риски/развилки, переставить приоритеты.
-3. **`agent/status.md`:** обновить snapshot (текущая фаза, активная подзадача, последние принятые решения).
-4. **`agent/memory.md`:** добавить новые permanent facts (только если они переживут эту сессию; иначе — в `status.md`).
-5. **`agent/decisions.md`:** добавить новые договорённости, если они переживут задачу.
-6. **`agent/session-checklist.md`:** пройтись по чеклисту завершения.
-7. **Commit предложение:** если есть логически завершённый этап — сформировать commit message по §7.2.5 и **предложить** пользователю. Не выполнять `git commit` без подтверждения.
-8. **Memory budget:** проверить, что `agent/memory.md` < ~500 строк; вынести устаревшее в архив или удалить с явным комментарием.
+1. **Код либо чистый, либо uncommitted work сохранён** в `/tmp/*.patch` или `git stash` с
+   описательным именем (см. §7.2.4).
+2. **Commit предложен пользователю** в виде, удовлетворяющем §7.2.5, но не выполнен
+   без явного подтверждения.
 
-Если какой-то пункт не применим — оставить в `agent/status.md` пометку «not applicable, reason: …». Не пропускать молча.
+Всё остальное (TODO.md, status.md, memory.md, decisions.md) обновляется по необходимости
+из `session-checklist.md`, а не как ритуал.
 
 ---
 
 ## 9. Definition of done
 
-Задача признаётся завершённой **исключительно** при выполнении **всех** условий:
+Определяется `decisions.md §4` (Build / verification contract) + `agent/session-checklist.md`
+(секция «Завершение»). Здесь фиксируем только:
 
-- [ ] Код успешно скомпилирован целевым тулчейном (Linux и/или Windows, по охвату задачи).
-- [ ] Базовые тесты пройдены без регрессий.
-- [ ] Отсутствуют новые предупреждения компилятора.
-- [ ] Отсутствуют новые сообщения Vulkan Validation Layers.
-- [ ] `clang-format` чист на изменённых файлах.
-- [ ] `.editorconfig` соблюдён.
-- [ ] Изменения кодовой базы полностью отражены в `TODO.md` и файлах `agent/`.
-- [ ] Если задача — render/visual: inspected `FINAL` + релевантные debug views, не только sidecar.
-- [ ] Если задача — git-операция поверх uncommitted work: `/tmp/*.patch` сохранён, destructive операция подтверждена.
+- [ ] Build green на охватываемой платформе.
+- [ ] `agent/status.md` отражает фактическое состояние на момент закрытия сессии.
+- [ ] Если сессия включала git-операции поверх uncommitted work — `/tmp/*.patch` сохранён,
+      destructive-операция подтверждена пользователем (см. §7.2.4).
 
 ---
 
