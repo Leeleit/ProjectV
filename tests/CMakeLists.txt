@@ -77,3 +77,31 @@ target_link_libraries(ProjectVAssetTests PRIVATE
 add_test(NAME ProjectVAssetTests COMMAND ProjectVAssetTests)
 set_tests_properties(ProjectVAssetTests PROPERTIES LABELS "unit")
 
+# Mesh-baker test executable (M2). CPU-only, no Vulkan init needed
+# because `MeshBaker` is the unit; GPU upload (`MeshGpuResources`)
+# is exercised at runtime in M4 when the model is actually drawn.
+add_executable(ProjectVMeshBakerTests
+        MeshBakerTests.cpp
+        ../src/asset/AssetLoader.cpp
+        ../src/asset/MeshBaker.cpp
+)
+
+target_compile_definitions(ProjectVMeshBakerTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVMeshBakerTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVMeshBakerTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVMeshBakerTests PRIVATE
+        fastgltf::fastgltf
+        meshoptimizer
+        glm
+)
+
+add_test(NAME ProjectVMeshBakerTests COMMAND ProjectVMeshBakerTests)
+set_tests_properties(ProjectVMeshBakerTests PROPERTIES LABELS "unit")
+
+

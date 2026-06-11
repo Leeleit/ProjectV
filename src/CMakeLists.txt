@@ -72,6 +72,8 @@ target_sources(ProjectV PRIVATE
         asset/AssetLoader.cpp
         asset/AssetManifest.cpp
         asset/AssetRegistry.cpp
+        asset/MeshBaker.cpp
+        asset/MeshGpuResources.cpp
         ecs/EcsWorld.cpp
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
