@@ -104,6 +104,47 @@ projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/JoltPh
 
 projectv_add_tracy()
 
+# --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+#     these are wired in for the new polygon-model pipeline, see
+#     agent/active-sessions.md session 2026-06-11-asset-pipeline-m0-m5) ---
+
+# meshoptimizer (header-only API; we link the static lib to keep the include
+# path attached through the INTERFACE property and to avoid pulling in
+# the demo/gltfpack tools).
+set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "Disable meshopt demo" FORCE)
+set(MESHOPT_BUILD_GLTFPACK OFF CACHE BOOL "Disable meshopt gltfpack" FORCE)
+set(MESHOPT_BUILD_SHARED_LIBS OFF CACHE BOOL "Build static meshopt" FORCE)
+set(MESHOPT_INSTALL OFF CACHE BOOL "Disable meshopt install" FORCE)
+set(MESHOPT_WERROR OFF CACHE BOOL "Disable meshopt -Werror" FORCE)
+add_subdirectory(external/meshoptimizer)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/meshoptimizer")
+
+# fastgltf (simdjson is bundled in external/fastgltf/deps/simdjson).
+# We don't need the deprecated-extension opt-in, the test/example/docs
+# targets, or the experimental C++20 module target for the renderer
+# integration (M0 only needs a TU to compile and link).
+set(FASTGLTF_ENABLE_TESTS OFF CACHE BOOL "Disable fastgltf tests" FORCE)
+set(FASTGLTF_ENABLE_EXAMPLES OFF CACHE BOOL "Disable fastgltf examples" FORCE)
+set(FASTGLTF_ENABLE_DOCS OFF CACHE BOOL "Disable fastgltf docs" FORCE)
+set(FASTGLTF_ENABLE_DEPRECATED_EXT OFF CACHE BOOL "Disable fastgltf deprecated-ext" FORCE)
+set(FASTGLTF_ENABLE_CPP_MODULES OFF CACHE BOOL "Disable fastgltf C++20 modules" FORCE)
+add_subdirectory(external/fastgltf)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/fastgltf")
+
+# draco (decode-only, no transcoder / CLI / Maya / Unity plugins).
+# `DRACO_DEBUG_COMPILER_WARNINGS=OFF` keeps draco from re-enabling
+# `-Werror`-grade warnings that would break ProjectV's `/WX` MSVC build.
+# `DRACO_TRANSCODER_SUPPORTED=OFF` drops the glTF material/scene/texture
+# objects we never decode; the KHR_draco_mesh_compression path still
+# works because it lives in the always-built mesh-decoder object set.
+set(DRACO_TRANSCODER_SUPPORTED OFF CACHE BOOL "Disable draco glTF transcoder" FORCE)
+set(DRACO_DEBUG_COMPILER_WARNINGS OFF CACHE BOOL "Disable draco debug warnings" FORCE)
+set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "Disable draco CLI tools" FORCE)
+set(DRACO_MAYA_PLUGIN OFF CACHE BOOL "Disable draco Maya plugin" FORCE)
+set(DRACO_UNITY_PLUGIN OFF CACHE BOOL "Disable draco Unity plugin" FORCE)
+add_subdirectory(external/draco)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/draco")
+
 add_library(projectv_build_options INTERFACE)
 if (MSVC)
     target_compile_options(projectv_build_options INTERFACE
@@ -134,6 +175,19 @@ else ()
 endif ()
 target_compile_definitions(projectv_build_options INTERFACE
         VK_NO_PROTOTYPES
+)
+# draco's CMakeLists exposes include paths only through the
+# `INCLUDES` parameter of `draco_add_library`, which the helper
+# forwards to `target_include_directories(... PRIVATE ...)` on the
+# OBJECT-library leaves, not on the public umbrella `draco::draco`
+# target. To use `#include <draco/compression/decode.h>` from
+# ProjectV TUs we attach the source-tree include dir at the build
+# options layer so it propagates through the same interface target
+# as the rest of the project.
+target_include_directories(projectv_build_options INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/external/draco"
+        "${CMAKE_CURRENT_SOURCE_DIR}/external/draco/src"
+        "${CMAKE_BINARY_DIR}"
 )
 
 if (PROJECTV_ENABLE_VALIDATION)

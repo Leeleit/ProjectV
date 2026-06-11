@@ -55,6 +55,7 @@ target_sources(ProjectV PRIVATE
         app/InputReplay.cpp
         app/LookDevCaptureAutomation.cpp
         app/main.cpp
+        asset/AssetStub.cpp
         ecs/EcsWorld.cpp
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
@@ -99,6 +100,12 @@ target_link_libraries(ProjectV PRIVATE
         Jolt::Jolt
         GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
+        # Polygon-model import pipeline (M0–M5). `meshoptimizer` propagates its
+        # `src/` include dir through the INTERFACE property, so the rest of
+        # the project picks up `<meshoptimizer.h>` automatically.
+        meshoptimizer
+        fastgltf::fastgltf
+        draco::draco
 )
 
 if (PROJECTV_ENABLE_TRACY)
