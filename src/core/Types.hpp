@@ -586,7 +586,9 @@ struct RenderState {
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline graphicsPipelineTaaOn = VK_NULL_HANDLE;
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline transparentGraphicsPipelineTaaOn = VK_NULL_HANDLE;
 	VkPipeline shadowGraphicsPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;

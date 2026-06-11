@@ -766,7 +766,7 @@ void RecordGraphicsCommands(
 			frameRenderData.opaqueIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Opaque Pass");
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.graphicsPipeline);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline);
 			vkCmdPushConstants(
 				cmd,
 				render.graphicsPipelineLayout,
@@ -782,13 +782,13 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-		if (render.transparentGraphicsPipeline &&
+		if ((taaOn ? render.transparentGraphicsPipelineTaaOn : render.transparentGraphicsPipeline) &&
 			frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE &&
 			frameRenderData.chunkDescriptorCount > 0 &&
 			frameRenderData.transparentIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Transparent Pass");
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.transparentGraphicsPipeline);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, taaOn ? render.transparentGraphicsPipelineTaaOn : render.transparentGraphicsPipeline);
 			vkCmdPushConstants(
 				cmd,
 				render.graphicsPipelineLayout,

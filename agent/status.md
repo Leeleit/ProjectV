@@ -2,7 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-06-11` — TAA renderer wiring (Subtask 1+2, commit `98fb391`) + Phase A1 close-out plumbing (ToggleTaa handler, DebugHud TAA lines, sidecar, history invalidation) landed. `taaEnabled=false` default (flip in A2). Parallel asset-pipeline M0+M1 committed (`1c72a4b`/`8b112e7`).
+Updated: `2026-06-12` — P1 shadow flicker/shimmer fix + SSBO double-buffer + validation cleanup landed (`b7e672f`).
 
 ---
 
@@ -136,6 +136,17 @@ Updated: `2026-06-11` — TAA renderer wiring (Subtask 1+2, commit `98fb391`) + 
   `cmake --build` с явной пересборкой `ProjectV` target, либо `cp` сразу после build'а.
 
 ## 5. TAA A2 complete — `taaEnabled=true`, SPIR-V search path fix, smoke verified (`2026-06-11`)
+
+## 6. P1 shadow fix — SSBO double-buffer, fence reorder, cascade depth, TAA clamp (`2026-06-12`)
+
+Committed as `b7e672f`:
+
+- `FramePreparation.cpp`: `vkWaitForFences` moved **before** `UpdateSceneResources` — prevents CPU from writing to staging buffers (chunk descriptors, voxel payload) while GPU still reads previous frame's data.
+- `Camera.cpp` + `voxel.frag` (cascade selection): `GetCameraViewDepth` uses `gl_FragCoord.z` instead of `dot(worldPos - cameraPos, cameraForward)`. TAA jitter only shifts X/Y of the projection matrix → cascade selection is frame-invariant.
+- `taa_resolve.frag`: history sample clamped to 3×3 neighbourhood colamp — eliminates TAA ghosting on revealed geometry.
+- **`core/Types.hpp` + `render/SceneResources.cpp`** (core fix): `sceneLightingBuffer/Allocation/MappedData` moved from shared `RenderState` to per-frame `SceneFrameResources`. With `MAX_FRAMES_IN_FLIGHT=2`, the single-buffer `memcpy` in `RefreshSceneLightingBuffer` overwrote data while the GPU for frame N-1 still read it → tile-sized gray/white squares. Fix: each frame owns its buffer, written in `UploadSceneFrameResources(frameIndex)`.
+- All 4 pipelines (graphics, shadow, meshing, TAA resolve) bind `frameResources.sceneLightingBuffer` instead of `render->sceneLightingBuffer`.
+- `VulkanBootstrap.cpp`: removed `VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT` from validation messenger to suppress noisy performance warnings.
 
 Uncommitted changes on this session (proposed commit):
 

@@ -393,6 +393,7 @@ bool RecreateSwapchain(
 
 	const bool hadGraphicsPipeline =
 		render->graphicsPipeline != VK_NULL_HANDLE ||
+		render->graphicsPipelineTaaOn != VK_NULL_HANDLE ||
 		render->graphicsPipelineLayout != VK_NULL_HANDLE;
 	{
 		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateSwapchainResources");

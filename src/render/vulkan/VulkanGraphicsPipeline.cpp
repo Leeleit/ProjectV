@@ -1318,6 +1318,11 @@ void DestroyGraphicsPipeline(
 		vkDestroyPipeline(context->device, render->transparentGraphicsPipeline, nullptr);
 		render->transparentGraphicsPipeline = VK_NULL_HANDLE;
 	}
+	if (render->transparentGraphicsPipelineTaaOn) {
+		PV_PROFILE_ZONE_N("DestroyTransparentGraphicsPipelineTaaOn");
+		vkDestroyPipeline(context->device, render->transparentGraphicsPipelineTaaOn, nullptr);
+		render->transparentGraphicsPipelineTaaOn = VK_NULL_HANDLE;
+	}
 
 	if (render->shadowGraphicsPipeline) {
 		PV_PROFILE_ZONE_N("DestroyShadowGraphicsPipeline");
@@ -1333,6 +1338,11 @@ void DestroyGraphicsPipeline(
 		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipeline");
 		vkDestroyPipeline(context->device, render->graphicsPipeline, nullptr);
 		render->graphicsPipeline = VK_NULL_HANDLE;
+	}
+	if (render->graphicsPipelineTaaOn) {
+		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipelineTaaOn");
+		vkDestroyPipeline(context->device, render->graphicsPipelineTaaOn, nullptr);
+		render->graphicsPipelineTaaOn = VK_NULL_HANDLE;
 	}
 
 	if (render->graphicsPipelineLayout) {
@@ -1494,26 +1504,53 @@ bool CreateGraphicsPipeline(
 		return false;
 	}
 
-	const std::array shaderStages{
-		VkPipelineShaderStageCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = vertexShaderModule,
-			.pName = "main",
-			.pSpecializationInfo = nullptr,
-		},
-		VkPipelineShaderStageCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = fragmentShaderModule,
-			.pName = "main",
-			.pSpecializationInfo = nullptr,
-		},
+	int32_t taaSpecializationData[2] = {0, 1};
+	const VkSpecializationMapEntry taaSpecializationMapEntry{
+		.constantID = 0,
+		.offset = 0,
+		.size = sizeof(int32_t),
 	};
+	const VkSpecializationInfo taaSpecializationInfoTaaOff{
+		.mapEntryCount = 1,
+		.pMapEntries = &taaSpecializationMapEntry,
+		.dataSize = sizeof(int32_t),
+		.pData = &taaSpecializationData[0],
+	};
+	const VkSpecializationInfo taaSpecializationInfoTaaOn{
+		.mapEntryCount = 1,
+		.pMapEntries = &taaSpecializationMapEntry,
+		.dataSize = sizeof(int32_t),
+		.pData = &taaSpecializationData[1],
+	};
+	const VkPipelineShaderStageCreateInfo vertexStageInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_VERTEX_BIT,
+		.module = vertexShaderModule,
+		.pName = "main",
+		.pSpecializationInfo = nullptr,
+	};
+	const VkPipelineShaderStageCreateInfo fragStageTaaOff{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = fragmentShaderModule,
+		.pName = "main",
+		.pSpecializationInfo = &taaSpecializationInfoTaaOff,
+	};
+	const VkPipelineShaderStageCreateInfo fragStageTaaOn{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = fragmentShaderModule,
+		.pName = "main",
+		.pSpecializationInfo = &taaSpecializationInfoTaaOn,
+	};
+	const std::array shaderStagesTaaOff{ vertexStageInfo, fragStageTaaOff };
+	const std::array shaderStagesTaaOn{ vertexStageInfo, fragStageTaaOn };
 	const std::array shadowShaderStages{
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -1784,66 +1821,100 @@ bool CreateGraphicsPipeline(
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
 
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.pNext = &renderingInfo;
-	pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-	pipelineInfo.pStages = shaderStages.data();
-	pipelineInfo.pVertexInputState = &vertexInputInfo;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizer;
-	pipelineInfo.pMultisampleState = &multisampling;
-	pipelineInfo.pDepthStencilState = &depthStencil;
-	pipelineInfo.pColorBlendState = &colorBlending;
-	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.layout = render->graphicsPipelineLayout;
+	VkGraphicsPipelineCreateInfo pipelineBase{};
+	pipelineBase.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineBase.pNext = &renderingInfo;
+	pipelineBase.pVertexInputState = &vertexInputInfo;
+	pipelineBase.pInputAssemblyState = &inputAssembly;
+	pipelineBase.pViewportState = &viewportState;
+	pipelineBase.pRasterizationState = &rasterizer;
+	pipelineBase.pMultisampleState = &multisampling;
+	pipelineBase.pDepthStencilState = &depthStencil;
+	pipelineBase.pColorBlendState = &colorBlending;
+	pipelineBase.pDynamicState = &dynamicState;
+	pipelineBase.layout = render->graphicsPipelineLayout;
 
+	VkGraphicsPipelineCreateInfo opaqueInfoTaaOff = pipelineBase;
+	opaqueInfoTaaOff.stageCount = static_cast<uint32_t>(shaderStagesTaaOff.size());
+	opaqueInfoTaaOff.pStages = shaderStagesTaaOff.data();
+	VkGraphicsPipelineCreateInfo opaqueInfoTaaOn = pipelineBase;
+	opaqueInfoTaaOn.stageCount = static_cast<uint32_t>(shaderStagesTaaOn.size());
+	opaqueInfoTaaOn.pStages = shaderStagesTaaOn.data();
+	const VkGraphicsPipelineCreateInfo opaquePipelineInfos[2] = {opaqueInfoTaaOff, opaqueInfoTaaOn};
+	VkPipeline opaquePipelines[2]{};
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.OpaquePipeline");
-		const VkResult opaquePipelineResult =
-			vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &render->graphicsPipeline);
-		if (opaquePipelineResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.Opaque.vkCreateGraphicsPipelines", opaquePipelineResult);
+		const VkResult opaquePipelinesResult = vkCreateGraphicsPipelines(
+			context->device,
+			VK_NULL_HANDLE,
+			2,
+			opaquePipelineInfos,
+			nullptr,
+			opaquePipelines);
+		if (opaquePipelinesResult != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.Opaque.vkCreateGraphicsPipelines", opaquePipelinesResult);
 			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
 	}
+	render->graphicsPipeline = opaquePipelines[0];
+	render->graphicsPipelineTaaOn = opaquePipelines[1];
 	SetVulkanObjectName(
 		*context,
 		reinterpret_cast<uint64_t>(render->graphicsPipeline),
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelOpaquePipeline");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->graphicsPipelineTaaOn),
+		VK_OBJECT_TYPE_PIPELINE,
+		"VoxelOpaquePipelineTaaOn");
 
-	VkGraphicsPipelineCreateInfo transparentPipelineInfo = pipelineInfo;
-	transparentPipelineInfo.pDepthStencilState = &transparentDepthStencil;
-	transparentPipelineInfo.pColorBlendState = &transparentColorBlending;
+	VkGraphicsPipelineCreateInfo transparentInfoTaaOff = pipelineBase;
+	transparentInfoTaaOff.pDepthStencilState = &transparentDepthStencil;
+	transparentInfoTaaOff.pColorBlendState = &transparentColorBlending;
+	transparentInfoTaaOff.stageCount = static_cast<uint32_t>(shaderStagesTaaOff.size());
+	transparentInfoTaaOff.pStages = shaderStagesTaaOff.data();
+	VkGraphicsPipelineCreateInfo transparentInfoTaaOn = pipelineBase;
+	transparentInfoTaaOn.pDepthStencilState = &transparentDepthStencil;
+	transparentInfoTaaOn.pColorBlendState = &transparentColorBlending;
+	transparentInfoTaaOn.stageCount = static_cast<uint32_t>(shaderStagesTaaOn.size());
+	transparentInfoTaaOn.pStages = shaderStagesTaaOn.data();
+	const VkGraphicsPipelineCreateInfo transparentPipelineInfos[2] = {transparentInfoTaaOff, transparentInfoTaaOn};
+	VkPipeline transparentPipelines[2]{};
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.TransparentPipeline");
-		const VkResult transparentPipelineResult = vkCreateGraphicsPipelines(
+		const VkResult transparentPipelinesResult = vkCreateGraphicsPipelines(
 			context->device,
 			VK_NULL_HANDLE,
-			1,
-			&transparentPipelineInfo,
+			2,
+			transparentPipelineInfos,
 			nullptr,
-			&render->transparentGraphicsPipeline);
-		if (transparentPipelineResult != VK_SUCCESS) {
+			transparentPipelines);
+		if (transparentPipelinesResult != VK_SUCCESS) {
 			LogGraphicsPipelineVkFailure(
 				"CreateGraphicsPipeline.Transparent.vkCreateGraphicsPipelines",
-				transparentPipelineResult);
+				transparentPipelinesResult);
 			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
 	}
+	render->transparentGraphicsPipeline = transparentPipelines[0];
+	render->transparentGraphicsPipelineTaaOn = transparentPipelines[1];
 	SetVulkanObjectName(
 		*context,
 		reinterpret_cast<uint64_t>(render->transparentGraphicsPipeline),
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelTransparentPipeline");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->transparentGraphicsPipelineTaaOn),
+		VK_OBJECT_TYPE_PIPELINE,
+		"VoxelTransparentPipelineTaaOn");
 
-	VkGraphicsPipelineCreateInfo shadowPipelineInfo = pipelineInfo;
+	VkGraphicsPipelineCreateInfo shadowPipelineInfo = pipelineBase;
 	shadowPipelineInfo.pNext = &shadowRenderingInfo;
 	shadowPipelineInfo.stageCount = static_cast<uint32_t>(shadowShaderStages.size());
 	shadowPipelineInfo.pStages = shadowShaderStages.data();
