@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата обновления: `2026-04-24`
+Дата обновления: `2026-06-12`
 Статус документа: `живой roadmap`
 
 ---
@@ -436,7 +436,14 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
   **Backlog (R&D, не блокирует mainline):** per-face uniform AO,
   compute-baked; welded mesh с GPU-hash-table; full SSAO/GTAO поверх
   depth/normal G-buffer (отдельный pass, отложен до HDR/luminance пути).
-- [ ] **P1 — моргание теней при движении камеры (shadow flicker / shimmer).** `clip-space` проекция
+- [x] **P1 — моргание теней при движении камеры (shadow flicker / shimmer) закрыт (`2026-06-12`).**
+      Root cause: `sceneLightingBuffer` SSBO был shared между `MAX_FRAMES_IN_FLIGHT=2` без
+      синхронизации — frame N+1 `memcpy` затирал данные, пока GPU frame N ещё читал. Fix chain:
+      `b7e672f` (fence reorder + cascade depth via `gl_FragCoord.z` + TAA history clamp +
+      per-frame `sceneLightingBuffer`), `b0fcd9b` (специализация pipeline для TAA-on/off, не
+      отключает validation performance warning), `02c297c` (preprocessor-guarded SPIR-V variants
+      `voxel.frag.spv` и `voxel.frag.taa_on.spv` — переменная физически отсутствует в SPIR-V,
+      validation warnings убраны по существу), `3c87f21` (mouse startup fix).
 - [x] **Swapchain semaphore reuse fix (`2026-06-09`, same-day)** закрыт через **per-frame *acquire*-semaphore +
   per-image *submit*-semaphore** pattern из Vulkan SDK 1.4 guide `swapchain_semaphore_reuse.html` (документы
   в `docs/VulkanSDK-Linux-Docs-1.4.350.1/`, агент должен читать их **до** grep'а headers). Root cause: per-frame
@@ -508,37 +515,39 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [ ] destruction playground;
 - [ ] большой editor / plugin stack / multiplayer.
 
-### Post-TAA follow-ups (отложено из `2026-06-11` TAA сессии)
+### Post-TAA follow-ups (`2026-06-12` план)
 
-Улучшения качества поверх текущего TAA baseline (RGB 3×3 clamp, motion vectors через
-depth-reconstruct, 8-tap Halton(2,3), HDR linear scene color). Не блокируют mainline, не
-влияют на anti-jitter цель, но дадут заметный прирост чистоты/производительности:
+Текущий TAA baseline (commit `ee82c6f` + `02c297c`): `taaEnabled=true`, 8-tap Halton(2,3),
+YCoCg 3×3 neighbourhood clamp, depth-reconstructed motion vectors, R16G16B16A16 scene
+color. Улучшения ниже — direct next steps. **1.1 closed**; остальное в очереди.
 
-- [ ] **YCoCg neighbourhood clamp** в TAA resolve вместо RGB clamp (лучше clamps bright
-      highlights и не теряет chroma, цена — 1 vec3 unpack/pack на пиксель).
+**In progress (Блок 1):**
+
+- [ ] **1.4 Per-pass TAA tuning HUD ladder** (`J` jitter, `M` blend, `K` neighbourhood, `L` invalidate) + sidecar additions
+- [ ] **1.2 Camera-cut detection** (viewProjDelta threshold → auto-invalidate history)
+- [ ] **1.3 Adaptive sharpening (CAS) post-TAA** (sharpenAmount = (1-blend) * authoredMax)
+- [ ] **1.8 Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`, runtime cycle)
+- [ ] **1.5 Anti-flicker для CTSH/AOCC/LOCL** (mini-TAA на history attachment, blend ~0.4)
+- [ ] **1.7 R11G11B10_UFloat scene color** (bandwidth save: 4 vs 8 bytes/pixel)
+- [ ] **1.6 Variable-rate shading** (VRS, 4×4 в cascade split edges)
+
+**Closed (Блок 1: TAA quality 1.x):**
+
+- [x] **1.1 YCoCg clamp в TAA resolve (`2026-06-12`).** `taa_resolve.frag` clamp'ит history в YCoCg space (lossless transform Y/Co/Cg) вместо RGB. 1-tap bright пиксель теперь двигает только Y — chroma highlight'ов не вымывается в grey. Sidecar metadata получил `taa_clamp_color_space=YCoCg` для capture-driven tuning.
+
+**Reference (источник идеи, не в плане исполнения этой сессии):**
+
 - [ ] **Mesh-side motion vectors** через `gl_PrimitiveID` / per-face velocity (избавляет от
       depth-reconstruct, открывает путь к dilated motion для прозрачных граней).
-- [ ] **Adaptive sharpening / CAS после TAA** (`tdrx`/`ffx-cas` style sharpening intensity
-      от `1 - blend`, чтобы скомпенсировать perceived blur от temporal accumulation).
 - [ ] **DLSS / FSR 2 / XeSS** (отдельная работа, R&D); потребует per-frame motion vectors в
       R16G16 формате, depth/normal G-buffer и UI для quality tier (Perf / Balanced / Quality).
-- [ ] **Per-pass TAA tuning HUD ladder** (как у `B` debug views / `H/K` exposure): runtime
-      `jitter scale`, `blend`, `neighbourhood radius`, `valid` — отдельные горячие клавиши
-      + sidecar metadata.
-- [ ] **Variable-rate shading** (VRS) для каскадов shadow / AOCC / contact shadow — экономия
-      fragment bandwidth в зонах, где TAA уже гарантирует temporal stability.
-- [ ] **Camera-cut detection** (резкий скачок `viewProjDelta` > threshold → автоматически
-      invalidates history на 1+ кадров, чтобы не было «smear» артефакта при instant teleport).
-- [ ] **Anti-flicker для contact / AOCC / local light** через тот же history buffer
-      (отдельный mini-TAA проход на этих слоях, blend factor поменьше).
 - [ ] **Velocity buffer для diffuse irradiance / specular probes** (отложено до deferred
       pass; current forward path не имеет G-buffer, поэтому diffuse TAA не применим).
 - [ ] **Halton(2,3) → longer cycle (16-tap)** если 8-tap покажет visible shimmer-pattern
       на slow-look сценах; trade-off — больше aliasing frequency, но плавнее converge.
-- [ ] **HDR scene color → R11G11B10_UFloat** как эксперимент bandwidth saving (текущий
-      R16G16B16A16_SFLOAT — самый дорогой формат; на 1440p ~24MB на target).
-- [ ] **Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`) с
-      presets, runtime switchable через debug ladder (отдельный P-уровень от `taaEnabled`).
+
+**Closed (initial TAA baseline):**
+
 - [x] **TAA runtime toggle (T key) + HUD diagnostics + sidecar metadata (A1, `2026-06-11`).** `taaEnabled` default off.
       Build green, ctest 1/1, smoke 6/6.
 - [x] **TAA A2 — `taaEnabled` flip `false→true`, SPIR-V search path fix, smoke verify (`2026-06-11`).**
@@ -547,6 +556,51 @@ depth-reconstruct, 8-tap Halton(2,3), HDR linear scene color). Не блокир
       check, ShaderIO.cpp SPIR-V search path fix (`parent_path()` → `".."` / `"src"` — `parent_path()` не работал с
       trailing separator от SDL_GetBasePath()). Smoke 6/6 с `PROJECTV_ENABLE_VALIDATION=ON`: 0 VUIDs, 0 errors,
       `taa_enabled=1`, `taa_history_valid=1`.
+- [x] **TAA-on SPIR-V variant (`02c297c`, `2026-06-12`).** Preprocessor-guarded `voxel.frag`
+      variants компилируются в `voxel.frag.spv` (TAA-off, `outColor` Location 0) и
+      `voxel.frag.taa_on.spv` (TAA-on, `outSceneColor` Location 1). Валидационный слой больше
+      не видит неиспользуемый output — переменная физически отсутствует в SPIR-V.
+- [x] **3c87f21 mouse startup fix (`2026-06-12`).** При skipFirstMouseMotion очищаются
+      накопленные mouseDeltaX/Y, не дропается только первое событие. Убирает 180°
+      yank camera при первом кадре.
+
+---
+
+### Блок 2 — Walk controller feel polish (3-5 дней)
+
+- [ ] **2.1 Frame-step / slow-motion debug mode** (`P` pause, `.` step, `<`/`>` 0.25×/0.5× timeScale).
+- [ ] **2.2 Walk HUD additions** (`WALK GRND/SPRT/AIR`, `SUPP`, `EDGE` counters per second).
+- [ ] **2.3 Replay regression suite expansion** (auto-jump, sneak-through-glass, held-jump fixtures).
+- [ ] **2.4 Stamina / jump-burst** (R&D, defer).
+
+### Блок 3 — Visual quality (SSAO/SSR) (5-10 дней)
+
+- [ ] **3.1 SSAO baseline** (depth+normal G-buffer; deferred или half-deferred).
+- [ ] **3.2 SSR** (Hi-Z trace, fallback reflection probe, Glass/Fluid reflections).
+
+### Блок 4 — Greedy meshing (2-3 дня)
+
+- [ ] **4.1 Greedy quad meshing в `voxel_mesh.comp`** (30-50% face count reduction).
+
+### Блок 5 — Frame-step / gizmo / RenderDoc markers (1-2 дня)
+
+- [ ] **5.1 RenderDoc markers** (`vkCmdBeginDebugUtilsLabelEXT`/End, gated on `PROJECTV_ENABLE_RENDERDOC_MARKERS`).
+- [ ] **5.2 Extra debug gizmos** (chunk AABB, cursor hit normal, cascade split planes).
+- [ ] **5.3 Benchmark automation** (`PROJECTV_BENCHMARK_FRAMES=N` env, output `benchmarks/<date>.csv`).
+
+### Блок 6 — Doc sync (1 день, дробно по 0.25 после каждого 1.x)
+
+- [ ] **6.1 TODO.md** (move closed items, re-prioritize based on actual delivery).
+- [ ] **6.2 agent/memory.md** (TAA specialization pitfalls, double-buffer pattern).
+- [ ] **6.3 agent/decisions.md** (TAA contract: default tier, history invalidation, sharpening rule).
+- [ ] **6.4 legacy/docs/libraries/vulkan/** (addendum: dual-MRT with SPIR-V variants).
+
+### Блок-0 (вне плана) — пост-сессионная гигиена
+
+- [ ] Confirm `3c87f21` (mouse fix) ловит 180° startup rotation на user-side.
+- [ ] Confirm `02c297c` (TAA shader variants) реально убирает `[256][2]` performance warning.
+- [ ] Verify `build/linux-clang-debug/bin/voxel.frag.taa_on.spv` загружается без path bug.
+- [ ] Update `agent/status.md` §6: commit chain `b7e672f → b0fcd9b → 02c297c → 3c87f21` стабилен.
 
 ---
 

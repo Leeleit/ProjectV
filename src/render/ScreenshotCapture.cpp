@@ -270,6 +270,7 @@ bool SaveScreenshotCaptureMetadata(
 		"taa_jitter_y={:.6f}\n"
 		"taa_blend={:.6f}\n"
 		"taa_history_valid={:d}\n"
+		"taa_clamp_color_space={}\n"
 		"shadow_cascade_count={}\n"
 		"shadow_cascade_lambda={:.6f}\n"
 		"shadow_cascade_splits={:.6f} {:.6f} {:.6f} {:.6f}\n"
@@ -334,6 +335,7 @@ bool SaveScreenshotCaptureMetadata(
 		render.taaJitterY,
 		render.taaBlend,
 		render.taaHistoryValid,
+		"YCoCg",
 		kSunShadowCascadeCount,
 		render.currentSunShadowCascadeSplits.splitLambda,
 		render.currentSunShadowCascadeSplits.viewDepthSplits[0],

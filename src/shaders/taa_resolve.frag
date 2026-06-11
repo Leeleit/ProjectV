@@ -2,11 +2,20 @@
 
 // TAA resolve pass. Reads the current jittered scene color and the previous
 // frame's resolved history, reprojects history through `prevViewProjection` +
-// `inverse(currViewProjection)`, clamps the history against a 3x3 RGB
+// `inverse(currViewProjection)`, clamps the history against a 3x3 YCoCg
 // neighbourhood of the current sample, and blends with the configurable
 // `taaParams.z` factor. Applies tone-map and color grading here so the
 // main voxel pass can stay in linear light. Outputs the final sRGB-encoded
 // color straight to the swapchain.
+//
+// YCoCg clamp rationale (vs RGB clamp): on bright highlights the RGB
+// neighbourhood can have a huge R range, which under RGB clamp either
+// discards the highlight or lets a single hot neighbour pull the median
+// too high. YCoCg separates luma (Y) from chroma (Co, Cg), so a 1-tap
+// bright pixel affects only Y; the chroma component still preserves the
+// per-sample tint, and the history clamp doesn't wash coloured highlights
+// toward grey. Reference: Yang, "Improved YCoCg Neighborhood Clamp for
+// Temporal Anti-Aliasing", GPU Gems 3 / MJP notes.
 
 layout(set = 0, binding = 0) uniform sampler2D sceneColor;
 layout(set = 0, binding = 1) uniform sampler2D historyColor;
@@ -70,7 +79,30 @@ vec3 ApplyTaaColorGrading(const vec3 mappedColor) {
     return clamp((saturatedColor - vec3(0.5)) * contrast + vec3(0.5 + lift), 0.0, 1.0);
 }
 
+// YCoCg is a lossless reversible color space derived from RGB. The exact
+// (non-approximate) transform below keeps full float precision; clamping in
+// YCoCg space and converting back round-trips RGB exactly. Co and Cg span
+// roughly [-1, 1] for in-gamut colours, Y spans [0, 1] (matching RGB here
+// because inputs are in [0, 1] linear light).
+vec3 RGBToYCoCg(const vec3 rgb) {
+    const float co = rgb.r - rgb.b;
+    const float tmp = rgb.b + co * 0.5;
+    const float cg = rgb.g - tmp;
+    const float y = tmp + cg * 0.5;
+    return vec3(y, co, cg);
+}
+
+vec3 YCoCgToRGB(const vec3 ycocg) {
+    const float tmp = ycocg.x - ycocg.z * 0.5;
+    const float g = tmp + ycocg.z;
+    const float b = tmp - ycocg.y * 0.5;
+    const float r = b + ycocg.y;
+    return vec3(r, g, b);
+}
+
 void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, out vec3 maxColor) {
+    // 3x3 min/max in YCoCg space, returned as YCoCg (Y, Co, Cg). Caller is
+    // expected to clamp a sample in YCoCg space and convert back to RGB.
     minColor = vec3(kHugeTaaRayT);
     maxColor = vec3(-kHugeTaaRayT);
     for (int offsetY = -1; offsetY <= 1; ++offsetY) {
@@ -80,8 +112,9 @@ void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, 
                 vec2(0.0),
                 vec2(1.0));
             const vec3 sampleColor = texture(sceneColor, sampleUv).rgb;
-            minColor = min(minColor, sampleColor);
-            maxColor = max(maxColor, sampleColor);
+            const vec3 sampleYCoCg = RGBToYCoCg(sampleColor);
+            minColor = min(minColor, sampleYCoCg);
+            maxColor = max(maxColor, sampleYCoCg);
         }
     }
 }
@@ -127,16 +160,24 @@ void main()
     vec3 minColor;
     vec3 maxColor;
     GetSceneColorRange(uv, texelSize, minColor, maxColor);
-    const vec3 clampedCurrent = clamp(texture(sceneColor, uv).rgb, minColor, maxColor);
+    // `minColor` / `maxColor` are in YCoCg space (Y, Co, Cg). Clamp the
+    // current sample in YCoCg space and convert back to RGB so the result
+    // can blend with the (also-RGB) history sample.
+    const vec3 currentYCoCg = clamp(
+        RGBToYCoCg(texture(sceneColor, uv).rgb),
+        minColor,
+        maxColor);
+    const vec3 clampedCurrent = YCoCgToRGB(currentYCoCg);
 
     const float blendFactor = historyValid && reprojectionOk
         ? clamp(sceneLighting.taaParams.z, 0.0, 1.0)
         : 0.0;
 
-    // Clamp the history sample against the current 3x3 neighborhood so
-    // that wrong reprojections (revealed geometry after camera movement)
-    // do not ghost a completely different surface into the blend.
-    const vec3 clampedHistory = clamp(historySample, minColor, maxColor);
+    // Clamp the history sample against the current 3x3 YCoCg neighborhood
+    // so that wrong reprojections (revealed geometry after camera movement)
+    // do not ghost a completely different surface into the blend. Same
+    // YCoCg-then-back-to-RGB flow as `clampedCurrent`.
+    const vec3 clampedHistory = YCoCgToRGB(clamp(RGBToYCoCg(historySample), minColor, maxColor));
 
     // Linear history: history was stored *before* tone-map was applied so
     // that successive blends happen in linear light. The resolve passes
