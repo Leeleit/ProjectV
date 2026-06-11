@@ -401,6 +401,11 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJumpDelay)) {
 		SetPhysicsWalkAutoJumpDelayEnabled(physics, !IsPhysicsWalkAutoJumpDelayEnabled(physics));
 	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleTaa) &&
+		world->voxelWorld) {
+		render->taaEnabled = !render->taaEnabled;
+		render->taaHistoryValid = false;
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseLightingExposure)) {
 		AdjustLightingExposure(*render, -kLightingExposureStepStops);
 	}
@@ -644,6 +649,12 @@ bool UpdateApp(
 	debug->stats.shadowMapResolution = render->shadowMapExtent.width;
 	debug->stats.transparentShadowPolicy = render->transparentShadowPolicy;
 	debug->stats.shadowTuningTarget = render->lightingDebugControls.shadowTuningTarget;
+	debug->stats.taaEnabled = render->taaEnabled;
+	debug->stats.taaBlend = render->taaBlend;
+	debug->stats.taaFrameCounter = render->taaFrameCounter;
+	debug->stats.taaHistoryValid = render->taaHistoryValid;
+	debug->stats.taaJitterX = render->taaJitterX;
+	debug->stats.taaJitterY = render->taaJitterY;
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;
 	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);

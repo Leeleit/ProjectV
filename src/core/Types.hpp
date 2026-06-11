@@ -424,6 +424,8 @@ struct DebugStats {
 	float taaBlend = 0.10f;
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
+	float taaJitterX = 0.0f;
+	float taaJitterY = 0.0f;
 	std::array<float, 3> sunDirection{};
 	float sunIntensity = 0.0f;
 	float sunShadowStrength = 0.0f;

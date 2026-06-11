@@ -151,6 +151,7 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::IncreaseShadowTuningValue, SDL_SCANCODE_I);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
 	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
+	BindAction(input, InputAction::ToggleTaa, SDL_SCANCODE_T);
 	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);
 	BindAction(input, InputAction::PickTargetMaterial, SDL_SCANCODE_M);
 }

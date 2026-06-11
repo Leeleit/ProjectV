@@ -657,6 +657,15 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
+		"TAA %s JIT %.2f %.2f BLND %.3f HIST %s",
+		GetBoolLabel(stats.taaEnabled),
+		stats.taaJitterX,
+		stats.taaJitterY,
+		stats.taaBlend,
+		GetBoolLabel(stats.taaHistoryValid));
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"FLG TCK %s SNK %s LCK %s PSL %s",
 		GetBoolLabel(stats.walkGroundTakeoffCached),
 		GetBoolLabel(stats.walkSneakActive),

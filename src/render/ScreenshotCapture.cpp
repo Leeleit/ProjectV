@@ -265,6 +265,11 @@ bool SaveScreenshotCaptureMetadata(
 		"local_point_light_shadow_bias={:.6f}\n"
 		"shadow_coverage_scale={:.6f}\n"
 		"shadow_cascade_blend={:.6f}\n"
+		"taa_enabled={:d}\n"
+		"taa_jitter_x={:.6f}\n"
+		"taa_jitter_y={:.6f}\n"
+		"taa_blend={:.6f}\n"
+		"taa_history_valid={:d}\n"
 		"shadow_cascade_count={}\n"
 		"shadow_cascade_lambda={:.6f}\n"
 		"shadow_cascade_splits={:.6f} {:.6f} {:.6f} {:.6f}\n"
@@ -324,6 +329,11 @@ bool SaveScreenshotCaptureMetadata(
 		render.currentSceneLighting.localPointLightParams[3],
 		render.lightingDebugControls.shadowCoverageScale,
 		render.currentSceneLighting.shadowCascadeBlendParams[0],
+		render.taaEnabled,
+		render.taaJitterX,
+		render.taaJitterY,
+		render.taaBlend,
+		render.taaHistoryValid,
 		kSunShadowCascadeCount,
 		render.currentSunShadowCascadeSplits.splitLambda,
 		render.currentSunShadowCascadeSplits.viewDepthSplits[0],
