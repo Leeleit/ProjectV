@@ -2,6 +2,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
+#include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/TaaResolvePipeline.hpp"
 
@@ -176,13 +177,22 @@ bool SupportsSampledImage(const VkPhysicalDevice physicalDevice, const VkFormat 
 
 VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 {
+	// Mirrors `ChooseShadowDepthFormat`: the depth image is now also
+	// bound as a `COMBINED_IMAGE_SAMPLER` by the TAA resolve pass
+	// (binding 2 in `TaaResolvePipeline.cpp`), so the chosen format
+	// must support `SAMPLED_IMAGE_BIT` in addition to
+	// `DEPTH_STENCIL_ATTACHMENT_BIT`. Rejecting formats that lack
+	// sampled-image support fails fast here instead of silently
+	// selecting a stencil layout that the shadow path would later
+	// reject at `vkCreateImageView` time.
 	constexpr std::array candidates{
 		VK_FORMAT_D32_SFLOAT,
 		VK_FORMAT_D32_SFLOAT_S8_UINT,
 		VK_FORMAT_D24_UNORM_S8_UINT,
 	};
 	for (const VkFormat candidate : candidates) {
-		if (SupportsDepthAttachment(physicalDevice, candidate)) {
+		if (SupportsDepthAttachment(physicalDevice, candidate) &&
+			SupportsSampledImage(physicalDevice, candidate)) {
 			return candidate;
 		}
 	}
@@ -231,7 +241,8 @@ bool CreateDepthResources(
 		.arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+			VK_IMAGE_USAGE_SAMPLED_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = 0,
 		.pQueueFamilyIndices = nullptr,

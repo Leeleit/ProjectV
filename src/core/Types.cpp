@@ -4,6 +4,7 @@
 #include "core/Types.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/SceneResources.hpp"
+#include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -24,6 +25,27 @@ void ShutdownVulkan(AppState *state)
 		DestroyVoxelMeshingPipeline(&state->context, &state->render);
 		DestroyGraphicsPipeline(&state->context, &state->render);
 		DestroySceneResources(&state->context, &state->render);
+
+		// Tear down the TAA offscreen colour targets here, after every other
+		// Vulkan resource consumer is gone. They are `new`-allocated by
+		// `VulkanSwapchain.cpp::RecreateSwapchain` and were never freed
+		// on shutdown, which left VMA holding dedicated-allocation entries
+		// (and the `delete` itself missing), tripping
+		// `~VmaDedicatedAllocationList` on exit with
+		// `Unfreed dedicated allocations found!`. The TAA resolve pipeline
+		// and its descriptor sets were already torn down by
+		// `DestroyGraphicsPipeline` above.
+		if (state->render.taaSceneColorTarget != nullptr || state->render.taaHistoryColorTarget != nullptr) {
+			projectv::taa::DestroyTaaRenderTargets(
+				&state->context,
+				*state->render.taaSceneColorTarget,
+				*state->render.taaHistoryColorTarget,
+				state->render.taaLinearSampler);
+			delete state->render.taaSceneColorTarget;
+			state->render.taaSceneColorTarget = nullptr;
+			delete state->render.taaHistoryColorTarget;
+			state->render.taaHistoryColorTarget = nullptr;
+		}
 	}
 
 	state->physics.reset();
