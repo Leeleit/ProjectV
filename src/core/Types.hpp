@@ -176,6 +176,29 @@ static_assert(std::is_standard_layout_v<ShadowPushConstants>);
 static_assert(std::is_trivially_copyable_v<ShadowPushConstants>);
 static_assert(sizeof(ShadowPushConstants) == 4);
 
+struct ResolvePushConstants {
+	// Matches the `ResolvePushConstants` struct declared in
+	// `src/shaders/taa_resolve.frag` (lines 38-43). Byte layout is enforced
+	// with `static_assert` so a future re-ordering of either side fails to
+	// compile. The TAA resolve pass is a fullscreen triangle that needs the
+	// inverse of the current viewProjection (for depth-to-world
+	// reprojection), the current viewProjection (uploaded alongside for
+	// potential future motion-vector work), the inverse render extent in
+	// pixels (to convert `gl_FragCoord` to UV), and a vec2 padding slot to
+	// keep the total size a multiple of 16. Total: 144 B.
+	std::array<float, 16> inverseCurrentViewProjection{};
+	std::array<float, 16> currentViewProjection{};
+	std::array<float, 2> renderExtentInverse{};
+	std::array<float, 2> reservedPadding{};
+};
+static_assert(std::is_standard_layout_v<ResolvePushConstants>);
+static_assert(std::is_trivially_copyable_v<ResolvePushConstants>);
+static_assert(sizeof(ResolvePushConstants) == 144);
+static_assert(offsetof(ResolvePushConstants, inverseCurrentViewProjection) == 0);
+static_assert(offsetof(ResolvePushConstants, currentViewProjection) == 64);
+static_assert(offsetof(ResolvePushConstants, renderExtentInverse) == 128);
+static_assert(offsetof(ResolvePushConstants, reservedPadding) == 136);
+
 struct DebugOverlayPushConstants {
 	std::array<float, 16> viewProjection{};
 	std::array<float, 4> overlayData0{};
@@ -271,7 +294,7 @@ struct InputReplayCapture {
 
 struct InputReplayState {
 	InputReplayCapture capture{};
-	std::string replayPath;
+	std::string replayPath{};
 	bool recording = false;
 	bool playbackRequested = false;
 	bool playbackActive = false;
@@ -389,19 +412,16 @@ struct DebugStats {
 	float sceneMaxExposure = 4.0f;
 	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
 	LightingDebugView lightingDebugView = LightingDebugView::Final;
-	// TAA defaults to off until the offscreen scene-color / history ping-pong
-	// resolve pipeline lands. The CPU-side Halton jitter is plumbed all the
-	// way through `BuildGraphicsPushConstants` / `FramePreparation` / scene
-	// lighting buffer, but the resolve pass that converts jitter into stable
-	// output is still future work. Leaving `taaEnabled` off here means
-	// turning the Taa debug view on or pressing the Taa toggle does not
-	// introduce sub-pixel wobble on the main pass before the resolve
-	// pass exists. See `agent/status.md` 2026-06-11 entry for the
-	// resolved Taa contract + the deferred offscreen-target work.
+	// TAA runtime state mirrored in the public debug HUD. `taaEnabled` is
+	// the master gate; the active blend factor, current frame counter and
+	// history-valid flag are also queryable here for HUD lines and the
+	// scripted capture sidecar. The per-frame jitter values
+	// (`taaJitterX/Y`) and the previous-frame view-projection matrix live
+	// only in `RenderState` because they feed the push-constant uploads
+	// and the scene-lighting buffer, not the debug HUD.
 	bool taaEnabled = false;
-	float taaJitterX = 0.0f;
-	float taaJitterY = 0.0f;
 	float taaBlend = 0.10f;
+	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
 	std::array<float, 3> sunDirection{};
 	float sunIntensity = 0.0f;
@@ -579,19 +599,20 @@ struct RenderState {
 	std::array<float, 16> taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
-	// TAA offscreen render targets + linear sampler. Allocated by
-	// `projectv::taa::CreateOrRecreateTaaRenderTargets` from
-	// `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays
-	// in lockstep with the swapchain. The TAA resolve pipeline
-	// itself is a follow-up; right now the main pass writes straight
-	// to the swapchain and these two targets stay allocated but
-	// unused. The fields are heap-allocated pointers (rather than
-	// raw `VkImage` handles) so `TaaRenderTargets.{hpp,cpp}` owns
-	// the full lifecycle and `RenderState` just keeps a borrowed
-	// reference. `projectv::taa::OffscreenColorTarget` is forward-
-	// declared at the top of this header; the full definition is
-	// only visible in `TaaRenderTargets.hpp` and the .cpp that
-	// actually performs the allocation.
+	// TAA offscreen render targets + linear sampler + resolve pipeline.
+	// Allocated by `projectv::taa::CreateOrRecreateTaaRenderTargets` from
+	// `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays in
+	// lockstep with the swapchain. The TAA resolve pipeline reads from the
+	// `historyColor` target while writing the resolved scene to the
+	// swapchain image; the freshly-resolved frame is then
+	// `vkCmdCopyImage`'d back into `historyColor` for the next frame.
+	// The fields are heap-allocated pointers (rather than raw `VkImage`
+	// handles) so `TaaRenderTargets.{hpp,cpp}` owns the full lifecycle
+	// and `RenderState` just keeps a borrowed reference.
+	// `projectv::taa::OffscreenColorTarget` is forward-declared at the
+	// top of this header; the full definition is only visible in
+	// `TaaRenderTargets.hpp` and the .cpp that actually performs the
+	// allocation.
 	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;
 	projectv::taa::OffscreenColorTarget *taaHistoryColorTarget = nullptr;
 	VkSampler taaLinearSampler = VK_NULL_HANDLE;

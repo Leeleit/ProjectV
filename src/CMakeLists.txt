@@ -70,6 +70,7 @@ target_sources(ProjectV PRIVATE
         render/ShadowProjection.cpp
         render/Taa.cpp
         render/TaaRenderTargets.cpp
+        render/vulkan/TaaResolvePipeline.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp

@@ -3,6 +3,7 @@
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
+#include "render/vulkan/TaaResolvePipeline.hpp"
 
 #include <array>
 #include <cstdio>
@@ -1315,6 +1316,7 @@ void DestroyGraphicsPipeline(
 
 	DestroyDebugOverlayPipeline(*context, *render);
 	DestroyDebugHudPipeline(*context, *render);
+	DestroyTaaResolvePipeline(context, render);
 
 	if (render->graphicsPipeline) {
 		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipeline");
@@ -1838,6 +1840,15 @@ bool CreateGraphicsPipeline(
 
 	if (!CreateDebugHudPipeline(*context, *swapchain, *render)) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugHud", "debug HUD pipeline creation failed");
+		destroyShaderModules();
+		DestroyGraphicsPipeline(context, render);
+		return false;
+	}
+
+	if (!CreateTaaResolvePipeline(context, swapchain, render)) {
+		LogGraphicsPipelineTextFailure(
+			"CreateGraphicsPipeline.TaaResolve",
+			"TAA resolve pipeline creation failed");
 		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);
 		return false;
