@@ -610,7 +610,7 @@ struct RenderState {
 	// and consumed by the TAA resolve pass for depth-based reprojection.
 	// `taaJitterX/Y` are the current frame's NDC sub-pixel offsets and are
 	// written into `VoxelSceneLighting.taaParams` for the same resolve pass.
-	bool taaEnabled = false;
+	bool taaEnabled = true;
 	float taaBlend = 0.10f;
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;

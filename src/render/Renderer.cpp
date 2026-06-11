@@ -873,6 +873,22 @@ void RecordGraphicsCommands(
 			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			render.taaHistoryNeedsInit = false;
 
+			// Swapchain: UNDEFINED (fresh from presentation engine) →
+			// COLOR_ATTACHMENT_OPTIMAL for the resolve pass. The TAA-off
+			// path transitions the swapchain at the top of the frame, but
+			// the TAA-on path skips that because the main pass writes to
+			// the offscreen target instead.
+			TransitionImage(
+				cmd,
+				swapchain.images[imageIndex],
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_PIPELINE_STAGE_2_NONE,
+				0,
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+
 			// === Begin resolve pass ===
 			const VkRenderingAttachmentInfo resolveColorAttachment{
 				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,

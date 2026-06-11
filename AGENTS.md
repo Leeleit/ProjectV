@@ -13,6 +13,7 @@
 | Снимок текущей сессии | `agent/status.md` |
 | Зафиксированные договорённости | `agent/decisions.md` |
 | Чеклист старта/завершения сессии | `agent/session-checklist.md` |
+| Multi-agent / parallel-session protocol | `AGENTS.md` §7.2.6 + `agent/active-sessions.md` |
 | Вендорные Vulkan 1.4 docs (читать ДО rg/grep'а headers) | `docs/VulkanSDK-Linux-Docs-1.4.350.1/` |
 | Принципы проектной инженерии | `legacy/docs/philosophy/` |
 | Стандарты (cmake, cpp, git) | `legacy/docs/standards/` |
@@ -139,8 +140,9 @@ Tactical rules (verification policy, smoke policy, tracy build policy, warning-c
 2. Прочитать `agent/memory.md` и `agent/status.md`.
 3. Если задача затрагивает рендер / память / оптимизацию / структуры данных / workflow — прочитать `agent/decisions.md`.
 4. Проверить чистоту и состояние git рабочего дерева: `git status -uall`, `git diff --stat`. **Если дерево грязное и предстоит destructive операция** — см. §7.2.4.
-5. Классифицировать задачу: `[mainline | extension | R&D]`. Тяжёлый R&D (`SVO`, mesh shaders, bindless) **не должен** блокировать mainline-MVP.
-6. Зафиксировать план в `task_progress` (для long-running подзадач).
+5. **Проверить, нет ли другой активной сессии.** См. `agent/active-sessions.md` (если существует) и свежие uncommitted изменения в `agent/status.md`. Если есть признаки параллельной работы — см. §7.2.6 (scope discipline, координация).
+6. Классифицировать задачу: `[mainline | extension | R&D]`. Тяжёлый R&D (`SVO`, mesh shaders, bindless) **не должен** блокировать mainline-MVP.
+7. Зафиксировать план в `task_progress` (для long-running подзадач).
 
 ### 7.2 Execution (выполнение)
 
@@ -261,6 +263,38 @@ stair-steps.
 Refs: agent/memory.md §10.11
 ```
 
+#### 7.2.6 Multi-agent concurrent work policy
+
+Над проектом может работать **более одного агента одновременно**: несколько параллельных Cline-сессий, разработчик + агент, агент + CI-бот. Это **нормальный** сценарий, а не исключение. Каждый агент отвечает за **атомарную подзадачу** (см. §3.5). Параллельно выданные подзадачи **должны иметь непересекающиеся scope** (разные файлы / слои / presets).
+
+**Что может пойти не так (conflict scenarios):**
+
+1. **Два агента пишут в один файл** — race на уровне ФС. Последний `write_to_file` молча затирает чужие изменения. Типичный случай: оба правят `TODO.md` или `agent/status.md` в конце сессии.
+2. **Разные файлы, конфликтующие решения** — один переименовывает класс, другой в это время расширяет вызовы. Merge conflict в git.
+3. **Destructive-операция поверх uncommitted work другого** — сценарий из §7.2.4: агент A делает `git checkout -- .` чтобы «откатить detour», не зная, что агент B держит в дереве недокоммиченный прогресс. Документация инцидента — `agent/memory.md §10.11`.
+
+**Протоколы снижения рисков:**
+
+- **Перед началом работы** (§7.1 шаг 5) — посмотреть свежесть `agent/status.md` и `git status -uall`. Если в дереве чужие uncommitted изменения, **не относящиеся к вашей подзадаче** — оставить их нетронутыми. Не делать `git add -A`, не делать `git checkout -- <file>` для файлов вне scope.
+- **Scope discipline.** Если выданная подзадача требует править файл, который, по вашим данным, уже правит другой агент (общий `TODO.md`, shared shader struct из `agent/memory.md §10.8`, корневой `CMakeLists.txt`) — **сообщить пользователю** и попросить serialization: дождаться завершения другой сессии или явно поделить scope.
+- **Координация через `agent/active-sessions.md`.** Append-only ledger активных сессий. При старте агент дописывает `(timestamp, scope, files-touched-intent)`; при завершении — закрывает запись (статус `closed` + commit hash). Файл — primary signal для arbitration при конфликте scope.
+- **Файлы-хабы (high-contention)**, которых следует избегать при параллельной работе без явной договорённости: `TODO.md`, `AGENTS.md` (см. §1), shader headers с shared structs (`SceneLightingBuffer`, `GraphicsPushConstants`), корневой `CMakeLists.txt`.
+- **При завершении сессии** (§8) — **обязательно** обновить `agent/active-sessions.md` (закрыть свою запись) **до** предложения коммита. Иначе другой агент не увидит, что scope освободился.
+
+**Conflict resolution (merge conflict / overwrite уже случился):**
+
+1. **Не паниковать.** Сначала `git status`, `git diff`, `git log -p` для обеих веток.
+2. **Определить владельца** по `agent/active-sessions.md` (timestamp + scope) — это **не** для обвинений, а для понимания намерений проигравшей стороны diff'а.
+3. **Manual merge с пользователем.** Автоматический merge агентом не делается — решения о приоритетах scope'ов принимает человек.
+4. **После merge** — запись в `agent/decisions.md` о конфликте и резолюции, чтобы следующая сессия видела «почему так».
+
+**Что НЕ делать:**
+
+- `git pull --rebase` (см. §7.2.4).
+- `git checkout -- <file>` для файлов вне своей подзадачи.
+- Тихо перезаписывать чужие uncommitted изменения, даже если они «кажутся мусором» — это мог быть прогресс, ещё не дошедший до commit.
+- Плодить новые файлы-ledger'ы — использовать `agent/active-sessions.md`.
+
 ### 7.3 Verification (закрытие подзадачи)
 
 Tactical verification rules (build/test policy, smoke policy, tracy build policy, warning-cleanup policy) живут в `decisions.md §4` (Build / verification contract) и `agent/session-checklist.md` (старт/завершение). Здесь фиксируем только **формальный инвариант**: build green на охватываемой платформе; `ctest` / scripted captures / `ProjectVRuntimeSmoke` применять по решению, принятому в `decisions.md §4`, а не как ритуал на каждое закрытие.
@@ -379,4 +413,5 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
 
 Правки протокола, не кода. Хранить здесь, не в git history, чтобы можно было быстро вспомнить «что и зачем».
 
+- **2026-06-11** — добавлена секция §7.2.6 «Multi-agent concurrent work policy». Расширены §0 Quick Reference (новая строка про multi-agent protocol) и §7.1 Initialization (новый шаг 5: проверка активных сессий; остальные сдвинуты на +1). Введён `agent/active-sessions.md` как append-only ledger координации между параллельными сессиями. Источник: явная команда пользователя «над проектом могут работать несколько агентов, изменения могут быть прерваны, агенты должны быть готовы».
 - **2026-06-10** — полная перезапись по инициативе пользователя. Добавлены: мета-процедура (§1), mode protocol (§5), subagent delegation policy (§7.2.1), общий safety protocol (§7.2.2), trust boundary (§7.2.3), git safety + uncommitted-work workflow (§7.2.4), commit message contract (§7.2.5), session-end protocol (§8), stack conventions (§10), tool conventions (§11). Удалено: самопротиворечие о «неизменяемости», расплывчатые формулировки про token economy без конкретных инструментов, отсутствие PLAN/ACT-mode protocol, отсутствие правил для subagent и commit format. Дополнено: MCP filesystem заблокирован в этой песочнице — явно зафиксировано.

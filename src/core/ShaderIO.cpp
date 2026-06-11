@@ -48,6 +48,10 @@ std::vector<std::filesystem::path> BuildShaderSearchPaths(const char *filename)
 
 	const char *basePath = SDL_GetBasePath();
 	if (basePath && *basePath) {
+		// Build-tree shader output (`build/<preset>/src/`) — checked before
+		// `bin/` because the POST_BUILD copy to the binary directory only
+		// runs when C++ sources change, not when shaders are recompiled.
+		candidates.emplace_back(std::filesystem::path(basePath) / ".." / "src" / filename);
 		candidates.emplace_back(std::filesystem::path(basePath) / filename);
 	}
 

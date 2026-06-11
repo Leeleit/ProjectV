@@ -2,7 +2,7 @@
 
 Долговечный delta-контекст поверх `TODO.md` и `AGENTS.md`.
 
-Дата обновления: `2026-04-24` + Linux-порт-инициализация `2026-06-09` (см. новые секции `## 5. Linux baseline` и `## 6. Linux risks/follow-up` ниже) + `2026-06-10` searxng + Pillow helper + `2026-06-10` P0.2 fix re-apply + per-corner AO design.
+Дата обновления: `2026-04-24` + Linux-порт-инициализация `2026-06-09` + `2026-06-10` searxng + Pillow helper + `2026-06-10` P0.2 fix re-apply + per-corner AO design + `2026-06-11` TAA A2 closeout.
 
 ---
 
@@ -616,3 +616,44 @@ read `*CurrentLayout` and write back the new value, not assume
 either `UNDEFINED` or a fixed post-state. The same pattern applies
 to any future offscreen resource that needs to be both written
 and sampled across frames.
+
+## 10.15 TAA close-out plumbing landed (A1, `2026-06-11`, committed as `9764463`)
+
+Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыре deferred subtask'а из `agent/memory.md §10.14` закрыты + история-инвалидация:
+
+- **Subtask C — ToggleTaa handler + T-биндинг:**
+  - `InputActions.cpp`: `BindAction(input, InputAction::ToggleTaa, SDL_SCANCODE_T)` добавлен между PlayLastInputReplay (Y) и ToggleMutationAnchor (X).
+  - `AppUpdate.cpp`: ToggleTaa handler работает как остальные toggle handlers: `ConsumeInputActionPressed` → flip `render->taaEnabled` + `render->taaHistoryValid = false`. Гейт `world->voxelWorld` (требуется active world).
+  - Ранее добавленный `InputAction::ToggleTaa` (37-й элемент enum в `core/Types.hpp`) теперь забинден и обрабатывается.
+  - `DebugStats` propagation: каждый кадр `AppUpdate.cpp` копирует `render->taaEnabled/blend/frameCounter/historyValid/jitterX/Y` → `debug->stats.*`. Jitter X/Y были добавлены в `DebugStats` (ранее отсутствовали — комментарий предполагал, что JITR не нужен в HUD, но для A1 он потребовался).
+
+- **Subtask D — DebugHud TAA JITR/BLND/HIST lines:**
+  - `DebugHud.cpp`: добавлен блок `TAA %s JIT %.2f %.2f BLND %.3f HIST %s` после TSHD (TransparentShadowPolicy) строки.
+  - JITR показывает текущий sub-pixel jitter offset (при `taaEnabled=false` это `0.00 0.00`).
+  - BLND показывает blend factor (`0.100` default).
+  - HIST показывает `true`/`false` (valid = 1 на втором+ кадре после TAA-enable или после history invalidation).
+
+- **Subtask E — ScreenshotCapture taa_* sidecar entries:**
+  - `ScreenshotCapture.cpp`: добавлены `taa_enabled`, `taa_jitter_x`, `taa_jitter_y`, `taa_blend`, `taa_history_valid` в format string + args между `shadow_cascade_blend` и `shadow_cascade_count`.
+
+- **Subtask F — History invalidation hooks:**
+  - `main.cpp::FinalizeActiveVoxelWorldReload`: `state->render.taaHistoryValid = false;` после флагов reload. Покрывает world reload (snapshot load, preset change).
+  - `AppUpdate.cpp::ToggleTaa handler`: `render->taaHistoryValid = false` на каждый toggle (в обе стороны). Новые jitter-projection начинает с чистого листа.
+  - Swapchain resize: уже было `render->taaHistoryValid = false` в `VulkanSwapchain.cpp` prior commit (`98fb391`).
+  - **Не invalidate:** pause toggle (нет изменения геометрии), voxel edit (sub-frame изменение, TAA depth-reproject handles).
+
+**Verification:**
+- `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green
+- `ctest --test-dir build/linux-clang-debug --output-on-failure -C Debug` — 1/1 passed (ProjectVTests; ProjectVAssetTests Not Run — pre-existing from asset-pipeline M1)
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` с `PROJECTV_ENABLE_VALIDATION=ON` — 6/6 captures (FINAL SHDW CSM CTSH AOCC LOCL), 0 VUIDs / 0 errors. Sidecar содержит `taa_enabled=0`, `taa_jitter_x=0.000000`, `taa_jitter_y=0.000000`, `taa_blend=0.100000`, `taa_history_valid=0`.
+- TAA-off path (по умолчанию) остаётся byte-equivalent к pre-A1 — ни в одном capture нет regression.
+
+**A2 next steps (closed `2026-06-11`):**
+1. ✅ Flip `core/Types.hpp::RenderState.taaEnabled` default: `false → true`.
+2. ✅ Build + ctest + smoke с `taaEnabled=true` (FINAL + SHDW CSM CTSH AOCC LOCL).
+3. ✅ Vision-verify anti-jitter: captures clean, `taa_history_valid=1` after warmup.
+4. ✅ SPIR-V search path fix (`parent_path()` → `".."`) — `SDL_GetBasePath()` returns trailing separator;
+   `parent_path()` only strips empty trailing string, not the actual `bin/` directory, so `bin/src/file.spv`
+   was constructed instead of `src/file.spv`. `".."` works on all platforms regardless of trailing separator.
+5. ⏳ `agent/decisions.md` §18 TAA contract entry — deferred to next session with TAA tuning.
+

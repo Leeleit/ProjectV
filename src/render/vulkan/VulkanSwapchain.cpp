@@ -420,12 +420,18 @@ bool RecreateSwapchain(
 	if (render->taaHistoryColorTarget == nullptr) {
 		render->taaHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
 	}
-	projectv::taa::CreateOrRecreateTaaRenderTargets(
-		context,
-		swapchain->extent,
-		*render->taaSceneColorTarget,
-		*render->taaHistoryColorTarget,
-		render->taaLinearSampler);
+	if (!projectv::taa::CreateOrRecreateTaaRenderTargets(
+			context,
+			swapchain->extent,
+			*render->taaSceneColorTarget,
+			*render->taaHistoryColorTarget,
+			render->taaLinearSampler)) {
+		runtime::LogRuntimeFailure(
+			"TaaRenderTargets",
+			"RecreateSwapchain.CreateOrRecreateTaaRenderTargets",
+			"TAA render target allocation failed");
+		return false;
+	}
 	render->taaHistoryValid = false;
 	render->taaSceneColorNeedsInit = true;
 	render->taaHistoryNeedsInit = true;

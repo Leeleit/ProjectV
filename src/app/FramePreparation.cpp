@@ -102,6 +102,7 @@ bool PrepareFrameRenderData(
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
 	frame->renderData.shadowDescriptorSet = sceneFrameResources.shadowDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
+	frame->renderData.taaResolveDescriptorSet = render->taaResolveDescriptorSets[frameIndex];
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
 	frame->renderData.shadowIndirectBuffer = sceneFrameResources.shadowIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;

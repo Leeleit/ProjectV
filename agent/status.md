@@ -2,7 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `2026-06-10` P0.2 fix re-apply + per-corner AO design (P0.3 next session, not merged) + `2026-06-10` P0.4 VoxelLab peter-pan fix (uncommitted, see session notes) + `2026-06-11` AGENTS.md slim pass (uncommitted, 5 блоков: §3, §6, §7.3, §8, §9; net -16 строк, +20/-36; ждёт коммита по §7.2.5) + `2026-06-11` P0.4 peter-pan problem **suspended** after 5 re-attempts (B+C cascade-texel-aware + per-cascade `vkCmdSetDepthBias` reverted; then rasterizer `0.0/1.5` bias, `kShadowDepthPadding=4.0`, VoxelLab `filterRadius=0.5`, `cascadeCenter=geometric` — все reverted; SHDW stats identical между всеми attempts и pre-fix closer shot на user camera `CAM 8.36 3.65 4.716 LOOK 0.22 -0.89 -0.4`; оператор сказал "пока оставим проблему") + **`2026-06-11` TAA infrastructure landed (anti-jitter baseline, не visual) — `taaEnabled` default off до offscreen scene-color resolve pass**. Сделано: scene lighting contract расширен (taaParams, prevViewProjectionMatrix, taaHistoryParams), `BuildGraphicsPushConstants` принимает jitter NDC, `FramePreparation` продвигает Halton(2,3) 8-tap и стэшит prev viewProj, `RefreshSceneLightingBuffer` заполняет TAA поля, `Taa` debug view + `ToggleTaa` action, `Taa.cpp` Halton sequence helper, `taa_resolve.vert/frag` шейдеры написаны, `taaEnabled=false` по умолчанию (resolve pipeline ещё не подключён — это следующий checkpoint). Build green на `linux-clang-debug`, ctest 1/1, .spv скопированы в `bin/`. См. ниже §5 и `agent/memory.md §10.12` + `agent/decisions.md §18`. Uncommitted: TODO.md Post-TAA backlog, VoxelMaterials.hpp/cpp, voxel.{frag,shadow.vert,mesh.comp}, Core/Types.hpp + RenderState TAA fields, Camera.{hpp,cpp}, FramePreparation.cpp, SceneResources.cpp, Taa.{hpp,cpp}, taa_resolve.{vert,frag}, CMakeLists.txt, agent/status.md. **Не закоммичено** — по §7.2.4 ждёт явного подтверждения. + **`2026-06-11` TAA renderer wiring landed (this session, не visual, gate off).** Subtask 1 (`VK_EXT_dynamic_rendering_unused_attachments` + dual `pColorAttachmentFormats`/`pAttachments` в main pipeline) + Subtask 2 (Renderer.cpp TAA-aware `RecordGraphicsCommands`: main pass → TAA offscreen, TAA resolve pass → swapchain, history copy через `vkCmdCopyImage`, layout transitions, per-image layout trackers в `RenderState`). `taaEnabled` остаётся `false`. Build green, ctest 1/1, smoke 6/6 на `cam -25 19 25 look 0.62 -0.48 -0.62` (VoxelLab) с `PROJECTV_ENABLE_VALIDATION=ON` — 0 VUID, 0 Unfreed, 0 ошибок. **Параллельная сессия** `2026-06-11-asset-pipeline-m0-m5` (M0 = CMake wiring) уже в дереве рядом — `CMakeLists.txt` / `src/CMakeLists.txt` / `src/core/Types.hpp` (наши правки рядом, не пересекаются). M4 (asset-pipeline) тоже планирует править `Renderer.cpp` / `core/Types.hpp` / `SceneResources.cpp` для `RecordModelCommands` и `ModelRenderState` — это прямой conflict с моими TAA-изменениями. Решение — за оператором: commit сейчас (asset-pipeline rebase) или ждать M0-M3. См. `agent/memory.md §10.14` + `agent/active-sessions.md` (закрытая запись).
+Updated: `2026-06-11` — TAA renderer wiring (Subtask 1+2, commit `98fb391`) + Phase A1 close-out plumbing (ToggleTaa handler, DebugHud TAA lines, sidecar, history invalidation) landed. `taaEnabled=false` default (flip in A2). Parallel asset-pipeline M0+M1 committed (`1c72a4b`/`8b112e7`).
 
 ---
 
@@ -135,13 +135,24 @@ Updated: `2026-04-24` + Linux-port-инициализация `2026-06-09` + `20
   pre-fix SPIR-V и capture выглядит как до merge'а. Working rule для будущих шейдер-only сессий: либо
   `cmake --build` с явной пересборкой `ProjectV` target, либо `cp` сразу после build'а.
 
-## 5. TAA off-target allocation committed (this session, `2026-06-11`)
+## 5. TAA A2 complete — `taaEnabled=true`, SPIR-V search path fix, smoke verified (`2026-06-11`)
 
-Two commits landed this session:
+Uncommitted changes on this session (proposed commit):
 
-- `52b130f` — TAA infrastructure baseline (CPU side, scene lighting contract, jitter, prev viewProj save, TAA debug view, `ToggleTaa` action, `Taa.cpp` Halton helper, `taa_resolve.{vert,frag}` shaders, doc updates).
-- `d9830c2` — TAA offscreen render target allocation (`OffscreenColorTarget` struct, R16G16B16A16_SFLOAT scene + history images, linear sampler, integration with `VulkanSwapchain::RecreateSwapchain` so resize-time lifecycle stays in one place, history invalidation on every (re)allocation).
+- `taaEnabled` default flipped `false→true` (`core/Types.hpp:613`).
+- `ShaderIO.cpp`: SPIR-V search path fix — `parent_path()` → `".."` / `"src"`. `SDL_GetBasePath()` returns trailing separator;
+  `parent_path()` strips only the empty trailing string, not `bin/`, so the fix was broken (`bin/src/file.spv` instead of
+  `src/file.spv`). `".."` works on all platforms regardless of trailing separator.
+- Dual MRT in `voxel.frag` — writes linear color to `layout(location=1) outSceneColor` (TAA-on scene color target)
+  alongside tone-mapped `layout(location=0) outColor` (swapchain slot). Fixes gray screen when TAA-on: without
+  Location 1 write, the scene color target stays clear (gray).
+- `FramePreparation.cpp:105` — `taaResolveDescriptorSet` assignment (fixes VUID 08600).
+- `Renderer.cpp`: swapchain `UNDEFINED→COLOR_ATTACHMENT_OPTIMAL` transition in TAA-on resolve block (fixes VUID 09592).
+- `VulkanSwapchain.cpp:423` — `CreateOrRecreateTaaRenderTargets` return-value check (prevents NULL image consumption).
 
-Both commits: `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` green, `ctest --test-dir build/linux-clang-debug -C Debug` 1/1 passed, .spv скопированы в `bin/`.
+Smoke with `PROJECTV_ENABLE_VALIDATION=ON`: 6/6 captures, 0 VUIDs, 0 errors, `taa_enabled=1`, `taa_history_valid=1`.
 
-**Still deferred (visual TAA ещё не работает):** offscreen scene color → main pass, fullscreen TAA resolve pipeline, `Renderer.cpp` integration, `DebugHud.cpp` TAA HUD lines, `AppUpdate.cpp` `ToggleTaa` handler, `ScreenshotCapture.cpp` `taa_*` sidecar entries, history invalidation triggers, `taaEnabled` default flip from `false` → `true`. Сейчас `taaEnabled` остаётся `false` чтобы main pass рендерился без jitter (resolve pipeline ещё не существует, иначе jitter без resolve = новый visible aliasing).
+Interim commits from earlier this session:
+- `52b130f` — TAA infrastructure baseline.
+- `d9830c2` — TAA offscreen render target allocation.
+- `9764463` — Phase A1 close-out plumbing (committed).

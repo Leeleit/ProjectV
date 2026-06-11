@@ -57,6 +57,34 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-11-taa-a2-flip
+
+- **id:** `2026-06-11T23:44Z-taa-a2-flip`
+- **started-at:** 2026-06-11T23:44:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** Phase A сессия 2 (A2) — flip `taaEnabled` default `false→true`, fix SPIR-V search path, smoke verify (0 VUIDs).
+- **files-touched-intent:** `src/core/Types.hpp` (`taaEnabled=true`), `src/core/ShaderIO.cpp` (SPIR-V search path: `parent_path()` → `".."`), `src/shaders/voxel.frag` (dual MRT), `src/render/vulkan/VulkanSwapchain.cpp` (return-value check), `src/app/FramePreparation.cpp` (`taaResolveDescriptorSet`), `src/render/Renderer.cpp` (swapchain layout transition in TAA-on resolve block)
+- **status:** closed
+- **closed-at:** 2026-06-11T23:59:00Z
+- **commit-hash:** uncommitted (proposed)
+- **notes:** A2 complete. SPIR-V search path had `parent_path()` which doesn't work with trailing separator from `SDL_GetBasePath()` → `bin/src/file.spv` instead of `src/file.spv`. Fixed to `".." / "src" / filename` which works cross-platform. Smoke 6/6 with `PROJECTV_ENABLE_VALIDATION=ON`: 0 VUIDs, 0 errors, `taa_enabled=1`, `taa_history_valid=1`.
+
+### session-2026-06-11-taa-closeout-plumbing
+
+- **id:** `2026-06-11T22:35Z-taa-closeout-plumbing`
+- **started-at:** 2026-06-11T22:35:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** Phase A сессия 1 — TAA close-out plumbing (deferred subtasks C+D+E+F из `agent/memory.md §10.14`): (C) `AppUpdate.cpp` `ToggleTaa` handler + `InputActions.cpp` T-биндинг + `DebugStats` propagation; (D) `DebugHud.cpp` TAA JITR/BLND/HIST lines в detailed HUD; (E) `ScreenshotCapture.cpp` `taa_*` sidecar entries; (F) history-invalidation hooks на world-reload / preset-change / Taa-toggle. `taaEnabled` остаётся `false` default — flip на A2 (следующая сессия) после visual verify. **Не трогаю:** `src/render/Renderer.cpp` (TAA-рендеринг уже wired в `98fb391`), `src/render/vulkan/VulkanGraphicsPipeline.cpp` (6 pipelines уже на месте), `src/render/vulkan/TaaResolvePipeline.cpp`, `src/render/Taa.*`, `src/render/TaaRenderTargets.cpp`. Asset-pipeline session parked на M2+ (`8b112e7` — operator сообщил "параллельный агент завершил свою работу"). Запись asset-pipeline остаётся `open` для owner'а — я её не правлю.
+- **files-touched-intent:** `src/app/AppUpdate.cpp` (ToggleTaa handler + world-reload/preset invalidate), `src/app/InputActions.cpp` (T-биндинг), `src/debug/DebugHud.cpp` (TAA lines), `src/render/ScreenshotCapture.cpp` (`taa_*` sidecar), `src/core/Types.hpp` (опционально: `taaEnabled` propagation if не propagated elsewhere), `agent/memory.md` (§10.15 closeout), `agent/status.md` (snapshot), `agent/active-sessions.md` (close record), `TODO.md` (P1 TAA-on в новой строке).
+- **status:** closed
+- **closed-at:** 2026-06-11T22:55:00Z
+- **commit-hash:** `9764463` — `feat(render): wire TAA ToggleTaa handler, debug HUD, sidecar, history invalidation`
+- **notes:** Phase A сессия 1 (A1) выполнена: ToggleTaa handler (T key), DebugHud TAA JITR/BLND/HIST lines, ScreenshotCapture `taa_*` sidecar, history invalidation on world-reload (FinalizeActiveVoxelWorldReload) + Taa toggle. `taaEnabled` остаётся `false` default (flip в A2). Build green, ctest 1/1, smoke 6/6 на `cam -25 19 25 look 0.62 -0.48 -0.62` с `PROJECTV_ENABLE_VALIDATION=ON` — 0 VUIDs / 0 errors / 6 captures. Backup: `/tmp/taa-closeout-a1/a1-full.patch`.
+
 ### session-2026-06-11-asset-pipeline-m0-m5
 
 - **id:** `2026-06-11T19:55Z-asset-pipeline-m0-m5`
@@ -66,8 +94,8 @@ Append-only ledger активных и недавно завершённых AI-
 - **branch:** master
 - **scope:** M0–M5: импорт полигональных моделей через `fastgltf` + `draco` + `meshoptimizer`. M0 = CMake wiring + smoke build. M1 = sync `AssetLoader` (`.glb` → `fastgltf::Asset`) + `AssetRegistry` + env-var manifest `PROJECTV_MODELS=path.glb@x,y,z;...`. M2 = `MeshBaker` + `MeshGpuResources` (interleaved vertex, meshopt vcache+vfetch, VMA upload). M3 = draco path (`KHR_draco_mesh_compression`). M4 = model graphics pass + `model.vert/frag` + shared GLSL helper для `SceneLightingBuffer` (Q6=U3=b) + `MeshComponent`/`ModelTransformComponent` ECS + Jolt static AABB body. M5 = multi-instance + frustum cull.
 - **files-touched-intent:** `CMakeLists.txt`, `src/CMakeLists.txt`, `src/asset/AssetLoader.{hpp,cpp}` (M1+), `src/asset/MeshBaker.{hpp,cpp}` (M2+), `src/asset/MeshGpuResources.{hpp,cpp}` (M2+), `src/asset/DracoMeshDecoder.{hpp,cpp}` (M3+), `src/asset/ModelPass.{hpp,cpp}` (M4+), `src/asset/ModelComponent.hpp` (M4+), `src/asset/AssetRegistry.{hpp,cpp}` (M1+), `src/asset/AssetStub.cpp` (M0), `src/render/Renderer.cpp` (M4 — `RecordModelCommands` between opaque and transparent), `src/render/SceneResources.cpp` (M4 — `ModelRenderState` slot), `src/core/Types.hpp` (M4 — `ModelRenderState` field), `src/app/FramePreparation.cpp` (M4+ — build model draw list), `src/ecs/EcsWorld.cpp` (M4+ — register components), `src/app/AppUpdate.cpp` (M1+ — manifest load), `src/shaders/model.vert`, `src/shaders/model.frag`, `src/shaders/lighting.glsl` (M4 — shared GGX helper + `SceneLightingBuffer` GLSL declaration, U3=b), `tests/AssetLoaderTests.cpp` (M1+), `tests/fixtures/box.glb` (M1). **Не трогаю:** `src/render/vulkan/VulkanBootstrap.cpp`, `src/render/vulkan/VulkanGraphicsPipeline.cpp`, `src/render/vulkan/TaaResolvePipeline.cpp`, `src/render/Taa.*`, `src/render/TaaRenderTargets.cpp` (TAA-сессия scope, см. ниже).
-- **status:** open
-- **notes:** Решения зафиксированы в диалоге `2026-06-11`: Q1=2, Q2=1 (→ план 3), Q3=1 (→ план 3), Q4=2, Q5=2 (receive-only, выровнено с RTX-будущим), Q6=1 (universal PBR SSBO, GGX reuse), Q7=1 (без save), Q8=2 (можно трогать `SceneLightingBuffer`), U1=c, U2=c, U3=b, U4=b. Параллельная сессия — `2026-06-11T16:43Z-taa-renderer-wiring` (см. ниже) — работает над TAA offscreen main pass + resolve pass; непересекающийся scope. **Прогресс:** M0 = `1c72a4b` (CMake wiring + stub TU) — closed. M1 = sync `.glb` parser + `AssetRegistry` + manifest + tests — closed-pending-commit. TAA-сессия закоммитила `98fb391` между M0 и M1.
+- **status:** open (operator сообщил "параллельный агент завершил свою работу" — M0 + M1 закоммичены, M2-M5 parked; запись оставлена `open` для owner'а)
+- **notes:** Решения зафиксированы в диалоге `2026-06-11`: Q1=2, Q2=1 (→ план 3), Q3=1 (→ план 3), Q4=2, Q5=2 (receive-only, выровнено с RTX-будущим), Q6=1 (universal PBR SSBO, GGX reuse), Q7=1 (без save), Q8=2 (можно трогать `SceneLightingBuffer`), U1=c, U2=c, U3=b, U4=b. Параллельная сессия — `2026-06-11T16:43Z-taa-renderer-wiring` (см. ниже) — работает над TAA offscreen main pass + resolve pass; непересекающийся scope. **Прогресс:** M0 = `1c72a4b` (CMake wiring + stub TU) — closed. M1 = `8b112e7 feat(asset): sync .glb loader, manifest parser, and asset registry (M1)` — closed. TAA-сессия закоммитила `98fb391` между M0 и M1. M2-M5 — R&D, не блокирует mainline, может быть возобновлено оператором позже.
 
 ### session-2026-06-11-taa-renderer-wiring
 

@@ -73,6 +73,7 @@ layout(location = 2) flat in uint inMaterialIndex;
 layout(location = 3) in float inAmbientVisibility;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outSceneColor;
 
 const uint kSunShadowCascadeCount = 4u;
 const uint kSunContactShadowMaxSteps = 12u;
@@ -921,6 +922,7 @@ void main() {
         color = localDirect;
     } else if (lightingDebugView == 4u) {
         outColor = vec4(shadowCovered ? vec3(sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
+        outSceneColor = outColor;
         return;
     } else if (lightingDebugView == 5u) {
         vec3 cascadeColor = GetSunShadowCascadeDebugColor(sunShadowCascadeIndex);
@@ -932,6 +934,7 @@ void main() {
             cascadeBlendWeight);
         }
         outColor = vec4(shadowCovered ? mix(cascadeColor * 0.28, cascadeColor, sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
+        outSceneColor = outColor;
         return;
     } else if (lightingDebugView == 6u) {
         color = vec3(sunContactVisibility);
@@ -944,9 +947,11 @@ void main() {
     if (lightingDebugView != 8u) {
         color = mix(color, fogColor, fog);
     }
+    const vec3 linearColor = color;
     color *= max(sceneLighting.postProcess.x, 0.0);
     color = ApplyToneMap(color);
     color = ApplyColorGrading(color);
 
     outColor = vec4(color, material.baseColor.a);
+    outSceneColor = vec4(linearColor, material.baseColor.a);
 }

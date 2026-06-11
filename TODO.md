@@ -539,6 +539,14 @@ depth-reconstruct, 8-tap Halton(2,3), HDR linear scene color). Не блокир
       R16G16B16A16_SFLOAT — самый дорогой формат; на 1440p ~24MB на target).
 - [ ] **Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`) с
       presets, runtime switchable через debug ladder (отдельный P-уровень от `taaEnabled`).
+- [x] **TAA runtime toggle (T key) + HUD diagnostics + sidecar metadata (A1, `2026-06-11`).** `taaEnabled` default off.
+      Build green, ctest 1/1, smoke 6/6.
+- [x] **TAA A2 — `taaEnabled` flip `false→true`, SPIR-V search path fix, smoke verify (`2026-06-11`).**
+      Dual MRT in `voxel.frag` (Location 0 + Location 1), `taaResolveDescriptorSet` population fix (VUID 08600),
+      swapchain layout transition in TAA-on resolve block (VUID 09592), `CreateOrRecreateTaaRenderTargets` return-value
+      check, ShaderIO.cpp SPIR-V search path fix (`parent_path()` → `".."` / `"src"` — `parent_path()` не работал с
+      trailing separator от SDL_GetBasePath()). Smoke 6/6 с `PROJECTV_ENABLE_VALIDATION=ON`: 0 VUIDs, 0 errors,
+      `taa_enabled=1`, `taa_history_valid=1`.
 
 ---
 
