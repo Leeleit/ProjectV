@@ -293,13 +293,13 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 		camera.position[0],
 		camera.position[1],
 		camera.position[2],
-		0.0f,
+		nearPlane,
 	};
 	pushConstants.cameraForward = {
 		cameraForward[0],
 		cameraForward[1],
 		cameraForward[2],
-		0.0f,
+		farPlane,
 	};
 	return pushConstants;
 }

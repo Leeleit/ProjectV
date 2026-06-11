@@ -1101,7 +1101,7 @@ bool RefreshGraphicsResourceBindings(
 			.range = VK_WHOLE_SIZE,
 		};
 		const VkDescriptorBufferInfo sceneLightingBufferInfo{
-			.buffer = render->sceneLightingBuffer,
+			.buffer = frameResources.sceneLightingBuffer,
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
@@ -1249,7 +1249,7 @@ bool RefreshGraphicsResourceBindings(
 			.range = VK_WHOLE_SIZE,
 		};
 		const VkDescriptorBufferInfo sceneLightingBufferInfo{
-			.buffer = render->sceneLightingBuffer,
+			.buffer = frameResources.sceneLightingBuffer,
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};

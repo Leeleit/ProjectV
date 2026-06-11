@@ -46,6 +46,13 @@ bool PrepareFrameRenderData(
 		swapchain->extent,
 		GetCameraVisibleSceneMaxDistance(*camera));
 
+	const VkFence inFlightFence = frame->inFlightFences[frameIndex];
+	const VkResult waitResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	if (waitResult != VK_SUCCESS) {
+		runtime::LogVkFailure("PrepareFrameRenderData.vkWaitForFences", waitResult);
+		return false;
+	}
+
 	if (!UpdateSceneResources(world, render, chunkCullingParameters, swapchain->extent)) {
 		runtime::LogRuntimeFailure(
 			"Frame",
@@ -57,13 +64,6 @@ bool PrepareFrameRenderData(
 	if (world->voxelWorld && !render->completedChunkRebuildIndices.empty()) {
 		CommitDirtyVoxelChunkRebuildRequests(*world->voxelWorld, render->completedChunkRebuildIndices);
 		render->completedChunkRebuildIndices.clear();
-	}
-
-	const VkFence inFlightFence = frame->inFlightFences[frameIndex];
-	const VkResult waitResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-	if (waitResult != VK_SUCCESS) {
-		runtime::LogVkFailure("PrepareFrameRenderData.vkWaitForFences", waitResult);
-		return false;
 	}
 
 	if (!UploadSceneFrameResources(*render, frame->currentFrame)) {

@@ -488,6 +488,9 @@ struct SceneFrameResources {
 	void *chunkCullingMappedData = nullptr;
 	VkBuffer chunkCullingBuffer = VK_NULL_HANDLE;
 	VmaAllocation chunkCullingAllocation = VK_NULL_HANDLE;
+	void *sceneLightingMappedData = nullptr;
+	VkBuffer sceneLightingBuffer = VK_NULL_HANDLE;
+	VmaAllocation sceneLightingAllocation = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
@@ -546,9 +549,6 @@ struct RenderState {
 	void *materialVisualMappedData = nullptr;
 	VkBuffer materialVisualBuffer = VK_NULL_HANDLE;
 	VmaAllocation materialVisualAllocation = VK_NULL_HANDLE;
-	void *sceneLightingMappedData = nullptr;
-	VkBuffer sceneLightingBuffer = VK_NULL_HANDLE;
-	VmaAllocation sceneLightingAllocation = VK_NULL_HANDLE;
 	VkDescriptorSetLayout graphicsDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool graphicsDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout shadowDescriptorSetLayout = VK_NULL_HANDLE;

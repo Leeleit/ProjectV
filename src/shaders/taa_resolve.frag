@@ -70,12 +70,9 @@ vec3 ApplyTaaColorGrading(const vec3 mappedColor) {
     return clamp((saturatedColor - vec3(0.5)) * contrast + vec3(0.5 + lift), 0.0, 1.0);
 }
 
-vec3 SampleSceneColorClamp(const vec2 uv, const vec2 texelSize) {
-    // 3x3 RGB clamp. Cheap; trades a tiny amount of chroma resolution for a
-    // much more stable history. YCoCg clamp is documented as a future
-    // upgrade path in `agent/decisions.md` §18.
-    vec3 minimumColor = vec3(kHugeTaaRayT);
-    vec3 maximumColor = vec3(-kHugeTaaRayT);
+void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, out vec3 maxColor) {
+    minColor = vec3(kHugeTaaRayT);
+    maxColor = vec3(-kHugeTaaRayT);
     for (int offsetY = -1; offsetY <= 1; ++offsetY) {
         for (int offsetX = -1; offsetX <= 1; ++offsetX) {
             const vec2 sampleUv = clamp(
@@ -83,11 +80,10 @@ vec3 SampleSceneColorClamp(const vec2 uv, const vec2 texelSize) {
                 vec2(0.0),
                 vec2(1.0));
             const vec3 sampleColor = texture(sceneColor, sampleUv).rgb;
-            minimumColor = min(minimumColor, sampleColor);
-            maximumColor = max(maximumColor, sampleColor);
+            minColor = min(minColor, sampleColor);
+            maxColor = max(maxColor, sampleColor);
         }
     }
-    return clamp(texture(sceneColor, uv).rgb, minimumColor, maximumColor);
 }
 
 void main()
@@ -128,17 +124,25 @@ void main()
         }
     }
 
-    const vec3 clampedCurrent = SampleSceneColorClamp(uv, texelSize);
+    vec3 minColor;
+    vec3 maxColor;
+    GetSceneColorRange(uv, texelSize, minColor, maxColor);
+    const vec3 clampedCurrent = clamp(texture(sceneColor, uv).rgb, minColor, maxColor);
 
     const float blendFactor = historyValid && reprojectionOk
         ? clamp(sceneLighting.taaParams.z, 0.0, 1.0)
         : 0.0;
 
+    // Clamp the history sample against the current 3x3 neighborhood so
+    // that wrong reprojections (revealed geometry after camera movement)
+    // do not ghost a completely different surface into the blend.
+    const vec3 clampedHistory = clamp(historySample, minColor, maxColor);
+
     // Linear history: history was stored *before* tone-map was applied so
     // that successive blends happen in linear light. The resolve passes
     // the linear result through tone-map + grading here, so the swapchain
     // output remains bit-stable across the TAA path.
-    vec3 linearOut = mix(clampedCurrent, historySample, blendFactor);
+    vec3 linearOut = mix(clampedCurrent, clampedHistory, blendFactor);
     // Apply exposure to the current sample as well so the in/out color
     // spaces stay consistent with the main pass.
     linearOut *= max(sceneLighting.postProcess.x, 0.0);

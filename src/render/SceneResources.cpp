@@ -176,12 +176,6 @@ void RefreshSceneLightingBuffer(
 		render.taaHistoryValid ? 1.0f : 0.0f,
 		0.0f,
 	};
-	if (render.sceneLightingMappedData) {
-		std::memcpy(
-			render.sceneLightingMappedData,
-			&render.currentSceneLighting,
-			sizeof(render.currentSceneLighting));
-	}
 }
 
 bool CreateBuffer(
@@ -502,7 +496,7 @@ void DestroySceneResources(
 		return;
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -539,6 +533,10 @@ void DestroySceneResources(
 			profiling::RecordFree(chunkCullingAllocation, "SceneChunkCullingBufferAllocation");
 			vmaDestroyBuffer(context->allocator, chunkCullingBuffer, chunkCullingAllocation);
 		}
+		if (sceneLightingBuffer && sceneLightingAllocation) {
+			profiling::RecordFree(sceneLightingAllocation, "VoxelSceneLightingBufferAllocation");
+			vmaDestroyBuffer(context->allocator, sceneLightingBuffer, sceneLightingAllocation);
+		}
 
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
@@ -567,6 +565,9 @@ void DestroySceneResources(
 		chunkCullingMappedData = nullptr;
 		chunkCullingBuffer = VK_NULL_HANDLE;
 		chunkCullingAllocation = VK_NULL_HANDLE;
+		sceneLightingMappedData = nullptr;
+		sceneLightingBuffer = VK_NULL_HANDLE;
+		sceneLightingAllocation = VK_NULL_HANDLE;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
 		shadowDescriptorSet = VK_NULL_HANDLE;
 		voxelMeshingDescriptorSet = VK_NULL_HANDLE;
@@ -589,14 +590,6 @@ void DestroySceneResources(
 	render->materialVisualMappedData = nullptr;
 	render->materialVisualBuffer = VK_NULL_HANDLE;
 	render->materialVisualAllocation = VK_NULL_HANDLE;
-
-	if (render->sceneLightingBuffer && render->sceneLightingAllocation) {
-		profiling::RecordFree(render->sceneLightingAllocation, "VoxelSceneLightingBufferAllocation");
-		vmaDestroyBuffer(context->allocator, render->sceneLightingBuffer, render->sceneLightingAllocation);
-	}
-	render->sceneLightingMappedData = nullptr;
-	render->sceneLightingBuffer = VK_NULL_HANDLE;
-	render->sceneLightingAllocation = VK_NULL_HANDLE;
 	render->currentSceneLighting = {};
 
 	render->sceneFaceCapacity = 0;
@@ -672,54 +665,50 @@ bool CreateSceneResources(
 			"VoxelMaterialVisualBuffer");
 	}
 
-	{
-		VmaAllocationInfo sceneLightingAllocationInfo{};
-		if (!CreateBuffer(
-				context,
-				sizeof(VoxelSceneLighting),
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				allocationInfo,
-				&render->sceneLightingBuffer,
-				&render->sceneLightingAllocation,
-				&sceneLightingAllocationInfo)) {
-			DestroySceneResources(context, render);
-			return false;
-		}
-		render->sceneLightingMappedData = sceneLightingAllocationInfo.pMappedData;
-		profiling::RecordAllocation(
-			render->sceneLightingAllocation,
-			sceneLightingAllocationInfo.size,
-			"VoxelSceneLightingBufferAllocation");
-		render->sceneMemoryBytes += sceneLightingAllocationInfo.size;
-		render->currentSceneLighting = BuildSceneLighting(*world->voxelWorld, *render);
-		render->currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
-			render->currentSunShadowCascadeSplits.nearPlane,
-			render->currentSunShadowCascadeSplits.farPlane,
-			render->sunShadowCascadeSplitLambda);
-		const auto [initialLightViewProjection] = BuildSunShadowProjection(
-			*world->voxelWorld,
-			{
-				render->currentSceneLighting.sunDirectionAndWrap[0],
-				render->currentSceneLighting.sunDirectionAndWrap[1],
-				render->currentSceneLighting.sunDirectionAndWrap[2],
-			},
-			render->lightingDebugControls.shadowCoverageScale);
-		for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-			StoreSunShadowProjection(render->currentSceneLighting, cascadeIndex, initialLightViewProjection);
-		}
-		StoreSunShadowCascadeSplits(render->currentSceneLighting, render->currentSunShadowCascadeSplits);
-		std::memcpy(
-			render->sceneLightingMappedData,
-			&render->currentSceneLighting,
-			sizeof(render->currentSceneLighting));
-		SetVulkanObjectName(
-			*context,
-			reinterpret_cast<uint64_t>(render->sceneLightingBuffer),
-			VK_OBJECT_TYPE_BUFFER,
-			"VoxelSceneLightingBuffer");
+	render->currentSceneLighting = BuildSceneLighting(*world->voxelWorld, *render);
+	render->currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
+		render->currentSunShadowCascadeSplits.nearPlane,
+		render->currentSunShadowCascadeSplits.farPlane,
+		render->sunShadowCascadeSplitLambda);
+	const auto [initialLightViewProjection] = BuildSunShadowProjection(
+		*world->voxelWorld,
+		{
+			render->currentSceneLighting.sunDirectionAndWrap[0],
+			render->currentSceneLighting.sunDirectionAndWrap[1],
+			render->currentSceneLighting.sunDirectionAndWrap[2],
+		},
+		render->lightingDebugControls.shadowCoverageScale);
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		StoreSunShadowProjection(render->currentSceneLighting, cascadeIndex, initialLightViewProjection);
 	}
+	StoreSunShadowCascadeSplits(render->currentSceneLighting, render->currentSunShadowCascadeSplits);
 
 	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
+		{
+			VmaAllocationInfo sceneLightingAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					sizeof(VoxelSceneLighting),
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.sceneLightingBuffer,
+					&frameResources.sceneLightingAllocation,
+					&sceneLightingAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.sceneLightingMappedData = sceneLightingAllocationInfo.pMappedData;
+			profiling::RecordAllocation(
+				frameResources.sceneLightingAllocation,
+				sceneLightingAllocationInfo.size,
+				"VoxelSceneLightingBufferAllocation");
+			render->sceneMemoryBytes += sceneLightingAllocationInfo.size;
+		}
+		std::memcpy(
+			frameResources.sceneLightingMappedData,
+			&render->currentSceneLighting,
+			sizeof(render->currentSceneLighting));
+
 		VmaAllocationInfo packedFaceAllocationInfo{};
 		if (!CreateBuffer(
 				context,
@@ -1065,6 +1054,12 @@ bool UploadSceneFrameResources(
 	}
 
 	SceneFrameResources &frameResources = render.sceneFrameResources[frameIndex];
+	if (frameResources.sceneLightingMappedData) {
+		std::memcpy(
+			frameResources.sceneLightingMappedData,
+			&render.currentSceneLighting,
+			sizeof(render.currentSceneLighting));
+	}
 	UpdateGeneratedFaceStatsFromFrameResources(render, frameResources);
 
 	uint32_t uploadedChunkDescriptorCount = 0;

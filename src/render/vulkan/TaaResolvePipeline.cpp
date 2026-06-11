@@ -392,10 +392,17 @@ bool RefreshTaaResolveResourceBindings(
 		"taa linear sampler is null");
 	PV_CHECK_OR_RETURN(
 		render->taaSceneColorTarget != nullptr && render->taaHistoryColorTarget != nullptr &&
-			render->depthImageView != VK_NULL_HANDLE && render->sceneLightingBuffer != VK_NULL_HANDLE,
+			render->depthImageView != VK_NULL_HANDLE,
 		"TaaResolve",
 		"RefreshTaaResolveResourceBindings.BoundResources",
-		"offscreen targets / depth view / scene lighting buffer is null");
+		"offscreen targets / depth view is null");
+	for (const SceneFrameResources &frameResources : render->sceneFrameResources) {
+		PV_CHECK_OR_RETURN(
+			frameResources.sceneLightingBuffer != VK_NULL_HANDLE,
+			"TaaResolve",
+			"RefreshTaaResolveResourceBindings.PerFrameLightingBuffer",
+			"per-frame scene lighting buffer is null");
+	}
 
 	for (VkDescriptorSet &descriptorSet : render->taaResolveDescriptorSets) {
 		descriptorSet = VK_NULL_HANDLE;
@@ -467,13 +474,12 @@ bool RefreshTaaResolveResourceBindings(
 		.imageView = render->depthImageView,
 		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
 	};
-	const VkDescriptorBufferInfo sceneLightingBufferInfo{
-		.buffer = render->sceneLightingBuffer,
-		.offset = 0,
-		.range = VK_WHOLE_SIZE,
-	};
-
 	for (size_t frameIndex = 0; frameIndex < render->taaResolveDescriptorSets.size(); ++frameIndex) {
+		const VkDescriptorBufferInfo sceneLightingBufferInfo{
+			.buffer = render->sceneFrameResources[frameIndex].sceneLightingBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
 		render->taaResolveDescriptorSets[frameIndex] = descriptorSets[frameIndex];
 
 		const std::array descriptorWrites{

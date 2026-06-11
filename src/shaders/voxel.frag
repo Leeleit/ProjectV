@@ -673,7 +673,10 @@ const float directDiffuseStrength) {
 }
 
 float GetCameraViewDepth(const vec3 worldPosition) {
-    return dot(worldPosition - pushConstants.cameraPosition.xyz, normalize(pushConstants.cameraForward.xyz));
+    const float near = pushConstants.cameraPosition.w;
+    const float far = pushConstants.cameraForward.w;
+    const float z = gl_FragCoord.z * 2.0 - 1.0;
+    return 2.0 * near * far / (far + near - z * (far - near));
 }
 
 uint SelectSunShadowCascadeByViewDepth(const float viewDepth) {
