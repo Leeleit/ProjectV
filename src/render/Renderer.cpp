@@ -35,6 +35,75 @@ DebugOverlayPushConstants BuildBoxOverlayPushConstants(
 	return pushConstants;
 }
 
+// 4x4 matrix inverse via Gauss-Jordan elimination with partial pivoting.
+// Column-major layout, same as the rest of the project (the
+// `MultiplyMatrices` helper in `Camera.cpp` uses the same convention).
+// Only used by the TAA resolve pass to build
+// `inverseCurrentViewProjection`; called at most once per frame so the
+// cost is irrelevant. The check that `det != 0` would be a real concern
+// for a singular matrix, but the projection matrix produced by
+// `BuildGraphicsPushConstants` is non-singular for any sensible near/far
+// pair, and the resolve pass is downstream of the voxel pass, so a
+// singular input would already have failed before reaching here.
+std::array<float, 16> InvertColumnMajorMat4(const std::array<float, 16> &matrix)
+{
+	std::array<float, 16> inverse{};
+	std::array<float, 16> augmented = matrix;
+	for (int column = 0; column < 4; ++column) {
+		inverse[column * 4 + 0] = (column == 0) ? 1.0f : 0.0f;
+		inverse[column * 4 + 1] = (column == 1) ? 1.0f : 0.0f;
+		inverse[column * 4 + 2] = (column == 2) ? 1.0f : 0.0f;
+		inverse[column * 4 + 3] = (column == 3) ? 1.0f : 0.0f;
+	}
+	for (int pivot = 0; pivot < 4; ++pivot) {
+		int bestRow = pivot;
+		float bestAbs = std::fabs(augmented[pivot * 4 + pivot]);
+		for (int row = pivot + 1; row < 4; ++row) {
+			const float candidateAbs = std::fabs(augmented[row * 4 + pivot]);
+			if (candidateAbs > bestAbs) {
+				bestAbs = candidateAbs;
+				bestRow = row;
+			}
+		}
+		if (bestRow != pivot) {
+			for (int column = 0; column < 4; ++column) {
+				std::swap(augmented[pivot * 4 + column], augmented[bestRow * 4 + column]);
+				std::swap(inverse[pivot * 4 + column], inverse[bestRow * 4 + column]);
+			}
+		}
+		const float pivotValue = augmented[pivot * 4 + pivot];
+		if (pivotValue == 0.0f) {
+			// Singular matrix; the resolve pass would produce
+			// undefined output, but the TAA-on path is currently a
+			// no-op (gate off) so this branch is unreachable in
+			// mainline. If the gate flips on without a non-singular
+			// viewProjection, `taa_resolve.frag` will read garbage
+			// reprojection — but the same is true of the previous
+			// pre-rewrite `inverse` path.
+			return inverse;
+		}
+		const float invPivot = 1.0f / pivotValue;
+		for (int column = 0; column < 4; ++column) {
+			augmented[pivot * 4 + column] *= invPivot;
+			inverse[pivot * 4 + column] *= invPivot;
+		}
+		for (int row = 0; row < 4; ++row) {
+			if (row == pivot) {
+				continue;
+			}
+			const float factor = augmented[row * 4 + pivot];
+			if (factor == 0.0f) {
+				continue;
+			}
+			for (int column = 0; column < 4; ++column) {
+				augmented[row * 4 + column] -= factor * augmented[pivot * 4 + column];
+				inverse[row * 4 + column] -= factor * inverse[pivot * 4 + column];
+			}
+		}
+	}
+	return inverse;
+}
+
 DebugOverlayPushConstants BuildCrosshairOverlayPushConstants(const SwapchainState &swapchain)
 {
 	DebugOverlayPushConstants pushConstants{};
@@ -511,23 +580,77 @@ void RecordGraphicsCommands(
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 		RecordShadowCommands(render, frameRenderData, cmd);
 
-		TransitionImage(
-			cmd,
-			swapchain.images[imageIndex],
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_2_NONE,
-			0,
-			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+		// The main voxel pipeline is declared with two color attachment
+		// formats (slot 0 = swapchain, slot 1 = R16G16B16A16_SFLOAT TAA
+		// offscreen) and the `dynamicRenderingUnusedAttachments` feature
+		// is enabled in `VulkanBootstrap.cpp`. Per-frame the *active* slot
+		// is chosen here: in TAA-off mode slot 0 is the swapchain image
+		// and slot 1 is `VK_NULL_HANDLE` (writes discarded), in TAA-on
+		// mode slot 0 is `VK_NULL_HANDLE` and slot 1 is the TAA scene
+		// color target. The previous code wrote straight to the
+		// swapchain; the contract below keeps that exact behaviour for
+		// the TAA-off path (slot 0 is the only used attachment, slot 1 =
+		// NULL).
+		const bool taaOn = render.taaEnabled &&
+			render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
+			render.taaResolvePipeline != VK_NULL_HANDLE && render.taaResolvePipelineLayout != VK_NULL_HANDLE;
 
-		const VkImageLayout oldDepthLayout =
-			render.depthImageNeedsInit ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+		// === Voxel color attachment transitions ===
+		// The TAA-on path skips the swapchain transition here; the
+		// resolve pass writes to it. The TAA-on path *does* transition
+		// the offscreen scene color (UNDEFINED or SHADER_READ_ONLY from
+		// last frame → COLOR_ATTACHMENT) for the main pass write.
+		if (!taaOn) {
+			TransitionImage(
+				cmd,
+				swapchain.images[imageIndex],
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_PIPELINE_STAGE_2_NONE,
+				0,
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+		} else {
+			const VkImageLayout oldSceneLayout = render.taaSceneColorCurrentLayout;
+			const VkPipelineStageFlags2 oldSceneStage =
+				oldSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED
+					? VK_PIPELINE_STAGE_2_NONE
+					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+			const VkAccessFlags2 oldSceneAccess =
+				oldSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+			TransitionImage(
+				cmd,
+				render.taaSceneColorTarget->image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				oldSceneLayout,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				oldSceneStage,
+				oldSceneAccess,
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			render.taaSceneColorNeedsInit = false;
+		}
+
+		// === Depth image transition (shared by both paths) ===
+		// Per-frame: from `depthImageCurrentLayout` (UNDEFINED on the
+		// very first frame, `DEPTH_ATTACHMENT_OPTIMAL` after a TAA-off
+		// frame, `DEPTH_READ_ONLY_OPTIMAL` after a TAA-on frame) into
+		// `DEPTH_ATTACHMENT_OPTIMAL` for the main pass write.
+		const VkImageLayout oldDepthLayout = render.depthImageCurrentLayout;
 		const VkPipelineStageFlags2 oldDepthStage =
-			render.depthImageNeedsInit ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+			oldDepthLayout == VK_IMAGE_LAYOUT_UNDEFINED
+				? VK_PIPELINE_STAGE_2_NONE
+				: (oldDepthLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+						? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT
+						: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 		const VkAccessFlags2 oldDepthAccess =
-			render.depthImageNeedsInit ? 0 : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			oldDepthLayout == VK_IMAGE_LAYOUT_UNDEFINED
+				? 0
+				: (oldDepthLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+						? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+						: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 		TransitionImage(
 			cmd,
 			render.depthImage,
@@ -538,6 +661,7 @@ void RecordGraphicsCommands(
 			oldDepthAccess,
 			VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+		render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 		render.depthImageNeedsInit = false;
 
 		const std::array<float, 4> sceneClearColor = GetVoxelSceneClearColor(render.currentSceneLighting);
@@ -551,18 +675,38 @@ void RecordGraphicsCommands(
 			},
 		};
 		constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
-		const VkRenderingAttachmentInfo colorAttachment{
+
+		// Main pass uses both pipeline slots. The `imageView` is NULL
+		// on the slot that's not in use this frame; with
+		// `dynamicRenderingUnusedAttachments` enabled, the driver
+		// discards those writes.
+		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
+		const VkImageView mainColor1View = taaOn ? render.taaSceneColorTarget->imageView : VK_NULL_HANDLE;
+		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
-			.imageView = swapchain.imageViews[imageIndex],
+			.imageView = mainColor0View,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.storeOp = mainColor0View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
+		const VkRenderingAttachmentInfo colorAttachment1{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.pNext = nullptr,
+			.imageView = mainColor1View,
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.resolveImageView = VK_NULL_HANDLE,
+			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = mainColor1View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.clearValue = clearColorValue,
+		};
+		const VkRenderingAttachmentInfo colorAttachments[2] = { colorAttachment0, colorAttachment1 };
 		const VkRenderingAttachmentInfo depthAttachment{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -582,8 +726,8 @@ void RecordGraphicsCommands(
 			.renderArea = {{0, 0}, swapchain.extent},
 			.layerCount = 1,
 			.viewMask = 0,
-			.colorAttachmentCount = 1,
-			.pColorAttachments = &colorAttachment,
+			.colorAttachmentCount = 2,
+			.pColorAttachments = colorAttachments,
 			.pDepthAttachment = &depthAttachment,
 			.pStencilAttachment = nullptr,
 		};
@@ -660,10 +804,236 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-		RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-		RecordDebugHudCommands(render, frameRenderData, cmd);
+		// Debug overlay / debug HUD are written *on top of* the final
+		// image. TAA-off: they go straight to the swapchain in the same
+		// main pass. TAA-on: the main pass writes to the offscreen scene
+		// color, so we move the overlay / HUD into the resolve pass
+		// block below where the swapchain is the active color
+		// attachment.
+		if (!taaOn) {
+			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
+			RecordDebugHudCommands(render, frameRenderData, cmd);
+		}
 
 		vkCmdEndRendering(cmd);
+
+		// === TAA resolve pass + history copy (TAA on only) ===
+		if (taaOn) {
+			// Scene color: COLOR_ATTACHMENT → SHADER_READ_ONLY for
+			// the resolve pass to sample it.
+			TransitionImage(
+				cmd,
+				render.taaSceneColorTarget->image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			// Depth: DEPTH_ATTACHMENT → DEPTH_READ_ONLY so the
+			// resolve pass can sample it for depth-based
+			// reprojection.
+			TransitionImage(
+				cmd,
+				render.depthImage,
+				VK_IMAGE_ASPECT_DEPTH_BIT,
+				VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+				VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+				VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+
+			// History: SHADER_READ_ONLY is the *default* end-of-frame
+			// layout; if this is the very first frame after a
+			// recreate / Taa toggle, the offscreen image is fresh
+			// and is still UNDEFINED. Skip the layout transition in
+			// that case and use UNDEFINED → SHADER_READ_ONLY
+			// directly, so the resolve pass can sample it (it just
+			// reads garbage; `taaHistoryValid == false` gates the
+			// shader's blend factor to fall back to the current
+			// frame).
+			TransitionImage(
+				cmd,
+				render.taaHistoryColorTarget->image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				render.taaHistoryColorCurrentLayout,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				render.taaHistoryColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED
+					? VK_PIPELINE_STAGE_2_NONE
+					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				render.taaHistoryColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0
+																			  : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			render.taaHistoryNeedsInit = false;
+
+			// === Begin resolve pass ===
+			const VkRenderingAttachmentInfo resolveColorAttachment{
+				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				.pNext = nullptr,
+				.imageView = swapchain.imageViews[imageIndex],
+				.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				.resolveMode = VK_RESOLVE_MODE_NONE,
+				.resolveImageView = VK_NULL_HANDLE,
+				.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.clearValue = clearColorValue,
+			};
+			const VkRenderingInfo resolveRenderingInfo{
+				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.renderArea = {{0, 0}, swapchain.extent},
+				.layerCount = 1,
+				.viewMask = 0,
+				.colorAttachmentCount = 1,
+				.pColorAttachments = &resolveColorAttachment,
+				.pDepthAttachment = nullptr,
+				.pStencilAttachment = nullptr,
+			};
+			vkCmdBeginRendering(cmd, &resolveRenderingInfo);
+			vkCmdSetViewport(cmd, 0, 1, &viewport);
+			vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TAA Resolve");
+
+			// Push constants for the resolve pass. The current
+			// viewProjection comes from the per-frame
+			// `graphicsPushConstants`; the inverse is built locally
+			// via Gauss-Jordan on the column-major 4x4 (see
+			// `InvertColumnMajorMat4` in the anonymous namespace
+			// above). The resolve shader expects both in the same
+			// column-major layout the CPU uses.
+			const std::array<float, 16> currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
+			const std::array<float, 16> inverseCurrentViewProj = InvertColumnMajorMat4(currentViewProj);
+			ResolvePushConstants resolvePushConstants{};
+			resolvePushConstants.inverseCurrentViewProjection = inverseCurrentViewProj;
+			resolvePushConstants.currentViewProjection = currentViewProj;
+			resolvePushConstants.renderExtentInverse = {
+				1.0f / static_cast<float>(swapchain.extent.width),
+				1.0f / static_cast<float>(swapchain.extent.height),
+			};
+			resolvePushConstants.reservedPadding = { 0.0f, 0.0f };
+
+			if (frameRenderData.taaResolveDescriptorSet != VK_NULL_HANDLE) {
+				vkCmdBindDescriptorSets(
+					cmd,
+					VK_PIPELINE_BIND_POINT_GRAPHICS,
+					render.taaResolvePipelineLayout,
+					0,
+					1,
+					&frameRenderData.taaResolveDescriptorSet,
+					0,
+					nullptr);
+			}
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.taaResolvePipeline);
+			vkCmdPushConstants(
+				cmd,
+				render.taaResolvePipelineLayout,
+				VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				sizeof(resolvePushConstants),
+				&resolvePushConstants);
+			// Fullscreen triangle, no vertex buffer — `taa_resolve.vert`
+			// synthesizes positions from `gl_VertexIndex` (0, 1, 2).
+			vkCmdDraw(cmd, 3, 1, 0, 0);
+
+			// Debug overlay / debug HUD go on top of the resolved
+			// swapchain image, in the same `vkCmdBeginRendering`
+			// block as the resolve pass so they share the swapchain
+			// attachment and the same `vkCmdSetViewport` /
+			// `vkCmdSetScissor` already bound for the resolve pass.
+			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
+			RecordDebugHudCommands(render, frameRenderData, cmd);
+
+			vkCmdEndRendering(cmd);
+
+			// === History copy (skip on the first frame after
+			// recreate / Taa toggle so the shader's `taaHistoryValid`
+			// flag is allowed to drop to zero) ===
+			if (render.taaHistoryValid) {
+				// Scene → TRANSFER_SRC, History → TRANSFER_DST.
+				TransitionImage(
+					cmd,
+					render.taaSceneColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_READ_BIT);
+				render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+				TransitionImage(
+					cmd,
+					render.taaHistoryColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT);
+				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+				// Same-format copy is simpler than blit (no scaling,
+				// no filter). The two images were created with the
+				// same extent, format, and sample count.
+				const VkImageCopy historyCopyRegion{
+					.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
+					.srcOffset = { 0, 0, 0 },
+					.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
+					.dstOffset = { 0, 0, 0 },
+					.extent = { swapchain.extent.width, swapchain.extent.height, 1u },
+				};
+				vkCmdCopyImage(
+					cmd,
+					render.taaSceneColorTarget->image,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					render.taaHistoryColorTarget->image,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					1,
+					&historyCopyRegion);
+
+				// Transition both back to SHADER_READ_ONLY so the
+				// next frame's resolve pass can sample them.
+				TransitionImage(
+					cmd,
+					render.taaSceneColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_READ_BIT,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+				render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				TransitionImage(
+					cmd,
+					render.taaHistoryColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			} else {
+				// First valid frame: from the next frame on, the
+				// shader can blend against the freshly-resolved
+				// history instead of falling back to the current
+				// scene as the only sample.
+				render.taaHistoryValid = true;
+			}
+		}
 
 		if (ShouldCaptureScreenshot(render)) {
 			RecordSwapchainScreenshotCopy(swapchain, render, cmd, imageIndex);

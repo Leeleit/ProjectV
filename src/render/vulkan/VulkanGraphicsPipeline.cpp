@@ -1602,16 +1602,33 @@ bool CreateGraphicsPipeline(
 		VK_COLOR_COMPONENT_G_BIT |
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
-
+	// The second slot of the dual-format pipeline is unused at the
+	// shader level (`voxel.frag` writes to `Location 0` only), but the
+	// pipeline still has to declare the slot so
+	// `dynamicRenderingUnusedAttachments` lets the per-frame
+	// `VkRenderingAttachmentInfo` use `imageView = VK_NULL_HANDLE` on it.
+	// VUID-VkPipelineColorBlendStateCreateInfo-pAttachments-00605 requires
+	// all entries to be identical when the `independentBlend` feature is
+	// not enabled, so we point both slots at the same blend state; the
+	// unused slot is effectively a no-op because the per-frame
+	// `imageView` is `VK_NULL_HANDLE` and writes are discarded.
+	VkPipelineColorBlendAttachmentState colorBlendAttachments[2] = {
+		colorBlendAttachment,
+		colorBlendAttachment,
+	};
 	VkPipelineColorBlendAttachmentState transparentColorBlendAttachment = kAlphaBlendAttachmentState;
+	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[2] = {
+		transparentColorBlendAttachment,
+		transparentColorBlendAttachment,
+	};
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.attachmentCount = 1;
-	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.attachmentCount = 2;
+	colorBlending.pAttachments = colorBlendAttachments;
 
 	VkPipelineColorBlendStateCreateInfo transparentColorBlending = colorBlending;
-	transparentColorBlending.pAttachments = &transparentColorBlendAttachment;
+	transparentColorBlending.pAttachments = transparentColorBlendAttachments;
 	VkPipelineColorBlendStateCreateInfo shadowColorBlending{};
 	shadowColorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	shadowColorBlending.attachmentCount = 0;
@@ -1723,12 +1740,37 @@ bool CreateGraphicsPipeline(
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelShadowPipelineLayout");
 
+	// The main voxel pipeline declares two color attachment formats so the
+	// same pipeline can drive both the TAA-on path (render to slot 1 =
+	// `R16G16B16A16_SFLOAT` TAA offscreen target, slot 0 = NULL) and the
+	// TAA-off path (render to slot 0 = swapchain, slot 1 = NULL). The
+	// ability to bind with `imageView = VK_NULL_HANDLE` on the unused
+	// slot requires the `dynamicRenderingUnusedAttachments` feature,
+	// enabled by `VK_EXT_dynamic_rendering_unused_attachments` in
+	// `VulkanBootstrap.cpp::InitializeVulkanBase`. Without that feature
+	// the pipeline declaration itself is still valid (formats can be
+	// `VK_FORMAT_UNDEFINED` for unused slots) but the per-frame
+	// `VkRenderingAttachmentInfo::imageView` would have to match, which
+	// would force a second pipeline variant. We fail fast on devices
+	// that lack the feature so the failure mode is a clear init error
+	// rather than a runtime VUID every frame.
+	if (!context->supportsDynamicRenderingUnusedAttachments) {
+		LogGraphicsPipelineTextFailure(
+			"CreateGraphicsPipeline.DynamicRenderingUnusedAttachments",
+			"device does not support VK_EXT_dynamic_rendering_unused_attachments; "
+			"main voxel pipeline requires it for the dual-format TAA contract");
+		return false;
+	}
+	const VkFormat mainColorAttachmentFormats[2] = {
+		swapchain->format,
+		VK_FORMAT_R16G16B16A16_SFLOAT,
+	};
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &swapchain->format,
+		.colorAttachmentCount = 2,
+		.pColorAttachmentFormats = mainColorAttachmentFormats,
 		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};

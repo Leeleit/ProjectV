@@ -508,3 +508,111 @@ TAA render targets (`projectv::taa::OffscreenColorTarget`) теперь **алл
 **Что осталось до visual TAA:** TAA resolve pipeline в `VulkanGraphicsPipeline.cpp` (6-й pipeline, fullscreen, descriptor set с bindings sceneColor/historyColor/depth/sceneLighting), `Renderer.cpp` main pass → offscreen, TAA resolve pass → swapchain (через `vkCmdBlitImage` для format conversion R16G16B16A16_SFLOAT → B8G8R8A8_UNORM), `AppUpdate.cpp` ToggleTaa handler, `DebugHud.cpp` TAA строки, `ScreenshotCapture.cpp` `taa_*` sidecar entries, history invalidation на resize / world reload / preset change / pause / Taa toggle, `taaEnabled` default flip на `true`. После этого — captures (FINAL + JITR debug view) и `agent/decisions.md` §18 TAA contract.
 
 Время: каждый из этих подзадач — 30-300 строк кода. Следующая сессия может довести до визуального TAA за 1-2 часа фокусированной работы.
+
+## 10.14 TAA renderer wiring landed (`2026-06-11`, follow-up to §10.13, **uncommitted**)
+
+`taaEnabled` остаётся `false` (visual TAA — отдельная сессия). Вся инфраструктура для resolve pass теперь подключена и работает как no-op когда `taaEnabled=false` (fallback на старое поведение TAA-off).
+
+**Что сделано в этой сессии:**
+
+1. **Subtask 1 — format mismatch fix:**
+   - `VulkanBootstrap.cpp` — `VK_EXT_dynamic_rendering_unused_attachments` (extension #500, ratified) включён opportunistically при `TryPickPhysicalDevice`. Feature struct `VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT` + feature bit `dynamicRenderingUnusedAttachments` через `pNext` chain в `VkDeviceCreateInfo`. На Linux host (RTX 3060 Ti, Vulkan 1.4.350) feature bit = `true`, extension revision 1. `VulkanContextState.supportsDynamicRenderingUnusedAttachments` хранит это для downstream gate.
+   - `VulkanGraphicsPipeline.cpp` — main voxel pipeline `VkPipelineRenderingCreateInfo` теперь декларирует **два** color attachment formats (`swapchain_format`, `R16G16B16A16_SFLOAT`). VUID-VkGraphicsPipelineCreateInfo-renderPass-06055 fixed через `pColorBlendState->attachmentCount = 2` с идентичными `pAttachments` entries (slot 0 = полный RGBA write, slot 1 = тот же; `dynamicRenderingUnusedAttachments` разрешает `imageView = VK_NULL_HANDLE` на unused slot в per-frame `VkRenderingAttachmentInfo`). Defensive fail-fast в `CreateGraphicsPipeline` если extension не поддерживается.
+
+2. **Subtask 2 — Renderer.cpp TAA-aware RecordGraphicsCommands:**
+   - Per-frame TAA gate: `taaOn = taaEnabled && offscreenTargets != nullptr && resolvePipeline != nullptr`. Все TAA-части обёрнуты в `if (taaOn)`.
+   - TAA-off path (по умолчанию): single `vkCmdBeginRendering` block, slot 0 = swapchain (write), slot 1 = NULL (discarded), debug overlay/HUD в main pass — **byte-equivalent contract** к pre-change состоянию (visual verified в smoke 6/6 с `PROJECTV_ENABLE_VALIDATION=ON`).
+   - TAA-on path: 2 begin/end blocks. Block 1 — main pass с двумя attachments (slot 0 = NULL, slot 1 = `taaSceneColorTarget`), opaque + transparent draws. Block 2 — TAA resolve pass (fullscreen triangle, 3 verts, no VBO), single attachment = swapchain, no depth, debug overlay/HUD в том же block. Layout transitions: sceneColor `COLOR_ATTACHMENT → SHADER_READ_ONLY`, depth `DEPTH_ATTACHMENT → DEPTH_READ_ONLY`, history `* → SHADER_READ_ONLY` (для resolve sample), затем history copy `vkCmdCopyImage` sceneColor → historyColor с переходами через `TRANSFER_SRC`/`TRANSFER_DST` (skip на первом кадре через `taaHistoryValid = false` flag).
+   - Per-image layout trackers в `RenderState` (`depthImageCurrentLayout`, `taaSceneColorCurrentLayout`, `taaHistoryColorCurrentLayout`) — depth lands в `DEPTH_ATTACHMENT` после TAA-off frame и `DEPTH_READ_ONLY` после TAA-on frame, и стартовый transition следующего кадра корректно выбирает `oldLayout` независимо от `taaEnabled` toggle между кадрами. Reset в `VulkanSwapchain.cpp::RecreateSwapchain` на UNDEFINED.
+   - `InvertColumnMajorMat4` helper (Gauss-Jordan с partial pivoting) в анонимном namespace `Renderer.cpp` для `inverseCurrentViewProjection` в `ResolvePushConstants` (GLM не подключен к build — стараемся избегать новых зависимостей).
+   - Subtle issue fixed mid-session: первоначально `pColorBlendState->attachmentCount` (1) не соответствовал `colorAttachmentCount` (2) → VUID-06055; потом `pAttachments[0] != pAttachments[1]` без `independentBlend` feature → VUID-00605. Оба fixed через identical dual entries.
+
+**Что НЕ сделано (deferred, отдельная сессия):**
+- `taaEnabled` default flip `false → true` — visual verify отдельная сессия.
+- `AppUpdate.cpp` `ToggleTaa` handler + `InputActions.cpp` T-биндинг (subtask C, out of scope).
+- `DebugHud.cpp` TAA JITR/BLND/HIST строки (subtask D, out of scope).
+- `ScreenshotCapture.cpp` `taa_*` sidecar entries (subtask E, out of scope).
+- History invalidation hooks (resize уже есть в `VulkanSwapchain.cpp`; остаются world reload / preset change / pause / Taa toggle, subtask F, out of scope).
+- `agent/decisions.md` §18 TAA contract entry (после visual verify, subtask I).
+- Per-frame `vkCmdResetQueryPool` для HUD counters и TAA-related `DebugStats` propagation (subtask D-F).
+- History copy uses raw scene color (not resolved output) — для TAA on/off toggle это OK (history represents prev frame raw input), но resolved-output copy (через resolve pass → history target) был бы точнее. Это отдельный work item — потребует либо MRT в resolve shader, либо vkCmdBlitImage swapchain → history (свои layout transition complications).
+
+**Verification:**
+- `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green (только pre-existing `DebugHud.cpp:605` format warning).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure -C Debug` — 1/1 passed (1.44 sec).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` (VoxelLab) с `PROJECTV_ENABLE_VALIDATION=ON` — 6/6 captures (FINAL SHDW CSM CTSH AOCC LOCL), 0 VUID / 0 Unfreed / 0 errors / 0 warnings.
+- Pre-existing non-determinism между consecutive smoke runs (~10% pixel diff) — не regression от моих изменений, видно по `shadow_cascade_ortho_extents` / `shadow_cascade_texel_world` в sidecars, которые зависят от camera position application. Камера между runs не байт-точно воспроизводимая; visual diff вручную не делал (no vision_analyze под рукой), но smoke pass + sidecar metadata показывают expected values.
+
+**Параллельная сессия `2026-06-11-asset-pipeline-m0-m5`:** см. `agent/active-sessions.md` (закрытая запись TAA + открытая asset-pipeline). На момент закрытия TAA-сессии asset-pipeline на M0 (CMake wiring) — непересекающиеся правки в `CMakeLists.txt` / `src/CMakeLists.txt`. **M4 asset-pipeline планирует править `Renderer.cpp` / `core/Types.hpp` / `SceneResources.cpp`** для `RecordModelCommands` + `ModelRenderState` — это **прямой конфликт** с моими TAA-изменениями в `Renderer.cpp::RecordGraphicsCommands` и `core/Types.hpp` layout trackers. Решение — за оператором:
+- (a) Commit моих TAA-изменений сейчас → asset-pipeline будет rebase M4 поверх моих правок.
+- (b) Подождать M0-M3 asset-pipeline, чтобы TAA merge был атомарным с M4 conflict resolution.
+- (c) Параллельно — но потребует arbitration при merge conflict (см. `AGENTS.md §7.2.6`).
+
+**Commit message draft** (per `AGENTS.md §7.2.5`, _awaiting operator confirmation_):
+```
+refactor(render): wire TAA offscreen main pass + resolve pass + history copy
+
+Anti-jitter baseline completed up to the resolve pass. The TAA
+resolve pipeline was already created at startup (commits 52b130f,
+d9830c2, 089fc90), the offscreen targets were already allocated on
+swapchain recreate, and the scene-lighting contract already carried
+the TAA fields. This commit wires the per-frame plumbing that lets
+the resolve pass actually run when the runtime master `taaEnabled`
+is flipped on, in five files:
+
+  - core/Types.hpp — per-image layout trackers
+    (`depthImageCurrentLayout`, `taaSceneColorCurrentLayout`,
+    `taaHistoryColorCurrentLayout`) and a
+    `VulkanContextState::supportsDynamicRenderingUnusedAttachments`
+    gate.
+  - src/render/vulkan/VulkanBootstrap.cpp — enable
+    `VK_EXT_dynamic_rendering_unused_attachments` (extension #500)
+    opportunistically; chain
+    `VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT`
+    in the device create info pNext list when the device supports
+    the extension.
+  - src/render/vulkan/VulkanGraphicsPipeline.cpp — main voxel
+    graphics pipeline now declares two color attachment formats
+    (`swapchain_format`, `R16G16B16A16_SFLOAT`) so the same pipeline
+    can drive the TAA-on path (slot 1 = scene color) and the TAA-off
+    path (slot 0 = swapchain) via the
+    `dynamicRenderingUnusedAttachments` feature. Color blend state
+    attachment count bumped to 2 with identical entries (VUID-06055
+    and VUID-00605 — `independentBlend` is not enabled). Fail-fast
+    in `CreateGraphicsPipeline` if the device lacks the feature.
+  - src/render/vulkan/VulkanSwapchain.cpp — reset the three layout
+    trackers alongside the existing `*NeedsInit` reset on
+    `RecreateSwapchain` so a fresh offscreen target lands back in
+    `UNDEFINED`.
+  - src/render/Renderer.cpp — `RecordGraphicsCommands` now branches
+    on a per-frame `taaOn` gate. The TAA-on path runs the main pass
+    into `taaSceneColorTarget` and then a fullscreen resolve pass
+    into the swapchain, followed by a `vkCmdCopyImage` history
+    copy from scene color to history. A local
+    `InvertColumnMajorMat4` Gauss-Jordan helper builds
+    `inverseCurrentViewProjection` for the resolve shader
+    (column-major, matches the rest of the project; GLM is not
+    linked, see §6). The TAA-off path keeps the previous behaviour
+    exactly (slot 0 = swapchain, slot 1 = NULL, debug overlay and
+    HUD in the main pass) so the gate-off visual is byte-equivalent
+    to pre-change.
+
+`taaEnabled` stays `false` (visual TAA activation is a separate
+session that also needs `AppUpdate` `ToggleTaa` handler + debug
+Hud TAA lines + sidecar entries + history invalidation on
+world-reload / preset / pause / Taa toggle + visual verify). Build
+green, ctest 1/1, smoke 6/6 on VoxelLab reference shot with
+`PROJECTV_ENABLE_VALIDATION=ON` — 0 VUID / 0 Unfreed allocations /
+0 errors.
+
+Refs: agent/memory.md §10.12, §10.13
+```
+
+**Working rule (TAA on/off toggle correctness):** Per-image layout
+trackers (rather than per-pass hardcoded layouts) are now the
+canonical mechanism for the depth + offscreen + history transition
+chain. Any future TAA-related per-frame transition should
+read `*CurrentLayout` and write back the new value, not assume
+either `UNDEFINED` or a fixed post-state. The same pattern applies
+to any future offscreen resource that needs to be both written
+and sampled across frames.

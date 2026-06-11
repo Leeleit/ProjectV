@@ -429,6 +429,9 @@ bool RecreateSwapchain(
 	render->taaHistoryValid = false;
 	render->taaSceneColorNeedsInit = true;
 	render->taaHistoryNeedsInit = true;
+	render->taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaFrameCounter = 0u;
 	render->taaPrevViewProjectionMatrix = {};
 

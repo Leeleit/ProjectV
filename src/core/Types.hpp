@@ -566,6 +566,21 @@ struct RenderState {
 	VkSampler shadowSampler = VK_NULL_HANDLE;
 	bool depthImageNeedsInit = false;
 	bool shadowImageNeedsInit = false;
+	// Per-image layout trackers. The `*NeedsInit` flags above only
+	// cover the very first transition (UNDEFINED → first layout);
+	// once cleared, the renderer is responsible for keeping the
+	// per-frame layout transitions consistent. The trackers below let
+	// `Renderer.cpp::RecordGraphicsCommands` pick the right `oldLayout`
+	// for each transition (depth lands in `DEPTH_ATTACHMENT_OPTIMAL` at
+	// the end of a TAA-off frame and `DEPTH_READ_ONLY_OPTIMAL` at the
+	// end of a TAA-on frame, so the next frame's start-of-frame
+	// transition needs to know which one it is). Same story for the
+	// TAA offscreen pair, which lands in `SHADER_READ_ONLY_OPTIMAL` at
+	// the end of every frame so the next frame's resolve pass can sample
+	// it without an extra barrier.
+	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImageLayout taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImageLayout taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
@@ -703,6 +718,20 @@ struct VulkanContextState {
 	uint32_t queueFamilyIndex = 0;
 	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkCommandPool commandPool = VK_NULL_HANDLE;
+	// `dynamicRenderingUnusedAttachments` is the runtime gate that lets the
+	// main voxel graphics pipeline declare two color attachment formats
+	// (`swapchain_format` + `R16G16B16A16_SFLOAT`) and still bind it with
+	// `imageView = VK_NULL_HANDLE` on the unused slot when TAA is off. The
+	// pipeline would otherwise trip
+	// VUID-VkRenderingAttachmentInfo-imageView-06135 (`imageView` must be
+	// non-NULL when the pipeline declared a non-`VK_FORMAT_UNDEFINED`
+	// format for that slot). Set during `InitializeVulkanBase` from the
+	// result of `TryPickPhysicalDevice`; read by
+	// `VulkanGraphicsPipeline::CreateGraphicsPipeline` to fail fast on
+	// devices that lack the extension. The TAA-off path itself works
+	// without this feature, but the dual-format pipeline declaration does
+	// not.
+	bool supportsDynamicRenderingUnusedAttachments = false;
 };
 
 struct SwapchainState {

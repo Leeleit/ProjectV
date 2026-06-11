@@ -18,6 +18,7 @@
 // it here *after* the `#define` so the extension function pointers stay
 // visible.
 #define VK_KHR_swapchain_maintenance1 1
+#define VK_EXT_dynamic_rendering_unused_attachments 1
 #include <vulkan/vulkan.h>
 #include "volk.h" // IWYU pragma: keep — see the comment above
 
@@ -43,6 +44,22 @@ constexpr char kOptionalTracyCalibratedTimestampsExtension[] = VK_EXT_CALIBRATED
 // `volk.h` does not define `VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME`
 // at the C-preprocessor level, so we use the literal name string.
 constexpr char kOptionalSwapchainMaintenance1Extension[] = "VK_KHR_swapchain_maintenance1";
+// `VK_EXT_dynamic_rendering_unused_attachments` (extension #500, ratified)
+// is the device-level feature that lets one graphics pipeline declared with
+// `pColorAttachmentFormats = {swapchain_format, R16G16B16A16_SFLOAT}` be
+// used both for the TAA-on path (render to slot 1, slot 0 = NULL) and the
+// TAA-off path (render to slot 0 = swapchain, slot 1 = NULL). Per the spec
+// (chap54.html §VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT),
+// any writes to a `pColorAttachments` slot with `imageView = VK_NULL_HANDLE`
+// are discarded — so a single main pipeline serves both paths without
+// building a second variant. Core in 1.3/1.4? No, still an extension; see
+// `legacy/docs/libraries/vulkan/` for the per-version support matrix. We
+// enable it opportunistically when supported; if the extension is missing
+// the project still builds and runs the TAA-off path correctly, but the
+// `taaEnabled` runtime toggle would fail with a VUID (we guard this in
+// `VulkanGraphicsPipeline.cpp::CreateGraphicsPipeline`).
+constexpr char kOptionalDynamicRenderingUnusedAttachmentsExtension[] =
+	"VK_EXT_dynamic_rendering_unused_attachments";
 
 // Callback, через который Vulkan присылает предупреждения и ошибки прямо в SDL-лог.
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -279,7 +296,8 @@ bool CheckRequiredFeatures(
 	VkPhysicalDeviceFeatures *outFeatures,
 	VkPhysicalDeviceVulkan12Features *outFeatures12,
 	VkPhysicalDeviceVulkan13Features *outFeatures13,
-	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR *outSwapchainMaintenance1Features)
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR *outSwapchainMaintenance1Features,
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT *outDynamicRenderingUnusedAttachmentsFeatures)
 {
 	VkPhysicalDeviceVulkan12Features features12{};
 	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -296,6 +314,20 @@ bool CheckRequiredFeatures(
 	if (outSwapchainMaintenance1Features != nullptr) {
 		maintenanceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 		features12.pNext = &maintenanceFeatures;
+	}
+	// The `dynamicRenderingUnusedAttachments` features struct follows the
+	// same optional-query pattern as swapchain-maintenance1: the caller
+	// passes a non-null out pointer only when the corresponding extension
+	// has already been verified on the device.
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
+	if (outDynamicRenderingUnusedAttachmentsFeatures != nullptr) {
+		dynamicRenderingUnusedAttachmentsFeatures.sType =
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
+		if (outSwapchainMaintenance1Features != nullptr) {
+			maintenanceFeatures.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
+		} else {
+			features12.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
+		}
 	}
 	features13.pNext = &features12;
 	VkPhysicalDeviceFeatures2 features2{};
@@ -358,6 +390,9 @@ bool CheckRequiredFeatures(
 	if (outSwapchainMaintenance1Features != nullptr) {
 		*outSwapchainMaintenance1Features = maintenanceFeatures;
 	}
+	if (outDynamicRenderingUnusedAttachmentsFeatures != nullptr) {
+		*outDynamicRenderingUnusedAttachmentsFeatures = dynamicRenderingUnusedAttachmentsFeatures;
+	}
 	return true;
 }
 
@@ -369,8 +404,10 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDeviceVulkan12Features features12{};
 	VkPhysicalDeviceVulkan13Features features13{};
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenance1Features{};
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
 	bool supportsTracyCalibratedTimestamps = false;
 	bool supportsSwapchainMaintenance1 = false;
+	bool supportsDynamicRenderingUnusedAttachments = false;
 };
 
 VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
@@ -431,12 +468,16 @@ bool TryPickPhysicalDevice(
 	VkPhysicalDeviceVulkan13Features supportedFeatures13{};
 	const bool deviceHasSwapchainMaintenance1 = HasDeviceExtension(physicalDevice, kOptionalSwapchainMaintenance1Extension);
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR supportedSwapchainMaintenance1Features{};
+	const bool deviceHasDynamicRenderingUnusedAttachments =
+		HasDeviceExtension(physicalDevice, kOptionalDynamicRenderingUnusedAttachmentsExtension);
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT supportedDynamicRenderingUnusedAttachmentsFeatures{};
 	if (!CheckRequiredFeatures(
 			physicalDevice,
 			&supportedFeatures,
 			&supportedFeatures12,
 			&supportedFeatures13,
-			deviceHasSwapchainMaintenance1 ? &supportedSwapchainMaintenance1Features : nullptr)) {
+			deviceHasSwapchainMaintenance1 ? &supportedSwapchainMaintenance1Features : nullptr,
+			deviceHasDynamicRenderingUnusedAttachments ? &supportedDynamicRenderingUnusedAttachmentsFeatures : nullptr)) {
 		return false;
 	}
 
@@ -446,9 +487,11 @@ bool TryPickPhysicalDevice(
 	outCandidate->features12 = supportedFeatures12;
 	outCandidate->features13 = supportedFeatures13;
 	outCandidate->swapchainMaintenance1Features = supportedSwapchainMaintenance1Features;
+	outCandidate->dynamicRenderingUnusedAttachmentsFeatures = supportedDynamicRenderingUnusedAttachmentsFeatures;
 	outCandidate->supportsTracyCalibratedTimestamps =
 		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
 	outCandidate->supportsSwapchainMaintenance1 = deviceHasSwapchainMaintenance1;
+	outCandidate->supportsDynamicRenderingUnusedAttachments = deviceHasDynamicRenderingUnusedAttachments;
 	return true;
 }
 } // namespace
@@ -607,6 +650,7 @@ bool InitializeVulkanBase(
 	// Фиксируем выбранную видеокарту и семейство очереди в общем состоянии.
 	context->physicalDevice = selected.device;
 	context->queueFamilyIndex = selected.queueFamilyIndex;
+	context->supportsDynamicRenderingUnusedAttachments = selected.supportsDynamicRenderingUnusedAttachments;
 
 	// Логическое устройство создаёт то API, которым мы будем реально пользоваться.
 	float queuePriority = 1.0f;
@@ -625,6 +669,9 @@ bool InitializeVulkanBase(
 	if (selected.supportsSwapchainMaintenance1) {
 		deviceExtensions.push_back(kOptionalSwapchainMaintenance1Extension);
 	}
+	if (selected.supportsDynamicRenderingUnusedAttachments) {
+		deviceExtensions.push_back(kOptionalDynamicRenderingUnusedAttachmentsExtension);
+	}
 
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
@@ -642,11 +689,26 @@ bool InitializeVulkanBase(
 		enabledSwapchainMaintenance1Features.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 	}
+	// `dynamicRenderingUnusedAttachments` is the *only* opt-in feature bit
+	// we actually want from the EXT — when the struct is present in the
+	// device pNext chain the loader treats the request as "enable the
+	// extension", and the feature bit is the runtime gate that allows
+	// `pColorAttachments[i].imageView = VK_NULL_HANDLE` on the unused
+	// slot of a `VkPipelineRenderingCreateInfo`-shaped pipeline.
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT enabledDynamicRenderingUnusedAttachmentsFeatures{};
+	if (selected.supportsDynamicRenderingUnusedAttachments) {
+		enabledDynamicRenderingUnusedAttachmentsFeatures.sType =
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
+		enabledDynamicRenderingUnusedAttachmentsFeatures.dynamicRenderingUnusedAttachments = VK_TRUE;
+	}
 	enabledFeatures13.pNext = &enabledFeatures12;
 	enabledFeatures12.pNext = selected.supportsSwapchainMaintenance1
 		? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
 		: nullptr;
-	enabledSwapchainMaintenance1Features.pNext = nullptr;
+	enabledSwapchainMaintenance1Features.pNext = selected.supportsDynamicRenderingUnusedAttachments
+		? reinterpret_cast<VkBaseOutStructure *>(&enabledDynamicRenderingUnusedAttachmentsFeatures)
+		: nullptr;
+	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;
