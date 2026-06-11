@@ -2,6 +2,7 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
+#include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 
@@ -403,6 +404,31 @@ bool RecreateSwapchain(
 	if (swapchain->extent.width == 0 || swapchain->extent.height == 0) {
 		return true;
 	}
+
+	// TAA offscreen colour targets stay in lockstep with the swapchain
+	// extent. The pair is intentionally allocated even when TAA is
+	// currently disabled — the targets are only ~24 MiB at 1440p with
+	// R16G16B16A16_SFLOAT, and pre-allocating them means toggling TAA on
+	// at runtime does not have to wait for a swapchain resize to reattach.
+	// The just-resolved history from the *previous* swapchain is no
+	// longer valid; the next frame's resolve pass therefore starts with
+	// `taaHistoryValid = false` and uses the current scene as the only
+	// sample until a fresh history has been resolved at least once.
+	if (render->taaSceneColorTarget == nullptr) {
+		render->taaSceneColorTarget = new projectv::taa::OffscreenColorTarget();
+	}
+	if (render->taaHistoryColorTarget == nullptr) {
+		render->taaHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
+	}
+	projectv::taa::CreateOrRecreateTaaRenderTargets(
+		context,
+		swapchain->extent,
+		*render->taaSceneColorTarget,
+		*render->taaHistoryColorTarget,
+		render->taaLinearSampler);
+	render->taaHistoryValid = false;
+	render->taaFrameCounter = 0u;
+	render->taaPrevViewProjectionMatrix = {};
 
 	if (hadGraphicsPipeline) {
 		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroyGraphicsPipeline");

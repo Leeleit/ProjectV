@@ -3,7 +3,12 @@
 
 #include "SDL3/SDL.h"
 #include "render/ShadowTypes.hpp"
+#include "render/TaaRenderTargets.hpp"
 #include "voxel/VoxelMaterials.hpp"
+
+namespace projectv::taa {
+struct OffscreenColorTarget;
+} // namespace projectv::taa
 // ReSharper disable once CppUnusedIncludeDirective
 #include "volk.h"
 #pragma clang diagnostic push
@@ -574,22 +579,21 @@ struct RenderState {
 	std::array<float, 16> taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
-	// TAA resolve pass resources. The pipeline is intentionally left as
-	// a follow-up because wiring the offscreen scene color + history
-	// ping-pong + fullscreen resolve pass is a separate, larger change
-	// that needs to land alongside depth-format / sample-count decisions.
-	// Until then these fields stay null and the main pass writes straight
-	// to the swapchain so the existing `voxel.frag` output reaches the
-	// screen unchanged. The shaderc list and the scene-lighting
-	// `taaParams` / `prevViewProjectionMatrix` / `taaHistoryParams`
-	// contract are already in place; the resolve pipeline is a
-	// drop-in addition on top.
-	VkImage taaSceneColorImage = VK_NULL_HANDLE;
-	VkImageView taaSceneColorImageView = VK_NULL_HANDLE;
-	VmaAllocation taaSceneColorAllocation = VK_NULL_HANDLE;
-	VkImage taaHistoryColorImage = VK_NULL_HANDLE;
-	VkImageView taaHistoryColorImageView = VK_NULL_HANDLE;
-	VmaAllocation taaHistoryColorAllocation = VK_NULL_HANDLE;
+	// TAA offscreen render targets + linear sampler. Allocated by
+	// `projectv::taa::CreateOrRecreateTaaRenderTargets` from
+	// `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays
+	// in lockstep with the swapchain. The TAA resolve pipeline
+	// itself is a follow-up; right now the main pass writes straight
+	// to the swapchain and these two targets stay allocated but
+	// unused. The fields are heap-allocated pointers (rather than
+	// raw `VkImage` handles) so `TaaRenderTargets.{hpp,cpp}` owns
+	// the full lifecycle and `RenderState` just keeps a borrowed
+	// reference. `projectv::taa::OffscreenColorTarget` is forward-
+	// declared at the top of this header; the full definition is
+	// only visible in `TaaRenderTargets.hpp` and the .cpp that
+	// actually performs the allocation.
+	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;
+	projectv::taa::OffscreenColorTarget *taaHistoryColorTarget = nullptr;
 	VkSampler taaLinearSampler = VK_NULL_HANDLE;
 	VkImageView taaResolveAttachmentImageView = VK_NULL_HANDLE;
 	VkPipelineLayout taaResolvePipelineLayout = VK_NULL_HANDLE;
