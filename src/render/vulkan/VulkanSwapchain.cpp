@@ -441,6 +441,16 @@ bool RecreateSwapchain(
 	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaFrameCounter = 0u;
 	render->taaPrevViewProjectionMatrix = {};
+	// 1.2 — companion reset for the camera-cut detector. The
+	// swapchain recreate path zeroes `taaPrevViewProjectionMatrix`,
+	// so the next frame's cut check would otherwise see the real
+	// current matrix next to a zero `prev` and register a false
+	// "cut" with `maxDelta` equal to the largest |viewProj| entry.
+	// Clear both the init flag and the cut accumulator so the
+	// post-recreate counter is a clean baseline again.
+	render->taaPrevViewProjectionMatrixInitialized = false;
+	render->taaCameraCutCount = 0u;
+	render->taaCameraCutMaxDelta = 0.0f;
 
 	if (hadGraphicsPipeline) {
 		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroyGraphicsPipeline");

@@ -191,13 +191,57 @@ bool PrepareFrameRenderData(
 			render->taaJitterX,
 			render->taaJitterY);
 	}
+	// Camera-cut detection (1.2). The Chebyshev (L-infinity over the 16
+	// floats of the matrix) distance between the previous and current
+	// frame's `viewProjection` is a cheap one-shot cut detector: ordinary
+	// mouse-look / WASD / spectator-fly stays well below 0.01 per frame,
+	// while snap rotations, teleports, or scene-preset changes push the
+	// delta above 0.20. When the delta exceeds `kTaaCameraCutThreshold`
+	// the history is dropped the same way swapchain resize / world reload
+	// / Taa toggle already do, so the next resolve falls back to the
+	// current sample only. The threshold lives as a single constant
+	// rather than a live hotkey because the operator data shows 0.10
+	// cleanly separates "ordinary continuous motion" from "intentional
+	// viewpoint change" without needing a per-session dial.
+	constexpr float kTaaCameraCutThreshold = 0.10f;
+	// 1.2 — camera-cut detection runs only after the first successful
+	// stash. The first frame after a swapchain recreate (or session
+	// start) would otherwise compare the real current `viewProjection`
+	// against the zero-initialised default and register a
+	// `maxDelta ≈ 40` "cut" every time, which the sidecar would log
+	// as a noise floor rather than a real viewpoint discontinuity.
+	// `taaPrevViewProjectionMatrixInitialized` is the companion flag;
+	// it's set here on the first stash and cleared by
+	// `VulkanSwapchain.cpp` on every swapchain recreate so the next
+	// run is a clean baseline again.
+	if (render->taaEnabled && render->taaPrevViewProjectionMatrixInitialized) {
+		const auto &currentVP = frame->renderData.graphicsPushConstants.viewProjection;
+		const auto &prevVP = render->taaPrevViewProjectionMatrix;
+		float maxDelta = 0.0f;
+		for (size_t i = 0; i < 16; ++i) {
+			const float delta = std::abs(currentVP[i] - prevVP[i]);
+			if (delta > maxDelta) {
+				maxDelta = delta;
+			}
+		}
+		if (maxDelta > kTaaCameraCutThreshold) {
+			render->taaHistoryValid = false;
+			++render->taaCameraCutCount;
+		}
+		if (maxDelta > render->taaCameraCutMaxDelta) {
+			render->taaCameraCutMaxDelta = maxDelta;
+		}
+	}
 	// Stash the current frame's viewProjection as the next frame's `prev`.
 	// The TAA resolve pass consumes `prevViewProjectionMatrix` from
 	// `VoxelSceneLighting`; on the *first* frame `taaPrevViewProjectionMatrix`
 	// is zero-initialised, so the first resolve correctly treats the history
-	// as invalid and falls back to the current sample only.
+	// as invalid and falls back to the current sample only. The companion
+	// `taaPrevViewProjectionMatrixInitialized` flag is set unconditionally
+	// so the camera-cut detector above runs on every subsequent frame.
 	if (render->taaEnabled) {
 		render->taaPrevViewProjectionMatrix = frame->renderData.graphicsPushConstants.viewProjection;
+		render->taaPrevViewProjectionMatrixInitialized = true;
 	}
 	if (world->voxelWorld) {
 		frame->renderData.graphicsPushConstants.worldMinAndChunkSize = {

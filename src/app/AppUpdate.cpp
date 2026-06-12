@@ -702,6 +702,9 @@ bool UpdateApp(
 	debug->stats.taaJitterY = render->taaJitterY;
 	debug->stats.taaJitterScale = render->taaJitterScale;
 	debug->stats.taaNeighbourhoodRadius = render->taaNeighbourhoodRadius;
+	debug->stats.taaCasSharpnessMax = render->taaCasSharpnessMax;
+	debug->stats.taaCameraCutCount = render->taaCameraCutCount;
+	debug->stats.taaCameraCutMaxDelta = render->taaCameraCutMaxDelta;
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;
 	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);

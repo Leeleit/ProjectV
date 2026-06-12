@@ -273,6 +273,9 @@ bool SaveScreenshotCaptureMetadata(
 		"taa_neighbourhood_radius={}\n"
 		"taa_history_valid={:d}\n"
 		"taa_clamp_color_space={}\n"
+		"taa_cas_sharpness_max={:.6f}\n"
+		"taa_camera_cut_count={}\n"
+		"taa_camera_cut_max_delta={:.6f}\n"
 		"shadow_cascade_count={}\n"
 		"shadow_cascade_lambda={:.6f}\n"
 		"shadow_cascade_splits={:.6f} {:.6f} {:.6f} {:.6f}\n"
@@ -340,6 +343,9 @@ bool SaveScreenshotCaptureMetadata(
 		render.taaNeighbourhoodRadius,
 		render.taaHistoryValid,
 		"YCoCg",
+		render.taaCasSharpnessMax,
+		render.taaCameraCutCount,
+		render.taaCameraCutMaxDelta,
 		kSunShadowCascadeCount,
 		render.currentSunShadowCascadeSplits.splitLambda,
 		render.currentSunShadowCascadeSplits.viewDepthSplits[0],

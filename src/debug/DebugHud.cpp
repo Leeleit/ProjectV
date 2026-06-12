@@ -657,7 +657,7 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s",
+		"TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s CAS %.2f",
 		GetBoolLabel(stats.taaEnabled),
 		stats.taaJitterX,
 		stats.taaJitterY,
@@ -665,7 +665,20 @@ size_t BuildStatsLines(
 		stats.taaBlend,
 		2 * stats.taaNeighbourhoodRadius + 1,
 		2 * stats.taaNeighbourhoodRadius + 1,
-		GetBoolLabel(stats.taaHistoryValid));
+		GetBoolLabel(stats.taaHistoryValid),
+		stats.taaCasSharpnessMax);
+	// 1.2 camera-cut detector. `CUT` accumulates the number of
+	// view-projection discontinuities seen since startup; `CLR`
+	// tracks the worst Chebyshev distance so the operator can
+	// compare a live repro against `decisions.md` §19's expected
+	// delta ranges. Stays on its own line so the TAA summary
+	// above stays compact.
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"TAACUT %u CLR %.2f",
+		stats.taaCameraCutCount,
+		stats.taaCameraCutMaxDelta);
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,

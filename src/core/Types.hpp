@@ -200,12 +200,17 @@ struct ResolvePushConstants {
 	// inverse of the current viewProjection (for depth-to-world
 	// reprojection), the current viewProjection (uploaded alongside for
 	// potential future motion-vector work), the inverse render extent in
-	// pixels (to convert `gl_FragCoord` to UV), and a vec2 padding slot to
-	// keep the total size a multiple of 16. Total: 144 B.
+	// pixels (to convert `gl_FragCoord` to UV), and the CAS sharpening
+	// inputs at the end. Total: 144 B. The trailing `taaBlend` /
+	// `taaCasSharpnessMax` pair (1.3) replaced the original
+	// `vec2 reservedPadding` slot with the same 8 B total; byte layout
+	// is unchanged so existing SPIR-V / push-constant expectations stay
+	// intact.
 	std::array<float, 16> inverseCurrentViewProjection{};
 	std::array<float, 16> currentViewProjection{};
 	std::array<float, 2> renderExtentInverse{};
-	std::array<float, 2> reservedPadding{};
+	float taaBlend = 0.0f;
+	float taaCasSharpnessMax = 0.0f;
 };
 static_assert(std::is_standard_layout_v<ResolvePushConstants>);
 static_assert(std::is_trivially_copyable_v<ResolvePushConstants>);
@@ -213,7 +218,8 @@ static_assert(sizeof(ResolvePushConstants) == 144);
 static_assert(offsetof(ResolvePushConstants, inverseCurrentViewProjection) == 0);
 static_assert(offsetof(ResolvePushConstants, currentViewProjection) == 64);
 static_assert(offsetof(ResolvePushConstants, renderExtentInverse) == 128);
-static_assert(offsetof(ResolvePushConstants, reservedPadding) == 136);
+static_assert(offsetof(ResolvePushConstants, taaBlend) == 136);
+static_assert(offsetof(ResolvePushConstants, taaCasSharpnessMax) == 140);
 
 struct DebugOverlayPushConstants {
 	std::array<float, 16> viewProjection{};
@@ -444,6 +450,12 @@ struct DebugStats {
 	float taaJitterY = 0.0f;
 	float taaJitterScale = 1.0f;
 	int32_t taaNeighbourhoodRadius = 1;
+	// CAS (1.3) ceiling mirror; see `RenderState` for the contract.
+	float taaCasSharpnessMax = 0.5f;
+	// Camera-cut detection mirror (1.2). Same source fields as in
+	// `RenderState`; see that block for the contract.
+	uint32_t taaCameraCutCount = 0;
+	float taaCameraCutMaxDelta = 0.0f;
 	std::array<float, 3> sunDirection{};
 	float sunIntensity = 0.0f;
 	float sunShadowStrength = 0.0f;
@@ -664,6 +676,43 @@ struct RenderState {
 	// 1 keeps the original 3x3 clamp (`-1, 0, +1`).
 	float taaJitterScale = 1.0f;
 	int32_t taaNeighbourhoodRadius = 1;
+	// CAS (Contrast Adaptive Sharpening) post-TAA (1.3). The shader
+	// derives the effective sharpening amount as
+	// `(1.0 - taaBlend) * taaCasSharpnessMax`, so this field is the
+	// *ceiling* on top of the per-frame blend-driven attenuation;
+	// high-blend frames (more history, already stable) get less
+	// sharpening, low-blend frames (less history, more noise) get
+	// more. 0.5 matches the AMD CAS reference for a default 0.10
+	// TAA blend, i.e. `(1 - 0.10) * 0.5 = 0.45` effective sharpening
+	// for the first-frame-after-invalidation sample. Range [0, 1];
+	// 0 disables the CAS step entirely (`ApplyCasLinear` short-
+	// circuits). The value is uploaded as part of `ResolvePushConstants`
+	// and consumed by `taa_resolve.frag::ApplyCasLinear` (see
+	// `decisions.md` §19).
+	float taaCasSharpnessMax = 0.5f;
+	// Camera-cut detection (1.2). The Chebyshev (max-abs-element) distance
+	// between the previous and current frame's `viewProjection` is computed
+	// each frame in `FramePreparation::BuildFrameData`; if it exceeds
+	// `kTaaCameraCutThreshold` (0.10) the camera has moved far enough in
+	// one frame that motion vectors can't sensibly reproject the history,
+	// and `taaHistoryValid` is dropped the same way swapchain resize /
+	// world reload / Taa toggle already do. `taaCameraCutCount` accumulates
+	// across the session (resets only on world reload); `taaCameraCutMaxDelta`
+	// records the worst Chebyshev distance seen since startup so the operator
+	// can compare a live repro against `decisions.md` §19's expected delta
+	// ranges. The first frame is skipped because the zero-initialised
+	// `taaPrevViewProjectionMatrix` would always register as a "cut".
+	uint32_t taaCameraCutCount = 0;
+	float taaCameraCutMaxDelta = 0.0f;
+	// 1.2 — companion flag to `taaPrevViewProjectionMatrix`. Set
+	// after the first successful stash so the camera-cut detector
+	// knows the previous-frame matrix is real (rather than the
+	// zero-initialised default). Reset by `VulkanSwapchain.cpp`
+	// on swapchain recreate, since that path also zeroes
+	// `taaPrevViewProjectionMatrix`; without this flag the very
+	// first frame after (re)init would always register as a
+	// "cut" with `maxDelta` equal to the largest |viewProj| entry.
+	bool taaPrevViewProjectionMatrixInitialized = false;
 	// TAA offscreen render targets + linear sampler + resolve pipeline.
 	// Allocated by `projectv::taa::CreateOrRecreateTaaRenderTargets` from
 	// `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays in

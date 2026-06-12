@@ -1001,7 +1001,12 @@ void RecordGraphicsCommands(
 				1.0f / static_cast<float>(swapchain.extent.width),
 				1.0f / static_cast<float>(swapchain.extent.height),
 			};
-			resolvePushConstants.reservedPadding = { 0.0f, 0.0f };
+			// CAS (1.3) inputs. `taaBlend` is 0 when TAA is off so the
+			// sharpen derivation in `taa_resolve.frag` falls back to
+			// `1.0 * taaCasSharpnessMax` (the user-authored ceiling)
+			// without a separate toggle.
+			resolvePushConstants.taaBlend = render.taaEnabled ? render.taaBlend : 0.0f;
+			resolvePushConstants.taaCasSharpnessMax = render.taaCasSharpnessMax;
 
 			if (frameRenderData.taaResolveDescriptorSet != VK_NULL_HANDLE) {
 				vkCmdBindDescriptorSets(

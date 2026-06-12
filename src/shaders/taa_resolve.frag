@@ -16,6 +16,16 @@
 // per-sample tint, and the history clamp doesn't wash coloured highlights
 // toward grey. Reference: Yang, "Improved YCoCg Neighborhood Clamp for
 // Temporal Anti-Aliasing", GPU Gems 3 / MJP notes.
+//
+// 1.3 — adaptive CAS (Contrast Adaptive Sharpening) post-TAA. The
+// sharpened amount is `(1 - taaBlend) * taaCasSharpnessMax` so high-blend
+// (stable) frames get less sharpening and low-blend (noisy) frames get
+// more. The CAS kernel reuses the same 3x3 / 5x5 / 7x7 neighbourhood loop
+// as the YCoCg clamp, accumulating the four corners in linear RGB and
+// the cross+center min/max for the local contrast weight. No extra
+// texture lookups beyond the loop the TAA clamp already runs. Reference:
+// Bartłomiej Wronski (AMD), "FidelityFX CAS – Contrast Adaptive
+// Sharpening", GPUOpen 2020.
 
 layout(set = 0, binding = 0) uniform sampler2D sceneColor;
 layout(set = 0, binding = 1) uniform sampler2D historyColor;
@@ -48,7 +58,11 @@ layout(push_constant) uniform ResolvePushConstants {
     mat4 inverseCurrentViewProjection;
     mat4 currentViewProjection;
     vec2 renderExtentInverse;
-    vec2 reservedPadding;
+    // CAS (1.3) inputs. The trailing 8 B replaced the original
+    // `vec2 reservedPadding` slot with the same total size; the byte
+    // layout (and the `static_assert` in `core/Types.hpp`) is unchanged.
+    float taaBlend;
+    float taaCasSharpnessMax;
 } pushConstants;
 
 layout(location = 0) out vec4 outColor;
@@ -109,19 +123,26 @@ vec3 YCoCgToRGB(const vec3 ycocg) {
     return vec3(r, g, b);
 }
 
-void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, out vec3 maxColor, out vec3 centroidColor) {
-    // 3x3 / 5x5 / 7x7 min/max in YCoCg space, returned as YCoCg (Y, Co, Cg).
-    // The per-axis radius comes from `sceneLighting.taaHistoryParams.w`
-    // (set by `RenderState::taaNeighbourhoodRadius`, live `,` key in
-    // `InputAction::CycleTaaNeighbourhoodRadius`). Allowed values are
-    // 1, 3, 5, 7; the loop is clamped to the same set so a stale or
-    // out-of-range value won't drive the loop into undefined territory.
-    // The caller is expected to clamp a sample in YCoCg space and convert
-    // back to RGB. The third out-param `centroidColor` is the arithmetic
-    // mean of the same neighbourhood in YCoCg space; `main()` uses it
-    // for the M5.2 color-distance rejection (skip clamp + history blend
-    // when current is far from this mean — see comment above
-    // `kTaaColorDistanceRejectionThreshold`).
+// 1.3 — gathers the YCoCg clamp range (min/max/centroid in YCoCg, used
+// for the temporal blend) and the CAS inputs (cross+center RGB min/max
+// and the 4-corner RGB sum, used for the post-blend sharpening). All
+// outputs are computed in a single 3x3 / 5x5 / 7x7 sweep so the
+// bandwidth cost is the same as the pre-1.3 loop. The radius comes
+// from `sceneLighting.taaHistoryParams.w` (set by
+// `RenderState::taaNeighbourhoodRadius`, live `,` key in
+// `InputAction::CycleTaaNeighbourhoodRadius`). Allowed values are
+// 1, 3, 5, 7; the loop is clamped to the same set so a stale or
+// out-of-range value won't drive the loop into undefined territory.
+void GetSceneColorRange(
+    const vec2 uv,
+    const vec2 texelSize,
+    out vec3 minColor,
+    out vec3 maxColor,
+    out vec3 centroidColor,
+    out vec3 rgbMin,
+    out vec3 rgbMax,
+    out vec3 rgbCornerSum)
+{
     const int radius = clamp(int(sceneLighting.taaHistoryParams.w + 0.5), 1, 7);
     // Snap odd-only: 1, 3, 5, 7. Anything in between behaves like the
     // lower bound (1, 3 or 5), so the cycle is well-defined.
@@ -130,6 +151,9 @@ void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, 
     const float normalizer = 1.0 / float(sideLength * sideLength);
     minColor = vec3(kHugeTaaRayT);
     maxColor = vec3(-kHugeTaaRayT);
+    rgbMin = vec3(kHugeTaaRayT);
+    rgbMax = vec3(-kHugeTaaRayT);
+    rgbCornerSum = vec3(0.0);
     vec3 sumColor = vec3(0.0);
     for (int offsetY = -snappedRadius; offsetY <= snappedRadius; ++offsetY) {
         for (int offsetX = -snappedRadius; offsetX <= snappedRadius; ++offsetX) {
@@ -142,9 +166,56 @@ void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, 
             minColor = min(minColor, sampleYCoCg);
             maxColor = max(maxColor, sampleYCoCg);
             sumColor += sampleYCoCg;
+            // CAS: cross+center (5 taps of the 3x3 — top, bottom, left,
+            // right, center) for the RGB min/max used as the local
+            // contrast range; the four corners (a, c, g, i) sum into
+            // the high-pass kernel. Edges in the 5x5 / 7x7 case
+            // contribute the cross-taps too (offsetX or offsetY == 0).
+            const bool isCorner = (offsetX == -snappedRadius || offsetX == snappedRadius) &&
+                                  (offsetY == -snappedRadius || offsetY == snappedRadius);
+            const bool isCross = (offsetX == 0 || offsetY == 0);
+            if (isCorner) {
+                rgbCornerSum += sampleColor;
+            }
+            if (isCross) {
+                rgbMin = min(rgbMin, sampleColor);
+                rgbMax = max(rgbMax, sampleColor);
+            }
         }
     }
     centroidColor = sumColor * normalizer;
+}
+
+// AMD FidelityFX CAS — Contrast Adaptive Sharpening, simplified for
+// post-TAA fullscreen pass. Bartłomiej Wronski (AMD), "FidelityFX CAS
+// – Contrast Adaptive Sharpening", GPUOpen 2020.
+// https://github.com/GPUOpen-Effects/FidelityFX-CAS
+//
+// Simplified: uses 3x3 box (5+4 taps already gathered by the TAA
+// clamp loop), operates in *linear* light (the YCoCg-clamp range and
+// the 4-corner sum are also pre-tonemap, so a sRGB-space sharpen
+// would mix the wrong gamma). High-pass kernel is
+// `center - 4-corner-avg`; the per-channel weight
+// `(center - cornerAvg) / (max - min)` is positive-clamped so flat
+// regions (highPass ≈ 0) get no boost. Output is clamped to the
+// local RGB [min, max] range to avoid overshoot into neighbouring
+// colors. `sharpenAmount == 0` short-circuits to the input color
+// (no ALU beyond the check).
+vec3 ApplyCasLinear(
+    const vec3 color,
+    const vec3 minColor,
+    const vec3 maxColor,
+    const vec3 cornerSum,
+    const float sharpenAmount)
+{
+    if (sharpenAmount <= 0.0) {
+        return color;
+    }
+    const vec3 cornerAvg = cornerSum * 0.25;
+    const vec3 highPass = color - cornerAvg;
+    const vec3 range = max(maxColor - minColor, vec3(1e-5));
+    const vec3 weight = clamp(highPass / range, vec3(0.0), vec3(1.0));
+    return clamp(color + highPass * (sharpenAmount * weight), minColor, maxColor);
 }
 
 void main()
@@ -188,7 +259,10 @@ void main()
     vec3 minColor;
     vec3 maxColor;
     vec3 centroidColor;
-    GetSceneColorRange(uv, texelSize, minColor, maxColor, centroidColor);
+    vec3 rgbMin;
+    vec3 rgbMax;
+    vec3 rgbCornerSum;
+    GetSceneColorRange(uv, texelSize, minColor, maxColor, centroidColor, rgbMin, rgbMax, rgbCornerSum);
     // `minColor` / `maxColor` / `centroidColor` are in YCoCg space (Y, Co, Cg).
     const vec3 currentYCoCg = RGBToYCoCg(texture(sceneColor, uv).rgb);
     // M5.2 color-distance rejection: when the current sample is far from
@@ -238,6 +312,20 @@ void main()
     // Apply exposure to the current sample as well so the in/out color
     // spaces stay consistent with the main pass.
     linearOut *= max(sceneLighting.postProcess.x, 0.0);
+
+    // 1.3 — inline CAS post-blend, pre-tonemap. The sharpening amount
+    // is `(1 - taaBlend) * taaCasSharpnessMax`: high blend (more
+    // history weight, the image is already stable across frames) ->
+    // less sharpening; low blend (more noise) -> more. TAA-off falls
+    // through with `taaBlend = 0`, so the ceiling `taaCasSharpnessMax`
+    // applies at full strength — same visual contract as the
+    // pre-1.3 sharpen disabled case (TAA-off, no temporal blur to
+    // undo, so the ceiling is appropriate). The CAS step is *linear*
+    // because the `rgbMin / rgbMax / rgbCornerSum` came from the
+    // pre-tonemap scene, and applying a linear high-pass kernel in
+    // sRGB space would mix the wrong gamma.
+    const float sharpenAmount = max(0.0, (1.0 - pushConstants.taaBlend) * pushConstants.taaCasSharpnessMax);
+    linearOut = ApplyCasLinear(linearOut, rgbMin, rgbMax, rgbCornerSum, sharpenAmount);
 
     vec3 mappedOut = ApplyTaaToneMap(linearOut);
     mappedOut = ApplyTaaColorGrading(mappedOut);
