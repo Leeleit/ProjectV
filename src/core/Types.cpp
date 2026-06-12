@@ -2,6 +2,8 @@
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #include "core/Types.hpp"
+#include "asset/ModelManifestLoader.hpp"
+#include "asset/ModelPass.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/SceneResources.hpp"
 #include "render/TaaRenderTargets.hpp"
@@ -25,6 +27,8 @@ void ShutdownVulkan(AppState *state)
 		DestroyVoxelMeshingPipeline(&state->context, &state->render);
 		DestroyGraphicsPipeline(&state->context, &state->render);
 		DestroySceneResources(&state->context, &state->render);
+		projectv::asset::UnloadAllModels(&state->context, &state->render);
+		projectv::asset::DestroyModelPipeline(&state->context, &state->render);
 
 		// Tear down the TAA offscreen colour targets here, after every other
 		// Vulkan resource consumer is gone. They are `new`-allocated by

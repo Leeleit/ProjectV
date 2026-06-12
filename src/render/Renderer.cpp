@@ -10,6 +10,7 @@
 
 #include "fmt/format.h"
 
+#include <cstring>
 #include <filesystem>
 
 namespace {
@@ -298,6 +299,7 @@ void RecordShadowCommands(
 	const VkCommandBuffer cmd)
 {
 	PV_PROFILE_ZONE_N("RecordShadowCommands");
+	PV_PROFILE_GPU_LABEL(cmd, "Shadow Pass");
 	if (render.shadowGraphicsPipeline == VK_NULL_HANDLE ||
 		render.shadowPipelineLayout == VK_NULL_HANDLE ||
 		render.shadowImage == VK_NULL_HANDLE ||
@@ -439,6 +441,7 @@ void RecordDebugOverlayCommands(
 	const VkCommandBuffer cmd)
 {
 	PV_PROFILE_ZONE_N("RecordDebugOverlayCommands");
+	PV_PROFILE_GPU_LABEL(cmd, "Debug Overlay");
 	if (!frameRenderData.debugUiVisible || render.debugOverlayPipelineLayout == VK_NULL_HANDLE) {
 		return;
 	}
@@ -483,6 +486,7 @@ void RecordDebugHudCommands(
 	const VkCommandBuffer cmd)
 {
 	PV_PROFILE_ZONE_N("RecordDebugHudCommands");
+	PV_PROFILE_GPU_LABEL(cmd, "Debug HUD");
 	if (render.debugHudPipeline == VK_NULL_HANDLE ||
 		frameRenderData.debugHudVertexBuffer == VK_NULL_HANDLE ||
 		frameRenderData.debugHudVertexCount == 0) {
@@ -502,6 +506,7 @@ void RecordVoxelMeshingCommands(
 	const VkCommandBuffer cmd)
 {
 	PV_PROFILE_ZONE_N("RecordVoxelMeshingCommands");
+	PV_PROFILE_GPU_LABEL(cmd, "Voxel Meshing");
 	if (render.voxelMeshingPipeline == VK_NULL_HANDLE ||
 		render.voxelMeshingPipelineLayout == VK_NULL_HANDLE ||
 		frameRenderData.voxelMeshingDescriptorSet == VK_NULL_HANDLE ||
@@ -574,6 +579,7 @@ void RecordGraphicsCommands(
 	const uint32_t imageIndex)
 {
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
+	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
 	{
 		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Graphics Frame");
 
@@ -782,6 +788,58 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
+		// M4: polygon-model import pass. Same depth attachment as the
+		// opaque pass, same descriptor set (kept bound from the opaque
+		// pass — the model pipeline reuses the same
+		// `graphicsPipelineLayout`). Per-instance world transform
+		// lives in `render.modelInstances`; `model.vert` reuses the
+		// same push constant struct as the voxel pass and only reads
+		// `viewProjection` (offset 0) and `modelTransform` (offset
+		// 64).
+		if (render.modelPipeline != VK_NULL_HANDLE && !render.modelInstances.empty()) {
+			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Model Pass");
+			vkCmdBindPipeline(
+				cmd,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				taaOn && render.modelPipelineTaaOn != VK_NULL_HANDLE
+					? render.modelPipelineTaaOn
+					: render.modelPipeline);
+			struct ModelPush {
+				std::array<float, 16> viewProjection{};
+				std::array<float, 16> modelTransform{};
+			};
+			ModelPush push{};
+			std::memcpy(
+				push.viewProjection.data(),
+				frameRenderData.graphicsPushConstants.viewProjection.data(),
+				sizeof(float) * 16);
+			for (const ModelInstanceData &instance : render.modelInstances) {
+				if (instance.indexCount == 0 || instance.vertexBuffer == VK_NULL_HANDLE
+					|| instance.indexBuffer == VK_NULL_HANDLE) {
+					continue;
+				}
+				std::memcpy(
+					push.modelTransform.data(),
+					instance.modelTransform.data(),
+					sizeof(float) * 16);
+				vkCmdPushConstants(
+					cmd,
+					render.graphicsPipelineLayout,
+					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					0,
+					sizeof(ModelPush),
+					&push);
+				const VkDeviceSize vertexOffset = 0;
+				vkCmdBindVertexBuffers(cmd, 0, 1, &instance.vertexBuffer, &vertexOffset);
+				vkCmdBindIndexBuffer(
+					cmd,
+					instance.indexBuffer,
+					0,
+					VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(cmd, instance.indexCount, 1, 0, 0, 0);
+			}
+		}
+
 		if ((taaOn ? render.transparentGraphicsPipelineTaaOn : render.transparentGraphicsPipeline) &&
 			frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE &&
 			frameRenderData.chunkDescriptorCount > 0 &&
@@ -919,6 +977,7 @@ void RecordGraphicsCommands(
 			vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TAA Resolve");
+			PV_PROFILE_GPU_LABEL_COLOR(cmd, "TAA Resolve", 0.20f, 0.65f, 1.00f, 1.0f);
 
 			// Push constants for the resolve pass. The current
 			// viewProjection comes from the per-frame

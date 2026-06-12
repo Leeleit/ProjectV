@@ -1,6 +1,8 @@
 #include "app/Camera.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
 #include "core/RuntimeDiagnostics.hpp"
+#include "asset/ModelManifestLoader.hpp"
+#include "asset/ModelPass.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
@@ -98,6 +100,25 @@ bool CreateTracyGpuContext(
 	profiling::NameVulkanGpuContext(render->tracyGraphicsContext, "Graphics Queue");
 	return true;
 #endif
+}
+} // namespace
+
+namespace {
+VkFormat ChooseModelDepthFormat(const VkPhysicalDevice physicalDevice)
+{
+	constexpr std::array<VkFormat, 3> candidates{
+		VK_FORMAT_D32_SFLOAT,
+		VK_FORMAT_D24_UNORM_S8_UINT,
+		VK_FORMAT_D16_UNORM,
+	};
+	for (const VkFormat format : candidates) {
+		VkFormatProperties props{};
+		vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+		if ((props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0) {
+			return format;
+		}
+	}
+	return VK_FORMAT_UNDEFINED;
 }
 } // namespace
 
@@ -210,6 +231,31 @@ bool InitVulkan(AppState *state)
 			"Init",
 			"InitVulkan.CreateVoxelMeshingPipeline",
 			"CreateVoxelMeshingPipeline returned false");
+		return false;
+	}
+
+	if (!projectv::asset::CreateModelPipeline(
+			&state->context,
+			state->render.graphicsPipelineLayout,
+			state->swapchain.format,
+			ChooseModelDepthFormat(state->context.physicalDevice),
+			&state->render)) {
+		runtime::LogRuntimeFailure(
+			"Init",
+			"InitVulkan.CreateModelPipeline",
+			"CreateModelPipeline returned false");
+		return false;
+	}
+
+	if (!projectv::asset::LoadAndRegisterModelsFromManifest(
+			&state->context,
+			state->context.commandPool,
+			state->context.queue,
+			&state->render)) {
+		runtime::LogRuntimeFailure(
+			"Init",
+			"InitVulkan.LoadAndRegisterModelsFromManifest",
+			"LoadAndRegisterModelsFromManifest returned false");
 		return false;
 	}
 

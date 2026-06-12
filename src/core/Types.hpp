@@ -1,7 +1,18 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+// `volk.h` must come before any header that pulls in `vk_mem_alloc.h`
+// (transitively: `asset/MeshGpuResources.hpp`, `render/ShadowTypes.hpp`,
+// `render/TaaRenderTargets.hpp`, `voxel/VoxelMaterials.hpp` all carry
+// VMA-related types). VMA's volk-aware import helper
+// (`vmaImportVulkanFunctionsFromVolk`) is declared only when
+// `VOLK_HEADER_VERSION` is defined at the time VMA's header is processed;
+// putting `volk.h` first here keeps the helper visible project-wide.
+// ReSharper disable once CppUnusedIncludeDirective
+#include "volk.h"
+
 #include "SDL3/SDL.h"
+#include "asset/MeshGpuResources.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -9,8 +20,6 @@
 namespace projectv::taa {
 struct OffscreenColorTarget;
 } // namespace projectv::taa
-// ReSharper disable once CppUnusedIncludeDirective
-#include "volk.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #include "vk_mem_alloc.h"
@@ -19,6 +28,7 @@ struct OffscreenColorTarget;
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -113,6 +123,12 @@ enum class InputAction : uint8_t {
 	PickTargetMaterial,
 	CaptureScreenshot,
 	ToggleTaa,
+	DecreaseTaaJitterScale,
+	IncreaseTaaJitterScale,
+	DecreaseTaaBlend,
+	IncreaseTaaBlend,
+	CycleTaaNeighbourhoodRadius,
+	InvalidateTaaHistory,
 	Count,
 };
 
@@ -426,6 +442,8 @@ struct DebugStats {
 	bool taaHistoryValid = false;
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
+	float taaJitterScale = 1.0f;
+	int32_t taaNeighbourhoodRadius = 1;
 	std::array<float, 3> sunDirection{};
 	float sunIntensity = 0.0f;
 	float sunShadowStrength = 0.0f;
@@ -512,6 +530,22 @@ struct WorldState {
 	VoxelScenePreset requestedScenePreset = VoxelScenePreset::VoxelLab;
 	bool snapshotSaveRequested = false;
 	bool snapshotLoadRequested = false;
+};
+
+struct ModelInstanceData {
+	std::array<float, 16> modelTransform{};
+	std::array<float, 3> worldAabbMin{};
+	std::array<float, 3> worldAabbMax{};
+	VkBuffer vertexBuffer = VK_NULL_HANDLE;
+	VkBuffer indexBuffer = VK_NULL_HANDLE;
+	uint32_t indexCount = 0;
+};
+
+struct ModelRegistryEntry {
+	std::string id;
+	projectv::asset::MeshGpuResources gpu;
+	std::array<float, 3> aabbMin{0.0f};
+	std::array<float, 3> aabbMax{0.0f};
 };
 
 struct RenderState {
@@ -621,6 +655,15 @@ struct RenderState {
 	std::array<float, 16> taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
+	// Per-pass TAA tuning ladder (live `;`/`'`/`-`/`=`/`,`/`.` ladder, see
+	// `InputAction::*Taa*`). `taaJitterScale` multiplies the Halton(2,3) output
+	// before it lands in `taaParams.xy`; range [0, 2], step 0.25. Default 1.0
+	// matches the pre-ladder behaviour. `taaNeighbourhoodRadius` drives the
+	// 3x3 / 5x5 / 7x7 history clamp in `taa_resolve.frag`; allowed values are
+	// 1 / 3 / 5 / 7 (the shader treats it as the per-axis loop bound), default
+	// 1 keeps the original 3x3 clamp (`-1, 0, +1`).
+	float taaJitterScale = 1.0f;
+	int32_t taaNeighbourhoodRadius = 1;
 	// TAA offscreen render targets + linear sampler + resolve pipeline.
 	// Allocated by `projectv::taa::CreateOrRecreateTaaRenderTargets` from
 	// `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays in
@@ -644,6 +687,22 @@ struct RenderState {
 	VkDescriptorSetLayout taaResolveDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool taaResolveDescriptorPool = VK_NULL_HANDLE;
 	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> taaResolveDescriptorSets{};
+	// Polygon-model import pipeline (M4). Each `ModelRegistryEntry`
+	// owns the device-local VBO/IBO for one baked .glb / .gltf asset.
+	// `modelInstances` is the per-frame list of draw commands, built
+	// by `FramePreparation::BuildModelDrawList` from the current ECS
+	// snapshot + the camera frustum. The model pass reuses the main
+	// `graphicsDescriptorSet` (binding 3 = SceneLightingBuffer is the
+	// only descriptor it needs), so no new descriptor set
+	// allocation is required for M4.
+	std::vector<ModelRegistryEntry> modelRegistry;
+	std::vector<ModelInstanceData> modelInstances;
+	VkPipelineLayout modelPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline modelPipeline = VK_NULL_HANDLE;
+	VkPipeline modelPipelineTaaOn = VK_NULL_HANDLE;
+	// The model pipeline reuses the main `graphicsPipelineLayout`
+	// (`modelPipelineLayout` stays null); the TAA-on variant is a
+	// separate VkPipeline object that binds the TAA-on shader variant.
 };
 
 struct LookDevCaptureAutomationState {

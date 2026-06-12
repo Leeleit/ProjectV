@@ -103,15 +103,24 @@ bool CopyBufferViaStaging(
 	submitInfo.pCommandBuffers = &commandBuffer;
 
 	const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
-
 	if (submitResult != VK_SUCCESS) {
 		runtime::LogVkFailure("MeshGpuResources.vkQueueSubmit", submitResult);
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 		return false;
 	}
+	// Wait for the GPU to finish the staging copy before freeing the
+	// command buffer. Without this `vkFreeCommandBuffers` is called
+	// while the command buffer is still pending on the queue, which
+	// the Vulkan spec (VUID-vkFreeCommandBuffers-pCommandBuffers-00047)
+	// explicitly forbids and trips the validation layer / segfaults
+	// on some drivers when called during the model-pipeline init
+	// path that runs before the first `vkWaitForFences` in the
+	// regular frame loop.
 	if (vkQueueWaitIdle(queue) != VK_SUCCESS) {
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 		return false;
 	}
+	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 	return true;
 }
 

@@ -27,6 +27,8 @@ set(SHADERS
         ${SHADER_DIR}/debug_overlay.frag
         ${SHADER_DIR}/debug_hud.vert
         ${SHADER_DIR}/debug_hud.frag
+        ${SHADER_DIR}/model.vert
+        ${SHADER_DIR}/model.frag
 )
 
 foreach (SHADER ${SHADERS})
@@ -56,6 +58,23 @@ add_custom_command(
 )
 list(APPEND SPV_SHADERS ${VOXEL_FRAG_TAA_SPV})
 
+# TAA-on variant of model.frag: declares `outSceneColor` (Location 1) so
+# the model pass writes to the same slot as the voxel pass on the TAA-on
+# path (where the first color attachment is NULL and the second holds
+# the offscreen scene color). Without this variant, the model pass
+# writes to a NULL slot and trips the validation layer's "writes to
+# output variable but imageView is VK_NULL_HANDLE" warning.
+set(MODEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/model.frag.taa_on.spv)
+add_custom_command(
+        OUTPUT ${MODEL_FRAG_TAA_SPV}
+        COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
+            -DTAA_ENABLED ${SHADER_DIR}/model.frag -o ${MODEL_FRAG_TAA_SPV}
+        DEPENDS ${SHADER_DIR}/model.frag
+        COMMAND_EXPAND_LISTS
+        VERBATIM
+)
+list(APPEND SPV_SHADERS ${MODEL_FRAG_TAA_SPV})
+
 add_custom_target(Shaders ALL DEPENDS ${SPV_SHADERS})
 add_dependencies(ProjectV Shaders)
 # --- КОНЕЦ БЛОКА ШЕЙДЕРОВ ---
@@ -75,6 +94,8 @@ target_sources(ProjectV PRIVATE
         asset/DracoMeshDecoder.cpp
         asset/MeshBaker.cpp
         asset/MeshGpuResources.cpp
+        asset/ModelPass.cpp
+        asset/ModelManifestLoader.cpp
         ecs/EcsWorld.cpp
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
