@@ -9,6 +9,44 @@ namespace projectv::audio {
 namespace {
 constexpr char kMusicDirectoryEnvVar[] = "PROJECTV_MUSIC_DIR";
 constexpr char kDefaultMusicDirectoryName[] = "music";
+constexpr char kRepoMarkerName[] = ".git";
+constexpr char kProjectMarkerName[] = "AGENTS.md";
+
+// **Walk up from `start` looking for the ProjectV
+// repo root.** The repo root is the first ancestor
+// directory that contains BOTH a `.git/` (or
+// `.git` file for submodule checkouts) AND an
+// `AGENTS.md` (a ProjectV-specific file). Returns
+// the empty path when no repo root is found. The
+// "both markers" check is more specific than
+// `.git` alone (which catches other VCS worktrees
+// in the file system) and more reliable than
+// `CMakeLists.txt` alone (which the build tree also
+// contains).
+std::filesystem::path FindRepoRootFromPath(const std::filesystem::path &start)
+{
+	std::error_code ec;
+	std::filesystem::path current = std::filesystem::absolute(start, ec);
+	if (ec) {
+		current = start;
+	}
+	while (!current.empty()) {
+		const std::filesystem::path gitPath = current / kRepoMarkerName;
+		const std::filesystem::path agentsPath = current / kProjectMarkerName;
+		const bool hasGit = std::filesystem::exists(gitPath, ec);
+		const bool hasAgents = std::filesystem::exists(agentsPath, ec);
+		if (hasGit && hasAgents && !ec) {
+			return current;
+		}
+		const std::filesystem::path parent = current.parent_path();
+		if (parent == current) {
+			// Reached filesystem root.
+			break;
+		}
+		current = parent;
+	}
+	return {};
+}
 } // namespace
 
 std::filesystem::path GetMusicDirectoryPath()
@@ -21,17 +59,41 @@ std::filesystem::path GetMusicDirectoryPath()
 		return std::filesystem::path(overridePath);
 	}
 
-	// 2. CWD-relative `./music`. **This is the
-	// primary fallback** because the operator's
-	// "папка music в корне" intent is the repo
-	// root, and the operator runs the binary
-	// from the repo root (e.g.
-	// `./build/linux-clang-debug/bin/ProjectV`).
-	// The CWD at launch time is the repo root;
-	// `./music` resolves to the right place. If
-	// the operator launched from somewhere else,
-	// they set `PROJECTV_MUSIC_DIR` (or use the
-	// SDL_GetBasePath fallback below).
+	// 2. **Repo-root walk-up from the binary's
+	// location.** The operator's "папка music в
+	// корне" intent is the ProjectV repo root.
+	// The binary lives at e.g.
+	// `<repo_root>/build/linux-clang-debug/bin/`,
+	// so walking up from `SDL_GetBasePath()`
+	// toward the filesystem root passes
+	// `bin/` → `linux-clang-debug/` → `build/` →
+	// `<repo_root>` (which has both `.git` and
+	// `AGENTS.md`). When the repo root is found,
+	// the music folder is `<repo_root>/music/`,
+	// regardless of CWD. This is what makes
+	// `/home/le1t/Projects/ProjectV/build/.../bin/ProjectV`
+	// find the right music folder when the
+	// operator runs the binary by absolute path
+	// from anywhere (shell prompt at `/tmp`, IDE
+	// run button, CI, etc.).
+	if (const char *basePath = SDL_GetBasePath();
+		basePath && *basePath) {
+		const std::filesystem::path repoRoot = FindRepoRootFromPath(basePath);
+		if (!repoRoot.empty()) {
+			return repoRoot / kDefaultMusicDirectoryName;
+		}
+	}
+
+	// 3. CWD-relative `./music`. Works when the
+	// operator runs the binary from the repo root
+	// (the canonical "I cloned the repo and built
+	// it, now `./build/.../bin/ProjectV` from the
+	// repo root" path). Catches the operator who
+	// builds the binary in-place and launches
+	// from the repo root, even when the repo
+	// walk-up above fails (e.g. the operator
+	// stripped `.git/` from the working tree, or
+	// installed the binary system-wide).
 	{
 		const std::filesystem::path cwdCandidate =
 			std::filesystem::path(kDefaultMusicDirectoryName);
@@ -41,7 +103,7 @@ std::filesystem::path GetMusicDirectoryPath()
 		}
 	}
 
-	// 3. `SDL_GetBasePath() / "music"`. Last
+	// 4. `SDL_GetBasePath() / "music"`. Last
 	// resort. `SDL_GetBasePath` returns the
 	// directory containing the executable, so
 	// this resolves to e.g.
@@ -49,10 +111,11 @@ std::filesystem::path GetMusicDirectoryPath()
 	// the operator runs from there. Matches the
 	// screenshot/snapshot convention as a
 	// final-fallback. We only return this if
-	// step 2's `./music` doesn't exist on disk
-	// — otherwise the CWD-relative path wins
-	// (so the operator can launch from the repo
-	// root without the engine looking at the
+	// step 2's repo walk-up didn't find a root AND
+	// step 3's CWD-relative `./music` doesn't
+	// exist — otherwise the CWD-relative path
+	// wins (so the operator can launch from the
+	// repo root without the engine looking at the
 	// build tree's bin/ subdirectory).
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
@@ -61,7 +124,7 @@ std::filesystem::path GetMusicDirectoryPath()
 		return resolvedPath;
 	}
 
-	// 4. Last-ditch: CWD-relative `./music` even
+	// 5. Last-ditch: CWD-relative `./music` even
 	// if it doesn't exist. The engine's
 	// `loadMusicFolder` creates the directory on
 	// first use, so this is safe.
