@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата обновления: `2026-06-12` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 closed)
+Дата обновления: `2026-06-12` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 closed + post-TAA roadmap + R&D Блоки 7-9)
 Статус документа: `живой roadmap`
 
 ---
@@ -457,6 +457,21 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
   no staircasing, no full-floor dark. **Working rule записан в `agent/memory.md` §10.7**: для Vulkan
   semantic вопросов — docs first, headers/vulkaninfo second.
 
+### P1 (visual quality post-TAA track, `2026-06-12`)
+
+После TAA-Блока 1-6 (1.1-1.5, 1.7 closed; 1.6 VRS R&D, 1.8 quality tier abstraction open per §5) и shadow/contact/AOCC/LOCL baselines (closed в lighting/look-dev P1 выше) следующий natural track — это **post-TAA visual quality extensions**, которые требуют HDR/luminance pipeline (отдельная работа) или fragment-budget trade-off. Все пункты здесь gated на решения в `agent/decisions.md §14` (per-vertex AO disable, welded-mesh deferred) и `agent/memory.md §10.5.1` (compute auto-exposure ждёт HDR path).
+
+- [ ] **7.1 Compute HDR pipeline foundation.** R16G16B16A16 scene color в main pass (replaces `B10G11R11_UFLOAT` для main `outColor` slot 0; TAA `outSceneColor` slot 1 остаётся packed по `decisions.md §18` + `TaaRenderTargets.hpp` `kTaaSceneColorFormat`). Tone-map перед LDR conversion. Single source of truth pattern — `inline constexpr VkFormat kMainSceneColorFormat` в `TaaRenderTargets.hpp` рядом с `kTaaSceneColorFormat`. Prerequisite для 7.2/7.3 — без HDR scene color adaptive auto-exposure и bloom некорректны.
+- [ ] **7.2 Compute-based adaptive auto-exposure.** Luminance histogram pass (downsampled HDR-буфер), geometric mean, time-smoothed. Supersedes CPU `SceneKey` metering (`decisions.md §14`, `memory.md §10.5.1`) — current `VoxelSceneLighting.exposureControl` contract остаётся, но `SceneKey` estimate заменяется на GPU-computed value. Live tuning ladder: `H`/`K` остаются manual stop bias поверх adaptive.
+- [ ] **7.3 Bloom (post-TAA).** Thresholded bright pass (выше tone-mapped white point) → two-pass Gaussian или cascade downsample/upsample. Forward path (без G-buffer) — single compute-shader cascade blur; alternative — fragment-shader horizontal+vertical separable. Half-res upscale cheap variant для low-end GPUs.
+- [ ] **7.4 Vertex welding + smooth shading (R&D, gated).** Per `decisions.md §14`: face-independent per-vertex AO **фундаментально** даёт pseudo-shadow на 2×2×2 corner geometry (count of solid axis-aligned neighbors peaks at convex corners with three abutting voxels). Re-introduce только через:
+  - **a) Per-face uniform AO compute-baked** в `PackedFace::lightingData` (write-once per dirty chunk, read in vertex shader). Чуть проще welded mesh, но не решает 3D-corner seam.
+  - **b) Welded mesh** (welded vertex / index buffers + GPU-hash-table dedup в `voxel_mesh.comp` + `vkCmdBindIndexBuffer` + `VkDrawIndexedIndirectCommand`). Полное решение, но ~400-600 lines изменений.
+  - **c) Compute-baked 3D-corner AO** в новом SSBO с индексом 3D-позиции → AO байт. Vertex shader lookup. Compromise между (a) и (b).
+  - До выбора одного из вариантов — `voxel.vert` остаётся с `outAmbientVisibility = 1.0`, per-pixel AOCC в `voxel.frag` — единственный cavity darkening.
+
+Подробный performance budget и rationale — в §4.5 ниже.
+
 ### P2
 
 - [ ] Начать lighting/shadow foundation-first контур:
@@ -477,7 +492,7 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [x] debug tools for world mutation;
 - [x] screenshot hotkey;
 - [ ] frame-step / slow-motion debug modes;
-- [ ] extra gizmo/debug overlays beyond current inspect / chunk / mutation overlays.
+- [x] extra gizmo/debug overlays beyond current inspect / chunk / mutation overlays.
 
 ### World / Render / Tooling
 
@@ -486,10 +501,13 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [ ] greedy meshing follow-up;
 - [ ] richer render stats / explicit per-pass timings / chunk update timings beyond current HUD + Tracy baseline;
 - [ ] RenderDoc-friendly markers;
-- [ ] benchmark automation.
+- [x] benchmark automation;
+- [x] **Two-level chunk visibility cache** — hash on `(cameraState, chunkDirtyMask)` в `UpdateChunkVisibilityAndIndirectCommands`; rebuild только когда hash invalidates (camera moved past threshold или chunk dirtied). Снижает CPU pressure на full-rebuild каждый кадр + уменьшает GPU bus traffic на `shadowIndirectBuffer` upload. Cross-link: P1 P0, contact с 5.3 (benchmark automation нужно для verify hit/miss ratio). Closed `2026-06-12` — see `agent/decisions.md` §22.
+- [ ] **Compute brushes (GPU world mutation)** — `SetVoxelMaterial` остаётся CPU для single-voxel edit (debug editor path); compute shader для **mass operations**: paint/erase stamps, brush shapes, explosion sphere, terrain generation. Direct GPU write в `PackedChunkVoxelPayload` SSBO + mark dirty chunks для mesh rebuild. Cross-link: P1 P0; foundation для gameplay-loop scenarios (build/blast, terrain sculpt).
 
 ### Visual Quality
 
+- [ ] **7.1-7.4** (HDR pipeline / compute auto-exposure / bloom / vertex welding) — см. §3 P1 «visual quality post-TAA track»;
 - [ ] HDR / tone mapping / exposure;
 - [ ] physically coherent material/lighting contract;
 - [ ] cascaded sun shadows;
@@ -499,6 +517,26 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [ ] volumetric fog / shafts;
 - [ ] `TAA` / temporal stabilization;
 - [ ] quality tiers and debug views.
+
+### 4.5 Performance budget (snapshot `2026-06-12`)
+
+Reference frame budget analysis с RTX 3060 Ti (8 GB):
+
+| Path | Время / кадр | FPS | Что внутри |
+|---|---|---|---|
+| Pre-shadow baseline (1500 FPS) | 0.67 ms | 1500 | ECS, physics, geometry, present |
+| Full look-dev (120 FPS) | 8.33 ms | 120 | + 4× CSM, PCF, AOCC, contact, LOCL DDA, BRDF, TAA |
+| 3000 FPS target | 0.33 ms | 3000 | physically impossible с текущим набором эффектов |
+| 4000 FPS target | 0.25 ms | 4000 | то же |
+| **Realistic post-optimization** | 2-3 ms | 300-500 | greedy meshing + per-cascade culling + 1.6 VRS + CSM static cache |
+
+**Откуда берётся 7.66 ms delta** (3 основных bottleneck'а по приоритету gain):
+
+1. **Geometry / Vertex Bound.** Greedy meshing (Блок 4.1) + per-cascade culling (closed 2026-04) уже отработали vertex stage. Дальнейшее: welded mesh (R&D per `decisions.md §14`), static/dynamic caster split для CSM.
+2. **Fragment / Instruction Bound.** Worst-case per-pixel budget сокращён 252→134 reads (-47%) в shadow-quality pass (`2026-06-09`, см. `memory.md §10.6`). Дальнейшее: **halve-res AO/contact upscale** (новый, до того как full-res bloom добавлять), VRS в cascade split edges (1.6, R&D).
+3. **CSM static / dynamic cache.** `shadowIndirectBuffer` rebuild + 4-cascade depth re-render каждый кадр. Split на static (rebuilt only при chunk dirty) + dynamic (rebuilt каждый кадр) даст значительный gain, но требует CPU-side scene-state hash (см. World/Render "two-level chunk visibility cache" выше).
+
+**Реалистичный ceiling на текущем look-dev path: 300-500 FPS** (2-3 ms/кадр) при сохранении текущего качества. 3000-4000 FPS физически невозможны: «пустой» кадр без освещения = 0.67 ms (1500 FPS) на этом GPU; полный освещённый = 8.33 ms. Delta в 7.66 ms — это shadow/BRDF/AOCC/LOCL work, которую нельзя «украсть» из воздуха. Каждый новый fragment-heavy effect (bloom, full-res AO, AOCC radius bump) **напрямую конкурирует** за этот budget; half-res upscale сделать раньше, чем full-res bloom.
 
 ---
 
@@ -606,6 +644,33 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 - [ ] Verify `build/linux-clang-debug/bin/voxel.frag.taa_on.spv` загружается без path bug.
 - [ ] Update `agent/status.md` §6: commit chain `b7e672f → b0fcd9b → 02c297c → 3c87f21` стабилен.
 
+### Блок 7 — Visual quality post-TAA (R&D, 3-5 дней, после TAA-Блока 1)
+
+Детальное описание и preconditions — в §3 P1 «visual quality post-TAA track». Этот блок — operational track для тех 4 пунктов.
+
+- [ ] **7.1 Compute HDR pipeline** (см. §3 P1 7.1) — R16G16B16A16 main scene color, tone-map pass, LDR conversion. Single source of truth — `kMainSceneColorFormat` constant в `TaaRenderTargets.hpp`. Prerequisite для 7.2/7.3.
+- [ ] **7.2 Compute-based adaptive auto-exposure** (см. §3 P1 7.2) — supersedes CPU `SceneKey` metering. Требует 7.1.
+- [ ] **7.3 Bloom** (см. §3 P1 7.3) — half-res upscale cheap variant для low-end; full-res forward (single compute-shader cascade) для high-end. Требует 7.1.
+- [ ] **7.4 Vertex welding + smooth shading** (см. §3 P1 7.4) — R&D, gated на `decisions.md §14`. 3 варианта: per-face uniform AO compute-baked, welded mesh + GPU-hash-table, compute-baked 3D-corner AO. Выбор варианта — отдельное решение перед implementation.
+
+### Блок 8 — Save/Load & streaming foundation (R&D, 5-10 дней)
+
+Без save/load любые world-edit'ы теряются на exit — `VoxelLab` / `ChunkGrid` / `MeshingStress` остаются hardcoded preset-based. zstd уже в зависимостях (submodule, `legacy/docs/libraries/zstd/`), integration path очевиден.
+
+- [ ] **8.1 Chunk serialization to disk.** Zstd-compressed snapshot, `*.pvchunk` format (header: magic + version + material table hash + dimension; body: run-length-encoded voxel data + chunk metadata). Loaded через async background thread (std::thread + condition variable, не ECS system — это I/O, не simulation tick).
+- [ ] **8.2 World reload через save/load.** Существующие `F6`/`F7` snapshot hotkeys (см. §7 за recent closures) переориентируются на serialized chunks вместо in-memory snapshot diff. Save/load API: `VoxelWorld::SaveToFile(path)`, `VoxelWorld::LoadFromFile(path)`, оба с progress callback.
+- [ ] **8.3 Streaming foundation** (deferred из «large-world streaming» в R&D-списке ниже). Distance-based chunk load/unload, async I/O, foundation для `LOD` system. Покрывает pre-emptive fetch по camera trajectory, hot/cold chunk classification.
+
+Cross-link: §5 R&D «large-world streaming / origin shifting / LOD» — Блок 8 это serialization layer для того, без которого streaming не имеет смысла.
+
+### Блок 9 — Voxel fluids (R&D, 5-10 дней)
+
+Наличие воды внутри стеклянного шара в `VoxelLab` просится быть динамической. Current `Fluid` material — static voxel, не отвечает на `SetVoxelMaterial` edit'ы.
+
+- [ ] **9.1 Cellular automata fluid simulation.** Tick-based water level per voxel cell. Equalize level с horizontal neighbors (один tick = 1 voxel height difference), fall down if air below (gravity-priority). Tick rate 4-10 Hz, не per-frame — даёт визуально «медленную» жидкость, как Minecraft. ECS system в background thread, не main tick (отдельный sim thread pool).
+- [ ] **9.2 GPU-вариант через compute.** Parallel cellular update, fast propagation для больших объёмов. Shared с Блок 8: chunk-dirty invalidation, mark chunk для mesh rebuild на CPU после GPU sim. Threshold для GPU sim: world size > N×N×N chunks (TBD по memory bandwidth).
+- [ ] **9.3 Fluid-vs-edit response.** Разрушение стенки → вода растекается через новое отверстие, integration с current `SetVoxelMaterial` (после `SyncPhysicsWorld`). Edit nearest fluid cell triggers sim tick в affected chunks. Cross-link: `decisions.md §5` interaction contract.
+
 ---
 
 ## 6. Риски
@@ -617,6 +682,21 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 - `Problems/` export из JetBrains быстро устаревает; перед следующим warning-cleanup pass его нужно заново выгружать, а
   не считать текущий XML источником истины.
 - `README.md`, vendored submodules и часть `docs/` могут содержать user-owned изменения; incidental edits нежелательны.
+- **Performance ceiling (см. §4.5):** current shadow + BRDF + AOCC + LOCL DDA + TAA path = 7.66 ms GPU на 120 FPS baseline
+  (RTX 3060 Ti). Любой новый fragment-heavy effect (bloom, full-res AO, AOCC radius bump, новые 1.5+ layer blend'ы)
+  **напрямую конкурирует** с TAA resolve + shadow PCF + BRDF. Half-res upscale (Блок 3, SSAO/contact) сделать раньше,
+  чем full-res bloom (Блок 7.3). Без 5.3 (benchmark automation) нельзя объективно verify hit/miss ratio оптимизаций.
+- **CSM full re-render каждый кадр:** `shadowIndirectBuffer` rebuild + 4 cascade depth pass = большая часть
+  fragment path budget. Static/dynamic cache дал бы значительный gain, но требует CPU-side scene-state hash
+  (см. World/Render «two-level chunk visibility cache» в §4) и пары с chunk-dirty invalidation tracking.
+- **TDR (timeout detection and recovery) на тяжёлых шейдерах** — fragment path уже сокращён 252→134 (-47%) в
+  2026-06-09 audit (см. `agent/memory.md §10.6`); добавлять fragment work только после benchmark-verify на
+  reference shot (`VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`). `tools/linux/Invoke-ProjectVRuntimeSmoke.sh`
+  ловит типичные случаи, но long-tail shader compile + Nкадров stability проверяется вручную.
+- **Smooth shading re-introduction path fragility** (Блок 7.4) — все три варианта (per-face uniform AO, welded
+  mesh, compute-baked 3D-corner AO) дают **разные** face-boundary behaviour; нужен явный acceptance test на
+  2×2×2 corner geometry (per `decisions.md §14`). Не «commit it and look at captures» — конкретный test fixture
+  с expected AO value per corner.
 
 ---
 

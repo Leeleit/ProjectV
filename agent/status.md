@@ -413,3 +413,49 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 - **Mip-mapped layer history** — для cheaper bilateral filtering. Complex, defer до 1.8 quality tier (mip level становится quality parameter).
 
 **Asset-pipeline parallel coordination:** одновременно active `session-2026-06-12-model-m6-triplanar-checker` (their M6 work on `model.frag` + `agent/memory.md §10.20`) и `session-2026-06-12-taa-m5_2-threshold-bump` (their M5.2 follow-up on `taa_resolve.frag` + `ModelPass.cpp` dual-MRT). Per `AGENTS.md §7.2.6` (multi-agent concurrent work) — manual merge requires user arbitration. Per-task isolation: каждый agent работает в своём файле (model.frag vs voxel.frag vs taa_resolve.frag vs ModelPass.cpp), кроме shared-файлов (Renderer.cpp, VulkanGraphicsPipeline.cpp, core/Types.hpp). Doc sync для shared-файлов — combined commit с attribution, как в `0503d8f` для 1.7+M5.2.
+
+## 13. Low-level perf + tooling session — `session-2026-06-12-lowlevel-perf-tooling` (closed, uncommitted)
+
+**3 low-level slices landed в одной resumed-сессии (per operator "5.3+5.2+two-level chunk visibility cache" + "насрать на asset-pipeline сессию" + "составляй план работ и работай"):**
+
+| Slice | Файлов | Commit (proposed) |
+|---|---|---|
+| **5.3 Benchmark automation** | 5 (BenchmarkAutomation.{hpp,cpp} new, Types.hpp state + AppState field, main.cpp wiring, CMakeLists.txt) | `feat(perf): PROJECTV_BENCHMARK_FRAMES=N env var + per-frame mean/min/max logging` |
+| **5.2 Debug gizmos** | 6 (Types.hpp InputAction tail + DebugState flags, InputActions.cpp 2 BindAction, AppUpdate.cpp handlers, DebugOverlays.{hpp,cpp} cascade+hit-normal+default-args, FramePreparation.cpp pass camera+render) | `feat(debug): cascade split plane + cursor hit normal overlay boxes (5.2)` |
+| **Two-level chunk visibility cache** | 4 (Types.hpp ChunkVisibilityCache + RenderState field, SceneResources.hpp hash fn + thresholds, SceneResources.cpp RebuildChunkVisibilityAndFillCache + ApplyCachedChunkVisibilityCommands + UpdateSceneFrameChunkVisibility cache check) | `perf(render): two-level chunk visibility cache keyed on (camera, sceneVoxelPayloadVersion)` |
+| **Doc sync** | 4 (TODO.md close 5.2/5.3, decisions.md §22/§23/§24 new, memory.md §10.19 new, status.md §13 this entry) | `docs(agent): sync 5.2 + 5.3 + two-level cache closures` |
+
+**Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, 901 VMA `-Wnullability-completeness` warnings (pre-existing, не мои). `ctest` 6/6 (1.47 s). `BuildDebugOverlayBoxes` signature change is non-breaking (default-valued trailing args) so the two existing tests at `tests/VoxelWorldTests.cpp:7302` и `:7348` still compile and pass without modification — their expected box counts (14, 10) are unchanged because the new gizmos default to off.
+
+**5.3 working rules (см. `agent/memory.md` §10.19):**
+- `PROJECTV_BENCHMARK_FRAMES` — master gate, unset = inactive (zero overhead).
+- `PROJECTV_BENCHMARK_WARMUP_FRAMES=30` — discarded before measurement (Vulkan pipeline compile + VMA warmup + SPIR-V load + first chunk meshing dispatch).
+- `PROJECTV_BENCHMARK_LOG_EVERY=60` — progress log frequency.
+- `PROJECTV_BENCHMARK_QUIT=1` — returns `SDL_APP_SUCCESS` after last measured frame.
+- `minFrameSeconds` sentinel `1e30f` / `maxFrameSeconds` `0.0f` — first valid frame always wins.
+- Mean = `totalFrameSeconds / framesRendered`.
+- Pattern sym­met­ri­cal с `LookDevCaptureAutomationState` для future `AutomationRegistry` refactor.
+
+**5.2 working rules (см. `agent/memory.md` §10.19):**
+- Cascade split plane boxes world-axis-aligned (not camera-aligned) — `DebugOverlayBox` это `Int3`. XZ footprint = cascade ortho width/height. 4 hues (red/orange/cyan/magenta).
+- Cursor hit normal shaft emits only *beyond* hit voxel (≤2 boxes) — reads as "next to selection" arrow.
+- `L` was reserved per `status.md §9` TAA footnote. `Z` was unused. Both gated on `hudVisible`.
+- `BuildDebugOverlayBoxes` trailing params default-valued → tests stay 4-arg form.
+- Cascade boxes emit *before* selection box; cursor shaft *after* — yellow selection wins Z-test ties.
+
+**Two-level cache contract (см. `decisions.md §22`):**
+- Hash: splitmix64 fold of (camera quantized 0.25 voxel position + 0.005 ~0.3° forward + sceneVoxelPayloadVersion + chunkDescriptorCount). Constants: 7 per-input mixers + 3-step final avalanche.
+- Cache lives on `RenderState` (single, not per-frame). Frame-independence holds because per-frame mapped memory is write-only.
+- Invalidation: hash mismatch OR chunkDescriptorCount change OR sceneVoxelPayloadVersion change (belt-and-suspenders).
+- Miss path: `RebuildChunkVisibilityAndFillCache` writes BOTH mapped buffer AND cache in one per-chunk pass. No extra copy.
+- Hit path: 3 `memcpy` calls (opaque + 4x shadow + transparent) replace 1500+ dot products. ~24 KB at 300 chunks.
+- Profiler: `Visible Chunks` / `Culled Chunks` populated both ways; new `ChunkVisibilityCacheHits` plot.
+
+**Cross-session coordination (per operator "насрать на него"):**
+- Asset-pipeline session `session-2026-06-12-asset-glb-voxel-snap` still open. My additions all at tail of their containers — field offsets don't shift, manual merge if they land between my commits.
+- `core/Types.hpp` contention: they touch tail of `InputAction::Count` + add field to `AppState`; I add `BenchmarkAutomationState`, `ChunkVisibilityCache`, 2 `InputAction` enum values, 2 `DebugState` flags, 1 `AppState` field, 1 `RenderState` field. All at tail, no offset shift.
+- `InputActions.cpp` contention: their `InitializeInputState` has uncommitted `BindAction` calls at bottom too; mine are at very end after theirs.
+
+**Test count baseline:** `ctest` 6/6 (1.47 s) — unchanged, не должно падать.
+
+**Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.

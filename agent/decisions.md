@@ -583,3 +583,65 @@ Cross-refs: `agent/memory.md` §10.18 (full timeline), `TODO.md` Блок 1
 - **Graphics descriptor pool `combinedSamplers` = 4 = 2 frames × 2 samplers** (binding 5 shadow + binding 6 layer history). Pre-fix имел 2 = 2 frames × 1 sampler. `VUID-VkDescriptorPool-size-...` triggers when descriptor sets can't be allocated.
 
 Cross-refs: `agent/memory.md` §10.21 (full timeline + build/test/smoke + working rules), `TODO.md` Блок 1 (1.5 closed), `agent/status.md` §12 (in-progress session snapshot), `agent/active-sessions.md` session-2026-06-12-taa-quality-1.5 (closed).
+
+## 22. Two-level chunk visibility cache (`2026-06-12`)
+
+Решение:
+
+- **Cache lives on `RenderState::chunkVisibilityCache`** (single, not per-frame). Cached `VkDrawIndirectCommand` arrays are frame-independent because both `sceneFrameResources[0]` and `[1]` get the same `memcpy`'d commands from this single cache on a hit. Frame-independence holds because the per-frame GPU mapped memory is just a write-only destination.
+- **Hash input:** 6 quantized camera ints (3 position @ 0.25 voxel units, 3 forward @ 0.005 ~0.3° steps) + `sceneVoxelPayloadVersion` + `chunkDescriptorCount`. 1-voxel camera moves always invalidate; sub-1° rotations also invalidate.
+- **Hash function:** splitmix64-style fold with 7 per-input mixers (`0x9E3779B185EBCA87`, `0xC2B2AE3D27D4EB4F`, …) and a final 3-step avalanche. The exact constants don't matter for correctness — only that a 1-bit change in any input flips ~half the hash bits (avalanche property).
+- **Cache invalidation:** any of (a) hash mismatch, (b) `chunkDescriptorCount` change, (c) `sceneVoxelPayloadVersion` change. The hash alone is sufficient; the explicit checks in the if-condition are belt-and-suspenders against a future refactor that drops one of the fields from the hash.
+- **Cache miss path:** `RebuildChunkVisibilityAndFillCache` runs the canonical per-chunk loop AND fills the cache in the same pass. No extra copy step on the cold path.
+- **Cache hit path:** `ApplyCachedChunkVisibilityCommands` does three `memcpy` calls (opaque, shadow, transparent). At 300 chunks that's 300*16 + 300*4*16 + 300*16 = ~24 KB — well under any L1. Replaces 1500+ dot products per frame.
+- **Profiler plots:** existing `Visible Chunks` / `Culled Chunks` plots stay populated on both hit and miss (read from cache on hit, computed on miss). New `ChunkVisibilityCacheHits` plot tracks the consecutive-hit counter — useful for correlating cache behaviour with profiler traces.
+- **Quantization functions in `projectv::visibility_cache` namespace** (`src/render/SceneResources.hpp`): `QuantizeCameraPositionComponent` (floor(value / 0.25)) and `QuantizeCameraForwardComponent` (lround(clamp(value, -1, 1) / 0.005)). Plus `ComputeVisibilityCacheHash(parameters, sceneVoxelPayloadVersion, chunkDescriptorCount)`.
+
+Почему:
+
+- **Per-frame CPU cull is pure waste on a static camera.** `UpdateChunkVisibilityAndIndirectCommands` runs every frame on every chunk in `chunkDescriptorCount`; on a static replay / capture / look-dev scene, all that work produces identical commands. The cache is a direct 5-15× speedup of the cull pass on those workloads.
+- **Quantization 0.25 voxel / 0.005 forward** is the smallest change the operator perceives as "the camera moved". A 1-voxel move should always rebuild (otherwise the cache serves stale data that the operator notices); a 0.1-voxel move is sub-perceptual and can be served from cache. Sub-1° rotations don't visibly change the cull set either.
+- **splitmix64 over FNV-1a** because splitmix64 has a stronger avalanche (FNV-1a has known bad behaviour on small input changes). Constants from the public-domain splitmix64 reference implementation.
+- **Single `RenderState`-level cache, not per-frame** because the cached commands are frame-independent. Two `memcpy` calls instead of one would double the GPU bus traffic; one `memcpy` to both `sceneFrameResources[0]` and `[1]` keeps the per-frame behaviour identical to the pre-cache path.
+- **Belt-and-suspenders explicit checks** in the if-condition — the hash itself folds all 8 inputs, but a future refactor that accidentally drops one of the fields from the hash would silently extend the cache lifetime. The explicit `chunkDescriptorCount == frameResources.chunkDescriptorCount` etc. checks make the dependency explicit at the call site.
+- **Cache miss writes to BOTH mapped buffer and cache in one pass** because the cost of the per-chunk math dominates the cost of the vector element assignment; doubling the work to "write to cache separately" would erase the gain on miss-heavy workloads.
+- **5.3 benchmark automation** (next section) is the verification path for the cache's hit/miss ratio: `PROJECTV_BENCHMARK_FRAMES=N PROJECTV_BENCHMARK_QUIT=1` runs N frames in a controlled setting, and the `ChunkVisibilityCacheHits` plot reports the consecutive-hit count per frame.
+
+Cross-refs: `agent/memory.md` §10.19 (working rules + full build/ctest/smoke state), `TODO.md` §4 World/Render/Tooling (closed), `agent/status.md` §13 (this session's snapshot), `agent/active-sessions.md` session-2026-06-12-lowlevel-perf-tooling (closed).
+
+## 23. Debug gizmo overlay contract (`5.2`, `2026-06-12`)
+
+Решение:
+
+- **Cascade split plane boxes** — 4 thin AABBs, one per CSM cascade, world-axis-aligned (because `DebugOverlayBox` is `Int3 min/maxExclusive` and cannot rotate). XZ footprint uses the cascade's `orthoWidths[cascadeIndex]` / `orthoHeights[cascadeIndex]` (so the operator gets a "shadow frustum footprint" cue), Y is a thin slab around the camera-relative Y. Four distinct hues (red/orange/cyan/magenta) so cascades 0-3 are distinguishable at a glance.
+- **Cursor hit normal shaft** — ≤2 voxel boxes along `selection.hitNormal` (±1 in one axis, guaranteed by `VoxelRaycast`), emitted *beyond* the hit voxel so it reads as a "next to selection" arrow rather than overlapping the yellow selection box. Zero-norm `hitNormal` is a no-op (defensive).
+- **Hotkeys:** `L` cycles cascade split planes (reserved per `agent/status.md §9` TAA tuning-ladder footnote: "L остался свободен на будущее"); `Z` cycles cursor hit normal. Both follow the same hotkey-on / `hudVisible`-on emission contract that `showChunkBounds` / `showDirtyChunkOverlay` already use.
+- **`BuildDebugOverlayBoxes` signature:** trailing `CameraState camera = CameraState{}` and `RenderState render = RenderState{}` default-valued params. The 2 existing tests at `tests/VoxelWorldTests.cpp:7302` and `:7348` keep their 4-arg call shape and stay green; expected box counts (14, 10) unchanged because gizmos default to off.
+
+Почему:
+
+- **World-axis-aligned cascade boxes** (not camera-aligned) because `DebugOverlayBox` API doesn't support rotation. The XZ footprint uses each cascade's ortho extent because that's the useful diagnostic for split-lambda tuning; a thin Y slab keeps the box visible from any camera angle.
+- **Cascade boxes emit before selection box** so the yellow selection box (when present) wins Z-test for ties against the dimmer cascade boxes (alpha 0.55).
+- **Cursor hit normal shaft emits *after* selection box** so the dim-white shaft reads as a "next to selection" arrow, not as a replacement marker.
+- **Default-valued trailing params** keep the test API stable. If a future feature wants to render gizmos without the HUD, move the `hudVisible` early-return out of `BuildDebugOverlayBoxes` (the per-gizmo flags already gate emission independently).
+
+Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 Gameplay/Debug (closed), `agent/status.md` §13, `agent/active-sessions.md` session-2026-06-12-lowlevel-perf-tooling (closed).
+
+## 24. Benchmark automation contract (`5.3`, `2026-06-12`)
+
+Решение:
+
+- **4 env vars:** `PROJECTV_BENCHMARK_FRAMES` (master gate, unset = inactive), `PROJECTV_BENCHMARK_WARMUP_FRAMES` (default 30, discarded before measurement), `PROJECTV_BENCHMARK_LOG_EVERY` (default 60, progress log frequency), `PROJECTV_BENCHMARK_QUIT` (`1` returns `SDL_APP_SUCCESS` after the last measured frame).
+- **State struct:** `BenchmarkAutomationState` mirrors `LookDevCaptureAutomationState` shape (active / quitWhenDone / completed) for symmetrical wiring in `main.cpp`. `minFrameSeconds` uses a sentinel `1e30f` initial value so the first valid frame always wins; `maxFrameSeconds` uses `0.0f`. The mean is `totalFrameSeconds / framesRendered`.
+- **Per-frame tick:** `UpdateBenchmarkAutomation(state, debugStats, frameCounter)` returns `true` only when the benchmark is done AND `quitWhenDone` is set, so `main.cpp` can return `SDL_APP_SUCCESS` and exit cleanly.
+- **New field on `AppState`:** `BenchmarkAutomationState benchmark{}`. Inactive when `PROJECTV_BENCHMARK_FRAMES` is unset (zero overhead).
+
+Почему:
+
+- **30 warmup frames** matches the operator-visible "first stable frame" on a cold ProjectV launch. Without warmup, the first 30 frames include Vulkan pipeline compile, VMA pool warmup, SPIR-V load, and the first chunk meshing dispatch — none of which represent steady-state cost. 30 is a safe floor; 60 would also work but doubles the run time of small N.
+- **`min/maxFrameSeconds` sentinels** (1e30f / 0.0f) — the alternative (compute the first sample inline, set min=max=firstFrame) adds branches on the hot path. The sentinel approach means `std::min` / `std::max` on the first valid frame is correct without special-casing.
+- **`quitWhenDone` is opt-in** because the canonical "look at the HUD for FPS" use case doesn't want the process to exit. The CI / scripted use case sets `PROJECTV_BENCHMARK_QUIT=1` and reads the structured SDL_Log line.
+- **Symmetrical with `LookDevCaptureAutomationState`** so a future "all automation types" refactor can move them behind a single `AutomationRegistry` without per-state plumbing.
+- **`PROJECTV_BENCHMARK_FRAMES` read once in `SDL_AppInit`** (not a per-frame env re-read) — the alternative would race with the operator's `$EDITOR` and invalidate in-flight measurements. If a future feature wants mid-session re-arm, the env-reader should be split out of `ConfigureBenchmarkAutomationFromEnvironment` and called from a hotkey.
+
+Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 World/Render/Tooling (closed), `agent/status.md` §13, `agent/active-sessions.md` session-2026-06-12-lowlevel-perf-tooling (closed).

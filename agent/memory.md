@@ -1176,4 +1176,128 @@ relocated to 1.5 commit because of texel-size invariants),
 §10.18 (1.7 — same constant centralization pattern,
 `kTaaSceneColorFormat`).
 
+## 10.19 — Two-level chunk visibility cache + 5.2 gizmos + 5.3 benchmark automation (`2026-06-12`)
+
+Closed in `session-2026-06-12-lowlevel-perf-tooling`. Three
+independent slices landing in the same session for atomic
+documentation:
+
+**Two-level chunk visibility cache:**
+
+- `RenderState::chunkVisibilityCache` is invalidated by ANY
+  of: hash mismatch, `chunkDescriptorCount` change,
+  `sceneVoxelPayloadVersion` change. The hash itself folds
+  all 3 inputs but the explicit checks in the if-condition
+  are belt-and-suspenders.
+- `projectv::visibility_cache::ComputeVisibilityCacheHash`
+  uses splitmix64 with constants
+  `0x9E3779B185EBCA87`, `0xC2B2AE3D27D4EB4F`,
+  `0x165667B19E3779F9`, `0x94D049BB133111EB`,
+  `0xD1342543DE82EF95`, `0xB45BCA9F4D2D9B33`,
+  `0x27D4EB2F165667C5`, `0x9C2A8E3F4D2D9B3B` and a
+  final 3-step avalanche. The exact constants don't
+  matter for correctness — only that a 1-bit change in
+  any input flips ~half the hash bits.
+- Cache size at 300 chunks: opaque 300*16 + shadow
+  300*4*16 + transparent 300*16 = ~24 KB. Well under any
+  L1. At 1000 chunks it's ~80 KB, still fits in L2.
+- `RebuildChunkVisibilityAndFillCache` writes to BOTH the
+  per-frame mapped GPU buffer AND the cache in the same
+  per-chunk pass. No extra copy step on the cold path.
+  The two writes share the per-chunk math, so we don't
+  pay an extra pass on miss-heavy workloads.
+- Profiler plots: `Visible Chunks` / `Culled Chunks` are
+  populated on both hit and miss (read from cache on hit,
+  computed on miss). New `ChunkVisibilityCacheHits` plot
+  tracks the consecutive-hit counter.
+- Cache miss is the default first-frame state (`valid=false`).
+  The first `UpdateSceneFrameChunkVisibility` call after
+  world load or `FinalizeActiveVoxelWorldReload` always
+  rebuilds.
+- **Cross-session merge risk:** `core/Types.hpp` is the
+  contention point with the asset-pipeline session —
+  their uncommitted changes also touch the tail of
+  `InputAction::Count` and add a new field to
+  `AppState`. My additions are *all at the tail* of their
+  respective containers, so field offsets don't shift.
+  Manual merge if the other agent lands between my
+  commits.
+
+**5.2 debug gizmos:**
+
+- `BuildDebugOverlayBoxes` signature: trailing
+  `CameraState camera = CameraState{}` and `RenderState
+  render = RenderState{}` default-valued params. The 2
+  existing tests at `tests/VoxelWorldTests.cpp:7302` and
+  `:7348` keep their 4-arg call shape and stay green.
+  Do not remove the default-valued trailing params
+  without first updating those two tests.
+- Cascade split plane boxes are world-axis-aligned (not
+  camera-aligned) because `DebugOverlayBox` is `Int3
+  min/maxExclusive`. The XZ footprint uses each
+  cascade's `orthoWidths/Heights`; Y is a thin slab
+  around the camera-relative Y. Four distinct hues
+  (red/orange/cyan/magenta) so cascades 0-3 are
+  distinguishable.
+- Cursor hit normal shaft emits only the voxels *beyond*
+  the hit voxel (≤2 boxes), so it reads as a "next to
+  selection" arrow rather than overlapping the yellow
+  selection box. `hitNormal` is always ±1 in one axis
+  (guaranteed by `VoxelRaycast`); zero-norm is a no-op.
+- `L` was the only free letter per `status.md §9` (the
+  TAA tuning-ladder footnote explicitly reserved it).
+  `Z` was unused. Both follow the same hotkey-on /
+  `hudVisible`-on emission contract that `showChunkBounds`
+  / `showDirtyChunkOverlay` already use.
+- The two new `DebugState` flags are gated on
+  `hudVisible` (the existing pattern). If a future
+  feature wants to render gizmos without the HUD, move
+  the `hudVisible` check out of the
+  `BuildDebugOverlayBoxes` early-return.
+
+**5.3 benchmark automation:**
+
+- `PROJECTV_BENCHMARK_FRAMES` is the master gate; unset
+  = inactive (no overhead).
+- `PROJECTV_BENCHMARK_WARMUP_FRAMES` (default 30) frames
+  are discarded before measurement starts. Without
+  warmup, the first ~30 frames include Vulkan pipeline
+  compile, VMA pool warmup, SPIR-V load, and the first
+  chunk meshing dispatch — none of which represent
+  steady-state cost.
+- `PROJECTV_BENCHMARK_LOG_EVERY` (default 60) controls
+  progress log frequency.
+- `PROJECTV_BENCHMARK_QUIT=1` returns `SDL_APP_SUCCESS`
+  from `SDL_AppIterate` after the last measured frame.
+- `minFrameSeconds` uses a sentinel `1e30f` initial
+  value so the first valid frame always wins;
+  `maxFrameSeconds` uses `0.0f`. The mean is
+  `totalFrameSeconds / framesRendered`.
+- The pattern is intentionally symmetrical with
+  `LookDevCaptureAutomationState` so a future "all
+  automation types" refactor can move them behind a
+  single `AutomationRegistry`.
+- Env vars are read **once** in `SDL_AppInit`. State is
+  immutable after that. To re-arm the benchmark, restart
+  the process. If a future feature wants mid-session
+  re-arm, the env-reader should be split out of
+  `ConfigureBenchmarkAutomationFromEnvironment` and
+  called from a hotkey.
+
+**Build / ctest state (final):**
+
+- `cmake --build build/linux-clang-debug --target
+  ProjectV ProjectVTests --parallel 8` — green.
+- 901 VMA `-Wnullability-completeness` warnings
+  (pre-existing, not mine).
+- `ctest` 6/6 (1.47 s, baseline 1.45 s — within noise).
+
+**Cross-refs:** `decisions.md §22` (two-level cache
+contract), `decisions.md §23` (5.2 gizmo contract),
+`decisions.md §24` (5.3 benchmark contract),
+`TODO.md §4` World/Render/Tooling + Gameplay/Debug
+(closed), `agent/status.md §13` (this session's
+snapshot), `agent/active-sessions.md`
+session-2026-06-12-lowlevel-perf-tooling (closed).
+
 

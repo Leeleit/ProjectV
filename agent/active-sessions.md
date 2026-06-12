@@ -57,6 +57,65 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-lowlevel-perf-tooling
+
+- **id:** `2026-06-12T19:00Z-lowlevel-perf-tooling`
+- **started-at:** 2026-06-12T19:00:00Z
+- **closed-at:** 2026-06-12T20:30:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** Three low-level render/tooling slices from TODO §4 "World / Render / Tooling" + TODO §5 "Debug gizmos":
+  1. **5.3 Benchmark automation** — `PROJECTV_BENCHMARK_FRAMES=N` env var. After N frames have rendered post-warmup, log per-pass mean ms + min/max + drawcall counts and quit. Pattern mirrors `LookDevCaptureAutomation` (env-driven, runs in `SDL_AppIterate`).
+  2. **5.2 Debug gizmos** — two new overlay layers for the existing `DebugOverlayBox` system: cascade split planes (4 thin AABBs at the camera's `viewDepthSplits[i]` along `cameraForward`, sized from each cascade's `orthoWidths/Heights`) and cursor hit normal (≤2 voxel box along `selection.hitNormal`). New `InputAction::ToggleCascadeSplitPlanes` (key `L`, reserved per status.md) + `InputAction::ToggleCursorHitNormal` (key `Z`). New `DebugState::{showCascadeSplitPlanes, showCursorHitNormal}`. `BuildDebugOverlayBoxes` signature extended with default-valued `CameraState` and `RenderState` trailing params so existing tests with the 4-arg call don't break.
+  3. **Two-level chunk visibility cache** — `UpdateChunkVisibilityAndIndirectCommands` currently iterates all `chunkDescriptorCount` chunks every frame. Add a `ChunkVisibilityCache` keyed on a splitmix64 hash of `(quantized camera position 0.25 voxel, quantized camera forward 0.005 ~0.3°, sceneVoxelPayloadVersion, chunkDescriptorCount)`. On cache hit, skip the per-chunk loop and `memcpy` cached `VkDrawIndirectCommand` arrays into the per-frame mapped GPU indirect buffers. `RebuildChunkVisibilityAndFillCache` writes both the mapped buffer and the cache in the same per-chunk pass so misses and hits share the per-chunk math. Quantization constants live in `projectv::visibility_cache` namespace in `SceneResources.hpp`.
+- **files-touched-intent:** `src/core/Types.hpp` (BenchmarkAutomationState + ChunkVisibilityCache + InputAction enum tail + DebugState flags + AppState::benchmark + RenderState::chunkVisibilityCache), `src/app/BenchmarkAutomation.{hpp,cpp}` (new file, env var reader + tick), `src/app/main.cpp` (SDL_AppInit env wiring + SDL_AppIterate tick), `src/app/AppUpdate.cpp` (input handlers for 2 new actions), `src/app/InputActions.cpp` (2 BindAction calls at tail of `InitializeInputState`), `src/debug/DebugOverlays.{hpp,cpp}` (cascade split + cursor hit normal boxes; default-valued CameraState/RenderState trailing params), `src/app/FramePreparation.cpp` (pass camera + render to `BuildDebugOverlayBoxes`), `src/render/SceneResources.{hpp,cpp}` (`ComputeVisibilityCacheHash` + `RebuildChunkVisibilityAndFillCache` + `ApplyCachedChunkVisibilityCommands` wired into `UpdateSceneFrameChunkVisibility`), `src/CMakeLists.txt` (register BenchmarkAutomation.cpp), `agent/memory.md` (new section for the cache hash rationale + working rules), `agent/decisions.md` (new section for cache contract), `agent/status.md` (snapshot), `TODO.md` (close 5.2 + 5.3, document two-level cache slice), `agent/active-sessions.md` (this entry + close).
+- **status:** closed
+- **commit-hash:** uncommitted (3 per-task commits + 1 doc sync commit proposed per §7.2.5)
+- **notes:** **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, 901 VMA `-Wnullability-completeness` warnings (pre-existing, не мои). `ctest` 6/6 (1.47 s, baseline 1.45 s). `BuildDebugOverlayBoxes` signature change is non-breaking (default-valued trailing args) so the two existing tests at `tests/VoxelWorldTests.cpp:7302` and `:7348` still compile and pass without modification — their expected box counts (14, 10) are unchanged because the new gizmos default to off.
+
+  **5.3 — benchmark automation working rules (см. `agent/memory.md` §10.19):**
+  - `PROJECTV_BENCHMARK_FRAMES` is the master gate; unset = inactive (no overhead).
+  - `PROJECTV_BENCHMARK_WARMUP_FRAMES` (default 30) frames are discarded before measurement starts. Without warmup, the first ~30 frames include Vulkan pipeline compile, VMA pool warmup, SPIR-V load, and the first chunk meshing dispatch — none of which represent steady-state cost.
+  - `PROJECTV_BENCHMARK_LOG_EVERY` (default 60) controls progress log frequency.
+  - `PROJECTV_BENCHMARK_QUIT=1` returns `SDL_APP_SUCCESS` from `SDL_AppIterate` after the last measured frame.
+  - `minFrameSeconds` uses a sentinel `1e30f` initial value so the first valid frame always wins; `maxFrameSeconds` uses `0.0f`. The mean is `totalFrameSeconds / framesRendered`.
+  - The pattern is intentionally sym­met­ri­cal with `LookDevCaptureAutomationState` so a future "all automation types" refactor can move them behind a single `AutomationRegistry`.
+
+  **5.2 — debug gizmos working rules (см. `agent/memory.md` §10.19):**
+  - Cascade split plane boxes are world-axis-aligned (not camera-aligned) because `DebugOverlayBox` is `Int3 min/maxExclusive`. The XZ footprint uses the cascade's `orthoWidths/Heights` (so the operator gets a "shadow frustum footprint" cue); Y is a thin slab around the camera-relative Y. Four distinct hues (red/orange/cyan/magenta) so cascades 0-3 are distinguishable.
+  - The cursor hit normal shaft emits only the voxels *beyond* the hit voxel (≤2 boxes), so it reads as a "next to selection" arrow rather than overlapping the yellow selection box. `hitNormal` is always ±1 in one axis (guaranteed by `VoxelRaycast`), so a zero-norm is treated as a no-op.
+  - `L` was the only free letter per `agent/status.md §9` (the TAA tuning-ladder footnote explicitly reserved it). `Z` was unused. Both follow the same hotkey-on / `hudVisible`-on emission contract that `showChunkBounds` / `showDirtyChunkOverlay` already use.
+
+  **Two-level cache contract (см. `decisions.md` §21):**
+  - Hash input: `QuantizeCameraPositionComponent` (0.25 voxel) + `QuantizeCameraForwardComponent` (0.005, ~0.3° step) + `sceneVoxelPayloadVersion` + `chunkDescriptorCount`. 1-voxel camera moves always invalidate; sub-1° rotations also invalidate.
+  - Hash function: splitmix64-style fold with 7 per-input mixers and a final 3-step avalanche. The exact constants don't matter for correctness — only that a 1-bit change in any input flips ~half the hash bits (avalanche property).
+  - Cache lives on `RenderState` (not `SceneFrameResources`); the cached commands are frame-independent because both `sceneFrameResources[0]` and `[1]` get the same `memcpy`'d commands from this single cache on a hit. Frame-independence holds because the per-frame GPU mapped memory is just a write-only destination.
+  - Cache invalidation: world version change OR camera position/forward quantization change OR `chunkDescriptorCount` change. The hash alone is sufficient — explicit version/count checks in the if-condition are belt-and-suspenders against a future refactor that drops one of the fields from the hash.
+  - On a miss the per-chunk loop writes to both the per-frame mapped buffer AND the cache in the same pass; no extra copy step. On a hit, three `memcpy` calls (opaque, shadow, transparent) replace 1500+ dot products.
+  - Cache size: `chunkDescriptorCount` `VkDrawIndirectCommand` entries for opaque + `chunkDescriptorCount * kSunShadowCascadeCount` (4) for shadow + `chunkDescriptorCount` for transparent. At 300 chunks that's 300*16 + 300*4*16 + 300*16 = ~24 KB, well under any L1.
+  - Profiler plots: existing `Visible Chunks` / `Culled Chunks` plots still get updated on both hit and miss (read from the cache on hit, computed on miss). New `ChunkVisibilityCacheHits` plot tracks the consecutive-hit counter — useful for correlating cache behaviour with profiler traces.
+
+  **Cross-session coordination:**
+  - `core/Types.hpp` is the contention point with the asset-pipeline session (`session-2026-06-12-asset-glb-voxel-snap`) — they have uncommitted changes that also touch `InputAction::Count` tail and a new field on `AppState`. My additions (`BenchmarkAutomationState`, `ChunkVisibilityCache`, 2 `InputAction` enum values, 2 `DebugState` flags) are *all at the tail* of their respective containers. Field offsets don't shift; manual merge if the other agent lands between my commits.
+  - `InputActions.cpp` is also contended (their `InitializeInputState` has uncommitted `BindAction` calls at the bottom too). My 2 BindAction calls are at the very end of the function, after theirs.
+  - Per operator "насрать на него" — proceeded without waiting. Their dirty tree stayed untouched in my session.
+
+  **Test count baseline:** `ctest` 6/6 (1.47 s) — unchanged, не должно падать.
+  **Build preset:** `linux-clang-debug`.
+
+  **Per-task commit plan (4 commits, not yet executed per §7.2.4):**
+  1. `feat(perf): PROJECTV_BENCHMARK_FRAMES=N env var + per-frame mean/min/max logging` (5 files: BenchmarkAutomation.{hpp,cpp} new, Types.hpp BenchmarkAutomationState + AppState field, main.cpp wiring, CMakeLists.txt)
+  2. `feat(debug): cascade split plane + cursor hit normal overlay boxes (5.2)` (6 files: Types.hpp InputAction tail + DebugState flags, InputActions.cpp 2 BindAction calls, AppUpdate.cpp handlers, DebugOverlays.{hpp,cpp} cascade+hit-normal helpers + default-valued params, FramePreparation.cpp pass camera+render)
+  3. `perf(render): two-level chunk visibility cache keyed on (camera, sceneVoxelPayloadVersion)` (4 files: Types.hpp ChunkVisibilityCache + RenderState field, SceneResources.hpp hash fn + thresholds, SceneResources.cpp RebuildChunkVisibilityAndFillCache + ApplyCachedChunkVisibilityCommands + UpdateSceneFrameChunkVisibility cache check, memory.md will be added separately)
+  4. `docs(agent): sync 5.2 + 5.3 + two-level cache closures` (4 files: TODO.md close 5.2/5.3, decisions.md §21 new, memory.md §10.19 new, status.md snapshot)
+
+  **Working rules to inherit (см. `agent/memory.md` §10.19):**
+  - Cache `RenderState::chunkVisibilityCache` is invalidated by ANY of: hash mismatch, `chunkDescriptorCount` change, `sceneVoxelPayloadVersion` change. The hash itself folds all three inputs but the explicit checks in the if-condition are belt-and-suspenders.
+  - `BuildDebugOverlayBoxes` is called from tests with the 4-arg form — do not remove the default-valued trailing `CameraState` / `RenderState` params without first updating `tests/VoxelWorldTests.cpp:7302` and `:7348`.
+  - The `BenchmarkAutomation` env vars are read **once** in `SDL_AppInit`. The state is immutable after that. To re-arm the benchmark, restart the process. If a future feature wants mid-session re-arm, the env-reader should be split out of `ConfigureBenchmarkAutomationFromEnvironment` and called from a hotkey.
+  - The two new `DebugState` flags are gated on `hudVisible` (the existing pattern). If a future feature wants to render gizmos without the HUD, move the `hudVisible` check out of the `BuildDebugOverlayBoxes` early-return.
+
 ### session-2026-06-12-taa-quality-1.5
 
 - **id:** `2026-06-12T15:00Z-taa-quality-1.5`
@@ -187,45 +246,17 @@ Refs: agent/memory.md §10.20, agent/active-sessions.md
 
 **Build preset:** `linux-clang-debug` (native clang 22 + lld 22 + libstdc++ 16). Не трогать `windows-clang-debug` (operator's primary dev tree).
 
-### session-2026-06-12-taa-m5_2-threshold-bump
+### session-2026-06-12-asset-glb-voxel-snap
 
-- **id:** `2026-06-12T15:35Z-taa-m5_2-threshold-bump`
-- **started-at:** 2026-06-12T15:35:00Z
+- **id:** `2026-06-12T18:25Z-asset-glb-voxel-snap`
+- **started-at:** 2026-06-12T18:25:00Z
 - **agent:** cline/MiniMax-M3
 - **operator:** le1t
 - **branch:** master
-- **scope:** M5.2 follow-up — bump `kTaaColorDistanceRejectionThreshold` `0.20 → 0.40` в `src/shaders/taa_resolve.frag:79`. Reason: runtime repro на model pass в VoxelLab (`PROJECTV_MODELS=box.glb@0,1,0`, reference shot) показал "block half in textures" symptom — `model.frag` 4×4 UV checker имеет два tint-варианта с YCoCg distance до voxel centroid ≈ 0.27 (yellow, проходит rejection) и ≈ 0.16 (blue, не проходит — clamped в voxel range, невидим). 0.40 ловит оба tint-варианта. False-positive risk bounded: voxel surfaces обычно в пределах 0.05 YCoCg от своего 3×3 mean.
-- **files-touched-intent:** `src/shaders/taa_resolve.frag` (1 строка, threshold bump + расширенный комментарий), `agent/memory.md` (§10.19, переименовано из §10.18 чтобы не конфликтовать с TAA-agent 1.7), `agent/status.md` (§8 M5.2 fix описание), `agent/active-sessions.md` (this entry). **TAA-scope-adjacent — TAA-agent (`session-2026-06-12-taa-1.2-1.3`) уже closed, разрешено править `taa_resolve.frag`.** Не трогаю: `decisions.md §19` (TAA-agent оставил threshold-as-tuned-0.20 в их §, не моё править), `TODO.md` (M5.2 уже closed в `8635ddf`).
+- **scope:** M5 follow-up — load `tests/fixtures/Untitled.colonada.glb` (column, hand-made by operator's friend) into `VoxelLab`. Two contract requirements: (1) **snap-to-grid** — model's AABB min lands at integer voxel corner (the "origin at the corner of the voxel under the model" rule, generalization of the M5.1b XZ-snap that put model **center** at `floor + 0.5` — that's wrong for any non-unit-width model); (2) **auto-scale** — model's AABB dimensions are integer multiples of voxel size (1.0 in `VoxelLab`), chosen automatically so neither the column straddles 4 voxel columns nor its height lands on a half-voxel. The current `SnapModelInstancesAboveGround` does XZ snap via `targetCenterX = floor(currentCenterX) + 0.5` which only works for 1×1 boxes; for a 1×5×1 column the bottom is at Y=integer but the XZ vertices land at `±0.5` — straddling. New behavior: compute per-axis scale `s_i = round(srcDim_i) / srcDim_i` (clamped to ≥1 voxel each), apply to model basis, then place AABB min at integer corner. Backward compat: existing `box.glb@0,1,0` manifest still works because for 1×1×1 box, per-axis round gives 1, scale = 1, AABB min = integer, center = `floor + 0.5` — same end state.
+- **files-touched-intent:** `src/asset/AssetManifest.{hpp,cpp}` (per-axis scale vec3 + auto-snap flag in `ManifestEntry`, parser extends 7→9-token form for explicit per-axis scale OR keep 7-token and treat single `scale` as `(s,s,s)` for back-compat), `src/asset/ModelManifestLoader.cpp` (`BuildEntryWorldMatrix` uses vec3 scale; `LoadAndRegisterModelsFromManifest` reads `entry.autoSnapToVoxelGrid` and applies scale-to-voxel-grid pre-pass that bakes the per-axis scale into `modelTransform` before the GPU upload so the source mesh data isn't re-baked), `src/asset/ModelManifestLoader.hpp` (decl), `tests/AssetLoaderTests.cpp` (extend with per-axis + auto-snap cases). **TAA-scope-adjacent — TAA-agent (`session-2026-06-12-taa-m5_2-threshold-bump`) был active; per `AGENTS.md §7.2.6` не трогаю их working tree (`ModelPass.{cpp,hpp}`, `VulkanBootstrap.cpp`, `taa_resolve.frag`); оператор явно решил не коммитить TAA-правки, сессия закрывается как aborted.** Не трогаю: `decisions.md` (per-axis scale + auto-snap — новое решение, добавится в новой секции после implementation), `TODO.md` (operator pending), `agent/memory.md` (existing §10.20 triplanar от моего M6, не конфликтует).
 - **status:** open
-- **notes:** Предыдущая моя сессия `session-2026-06-12-model-m5_1b-depth-bias` уже aborted (см. ниже в closed). M5.1b (z-fight depth bias) был на неверной посылке — модель не z-fight'ит, а прячется под полом VoxelLab; фикс через env var `box.glb@0,1,0` (без кода). После abort оператор сообщил, что с TAA-on модель всё равно не видна ("half in textures"). TAA 1.2 + 1.3 уже закоммичены (`008873a`/`4deee52`/`9ac9924`), но не фиксили M5.2. Bump threshold — single-line fix, build green, ctest 6/6, SPV скопирован в `bin/` per `agent/memory.md §10.16` working rule (incremental `cmake --build` не копирует свежие `.spv` в `bin/`). **Visual verify — за оператором** (binary у него, validation layers не установлены, не могу запустить runtime smoke с `PROJECTV_ENABLE_VALIDATION=ON`). **Pending commit** — следующий commit message draft:
-
-```
-fix(taa): raise M5.2 color-distance rejection threshold to cover dim tints
-
-The model pass in VoxelLab with the 4x4 procedural UV checker has
-two tint variants that produce YCoCg samples at distance ~0.27
-(yellow, passes the M5.2 rejection at 0.20) and ~0.16 (blue, fails,
-gets clamped into the voxel range and disappears). Operator reported
-this as "block half in textures" after the M5.1b revert + spawn-
-position fix on `box.glb@0,1,0`. Raising `kTaaColorDistanceRejection-
-Threshold` from 0.20 to 0.40 catches both tint variants with enough
-headroom for chroma-dim outliers, and stays well above the
-~0.05 YCoCg variance of natural voxel-pass surfaces, so false-
-positive risk on the voxel-only path is bounded.
-
-Refs: agent/status.md §8, agent/active-sessions.md session-2026-06-12-taa-m5_2-threshold-bump
-```
-
-**ADDENDUM (`2026-06-12` ~16:00):** После feedback "ЕГО ВООБЩЕ НЕ ВИДНО С TAA ON" оператор подсказал перепроверить shader compilation. ninja: no work to do — shader якобы up to date. Проверил `taa_resolve.frag.spv` md5 — действительно новый (0.40 threshold applied). Тогда **нашёл настоящий root cause** в `ModelPass.cpp:202`:
-- `VkPipelineRenderingCreateInfo::colorAttachmentCount = 1` (pre-fix).
-- `model.frag:33` TAA-on: `layout(location = 1) out vec4 outSceneColor`.
-- Main pass `vkCmdBeginRendering` (Renderer.cpp:735) имеет 2 attachments.
-- Pipeline объявляет 1 → write в Location 1 — **undefined behavior** (драйвер silently дропает, validation layers не стоят).
-- `taaSceneColorTarget` оставался пустым в model pixels → resolve pass сэмплил пустоту → модель невидима несмотря на правильный M5.2 threshold.
-
-**Фикс:** `ModelPass.cpp:200-224` теперь объявляет dual-MRT attachments `{ colorFormat, projectv::taa::kTaaSceneColorFormat }` (последний — `B10G11R11_UFLOAT_PACK32` per TAA-agent 1.7 centralization в `TaaRenderTargets.hpp:52`). `ModelPass.hpp` — `#include "render/TaaRenderTargets.hpp"` для namespace'а. `VulkanInit.cpp:237` — call site без изменений (использует default `kTaaSceneColorFormat`).
-
-**Иерархия фиксов:** M5.2 threshold (0.20→0.40) для partial visibility. Dual-MRT для полной невидимости. Оба нужны — dual-MRT без threshold → частичный clamp; threshold без dual-MRT → полная invisible (write дропается до resolve). **Visual verify — за оператором.**
+- **notes:** Per operator "нужно автоматическое изменение размера, чтобы длина или ширина были кратны длинам вокселей" — auto-scale выбирает `N_i = max(1, round(srcDim_i))` per axis, минимизирует искажение. Для колонны `Untitled.colonada.glb` ожидаемо: src AABB ~`[0.5, 0, 0.5] × [0.5, 5.2, 0.5]` (грубая оценка, фактические размеры читаем из `loaded->aabbMin/Max` в `LoadAndRegisterModelsFromManifest`), после auto-scale → 1×5×1 или 1×6×1 (round(5.2)=5 если <=2.5, иначе 5/6). Place position `entry.position = (4, ?, 0)` — на полу, в стороне от стеклянной оболочки `VoxelLab` (radius 6 вокруг (0,8,0)). Snap Y: `topVoxelY + 1` floor (VoxelLab пол на Y=0 → bottom at Y=1). Snap XZ: `floor(currentMinX), floor(currentMinZ)` — corner, а не center. Working rule: при auto-snap, **сначала** scale, **потом** snap (иначе snap до scale даст half-voxel X corner если scale не применяется к AABB).
 
 ### session-2026-06-12-taa-1.2-1.3
 
@@ -481,6 +512,20 @@ Refs: agent/status.md §8, agent/active-sessions.md session-2026-06-12-taa-m5_2-
 
 <!-- Недавние закрытые сессии (последние ~10). Старые можно переносить
      в `legacy/docs/archive/agent-sessions/` для сохранения истории. -->
+
+### session-2026-06-12-taa-m5_2-threshold-bump
+
+- **id:** `2026-06-12T15:35Z-taa-m5_2-threshold-bump`
+- **started-at:** 2026-06-12T15:35:00Z
+- **closed-at:** 2026-06-12T18:25:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** M5.2 follow-up — bump `kTaaColorDistanceRejectionThreshold` `0.20 → 0.40` + dual-MRT model pipeline fix (`ModelPass.cpp:200-224` pColorAttachmentCount 1→2, `ModelPass.hpp` include `TaaRenderTargets.hpp` для namespace'а, `VulkanBootstrap.cpp` redundant `volk.h` include).
+- **files-touched-intent:** `src/shaders/taa_resolve.frag`, `src/asset/ModelPass.{cpp,hpp}`, `src/render/vulkan/VulkanBootstrap.cpp`
+- **status:** aborted
+- **commit-hash:** uncommitted (operator decision `2026-06-12` ~18:20)
+- **notes:** **Aborted by operator decision (`2026-06-12` ~18:20).** После `867c554` (M5.1b follow-up ground-snap + triplanar checker landed) оператор решил не коммитить TAA-scope правки (M5.2 threshold + dual-MRT). Все 4 файла остаются в working tree как **orphaned uncommitted work** — не в scope новой asset-pipeline сессии (`session-2026-06-12-asset-glb-voxel-snap`) per `AGENTS.md §7.2.6` scope discipline. Build state на момент abort: green, ctest 6/6, `taa_resolve.frag.spv` обновлён (md5 подтверждает threshold=0.40), `ModelPass.cpp` dual-MRT compiles, smoke не прогонялся (validation layers не установлены, binary у оператора). **Иерархия фиксов не теряется:** M5.2 threshold (0.20→0.40) + dual-MRT (attachmentCount 1→2) — обе правки нужны для M5.1b "model visible with TAA on" contract, могут быть подхвачены следующей TAA-scope сессией. **Visual verify — за оператором** (binary у него). **Working tree snapshot для потенциального re-open:** `git diff --stat` показывает 4 файла, +77 -8.
 
 ### session-2026-06-11-taa-ycocg-clamp
 
