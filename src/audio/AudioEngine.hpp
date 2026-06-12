@@ -18,11 +18,28 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <miniaudio.h>
 
 namespace projectv::audio {
+
+// **Artist / title parser, 2026-06-13.** Splits a
+// filename like "Le1t - Palm Trees.mp3" into
+// `("Le1t", "Palm Trees")` for the HUD. Convention
+// is `<artist> - <title>.mp3` (space-dash-space
+// separator), matching the operator's current music
+// folder. The `.mp3` extension is stripped
+// case-insensitively before splitting. On
+// no-separator (e.g. "StandaloneTrack.mp3"):
+// `artist` becomes "-" (em-dash) and `title` is the
+// full stem. The function is exported so the
+// `AudioEngine::updateCurrentTrackMetadata` helper
+// and any future consumers (save/load, sidecar) can
+// call it without duplicating the logic.
+void ParseArtistTitle(const std::string &filename,
+	std::string &artist, std::string &title);
 
 // **Playback state, 2026-06-12.** Three-valued enum so
 // the HUD line and sidecar can show the current state
@@ -127,6 +144,29 @@ public:
 	// returned reference is valid until the next
 	// `tick` that re-scans the playlist.
 	const std::string &currentTrackName() const { return m_currentTrackName; }
+	// **Artist / title for the HUD, 2026-06-13.**
+	// Cached parsed form of `currentTrackName()` per
+	// the `ParseArtistTitle` convention. `artist` is
+	// `"-"` (em-dash) when the filename has no
+	// ` - ` separator; `title` is the stem with the
+	// `.mp3` stripped. Both are empty when the
+	// playlist is empty. Re-parsed only when
+	// `m_currentTrackName` changes (see
+	// `updateCurrentTrackMetadata`).
+	const std::string &currentArtist() const { return m_currentArtist; }
+	const std::string &currentTitle() const { return m_currentTitle; }
+	// **Playback position / duration, 2026-06-13.**
+	// Position is the cursor in seconds (0.0f when
+	// no sound is loaded; otherwise read via
+	// `ma_sound_get_cursor_in_seconds`). Duration
+	// is the track length in seconds (0.0f when no
+	// sound is loaded or the decoder does not
+	// expose length — the latter is rare for MP3
+	// with `MA_SOUND_FLAG_STREAM` but possible for
+	// malformed streams). Both are cheap (one
+	// miniaudio call each, no allocation).
+	float positionSeconds() const;
+	float durationSeconds() const;
 	const std::filesystem::path &musicFolder() const { return m_musicFolder; }
 	size_t playlistSize() const { return m_playlist.size(); }
 	size_t currentIndex() const { return m_currentIndex; }
@@ -165,6 +205,18 @@ private:
 	// pause → resume).
 	void pauseImpl();
 
+	// **Artist / title cache updater, 2026-06-13.**
+	// Re-parses `m_currentTrackName` into
+	// `m_currentArtist` / `m_currentTitle` via
+	// `ParseArtistTitle`. Called from every site
+	// that mutates `m_currentTrackName`
+	// (`scanPlaylist`, `loadCurrentTrack` on both
+	// success and failure, `shutdown`). Cheap
+	// (O(filename.length) string search + two
+	// `substr` copies) and only runs on track
+	// changes, not per frame.
+	void updateCurrentTrackMetadata();
+
 	ma_engine m_engine{};
 	ma_sound_group m_musicGroup{};
 	ma_sound m_sound{};
@@ -200,6 +252,17 @@ private:
 	// every frame. Updated only when the playlist
 	// (re)scans or the current index changes.
 	std::string m_currentTrackName;
+	// **Artist / title cache, 2026-06-13.** Parsed
+	// from `m_currentTrackName` via
+	// `updateCurrentTrackMetadata` (called from
+	// the same sites that update the name). Both
+	// are empty when the playlist is empty;
+	// `m_currentArtist` is `"-"` (em-dash) when
+	// the filename has no ` - ` separator. The
+	// parser does not allocate unless the inputs
+	// differ from the previous track.
+	std::string m_currentArtist;
+	std::string m_currentTitle;
 };
 
 } // namespace projectv::audio

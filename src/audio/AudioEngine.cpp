@@ -5,6 +5,7 @@
 #include "fmt/format.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 
 // **Custom deleter for `AudioEnginePtr` in
@@ -33,6 +34,42 @@ const char *MusicStateToString(MusicState state)
 		return "PAUSE";
 	}
 	return "STOP";
+}
+
+// **Artist / title parser, 2026-06-13.** See
+// `AudioEngine.hpp` for the contract. The
+// implementation:
+// 1. Strips a case-insensitive `.mp3` extension
+//    (the playlist only adds `.mp3` files, but
+//    the helper is robust to any 4-char tail).
+// 2. Finds the first ` - ` (space-dash-space,
+//    `std::string_view`) and splits on it.
+// 3. Falls back to `artist = "-"` when no
+//    separator is present. The em-dash is the
+//    HUD-visible "no artist" sentinel; it is
+//    also distinct from empty string (which
+//    means "no track loaded").
+void ParseArtistTitle(const std::string &filename,
+	std::string &artist, std::string &title)
+{
+	std::string stem = filename;
+	if (stem.size() >= 4) {
+		std::string ext = stem.substr(stem.size() - 4);
+		std::transform(ext.begin(), ext.end(), ext.begin(),
+			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		if (ext == ".mp3") {
+			stem = stem.substr(0, stem.size() - 4);
+		}
+	}
+	constexpr std::string_view kSeparator = " - ";
+	const auto pos = stem.find(kSeparator);
+	if (pos == std::string::npos) {
+		artist = "-";
+		title = stem;
+	} else {
+		artist = stem.substr(0, pos);
+		title = stem.substr(pos + kSeparator.size());
+	}
 }
 
 AudioEngine::~AudioEngine()
@@ -115,6 +152,7 @@ void AudioEngine::shutdown()
 	m_pausedCursorMs = 0;
 	m_playlist.clear();
 	m_currentTrackName.clear();
+	updateCurrentTrackMetadata();
 }
 
 size_t AudioEngine::loadMusicFolder(const std::filesystem::path &folderPath)
@@ -183,6 +221,13 @@ size_t AudioEngine::scanPlaylist()
 	} else {
 		m_currentTrackName.clear();
 	}
+	// Re-parse artist / title from the new name.
+	// Called every scan, not per frame, so the cost
+	// is amortized over the 5-second refresh
+	// interval. `updateCurrentTrackMetadata` is the
+	// single source of truth for keeping the
+	// artist/title cache in sync with the name.
+	updateCurrentTrackMetadata();
 
 	m_lastPlaylistRefresh = std::chrono::steady_clock::now();
 	return m_playlist.size();
@@ -230,11 +275,13 @@ bool AudioEngine::loadCurrentTrack()
 				ma_result_description(initResult)));
 		m_soundLoaded = false;
 		m_currentTrackName.clear();
+		updateCurrentTrackMetadata();
 		return false;
 	}
 
 	m_soundLoaded = true;
 	m_currentTrackName = trackPath.filename().string();
+	updateCurrentTrackMetadata();
 	// v1 default: loop forever. The user explicitly
 	// asked for loop=true.
 	ma_sound_set_looping(&m_sound, MA_TRUE);
@@ -527,6 +574,60 @@ void AudioEngine::tick()
 		// next Q press.)
 		(void)prevSize;
 	}
+}
+
+void AudioEngine::updateCurrentTrackMetadata()
+{
+	// Re-parse the cached name into the HUD-visible
+	// artist / title pair. The helper writes
+	// `"-" / "<stem>"` when there is no ` - `
+	// separator, so the HUD always has a
+	// non-empty title to show (the artist may be
+	// `"-"`).
+	ParseArtistTitle(m_currentTrackName, m_currentArtist, m_currentTitle);
+}
+
+float AudioEngine::positionSeconds() const
+{
+	// Guard: `ma_sound_get_cursor_in_seconds`
+	// reads from `m_sound`, which is uninitialized
+	// when `m_soundLoaded == false`. The contract
+	// for the HUD is "0.0 when no sound is
+	// loaded"; that's also what miniaudio would
+	// return for a not-yet-started sound.
+	if (!m_soundLoaded) {
+		return 0.0f;
+	}
+	float cursorSeconds = 0.0f;
+	const ma_result result = ma_sound_get_cursor_in_seconds(&m_sound, &cursorSeconds);
+	if (result != MA_SUCCESS) {
+		// Decoder is in a bad state (e.g. malformed
+		// stream). The HUD will render this as
+		// `POS 0:00 / mm:ss`; not a hard error.
+		return 0.0f;
+	}
+	return cursorSeconds;
+}
+
+float AudioEngine::durationSeconds() const
+{
+	// Same guard as `positionSeconds`. The MP3
+	// decoder typically exposes the full stream
+	// length for `MA_SOUND_FLAG_STREAM` sources
+	// (it reads the file's frame count on the
+	// first `ma_sound_init_from_file`), so a
+	// failure here usually means a malformed
+	// header; the HUD will fall back to
+	// `POS 1:42 / --:--`.
+	if (!m_soundLoaded) {
+		return 0.0f;
+	}
+	float lengthSeconds = 0.0f;
+	const ma_result result = ma_sound_get_length_in_seconds(&m_sound, &lengthSeconds);
+	if (result != MA_SUCCESS) {
+		return 0.0f;
+	}
+	return lengthSeconds;
 }
 
 } // namespace projectv::audio

@@ -590,6 +590,29 @@ struct DebugStats {
 	uint32_t audioMusicPlaylistSize = 0;
 	uint32_t audioMusicCurrentIndex = 0;
 	std::array<char, 128> audioMusicTrackName{};
+	// **Music HUD mirrors, 2026-06-13.** Parsed
+	// from `audioMusicTrackName` on the C++ side
+	// (see `audio::ParseArtistTitle`); the engine
+	// re-parses only when the underlying track
+	// changes, so the mirror update in
+	// `AppUpdate` is a cheap per-frame copy.
+	// `audioMusicArtist` is `"-"` (em-dash) when
+	// the filename has no ` - ` separator;
+	// `audioMusicTitle` is the stem with `.mp3`
+	// stripped. Both are empty when the playlist
+	// is empty. Position / duration are in
+	// seconds; 0.0f means "not loaded" (position)
+	// or "decoder did not expose length"
+	// (duration). 96 / 128 are the same char
+	// budgets as the existing track name —
+	// the artist line and title line fit
+	// comfortably in the 96-char HUD buffer
+	// (`kHudLineBufferSize`) because each has
+	// a 6-7 char label prefix.
+	std::array<char, 96> audioMusicArtist{};
+	std::array<char, 128> audioMusicTitle{};
+	float audioMusicPositionSec = 0.0f;
+	float audioMusicDurationSec = 0.0f;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 	bool walkDebugValid = false;

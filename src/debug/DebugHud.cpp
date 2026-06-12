@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -36,6 +37,41 @@ constexpr size_t kMaxStatsLineCount = 38;
 // follow-up hotkey-rebind slice the operator
 // committed to).
 constexpr size_t kMaxHelperLineCount = 24;
+
+// **mm:ss formatter, 2026-06-13.** Used by the
+// music HUD line `POS mm:ss / mm:ss`. The
+// `treatZeroAsValid` flag distinguishes the two
+// callers:
+//   - **Position** uses `treatZeroAsValid = true`:
+//     "0:00" is the legitimate display for
+//     "at the start of the track" (cursor is 0
+//     before playback begins or right after a
+//     play-from-stop transition).
+//   - **Duration** uses `treatZeroAsValid = false`:
+//     0.0f means "decoder did not expose a
+//     length" (rare for MP3 but possible for
+//     malformed streams), and `--:--` is the
+//     HUD-visible "no data" sentinel.
+// The output is always 5 chars (`m:ss` or
+// `--:--`), 4 bytes wide for a 2-digit minute
+// cap (so a 600-minute track would still fit).
+// Negative inputs are clamped to 0 before the
+// minute/second split (the float can briefly
+// go negative on stream underflows, and a
+// `-1:59` would corrupt the HUD).
+std::string FormatMmSs(float seconds, bool treatZeroAsValid)
+{
+	if (seconds <= 0.0f && !treatZeroAsValid) {
+		return std::string("--:--");
+	}
+	const float clamped = seconds < 0.0f ? 0.0f : seconds;
+	const uint32_t totalSec = static_cast<uint32_t>(clamped);
+	const uint32_t mm = totalSec / 60u;
+	const uint32_t ss = totalSec % 60u;
+	char buf[16];
+	std::snprintf(buf, sizeof(buf), "%u:%02u", mm, ss);
+	return std::string(buf);
+}
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -563,17 +599,29 @@ size_t BuildStatsLines(
 		return lineCount;
 	}
 
-	// **Audio engine line, 2026-06-12.** Lives in the
-	// regular (non-detailed-only) section because
-	// audio is a normal feature, not a debug tool.
-	// Format: `MUSIC <state> VOL 0.80 TRK <name>`.
-	// `TRK` is only included when the playlist is
-	// non-empty and the engine has selected a
-	// track; otherwise the line is shortened to
-	// `MUSIC <state> VOL 0.80 (no tracks)`. The font
+	// **Audio engine HUD block, 2026-06-13.** Lives
+	// in the regular (non-detailed-only) section
+	// because audio is a normal feature, not a
+	// debug tool — same rationale as the previous
+	// 1-line block. Replaces the 1-line
+	// `MUSIC <state> VOL 0.80 TRK <name>` from
+	// 2026-06-12 with a 4-line layout, one line
+	// per field the operator asked for (state,
+	// artist, title, position+duration). The font
 	// supports uppercase, digits, `.`, `-`, `:`
-	// only — no square brackets — so the line uses
-	// only those glyphs.
+	// only — no square brackets, no lowercase
+	// letters — so all labels and labels are
+	// uppercase ASCII. Volume is intentionally
+	// not its own line: it shares the
+	// `MUSIC <state>` line as a second column so
+	// the operator still sees the live value
+	// (e.g. `MUSIC PLAY  VOL 0.65`) without
+	// pushing the cap to 5 lines. The 3 meta
+	// lines (ARTIST, TITLE, POS) are gated on
+	// "engine initialized AND playlist
+	// non-empty" — when the playlist is empty
+	// the HUD shows only the `MUSIC` line, same
+	// as before but with no `TRK` noise.
 	{
 		const char *musicState = "STOP";
 		if (stats.audioMusicInitialized) {
@@ -591,25 +639,52 @@ size_t BuildStatsLines(
 		} else {
 			musicState = "OFF";
 		}
-		if (stats.audioMusicPlaylistSize == 0) {
+		const bool showMetaLines = stats.audioMusicInitialized
+			&& stats.audioMusicPlaylistSize > 0;
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"MUSIC %s  VOL %.2f",
+			musicState,
+			stats.audioMusicVolume);
+		if (showMetaLines) {
+			// `audioMusicArtist` and
+			// `audioMusicTitle` are fixed-size
+			// `std::array<char, N>` mirrors (see
+			// `DebugStats` in `core/Types.hpp`).
+			// Pass via `.data()` to snprintf. The
+			// artist field is `"-"` (em-dash) when
+			// the filename has no ` - ` separator
+			// — the parser intentionally emits a
+			// visible sentinel rather than an
+			// empty string so the operator can
+			// distinguish "unknown artist" from
+			// "no track loaded" at a glance.
 			PV_APPEND_HUD_LINE(
 				outLines,
 				lineCount,
-				"MUSIC %s VOL %.2f NO TRACKS",
-				musicState,
-				stats.audioMusicVolume);
-		} else {
-			// `audioMusicTrackName` is a fixed-size
-			// `std::array<char, 128>` (see
-			// `DebugStats`). Pass it via
-			// `.data()` to snprintf.
+				"ARTIST %s",
+				stats.audioMusicArtist.data());
 			PV_APPEND_HUD_LINE(
 				outLines,
 				lineCount,
-				"MUSIC %s VOL %.2f TRK %s",
-				musicState,
-				stats.audioMusicVolume,
-				stats.audioMusicTrackName.data());
+				"TITLE %s",
+				stats.audioMusicTitle.data());
+			// **Position / duration, 2026-06-13.**
+			// Position always shows `0:00` at the
+			// start of a track (cursor is 0 before
+			// playback); `--:--` is reserved for
+			// duration when the decoder did not
+			// expose a length. Both are formatted
+			// by the `FormatMmSs` helper above.
+			const std::string posStr = FormatMmSs(stats.audioMusicPositionSec, /*treatZeroAsValid=*/true);
+			const std::string durStr = FormatMmSs(stats.audioMusicDurationSec, /*treatZeroAsValid=*/false);
+			PV_APPEND_HUD_LINE(
+				outLines,
+				lineCount,
+				"POS %s / %s",
+				posStr.c_str(),
+				durStr.c_str());
 		}
 	}
 

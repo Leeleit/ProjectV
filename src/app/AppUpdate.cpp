@@ -834,6 +834,36 @@ bool UpdateApp(
 		const size_t copyLen = std::min(trackName.size(),
 			debug->stats.audioMusicTrackName.size() - 1);
 		std::copy_n(trackName.begin(), copyLen, debug->stats.audioMusicTrackName.begin());
+		// **Music HUD mirrors, 2026-06-13.**
+		// Artist / title are cached on the engine
+		// side and re-parsed only on track
+		// changes, so the per-frame mirror copy is
+		// a single `std::copy_n` per field.
+		// Position / duration are queried each
+		// frame; both calls are O(1) in miniaudio
+		// (one counter read + one divide by
+		// sample rate) and the per-frame cost is
+		// in the nanosecond range. The 1-byte
+		// `char` arrays are zero-filled before
+		// the copy so a shorter-than-buffer
+		// string is null-terminated for the HUD's
+		// `snprintf("%s", ...)`.
+		const std::string &artist = audio->currentArtist();
+		std::fill(debug->stats.audioMusicArtist.begin(),
+			debug->stats.audioMusicArtist.end(), '\0');
+		const size_t artistCopyLen = std::min(artist.size(),
+			debug->stats.audioMusicArtist.size() - 1);
+		std::copy_n(artist.begin(), artistCopyLen, debug->stats.audioMusicArtist.begin());
+
+		const std::string &title = audio->currentTitle();
+		std::fill(debug->stats.audioMusicTitle.begin(),
+			debug->stats.audioMusicTitle.end(), '\0');
+		const size_t titleCopyLen = std::min(title.size(),
+			debug->stats.audioMusicTitle.size() - 1);
+		std::copy_n(title.begin(), titleCopyLen, debug->stats.audioMusicTitle.begin());
+
+		debug->stats.audioMusicPositionSec = audio->positionSeconds();
+		debug->stats.audioMusicDurationSec = audio->durationSeconds();
 	} else {
 		debug->stats.audioMusicInitialized = false;
 		debug->stats.audioMusicState = 0;
@@ -842,6 +872,12 @@ bool UpdateApp(
 		debug->stats.audioMusicCurrentIndex = 0;
 		std::fill(debug->stats.audioMusicTrackName.begin(),
 			debug->stats.audioMusicTrackName.end(), '\0');
+		std::fill(debug->stats.audioMusicArtist.begin(),
+			debug->stats.audioMusicArtist.end(), '\0');
+		std::fill(debug->stats.audioMusicTitle.begin(),
+			debug->stats.audioMusicTitle.end(), '\0');
+		debug->stats.audioMusicPositionSec = 0.0f;
+		debug->stats.audioMusicDurationSec = 0.0f;
 	}
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
