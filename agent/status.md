@@ -558,3 +558,34 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 **Test count baseline:** `ctest 6/6` (1.50s) — preserved.
 
 **Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
+
+## 16. Per-pass CPU timings — `session-2026-06-12-richer-render-stats` (closed, uncommitted)
+
+**1 commit proposed** (per operator "Коммить и richer render stats / per-pass timings делай"):
+
+| SHA | Subject | Files |
+|---|---|---|
+| _pending_ | `feat(perf): per-pass CPU timing aggregation (6 measured + 1 derived + chunk count)` | 5 source + 4 doc |
+
+**What landed (build green, ctest 6/6 baseline preserved):**
+
+- New `RenderPassTimings` struct in `src/core/Types.hpp` (7 float fields + 1 uint32) — `shadowMs` / `meshingMs` / `graphicsMs` / `taaResolveMs` / `debugOverlayMs` / `debugHudMs` / `otherMs` / `dirtyChunkRebuiltCount`. Lives on `RenderState::renderPassTimings`.
+- 8 `DebugStats` mirrors (`renderPassShadowMs` / ... / `renderPassOtherMs` / `renderPassDirtyChunkRebuiltCount`) for HUD/sidecar consumption.
+- `ScopedPassTimer` RAII helper in `Renderer.cpp` anonymous namespace — converts `SDL_GetPerformanceCounter` ticks to ms at destructor; covers early-return paths automatically.
+- 5 `ScopedPassTimer` placements at the top of `RecordShadowCommands` / `RecordVoxelMeshingCommands` / `RecordDebugOverlayCommands` / `RecordDebugHudCommands` / `RecordGraphicsCommands`. Plus 1 manual `SDL_GetPerformanceCounter` start/end around the inlined TAA resolve block (lines ~1153-1200).
+- `RecordVoxelMeshingCommands` snapshots `frameRenderData.dirtyChunkCount` into `renderPassTimings.dirtyChunkRebuiltCount` at the top (so the value is what was requested, even on early return).
+- `AppUpdate.cpp` mirrors all 8 fields + derives `otherMs = frameTimeMs - graphicsMs` (clamped to ≥ 0).
+- `DebugHud.cpp` 2 detailed-only HUD lines: `RPASS GFX 0.50 OTH 0.50 ms` + `RPASS SHAD 0.40 MES 1.20 TAA 0.80 OVL 0.30 HUD 0.20 CHNK 12`. `kMaxStatsLineCount = 38` (was 36).
+- `ScreenshotCapture.cpp` 7 new sidecar keys (`render_pass_shadow_ms` / ... / `render_pass_debug_hud_ms` + `render_pass_dirty_chunk_rebuilt_count`) in a second `fmt::format` call to avoid the 99-arg limit.
+
+**Build / test:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, 1 pre-existing warning (DebugHud.cpp:600 LOCL `%.0f` for bool, не моя). `ctest 6/6` (1.47s baseline preserved).
+
+**First iteration failed the test:** initial placement put the 2 HUD lines in the basic section (before `if (!detailedHudVisible) return`), which pushed both basic and detailed to the 65536-vertex test-buffer cap, breaking `detailedVertexCount > basicVertexCount`. Moved to detailed-only — semantically more correct (diagnostic data, not always-on) AND keeps the test invariant intact. The `git diff` shows the final version with detailed-only placement.
+
+**Scope discipline:** TAA-agent's 4 uncommitted files (`ModelPass.{cpp,hpp}`, `VulkanBootstrap.cpp`, `taa_resolve.frag`) untouched. My changes are in `core/Types.hpp` (struct field) + `app/AppUpdate.cpp` (stats mirror) + `render/Renderer.cpp` (timers) + `debug/DebugHud.cpp` (HUD lines) + `render/ScreenshotCapture.cpp` (sidecar). No shader edits, no descriptor changes, no pipeline changes.
+
+**Files (mine, для коммита):** `src/core/Types.hpp`, `src/render/Renderer.cpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, `TODO.md`, `agent/active-sessions.md`, `agent/decisions.md`, `agent/memory.md`, `agent/status.md`.
+
+**Test count baseline:** `ctest 6/6` (1.47s) — preserved.
+
+**Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.

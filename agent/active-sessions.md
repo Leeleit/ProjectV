@@ -57,6 +57,68 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-richer-render-stats
+
+- **id:** `2026-06-12T23:30Z-richer-render-stats`
+- **started-at:** 2026-06-12T23:30:00Z
+- **closed-at:** 2026-06-12T23:55:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Richer render stats / explicit per-pass timings** (TODO §4 "World / Render / Tooling"). CPU-side per-pass `std::chrono` (или `SDL_GetPerformanceCounter` для consistency с `ComputeFrameDeltaSeconds`) timing aggregation для 6 recorded passes (Shadow / Voxel Meshing / Graphics / TAA Resolve / Debug Overlay / Debug HUD) + chunk-update timing (`voxel_mesh.comp` dispatch CPU time + count re-meshed chunks). HUD line `RPASS SHADOW 0.50 MES 1.20 GFX 2.10 TAA 0.80 OVL 0.30 HUD 0.20 OTH 0.50ms` в detailed-HUD section. Sidecar metadata: `render_pass_shadow_ms` / `render_pass_meshing_ms` / `render_pass_graphics_ms` / `render_pass_taa_resolve_ms` / `render_pass_debug_overlay_ms` / `render_pass_debug_hud_ms` / `render_pass_chunk_update_ms` / `render_pass_other_ms` / `dirty_chunk_rebuilt_count`. **Foundation для follow-up:** TODO §4.5 perf budget breakdown ("300-500 FPS realistic post-optimization ceiling") требует actual per-pass numbers вместо "1-frame measure + 1-hypthosis" — этот slice даёт runtime evidence layer. **Orthogonal к TAA:** только reads `render->sceneTriangleCount` mirror pattern + writes new `RenderState::renderPass*Ms` fields; никаких shader edits, descriptor changes, pipeline changes. TAA-agent's GPU labels (`PV_PROFILE_GPU_LABEL` per `decisions.md §18`) — это renderdoc markers, мой slice — actual timings, не overlap.
+- **files-touched-intent:** `src/core/Types.hpp` (`RenderState::renderPassTimings` struct + 8 `DebugStats` mirrors), `src/render/Renderer.cpp` (6 `SDL_GetPerformanceCounter` start/end pairs around each `Record*Commands` call), `src/render/ScreenshotCapture.cpp` (9 sidecar keys — extend `SaveScreenshotCaptureMetadata` signature to take `RenderState`), `src/debug/DebugHud.cpp` (1 new HUD line в detailed section + 1 helper line), `agent/memory.md` (working rules), `agent/decisions.md` (contract), `agent/status.md` (snapshot), `TODO.md` (close per-pass timings item), `agent/active-sessions.md` (this entry + close). **Не трогаю:** TAA-agent's 4 uncommitted files per §7.2.6; `src/voxel/VoxelMeshing.cpp` (already has its own chunk-rebuild count tracking — will read, not modify).
+- **status:** closed
+- **commit-hash:** uncommitted (1 commit proposed per §7.2.5)
+- **notes:** **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, 1 pre-existing warning (`DebugHud.cpp:600` LOCL `%.0f` for bool, не моя). `ctest 6/6` (1.47 s, baseline preserved). Diff: `src/core/Types.hpp` +35 lines, `src/render/Renderer.cpp` +40 lines, `src/app/AppUpdate.cpp` +13 lines, `src/debug/DebugHud.cpp` +24 lines, `src/render/ScreenshotCapture.cpp` +18 lines — total +130 source lines, additive (no field offsets shift, no shader edits, no descriptor bindings, no pipeline changes).
+
+  **First-iteration test failure (resolved):** initial placement put the 2 HUD lines in the basic section (before `if (!detailedHudVisible) return`), which pushed both basic and detailed above the 65536-vertex test-buffer cap. The `BuildDebugHudVertices` sanity test's `detailedVertexCount > basicVertexCount` assertion failed because both were at 65532. Moved to detailed-only — semantically more correct (per-pass timings are diagnostic, not always-on) AND keeps the test invariant intact. Production `DEBUG_HUD_MAX_VERTEX_COUNT = 262144` is unaffected by the test's smaller buffer.
+
+  **Working rules (см. `agent/memory.md §10.24`):**
+  - 6 `*Ms` fields measured with `ScopedPassTimer` RAII (one at the top of each `Record*Commands` function). TAA resolve inline block gets a manual `SDL_GetPerformanceCounter` start/end pair.
+  - 1 `otherMs` field derived in `AppUpdate.cpp` as `frameTimeMs - graphicsMs` (clamped to ≥ 0).
+  - `dirtyChunkRebuiltCount` snapshots at the top of `RecordVoxelMeshingCommands` (so the value is what was requested, even on early return).
+  - HUD lines live in detailed-only section (test buffer invariant + semantically more correct).
+  - Sidecar keys split into a second `fmt::format` call to avoid the 99-arg compile-time checker limit.
+  - GPU-side `vkCmdWriteTimestamp` is a follow-up, not a parallel implementation — CPU-side accuracy is sufficient for the "where is my budget going" use case.
+
+  **Commit plan (1 commit, pending operator confirmation per §7.2.4):**
+  ```
+  feat(perf): per-pass CPU timing aggregation (6 measured + 1 derived + chunk count)
+
+  Adds 6 per-pass CPU timing measurements (Shadow / Voxel
+  Meshing / Graphics / TAA Resolve / Debug Overlay / Debug
+  HUD) plus a derived `otherMs = frameTimeMs - graphicsMs`
+  and the per-frame dirty-chunk rebuilt count. Foundation
+  for TODO §4.5 perf-budget analysis ("halve-res AO/contact
+  upscale" needs to know which sub-pass is the bottleneck,
+  not just the total).
+
+  Implementation: `ScopedPassTimer` RAII helper in
+  Renderer.cpp anonymous namespace converts
+  `SDL_GetPerformanceCounter` ticks to ms at destructor;
+  covers early-return paths automatically. New
+  `RenderPassTimings` struct in RenderState holds the 7
+  float + 1 uint32 fields; 8 DebugStats mirrors feed the
+  HUD and sidecar.
+
+  HUD lines live in the detailed-only section because (a)
+  the test harness uses a 65536-vertex buffer that the
+  original detailed HUD already fills near the cap, and
+  (b) per-pass timings are diagnostic data, not always-on.
+  Sidecar keys split into a second fmt::format call to
+  avoid the 99-arg compile-time checker.
+
+  Build: green, ctest 6/6 (1.47s, baseline preserved).
+  Additive only — no field offsets shift, no shader edits,
+  no descriptor binding changes, no pipeline changes.
+  GPU-side vkCmdWriteTimestamp is a follow-up, not a
+  parallel implementation.
+
+  Refs: TODO.md §4 "richer render stats / explicit per-pass
+        timings" (closed), agent/decisions.md §27,
+        agent/memory.md §10.24, agent/status.md §16
+  ```
+
 ### session-2026-06-12-frame-step-slow-motion
 
 - **id:** `2026-06-12T22:30Z-frame-step-slow-motion`

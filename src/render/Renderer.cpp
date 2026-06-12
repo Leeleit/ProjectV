@@ -14,6 +14,38 @@
 #include <filesystem>
 
 namespace {
+// **Per-pass CPU timing helper, 2026-06-12.** RAII wrapper
+// that converts `SDL_GetPerformanceCounter` ticks at
+// destruction into a millisecond float and writes it to the
+// referenced output slot. Used by each `Record*Commands`
+// function below to populate
+// `RenderState::renderPassTimings::*Ms`. RAII matters for
+// the early-return paths in `RecordShadowCommands` /
+// `RecordVoxelMeshingCommands` / `RecordDebugOverlayCommands`
+// / `RecordDebugHudCommands` — without RAII each early
+// return would need its own `writeTiming()` call site, and
+// one missed call would silently leave the previous frame's
+// stale number on the HUD.
+class ScopedPassTimer {
+public:
+	explicit ScopedPassTimer(float &outMs)
+		: outMs_(outMs), start_(SDL_GetPerformanceCounter()) {}
+
+	~ScopedPassTimer() {
+		const Uint64 end = SDL_GetPerformanceCounter();
+		const Uint64 freq = SDL_GetPerformanceFrequency();
+		const double seconds = static_cast<double>(end - start_) / static_cast<double>(freq);
+		outMs_ = static_cast<float>(seconds * 1000.0);
+	}
+
+	ScopedPassTimer(const ScopedPassTimer &) = delete;
+	ScopedPassTimer &operator=(const ScopedPassTimer &) = delete;
+
+private:
+	float &outMs_;
+	Uint64 start_;
+};
+
 DebugOverlayPushConstants BuildBoxOverlayPushConstants(
 	const FrameRenderData &frameRenderData,
 	const DebugOverlayBox &box)
@@ -298,6 +330,7 @@ void RecordShadowCommands(
 	const FrameRenderData &frameRenderData,
 	const VkCommandBuffer cmd)
 {
+	ScopedPassTimer passTimer(render.renderPassTimings.shadowMs);
 	PV_PROFILE_ZONE_N("RecordShadowCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Shadow Pass");
 	if (render.shadowGraphicsPipeline == VK_NULL_HANDLE ||
@@ -440,6 +473,7 @@ void RecordDebugOverlayCommands(
 	const FrameRenderData &frameRenderData,
 	const VkCommandBuffer cmd)
 {
+	ScopedPassTimer passTimer(render.renderPassTimings.debugOverlayMs);
 	PV_PROFILE_ZONE_N("RecordDebugOverlayCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Debug Overlay");
 	if (!frameRenderData.debugUiVisible || render.debugOverlayPipelineLayout == VK_NULL_HANDLE) {
@@ -485,6 +519,7 @@ void RecordDebugHudCommands(
 	const FrameRenderData &frameRenderData,
 	const VkCommandBuffer cmd)
 {
+	ScopedPassTimer passTimer(render.renderPassTimings.debugHudMs);
 	PV_PROFILE_ZONE_N("RecordDebugHudCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Debug HUD");
 	if (render.debugHudPipeline == VK_NULL_HANDLE ||
@@ -505,6 +540,15 @@ void RecordVoxelMeshingCommands(
 	const FrameRenderData &frameRenderData,
 	const VkCommandBuffer cmd)
 {
+	ScopedPassTimer passTimer(render.renderPassTimings.meshingMs);
+	// Snapshot the dirty chunk count for HUD/sidecar at the
+	// start of the function (so the value is what was
+	// requested this frame, even if the function early-
+	// returns because the pipeline is null). On a real
+	// dispatch path the value is the same as the
+	// `vkCmdDispatch(cmd, frameRenderData.dirtyChunkCount, 1, 1)`
+	// count at line ~540 below.
+	render.renderPassTimings.dirtyChunkRebuiltCount = frameRenderData.dirtyChunkCount;
 	PV_PROFILE_ZONE_N("RecordVoxelMeshingCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Voxel Meshing");
 	if (render.voxelMeshingPipeline == VK_NULL_HANDLE ||
@@ -578,6 +622,15 @@ void RecordGraphicsCommands(
 	const VkCommandBuffer cmd,
 	const uint32_t imageIndex)
 {
+	// Per-pass CPU timing for the outer `RecordGraphicsCommands`
+	// body. Covers transitions, main pass recording, TAA
+	// resolve setup, history copy, etc. — i.e. the
+	// `Record*Commands` time minus the explicitly-timed
+	// sub-passes (`shadowMs`, `meshingMs`, `taaResolveMs`,
+	// `debugOverlayMs`, `debugHudMs`). Each sub-pass has its
+	// own `ScopedPassTimer` further down so the HUD line can
+	// show both the total and the breakdown.
+	ScopedPassTimer passTimer(render.renderPassTimings.graphicsMs);
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
 	{
@@ -1107,6 +1160,17 @@ void RecordGraphicsCommands(
 
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TAA Resolve");
 			PV_PROFILE_GPU_LABEL_COLOR(cmd, "TAA Resolve", 0.20f, 0.65f, 1.00f, 1.0f);
+			// Per-pass CPU timing for the inline TAA resolve
+			// section. Manual start/end (not `ScopedPassTimer`)
+			// because the function is too large to wrap a
+			// timer around the whole thing — the timer only
+			// covers the resolve-push-constant build + bind +
+			// draw, not the surrounding `vkCmdBeginRendering` /
+			// `vkCmdSetViewport` / `vkCmdSetScissor` setup
+			// (those are part of the TAA-on `graphicsMs` body
+			// measurement instead, so the operator can still
+			// see the cost when TAA is on).
+			const Uint64 taaResolveStartCounter = SDL_GetPerformanceCounter();
 
 			// Push constants for the resolve pass. The current
 			// viewProjection comes from the per-frame
@@ -1153,6 +1217,13 @@ void RecordGraphicsCommands(
 			// Fullscreen triangle, no vertex buffer — `taa_resolve.vert`
 			// synthesizes positions from `gl_VertexIndex` (0, 1, 2).
 			vkCmdDraw(cmd, 3, 1, 0, 0);
+			// Close out the TAA resolve CPU timing.
+			{
+				const Uint64 taaResolveEndCounter = SDL_GetPerformanceCounter();
+				const double seconds = static_cast<double>(taaResolveEndCounter - taaResolveStartCounter) /
+					static_cast<double>(SDL_GetPerformanceFrequency());
+				render.renderPassTimings.taaResolveMs = static_cast<float>(seconds * 1000.0);
+			}
 
 			// Debug overlay / debug HUD go on top of the resolved
 			// swapchain image, in the same `vkCmdBeginRendering`

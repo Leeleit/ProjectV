@@ -521,6 +521,22 @@ struct DebugStats {
 	// forced step" — not a sticky latched flag.
 	float simulationTimeScale = 1.0f;
 	bool simulationFrameStepPending = false;
+	// Per-pass CPU timing mirrors (2026-06-12). Source fields
+	// live in `RenderState::renderPassTimings`; the mirror
+	// exists so the HUD and runtime capture sidecar can read
+	// the per-pass breakdown without poking into
+	// `RenderState` directly. `renderPassOtherMs` is derived
+	// in `AppUpdate.cpp` as
+	// `frameTimeMs - sum(measured passes)` so the dashboard
+	// shows what the unaccounted-for slice of the frame is.
+	float renderPassShadowMs = 0.0f;
+	float renderPassMeshingMs = 0.0f;
+	float renderPassGraphicsMs = 0.0f;
+	float renderPassTaaResolveMs = 0.0f;
+	float renderPassDebugOverlayMs = 0.0f;
+	float renderPassDebugHudMs = 0.0f;
+	float renderPassOtherMs = 0.0f;
+	uint32_t renderPassDirtyChunkRebuiltCount = 0;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 	bool walkDebugValid = false;
@@ -694,6 +710,39 @@ struct ModelRegistryEntry {
 	projectv::asset::MeshGpuResources gpu;
 	std::array<float, 3> aabbMin{0.0f};
 	std::array<float, 3> aabbMax{0.0f};
+};
+
+// **Per-pass CPU timing, 2026-06-12.** Wall-clock
+// microsecond-precision time spent inside each
+// `Record*Commands` function in `Renderer.cpp`, plus the
+// inlined TAA resolve block. Measured with
+// `SDL_GetPerformanceCounter` (same primitive as
+// `ComputeFrameDeltaSeconds` in `AppUpdate.cpp`). All 6
+// fields are CPU-side; for GPU-accurate numbers (e.g. shadow
+// GPU time vs shadow CPU time on different drivers) the
+// follow-up would be `vkCmdWriteTimestamp` queries on each
+// pass, but for the "where is my frame budget going" use
+// case CPU is sufficient and avoids the per-frame query
+// pool reset overhead. `*Ms` fields default to `0.0f` so
+// the HUD line never shows garbage on the first frame.
+// `dirtyChunkRebuiltCount` mirrors `FrameRenderData::dirtyChunkCount`
+// at the time of `RecordVoxelMeshingCommands` — that count
+// is already tracked; this struct just snapshots it for
+// the HUD/sidecar.
+struct RenderPassTimings {
+	float shadowMs = 0.0f;
+	float meshingMs = 0.0f;
+	float graphicsMs = 0.0f;
+	float taaResolveMs = 0.0f;
+	float debugOverlayMs = 0.0f;
+	float debugHudMs = 0.0f;
+	// Derived: `frameTimeMs - (shadow + meshing + graphics +
+	// taaResolve + debugOverlay + debugHud)`. Computed at
+	// the stats-mirror site in `AppUpdate.cpp` so the
+	// caller can keep it consistent with whatever total
+	// the rest of the dashboard reads.
+	float otherMs = 0.0f;
+	uint32_t dirtyChunkRebuiltCount = 0;
 };
 
 struct RenderState {
@@ -959,6 +1008,13 @@ struct RenderState {
 	// The model pipeline reuses the main `graphicsPipelineLayout`
 	// (`modelPipelineLayout` stays null); the TAA-on variant is a
 	// separate VkPipeline object that binds the TAA-on shader variant.
+	// Per-pass CPU timings (2026-06-12). Each `Record*Commands`
+	// function in `Renderer.cpp` writes its own field at exit;
+	// `AppUpdate.cpp` computes `otherMs` from
+	// `frameTimeMs - sum(measured passes)` and mirrors the
+	// whole struct into `DebugStats` for HUD/sidecar
+	// consumption. Field semantics per `RenderPassTimings`.
+	RenderPassTimings renderPassTimings{};
 };
 
 struct LookDevCaptureAutomationState {

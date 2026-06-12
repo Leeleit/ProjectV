@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата обновления: `2026-06-12` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 + frame-step/slow-motion closed + post-TAA roadmap + R&D Блоки 7-9)
+Дата обновления: `2026-06-12` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 + frame-step/slow-motion + per-pass timings closed + post-TAA roadmap + R&D Блоки 7-9)
 Статус документа: `живой roadmap`
 
 ---
@@ -499,7 +499,7 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 - [ ] richer chunk model;
 - [ ] richer world-editing workflows beyond the current lightweight debug editor;
 - [x] greedy meshing follow-up (closed — see `agent/active-sessions.md session-2026-06-12-greedy-meshing`, `decisions.md §25`, `memory.md §10.22`);
-- [ ] richer render stats / explicit per-pass timings / chunk update timings beyond current HUD + Tracy baseline;
+- [x] **richer render stats / explicit per-pass timings** closed `2026-06-12` — см. `agent/active-sessions.md session-2026-06-12-richer-render-stats`, `agent/decisions.md §27`. CPU-side per-pass `SDL_GetPerformanceCounter` timing для 6 passes (Shadow / Voxel Meshing / Graphics / TAA Resolve / Debug Overlay / Debug HUD) + `RenderPassTimings` struct в `RenderState` + 7 mirrors в `DebugStats` + 1 derived `otherMs = frameTimeMs - graphicsMs`. HUD lines `RPASS GFX 0.50 OTH 0.50 ms` + `RPASS SHAD 0.40 MES 1.20 TAA 0.80 OVL 0.30 HUD 0.20 CHNK 12` в detailed section. Sidecar: 7 `render_pass_*` keys + `render_pass_dirty_chunk_rebuilt_count`. `RenderDoc-friendly markers` остаётся (closed partially — labels added in `3ee995f`, but full capture workflow R&D).
 - [ ] RenderDoc-friendly markers;
 - [x] benchmark automation;
 - [x] **Two-level chunk visibility cache** — hash on `(cameraState, chunkDirtyMask)` в `UpdateChunkVisibilityAndIndirectCommands`; rebuild только когда hash invalidates (camera moved past threshold или chunk dirtied). Снижает CPU pressure на full-rebuild каждый кадр + уменьшает GPU bus traffic на `shadowIndirectBuffer` upload. Cross-link: P1 P0, contact с 5.3 (benchmark automation нужно для verify hit/miss ratio). Closed `2026-06-12` — see `agent/decisions.md` §22.

@@ -753,6 +753,27 @@ bool UpdateApp(
 		debug->stats.worldEditVersion = world->voxelWorld->editVersion;
 		debug->stats.scenePreset = world->voxelWorld->scenePreset;
 	}
+	// Per-pass CPU timing mirrors (2026-06-12). Each
+	// `Record*Commands` function in `Renderer.cpp` writes its
+	// own `*Ms` field via `ScopedPassTimer`; we mirror all
+	// of them into `DebugStats` here so the HUD and capture
+	// sidecar can read the per-pass breakdown without poking
+	// into `RenderState` directly. `renderPassOtherMs` is
+	// derived as `frameTimeMs - graphicsMs` — the slice of
+	// the wall-clock frame time not spent inside
+	// `RecordGraphicsCommands` (SDL event handling, scene
+	// resource upload, ECS sync, physics tick, AppUpdate
+	// itself, etc.).
+	debug->stats.renderPassShadowMs = render->renderPassTimings.shadowMs;
+	debug->stats.renderPassMeshingMs = render->renderPassTimings.meshingMs;
+	debug->stats.renderPassGraphicsMs = render->renderPassTimings.graphicsMs;
+	debug->stats.renderPassTaaResolveMs = render->renderPassTimings.taaResolveMs;
+	debug->stats.renderPassDebugOverlayMs = render->renderPassTimings.debugOverlayMs;
+	debug->stats.renderPassDebugHudMs = render->renderPassTimings.debugHudMs;
+	debug->stats.renderPassDirtyChunkRebuiltCount = render->renderPassTimings.dirtyChunkRebuiltCount;
+	debug->stats.renderPassOtherMs = std::max(
+		0.0f,
+		debug->stats.frameTimeMilliseconds - render->renderPassTimings.graphicsMs);
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
 	debug->stats.detailedHudVisible = debug->detailedHudVisible;

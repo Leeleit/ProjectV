@@ -23,7 +23,7 @@ constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
-constexpr size_t kMaxStatsLineCount = 36;
+constexpr size_t kMaxStatsLineCount = 38;
 constexpr size_t kMaxHelperLineCount = 16;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
@@ -551,6 +551,40 @@ size_t BuildStatsLines(
 	if (!detailedHudVisible) {
 		return lineCount;
 	}
+
+	// Per-pass CPU timing lines (2026-06-12). Two-line
+	// format: first line shows the total graphics time
+	// (`GFX`) and the unaccounted-for slice (`OTH` =
+	// `frameTimeMs - GFX`, i.e. SDL events, scene upload,
+	// AppUpdate itself). Second line shows the breakdown
+	// of sub-passes inside `RecordGraphicsCommands` so the
+	// operator can see which sub-pass is dominating. The
+	// `CHNK N` tail mirrors the per-frame dirty-chunk
+	// count that was actually requested for re-meshing —
+	// useful for the TODO §4.5 perf-budget analysis
+	// ("halve-res AO/contact upscale" needs to know which
+	// pass is the bottleneck, not just the total). Lives
+	// in the detailed-only section because the per-pass
+	// breakdown is diagnostic data — the basic HUD keeps
+	// the high-level `frameTimeMilliseconds` line and
+	// stops there, the detailed HUD shows where the budget
+	// is going.
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"RPASS GFX %.2f  OTH %.2f ms",
+		stats.renderPassGraphicsMs,
+		stats.renderPassOtherMs);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"RPASS SHAD %.2f MES %.2f TAA %.2f OVL %.2f HUD %.2f CHNK %u",
+		stats.renderPassShadowMs,
+		stats.renderPassMeshingMs,
+		stats.renderPassTaaResolveMs,
+		stats.renderPassDebugOverlayMs,
+		stats.renderPassDebugHudMs,
+		stats.renderPassDirtyChunkRebuiltCount);
 
 	PV_APPEND_HUD_LINE(
 		outLines,

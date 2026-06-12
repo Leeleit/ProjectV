@@ -394,6 +394,31 @@ bool SaveScreenshotCaptureMetadata(
 		render.lightingDebugControls.shadowFilterRadiusOffset,
 		render.lightingDebugControls.shadowCascadeBlendOffset);
 
+	// Per-pass CPU timing keys (2026-06-12). Split into
+	// a second `fmt::format` call because the first call
+	// already pushes `fmt`'s 99-arg compile-time format
+	// string checker to its limit — adding 7 more fields
+	// would trip the limit. The two `stream <<` writes
+	// concatenate into the same sidecar file; the keys are
+	// at the end of the file so existing parsers (which
+	// only look for specific `key=value` pairs) keep
+	// working unchanged.
+	stream << fmt::format(
+		"render_pass_shadow_ms={:.6f}\n"
+		"render_pass_meshing_ms={:.6f}\n"
+		"render_pass_graphics_ms={:.6f}\n"
+		"render_pass_taa_resolve_ms={:.6f}\n"
+		"render_pass_debug_overlay_ms={:.6f}\n"
+		"render_pass_debug_hud_ms={:.6f}\n"
+		"render_pass_dirty_chunk_rebuilt_count={}\n",
+		render.renderPassTimings.shadowMs,
+		render.renderPassTimings.meshingMs,
+		render.renderPassTimings.graphicsMs,
+		render.renderPassTimings.taaResolveMs,
+		render.renderPassTimings.debugOverlayMs,
+		render.renderPassTimings.debugHudMs,
+		render.renderPassTimings.dirtyChunkRebuiltCount);
+
 	if (!stream) {
 		runtime::LogRuntimeFailure("Capture", "SaveScreenshotCaptureMetadata.Write", resolvedPath.string());
 		return false;
