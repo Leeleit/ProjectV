@@ -667,6 +667,19 @@ size_t BuildStatsLines(
 		2 * stats.taaNeighbourhoodRadius + 1,
 		GetBoolLabel(stats.taaHistoryValid),
 		stats.taaCasSharpnessMax);
+	// 1.5 anti-flicker layer history: `LYR` shows whether the
+	// previous-frame layer mask is currently valid (false on
+	// the first frame after swapchain-recreate / world-reload /
+	// Taa-toggle / etc., true afterwards). `BLF` is the
+	// per-frame blend factor for the per-layer temporal filter
+	// (default 0.4). Together they tell the operator whether
+	// the layer anti-flicker is currently active.
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"TAALYR %s BLF %.2f",
+		GetBoolLabel(stats.taaLayerHistoryValid),
+		stats.taaLayerBlendFactor);
 	// 1.2 camera-cut detector. `CUT` accumulates the number of
 	// view-projection discontinuities seen since startup; `CLR`
 	// tracks the worst Chebyshev distance so the operator can

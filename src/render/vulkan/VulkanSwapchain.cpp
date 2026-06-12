@@ -421,11 +421,26 @@ bool RecreateSwapchain(
 	if (render->taaHistoryColorTarget == nullptr) {
 		render->taaHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
 	}
+	// 1.5 anti-flicker: also lazy-allocate the per-layer history
+	// pair. Same lifecycle as the colour history — both pairs go
+	// through `CreateOrRecreateTaaRenderTargets` and re-allocate
+	// together on swapchain resize. The pair is intentionally
+	// allocated even when anti-flicker is conceptually disabled
+	// (TAA off) so toggling it on at runtime does not have to
+	// wait for a swapchain resize.
+	if (render->taaLayerSceneColorTarget == nullptr) {
+		render->taaLayerSceneColorTarget = new projectv::taa::OffscreenColorTarget();
+	}
+	if (render->taaLayerHistoryColorTarget == nullptr) {
+		render->taaLayerHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
+	}
 	if (!projectv::taa::CreateOrRecreateTaaRenderTargets(
 			context,
 			swapchain->extent,
 			*render->taaSceneColorTarget,
 			*render->taaHistoryColorTarget,
+			*render->taaLayerSceneColorTarget,
+			*render->taaLayerHistoryColorTarget,
 			render->taaLinearSampler)) {
 		runtime::LogRuntimeFailure(
 			"TaaRenderTargets",
@@ -438,6 +453,15 @@ bool RecreateSwapchain(
 	render->taaHistoryNeedsInit = true;
 	render->taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	// 1.5 anti-flicker: same reset for the per-layer history
+	// pair. The layout trackers above stay in sync with the
+	// actual GPU image layouts and the descriptor writes in
+	// `VulkanGraphicsPipeline.cpp` use them implicitly through
+	// the bound `VK_IMAGE_LAYOUT_*` in the descriptor info,
+	// so the reset is required for the next frame to start
+	// from a clean state.
+	render->taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	render->taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaFrameCounter = 0u;
 	render->taaPrevViewProjectionMatrix = {};
@@ -451,6 +475,14 @@ bool RecreateSwapchain(
 	render->taaPrevViewProjectionMatrixInitialized = false;
 	render->taaCameraCutCount = 0u;
 	render->taaCameraCutMaxDelta = 0.0f;
+	// 1.5 — same companion reset for the layer history. The
+	// swapchain recreate path zero-initialises the layer history
+	// pair (same as the colour history above), so the next
+	// frame's layer history sample would otherwise read garbage.
+	// Reset the valid flag so the voxel pass falls through to
+	// the raw current value (without sampling history) for the
+	// first frame after recreate.
+	render->taaLayerHistoryValid = false;
 
 	if (hadGraphicsPipeline) {
 		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroyGraphicsPipeline");

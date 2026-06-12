@@ -119,10 +119,18 @@ struct VoxelSceneLighting {
 	std::array<float, 16> prevViewProjectionMatrix{};
 	// texel size x, texel size y, history valid (0/1), neighbourhood radius (1/3/5/7)
 	std::array<float, 4> taaHistoryParams{};
+	// 1.5 anti-flicker: per-layer temporal history parameters.
+	// texel size x, texel size y, history valid (0/1), blend factor
+	// (default 0.4 — `final = mix(raw, history, blend)`). Mirrors the
+	// `taaHistoryParams` layout so the shader contract stays
+	// predictable. Byte layout preserved as 16 B `vec4` after
+	// `taaHistoryParams`; the new `static_assert` block below
+	// confirms.
+	std::array<float, 4> taaLayerHistoryParams{};
 };
 static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
 static_assert(std::is_trivially_copyable_v<VoxelSceneLighting>);
-static_assert(sizeof(VoxelSceneLighting) == 608);
+static_assert(sizeof(VoxelSceneLighting) == 624);
 static_assert(offsetof(VoxelSceneLighting, skyColorAndFogDensity) == 0);
 static_assert(offsetof(VoxelSceneLighting, horizonColorAndFogStart) == 16);
 static_assert(offsetof(VoxelSceneLighting, groundColorAndFogMax) == 32);
@@ -143,6 +151,7 @@ static_assert(offsetof(VoxelSceneLighting, localPointLightParams) == 496);
 static_assert(offsetof(VoxelSceneLighting, taaParams) == 512);
 static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528);
 static_assert(offsetof(VoxelSceneLighting, taaHistoryParams) == 592);
+static_assert(offsetof(VoxelSceneLighting, taaLayerHistoryParams) == 608);
 
 constexpr size_t kVoxelMaterialCount = 5;
 

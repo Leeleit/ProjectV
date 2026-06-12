@@ -170,11 +170,40 @@ void RefreshSceneLightingBuffer(
 		render.taaEnabled ? 1.0f : 0.0f,
 	};
 	render.currentSceneLighting.prevViewProjectionMatrix = render.taaPrevViewProjectionMatrix;
+	// 1.5 (and TAA fix in the same edit): the colour history
+	// texel-size cells were previously left at 0 by this refresh
+	// path; the comment claimed the size was "patched in by
+	// FramePreparation via UploadSceneFrameResources" but no
+	// such patch existed in the codebase, which meant the
+	// `taa_resolve.frag` reprojection step ran with
+	// `texelSize = (0, 0)` and silently fell back to the
+	// "current-pixel-only" branch — the temporal blend was
+	// effectively disabled even when the user said `TAA on`.
+	// The fix is to populate the size here, since this function
+	// already has the swapchain extent available in
+	// `renderExtent`; the comment claiming a separate patch was
+	// the symptom of the bug, not the bug itself. Same fix
+	// applies to `taaLayerHistoryParams.xy` for the 1.5 layer
+	// anti-flicker history (without the texel size, the layer
+	// sampling would do `gl_FragCoord.xy * vec2(0)` and read
+	// from a single texel, breaking the temporal blend).
+	const float texelX = renderExtent.width > 0u
+		? 1.0f / static_cast<float>(renderExtent.width)
+		: 0.0f;
+	const float texelY = renderExtent.height > 0u
+		? 1.0f / static_cast<float>(renderExtent.height)
+		: 0.0f;
 	render.currentSceneLighting.taaHistoryParams = {
-		0.0f,
-		0.0f,
+		texelX,
+		texelY,
 		render.taaHistoryValid ? 1.0f : 0.0f,
 		static_cast<float>(render.taaNeighbourhoodRadius),
+	};
+	render.currentSceneLighting.taaLayerHistoryParams = {
+		texelX,
+		texelY,
+		render.taaLayerHistoryValid ? 1.0f : 0.0f,
+		render.taaLayerBlendFactor,
 	};
 }
 

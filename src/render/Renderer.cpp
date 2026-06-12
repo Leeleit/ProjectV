@@ -686,8 +686,30 @@ void RecordGraphicsCommands(
 		// on the slot that's not in use this frame; with
 		// `dynamicRenderingUnusedAttachments` enabled, the driver
 		// discards those writes.
+		// 1.5 anti-flicker: the main pass also binds the
+		// per-layer history pair (Location 2) so the voxel pass
+		// can write `outLayerMask` (R = CTSH, G = AOCC, B = LOCL,
+		// A = 1.0) into it. The image view is the layer scene
+		// color target — the per-frame `vkCmdCopyImage` at the
+		// bottom of the frame moves its contents into the layer
+		// history target so the next frame's voxel pass can
+		// sample them. The pipeline's
+		// `pColorAttachmentFormats[2]` is
+		// `projectv::taa::kTaaLayerHistoryColorFormat`
+		// (`R8G8B8A8_UNORM`), so the format must match — the
+		// `VulkanGraphicsPipeline.cpp` `colorAttachmentCount`
+		// is now 3 to match. Without this 3rd binding here,
+		// the voxel pass writes to Location 2 would be silently
+		// dropped by the driver (no validation layer in the
+		// current smoke path), and the next frame's history
+		// sample would read uninitialised memory — which is
+		// what caused the dim regression in the first 1.5
+		// smoke before this fix.
 		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
 		const VkImageView mainColor1View = taaOn ? render.taaSceneColorTarget->imageView : VK_NULL_HANDLE;
+		const VkImageView mainColor2View = render.taaLayerSceneColorTarget != nullptr
+			? render.taaLayerSceneColorTarget->imageView
+			: VK_NULL_HANDLE;
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -712,7 +734,19 @@ void RecordGraphicsCommands(
 			.storeOp = mainColor1View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
-		const VkRenderingAttachmentInfo colorAttachments[2] = { colorAttachment0, colorAttachment1 };
+		const VkRenderingAttachmentInfo colorAttachment2{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.pNext = nullptr,
+			.imageView = mainColor2View,
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.resolveImageView = VK_NULL_HANDLE,
+			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = mainColor2View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.clearValue = clearColorValue,
+		};
+		const VkRenderingAttachmentInfo colorAttachments[3] = { colorAttachment0, colorAttachment1, colorAttachment2 };
 		const VkRenderingAttachmentInfo depthAttachment{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -732,7 +766,7 @@ void RecordGraphicsCommands(
 			.renderArea = {{0, 0}, swapchain.extent},
 			.layerCount = 1,
 			.viewMask = 0,
-			.colorAttachmentCount = 2,
+			.colorAttachmentCount = 3,
 			.pColorAttachments = colorAttachments,
 			.pDepthAttachment = &depthAttachment,
 			.pStencilAttachment = nullptr,
@@ -1118,6 +1152,99 @@ void RecordGraphicsCommands(
 				// history instead of falling back to the current
 				// scene as the only sample.
 				render.taaHistoryValid = true;
+			}
+		}
+
+		// 1.5 anti-flicker: copy the current frame's
+		// `outLayerMask` from the layer scene color target to the
+		// layer history color target. Same ping-pong shape as
+		// the colour history above, except the copy happens
+		// every frame (the colour history copy is conditional
+		// on `taaHistoryValid` for the resolve-pass init dance,
+		// but the voxel pass always writes `outLayerMask` so
+		// the layer history is unconditionally valid after the
+		// first frame — `taaLayerHistoryValid` is set true on
+		// the very first frame's copy, just like the colour
+		// history's `else` branch above). The 1.5 init flag
+		// still exists for the first-frame-after-recreate
+		// case where the swapchain was just rebuilt and the
+		// voxel pass shouldn't try to read a zero-initialised
+		// history.
+		if (render.taaLayerSceneColorTarget != nullptr
+			&& render.taaLayerHistoryColorTarget != nullptr
+			&& render.taaLayerSceneColorTarget->image != VK_NULL_HANDLE
+			&& render.taaLayerHistoryColorTarget->image != VK_NULL_HANDLE) {
+			if (render.taaLayerHistoryValid) {
+				TransitionImage(
+					cmd,
+					render.taaLayerSceneColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_READ_BIT);
+				render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+				TransitionImage(
+					cmd,
+					render.taaLayerHistoryColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT);
+				render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+				const VkImageCopy layerHistoryCopyRegion{
+					.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
+					.srcOffset = { 0, 0, 0 },
+					.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
+					.dstOffset = { 0, 0, 0 },
+					.extent = { swapchain.extent.width, swapchain.extent.height, 1u },
+				};
+				vkCmdCopyImage(
+					cmd,
+					render.taaLayerSceneColorTarget->image,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					render.taaLayerHistoryColorTarget->image,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					1,
+					&layerHistoryCopyRegion);
+
+				TransitionImage(
+					cmd,
+					render.taaLayerSceneColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_READ_BIT,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+				render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				TransitionImage(
+					cmd,
+					render.taaLayerHistoryColorTarget->image,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+				render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			} else {
+				// First valid frame: same pattern as the colour
+				// history `else` branch above. The next frame's
+				// voxel pass can sample the freshly-copied
+				// history instead of falling back to the raw
+				// current value (the `blend = mix(raw, history,
+				// layerBlend)` then weights 0% history, 100% raw,
+				// which is the no-temporal-smoothing baseline).
+				render.taaLayerHistoryValid = true;
 			}
 		}
 

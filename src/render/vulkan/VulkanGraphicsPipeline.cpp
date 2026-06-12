@@ -74,6 +74,23 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
+	// 1.5 anti-flicker: per-layer temporal history. The voxel pass
+	// reads this at the current fragment UV, blends the freshly-
+	// computed raw CTSH/AOCC/LOCL with the previous frame's
+	// values, and uses the blended values for this frame's lighting.
+	// The freshly-computed raw values are then written to
+	// `outLayerMask` (Location 2 MRT output) and copied to this
+	// history at end of frame. The previous-frame TAA colour
+	// history is read-only inside the resolve pass and lives
+	// outside the graphics descriptor set, so this binding
+	// is the voxel pass's only layer-history access point.
+	VkDescriptorSetLayoutBinding{
+		.binding = 6,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
 };
 constexpr VkDescriptorSetLayoutCreateInfo kGraphicsDescriptorSetLayoutInfo{
 	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1110,6 +1127,25 @@ bool RefreshGraphicsResourceBindings(
 			.imageView = render->shadowImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
 		};
+		// 1.5 anti-flicker: layer history. Uses the same linear
+		// sampler as the colour history (the resolve pass and
+		// other consumers also share this sampler). The voxel
+		// pass uses the texture's texel size from
+		// `VoxelSceneLighting.taaLayerHistoryParams.xy` to step
+		// the read UV, not the sampler's filtering mode, so
+		// `LINEAR` / `NEAREST` is a non-issue for the layer
+		// history read; we keep the project's shared sampler
+		// for consistency. `SHADER_READ_ONLY_OPTIMAL` matches
+		// the layout the layer history is in after the per-
+		// frame `vkCmdCopyImage` (history copy block in
+		// `Renderer.cpp`).
+		const VkDescriptorImageInfo layerHistoryImageInfo{
+			.sampler = render->taaLinearSampler,
+			.imageView = render->taaLayerHistoryColorTarget != nullptr
+				? render->taaLayerHistoryColorTarget->imageView
+				: VK_NULL_HANDLE,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
 		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1181,6 +1217,20 @@ bool RefreshGraphicsResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
 				.pBufferInfo = &chunkVoxelPayloadBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			// 1.5 anti-flicker: per-layer temporal history (binding 6).
+			// See `kGraphicsDescriptorBindings` for the contract.
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 6,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &layerHistoryImageInfo,
+				.pBufferInfo = nullptr,
 				.pTexelBufferView = nullptr,
 			},
 		};
@@ -1792,15 +1842,26 @@ bool CreateGraphicsPipeline(
 			"main voxel pipeline requires it for the dual-format TAA contract");
 		return false;
 	}
-	const VkFormat mainColorAttachmentFormats[2] = {
+	const VkFormat mainColorAttachmentFormats[3] = {
 		swapchain->format,
 		projectv::taa::kTaaSceneColorFormat,
+		// 1.5 anti-flicker: per-layer temporal mask (R8G8B8A8_UNORM,
+		// 4 B/pixel). The voxel pass writes the raw per-layer values
+		// (CTSH, AOCC, LOCL) here; the next frame samples them as
+		// `sampler2D layerHistory` (binding 6) for temporal blending.
+		// `dynamicRenderingUnusedAttachments` allows the per-frame
+		// `VkRenderingAttachmentInfo::imageView` to be
+		// `VK_NULL_HANDLE` for slots the current variant doesn't
+		// actually write to (TAA-on skips slot 0, TAA-off skips
+		// slot 1), so the same pipeline declaration works for
+		// both shader variants.
+		projectv::taa::kTaaLayerHistoryColorFormat,
 	};
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
-		.colorAttachmentCount = 2,
+		.colorAttachmentCount = 3,
 		.pColorAttachmentFormats = mainColorAttachmentFormats,
 		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,

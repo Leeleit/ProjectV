@@ -39,16 +39,30 @@ void ShutdownVulkan(AppState *state)
 		// `Unfreed dedicated allocations found!`. The TAA resolve pipeline
 		// and its descriptor sets were already torn down by
 		// `DestroyGraphicsPipeline` above.
-		if (state->render.taaSceneColorTarget != nullptr || state->render.taaHistoryColorTarget != nullptr) {
+		if (state->render.taaSceneColorTarget != nullptr
+			|| state->render.taaHistoryColorTarget != nullptr
+			|| state->render.taaLayerSceneColorTarget != nullptr
+			|| state->render.taaLayerHistoryColorTarget != nullptr) {
 			projectv::taa::DestroyTaaRenderTargets(
 				&state->context,
 				*state->render.taaSceneColorTarget,
 				*state->render.taaHistoryColorTarget,
+				*state->render.taaLayerSceneColorTarget,
+				*state->render.taaLayerHistoryColorTarget,
 				state->render.taaLinearSampler);
 			delete state->render.taaSceneColorTarget;
 			state->render.taaSceneColorTarget = nullptr;
 			delete state->render.taaHistoryColorTarget;
 			state->render.taaHistoryColorTarget = nullptr;
+			// 1.5 — also tear down the per-layer history pair. Same
+			// pattern as the colour history above: the helper frees
+			// the GPU resources, then we drop the host-side pointer
+			// and reset the slot so a re-init starts from a clean
+			// state.
+			delete state->render.taaLayerSceneColorTarget;
+			state->render.taaLayerSceneColorTarget = nullptr;
+			delete state->render.taaLayerHistoryColorTarget;
+			state->render.taaLayerHistoryColorTarget = nullptr;
 		}
 	}
 

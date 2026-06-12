@@ -56,4 +56,26 @@ std::array<float, 4> BuildTaaHistoryParams(
 	};
 }
 
+// 1.5 anti-flicker: per-layer history parameters. Layout matches
+// `taaHistoryParams` (texelX, texelY, valid, blend) but the last
+// slot is the layer blend factor instead of the TAA neighbourhood
+// radius — those are independent. The layer history matches the
+// colour history's resolution (both render targets are allocated
+// at the swapchain extent), so the texel-size is the same.
+std::array<float, 4> BuildTaaLayerHistoryParams(
+	const VkExtent2D extent,
+	bool historyValid,
+	float blendFactor)
+{
+	if (extent.width == 0u || extent.height == 0u) {
+		return {0.0f, 0.0f, historyValid ? 1.0f : 0.0f, blendFactor};
+	}
+	return {
+		1.0f / static_cast<float>(extent.width),
+		1.0f / static_cast<float>(extent.height),
+		historyValid ? 1.0f : 0.0f,
+		blendFactor,
+	};
+}
+
 } // namespace projectv::taa

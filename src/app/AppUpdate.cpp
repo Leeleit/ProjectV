@@ -406,6 +406,12 @@ bool UpdateApp(
 		world->voxelWorld) {
 		render->taaEnabled = !render->taaEnabled;
 		render->taaHistoryValid = false;
+		// 1.5 — same reset for the layer history pair. Toggling
+		// TAA on/off should also drop the layer history (same
+		// underlying reason — the next frame's blending would
+		// be against stale per-layer data from before the
+		// toggle).
+		render->taaLayerHistoryValid = false;
 	}
 	// TAA tuning ladder: 4 live parameters behind `;`/`'`/`-`/`=`/`,`/`.`.
 	// Jitter scale is a continuous multiplier in [0, 2] (step 0.25) on the
@@ -418,18 +424,22 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaJitterScale)) {
 		render->taaJitterScale = std::clamp(render->taaJitterScale - 0.25f, 0.0f, 2.0f);
 		render->taaHistoryValid = false;
+		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaJitterScale)) {
 		render->taaJitterScale = std::clamp(render->taaJitterScale + 0.25f, 0.0f, 2.0f);
 		render->taaHistoryValid = false;
+		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaBlend)) {
 		render->taaBlend = std::clamp(render->taaBlend - 0.05f, 0.0f, 1.0f);
 		render->taaHistoryValid = false;
+		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaBlend)) {
 		render->taaBlend = std::clamp(render->taaBlend + 0.05f, 0.0f, 1.0f);
 		render->taaHistoryValid = false;
+		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
 		// Cycle 1 -> 3 -> 5 -> 7 -> 1. The shader clamps to the same
@@ -447,9 +457,17 @@ bool UpdateApp(
 			render->taaNeighbourhoodRadius = kNeighbourhoodCycle[nextIndex];
 		}
 		render->taaHistoryValid = false;
+		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::InvalidateTaaHistory)) {
 		render->taaHistoryValid = false;
+		// 1.5 — `.` invalidates both the colour and layer
+		// history. The user's intent is "reset all TAA
+		// history so the next frame starts fresh"; dropping
+		// just the colour would leave the layer history
+		// stale and the voxel pass would blend against
+		// pre-invalidated data.
+		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseLightingExposure)) {
 		AdjustLightingExposure(*render, -kLightingExposureStepStops);
@@ -705,6 +723,14 @@ bool UpdateApp(
 	debug->stats.taaCasSharpnessMax = render->taaCasSharpnessMax;
 	debug->stats.taaCameraCutCount = render->taaCameraCutCount;
 	debug->stats.taaCameraCutMaxDelta = render->taaCameraCutMaxDelta;
+	// 1.5 anti-flicker mirror. `taaLayerHistoryValid` is reset by
+	// the same triggers as the colour history (`taaHistoryValid`)
+	// — swapchain recreate, world reload, Taa toggle, jitter
+	// scale, blend, neighbourhood radius, `.` invalidate, and
+	// the 1.2 camera-cut detector — so the per-frame DebugStats
+	// mirror reflects the same flag the voxel pass will sample.
+	debug->stats.taaLayerHistoryValid = render->taaLayerHistoryValid;
+	debug->stats.taaLayerBlendFactor = render->taaLayerBlendFactor;
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;
 	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);

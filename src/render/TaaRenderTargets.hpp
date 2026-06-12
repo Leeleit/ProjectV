@@ -51,6 +51,19 @@ namespace projectv::taa {
 // the captured `taa_scene_color_format` sidecar key.
 inline constexpr VkFormat kTaaSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 
+// TAA per-layer history format (1.5 anti-flicker). `R8G8B8A8_UNORM`
+// (4 B/pixel) holds the 3 layer values (CTSH, AOCC, LOCL) in the
+// RGB channels with alpha=1.0. The values are smooth floats in
+// [0, 1] (already normalised by their respective `Compute*Visibility`
+// functions in `voxel.frag`); 8-bit precision is enough for the
+// temporal smoothing the layer anti-flicker is meant to provide
+// (we're not doing precise measurements, just visual smoothing).
+// Same 4 B/pixel as `kTaaSceneColorFormat`; using a separate
+// constant because the two formats are independent and may evolve
+// separately (e.g. bump to R16G16UNORM if precision becomes an
+// issue, or downsample layer history further for perf).
+inline constexpr VkFormat kTaaLayerHistoryColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
 // TAA offscreen render target + linear sampler. Created / recreated in
 // `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` so the size stays in
 // lockstep with the swapchain extent. Two identical
@@ -70,15 +83,24 @@ struct OffscreenColorTarget {
 	projectv::taa::VmaAllocationHandle allocation = nullptr;
 };
 
-// Build / recreate the two TAA offscreen color images + linear sampler.
-// Returns false on any allocation / view creation failure; the caller
-// is expected to clean up partial state and abort frame submission
-// until the next successful recreate.
+// Build / recreate the TAA offscreen color images (colour +
+// per-layer history) + linear sampler. Returns false on any
+// allocation / view creation failure; the caller is expected to
+// clean up partial state and abort frame submission until the next
+// successful recreate.
+//
+// 1.5 anti-flicker: the function now also allocates the
+// per-layer history pair (CTSH, AOCC, LOCL). The same extent
+// and recreate cadence applies — both image sets follow the
+// swapchain extent and re-allocate together on resize. Same
+// ping-pong shape (current + previous) as the colour history.
 bool CreateOrRecreateTaaRenderTargets(
 	VulkanContextState *context,
 	VkExtent2D extent,
 	OffscreenColorTarget &sceneColor,
 	OffscreenColorTarget &historyColor,
+	OffscreenColorTarget &layerSceneColor,
+	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler);
 
 // Free everything allocated by `CreateOrRecreateTaaRenderTargets`.
@@ -87,6 +109,8 @@ void DestroyTaaRenderTargets(
 	VulkanContextState *context,
 	OffscreenColorTarget &sceneColor,
 	OffscreenColorTarget &historyColor,
+	OffscreenColorTarget &layerSceneColor,
+	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler);
 
 // Transition helpers used by `Renderer.cpp::RecordGraphicsCommands`.

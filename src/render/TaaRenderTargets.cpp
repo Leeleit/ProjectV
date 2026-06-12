@@ -68,6 +68,8 @@ bool CreateOrRecreateTaaRenderTargets(
 	const VkExtent2D extent,
 	OffscreenColorTarget &sceneColor,
 	OffscreenColorTarget &historyColor,
+	OffscreenColorTarget &layerSceneColor,
+	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler)
 {
 	if (!context || !context->allocator || context->device == VK_NULL_HANDLE) {
@@ -80,40 +82,61 @@ bool CreateOrRecreateTaaRenderTargets(
 	// Tear down the previous pair before we allocate. The recreate path
 	// is the only legal way to resize these targets so any partial state
 	// from a failed create is the same as "no allocation yet".
-	DestroyTaaRenderTargets(context, sceneColor, historyColor, linearSampler);
+	DestroyTaaRenderTargets(
+		context,
+		sceneColor,
+		historyColor,
+		layerSceneColor,
+		layerHistoryColor,
+		linearSampler);
 
 	const VkExtent3D imageExtent{extent.width, extent.height, 1u};
-	// Source of truth: `kTaaSceneColorFormat` in `TaaRenderTargets.hpp`.
-	// The graphics pipeline declaration in `VulkanGraphicsPipeline.cpp`
-	// reads the same constant so the two cannot drift.
-	const VkFormat targetFormat = kTaaSceneColorFormat;
+	// Source of truth: `kTaaSceneColorFormat` and
+	// `kTaaLayerHistoryColorFormat` in `TaaRenderTargets.hpp`. The
+	// graphics pipeline declaration in `VulkanGraphicsPipeline.cpp`
+	// reads the same constants so they cannot drift.
+	const VkFormat sceneColorFormat = kTaaSceneColorFormat;
+	const VkFormat layerColorFormat = kTaaLayerHistoryColorFormat;
 
-	VkImageCreateInfo imageInfo{};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.format = targetFormat;
-	imageInfo.extent = imageExtent;
-	imageInfo.mipLevels = 1u;
-	imageInfo.arrayLayers = 1u;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.usage =
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-		VK_IMAGE_USAGE_SAMPLED_BIT |
-		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-		VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	// Both image sets share the same `VkImageCreateInfo` (usage
+	// flags, tiling, samples) — only the format differs. Build a
+	// common template and have the lambda copy it per call.
+	const VkImageCreateInfo imageInfoTemplate{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = VK_FORMAT_UNDEFINED, // patched per call
+		.extent = imageExtent,
+		.mipLevels = 1u,
+		.arrayLayers = 1u,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage =
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+			VK_IMAGE_USAGE_SAMPLED_BIT |
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = 0,
+		.pQueueFamilyIndices = nullptr,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
 
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	allocationInfo.flags = 0;
 
-	auto allocateTarget = [&](OffscreenColorTarget &target, const char *name) -> bool {
+	auto allocateTarget = [&](
+		OffscreenColorTarget &target,
+		VkFormat format,
+		const char *name) -> bool {
 		// Cast the `void*` handle back to its real VMA type for the
 		// call. The `void*` representation in the public header is
 		// just there to avoid leaking `vk_mem_alloc.h` into every
 		// translation unit that needs the offscreen-target struct.
+		VkImageCreateInfo imageInfo = imageInfoTemplate;
+		imageInfo.format = format;
 		VmaAllocation allocation = nullptr;
 		if (vmaCreateImage(
 				context->allocator,
@@ -131,7 +154,7 @@ bool CreateOrRecreateTaaRenderTargets(
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfo.image = target.image;
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = targetFormat;
+		viewInfo.format = format;
 		viewInfo.components = {
 			VK_COMPONENT_SWIZZLE_IDENTITY,
 			VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -149,12 +172,44 @@ bool CreateOrRecreateTaaRenderTargets(
 		return true;
 	};
 
-	if (!allocateTarget(sceneColor, "TaaSceneColorImage")) {
-		DestroyTaaRenderTargets(context, sceneColor, historyColor, linearSampler);
+	if (!allocateTarget(sceneColor, sceneColorFormat, "TaaSceneColorImage")) {
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			linearSampler);
 		return false;
 	}
-	if (!allocateTarget(historyColor, "TaaHistoryColorImage")) {
-		DestroyTaaRenderTargets(context, sceneColor, historyColor, linearSampler);
+	if (!allocateTarget(historyColor, sceneColorFormat, "TaaHistoryColorImage")) {
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			linearSampler);
+		return false;
+	}
+	if (!allocateTarget(layerSceneColor, layerColorFormat, "TaaLayerSceneColorImage")) {
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			linearSampler);
+		return false;
+	}
+	if (!allocateTarget(layerHistoryColor, layerColorFormat, "TaaLayerHistoryColorImage")) {
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			linearSampler);
 		return false;
 	}
 
@@ -171,7 +226,13 @@ bool CreateOrRecreateTaaRenderTargets(
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
 	if (vkCreateSampler(context->device, &samplerInfo, nullptr, &linearSampler) != VK_SUCCESS) {
-		DestroyTaaRenderTargets(context, sceneColor, historyColor, linearSampler);
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			linearSampler);
 		return false;
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(linearSampler), VK_OBJECT_TYPE_SAMPLER, "TaaLinearSampler");
@@ -183,6 +244,8 @@ void DestroyTaaRenderTargets(
 	VulkanContextState *context,
 	OffscreenColorTarget &sceneColor,
 	OffscreenColorTarget &historyColor,
+	OffscreenColorTarget &layerSceneColor,
+	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler)
 {
 	if (!context) {
@@ -194,6 +257,8 @@ void DestroyTaaRenderTargets(
 	}
 	DestroyTarget(context, sceneColor);
 	DestroyTarget(context, historyColor);
+	DestroyTarget(context, layerSceneColor);
+	DestroyTarget(context, layerHistoryColor);
 }
 
 void TransitionTaaSceneColorForWrite(

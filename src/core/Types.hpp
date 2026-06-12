@@ -452,6 +452,15 @@ struct DebugStats {
 	int32_t taaNeighbourhoodRadius = 1;
 	// CAS (1.3) ceiling mirror; see `RenderState` for the contract.
 	float taaCasSharpnessMax = 0.5f;
+	// 1.5 — layer history validity mirror. See `RenderState` for the
+	// contract; the HUD exposes a single boolean.
+	bool taaLayerHistoryValid = false;
+	// 1.5 — layer blend factor mirror; see `RenderState` for the
+	// contract. Not currently surfaced in the HUD (the value is
+	// authored at startup and only changed via env var), but
+	// exposed through this mirror so sidecar captures can verify
+	// it.
+	float taaLayerBlendFactor = 0.4f;
 	// Camera-cut detection mirror (1.2). Same source fields as in
 	// `RenderState`; see that block for the contract.
 	uint32_t taaCameraCutCount = 0;
@@ -629,6 +638,14 @@ struct RenderState {
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	// 1.5 anti-flicker: per-layer (CTSH/AOCC/LOCL) image
+	// layout trackers. Same shape and lifecycle as the colour
+	// history layout trackers above — both go through the
+	// per-frame transition + copy block in `Renderer.cpp` and
+	// are reset to `UNDEFINED` by `VulkanSwapchain.cpp` on
+	// swapchain recreate.
+	VkImageLayout taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImageLayout taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
@@ -729,6 +746,38 @@ struct RenderState {
 	// allocation.
 	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;
 	projectv::taa::OffscreenColorTarget *taaHistoryColorTarget = nullptr;
+	// 1.5 anti-flicker: per-layer (CTSH, AOCC, LOCL) temporal history
+	// attachments. R8G8B8A8_UNORM (4 B/pixel) for the 3 layer values
+	// in RGB + alpha=1.0. The voxel pass reads from
+	// `taaLayerHistoryColorTarget` and writes the freshly-computed raw
+	// values to `taaLayerSceneColorTarget`; the per-frame
+	// `vkCmdCopyImage` in `Renderer.cpp` makes the current frame's
+	// values the next frame's history input. See
+	// `TaaRenderTargets.hpp::kTaaLayerHistoryColorFormat` for the
+	// format choice rationale.
+	projectv::taa::OffscreenColorTarget *taaLayerSceneColorTarget = nullptr;
+	projectv::taa::OffscreenColorTarget *taaLayerHistoryColorTarget = nullptr;
+	// 1.5 — companion init flag for the layer history. Mirrors the
+	// 1.2 `taaPrevViewProjectionMatrixInitialized` pattern: the voxel
+	// pass should not sample the layer history on the very first
+	// frame after (re)init because the zero-initialised content is
+	// not a real previous-frame value (it would still blend cleanly
+	// because layer values are 0-1 floats, but the explicit gate
+	// matches the existing init-flag contract and keeps the
+	// history-invalidation semantics consistent). Reset by
+	// `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` next to the
+	// `taaHistoryColorTarget` reset.
+	bool taaLayerHistoryValid = false;
+	// 1.5 anti-flicker layer blend factor. 0 = no temporal
+	// smoothing (raw current value used in lighting), 1 = full
+	// reliance on history (previous-frame value used in lighting,
+	// current frame is just written to history for next frame's
+	// read). Default 0.4 matches a 1-frame temporal filter
+	// (`final = 0.6 * raw_current + 0.4 * raw_previous`) — enough
+	// to kill per-frame flicker on AOCC and local-light DDA, not
+	// so high that legitimate one-frame lighting changes
+	// (e.g. toggling a light on/off) are smeared across frames.
+	float taaLayerBlendFactor = 0.4f;
 	VkSampler taaLinearSampler = VK_NULL_HANDLE;
 	VkImageView taaResolveAttachmentImageView = VK_NULL_HANDLE;
 	VkPipelineLayout taaResolvePipelineLayout = VK_NULL_HANDLE;
