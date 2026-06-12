@@ -197,6 +197,17 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::StopMusic, SDL_SCANCODE_E);
 	BindAction(input, InputAction::MusicVolumeDown, SDL_SCANCODE_7);
 	BindAction(input, InputAction::MusicVolumeUp, SDL_SCANCODE_8);
+	// **Track switching, 2026-06-12.** `9` and `0`
+	// are the only adjacent free digit pair in
+	// the existing `InputAction` table (the
+	// adjacent digits `7` and `8` were taken
+	// by the volume-up / volume-down actions
+	// above). `9` conventionally means "skip
+	// ahead in time" (next track); `0`
+	// conventionally means "rewind" (previous
+	// track). Both wrap around the playlist.
+	BindAction(input, InputAction::NextMusicTrack, SDL_SCANCODE_9);
+	BindAction(input, InputAction::PreviousMusicTrack, SDL_SCANCODE_0);
 }
 
 void HandleInputActionEvent(

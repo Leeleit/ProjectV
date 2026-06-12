@@ -592,6 +592,12 @@ bool UpdateApp(
 		if (ConsumeInputActionPressed(*input, InputAction::MusicVolumeUp)) {
 			audio->increaseVolume(kMusicVolumeStep);
 		}
+		if (ConsumeInputActionPressed(*input, InputAction::NextMusicTrack)) {
+			audio->nextTrack();
+		}
+		if (ConsumeInputActionPressed(*input, InputAction::PreviousMusicTrack)) {
+			audio->previousTrack();
+		}
 		// Per-frame tick: 5-second playlist refresh
 		// + "current track removed" handling.
 		// Cheap when `m_lastPlaylistRefresh` is

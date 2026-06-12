@@ -92,10 +92,28 @@ public:
 	// apply to the music group. `step` is in the same
 	// 0..1 units as `volume()` (0.05 matches the existing
 	// `kLightingExposureStepStops` style).
+	// `nextTrack` / `previousTrack`: cycle through the
+	// 5-sec-refresh playlist with wrap-around
+	// (next from last → 0; prev from 0 → last).
+	// Behavior on each state:
+	// - Playing: stop current, reload, start new
+	//   (interrupts the current track).
+	// - Paused: stop current, reload (state stays
+	//   Paused; the new track is loaded but not
+	//   playing). Resume would now play the new
+	//   track.
+	// - Stopped: just update the index (no sound
+	//   to reload; the next play will load the
+	//   new track).
+	// Empty playlist: no-op (hotkey does
+	// nothing, same as the existing play/pause
+	// no-op behavior on an empty playlist).
 	void togglePlayPause();
 	void stop();
 	void increaseVolume(float step);
 	void decreaseVolume(float step);
+	void nextTrack();
+	void previousTrack();
 
 	// **State accessors** for the HUD / DebugStats
 	// mirror. Cheap: all inline reads, no miniaudio
@@ -126,6 +144,19 @@ private:
 
 	// Tear down the current `m_sound` if loaded.
 	void unloadCurrentTrack();
+
+	// **Internal helper for `nextTrack` / `previousTrack`.**
+	// Clamps `newIndex` to a valid position in
+	// the playlist, updates `m_currentIndex` and
+	// the cached `m_currentTrackName`, then
+	// re-loads the sound according to the
+	// current `m_state` (Playing → reload + start;
+	// Paused → reload; Stopped → just update
+	// index). No-op if the playlist is empty.
+	// Returns true on success (the new track
+	// loaded and, when state was Playing, started
+	// without error).
+	bool goToTrack(size_t newIndex);
 
 	// Apply `m_volume` to the music group.
 	void applyVolume();

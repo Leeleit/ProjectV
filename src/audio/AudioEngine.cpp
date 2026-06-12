@@ -373,6 +373,104 @@ void AudioEngine::decreaseVolume(float step)
 	applyVolume();
 }
 
+bool AudioEngine::goToTrack(size_t newIndex)
+{
+	if (m_playlist.empty()) {
+		// No tracks to switch to. Caller
+		// (nextTrack / previousTrack) is a no-op
+		// in this case. Don't touch
+		// `m_currentIndex` so the next 5-sec
+		// refresh that finds tracks picks up
+		// at the right position.
+		return false;
+	}
+	// Wrap clamp: handles the wrap-around case
+	// where `nextTrack` passed `m_playlist.size()`
+	// or `previousTrack` passed `(size_t)-1`.
+	newIndex = newIndex % m_playlist.size();
+	m_currentIndex = newIndex;
+	m_currentTrackName = m_playlist[m_currentIndex].filename().string();
+	m_pausedCursorMs = 0;
+
+	// Behavior depends on the current state —
+	// see the per-state block in the hpp
+	// comment. Common to all: tear down the
+	// currently loaded sound first (no-op when
+	// `m_soundLoaded == false`, e.g. when
+	// `m_state == Stopped` and we never started
+	// playback).
+	unloadCurrentTrack();
+
+	switch (m_state) {
+	case MusicState::Playing:
+		// Interrupt: load the new track and start
+		// it from 0. The user pressed Next/Prev
+		// mid-playback; they expect the new
+		// track to start, not the old one to
+		// keep playing.
+		if (!loadCurrentTrack()) {
+			m_state = MusicState::Stopped;
+			return false;
+		}
+		if (ma_sound_start(&m_sound) != MA_SUCCESS) {
+			runtime::LogRuntimeFailure(
+				"Audio",
+				"AudioEngine.goToTrack.ma_sound_start",
+				"ma_sound_start returned non-success after track switch");
+			m_state = MusicState::Stopped;
+			return false;
+		}
+		return true;
+
+	case MusicState::Paused:
+		// Replace the loaded sound so the next
+		// `togglePlayPause` call plays the NEW
+		// track. State stays Paused so the HUD
+		// line still says PAUSE.
+		if (!loadCurrentTrack()) {
+			m_state = MusicState::Stopped;
+			return false;
+		}
+		return true;
+
+	case MusicState::Stopped:
+		// No sound to unload-and-reload; the
+		// index update is enough. The next
+		// `togglePlayPause` will `loadCurrentTrack()`
+		// at the new index and start.
+		return true;
+	}
+	return false;
+}
+
+void AudioEngine::nextTrack()
+{
+	if (m_playlist.empty()) {
+		return;
+	}
+	// Wrap forward: index `playlist.size() - 1` →
+	// 0, index `playlist.size() - 2` → `playlist.size() - 1`,
+	// etc. The `+ playlist.size()` before the
+	// modulo keeps the arithmetic unsigned-safe
+	// (otherwise `(0u + 1u) % 1u == 0` which is
+	// fine but `(0u - 1u) % 1u` would underflow).
+	const size_t next = (m_currentIndex + 1u) % m_playlist.size();
+	goToTrack(next);
+}
+
+void AudioEngine::previousTrack()
+{
+	if (m_playlist.empty()) {
+		return;
+	}
+	// Wrap backward: index 0 → `playlist.size() - 1`,
+	// index 1 → 0, etc. The `+ playlist.size()` keeps
+	// the subtraction unsigned-safe (otherwise
+	// `(0u - 1u)` would underflow to `UINT_MAX`).
+	const size_t prev = (m_currentIndex + m_playlist.size() - 1u) % m_playlist.size();
+	goToTrack(prev);
+}
+
 void AudioEngine::tick()
 {
 	if (!m_engineInitialized) {

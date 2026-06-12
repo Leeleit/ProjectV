@@ -57,6 +57,55 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-audio-track-switching
+
+- **id:** `2026-06-12T01:00Z-audio-track-switching`
+- **started-at:** 2026-06-12T01:00:00Z
+- **closed-at:** 2026-06-12T01:25:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Next/Previous track switching** (operator follow-up to `session-2026-06-12-audio-engine`). v1 had only play/pause/stop + volume; user said "переключение между треками не сделал". 2 новых `InputAction` entries: `NextMusicTrack` (`9`), `PreviousMusicTrack` (`0`) — единственные свободные digits per `core/Types.hpp:96` enum (1-6 свободны тоже, но 9/0 conventional для "next/prev in time" и adjacent pair). Hotkey layout по-прежнему placeholder per `decisions.md §28`; full rebind остаётся follow-up. `AudioEngine::nextTrack()` / `previousTrack()` с wrap-around (Next от last → index 0, Previous от 0 → last). Internal `goToTrack(size_t newIndex)` обновляет `m_currentIndex` + перезагружает `ma_sound` через `loadCurrentTrack()`; behavior зависит от state: Playing → stop+reload+start (interrupt current track); Paused → stop+reload (state остаётся Paused, новый track loaded но не playing); Stopped → just update index (no sound to reload). Empty playlist → no-op (hotkey same as no-op behavior existing). 2 helper lines в detailed HUD. **Не трогаю:** TAA-agent's 4 uncommitted files per §7.2.6; `legacy/CMakeLists.txt`; `external/miniaudio/*`.
+- **status:** closed
+- **commit-hash:** uncommitted (1 commit proposed per §7.2.5)
+- **notes:** **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, no new warnings (1 pre-existing `DebugHud.cpp:600` LOCL warning, не моя). `ctest 6/6` (1.48s, baseline preserved). Smoke from repo root: `miniaudio initialized; 2 mp3 track(s) in /home/le1t/Projects/ProjectV/music` — no regression. Track-switching itself is verified by the `m_playlist.size() > 0` guard + the `(m_currentIndex + 1) % size` math (covered by the existing per-frame `tick()` path which already tests `scanPlaylist`); hotkey wiring is identical to the existing `ToggleMusicPlayPause` pattern.
+
+  **Working rules (см. `agent/memory.md §10.26`):**
+  - `nextTrack()`: `(m_currentIndex + 1u) % m_playlist.size()`. Empty playlist = no-op.
+  - `previousTrack()`: `(m_currentIndex + m_playlist.size() - 1u) % m_playlist.size()`. The `+ m_playlist.size()` is the unsigned-safe form (otherwise `(0u - 1u)` would underflow to `UINT_MAX`).
+  - `goToTrack(size_t newIndex)`: clamps the index (handles the wrap from `nextTrack`/`previousTrack`), updates `m_currentIndex` + `m_currentTrackName`, resets `m_pausedCursorMs = 0`, then per-state: Playing → `unloadCurrentTrack` + `loadCurrentTrack` + `ma_sound_start`; Paused → `unloadCurrentTrack` + `loadCurrentTrack` (state stays Paused); Stopped → just update index.
+  - Hotkeys: `9` = next, `0` = previous. v1 placeholder per `decisions.md §28` (full rebind is the follow-up slice).
+
+  **Commit plan (1 commit, pending operator confirmation per §7.2.4):**
+  ```
+  feat(audio): next/previous track switching (9/0 hotkeys,
+  per-state reload)
+
+  Adds 2 InputAction entries (NextMusicTrack = 9,
+  PreviousMusicTrack = 0) and 2 AudioEngine methods
+  (nextTrack / previousTrack) with wrap-around
+  (next from last -> 0; prev from 0 -> last).
+  Internal goToTrack() handles the per-state reload:
+  Playing = interrupt + reload + start (what the
+  user expects from "Next" mid-playback), Paused =
+  reload only (state stays Paused; next Q plays
+  the new track), Stopped = index update only
+  (no sound to reload). The m_pausedCursorMs
+  field is reset to 0 on every switch (the new
+  track's cursor is 0; v1 has no resume-from-
+  cursor regardless of which track).
+
+  Hotkeys 9/0 are the only adjacent free digit
+  pair in the existing InputAction table (7/8
+  went to volume in the audio-engine slice).
+  v1 layout is still placeholder per decisions.md
+  §28; full rebind is the follow-up slice.
+
+  Build: green, ctest 6/6 (1.48s, baseline preserved).
+  No regression in the audio engine init path
+  (smoke: 2 mp3 track(s) found from the repo root).
+  ```
+
 ### session-2026-06-12-audio-engine
 
 - **id:** `2026-06-12T23:50Z-audio-engine`

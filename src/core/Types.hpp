@@ -205,6 +205,22 @@ enum class InputAction : uint8_t {
 	StopMusic,
 	MusicVolumeDown,
 	MusicVolumeUp,
+	// **Track switching, 2026-06-12.** Next /
+	// previous track through the 5-sec-refresh
+	// playlist. Hotkeys `9` (next) and `0`
+	// (previous) are the only adjacent free
+	// digits in the existing `InputAction` table
+	// (1-6 are also free, but 9/0 are the
+	// conventional "skip ahead / rewind" pair in
+	// media-player UX). v1 layout is placeholder;
+	// the full hotkey rebind (per the operator's
+	// note in the audio-engine session) remains
+	// the follow-up slice. `nextTrack()` and
+	// `previousTrack()` wrap around the playlist
+	// (next from last → 0; prev from 0 → last);
+	// empty playlist = no-op.
+	NextMusicTrack,
+	PreviousMusicTrack,
 	Count,
 };
 

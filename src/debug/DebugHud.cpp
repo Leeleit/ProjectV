@@ -973,6 +973,16 @@ size_t BuildHelperLines(
 		// E = stop, 7/8 = vol-/vol+.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC Q PLAY  E STOP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 7 DN   8 UP");
+		// **Track switching, 2026-06-12.** `9` =
+		// next, `0` = previous. The bracket and
+		// backslash / backtick keys are spelled
+		// out in `TIMECTL` above; the digits are
+		// also too narrow for the long-form
+		// "NEXT" / "PREV" labels, so the helper
+		// uses the same "9 SKIP  0 BACK" shape
+		// that the volume-down / volume-up line
+		// uses for the digit pair.
+		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 9 NEXT  0 PREV");
 	} else {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");
