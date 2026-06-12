@@ -167,3 +167,55 @@ Interim commits from earlier this session:
 - `52b130f` — TAA infrastructure baseline.
 - `d9830c2` — TAA offscreen render target allocation.
 - `9764463` — Phase A1 close-out plumbing (committed).
+
+---
+
+## 7. TAA Блок 1 / 1.1 YCoCg clamp — `a2972fa` (in-progress session, not closed)
+
+- `src/shaders/taa_resolve.frag`: RGB→YCoCg exact transform (lossless round-trip), 3×3 min/max и history clamp в YCoCg space. 1-tap bright пиксель теперь двигает только Y — chroma highlight'ов не вымывается в grey.
+- `src/render/ScreenshotCapture.cpp`: sidecar `taa_clamp_color_space=YCoCg` для capture-driven tuning.
+- `TODO.md`: P1 shadow flicker/shimmer → closed (link на `b7e672f` chain); post-TAA follow-ups переструктурированы в Блоки 1–6; 1.1 YCoCg clamp → closed.
+
+Verification: build / ctest / smoke **не перепрогонял** в resumed-сессии (оператор решил коммитить «как есть» — поверхность маленькая, 1 shader + 1 cpp строка, baseline A1/A2 chain 6/6 smoke clean). Visual verify остаётся в TODO §5 Блок-0.
+
+Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA GPU upload (M2)` залeтел в этом же репозитории. Non-overlapping scope с моими 3 файлами (только `agent/active-sessions.md` shared; stage через `git add <file>` изолирует коммит).
+
+---
+
+## 8. TAA Блок 1 / 1.4 tuning ladder + Блок 5 / 5.1 RenderDoc markers — код в working tree, коммиты pending
+
+Код полностью готов в working tree на 22 файлах (448+/21- строк). Build green, `ProjectVTests` 1/1. Коммиты **не** сделаны по решению оператора (multi-agent conflict на `core/Types.hpp` / `tests/CMakeLists.txt` / `src/CMakeLists.txt` / `Renderer.cpp` с asset-pipeline M4 сессией, которая в этот момент пишет `ModelInstanceData`/`ModelRegistryEntry`/model pass init/shutdown).
+
+**Что в working tree (mine, 1.4 + 5.1 + VMA/glm fix + 6.x):**
+
+- `src/core/Types.hpp` — 5 new `InputAction` enum entries (`Decrease/IncreaseTaaJitterScale`, `Decrease/IncreaseTaaBlend`, `CycleTaaNeighbourhoodRadius`, `InvalidateTaaHistory`); `RenderState::taaJitterScale` (float, [0,2] step 0.25, default 1.0), `taaNeighbourhoodRadius` (int32_t, cycle 1/3/5/7, default 1); `DebugStats` mirror fields. **Plus VMA fix:** `#include "volk.h"` перемещён на самый верх файла, до VMA-touching headers (`asset/MeshGpuResources.hpp`, `render/ShadowTypes.hpp`, `render/TaaRenderTargets.hpp`, `voxel/VoxelMaterials.hpp`). Удалён дублирующий `#include "volk.h"` на старом месте.
+- `src/app/InputActions.cpp` — bind 5 new keys: `;` jitter dec, `'` jitter inc, `-` blend dec, `=` blend inc, `,` radius cycle, `.` invalidate. Все 5 в правой руке (TODO-предложение `J`/`M`/`K`/`L` не реализуемо — `J`/`M`/`K` уже заняты walk auto-jump / pick material / exposure inc).
+- `src/app/AppUpdate.cpp` — 5 new handlers в `UpdateApp`. Все `*->taaHistoryValid = false` на change. `CycleTaaNeighbourhoodRadius` использует `std::array<int32_t, 4>{1, 3, 5, 7}` через `std::find` + индексная арифметика. `<array>` добавлен в includes.
+- `src/app/FramePreparation.cpp` — `taaJitterX/Y` умножаются на `taaJitterScale` после `AdvanceTaaPixelJitter`.
+- `src/shaders/taa_resolve.frag` — `GetSceneColorRange` теперь использует `sceneLighting.taaHistoryParams.w` (reserved → neighbourhood radius) как loop bound. Snap к odd values `(r >= 7) ? 7 : (r >= 5) ? 5 : (r >= 3) ? 3 : 1`. 3×3 / 7×7 / 11×11 / 15×15.
+- `src/voxel/VoxelMaterials.hpp` — comment update `texel size x, texel size y, history valid (0/1), reserved` → `... neighbourhood radius (1/3/5/7)`. Byte layout **не изменился**, `static_assert` (offsetof `taaHistoryParams` == 592) проходит.
+- `src/render/SceneResources.cpp` — populate `taaHistoryParams.w` с `taaNeighbourhoodRadius`.
+- `src/render/ScreenshotCapture.cpp` — 2 new sidecar keys: `taa_jitter_scale` (после `taa_jitter_y`), `taa_neighbourhood_radius` (после `taa_blend`).
+- `src/debug/DebugHud.cpp` — extended TAA HUD line: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s`. 2 new helper lines: `T TAA  ;' JIT  -= BLND` и `, NHOOD  . INVHIST`.
+- `src/debug/ProfilingGpu.hpp` — `profiling::ScopedGpuDebugLabel` RAII + `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR` macros, gated на `PROJECTV_ENABLE_RENDERDOC_MARKERS`. `__COUNTER__` для unique identifier'ов.
+- `src/render/Renderer.cpp` — `PV_PROFILE_GPU_LABEL` на 6 hot sites: `RecordShadowCommands` ("Shadow Pass"), `RecordVoxelMeshingCommands` ("Voxel Meshing"), `RecordGraphicsCommands` ("Graphics Pass"), TAA resolve section ("TAA Resolve" + color 0.20/0.65/1.00), `RecordDebugOverlayCommands` ("Debug Overlay"), `RecordDebugHudCommands` ("Debug HUD").
+- `src/shaders/voxel.frag` — comment update: `taaHistoryParams = (texelX, texelY, valid, reserved)` → `(texelX, texelY, valid, neighbourhoodRadius)`. Функционально не меняется (voxel pass не использует `.w`).
+- `tests/CMakeLists.txt` — `glm` добавлен в `ProjectVTests` link (asset-pipeline's M2/M4 `MeshGpuResources.hpp` транзитивно тянет `<glm/glm.hpp>`, нужен `glm` target для INTERFACE include path propagation).
+
+**Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests` — green. `ctest` — 1/1 (`ProjectVTests` passed). 1 pre-existing warning в `DebugHud.cpp:605` (`%.0f` для bool в LOCL строке, не моя правка). Asset-pipeline's `ProjectVAssetTests`/`ProjectVMeshBakerTests`/`ProjectVDracoTests` — not built (out of my scope).
+
+**Doc state:**
+- `TODO.md` — 1.4 + 5.1 closed; Блок 6 doc sync closed (6.1-6.4); header date `2026-06-12 (1.4 + 5.1 closed)`.
+- `agent/memory.md` §10.16 — full TAA tuning ladder + RenderDoc markers landed + VMA/glm fix. Working rules: volk.h position relative to VMA-touching headers; asset-pipeline sibling target dependency propagation.
+- `agent/decisions.md` §18 — TAA contract: default `taaEnabled=true`, history invalidation triggers, live tuning policy, YCoCg clamp rationale, dual-MRT SPIR-V variant rationale, neighbourhood radius 1/3/5/7.
+- (Originally также пытался писать в `legacy/docs/libraries/vulkan/13_projectv-taa.md` — НЕ правильное место. Удалено. `legacy/docs/libraries/` — свалка-справочник per `AGENTS.md` §4, не source of truth. Vulkan reference — `docs/VulkanSDK-Linux-Docs-1.4.350.1/`.)
+
+**Asset-pipeline parallel state (в working tree, не коммичено):** M4 model pass активно пишется. `core/Types.hpp` имеет их `#include "asset/MeshGpuResources.hpp"` (line 5) → `ModelInstanceData`/`ModelRegistryEntry` structs + model fields в `RenderState`. `src/CMakeLists.txt` имеет их `model.vert`/`model.frag` + `ModelPass.cpp`/`ModelManifestLoader.cpp`. `src/render/Renderer.cpp` имеет их `Model Pass` block внутри `RecordGraphicsCommands`. `src/core/Types.cpp` + `src/render/vulkan/VulkanInit.cpp` имеют model pass init/shutdown. `src/asset/MeshGpuResources.cpp` (modified) — что-то там. `tests/CMakeLists.txt` теперь чистый от их правок (видимо откатили). Build ловит только мои VMA/glm fix'ы.
+
+**Commit plan (pending operator decision):**
+- **A — 1.4 (TAA tuning ladder):** 9 files. Только мои части — отфильтровать из shared `core/Types.hpp` / `src/render/Renderer.cpp` (там M4 Model Pass block).
+- **B — 5.1 (RenderDoc markers):** 2 files. `src/debug/ProfilingGpu.hpp` + `src/render/Renderer.cpp`. Renderer.cpp shared, фильтровать.
+- **C — VMA/glm fix:** 2 files. `src/core/Types.hpp` (volk.h position) + `tests/CMakeLists.txt` (glm link). Shared, фильтровать.
+- **D — 6.x doc sync:** 3 files. `TODO.md` + `agent/memory.md` + `agent/decisions.md`. Не shared с asset-pipeline.
+
+**Backup:** `/tmp/taa_1.4_and_5.1_20260611T213303Z.patch` (24 KB) — все мои изменения включая VMA/glm fix.

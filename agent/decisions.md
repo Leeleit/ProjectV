@@ -425,3 +425,35 @@ Update `2026-04-22`:
 - `AGENTS.md` §7.4 (Synchronization) requires sync `agent/` после заметной работы — Linux-факты идут в `agent/memory.md` (долговечный context) и `agent/status.md` (сжатый snapshot), roadmap follow-up — в `TODO.md`.
 - Submodule-VMA `b3cbbb43` уже 8+ месяцев без обновления в репо. На текущей upstream `v3.4.0` header остаётся `include/vk_mem_alloc.h` (не `vma/vk_mem_alloc.h`). `vma/vk_mem_alloc.h` — Windows-Vulkan-SDK layout. Поправка include path — минимальное вмешательство, фиксит обе платформы. Upstream submodule bump — отдельный follow-up.
 - Build options `if (MSVC) ... endif()` + Linux `else()` branch — кросс-платформенный contract. На Windows ничего не меняется (MSVC истинен); на Linux clang-native flags применяются корректно.
+
+## 18. TAA contract (`2026-06-12`)
+
+Решение:
+
+- **Default `taaEnabled=true`.** Live visual TAA — основной путь рендеринга, не opt-in. Anti-jitter baseline из `ee82c6f` это устанавливает; см. `agent/memory.md` §10.14 для предыстории.
+- **TAA on/off variants в SPIR-V, не runtime branches.** `voxel.frag` компилируется в `voxel.frag.spv` (TAA-off, `outColor` Location 0) и `voxel.frag.taa_on.spv` (TAA-on, `outSceneColor` Location 1). Validation layer больше не видит неиспользуемый output — переменная физически отсутствует в SPIR-V. `02c297c` починил это; `b0fcd9b` — оригинальная per-frame specialization (предшественник, deferred).
+- **Tuning ladder: live runtime knobs, no preset file.** 5 hotkeys в `;`/`'`/`-`/`=`/`,`/`.` (см. `agent/memory.md` §10.16). Default values — `taaBlend=0.10`, `taaJitterScale=1.0`, `taaNeighbourhoodRadius=1` (3×3), `taaHistoryValid=false` until second frame. Любой change инвалидирует history (`taaHistoryValid=false`) на следующий кадр.
+- **History invalidation triggers (6 событий):**
+  1. Swapchain resize (`VulkanSwapchain.cpp::CreateOrRecreateSwapchain`).
+  2. World reload через `FinalizeActiveVoxelWorldReload` (`main.cpp`).
+  3. `T` toggle (TAA on↔off).
+  4. `taaJitterScale` change (live `;`/`'`).
+  5. `taaBlend` change (live `-`/`=`).
+  6. `taaNeighbourhoodRadius` change (live `,` cycle).
+  7. `.` history-invalidate single press.
+- **Не invalidate:** pause toggle (нет изменения геометрии), voxel edit (sub-frame изменение, TAA depth-reproject handles), camera movement (motion vectors — основная задача TAA).
+- **`taaClampColorSpace = YCoCg` (vs RGB).** Y/Co/Cg lossless reversible transform, 1-tap bright пиксель двигает только Y. RGB clamp либо дискардил highlight, либо вымывал chroma. `a2972fa` + см. `agent/memory.md` §10.16.
+- **Neighbourhood radius = 1/3/5/7.** Не `1/2/3/4` — radius симметричный, `radius=1` = 3×3, `radius=3` = 7×7, etc. Shader snap'ит in-between к нижнему valid odd. `taaHistoryParams.w` slot раньше был `reserved` (byte layout не изменился, semantic только).
+- **Per-frame `taaParams` field layout:** `(jitterX, jitterY, blend, enabled)`. Blended как `0.0` when `taaEnabled=false`, иначе `taaBlend`. Enabled = `1.0/0.0`. Packed в `vec4` SSBO, контракт с `voxel.frag`/`voxel_shadow.vert`/`voxel_mesh.comp`/`taa_resolve.frag` byte-exact (см. `static_assert` в `VoxelMaterials.hpp:125-145`).
+- **Per-frame `taaHistoryParams` field layout:** `(texelSizeX, texelSizeY, historyValid, neighbourhoodRadius)`. Texel sizes = 0 на `RefreshSceneLightingBuffer` (CPU не знает swapchain extent), `FramePreparation::UploadSceneFrameResources` патчит позже. `historyValid` = 0 invalidate.
+- **`PROJECTV_ENABLE_RENDERDOC_MARKERS` CMake option (Debug default ON, `linux-clang-debug` preset OFF).** Gated compile-time; `PV_PROFILE_GPU_LABEL`/`PV_PROFILE_GPU_LABEL_COLOR` macros no-op когда OFF. Function pointers грузятся volk'ом (extension `VK_EXT_debug_utils` always enabled). Future pass'ы: добавить 2 строки в start of function body.
+
+Почему:
+
+- TAA on by default потому что anti-jitter — базовая UX проблема (perceived camera shake on every frame), TAA — единственный cheap fix. Не делать это opt-in — значит заставлять пользователя нажимать `T` на каждом запуске. Per-frame `1/60s` jitter ring buffer с `TaaParams` (8-tap Halton 2,3) — bounded cost.
+- SPIR-V variants вместо `if (taaEnabled) { ... }` branches: branches добавляют uniform-dependent divergence на hot path. Variant SPIR-V (compile-time constant) — zero-cost. Pre-`02c297c` validation layer ругался на `outSceneColor unused` в TAA-off frame; 2 SPIR-V файла — это physical fix, не warning suppress.
+- Live tuning ladder (not preset file) потому что TAA параметры должны tuning'иться per-scene. YCoCg clamp + neighbourhood radius + blend — не «save the preset» параметры, а runtime knobs. HUD + sidecar capture metadata — recordable, reproducible.
+- YCoCg над RGB clamp потому что highlights самая проблемная зона для RGB clamp (sample variance огромная), а luma/chroma split даёт physically meaningful separation. MJP notes + Yang GPU Gems 3 reference.
+- Neighbourhood radius как 1/3/5/7 (не 1/2/3/4) потому что radius symmetric about center pixel: `[-r, +r]` итого `2r+1` taps. 1 = 3×3 (original), 3 = 7×7, etc. Shader на GLSL не умеет dynamic loop bounds; snap к odd values держит shader simple.
+
+Cross-refs: `agent/memory.md` §10.12–§10.16 (full timeline). TODO §5 Блок 1 (1.1, 1.4 closed; 1.2, 1.3, 1.5, 1.6, 1.7, 1.8 in progress / R&D).

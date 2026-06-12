@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата обновления: `2026-06-12`
+Дата обновления: `2026-06-12` (1.4 + 5.1 closed)
 Статус документа: `живой roadmap`
 
 ---
@@ -523,7 +523,6 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 
 **In progress (Блок 1):**
 
-- [ ] **1.4 Per-pass TAA tuning HUD ladder** (`J` jitter, `M` blend, `K` neighbourhood, `L` invalidate) + sidecar additions
 - [ ] **1.2 Camera-cut detection** (viewProjDelta threshold → auto-invalidate history)
 - [ ] **1.3 Adaptive sharpening (CAS) post-TAA** (sharpenAmount = (1-blend) * authoredMax)
 - [ ] **1.8 Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`, runtime cycle)
@@ -534,6 +533,11 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 **Closed (Блок 1: TAA quality 1.x):**
 
 - [x] **1.1 YCoCg clamp в TAA resolve (`2026-06-12`).** `taa_resolve.frag` clamp'ит history в YCoCg space (lossless transform Y/Co/Cg) вместо RGB. 1-tap bright пиксель теперь двигает только Y — chroma highlight'ов не вымывается в grey. Sidecar metadata получил `taa_clamp_color_space=YCoCg` для capture-driven tuning.
+- [x] **1.4 Per-pass TAA tuning HUD ladder (`2026-06-12`).** 4 live hotkeys: `;`/`'` jitter scale dec/inc (multiplier on Halton(2,3) output, [0,2] step 0.25), `-`/`=` blend factor dec/inc (per-frame history weight, [0,1] step 0.05), `,` neighbourhood radius cycle (1/3/5/7, drives `taa_resolve.frag` 3×3/5×5/7×7 loop), `.` history-invalidate single press. All four invalidate `taaHistoryValid` on change so the next frame takes the current scene as the only sample. `taaNeighbourhoodRadius` пишется в `taaHistoryParams.w` (раньше был `reserved` slot) — byte layout `VoxelSceneLighting` неизменён. Detailed HUD строка: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s`. Sidecar keys: `taa_jitter_scale`, `taa_neighbourhood_radius`. Build green, ctest 1/1 на `ProjectVTests`. **TODO 1.4 had предложенные keys `J`/`M`/`K`/`L`, но они уже заняты** (walk auto-jump / pick material / exposure inc) — выбор пал на правую руку `;`/`'`/`-`/`=`/`,`/`.`, 5 keys включая invalidate. `L` остался свободен на будущее.
+
+**Closed (Блок 5: tooling — renderdoc markers, 2026-06-12):**
+
+- [x] **5.1 RenderDoc markers (`2026-06-12`).** `profiling::ScopedGpuDebugLabel` RAII wrapper вокруг `vkCmdBeginDebugUtilsLabelEXT` / `vkCmdEndDebugUtilsLabelEXT` в `src/debug/ProfilingGpu.hpp` + `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR` macros gated на CMake option `PROJECTV_ENABLE_RENDERDOC_MARKERS` (Debug default ON, `linux-clang-debug` preset OFF). Hot sites wrapped: `DrawFrame` (implicit через per-function labels), `RecordShadowCommands` ("Shadow Pass"), `RecordVoxelMeshingCommands` ("Voxel Meshing"), `RecordGraphicsCommands` ("Graphics Pass"), TAA resolve section ("TAA Resolve" + color), `RecordDebugOverlayCommands` ("Debug Overlay"), `RecordDebugHudCommands` ("Debug HUD"). Drawn by RenderDoc + Tracy + validation layer. `vkCmdBeginDebugUtilsLabelEXT` is already loaded by `volkLoadDevice` (extension `VK_EXT_debug_utils` is enabled unconditionally in `VulkanBootstrap`). Build green, ctest 1/1.
 
 **Reference (источник идеи, не в плане исполнения этой сессии):**
 
@@ -590,10 +594,10 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 
 ### Блок 6 — Doc sync (1 день, дробно по 0.25 после каждого 1.x)
 
-- [ ] **6.1 TODO.md** (move closed items, re-prioritize based on actual delivery).
-- [ ] **6.2 agent/memory.md** (TAA specialization pitfalls, double-buffer pattern).
-- [ ] **6.3 agent/decisions.md** (TAA contract: default tier, history invalidation, sharpening rule).
-- [ ] **6.4 legacy/docs/libraries/vulkan/** (addendum: dual-MRT with SPIR-V variants).
+- [x] **6.1 TODO.md** (`2026-06-12`). 1.4 (TAA tuning ladder) + 5.1 (RenderDoc markers) закрыты; "Closed (Блок 1)" + новый "Closed (Блок 5)" subsections.
+- [x] **6.2 agent/memory.md** (`2026-06-12`). §10.15 закрыт: TAA specialization contract (per-frame `taaParams` + `taaHistoryParams` byte layout, history invalidation на 6 триггерах), `vmaImportVulkanFunctionsFromVolk` requires `volk.h` первым.
+- [x] **6.3 agent/decisions.md** (`2026-06-12`). §18: TAA contract (default `taaEnabled=true`, history invalidation triggers, jitter scale/blend live tuning policy, `taaClampColorSpace=YCoCg`).
+- [x] **6.4 (rolled into `agent/decisions.md` §18 + `agent/memory.md` §10.16)** (`2026-06-12`). Dual-MRT + `voxel.frag.spv`/`voxel.frag.taa_on.spv` variants + `taaHistoryParams.w` reserved→neighbourhood radius (layout preserved, semantic only). `legacy/docs/libraries/` — это **не source of truth** (см. `AGENTS.md` §4), только offline-справочник для идей; не пишем туда project-specific contract. Для project-specific addendum: `agent/decisions.md` §18 "TAA contract" покрывает dual-MRT, `agent/memory.md` §10.16 покрывает byte layout и SPIR-V variant build wiring.
 
 ### Блок-0 (вне плана) — пост-сессионная гигиена
 
