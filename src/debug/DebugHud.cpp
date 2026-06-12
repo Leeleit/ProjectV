@@ -24,8 +24,26 @@ constexpr float kGlyphWidthPx = 5.0f * kGlyphPixelSizePx;
 constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
+// **Music panel, 2026-06-13.** Minimum width
+// fits the longest expected `ARTIST` / `TITLE`
+// line. 4 lines max (`MUSIC`, `ARTIST`,
+// `TITLE`, `POS`), at ~10 px/glyph + 16 px
+// padding (2 × 8) on each side. 260 px covers
+// artist / title up to ~25 chars after
+// uppercase. Wider font sizes (e.g. 2x scale)
+// would need a re-tune.
+constexpr float kMusicPanelMinWidthPx = 260.0f;
 constexpr size_t kHudLineBufferSize = 96;
 constexpr size_t kMaxStatsLineCount = 38;
+// **Music panel cap, 2026-06-13.** Four lines
+// (`MUSIC <state> VOL <vol>`, `ARTIST <name>`,
+// `TITLE <name>`, `POS m:ss / m:ss`). The cap
+// exists so `BuildMusicLines` can use the same
+// `BeginHudLine` / `PV_APPEND_HUD_LINE`
+// pattern as the stats / helper panels without
+// overflow checks; `kHudLineBufferSize * 4`
+// bytes of stack storage on the renderer.
+constexpr size_t kMaxMusicLineCount = 4;
 // **Helper-panel cap, 2026-06-12 bump.** Was 16
 // (per-line at the time of the original
 // implementation); over the next several
@@ -71,6 +89,49 @@ std::string FormatMmSs(float seconds, bool treatZeroAsValid)
 	char buf[16];
 	std::snprintf(buf, sizeof(buf), "%u:%02u", mm, ss);
 	return std::string(buf);
+}
+
+// **HUD uppercase helper, 2026-06-13.** Copies
+// `in` into `out`, uppercasing ASCII `a-z` to
+// `A-Z`. Other characters (digits, `-`, `.`,
+// `:`, ` `, `\0`) pass through unchanged. The
+// output is always null-terminated (truncated
+// at `outSize - 1` if necessary). The engine
+// keeps the canonical case in
+// `audioMusicArtist` / `audioMusicTitle`; the
+// HUD uppercases at display time because the
+// 5×7 bitmap font only supports A-Z — lowercase
+// `a-z` falls through to the `default:` arm of
+// `GetGlyphRows` (empty 7-byte array) and
+// renders as blank, which is what produced the
+// "Artist L Title P" garble the operator
+// flagged in the 2026-06-13 screenshot (e.g.
+// "Le1t" → "L 1", "Palm Trees" → "P   T").
+// Truncation is intentional: long artist /
+// title names that don't fit in the 96-char
+// mirror are cut at the panel edge by the
+// 5x7 glyph render (each char = 10 px advance,
+// panel min-width = 260 px → ~25 chars max
+// per line). Returning the truncated string
+// keeps the alignment predictable; the
+// alternative (scrolling marquee) is a v2
+// feature.
+void FormatUppercaseForHud(
+	const char *in, char *out, size_t outSize)
+{
+	if (outSize == 0) {
+		return;
+	}
+	size_t i = 0;
+	for (; i + 1 < outSize && in[i] != '\0'; ++i) {
+		const char c = in[i];
+		if (c >= 'a' && c <= 'z') {
+			out[i] = static_cast<char>(c - ('a' - 'A'));
+		} else {
+			out[i] = c;
+		}
+	}
+	out[i] = '\0';
 }
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
@@ -203,9 +264,10 @@ void AppendTextLine(
 	const float originYPx,
 	const std::string_view text,
 	const std::array<float, 4> &color,
-	const float xOffsetPx = 0.0f)
+	const float xOffsetPx = 0.0f,
+	const float originXPx = kPanelOriginXPx)
 {
-	float cursorXPx = kPanelOriginXPx + kPanelPaddingPx + xOffsetPx;
+	float cursorXPx = originXPx + kPanelPaddingPx + xOffsetPx;
 	for (const char character : text) {
 		if (character == ' ') {
 			cursorXPx += kGlyphAdvancePx;
@@ -247,7 +309,8 @@ void AppendShadowedTextLine(
 	const VkExtent2D extent,
 	const float originYPx,
 	const std::string_view text,
-	const std::array<float, 4> &color)
+	const std::array<float, 4> &color,
+	const float originXPx = kPanelOriginXPx)
 {
 	AppendTextLine(
 		outVertices,
@@ -257,7 +320,8 @@ void AppendShadowedTextLine(
 		originYPx + kTextShadowOffsetPx,
 		text,
 		{0.0f, 0.0f, 0.0f, color[3] * 0.65f},
-		kTextShadowOffsetPx);
+		kTextShadowOffsetPx,
+		originXPx);
 	AppendTextLine(
 		outVertices,
 		vertexCount,
@@ -265,7 +329,9 @@ void AppendShadowedTextLine(
 		extent,
 		originYPx,
 		text,
-		color);
+		color,
+		0.0f,
+		originXPx);
 }
 
 void AppendPanel(
@@ -277,9 +343,9 @@ void AppendPanel(
 	const float panelWidthPx,
 	const float panelHeightPx,
 	const std::array<float, 4> &panelColor,
-	const std::array<float, 4> &accentColor)
+	const std::array<float, 4> &accentColor,
+	const float minXPx = kPanelOriginXPx)
 {
-	constexpr float minXPx = kPanelOriginXPx;
 	const float maxXPx = minXPx + panelWidthPx;
 	const float maxYPx = minYPx + panelHeightPx;
 	AppendQuad(
@@ -595,97 +661,22 @@ size_t BuildStatsLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "SUP NONE");
 	}
 
+	// **Music HUD moved out, 2026-06-13.** The
+	// music block (state / volume / artist / title
+	// / position) used to live here in the regular
+	// section, but the operator asked for a
+	// separate top-right panel (per the 2026-06-13
+	// screenshot complaint about the
+	// "Artist L Title P" garble — see
+	// `FormatUppercaseForHud` for the case-folding
+	// rationale and `BuildMusicLines` for the new
+	// block). This function now stops emitting
+	// music lines; the music panel is built and
+	// rendered separately at the end of
+	// `BuildDebugHudVertices`.
+
 	if (!detailedHudVisible) {
 		return lineCount;
-	}
-
-	// **Audio engine HUD block, 2026-06-13.** Lives
-	// in the regular (non-detailed-only) section
-	// because audio is a normal feature, not a
-	// debug tool — same rationale as the previous
-	// 1-line block. Replaces the 1-line
-	// `MUSIC <state> VOL 0.80 TRK <name>` from
-	// 2026-06-12 with a 4-line layout, one line
-	// per field the operator asked for (state,
-	// artist, title, position+duration). The font
-	// supports uppercase, digits, `.`, `-`, `:`
-	// only — no square brackets, no lowercase
-	// letters — so all labels and labels are
-	// uppercase ASCII. Volume is intentionally
-	// not its own line: it shares the
-	// `MUSIC <state>` line as a second column so
-	// the operator still sees the live value
-	// (e.g. `MUSIC PLAY  VOL 0.65`) without
-	// pushing the cap to 5 lines. The 3 meta
-	// lines (ARTIST, TITLE, POS) are gated on
-	// "engine initialized AND playlist
-	// non-empty" — when the playlist is empty
-	// the HUD shows only the `MUSIC` line, same
-	// as before but with no `TRK` noise.
-	{
-		const char *musicState = "STOP";
-		if (stats.audioMusicInitialized) {
-			switch (static_cast<projectv::audio::MusicState>(stats.audioMusicState)) {
-			case projectv::audio::MusicState::Stopped:
-				musicState = "STOP";
-				break;
-			case projectv::audio::MusicState::Playing:
-				musicState = "PLAY";
-				break;
-			case projectv::audio::MusicState::Paused:
-				musicState = "PAUSE";
-				break;
-			}
-		} else {
-			musicState = "OFF";
-		}
-		const bool showMetaLines = stats.audioMusicInitialized
-			&& stats.audioMusicPlaylistSize > 0;
-		PV_APPEND_HUD_LINE(
-			outLines,
-			lineCount,
-			"MUSIC %s  VOL %.2f",
-			musicState,
-			stats.audioMusicVolume);
-		if (showMetaLines) {
-			// `audioMusicArtist` and
-			// `audioMusicTitle` are fixed-size
-			// `std::array<char, N>` mirrors (see
-			// `DebugStats` in `core/Types.hpp`).
-			// Pass via `.data()` to snprintf. The
-			// artist field is `"-"` (em-dash) when
-			// the filename has no ` - ` separator
-			// — the parser intentionally emits a
-			// visible sentinel rather than an
-			// empty string so the operator can
-			// distinguish "unknown artist" from
-			// "no track loaded" at a glance.
-			PV_APPEND_HUD_LINE(
-				outLines,
-				lineCount,
-				"ARTIST %s",
-				stats.audioMusicArtist.data());
-			PV_APPEND_HUD_LINE(
-				outLines,
-				lineCount,
-				"TITLE %s",
-				stats.audioMusicTitle.data());
-			// **Position / duration, 2026-06-13.**
-			// Position always shows `0:00` at the
-			// start of a track (cursor is 0 before
-			// playback); `--:--` is reserved for
-			// duration when the decoder did not
-			// expose a length. Both are formatted
-			// by the `FormatMmSs` helper above.
-			const std::string posStr = FormatMmSs(stats.audioMusicPositionSec, /*treatZeroAsValid=*/true);
-			const std::string durStr = FormatMmSs(stats.audioMusicDurationSec, /*treatZeroAsValid=*/false);
-			PV_APPEND_HUD_LINE(
-				outLines,
-				lineCount,
-				"POS %s / %s",
-				posStr.c_str(),
-				durStr.c_str());
-		}
 	}
 
 	// Per-pass CPU timing lines (2026-06-12). Two-line
@@ -1011,6 +1002,106 @@ size_t BuildStatsLines(
 	return lineCount;
 }
 
+// **Music HUD block builder, 2026-06-13.** Emits
+// up to 4 lines for the top-right music panel:
+//   1. `MUSIC <state>  VOL 0.80` (always)
+//   2. `ARTIST <name>`           (gated on init + playlist)
+//   3. `TITLE  <name>`           (gated)
+//   4. `POS    m:ss / m:ss`      (gated)
+//
+// The artist and title are uppercased via
+// `FormatUppercaseForHud` before snprintf,
+// because the 5×7 bitmap font in `GetGlyphRows`
+// supports only A-Z, 0-9, `.`, `-`, `:` — the
+// lowercase characters in the operator's music
+// folder names ("Le1t - Palm Trees.mp3",
+// "Le1t - aCID.mp3") would otherwise render as
+// blank glyphs. The uppercase copy is local to
+// this function and to the local `upperArtist` /
+// `upperTitle` stack buffers; the engine keeps
+// the canonical case in `audioMusicArtist` /
+// `audioMusicTitle` mirrors and the sidecar
+// (when plumbed) will see the original case.
+//
+// Gating: line 1 is always emitted so the panel
+// is never empty (operator can see "MUSIC OFF"
+// at a glance when audio is not initialized).
+// Lines 2-4 are gated on `init && playlist > 0`
+// because ARTIST / TITLE / POS are undefined
+// when there's no track to play — emitting
+// empty fields would be confusing.
+//
+// The "POS 0:00" position display always shows
+// the cursor (so 0:00 is shown at the start of
+// a track); "--:--" is reserved for duration
+// when `ma_sound_get_length_in_seconds` returns
+// MA_FAILURE (rare for MP3 but possible for
+// malformed streams).
+size_t BuildMusicLines(
+	const DebugStats &stats,
+	std::array<std::array<char, kHudLineBufferSize>, kMaxMusicLineCount> &outLines)
+{
+	size_t lineCount = 0;
+	const char *musicState = "STOP";
+	if (stats.audioMusicInitialized) {
+		switch (static_cast<projectv::audio::MusicState>(stats.audioMusicState)) {
+		case projectv::audio::MusicState::Stopped:
+			musicState = "STOP";
+			break;
+		case projectv::audio::MusicState::Playing:
+			musicState = "PLAY";
+			break;
+		case projectv::audio::MusicState::Paused:
+			musicState = "PAUSE";
+			break;
+		}
+	} else {
+		musicState = "OFF";
+	}
+	const bool showMetaLines = stats.audioMusicInitialized
+		&& stats.audioMusicPlaylistSize > 0;
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"MUSIC %s  VOL %.2f",
+		musicState,
+		stats.audioMusicVolume);
+	if (showMetaLines) {
+		// Uppercase transform is in-place on a
+		// local stack buffer; the engine mirror
+		// is read-only here.
+		char upperArtist[96];
+		char upperTitle[128];
+		FormatUppercaseForHud(
+			stats.audioMusicArtist.data(),
+			upperArtist,
+			sizeof(upperArtist));
+		FormatUppercaseForHud(
+			stats.audioMusicTitle.data(),
+			upperTitle,
+			sizeof(upperTitle));
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"ARTIST %s",
+			upperArtist);
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"TITLE %s",
+			upperTitle);
+		const std::string posStr = FormatMmSs(stats.audioMusicPositionSec, /*treatZeroAsValid=*/true);
+		const std::string durStr = FormatMmSs(stats.audioMusicDurationSec, /*treatZeroAsValid=*/false);
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"POS %s / %s",
+			posStr.c_str(),
+			durStr.c_str());
+	}
+	return lineCount;
+}
+
 size_t BuildHelperLines(
 	const DebugStats &stats,
 	std::array<std::array<char, kHudLineBufferSize>, kMaxHelperLineCount> &outLines)
@@ -1134,6 +1225,15 @@ uint32_t BuildDebugHudVertices(
 	uint32_t vertexCount = 0;
 	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
 	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
+	// **Music panel color, 2026-06-13.** Slightly
+	// purplish-blue vs the stats / helper panels
+	// (which are more navy-grey) so the operator
+	// can spot it instantly. Same alpha as
+	// helperPanelColor so the three panels read
+	// as a balanced "set" rather than one
+	// dominating. The accent strip on top
+	// (gold) is shared across all three.
+	constexpr std::array musicPanelColor{0.08f, 0.07f, 0.13f, 0.78f};
 	constexpr std::array accentColor{0.96f, 0.79f, 0.31f, 0.95f};
 	constexpr std::array titleColor{0.98f, 0.96f, 0.88f, 0.98f};
 	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
@@ -1143,16 +1243,42 @@ uint32_t BuildDebugHudVertices(
 	const size_t statsLineCount = BuildStatsLines(stats, camera, interaction, statsLines);
 	std::array<std::array<char, kHudLineBufferSize>, kMaxHelperLineCount> helperLines{};
 	const size_t helperLineCount = BuildHelperLines(stats, helperLines);
+	// **Music lines, 2026-06-13.** Built and
+	// rendered separately (top-right panel) per
+	// the operator request; see `BuildMusicLines`
+	// for the line-level rationale.
+	std::array<std::array<char, kHudLineBufferSize>, kMaxMusicLineCount> musicLines{};
+	const size_t musicLineCount = BuildMusicLines(stats, musicLines);
 	const float statsPanelWidthPx = ComputePanelWidthPx(statsLines, "STAT", kStatsPanelMinWidthPx);
 	const float helperPanelWidthPx = ComputePanelWidthPx(helperLines, "HELP", kHelperPanelMinWidthPx);
+	const float musicPanelWidthPx = ComputePanelWidthPx(musicLines, "MUSIC", kMusicPanelMinWidthPx);
 	const float hudStackWidthPx = std::max(statsPanelWidthPx, helperPanelWidthPx);
 	const float statsPanelHeightPx =
 		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(statsLineCount) * kLineAdvancePx + textBoundsHeightPx;
 	const float helperPanelHeightPx =
 		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(helperLineCount) * kLineAdvancePx + textBoundsHeightPx;
+	const float musicPanelHeightPx =
+		kPanelPaddingPx * 2.0f + titleOffsetPx + static_cast<float>(musicLineCount) * kLineAdvancePx + textBoundsHeightPx;
 	constexpr float statsPanelMinY = kPanelOriginYPx;
 	const float statsPanelMaxY = statsPanelMinY + statsPanelHeightPx;
 	const float helperPanelMinY = statsPanelMaxY + kPanelGapPx;
+	// **Music panel anchored at top-right,
+	// 2026-06-13.** `extent.width -
+	// musicPanelWidthPx - kPanelOriginXPx` puts
+	// the right edge of the panel 12 px from the
+	// right side of the viewport (same
+	// `kPanelOriginXPx` margin as the top-left
+	// stack). Independent of the top-left stack
+	// (which uses `kPanelOriginXPx` directly);
+	// the two stacks never overlap unless the
+	// viewport is narrower than
+	// `hudStackWidthPx + musicPanelWidthPx + 3 *
+	// kPanelOriginXPx` (~560 px at the current
+	// minimum widths — well below any practical
+	// 1280+ render target).
+	const float musicPanelMinXPx = static_cast<float>(extent.width)
+		- musicPanelWidthPx - kPanelOriginXPx;
+	constexpr float musicPanelMinY = kPanelOriginYPx;
 	AppendPanel(
 		outVertices,
 		vertexCount,
@@ -1173,6 +1299,17 @@ uint32_t BuildDebugHudVertices(
 		helperPanelHeightPx,
 		helperPanelColor,
 		accentColor);
+	AppendPanel(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		musicPanelMinY,
+		musicPanelWidthPx,
+		musicPanelHeightPx,
+		musicPanelColor,
+		accentColor,
+		musicPanelMinXPx);
 
 	AppendShadowedTextLine(
 		outVertices,
@@ -1190,6 +1327,15 @@ uint32_t BuildDebugHudVertices(
 		helperPanelMinY + kPanelPaddingPx + titleOffsetPx,
 		"HELP",
 		titleColor);
+	AppendShadowedTextLine(
+		outVertices,
+		vertexCount,
+		maxVertexCount,
+		extent,
+		musicPanelMinY + kPanelPaddingPx + titleOffsetPx,
+		"MUSIC",
+		titleColor,
+		musicPanelMinXPx);
 
 	for (size_t lineIndex = 0; lineIndex < statsLineCount; ++lineIndex) {
 		const float originYPx =
@@ -1215,6 +1361,24 @@ uint32_t BuildDebugHudVertices(
 			originYPx,
 			helperLines[lineIndex].data(),
 			textColor);
+	}
+
+	// Music lines (top-right panel) — pass the
+	// panel's `minXPx` as the per-line `originXPx`
+	// so the text starts inside the panel's
+	// padding, not at the viewport left edge.
+	for (size_t lineIndex = 0; lineIndex < musicLineCount; ++lineIndex) {
+		const float originYPx =
+			musicPanelMinY + kPanelPaddingPx + titleOffsetPx + static_cast<float>(lineIndex + 1) * kLineAdvancePx;
+		AppendShadowedTextLine(
+			outVertices,
+			vertexCount,
+			maxVertexCount,
+			extent,
+			originYPx,
+			musicLines[lineIndex].data(),
+			textColor,
+			musicPanelMinXPx);
 	}
 
 	return std::min(vertexCount, maxVertexCount);
