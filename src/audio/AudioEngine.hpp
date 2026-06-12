@@ -231,16 +231,23 @@ private:
 	float m_volume = 0.8f;
 	MusicState m_state = MusicState::Stopped;
 
-	// Saved cursor for pause → resume. 0 when not
-	// paused. **Currently unused** in v1: miniaudio
-	// does not expose `ma_sound_set_time` (the API
-	// was removed in 0.10+), so v1 pause = stop +
-	// forget cursor, and the next play starts from
-	// 0. The field is kept (and reset to 0 in
-	// `unloadCurrentTrack`) so v2 can re-introduce
-	// the cursor-save path without a stale-read
-	// hazard. See `decisions.md §28` for the v1
-	// limitation.
+	// **Dead code, 2026-06-13.** Saved cursor
+	// for pause → resume, 0 when not paused.
+	// Miniaudio's `ma_sound_stop` preserves the
+	// cursor in-place on the `ma_sound` struct
+	// (it only sets node state to stopped, see
+	// miniaudio.h:78774), so a subsequent
+	// `ma_sound_start` resumes from the
+	// preserved position naturally — no manual
+	// cursor save is needed. The field is
+	// never read in v1; the multiple reset-to-0
+	// sites (`pauseImpl`, `stop`, `unloadCurrentTrack`,
+	// `goToTrack`) are no-ops. Kept for
+	// field-shape stability (removing it would
+	// shift the binary layout and break any
+	// out-of-tree debug tools reading the
+	// `AudioEngine` memory). v2 cleanup can
+	// remove it along with a comment sweep.
 	ma_uint64 m_pausedCursorMs = 0;
 
 	// 5-second playlist refresh. Initialized to "now"

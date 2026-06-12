@@ -331,21 +331,71 @@ void AudioEngine::togglePlayPause()
 				return;
 			}
 		}
-		// From a "stop" state, the cursor is at 0
-		// (we reset on stop). Just start. Note:
-		// miniaudio 0.11+ does NOT expose
-		// `ma_sound_set_time_in_milliseconds` — the
-		// `ma_sound_set_time` API was removed in
-		// 0.10+. The higher-level `ma_sound` API
-		// only supports start-from-beginning. v1
-		// therefore does NOT have true
-		// "pause → resume from cursor" semantics;
-		// a "pause" is `stop` + forget cursor, and
-		// the next "play" starts from 0. This is
-		// documented in `decisions.md §28` and
-		// `memory.md §10.26` as a known v1
-		// limitation; v2 can add a custom decoder
-		// wrapper for true resume.
+		// **Cursor semantics 2026-06-13 (two
+		// iterations).** The cursor state
+		// depends on which path got us here:
+		//
+		//   - **From `pauseImpl()` (Q during
+		//     Playing → Paused):** cursor is
+		//     preserved in-place. `ma_sound_stop`
+		//     only sets node state to stopped
+		//     (miniaudio.h:78774); the audio
+		//     thread's last-read position is
+		//     kept in `pSound->cursor`. So when
+		//     the operator presses Q again, the
+		//     Paused branch's `ma_sound_start`
+		//     resumes from there.
+		//   - **From `stop()` (E during Playing
+		//     → Stopped):** cursor is RESET to
+		//     0. `stop()` now calls
+		//     `ma_sound_seek_to_pcm_frame(&m_sound, 0)`
+		//     after `ma_sound_stop`, which
+		//     atomically sets `pSound->seekTarget`
+		//     to 0 (miniaudio.h:79437); the
+		//     mixing thread applies the seek on
+		//     the next read cycle
+		//     (miniaudio.h:76908-76916) and
+		//     resets the decoder to the start.
+		//     So the operator's E+Q (E to stop
+		//     and rewind, then Q to play) starts
+		//     the track from the beginning.
+		//   - **Sound unloaded** (fresh init, or
+		//     5-second rescan removed the file):
+		//     cursor is implicitly 0 because the
+		//     new `ma_sound_init_from_file`
+		//     starts a fresh decoder.
+		//
+		// Q vs E contract, 2026-06-13 final:
+		// Q is play/pause toggle (preserves
+		// cursor); E is stop-and-rewind
+		// (resets to 0). Standard music-player
+		// semantic, matches the operator's
+		// mental model after the 2026-06-13
+		// "Q after Q restarts; 2xQ and 1xE
+		// behave the same" bug report.
+		//
+		// Historical note (kept for
+		// archaeology): an even earlier
+		// version of this comment claimed
+		// "v1 pause = stop + forget cursor,
+		// and the next play starts from 0;
+		// v2 can add a custom decoder
+		// wrapper for true resume." That was
+		// a misreading of the miniaudio API:
+		// the absence of `ma_sound_set_time`
+		// does NOT imply that `ma_sound_stop`
+		// forgets the cursor. The two APIs
+		// are independent (`ma_sound_set_time`
+		// would have let us SEEK to an
+		// arbitrary position; the stop/start
+		// cycle naturally resumes from the
+		// current position). The operator's
+		// 2026-06-13 "Q after Q starts from
+		// beginning" bug report was the
+		// in-code symptom of that misreading
+		// — see the Paused branch fix
+		// (guard added so the cursor is
+		// preserved across pause → resume).
 		if (ma_sound_start(&m_sound) != MA_SUCCESS) {
 			runtime::LogRuntimeFailure(
 				"Audio",
@@ -361,11 +411,50 @@ void AudioEngine::togglePlayPause()
 		break;
 
 	case MusicState::Paused:
-		// No cursor to restore (see Stopped branch
-		// note). The sound was unloaded on pause, so
-		// reload it from disk and start from 0.
-		if (!loadCurrentTrack()) {
-			return;
+		// **Bug fix 2026-06-13.** Previously this
+		// branch unconditionally called
+		// `loadCurrentTrack()` — which unloads
+		// the in-memory sound and re-initializes
+		// from disk — making the second Q press
+		// restart playback from 0 instead of
+		// resuming from the cursor. The operator
+		// flagged this as "Q after Q запускает
+		// трек с начала" (Q after Q starts the
+		// track from the beginning). The fix is
+		// symmetric to the Stopped branch: only
+		// reload if `!m_soundLoaded` (e.g. the
+		// 5-second playlist rescan unloaded
+		// mid-pause because the operator
+		// deleted the file), then call
+		// `ma_sound_start` which resumes from
+		// the cursor that `pauseImpl()`'s
+		// `ma_sound_stop` preserved in-place.
+		//
+		// `ma_sound_stop` does NOT reset the
+		// cursor (verified against
+		// miniaudio.h:78774: it only calls
+		// `ma_node_set_state(stopped)`, the
+		// `pSound->cursor` field is untouched).
+		// The earlier doc comment claimed
+		// "miniaudio has no `ma_sound_set_time`
+		// → v1 pause = stop + forget cursor"
+		// — that was wrong; the cursor IS
+		// preserved, and resume works through
+		// the natural stop/start cycle without
+		// needing `ma_sound_set_time`. The
+		// operator workaround ("E after Q, then
+		// Q") worked because `stop()` doesn't
+		// unload the sound either, so the
+		// Stopped branch's existing
+		// `!m_soundLoaded` guard preserved the
+		// reload path and `ma_sound_start`
+		// resumed from the saved cursor. This
+		// fix makes the Paused branch behave
+		// the same.
+		if (!m_soundLoaded) {
+			if (!loadCurrentTrack()) {
+				return;
+			}
 		}
 		if (ma_sound_start(&m_sound) != MA_SUCCESS) {
 			runtime::LogRuntimeFailure(
@@ -385,15 +474,29 @@ void AudioEngine::pauseImpl()
 		m_state = MusicState::Stopped;
 		return;
 	}
-	// `m_pausedCursorMs` is not saved: miniaudio
-	// has no `ma_sound_set_time` API (see the
-	// long note in `togglePlayPause`'s Stopped
-	// branch). v1 pause semantics = stop and
-	// forget the cursor; the next play starts
-	// from 0. The field is reset to 0 in
-	// `unloadCurrentTrack` so any future
-	// cursor-aware code (v2) can re-introduce
-	// the save without a stale-read hazard.
+	// **Cursor preservation, 2026-06-13.**
+	// `ma_sound_stop` only calls
+	// `ma_node_set_state(stopped)`
+	// (miniaudio.h:78774) and does NOT touch
+	// `pSound->cursor`. The audio thread's
+	// last-read cursor position is preserved
+	// in the `ma_sound` struct, so a
+	// subsequent `ma_sound_start` (in the
+	// Paused branch of `togglePlayPause`,
+	// after the 2026-06-13 guard fix) resumes
+	// from that exact position. The
+	// `m_pausedCursorMs = 0;` line below is
+	// **dead code** kept for field-shape
+	// stability: there is no read of
+	// `m_pausedCursorMs` anywhere in v1, and
+	// even if there were, the natural cursor
+	// in `m_sound` is the authoritative
+	// source (read via
+	// `ma_sound_get_cursor_in_seconds` in the
+	// HUD mirror). The field can be removed
+	// in a v2 cleanup slice; for now the
+	// reset-to-0 calls are no-ops and do no
+	// harm.
 	ma_sound_stop(&m_sound);
 	m_pausedCursorMs = 0;
 	m_state = MusicState::Paused;
@@ -403,6 +506,51 @@ void AudioEngine::stop()
 {
 	if (m_soundLoaded) {
 		ma_sound_stop(&m_sound);
+		// **Cursor reset, 2026-06-13.** E is the
+		// "hard stop" hotkey: after pressing E,
+		// the next Q should start the track from
+		// 0, not from where the audio cursor was.
+		// `ma_sound_stop` alone preserves the
+		// cursor in-place (the audio thread's
+		// last-read position is kept in
+		// `pSound->cursor`, and `ma_sound_start`
+		// resumes from there). To get the
+		// "stop and rewind to start" semantic,
+		// we additionally call
+		// `ma_sound_seek_to_pcm_frame(0)`, which
+		// atomically sets `pSound->seekTarget` to
+		// 0 (miniaudio.h:79437). The miniaudio
+		// mixing thread reads the seek target on
+		// its next read cycle
+		// (miniaudio.h:76908-76916) and resets
+		// the decoder to the start of the stream
+		// before producing audio. This works for
+		// paused/stopped sounds too: the seek
+		// target is applied on the next read
+		// cycle, which is the cycle after the
+		// next `ma_sound_start`. The seek is a
+		// no-op for the 5-second rescan case
+		// (track removed mid-Playing) because
+		// the cursor position is irrelevant when
+		// the track is about to be unloaded.
+		const ma_result seekResult = ma_sound_seek_to_pcm_frame(&m_sound, 0);
+		if (seekResult != MA_SUCCESS) {
+			// Non-fatal: the cursor stays where it
+			// was, which is the pre-fix behavior
+			// (same as if the operator pressed Q
+			// to resume instead of E). Logged for
+			// debuggability. MA_NOT_IMPLEMENTED
+			// is the common case for some
+			// streaming protocols; we don't log
+			// that as a failure.
+			if (seekResult != MA_NOT_IMPLEMENTED) {
+				runtime::LogRuntimeFailure(
+					"Audio",
+					"AudioEngine.stop.ma_sound_seek_to_pcm_frame",
+					fmt::format("ma_sound_seek_to_pcm_frame(0) failed: {}",
+						ma_result_description(seekResult)));
+			}
+		}
 	}
 	m_pausedCursorMs = 0;
 	m_state = MusicState::Stopped;
