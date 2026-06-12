@@ -61,25 +61,75 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-11T20:55Z-taa-tooling-1.4-5.1-6.x`
 - **started-at:** 2026-06-11T20:55:00Z
+- **closed-at:** 2026-06-12T09:30:00Z
 - **agent:** cline/MiniMax-M3
 - **operator:** le1t
 - **branch:** master
-- **scope:** Mini-plan 1.4 + 5.1 + 6.x: (A) TAA tuning HUD ladder — `J` jitter, `M` blend, `K` neighbourhood radius, `L` history-invalidate hotkeys + DebugHud lines + sidecar keys; (B) 5.1 RenderDoc markers — `vkCmdBeginDebugUtilsLabelEXT/End` на hot sites в `Renderer.cpp`, gated `PROJECTV_ENABLE_RENDERDOC_MARKERS`; (C) 6.x doc sync — TODO close, memory TAA section, decisions TAA contract, vulkan addendum. 3 связных коммита в одной сессии по выбору оператора.
-- **files-touched-intent:** `src/app/InputActions.cpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, `src/render/Renderer.cpp`, `src/render/vulkan/VulkanBootstrap.cpp` (marker fn loaders), `src/core/Types.hpp` (DebugStats / TaaTuning fields), `agent/memory.md` (TAA section), `agent/decisions.md` (TAA contract), `agent/active-sessions.md` (close), `agent/status.md` (snapshot), `TODO.md` (close 1.4 + 5.1), `legacy/docs/libraries/vulkan/` (dual-MRT addendum)
-- **status:** open
-- **notes:** Mini-plan по выбору оператора. **3 commits landed in this session** (per operator "продолжай работу", mid-2026-06-12):
+- **scope:** Mini-plan 1.4 + 5.1 + 6.x: (A) TAA tuning HUD ladder — `;`/`'` jitter scale, `-`/`=` blend, `,` neighbourhood radius, `.` history-invalidate hotkeys + DebugHud lines + sidecar keys; (B) 5.1 RenderDoc markers — `vkCmdBeginDebugUtilsLabelEXT/End` на hot sites в `Renderer.cpp`, gated `PROJECTV_ENABLE_RENDERDOC_MARKERS`; (C) 6.x doc sync — TODO close, memory TAA section, decisions TAA contract, vulkan addendum. 4 связных коммита в одной сессии по выбору оператора.
+- **files-touched-intent:** `src/app/InputActions.cpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, `src/render/Renderer.cpp`, `src/render/vulkan/VulkanBootstrap.cpp` (marker fn loaders), `src/core/Types.hpp` (DebugStats / TaaTuning fields), `agent/memory.md` (TAA section), `agent/decisions.md` (TAA contract), `agent/active-sessions.md` (close), `agent/status.md` (snapshot), `TODO.md` (close 1.4 + 5.1), `legacy/docs/libraries/vulkan/` (dual-MRT addendum — rejected, см. ниже)
+- **status:** closed
+- **commit-hash:** `8635ddf` — `fix(taa): TAA tuning HUD ladder + M5.2 color-distance rejection`
+- **notes:** **4 commits landed in this session** (per operator "продолжай работу", mid-2026-06-12):
   - `8635ddf fix(taa): TAA tuning HUD ladder + M5.2 color-distance rejection` — 8 files. 1.4 (5 new hotkeys `;`/`'`/`-`/`=`/`,`/`.`, `taaNeighbourhoodRadius` в `taaHistoryParams.w`, sidecar keys, DebugHud line, AppUpdate handlers, InputActions bindings) + M5.2 follow-up fix (color-distance rejection в YCoCg clamp — fixes polygon-model "faint grey blob" reported by asset-pipeline closeout `b152b70`).
   - `3ee995f feat(render): add RenderDoc debug-utility label helpers + TAA-resolve hot site` — 1 file. `profiling::ScopedGpuDebugLabel` RAII + `PV_PROFILE_GPU_LABEL` macros, gated on `PROJECTV_ENABLE_RENDERDOC_MARKERS`. (`Renderer.cpp` hot sites already committed by asset-pipeline session as part of M4/M5 chain.)
   - `f90687a docs(agent): sync Блок 1 (1.4) + Блок 5 (5.1) + Блок 6 (6.x) closures` — 4 files. TODO Блок 1 + 5 + 6 closed, `agent/memory.md` §10.16 added, `agent/decisions.md` §18 added, `agent/status.md` §8 snapshot. `legacy/docs/libraries/vulkan/13_projectv-taa.md` создан, потом удалён — `legacy/docs/libraries/` это свалка-справочник, не source of truth per `AGENTS.md` §4. Vulkan reference: `docs/VulkanSDK-Linux-Docs-1.4.350.1/`.
-  - **Earlier M5.2 fix work (also covered by `8635ddf`):** `kTaaColorDistanceRejectionThreshold = 0.20` в YCoCg space. Когда current sample далёк от neighborhood centroid, skip both YCoCg clamp и temporal blend. Reported в `b152b70` (asset-pipeline closeout) M5.2 follow-up — deferred в TAA-scope per `AGENTS.md` §7.2.6. Fixed здесь.
+  - `e27d971 docs(agent): record 1.4 + 5.1 + 6.x + M5.2 commits in active-sessions.md` — 1 file, session metadata update.
 
-  **Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests` green, `ctest` 6/6 (`ProjectVTests`, `ProjectVAssetTests`, `ProjectVMeshBakerTests`, `ProjectVDracoTests`, `ProjectVFrustumCullingTests`, `ProjectVBoxUvFixtureTests`).
+  **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests` green, `ctest` 6/6 (`ProjectVTests`, `ProjectVAssetTests`, `ProjectVMeshBakerTests`, `ProjectVDracoTests`, `ProjectVFrustumCullingTests`, `ProjectVBoxUvFixtureTests`).
 
   **Asset-pipeline parallel closed** (`b152b70 docs(agent): close out asset-pipeline session with M5/M5.1/M5.2 status`). Их M4 (model graphics pass, `c4382ea`) + M5 (frustum cull, `ccf7400`) + M6 prep (UV box fixture, `dfaa037`) committed. `FramePreparation.cpp` (`taaJitterX/Y *= taaJitterScale`) и `Renderer.cpp` (6 GPU labels на hot sites) подхвачены в их M4/M5 commits.
 
-  **Uncommitted stale working tree (NOT mine, оставлены как есть):** `src/render/vulkan/VulkanBootstrap.cpp` (asset-pipeline сессия добавила `#include "volk.h"` на line 13 во время VMA fix попытки; потом нашли лучший fix в `core/Types.hpp` и закоммитили там, но эта правка осталась в working tree — redundant, no-op), `.gitignore` (`/.venv/` + `minimax_proxy.py` — operator/personal), `pyproject.toml` + `uv.lock` (untracked, Python project files, не мой scope).
+  **Uncommitted в working tree (NOT mine, осталось на следующую сессию / operator):** `src/render/vulkan/VulkanBootstrap.cpp` (asset-pipeline сессия добавила `#include "volk.h"` на line 13 во время VMA fix попытки; потом нашли лучший fix в `core/Types.hpp` и закоммитили там, но эта redundant правка осталась в working tree — no-op), `.gitignore` (`/.venv/` + `minimax_proxy.py` — operator/personal), `pyproject.toml` + `uv.lock` (untracked, Python project files, не мой scope).
 
-  Сессия остаётся `open` per явная инструкция оператора («ты сессию не закрываешь, мы ещё работать будем»). Следующий sub-task — на усмотрение оператора из TODO §5 (Блок 1.2/1.3/1.5/1.6/1.7/1.8 R&D, Блок 2 walk feel polish, Блок 3 SSAO/SSR, Блок 4 greedy meshing, Блок 5 5.2/5.3).
+#### Handoff для следующей сессии (2026-06-12 onward)
+
+**Recent commit chain (эта сессия):**
+- `e27d971` — active-sessions.md update
+- `f90687a` — doc sync (Блок 1/5/6)
+- `3ee995f` — 5.1 RenderDoc debug-utility labels
+- `8635ddf` — 1.4 TAA tuning ladder + M5.2 fix
+
+**Recent commit chain (asset-pipeline сессия — closed):**
+- `b152b70` — close out
+- `dfaa037` — UV box fixture
+- `ccf7400` — M5 frustum cull
+- `c4382ea` — M4 model graphics pass
+
+**Dirty tree safety:** если `git status -uall` показывает чужие uncommitted changes — **не делать** `git checkout -- .` или `git stash drop` (см. `agent/memory.md` §10.11 — там потеряли P0.2 LINEAR fix). Сначала `git diff > /tmp/before_drop_<ts>.patch` и спросить оператора.
+
+**Tuning ladder hotkeys (master HEAD):**
+- `;` jitter scale dec, `'` jitter scale inc (multiplier on Halton, [0,2] step 0.25)
+- `-` blend dec, `=` blend inc (history weight, [0,1] step 0.05)
+- `,` neighbourhood radius cycle (1/3/5/7 — 3×3/7×7/11×11/15×15)
+- `.` history invalidate (single press)
+- `T` toggle TAA on/off (pre-existing)
+
+**Known follow-ups (TODO §5, in priority order by operator):**
+
+| ID | Описание | Сложность | Scope |
+|---|---|---|---|
+| 1.2 | Camera-cut detection (viewProjDelta threshold → auto-invalidate history) | 2-3 ч | TAA-scope |
+| 1.3 | Adaptive CAS sharpening post-TAA (`sharpenAmount = (1-blend) * authoredMax`) | 1-2 ч | TAA-scope, ffx-cas |
+| 1.5 | Anti-flicker для CTSH/AOCC/LOCL через mini-TAA history attachment | 3-5 ч | TAA-scope |
+| 1.7 | R11G11B10_UFloat scene color (bandwidth: 4 vs 8 bytes/pixel) | 2-4 ч | TAA-scope, swapchain format |
+| 1.8 | `TaaQuality` tier abstraction (Off/Light/Std/High) | 4-6 ч | TAA-scope, refactor 1.4 |
+| 1.6 | VRS в cascade split edges | R&D | TAA-scope + GPU driver confirm |
+| 2.x | Walk controller feel polish (frame-step, HUD additions, replay suite) | 3-5 дней | walk-scope |
+| 3.x | SSAO baseline / SSR | 5-10 дней | deferred/hard |
+| 4.1 | Greedy quad meshing | 2-3 дня | voxel-scope |
+| 5.2 | Доп. debug gizmos (chunk AABB, cursor hit normal, cascade split planes) | 1-2 ч | render-scope |
+| 5.3 | Benchmark automation (`PROJECTV_BENCHMARK_FRAMES=N` env) | 1-2 ч | render-scope |
+| 6.1-6.4 | Doc sync (closed in `f90687a`) | — | done |
+
+**Test count baseline:** `ctest` 6/6 (~1.4s wall clock, `ProjectVTests` 1.4s + 5 fast suites). Это baseline, не должно падать.
+
+**Build preset:** `linux-clang-debug` (native clang 22 + lld 22 + libstdc++ 16). Не трогать `windows-clang-debug` (operator's primary dev tree).
+
+**Working rules to inherit (см. `agent/memory.md` §10.16):**
+- `volk.h` MUST come before any VMA-touching header in shared files. If new VMA-related types are added to `core/Types.hpp`, the `volk.h` include position is preserved at top.
+- Asset-pipeline sibling target dependency propagation: when asset-pipeline adds a header-only dep (e.g., glm) that's transitively pulled in by `core/Types.hpp`, all sibling targets that include Types.hpp must also link that dep. `ProjectVTests` was the canary.
+- Shader compile artifact `*.spv` is NOT auto-copied to `bin/` if `ProjectV` ELF is up-to-date. After shader edits: `cp build/.../src/<name>.spv build/.../bin/<name>.spv` (or `cmake --build` with a forced ProjectV relink).
+- `legacy/docs/libraries/` is a dump of reference material, NOT source of truth per `AGENTS.md` §4. Vulkan reference is in `docs/VulkanSDK-Linux-Docs-1.4.350.1/`.
 
 ### session-2026-06-11-taa-a2-flip
 

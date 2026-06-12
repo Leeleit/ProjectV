@@ -2,7 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-06-12` — P1 shadow flicker/shimmer fix + SSBO double-buffer + validation cleanup landed (`b7e672f`).
+Updated: `2026-06-12` — TAA 1.4 tuning HUD ladder + 5.1 RenderDoc markers + M5.2 color-distance rejection + 6.x doc sync landed (`8635ddf` / `3ee995f` / `f90687a` / `e27d971`). See §8.
 
 ---
 
@@ -182,40 +182,98 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 
 ---
 
-## 8. TAA Блок 1 / 1.4 tuning ladder + Блок 5 / 5.1 RenderDoc markers — код в working tree, коммиты pending
+## 8. TAA Блок 1 / 1.4 + Блок 5 / 5.1 + M5.2 fix + Блок 6 — LANDED (`2026-06-12`)
 
-Код полностью готов в working tree на 22 файлах (448+/21- строк). Build green, `ProjectVTests` 1/1. Коммиты **не** сделаны по решению оператора (multi-agent conflict на `core/Types.hpp` / `tests/CMakeLists.txt` / `src/CMakeLists.txt` / `Renderer.cpp` с asset-pipeline M4 сессией, которая в этот момент пишет `ModelInstanceData`/`ModelRegistryEntry`/model pass init/shutdown).
+**4 commits landed в этой resumed-сессии:**
 
-**Что в working tree (mine, 1.4 + 5.1 + VMA/glm fix + 6.x):**
+| SHA | Subject | Files |
+|---|---|---|
+| `8635ddf` | `fix(taa): TAA tuning HUD ladder + M5.2 color-distance rejection` | 8 |
+| `3ee995f` | `feat(render): add RenderDoc debug-utility label helpers + TAA-resolve hot site` | 1 |
+| `f90687a` | `docs(agent): sync Блок 1 (1.4) + Блок 5 (5.1) + Блок 6 (6.x) closures` | 4 |
+| `e27d971` | `docs(agent): record 1.4 + 5.1 + 6.x + M5.2 commits in active-sessions.md` | 1 |
 
-- `src/core/Types.hpp` — 5 new `InputAction` enum entries (`Decrease/IncreaseTaaJitterScale`, `Decrease/IncreaseTaaBlend`, `CycleTaaNeighbourhoodRadius`, `InvalidateTaaHistory`); `RenderState::taaJitterScale` (float, [0,2] step 0.25, default 1.0), `taaNeighbourhoodRadius` (int32_t, cycle 1/3/5/7, default 1); `DebugStats` mirror fields. **Plus VMA fix:** `#include "volk.h"` перемещён на самый верх файла, до VMA-touching headers (`asset/MeshGpuResources.hpp`, `render/ShadowTypes.hpp`, `render/TaaRenderTargets.hpp`, `voxel/VoxelMaterials.hpp`). Удалён дублирующий `#include "volk.h"` на старом месте.
-- `src/app/InputActions.cpp` — bind 5 new keys: `;` jitter dec, `'` jitter inc, `-` blend dec, `=` blend inc, `,` radius cycle, `.` invalidate. Все 5 в правой руке (TODO-предложение `J`/`M`/`K`/`L` не реализуемо — `J`/`M`/`K` уже заняты walk auto-jump / pick material / exposure inc).
-- `src/app/AppUpdate.cpp` — 5 new handlers в `UpdateApp`. Все `*->taaHistoryValid = false` на change. `CycleTaaNeighbourhoodRadius` использует `std::array<int32_t, 4>{1, 3, 5, 7}` через `std::find` + индексная арифметика. `<array>` добавлен в includes.
-- `src/app/FramePreparation.cpp` — `taaJitterX/Y` умножаются на `taaJitterScale` после `AdvanceTaaPixelJitter`.
-- `src/shaders/taa_resolve.frag` — `GetSceneColorRange` теперь использует `sceneLighting.taaHistoryParams.w` (reserved → neighbourhood radius) как loop bound. Snap к odd values `(r >= 7) ? 7 : (r >= 5) ? 5 : (r >= 3) ? 3 : 1`. 3×3 / 7×7 / 11×11 / 15×15.
-- `src/voxel/VoxelMaterials.hpp` — comment update `texel size x, texel size y, history valid (0/1), reserved` → `... neighbourhood radius (1/3/5/7)`. Byte layout **не изменился**, `static_assert` (offsetof `taaHistoryParams` == 592) проходит.
-- `src/render/SceneResources.cpp` — populate `taaHistoryParams.w` с `taaNeighbourhoodRadius`.
-- `src/render/ScreenshotCapture.cpp` — 2 new sidecar keys: `taa_jitter_scale` (после `taa_jitter_y`), `taa_neighbourhood_radius` (после `taa_blend`).
-- `src/debug/DebugHud.cpp` — extended TAA HUD line: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s`. 2 new helper lines: `T TAA  ;' JIT  -= BLND` и `, NHOOD  . INVHIST`.
-- `src/debug/ProfilingGpu.hpp` — `profiling::ScopedGpuDebugLabel` RAII + `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR` macros, gated на `PROJECTV_ENABLE_RENDERDOC_MARKERS`. `__COUNTER__` для unique identifier'ов.
-- `src/render/Renderer.cpp` — `PV_PROFILE_GPU_LABEL` на 6 hot sites: `RecordShadowCommands` ("Shadow Pass"), `RecordVoxelMeshingCommands` ("Voxel Meshing"), `RecordGraphicsCommands` ("Graphics Pass"), TAA resolve section ("TAA Resolve" + color 0.20/0.65/1.00), `RecordDebugOverlayCommands` ("Debug Overlay"), `RecordDebugHudCommands` ("Debug HUD").
-- `src/shaders/voxel.frag` — comment update: `taaHistoryParams = (texelX, texelY, valid, reserved)` → `(texelX, texelY, valid, neighbourhoodRadius)`. Функционально не меняется (voxel pass не использует `.w`).
-- `tests/CMakeLists.txt` — `glm` добавлен в `ProjectVTests` link (asset-pipeline's M2/M4 `MeshGpuResources.hpp` транзитивно тянет `<glm/glm.hpp>`, нужен `glm` target для INTERFACE include path propagation).
+**Что в `8635ddf` (primary 1.4 + M5.2 fix):**
 
-**Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests` — green. `ctest` — 1/1 (`ProjectVTests` passed). 1 pre-existing warning в `DebugHud.cpp:605` (`%.0f` для bool в LOCL строке, не моя правка). Asset-pipeline's `ProjectVAssetTests`/`ProjectVMeshBakerTests`/`ProjectVDracoTests` — not built (out of my scope).
+- 1.4: 5 new hotkeys `;`/`'`/`-`/`=`/`,`/`.` drive per-pass TAA knobs (jitter scale / blend / neighbourhood radius / history invalidate). `taaNeighbourhoodRadius` в `taaHistoryParams.w` (was `reserved` slot, byte layout unchanged). All four invalidate `taaHistoryValid` на change.
+- 5.1 hot sites: 6 `PV_PROFILE_GPU_LABEL` calls на `RecordShadowCommands` ("Shadow Pass") / `RecordVoxelMeshingCommands` ("Voxel Meshing") / `RecordGraphicsCommands` ("Graphics Pass") / TAA resolve section ("TAA Resolve" + color 0.20/0.65/1.00) / `RecordDebugOverlayCommands` ("Debug Overlay") / `RecordDebugHudCommands` ("Debug HUD") — но эти Renderer.cpp правки подхвачены в asset-pipeline's M4/M5 chain (`c4382ea` / `ccf7400`).
+- M5.2 fix: `kTaaColorDistanceRejectionThreshold = 0.20` в YCoCg space. Когда current sample далёк от neighborhood centroid, skip both YCoCg clamp и temporal blend. Fixes the polygon-model pass "faint grey blob" regression reported in asset-pipeline closeout `b152b70` (M5.2 follow-up). Models surrounded by voxel pixels now keep their saturated colors.
 
-**Doc state:**
-- `TODO.md` — 1.4 + 5.1 closed; Блок 6 doc sync closed (6.1-6.4); header date `2026-06-12 (1.4 + 5.1 closed)`.
+**Что в `3ee995f` (5.1 helper):**
+
+- `profiling::ScopedGpuDebugLabel` RAII в `src/debug/ProfilingGpu.hpp` + `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR` macros, gated на CMake option `PROJECTV_ENABLE_RENDERDOC_MARKERS` (Debug default ON, `linux-clang-debug` preset OFF). `__COUNTER__` для unique identifiers. Function pointers loaded volk'ом.
+
+**Что в `f90687a` (6.x doc sync):**
+
+- `TODO.md` — 1.4 + 5.1 closed; Блок 6 doc sync closed (6.1-6.4); header date `2026-06-12 (1.4 + 5.1 closed)`. 6.4 rolled into `decisions.md` §18 (legacy docs — справочник, не source of truth per `AGENTS.md` §4).
 - `agent/memory.md` §10.16 — full TAA tuning ladder + RenderDoc markers landed + VMA/glm fix. Working rules: volk.h position relative to VMA-touching headers; asset-pipeline sibling target dependency propagation.
-- `agent/decisions.md` §18 — TAA contract: default `taaEnabled=true`, history invalidation triggers, live tuning policy, YCoCg clamp rationale, dual-MRT SPIR-V variant rationale, neighbourhood radius 1/3/5/7.
-- (Originally также пытался писать в `legacy/docs/libraries/vulkan/13_projectv-taa.md` — НЕ правильное место. Удалено. `legacy/docs/libraries/` — свалка-справочник per `AGENTS.md` §4, не source of truth. Vulkan reference — `docs/VulkanSDK-Linux-Docs-1.4.350.1/`.)
+- `agent/decisions.md` §18 — TAA contract: default `taaEnabled=true`, history invalidation triggers (7 events), live tuning policy, YCoCg clamp rationale, dual-MRT SPIR-V variant rationale, neighbourhood radius 1/3/5/7.
+- `agent/status.md` §8 — этот snapshot.
 
-**Asset-pipeline parallel state (в working tree, не коммичено):** M4 model pass активно пишется. `core/Types.hpp` имеет их `#include "asset/MeshGpuResources.hpp"` (line 5) → `ModelInstanceData`/`ModelRegistryEntry` structs + model fields в `RenderState`. `src/CMakeLists.txt` имеет их `model.vert`/`model.frag` + `ModelPass.cpp`/`ModelManifestLoader.cpp`. `src/render/Renderer.cpp` имеет их `Model Pass` block внутри `RecordGraphicsCommands`. `src/core/Types.cpp` + `src/render/vulkan/VulkanInit.cpp` имеют model pass init/shutdown. `src/asset/MeshGpuResources.cpp` (modified) — что-то там. `tests/CMakeLists.txt` теперь чистый от их правок (видимо откатили). Build ловит только мои VMA/glm fix'ы.
+**Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests` green, `ctest` 6/6 (`ProjectVTests`, `ProjectVAssetTests`, `ProjectVMeshBakerTests`, `ProjectVDracoTests`, `ProjectVFrustumCullingTests`, `ProjectVBoxUvFixtureTests`).
 
-**Commit plan (pending operator decision):**
-- **A — 1.4 (TAA tuning ladder):** 9 files. Только мои части — отфильтровать из shared `core/Types.hpp` / `src/render/Renderer.cpp` (там M4 Model Pass block).
-- **B — 5.1 (RenderDoc markers):** 2 files. `src/debug/ProfilingGpu.hpp` + `src/render/Renderer.cpp`. Renderer.cpp shared, фильтровать.
-- **C — VMA/glm fix:** 2 files. `src/core/Types.hpp` (volk.h position) + `tests/CMakeLists.txt` (glm link). Shared, фильтровать.
-- **D — 6.x doc sync:** 3 files. `TODO.md` + `agent/memory.md` + `agent/decisions.md`. Не shared с asset-pipeline.
+**Uncommitted в working tree (NOT mine, осталось на следующую сессию / operator):**
 
-**Backup:** `/tmp/taa_1.4_and_5.1_20260611T213303Z.patch` (24 KB) — все мои изменения включая VMA/glm fix.
+- `src/render/vulkan/VulkanBootstrap.cpp` — asset-pipeline сессия добавила `#include "volk.h"` на line 13 во время VMA fix попытки; потом нашли лучший fix в `core/Types.hpp` (`c4382ea`) и закоммитили там, но эта redundant правка осталась в working tree — no-op.
+- `.gitignore` — `/.venv/` + `minimax_proxy.py` (operator/personal additions).
+- `pyproject.toml` + `uv.lock` (untracked) — Python project files, не мой scope.
+
+---
+
+## 9. Handoff для следующей сессии (2026-06-12 onward)
+
+**Recent commit chain (эта сессия — `cline/MiniMax-M3`):**
+- `e27d971` — active-sessions.md update (session metadata)
+- `f90687a` — doc sync (Блок 1/5/6)
+- `3ee995f` — 5.1 RenderDoc debug-utility labels
+- `8635ddf` — 1.4 TAA tuning ladder + M5.2 fix
+
+**Recent commit chain (asset-pipeline сессия — closed at `b152b70`):**
+- `b152b70` — close out
+- `dfaa037` — UV box fixture (M6 prep)
+- `ccf7400` — M5 frustum cull
+- `c4382ea` — M4 model graphics pass + manifest load + TAA shader variant
+- `24ccb08` — M3 KHR_draco_mesh_compression
+- `cccdbc1` — M2 meshopt + VMA upload
+- `8b112e7` — M1 .glb loader + AssetRegistry
+- `1c72a4b` — M0 CMake wiring
+
+**Tuning ladder hotkeys (master HEAD):**
+- `;` jitter scale dec, `'` jitter scale inc (multiplier on Halton, [0,2] step 0.25)
+- `-` blend dec, `=` blend inc (history weight, [0,1] step 0.05)
+- `,` neighbourhood radius cycle (1/3/5/7 — 3×3/7×7/11×11/15×15)
+- `.` history invalidate (single press)
+- `T` toggle TAA on/off (pre-existing)
+
+**Dirty tree safety:** если `git status -uall` показывает чужие uncommitted changes — **не делать** `git checkout -- .` или `git stash drop` (см. `agent/memory.md` §10.11 — там потеряли P0.2 LINEAR fix). Сначала `git diff > /tmp/before_drop_<ts>.patch` и спросить оператора.
+
+**Known follow-ups (TODO §5, in priority order by operator):**
+
+| ID | Описание | Сложность | Scope |
+|---|---|---|---|
+| 1.2 | Camera-cut detection (viewProjDelta threshold → auto-invalidate history) | 2-3 ч | TAA-scope |
+| 1.3 | Adaptive CAS sharpening post-TAA (`sharpenAmount = (1-blend) * authoredMax`) | 1-2 ч | TAA-scope, ffx-cas |
+| 1.5 | Anti-flicker для CTSH/AOCC/LOCL через mini-TAA history attachment | 3-5 ч | TAA-scope |
+| 1.7 | R11G11B10_UFloat scene color (bandwidth: 4 vs 8 bytes/pixel) | 2-4 ч | TAA-scope, swapchain format |
+| 1.8 | `TaaQuality` tier abstraction (Off/Light/Std/High) | 4-6 ч | TAA-scope, refactor 1.4 |
+| 1.6 | VRS в cascade split edges | R&D | TAA-scope + GPU driver confirm |
+| 2.x | Walk controller feel polish (frame-step, HUD additions, replay suite) | 3-5 дней | walk-scope |
+| 3.x | SSAO baseline / SSR | 5-10 дней | deferred/hard |
+| 4.1 | Greedy quad meshing | 2-3 дня | voxel-scope |
+| 5.2 | Доп. debug gizmos (chunk AABB, cursor hit normal, cascade split planes) | 1-2 ч | render-scope |
+| 5.3 | Benchmark automation (`PROJECTV_BENCHMARK_FRAMES=N` env) | 1-2 ч | render-scope |
+| 6.1-6.4 | Doc sync (closed in `f90687a`) | — | done |
+
+**Test count baseline:** `ctest` 6/6 (~1.4s wall clock, `ProjectVTests` 1.4s + 5 fast suites). Это baseline, не должно падать.
+
+**Build preset:** `linux-clang-debug` (native clang 22 + lld 22 + libstdc++ 16). Не трогать `windows-clang-debug` (operator's primary dev tree).
+
+**Working rules to inherit (см. `agent/memory.md` §10.16):**
+- `volk.h` MUST come before any VMA-touching header in shared files. If new VMA-related types are added to `core/Types.hpp`, the `volk.h` include position is preserved at top.
+- Asset-pipeline sibling target dependency propagation: when asset-pipeline adds a header-only dep (e.g., glm) that's transitively pulled in by `core/Types.hpp`, all sibling targets that include Types.hpp must also link that dep. `ProjectVTests` was the canary.
+- Shader compile artifact `*.spv` is NOT auto-copied to `bin/` if `ProjectV` ELF is up-to-date. After shader edits: `cp build/.../src/<name>.spv build/.../bin/<name>.spv` (or `cmake --build` with a forced ProjectV relink).
+- `legacy/docs/libraries/` is a dump of reference material, NOT source of truth per `AGENTS.md` §4. Vulkan reference is in `docs/VulkanSDK-Linux-Docs-1.4.350.1/`.
+
+**Ключевые env vars (master HEAD):** `PROJECTV_MODELS=path.glb@x,y,z;...` (manifest), `PROJECTV_START_CAMERA_POSITION="x y z"`, `PROJECTV_START_CAMERA_LOOK="x y z"`, `PROJECTV_LOOKDEV_CAPTURE_*` (smoke harness), `PROJECTV_ENABLE_VALIDATION` (1/0, default ON in Debug), `PROJECTV_ENABLE_RENDERDOC_MARKERS` (1/0, default ON in Debug, OFF в `linux-clang-debug` preset), `PROJECTV_ENABLE_TRACY` (1/0, default ON).
+
+**Status §7 (YCoCg clamp landed in `a2972fa`):** Marked stale by §8. Read §8 for current state.
