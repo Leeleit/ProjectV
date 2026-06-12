@@ -1,0 +1,67 @@
+# clangd config for ProjectV (Linux primary dev tree: linux-clang-debug).
+# Drives clangd to use the ninja-generated compile_commands.json and to
+# tolerate the project-wide `-include cstring` flag plus the small set of
+# non-source files (cmake regeneration outputs, vendored submodules under
+# external/) that the compiler never sees.
+
+CompileFlags:
+  # Match the build preset: project-global pre-include of <cstring> in
+  # CMakeLists.txt (`-include cstring`) so libstdc++ 16 stops complaining
+  # about implicit declarations of std::mem* / std::str* on Linux. clangd
+  # needs to know about this or it will flag the project-wide reliance on
+  # <cstring> being transitively present as missing includes.
+  Add: [-include cstring]
+  # Treat headers and generated artefacts clangd should not analyse.
+  Remove: [-W*]
+  # Explicit C++ standard: matches CMAKE_CXX_STANDARD 26 in CMakeLists.txt.
+  # Without this clangd may default to a lower standard when
+  # compile_commands.json is stale, missing for a file, or has its -std
+  # flag stripped by another layer, producing C++26 syntax errors in
+  # code that the build accepts.
+  Standard: c++26
+  # Query the system compiler for its built-in include paths (libstdc++
+  # 16, clang resource dir, etc.). Without this clangd falls back to
+  # compile_commands.json's -I flags only — if a file is opened via a
+  # path that has no compile command (e.g. an untracked source touched
+  # by another agent's in-progress work), headers like <vector>,
+  # <string>, <cstdint> fail to resolve, producing cascade "no member
+  # X in struct Y" / "incomplete type" errors that look like real
+  # source bugs but vanish after a clean clangd restart. The
+  # QueryDriver glob is restricted to /usr/sbin to limit which binaries
+  # clangd will execute; the project's two driver binaries are both
+  # there on this host (Arch Linux native clang 22).
+  QueryDriver: [/usr/sbin/clang, /usr/sbin/clang++]
+
+Index:
+  # Background indexing of /usr/include and the project source tree.
+  # The default `Build` mode is fine for stable trees, but the
+  # project-wide index can hold stale entries across unrelated edits
+  # in the dirty tree (other agents' in-progress work on src/, tests/,
+  # CMakeLists.txt). The symptom is the LSP surfacing "no member X in
+  # struct Y" / "incomplete type" errors for fields and types that
+  # have already been added to Types.hpp / other headers, while the
+  # build itself is green. `Skip` means clangd only analyses the file
+  # currently open plus the chain of headers its compile command pulls
+  # in — slower for cross-file refactor, but no stale project-wide
+  # index entries that could surface as false errors after a code
+  # change elsewhere in the tree. This is the right trade-off for
+  # ProjectV right now: the dirty tree is large and frequently edited
+  # in parallel, and a green build is the only authoritative check.
+  Background: Skip
+
+# Diagnostics tuning: clangd's static analysis is stricter than what the
+# build preset (linux-clang-debug) compiles with. Suppress diagnostics on
+# vendored third-party submodules and the build's own intermediate headers
+# — the compile_commands.json only ever compiles the project sources, but
+# clangd can still walk into external/ while resolving includes.
+Diagnostics:
+  # VMA / volk / fastgltf ship with their own -Wnullability-completeness
+  # noise that the project does not enable. `unused-includes` is suppressed
+  # here as a global gate; vendored headers under external/ are transitively
+  # pulled in by the pre-compiled target compile units, not the project
+  # sources that reference them, so a path-based exclusion would be redundant
+  # (and the previous `Exclude: [external/**]` sub-block was rejected by
+  # clangd's config schema — `Diagnostics.UnusedIncludes` accepts only the
+  # scalar values `None` / `Strict` or an `IgnoreHeader: [regex]` dict, not
+  # an `Exclude:` key).
+  Suppress: [nullability-completeness, unused-includes]
