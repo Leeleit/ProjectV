@@ -93,7 +93,7 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 	// `box.glb@0,1,0` env-var spawn). Idempotent + cheap
 	// (one `GetVoxelMaterial` probe per AABB sample); safe to
 	// re-run on every world reload / preset switch.
-	projectv::asset::SnapModelInstancesAboveGround(*world->voxelWorld, &state->render);
+	projectv::asset::SnapModelInstancesAboveGroundDispatch(*world->voxelWorld, &state->render);
 
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
 		ConsumeInputActionPressed(state->input, InputAction::MoveUp);

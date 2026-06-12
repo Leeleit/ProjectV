@@ -265,7 +265,13 @@ bool InitVulkan(AppState *state)
 	// `FinalizeActiveVoxelWorldReload` for F5 / F6 / replay; this
 	// startup branch covers the initial VoxelLab default scene
 	// (which doesn't go through `FinalizeActiveVoxelWorldReload`).
-	projectv::asset::SnapModelInstancesAboveGround(*state->world.voxelWorld, &state->render);
+	//
+	// M5.1d: routes through the dispatch wrapper, which honours
+	// the `PROJECTV_MODEL_SNAP=centre` env var for the optional
+	// centre-anchored snap (see `ModelManifestLoader.hpp` for the
+	// contract). The default branch (no env var, or any other
+	// value) is bottom-anchored.
+	projectv::asset::SnapModelInstancesAboveGroundDispatch(*state->world.voxelWorld, &state->render);
 
 	return true;
 }

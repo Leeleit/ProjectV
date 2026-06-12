@@ -497,3 +497,32 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 
 **Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
 
+---
+
+## 15. M5.1d asset-pipeline follow-up — `session-2026-06-12-asset-glb-voxel-snap` — closed, uncommitted
+
+**What landed in this session (build green, ctest 6/6, `ProjectV` binary works):**
+- glTF node hierarchy walk (`ApplyNodeHierarchyTransforms` in `AssetLoader.cpp:268-369`) — bakes per-node TRS into positions + normals before AABB accumulation. Fixes the M5.1b "overlapping geometry pile" symptom.
+- `manifest position` = `worldAabbMin` semantic change (`ModelManifestLoader.cpp:147-161`).
+- `ModelInstanceData::sourceAabbMin` field (`Types.hpp:658`) + 3× snap/drag sites updated to write `modelTransform[12..14] = newMin - sourceAabbMin`.
+- Per-axis smart snap with **post-round fit check** (`ModelManifestLoader.cpp:387-485`): Case A vs B per axis, with fallback when rounding would push AABB max past floor bound.
+- **Floor bounds** (`VoxelWorld::floorMin` / `floorMaxExclusive`): snap clamps to the visible 18×18 platform, not world bound (24×24 with padding=3).
+- **ModelGravigun** (`src/app/ModelGravigun.{cpp,hpp}`, NEW, 221 lines): HL2-style F-key debug tool, pick-anchor math to prevent teleport-on-press, opt-out snap via `PROJECTV_GRAVIGUN_SNAP=off`.
+- **AGENTS.md §7.2.6 new bullet**: generalized scope-ownership rule (don't touch other sessions' files under any pretext, including "fix the build"). Source: 2026-06-12 TAA-shader glslc incident.
+- Auto-scale отменён оператором в середине сессии: «без snap и auto-resize, надо просто импорт чужой модели без деформаций». Реализован no-snap путь.
+
+**What FAILED (per operator "для тебя это слишком тяжело, запиши в памяти, что ты не справился"):**
+
+1. **Per-mesh manifest positioning.** Operator wanted `position=@cylinder@-9,1,-9;sphere@0,0,15` — ставить разные меши одной .glb в разные координаты. Не реализовано. Manifest format сейчас — один `position` на entry, общий AABB. Требует или (a) разбить asset на 2 .glb, или (b) новый manifest format с explicit per-mesh names + positions. Записано как future work.
+
+2. **Column-only AABB vs full AABB separation.** Operator хотел, чтобы AABB считался по column'у (Cylinder+Cube, без Sphere), а Sphere ("люстра") мог выходить за края платформы, а column — нет. Я реализовал выравнивание по **full AABB** модели, но математически **column AABB == full AABB** для этого asset'а (sphere X∈[-2.01,-0.79]⊂cylinder X∈[-2.36,3.64], sphere Z∈[3.28,4.50]⊂cylinder Z∈[-3.42,4.71] — sphere полностью внутри column AABB). Оператор сказал "обманываешь" когда я показал это; я не смог убедить. Реальное решение требует multi-mesh manifest (см. выше) или разделения asset'а.
+
+**Lesson for future sessions:** когда оператор говорит "нижняя часть column'а должна быть в углу, люстра может выходить за рамки" — это запрос на **multi-mesh placement**, не на умный AABB-калькулятор. Per-mesh манифест формат или split .glb — единственные пути.
+
+**Working tree state (на момент закрытия):**
+- My changes (commit candidate): 13 файлов, +1081/-97 строк. AGENTS.md, src/app/{FramePreparation.{cpp,hpp}, main.cpp, ModelGravigun.{cpp,hpp} (NEW)}, src/asset/{AssetLoader.{cpp,hpp}, ModelManifestLoader.{cpp,hpp}}, src/debug/DebugHud.cpp, src/render/vulkan/VulkanInit.cpp, src/voxel/VoxelWorld.{cpp,hpp}, tests/AssetLoaderTests.cpp, agent/active-sessions.md, agent/status.md.
+- TAA-scope НЕ мои (orphaned от aborted `session-2026-06-12-taa-m5_2-threshold-bump`): `src/shaders/taa_resolve.frag` (27 lines), `src/asset/ModelPass.{cpp,hpp}` (43 lines), `src/render/vulkan/VulkanBootstrap.cpp` (12 lines). Не включены в мой коммит. Оператор решает, что с ними делать.
+- Untracked (not mine): `compile_commands.json` (LSP symlink), `minimax_proxy.py`, `pyproject.toml`, `uv.lock` (operator's Python env).
+- `.gitignore` reverted (был 4 чужых Python-строки).
+
+

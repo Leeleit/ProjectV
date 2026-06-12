@@ -11,7 +11,8 @@ bool PrepareFrameRenderData(
 	const DebugState *debug,
 	WorldState *world,
 	RenderState *render,
-	FrameState *frame);
+	FrameState *frame,
+	InputState *input);
 
 // M5: build the per-frame frustum-culled model draw list. Walks
 // `render->modelInstances` and copies the ones whose world AABB

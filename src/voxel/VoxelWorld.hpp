@@ -75,6 +75,20 @@ struct VoxelWorld {
 	VoxelWorldConfig config{};
 	Int3 min{};
 	Int3 maxExclusive{};
+	// **Floor bounds (M5.1d, 2026-06-12):** the XZ extent of
+	// the visible checkerboard floor (the "platform"), without
+	// the world-bound padding that `min` / `maxExclusive`
+	// include for chunk allocation. For VoxelLab with
+	// `floorSize=18, padding=3`, `min=(-12,0,-12)`,
+	// `maxExclusive=(12,17,12)`, `floorMin=(-9,0,-9)`,
+	// `floorMaxExclusive=(9,17,9)`. The model's snap should
+	// clamp to the floor (the visible platform), not the world
+	// (which extends 3 voxels into invisible Air padding
+	// around the floor). Y is the same as `maxExclusive.y` —
+	// there's no horizontal padding for the height; the only
+	// thing that changes is the XZ floor extent.
+	Int3 floorMin{};
+	Int3 floorMaxExclusive{};
 	int width = 0;
 	int height = 0;
 	int depth = 0;

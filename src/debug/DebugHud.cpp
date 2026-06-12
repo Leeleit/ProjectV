@@ -836,6 +836,10 @@ size_t BuildHelperLines(
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F2 MAT  F3 CAM");
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F4 MODE  F5 SCENE");
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F6 SAVE  F7 LOAD");
+	// M5.1d gravigun: F picks/drops a model under the crosshair
+	// and snaps its AABB min to integer voxel grid; logs the
+	// final integer coords on drop.
+	PV_APPEND_HUD_LINE(outLines, lineCount, "F GRAVIGUN");
 	if (stats.detailedHudVisible) {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F8 TOOL  F9 BND");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F10 DIRTY  F11 AIR");

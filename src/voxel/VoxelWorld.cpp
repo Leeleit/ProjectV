@@ -325,6 +325,30 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
 	world->chunkSize = config.chunkSize;
 	world->min = min;
 	world->maxExclusive = maxExclusive;
+	// **Floor bounds (M5.1d, 2026-06-12):** the XZ extent of
+	// the visible checkerboard, without the world padding
+	// (which exists for chunk allocation, not for the model
+	// snap). The snap should clamp models to the floor (the
+	// visible platform), not to the world (which extends
+	// `padding` voxels of invisible Air beyond the floor on
+	// every side). Y is unchanged — there's no horizontal
+	// padding for the height, only XZ. The convention: floor
+	// is centered at world origin, halfFloor = `floorSize/2`,
+	// so `floorMin = (-halfFloor, 0, -halfFloor)` and
+	// `floorMaxExclusive = (halfFloor, maxY, halfFloor)`.
+	// Padding on the world is uniformly subtracted from the XZ
+	// extents. For VoxelLab (floorSize=18, padding=3): floor
+	// is X∈[-9,9], Z∈[-9,9].
+	world->floorMin = Int3{
+		min.x + config.padding,
+		min.y,
+		min.z + config.padding,
+	};
+	world->floorMaxExclusive = Int3{
+		maxExclusive.x - config.padding,
+		maxExclusive.y,
+		maxExclusive.z - config.padding,
+	};
 	world->width = width;
 	world->height = height;
 	world->depth = depth;
