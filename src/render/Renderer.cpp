@@ -796,7 +796,13 @@ void RecordGraphicsCommands(
 		// same push constant struct as the voxel pass and only reads
 		// `viewProjection` (offset 0) and `modelTransform` (offset
 		// 64).
-		if (render.modelPipeline != VK_NULL_HANDLE && !render.modelInstances.empty()) {
+		// M5: iterate `visibleModelInstances` (the per-frame
+		// frustum-culled subset built in
+		// `FramePreparation::BuildVisibleModelInstanceList`) instead
+		// of the raw `modelInstances`. Off-screen / max-distance
+		// instances never generate a draw call, so the GPU side
+		// stays untouched even when the manifest grows.
+		if (render.modelPipeline != VK_NULL_HANDLE && !render.visibleModelInstances.empty()) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Model Pass");
 			vkCmdBindPipeline(
 				cmd,
@@ -813,7 +819,7 @@ void RecordGraphicsCommands(
 				push.viewProjection.data(),
 				frameRenderData.graphicsPushConstants.viewProjection.data(),
 				sizeof(float) * 16);
-			for (const ModelInstanceData &instance : render.modelInstances) {
+			for (const ModelInstanceData &instance : render.visibleModelInstances) {
 				if (instance.indexCount == 0 || instance.vertexBuffer == VK_NULL_HANDLE
 					|| instance.indexBuffer == VK_NULL_HANDLE) {
 					continue;

@@ -697,6 +697,15 @@ struct RenderState {
 	// allocation is required for M4.
 	std::vector<ModelRegistryEntry> modelRegistry;
 	std::vector<ModelInstanceData> modelInstances;
+	// M5: per-frame frustum-culled subset of `modelInstances`. Built
+	// each frame in `FramePreparation::BuildVisibleModelInstanceList`
+	// from the same `ChunkCullingParameters` that drives chunk
+	// visibility. The render command buffer iterates this filtered
+	// list rather than `modelInstances` so off-screen / max-distance
+	// instances do not generate draw calls. The allocation is
+	// reused across frames; capacity tracks the worst-case
+	// `modelInstances.size()`.
+	std::vector<ModelInstanceData> visibleModelInstances;
 	VkPipelineLayout modelPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline modelPipeline = VK_NULL_HANDLE;
 	VkPipeline modelPipelineTaaOn = VK_NULL_HANDLE;

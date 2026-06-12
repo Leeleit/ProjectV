@@ -9,6 +9,43 @@
 #include "render/Taa.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+void BuildVisibleModelInstanceList(
+	const ChunkCullingParameters &parameters,
+	RenderState *render)
+{
+	if (!render) {
+		return;
+	}
+	if (render->modelInstances.empty()) {
+		// No models loaded (manifest empty or never set) — keep
+		// the culled list empty and skip the per-instance loop
+		// entirely. Cheap, and the renderer already short-circuits
+		// on an empty `visibleModelInstances`.
+		render->visibleModelInstances.clear();
+		return;
+	}
+	render->visibleModelInstances.clear();
+	render->visibleModelInstances.reserve(render->modelInstances.size());
+	for (const ModelInstanceData &instance : render->modelInstances) {
+		// Skip empty registrations: the registry/loader can
+		// produce entries with `indexCount == 0` or null buffers
+		// (e.g. a primitive that failed to upload) and those
+		// would have been skipped by the renderer anyway — no
+		// point culling them through the frustum math first.
+		if (instance.indexCount == 0 ||
+			instance.vertexBuffer == VK_NULL_HANDLE ||
+			instance.indexBuffer == VK_NULL_HANDLE) {
+			continue;
+		}
+		if (IsAabbVisibleAgainstCameraFrustum(
+				instance.worldAabbMin,
+				instance.worldAabbMax,
+				parameters)) {
+			render->visibleModelInstances.push_back(instance);
+		}
+	}
+}
+
 bool PrepareFrameRenderData(
 	VulkanContextState *context,
 	const SwapchainState *swapchain,
@@ -82,6 +119,16 @@ bool PrepareFrameRenderData(
 		return false;
 	}
 
+	// M5: per-frame model-instance frustum cull. The same camera
+	// basis that drives chunk visibility (`chunkCullingParameters`,
+	// built above) is reused so chunk cull + model cull share a
+	// consistent view of the frustum. Off-screen and max-distance
+	// instances never reach `RecordModelCommands`. Empty manifests
+	// short-circuit to a clear; non-empty manifests re-use
+	// `visibleModelInstances` capacity to avoid per-frame
+	// allocations.
+	BuildVisibleModelInstanceList(chunkCullingParameters, render);
+
 	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
 	sceneFrameResources.debugHudVertexCount = 0;
 	if (sceneFrameResources.debugHudVertexMappedData) {
@@ -130,8 +177,12 @@ bool PrepareFrameRenderData(
 	const std::array<float, 2> taaPixelJitter = render->taaEnabled
 		? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
 		: std::array<float, 2>{0.0f, 0.0f};
-	render->taaJitterX = taaPixelJitter[0];
-	render->taaJitterY = taaPixelJitter[1];
+	// `taaJitterScale` is the per-pass TAA tuning-ladder multiplier
+	// (live `;`/`'` keys, see `InputAction::*TaaJitterScale`). At 1.0 the
+	// behaviour matches the pre-ladder Halton output; 0.0 freezes the
+	// projection jitter entirely, 2.0 lets it wander across a full pixel.
+	render->taaJitterX = taaPixelJitter[0] * render->taaJitterScale;
+	render->taaJitterY = taaPixelJitter[1] * render->taaJitterScale;
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(

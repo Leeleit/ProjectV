@@ -111,6 +111,103 @@ inline bool IsSceneChunkVisible(
 	return true;
 }
 
+// M5: world-space AABB vs the same camera frustum that
+// `IsSceneChunkVisible` builds. Used by `FramePreparation` to cull
+// polygon-model instances per frame without paying the cost of an
+// indirect buffer + GPU readback. Planes are constructed inline rather
+// than refactoring the chunk helper because the chunk hot path is owned
+// by another agent's work-in-progress and the cost of an additional ~30
+// lines of math is negligible compared to touching a shared function.
+inline bool IsAabbVisibleAgainstCameraFrustum(
+	const std::array<float, 3> &aabbMin,
+	const std::array<float, 3> &aabbMax,
+	const ChunkCullingParameters &parameters)
+{
+	const auto loadFloat3 = [](const std::array<float, 4> &values) {
+		return std::array{values[0], values[1], values[2]};
+	};
+	const auto dot = [](const std::array<float, 3> &a, const std::array<float, 3> &b) {
+		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	};
+	const auto lengthSquared = [&](const std::array<float, 3> &vector) {
+		return dot(vector, vector);
+	};
+
+	const std::array<float, 3> cameraPosition = loadFloat3(parameters.cameraPositionAndMaxDistance);
+	const std::array<float, 3> cameraForward = loadFloat3(parameters.cameraForwardAndTanHalfVerticalFov);
+	const std::array<float, 3> cameraRight = loadFloat3(parameters.cameraRightAndTanHalfHorizontalFov);
+	const std::array<float, 3> cameraUp = loadFloat3(parameters.cameraUpAndNearPlane);
+	const float maxDistance = parameters.cameraPositionAndMaxDistance[3];
+	const float tanHalfVerticalFov = std::max(parameters.cameraForwardAndTanHalfVerticalFov[3], 0.0f);
+	const float tanHalfHorizontalFov = std::max(parameters.cameraRightAndTanHalfHorizontalFov[3], 0.0f);
+	const float nearPlane = std::max(parameters.cameraUpAndNearPlane[3], 0.0f);
+
+	const std::array aabbCenter{
+		(aabbMin[0] + aabbMax[0]) * 0.5f,
+		(aabbMin[1] + aabbMax[1]) * 0.5f,
+		(aabbMin[2] + aabbMax[2]) * 0.5f,
+	};
+	const std::array aabbHalfExtent{
+		(aabbMax[0] - aabbMin[0]) * 0.5f,
+		(aabbMax[1] - aabbMin[1]) * 0.5f,
+		(aabbMax[2] - aabbMin[2]) * 0.5f,
+	};
+	const std::array toAabbCenter{
+		aabbCenter[0] - cameraPosition[0],
+		aabbCenter[1] - cameraPosition[1],
+		aabbCenter[2] - cameraPosition[2],
+	};
+	const auto projectedRadiusOntoPlane = [&](const std::array<float, 3> &planeNormal) {
+		return std::abs(planeNormal[0]) * aabbHalfExtent[0] +
+			   std::abs(planeNormal[1]) * aabbHalfExtent[1] +
+			   std::abs(planeNormal[2]) * aabbHalfExtent[2];
+	};
+	const auto passesPlane = [&](const std::array<float, 3> &planeNormal, const float planeOffset = 0.0f) {
+		const float centerDistance = dot(toAabbCenter, planeNormal) - planeOffset;
+		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
+	};
+	const float aabbRadius = std::sqrt(lengthSquared(aabbHalfExtent));
+	if (!passesPlane(cameraForward, nearPlane)) {
+		return false;
+	}
+
+	if (maxDistance > 0.0f) {
+		const float maxCenterDistance = maxDistance + aabbRadius;
+		if (lengthSquared(toAabbCenter) > maxCenterDistance * maxCenterDistance) {
+			return false;
+		}
+	}
+
+	const std::array leftPlane{
+		cameraForward[0] * tanHalfHorizontalFov + cameraRight[0],
+		cameraForward[1] * tanHalfHorizontalFov + cameraRight[1],
+		cameraForward[2] * tanHalfHorizontalFov + cameraRight[2],
+	};
+	const std::array rightPlane{
+		cameraForward[0] * tanHalfHorizontalFov - cameraRight[0],
+		cameraForward[1] * tanHalfHorizontalFov - cameraRight[1],
+		cameraForward[2] * tanHalfHorizontalFov - cameraRight[2],
+	};
+	const std::array bottomPlane{
+		cameraForward[0] * tanHalfVerticalFov + cameraUp[0],
+		cameraForward[1] * tanHalfVerticalFov + cameraUp[1],
+		cameraForward[2] * tanHalfVerticalFov + cameraUp[2],
+	};
+	const std::array topPlane{
+		cameraForward[0] * tanHalfVerticalFov - cameraUp[0],
+		cameraForward[1] * tanHalfVerticalFov - cameraUp[1],
+		cameraForward[2] * tanHalfVerticalFov - cameraUp[2],
+	};
+	if (!passesPlane(leftPlane) || !passesPlane(rightPlane)) {
+		return false;
+	}
+	if (!passesPlane(bottomPlane) || !passesPlane(topPlane)) {
+		return false;
+	}
+
+	return true;
+}
+
 inline bool IsSceneChunkVisibleInShadowCascade(
 	const PackedSceneChunkDescriptor &chunkDescriptor,
 	const std::array<float, 16> &lightViewProjection)

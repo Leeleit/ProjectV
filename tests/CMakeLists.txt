@@ -39,6 +39,12 @@ target_link_libraries(ProjectVTests PRIVATE
         Jolt::Jolt
         SDL3::SDL3
         GPUOpen::VulkanMemoryAllocator
+        # Pulled in transitively by `core/Types.hpp` after the asset
+        # pipeline landed `MeshGpuResources.hpp`; the `glm` target's
+        # INTERFACE include directory (`external/glm/`) has to be on
+        # the test TU's include path or the build dies on the very
+        # first TU that opens `AssetLoader.hpp`.
+        glm
 )
 
 if (PROJECTV_ENABLE_TRACY)
@@ -140,6 +146,66 @@ target_link_libraries(ProjectVDracoTests PRIVATE
 
 add_test(NAME ProjectVDracoTests COMMAND ProjectVDracoTests)
 set_tests_properties(ProjectVDracoTests PROPERTIES LABELS "unit")
+
+# Frustum-cull test executable (M5). CPU-only: the helper under
+# test (`IsAabbVisibleAgainstCameraFrustum`) is an inline camera-
+# basis math function in `src/render/SceneResources.hpp` and does
+# not touch Vulkan. The executable links `projectv_build_options`
+# for warning flags but does not need any of the asset pipeline
+# libraries — keeping it lean keeps the test runtime well under
+# 100 ms so the per-test budget in
+# `decisions.md §4` stays comfortable.
+add_executable(ProjectVFrustumCullingTests
+        FrustumCullingTests.cpp
+)
+
+target_compile_definitions(ProjectVFrustumCullingTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVFrustumCullingTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVFrustumCullingTests PRIVATE projectv_build_options)
+# `core/Types.hpp` (transitively included by
+# `render/SceneResources.hpp`) needs `volk.h` on the include path;
+# linking `volk` is the cheapest way to inherit that since the
+# library exports `external/volk/` as a PUBLIC include directory.
+# `glm` is pulled in the same way by the asset-pipeline headers
+# (`AssetLoader.hpp` → `MeshBaker.hpp`); its INTERFACE include
+# path (`external/glm/`) is also needed. `vk_mem_alloc.h` is
+# pulled in transitively by `MeshGpuResources.hpp` →
+# `core/Types.hpp` and is exported by the VMA target.
+target_link_libraries(ProjectVFrustumCullingTests PRIVATE volk glm GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVFrustumCullingTests COMMAND ProjectVFrustumCullingTests)
+set_tests_properties(ProjectVFrustumCullingTests PROPERTIES LABELS "unit")
+
+# Box-UV fixture test executable (M6 prep). Validates the GLB
+# header byte order (`magic, version, length`) by reading the
+# fixture back from disk. The original M6 generator wrote the
+# header in the wrong order and fastgltf reported
+# `Error::UnsupportedVersion`, which is a misleading symptom for
+# a header-byte-order bug. This test catches the regression at
+# the byte level so the next person doesn't have to debug a
+# fastgltf error message that points to the wrong place.
+add_executable(ProjectVBoxUvFixtureTests
+        BoxUvFixtureTests.cpp
+)
+
+target_compile_definitions(ProjectVBoxUvFixtureTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVBoxUvFixtureTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVBoxUvFixtureTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVBoxUvFixtureTests COMMAND ProjectVBoxUvFixtureTests)
+set_tests_properties(ProjectVBoxUvFixtureTests PROPERTIES LABELS "unit")
 
 
 
