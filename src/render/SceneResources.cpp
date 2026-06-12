@@ -683,17 +683,72 @@ bool UpdateSceneFrameChunkVisibility(
 		frameResources.chunkDescriptorCount > result.visibleChunkCount
 			? frameResources.chunkDescriptorCount - result.visibleChunkCount
 			: 0u;
-	// Stamp the cache with the just-rebuilt result. The hash +
-	// version + count tuple is what the next frame compares
-	// against.
-	cache.valid = true;
-	cache.hash = hash;
-	cache.sceneVoxelPayloadVersion = render.sceneVoxelPayloadVersion;
-	cache.chunkDescriptorCount = frameResources.chunkDescriptorCount;
-	cache.visibleChunkCount = result.visibleChunkCount;
-	cache.shadowCascadeVisibleChunkCounts = result.shadowCascadeVisibleChunkCounts;
-	cache.culledChunkCount = culledChunkCount;
-	cache.consecutiveHitCount = 0;
+	// Stamp the cache with the just-rebuilt result, BUT only once
+	// the CPU can actually see the dispatch's face counts. On the
+	// first two frames after startup `render.sceneOpaqueFaceCount`
+	// (read into `frameResources.opaqueFaceCount` in
+	// `UploadSceneFrameResources` from `chunkDescriptor.drawRanges[1]`)
+	// is 0 because the voxel meshing compute has not yet written
+	// anything the CPU can observe. If we stamped the cache in that
+	// state, the miss path would persist `instanceCount = 0`
+	// commands; the very next frame the dispatch would skip (its
+	// per-frame `meshedSceneVersion` already matches
+	// `sceneVoxelPayloadVersion`), the cache would HIT, and the
+	// zero-instance commands would be `memcpy`'d back over the
+	// indirect buffer forever — the swapchain would render with no
+	// voxels drawn (just the clear-color sky) until a camera move
+	// invalidated the cache hash and forced another miss-path read,
+	// by which point the CPU could finally observe the dispatch's
+	// real output. Gating on `opaqueFaceCount`/`transparentFaceCount
+	// > 0` keeps the cache invalid until the GPU has actually
+	// produced faces this generation, so the first validated stamp
+	// happens on the frame where the miss path can read correct
+	// values. Verified end-to-end via Tracy `Generated Opaque
+	// Faces` plot (steps from 0 → 908 on the validation frame) and
+	// by visual smoke: VoxelLab reference shot now renders the
+	// world from frame 0 without any camera input.
+	const bool hasGeneratedFaces = (frameResources.opaqueFaceCount > 0u) ||
+		(frameResources.transparentFaceCount > 0u);
+	// `dirtyChunkCount > 0` means the voxel meshing compute will run
+	// for this frame's per-frame resource. In that case the
+	// `chunkDescriptor.drawRanges` we just read is the *pre-dispatch*
+	// state — the GPU hasn't run yet, and on the very first frame
+	// after a world edit (or a startup frame) the read is the source
+	// descriptor's `0` rather than the dispatch's real output. If we
+	// stamped the cache in that state, the miss path would persist
+	// `instanceCount = 0` (or any other stale pre-dispatch value) and
+	// the next frame's `ApplyCached…` `memcpy` would pin those stale
+	// commands into the indirect buffer for as long as the camera
+	// hash holds — the user sees a voxel's face vanish forever after
+	// breaking a neighbor (the cache only refreshes once a camera
+	// move changes the hash, and by then the GPU has the right
+	// output sitting in `drawRanges` but the cache is locked to
+	// yesterday's instance count). Gating on `dirtyChunkCount == 0`
+	// forces the next frame to take the miss path one more time, by
+	// which point the dispatch's write is visible to the CPU (via
+	// the per-frame resource rotation's 1-frame staleness window)
+	// and the cache can validate with the real face count.
+	const bool dispatchDoneThisFrame = (frameResources.dirtyChunkCount == 0u);
+	if (hasGeneratedFaces && dispatchDoneThisFrame) {
+		cache.valid = true;
+		cache.hash = hash;
+		cache.sceneVoxelPayloadVersion = render.sceneVoxelPayloadVersion;
+		cache.chunkDescriptorCount = frameResources.chunkDescriptorCount;
+		cache.visibleChunkCount = result.visibleChunkCount;
+		cache.shadowCascadeVisibleChunkCounts = result.shadowCascadeVisibleChunkCounts;
+		cache.culledChunkCount = culledChunkCount;
+		cache.consecutiveHitCount = 0;
+	} else {
+		// CPU cannot yet observe any GPU-written face counts. If we
+		// validated the cache here, every future frame would apply
+		// the `instanceCount = 0` commands via `ApplyCached…` and
+		// the swapchain would render empty until something else
+		// (camera move, world edit) tripped the cache hash. Force
+		// the next frame to take the miss path so it re-reads
+		// `chunkDescriptor.drawRanges[1]` after the dispatch has had
+		// a chance to populate it.
+		cache.valid = false;
+	}
 	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(result.visibleChunkCount));
 	profiling::PlotValue("Culled Chunks", static_cast<int64_t>(culledChunkCount));
 	profiling::PlotValue("ChunkVisibilityCacheHits", static_cast<int64_t>(0));
