@@ -57,6 +57,55 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-frame-step-slow-motion
+
+- **id:** `2026-06-12T22:30Z-frame-step-slow-motion`
+- **started-at:** 2026-06-12T22:30:00Z
+- **closed-at:** 2026-06-12T23:15:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Frame-step / slow-motion debug modes** (TODO §4 "Gameplay / Debug" — единственный оставшийся open P0-кандидат в этой секции). 4 новых `InputAction` entries: `DecreaseTimeScale` (`[`), `IncreaseTimeScale` (`]`), `StepSingleFrame` (`\`), `ResetTimeScale` (`` ` ``). `SimulationState` + 2 поля: `timeScale` (float, [0,4], default 1.0, multiplier на `frameDeltaSeconds` после `ComputeFrameDeltaSeconds`), `frameStepRequested` (bool one-shot, выставляется `StepSingleFrame` action, consumed в `UpdateApp` accumulator block). Acc logic: `effectivePaused = simulation.paused && !frameStepRequestedNow`; frame-step переопределяет accumulator на `fixedSimulationDeltaSeconds` (ровно один fixed tick), `paused && spectator` camera-tick остаётся. TogglePause (`P`) и time-scale=0 — разные пути к pause, не merge (operator сказал "frame-step / slow-motion" → distinct from existing pause). `DebugStats` mirror +2 fields (`simulationTimeScale`, `simulationFrameStepPending`). HUD line `TIME x.xx` + `STEP` indicator + 1 helper line. **Не трогаю:** TAA-agent's 4 uncommitted files (ModelPass.{cpp,hpp}, VulkanBootstrap.cpp, taa_resolve.frag) per §7.2.6 "Что НЕ делать"; existing `simulation.paused` semantics (existing tests `tests/VoxelWorldTests.cpp:2211/2541/2570` continue to pass — additive fields, `TogglePause` handler unchanged).
+- **files-touched-intent:** `src/core/Types.hpp` (4 `InputAction` enum entries tail + 2 `SimulationState` fields + 2 `DebugStats` mirrors), `src/app/InputActions.cpp` (4 `BindAction` calls tail), `src/app/AppUpdate.cpp` (4 input handlers + accumulator bypass for frame step + `effectivePaused` refactor of 3 `simulation->paused` references + 2 stats mirrors), `src/debug/DebugHud.cpp` (1 new HUD line + 1 helper line entry), `TODO.md` (close frame-step item), `agent/status.md` (snapshot), `agent/memory.md` (working rules), `agent/decisions.md` (contract), `agent/active-sessions.md` (this entry + close).
+- **status:** closed
+- **commit-hash:** uncommitted (1 commit proposed per §7.2.5)
+- **notes:** **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, 1 pre-existing warning (`DebugHud.cpp:600` LOCL `%.0f` for bool, не моя). `ctest 6/6` (1.50 s, baseline preserved). Diff: `src/core/Types.hpp` +53 lines, `src/app/InputActions.cpp` +12, `src/app/AppUpdate.cpp` +106/-4, `src/debug/DebugHud.cpp` +24 — total +195 source lines, additive (no field offsets shift, no shader edits, no descriptor bindings, no pipeline changes). Existing tests at `tests/VoxelWorldTests.cpp:2211/2541/2570` продолжают проверять `simulation.paused` semantics — additive, не сломались.
+
+  **Working rules (см. `agent/memory.md §10.23`):**
+  - 4 hotkeys, все keyboard, no preset file. Брекет и backslash / backtick — visually distinct от TAA ladder (`;`/`'`/`-`/`=`/`,`/`.`) и 5.2 gizmo ladder (`L`/`Z`).
+  - `timeScale` ladder: `0`, `0.5`, `1.0`, `2.0`, `4.0`. Snap thresholds `[` < 0.01 → 0; `]` от 0 → 0.5; clamp до 4.0.
+  - `effectivePaused` is the per-frame unpaused-equivalent. 3 `simulation->paused` references (cameraCanUpdate, accumulator gate, while-loop condition, paused+spectator camera tick) switched to `effectivePaused`.
+  - Time scale applied AFTER `ComputeFrameDeltaSeconds` — wall-clock `framesPerSecond` / `frameTimeMilliseconds` и input replay recording остаются real-time.
+  - Frame-step accumulator override (`simulationAccumulatorSeconds = fixedSimulationDeltaSeconds`) AFTER time scale multiplication, so non-zero `timeScale` doesn't double-apply. While loop runs exactly once per `\` press.
+  - Frame-step does NOT invalidate TAA history. Unlike world reload / swapchain resize / TAA toggle, the per-frame `frameStepRequested` event sits one layer up (accumulator / sim tick) and doesn't need to touch the TAA contract.
+
+  **Scope discipline (per `AGENTS.md §7.2.6`):** TAA-agent's 4 uncommitted files (ModelPass.{cpp,hpp}, VulkanBootstrap.cpp, taa_resolve.frag) НЕ ТРОНУТЫ. Diff stat подтверждает: my src/ changes — только InputAction handlers, accumulator logic, HUD; ничего в TAA-agent's файлах. Per §7.2.6 — это была единственная safe сессия в параллель с TAA-agent, потому что мои правки не пересекаются с render/voxel/timing contract layers.
+
+  **Commit plan (1 commit, pending operator confirmation per §7.2.4):**
+  ```
+  feat(debug): frame-step / slow-motion runtime debug controls
+
+  Adds 4 InputAction entries (`[`/`]`/`\`/`` ` ``) and 2
+  SimulationState fields (`timeScale`, `frameStepRequested`)
+  so the operator can slow the sim down to 0.5x / 0.25x ...,
+  freeze it at 0, or single-step one fixed tick at a time.
+  Pairs with the existing `TogglePause` (P) action — pause
+  and time-scale are independent runtime axes per
+  decisions.md §26, so the operator can leave timeScale=0.25
+  for fine-tuning camera framing and still step one frame at
+  a time with \.
+
+  Build: green, ctest 6/6 (1.50s, baseline preserved).
+  Additive only — no field offsets shift, no shader edits, no
+  descriptor binding changes, no pipeline changes. Existing
+  tests at tests/VoxelWorldTests.cpp:2211/2541/2570 continue
+  to pass (simulation.paused semantics unchanged).
+
+  Refs: TODO.md §4 "frame-step / slow-motion debug modes"
+        (closed), agent/decisions.md §26, agent/memory.md
+        §10.23, agent/status.md §15
+  ```
+
 ### session-2026-06-12-greedy-meshing
 
 - **id:** `2026-06-12T21:15Z-greedy-meshing`

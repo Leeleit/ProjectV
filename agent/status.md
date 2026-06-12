@@ -526,3 +526,35 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 - `.gitignore` reverted (был 4 чужых Python-строки).
 
 
+
+## 15. Frame-step / slow-motion debug — `session-2026-06-12-frame-step-slow-motion` (closed, uncommitted)
+
+**1 commit proposed** (per operator "Даю добро" + 1-doc-commit pattern from `4deee52`):
+
+| SHA | Subject | Files |
+|---|---|---|
+| _pending_ | `feat(debug): frame-step + slow-motion runtime controls (4 hotkeys + SimulationState fields)` | 4 source + 4 doc |
+
+**What landed (build green, ctest 6/6 baseline preserved):**
+
+- 4 новых `InputAction` entries tail: `DecreaseTimeScale` (`[`), `IncreaseTimeScale` (`]`), `StepSingleFrame` (`\`), `ResetTimeScale` (`` ` ``). Биндинги в `src/app/InputActions.cpp:171-175`.
+- `SimulationState` + 2 fields: `timeScale` (float [0,4], default 1.0, multiplier на `frameDeltaSeconds` после `ComputeFrameDeltaSeconds`), `frameStepRequested` (bool one-shot, consumed at top of `UpdateApp` accumulator block).
+- `DebugStats` + 2 mirrors: `simulationTimeScale`, `simulationFrameStepPending`.
+- `AppUpdate.cpp`: 4 input handlers (строки 484-541), `effectivePaused = paused && !frameStepRequestedNow` refactor of 3 `simulation->paused` references (строки 626/656/666/716), accumulator override (строки 645-655), 2 stats mirrors (строки 763-764).
+- `DebugHud.cpp`: `TIME x.xx` stats line (всегда), `STEP` one-frame indicator (на press frame), 2 helper lines (`TIMECTL DOWN UP`, `TIMESTEP STEP RESET 1X`).
+
+**Build / test:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, 1 pre-existing warning (DebugHud.cpp:600 LOCL `%.0f` for bool, не моя). `ctest 6/6` (1.50s wall clock, baseline).
+
+**Scope discipline (per `AGENTS.md §7.2.6`):** не тронуто ничего из TAA-agent's working tree — `src/asset/ModelPass.{cpp,hpp}`, `src/render/vulkan/VulkanBootstrap.cpp`, `src/shaders/taa_resolve.frag` остаются в uncommitted state для TAA-agent's commit (тот же подход, что в `8635ddf` 1.4+M5.2 combined commit). Per operator — они и так под TAA-agent's ownership.
+
+**Files-touched (mine, для коммита):** `src/core/Types.hpp`, `src/app/InputActions.cpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `TODO.md`, `agent/active-sessions.md`, `agent/decisions.md`, `agent/memory.md`, `agent/status.md`.
+
+**Hotkey summary (master HEAD, post-merge):**
+- `[` slow, `]` fast (time scale 0.5x / 0.25x / 0.125x ... / 2x / 4x ladder)
+- `\` step 1 frame
+- `` ` `` reset time scale to 1.0
+- `P` pause toggle (existing, distinct axis)
+
+**Test count baseline:** `ctest 6/6` (1.50s) — preserved.
+
+**Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.

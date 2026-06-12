@@ -1431,3 +1431,21 @@ contract), `TODO.md §4` (greedy meshing closed) + §4.5
 `agent/active-sessions.md`
 session-2026-06-12-greedy-meshing (closed).
 
+
+## 10.23 Frame-step / slow-motion landed (`2026-06-12`)
+
+Live runtime debug controls for visual debugging. Additive, no TAA/meshing/render-pipeline impact. Implementation in `src/app/AppUpdate.cpp:600-650` (input handlers + accumulator override) and `src/app/InputActions.cpp:171-175` (4 `BindAction` calls).
+
+**Working rules:**
+
+- **4 `InputAction` entries (tail of enum, before `Count`):** `DecreaseTimeScale` (`SDL_SCANCODE_LEFTBRACKET` / `[`), `IncreaseTimeScale` (`SDL_SCANCODE_RIGHTBRACKET` / `]`), `StepSingleFrame` (`SDL_SCANCODE_BACKSLASH` / `\`), `ResetTimeScale` (`SDL_SCANCODE_GRAVE` / `` ` ``). The bracket and backslash / backtick keys have no glyph in the HUD font (only A-Z, 0-9, `.`, `-`, `:` per `DebugHud.cpp::GetGlyphRows`) — the helper panel spells them out as `TIMECTL DOWN UP` and `TIMESTEP STEP RESET 1X`.
+- **`timeScale` ladder: `0`, `0.5`, `1.0`, `2.0`, `4.0`.** `[` halves with snap to `0` below `0.01`; `]` doubles with `timeScale <= 0` → `0.5` escape, clamped to `4.0`; `` ` `` resets to `1.0`. The snap thresholds exist so a half-step into `0.0078` doesn't crawl the sim unexpectedly.
+- **`effectivePaused = simulation->paused && !frameStepRequestedNow`.** Three `simulation->paused` references in `AppUpdate.cpp::UpdateApp` switched to `effectivePaused` (lines 626 `cameraCanUpdate`, 656 accumulator gate, 666 while-loop condition, 716 paused+spectator camera tick). The `TogglePause` handler at line 333 is **unchanged** — `paused` and `timeScale` are independent runtime axes per `decisions.md §26`.
+- **Time scale is applied after `ComputeFrameDeltaSeconds`** (line 638: `simulation->frameDeltaSeconds *= simulation->timeScale;`). The wall-clock `framesPerSecond` / `frameTimeMilliseconds` stats at lines 307-308 still report real-time even at `timeScale = 0`; input replay recording also records wall-clock delta (the `RecordInputReplayFrame` call at line 313 happens before the scaling).
+- **Frame-step accumulator override at lines 645-655** sets `simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds` when `frameStepRequestedNow`, AFTER the `timeScale` multiplication, so a non-zero `timeScale` doesn't double-apply. The while loop runs exactly one iteration per `\` press.
+- **Frame-step does NOT invalidate TAA history.** Unlike world reload / swapchain resize / TAA toggle, the `frameStepRequested` event does not touch `taaHistoryValid` or `taaLayerHistoryValid` — TAA's reprojection is per-frame and `\` is per-frame, so a single step appears as a single frame in the TAA history chain. The existing camera-cut detector (1.2) handles any visible-artifact edge case.
+- **HUD surfaces:** `TIME x.xx` line always emitted (default `TIME 1.00`), one-frame `STEP` line only on the press frame. Both are after the `MODE / PAUSE / AIR` line in `BuildStatsLines` so the two pause-related runtime axes read as a group.
+
+**Files touched:** `src/core/Types.hpp` (4 `InputAction` + 2 `SimulationState` + 2 `DebugStats`), `src/app/InputActions.cpp` (4 `BindAction`), `src/app/AppUpdate.cpp` (4 handlers + accumulator override + 3 `effectivePaused` refactors + 2 stats mirrors), `src/debug/DebugHud.cpp` (1 stats line + 2 helper lines).
+
+**Test impact:** additive fields — existing `simulation.paused` tests at `tests/VoxelWorldTests.cpp:2211, 2541, 2570` continue to pass. `ctest 6/6` baseline preserved at `1.50s` wall clock on `linux-clang-debug`.

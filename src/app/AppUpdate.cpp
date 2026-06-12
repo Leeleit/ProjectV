@@ -481,6 +481,66 @@ bool UpdateApp(
 		// pre-invalidated data.
 		render->taaLayerHistoryValid = false;
 	}
+	// Frame-step / slow-motion debug (2026-06-12). The
+	// `timeScale` axis is independent of the existing
+	// `TogglePause` action (`P`) — the operator can leave
+	// `timeScale=0.25` for fine-tuning camera framing and
+	// still step one frame at a time with `\`. See
+	// `decisions.md §26` for the per-field contract.
+	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTimeScale)) {
+		// `[` halves the time scale. Below 0.01 it snaps to
+		// 0 so the user gets a discrete "pause" stop
+		// (paired with `]` to escape the snap), avoiding
+		// the operator nudging toward 0.001 and wondering
+		// why the sim crawled.
+		constexpr float kTimeScaleDownStep = 0.5f;
+		constexpr float kTimeScaleSnapToZeroThreshold = 0.01f;
+		simulation->timeScale *= kTimeScaleDownStep;
+		if (simulation->timeScale < kTimeScaleSnapToZeroThreshold) {
+			simulation->timeScale = 0.0f;
+		}
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTimeScale)) {
+		// `]` doubles the time scale. `timeScale == 0` is
+		// the only stop that "doubling" can't escape on its
+		// own (`0 * 2 = 0`), so the handler additionally
+		// bounces out of zero to the smallest non-zero
+		// value in the ladder (0.5, the result of one `]`
+		// press from 0.25; for one `]` press from 0.0 the
+		// ladder is just `0.5`). This matches the symmetric
+		// `[` handler snapping to 0 below 0.01.
+		constexpr float kTimeScaleUpStep = 2.0f;
+		constexpr float kTimeScaleSnapFromZeroTarget = 0.5f;
+		if (simulation->timeScale <= 0.0f) {
+			simulation->timeScale = kTimeScaleSnapFromZeroTarget;
+		} else {
+			simulation->timeScale *= kTimeScaleUpStep;
+		}
+		simulation->timeScale = std::min(simulation->timeScale, 4.0f);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ResetTimeScale)) {
+		// `` ` `` resets `timeScale` to 1.0 (realtime). Note
+		// this leaves `simulation->paused` untouched —
+		// `timeScale` and `paused` are orthogonal axes, so
+		// resetting one does not reset the other. If the
+		// operator wants to fully resume after stepping
+		// through a frame, they press `P` to unpause and
+		// then `` ` `` to reset time-scale.
+		simulation->timeScale = 1.0f;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::StepSingleFrame)) {
+		// `\` queues exactly one fixed-step tick,
+		// regardless of `paused` and regardless of the
+		// current accumulator. Consumed at the top of
+		// the accumulator block below — see
+		// `effectivePaused` derivation and the
+		// `simulationAccumulatorSeconds = fixedDelta`
+		// override. The flag is read-then-cleared, so
+		// back-to-back presses translate to "one tick
+		// per press" even when the per-frame loop
+		// processes a tick faster than `UpdateApp` returns.
+		simulation->frameStepRequested = true;
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseLightingExposure)) {
 		AdjustLightingExposure(*render, -kLightingExposureStepStops);
 	}
@@ -540,11 +600,38 @@ bool UpdateApp(
 	const bool creativeMode = IsCreativeMode(*camera);
 	const bool spectatorMode = IsSpectatorMode(*camera);
 	const bool walkMode = IsWalkMode(*camera);
-	const bool cameraCanUpdate = spectatorMode || !simulation->paused;
+
+	// Frame-step / slow-motion accumulator override
+	// (2026-06-12). Read-then-clear the one-shot
+	// `frameStepRequested` flag. The accumulator override
+	// below forces exactly one fixed tick that frame even
+	// when `simulation->paused` is true. `effectivePaused`
+	// is the per-frame unpaused-equivalent: it is true
+	// only when the user explicitly paused AND did not
+	// press `\` this frame. Used in place of
+	// `simulation->paused` for the accumulator, the
+	// physics-tick while loop, and the camera-tick-on-
+	// pause block below. Declared here (before
+	// `cameraCanUpdate`) so the camera-look path can
+	// honour a same-frame step request too.
+	const bool frameStepRequestedNow = simulation->frameStepRequested;
+	simulation->frameStepRequested = false;
+	const bool effectivePaused = simulation->paused && !frameStepRequestedNow;
+	const bool cameraCanUpdate = spectatorMode || !effectivePaused;
 	const bool allowWorldEditing =
 		(creativeMode || walkMode) &&
 		!world->scenePresetReloadRequested &&
 		!world->snapshotLoadRequested;
+
+	// Apply `timeScale` to the per-frame delta. Default 1.0
+	// is a no-op; at 0 the delta is 0 and the accumulator
+	// does not advance, but the renderer and input replay
+	// recording still see the unscaled clock. The scaling
+	// is applied after `ComputeFrameDeltaSeconds` so the
+	// `framesPerSecond` / `frameTimeMilliseconds` stats
+	// below still report the wall-clock frame time (not
+	// the scaled sim time).
+	simulation->frameDeltaSeconds *= simulation->timeScale;
 
 	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
@@ -554,7 +641,15 @@ bool UpdateApp(
 		return false;
 	}
 
-	if (!simulation->paused) {
+	if (frameStepRequestedNow) {
+		// One forced fixed tick this frame, regardless of
+		// the unscaled accumulator. Override after the
+		// scaling above so a non-zero `timeScale` doesn't
+		// double-apply — we want exactly one step, not
+		// one step + whatever fractional remainder the
+		// scaled delta accumulated.
+		simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds;
+	} else if (!effectivePaused) {
 		simulation->simulationAccumulatorSeconds += simulation->frameDeltaSeconds;
 	} else {
 		simulation->simulationAccumulatorSeconds = 0.0f;
@@ -569,7 +664,7 @@ bool UpdateApp(
 
 	while (simulation->simulationAccumulatorSeconds >= simulation->fixedSimulationDeltaSeconds &&
 		   simulation->simulationStepsLastFrame < kMaxSimulationStepsPerFrame &&
-		   !simulation->paused) {
+		   !effectivePaused) {
 		if (walkMode) {
 			PV_CHECK_OR_RETURN(
 				physics && world->voxelWorld,
@@ -619,7 +714,7 @@ bool UpdateApp(
 			std::fmod(simulation->simulationAccumulatorSeconds, simulation->fixedSimulationDeltaSeconds);
 	}
 
-	if (simulation->paused && spectatorMode && simulation->frameDeltaSeconds > 0.0f) {
+	if (effectivePaused && spectatorMode && simulation->frameDeltaSeconds > 0.0f) {
 		TickCamera(camera, *input, simulation->frameDeltaSeconds);
 	}
 
@@ -664,6 +759,13 @@ bool UpdateApp(
 	debug->stats.walkAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics);
 	debug->stats.walkAutoJumpDelayEnabled = IsPhysicsWalkAutoJumpDelayEnabled(physics);
 	debug->stats.simulationPaused = simulation->paused;
+	// Frame-step / slow-motion mirrors. `simulationFrameStepPending`
+	// is set to the pre-clear value of
+	// `simulation->frameStepRequested` so the HUD and capture
+	// sidecar see the indicator during the same frame the
+	// accumulator override consumed the request.
+	debug->stats.simulationTimeScale = simulation->timeScale;
+	debug->stats.simulationFrameStepPending = frameStepRequestedNow;
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
 	debug->stats.sceneExposure = render->currentSceneLighting.postProcess[0];

@@ -452,6 +452,20 @@ size_t BuildStatsLines(
 		GetControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "ON" : "OFF",
 		GetWalkAirControlModeLabel(stats.walkAirControlMode));
+	// Frame-step / slow-motion line. Default `TIME 1.00`. The
+	// `STEP` line is only emitted on the same frame the
+	// operator pressed `\` — it is a one-frame indicator for
+	// "the next tick is a forced step", not a sticky latched
+	// flag. Stays adjacent to the `PAUSE` line above so the
+	// two pause-related runtime axes read as a group.
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
+		"TIME %.2f",
+		stats.simulationTimeScale);
+	if (stats.simulationFrameStepPending) {
+		PV_APPEND_HUD_LINE(outLines, lineCount, "STEP");
+	}
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
@@ -853,6 +867,16 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "T TAA  ;' JIT  -= BLND");
 		PV_APPEND_HUD_LINE(outLines, lineCount, ", NHOOD  . INVHIST");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
+		// Frame-step / slow-motion: `[` halves, `]` doubles
+		// (clamped 0..4, snapped to 0 below 0.01), `\` queues
+		// one fixed tick, `` ` `` resets to 1.0. The bracket
+		// and backslash / backtick keys have no glyph in the
+		// HUD font (only A-Z, 0-9, `.`, `-`, `:`), so the
+		// helper spells them out. The keys themselves are
+		// not redefined — the binding stays at the
+		// SDL_SCANCODE level in `InputActions.cpp`.
+		PV_APPEND_HUD_LINE(outLines, lineCount, "TIMECTL DOWN  UP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "TIMESTEP STEP  RESET 1X");
 	} else {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");

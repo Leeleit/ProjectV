@@ -168,6 +168,18 @@ void InitializeInputState(InputState &input)
 	// будущее"). `Z` is unused.
 	BindAction(input, InputAction::ToggleCascadeSplitPlanes, SDL_SCANCODE_L);
 	BindAction(input, InputAction::ToggleCursorHitNormal, SDL_SCANCODE_Z);
+	// Frame-step / slow-motion debug (2026-06-12). `[` / `]`
+	// are visually a "rewind" / "fast-forward" pair on a QWERTY
+	// keyboard; `\` is the "step once" trigger (low traffic on
+	// the main alphanumeric cluster, no overlap with the TAA
+	// ladder `;`/`'`/`-`/`=`/`,`/`.`); `` ` `` resets
+	// `timeScale` to 1.0 — the backtick is the rightmost
+	// top-row key, mirroring the read-only hotkey shape used
+	// by `V` (reset lighting debug controls).
+	BindAction(input, InputAction::DecreaseTimeScale, SDL_SCANCODE_LEFTBRACKET);
+	BindAction(input, InputAction::IncreaseTimeScale, SDL_SCANCODE_RIGHTBRACKET);
+	BindAction(input, InputAction::StepSingleFrame, SDL_SCANCODE_BACKSLASH);
+	BindAction(input, InputAction::ResetTimeScale, SDL_SCANCODE_GRAVE);
 }
 
 void HandleInputActionEvent(

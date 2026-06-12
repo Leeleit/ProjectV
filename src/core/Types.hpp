@@ -169,6 +169,22 @@ enum class InputAction : uint8_t {
 	// at extreme angles (top-down, side-on) where the yellow
 	// selection box alone is ambiguous.
 	ToggleCursorHitNormal,
+	// **Frame-step / slow-motion debug, 2026-06-12:** live time-scale
+	// control for visual debugging. 4 hotkeys: `[` halves the current
+	// `SimulationState::timeScale` (snapping to 0 below 0.01 for a
+	// discrete "pause" stop), `]` doubles it (clamped to 4.0 max),
+	// `\` queues exactly one fixed-step physics tick regardless of the
+	// current pause state (consumed in `UpdateApp` after the input
+	// action block), and `` ` `` resets `timeScale` to 1.0. These are
+	// independent of the existing `TogglePause` (`P`) action — pause
+	// and slow-motion are distinct runtime debug paths so the operator
+	// can keep the time-scale axis at, e.g., 0.25x while still being
+	// free to single-step one frame for screenshot alignment. See
+	// `agent/decisions.md §26` for the per-field contract.
+	DecreaseTimeScale,
+	IncreaseTimeScale,
+	StepSingleFrame,
+	ResetTimeScale,
 	Count,
 };
 
@@ -493,6 +509,18 @@ struct DebugStats {
 	bool walkAutoJumpEnabled = false;
 	bool walkAutoJumpDelayEnabled = true;
 	bool simulationPaused = false;
+	// **Frame-step / slow-motion mirrors, 2026-06-12.** See
+	// `SimulationState::timeScale` and `::frameStepRequested`
+	// for the per-field contract. The mirror exists so the HUD
+	// and the runtime capture sidecar (added by the same
+	// change) can read the current time-scale without poking
+	// into `SimulationState` directly. `simulationFrameStepPending`
+	// is set true on the same frame the user pressed
+	// `StepSingleFrame` and is cleared at the top of `UpdateApp`,
+	// so it is a one-frame indicator for "the next tick is a
+	// forced step" — not a sticky latched flag.
+	float simulationTimeScale = 1.0f;
+	bool simulationFrameStepPending = false;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 	bool walkDebugValid = false;
@@ -992,6 +1020,31 @@ struct SimulationState {
 	uint32_t simulationStepsLastFrame = 0;
 	uint64_t simulationTick = 0;
 	bool paused = false;
+	// **Frame-step / slow-motion debug, 2026-06-12.** Live
+	// runtime multiplier on the per-frame delta. 1.0 = realtime,
+	// 0.5 = half speed, 0 = effectively paused (same end-state as
+	// `TogglePause` but on a continuous axis, not a discrete
+	// toggle). Applied to `frameDeltaSeconds` after
+	// `ComputeFrameDeltaSeconds` in `UpdateApp` so the
+	// fixed-step physics accumulator, look-dev capture
+	// automation, and input replay recording all see the
+	// scaled delta. Clamped to [0, 4] by the action handlers;
+	// the `[` key halves and snaps to 0 below 0.01 for a
+	// discrete "pause" stop, the `]` key doubles and clamps
+	// at 4.0, the `` ` `` key resets to 1.0.
+	float timeScale = 1.0f;
+	// **Frame-step request, 2026-06-12.** One-shot flag. Set by
+	// the `StepSingleFrame` action handler, consumed at the
+	// top of the `UpdateApp` accumulator block. The consumer
+	// forces `simulationAccumulatorSeconds = fixedSimulationDeltaSeconds`
+	// and computes `effectivePaused = paused && !frameStepRequestedNow`
+	// so exactly one fixed tick runs that frame even when
+	// `paused == true`. The flag is read-then-cleared, so a
+	// second press while the first tick is still in the
+	// accumulator queue is impossible to lose — but the queue
+	// only ever holds one step at a time, so back-to-back
+	// presses translate to "one tick per press".
+	bool frameStepRequested = false;
 };
 
 struct InputState {

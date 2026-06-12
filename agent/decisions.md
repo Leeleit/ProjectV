@@ -2,7 +2,7 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-06-12` (+§19 + §20 TAA contracts)
+Дата обновления: `2026-06-12` (+§19 + §20 TAA contracts + §26 frame-step/slow-motion)
 
 ---
 
@@ -683,3 +683,23 @@ Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 World/Render/Tooling (close
 - **Cross-chunk `ReadVoxelMaterial`** уже handles OOB (returns 0=Air) — greedy pass автоматически extends to chunk boundary без chunk-coordination protocol. Worst case: chunk boundary quads merge with `neighborMaterial=0` (Air), и следующий chunk на adjacent face plane будет also have `neighborMaterial=0` (тоже Air, если сосед тоже empty) — но chunk is invisible until meshed, so independent dispatch is safe.
 
 Cross-refs: `agent/memory.md` §10.20, `TODO.md` §4 (greedy meshing closed) + §4.5 (perf budget context), `agent/status.md` §14, `agent/active-sessions.md` session-2026-06-12-greedy-meshing.
+
+## 26. Frame-step / slow-motion debug contract (`2026-06-12`)
+
+Решение:
+
+- **Time scale is a continuous axis independent of `paused`.** `SimulationState::timeScale` (float, default `1.0`, range `[0, 4]`) multiplies `frameDeltaSeconds` after `ComputeFrameDeltaSeconds`. The existing `TogglePause` (`P`) handler continues to flip `simulation->paused` and reset the accumulator on transition — pause and slow-motion are deliberately **distinct runtime axes** so the operator can leave `timeScale = 0.25` for fine-tuning camera framing while still being free to step one frame at a time with `\`.
+- **`timeScale = 0` and `paused = true` produce the same effective sim-stop but are not the same state.** The wall-clock `framesPerSecond` / `frameTimeMilliseconds` stats still report real-time even at `timeScale = 0` because the scaling is applied to `simulation->frameDeltaSeconds` after `ComputeFrameDeltaSeconds`, not before. Input replay recording records the wall-clock delta the same way.
+- **4 hotkeys, all keyboard, all runtime, no preset file.** `[` halves `timeScale` (snaps to `0` below `0.01` for a discrete "pause" stop), `]` doubles `timeScale` (`timeScale == 0` bounces to `0.5` so the operator can escape zero; clamped to `4.0` at the top), `\` queues exactly one fixed-step tick (`frameStepRequested = true`; consumed at the top of `UpdateApp`), `` ` `` resets to `1.0`. `\` / `` ` `` were chosen over `[` / `]` because they sit on the QWERTY backtick/backslash row and are unused by the TAA ladder (`;`/`'`/`-`/`=`/`,`/`.`) or the 5.2 gizmo ladder (`L`/`Z`).
+- **`effectivePaused = simulation->paused && !frameStepRequestedNow`.** The frame-step handler reads-and-clears `frameStepRequested` at the top of `UpdateApp`, so the `effectivePaused` local is true only when the user explicitly paused AND did not press `\` this frame. Three `simulation->paused` references — the `cameraCanUpdate` flag, the accumulator update block, and the physics-tick while loop condition — were switched to `effectivePaused` so a same-frame step bypasses the pause gate cleanly. The `paused && spectator` camera-tick block is also gated on `effectivePaused` so the camera can look during a frame step.
+- **Frame-step accumulator override.** When `frameStepRequestedNow` is true, `simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds` overrides the per-frame scaled-delta accumulation, so exactly one fixed tick runs that frame regardless of `timeScale` and regardless of `paused`. The flag is read-then-cleared, so back-to-back presses translate to "one tick per press" (the per-frame `while` loop only ever holds one step at a time).
+- **Frame-step is orthogonal to TAA history invalidation.** Unlike world reload / swapchain resize / TAA toggle, the `frameStepRequested` event does **not** invalidate `taaHistoryValid` or `taaLayerHistoryValid` — TAA's reprojection is per-frame and `\` is per-frame, so a single step just appears as a single frame in the TAA history chain. If a future bug shows a frame-step-induced TAA artifact, the right fix is camera-cut detection (1.2), not a new `frameStepRequested → invalidate` rule.
+- **HUD surfaces.** New `TIME x.xx` line adjacent to the existing `MODE / PAUSE / AIR` line so the two pause-related runtime axes read as a group. One-frame `STEP` indicator (only emitted when `simulationFrameStepPending` is true on the press frame). Helper panel: 2 new lines `TIMECTL DOWN UP` and `TIMESTEP STEP RESET 1X` in the detailed-HUD section, using only glyphs the existing font supports (A-Z, 0-9, `.`, `-`, `:`) — the bracket / backslash / backtick keys are spelled out in the helper text because their raw glyphs are not in the font.
+
+Почему:
+
+- Continuous time-scale axis, not a discrete slow/normal toggle, because the operator's first instinct when a frame looks wrong is "let me see that slower" — a 0.25x / 0.5x / 1x / 2x / 4x ladder captures every common case without inventing per-preset speed labels. The 0.01 snap threshold on the `[` key is a UX concession: a half-step from `0.0156` would round to `0.0078` and the operator would wonder why the sim crawled.
+- `effectivePaused` rather than mutating `simulation->paused` itself, because toggling `paused` would re-zero the accumulator (`simulation->simulationAccumulatorSeconds = 0.0f` in the `TogglePause` handler) and undo the one-step budget. The local read+clear is a one-frame escape hatch, not a state machine.
+- Frame-step does not invalidate TAA history, because every `paused`-state frame already goes through the TAA path normally — the resolve pass just sees one frame of "current only" because `taaHistoryValid` is set false by the existing triggers. The new frame-step path sits one layer up (the accumulator / sim tick) and does not need to touch the TAA contract.
+
+Cross-refs: `agent/memory.md §10.23` (working rules), `agent/status.md §15` (session snapshot), `agent/active-sessions.md session-2026-06-12-frame-step-slow-motion`, `TODO.md §4 "frame-step / slow-motion debug modes"` (closed).
