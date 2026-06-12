@@ -129,6 +129,36 @@ enum class InputAction : uint8_t {
 	IncreaseTaaBlend,
 	CycleTaaNeighbourhoodRadius,
 	InvalidateTaaHistory,
+	// **M5.1d debug tool, 2026-06-12:** Half-Life 2 / Garry's Mod
+	// style physics-gun for interactively positioning loaded
+	// models. Hold F to "pick" the closest model in front of
+	// the camera; the picked model then snaps to integer voxel
+	// coords under the crosshair on a horizontal plane (default
+	// Y=1, the top of the VoxelLab floor voxel). Release F to
+	// drop. Prints "PICKED: <id> aabbMin=(...)" on grab and
+	// "DROPPED: <id> final_aabbMin=(...)" on release, so the
+	// operator can read the integer voxel coordinates out of
+	// the smoke log and hard-code the manifest position
+	// (or verify the snap math). See `app/ModelGravigun.hpp`
+	// for the contract.
+	PickModel,
+	// **5.2 Debug gizmos, 2026-06-12:** `L` cycles a world-aligned
+	// "split plane" overlay at each of the four `viewDepthSplits`
+	// distances along the camera forward vector. Useful when tuning
+	// cascade split lambda / split distribution by eye against a
+	// static scene. The boxes are intentionally axis-aligned
+	// (`DebugOverlayBox` is `Int3 min/maxExclusive`) so they read
+	// as a coarse "where does each cascade start" cue rather
+	// than a precise world frustum — see
+	// `debug/DebugOverlays.cpp::AppendCascadeSplitPlaneOverlayBoxes`
+	// for the math.
+	ToggleCascadeSplitPlanes,
+	// **5.2 Debug gizmos, 2026-06-12:** `Z` toggles a 1-voxel-wide
+	// shaft along the cursor hit normal (`selection.hitNormal`,
+	// ±1 in one axis) for 2 voxels. Helps visualise face selection
+	// at extreme angles (top-down, side-on) where the yellow
+	// selection box alone is ambiguous.
+	ToggleCursorHitNormal,
 	Count,
 };
 
@@ -335,6 +365,54 @@ struct VoxelMeshingPushConstants {
 	std::array<int32_t, 4> worldMaxExclusiveAndChunkCount{};
 	std::array<uint32_t, 4> chunkGridAndTransparentFaceBase{};
 	std::array<uint32_t, 4> faceCapacities{};
+};
+
+// **Two-level chunk visibility cache (2026-06-12).** When the
+// CPU-side cull pass in `UpdateChunkVisibilityAndIndirectCommands`
+// runs every frame, it re-iterates every chunk descriptor and
+// re-evaluates the camera frustum + 4 shadow cascade clip volumes,
+// even on a perfectly static camera + static world. That's
+// measurable on a mainline look-dev scene (300+ chunks × 5
+// visibility tests = 1500+ dot products / frame) and pure waste
+// when nothing moved. This struct caches the resulting
+// `VkDrawIndirectCommand` arrays + visible-chunk counts keyed
+// on a hash of `(sceneVoxelPayloadVersion, chunkDescriptorCount,
+// quantized camera position, quantized camera forward)`. On
+// cache hit, the per-chunk loop is skipped entirely and the
+// cached command buffers are `memcpy`'d straight into the
+// per-frame mapped GPU indirect buffers. The thresholds are
+// chosen so a static-camera replay / capture run keeps the
+// entire cull pass off the per-frame critical path.
+struct ChunkVisibilityCache {
+	bool valid = false;
+	uint64_t sceneVoxelPayloadVersion = 0;
+	uint32_t chunkDescriptorCount = 0;
+	// Quantized camera state: position to 0.25 voxel (so
+	// 1-voxel camera moves always invalidate), forward to
+	// 0.005 (~0.3° steps) so sub-1° rotations also
+	// invalidate. Forward is stored as fixed-point
+	// (forward * 1000, clamped + rounded) to keep the
+	// cache key as a small integer tuple.
+	int32_t quantizedCameraX = 0;
+	int32_t quantizedCameraY = 0;
+	int32_t quantizedCameraZ = 0;
+	int32_t quantizedForwardX1000 = 0;
+	int32_t quantizedForwardY1000 = 0;
+	int32_t quantizedForwardZ1000 = 0;
+	uint64_t hash = 0;
+	uint32_t visibleChunkCount = 0;
+	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
+	std::vector<VkDrawIndirectCommand> opaqueCommands;
+	std::vector<VkDrawIndirectCommand> shadowCommands;
+	std::vector<VkDrawIndirectCommand> transparentCommands;
+	// Cached values for the chunk-culling profiler plots. Mirrors
+	// the "Visible Chunks" / "Culled Chunks" values written by
+	// `UpdateSceneFrameChunkVisibility` so the plot stays
+	// populated even on cache-hit frames.
+	uint32_t culledChunkCount = 0;
+	// 0 = miss (rebuild), 1+ = Nth consecutive hit. Useful
+	// when correlating profiler traces with cache behaviour.
+	uint64_t consecutiveHitCount = 0;
 };
 static_assert(std::is_standard_layout_v<VoxelMeshingPushConstants>);
 static_assert(std::is_trivially_copyable_v<VoxelMeshingPushConstants>);
@@ -611,6 +689,16 @@ struct RenderState {
 	VkDescriptorSetLayout voxelMeshingDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool voxelMeshingDescriptorPool = VK_NULL_HANDLE;
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
+	// Two-level chunk visibility cache. Lives on RenderState (not
+	// SceneFrameResources) because the cached commands are
+	// frame-independent — both `sceneFrameResources[0]` and
+	// `[1]` get the same `memcpy`'d commands from this single
+	// cache on a hit. The cache is invalidated by
+	// `UpdateSceneFrameChunkVisibility` whenever the camera
+	// moved past the quantization threshold or the world
+	// version changed. See `ChunkVisibilityCache` for the
+	// per-field contract.
+	ChunkVisibilityCache chunkVisibilityCache{};
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
 	VmaAllocation depthAllocation = VK_NULL_HANDLE;
@@ -836,6 +924,36 @@ struct LookDevCaptureAutomationState {
 	uint32_t nextViewIndex = 0;
 };
 
+// **5.3 Benchmark automation, 2026-06-12.** Tracks per-frame timings
+// over a fixed-frame target driven by `PROJECTV_BENCHMARK_FRAMES` so the
+// operator can capture stable FPS / min-ms / max-ms numbers from a
+// CI-style headless run without writing a one-off test harness. The
+// state mirrors `LookDevCaptureAutomationState`'s shape (active /
+// quitWhenDone / completed) so the wiring in `main.cpp` is
+// symmetrical. Warmup frames are discarded (the first ~30 frames of
+// any ProjectV run include Vulkan pipeline compile, VMA pool warmup,
+// shader SPIR-V load, and the first chunk meshing dispatch — none of
+// which represent steady-state cost). `minFrameSeconds` /
+// `maxFrameSeconds` use a "first-sample" sentinel (`1e30f` / `0.0f`)
+// so the first valid frame always wins. The cumulative
+// `totalFrameSeconds` is what `LogBenchmarkSummary` divides by
+// `framesRendered` to compute the mean.
+struct BenchmarkAutomationState {
+	bool active = false;
+	bool quitWhenDone = false;
+	bool completed = false;
+	uint32_t warmupFramesRemaining = 0;
+	uint32_t targetFrameCount = 0;
+	uint32_t framesRendered = 0;
+	uint32_t logEveryFrames = 60;
+	Uint64 startCounter = 0;
+	Uint64 firstFrameCounter = 0;
+	Uint64 lastFrameCounter = 0;
+	float totalFrameSeconds = 0.0f;
+	float minFrameSeconds = 1e30f;
+	float maxFrameSeconds = 0.0f;
+};
+
 struct FrameState {
 	uint32_t currentFrame = 0;
 	std::vector<VkCommandBuffer> commandBuffers;
@@ -883,6 +1001,14 @@ struct DebugState {
 	bool detailedHudVisible = false;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
+	// 5.2 debug gizmos. See `InputAction::ToggleCascadeSplitPlanes`
+	// and `InputAction::ToggleCursorHitNormal` for the hotkey
+	// contracts. Both overlays only emit when `hudVisible` is also
+	// true (matches the existing `showChunkBounds` /
+	// `showDirtyChunkOverlay` contract — the boxes are a
+	// diagnostic aid, not a primary UI element).
+	bool showCascadeSplitPlanes = false;
+	bool showCursorHitNormal = false;
 };
 
 struct PlatformState {
@@ -955,6 +1081,12 @@ struct AppState {
 	InputState input{};
 	InteractionState interaction{};
 	LookDevCaptureAutomationState lookDevCapture{};
+	// 5.3 benchmark automation. See `BenchmarkAutomationState` for the
+	// per-frame field contract; the env var reader is in
+	// `app/BenchmarkAutomation.cpp` and the per-frame tick is wired in
+	// `main.cpp::SDL_AppIterate` right after the look-dev capture
+	// automation. Inactive when `PROJECTV_BENCHMARK_FRAMES` is unset.
+	BenchmarkAutomationState benchmark{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
 	PhysicsStatePtr physics{nullptr, DestroyPhysicsState};
 

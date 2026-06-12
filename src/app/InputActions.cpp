@@ -160,6 +160,14 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::IncreaseTaaBlend, SDL_SCANCODE_EQUALS);
 	BindAction(input, InputAction::CycleTaaNeighbourhoodRadius, SDL_SCANCODE_COMMA);
 	BindAction(input, InputAction::InvalidateTaaHistory, SDL_SCANCODE_PERIOD);
+	// M5.1d: HL2-style physicsgun for positioning loaded models.
+	// See `app/ModelGravigun.hpp` for the full contract.
+	BindAction(input, InputAction::PickModel, SDL_SCANCODE_F);
+	// 5.2 debug gizmos. `L` was reserved by `agent/status.md §9`
+	// (TAA tuning ladder footnote: "L остался свободен на
+	// будущее"). `Z` is unused.
+	BindAction(input, InputAction::ToggleCascadeSplitPlanes, SDL_SCANCODE_L);
+	BindAction(input, InputAction::ToggleCursorHitNormal, SDL_SCANCODE_Z);
 }
 
 void HandleInputActionEvent(

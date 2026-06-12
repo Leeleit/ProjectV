@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 inline PackedSceneChunkDescriptor MakeUploadedSceneChunkDescriptor(
 	const PackedSceneChunkDescriptor &sourceDescriptor,
@@ -299,5 +300,69 @@ bool UpdateSceneFrameChunkVisibility(
 void DestroySceneResources(
 	VulkanContextState *context,
 	RenderState *render);
+
+// **Two-level chunk visibility cache, 2026-06-12.** The hash
+// used by `ChunkVisibilityCache::valid` to decide between
+// cache-hit `memcpy` and full per-chunk rebuild. Quantization
+// thresholds are picked to keep a static-camera look-dev /
+// replay run entirely off the cull critical path:
+//   * camera position → 0.25 voxel units (so a single-voxel
+//     move always invalidates),
+//   * camera forward → 0.005 (~0.3° steps) so sub-1° rotations
+//     also invalidate.
+// The hash is the XOR-fold of 6 quantized camera ints + the
+// world payload version + the chunk descriptor count. Stored
+// on `ChunkVisibilityCache` so the next frame can compare
+// without recomputing.
+namespace projectv::visibility_cache {
+constexpr float kCameraPositionQuantization = 0.25f;
+constexpr float kCameraForwardQuantization = 0.005f;
+
+inline int32_t QuantizeCameraPositionComponent(const float value)
+{
+	return static_cast<int32_t>(std::floor(value / kCameraPositionQuantization));
+}
+
+inline int32_t QuantizeCameraForwardComponent(const float value)
+{
+	const float clamped = std::clamp(value, -1.0f, 1.0f);
+	return static_cast<int32_t>(std::lround(clamped / kCameraForwardQuantization));
+}
+
+inline uint64_t ComputeVisibilityCacheHash(
+	const ChunkCullingParameters &parameters,
+	const uint64_t sceneVoxelPayloadVersion,
+	const uint32_t chunkDescriptorCount)
+{
+	const auto posX = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[0]);
+	const auto posY = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[1]);
+	const auto posZ = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[2]);
+	const auto fwdX = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[0]);
+	const auto fwdY = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[1]);
+	const auto fwdZ = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[2]);
+
+	// splitmix64-style fold. The exact constants don't matter
+	// for correctness — only that (a) the hash is
+	// deterministic and (b) the bits of each component get
+	// mixed into the high bits, so a 1-bit change in any input
+	// flips roughly half the hash bits.
+	uint64_t hash = static_cast<uint64_t>(posX) * 0x9E3779B185EBCA87ULL;
+	hash ^= static_cast<uint64_t>(posY) * 0xC2B2AE3D27D4EB4FULL;
+	hash ^= static_cast<uint64_t>(posZ) * 0x165667B19E3779F9ULL;
+	hash ^= static_cast<uint64_t>(fwdX) * 0x94D049BB133111EBULL;
+	hash ^= static_cast<uint64_t>(fwdY) * 0xD1342543DE82EF95ULL;
+	hash ^= static_cast<uint64_t>(fwdZ) * 0xB45BCA9F4D2D9B33ULL;
+	hash ^= sceneVoxelPayloadVersion * 0x27D4EB2F165667C5ULL;
+	hash ^= static_cast<uint64_t>(chunkDescriptorCount) * 0x9C2A8E3F4D2D9B3BULL;
+
+	// Final avalanche. Same mix as splitmix64.
+	hash ^= hash >> 30;
+	hash *= 0xBF58476D1CE4E5B9ULL;
+	hash ^= hash >> 27;
+	hash *= 0x94D049BB133111EBULL;
+	hash ^= hash >> 31;
+	return hash;
+}
+} // namespace projectv::visibility_cache
 
 #endif

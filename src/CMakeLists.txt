@@ -81,9 +81,11 @@ add_dependencies(ProjectV Shaders)
 
 target_sources(ProjectV PRIVATE
         app/AppUpdate.cpp
+        app/BenchmarkAutomation.cpp
         app/Camera.cpp
         app/FramePreparation.cpp
         app/InputActions.cpp
+        app/ModelGravigun.cpp
         app/InputReplay.cpp
         app/LookDevCaptureAutomation.cpp
         app/main.cpp

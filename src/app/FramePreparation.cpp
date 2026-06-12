@@ -1,6 +1,7 @@
 #include "app/FramePreparation.hpp"
 
 #include "app/Camera.hpp"
+#include "app/ModelGravigun.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/DebugHud.hpp"
 #include "debug/DebugOverlays.hpp"
@@ -54,7 +55,8 @@ bool PrepareFrameRenderData(
 	const DebugState *debug,
 	WorldState *world,
 	RenderState *render,
-	FrameState *frame)
+	FrameState *frame,
+	InputState *input)
 {
 	PV_PROFILE_ZONE_N("PrepareFrameRenderData");
 	PV_CHECK_OR_RETURN(
@@ -129,6 +131,23 @@ bool PrepareFrameRenderData(
 	// allocations.
 	BuildVisibleModelInstanceList(chunkCullingParameters, render);
 
+	// M5.1d gravigun: hold F to pick and drag a model under the
+	// crosshair, snapping AABB min to integer voxel grid. Must
+	// run AFTER BuildVisibleModelInstanceList (so the frustum
+	// cull sees the just-updated AABB) but BEFORE the model pass
+	// records commands (so the new worldAabbMin/Max and the
+	// modelTransform translation column are uploaded to the GPU).
+	if (world->voxelWorld) {
+		static projectv::app::ModelGravigunState gravigunState;
+		TickModelGravigun(
+			&gravigunState,
+			*world->voxelWorld,
+			*camera,
+			swapchain->extent,
+			render,
+			input);
+	}
+
 	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
 	sceneFrameResources.debugHudVertexCount = 0;
 	if (sceneFrameResources.debugHudVertexMappedData) {
@@ -166,7 +185,9 @@ bool PrepareFrameRenderData(
 		world->voxelWorld.get(),
 		*interaction,
 		*debug,
-		&frame->renderData.debugOverlayBoxes);
+		&frame->renderData.debugOverlayBoxes,
+		*camera,
+		*render);
 	// TAA jitter: advance the 8-tap Halton(2,3) sub-pixel sequence and stash
 	// the offset so the next frame can reproject through it. The jitter sits
 	// in pixel units here; `BuildGraphicsPushConstants` converts it to NDC

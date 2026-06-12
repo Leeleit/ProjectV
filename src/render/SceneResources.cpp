@@ -454,6 +454,139 @@ uint32_t UpdateChunkVisibilityAndIndirectCommands(
 	return visibleChunkCount;
 }
 
+namespace {
+// **Two-level cache rebuild path (2026-06-12).** Same per-chunk
+// loop as `UpdateChunkVisibilityAndIndirectCommands` above, but
+// also fills `cache.opaqueCommands` / `cache.shadowCommands` /
+// `cache.transparentCommands` so the next call can short-circuit
+// the loop entirely on a cache hit. Splitting the two paths
+// keeps the original function untouched (it's still the canonical
+// per-frame behaviour — see `decisions.md` §21) and the cache
+// path is opt-in via `UpdateSceneFrameChunkVisibility`'s hash
+// check.
+struct ChunkVisibilityRebuildResult {
+	uint32_t visibleChunkCount = 0;
+	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
+};
+
+ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
+	const RenderState &render,
+	SceneFrameResources &frameResources,
+	const ChunkCullingParameters &parameters,
+	ChunkVisibilityCache &cache)
+{
+	ChunkVisibilityRebuildResult result{};
+	if (!frameResources.chunkDescriptorMappedData ||
+		!frameResources.opaqueIndirectMappedData ||
+		!frameResources.shadowIndirectMappedData ||
+		!frameResources.transparentIndirectMappedData) {
+		return result;
+	}
+
+	const auto *chunkDescriptors = static_cast<const PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
+	auto *opaqueCommands = static_cast<VkDrawIndirectCommand *>(frameResources.opaqueIndirectMappedData);
+	auto *shadowCommands = static_cast<VkDrawIndirectCommand *>(frameResources.shadowIndirectMappedData);
+	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
+	result.shadowCascadeVisibleChunkCounts.fill(0u);
+	std::array<std::array<float, 16>, kSunShadowCascadeCount> shadowCascadeMatrices{};
+	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * shadowCascadeMatrices[cascadeIndex].size();
+		std::copy_n(
+			render.currentSceneLighting.sunShadowViewProjections.data() + matrixOffset,
+			shadowCascadeMatrices[cascadeIndex].size(),
+			shadowCascadeMatrices[cascadeIndex].begin());
+	}
+
+	const uint32_t chunkDescriptorCount = frameResources.chunkDescriptorCount;
+	if (cache.opaqueCommands.size() != chunkDescriptorCount) {
+		cache.opaqueCommands.assign(chunkDescriptorCount, VkDrawIndirectCommand{});
+	}
+	if (cache.shadowCommands.size() != chunkDescriptorCount * kSunShadowCascadeCount) {
+		cache.shadowCommands.assign(chunkDescriptorCount * kSunShadowCascadeCount, VkDrawIndirectCommand{});
+	}
+	if (cache.transparentCommands.size() != chunkDescriptorCount) {
+		cache.transparentCommands.assign(chunkDescriptorCount, VkDrawIndirectCommand{});
+	}
+
+	const uint32_t shadowCommandStride = chunkDescriptorCount;
+	for (uint32_t chunkIndex = 0; chunkIndex < chunkDescriptorCount; ++chunkIndex) {
+		const PackedSceneChunkDescriptor &chunkDescriptor = chunkDescriptors[chunkIndex];
+		const bool visible = IsSceneChunkVisible(chunkDescriptor, parameters);
+		if (visible) {
+			++result.visibleChunkCount;
+		}
+
+		const VkDrawIndirectCommand opaqueCommand = BuildChunkIndirectCommand(
+			chunkDescriptor.drawRanges[0],
+			chunkDescriptor.drawRanges[1],
+			visible);
+		const VkDrawIndirectCommand transparentCommand = BuildChunkIndirectCommand(
+			chunkDescriptor.drawRanges[2],
+			chunkDescriptor.drawRanges[3],
+			visible);
+
+		opaqueCommands[chunkIndex] = opaqueCommand;
+		cache.opaqueCommands[chunkIndex] = opaqueCommand;
+		transparentCommands[chunkIndex] = transparentCommand;
+		cache.transparentCommands[chunkIndex] = transparentCommand;
+
+		for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
+			const bool shadowVisible = IsSceneChunkVisibleInShadowCascade(
+				chunkDescriptor,
+				shadowCascadeMatrices[cascadeIndex]);
+			if (shadowVisible) {
+				++result.shadowCascadeVisibleChunkCounts[cascadeIndex];
+			}
+			const VkDrawIndirectCommand shadowCommand = BuildChunkIndirectCommand(
+				chunkDescriptor.drawRanges[0],
+				chunkDescriptor.drawRanges[1],
+				shadowVisible);
+			const size_t shadowSlot = static_cast<size_t>(cascadeIndex) * shadowCommandStride + chunkIndex;
+			shadowCommands[shadowSlot] = shadowCommand;
+			cache.shadowCommands[shadowSlot] = shadowCommand;
+		}
+	}
+
+	return result;
+}
+
+// **Two-level cache hit path (2026-06-12).** Copies the cached
+// `VkDrawIndirectCommand` arrays into the per-frame mapped GPU
+// indirect buffers. Three `memcpy` calls (opaque, shadow,
+// transparent) replace the 1500+ dot products of the per-chunk
+// loop. The shadow buffer is `chunkDescriptorCount *
+// kSunShadowCascadeCount` `VkDrawIndirectCommand` entries — at
+// 300 chunks and 4 cascades that's 300*4*16 = ~19 KB, well
+// under any L1 cache.
+void ApplyCachedChunkVisibilityCommands(
+	const ChunkVisibilityCache &cache,
+	SceneFrameResources &frameResources)
+{
+	if (frameResources.opaqueIndirectMappedData &&
+		cache.opaqueCommands.size() == frameResources.chunkDescriptorCount) {
+		std::memcpy(
+			frameResources.opaqueIndirectMappedData,
+			cache.opaqueCommands.data(),
+			cache.opaqueCommands.size() * sizeof(VkDrawIndirectCommand));
+	}
+	if (frameResources.shadowIndirectMappedData &&
+		cache.shadowCommands.size() ==
+			frameResources.chunkDescriptorCount * kSunShadowCascadeCount) {
+		std::memcpy(
+			frameResources.shadowIndirectMappedData,
+			cache.shadowCommands.data(),
+			cache.shadowCommands.size() * sizeof(VkDrawIndirectCommand));
+	}
+	if (frameResources.transparentIndirectMappedData &&
+		cache.transparentCommands.size() == frameResources.chunkDescriptorCount) {
+		std::memcpy(
+			frameResources.transparentIndirectMappedData,
+			cache.transparentCommands.data(),
+			cache.transparentCommands.size() * sizeof(VkDrawIndirectCommand));
+	}
+}
+} // namespace
+
 uint32_t PrepareDirtyChunkMeshingList(
 	const RenderState &render,
 	SceneFrameResources &frameResources)
@@ -501,19 +634,69 @@ bool UpdateSceneFrameChunkVisibility(
 		std::memcpy(frameResources.chunkCullingMappedData, &parameters, sizeof(parameters));
 	}
 
+	// **Two-level cache check, 2026-06-12.** The hash folds
+	// quantized camera position (0.25 voxel) + quantized
+	// camera forward (0.005, ~0.3°) + scene voxel payload
+	// version + chunk descriptor count. On a hit we skip the
+	// per-chunk loop entirely and `memcpy` the cached
+	// `VkDrawIndirectCommand` arrays straight into the
+	// per-frame mapped GPU indirect buffers. See
+	// `ChunkVisibilityCache` and
+	// `projectv::visibility_cache::ComputeVisibilityCacheHash`
+	// for the per-field contract and rationale.
+	const uint64_t hash = projectv::visibility_cache::ComputeVisibilityCacheHash(
+		parameters,
+		render.sceneVoxelPayloadVersion,
+		frameResources.chunkDescriptorCount);
+	ChunkVisibilityCache &cache = render.chunkVisibilityCache;
+	if (cache.valid &&
+		cache.hash == hash &&
+		cache.chunkDescriptorCount == frameResources.chunkDescriptorCount &&
+		cache.sceneVoxelPayloadVersion == render.sceneVoxelPayloadVersion &&
+		cache.opaqueCommands.size() == frameResources.chunkDescriptorCount &&
+		cache.shadowCommands.size() ==
+			static_cast<size_t>(frameResources.chunkDescriptorCount) * kSunShadowCascadeCount &&
+		cache.transparentCommands.size() == frameResources.chunkDescriptorCount) {
+		ApplyCachedChunkVisibilityCommands(cache, frameResources);
+		frameResources.shadowCascadeVisibleChunkCounts = cache.shadowCascadeVisibleChunkCounts;
+		++cache.consecutiveHitCount;
+		profiling::PlotValue("Visible Chunks", static_cast<int64_t>(cache.visibleChunkCount));
+		profiling::PlotValue("Culled Chunks", static_cast<int64_t>(cache.culledChunkCount));
+		profiling::PlotValue("ChunkVisibilityCacheHits", static_cast<int64_t>(cache.consecutiveHitCount));
+		return true;
+	}
+
 	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
-	const uint32_t visibleChunkCount = UpdateChunkVisibilityAndIndirectCommands(
+	// **Cache miss path (2026-06-12).** Run the canonical
+	// per-chunk loop AND fill the cache in the same pass so the
+	// next frame's hit check has data to `memcpy`. The two side
+	// effects (frameResources mapped writes + cache fills) share
+	// the same per-chunk math, so we don't pay an extra pass
+	// here.
+	const ChunkVisibilityRebuildResult result = RebuildChunkVisibilityAndFillCache(
 		render,
 		frameResources,
 		parameters,
-		shadowCascadeVisibleChunkCounts);
-	frameResources.shadowCascadeVisibleChunkCounts = shadowCascadeVisibleChunkCounts;
+		cache);
+	frameResources.shadowCascadeVisibleChunkCounts = result.shadowCascadeVisibleChunkCounts;
 	const uint32_t culledChunkCount =
-		frameResources.chunkDescriptorCount > visibleChunkCount
-			? frameResources.chunkDescriptorCount - visibleChunkCount
+		frameResources.chunkDescriptorCount > result.visibleChunkCount
+			? frameResources.chunkDescriptorCount - result.visibleChunkCount
 			: 0u;
-	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(visibleChunkCount));
+	// Stamp the cache with the just-rebuilt result. The hash +
+	// version + count tuple is what the next frame compares
+	// against.
+	cache.valid = true;
+	cache.hash = hash;
+	cache.sceneVoxelPayloadVersion = render.sceneVoxelPayloadVersion;
+	cache.chunkDescriptorCount = frameResources.chunkDescriptorCount;
+	cache.visibleChunkCount = result.visibleChunkCount;
+	cache.shadowCascadeVisibleChunkCounts = result.shadowCascadeVisibleChunkCounts;
+	cache.culledChunkCount = culledChunkCount;
+	cache.consecutiveHitCount = 0;
+	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(result.visibleChunkCount));
 	profiling::PlotValue("Culled Chunks", static_cast<int64_t>(culledChunkCount));
+	profiling::PlotValue("ChunkVisibilityCacheHits", static_cast<int64_t>(0));
 	return true;
 }
 

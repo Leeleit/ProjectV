@@ -7,6 +7,7 @@
 #include "app/FramePreparation.hpp"
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
+#include "app/BenchmarkAutomation.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
 #include "asset/ModelManifestLoader.hpp"
 #include "core/RuntimeDiagnostics.hpp"
@@ -315,6 +316,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		return SDL_APP_FAILURE;
 	}
 	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
+	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark);
 
 	if (!SDL_SetWindowRelativeMouseMode(state->platform.window, state->input.relativeMouseModeEnabled)) {
 		runtime::LogSdlFailure("SDL_AppInit.SDL_SetWindowRelativeMouseMode");
@@ -389,6 +391,13 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	}
 	const bool quitAfterLookDevCaptureFrame =
 		UpdateLookDevCaptureAutomation(&state->lookDevCapture, &state->render);
+	const DebugState *benchmarkDebug = GetDebugState(state->ecs.get());
+	const Uint64 benchmarkFrameCounter = SDL_GetPerformanceCounter();
+	const bool quitAfterBenchmarkFrame =
+		UpdateBenchmarkAutomation(
+			&state->benchmark,
+			benchmarkDebug ? benchmarkDebug->stats : DebugStats{},
+			benchmarkFrameCounter);
 
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(
@@ -430,7 +439,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 				   debug,
 				   world,
 				   &state->render,
-				   &state->frame)) {
+				   &state->frame,
+				   &state->input)) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"SDL_AppIterate.PrepareFrameRenderData",
@@ -443,6 +453,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->render,
 			&state->frame);
 		if (quitAfterLookDevCaptureFrame && result == SDL_APP_CONTINUE) {
+			result = SDL_APP_SUCCESS;
+		}
+		if (quitAfterBenchmarkFrame && result == SDL_APP_CONTINUE) {
 			result = SDL_APP_SUCCESS;
 		}
 	}

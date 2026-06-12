@@ -393,6 +393,18 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleDirtyChunkOverlay)) {
 		debug->showDirtyChunkOverlay = !debug->showDirtyChunkOverlay;
 	}
+	// 5.2 debug gizmos: cascade split planes + cursor hit normal.
+	// Both overlays follow the same hotkey-on/visibility-on pair
+	// already used for chunk bounds / dirty chunk overlay: the
+	// key only flips the flag, the actual emission gate is in
+	// `BuildDebugOverlayBoxes` and additionally requires
+	// `debug->hudVisible` to be true.
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleCascadeSplitPlanes)) {
+		debug->showCascadeSplitPlanes = !debug->showCascadeSplitPlanes;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleCursorHitNormal)) {
+		debug->showCursorHitNormal = !debug->showCursorHitNormal;
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAirControlMode)) {
 		SetPhysicsWalkAirControlMode(physics, GetNextWalkAirControlMode(GetPhysicsWalkAirControlMode(physics)));
 	}
