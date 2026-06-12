@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата обновления: `2026-06-12` (1.4 + 5.1 closed)
+Дата обновления: `2026-06-12` (1.2 + 1.3 + 1.4 + 5.1 closed)
 Статус документа: `живой roadmap`
 
 ---
@@ -523,8 +523,6 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 
 **In progress (Блок 1):**
 
-- [ ] **1.2 Camera-cut detection** (viewProjDelta threshold → auto-invalidate history)
-- [ ] **1.3 Adaptive sharpening (CAS) post-TAA** (sharpenAmount = (1-blend) * authoredMax)
 - [ ] **1.8 Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`, runtime cycle)
 - [ ] **1.5 Anti-flicker для CTSH/AOCC/LOCL** (mini-TAA на history attachment, blend ~0.4)
 - [ ] **1.7 R11G11B10_UFloat scene color** (bandwidth save: 4 vs 8 bytes/pixel)
@@ -533,6 +531,8 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 **Closed (Блок 1: TAA quality 1.x):**
 
 - [x] **1.1 YCoCg clamp в TAA resolve (`2026-06-12`).** `taa_resolve.frag` clamp'ит history в YCoCg space (lossless transform Y/Co/Cg) вместо RGB. 1-tap bright пиксель теперь двигает только Y — chroma highlight'ов не вымывается в grey. Sidecar metadata получил `taa_clamp_color_space=YCoCg` для capture-driven tuning.
+- [x] **1.2 Camera-cut detection (`2026-06-12`).** Chebyshev (L-infinity, max-abs) distance между `taaPrevViewProjectionMatrix` (frame N-1) и `frame->graphicsPushConstants.viewProjection` (frame N) в `FramePreparation::BuildFrameData` после `AdvanceTaaPixelJitter`. Если delta > `kTaaCameraCutThreshold = 0.10` (10% per-element), то `taaHistoryValid = false` + `++taaCameraCutCount`. Threshold 0.10 clean отделяет "ordinary motion" (<0.01/frame) от "intentional viewpoint change" (>0.20/frame). New fields: `RenderState::taaCameraCutCount` (uint32, accumulates), `taaCameraCutMaxDelta` (float, worst seen), `taaPrevViewProjectionMatrixInitialized` (bool, prevents false-positive on first frame / post-swapchain-recreate). Sidecar: `taa_camera_cut_count`, `taa_camera_cut_max_delta`. HUD: новая строка `TAACUT %u CLR %.2f`. **7-й history invalidation trigger** (per `decisions.md` §18): добавлен в список `Swapchain resize / world reload / Taa toggle / jitter scale / blend / neighbourhood radius / . invalidate / **camera-cut > 0.10**`. `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` reset'ает `taaPrevViewProjectionMatrixInitialized` + `taaCameraCutCount` + `taaCameraCutMaxDelta` рядом с `taaPrevViewProjectionMatrix = {}` — следующий кадр не false-positive. Build green, ctest 6/6, smoke 6/6 (`VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`): `taa_camera_cut_count=0` (static camera = no cuts) + `taa_camera_cut_max_delta=0.000000`. Visual verify FINAL view: scene renders clean, no artefacts.
+- [x] **1.3 Adaptive CAS sharpening post-TAA (`2026-06-12`).** Inline AMD FidelityFX CAS (Bartłomiej Wronski, GPUOpen 2020) в `taa_resolve.frag`, integrated в существующий 3×3/5×5/7×7 neighbourhood loop без extra texture lookups. `GetSceneColorRange` теперь возвращает дополнительно `rgbMin` / `rgbMax` (5-tap cross+center min/max) и `rgbCornerSum` (4-corner sum). CAS kernel: `highPass = color - cornerAvg`, `weight = clamp(highPass / (max - min), 0, 1)`, `output = clamp(color + highPass * (sharpenAmount * weight), min, max)`. Linear-light pass до tone-map (CAS в sRGB даёт wrong gamma). `sharpenAmount = max(0, (1.0 - taaBlend) * taaCasSharpnessMax)` derived in shader: high-blend (стабильная) → less sharpening, low-blend (noisy) → more. TAA-off path: `taaBlend=0` so `sharpenAmount = taaCasSharpnessMax` (full ceiling). New field: `RenderState::taaCasSharpnessMax` (float, [0,1], default 0.5). New push-constant fields: `taaBlend`, `taaCasSharpnessMax` (replaces `vec2 reservedPadding` slot в `ResolvePushConstants`, same 8 B total — byte layout unchanged, `static_assert` в `core/Types.hpp:212-218` обновлён). HUD: `TAA` line получил `CAS %.2f` token. Sidecar: `taa_cas_sharpness_max`. Build green, ctest 6/6, smoke 6/6: `taa_cas_sharpness_max=0.500000`, scene рендерится без ringing/haloing, FPS 93.2 на `VoxelLab` reference shot.
 - [x] **1.4 Per-pass TAA tuning HUD ladder (`2026-06-12`).** 4 live hotkeys: `;`/`'` jitter scale dec/inc (multiplier on Halton(2,3) output, [0,2] step 0.25), `-`/`=` blend factor dec/inc (per-frame history weight, [0,1] step 0.05), `,` neighbourhood radius cycle (1/3/5/7, drives `taa_resolve.frag` 3×3/5×5/7×7 loop), `.` history-invalidate single press. All four invalidate `taaHistoryValid` on change so the next frame takes the current scene as the only sample. `taaNeighbourhoodRadius` пишется в `taaHistoryParams.w` (раньше был `reserved` slot) — byte layout `VoxelSceneLighting` неизменён. Detailed HUD строка: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s`. Sidecar keys: `taa_jitter_scale`, `taa_neighbourhood_radius`. Build green, ctest 1/1 на `ProjectVTests`. **TODO 1.4 had предложенные keys `J`/`M`/`K`/`L`, но они уже заняты** (walk auto-jump / pick material / exposure inc) — выбор пал на правую руку `;`/`'`/`-`/`=`/`,`/`.`, 5 keys включая invalidate. `L` остался свободен на будущее.
 
 **Closed (Блок 5: tooling — renderdoc markers, 2026-06-12):**

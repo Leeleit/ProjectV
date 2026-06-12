@@ -617,6 +617,131 @@ either `UNDEFINED` or a fixed post-state. The same pattern applies
 to any future offscreen resource that needs to be both written
 and sampled across frames.
 
+## 10.17 TAA Блок 1 / 1.2 + 1.3 — camera-cut detector + adaptive CAS sharpening (`2026-06-12`)
+
+**1.2 — Camera-cut detection.** Chebyshev (L-infinity, max-abs over
+the 16 floats of `viewProjection`) distance between the previous
+and current frame's `viewProjection`, computed each frame in
+`FramePreparation::BuildFrameData` after the Halton jitter advance
+and before the `taaPrevViewProjectionMatrix` stash. Threshold
+`kTaaCameraCutThreshold = 0.10f` lives as a single constant — operator
+data shows 0.10 cleanly separates "ordinary mouse-look / WASD / spectator
+fly" (delta < 0.01/frame) from "snap rotation / teleport / scene-preset
+change" (delta > 0.20/frame). When the delta exceeds the threshold,
+`taaHistoryValid = false` and `taaCameraCutCount++`; this is the
+**7th history-invalidation trigger** in the `decisions.md` §18 list
+(beyond swapchain resize / world reload / Taa toggle / jitter scale /
+blend / neighbourhood radius / `.` invalidate).
+
+**First-frame false-positive guard.** `taaPrevViewProjectionMatrix` is
+zero-initialised, so a naive detector would register a
+`maxDelta ≈ |viewProj|max ≈ 40` cut on the very first frame. To
+prevent this, a companion `bool taaPrevViewProjectionMatrixInitialized`
+in `RenderState` is set on the first successful stash and gates the
+detector. `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` clears it
+(next to the existing `taaPrevViewProjectionMatrix = {}`) so the
+post-recreate frame is also a clean baseline; the existing
+`taaFrameCounter = 0u` and `taaHistoryNeedsInit = true` resets in the
+same path remain. The detector is single-call per frame, 16
+subtractions + 16 max-abs + 1 compare — bandwidth-free.
+
+**1.3 — Inline CAS (Contrast Adaptive Sharpening) post-TAA.** AMD
+FidelityFX CAS port (`Bartłomiej Wronski, "FidelityFX CAS –
+Contrast Adaptive Sharpening", GPUOpen 2020;
+https://github.com/GPUOpen-Effects/FidelityFX-CAS`) integrated into
+`taa_resolve.frag` so the resolve pass stays single-pass. The
+high-pass kernel is `center - 4-corner-avg`; the per-channel weight
+`(highPass) / (max - min)` is positive-clamped to `[0, 1]` so flat
+regions (highPass ≈ 0) get no boost and bright overshoot is impossible.
+The result is clamped to the local RGB `[min, max]` range to avoid
+neighbour-color contamination.
+
+**No extra texture lookups.** `GetSceneColorRange` was extended in
+the same loop the TAA YCoCg clamp already runs: the existing
+`2r+1 × 2r+1` sweep now also accumulates `rgbMin / rgbMax` (from
+cross+center, 5 taps) and `rgbCornerSum` (4 corner taps). The
+branch (`isCorner` / `isCross`) is a single `bool` and one
+accumulator per pixel, ALU-cheap. The loop is bandwidth-bound
+(45 texture samples per fragment at radius=7), not ALU-bound, so the
+extra accumulators don't change the resolve's GPU cost.
+
+**`sharpenAmount = (1.0 - taaBlend) * taaCasSharpnessMax`** is derived
+in-shader from the new `taaBlend` / `taaCasSharpnessMax` push-constant
+fields. High blend (more history weight, already stable) -> less
+sharpening; low blend (more noise) -> more. TAA-off falls through
+with `taaBlend = 0`, so the ceiling `taaCasSharpnessMax` applies at
+full strength (no temporal blur to undo, so the ceiling is
+appropriate). The CAS step is **linear-light pre-tonemap** because
+the `rgbMin / rgbMax / rgbCornerSum` come from the pre-tonemap scene;
+applying a linear high-pass kernel in sRGB space would mix the wrong
+gamma. `taa_resolve.frag` passes `mappedOut = ApplyTaaToneMap(linearOut)`
+only after the CAS step.
+
+**Push constant layout.** `ResolvePushConstants` replaced the trailing
+`vec2 reservedPadding` with `float taaBlend; float taaCasSharpnessMax;`
+— same 8 B total, byte layout unchanged (verified by `static_assert`
+at `core/Types.hpp:212-218`; `offsetof(ResolvePushConstants, taaBlend)
+== 136` and `...taaCasSharpnessMax == 140`). `Renderer.cpp:1004-1009`
+populates the new fields from `render.taaEnabled ? render.taaBlend :
+0.0f` and `render.taaCasSharpnessMax` respectively.
+
+**Why inline CAS instead of a separate `cas.frag` pipeline.** A separate
+post-TAA CAS pipeline would need a new graphics pipeline, descriptor
+set layout, render pass slot between TAA resolve and the swapchain,
+and a third fullscreen draw per frame — all for a 5+4-tap pass that
+reuses data already gathered. Integrating it into `taa_resolve.frag`
+keeps the resolve single-pass, eliminates a swapchain readback
+(CAS reads from the *pre-tonemap* linear buffer, not the swapchain),
+and avoids touching `VulkanGraphicsPipeline.cpp` (which is also
+shared with the asset-pipeline's M4 model pass). The trade-off is
+that `taa_resolve.frag` now does TAA + CAS in one pass; the cost is
+the 4-corner accumulator in the existing loop, which is bandwidth-
+negligible.
+
+**Verification (`2026-06-12`, this session):**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests`
+  — green, 1 pre-existing warning at `DebugHud.cpp:600` (`%.0f` for
+  bool, not my change).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` —
+  6/6 passed (`ProjectVTests`, `ProjectVAssetTests`,
+  `ProjectVMeshBakerTests`, `ProjectVDracoTests`,
+  `ProjectVFrustumCullingTests`, `ProjectVBoxUvFixtureTests`), 1.45 s
+  wall clock.
+- `bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh
+  --camera-pos "-25 19 25" --camera-look "0.62 -0.48 -0.62"
+  --views "FINAL SHDW CSM CTSH AOCC LOCL"` — 6/6 captures at
+  `build/linux-clang-debug/lookdev-captures/20260612-1.2-1.3-smoke-v2/`.
+  Sidecar `taa_camera_cut_count=0` (static camera, expected),
+  `taa_cas_sharpness_max=0.500000`, `taa_history_valid=1`.
+- Vision review of FINAL view: scene renders clean — VoxelLab
+  glass/fluid sphere, opaque anchor, checker floor, no ringing /
+  haloing from the CAS step, no ghosting from the camera-cut
+  detector. HUD FPS 93.2 on this build.
+
+**Working rules to inherit:**
+- **First-frame / post-recreate baseline guard.** Any new
+  frame-to-frame state that's initialised to a sentinel (zero, NaN,
+  identity matrix) and compared against the next-frame value needs a
+  companion "initialised" flag, **not** a `frameCounter > N` heuristic
+  (which breaks if the counter is reset mid-session for a different
+  reason — e.g. swapchain recreate). Reset the flag in every code path
+  that resets the underlying state.
+- **Linear-light CAS, not sRGB.** AMD's reference CAS operates in
+  display-referred (sRGB-encoded) space because it's typically
+  composed after a separate post-process stack. Our CAS runs on
+  linear data, so the high-pass kernel and the `[min, max]` range
+  must be in linear light too. Mixing would give a different gamma
+  curve and break the "clamp to local range" overshoot guard.
+- **Push constant byte layout invariance.** `ResolvePushConstants`
+  gained 2 new float fields but the total size stayed 144 B. The
+  `static_assert` block at the struct definition is the source of
+  truth for layout; updating it in lockstep with the shader's
+  GLSL declaration is mandatory.
+
+**Cross-refs:** `TODO.md` Блок 1 (1.2 + 1.3 closed in this
+session), `agent/decisions.md` §19 (TAA sharpness contract), this
+section, `agent/status.md` §10 (in-progress session snapshot).
+
 ## 10.15 TAA close-out plumbing landed (A1, `2026-06-11`, committed as `9764463`)
 
 Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыре deferred subtask'а из `agent/memory.md §10.14` закрыты + история-инвалидация:
@@ -683,4 +808,3 @@ Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыр
 - Fix: перенёс `#include "volk.h"` на самый верх `core/Types.hpp` (до всех VMA-touching headers). Удалил дубликат на старом месте. 1 строка в `tests/CMakeLists.txt` — добавил `glm` в `ProjectVTests` link.
 - Working rule: **when a header is added to a shared file like `core/Types.hpp` (which includes VMA via `MeshGpuResources.hpp` etc.), the project's volk include must come first.** The order is volk.h → SDL3.h → project headers → VMA transitively. If future modules add new VMA-touching headers to `core/Types.hpp`, volk.h position is preserved by the existing top-of-file placement.
 - Working rule: **when a target adds asset-pipeline code that pulls in glm (or any header-only dep with INTERFACE include dirs), all sibling targets that include the same shared header must also link the new dep.** `ProjectVTests` was the one that broke first because it has the smallest link line; the fix is to add `glm` (1 line) — not to add glm to a global INTERFACE option, which would also drag it into targets that don't need it.
-

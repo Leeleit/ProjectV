@@ -2,7 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-06-12` — TAA 1.4 tuning HUD ladder + 5.1 RenderDoc markers + M5.2 color-distance rejection + 6.x doc sync landed (`8635ddf` / `3ee995f` / `f90687a` / `e27d971`). See §8.
+Updated: `2026-06-12` — TAA 1.2 camera-cut detection + 1.3 inline CAS post-TAA landed (uncommitted, см. §10).
 
 ---
 
@@ -277,3 +277,60 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 **Ключевые env vars (master HEAD):** `PROJECTV_MODELS=path.glb@x,y,z;...` (manifest), `PROJECTV_START_CAMERA_POSITION="x y z"`, `PROJECTV_START_CAMERA_LOOK="x y z"`, `PROJECTV_LOOKDEV_CAPTURE_*` (smoke harness), `PROJECTV_ENABLE_VALIDATION` (1/0, default ON in Debug), `PROJECTV_ENABLE_RENDERDOC_MARKERS` (1/0, default ON in Debug, OFF в `linux-clang-debug` preset), `PROJECTV_ENABLE_TRACY` (1/0, default ON).
 
 **Status §7 (YCoCg clamp landed in `a2972fa`):** Marked stale by §8. Read §8 for current state.
+
+---
+
+## 10. TAA Блок 1 / 1.2 + 1.3 — camera-cut detector + inline CAS post-TAA — LANDED (uncommitted, this session)
+
+**2 commits proposed** (per operator "потом скажу, что делать" — commits не сделаны):
+
+| SHA | Subject | Files |
+|---|---|---|
+| _pending_ | `fix(taa): camera-cut detection (Chebyshev threshold) + first-frame guard` | 5 |
+| _pending_ | `feat(taa): inline AMD CAS post-TAA sharpen, sharpenAmount = (1-blend)*max` | 4 |
+
+**Что в 1.2 (camera-cut detector):**
+
+- `core/Types.hpp::RenderState` (line 666-689): добавлены `taaCameraCutCount` (uint32, default 0), `taaCameraCutMaxDelta` (float, default 0.0f), `taaPrevViewProjectionMatrixInitialized` (bool, default false). `DebugStats` mirror.
+- `app/FramePreparation.cpp`: cut detector в `BuildFrameData` после `AdvanceTaaPixelJitter`, **до** `taaPrevViewProjectionMatrix` stash. `constexpr float kTaaCameraCutThreshold = 0.10f`. Companion bool gate prevents first-frame false-positive (zero-init prev = 40 maxDelta).
+- `app/AppUpdate.cpp`: 2 поля добавлены в `debug->stats.taa*` mirror.
+- `debug/DebugHud.cpp`: новая HUD-строка `TAACUT %u CLR %.2f` после TAA line.
+- `render/ScreenshotCapture.cpp`: 2 новых sidecar keys `taa_camera_cut_count` + `taa_camera_cut_max_delta`.
+- `render/vulkan/VulkanSwapchain.cpp::CreateOrRecreateSwapchain`: companion bool + cut accumulator reset рядом с `taaPrevViewProjectionMatrix = {}` — следующий кадр не false-positive.
+
+**Что в 1.3 (inline CAS post-TAA):**
+
+- `core/Types.hpp::ResolvePushConstants` (line 195-219): `vec2 reservedPadding` заменён на `float taaBlend + float taaCasSharpnessMax` (8 B total, byte layout preserved, `static_assert` обновлён: `taaBlend @ 136`, `taaCasSharpnessMax @ 140`).
+- `core/Types.hpp::RenderState` + `DebugStats`: новый `taaCasSharpnessMax` (float, [0,1], default 0.5).
+- `render/Renderer.cpp:1004-1009`: populate `resolvePushConstants.taaBlend = render.taaEnabled ? render.taaBlend : 0.0f` + `resolvePushConstants.taaCasSharpnessMax = render.taaCasSharpnessMax`.
+- `shaders/taa_resolve.frag`: comprehensive rewrite — `ResolvePushConstants` GLSL block обновлён, `GetSceneColorRange` extended с `rgbMin / rgbMax / rgbCornerSum` (bandwidth-free, same loop), `ApplyCasLinear` function добавлен (AMD CAS kernel: `center - 4-corner-avg` high-pass, positive-clamped weight, clamp-to-range output), `main()` CAS step между blend и tonemap (linear-light).
+- `app/AppUpdate.cpp`: `debug->stats.taaCasSharpnessMax` mirror.
+- `debug/DebugHud.cpp`: TAA line получил `CAS %.2f` token.
+- `render/ScreenshotCapture.cpp`: `taa_cas_sharpness_max` sidecar key.
+
+**Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green. `ctest` 6/6 passed (1.45 s). `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `VoxelLab` reference shot — 6/6 captures, sidecar:
+- `taa_camera_cut_count=0` (static camera = no cuts, 1.2 ✓)
+- `taa_camera_cut_max_delta=0.000000` (1.2 ✓)
+- `taa_cas_sharpness_max=0.500000` (1.3 ✓)
+- `taa_history_valid=1`, `taa_blend=0.10`, `taa_neighbourhood_radius=1` (carry-over из 1.4)
+- `taa_jitter_x=0.125`, `taa_jitter_y=0.278` (Halton 8-tap)
+
+**Visual verify (FINAL view, post-CAS):** VoxelLab рендерится чисто, FPS 93.2. CAS sharpening не даёт ringing / haloing, scene edges clean, no artefacts. `B` cycles lighting views на smk. capture set. Sidecar `taa_*` keys populated.
+
+**Asset-pipeline parallel:** `ModelPass.cpp` (modified, чужая территория, depth bias M5.1b), `VulkanBootstrap.cpp` (modified, no-op), `.gitignore` + `pyproject.toml` + `uv.lock` (operator). Все мои TAA-scope правки не пересекаются.
+
+**Known follow-ups (TODO §5 Блок 1, in priority order):**
+
+| ID | Описание | Сложность | Scope |
+|---|---|---|---|
+| 1.5 | Anti-flicker для CTSH/AOCC/LOCL через mini-TAA history attachment | 3-5 ч | TAA-scope |
+| 1.7 | R11G11B10_UFloat scene color (bandwidth: 4 vs 8 bytes/pixel) | 2-4 ч | TAA-scope, swapchain format |
+| 1.8 | `TaaQuality` tier abstraction (Off/Light/Std/High) | 4-6 ч | TAA-scope, refactor 1.4 |
+| 1.6 | VRS в cascade split edges | R&D | TAA-scope + GPU driver confirm |
+| 2.x | Walk controller feel polish (frame-step, HUD additions, replay suite) | 3-5 дней | walk-scope |
+| 3.x | SSAO baseline / SSR | 5-10 дней | deferred/hard |
+| 4.1 | Greedy quad meshing | 2-3 дня | voxel-scope |
+| 5.2 | Доп. debug gizmos (chunk AABB, cursor hit normal, cascade split planes) | 1-2 ч | render-scope |
+| 5.3 | Benchmark automation (`PROJECTV_BENCHMARK_FRAMES=N` env) | 1-2 ч | render-scope |
+
+**Test count baseline:** `ctest` 6/6 (1.45 s) — unchanged, не должно падать.

@@ -57,6 +57,92 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-taa-1.2-1.3
+
+- **id:** `2026-06-12T15:00Z-taa-1.2-1.3`
+- **started-at:** 2026-06-12T15:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** TAA Блок 1 / 1.2 (camera-cut detection) + 1.3 (adaptive CAS sharpening post-TAA). 1.2: Chebyshev (L-infinity, max-abs over 16 floats) delta между `taaPrevViewProjectionMatrix` (frame N-1) и `frame->graphicsPushConstants.viewProjection` (frame N) в `FramePreparation::BuildFrameData`. Threshold `kTaaCameraCutThreshold = 0.10f` (10% per-element). First-frame guard через `taaPrevViewProjectionMatrixInitialized` bool, reset в `VulkanSwapchain.cpp::CreateOrRecreateSwapchain`. 1.3: inline AMD FidelityFX CAS (Bartłomiej Wronski, GPUOpen 2020) integrated в `taa_resolve.frag` single-pass, no extra texture lookups (extended `GetSceneColorRange` loop: `rgbMin / rgbMax` 5-tap cross+center, `rgbCornerSum` 4-tap corners). `sharpenAmount = max(0, (1.0 - taaBlend) * taaCasSharpnessMax)` derived in-shader. Linear-light pre-tonemap. `ResolvePushConstants` `vec2 reservedPadding` заменён на `float taaBlend + float taaCasSharpnessMax` (8 B total, byte layout preserved, `static_assert` обновлён).
+- **files-touched-intent:** `src/core/Types.hpp` (RenderState + DebugStats + ResolvePushConstants), `src/app/FramePreparation.cpp` (camera-cut detector), `src/app/AppUpdate.cpp` (DebugStats mirror), `src/debug/DebugHud.cpp` (TAACUT line + CAS в TAA), `src/render/ScreenshotCapture.cpp` (3 sidecar keys), `src/render/vulkan/VulkanSwapchain.cpp` (companion reset), `src/render/Renderer.cpp` (push-constant populate), `src/shaders/taa_resolve.frag` (CAS kernel + linear-light step), `agent/memory.md` (§10.17), `agent/decisions.md` (§19), `agent/status.md` (§10), `TODO.md` (close 1.2 + 1.3 in Блок 1), `agent/active-sessions.md` (this entry).
+- **status:** open
+- **notes:** **2+1 commits proposed (per operator "потом скажу, что делать" — commits не сделаны по AGENTS.md §7.2.4):**
+  - `fix(taa): camera-cut detection (Chebyshev threshold) + first-frame guard` — 6 files. RenderState/DebugStats fields, FramePreparation detector, AppUpdate mirror, DebugHud line, ScreenshotCapture sidecar, VulkanSwapchain companion reset.
+  - `feat(taa): inline AMD CAS post-TAA sharpen, sharpenAmount = (1-blend)*max` — 4 files. ResolvePushConstants field rename + byte layout, RenderState/DebugStats CAS field, Renderer push-constant populate, taa_resolve.frag comprehensive rewrite (push block, GetSceneColorRange extension, ApplyCasLinear, main CAS step), AppUpdate mirror, DebugHud CAS token, ScreenshotCapture sidecar.
+  - `docs(agent): sync 1.2 + 1.3 closures + add §10.17/§19/§10` — 5 files (TODO.md, memory.md, decisions.md, status.md, active-sessions.md).
+
+  **Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` green, 1 pre-existing warning (`DebugHud.cpp:600` LOCL line, не моя правка). `ctest` 6/6 (1.45 s) — `ProjectVTests`, `ProjectVAssetTests`, `ProjectVMeshBakerTests`, `ProjectVDracoTests`, `ProjectVFrustumCullingTests`, `ProjectVBoxUvFixtureTests`. `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` (`VoxelLab` reference shot) с `PROJECTV_ENABLE_VALIDATION=OFF` (Linux preset = ON, layers package not installed, smoke script defaults to OFF): 6/6 captures под `build/linux-clang-debug/lookdev-captures/20260612-1.2-1.3-smoke-v2/`. Sidecar:
+  - `taa_camera_cut_count=0` (static camera, no cuts) ✓
+  - `taa_camera_cut_max_delta=0.000000` ✓
+  - `taa_cas_sharpness_max=0.500000` (default) ✓
+  - `taa_history_valid=1`, `taa_blend=0.10`, `taa_neighbourhood_radius=1` (carry-over из 1.4)
+  - `taa_jitter_x=0.125`, `taa_jitter_y=0.278` (Halton 8-tap)
+
+  **Visual verify (FINAL view):** VoxelLab рендерится чисто, FPS 93.2, glass/fluid sphere + opaque anchor + checker floor, **no ringing / haloing** от CAS step, **no ghosting** от camera-cut detector (count=0 на static camera).
+
+  **Asset-pipeline parallel (now closed):** `session-2026-06-12-model-m5_1b-depth-bias` (см. ниже) aborted, их `ModelPass.cpp` depth bias reverted к pre-M5.1b state, их doc-правки (включая `agent/memory.md §10.17` для M5.1b) тоже откачены. Моя `agent/memory.md §10.17` теперь TAA-контент, не конфликтует. `VulkanBootstrap.cpp` (redundant `#include "volk.h"`, no-op от asset-pipeline VMA fix detour), `.gitignore` (operator), `pyproject.toml` + `uv.lock` (untracked, operator) — все **не мои**, не трогать.
+
+  **History invalidation triggers (теперь 8, per `decisions.md` §18 + §19):**
+  1. Swapchain resize (`VulkanSwapchain.cpp::CreateOrRecreateSwapchain`).
+  2. World reload через `FinalizeActiveVoxelWorldReload` (`main.cpp`).
+  3. `T` toggle (TAA on↔off).
+  4. `taaJitterScale` change (live `;`/`'`).
+  5. `taaBlend` change (live `-`/`=`).
+  6. `taaNeighbourhoodRadius` change (live `,` cycle).
+  7. `.` history-invalidate single press.
+  8. **`taaCameraCutDelta > 0.10` (1.2, this session).**
+
+#### Handoff для следующей сессии (2026-06-12 onward)
+
+**Recent uncommitted changes (this session, ~13 files):**
+- `src/core/Types.hpp`, `src/app/FramePreparation.cpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, `src/render/vulkan/VulkanSwapchain.cpp`, `src/render/Renderer.cpp`, `src/shaders/taa_resolve.frag` — 1.2 + 1.3 work
+- `TODO.md`, `agent/memory.md`, `agent/decisions.md`, `agent/status.md`, `agent/active-sessions.md` — doc sync
+
+**Other-agent uncommitted (NOT mine, do not touch):** `VulkanBootstrap.cpp` (no-op volk.h redundant include, asset-pipeline leftover), `.gitignore` (operator), `pyproject.toml` + `uv.lock` (untracked, operator). **M5.1b depth bias откачен**, `ModelPass.cpp` чистый.
+
+**Commit plan (pending operator decision, 2+1 commits):**
+- **A — 1.2 fix:** `fix(taa): camera-cut detection (Chebyshev threshold) + first-frame guard` — 6 files
+- **B — 1.3 feat:** `feat(taa): inline AMD CAS post-TAA sharpen, sharpenAmount = (1-blend)*max` — 4 files
+- **C — doc sync:** `docs(agent): sync 1.2 + 1.3 closures + add §10.17/§19/§10` — 5 files
+
+**Backup:** None saved to `/tmp/` this session (clean working tree, per-file diffs readable through `git diff`). If operator wants atomic-patch backup, run `git diff > /tmp/taa_1.2_1.3_<ts>.patch` before any destructive git action.
+
+**Tuning ladder hotkeys (master HEAD):**
+- `;` jitter scale dec, `'` jitter scale inc (multiplier on Halton, [0,2] step 0.25)
+- `-` blend dec, `=` blend inc (history weight, [0,1] step 0.05)
+- `,` neighbourhood radius cycle (1/3/5/7 — 3×3/7×7/11×11/15×15)
+- `.` history invalidate (single press)
+- `T` toggle TAA on/off (pre-existing)
+- **NEW (this session):** `taaCameraCutCount` + `taaCameraCutMaxDelta` exposed в `TAACUT %u CLR %.2f` HUD line + sidecar; `taaCasSharpnessMax` exposed в TAA `CAS %.2f` token + sidecar (no live hotkey yet, future live-tuning keys candidate)
+
+**Working rules to inherit (см. `agent/memory.md` §10.17):**
+- **First-frame / post-recreate baseline guard.** Any new frame-to-frame state that's initialised to a sentinel (zero, NaN, identity matrix) and compared against the next-frame value needs a companion "initialised" bool, **not** a `frameCounter > N` heuristic. Reset the flag in every code path that resets the underlying state.
+- **Linear-light CAS, not sRGB.** AMD's reference CAS operates in display-referred (sRGB-encoded) space because it's typically composed after a separate post-process stack. Our CAS runs on linear data, so the high-pass kernel and the `[min, max]` range must be in linear light too.
+- **Push constant byte layout invariance.** `ResolvePushConstants` gained 2 new float fields but the total size stayed 144 B. The `static_assert` block at the struct definition is the source of truth for layout; updating it in lockstep with the shader's GLSL declaration is mandatory.
+- `volk.h` MUST come before any VMA-touching header in shared files. If new VMA-related types are added to `core/Types.hpp`, the `volk.h` include position is preserved at top.
+- Asset-pipeline sibling target dependency propagation: when asset-pipeline adds a header-only dep (e.g., glm) that's transitively pulled in by `core/Types.hpp`, all sibling targets that include Types.hpp must also link that dep. `ProjectVTests` was the canary.
+- Shader compile artifact `*.spv` is NOT auto-copied to `bin/` if `ProjectV` ELF is up-to-date. After shader edits: `cp build/.../src/<name>.spv build/.../bin/<name>.spv` (or `cmake --build` with a forced ProjectV relink).
+- `legacy/docs/libraries/` is a dump of reference material, NOT source of truth per `AGENTS.md` §4. Vulkan reference is in `docs/VulkanSDK-Linux-Docs-1.4.350.1/`.
+
+**Test count baseline:** `ctest` 6/6 (~1.45 s wall clock, `ProjectVTests` 1.4 s + 5 fast suites). Это baseline, не должно падать.
+
+**Build preset:** `linux-clang-debug` (native clang 22 + lld 22 + libstdc++ 16). Не трогать `windows-clang-debug` (operator's primary dev tree).
+
+### session-2026-06-12-model-m5_1b-depth-bias
+
+- **id:** `2026-06-12T13:00Z-model-m5_1b-depth-bias`
+- **started-at:** 2026-06-12T13:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** M5.1b (asset-pipeline handoff) — model-vs-voxel tight-contact z-fighting fix via **negative** `depthBiasConstantFactor` / `depthBiasSlopeFactor` в `src/asset/ModelPass.cpp`. Build green, ctest 6/6. Visual verify остаётся за оператором (binary у него).
+- **files-touched-intent:** `src/asset/ModelPass.cpp` (rasterizer.depthBiasEnable VK_TRUE, -1.25f / -1.75f), `agent/memory.md` (§10.17), `agent/decisions.md` (§15 depth bias sign), `agent/active-sessions.md` (this entry + close stale asset-pipeline), `agent/status.md` (snapshot), `TODO.md` (close M5.1b entry). **Не трогаю:** `VulkanBootstrap.cpp` redundant `volk.h` include (asset-pipeline leftover, no-op, "NOT mine" per TAA-agent's handoff at `7e7547c`); `.gitignore` operator entries; `pyproject.toml` / `uv.lock` untracked.
+- **status:** aborted
+- **closed-at:** 2026-06-12T14:30:00Z
+- **commit-hash:** uncommitted (reverted before commit)
+- **notes:** **Aborted by operator feedback.** Operator сообщил, что M5.1b (z-fight depth bias) решал не ту проблему: модель не «мерцала», а пряталась под полом (asset-pipeline сессия заспавнила её на `y=0`, она окклюдится полом VoxelLab; оператор увидел её только сломав пол). Также оператор подтвердил, что с включённым TAA модель всё равно не видна — это отдельная проблема, не связанная с depth bias. **Что сделано:** отрицательный depth bias в `ModelPass.cpp` (1 файл, ~30 строк) **откачен обратно к `depthBiasEnable = VK_FALSE`** — опасная правка на неверной посылке. Все doc-правки тоже откачены (`agent/memory.md` §10.17 удалён, `agent/decisions.md` §15 sub-bullet о depth bias sign удалён, `agent/status.md` §10 snapshot удалён, `TODO.md` "Closed (Model-pipeline follow-ups)" entry удалён, header date возвращён к `1.4 + 5.1 closed`). **Что сохранено:** `asset-pipeline` запись в этом файле осталась обновлена `open→closed` (это была stale правка, корректная сама по себе — close-out commit `b152b70` существует). **Working tree сейчас:** `src/asset/ModelPass.cpp` reverted к pre-M5.1b state; docs reverted; 3 не-моих файла остались как были (`.gitignore` operator's, `VulkanBootstrap.cpp` redundant `volk.h` от asset-pipeline VMA fix detour, `pyproject.toml` + `uv.lock` untracked). **Следующий шаг:** разобраться с реальной проблемой — модель не видна с TAA on. Это **TAA-scope**, и нужен re-look на M5.2 fix в `8635ddf` (YCoCg color-distance rejection) — почему не сработал. Также нужно понять правильный default spawn position (Y=0 vs Y=1, в VoxelLab пол на Y=0, модель должна быть над полом).
+
 ### session-2026-06-11-taa-tooling-1.4-5.1-6.x
 
 - **id:** `2026-06-11T20:55Z-taa-tooling-1.4-5.1-6.x`
@@ -168,7 +254,9 @@ Append-only ledger активных и недавно завершённых AI-
 - **branch:** master
 - **scope:** M0–M5: импорт полигональных моделей через `fastgltf` + `draco` + `meshoptimizer`. M0 = CMake wiring + smoke build. M1 = sync `AssetLoader` (`.glb` → `fastgltf::Asset`) + `AssetRegistry` + env-var manifest `PROJECTV_MODELS=path.glb@x,y,z;...`. M2 = `MeshBaker` + `MeshGpuResources` (interleaved vertex, meshopt vcache+vfetch, VMA upload). M3 = draco path (`KHR_draco_mesh_compression`). M4 = model graphics pass + `model.vert/frag` + shared GLSL helper для `SceneLightingBuffer` (Q6=U3=b) + `MeshComponent`/`ModelTransformComponent` ECS + Jolt static AABB body. M5 = multi-instance + frustum cull.
 - **files-touched-intent:** `CMakeLists.txt`, `src/CMakeLists.txt`, `src/asset/AssetLoader.{hpp,cpp}` (M1+), `src/asset/MeshBaker.{hpp,cpp}` (M2+), `src/asset/MeshGpuResources.{hpp,cpp}` (M2+), `src/asset/DracoMeshDecoder.{hpp,cpp}` (M3+), `src/asset/ModelPass.{hpp,cpp}` (M4+), `src/asset/ModelComponent.hpp` (M4+), `src/asset/AssetRegistry.{hpp,cpp}` (M1+), `src/asset/AssetStub.cpp` (M0), `src/render/Renderer.cpp` (M4 — `RecordModelCommands` between opaque and transparent), `src/render/SceneResources.cpp` (M4 — `ModelRenderState` slot), `src/core/Types.hpp` (M4 — `ModelRenderState` field), `src/app/FramePreparation.cpp` (M4+ — build model draw list), `src/ecs/EcsWorld.cpp` (M4+ — register components), `src/app/AppUpdate.cpp` (M1+ — manifest load), `src/shaders/model.vert`, `src/shaders/model.frag`, `src/shaders/lighting.glsl` (M4 — shared GGX helper + `SceneLightingBuffer` GLSL declaration, U3=b), `tests/AssetLoaderTests.cpp` (M1+), `tests/fixtures/box.glb` (M1). **Не трогаю:** `src/render/vulkan/VulkanBootstrap.cpp`, `src/render/vulkan/VulkanGraphicsPipeline.cpp`, `src/render/vulkan/TaaResolvePipeline.cpp`, `src/render/Taa.*`, `src/render/TaaRenderTargets.cpp` (TAA-сессия scope, см. ниже).
-- **status:** open (M5/M5.1/M5.2 deferred; M6 prep landing as the final commit batch from this session — per operator 2026-06-12)
+- **status:** closed
+- **closed-at:** 2026-06-12T13:00:00Z
+- **commit-hash:** `b152b70` — `docs(agent): close out asset-pipeline session with M5/M5.1/M5.2 status`
 - **notes:** Решения зафиксированы в диалоге `2026-06-11`: Q1=2, Q2=1 (→ план 3), Q3=1 (→ план 3), Q4=2, Q5=2 (receive-only, выровнено с RTX-будущим), Q6=1 (universal PBR SSBO, GGX reuse), Q7=1 (без save), Q8=2 (можно трогать `SceneLightingBuffer`), U1=c, U2=c, U3=b, U4=b. **Прогресс:** M0 = `1c72a4b` — closed. M1 = `8b112e7` — closed. M2 = `cccdbc1` — closed. M3 = `24ccb08` — closed. M4 = `c4382ea` — closed. **M5** = frustum cull — code complete, build green, ctest 5/5 + new `ProjectVFrustumCullingTests` 5/5. Operator confirmed model visible at `box.glb@0,0,0` etc. с `box_uv.glb` checker-pattern. **DEFERRED (M5 follow-up, TAA-scope):** M5.1 (model-vs-voxel Z-fighting depth bias) — **reverted** in this session: positive `depthBiasConstantFactor` / `depthBiasSlopeFactor` in Vulkan **pushes model fragments away from camera**, so voxel pass (no bias) wins every shared Z-test, and in TAA-on mode the model's `outSceneColor` is overwritten by the voxel pass. Reverted to `depthBiasEnable = VK_FALSE`. Tight-contact z-fighting is now a known issue, deferred to the shadow-pass-styled bias follow-up. M5.2 (TAA-on shader contract: model writes linear, resolve applies tonemap+grading) — `model.frag` `TAA_ENABLED` path now writes linear exposed color (matches `voxel.frag:958-964`); **but** TAA resolve's 3x3 YCoCg neighborhood clamp (`taa_resolve.frag:170-190`) **collapses the model color toward the surrounding voxel range** when the model pixel is surrounded by voxel pixels, so the model becomes a faint grey blob. The fix needs **color-distance rejection** in `taa_resolve.frag` (bias blend toward 0 when `|current − history| > threshold`). `taa_resolve.frag` is **TAA-agent's working tree** (parallel session, AGENTS.md §7.2.6 scope discipline says don't touch), so this fix is **deferred to the TAA-agent's tempo** or to the next dedicated TAA-scope session. **M6 prep** = UV-projected box fixture + shader UV path + generator fixes (header byte order, Khronos winding copy) + regression test (`ProjectVBoxUvFixtureTests`). All complete, build green, ctest 6/6. **Scope discipline:** throughout 2026-06-12 session TAA-agent offline, его ~17 dirty файлов нетронуты (`AppUpdate.cpp`, `InputActions.cpp`, `DebugHud.cpp`, `ProfilingGpu.hpp`, `SceneResources.cpp`, `ScreenshotCapture.cpp`, `VulkanBootstrap.cpp`, `taa_resolve.frag`, `voxel.frag`, `VoxelMaterials.hpp`, `agent/decisions.md`, `agent/memory.md`, `agent/status.md`, `TODO.md`, `.gitignore`). Касался только моих M5/M5.1/M5.2/M6-scope: `SceneResources.hpp` (M5), `FramePreparation.{hpp,cpp}` (M5), `Renderer.cpp` (M5), `core/Types.hpp` (M5), `ModelPass.cpp` (M5.1 reverted), `model.frag` (M5.2 + M6 UV), `tests/FrustumCullingTests.cpp` (M5, new), `tests/BoxUvFixtureTests.cpp` (M6, new), `tests/CMakeLists.txt` (M5 + M6 new test exes), `GenerateBoxUvFixture.cpp` (M6, new), `box_uv.glb` (M6, force-added), `agent/active-sessions.md`. **MVP-отступления** (всё ещё deferred): Jolt AABB body (Q4=2, follow-up ~30 мин), `MeshComponent`/`ModelTransformComponent` в flecs ECS (per-instance пока в `RenderState`), полный `SceneLightingBuffer` extract из 5 шейдеров (U3=b частично: math вынесен, struct declaration per-shader), M5.1 (Z-fight bias) и M5.2 (TAA-on resolve clamp) — оба **deferred** (см. выше).
 
 #### Handoff для следующей сессии (2026-06-12 onward)

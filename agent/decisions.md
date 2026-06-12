@@ -2,7 +2,7 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-04-24`
+Дата обновления: `2026-06-12` (+§19 TAA camera-cut + CAS contract)
 
 ---
 
@@ -457,3 +457,84 @@ Update `2026-04-22`:
 - Neighbourhood radius как 1/3/5/7 (не 1/2/3/4) потому что radius symmetric about center pixel: `[-r, +r]` итого `2r+1` taps. 1 = 3×3 (original), 3 = 7×7, etc. Shader на GLSL не умеет dynamic loop bounds; snap к odd values держит shader simple.
 
 Cross-refs: `agent/memory.md` §10.12–§10.16 (full timeline). TODO §5 Блок 1 (1.1, 1.4 closed; 1.2, 1.3, 1.5, 1.6, 1.7, 1.8 in progress / R&D).
+
+## 19. TAA camera-cut + CAS contract (`2026-06-12`)
+
+Решение:
+
+- **Camera-cut detection** (1.2). Chebyshev (L-infinity, max-abs over
+  16 floats) distance между `taaPrevViewProjectionMatrix` (frame N-1)
+  и `frame->graphicsPushConstants.viewProjection` (frame N) проверяется
+  в `FramePreparation::BuildFrameData` после `AdvanceTaaPixelJitter` и
+  **до** `taaPrevViewProjectionMatrix` stash. Если delta > `0.10f` (10%
+  per-element), то `taaHistoryValid = false` + `taaCameraCutCount++`.
+  - 7-й history-invalidation trigger (поверх swapchain resize / world
+    reload / Taa toggle / jitter scale / blend / neighbourhood radius /
+    `.` invalidate). Per-frame `taaCameraCutMaxDelta` accumulating worst
+    case since startup.
+  - **First-frame guard через `taaPrevViewProjectionMatrixInitialized`
+    bool, не `taaFrameCounter > N` heuristic.** `taaPrevViewProjectionMatrix`
+    zero-initialised, naive detector регистрирует `maxDelta ≈ |viewProj|max`
+    на frame 0 / post-swapchain-recreate. Companion bool ставится на
+    first stash, ресетится в `VulkanSwapchain.cpp::CreateOrRecreateSwapchain`
+    рядом с `taaPrevViewProjectionMatrix = {}`. Frame-counter heuristic
+    сломался бы, если counter reset'ится по другой причине (separate concern).
+- **Inline CAS post-TAA** (1.3). AMD FidelityFX CAS (Bartłomiej Wronski,
+  GPUOpen 2020) integrated в `taa_resolve.frag` single-pass. High-pass
+  `center - 4-corner-avg`, weight `clamp(highPass / (max - min), 0, 1)`,
+  output `clamp(color + highPass * (sharpenAmount * weight), min, max)`.
+  - **No extra texture lookups.** Existing `2r+1 × 2r+1` neighbourhood
+    loop в `GetSceneColorRange` extended: `rgbMin` / `rgbMax` (5-tap
+    cross+center), `rgbCornerSum` (4-tap corners). Bandwidth-negligible.
+  - **`sharpenAmount = max(0, (1.0 - taaBlend) * taaCasSharpnessMax)`**
+    derived in-shader. High blend (stable) -> less sharpening, low
+    blend (noisy) -> more. TAA-off falls through with `taaBlend = 0`,
+    `sharpenAmount = taaCasSharpnessMax` (ceiling alone).
+  - **Linear-light pre-tonemap.** CAS reads pre-tonemap scene, applying
+    sRGB-space high-pass даёт wrong gamma curve и ломает "clamp to
+    local range" overshoot guard. TAA-resolve sequence теперь:
+    `clampedCurrent / clampedHistory` -> `linearOut` -> `*= exposure`
+    -> **`ApplyCasLinear(linearOut, rgbMin, rgbMax, rgbCornerSum, sharpenAmount)`**
+    -> `ApplyTaaToneMap` -> `ApplyTaaColorGrading` -> `outColor`.
+  - **Push constant byte layout unchanged.** `ResolvePushConstants`
+    заменил `vec2 reservedPadding` (8 B) на `float taaBlend; float
+    taaCasSharpnessMax;` (8 B). Total 144 B preserved. `static_assert`
+    в `core/Types.hpp:212-218` обновлён: `offsetof(..., taaBlend) ==
+    136`, `...taaCasSharpnessMax == 140`. GLSL `pushConstants` block
+    в `taa_resolve.frag` mirror-обновлён.
+- **Default `taaCasSharpnessMax = 0.5f`.** При default `taaBlend = 0.10`,
+  effective sharpening = `(1 - 0.10) * 0.5 = 0.45`. AMD CAS reference
+  target for stable post-TAA output.
+- **`taaCasSharpnessMax = 0.0f` отключает CAS step** (`ApplyCasLinear`
+  short-circuits на `sharpenAmount <= 0.0`), не требует shader branch.
+- **Inline CAS, не отдельный pipeline.** Альтернатива — отдельный
+  `cas.frag` + 7-й graphics pipeline + descriptor set + render pass
+  slot + третий fullscreen draw per frame. Trade-off: `taa_resolve.frag`
+  теперь делает TAA + CAS, но bandwidth-neutral (existing loop) и
+  без swapchain readback (CAS читает pre-tonemap linear). Plus: не
+  трогает `VulkanGraphicsPipeline.cpp` (shared с asset-pipeline M4).
+
+Почему:
+
+- Camera-cut detection потому что motion vectors (depth-reconstructed
+  или нет) не могут sensibly reproject history если viewpoint changed
+  beyond ~0.10 element-wise delta. Без detector: ghost trails на
+  teleport / snap rotation / preset switch. Threshold 0.10 — single
+  constant (не live hotkey) потому что operator data clean separates
+  "ordinary motion" от "intentional cut" без per-session dial.
+- Inline CAS потому что (a) reuse the 3×3/5×5/7×7 neighbourhood loop
+  (bandwidth-free), (b) linear-light contract simple (no extra
+  swapchain readback), (c) не трогает shared `VulkanGraphicsPipeline.cpp`
+  (asset-pipeline territory per AGENTS.md §7.2.6). Trade-off: один shader
+  делает две вещи, но bounded (1 shader, 1 push-constant expansion, 0
+  new pipelines).
+- Linear-light CAS (не sRGB) потому что AMD reference CAS работает в
+  display-referred space, а наш resolve pass — linear -> tonemap. Применение
+  sRGB-space high-pass на linear data даст wrong gamma curve.
+- First-frame guard через bool (не frame-counter) потому что bool — single
+  concern (init state), counter — orthogonal concern (Halton sequence).
+  Bool resets в одном месте (swapchain recreate); counter может reset'иться
+  по разным причинам (separate policy).
+
+Cross-refs: `agent/memory.md` §10.17 (full timeline), `TODO.md` Блок 1
+(1.2 + 1.3 closed in this session).
