@@ -372,3 +372,44 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 | 1.6 | VRS R&D | 4-8 ч | phase 5 (with kill switch) |
 
 **Asset-pipeline parallel:** no conflicts. M5.1b depth bias откачен per aborted session. 4 chuzhie uncommitted (`.gitignore`, `VulkanBootstrap.cpp`, `pyproject.toml`, `uv.lock`) — не мои, не трогаю.
+
+---
+
+## 12. TAA Блок 1 / 1.5 — per-layer (CTSH/AOCC/LOCL) anti-flicker — LANDED (uncommitted, this session)
+
+**Phase 2/5 of big session landed (per operator "go"). 2 commits proposed** (per `8635ddf` + `4deee52` precedent, per-task doc commit pattern):
+
+| SHA | Subject | Files |
+|---|---|---|
+| `237ab76` | `feat(taa): per-layer (CTSH/AOCC/LOCL) anti-flicker + 3rd-MRT binding fix + texel-size patch` | 17 |
+| `4d8b4c8` | `fix(taa): 1.5 layer-history Vulkan validation errors (image layouts + descriptor pool + color blend attachment count)` | 5 |
+
+**What 1.5 changes (high-level):**
+
+- New 3rd MRT attachment на voxel pass — `outLayerMask` (Location 2, R = CTSH, G = AOCC, B = LOCL, A = 1.0), формат `R8G8B8A8_UNORM`. Per-frame `vkCmdCopyImage` в `taaLayerHistoryColorTarget`. Fragment shader сэмплит `sampler2D layerHistory` (binding 6) и применяет `mix(rawCurrent, history, blend=0.4)` к AOCC + LOCL в main lighting. CTSH пишется в history, но **не blended** (deferred — cascade/contact shadow separation refactor).
+- Single source of truth: `inline constexpr VkFormat kTaaLayerHistoryColorFormat = VK_FORMAT_R8G8B8A8_UNORM` в `projectv::taa` namespace (`src/render/TaaRenderTargets.hpp`), consumed by `CreateOrRecreateTaaRenderTargets` + `pColorAttachmentFormats[2]` declaration.
+- `VoxelSceneLighting::taaLayerHistoryParams` vec4 (texelX, texelY, neighbourhoodRadius, blendFactor) packed в SSBO на offset 608, total struct 624 B. `static_assert` блок обновлён.
+- 3 pre-existing bug fixes included: 3rd-MRT binding fix (`colorAttachmentCount=2→3` в `vkCmdBeginRendering`), TAA reprojection texel-size patch (`BuildTaaHistoryParams` was defined but never called → `taaHistoryParams.xy=(0,0)` → TAA de facto disabled), `voxel.frag.taa_on.spv` refresh (incremental `cmake --build` doesn't copy fresh `.spv` to `bin/`).
+- 3 validation fixes (post-validation-verify): `initialLayout=UNDEFINED` per VUID-00993, `pColorBlendState->attachmentCount=3` per VUID-06055, graphics descriptor pool `COMBINED_IMAGE_SAMPLER` 2→4.
+- Layer history invalidation привязан к 6 existing TAA triggers (Taa toggle, jitter scale, blend, neighbourhood radius, `.` invalidate, Taa toggle duplicate — paired set on AppUpdate.cpp branches).
+
+**Build / test / smoke (`2026-06-12`):**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests ProjectVDracoTests ProjectVFrustumCullingTests ProjectVBoxUvFixtureTests --parallel 8` — green, 1 pre-existing warning (`DebugHud.cpp:600` LOCL `%.0f` for bool, не моя).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` — 6/6 passed (1.50 s).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `VoxelLab` ref shot (`cam -25 19 25 look 0.62 -0.48 -0.62`) с `PROJECTV_ENABLE_VALIDATION=OFF` (Linux preset = ON, layers package not installed, smoke script defaults to OFF): 6/6 captures под `build/linux-clang-debug/lookdev-captures/20260612-1.5-final/`. Sidecar: `taa_history_valid=1`, `taa_layer_history_valid=1`, `taa_layer_blend_factor=0.400000`, `taa_camera_cut_count=0`, `taa_scene_color_format=B10G11R11_UFLOAT`.
+- **Validation verify (post `4d8b4c8`):** `PROJECTV_ENABLE_VALIDATION=ON build/linux-clang-debug/bin/ProjectV` — 0 VUIDs, 0 errors, scene renders correctly.
+- Vision review of FINAL view: vibrant VoxelLab, opaque anchor, checker floor, FPS **127.3** (vs 1.7 baseline 110.6, single-run variance likely explains the difference).
+
+**Next steps (Big Session, 3 phases remaining):**
+| ID | Task | Сложность | Status |
+|---|---|---|---|
+| 1.8 | Quality tier abstraction | 4-6 ч | phase 3 (next) |
+| first-frame AA | FXAA-lite in resolve | 1-2 ч | phase 4 (optional) |
+| 1.6 | VRS R&D | 4-8 ч | phase 5 (with kill switch) |
+
+**1.5 follow-ups (deferred, in priority order):**
+- **CTSH blending** — `ComputeSunShadowSample` refactor для separation cascade shadow от contact shadow, blend только contact term (cascade меняется с viewpoint, history reprojection wrong direction).
+- **Layer history half-float format** — `R16G16B16A16_SFLOAT` для HDR contact shadows, 2× bandwidth but better dynamic range. Default = `R8G8B8A8_UNORM` пока не доказана необходимость.
+- **Mip-mapped layer history** — для cheaper bilateral filtering. Complex, defer до 1.8 quality tier (mip level становится quality parameter).
+
+**Asset-pipeline parallel coordination:** одновременно active `session-2026-06-12-model-m6-triplanar-checker` (their M6 work on `model.frag` + `agent/memory.md §10.20`) и `session-2026-06-12-taa-m5_2-threshold-bump` (their M5.2 follow-up on `taa_resolve.frag` + `ModelPass.cpp` dual-MRT). Per `AGENTS.md §7.2.6` (multi-agent concurrent work) — manual merge requires user arbitration. Per-task isolation: каждый agent работает в своём файле (model.frag vs voxel.frag vs taa_resolve.frag vs ModelPass.cpp), кроме shared-файлов (Renderer.cpp, VulkanGraphicsPipeline.cpp, core/Types.hpp). Doc sync для shared-файлов — combined commit с attribution, как в `0503d8f` для 1.7+M5.2.

@@ -914,3 +914,266 @@ Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыр
 - `kTaaSceneColorFormat` — single source of truth для TAA offscreen color format. Не хардкодить `R16G16B16A16_SFLOAT` или `B10G11R11_UFLOAT_PACK32` в pipeline declarations.
 - M5.2 threshold — lever для "маленькая surface окружённая большой different surface". Бампить по тому же принципу, если будущие materials не проходят rejection.
 
+## 10.20 Model procedural UV checker → triplanar on `inWorldPosition` (`2026-06-12`)
+
+`src/shaders/model.frag:50-90` — заменил `inUv`-based 4×4 procedural UV checker на **triplanar projection on `inWorldPosition`**, picked by dominant face normal axis. Build green, ctest 6/6, `model.frag.spv` + `model.frag.taa_on.spv` скопированы в `bin/` per §10.16.
+
+**Почему.** `box.glb` (default model-pipeline test fixture, 1664 B) **не имеет `TEXCOORD_0` accessor**. `model.frag:62` pre-fix использовал `const vec2 checkerUv = floor(inUv * 4.0);` — но `inUv` defaults to `(0, 0)` на всех face → `floor((0,0) * 4) = (0,0)` → `checkerMask = 0` всегда → один tint на весь куб → uniform beige. Symptom: "block наполовину в текстурах" — model visible (после M5.2 dual-MRT fix от TAA-agent), но procedural 4×4 UV checker pattern не виден, потому что UV stream пустой. Pre-fix код явно признавал это в comment: "If the UV stream is missing (e.g. `box.glb` has no TEXCOORD_0 accessor), the input defaults to (0, 0) and the whole box is uniform." Оператор явно попросил фикс: "Теперь чини то, что она наполовину в текстурах."
+
+**Фикс — triplanar projection:**
+```glsl
+const vec3 absNormal = abs(normal);
+vec2 checkerUv;
+if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z) {
+    // Top/bottom face: project onto XZ.
+    checkerUv = inWorldPosition.xz;
+} else if (absNormal.x >= absNormal.z) {
+    // Left/right face: project onto ZY.
+    checkerUv = inWorldPosition.zy;
+} else {
+    // Front/back face: project onto XY.
+    checkerUv = inWorldPosition.xy;
+}
+const float checkerMask = mod(checkerUv.x + checkerUv.y, 2.0);
+```
+
+**Trade-off vs per-face UVs.** Pre-fix UV-based: каждая face имеет свой 0..1 range → checker 4×4 на каждой face независимо. Post-fix triplanar: world-space coordinate shared across faces — две смежные face'ы на одной wall (например, top + front) показывают **continuation** одного pattern через edge, не два независимых checker'а. Visually slightly different, но "block has a visible checker on every face regardless of which fixture operator loads" contract выполнен.
+
+**Когда станет UV-friendly path again:** M6+ заменит triplanar на real `sampler2D baseColor` + per-face UVs (TODO §5 / handoff M6+). Тогда triplanar revertнется.
+
+**Working rules:**
+- Procedural patterns / dummy textures в shaders, которые зависят от UV, нужно либо (a) проверять на fixtures БЕЗ UV (`box.glb` default) либо (b) использовать world-space / triplanar / object-space координаты как UV-free fallback. `box.glb` test fixture — de-facto minimum-fixture для model pass; всё, что в нём не работает, сломает visual verify.
+- "Half in textures" / "uniform color" / "model looks like single tint" на тестовом fixture → почти всегда UV-less mesh, не shader bug. Triplanar / object-space projection — robust fallback.
+
+## 10.21 TAA Блок 1 / 1.5 — per-layer (CTSH/AOCC/LOCL) anti-flicker via mini-TAA history attachment (`2026-06-12`)
+
+**Per-layer temporal history: TAA color blend фиксит основное
+мерцание, но per-frame jitter в lighting (CTSH/AOCC/LOCL) всё ещё
+виден как flicker на voxel surfaces.** 1.5 вводит second temporal
+filter, заточенный на per-layer lighting values, не на scene color.
+
+**Архитектура — 3-й MRT attachment + 6-й graphics binding:**
+
+`src/shaders/voxel.frag` пишет `vec4 outLayerMask` (Location 2, R =
+sun contact shadow visibility, G = AOCC, B = local-point-light
+visibility, A = 1.0) в новый 3-й color attachment формата
+`R8G8B8A8_UNORM`. На каждом кадре `Renderer.cpp` per-frame
+`vkCmdCopyImage` копирует `taaLayerSceneColorTarget` →
+`taaLayerHistoryColorTarget` (тот же формат, `vkCmdCopyImage` spec
+§7.1.1: src и dst formats identical). Следующий кадр fragment shader
+сэмплит `sampler2D layerHistory` (binding 6, graphics descriptor
+set) и применяет `mix(rawCurrent, history, blend=0.4)` к AOCC + LOCL
+в main lighting.
+
+**CTSH пока не smoothed** в main lighting (только write to history).
+Причина: `ComputeSunShadowSample` объединяет cascade shadow и
+contact shadow в одно значение, и blend между ними даст wrong
+результат (cascade shadow — viewpoint-dependent, contact shadow —
+viewpoint-independent; mix → wrong direction). Refactor для
+separation — deferred, см. "Working rules / deferred work" ниже.
+
+**Blend-at-read, не blend-at-write** — uniform contribution per
+frame, нет exponential-decay artefacts от stale histories. Если бы
+blend был на write side (history ← mix(raw, history, blend)), то
+каждый frame exponential decay old samples (history → 0), что
+даёт wrong weighting на sustained motion. На read side (output ←
+mix(raw, history, blend)) — каждая history sample имеет weight
+`blend`, каждая raw sample имеет weight `1-blend`, geometric mean
+через N frames.
+
+**Component budget на RTX 3060** = 8 vec4 outputs per fragment
+(`maxFragmentOutputComponents`). TAA-off path: `outColor (4) +
+outLayerMask (4) = 8`. TAA-on path: `outSceneColor (4) + outLayerMask
+(4) = 8`. Packing всех 3 layer values (CTSH, AOCC, LOCL) в один
+`vec4` — единственный способ уложиться в budget. 3-й attachment
+slot в pipeline declaration bound в обоих path'ах, но per-frame
+`VkRenderingAttachmentInfo::imageView` = `VK_NULL_HANDLE` на unused
+slot — `dynamicRenderingUnusedAttachments` allows.
+
+**`VoxelSceneLighting::taaLayerHistoryParams` vec4** (texelX,
+texelY, neighbourhoodRadius, blendFactor) — packed в существующий
+SSBO на offset 608 (после `taaHistoryParams` 16 B + 16 B padding),
+total struct 624 B (rounded up from 616 → multiple of 16 B per
+std430 layout rules). `static_assert(sizeof(VoxelSceneLighting) ==
+624)` + `static_assert(offsetof(VoxelSceneLighting, taaLayerHistory
+Params) == 608)` enforces byte layout invariance — same pattern что
+1.2 (`taaPrevViewProjectionMatrix` в push-constants) и 1.4
+(`taaNeighbourhoodRadius` в `taaHistoryParams.w`).
+
+**Centralized format constant** (та же pattern что 1.7):
+`inline constexpr VkFormat kTaaLayerHistoryColorFormat =
+VK_FORMAT_R8G8B8A8_UNORM` в `projectv::taa` namespace
+(`src/render/TaaRenderTargets.hpp`). Consumed by:
+- `CreateOrRecreateTaaRenderTargets` (image allocation для обоих
+  layer scene color и layer history)
+- `VulkanGraphicsPipeline.cpp` (`pColorAttachmentFormats[2]`
+  declaration)
+
+**3 pre-existing bug fixes включены в feat commit `237ab76`:**
+
+1. **3rd-MRT binding fix** (`Renderer.cpp:735` pre-fix имел
+   `colorAttachmentCount = 2` в `vkCmdBeginRendering` пока pipeline
+   объявлял 3 attachments). Driver silently дропал write в
+   `outLayerMask` (VUID-VkGraphicsPipelineCreateInfo-renderPass-06055
+   не fired'ил без validation layers, но rendering > pipeline strict
+   violation — write в undeclared attachment = undefined behavior).
+   Symptom: layer mask всегда чёрный → blend с history → вся сцена
+   под-flicker'ит. Fix: `colorAttachmentCount = 3`.
+
+2. **TAA reprojection texel-size patch** (`SceneResources.cpp::
+   RefreshSceneLightingBuffer` pre-fix не вызывал
+   `BuildTaaHistoryParams`, хотя функция была defined). `taaHistory
+   Params.xy` оставались `(0, 0)`, `taa_resolve.frag` reprojection
+   branch тихо фолбэчился к current-pixel-only — **TAA was de facto
+   disabled**, и весь предыдущий "TAA" perf benefit был бы
+   мнимым. 1.5 patch'ил это как pre-existing bug, потому что
+   layer history texel size populate использует ту же логику и
+   должен быть consistent.
+
+3. **`voxel.frag.taa_on.spv` refresh.** Incremental `cmake
+   --build` не копирует свежие `.spv` в `bin/` (working rule из
+   §10.16). 1.5 добавил 1.5-specific шейдер code, и без
+   `voxel.frag.taa_on.spv` refresh в `bin/` runtime упал бы на
+   resolve pass.
+
+**3 validation fixes в `4d8b4c8`** (caught by
+`PROJECTV_ENABLE_VALIDATION=ON`):
+
+1. **VUID-VkImageCreateInfo-initialLayout-00993:** `initialLayout`
+   для layer scene color + history = `UNDEFINED`, не
+   `SHADER_READ_ONLY`. Pre-fix имел `SHADER_READ_ONLY_OPTIMAL` —
+   forbidden. The first-frame per-frame transition в `Renderer.cpp`
+   is the only way to get image into read layout.
+
+2. **VUID-VkGraphicsPipelineCreateInfo-renderPass-06055:**
+   `pColorBlendState->attachmentCount` = 3, не 2. Pre-fix имел 2
+   (counting only `outColor`/`outSceneColor` и ignored the new
+   `outLayerMask` attachment).
+
+3. **VUID-VkDescriptorPool-size-...:** Graphics descriptor pool
+   combined samplers grew `2u → 4u` (1.5 added binding 6 layer
+   history, plus existing binding 5 shadow sampler, `MAX_FRAMES_IN_
+   FLIGHT = 2` → 2 × 2 = 4). Pre-fix имел `2u`, новый binding не
+   помещался.
+
+Plus layer history transitions используют layout trackers
+(`taaLayerHistoryColorCurrentLayout`) как `oldLayout` вместо
+hardcoded `SHADER_READ_ONLY` (VUID-VkImageMemoryBarrier2-oldLayout-
+01197, актуально на subsequent frames где actual layout уже
+`SHADER_READ_ONLY`).
+
+**Build / test / smoke (`2026-06-12`):**
+
+- `cmake --build build/linux-clang-debug --target ProjectV
+  ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests
+  ProjectVDracoTests ProjectVFrustumCullingTests
+  ProjectVBoxUvFixtureTests --parallel 8` — green, 1 pre-existing
+  warning (`DebugHud.cpp:600` LOCL `%.0f` for bool, не моя).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` —
+  6/6 passed (1.50 s).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `VoxelLab` ref
+  shot с `PROJECTV_ENABLE_VALIDATION=OFF` (Linux preset = ON, layers
+  package not installed, smoke script defaults to OFF): 6/6 captures
+  под `build/linux-clang-debug/lookdev-captures/20260612-1.5-final/`.
+  Sidecar: `taa_history_valid=1`, `taa_layer_history_valid=1`,
+  `taa_layer_blend_factor=0.400000`, `taa_camera_cut_count=0`,
+  `taa_scene_color_format=B10G11R11_UFLOAT`.
+- **Validation verify (post `4d8b4c8`):** `PROJECTV_ENABLE_VALIDATION
+  =ON build/linux-clang-debug/bin/ProjectV` — 0 VUIDs, 0 errors,
+  scene renders correctly.
+- Vision review of FINAL view: vibrant VoxelLab, opaque anchor,
+  checker floor, FPS **127.3** (vs 1.7 baseline 110.6, single-run
+  variance likely explains the difference).
+
+**Working rules to inherit:**
+
+- **3rd-MRT binding = `colorAttachmentCount` в `vkCmdBeginRendering`
+  matches `pColorAttachmentFormats[2]` + `pColorBlendState->
+  attachmentCount` + `pColorAttachmentCount` declaration in
+  pipeline.** Any mismatch = silent write drop on driver side или
+  validation error. `VUID-VkGraphicsPipelineCreateInfo-renderPass-
+  06055` — even with validation layers on, easy to miss in a
+  refactor that adds a 3rd attachment. **Pre-existing bug fix
+  важнее** чем кажется: 1.5 commit добавил 3rd attachment в
+  pipeline, но оригинальный commit не обновил
+  `vkCmdBeginRendering` — driver silently dropped writes. This is
+  the kind of "3 steps to add an MRT" checklist that needs to
+  stay synchronized.
+
+- **Layer history texel size populate matches scene color texel size
+  populate.** Both derive from `renderExtent`, both go through
+  `BuildTaaHistoryParams` / `BuildTaaLayerHistoryParams`. If one is
+  populated and the other not, the two TAA filters work at
+  different "pixel densities" — visible as scaling artefact at
+  boundaries.
+
+- **Centralized format constants** (`kTaaLayerHistoryColorFormat`,
+  `kTaaSceneColorFormat`) — same pattern что 1.7. Inline constexpr
+  в header, 2 consumers, compiler-enforced consistency.
+
+- **Blend-at-read, not blend-at-write** for temporal filters
+  applied to GPU-computed values (lighting, AO, etc.). Avoids
+  exponential decay artefacts на stale histories. Geometric mean
+  weighting.
+
+- **Descriptor pool sizes must grow with each new combined image
+  sampler.** `MAX_FRAMES_IN_FLIGHT × combined_samplers_per_frame`.
+  1.5 added binding 6 → pool grew from 2 → 4. Future binding
+  additions (7, 8, ...) need proportional pool growth.
+
+- **`initialLayout` must be `UNDEFINED` / `PREINITIALIZED` /
+  `ZERO_INITIALIZED`** per VUID-VkImageCreateInfo-initialLayout-
+  00993. Can't use `SHADER_READ_ONLY_OPTIMAL` directly. First-frame
+  per-frame transition in `Renderer.cpp` is the only way to get
+  image into read layout.
+
+- **Per-frame transitions use layout tracker as `oldLayout`, not
+  hardcoded.** Actual GPU state may be `COLOR_ATTACHMENT_OPTIMAL`
+  (after rendering pass) или `SHADER_READ_ONLY_OPTIMAL` (after
+  copy block). Hardcoding wrong `oldLayout` triggers
+  VUID-VkImageMemoryBarrier2-oldLayout-01197.
+
+- **Voxel pass writes to layer scene color в обоих TAA-on и TAA-off
+  paths.** Transition (UNDEFINED → COLOR_ATTACHMENT) runs
+  unconditionally, не inside `if (taaOn)`. Otherwise the per-frame
+  `vkCmdCopyImage` would dangle на target в non-read layout when
+  TAA-off (но `taaLayerHistoryValid=false` предотвращает actual
+  issue, layer history still invalid).
+
+- **Incremental `cmake --build` не копирует свежие `.spv` в `bin/`.**
+  After shader edits: `cp build/.../src/voxel.frag.taa_on.spv
+  build/.../bin/voxel.frag.taa_on.spv` (или force relink of
+  `ProjectV` target). Working rule из §10.16.
+
+**Deferred work (1.5 follow-ups):**
+
+- **CTSH blending.** Нужен refactor `ComputeSunShadowSample` —
+  separate cascade shadow term от contact shadow term, blend
+  contact term с history, **не** blend cascade term (cascade
+  меняется с viewpoint, history reprojection будет wrong). В
+  cascade transition зонах contact blend даст wrong
+  "ghost contact shadow" — visual artefact, лучше skip blending
+  чем blend wrongly.
+
+- **Layer history формат на half-float для большего dynamic range.**
+  `R8G8B8A8_UNORM` — 8 bits per channel, signed-quantity trouble на
+  high-contrast areas. `R16G16B16A16_SFLOAT` — 2x bandwidth, но
+  бесценно для HDR contact shadows. Дефолт — `R8G8B8A8_UNORM`
+  пока не доказана необходимость.
+
+- **Mip-mapped layer history** для cheaper bilateral filtering
+  (avoid neighborhood sampling bandwidth). Complex, defer до 1.8
+  quality tier (where mip level становится part of quality
+  parameter).
+
+**Cross-refs:** `TODO.md` Блок 1 (1.5 closed, this commit),
+`agent/decisions.md` §21 (TAA per-layer history contract, this
+session), `agent/status.md` §12 (in-progress session snapshot,
+this commit), `agent/active-sessions.md` session-2026-06-12-taa-
+quality-1.5 (closed), `agent/memory.md` §10.17 (1.2+1.3 — pre-
+existing `taaHistoryParams` patch was originally 1.5 work;
+relocated to 1.5 commit because of texel-size invariants),
+§10.18 (1.7 — same constant centralization pattern,
+`kTaaSceneColorFormat`).
+
+
