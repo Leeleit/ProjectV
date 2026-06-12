@@ -637,13 +637,25 @@ struct RenderState {
 	// it without an extra barrier.
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	// Vulkan spec VUID-VkImageCreateInfo-initialLayout-00993
+	// requires `initialLayout` to be `UNDEFINED` /
+	// `PREINITIALIZED` / `ZERO_INITIALIZED`, so both the
+	// colour and layer history images are created with
+	// `initialLayout = UNDEFINED` and the first-frame
+	// per-frame transition in `Renderer.cpp` moves them to
+	// `SHADER_READ_ONLY_OPTIMAL` for the resolve pass / the
+	// voxel pass's binding-6 sample. The trackers here mirror
+	// that initial state.
 	VkImageLayout taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	// 1.5 anti-flicker: per-layer (CTSH/AOCC/LOCL) image
 	// layout trackers. Same shape and lifecycle as the colour
 	// history layout trackers above — both go through the
 	// per-frame transition + copy block in `Renderer.cpp` and
-	// are reset to `UNDEFINED` by `VulkanSwapchain.cpp` on
-	// swapchain recreate.
+	// are reset on swapchain recreate. The scene target is
+	// born in `UNDEFINED` (the voxel pass writes to it via
+	// `vkCmdBeginRendering`'s `imageLayout`); the history
+	// target is also born in `UNDEFINED` for the same
+	// Vulkan-spec reason as the colour history.
 	VkImageLayout taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;

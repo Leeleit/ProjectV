@@ -130,13 +130,36 @@ bool CreateOrRecreateTaaRenderTargets(
 	auto allocateTarget = [&](
 		OffscreenColorTarget &target,
 		VkFormat format,
-		const char *name) -> bool {
+		const char *name,
+		VkImageLayout initialLayout) -> bool {
 		// Cast the `void*` handle back to its real VMA type for the
 		// call. The `void*` representation in the public header is
 		// just there to avoid leaking `vk_mem_alloc.h` into every
 		// translation unit that needs the offscreen-target struct.
 		VkImageCreateInfo imageInfo = imageInfoTemplate;
 		imageInfo.format = format;
+		// The two ping-pong roles in the colour + layer history
+		// pairs want different `initialLayout` values:
+		//   - the *scene* image is written by the voxel pass
+		//     (via `vkCmdBeginRendering`'s `imageLayout`),
+		//     so its initial state of `UNDEFINED` is the right
+		//     Vulkan idiom and lets the first write transition
+		//     to `COLOR_ATTACHMENT_OPTIMAL` for free.
+		//   - the *history* image is read-only in the voxel
+		//     pass (via the `sampler2D` descriptor at binding 6
+		//     for the layer pair, binding 3 for the colour pair),
+		//     so its descriptor's `imageLayout` is
+		//     `SHADER_READ_ONLY_OPTIMAL`. To avoid the first
+		//     validation warning about "current layout is
+		//     `UNDEFINED` when the descriptor expects
+		//     `SHADER_READ_ONLY_OPTIMAL`", the history image
+		//     is created with `initialLayout = SHADER_READ_ONLY_OPTIMAL`
+		//     so the first frame's voxel pass already sees the
+		//     right layout. The voxel pass never writes to
+		//     the history, so the initial layout sticks for
+		//     the rest of the session until the swapchain
+		//     recreate resets it.
+		imageInfo.initialLayout = initialLayout;
 		VmaAllocation allocation = nullptr;
 		if (vmaCreateImage(
 				context->allocator,
@@ -172,7 +195,7 @@ bool CreateOrRecreateTaaRenderTargets(
 		return true;
 	};
 
-	if (!allocateTarget(sceneColor, sceneColorFormat, "TaaSceneColorImage")) {
+	if (!allocateTarget(sceneColor, sceneColorFormat, "TaaSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -182,7 +205,7 @@ bool CreateOrRecreateTaaRenderTargets(
 			linearSampler);
 		return false;
 	}
-	if (!allocateTarget(historyColor, sceneColorFormat, "TaaHistoryColorImage")) {
+	if (!allocateTarget(historyColor, sceneColorFormat, "TaaHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -192,7 +215,7 @@ bool CreateOrRecreateTaaRenderTargets(
 			linearSampler);
 		return false;
 	}
-	if (!allocateTarget(layerSceneColor, layerColorFormat, "TaaLayerSceneColorImage")) {
+	if (!allocateTarget(layerSceneColor, layerColorFormat, "TaaLayerSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -202,7 +225,7 @@ bool CreateOrRecreateTaaRenderTargets(
 			linearSampler);
 		return false;
 	}
-	if (!allocateTarget(layerHistoryColor, layerColorFormat, "TaaLayerHistoryColorImage")) {
+	if (!allocateTarget(layerHistoryColor, layerColorFormat, "TaaLayerHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,

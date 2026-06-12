@@ -639,6 +639,73 @@ void RecordGraphicsCommands(
 			render.taaSceneColorNeedsInit = false;
 		}
 
+		// 1.5 anti-flicker: layer scene color transition. The
+		// layer scene color is written by the voxel pass
+		// (Location 2 in `vkCmdBeginRendering`) on BOTH the
+		// TAA-on and TAA-off paths, so the transition runs
+		// unconditionally. Same `oldLayout = current tracker`
+		// pattern as the depth + TAA scene transitions above:
+		// on the first frame `oldLayout = UNDEFINED` (matches
+		// the image's `initialLayout`), on subsequent frames
+		// `oldLayout = SHADER_READ_ONLY_OPTIMAL` (matches the
+		// post-copy layout tracker). The rendering pass's
+		// `imageLayout` declaration is `COLOR_ATTACHMENT_OPTIMAL`
+		// so we transition to that here.
+		{
+			const VkImageLayout oldLayerSceneLayout = render.taaLayerSceneColorCurrentLayout;
+			const VkPipelineStageFlags2 oldLayerSceneStage =
+				oldLayerSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED
+					? VK_PIPELINE_STAGE_2_NONE
+					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+			const VkAccessFlags2 oldLayerSceneAccess =
+				oldLayerSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED
+					? 0
+					: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+			TransitionImage(
+				cmd,
+				render.taaLayerSceneColorTarget->image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				oldLayerSceneLayout,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				oldLayerSceneStage,
+				oldLayerSceneAccess,
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+			render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		}
+		// 1.5 anti-flicker: layer history transition. The
+		// layer history is read by the voxel pass (binding 6
+		// as `sampler2D layerHistory`) on BOTH paths, so the
+		// transition runs unconditionally. The descriptor's
+		// `imageLayout` is `SHADER_READ_ONLY_OPTIMAL`, so we
+		// transition to that here. On the first frame,
+		// `oldLayout = UNDEFINED` (matches the image's
+		// `initialLayout`); on subsequent frames,
+		// `oldLayout = SHADER_READ_ONLY_OPTIMAL` (matches the
+		// post-copy layout tracker).
+		{
+			const VkImageLayout oldLayerHistoryLayout = render.taaLayerHistoryColorCurrentLayout;
+			const VkPipelineStageFlags2 oldLayerHistoryStage =
+				oldLayerHistoryLayout == VK_IMAGE_LAYOUT_UNDEFINED
+					? VK_PIPELINE_STAGE_2_NONE
+					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+			const VkAccessFlags2 oldLayerHistoryAccess =
+				oldLayerHistoryLayout == VK_IMAGE_LAYOUT_UNDEFINED
+					? 0
+					: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+			TransitionImage(
+				cmd,
+				render.taaLayerHistoryColorTarget->image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				oldLayerHistoryLayout,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				oldLayerHistoryStage,
+				oldLayerHistoryAccess,
+				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		}
+
 		// === Depth image transition (shared by both paths) ===
 		// Per-frame: from `depthImageCurrentLayout` (UNDEFINED on the
 		// very first frame, `DEPTH_ATTACHMENT_OPTIMAL` after a TAA-off
@@ -910,10 +977,32 @@ void RecordGraphicsCommands(
 		// attachment.
 		if (!taaOn) {
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-			RecordDebugHudCommands(render, frameRenderData, cmd);
-		}
+		RecordDebugHudCommands(render, frameRenderData, cmd);
+	}
 
-		vkCmdEndRendering(cmd);
+	vkCmdEndRendering(cmd);
+
+	// 1.5 anti-flicker: sync the layout trackers with the actual
+	// GPU image layouts after the main pass ends. The voxel pass
+	// auto-transitioned the layer scene color target from
+	// `UNDEFINED` to `COLOR_ATTACHMENT_OPTIMAL` (via the
+	// rendering pass's `imageLayout` in `VkRenderingAttachmentInfo`),
+	// and the layer history target is still in
+	// `SHADER_READ_ONLY_OPTIMAL` (read-only during the voxel pass,
+	// no transition triggered). The copy block below uses these
+	// trackers as `oldLayout` for the `vkCmdPipelineBarrier2`
+	// calls, so they have to match the actual GPU state — without
+	// this sync, the first frame's barrier would have
+	// `oldLayout = UNDEFINED` but actual = `COLOR_ATTACHMENT_OPTIMAL`
+	// and validation would fail (VUID-VkImageMemoryBarrier2-oldLayout-01197).
+	// The voxel pass writes to the layer scene color target
+	// (Location 2) in BOTH the TAA-on and TAA-off paths, so the
+	// post-pass layout is `COLOR_ATTACHMENT_OPTIMAL` for both.
+	// The history target is read-only in both paths, so it
+	// stays in its initial `SHADER_READ_ONLY_OPTIMAL` (set by
+	// the `initialLayout` in `TaaRenderTargets.cpp` and tracked
+	// in `taaLayerHistoryColorCurrentLayout`).
+	render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		// === TAA resolve pass + history copy (TAA on only) ===
 		if (taaOn) {
@@ -1179,7 +1268,7 @@ void RecordGraphicsCommands(
 					cmd,
 					render.taaLayerSceneColorTarget->image,
 					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					render.taaLayerSceneColorCurrentLayout,
 					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
@@ -1190,7 +1279,7 @@ void RecordGraphicsCommands(
 					cmd,
 					render.taaLayerHistoryColorTarget->image,
 					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					render.taaLayerHistoryColorCurrentLayout,
 					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
@@ -1218,7 +1307,7 @@ void RecordGraphicsCommands(
 					cmd,
 					render.taaLayerSceneColorTarget->image,
 					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					render.taaLayerSceneColorCurrentLayout,
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -1229,7 +1318,7 @@ void RecordGraphicsCommands(
 					cmd,
 					render.taaLayerHistoryColorTarget->image,
 					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					render.taaLayerHistoryColorCurrentLayout,
 					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_WRITE_BIT,

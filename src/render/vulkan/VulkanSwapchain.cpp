@@ -452,14 +452,15 @@ bool RecreateSwapchain(
 	render->taaSceneColorNeedsInit = true;
 	render->taaHistoryNeedsInit = true;
 	render->taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	// 1.5 anti-flicker: same reset for the per-layer history
-	// pair. The layout trackers above stay in sync with the
-	// actual GPU image layouts and the descriptor writes in
-	// `VulkanGraphicsPipeline.cpp` use them implicitly through
-	// the bound `VK_IMAGE_LAYOUT_*` in the descriptor info,
-	// so the reset is required for the next frame to start
+	// Both history images are reset to `UNDEFINED` (matching
+	// their `initialLayout` in `TaaRenderTargets.cpp`); the
+	// first-frame per-frame transition in `Renderer.cpp` will
+	// move them to `SHADER_READ_ONLY_OPTIMAL` for the next
+	// resolve pass / the next voxel pass's binding-6 sample.
+	// The depth and the layer scene trackers also go back to
+	// `UNDEFINED` so the first frame after recreate starts
 	// from a clean state.
+	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;

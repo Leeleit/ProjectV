@@ -17,9 +17,18 @@ constexpr VkDescriptorPoolSize kGraphicsStorageDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 	.descriptorCount = kGraphicsDescriptorSetCount * 5u,
 };
+// 1.5 anti-flicker: bump the COMBINED_IMAGE_SAMPLER count from
+// 1 per frame to 2 per frame — binding 4 (sunShadowMap) and
+// binding 6 (layerHistory) both need combined image samplers
+// for the voxel pass. With `MAX_FRAMES_IN_FLIGHT = 2` the pool
+// now needs `2 * 2 = 4` descriptors. The previous
+// `descriptorCount = 1 * kGraphicsDescriptorSetCount = 2` was
+// sized for the pre-1.5 single-sampler case and triggered
+// validation `VUID-VkDescriptorPool-size-...` on the first
+// `vkAllocateDescriptorSets` after binding 6 was added.
 constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = kGraphicsDescriptorSetCount,
+	.descriptorCount = kGraphicsDescriptorSetCount * 2u,
 };
 constexpr std::array kGraphicsDescriptorPoolSizes{
 	kGraphicsStorageDescriptorPoolSize,
@@ -1680,29 +1689,36 @@ bool CreateGraphicsPipeline(
 		VK_COLOR_COMPONENT_G_BIT |
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
-	// The second slot of the dual-format pipeline is unused at the
-	// shader level (`voxel.frag` writes to `Location 0` only), but the
-	// pipeline still has to declare the slot so
-	// `dynamicRenderingUnusedAttachments` lets the per-frame
-	// `VkRenderingAttachmentInfo` use `imageView = VK_NULL_HANDLE` on it.
-	// VUID-VkPipelineColorBlendStateCreateInfo-pAttachments-00605 requires
-	// all entries to be identical when the `independentBlend` feature is
-	// not enabled, so we point both slots at the same blend state; the
-	// unused slot is effectively a no-op because the per-frame
-	// `imageView` is `VK_NULL_HANDLE` and writes are discarded.
-	VkPipelineColorBlendAttachmentState colorBlendAttachments[2] = {
+	// The third slot of the dual-format pipeline is unused at the
+	// shader level in the TAA-on variant (TAA-on writes to Location
+	// 1 only, the per-frame `VkRenderingAttachmentInfo` for slot 2
+	// can be `VK_NULL_HANDLE`), but the pipeline still has to
+	// declare all 3 slots so VUID-VkGraphicsPipelineCreateInfo-renderPass-06055
+	// (`pColorBlendState->attachmentCount == colorAttachmentCount`)
+	// is satisfied and `dynamicRenderingUnusedAttachments` lets
+	// the per-frame `imageView` go null on any unused slot.
+	// VUID-VkPipelineColorBlendStateCreateInfo-pAttachments-00605
+	// requires all entries to be identical when `independentBlend`
+	// is not enabled, so all three slots point at the same blend
+	// state. The third (1.5 layer history) slot uses a write mask
+	// of `0xF` even though the layer mask only carries meaningful
+	// data in the RGB channels; writing to alpha (the reserved 1.0
+	// channel) is a no-op since the value is constant.
+	VkPipelineColorBlendAttachmentState colorBlendAttachments[3] = {
+		colorBlendAttachment,
 		colorBlendAttachment,
 		colorBlendAttachment,
 	};
 	VkPipelineColorBlendAttachmentState transparentColorBlendAttachment = kAlphaBlendAttachmentState;
-	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[2] = {
+	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[3] = {
+		transparentColorBlendAttachment,
 		transparentColorBlendAttachment,
 		transparentColorBlendAttachment,
 	};
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.attachmentCount = 2;
+	colorBlending.attachmentCount = 3;
 	colorBlending.pAttachments = colorBlendAttachments;
 
 	VkPipelineColorBlendStateCreateInfo transparentColorBlending = colorBlending;
