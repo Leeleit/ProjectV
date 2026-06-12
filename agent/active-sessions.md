@@ -109,6 +109,37 @@ Append-only ledger активных и недавно завершённых AI-
 - **status:** open (M5/M5.1/M5.2 deferred; M6 prep landing as the final commit batch from this session — per operator 2026-06-12)
 - **notes:** Решения зафиксированы в диалоге `2026-06-11`: Q1=2, Q2=1 (→ план 3), Q3=1 (→ план 3), Q4=2, Q5=2 (receive-only, выровнено с RTX-будущим), Q6=1 (universal PBR SSBO, GGX reuse), Q7=1 (без save), Q8=2 (можно трогать `SceneLightingBuffer`), U1=c, U2=c, U3=b, U4=b. **Прогресс:** M0 = `1c72a4b` — closed. M1 = `8b112e7` — closed. M2 = `cccdbc1` — closed. M3 = `24ccb08` — closed. M4 = `c4382ea` — closed. **M5** = frustum cull — code complete, build green, ctest 5/5 + new `ProjectVFrustumCullingTests` 5/5. Operator confirmed model visible at `box.glb@0,0,0` etc. с `box_uv.glb` checker-pattern. **DEFERRED (M5 follow-up, TAA-scope):** M5.1 (model-vs-voxel Z-fighting depth bias) — **reverted** in this session: positive `depthBiasConstantFactor` / `depthBiasSlopeFactor` in Vulkan **pushes model fragments away from camera**, so voxel pass (no bias) wins every shared Z-test, and in TAA-on mode the model's `outSceneColor` is overwritten by the voxel pass. Reverted to `depthBiasEnable = VK_FALSE`. Tight-contact z-fighting is now a known issue, deferred to the shadow-pass-styled bias follow-up. M5.2 (TAA-on shader contract: model writes linear, resolve applies tonemap+grading) — `model.frag` `TAA_ENABLED` path now writes linear exposed color (matches `voxel.frag:958-964`); **but** TAA resolve's 3x3 YCoCg neighborhood clamp (`taa_resolve.frag:170-190`) **collapses the model color toward the surrounding voxel range** when the model pixel is surrounded by voxel pixels, so the model becomes a faint grey blob. The fix needs **color-distance rejection** in `taa_resolve.frag` (bias blend toward 0 when `|current − history| > threshold`). `taa_resolve.frag` is **TAA-agent's working tree** (parallel session, AGENTS.md §7.2.6 scope discipline says don't touch), so this fix is **deferred to the TAA-agent's tempo** or to the next dedicated TAA-scope session. **M6 prep** = UV-projected box fixture + shader UV path + generator fixes (header byte order, Khronos winding copy) + regression test (`ProjectVBoxUvFixtureTests`). All complete, build green, ctest 6/6. **Scope discipline:** throughout 2026-06-12 session TAA-agent offline, его ~17 dirty файлов нетронуты (`AppUpdate.cpp`, `InputActions.cpp`, `DebugHud.cpp`, `ProfilingGpu.hpp`, `SceneResources.cpp`, `ScreenshotCapture.cpp`, `VulkanBootstrap.cpp`, `taa_resolve.frag`, `voxel.frag`, `VoxelMaterials.hpp`, `agent/decisions.md`, `agent/memory.md`, `agent/status.md`, `TODO.md`, `.gitignore`). Касался только моих M5/M5.1/M5.2/M6-scope: `SceneResources.hpp` (M5), `FramePreparation.{hpp,cpp}` (M5), `Renderer.cpp` (M5), `core/Types.hpp` (M5), `ModelPass.cpp` (M5.1 reverted), `model.frag` (M5.2 + M6 UV), `tests/FrustumCullingTests.cpp` (M5, new), `tests/BoxUvFixtureTests.cpp` (M6, new), `tests/CMakeLists.txt` (M5 + M6 new test exes), `GenerateBoxUvFixture.cpp` (M6, new), `box_uv.glb` (M6, force-added), `agent/active-sessions.md`. **MVP-отступления** (всё ещё deferred): Jolt AABB body (Q4=2, follow-up ~30 мин), `MeshComponent`/`ModelTransformComponent` в flecs ECS (per-instance пока в `RenderState`), полный `SceneLightingBuffer` extract из 5 шейдеров (U3=b частично: math вынесен, struct declaration per-shader), M5.1 (Z-fight bias) и M5.2 (TAA-on resolve clamp) — оба **deferred** (см. выше).
 
+#### Handoff для следующей сессии (2026-06-12 onward)
+
+**Куда смотреть в первую очередь:**
+
+1. `git log --oneline -10` — последние коммиты: TAA-agent chain (`a2972fa`, `3c87f21`, `02c297c`, `b0fcd9b`, `b7e672f`, `9764463`, `ee82c6f`, `8412b58`, `306003e`, `98fb391`) + asset-pipeline chain (`1c72a4b`, `8b112e7`, `cccdbc1`, `24ccb08`, `c4382ea`, `ccf7400`, `dfaa037`, `b152b70`).
+2. `git status -uall` — если дерево **грязное**, **не делать** `git checkout -- .` или `git stash drop` (см. `agent/memory.md §10.11` — там потеряли P0.2 LINEAR fix). Сначала `git diff > /tmp/before_drop_<ts>.patch` и спросить оператора.
+3. **Не трогать** TAA-scope файлы пока TAA-agent не закроется (см. ниже).
+
+**TAA-agent dirty файлы (НЕ МОИ, не удалять и не модифицировать):**
+
+`TODO.md`, `agent/decisions.md`, `agent/memory.md`, `agent/status.md`, `src/app/AppUpdate.cpp`, `src/app/InputActions.cpp`, `src/debug/DebugHud.cpp`, `src/debug/ProfilingGpu.hpp`, `src/render/SceneResources.cpp`, `src/render/ScreenshotCapture.cpp`, `src/render/vulkan/VulkanBootstrap.cpp`, `src/shaders/taa_resolve.frag`, `src/shaders/voxel.frag`, `src/voxel/VoxelMaterials.hpp`, `tests/CMakeLists.txt` (там тоже есть правка), `.gitignore`. Other-agent untracked (тоже не мои): `pyproject.toml`, `uv.lock`, `minimax_proxy.py`.
+
+**Известные follow-up'ы, ждущие следующих сессий (приоритет — по решению оператора):**
+
+| ID | Описание | Сложность | Scope |
+|----|----------|-----------|-------|
+| **M5.2b** | `taa_resolve.frag` color-distance rejection: добавить `if (length(clampedCurrent - clampedHistory) > threshold) blendFactor = 0.0;` перед `mix()`. Это **вернёт** модель в TAA-on. | 10 строк | TAA-scope, нужно согласование с TAA-agent или явное разрешение оператора на merge |
+| **M5.1b** | `ModelPass.cpp` depth bias для model-vs-voxel z-fight. Правильный подход — **negative** `depthBiasConstantFactor` (тянет ближе к камере) ИЛИ `depthBiasEnable=FALSE` + `cullMode=NONE` для model pass в overlap region. Альтернатива — отдельный `modelPipelineNoDepthWrite` для overlap cases. | ~30 строк | Мой scope |
+| **M5.3** | Jolt AABB body для каждой загруженной модели (Q4=2). `PhysicsWorld::JPH::BodyInterface::CreateAndAddBody` per `LoadedAsset`, AABB из `worldAabbMin/Max` (уже считается в `ModelManifestLoader`). | ~30 строк | Мой scope, простой |
+| **M5.4** | `MeshComponent` + `ModelTransformComponent` в flecs ECS. Сейчас per-instance data живёт в `RenderState::visibleModelInstances`. Перевод в ECS — single component per model, query в `FramePreparation::BuildVisibleModelInstanceList`. | ~1 час | Мой scope |
+| **M5.5** | Полный `SceneLightingBuffer` extract (U3=b). `lighting.glsl` уже содержит math, но `std430` struct declaration всё ещё per-shader в `voxel.frag`, `voxel_shadow.vert`, `voxel_mesh.comp`, `model.frag`, `model.vert`. Extract в один shared `SceneLightingBuffer.glsl` через `glslc --target-env=vulkan1.3` `#include` support. | ~1.5 часа | TAA-scope-adjacent (5 шейдеров), нужно согласование |
+| **M6+** | Real diffuse texture sampling в `model.frag` (сейчас только UV-based procedural checker). Генерировать `tests/fixtures/box_textured.glb` через тот же `GenerateBoxUvFixture`-style generator, добавить `sampler2D baseColor` binding, `material.baseColorTexture` resolve в `AssetLoader`. | ~1 час | Мой scope |
+
+**Test count baseline:** `ctest` = 6/6 (ProjectVTests 1.4s + 5 fast suites). Это baseline, не должно падать.
+
+**Ключевые клавиатурные шорткаты в master:** ToggleTaa = **`T`** (не `;`!). `;` зарезервирован под `TaaJitterScale` (в TAA-agent working tree). Скриншот — кнопка в HUD.
+
+**Ключевые env vars:** `PROJECTV_MODELS=path.glb@x,y,z;path2.glb@x,y,z,rx,ry,rz,s` (manifest), `PROJECTV_START_CAMERA_POSITION="x y z"`, `PROJECTV_START_CAMERA_LOOK="x y z"`, `PROJECTV_LOOKDEV_CAPTURE_*` (smoke harness contract).
+
+**Build preset:** `linux-clang-debug` (native clang 22 + lld 22 + libstdc++ 16). Не трогать `windows-clang-debug` (operator's primary dev tree).
+
 ### session-2026-06-11-taa-renderer-wiring
 
 - **id:** `2026-06-11T16:43Z-taa-renderer-wiring`
