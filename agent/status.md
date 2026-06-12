@@ -2,7 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-06-12` — TAA 1.2 camera-cut detection + 1.3 inline CAS post-TAA landed (uncommitted, см. §10).
+Updated: `2026-06-12` — TAA Блок 1 phase 1/5: 1.7 R11G11B10 scene color landed (uncommitted, см. §11).
 
 ---
 
@@ -197,7 +197,7 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 
 - 1.4: 5 new hotkeys `;`/`'`/`-`/`=`/`,`/`.` drive per-pass TAA knobs (jitter scale / blend / neighbourhood radius / history invalidate). `taaNeighbourhoodRadius` в `taaHistoryParams.w` (was `reserved` slot, byte layout unchanged). All four invalidate `taaHistoryValid` на change.
 - 5.1 hot sites: 6 `PV_PROFILE_GPU_LABEL` calls на `RecordShadowCommands` ("Shadow Pass") / `RecordVoxelMeshingCommands` ("Voxel Meshing") / `RecordGraphicsCommands` ("Graphics Pass") / TAA resolve section ("TAA Resolve" + color 0.20/0.65/1.00) / `RecordDebugOverlayCommands` ("Debug Overlay") / `RecordDebugHudCommands` ("Debug HUD") — но эти Renderer.cpp правки подхвачены в asset-pipeline's M4/M5 chain (`c4382ea` / `ccf7400`).
-- M5.2 fix: `kTaaColorDistanceRejectionThreshold = 0.20` в YCoCg space. Когда current sample далёк от neighborhood centroid, skip both YCoCg clamp и temporal blend. Fixes the polygon-model pass "faint grey blob" regression reported in asset-pipeline closeout `b152b70` (M5.2 follow-up). Models surrounded by voxel pixels now keep their saturated colors.
+- M5.2 fix: `kTaaColorDistanceRejectionThreshold = 0.40` в YCoCg space (`taa_resolve.frag:79`, bumped `2026-06-12` from `0.20` after a runtime repro показал, что `model.frag` 4×4 procedural UV checker имеет два tint-варианта с YCoCg distance до voxel centroid ≈ 0.27 (yellow, проходит rejection) и ≈ 0.16 (blue, не проходит — clamped в voxel range, "half in textures" symptom). `0.40` ловит оба tint-варианта, оставляет headroom для chroma-dim outliers. False-positive risk на natural voxel variation bounded (voxel surfaces обычно в пределах 0.05 YCoCg от своего 3×3 mean, well under 0.40). Когда current sample далёк от neighborhood centroid, skip both YCoCg clamp и temporal blend. Fixes the polygon-model pass "faint grey blob" regression reported in asset-pipeline closeout `b152b70` (M5.2 follow-up). Models surrounded by voxel pixels now keep their saturated colors.
 
 **Что в `3ee995f` (5.1 helper):**
 
@@ -334,3 +334,41 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 | 5.3 | Benchmark automation (`PROJECTV_BENCHMARK_FRAMES=N` env) | 1-2 ч | render-scope |
 
 **Test count baseline:** `ctest` 6/6 (1.45 s) — unchanged, не должно падать.
+
+---
+
+## 11. TAA Блок 1 / 1.7 — R11G11B10_UFloat scene color — LANDED (uncommitted, this session)
+
+**Phase 1/5 of big session landed (per operator "go"). 1 commit proposed** (per `8635ddf` + `4deee52` precedent, per-task doc commit pattern):
+
+| SHA | Subject | Files |
+|---|---|---|
+| _pending_ | `perf(render): TAA scene color to B10G11R11_UFLOAT (2x bandwidth save)` | 3 |
+| _pending_ | `docs(agent): sync 1.7 closure + add §10.18/§20/§11` | 5 |
+
+**What 1.7 changes:**
+
+- `src/render/TaaRenderTargets.hpp` — new `inline constexpr VkFormat kTaaSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32` in `projectv::taa` namespace. Single source of truth for the TAA scene color format. Doc comment block explains the format choice (2× bandwidth vs R16G16B16A16), loss-of-precision trade-off (5/6/5 bits per channel + 5-bit shared exponent), and fallback path (1-line revert).
+- `src/render/TaaRenderTargets.cpp:86` — image allocation now uses `kTaaSceneColorFormat` instead of literal `VK_FORMAT_R16G16B16A16_SFLOAT`. Both sceneColor and historyColor targets get the new format.
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp:1794` — pipeline's `pColorAttachmentFormats[1]` declaration now uses `kTaaSceneColorFormat`. The voxel pipeline's dual-slot TAA contract (slot 0 = swapchain, slot 1 = TAA scene color) is preserved, only the format of slot 1 changes.
+- `src/render/ScreenshotCapture.cpp` — new sidecar key `taa_scene_color_format=B10G11R11_UFLOAT` (after `taa_camera_cut_max_delta`, before `shadow_cascade_count`).
+- Shader code (`voxel.frag`, `model.frag.taa_on.spv`, `taa_resolve.frag`) **unchanged** — they write/read `vec4` and the format transition is transparent. Alpha of `outSceneColor` is undefined on store per Vulkan spec for packed formats, but `taa_resolve.frag` only consumes `.rgb` from the history sample, so the dropped alpha is a no-op.
+
+**Build / test / smoke (`2026-06-12`):**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests ProjectVDracoTests ProjectVFrustumCullingTests ProjectVBoxUvFixtureTests --parallel 8` — green, 1 pre-existing warning (`DebugHud.cpp:600` LOCL `%.0f` for bool, не моя).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` — 6/6 passed (1.48 s).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `VoxelLab` reference shot — 6/6 captures под `build/linux-clang-debug/lookdev-captures/20260612-1.7-r11g11b10/`. Sidecar:
+  - `taa_scene_color_format=B10G11R11_UFLOAT` ✓ (new key populated)
+  - `taa_history_valid=1`, `taa_blend=0.10`, `taa_cas_sharpness_max=0.500000` (carry-over from 1.2+1.3)
+  - `taa_camera_cut_count=0`, `taa_camera_cut_max_delta=0.001018` (static camera, expected)
+- Vision review of FINAL view: VoxelLab renders clean — glass/fluid sphere, opaque anchor, checker floor, no banding visible in dim areas (sky background uniform light blue). FPS **110.6** (vs 1.2+1.3 baseline 93.2 — likely bandwidth reduction showing perf benefit, though single-run variance is high).
+
+**Next steps (Big Session, 4 phases remaining):**
+| ID | Task | Сложность | Status |
+|---|---|---|---|
+| 1.5 | Anti-flicker CTSH/AOCC/LOCL | 4-6 ч | next (highest visual impact) |
+| 1.8 | Quality tier abstraction | 4-6 ч | phase 3 |
+| first-frame AA | FXAA-lite in resolve | 1-2 ч | phase 4 |
+| 1.6 | VRS R&D | 4-8 ч | phase 5 (with kill switch) |
+
+**Asset-pipeline parallel:** no conflicts. M5.1b depth bias откачен per aborted session. 4 chuzhie uncommitted (`.gitignore`, `VulkanBootstrap.cpp`, `pyproject.toml`, `uv.lock`) — не мои, не трогаю.

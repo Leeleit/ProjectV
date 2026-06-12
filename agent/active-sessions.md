@@ -57,6 +57,81 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-taa-quality-1.7
+
+- **id:** `2026-06-12T16:00Z-taa-quality-1.7`
+- **started-at:** 2026-06-12T16:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** TAA Блок 1 / 1.7 (R11G11B10_UFloat scene color) — phase 1/5 of the big-session plan (per `status.md §11`). 2× bandwidth save: `VK_FORMAT_R16G16B16A16_SFLOAT` (8 B/pixel) → `VK_FORMAT_B10G11R11_UFLOAT_PACK32` (4 B/pixel) для `taaSceneColorTarget` + `taaHistoryColorTarget`. Single source of truth: `inline constexpr VkFormat kTaaSceneColorFormat` в `projectv::taa` namespace (`src/render/TaaRenderTargets.hpp`), consumed by `CreateOrRecreateTaaRenderTargets` (image allocation) и `VulkanGraphicsPipeline::CreateGraphicsPipeline` (`pColorAttachmentFormats[1]` declaration). Shader code (`voxel.frag`, `model.frag.taa_on.spv`, `taa_resolve.frag`) **без изменений** — format transition transparent. Sidecar: новый `taa_scene_color_format=B10G11R11_UFLOAT` key для capture-driven verification.
+- **files-touched-intent:** `src/render/TaaRenderTargets.hpp` (kTaaSceneColorFormat constant + doc comment), `src/render/TaaRenderTargets.cpp` (use kTaaSceneColorFormat), `src/render/vulkan/VulkanGraphicsPipeline.cpp` (use kTaaSceneColorFormat + comment update), `src/render/ScreenshotCapture.cpp` (taa_scene_color_format sidecar key), `agent/memory.md` (§10.18), `agent/decisions.md` (§20), `agent/status.md` (§11), `TODO.md` (close 1.7 in Блок 1), `agent/active-sessions.md` (this entry).
+- **status:** open
+- **notes:** **Phase 1/5 of big-session plan, 2 commits proposed (per-task pattern):**
+  - `perf(render): TAA scene color to B10G11R11_UFLOAT (2x bandwidth save)` — 4 files (TaaRenderTargets.hpp + TaaRenderTargets.cpp + VulkanGraphicsPipeline.cpp + ScreenshotCapture.cpp). Constant-driven, so the format change is in 1 line and the consumers automatically follow.
+  - `docs(agent): sync 1.7 closure + add §10.18/§20/§11` — 5 files (TODO.md + memory.md + decisions.md + status.md + active-sessions.md).
+
+  **Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests ProjectVDracoTests ProjectVFrustumCullingTests ProjectVBoxUvFixtureTests --parallel 8` — green, 1 pre-existing warning (DebugHud.cpp:600 LOCL `%.0f` for bool, не моя). `ctest` 6/6 (1.48 s) — все suites прошли. `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` (`VoxelLab` reference shot) с `PROJECTV_ENABLE_VALIDATION=OFF`: 6/6 captures под `build/linux-clang-debug/lookdev-captures/20260612-1.7-r11g11b10/`. Sidecar: `taa_scene_color_format=B10G11R11_UFLOAT` ✓, `taa_history_valid=1`, `taa_blend=0.10`, `taa_cas_sharpness_max=0.500000`, `taa_camera_cut_count=0`, `taa_camera_cut_max_delta=0.001018`.
+
+  **Visual verify (FINAL view):** VoxelLab рендерится чисто, FPS 110.6. **No banding** в dim areas. Glass/fluid sphere + opaque anchor + sky gradient все visible, без визуальных артефактов от format change.
+
+  **Parallel agent collision (TAA-scope):** одновременно active `session-2026-06-12-taa-m5_2-threshold-bump` (m5.2 threshold 0.20→0.40 + dual-MRT model pipeline fix), их doc правки interleaved с моими в `agent/memory.md` / `agent/status.md` / `agent/active-sessions.md`. Per `AGENTS.md §7.2.6` (multi-agent concurrent work) — manual merge требует user arbitration. **Plan:** commit только мои 4 code файла (TaaRenderTargets.hpp + TaaRenderTargets.cpp + VulkanGraphicsPipeline.cpp + ScreenshotCapture.cpp) + 1 doc-файл который 100% мой (TODO.md — close 1.7 только, parallel не трогал). Doc файлы со смешанным содержимым (memory/decisions/status/active-sessions) — отложить до согласования с пользователем.
+
+  **Big-session queue (4 phases remaining):**
+  - Phase 2 (next): 1.5 anti-flicker CTSH/AOCC/LOCL (4-6 ч, highest visual impact)
+  - Phase 3: 1.8 quality tier abstraction (4-6 ч, refactor)
+  - Phase 4: first-frame AA FXAA-lite in resolve (1-2 ч, optional)
+  - Phase 5: 1.6 VRS R&D (4-8 ч, with kill switch)
+
+**Working rules to inherit (см. `agent/memory.md` §10.18):**
+- **Single source of truth for cross-consumer constants.** When a Vulkan format is consumed by both image allocation and pipeline declaration, define it as an `inline constexpr` in the header next to the resource struct, not as two separate literals. The constant prevents the two consumers from drifting on a future change; the compiler enforces the relationship. This pattern applies to any cross-shader-struct value (push-constant fields, descriptor-set bindings, etc.).
+- Shader-side aliasing note: `B10G11R11_UFLOAT_PACK32` has 5/6/5 bits per channel with a 5-bit shared exponent. Single bright sample can compress dim neighbour's exponent range, visible as banding in dim areas (< 0.1% intensity in linear light). Fallback revert = 1-line constant change.
+- Shader code reads/writes `vec4` regardless of `outSceneColor` format. Alpha channel of `outSceneColor` is undefined on store for packed formats, but `taa_resolve.frag` only consumes `.rgb` from history, so the dropped alpha is a no-op.
+
+**Test count baseline:** `ctest` 6/6 (~1.48 s wall clock). Это baseline, не должно падать.
+
+**Build preset:** `linux-clang-debug` (native clang 22 + lld 22 + libstdc++ 16). Не трогать `windows-clang-debug` (operator's primary dev tree).
+
+### session-2026-06-12-taa-m5_2-threshold-bump
+
+- **id:** `2026-06-12T15:35Z-taa-m5_2-threshold-bump`
+- **started-at:** 2026-06-12T15:35:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** M5.2 follow-up — bump `kTaaColorDistanceRejectionThreshold` `0.20 → 0.40` в `src/shaders/taa_resolve.frag:79`. Reason: runtime repro на model pass в VoxelLab (`PROJECTV_MODELS=box.glb@0,1,0`, reference shot) показал "block half in textures" symptom — `model.frag` 4×4 UV checker имеет два tint-варианта с YCoCg distance до voxel centroid ≈ 0.27 (yellow, проходит rejection) и ≈ 0.16 (blue, не проходит — clamped в voxel range, невидим). 0.40 ловит оба tint-варианта. False-positive risk bounded: voxel surfaces обычно в пределах 0.05 YCoCg от своего 3×3 mean.
+- **files-touched-intent:** `src/shaders/taa_resolve.frag` (1 строка, threshold bump + расширенный комментарий), `agent/memory.md` (§10.19, переименовано из §10.18 чтобы не конфликтовать с TAA-agent 1.7), `agent/status.md` (§8 M5.2 fix описание), `agent/active-sessions.md` (this entry). **TAA-scope-adjacent — TAA-agent (`session-2026-06-12-taa-1.2-1.3`) уже closed, разрешено править `taa_resolve.frag`.** Не трогаю: `decisions.md §19` (TAA-agent оставил threshold-as-tuned-0.20 в их §, не моё править), `TODO.md` (M5.2 уже closed в `8635ddf`).
+- **status:** open
+- **notes:** Предыдущая моя сессия `session-2026-06-12-model-m5_1b-depth-bias` уже aborted (см. ниже в closed). M5.1b (z-fight depth bias) был на неверной посылке — модель не z-fight'ит, а прячется под полом VoxelLab; фикс через env var `box.glb@0,1,0` (без кода). После abort оператор сообщил, что с TAA-on модель всё равно не видна ("half in textures"). TAA 1.2 + 1.3 уже закоммичены (`008873a`/`4deee52`/`9ac9924`), но не фиксили M5.2. Bump threshold — single-line fix, build green, ctest 6/6, SPV скопирован в `bin/` per `agent/memory.md §10.16` working rule (incremental `cmake --build` не копирует свежие `.spv` в `bin/`). **Visual verify — за оператором** (binary у него, validation layers не установлены, не могу запустить runtime smoke с `PROJECTV_ENABLE_VALIDATION=ON`). **Pending commit** — следующий commit message draft:
+
+```
+fix(taa): raise M5.2 color-distance rejection threshold to cover dim tints
+
+The model pass in VoxelLab with the 4x4 procedural UV checker has
+two tint variants that produce YCoCg samples at distance ~0.27
+(yellow, passes the M5.2 rejection at 0.20) and ~0.16 (blue, fails,
+gets clamped into the voxel range and disappears). Operator reported
+this as "block half in textures" after the M5.1b revert + spawn-
+position fix on `box.glb@0,1,0`. Raising `kTaaColorDistanceRejection-
+Threshold` from 0.20 to 0.40 catches both tint variants with enough
+headroom for chroma-dim outliers, and stays well above the
+~0.05 YCoCg variance of natural voxel-pass surfaces, so false-
+positive risk on the voxel-only path is bounded.
+
+Refs: agent/status.md §8, agent/active-sessions.md session-2026-06-12-taa-m5_2-threshold-bump
+```
+
+**ADDENDUM (`2026-06-12` ~16:00):** После feedback "ЕГО ВООБЩЕ НЕ ВИДНО С TAA ON" оператор подсказал перепроверить shader compilation. ninja: no work to do — shader якобы up to date. Проверил `taa_resolve.frag.spv` md5 — действительно новый (0.40 threshold applied). Тогда **нашёл настоящий root cause** в `ModelPass.cpp:202`:
+- `VkPipelineRenderingCreateInfo::colorAttachmentCount = 1` (pre-fix).
+- `model.frag:33` TAA-on: `layout(location = 1) out vec4 outSceneColor`.
+- Main pass `vkCmdBeginRendering` (Renderer.cpp:735) имеет 2 attachments.
+- Pipeline объявляет 1 → write в Location 1 — **undefined behavior** (драйвер silently дропает, validation layers не стоят).
+- `taaSceneColorTarget` оставался пустым в model pixels → resolve pass сэмплил пустоту → модель невидима несмотря на правильный M5.2 threshold.
+
+**Фикс:** `ModelPass.cpp:200-224` теперь объявляет dual-MRT attachments `{ colorFormat, projectv::taa::kTaaSceneColorFormat }` (последний — `B10G11R11_UFLOAT_PACK32` per TAA-agent 1.7 centralization в `TaaRenderTargets.hpp:52`). `ModelPass.hpp` — `#include "render/TaaRenderTargets.hpp"` для namespace'а. `VulkanInit.cpp:237` — call site без изменений (использует default `kTaaSceneColorFormat`).
+
+**Иерархия фиксов:** M5.2 threshold (0.20→0.40) для partial visibility. Dual-MRT для полной невидимости. Оба нужны — dual-MRT без threshold → частичный clamp; threshold без dual-MRT → полная invisible (write дропается до resolve). **Visual verify — за оператором.**
+
 ### session-2026-06-12-taa-1.2-1.3
 
 - **id:** `2026-06-12T15:00Z-taa-1.2-1.3`

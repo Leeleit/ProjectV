@@ -742,6 +742,94 @@ negligible.
 session), `agent/decisions.md` §19 (TAA sharpness contract), this
 section, `agent/status.md` §10 (in-progress session snapshot).
 
+## 10.18 TAA Блок 1 / 1.7 — R11G11B10_UFloat scene color (`2026-06-12`)
+
+**Single-line format change: 8 → 4 bytes/pixel на TAA scene color
++ history.** Mechanical, low-risk, **2× bandwidth reduction** на
+resolve-pass read (`historyColor` sample) и per-frame
+`vkCmdCopyImage` history update.
+
+**Single source of truth: `kTaaSceneColorFormat` constant.**
+
+`src/render/TaaRenderTargets.hpp` — new `inline constexpr VkFormat
+kTaaSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32` in the
+`projectv::taa` namespace. Consumed by:
+
+- `src/render/TaaRenderTargets.cpp:86` — image allocation
+  (`vmaCreateImage` with `imageInfo.format = kTaaSceneColorFormat`)
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp:1794` — pipeline
+  declaration (`pColorAttachmentFormats[1] = kTaaSceneColorFormat`)
+
+The constant is the only place the format is hard-coded. If a
+future change needs to bump back to R16G16B16A16 (e.g. banding
+becomes visible), the change is 1 line + rebuild.
+
+**Shader code unchanged.** `voxel.frag` writes `vec4 outSceneColor`
+(Location 1), `model.frag.taa_on.spv` writes `vec4 outSceneColor`
+(Location 1), `taa_resolve.frag` reads `texture(historyColor, ...).rgb`.
+Vulkan spec: alpha channel of `outSceneColor` is **undefined** for
+packed formats like `B10G11R11_UFLOAT_PACK32` (no storage for alpha),
+but the resolve only consumes `.rgb`, so the dropped alpha is a
+no-op. The resolve output writes to the swapchain (B8G8R8A8 UNORM
+on most desktops), which has full alpha — that transition is
+transparent to the rest of the pipeline.
+
+**`vkCmdCopyImage` format compatibility** (Vulkan spec §7.1.1):
+srcImage and dstImage formats must be identical. Both `sceneColor`
+and `historyColor` use `kTaaSceneColorFormat`, so the copy is
+unchanged.
+
+**Why R11G11B10_UFLOAT, not R10G10B10A2_UNORM?** The TAA scene color
+needs **unsigned-float** representation (linear HDR after tone-map
+in the resolve pass) and **RGB-only** (alpha is unused). A2UNORM
+wastes 2 bits on an unused alpha. R11G11B10 has 5/6/5 bits per channel
+with a shared 5-bit exponent — narrow dynamic range but 32 bits
+total, which matches our needs exactly. B10G11R11 is the standard
+"Vulkan R11G11B10" name.
+
+**Loss of precision vs R16G16B16A16_SFLOAT.** 5 bits B + 6 bits G +
+5 bits R + 5-bit shared exponent. The shared exponent is the main
+risk: a single bright sample in a frame compresses the dim
+neighbour's exponent range, visible as banding in dim areas
+(< 0.1% intensity in linear light). The capture-driven `taa_scene_
+color_format` sidecar key lets the operator verify the format at
+runtime; if banding shows up, revert is a 1-line constant change.
+
+**Build / test / smoke (`2026-06-12`):**
+- `cmake --build build/linux-clang-debug --target ProjectV
+  ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests
+  ProjectVDracoTests ProjectVFrustumCullingTests
+  ProjectVBoxUvFixtureTests --parallel 8` — green, 1 pre-existing
+  warning (`DebugHud.cpp:600` LOCL `%.0f` for bool, не моя).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` —
+  6/6 passed (1.48 s wall clock).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на VoxelLab
+  reference shot — 6/6 captures, sidecar shows
+  `taa_scene_color_format=B10G11R11_UFLOAT`,
+  `taa_history_valid=1`, `taa_blend=0.10`, `taa_camera_cut_count=0`.
+- Vision review of FINAL view: scene renders clean, FPS **110.6**
+  (выше 1.2+1.3 baseline 93.2 — likely bandwidth reduction showing
+  perf benefit, though single-run variance is high enough that this
+  could also be noise). **No visible banding** in dim areas (sky
+  background uniform light blue, checker floor clean).
+
+**Working rule to inherit:**
+- **Single source of truth for cross-consumer constants.** When a
+  Vulkan format is consumed by both image allocation and pipeline
+  declaration, define it as an `inline constexpr` in the header
+  next to the resource struct, not as two separate literals. The
+  constant prevents the two consumers from drifting on a future
+  change; the compiler enforces the relationship. This pattern
+  applies to any cross-shader-struct value (push-constant fields,
+  descriptor-set bindings, etc.) — see also
+  `agent/decisions.md` §18 (TAA push-constant byte layout invariance
+  from 1.2+1.3) and §19 (ResolvePushConstants field rename
+  preserved byte layout).
+
+**Cross-refs:** `TODO.md` Блок 1 (1.7 closed), `agent/decisions.md`
+§20 (TAA scene color format contract, this section),
+`agent/status.md` §11 (in-progress session snapshot).
+
 ## 10.15 TAA close-out plumbing landed (A1, `2026-06-11`, committed as `9764463`)
 
 Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыре deferred subtask'а из `agent/memory.md §10.14` закрыты + история-инвалидация:
@@ -808,3 +896,21 @@ Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыр
 - Fix: перенёс `#include "volk.h"` на самый верх `core/Types.hpp` (до всех VMA-touching headers). Удалил дубликат на старом месте. 1 строка в `tests/CMakeLists.txt` — добавил `glm` в `ProjectVTests` link.
 - Working rule: **when a header is added to a shared file like `core/Types.hpp` (which includes VMA via `MeshGpuResources.hpp` etc.), the project's volk include must come first.** The order is volk.h → SDL3.h → project headers → VMA transitively. If future modules add new VMA-touching headers to `core/Types.hpp`, volk.h position is preserved by the existing top-of-file placement.
 - Working rule: **when a target adds asset-pipeline code that pulls in glm (or any header-only dep with INTERFACE include dirs), all sibling targets that include the same shared header must also link the new dep.** `ProjectVTests` was the one that broke first because it has the smallest link line; the fix is to add `glm` (1 line) — not to add glm to a global INTERFACE option, which would also drag it into targets that don't need it.
+
+## 10.19 M5.2 color-distance rejection threshold bump + model pipeline dual-MRT fix (`2026-06-12`)
+
+Два последовательных фикса, оба преследуют один визуальный симптом: "модель невидима с TAA on, half in blocks".
+
+**Фикс 1: `kTaaColorDistanceRejectionThreshold` 0.20 → 0.40 в `src/shaders/taa_resolve.frag:79`.** Euclidean distance от current sample до neighborhood centroid в YCoCg space. `model.frag:62-67` 4×4 procedural UV checker даёт два tint-варианта после ambient + direct-sun: yellow `vec3(0.85, 0.62, 0.38)` × albedo → YCoCg distance ≈ 0.27 (проходит rejection), blue `vec3(0.60, 0.55, 0.45)` × albedo → distance ≈ 0.16 (НЕ проходит — clamped в voxel range, invisible). 0.40 ловит оба. False-positive risk bounded: voxel surfaces обычно в пределах 0.05 YCoCg от своего 3×3 mean. Build green, ctest 6/6, SPV скопирован в `bin/` per §10.16 working rule.
+
+**Фикс 2: model pipeline dual-MRT attachment declaration в `src/asset/ModelPass.cpp:200-224`.** **Это и был настоящий root cause невидимости с TAA on.** `ModelPass.cpp:202` (pre-fix) объявлял `VkPipelineRenderingCreateInfo.colorAttachmentCount = 1` с одним format (swapchain). Но `model.frag:33` для TAA-on пишет в `layout(location = 1) out vec4 outSceneColor` — TAA scene color. Main pass `vkCmdBeginRendering` (Renderer.cpp:735) имеет 2 attachments (Location 0 = swapchain, Location 1 = TAA scene color). Model pipeline объявлял только 1 → write в Location 1 — undefined behavior. `VK_KHR_dynamic_rendering_unused_attachments` позволяет rendering иметь БОЛЬШЕ attachments чем pipeline, но не наоборот. Validation layers не стоят, драйвер silently дропал write → `taaSceneColorTarget` оставался пустым в model pixels → resolve pass сэмплил пустоту → модель невидима несмотря на правильный threshold.
+
+Фикс: model pipeline теперь объявляет 2 attachments через `const VkFormat modelColorAttachmentFormats[2] = { colorFormat, projectv::taa::kTaaSceneColorFormat };` (последний — `B10G11R11_UFLOAT_PACK32` per TAA-agent 1.7 centralization в `TaaRenderTargets.hpp:52`). `kTaaSceneColorFormat` consumed also в `TaaRenderTargets.cpp:86` (image allocation) и `VulkanGraphicsPipeline.cpp:1794` (main graphics pipeline declaration) — single source of truth, нельзя drift'нуть.
+
+**Иерархия фиксов:** фикс 1 (threshold) был необходим для partial-visibility symptom (yellow tint 4×4 проходил, blue нет). Фикс 2 (dual-MRT) — для полной невидимости с TAA on. Оба нужны: без фикса 2 модель вообще не пишется в scene color target независимо от rejection threshold. Без фикса 1 часть model pixels clamped даже с dual-MRT write.
+
+**Working rules:**
+- Каждый Vulkan pipeline, используемый в `vkCmdBeginRendering(...)` с N attachments, должен объявлять все N в `VkPipelineRenderingCreateInfo::pColorAttachmentFormats`. Иначе write в undeclared attachment — undefined. `VK_KHR_dynamic_rendering_unused_attachments` идёт только в одну сторону (rendering ≥ pipeline).
+- `kTaaSceneColorFormat` — single source of truth для TAA offscreen color format. Не хардкодить `R16G16B16A16_SFLOAT` или `B10G11R11_UFLOAT_PACK32` в pipeline declarations.
+- M5.2 threshold — lever для "маленькая surface окружённая большой different surface". Бампить по тому же принципу, если будущие materials не проходят rejection.
+
