@@ -98,6 +98,8 @@ target_sources(ProjectV PRIVATE
         asset/MeshGpuResources.cpp
         asset/ModelPass.cpp
         asset/ModelManifestLoader.cpp
+        audio/AudioEngine.cpp
+        audio/MusicDirectoryPath.cpp
         ecs/EcsWorld.cpp
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
@@ -131,6 +133,22 @@ target_sources(ProjectV PRIVATE
 target_include_directories(ProjectV PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+# **Audio engine, 2026-06-12.** miniaudio is vendored as
+# a submodule at `external/miniaudio/`. Built as a static
+# library (the default per miniaudio's CMakeLists.txt) and
+# linked into `ProjectV`. On Linux, miniaudio's
+# `find_package(PulseAudio)` resolves `libpulse.so.0` (the
+# `pipewire-pulse` shim), which routes audio to PipeWire.
+# `EXCLUDE_FROM_ALL` so the miniaudio examples and tests
+# don't pollute the build.
+add_subdirectory(${PROJECT_SOURCE_DIR}/external/miniaudio
+    ${CMAKE_BINARY_DIR}/external/miniaudio EXCLUDE_FROM_ALL)
+target_link_libraries(ProjectV PRIVATE miniaudio)
+
+if (LINUX)
+    target_link_libraries(ProjectV PRIVATE pthread dl m)
+endif ()
 
 target_link_libraries(ProjectV PRIVATE projectv_build_options)
 

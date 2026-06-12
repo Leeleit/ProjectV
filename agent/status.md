@@ -589,3 +589,47 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 **Test count baseline:** `ctest 6/6` (1.47s) — preserved.
 
 **Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
+
+## 18. Audio engine — `session-2026-06-12-audio-engine` (closed, uncommitted)
+
+**1 commit proposed** (per operator answers to plan: playlist 5-sec auto-refresh, loop=true, stereo, free keys only, repo root `music/`):
+
+| SHA | Subject | Files |
+|---|---|---|
+| _pending_ | `feat(audio): miniaudio music engine (16/44100 PipeWire, 4 hotkeys, 5s playlist refresh)` | 13 source + 4 doc + 1 gitkeep |
+
+**What landed (build green, ctest 6/6, smoke-verified):**
+
+- **`external/miniaudio` wired into `src/CMakeLists.txt`** (`add_subdirectory` + `pthread dl m` Linux link line + `EXCLUDE_FROM_ALL` for the upstream examples). Also added to `tests/CMakeLists.txt` so the test TUs see the header. Built-in MP3 decoder handles `.mp3` directly.
+- **New `src/audio/` module:** `AudioEngine.{hpp,cpp}` (~440 lines) wraps `ma_engine` + `ma_sound_group` (music bus) + `ma_sound` (current track). `MusicDirectoryPath.{hpp,cpp}` (~50 lines) resolves `PROJECTV_MUSIC_DIR` → `SDL_GetBasePath()/music` → `./music`.
+- **Playlist with 5-second auto-refresh** (`AudioEngine::tick`). Alphabetical sort, case-insensitive `.mp3` filter, sticky `m_currentIndex`, graceful uninit on current-track-disappears, "playlist grew" / "playlist shrank" handled.
+- **4 hotkeys:** `Q` play/pause, `E` stop, `7` vol-, `8` vol+ (per operator "назначай там, где свободно"). Loop=true, volume 0.0..1.0 step 0.05 default 0.8.
+- **`MusicState` enum + HUD line** `MUSIC <STATE> VOL 0.80 TRK <name>` (regular section, alongside `TIME x.xx` and `SIM/TRI`). 2 detailed helper lines `MUSIC Q PLAY  E STOP` + `MUSIC 7 DN   8 UP`.
+- **`AppState::audio`** as `AudioEnginePtr` (function-pointer deleter at global scope, matching `EcsStatePtr` / `PhysicsStatePtr` pattern in `core/Types.hpp`).
+- **`UpdateApp` 10th parameter** `projectv::audio::AudioEngine *audio = nullptr` (default-nullable for tests).
+- **6 sidecar keys** in `ScreenshotCapture.cpp` (split into 3 separate `fmt::format` blocks to avoid 99-arg limit; v1 writes `music_initialized=0` defaults since the screenshot capture path doesn't have a direct pointer to `AppState::audio` — follow-up plumbing slice).
+- **`music/.gitkeep`** at repo root for the empty music folder.
+
+**Build / test / smoke:**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, no new warnings (1 pre-existing `DebugHud.cpp:600` LOCL `%.0f` warning, не моя).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` — 6/6 (1.46s baseline preserved).
+- **Smoke test** with `PROJECTV_ENABLE_VALIDATION=OFF PROJECTV_MUSIC_DIR=/home/le1t/Projects/ProjectV/music`:
+  ```
+  Tracy GPU context created (calibrated timestamps)
+  Using voxel scene preset: VoxelLab
+  [ProjectV][Audio] miniaudio initialized; 2 mp3 track(s) in /home/le1t/Projects/ProjectV/music
+  ```
+  Engine init succeeded, found the user's 2 tracks (`Le1t - Palm Trees.mp3` and `Le1t - aCID.mp3`). `audio->init()` returned true → `state->audio` stays alive, hotkeys are wired. Pipeline ends cleanly on the 5-second SIGTERM.
+
+**v1 limitations explicitly documented in `decisions.md §28`:**
+- Pause = stop + forget cursor (miniaudio 0.11+ has no `ma_sound_set_time`; v2 needs a custom decoder wrapper for true resume-from-cursor).
+- Sidecar `music_*` keys default to `initialized=0` (capture path doesn't plumb the audio engine pointer through the renderer interface yet).
+- v1 hotkey layout is placeholder; full rebind is the follow-up slice per operator "это потом".
+
+**Scope discipline:** TAA-agent's 4 uncommitted files (`ModelPass.{cpp,hpp}`, `VulkanBootstrap.cpp`, `taa_resolve.frag`) untouched (diff stat identical to session start). My changes are in `src/audio/` (NEW), `src/CMakeLists.txt`, `tests/CMakeLists.txt`, `src/core/Types.hpp` (additive fields, no offset shift), `src/app/{AppUpdate,InputActions,main}.{hpp,cpp}`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, plus `music/.gitkeep`. The user's 2 mp3 files in `music/` are user content, not committed.
+
+**Files (mine, для коммита):** `src/CMakeLists.txt`, `src/audio/AudioEngine.{hpp,cpp}`, `src/audio/MusicDirectoryPath.{hpp,cpp}`, `src/core/Types.hpp`, `src/app/AppUpdate.{hpp,cpp}`, `src/app/InputActions.cpp`, `src/app/main.cpp`, `src/debug/DebugHud.cpp`, `src/render/ScreenshotCapture.cpp`, `tests/CMakeLists.txt`, `music/.gitkeep`, `TODO.md`, `agent/decisions.md`, `agent/memory.md`, `agent/status.md`, `agent/active-sessions.md`.
+
+**Test count baseline:** `ctest 6/6` (1.46s) — preserved.
+
+**Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.

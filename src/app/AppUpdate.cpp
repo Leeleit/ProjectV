@@ -3,6 +3,7 @@
 #include "app/Camera.hpp"
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
+#include "audio/AudioEngine.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 
 namespace {
 constexpr uint32_t kMaxSimulationStepsPerFrame = 5;
@@ -295,7 +297,8 @@ bool UpdateApp(
 	WorldState *world,
 	PhysicsState *physics,
 	RenderState *render,
-	DebugState *debug)
+	DebugState *debug,
+	projectv::audio::AudioEngine *audio)
 {
 	PV_PROFILE_ZONE_N("UpdateApp");
 	if (!platform || !simulation || !camera || !input || !interaction || !world || !render || !debug) {
@@ -568,6 +571,34 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseShadowTuningValue)) {
 		AdjustShadowTuning(*render, 1.0f);
 	}
+	// **Audio engine handlers, 2026-06-12.** All four
+	// are no-ops if the engine didn't init
+	// (`audio == nullptr`) so a miniaudio init
+	// failure on the host doesn't break the rest
+	// of the program. Step matches the
+	// `kLightingExposureStepStops` style: 0.05
+	// in the [0, 1] volume range.
+	if (audio) {
+		constexpr float kMusicVolumeStep = 0.05f;
+		if (ConsumeInputActionPressed(*input, InputAction::ToggleMusicPlayPause)) {
+			audio->togglePlayPause();
+		}
+		if (ConsumeInputActionPressed(*input, InputAction::StopMusic)) {
+			audio->stop();
+		}
+		if (ConsumeInputActionPressed(*input, InputAction::MusicVolumeDown)) {
+			audio->decreaseVolume(kMusicVolumeStep);
+		}
+		if (ConsumeInputActionPressed(*input, InputAction::MusicVolumeUp)) {
+			audio->increaseVolume(kMusicVolumeStep);
+		}
+		// Per-frame tick: 5-second playlist refresh
+		// + "current track removed" handling.
+		// Cheap when `m_lastPlaylistRefresh` is
+		// recent (just one `steady_clock::now()`
+		// call).
+		audio->tick();
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleInputReplayRecording)) {
 		if (input->replay.recording) {
 			if (!StopInputReplayRecording(input)) {
@@ -774,6 +805,38 @@ bool UpdateApp(
 	debug->stats.renderPassOtherMs = std::max(
 		0.0f,
 		debug->stats.frameTimeMilliseconds - render->renderPassTimings.graphicsMs);
+	// **Audio engine mirrors, 2026-06-12.** Source
+	// of truth is the `AudioEngine` singleton on
+	// `AppState` (passed in as the 10th
+	// `UpdateApp` parameter). Mirrors feed the
+	// HUD line + the capture sidecar without
+	// poking into the engine. The track name is
+	// a fixed-size `std::array<char, 128>` so the
+	// mirror boundary is ABI-stable and doesn't
+	// allocate per frame; the engine keeps the
+	// canonical name on the heap and only
+	// re-copies on playlist rescan.
+	if (audio) {
+		debug->stats.audioMusicInitialized = audio->isInitialized();
+		debug->stats.audioMusicState = static_cast<uint8_t>(audio->state());
+		debug->stats.audioMusicVolume = audio->volume();
+		debug->stats.audioMusicPlaylistSize = static_cast<uint32_t>(audio->playlistSize());
+		debug->stats.audioMusicCurrentIndex = static_cast<uint32_t>(audio->currentIndex());
+		const std::string &trackName = audio->currentTrackName();
+		std::fill(debug->stats.audioMusicTrackName.begin(),
+			debug->stats.audioMusicTrackName.end(), '\0');
+		const size_t copyLen = std::min(trackName.size(),
+			debug->stats.audioMusicTrackName.size() - 1);
+		std::copy_n(trackName.begin(), copyLen, debug->stats.audioMusicTrackName.begin());
+	} else {
+		debug->stats.audioMusicInitialized = false;
+		debug->stats.audioMusicState = 0;
+		debug->stats.audioMusicVolume = 0.0f;
+		debug->stats.audioMusicPlaylistSize = 0;
+		debug->stats.audioMusicCurrentIndex = 0;
+		std::fill(debug->stats.audioMusicTrackName.begin(),
+			debug->stats.audioMusicTrackName.end(), '\0');
+	}
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
 	debug->stats.detailedHudVisible = debug->detailedHudVisible;

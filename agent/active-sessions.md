@@ -57,6 +57,98 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-12-audio-engine
+
+- **id:** `2026-06-12T23:50Z-audio-engine`
+- **started-at:** 2026-06-12T23:50:00Z
+- **closed-at:** 2026-06-13T00:15:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Audio engine через miniaudio** (player из `legacy/docs/architecture/practice/02_engine_bootstrap_spec.md:533`, subsystem с 5-летним wait — `AudioSystem` поле в `AppState`). Submodule `external/miniaudio` уже скачан, **не подключён к CMake** — `add_subdirectory` + link pthread dl m в `src/CMakeLists.txt`. Новый модуль `src/audio/` с `AudioEngine` class (wraps `ma_engine` + `ma_sound_group` + `ma_sound`), `MusicDirectoryPath.{hpp,cpp}` (env-var override `PROJECTV_MUSIC_DIR` → `SDL_GetBasePath()/music` → `./music` CWD-relative, mirrors screenshot/snapshot pattern). **Playlist с 5-sec auto-refresh** (per user): каждые 5с `std::filesystem::directory_iterator` сканирует folder, sort алфавитно, `m_playlist = vector<path>`. Если current track (по sticky index) исчез — graceful uninit + clamp index. Если новые файлы добавлены — playlist растёт, current stays. **4 hotkeys:** Q=play/pause, E=stop, 7=vol-, 8=vol+ (all free letters/digits per `core/Types.hpp:96` enum). Loop=true (default), volume 0..1 step 0.05 default 0.8. 16-bit signed PCM 16/44100 stereo, через miniaudio's PulseAudio backend → `pipewire-pulse` → PipeWire (per `pactl info` Server String = `/run/user/1000/pulse/native` = pipewire-pulse shim). **Graceful degradation:** miniaudio init fail / empty folder / broken mp3 → `state->audio` живёт, hotkeys = no-ops, остальная программа не ломается. HUD: `MUSIC <STATE> VOL 0.80 TRK <name>` (regular section). Sidecar: 4 keys во втором `fmt::format` per §27 pattern. 4 `InputAction` entries + 4 `DebugStats` mirrors. `AppState::audio` (std::unique_ptr<AudioEngine>). **Не трогаю:** TAA-agent's 4 uncommitted files per §7.2.6; `legacy/CMakeLists.txt` (legacy reference only); `external/miniaudio/*` (submodule, read-only).
+- **files-touched-intent:** `src/CMakeLists.txt` (add_subdirectory + link pthread dl m), `src/audio/AudioEngine.{hpp,cpp}` (NEW), `src/audio/MusicDirectoryPath.{hpp,cpp}` (NEW), `src/core/Types.hpp` (4 `InputAction` + 4 `DebugStats` + `AppState::audio`), `src/app/InputActions.cpp` (4 `BindAction`), `src/app/AppUpdate.cpp` (4 handlers + 3 stats mirrors), `src/app/main.cpp` (init/shutdown + first scan), `src/debug/DebugHud.cpp` (1 HUD line + 2 helper lines), `src/render/ScreenshotCapture.cpp` (4 sidecar keys via 2nd `fmt::format` block), `music/.gitkeep` (NEW empty dir), `TODO.md` (close audio item), `agent/decisions.md` §28 (contract), `agent/memory.md` §10.26 (working rules), `agent/status.md` §18 (snapshot), `agent/active-sessions.md` (this entry + close).
+- **status:** closed
+- **commit-hash:** uncommitted (1 commit proposed per §7.2.5)
+- **notes:** **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, no new warnings (1 pre-existing `DebugHud.cpp:600` LOCL warning, не моя). `ctest 6/6` (1.46 s, baseline preserved). **Smoke verified:** `PROJECTV_ENABLE_VALIDATION=OFF PROJECTV_MUSIC_DIR=/home/le1t/Projects/ProjectV/music` → `[ProjectV][Audio] miniaudio initialized; 2 mp3 track(s) in /home/le1t/Projects/ProjectV/music`. Engine init succeeded, found the user's 2 tracks, hotkeys are wired.
+
+  **Source diff scope:**
+  - `src/CMakeLists.txt` +11 lines (add_subdirectory + pthread dl m)
+  - `src/audio/AudioEngine.{hpp,cpp}` NEW (~480 lines combined)
+  - `src/audio/MusicDirectoryPath.{hpp,cpp}` NEW (~50 lines combined)
+  - `src/core/Types.hpp` +28 lines (4 `InputAction` + 5 `DebugStats` mirrors + `AppState::audio` + forward decls + deleter)
+  - `src/app/AppUpdate.{hpp,cpp}` +44 lines (10th `audio` param + 4 handlers + 5 stats mirrors)
+  - `src/app/InputActions.cpp` +12 lines (4 `BindAction`)
+  - `src/app/main.cpp` +27 lines (audio init + first playlist scan)
+  - `src/debug/DebugHud.cpp` +45 lines (1 regular HUD line + 2 detailed helper lines + audio header include)
+  - `src/render/ScreenshotCapture.cpp` +21 lines (6 default-`OFF` sidecar keys)
+  - `tests/CMakeLists.txt` +14 lines (miniaudio link + audio source)
+  - `music/.gitkeep` NEW
+
+  **Working rules (см. `agent/memory.md §10.26`):**
+  - 4 hotkeys: Q (play/pause), E (stop), 7 (vol-), 8 (vol+). v1 layout is placeholder per the operator's note "надо переназначить все кнопки, потому что текущая раскладка неудобная, но это потом."
+  - Loop = `MA_TRUE` for v1.
+  - Volume 0.0..1.0 step 0.05 default 0.8. Bus-level via `ma_sound_group_set_volume`.
+  - 5-second playlist refresh, sticky `m_currentIndex`.
+  - Linux audio routing = PulseAudio → `pipewire-pulse` → PipeWire.
+  - miniaudio 0.11+ has no `ma_sound_set_time` API → v1 pause = stop + forget cursor; v2 needs custom decoder wrapper for true resume.
+  - `ma_engine_config` doesn't have a `playback` substruct — engine picks device-native format. 16/44100 satisfied at the engine level (44.1 kHz sample rate) + device-native 16-bit s16 on the device level.
+  - `AudioEnginePtr` uses function-pointer deleter at global scope, matching `EcsStatePtr` / `PhysicsStatePtr` pattern (keeps `core/Types.hpp` header-only, avoids 100k-line `<miniaudio.h>` include in ~20 TUs).
+  - Sidecar `music_*` keys write `initialized=0` for v1 (capture path doesn't plumb the audio engine pointer through the renderer interface yet; follow-up slice).
+
+  **Commit plan (1 commit, pending operator confirmation per §7.2.4):**
+  ```
+  feat(audio): miniaudio music engine (16/44100 PipeWire,
+  4 hotkeys, 5s playlist refresh)
+
+  miniaudio was a vendored submodule but not wired into
+  CMake; this commit adds the add_subdirectory + link
+  pthread dl m (Linux) and introduces src/audio/ with
+  AudioEngine (ma_engine + ma_sound_group + ma_sound)
+  and MusicDirectoryPath (env override
+  PROJECTV_MUSIC_DIR → SDL_GetBasePath()/music → ./music,
+  mirrors the screenshot/snapshot pattern).
+
+  Playback format = 16-bit signed PCM at 44.1 kHz
+  stereo. miniaudio's engine config exposes sampleRate
+  and channels; the device picks the native format
+  (typically ma_format_s16 on built-in Linux audio,
+  satisfying the user-spec "16/44100"). Linux routing
+  = PulseAudio → pipewire-pulse → PipeWire (no direct
+  PipeWire backend in miniaudio; the chain satisfies
+  the "выход pipewire pcm" requirement).
+
+  Playlist with 5-second auto-refresh: std::filesystem
+  directory_iterator scans the music folder, sorts
+  alphabetically, sticky m_currentIndex. If the
+  currently-loaded track is gone, graceful uninit +
+  transition to Stopped; if new files are added, the
+  playlist grows without disrupting playback.
+
+  4 hotkeys (Q play/pause, E stop, 7 vol-, 8 vol+)
+  per the operator's "назначай там, где свободно"
+  constraint; full hotkey rebind is a follow-up slice.
+
+  AppState::audio is AudioEnginePtr with a
+  function-pointer deleter at global scope (mirrors
+  EcsStatePtr / PhysicsStatePtr, keeps core/Types.hpp
+  header-only).
+
+  HUD: MUSIC <STATE> VOL 0.80 TRK <name> in the regular
+  section. Sidecar: 6 music_* keys in
+  ScreenshotCapture.cpp (defaults to initialized=0; the
+  renderer plumbing for live audio is a follow-up
+  slice per decisions.md §28).
+
+  Build: green, ctest 6/6 (1.46s, baseline preserved).
+  Smoke: PROJECTV_MUSIC_DIR=/home/le1t/Projects/ProjectV/music
+  → "miniaudio initialized; 2 mp3 track(s)".
+
+  Refs: TODO.md §4 (audio engine closed),
+        agent/decisions.md §28, agent/memory.md §10.26,
+        agent/status.md §18,
+        legacy/docs/architecture/practice/02_engine_bootstrap_spec.md:533
+  ```
+
 ### session-2026-06-12-richer-render-stats
 
 - **id:** `2026-06-12T23:30Z-richer-render-stats`

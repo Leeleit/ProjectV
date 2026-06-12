@@ -5,6 +5,7 @@ add_executable(ProjectVTests
         ../src/app/InputActions.cpp
         ../src/app/InputReplay.cpp
         ../src/app/LookDevCaptureAutomation.cpp
+        ../src/audio/AudioEngine.cpp
         ../src/ecs/EcsWorld.cpp
         ../src/physics/PhysicsWorld.cpp
         ../src/debug/DebugHud.cpp
@@ -45,6 +46,17 @@ target_link_libraries(ProjectVTests PRIVATE
         # the test TU's include path or the build dies on the very
         # first TU that opens `AssetLoader.hpp`.
         glm
+        # Audio engine (2026-06-12). `miniaudio` is needed
+        # because `AppUpdate.cpp` now `#include`s
+        # `audio/AudioEngine.hpp`, which includes the
+        # library header. Linking the library is the
+        # cheapest way to inherit `external/miniaudio/`
+        # on the test TU's include path. The audio
+        # engine itself is not used in any test (the
+        # test path passes `nullptr` for the engine),
+        # but the include is needed to compile
+        # `AppUpdate.cpp`.
+        miniaudio
 )
 
 if (PROJECTV_ENABLE_TRACY)

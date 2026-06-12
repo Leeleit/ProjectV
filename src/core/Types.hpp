@@ -39,10 +39,16 @@ constexpr uint32_t MAX_LOOK_DEV_CAPTURE_VIEW_COUNT = 8;
 struct VoxelWorld;
 struct EcsState;
 struct PhysicsState;
+namespace projectv::audio {
+class AudioEngine;
+} // namespace projectv::audio
 void DestroyEcsState(EcsState *ecs);
 void DestroyPhysicsState(PhysicsState *physics);
+void DestroyAudioEngine(projectv::audio::AudioEngine *engine);
 using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
 using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
+using AudioEnginePtr = std::unique_ptr<projectv::audio::AudioEngine,
+	void (*)(projectv::audio::AudioEngine *)>;
 
 struct PackedSceneVoxelFace {
 	// A1 (4.1 greedy meshing): this struct now covers both 1×1 voxels and
@@ -185,6 +191,20 @@ enum class InputAction : uint8_t {
 	IncreaseTimeScale,
 	StepSingleFrame,
 	ResetTimeScale,
+	// **Audio engine, 2026-06-12.** Music player
+	// controls. v1 layout uses free letters/digits
+	// per the operator's request ("надо
+	// переназначить все кнопки ... но это потом.
+	// Сейчас назначай там, где свободно"); the full
+	// hotkey rebind is a follow-up slice. See
+	// `decisions.md §28` and `InputActions.cpp` for
+	// the current bindings (Q / E / 7 / 8). The
+	// `MusicState` enum (Stopped / Playing / Paused)
+	// lives in `src/audio/AudioEngine.hpp`.
+	ToggleMusicPlayPause,
+	StopMusic,
+	MusicVolumeDown,
+	MusicVolumeUp,
 	Count,
 };
 
@@ -537,6 +557,23 @@ struct DebugStats {
 	float renderPassDebugHudMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
 	uint32_t renderPassDirtyChunkRebuiltCount = 0;
+	// **Audio engine mirrors, 2026-06-12.** Source of
+	// truth lives in `AudioEngine` (singleton on
+	// `AppState`); these mirrors feed the HUD line
+	// and the capture sidecar without poking into
+	// `AppState` directly. `audioMusicState` is
+	// `uint8_t` (the underlying `MusicState` is
+	// 1-byte too) for ABI stability across the
+	// `DebugStats` mirror boundary. The string
+	// mirrors are populated on every frame the
+	// playlist rescan or current-index change
+	// (see `AudioEngine::scanPlaylist`).
+	uint8_t audioMusicState = 0; // 0=Stopped, 1=Playing, 2=Paused (matches MusicState enum)
+	float audioMusicVolume = 0.8f;
+	bool audioMusicInitialized = false;
+	uint32_t audioMusicPlaylistSize = 0;
+	uint32_t audioMusicCurrentIndex = 0;
+	std::array<char, 128> audioMusicTrackName{};
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 	bool walkDebugValid = false;
@@ -1219,6 +1256,16 @@ struct AppState {
 	BenchmarkAutomationState benchmark{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
 	PhysicsStatePtr physics{nullptr, DestroyPhysicsState};
+	// **Audio engine, 2026-06-12.** Single
+	// `AudioEngine` instance mirroring the
+	// `physics` / `ecs` / `render` singletons.
+	// Stays `nullptr` if `init` failed (logs and
+	// returns false) so the rest of the program
+	// keeps running without audio. The
+	// destructor is the engine's own
+	// `~AudioEngine`, which calls `shutdown`
+	// unconditionally.
+	AudioEnginePtr audio{nullptr, DestroyAudioEngine};
 
 	bool shutdownDone = false;
 

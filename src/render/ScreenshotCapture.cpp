@@ -418,6 +418,40 @@ bool SaveScreenshotCaptureMetadata(
 		render.renderPassTimings.debugOverlayMs,
 		render.renderPassTimings.debugHudMs,
 		render.renderPassTimings.dirtyChunkRebuiltCount);
+	// **Audio engine keys, 2026-06-12.** Three
+	// `fmt::format` blocks so the 99-arg limit
+	// doesn't trip (the first block is already
+	// at 99; the per-pass timing block adds 7;
+	// these add 4 + 1 + 1). The state string
+	// mirrors the `MusicStateToString` output
+	// from `audio/AudioEngine.cpp` so a parser
+	// can grep for `music_state=PLAY` etc.
+	// `music_track=` is empty when the playlist
+	// is empty or the engine didn't init.
+	//
+	// **v1 limitation:** the screenshot
+	// capture path doesn't have a direct
+	// pointer to the `AppState::audio` engine
+	// (the renderer is reached via `DrawFrame`
+	// → `RecordGraphicsCommands` →
+	// `SaveRequestedScreenshot` → this
+	// function, none of which take an audio
+	// pointer). The HUD mirrors in
+	// `DebugStats::audioMusic*` are the
+	// authoritative live view; the sidecar
+	// here defaults to `music_initialized=0`
+	// for now. Plumbing the audio engine
+	// pointer through the renderer's
+	// interface is a follow-up slice
+	// (`agent/decisions.md §28` known
+	// limitation, `memory.md §10.26` working
+	// rule).
+	stream << "music_initialized=0\n";
+	stream << fmt::format("music_volume={:.6f}\n", 0.0f);
+	stream << "music_playlist_size=0\n";
+	stream << "music_current_index=0\n";
+	stream << "music_state=OFF\n";
+	stream << "music_track=\n";
 
 	if (!stream) {
 		runtime::LogRuntimeFailure("Capture", "SaveScreenshotCaptureMetadata.Write", resolvedPath.string());

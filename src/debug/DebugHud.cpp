@@ -1,6 +1,7 @@
 #include "debug/DebugHud.hpp"
 
 #include "app/Camera.hpp"
+#include "audio/AudioEngine.hpp"
 
 #include <algorithm>
 #include <array>
@@ -552,6 +553,56 @@ size_t BuildStatsLines(
 		return lineCount;
 	}
 
+	// **Audio engine line, 2026-06-12.** Lives in the
+	// regular (non-detailed-only) section because
+	// audio is a normal feature, not a debug tool.
+	// Format: `MUSIC <state> VOL 0.80 TRK <name>`.
+	// `TRK` is only included when the playlist is
+	// non-empty and the engine has selected a
+	// track; otherwise the line is shortened to
+	// `MUSIC <state> VOL 0.80 (no tracks)`. The font
+	// supports uppercase, digits, `.`, `-`, `:`
+	// only — no square brackets — so the line uses
+	// only those glyphs.
+	{
+		const char *musicState = "STOP";
+		if (stats.audioMusicInitialized) {
+			switch (static_cast<projectv::audio::MusicState>(stats.audioMusicState)) {
+			case projectv::audio::MusicState::Stopped:
+				musicState = "STOP";
+				break;
+			case projectv::audio::MusicState::Playing:
+				musicState = "PLAY";
+				break;
+			case projectv::audio::MusicState::Paused:
+				musicState = "PAUSE";
+				break;
+			}
+		} else {
+			musicState = "OFF";
+		}
+		if (stats.audioMusicPlaylistSize == 0) {
+			PV_APPEND_HUD_LINE(
+				outLines,
+				lineCount,
+				"MUSIC %s VOL %.2f NO TRACKS",
+				musicState,
+				stats.audioMusicVolume);
+		} else {
+			// `audioMusicTrackName` is a fixed-size
+			// `std::array<char, 128>` (see
+			// `DebugStats`). Pass it via
+			// `.data()` to snprintf.
+			PV_APPEND_HUD_LINE(
+				outLines,
+				lineCount,
+				"MUSIC %s VOL %.2f TRK %s",
+				musicState,
+				stats.audioMusicVolume,
+				stats.audioMusicTrackName.data());
+		}
+	}
+
 	// Per-pass CPU timing lines (2026-06-12). Two-line
 	// format: first line shows the total graphics time
 	// (`GFX`) and the unaccounted-for slice (`OTH` =
@@ -911,6 +962,17 @@ size_t BuildHelperLines(
 		// SDL_SCANCODE level in `InputActions.cpp`.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TIMECTL DOWN  UP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TIMESTEP STEP  RESET 1X");
+		// **Audio engine, 2026-06-12.** Music
+		// player controls. v1 layout per
+		// `decisions.md §28` (full hotkey rebind
+		// is the follow-up slice). The bracket
+		// and backslash / backtick keys are
+		// spelled out because their raw glyphs
+		// are not in the HUD font (only A-Z,
+		// 0-9, `.`, `-`, `:`). Q = play/pause,
+		// E = stop, 7/8 = vol-/vol+.
+		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC Q PLAY  E STOP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 7 DN   8 UP");
 	} else {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");

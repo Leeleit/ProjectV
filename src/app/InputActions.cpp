@@ -180,6 +180,23 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::IncreaseTimeScale, SDL_SCANCODE_RIGHTBRACKET);
 	BindAction(input, InputAction::StepSingleFrame, SDL_SCANCODE_BACKSLASH);
 	BindAction(input, InputAction::ResetTimeScale, SDL_SCANCODE_GRAVE);
+	// **Audio engine, 2026-06-12.** Music
+	// player controls. v1 hotkey layout is
+	// placeholder per `decisions.md §28` —
+	// the operator plans a full hotkey
+	// rebind as a follow-up. The current
+	// letters/digits were chosen because they
+	// were free in the existing `InputAction`
+	// table (Q/E are not used; digits 7/8
+	// are not used; the digit pair keeps
+	// the volume-down / volume-up mnemonic
+	// intuitive without stealing letters
+	// from the existing edit/lighting
+	// ladders).
+	BindAction(input, InputAction::ToggleMusicPlayPause, SDL_SCANCODE_Q);
+	BindAction(input, InputAction::StopMusic, SDL_SCANCODE_E);
+	BindAction(input, InputAction::MusicVolumeDown, SDL_SCANCODE_7);
+	BindAction(input, InputAction::MusicVolumeUp, SDL_SCANCODE_8);
 }
 
 void HandleInputActionEvent(

@@ -2,7 +2,7 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-06-12` (+§19 + §20 TAA contracts + §26 frame-step/slow-motion + §27 per-pass timings)
+Дата обновления: `2026-06-12` (+§19 + §20 TAA contracts + §26 frame-step/slow-motion + §27 per-pass timings + §28 audio engine)
 
 ---
 
@@ -725,3 +725,32 @@ Cross-refs: `agent/memory.md §10.23` (working rules), `agent/status.md §15` (s
 - `kMaxStatsLineCount` is the one knob the operator is most likely to bump, so it stays a named constant near the top of the file rather than being computed from another constant. If the per-pass lines ever need to be 4 lines instead of 2, only the cap and the HUD block change — no renderer / struct changes.
 
 Cross-refs: `agent/memory.md §10.24` (working rules), `agent/status.md §16` (session snapshot), `agent/active-sessions.md session-2026-06-12-richer-render-stats`, `TODO.md §4 "richer render stats / explicit per-pass timings"` (closed).
+
+## 28. Audio engine contract (`2026-06-12`)
+
+Решение:
+
+- **miniaudio, not SDL_mixer or OpenAL.** miniaudio is a single-header C library (100k lines, all in `miniaudio.h`) with a built-in MP3 decoder (no external `libmpg123` dep), a one-stop `ma_engine` API, and clean Linux PipeWire routing via its PulseAudio backend → `pipewire-pulse` shim. SDL_mixer pulls in a runtime ABI mismatch per release; OpenAL is a heavier API surface and lacks the `ma_engine_set_volume` / per-track-loop ergonomics we want. Per `legacy/docs/architecture/practice/02_engine_bootstrap_spec.md:533` the audio subsystem has been planned for years; this is the v1 implementation.
+- **Playback format = 16-bit signed PCM at 44.1 kHz stereo, device-native per engine config.** The `ma_engine_config` API only exposes `sampleRate` and `channels` directly; the `playback.format` substruct is `ma_device_config`-only. The engine picks the device's native format (typically `ma_format_s16` on built-in Linux audio, which matches the user-spec "16/44100"). If a future slice needs to force a specific format, it has to drop to the lower-level `ma_device` API. v1 doesn't.
+- **Linux backend = PulseAudio → pipewire-pulse → PipeWire.** miniaudio has no direct PipeWire backend. On this host, `pactl info` reports `Server String: /run/user/1000/pulse/native` — that's the `pipewire-pulse` shim serving the PulseAudio wire protocol, with PipeWire as the actual audio server. miniaudio's `find_package(PulseAudio)` resolves `libpulse.so.0` and the output is automatically routed to PipeWire. The user's "выход pipewire pcm" requirement is satisfied by this chain.
+- **`MusicState` enum: `Stopped | Playing | Paused`.** Three-valued because pause = stop + remember cursor in some libs but miniaudio 0.11+ has no `ma_sound_set_time` (the API was removed in 0.10+), so v1 pause semantics = stop + forget cursor, and the next "play" starts from 0. The enum exists anyway so the HUD/sidecar can show the three states cleanly. v2 can add true resume via a custom decoder wrapper.
+- **`AudioEnginePtr` uses a function-pointer deleter at global scope, matching `DestroyEcsState` / `DestroyPhysicsState`.** The deleter (`DestroyAudioEngine` in `audio/AudioEngine.cpp` at global scope) is `delete engine`, which transitively calls `~AudioEngine() → shutdown()`. This pattern keeps `core/Types.hpp` header-only (no need to include `<miniaudio.h>` there), which matters because `core/Types.hpp` is included by ~20 TUs and `<miniaudio.h>` is a 100k-line single-header library.
+- **5-second playlist refresh, sticky `m_currentIndex`.** The playlist is rebuilt every 5 seconds via `std::filesystem::directory_iterator`. If the currently-loaded track is still in the new playlist, the index is remapped to its new position (so new files added before the current track don't disrupt playback). If the current track is gone, the engine unloads the sound and transitions to `Stopped` (so the next `Q` press loads whatever's at index 0 now). 0-second refresh would be wasteful; 30-second refresh would be visibly laggy when the operator drops a new file in. 5 is the empirically-sensible midpoint.
+- **Loop = `MA_TRUE` for v1.** Music is a "fire-and-forget" experience in this engine; the operator doesn't expect to manually restart. If a future slice adds an SFX layer, that layer can use the default `MA_FALSE`.
+- **4 hotkeys in v1: `Q` play/pause, `E` stop, `7` vol-, `8` vol+.** v1 layout is placeholder per the operator's note "надо переназначить все кнопки, потому что текущая раскладка неудобная, но это потом." These are the only free letters/digits in the existing `InputAction` enum (Q, E, 7, 8 are not bound; the bracket and backslash/backtick keys from the time-scale ladder and the TAA ladder already take `[ ] \ `` ` ``). The full hotkey rebind is a follow-up slice.
+- **Volume = 0.0..1.0, step 0.05, default 0.8.** Step matches the existing `kLightingExposureStepStops` style (5 cents per press); default 0.8 is the legacy spec from `legacy/docs/architecture/practice/40_cpp26_reality_spec.md:262` (`volume_music{0.8f}`). Applied to the music `ma_sound_group` bus-level volume, so future SFX/Ambient groups can have their own bus-level volumes without cross-contamination.
+- **Graceful degradation on every failure mode.** miniaudio init fail / empty folder / broken `.mp3` file / operator press when playlist is empty — all are logged via `runtime::LogRuntimeFailure` and silently degrade. The program keeps running; the HUD shows `MUSIC OFF VOL 0.80` or `MUSIC STOP VOL 0.80 NO TRACKS`; hotkeys are no-ops. Per `decisions.md §4` build/verification contract: the renderer-side smoke is a targeted check, not mandatory DoD.
+- **Sidecar `music_*` keys write `initialized=0` for now.** The screenshot capture path doesn't have a direct pointer to the `AppState::audio` engine (`DrawFrame` → `RecordGraphicsCommands` → `SaveRequestedScreenshot` → `SaveScreenshotCaptureMetadata` none of which take an audio pointer). Plumb the audio engine pointer through `FrameRenderData` (or via a `RenderContext` struct) is a follow-up slice. The HUD's `MUSIC <STATE> VOL 0.80 TRK <name>` is the authoritative live view.
+- **`MA_SOUND_FLAG_STREAM` for the file loader.** The MP3 is streamed from disk rather than pre-decoded to RAM. For typical music files (3-10 MB) this is a small saving, but the right semantic for "playlist that can change every 5 seconds" — pre-loading the file would mean re-loading it every time the operator drops a new file in. Flag is bitwise-orable with future flags.
+
+Почему:
+
+- miniaudio over SDL_mixer / OpenAL: single-file, no runtime ABI mismatch, built-in MP3 decoder, one-stop engine API, clean Linux PipeWire routing.
+- 16/44100 at the engine config layer + device-native format at the device layer: the user said "16/44100" and on any sane Linux desktop the device picks 16-bit s16; forcing a specific format would require dropping to the lower-level API which is out of v1 scope.
+- 5-second playlist refresh: 0 = wasteful, 30 = visibly laggy, 5 = responsive enough that the operator can drop a file and quickly verify it's in the playlist.
+- Loop = `MA_TRUE` for v1: matches the user request "музыка" (music), which is intrinsically looping; an SFX layer can override.
+- Hotkeys Q/E/7/8: the operator explicitly said the v1 layout is placeholder and the full rebind is a follow-up.
+- `AudioEnginePtr` with function-pointer deleter at global scope: keeps `core/Types.hpp` header-only, avoids the 100k-line `<miniaudio.h>` include in ~20 TUs.
+- Sidecar defaults to `music_initialized=0`: capture-side audio plumbing is a separate plumbing refactor (add `FrameRenderData::audioEngine` field, thread it from `DrawFrame`); out of v1 scope.
+
+Cross-refs: `agent/memory.md §10.26` (working rules), `agent/status.md §18` (session snapshot), `agent/active-sessions.md session-2026-06-12-audio-engine`, `legacy/docs/architecture/practice/02_engine_bootstrap_spec.md:533` (the planned `AudioSystem` that this slice implements).

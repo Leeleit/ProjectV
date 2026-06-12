@@ -9,6 +9,8 @@
 #include "app/InputReplay.hpp"
 #include "app/BenchmarkAutomation.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
+#include "audio/AudioEngine.hpp"
+#include "audio/MusicDirectoryPath.hpp"
 #include "asset/ModelManifestLoader.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
@@ -315,6 +317,40 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
+	// **Audio engine, 2026-06-12.** Init is non-fatal
+	// on failure (per `decisions.md §28` — graceful
+	// degradation so a miniaudio/PulseAudio init
+	// failure on the host doesn't break the rest
+	// of the program). The deleter (`AudioEnginePtr`
+	// in `core/Types.hpp`) takes care of
+	// `shutdown()` in the deleter TU, so
+	// `SDL_AppQuit` only needs to reset the
+	// `unique_ptr` (which happens implicitly when
+	// `state` is destroyed). Construct via the
+	// `AudioEnginePtr` alias explicitly because the
+	// custom function-pointer deleter does not
+	// accept the `std::default_delete<T>` returned
+	// by `std::make_unique<AudioEngine>()`.
+	state->audio = AudioEnginePtr(
+		new projectv::audio::AudioEngine(),
+		DestroyAudioEngine);
+	if (!state->audio->init()) {
+		SDL_Log("[ProjectV][Audio] miniaudio init failed; running without music");
+		state->audio.reset();
+	} else {
+		// First playlist scan. `loadMusicFolder`
+		// returns the number of `.mp3` files found;
+		// 0 is a valid result and means "the engine
+		// is alive but has no track to play". The
+		// operator can drop a file in the folder
+		// and the next 5-second tick will pick it
+		// up — no app restart required.
+		const size_t trackCount = state->audio->loadMusicFolder(
+			projectv::audio::GetMusicDirectoryPath());
+		SDL_Log("[ProjectV][Audio] miniaudio initialized; %zu mp3 track(s) in %s",
+			trackCount,
+			state->audio->musicFolder().string().c_str());
+	}
 	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
 	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark);
 
@@ -409,7 +445,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			world,
 			state->physics.get(),
 			&state->render,
-			debug)) {
+			debug,
+			state->audio.get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");
 	} else if (world->snapshotSaveRequested &&
 			   !SaveActiveVoxelWorldSnapshot(state)) {
