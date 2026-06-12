@@ -276,6 +276,7 @@ bool SaveScreenshotCaptureMetadata(
 		"taa_cas_sharpness_max={:.6f}\n"
 		"taa_camera_cut_count={}\n"
 		"taa_camera_cut_max_delta={:.6f}\n"
+		"taa_scene_color_format={}\n"
 		"shadow_cascade_count={}\n"
 		"shadow_cascade_lambda={:.6f}\n"
 		"shadow_cascade_splits={:.6f} {:.6f} {:.6f} {:.6f}\n"
@@ -346,6 +347,7 @@ bool SaveScreenshotCaptureMetadata(
 		render.taaCasSharpnessMax,
 		render.taaCameraCutCount,
 		render.taaCameraCutMaxDelta,
+		"B10G11R11_UFLOAT",
 		kSunShadowCascadeCount,
 		render.currentSunShadowCascadeSplits.splitLambda,
 		render.currentSunShadowCascadeSplits.viewDepthSplits[0],

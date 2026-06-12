@@ -2,7 +2,7 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-06-12` (+§19 TAA camera-cut + CAS contract)
+Дата обновления: `2026-06-12` (+§19 + §20 TAA contracts)
 
 ---
 
@@ -538,3 +538,23 @@ Cross-refs: `agent/memory.md` §10.12–§10.16 (full timeline). TODO §5 Бло
 
 Cross-refs: `agent/memory.md` §10.17 (full timeline), `TODO.md` Блок 1
 (1.2 + 1.3 closed in this session).
+
+## 20. TAA scene color format (`2026-06-12`)
+
+Решение:
+
+- **`taaSceneColorTarget` + `taaHistoryColorTarget` формат = `VK_FORMAT_B10G11R11_UFLOAT_PACK32` (4 B/pixel).** Раньше — `VK_FORMAT_R16G16B16A16_SFLOAT` (8 B/pixel). 2× bandwidth save на resolve-pass read и history copy. Single source of truth — `inline constexpr VkFormat kTaaSceneColorFormat` в `projectv::taa` namespace (`src/render/TaaRenderTargets.hpp`).
+- **Two consumers, one constant:** `CreateOrRecreateTaaRenderTargets` (image allocation) и `VulkanGraphicsPipeline::CreateGraphicsPipeline` (`pColorAttachmentFormats[1]` declaration) оба consume `kTaaSceneColorFormat`. Format cannot drift.
+- **Shader code не трогаем.** `voxel.frag` и `model.frag.taa_on.spv` пишут `vec4 outSceneColor` (Location 1), `taa_resolve.frag` читает `texture(historyColor, ...).rgb` — Vulkan spec: alpha of packed formats is undefined on store, but resolve only consumes `.rgb`, dropped alpha is no-op. Resolve output пишет в swapchain (B8G8R8A8 UNORM) — format transition transparent.
+- **`vkCmdCopyImage` format compatibility:** src и dst оба `kTaaSceneColorFormat`, identical → spec §7.1.1 satisfied.
+
+Почему:
+
+- **Bandwidth wins** на resolve-pass read + per-frame history update — это 2 из 3 самых горячих transfer paths в TAA pipeline.
+- **5/6/5 bits per channel + 5-bit shared exponent** — узкий dynamic range, но matches HDR linear color после tone-map. Dim areas (< 0.1% intensity) могут banding'ить — fallback revert к R16G16B16A16 = 1-line change.
+- **R11G11B10_UFLOAT, не R10G10B10A2_UNORM:** linear HDR + RGB-only. A2UNORM тратит 2 bits на unused alpha; UFLOAT matches our tone-map output.
+- **B10G11R11, не R11G11B11:** standard "Vulkan R11G11B10" name. `B10G11R11_UFLOAT_PACK32` = R in low bits, B in high bits. Same memory layout, just a naming convention.
+- **Single-source-of-truth constant** (не magic literal × 2): pattern из §18/§19 (push-constant byte layout invariance). Inline constexpr + 2 consumers = compiler-enforced consistency.
+
+Cross-refs: `agent/memory.md` §10.18 (full timeline), `TODO.md` Блок 1
+(1.7 closed in this session).

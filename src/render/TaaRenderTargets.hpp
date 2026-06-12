@@ -26,13 +26,38 @@ using VmaAllocationHandle = void*;
 
 namespace projectv::taa {
 
+// Single source of truth for the TAA offscreen colour format. The
+// pipeline declaration in `VulkanGraphicsPipeline.cpp` and the image
+// allocation in `CreateOrRecreateTaaRenderTargets` both consume this
+// constant so they cannot drift.
+//
+// Format choice (`VK_FORMAT_B10G11R11_UFLOAT_PACK32`): 32 bits per pixel
+// (4 B/pixel) vs the previous `VK_FORMAT_R16G16B16A16_SFLOAT` 64 bits
+// per pixel (8 B/pixel). 2× bandwidth save on the resolve-pass read
+// (`historyColor` sample) and the per-frame `vkCmdCopyImage` history
+// update. The shader writes `vec4` to `outSceneColor` regardless, and
+// the `B10G11R11_UFLOAT` format is unsigned-float packed-RGB with the
+// alpha channel ignored on store (Vulkan spec: alpha is undefined
+// for packed formats); `taa_resolve.frag` only consumes `.rgb` from
+// the history sample, so the dropped alpha is a no-op for the
+// resolve. The resolve output goes straight to the swapchain (B8G8R8A8
+// UNORM on most desktops) — the format transition is transparent to
+// the rest of the pipeline.
+//
+// Loss of precision vs R16G16B16A16_SFLOAT: 5 bits for B, 6 for G, 5
+// for R (with shared exponent). Visible at < 0.1% intensity in dim
+// areas; if banding shows up in the live look-dev captures, fall
+// back by reverting to `VK_FORMAT_R16G16B16A16_SFLOAT`. Tunable via
+// the captured `taa_scene_color_format` sidecar key.
+inline constexpr VkFormat kTaaSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+
 // TAA offscreen render target + linear sampler. Created / recreated in
 // `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` so the size stays in
-// lockstep with the swapchain extent. Two identical R16G16B16A16_SFLOAT
-// images are allocated and double-buffered: the resolve pass reads from
-// `history` while writing to `current`, then the post-resolve ping-pong
-// swap (or copy) makes the freshly-resolved `current` the next frame's
-// `history`.
+// lockstep with the swapchain extent. Two identical
+// `kTaaSceneColorFormat` (B10G11R11_UFLOAT_PACK32) images are allocated
+// and double-buffered: the resolve pass reads from `history` while
+// writing to `current`, then the post-resolve ping-pong swap (or copy)
+// makes the freshly-resolved `current` the next frame's `history`.
 //
 // Both images start in `UNDEFINED` layout; the first caller's
 // `TransitionImage` helper is responsible for moving them to

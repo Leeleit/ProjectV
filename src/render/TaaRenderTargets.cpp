@@ -83,7 +83,10 @@ bool CreateOrRecreateTaaRenderTargets(
 	DestroyTaaRenderTargets(context, sceneColor, historyColor, linearSampler);
 
 	const VkExtent3D imageExtent{extent.width, extent.height, 1u};
-	const VkFormat targetFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	// Source of truth: `kTaaSceneColorFormat` in `TaaRenderTargets.hpp`.
+	// The graphics pipeline declaration in `VulkanGraphicsPipeline.cpp`
+	// reads the same constant so the two cannot drift.
+	const VkFormat targetFormat = kTaaSceneColorFormat;
 
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;

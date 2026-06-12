@@ -1770,14 +1770,17 @@ bool CreateGraphicsPipeline(
 
 	// The main voxel pipeline declares two color attachment formats so the
 	// same pipeline can drive both the TAA-on path (render to slot 1 =
-	// `R16G16B16A16_SFLOAT` TAA offscreen target, slot 0 = NULL) and the
-	// TAA-off path (render to slot 0 = swapchain, slot 1 = NULL). The
-	// ability to bind with `imageView = VK_NULL_HANDLE` on the unused
-	// slot requires the `dynamicRenderingUnusedAttachments` feature,
-	// enabled by `VK_EXT_dynamic_rendering_unused_attachments` in
-	// `VulkanBootstrap.cpp::InitializeVulkanBase`. Without that feature
-	// the pipeline declaration itself is still valid (formats can be
-	// `VK_FORMAT_UNDEFINED` for unused slots) but the per-frame
+	// TAA offscreen target, slot 0 = NULL) and the TAA-off path (render
+	// to slot 0 = swapchain, slot 1 = NULL). The TAA offscreen format
+	// is consumed from the same `kTaaSceneColorFormat` constant that
+	// the image allocator in `TaaRenderTargets.cpp` uses, so the
+	// pipeline declaration and the actual `VkImage` format cannot
+	// drift. The ability to bind with `imageView = VK_NULL_HANDLE` on
+	// the unused slot requires the `dynamicRenderingUnusedAttachments`
+	// feature, enabled by `VK_EXT_dynamic_rendering_unused_attachments`
+	// in `VulkanBootstrap.cpp::InitializeVulkanBase`. Without that
+	// feature the pipeline declaration itself is still valid (formats
+	// can be `VK_FORMAT_UNDEFINED` for unused slots) but the per-frame
 	// `VkRenderingAttachmentInfo::imageView` would have to match, which
 	// would force a second pipeline variant. We fail fast on devices
 	// that lack the feature so the failure mode is a clear init error
@@ -1791,7 +1794,7 @@ bool CreateGraphicsPipeline(
 	}
 	const VkFormat mainColorAttachmentFormats[2] = {
 		swapchain->format,
-		VK_FORMAT_R16G16B16A16_SFLOAT,
+		projectv::taa::kTaaSceneColorFormat,
 	};
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
