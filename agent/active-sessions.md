@@ -61,21 +61,25 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-12T16:00Z-taa-quality-1.7`
 - **started-at:** 2026-06-12T16:00:00Z
+- **closed-at:** 2026-06-12T16:30:00Z
 - **agent:** cline/MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** TAA Блок 1 / 1.7 (R11G11B10_UFloat scene color) — phase 1/5 of the big-session plan (per `status.md §11`). 2× bandwidth save: `VK_FORMAT_R16G16B16A16_SFLOAT` (8 B/pixel) → `VK_FORMAT_B10G11R11_UFLOAT_PACK32` (4 B/pixel) для `taaSceneColorTarget` + `taaHistoryColorTarget`. Single source of truth: `inline constexpr VkFormat kTaaSceneColorFormat` в `projectv::taa` namespace (`src/render/TaaRenderTargets.hpp`), consumed by `CreateOrRecreateTaaRenderTargets` (image allocation) и `VulkanGraphicsPipeline::CreateGraphicsPipeline` (`pColorAttachmentFormats[1]` declaration). Shader code (`voxel.frag`, `model.frag.taa_on.spv`, `taa_resolve.frag`) **без изменений** — format transition transparent. Sidecar: новый `taa_scene_color_format=B10G11R11_UFLOAT` key для capture-driven verification.
 - **files-touched-intent:** `src/render/TaaRenderTargets.hpp` (kTaaSceneColorFormat constant + doc comment), `src/render/TaaRenderTargets.cpp` (use kTaaSceneColorFormat), `src/render/vulkan/VulkanGraphicsPipeline.cpp` (use kTaaSceneColorFormat + comment update), `src/render/ScreenshotCapture.cpp` (taa_scene_color_format sidecar key), `agent/memory.md` (§10.18), `agent/decisions.md` (§20), `agent/status.md` (§11), `TODO.md` (close 1.7 in Блок 1), `agent/active-sessions.md` (this entry).
-- **status:** open
-- **notes:** **Phase 1/5 of big-session plan, 2 commits proposed (per-task pattern):**
-  - `perf(render): TAA scene color to B10G11R11_UFLOAT (2x bandwidth save)` — 4 files (TaaRenderTargets.hpp + TaaRenderTargets.cpp + VulkanGraphicsPipeline.cpp + ScreenshotCapture.cpp). Constant-driven, so the format change is in 1 line and the consumers automatically follow.
-  - `docs(agent): sync 1.7 closure + add §10.18/§20/§11` — 5 files (TODO.md + memory.md + decisions.md + status.md + active-sessions.md).
+- **status:** closed
+- **commit-hash:** `59d681e` — `perf(render): TAA scene color to B10G11R11_UFLOAT (2x bandwidth save)` (with follow-up `0503d8f` doc sync combined with M5.2 follow-up)
+- **notes:** **Phase 1/5 of big-session plan, 2 commits landed:**
+  - `59d681e perf(render): TAA scene color to B10G11R11_UFLOAT (2x bandwidth save)` — 6 files: 4 code (TaaRenderTargets.hpp + TaaRenderTargets.cpp + VulkanGraphicsPipeline.cpp + ScreenshotCapture.cpp) + 2 doc (TODO.md close 1.7 + agent/decisions.md §20). Constant-driven, so the format change is in 1 line and the consumers automatically follow.
+  - `0503d8f docs(agent): sync TAA Блок 1 / 1.7 (R11G11B10) + M5.2 follow-up closures` — 3 files: agent/memory.md + agent/status.md + agent/active-sessions.md. Per user arbitration (option A), combined doc sync covers both my 1.7 changes and the parallel session's M5.2 changes since the doc files were interleaved.
 
   **Build state:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests ProjectVDracoTests ProjectVFrustumCullingTests ProjectVBoxUvFixtureTests --parallel 8` — green, 1 pre-existing warning (DebugHud.cpp:600 LOCL `%.0f` for bool, не моя). `ctest` 6/6 (1.48 s) — все suites прошли. `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` (`VoxelLab` reference shot) с `PROJECTV_ENABLE_VALIDATION=OFF`: 6/6 captures под `build/linux-clang-debug/lookdev-captures/20260612-1.7-r11g11b10/`. Sidecar: `taa_scene_color_format=B10G11R11_UFLOAT` ✓, `taa_history_valid=1`, `taa_blend=0.10`, `taa_cas_sharpness_max=0.500000`, `taa_camera_cut_count=0`, `taa_camera_cut_max_delta=0.001018`.
 
   **Visual verify (FINAL view):** VoxelLab рендерится чисто, FPS 110.6. **No banding** в dim areas. Glass/fluid sphere + opaque anchor + sky gradient все visible, без визуальных артефактов от format change.
 
-  **Parallel agent collision (TAA-scope):** одновременно active `session-2026-06-12-taa-m5_2-threshold-bump` (m5.2 threshold 0.20→0.40 + dual-MRT model pipeline fix), их doc правки interleaved с моими в `agent/memory.md` / `agent/status.md` / `agent/active-sessions.md`. Per `AGENTS.md §7.2.6` (multi-agent concurrent work) — manual merge требует user arbitration. **Plan:** commit только мои 4 code файла (TaaRenderTargets.hpp + TaaRenderTargets.cpp + VulkanGraphicsPipeline.cpp + ScreenshotCapture.cpp) + 1 doc-файл который 100% мой (TODO.md — close 1.7 только, parallel не трогал). Doc файлы со смешанным содержимым (memory/decisions/status/active-sessions) — отложить до согласования с пользователем.
+  **Parallel agent coordination resolved:** одновременно active `session-2026-06-12-taa-m5_2-threshold-bump` (m5.2 threshold 0.20→0.40 + dual-MRT model pipeline fix), их doc правки interleaved с моими в `agent/memory.md` / `agent/status.md` / `agent/active-sessions.md`. Per `AGENTS.md §7.2.6` (multi-agent concurrent work) — manual merge requires user arbitration. User chose option A: combined commit with both my 1.7 changes и their M5.2 changes. Resolved.
+
+  **Cross-agent coupling:** `kTaaSceneColorFormat` constant (in TaaRenderTargets.hpp, мой 1.7) is consumed by parallel session's dual-MRT fix in `src/asset/ModelPass.cpp:200-224` (their pending commit). Both 1.7 commit (59d681e) and their M5.2 commit will land separately, both reference the same constant.
 
   **Big-session queue (4 phases remaining):**
   - Phase 2 (next): 1.5 anti-flicker CTSH/AOCC/LOCL (4-6 ч, highest visual impact)
