@@ -259,5 +259,13 @@ bool InitVulkan(AppState *state)
 		return false;
 	}
 
+	// M5.1b follow-up: lift the loaded `modelInstances` to sit
+	// cleanly on top of the voxel floor instead of half-submerged
+	// in it. The same call is also wired into
+	// `FinalizeActiveVoxelWorldReload` for F5 / F6 / replay; this
+	// startup branch covers the initial VoxelLab default scene
+	// (which doesn't go through `FinalizeActiveVoxelWorldReload`).
+	projectv::asset::SnapModelInstancesAboveGround(*state->world.voxelWorld, &state->render);
+
 	return true;
 }

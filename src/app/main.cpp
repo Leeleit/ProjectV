@@ -8,6 +8,7 @@
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
+#include "asset/ModelManifestLoader.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
@@ -84,6 +85,14 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 			"SyncPhysicsWorld returned false after world reload");
 		return false;
 	}
+
+	// M5.1b follow-up: lift the loaded `modelInstances` to sit
+	// cleanly on top of the voxel floor instead of half-submerged
+	// in it (the "half in textures" symptom after the
+	// `box.glb@0,1,0` env-var spawn). Idempotent + cheap
+	// (one `GetVoxelMaterial` probe per AABB sample); safe to
+	// re-run on every world reload / preset switch.
+	projectv::asset::SnapModelInstancesAboveGround(*world->voxelWorld, &state->render);
 
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
 		ConsumeInputActionPressed(state->input, InputAction::MoveUp);

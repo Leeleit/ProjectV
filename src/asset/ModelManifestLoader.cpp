@@ -1,11 +1,13 @@
 #include "asset/ModelManifestLoader.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -14,6 +16,7 @@
 #include "asset/MeshBaker.hpp"
 #include "asset/MeshGpuResources.hpp"
 #include "core/RuntimeDiagnostics.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 #include "fmt/format.h"
 
@@ -143,6 +146,134 @@ void UnloadAllModels(VulkanContextState *context, RenderState *render)
 	}
 	render->modelRegistry.clear();
 	render->modelInstances.clear();
+}
+
+namespace {
+
+// Find the LOWEST non-Air voxel in the column at the given integer
+// XZ position. This is the *ground* / floor / first solid surface
+// at that XZ. Returns `std::numeric_limits<int32_t>::max()` if the
+// column is fully Air (no solid voxels at all — caller decides what
+// to do). Walks from Y=0 up. We pick the lowest, not the topmost,
+// because in `VoxelLab` the same XZ column can contain the floor
+// (Y=0), the glass shell (Y=2..14), and the fluid column
+// (Y=3..10) — the topmost non-Air voxel is the upper shell arc
+// (Y=14) and lifting the model to sit "on top of" the shell would
+// teleport it 14 units up, far above the floor.
+int32_t FindBottomVoxelYAtXZ(const VoxelWorld &world, int32_t x, int32_t z)
+{
+	const int32_t worldHeight = static_cast<int32_t>(world.height);
+	if (worldHeight <= 0) {
+		return std::numeric_limits<int32_t>::max();
+	}
+	for (int32_t y = 0; y < worldHeight; ++y) {
+		if (GetVoxelMaterial(world, Int3{x, y, z}) != VoxelMaterial::Air) {
+			return y;
+		}
+	}
+	return std::numeric_limits<int32_t>::max();
+}
+
+// Compute the floor surface across the model's XZ footprint (the
+// highest of the LOWEST non-Air voxels at 5 AABB samples — 4
+// corners + center). A model on a 1-cell-wide bridge / wall
+// corner would otherwise snap to the wrong side if we only
+// sampled the center. Returns `INT_MIN` if any sample lands
+// over fully-Air.
+int32_t FindFloorSurfaceYForAabb(const VoxelWorld &world, float minX, float maxX, float minZ, float maxZ)
+{
+	const auto trySample = [&](float fx, float fz) -> int32_t {
+		const int32_t x = static_cast<int32_t>(std::floor(fx));
+		const int32_t z = static_cast<int32_t>(std::floor(fz));
+		return FindBottomVoxelYAtXZ(world, x, z);
+	};
+	const int32_t a = trySample(minX, minZ);
+	const int32_t b = trySample(maxX, minZ);
+	const int32_t c = trySample(minX, maxZ);
+	const int32_t d = trySample(maxX, maxZ);
+	const int32_t e = trySample(0.5f * (minX + maxX), 0.5f * (minZ + maxZ));
+	if (a == std::numeric_limits<int32_t>::min() ||
+		b == std::numeric_limits<int32_t>::min() ||
+		c == std::numeric_limits<int32_t>::min() ||
+		d == std::numeric_limits<int32_t>::min() ||
+		e == std::numeric_limits<int32_t>::min()) {
+		return std::numeric_limits<int32_t>::min();
+	}
+	return std::max({a, b, c, d, e});
+}
+
+} // namespace
+
+void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
+{
+	if (!render) {
+		return;
+	}
+	// Column-major `glm::mat4` storage in `ModelInstanceData::modelTransform`
+	// (matches `StoreMatrixColumnMajor` in this file), so translation
+	// lives at indices [12, 13, 14]. Updating those three floats
+	// is enough to translate the instance; the rotation / scale
+	// basis (columns 0..2) is left untouched.
+	for (ModelInstanceData &instance : render->modelInstances) {
+		const float currentBottomY = instance.worldAabbMin[1];
+		const float currentTopY = instance.worldAabbMax[1];
+		const float modelHeight = std::max(currentTopY - currentBottomY, 0.0f);
+		const int32_t topVoxelY = FindFloorSurfaceYForAabb(
+			world,
+			instance.worldAabbMin[0],
+			instance.worldAabbMax[0],
+			instance.worldAabbMin[2],
+			instance.worldAabbMax[2]);
+		if (topVoxelY == std::numeric_limits<int32_t>::min()) {
+			// No ground under this instance (empty scene / floating
+			// in air). Skip — the operator-visible position is left
+			// at whatever the manifest said, no spurious snapping to
+			// Y=0 or Y=INT_MIN.
+			continue;
+		}
+		// The voxel at `topVoxelY` is the solid floor; the world
+		// surface is the TOP of that voxel, i.e. integer
+		// `topVoxelY + 1`. The model's bottom should land there.
+		const float targetBottomY = static_cast<float>(topVoxelY + 1);
+		const float liftY = targetBottomY - currentBottomY;
+		if (std::abs(liftY) > 1e-4f) {
+			// Translate the model by liftY. Column-major: translation
+			// is the 4th column.
+			instance.modelTransform[13] += liftY;
+			instance.worldAabbMin[1] += liftY;
+			instance.worldAabbMax[1] += liftY;
+		}
+
+		// Voxel-grid XZ snap ("нормировка gltf по гриду вокселей"):
+		// the manifest `position` is the model's geometric center
+		// (per `BuildEntryWorldMatrix`), but for a 1x1x1 box centered
+		// at integer coordinates the box's vertices are at
+		// `integer ± 0.5`, which means the box straddles 4 voxel
+		// columns and the model sits on the seam between voxels, not
+		// on a single voxel column ("его центр это центр четырёх
+		// вокселей, это не по сетке"). Snap XZ to `floor + 0.5` so
+		// vertices align with the voxel grid (vertices at integer
+		// coordinates, box sits cleanly on a single voxel column).
+		// The Y is already snapped to `targetBottomY = topVoxelY + 1`
+		// above, so the liftY in the Y is unchanged — but the XZ
+		// shift is independent of the lift.
+		const float currentCenterX = 0.5f * (instance.worldAabbMin[0] + instance.worldAabbMax[0]);
+		const float currentCenterZ = 0.5f * (instance.worldAabbMin[2] + instance.worldAabbMax[2]);
+		const float targetCenterX = std::floor(currentCenterX) + 0.5f;
+		const float targetCenterZ = std::floor(currentCenterZ) + 0.5f;
+		const float shiftX = targetCenterX - currentCenterX;
+		const float shiftZ = targetCenterZ - currentCenterZ;
+		if (std::abs(shiftX) > 1e-4f) {
+			instance.modelTransform[12] += shiftX;
+			instance.worldAabbMin[0] += shiftX;
+			instance.worldAabbMax[0] += shiftX;
+		}
+		if (std::abs(shiftZ) > 1e-4f) {
+			instance.modelTransform[14] += shiftZ;
+			instance.worldAabbMin[2] += shiftZ;
+			instance.worldAabbMax[2] += shiftZ;
+		}
+	}
 }
 
 } // namespace projectv::asset

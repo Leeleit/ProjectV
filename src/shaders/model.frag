@@ -47,20 +47,37 @@ void main() {
     // for models is a follow-up (per Q5=2 contract, RTX-aware future).
     const float diffuseWrap = max(sceneLighting.sunDirectionAndWrap.w, 0.0);
     const vec3 albedo = vec3(0.85, 0.65, 0.45);
-    // M6 prep: use `inUv` to vary the base albedo per-fragment so
-    // the model pass's UV path is observable in the rendered
-    // framebuffer. The pattern is a 4×4 procedural checkerboard
-    // tinted in two distinct hues — when the UV stream is wired
-    // correctly (mesh has TEXCOORD_0, baked vertex carries the
-    // attribute, the model.vert passes it through), the box shows
-    // a clear checker pattern. If the UV stream is missing (e.g.
-    // `box.glb` has no TEXCOORD_0 accessor), the input defaults
-    // to (0, 0) and the whole box is uniform. This is the
-    // cheapest possible "is UV actually flowing through the
-    // pipeline?" test: a real diffuse texture sampling is a M6
-    // follow-up.
-    const vec2 checkerUv = floor(inUv * 4.0);
-    const float checkerMask = mod(checkerUv.x + checkerUv.y, 2.0);
+    // M6 prep: triplanar procedural checker on `inWorldPosition`,
+    // picked by the dominant face normal axis. Cell size 0.3
+    // (NOT a divisor of 1.0 — the 1×1 box side length) plus an
+    // arbitrary `vec2(0.137, 0.241)` offset, so the cell grid is
+    // NOT aligned with the box vertices. Without the offset
+    // (and with cell sizes like 0.25 or 0.5, both divisors of
+    // 1.0), all 4 vertices of a face land on the same cell
+    // corner and `floor()` collapses the face to a single
+    // tint — the previous "two triangles with different
+    // gradients" complaint. With cell 0.3, the 4 vertices of
+    // a face land in different cells, so the face shows a
+    // visible chess-board pattern that varies between faces
+    // (each face uses a different world-space axis pair, so
+    // the offsets land in different cell positions). M6+ will
+    // replace this with a real `sampler2D baseColor` and
+    // per-face UVs.
+    const vec3 absNormal = abs(normal);
+    vec2 checkerUv;
+    if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z) {
+        // Top/bottom face: project onto XZ.
+        checkerUv = inWorldPosition.xz;
+    } else if (absNormal.x >= absNormal.z) {
+        // Left/right face: project onto ZY.
+        checkerUv = inWorldPosition.zy;
+    } else {
+        // Front/back face: project onto XY.
+        checkerUv = inWorldPosition.xy;
+    }
+    const float cellSize = 0.3;
+    const vec2 cellCoord = floor((checkerUv + vec2(0.137, 0.241)) / cellSize);
+    const float checkerMask = mod(cellCoord.x + cellCoord.y, 2.0);
     const vec3 checkerTint = mix(
         vec3(1.0, 0.95, 0.85),
         vec3(0.7, 0.85, 1.0),
