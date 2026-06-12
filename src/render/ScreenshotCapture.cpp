@@ -268,7 +268,9 @@ bool SaveScreenshotCaptureMetadata(
 		"taa_enabled={:d}\n"
 		"taa_jitter_x={:.6f}\n"
 		"taa_jitter_y={:.6f}\n"
+		"taa_jitter_scale={:.6f}\n"
 		"taa_blend={:.6f}\n"
+		"taa_neighbourhood_radius={}\n"
 		"taa_history_valid={:d}\n"
 		"taa_clamp_color_space={}\n"
 		"shadow_cascade_count={}\n"
@@ -333,7 +335,9 @@ bool SaveScreenshotCaptureMetadata(
 		render.taaEnabled,
 		render.taaJitterX,
 		render.taaJitterY,
+		render.taaJitterScale,
 		render.taaBlend,
+		render.taaNeighbourhoodRadius,
 		render.taaHistoryValid,
 		"YCoCg",
 		kSunShadowCascadeCount,

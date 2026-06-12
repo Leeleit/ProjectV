@@ -43,7 +43,9 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     // TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
     // taaParams = (jitterX, jitterY, blend, enabled); prevViewProjectionMatrix
     // is the previous frame's viewProjection (used by the TAA resolve pass for
-    // depth-based reprojection); taaHistoryParams = (texelX, texelY, valid, reserved).
+    // depth-based reprojection); taaHistoryParams = (texelX, texelY, valid, neighbourhoodRadius).
+    // The voxel pass doesn't read .w, but the field is declared here so the
+    // std430 layout matches `VoxelSceneLighting` byte-for-byte.
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;

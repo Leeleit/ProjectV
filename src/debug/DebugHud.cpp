@@ -657,11 +657,14 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"TAA %s JIT %.2f %.2f BLND %.3f HIST %s",
+		"TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s",
 		GetBoolLabel(stats.taaEnabled),
 		stats.taaJitterX,
 		stats.taaJitterY,
+		stats.taaJitterScale,
 		stats.taaBlend,
+		2 * stats.taaNeighbourhoodRadius + 1,
+		2 * stats.taaNeighbourhoodRadius + 1,
 		GetBoolLabel(stats.taaHistoryValid));
 	PV_APPEND_HUD_LINE(
 		outLines,
@@ -817,6 +820,8 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "T TAA  ;' JIT  -= BLND");
+		PV_APPEND_HUD_LINE(outLines, lineCount, ", NHOOD  . INVHIST");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 	} else {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");

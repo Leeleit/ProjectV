@@ -54,6 +54,15 @@ layout(push_constant) uniform ResolvePushConstants {
 layout(location = 0) out vec4 outColor;
 
 const float kHugeTaaRayT = 1e20;
+// Color-distance rejection threshold in YCoCg space. When the current
+// sample is farther than this from the neighborhood centroid, the
+// shader assumes the surrounding samples are from a different
+// material/surface (e.g. a polygon-model pass output surrounded by
+// voxel pass samples — see M5.2 follow-up from the asset-pipeline
+// closeout) and skips both the YCoCg clamp and the temporal blend.
+// 0.20 covers a saturated channel in [0, 1] linear without false
+// positives on natural voxel-pass variation.
+const float kTaaColorDistanceRejectionThreshold = 0.20;
 
 vec3 ApplyTaaToneMap(const vec3 linearColor) {
     const uint toneMapOperator = uint(sceneLighting.postProcess.z + 0.5);
@@ -100,13 +109,30 @@ vec3 YCoCgToRGB(const vec3 ycocg) {
     return vec3(r, g, b);
 }
 
-void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, out vec3 maxColor) {
-    // 3x3 min/max in YCoCg space, returned as YCoCg (Y, Co, Cg). Caller is
-    // expected to clamp a sample in YCoCg space and convert back to RGB.
+void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, out vec3 maxColor, out vec3 centroidColor) {
+    // 3x3 / 5x5 / 7x7 min/max in YCoCg space, returned as YCoCg (Y, Co, Cg).
+    // The per-axis radius comes from `sceneLighting.taaHistoryParams.w`
+    // (set by `RenderState::taaNeighbourhoodRadius`, live `,` key in
+    // `InputAction::CycleTaaNeighbourhoodRadius`). Allowed values are
+    // 1, 3, 5, 7; the loop is clamped to the same set so a stale or
+    // out-of-range value won't drive the loop into undefined territory.
+    // The caller is expected to clamp a sample in YCoCg space and convert
+    // back to RGB. The third out-param `centroidColor` is the arithmetic
+    // mean of the same neighbourhood in YCoCg space; `main()` uses it
+    // for the M5.2 color-distance rejection (skip clamp + history blend
+    // when current is far from this mean — see comment above
+    // `kTaaColorDistanceRejectionThreshold`).
+    const int radius = clamp(int(sceneLighting.taaHistoryParams.w + 0.5), 1, 7);
+    // Snap odd-only: 1, 3, 5, 7. Anything in between behaves like the
+    // lower bound (1, 3 or 5), so the cycle is well-defined.
+    const int snappedRadius = (radius >= 7) ? 7 : (radius >= 5) ? 5 : (radius >= 3) ? 3 : 1;
+    const int sideLength = 2 * snappedRadius + 1;
+    const float normalizer = 1.0 / float(sideLength * sideLength);
     minColor = vec3(kHugeTaaRayT);
     maxColor = vec3(-kHugeTaaRayT);
-    for (int offsetY = -1; offsetY <= 1; ++offsetY) {
-        for (int offsetX = -1; offsetX <= 1; ++offsetX) {
+    vec3 sumColor = vec3(0.0);
+    for (int offsetY = -snappedRadius; offsetY <= snappedRadius; ++offsetY) {
+        for (int offsetX = -snappedRadius; offsetX <= snappedRadius; ++offsetX) {
             const vec2 sampleUv = clamp(
                 uv + vec2(float(offsetX), float(offsetY)) * texelSize,
                 vec2(0.0),
@@ -115,8 +141,10 @@ void GetSceneColorRange(const vec2 uv, const vec2 texelSize, out vec3 minColor, 
             const vec3 sampleYCoCg = RGBToYCoCg(sampleColor);
             minColor = min(minColor, sampleYCoCg);
             maxColor = max(maxColor, sampleYCoCg);
+            sumColor += sampleYCoCg;
         }
     }
+    centroidColor = sumColor * normalizer;
 }
 
 void main()
@@ -159,25 +187,48 @@ void main()
 
     vec3 minColor;
     vec3 maxColor;
-    GetSceneColorRange(uv, texelSize, minColor, maxColor);
-    // `minColor` / `maxColor` are in YCoCg space (Y, Co, Cg). Clamp the
-    // current sample in YCoCg space and convert back to RGB so the result
-    // can blend with the (also-RGB) history sample.
-    const vec3 currentYCoCg = clamp(
-        RGBToYCoCg(texture(sceneColor, uv).rgb),
-        minColor,
-        maxColor);
-    const vec3 clampedCurrent = YCoCgToRGB(currentYCoCg);
+    vec3 centroidColor;
+    GetSceneColorRange(uv, texelSize, minColor, maxColor, centroidColor);
+    // `minColor` / `maxColor` / `centroidColor` are in YCoCg space (Y, Co, Cg).
+    const vec3 currentYCoCg = RGBToYCoCg(texture(sceneColor, uv).rgb);
+    // M5.2 color-distance rejection: when the current sample is far from
+    // the neighbourhood mean, both the YCoCg clamp and the temporal blend
+    // are skipped. The clamp alone is not enough — without this guard,
+    // a polygon-model pass pixel surrounded by voxel pass samples gets
+    // pulled into the voxel range (since the model often has a
+    // saturated/distinct colour that the voxel range doesn't include).
+    // The history blend is also skipped because the previous frame's
+    // history at the same UV is most likely *also* a model pixel that
+    // already got collapsed, so blending with it would re-introduce
+    // the bug. Source of the original report: the asset-pipeline
+    // session closeout (`b152b70`) M5.2 follow-up; fix landed in
+    // `taa_resolve.frag` per AGENTS.md §7.2.6 (TAA-scope).
+    const float currentToCentroidDistance = length(currentYCoCg - centroidColor);
+    const bool isOutlier = currentToCentroidDistance > kTaaColorDistanceRejectionThreshold;
+    // Clamp the current sample in YCoCg space and convert back to RGB so
+    // the result can blend with the (also-RGB) history sample.
+    const vec3 clampedCurrent = isOutlier
+        ? YCoCgToRGB(currentYCoCg)
+        : YCoCgToRGB(clamp(currentYCoCg, minColor, maxColor));
 
-    const float blendFactor = historyValid && reprojectionOk
+    const float temporalBlend = historyValid && reprojectionOk
         ? clamp(sceneLighting.taaParams.z, 0.0, 1.0)
         : 0.0;
+    // Outliers skip the temporal blend: the history sample at the same
+    // UV is most likely a previous-frame model pixel that already got
+    // clamped into the voxel range, so blending with it would smear the
+    // collapse. The current sample is used as-is, no history.
+    const float blendFactor = isOutlier ? 0.0 : temporalBlend;
 
     // Clamp the history sample against the current 3x3 YCoCg neighborhood
     // so that wrong reprojections (revealed geometry after camera movement)
     // do not ghost a completely different surface into the blend. Same
-    // YCoCg-then-back-to-RGB flow as `clampedCurrent`.
-    const vec3 clampedHistory = YCoCgToRGB(clamp(RGBToYCoCg(historySample), minColor, maxColor));
+    // YCoCg-then-back-to-RGB flow as `clampedCurrent`. Outliers skip the
+    // history entirely (blendFactor=0 above), but we still pass through
+    // the same RGB conversion so the math stays consistent.
+    const vec3 clampedHistory = isOutlier
+        ? YCoCgToRGB(RGBToYCoCg(historySample))
+        : YCoCgToRGB(clamp(RGBToYCoCg(historySample), minColor, maxColor));
 
     // Linear history: history was stored *before* tone-map was applied so
     // that successive blends happen in linear light. The resolve passes

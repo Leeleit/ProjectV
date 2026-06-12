@@ -10,6 +10,7 @@
 #include "voxel/VoxelInteraction.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace {
@@ -406,6 +407,50 @@ bool UpdateApp(
 		render->taaEnabled = !render->taaEnabled;
 		render->taaHistoryValid = false;
 	}
+	// TAA tuning ladder: 4 live parameters behind `;`/`'`/`-`/`=`/`,`/`.`.
+	// Jitter scale is a continuous multiplier in [0, 2] (step 0.25) on the
+	// Halton(2,3) output; blend is the per-frame history weight in [0, 1]
+	// (step 0.05); neighbourhood radius cycles through 1/3/5/7 for the
+	// history clamp in `taa_resolve.frag`; history-invalidate forces one
+	// frame of `taaHistoryValid=false` so the next resolve takes the current
+	// scene as the only sample. All four invalidate history on change so
+	// the next frame uses the new blend/jitter/radius cleanly.
+	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaJitterScale)) {
+		render->taaJitterScale = std::clamp(render->taaJitterScale - 0.25f, 0.0f, 2.0f);
+		render->taaHistoryValid = false;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaJitterScale)) {
+		render->taaJitterScale = std::clamp(render->taaJitterScale + 0.25f, 0.0f, 2.0f);
+		render->taaHistoryValid = false;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaBlend)) {
+		render->taaBlend = std::clamp(render->taaBlend - 0.05f, 0.0f, 1.0f);
+		render->taaHistoryValid = false;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaBlend)) {
+		render->taaBlend = std::clamp(render->taaBlend + 0.05f, 0.0f, 1.0f);
+		render->taaHistoryValid = false;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
+		// Cycle 1 -> 3 -> 5 -> 7 -> 1. The shader clamps to the same
+		// 1/3/5/7 set, so odd values outside that set won't be applied.
+		constexpr std::array<int32_t, 4> kNeighbourhoodCycle{1, 3, 5, 7};
+		auto current = std::find(
+			kNeighbourhoodCycle.begin(),
+			kNeighbourhoodCycle.end(),
+			render->taaNeighbourhoodRadius);
+		if (current == kNeighbourhoodCycle.end()) {
+			render->taaNeighbourhoodRadius = kNeighbourhoodCycle.front();
+		} else {
+			const size_t nextIndex = (static_cast<size_t>(current - kNeighbourhoodCycle.begin()) + 1u)
+				% kNeighbourhoodCycle.size();
+			render->taaNeighbourhoodRadius = kNeighbourhoodCycle[nextIndex];
+		}
+		render->taaHistoryValid = false;
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::InvalidateTaaHistory)) {
+		render->taaHistoryValid = false;
+	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseLightingExposure)) {
 		AdjustLightingExposure(*render, -kLightingExposureStepStops);
 	}
@@ -655,6 +700,8 @@ bool UpdateApp(
 	debug->stats.taaHistoryValid = render->taaHistoryValid;
 	debug->stats.taaJitterX = render->taaJitterX;
 	debug->stats.taaJitterY = render->taaJitterY;
+	debug->stats.taaJitterScale = render->taaJitterScale;
+	debug->stats.taaNeighbourhoodRadius = render->taaNeighbourhoodRadius;
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;
 	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);

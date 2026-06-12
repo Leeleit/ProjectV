@@ -174,7 +174,7 @@ void RefreshSceneLightingBuffer(
 		0.0f,
 		0.0f,
 		render.taaHistoryValid ? 1.0f : 0.0f,
-		0.0f,
+		static_cast<float>(render.taaNeighbourhoodRadius),
 	};
 }
 

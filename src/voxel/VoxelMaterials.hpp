@@ -117,7 +117,7 @@ struct VoxelSceneLighting {
 	// `GraphicsPushConstants::viewProjection`). Reused by the TAA resolve
 	// pass for depth-based reprojection; zeroed on the first frame.
 	std::array<float, 16> prevViewProjectionMatrix{};
-	// texel size x, texel size y, history valid (0/1), reserved
+	// texel size x, texel size y, history valid (0/1), neighbourhood radius (1/3/5/7)
 	std::array<float, 4> taaHistoryParams{};
 };
 static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
