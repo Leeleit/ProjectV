@@ -499,7 +499,7 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 
 ---
 
-## 15. M5.1d asset-pipeline follow-up — `session-2026-06-12-asset-glb-voxel-snap` — closed, uncommitted
+## 15. M5.1d asset-pipeline follow-up — `session-2026-06-12-asset-glb-voxel-snap` — closed, `8cc71f8`
 
 **What landed in this session (build green, ctest 6/6, `ProjectV` binary works):**
 - glTF node hierarchy walk (`ApplyNodeHierarchyTransforms` in `AssetLoader.cpp:268-369`) — bakes per-node TRS into positions + normals before AABB accumulation. Fixes the M5.1b "overlapping geometry pile" symptom.
