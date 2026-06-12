@@ -4,6 +4,9 @@ struct PackedFace {
     uint localVoxelFace;
     uint chunkIndexMaterial;
     uint lightingData;
+    // A1 (4.1 greedy meshing): (width, height) in 8 bits each for the
+    // in-plane quad size. See `decisions.md §25`.
+    uint packedExtents;
 };
 
 layout(set = 0, binding = 0, std430) readonly buffer PackedFacePayload {
@@ -105,6 +108,18 @@ uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
     }
 }
 
+// A1 (4.1 greedy meshing): scale the unit corner offset by the merged
+// quad extents. Mirror of `voxel.vert::ApplyGreedyScale`.
+uvec3 ApplyGreedyScale(const uint faceIndex, const uvec3 unitOffset, const uvec2 quadExtents) {
+    if (faceIndex == 0u || faceIndex == 1u) {
+        return uvec3(unitOffset.x, unitOffset.y * quadExtents.x, unitOffset.z * quadExtents.y);
+    } else if (faceIndex == 2u || faceIndex == 3u) {
+        return uvec3(unitOffset.x * quadExtents.x, unitOffset.y, unitOffset.z * quadExtents.y);
+    } else {
+        return uvec3(unitOffset.x * quadExtents.x, unitOffset.y * quadExtents.y, unitOffset.z);
+    }
+}
+
 void main() {
     const PackedFace packedFace = packedFaces[uint(gl_InstanceIndex)];
     const uint localVoxelFace = packedFace.localVoxelFace;
@@ -118,9 +133,16 @@ void main() {
     (localVoxelFace >> 8u) & 0xFFu,
     (localVoxelFace >> 16u) & 0xFFu);
 
+    // A1 (4.1 greedy meshing): decode merged-quad extents.
+    const uvec2 quadExtents = uvec2(
+    packedFace.packedExtents & 0xFFu,
+    (packedFace.packedExtents >> 8u) & 0xFFu);
+
     const uint triangleVertexIndex = uint(gl_VertexIndex) % 6u;
     const uint cornerIndex = DecodeTriangleCornerIndex(triangleVertexIndex);
-    const vec3 localCornerPosition = vec3(localVoxelCoord + GetFaceCornerOffset(faceIndex, cornerIndex));
+    const uvec3 unitOffset = GetFaceCornerOffset(faceIndex, cornerIndex);
+    const uvec3 scaledOffset = ApplyGreedyScale(faceIndex, unitOffset, quadExtents);
+    const vec3 localCornerPosition = vec3(localVoxelCoord + scaledOffset);
     const vec3 worldPosition = vec3(chunkDescriptors[chunkIndex].chunkOrigin.xyz) + localCornerPosition;
 
     outMaterialIndex = materialIndex;

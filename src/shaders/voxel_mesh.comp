@@ -20,6 +20,12 @@ struct PackedFace {
     uint localVoxelFace;
     uint chunkIndexMaterial;
     uint lightingData;
+    // A1 (4.1 greedy meshing): `packedExtents` packs (width, height) in 8
+    // bits each for the in-plane quad size. width = how many voxels the quad
+    // spans in axisU, height = axisV. For non-greedy paths, set (1, 1) and
+    // the vertex shader still produces the same unit quad. See
+    // `agent/decisions.md §25` for the merge contract.
+    uint packedExtents;
 };
 
 layout(set = 0, binding = 0, std430) buffer PackedChunkDescriptors {
@@ -106,11 +112,28 @@ ivec3(0, 0, -1)
 );
 const uint kSunShadowCascadeCount = 4u;
 
+// A1 (4.1 greedy meshing): max in-plane chunk extent for the greedy pass.
+// The visited bitmask needs `extent * extent` bits; 64² = 4096 bits = 128
+// uints = 512 bytes per axis+direction pass. Past this extent we fall back
+// to per-voxel emission (1×1 quad per face). 64 covers the practical
+// chunk size in the project (TODO §4.5 perf budget); PackedFace's 8-bit
+// per-axis packing still allows up to 256 for non-greedy paths.
+const uint kMaxChunkExtentForGreedy = 64u;
+
 uint PackLocalVoxelFace(const uvec3 localVoxelCoord, const uint faceIndex) {
     return (localVoxelCoord.x & 0xFFu) |
     ((localVoxelCoord.y & 0xFFu) << 8u) |
     ((localVoxelCoord.z & 0xFFu) << 16u) |
     ((faceIndex & 0xFFu) << 24u);
+}
+
+// A1 (4.1 greedy meshing): pack (width, height) of a merged quad into the
+// 4th uint of PackedFace. width and height are 8 bits each (max 255); a
+// chunk extent of 64 means a quad can span up to 64 voxels in either
+// in-plane axis. Beyond kMaxChunkExtentForGreedy (64) we fall back to
+// per-voxel emission and this packing is unused.
+uint PackQuadExtents(const uint width, const uint height) {
+    return (width & 0xFFu) | ((height & 0xFFu) << 8u);
 }
 
 uint PackChunkIndexMaterial(const uint chunkIndex, const uint materialIndex) {
@@ -336,6 +359,209 @@ bool IsChunkInsideShadowCascade(const ChunkDescriptor chunkDescriptor, const uin
     return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
 }
 
+// A1 (4.1 greedy meshing): per-axis greedy pass for one face direction.
+//
+// Walks the 2D plane of cells that emit a face in the direction
+// (axisN, signN), merging adjacent cells with the same exposed state into a
+// single W×H quad. A face is "emitted" by cell (pN, pU, pV) when
+// `ShouldEmitVoxelFace(voxel(pN,pU,pV), neighbor(pN+signN, pU, pV))` is
+// true. Two adjacent cells on the same plane can merge iff they share the
+// same {cellMaterial, neighborIsAirOrGlass} state. AO merge condition is
+// not required: per-vertex AO is disabled (see `decisions.md §14` v2) and
+// `lightingData` is a no-op.
+//
+// `axisN`/`axisU`/`axisV` are 0=X/1=Y/2=Z world axes; `signN` is +1 for
+// face+ directions and -1 for face- directions. Plane iteration is
+// per-pN slice: for each pN in [0, extentN), walk the (pU, pV) plane and
+// greedily extend in axisU first, then axisV, then emit one quad and
+// mark visited.
+//
+// The visited bitmask is `kMaxChunkExtentForGreedy` uints (one bit per
+// cell, one uint per row in axisU direction). For chunks where extentU
+// or extentV exceeds `kMaxChunkExtentForGreedy`, the function falls back
+// to per-voxel emission (1×1 quad per face, identical to the previous
+// non-greedy behavior).
+void GreedyFacePass(
+    const uint faceIndex,
+    const uint axisN,
+    const uint axisU,
+    const uint axisV,
+    const int signN,
+    const ChunkDescriptor chunkDescriptor,
+    const uint chunkIndex,
+    const uint opaqueFirstFace,
+    const uint transparentFirstFace,
+    const uint maxChunkFaceCount,
+    inout uint opaqueFaceCount,
+    inout uint transparentFaceCount) {
+    const uint extentN = chunkDescriptor.chunkExtentAndNonAir[axisN];
+    const uint extentU = chunkDescriptor.chunkExtentAndNonAir[axisU];
+    const uint extentV = chunkDescriptor.chunkExtentAndNonAir[axisV];
+
+    const bool useGreedy = (extentU <= kMaxChunkExtentForGreedy) &&
+    (extentV <= kMaxChunkExtentForGreedy);
+
+    for (uint pN = 0u; pN < extentN; ++pN) {
+        if (useGreedy) {
+            // Visited bitmask: bit pU of visited[pV] = "cell (pU, pV) consumed".
+            // Cleared per pN slice because each face plane is independent.
+            uint visited[kMaxChunkExtentForGreedy];
+            for (uint i = 0u; i < kMaxChunkExtentForGreedy; ++i) {
+                visited[i] = 0u;
+            }
+
+            for (uint pV = 0u; pV < extentV; ++pV) {
+                for (uint pU = 0u; pU < extentU; ++pU) {
+                    if (((visited[pV] >> pU) & 1u) != 0u) {
+                        continue;
+                    }
+
+                    // Build (pN, pU, pV) voxel coord + read cell material.
+                    uvec3 localVoxelCoord;
+                    localVoxelCoord[axisN] = pN;
+                    localVoxelCoord[axisU] = pU;
+                    localVoxelCoord[axisV] = pV;
+                    const uint cellMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                    if (cellMaterial == 0u) {
+                        continue;
+                    }
+
+                    // Read neighbor at (pN+signN, pU, pV); may be outside chunk
+                    // or world — `ReadVoxelMaterial` returns 0 (Air) for OOB.
+                    ivec3 worldVoxelPosition = ivec3(chunkDescriptor.chunkOrigin.xyz) + ivec3(localVoxelCoord);
+                    ivec3 neighborPosition = worldVoxelPosition;
+                    neighborPosition[axisN] += signN;
+                    const uint neighborMaterial = ReadVoxelMaterial(neighborPosition);
+                    if (!ShouldEmitVoxelFace(cellMaterial, neighborMaterial)) {
+                        continue;
+                    }
+
+                    // Greedy extend in axisU direction (width).
+                    uint W = 0u;
+                    while (pU + W < extentU) {
+                        if (((visited[pV] >> (pU + W)) & 1u) != 0u) {
+                            break;
+                        }
+                        uvec3 testCoord = localVoxelCoord;
+                        testCoord[axisU] = pU + W;
+                        const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
+                        if (testMaterial != cellMaterial) {
+                            break;
+                        }
+                        ivec3 testNeighbor = worldVoxelPosition;
+                        testNeighbor[axisN] += signN;
+                        testNeighbor[axisU] += int(W);
+                        const uint testNeighborMaterial = ReadVoxelMaterial(testNeighbor);
+                        if (!ShouldEmitVoxelFace(testMaterial, testNeighborMaterial)) {
+                            break;
+                        }
+                        ++W;
+                    }
+                    if (W == 0u) {
+                        continue;
+                    }
+
+                    // Greedy extend in axisV direction (height), constrained by W.
+                    uint H = 1u;
+                    while (pV + H < extentV) {
+                        bool rowValid = true;
+                        for (uint wi = 0u; wi < W; ++wi) {
+                            if (((visited[pV + H] >> (pU + wi)) & 1u) != 0u) {
+                                rowValid = false;
+                                break;
+                            }
+                            uvec3 testCoord = localVoxelCoord;
+                            testCoord[axisU] = pU + wi;
+                            testCoord[axisV] = pV + H;
+                            const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
+                            if (testMaterial != cellMaterial) {
+                                rowValid = false;
+                                break;
+                            }
+                            ivec3 testNeighbor = worldVoxelPosition;
+                            testNeighbor[axisN] += signN;
+                            testNeighbor[axisU] += int(wi);
+                            testNeighbor[axisV] += int(H);
+                            const uint testNeighborMaterial = ReadVoxelMaterial(testNeighbor);
+                            if (!ShouldEmitVoxelFace(testMaterial, testNeighborMaterial)) {
+                                rowValid = false;
+                                break;
+                            }
+                        }
+                        if (!rowValid) {
+                            break;
+                        }
+                        ++H;
+                    }
+
+                    // Emit the merged quad: start = (pN, pU, pV), extents = (W, H).
+                    const PackedFace packedFace = PackedFace(
+                    PackLocalVoxelFace(localVoxelCoord, faceIndex),
+                    PackChunkIndexMaterial(chunkIndex, cellMaterial),
+                    0u, // lightingData no-op (per-vertex AO disabled)
+                    PackQuadExtents(W, H));
+
+                    if (cellMaterial == 1u) {
+                        if (transparentFaceCount < maxChunkFaceCount) {
+                            packedFaces[transparentFirstFace + transparentFaceCount] = packedFace;
+                            ++transparentFaceCount;
+                        }
+                    } else {
+                        if (opaqueFaceCount < maxChunkFaceCount) {
+                            packedFaces[opaqueFirstFace + opaqueFaceCount] = packedFace;
+                            ++opaqueFaceCount;
+                        }
+                    }
+
+                    // Mark the (W × H) block visited in one shot per row.
+                    const uint visitedMask = ((1u << W) - 1u) << pU;
+                    for (uint v = 0u; v < H; ++v) {
+                        visited[pV + v] |= visitedMask;
+                    }
+                }
+            }
+        } else {
+            // Fallback path for oversized chunks: emit 1×1 quads per face.
+            // Identical to the previous per-voxel loop, no merge.
+            for (uint pV = 0u; pV < extentV; ++pV) {
+                for (uint pU = 0u; pU < extentU; ++pU) {
+                    uvec3 localVoxelCoord;
+                    localVoxelCoord[axisN] = pN;
+                    localVoxelCoord[axisU] = pU;
+                    localVoxelCoord[axisV] = pV;
+                    const uint cellMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                    if (cellMaterial == 0u) {
+                        continue;
+                    }
+                    ivec3 worldVoxelPosition = ivec3(chunkDescriptor.chunkOrigin.xyz) + ivec3(localVoxelCoord);
+                    ivec3 neighborPosition = worldVoxelPosition;
+                    neighborPosition[axisN] += signN;
+                    const uint neighborMaterial = ReadVoxelMaterial(neighborPosition);
+                    if (!ShouldEmitVoxelFace(cellMaterial, neighborMaterial)) {
+                        continue;
+                    }
+                    const PackedFace packedFace = PackedFace(
+                    PackLocalVoxelFace(localVoxelCoord, faceIndex),
+                    PackChunkIndexMaterial(chunkIndex, cellMaterial),
+                    0u,
+                    PackQuadExtents(1u, 1u));
+                    if (cellMaterial == 1u) {
+                        if (transparentFaceCount < maxChunkFaceCount) {
+                            packedFaces[transparentFirstFace + transparentFaceCount] = packedFace;
+                            ++transparentFaceCount;
+                        }
+                    } else {
+                        if (opaqueFaceCount < maxChunkFaceCount) {
+                            packedFaces[opaqueFirstFace + opaqueFaceCount] = packedFace;
+                            ++opaqueFaceCount;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void main() {
     const uint dirtyChunkListIndex = gl_GlobalInvocationID.x;
     if (dirtyChunkListIndex >= pushConstants.faceCapacities.z) {
@@ -365,42 +591,38 @@ void main() {
 
     uint opaqueFaceCount = 0u;
     uint transparentFaceCount = 0u;
-    for (uint localZ = 0u; localZ < chunkDescriptor.chunkExtentAndNonAir.z; ++localZ) {
-        for (uint localY = 0u; localY < chunkDescriptor.chunkExtentAndNonAir.y; ++localY) {
-            for (uint localX = 0u; localX < chunkDescriptor.chunkExtentAndNonAir.x; ++localX) {
-                const uvec3 localVoxelCoord = uvec3(localX, localY, localZ);
-                const uint materialIndex = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
-                if (materialIndex == 0u) {
-                    continue;
-                }
 
-                const ivec3 worldVoxelPosition = chunkDescriptor.chunkOrigin.xyz + ivec3(localVoxelCoord);
-                for (uint faceIndex = 0u; faceIndex < 6u; ++faceIndex) {
-                    const uint neighborMaterialIndex = ReadVoxelMaterial(worldVoxelPosition + kNeighborOffsets[faceIndex]);
-                    if (!ShouldEmitVoxelFace(materialIndex, neighborMaterialIndex)) {
-                        continue;
-                    }
-
-                    const PackedFace packedFace = PackedFace(
-                    PackLocalVoxelFace(localVoxelCoord, faceIndex),
-                    PackChunkIndexMaterial(chunkIndex, materialIndex),
-                    ComputeFaceCornerPackedAO(worldVoxelPosition, faceIndex));
-
-                    if (materialIndex == 1u) {
-                        if (transparentFaceCount < maxChunkFaceCount) {
-                            packedFaces[transparentFirstFace + transparentFaceCount] = packedFace;
-                            ++transparentFaceCount;
-                        }
-                    } else {
-                        if (opaqueFaceCount < maxChunkFaceCount) {
-                            packedFaces[opaqueFirstFace + opaqueFaceCount] = packedFace;
-                            ++opaqueFaceCount;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // A1 (4.1 greedy meshing): 6 per-axis greedy passes, one per face
+    // direction. Each pass walks the 2D plane of cells that emit a face in
+    // that direction and merges adjacent cells with the same exposed state
+    // into a single W×H quad. For oversized chunks (>kMaxChunkExtentForGreedy
+    // in any in-plane axis) the pass falls back to per-voxel emission. This
+    // replaces the previous triple-nested loop over (X, Y, Z) × 6 directions
+    // that emitted one PackedFace per voxel-face.
+    GreedyFacePass(0u, 0u, 1u, 2u, 1,
+    chunkDescriptor, chunkIndex,
+    opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
+    opaqueFaceCount, transparentFaceCount);
+    GreedyFacePass(1u, 0u, 1u, 2u, -1,
+    chunkDescriptor, chunkIndex,
+    opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
+    opaqueFaceCount, transparentFaceCount);
+    GreedyFacePass(2u, 1u, 0u, 2u, 1,
+    chunkDescriptor, chunkIndex,
+    opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
+    opaqueFaceCount, transparentFaceCount);
+    GreedyFacePass(3u, 1u, 0u, 2u, -1,
+    chunkDescriptor, chunkIndex,
+    opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
+    opaqueFaceCount, transparentFaceCount);
+    GreedyFacePass(4u, 2u, 0u, 1u, 1,
+    chunkDescriptor, chunkIndex,
+    opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
+    opaqueFaceCount, transparentFaceCount);
+    GreedyFacePass(5u, 2u, 0u, 1u, -1,
+    chunkDescriptor, chunkIndex,
+    opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
+    opaqueFaceCount, transparentFaceCount);
 
     chunkDescriptors[chunkIndex].drawRanges.y = opaqueFaceCount;
     chunkDescriptors[chunkIndex].drawRanges.w = transparentFaceCount;

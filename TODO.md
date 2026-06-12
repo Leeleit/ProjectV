@@ -498,7 +498,7 @@ Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
 
 - [ ] richer chunk model;
 - [ ] richer world-editing workflows beyond the current lightweight debug editor;
-- [ ] greedy meshing follow-up;
+- [x] greedy meshing follow-up (closed — see `agent/active-sessions.md session-2026-06-12-greedy-meshing`, `decisions.md §25`, `memory.md §10.22`);
 - [ ] richer render stats / explicit per-pass timings / chunk update timings beyond current HUD + Tracy baseline;
 - [ ] RenderDoc-friendly markers;
 - [x] benchmark automation;
@@ -622,7 +622,7 @@ color. Улучшения ниже — direct next steps. **1.1 closed**; ост
 
 ### Блок 4 — Greedy meshing (2-3 дня)
 
-- [ ] **4.1 Greedy quad meshing в `voxel_mesh.comp`** (30-50% face count reduction).
+- [x] **4.1 Greedy quad meshing в `voxel_mesh.comp`** (30-50% face count reduction; closed — see `agent/active-sessions.md session-2026-06-12-greedy-meshing`, `decisions.md §25`, `memory.md §10.22`).
 
 ### Блок 5 — Frame-step / gizmo / RenderDoc markers (1-2 дня)
 

@@ -459,3 +459,41 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 **Test count baseline:** `ctest` 6/6 (1.47 s) — unchanged, не должно падать.
 
 **Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
+
+---
+
+## 14. A1 greedy meshing (4.1) — `session-2026-06-12-greedy-meshing` (closed, uncommitted)
+
+**1 commit proposed** (per operator "давай A1" + "потом скажу, что ещё"):
+
+| SHA | Subject | Files |
+|---|---|---|
+| _pending_ | `feat(voxel,perf): greedy meshing в voxel_mesh.comp + PackedFace 16B extension` | 4 |
+
+**Что в A1:**
+
+- **`PackedSceneVoxelFace` (`core/Types.hpp:47-65`)** — extended 12→16 bytes. New 4th `uint32_t packedExtents` field packs `(width, height, _, _)` 8 bits each. 4 `static_assert` обновлены: `sizeof == 16`, 4×`offsetof` (0/4/8/12). Buffer stride в `SceneResources.cpp:927` auto-adapts via `sizeof(PackedSceneVoxelFace) * count` — no manual change needed.
+- **`voxel_mesh.comp`** — extended `PackedFace` GLSL struct (line 19-26, mirror C++). New `PackQuadExtents(width, height)` helper (line 130-132). New `GreedyFacePass(faceIndex, axisN, axisU, axisV, signN, ...)` function (line 384-562) implementing per-axis greedy meshing: 6 internal passes per chunk (X+/X-/Y+/Y-/Z+/Z-), each walks 2D `extentU × extentV` plane with `kMaxChunkExtentForGreedy = 64` bitmask, merges cells with same `{cellMaterial, neighborIsAirOrGlass}` state, falls back to per-voxel for oversized chunks. Replaced triple-nested voxel loop in `main()` (line 592-630 of pre-A1) with 6 explicit `GreedyFacePass` calls.
+- **`voxel.vert`** + **`voxel_shadow.vert`** — extended `PackedFace` mirror. New `ApplyGreedyScale(faceIndex, unitOffset, quadExtents)` helper decodes merged-quad `(width, height)` from `packedExtents` and scales `GetFaceCornerOffset`'s 0/1 in-plane channels by `(width, height)` per face. `main()` reconstructs `scaledOffset` from `unitOffset + ApplyGreedyScale` and uses it in `localCornerPosition = vec3(localVoxelCoord + scaledOffset)`.
+- **`PackedFace` 4-uint layout mirrors across 3 GLSL + 1 C++** — single source of truth via `static_assert`. C++ `sizeof` drives GPU buffer allocation.
+
+**Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests ProjectVDracoTests ProjectVFrustumCullingTests ProjectVBoxUvFixtureTests --parallel 8` — green, 901 VMA `-Wnullability-completeness` warnings (pre-existing, не мои). `ctest` 6/6 (1.46 s, baseline 1.45-1.50 s — within noise).
+
+**Visual smoke verify (per `AGENTS.md §7.3` / `decisions.md §4`):** `tools/linux/Invoke-ProjectVRuntimeSmoke.sh --capture-dir build/linux-clang-debug/lookdev-captures/20260612-greedy-meshing-v1 --views "FINAL" --warmup 5 --interval 1` — PASS. 1 .bmp + 1 .txt sidecar, exit code 0. VoxelLab reference shot `cam -25 19 25 look 0.62 -0.48 -0.62` рендерится без crash. BMP pixel distribution (PIL `Counter(pixels[::1000])`) matches VoxelLab baseline: dominant `(189, 193, 195)` light gray (floor/glass surface, 1826 samples), dark `(41, 46, 52)` sky (56 samples), `(51, 55, 62)` mid-tone (49 samples), near-white `(234, 239, 242)` highlights (7 samples), near-black `(15, 17, 20)` shadows (6 samples). **No "uniform gray regions" (would indicate missing cell holes) or unexpected color shifts.** BMP file size 5.88 MB matches previous VoxelLab captures (1896×1034 RGB).
+
+**Working rules (см. `agent/memory.md §10.22` + `decisions.md §25`):**
+- **`PackedFace` edit always updates all 3 GLSL mirrors AND C++ struct in the same change.** `static_assert` в `core/Types.hpp:54-62` enforces the 4×`offsetof` contract — if any GLSL mirror drifts, the next buffer allocation overwrites wrong data and the renderer shows garbage (visual regression, not crash).
+- **Vertex shader corner triangulation invariant:** `gl_VertexID` → `DecodeTriangleCornerIndex` → 4 corners (0/1/2/3) → 6 vertices in 2 triangles. The `ApplyGreedyScale` helper multiplies only the in-plane channels — the normal-axis channel stays 0/1. Reordering the channels или using `(width, height, 0)` as a fixed offset would break the quad triangulation.
+- **`kMaxChunkExtentForGreedy = 64`** is a budget choice. If a future feature wants chunk > 64, raise the constant AND verify 3KB per-chunk local-memory stays under GPU's spill threshold (typical 4KB register file + 16KB+ local). Alternative: switch to SSBO-backed bitmask for unbounded chunk sizes.
+- **Greedy merge condition is solid-only behavior, transparent-agnostic.** `ShouldEmitVoxelFace` asymmetry (opaque vs `{Air, Glass}`, fluid vs `{Air, Glass}`, glass vs `{Air}` only) means glass-on-glass faces не emit (per `decisions.md §13`) — no merge opportunity across glass boundaries. Fluid merges as opaque. Net: greedy helps planar opaque walls most, glass thin shells least (but those are sparse anyway).
+- **Cross-chunk reads = `ReadVoxelMaterial` returns 0 (Air) for OOB.** Greedy pass seamlessly handles chunk boundaries без per-chunk coordination protocol. Independent dispatches produce consistent quads at boundaries. Global cross-chunk merge (eliminating the duplicate face pair at chunk seams) is theoretically possible but requires barrier/2-pass — defer to future "global greedy" optimization.
+- **Default-valued `(width=1, height=1)` preserves pre-A1 behavior** для any future code paths (debug overlay, replay fixtures, manual emit). `packedExtents` is only `0u` (uninitialized) in test fixtures, not in production dispatch path.
+
+**Cross-session coordination:**
+- `core/Types.hpp` is shared with `session-2026-06-12-asset-glb-voxel-snap` (their uncommitted changes). My addition is `uint32_t packedExtents = 0;` at the **end** of `PackedSceneVoxelFace` field list (after `lightingData`) — **no offset shift** для other fields. Their new field (if any) also goes at the tail, no overlap.
+- `voxel_mesh.comp` / `voxel.vert` / `voxel_shadow.vert` not in their dirty tree (per `agent/active-sessions.md session-2026-06-12-asset-glb-voxel-snap`'s files-touched-intent).
+
+**Test count baseline:** `ctest` 6/6 (1.46 s) — unchanged, не должно падать.
+
+**Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
+

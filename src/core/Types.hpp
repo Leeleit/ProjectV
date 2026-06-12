@@ -45,16 +45,26 @@ using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
 using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
 
 struct PackedSceneVoxelFace {
+	// A1 (4.1 greedy meshing): this struct now covers both 1×1 voxels and
+	// greedy W×H merged quads. `localVoxelFace` still packs the START voxel
+	// coord + face index (same as before — the minimum-corner anchor);
+	// `packedExtents` carries the in-plane (width, height) in 8 bits each so
+	// the vertex shader can stretch the 4-corner unit offset to the merged
+	// quad size. Lighting stays on `lightingData` as a no-op for now
+	// (per-vertex AO disabled per `decisions.md §14` v2, AO no longer blocks
+	// greedy merge).
 	uint32_t localVoxelFace = 0;
 	uint32_t chunkIndexMaterial = 0;
 	uint32_t lightingData = 0;
+	uint32_t packedExtents = 0;
 };
 static_assert(std::is_standard_layout_v<PackedSceneVoxelFace>);
 static_assert(std::is_trivially_copyable_v<PackedSceneVoxelFace>);
-static_assert(sizeof(PackedSceneVoxelFace) == 12);
+static_assert(sizeof(PackedSceneVoxelFace) == 16);
 static_assert(offsetof(PackedSceneVoxelFace, localVoxelFace) == 0);
 static_assert(offsetof(PackedSceneVoxelFace, chunkIndexMaterial) == 4);
 static_assert(offsetof(PackedSceneVoxelFace, lightingData) == 8);
+static_assert(offsetof(PackedSceneVoxelFace, packedExtents) == 12);
 
 struct PackedSceneChunkDescriptor {
 	std::array<int32_t, 4> chunkOrigin{};
@@ -635,6 +645,17 @@ struct ModelInstanceData {
 	std::array<float, 16> modelTransform{};
 	std::array<float, 3> worldAabbMin{};
 	std::array<float, 3> worldAabbMax{};
+	// Source (asset-local) AABB min in model-local space. The
+	// load path's `aabbMinOffset = T(-srcMin*scale)` shifts the
+	// model basis so the translation column of `modelTransform`
+	// ends up at `pos - srcAabbMin` (NOT `pos`); the renderer
+	// then adds `srcAabbMin` back when transforming each vertex.
+	// Snap / drag paths that mutate the AABB min must also update
+	// `modelTransform[12..14]` to `newMin - sourceAabbMin` — see
+	// `ModelManifestLoader.cpp` and `ModelGravigun.cpp`. The
+	// field is captured at load time from
+	// `ModelRegistryEntry::aabbMin` and never changes after that.
+	std::array<float, 3> sourceAabbMin{};
 	VkBuffer vertexBuffer = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
 	uint32_t indexCount = 0;

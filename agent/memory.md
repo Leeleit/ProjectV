@@ -1300,4 +1300,134 @@ contract), `decisions.md §23` (5.2 gizmo contract),
 snapshot), `agent/active-sessions.md`
 session-2026-06-12-lowlevel-perf-tooling (closed).
 
+## 10.22 Greedy meshing (4.1) landed (`2026-06-12`)
+
+Closed in `session-2026-06-12-greedy-meshing`. **One
+foundation commit** (operator "давай A1" after 3-slice
+lowlevel session) covers PackedFace extension, vertex
+shader scale helper, and the per-axis greedy pass in
+`voxel_mesh.comp`. Per-axis (vs single triple-nested
+voxel loop) даёт clean kill switch + parallelizable
+future work, без роста dispatch count per frame.
+
+**`PackedFace` 12 → 16 bytes — single source of truth
+pattern (`static_assert`-enforced).**
+
+- C++ `PackedSceneVoxelFace` (`core/Types.hpp:47-65`):
+  added `uint32_t packedExtents = 0`, updated 4
+  `static_assert` (`sizeof == 16`, 4×`offsetof`).
+- GLSL `PackedFace` mirror in 3 shaders
+  (`voxel_mesh.comp`, `voxel.vert`, `voxel_shadow.vert`):
+  same 4-uint layout.
+- `SceneResources.cpp:927` uses
+  `sizeof(PackedSceneVoxelFace) * count` for buffer
+  allocation — auto-adapts to 16 bytes, **no manual
+  change needed**. The `sizeof` operator + C++ struct is
+  the single source of truth for the GPU buffer stride.
+- `packedExtents` packs `(width, height, _, _)` 8 bits
+  each. `width=1, height=1` (default) = unit quad
+  (pre-A1 behavior, no merge). Larger = merged quad.
+- **Working rule для future PackedFace edits:** always
+  update all 3 GLSL mirrors AND the C++ struct in the
+  same change. The `static_assert` block в
+  `core/Types.hpp` will fail compile if they drift.
+
+**`kMaxChunkExtentForGreedy = 64` — buffer-driven
+choice.**
+
+- 64×64 plane = 4096 bits = 128 uints = 512 bytes per
+  axis+direction pass.
+- 6 passes per chunk × 512 bytes = 3KB stack-allocated
+  local memory (`uint visited[64]` per GLSL local-array
+  pattern). RTX 3060 has 256KB L2 → no cache pressure.
+- Past 64, fallback to per-voxel (1×1 quads) — no crash,
+  no merge benefit. PackedFace's 8-bit per-axis packing
+  allows up to 256, но practical chunk size ≤ 64.
+- **Working rule для future chunk-size bumps:** если a
+  feature wants chunk > 64, raise `kMaxChunkExtentForGreedy`
+  and verify 3KB per-chunk local-memory budget stays under
+  GPU's spill threshold (typically 4KB register file +
+  16KB+ local memory). Or switch to SSBO-backed bitmask.
+
+**Vertex shader scale helper — `ApplyGreedyScale`.**
+
+- For each face, maps in-plane channels to `(width, height)`:
+  - face 0/1 (X±): in-plane = (Y, Z). `unit.y * width`,
+    `unit.z * height`.
+  - face 2/3 (Y±): in-plane = (X, Z). `unit.x * width`,
+    `unit.z * height`.
+  - face 4/5 (Z±): in-plane = (X, Y). `unit.x * width`,
+    `unit.y * height`.
+- Normal-axis channel stays 0/1 — face plane is
+  `localVoxelCoord + normal_offset`, not multiplied.
+- For unit quads the helper is no-op. **Critical:** не
+  reorder `unitOffset` channels — the existing
+  `GetFaceCornerOffset` 0/1 layout is the contract with
+  the per-quad triangulation (`DecodeTriangleCornerIndex`).
+
+**Greedy merge condition — `decisions.md §25`.**
+
+- Same `cellMaterial` AND same `neighborIsAirOrGlass`
+  set state. AO not part of merge (per-vertex AO
+  disabled per `decisions.md §14` v2, `lightingData` no-op).
+- Glass (`material == 1`) participates in greedy as
+  usual — but `ShouldEmitVoxelFace(glass, glass) = false`
+  per `decisions.md §13` means glass-on-glass faces не
+  emit, no merge opportunity across glass boundaries.
+- Fluid (`material == 2`) merges as usual — same opaque
+  policy (`ShouldEmitVoxelFace(fluid, Air/Glass) = true`).
+
+**Cross-chunk reads — `ReadVoxelMaterial` returns 0
+(Air) for OOB.**
+
+- Greedy pass seamlessly handles chunk boundaries
+  because OOB neighbor = Air = exposed (for non-zero
+  cell material). Worst case: chunk boundary quads merge
+  with `neighborMaterial = 0` (Air) → standard "face
+  toward outside world" behavior, matches pre-A1.
+- **No chunk-coordination protocol needed** —
+  independent dispatches produce consistent quads at
+  boundaries. Cross-chunk greedy merge across the
+  boundary plane is theoretically possible (чтобы убрать
+  the duplicate face pair) but requires either a barrier
+  или 2-pass greedy. Defer to a future "global greedy"
+  optimization.
+
+**`DrawCommand(6u, ...)` unchanged.**
+
+- 1 quad = 2 triangles = 6 indices. Greedy reduces
+  INSTANCE count (1 instance per merged quad, was 1 per
+  voxel-face), vertex shader invocations drop
+  proportionally. Worst case (all 1×1 quads) = identical
+  to pre-A1.
+
+**Build / ctest / smoke state (final, A1.0):**
+
+- `cmake --build build/linux-clang-debug --target
+  ProjectV ProjectVTests ProjectVAssetTests
+  ProjectVMeshBakerTests ProjectVDracoTests
+  ProjectVFrustumCullingTests ProjectVBoxUvFixtureTests
+  --parallel 8` — green. 901 VMA
+  `-Wnullability-completeness` warnings (pre-existing,
+  not mine).
+- `ctest` 6/6 (1.46 s, baseline 1.45-1.50 s — within
+  noise).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh
+  --capture-dir
+  build/linux-clang-debug/lookdev-captures/20260612-greedy-meshing-v1
+  --views "FINAL" --warmup 5 --interval 1` — PASS. 1
+  .bmp + 1 .txt sidecar, exit code 0. VoxelLab reference
+  shot `cam -25 19 25 look 0.62 -0.48 -0.62` renders
+  without crash, sidecar fully populated, BMP pixel
+  distribution matches VoxelLab baseline (light gray for
+  glass/floor + dark blue sky + near-white highlights +
+  near-black shadows — no "uniform gray" holes that would
+  indicate missing cells).
+
+**Cross-refs:** `decisions.md §25` (greedy meshing
+contract), `TODO.md §4` (greedy meshing closed) + §4.5
+(perf budget context — vertex stage #1 bottleneck),
+`agent/status.md §14` (this session's snapshot),
+`agent/active-sessions.md`
+session-2026-06-12-greedy-meshing (closed).
 

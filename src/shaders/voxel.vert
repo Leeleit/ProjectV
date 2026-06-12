@@ -4,6 +4,10 @@ struct PackedFace {
     uint localVoxelFace;
     uint chunkIndexMaterial;
     uint lightingData;
+    // A1 (4.1 greedy meshing): (width, height) in 8 bits each for the
+    // in-plane quad size. width = axisU extent, height = axisV extent.
+    // (1, 1) = unit quad (no merge). See `decisions.md §25`.
+    uint packedExtents;
 };
 
 layout(set = 0, binding = 0, std430) readonly buffer PackedFacePayload {
@@ -104,6 +108,25 @@ uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
     }
 }
 
+// A1 (4.1 greedy meshing): scale the unit corner offset by the merged
+// quad extents in the face's in-plane channels. `unitOffset.x/y/z` are 0
+// or 1 (per existing `GetFaceCornerOffset`); the in-plane channels get
+// multiplied by `quadExtents.x` (width = axisU) and `quadExtents.y`
+// (height = axisV) respectively, while the normal-axis channel stays at
+// its 0/1 value. For unit quads (W=H=1) this is a no-op.
+uvec3 ApplyGreedyScale(const uint faceIndex, const uvec3 unitOffset, const uvec2 quadExtents) {
+    if (faceIndex == 0u || faceIndex == 1u) {
+        // Face 0/1 (X±): in-plane = (Y, Z). axisU = Y, axisV = Z.
+        return uvec3(unitOffset.x, unitOffset.y * quadExtents.x, unitOffset.z * quadExtents.y);
+    } else if (faceIndex == 2u || faceIndex == 3u) {
+        // Face 2/3 (Y±): in-plane = (X, Z). axisU = X, axisV = Z.
+        return uvec3(unitOffset.x * quadExtents.x, unitOffset.y, unitOffset.z * quadExtents.y);
+    } else {
+        // Face 4/5 (Z±): in-plane = (X, Y). axisU = X, axisV = Y.
+        return uvec3(unitOffset.x * quadExtents.x, unitOffset.y * quadExtents.y, unitOffset.z);
+    }
+}
+
 void main() {
     const PackedFace packedFace = packedFaces[uint(gl_InstanceIndex)];
     const uint localVoxelFace = packedFace.localVoxelFace;
@@ -117,9 +140,17 @@ void main() {
     (localVoxelFace >> 8u) & 0xFFu,
     (localVoxelFace >> 16u) & 0xFFu);
 
+    // A1 (4.1 greedy meshing): decode (width, height) of the merged quad.
+    // Unit quads carry (1, 1) and behave exactly like the pre-A1 path.
+    const uvec2 quadExtents = uvec2(
+    packedFace.packedExtents & 0xFFu,
+    (packedFace.packedExtents >> 8u) & 0xFFu);
+
     const uint triangleVertexIndex = uint(gl_VertexIndex) % 6u;
     const uint cornerIndex = DecodeTriangleCornerIndex(triangleVertexIndex);
-    const vec3 localCornerPosition = vec3(localVoxelCoord + GetFaceCornerOffset(faceIndex, cornerIndex));
+    const uvec3 unitOffset = GetFaceCornerOffset(faceIndex, cornerIndex);
+    const uvec3 scaledOffset = ApplyGreedyScale(faceIndex, unitOffset, quadExtents);
+    const vec3 localCornerPosition = vec3(localVoxelCoord + scaledOffset);
     const vec3 worldPosition = vec3(chunkDescriptors[chunkIndex].chunkOrigin.xyz) + localCornerPosition;
 
     gl_Position = pushConstants.viewProjection * vec4(worldPosition, 1.0);
