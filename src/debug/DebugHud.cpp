@@ -25,7 +25,17 @@ constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
 constexpr size_t kHudLineBufferSize = 96;
 constexpr size_t kMaxStatsLineCount = 38;
-constexpr size_t kMaxHelperLineCount = 16;
+// **Helper-panel cap, 2026-06-12 bump.** Was 16
+// (per-line at the time of the original
+// implementation); over the next several
+// sessions the panel accumulated more hotkey
+// lines than 16 can hold, and `BeginHudLine`
+// silently drops the tail. Bumped to 24 to
+// fit the new "MOVE / SPD / L Z" additions
+// (and a few lines of headroom for the
+// follow-up hotkey-rebind slice the operator
+// committed to).
+constexpr size_t kMaxHelperLineCount = 24;
 
 std::array<uint8_t, 7> GetGlyphRows(const char character)
 {
@@ -943,9 +953,49 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F8 TOOL  F9 BND");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F10 DIRTY  F11 AIR");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "J AUTOJUMP  F12 DELAY");
+		// **Movement / speed, 2026-06-12.** WASD
+		// moves the character (or the camera in
+		// spectator mode). `SPACE` is "up": jump
+		// in walk mode, ascend in creative /
+		// spectator flight. `LSHIFT` is "down":
+		// sneak in walk, descend in creative /
+		// spectator flight. `LCTRL` is the
+		// speed-boost hold-key (doubles the
+		// configured `CameraState::moveSpeed`).
+		// `LALT` is the slow-mo hold-key (halves
+		// it). `RSHIFT` / `RCTRL` / `RALT` are
+		// the right-hand alternates; the helper
+		// shows the left-hand form for brevity
+		// but the binding in `InputActions.cpp`
+		// accepts both. This line was missing
+		// from the helper before the v1 cap
+		// bump; the operator shouldn't have to
+		// grep the source to know that `W`
+		// moves forward.
+		PV_APPEND_HUD_LINE(outLines, lineCount, "MOVE WASD  SPC UP  SHFT DN");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "SPD  CTL+ FAST  ALT- SLOW");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  N TMAP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "H EXP-  K EXPUP  V RESET");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "O SHDW  U DEC  I INC");
+		// **Debug gizmos, 2026-06-12.** `L`
+		// toggles the cascade split-plane
+		// overlay (4 thin AABBs at the
+		// `viewDepthSplits[i]` distances along
+		// the camera forward vector, sized from
+		// each cascade's ortho footprint; the
+		// colors are 4 distinct hues
+		// red/orange/cyan/magenta so the
+		// operator can tell cascades apart at
+		// a glance). `Z` toggles the cursor
+		// hit-normal shaft (1-voxel-wide shaft
+		// along `selection.hitNormal` for 2
+		// voxels beyond the hit voxel; helps
+		// disambiguate face selection at
+		// extreme angles where the yellow
+		// selection box alone is ambiguous).
+		// Both were missing from the helper
+		// before the v1 cap bump.
+		PV_APPEND_HUD_LINE(outLines, lineCount, "L CASC  Z HITNRM");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
@@ -960,8 +1010,7 @@ size_t BuildHelperLines(
 		// helper spells them out. The keys themselves are
 		// not redefined — the binding stays at the
 		// SDL_SCANCODE level in `InputActions.cpp`.
-		PV_APPEND_HUD_LINE(outLines, lineCount, "TIMECTL DOWN  UP");
-		PV_APPEND_HUD_LINE(outLines, lineCount, "TIMESTEP STEP  RESET 1X");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "TIME [ DN  ] UP  \\ STEP  ` 1X");
 		// **Audio engine, 2026-06-12.** Music
 		// player controls. v1 layout per
 		// `decisions.md §28` (full hotkey rebind
@@ -971,8 +1020,7 @@ size_t BuildHelperLines(
 		// are not in the HUD font (only A-Z,
 		// 0-9, `.`, `-`, `:`). Q = play/pause,
 		// E = stop, 7/8 = vol-/vol+.
-		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC Q PLAY  E STOP");
-		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 7 DN   8 UP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC Q PLY  E STP  7- 8+");
 		// **Track switching, 2026-06-12.** `9` =
 		// next, `0` = previous. The bracket and
 		// backslash / backtick keys are spelled
@@ -982,7 +1030,7 @@ size_t BuildHelperLines(
 		// uses the same "9 SKIP  0 BACK" shape
 		// that the volume-down / volume-up line
 		// uses for the digit pair.
-		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 9 NEXT  0 PREV");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 9 NXT  0 PRV");
 	} else {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");
