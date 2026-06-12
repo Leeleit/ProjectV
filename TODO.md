@@ -2,7 +2,7 @@
 
 Актуальная дорожная карта `ProjectV`.
 
-Дата обновления: `2026-06-12` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 + frame-step/slow-motion + per-pass timings + audio engine (miniaudio) closed + post-TAA roadmap + R&D Блоки 7-9)
+Дата обновления: `2026-06-13` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 + frame-step/slow-motion + per-pass timings + audio engine (miniaudio) closed + music HUD 4-line (`723edc5`) + post-TAA roadmap + R&D Блоки 7-9)
 Статус документа: `живой roadmap`
 
 ---

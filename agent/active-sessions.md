@@ -893,3 +893,34 @@ Refs: agent/memory.md §10.20, agent/active-sessions.md
 - **status:** closed
 - **commit-hash:** _pending_ (заполняется после коммита пользователем)
 - **notes:** Источник — явная команда пользователя «над проектом могут работать несколько агентов, изменения могут быть прерваны, агенты должны быть готовы». Протокол multi-agent зафиксирован; см. `AGENTS.md` §7.2.6.
+
+### session-2026-06-13-music-hud-4line
+
+- **id:** `2026-06-13T01:10Z-music-hud-4line`
+- **started-at:** 2026-06-13T01:10:00Z
+- **closed-at:** 2026-06-13T01:20:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Music HUD: 1-line → 4-line.** Replaces the 2026-06-12 1-line `MUSIC <state> VOL 0.80 TRK <name>` block with 4 lines per the operator's request: `MUSIC <state>  VOL 0.80` (always), then 3 gated lines `ARTIST <name>` / `TITLE <name>` / `POS m:ss / m:ss` (only when engine initialized AND playlist non-empty). HUD font supports only uppercase ASCII, digits, `.`, `-`, `:`, so labels are ASCII-only. Layout lives in the regular (non-detailed-only) section because music is a feature, not a debug tool. **Не трогаю:** TAA-agent's 4 uncommitted files per §7.2.6; `legacy/CMakeLists.txt`; `external/miniaudio/*`.
+- **files-touched-intent:** `src/audio/AudioEngine.{hpp,cpp}`, `src/core/Types.hpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `agent/decisions.md §28`, `agent/status.md §19`, `agent/active-sessions.md` (this entry)
+- **status:** closed
+- **commit-hash:** `723edc5` — `feat(audio): 4-line music HUD (state/vol/artist/title/pos)`
+- **notes:** **Build state (final):** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, no new warnings (1 pre-existing `DebugHud.cpp:789` LOCL warning, не моя). `ctest 6/6` (1.38s, baseline preserved). Smoke from repo root: `miniaudio initialized; 2 mp3 track(s) in /home/le1t/Projects/ProjectV/music` — no regression. TestBuildDebugHudVerticesProducesGeometryWhenVisible passes because default DebugStats exercises the `audioMusicInitialized=false` branch, which still emits exactly 1 line for audio (same shape as pre-change).
+
+  **Working rules (см. `agent/memory.md §10.26` + `decisions.md §28` new bullet):**
+  - `ParseArtistTitle(filename, artist, title)`: free function, strips case-insensitive `.mp3` tail, splits on first ` - ` (space-dash-space, `std::string_view`). Fallback: `artist="-"` (em-dash sentinel, distinct from empty string) + `title=full-stem`.
+  - `m_currentArtist` / `m_currentTitle` cached in AudioEngine, re-parsed only on track change via `updateCurrentTrackMetadata()` called from `scanPlaylist` / `loadCurrentTrack` (success+fail) / `shutdown`. Per-frame cost: zero (mirror copy is single `std::copy_n` per field).
+  - `positionSeconds()` / `durationSeconds()`: O(1) miniaudio calls, both guarded by `m_soundLoaded` and falling back to 0.0f on `MA_FAILURE`. Use `ma_sound_get_cursor_in_seconds` / `ma_sound_get_length_in_seconds` (not `_in_milliseconds` — that getter doesn't exist for length; only `_in_pcm_frames` and `_in_seconds` are exposed).
+  - `FormatMmSs(seconds, treatZeroAsValid)`: HUD helper in `DebugHud.cpp` anonymous namespace. Position uses `true` (so "0:00" at start of track); duration uses `false` (so "--:--" is the "no length" sentinel). Negative inputs clamped to 0 (rare stream underflow would otherwise produce "-1:59").
+  - `kMaxStatsLineCount = 38` does NOT need a bump: basic goes from ~12 to ~15, detailed from ~30 to ~33, both still fit in 38 with headroom for the SFX/ambient slices the operator may add later.
+  - HUD placement: regular (non-detailed-only) section, immediately after the walk feet/sup block, before the per-pass GFX/OTH/timings line. With the new 4 lines, the per-pass timings section is shifted down by 3 lines in detailed mode (visible as: "music grew, timings moved down") — acceptable cosmetic shift, no test depends on line ordering.
+
+  **Mirror contract (new in `DebugStats`):**
+  - `audioMusicArtist: char[96]` (matches existing short-string budget)
+  - `audioMusicTitle: char[128]` (matches `audioMusicTrackName` budget for full filename minus artist)
+  - `audioMusicPositionSec: float` (0.0f when not loaded; queried each frame)
+  - `audioMusicDurationSec: float` (0.0f when not loaded OR decoder did not expose length)
+  - All four are reset to defaults in the `audio == nullptr` branch of `AppUpdate` (graceful degradation when miniaudio init failed).
+
+  **Commit plan (1 commit, executed):** `723edc5 feat(audio): 4-line music HUD (state/vol/artist/title/pos)` — see git log.

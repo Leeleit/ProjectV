@@ -633,3 +633,50 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 **Test count baseline:** `ctest 6/6` (1.46s) — preserved.
 
 **Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
+
+## 19. Music HUD: 1-line → 4-line — `723edc5` (closed, committed)
+
+**1 commit proposed & executed** per operator answers to plan: layout = 4 lines (one per field), visibility = always (basic + detailed):
+
+| SHA | Subject | Files |
+|---|---|---|
+| `723edc5` | `feat(audio): 4-line music HUD (state/vol/artist/title/pos)` | 5 source + 2 doc |
+
+**What landed (build green, ctest 6/6, smoke-verified):**
+
+- **4-line HUD block in `DebugHud.cpp`** (replaces 2026-06-12 1-line `MUSIC <state> VOL 0.80 TRK <name>`):
+  ```
+  MUSIC PLAY  VOL 0.65        (always)
+  ARTIST Le1t                 (gated: init+playlist)
+  TITLE  Palm Trees           (gated: init+playlist)
+  POS    1:42 / 3:28          (gated: init+playlist)
+  ```
+  The 3 meta lines are gated on `audioMusicInitialized && audioMusicPlaylistSize > 0` so the empty-playlist case still shows the 1-line `MUSIC OFF` shape (no `NO TRACKS` noise). Volume shares the `MUSIC` line (not its own line) to keep the cap at 4 lines and `kMaxStatsLineCount=38` unchanged (basic +3, detailed +3, both still fit in 38 with headroom).
+- **`AudioEngine::ParseArtistTitle`** (free function, called from `updateCurrentTrackMetadata()`): strips case-insensitive `.mp3` tail, splits on first ` - ` (space-dash-space, `std::string_view`). Fallback: `artist="-"` (em-dash sentinel, distinct from empty string) + `title=full-stem`. Re-parsed only on track change (scanPlaylist / loadCurrentTrack success+fail / shutdown), per-frame cost: zero.
+- **`AudioEngine` getters** `currentArtist()` / `currentTitle()` (cached strings) + `positionSeconds()` / `durationSeconds()` (O(1) miniaudio reads via `ma_sound_get_cursor_in_seconds` / `ma_sound_get_length_in_seconds`, both guarded by `m_soundLoaded` and falling back to 0.0f on `MA_FAILURE`).
+- **`DebugStats` mirrors** (`core/Types.hpp`): `audioMusicArtist: char[96]`, `audioMusicTitle: char[128]`, `audioMusicPositionSec: float`, `audioMusicDurationSec: float`. All four reset to defaults in the `audio == nullptr` branch of `AppUpdate` (graceful degradation when miniaudio init failed).
+- **`FormatMmSs(seconds, treatZeroAsValid)` helper** in `DebugHud.cpp` anonymous namespace. Position uses `true` (so "0:00" at start of track); duration uses `false` (so "--:--" is the "decoder did not expose length" sentinel). Negative inputs clamped to 0 (rare stream underflow would otherwise produce "-1:59").
+- **`AppUpdate` mirror block** extended: per-frame copy of artist + title (single `std::copy_n` per field, both O(filename-length)) + position / duration float assignment.
+
+**Build / test / smoke:**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — green, no new warnings (1 pre-existing `DebugHud.cpp:789` LOCL `%.0f` warning, не моя; was `:600` before my edit because the audio block grew by ~30 lines, shifting line numbers).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` — 6/6 (1.38s, baseline preserved).
+- **Smoke test** with `PROJECTV_ENABLE_VALIDATION=OFF`:
+  ```
+  [ProjectV][Audio] miniaudio initialized; 2 mp3 track(s) in /home/le1t/Projects/ProjectV/music
+  ```
+  Engine init succeeded, found the user's 2 tracks (`Le1t - Palm Trees.mp3` and `Le1t - aCID.mp3`). HUD will show `MUSIC STOP  VOL 0.80` initially; after pressing `Q`, the lines become `MUSIC PLAY  VOL 0.80` + `ARTIST Le1t` + `TITLE Palm Trees` + `POS 0:00 / 3:28` (or whatever duration the decoder reports for that file).
+- **TestBuildDebugHudVerticesProducesGeometryWhenVisible** still passes because default `DebugStats stats{}` exercises the `audioMusicInitialized=false` branch, which still emits exactly 1 line for audio (same shape as pre-change). The detailed-vs-basic vertex invariant holds (basic still < detailed).
+
+**Scope discipline:** TAA-agent's 4 uncommitted files (`ModelPass.{cpp,hpp}`, `VulkanBootstrap.cpp`, `taa_resolve.frag`) untouched (diff stat identical to session start). My changes are in `src/audio/AudioEngine.{hpp,cpp}`, `src/core/Types.hpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `agent/decisions.md §28` (new bullet for 4-line layout), `agent/active-sessions.md` (new session entry), `agent/status.md §19` (this section).
+
+**Files (mine, committed):** `src/audio/AudioEngine.{hpp,cpp}`, `src/core/Types.hpp`, `src/app/AppUpdate.cpp`, `src/debug/DebugHud.cpp`, `agent/decisions.md`, `agent/active-sessions.md`, `agent/status.md`.
+
+**Known follow-ups (not in this commit):**
+- Sidecar `music_*` keys still write `initialized=0` defaults — capture path doesn't plumb audio engine pointer through the renderer interface yet (separate plumbing slice per `decisions.md §28`).
+- Full hotkey rebind is the operator's follow-up (per `decisions.md §28`; v1 layout is placeholder).
+- v1 pause semantics: no resume-from-cursor (miniaudio 0.11+ removed `ma_sound_set_time`) — v2 needs custom decoder wrapper.
+
+**Test count baseline:** `ctest 6/6` (1.38s) — preserved.
+
+**Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
