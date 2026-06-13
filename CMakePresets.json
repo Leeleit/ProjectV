@@ -100,7 +100,8 @@
         "PROJECTV_ENABLE_IMGUI": "OFF",
         "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
         "PROJECTV_ENABLE_TRACY": "ON",
-        "PROJECTV_ENABLE_VALIDATION": "ON"
+        "PROJECTV_ENABLE_VALIDATION": "ON",
+        "PROJECTV_ENABLE_BENCHMARKS": "ON"
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {

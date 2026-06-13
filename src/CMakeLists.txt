@@ -204,6 +204,36 @@ add_custom_command(TARGET ProjectV POST_BUILD
         $<TARGET_FILE_DIR:ProjectV>
 )
 
+# **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+# compilation. `frustum_cull.c` is a C TU with hand-rolled
+# AVX2 intrinsics behind a `__attribute__((target("avx2")))`
+# per-function ABI switch. The kernel is built with
+# `-std=c2x` (the C23/C2y alias) so the `__attribute__`
+# extensions and the `_mm256_*` intrinsics are available;
+# `-mavx2` is added on the C side only (the rest of the
+# engine does not need the AVX2 ABI level by default).
+#
+# **Why a separate C library.** The kernel ships as
+# `projectv_c_kernels` so:
+# - the C++ engine does not need to know about the
+#   intrinsics build flags (avoids polluting the main
+#   target's `target_compile_options`).
+# - benchmark targets link the same object files the
+#   engine uses (no source-duplication, no risk of
+#   scalar-vs-intrinsic skew in the comparison).
+# - the per-function `__attribute__((target("avx2")))`
+#   stays scoped to `frustum_cull.c`; other C TUs
+#   (none yet) compile with the host baseline.
+add_library(projectv_c_kernels STATIC
+        c_kernels/frustum_cull.c
+)
+target_include_directories(projectv_c_kernels PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(projectv_c_kernels PUBLIC c_std_23)
+if (CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(projectv_c_kernels PRIVATE -mavx2)
+endif ()
+target_link_libraries(ProjectV PRIVATE projectv_c_kernels)
+
 if (WIN32)
     find_program(PROJECTV_POWERSHELL_EXECUTABLE NAMES pwsh powershell REQUIRED)
 

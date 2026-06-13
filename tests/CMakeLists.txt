@@ -459,5 +459,77 @@ target_sources(ProjectVStdModuleProbe PRIVATE
 add_test(NAME ProjectVStdModuleProbe COMMAND ProjectVStdModuleProbe)
 set_tests_properties(ProjectVStdModuleProbe PROPERTIES LABELS "unit")
 
+# **Tier 3 (`2026-06-13`).** Google Benchmark harness
+# for the frustum-cull hot path. Three implementations
+# are measured side-by-side:
+# - `BM_CppScalar` — `projectv::math::` types via the
+#   production M5 helper
+#   (`IsAabbVisibleAgainstCameraFrustum`).
+# - `BM_CScalar` — `projectv_cull_frustum_scalar`
+#   (the same algorithm in plain C).
+# - `BM_CAvx2` — `projectv_cull_frustum_avx2`
+#   (8-way batched intrinsics, gated on
+#   `__AVX2__` being defined at compile time).
+#
+# The harness is **not** added to `ctest` (Google
+# Benchmark is for perf measurement, not pass/fail). The
+# binary runs from `bin/ProjectVFrustumCullBenchmark`
+# with `--benchmark_min_time=0.1s` (default).
+#
+# Build flag: gated by `PROJECTV_ENABLE_BENCHMARKS=ON`
+# (the `linux-clang-debug` preset enables it; the
+# `windows-clang-debug` preset leaves it OFF for now).
+if (PROJECTV_ENABLE_BENCHMARKS)
+    add_executable(ProjectVFrustumCullBenchmark
+            ${CMAKE_SOURCE_DIR}/src/bench/FrustumCullBenchmark.cpp
+    )
+
+    target_include_directories(ProjectVFrustumCullBenchmark PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(ProjectVFrustumCullBenchmark PRIVATE
+            projectv_build_options
+            benchmark::benchmark
+            projectv_c_kernels
+            # **volk + glm + VMA** for the include path.
+            # `core/Types.hpp` (transitively included by
+            # `render/SceneResources.hpp` → `core/Math.hpp` →
+            # `core/Types.hpp`) needs `volk.h` on the include
+            # path. Linking `volk` is the cheapest way to
+            # inherit that since the library exports
+            # `external/volk/` as a PUBLIC include directory.
+            # `glm` and `GPUOpen::VulkanMemoryAllocator`
+            # follow the same pattern (the `AssetLoader`
+            # headers pull in `vk_mem_alloc.h` and
+            # `<glm/glm.hpp>`).
+            volk
+            glm
+            GPUOpen::VulkanMemoryAllocator
+    )
+
+    # **Tier 0.B / 2 alignment.** The benchmark includes
+    # `core/Types.hpp` (transitively via
+    # `core/Math.hpp`), so it needs the project's C++20
+    # modules in the `FILE_SET CXX_MODULES` to resolve
+    # the `import projectv.math;` / `import projectv.string_id;`
+    # statements. The macro is the uniform way to wire
+    # that across all test targets.
+    projectv_test_add_modules(ProjectVFrustumCullBenchmark)
+
+    # **AVX2 ABI on the consumer side.** The C kernel
+    # uses `__attribute__((target("avx2")))` per function
+    # (per-TU ABI is not required); the consumer does
+    # not need `-mavx2` to *call* the kernel, but
+    # `-mavx2` is harmless and makes the inner scalar
+    # baseline auto-vectorise (which is the point of
+    # the comparison — does the hand-rolled kernel beat
+    # what Clang 22's autovectorizer produces on the
+    # scalar path?).
+    target_compile_options(ProjectVFrustumCullBenchmark PRIVATE
+            -mavx2
+    )
+endif ()
+
 
 

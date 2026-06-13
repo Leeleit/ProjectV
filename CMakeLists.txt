@@ -66,6 +66,14 @@ option(
         ${PROJECTV_DEFAULT_ENABLE_RENDERDOC_MARKERS}
 )
 option(PROJECTV_BUILD_TRACY_PROFILER "Build bundled Tracy profiler UI" OFF)
+# **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+# dev-only benchmark harness (see
+# `legacy/docs/libraries/benchmark/` for integration notes
+# once that doc lands). OFF by default — the unit-test
+# suite does not need it; only `bench/FrustumCullBenchmark`
+# and future perf tests pull it in. Linux-clang-debug
+# preset overrides this to ON (per `CMakePresets.json:42`).
+option(PROJECTV_ENABLE_BENCHMARKS "Build Google Benchmark perf-test harness" OFF)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_C_STANDARD 23)
@@ -304,6 +312,67 @@ set(DRACO_UNITY_PLUGIN OFF CACHE BOOL "Disable draco Unity plugin" FORCE)
 set(CMAKE_POLICY_DEFAULT_CMP0148 OLD)
 add_subdirectory(external/draco)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/draco")
+
+# Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+# harness for the hot kernel work
+# (`src/c_kernels/frustum_cull.c` + `bench/FrustumCullBenchmark.cpp`).
+#
+# **libc++ compatibility.** Benchmark 1.9.4 ships with a
+# `BENCHMARK_USE_LIBCXX` cache option that toggles libc++
+# build settings (it does NOT itself add `-stdlib=libc++`
+# to the compile flags — that's the host CMake's job).
+# We rely on the global
+# `add_compile_options(-stdlib=libc++)` + libc++/libstdc++
+# hybrid link from the root scope to compile the
+# benchmark sources themselves.
+#
+# **Options.**
+# - `BENCHMARK_ENABLE_TESTING=OFF` — we don't run the
+#   benchmark's own unit tests (they need gtest + pfm).
+# - `BENCHMARK_ENABLE_GTEST_TESTS=OFF` — same reason.
+# - `BENCHMARK_DOWNLOAD_DEPENDENCIES=OFF` — no
+#   gmock/gtest fetch from the network at configure time.
+# - `BENCHMARK_ENABLE_INSTALL=OFF` — embedder, not
+#   installer.
+# - `BENCHMARK_ENABLE_WERROR=OFF` — benchmark 1.9.4
+#   has known warnings under Clang 22 (e.g. `<chrono>`
+#   narrowing) that would otherwise fail the build. The
+#   warning-cleanup policy in `decisions.md §4` does
+#   not apply to third-party code.
+# - `BENCHMARK_ENABLE_LTO=OFF` — embedding benchmark
+#   in our debug build; LTO of debug binaries is
+#   counter-productive.
+# - `BENCHMARK_USE_BUNDLED_GTEST=OFF` — no gtest
+#   linkage in the production image.
+#
+# Gated by `PROJECTV_ENABLE_BENCHMARKS=ON` to keep the
+# default build slim.
+if (PROJECTV_ENABLE_BENCHMARKS)
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark's own unit tests" FORCE)
+    set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable gtest-backed benchmark tests" FORCE)
+    set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "Disable gtest download" FORCE)
+    set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "Disable benchmark install target" FORCE)
+    set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "Disable -Werror for benchmark" FORCE)
+    set(BENCHMARK_ENABLE_LTO OFF CACHE BOOL "Disable LTO for benchmark" FORCE)
+    set(BENCHMARK_USE_BUNDLED_GTEST OFF CACHE BOOL "Disable bundled gtest in benchmark" FORCE)
+    set(BENCHMARK_USE_LIBCXX ON CACHE BOOL "Use libc++ as benchmark's stdlib" FORCE)
+    add_subdirectory(external/benchmark)
+    # **Clang 22 vs benchmark 1.9.4 C2y-extension warnings.**
+    # Benchmark 1.9.4's `include/benchmark/benchmark.h:1461` uses
+    # `__COUNTER__` in a preprocessor `defined(__COUNTER__) &&
+    # (__COUNTER__ + 1 == __COUNTER__ + 0)` test that Clang 22
+    # flags as `__COUNTER__ is a C2y extension`. Benchmark
+    # 1.9.4 also enables `-pedantic-errors` on Linux, which
+    # promotes the warning to an error. The fix is a per-target
+    # `-Wno-c2y-extensions`. The warning is a forward-compat
+    # diagnostic, not a real bug; silencing it is safe.
+    # Pinned to Clang's C2y warning class so we don't blanket-
+    # suppress real issues.
+    if (TARGET benchmark)
+        target_compile_options(benchmark PRIVATE -Wno-c2y-extensions)
+    endif ()
+    projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/benchmark")
+endif ()
 
 # nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
 # pulled in by `FetchContent` rather than vendored as a submodule, so
