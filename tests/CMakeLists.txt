@@ -263,5 +263,39 @@ target_link_libraries(ProjectVStringIdTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVStringIdTests COMMAND ProjectVStringIdTests)
 set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
 
+# C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+# executable that `import projectv.probe;` and prints the
+# value. Validates the CMake `FILE_SET CXX_MODULES` +
+# `CMAKE_CXX_SCAN_FOR_MODULES=ON` pipeline end-to-end
+# before we commit to converting the real `Math.ixx`.
+#
+# The probe module is duplicated into `tests/` because
+# CMake's `FILE_SET CXX_MODULES` base directory is the
+# target's source dir, and the test target's source dir
+# is `tests/`. A future refactor (Tier 2.D) can move
+# shared modules into a common location and use
+# `BASE_DIRS` on the FILE_SET to widen the scope.
+add_executable(ProjectVModuleSmoke
+        ModuleSmokeTest.cpp
+)
+
+target_sources(ProjectVModuleSmoke PRIVATE
+        FILE_SET CXX_MODULES FILES
+        Probe.ixx
+)
+
+target_compile_definitions(ProjectVModuleSmoke PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVModuleSmoke PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVModuleSmoke PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVModuleSmoke COMMAND ProjectVModuleSmoke)
+set_tests_properties(ProjectVModuleSmoke PROPERTIES LABELS "unit")
+
 
 

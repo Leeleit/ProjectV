@@ -1,5 +1,19 @@
 add_executable(ProjectV)
 
+# **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+# the project: `core/Math.ixx` exports
+# `projectv::math::{Vec3,Vec4,Mat4,dot,cross,lengthSq,length,
+# normalize,identity,zero,transpose,inverse,operator*+,-,fromArray16}`.
+# The header `core/Math.hpp` is kept as a re-export shim for
+# TUs that still use the `#include` form (Tier 2.D will
+# migrate them to `import projectv.math;` and delete the
+# header).
+target_sources(ProjectV PRIVATE
+        FILE_SET CXX_MODULES FILES
+        core/Math.ixx
+        core/Probe.ixx
+)
+
 # --- БЛОК АВТОКОМПИЛЯЦИИ ШЕЙДЕРОВ ---
 find_program(PROJECTV_GLSLC_EXECUTABLE glslc)
 find_program(PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
@@ -29,6 +43,10 @@ set(SHADERS
         ${SHADER_DIR}/debug_hud.frag
         ${SHADER_DIR}/model.vert
         ${SHADER_DIR}/model.frag
+        # Defense r0 (2026-06-13): GPU ray-march compute shader for the
+        # optional ray-march pass (toggle F6). See
+        # `src/render/RayMarchPass.hpp` and `docs/DefenseReport.md §2.1`.
+        ${SHADER_DIR}/ray_march.comp
 )
 
 foreach (SHADER ${SHADERS})
@@ -110,6 +128,7 @@ target_sources(ProjectV PRIVATE
         debug/DebugOverlays.cpp
         platform/PlatformEvents.cpp
         render/Renderer.cpp
+        render/RayMarchPass.cpp
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
         render/ShadowProjection.cpp
@@ -127,6 +146,7 @@ target_sources(ProjectV PRIVATE
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp
         voxel/VoxelWorld.cpp
+        voxel/SceneConfig.cpp
         # Add new files here
 )
 
@@ -167,6 +187,10 @@ target_link_libraries(ProjectV PRIVATE
         glm
         fastgltf::fastgltf
         draco::draco
+        # Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+        # loading (per ТЗ 4.5.1). Pulled in via FetchContent at the root
+        # `CMakeLists.txt`; here we only attach the target.
+        nlohmann_json::nlohmann_json
 )
 
 if (PROJECTV_ENABLE_TRACY)

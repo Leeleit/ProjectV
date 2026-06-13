@@ -185,6 +185,24 @@ set(CMAKE_POLICY_DEFAULT_CMP0148 OLD)
 add_subdirectory(external/draco)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/draco")
 
+# nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+# pulled in by `FetchContent` rather than vendored as a submodule, so
+# the project does not need yet another pinned external directory for
+# a single 1.1 MB header. Used by `src/voxel/SceneConfig.{hpp,cpp}`
+# to load runtime scene presets from `runtime/scene.json` (per
+# ТЗ 4.5.1 "Использование структурированных форматов для сохранения
+# сцен").
+include(FetchContent)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install OFF CACHE INTERNAL "")
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_library(projectv_build_options INTERFACE)
 if (MSVC)
     target_compile_options(projectv_build_options INTERFACE
@@ -208,10 +226,17 @@ else ()
     # std::memset / std::strcmp without an explicit <cstring> include; on
     # MSVC these come in transitively via <cstdint>/<cstdlib>, but on
     # libstdc++ they do not, so the namespace-qualified calls break.
-    target_compile_options(projectv_build_options INTERFACE
-            -include
-            cstring
-    )
+    #
+    # **Tier 2.A — module support (`2026-06-13`).** Removed the
+    # global `-include cstring` flag here. C++20 modules require
+    # `export module X;` to be the first non-preprocessor token in
+    # a `.ixx` TU; a force-include injects preprocessor output
+    # *before* the file content, which would land in neither the
+    # global module fragment nor the module purview. The
+    # remaining caller that relied on the implicit include
+    # (`src/render/vulkan/VulkanBootstrap.cpp`'s `std::strcmp`
+    # per `agent/memory.md §6`) now has an explicit `<cstring>`
+    # include added in the same commit.
 endif ()
 target_compile_definitions(projectv_build_options INTERFACE
         VK_NO_PROTOTYPES
