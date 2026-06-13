@@ -16,13 +16,39 @@
 
 #include <chrono>
 #include <cstdint>
+#include <expected>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <miniaudio.h>
 
 namespace projectv::audio {
+
+// **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
+// `AudioEngine::loadMusicFolder`. The success value is the
+// track count (`size_t`); 0 is a valid result (empty folder
+// or no `.mp3` files). Error variants surface recoverable
+// failures (`create_directories` / `directory_iterator`)
+// that the old `size_t` return couldn't distinguish from
+// "folder is fine, just empty". Cold path (1× per
+// startup / 5-second playlist refresh), so the
+// `std::expected` cost is irrelevant.
+enum class AudioLoadError : std::uint8_t {
+	PreconditionFailed = 0,
+	FolderCreateFailed,
+	ScanFailed,
+};
+
+constexpr std::string_view toString(AudioLoadError e) noexcept {
+	switch (e) {
+	case AudioLoadError::PreconditionFailed: return "PreconditionFailed";
+	case AudioLoadError::FolderCreateFailed: return "FolderCreateFailed";
+	case AudioLoadError::ScanFailed: return "ScanFailed";
+	}
+	return "Unknown";
+}
 
 // **Artist / title parser, 2026-06-13.** Splits a
 // filename like "Le1t - Palm Trees.mp3" into
@@ -90,7 +116,15 @@ class AudioEngine {
 	// in `Stopped` state). The folder is created on
 	// disk if it doesn't exist so the operator can
 	// always `cd` into it and drop files.
-	size_t loadMusicFolder(const std::filesystem::path &folderPath);
+	// **Tier 1.B (`2026-06-13`).** Returns
+	// `std::expected<size_t, AudioLoadError>`. The success
+	// value is the number of `.mp3` tracks discovered; 0 is
+	// a valid result (empty folder). The error variants
+	// surface recoverable failures that the old `size_t`
+	// return couldn't distinguish from the "empty folder"
+	// case. Callers use `.value_or(0)` to preserve the
+	// historical "0 is valid" contract.
+	std::expected<size_t, projectv::audio::AudioLoadError> loadMusicFolder(const std::filesystem::path &folderPath);
 
 	// **Per-frame tick.** Call from `AppUpdate` once per
 	// frame. Refreshes the playlist on a 5-second

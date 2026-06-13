@@ -11,6 +11,7 @@
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
+#include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -122,116 +123,96 @@ VkFormat ChooseModelDepthFormat(const VkPhysicalDevice physicalDevice)
 }
 } // namespace
 
-bool InitVulkan(AppState *state)
+std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState *state)
 {
+	// **Tier 1.B (`2026-06-13`).** Returns
+	// `std::expected<void, VulkanInitError>`. Each
+	// `return false;` site is replaced with
+	// `return std::unexpected(VulkanInitError::Variant);` and
+	// the per-step `runtime::LogRuntimeFailure` log line is
+	// preserved. The `PV_CHECK_OR_RETURN` macro short-circuits
+	// on a `false` precondition — we replace it with an
+	// explicit `if + return std::unexpected` for the two
+	// preconditions so the error variant is preserved.
+	const auto fail = [](projectv::vulkan_init::VulkanInitError e, std::string_view step, std::string_view detail) {
+		runtime::LogRuntimeFailure("Init", step, detail);
+		return std::unexpected(e);
+	};
 	PV_PROFILE_ZONE_N("InitVulkan");
-	PV_CHECK_OR_RETURN(state != nullptr, "Init", "InitVulkan.Preconditions", "AppState is null");
+	if (state == nullptr) {
+		return fail(projectv::vulkan_init::VulkanInitError::PreconditionFailed,
+			"InitVulkan.Preconditions", "AppState is null");
+	}
 	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
 	WorldState *world = GetWorldState(state->ecs.get());
-	PV_CHECK_OR_RETURN(
-		camera && world,
-		"Init",
-		"InitVulkan.EcsAccess",
-		"primary camera or world singleton is unavailable");
+	if (!camera || !world) {
+		return fail(projectv::vulkan_init::VulkanInitError::PreconditionFailed,
+			"InitVulkan.EcsAccess", "primary camera or world singleton is unavailable");
+	}
 	if (!InitializeVulkanBase(&state->platform, &state->context, &state->frame)) {
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::BootstrapFailed,
+			"InitVulkan.InitializeVulkanBase", "InitializeVulkanBase returned false");
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterBootstrap)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan",
-			"intentional failure probe requested after bootstrap");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::BootstrapFailureProbe,
+			"InitVulkan", "intentional failure probe requested after bootstrap");
 	}
 
 	if (!CreateTracyGpuContext(&state->context, &state->render)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreateTracyGpuContext",
-			"CreateTracyGpuContext returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::TracyContextFailed,
+			"InitVulkan.CreateTracyGpuContext", "CreateTracyGpuContext returned false");
 	}
 
 	if (!RecreateSwapchain(&state->platform, &state->context, &state->swapchain, &state->render)) {
-		return false;
+		return std::unexpected(projectv::vulkan_init::VulkanInitError::SwapchainFailed);
 	}
 
 	if (!CreateVoxelSceneWorld(state)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreateVoxelSceneWorld",
-			"CreateVoxelSceneWorld returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::WorldCreationFailed,
+			"InitVulkan.CreateVoxelSceneWorld", "CreateVoxelSceneWorld returned false");
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterWorld)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan",
-			"intentional failure probe requested after world creation");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::WorldFailureProbe,
+			"InitVulkan", "intentional failure probe requested after world creation");
 	}
 
 	InitializeCamera(camera, &state->simulation, &state->input);
 	ApplyStartupCameraOverrideFromEnvironment(camera);
 	if (!SyncEcsWorldState(state->ecs.get())) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.SyncEcsWorldState",
-			"SyncEcsWorldState returned false after world creation");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::EcsSyncFailed,
+			"InitVulkan.SyncEcsWorldState", "SyncEcsWorldState returned false after world creation");
 	}
 	state->physics.reset(CreatePhysicsState());
 	if (!state->physics ||
 		!SyncPhysicsWorld(state->physics.get(), world->voxelWorld.get())) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreatePhysicsState",
-			"failed to create or sync physics state");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::PhysicsStateFailed,
+			"InitVulkan.CreatePhysicsState", "failed to create or sync physics state");
 	}
 
 	if (!CreateSceneResources(&state->context, world, &state->render)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreateSceneResources",
-			"CreateSceneResources returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::SceneResourcesFailed,
+			"InitVulkan.CreateSceneResources", "CreateSceneResources returned false");
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::AfterSceneResources)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan",
-			"intentional failure probe requested after scene resources");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::SceneResourcesFailureProbe,
+			"InitVulkan", "intentional failure probe requested after scene resources");
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::BeforeGraphicsPipeline)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan",
-			"intentional failure probe requested before graphics pipeline creation");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::GraphicsPipelineProbe,
+			"InitVulkan", "intentional failure probe requested before graphics pipeline creation");
 	}
 
 	if (!CreateGraphicsPipeline(&state->context, &state->swapchain, &state->render)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreateGraphicsPipeline",
-			"CreateGraphicsPipeline returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::GraphicsPipelineFailed,
+			"InitVulkan.CreateGraphicsPipeline", "CreateGraphicsPipeline returned false");
 	}
 	if (IsInitFailureStageRequested(InitFailureStage::BeforeVoxelMeshingPipeline)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan",
-			"intentional failure probe requested before voxel meshing pipeline creation");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::VoxelMeshingPipelineProbe,
+			"InitVulkan", "intentional failure probe requested before voxel meshing pipeline creation");
 	}
 	if (!CreateVoxelMeshingPipeline(&state->context, &state->render)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreateVoxelMeshingPipeline",
-			"CreateVoxelMeshingPipeline returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::VoxelMeshingPipelineFailed,
+			"InitVulkan.CreateVoxelMeshingPipeline", "CreateVoxelMeshingPipeline returned false");
 	}
 
 	if (!projectv::asset::CreateModelPipeline(
@@ -240,11 +221,8 @@ bool InitVulkan(AppState *state)
 			state->swapchain.format,
 			ChooseModelDepthFormat(state->context.physicalDevice),
 			&state->render)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.CreateModelPipeline",
-			"CreateModelPipeline returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::ModelPipelineFailed,
+			"InitVulkan.CreateModelPipeline", "CreateModelPipeline returned false");
 	}
 
 	if (!projectv::asset::LoadAndRegisterModelsFromManifest(
@@ -252,11 +230,8 @@ bool InitVulkan(AppState *state)
 			state->context.commandPool,
 			state->context.queue,
 			&state->render)) {
-		runtime::LogRuntimeFailure(
-			"Init",
-			"InitVulkan.LoadAndRegisterModelsFromManifest",
-			"LoadAndRegisterModelsFromManifest returned false");
-		return false;
+		return fail(projectv::vulkan_init::VulkanInitError::ModelManifestFailed,
+			"InitVulkan.LoadAndRegisterModelsFromManifest", "LoadAndRegisterModelsFromManifest returned false");
 	}
 
 	// M5.1b follow-up: lift the loaded `modelInstances` to sit
@@ -273,5 +248,5 @@ bool InitVulkan(AppState *state)
 	// value) is bottom-anchored.
 	projectv::asset::SnapModelInstancesAboveGroundDispatch(*state->world.voxelWorld, &state->render);
 
-	return true;
+	return {};
 }

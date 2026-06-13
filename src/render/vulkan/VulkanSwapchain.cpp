@@ -123,28 +123,43 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &caps, SDL_Window *window
 	extent.height = std::clamp(extent.height, caps.minImageExtent.height, caps.maxImageExtent.height);
 	return extent;
 }
+} // namespace
 
-bool CreateOrRecreateSwapchain(
+// **Tier 1.B (`2026-06-13`).** Moved `CreateOrRecreateSwapchain` to
+// file scope so the header declaration (also file scope) doesn't
+// conflict with an anonymous-namespace definition. The function
+// still uses the file-scope helpers from the anonymous namespace
+// above (anonymous-namespace contents are visible at file scope).
+std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwapchain(
 	PlatformState *platform,
 	VulkanContextState *context,
 	SwapchainState *swapchain)
 {
+	// **Tier 1.B (`2026-06-13`).** Returns
+	// `std::expected<VkFormat, SwapchainError>`. The chosen
+	// `VkFormat` is returned on success and also written to
+	// `swapchain->format` so callers that read the format through
+	// the struct keep working. Each `return false;` is replaced
+	// with `return std::unexpected(SwapchainError::Variant);` —
+	// the per-step `runtime::LogRuntimeFailure` / `LogVkFailure`
+	// calls are preserved inside this function so the
+	// diagnostic log line carries the same detail as before.
+	const auto fail = [](projectv::swapchain::SwapchainError e, std::string_view step, std::string_view detail) {
+		runtime::LogRuntimeFailure("Swapchain", step, detail);
+		return std::unexpected(e);
+	};
 	PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain");
 	SwapchainSupportDetails support;
 	if (!QuerySwapchainSupport(context->physicalDevice, context->surface, &support)) {
-		runtime::LogRuntimeFailure(
-			"Swapchain",
+		return fail(projectv::swapchain::SwapchainError::QuerySupportFailed,
 			"CreateOrRecreateSwapchain.QuerySwapchainSupport",
 			"QuerySwapchainSupport returned false");
-		return false;
 	}
 
 	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) == 0) {
-		runtime::LogRuntimeFailure(
-			"Swapchain",
+		return fail(projectv::swapchain::SwapchainError::SurfaceUsageUnsupported,
 			"CreateOrRecreateSwapchain.SurfaceUsage",
 			"surface does not support VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT for swapchain images");
-		return false;
 	}
 	const bool supportsTransferSrc =
 		(support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
@@ -154,9 +169,10 @@ bool CreateOrRecreateSwapchain(
 	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, platform->window);
 
 	if (chosenExtent.width == 0 || chosenExtent.height == 0) {
+		swapchain->format = format;
 		swapchain->extent = chosenExtent;
 		swapchain->supportsTransferSrc = false;
-		return true;
+		return format;
 	}
 
 	uint32_t imageCount = std::max(2u, support.capabilities.minImageCount);
@@ -197,7 +213,7 @@ bool CreateOrRecreateSwapchain(
 		const VkResult createSwapchainResult = vkCreateSwapchainKHR(context->device, &createInfo, nullptr, &newSwapchain);
 		if (createSwapchainResult != VK_SUCCESS) {
 			runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateSwapchainKHR", createSwapchainResult);
-			return false;
+			return std::unexpected(projectv::swapchain::SwapchainError::CreateSwapchainFailed);
 		}
 	}
 
@@ -209,13 +225,11 @@ bool CreateOrRecreateSwapchain(
 			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 			if (imageCountResult != VK_SUCCESS) {
 				runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)", imageCountResult);
-				return false;
+				return std::unexpected(projectv::swapchain::SwapchainError::GetImageCountFailed);
 			}
-			runtime::LogRuntimeFailure(
-				"Swapchain",
+			return fail(projectv::swapchain::SwapchainError::ZeroImages,
 				"CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)",
 				"swapchain returned zero images");
-			return false;
 		}
 	}
 
@@ -227,7 +241,7 @@ bool CreateOrRecreateSwapchain(
 		if (fetchImagesResult != VK_SUCCESS) {
 			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 			runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(data)", fetchImagesResult);
-			return false;
+			return std::unexpected(projectv::swapchain::SwapchainError::GetImageListFailed);
 		}
 	}
 
@@ -255,7 +269,7 @@ bool CreateOrRecreateSwapchain(
 				}
 				vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 				runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateImageView", createImageViewResult);
-				return false;
+				return std::unexpected(projectv::swapchain::SwapchainError::CreateImageViewFailed);
 			}
 		}
 	}
@@ -322,7 +336,7 @@ bool CreateOrRecreateSwapchain(
 				"Swapchain",
 				"CreateOrRecreateSwapchain.PerImageSemaphores",
 				"failed to create per-swapchain-image submit semaphores");
-			return false;
+			return std::unexpected(projectv::swapchain::SwapchainError::CreateSemaphoreFailed);
 		}
 		// Destroy the previous per-image semaphores before overwriting
 		// the vector. The earlier `vkDeviceWaitIdle` in
@@ -361,9 +375,8 @@ bool CreateOrRecreateSwapchain(
 				viewName);
 		}
 	}
-	return true;
+	return format;
 }
-} // namespace
 
 bool RecreateSwapchain(
 	PlatformState *platform,
@@ -397,7 +410,18 @@ bool RecreateSwapchain(
 		render->graphicsPipelineLayout != VK_NULL_HANDLE;
 	{
 		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateSwapchainResources");
-		if (!CreateOrRecreateSwapchain(platform, context, swapchain)) {
+		// **Tier 1.B (`2026-06-13`).** `CreateOrRecreateSwapchain`
+		// now returns `std::expected<VkFormat, SwapchainError>`.
+		// `RecreateSwapchain` keeps its `bool` contract (it's the
+		// per-frame hot path that wraps the cold init); the
+		// variant is logged at high level so the operator still
+		// gets the specific failure reason.
+		const auto swapResult = CreateOrRecreateSwapchain(platform, context, swapchain);
+		if (!swapResult.has_value()) {
+			runtime::LogRuntimeFailure(
+				"Swapchain",
+				"RecreateSwapchain.CreateOrRecreateSwapchain",
+				std::string{"CreateOrRecreateSwapchain returned: "} + std::string{projectv::swapchain::toString(swapResult.error())});
 			return false;
 		}
 	}
@@ -434,18 +458,24 @@ bool RecreateSwapchain(
 	if (render->taaLayerHistoryColorTarget == nullptr) {
 		render->taaLayerHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
 	}
-	if (!projectv::taa::CreateOrRecreateTaaRenderTargets(
-			context,
-			swapchain->extent,
-			*render->taaSceneColorTarget,
-			*render->taaHistoryColorTarget,
-			*render->taaLayerSceneColorTarget,
-			*render->taaLayerHistoryColorTarget,
-			render->taaLinearSampler)) {
+	// **Tier 1.B (`2026-06-13`).** `std::expected<void, TaaError>`
+	// returns the specific failure variant (image / image-view /
+	// sampler create). The per-step detail is logged inside
+	// `CreateOrRecreateTaaRenderTargets`; the high-level caller
+	// logs the variant name and tears down.
+	const auto taaResult = projectv::taa::CreateOrRecreateTaaRenderTargets(
+		context,
+		swapchain->extent,
+		*render->taaSceneColorTarget,
+		*render->taaHistoryColorTarget,
+		*render->taaLayerSceneColorTarget,
+		*render->taaLayerHistoryColorTarget,
+		render->taaLinearSampler);
+	if (!taaResult.has_value()) {
 		runtime::LogRuntimeFailure(
 			"TaaRenderTargets",
 			"RecreateSwapchain.CreateOrRecreateTaaRenderTargets",
-			"TAA render target allocation failed");
+			std::string{"TAA render target allocation failed: "} + std::string{projectv::taa::toString(taaResult.error())});
 		return false;
 	}
 	render->taaHistoryValid = false;

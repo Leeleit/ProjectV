@@ -1,6 +1,10 @@
 #ifndef PROJECTV_TAA_RENDER_TARGETS_HPP
 #define PROJECTV_TAA_RENDER_TARGETS_HPP
 
+#include <cstdint>
+#include <expected>
+#include <string_view>
+
 #include "core/Types.hpp"
 
 // Forward declarations. The full definitions live in `core/Types.hpp`
@@ -20,6 +24,32 @@ struct VulkanContextState;
 // VMA header is included by the .cpp via the `RenderState` chain.
 namespace projectv::taa {
 using VmaAllocationHandle = void *;
+
+// **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
+// `CreateOrRecreateTaaRenderTargets`. Replaces the old `bool` return
+// + per-step log-line pattern with `std::expected<void, TaaError>`
+// so callers can `match` on the exact failure (image create vs
+// image-view create vs sampler create vs precondition violation).
+// Cold path (1× per swapchain recreate), so the ~2× `std::expected`
+// cost is irrelevant. Each variant maps to a `toString(e)` for log
+// lines and a per-step `runtime::LogRuntimeFailure` call inside the
+// implementation.
+enum class TaaError : std::uint8_t {
+	PreconditionFailed = 0,
+	ImageCreateFailed,
+	ImageViewCreateFailed,
+	SamplerCreateFailed,
+};
+
+constexpr std::string_view toString(TaaError e) noexcept {
+	switch (e) {
+	case TaaError::PreconditionFailed: return "PreconditionFailed";
+	case TaaError::ImageCreateFailed: return "ImageCreateFailed";
+	case TaaError::ImageViewCreateFailed: return "ImageViewCreateFailed";
+	case TaaError::SamplerCreateFailed: return "SamplerCreateFailed";
+	}
+	return "Unknown";
+}
 }
 
 #include <vulkan/vulkan.h>
@@ -94,7 +124,13 @@ struct OffscreenColorTarget {
 // and recreate cadence applies — both image sets follow the
 // swapchain extent and re-allocate together on resize. Same
 // ping-pong shape (current + previous) as the colour history.
-bool CreateOrRecreateTaaRenderTargets(
+// **Tier 1.B (`2026-06-13`).** Returns `std::expected<void, TaaError>`
+// (was `bool`). The 4 failure points — precondition violation,
+// `vmaCreateImage` failure, `vkCreateImageView` failure, and
+// `vkCreateSampler` failure — each map to a distinct
+// `TaaError` variant. Cold path (1× per swapchain recreate), so
+// the `std::expected` cost is irrelevant.
+std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 	VulkanContextState *context,
 	VkExtent2D extent,
 	OffscreenColorTarget &sceneColor,

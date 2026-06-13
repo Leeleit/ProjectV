@@ -1,5 +1,6 @@
 #include "render/TaaRenderTargets.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 // The header deliberately keeps `VmaAllocation` as a `void*` so it
@@ -63,7 +64,7 @@ void DestroyTarget(VulkanContextState *context, OffscreenColorTarget &target)
 
 } // namespace
 
-bool CreateOrRecreateTaaRenderTargets(
+std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 	VulkanContextState *context,
 	const VkExtent2D extent,
 	OffscreenColorTarget &sceneColor,
@@ -72,11 +73,24 @@ bool CreateOrRecreateTaaRenderTargets(
 	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler)
 {
+	// **Tier 1.B (`2026-06-13`).** Returns `std::expected<void, TaaError>`.
+	// Each failure point maps to a distinct enum variant. The
+	// implementation logs the per-step detail in
+	// `runtime::LogRuntimeFailure("Taa", step, detail)` and
+	// returns `std::unexpected(TaaError::Variant)`. The caller
+	// in `VulkanSwapchain.cpp::RecreateSwapchain` logs the
+	// variant name and tears down.
+	const auto fail = [](projectv::taa::TaaError e, std::string_view step, std::string_view detail) {
+		runtime::LogRuntimeFailure("Taa", step, detail);
+		return std::unexpected(e);
+	};
 	if (!context || !context->allocator || context->device == VK_NULL_HANDLE) {
-		return false;
+		return fail(projectv::taa::TaaError::PreconditionFailed,
+			"CreateOrRecreateTaaRenderTargets.Preconditions", "context/allocator/device null");
 	}
 	if (extent.width == 0u || extent.height == 0u) {
-		return false;
+		return fail(projectv::taa::TaaError::PreconditionFailed,
+			"CreateOrRecreateTaaRenderTargets.Preconditions", "extent is zero-sized");
 	}
 
 	// Tear down the previous pair before we allocate. The recreate path
@@ -131,7 +145,7 @@ bool CreateOrRecreateTaaRenderTargets(
 							  OffscreenColorTarget &target,
 							  const VkFormat format,
 							  const char *name,
-							  const VkImageLayout initialLayout) -> bool {
+							  const VkImageLayout initialLayout) -> std::expected<void, projectv::taa::TaaError> {
 		// Cast the `void*` handle back to its real VMA type for the
 		// call. The `void*` representation in the public header is
 		// just there to avoid leaking `vk_mem_alloc.h` into every
@@ -168,7 +182,8 @@ bool CreateOrRecreateTaaRenderTargets(
 				&target.image,
 				&allocation,
 				nullptr) != VK_SUCCESS) {
-			return false;
+			return fail(projectv::taa::TaaError::ImageCreateFailed,
+				"CreateOrRecreateTaaRenderTargets.vmaCreateImage", name);
 		}
 		target.allocation = allocation;
 		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(target.image), VK_OBJECT_TYPE_IMAGE, name);
@@ -192,13 +207,14 @@ bool CreateOrRecreateTaaRenderTargets(
 			1,
 		};
 		if (vkCreateImageView(context->device, &viewInfo, nullptr, &target.imageView) != VK_SUCCESS) {
-			return false;
+			return fail(projectv::taa::TaaError::ImageViewCreateFailed,
+				"CreateOrRecreateTaaRenderTargets.vkCreateImageView", name);
 		}
 		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(target.imageView), VK_OBJECT_TYPE_IMAGE_VIEW, name);
-		return true;
+		return {};
 	};
 
-	if (!allocateTarget(sceneColor, sceneColorFormat, "TaaSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
+	if (!allocateTarget(sceneColor, sceneColorFormat, "TaaSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -206,9 +222,9 @@ bool CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return false;
+		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
 	}
-	if (!allocateTarget(historyColor, sceneColorFormat, "TaaHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
+	if (!allocateTarget(historyColor, sceneColorFormat, "TaaHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -216,9 +232,9 @@ bool CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return false;
+		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
 	}
-	if (!allocateTarget(layerSceneColor, layerColorFormat, "TaaLayerSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
+	if (!allocateTarget(layerSceneColor, layerColorFormat, "TaaLayerSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -226,9 +242,9 @@ bool CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return false;
+		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
 	}
-	if (!allocateTarget(layerHistoryColor, layerColorFormat, "TaaLayerHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED)) {
+	if (!allocateTarget(layerHistoryColor, layerColorFormat, "TaaLayerHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
 			context,
 			sceneColor,
@@ -236,7 +252,7 @@ bool CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return false;
+		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
 	}
 
 	VkSamplerCreateInfo samplerInfo{};
@@ -259,11 +275,12 @@ bool CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return false;
+		return fail(projectv::taa::TaaError::SamplerCreateFailed,
+			"CreateOrRecreateTaaRenderTargets.vkCreateSampler", "TaaLinearSampler");
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(linearSampler), VK_OBJECT_TYPE_SAMPLER, "TaaLinearSampler");
 
-	return true;
+	return {};
 }
 
 void DestroyTaaRenderTargets(

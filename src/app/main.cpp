@@ -377,8 +377,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
-	if (!InitVulkan(state.get())) {
-		runtime::LogRuntimeFailure("App", "SDL_AppInit.InitVulkan", "InitVulkan returned false");
+	// **Tier 1.B (`2026-06-13`).** `InitVulkan` now returns
+	// `std::expected<void, VulkanInitError>`. The per-step
+	// detail is logged inside the implementation; the
+	// high-level caller logs the variant name and tears down.
+	const auto initResult = InitVulkan(state.get());
+	if (!initResult.has_value()) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"SDL_AppInit.InitVulkan",
+			std::string{"InitVulkan returned: "} + std::string{projectv::vulkan_init::toString(initResult.error())});
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
@@ -417,15 +425,17 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		SDL_Log("[ProjectV][Audio] miniaudio init failed; running without music");
 		state->audio.reset();
 	} else {
-		// First playlist scan. `loadMusicFolder`
-		// returns the number of `.mp3` files found;
-		// 0 is a valid result and means "the engine
-		// is alive but has no track to play". The
-		// operator can drop a file in the folder
-		// and the next 5-second tick will pick it
-		// up — no app restart required.
+		// First playlist scan. `loadMusicFolder` now
+		// returns `std::expected<size_t, AudioLoadError>`.
+		// `.value_or(0)` preserves the historical "0 is
+		// valid" contract: an empty folder (or a
+		// `create_directories` failure the caller chose
+		// to fall through) yields 0 tracks and the engine
+		// is still alive. The operator can drop a file
+		// in the folder and the next 5-second tick will
+		// pick it up — no app restart required.
 		const size_t trackCount = state->audio->loadMusicFolder(
-			projectv::audio::GetMusicDirectoryPath());
+			projectv::audio::GetMusicDirectoryPath()).value_or(0);
 		SDL_Log("[ProjectV][Audio] miniaudio initialized; %zu mp3 track(s) in %s",
 				trackCount,
 				state->audio->musicFolder().string().c_str());

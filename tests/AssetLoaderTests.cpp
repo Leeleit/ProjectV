@@ -198,7 +198,7 @@ void TestAssetRegistry(TestContext &context)
 		context.Fail(__LINE__, "registry should start empty");
 	}
 
-	if (!registry.Load("box", BoxFixturePath().string())) {
+	if (!registry.Load("box", BoxFixturePath().string()).has_value()) {
 		context.Fail(__LINE__, std::string("registry.Load failed: ") + std::string(projectv::asset::GetAssetLoaderLastErrorMessage()));
 		return;
 	}

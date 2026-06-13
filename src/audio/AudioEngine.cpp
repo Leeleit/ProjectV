@@ -154,15 +154,32 @@ void AudioEngine::shutdown()
 	updateCurrentTrackMetadata();
 }
 
-size_t AudioEngine::loadMusicFolder(const std::filesystem::path &folderPath)
+std::expected<size_t, projectv::audio::AudioLoadError> AudioEngine::loadMusicFolder(const std::filesystem::path &folderPath)
 {
+	// **Tier 1.B (`2026-06-13`).** `std::expected<size_t,
+	// AudioLoadError>` carries the specific failure
+	// variant. `create_directories` failure was previously
+	// silently swallowed; the new code surfaces it as
+	// `AudioLoadError::FolderCreateFailed` (and the
+	// caller can choose to log it or fall through to 0).
+	// `scanPlaylist` continues to handle the "empty folder"
+	// case as a 0-track success.
 	m_musicFolder = folderPath;
-	std::error_code ec;
-	std::filesystem::create_directories(m_musicFolder, ec);
-	// `create_directories` failing is non-fatal — the
-	// scan below will just produce an empty playlist
-	// and the operator can fix the path with
-	// `PROJECTV_MUSIC_DIR`.
+	if (m_musicFolder.empty()) {
+		return std::unexpected(projectv::audio::AudioLoadError::PreconditionFailed);
+	}
+	std::error_code createEc;
+	std::filesystem::create_directories(m_musicFolder, createEc);
+	if (createEc) {
+		// `create_directories` failing is non-fatal — the
+		// scan below will just produce an empty playlist
+		// and the operator can fix the path with
+		// `PROJECTV_MUSIC_DIR`. We surface the variant for
+		// visibility but the caller can still treat
+		// "0 tracks" as a valid outcome.
+		runtime::LogRuntimeFailure("Audio", "loadMusicFolder.create_directories", createEc.message());
+		return std::unexpected(projectv::audio::AudioLoadError::FolderCreateFailed);
+	}
 	return scanPlaylist();
 }
 
