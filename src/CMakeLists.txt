@@ -11,6 +11,7 @@ add_executable(ProjectV)
 target_sources(ProjectV PRIVATE
         FILE_SET CXX_MODULES FILES
         core/Math.ixx
+        core/StringId.ixx
         core/Probe.ixx
 )
 
