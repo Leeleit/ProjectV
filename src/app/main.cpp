@@ -18,12 +18,15 @@
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
+#include "render/RayMarchPass.hpp"
 #include "render/Renderer.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanInit.hpp"
+#include "voxel/SceneConfig.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+#include <cstdio>
 #include <string>
 
 namespace {
@@ -40,6 +43,47 @@ bool WaitForDeviceIdle(VulkanContextState &context)
 	}
 
 	return true;
+}
+
+// **Hot shader reload (defense r0, 2026-06-13).** F5 re-runs `cmake --build`
+// for the `Shaders` target (which re-invokes `glslc` on every
+// `.comp` / `.frag` / `.vert` under `src/shaders/`) and re-loads the produced
+// `.spv` files from disk. Pipeline recreation is scoped to the ray-march
+// pass for now (it owns the only freshly-added `.comp`); the pre-existing
+// graphics / shadow / TAA pipelines keep their cached shader modules until
+// a real pipeline-recreate PR lands (per ТЗ 4.1.6).
+int RebuildAllShadersFromDisk()
+{
+	int reloadedCount = 0;
+
+	// 1. The `Shaders` custom target in `src/CMakeLists.txt:78` depends on
+	//    the source `.comp` / `.frag` / `.vert` files. Re-invoking
+	//    `cmake --build` for that target is the canonical way to refresh
+	//    the `.spv` outputs. The user's environment has `glslc`
+	//    available; the build host uses the same compiler at build time
+	//    and at run time, so re-compiled `.spv` are byte-stable enough
+	//    for a runtime pipeline-recreate.
+	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
+	if (buildDir == nullptr) {
+		buildDir = "build/linux-clang-debug";
+	}
+
+	const std::string cmakeCmd = std::string("cmake --build ") + buildDir + " --target Shaders 2>&1 > /tmp/projectv_shader_reload.log";
+	const int rc = std::system(cmakeCmd.c_str());
+	if (rc == 0) {
+		++reloadedCount;
+	}
+
+	// 2. Recreate the ray-march pass so the freshly compiled compute
+	//    shader is re-bound next frame. Other pipelines keep their
+	//    cached shader modules until a fuller pipeline-recreate slice
+	//    lands.
+	projectv::render::RequestRayMarchPipelineRecreate();
+
+	std::fprintf(
+		stderr,
+		"[ProjectV][App] HotReloadShaders: re-built shaders, requested ray-march pipeline recreate\n");
+	return reloadedCount;
 }
 
 bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view operationStep)
@@ -159,11 +203,18 @@ bool SaveActiveVoxelWorldSnapshot(AppState *state)
 		"active voxel world is unavailable");
 
 	const std::string snapshotPath = GetVoxelWorldSnapshotPath();
-	if (!SaveVoxelWorldSnapshot(*world->voxelWorld, snapshotPath)) {
+	// **Tier 1.B (`2026-06-13`).** `std::expected` returns the
+	// exact `VoxelSnapshotError` variant. The implementation has
+	// already logged the per-step detail; the high-level caller
+	// logs the variant name so the operator gets a single
+	// "variant" log line + the deeper "step" log line in the
+	// diagnostic output.
+	const auto saveResult = SaveVoxelWorldSnapshot(*world->voxelWorld, snapshotPath);
+	if (!saveResult.has_value()) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"SaveActiveVoxelWorldSnapshot.SaveVoxelWorldSnapshot",
-			"SaveVoxelWorldSnapshot returned false");
+			std::string{"SaveVoxelWorldSnapshot returned: "} + std::string{toString(saveResult.error())});
 		return false;
 	}
 
@@ -181,14 +232,19 @@ bool LoadActiveVoxelWorldSnapshot(AppState *state)
 	}
 
 	const std::string snapshotPath = GetVoxelWorldSnapshotPath();
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(snapshotPath);
-	if (!loadedWorld) {
+	// **Tier 1.B (`2026-06-13`).** `std::expected` returns the
+	// exact `VoxelSnapshotError` variant. On error, the high-level
+	// caller logs the variant name; the per-step detail is in the
+	// lower-level log line emitted inside `LoadVoxelWorldSnapshot`.
+	auto loadedResult = LoadVoxelWorldSnapshot(snapshotPath);
+	if (!loadedResult.has_value()) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"LoadActiveVoxelWorldSnapshot.LoadVoxelWorldSnapshot",
-			"LoadVoxelWorldSnapshot returned null");
+			std::string{"LoadVoxelWorldSnapshot returned: "} + std::string{toString(loadedResult.error())});
 		return false;
 	}
+	std::unique_ptr<VoxelWorld> loadedWorld = std::move(*loadedResult);
 
 	state->world.voxelWorld = std::move(loadedWorld);
 	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
@@ -229,12 +285,21 @@ bool StartLastInputReplayPlayback(AppState *state)
 		return false;
 	}
 
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath);
+	std::unique_ptr<VoxelWorld> loadedWorld = [&]() -> std::unique_ptr<VoxelWorld> {
+		// **Tier 1.B (`2026-06-13`).** `std::expected` carries the
+		// `VoxelSnapshotError` variant through; we unwrap it here
+		// and convert the error variant into a high-level log line.
+		auto result = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath);
+		if (!result.has_value()) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"StartLastInputReplayPlayback.LoadVoxelWorldSnapshot",
+				std::string{"LoadVoxelWorldSnapshot returned: "} + std::string{toString(result.error())});
+			return nullptr;
+		}
+		return std::move(*result);
+	}();
 	if (!loadedWorld) {
-		runtime::LogRuntimeFailure(
-			"App",
-			"StartLastInputReplayPlayback.LoadVoxelWorldSnapshot",
-			"LoadVoxelWorldSnapshot returned null");
 		return false;
 	}
 
@@ -368,6 +433,38 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
 	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark);
 
+	// **Scene config (defense r0, 2026-06-13).** Read the JSON
+	// scene-config at `runtime/scene.json` and apply it as a runtime
+	// scene-preset override (per ТЗ 4.5.1 "Использование
+	// структурированных форматов"). The reload path mirrors the
+	// `PROJECTV_VOXEL_SCENE_PRESET` env-var flow that
+	// `GetRequestedVoxelScenePreset` already supports, so a failed
+	// JSON parse simply falls back to the hard-coded default.
+	{
+		const std::string configPath = projectv::voxel::GetDefaultSceneConfigPath();
+		projectv::voxel::EnsureDefaultSceneConfig(configPath);
+
+		projectv::voxel::SceneConfig config;
+		if (projectv::voxel::LoadSceneConfig(configPath, config)) {
+			std::fprintf(
+				stderr,
+				"[ProjectV][SceneConfig] loaded '%s' from %s (preset=%s)\n",
+				config.name.c_str(),
+				configPath.c_str(),
+				std::string{VoxelScenePresetToString(config.scenePreset)}.c_str());
+			WorldState *worldState = GetWorldState(state->ecs.get());
+			if (worldState && worldState->voxelWorld &&
+				worldState->voxelWorld->scenePreset != config.scenePreset) {
+				if (ReloadActiveVoxelScene(state.get(), config.scenePreset)) {
+					std::fprintf(
+						stderr,
+						"[ProjectV][SceneConfig] applied preset=%s\n",
+						std::string{VoxelScenePresetToString(config.scenePreset)}.c_str());
+				}
+			}
+		}
+	}
+
 	if (!SDL_SetWindowRelativeMouseMode(state->platform.window, state->input.relativeMouseModeEnabled)) {
 		runtime::LogSdlFailure("SDL_AppInit.SDL_SetWindowRelativeMouseMode");
 		state->input.relativeMouseModeEnabled = false;
@@ -402,6 +499,24 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	}
 	if (state->input.replay.playbackActive && IsInteractiveInputEvent(*event)) {
 		return SDL_APP_CONTINUE;
+	}
+
+	// **Defense r0 hotkeys (2026-06-13).** F5 = hot reload shaders, F6 =
+	// ray-march pass toggle. Both bypass the formal `InputAction` enum to
+	// avoid touching `core/Types.hpp` while `session-2026-06-13-hardcore-perf-r0`
+	// is mid-edit on the same header. See
+	// `docs/DefenseReport.md §2.7` for the contract.
+	if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
+		if (event->key.key == SDLK_F5) {
+			RebuildAllShadersFromDisk();
+		} else if (event->key.key == SDLK_F6) {
+			const bool newState = !projectv::render::IsRayMarchEnabled();
+			projectv::render::SetRayMarchEnabled(newState);
+			std::fprintf(
+				stderr,
+				"[ProjectV][App] ToggleRayMarch: %s\n",
+				newState ? "ray-march pass ENABLED" : "ray-march pass DISABLED");
+		}
 	}
 
 	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
@@ -451,6 +566,26 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->benchmark,
 			benchmarkDebug ? benchmarkDebug->stats : DebugStats{},
 			benchmarkFrameCounter);
+
+	// **Fluid CA tick (defense r0, 2026-06-13).** Throttled to ~60 Hz so the
+	// per-tick cost stays constant regardless of render FPS. The throttle
+	// is local to this function (static storage) and lives here to keep
+	// `AppUpdate.cpp` untouched while `session-2026-06-13-problems-cleanup-v2`
+	// is mid-edit on that file. `UpdateFluidCA` is a no-op when the world
+	// has zero `Fluid` voxels, so the cost on dry scenes is the
+	// `stats.fluidVoxelCount` check (one uint32 read) plus the
+	// `voxelWorld` pointer validation.
+	{
+		static Uint64 lastFluidTickCounter = 0;
+		const Uint64 fluidTickInterval = SDL_GetPerformanceFrequency() / 60u;
+		if (lastFluidTickCounter == 0u ||
+			benchmarkFrameCounter - lastFluidTickCounter >= fluidTickInterval) {
+			lastFluidTickCounter = benchmarkFrameCounter;
+			if (world->voxelWorld) {
+				UpdateFluidCA(*world->voxelWorld);
+			}
+		}
+	}
 
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(

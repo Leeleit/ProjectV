@@ -241,5 +241,27 @@ target_link_libraries(ProjectVMathTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVMathTests COMMAND ProjectVMathTests)
 set_tests_properties(ProjectVMathTests PROPERTIES LABELS "unit")
 
+# StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+# `projectv::core::StringID` (`src/core/StringId.hpp`) — 16 B
+# FNV-1a hash + length tuple with constexpr literal ctor.
+# Same target shape as `ProjectVMathTests`: pure C++ standard
+# library, no third-party deps, no Vulkan, no asset pipeline.
+add_executable(ProjectVStringIdTests
+        StringIdTest.cpp
+)
+
+target_compile_definitions(ProjectVStringIdTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVStringIdTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVStringIdTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVStringIdTests COMMAND ProjectVStringIdTests)
+set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
+
 
 

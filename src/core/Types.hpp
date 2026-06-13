@@ -14,6 +14,7 @@
 #include "SDL3/SDL.h"
 #include "asset/MeshGpuResources.hpp"
 #include "core/Math.hpp"
+#include "core/StringId.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -28,6 +29,7 @@ struct OffscreenColorTarget;
 
 #include <array>
 #include <cstddef>
+#include <inplace_vector>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -476,9 +478,33 @@ struct ChunkVisibilityCache {
 	uint64_t hash = 0;
 	uint32_t visibleChunkCount = 0;
 	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
-	std::vector<VkDrawIndirectCommand> opaqueCommands;
-	std::vector<VkDrawIndirectCommand> shadowCommands;
-	std::vector<VkDrawIndirectCommand> transparentCommands;
+	// **Tier 1.A (`2026-06-13`).** `std::inplace_vector` (P0843, C++26)
+	// replaces `std::vector` for the per-frame cached indirect-draw
+	// command arrays. Capacity is fixed at `kChunkVisibilityCacheMaxChunks`
+	// (1024 — covers VoxelLab + MeshingStress worst case per
+	// `TODO.md §Tier 1.A`); the shadow array is sized for
+	// `kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount` so all
+	// per-cascade slots fit in a single inplace_vector. Compared to
+	// `std::vector`:
+	//   - **No heap allocation per resize.** `std::vector::assign(N, x)`
+	//     allocates on the first miss; `inplace_vector::resize(N)`
+	//     value-initializes the slack region in-place.
+	//   - **No realloc copy on growth.** Once sized to N entries, the
+	//     data pointer is stable — the `memcpy` from `cache.data()`
+	//     to the per-frame mapped GPU buffer (in
+	//     `ApplyCachedChunkVisibilityCommands`) cannot be invalidated
+	//     by a later resize (we do resize() once per cache miss, then
+	//     only index-write into the array, never grow).
+	//   - **Stack-friendly.** The 16-byte-aligned `VkDrawIndirectCommand`
+	//     lives in the same cache line as the rest of the cache
+	//     struct, eliminating a heap-pointer chase on the hot path.
+	// The cap is asserted at the call site (`assert(chunkDescriptorCount
+	// <= kChunkVisibilityCacheMaxChunks)`) — exceeding it is a logic
+	// error, not a runtime overflow.
+	static constexpr std::size_t kChunkVisibilityCacheMaxChunks = 1024;
+	std::inplace_vector<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands;
+	std::inplace_vector<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands;
+	std::inplace_vector<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> transparentCommands;
 	// Cached values for the chunk-culling profiler plots. Mirrors
 	// the "Visible Chunks" / "Culled Chunks" values written by
 	// `UpdateSceneFrameChunkVisibility` so the plot stays
@@ -806,7 +832,16 @@ struct ModelInstanceData {
 };
 
 struct ModelRegistryEntry {
-	std::string id;
+	// **Tier 1.D/E (`2026-06-13`).** Replaced `std::string` with
+	// `projectv::core::StringID` — 16 B (hash + length + pad),
+	// trivially copyable, hashable. `std::string` is forbidden in
+	// hot path per `legacy/docs/philosophy/02_paradigms/06_strings-philosophy.md`
+	// (allocates, doesn't fit in a cache line, forces unordered_map
+	// to rehash bytes every lookup). The `id` is set once at manifest
+	// load time and then read-only for the rest of the session;
+	// StringID costs a single 16-byte copy instead of a 32-byte
+	// `std::string` (heap-allocated, refcounted-or-SSO).
+	projectv::core::StringID id;
 	projectv::asset::MeshGpuResources gpu;
 	std::array<float, 3> aabbMin{0.0f};
 	std::array<float, 3> aabbMax{0.0f};

@@ -281,11 +281,16 @@ bool StartInputReplayRecording(
 	if (!EnsureParentDirectoryExists(snapshotPath, "StartInputReplayRecording.CreateDirectories")) {
 		return false;
 	}
-	if (!SaveVoxelWorldSnapshot(world, capture.snapshotPath)) {
+	// **Tier 1.B (`2026-06-13`).** `std::expected` carries the
+	// `VoxelSnapshotError` variant through. Caller logs the
+	// variant name; the per-step detail is in the lower-level
+	// log line emitted inside `SaveVoxelWorldSnapshot`.
+	const auto saveResult = SaveVoxelWorldSnapshot(world, capture.snapshotPath);
+	if (!saveResult.has_value()) {
 		runtime::LogRuntimeFailure(
 			"InputReplay",
 			"StartInputReplayRecording.SaveSnapshot",
-			capture.snapshotPath);
+			std::string{capture.snapshotPath} + " (variant=" + std::string{toString(saveResult.error())} + ")");
 		return false;
 	}
 

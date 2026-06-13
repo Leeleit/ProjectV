@@ -445,14 +445,24 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	}
 
 	const uint32_t chunkDescriptorCount = frameResources.chunkDescriptorCount;
+	// **Tier 1.A (`2026-06-13`).** `ChunkVisibilityCache` now uses
+	// `std::inplace_vector` (P0843, C++26) with a fixed cap of
+	// `kChunkVisibilityCacheMaxChunks` (1024). The cap covers
+	// VoxelLab + MeshingStress worst case; exceeding it is a logic
+	// error and would have been an OOM on the old `std::vector`
+	// path. `resize()` value-initialises new slots in-place
+	// (no heap allocation, no realloc copy of existing data).
+	assert(chunkDescriptorCount <= ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks);
+	assert(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount <=
+		ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount);
 	if (cache.opaqueCommands.size() != chunkDescriptorCount) {
-		cache.opaqueCommands.assign(chunkDescriptorCount, VkDrawIndirectCommand{});
+		cache.opaqueCommands.resize(chunkDescriptorCount);
 	}
 	if (cache.shadowCommands.size() != static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount) {
-		cache.shadowCommands.assign(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount, VkDrawIndirectCommand{});
+		cache.shadowCommands.resize(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount);
 	}
 	if (cache.transparentCommands.size() != chunkDescriptorCount) {
-		cache.transparentCommands.assign(chunkDescriptorCount, VkDrawIndirectCommand{});
+		cache.transparentCommands.resize(chunkDescriptorCount);
 	}
 
 	const uint32_t shadowCommandStride = chunkDescriptorCount;

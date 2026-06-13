@@ -3,11 +3,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
+
+#include "voxel/VoxelSnapshotError.hpp"
 
 struct AppState;
 
@@ -103,16 +107,34 @@ struct VoxelWorld {
 	VoxelWorldStats stats{};
 };
 
-bool TryParseVoxelScenePreset(std::string_view text, VoxelScenePreset *outPreset);
-const char *VoxelScenePresetToString(VoxelScenePreset preset);
+// (Tier 1.E: replaced by `ParseVoxelScenePreset(std::string_view)` below
+// returning `std::optional<VoxelScenePreset>`. The out-param form is gone.)
 VoxelScenePreset GetNextVoxelScenePreset(VoxelScenePreset preset);
 VoxelScenePreset GetRequestedVoxelScenePreset();
 std::string GetVoxelWorldSnapshotPath();
 bool CreateVoxelSceneWorld(AppState *state);
 bool CreateVoxelSceneWorld(AppState *state, VoxelScenePreset preset);
 void DestroyVoxelSceneWorld(AppState *state);
-bool SaveVoxelWorldSnapshot(const VoxelWorld &world, std::string_view snapshotPath);
-std::unique_ptr<VoxelWorld> LoadVoxelWorldSnapshot(std::string_view snapshotPath);
+// **Tier 1.B (`2026-06-13`).** `std::expected<T, VoxelSnapshotError>`
+// for the snapshot save / load path. Replaces the old `bool` /
+// `nullptr` return + per-step log-line pattern with a strongly-typed
+// error enum. See `VoxelSnapshotError.hpp` for the per-variant
+// taxonomy. Cold path only (1× per snapshot), so the ~2× cost of
+// `std::expected` over a raw `bool` is irrelevant.
+std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(const VoxelWorld &world, std::string_view snapshotPath);
+std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> LoadVoxelWorldSnapshot(std::string_view snapshotPath);
+// **Tier 1.E (`2026-06-13`).** `VoxelScenePresetToString` returns
+// `std::string_view` (was `const char *`) so callers can use the
+// result in `string_view` contexts (fmt, fmtlog, unordered_map
+// with `string_view` key) without an implicit conversion. Body
+// stays in the .cpp — the function is only used at runtime
+// (SDL_Log, sidecar metadata, JSON serialization) so
+// `constexpr` would not buy anything and would force the body
+// into the header.
+// `ParseVoxelScenePreset` is `std::optional<VoxelScenePreset>`
+// (was `bool TryParseVoxelScenePreset(text, &out)` with out-param).
+std::string_view VoxelScenePresetToString(VoxelScenePreset preset);
+std::optional<VoxelScenePreset> ParseVoxelScenePreset(std::string_view text);
 bool IsInsideVoxelWorld(const VoxelWorld &world, Int3 position);
 VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
 Int3 GetVoxelChunkCoord(const VoxelWorld &world, Int3 position);
@@ -128,5 +150,15 @@ void CommitDirtyVoxelChunkRebuildRequests(VoxelWorld &world, const std::vector<s
 uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
 uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
 uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
+
+// **Fluid cellular automata (defense r0, 2026-06-13).** One CA tick per call:
+// each `VoxelMaterial::Fluid` voxel attempts to fall straight down by one
+// cell, falling back to the four cardinal neighbours if the cell below is
+// already solid. Uses a double-buffer copy of `voxels` so a single tick is
+// deterministic and free of read-after-write hazards. Marks every changed
+// chunk dirty via `MarkVoxelChunkDirty` so meshing picks the changes up on
+// the next frame. Caller is expected to invoke this at a fixed step
+// (typically 1/60 s) from the main app loop.
+uint32_t UpdateFluidCA(VoxelWorld &world);
 
 #endif

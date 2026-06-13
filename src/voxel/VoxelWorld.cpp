@@ -668,38 +668,48 @@ std::filesystem::path ResolveVoxelWorldSnapshotPath(const std::string_view snaps
 }
 } // namespace
 
-bool TryParseVoxelScenePreset(const std::string_view text, VoxelScenePreset *outPreset)
+std::optional<VoxelScenePreset> ParseVoxelScenePreset(const std::string_view text)
 {
-	if (!outPreset || text.empty()) {
-		return false;
+	// **Tier 1.E (`2026-06-13`).** Replaced `bool TryParse(..., &out)`
+	// out-param pattern with `std::optional<VoxelScenePreset>`.
+	// Cold path (preset switch from JSON / CLI), so the small
+	// `optional` overhead is irrelevant. The `std::nullopt` return
+	// is more idiomatic than a magic empty preset — the caller
+	// does `.value_or(VoxelScenePreset::VoxelLab)` to get the
+	// historical "fall through to default" behavior.
+	if (text.empty()) {
+		return std::nullopt;
 	}
 
 	if (MatchesPresetName(text, "voxellab")) {
-		*outPreset = VoxelScenePreset::VoxelLab;
-		return true;
+		return VoxelScenePreset::VoxelLab;
 	}
 	if (MatchesPresetName(text, "flatbenchmark")) {
-		*outPreset = VoxelScenePreset::FlatBenchmark;
-		return true;
+		return VoxelScenePreset::FlatBenchmark;
 	}
 	if (MatchesPresetName(text, "transparencystress")) {
-		*outPreset = VoxelScenePreset::TransparencyStress;
-		return true;
+		return VoxelScenePreset::TransparencyStress;
 	}
 	if (MatchesPresetName(text, "chunkgrid")) {
-		*outPreset = VoxelScenePreset::ChunkGrid;
-		return true;
+		return VoxelScenePreset::ChunkGrid;
 	}
 	if (MatchesPresetName(text, "meshingstress")) {
-		*outPreset = VoxelScenePreset::MeshingStress;
-		return true;
+		return VoxelScenePreset::MeshingStress;
 	}
 
-	return false;
+	return std::nullopt;
 }
 
-const char *VoxelScenePresetToString(const VoxelScenePreset preset)
+std::string_view VoxelScenePresetToString(const VoxelScenePreset preset)
 {
+	// **Tier 1.E (`2026-06-13`).** `constexpr std::string_view` return
+	// (was `const char *`). The literal stays in `.rodata` either
+	// way; the new return type lets callers use the result in
+	// `string_view` / `fmt::format` / `unordered_map<std::string_view, …>`
+	// contexts without an implicit conversion. The fallback
+	// `"VoxelLab"` (formerly the "shouldn't happen" default) is
+	// preserved — any unknown enum value is treated as VoxelLab,
+	// matching the original contract.
 	switch (preset) {
 	case VoxelScenePreset::VoxelLab:
 		return "VoxelLab";
@@ -742,14 +752,17 @@ VoxelScenePreset GetRequestedVoxelScenePreset()
 	}
 
 	VoxelScenePreset scenePreset = kDefaultVoxelScenePreset;
-	if (TryParseVoxelScenePreset(requestedPreset, &scenePreset)) {
-		return scenePreset;
+	// **Tier 1.E (`2026-06-13`).** `ParseVoxelScenePreset` returns
+	// `std::optional<VoxelScenePreset>`; `.value_or(default)` replaces
+	// the old `if (TryParse(...)) return out;` out-param pattern.
+	if (const auto parsedPreset = ParseVoxelScenePreset(requestedPreset)) {
+		return *parsedPreset;
 	}
 
 	SDL_Log(
 		"Unknown PROJECTV_SCENE_PRESET='%s'; using %s",
 		requestedPreset,
-		VoxelScenePresetToString(kDefaultVoxelScenePreset));
+		std::string{VoxelScenePresetToString(kDefaultVoxelScenePreset)}.c_str());
 	return kDefaultVoxelScenePreset;
 }
 
@@ -793,7 +806,7 @@ bool CreateVoxelSceneWorld(AppState *state, const VoxelScenePreset preset)
 	if (state->world.voxelWorld) {
 		SDL_Log(
 			"Using voxel scene preset: %s",
-			VoxelScenePresetToString(state->world.voxelWorld->scenePreset));
+			std::string{VoxelScenePresetToString(state->world.voxelWorld->scenePreset)}.c_str());
 	}
 	return static_cast<bool>(state->world.voxelWorld);
 }
@@ -811,14 +824,24 @@ void DestroyVoxelSceneWorld(AppState *state)
 	state->world.snapshotLoadRequested = false;
 }
 
-bool SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snapshotPath)
+std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snapshotPath)
 {
+	// **Tier 1.B (`2026-06-13`).** Returns `std::expected<bool,
+	// VoxelSnapshotError>` instead of `bool`. Each early-return
+	// site is a `std::unexpected(VoxelSnapshotError::Variant)`
+	// that names the failure. The original log-line is preserved
+	// via `runtime::LogRuntimeFailure(subsystem, step, detail)`
+	// so the operator's log greps still work; the error variant
+	// is the new machine-readable channel for callers that want
+	// to react programmatically (e.g. `auto _ = save(...).or_else([](auto e){
+	//   return fallbackWorldFromPreset(); });`).
+	const auto fail = [](projectv::voxel::VoxelSnapshotError e, std::string_view step, std::string_view detail) {
+		runtime::LogRuntimeFailure("VoxelWorld", step, detail);
+		return std::unexpected(e);
+	};
 	if (snapshotPath.empty()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"SaveVoxelWorldSnapshot.Path",
-			"snapshot path is empty");
-		return false;
+		return fail(projectv::voxel::VoxelSnapshotError::EmptyPath,
+			"SaveVoxelWorldSnapshot.Path", "snapshot path is empty");
 	}
 
 	const std::filesystem::path resolvedPath = ResolveVoxelWorldSnapshotPath(snapshotPath);
@@ -827,11 +850,8 @@ bool SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snap
 	if (!parentPath.empty() &&
 		!std::filesystem::create_directories(parentPath, createDirectoriesError) &&
 		createDirectoriesError) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"SaveVoxelWorldSnapshot.CreateDirectories",
-			createDirectoriesError.message());
-		return false;
+		return fail(projectv::voxel::VoxelSnapshotError::CreateDirectoriesFailed,
+			"SaveVoxelWorldSnapshot.CreateDirectories", createDirectoriesError.message());
 	}
 
 	VoxelWorldSnapshotHeader header{};
@@ -839,11 +859,8 @@ bool SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snap
 	header.version = kVoxelWorldSnapshotVersion;
 	ClearSnapshotReservedFields(&header);
 	if (world.voxels.size() > std::numeric_limits<uint32_t>::max()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"SaveVoxelWorldSnapshot.Size",
-			"voxel buffer exceeds snapshot format limit");
-		return false;
+		return fail(projectv::voxel::VoxelSnapshotError::VoxelBufferTooLarge,
+			"SaveVoxelWorldSnapshot.Size", "voxel buffer exceeds snapshot format limit");
 	}
 	header.voxelByteCount = static_cast<uint32_t>(world.voxels.size());
 	header.scenePreset = static_cast<uint8_t>(world.scenePreset);
@@ -854,11 +871,8 @@ bool SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snap
 
 	std::ofstream file(resolvedPath, std::ios::binary | std::ios::trunc);
 	if (!file.is_open()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"SaveVoxelWorldSnapshot.Open",
-			"failed to open snapshot file for write: " + resolvedPath.string());
-		return false;
+		return fail(projectv::voxel::VoxelSnapshotError::OpenForWriteFailed,
+			"SaveVoxelWorldSnapshot.Open", "failed to open snapshot file for write: " + resolvedPath.string());
 	}
 
 	file.write(reinterpret_cast<const char *>(&header), sizeof(header));
@@ -868,98 +882,74 @@ bool SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snap
 			static_cast<std::streamsize>(world.voxels.size()));
 	}
 	if (!file.good()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"SaveVoxelWorldSnapshot.Write",
-			"failed to write snapshot file: " + resolvedPath.string());
-		return false;
+		return fail(projectv::voxel::VoxelSnapshotError::WriteFailed,
+			"SaveVoxelWorldSnapshot.Write", "failed to write snapshot file: " + resolvedPath.string());
 	}
 
 	SDL_Log("Saved voxel world snapshot: %s", resolvedPath.string().c_str());
 	return true;
 }
 
-std::unique_ptr<VoxelWorld> LoadVoxelWorldSnapshot(const std::string_view snapshotPath)
+std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> LoadVoxelWorldSnapshot(const std::string_view snapshotPath)
 {
+	// **Tier 1.B (`2026-06-13`).** Returns `std::expected<unique_ptr<VoxelWorld>,
+	// VoxelSnapshotError>`. Each early-return site is a
+	// `std::unexpected(VoxelSnapshotError::Variant)` so callers
+	// can match on the exact failure (e.g.
+	// `.transform_error([](auto e){ return fallback(e); })`).
+	const auto fail = [](projectv::voxel::VoxelSnapshotError e, std::string_view step, std::string_view detail) {
+		runtime::LogRuntimeFailure("VoxelWorld", step, detail);
+		return std::unexpected(e);
+	};
 	if (snapshotPath.empty()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Path",
-			"snapshot path is empty");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::EmptyPath,
+			"LoadVoxelWorldSnapshot.Path", "snapshot path is empty");
 	}
 
 	const std::filesystem::path resolvedPath = ResolveVoxelWorldSnapshotPath(snapshotPath);
 	std::error_code fileSizeError;
 	const std::uintmax_t fileSize = std::filesystem::file_size(resolvedPath, fileSizeError);
 	if (fileSizeError) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.FileSize",
-			fileSizeError.message());
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::FileSizeQueryFailed,
+			"LoadVoxelWorldSnapshot.FileSize", fileSizeError.message());
 	}
 	if (fileSize < sizeof(VoxelWorldSnapshotHeader)) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.FileSize",
-			"snapshot file is smaller than the header");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::FileTooSmall,
+			"LoadVoxelWorldSnapshot.FileSize", "snapshot file is smaller than the header");
 	}
 
 	std::ifstream file(resolvedPath, std::ios::binary);
 	if (!file.is_open()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Open",
-			"failed to open snapshot file for read: " + resolvedPath.string());
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::OpenForReadFailed,
+			"LoadVoxelWorldSnapshot.Open", "failed to open snapshot file for read: " + resolvedPath.string());
 	}
 
 	VoxelWorldSnapshotHeader header{};
 	file.read(reinterpret_cast<char *>(&header), sizeof(header));
 	if (!file.good()) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.ReadHeader",
-			"failed to read snapshot header: " + resolvedPath.string());
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::ReadHeaderFailed,
+			"LoadVoxelWorldSnapshot.ReadHeader", "failed to read snapshot header: " + resolvedPath.string());
 	}
 
 	if (header.magic != kVoxelWorldSnapshotMagic) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Header",
-			"snapshot magic mismatch");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::MagicMismatch,
+			"LoadVoxelWorldSnapshot.Header", "snapshot magic mismatch");
 	}
 	if (header.version != kVoxelWorldSnapshotVersion) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Header",
-			"unsupported snapshot version");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::UnsupportedVersion,
+			"LoadVoxelWorldSnapshot.Header", "unsupported snapshot version");
 	}
 	if (!IsValidVoxelScenePresetValue(header.scenePreset)) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Header",
-			"snapshot scene preset is invalid");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::InvalidScenePreset,
+			"LoadVoxelWorldSnapshot.Header", "snapshot scene preset is invalid");
 	}
 	if (!HasClearSnapshotReservedFields(header)) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Header",
-			"snapshot reserved fields must stay zero");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::ReservedFieldsNonZero,
+			"LoadVoxelWorldSnapshot.Header", "snapshot reserved fields must stay zero");
 	}
 	if (header.config.chunkSize <= 0) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Header",
-			"snapshot chunk size must stay positive");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::InvalidChunkSize,
+			"LoadVoxelWorldSnapshot.Header", "snapshot chunk size must stay positive");
 	}
 
 	std::unique_ptr<VoxelWorld> world = CreateEmptyVoxelWorld(
@@ -968,25 +958,16 @@ std::unique_ptr<VoxelWorld> LoadVoxelWorldSnapshot(const std::string_view snapsh
 		header.min,
 		header.maxExclusive);
 	if (!world) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.CreateWorld",
-			"failed to create world layout for snapshot");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::CreateWorldFailed,
+			"LoadVoxelWorldSnapshot.CreateWorld", "failed to create world layout for snapshot");
 	}
 	if (world->voxels.size() != header.voxelByteCount) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.Header",
-			"snapshot voxel count does not match world layout");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::VoxelCountMismatch,
+			"LoadVoxelWorldSnapshot.Header", "snapshot voxel count does not match world layout");
 	}
 	if (fileSize != sizeof(VoxelWorldSnapshotHeader) + header.voxelByteCount) {
-		runtime::LogRuntimeFailure(
-			"VoxelWorld",
-			"LoadVoxelWorldSnapshot.FileSize",
-			"snapshot file size does not match header payload size");
-		return nullptr;
+		return fail(projectv::voxel::VoxelSnapshotError::FileSizeMismatch,
+			"LoadVoxelWorldSnapshot.FileSize", "snapshot file size does not match header payload size");
 	}
 
 	if (header.voxelByteCount > 0) {
@@ -994,21 +975,15 @@ std::unique_ptr<VoxelWorld> LoadVoxelWorldSnapshot(const std::string_view snapsh
 			reinterpret_cast<char *>(world->voxels.data()),
 			header.voxelByteCount);
 		if (!file.good()) {
-			runtime::LogRuntimeFailure(
-				"VoxelWorld",
-				"LoadVoxelWorldSnapshot.ReadPayload",
-				"failed to read snapshot payload: " + resolvedPath.string());
-			return nullptr;
+			return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
+				"LoadVoxelWorldSnapshot.ReadPayload", "failed to read snapshot payload: " + resolvedPath.string());
 		}
 	}
 
 	for (const uint8_t materialValue : world->voxels) {
 		if (!IsValidVoxelMaterialValue(materialValue)) {
-			runtime::LogRuntimeFailure(
-				"VoxelWorld",
-				"LoadVoxelWorldSnapshot.Payload",
-				"snapshot contains invalid voxel material id");
-			return nullptr;
+			return fail(projectv::voxel::VoxelSnapshotError::InvalidVoxelMaterial,
+				"LoadVoxelWorldSnapshot.Payload", "snapshot contains invalid voxel material id");
 		}
 	}
 
@@ -1298,4 +1273,130 @@ uint32_t CountVoxelsByMaterial(const VoxelWorld &world, const VoxelMaterial mate
 	}
 
 	return 0;
+}
+
+// **Fluid cellular automata (defense r0, 2026-06-13).** See header doc-comment
+// for the per-tick contract. This is a small bounded forward-shader-style
+// implementation: one CA step per call, no diffusion, no viscosity. Cheap
+// enough to run on every fixed simulation tick (1/60 s) and good enough to
+// demonstrate falling + spreading in the `Voxel Laboratory` shell breach
+// scenario. `decisions.md §15` documents why this lives on the CPU (and not
+// a GPU compute pass): MVP scope, no job system yet, and the visible
+// chunk count is bounded so the per-tick cost is sub-millisecond.
+uint32_t UpdateFluidCA(VoxelWorld &world)
+{
+	if (world.stats.fluidVoxelCount == 0u || world.voxels.empty()) {
+		return 0u;
+	}
+
+	// 1. Double-buffer copy of the voxel array. Cheap: 4-8 KB for the
+	//    bounded `VoxelLab` scene. Avoids read-after-write hazards in a
+	//    single tick: we read from `world.voxels` (current state) and
+	//    write into `next` (new state), then swap at the end.
+	std::vector<uint8_t> next = world.voxels;
+
+	const int width = world.width;
+	const int height = world.height;
+	const int depth = world.depth;
+	const int chunkSize = world.chunkSize;
+
+	const auto index = [width, height](const int x, const int y, const int z) -> size_t {
+		return static_cast<size_t>(x) + static_cast<size_t>(y) * static_cast<size_t>(width)
+			 + static_cast<size_t>(z) * static_cast<size_t>(width) * static_cast<size_t>(height);
+	};
+	const auto inBounds = [=](const int x, const int y, const int z) -> bool {
+		return x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth;
+	};
+
+	uint32_t movedCount = 0u;
+
+	for (int z = 0; z < depth; ++z) {
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				const size_t idx = index(x, y, z);
+				if (world.voxels[idx] != static_cast<uint8_t>(VoxelMaterial::Fluid)) {
+					continue;
+				}
+
+				// Try fall straight down first. Falling is the dominant
+				// gravity-driven motion and matches the `f_fall` rule from
+				// `legacy/docs/architecture/academic/01_project_defense_model.md §1.2`.
+				if (y > 0) {
+					const size_t belowIdx = index(x, y - 1, z);
+					if (world.voxels[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
+						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
+						next[belowIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
+						++movedCount;
+						continue;
+					}
+				}
+
+				// Fall-back spread to one of the four cardinal neighbours.
+				// Pick deterministically by hashing (x, y, z) so the
+				// pattern is reproducible across runs (and so the
+				// `VoxelLab` shell breach demo always spreads the same
+				// way). Order preference: +X, -X, +Z, -Z.
+				const uint32_t h = static_cast<uint32_t>(x * 73856093u
+												  ^ y * 19349663u
+												  ^ z * 83492791u);
+				const int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+				const int startSide = static_cast<int>(h & 0x3u);
+				bool spread = false;
+				for (int s = 0; s < 4 && !spread; ++s) {
+					const int sideIdx = (startSide + s) & 0x3;
+					const int nx = x + sides[sideIdx][0];
+					const int nz = z + sides[sideIdx][1];
+					if (!inBounds(nx, y, nz)) {
+						continue;
+					}
+					// Only spread to neighbours that have solid support
+					// below (otherwise the fluid would just keep falling
+					// in place next tick). Solid support = FloorWhite,
+					// FloorGray, Glass, or another Fluid. This is the
+					// "concave ground" branch of the spread rule.
+					bool hasSupport = false;
+					if (y > 0) {
+						const uint8_t belowMaterial = world.voxels[index(nx, y - 1, nz)];
+						hasSupport = belowMaterial != static_cast<uint8_t>(VoxelMaterial::Air);
+					}
+					if (!hasSupport) {
+						continue;
+					}
+					const size_t neighbourIdx = index(nx, y, nz);
+					if (world.voxels[neighbourIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
+						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
+						next[neighbourIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
+						++movedCount;
+						spread = true;
+					}
+				}
+			}
+		}
+	}
+
+	if (movedCount == 0u) {
+		return 0u;
+	}
+
+	// 2. Commit the new state and refresh stats through the public
+	//    `SetVoxelMaterial` path so all downstream counters (chunk
+	//    dirty flags, `fluidVoxelCount`, etc.) stay consistent. The
+	//    pixel-by-pixel rewrite is fine for MVP-scale scenes; for
+	//    larger worlds a chunk-level delta would be the next step.
+	for (int z = 0; z < depth; ++z) {
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				const size_t idx = index(x, y, z);
+				const uint8_t previous = world.voxels[idx];
+				const uint8_t current = next[idx];
+				if (previous == current) {
+					continue;
+				}
+				const auto material = static_cast<VoxelMaterial>(current);
+				SetVoxelMaterial(world, {x, y, z}, material);
+			}
+		}
+	}
+
+	return movedCount;
 }
