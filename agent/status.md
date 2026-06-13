@@ -703,8 +703,8 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 - [x] `agent/memory.md §11` — comprehensive technical debt + plan.
 - [x] `agent/decisions.md §29` — новое правило `std::expected` для cold path.
 - [x] `TODO.md` — перезаписан под новый roadmap (все `[x]` из старого — прошлое, новый `[ ]` для Tier 0..5).
-- [ ] **Phase 0 commit** — предложен пользователю по `§7.2.5`, **не auto-execute**.
-- [ ] Phase 1 (Tier-0 код) — после явного одобрения operator + commit'a Phase 0.
+- [x] **Phase 0 commit** — `964791d` `docs(agent): r0 hardcore perf roadmap + std::expected cold/bool hot rule` (5 файлов документации, 339 insertions / 803 deletions). По команде operator «1->3» (commit Phase 0 + Tier 0 код).
+- [ ] Phase 1 (Tier-0 код) — atomic sub-коммиты: A) introduce `src/core/Math.hpp` (Vec3/Vec4/Mat4, alignas 16/32); B) migrate hot structures; C) SIMD frustum cull; D) pre-reserve hot vectors. Каждый — отдельный commit по `§7.2.5`.
 
 **Scope discipline:**
 - Phase 0 трогает **только** 4 документа (`active-sessions.md`, `status.md`, `memory.md`, `decisions.md`) + `TODO.md`. Никакого кода.
