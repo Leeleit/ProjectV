@@ -719,8 +719,26 @@ const float localPointLightVisibility) {
 float GetCameraViewDepth(const vec3 worldPosition) {
     const float near = pushConstants.cameraPosition.w;
     const float far = pushConstants.cameraForward.w;
-    const float z = gl_FragCoord.z * 2.0 - 1.0;
-    return 2.0 * near * far / (far + near - z * (far - near));
+    // **Tremor fix (`2026-06-13`).** Vulkan's
+    // `gl_FragCoord.z` is already in the [0, 1] NDC
+    // range (NOT [-1, 1] like OpenGL). The pre-fix
+    // code used the OpenGL convention
+    // `z = gl_FragCoord.z * 2.0 - 1.0` with the
+    // OpenGL linearization formula, which produced
+    // *negative* view depths at the near plane and
+    // *wrong* cascade selections at the far plane.
+    // The wrong cascade selection (especially in
+    // the boundary region between two cascades)
+    // caused per-frame cascade-switch flicker that
+    // showed up as the user-reported "tremor" on
+    // VoxelLab's flat floor and as the per-frame
+    // shadow noise on the larger scenes. The
+    // Vulkan linearization is the standard
+    // single-divide form:
+    //   `viewZ = near * far / (far - z * (far - near))`
+    // with `z = gl_FragCoord.z` (no rescale).
+    const float z = gl_FragCoord.z;
+    return near * far / (far - z * (far - near));
 }
 
 uint SelectSunShadowCascadeByViewDepth(const float viewDepth) {
@@ -922,8 +940,49 @@ void main() {
     const bool layerHistoryValid = sceneLighting.taaLayerHistoryParams.z > 0.5;
     const vec2 layerTexelSize = sceneLighting.taaLayerHistoryParams.xy;
     const float layerBlend = clamp(sceneLighting.taaLayerHistoryParams.w, 0.0, 1.0);
+
+    // **TAA layer-history reprojection (`2026-06-13`).** The
+    // pre-fix code sampled the layer-history texture at the
+    // *current* frame's gl_FragCoord, while the TAA
+    // jitter shifts the world-space ray-march / shadow /
+    // AO result by a sub-pixel each frame. With a static
+    // history UV and a jittered shading UV, the
+    // per-frame blending oscillated the soft-shadow /
+    // AO / local-point-light terms by exactly the
+    // jitter amplitude, producing the user-reported
+    // "tremor" on VoxelLab's flat floor and the
+    // severe "psychedelia" on the larger scenes where
+    // the jitter covered a much wider area per frame.
+    //
+    // **Why world-space reprojection works without a
+    // depth read.** `inWorldPosition` is the
+    // fragment's world position (already computed
+    // earlier in main()), and
+    // `sceneLighting.prevViewProjectionMatrix` is the
+    // previous frame's full view-projection. The
+    // multiplication `prev * worldH` is the standard
+    // TAA history lookup, just with a world-space
+    // input rather than a depth-unprojected one. This
+    // is cheaper than reading the depth attachment
+    // (no texture sample, no inverse-projection
+    // multiply) and avoids the depth-validity /
+    // background-clipping edge cases that the
+    // depth-based version has to handle.
+    vec2 layerUv = gl_FragCoord.xy * layerTexelSize;
+    if (layerHistoryValid) {
+        const vec4 prevClip = sceneLighting.prevViewProjectionMatrix *
+            vec4(inWorldPosition, 1.0);
+        if (prevClip.w > 0.0001) {
+            const vec2 reprojectedUv = prevClip.xy / prevClip.w * 0.5 + 0.5;
+            if (all(greaterThanEqual(reprojectedUv, vec2(0.0))) &&
+                all(lessThanEqual(reprojectedUv, vec2(1.0)))) {
+                layerUv = reprojectedUv;
+            }
+        }
+    }
+
     const vec4 historyLayerSample = layerHistoryValid
-        ? texture(layerHistory, gl_FragCoord.xy * layerTexelSize)
+        ? texture(layerHistory, layerUv)
         : vec4(1.0, 1.0, 1.0, 1.0);
     // 1.5 anti-flicker: also blend local-point-light visibility.
     // Always compute the DDA at the top of main() so the raw value

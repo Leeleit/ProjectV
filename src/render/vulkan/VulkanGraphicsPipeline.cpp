@@ -1092,7 +1092,7 @@ bool RefreshGraphicsResourceBindings(
 	allocateInfo.descriptorSetCount = static_cast<uint32_t>(setLayouts.size());
 	allocateInfo.pSetLayouts = setLayouts.data();
 	const VkResult allocateDescriptorSetsResult =
-		vkAllocateDescriptorSets(context->device, &allocateInfo, descriptorSets.data());
+		vkAllocateDescriptorSets(context->device, &allocateInfo, 		descriptorSets.data());
 	if (allocateDescriptorSetsResult != VK_SUCCESS) {
 		LogGraphicsPipelineVkFailure(
 			"RefreshGraphicsResourceBindings.vkAllocateDescriptorSets",
@@ -1249,6 +1249,48 @@ bool RefreshGraphicsResourceBindings(
 			descriptorWrites.data(),
 			0,
 			nullptr);
+
+		// **TAA resolve descriptor update (`2026-06-13`).** The
+		// TAA resolve pass has its own per-frame descriptor
+		// set (`render->taaResolveDescriptorSets[frameIndex]`,
+		// allocated inside `CreateTaaResolvePipeline` and
+		// not recreated by `RefreshGraphicsResourceBindings`).
+		// Without this patch, the TAA resolve set's
+		// binding 3 (sceneLighting) keeps the *old*
+		// `sceneLightingBuffer` handle across a scene
+		// preset switch (F5) and the next `vkCmdDraw`
+		// issued by the TAA resolve pass triggers
+		// `VUID-vkCmdDraw-None-08114`
+		// ("the storage buffer descriptor
+		// sceneLighting is using buffer ... that is
+		// invalid or has been destroyed"). The
+		// validation error references the *TAA resolve*
+		// descriptor set, not the graphics set, which
+		// is why the F5 validation persists even after
+		// `RefreshGraphicsResourceBindings` correctly
+		// rewrites the graphics set. Mirroring the
+		// `sceneLightingBufferInfo` write into the TAA
+		// resolve set's binding 3 here closes the race.
+		if (render->taaResolveDescriptorSets[frameIndex] != VK_NULL_HANDLE) {
+			const VkWriteDescriptorSet taaResolveWrite{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = render->taaResolveDescriptorSets[frameIndex],
+				.dstBinding = 3,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &sceneLightingBufferInfo,
+				.pTexelBufferView = nullptr,
+			};
+			vkUpdateDescriptorSets(
+				context->device,
+				1,
+				&taaResolveWrite,
+				0,
+				nullptr);
+		}
 	}
 
 	if (!render->shadowDescriptorSetLayout) {

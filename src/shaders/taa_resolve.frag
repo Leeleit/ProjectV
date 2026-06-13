@@ -259,8 +259,30 @@ void main()
         // and dividing by `w` gives the world-space position. Then we
         // reproject that point through the previous viewProjection to
         // get the previous-frame NDC, convert to UV, and sample history.
+        //
+        // **Vulkan NDC depth range is [0, 1], NOT [-1, 1] like OpenGL.**
+        // The pre-2026-06-13 code used the OpenGL convention
+        // `ndcDepth = rawDepth * 2.0 - 1.0` which mapped Vulkan's
+        // [0, 1] depth into the wrong half of the NDC space,
+        // making the reprojection sample wildly off-screen
+        // UVs (the closer the depth to 0.0, the more the
+        // reconstructed world position flew behind the camera
+        // and out of the valid reprojection region). The
+        // visible symptom was a per-frame "tremor" on VoxelLab
+        // (compact scene, small UV offset) and a "psychedelic"
+        // full-screen artifact on TransparencyStress /
+        // FlatBenchmark / ChunkGrid (large far-distance scenes
+        // where the off-screen UV wrapped into random history
+        // texture memory). This is the same NDC-convention
+        // bug that has bitten every Vulkan port of an OpenGL
+        // engine at least once; the projection matrix in
+        // `src/app/Camera.cpp:241` writes the Vulkan [0, 1] range
+        // (third column's `farPlane / (nearPlane - farPlane)` and
+        // fourth column's `nearPlane * farPlane / (nearPlane - farPlane)`
+        // are the standard Vulkan depth terms), so the inverse
+        // application on the shader side must NOT rescale.
         const float rawDepth = texture(depth, uv).r;
-        const float ndcDepth = rawDepth * 2.0 - 1.0;
+        const float ndcDepth = rawDepth;
         const vec4 ndcNear = vec4(uv * 2.0 - 1.0, ndcDepth, 1.0);
         const vec4 worldH = pushConstants.inverseCurrentViewProjection * ndcNear;
         if (worldH.w > 0.0001) {

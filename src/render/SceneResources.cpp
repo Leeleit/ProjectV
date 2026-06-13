@@ -1,5 +1,6 @@
 #include "render/SceneResources.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/ShadowProjection.hpp"
 #include "render/Taa.hpp"
@@ -717,6 +718,39 @@ void DestroySceneResources(
 {
 	if (!context || !render || !context->allocator) {
 		return;
+	}
+
+	// **Pre-existing race fix (`2026-06-13`).** Wait for
+	// the GPU to finish before destroying the
+	// per-frame buffers. The validation layer
+	// reports: "the storage buffer descriptor
+	// sceneLighting is using buffer ... that is
+	// invalid or has been destroyed" on
+	// `vkCmdDraw` calls issued after a scene preset
+	// switch (`F5` or the startup auto-cycle) — the
+	// previous frame's draw is still in flight when
+	// we tear down its descriptor-backed buffers.
+	// The fix is the brute-force `vkDeviceWaitIdle`:
+	// a per-resource timeline-semaphore lifetime
+	// tracker would be cleaner, but `DestroySceneResources`
+	// is only called on scene switches / allocation
+	// error rollbacks (not per-frame), so the
+	// pipeline stall is acceptable. The pre-existing
+	// call sites that follow this preamble
+	// (`CreateSceneResources` and the per-buffer
+	// `vmaCreateBuffer` failure-rollback paths) all
+	// destroy a known set of buffers that may be
+	// in-flight in any of the
+	// `render->sceneFrameResources` slots, so a
+	// single device-wide idle is the simplest
+	// correct fix.
+	if (context->device != VK_NULL_HANDLE) {
+		const VkResult idleResult = vkDeviceWaitIdle(context->device);
+		if (idleResult != VK_SUCCESS) {
+			runtime::LogVkFailure(
+				"DestroySceneResources.vkDeviceWaitIdle",
+				idleResult);
+		}
 	}
 
 	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {

@@ -439,12 +439,16 @@ add_executable(ProjectVStringIdTests
         StringIdTest.cpp
 )
 
-target_sources(ProjectVStringIdTests PRIVATE
-        FILE_SET CXX_MODULES FILES
-        ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
-        BASE_DIRS
-        ${CMAKE_SOURCE_DIR}/src
-)
+# StringIdTest needs the modules so the `core/StringId.hpp` shim
+# can `import projectv.string_id;` (and the `math` import via
+# `core/Types.hpp` if any test-only header pulls it in).
+# The `projectv_test_add_modules` macro below adds both
+# `Math.ixx` and `StringId.ixx` to the target's
+# `FILE_SET CXX_MODULES` — adding them manually here too
+# triggers a CMake developer warning ("has source file ... in
+# a 'FILE_SET TYPE CXX_MODULES' multiple times"). The macro
+# is the single source of truth for module wiring.
+projectv_test_add_modules(ProjectVStringIdTests)
 
 target_compile_definitions(ProjectVStringIdTests PRIVATE
         PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
@@ -458,12 +462,6 @@ target_link_libraries(ProjectVStringIdTests PRIVATE projectv_build_options)
 
 add_test(NAME ProjectVStringIdTests COMMAND ProjectVStringIdTests)
 set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
-
-# StringIdTests is a header-only test (no `core/Types.hpp`
-# include), but the shim's `import projectv.string_id;`
-# statement needs the module in scope. The macro is the
-# uniform way to wire that.
-projectv_test_add_modules(ProjectVStringIdTests)
 
 # C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
 # executable that `import projectv.probe;` and prints the
@@ -694,16 +692,15 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     # the top, so the project's C++20 modules need to
     # be in this target's `FILE_SET CXX_MODULES` for the
     # `import` to resolve. `projectv_test_add_modules`
-    # covers the test TU; the shadow-projection
-    # implementation TU is compiled directly into the
-    # benchmark target so it also needs the modules.
-    target_sources(ProjectVShadowProjectionBenchmark PRIVATE
-            FILE_SET CXX_MODULES FILES
-            ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
-            ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
-            BASE_DIRS
-            ${CMAKE_SOURCE_DIR}/src
-    )
+    # **Module wiring is via the macro above.**
+    # `projectv_test_add_modules` adds both `Math.ixx`
+    # and `StringId.ixx` to the target's
+    # `FILE_SET CXX_MODULES`. A separate manual
+    # `target_sources(... FILE_SET ...)` block for
+    # the same `.ixx` files triggers a CMake
+    # developer warning ("has source file ... in a
+    # 'FILE_SET TYPE CXX_MODULES' multiple times").
+    # The macro is the single source of truth.
 endif ()
 
 
