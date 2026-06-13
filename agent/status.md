@@ -680,3 +680,36 @@ Asset-pipeline parallel: `cccdbc1 feat(asset): meshopt-driven mesh baker and VMA
 **Test count baseline:** `ctest 6/6` (1.38s) — preserved.
 
 **Build preset:** `linux-clang-debug`. Не трогать `windows-clang-debug`.
+
+## 20. Hardcore perf r0: roadmap rewrite — `2026-06-13` (open, Phase 0 = doc only)
+
+**Phase 0 = документация, не код.** По явной команде оператора: «сейчас то, что ты написал в отчёте — приоритет номер 1, плюём на всё, что в TODO, сейчас занимаемся хардкором, который ты расписал». Phase 0 закрывается, Phase 1+ (код) — после явного «поехали» оператора и подтверждения Phase 0 commit.
+
+**Operator answers (зафиксировано в `active-sessions.md` session-2026-06-13-hardcore-perf-r0):**
+1. **Tier приоритет:** сам решаю → беру **Tier-0 первой**: Vec3/Vec4/Mat4 (alignas) + SIMD frustum cull.
+2. **StringID:** как считаю лучше → **Tier-0** (философия §06_strings-philosophy.md явно требует, и в проекте **0** StringID типов).
+3. **C26 / intrinsics:** и то, и другое → **perf-benchmark + стратегическая опция**, с Godbolt-ревью по ходу.
+4. **C++20 modules (`.ixx`):** сразу в **mainline** (не в probe build tree).
+5. **`std::expected`:** новое **правило** в `decisions.md §29` → `std::expected` для cold path, `bool + CORE_ASSERT` для hot path (per CppCon 2024: 2.18× slowdown в hot).
+6. **R&D:** mesh shaders / SVO GPU / `std::execution` (Senders/Receivers) / static reflection / contracts / `std::hive` → **отложены** в Tier 4, не блокируют mainline.
+7. **AppState god-object refactor:** всего проекта → **PIMPL + 3 subcontexts** (`RenderContext`, `SimulationContext`, `BootstrapContext`).
+8. **`std::inplace_vector` для chunk cull:** как считаю лучше → `inplace_vector<VkDrawIndirectCommand, 1024>`, заменить `std::vector` в `ChunkVisibilityCache`.
+9. **Godbolt intrinsics review:** разрешено по ходу.
+10. **C26 / asm:** нет C в проекте → отложено.
+
+**Phase 0 deliverables (this session, doc-only):**
+- [x] Полный технический отчёт прочитан + структурирован (философия × 22 файла, src/× обойдён, web-разведка C++26/Clang 22).
+- [x] `agent/active-sessions.md` — новая запись `session-2026-06-13-hardcore-perf-r0` сверху секции «Активные сессии».
+- [x] `agent/memory.md §11` — comprehensive technical debt + plan.
+- [x] `agent/decisions.md §29` — новое правило `std::expected` для cold path.
+- [x] `TODO.md` — перезаписан под новый roadmap (все `[x]` из старого — прошлое, новый `[ ]` для Tier 0..5).
+- [ ] **Phase 0 commit** — предложен пользователю по `§7.2.5`, **не auto-execute**.
+- [ ] Phase 1 (Tier-0 код) — после явного одобрения operator + commit'a Phase 0.
+
+**Scope discipline:**
+- Phase 0 трогает **только** 4 документа (`active-sessions.md`, `status.md`, `memory.md`, `decisions.md`) + `TODO.md`. Никакого кода.
+- Phase 1+ трогает только mainline `src/`, `tests/`, `src/core/Math.hpp` (new), `CMakeLists.txt` (если нужно). **Не трогаю** `external/`, `legacy/`, `docs/`, build-артефакты, `windows-clang-debug` preset.
+
+**Git state pre-Phase 0:** branch `master`, ahead of `origin/master` by 20 commits, working tree clean (последний `520916d chore(repo): mass cleanup of warning noise, dead code, and tree hygiene`). Per `AGENTS.md §7.2.4` перед любой destructive-операцией — safety-net patch `/tmp/before_*.patch`; для Phase 0 (doc-only) не нужно, для Phase 1 (код) обязательно.
+
+**Build preset:** `linux-clang-debug` (Clang 22.1.6, libstdc++ 16, sccache, default). **Не трогать `windows-clang-debug`** до явного «переключись».

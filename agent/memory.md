@@ -1497,3 +1497,149 @@ miniaudio is now wired into the build (`src/CMakeLists.txt` `add_subdirectory(ex
 **Test impact:** `ctest 6/6` (1.48s wall clock) preserved. The audio engine itself isn't tested in `tests/VoxelWorldTests.cpp` because it would need an actual PulseAudio device; the test path passes `nullptr` for the engine. `runtime::LogRuntimeFailure` is the failure surface.
 
 **User-content note:** `music/` is intentionally not auto-populated. The operator drops `.mp3` files in; `PROJECTV_MUSIC_DIR` overrides the path. On a fresh clone, `music/.gitkeep` is the only file; the engine reports `0 mp3 track(s)`, HUD shows `MUSIC STOP VOL 0.80 NO TRACKS`, hotkeys are no-ops. The directory is created on disk by `loadMusicFolder` if it doesn't exist, so the operator can `cd` into it and drop files without pre-creating.
+
+---
+
+## 11. Hardcore perf / architecture pass r0 (`2026-06-13`)
+
+**Status:** Phase 0 (doc) in flight; Phase 1+ (код) — после явного одобрения operator.
+
+### 11.0 Source-of-truth shift
+
+Эта секция — **долговечный technical-debt inventory** для нового r0 roadmap. Все предыдущие секции (§1..§10.x) остаются в силе как historical record; §11 — это living document для нового потока работ.
+
+**Pre-r0 baseline (verified перед началом r0):**
+- `cmake_minimum 3.30`, `CMAKE_CXX_STANDARD 26`, `CMAKE_C_STANDARD 23` (root `CMakeLists.txt:1-30`).
+- Toolchain: Clang 22.1.6 + libstdc++ 16 (Linux mainline) + clang-cl 22 (Windows dev tree). `linux-clang-debug` preset = baseline dev tree, ahead of `origin/master` by 20 commits, working tree clean.
+- `ctest 6/6` (1.38-1.50s wall clock, baseline на `linux-clang-debug`).
+- No C++26 modules in source. No `import std;`. No `std::simd`. No `std::expected` в коде. No `std::inplace_vector`. No static reflection. No contracts. No `std::execution`. No StringID тип ни в одном файле.
+- 0 inline-asm вставок в `src/`. 0 SIMD intrinsics в hot path. 0 SIMD в шейдерах (только auto-vectorize от компилятора GLSL).
+- Философия (22 файла) прочитана полностью; **код** прочитан селективно: `CMakeLists.txt` × 2, presets, `src/CMakeLists.txt`, `src/main.cpp` (app), `src/ecs/EcsWorld.{hpp,cpp}`, `src/core/Types.hpp` (1315 строк), `src/core/ShaderIO.{hpp,cpp}`, `src/app/AppUpdate.{hpp,cpp}`, `src/app/Camera.cpp` (counts only), `src/app/InputActions.cpp` (counts only), `src/render/Renderer.hpp` (13 строк), `src/render/SceneResources.{hpp,cpp}`, `src/render/ShadowProjection.cpp` (counts only), `src/voxel/VoxelWorld.{hpp,cpp}`, `src/physics/PhysicsWorld.hpp`, `src/shaders/voxel.frag`, `src/debug/Profiling.hpp`. Итого ~5300 строк mainline кода просмотрено напрямую + line-count overview остального.
+
+### 11.1 Архитектурные проблемы
+
+| # | Проблема | Файл:строка | Философский ref | Серьёзность |
+|---|---|---|---|---|
+| A1 | **`AppState` — god-object**: 12 разнородных state'ов в одной структуре (`PlatformState`, `VulkanContextState`, `SwapchainState`, `WorldState`, `RenderState`, `FrameState`, `SimulationState`, `InputState`, `InteractionState`, `LookDevCaptureAutomationState`, `BenchmarkAutomationState`, плюс `EcsStatePtr`/`PhysicsStatePtr`/`AudioEnginePtr` smart-pointer singletons) | `src/core/Types.hpp:1278-1311` | §02_anti-patterns §9 God Object | High |
+| A2 | **`UpdateApp` — god-function**: 989 строк, 60+ input actions, ~200 строк ручного `debug->stats.X = render->Y.X` mirror block | `src/app/AppUpdate.cpp:291-988` | §01_foundation / 09_code-review §9 | High |
+| A3 | **Copy-paste frustum cull**: 3 функции с **идентичным каркасом** (loadFloat3, dot, lengthSquared, passesPlane lambdas), разные входные данные. С комментарием-оправданием: "the cost of an additional ~30 lines of math is negligible compared to touching a shared function" | `src/render/SceneResources.hpp:21-209` (3× frustum) | DRY, OCP | High |
+| A4 | **`InputAction` enum — потенциальный bit-mask overflow**: 60+ actions; `InputReplayFrame::actionDownMask: uint32_t` / `actionPressedMask: uint32_t` (32 бита). Если это битовая маска — **bug**; если индексы — имена вводят в заблуждение. **Требует проверки InputActions.cpp** | `src/core/Types.hpp:101-224, 388-396` | §01_foundation / 02_anti-patterns §1 STL hot path | Med |
+| A5 | **RAII отсутствует для Vulkan handles**: `VkBuffer` + `VmaAllocation` + `void* mappedData` живут как триады в `SceneFrameResources` (9 пар), `RenderState` (15+ пар), `WorldState`. 30+ пар вручную | `src/core/Types.hpp:709-753, 823-1093` | §01_foundation / 07_memory-philosophy | Med |
+| A6 | **No fixed-step test coverage hot-path functions**: `BuildGraphicsPushConstants`, `InvertColumnMajorMat4`, `ComputeVisibilityCacheHash`, `BuildSunShadowCascadeSplits`, `CreateOrRecreateTaaRenderTargets` — без unit-тестов | `src/render/Renderer.cpp`, `src/render/ShadowProjection.cpp`, `src/render/TaaRenderTargets.cpp` | §03_domain / 04_testing-philosophy | Med |
+| A7 | **No Google Benchmarks** вообще; философия явно требует «регрессии производительности — бенчмарки в Google Benchmark» | (отсутствует) | §03_domain / 01_optimization-philosophy, /04_testing-philosophy §4 | Med |
+| A8 | **`std::array<float, N>` без `alignas`**: mat4/vec3/vec4 в hot structures. SIMD (`movaps`/AVX) невозможен с 4-byte-aligned `std::array` | `src/core/Types.hpp:309-313` (Mat4 GPU), `263-278` (PushConstants), `242-256` (CameraState), `src/render/SceneResources.hpp:486-498` (ChunkCullingParameters), `src/render/TaaRenderTargets.hpp` (резметка) | §01_foundation / 09_data-layout-philosophy | **Critical** |
+| A9 | **Voxel storage `std::vector<uint8_t>` (AoS byte-per-voxel)** — 1 byte/voxel без derivative histograms, без SoA material distribution, без SIMD | `src/voxel/VoxelWorld.hpp:95` | §02_paradigms / 02_dod-philosophy | Low (рабочее, low-priority) |
+| A10 | **AppUpdate mirror block 200+ строк**: каждый DebugStats field копируется вручную, легко забыть | `src/app/AppUpdate.cpp:770-986` | §03_domain / 04_testing-philosophy §9 maintainability | Med |
+| A11 | **3 копии DDA trace в шейдере** (`TraceLocalPointLightShadowRay`, `ComputeSunContactVisibility`, `TraceAmbientOcclusionRay`) — идентичная 12-step DDA, разные occluder predicates. Высокая стоимость поддержки | `src/shaders/voxel.frag:254-321, 323-377, 379-437` | DRY | Low (GPU, low-priority) |
+| A12 | **Magic numbers без `// EVIL:` комментариев** (нарушение §04_evil-hacks-philosophy.md §3): `0.05, 0.14, 0.03, 0.02, 0.001, 0.0001, 0.75, 0.35, 0.65, 0.55, 0.08, 0.28, 0.45, 1.10, 1.50, 8.0, 12.0, 0.10, 0.4, 0.5` | `src/shaders/voxel.frag` (multiple sites), `src/render/Taa.cpp:79`, etc. | §01_foundation / 04_evil-hacks-philosophy | Low |
+| A13 | **`vkWaitForFences(... UINT64_MAX)`** — блокирующий wait, может вызвать stutter | `src/render/Renderer.cpp:276` | §03_domain / 01_optimization-philosophy "low latency > throughput" | Low |
+
+### 11.2 Оптимизационные проблемы (Performance, not Architecture)
+
+| # | Проблема | Hot path cost | Серьёзность |
+|---|---|---|---|
+| P1 | **Zero SIMD в hot path CPU**: `IsSceneChunkVisible` / `IsAabbVisibleAgainstCameraFrustum` используют scalar lambdas. Per-frame: 300+ chunks × 5 visibility tests = **1500+ dot products + sphere fits**. 4 каскада + sun + AABB = × 5. **16500+ fp ops/frame scalar** | **Critical** |
+| P2 | **`std::array<float, N>` без `alignas(16/32)`** — компилятор не может использовать `movaps` (alignment-required SSE), fallback на `movups` (2-3× slowdown) или скаляр. Все mat4/vec3/vec4 | **Critical** |
+| P3 | **`std::vector` в hot path без `reserve()`**: `ChunkVisibilityCache.opaqueCommands/shadowCommands/transparentCommands` push_back per-chunk per-frame (3 × ~300 chunks/frame = 900 push_backs). `pendingChunkRebuildIndices` push_back per voxel edit. `DebugOverlayBoxes` push_back per frame. `InputReplayCapture::frames` push_back per frame. Все — potential realloc | High |
+| P4 | **`std::string` повсюду в hot path**: `ModelRegistryEntry::id`, `InputReplayCapture::snapshotPath`, `AudioEngine::m_currentTrackName`/`m_currentArtist`/`m_currentTitle`, `VoxelScenePresetToString`, `RuntimeDiagnostics::LogRuntimeFailure` (через `fmt::format`). **`std::string` в hot path ЗАПРЕЩЁН** по §06_strings-philosophy.md. **0** StringID типов в проекте | High |
+| P5 | **Нет custom allocators** (Frame/Stack/Pool) — везде `std::vector` + `std::string` + `std::unique_ptr<T, void(*)(T*)>`. Философия §07_memory-philosophy явно требует | High |
+| P6 | **Нет `[[likely]]/[[unlikely]]/[[assume]]` в hot loops**. Ранние return в `IsSceneChunkVisible` (50% chunks = air) идеальные кандидаты | Low (compiler auto-applies) |
+| P7 | **Shadow projection 4 cascades × sphere fit** — scalar, не SIMD | Med (per-frame, 4×) |
+| P8 | **Voxel bulk repack** (compute meshing dispatch host side) — scalar memcpy-style | Med (per dirty chunk) |
+| P9 | **InvertColumnMajorMat4** (per-frame TAA resolve) — Gauss-Jordan scalar | Low (1×/frame) |
+| P10 | **No `std::simd<float, 8>` в шейдер-equivalent CPU math** (mat4 mul, dot, transform-points) | High (cumulative) |
+| P11 | **Frustum cull не branchless** — 4 conditional returns. Сортировка chunks по likely-visible позволила бы `[[likely]]` skip | Low |
+| P12 | **Chunk visibility cache key пересчитывается каждый frame** при camera move. Dirty-flag на chunks уменьшил бы hit-rate сбои | Med |
+
+### 11.3 C++26 / C26 / C-kernels — что внедрять, что отложить
+
+**Web research 2026-06-13 (status на середину 2026):**
+
+| Технология | Статус | Готовность для ProjectV | Решение |
+|---|---|---|---|
+| **C++26 ratified** | ISO DIS 28 March 2026, formal publication Q4 2026 | Clang 22 / GCC 16 реализуют ~2/3 | ✅ Tier 1-2 |
+| **`std::execution` (P2300, Senders/Receivers)** | C++26 ratified | GCC experimental, Clang experimental, MSVC — нет | 🟡 R&D (Tier 4) |
+| **Static Reflection (P2996)** | C++26 ratified | GCC 16 merged, Clang 19+ (Dan Katz fork), MSVC preview | 🟡 R&D (Tier 4) |
+| **Contracts (P2900)** | C++26 ratified | GCC 16 merged, Clang experimental (`-fexperimental-contracts`), MSVC preview | 🟡 R&D (Tier 4) |
+| **`std::simd`** | C++26 | GCC 15+ ✅, Clang 19+ partial (x86 strong), MSVC in progress | ✅ Tier 0 (probe, потом mainline) |
+| **`std::inplace_vector`** (P0843) | C++26 | GCC 15+ ✅, Clang 19+ ✅, MSVC 19.50+ ✅ | ✅ Tier 1 (готов, low-risk) |
+| **`std::hive`** (P0447, based on plf::colony) | C++26 | GCC 15+ ✅, Clang 19+ ✅, MSVC preview | 🟡 R&D (Tier 4) |
+| **`std::expected`** (C++23) | C++23 ✅ | ✅ в Clang 16+, libc++/libstdc++/MSVC | ✅ Tier 1 (cold path only) |
+| **`import std;`** | C++26 | CMake 4.2+ experimental gate `CMAKE_EXPERIMENTAL_CXX_IMPORT_STD` | 🟡 Tier 2 (за `CXX_MODULE_STD ON` gate) |
+| **C++20 Modules (`.ixx`)** | C++20 ✅ | CMake 3.28+ ✅, Clang 16+ ✅ | ✅ Tier 2 (mainline) |
+| **C26** | C23 ratified, C26 draft | GCC 15 default C23 | 🟡 No C files in mainline, **deferred** |
+| **`std::span` mandatory`?** | C++20 ✅ | ✅ all | Tier 5 (миграция non-owning buffer views) |
+| **`std::chrono` `std::expected<T,E>::or_else` etc** | C++23 | ✅ all | Tier 1 (cold path) |
+
+**Performance data points (web research 2026-06-13):**
+- **`std::expected` 2.18× slowdown** vs raw returns (per CppCon 2024 Fanaskov, synthetic micro-benchmark). **НЕ для hot path** в real-time. Подтверждает правило cold-only.
+- **Clang 22 Issue #194008**: vectorizer stack-smash bug на простых циклах с AVX2+ASan. **Workaround**: `-O2` без ASan для perf-теста.
+- **Clang 22 Issue #182954**: 50% IR compile regression vs LLVM 21, но **только JIT (clang-repl)**, AOT не затронут — ProjectV нерелевантно.
+- **Clang 22 AVX ABI change**: per-function `__attribute__((target("avx")))` теперь влияет на ABI. Selective SIMD работает чище.
+
+**C-kernels decision:** **0 C files** в mainline (CMakeLists объявляет `LANGUAGES C CXX` для submodule'ей Jolt/fmt, но сам ProjectV — pure C++). C-файлы не дают выигрыша без сравнимого по hotness C++ hot path; C26/asm отложены на future, не блокируют mainline.
+
+**Intrinsics decision:** **0 inline-asm** в mainline, intrinsics — для hot kernels. Целевые kernels для AVX2 intrinsics (с Godbolt-ревью по ходу):
+1. `FrustumCullAvx2(visible_mask, chunks, parameters, count)` — 8 chunks параллельно, 8-bit mask. Expected **8× speedup** vs scalar.
+2. `DotProductsAvx2(positions, directions, out, count)` — 8 dots параллельно.
+3. `InverseMat4Avx2(matrix, out)` — TAA resolve, 1×/frame. Expected **2-3×** (не критично для perf, но для test correctness).
+4. `ShadowSphereFitAvx2(world_bounds, sun_dir, out_frustum)` — 4 cascades параллельно. Expected **3-4×** для build shadow projection.
+
+### 11.4 Tier plan (оператор одобрил; см. `decisions.md §29` + `status.md §20`)
+
+| Tier | Описание | Файлы | Риск | Статус |
+|---|---|---|---|---|
+| **0** | **`projectv::math::Vec3/Vec4/Mat4` (alignas 16/32) + SIMD frustum cull + pre-reserve hot vectors** | `src/core/Math.hpp` (new), `src/render/SceneResources.hpp` (cull), `src/voxel/VoxelWorld.hpp`, `src/render/ShadowProjection.cpp`, `src/render/Renderer.cpp`, `src/app/Camera.cpp` | Med (Touches mat4 layout, но Vec3/Vec4 same size, Mat4 already 64 bytes) | **ПЕРВЫЙ** |
+| **1** | **`std::inplace_vector` для chunk cull + `std::expected` для cold path (load, file I/O, init) + StringID тип** | `src/render/SceneResources.{hpp,cpp}`, `src/asset/AssetLoader.{hpp,cpp}`, `src/audio/AudioEngine.{hpp,cpp}`, new `src/core/StringId.hpp` | Med | После Tier 0 |
+| **2** | **C++20 modules (`.ixx`)** — `core.ixx`, `math.ixx`, `ecs.ixx` — mainline, не probe | `src/core/{Math,Types}.ixx` (new), CMake `FILE_SET CXX_MODULES` | High (toolchain CMAKE_POLICY), но 2-5× build speedup | После Tier 1 |
+| **3** | **C / intrinsics (Godbolt + benchmark)** — `FrustumCullBenchmark`, `src/c_kernels/frustum_cull.c` (extern "C") | `src/bench/FrustumCullBenchmark.cpp` (new), `src/c_kernels/frustum_cull.c` (new) | Med (Clang 22 AVX ABI change) | После Tier 2 |
+| **4** | **R&D (не блокирует mainline)** | `std::execution`, mesh shaders, SVO GPU, static reflection, contracts, `std::hive`, C26 | — | Отложено |
+| **5** | **Прочее**: `[[likely/unlikely]]`, DDA shader template, `// EVIL:` comments, tests для hot invariants, `std::span` migration, vkWaitForFences timeout, fix `InputAction` bit-mask overflow (если bug), `AppState` PIMPL refactor, `UpdateApp` mirror helpers | per file | Low | После Tier 3 |
+
+### 11.5 Pre-flight checklist per atomic-подзадача
+
+Per `AGENTS.md §7.2.4` и `§3.5`:
+
+1. **Pre:** `git diff > /tmp/before_hardcore_r0_<subtask>_<timestamp>.patch` (safety-net).
+2. **Pre:** `git status -uall` clean baseline.
+3. **Work:** только файлы в `files-touched-intent` active-session записи. Никаких `external/`, `legacy/`, `docs/`, build-артефактов.
+4. **Verify:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` green. `ctest 6/6` baseline.
+5. **Commit:** предложен пользователю per `§7.2.5`, не auto-execute. Commit message в формате: `<type>(<scope>): <summary>` + body + Refs.
+6. **Update active-sessions.md:** status `closed` + commit-hash только после явного `git commit` от оператора.
+
+### 11.6 Build / verify baselines (для regression-detection)
+
+- `linux-clang-debug` (default dev tree): Clang 22.1.6 + libstdc++ 16 + sccache, ctest 6/6 (1.38-1.50s wall clock).
+- `windows-clang-debug` (alternate dev tree): clang-cl 22, primary dev tree на master upstream, не трогаем.
+- `linux-clang-debug-tracy-profiler` (R&D): не запускаем в routine verification, только по запросу.
+- `linux-clang-debug-sccache`, `linux-clang-debug-ci`: варианты dev/ci с sccache, build-как-ci baseline.
+- **Test suites (current):** ProjectVAssetTests, ProjectVMeshBakerTests, ProjectVDracoTests, ProjectVFrustumCullingTests, ProjectVBoxUvFixtureTests, ProjectVVoxelWorldTests → ctest 6/6.
+- **Sidecar metadata format:** key=value, one line each, 2 `fmt::format` blocks concatenated (один для scene, один для render passes). Parsers look for `key=value` substrings, не позиционные.
+
+### 11.7 Web research bookmarks (для дальнейшей разведки)
+
+- **C++26:** https://en.cppreference.com/w/cpp/26 (compiler support table), https://herbsutter.com/2026/03/29/c26-is-done-trip-report-march-2026-iso-c-standards-meeting-london-croydon-uk/
+- **C++20 modules:** https://cmake.org/cmake/help/latest/manual/cmake-cxxmodules.7.html (CMake 3.28+), https://clang.llvm.org/docs/StandardCPlusPlusModules.html (Clang 23 docs)
+- **C++ modules reality check 2026:** https://mropert.github.io/2026/04/13/modules_in_2026/ ("C++ Modules in 2026" — Mathieu Ropert)
+- **`std::expected` perf:** https://cppcon2025.sched.com/event/27bOQ/performance-of-stdexpected-with-monadic-operations (CppCon 2025 talk)
+- **Clang 22 release notes:** https://rocmdocs.amd.com/projects/llvm-project/en/latest/LLVM/clang/html/ReleaseNotes.html
+- **Clang 22 bugs:** https://github.com/llvm/llvm-project/issues/194008 (vectorizer stack smash с AVX2+ASan), /issues/182954 (IR compile regression JIT-only)
+- **boost::pfr C++26 reflection-based:** https://github.com/boostorg/pfr/pull/231 (merged Jan 2026)
+
+### 11.8 Cross-refs
+
+- `agent/status.md §20` — Phase 0 snapshot.
+- `agent/decisions.md §29` — новое правило `std::expected`.
+- `agent/active-sessions.md` session-2026-06-13-hardcore-perf-r0 — active session.
+- `TODO.md` — переписан под Tier 0..5.
+- `legacy/docs/philosophy/01_foundation/04_evil-hacks-philosophy.md` — SIMD intrinsics mandate.
+- `legacy/docs/philosophy/01_foundation/05_compiler-philosophy.md` — PGO, ThinLTO, sanitizers, `[[likely]]`.
+- `legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md` — C++26 модули, `import std;`.
+- `legacy/docs/philosophy/01_foundation/07_memory-philosophy.md` — allocators.
+- `legacy/docs/philosophy/01_foundation/08_error-handling.md` — `std::expected` для cold path.
+- `legacy/docs/philosophy/01_foundation/09_data-layout-philosophy.md` — `alignas`, hot/cold, SoA.
+- `legacy/docs/philosophy/02_paradigms/01_zero-cost-abstractions.md` — `std::simd`, contracts, reflection.
+- `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` — SoA, hot/cold, batch.
+- `legacy/docs/philosophy/02_paradigms/06_strings-philosophy.md` — StringID.
+- `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — данные → алгоритм → код, профилировать.
+- `legacy/docs/philosophy/03_domain/04_testing-philosophy.md` — invariant тесты, perf benchmarks.

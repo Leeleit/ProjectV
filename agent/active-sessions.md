@@ -57,6 +57,28 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-13-hardcore-perf-r0
+
+- **id:** `2026-06-13T13:30Z-hardcore-perf-r0`
+- **started-at:** 2026-06-13T13:30:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Hardcore performance / architecture pass r0 — перезапись приоритетов.** Оператор явно сказал: «сейчас то, что ты написал в отчёте — приоритет номер 1, плюём на всё, что в TODO, занимаемся хардкором». Полный отчёт по проекту (философия × 22 файла прочитана, код src/× обойдён, web-разведка по C++26/Clang 22/C26) — сохранён в `agent/memory.md §11` + `TODO.md` переписан + `agent/decisions.md §29` (новое правило `std::expected`). Phase 0 = документация. Phase 1+ = Tier-0 код (Vec3/Vec4/Mat4 + SIMD frustum cull) и далее по плану.
+- **files-touched-intent:** `agent/active-sessions.md` (this entry), `agent/status.md` (§20), `agent/memory.md` (§11), `agent/decisions.md` (§29), `TODO.md` (rewrite), потом `src/core/Math.hpp` (new), `src/render/SceneResources.hpp` (cull SIMD), `src/render/SceneResources.cpp` (call sites), `src/render/vulkan/VulkanGraphicsPipeline.cpp` (push constants), `src/app/Camera.cpp` (matrix math), `src/voxel/VoxelWorld.hpp` (Int3 → Vec3), `src/core/Types.hpp` (mat4/vec3/vec4 hot structures), `src/render/ShadowProjection.cpp` (sphere fit), `src/render/Renderer.cpp` (BuildGraphicsPushConstants), `tests/` (new benchmark). **Все файлы mainline, не трогаю `external/`, `legacy/`, `docs/`**, **не трогаю build-артефакты**.
+- **status:** open
+- **notes:** См. `agent/memory.md §11` для полного плана. **Operator answers (зафиксировано):** (1) «сам решай» — беру Tier-0 первой (Vec3+SIMD frustum cull); (2) «как считаешь лучше» — StringID Tier-0; (3) «и то, и другое» — C26/intrinsics как perf-benchmark AND стратегическая опция; (4) «mainline» — модули C++20 (`.ixx`) сразу в mainline, не probe; (5) «новое правило в decisions.md» — `std::expected` для cold path, `bool+CORE_ASSERT` для hot path; (6) «подтверждаю R&D отложен» — mesh shaders, SVO GPU, `std::execution` остаются R&D; (7) «всего проекта» — `AppState` god-object refactor: PIMPL + 3 subcontexts (RenderContext, SimulationContext, BootstrapContext); (8) «как считаю лучше» — `std::inplace_vector<VkDrawIndirectCommand, 1024>` для chunk visibility cache; (9) «разрешаю» — Godbolt-ревью intrinsics по ходу; (10) «нет C у нас нигде» — C26/asm-вставки не приоритет, оставляем на future.
+
+  **Build state baseline:** git clean, `linux-clang-debug` build green, ctest 6/6 (последний known baseline 1.38-1.50s). **Pre-flight per AGENTS.md §7.2.4:** safety-net patch `git diff > /tmp/before_hardcore_r0_<timestamp>.patch` ПЕРЕД любой правкой. **Каждая atomic-подзадача = 1 commit, предложен пользователю (не auto-execute).**
+
+  **Tier plan (operator увидит в TODO.md):**
+  - Tier 0: Vec3/Vec4/Mat4 (alignas) + SIMD frustum cull + reserve vectors
+  - Tier 1: `std::inplace_vector` для chunk cull, `std::expected` для cold path
+  - Tier 2: C++20 modules (`.ixx`) — mainline, `core.ixx`/`math.ixx`/`ecs.ixx`
+  - Tier 3: C / intrinsics (Godbolt review, FrustumCullBenchmark, AVX2 path)
+  - Tier 4: R&D — `std::execution`, mesh shaders, SVO GPU, static reflection, contracts, hive
+  - Tier 5: прочее — StringID, `[[likely/unlikely]]`, DDA shader template, `// EVIL:` comments, tests для hot invariants, `std::span` migration, vkWaitForFences timeout
+
 ### session-2026-06-13-problems-cleanup-v2
 
 - **id:** `2026-06-13T03:32Z-problems-cleanup-v2`

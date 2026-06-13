@@ -1,846 +1,149 @@
-# TODO.md
+# TODO — Hardcore perf / architecture r0 (`2026-06-13`)
 
-Актуальная дорожная карта `ProjectV`.
+**Снимок:** `2026-06-13` — Phase 0 (документация) закрыт, Phase 1+ (код) **после явного одобрения operator + commit'a Phase 0**.
 
-Дата обновления: `2026-06-13` (1.2 + 1.3 + 1.4 + 1.5 + 1.7 + 5.1 + frame-step/slow-motion + per-pass timings + audio engine (miniaudio) closed + music HUD 4-line (`723edc5`) + post-TAA roadmap + R&D Блоки 7-9)
-Статус документа: `живой roadmap`
+**Source-of-truth shift:** По явной команде оператора «сейчас то, что ты написал в отчёте — приоритет номер 1, плюём на всё, что в TODO, сейчас занимаемся хардкором, который ты расписал». Все 846 строк старого TODO (всё `[x]`, history closed) — **отменены в части дальнейших приоритетов**; **сохранены** в `/tmp/before_todo_rewrite_20260613T1330.md` как historical record. **Новый roadmap** ниже построен вокруг Tier 0..5 плана из `agent/memory.md §11` + `agent/decisions.md §29`.
 
----
+**Build preset baseline:** `linux-clang-debug` (Clang 22.1.6 + libstdc++ 16 + sccache, ctest 6/6 ≈ 1.38-1.50s). **Не трогать** `windows-clang-debug` / `linux-clang-debug-tracy-profiler` до явного «переключись».
 
-## 1. Mainline
-
-Mainline `ProjectV` сейчас — это reproducible interactive voxel MVP.
-
-Что уже есть в коде:
-
-- runnable voxel slice на `Vulkan + SDL + Jolt`;
-- `creative` / `spectator` / `walk`;
-- voxel world, dirty chunks, meshing, frustum/distance culling;
-- block interaction, snapshots, lightweight debug editor;
-- HUD, Tracy, runtime smoke и failure probes;
-- рабочий, но ещё тюнингуемый `walk`-контроллер.
-
-Что не должно становиться блокером mainline:
-
-- `SVO`;
-- mesh shaders;
-- bindless-everything;
-- тяжёлая simulation R&D;
-- большой editor;
-- multiplayer;
-- plugin/modding stack.
+**Scope discipline per `AGENTS.md §7.2.6`:** `external/`, `legacy/`, `docs/`, build-артефакты — **out of scope**. Build pipeline / submodule'и — frozen. Трогаю mainline `src/`, `tests/`, корневой `CMakeLists.txt`/`CMakePresets.json` (если нужно), `cmake/` (если нужно).
 
 ---
 
-## 2. Текущий Milestone
+## Tier 0 — `Vec3/Vec4/Mat4` (alignas) + SIMD frustum cull + pre-reserve hot vectors
 
-Ближайший честный milestone:
+**Цель:** устранить zero-SIMD в hot path (P1, P2, P3 из `memory.md §11.2`). Локальный scope, измеримый bottleneck, нулевой ABI-влияние (Vec3 = 16 bytes = alignment pad, Mat4 = 64 bytes = уже aligned). Один atomic-подзадача = один commit.
 
-- стабильный интерактивный voxel sandbox slice;
-- repeatable `configure/build/test` loop plus targeted runtime smoke when lifecycle/Vulkan coverage is relevant;
-- world edit + snapshots + lightweight debug tools;
-- walk/controller feel без грубых runtime regressions;
-- документация синхронизирована с кодом и `agent/`.
+- [ ] **A. `projectv::math::Vec3/Vec4/Mat4` (alignas 16/32)** — new `src/core/Math.hpp` (header-only). `Vec3` 16-byte aligned (pad), `Vec4` 16-byte aligned, `Mat4` 16-byte aligned. Scalar member access (`x`, `y`, `z`, `w`, `m[0]..m[15]`). Free functions: `dot(Vec3,Vec3)`, `cross(Vec3,Vec3)`, `length(Vec3)`, `normalize(Vec3)`, `operator*(Mat4,Vec4)`, `inverse(Mat4)`, `transpose(Mat4)`. **Verify:** `static_assert(sizeof(Vec3)==16)`, `static_assert(alignof(Vec3)==16)`, `static_assert(alignof(Mat4)==16)`, Godbolt: компилятор использует `movaps` / `vmovaps` (alignment-required SSE/AVX).
+- [ ] **B. Заменить `std::array<float, N>` в hot structures** на `Vec3/Vec4/Mat4`: `src/core/Types.hpp` (CameraState, ChunkCullingParameters, GraphicsPushConstants, PackedSceneChunkDescriptor, etc.), `src/render/SceneResources.hpp` (PackedSceneChunkDescriptor fields, ChunkCullingParameters, FrameRenderData), `src/voxel/VoxelWorld.hpp` (Int3 → остаётся, но chunk координаты можно конвертировать), `src/app/Camera.cpp` (mat4 mul, inverse, perspective). **Zero ABI-change** (same sizes, только alignment).
+- [ ] **C. Frustum cull — single templated SIMD function** — `IsSceneChunkVisible` + `IsAabbVisibleAgainstCameraFrustum` + `IsSceneChunkVisibleInShadowCascade` объединяются в одну `template<typename GetOrigin, typename GetHalfExtent> bool FrustumCull(GetOrigin, GetHalfExtent, ChunkCullingParameters)`. SIMD-вариант через `std::simd<float, 8>` (8 chunks параллельно), fallback на scalar. **Verify:** `TracyPlot("FrustumCulling (ms)")` до/после; ожидаем 8× speedup.
+- [ ] **D. Pre-reserve `std::vector` в hot paths** — `src/voxel/VoxelWorld.cpp::QueueChunkRebuildRequest` (`pendingChunkRebuildIndices.push_back` per voxel edit), `src/render/SceneResources.cpp` (`ChunkVisibilityCache.opaqueCommands/shadowCommands/transparentCommands` push_back per chunk per frame), `src/render/Renderer.cpp` (`DebugOverlayBoxes` push_back per frame), `src/app/InputReplay.cpp` (`InputReplayCapture.frames` per recorded frame). Либо `reserve(maxPossible)` на init, либо `std::inplace_vector<T, N>` (Tier 1, если cap известен).
+- [ ] **E. Godbolt-ревью intrinsics vs auto-vectorize** — для каждой hot-функции после Tier 0.C проверить, что SIMD реально компилируется в AVX (не остался scalar из-за зависимостей). Если auto-vectorize даёт то же — `[[likely]]` / loop restructuring помогут.
+- [ ] **F. **Tier 0 commit (atomic)** — `<type>(<scope>): <summary>` per `§7.2.5`. Заголовок: `perf(render): alignas Vec3/Mat4 + SIMD frustum cull + pre-reserve hot vectors` (или split на 2-3 commit'а если diff > 800 lines). Body: per-commit motivation, expected regression risk, build state.
+- [ ] **G. Verify build green** — `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` clean. `ctest 6/6` baseline preserved. `TracyPlot` показывает >5% FrustumCulling speedup (Tier 0.C). Sidecar captures VoxelLab/FlatBenchmark/MeshingStress unchanged.
 
-Критерий готовности milestone:
-
-- проект легко запускается и проверяется;
-- текущие control/debug loops не выглядят хрупкими;
-- следующий gameplay/debug слой можно добавлять без новой документной или архитектурной зачистки.
+**Tier 0 exit criteria:** SIMD working в cull + cull time measurably снижен + zero new warnings + ctest baseline. **Следующий Tier начинается только после явного одобрения operator + apply commit'a.**
 
 ---
 
-## 3. Активные Приоритеты
+## Tier 1 — `std::inplace_vector` + `std::expected` (cold) + StringID
 
-### P0
+**Цель:** устранить hot-path `std::vector` realloc (Tier 0.D follow-up), cold-path `bool` → `std::expected<T,E>` (A1, P4 из `memory.md §11.1-§11.2`), ввести StringID тип (P4 — 0 StringID в проекте).
 
-- [x] Replay-capture-driven walk regression workflow is now the default mainline path: runtime input replay exists,
-  replay fixtures cover live controller bugs, and future live repros should start from capture rather than handwritten
-  key scripts.
-- [x] Current refactor/lint/static-analysis sweep is closed enough that the next gameplay/debug slice is no longer
-  blocked by warning cleanup; the latest DFA/tidy follow-ups kept `build -> tests -> smoke` green.
-- [x] GUI runtime smoke stays developer-only and targeted: use it for Vulkan/bootstrap/swapchain/window lifecycle,
-  present/screenshot sync, device-lost/hang risk, not as a mandatory ritual after every lighting/material/doc change.
-- [x] `walk` / `creative` controller work is now explicitly bounded by replay/HUD/Tracy evidence instead of broad
-  heuristics; that guardrail lives in the project contracts now, not as an open TODO item.
+- [ ] **A. `std::inplace_vector<VkDrawIndirectCommand, 1024>`** — заменить `std::vector` в `src/core/Types.hpp::ChunkVisibilityCache` (cap 1024 покрывает worst-case VoxelLab + MeshingStress). Fixed-cap, stack-friendly, no realloc. `static_assert(inplace_vector<VkDrawIndirectCommand, 1024>::capacity() == 1024)`.
+- [ ] **B. `std::expected<T, E>` для cold path** — рефакторинг следующих функций (cold = init/load/file I/O, не per-frame per-entity):
+  - `src/voxel/VoxelWorld.cpp::SaveVoxelWorldSnapshot` → `std::expected<bool, VoxelSnapshotError>` (enum `FileNotFound`, `WriteError`, `HeaderCorrupted`)
+  - `src/voxel/VoxelWorld.cpp::LoadVoxelWorldSnapshot` → `std::expected<std::unique_ptr<VoxelWorld>, VoxelSnapshotError>`
+  - `src/asset/AssetLoader.cpp::Load*` → `std::expected<AssetData, AssetLoadError>` per asset type
+  - `src/audio/AudioEngine.cpp::loadMusicFolder` → `std::expected<size_t, AudioLoadError>` (size_t = track count, 0 = valid)
+  - `src/asset/ModelManifestLoader.cpp::load*` → `std::expected<ModelManifest, ManifestError>`
+  - `src/render/vulkan/VulkanInit.cpp::InitVulkan` → `std::expected<VulkanContext, VulkanInitError>` (per-step error)
+  - `src/render/vulkan/VulkanSwapchain.cpp::CreateOrRecreateSwapchain` → `std::expected<VkFormat, SwapchainError>`
+  - `src/render/TaaRenderTargets.cpp::CreateOrRecreateTaaRenderTargets` → `std::expected<TaaRenderTarget, TaaError>`
+- [ ] **C. `.and_then()` / `.or_else()` / `.transform()` композиция** в cold-path вызовах (main.cpp::SDL_AppInit, SDL_AppIterate snapshot load, asset load). Не заставлять каждый caller обрабатывать все error variants — `.or_else(fallback)` где есть fallback.
+- [ ] **D. `StringID` тип** — new `src/core/StringId.hpp`: `struct alignas(8) StringID { uint64_t hash; uint32_t length; };` + `constexpr StringID` ctor от `const char (&)[N]` (FNV-1a 64-bit на compile time). `operator==`/`!=` по (hash, length). `StringID("rock_diffuse")` constexpr.
+- [ ] **E. Заменить `std::string` в hot path на StringID**:
+  - `src/core/Types.hpp::ModelRegistryEntry::id: std::string` → `StringID`
+  - `src/audio/AudioEngine::m_currentTrackName` → `StringID` (track filename); `m_currentArtist` / `m_currentTitle` → `StringID` (parsed sub-fields); `currentTrackName()` возвращает `StringID`, mirror в `DebugStats::audioMusicTrackName` — `std::array<char, 128>` остаётся (HMI readable).
+  - `src/core/Types.hpp::InputReplayState::replayPath` / `InputReplayCapture::snapshotPath` → `std::filesystem::path` (это OS path, не StringID).
+  - `VoxelScenePresetToString` → `constexpr std::string_view` (compile-time), `ParseVoxelScenePreset` → `std::optional<VoxelScenePreset>`.
+- [ ] **F. **Tier 1 commit (atomic)** — `feat(core): std::inplace_vector + std::expected cold + StringID type`. Body: scope list, refactor count, error contract per функция. Verify ctest 6/6.
+- [ ] **G. Verify build green + ctest baseline** — `linux-clang-debug` clean, ctest 6/6.
 
-### P1
-
-- [x] Первый post-refactor gameplay/debug tooling slice закрыт: runtime inspect telemetry, chunk-oriented overlays, material pick, и anchored world-mutation helpers уже живут в sandbox.
-- [ ] Продолжать lighting/look-dev foundation-first slice для текущей demo-scene цели:
-  - [x] первый lighting contract для сцены теперь явный в runtime: `VoxelSceneLighting` держит
-    sky/horizon/ground/sun/fog + exposure/tone-mapping baseline для каждого `VoxelScenePreset`;
-  - [x] минимальная debug ladder для итерации освещения уже есть в sandbox: `B` cycles lighting view, `N` tone-map,
-    `H/K` exposure, `V` reset, а detailed HUD показывает текущее lighting state;
-  - [x] довести первый direct-light baseline до стабильного live look-dev состояния до local lights / advanced GI;
-  - [x] первый shadow path для текущего voxel renderer уже выбран и прототипирован: scene-wide orthographic sun shadow
-    map рендерится отдельным depth pass и семплируется в main voxel pass только для direct sun;
-  - [x] дотюнить первый sun-shadow baseline в live look-dev:
-    - [x] current baseline уже не single-sample prototype: shadow map теперь `2048x2048`, а main voxel shader использует
-      weighted `5x5` PCF вместо одного compare sample;
-    - [x] lighting debug ladder теперь включает dedicated `Shadow` view, а detailed HUD показывает current shadow
-      strength / filter radius / bias;
-    - [x] live look-dev capture больше не зависит от внешних тулов: `C` сохраняет текущий кадр в `.bmp` вместе с sidecar
-      metadata-файлом для preset/exposure/shadow tuning;
-    - [x] shadow projection больше не тратит большую часть карты на пустой padded world volume: CPU fit теперь сначала
-      использует bounds активных chunk-ов и только потом fallback'ается на полные world bounds для пустой сцены;
-    - [x] current direct-light baseline больше не держится на ad-hoc `spec power + shininess`: material visuals теперь
-      упаковывают `base color`, `AO`, `roughness`, `metallic`, `reflectance`, transmission tint и emissive/fog hooks, а
-      `voxel.frag` использует `GGX + Fresnel-Schlick + Smith` для direct sun без ломки текущего ambient/fog/shadow loop;
-    - [x] после этого BRDF/material contract shift обновить opaque-heavy capture baselines (`ChunkGrid` /
-      `MeshingStress`), чтобы дальнейший shadow tuning сравнивал уже новый lighting baseline, а не старые `FINAL` кадры
-      до смены direct-light response;
-      - current refreshed capture set generated through the runtime capture path under
-        `build/windows-clang-debug/lookdev-captures/20260424-brdf-baseline-v2/`: `ChunkGrid` default camera and
-        `MeshingStress` reference shot (`cam -25 19 25`, `look 0.62 -0.48 -0.62`) each have paired `FINAL` / `SHDW`
-        `.bmp` + `.txt` sidecars.
-      - startup camera/capture automation is now env-driven for look-dev repros:
-        `PROJECTV_START_CAMERA_POSITION`, `PROJECTV_START_CAMERA_LOOK`, `PROJECTV_LOOKDEV_CAPTURE_VIEWS`,
-        `PROJECTV_LOOKDEV_CAPTURE_WARMUP_FRAMES`, `PROJECTV_LOOKDEV_CAPTURE_INTERVAL_FRAMES`,
-        `PROJECTV_LOOKDEV_CAPTURE_QUIT`.
-      - screenshot capture sync was fixed after the first scripted capture exposed stale swapchain/readback content:
-        the submit now signals present after all recorded commands, including the post-render transfer copy.
-    - [x] ambient/environment fill теперь явный, а не спрятанный shader-only gradient: `postProcess.y` хранит
-      per-preset environment diffuse intensity, `voxel.frag` считает sky/horizon/ground fill отдельным слоем,
-      detailed HUD и screenshot sidecar показывают `ENV` / `environment_intensity`, а scripted captures обновлены под
-      `build/windows-clang-debug/lookdev-captures/20260424-env-fill-v1/` (`FINAL` / `AMB` / `SHDW` для `ChunkGrid` и
-      `MeshingStress` reference shot).
-    - [x] local cavity ambient follow-up landed on top of that fill contract: compute meshing now bakes a cheap
-      per-face ambient-visibility term into `PackedSceneVoxelFace`, `voxel.frag` multiplies environment fill by it, and
-      sealed voxel cavities no longer read as if they still see the full sky gradient. This is intentionally a bounded
-      voxel-neighborhood visibility term, not `SSAO/GTAO`.
-    - [x] minimal exposure/grading contract now exists before auto exposure: `VoxelSceneLighting.colorGrading` carries
-      white point / contrast / saturation / lift, the shader applies it after tone mapping, clear color follows the same
-      grading path, detailed HUD and screenshot sidecars expose the values, and scripted captures were refreshed under
-      `build/windows-clang-debug/lookdev-captures/20260424-grading-v1/`.
-    - [x] first auto-exposure policy is now explicit and intentionally CPU-side: per-preset `SceneKey` metering
-      estimates
-      exposure from authored sky/horizon/ground/sun brightness and clamps it through `exposureControl`, while `H/K`
-      remains manual stop bias on top. This is not histogram/adaptive exposure yet, but it removes hidden fixed exposure
-      as the only path and keeps the current forward renderer simple.
-      - refreshed scripted captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-auto-exposure-v1/`; sidecars now include
-        `exposure_metering`, `exposure_key`, `exposure_target_key`, `exposure_min`, and `exposure_max`.
-    - [x] продолжить bias/normal-bias/coverage/strength tuning по живым capture/screenshot, пока не уйдут заметные
-      aliasing / acne / peter-panning артефакты.
-    - [x] keep current shadow tuning focused on opaque-heavy presets (`ChunkGrid` / `MeshingStress`) until the
-      demo-scene either gains opaque anchor geometry or an explicit transparent-shadow policy.
-      - current baseline in `src/voxel/VoxelMaterials.cpp`:
-        - `ChunkGrid`: live `C` capture pass moved it to {0.76f, 0.0010f, 0.0040f, 1.30f}; the default-view shadow
-          capture kept full coverage and reduced bright-surface speckle versus the old {0.76f, 0.0009f, 0.0065f, 1.40f}.
-        - `MeshingStress`: the startup camera turned out to be a weak tuning case, but the user-provided reference
-          shot (`cam -25 19 25`, `look 0.62 -0.48 -0.62`) is now the reproducible capture case instead. Tested moderate
-          candidates around the current baseline (`{0.80f, 0.0012f, 0.0045f, 1.40f}`,
-          `{0.80f, 0.0011f, 0.0045f, 1.40f}`, `{0.80f, 0.0011f, 0.0050f, 1.40f}`) did move the shadow image there, but
-          none beat the baseline `{0.80f, 0.0010f, 0.0070f, 1.50f}` clearly enough to justify a preset change yet.
-    - [x] `VoxelLab` now has explicit opaque anchor geometry: a small right-side solid stepped marker built from
-      `FloorGray` / `FloorWhite` outside the glass/fluid sphere, so the demo scene has a stable opaque caster/receiver
-      for the current opaque-only sun-shadow path.
-      - refreshed captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-voxel-lab-anchor-v1/`.
-    - [x] First real CSM render path is now wired: the sun shadow image is a 4-layer depth array, the shadow pass
-      renders
-      each cascade with its own uploaded light matrix, the final shader samples `sampler2DArrayShadow` by camera
-      view-depth, and `CSM` debug view visualizes cascade selection.
-    - [x] First CSM stabilization step landed: cascade projection centers snap to the shadow texel grid using the active
-      shadow-map resolution, and tests cover sub-texel camera nudges so small movement does not continuously slide the
-      first cascade projection.
-    - [x] First bounded CSM diagnostics/coverage step landed: detailed HUD and screenshot sidecars now expose
-      per-cascade
-      view-depth ranges, ortho extents, and effective world-space texel size, so split coverage can be compared from
-      scripted captures instead of only eyeballing the final frame. Cascade-specific caster culling and deeper temporal
-      edge-case tuning remain follow-up work.
-    - [x] First split-edge stability follow-up landed on top of those diagnostics: cascade `XY` fit now uses a
-      rotation-stable sphere extent per view slice instead of a tight light-space AABB, so per-cascade extents/texel
-      density stay predictable under camera yaw changes. The next quality gap is now shader-side split transition/caster
-      coverage tuning, not another hidden CPU fit heuristic.
-    - [x] First shader-side split transition follow-up landed on top of that stable fit: `voxel.frag` now blends the
-      current and next cascade across a runtime-visible split band instead of hard-switching at the split edge, while
-      detailed HUD and screenshot sidecars expose the active `BLND` value for tuning.
-      - refreshed `MeshingStress` scripted captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-csm-blend-v1/` with `FINAL` / `SHDW` / `CSM`.
-    - [x] First cascade-specific caster coverage follow-up landed on top of the split-blend baseline: per-cascade shadow
-      depth fit no longer uses full active-scene bounds blindly, and instead extrudes the current receiver slice
-      upstream
-      along the sun direction before intersecting with active scene bounds. HUD and screenshot sidecars now expose
-      `shadow_cascade_caster_light_ranges` so that caster-depth coverage can be compared from captures too.
-      - refreshed `MeshingStress` scripted captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-csm-caster-coverage-v1/` with `FINAL` / `SHDW` / `CSM`.
-    - [x] Cascade-specific caster coverage no longer affects only light-depth: per-cascade ortho `XY` fit now also
-      expands around needed caster coverage, so shadows do not disappear just because a tall/upstream caster falls
-      outside the receiver-only projected footprint of the nearer cascade.
-      - refreshed scripted verification capture lives under
-        `build/windows-clang-debug/lookdev-captures/20260424-csm-caster-xy-v1/`.
-    - [x] Cascade-specific caster coverage no longer gets clipped by the shadow camera near plane: once upstream caster
-      coverage expands a cascade beyond the receiver sphere, the light camera now moves upstream enough to keep the
-      expanded caster range in front of the depth near plane instead of silently dropping it in mid/far cascades.
-      - refreshed scripted verification capture lives under
-        `build/windows-clang-debug/lookdev-captures/20260424-csm-nearplane-v1/`.
-    - [x] Real per-cascade caster draw culling now exists on top of the projection-fit work: the shadow indirect buffer
-      stores one chunk-draw range per cascade, CPU visibility rebuilds chunk AABBs against each cascade clip volume, and
-      dirty-chunk meshing patches those same per-cascade commands on the GPU instead of drawing every opaque chunk into
-      every cascade by default.
-      - refreshed scripted verification captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-csm-draw-culling-v1/`.
-      - bounded perf polish on top of that step: when a frame has no dirty meshing work and CPU culling reports an empty
-        cascade, the renderer now skips the empty `vkCmdDrawIndirect` call for that cascade instead of submitting a
-        known
-        no-op draw.
-    - [x] CSM split planning now follows the same visible-scene receiver range as main-pass chunk visibility instead of
-      the raw camera far plane: cascades use camera near plus `min(farPlane, 64)`, so near cascades stop budgeting
-      texels
-      for receivers beyond the current mainline culling horizon.
-    - [x] CSM default split distribution is now more near-biased after live user repro: the mainline cascade lambda
-      moved
-      from `0.65` to `0.80`, so the current `2048x2048` budget is spent more aggressively on near/mid receivers instead
-      of leaving too much density in the far cascade.
-      - refreshed scripted verification capture lives under
-        `build/windows-clang-debug/lookdev-captures/20260424-csm-lambda-v1/`.
-    - [x] transparent shadow policy is now explicit for the current mainline sun-shadow path:
-      `GLASS_IGNORED_FLUID_CASTS`. Glass does not cast sun shadows until a separate tinted/transmission or RT path
-      exists; `Fluid` casts through the current opaque shadow-map path instead of being silently ignored.
-      - refreshed `VoxelLab` policy captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-fluid-shadow-policy-v1/`.
-    - [x] close-range shadow acne/stair-step follow-up landed: receiver sampling now adds a small world-space bias
-      toward
-      the sun, skips shadow sampling for nearly unlit/backfacing surfaces, and replaces the old `3x3` box PCF with a
-      weighted `5x5` PCF. Close `VoxelLab` captures live under
-      `build/windows-clang-debug/lookdev-captures/20260424-shadow-acne-close-v2/`.
-    - [x] one-sided voxel-face self-shadow acne is now fixed at the caster side: the shadow graphics pipeline enables
-      static polygon depth bias, so lit-facing faces do not re-sample their own triangle raster pattern as
-      micro-shadows.
-      Verification capture lives under
-      `build/windows-clang-debug/lookdev-captures/20260424-shadow-acne-caster-bias-v1/`.
-    - [x] first contact-shadow baseline now lives on top of the current sun path without another render pass:
-      the main voxel shader binds the same chunk descriptors + packed voxel payload as meshing, traces a short
-      voxel DDA ray toward the sun, and attenuates direct sun locally through explicit
-      `sunContactShadowParams={strength,maxDistance}` in `VoxelSceneLighting`.
-      - `B` now also cycles a dedicated `CTSH` debug view, detailed HUD shows `CTSH STR/DST`, and screenshot sidecars
-        write `contact_shadow_strength` / `contact_shadow_distance`.
-      - current occluder policy matches the mainline transparent-shadow contract: `Glass` stays ignored, `Fluid`
-        remains a contact-shadow occluder.
-      - refreshed scripted verification captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-contact-shadow-v1/` with `FINAL` / `SHDW` / `CTSH`.
-      - the first post-landing regression is fixed too: `voxel_shadow.vert` now matches the updated
-        `SceneLightingBuffer` layout after `sunContactShadowParams` was inserted, so the shadow pass again reads the
-        correct cascade matrices instead of shifted data.
-    - [x] contact-shadow landing was revalidated with real runtime captures after the first failed `VoxelLab` check:
-      `build/windows-clang-debug/lookdev-captures/20260424-contact-shadow-v4/` and the user-facing
-      `build/windows-clang-debug-tracy-profiler/lookdev-captures/20260424-contact-shadow-tracy-v2/` both contain
-      inspected `FINAL` / `SHDW` / `CSM` / `CTSH` frames. `FINAL` now shows the actual game frame, `SHDW` and `CSM`
-      show the same visible sun-shadow region, and `CTSH` stays a local contact-only layer instead of replacing CSM.
-    - [x] first ambient/contact-occlusion follow-up now exists as a bounded voxel-space `AOCC` baseline, not a full
-      `SSAO/GTAO` pass: `VoxelSceneLighting.ambientOcclusionParams={strength,radius,minVisibility}` controls a short
-      hemisphere DDA in `voxel.frag`, `B` cycles the dedicated `AOCC` debug view, HUD/sidecars expose the authored
-      values, and the tuned baseline uses stronger normal weighting plus distance-squared falloff so large transparent
-      volumes do not turn into broad fake shadows.
-      - refreshed inspected captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-aocc-baseline-v2/`,
-        `build/windows-clang-debug/lookdev-captures/20260424-aocc-meshing-v1/`, and
-        `build/windows-clang-debug-tracy-profiler/lookdev-captures/20260424-aocc-tracy-v1/`.
-      - full screen-space `SSAO/GTAO` remains a later quality pass if the renderer grows the right depth/normal pipeline;
-        this slice only gives the current forward voxel path a small local occlusion layer.
-    - [x] first authored local point-light contract now exists before local shadow maps/cubemaps: `VoxelSceneLighting`
-      appends `localPointLightPositionAndRadius`, `localPointLightColorAndIntensity`, and `localPointLightParams`,
-      presets author one inverse-square point light, and `voxel.frag` adds that light to the same GGX direct-light path.
-      The current follow-up is a bounded local-shadow baseline inside that same forward voxel path:
-      `localPointLightParams={enabled,sourceRadius,shadowStrength,shadowBias}` now drive a short opaque-only voxel DDA
-      visibility term before any separate local shadow-map/cubemap resource exists. `Glass` and `Fluid` are both ignored
-      as local-light shadow occluders for now; full local shadow maps/cubemaps remain the later quality layer.
-      - `B` now also cycles `LOCL`, detailed HUD shows `LOCL` / `LCLR` / `LSHD`, screenshot sidecars write
-        `local_point_light_*`, and scripted captures accept `PROJECTV_LOOKDEV_CAPTURE_VIEWS=LOCL`.
-      - inspected captures live under
-        `build/windows-clang-debug/lookdev-captures/20260424-local-shadow-v1/` and
-        `build/windows-clang-debug/lookdev-captures/20260424-local-shadow-meshing-v1/`.
-      - blocked-face local-light artifacts are now bounded too: the visibility ray no longer starts from the raw
-        interpolated fragment position. It is first clamped onto a stable point on the owning voxel face, which removes
-        the visible per-face fractal/moire pattern that appeared when opaque blocks fully enclosed the light. Close-up
-        verification lives under
-        `build/windows-clang-debug/lookdev-captures/20260424-local-shadow-fractal-fix-v1/`.
-      - the same local-light fix is now also rechecked against the user-provided live repro angle instead of only a
-        synthetic close-up: loading `latest.projectv.replay.snapshot.bin` through `PROJECTV_SNAPSHOT_PATH` plus the
-        screenshot-sidecar camera (`cam -0.077 2.650 7.830`, `look 0.93 0.28 -0.22`) produces clean `FINAL` / `LOCL`
-        captures under `build/windows-clang-debug/lookdev-captures/20260424-user-snapshot-camera-v1/`.
-      - the next real close-range aliasing follow-up landed on top of that blocked-face fix too: local-light visibility
-        no longer uses one hard per-pixel ray to the emitter center. `voxel.frag` now traces from a stable point on the
-        owning voxel face and averages a small emitter disk around the authored `sourceRadius`, which removes the visible
-        binary speckle that appeared on partially occluded faces in the user-provided `FINAL/LOCL` layer set.
-      - refreshed close-up verification against the saved `F6` world snapshot lives under
-        `build/windows-clang-debug/lookdev-captures/20260424-user-f6-close-angle1-v2/` and
-        `build/windows-clang-debug/lookdev-captures/20260424-user-f6-close-angle2-v2/`.
-      - that same local-light path no longer collapses to one constant visibility value per voxel face either: replacing
-        the old face-center sample with a stabilized in-face point removes the obvious “every floor voxel has its own
-        shadow bucket” artifact in close ground-level shots. Refreshed verification lives under
-        `build/windows-clang-debug/lookdev-captures/20260424-user-floor-voxel-shadow-v2/`.
-- [x] Текущий узкий `walk` / `creative` feel-tuning slice закрыт на нынешнем наборе live repro: `MinecraftLike`
-  air-control уже baseline, high-speed creative flight wedges закрыты, held-jump restored, а auto-jump path теперь
-  runtime-toggleable и replay-covered.
-- [x] HUD/debug counter policy уже codified в runtime: normal vs detailed HUD split введён, а новые low-level counters
-  не должны возвращаться в обычный экран без явной диагностической пользы.
-- [x] **Multiplatform dev baseline (`2026-06-09`)** теперь живёт: `ProjectV` is expected to build and run on both
-  `windows-clang-debug` (existing) и `linux-clang-debug` (new). Arch Linux — active Linux dev host. Linux toolchain:
-  clang 22.1.6 native + lld 22.1.6 + libstdc++ 16.1.1 + SDL3 3.4.10 + Vulkan 1.4.350. Configure / build / ctest зелёные
-  на `linux-clang-debug`. Source-side fixes, которые приземлились как часть baseline: `src/CMakeLists.txt`
-  (`GPUOpen::VulkanMemoryAllocator` uncommented), `src/core/Types.hpp` (VMA include path), `src/ecs/EcsWorld.hpp`
-  (`<cstddef>`). Root `CMakeLists.txt` Windows-жёсткие опции теперь platform-gated. `CMakePresets.json` получил
-  `linux-clang-debug*` семейство. Подробное описание и follow-up риски — в `agent/memory.md` §5-8 и `agent/decisions.md`
-  §17.
-- [x] **Shadow-quality audit + targeted fix pass (`2026-06-09`, same-day)** закрыт в ответ на «тени лесенкой, 120 FPS,
-  иногда пропадают». Шесть фиксов: A1 — `shadowRasterizer.cullMode = VK_CULL_MODE_NONE` в `VulkanGraphicsPipeline.cpp`
-  (back-face cull от main pass чопал shadow map); A2 — local-light DDA теперь стартует вдоль faceNormal only
-  (`voxel.frag`), self-shadow на lit-гранях уходит; A3 — frustum-cull near-check восстановлен и снабжён
-  длинным комментарием (`SceneResources.hpp`), убранный по ошибке во время первой попытки и пойманный
-  `TestIsSceneChunkVisibleInShadowCascade` в `tests/VoxelWorldTests.cpp:2157`; A5 — `filterRadius` clamp к `[0, 2]`
-  в `voxel.frag` (debug-ladder `H/K` ceiling 8.0 раздувал PCF kernel); B1a/b/c — fragment-budget culling:
-  AOCC directions 5→3, AOCC steps 6→4, local-light DDA steps 32→12. Worst-case per-pixel budget
-  на лит-voxel: 252 → 134 reads (-47%). **Visual verification** через новый
-  `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` (counterpart `Invoke-ProjectVRuntimeSmoke.ps1`): 6/6 captures
-  на `cam -25 19 25 look 0.62 -0.48 -0.62` (`VoxelLab`), HUD FPS 121.7/123.2/116.4 для FINAL/CSM/SHDW,
-  shadows continuous, no holes, contact/AOCC/local-light слои живые. Deferred: B2 (shadow map 2048→1536)
-  и B3 (per-frame chunk visibility cache) — отдельные задачи. Подробный diff и lesson-learned — в
-  `agent/memory.md` §10.
-- [x] **Shadow-quality pass v2 — P0 закрыт (`2026-06-10`).** Stratified Poisson disk PCF (12 taps) заменил
-  uniform-grid 5×5 weighted в `voxel.frag::SampleSunShadowCascade`. Бюджет чтений: 25 → 12 (снижение, не
-  рост). `pcfStepScale = filterRadius * 0.75` сохранён, A5 `filterRadius` clamp `[0, 2]` остаётся в силе.
-  Каждый тап additionally `clamp`-ится в `[1e-5, 1-1e-5]`, чтобы избежать `clamp-to-edge` артефактов на
-  стыке каскадов. Build green, ctest 1/1, smoke 4/4 (`FINAL SHDW CSM CTSH` на
-  `VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`). Visual inspection подтверждает уход
-  пиксельной лесенки на стыке каскадов.
-- [x] **Shadow-quality pass v2 — P0.2 реально закрыт (`2026-06-10`)** изменением `magFilter`/`minFilter`
-  shadow-сэмплера с `VK_FILTER_NEAREST` на `VK_FILTER_LINEAR` в
-  `src/render/vulkan/VulkanGraphicsPipeline.cpp:399-400` (одна строка). Vulkan spec 1.4 §20.2.4
-  описывает hardware 2×2 PCF при LINEAR фильтре, что даёт плавный gradient
-  вместо дискретных 0/1. **Lost-and-reapplied incident `2026-06-10`:** первоначальный
-  fix был uncommitted в прошлой сессии, и `git checkout -- .` + `git stash drop` в W1-W5
-  detour его уничтожил. Re-apply сводился к одной 2-строчной правке. Working rule:
-  перед `git checkout -- .` — сохранить uncommitted state в `/tmp/`. Visual verify:
-  `build/linux-clang-debug/lookdev-captures/20260610-p0_2_fix_redo/SHDW.bmp` показывает
-  мягкий gradient на VoxelLab чекерном полу.
-- [x] **Shadow-quality pass v2 — P0.3 — 3-4 видимые полосы на стеке voxel'ов (`2026-06-10`,
-  диагноз изменился).** Изначально диагностировано как flat-shading banding и попытка
-  per-corner normal averaging в `voxel_mesh.comp` (W1-W5, откачено, см. `agent/memory.md` §10.11).
-  **Реальная причина — flat per-face `inAmbientVisibility` в `voxel.frag`.** Когда 4 угла грани
-  voxel'я получают разные ambient occlusion значения (нижний voxel тёмный, верхний светлый),
-  per-face усреднение даёт скачок яркости на границе между voxel'ами. Корректный fix —
-  **per-corner packed AO**: упаковать 4 corner AO (по 8 бит) в 24 unused bits
-  `PackedFace::lightingData`, в `voxel.vert` убрать `flat` с `outAmbientVisibility`,
-  в `voxel.frag` убрать `flat` с `inAmbientVisibility`. Тогда rasterizer билинейно
-  интерполирует AO между углами внутри каждой грани, и скачок яркости между voxel'ями
-  пропадает. Дизайн и reference: Mikola Lysenko, *Ambient occlusion for Minecraft-like
-  worlds - 0 FPS* (https://blog.0fps.net/2013/09/25/ambient-occlusion-for-minecraft-like-worlds/).
-  Касается 3 файлов шейдеров: `voxel_mesh.comp` (функция `ComputeFaceAmbientVisibilityByte`),
-  `voxel.vert` (убрать `flat`), `voxel.frag` (убрать `flat`). Без C++ изменений — данные
-  уже лежат в `lightingData`. **Status: смержен в этой сессии (`2026-06-10`), visual verified.**
-  `voxel_mesh.comp` теперь использует `ComputeFaceCornerPackedAO` (4×8-bit packed AO в
-  `PackedFace::lightingData`), `voxel.vert` снимает `flat` с `outAmbientVisibility` и распаковывает
-  `cornerIndex` байт через `(lightingData >> (cornerIndex*8)) & 0xFF`, `voxel.frag` снимает
-  `flat` с `inAmbientVisibility`. Captures на VoxelLab reference shot
-  `cam 3.233 4.301 12.320 look 0.65 -0.03 -0.76` живут под
-  `build/linux-clang-debug/lookdev-captures/20260610-p03-per-corner-ao-v3/` (FINAL view показывает
-  плавный vertical gradient вместо 3-4 горизонтальных полос). Build green, ctest 1/1.
-  **Lesson learned (см. `agent/memory.md` §10.11):** incremental `cmake --build` не копирует
-  свежие `.spv` в `bin/`, если `ProjectV` ELF уже up-to-date. После правки шейдеров всегда
-  `cp build/.../src/voxel*.spv build/.../bin/` или `cmake --build` с явной пересборкой ELF.
-  Иначе capture выглядит как pre-fix даже после корректного merge'а.
-- [x] **P0.3 follow-up — face-independent 4-axis-aligned AO в vertex shader
-  (`2026-06-10`, две ревизии в той же сессии).** Диагноз после P0.3: per-corner
-  AO снимает flat-shading banding внутри грани, но 3 GPU vertex'а, попадающих
-  в один 3D corner, по-прежнему пишут разные AOs (потому что
-  `ComputeFaceCornerPackedAO` зависит от `(face, corner)`, а 3 разных грани
-  дают 3 разных neighbor sets). В P0.3 это проявилось как «тёмное пятно в
-  центре лицевой грани башни»: rasterizer плавно интерполирует внутри грани,
-  но на стыке с другой гранью виден скачок.
-  **Корректный fix — AO, привязанный к 3D-позиции, а не к (face, corner).**
-  Поскольку полный GPU-hash-table welding потребовал бы ~400-600 lines изменений
-  (новые welded vertex / index буферы, hash table, новые dispatches в
-  `voxel_mesh.comp`, vertex input state, `VkDrawIndexedIndirectCommand`,
-  `vkCmdBindIndexBuffer`, новые binding'и в `VulkanVoxelMeshingPipeline.cpp`)
-  и не влезал в разумный объём одной сессии, реализован pragmatic equivalent:
-  **4-axis-aligned AO в vertex shader** на integer 3D-позиции. AO level =
-  (4 − occluderCount), где occluderCount = количество non-Air / non-Glass
-  вокселей среди 4 axis-aligned соседей 3D-угла. **4 «диагональных»
-  октанта исключены**, поэтому 4-voxel junction (4 solid + 4 air вокруг
-  угла) читается как 0 occluder'ов / fully lit → 50% dark spot,
-  который давал 8-surrounding, исчез. Per-corner интерполяция внутри грани
-  сохраняется: 4 угла одной грани = 4 разных 3D-позиции = 4 разных AO.
-  **Файлы:**
-  - `src/shaders/voxel.vert` — добавлены `PackedChunkVoxelPayload` binding (binding 5),
-    helper'ы `DecodeChunkVoxelMaterialVertex` / `ReadVertexNeighborMaterial` /
-    `IsVertexAoOccluder` / `ComputeVertexAmbientOcclusionByte`, в `main()`
-    `outAmbientVisibility` вычисляется из 4-axis-aligned через
-    `ivec3(floor(worldPosition + 0.5))`.
-  - `src/shaders/voxel_mesh.comp` — `ComputeFaceCornerPackedAO` становится
-    no-op (возвращает 0); `PackedFace::lightingData` остаётся в 12-байтной
-    структуре для совместимости descriptor barrier'а, но больше не читается.
-  - `src/render/vulkan/VulkanGraphicsPipeline.cpp` — binding 5 в graphics
-    descriptor set layout получает `stageFlags = VERTEX_BIT | FRAGMENT_BIT`
-    (раньше был только FRAGMENT_BIT, что ломало `vkCreateGraphicsPipelines`).
-  **Trade-off:** алгоритм AO меняется с 3-neighbor (Lysenko) на 4-axis-aligned.
-  Оба варианта — валидный Minecraft-style AO. Per-corner интерполяция
-  внутри грани сохранена. Вдвое меньше reads per vertex (4 vs 8).
-  **C++ side:** 1 строка (`stageFlags` для binding 5). Никаких новых
-  буферов, dispatch'ей, indirect commands, descriptor'ов.
-  **Build:** green. **ctest:** 1/1 passed. **Visual:** user запустил binary
-  с `cam 5.152 4.379 13.694 look 0.42 -0.12 -0.90` и подтвердил, что
-  scene рендерится корректно (FPS 117.8) и тёмных пятен на 4-voxel
-  junctions больше нет. Scripted smoke capture от моего agent-session
-  показал пустую сцену из-за pre-existing unnamed SPIR-V binding noise
-  (binding 4/6/9 в `vkCmdDrawIndirect`/`vkCmdDispatch`), но это шум
-  validation layer'а — binary сам по себе рендерит корректно, что и
-  подтверждает user-side capture.
-  **Pre-existing багфикс заодно:** при запуске программы мышь улетала вниз,
-  потому что первый `SDL_EVENT_MOUSE_MOTION` после
-  `SDL_SetWindowRelativeMouseMode(true)` несёт огромный pre-capture delta.
-  Добавлен `InputState::skipFirstMouseMotion` (default true) + gate в
-  `HandleCameraEvent` + reset в `SetRelativeMouseMode`. После правки камера
-  стабильна на старте.
-  **Reference:** Mikola Lysenko, *Ambient occlusion for Minecraft-like
-  worlds - 0 FPS*,
-  https://blog.0fps.net/2013/09/25/ambient-occlusion-for-minecraft-like-worlds/
-  (per-face-corner neighbor check, описанный там, остаётся в
-  `voxel_mesh.comp::ComputeFaceCornerAmbientLevel` для reference / возможного
-  revert, но не используется в рендере).
-- [x] **P0.3 follow-up v2 — per-vertex AO полностью отключён
-  (`2026-06-10`).** User подтвердил, что 4-axis-aligned модель всё ещё
-  оставляет «псевдотень» на 3D-углу 2x2x2 куба: `3 из 4 axis-aligned соседей
-  solid → AO=64 = 25% lit`, хотя с этого угла видно небо из диагонали.
-  Это **структурный** артефакт: face-independent per-corner AO, считающий
-  solid axis-aligned соседей, не различает «concave» (стенки вокруг 1x1
-  дырки — действительно темно) и «convex 3-walls-1-sky» (выпуклый угол
-  2x2x2 — небо видно, но 3 оси закрыты) — оба дают одинаково высокий count.
-  **Решение:** `voxel.vert` устанавливает `outAmbientVisibility = 1.0`
-  безусловно, без чтения storage buffers. Binding 5 (`PackedChunkVoxelPayload`)
-  удалён из vertex shader, его descriptor-stage флаги в
-  `VulkanGraphicsPipeline.cpp` свёрнуты до `FRAGMENT_BIT` (vertex shader
-  больше не использует). Все helper-функции per-vertex AO
-  (`ReadVertexNeighborMaterial`, `IsVertexAoOccluder`,
-  `ComputeVertexAmbientOcclusionByte`, `DecodeChunkVoxelMaterialVertex`)
-  удалены как dead code. Per-pixel cavity darkening сохранён через
-  `ComputeAmbientOcclusionVisibility` в `voxel.frag` (AOCC ray-cast),
-  который не имеет face-boundary seams и корректно затемняет
-  настоящие 1x1 дыры, не трогая выпуклые углы.
-  **Файлы:**
-  - `src/shaders/voxel.vert` — `outAmbientVisibility = 1.0` (было: 4-axis-aligned
-    formula). Удалены binding 5 и 4 helper-функции. Binding 3 (`PackedChunkDescriptors`)
-    остаётся (используется для `chunkDescriptor` в vertex shader). Комментарий
-    сверху объясняет, почему AO выключен и как вернуть (через compute-baked
-    per-face uniform AO или welded mesh).
-  - `src/render/vulkan/VulkanGraphicsPipeline.cpp` — binding 5 в graphics
-    descriptor set layout получает `stageFlags = FRAGMENT_BIT` (было:
-    `VERTEX_BIT | FRAGMENT_BIT`).
-  **Build:** green. **ctest:** 1/1 passed. **Lesson learned:** per-vertex
-  AO при face-independent constraint (welded mesh отсутствует) **фундаментально**
-  не способен правильно обработать 2x2x2 corner geometry; либо weld mesh,
-  либо per-pixel AOCC, либо no per-vertex AO. Зафиксировано в
-  `agent/decisions.md` §14. Visual verify отдан оператору.
-  **Backlog (R&D, не блокирует mainline):** per-face uniform AO,
-  compute-baked; welded mesh с GPU-hash-table; full SSAO/GTAO поверх
-  depth/normal G-buffer (отдельный pass, отложен до HDR/luminance пути).
-- [x] **P1 — моргание теней при движении камеры (shadow flicker / shimmer) закрыт (`2026-06-12`).**
-      Root cause: `sceneLightingBuffer` SSBO был shared между `MAX_FRAMES_IN_FLIGHT=2` без
-      синхронизации — frame N+1 `memcpy` затирал данные, пока GPU frame N ещё читал. Fix chain:
-      `b7e672f` (fence reorder + cascade depth via `gl_FragCoord.z` + TAA history clamp +
-      per-frame `sceneLightingBuffer`), `b0fcd9b` (специализация pipeline для TAA-on/off, не
-      отключает validation performance warning), `02c297c` (preprocessor-guarded SPIR-V variants
-      `voxel.frag.spv` и `voxel.frag.taa_on.spv` — переменная физически отсутствует в SPIR-V,
-      validation warnings убраны по существу), `3c87f21` (mouse startup fix).
-- [x] **Swapchain semaphore reuse fix (`2026-06-09`, same-day)** закрыт через **per-frame *acquire*-semaphore +
-  per-image *submit*-semaphore** pattern из Vulkan SDK 1.4 guide `swapchain_semaphore_reuse.html` (документы
-  в `docs/VulkanSDK-Linux-Docs-1.4.350.1/`, агент должен читать их **до** grep'а headers). Root cause: per-frame
-  `imageAvailableSemaphores[2]` и `renderFinishedSemaphores[2]` индексировались по `currentFrame % MAX_FRAMES_IN_FLIGHT`
-  вместо swapchain `imageIndex`. Сделано: `submitSemaphores[imageIndex]` per-swapchain-image в `SwapchainState`,
-  создаются в `CreateOrRecreateSwapchain`; `vkQueueSubmit2::pSignalSemaphores[0]` и
-  `vkQueuePresentKHR::pWaitSemaphores[0]` оба используют `submitSemaphores[imageIndex]`. Также opportunistically
-  enabled `VK_KHR_swapchain_maintenance1` (+ dependency instance extensions
-  `VK_KHR_get_surface_capabilities2` + `VK_KHR_surface_maintenance1`). Финальный warning count: **0**
-  (-100% от 20), build green, ctest 1/1, smoke 6/6, vision verify FINAL view — continuous soft sun shadow,
-  no staircasing, no full-floor dark. **Working rule записан в `agent/memory.md` §10.7**: для Vulkan
-  semantic вопросов — docs first, headers/vulkaninfo second.
-
-### P1 (visual quality post-TAA track, `2026-06-12`)
-
-После TAA-Блока 1-6 (1.1-1.5, 1.7 closed; 1.6 VRS R&D, 1.8 quality tier abstraction open per §5) и shadow/contact/AOCC/LOCL baselines (closed в lighting/look-dev P1 выше) следующий natural track — это **post-TAA visual quality extensions**, которые требуют HDR/luminance pipeline (отдельная работа) или fragment-budget trade-off. Все пункты здесь gated на решения в `agent/decisions.md §14` (per-vertex AO disable, welded-mesh deferred) и `agent/memory.md §10.5.1` (compute auto-exposure ждёт HDR path).
-
-- [ ] **7.1 Compute HDR pipeline foundation.** R16G16B16A16 scene color в main pass (replaces `B10G11R11_UFLOAT` для main `outColor` slot 0; TAA `outSceneColor` slot 1 остаётся packed по `decisions.md §18` + `TaaRenderTargets.hpp` `kTaaSceneColorFormat`). Tone-map перед LDR conversion. Single source of truth pattern — `inline constexpr VkFormat kMainSceneColorFormat` в `TaaRenderTargets.hpp` рядом с `kTaaSceneColorFormat`. Prerequisite для 7.2/7.3 — без HDR scene color adaptive auto-exposure и bloom некорректны.
-- [ ] **7.2 Compute-based adaptive auto-exposure.** Luminance histogram pass (downsampled HDR-буфер), geometric mean, time-smoothed. Supersedes CPU `SceneKey` metering (`decisions.md §14`, `memory.md §10.5.1`) — current `VoxelSceneLighting.exposureControl` contract остаётся, но `SceneKey` estimate заменяется на GPU-computed value. Live tuning ladder: `H`/`K` остаются manual stop bias поверх adaptive.
-- [ ] **7.3 Bloom (post-TAA).** Thresholded bright pass (выше tone-mapped white point) → two-pass Gaussian или cascade downsample/upsample. Forward path (без G-buffer) — single compute-shader cascade blur; alternative — fragment-shader horizontal+vertical separable. Half-res upscale cheap variant для low-end GPUs.
-- [ ] **7.4 Vertex welding + smooth shading (R&D, gated).** Per `decisions.md §14`: face-independent per-vertex AO **фундаментально** даёт pseudo-shadow на 2×2×2 corner geometry (count of solid axis-aligned neighbors peaks at convex corners with three abutting voxels). Re-introduce только через:
-  - **a) Per-face uniform AO compute-baked** в `PackedFace::lightingData` (write-once per dirty chunk, read in vertex shader). Чуть проще welded mesh, но не решает 3D-corner seam.
-  - **b) Welded mesh** (welded vertex / index buffers + GPU-hash-table dedup в `voxel_mesh.comp` + `vkCmdBindIndexBuffer` + `VkDrawIndexedIndirectCommand`). Полное решение, но ~400-600 lines изменений.
-  - **c) Compute-baked 3D-corner AO** в новом SSBO с индексом 3D-позиции → AO байт. Vertex shader lookup. Compromise между (a) и (b).
-  - До выбора одного из вариантов — `voxel.vert` остаётся с `outAmbientVisibility = 1.0`, per-pixel AOCC в `voxel.frag` — единственный cavity darkening.
-
-Подробный performance budget и rationale — в §4.5 ниже.
-
-### P2
-
-- [ ] Начать lighting/shadow foundation-first контур:
-  - HDR / exposure / material contract;
-  - sun shadows;
-  - local shadow/contact-occlusion;
-  - reflections / atmosphere;
-  - temporal stabilization;
-  - quality/debug ladder.
+**Tier 1 exit criteria:** 0 `std::string` в hot path; cold path типобезопасный; inplace_vector заменил 1+ hot vector; StringID constexpr-constructed в hot path.
 
 ---
 
-## 4. Mainline Backlog
+## Tier 2 — C++20 modules (`.ixx`) — mainline
 
-### Gameplay / Debug
+**Цель:** ускорить сборку 2-5× per `§06_compile-time-philosophy.md`. Оператор явно сказал «mainline, не probe build tree».
 
-- [x] inspect tools;
-- [x] debug tools for world mutation;
-- [x] screenshot hotkey;
-- [x] **frame-step / slow-motion debug modes** closed `2026-06-12` — см. `agent/active-sessions.md session-2026-06-12-frame-step-slow-motion`, `agent/decisions.md §26`. 4 новых hotkey (`[` slow / `]` fast / `\` step / `` ` `` reset 1x), `SimulationState::timeScale` + `::frameStepRequested`, accumulator override + `effectivePaused` refactor of 3 `simulation->paused` references. `TIME 0.50` HUD line + `STEP` one-frame indicator.
-- [x] extra gizmo/debug overlays beyond current inspect / chunk / mutation overlays.
+- [ ] **A. Подготовить module files** — `src/core/Math.ixx` (Vec3/Vec4/Mat4 + StringID), `src/core/Types.ixx` (forward declarations + opaque types), `src/ecs/EcsWorld.ixx` (ECS API). Каждый `export module projectv.{core,math,ecs};` + `export` declarations.
+- [ ] **B. CMake support** — root `CMakeLists.txt` или `src/CMakeLists.txt`: для каждого target добавить `target_sources(... PRIVATE FILE_SET CXX_MODULES FILES ...)`. `CMAKE_CXX_SCAN_FOR_MODULES ON` (default в CMP0155 NEW для C++20+). CMake 4.x на mainline, проверено 3.30+.
+- [ ] **C. `import std;`** — `CMAKE_EXPERIMENTAL_CXX_IMPORT_STD d0edc3af-4c50-42ea-a356-e2862fe7a444` + `CMAKE_CXX_MODULE_STD ON` в корневом `CMakeLists.txt` (до `project()`). Probe в `src/CMakeLists.txt` — добавить probe-TU, который только `import std;` и печатает `sizeof(int)`. Build green? Продолжаем. Нет — фикс CMake, отчёт в `decisions.md`.
+- [ ] **D. Миграция** — по одному файлу `import projectv.core;` / `import projectv.math;` / `import projectv.ecs;` в `src/app/*.cpp`, `src/voxel/*.cpp`, `src/render/*.cpp`. **Не мигрируем** `.cpp` который `#include` Vulkan/SDL/flecs/Jolt headers (оставляем в `#include` через `target_include_directories`).
+- [ ] **E. Замер build time** — `time cmake --build build/linux-clang-debug --target ProjectV --parallel 8` до/после. Ожидаем 2-5× speedup на cold rebuild (полная сборка), 1.5-2× на incremental (один файл).
+- [ ] **F. **Tier 2 commit (atomic)** — `build(cmake): enable C++20 modules + import std`. Body: build time before/after, modules file list, `import std;` experimental gate rationale.
+- [ ] **G. Verify build green + ctest baseline** — `linux-clang-debug` clean, ctest 6/6. `windows-clang-debug` тоже green (operator явно не сказал «не трогать» для Tier 2; cross-platform verify).
 
-### World / Render / Tooling
-
-- [ ] richer chunk model;
-- [ ] richer world-editing workflows beyond the current lightweight debug editor;
-- [x] greedy meshing follow-up (closed — see `agent/active-sessions.md session-2026-06-12-greedy-meshing`, `decisions.md §25`, `memory.md §10.22`);
-- [x] **richer render stats / explicit per-pass timings** closed `2026-06-12` — см. `agent/active-sessions.md session-2026-06-12-richer-render-stats`, `agent/decisions.md §27`. CPU-side per-pass `SDL_GetPerformanceCounter` timing для 6 passes (Shadow / Voxel Meshing / Graphics / TAA Resolve / Debug Overlay / Debug HUD) + `RenderPassTimings` struct в `RenderState` + 7 mirrors в `DebugStats` + 1 derived `otherMs = frameTimeMs - graphicsMs`. HUD lines `RPASS GFX 0.50 OTH 0.50 ms` + `RPASS SHAD 0.40 MES 1.20 TAA 0.80 OVL 0.30 HUD 0.20 CHNK 12` в detailed section. Sidecar: 7 `render_pass_*` keys + `render_pass_dirty_chunk_rebuilt_count`. `RenderDoc-friendly markers` остаётся (closed partially — labels added in `3ee995f`, but full capture workflow R&D).
-- [ ] RenderDoc-friendly markers;
-- [x] benchmark automation;
-- [x] **Two-level chunk visibility cache** — hash on `(cameraState, chunkDirtyMask)` в `UpdateChunkVisibilityAndIndirectCommands`; rebuild только когда hash invalidates (camera moved past threshold или chunk dirtied). Снижает CPU pressure на full-rebuild каждый кадр + уменьшает GPU bus traffic на `shadowIndirectBuffer` upload. Cross-link: P1 P0, contact с 5.3 (benchmark automation нужно для verify hit/miss ratio). Closed `2026-06-12` — see `agent/decisions.md` §22.
-- [ ] **Compute brushes (GPU world mutation)** — `SetVoxelMaterial` остаётся CPU для single-voxel edit (debug editor path); compute shader для **mass operations**: paint/erase stamps, brush shapes, explosion sphere, terrain generation. Direct GPU write в `PackedChunkVoxelPayload` SSBO + mark dirty chunks для mesh rebuild. Cross-link: P1 P0; foundation для gameplay-loop scenarios (build/blast, terrain sculpt).
-
-### Visual Quality
-
-- [ ] **7.1-7.4** (HDR pipeline / compute auto-exposure / bloom / vertex welding) — см. §3 P1 «visual quality post-TAA track»;
-- [ ] HDR / tone mapping / exposure;
-- [ ] physically coherent material/lighting contract;
-- [ ] cascaded sun shadows;
-- [ ] local lights + local shadows;
-- [ ] `SSAO/GTAO`;
-- [ ] `SSR`;
-- [ ] volumetric fog / shafts;
-- [ ] `TAA` / temporal stabilization;
-- [ ] quality tiers and debug views.
-
-### 4.5 Performance budget (snapshot `2026-06-12`)
-
-Reference frame budget analysis с RTX 3060 Ti (8 GB):
-
-| Path | Время / кадр | FPS | Что внутри |
-|---|---|---|---|
-| Pre-shadow baseline (1500 FPS) | 0.67 ms | 1500 | ECS, physics, geometry, present |
-| Full look-dev (120 FPS) | 8.33 ms | 120 | + 4× CSM, PCF, AOCC, contact, LOCL DDA, BRDF, TAA |
-| 3000 FPS target | 0.33 ms | 3000 | physically impossible с текущим набором эффектов |
-| 4000 FPS target | 0.25 ms | 4000 | то же |
-| **Realistic post-optimization** | 2-3 ms | 300-500 | greedy meshing + per-cascade culling + 1.6 VRS + CSM static cache |
-
-**Откуда берётся 7.66 ms delta** (3 основных bottleneck'а по приоритету gain):
-
-1. **Geometry / Vertex Bound.** Greedy meshing (Блок 4.1) + per-cascade culling (closed 2026-04) уже отработали vertex stage. Дальнейшее: welded mesh (R&D per `decisions.md §14`), static/dynamic caster split для CSM.
-2. **Fragment / Instruction Bound.** Worst-case per-pixel budget сокращён 252→134 reads (-47%) в shadow-quality pass (`2026-06-09`, см. `memory.md §10.6`). Дальнейшее: **halve-res AO/contact upscale** (новый, до того как full-res bloom добавлять), VRS в cascade split edges (1.6, R&D).
-3. **CSM static / dynamic cache.** `shadowIndirectBuffer` rebuild + 4-cascade depth re-render каждый кадр. Split на static (rebuilt only при chunk dirty) + dynamic (rebuilt каждый кадр) даст значительный gain, но требует CPU-side scene-state hash (см. World/Render "two-level chunk visibility cache" выше).
-
-**Реалистичный ceiling на текущем look-dev path: 300-500 FPS** (2-3 ms/кадр) при сохранении текущего качества. 3000-4000 FPS физически невозможны: «пустой» кадр без освещения = 0.67 ms (1500 FPS) на этом GPU; полный освещённый = 8.33 ms. Delta в 7.66 ms — это shadow/BRDF/AOCC/LOCL work, которую нельзя «украсть» из воздуха. Каждый новый fragment-heavy effect (bloom, full-res AO, AOCC radius bump) **напрямую конкурирует** за этот budget; half-res upscale сделать раньше, чем full-res bloom.
+**Tier 2 exit criteria:** все mainline `.cpp` импортируют modules вместо `#include`-of-our-headers. Build measurably faster. Clang 22 + clang-cl 22 оба green.
 
 ---
 
-## 5. R&D Backlog
+## Tier 3 — C / intrinsics (Godbolt + benchmark)
 
-Эти темы не блокируют ближайший milestone:
+**Цель:** устранить оставшийся scalar hot path (если после Tier 0 ещё есть bottleneck по Tracy). Godbolt-ревью каждого intrinsics.
 
-- [ ] simple sandbox interactions / gameplay loop поверх текущего sandbox;
-- [ ] `SVO` и альтернативные voxel representations;
-- [ ] mesh shaders / GPU-driven rendering / visibility buffer;
-- [ ] hardware RT shadows / reflections / GI;
-- [ ] large-world streaming / origin shifting / LOD;
-- [ ] job system / heavy simulation;
-- [ ] destruction playground;
-- [ ] большой editor / plugin stack / multiplayer.
+- [ ] **A. `src/bench/FrustumCullBenchmark.cpp`** — Google Benchmark. Замер: 300 chunks × 5 visibility tests, scalar vs `std::simd<float, 8>` vs AVX2 intrinsics. Compile flags: `-O2 -mavx2 -fno-sanitize=address` (Clang 22 Issue #194008 workaround для ASan + AVX2 vectorizer stack smash). `--benchmark_min_time=2s` для стабильности.
+- [ ] **B. CMake support** — `cmake/ProjectVThirdParty.cmake` (existing) или новый `cmake/GoogleBenchmark.cmake` — `find_package(benchmark REQUIRED)`. Если нет — `FetchContent` или git submodule. **Verify:** `ctest -L BENCHMARK` (отдельный label, не в основном ctest 6/6).
+- [ ] **C. `src/c_kernels/frustum_cull.c`** — C26 kernel, extern "C" wrapper, `__attribute__((target("avx2")))`. Header `src/c_kernels/frustum_cull.h` для C++ caller. **Godbolt-ревью** (https://godbolt.org/, Clang 22, x86-64-clang 22.1.6, -O2 -mavx2): убедиться, что компилятор выдаёт `vbroadcastss` / `vdpps` / `vmovmskps` для dot product, не остаётся scalar.
+- [ ] **D. Если SIMD win > 5%** — оставляем. Если ≤5% — rollback, `[[likely]]` + branchless reorg дают то же.
+- [ ] **E. **Tier 3 commit (atomic)** — `perf(bench): FrustumCullBenchmark + C kernel + intrinsics`. Body: до/после measurements, Godbolt screenshots, decision rationale.
 
-### Post-TAA follow-ups (`2026-06-12` план)
-
-Текущий TAA baseline (commit `ee82c6f` + `02c297c`): `taaEnabled=true`, 8-tap Halton(2,3),
-YCoCg 3×3 neighbourhood clamp, depth-reconstructed motion vectors, R16G16B16A16 scene
-color. Улучшения ниже — direct next steps. **1.1 closed**; остальное в очереди.
-
-**In progress (Блок 1):**
-
-- [ ] **1.8 Quality tier abstraction** (`TaaQuality::Off` / `Light` / `Standard` / `High`, runtime cycle)
-- [ ] **1.6 Variable-rate shading** (VRS, 4×4 в cascade split edges)
-
-**Closed (Блок 1: TAA quality 1.x):**
-
-- [x] **1.1 YCoCg clamp в TAA resolve (`2026-06-12`).** `taa_resolve.frag` clamp'ит history в YCoCg space (lossless transform Y/Co/Cg) вместо RGB. 1-tap bright пиксель теперь двигает только Y — chroma highlight'ов не вымывается в grey. Sidecar metadata получил `taa_clamp_color_space=YCoCg` для capture-driven tuning.
-- [x] **1.2 Camera-cut detection (`2026-06-12`).** Chebyshev (L-infinity, max-abs) distance между `taaPrevViewProjectionMatrix` (frame N-1) и `frame->graphicsPushConstants.viewProjection` (frame N) в `FramePreparation::BuildFrameData` после `AdvanceTaaPixelJitter`. Если delta > `kTaaCameraCutThreshold = 0.10` (10% per-element), то `taaHistoryValid = false` + `++taaCameraCutCount`. Threshold 0.10 clean отделяет "ordinary motion" (<0.01/frame) от "intentional viewpoint change" (>0.20/frame). New fields: `RenderState::taaCameraCutCount` (uint32, accumulates), `taaCameraCutMaxDelta` (float, worst seen), `taaPrevViewProjectionMatrixInitialized` (bool, prevents false-positive on first frame / post-swapchain-recreate). Sidecar: `taa_camera_cut_count`, `taa_camera_cut_max_delta`. HUD: новая строка `TAACUT %u CLR %.2f`. **7-й history invalidation trigger** (per `decisions.md` §18): добавлен в список `Swapchain resize / world reload / Taa toggle / jitter scale / blend / neighbourhood radius / . invalidate / **camera-cut > 0.10**`. `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` reset'ает `taaPrevViewProjectionMatrixInitialized` + `taaCameraCutCount` + `taaCameraCutMaxDelta` рядом с `taaPrevViewProjectionMatrix = {}` — следующий кадр не false-positive. Build green, ctest 6/6, smoke 6/6 (`VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`): `taa_camera_cut_count=0` (static camera = no cuts) + `taa_camera_cut_max_delta=0.000000`. Visual verify FINAL view: scene renders clean, no artefacts.
-- [x] **1.3 Adaptive CAS sharpening post-TAA (`2026-06-12`).** Inline AMD FidelityFX CAS (Bartłomiej Wronski, GPUOpen 2020) в `taa_resolve.frag`, integrated в существующий 3×3/5×5/7×7 neighbourhood loop без extra texture lookups. `GetSceneColorRange` теперь возвращает дополнительно `rgbMin` / `rgbMax` (5-tap cross+center min/max) и `rgbCornerSum` (4-corner sum). CAS kernel: `highPass = color - cornerAvg`, `weight = clamp(highPass / (max - min), 0, 1)`, `output = clamp(color + highPass * (sharpenAmount * weight), min, max)`. Linear-light pass до tone-map (CAS в sRGB даёт wrong gamma). `sharpenAmount = max(0, (1.0 - taaBlend) * taaCasSharpnessMax)` derived in shader: high-blend (стабильная) → less sharpening, low-blend (noisy) → more. TAA-off path: `taaBlend=0` so `sharpenAmount = taaCasSharpnessMax` (full ceiling). New field: `RenderState::taaCasSharpnessMax` (float, [0,1], default 0.5). New push-constant fields: `taaBlend`, `taaCasSharpnessMax` (replaces `vec2 reservedPadding` slot в `ResolvePushConstants`, same 8 B total — byte layout unchanged, `static_assert` в `core/Types.hpp:212-218` обновлён). HUD: `TAA` line получил `CAS %.2f` token. Sidecar: `taa_cas_sharpness_max`. Build green, ctest 6/6, smoke 6/6: `taa_cas_sharpness_max=0.500000`, scene рендерится без ringing/haloing, FPS 93.2 на `VoxelLab` reference shot.
-- [x] **1.7 R11G11B10_UFloat scene color (`2026-06-12`).** `taaSceneColorTarget` + `taaHistoryColorTarget` теперь `VK_FORMAT_B10G11R11_UFLOAT_PACK32` (4 B/pixel) вместо `VK_FORMAT_R16G16B16A16_SFLOAT` (8 B/pixel). **2× bandwidth save** на resolve-pass read (history sample) + per-frame `vkCmdCopyImage` history update. Single source of truth — `inline constexpr VkFormat kTaaSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32` в `src/render/TaaRenderTargets.hpp` namespace `projectv::taa`, consumed by both `CreateOrRecreateTaaRenderTargets` (image allocation) и `VulkanGraphicsPipeline.cpp:1794` (pipeline `pColorAttachmentFormats[1]` declaration) — два consumer'а не могут дрифтовать. Shader code (`voxel.frag`, `model.frag`, `taa_resolve.frag`) **без изменений** — пишут/читают `vec4`, формат транспарентен; alpha channel of `outSceneColor` ignored on store (Vulkan spec: undefined для packed formats), `taa_resolve.frag` only consumes `.rgb` from history sample (alpha drop is no-op). Sidecar: новый key `taa_scene_color_format=B10G11R11_UFLOAT` для capture-driven verification. Build green, ctest 6/6 (1.48 s, после `--clean-first`), smoke 6/6 на `VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62` (`build/linux-clang-debug/lookdev-captures/20260612-1.7-r11g11b10/`): `taa_scene_color_format=B10G11R11_UFLOAT` populated, FPS 110.6 (выше 1.2+1.3 baseline 93.2 — likely bandwidth reduction showing perf benefit), scene рендерится **без banding** в dim areas. **Loss of precision** vs R16G16B16A16: 5/6/5 bits per channel (B/G/R) с shared exponent; visible at < 0.1% intensity dim areas. Fallback path: revert constant к `VK_FORMAT_R16G16B16A16_SFLOAT` (1-line change), rebuild, sidecar подтвердит.
-- [x] **1.5 Per-layer (CTSH/AOCC/LOCL) anti-flicker via mini-TAA history attachment (`2026-06-12`).** Voxel pass теперь пишет packed layer mask в **3-й MRT attachment** (`outLayerMask` Location 2, формат `R8G8B8A8_UNORM` — 4 B/pixel) — `R` = sun contact shadow visibility (CTSH), `G` = AOCC (cavity occlusion), `B` = local-point-light visibility (LOCL), `A` = 1.0. На каждом кадре per-frame `vkCmdCopyImage` копирует текущий layer scene color → layer history attachment; fragment shader сэмплит `sampler2D layerHistory` (binding 6) и применяет `mix(rawCurrent, history, blend=0.4)` к AOCC + LOCL в main lighting. CTSH **пока только записывается в history, не smoothed** в main lighting (deferred — нужно отделить cascade shadow от contact shadow в `ComputeSunShadowSample`, это отдельный refactor). **Blend-at-read, не blend-at-write** — uniform contribution per frame, нет exponential-decay artefacts от stale histories. Per-layer values packed в 1 `vec4` чтобы уложиться в component budget RTX 3060 = 8 vec4 outputs (TAA-off: `outColor 4 + outLayerMask 4 = 8`; TAA-on: `outSceneColor 4 + outLayerMask 4 = 8`). Single source of truth — `inline constexpr VkFormat kTaaLayerHistoryColorFormat = VK_FORMAT_R8G8B8A8_UNORM` в `src/render/TaaRenderTargets.hpp` (та же centralization pattern что 1.7, `kTaaLayerHistoryColorFormat` consumed by `CreateOrRecreateTaaRenderTargets` + `pColorAttachmentFormats[2]` declaration). 2 коммита landed: `237ab76` (feat, 17 files — 4 shader, 7 render, 2 C++ glue, 1 shader-struct, 1 HUD, 1 input-mirror, плюс 3 pre-existing bug fixes: 3rd-MRT binding fix, TAA reprojection texel-size patch, `voxel.frag.taa_on.spv` refresh) + `4d8b4c8` (validation fix, 5 files — 3 VUIDs caught by `PROJECTV_ENABLE_VALIDATION=ON`: VUID-VkImageCreateInfo-initialLayout-00993, VUID-VkGraphicsPipelineCreateInfo-renderPass-06055, VUID-VkDescriptorPool-size). Layer history invalidation привязан к 6 existing triggers (Taa toggle / jitter scale / blend / neighbourhood radius / `.` invalidate / Taa toggle) — new fields в `AppUpdate.cpp` branches. Build green, ctest 6/6 (1.50 s), smoke 6/6 (`VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`) под `build/linux-clang-debug/lookdev-captures/20260612-1.5-final/`: sidecar `taa_layer_history_valid=1`, `taa_layer_blend_factor=0.400000`, `taa_history_valid=1`, `taa_camera_cut_count=0`, `taa_scene_color_format=B10G11R11_UFLOAT`. Validation verify (`PROJECTV_ENABLE_VALIDATION=ON`): 0 VUIDs, 0 errors. Vision verify: vibrant VoxelLab, opaque anchor, checker floor, FPS 127.3 (vs 1.7 baseline 110.6, slight variance).
-- [x] **1.4 Per-pass TAA tuning HUD ladder (`2026-06-12`).** 4 live hotkeys: `;`/`'` jitter scale dec/inc (multiplier on Halton(2,3) output, [0,2] step 0.25), `-`/`=` blend factor dec/inc (per-frame history weight, [0,1] step 0.05), `,` neighbourhood radius cycle (1/3/5/7, drives `taa_resolve.frag` 3×3/5×5/7×7 loop), `.` history-invalidate single press. All four invalidate `taaHistoryValid` on change so the next frame takes the current scene as the only sample. `taaNeighbourhoodRadius` пишется в `taaHistoryParams.w` (раньше был `reserved` slot) — byte layout `VoxelSceneLighting` неизменён. Detailed HUD строка: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s`. Sidecar keys: `taa_jitter_scale`, `taa_neighbourhood_radius`. Build green, ctest 1/1 на `ProjectVTests`. **TODO 1.4 had предложенные keys `J`/`M`/`K`/`L`, но они уже заняты** (walk auto-jump / pick material / exposure inc) — выбор пал на правую руку `;`/`'`/`-`/`=`/`,`/`.`, 5 keys включая invalidate. `L` остался свободен на будущее.
-
-**Closed (Блок 5: tooling — renderdoc markers, 2026-06-12):**
-
-- [x] **5.1 RenderDoc markers (`2026-06-12`).** `profiling::ScopedGpuDebugLabel` RAII wrapper вокруг `vkCmdBeginDebugUtilsLabelEXT` / `vkCmdEndDebugUtilsLabelEXT` в `src/debug/ProfilingGpu.hpp` + `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR` macros gated на CMake option `PROJECTV_ENABLE_RENDERDOC_MARKERS` (Debug default ON, `linux-clang-debug` preset OFF). Hot sites wrapped: `DrawFrame` (implicit через per-function labels), `RecordShadowCommands` ("Shadow Pass"), `RecordVoxelMeshingCommands` ("Voxel Meshing"), `RecordGraphicsCommands` ("Graphics Pass"), TAA resolve section ("TAA Resolve" + color), `RecordDebugOverlayCommands` ("Debug Overlay"), `RecordDebugHudCommands` ("Debug HUD"). Drawn by RenderDoc + Tracy + validation layer. `vkCmdBeginDebugUtilsLabelEXT` is already loaded by `volkLoadDevice` (extension `VK_EXT_debug_utils` is enabled unconditionally in `VulkanBootstrap`). Build green, ctest 1/1.
-
-**Reference (источник идеи, не в плане исполнения этой сессии):**
-
-- [ ] **Mesh-side motion vectors** через `gl_PrimitiveID` / per-face velocity (избавляет от
-      depth-reconstruct, открывает путь к dilated motion для прозрачных граней).
-- [ ] **DLSS / FSR 2 / XeSS** (отдельная работа, R&D); потребует per-frame motion vectors в
-      R16G16 формате, depth/normal G-buffer и UI для quality tier (Perf / Balanced / Quality).
-- [ ] **Velocity buffer для diffuse irradiance / specular probes** (отложено до deferred
-      pass; current forward path не имеет G-buffer, поэтому diffuse TAA не применим).
-- [ ] **Halton(2,3) → longer cycle (16-tap)** если 8-tap покажет visible shimmer-pattern
-      на slow-look сценах; trade-off — больше aliasing frequency, но плавнее converge.
-
-**Closed (initial TAA baseline):**
-
-- [x] **TAA runtime toggle (T key) + HUD diagnostics + sidecar metadata (A1, `2026-06-11`).** `taaEnabled` default off.
-      Build green, ctest 1/1, smoke 6/6.
-- [x] **TAA A2 — `taaEnabled` flip `false→true`, SPIR-V search path fix, smoke verify (`2026-06-11`).**
-      Dual MRT in `voxel.frag` (Location 0 + Location 1), `taaResolveDescriptorSet` population fix (VUID 08600),
-      swapchain layout transition in TAA-on resolve block (VUID 09592), `CreateOrRecreateTaaRenderTargets` return-value
-      check, ShaderIO.cpp SPIR-V search path fix (`parent_path()` → `".."` / `"src"` — `parent_path()` не работал с
-      trailing separator от SDL_GetBasePath()). Smoke 6/6 с `PROJECTV_ENABLE_VALIDATION=ON`: 0 VUIDs, 0 errors,
-      `taa_enabled=1`, `taa_history_valid=1`.
-- [x] **TAA-on SPIR-V variant (`02c297c`, `2026-06-12`).** Preprocessor-guarded `voxel.frag`
-      variants компилируются в `voxel.frag.spv` (TAA-off, `outColor` Location 0) и
-      `voxel.frag.taa_on.spv` (TAA-on, `outSceneColor` Location 1). Валидационный слой больше
-      не видит неиспользуемый output — переменная физически отсутствует в SPIR-V.
-- [x] **3c87f21 mouse startup fix (`2026-06-12`).** При skipFirstMouseMotion очищаются
-      накопленные mouseDeltaX/Y, не дропается только первое событие. Убирает 180°
-      yank camera при первом кадре.
+**Tier 3 exit criteria:** benchmark показывает выигрыш ИЛИ документирует, что SIMD не нужен (auto-vectorize достаточно).
 
 ---
 
-### Блок 2 — Walk controller feel polish (3-5 дней)
+## Tier 4 — R&D (отложено, не блокирует mainline)
 
-- [ ] **2.1 Frame-step / slow-motion debug mode** (`P` pause, `.` step, `<`/`>` 0.25×/0.5× timeScale).
-- [ ] **2.2 Walk HUD additions** (`WALK GRND/SPRT/AIR`, `SUPP`, `EDGE` counters per second).
-- [ ] **2.3 Replay regression suite expansion** (auto-jump, sneak-through-glass, held-jump fixtures).
-- [ ] **2.4 Stamina / jump-burst** (R&D, defer).
-
-### Блок 3 — Visual quality (SSAO/SSR) (5-10 дней)
-
-- [ ] **3.1 SSAO baseline** (depth+normal G-buffer; deferred или half-deferred).
-- [ ] **3.2 SSR** (Hi-Z trace, fallback reflection probe, Glass/Fluid reflections).
-
-### Блок 4 — Greedy meshing (2-3 дня)
-
-- [x] **4.1 Greedy quad meshing в `voxel_mesh.comp`** (30-50% face count reduction; closed — see `agent/active-sessions.md session-2026-06-12-greedy-meshing`, `decisions.md §25`, `memory.md §10.22`).
-
-### Блок 5 — Frame-step / gizmo / RenderDoc markers (1-2 дня)
-
-- [ ] **5.1 RenderDoc markers** (`vkCmdBeginDebugUtilsLabelEXT`/End, gated on `PROJECTV_ENABLE_RENDERDOC_MARKERS`).
-- [ ] **5.2 Extra debug gizmos** (chunk AABB, cursor hit normal, cascade split planes).
-- [ ] **5.3 Benchmark automation** (`PROJECTV_BENCHMARK_FRAMES=N` env, output `benchmarks/<date>.csv`).
-
-### Блок 6 — Doc sync (1 день, дробно по 0.25 после каждого 1.x)
-
-- [x] **6.1 TODO.md** (`2026-06-12`). 1.4 (TAA tuning ladder) + 5.1 (RenderDoc markers) закрыты; "Closed (Блок 1)" + новый "Closed (Блок 5)" subsections.
-- [x] **6.2 agent/memory.md** (`2026-06-12`). §10.15 закрыт: TAA specialization contract (per-frame `taaParams` + `taaHistoryParams` byte layout, history invalidation на 6 триггерах), `vmaImportVulkanFunctionsFromVolk` requires `volk.h` первым.
-- [x] **6.3 agent/decisions.md** (`2026-06-12`). §18: TAA contract (default `taaEnabled=true`, history invalidation triggers, jitter scale/blend live tuning policy, `taaClampColorSpace=YCoCg`).
-- [x] **6.4 (rolled into `agent/decisions.md` §18 + `agent/memory.md` §10.16)** (`2026-06-12`). Dual-MRT + `voxel.frag.spv`/`voxel.frag.taa_on.spv` variants + `taaHistoryParams.w` reserved→neighbourhood radius (layout preserved, semantic only). `legacy/docs/libraries/` — это **не source of truth** (см. `AGENTS.md` §4), только offline-справочник для идей; не пишем туда project-specific contract. Для project-specific addendum: `agent/decisions.md` §18 "TAA contract" покрывает dual-MRT, `agent/memory.md` §10.16 покрывает byte layout и SPIR-V variant build wiring.
-
-### Блок-0 (вне плана) — пост-сессионная гигиена
-
-- [ ] Confirm `3c87f21` (mouse fix) ловит 180° startup rotation на user-side.
-- [ ] Confirm `02c297c` (TAA shader variants) реально убирает `[256][2]` performance warning.
-- [ ] Verify `build/linux-clang-debug/bin/voxel.frag.taa_on.spv` загружается без path bug.
-- [ ] Update `agent/status.md` §6: commit chain `b7e672f → b0fcd9b → 02c297c → 3c87f21` стабилен.
-
-### Блок 7 — Visual quality post-TAA (R&D, 3-5 дней, после TAA-Блока 1)
-
-Детальное описание и preconditions — в §3 P1 «visual quality post-TAA track». Этот блок — operational track для тех 4 пунктов.
-
-- [ ] **7.1 Compute HDR pipeline** (см. §3 P1 7.1) — R16G16B16A16 main scene color, tone-map pass, LDR conversion. Single source of truth — `kMainSceneColorFormat` constant в `TaaRenderTargets.hpp`. Prerequisite для 7.2/7.3.
-- [ ] **7.2 Compute-based adaptive auto-exposure** (см. §3 P1 7.2) — supersedes CPU `SceneKey` metering. Требует 7.1.
-- [ ] **7.3 Bloom** (см. §3 P1 7.3) — half-res upscale cheap variant для low-end; full-res forward (single compute-shader cascade) для high-end. Требует 7.1.
-- [ ] **7.4 Vertex welding + smooth shading** (см. §3 P1 7.4) — R&D, gated на `decisions.md §14`. 3 варианта: per-face uniform AO compute-baked, welded mesh + GPU-hash-table, compute-baked 3D-corner AO. Выбор варианта — отдельное решение перед implementation.
-
-### Блок 8 — Save/Load & streaming foundation (R&D, 5-10 дней)
-
-Без save/load любые world-edit'ы теряются на exit — `VoxelLab` / `ChunkGrid` / `MeshingStress` остаются hardcoded preset-based. zstd уже в зависимостях (submodule, `legacy/docs/libraries/zstd/`), integration path очевиден.
-
-- [ ] **8.1 Chunk serialization to disk.** Zstd-compressed snapshot, `*.pvchunk` format (header: magic + version + material table hash + dimension; body: run-length-encoded voxel data + chunk metadata). Loaded через async background thread (std::thread + condition variable, не ECS system — это I/O, не simulation tick).
-- [ ] **8.2 World reload через save/load.** Существующие `F6`/`F7` snapshot hotkeys (см. §7 за recent closures) переориентируются на serialized chunks вместо in-memory snapshot diff. Save/load API: `VoxelWorld::SaveToFile(path)`, `VoxelWorld::LoadFromFile(path)`, оба с progress callback.
-- [ ] **8.3 Streaming foundation** (deferred из «large-world streaming» в R&D-списке ниже). Distance-based chunk load/unload, async I/O, foundation для `LOD` system. Покрывает pre-emptive fetch по camera trajectory, hot/cold chunk classification.
-
-Cross-link: §5 R&D «large-world streaming / origin shifting / LOD» — Блок 8 это serialization layer для того, без которого streaming не имеет смысла.
-
-### Блок 9 — Voxel fluids (R&D, 5-10 дней)
-
-Наличие воды внутри стеклянного шара в `VoxelLab` просится быть динамической. Current `Fluid` material — static voxel, не отвечает на `SetVoxelMaterial` edit'ы.
-
-- [ ] **9.1 Cellular automata fluid simulation.** Tick-based water level per voxel cell. Equalize level с horizontal neighbors (один tick = 1 voxel height difference), fall down if air below (gravity-priority). Tick rate 4-10 Hz, не per-frame — даёт визуально «медленную» жидкость, как Minecraft. ECS system в background thread, не main tick (отдельный sim thread pool).
-- [ ] **9.2 GPU-вариант через compute.** Parallel cellular update, fast propagation для больших объёмов. Shared с Блок 8: chunk-dirty invalidation, mark chunk для mesh rebuild на CPU после GPU sim. Threshold для GPU sim: world size > N×N×N chunks (TBD по memory bandwidth).
-- [ ] **9.3 Fluid-vs-edit response.** Разрушение стенки → вода растекается через новое отверстие, integration с current `SetVoxelMaterial` (после `SyncPhysicsWorld`). Edit nearest fluid cell triggers sim tick в affected chunks. Cross-link: `decisions.md §5` interaction contract.
+- [ ] `std::execution` (P2300, Senders/Receivers) — нужна Job System, отдельный slice. **Не делаем**, пока нет demand на многопоточность.
+- [ ] Static reflection (P2996) — Clang fork only (Dan Katz). Mainline Clang не имеет. Подождать Clang 23+ или stdlib C++26.
+- [ ] Contracts (P2900) — Clang 22 experimental, не zero-cost в debug. Подождать Clang 23+ или production-ready.
+- [ ] `std::hive` (P0447) — MSVC preview, libstdc++ stable, libc++ in progress. Подождать libc++ 19+.
+- [ ] Mesh shaders (VK_EXT_mesh_shader) — mainline MVP не требует. R&D для future, не в Tier 0..3.
+- [ ] SVO GPU (Sparse Voxel Octree on GPU) — R&D, огромный scope, не mainline.
+- [ ] C26 / C-kernels (отдельно от Tier 3 C-frustum-cull) — нет C файлов в mainline, отложено до demand (audio DSP kernel, например).
+- [ ] Inline asm (`__asm__`) — отложено до конкретного use-case (prefetcht0 в SPSC queue, pause в spinlock).
 
 ---
 
-## 6. Риски
+## Tier 5 — прочее (по ходу Tier 0..3)
 
-- Документация и `agent/` быстро дрейфуют, если после задачи обновить только код.
-- В `build/windows-clang-debug` нельзя гонять несколько `build/test/smoke` параллельно; если smoke нужен, запускать его
-  только последовательно после build/tests.
-- `walk` легко регрессирует от широких эвристик; для него приоритетны live repro, fixed-step tests, HUD и Tracy.
-- `Problems/` export из JetBrains быстро устаревает; перед следующим warning-cleanup pass его нужно заново выгружать, а
-  не считать текущий XML источником истины.
-- `README.md`, vendored submodules и часть `docs/` могут содержать user-owned изменения; incidental edits нежелательны.
-- **Performance ceiling (см. §4.5):** current shadow + BRDF + AOCC + LOCL DDA + TAA path = 7.66 ms GPU на 120 FPS baseline
-  (RTX 3060 Ti). Любой новый fragment-heavy effect (bloom, full-res AO, AOCC radius bump, новые 1.5+ layer blend'ы)
-  **напрямую конкурирует** с TAA resolve + shadow PCF + BRDF. Half-res upscale (Блок 3, SSAO/contact) сделать раньше,
-  чем full-res bloom (Блок 7.3). Без 5.3 (benchmark automation) нельзя объективно verify hit/miss ratio оптимизаций.
-- **CSM full re-render каждый кадр:** `shadowIndirectBuffer` rebuild + 4 cascade depth pass = большая часть
-  fragment path budget. Static/dynamic cache дал бы значительный gain, но требует CPU-side scene-state hash
-  (см. World/Render «two-level chunk visibility cache» в §4) и пары с chunk-dirty invalidation tracking.
-- **TDR (timeout detection and recovery) на тяжёлых шейдерах** — fragment path уже сокращён 252→134 (-47%) в
-  2026-06-09 audit (см. `agent/memory.md §10.6`); добавлять fragment work только после benchmark-verify на
-  reference shot (`VoxelLab cam -25 19 25 look 0.62 -0.48 -0.62`). `tools/linux/Invoke-ProjectVRuntimeSmoke.sh`
-  ловит типичные случаи, но long-tail shader compile + Nкадров stability проверяется вручную.
-- **Smooth shading re-introduction path fragility** (Блок 7.4) — все три варианта (per-face uniform AO, welded
-  mesh, compute-baked 3D-corner AO) дают **разные** face-boundary behaviour; нужен явный acceptance test на
-  2×2×2 corner geometry (per `decisions.md §14`). Не «commit it and look at captures» — конкретный test fixture
-  с expected AO value per corner.
+- [ ] **`[[likely]] / [[unlikely]]`** в `IsSceneChunkVisible` early-out (`chunkExtentAndNonAir[3] == 0u` return false — 50% chunks = air).
+- [ ] **`[[assume]]`** в hot loops: `IsSceneChunkVisible(assume(parameters.cameraUpAndNearPlane[3] >= 0.0f))` (assertion безопасна, не проверяется в Release).
+- [ ] **3 копии DDA trace в `voxel.frag`** → шаблонизировать через `#define IS_OCCLUDER` или function pointer parameter (медленнее, не делать). Или macro `#define DDA_BODY(IS_OCCLUDER_FN)` 3× substitute.
+- [ ] **`// EVIL:` комментарии** на magic numbers per `§04_evil-hacks-philosophy.md §3`. VoxelLab имеет `0.05, 0.14, 0.03, 0.02, 0.001, 0.0001, 0.75, 0.35, 0.65, 0.55, 0.08, 0.28, 0.45, 1.10, 1.50, 8.0, 12.0, 0.10, 0.4, 0.5` — все без `EVIL:`.
+- [ ] **Google Benchmarks** для всех hot path: `ShadowProjectionBenchmark`, `VoxelStorageBenchmark`, `MatMulBenchmark`, `BuildGraphicsPushConstantsBenchmark`. Каждый Tier 0/1/2/3 закрывает соответствующий benchmark slice.
+- [ ] **Tests** для `BuildGraphicsPushConstants`, `ComputeVisibilityCacheHash`, `BuildSunShadowCascadeSplits`, `CreateOrRecreateTaaRenderTargets` (per `§04_testing-philosophy.md` — критичные инварианты).
+- [ ] **`std::array` → `std::span`** для non-owning buffer views (после Tier 1 inplace_vector, остальные `std::array<T,N>` где `T` — opaque handle).
+- [ ] **`vkWaitForFences` с timeout=10ms** вместо `UINT64_MAX` (per `§01_optimization-philosophy.md` «low latency > throughput»).
+- [ ] **Проверить и починить** `InputAction` bit-mask overflow в `InputReplayFrame` (uint32_t vs 60+ actions) — `src/app/InputActions.cpp` — bit-маска или raw indices?
+- [ ] **`AppState` PIMPL refactor**: `AppState = std::unique_ptr<AppStateImpl>` (forward-decl в `core/Types.hpp`), `AppStateImpl` владеет `RenderContext` + `SimulationContext` + `BootstrapContext`. `~AppStateImpl()` в правильном порядке.
+- [ ] **`UpdateApp` mirror helpers** — `MirrorDebugStatsFromRender/Audio/Physics/Camera/Input`. Сейчас ~200 строк mirror блоков вручную.
+- [ ] **Read-only safety net pattern** — `git diff > /tmp/before_<subtask>_<timestamp>.patch` per atomic-подзадача per `AGENTS.md §7.2.4`. Уже в `§11.5 memory.md`.
 
 ---
 
-## 7. Недавние Закрытия
+## Pre-flight checklist per atomic-подзадача (per `AGENTS.md §3.5` + `§7.2.4`)
 
-Держать здесь только крупные факты, которые влияют на ближайший roadmap:
+1. **Pre:** `git diff > /tmp/before_hardcore_r0_<subtask>_<timestamp>.patch` (safety-net для destructive rollback).
+2. **Pre:** `git status -uall` clean baseline.
+3. **Work:** только файлы в `files-touched-intent` active-session записи. Никаких `external/`, `legacy/`, `docs/`, build-артефактов.
+4. **Verify:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` clean. `ctest 6/6` baseline.
+5. **Commit:** предложен пользователю per `§7.2.5`, **не auto-execute**. Commit message формат: `<type>(<scope>): <summary>` + body + Refs.
+6. **Update active-sessions.md:** status `closed` + commit-hash только после явного `git commit` от оператора.
 
-- [x] legacy docs больше не split между параллельными `latest` / `old` roots: теперь это один унифицированный `legacy/docs` tree с явной навигацией, `archive/roadmaps` для исторических планов, обновлёнными ссылками из `AGENTS.md` / `agent/session-checklist.md`, восстановленным полным library corpus и возвращёнными `guides/`, `tutorials/`, `examples/`, `architecture/future/` + missing `theory` notes.
-- [x] `TODO.md` / `AGENTS.md` / `agent/` снова синхронизированы по ролям и очищены от длинного исторического дубляжа;
-- [x] snapshots (`F6/F7`);
-- [x] lightweight debug editor (`F8/F9/F10`);
-- [x] repeatable build/test/smoke contour;
-- [x] walk live HUD + Tracy diagnostics;
-- [x] dual air-control modes (`F11`);
-- [x] placement/body overlap guard;
-- [x] delayed auto-jump toggle (`F12`);
-- [x] inspect tooling now exposes target/placement chunk facts, local voxel coords, hit normal, mutation anchor state, preview box, and world-edit version directly in the HUD/overlay path.
-- [x] lightweight world-mutation helpers now include `X` anchor-based cuboid paint/erase and `M` material pick, covered by fixed tests instead of ad-hoc runtime checks.
-- [x] one-block auto-jump is now runtime-toggleable (`J`) and defaults off; when enabled, the `F12` micro-delay arms only once the immediate one-block rise is actually reachable instead of pre-arming from a distant probe.
-- [x] debug HUD now has basic vs detailed modes (`G`): normal HUD hides low-level walk/selection/replay counters and the green placement preview, while detailed HUD keeps the full diagnosis surface.
-- [x] held-jump repeat restored.
-- [x] moving narrow-edge traversal with held `W` no longer drops `walk` into synthetic `Air`; jump can still commit from partial edge support (`5.tracy` case).
-- [x] exact first jump press on the thinnest edge support no longer depends on pre-tick `supportState`: the replay fixture now proves the jump still launches from remaining support hits, while ordinary walk-off without jump is no longer kept alive by the same rule.
-- [x] jump landing back onto recent takeoff-plane no longer stays `Air` on the support plane and then drops late (`6.tracy` case).
-- [x] author-refactor fallout no longer breaks `PhysicsWorld.cpp` build; Jolt include order restored and `build/test/smoke` are green again.
-- [x] crouch-jump into a glass column no longer turns side-wall voxels into fake sneak support; `Shift` wall-slide regression is covered by fixed-step tests and `build/test/smoke` stay green.
-- [x] active ballistic jump can no longer reuse cached ground-takeoff grace for a second airborne jump; the `7.tracy` retry-jump path is now covered by a state-driven fixed-step regression instead of a guessed frame.
-- [x] successful `SyncPhysicsWorld` after voxel edits now invalidates cached walk support/anchors before the next tick, so removed support cannot survive only as stale walk ownership.
-- [x] Runtime input replay now exists for walk bugs: `R` records snapshot + per-frame input into the latest replay file, `Y` replays it in-game, and tests can load the same capture instead of rebuilding long manual key scripts.
-- [x] replay-driven crouch wall-cling no longer authorizes grounded support at the caller's midair `feetY`; sneak support is now anchored to the sampled top-plane and the strengthened two-block regression stays green.
-- [x] replay-driven stacked placed-block wall climb no longer reacquires foreign ground-takeoff planes or midair crouch support from too far below the support plane; the same live replay now stays at `feetY=1.050` instead of climbing to `2.050/3.050`.
-- [x] replay-driven boosted creative flight through `TransparencyStress` no longer wedges on glass columns or exact glass-corner hits at high speed; `TickCreativeCharacter` now substeps long boosted travel more aggressively and the exact captures live in `tests/fixtures/creative_transparency_boost_stuck.*` and `creative_transparency_boost_corner_stuck.*`.
-- [x] opaque voxel faces under glass no longer disappear: the meshing shader now emits opaque faces against `Glass` neighbors while still culling the internal glass face on the same plane.
-- [x] Problems-driven warning cleanup removed the remaining current `clang-tidy` findings around `InputActions`, `Types`, `EcsWorld`, and `PhysicsWorld`; `build -> tests -> smoke` is green again, and the next warning pass now has an explicit reminder to regenerate `Problems/` instead of trusting stale XML line numbers.
-- [x] refreshed JetBrains `Problems/` export no longer points at the old stale-pointer helpers in `PhysicsWorld.cpp`: internal walk helpers now use reference contracts where `nullptr` was never meaningful, dead descending-ledge/jump-lock DFA-only paths were removed, and `build -> tests -> smoke` remains green after the refactor.
-- [x] follow-up `Problems/` + `problems/tools/` cleanup removed the remaining live switch/default warning in `PhysicsWorld.cpp`, collapsed several test-only inspection nits in `VoxelWorldTests.cpp` (bitmask helpers, constexpr/deduced arrays, structured bindings, integer scan loop), and kept `build -> tests -> smoke` green; the leftover `CppDFAUnreachableFunctionCall` rows in the checked-in tools export still need a fresh re-export because the current `main()` already calls those tests directly.
-- [x] follow-up DFA cleanup in `VoxelInteraction.cpp` / `DebugOverlays.cpp` removed more stale nullable-out-param and redundant-branch warnings by switching file-local helpers to reference contracts and by tightening anchored-paint preconditions without changing runtime behavior.
-- [x] latest checked-in `problems/` + `problems/tests/` follow-up removed the remaining visible current-source
-  inspection nits in `VoxelMaterials.cpp`, `Renderer.cpp`, `AppUpdate.cpp`, `SceneResources.cpp`,
-  `VulkanGraphicsPipeline.cpp`, and `VoxelWorldTests.cpp` (reference-only helper contracts, stale `+0.5f` integer cast,
-  redundant BMP parsing expressions, structured bindings, constexpr data, and safe `size_t` sizing). Sequential
-  `build -> tests -> smoke` is green again in `windows-clang-debug`, plus `build + smoke` is green in
-  `windows-clang-debug-tracy-profiler`; any leftover `CppDFAUnreachableFunctionCall` / `CppDFAConstantParameter` rows in
-  the checked-in XML should now be treated as stale export artifacts until the next fresh JetBrains export.
-- [x] fresh `problems/tests/` follow-up after a new JetBrains export removed the remaining real helper/DFA nits in
-  `tests/VoxelWorldTests.cpp` (`repeat`-specific key helper, one-off bitmask helper, LE32 helper shape) and now
-  suppresses `CppDFAUnreachableFunctionCall` at file scope for that custom single-TU runner. `ProjectVTests` still
-  builds and passes in `build/windows-clang-debug`; the remaining usefulness of `problems/tests/` is now in real
-  helper/dataflow issues, not in JetBrains trying to rediscover reachability through this bespoke test harness.
-- [x] fresh root-level `problems/` export follow-up removed the remaining current-source inspection tails in
-  `SceneResources.cpp/.hpp`, `ShadowProjection.cpp/.hpp`, `ScreenshotCapture.cpp`, `DebugHud.cpp`, `Types.hpp`,
-  `FramePreparation.cpp`, `VoxelMaterials.cpp/.hpp`, `VoxelWorldTests.cpp`, and the touched shadow docs. The cleanup
-  replaced fake-nullable helper contracts with references where `nullptr` was not meaningful, removed stale
-  iterator/cast boilerplate around CSM matrix copies, restored the local SDL Vulkan include contract to
-  `VulkanBootstrap.cpp` after pruning an unused transitive header include, and kept sequential
-  `cmake --build build/windows-clang-debug --config Debug --parallel 8` +
-  `ctest --test-dir build/windows-clang-debug --output-on-failure -C Debug`
-  green. Runtime smoke was not rerun because this pass did not touch the targeted Vulkan/bootstrap/swapchain lifecycle
-  contract.
-- [x] detailed HUD help no longer flickers when stat lines get longer at runtime: the debug-HUD vertex budget was too
-  small for the pixel-quad text path with shadows, so the buffer cap is now larger and covered by a rich detailed-HUD
-  regression.
-- [x] roadmap wording was tightened so shipped baseline features no longer masquerade as untouched backlog: current
-  lightweight world editing, inspect/chunk/mutation overlays, and the existing HUD + Tracy stats path are now treated as
-  the baseline, while the open backlog explicitly points only at richer follow-up tooling.
-- [x] gameplay-oriented `simple sandbox interactions` are no longer treated as the next mainline slice: they moved to
-  R&D/backlog, while the next practical work is now lighting/look-dev for the current demo-scene direction.
-- [x] first lighting/look-dev kickoff landed in runtime: scene presets now carry explicit exposure/tone-map baseline
-  alongside sky/horizon/ground/sun/fog, the renderer clear color follows the same scene-lighting contract, and the live
-  sandbox now has a minimal lighting debug ladder (`B/N/H/K/V`) with HUD visibility.
-- [x] first practical sun-shadow prototype landed for the current renderer: a single scene-wide orthographic shadow map
-  now renders the opaque voxel scene before the main pass, the main voxel shader samples it for direct sun only, and
-  `build -> tests -> smoke` is green on that path.
-- [x] first sun-shadow quality/debug follow-up landed: the baseline shadow map is now `2048x2048`, the main voxel shader
-  uses weighted `5x5` PCF instead of a single hard compare sample, and the existing lighting debug ladder now
-  includes a dedicated `Shadow` view plus detailed HUD telemetry for current shadow tuning.
-- [x] entering `TransparencyStress` after another preset no longer device-lost: the shadow pass now has its own
-  descriptor contract and follows the renderer's sparse per-chunk face layout via opaque indirect commands instead of
-  assuming a dense opaque-face prefix. `build -> tests -> smoke` plus manual
-  `VoxelLab -> FlatBenchmark -> TransparencyStress` repro are green in both debug build trees.
-- [x] the shadow path no longer inherits camera-frustum culling: compute meshing now maintains a dedicated all-occluder
-  `shadowIndirectBuffer` for opaque faces, the shadow pass consumes that buffer instead of the main opaque visibility
-  commands, and `build -> tests -> smoke` stayed green after the change. The remaining limitation is now more honest:
-  transparent-heavy `VoxelLab` still reads mostly shadowless because the current sun-shadow baseline is opaque-only.
-- [x] shadow tuning is now capture-friendly inside the runtime loop itself: `C` saves a `.bmp` of the current frame plus
-  a `.txt` sidecar with preset/exposure/shadow state, and `build -> tests -> smoke` is green in both debug build trees
-  after wiring that path.
-- [x] sun-shadow projection no longer wastes coverage on empty scene padding: the CPU fit now prefers active chunk
-  bounds over full `VoxelWorld` bounds, so the same `2048x2048` map lands on denser useful texels in opaque-heavy
-  presets without adding cascades or camera-fit R&D.
-- [x] the sun-shadow contract no longer disagrees about the sign of the authored sun vector: `sunDirectionAndWrap.xyz`
-  remains the shading-side vector toward the sun, while the CPU shadow projection now flips it to the actual
-  light-travel direction before building the shadow camera, so direct light and shadow placement no longer fight each
-  other. `build -> tests -> smoke` is green in both debug build trees after the fix.
-- [x] shadow receiver bias is no longer a flat brute-force offset for every angle: the voxel shader now scales the
-  authored depth/normal bias by `N.L`, which reduces grazing-angle acne without demanding the same constant offset on
-  directly lit flat tops. `build -> tests -> smoke` is green in both debug build trees after the change.
-- [x] close-range shadow acne/stair-step artifacts got a bounded shader-side fix: receiver projection now includes a
-  small sun-direction world-space bias, shadow sampling skips nearly unlit/backfacing faces, and PCF is a weighted `5x5`
-  kernel rather than the old `3x3` box kernel.
-- [x] the remaining one-sided micro-triangle acne was identified as caster-side self-shadowing, not a filtering problem:
-  the shadow pipeline now uses Vulkan polygon depth bias for shadow-map writes, with a close `VoxelLab` repro capture
-  under `build/windows-clang-debug/lookdev-captures/20260424-shadow-acne-caster-bias-v1/`.
-- [x] first physically-coherent direct-light follow-up landed on top of the preset-based lighting contract:
-  `VoxelMaterialVisual` no longer packs ad-hoc ambient/diffuse/spec/shininess knobs, the runtime material table now
-  carries `AO/roughness/metallic/reflectance` plus transmission tint and fog/emissive/ambient/direct-response hooks, and
-  `voxel.frag` shades direct sun with a `GGX + Fresnel-Schlick + Smith` baseline while keeping the current ambient
-  gradient, fog and sun-shadow loop intact.
-- [x] opaque-heavy capture baselines were refreshed after the BRDF/material shift using a scripted runtime path rather
-  than manual keyboard timing: startup camera override + `FINAL/SHDW` capture automation now cover `ChunkGrid` and the
-  fixed `MeshingStress` reference shot, and the screenshot readback path no longer races present against the
-  post-render transfer copy.
-- [x] ambient/environment fill contract is now explicit in the existing lighting buffer: `postProcess.y` carries the
-  per-preset environment diffuse intensity, the shader separates sky/horizon/ground fill from direct sun, and refreshed
-  `FINAL/AMB/SHDW` captures prove the fill layer without hiding sun-shadow contrast.
-- [x] local ambient visibility now complements that fill contract: compute meshing bakes a cheap per-face sky-visibility
-  term into the packed face payload, `voxel.frag` multiplies ambient fill by it, and closed voxel cavities no longer
-  read as if their upward-facing surfaces still saw unobstructed sky.
-- [x] minimal exposure/grading contract is now explicit too: `VoxelSceneLighting.colorGrading` carries white point,
-  contrast, saturation and lift; shader output and clear color both apply the same post-tone-map grading, and refreshed
-  `FINAL/AMB/SHDW` captures live under `build/windows-clang-debug/lookdev-captures/20260424-grading-v1/`.
-- [x] first auto-exposure policy is now explicit without adding an HDR histogram pass:
-  `VoxelSceneLighting.exposureControl`
-  carries metering mode / target key / min exposure / max exposure, `SceneKey` exposure is computed on CPU from the
-  authored scene brightness, and refreshed captures live under
-  `build/windows-clang-debug/lookdev-captures/20260424-auto-exposure-v1/`.
-- [x] `VoxelLab` gained opaque anchor geometry for look-dev: a small solid stepped marker outside the transparent sphere
-  gives the demo scene a readable opaque sun-shadow caster/receiver without changing the transparent-shadow policy.
-- [x] first real CSM renderer step landed: CPU split planning now feeds a 4-layer Vulkan shadow depth array, per-cascade
-  light matrices, shader-side cascade selection, `CSM` debug visualization, capture metadata, texel-grid snapping, and
-  regression tests.
-- [x] first shader-side CSM split-transition follow-up landed: split edges no longer hard-switch in `voxel.frag`, the
-  blend band is runtime-tunable via the existing shadow ladder, HUD/sidecar metadata expose `shadow_cascade_blend`, and
-  refreshed `MeshingStress` `FINAL/SHDW/CSM` captures live under
-  `build/windows-clang-debug/lookdev-captures/20260424-csm-blend-v1/`.
-- [x] first cascade-specific CSM caster coverage follow-up landed: per-cascade depth fit now uses the receiver slice
-  extruded upstream along the sun direction instead of blindly using full active-scene bounds for every cascade, and
-  sidecars/HUD now expose `shadow_cascade_caster_light_ranges`. Refreshed `MeshingStress` `FINAL/SHDW/CSM` captures live
-  under `build/windows-clang-debug/lookdev-captures/20260424-csm-caster-coverage-v1/`.
-- [x] CSM receiver planning now follows the same visible-scene distance contract as chunk visibility: cascade splits are
-  built from camera near plus `min(farPlane, 64)` instead of the raw camera far plane, so current mainline no longer
-  spends shadow split budget on receivers that chunk culling never draws.
-- [x] transparent shadow policy is now intentionally simple: the current sun-shadow pass renders only opaque casters and
-  reports `GLASS_IGNORED_FLUID_CASTS` in HUD/capture metadata. Glass shadows wait for a later dedicated
-  tinted/transmission path, while `Fluid` casts through the current opaque shadow-map path.
-  Refreshed `VoxelLab` `FINAL/SHDW` captures live under
-  `build/windows-clang-debug/lookdev-captures/20260424-fluid-shadow-policy-v1/`.
+---
+
+## Done (Phase 0, doc-only, `2026-06-13`)
+
+- [x] Полный технический отчёт сохранён в `agent/memory.md §11` (13 KB).
+- [x] Новое правило `std::expected` cold/bool hot в `agent/decisions.md §29`.
+- [x] Snapshot в `agent/status.md §20` (Phase 0 done, Phase 1+ pending operator).
+- [x] Active session `session-2026-06-13-hardcore-perf-r0` registered в `agent/active-sessions.md`.
+- [x] Этот TODO переписан под Tier 0..5.
+- [ ] **Phase 0 commit** — предложен пользователю (не auto-execute).
+- [ ] **Phase 1+ (Tier 0 код)** — после явного одобрения operator.
+
+---
+
+## Cross-refs
+
+- `agent/memory.md §11` — comprehensive technical-debt + plan + web research bookmarks.
+- `agent/decisions.md §29` — Tier plan + error-handling rule + refactor scope.
+- `agent/status.md §20` — Phase 0 snapshot + operator answers.
+- `agent/active-sessions.md` session-2026-06-13-hardcore-perf-r0 — active session.
+- `legacy/docs/philosophy/01_foundation/{04,05,06,07,08,09}_*.md` — anti-patterns, compiler, compile-time, memory, errors, data-layout.
+- `legacy/docs/philosophy/02_paradigms/{01,02,06}_*.md` — zero-cost, DoD, strings.
+- `legacy/docs/philosophy/03_domain/{01,04}_*.md` — optimization, testing.
+- `/tmp/before_todo_rewrite_20260613T1330.md` — backup старого TODO (846 строк history, все `[x]`).
