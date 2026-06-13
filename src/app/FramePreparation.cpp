@@ -1,3 +1,12 @@
+// **Tier 2.D (`2026-06-13`).** Direct importer of
+// `projectv.math`. The header chain (`SceneResources.hpp`
+// → `core/Types.hpp` → `core/Math.hpp` shim) would
+// re-issue the import on our behalf, but doing it
+// ourselves makes the dep visible at the top of the
+// TU and lets `git grep "import projectv.math" .` list
+// every direct consumer.
+import projectv.math;
+
 #include "app/FramePreparation.hpp"
 
 #include "app/Camera.hpp"

@@ -1,6 +1,23 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+// **Tier 2.D (`2026-06-13`).** The `projectv.math` module
+// is imported centrally at the top of this header. The
+// `import` statement MUST precede any `#include` directive
+// in the same TU — C++20 modules spec — so it sits
+// above the `volk.h` include below. Every TU that
+// includes `core/Types.hpp` (effectively every mainline
+// TU — see the `MeshGpuResources` / `VoxelMaterials` /
+// `ShadowTypes` / `TaaRenderTargets` includes below)
+// re-receives the import automatically. The old
+// `core/Math.hpp` shim is still in place for the few TUs
+// that include `core/Math.hpp` *directly* without going
+// through `core/Types.hpp` (currently: `Renderer.cpp`,
+// `Camera.cpp`, `FramePreparation.cpp`, `ShadowProjection.cpp`)
+// — those TUs do their own `import projectv.math;` and the
+// shim is a no-op for them.
+import projectv.math;
+
 // `volk.h` must come before any header that pulls in `vk_mem_alloc.h`
 // (transitively: `asset/MeshGpuResources.hpp`, `render/ShadowTypes.hpp`,
 // `render/TaaRenderTargets.hpp`, `voxel/VoxelMaterials.hpp` all carry

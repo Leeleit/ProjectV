@@ -1,7 +1,16 @@
+// **Tier 2.D (`2026-06-13`).** Direct importer of
+// `projectv.math` — same pattern as ShadowProjection.cpp.
+// The `import` precedes the `#include` directives in the
+// TU (C++20 modules ordering). The shim header
+// `core/Math.hpp` is no longer needed for this TU because
+// every consumer of Math types in this file goes through
+// the module interface; future inline-types in Math.hpp
+// would be an ODR violation against the module.
+import projectv.math;
+
 #include "app/Camera.hpp"
 
 #include "app/InputActions.hpp"
-#include "core/Math.hpp"
 
 #include <algorithm>
 #include <cmath>

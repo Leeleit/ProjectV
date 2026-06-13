@@ -1,3 +1,12 @@
+// **Tier 2.D (`2026-06-13`).** Direct importer of
+// `projectv.math`. `Renderer.cpp` is the heaviest math
+// user in the project (`BuildGraphicsPushConstants` /
+// `BuildChunkIndirectCommand` / shadow culling), so
+// being a direct importer (vs going through the
+// `core/Math.hpp` shim) gives the dep graph a precise
+// signal about which TUs depend on the math module.
+import projectv.math;
+
 #include "render/Renderer.hpp"
 
 #include "core/RuntimeDiagnostics.hpp"
