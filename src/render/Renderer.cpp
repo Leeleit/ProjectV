@@ -27,11 +27,12 @@ namespace {
 // one missed call would silently leave the previous frame's
 // stale number on the HUD.
 class ScopedPassTimer {
-public:
+  public:
 	explicit ScopedPassTimer(float &outMs)
 		: outMs_(outMs), start_(SDL_GetPerformanceCounter()) {}
 
-	~ScopedPassTimer() {
+	~ScopedPassTimer()
+	{
 		const Uint64 end = SDL_GetPerformanceCounter();
 		const Uint64 freq = SDL_GetPerformanceFrequency();
 		const double seconds = static_cast<double>(end - start_) / static_cast<double>(freq);
@@ -41,7 +42,7 @@ public:
 	ScopedPassTimer(const ScopedPassTimer &) = delete;
 	ScopedPassTimer &operator=(const ScopedPassTimer &) = delete;
 
-private:
+  private:
 	float &outMs_;
 	Uint64 start_;
 };
@@ -83,10 +84,10 @@ std::array<float, 16> InvertColumnMajorMat4(const std::array<float, 16> &matrix)
 	std::array<float, 16> inverse{};
 	std::array<float, 16> augmented = matrix;
 	for (int column = 0; column < 4; ++column) {
-		inverse[column * 4 + 0] = (column == 0) ? 1.0f : 0.0f;
-		inverse[column * 4 + 1] = (column == 1) ? 1.0f : 0.0f;
-		inverse[column * 4 + 2] = (column == 2) ? 1.0f : 0.0f;
-		inverse[column * 4 + 3] = (column == 3) ? 1.0f : 0.0f;
+		inverse[column * 4 + 0] = column == 0 ? 1.0f : 0.0f;
+		inverse[column * 4 + 1] = column == 1 ? 1.0f : 0.0f;
+		inverse[column * 4 + 2] = column == 2 ? 1.0f : 0.0f;
+		inverse[column * 4 + 3] = column == 3 ? 1.0f : 0.0f;
 	}
 	for (int pivot = 0; pivot < 4; ++pivot) {
 		int bestRow = pivot;
@@ -99,9 +100,9 @@ std::array<float, 16> InvertColumnMajorMat4(const std::array<float, 16> &matrix)
 			}
 		}
 		if (bestRow != pivot) {
-			for (int column = 0; column < 4; ++column) {
-				std::swap(augmented[pivot * 4 + column], augmented[bestRow * 4 + column]);
-				std::swap(inverse[pivot * 4 + column], inverse[bestRow * 4 + column]);
+			for (int swapCol = 0; swapCol < 4; ++swapCol) {
+				std::swap(augmented[pivot * 4 + swapCol], augmented[bestRow * 4 + swapCol]);
+				std::swap(inverse[pivot * 4 + swapCol], inverse[bestRow * 4 + swapCol]);
 			}
 		}
 		const float pivotValue = augmented[pivot * 4 + pivot];
@@ -116,9 +117,9 @@ std::array<float, 16> InvertColumnMajorMat4(const std::array<float, 16> &matrix)
 			return inverse;
 		}
 		const float invPivot = 1.0f / pivotValue;
-		for (int column = 0; column < 4; ++column) {
-			augmented[pivot * 4 + column] *= invPivot;
-			inverse[pivot * 4 + column] *= invPivot;
+		for (int scaleCol = 0; scaleCol < 4; ++scaleCol) {
+			augmented[pivot * 4 + scaleCol] *= invPivot;
+			inverse[pivot * 4 + scaleCol] *= invPivot;
 		}
 		for (int row = 0; row < 4; ++row) {
 			if (row == pivot) {
@@ -128,9 +129,9 @@ std::array<float, 16> InvertColumnMajorMat4(const std::array<float, 16> &matrix)
 			if (factor == 0.0f) {
 				continue;
 			}
-			for (int column = 0; column < 4; ++column) {
-				augmented[row * 4 + column] -= factor * augmented[pivot * 4 + column];
-				inverse[row * 4 + column] -= factor * inverse[pivot * 4 + column];
+			for (int elimCol = 0; elimCol < 4; ++elimCol) {
+				augmented[row * 4 + elimCol] -= factor * augmented[pivot * 4 + elimCol];
+				inverse[row * 4 + elimCol] -= factor * inverse[pivot * 4 + elimCol];
 			}
 		}
 	}
@@ -651,8 +652,8 @@ void RecordGraphicsCommands(
 		// the TAA-off path (slot 0 is the only used attachment, slot 1 =
 		// NULL).
 		const bool taaOn = render.taaEnabled &&
-			render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
-			render.taaResolvePipeline != VK_NULL_HANDLE && render.taaResolvePipelineLayout != VK_NULL_HANDLE;
+						   render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
+						   render.taaResolvePipeline != VK_NULL_HANDLE && render.taaResolvePipelineLayout != VK_NULL_HANDLE;
 
 		// === Voxel color attachment transitions ===
 		// The TAA-on path skips the swapchain transition here; the
@@ -768,15 +769,15 @@ void RecordGraphicsCommands(
 		const VkPipelineStageFlags2 oldDepthStage =
 			oldDepthLayout == VK_IMAGE_LAYOUT_UNDEFINED
 				? VK_PIPELINE_STAGE_2_NONE
-				: (oldDepthLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-						? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT
-						: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+			: oldDepthLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+				? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT
+				: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 		const VkAccessFlags2 oldDepthAccess =
 			oldDepthLayout == VK_IMAGE_LAYOUT_UNDEFINED
 				? 0
-				: (oldDepthLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-						? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-						: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			: oldDepthLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+				? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+				: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 		TransitionImage(
 			cmd,
 			render.depthImage,
@@ -828,8 +829,19 @@ void RecordGraphicsCommands(
 		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
 		const VkImageView mainColor1View = taaOn ? render.taaSceneColorTarget->imageView : VK_NULL_HANDLE;
 		const VkImageView mainColor2View = render.taaLayerSceneColorTarget != nullptr
-			? render.taaLayerSceneColorTarget->imageView
-			: VK_NULL_HANDLE;
+											   ? render.taaLayerSceneColorTarget->imageView
+											   : VK_NULL_HANDLE;
+		// JetBrains DFA flags `mainColorXView != VK_NULL_HANDLE` as
+		// "always false" because the indexer can't follow the runtime
+		// `taaOn` ternary that produces these views. The branch IS
+		// reachable: when `taaOn` is false, slot 0 is the swapchain
+		// (non-null) and we must STORE; when TAA is on, slot 0 is
+		// unused (`dynamicRenderingUnusedAttachments` feature)
+		// and DONT_CARE is correct. The DFA path-insensitive
+		// `?:` folding misses this, so suppress the
+		// `CppDFAConstantConditions` / `CppDFAUnreachableCode`
+		// report per-line. The actual condition is exercised in
+		// production on every TAA-off frame.
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -839,6 +851,7 @@ void RecordGraphicsCommands(
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			// noinspection CppDFAConstantConditions, CppDFAUnreachableCode
 			.storeOp = mainColor0View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
@@ -866,7 +879,7 @@ void RecordGraphicsCommands(
 			.storeOp = mainColor2View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
-		const VkRenderingAttachmentInfo colorAttachments[3] = { colorAttachment0, colorAttachment1, colorAttachment2 };
+		const VkRenderingAttachmentInfo colorAttachments[3] = {colorAttachment0, colorAttachment1, colorAttachment2};
 		const VkRenderingAttachmentInfo depthAttachment{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -974,8 +987,7 @@ void RecordGraphicsCommands(
 				frameRenderData.graphicsPushConstants.viewProjection.data(),
 				sizeof(float) * 16);
 			for (const ModelInstanceData &instance : render.visibleModelInstances) {
-				if (instance.indexCount == 0 || instance.vertexBuffer == VK_NULL_HANDLE
-					|| instance.indexBuffer == VK_NULL_HANDLE) {
+				if (instance.indexCount == 0 || instance.vertexBuffer == VK_NULL_HANDLE || instance.indexBuffer == VK_NULL_HANDLE) {
 					continue;
 				}
 				std::memcpy(
@@ -989,7 +1001,7 @@ void RecordGraphicsCommands(
 					0,
 					sizeof(ModelPush),
 					&push);
-				const VkDeviceSize vertexOffset = 0;
+				constexpr VkDeviceSize vertexOffset = 0;
 				vkCmdBindVertexBuffers(cmd, 0, 1, &instance.vertexBuffer, &vertexOffset);
 				vkCmdBindIndexBuffer(
 					cmd,
@@ -1030,32 +1042,32 @@ void RecordGraphicsCommands(
 		// attachment.
 		if (!taaOn) {
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-		RecordDebugHudCommands(render, frameRenderData, cmd);
-	}
+			RecordDebugHudCommands(render, frameRenderData, cmd);
+		}
 
-	vkCmdEndRendering(cmd);
+		vkCmdEndRendering(cmd);
 
-	// 1.5 anti-flicker: sync the layout trackers with the actual
-	// GPU image layouts after the main pass ends. The voxel pass
-	// auto-transitioned the layer scene color target from
-	// `UNDEFINED` to `COLOR_ATTACHMENT_OPTIMAL` (via the
-	// rendering pass's `imageLayout` in `VkRenderingAttachmentInfo`),
-	// and the layer history target is still in
-	// `SHADER_READ_ONLY_OPTIMAL` (read-only during the voxel pass,
-	// no transition triggered). The copy block below uses these
-	// trackers as `oldLayout` for the `vkCmdPipelineBarrier2`
-	// calls, so they have to match the actual GPU state — without
-	// this sync, the first frame's barrier would have
-	// `oldLayout = UNDEFINED` but actual = `COLOR_ATTACHMENT_OPTIMAL`
-	// and validation would fail (VUID-VkImageMemoryBarrier2-oldLayout-01197).
-	// The voxel pass writes to the layer scene color target
-	// (Location 2) in BOTH the TAA-on and TAA-off paths, so the
-	// post-pass layout is `COLOR_ATTACHMENT_OPTIMAL` for both.
-	// The history target is read-only in both paths, so it
-	// stays in its initial `SHADER_READ_ONLY_OPTIMAL` (set by
-	// the `initialLayout` in `TaaRenderTargets.cpp` and tracked
-	// in `taaLayerHistoryColorCurrentLayout`).
-	render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		// 1.5 anti-flicker: sync the layout trackers with the actual
+		// GPU image layouts after the main pass ends. The voxel pass
+		// auto-transitioned the layer scene color target from
+		// `UNDEFINED` to `COLOR_ATTACHMENT_OPTIMAL` (via the
+		// rendering pass's `imageLayout` in `VkRenderingAttachmentInfo`),
+		// and the layer history target is still in
+		// `SHADER_READ_ONLY_OPTIMAL` (read-only during the voxel pass,
+		// no transition triggered). The copy block below uses these
+		// trackers as `oldLayout` for the `vkCmdPipelineBarrier2`
+		// calls, so they have to match the actual GPU state — without
+		// this sync, the first frame's barrier would have
+		// `oldLayout = UNDEFINED` but actual = `COLOR_ATTACHMENT_OPTIMAL`
+		// and validation would fail (VUID-VkImageMemoryBarrier2-oldLayout-01197).
+		// The voxel pass writes to the layer scene color target
+		// (Location 2) in BOTH the TAA-on and TAA-off paths, so the
+		// post-pass layout is `COLOR_ATTACHMENT_OPTIMAL` for both.
+		// The history target is read-only in both paths, so it
+		// stays in its initial `SHADER_READ_ONLY_OPTIMAL` (set by
+		// the `initialLayout` in `TaaRenderTargets.cpp` and tracked
+		// in `taaLayerHistoryColorCurrentLayout`).
+		render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 		// === TAA resolve pass + history copy (TAA on only) ===
 		if (taaOn) {
@@ -1107,7 +1119,7 @@ void RecordGraphicsCommands(
 					? VK_PIPELINE_STAGE_2_NONE
 					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 				render.taaHistoryColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0
-																			  : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+																				 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1159,6 +1171,14 @@ void RecordGraphicsCommands(
 			vkCmdSetScissor(cmd, 0, 1, &scissor);
 
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TAA Resolve");
+			// noinspection CppShadowVariable, CppDeclaratorNeverUsed
+			// clangd parser doesn't expand `__COUNTER__` correctly
+			// inside the `PV_PROFILE_GPU_LABEL_COLOR` macro body, so
+			// it sees the same `_pvGpuLabel<N>` identifier name twice
+			// and reports "shadows a local variable". The real
+			// expansion uses a fresh `__COUNTER__` value per call,
+			// so each `_pvGpuLabel<N>` is unique and there is no
+			// shadow. Build (clang++ 22) is green.
 			PV_PROFILE_GPU_LABEL_COLOR(cmd, "TAA Resolve", 0.20f, 0.65f, 1.00f, 1.0f);
 			// Per-pass CPU timing for the inline TAA resolve
 			// section. Manual start/end (not `ScopedPassTimer`)
@@ -1221,7 +1241,7 @@ void RecordGraphicsCommands(
 			{
 				const Uint64 taaResolveEndCounter = SDL_GetPerformanceCounter();
 				const double seconds = static_cast<double>(taaResolveEndCounter - taaResolveStartCounter) /
-					static_cast<double>(SDL_GetPerformanceFrequency());
+									   static_cast<double>(SDL_GetPerformanceFrequency());
 				render.renderPassTimings.taaResolveMs = static_cast<float>(seconds * 1000.0);
 			}
 
@@ -1267,11 +1287,11 @@ void RecordGraphicsCommands(
 				// no filter). The two images were created with the
 				// same extent, format, and sample count.
 				const VkImageCopy historyCopyRegion{
-					.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
-					.srcOffset = { 0, 0, 0 },
-					.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
-					.dstOffset = { 0, 0, 0 },
-					.extent = { swapchain.extent.width, swapchain.extent.height, 1u },
+					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+					.srcOffset = {0, 0, 0},
+					.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+					.dstOffset = {0, 0, 0},
+					.extent = {swapchain.extent.width, swapchain.extent.height, 1u},
 				};
 				vkCmdCopyImage(
 					cmd,
@@ -1330,10 +1350,7 @@ void RecordGraphicsCommands(
 		// case where the swapchain was just rebuilt and the
 		// voxel pass shouldn't try to read a zero-initialised
 		// history.
-		if (render.taaLayerSceneColorTarget != nullptr
-			&& render.taaLayerHistoryColorTarget != nullptr
-			&& render.taaLayerSceneColorTarget->image != VK_NULL_HANDLE
-			&& render.taaLayerHistoryColorTarget->image != VK_NULL_HANDLE) {
+		if (render.taaLayerSceneColorTarget != nullptr && render.taaLayerHistoryColorTarget != nullptr && render.taaLayerSceneColorTarget->image != VK_NULL_HANDLE && render.taaLayerHistoryColorTarget->image != VK_NULL_HANDLE) {
 			if (render.taaLayerHistoryValid) {
 				TransitionImage(
 					cmd,
@@ -1359,11 +1376,11 @@ void RecordGraphicsCommands(
 				render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
 				const VkImageCopy layerHistoryCopyRegion{
-					.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
-					.srcOffset = { 0, 0, 0 },
-					.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u },
-					.dstOffset = { 0, 0, 0 },
-					.extent = { swapchain.extent.width, swapchain.extent.height, 1u },
+					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+					.srcOffset = {0, 0, 0},
+					.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+					.dstOffset = {0, 0, 0},
+					.extent = {swapchain.extent.width, swapchain.extent.height, 1u},
 				};
 				vkCmdCopyImage(
 					cmd,

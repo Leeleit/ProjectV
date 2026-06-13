@@ -3,7 +3,7 @@
 **🟡 Уровень 2: Средний**
 
 Краткое описание основных функций и структур miniaudio с примерами использования. Полный
-перечень — [miniaudio.h](../../external/miniaudio/miniaudio.h), [официальная документация miniaud.io](https://miniaud.io/docs).
+перечень — [miniaudio.h](../../../../external/miniaudio/miniaudio.h), [официальная документация miniaud.io](https://miniaud.io/docs).
 
 ## На этой странице
 
@@ -310,7 +310,7 @@ ma_decoder_config ma_decoder_config_init(ma_format outputFormat, ma_uint32 outpu
 ## ma_encoder
 
 Кодирование PCM в файл. Встроен только WAV.
-Пример: [simple_capture.c](../../external/miniaudio/examples/simple_capture.c).
+Пример: [simple_capture.c](../../../../external/miniaudio/examples/simple_capture.c).
 
 ### ma_encoder_config_init
 
@@ -462,7 +462,7 @@ ma_bool32 ma_sound_at_end(const ma_sound* pSound);
 
 ### MA_MAX_CHANNELS
 
-Константа **254** — максимальное число каналов ([miniaudio.h](../../external/miniaudio/miniaudio.h)). Значение по
+Константа **254** — максимальное число каналов ([miniaudio.h](../../../../external/miniaudio/miniaudio.h)). Значение по
 умолчанию может быть переопределено с помощью `#define MA_MAX_CHANNELS <значение>` перед включением miniaudio.h.
 
 **Примечание:** Для изменения значения необходимо определить макрос до включения заголовочного файла:

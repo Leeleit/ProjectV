@@ -12,7 +12,7 @@
 namespace projectv::asset {
 
 class AssetRegistry {
-public:
+  public:
 	AssetRegistry() = default;
 	~AssetRegistry() = default;
 
@@ -40,7 +40,7 @@ public:
 
 	std::size_t Size() const;
 
-private:
+  private:
 	mutable std::mutex mMutex;
 	std::unordered_map<std::string, std::unique_ptr<LoadedAsset>> mEntries;
 	std::vector<std::string> mInsertionOrder;

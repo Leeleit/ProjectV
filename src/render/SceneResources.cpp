@@ -188,11 +188,11 @@ void RefreshSceneLightingBuffer(
 	// sampling would do `gl_FragCoord.xy * vec2(0)` and read
 	// from a single texel, breaking the temporal blend).
 	const float texelX = renderExtent.width > 0u
-		? 1.0f / static_cast<float>(renderExtent.width)
-		: 0.0f;
+							 ? 1.0f / static_cast<float>(renderExtent.width)
+							 : 0.0f;
 	const float texelY = renderExtent.height > 0u
-		? 1.0f / static_cast<float>(renderExtent.height)
-		: 0.0f;
+							 ? 1.0f / static_cast<float>(renderExtent.height)
+							 : 0.0f;
 	render.currentSceneLighting.taaHistoryParams = {
 		texelX,
 		texelY,
@@ -394,76 +394,12 @@ void UpdateGeneratedFaceStatsFromFrameResources(
 	render.sceneTriangleCount = (render.sceneOpaqueFaceCount + render.sceneTransparentFaceCount) * 2u;
 }
 
-uint32_t UpdateChunkVisibilityAndIndirectCommands(
-	const RenderState &render,
-	SceneFrameResources &frameResources,
-	const ChunkCullingParameters &parameters,
-	std::array<uint32_t, kSunShadowCascadeCount> &outShadowCascadeVisibleChunkCounts)
-{
-	if (!frameResources.chunkDescriptorMappedData ||
-		!frameResources.opaqueIndirectMappedData ||
-		!frameResources.shadowIndirectMappedData ||
-		!frameResources.transparentIndirectMappedData) {
-		return 0;
-	}
-
-	const auto *chunkDescriptors = static_cast<const PackedSceneChunkDescriptor *>(frameResources.chunkDescriptorMappedData);
-	auto *opaqueCommands = static_cast<VkDrawIndirectCommand *>(frameResources.opaqueIndirectMappedData);
-	auto *shadowCommands = static_cast<VkDrawIndirectCommand *>(frameResources.shadowIndirectMappedData);
-	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
-	outShadowCascadeVisibleChunkCounts.fill(0u);
-	std::array<std::array<float, 16>, kSunShadowCascadeCount> shadowCascadeMatrices{};
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * shadowCascadeMatrices[cascadeIndex].size();
-		std::copy_n(
-			render.currentSceneLighting.sunShadowViewProjections.data() + matrixOffset,
-			shadowCascadeMatrices[cascadeIndex].size(),
-			shadowCascadeMatrices[cascadeIndex].begin());
-	}
-	const uint32_t shadowCommandStride = frameResources.chunkDescriptorCount;
-	uint32_t visibleChunkCount = 0;
-	for (uint32_t chunkIndex = 0; chunkIndex < frameResources.chunkDescriptorCount; ++chunkIndex) {
-		const PackedSceneChunkDescriptor &chunkDescriptor = chunkDescriptors[chunkIndex];
-		const bool visible = IsSceneChunkVisible(chunkDescriptor, parameters);
-		if (visible) {
-			++visibleChunkCount;
-		}
-
-		opaqueCommands[chunkIndex] = BuildChunkIndirectCommand(
-			chunkDescriptor.drawRanges[0],
-			chunkDescriptor.drawRanges[1],
-			visible);
-		for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-			const bool shadowVisible = IsSceneChunkVisibleInShadowCascade(
-				chunkDescriptor,
-				shadowCascadeMatrices[cascadeIndex]);
-			if (shadowVisible) {
-				++outShadowCascadeVisibleChunkCounts[cascadeIndex];
-			}
-			shadowCommands[static_cast<size_t>(cascadeIndex) * shadowCommandStride + chunkIndex] = BuildChunkIndirectCommand(
-				chunkDescriptor.drawRanges[0],
-				chunkDescriptor.drawRanges[1],
-				shadowVisible);
-		}
-		transparentCommands[chunkIndex] = BuildChunkIndirectCommand(
-			chunkDescriptor.drawRanges[2],
-			chunkDescriptor.drawRanges[3],
-			visible);
-	}
-
-	return visibleChunkCount;
-}
-
 namespace {
-// **Two-level cache rebuild path (2026-06-12).** Same per-chunk
-// loop as `UpdateChunkVisibilityAndIndirectCommands` above, but
-// also fills `cache.opaqueCommands` / `cache.shadowCommands` /
+// **Two-level cache rebuild path (2026-06-12).** Per-chunk
+// loop that also fills `cache.opaqueCommands` / `cache.shadowCommands` /
 // `cache.transparentCommands` so the next call can short-circuit
-// the loop entirely on a cache hit. Splitting the two paths
-// keeps the original function untouched (it's still the canonical
-// per-frame behaviour — see `decisions.md` §21) and the cache
-// path is opt-in via `UpdateSceneFrameChunkVisibility`'s hash
-// check.
+// the loop entirely on a cache hit. The cache path is opt-in
+// via `UpdateSceneFrameChunkVisibility`'s hash check.
 struct ChunkVisibilityRebuildResult {
 	uint32_t visibleChunkCount = 0;
 	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
@@ -501,8 +437,8 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	if (cache.opaqueCommands.size() != chunkDescriptorCount) {
 		cache.opaqueCommands.assign(chunkDescriptorCount, VkDrawIndirectCommand{});
 	}
-	if (cache.shadowCommands.size() != chunkDescriptorCount * kSunShadowCascadeCount) {
-		cache.shadowCommands.assign(chunkDescriptorCount * kSunShadowCascadeCount, VkDrawIndirectCommand{});
+	if (cache.shadowCommands.size() != static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount) {
+		cache.shadowCommands.assign(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount, VkDrawIndirectCommand{});
 	}
 	if (cache.transparentCommands.size() != chunkDescriptorCount) {
 		cache.transparentCommands.assign(chunkDescriptorCount, VkDrawIndirectCommand{});
@@ -571,7 +507,7 @@ void ApplyCachedChunkVisibilityCommands(
 	}
 	if (frameResources.shadowIndirectMappedData &&
 		cache.shadowCommands.size() ==
-			frameResources.chunkDescriptorCount * kSunShadowCascadeCount) {
+			static_cast<size_t>(frameResources.chunkDescriptorCount) * kSunShadowCascadeCount) {
 		std::memcpy(
 			frameResources.shadowIndirectMappedData,
 			cache.shadowCommands.data(),
@@ -666,22 +602,21 @@ bool UpdateSceneFrameChunkVisibility(
 		return true;
 	}
 
-	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
 	// **Cache miss path (2026-06-12).** Run the canonical
 	// per-chunk loop AND fill the cache in the same pass so the
 	// next frame's hit check has data to `memcpy`. The two side
 	// effects (frameResources mapped writes + cache fills) share
 	// the same per-chunk math, so we don't pay an extra pass
 	// here.
-	const ChunkVisibilityRebuildResult result = RebuildChunkVisibilityAndFillCache(
+	const auto &[resultVisibleChunkCount, resultShadowCascadeVisibleChunkCounts] = RebuildChunkVisibilityAndFillCache(
 		render,
 		frameResources,
 		parameters,
 		cache);
-	frameResources.shadowCascadeVisibleChunkCounts = result.shadowCascadeVisibleChunkCounts;
+	frameResources.shadowCascadeVisibleChunkCounts = resultShadowCascadeVisibleChunkCounts;
 	const uint32_t culledChunkCount =
-		frameResources.chunkDescriptorCount > result.visibleChunkCount
-			? frameResources.chunkDescriptorCount - result.visibleChunkCount
+		frameResources.chunkDescriptorCount > resultVisibleChunkCount
+			? frameResources.chunkDescriptorCount - resultVisibleChunkCount
 			: 0u;
 	// Stamp the cache with the just-rebuilt result, BUT only once
 	// the CPU can actually see the dispatch's face counts. On the
@@ -707,8 +642,8 @@ bool UpdateSceneFrameChunkVisibility(
 	// Faces` plot (steps from 0 → 908 on the validation frame) and
 	// by visual smoke: VoxelLab reference shot now renders the
 	// world from frame 0 without any camera input.
-	const bool hasGeneratedFaces = (frameResources.opaqueFaceCount > 0u) ||
-		(frameResources.transparentFaceCount > 0u);
+	const bool hasGeneratedFaces = frameResources.opaqueFaceCount > 0u ||
+								   frameResources.transparentFaceCount > 0u;
 	// `dirtyChunkCount > 0` means the voxel meshing compute will run
 	// for this frame's per-frame resource. In that case the
 	// `chunkDescriptor.drawRanges` we just read is the *pre-dispatch*
@@ -728,14 +663,14 @@ bool UpdateSceneFrameChunkVisibility(
 	// which point the dispatch's write is visible to the CPU (via
 	// the per-frame resource rotation's 1-frame staleness window)
 	// and the cache can validate with the real face count.
-	const bool dispatchDoneThisFrame = (frameResources.dirtyChunkCount == 0u);
+	const bool dispatchDoneThisFrame = frameResources.dirtyChunkCount == 0u;
 	if (hasGeneratedFaces && dispatchDoneThisFrame) {
 		cache.valid = true;
 		cache.hash = hash;
 		cache.sceneVoxelPayloadVersion = render.sceneVoxelPayloadVersion;
 		cache.chunkDescriptorCount = frameResources.chunkDescriptorCount;
-		cache.visibleChunkCount = result.visibleChunkCount;
-		cache.shadowCascadeVisibleChunkCounts = result.shadowCascadeVisibleChunkCounts;
+		cache.visibleChunkCount = resultVisibleChunkCount;
+		cache.shadowCascadeVisibleChunkCounts = resultShadowCascadeVisibleChunkCounts;
 		cache.culledChunkCount = culledChunkCount;
 		cache.consecutiveHitCount = 0;
 	} else {
@@ -749,7 +684,7 @@ bool UpdateSceneFrameChunkVisibility(
 		// a chance to populate it.
 		cache.valid = false;
 	}
-	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(result.visibleChunkCount));
+	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(resultVisibleChunkCount));
 	profiling::PlotValue("Culled Chunks", static_cast<int64_t>(culledChunkCount));
 	profiling::PlotValue("ChunkVisibilityCacheHits", static_cast<int64_t>(0));
 	return true;

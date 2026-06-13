@@ -139,10 +139,8 @@ void AppendCascadeSplitPlaneOverlayBoxes(
 		const float worldY = camera.position[1] + forward[1] * splitDepth;
 		const float worldZ = camera.position[2] + forward[2] * splitDepth;
 
-		const float halfWidth = std::max(orthoWidths[cascadeIndex] * 0.5f, 1.0f)
-			+ kCascadeSplitPlaneSizePadding;
-		const float halfHeight = std::max(orthoHeights[cascadeIndex] * 0.5f, 1.0f)
-			+ kCascadeSplitPlaneSizePadding;
+		const float halfWidth = std::max(orthoWidths[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
+		const float halfHeight = std::max(orthoHeights[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
 
 		// AABB on the world XZ plane, centered at (worldX, _, worldZ),
 		// thin in Y. We pick a thin slab around the camera-relative

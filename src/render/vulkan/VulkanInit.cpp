@@ -106,7 +106,7 @@ bool CreateTracyGpuContext(
 namespace {
 VkFormat ChooseModelDepthFormat(const VkPhysicalDevice physicalDevice)
 {
-	constexpr std::array<VkFormat, 3> candidates{
+	constexpr std::array candidates{
 		VK_FORMAT_D32_SFLOAT,
 		VK_FORMAT_D24_UNORM_S8_UINT,
 		VK_FORMAT_D16_UNORM,

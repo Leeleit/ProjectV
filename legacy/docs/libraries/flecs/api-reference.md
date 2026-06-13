@@ -3,21 +3,21 @@
 **🟡 Уровень 2: Средний**
 
 Краткое описание основных функций и типов flecs. C++ — в приоритете; C — в подразделах. Полный
-API: [flecs.h](../../external/flecs/include/flecs.h), [flecs.hpp](../../external/flecs/include/flecs/addons/cpp/flecs.hpp).
+API: [flecs.h](../../../../external/flecs/include/flecs.h), [flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp).
 Doxygen: [flecs.dev](https://www.flecs.dev/flecs/).
 
 ## Карта заголовков
 
 | Файл                                                                                              | Назначение                                   |
 |---------------------------------------------------------------------------------------------------|----------------------------------------------|
-| [flecs.h](../../external/flecs/include/flecs.h)                                                   | Точка входа, C API                           |
-| [flecs/addons/flecs_c.h](../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы (ECS_COMPONENT, ecs_set, ecs_each) |
-| [flecs/addons/cpp/flecs.hpp](../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                              |
-| [flecs/addons/cpp/entity.hpp](../../external/flecs/include/flecs/addons/cpp/entity.hpp)           | flecs::entity                                |
-| [flecs/addons/cpp/mixins/query](../../external/flecs/include/flecs/addons/cpp/mixins/query)       | query_builder                                |
-| [flecs/addons/cpp/mixins/system](../../external/flecs/include/flecs/addons/cpp/mixins/system)     | system_builder                               |
-| [flecs/addons/cpp/mixins/observer](../../external/flecs/include/flecs/addons/cpp/mixins/observer) | observer                                     |
-| [flecs/addons/system.h](../../external/flecs/include/flecs/addons/system.h)                       | ecs_system_desc_t                            |
+| [flecs.h](../../../../external/flecs/include/flecs.h)                                                   | Точка входа, C API                           |
+| [flecs/addons/flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы (ECS_COMPONENT, ecs_set, ecs_each) |
+| [flecs/addons/cpp/flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                              |
+| [flecs/addons/cpp/entity.hpp](../../../../external/flecs/include/flecs/addons/cpp/entity.hpp)           | flecs::entity                                |
+| [flecs/addons/cpp/mixins/query](../../../../external/flecs/include/flecs/addons/cpp/mixins/query)       | query_builder                                |
+| [flecs/addons/cpp/mixins/system](../../../../external/flecs/include/flecs/addons/cpp/mixins/system)     | system_builder                               |
+| [flecs/addons/cpp/mixins/observer](../../../../external/flecs/include/flecs/addons/cpp/mixins/observer) | observer                                     |
+| [flecs/addons/system.h](../../../../external/flecs/include/flecs/addons/system.h)                       | ecs_system_desc_t                            |
 
 ## На этой странице
 
@@ -107,7 +107,7 @@ ecs_entity_t ecs_new(ecs_world_t *world);
 ecs_entity_t ecs_new_w_pair(world, EcsChildOf, parent);
 void ecs_delete(world, entity);
 void ecs_add/ecs_remove/ecs_clear(world, entity, id);
-void ecs_set(world, e, Position, {10, 20});  // макрос, [flecs_c.h](../../external/flecs/include/flecs/addons/flecs_c.h)
+void ecs_set(world, e, Position, {10, 20});  // макрос, [flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)
 const void* ecs_get(world, entity, id);
 void* ecs_ensure(world, entity, id);
 ```
@@ -142,7 +142,7 @@ world.entity<Position>();     // entity, представляющая компо
 
 ### C++ API
 
-**Query builder** — [mixins/query](../../external/flecs/include/flecs/addons/cpp/mixins/query):
+**Query builder** — [mixins/query](../../../../external/flecs/include/flecs/addons/cpp/mixins/query):
 
 ```cpp
 // Простой each (ad-hoc query)
@@ -164,7 +164,7 @@ q.destruct();  // или RAII
 
 ### C API
 
-В `ecs_query_desc_t` — `.terms`, не `.filter.terms` ([flecs.h](../../external/flecs/include/flecs.h)):
+В `ecs_query_desc_t` — `.terms`, не `.filter.terms` ([flecs.h](../../../../external/flecs/include/flecs.h)):
 
 ```c
 ecs_query_t *q = ecs_query(world, {
@@ -200,7 +200,7 @@ ecs_query_fini(q);
 
 ### C++ API
 
-**System builder** — [mixins/system](../../external/flecs/include/flecs/addons/cpp/mixins/system):
+**System builder** — [mixins/system](../../../../external/flecs/include/flecs/addons/cpp/mixins/system):
 
 ```cpp
 world.system<Position, const Velocity>("Move")
@@ -226,7 +226,7 @@ world.system<Position, Velocity>("Move")
 ### C API
 
 `ECS_SYSTEM(world, Name, Phase, Comp1, Comp2)`. Доп. параметры через
-`ecs_system_desc_t` ([system.h](../../external/flecs/include/flecs/addons/system.h)): phase, interval, rate,
+`ecs_system_desc_t` ([system.h](../../../../external/flecs/include/flecs/addons/system.h)): phase, interval, rate,
 multi_threaded.
 
 ---
@@ -258,7 +258,7 @@ world.observer<Position>()
     .each([](Position& p) { /* Position установлен */ });
 ```
 
-**События** ([ObserversManual.md](../../external/flecs/docs/ObserversManual.md)):
+**События** ([ObserversManual.md](../../../../external/flecs/docs/ObserversManual.md)):
 
 | Событие           | Когда                               |
 |-------------------|-------------------------------------|
@@ -374,7 +374,7 @@ inst.set<Defense>({100});  // теперь у instance своё значение
 ### C API
 
 `ecs_entity(world, {.name = "...", .add = ecs_ids(EcsPrefab)})`, `ecs_new_w_pair(world, EcsIsA, prefab)`.
-Подробнее: [PrefabsManual.md](../../external/flecs/docs/PrefabsManual.md).
+Подробнее: [PrefabsManual.md](../../../../external/flecs/docs/PrefabsManual.md).
 
 ---
 
@@ -398,7 +398,7 @@ inst.set<Defense>({100});  // теперь у instance своё значение
 ### C API (ecs_iter_t)
 
 Поля: `entities`, `count`, `delta_time`, `world`, `param`. Компоненты: `ecs_field(it, Type, index)` — `Type*` на
-массив. [flecs.h](../../external/flecs/include/flecs.h).
+массив. [flecs.h](../../../../external/flecs/include/flecs.h).
 
 ---
 
@@ -406,4 +406,4 @@ inst.set<Defense>({100});  // теперь у instance своё значение
 
 - [Глоссарий](glossary.md)
 - [Основные понятия](concepts.md)
-- [Карта заголовков](#карта-заголовков) — [flecs.h](../../external/flecs/include/flecs.h), [flecs.hpp](../../external/flecs/include/flecs/addons/cpp/flecs.hpp)
+- [Карта заголовков](#карта-заголовков) — [flecs.h](../../../../external/flecs/include/flecs.h), [flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)

@@ -18,7 +18,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include <miniaudio.h>
@@ -39,7 +38,7 @@ namespace projectv::audio {
 // and any future consumers (save/load, sidecar) can
 // call it without duplicating the logic.
 void ParseArtistTitle(const std::string &filename,
-	std::string &artist, std::string &title);
+					  std::string &artist, std::string &title);
 
 // **Playback state, 2026-06-12.** Three-valued enum so
 // the HUD line and sidecar can show the current state
@@ -68,7 +67,7 @@ const char *MusicStateToString(MusicState state);
 // singleton, because the music hotkeys fire from
 // `UpdateApp` and don't need per-entity iteration.
 class AudioEngine {
-public:
+  public:
 	AudioEngine() = default;
 	~AudioEngine();
 
@@ -135,15 +134,15 @@ public:
 	// **State accessors** for the HUD / DebugStats
 	// mirror. Cheap: all inline reads, no miniaudio
 	// calls.
-	MusicState state() const { return m_state; }
-	float volume() const { return m_volume; }
-	bool isInitialized() const { return m_engineInitialized; }
-	bool isPlaylistEmpty() const { return m_playlist.empty(); }
+	[[nodiscard]] MusicState state() const { return m_state; }
+	[[nodiscard]] float volume() const { return m_volume; }
+	[[nodiscard]] bool isInitialized() const { return m_engineInitialized; }
+	[[nodiscard]] bool isPlaylistEmpty() const { return m_playlist.empty(); }
 	// Returns the filename of the current track, or
 	// the empty string if the playlist is empty. The
 	// returned reference is valid until the next
 	// `tick` that re-scans the playlist.
-	const std::string &currentTrackName() const { return m_currentTrackName; }
+	[[nodiscard]] const std::string &currentTrackName() const { return m_currentTrackName; }
 	// **Artist / title for the HUD, 2026-06-13.**
 	// Cached parsed form of `currentTrackName()` per
 	// the `ParseArtistTitle` convention. `artist` is
@@ -153,8 +152,8 @@ public:
 	// playlist is empty. Re-parsed only when
 	// `m_currentTrackName` changes (see
 	// `updateCurrentTrackMetadata`).
-	const std::string &currentArtist() const { return m_currentArtist; }
-	const std::string &currentTitle() const { return m_currentTitle; }
+	[[nodiscard]] const std::string &currentArtist() const { return m_currentArtist; }
+	[[nodiscard]] const std::string &currentTitle() const { return m_currentTitle; }
 	// **Playback position / duration, 2026-06-13.**
 	// Position is the cursor in seconds (0.0f when
 	// no sound is loaded; otherwise read via
@@ -162,16 +161,16 @@ public:
 	// is the track length in seconds (0.0f when no
 	// sound is loaded or the decoder does not
 	// expose length — the latter is rare for MP3
-	// with `MA_SOUND_FLAG_STREAM` but possible for
+	// with `MA_SOUND FLAG_STREAM` but possible for
 	// malformed streams). Both are cheap (one
 	// miniaudio call each, no allocation).
-	float positionSeconds() const;
-	float durationSeconds() const;
-	const std::filesystem::path &musicFolder() const { return m_musicFolder; }
-	size_t playlistSize() const { return m_playlist.size(); }
-	size_t currentIndex() const { return m_currentIndex; }
+	[[nodiscard]] float positionSeconds() const;
+	[[nodiscard]] float durationSeconds() const;
+	[[nodiscard]] const std::filesystem::path &musicFolder() const { return m_musicFolder; }
+	[[nodiscard]] size_t playlistSize() const { return m_playlist.size(); }
+	[[nodiscard]] size_t currentIndex() const { return m_currentIndex; }
 
-private:
+  private:
 	// Rebuild `m_playlist` from `m_musicFolder`. Returns
 	// the new size. Sorts alphabetically (case-sensitive
 	// per `std::filesystem::path::compare`).
@@ -253,7 +252,7 @@ private:
 	// 5-second playlist refresh. Initialized to "now"
 	// on the first scan so the operator gets a
 	// responsive update on `loadMusicFolder`.
-	std::chrono::steady_clock::time_point m_lastPlaylistRefresh{};
+	std::chrono::steady_clock::time_point m_lastPlaylistRefresh;
 
 	// Cached so the HUD doesn't construct a `std::string`
 	// every frame. Updated only when the playlist

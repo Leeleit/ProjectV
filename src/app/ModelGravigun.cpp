@@ -5,7 +5,6 @@
 #include "asset/ModelManifestLoader.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
-#include "voxel/VoxelMaterials.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
@@ -71,7 +70,7 @@ bool RayAabbIntersect(const Ray &ray, const glm::vec3 &aabbMin, const glm::vec3 
 // Intersect a ray with a horizontal plane at y=planeY. Returns
 // the intersection point or std::nullopt if the ray is parallel
 // to the plane or the intersection is behind the ray origin.
-std::optional<glm::vec3> IntersectRayHorizontalPlane(const Ray &ray, float planeY)
+std::optional<glm::vec3> IntersectRayHorizontalPlane(const Ray &ray, const float planeY)
 {
 	if (std::abs(ray.direction.y) < 1e-6f) {
 		return std::nullopt;
@@ -168,9 +167,9 @@ void TickModelGravigun(
 			float tNear = 0.0f;
 			float tFar = 0.0f;
 			if (!RayAabbIntersect(ray,
-					glm::vec3(inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2]),
-					glm::vec3(inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2]),
-					tNear, tFar)) {
+								  glm::vec3(inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2]),
+								  glm::vec3(inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2]),
+								  tNear, tFar)) {
 				continue;
 			}
 			if (tNear < bestTNear) {
@@ -207,12 +206,12 @@ void TickModelGravigun(
 				state->pickAnchorHit = state->pickAnchorAabbMin;
 			}
 			std::fprintf(stderr,
-				"[Gravigun-DBG] PICKED: index=%d aabbMin=(%.3f,%.3f,%.3f) aabbMax=(%.3f,%.3f,%.3f) anchorHit=(%.3f,%.3f,%.3f) targetY=%.1f\n",
-				bestIndex,
-				inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2],
-				inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2],
-				state->pickAnchorHit.x, state->pickAnchorHit.y, state->pickAnchorHit.z,
-				state->targetY);
+						 "[Gravigun-DBG] PICKED: index=%d aabbMin=(%.3f,%.3f,%.3f) aabbMax=(%.3f,%.3f,%.3f) anchorHit=(%.3f,%.3f,%.3f) targetY=%.1f\n",
+						 bestIndex,
+						 inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2],
+						 inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2],
+						 state->pickAnchorHit.x, state->pickAnchorHit.y, state->pickAnchorHit.z,
+						 state->targetY);
 		} else {
 			std::fprintf(stderr, "[Gravigun-DBG] no model under crosshair\n");
 		}
@@ -241,17 +240,17 @@ void TickModelGravigun(
 		// AABB so the operator can correct the position.
 		const bool snapOnDrop = GravigunSnapEnabled();
 		if (snapOnDrop) {
-			projectv::asset::SnapModelInstancesAboveGround(world, render);
+			asset::SnapModelInstancesAboveGround(world, render);
 		}
 		const ModelInstanceData &inst = render->modelInstances[state->pickedInstanceIndex];
 		std::fprintf(stderr,
-			"[Gravigun-DBG] DROPPED: index=%d final_aabbMin=(%.3f,%.3f,%.3f) final_aabbMax=(%.3f,%.3f,%.3f) manifest_position=(%.3f,%.3f,%.3f) targetY=%.1f snap=%s\n",
-			state->pickedInstanceIndex,
-			inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2],
-			inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2],
-			inst.modelTransform[12], inst.modelTransform[13], inst.modelTransform[14],
-			state->targetY,
-			snapOnDrop ? "on" : "off");
+					 "[Gravigun-DBG] DROPPED: index=%d final_aabbMin=(%.3f,%.3f,%.3f) final_aabbMax=(%.3f,%.3f,%.3f) manifest_position=(%.3f,%.3f,%.3f) targetY=%.1f snap=%s\n",
+					 state->pickedInstanceIndex,
+					 inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2],
+					 inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2],
+					 inst.modelTransform[12], inst.modelTransform[13], inst.modelTransform[14],
+					 state->targetY,
+					 snapOnDrop ? "on" : "off");
 		state->pickedInstanceIndex = -1;
 		state->targetY = 0.0f;
 		state->pickAnchorAabbMin = glm::vec3(0.0f);

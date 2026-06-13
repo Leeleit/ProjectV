@@ -1,8 +1,8 @@
 #ifndef VOXEL_MATERIALS_HPP
 #define VOXEL_MATERIALS_HPP
 
-#include "voxel/VoxelWorld.hpp"
 #include "render/ShadowTypes.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 #include <array>
 #include <cstddef>

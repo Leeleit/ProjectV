@@ -210,7 +210,7 @@ High-level API построен на node graph. Узлы (nodes) соединя
 
 Для простого воспроизведения достаточно `ma_engine_play_sound` или `ma_sound_init_from_file` + `ma_sound_start`. Node
 graph используется при необходимости продвинутого микширования.
-Примеры: [node_graph.c](../../external/miniaudio/examples/node_graph.c), [engine_effects.c](../../external/miniaudio/examples/engine_effects.c).
+Примеры: [node_graph.c](../../../../external/miniaudio/examples/node_graph.c), [engine_effects.c](../../../../external/miniaudio/examples/engine_effects.c).
 
 ---
 

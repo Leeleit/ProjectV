@@ -3,7 +3,7 @@
 **🔴 Уровень 3: Продвинутый**
 
 Краткое описание основных функций и структур VMA для игры на Vulkan. Полные объявления и комментарии —
-в [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h).
+в [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h).
 
 ## Оглавление
 
@@ -312,7 +312,7 @@ VkResult vmaFindMemoryTypeIndex(
 Параметры создания аллокатора. Основные поля: `flags`, `physicalDevice`, `device`, `instance`, `vulkanApiVersion`,
 `pVulkanFunctions` (при volk — через `vmaImportVulkanFunctionsFromVolk`). Опционально: `preferredLargeHeapBlockSize` (
 0 = по умолчанию), `pAllocationCallbacks`, `pDeviceMemoryCallbacks`, `pHeapSizeLimit` (массив лимитов в байтах по
-каждому heap'у). Подробнее — [Интеграция](integration.md) и [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h).
+каждому heap'у). Подробнее — [Интеграция](integration.md) и [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h).
 
 ---
 
@@ -405,7 +405,7 @@ VMA может перемещать аллокации внутри блоков
 
 Приложение получает список перемещений и выполняет копирование данных в новое место. Для простой игры обычно не
 требуется; полезно при большом количестве мелких аллокаций и освобождений. Детали —
-в [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h)
+в [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h)
 и [официальной документации VMA](https://gpuopen.com/vulkan-memory-allocator/).
 
 ---

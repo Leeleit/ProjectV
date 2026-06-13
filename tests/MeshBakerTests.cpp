@@ -1,7 +1,6 @@
 #include "asset/AssetLoader.hpp"
 #include "asset/MeshBaker.hpp"
 
-#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -23,11 +22,6 @@ struct TestContext {
 	}
 };
 
-bool ApproxEqual(const float a, const float b, const float epsilon = 1e-5f)
-{
-	return std::fabs(a - b) <= epsilon;
-}
-
 std::filesystem::path BoxFixturePath()
 {
 	return std::filesystem::path(PROJECTV_TESTS_SOURCE_DIR) / "fixtures" / "box.glb";
@@ -40,16 +34,16 @@ void TestBakeBoxReducesOrKeepsAcmrNearIdeal(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("LoadGlb failed: ") + error.message);
 		return;
 	}
 
-	projectv::asset::BakeConfig config;
-	projectv::asset::BakedMesh baked;
+	projectv::asset::BakeConfig config{};
+	config.optimizeVertexCache = false;
 	std::string bakeError;
-	baked = projectv::asset::BakeLoadedAsset(*loaded, config, &bakeError);
+	const projectv::asset::BakedMesh baked = projectv::asset::BakeLoadedAsset(*loaded, config, &bakeError);
 
 	if (!bakeError.empty()) {
 		context.Fail(__LINE__, std::string("BakeLoadedAsset error: ") + bakeError);
@@ -73,8 +67,7 @@ void TestBakeBoxReducesOrKeepsAcmrNearIdeal(TestContext &context)
 		context.Fail(__LINE__, "overfetch out of sane range");
 	}
 
-	const float indicesOverVertices = static_cast<float>(prim.indexCount)
-		/ (3.0f * static_cast<float>(prim.vertexCount));
+	const float indicesOverVertices = static_cast<float>(prim.indexCount) / (3.0f * static_cast<float>(prim.vertexCount));
 	if (indicesOverVertices > 2.0f) {
 		context.Fail(__LINE__, "ACMR worse than 2.0 after meshopt pipeline");
 	}
@@ -87,7 +80,7 @@ void TestBakePreservesAllIndicesDistinct(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("LoadGlb failed: ") + error.message);
 		return;
@@ -102,9 +95,7 @@ void TestBakePreservesAllIndicesDistinct(TestContext &context)
 			context.Fail(__LINE__, "degenerate triangle in baked mesh");
 			return;
 		}
-		if (a >= baked.primitives.front().vertexCount
-			|| b >= baked.primitives.front().vertexCount
-			|| c >= baked.primitives.front().vertexCount) {
+		if (a >= baked.primitives.front().vertexCount || b >= baked.primitives.front().vertexCount || c >= baked.primitives.front().vertexCount) {
 			context.Fail(__LINE__, "out-of-bounds index after reordering");
 			return;
 		}
@@ -118,7 +109,7 @@ void TestBakeDisabledOptimizersProducesSaneBuffer(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("LoadGlb failed: ") + error.message);
 		return;

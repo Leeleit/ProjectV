@@ -76,7 +76,7 @@ constexpr std::array kTaaResolveDescriptorPoolSizes{
 	kTaaResolveStorageBufferPoolSize,
 };
 
-void LogTaaResolveVkFailure(const char *step, const VkResult result);
+void LogTaaResolveVkFailure(const char *step, VkResult result);
 
 VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char> &code)
 {

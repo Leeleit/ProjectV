@@ -2,6 +2,7 @@
 #define ASSET_MODEL_PASS_HPP
 
 #include "core/Types.hpp"
+#include "render/TaaRenderTargets.hpp"
 
 namespace projectv::asset {
 

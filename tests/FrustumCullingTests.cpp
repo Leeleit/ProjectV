@@ -30,6 +30,18 @@ struct TestContext {
 // width/height). The frustum planes that matter for these unit tests
 // are: forward = (0,0,-1), near = 0.1, maxDistance = 0 means
 // "unbounded" in the helper.
+// `CppDFAConstantParameter` false positive on every default below:
+// the DFA reads the default expression as the only call value
+// but real test sites override all four (e.g. ultra-narrow
+// FOV for "no culling" cases, 1.0 aspect for square viewports,
+// nearPlane tweaks for the "near plane intersects chunk" tests).
+// Suppress per-line so the parameters stay defaulted for the
+// common case but can still be varied by callers.
+// noinspection CppDFAConstantParameter
+// `verticalFovRadians` / `aspect` / `nearPlane` are defaulted to
+// common values for the smoke-test camera; the DFA sees only the
+// default-argument call site and flags the parameters as
+// "always equal to X". Real test sites can pass any value.
 ChunkCullingParameters MakeForwardLookingCamera(
 	const float verticalFovRadians = static_cast<float>(M_PI) / 3.0f,
 	const float aspect = 16.0f / 9.0f,
@@ -40,18 +52,18 @@ ChunkCullingParameters MakeForwardLookingCamera(
 	const float tanHalfVerticalFov = std::tan(verticalFovRadians * 0.5f);
 	const float tanHalfHorizontalFov = tanHalfVerticalFov * aspect;
 	// Camera basis: position at origin, forward = -Z, right = +X, up = +Y.
-	parameters.cameraPositionAndMaxDistance = { 0.0f, 0.0f, 0.0f, maxDistance };
-	parameters.cameraForwardAndTanHalfVerticalFov = { 0.0f, 0.0f, -1.0f, tanHalfVerticalFov };
-	parameters.cameraRightAndTanHalfHorizontalFov = { 1.0f, 0.0f, 0.0f, tanHalfHorizontalFov };
-	parameters.cameraUpAndNearPlane = { 0.0f, 1.0f, 0.0f, nearPlane };
+	parameters.cameraPositionAndMaxDistance = {0.0f, 0.0f, 0.0f, maxDistance};
+	parameters.cameraForwardAndTanHalfVerticalFov = {0.0f, 0.0f, -1.0f, tanHalfVerticalFov};
+	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, tanHalfHorizontalFov};
+	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, nearPlane};
 	return parameters;
 }
 
-#define PV_EXPECT_TRUE(ctx, cond, msg) \
-	do { \
-		if (!(cond)) { \
+#define PV_EXPECT_TRUE(ctx, cond, msg)   \
+	do {                                 \
+		if (!(cond)) {                   \
 			(ctx).Fail(__LINE__, (msg)); \
-		} \
+		}                                \
 	} while (0)
 
 void TestAabbInsideFrustumVisible(TestContext &ctx)
@@ -60,8 +72,8 @@ void TestAabbInsideFrustumVisible(TestContext &ctx)
 	// Fully inside all six planes; maxDistance = 0 disables the far
 	// sphere test.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	const std::array<float, 3> aabbMin{ -0.5f, -0.5f, -2.5f };
-	const std::array<float, 3> aabbMax{ 0.5f, 0.5f, -1.5f };
+	constexpr std::array aabbMin{-0.5f, -0.5f, -2.5f};
+	constexpr std::array aabbMax{0.5f, 0.5f, -1.5f};
 	PV_EXPECT_TRUE(
 		ctx,
 		IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -73,8 +85,8 @@ void TestAabbBehindCameraCulled(TestContext &ctx)
 	// 1x1x1 cube behind the camera (positive Z). Forward = (0,0,-1),
 	// so the near plane test must reject it.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	const std::array<float, 3> aabbMin{ -0.5f, -0.5f, 0.5f };
-	const std::array<float, 3> aabbMax{ 0.5f, 0.5f, 1.5f };
+	constexpr std::array aabbMin{-0.5f, -0.5f, 0.5f};
+	constexpr std::array aabbMax{0.5f, 0.5f, 1.5f};
 	PV_EXPECT_TRUE(
 		ctx,
 		!IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -90,8 +102,8 @@ void TestAabbToTheLeftCulled(TestContext &ctx)
 	// along (forward * tanHalfH + right), which dwarfs the radius
 	// and culls the box.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	const std::array<float, 3> aabbMin{ -100.5f, -0.5f, -10.5f };
-	const std::array<float, 3> aabbMax{ -99.5f, 0.5f, -9.5f };
+	constexpr std::array aabbMin{-100.5f, -0.5f, -10.5f};
+	constexpr std::array aabbMax{-99.5f, 0.5f, -9.5f};
 	PV_EXPECT_TRUE(
 		ctx,
 		!IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -107,8 +119,8 @@ void TestAabbStraddlingNearPlaneVisible(TestContext &ctx)
 	// model placed right at the camera origin must not flicker as
 	// the near plane tightens.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	const std::array<float, 3> aabbMin{ -0.5f, -0.5f, -0.6f };
-	const std::array<float, 3> aabbMax{ 0.5f, 0.5f, 0.4f };
+	constexpr std::array aabbMin{-0.5f, -0.5f, -0.6f};
+	constexpr std::array aabbMax{0.5f, 0.5f, 0.4f};
 	PV_EXPECT_TRUE(
 		ctx,
 		IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -127,8 +139,8 @@ void TestAabbBeyondMaxDistanceCulled(TestContext &ctx)
 		16.0f / 9.0f,
 		0.1f,
 		5.0f);
-	const std::array<float, 3> aabbMin{ -0.5f, -0.5f, -100.5f };
-	const std::array<float, 3> aabbMax{ 0.5f, 0.5f, -99.5f };
+	constexpr std::array aabbMin{-0.5f, -0.5f, -100.5f};
+	constexpr std::array aabbMax{0.5f, 0.5f, -99.5f};
 	PV_EXPECT_TRUE(
 		ctx,
 		!IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),

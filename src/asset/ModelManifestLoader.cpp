@@ -7,7 +7,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <limits>
 #include <string>
 #include <utility>
 
@@ -28,9 +27,7 @@ glm::mat4 BuildEntryWorldMatrix(const ManifestEntry &entry)
 {
 	const glm::vec3 rotationRadians = glm::radians(entry.rotationDegrees);
 	const glm::mat4 translation = glm::translate(glm::mat4(1.0f), entry.position);
-	const glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), rotationRadians.y, glm::vec3(0.0f, 1.0f, 0.0f))
-		* glm::rotate(glm::mat4(1.0f), rotationRadians.x, glm::vec3(1.0f, 0.0f, 0.0f))
-		* glm::rotate(glm::mat4(1.0f), rotationRadians.z, glm::vec3(0.0f, 0.0f, 1.0f));
+	const glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), rotationRadians.y, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), rotationRadians.x, glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), rotationRadians.z, glm::vec3(0.0f, 0.0f, 1.0f));
 	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(entry.scale));
 	return translation * rotation * scale;
 }
@@ -153,7 +150,7 @@ bool LoadAndRegisterModelsFromManifest(
 		const glm::mat4 aabbMinOffset = glm::translate(glm::mat4(1.0f), -srcMin * entry.scale);
 		const glm::mat4 worldWithAabbMin = world * aabbMinOffset;
 		StoreMatrixColumnMajor(worldWithAabbMin, instance.modelTransform);
-		instance.worldAabbMin = { entry.position.x, entry.position.y, entry.position.z };
+		instance.worldAabbMin = {entry.position.x, entry.position.y, entry.position.z};
 		instance.worldAabbMax = {
 			entry.position.x + srcDim.x * entry.scale,
 			entry.position.y + srcDim.y * entry.scale,
@@ -197,96 +194,6 @@ void UnloadAllModels(VulkanContextState *context, RenderState *render)
 }
 
 namespace {
-
-// Find the LOWEST non-Air voxel in the column at the given integer
-// XZ position. This is the *ground* / floor / first solid surface
-// at that XZ. Returns `std::numeric_limits<int32_t>::max()` if the
-// column is fully Air (no solid voxels at all — caller decides what
-// to do). Walks from Y=0 up. We pick the lowest, not the topmost,
-// because in `VoxelLab` the same XZ column can contain the floor
-// (Y=0), the glass shell (Y=2..14), and the fluid column
-// (Y=3..10) — the topmost non-Air voxel is the upper shell arc
-// (Y=14) and lifting the model to sit "on top of" the shell would
-// teleport it 14 units up, far above the floor.
-int32_t FindBottomVoxelYAtXZ(const VoxelWorld &world, int32_t x, int32_t z)
-{
-	const int32_t worldHeight = static_cast<int32_t>(world.height);
-	if (worldHeight <= 0) {
-		return std::numeric_limits<int32_t>::max();
-	}
-	for (int32_t y = 0; y < worldHeight; ++y) {
-		if (GetVoxelMaterial(world, Int3{x, y, z}) != VoxelMaterial::Air) {
-			return y;
-		}
-	}
-	return std::numeric_limits<int32_t>::max();
-}
-
-// Compute the floor surface across the model's XZ footprint (the
-// highest of the LOWEST non-Air voxels at 5 AABB samples — 4
-// corners + center). A model on a 1-cell-wide bridge / wall
-// corner would otherwise snap to the wrong side if we only
-// sampled the center. Returns `INT_MIN` if NO sample has a solid
-// voxel underneath (caller should skip the snap — the model is
-// either floating in air, or its XZ footprint extends outside the
-// world's bounds).
-//
-// **Bug history (M5.1c, 2026-06-12):** the original M5.1b version
-// checked for `INT_MIN` here, but `FindBottomVoxelYAtXZ` actually
-// returns `INT_MAX` (not `INT_MIN`) when its XZ column is fully
-// Air — so the check was dead and `std::max` would silently
-// pollute the result with `INT_MAX` whenever any sample landed
-// outside the world (e.g. a column model at Z=9..17 in a world
-// that only goes to Z=12). The snap pass then did
-// `topVoxelY + 1` on `INT_MAX`, which is signed integer overflow
-// (UB; on 2's-complement platforms `INT_MAX + 1 == INT_MIN`),
-// then `static_cast<float>(INT_MIN)` rounded to `-2147483648.0` —
-// the model was lifted by ~2 billion units downward, sending it
-// far below the floor and out of the camera frustum. Now
-// `FindFloorSurfaceYForAabb` returns `INT_MIN` whenever any of
-// the 5 samples is `INT_MAX` (out-of-bounds or fully-Air), and
-// the snap's existing `if (topVoxelY == INT_MIN) continue;`
-// guard correctly skips the model — the operator gets a
-// "model not visible" instead of a "model teleported into the
-// void" failure mode. The two-stage `INT_MAX → INT_MIN` rename
-// also catches the no-floor-anywhere case (model entirely
-// outside the world or in mid-air with no platform).
-int32_t FindFloorSurfaceYForAabb(const VoxelWorld &world, float minX, float maxX, float minZ, float maxZ)
-{
-	const auto trySample = [&](float fx, float fz) -> int32_t {
-		const int32_t x = static_cast<int32_t>(std::floor(fx));
-		const int32_t z = static_cast<int32_t>(std::floor(fz));
-		return FindBottomVoxelYAtXZ(world, x, z);
-	};
-	const std::array<int32_t, 5> samples{
-		trySample(minX, minZ),
-		trySample(maxX, minZ),
-		trySample(minX, maxZ),
-		trySample(maxX, maxZ),
-		trySample(0.5f * (minX + maxX), 0.5f * (minZ + maxZ)),
-	};
-	const int32_t noFloorSentinel = std::numeric_limits<int32_t>::max();
-	bool anyValid = false;
-	int32_t best = 0;
-	for (const int32_t s : samples) {
-		if (s == noFloorSentinel) {
-			// Out-of-world or fully-Air column at this sample.
-			// Skip it — do NOT pollute `best` with `INT_MAX`,
-			// otherwise the snap pass does `INT_MAX + 1` and
-			// overflows. If ALL samples are out, the function
-			// returns `INT_MIN` and the snap skips the model.
-			continue;
-		}
-		if (!anyValid || s > best) {
-			best = s;
-			anyValid = true;
-		}
-	}
-	if (!anyValid) {
-		return std::numeric_limits<int32_t>::min();
-	}
-	return best;
-}
 
 } // namespace
 void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
@@ -354,7 +261,6 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 	// the floor edge (`aabbMax.z=9`), so the snap now uses
 	// `floorMaxExclusive` for the clamp test.
 	const float worldMinX = static_cast<float>(world.floorMin.x);
-	const float worldMinY = static_cast<float>(world.min.y);
 	const float worldMinZ = static_cast<float>(world.floorMin.z);
 	const float worldMaxX = static_cast<float>(world.floorMaxExclusive.x);
 	const float worldMaxY = static_cast<float>(world.maxExclusive.y);
@@ -369,9 +275,9 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 				"Model",
 				"SnapModelInstancesAboveGround",
 				fmt::format("degenerate AABB: aabbMin=({:.3f},{:.3f},{:.3f}) aabbMax=({:.3f},{:.3f},{:.3f}) dims=({:.3f},{:.3f},{:.3f})",
-					instance.worldAabbMin[0], instance.worldAabbMin[1], instance.worldAabbMin[2],
-					instance.worldAabbMax[0], instance.worldAabbMax[1], instance.worldAabbMax[2],
-					dimX, dimY, dimZ));
+							instance.worldAabbMin[0], instance.worldAabbMin[1], instance.worldAabbMin[2],
+							instance.worldAabbMax[0], instance.worldAabbMax[1], instance.worldAabbMax[2],
+							dimX, dimY, dimZ));
 			continue;
 		}
 
@@ -544,9 +450,9 @@ void SnapModelInstancesCenterAnchored(
 				"Model",
 				"SnapModelInstancesCenterAnchored",
 				fmt::format("degenerate AABB: aabbMin=({:.3f},{:.3f},{:.3f}) aabbMax=({:.3f},{:.3f},{:.3f}) dims=({:.3f},{:.3f},{:.3f})",
-					instance.worldAabbMin[0], instance.worldAabbMin[1], instance.worldAabbMin[2],
-					instance.worldAabbMax[0], instance.worldAabbMax[1], instance.worldAabbMax[2],
-					dimX, dimY, dimZ));
+							instance.worldAabbMin[0], instance.worldAabbMin[1], instance.worldAabbMin[2],
+							instance.worldAabbMax[0], instance.worldAabbMax[1], instance.worldAabbMax[2],
+							dimX, dimY, dimZ));
 			continue;
 		}
 

@@ -7,7 +7,7 @@ Modern C++ идиомы (RAII, умные указатели, move semantics) д
 Vulkan кода в ProjectV.
 
 > **Связь с философией:** Vulkan — это квинтэссенция zero-cost abstractions.
-> См. [06_vulkan-philosophy.md](../../philosophy/06_vulkan-philosophy.md). RAII для GPU ресурсов — это не просто
+> См. [06_vulkan-philosophy.md](../../philosophy/03_domain/02_vulkan-philosophy.md). RAII для GPU ресурсов — это не просто
 > удобство,
 > это способ гарантировать корректность в мире, где утечка GPU памяти может крашнуть драйвер.
 

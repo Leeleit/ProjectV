@@ -8,7 +8,7 @@
 архитектуру: состояние UI сохраняется между кадрами. Предназначена для игровых HUD, меню и приложений, требующих
 профессионального вида интерфейса.
 
-Версия: **6.0+** (см. [Core.h](../../external/rmlui/Include/RmlUi/Core/Core.h))
+Версия: **6.0+** (см. [Core.h](../../../../external/rmlui/Include/RmlUi/Core/Core.h))
 Исходники: [mikke89/RmlUi](https://github.com/mikke89/RmlUi)
 Документация: [mikke89.github.io/RmlUiDoc](https://mikke89.github.io/RmlUiDoc/)
 

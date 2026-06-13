@@ -5,15 +5,19 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
-#include <limits>
-#include <span>
 #include <stack>
 #include <utility>
 #include <vector>
 
 #include <fastgltf/core.hpp>
+// noinspection CppUnusedIncludeDirective
+// `<fastgltf/glm_element_traits.hpp>` is required for
+// `iterateAccessorWithIndex<glm::vec3>` with a const lambda
+// in `LoadMeshNodeFromAccessor` — JetBrains' indexer doesn't
+// see the const `Element<glm::vec3>` instantiation through the
+// `<fastgltf/glm_element_traits.hpp>` header, but the build
+// (clang++ 22) does.
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <glm/glm.hpp>
@@ -41,9 +45,15 @@ bool CopyAccessorToVec3(
 	}
 	out.clear();
 	out.reserve(accessor.count);
-	fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, accessor, [&](glm::vec3 value, std::size_t) {
-		out.push_back(value);
-	});
+	// `iterateAccessorWithIndex` in fastgltf has `requires Element<ElementType>`
+	// — `Element` is only defined for non-const types, so the lambda parameter
+	// must stay `glm::vec3` / `glm::vec2` (NOT `const glm::vec3`), even though
+	// JetBrains flags it as `CppParameterMayBeConst`. The build break is the
+	// authoritative source of truth here.
+	fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, accessor,
+												  [&](const glm::vec3 value, std::size_t) {
+													  out.push_back(value);
+												  });
 	return true;
 }
 
@@ -57,7 +67,7 @@ bool CopyAccessorToVec2(
 	}
 	out.clear();
 	out.reserve(accessor.count);
-	fastgltf::iterateAccessorWithIndex<glm::vec2>(asset, accessor, [&](glm::vec2 value, std::size_t) {
+	fastgltf::iterateAccessorWithIndex<glm::vec2>(asset, accessor, [&](const glm::vec2 value, std::size_t) {
 		out.push_back(value);
 	});
 	return true;
@@ -72,26 +82,31 @@ bool CopyIndicesToU32(
 	out.reserve(accessor.count);
 	switch (accessor.componentType) {
 	case fastgltf::ComponentType::UnsignedInt: {
-		fastgltf::iterateAccessorWithIndex<std::uint32_t>(asset, accessor, [&](std::uint32_t v, std::size_t) {
+		fastgltf::iterateAccessorWithIndex<std::uint32_t>(asset, accessor, [&](const std::uint32_t v, std::size_t) {
 			out.push_back(v);
 		});
 		return true;
 	}
 	case fastgltf::ComponentType::UnsignedShort: {
-		fastgltf::iterateAccessorWithIndex<std::uint16_t>(asset, accessor, [&](std::uint16_t v, std::size_t) {
-			out.push_back(static_cast<std::uint32_t>(v));
+		fastgltf::iterateAccessorWithIndex<std::uint16_t>(asset, accessor, [&](const std::uint16_t v, std::size_t) {
+			out.push_back(v);
 		});
 		return true;
 	}
 	case fastgltf::ComponentType::Byte: {
-		fastgltf::iterateAccessorWithIndex<std::int8_t>(asset, accessor, [&](std::int8_t v, std::size_t) {
+		fastgltf::iterateAccessorWithIndex<std::int8_t>(asset, accessor, [&](const std::int8_t v, std::size_t) {
+			// `int8_t` → `uint32_t` is a signed-to-unsigned widening
+			// conversion. Without an explicit cast the compiler
+			// issues `-Wsign-conversion` (and -Werror in
+			// downstream `Werror=sign-conversion` builds), so keep
+			// the cast even though JetBrains flags it as redundant.
 			out.push_back(static_cast<std::uint32_t>(v));
 		});
 		return true;
 	}
 	case fastgltf::ComponentType::UnsignedByte: {
-		fastgltf::iterateAccessorWithIndex<std::uint8_t>(asset, accessor, [&](std::uint8_t v, std::size_t) {
-			out.push_back(static_cast<std::uint32_t>(v));
+		fastgltf::iterateAccessorWithIndex<std::uint8_t>(asset, accessor, [&](const std::uint8_t v, std::size_t) {
+			out.push_back(v);
 		});
 		return true;
 	}
@@ -207,7 +222,7 @@ glm::mat4 ComposeNodeLocalMatrix(const fastgltf::Node &node)
 		// by column to honour the (col, row) semantics on both
 		// sides — `glm[col][row]` is the same as `m.col(col)[row]`.
 		glm::mat4 result(0.0f);
-		for (std::size_t col = 0; col < 4; ++col) {
+		for (int col = 0; col < 4; ++col) {
 			const auto &srcCol = m[col];
 			result[col][0] = srcCol.x();
 			result[col][1] = srcCol.y();
@@ -216,23 +231,23 @@ glm::mat4 ComposeNodeLocalMatrix(const fastgltf::Node &node)
 		}
 		return result;
 	}
-	const auto &trs = std::get<fastgltf::TRS>(node.transform);
+	const auto &[srcTranslation, srcRotation, srcScale] = std::get<fastgltf::TRS>(node.transform);
 	const glm::vec3 translation(
-		trs.translation.x(),
-		trs.translation.y(),
-		trs.translation.z());
+		srcTranslation.x(),
+		srcTranslation.y(),
+		srcTranslation.z());
 	// fastgltf's quat stores (X, Y, Z, W) in the order w is the
 	// scalar; glm::quat is the same. The constructor takes W
 	// first per the glTF spec.
 	const glm::quat rotation(
-		static_cast<float>(trs.rotation.w()),
-		static_cast<float>(trs.rotation.x()),
-		static_cast<float>(trs.rotation.y()),
-		static_cast<float>(trs.rotation.z()));
+		srcRotation.w(),
+		srcRotation.x(),
+		srcRotation.y(),
+		srcRotation.z());
 	const glm::vec3 scale(
-		trs.scale.x(),
-		trs.scale.y(),
-		trs.scale.z());
+		srcScale.x(),
+		srcScale.y(),
+		srcScale.z());
 	const glm::mat4 t = glm::translate(glm::mat4(1.0f), translation);
 	const glm::mat4 r = glm::mat4_cast(rotation);
 	const glm::mat4 s = glm::scale(glm::mat4(1.0f), scale);
@@ -273,20 +288,21 @@ bool ApplyNodeHierarchyTransforms(
 		SetLastError("asset has no scenes");
 		return false;
 	}
-	const fastgltf::Scene &scene = asset.scenes.front();
-	if (scene.nodeIndices.empty()) {
+	const auto &[sceneNodeIndices, sceneName] = asset.scenes.front();
+	(void)sceneName;
+	if (sceneNodeIndices.empty()) {
 		SetLastError("default scene has no root nodes");
 		return false;
 	}
 
-	std::vector<bool> nodeVisited(asset.nodes.size(), false);
+	std::vector nodeVisited(asset.nodes.size(), false);
 
 	struct Frame {
 		size_t nodeIndex;
 		glm::mat4 parentGlobal;
 	};
 	std::stack<Frame> stack;
-	for (const size_t rootIdx : scene.nodeIndices) {
+	for (const size_t rootIdx : sceneNodeIndices) {
 		stack.push(Frame{rootIdx, glm::mat4(1.0f)});
 	}
 
@@ -295,25 +311,25 @@ bool ApplyNodeHierarchyTransforms(
 	glm::vec3 aabbMax{0.0f};
 
 	while (!stack.empty()) {
-		const Frame frame = stack.top();
+		const auto &[nodeIndex, parentGlobal] = stack.top();
 		stack.pop();
-		const fastgltf::Node &node = asset.nodes[frame.nodeIndex];
-		if (frame.nodeIndex >= asset.nodes.size()) {
+		const fastgltf::Node &node = asset.nodes[nodeIndex];
+		if (nodeIndex >= asset.nodes.size()) {
 			SetLastError("scene references out-of-range node index");
 			return false;
 		}
-		if (nodeVisited[frame.nodeIndex]) {
+		if (nodeVisited[nodeIndex]) {
 			// glTF §3.5.2: hierarchy MUST be disjoint strict
 			// trees. A duplicate visit is a malformed asset.
 			continue;
 		}
-		nodeVisited[frame.nodeIndex] = true;
+		nodeVisited[nodeIndex] = true;
 		const glm::mat4 local = ComposeNodeLocalMatrix(node);
-		const glm::mat4 global = frame.parentGlobal * local;
+		const glm::mat4 global = parentGlobal * local;
 
 		// Apply the global transform to every referenced mesh.
 		if (node.meshIndex.has_value()) {
-			const size_t meshIdx = *node.meshIndex;
+			const auto meshIdx = *node.meshIndex;
 			if (meshIdx >= asset.meshes.size()) {
 				SetLastError("node references out-of-range mesh index");
 				return false;
@@ -381,8 +397,7 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 
 	auto dataBuffer = fastgltf::GltfDataBuffer::FromPath(path);
 	if (dataBuffer.error() != fastgltf::Error::None) {
-		const std::string message = std::string("GltfDataBuffer::FromPath failed: ")
-			+ fastgltf::getErrorMessage(dataBuffer.error());
+		const std::string message = std::string("GltfDataBuffer::FromPath failed: ") + fastgltf::getErrorMessage(dataBuffer.error());
 		SetLastError(message);
 		if (outError) {
 			outError->message = message;
@@ -397,8 +412,7 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 	const std::filesystem::path directory = std::filesystem::path(path).parent_path();
 	auto assetExpected = parser.loadGltf(dataBuffer.get(), directory, options, categories);
 	if (assetExpected.error() != fastgltf::Error::None) {
-		const std::string message = std::string("loadGltf failed: ")
-			+ fastgltf::getErrorMessage(assetExpected.error());
+		const std::string message = std::string("loadGltf failed: ") + fastgltf::getErrorMessage(assetExpected.error());
 		SetLastError(message);
 		if (outError) {
 			outError->message = message;
@@ -481,7 +495,7 @@ std::optional<GlbDimensions> ComputeGlbDimensions(
 	LoadAssetError *outError)
 {
 	LoadAssetError localError;
-	std::unique_ptr<LoadedAsset> loaded = LoadGlb(path, &localError);
+	const std::unique_ptr<LoadedAsset> loaded = LoadGlb(path, &localError);
 	if (!loaded) {
 		if (outError) {
 			*outError = std::move(localError);
@@ -526,10 +540,10 @@ VoxelAlignedAabb ComputeVoxelAlignedAabb(
 	// `(aabbMax - aabbMin) = srcDim` scales by `s_i` to give the
 	// integer-aligned target.
 	(void)voxelSize; // voxelSize is implicit in the per-axis `round`
-	                 // (which assumes 1.0 — the VoxelLab contract).
-	                 // Kept in the signature for future per-world
-	                 // voxelSize support (e.g. sub-voxel worlds).
-	                 // Tests construct the 1.0 case explicitly.
+					 // (which assumes 1.0 — the VoxelLab contract).
+					 // Kept in the signature for future per-world
+					 // voxelSize support (e.g. sub-voxel worlds).
+					 // Tests construct the 1.0 case explicitly.
 	const float srcX = std::max(aabbMax.x - aabbMin.x, 1e-6f);
 	const float srcY = std::max(aabbMax.y - aabbMin.y, 1e-6f);
 	const float srcZ = std::max(aabbMax.z - aabbMin.z, 1e-6f);

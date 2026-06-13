@@ -1,8 +1,6 @@
 #include "render/Taa.hpp"
 
-#include <algorithm>
 #include <array>
-#include <cstdint>
 
 namespace projectv::taa {
 
@@ -43,7 +41,7 @@ std::array<float, 2> AdvanceTaaPixelJitter(uint32_t *frameCounter)
 
 std::array<float, 4> BuildTaaHistoryParams(
 	const VkExtent2D extent,
-	bool historyValid)
+	const bool historyValid)
 {
 	if (extent.width == 0u || extent.height == 0u) {
 		return {0.0f, 0.0f, historyValid ? 1.0f : 0.0f, 0.0f};
@@ -64,8 +62,8 @@ std::array<float, 4> BuildTaaHistoryParams(
 // at the swapchain extent), so the texel-size is the same.
 std::array<float, 4> BuildTaaLayerHistoryParams(
 	const VkExtent2D extent,
-	bool historyValid,
-	float blendFactor)
+	const bool historyValid,
+	const float blendFactor)
 {
 	if (extent.width == 0u || extent.height == 0u) {
 		return {0.0f, 0.0f, historyValid ? 1.0f : 0.0f, blendFactor};

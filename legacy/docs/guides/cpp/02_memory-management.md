@@ -217,7 +217,7 @@ auto data = std::make_unique_for_overwrite<SIMDData[]>(100);
 ```
 
 **Связь с философией:** Это прямое продолжение принципов DOD
-из [03_dod-philosophy.md](../../philosophy/03_dod-philosophy.md). Данные должны лежать так, чтобы минимизировать cache
+из [03_dod-philosophy.md](../../philosophy/02_paradigms/02_dod-philosophy.md). Данные должны лежать так, чтобы минимизировать cache
 misses и конфликты между потоками.
 
 ---

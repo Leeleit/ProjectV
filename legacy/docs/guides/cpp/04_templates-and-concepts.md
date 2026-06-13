@@ -155,7 +155,7 @@ public:
 4. **Perfect forwarding:** `this Self&& self` работает корректно
 
 > **Связь с философией:** Это пример "zero-cost abstraction"
-> из [02_zero-cost-abstractions.md](../../philosophy/02_zero-cost-abstractions.md). Deducing This даёт статический
+> из [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md). Deducing This даёт статический
 > полиморфизм без runtime-накладных расходов виртуальных функций.
 
 ### Концепты для ECS компонентов
@@ -319,7 +319,7 @@ class MovementSystem : public ProcessingSystem<TransformComponent, VelocityCompo
 ```
 
 **Связь с философией:** Шаблонные системы в ECS — это пример композиции вместо наследования.
-См. [04_ecs-philosophy.md](../../philosophy/04_ecs-philosophy.md).
+См. [04_ecs-philosophy.md](../../philosophy/02_paradigms/03_ecs-philosophy.md).
 
 ### Концепты для воксельных данных
 

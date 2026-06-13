@@ -19,7 +19,7 @@ struct VulkanContextState;
 // the C++ builtin so the header stays self-contained — the real
 // VMA header is included by the .cpp via the `RenderState` chain.
 namespace projectv::taa {
-using VmaAllocationHandle = void*;
+using VmaAllocationHandle = void *;
 }
 
 #include <vulkan/vulkan.h>
@@ -80,7 +80,7 @@ inline constexpr VkFormat kTaaLayerHistoryColorFormat = VK_FORMAT_R8G8B8A8_UNORM
 struct OffscreenColorTarget {
 	VkImage image = VK_NULL_HANDLE;
 	VkImageView imageView = VK_NULL_HANDLE;
-	projectv::taa::VmaAllocationHandle allocation = nullptr;
+	VmaAllocationHandle allocation = nullptr;
 };
 
 // Build / recreate the TAA offscreen color images (colour +
@@ -120,13 +120,13 @@ void DestroyTaaRenderTargets(
 // `SwapchainState::format` (only the depth-stencil transition needs it,
 // and only when the caller is changing the depth attachment usage).
 void TransitionTaaSceneColorForWrite(
-	const VkCommandBuffer cmd,
+	VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor);
 void TransitionTaaSceneColorForSample(
-	const VkCommandBuffer cmd,
+	VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor);
 void TransitionTaaHistoryForSample(
-	const VkCommandBuffer cmd,
+	VkCommandBuffer cmd,
 	const OffscreenColorTarget &historyColor);
 // Copy the just-resolved `sceneColor` into `historyColor` so the next
 // frame's resolve pass has a fresh history sample to reproject against.
@@ -134,7 +134,7 @@ void TransitionTaaHistoryForSample(
 // count, and avoids the extra `vkCmdBlitImage` path that the spec warns
 // about for colour-only copies.
 void RecordTaaHistoryCopy(
-	const VkCommandBuffer cmd,
+	VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor,
 	const OffscreenColorTarget &historyColor,
 	VkExtent2D extent);

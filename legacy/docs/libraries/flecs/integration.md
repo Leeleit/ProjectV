@@ -105,7 +105,7 @@ world.import<game_module>();
 ## 5. Addons и кастомная сборка
 
 При сборке через CMake (`add_subdirectory`) все addons включены по умолчанию.
-Для кастомной сборки (defines) см. [BuildingFlecs.md](../../external/flecs/docs/BuildingFlecs.md).
+Для кастомной сборки (defines) см. [BuildingFlecs.md](../../../../external/flecs/docs/BuildingFlecs.md).
 
 ---
 

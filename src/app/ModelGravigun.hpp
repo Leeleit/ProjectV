@@ -1,8 +1,6 @@
 #ifndef MODEL_GRAVIGUN_HPP
 #define MODEL_GRAVIGUN_HPP
 
-#include <array>
-
 #include "core/Types.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -101,7 +99,7 @@ void TickModelGravigun(
 	ModelGravigunState *state,
 	const VoxelWorld &world,
 	const CameraState &camera,
-	const VkExtent2D extent,
+	VkExtent2D extent,
 	RenderState *render,
 	InputState *input);
 

@@ -24,8 +24,7 @@ bool CreateStagingBuffer(
 
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-		| VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
 	return vmaCreateBuffer(
 			   allocator,
@@ -33,8 +32,7 @@ bool CreateStagingBuffer(
 			   &allocationInfo,
 			   &outBuffer,
 			   &outAllocation,
-			   &outAllocationInfo)
-		== VK_SUCCESS;
+			   &outAllocationInfo) == VK_SUCCESS;
 }
 
 bool CreateDeviceBuffer(
@@ -54,8 +52,7 @@ bool CreateDeviceBuffer(
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	allocationInfo.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-	return vmaCreateBuffer(allocator, &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr)
-		== VK_SUCCESS;
+	return vmaCreateBuffer(allocator, &bufferInfo, &allocationInfo, &outBuffer, &outAllocation, nullptr) == VK_SUCCESS;
 }
 
 bool CopyBufferViaStaging(
@@ -67,6 +64,13 @@ bool CopyBufferViaStaging(
 	const VkBuffer destination,
 	const VkDeviceSize size)
 {
+	// `allocator` is currently unused — staging buffers are
+	// created with the legacy `vkCreateBuffer + vkAllocateMemory`
+	// path below, not through VMA. Kept in the signature so the
+	// helper can be re-pointed at VMA in a future slice without
+	// changing every call site.
+	(void)allocator;
+
 	VkCommandBufferAllocateInfo allocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocateInfo.commandPool = commandPool;
@@ -138,8 +142,7 @@ bool UploadBakedPrimitiveToGpu(
 	if (outError) {
 		outError->clear();
 	}
-	if (device == VK_NULL_HANDLE || allocator == VK_NULL_HANDLE
-		|| commandPool == VK_NULL_HANDLE || queue == VK_NULL_HANDLE) {
+	if (device == VK_NULL_HANDLE || allocator == VK_NULL_HANDLE || commandPool == VK_NULL_HANDLE || queue == VK_NULL_HANDLE) {
 		if (outError) {
 			*outError = "UploadBakedPrimitiveToGpu: null device / allocator / pool / queue";
 		}

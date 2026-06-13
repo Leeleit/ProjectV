@@ -228,5 +228,5 @@ void registerGameplaySystems(flecs::world& ecs) {
 ## Ссылки
 
 - [Engine Structure](../../architecture/practice/00_engine-structure.md)
-- [ECS Philosophy](../../philosophy/04_ecs-philosophy.md)
+- [ECS Philosophy](../../philosophy/02_paradigms/03_ecs-philosophy.md)
 - [Flecs Patterns](../../libraries/flecs/10_projectv-patterns.md)

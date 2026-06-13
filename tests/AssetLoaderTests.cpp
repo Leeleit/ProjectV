@@ -2,7 +2,6 @@
 #include "asset/AssetManifest.hpp"
 #include "asset/AssetRegistry.hpp"
 
-#include <array>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -25,6 +24,12 @@ struct TestContext {
 	}
 };
 
+// `CppDFAConstantParameter` false positive: the DFA reads the
+// default `1e-5f` as the only call value, but real call sites
+// pass `1e-3f` (glTF float-quantisation tolerance, see
+// `TestBakeBoxUvAcceptsRoundingToOnePercent`) and other
+// task-specific epsilons.
+// noinspection CppDFAConstantParameter
 bool ApproxEqual(const float a, const float b, const float epsilon = 1e-5f)
 {
 	return std::fabs(a - b) <= epsilon;
@@ -43,13 +48,12 @@ std::filesystem::path UntitledColonadaFixturePath()
 void TestLoadBoxGlbExtractsOnePrimitive(TestContext &context)
 {
 	if (!std::filesystem::exists(BoxFixturePath())) {
-		context.Fail(__LINE__, "box.glb fixture not found at "
-								  + BoxFixturePath().string());
+		context.Fail(__LINE__, "box.glb fixture not found at " + BoxFixturePath().string());
 		return;
 	}
 
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("LoadGlb returned null: ") + error.message);
 		return;
@@ -77,18 +81,16 @@ void TestLoadBoxGlbExtractsOnePrimitive(TestContext &context)
 	if (prim.normals.size() != 24) {
 		context.Fail(__LINE__, "primitive.normals size mismatch");
 	}
-	if (prim.uvs.size() != 0) {
+	if (!prim.uvs.empty()) {
 		context.Fail(__LINE__, "primitive.uvs should be empty for Box.glb (no TEXCOORD_0)");
 	}
 	if (prim.indices.size() != 36) {
 		context.Fail(__LINE__, "primitive.indices size mismatch");
 	}
-	if (!ApproxEqual(loaded->aabbMin.x, -0.5f) || !ApproxEqual(loaded->aabbMin.y, -0.5f)
-		|| !ApproxEqual(loaded->aabbMin.z, -0.5f)) {
+	if (!ApproxEqual(loaded->aabbMin.x, -0.5f) || !ApproxEqual(loaded->aabbMin.y, -0.5f) || !ApproxEqual(loaded->aabbMin.z, -0.5f)) {
 		context.Fail(__LINE__, "aabbMin not (-0.5, -0.5, -0.5)");
 	}
-	if (!ApproxEqual(loaded->aabbMax.x, 0.5f) || !ApproxEqual(loaded->aabbMax.y, 0.5f)
-		|| !ApproxEqual(loaded->aabbMax.z, 0.5f)) {
+	if (!ApproxEqual(loaded->aabbMax.x, 0.5f) || !ApproxEqual(loaded->aabbMax.y, 0.5f) || !ApproxEqual(loaded->aabbMax.z, 0.5f)) {
 		context.Fail(__LINE__, "aabbMax not (0.5, 0.5, 0.5)");
 	}
 }
@@ -96,7 +98,7 @@ void TestLoadBoxGlbExtractsOnePrimitive(TestContext &context)
 void TestLoadBoxGlbReportsErrorForMissingFile(TestContext &context)
 {
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(
+	const auto loaded = projectv::asset::LoadGlb(
 		(std::filesystem::path(PROJECTV_TESTS_SOURCE_DIR) / "fixtures" / "no_such.glb").string(),
 		&error);
 	if (loaded != nullptr) {
@@ -197,8 +199,7 @@ void TestAssetRegistry(TestContext &context)
 	}
 
 	if (!registry.Load("box", BoxFixturePath().string())) {
-		context.Fail(__LINE__, std::string("registry.Load failed: ")
-								  + std::string(projectv::asset::GetAssetLoaderLastErrorMessage()));
+		context.Fail(__LINE__, std::string("registry.Load failed: ") + std::string(projectv::asset::GetAssetLoaderLastErrorMessage()));
 		return;
 	}
 	if (registry.Size() != 1) {
@@ -236,13 +237,12 @@ void TestComputeGlbDimensionsReportsBoxFixture(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto dims = projectv::asset::ComputeGlbDimensions(BoxFixturePath().string(), &error);
+	const auto dims = projectv::asset::ComputeGlbDimensions(BoxFixturePath().string(), &error);
 	if (!dims) {
 		context.Fail(__LINE__, std::string("ComputeGlbDimensions(box.glb) returned nullopt: ") + error.message);
 		return;
 	}
-	if (!ApproxEqual(dims->size.x, 1.0f) || !ApproxEqual(dims->size.y, 1.0f)
-		|| !ApproxEqual(dims->size.z, 1.0f)) {
+	if (!ApproxEqual(dims->size.x, 1.0f) || !ApproxEqual(dims->size.y, 1.0f) || !ApproxEqual(dims->size.z, 1.0f)) {
 		context.Fail(__LINE__, "box.glb size is not (1, 1, 1)");
 	}
 }
@@ -276,10 +276,9 @@ void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto dims = projectv::asset::ComputeGlbDimensions(path.string(), &error);
+	const auto dims = projectv::asset::ComputeGlbDimensions(path.string(), &error);
 	if (!dims) {
-		context.Fail(__LINE__, std::string("ComputeGlbDimensions(Untitled.colonada.glb) returned nullopt: ")
-								  + error.message);
+		context.Fail(__LINE__, std::string("ComputeGlbDimensions(Untitled.colonada.glb) returned nullopt: ") + error.message);
 		return;
 	}
 	// After node-hierarchy walk, the lamp post is ~6 wide × ~14.5
@@ -288,9 +287,9 @@ void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context
 	// Y dim (2.73) scaled by node scale 5 = 13.6, plus the Sphere
 	// and Cube contributions. We assert 6 ≤ X ≤ 6.1, 14 ≤ Y ≤ 15,
 	// 8 ≤ Z ≤ 8.2 to leave room for floating-point tolerance.
-	const float xMin = 5.5f, xMax = 6.5f;
-	const float yMin = 14.0f, yMax = 15.0f;
-	const float zMin = 7.5f, zMax = 8.5f;
+	constexpr float xMin = 5.5f, xMax = 6.5f;
+	constexpr float yMin = 14.0f, yMax = 15.0f;
+	constexpr float zMin = 7.5f, zMax = 8.5f;
 	if (dims->size.x < xMin || dims->size.x > xMax) {
 		std::fprintf(stderr, "Untitled.colonada X size=%.3f, expected in [%.1f, %.1f]\n", dims->size.x, xMin, xMax);
 		context.Fail(__LINE__, "X dim is not ~6 — node hierarchy not applied?");
@@ -306,26 +305,24 @@ void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context
 	// Print the AABB for human inspection (one-shot debugging —
 	// the reusable inspector is `tools/compute-glb-dimensions`).
 	std::fprintf(stderr,
-		"ComputeGlbDimensions: path=%s aabbMin=(%.6f %.6f %.6f) aabbMax=(%.6f %.6f %.6f) size=(%.6f %.6f %.6f)\n",
-		path.string().c_str(),
-		dims->aabbMin.x, dims->aabbMin.y, dims->aabbMin.z,
-		dims->aabbMax.x, dims->aabbMax.y, dims->aabbMax.z,
-		dims->size.x, dims->size.y, dims->size.z);
+				 "ComputeGlbDimensions: path=%s aabbMin=(%.6f %.6f %.6f) aabbMax=(%.6f %.6f %.6f) size=(%.6f %.6f %.6f)\n",
+				 path.string().c_str(),
+				 dims->aabbMin.x, dims->aabbMin.y, dims->aabbMin.z,
+				 dims->aabbMax.x, dims->aabbMax.y, dims->aabbMax.z,
+				 dims->size.x, dims->size.y, dims->size.z);
 }
 
 void TestComputeVoxelAlignedAabbBoxFixture(TestContext &context)
 {
 	// 1x1x1 box already on the voxel grid. Identity: no scaling, no
 	// shift. The helper should round-trip.
-	const glm::vec3 aabbMin(0.0f, 1.0f, 0.0f);
-	const glm::vec3 aabbMax(1.0f, 2.0f, 1.0f);
-	const auto aligned = projectv::asset::ComputeVoxelAlignedAabb(aabbMin, aabbMax, 1.0f);
-	if (!ApproxEqual(aligned.aabbMin.x, 0.0f) || !ApproxEqual(aligned.aabbMin.y, 1.0f)
-		|| !ApproxEqual(aligned.aabbMin.z, 0.0f)) {
+	constexpr glm::vec3 aabbMin(0.0f, 1.0f, 0.0f);
+	constexpr glm::vec3 aabbMax(1.0f, 2.0f, 1.0f);
+	const auto &[alignedAabbMin, alignedAabbMax] = projectv::asset::ComputeVoxelAlignedAabb(aabbMin, aabbMax, 1.0f);
+	if (!ApproxEqual(alignedAabbMin.x, 0.0f) || !ApproxEqual(alignedAabbMin.y, 1.0f) || !ApproxEqual(alignedAabbMin.z, 0.0f)) {
 		context.Fail(__LINE__, "box fixture: aligned aabbMin not (0, 1, 0)");
 	}
-	if (!ApproxEqual(aligned.aabbMax.x, 1.0f) || !ApproxEqual(aligned.aabbMax.y, 2.0f)
-		|| !ApproxEqual(aligned.aabbMax.z, 1.0f)) {
+	if (!ApproxEqual(alignedAabbMax.x, 1.0f) || !ApproxEqual(alignedAabbMax.y, 2.0f) || !ApproxEqual(alignedAabbMax.z, 1.0f)) {
 		context.Fail(__LINE__, "box fixture: aligned aabbMax not (1, 2, 1)");
 	}
 }
@@ -339,22 +336,22 @@ void TestComputeVoxelAlignedAabbUntitledColonada(TestContext &context)
 	// stays at (-9, 0, 9). The Y is left untouched here because the
 	// ground-snap step (which is not part of this pure helper) is
 	// what enforces `topVoxelY + 1`.
-	const glm::vec3 aabbMin(-9.0f, 0.0f, 9.0f);
-	const glm::vec3 aabbMax(-3.0f, 2.7f, 17.1f);
-	const auto aligned = projectv::asset::ComputeVoxelAlignedAabb(aabbMin, aabbMax, 1.0f);
-	const float dimX = aligned.aabbMax.x - aligned.aabbMin.x;
-	const float dimY = aligned.aabbMax.y - aligned.aabbMin.y;
-	const float dimZ = aligned.aabbMax.z - aligned.aabbMin.z;
+	constexpr glm::vec3 aabbMin(-9.0f, 0.0f, 9.0f);
+	constexpr glm::vec3 aabbMax(-3.0f, 2.7f, 17.1f);
+	const auto &[alignedAabbMin, alignedAabbMax] = projectv::asset::ComputeVoxelAlignedAabb(aabbMin, aabbMax, 1.0f);
+	const float dimX = alignedAabbMax.x - alignedAabbMin.x;
+	const float dimY = alignedAabbMax.y - alignedAabbMin.y;
+	const float dimZ = alignedAabbMax.z - alignedAabbMin.z;
 	if (!ApproxEqual(dimX, 6.0f) || !ApproxEqual(dimY, 3.0f) || !ApproxEqual(dimZ, 8.0f)) {
 		std::fprintf(stderr,
-			"ComputeVoxelAlignedAabb untitled: got dims (%.6f, %.6f, %.6f), expected (6, 3, 8)\n",
-			dimX, dimY, dimZ);
+					 "ComputeVoxelAlignedAabb untitled: got dims (%.6f, %.6f, %.6f), expected (6, 3, 8)\n",
+					 dimX, dimY, dimZ);
 		context.Fail(__LINE__, "untitled colonada: aligned dims are not (6, 3, 8)");
 	}
-	if (!ApproxEqual(aligned.aabbMin.x, -9.0f) || !ApproxEqual(aligned.aabbMin.z, 9.0f)) {
+	if (!ApproxEqual(alignedAabbMin.x, -9.0f) || !ApproxEqual(alignedAabbMin.z, 9.0f)) {
 		std::fprintf(stderr,
-			"ComputeVoxelAlignedAabb untitled: got aabbMin=(%.6f, %.6f, %.6f), expected X=-9, Z=9\n",
-			aligned.aabbMin.x, aligned.aabbMin.y, aligned.aabbMin.z);
+					 "ComputeVoxelAlignedAabb untitled: got aabbMin=(%.6f, %.6f, %.6f), expected X=-9, Z=9\n",
+					 alignedAabbMin.x, alignedAabbMin.y, alignedAabbMin.z);
 		context.Fail(__LINE__, "untitled colonada: XZ corner snap did not preserve operator's integer position");
 	}
 }

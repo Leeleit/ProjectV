@@ -344,7 +344,7 @@ public:
 ```
 
 **Связь с философией:** Лямбды в ECS — это пример композиции вместо наследования.
-См. [04_ecs-philosophy.md](../../philosophy/04_ecs-philosophy.md).
+См. [04_ecs-philosophy.md](../../philosophy/02_paradigms/03_ecs-philosophy.md).
 
 ### Воксельные пайплайны
 

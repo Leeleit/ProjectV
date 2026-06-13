@@ -29,7 +29,6 @@ struct OffscreenColorTarget;
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -48,7 +47,7 @@ void DestroyAudioEngine(projectv::audio::AudioEngine *engine);
 using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
 using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
 using AudioEnginePtr = std::unique_ptr<projectv::audio::AudioEngine,
-	void (*)(projectv::audio::AudioEngine *)>;
+									   void (*)(projectv::audio::AudioEngine *)>;
 
 struct PackedSceneVoxelFace {
 	// A1 (4.1 greedy meshing): this struct now covers both 1×1 voxels and
@@ -408,7 +407,7 @@ struct InputReplayCapture {
 
 struct InputReplayState {
 	InputReplayCapture capture{};
-	std::string replayPath{};
+	std::string replayPath;
 	bool recording = false;
 	bool playbackRequested = false;
 	bool playbackActive = false;

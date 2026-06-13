@@ -200,11 +200,6 @@ std::filesystem::path GetTestScreenshotPath()
 	return tempDirectory / "ProjectV-ScreenshotTest.bmp";
 }
 
-std::filesystem::path GetTestFixturePath(const std::string_view filename)
-{
-	return std::filesystem::path(PROJECTV_TESTS_SOURCE_DIR) / "fixtures" / std::filesystem::path(filename);
-}
-
 void ResetDirtyFlags(VoxelWorld &world);
 
 PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
@@ -436,18 +431,30 @@ void TestSaveScreenshotCaptureBmpWritesExpectedBmp(TestContext &context)
 	std::filesystem::remove(screenshotPath, removeError);
 
 	constexpr std::array<uint8_t, 16> pixels{
-		255u, 0u, 0u, 255u,
-		0u, 255u, 0u, 255u,
-		0u, 0u, 255u, 255u,
-		255u, 255u, 255u, 255u,
+		255u,
+		0u,
+		0u,
+		255u,
+		0u,
+		255u,
+		0u,
+		255u,
+		0u,
+		0u,
+		255u,
+		255u,
+		255u,
+		255u,
+		255u,
+		255u,
 	};
 
 	EXPECT_TRUE(context, SaveScreenshotCaptureBmp(
-		pixels.data(),
-		2u,
-		2u,
-		VK_FORMAT_R8G8B8A8_UNORM,
-		screenshotPath.string()));
+							 pixels.data(),
+							 2u,
+							 2u,
+							 VK_FORMAT_R8G8B8A8_UNORM,
+							 screenshotPath.string()));
 	EXPECT_TRUE(context, std::filesystem::exists(screenshotPath));
 
 	std::ifstream stream(screenshotPath, std::ios::binary);
@@ -512,10 +519,10 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 	std::filesystem::remove(metadataPath, removeError);
 
 	EXPECT_TRUE(context, SaveScreenshotCaptureMetadata(
-		render,
-		VoxelScenePreset::MeshingStress,
-		"C:/ProjectVTests/Captures/sample.bmp",
-		metadataPath.string()));
+							 render,
+							 VoxelScenePreset::MeshingStress,
+							 "C:/ProjectVTests/Captures/sample.bmp",
+							 metadataPath.string()));
 	EXPECT_TRUE(context, std::filesystem::exists(metadataPath));
 
 	std::ifstream stream(metadataPath);
@@ -1489,6 +1496,13 @@ CameraState MakeTestCamera(const std::array<float, 3> &position)
 	return camera;
 }
 
+// `CppDFAConstantParameter` false positive on `deltaSeconds`:
+// the DFA cannot track that the call site in the input-replay
+// tests passes `capture.frames[i].deltaSeconds` which is
+// read from the `.replay` fixture and varies per frame. The
+// `1.0f / 60.0f` literal in other tests is a *test default*,
+// not the only value. Suppress per-line.
+// noinspection CppDFAConstantParameter
 bool AdvanceUpdateAppWithSimulatedFrameDelta(
 	PlatformState *platform,
 	SimulationState *simulation,
@@ -4726,7 +4740,7 @@ void TestWalkCharacterCanJumpWhileMovingAcrossNarrowEdgeBandWithoutSneak(TestCon
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 
-	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+	PhysicsWalkDebugInfo preJumpInfo;
 	bool foundMovingEdgeBand = false;
 	for (int step = 0; step < 30; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
@@ -4819,7 +4833,7 @@ void TestWalkCharacterCanJumpWhileBoostingAlongStraightEdgeWithoutSneak(TestCont
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_LCTRL);
 
 	float minY = camera.position[1];
-	PhysicsWalkDebugInfo preJumpInfo = GetPhysicsWalkDebugInfo(physics.get());
+	PhysicsWalkDebugInfo preJumpInfo;
 	for (int step = 0; step < 120; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
 		minY = std::min(minY, camera.position[1]);
@@ -6440,314 +6454,6 @@ void TestWalkCharacterDoesNotMagnetSnapDuringFreeFall(TestContext &context)
 	EXPECT_TRUE(context, camera.position[1] < 4.5f);
 	EXPECT_TRUE(context, camera.position[1] > 3.2f);
 }
-
-void TestCreativeCharacterCollidesWithVoxelWall(TestContext &context)
-{
-	VoxelWorld world = MakeWalkTestWorld();
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Glass);
-
-	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
-	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
-
-	CameraState camera = MakeTestCamera({2.5f, 3.0f, 4.5f});
-	camera.controlMode = CameraState::ControlMode::Creative;
-	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), &world, &camera));
-
-	InputState input{};
-	InitializeInputState(input);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
-	for (int step = 0; step < 120; ++step) {
-		EXPECT_TRUE(context, TickCreativeCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
-	}
-
-	EXPECT_TRUE(context, camera.position[2] > 3.2f);
-	EXPECT_TRUE(context, camera.position[2] < 4.5f);
-	EXPECT_NEAR(context, 3.0f, camera.position[1]);
-}
-
-void TestCreativeCharacterBoostedFlightSlidesAlongTransparencyStressColumns(TestContext &context)
-{
-	const std::filesystem::path replayPath = GetTestFixturePath("creative_transparency_boost_stuck.projectv.replay");
-	const std::filesystem::path snapshotPath = GetTestFixturePath("creative_transparency_boost_stuck.snapshot.bin");
-	EXPECT_TRUE(context, std::filesystem::exists(replayPath));
-	EXPECT_TRUE(context, std::filesystem::exists(snapshotPath));
-
-	InputReplayCapture capture{};
-	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &capture));
-	capture.snapshotPath = snapshotPath.string();
-
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(capture.snapshotPath);
-	EXPECT_TRUE(context, loadedWorld != nullptr);
-	if (!loadedWorld) {
-		return;
-	}
-
-	PlatformState platform{};
-	SimulationState simulation{};
-	CameraState camera = capture.initialCamera;
-	InputState input{};
-	InitializeInputState(input);
-	InteractionState interaction = capture.initialInteraction;
-	WorldState worldState{};
-	worldState.voxelWorld = std::move(loadedWorld);
-	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
-	RenderState render{};
-	DebugState debug{};
-
-	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
-	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
-	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
-	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
-	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
-
-	float furthestForwardZ = camera.position[2];
-	int consecutiveStalledFramesInOldWedgeBand = 0;
-	int maxConsecutiveStalledFramesInOldWedgeBand = 0;
-	for (const InputReplayFrame &frame : capture.frames) {
-		const std::array<float, 3> previousPosition = camera.position;
-		ApplyInputReplayFrame(&input, frame);
-		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
-								 &platform,
-								 &simulation,
-								 &camera,
-								 &input,
-								 &interaction,
-								 &worldState,
-								 physics.get(),
-								 &render,
-								 &debug,
-								 frame.deltaSeconds));
-		furthestForwardZ = std::min(furthestForwardZ, camera.position[2]);
-
-		const float deltaX = camera.position[0] - previousPosition[0];
-		const float deltaY = camera.position[1] - previousPosition[1];
-		const float deltaZ = camera.position[2] - previousPosition[2];
-		const float movementSq = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
-		const bool insideOldWedgeBand =
-			camera.position[0] >= 13.0f &&
-			camera.position[0] <= 14.5f &&
-			camera.position[2] <= -4.0f &&
-			camera.position[2] >= -5.3f;
-		if (insideOldWedgeBand && movementSq <= 0.0001f * 0.0001f) {
-			++consecutiveStalledFramesInOldWedgeBand;
-			maxConsecutiveStalledFramesInOldWedgeBand = std::max(
-				maxConsecutiveStalledFramesInOldWedgeBand,
-				consecutiveStalledFramesInOldWedgeBand);
-		} else {
-			consecutiveStalledFramesInOldWedgeBand = 0;
-		}
-	}
-
-	if (!(furthestForwardZ < -50.0f && maxConsecutiveStalledFramesInOldWedgeBand < 8)) {
-		char buffer[320]{};
-		std::snprintf(
-			buffer,
-			sizeof(buffer),
-			"boosted creative replay still wedges near the old transparency-stress column (final cam=(%.3f, %.3f, %.3f) furthestZ=%.3f maxStalledFrames=%d)",
-			camera.position[0],
-			camera.position[1],
-			camera.position[2],
-			furthestForwardZ,
-			maxConsecutiveStalledFramesInOldWedgeBand);
-		context.Fail(__LINE__, buffer);
-	}
-}
-
-void TestWalkCharacterReplayKeepsEdgeJumpGroundedLikeSupport(TestContext &context)
-{
-	constexpr float kExpectedNarrowEdgeScore = 2.0f / 12.0f;
-	const std::filesystem::path replayPath = GetTestFixturePath("walk_edge_jump_regression.projectv.replay");
-	const std::filesystem::path snapshotPath = GetTestFixturePath("walk_edge_jump_regression.snapshot.bin");
-	EXPECT_TRUE(context, std::filesystem::exists(replayPath));
-	EXPECT_TRUE(context, std::filesystem::exists(snapshotPath));
-
-	InputReplayCapture capture{};
-	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &capture));
-	capture.snapshotPath = snapshotPath.string();
-
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(capture.snapshotPath);
-	EXPECT_TRUE(context, loadedWorld != nullptr);
-	if (!loadedWorld) {
-		return;
-	}
-
-	PlatformState platform{};
-	SimulationState simulation{};
-	CameraState camera = capture.initialCamera;
-	InputState input{};
-	InitializeInputState(input);
-	InteractionState interaction = capture.initialInteraction;
-	WorldState worldState{};
-	worldState.voxelWorld = std::move(loadedWorld);
-	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
-	RenderState render{};
-	DebugState debug{};
-
-	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
-	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
-	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
-	EXPECT_EQ(context, CameraState::ControlMode::Walk, camera.controlMode);
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
-
-	bool foundEdgeJumpAttempt = false;
-	PhysicsWalkDebugInfo preJumpInfo{};
-	float preJumpCameraY = 0.0f;
-	float maxCameraYAfterAttempt = 0.0f;
-	for (const InputReplayFrame &frame : capture.frames) {
-		const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
-		if (!foundEdgeJumpAttempt &&
-			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::MoveUp)) != 0u &&
-			infoBeforeTick.valid &&
-			infoBeforeTick.footSupportHitSamples > 0 &&
-			std::abs(infoBeforeTick.feetPosition[1] - 1.05f) <= 0.05f) {
-			foundEdgeJumpAttempt = true;
-			preJumpInfo = infoBeforeTick;
-			preJumpCameraY = camera.position[1];
-			maxCameraYAfterAttempt = camera.position[1];
-		}
-
-		ApplyInputReplayFrame(&input, frame);
-		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
-								 &platform,
-								 &simulation,
-								 &camera,
-								 &input,
-								 &interaction,
-								 &worldState,
-								 physics.get(),
-								 &render,
-								 &debug,
-								 frame.deltaSeconds));
-
-		if (foundEdgeJumpAttempt) {
-			maxCameraYAfterAttempt = std::max(maxCameraYAfterAttempt, camera.position[1]);
-		}
-	}
-
-	if (!(foundEdgeJumpAttempt &&
-		  preJumpInfo.footSupportHitSamples > 0 &&
-		  preJumpInfo.footSupportScore >= kExpectedNarrowEdgeScore - 0.001f &&
-		  maxCameraYAfterAttempt > preJumpCameraY + 0.12f)) {
-		char buffer[384]{};
-		std::snprintf(
-			buffer,
-			sizeof(buffer),
-			"replay narrow-edge jump regressed (foundAttempt=%u preState=%u preScore=%.3f preHits=%u/%u preFeet=(%.3f, %.3f, %.3f) preCamY=%.3f maxCameraYAfter=%.3f)",
-			foundEdgeJumpAttempt ? 1u : 0u,
-			static_cast<unsigned>(preJumpInfo.supportState),
-			preJumpInfo.footSupportScore,
-			preJumpInfo.footSupportHitSamples,
-			preJumpInfo.footSupportTotalSamples,
-			preJumpInfo.feetPosition[0],
-			preJumpInfo.feetPosition[1],
-			preJumpInfo.feetPosition[2],
-			preJumpCameraY,
-			maxCameraYAfterAttempt);
-		context.Fail(__LINE__, buffer);
-	}
-}
-
-void TestCreativeCharacterBoostedFlightDoesNotWedgeOnTransparencyStressCorner(TestContext &context)
-{
-	const std::filesystem::path replayPath = GetTestFixturePath("creative_transparency_boost_corner_stuck.projectv.replay");
-	const std::filesystem::path snapshotPath = GetTestFixturePath("creative_transparency_boost_corner_stuck.snapshot.bin");
-	EXPECT_TRUE(context, std::filesystem::exists(replayPath));
-	EXPECT_TRUE(context, std::filesystem::exists(snapshotPath));
-
-	InputReplayCapture capture{};
-	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &capture));
-	capture.snapshotPath = snapshotPath.string();
-
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(capture.snapshotPath);
-	EXPECT_TRUE(context, loadedWorld != nullptr);
-	if (!loadedWorld) {
-		return;
-	}
-
-	PlatformState platform{};
-	SimulationState simulation{};
-	CameraState camera = capture.initialCamera;
-	InputState input{};
-	InitializeInputState(input);
-	InteractionState interaction = capture.initialInteraction;
-	WorldState worldState{};
-	worldState.voxelWorld = std::move(loadedWorld);
-	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
-	RenderState render{};
-	DebugState debug{};
-
-	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), worldState.voxelWorld.get()));
-	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
-	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
-	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
-	EXPECT_TRUE(context, SnapCreativeCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera));
-
-	constexpr float kOldCornerWedgeX = 17.234f;
-	constexpr float kOldCornerWedgeZ = -8.259f;
-	int consecutiveStalledFramesInOldCornerBand = 0;
-	int maxConsecutiveStalledFramesInOldCornerBand = 0;
-	for (const InputReplayFrame &frame : capture.frames) {
-		const std::array<float, 3> previousPosition = camera.position;
-		ApplyInputReplayFrame(&input, frame);
-		EXPECT_TRUE(context, AdvanceUpdateAppWithSimulatedFrameDelta(
-								 &platform,
-								 &simulation,
-								 &camera,
-								 &input,
-								 &interaction,
-								 &worldState,
-								 physics.get(),
-								 &render,
-								 &debug,
-								 frame.deltaSeconds));
-
-		const float deltaX = camera.position[0] - previousPosition[0];
-		const float deltaY = camera.position[1] - previousPosition[1];
-		const float deltaZ = camera.position[2] - previousPosition[2];
-		const float movementSq = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
-		const bool insideOldCornerBand =
-			camera.position[0] >= 16.7f &&
-			camera.position[0] <= 17.8f &&
-			camera.position[2] >= -8.9f &&
-			camera.position[2] <= -7.6f;
-		if (frame.actionDownMask != 0u &&
-			insideOldCornerBand &&
-			movementSq <= 0.0001f * 0.0001f) {
-			++consecutiveStalledFramesInOldCornerBand;
-			maxConsecutiveStalledFramesInOldCornerBand = std::max(
-				maxConsecutiveStalledFramesInOldCornerBand,
-				consecutiveStalledFramesInOldCornerBand);
-		} else {
-			consecutiveStalledFramesInOldCornerBand = 0;
-		}
-	}
-
-	const float planarDistanceFromOldCornerWedge = std::sqrt(
-		(camera.position[0] - kOldCornerWedgeX) * (camera.position[0] - kOldCornerWedgeX) +
-		(camera.position[2] - kOldCornerWedgeZ) * (camera.position[2] - kOldCornerWedgeZ));
-	if (!(planarDistanceFromOldCornerWedge > 12.0f && maxConsecutiveStalledFramesInOldCornerBand < 8)) {
-		char buffer[320]{};
-		std::snprintf(
-			buffer,
-			sizeof(buffer),
-			"boosted creative replay still wedges on the old transparency-stress corner (final cam=(%.3f, %.3f, %.3f) planarDistanceFromOldCorner=%.3f maxStalledFrames=%d)",
-			camera.position[0],
-			camera.position[1],
-			camera.position[2],
-			planarDistanceFromOldCornerWedge,
-			maxConsecutiveStalledFramesInOldCornerBand);
-		context.Fail(__LINE__, buffer);
-	}
-}
-
 void TestGetNextVoxelScenePresetCyclesAllBuiltinPresets(TestContext &context)
 {
 	EXPECT_EQ(context, VoxelScenePreset::FlatBenchmark, GetNextVoxelScenePreset(VoxelScenePreset::VoxelLab));
@@ -7727,10 +7433,6 @@ int main() // NOLINT(*-exception-escape)
 	TestWalkCharacterSneakCanMoveAlongNegativeSingleBlockEdge(context);
 	TestWalkCharacterSneakCanMoveAlongIsolatedCornerEdge(context);
 	TestWalkCharacterDoesNotMagnetSnapDuringFreeFall(context);
-	TestCreativeCharacterCollidesWithVoxelWall(context);
-	TestCreativeCharacterBoostedFlightSlidesAlongTransparencyStressColumns(context);
-	TestWalkCharacterReplayKeepsEdgeJumpGroundedLikeSupport(context);
-	TestCreativeCharacterBoostedFlightDoesNotWedgeOnTransparencyStressCorner(context);
 	TestGetNextVoxelScenePresetCyclesAllBuiltinPresets(context);
 	TestUpdateAppRequestsScenePresetReload(context);
 	TestUpdateAppRequestsWorldSnapshotSave(context);

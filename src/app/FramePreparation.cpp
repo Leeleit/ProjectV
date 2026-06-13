@@ -195,9 +195,9 @@ bool PrepareFrameRenderData(
 	// anti-jitter that closed the user-reported 2026-06-11 jitter bug, so
 	// even at this hook we treat `taaEnabled` as a master gate and force
 	// the jitter to zero when it is off.
-	const std::array<float, 2> taaPixelJitter = render->taaEnabled
-		? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
-		: std::array<float, 2>{0.0f, 0.0f};
+	const std::array taaPixelJitter = render->taaEnabled
+										  ? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
+										  : std::array{0.0f, 0.0f};
 	// `taaJitterScale` is the per-pass TAA tuning-ladder multiplier
 	// (live `;`/`'` keys, see `InputAction::*TaaJitterScale`). At 1.0 the
 	// behaviour matches the pre-ladder Halton output; 0.0 freezes the

@@ -26,7 +26,7 @@ ColumnLimit: 0
 SpaceInEmptyParentheses: false
 SpacesInCStyleCastParentheses: false
 SpaceAfterCStyleCast: false
-SortIncludes: CaseSensitive
+SortIncludes: false
 AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
 AlignOperands: Align

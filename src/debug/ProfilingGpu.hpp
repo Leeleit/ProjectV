@@ -27,13 +27,13 @@
 #if defined(PROJECTV_ENABLE_RENDERDOC_MARKERS)
 #define PV_PROFILE_GPU_LABEL(cmd, name) \
 	profiling::ScopedGpuDebugLabel _pvGpuLabel##__COUNTER__(cmd, name)
-#define PV_PROFILE_GPU_LABEL_COLOR(cmd, name, r, g, b, a) \
+#define PV_PROFILE_GPU_LABEL_COLOR(cmd, name, r, g, b, a)    \
 	profiling::ScopedGpuDebugLabel _pvGpuLabel##__COUNTER__( \
-		cmd,                                                \
-		name,                                               \
-		(r),                                                \
-		(g),                                                \
-		(b),                                                \
+		cmd,                                                 \
+		name,                                                \
+		(r),                                                 \
+		(g),                                                 \
+		(b),                                                 \
 		(a))
 #else
 #define PV_PROFILE_GPU_LABEL(cmd, name) \
@@ -180,14 +180,14 @@ inline void DestroyVulkanGpuContext(void *contextHandle)
 // `PROJECTV_ENABLE_RENDERDOC_MARKERS=0`, so call sites don't need their
 // own `#if` guards.
 class ScopedGpuDebugLabel {
-public:
+  public:
 	explicit ScopedGpuDebugLabel(
-		VkCommandBuffer cmd,
+		const VkCommandBuffer cmd,
 		const char *name,
-		float r = 1.0f,
-		float g = 1.0f,
-		float b = 1.0f,
-		float a = 1.0f) noexcept
+		const float r = 1.0f,
+		const float g = 1.0f,
+		const float b = 1.0f,
+		const float a = 1.0f) noexcept
 		: cmd_(cmd)
 	{
 		if (cmd_ == VK_NULL_HANDLE || !name || !vkCmdBeginDebugUtilsLabelEXT) {
@@ -216,7 +216,7 @@ public:
 	ScopedGpuDebugLabel(ScopedGpuDebugLabel &&) = delete;
 	ScopedGpuDebugLabel &operator=(ScopedGpuDebugLabel &&) = delete;
 
-private:
+  private:
 	VkCommandBuffer cmd_;
 };
 #endif // PROJECTV_ENABLE_RENDERDOC_MARKERS

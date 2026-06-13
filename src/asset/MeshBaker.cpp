@@ -93,7 +93,7 @@ bool BakePrimitive(
 			sizeof(LinearVertex));
 	}
 
-	const auto vfetchStats = meshopt_analyzeVertexFetch(
+	const auto [bytes_fetched, overfetch] = meshopt_analyzeVertexFetch(
 		finalIndices.data(),
 		finalIndices.size(),
 		uniqueCount,
@@ -105,7 +105,7 @@ bool BakePrimitive(
 	out.vertexCount = static_cast<uint32_t>(uniqueCount);
 	out.indexCount = static_cast<uint32_t>(out.indices.size());
 	out.materialIndex = src.materialIndex;
-	out.overfetch = vfetchStats.overfetch;
+	out.overfetch = overfetch;
 	return true;
 }
 
@@ -146,8 +146,7 @@ BakedMesh BakeLoadedAsset(
 
 	// ACMR (Average Cache Miss Ratio) = vertex shader invocations / triangle count.
 	// Ideal 0.5; well-optimized cube sits around 0.55-0.65 depending on topology.
-	result.acmr = static_cast<float>(totalIndexTriples * 3)
-		/ static_cast<float>(totalUniqueVertices);
+	result.acmr = static_cast<float>(totalIndexTriples * 3) / static_cast<float>(totalUniqueVertices);
 	result.atvr = result.acmr;
 	return result;
 }

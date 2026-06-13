@@ -135,7 +135,7 @@ bindingFlags.pBindingFlags = flags.data();
 
 ## SDL3 Vulkan
 
-Функции из [SDL_vulkan.h](../../external/SDL/include/SDL3/SDL_vulkan.h). Окно должно быть с `SDL_WINDOW_VULKAN`.
+Функции из [SDL_vulkan.h](../../../../external/SDL/include/SDL3/SDL_vulkan.h). Окно должно быть с `SDL_WINDOW_VULKAN`.
 
 ### SDL_Vulkan_GetInstanceExtensions 🟢
 
@@ -214,7 +214,7 @@ void SDL_Vulkan_UnloadLibrary(void);
 
 ## volk
 
-Функции из [volk.h](../../external/volk/volk.h). Версия: `VOLK_HEADER_VERSION` 343.
+Функции из [volk.h](../../../../external/volk/volk.h). Версия: `VOLK_HEADER_VERSION` 343.
 
 ### volkInitialize 🟢
 

@@ -273,7 +273,7 @@ auto inst = world.entity().is_a(SpaceShip);  // instance с Defense
 ```
 
 В C: `ecs_entity_t inst = ecs_new_w_pair(world, EcsIsA, prefab);`. Компоненты prefab можно переопределять на instance.
-Подробнее: [PrefabsManual.md](../../external/flecs/docs/PrefabsManual.md).
+Подробнее: [PrefabsManual.md](../../../../external/flecs/docs/PrefabsManual.md).
 
 ---
 

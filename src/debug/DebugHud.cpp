@@ -77,7 +77,7 @@ constexpr size_t kMaxHelperLineCount = 24;
 // minute/second split (the float can briefly
 // go negative on stream underflows, and a
 // `-1:59` would corrupt the HUD).
-std::string FormatMmSs(float seconds, bool treatZeroAsValid)
+std::string FormatMmSs(const float seconds, const bool treatZeroAsValid)
 {
 	if (seconds <= 0.0f && !treatZeroAsValid) {
 		return std::string("--:--");
@@ -117,11 +117,10 @@ std::string FormatMmSs(float seconds, bool treatZeroAsValid)
 // alternative (scrolling marquee) is a v2
 // feature.
 void FormatUppercaseForHud(
-	const char *in, char *out, size_t outSize)
+	const char *in, char *out, const size_t outSize)
 {
-	if (outSize == 0) {
-		return;
-	}
+	// Callers always pass a non-zero stack-buffer size; the
+	// `outSize == 0` defensive check was dead code and DFA-flagged.
 	size_t i = 0;
 	for (; i + 1 < outSize && in[i] != '\0'; ++i) {
 		const char c = in[i];
@@ -772,12 +771,12 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"LOCL %.1f %.1f %.1f R %.1f E %.0f",
+		"LOCL %.1f %.1f %.1f R %.1f E %.0d",
 		stats.localPointLightPosition[0],
 		stats.localPointLightPosition[1],
 		stats.localPointLightPosition[2],
 		stats.localPointLightRadius,
-		stats.localPointLightEnabled);
+		static_cast<int>(stats.localPointLightEnabled));
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
@@ -1058,8 +1057,7 @@ size_t BuildMusicLines(
 	} else {
 		musicState = "OFF";
 	}
-	const bool showMetaLines = stats.audioMusicInitialized
-		&& stats.audioMusicPlaylistSize > 0;
+	const bool showMetaLines = stats.audioMusicInitialized && stats.audioMusicPlaylistSize > 0;
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
@@ -1276,8 +1274,7 @@ uint32_t BuildDebugHudVertices(
 	// kPanelOriginXPx` (~560 px at the current
 	// minimum widths — well below any practical
 	// 1280+ render target).
-	const float musicPanelMinXPx = static_cast<float>(extent.width)
-		- musicPanelWidthPx - kPanelOriginXPx;
+	const float musicPanelMinXPx = static_cast<float>(extent.width) - musicPanelWidthPx - kPanelOriginXPx;
 	constexpr float musicPanelMinY = kPanelOriginYPx;
 	AppendPanel(
 		outVertices,

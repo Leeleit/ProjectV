@@ -163,6 +163,6 @@ src/
 - [VoxelWorld](VoxelWorld.md)
 - [Debugging](Debugging.md)
 - [Profiling](Profiling.md)
-- [README_NEW](../README_NEW.md)
+- [README](../README.md)
 - [Voxel MVP Smoke Checklist](voxel_mvp_smoke_checklist.md)
 - [TODO](../TODO.md)

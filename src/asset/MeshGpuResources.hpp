@@ -1,12 +1,11 @@
 #ifndef ASSET_MESH_GPU_RESOURCES_HPP
 #define ASSET_MESH_GPU_RESOURCES_HPP
 
-#include <cstdint>
 #include <string>
 
 #include "asset/MeshBaker.hpp"
-#include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
+#include "vulkan/vulkan.h"
 
 namespace projectv::asset {
 

@@ -8,3 +8,4 @@ tests/fixtures/
 /pyproject.toml
 /uv.lock
 /compile_commands.json
+/.cache/

@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstring>
 
 // **Custom deleter for `AudioEnginePtr` in
 // `core/Types.hpp`, at global scope to match the
@@ -23,7 +22,7 @@ void DestroyAudioEngine(projectv::audio::AudioEngine *engine)
 
 namespace projectv::audio {
 
-const char *MusicStateToString(MusicState state)
+const char *MusicStateToString(const MusicState state)
 {
 	switch (state) {
 	case MusicState::Stopped:
@@ -50,13 +49,13 @@ const char *MusicStateToString(MusicState state)
 //    also distinct from empty string (which
 //    means "no track loaded").
 void ParseArtistTitle(const std::string &filename,
-	std::string &artist, std::string &title)
+					  std::string &artist, std::string &title)
 {
 	std::string stem = filename;
 	if (stem.size() >= 4) {
 		std::string ext = stem.substr(stem.size() - 4);
-		std::transform(ext.begin(), ext.end(), ext.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		std::ranges::transform(ext, ext.begin(),
+							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext == ".mp3") {
 			stem = stem.substr(0, stem.size() - 4);
 		}
@@ -118,7 +117,7 @@ bool AudioEngine::init()
 	// volume bus — sounds attach to it via the `group`
 	// parameter of `ma_sound_init_from_file`.
 	const ma_result groupResult =
-		ma_sound_group_init(&m_engine, /*flags=*/0, /*pAttachment=*/nullptr, &m_musicGroup);
+		ma_sound_group_init(&m_engine, /*flags=*/0, /*pParentGroup=*/nullptr, &m_musicGroup);
 	if (groupResult != MA_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Audio",
@@ -189,8 +188,8 @@ size_t AudioEngine::scanPlaylist()
 		const auto &path = entry.path();
 		// Case-insensitive `.mp3` extension match.
 		std::string ext = path.extension().string();
-		std::transform(ext.begin(), ext.end(), ext.begin(),
-			[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		std::ranges::transform(ext, ext.begin(),
+							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext != ".mp3") {
 			continue;
 		}
@@ -201,7 +200,7 @@ size_t AudioEngine::scanPlaylist()
 	// case-sensitive (per platform `std::filesystem`
 	// semantics), which matches how Linux file
 	// managers order music folders.
-	std::sort(m_playlist.begin(), m_playlist.end());
+	std::ranges::sort(m_playlist);
 
 	// Clamp the current index to a valid position.
 	if (m_playlist.empty()) {
@@ -263,7 +262,7 @@ bool AudioEngine::loadCurrentTrack()
 		trackPath.string().c_str(),
 		MA_SOUND_FLAG_STREAM,
 		m_musicGroupInitialized ? &m_musicGroup : nullptr,
-		/*pDoneNotification=*/nullptr,
+		/*pDoneFence=*/nullptr,
 		&m_sound);
 
 	if (initResult != MA_SUCCESS) {
@@ -271,8 +270,8 @@ bool AudioEngine::loadCurrentTrack()
 			"Audio",
 			"AudioEngine.loadCurrentTrack.ma_sound_init_from_file",
 			fmt::format("ma_sound_init_from_file({}) failed: {}",
-				trackPath.string(),
-				ma_result_description(initResult)));
+						trackPath.string(),
+						ma_result_description(initResult)));
 		m_soundLoaded = false;
 		m_currentTrackName.clear();
 		updateCurrentTrackMetadata();
@@ -548,7 +547,7 @@ void AudioEngine::stop()
 					"Audio",
 					"AudioEngine.stop.ma_sound_seek_to_pcm_frame",
 					fmt::format("ma_sound_seek_to_pcm_frame(0) failed: {}",
-						ma_result_description(seekResult)));
+								ma_result_description(seekResult)));
 			}
 		}
 	}
@@ -556,13 +555,13 @@ void AudioEngine::stop()
 	m_state = MusicState::Stopped;
 }
 
-void AudioEngine::increaseVolume(float step)
+void AudioEngine::increaseVolume(const float step)
 {
 	m_volume = std::clamp(m_volume + step, 0.0f, 1.0f);
 	applyVolume();
 }
 
-void AudioEngine::decreaseVolume(float step)
+void AudioEngine::decreaseVolume(const float step)
 {
 	m_volume = std::clamp(m_volume - step, 0.0f, 1.0f);
 	applyVolume();
@@ -681,7 +680,7 @@ void AudioEngine::tick()
 	if (now - m_lastPlaylistRefresh >= std::chrono::seconds(5)) {
 		const size_t prevSize = m_playlist.size();
 		const std::filesystem::path prevTrack =
-			(m_currentIndex < m_playlist.size()) ? m_playlist[m_currentIndex] : std::filesystem::path{};
+			m_currentIndex < m_playlist.size() ? m_playlist[m_currentIndex] : std::filesystem::path{};
 		scanPlaylist();
 		// If the current track is still in the
 		// playlist, keep playing it (the index
@@ -691,7 +690,7 @@ void AudioEngine::tick()
 		// gone, gracefully uninit — the operator
 		// can press Q to start a new track.
 		if (m_soundLoaded && !prevTrack.empty() && !m_playlist.empty()) {
-			auto it = std::find(m_playlist.begin(), m_playlist.end(), prevTrack);
+			const auto it = std::ranges::find(m_playlist, prevTrack);
 			if (it == m_playlist.end()) {
 				// Current track removed. Pause
 				// semantics differ from stop

@@ -143,11 +143,9 @@ pid=$!
 set -e
 
 # Wait for either: process exits, or capture files appear, or timeouts
-declare -i waited=0
 declare -i startup_budget="${timeout_start}"
 declare -i capture_budget="${timeout_capture}"
 declare -i phase=0   # 0 = startup, 1 = capture
-expected_min_files=0
 declare -i started_at="${start_ts}"
 
 set +e

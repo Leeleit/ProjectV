@@ -6,7 +6,7 @@
 с миллионами сущностей. Поддерживает связи между сущностями (relationships), иерархии, префабы, запросы (queries) и
 системы (systems). API на C99 и C++17, archetype-хранилище (SoA), кешируемые запросы.
 
-Версия: **v4** (см. [flecs.h](../../external/flecs/include/flecs.h))
+Версия: **v4** (см. [flecs.h](../../../../external/flecs/include/flecs.h))
 Исходники: [SanderMertens/flecs](https://github.com/SanderMertens/flecs)
 Документация: [flecs.dev](https://www.flecs.dev)
 
@@ -26,13 +26,13 @@
 
 | Файл                                                                                                | Назначение                                              |
 |-----------------------------------------------------------------------------------------------------|---------------------------------------------------------|
-| [flecs.h](../../external/flecs/include/flecs.h)                                                     | Точка входа C API; при C++ подтягивает flecs.hpp        |
-| [flecs/addons/flecs_c.h](../../external/flecs/include/flecs/addons/flecs_c.h)                       | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each |
-| [flecs/addons/cpp/flecs.hpp](../../external/flecs/include/flecs/addons/cpp/flecs.hpp)               | C++ точка входа                                         |
-| [flecs/addons/cpp/entity.hpp](../../external/flecs/include/flecs/addons/cpp/entity.hpp)             | Класс flecs::entity                                     |
-| [flecs/addons/cpp/mixins/query/](../../external/flecs/include/flecs/addons/cpp/mixins/query/)       | Query builder                                           |
-| [flecs/addons/cpp/mixins/system/](../../external/flecs/include/flecs/addons/cpp/mixins/system/)     | System builder                                          |
-| [flecs/addons/cpp/mixins/observer/](../../external/flecs/include/flecs/addons/cpp/mixins/observer/) | Observer builder                                        |
+| [flecs.h](../../../../external/flecs/include/flecs.h)                                                     | Точка входа C API; при C++ подтягивает flecs.hpp        |
+| [flecs/addons/flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)                       | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each |
+| [flecs/addons/cpp/flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)               | C++ точка входа                                         |
+| [flecs/addons/cpp/entity.hpp](../../../../external/flecs/include/flecs/addons/cpp/entity.hpp)             | Класс flecs::entity                                     |
+| [flecs/addons/cpp/mixins/query/](../../../../external/flecs/include/flecs/addons/cpp/mixins/query/)       | Query builder                                           |
+| [flecs/addons/cpp/mixins/system/](../../../../external/flecs/include/flecs/addons/cpp/mixins/system/)     | System builder                                          |
+| [flecs/addons/cpp/mixins/observer/](../../../../external/flecs/include/flecs/addons/cpp/mixins/observer/) | Observer builder                                        |
 
 ## Требования
 

@@ -140,18 +140,11 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 		if (key == "snapshot_path") {
 			stream >> std::quoted(capture.snapshotPath);
 		} else if (key == "camera_pos") {
-			stream >> capture.initialCamera.position[0]
-				   >> capture.initialCamera.position[1]
-				   >> capture.initialCamera.position[2];
+			stream >> capture.initialCamera.position[0] >> capture.initialCamera.position[1] >> capture.initialCamera.position[2];
 		} else if (key == "camera_angles") {
-			stream >> capture.initialCamera.yawRadians
-				   >> capture.initialCamera.pitchRadians;
+			stream >> capture.initialCamera.yawRadians >> capture.initialCamera.pitchRadians;
 		} else if (key == "camera_move") {
-			stream >> capture.initialCamera.moveSpeed
-				   >> capture.initialCamera.mouseSensitivity
-				   >> capture.initialCamera.verticalFovRadians
-				   >> capture.initialCamera.nearPlane
-				   >> capture.initialCamera.farPlane;
+			stream >> capture.initialCamera.moveSpeed >> capture.initialCamera.mouseSensitivity >> capture.initialCamera.verticalFovRadians >> capture.initialCamera.nearPlane >> capture.initialCamera.farPlane;
 		} else if (key == "camera_control_mode") {
 			int controlMode = 0;
 			stream >> controlMode;
@@ -159,9 +152,7 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 		} else if (key == "interaction") {
 			int placementMaterial = 0;
 			int editorTool = 0;
-			stream >> placementMaterial
-				   >> capture.initialInteraction.maxInteractionDistance
-				   >> editorTool;
+			stream >> placementMaterial >> capture.initialInteraction.maxInteractionDistance >> editorTool;
 			capture.initialInteraction.placementMaterial = static_cast<VoxelMaterial>(placementMaterial);
 			capture.initialInteraction.editorTool = static_cast<DebugEditorTool>(editorTool);
 		} else if (key == "walk") {
@@ -187,13 +178,7 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 			InputReplayFrame frame{};
 			int removePressed = 0;
 			int placePressed = 0;
-			stream >> frame.deltaSeconds
-				   >> frame.mouseDeltaX
-				   >> frame.mouseDeltaY
-				   >> frame.actionDownMask
-				   >> frame.actionPressedMask
-				   >> removePressed
-				   >> placePressed;
+			stream >> frame.deltaSeconds >> frame.mouseDeltaX >> frame.mouseDeltaY >> frame.actionDownMask >> frame.actionPressedMask >> removePressed >> placePressed;
 			frame.removePressed = removePressed != 0;
 			frame.placePressed = placePressed != 0;
 			capture.frames.push_back(frame);

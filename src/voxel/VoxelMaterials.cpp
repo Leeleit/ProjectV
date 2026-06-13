@@ -347,14 +347,14 @@ VoxelSceneLighting BuildVoxelSceneLighting(
 		lighting.localPointLightColorAndIntensity[3] > 0.0f;
 	lighting.localPointLightParams[0] = localPointLightEnabled ? 1.0f : 0.0f;
 	lighting.localPointLightParams[1] = localPointLightEnabled
-		? std::clamp(lighting.localPointLightParams[1], 0.05f, kMaxLocalPointLightSourceRadius)
-		: 0.0f;
+											? std::clamp(lighting.localPointLightParams[1], 0.05f, kMaxLocalPointLightSourceRadius)
+											: 0.0f;
 	lighting.localPointLightParams[2] = localPointLightEnabled
-		? std::clamp(lighting.localPointLightParams[2], 0.0f, 1.0f)
-		: 0.0f;
+											? std::clamp(lighting.localPointLightParams[2], 0.0f, 1.0f)
+											: 0.0f;
 	lighting.localPointLightParams[3] = localPointLightEnabled
-		? std::clamp(lighting.localPointLightParams[3], 0.0f, kMaxLocalPointLightShadowBias)
-		: 0.0f;
+											? std::clamp(lighting.localPointLightParams[3], 0.0f, kMaxLocalPointLightShadowBias)
+											: 0.0f;
 	lighting.shadowCascadeBlendParams[0] = std::clamp(
 		lighting.shadowCascadeBlendParams[0] + controls.shadowCascadeBlendOffset,
 		0.0f,

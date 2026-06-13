@@ -6,8 +6,8 @@
 
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -50,9 +50,6 @@ std::string NormalizeToken(const std::string_view text)
 
 bool TryParseFloat3(const std::string_view text, std::array<float, 3> *outValue)
 {
-	if (!outValue) {
-		return false;
-	}
 
 	std::string copy{text};
 	char *cursor = copy.data();
@@ -86,7 +83,7 @@ bool TryParseFloat3(const std::string_view text, std::array<float, 3> *outValue)
 
 bool TryParseUnsigned(const char *text, uint32_t *outValue)
 {
-	if (!text || !*text || !outValue) {
+	if (!text || !*text) {
 		return false;
 	}
 
@@ -146,10 +143,6 @@ bool TryParseDebugViewToken(
 	const std::string_view token,
 	LightingDebugView *outView)
 {
-	if (!outView) {
-		return false;
-	}
-
 	const std::string normalized = NormalizeToken(token);
 	if (normalized == "final") {
 		*outView = LightingDebugView::Final;
@@ -195,10 +188,6 @@ bool TryParseDebugViewList(
 	std::array<LightingDebugView, MAX_LOOK_DEV_CAPTURE_VIEW_COUNT> *outViews,
 	uint32_t *outViewCount)
 {
-	if (!outViews || !outViewCount) {
-		return false;
-	}
-
 	*outViews = {};
 	*outViewCount = 0;
 	size_t tokenStart = 0;
@@ -224,7 +213,7 @@ bool TryParseDebugViewList(
 			return false;
 		}
 		(*outViews)[*outViewCount] = view;
-		++(*outViewCount);
+		++*outViewCount;
 		tokenStart = tokenEnd;
 	}
 

@@ -6,8 +6,8 @@
 сущностей (entities). Поддерживает связи между сущностями (relationships), иерархии, префабы, запросы (queries) и
 системы (systems). API на C99 и C++17, archetype-хранилище (SoA), кешируемые запросы.
 
-Версия: **4.1.4** (см. [flecs.h](../../external/flecs/include/flecs.h)).
-Исходники: [SanderMertens/flecs](https://github.com/SanderMertens/flecs), [документация](../../external/flecs/docs).
+Версия: **4.1.4** (см. [flecs.h](../../../../external/flecs/include/flecs.h)).
+Исходники: [SanderMertens/flecs](https://github.com/SanderMertens/flecs), [документация](../../../../external/flecs/docs).
 
 **Основные возможности:** организация игровой логики — сущности, компоненты, системы. Цикл обновления вызывается через
 `world.progress()` или `ecs_progress()`. flecs не зависит от графических API; рендеринг подключается отдельно (например,
@@ -120,14 +120,14 @@ flowchart TD
 
 | Файл                                                                                              | Назначение                                                                                                   |
 |---------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
-| [flecs.h](../../external/flecs/include/flecs.h)                                                   | Точка входа. C API; при C++ подтягивает [flecs.hpp](../../external/flecs/include/flecs/addons/cpp/flecs.hpp) |
-| [flecs/addons/flecs_c.h](../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each                                                      |
-| [flecs/addons/cpp/flecs.hpp](../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                                                                                              |
-| [flecs/addons/cpp/entity.hpp](../../external/flecs/include/flecs/addons/cpp/entity.hpp)           | flecs::entity                                                                                                |
-| [flecs/addons/cpp/mixins/query](../../external/flecs/include/flecs/addons/cpp/mixins/query)       | query, query_builder                                                                                         |
-| [flecs/addons/cpp/mixins/system](../../external/flecs/include/flecs/addons/cpp/mixins/system)     | system, system_builder                                                                                       |
-| [flecs/addons/cpp/mixins/observer](../../external/flecs/include/flecs/addons/cpp/mixins/observer) | observer                                                                                                     |
-| [flecs/addons/system.h](../../external/flecs/include/flecs/addons/system.h)                       | ecs_system_desc_t                                                                                            |
+| [flecs.h](../../../../external/flecs/include/flecs.h)                                                   | Точка входа. C API; при C++ подтягивает [flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp) |
+| [flecs/addons/flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each                                                      |
+| [flecs/addons/cpp/flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                                                                                              |
+| [flecs/addons/cpp/entity.hpp](../../../../external/flecs/include/flecs/addons/cpp/entity.hpp)           | flecs::entity                                                                                                |
+| [flecs/addons/cpp/mixins/query](../../../../external/flecs/include/flecs/addons/cpp/mixins/query)       | query, query_builder                                                                                         |
+| [flecs/addons/cpp/mixins/system](../../../../external/flecs/include/flecs/addons/cpp/mixins/system)     | system, system_builder                                                                                       |
+| [flecs/addons/cpp/mixins/observer](../../../../external/flecs/include/flecs/addons/cpp/mixins/observer) | observer                                                                                                     |
+| [flecs/addons/system.h](../../../../external/flecs/include/flecs/addons/system.h)                       | ecs_system_desc_t                                                                                            |
 
 ---
 

@@ -11,7 +11,6 @@ void SetVulkanObjectName(
 	(void)handle;
 	(void)objectType;
 	(void)name;
-	return;
 #else
 	if (!context.device || !handle || !name || !vkSetDebugUtilsObjectNameEXT) {
 		return;

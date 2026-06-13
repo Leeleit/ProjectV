@@ -1,7 +1,6 @@
 #include "asset/DracoMeshDecoder.hpp"
 
 #include <array>
-#include <cstring>
 #include <string>
 #include <utility>
 
@@ -11,7 +10,6 @@
 #include <draco/core/decoder_buffer.h>
 #include <draco/mesh/mesh.h>
 #include <draco/point_cloud/point_cloud.h>
-#include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 #include <glm/glm.hpp>
@@ -40,7 +38,7 @@ bool ExtractFloatAttribute(
 		}
 		return false;
 	}
-	const std::size_t pointCount = static_cast<std::size_t>(mesh.num_points());
+	const std::size_t pointCount = mesh.num_points();
 	outFloats.resize(pointCount * componentCount);
 	outFloatStride = componentCount;
 	for (std::size_t i = 0; i < pointCount; ++i) {
@@ -101,7 +99,7 @@ bool DecodeDracoPrimitive(
 		return false;
 	}
 
-	const fastgltf::DefaultBufferDataAdapter adapter;
+	constexpr fastgltf::DefaultBufferDataAdapter adapter;
 	const auto compressedBytes = adapter(asset, bufferViewIndex);
 	if (compressedBytes.empty()) {
 		if (outError) {
@@ -119,8 +117,7 @@ bool DecodeDracoPrimitive(
 	auto decodeResult = decoder.DecodeMeshFromBuffer(&decoderBuffer);
 	if (!decodeResult.ok()) {
 		if (outError) {
-			*outError = std::string("draco::Decoder::DecodeMeshFromBuffer failed: ")
-				+ decodeResult.status().error_msg_string();
+			*outError = std::string("draco::Decoder::DecodeMeshFromBuffer failed: ") + decodeResult.status().error_msg_string();
 		}
 		return false;
 	}
@@ -132,9 +129,7 @@ bool DecodeDracoPrimitive(
 	std::size_t positionStride = 0;
 	std::size_t normalStride = 0;
 	std::size_t uvStride = 0;
-	if (!ExtractFloatAttribute(*mesh, draco::GeometryAttribute::POSITION, 3, positionFloats, positionStride, outError)
-		|| !ExtractFloatAttribute(*mesh, draco::GeometryAttribute::NORMAL, 3, normalFloats, normalStride, outError)
-		|| !ExtractFloatAttribute(*mesh, draco::GeometryAttribute::TEX_COORD, 2, uvFloats, uvStride, outError)) {
+	if (!ExtractFloatAttribute(*mesh, draco::GeometryAttribute::POSITION, 3, positionFloats, positionStride, outError) || !ExtractFloatAttribute(*mesh, draco::GeometryAttribute::NORMAL, 3, normalFloats, normalStride, outError) || !ExtractFloatAttribute(*mesh, draco::GeometryAttribute::TEX_COORD, 2, uvFloats, uvStride, outError)) {
 		return false;
 	}
 	if (positionFloats.empty()) {
@@ -155,20 +150,20 @@ bool DecodeDracoPrimitive(
 		ConvertFloatBufferToVec2(uvFloats, out.uvs);
 	}
 
-	const std::size_t faceCount = static_cast<std::size_t>(mesh->num_faces());
+	const std::size_t faceCount = mesh->num_faces();
 	out.indices.resize(faceCount * 3);
 	for (std::size_t i = 0; i < faceCount; ++i) {
 		const auto &face = mesh->face(draco::FaceIndex(static_cast<uint32_t>(i)));
-		out.indices[i * 3 + 0] = static_cast<uint32_t>(face[0].value());
-		out.indices[i * 3 + 1] = static_cast<uint32_t>(face[1].value());
-		out.indices[i * 3 + 2] = static_cast<uint32_t>(face[2].value());
+		out.indices[i * 3 + 0] = face[0].value();
+		out.indices[i * 3 + 1] = face[1].value();
+		out.indices[i * 3 + 2] = face[2].value();
 	}
 
 	if (primitive.materialIndex.has_value()) {
 		out.materialIndex = *primitive.materialIndex;
 	}
 
-	if (out.positions.empty() || out.indices.empty() || (out.indices.size() % 3 != 0)) {
+	if (out.positions.empty() || out.indices.empty() || out.indices.size() % 3 != 0) {
 		if (outError) {
 			*outError = "decoded draco primitive has degenerate geometry";
 		}

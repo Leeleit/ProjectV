@@ -219,8 +219,8 @@ float GetCameraVisibleSceneMaxDistance(const CameraState &camera)
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
 	const VkExtent2D extent,
-	float taaJitterNdcX,
-	float taaJitterNdcY)
+	const float taaJitterNdcX,
+	const float taaJitterNdcY)
 {
 	const Float3 cameraPosition{
 		camera.position[0],

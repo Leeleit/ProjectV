@@ -3,7 +3,7 @@
 **🔴 Уровень 3: Продвинутый** — Unity Builds, PCH, CCache и оптимизации для ProjectV.
 
 > **Связь с философией:** Unity Builds и PCH — часть стратегии оптимизации времени компиляции.
-> См. [05_optimization-philosophy.md](../../philosophy/05_optimization-philosophy.md).
+> См. [05_optimization-philosophy.md](../../philosophy/03_domain/01_optimization-philosophy.md).
 
 ---
 

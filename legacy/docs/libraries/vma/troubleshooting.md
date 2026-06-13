@@ -147,7 +147,7 @@
 **Решение:** Проверьте `usage` и флаги в `VmaAllocationCreateInfo`. Например, `VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED`
 работает только при наличии типа памяти с `VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT` (часто только на мобильных). Для
 изображений убедитесь, что tiling (OPTIMAL vs LINEAR) и другие параметры совместимы с доступными типами памяти.
-См. [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h) и `vmaFindMemoryTypeIndex`.
+См. [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h) и `vmaFindMemoryTypeIndex`.
 
 ---
 
@@ -175,7 +175,7 @@
 нестандартным.
 
 **Решение:** Такое предупреждение можно игнорировать — оно известно при работе с VMA и dedicated allocation (указано в
-комментариях в [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h)). При необходимости отключите validation для
+комментариях в [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h)). При необходимости отключите validation для
 данного сценария или используйте актуальную версию слоёв.
 
 ---

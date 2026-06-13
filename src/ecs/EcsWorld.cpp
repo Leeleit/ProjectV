@@ -3,7 +3,6 @@
 #include "core/Types.hpp"
 #include "voxel/VoxelWorld.hpp"
 
-#include <algorithm>
 #include <string>
 #include <vector>
 

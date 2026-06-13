@@ -11,8 +11,8 @@ bool AssetRegistry::Load(const std::string &id, const std::string &path)
 	if (!loaded) {
 		return false;
 	}
-	std::lock_guard<std::mutex> lock(mMutex);
-	auto it = mEntries.find(id);
+	std::lock_guard lock(mMutex);
+	const auto it = mEntries.find(id);
 	if (it == mEntries.end()) {
 		mInsertionOrder.push_back(id);
 	}
@@ -22,7 +22,7 @@ bool AssetRegistry::Load(const std::string &id, const std::string &path)
 
 const LoadedAsset *AssetRegistry::Get(const std::string &id) const
 {
-	std::lock_guard<std::mutex> lock(mMutex);
+	std::lock_guard lock(mMutex);
 	const auto it = mEntries.find(id);
 	if (it == mEntries.end() || !it->second) {
 		return nullptr;
@@ -32,29 +32,29 @@ const LoadedAsset *AssetRegistry::Get(const std::string &id) const
 
 void AssetRegistry::Unload(const std::string &id)
 {
-	std::lock_guard<std::mutex> lock(mMutex);
+	std::lock_guard lock(mMutex);
 	mEntries.erase(id);
 	mInsertionOrder.erase(
-		std::remove(mInsertionOrder.begin(), mInsertionOrder.end(), id),
+		std::ranges::remove(mInsertionOrder, id).begin(),
 		mInsertionOrder.end());
 }
 
 void AssetRegistry::Clear()
 {
-	std::lock_guard<std::mutex> lock(mMutex);
+	std::lock_guard lock(mMutex);
 	mEntries.clear();
 	mInsertionOrder.clear();
 }
 
 std::vector<std::string> AssetRegistry::Ids() const
 {
-	std::lock_guard<std::mutex> lock(mMutex);
+	std::lock_guard lock(mMutex);
 	return mInsertionOrder;
 }
 
 std::size_t AssetRegistry::Size() const
 {
-	std::lock_guard<std::mutex> lock(mMutex);
+	std::lock_guard lock(mMutex);
 	return mEntries.size();
 }
 

@@ -2,7 +2,6 @@
 #define SHADOW_TYPES_HPP
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 
 constexpr uint32_t kSunShadowCascadeCount = 4u;

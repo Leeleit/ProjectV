@@ -57,6 +57,37 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-13-problems-cleanup-v2
+
+- **id:** `2026-06-13T03:32Z-problems-cleanup-v2`
+- **started-at:** 2026-06-13T03:32:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Problems-driven warning cleanup v2** поверх свежей выгрузки `Problems/*.xml` (после того как оператор явно разрешил менять любые файлы, и предыдущие сессии закрыли свои правки). 26 XML файлов, **285 проблем** (vs 224 в v1). Per `decisions.md §12`: `Problems/*.xml` — hint, не source of truth. v1 уже починил ~170 из 224, оставшиеся ~52 (включая 5 dirty файлов, которые сейчас уже закоммичены) теперь доступны + новые 60+ warnings добавлены JetBrains после моих правок (т.к. structured binding / new includes / dead code removal). Полный scope.
+- **files-touched-intent:** все 41 файл, упомянутые в `Problems/*.xml` + `src/CMakeLists.txt` (новый uncommitted change от TAA/audio).
+- **status:** open
+- **notes:** Safety net: `/tmp/before_problems_cleanup_v2_20260613T0330.patch` (full uncommitted state snapshot, 78 KB). Per `AGENTS.md §7.2.4` — НЕ делаю `git checkout -- .` / `git stash drop`. v1 closed at `2026-06-13T03:25:00Z` со 170 fixes в 30 файлах; v2 продолжает с того места, расширяя scope на 5 ранее заблокированных dirty files + новые findings. План: dispatch subagent для inventory → fix по файлам → build → ctest → smoke.
+
+  **v2 update `2026-06-13T03:38Z` (по команде оператора):**
+  - Получено явное разрешение менять ЛЮБЫЕ файлы (включая ранее заблокированные dirty).
+  - Добавлен scope `tests/`: 56 findings в `Problems/tests/*.xml` (6 source files: AssetLoaderTests 19, FrustumCullingTests 23, MeshBakerTests 6, DracoDecoderTests 4, VoxelWorldTests 2, BoxUvFixtureTests 2).
+  - Subagent проверено: **0 entries** в `Problems/*.xml` с `file://$PROJECT_DIR$/external/...` — сторонние библиотеки не флагаются inspection'ом в текущей выгрузке.
+  - `external/` уже в `CidrRootsConfiguration.excludeRoots` в `.idea/misc.xml:21` — CLion IDE-level exclusion настроен корректно. Дополнительная suppression-инфраструктура не нужна.
+  - **План:** ~341 total (285 mainline + 56 tests) — fix по файлам, build, ctest, prepare single commit per `§7.2.5`. Работаю автономно (оператор спит).
+
+### session-2026-06-13-problems-cleanup-v1
+
+- **id:** `2026-06-13T02:55Z-problems-cleanup-v1`
+- **started-at:** 2026-06-13T02:55:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Problems-driven warning cleanup** поверх свежей выгрузки `Problems/*.xml` (JetBrains inspection export, .gitignored, 25 XML файлов, 224 проблемы, 39 уникальных файлов). Стратегия по `decisions.md §12`: `Problems/*.xml` — hint, не source of truth; фиксим только то, что воспроизводится на current source. **Не трогаю:** 4-5 файлов в dirty tree от других сессий — `src/asset/ModelPass.{cpp,hpp}` (asset-pipeline M5.1b), `src/audio/AudioEngine.{cpp,hpp}` (audio-engine), `src/debug/DebugHud.cpp` (audio), `src/render/vulkan/VulkanBootstrap.cpp` (TAA M5.2). На них приходится 52 проблемы (≈23%) из общего списка — для них нужен отдельный скоуп после коммита их владельцами.
+- **files-touched-intent:** `src/asset/{AssetLoader,AssetManifest,AssetRegistry,AssetStub,DracoMeshDecoder,MeshBaker,MeshGpuResources,ModelManifestLoader}.{cpp,hpp}`, `src/app/{AppUpdate,BenchmarkAutomation,Camera,FramePreparation,LookDevCaptureAutomation,ModelGravigun,main}.{cpp,hpp}`, `src/audio/MusicDirectoryPath.hpp`, `src/core/{Types,Types.cpp}`, `src/debug/ProfilingGpu.hpp`, `src/ecs/EcsWorld.cpp`, `src/physics/PhysicsWorld.cpp`, `src/render/{Renderer,SceneResources,Taa,TaaRenderTargets}.{cpp,hpp}`, `src/render/vulkan/{TaaResolvePipeline,VulkanDebug,VulkanInit}.cpp`, `src/render/ShadowTypes.hpp`, `agent/{memory,decisions}.md`, `TODO.md`.
+- **status:** open
+- **notes:** Working tree на старте имеет 9 uncommitted файлов от предыдущих closed/aborted сессий (см. `git diff --stat`). Per AGENTS.md §7.2.4 — НЕ делаю `git checkout -- .` / `git stash drop`. На старте сессии фиксирую snapshot `/tmp/before_problems_cleanup_<ts>.patch` для safety net. План: фиксим non-dirty файлы → build → ctest → safety net patch → diff dirty file поверх → спросить оператора по dirty files.
+
 ### session-2026-06-12-audio-track-switching
 
 - **id:** `2026-06-12T01:00Z-audio-track-switching`

@@ -13,7 +13,7 @@ namespace projectv::asset {
 
 namespace {
 
-std::string_view Trim(std::string_view s)
+std::string_view Trim(const std::string_view s)
 {
 	std::size_t begin = 0;
 	while (begin < s.size() && std::isspace(static_cast<unsigned char>(s[begin]))) {
@@ -36,12 +36,12 @@ std::string DefaultIdForPath(const std::string &path)
 	return stem;
 }
 
-bool TryParseFloat(std::string_view token, float &out)
+bool TryParseFloat(const std::string_view token, float &out)
 {
 	if (token.empty()) {
 		return false;
 	}
-	std::string buf(token);
+	const std::string buf(token);
 	char *parseEnd = nullptr;
 	const float v = std::strtof(buf.c_str(), &parseEnd);
 	if (parseEnd != buf.c_str() + buf.size()) {
@@ -51,53 +51,46 @@ bool TryParseFloat(std::string_view token, float &out)
 	return true;
 }
 
-bool TryParseVec3(std::string_view tokens, glm::vec3 &out)
+bool TryParseVec3(const std::string_view tokens, glm::vec3 &out)
 {
 	float values[3] = {0.0f, 0.0f, 0.0f};
-	std::size_t parsed = 0;
 	std::size_t cursor = 0;
 	for (int i = 0; i < 3; ++i) {
 		const auto comma = tokens.find(',', cursor);
-		const auto slice = (comma == std::string_view::npos)
-			? tokens.substr(cursor)
-			: tokens.substr(cursor, comma - cursor);
+		const std::string_view slice = comma == std::string_view::npos
+										   ? tokens.substr(cursor)
+										   : tokens.substr(cursor, comma - cursor);
 		float v = 0.0f;
 		if (!TryParseFloat(Trim(slice), v)) {
 			return false;
 		}
 		values[i] = v;
-		++parsed;
 		if (comma == std::string_view::npos) {
-			cursor = tokens.size();
 			break;
 		}
 		cursor = comma + 1;
-	}
-	if (parsed != 3) {
-		return false;
 	}
 	out = glm::vec3(values[0], values[1], values[2]);
 	return true;
 }
 
 bool TryParseFullTransform(
-	std::string_view tokens,
+	const std::string_view tokens,
 	ManifestEntry &out)
 {
 	float values[7] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 	std::size_t cursor = 0;
 	for (int i = 0; i < 7; ++i) {
 		const auto comma = tokens.find(',', cursor);
-		const auto slice = (comma == std::string_view::npos)
-			? tokens.substr(cursor)
-			: tokens.substr(cursor, comma - cursor);
+		const std::string_view slice = comma == std::string_view::npos
+										   ? tokens.substr(cursor)
+										   : tokens.substr(cursor, comma - cursor);
 		float v = 0.0f;
 		if (!TryParseFloat(Trim(slice), v)) {
 			return false;
 		}
 		values[i] = v;
 		if (comma == std::string_view::npos) {
-			cursor = tokens.size();
 			break;
 		}
 		cursor = comma + 1;
@@ -115,12 +108,12 @@ bool ParseEntry(const std::string &rawEntry, ManifestEntry &out)
 		return false;
 	}
 	const auto at = trimmed.find('@');
-	const std::string_view pathView = (at == std::string_view::npos)
-		? trimmed
-		: trimmed.substr(0, at);
-	const std::string_view transformView = (at == std::string_view::npos)
-		? std::string_view{}
-		: trimmed.substr(at + 1);
+	const std::string_view pathView = at == std::string_view::npos
+										  ? trimmed
+										  : trimmed.substr(0, at);
+	const std::string_view transformView = at == std::string_view::npos
+											   ? std::string_view{}
+											   : trimmed.substr(at + 1);
 
 	out.path.assign(pathView);
 	if (out.path.empty()) {
@@ -131,7 +124,7 @@ bool ParseEntry(const std::string &rawEntry, ManifestEntry &out)
 	out.rotationDegrees = glm::vec3(0.0f);
 	out.scale = 1.0f;
 
-	const auto commaCount = std::count(transformView.begin(), transformView.end(), ',');
+	const auto commaCount = std::ranges::count(transformView, ',');
 	if (transformView.empty()) {
 		return true;
 	}
@@ -152,9 +145,9 @@ std::vector<ManifestEntry> ParseAssetManifestString(const std::string &raw)
 	std::size_t cursor = 0;
 	while (cursor <= raw.size()) {
 		const auto semi = raw.find(';', cursor);
-		const auto end = (semi == std::string::npos) ? raw.size() : semi;
+		const auto end = semi == std::string::npos ? raw.size() : semi;
 		const std::string token = raw.substr(cursor, end - cursor);
-		cursor = (semi == std::string::npos) ? raw.size() + 1 : semi + 1;
+		cursor = semi == std::string::npos ? raw.size() + 1 : semi + 1;
 
 		ManifestEntry entry;
 		if (ParseEntry(token, entry)) {

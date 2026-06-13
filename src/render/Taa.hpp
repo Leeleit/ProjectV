@@ -3,8 +3,6 @@
 
 #include "core/Types.hpp"
 
-#include <cstdint>
-
 namespace projectv::taa {
 
 // 8-tap Halton(2,3) sub-pixel jitter sequence, in *pixel* units relative to
@@ -23,7 +21,7 @@ std::array<float, 2> AdvanceTaaPixelJitter(uint32_t *frameCounter);
 // guarantee `extent.width` and `extent.height` are > 0; the function returns
 // zero texel sizes if not.
 std::array<float, 4> BuildTaaHistoryParams(
-	const VkExtent2D extent,
+	VkExtent2D extent,
 	bool historyValid);
 
 // 1.5 anti-flicker: per-layer history parameters. Same layout as
@@ -34,7 +32,7 @@ std::array<float, 4> BuildTaaHistoryParams(
 // are allocated at the swapchain extent), so the texel-size is
 // the same.
 std::array<float, 4> BuildTaaLayerHistoryParams(
-	const VkExtent2D extent,
+	VkExtent2D extent,
 	bool historyValid,
 	float blendFactor);
 

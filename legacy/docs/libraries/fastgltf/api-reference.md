@@ -1,7 +1,7 @@
 # Справочник API fastgltf 🟡
 
 Краткое описание классов и функций fastgltf. Полные объявления —
-в [external/fastgltf/include](../../external/fastgltf/include).
+в [external/fastgltf/include](../../../../external/fastgltf/include).
 
 Include по сценарию: см. [Интеграция §6](integration.md#6-include-и-заголовки).
 

@@ -2,7 +2,7 @@
 
 **🟡 Уровень 2: Средний**
 
-Полные объявления — в [imgui.h](../../external/imgui/imgui.h) и
+Полные объявления — в [imgui.h](../../../../external/imgui/imgui.h) и
 backend-хедерах.
 
 ## Оглавление
@@ -183,7 +183,7 @@ void ImGui::ShowFontSelector(const char* label);
 ```
 
 `ShowDemoWindow` — все виджеты; `ShowMetricsWindow` — внутреннее состояние; `ShowIDStackToolWindow` — отладка ID.
-Исходники — [imgui_demo.cpp](../../external/imgui/imgui_demo.cpp).
+Исходники — [imgui_demo.cpp](../../../../external/imgui/imgui_demo.cpp).
 
 ---
 
@@ -355,7 +355,7 @@ bool ImGui::InputText(const char* label, char* buf, size_t buf_size, ImGuiInputT
 bool ImGui::InputTextMultiline(const char* label, char* buf, size_t buf_size, const ImVec2& size = ImVec2(0,0));
 ```
 
-Для `InputText` с `std::string` — использовать [imgui_stdlib.h](../../external/imgui/misc/cpp/imgui_stdlib.h).
+Для `InputText` с `std::string` — использовать [imgui_stdlib.h](../../../../external/imgui/misc/cpp/imgui_stdlib.h).
 
 ---
 
@@ -600,7 +600,7 @@ while (clipper.Step()) {
 
 ## Backend SDL3 (Platform)
 
-Файлы: [imgui_impl_sdl3.h](../../external/imgui/backends/imgui_impl_sdl3.h), [imgui_impl_sdl3.cpp](../../external/imgui/backends/imgui_impl_sdl3.cpp).
+Файлы: [imgui_impl_sdl3.h](../../../../external/imgui/backends/imgui_impl_sdl3.h), [imgui_impl_sdl3.cpp](../../../../external/imgui/backends/imgui_impl_sdl3.cpp).
 
 | Функция                                                | Описание                                   |
 |--------------------------------------------------------|--------------------------------------------|
@@ -619,7 +619,7 @@ while (clipper.Step()) {
 
 ## Backend Vulkan (Renderer)
 
-Файлы: [imgui_impl_vulkan.h](../../external/imgui/backends/imgui_impl_vulkan.h), [imgui_impl_vulkan.cpp](../../external/imgui/backends/imgui_impl_vulkan.cpp).
+Файлы: [imgui_impl_vulkan.h](../../../../external/imgui/backends/imgui_impl_vulkan.h), [imgui_impl_vulkan.cpp](../../../../external/imgui/backends/imgui_impl_vulkan.cpp).
 
 ### ImGui_ImplVulkan_PipelineInfo
 
@@ -669,7 +669,7 @@ while (clipper.Step()) {
 
 ## imconfig.h — ключевые опции
 
-Файл: [imconfig.h](../../external/imgui/imconfig.h). Или свой файл: `#define IMGUI_USER_CONFIG "my_config.h"`.
+Файл: [imconfig.h](../../../../external/imgui/imconfig.h). Или свой файл: `#define IMGUI_USER_CONFIG "my_config.h"`.
 
 | Опция                         | Описание                                             |
 |-------------------------------|------------------------------------------------------|

@@ -51,7 +51,7 @@ set(VOXEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/voxel.frag.taa_on.spv)
 add_custom_command(
         OUTPUT ${VOXEL_FRAG_TAA_SPV}
         COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
-            -DTAA_ENABLED ${SHADER_DIR}/voxel.frag -o ${VOXEL_FRAG_TAA_SPV}
+        -DTAA_ENABLED ${SHADER_DIR}/voxel.frag -o ${VOXEL_FRAG_TAA_SPV}
         DEPENDS ${SHADER_DIR}/voxel.frag
         COMMAND_EXPAND_LISTS
         VERBATIM
@@ -68,7 +68,7 @@ set(MODEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/model.frag.taa_on.spv)
 add_custom_command(
         OUTPUT ${MODEL_FRAG_TAA_SPV}
         COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
-            -DTAA_ENABLED ${SHADER_DIR}/model.frag -o ${MODEL_FRAG_TAA_SPV}
+        -DTAA_ENABLED ${SHADER_DIR}/model.frag -o ${MODEL_FRAG_TAA_SPV}
         DEPENDS ${SHADER_DIR}/model.frag
         COMMAND_EXPAND_LISTS
         VERBATIM
@@ -143,7 +143,7 @@ target_include_directories(ProjectV PRIVATE
 # `EXCLUDE_FROM_ALL` so the miniaudio examples and tests
 # don't pollute the build.
 add_subdirectory(${PROJECT_SOURCE_DIR}/external/miniaudio
-    ${CMAKE_BINARY_DIR}/external/miniaudio EXCLUDE_FROM_ALL)
+        ${CMAKE_BINARY_DIR}/external/miniaudio EXCLUDE_FROM_ALL)
 target_link_libraries(ProjectV PRIVATE miniaudio)
 
 if (LINUX)

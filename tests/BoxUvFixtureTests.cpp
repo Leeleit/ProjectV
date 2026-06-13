@@ -11,7 +11,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -33,11 +32,11 @@ struct TestContext {
 	}
 };
 
-#define PV_EXPECT_TRUE(ctx, cond, msg) \
-	do { \
-		if (!(cond)) { \
+#define PV_EXPECT_TRUE(ctx, cond, msg)   \
+	do {                                 \
+		if (!(cond)) {                   \
 			(ctx).Fail(__LINE__, (msg)); \
-		} \
+		}                                \
 	} while (0)
 
 void TestGenerateAndValidateHeader(TestContext &ctx)
@@ -49,6 +48,13 @@ void TestGenerateAndValidateHeader(TestContext &ctx)
 		input.good(),
 		"tests/fixtures/box_uv.glb must be present on disk (run GenerateBoxUvFixture first)");
 
+	// `header` is mutated by `input.read` (the `const_cast` is
+	// needed to satisfy `istream::read`'s `char*` signature),
+	// so it can't be `const` / `constexpr` despite the
+	// all-zero initialiser. The `CppVariableCanBeMadeConstexpr`
+	// report is a JetBrains DFA false positive — it doesn't
+	// trace through the `const_cast` to see the write.
+	// noinspection CppLocalVariableMayBeConst
 	uint32_t header[3] = {0, 0, 0};
 	input.read(reinterpret_cast<char *>(header), sizeof(header));
 	PV_EXPECT_TRUE(

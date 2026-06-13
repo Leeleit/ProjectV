@@ -183,5 +183,5 @@ generated opaque/transparent faces, visibility pressure, upload sizes и live `w
 - [BuildAndRun](BuildAndRun.md)
 - [Debugging](Debugging.md)
 - [VoxelWorld](VoxelWorld.md)
-- [README_NEW](../README_NEW.md)
+- [README](../README.md)
 - [TODO](../TODO.md)

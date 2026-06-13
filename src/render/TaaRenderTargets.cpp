@@ -9,9 +9,6 @@
 // `vmaCreateImage` / `vmaDestroyImage` calls actually need it.
 #include "vk_mem_alloc.h"
 
-#include <algorithm>
-#include <array>
-
 namespace projectv::taa {
 
 namespace {
@@ -37,7 +34,10 @@ void TransitionImageLayout(
 	imageBarrier.image = image;
 	imageBarrier.subresourceRange = {
 		VK_IMAGE_ASPECT_COLOR_BIT,
-		0, 1, 0, 1,
+		0,
+		1,
+		0,
+		1,
 	};
 
 	VkDependencyInfo depInfo{};
@@ -95,8 +95,8 @@ bool CreateOrRecreateTaaRenderTargets(
 	// `kTaaLayerHistoryColorFormat` in `TaaRenderTargets.hpp`. The
 	// graphics pipeline declaration in `VulkanGraphicsPipeline.cpp`
 	// reads the same constants so they cannot drift.
-	const VkFormat sceneColorFormat = kTaaSceneColorFormat;
-	const VkFormat layerColorFormat = kTaaLayerHistoryColorFormat;
+	constexpr VkFormat sceneColorFormat = kTaaSceneColorFormat;
+	constexpr VkFormat layerColorFormat = kTaaLayerHistoryColorFormat;
 
 	// Both image sets share the same `VkImageCreateInfo` (usage
 	// flags, tiling, samples) — only the format differs. Build a
@@ -128,10 +128,10 @@ bool CreateOrRecreateTaaRenderTargets(
 	allocationInfo.flags = 0;
 
 	auto allocateTarget = [&](
-		OffscreenColorTarget &target,
-		VkFormat format,
-		const char *name,
-		VkImageLayout initialLayout) -> bool {
+							  OffscreenColorTarget &target,
+							  const VkFormat format,
+							  const char *name,
+							  const VkImageLayout initialLayout) -> bool {
 		// Cast the `void*` handle back to its real VMA type for the
 		// call. The `void*` representation in the public header is
 		// just there to avoid leaking `vk_mem_alloc.h` into every
@@ -186,7 +186,10 @@ bool CreateOrRecreateTaaRenderTargets(
 		};
 		viewInfo.subresourceRange = {
 			VK_IMAGE_ASPECT_COLOR_BIT,
-			0, 1, 0, 1,
+			0,
+			1,
+			0,
+			1,
 		};
 		if (vkCreateImageView(context->device, &viewInfo, nullptr, &target.imageView) != VK_SUCCESS) {
 			return false;
@@ -342,7 +345,7 @@ void RecordTaaHistoryCopy(
 	const VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor,
 	const OffscreenColorTarget &historyColor,
-	VkExtent2D extent)
+	const VkExtent2D extent)
 {
 	if (sceneColor.image == VK_NULL_HANDLE || historyColor.image == VK_NULL_HANDLE) {
 		return;
@@ -374,11 +377,10 @@ void RecordTaaHistoryCopy(
 		VK_PIPELINE_STAGE_2_COPY_BIT,
 		VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
-	const VkImageCopy copyRegion{};
-	// The default-initialised `VkImageCopy` is already correct for a
-	// 2D full-color copy of the swapchain-sized area. We set the
-	// subresource explicitly to keep the intent obvious in a code
-	// review and to make the helper robust to any future change in the
+	// Default-initialised `VkImageCopy` is already correct for a
+	// 2D full-color copy of the swapchain-sized area. The subresource
+	// is set explicitly to keep the intent obvious in a code review
+	// and to make the helper robust to any future change in the
 	// struct's zero-initialised field semantics.
 	VkImageCopy region{};
 	region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};

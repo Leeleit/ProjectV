@@ -317,6 +317,14 @@ Refs: agent/memory.md §10.11
   пользователь отдельно подтвердил, что «ревертить =
   помешаешь TAA-агенту ещё раз».
 
+#### 7.2.7 Code quality: fix, don't silence
+
+**Запрещено глушить ошибки и варнинги.** Любые формы suppression
+— в коде, в IDE-конфиге, в CMake, в `.clangd` — запрещены как
+способ «починить» проблему. Если проблема реална — чинить код.
+Если это DFA/IDE false-positive, не переписывать и не глушить —
+оставить видимым.
+
 ### 7.3 Verification (закрытие подзадачи)
 
 Tactical verification rules (build/test policy, smoke policy, tracy build policy, warning-cleanup policy) живут в `decisions.md §4` (Build / verification contract) и `agent/session-checklist.md` (старт/завершение). Здесь фиксируем только **формальный инвариант**: build green на охватываемой платформе; `ctest` / scripted captures / `ProjectVRuntimeSmoke` применять по решению, принятому в `decisions.md §4`, а не как ритуал на каждое закрытие.
@@ -354,6 +362,47 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
 
 Всё остальное (TODO.md, status.md, memory.md, decisions.md) обновляется по необходимости
 из `session-checklist.md`, а не как ритуал.
+
+### 8.1. Кто закрывает сессию (важно)
+
+Сессия живёт в `agent/active-sessions.md` **до явной команды оператора**. Агент **не**:
+
+- переносит свою запись в секцию «Закрытые сессии»;
+- выставляет `status: closed`, `closed-at`, `commit-hash`;
+- формирует финальный `git commit` / `git commit --amend` (см. §7.2.5 — commit **предлагается**, но не выполняется);
+- удаляет safety-net patch из `/tmp/`;
+- «закрывает на себе» задачу без подтверждения.
+
+Даже если ассистент уверен, что работа завершена, build green, ctest 6/6 — без слов оператора
+«закрой сессию» / «закоммить» / «готово» сессия остаётся `open`. Это касается и случая, когда
+оператор ушёл спать / оффлайн: **ждать**, а не «закрыть на автомате».
+
+Когда ассистент считает, что сессия завершена, он:
+1. Обновляет запись в `agent/active-sessions.md` (notes/commits) **с пометкой «готово к закрытию»**.
+2. Сообщает пользователю, что сессия готова к закрытию, и **ждёт команды**.
+3. Не предлагает автоматическое закрытие в каждом ответе — одно подтверждение пользователя, не ритуал.
+
+**Когда агент записывает в `active-sessions.md`:**
+- **Старт сессии** — сразу, до любой работы. Поля: id, started-at, scope, files-touched-intent.
+- **Изменение scope / целей** — сразу при получении новой задачи или смене направления. Не дожидаясь конца.
+- **Крупное завершение этапа** — в notes добавляется запись «готово к закрытию», но **status: open** сохраняется до команды.
+
+### 8.2. Что агент НЕ должен путать с «потерянной работой»
+
+Multi-agent coordination — **текущий** контракт проекта (см. §7.2.6,
+`agent/active-sessions.md`). Если в начале новой сессии выясняется, что часть предыдущей работы
+не попала в HEAD, **это не «потеря»** — это нормальное состояние uncommitted-ветки предыдущей
+сессии (одной или нескольких), и она лежит в `git status -uall` + в safety-net patch'ах
+`/tmp/before_*.patch`. Списывать uncommitted правки на «другого агента» без проверки — fabrication.
+
+Прежде чем делать такое заявление — **проверить `git reflog` / `git fsck` / `/tmp/*.patch`**,
+и:
+- если следы есть в `git reflog` или `/tmp/` — пометить как «незакоммиченная работа предыдущей
+  сессии, не утеряна»;
+- если другая сессия действительно откатила работу (видно в `git reflog` / `agent/active-sessions.md`)
+  — **сообщить оператору** и попросить arbitration, не выдумывать narrative;
+- если действительно никаких следов нет — пометить как «причина неясна, нужна проверка
+  оператора», а не «кто-то откатил».
 
 ---
 
@@ -409,7 +458,7 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
 
 - Новые структуры — **SoA** по умолчанию. AoS — только если есть явная причина (маленький size, hot path, BR-friendly).
 - Итерация — индексная, не iterator-based, если только размер hot loop не оправдывает iterator.
-- For the bespoke single-TU test runner в `tests/VoxelWorldTests.cpp` — file-level `// ReSharper disable CppDFAUnreachableFunctionCall` допустим (JetBrains DFA не моделирует reachability custom-harness надёжно; см. `decisions.md §12`).
+- Бэст-сделанный single-TU test runner в `tests/VoxelWorldTests.cpp`: исторически содержал `// ReSharper disable CppDFAUnreachableFunctionCall` — это была ошибка, не прецедент. Если потребуется DFA-clean harness — рефакторить в сторону direct calls из `main()`, не добавлять suppressions (см. §7.2.7). Существующий suppression должен быть вычищен в отдельной подзадаче.
 
 ---
 
@@ -435,6 +484,7 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
 
 Правки протокола, не кода. Хранить здесь, не в git history, чтобы можно было быстро вспомнить «что и зачем».
 
+- **2026-06-13** — добавлена §7.2.7 «Code quality: fix, don't silence». Запрещены все формы suppression (`// noinspection`, `// ReSharper disable`, `#pragma ide diagnostic ignored`, `.clangd` `Diagnostics.Suppress` / `CompileFlags.Add: [--system-include-prefix]`) как способ скрыть проблему. Реальные баги — фиксить в коде, DFA false-positives — оставлять видимыми. Удалена прецедентная ссылка на `// ReSharper disable` в §10.5 (это была ошибка, не прецедент; вычистка — отдельная подзадача). Источник: сессии v3-v6 накопили ~40 `//noinspection` + suppress-codes в `.clangd` вместо починки 5 реальных проблем; пользователь явно потребовал «вместо починки проблем, просто заглушил их» — правило зафиксировано в протоколе.
 - **2026-06-12** — добавлен bullet в §7.2.6 «Что НЕ делать»: «Трогать файлы чужой активной/aborted-сессии под любым предлогом, включая "починить сборку"». Обобщённое правило scope-ownership: запрещены модификация, перезапись, ручная компиляция/генерация build-артефактов (`.spv`, `.o`, `.so`, generated headers), правка исходников/документации/тестов/конфигов/любых других файлов (включая `build/`, `external/`, `docs/`), чей владелец — другая сессия. Блокировка сборки файлом чужой сессии → сообщить пользователю, попросить serialization, **не** ревертить/удалять артефакты чужой сессии (это пересоздаст блокировку на её стороне). Источник: инцидент 2026-06-12 — асcess-сompile aborted TAA-шейдера через `glslc` напрямую, нарушив ownership; пользователь подтвердил, что «ревертить = помешаешь TAA-агенту ещё раз».
 - **2026-06-11** — добавлена секция §7.2.6 «Multi-agent concurrent work policy». Расширены §0 Quick Reference (новая строка про multi-agent protocol) и §7.1 Initialization (новый шаг 5: проверка активных сессий; остальные сдвинуты на +1). Введён `agent/active-sessions.md` как append-only ledger координации между параллельными сессиями. Источник: явная команда пользователя «над проектом могут работать несколько агентов, изменения могут быть прерваны, агенты должны быть готовы».
 - **2026-06-10** — полная перезапись по инициативе пользователя. Добавлены: мета-процедура (§1), mode protocol (§5), subagent delegation policy (§7.2.1), общий safety protocol (§7.2.2), trust boundary (§7.2.3), git safety + uncommitted-work workflow (§7.2.4), commit message contract (§7.2.5), session-end protocol (§8), stack conventions (§10), tool conventions (§11). Удалено: самопротиворечие о «неизменяемости», расплывчатые формулировки про token economy без конкретных инструментов, отсутствие PLAN/ACT-mode protocol, отсутствие правил для subagent и commit format. Дополнено: MCP filesystem заблокирован в этой песочнице — явно зафиксировано.

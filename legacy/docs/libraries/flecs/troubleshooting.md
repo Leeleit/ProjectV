@@ -244,7 +244,7 @@ target_compile_definitions(ProjectV PRIVATE FLECS_DEBUG)
 ## Многопоточность
 
 `ecs_set_threads(world, n)` и `multi_threaded` в system builder. Системы с `immediate = true` не могут быть
-`multi_threaded`. [Systems.md](../../external/flecs/docs/Systems.md).
+`multi_threaded`. [Systems.md](../../../../external/flecs/docs/Systems.md).
 
 **Vulkan:** запись в CommandBuffer не потокобезопасна. Системы рендеринга не должны использовать `multi_threaded()`.
 Физику можно вынести в отдельные потоки, рендер — в main.
@@ -256,4 +256,4 @@ target_compile_definitions(ProjectV PRIVATE FLECS_DEBUG)
 - [Интеграция](integration.md) — CMake, порядок вызовов
 - [Основные понятия](concepts.md) — Query, singleton, hierarchy
 - [Справочник API](api-reference.md)
-- [BuildingFlecs.md](../../external/flecs/docs/BuildingFlecs.md)
+- [BuildingFlecs.md](../../../../external/flecs/docs/BuildingFlecs.md)

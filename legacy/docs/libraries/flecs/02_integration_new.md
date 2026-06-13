@@ -146,7 +146,7 @@ set(FLECS_CUSTOM_BUILD ON CACHE BOOL "" FORCE)
 add_subdirectory(external/flecs)
 ```
 
-Подробнее: [BuildingFlecs.md](../../external/flecs/docs/BuildingFlecs.md)
+Подробнее: [BuildingFlecs.md](../../../../external/flecs/docs/BuildingFlecs.md)
 
 ---
 

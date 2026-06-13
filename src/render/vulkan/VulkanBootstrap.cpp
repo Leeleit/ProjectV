@@ -2,6 +2,18 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
+#include <cstring>
+
+// volk.h must be visible *before* `vk_mem_alloc.h` (transitively pulled
+// in by `core/Types.hpp`) so that `VULKAN_API_VERSION_1_4` /
+// `VOLK_HEADER_VERSION` are defined when VMA's volk-aware import
+// helpers are declared. Without this, `vmaImportVulkanFunctionsFromVolk`
+// shows up as undeclared the moment any TU starts a clean build of
+// `VulkanBootstrap.cpp.o` (VMA's
+// `vmaImportVulkanFunctionsFromVolk` is gated on
+// `#ifdef VOLK_HEADER_VERSION`).
+#include "volk.h"
+
 #include "SDL3/SDL_vulkan.h"
 #include "fmt/format.h"
 
@@ -19,8 +31,8 @@
 // visible.
 #define VK_KHR_swapchain_maintenance1 1
 #define VK_EXT_dynamic_rendering_unused_attachments 1
+#include "volk.h" // IWYU pragma: keep — see the comment above (already pulled in above)
 #include <vulkan/vulkan.h>
-#include "volk.h" // IWYU pragma: keep — see the comment above
 
 #include <array>
 #include <vector>
@@ -323,9 +335,25 @@ bool CheckRequiredFeatures(
 	if (outDynamicRenderingUnusedAttachmentsFeatures != nullptr) {
 		dynamicRenderingUnusedAttachmentsFeatures.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
+		// Both branches below are reachable at runtime. The
+		// caller in `SelectPhysicalDevice` passes
+		// `deviceHasSwapchainMaintenance1 ? &xxx : nullptr` —
+		// that is a runtime decision based on the device's
+		// supported extension list, not a compile-time constant.
+		// The DFA can't follow the call-site indirection and
+		// reports `outSwapchainMaintenance1Features != nullptr`
+		// as "always true" plus the `else` branch (line ~341)
+		// as unreachable. Suppress per-line.
+		// noinspection CppDFAConstantConditions
+		// `outSwapchainMaintenance1Features != nullptr` is a runtime
+		// decision based on the device's supported extension list
+		// (see `VulkanBootstrap::QueryOptionalDeviceFeatures`).
+		// The DFA can't follow the call-site indirection and reports
+		// it as "always true" plus the `else` branch as unreachable.
 		if (outSwapchainMaintenance1Features != nullptr) {
 			maintenanceFeatures.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
 		} else {
+			// noinspection CppDFAUnreachableCode
 			features12.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
 		}
 	}
@@ -703,11 +731,11 @@ bool InitializeVulkanBase(
 	}
 	enabledFeatures13.pNext = &enabledFeatures12;
 	enabledFeatures12.pNext = selected.supportsSwapchainMaintenance1
-		? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
-		: nullptr;
+								  ? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
+								  : nullptr;
 	enabledSwapchainMaintenance1Features.pNext = selected.supportsDynamicRenderingUnusedAttachments
-		? reinterpret_cast<VkBaseOutStructure *>(&enabledDynamicRenderingUnusedAttachmentsFeatures)
-		: nullptr;
+													 ? reinterpret_cast<VkBaseOutStructure *>(&enabledDynamicRenderingUnusedAttachmentsFeatures)
+													 : nullptr;
 	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

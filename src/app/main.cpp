@@ -3,15 +3,15 @@
 #include "SDL3/SDL_main.h"
 
 #include "app/AppUpdate.hpp"
+#include "app/BenchmarkAutomation.hpp"
 #include "app/Camera.hpp"
 #include "app/FramePreparation.hpp"
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
-#include "app/BenchmarkAutomation.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
+#include "asset/ModelManifestLoader.hpp"
 #include "audio/AudioEngine.hpp"
 #include "audio/MusicDirectoryPath.hpp"
-#include "asset/ModelManifestLoader.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
@@ -331,6 +331,20 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	// custom function-pointer deleter does not
 	// accept the `std::default_delete<T>` returned
 	// by `std::make_unique<AudioEngine>()`.
+	// `CppDFAMemoryLeak` false positive: the engine is
+	// transferred into `state->audio` (a
+	// `unique_ptr<AudioEngine, DestroyAudioEngine>`)
+	// and `state` itself is handed off to SDL via
+	// `*appstate = state.release()` on the line below.
+	// `SDL_AppQuit` does `delete state` which destroys
+	// the engine and runs the deleter. The DFA doesn't
+	// see the SDL3 callback round-trip, so it
+	// reports a leak. Suppress per-line.
+	// noinspection CppDFAMemoryLeak
+	// AudioEngine is owned by `state` (an `std::unique_ptr` with
+	// custom deleter `DestroyAudioEngine`). `SDL_AppQuit` retrieves
+	// `appstate` via `state.release()` and runs the deleter. The DFA
+	// doesn't see the SDL3 callback round-trip, so it reports a leak.
 	state->audio = AudioEnginePtr(
 		new projectv::audio::AudioEngine(),
 		DestroyAudioEngine);
@@ -348,8 +362,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		const size_t trackCount = state->audio->loadMusicFolder(
 			projectv::audio::GetMusicDirectoryPath());
 		SDL_Log("[ProjectV][Audio] miniaudio initialized; %zu mp3 track(s) in %s",
-			trackCount,
-			state->audio->musicFolder().string().c_str());
+				trackCount,
+				state->audio->musicFolder().string().c_str());
 	}
 	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
 	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark);
@@ -360,6 +374,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	}
 
 	*appstate = state.release();
+	// noinspection CppDFAMemoryLeak
+	// Same AudioEngine ownership handoff as in `SDL_AppInit` —
+	// DFA doesn't see the `SDL_AppQuit` -> `delete state` path.
 	return SDL_APP_CONTINUE;
 }
 

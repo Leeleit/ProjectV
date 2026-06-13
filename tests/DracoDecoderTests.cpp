@@ -22,6 +22,9 @@ struct TestContext {
 	}
 };
 
+// `CppDFAConstantParameter` false positive: see
+// `tests/AssetLoaderTests.cpp:27` for the same helper.
+// noinspection CppDFAConstantParameter
 bool ApproxEqual(const float a, const float b, const float epsilon = 1e-5f)
 {
 	return std::fabs(a - b) <= epsilon;
@@ -44,7 +47,7 @@ void TestDracoBoxLoadExtractsSameGeometry(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxDracoFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxDracoFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("draco LoadGlb failed: ") + error.message);
 		return;
@@ -71,12 +74,10 @@ void TestDracoBoxLoadExtractsSameGeometry(TestContext &context)
 	if (prim.indices.size() != 36) {
 		context.Fail(__LINE__, "draco box indices should be 36");
 	}
-	if (!ApproxEqual(loaded->aabbMin.x, -0.5f) || !ApproxEqual(loaded->aabbMin.y, -0.5f)
-		|| !ApproxEqual(loaded->aabbMin.z, -0.5f)) {
+	if (!ApproxEqual(loaded->aabbMin.x, -0.5f) || !ApproxEqual(loaded->aabbMin.y, -0.5f) || !ApproxEqual(loaded->aabbMin.z, -0.5f)) {
 		context.Fail(__LINE__, "draco box aabbMin not (-0.5, -0.5, -0.5)");
 	}
-	if (!ApproxEqual(loaded->aabbMax.x, 0.5f) || !ApproxEqual(loaded->aabbMax.y, 0.5f)
-		|| !ApproxEqual(loaded->aabbMax.z, 0.5f)) {
+	if (!ApproxEqual(loaded->aabbMax.x, 0.5f) || !ApproxEqual(loaded->aabbMax.y, 0.5f) || !ApproxEqual(loaded->aabbMax.z, 0.5f)) {
 		context.Fail(__LINE__, "draco box aabbMax not (0.5, 0.5, 0.5)");
 	}
 }
@@ -88,7 +89,7 @@ void TestDracoBoxBakesViaMeshBaker(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxDracoFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxDracoFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("draco LoadGlb failed: ") + error.message);
 		return;
@@ -120,7 +121,7 @@ void TestNonDracoPathStillWorks(TestContext &context)
 		return;
 	}
 	projectv::asset::LoadAssetError error;
-	auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
+	const auto loaded = projectv::asset::LoadGlb(BoxFixturePath().string(), &error);
 	if (!loaded) {
 		context.Fail(__LINE__, std::string("non-draco LoadGlb regressed: ") + error.message);
 		return;

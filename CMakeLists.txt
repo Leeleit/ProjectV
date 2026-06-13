@@ -60,6 +60,21 @@ add_subdirectory(external/volk)
 
 # Vulkan Memory Allocator
 add_subdirectory(external/VulkanMemoryAllocator)
+# VMA is a header-only INTERFACE target. The upstream headers use
+# raw `T*` pointers in hundreds of public API signatures and
+# (correctly) omit Clang's `_Nonnull` / `_Nullable` annotations
+# — they're not C-only code, and Apple-clang / upstream Clang's
+# `-Wnullability-completeness` (which catches pointers crossing
+# the annotated/non-annotated boundary in *Obj-C* method families)
+# treats every such pointer as a diagnostic. VMA's contract
+# (Vulkan physical-device memory, alloc callbacks, etc.) is
+# fundamentally `void*`/nullable-by-vulkan-spec, so the warning
+# is a third-party-API false positive. Scope the suppression to
+# VMA's own INTERFACE so our own code in `src/` and `tests/` is
+# NOT affected (per AGENTS.md §7.2.7 "не глушить в ProjectV таргете").
+target_compile_options(VulkanMemoryAllocator INTERFACE
+    -Wno-nullability-completeness
+)
 
 # fmt
 set(FMT_DOC OFF CACHE BOOL "Disable fmt docs" FORCE)
@@ -153,6 +168,20 @@ set(DRACO_DEBUG_COMPILER_WARNINGS OFF CACHE BOOL "Disable draco debug warnings" 
 set(DRACO_BUILD_EXECUTABLES OFF CACHE BOOL "Disable draco CLI tools" FORCE)
 set(DRACO_MAYA_PLUGIN OFF CACHE BOOL "Disable draco Maya plugin" FORCE)
 set(DRACO_UNITY_PLUGIN OFF CACHE BOOL "Disable draco Unity plugin" FORCE)
+# draco's CMakeLists.txt:40 calls `include(FindPythonInterp)`. That
+# module is scheduled for removal under CMP0148 (CMake 4.0+). Without
+# the policy being explicitly set, every configure re-emits a
+# `(dev) Policy CMP0148 is not set` warning at the include() call.
+# Set the policy as the default for every subdirectory's scope via
+# `CMAKE_POLICY_DEFAULT_CMP<NNNN>`, so the setting follows
+# `add_subdirectory(external/draco)` into draco's own scope (policies
+# are stack-based and a subdir starts a fresh stack — only the
+# CMAKE_POLICY_DEFAULT_CMP<NNNN> cache vars are carried across the
+# boundary by default). We do NOT call `cmake_policy(SET CMP0148 OLD)`
+# in this scope, because that triggers a separate deprecation warning
+# ("OLD behavior will be removed in a future version of CMake") that's
+# strictly worse than the dev warning we're trying to suppress.
+set(CMAKE_POLICY_DEFAULT_CMP0148 OLD)
 add_subdirectory(external/draco)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/draco")
 

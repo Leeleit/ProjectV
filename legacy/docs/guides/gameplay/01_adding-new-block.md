@@ -382,4 +382,4 @@ TEST_CASE("Obsidian requires diamond pickaxe") {
 
 - [Gameplay Overview](./00_overview.md)
 - [Engine Structure](../../architecture/practice/00_engine-structure.md)
-- [Voxel Data Philosophy](../../philosophy/07_voxel-data-philosophy.md)
+- [Voxel Data Philosophy](../../philosophy/03_domain/03_voxel-data-philosophy.md)

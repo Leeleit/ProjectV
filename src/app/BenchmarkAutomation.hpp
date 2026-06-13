@@ -7,6 +7,6 @@ void ConfigureBenchmarkAutomationFromEnvironment(BenchmarkAutomationState *state
 bool UpdateBenchmarkAutomation(
 	BenchmarkAutomationState *state,
 	const DebugStats &debugStats,
-	const Uint64 frameCounter);
+	Uint64 frameCounter);
 
 #endif

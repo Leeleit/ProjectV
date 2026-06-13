@@ -116,4 +116,4 @@
 
 - [Основные понятия](concepts.md) — main vs callbacks, event loop, Vulkan-интеграция.
 - [Справочник API](api-reference.md) — полные описания функций и структур, ссылки на
-  хедеры: [SDL_events.h](../../external/SDL/include/SDL3/SDL_events.h), [SDL_keycode.h](../../external/SDL/include/SDL3/SDL_keycode.h), [SDL_video.h](../../external/SDL/include/SDL3/SDL_video.h).
+  хедеры: [SDL_events.h](../../../../external/SDL/include/SDL3/SDL_events.h), [SDL_keycode.h](../../../../external/SDL/include/SDL3/SDL_keycode.h), [SDL_video.h](../../../../external/SDL/include/SDL3/SDL_video.h).

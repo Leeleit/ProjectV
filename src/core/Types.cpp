@@ -39,10 +39,7 @@ void ShutdownVulkan(AppState *state)
 		// `Unfreed dedicated allocations found!`. The TAA resolve pipeline
 		// and its descriptor sets were already torn down by
 		// `DestroyGraphicsPipeline` above.
-		if (state->render.taaSceneColorTarget != nullptr
-			|| state->render.taaHistoryColorTarget != nullptr
-			|| state->render.taaLayerSceneColorTarget != nullptr
-			|| state->render.taaLayerHistoryColorTarget != nullptr) {
+		if (state->render.taaSceneColorTarget != nullptr || state->render.taaHistoryColorTarget != nullptr || state->render.taaLayerSceneColorTarget != nullptr || state->render.taaLayerHistoryColorTarget != nullptr) {
 			projectv::taa::DestroyTaaRenderTargets(
 				&state->context,
 				*state->render.taaSceneColorTarget,
@@ -70,7 +67,7 @@ void ShutdownVulkan(AppState *state)
 	DestroyVoxelSceneWorld(state);
 
 	if (state->context.device) {
-		for (VkSemaphore semaphore : state->swapchain.submitSemaphores) {
+		for (const VkSemaphore semaphore : state->swapchain.submitSemaphores) {
 			if (semaphore != VK_NULL_HANDLE) {
 				vkDestroySemaphore(state->context.device, semaphore, nullptr);
 			}

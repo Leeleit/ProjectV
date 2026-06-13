@@ -116,7 +116,7 @@ VMA включает `vulkan/vulkan.h`. В проекте с volk функции
 Опционально: `preferredLargeHeapBlockSize` (0 = по умолчанию, например 256 MiB для больших heap'ов),
 `pAllocationCallbacks` (CPU-аллокации), `pDeviceMemoryCallbacks` (колбэки для vkAllocateMemory/vkFreeMemory),
 `pHeapSizeLimit` (массив лимитов в байтах по каждому heap'у; `VK_WHOLE_SIZE` = без лимита). Подробнее —
-в [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h).
+в [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h).
 
 ```cpp
 VmaAllocatorCreateInfo allocInfo = {};
@@ -174,7 +174,7 @@ if (/* buffer device address включён */)
     allocInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 ```
 
-Остальные флаги добавлять по необходимости (см. [vk_mem_alloc.h](../../external/VMA/include/vk_mem_alloc.h),
+Остальные флаги добавлять по необходимости (см. [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h),
 `VmaAllocatorCreateFlagBits`).
 
 ---

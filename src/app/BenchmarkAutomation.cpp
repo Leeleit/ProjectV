@@ -5,10 +5,8 @@
 #include "SDL3/SDL.h"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -28,7 +26,7 @@ bool IsValueSeparator(const char value)
 
 bool TryParseUnsigned(const char *text, uint32_t *outValue)
 {
-	if (!text || !*text || !outValue) {
+	if (!text || !*text) {
 		return false;
 	}
 
@@ -182,8 +180,8 @@ bool UpdateBenchmarkAutomation(
 	state->lastFrameCounter = frameCounter;
 	const Uint64 frequency = SDL_GetPerformanceFrequency();
 	const float frameSeconds = frequency > 0
-		? static_cast<float>(deltaCounter) / static_cast<float>(frequency)
-		: 0.0f;
+								   ? static_cast<float>(deltaCounter) / static_cast<float>(frequency)
+								   : 0.0f;
 
 	state->totalFrameSeconds += frameSeconds;
 	state->minFrameSeconds = std::min(state->minFrameSeconds, frameSeconds);

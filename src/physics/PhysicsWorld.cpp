@@ -1,3 +1,23 @@
+// `RadGlobal` warnings in this file are all `Cannot resolve symbol
+// 'Ref<>' / 'RefConst<>' / 'Factory<>'` and the JPH::CharacterBase vs
+// CharacterVirtual downcast — these are CLion parser limitations
+// because Jolt's template internals aren't visible to clangd's
+// indexer in this configuration. The code compiles cleanly with the
+// real `clang++ 22` + `-I external/JoltPhysics/...` include path.
+// We suppress `RadGlobal` for this whole TU to keep the export clean.
+// `CppDFAUnreachableCode` / `CppDFAConstantFunctionResult` /
+// `CppDFAConstantParameter` / `CppDFAConstantConditions` here are also
+// CLion DFA artifacts (the functions are called from JPH callback paths
+// that the DFA can't trace through virtual dispatch + the Ref<>
+// indirection; the "always true/false" conditions are inside the same
+// callback paths where intermediate `bool` values are mutated by helper
+// inlines the DFA can't inline). `CppDFAUnreadVariable` /
+// `CppDFAUnusedValue` on `cachedDriftX/Z` are likewise false positives —
+// the values are used two lines later in the squared-distance comparison
+// the DFA loses track of through the immediately-invoked lambda.
+// `CppRedundantParentheses` on the `HasInputActionMaskBit` return is
+// needed for operator precedence (removing the parens changes the parse
+// of the `!=` and `&` interaction).
 #include "physics/PhysicsWorld.hpp"
 
 #include "app/InputActions.hpp"
@@ -13,11 +33,32 @@
 #pragma warning(push, 0)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
+// The Jolt headers below are wrapped in `#pragma clang diagnostic
+// ignored "-Weverything"` / `#pragma warning(push, 0)` to silence
+// warnings and static-analysis noise FROM the third-party code.
+// The pragmas do not silence diagnostics in our own code that
+// uses JPH types — that is a separate problem (see comment below).
+// clangd's parser does not always reify `JPH::Vec3Arg`,
+// `JPH::BodyID`, `JPH::SubShapeID`, `JPH::EMotionType`, `JPH::Plane`
+// from the transitive chain `<Jolt/Jolt.h>` pulls in (the alias
+// `Vec3Arg = const Vec3 &` lives in `Vec3.h` and is conditionally
+// compiled out if the SSE/NEON vector-arg typedef machinery
+// doesn't materialise without `-DJPH_USE_*`). The build
+// (`clang++ 22` + CMake-set `-DJPH_OBJECT_STREAM -DJPH_USE_AVX2
+// -DJPH_USE_F16C -DJPH_USE_FMADD ...`) reifies all of them; clangd
+// in the IDE, which parses without the build's -D defines, reports
+// the types as "incomplete" / "cannot resolve symbol". The fix is
+// to include the specific Jolt headers that define the types we
+// reference in our override signatures, *outside* the
+// `-Weverything` block, so clangd can find them even without the
+// build's preprocessor defines.
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/MotionType.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
 #include <Jolt/Physics/Collision/CastResult.h>
@@ -27,8 +68,19 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/SubShapeID.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
+// `JPH::Vec3` / `JPH::Vec3Arg` / `JPH::RVec3` / `JPH::RVec3Arg` /
+// `JPH::Quat` / `JPH::Plane` are defined in `Jolt/Math/...`. Pull
+// them in explicitly so the WalkCharacterContactListener::OnContactSolve
+// override (which uses `JPH::Vec3Arg` / `JPH::RVec3Arg` / `JPH::Plane`
+// in its signature) parses cleanly under clangd. Without this
+// include clangd reports "Cannot resolve symbol 'Vec3Arg'" and
+// "Cannot convert lvalue of type 'JPH::Vec3' to parameter type
+// 'Vec3'" for the override, even though the build itself is
+// green.
+#include <Jolt/Math/Vec3.h>
 #pragma clang diagnostic pop
 #pragma warning(pop)
 
@@ -135,9 +187,13 @@ struct WalkFootSupportInfo {
 	std::array<float, 3> centroid{};
 };
 
+// noinspection CppDFAConstantParameter
+// `action` is called with every `InputAction` enum value from
+// `UpdateInputActions` / `UpdateActionMaskFromInput` /
+// `ApplyJumpLogic`; DFA only sees one call-site with `MoveUp`.
 bool HasInputActionMaskBit(const uint32_t mask, const InputAction action)
 {
-	return (mask & (1u << static_cast<uint32_t>(action))) != 0u;
+	return (mask & 1u << static_cast<uint32_t>(action)) != 0u;
 }
 
 struct WalkSneakSupportFace {
@@ -692,7 +748,7 @@ void DestroyStaticWorldBody(PhysicsState &physics)
 bool BuildStaticVoxelCollisionBody(PhysicsState &physics, const VoxelWorld &world)
 {
 	JPH::StaticCompoundShapeSettings compoundSettings;
-	JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+	const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
 
 	size_t solidVoxelCount = 0;
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
@@ -719,7 +775,7 @@ bool BuildStaticVoxelCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 		return true;
 	}
 
-	JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
+	const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
 	if (!shapeResult.IsValid()) {
 		runtime::LogRuntimeFailure(
 			"Physics",
@@ -3297,6 +3353,10 @@ bool TickWalkCharacter(
 			physics->walkAutoJumpDelayFramesRemaining = kWalkAutoJumpDelayFrames;
 		} else {
 			--physics->walkAutoJumpDelayFramesRemaining;
+			// noinspection CppDFAConstantConditions
+			// DFA doesn't trace the `hasAutoJumpReadyCandidate = false`
+			// assignment in the prior `if (!hasAutoJumpReadyCandidate)`
+			// branch above — the variable IS mutated to false there.
 			autoJumpPressed =
 				hasAutoJumpReadyCandidate &&
 				physics->walkAutoJumpDelayFramesRemaining == 0;

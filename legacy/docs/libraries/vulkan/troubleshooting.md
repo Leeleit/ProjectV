@@ -73,7 +73,7 @@
 **Проблема:** Двухшаговый вызов как в SDL2 — сначала с `nullptr` для подсчёта, затем копирование в свой массив — **не
 подходит для SDL3**.
 
-**SDL3 API** ([SDL_vulkan.h](../../external/SDL/include/SDL3/SDL_vulkan.h)):
+**SDL3 API** ([SDL_vulkan.h](../../../../external/SDL/include/SDL3/SDL_vulkan.h)):
 
 ```c
 char const * const * SDL_Vulkan_GetInstanceExtensions(Uint32 *count);

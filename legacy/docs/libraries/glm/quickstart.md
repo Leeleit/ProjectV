@@ -15,7 +15,7 @@
 
 - CMake 3.25+
 - Компилятор C++ (MSVC, GCC, Clang) с поддержкой C++17+
-- glm как подмодуль в [external/glm](../../external/glm/)
+- glm как подмодуль в [external/glm](../../../../external/glm/)
 - Проект ProjectV уже настроен (см. корневой CMakeLists.txt)
 
 ## Шаг 1: CMakeLists.txt

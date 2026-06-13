@@ -268,7 +268,7 @@ bool CreateDepthResources(
 		.samples = VK_SAMPLE_COUNT_1_BIT,
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-			VK_IMAGE_USAGE_SAMPLED_BIT,
+				 VK_IMAGE_USAGE_SAMPLED_BIT,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = 0,
 		.pQueueFamilyIndices = nullptr,
@@ -1151,8 +1151,8 @@ bool RefreshGraphicsResourceBindings(
 		const VkDescriptorImageInfo layerHistoryImageInfo{
 			.sampler = render->taaLinearSampler,
 			.imageView = render->taaLayerHistoryColorTarget != nullptr
-				? render->taaLayerHistoryColorTarget->imageView
-				: VK_NULL_HANDLE,
+							 ? render->taaLayerHistoryColorTarget->imageView
+							 : VK_NULL_HANDLE,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		};
 		const std::array descriptorWrites{
@@ -1599,8 +1599,8 @@ bool CreateGraphicsPipeline(
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
-	const std::array shaderStagesTaaOff{ vertexStageInfo, fragStageTaaOff };
-	const std::array shaderStagesTaaOn{ vertexStageInfo, fragStageTaaOn };
+	const std::array shaderStagesTaaOff{vertexStageInfo, fragStageTaaOff};
+	const std::array shaderStagesTaaOn{vertexStageInfo, fragStageTaaOn};
 	const std::array shadowShaderStages{
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
