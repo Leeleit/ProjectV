@@ -1,6 +1,30 @@
-#include "render/ShadowProjection.hpp"
+// **Tier 2.D (`2026-06-13`).** `import projectv.math;` replaces
+// the `#include "core/Math.hpp"` form. The `import` declares
+// a dependency on the module's interface (the
+// `projectv::math::{Vec3,Vec4,Mat4,dot,cross,...}` types and
+// free functions) without the textual preprocessor
+// substitution that `#include` does — Clang's module scanner
+// then notes the dep in the `.modmap` so a future
+// `Math.ixx` change rebuilds only the module's own .pcm and
+// the consumers that re-import it, instead of every TU that
+// `#include`d the header (per `TODO.md Tier 2.E`'s 2-5×
+// cold-rebuild speedup target).
+//
+// **Ordering:** per C++20 modules spec, `import` statements
+// must precede `#include` directives in the same TU. The
+// project header `ShadowProjection.hpp` is included *after*
+// the `import` so its macros / declarations see the
+// `projectv::math` namespace without an explicit
+// `using namespace`.
+//
+// The standard-library headers (`<algorithm>`, `<cmath>`,
+// `<cstring>`, `<limits>`) stay as `#include` — they're
+// outside the project's module surface and `import std;`
+// is the CMake 4.2+ experimental gate per `TODO.md Tier 2.C`
+// (deferred).
+import projectv.math;
 
-#include "core/Math.hpp"
+#include "render/ShadowProjection.hpp"
 
 #include <algorithm>
 #include <cmath>

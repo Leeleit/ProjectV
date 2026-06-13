@@ -45,6 +45,18 @@ struct alignas(16) Vec3 {
 		: x(xVal), y(yVal), z(zVal), _pad(0.0f) {}
 	constexpr Vec3(const float xVal, const float yVal, const float zVal, const float padVal) noexcept
 		: x(xVal), y(yVal), z(zVal), _pad(padVal) {}
+
+	// **Single-arg subscript** for the `camera.c[i]` /
+	// `result.c[i]` codepaths where the caller is
+	// iterating a Vec3's components by index. Mirrors
+	// the `glm::vec3[i]` convention. Without this,
+	// `.c[0]`-style code in callers wouldn't compile.
+	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept {
+		return (&x)[i];
+	}
+	[[nodiscard]] constexpr const float &operator[](const std::size_t i) const noexcept {
+		return (&x)[i];
+	}
 };
 
 struct alignas(16) Vec4 {
@@ -78,13 +90,25 @@ struct alignas(16) Mat4 {
 	constexpr Mat4(const Vec4 c0, const Vec4 c1, const Vec4 c2, const Vec4 c3) noexcept
 		: c{c0, c1, c2, c3} {}
 
-	// **Column accessor.** `m.c[col][row]` reads the (row, col)
-	// element, matching `glm::mat4[col][row]` and the rest of
-	// the project's column-major convention.
-	[[nodiscard]] constexpr float &operator[](const std::size_t col, const std::size_t row) noexcept {
-		return c[col][static_cast<std::size_t>(row) > 0 ? row : 0];
+	// **Column accessor** (the original `Math.hpp` form, kept
+	// for ABI/grep compat). `m.column(col)[row]` or
+	// `m.c[col][row]` both work. Matches the column-major
+	// convention used everywhere in the project
+	// (`Renderer.cpp::InvertColumnMajorMat4`, `Camera.cpp`).
+	[[nodiscard]] constexpr Vec4 &column(const std::size_t i) noexcept {
+		return c[i];
 	}
-	[[nodiscard]] constexpr const float &operator[](const std::size_t col, const std::size_t row) const noexcept {
+	[[nodiscard]] constexpr const Vec4 &column(const std::size_t i) const noexcept {
+		return c[i];
+	}
+
+	// **2-arg (col, row) accessor.** Returns the (row, col)
+	// element. Mirrors `glm::mat4[col][row]` and is what
+	// `operator*(Mat4, Mat4)` uses internally.
+	[[nodiscard]] constexpr float &m(const std::size_t col, const std::size_t row) noexcept {
+		return c[col][row];
+	}
+	[[nodiscard]] constexpr const float &m(const std::size_t col, const std::size_t row) const noexcept {
 		return c[col][row];
 	}
 
@@ -261,6 +285,18 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 
 [[nodiscard]] inline Vec3 operator-(const Vec3 a) noexcept {
 	return Vec3{-a.x, -a.y, -a.z};
+}
+
+[[nodiscard]] inline Vec3 operator*(const Vec3 v, const float s) noexcept {
+	return Vec3{v.x * s, v.y * s, v.z * s};
+}
+
+[[nodiscard]] inline Vec3 operator*(const float s, const Vec3 v) noexcept {
+	return Vec3{v.x * s, v.y * s, v.z * s};
+}
+
+[[nodiscard]] inline Vec3 operator*(const Vec3 a, const Vec3 b) noexcept {
+	return Vec3{a.x * b.x, a.y * b.y, a.z * b.z};
 }
 
 [[nodiscard]] inline Vec4 operator+(const Vec4 a, const Vec4 b) noexcept {
