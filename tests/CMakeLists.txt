@@ -1,3 +1,23 @@
+# **libc++ migration (Phase 2, `2026-06-13`).** Helper
+# macro that adds the project's `.ixx` modules to a test
+# target's `FILE_SET CXX_MODULES` with the project's
+# `src/` as `BASE_DIRS`. Every test that includes
+# `core/Types.hpp` (transitively) needs the modules
+# available so the `import projectv.math;` /
+# `import projectv.string_id;` shims in `core/Types.hpp`
+# and `core/Math.hpp` / `core/StringId.hpp` resolve at
+# compile time. Without the FILE_SET, the `import`
+# statement in the shim fails with "module not found".
+macro(projectv_test_add_modules TARGET)
+    target_sources(${TARGET} PRIVATE
+        FILE_SET CXX_MODULES FILES
+        ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
+        ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
+        BASE_DIRS
+        ${CMAKE_SOURCE_DIR}/src
+    )
+endmacro()
+
 add_executable(ProjectVTests
         VoxelWorldTests.cpp
         ../src/app/AppUpdate.cpp
@@ -63,6 +83,25 @@ if (PROJECTV_ENABLE_TRACY)
     target_link_libraries(ProjectVTests PRIVATE Tracy::TracyClient)
 endif ()
 
+# **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+# `ProjectVTests` includes `core/Types.hpp` transitively
+# (via `VoxelWorld.cpp`, `Camera.cpp`, `PhysicsWorld.cpp`,
+# `DebugHud.cpp`, `DebugOverlays.cpp`, `ScreenshotCapture.cpp`),
+# so the `projectv.math` and `projectv.string_id` module
+# `import` statements at the top of `core/Types.hpp`
+# need the modules in this target's `FILE_SET CXX_MODULES`
+# to resolve. Without this call, the build fails with
+# "fatal error: module 'projectv.math' not found" on every
+# TU that includes `core/Types.hpp`. **The same
+# regression appeared in the Tier 1.B phase 2 commit
+# (`92c4380`); the per-test `projectv_test_add_modules()`
+# call was added to the new M-pipeline tests but never to
+# the legacy `ProjectVTests` target.** Wiring it up here
+# is the build-system side of the same fix the operator
+# applied by hand to `src/core/Types.hpp` to migrate to
+# libc++.
+projectv_test_add_modules(ProjectVTests)
+
 add_test(NAME ProjectVTests COMMAND ProjectVTests)
 set_tests_properties(ProjectVTests PROPERTIES LABELS "unit")
 
@@ -97,6 +136,12 @@ target_link_libraries(ProjectVAssetTests PRIVATE
 add_test(NAME ProjectVAssetTests COMMAND ProjectVAssetTests)
 set_tests_properties(ProjectVAssetTests PROPERTIES LABELS "unit")
 
+# AssetTests pulls in `core/Types.hpp` (transitively via
+# `asset/AssetLoader.cpp` → `asset/MeshGpuResources.hpp`),
+# so it needs the projectv.math and projectv.string_id
+# modules in its FILE_SET so the shim's `import`s resolve.
+projectv_test_add_modules(ProjectVAssetTests)
+
 # Mesh-baker test executable (M2). CPU-only, no Vulkan init needed
 # because `MeshBaker` is the unit; GPU upload (`MeshGpuResources`)
 # is exercised at runtime in M4 when the model is actually drawn.
@@ -126,7 +171,15 @@ target_link_libraries(ProjectVMeshBakerTests PRIVATE
 add_test(NAME ProjectVMeshBakerTests COMMAND ProjectVMeshBakerTests)
 set_tests_properties(ProjectVMeshBakerTests PROPERTIES LABELS "unit")
 
-# Draco decoder test executable (M3). Like the asset-loader test,
+# MeshBakerTests pulls in `core/Types.hpp` (transitively
+# via `asset/MeshBaker.cpp` → `core/Types.hpp` for the
+# `MeshGpuResources` field), so it needs the modules.
+projectv_test_add_modules(ProjectVMeshBakerTests)
+
+# MeshBakerTests pulls in `core/Types.hpp` (transitively via
+# `asset/MeshBaker.cpp` → `core/Types.hpp` for the
+# `MeshGpuResources` field), so it needs the modules.
+
 # it's a separate executable to keep its own `main()` and its
 # own draco / fastgltf link line. The draco-compressed fixture
 # `tests/fixtures/box_draco.glb` is the smallest self-contained
@@ -159,9 +212,16 @@ target_link_libraries(ProjectVDracoTests PRIVATE
 add_test(NAME ProjectVDracoTests COMMAND ProjectVDracoTests)
 set_tests_properties(ProjectVDracoTests PROPERTIES LABELS "unit")
 
+# DracoTests pulls in `core/Types.hpp` (transitively via
+# `asset/DracoMeshDecoder.cpp` → `asset/MeshGpuResources.hpp`),
+# so it needs the modules.
+projectv_test_add_modules(ProjectVDracoTests)
+
+# DracoTests pulls in `core/Types.hpp` (transitively via
+# `asset/DracoMeshDecoder.cpp` → `asset/MeshGpuResources.hpp`),
+# so it needs the modules.
 # Frustum-cull test executable (M5). CPU-only: the helper under
 # test (`IsAabbVisibleAgainstCameraFrustum`) is an inline camera-
-# basis math function in `src/render/SceneResources.hpp` and does
 # not touch Vulkan. The executable links `projectv_build_options`
 # for warning flags but does not need any of the asset pipeline
 # libraries — keeping it lean keeps the test runtime well under
@@ -194,7 +254,14 @@ target_link_libraries(ProjectVFrustumCullingTests PRIVATE volk glm GPUOpen::Vulk
 add_test(NAME ProjectVFrustumCullingTests COMMAND ProjectVFrustumCullingTests)
 set_tests_properties(ProjectVFrustumCullingTests PROPERTIES LABELS "unit")
 
-# Box-UV fixture test executable (M6 prep). Validates the GLB
+# FrustumCullingTests is a header-only test (no
+# `core/Types.hpp` include), but the helper is cheap
+# and keeps the macro use uniform across tests.
+projectv_test_add_modules(ProjectVFrustumCullingTests)
+
+# FrustumCullingTests is a header-only test (no
+# `core/Types.hpp` include), but the helper is cheap
+# and keeps the macro use uniform across tests.
 # header byte order (`magic, version, length`) by reading the
 # fixture back from disk. The original M6 generator wrote the
 # header in the wrong order and fastgltf reported
@@ -219,14 +286,20 @@ target_link_libraries(ProjectVBoxUvFixtureTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVBoxUvFixtureTests COMMAND ProjectVBoxUvFixtureTests)
 set_tests_properties(ProjectVBoxUvFixtureTests PROPERTIES LABELS "unit")
 
-# Math types smoke test (Tier 0.A, 2026-06-13). Header-only
-# `projectv::math` (`src/core/Math.hpp`) — Vec3/Vec4/Mat4 with
-# 16-byte alignment for SIMD. The TU only includes Math.hpp
-# and uses the types, so it needs no other library links.
+# BoxUvFixtureTests is a header-only test (no
+# `core/Types.hpp` include), but the helper is cheap
+# and keeps the macro use uniform across tests.
+projectv_test_add_modules(ProjectVBoxUvFixtureTests)
+
 # No Vulkan init, no Jolt, no asset pipeline.
 add_executable(ProjectVMathTests
         MathTest.cpp
 )
+
+# MathTest needs the modules so the `core/Math.hpp` shim
+# can `import projectv.math;` (and the `string_id` import
+# via `core/Types.hpp` if any test-only header pulls it in).
+projectv_test_add_modules(ProjectVMathTests)
 
 target_compile_definitions(ProjectVMathTests PRIVATE
         PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
@@ -250,6 +323,13 @@ add_executable(ProjectVStringIdTests
         StringIdTest.cpp
 )
 
+target_sources(ProjectVStringIdTests PRIVATE
+        FILE_SET CXX_MODULES FILES
+        ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
+        BASE_DIRS
+        ${CMAKE_SOURCE_DIR}/src
+)
+
 target_compile_definitions(ProjectVStringIdTests PRIVATE
         PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
 )
@@ -262,6 +342,12 @@ target_link_libraries(ProjectVStringIdTests PRIVATE projectv_build_options)
 
 add_test(NAME ProjectVStringIdTests COMMAND ProjectVStringIdTests)
 set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
+
+# StringIdTests is a header-only test (no `core/Types.hpp`
+# include), but the shim's `import projectv.string_id;`
+# statement needs the module in scope. The macro is the
+# uniform way to wire that.
+projectv_test_add_modules(ProjectVStringIdTests)
 
 # C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
 # executable that `import projectv.probe;` and prints the
@@ -281,7 +367,9 @@ add_executable(ProjectVModuleSmoke
 
 target_sources(ProjectVModuleSmoke PRIVATE
         FILE_SET CXX_MODULES FILES
-        Probe.ixx
+        ${CMAKE_SOURCE_DIR}/src/core/Probe.ixx
+        BASE_DIRS
+        ${CMAKE_SOURCE_DIR}/src
 )
 
 target_compile_definitions(ProjectVModuleSmoke PRIVATE
@@ -296,6 +384,80 @@ target_link_libraries(ProjectVModuleSmoke PRIVATE projectv_build_options)
 
 add_test(NAME ProjectVModuleSmoke COMMAND ProjectVModuleSmoke)
 set_tests_properties(ProjectVModuleSmoke PROPERTIES LABELS "unit")
+
+# C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+# Per the libc++ docs (https://libcxx.llvm.org/docs/Modules.html)
+# and the research in commit `e0029dc`-era, **`import std;` is
+# ONLY available with libc++**, not with libstdc++ (libstdc++
+# 16.1.1 ships `bits/std.cc` in GCC's legacy `-fmodules` format
+# which Clang 22 cannot consume).
+#
+# **Phase 2 (`2026-06-13`).** The main `ProjectV` build
+# has now switched to libc++ (via the root
+# `CMakeLists.txt`'s `CMAKE_CXX_STDLIB=libc++` + the
+# `projectv_build_options` INTERFACE library). This
+# probe inherits libc++ from there; the per-target
+# `-stdlib=libc++` override that was here in Phase 1
+# is gone.
+#
+# The probe precompiles `std.pcm` from
+# `/usr/share/libc++/v1/std.cppm` as a CMake custom
+# command (output goes into the binary dir), then links
+# the consumer TU with `-fmodule-file=std=<...>`. If
+# the precompile or the consumer link fails, the failure
+# message names the exact missing piece (the libc++
+# `.cppm`, the `libc++.modules.json`, etc.).
+add_executable(ProjectVStdModuleProbe
+        StdModuleProbe.cpp
+)
+
+target_link_directories(ProjectVStdModuleProbe PRIVATE
+        /usr/lib
+)
+target_link_options(ProjectVStdModuleProbe PRIVATE
+        -stdlib=libc++
+)
+target_link_libraries(ProjectVStdModuleProbe PRIVATE
+        c++
+        c++abi
+        "-l:libstdc++.so.6"
+)
+
+# **Precompile `std.pcm` as a custom target.** Output goes
+# into the build's binary dir so the consumer TU can
+# `-fmodule-file=std=...` find it. The precompile command
+# is the canonical libc++ + Clang invocation from
+# https://0xstubs.org/using-the-c23-std-module-with-clang-18/
+# — same flags, just modernised for `-std=c++26`.
+add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+        COMMAND /usr/sbin/clang++
+                -std=c++26
+                -stdlib=libc++
+                -Wno-reserved-identifier
+                -Wno-reserved-module-identifier
+                --precompile
+                -o ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+                /usr/share/libc++/v1/std.cppm
+        DEPENDS /usr/share/libc++/v1/std.cppm
+        COMMENT "Precompiling libc++ std.pcm"
+        VERBATIM
+)
+add_custom_target(std_pcm_build DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/std.pcm)
+add_dependencies(ProjectVStdModuleProbe std_pcm_build)
+
+target_compile_options(ProjectVStdModuleProbe PRIVATE
+        -fmodule-file=std=${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+)
+target_sources(ProjectVStdModuleProbe PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+)
+
+# Re-enable the test. The probe takes ~30s on a cold
+# cache because of the precompile step; on warm sccache
+# it's <1s.
+add_test(NAME ProjectVStdModuleProbe COMMAND ProjectVStdModuleProbe)
+set_tests_properties(ProjectVStdModuleProbe PROPERTIES LABELS "unit")
 
 
 

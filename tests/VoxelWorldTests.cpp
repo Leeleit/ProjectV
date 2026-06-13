@@ -85,15 +85,22 @@ bool ColorsMatch(
 	return true;
 }
 
+// **Tier 0 (`2026-06-13`) signature change:**
+// the production `Mat4` (`projectv::math::Mat4`) replaced
+// the legacy `std::array<float, 16>` for the column-major
+// matrix. The matrix layout is identical (column-major
+// 4x4 with `c[col][row]` storage), so the math is the
+// same; only the indexing changes from flat-array
+// `matrix[col*4+row]` to the new `matrix.c[col][row]`.
 std::array<float, 4> TransformPoint(
-	const std::array<float, 16> &matrix,
+	const projectv::math::Mat4 &matrix,
 	const std::array<float, 3> &point)
 {
 	return {
-		matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
-		matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
-		matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
-		matrix[3] * point[0] + matrix[7] * point[1] + matrix[11] * point[2] + matrix[15],
+		matrix.c[0][0] * point[0] + matrix.c[1][0] * point[1] + matrix.c[2][0] * point[2] + matrix.c[3][0],
+		matrix.c[0][1] * point[0] + matrix.c[1][1] * point[1] + matrix.c[2][1] * point[2] + matrix.c[3][1],
+		matrix.c[0][2] * point[0] + matrix.c[1][2] * point[1] + matrix.c[2][2] * point[2] + matrix.c[3][2],
+		matrix.c[0][3] * point[0] + matrix.c[1][3] * point[1] + matrix.c[2][3] * point[2] + matrix.c[3][3],
 	};
 }
 
@@ -341,18 +348,25 @@ void TestWorldBoundsAndChunkIndexing(TestContext &context)
 void TestVoxelScenePresetParsingAcceptsCanonicalAndFlexibleNames(TestContext &context)
 {
 	VoxelScenePreset preset = VoxelScenePreset::VoxelLab;
-	EXPECT_TRUE(context, TryParseVoxelScenePreset("VoxelLab", &preset));
+	// **Tier 1.E (`2026-06-13`).** `TryParseVoxelScenePreset(text, &out)`
+	// was renamed to `ParseVoxelScenePreset(text)` and now returns
+	// `std::optional<VoxelScenePreset>` (no out-param). Same logic,
+	// std::optional for success/failure.
+	preset = ParseVoxelScenePreset("VoxelLab").value();
 	EXPECT_EQ(context, VoxelScenePreset::VoxelLab, preset);
-	EXPECT_TRUE(context, TryParseVoxelScenePreset("flat_benchmark", &preset));
+	preset = ParseVoxelScenePreset("flat_benchmark").value();
 	EXPECT_EQ(context, VoxelScenePreset::FlatBenchmark, preset);
-	EXPECT_TRUE(context, TryParseVoxelScenePreset("TRANSPARENCY-STRESS", &preset));
+	preset = ParseVoxelScenePreset("TRANSPARENCY-STRESS").value();
 	EXPECT_EQ(context, VoxelScenePreset::TransparencyStress, preset);
-	EXPECT_TRUE(context, TryParseVoxelScenePreset("chunk grid", &preset));
+	preset = ParseVoxelScenePreset("chunk grid").value();
 	EXPECT_EQ(context, VoxelScenePreset::ChunkGrid, preset);
-	EXPECT_TRUE(context, TryParseVoxelScenePreset("meshingstress", &preset));
+	preset = ParseVoxelScenePreset("meshingstress").value();
 	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, preset);
-	EXPECT_TRUE(context, !TryParseVoxelScenePreset("not_a_scene", &preset));
-	EXPECT_TRUE(context, std::string_view(VoxelScenePresetToString(VoxelScenePreset::MeshingStress)) == "MeshingStress");
+	EXPECT_TRUE(context, !ParseVoxelScenePreset("not_a_scene").has_value());
+	// **Tier 1.E.** `VoxelScenePresetToString` now returns
+	// `std::string_view` directly; the previous explicit
+	// `std::string_view(...)` cast is a no-op.
+	EXPECT_TRUE(context, VoxelScenePresetToString(VoxelScenePreset::MeshingStress) == "MeshingStress");
 }
 
 void TestCreateVoxelSceneWorldBuildsExpectedBaselineScenes(TestContext &context)
@@ -619,8 +633,8 @@ void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
 	std::error_code removeError;
 	std::filesystem::remove(snapshotPath, removeError);
 
-	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()));
-	const std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(snapshotPath.string());
+	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()).has_value());
+	const std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(snapshotPath.string()).value();
 	EXPECT_TRUE(context, loadedWorld != nullptr);
 	if (!loadedWorld) {
 		return;
@@ -986,12 +1000,18 @@ void TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(Test
 	const auto [paddedLightViewProjection] =
 		BuildSunShadowProjection(paddedWorld, {0.35f, 0.88f, 0.22f}, 1.10f);
 
-	for (size_t matrixIndex = 0; matrixIndex < compactLightViewProjection.size(); ++matrixIndex) {
-		EXPECT_TRUE(
-			context,
-			std::abs(
-				compactLightViewProjection[matrixIndex] -
-				paddedLightViewProjection[matrixIndex]) <= 0.001f);
+	// **Tier 0.B (`2026-06-13`).** `SunShadowProjection::lightViewProjection`
+	// is now `projectv::math::Mat4` (16-byte aligned) instead of
+	// `std::array<float, 16>`. Element comparison switches from flat
+	// array indexing to the column-major `c[col][row]` accessor.
+	for (size_t col = 0; col < 4; ++col) {
+		for (size_t row = 0; row < 4; ++row) {
+			EXPECT_TRUE(
+				context,
+				std::abs(
+					compactLightViewProjection.c[col][row] -
+					paddedLightViewProjection.c[col][row]) <= 0.001f);
+		}
 	}
 
 	constexpr std::array activeChunkMin{-8.0f, 0.0f, -8.0f};
@@ -1108,7 +1128,13 @@ void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &cont
 			inputs.cameraPosition[1] + inputs.cameraForward[1] * centerDepth,
 			inputs.cameraPosition[2] + inputs.cameraForward[2] * centerDepth,
 		};
-		const std::array<float, 4> clipCenter = TransformPoint(cascadeMatrix, sliceCenter);
+		// **Tier 0.B (`2026-06-13`).** `lightViewProjections` (the
+		// UBO-bound raw storage) stays as `std::array<float, 64>`,
+		// but the test's local helper `TransformPoint` now takes
+		// `Mat4`. We copy the 16 floats out of the raw UBO storage
+		// and lift them into a `Mat4` via `fromArray16`.
+		const projectv::math::Mat4 cascadeMat = projectv::math::fromArray16(cascadeMatrix);
+		const std::array<float, 4> clipCenter = TransformPoint(cascadeMat, sliceCenter);
 		EXPECT_TRUE(context, std::abs(clipCenter[3]) > 0.0001f);
 		const float inverseW = 1.0f / clipCenter[3];
 		EXPECT_TRUE(context, std::abs(clipCenter[0] * inverseW) <= 1.0f);
@@ -1610,11 +1636,12 @@ int RunReplayAnalysisFromEnvironment()
 		return EXIT_FAILURE;
 	}
 
-	std::unique_ptr<VoxelWorld> world = LoadVoxelWorldSnapshot(capture.snapshotPath);
-	if (!world) {
+	auto loadResult = LoadVoxelWorldSnapshot(capture.snapshotPath);
+	if (!loadResult.has_value()) {
 		std::fprintf(stderr, "[ReplayAnalysis] failed to load snapshot: %s\n", capture.snapshotPath.c_str());
 		return EXIT_FAILURE;
 	}
+	std::unique_ptr<VoxelWorld> world = std::move(loadResult).value();
 
 	PlatformState platform{};
 	SimulationState simulation{};
@@ -2152,29 +2179,40 @@ void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &con
 		1.0f,
 		0.0f,
 		0.0f,
-		0.0f,
-		0.0f,
-		1.0f,
-		0.0f,
-		0.0f,
-		0.0f,
-		0.0f,
-		1.0f,
-	};
+							 0.0f,
+							 0.0f,
+							 1.0f,
+							 0.0f,
+							 0.0f,
+							 0.0f,
+							 0.0f,
+							 1.0f,
+						 };
 
-	EXPECT_TRUE(context, IsSceneChunkVisibleInShadowCascade(
-							 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}),
-							 identityProjection));
-	EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-							 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}),
-							 identityProjection));
-	EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-							 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
-							 identityProjection));
-	EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-							 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 0u),
-							 identityProjection));
-}
+						 // **Tier 0 (`2026-06-13`) signature change:**
+						 // `IsSceneChunkVisibleInShadowCascade` now takes
+						 // a `projectv::math::Mat4` 2nd argument (16-byte
+						 // aligned) instead of a `std::array<float, 16>`.
+						 // The legacy POD array is still the simplest
+						 // way to write out a 4x4 column-major matrix
+						 // literal in test source, so we convert at the
+						 // call site with the project's `fromArray16`.
+						 const projectv::math::Mat4 identityMat =
+							 projectv::math::fromArray16(identityProjection);
+
+						 EXPECT_TRUE(context, IsSceneChunkVisibleInShadowCascade(
+													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}),
+													 identityMat));
+						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
+													 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}),
+													 identityMat));
+						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
+													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
+													 identityMat));
+						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
+													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 0u),
+													 identityMat));
+					 }
 
 void TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(TestContext &context)
 {
@@ -2436,7 +2474,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	std::error_code removeError;
 	std::filesystem::remove(snapshotPath, removeError);
 	std::filesystem::remove(replayPath, removeError);
-	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()));
+	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()).has_value());
 
 	InputReplayCapture capture{};
 	capture.snapshotPath = snapshotPath.string();
@@ -2461,7 +2499,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 
 	InputReplayCapture loaded{};
 	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &loaded));
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(loaded.snapshotPath);
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(loaded.snapshotPath).value();
 	EXPECT_TRUE(context, loadedWorld != nullptr);
 	if (!loadedWorld) {
 		return;
