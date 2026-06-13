@@ -8,6 +8,7 @@ import projectv.math;
 
 #include "app/Camera.hpp"
 #include "app/ModelGravigun.hpp"
+#include "c_kernels/FrustumCulling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/DebugHud.hpp"
 #include "debug/DebugOverlays.hpp"
@@ -31,25 +32,44 @@ void BuildVisibleModelInstanceList(
 		render->visibleModelInstances.clear();
 		return;
 	}
-	render->visibleModelInstances.clear();
-	render->visibleModelInstances.reserve(render->modelInstances.size());
+
+	// **Pre-filter empty registrations.** The registry /
+	// loader can produce entries with `indexCount == 0` or
+	// null buffers (e.g. a primitive that failed to
+	// upload) and those would have been skipped by the
+	// renderer anyway — no point culling them through the
+	// frustum math first. We collect the remaining
+	// `ModelInstanceData`s into a `std::vector` and
+	// batch-cull them via the C kernel.
+	std::vector<ModelInstanceData> cullCandidates;
+	cullCandidates.reserve(render->modelInstances.size());
 	for (const ModelInstanceData &instance : render->modelInstances) {
-		// Skip empty registrations: the registry/loader can
-		// produce entries with `indexCount == 0` or null buffers
-		// (e.g. a primitive that failed to upload) and those
-		// would have been skipped by the renderer anyway — no
-		// point culling them through the frustum math first.
 		if (instance.indexCount == 0 ||
 			instance.vertexBuffer == VK_NULL_HANDLE ||
 			instance.indexBuffer == VK_NULL_HANDLE) {
 			continue;
 		}
-		if (IsAabbVisibleAgainstCameraFrustum(
-				instance.worldAabbMin,
-				instance.worldAabbMax,
-				parameters)) {
-			render->visibleModelInstances.push_back(instance);
-		}
+		cullCandidates.push_back(instance);
+	}
+
+	// **Tier 4 (`2026-06-13`).** C / AVX2 frustum-cull
+	// kernel (`src/c_kernels/FrustumCulling.cpp`).
+	// `FilterVisibleInstances` does the conversion +
+	// batched C-kernel call + mask-to-vector filter in
+	// one call. Per the Tier 3 benchmark this is
+	// 3.7-3.9× faster than the per-AABB
+	// `IsAabbVisibleAgainstCameraFrustum` path on this
+	// hardware. For `count < 8` it falls back to the
+	// inline C++ helper (the kernel's per-batch setup
+	// cost is not amortised for tiny inputs).
+	const std::vector<ModelInstanceData> visible = projectv::c_kernels::FilterVisibleInstances(
+		std::span<const ModelInstanceData>(cullCandidates.data(), cullCandidates.size()),
+		parameters);
+
+	render->visibleModelInstances.clear();
+	render->visibleModelInstances.reserve(visible.size());
+	for (const ModelInstanceData &instance : visible) {
+		render->visibleModelInstances.push_back(instance);
 	}
 }
 

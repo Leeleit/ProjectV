@@ -254,6 +254,65 @@ target_link_libraries(ProjectVFrustumCullingTests PRIVATE volk glm GPUOpen::Vulk
 add_test(NAME ProjectVFrustumCullingTests COMMAND ProjectVFrustumCullingTests)
 set_tests_properties(ProjectVFrustumCullingTests PROPERTIES LABELS "unit")
 
+# **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+# Verifies the `c_kernels::FrustumCulling` C++ wrapper
+# (used by `BuildVisibleModelInstanceList` in
+# `app/FramePreparation.cpp`) produces identical results
+# to the inline `IsAabbVisibleAgainstCameraFrustum`
+# helper for the same fixture. Covers the 300-AABB
+# batched path, the 4-AABB and 1-AABB fallback
+# paths, the `CullVisibleMask` low-level entry point,
+# and the empty-input edge case.
+add_executable(ProjectVCFrustumCullingTests
+        CFrustumCullingTests.cpp
+        # **Compile the C++ wrapper into the test target
+        # directly.** `FrustumCulling.cpp` is normally
+        # compiled into the `ProjectV` binary (it lives
+        # in `src/CMakeLists.txt`'s `target_sources`
+        # block). Tests can't reuse that .o file because
+        # the `c_kernels::CullVisibleMask` / `FilterVisibleInstances`
+        # symbols are part of the engine library, not a
+        # shared static lib. Compiling the wrapper into
+        # the test target keeps the test self-contained
+        # and avoids forcing `projectv_c_kernels` to
+        # depend on the engine's C++20 module set (which
+        # is target-scoped to `ProjectV`).
+        ${CMAKE_SOURCE_DIR}/src/c_kernels/FrustumCulling.cpp
+)
+
+target_compile_definitions(ProjectVCFrustumCullingTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVCFrustumCullingTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVCFrustumCullingTests PRIVATE
+        projectv_build_options
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+        # **C kernel lib.** `c_kernels::CullVisibleMask` calls
+        # `projectv_cull_frustum_scalar` from the static
+        # `projectv_c_kernels` library (built from
+        # `src/c_kernels/frustum_cull.c` in
+        # `src/CMakeLists.txt`).
+        projectv_c_kernels
+)
+
+add_test(NAME ProjectVCFrustumCullingTests COMMAND ProjectVCFrustumCullingTests)
+set_tests_properties(ProjectVCFrustumCullingTests PROPERTIES LABELS "unit")
+
+# **Tier 4 — module wiring.** The test includes
+# `c_kernels/FrustumCulling.hpp` (transitively
+# `core/Types.hpp` → math/string_id shim imports),
+# so the project's C++20 modules need to be in
+# the `FILE_SET CXX_MODULES` for this target to
+# resolve. The macro is the uniform way to wire
+# that across all test targets.
+projectv_test_add_modules(ProjectVCFrustumCullingTests)
+
 # FrustumCullingTests is a header-only test (no
 # `core/Types.hpp` include), but the helper is cheap
 # and keeps the macro use uniform across tests.

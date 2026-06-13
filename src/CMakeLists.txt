@@ -103,6 +103,7 @@ target_sources(ProjectV PRIVATE
         app/BenchmarkAutomation.cpp
         app/Camera.cpp
         app/FramePreparation.cpp
+        c_kernels/FrustumCulling.cpp
         app/InputActions.cpp
         app/ModelGravigun.cpp
         app/InputReplay.cpp
@@ -232,6 +233,20 @@ target_compile_features(projectv_c_kernels PUBLIC c_std_23)
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(projectv_c_kernels PRIVATE -mavx2)
 endif ()
+# **C++ wrapper lives in `ProjectV`, not in
+# `projectv_c_kernels`.** The wrapper TU
+# (`c_kernels/FrustumCulling.cpp`) includes
+# `core/Types.hpp` transitively, which in turn
+# `#import projectv.math;` / `projectv.string_id;`
+# via the shim headers. C++20 modules cannot span
+# two CMake targets' `FILE_SET CXX_MODULES`
+# (CMake errors with "Disagreement of the location
+# of the 'projectv.math' module" if both `ProjectV`
+# and `projectv_c_kernels` declare the same .ixx).
+# Keeping the wrapper in `ProjectV` puts it in the
+# target that already owns the modules; the kernel
+# stays in a pure-C static lib (no C++ TUs, no
+# ODR risk, no module interaction).
 target_link_libraries(ProjectV PRIVATE projectv_c_kernels)
 
 if (WIN32)
