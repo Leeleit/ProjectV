@@ -27,7 +27,7 @@
 //     shouldn't be part of the public surface.
 module;
 
-#include <cmath>
+#include <array>
 #include <cstddef>
 
 export module projectv.math;
@@ -132,6 +132,10 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+[[nodiscard]] inline float dot(const Vec4 a, const Vec4 b) noexcept {
+	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+
 [[nodiscard]] inline Vec3 cross(const Vec3 a, const Vec3 b) noexcept {
 	return Vec3{
 		a.y * b.z - a.z * b.y,
@@ -144,8 +148,31 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return dot(v, v);
 }
 
+[[nodiscard]] inline float lengthSq(const Vec4 v) noexcept {
+	return dot(v, v);
+}
+
 [[nodiscard]] inline float length(const Vec3 v) noexcept {
-	return std::sqrt(lengthSq(v));
+	// **libc++ migration / `import` regression (`2026-06-13`).**
+	// Use `__builtin_sqrtf` instead of `std::sqrt` so we
+	// don't need to `#include <cmath>` in the global
+	// module fragment. Including `<cmath>` here would
+	// put `std::sqrt` in the global module purview;
+	// any consumer TU that also `#include <cmath>`
+	// (e.g. for its own `std::sqrt` use) would then
+	// ODR-clash on the redefinition. The Clang
+	// builtin is a direct call to the `sqrtss`
+	// instruction on x86-64 (the project's
+	// `mavx2 / -fpmath=sse` build flag) so there's
+	// no performance cost vs `std::sqrt`. The
+	// original `std::sqrt` was used in commit
+	// `86df567` (Tier 0.A) before the modules
+	// pipeline was set up.
+	return __builtin_sqrtf(lengthSq(v));
+}
+
+[[nodiscard]] inline float length(const Vec4 v) noexcept {
+	return __builtin_sqrtf(lengthSq(v));
 }
 
 [[nodiscard]] inline Vec3 normalize(const Vec3 v) noexcept {
@@ -279,6 +306,10 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
+[[nodiscard]] inline Vec3 operator+(const Vec3 v, const float s) noexcept {
+	return Vec3{v.x + s, v.y + s, v.z + s};
+}
+
 [[nodiscard]] inline Vec3 operator-(const Vec3 a, const Vec3 b) noexcept {
 	return Vec3{a.x - b.x, a.y - b.y, a.z - b.z};
 }
@@ -299,6 +330,26 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return Vec3{a.x * b.x, a.y * b.y, a.z * b.z};
 }
 
+[[nodiscard]] inline Vec4 operator*(const Vec4 a, const Vec4 b) noexcept {
+	return Vec4{a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w};
+}
+
+[[nodiscard]] inline Vec4 operator*(const Vec4 v, const float s) noexcept {
+	return Vec4{v.x * s, v.y * s, v.z * s, v.w * s};
+}
+
+[[nodiscard]] inline Vec4 operator*(const float s, const Vec4 v) noexcept {
+	return Vec4{v.x * s, v.y * s, v.z * s, v.w * s};
+}
+
+[[nodiscard]] inline Vec3 operator/(const Vec3 v, const float s) noexcept {
+	return Vec3{v.x / s, v.y / s, v.z / s};
+}
+
+[[nodiscard]] inline Vec4 operator/(const Vec4 v, const float s) noexcept {
+	return Vec4{v.x / s, v.y / s, v.z / s, v.w / s};
+}
+
 [[nodiscard]] inline Vec4 operator+(const Vec4 a, const Vec4 b) noexcept {
 	return Vec4{a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w};
 }
@@ -315,12 +366,44 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 // `Mat4` so the existing ModelManifestLoader /
 // ShadowProjection code can memcpy-glm->Mat4 without
 // having to include glm in this module.
+//
+// **`std::array` overloads (Tier 2.D `2026-06-13`).** The
+// raw-pointer overloads are the canonical ones (memcpy
+// from `glm::mat4::data()`); the `std::array` overloads
+// are convenience for callers that have a sized buffer
+// already in scope (e.g. the `ProjectVMathTests`
+// `fromArray*` test cases).
 [[nodiscard]] inline Mat4 fromArray16(const float *src) noexcept {
 	Mat4 result{};
 	for (std::size_t i = 0; i < 16; ++i) {
 		result.c[i / 4][i % 4] = src[i];
 	}
 	return result;
+}
+
+template <std::size_t N>
+[[nodiscard]] inline Mat4 fromArray16(const std::array<float, N> &src) noexcept {
+	static_assert(N >= 16, "fromArray16 needs at least 16 floats");
+	Mat4 result{};
+	for (std::size_t i = 0; i < 16; ++i) {
+		result.c[i / 4][i % 4] = src[i];
+	}
+	return result;
+}
+
+[[nodiscard]] inline Vec3 fromArray3(const std::array<float, 3> &src) noexcept {
+	return Vec3{src[0], src[1], src[2]};
+}
+
+[[nodiscard]] inline Vec3 fromArray4(const std::array<float, 4> &src) noexcept {
+	// 4-element array → Vec3 (first 3 elements, sentinel
+	// w=0 on the Vec3 per the `_pad` field's default-init
+	// contract).
+	return Vec3{src[0], src[1], src[2], 0.0f};
+}
+
+[[nodiscard]] inline Vec4 fromArray4asVec4(const std::array<float, 4> &src) noexcept {
+	return Vec4{src[0], src[1], src[2], src[3]};
 }
 
 } // namespace projectv::math

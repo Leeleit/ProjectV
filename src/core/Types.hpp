@@ -1,22 +1,21 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
-// **Tier 2.D (`2026-06-13`).** The `projectv.math` module
-// is imported centrally at the top of this header. The
-// `import` statement MUST precede any `#include` directive
-// in the same TU — C++20 modules spec — so it sits
-// above the `volk.h` include below. Every TU that
-// includes `core/Types.hpp` (effectively every mainline
-// TU — see the `MeshGpuResources` / `VoxelMaterials` /
-// `ShadowTypes` / `TaaRenderTargets` includes below)
-// re-receives the import automatically. The old
-// `core/Math.hpp` shim is still in place for the few TUs
-// that include `core/Math.hpp` *directly* without going
-// through `core/Types.hpp` (currently: `Renderer.cpp`,
-// `Camera.cpp`, `FramePreparation.cpp`, `ShadowProjection.cpp`)
-// — those TUs do their own `import projectv.math;` and the
-// shim is a no-op for them.
+// **libc++ migration debug (`2026-06-13`).** Re-enabled
+// the central `import projectv.math;` + `import
+// projectv.string_id;` now that the global-module-fragment
+// ODR conflict on `<cmath>` (per the commit-time
+// deprecation note below) has been resolved — the
+// `Math.ixx` global fragment no longer pulls in
+// `<cmath>` (it uses `__builtin_sqrtf` directly, per
+// the change in `src/core/Math.ixx`).
+//
+// Original text (preserved below for git-blame archeology):
+//   "**libc++ migration debug (`2026-06-13`).** Removed
+//   `import projectv.math;` from this central header as
+//   well..."
 import projectv.math;
+import projectv.string_id;
 
 // `volk.h` must come before any header that pulls in `vk_mem_alloc.h`
 // (transitively: `asset/MeshGpuResources.hpp`, `render/ShadowTypes.hpp`,
@@ -46,11 +45,28 @@ struct OffscreenColorTarget;
 
 #include <array>
 #include <cstddef>
-#include <inplace_vector>
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
+
+// **libc++ migration shim (`2026-06-13`).** `std::inplace_vector`
+// (P0843, C++26) is in libstdc++ 16.1.1 but NOT yet in
+// libc++ 22. Per `agent/memory.md §8` — until libc++
+// catches up, we use a local drop-in shim
+// (`core/InplaceVectorShim.hpp`) that provides the same
+// surface used by the Tier 1.A call sites in
+// `render/SceneResources.cpp`. The `__GLIBCXX__` macro
+// (defined by libstdc++) selects the stdlib path; libc++
+// (which defines `_LIBCPP_VERSION` instead) falls back
+// to the shim.
+#ifdef __GLIBCXX__
+#include <inplace_vector>
+#define PROJECTV_INPLACE_VECTOR std::inplace_vector
+#else
+#include "core/InplaceVectorShim.hpp"
+#define PROJECTV_INPLACE_VECTOR ::projectv::core::InplaceVectorShim
+#endif
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 constexpr uint32_t MAX_LOOK_DEV_CAPTURE_VIEW_COUNT = 8;
@@ -519,9 +535,9 @@ struct ChunkVisibilityCache {
 	// <= kChunkVisibilityCacheMaxChunks)`) — exceeding it is a logic
 	// error, not a runtime overflow.
 	static constexpr std::size_t kChunkVisibilityCacheMaxChunks = 1024;
-	std::inplace_vector<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands;
-	std::inplace_vector<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands;
-	std::inplace_vector<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> transparentCommands;
+	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands;
+	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands;
+	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> transparentCommands;
 	// Cached values for the chunk-culling profiler plots. Mirrors
 	// the "Visible Chunks" / "Culled Chunks" values written by
 	// `UpdateSceneFrameChunkVisibility` so the plot stays

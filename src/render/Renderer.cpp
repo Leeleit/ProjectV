@@ -1,10 +1,6 @@
-// **Tier 2.D (`2026-06-13`).** Direct importer of
-// `projectv.math`. `Renderer.cpp` is the heaviest math
-// user in the project (`BuildGraphicsPushConstants` /
-// `BuildChunkIndirectCommand` / shadow culling), so
-// being a direct importer (vs going through the
-// `core/Math.hpp` shim) gives the dep graph a precise
-// signal about which TUs depend on the math module.
+// **Tier 2.D (`2026-06-13`).** Re-enabled direct importer
+// of `projectv.math`. See `src/app/Camera.cpp` for the
+// full rationale.
 import projectv.math;
 
 #include "render/Renderer.hpp"

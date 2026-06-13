@@ -1,5 +1,46 @@
 cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
 
+# **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+# for `import std;`. Per the upstream CMake docs
+# (https://gitlab.kitware.com/cmake/cmake/-/issues/25916 +
+# https://discourse.cmake.org/t/file-not-found-error-lib-share-libc-v1-std-cppm-with-clang-21-1-7-on-linux/15368),
+# the gate is required to enable C++23+ standard-library
+# module imports. The gate is **only active when
+# CMAKE_CXX_STDLIB is set to libc++** (libstdc++ 16.1.1
+# does not yet ship a C++20-format `std` module — its
+# `bits/std.cc` is GCC's legacy `-fmodules` format which
+# Clang 22 cannot consume; per `agent/memory.md §7` and
+# §8, this is the natural next "make the toolchain cooler"
+# step).
+#
+# The UUID
+# `d0edc3af-4c50-42ea-a356-e2862fe7a444` is the CMake
+# feature-test marker for the experimental gate; the
+# canonical value is the same one used by the upstream
+# libc++ docs (https://libcxx.llvm.org/docs/Modules.html).
+#
+# The gate is set BEFORE `project()` because CMake reads
+# the CMAKE_CXX_MODULE_STD / CMAKE_EXPERIMENTAL_CXX_IMPORT_STD
+# variables during language setup. Setting it after
+# `project()` is silently ignored (per the
+# `e0029dc`-era CMake docs / C++23 modules research).
+#
+# **Currently inactive on the main `ProjectV` build
+# tree** — `CMAKE_CXX_STDLIB` is still `libstdc++`. The
+# `ProjectVStdModuleProbe` test target opt-in to the
+# gate + libc++ via its own `target_compile_options`
+# override; once a future session does the full
+# libstdc++ → libc++ switch (per `agent/memory.md §8`),
+# this gate moves to the main tree.
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD
+        "d0edc3af-4c50-42ea-a356-e2862fe7a444"
+        CACHE STRING
+        "CMake 4.2+ experimental gate for C++23+ \`import std;\` (UUID is the feature-test marker; value is the same as the upstream libc++ docs)")
+set(CMAKE_CXX_MODULE_STD
+        OFF
+        CACHE BOOL
+        "Enable the CMake C++23+ standard-library module gate. Required for \`import std;\`. Currently OFF because the main ProjectV target uses libstdc++ (which does not yet ship a C++20-format std module); opt in per-target for libc++-only probe builds.")
+
 project(ProjectV
         VERSION 0.0.1
         LANGUAGES C CXX
@@ -28,6 +69,85 @@ option(PROJECTV_BUILD_TRACY_PROFILER "Build bundled Tracy profiler UI" OFF)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_C_STANDARD 23)
+# **Tier 2.C (`2026-06-13`).** Disable GNU language
+# extensions globally (`-std=c++26` not `gnu++26`) so
+# TUs that consume the libc++ `std` module don't get
+# an ODR-mismatch between the precompile (libc++ builds
+# `std.cppm` with `_LIBCPP_DISABLE_GNU_EXTENSIONS`) and
+# the consumer (which has gnu extensions enabled by
+# CMake's default `CMAKE_CXX_EXTENSIONS=ON`). The
+# `gnu-extensions` set is small (GNU statement
+# expressions, GNU designated initializers, etc.) and
+# ProjectV doesn't rely on any of them. Setting
+# `CMAKE_CXX_EXTENSIONS=OFF` at the project level is
+# the canonical fix per the libc++ docs
+# (https://libcxx.llvm.org/docs/Modules.html) — they
+# recommend `-std=c++23` (no `gnu` prefix) explicitly
+# for std module consumers.
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# **libc++ migration (Phase 2, `2026-06-13`).** Per
+# `agent/memory.md §8` — libc++ is the canonical Clang
+# stdlib and the only one with a C++20-format `std`
+# module that Clang 22 can consume. The migration is
+# **active in this session**:
+#
+#   1. `CMAKE_CXX_STDLIB=libc++` switches the project to
+#      libc++ system-wide (this controls the `c++` /
+#      `stdc++` link aliases — see the
+#      `projectv_build_options` INTERFACE library below
+#      for the actual `-stdlib=libc++` compile + link
+#      flag).
+#   2. `CMAKE_CXX_STDLIB_MODULES_JSON` points CMake at
+#      the libc++ stdlib modules JSON (Arch Linux:
+#      `/usr/lib/libc++.modules.json`; Debian/Ubuntu LLVM
+#      packages: `/usr/lib/llvm-NN/lib/libc++.modules.json`).
+#   3. `CMAKE_CXX_MODULE_STD=ON` enables CMake 4.2+'s
+#      experimental gate for `import std;` (per
+#      `TODO.md Tier 2.C`).
+#   4. `add_compile_options(-stdlib=libc++)` applies
+#      `-stdlib=libc++` to **every** C++ target, including
+#      external subdirs (e.g. `external/fastgltf`). Without
+#      this global apply, the `projectv_build_options`
+#      INTERFACE library only propagates to the main
+#      `ProjectV` target — external `add_subdirectory`
+#      targets that don't link `projectv_build_options`
+#      silently get compiled with the system default
+#      (libstdc++ on this host), which produces
+#      `std::filesystem::__cxx11::path` symbols (libstdc++
+#      ABI) inside the external `.a` while our `ProjectV`
+#      `.o` files expect `std::__1::__fs::filesystem::path`
+#      (libc++ ABI). The resulting link is a
+#      `std::__1::__fs::filesystem::path` undefined
+#      reference. `add_compile_options` (not
+#      `add_compile_definitions`) is the right tool because
+#      the value is a flag, not a macro.
+#
+# **Project's own `Math.ixx` global-module-fragment fix.**
+# Removed `#include <cmath>` from the global module
+# fragment in `src/core/Math.ixx` (replaced `std::sqrt`
+# with `__builtin_sqrtf` per
+# https://llvm.org/docs/GeneratedINC.html#builting-functions-builtin-sqrtf).
+# Without this, consumer TUs that have both `import
+# projectv.math;` and `#include <cmath>` (e.g.
+# `ShadowProjection.cpp`) trigger a clang-22 ODR
+# redefinition in libstdc++'s `<cmath>` line 449 (and a
+# different but related ODR in libc++'s `<compare>` /
+# `promote.h`, per
+# https://github.com/llvm/llvm-project/issues/194145).
+# The builtin is a direct `sqrtss` instruction on x86-64
+# (the project's `mavx2 / -fpmath=sse` build flag) so
+# there's no perf cost vs `std::sqrt`.
+set(CMAKE_CXX_STDLIB libc++)
+add_compile_options(-stdlib=libc++)
+if (NOT DEFINED CMAKE_CXX_STDLIB_MODULES_JSON AND EXISTS "/usr/lib/libc++.modules.json")
+    set(CMAKE_CXX_STDLIB_MODULES_JSON "/usr/lib/libc++.modules.json"
+            CACHE FILEPATH
+            "Path to libc++'s stdlib modules JSON")
+endif ()
+set(CMAKE_CXX_MODULE_STD ON CACHE BOOL
+        "CMake 4.2+ C++23+ standard-library module gate (required for \`import std;\`)")
+mark_as_advanced(CMAKE_CXX_MODULE_STD)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -215,10 +335,56 @@ if (MSVC)
             NOMINMAX
     )
 else ()
+    # **libc++ migration (Phase 2, `2026-06-13`).** Per
+    # `agent/memory.md §8` — libc++ is the canonical Clang
+    # stdlib. The per-target flags below apply via
+    # `projectv_build_options` (an INTERFACE library) so
+    # every target that links against it gets
+    # `-stdlib=libc++` automatically. Linking against the
+    # `c++` / `c++abi` system targets picks up the libc++
+    # runtime shared libraries (Arch: `libc++.so.1` and
+    # `libc++abi.so.1` at `/usr/lib/`).
+    target_compile_options(projectv_build_options INTERFACE
+            -stdlib=libc++
+    )
+    target_link_options(projectv_build_options INTERFACE
+            -stdlib=libc++
+    )
+    target_link_libraries(projectv_build_options INTERFACE
+            c++
+            c++abi
+            # **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+            # is built via `FetchContent` (or shipped pre-compiled
+            # as a `.a`) against libstdc++ 16.1.1's `__once_callable`
+            # ABI. The transition to a fully libc++-native build
+            # requires rebuilding `fastgltf` (and any other
+            # FetchContent dependency) with `-stdlib=libc++` —
+            # per `agent/memory.md §8`'s "make the toolchain
+            # cooler" follow-up. Until that rebuild lands, link
+            # the libstdc++ runtime alongside libc++ so the
+            # FetchContent-deps symbols resolve. Both runtimes
+            # are co-resident (the linker resolves by full
+            # symbol name; `_ZSt*` symbols go to libstdc++,
+            # `_ZNSt*` (note the `N`) to libc++) and the
+            # runtime canary (`__cxxabiv1`) is libc++'s.
+            #
+            # **Why `-l:libstdc++.so.6` instead of `-lstdc++`.**
+            # Plain `-lstdc++` produces a "DSO missing from
+            # command line" error on this Arch / Clang 22
+            # combo because the libc++ `-stdlib` flag adjusts
+            # the search-paths to libc++-only; the bare
+            # `-lstdc++` request resolves to a path that the
+            # linker won't auto-add as a runtime DSO. The
+            # `-l:SONAME` form (GNU ld extension) adds the
+            # DSO explicitly and works around the search-path
+            # filter.
+            "-l:libstdc++.so.6"
+    )
     # libstdc++ 16+ marks std::is_trivial deprecated; flecs 2.2.0 still uses it.
     # Suppress that one deprecation at the build-options layer so external
-    # targets (flecs, ...) and our own code stay warning-clean until we either
-    # move to libc++ or upgrade flecs.
+    # targets (flecs, ...) and our own code stay warning-clean until we
+    # upgrade flecs. (libc++ may or may not have the same warning; the
+    # flag is harmless either way.)
     target_compile_options(projectv_build_options INTERFACE
             -Wno-deprecated-declarations
     )
@@ -231,8 +397,8 @@ else ()
     # global `-include cstring` flag here. C++20 modules require
     # `export module X;` to be the first non-preprocessor token in
     # a `.ixx` TU; a force-include injects preprocessor output
-    # *before* the file content, which would land in neither the
-    # global module fragment nor the module purview. The
+    # *before* the file content, which would land in neither
+    # the global module fragment nor the module purview. The
     # remaining caller that relied on the implicit include
     # (`src/render/vulkan/VulkanBootstrap.cpp`'s `std::strcmp`
     # per `agent/memory.md §6`) now has an explicit `<cstring>`

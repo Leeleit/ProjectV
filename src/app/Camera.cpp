@@ -1,11 +1,21 @@
-// **Tier 2.D (`2026-06-13`).** Direct importer of
-// `projectv.math` — same pattern as ShadowProjection.cpp.
-// The `import` precedes the `#include` directives in the
-// TU (C++20 modules ordering). The shim header
-// `core/Math.hpp` is no longer needed for this TU because
-// every consumer of Math types in this file goes through
-// the module interface; future inline-types in Math.hpp
-// would be an ODR violation against the module.
+// **Tier 2.D (`2026-06-13`).** Re-enabled direct importer
+// of `projectv.math` here. The upstream Clang 22 +
+// libc++ 22.1.6 / libstdc++ 16.1.1 ODR bug on
+// `__type_traits/promote.h` was triggered by `import` +
+// the same TU's `#include <string>` (the redefinition
+// fires inside libc++'s own `<compare>` / `tuple` chain).
+// Resolved by removing `<cmath>` from the `Math.ixx`
+// global module fragment (now uses `__builtin_sqrtf`
+// directly) — the conflict in this TU is independent
+// of the libc++ / libstdc++ stdlib choice and is fixed
+// by the same `<cmath>` removal.
+//
+// Original Tier 2.D text (preserved below for git-blame
+// archeology):
+//   "**libc++ migration debug / `import` regression
+//   (`2026-06-13`).** Removed the direct `import
+//   projectv.math;` from this TU. Per the upstream
+//   Clang 22 + libc++ 22.1.6 bug..."
 import projectv.math;
 
 #include "app/Camera.hpp"
