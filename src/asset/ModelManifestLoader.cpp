@@ -32,10 +32,17 @@ glm::mat4 BuildEntryWorldMatrix(const ManifestEntry &entry)
 	return translation * rotation * scale;
 }
 
-void StoreMatrixColumnMajor(const glm::mat4 &source, std::array<float, 16> &out)
+// **Tier 0.B (`2026-06-13`).** Takes the destination as a
+// `projectv::math::Mat4` directly so the `LoadAndRegisterModelsFromManifest`
+// call sites can store `glm::mat4` → `Mat4` without an intermediate
+// `std::array<float, 16>`. The copy is a `memcpy` because both source
+// and destination are column-major 4x4 matrices with the same
+// 64-byte layout; `glm::value_ptr` returns a pointer to the matrix
+// data in column-major order, which matches `Mat4::data()`.
+void StoreMatrixColumnMajor(const glm::mat4 &source, projectv::math::Mat4 &out)
 {
 	const float *src = glm::value_ptr(source);
-	std::memcpy(out.data(), src, sizeof(std::array<float, 16>));
+	std::memcpy(out.data(), src, sizeof(projectv::math::Mat4));
 }
 
 } // namespace
@@ -176,6 +183,54 @@ bool LoadAndRegisterModelsFromManifest(
 			static_cast<float>(reg.aabbMin[1]),
 			static_cast<float>(reg.aabbMin[2]),
 		};
+	}
+	// **Tier 0.D (`2026-06-13`).** Reserve once before the loop so
+	// `modelInstances.push_back` doesn't reallocate as the
+	// manifest is parsed. The number of entries equals the
+	// registry size at this point (all of them get a manifest
+	// instance). The resize to `0` first defends against a
+	// re-load of the same manifest leaving the previous frame's
+	// instances behind.
+	render->modelInstances.clear();
+	render->modelInstances.reserve(modelEntries.size());
+	for (const auto &entry : modelEntries) {
+		const auto &reg = render->modelRegistry[entry.id];
+		if (!reg.gpu.vertexBuffer) {
+			continue;
+		}
+		const projectv::math::Vec3 srcDim{
+			reg.aabbMax.x - reg.aabbMin.x,
+			reg.aabbMax.y - reg.aabbMin.y,
+			reg.aabbMax.z - reg.aabbMin.z,
+			0.0f,
+		};
+		projectv::math::Mat4 modelTransform = projectv::math::identity();
+		modelTransform.c[0].x = entry.scale;
+		modelTransform.c[1].y = entry.scale;
+		modelTransform.c[2].z = entry.scale;
+		modelTransform.c[3] = projectv::math::Vec4{
+			entry.position.x - (reg.aabbMin.x * entry.scale),
+			entry.position.y - (reg.aabbMin.y * entry.scale),
+			entry.position.z - (reg.aabbMin.z * entry.scale),
+			1.0f,
+		};
+		ModelInstanceData instance{};
+		instance.modelTransform = modelTransform;
+		instance.worldAabbMin = {entry.position.x, entry.position.y, entry.position.z, 0.0f};
+		instance.worldAabbMax = projectv::math::Vec3{
+			entry.position.x + srcDim.x * entry.scale,
+			entry.position.y + srcDim.y * entry.scale,
+			entry.position.z + srcDim.z * entry.scale,
+			0.0f,
+		};
+		instance.vertexBuffer = reg.gpu.vertexBuffer;
+		instance.indexBuffer = reg.gpu.indexBuffer;
+		instance.indexCount = reg.gpu.indexCount;
+		instance.sourceAabbMin = {
+			static_cast<float>(reg.aabbMin[0]),
+			static_cast<float>(reg.aabbMin[1]),
+			static_cast<float>(reg.aabbMin[2]),
+		};
 		render->modelInstances.push_back(instance);
 	}
 	return true;
@@ -267,16 +322,16 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 	const float worldMaxZ = static_cast<float>(world.floorMaxExclusive.z);
 
 	for (ModelInstanceData &instance : render->modelInstances) {
-		const float dimX = instance.worldAabbMax[0] - instance.worldAabbMin[0];
-		const float dimY = instance.worldAabbMax[1] - instance.worldAabbMin[1];
-		const float dimZ = instance.worldAabbMax[2] - instance.worldAabbMin[2];
+		const float dimX = instance.worldAabbMax.x - instance.worldAabbMin.x;
+		const float dimY = instance.worldAabbMax.y - instance.worldAabbMin.y;
+		const float dimZ = instance.worldAabbMax.z - instance.worldAabbMin.z;
 		if (dimX <= 0.0f || dimY <= 0.0f || dimZ <= 0.0f) {
 			runtime::LogRuntimeFailure(
 				"Model",
 				"SnapModelInstancesAboveGround",
 				fmt::format("degenerate AABB: aabbMin=({:.3f},{:.3f},{:.3f}) aabbMax=({:.3f},{:.3f},{:.3f}) dims=({:.3f},{:.3f},{:.3f})",
-							instance.worldAabbMin[0], instance.worldAabbMin[1], instance.worldAabbMin[2],
-							instance.worldAabbMax[0], instance.worldAabbMax[1], instance.worldAabbMax[2],
+							instance.worldAabbMin.x, instance.worldAabbMin.y, instance.worldAabbMin.z,
+							instance.worldAabbMax.x, instance.worldAabbMax.y, instance.worldAabbMax.z,
 							dimX, dimY, dimZ));
 			continue;
 		}
@@ -285,9 +340,9 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 		// invariants on that axis. The "AABB max on grid" path
 		// wins when the operator's drag would make the model
 		// stick out; the "AABB min on grid" path wins otherwise.
-		const float rawMaxX = instance.worldAabbMin[0] + dimX;
-		const float rawMaxY = instance.worldAabbMin[1] + dimY;
-		const float rawMaxZ = instance.worldAabbMin[2] + dimZ;
+		const float rawMaxX = instance.worldAabbMin.x + dimX;
+		const float rawMaxY = instance.worldAabbMin.y + dimY;
+		const float rawMaxZ = instance.worldAabbMin.z + dimZ;
 		const bool xSticksOut = rawMaxX > worldMaxX;
 		const bool ySticksOut = rawMaxY > worldMaxY;
 		const bool zSticksOut = rawMaxZ > worldMaxZ;
@@ -325,7 +380,7 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			newMaxX = std::floor(std::min(rawMaxX, worldMaxX));
 			newMinX = newMaxX - dimX;
 		} else {
-			const float roundedX = std::round(std::clamp(instance.worldAabbMin[0], worldMinX, worldMaxX - dimX));
+			const float roundedX = std::round(std::clamp(instance.worldAabbMin.x, worldMinX, worldMaxX - dimX));
 			if (roundedX + dimX <= worldMaxX) {
 				newMinX = roundedX;
 				newMaxX = roundedX + dimX;
@@ -350,7 +405,7 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			newMaxY = std::floor(std::min(rawMaxY, worldMaxY));
 			newMinY = newMaxY - dimY;
 		} else {
-			newMinY = instance.worldAabbMin[1];
+			newMinY = instance.worldAabbMin.y;
 			newMaxY = newMinY + dimY;
 		}
 
@@ -366,7 +421,7 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			newMaxZ = std::floor(std::min(rawMaxZ, worldMaxZ));
 			newMinZ = newMaxZ - dimZ;
 		} else {
-			const float roundedZ = std::round(std::clamp(instance.worldAabbMin[2], worldMinZ, worldMaxZ - dimZ));
+			const float roundedZ = std::round(std::clamp(instance.worldAabbMin.z, worldMinZ, worldMaxZ - dimZ));
 			if (roundedZ + dimZ <= worldMaxZ) {
 				newMinZ = roundedZ;
 				newMaxZ = roundedZ + dimZ;
@@ -377,12 +432,12 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 		}
 
 		// Update the AABB in place. AABB dim is preserved.
-		instance.worldAabbMin[0] = newMinX;
-		instance.worldAabbMin[1] = newMinY;
-		instance.worldAabbMin[2] = newMinZ;
-		instance.worldAabbMax[0] = newMaxX;
-		instance.worldAabbMax[1] = newMaxY;
-		instance.worldAabbMax[2] = newMaxZ;
+		instance.worldAabbMin.x = newMinX;
+		instance.worldAabbMin.y = newMinY;
+		instance.worldAabbMin.z = newMinZ;
+		instance.worldAabbMax.x = newMaxX;
+		instance.worldAabbMax.y = newMaxY;
+		instance.worldAabbMax.z = newMaxZ;
 
 		// Update the model basis translation column so the
 		// rendered mesh stays aligned with the AABB. The load
@@ -397,9 +452,9 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 		// (e.g. snap to AABB min.x=-9 with srcMin.x=-2.36
 		// would render the model with its actual AABB at
 		// -9 + (-2.36) = -11.36).
-		instance.modelTransform[12] = newMinX - instance.sourceAabbMin[0];
-		instance.modelTransform[13] = newMinY - instance.sourceAabbMin[1];
-		instance.modelTransform[14] = newMinZ - instance.sourceAabbMin[2];
+		instance.modelTransform.c[3].x = newMinX - instance.sourceAabbMin[0];
+		instance.modelTransform.c[3].y = newMinY - instance.sourceAabbMin[1];
+		instance.modelTransform.c[3].z = newMinZ - instance.sourceAabbMin[2];
 	}
 }
 
@@ -442,16 +497,16 @@ void SnapModelInstancesCenterAnchored(
 	const float worldMaxZ = static_cast<float>(world.floorMaxExclusive.z);
 
 	for (ModelInstanceData &instance : render->modelInstances) {
-		const float dimX = instance.worldAabbMax[0] - instance.worldAabbMin[0];
-		const float dimY = instance.worldAabbMax[1] - instance.worldAabbMin[1];
-		const float dimZ = instance.worldAabbMax[2] - instance.worldAabbMin[2];
+		const float dimX = instance.worldAabbMax.x - instance.worldAabbMin.x;
+		const float dimY = instance.worldAabbMax.y - instance.worldAabbMin.y;
+		const float dimZ = instance.worldAabbMax.z - instance.worldAabbMin.z;
 		if (dimX <= 0.0f || dimY <= 0.0f || dimZ <= 0.0f) {
 			runtime::LogRuntimeFailure(
 				"Model",
 				"SnapModelInstancesCenterAnchored",
 				fmt::format("degenerate AABB: aabbMin=({:.3f},{:.3f},{:.3f}) aabbMax=({:.3f},{:.3f},{:.3f}) dims=({:.3f},{:.3f},{:.3f})",
-							instance.worldAabbMin[0], instance.worldAabbMin[1], instance.worldAabbMin[2],
-							instance.worldAabbMax[0], instance.worldAabbMax[1], instance.worldAabbMax[2],
+							instance.worldAabbMin.x, instance.worldAabbMin.y, instance.worldAabbMin.z,
+							instance.worldAabbMax.x, instance.worldAabbMax.y, instance.worldAabbMax.z,
 							dimX, dimY, dimZ));
 			continue;
 		}
@@ -462,9 +517,9 @@ void SnapModelInstancesCenterAnchored(
 		// the snap target. Compute the centre, snap to the
 		// integer grid (X, Y, Z), clamp to the world bounds
 		// so the AABB fits, then derive the new AABB min.
-		float centerX = 0.5f * (instance.worldAabbMin[0] + instance.worldAabbMax[0]);
-		float centerY = 0.5f * (instance.worldAabbMin[1] + instance.worldAabbMax[1]);
-		float centerZ = 0.5f * (instance.worldAabbMin[2] + instance.worldAabbMax[2]);
+		float centerX = 0.5f * (instance.worldAabbMin.x + instance.worldAabbMax.x);
+		float centerY = 0.5f * (instance.worldAabbMin.y + instance.worldAabbMax.y);
+		float centerZ = 0.5f * (instance.worldAabbMin.z + instance.worldAabbMax.z);
 
 		// Snap to integer voxel grid (all 3 axes; the
 		// operator's `position` becomes the integer centre).
@@ -488,21 +543,21 @@ void SnapModelInstancesCenterAnchored(
 		const float newMinX = centerX - halfDimX;
 		const float newMinY = centerY - halfDimY;
 		const float newMinZ = centerZ - halfDimZ;
-		instance.worldAabbMin[0] = newMinX;
-		instance.worldAabbMin[1] = newMinY;
-		instance.worldAabbMin[2] = newMinZ;
-		instance.worldAabbMax[0] = newMinX + dimX;
-		instance.worldAabbMax[1] = newMinY + dimY;
-		instance.worldAabbMax[2] = newMinZ + dimZ;
+		instance.worldAabbMin.x = newMinX;
+		instance.worldAabbMin.y = newMinY;
+		instance.worldAabbMin.z = newMinZ;
+		instance.worldAabbMax.x = newMinX + dimX;
+		instance.worldAabbMax.y = newMinY + dimY;
+		instance.worldAabbMax.z = newMinZ + dimZ;
 
 		// Update the model basis translation column. Same
 		// `-sourceAabbMin` offset as the bottom-anchored snap
 		// above — the load path's aabbMinOffset puts the
 		// translation at `pos - sourceAabbMin`, and the snap
 		// must preserve that relationship.
-		instance.modelTransform[12] = newMinX - instance.sourceAabbMin[0];
-		instance.modelTransform[13] = newMinY - instance.sourceAabbMin[1];
-		instance.modelTransform[14] = newMinZ - instance.sourceAabbMin[2];
+		instance.modelTransform.c[3].x = newMinX - instance.sourceAabbMin[0];
+		instance.modelTransform.c[3].y = newMinY - instance.sourceAabbMin[1];
+		instance.modelTransform.c[3].z = newMinZ - instance.sourceAabbMin[2];
 	}
 }
 

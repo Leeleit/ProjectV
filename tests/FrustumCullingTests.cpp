@@ -5,6 +5,7 @@
 // Vulkan / mesh data, so no fixture file is needed — every test
 // constructs the camera basis and the AABB by hand.
 
+#include "core/Math.hpp"
 #include "core/Types.hpp"
 #include "render/SceneResources.hpp"
 
@@ -72,8 +73,8 @@ void TestAabbInsideFrustumVisible(TestContext &ctx)
 	// Fully inside all six planes; maxDistance = 0 disables the far
 	// sphere test.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	constexpr std::array aabbMin{-0.5f, -0.5f, -2.5f};
-	constexpr std::array aabbMax{0.5f, 0.5f, -1.5f};
+	constexpr projectv::math::Vec3 aabbMin{-0.5f, -0.5f, -2.5f, 0.0f};
+	constexpr projectv::math::Vec3 aabbMax{0.5f, 0.5f, -1.5f, 0.0f};
 	PV_EXPECT_TRUE(
 		ctx,
 		IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -85,8 +86,8 @@ void TestAabbBehindCameraCulled(TestContext &ctx)
 	// 1x1x1 cube behind the camera (positive Z). Forward = (0,0,-1),
 	// so the near plane test must reject it.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	constexpr std::array aabbMin{-0.5f, -0.5f, 0.5f};
-	constexpr std::array aabbMax{0.5f, 0.5f, 1.5f};
+	constexpr projectv::math::Vec3 aabbMin{-0.5f, -0.5f, 0.5f, 0.0f};
+	constexpr projectv::math::Vec3 aabbMax{0.5f, 0.5f, 1.5f, 0.0f};
 	PV_EXPECT_TRUE(
 		ctx,
 		!IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -102,8 +103,8 @@ void TestAabbToTheLeftCulled(TestContext &ctx)
 	// along (forward * tanHalfH + right), which dwarfs the radius
 	// and culls the box.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	constexpr std::array aabbMin{-100.5f, -0.5f, -10.5f};
-	constexpr std::array aabbMax{-99.5f, 0.5f, -9.5f};
+	constexpr projectv::math::Vec3 aabbMin{-100.5f, -0.5f, -10.5f, 0.0f};
+	constexpr projectv::math::Vec3 aabbMax{-99.5f, 0.5f, -9.5f, 0.0f};
 	PV_EXPECT_TRUE(
 		ctx,
 		!IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -119,8 +120,8 @@ void TestAabbStraddlingNearPlaneVisible(TestContext &ctx)
 	// model placed right at the camera origin must not flicker as
 	// the near plane tightens.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera();
-	constexpr std::array aabbMin{-0.5f, -0.5f, -0.6f};
-	constexpr std::array aabbMax{0.5f, 0.5f, 0.4f};
+	constexpr projectv::math::Vec3 aabbMin{-0.5f, -0.5f, -0.6f, 0.0f};
+	constexpr projectv::math::Vec3 aabbMax{0.5f, 0.5f, 0.4f, 0.0f};
 	PV_EXPECT_TRUE(
 		ctx,
 		IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),
@@ -139,8 +140,8 @@ void TestAabbBeyondMaxDistanceCulled(TestContext &ctx)
 		16.0f / 9.0f,
 		0.1f,
 		5.0f);
-	constexpr std::array aabbMin{-0.5f, -0.5f, -100.5f};
-	constexpr std::array aabbMax{0.5f, 0.5f, -99.5f};
+	constexpr projectv::math::Vec3 aabbMin{-0.5f, -0.5f, -100.5f, 0.0f};
+	constexpr projectv::math::Vec3 aabbMax{0.5f, 0.5f, -99.5f, 0.0f};
 	PV_EXPECT_TRUE(
 		ctx,
 		!IsAabbVisibleAgainstCameraFrustum(aabbMin, aabbMax, camera),

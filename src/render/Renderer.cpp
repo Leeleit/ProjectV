@@ -14,6 +14,17 @@
 #include <filesystem>
 
 namespace {
+// `BuildGraphicsPushConstants` is non-singular for any sensible near/far
+// pair, and the resolve pass is downstream of the voxel pass, so a
+// singular input would already have failed before reaching here.
+//
+// **Tier 0.B (`2026-06-13`).** Removed; replaced by
+// `projectv::math::inverse(Mat4)` from `core/Math.hpp`. Same
+// Gauss-Jordan with partial pivoting, same singular-matrix
+// fallback (returns partial-inverse state). The new helper takes
+// `Mat4` (16-byte aligned) directly so the resolve pass no
+// longer needs to construct a temporary `std::array<float, 16>`.
+//
 // **Per-pass CPU timing helper, 2026-06-12.** RAII wrapper
 // that converts `SDL_GetPerformanceCounter` ticks at
 // destruction into a millisecond float and writes it to the
@@ -69,74 +80,13 @@ DebugOverlayPushConstants BuildBoxOverlayPushConstants(
 	return pushConstants;
 }
 
-// 4x4 matrix inverse via Gauss-Jordan elimination with partial pivoting.
-// Column-major layout, same as the rest of the project (the
-// `MultiplyMatrices` helper in `Camera.cpp` uses the same convention).
-// Only used by the TAA resolve pass to build
-// `inverseCurrentViewProjection`; called at most once per frame so the
-// cost is irrelevant. The check that `det != 0` would be a real concern
-// for a singular matrix, but the projection matrix produced by
-// `BuildGraphicsPushConstants` is non-singular for any sensible near/far
-// pair, and the resolve pass is downstream of the voxel pass, so a
-// singular input would already have failed before reaching here.
-std::array<float, 16> InvertColumnMajorMat4(const std::array<float, 16> &matrix)
-{
-	std::array<float, 16> inverse{};
-	std::array<float, 16> augmented = matrix;
-	for (int column = 0; column < 4; ++column) {
-		inverse[column * 4 + 0] = column == 0 ? 1.0f : 0.0f;
-		inverse[column * 4 + 1] = column == 1 ? 1.0f : 0.0f;
-		inverse[column * 4 + 2] = column == 2 ? 1.0f : 0.0f;
-		inverse[column * 4 + 3] = column == 3 ? 1.0f : 0.0f;
-	}
-	for (int pivot = 0; pivot < 4; ++pivot) {
-		int bestRow = pivot;
-		float bestAbs = std::fabs(augmented[pivot * 4 + pivot]);
-		for (int row = pivot + 1; row < 4; ++row) {
-			const float candidateAbs = std::fabs(augmented[row * 4 + pivot]);
-			if (candidateAbs > bestAbs) {
-				bestAbs = candidateAbs;
-				bestRow = row;
-			}
-		}
-		if (bestRow != pivot) {
-			for (int swapCol = 0; swapCol < 4; ++swapCol) {
-				std::swap(augmented[pivot * 4 + swapCol], augmented[bestRow * 4 + swapCol]);
-				std::swap(inverse[pivot * 4 + swapCol], inverse[bestRow * 4 + swapCol]);
-			}
-		}
-		const float pivotValue = augmented[pivot * 4 + pivot];
-		if (pivotValue == 0.0f) {
-			// Singular matrix; the resolve pass would produce
-			// undefined output, but the TAA-on path is currently a
-			// no-op (gate off) so this branch is unreachable in
-			// mainline. If the gate flips on without a non-singular
-			// viewProjection, `taa_resolve.frag` will read garbage
-			// reprojection — but the same is true of the previous
-			// pre-rewrite `inverse` path.
-			return inverse;
-		}
-		const float invPivot = 1.0f / pivotValue;
-		for (int scaleCol = 0; scaleCol < 4; ++scaleCol) {
-			augmented[pivot * 4 + scaleCol] *= invPivot;
-			inverse[pivot * 4 + scaleCol] *= invPivot;
-		}
-		for (int row = 0; row < 4; ++row) {
-			if (row == pivot) {
-				continue;
-			}
-			const float factor = augmented[row * 4 + pivot];
-			if (factor == 0.0f) {
-				continue;
-			}
-			for (int elimCol = 0; elimCol < 4; ++elimCol) {
-				augmented[row * 4 + elimCol] -= factor * augmented[pivot * 4 + elimCol];
-				inverse[row * 4 + elimCol] -= factor * inverse[pivot * 4 + elimCol];
-			}
-		}
-	}
-	return inverse;
-}
+// **Tier 0.B (`2026-06-13`).** The local `InvertColumnMajorMat4` is
+// removed; replaced by `projectv::math::inverse(Mat4)` from
+// `core/Math.hpp`. Same Gauss-Jordan with partial pivoting, same
+// singular-matrix fallback (returns partial-inverse state). The
+// new helper takes `Mat4` (16-byte aligned) directly so the
+// resolve pass no longer needs to construct a temporary
+// `std::array<float, 16>`.
 
 DebugOverlayPushConstants BuildCrosshairOverlayPushConstants(const SwapchainState &swapchain)
 {
@@ -1194,13 +1144,13 @@ void RecordGraphicsCommands(
 
 			// Push constants for the resolve pass. The current
 			// viewProjection comes from the per-frame
-			// `graphicsPushConstants`; the inverse is built locally
-			// via Gauss-Jordan on the column-major 4x4 (see
-			// `InvertColumnMajorMat4` in the anonymous namespace
-			// above). The resolve shader expects both in the same
-			// column-major layout the CPU uses.
-			const std::array<float, 16> currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
-			const std::array<float, 16> inverseCurrentViewProj = InvertColumnMajorMat4(currentViewProj);
+			// `graphicsPushConstants`; the inverse is computed via
+			// `projectv::math::inverse(Mat4)` from `core/Math.hpp`
+			// (Gauss-Jordan with partial pivoting, see header for
+			// the contract). The resolve shader expects both in
+			// the same column-major layout the CPU uses.
+			const projectv::math::Mat4 currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
+			const projectv::math::Mat4 inverseCurrentViewProj = projectv::math::inverse(currentViewProj);
 			ResolvePushConstants resolvePushConstants{};
 			resolvePushConstants.inverseCurrentViewProjection = inverseCurrentViewProj;
 			resolvePushConstants.currentViewProjection = currentViewProj;

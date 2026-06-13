@@ -35,16 +35,21 @@ VoxelSceneLighting BuildSceneLighting(
 	return BuildVoxelSceneLighting(world.scenePreset, render.lightingDebugControls);
 }
 
+// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
+// `std::array<float, 16>`. Same column-major field order, same
+// 64 B byte size; the destination is a `std::array<float, 64>`
+// (raw storage for the `sunShadowViewProjections` UBO field,
+// std430 GLSL `mat4[4]`) which is memcpy'd from the source.
 void StoreSunShadowProjection(
 	VoxelSceneLighting &lighting,
 	const uint32_t cascadeIndex,
-	const std::array<float, 16> &projection)
+	const projectv::math::Mat4 &projection)
 {
-	const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * projection.size();
-	std::copy_n(
-		projection.begin(),
-		projection.size(),
-		lighting.sunShadowViewProjections.data() + matrixOffset);
+	const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * 16u;
+	std::memcpy(
+		lighting.sunShadowViewProjections.data() + matrixOffset,
+		projection.data(),
+		sizeof(projectv::math::Mat4));
 }
 
 void StoreSunShadowCascadeProjections(
@@ -424,13 +429,19 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	auto *shadowCommands = static_cast<VkDrawIndirectCommand *>(frameResources.shadowIndirectMappedData);
 	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
 	result.shadowCascadeVisibleChunkCounts.fill(0u);
-	std::array<std::array<float, 16>, kSunShadowCascadeCount> shadowCascadeMatrices{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) per
+	// element replaces `std::array<float, 16>`. Same column-major
+	// field order, same 64 B byte size. The `sunShadowViewProjections`
+	// UBO field stays `std::array<float, 64>` (raw storage for
+	// the std430 GLSL `mat4[4]`) and is memcpy'd into the
+	// per-cascade `Mat4`.
+	std::array<projectv::math::Mat4, kSunShadowCascadeCount> shadowCascadeMatrices{};
 	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * shadowCascadeMatrices[cascadeIndex].size();
-		std::copy_n(
+		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * 16u;
+		std::memcpy(
+			shadowCascadeMatrices[cascadeIndex].data(),
 			render.currentSceneLighting.sunShadowViewProjections.data() + matrixOffset,
-			shadowCascadeMatrices[cascadeIndex].size(),
-			shadowCascadeMatrices[cascadeIndex].begin());
+			sizeof(projectv::math::Mat4));
 	}
 
 	const uint32_t chunkDescriptorCount = frameResources.chunkDescriptorCount;

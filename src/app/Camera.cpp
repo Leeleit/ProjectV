@@ -1,6 +1,7 @@
 #include "app/Camera.hpp"
 
 #include "app/InputActions.hpp"
+#include "core/Math.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -13,43 +14,21 @@ constexpr float kSlowMoveSpeedMultiplier = 0.25f;
 constexpr float kMaxLookPitchRadians = 1.553343f;
 constexpr float kMainlineVisibleSceneMaxDistance = 64.0f;
 
-struct Float3 {
-	float x = 0.0f;
-	float y = 0.0f;
-	float z = 0.0f;
-};
+using Float3 = projectv::math::Vec3;
 
 Float3 GetForwardVector(const CameraState &camera)
 {
-	return {
+	return Float3{
 		std::cos(camera.pitchRadians) * std::sin(camera.yawRadians),
 		std::sin(camera.pitchRadians),
 		-std::cos(camera.pitchRadians) * std::cos(camera.yawRadians),
+		0.0f,
 	};
-}
-
-Float3 Normalize(const Float3 vector)
-{
-	const float length = std::sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
-	if (length <= 0.00001f) {
-		return {};
-	}
-
-	return {vector.x / length, vector.y / length, vector.z / length};
 }
 
 Float3 FlattenToPlane(const Float3 vector)
 {
-	return Normalize(Float3{vector.x, 0.0f, vector.z});
-}
-
-Float3 Cross(const Float3 a, const Float3 b)
-{
-	return {
-		a.y * b.z - a.z * b.y,
-		a.z * b.x - a.x * b.z,
-		a.x * b.y - a.y * b.x,
-	};
+	return projectv::math::normalize(Float3{vector.x, 0.0f, vector.z, 0.0f});
 }
 
 void AddScaled(std::array<float, 3> *target, const Float3 vector, const float scale)
@@ -57,28 +36,6 @@ void AddScaled(std::array<float, 3> *target, const Float3 vector, const float sc
 	target->at(0) += vector.x * scale;
 	target->at(1) += vector.y * scale;
 	target->at(2) += vector.z * scale;
-}
-
-float Dot(const Float3 a, const Float3 b)
-{
-	return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-std::array<float, 16> MultiplyMatrices(
-	const std::array<float, 16> &a,
-	const std::array<float, 16> &b)
-{
-	std::array<float, 16> result{};
-	for (int column = 0; column < 4; ++column) {
-		for (int row = 0; row < 4; ++row) {
-			float value = 0.0f;
-			for (int index = 0; index < 4; ++index) {
-				value += a[index * 4 + row] * b[column * 4 + index];
-			}
-			result[column * 4 + row] = value;
-		}
-	}
-	return result;
 }
 } // namespace
 
@@ -170,10 +127,10 @@ void TickCamera(
 		return;
 	}
 
-	const Float3 forward = Normalize(GetForwardVector(*camera));
+	const Float3 forward = projectv::math::normalize(GetForwardVector(*camera));
 	const Float3 planarForward = FlattenToPlane(forward);
-	constexpr Float3 worldUp{0.0f, 1.0f, 0.0f};
-	const Float3 right = Normalize(Cross(planarForward, worldUp));
+	constexpr Float3 worldUp{0.0f, 1.0f, 0.0f, 0.0f};
+	const Float3 right = projectv::math::normalize(projectv::math::cross(planarForward, worldUp));
 	float moveSpeed = camera->moveSpeed;
 	if (IsInputActionDown(input, InputAction::SpeedBoost)) {
 		moveSpeed *= kBoostMoveSpeedMultiplier;
@@ -205,8 +162,8 @@ void TickCamera(
 
 std::array<float, 3> GetCameraForwardVector(const CameraState &camera)
 {
-	const auto [x, y, z] = Normalize(GetForwardVector(camera));
-	return {x, y, z};
+	const Float3 forward = projectv::math::normalize(GetForwardVector(camera));
+	return {forward.x, forward.y, forward.z};
 }
 
 float GetCameraVisibleSceneMaxDistance(const CameraState &camera)
@@ -226,32 +183,22 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 		camera.position[0],
 		camera.position[1],
 		camera.position[2],
+		0.0f,
 	};
-	const std::array<float, 3> forwardVector = GetCameraForwardVector(camera);
-	const Float3 forward{
-		forwardVector[0],
-		forwardVector[1],
-		forwardVector[2],
-	};
-	const Float3 right = Normalize(Cross(forward, Float3{0.0f, 1.0f, 0.0f}));
-	const Float3 up = Normalize(Cross(right, forward));
+	const Float3 forward = projectv::math::normalize(GetForwardVector(camera));
+	const Float3 right = projectv::math::normalize(projectv::math::cross(forward, Float3{0.0f, 1.0f, 0.0f, 0.0f}));
+	const Float3 up = projectv::math::normalize(projectv::math::cross(right, forward));
 
-	const std::array view{
-		right.x,
-		up.x,
-		-forward.x,
-		0.0f,
-		right.y,
-		up.y,
-		-forward.y,
-		0.0f,
-		right.z,
-		up.z,
-		-forward.z,
-		0.0f,
-		-Dot(right, cameraPosition),
-		-Dot(up, cameraPosition),
-		Dot(forward, cameraPosition),
+	// View matrix (column-major): right/up/-forward basis + translation.
+	// Each `c[i]` is column i of the matrix.
+	projectv::math::Mat4 view{};
+	view.c[0] = projectv::math::Vec4{right.x, up.x, -forward.x, 0.0f};
+	view.c[1] = projectv::math::Vec4{right.y, up.y, -forward.y, 0.0f};
+	view.c[2] = projectv::math::Vec4{right.z, up.z, -forward.z, 0.0f};
+	view.c[3] = projectv::math::Vec4{
+		-projectv::math::dot(right, cameraPosition),
+		-projectv::math::dot(up, cameraPosition),
+		projectv::math::dot(forward, cameraPosition),
 		1.0f,
 	};
 
@@ -262,35 +209,22 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 
 	// TAA jitter: the projection matrix translates NDC X/Y by `2 * jitterNdc / extent`
 	// in clip space (because the GPU does `ndc.xy = clip.xy / clip.w`, and on the
-	// standard column-major `MultiplyMatrices(projection, view)` used below the
+	// standard column-major `viewProjection = projection * view` used below the
 	// `m[2]` and `m[6]` cells become the third column's first/second row). This
 	// shifts the entire rasterization of the current frame by a sub-pixel amount
 	// so successive frames can be averaged out to a stable image. Caller passes
 	// zero when TAA is disabled or the camera is static for diagnostics.
 	const float jitterNdcX = extent.width > 0 ? taaJitterNdcX * 2.0f / static_cast<float>(extent.width) : 0.0f;
 	const float jitterNdcY = extent.height > 0 ? taaJitterNdcY * 2.0f / static_cast<float>(extent.height) : 0.0f;
-	const std::array projection{
-		1.0f / (aspect * tanHalfFov),
-		0.0f,
-		jitterNdcX,
-		0.0f,
-		0.0f,
-		-1.0f / tanHalfFov,
-		jitterNdcY,
-		0.0f,
-		0.0f,
-		0.0f,
-		farPlane / (nearPlane - farPlane),
-		-1.0f,
-		0.0f,
-		0.0f,
-		nearPlane * farPlane / (nearPlane - farPlane),
-		0.0f,
-	};
+	projectv::math::Mat4 projection{};
+	projection.c[0] = projectv::math::Vec4{1.0f / (aspect * tanHalfFov), 0.0f, 0.0f, 0.0f};
+	projection.c[1] = projectv::math::Vec4{0.0f, -1.0f / tanHalfFov, 0.0f, 0.0f};
+	projection.c[2] = projectv::math::Vec4{jitterNdcX, jitterNdcY, farPlane / (nearPlane - farPlane), -1.0f};
+	projection.c[3] = projectv::math::Vec4{0.0f, 0.0f, nearPlane * farPlane / (nearPlane - farPlane), 0.0f};
 
 	GraphicsPushConstants pushConstants{};
-	pushConstants.viewProjection = MultiplyMatrices(projection, view);
-	const std::array<float, 3> cameraForward = GetCameraForwardVector(camera);
+	pushConstants.viewProjection = projection * view;
+	const Float3 cameraForward = projectv::math::normalize(GetForwardVector(camera));
 	pushConstants.cameraPosition = {
 		camera.position[0],
 		camera.position[1],
@@ -298,9 +232,9 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 		nearPlane,
 	};
 	pushConstants.cameraForward = {
-		cameraForward[0],
-		cameraForward[1],
-		cameraForward[2],
+		cameraForward.x,
+		cameraForward.y,
+		cameraForward.z,
 		farPlane,
 	};
 	return pushConstants;
@@ -315,15 +249,11 @@ ChunkCullingParameters BuildChunkCullingParameters(
 		camera.position[0],
 		camera.position[1],
 		camera.position[2],
+		0.0f,
 	};
-	const std::array<float, 3> forwardVector = GetCameraForwardVector(camera);
-	const Float3 forward{
-		forwardVector[0],
-		forwardVector[1],
-		forwardVector[2],
-	};
-	const Float3 right = Normalize(Cross(forward, Float3{0.0f, 1.0f, 0.0f}));
-	const auto [x, y, z] = Normalize(Cross(right, forward));
+	const Float3 forward = projectv::math::normalize(GetForwardVector(camera));
+	const Float3 right = projectv::math::normalize(projectv::math::cross(forward, Float3{0.0f, 1.0f, 0.0f, 0.0f}));
+	const Float3 up = projectv::math::normalize(projectv::math::cross(right, forward));
 	const float aspect = extent.height > 0
 							 ? static_cast<float>(extent.width) / static_cast<float>(extent.height)
 							 : 1.0f;
@@ -331,29 +261,17 @@ ChunkCullingParameters BuildChunkCullingParameters(
 	const float tanHalfHorizontalFov = tanHalfVerticalFov * aspect;
 
 	ChunkCullingParameters parameters{};
-	parameters.cameraPositionAndMaxDistance = {
-		cameraPosition.x,
-		cameraPosition.y,
-		cameraPosition.z,
-		maxDistance,
+	parameters.cameraPositionAndMaxDistance = projectv::math::Vec4{
+		cameraPosition.x, cameraPosition.y, cameraPosition.z, maxDistance,
 	};
-	parameters.cameraForwardAndTanHalfVerticalFov = {
-		forward.x,
-		forward.y,
-		forward.z,
-		tanHalfVerticalFov,
+	parameters.cameraForwardAndTanHalfVerticalFov = projectv::math::Vec4{
+		forward.x, forward.y, forward.z, tanHalfVerticalFov,
 	};
-	parameters.cameraRightAndTanHalfHorizontalFov = {
-		right.x,
-		right.y,
-		right.z,
-		tanHalfHorizontalFov,
+	parameters.cameraRightAndTanHalfHorizontalFov = projectv::math::Vec4{
+		right.x, right.y, right.z, tanHalfHorizontalFov,
 	};
-	parameters.cameraUpAndNearPlane = {
-		x,
-		y,
-		z,
-		camera.nearPlane,
+	parameters.cameraUpAndNearPlane = projectv::math::Vec4{
+		up.x, up.y, up.z, camera.nearPlane,
 	};
 	return parameters;
 }

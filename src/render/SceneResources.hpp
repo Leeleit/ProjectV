@@ -1,6 +1,7 @@
 #ifndef SCENE_RESOURCES_HPP
 #define SCENE_RESOURCES_HPP
 
+#include "core/Math.hpp"
 #include "core/Types.hpp"
 
 #include <algorithm>
@@ -26,46 +27,49 @@ inline bool IsSceneChunkVisible(
 		return false;
 	}
 
-	const auto loadFloat3 = [](const std::array<float, 4> &values) {
-		return std::array{values[0], values[1], values[2]};
+	const auto loadFloat3 = [](const projectv::math::Vec4 &values) {
+		return projectv::math::Vec3{values.x, values.y, values.z, 0.0f};
 	};
-	const auto dot = [](const std::array<float, 3> &a, const std::array<float, 3> &b) {
-		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	const auto dot = [](const projectv::math::Vec3 &a, const projectv::math::Vec3 &b) {
+		return projectv::math::dot(a, b);
 	};
-	const auto lengthSquared = [&](const std::array<float, 3> &vector) {
-		return dot(vector, vector);
+	const auto lengthSquared = [&](const projectv::math::Vec3 &vector) {
+		return projectv::math::lengthSq(vector);
 	};
 
-	const std::array<float, 3> cameraPosition = loadFloat3(parameters.cameraPositionAndMaxDistance);
-	const std::array<float, 3> cameraForward = loadFloat3(parameters.cameraForwardAndTanHalfVerticalFov);
-	const std::array<float, 3> cameraRight = loadFloat3(parameters.cameraRightAndTanHalfHorizontalFov);
-	const std::array<float, 3> cameraUp = loadFloat3(parameters.cameraUpAndNearPlane);
-	const float maxDistance = parameters.cameraPositionAndMaxDistance[3];
-	const float tanHalfVerticalFov = std::max(parameters.cameraForwardAndTanHalfVerticalFov[3], 0.0f);
-	const float tanHalfHorizontalFov = std::max(parameters.cameraRightAndTanHalfHorizontalFov[3], 0.0f);
-	const float nearPlane = std::max(parameters.cameraUpAndNearPlane[3], 0.0f);
+	const projectv::math::Vec3 cameraPosition = loadFloat3(parameters.cameraPositionAndMaxDistance);
+	const projectv::math::Vec3 cameraForward = loadFloat3(parameters.cameraForwardAndTanHalfVerticalFov);
+	const projectv::math::Vec3 cameraRight = loadFloat3(parameters.cameraRightAndTanHalfHorizontalFov);
+	const projectv::math::Vec3 cameraUp = loadFloat3(parameters.cameraUpAndNearPlane);
+	const float maxDistance = parameters.cameraPositionAndMaxDistance.w;
+	const float tanHalfVerticalFov = std::max(parameters.cameraForwardAndTanHalfVerticalFov.w, 0.0f);
+	const float tanHalfHorizontalFov = std::max(parameters.cameraRightAndTanHalfHorizontalFov.w, 0.0f);
+	const float nearPlane = std::max(parameters.cameraUpAndNearPlane.w, 0.0f);
 
-	const std::array chunkHalfExtent{
+	const projectv::math::Vec3 chunkHalfExtent{
 		static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]) * 0.5f,
 		static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[1]) * 0.5f,
 		static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[2]) * 0.5f,
+		0.0f,
 	};
-	const std::array chunkCenter{
-		static_cast<float>(chunkDescriptor.chunkOrigin[0]) + chunkHalfExtent[0],
-		static_cast<float>(chunkDescriptor.chunkOrigin[1]) + chunkHalfExtent[1],
-		static_cast<float>(chunkDescriptor.chunkOrigin[2]) + chunkHalfExtent[2],
+	const projectv::math::Vec3 chunkCenter{
+		static_cast<float>(chunkDescriptor.chunkOrigin[0]) + chunkHalfExtent.x,
+		static_cast<float>(chunkDescriptor.chunkOrigin[1]) + chunkHalfExtent.y,
+		static_cast<float>(chunkDescriptor.chunkOrigin[2]) + chunkHalfExtent.z,
+		0.0f,
 	};
-	const std::array toChunkCenter{
-		chunkCenter[0] - cameraPosition[0],
-		chunkCenter[1] - cameraPosition[1],
-		chunkCenter[2] - cameraPosition[2],
+	const projectv::math::Vec3 toChunkCenter{
+		chunkCenter.x - cameraPosition.x,
+		chunkCenter.y - cameraPosition.y,
+		chunkCenter.z - cameraPosition.z,
+		0.0f,
 	};
-	const auto projectedRadiusOntoPlane = [&](const std::array<float, 3> &planeNormal) {
-		return std::abs(planeNormal[0]) * chunkHalfExtent[0] +
-			   std::abs(planeNormal[1]) * chunkHalfExtent[1] +
-			   std::abs(planeNormal[2]) * chunkHalfExtent[2];
+	const auto projectedRadiusOntoPlane = [&](const projectv::math::Vec3 &planeNormal) {
+		return std::abs(planeNormal.x) * chunkHalfExtent.x +
+			   std::abs(planeNormal.y) * chunkHalfExtent.y +
+			   std::abs(planeNormal.z) * chunkHalfExtent.z;
 	};
-	const auto passesPlane = [&](const std::array<float, 3> &planeNormal, const float planeOffset = 0.0f) {
+	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
 		const float centerDistance = dot(toChunkCenter, planeNormal) - planeOffset;
 		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
@@ -81,25 +85,29 @@ inline bool IsSceneChunkVisible(
 		}
 	}
 
-	const std::array leftPlane{
-		cameraForward[0] * tanHalfHorizontalFov + cameraRight[0],
-		cameraForward[1] * tanHalfHorizontalFov + cameraRight[1],
-		cameraForward[2] * tanHalfHorizontalFov + cameraRight[2],
+	const projectv::math::Vec3 leftPlane{
+		cameraForward.x * tanHalfHorizontalFov + cameraRight.x,
+		cameraForward.y * tanHalfHorizontalFov + cameraRight.y,
+		cameraForward.z * tanHalfHorizontalFov + cameraRight.z,
+		0.0f,
 	};
-	const std::array rightPlane{
-		cameraForward[0] * tanHalfHorizontalFov - cameraRight[0],
-		cameraForward[1] * tanHalfHorizontalFov - cameraRight[1],
-		cameraForward[2] * tanHalfHorizontalFov - cameraRight[2],
+	const projectv::math::Vec3 rightPlane{
+		cameraForward.x * tanHalfHorizontalFov - cameraRight.x,
+		cameraForward.y * tanHalfHorizontalFov - cameraRight.y,
+		cameraForward.z * tanHalfHorizontalFov - cameraRight.z,
+		0.0f,
 	};
-	const std::array bottomPlane{
-		cameraForward[0] * tanHalfVerticalFov + cameraUp[0],
-		cameraForward[1] * tanHalfVerticalFov + cameraUp[1],
-		cameraForward[2] * tanHalfVerticalFov + cameraUp[2],
+	const projectv::math::Vec3 bottomPlane{
+		cameraForward.x * tanHalfVerticalFov + cameraUp.x,
+		cameraForward.y * tanHalfVerticalFov + cameraUp.y,
+		cameraForward.z * tanHalfVerticalFov + cameraUp.z,
+		0.0f,
 	};
-	const std::array topPlane{
-		cameraForward[0] * tanHalfVerticalFov - cameraUp[0],
-		cameraForward[1] * tanHalfVerticalFov - cameraUp[1],
-		cameraForward[2] * tanHalfVerticalFov - cameraUp[2],
+	const projectv::math::Vec3 topPlane{
+		cameraForward.x * tanHalfVerticalFov - cameraUp.x,
+		cameraForward.y * tanHalfVerticalFov - cameraUp.y,
+		cameraForward.z * tanHalfVerticalFov - cameraUp.z,
+		0.0f,
 	};
 	if (!passesPlane(leftPlane) || !passesPlane(rightPlane)) {
 		return false;
@@ -119,50 +127,53 @@ inline bool IsSceneChunkVisible(
 // by another agent's work-in-progress and the cost of an additional ~30
 // lines of math is negligible compared to touching a shared function.
 inline bool IsAabbVisibleAgainstCameraFrustum(
-	const std::array<float, 3> &aabbMin,
-	const std::array<float, 3> &aabbMax,
+	const projectv::math::Vec3 &aabbMin,
+	const projectv::math::Vec3 &aabbMax,
 	const ChunkCullingParameters &parameters)
 {
-	const auto loadFloat3 = [](const std::array<float, 4> &values) {
-		return std::array{values[0], values[1], values[2]};
+	const auto loadFloat3 = [](const projectv::math::Vec4 &values) {
+		return projectv::math::Vec3{values.x, values.y, values.z, 0.0f};
 	};
-	const auto dot = [](const std::array<float, 3> &a, const std::array<float, 3> &b) {
-		return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	const auto dot = [](const projectv::math::Vec3 &a, const projectv::math::Vec3 &b) {
+		return projectv::math::dot(a, b);
 	};
-	const auto lengthSquared = [&](const std::array<float, 3> &vector) {
-		return dot(vector, vector);
+	const auto lengthSquared = [&](const projectv::math::Vec3 &vector) {
+		return projectv::math::lengthSq(vector);
 	};
 
-	const std::array<float, 3> cameraPosition = loadFloat3(parameters.cameraPositionAndMaxDistance);
-	const std::array<float, 3> cameraForward = loadFloat3(parameters.cameraForwardAndTanHalfVerticalFov);
-	const std::array<float, 3> cameraRight = loadFloat3(parameters.cameraRightAndTanHalfHorizontalFov);
-	const std::array<float, 3> cameraUp = loadFloat3(parameters.cameraUpAndNearPlane);
-	const float maxDistance = parameters.cameraPositionAndMaxDistance[3];
-	const float tanHalfVerticalFov = std::max(parameters.cameraForwardAndTanHalfVerticalFov[3], 0.0f);
-	const float tanHalfHorizontalFov = std::max(parameters.cameraRightAndTanHalfHorizontalFov[3], 0.0f);
-	const float nearPlane = std::max(parameters.cameraUpAndNearPlane[3], 0.0f);
+	const projectv::math::Vec3 cameraPosition = loadFloat3(parameters.cameraPositionAndMaxDistance);
+	const projectv::math::Vec3 cameraForward = loadFloat3(parameters.cameraForwardAndTanHalfVerticalFov);
+	const projectv::math::Vec3 cameraRight = loadFloat3(parameters.cameraRightAndTanHalfHorizontalFov);
+	const projectv::math::Vec3 cameraUp = loadFloat3(parameters.cameraUpAndNearPlane);
+	const float maxDistance = parameters.cameraPositionAndMaxDistance.w;
+	const float tanHalfVerticalFov = std::max(parameters.cameraForwardAndTanHalfVerticalFov.w, 0.0f);
+	const float tanHalfHorizontalFov = std::max(parameters.cameraRightAndTanHalfHorizontalFov.w, 0.0f);
+	const float nearPlane = std::max(parameters.cameraUpAndNearPlane.w, 0.0f);
 
-	const std::array aabbCenter{
-		(aabbMin[0] + aabbMax[0]) * 0.5f,
-		(aabbMin[1] + aabbMax[1]) * 0.5f,
-		(aabbMin[2] + aabbMax[2]) * 0.5f,
+	const projectv::math::Vec3 aabbCenter{
+		(aabbMin.x + aabbMax.x) * 0.5f,
+		(aabbMin.y + aabbMax.y) * 0.5f,
+		(aabbMin.z + aabbMax.z) * 0.5f,
+		0.0f,
 	};
-	const std::array aabbHalfExtent{
-		(aabbMax[0] - aabbMin[0]) * 0.5f,
-		(aabbMax[1] - aabbMin[1]) * 0.5f,
-		(aabbMax[2] - aabbMin[2]) * 0.5f,
+	const projectv::math::Vec3 aabbHalfExtent{
+		(aabbMax.x - aabbMin.x) * 0.5f,
+		(aabbMax.y - aabbMin.y) * 0.5f,
+		(aabbMax.z - aabbMin.z) * 0.5f,
+		0.0f,
 	};
-	const std::array toAabbCenter{
-		aabbCenter[0] - cameraPosition[0],
-		aabbCenter[1] - cameraPosition[1],
-		aabbCenter[2] - cameraPosition[2],
+	const projectv::math::Vec3 toAabbCenter{
+		aabbCenter.x - cameraPosition.x,
+		aabbCenter.y - cameraPosition.y,
+		aabbCenter.z - cameraPosition.z,
+		0.0f,
 	};
-	const auto projectedRadiusOntoPlane = [&](const std::array<float, 3> &planeNormal) {
-		return std::abs(planeNormal[0]) * aabbHalfExtent[0] +
-			   std::abs(planeNormal[1]) * aabbHalfExtent[1] +
-			   std::abs(planeNormal[2]) * aabbHalfExtent[2];
+	const auto projectedRadiusOntoPlane = [&](const projectv::math::Vec3 &planeNormal) {
+		return std::abs(planeNormal.x) * aabbHalfExtent.x +
+			   std::abs(planeNormal.y) * aabbHalfExtent.y +
+			   std::abs(planeNormal.z) * aabbHalfExtent.z;
 	};
-	const auto passesPlane = [&](const std::array<float, 3> &planeNormal, const float planeOffset = 0.0f) {
+	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
 		const float centerDistance = dot(toAabbCenter, planeNormal) - planeOffset;
 		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
@@ -178,25 +189,29 @@ inline bool IsAabbVisibleAgainstCameraFrustum(
 		}
 	}
 
-	const std::array leftPlane{
-		cameraForward[0] * tanHalfHorizontalFov + cameraRight[0],
-		cameraForward[1] * tanHalfHorizontalFov + cameraRight[1],
-		cameraForward[2] * tanHalfHorizontalFov + cameraRight[2],
+	const projectv::math::Vec3 leftPlane{
+		cameraForward.x * tanHalfHorizontalFov + cameraRight.x,
+		cameraForward.y * tanHalfHorizontalFov + cameraRight.y,
+		cameraForward.z * tanHalfHorizontalFov + cameraRight.z,
+		0.0f,
 	};
-	const std::array rightPlane{
-		cameraForward[0] * tanHalfHorizontalFov - cameraRight[0],
-		cameraForward[1] * tanHalfHorizontalFov - cameraRight[1],
-		cameraForward[2] * tanHalfHorizontalFov - cameraRight[2],
+	const projectv::math::Vec3 rightPlane{
+		cameraForward.x * tanHalfHorizontalFov - cameraRight.x,
+		cameraForward.y * tanHalfHorizontalFov - cameraRight.y,
+		cameraForward.z * tanHalfHorizontalFov - cameraRight.z,
+		0.0f,
 	};
-	const std::array bottomPlane{
-		cameraForward[0] * tanHalfVerticalFov + cameraUp[0],
-		cameraForward[1] * tanHalfVerticalFov + cameraUp[1],
-		cameraForward[2] * tanHalfVerticalFov + cameraUp[2],
+	const projectv::math::Vec3 bottomPlane{
+		cameraForward.x * tanHalfVerticalFov + cameraUp.x,
+		cameraForward.y * tanHalfVerticalFov + cameraUp.y,
+		cameraForward.z * tanHalfVerticalFov + cameraUp.z,
+		0.0f,
 	};
-	const std::array topPlane{
-		cameraForward[0] * tanHalfVerticalFov - cameraUp[0],
-		cameraForward[1] * tanHalfVerticalFov - cameraUp[1],
-		cameraForward[2] * tanHalfVerticalFov - cameraUp[2],
+	const projectv::math::Vec3 topPlane{
+		cameraForward.x * tanHalfVerticalFov - cameraUp.x,
+		cameraForward.y * tanHalfVerticalFov - cameraUp.y,
+		cameraForward.z * tanHalfVerticalFov - cameraUp.z,
+		0.0f,
 	};
 	if (!passesPlane(leftPlane) || !passesPlane(rightPlane)) {
 		return false;
@@ -210,21 +225,23 @@ inline bool IsAabbVisibleAgainstCameraFrustum(
 
 inline bool IsSceneChunkVisibleInShadowCascade(
 	const PackedSceneChunkDescriptor &chunkDescriptor,
-	const std::array<float, 16> &lightViewProjection)
+	const projectv::math::Mat4 &lightViewProjection)
 {
 	if (chunkDescriptor.chunkExtentAndNonAir[3] == 0u) {
 		return false;
 	}
 
-	const std::array chunkMin{
+	const projectv::math::Vec3 chunkMin{
 		static_cast<float>(chunkDescriptor.chunkOrigin[0]),
 		static_cast<float>(chunkDescriptor.chunkOrigin[1]),
 		static_cast<float>(chunkDescriptor.chunkOrigin[2]),
+		0.0f,
 	};
-	const std::array chunkMax{
-		chunkMin[0] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]),
-		chunkMin[1] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[1]),
-		chunkMin[2] + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[2]),
+	const projectv::math::Vec3 chunkMax{
+		chunkMin.x + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]),
+		chunkMin.y + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[1]),
+		chunkMin.z + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[2]),
+		0.0f,
 	};
 
 	// Two valid contracts feed this culling, both rely on `clip.z < 0` for the
@@ -250,17 +267,18 @@ inline bool IsSceneChunkVisibleInShadowCascade(
 	bool outsideNear = true;
 	bool outsideFar = true;
 	for (uint32_t cornerIndex = 0; cornerIndex < 8u; ++cornerIndex) {
-		const std::array corner{
-			(cornerIndex & 1u) != 0u ? chunkMax[0] : chunkMin[0],
-			(cornerIndex & 2u) != 0u ? chunkMax[1] : chunkMin[1],
-			(cornerIndex & 4u) != 0u ? chunkMax[2] : chunkMin[2],
+		const projectv::math::Vec3 corner{
+			(cornerIndex & 1u) != 0u ? chunkMax.x : chunkMin.x,
+			(cornerIndex & 2u) != 0u ? chunkMax.y : chunkMin.y,
+			(cornerIndex & 4u) != 0u ? chunkMax.z : chunkMin.z,
+			0.0f,
 		};
-		const std::array clipCorner{
-			lightViewProjection[0] * corner[0] + lightViewProjection[4] * corner[1] + lightViewProjection[8] * corner[2] + lightViewProjection[12],
-			lightViewProjection[1] * corner[0] + lightViewProjection[5] * corner[1] + lightViewProjection[9] * corner[2] + lightViewProjection[13],
-			lightViewProjection[2] * corner[0] + lightViewProjection[6] * corner[1] + lightViewProjection[10] * corner[2] + lightViewProjection[14],
-			lightViewProjection[3] * corner[0] + lightViewProjection[7] * corner[1] + lightViewProjection[11] * corner[2] + lightViewProjection[15],
-		};
+		// Column-major mat4 * homogeneous vec4 (w=1.0).
+		// `math::operator*(Mat4, Vec4)` matches the original
+		// `std::array` formula `m[col*4+row] * v[col]` (which is
+		// the standard column-major mat*vec contract).
+		const projectv::math::Vec4 clipCorner = lightViewProjection
+			* projectv::math::Vec4{corner.x, corner.y, corner.z, 1.0f};
 		outsideLeft = outsideLeft && clipCorner[0] < -clipCorner[3];
 		outsideRight = outsideRight && clipCorner[0] > clipCorner[3];
 		outsideBottom = outsideBottom && clipCorner[1] < -clipCorner[3];

@@ -239,8 +239,10 @@ bool PrepareFrameRenderData(
 		const auto &currentVP = frame->renderData.graphicsPushConstants.viewProjection;
 		const auto &prevVP = render->taaPrevViewProjectionMatrix;
 		float maxDelta = 0.0f;
+		const float *currentData = currentVP.data();
+		const float *prevData = prevVP.data();
 		for (size_t i = 0; i < 16; ++i) {
-			const float delta = std::abs(currentVP[i] - prevVP[i]);
+			const float delta = std::abs(currentData[i] - prevData[i]);
 			if (delta > maxDelta) {
 				maxDelta = delta;
 			}

@@ -219,5 +219,27 @@ target_link_libraries(ProjectVBoxUvFixtureTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVBoxUvFixtureTests COMMAND ProjectVBoxUvFixtureTests)
 set_tests_properties(ProjectVBoxUvFixtureTests PROPERTIES LABELS "unit")
 
+# Math types smoke test (Tier 0.A, 2026-06-13). Header-only
+# `projectv::math` (`src/core/Math.hpp`) — Vec3/Vec4/Mat4 with
+# 16-byte alignment for SIMD. The TU only includes Math.hpp
+# and uses the types, so it needs no other library links.
+# No Vulkan init, no Jolt, no asset pipeline.
+add_executable(ProjectVMathTests
+        MathTest.cpp
+)
+
+target_compile_definitions(ProjectVMathTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVMathTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVMathTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVMathTests COMMAND ProjectVMathTests)
+set_tests_properties(ProjectVMathTests PROPERTIES LABELS "unit")
+
 
 

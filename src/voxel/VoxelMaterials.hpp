@@ -1,6 +1,7 @@
 #ifndef VOXEL_MATERIALS_HPP
 #define VOXEL_MATERIALS_HPP
 
+#include "core/Math.hpp"
 #include "render/ShadowTypes.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -116,7 +117,14 @@ struct VoxelSceneLighting {
 	// previous frame's viewProjection (column-major, same layout as
 	// `GraphicsPushConstants::viewProjection`). Reused by the TAA resolve
 	// pass for depth-based reprojection; zeroed on the first frame.
-	std::array<float, 16> prevViewProjectionMatrix{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
+	// `std::array<float, 16>`. Same byte size (64 B), the
+	// `static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528)`
+	// below still holds because `Mat4` and `std::array<float, 16>` have
+	// the same size and alignment; the column-major field order
+	// (`m[col*4 + row]`) matches the std430 GLSL `mat4` layout that the
+	// shader uses.
+	projectv::math::Mat4 prevViewProjectionMatrix{};
 	// texel size x, texel size y, history valid (0/1), neighbourhood radius (1/3/5/7)
 	std::array<float, 4> taaHistoryParams{};
 	// 1.5 anti-flicker: per-layer temporal history parameters.

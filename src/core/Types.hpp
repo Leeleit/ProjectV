@@ -13,6 +13,7 @@
 
 #include "SDL3/SDL.h"
 #include "asset/MeshGpuResources.hpp"
+#include "core/Math.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -261,7 +262,12 @@ enum class WalkAirControlMode : uint8_t {
 };
 
 struct GraphicsPushConstants {
-	std::array<float, 16> viewProjection{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned
+	// per `core/Math.hpp`) replaces `std::array<float, 16>` so the
+	// compiler can emit `movaps` / `vmovaps` (alignment-required
+	// SSE/AVX) instead of `movups`. Same byte size (64 B),
+	// static_asserts below still hold.
+	projectv::math::Mat4 viewProjection{};
 	std::array<float, 4> cameraPosition{};
 	std::array<float, 4> cameraForward{};
 	std::array<int32_t, 4> worldMinAndChunkSize{};
@@ -297,8 +303,12 @@ struct ResolvePushConstants {
 	// `vec2 reservedPadding` slot with the same 8 B total; byte layout
 	// is unchanged so existing SPIR-V / push-constant expectations stay
 	// intact.
-	std::array<float, 16> inverseCurrentViewProjection{};
-	std::array<float, 16> currentViewProjection{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned)
+	// replaces `std::array<float, 16>` for the two viewProjection
+	// matrices. Same byte size (64 B each, 128 B total), byte
+	// layout preserved for SPIR-V / push-constant expectations.
+	projectv::math::Mat4 inverseCurrentViewProjection{};
+	projectv::math::Mat4 currentViewProjection{};
 	std::array<float, 2> renderExtentInverse{};
 	float taaBlend = 0.0f;
 	float taaCasSharpnessMax = 0.0f;
@@ -313,7 +323,10 @@ static_assert(offsetof(ResolvePushConstants, taaBlend) == 136);
 static_assert(offsetof(ResolvePushConstants, taaCasSharpnessMax) == 140);
 
 struct DebugOverlayPushConstants {
-	std::array<float, 16> viewProjection{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
+	// `std::array<float, 16>`. Same byte size (64 B), static_asserts
+	// still hold.
+	projectv::math::Mat4 viewProjection{};
 	std::array<float, 4> overlayData0{};
 	std::array<float, 4> overlayData1{};
 	std::array<float, 4> overlayColor{};
@@ -484,10 +497,15 @@ static_assert(offsetof(VoxelMeshingPushConstants, chunkGridAndTransparentFaceBas
 static_assert(offsetof(VoxelMeshingPushConstants, faceCapacities) == 48);
 
 struct ChunkCullingParameters {
-	std::array<float, 4> cameraPositionAndMaxDistance{};
-	std::array<float, 4> cameraForwardAndTanHalfVerticalFov{};
-	std::array<float, 4> cameraRightAndTanHalfHorizontalFov{};
-	std::array<float, 4> cameraUpAndNearPlane{};
+	// **Tier 0.B (`2026-06-13`).** Four `Vec4`s (16-byte aligned
+	// per `core/Math.hpp`) replace four `std::array<float, 4>`s. Each
+	// Vec4 packs (xyz, sentinel_w): camera position + max distance,
+	// camera forward + tan half-vertical-fov, etc. Same byte size
+	// (64 B total), static_asserts still hold.
+	projectv::math::Vec4 cameraPositionAndMaxDistance{};
+	projectv::math::Vec4 cameraForwardAndTanHalfVerticalFov{};
+	projectv::math::Vec4 cameraRightAndTanHalfHorizontalFov{};
+	projectv::math::Vec4 cameraUpAndNearPlane{};
 };
 static_assert(std::is_standard_layout_v<ChunkCullingParameters>);
 static_assert(std::is_trivially_copyable_v<ChunkCullingParameters>);
@@ -761,9 +779,16 @@ struct WorldState {
 };
 
 struct ModelInstanceData {
-	std::array<float, 16> modelTransform{};
-	std::array<float, 3> worldAabbMin{};
-	std::array<float, 3> worldAabbMax{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
+	// `std::array<float, 16>` for the model transform. `Vec3`
+	// (16-byte aligned) replaces `std::array<float, 3>` for the
+	// AABB bounds: 12-byte `std::array` grows to 16 bytes with
+	// `Vec3` so the `ModelInstanceData` struct grows by 8 bytes
+	// total. ABI change in cold model-pipeline path; not a hot
+	// per-chunk cost.
+	projectv::math::Mat4 modelTransform{};
+	projectv::math::Vec3 worldAabbMin{};
+	projectv::math::Vec3 worldAabbMax{};
 	// Source (asset-local) AABB min in model-local space. The
 	// load path's `aabbMinOffset = T(-srcMin*scale)` shifts the
 	// model basis so the translation column of `modelTransform`
@@ -954,7 +979,11 @@ struct RenderState {
 	bool taaHistoryValid = false;
 	bool taaSceneColorNeedsInit = true;
 	bool taaHistoryNeedsInit = true;
-	std::array<float, 16> taaPrevViewProjectionMatrix{};
+	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned)
+	// replaces `std::array<float, 16>`. Same byte size (64 B);
+	// the `taaPrevViewProjectionMatrixInitialized` companion
+	// flag below stays the same.
+	projectv::math::Mat4 taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
 	// Per-pass TAA tuning ladder (live `;`/`'`/`-`/`=`/`,`/`.` ladder, see

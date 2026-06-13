@@ -57,6 +57,28 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-13-defense-prep-r0
+
+- **id:** `2026-06-13T15:30Z-defense-prep-r0`
+- **started-at:** 2026-06-13T15:30:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Defense preparation r0** (защита 2026-06-15). Атомарная подзадача — закрыть критичные gap'ы ТЗ к защите (ray-marching compute pass, fluid CA cellular automata, hot reload шейдеров, JSON scene config) + подготовить документацию (DefenseReport, DefenseDemoScript, DefenseSpeakerNotes для 6 человек, DefenseFAQ). Оператор один разрабатывал, но защищают 6 человек — 4-5 минут le1t, по ~1 минуте остальным из готовых talking points.
+- **files-touched-intent:**
+  - **NEW:** `docs/DefenseReport.md`, `docs/DefenseDemoScript.md`, `docs/DefenseSpeakerNotes.md`, `docs/DefenseFAQ.md`
+  - **NEW:** `src/voxel/SceneConfig.{hpp,cpp}` (nlohmann/json header-only loader, scene config в `runtime/scene.json`)
+  - **NEW:** `src/shaders/ray_march.comp` (compute shader для ray-marching по packed voxel payload)
+  - **NEW:** `src/render/RayMarchPass.{hpp,cpp}` (compute pass driver, дёргается из Renderer.cpp с toggle)
+  - **MINIMAL EDIT:** `src/voxel/VoxelWorld.{hpp,cpp}` (добавить `UpdateFluidCA()` method, без изменений в `core/Types.hpp`)
+  - **MINIMAL EDIT:** `src/render/Renderer.cpp` (1 hook для ray-march pass в RecordGraphicsCommands)
+  - **MINIMAL EDIT:** `src/app/main.cpp` (F5 hot-reload шейдеров, F6 ray-march toggle, scene config init)
+  - **MINIMAL EDIT:** `src/CMakeLists.txt` (зарегистрировать SceneConfig.cpp + ray_march.comp shader)
+  - **MINIMAL EDIT:** `CMakeLists.txt` (root) (nlohmann/json через FetchContent)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close), `agent/status.md` (новая секция §15)
+- **status:** open
+- **notes:** **Scope discipline (per `AGENTS.md §7.2.6`):** НЕ ТРОГАЮ `core/Types.hpp`, `core/Math.hpp`, `render/SceneResources.hpp`, `tests/CMakeLists.txt`, `tests/MathTest.cpp` — это файлы активной `session-2026-06-13-hardcore-perf-r0` (Tier 0: Vec3/Mat4 + SIMD frustum cull). НЕ ТРОГАЮ `src/asset/`, `src/audio/`, `src/debug/`, `src/ecs/`, `src/physics/`, `src/render/vulkan/*` — это потенциально `session-2026-06-13-problems-cleanup-v2`. Мои файлы: новые + additive VoxelWorld/Renderer/main/CMakeLists (без `core/Types.hpp`). **Конфликты с Tier 0 исключены** (мы в разных файлах); конфликты с problems cleanup v2 маловероятны (я не правлю их файлы). **Build preset:** `linux-clang-debug` (Tier 0 baseline; не трогаю `windows-clang-debug` и `linux-clang-debug-tracy-profiler`). **Не запускаю build параллельно с Tier 0** (если Tier 0 параллельно собирает — жду).
+
 ### session-2026-06-13-hardcore-perf-r0
 
 - **id:** `2026-06-13T13:30Z-hardcore-perf-r0`

@@ -246,9 +246,9 @@ void TickModelGravigun(
 		std::fprintf(stderr,
 					 "[Gravigun-DBG] DROPPED: index=%d final_aabbMin=(%.3f,%.3f,%.3f) final_aabbMax=(%.3f,%.3f,%.3f) manifest_position=(%.3f,%.3f,%.3f) targetY=%.1f snap=%s\n",
 					 state->pickedInstanceIndex,
-					 inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2],
-					 inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2],
-					 inst.modelTransform[12], inst.modelTransform[13], inst.modelTransform[14],
+					 inst.worldAabbMin.x, inst.worldAabbMin.y, inst.worldAabbMin.z,
+					 inst.worldAabbMax.x, inst.worldAabbMax.y, inst.worldAabbMax.z,
+					 inst.modelTransform.c[3].x, inst.modelTransform.c[3].y, inst.modelTransform.c[3].z,
 					 state->targetY,
 					 snapOnDrop ? "on" : "off");
 		state->pickedInstanceIndex = -1;
@@ -327,9 +327,9 @@ void TickModelGravigun(
 			// offset so the GPU's per-vertex transform puts
 			// vertex `sourceAabbMin` exactly at `newMin` in
 			// world space.
-			inst.modelTransform[12] = newMinX - inst.sourceAabbMin[0];
-			inst.modelTransform[13] = newMinY - inst.sourceAabbMin[1];
-			inst.modelTransform[14] = newMinZ - inst.sourceAabbMin[2];
+			inst.modelTransform.c[3].x = newMinX - inst.sourceAabbMin[0];
+			inst.modelTransform.c[3].y = newMinY - inst.sourceAabbMin[1];
+			inst.modelTransform.c[3].z = newMinZ - inst.sourceAabbMin[2];
 		}
 	}
 }
