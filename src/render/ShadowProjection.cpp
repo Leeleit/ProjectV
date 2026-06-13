@@ -576,13 +576,13 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 		float casterMinZ = std::numeric_limits<float>::max();
 		float casterMaxZ = std::numeric_limits<float>::lowest();
 		const auto accumulateLightDepth = [&](const Float3 corner) {
-			const Float3 relativeCorner = (corner, lightPosition);
+			const Float3 relativeCorner = corner - lightPosition;
 			const float lightZ = projectv::math::dot(lightForward, relativeCorner);
 			minZ = std::min(minZ, lightZ);
 			maxZ = std::max(maxZ, lightZ);
 		};
 		const auto accumulateCasterLightDepth = [&](const Float3 corner) {
-			const Float3 relativeCorner = (corner, lightPosition);
+			const Float3 relativeCorner = corner - lightPosition;
 			const float lightZ = projectv::math::dot(lightForward, relativeCorner);
 			casterMinZ = std::min(casterMinZ, lightZ);
 			casterMaxZ = std::max(casterMaxZ, lightZ);

@@ -188,20 +188,34 @@ bool LoadAndRegisterModelsFromManifest(
 	// `modelInstances.push_back` doesn't reallocate as the
 	// manifest is parsed. The number of entries equals the
 	// registry size at this point (all of them get a manifest
-	// instance). The resize to `0` first defends against a
-	// re-load of the same manifest leaving the previous frame's
+	// instance). The `clear` first defends against a re-load
+	// of the same manifest leaving the previous frame's
 	// instances behind.
+	//
+	// **Index-based iteration (matches the original pattern at
+	// line 127 of the pre-Tier-0 version).** `manifest` and
+	// `modelRegistry` are aligned by insertion order (the
+	// `for` loop at lines 67+ pushes to `modelRegistry` in
+	// the same order it consumes `manifest`), so we iterate
+	// the smaller of the two and pull the parallel `reg` by
+	// index. We do NOT use `entry.id` to look up the registry
+	// because `ModelRegistryEntry::id` is a `std::string`
+	// and `modelRegistry` is a `std::vector<...>` (not a
+	// hash map) — using `entry.id` would silently mis-look-up
+	// into undefined memory.
 	render->modelInstances.clear();
-	render->modelInstances.reserve(modelEntries.size());
-	for (const auto &entry : modelEntries) {
-		const auto &reg = render->modelRegistry[entry.id];
+	render->modelInstances.reserve(render->modelRegistry.size());
+	const size_t instanceCount = std::min(render->modelRegistry.size(), manifest.size());
+	for (size_t i = 0; i < instanceCount; ++i) {
+		const ManifestEntry &entry = manifest[i];
+		const ModelRegistryEntry &reg = render->modelRegistry[i];
 		if (!reg.gpu.vertexBuffer) {
 			continue;
 		}
 		const projectv::math::Vec3 srcDim{
-			reg.aabbMax.x - reg.aabbMin.x,
-			reg.aabbMax.y - reg.aabbMin.y,
-			reg.aabbMax.z - reg.aabbMin.z,
+			reg.aabbMax[0] - reg.aabbMin[0],
+			reg.aabbMax[1] - reg.aabbMin[1],
+			reg.aabbMax[2] - reg.aabbMin[2],
 			0.0f,
 		};
 		projectv::math::Mat4 modelTransform = projectv::math::identity();
@@ -209,9 +223,9 @@ bool LoadAndRegisterModelsFromManifest(
 		modelTransform.c[1].y = entry.scale;
 		modelTransform.c[2].z = entry.scale;
 		modelTransform.c[3] = projectv::math::Vec4{
-			entry.position.x - (reg.aabbMin.x * entry.scale),
-			entry.position.y - (reg.aabbMin.y * entry.scale),
-			entry.position.z - (reg.aabbMin.z * entry.scale),
+			entry.position.x - (reg.aabbMin[0] * entry.scale),
+			entry.position.y - (reg.aabbMin[1] * entry.scale),
+			entry.position.z - (reg.aabbMin[2] * entry.scale),
 			1.0f,
 		};
 		ModelInstanceData instance{};
