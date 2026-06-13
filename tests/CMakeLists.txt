@@ -313,6 +313,63 @@ set_tests_properties(ProjectVCFrustumCullingTests PROPERTIES LABELS "unit")
 # that across all test targets.
 projectv_test_add_modules(ProjectVCFrustumCullingTests)
 
+# **Tier 5 (`2026-06-13`).** Unit test for
+# `BuildSunShadowCascadeSplits`. Verifies the
+# happy path, the `minDepthStep` regression
+# check, the lambda sweep (0 → uniform,
+# 1 → logarithmic), the defensive defaults for
+# non-finite inputs, the lambda clamp, and the
+# degenerate `farPlane <= nearPlane` case.
+# CPU-only — no Vulkan, no asset pipeline.
+add_executable(ProjectVSunShadowCascadeSplitsTests
+        SunShadowCascadeSplitsTests.cpp
+        # **Compile the implementation into the test
+        # target directly.** `BuildSunShadowCascadeSplits`
+        # is a non-template function in
+        # `src/render/ShadowProjection.cpp`; the
+        # test includes the header but the .o file
+        # lives in the `ProjectV` binary, not in
+        # a shared static lib. Compiling the
+        # implementation into the test target keeps
+        # the test self-contained and avoids forcing
+        # `ShadowProjection.cpp` into a shared lib
+        # (which would require splitting the
+        # renderer's `SceneLightingBuffer` POD
+        # types away from the engine TU).
+        ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
+)
+
+target_compile_definitions(ProjectVSunShadowCascadeSplitsTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVSunShadowCascadeSplitsTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVSunShadowCascadeSplitsTests PRIVATE
+        projectv_build_options
+        # **No Vulkan, no asset pipeline.** The shadow
+        # projection helpers in `src/render/ShadowProjection.{hpp,cpp}`
+        # are pure CPU; the only transitive include is
+        # `core/Types.hpp` (for the `ChunkCullingParameters`
+        # type used in `SunShadowCascadeProjectionInputs`).
+        # Linking `volk` + `glm` + VMA is required to get
+        # the include paths on the TU that includes
+        # `core/Types.hpp`.
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+add_test(NAME ProjectVSunShadowCascadeSplitsTests COMMAND ProjectVSunShadowCascadeSplitsTests)
+set_tests_properties(ProjectVSunShadowCascadeSplitsTests PROPERTIES LABELS "unit")
+
+# **Module wiring.** The test includes
+# `render/ShadowProjection.hpp` (transitively
+# `core/Types.hpp` → math/string_id shim imports).
+projectv_test_add_modules(ProjectVSunShadowCascadeSplitsTests)
+
 # FrustumCullingTests is a header-only test (no
 # `core/Types.hpp` include), but the helper is cheap
 # and keeps the macro use uniform across tests.
@@ -587,6 +644,65 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     # scalar path?).
     target_compile_options(ProjectVFrustumCullBenchmark PRIVATE
             -mavx2
+    )
+
+    # **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+    # measures the per-frame cost of
+    # `BuildSunShadowProjection` and
+    # `BuildSunShadowCascadeSplits`. Both are called
+    # once per frame from the shadow-cascade rebuild
+    # path. The benchmark's output is a numeric
+    # `ns/op` (not pass/fail), used for perf
+    # regression tracking per `decisions.md §777`
+    # "Google Benchmark'и для всех hot path".
+    add_executable(ProjectVShadowProjectionBenchmark
+            ${CMAKE_SOURCE_DIR}/src/bench/ShadowProjectionBenchmark.cpp
+            # **Compile the implementation into the
+            # benchmark target directly.** `BuildSunShadowProjection`
+            # is not in a shared static lib, so we
+            # compile `ShadowProjection.cpp` into the
+            # benchmark target as a separate source
+            # (same pattern as
+            # `ProjectVSunShadowCascadeSplitsTests`).
+            # The shadow projection helpers reference
+            # `core/Types.hpp` (for `VoxelWorld`,
+            # `Int3`, `VoxelMaterial`, etc.) which
+            # transitively pulls in `volk` /
+            # `vk_mem_alloc.h`. **The .cpp is in
+            # `target_sources`, not `target_link_libraries`**
+            # — `target_link_libraries` passes the path
+            # to the linker (which would not compile it).
+            ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
+    )
+
+    target_include_directories(ProjectVShadowProjectionBenchmark PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(ProjectVShadowProjectionBenchmark PRIVATE
+            projectv_build_options
+            benchmark::benchmark
+            volk
+            glm
+            GPUOpen::VulkanMemoryAllocator
+    )
+
+    projectv_test_add_modules(ProjectVShadowProjectionBenchmark)
+
+    # **Module wiring for `ShadowProjection.cpp`.** The
+    # implementation TU has `import projectv.math;` at
+    # the top, so the project's C++20 modules need to
+    # be in this target's `FILE_SET CXX_MODULES` for the
+    # `import` to resolve. `projectv_test_add_modules`
+    # covers the test TU; the shadow-projection
+    # implementation TU is compiled directly into the
+    # benchmark target so it also needs the modules.
+    target_sources(ProjectVShadowProjectionBenchmark PRIVATE
+            FILE_SET CXX_MODULES FILES
+            ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
+            ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
+            BASE_DIRS
+            ${CMAKE_SOURCE_DIR}/src
     )
 endif ()
 

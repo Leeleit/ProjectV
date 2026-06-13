@@ -222,6 +222,17 @@ SunShadowCascadeSplits BuildSunShadowCascadeSplits(
 {
 	const float safeNear =
 		std::isfinite(nearPlane) && nearPlane >= kMinCascadeNearPlane ? nearPlane : kDefaultCascadeNearPlane;
+	// EVIL: magic number `1.0f` (safeFar floor above safeNear).
+	// If the caller's `farPlane` is non-finite OR
+	// `farPlane - safeNear < kMinCascadeNearPlane`, we
+	// fall back to a default cascade depth. The `1.0f`
+	// floor is the **minimum cascade depth** we accept
+	// for a single cascade — the shadow map needs
+	// enough depth range to be useful, and a 0.1-wide
+	// cascade produces 1-bit texel coverage at
+	// 2048×2048 over 8 world units. A future refactor
+	// should extract `kMinCascadeDepthRange = 1.0f` as
+	// a named constant.
 	const float safeFar =
 		std::isfinite(farPlane) && farPlane > safeNear + kMinCascadeNearPlane ? farPlane : std::max(kDefaultCascadeFarPlane, safeNear + 1.0f);
 	const float clampedLambda = std::clamp(
@@ -229,6 +240,18 @@ SunShadowCascadeSplits BuildSunShadowCascadeSplits(
 		0.0f,
 		1.0f);
 	const float depthRange = safeFar - safeNear;
+	// EVIL: magic number `0.0001f` (depth split minimum step).
+	// Two consecutive cascade splits must be at least
+	// `minDepthStep` apart or the cascaded shadow
+	// map's Z-buffer discrimination collapses
+	// (the cascade `viewDepthSplits` would round to
+	// the same texel). The 0.0001f is `0.01%` of the
+	// depth range, with a 0.0001f absolute floor for
+	// the degenerate case of a near-zero depth range.
+	// A future refactor should extract
+	// `kMinCascadeSplitStepFraction = 1e-4f` and
+	// `kMinCascadeSplitStepAbsolute = 1e-4f` as
+	// named constants.
 	const float minDepthStep = std::max(depthRange * 0.0001f, 0.0001f);
 
 	SunShadowCascadeSplits splits{};

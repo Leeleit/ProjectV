@@ -19,11 +19,22 @@ inline PackedSceneChunkDescriptor MakeUploadedSceneChunkDescriptor(
 	return uploadedDescriptor;
 }
 
+// **Tier 5 (`2026-06-13`).** `[[unlikely]]` on the
+// early-out branch (empty AABBs are common in the chunk
+// grid: chunks with no solid voxels are dropped from the
+// descriptor stream before they reach this function, but
+// the descriptor set still carries them as zero-extent
+// sentinels to keep the index stream flat). `[[likely]]`
+// on the final return — for a fully populated chunk grid
+// inside the camera frustum, the dominant path is "all
+// 6 planes pass, return true". The branch predictor
+// benefits even on debug builds where the hint is a
+// `__builtin_expect` wrapper.
 inline bool IsSceneChunkVisible(
 	const PackedSceneChunkDescriptor &chunkDescriptor,
 	const ChunkCullingParameters &parameters)
 {
-	if (chunkDescriptor.chunkExtentAndNonAir[3] == 0u) {
+	if (chunkDescriptor.chunkExtentAndNonAir[3] == 0u) [[unlikely]] {
 		return false;
 	}
 
@@ -74,13 +85,23 @@ inline bool IsSceneChunkVisible(
 		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 	const float chunkRadius = std::sqrt(lengthSquared(chunkHalfExtent));
-	if (!passesPlane(cameraForward, nearPlane)) {
+	// **Tier 5.** `[[unlikely]]` on the near-plane cull.
+	// The camera's near plane is at 0.5 world units; only
+	// chunks directly behind the camera are culled, and
+	// the camera is rarely inside a chunk's volume in the
+	// VoxelLab / FlatBenchmark / ChunkGrid presets.
+	if (!passesPlane(cameraForward, nearPlane)) [[unlikely]] {
 		return false;
 	}
 
 	if (maxDistance > 0.0f) {
 		const float maxCenterDistance = maxDistance + chunkRadius;
-		if (lengthSquared(toChunkCenter) > maxCenterDistance * maxCenterDistance) {
+		// `[[unlikely]]` on the max-distance cull.
+		// Chunks within 200 world units of the camera
+		// are by far the dominant case; the cull only
+		// fires for chunks the user has loaded far
+		// past the visible frustum.
+		if (lengthSquared(toChunkCenter) > maxCenterDistance * maxCenterDistance) [[unlikely]] {
 			return false;
 		}
 	}
@@ -109,10 +130,15 @@ inline bool IsSceneChunkVisible(
 		cameraForward.z * tanHalfVerticalFov - cameraUp.z,
 		0.0f,
 	};
-	if (!passesPlane(leftPlane) || !passesPlane(rightPlane)) {
+	// **Tier 5.** `[[unlikely]]` on the 4 side-plane
+	// culls. The chunk grid is large enough that
+	// chunks spilling out of the L/R/B/T frustum are
+	// a minority of the visible set; the dominant
+	// case is "all 4 pass → return true".
+	if (!passesPlane(leftPlane) || !passesPlane(rightPlane)) [[unlikely]] {
 		return false;
 	}
-	if (!passesPlane(bottomPlane) || !passesPlane(topPlane)) {
+	if (!passesPlane(bottomPlane) || !passesPlane(topPlane)) [[unlikely]] {
 		return false;
 	}
 

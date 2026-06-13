@@ -262,6 +262,41 @@ enum class InputAction : uint8_t {
 constexpr size_t kInputActionCount = static_cast<size_t>(InputAction::Count);
 constexpr size_t kInputActionBindingSlotCount = 2;
 
+// **Tier 5 (`2026-06-13`).** Bit-mask overflow fix.
+//
+// The `InputAction` enum has 58 values today
+// (well over 32). The pre-Tier-5 code stored
+// the per-frame replay mask in a `uint32_t`
+// (`InputReplayFrame::actionDownMask` /
+// `actionPressedMask`), which silently lost
+// bits 32..57 and invoked **undefined behavior**
+// (`1u << actionIndex` with `actionIndex >= 32`
+// is UB on a 32-bit shift). The 58-action
+// inventory had reached the overflow point
+// some time ago when the music / track controls
+// were added; nobody noticed because the
+// most-used actions are all in the low bits
+// (MoveForward, MoveBackward, MoveLeft, MoveRight,
+// MoveUp, MoveDown, etc.) and the high-bit
+// actions (ToggleCascadeSplitPlanes,
+// ToggleCursorHitNormal, DecreaseTimeScale, ...)
+// are debug-only and rarely pressed in practice.
+//
+// **Fix.** Widen the mask type to `uint64_t` and
+// bump the on-disk replay format version
+// (`kInputReplayVersion` 2 → 3). The 64-bit
+// shift `1ull << actionIndex` is well-defined up
+// to 64. The `static_assert` below makes adding
+// a 65th action a compile-time failure; bumping
+// past 64 requires a multi-mask representation
+// (e.g. `std::array<uint64_t, N>` with N masks
+// for 64*N actions).
+static_assert(
+	kInputActionCount <= 64,
+	"InputAction bit-mask overflow: InputReplayFrame::actionDownMask / "
+	"actionPressedMask are uint64_t (64 bits); >64 actions require "
+	"either a multi-mask representation or a wider type.");
+
 struct InputActionButtonState {
 	bool down = false;
 	bool pressed = false;
@@ -437,8 +472,16 @@ struct InputReplayFrame {
 	float deltaSeconds = 0.0f;
 	float mouseDeltaX = 0.0f;
 	float mouseDeltaY = 0.0f;
-	uint32_t actionDownMask = 0;
-	uint32_t actionPressedMask = 0;
+	// **Tier 5 (`2026-06-13`).** Widened from `uint32_t`
+	// to `uint64_t` to match the 64-input-action inventory
+	// (the previous 32-bit mask lost bits 32..57 silently
+	// and invoked UB on the `1u << actionIndex` shift).
+	// The on-disk replay format version was bumped
+	// (`kInputReplayVersion` 2 → 3) to match — old
+	// version-2 replay files cannot be loaded by a
+	// version-3 binary.
+	uint64_t actionDownMask = 0;
+	uint64_t actionPressedMask = 0;
 	bool removePressed = false;
 	bool placePressed = false;
 };

@@ -112,7 +112,43 @@ bool PrepareFrameRenderData(
 		GetCameraVisibleSceneMaxDistance(*camera));
 
 	const VkFence inFlightFence = frame->inFlightFences[frameIndex];
-	const VkResult waitResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	// **Tier 5 (`2026-06-13`).** Tight fence-wait
+	// latency. The engine polls for the previous
+	// frame's GPU work to finish with a 10 ms
+	// budget; if the GPU is behind, we fall back
+	// to a blocking wait but log the stall as a
+	// Tracy event. Per
+	// `legacy/docs/philosophy/01_foundation/01_manifesto.md`:
+	// "p99 latency, не средний" — the engine
+	// should expose GPU stalls as observable
+	// frame-time spikes rather than absorbing
+	// them silently into a 33 ms+ wait.
+	//
+	// EVIL: the `10'000'000` nanosecond constant
+	// is a hard-coded budget. A future refactor
+	// should drive this from
+	// `Configuration::frameFenceTimeoutNs` (so
+	// CI / benchmark / shipping presets can tune
+	// the threshold). 10 ms is the chosen
+	// baseline: 2× a 60 Hz frame at 16.6 ms
+	// gives the GPU 2 frames of slack before we
+	// report a stall; tightening this to 1 ms
+	// would make every GPU hickup a stall;
+	// loosening to 50 ms+ would mask p99 spikes
+	// in the 16-30 ms range we care about.
+	VkResult waitResult = vkWaitForFences(
+		context->device, 1, &inFlightFence, VK_TRUE, 10'000'000);
+	if (waitResult == VK_TIMEOUT) {
+		// **GPU is behind.** Block and wait for
+		// the fence; the engine has no choice
+		// (we cannot issue this frame's
+		// GPU work onto a still-pending
+		// command buffer slot for this
+		// in-flight frame index).
+		PV_PROFILE_ZONE_N("PrepareFrameRenderData.GPUStallFallback");
+		waitResult = vkWaitForFences(
+			context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	}
 	if (waitResult != VK_SUCCESS) {
 		runtime::LogVkFailure("PrepareFrameRenderData.vkWaitForFences", waitResult);
 		return false;

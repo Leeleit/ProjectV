@@ -12,7 +12,27 @@
 
 namespace {
 constexpr std::string_view kInputReplayMagic = "PROJECTV_INPUT_REPLAY";
-constexpr int kInputReplayVersion = 2;
+// **Tier 5 (`2026-06-13`).** Bumped from 2 to 3.
+// Version 3 widens the per-frame
+// `(actionDownMask, actionPressedMask)` pair from
+// `uint32_t` to `uint64_t` to match the 58-action
+// `InputAction` inventory (the v2 format silently
+// lost bits 32..57 and invoked UB on the
+// `1u << actionIndex` shift). Version 1 → 2 was the
+// `walkAirControlMode` line layout change. Version
+// 2 → 3 is the mask-width bump.
+//
+// **Loading.** `LoadInputReplayCapture` still
+// accepts v1 and v2 files for backwards
+// compatibility — both had 32-bit masks, so
+// the v1/v2 path stays on `uint32_t` locals
+// and the v3 path reads `uint64_t` directly.
+// Old v1/v2 captures written before this Tier 5
+// commit can still be replayed; they just can't
+// record actions past bit 31 (a known
+// pre-existing limitation that this version
+// bump fixes going forward).
+constexpr int kInputReplayVersion = 3;
 
 std::filesystem::path GetInputReplayDirectoryPath()
 {
@@ -73,7 +93,9 @@ void ResetReplayFrameApplication(InputState &input)
 	input.mouseDeltaY = 0.0f;
 	input.removePressed = false;
 	input.placePressed = false;
-	ApplyInputActionSnapshot(input, 0u, 0u);
+	// **Tier 5.** `0ull` (was `0u`) — the mask type
+	// is now `uint64_t`.
+	ApplyInputActionSnapshot(input, 0ull, 0ull);
 }
 
 bool WriteReplayCapture(std::ostream &stream, const InputReplayCapture &capture)
@@ -126,9 +148,19 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 
 	std::string magic;
 	int version = 0;
+	// **Tier 5 (`2026-06-13`).** Accept v1, v2, and v3
+	// files. The v1 → v2 transition was the
+	// `walkAirControlMode` line layout change; the
+	// v2 → v3 transition is the mask-width bump from
+	// `uint32_t` to `uint64_t`. v3 files are
+	// binary-compatible with v2 on the per-frame
+	// integer stream (`stream >> uint64_t` reads a
+	// v2 `uint32_t` token correctly via zero
+	// extension), so the parser does not need to
+	// branch on the version for the frame block.
 	if (!(stream >> magic >> version) ||
 		magic != kInputReplayMagic ||
-		(version != 1 && version != kInputReplayVersion)) {
+		(version != 1 && version != 2 && version != kInputReplayVersion)) {
 		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Header", "invalid replay header");
 		return false;
 	}

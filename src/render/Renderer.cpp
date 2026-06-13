@@ -228,7 +228,21 @@ bool SaveRequestedScreenshot(
 		return true;
 	}
 
-	const VkResult waitResult = vkWaitForFences(context.device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	// **Tier 5 (`2026-06-13`).** Tight fence-wait
+	// latency — same pattern as
+	// `FramePreparation.cpp:115`. 10 ms quick
+	// poll, blocking fallback if the GPU is
+	// behind. See the comment there for the
+	// full rationale; this is the screenshot
+	// capture path, which has the same p99
+	// latency sensitivity as the per-frame
+	// path.
+	VkResult waitResult = vkWaitForFences(
+		context.device, 1, &inFlightFence, VK_TRUE, 10'000'000);
+	if (waitResult == VK_TIMEOUT) {
+		waitResult = vkWaitForFences(
+			context.device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	}
 	if (waitResult != VK_SUCCESS) {
 		runtime::LogVkFailure("DrawFrame.ScreenshotWaitFence", waitResult);
 		render.screenshotCaptureRequested = false;

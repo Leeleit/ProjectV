@@ -328,7 +328,11 @@ bool StartLastInputReplayPlayback(AppState *state)
 	state->input.mouseDeltaY = 0.0f;
 	state->input.removePressed = false;
 	state->input.placePressed = false;
-	ApplyInputActionSnapshot(state->input, 0u, 0u);
+	// **Tier 5.** `0ull` (was `0u`) — the mask type
+	// is now `uint64_t`. The 0 value implicit-converts
+	// to either width, but matching the function
+	// signature explicitly avoids the narrowing warning.
+	ApplyInputActionSnapshot(state->input, 0ull, 0ull);
 	SetPhysicsWalkAirControlMode(state->physics.get(), state->input.replay.capture.walkAirControlMode);
 	SetPhysicsWalkAutoJumpEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpEnabled);
 	SetPhysicsWalkAutoJumpDelayEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpDelayEnabled);

@@ -258,31 +258,34 @@ bool ConsumeInputActionPressed(
 	return wasPressed;
 }
 
-uint32_t GetInputActionDownMask(const InputState &input)
+// **Tier 5 (`2026-06-13`).** `uint64_t` return type
+// and `1ull << actionIndex` shift (the `1u` 32-bit
+// shift with `actionIndex >= 32` was UB).
+uint64_t GetInputActionDownMask(const InputState &input)
 {
-	uint32_t mask = 0;
+	uint64_t mask = 0;
 	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
 		const InputAction action = static_cast<InputAction>(actionIndex);
 		if (!IsInputActionReplayRecordable(action) || !input.actions[actionIndex].down) {
 			continue;
 		}
 
-		mask |= 1u << actionIndex;
+		mask |= 1ull << actionIndex;
 	}
 
 	return mask;
 }
 
-uint32_t GetInputActionPressedMask(const InputState &input)
+uint64_t GetInputActionPressedMask(const InputState &input)
 {
-	uint32_t mask = 0;
+	uint64_t mask = 0;
 	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
 		const InputAction action = static_cast<InputAction>(actionIndex);
 		if (!IsInputActionReplayRecordable(action) || !input.actions[actionIndex].pressed) {
 			continue;
 		}
 
-		mask |= 1u << actionIndex;
+		mask |= 1ull << actionIndex;
 	}
 
 	return mask;
@@ -290,15 +293,15 @@ uint32_t GetInputActionPressedMask(const InputState &input)
 
 void ApplyInputActionSnapshot(
 	InputState &input,
-	const uint32_t downMask,
-	const uint32_t pressedMask)
+	const uint64_t downMask,
+	const uint64_t pressedMask)
 {
 	input.lastMoveUpPressedTimestampNs = 0;
 	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
 		const InputAction action = static_cast<InputAction>(actionIndex);
 		const bool isRecordable = IsInputActionReplayRecordable(action);
-		const bool isDown = isRecordable && (downMask & 1u << actionIndex) != 0u;
-		const bool isPressed = isRecordable && (pressedMask & 1u << actionIndex) != 0u;
+		const bool isDown = isRecordable && (downMask & 1ull << actionIndex) != 0u;
+		const bool isPressed = isRecordable && (pressedMask & 1ull << actionIndex) != 0u;
 		input.actions[actionIndex].down = isDown;
 		input.actions[actionIndex].pressed = isPressed;
 		input.bindings[actionIndex].downStates = {};

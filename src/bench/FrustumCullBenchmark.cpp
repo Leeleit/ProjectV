@@ -143,10 +143,25 @@ struct VisibilityFixture {
             };
             f.parameters[r].cameraPositionAndMaxDistance =
                 projectv::math::Vec4{64.0f, 64.0f, 64.0f, 200.0f};
+            // EVIL: `0.829f` and `1.192f` are pre-computed
+            // `tan(halfFOV)` values for the engine's default
+            // 75° vertical / 100° horizontal FOV. The literals
+            // are not obvious without the derivation. A
+            // future refactor should compute them at fixture
+            // build time from the angle constants (so the
+            // comment is preserved as the source of truth) and
+            // assert the rounding matches `std::tan(deg2rad(37.5))`
+            // / `std::tan(deg2rad(50.0))` to within 1e-5.
             f.parameters[r].cameraForwardAndTanHalfVerticalFov =
                 projectv::math::Vec4{forward.x, forward.y, forward.z, 0.829f /*tan(39.7°)*/};
             f.parameters[r].cameraRightAndTanHalfHorizontalFov =
                 projectv::math::Vec4{right.x, right.y, right.z, 1.192f /*tan(50°)*/};
+            // EVIL: `0.5f` is the near plane distance in
+            // world units (matches `FramePreparation`'s
+            // `kCameraNearPlane` default). The literal is
+            // shared with `src/app/FramePreparation.cpp`'s
+            // near-plane construction. If the engine default
+            // changes, this benchmark fixture must follow.
             f.parameters[r].cameraUpAndNearPlane =
                 projectv::math::Vec4{up.x, up.y, up.z, 0.5f};
         }

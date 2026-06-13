@@ -1694,12 +1694,17 @@ int RunReplayAnalysisFromEnvironment()
 	for (size_t frameIndex = 0; frameIndex < capture.frames.size(); ++frameIndex) {
 		const InputReplayFrame &frame = capture.frames[frameIndex];
 		const bool downMaskChanged = frame.actionDownMask != previousDownMask;
+		// **Tier 5.** `1ull <<` (not `1u <<`) — the
+		// action indices here are all < 32 so the old
+		// 32-bit shift happened to work, but the mask
+		// type is now `uint64_t` and the future-proof
+		// pattern is the 64-bit shift.
 		const bool jumpPressed =
-			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::MoveUp)) != 0u;
+			(frame.actionPressedMask & 1ull << static_cast<uint32_t>(InputAction::MoveUp)) != 0u;
 		const bool toggleWalkCreativePressed =
-			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::ToggleWalkCreativeMode)) != 0u;
+			(frame.actionPressedMask & 1ull << static_cast<uint32_t>(InputAction::ToggleWalkCreativeMode)) != 0u;
 		const bool toggleControlModePressed =
-			(frame.actionPressedMask & 1u << static_cast<uint32_t>(InputAction::ToggleControlMode)) != 0u;
+			(frame.actionPressedMask & 1ull << static_cast<uint32_t>(InputAction::ToggleControlMode)) != 0u;
 		const bool interestingInput =
 			downMaskChanged ||
 			frame.placePressed ||
@@ -2486,12 +2491,17 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	for (int frameIndex = 0; frameIndex < 30; ++frameIndex) {
 		InputReplayFrame frame{};
 		frame.deltaSeconds = 1.0f / 60.0f;
-		frame.actionDownMask = 1u << static_cast<size_t>(InputAction::MoveForward);
+		// **Tier 5.** `1ull <<` (was `1u <<`) — the mask
+		// type is now `uint64_t`; the 32-bit shift
+		// worked here because all action indices used
+		// are < 32, but the future-proof pattern is the
+		// 64-bit shift.
+		frame.actionDownMask = 1ull << static_cast<size_t>(InputAction::MoveForward);
 		if (frameIndex == 4) {
-			frame.actionPressedMask |= 1u << static_cast<size_t>(InputAction::MoveUp);
+			frame.actionPressedMask |= 1ull << static_cast<size_t>(InputAction::MoveUp);
 		}
 		if (frameIndex >= 4 && frameIndex < 8) {
-			frame.actionDownMask |= 1u << static_cast<size_t>(InputAction::MoveUp);
+			frame.actionDownMask |= 1ull << static_cast<size_t>(InputAction::MoveUp);
 		}
 		capture.frames.push_back(frame);
 	}

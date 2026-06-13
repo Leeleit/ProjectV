@@ -13,12 +13,18 @@ bool IsInputActionDown(
 bool ConsumeInputActionPressed(
 	InputState &input,
 	InputAction action);
-uint32_t GetInputActionDownMask(const InputState &input);
-uint32_t GetInputActionPressedMask(const InputState &input);
+// **Tier 5 (`2026-06-13`).** `uint64_t` mask type.
+// The 58-action `InputAction` inventory exceeds 32
+// bits; the previous `uint32_t` return type silently
+// lost high bits and invoked UB on the
+// `1u << actionIndex` shift. See the matching note
+// in `core/Types.hpp::InputReplayFrame`.
+uint64_t GetInputActionDownMask(const InputState &input);
+uint64_t GetInputActionPressedMask(const InputState &input);
 void ApplyInputActionSnapshot(
 	InputState &input,
-	uint32_t downMask,
-	uint32_t pressedMask);
+	uint64_t downMask,
+	uint64_t pressedMask);
 VoxelMaterial GetNextPlacementMaterial(VoxelMaterial currentMaterial);
 
 #endif
