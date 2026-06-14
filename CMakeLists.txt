@@ -32,10 +32,11 @@ cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
 # override; once a future session does the full
 # libstdc++ → libc++ switch (per `agent/memory.md §8`),
 # this gate moves to the main tree.
-set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD
-        "d0edc3af-4c50-42ea-a356-e2862fe7a444"
-        CACHE STRING
-        "CMake 4.2+ experimental gate for C++23+ \`import std;\` (UUID is the feature-test marker; value is the same as the upstream libc++ docs)")
+
+#set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD
+#        "d0edc3af-4c50-42ea-a356-e2862fe7a444"
+#        CACHE STRING
+#        "CMake 4.2+ experimental gate for C++23+ \`import std;\` (UUID is the feature-test marker; value is the same as the upstream libc++ docs)")
 set(CMAKE_CXX_MODULE_STD
         OFF
         CACHE BOOL
