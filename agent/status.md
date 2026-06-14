@@ -3,6 +3,8 @@
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
 Updated: `2026-06-14` — 4 КТ-документа сконвертированы в LaTeX (session-2026-06-13-kt-latex-r0, см. §19). 5 PDF в `docs/tex/`.
+Updated: `2026-06-14` — V-sync FIFO bug + CA pause/timeScale + 20Hz default (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up, см. `decisions.md §30.1`, `memory.md §12.1`). 3 fixes (V-sync explicit-FIFO, CA moved to `UpdateApp` w/ `effectivePaused`+`timeScale`, default 30→20Hz). 8 new CA sub-tests (24 total, 100% pass). Build green, ctest 13/13, smoke clean.
+Updated: `2026-06-14` — Release presets r0 (session-2026-06-14-release-presets-r0, см. §21). 8 новых CMakePresets (linux-clang-release, windows-clang-release, +4 build/test варианта), root `CMakeLists.txt` +1 Release-блок (`-O3 -flto=thin -NDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`), `README_NEW.md` создан с нуля, `agent/decisions.md §4` +подсекция Release policy. linux-clang-release: configure 54s, build 137/137 green, ctest 13/13 (0.06s), smoke 6/6 captures, ELF 19MB (-73% vs 72MB debug).
 
 ---
 
@@ -963,3 +965,86 @@ Refs: 90a45b4 (tremor fix attempt),
 - Подсветка кода отключена (`--no-highlight`) — pandoc-генерируемые `\FunctionTok`/`\NormalTok` не работают в `\input{}` без переноса всех pygments-определений.
 
 **Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закрой сессию» / «закоммить» per §8.1.
+
+---
+
+## §21. Release presets r0 — `session-2026-06-14-release-presets-r0` (open, build green)
+
+**Per operator request «release build для linux и windows, чтобы увидеть готовый продукт».** Консервативная политика, без `-ffast-math` (Fluid CA determinism + TAA YCoCg clamp), без `-march=native` (portability между CPU). 5 файлов изменено, 0 правок в `src/`, `tests/`, `external/`, `legacy/`, `docs/`, `tools/`.
+
+**Файлы (5):**
+| Файл | Что |
+|------|-----|
+| `CMakePresets.json` | +8 presets: `linux-clang-release-base` (hidden) + `linux-clang-release` + `linux-clang-release-build` + `linux-clang-release-tests` + симметричные `windows-clang-release-*`. JSON validated через `cmake --list-presets=configure` (8 configure + 6 build + 5 test entries — старые debug-presets не сломаны). |
+| root `CMakeLists.txt` | +1 блок `if (CMAKE_BUILD_TYPE STREQUAL "Release")` после `add_compile_options(-stdlib=libc++)`. Compile: `-O3 -flto=thin -DNDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`. Link: `-flto=thin -Wl,--gc-sections`. |
+| `README_NEW.md` (NEW) | создан с нуля (файл отсутствовал, `agent/memory.md §4` объявляет каноническим root-facing overview). Содержит Quickstart (Linux + Windows Debug), Release build секцию с командами, ссылку на `agent/decisions.md §4` за полной политикой. |
+| `agent/decisions.md §4` | +подсекция «Release presets (2026-06-14, conservative policy)» с explicit обязательными + запрещёнными флагами, ожидаемым эффектом (25-40 MB ELF, +1.5-2.5× FPS), и обоснованием через operator request. |
+| `agent/active-sessions.md` | append-only `session-2026-06-14T10:53Z-release-presets-r0` запись. |
+
+**Build verification (2026-06-14, `linux-clang-release`):**
+- `cmake --preset linux-clang-release`: configure green (54.1s, `ProjectV options: validation=OFF, tracy=OFF, renderdoc=OFF, tracy-profiler=OFF, imgui=OFF`).
+- `cmake --build build/linux-clang-release --target all --parallel 8`: 137/137 targets green, 0 errors, 0 new warnings (только pre-existing miniaudio CMP0148 deprecation).
+- `ctest --test-dir build/linux-clang-release --output-on-failure`: **100% tests passed, 0 tests failed out of 13**. ProjectVTests (157 sub-tests) — **0.03s** на release vs ~1.4s на debug (O3+LTO+NDEBUG payoff).
+- `bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-release --capture-dir build/linux-clang-release/lookdev-captures/2026-06-14-release-v1`: **6/6 captures** (FINAL/SHDW/CSM/CTSH/AOCC/LOCL), exit 0, smoke 1s wall clock.
+
+**Метрики release vs debug:**
+- ELF: **19 MB** (release) vs **72 MB** (debug) — **-73%** (ThinLTO + gc-sections + dead code removal).
+- ctest wall clock: **0.06s** (release) vs ~1.5s (debug) — **-96%**.
+- Render-pass timings на release (VoxelLab reference shot, single frame): shadow 30 µs, graphics 76 µs, TAA 3 µs.
+
+**Smoke captures под `build/linux-clang-release/lookdev-captures/2026-06-14-release-v1/`:**
+- 6 × `ProjectV-VoxelLab-<ts>-000{1..6}.bmp` (5.88 MB каждый, matches VoxelLab baseline из `agent/memory.md §1`).
+- 6 × `.txt` sidecar, `taa_*` / `shadow_*` / `exposure_*` keys populated, `scene_preset=VoxelLab`, `transparent_shadow_policy=GLASS_IGNORED_FLUID_CASTS`.
+
+**Scope discipline (per `AGENTS.md §7.2.6`):** **0 пересечений** с 6 активными сессиями (`render-race-debug` = read-only, `camera-fullscreen-jump-fix` = `src/app/main.cpp`, `kt-latex-r0` = `docs/tex/`, `hardcore-perf-r0` = `src/core/Math.hpp` + `src/render/SceneResources.*`, `problems-cleanup-v2`/`v1` = warning cleanup в `src/asset`+`src/audio`+`src/debug`+`src/ecs`+`src/physics`+`src/render/vulkan/*`+`src/app/AppUpdate.cpp`). Pre-commit: `git diff CMakePresets.json CMakeLists.txt README_NEW.md` показывает только мои правки.
+
+**Safety net:** `/tmp/before_release_presets_2026-06-14T1053.patch` (10 KB, captures все 5 uncommitted чужих файлов).
+
+**Windows:** presets готовы и JSON-valid, `cmake --list-presets` подтверждает `windows-clang-release` + `windows-clang-release-build` + `windows-clang-release-tests`. Оператор собирает на Windows-хосте: `cmake --preset windows-clang-release && cmake --build ... --preset windows-clang-release-build && ctest --test-dir build/windows-clang-release --output-on-failure`.
+
+**Commit plan (1 commit, pending operator confirmation per `AGENTS.md §7.2.4` + `§7.2.5`):**
+```
+build(cmake): conservative Release presets (linux-clang-release, windows-clang-release)
+
+Adds CMAKE_BUILD_TYPE=Release presets for both platforms
+with -O3 -flto=thin -NDEBUG -ffunction-sections -fdata-
+sections -fno-finite-math-only. Deliberately omits
+-ffast-math (breaks Fluid CA determinism + TAA YCoCg
+clamp per `decisions.md §4`) and -march=native (binaries
+must remain portable between CPUs).
+
+Validation / Tracy / RenderDoc markers / Benchmarks all
+OFF in release (PROJECTV_ENABLE_*). BUILD_TESTING=ON
+preserves the ctest 13/13 baseline.
+
+Root CMakeLists.txt gets a CMAKE_BUILD_TYPE=Release
+block with the compile+link policy. CMakePresets.json
+adds 8 new presets (configure/build/test × 2 OS, with
+hidden *-base parents).
+
+README_NEW.md created (file did not exist; per
+`agent/memory.md §4` it is the canonical root-facing
+overview). Includes Quickstart (Debug + Release) and
+links to `agent/decisions.md §4` for the full policy.
+
+agent/decisions.md §4 captures the conservative
+release-flag policy as a permanent invariant.
+
+Scope: only CMakePresets.json + root CMakeLists.txt +
+README_NEW.md + agent/{decisions,active-sessions,status}.md
++ safety-net patch in /tmp/. No src/, tests/,
+external/, legacy/, docs/ changes (per TODO.md §9 +
+active-sessions scope discipline §7.2.6).
+
+Build (linux-clang-release): configure green, all 137
+targets built, ctest 13/13 passed in 0.06s, smoke 6/6
+captures clean, ELF 19MB (-73% vs 72MB debug). Windows
+presets validated via `cmake --list-presets`; the
+operator runs the actual Windows build on the Windows
+host.
+
+Refs: agent/decisions.md §4, agent/memory.md §6,
+       legacy/docs/standards/cmake/04_advanced-optimization.md
+```
+
+**Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.

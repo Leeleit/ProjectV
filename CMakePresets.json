@@ -152,6 +152,77 @@
         "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE",
         "CMAKE_POLICY_DEFAULT_CMP0069": "NEW"
       }
+    },
+    {
+      "name": "windows-clang-release-base",
+      "hidden": true,
+      "inherits": "base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang-cl.exe",
+        "CMAKE_CXX_COMPILER": "clang-cl.exe",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+        "CMAKE_LINKER_TYPE": "LLD",
+        "PROJECTV_ENABLE_IMGUI": "OFF",
+        "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
+        "PROJECTV_ENABLE_TRACY": "OFF",
+        "PROJECTV_ENABLE_VALIDATION": "OFF"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": [
+            "Windows"
+          ]
+        }
+      }
+    },
+    {
+      "name": "windows-clang-release",
+      "displayName": "Windows Clang Release",
+      "inherits": "windows-clang-release-base"
+    },
+    {
+      "name": "linux-clang-release-base",
+      "hidden": true,
+      "inherits": "base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+        "CMAKE_LINKER_TYPE": "LLD",
+        "PROJECTV_ENABLE_IMGUI": "OFF",
+        "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
+        "PROJECTV_ENABLE_TRACY": "OFF",
+        "PROJECTV_ENABLE_VALIDATION": "OFF",
+        "PROJECTV_ENABLE_BENCHMARKS": "OFF"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": [
+            "Linux"
+          ]
+        }
+      }
+    },
+    {
+      "name": "linux-clang-release",
+      "displayName": "Linux Clang Release",
+      "inherits": "linux-clang-release-base",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
+      }
     }
   ],
   "buildPresets": [
@@ -189,6 +260,24 @@
         "ProjectV",
         "ProjectVTests"
       ]
+    },
+    {
+      "name": "windows-clang-release-build",
+      "displayName": "Build ProjectV + tests (Release)",
+      "configurePreset": "windows-clang-release",
+      "targets": [
+        "ProjectV",
+        "ProjectVTests"
+      ]
+    },
+    {
+      "name": "linux-clang-release-build",
+      "displayName": "Build ProjectV + tests (Release)",
+      "configurePreset": "linux-clang-release",
+      "targets": [
+        "ProjectV",
+        "ProjectVTests"
+      ]
     }
   ],
   "testPresets": [
@@ -212,6 +301,22 @@
       "name": "linux-clang-debug-tests",
       "displayName": "Run tests (Dev)",
       "configurePreset": "linux-clang-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-clang-release-tests",
+      "displayName": "Run tests (Release)",
+      "configurePreset": "windows-clang-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-clang-release-tests",
+      "displayName": "Run tests (Release)",
+      "configurePreset": "linux-clang-release",
       "output": {
         "outputOnFailure": true
       }

@@ -57,6 +57,30 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-14T10-53Z-release-presets-r0
+
+- **id:** `2026-06-14T10:53Z-release-presets-r0`
+- **started-at:** 2026-06-14T10:53:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Release-пресеты для Linux + Windows** (per operator request «нужно создать release билд для линукса и винды, чтобы увидеть готовый продукт»). Conservative policy: `-O3 -flto=thin -DNDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only -Wl,--gc-sections`. Без `-ffast-math` (Fluid CA determinism + TAA YCoCg clamp), без `-march=native` (portability). Validation/Tracy/RenderDoc/Benchmarks — OFF. `BUILD_TESTING=ON` сохраняет ctest baseline. Только build-config change — без правок `src/`, `tests/`, `external/`, `legacy/`, `docs/`, `tools/`.
+- **files-touched-intent:**
+  - **EDIT:** `CMakePresets.json` (+8 presets: `linux-clang-release-base` (hidden) + `linux-clang-release` + `linux-clang-release-build` + `linux-clang-release-tests` + симметричные `windows-clang-release-*`)
+  - **EDIT:** root `CMakeLists.txt` (+1 блок `if (CMAKE_BUILD_TYPE STREQUAL "Release")` с compile+link политикой, после `add_compile_options(-stdlib=libc++)` ~line 160)
+  - **CREATE:** `README_NEW.md` (НЕ существовал; per `agent/memory.md §4` это канонический root-facing overview; создаю минимальный с секциями Quickstart + Release build)
+  - **EDIT:** `agent/decisions.md §4` (+подпункт «Release presets» с conservative policy)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close при operator approval), `agent/status.md` (новая секция)
+  - **НЕ ТРОГАЮ** (out of scope per plan + active sessions):
+    - `src/**` — owned by 6 активных сессий
+    - `tests/**` — same
+    - `external/`, `legacy/`, `docs/`, `tools/`, `build/`
+    - `agent/memory.md` (release-флаги зафиксированы в `decisions.md §4`, не дублируем per AGENTS.md §6)
+    - `AGENTS.md` (per §1, только по явной команде)
+    - `TODO.md` (release-presets — не Tier 0-5)
+- **status:** open
+- **notes:** **Scope discipline (per `AGENTS.md §7.2.6`):** `CMakePresets.json` + root `CMakeLists.txt` — hub-файлы, но НЕ заявлены ни одной из 6 активных сессий (`render-race-debug` = read-only, `camera-fullscreen-jump-fix` = `src/app/main.cpp`, `kt-latex-r0` = `docs/tex/`, `hardcore-perf-r0` = `src/core/Math.hpp`+`src/render/SceneResources.*`, `problems-cleanup-v2`/`v1` = warning cleanup в `src/asset`+`src/audio`+`src/debug`+`src/ecs`+`src/physics`+`src/render/vulkan/*`+`src/app/AppUpdate.cpp`). Cross-check перед коммитом: `git diff CMakePresets.txt CMakeLists.txt README_NEW.md` показывает только мои правки. **Safety net:** `/tmp/before_release_presets_2026-06-14T1053.patch` (10 KB, 5 файлов, captures все uncommitted от предыдущих сессий). **Build verification:** `cmake --preset linux-clang-release` → `cmake --build build/linux-clang-release --target ProjectV ProjectVTests --parallel 8` → `ctest --test-dir build/linux-clang-release --output-on-failure` (12/12 baseline) → `bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-release --capture-dir build/linux-clang-release/lookdev-captures/2026-06-14-release-v1` (6/6 captures). **Windows:** presets готовы, оператор собирает на Windows-хосте (CMake 4.x presets — host-independent JSON, validate через `cmake --list-presets`).
+
 ### session-2026-06-14T13-00Z-render-race-debug
 
 - **id:** `2026-06-14T13-00Z-render-race-debug`
@@ -435,6 +459,23 @@ Append-only ledger активных и недавно завершённых AI-
   **Build state:** 13/13 ctest pass (added `ProjectVFluidCATests` to the suite, 0.01s runtime). 0 uncommitted. Safety net: `/tmp/before_ca_audit_2026-06-13.patch` (705 lines, captures V-sync + taaJitterScale = 0.0f + taaBlend = 0.0f + active-sessions.md + status.md + this CA audit uncommitted work).
 
   **Phase 2 awaiting operator commit approval.** Per `AGENTS.md §7.2.5` + `§8.1`: do not auto-commit, do not close session, wait for explicit "закоммить" / "готово".
+
+  **Phase 2 follow-up (`2026-06-14T~21:00Z`, 3 operator reports в одной сессии).** Оператор жаловался: (1) «vsync слетает при постановке блока, даже если V → vsync on»; (2) «вода растекается даже при паузе»; (3) «не действует замедление/ускорение через [ и ]»; (4) «вода всё равно слишком быстро льётся». Subagent audit: (1) root cause — `ChoosePresentMode` else-branch bug (FIFO selection), subagent подтвердил 0 ссылок `SetVoxelMaterial → swapchain` (ложная корреляция «после блока»); (2-3) root cause — CA tick в `main.cpp:637-670` wall-clock throttle, ignored `paused`/`timeScale`; (4) rate 30Hz → 20Hz (operator chose 20).
+
+  **Phase 2 follow-up changes:**
+  - `src/render/vulkan/VulkanSwapchain.cpp:148-180` — `ChoosePresentMode` per-mode explicit dispatch (no more `if (!= FIFO)` MAILBOX fallthrough).
+  - `src/core/Types.hpp:1348-1382` — `SimulationState::fluidTickRateHz = 20.0f` + `fluidAccumulatorSeconds = 0.0f` fields.
+  - `src/app/main.cpp:626-643` — CA throttle block удалён (оставлен `benchmarkFrameCounter` для `UpdateBenchmarkAutomation`).
+  - `src/app/AppUpdate.cpp:693-733` — CA tick block вставлен после physics accumulator, перед camera-look-input. Использует `effectivePaused` gate, `scaledDelta = frameDelta * timeScale`, отдельный `fluidAccumulatorSeconds` accumulator + `1 / fluidTickRateHz` interval.
+  - `tests/FluidCATests.cpp:763-1145` — 8 новых sub-tests + `TickFluidCA` helper. Total 24 sub-tests, 100% pass.
+  - `agent/decisions.md §30.1` — V-sync fix + CA tick move + 20Hz default plan + 4 обоснования.
+  - `agent/memory.md §12.1` — V-sync bug history + CA pause/timeScale fix history + 4 lessons learned (subagent must для root-cause, default+override pattern, visual vs physics tickrate cap, SimulationState для sim knobs).
+  - `agent/status.md` — обновлён с новым closed-session.
+  - `TODO.md` — Phase 2 follow-up чекбоксы.
+
+  **Build state:** 13/13 ctest pass. Smoke clean (`ProjectV` exit 0). Uncommitted: ~756 lines added across 9 files (V-sync fix + CA tick move + 8 tests + 4 doc updates). Safety net: `/tmp/before_2026-06-14-vsync_ca_pause_timescale.patch` (986 lines).
+
+  **Phase 2 follow-up awaiting operator commit approval.** Per `AGENTS.md §7.2.5` + `§8.1`: do not auto-commit, do not close session, wait for explicit "закоммить" / "готово".
 
 ### session-2026-06-13-problems-cleanup-v2
 

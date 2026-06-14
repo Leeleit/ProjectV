@@ -162,6 +162,57 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# **Release-only compile + link policy (2026-06-14).**
+# Per `agent/decisions.md §4` "Release presets" subsection
+# and the operator-confirmed conservative policy.
+#
+# **Flags:**
+# - `-O3` — standard release optimization.
+# - `-flto=thin` — ThinLTO per
+#   `legacy/docs/standards/cmake/04_advanced-optimization.md §3.1`
+#   (mandatory for release; parallel-friendly, lower memory
+#   than full LTO, supported by Clang 22 + lld 22 + clang-cl 22).
+# - `-DNDEBUG` — collapses `PV_ASSERT` and other `assert`-style
+#   invariants to no-ops (per `agent/decisions.md §29`).
+# - `-ffunction-sections -fdata-sections` +
+#   `-Wl,--gc-sections` — drop dead code at link time,
+#   typically -10-15% smaller ELF.
+# - `-fno-finite-math-only` — keeps IEEE-754 strict semantics
+#   (no `-ffast-math` reordering); forbids silently eliding
+#   `inf`/`NaN` checks. One category of UB removed without
+#   the cost of full `-ffast-math`.
+#
+# **Deliberately NOT set (operator-confirmed):**
+# - `-ffast-math` — breaks Fluid CA determinism
+#   (`agent/memory.md §12`) and TAA YCoCg clamp
+#   (`agent/status.md §7`); both rely on IEEE-754 strict.
+# - `-march=native` — release binary must stay portable across
+#   different host CPUs (Linux dev host is x86_64 Arch with
+#   Zen; the deployed binary may land on Intel/AMD hybrid).
+# - PGO / AutoFDO — separate 3-step workflow, out of scope.
+# - `-fno-omit-frame-pointer` — no benefit without backtrace
+#   symbols in the production image.
+#
+# `PROJECTV_DEFAULT_ENABLE_VALIDATION=OFF` for non-Debug
+# builds (line 56-59 above) already gates validation
+# layers off, so no extra toggle is needed here. Tracy /
+# RenderDoc markers / benchmarks are gated off in the
+# `*-release-base` configure presets.
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_compile_options(
+            -O3
+            -flto=thin
+            -DNDEBUG
+            -ffunction-sections
+            -fdata-sections
+            -fno-finite-math-only
+    )
+    add_link_options(
+            -flto=thin
+            -Wl,--gc-sections
+    )
+endif ()
+
 #-------------------------Submodules-------------------------
 
 # SDL

@@ -61,6 +61,31 @@
 - Shader compile path принимает `glslc` или `glslangValidator`.
 - Для translation units с Jolt include-contract начинается с `<Jolt/Jolt.h>`; auto-refactor не должен поднимать другие Jolt headers выше него.
 
+### Release presets (2026-06-14, conservative policy)
+
+Решение:
+
+- `linux-clang-release` и `windows-clang-release` — новые configure-presets с `CMAKE_BUILD_TYPE=Release`. Политика:
+  - **Обязательные compile flags:** `-O3 -flto=thin -DNDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`.
+  - **Обязательные link flags:** `-flto=thin -Wl,--gc-sections`.
+  - **`PROJECTV_ENABLE_VALIDATION=OFF`** — `PROJECTV_DEFAULT_ENABLE_VALIDATION` gate (root `CMakeLists.txt:56-59`) уже даёт OFF для non-Debug; дополнительный override в `*-release-base` preset для explicitness.
+  - **`PROJECTV_ENABLE_TRACY=OFF`** — Tracy instrumentation выключена в release (default-on в debug-presets; release — без overhead).
+  - **`PROJECTV_ENABLE_RENDERDOC_MARKERS=OFF`** — RenderDoc debug-utility markers выключены (default-on в debug; release — без call'ов в hot path).
+  - **`PROJECTV_ENABLE_BENCHMARKS=OFF`** — Google Benchmark dev-only, не нужен в release (`linux-clang-debug` default = ON; release-base = OFF).
+  - **`BUILD_TESTING=ON`** — ctest baseline preserved per `AGENTS.md §9` (12/12 ожидаемо).
+  - **Linker:** `CMAKE_LINKER_TYPE=LLD` (Linux: `/usr/bin/ld.lld` 22.1.6; Windows: clang-cl LLD).
+- **Категорически запрещено в Release-флагах:**
+  - `-ffast-math` — ломает детерминизм Fluid CA (`agent/memory.md §12`) и TAA YCoCg clamp (`agent/status.md §7`); оба зависят от IEEE-754 strict semantics.
+  - `-march=native` — release binary должен быть переносим между CPU (dev host = AMD Zen; production target может быть Intel/AMD hybrid).
+  - `-fno-omit-frame-pointer` — нет пользы без backtrace symbols в production image.
+  - PGO / AutoFDO — отдельный 3-step workflow, не часть release-пресета.
+- **Smoke policy для release-build среза:** build-config change, не правка Vulkan/bootstrap/swapchain/present. Per §4 (выше) runtime smoke — **не** mandatory; рекомендуется как sanity check первого запуска release ELF (`Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-release`). Если release binary стартует и рендерит — release-preset срез считается закрытым.
+- **Ожидаемый эффект:** ELF 25-40 MB (vs 50.5 MB debug, no LTO), FPS +1.5-2.5× vs debug на VoxelLab reference shot.
+
+Почему:
+
+- Operator попросил release-build чтобы увидеть готовый продукт. Release-пресет должен быть **conservative** (без `-ffast-math`, без `-march=native`) чтобы не сломать детерминизм и переносимость — это «что мы можем гарантировать» для release. PGO/CPack/install — отдельные, более крупные подзадачи, не в scope этого среза.
+
 Почему:
 
 - Это сохраняет reproducible contour для mainline без лишней хрупкости, конфликтов build tree и пустых smoke-ритуалов.
@@ -824,3 +849,28 @@ Cross-refs: `agent/memory.md §11` (полный technical-debt inventory + plan
 - **Тесты self-contained, не зависят от AppState / VoxelLab preset.** `MakeFluidCATestWorld` строит минимальный мир (4-12 клеток на измерение) без необходимости в `CreateVoxelSceneWorld` / SDL / Vulkan init. Каждый тест — это 1 сценарий + assertions. Ctest run = 0.01 sec.
 
 Cross-refs: `src/voxel/VoxelWorld.hpp:154-191` (header doc с determinism contract), `src/voxel/VoxelWorld.cpp:1284-1434` (refactored `UpdateFluidCA`), `tests/FluidCATests.cpp` (12 sub-tests), `tests/CMakeLists.txt:706-749` (новый test target), `src/app/main.cpp:621-643` (throttle с `fluidTickInitialized`), `agent/active-sessions.md session-2026-06-13-hardcore-perf-r0` (Phase 2 = CA audit sub-task).
+
+### 30.1. CA tick перенесён в `UpdateApp` (pause + timeScale), default 20 Hz (`2026-06-14`)
+
+Решение (по итогам трёх operator reports: «вода растекается на паузе», «не действует замедление/ускорение времени», «слишком быстро льётся»):
+
+- **V-sync FIFO bug в `ChoosePresentMode` (Fix 1, src/render/vulkan/VulkanSwapchain.cpp:148-180).** Root cause: `if (g_preferredPresentMode != FIFO)` branch silently fell through to MAILBOX-first default chain на любой surface, поддерживающей MAILBOX. V cycle: `FIFO → IMMEDIATE → MAILBOX → FIFO`. Третий press (`MAILBOX → FIFO`) **никогда** реально не возвращал FIFO на Linux/Wayland VRR — `g_preferredPresentMode = FIFO` заходил в else-branch, который prefers MAILBOX. Оператор воспринимал это как «vsync слетает при постановке блока», но subagent audit подтвердил: `SetVoxelMaterial` → 0 ссылок на swapchain state. **«После блока»** — ложная корреляция: пользователь ставил блок, swapchain re-create по любой причине (`vkAcquireNextImageKHR` → `OUT_OF_DATE` на stutter кадра, window events), `ChoosePresentMode` re-выбирал MAILBOX. **Fix**: убрал `if (!= FIFO)` branch полностью. New condition: `if (IMMEDIATE || MAILBOX) → PickBestAvailablePresentMode`; иначе explicit-FIFO honours FIFO напрямую. Default startup теперь явно: `g_preferredPresentMode = FIFO` → возвращает FIFO. «V → IMMEDIATE → MAILBOX → FIFO» теперь работает симметрично. **Side-effect на startup**: предыдущий код по дефолту возвращал MAILBOX (low-latency under load, tear-free на VRR). После фикса — FIFO. Если оператор хочет MAILBACK-only поведение, V press #2.
+
+- **CA tick перенесён из `main.cpp:637-670` в `AppUpdate.cpp` после accumulator block (Fix 2, src/app/AppUpdate.cpp:693-733).** Root cause: CA tick имел wall-clock throttle (`SDL_GetPerformanceCounter()`) и **никак** не консультировался с `simulation->paused` или `simulation->timeScale`. `UpdateApp` уже имеет `effectivePaused` (line 654), `frameDeltaSeconds *= timeScale` (line 669), и physics-tick accumulator pattern (line 700-702). **Fix**: удалил `static bool fluidTickInitialized` + `static Uint64 lastFluidTickCounter` блок в `main.cpp`. Добавил в `SimulationState` поля `fluidTickRateHz = 20.0f` (новый default, был 30) и `fluidAccumulatorSeconds = 0.0f`. CA tick теперь в `AppUpdate.cpp` после physics accumulator, перед camera-look-input. Использует **отдельный** `fluidAccumulatorSeconds` accumulator + `1 / fluidTickRateHz` interval, scaled by уже-scaled `frameDeltaSeconds`. `effectivePaused` gate: на паузе accumulator **zeroed** (не chase'ит, не catch-up'ит).
+
+- **Default 20 Hz (was 30).** Оператор: «вода всё равно слишком быстро льётся». 20 Hz at `timeScale = 1.0` = 1 cell / 50 ms. С `timeScale = 0.5` (один `[` press) — 10 Hz, 1 cell / 100 ms. С `timeScale = 2.0` (один `]` press) — 40 Hz, 1 cell / 25 ms. С `timeScale = 4.0` (clamp) — 80 Hz, 1 cell / 12.5 ms. Все edge cases покрыты `TestFluidCAFluidRateRespectsTimeScale` + `TestFluidCAFluidTimeScaleZeroStops` + `TestFluidCAFluidRateConfigurable`.
+
+- **Frame-step + timeScale=0 = 0 CA ticks (by design).** Оператор предположил, что `\` во время паузы должен advance'ить CA на 1 tick (как physics). **Это false expectation**: CA throttle использует `scaledDelta = frameDelta * timeScale`, и при timeScale=0 scaledDelta=0 → accumulator не растёт. **Physics** имеет special-case `frameStepRequestedNow → simulationAccumulatorSeconds = fixedSimulationDeltaSeconds` (force-override, line 686), но CA — нет. **Rationale**: CA — visual only, не gameplay-physics. Frame-step в pause — это для inspector-tooling physics, не для inspector-tooling fluid. Если оператор хочет CA advance в pause — unpause на 1 frame, pause обратно. **Documented в `TestFluidCAFluidFrameStepWithTimeScaleZero`** (test pins это поведение).
+
+- **Multiple ticks per frame allowed (no cap).** В отличие от physics, который clamp'ит `simulationStepsLastFrame < kMaxSimulationStepsPerFrame` (5 max), CA while-loop drain'ит accumulator полностью. `timeScale = 4.0` + 60 FPS = 4 sim-sec/sec → 80 CA ticks/sec для fluid с достаточным material. **Rationale**: fluid — pure visual, не имеет failure mode при under-simulation (fall не зависит от order, spread order is hash-deterministic). С cap'ом 5 ticks/frame, timeScale=4.0 would drop 75 fluid ticks/sec — visually broken.
+
+- **Test coverage — 8 новых sub-tests, 24 total (100% pass).** `TestFluidCAFluidDoesNotMoveOnPause`, `TestFluidCAFluidMovesOnUnpause`, `TestFluidCAFluidRateRespectsTimeScale`, `TestFluidCAFluidRateAboveBase`, `TestFluidCAFluidRateAtDefault`, `TestFluidCAFluidTimeScaleZeroStops`, `TestFluidCAFluidFrameStepWithTimeScaleZero`, `TestFluidCAFluidRateConfigurable`. Helper `TickFluidCA(SimulationState &, VoxelWorld &, float frameDelta, int frameCount)` inline-зеркало production throttle.
+
+Почему:
+
+- **«Перенести в UpdateApp» чище, чем «добавить guard в main.cpp».** Per `legacy/docs/philosophy/01_foundation/02_arch-design.md` (DRY): pause + timeScale + frameStep logic уже корректно живёт в `UpdateApp`. Дублировать в main.cpp = два места для maintenance bug'ов. Move = one source of truth.
+- **«20 Hz default» выбран по операторскому feedback.** 30 Hz (предыдущий) — water выглядит как "fast pour". 15 Hz (альтернатива) — water выглядит как "crawl". 20 Hz — visual sweet spot: «water falls, doesn't pour». Override через `PROJECTV_FLUID_TICK_HZ` env var (если потребуется в будущем) — поле в `SimulationState` доступно из C++ кода.
+- **«Visual only, no cap» обосновано determinism.** Fluid CA — pure function of `world.voxels` snapshot. Multi-tick-per-frame даёт identical output к N-separate-tick calls (snapshot semantics + iteration order fixed). Cap'ить — значит introduce unobservable side-effect (slow-mo делает воду "lag").
+- **«V-sync MAILBOX-as-default side-effect» — explicit, не случайный.** До фикса: default = MAILBOX (visual: no tearing, low latency). После: default = FIFO (visual: vsync-strict, FPS = display rate). Оператор сам выбирал V hotkey для vsync-toggle, значит ожидал, что default = vsync. MAILBOX-as-default — over-engineering для не-продвинутых user'ов. Если когда-нибудь понадобится «MAILBOX для бенчмарков» — env var `PROJECTV_PRESENT_MODE_DEFAULT = MAILBOX` (вне scope сегодня).
+
+Cross-refs: `src/render/vulkan/VulkanSwapchain.cpp:148-180` (V-sync fix), `src/core/Types.hpp:1348-1382` (`fluidTickRateHz` + `fluidAccumulatorSeconds`), `src/app/main.cpp:626-643` (удалён CA throttle, оставлен только `benchmarkFrameCounter` для benchmark automation), `src/app/AppUpdate.cpp:693-733` (новый CA tick block), `tests/FluidCATests.cpp:763-1145` (8 новых sub-tests + `TickFluidCA` helper), `agent/memory.md §12` (V-sync bug history + CA pause/timeScale fix history).
