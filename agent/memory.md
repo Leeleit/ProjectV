@@ -1598,7 +1598,7 @@ miniaudio is now wired into the build (`src/CMakeLists.txt` `add_subdirectory(ex
 
 ### 11.5 Pre-flight checklist per atomic-подзадача
 
-Per `AGENTS.md §7.2.4` и `§3.5`:
+Per `AGENTS.md §7.2.4` и `§7.2.6.1`:
 
 1. **Pre:** `git diff > /tmp/before_hardcore_r0_<subtask>_<timestamp>.patch` (safety-net).
 2. **Pre:** `git status -uall` clean baseline.
@@ -1643,3 +1643,32 @@ Per `AGENTS.md §7.2.4` и `§3.5`:
 - `legacy/docs/philosophy/02_paradigms/06_strings-philosophy.md` — StringID.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — данные → алгоритм → код, профилировать.
 - `legacy/docs/philosophy/03_domain/04_testing-philosophy.md` — invariant тесты, perf benchmarks.
+
+## 12. Fluid CA audit (`2026-06-13`)
+
+`UpdateFluidCA` (in `src/voxel/VoxelWorld.cpp:1286-1434`) — единственная cellular automata в mainline. Изначально `f_fall` + `f_spread` (4 cardinal neighbours с "concave ground" support check), snapshot-read pattern, `z, y, x` ascending iteration. ~110 строк.
+
+**CRITICAL BUG FOUND (`2026-06-13`):** commit loop использовал local coords (x ∈ [0, width)) как world coords при вызове `SetVoxelMaterial`. Для VoxelLab (`min = (-12, 0, -12)`, `width = 24`) local `x=12` → world `x=12` → `IsInsideVoxelWorld` rejects (`x < maxExclusive.x = 12` false). **Все falls в VoxelLab silently dropped.** Для x<12 — silently landed at wrong cell. **Это и был «вода не падает»** в production. Fix: добавить `world.min` offset перед `SetVoxelMaterial` в commit loop (`VoxelWorld.cpp:1402-1422`).
+
+**Audit findings (все закоммичены в Phase 2 сессии `session-2026-06-13-hardcore-perf-r0`):**
+
+1. **Spread rule удалена** — `f_spread` (the "concave ground" branch) была source of the "fluid respawns off the platform" perception. Платформа 4×3, видимый checkerboard 24×24, оба treated as valid `hasSupport` targets. Оператор: «только падает, не растекается». ~30 строк удалено (spread branch, hash, side array, support check).
+2. **«CA в AppEvent» — false alarm.** Throttle block в `src/app/main.cpp:621-643` уже в `SDL_AppIterate` (function на строке 580). Side fix: `static bool fluidTickInitialized` заменил fragile `lastFluidTickCounter == 0u` check.
+3. **«Double-step gravity» — false alarm.** Y-ascending iteration (line 1339: `for (int y = 0; y < height; ++y)`) уже bottom-up. Без double-step. **НО:** столбец fluid **percolates** вниз за 2N тиков, не N. Tick 0 = 1 cell, tick 1 = 2 cells, …, tick N-1 = N cells (cascade вверх), symmetric cascade вниз к settled state. Документировано в `TestFluidCAColumnPercolatesDownAndSettlesAtY0`.
+4. **PV_ASSERTs** добавлены (debug-only): pre-conditions (voxels.size() == width*height*depth, dimensions > 0), post-condition (stats.fluidVoxelCount == std::count(voxels, == Fluid)).
+5. **Determinism contract** документирован в `src/voxel/VoxelWorld.hpp:154-191` рядом с declaration. Verified by `TestFluidCADeterministicAcrossRuns` (run twice, compare bytes).
+6. **CRITICAL: commit loop coordinate bug** — fixed by adding `world.min` offset. Verified by `TestFluidCAVoxelLabSphereFallOnGlassBreak` (builds world with `min = (-12, 0, -12)` mirror production VoxelLab, breaks bottom glass, asserts fluid falls).
+
+**Tests:** `tests/FluidCATests.cpp` (13 sub-tests, 100% pass), новый executable `ProjectVFluidCATests` в `tests/CMakeLists.txt:706-749`. Self-contained CPU tests, hand-construct VoxelWorld через `MakeFluidCATestWorld` (без AppState / VoxelLab preset dependency). Compiles `VoxelWorld.cpp` + `RuntimeDiagnostics.cpp` + `VulkanResult.cpp` в test target (same pattern as `ProjectVCFrustumCullingTests`).
+
+**«Вода не течёт вниз» — был CRITICAL BUG, не expected behavior.** Commit loop silently dropped all fall commits в production VoxelLab. Fix: добавить `world.min` offset. Теперь падает.
+
+**«Respawn за платформой» — был spread rule, теперь by design.** Удаление spread rule (потом восстановление без support check) — оператор хочет horizontal spread. «Respawn за платформой» — feature, не bug, теперь documented в decisions.md §30.
+
+**Spread «swap» bug (2026-06-13 follow-up).** Initial spread rule использовал `world.voxels[neighbour] == Air` для target check. Два adjacent source cells могли оба «успешно» spread (last write wins), один fluid voxel теряется. Per-tick count drop. **Fix**: target check использует `next[neighbour] == Air` (новое состояние, не snapshot). Когда первый source claim destination, второй отклонён. То же fix применён к fall rule. `claimed[]` per-tick bool array (~10 KB) belt-and-suspenders. Verified by `TestFluidCASpreadIsDeterministic`.
+
+**Fall-through-floor РЕВЁРТНУТ (2026-06-13 follow-up #3).** Оператор уточнил: «платформа исчезает из-за воды» — это нежелательно, fall-through rule эродировала платформу. **Revert**: fall rule проходит только через `Air` (как до follow-up). Вода на платформе (y=1) не падает через платформу — она распространяется через spread rule на Air-соседей (за пределы платформы), и оттуда стекает через fall. **Платформа остаётся целой**. Tests: `TestFluidCAFluidDoesNotFallThroughPlatform` (платформа cell MUST stay FloorWhite), `TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact` (все 16 floor cells at y=0 = FloorWhite).
+
+**30Hz tick + spread-via-Floor (2026-06-13 follow-up #2).** Оператор: (1) вода моргает слишком быстро; (2) вода не стекает с платформы, остаётся на ней. **Fix 1**: CA tick rate 60Hz → 30Hz (`src/app/main.cpp:656`). **Fix 2** (reverted): fall rule проходил через FloorWhite/FloorGray, но эродировал платформу — откатили (см. выше). **Fix 3** (active): `ShouldEmitVoxelFace` в `voxel_mesh.comp:202-209` — fluid emit faces против ВСЕХ материалов. Каждый water cube имеет 5-6 видимых граней (раньше 3-4, оператор жаловался «у воды одной грани куба нет»). **Fix 4** (active): `cullMode` в `VulkanGraphicsPipeline.cpp:1696` — `VK_CULL_MODE_NONE`, back-face culling отключён.
+
+**Cross-refs:** `agent/decisions.md §30` (полный audit + решения), `agent/active-sessions.md` session-2026-06-13-hardcore-perf-r0 (Phase 2 sub-task), `src/voxel/VoxelWorld.hpp:154-191` (determinism contract), `src/voxel/VoxelWorld.cpp:1284-1434` (refactored `UpdateFluidCA`), `src/app/main.cpp:656` (30Hz CA throttle), `tests/FluidCATests.cpp` (16 sub-tests).

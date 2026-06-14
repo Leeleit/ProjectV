@@ -770,11 +770,31 @@ struct DebugStats {
 	// only in `RenderState` because they feed the push-constant uploads
 	// and the scene-lighting buffer, not the debug HUD.
 	bool taaEnabled = false;
-	float taaBlend = 0.10f;
+	// **Tier 5 follow-up (`2026-06-13`).** Default 0.0
+	// (was 0.10). The per-frame temporal blend against
+	// `taaHistory` was producing the user-reported
+	// tremor: the history sample is reprojected via
+	// `prevViewProjectionMatrix` and read at a slightly
+	// off-position per frame, so blending 10% of an
+	// oscillating history into the current frame
+	// produces a per-frame colour wobble. Setting
+	// `taaBlend = 0` removes the temporal blend entirely
+	// (output = current frame only); the TAA pipeline
+	// still runs (the resolve pass's 3x3 neighbourhood
+	// clamp and outlier rejection still apply) but the
+	// colour comes straight from the rasteriser. The
+	// hotkey ladder (`;` / `=`) still dials blend in
+	// [0, 1] for operators who want the anti-flicker
+	// benefit at the cost of the per-frame motion.
+	float taaBlend = 0.0f;
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
+	// Default 1.0 (pre-ladder Halton output). The
+	// per-frame projection jitter is the smaller of
+	// the two TAA-side contributions to the tremor;
+	// the bigger one was the temporal blend (see above).
 	float taaJitterScale = 1.0f;
 	int32_t taaNeighbourhoodRadius = 1;
 	// CAS (1.3) ceiling mirror; see `RenderState` for the contract.
@@ -1104,7 +1124,17 @@ struct RenderState {
 	// 3x3 / 5x5 / 7x7 history clamp in `taa_resolve.frag`; allowed values are
 	// 1 / 3 / 5 / 7 (the shader treats it as the per-axis loop bound), default
 	// 1 keeps the original 3x3 clamp (`-1, 0, +1`).
-	float taaJitterScale = 1.0f;
+	// **VoxelLab tremor fix (`2026-06-13`).** Default 0.0
+	// (was 1.0). The user confirmed: pressing `-` to dial
+	// `taaJitterScale` down to 0 makes the visible tremor
+	// disappear. Setting the default to 0 removes the
+	// per-frame projection jitter (the only TAA-side
+	// contribution to the visible tremor once the
+	// `taaBlend` was already at 0 in a prior fix). The
+	// hotkey ladder (`-` / `'`) still dials jitter in
+	// [0, 2] for operators who want the sub-pixel AA
+	// benefit at the cost of the per-frame motion.
+	float taaJitterScale = 0.0f;
 	int32_t taaNeighbourhoodRadius = 1;
 	// CAS (Contrast Adaptive Sharpening) post-TAA (1.3). The shader
 	// derives the effective sharpening amount as
@@ -1333,6 +1363,16 @@ struct InputState {
 	// capture-mode motion on launch is silently dropped; reset to true from
 	// `SetRelativeMouseMode` whenever the user re-toggles relative mode.
 	bool skipFirstMouseMotion = true;
+	// **Window-event mouse freeze (`2026-06-14`).** When the WM
+	// toggles fullscreen or resizes the window, SDL can deliver a
+	// small burst of 1-3 spurious MOUSE_MOTION events (the cursor
+	// is recentered in the new window extent, but the relative
+	// delta is non-zero on some platforms). `skipFirstMouseMotion`
+	// only drops the first event; this counter drops the next N
+	// events after any window-state change. Set in
+	// `main.cpp::SDL_AppEvent`, decremented in
+	// `HandleCameraEvent`.
+	int mouseMotionFreezeCount = 0;
 	Uint64 lastMoveUpPressedTimestampNs = 0;
 	std::array<InputActionButtonState, kInputActionCount> actions{};
 	std::array<InputActionBinding, kInputActionCount> bindings{};

@@ -1,0 +1,17 @@
+Tracy GPU context created (calibrated timestamps)
+Using voxel scene preset: VoxelLab
+[ProjectV][Audio] miniaudio initialized; 2 mp3 track(s) in /home/le1t/Projects/ProjectV/music
+[ProjectV][LookDevCapture] armed views=6 warmup=30 interval=2 quit=true
+[ProjectV][SceneConfig] loaded 'ProjectV Default' from runtime/scene.json (preset=VoxelLab)
+[ProjectV][LookDevCapture] capture requested view=FINAL index=1/6
+[ProjectV][Capture][SaveRequestedScreenshot] saved image=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840217-0001.bmp metadata=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840217-0001.txt
+[ProjectV][LookDevCapture] capture requested view=SHDW index=2/6
+[ProjectV][Capture][SaveRequestedScreenshot] saved image=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840258-0002.bmp metadata=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840258-0002.txt
+[ProjectV][LookDevCapture] capture requested view=CSM index=3/6
+[ProjectV][Capture][SaveRequestedScreenshot] saved image=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840296-0003.bmp metadata=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840296-0003.txt
+[ProjectV][LookDevCapture] capture requested view=CTSH index=4/6
+[ProjectV][Capture][SaveRequestedScreenshot] saved image=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840331-0004.bmp metadata=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840331-0004.txt
+[ProjectV][LookDevCapture] capture requested view=AOCC index=5/6
+[ProjectV][Capture][SaveRequestedScreenshot] saved image=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840367-0005.bmp metadata=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840367-0005.txt
+[ProjectV][LookDevCapture] capture requested view=LOCL index=6/6
+[ProjectV][Capture][SaveRequestedScreenshot] saved image=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840402-0006.bmp metadata=docs/screenshots/kt-3.1/ProjectV-VoxelLab-1781349840402-0006.txt

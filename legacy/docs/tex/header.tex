@@ -1,0 +1,147 @@
+% ProjectV KT documents — header includes
+% Include-only file (NO \documentclass here).
+% Pandoc generates \documentclass; this file adds custom packages + config.
+% Used via: pandoc -H header.tex (standalone) or \input{header.tex} (combined).
+
+% --- Encoding & language (xelatex) ---
+% Note: no 'lang: ru' in YAML to avoid pandoc auto-adding babel/polyglossia.
+% We load polyglossia explicitly and pick fonts with full Cyrillic coverage.
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage{russian}
+\setotherlanguage{english}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+% Liberation Mono has full Cyrillic coverage (JetBrainsMono NFM does not).
+\setmonofont{Liberation Mono}[
+  Scale=0.85,
+  Ligatures=TeX,
+]
+\usepackage{amsmath,amssymb}
+
+% --- Section numbering (override pandoc default -\maxdimen) ---
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% --- Page geometry ---
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.0cm,
+            headheight=14pt, footskip=1.2cm]{geometry}
+
+% --- Headings & ToC ---
+\usepackage{titlesec}
+\usepackage{tocloft}
+\titleformat{\section}{\Large\bfseries}{\thesection}{0.6em}{}
+
+% --- Headers/footers ---
+\usepackage{fancyhdr}
+\fancyhf{}
+% Use \rightmark (chapter title) — always available, no \maketitle race.
+\fancyhead[L]{\small\nouppercase{\rightmark}}
+\fancyhead[R]{\small KT-2.1 / КТ}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% --- Section numbering: add trailing dot ---
+\renewcommand{\thesection}{\arabic{section}.}
+\renewcommand{\thesubsection}{\arabic{section}.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+
+% --- Title page: vertically centered, with "Команда" line ---
+% hyperref redefines \maketitle; our \AtBeginDocument runs AFTER hyperref,
+% so it wins. Use \makeatletter for \@title/author/date access.
+\makeatletter
+\AtBeginDocument{%
+  \renewcommand{\maketitle}{%
+    \newpage
+    \null\vfill
+    \begin{center}
+      {\Huge \@title \par}
+      \vskip 1.5em
+      {\Large \@author \par}
+      \vskip 0.5em
+      {\bfseries Команда:} «Черепашки Ninja» \\
+      \vskip 1em
+      {\large \@date \par}
+    \end{center}
+    \vfill\null
+    \thispagestyle{empty}
+    \newpage
+  }%
+}
+\makeatother
+
+% --- Lists ---
+\usepackage{enumitem}
+\setlist{topsep=4pt, itemsep=0pt, parsep=2pt}
+
+% --- Code & verbatim (incl. ASCII-art) ---
+% Use fancyvrb (not listings): listings' \lstinline is not Unicode-safe
+% (breaks on ≈ ▶ ◀ ✅ etc. which appear in KT docs).
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\definecolor{codeframe}{HTML}{BFBFBF}
+\definecolor{codebg}{HTML}{F6F6F6}
+\fvset{
+  fontsize=\small,
+  baselinestretch=1.0,
+}
+% \sloppy avoids Overfull \hbox warnings on long ASCII-art lines.
+\sloppy
+\RecustomVerbatimEnvironment{Verbatim}{Verbatim}{%
+  frame=single,
+  rulecolor=\color{codeframe},
+  framerule=0.4pt,
+  framesep=4pt,
+  xleftmargin=8pt,
+  xrightmargin=8pt,
+}
+
+% --- Tables ---
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}    % pandoc uses \toprule/\midrule/\bottomrule
+\usepackage{calc}        % pandoc uses for \widthof in minipages
+\usepackage{etoolbox}    % loaded transitively by many packages; explicit for safety
+% Compact tables: tighter column padding + smaller font for longtables.
+% Compact tables: tighter column padding + smaller font for tables.
+\AtBeginEnvironment{tabular}{\footnotesize}
+\AtBeginEnvironment{longtable}{\footnotesize}
+\setlength{\tabcolsep}{2pt}        % default 6pt → 2pt (very tight columns)
+\renewcommand{\arraystretch}{1.1}  % default 1.0 → 1.1 (slight row height)
+\setlength{\LTpre}{4pt}
+\setlength{\LTpost}{4pt}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+% Wrap all longtable environments in \footnotesize font (auto-applied to multi-page tables).
+\let\oldlongtable\longtable
+\let\oldendlongtable\endlongtable
+\renewenvironment{longtable}{\begingroup\footnotesize\oldlongtable}{\oldendlongtable\endgroup}
+
+% --- Graphics ---
+\usepackage{graphicx}
+\graphicspath{{./}{./screenshots/}}
+
+% --- Hyperlinks (last, as recommended) ---
+\usepackage[unicode, hidelinks]{hyperref}
+
+% --- Misc ---
+\usepackage{csquotes}
+
+% --- Pandoc compatibility ---
+% \tightlist is defined in standalone preamble (used by pandoc for compact lists).
+% KT-Combined.tex includes fragments via \input{}, so we need it here too.
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+% Shaded environment is defined empty in standalone (pandoc only uses it for
+% syntax highlighting when --highlight-style is set; otherwise it's a no-op).
+\newenvironment{Shaded}{}{}
+% Highlighting environment — pandoc uses it for inline code (\texttt with
+% commandchars for backslash escapes). Defined via fancyvrb in standalone.
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% \pandocbounded wraps \includegraphics in standalone (image-fit helper).
+% Pass through unchanged for combined.
+\providecommand{\pandocbounded}[1]{#1}

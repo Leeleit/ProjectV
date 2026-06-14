@@ -1,0 +1,554 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  11pt,a4paper,oneside]{article}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+% ProjectV KT documents — header includes
+% Include-only file (NO \documentclass here).
+% Pandoc generates \documentclass; this file adds custom packages + config.
+% Used via: pandoc -H header.tex (standalone) or \input{header.tex} (combined).
+
+% --- Encoding & language (xelatex) ---
+% Note: no 'lang: ru' in YAML to avoid pandoc auto-adding babel/polyglossia.
+% We load polyglossia explicitly and pick fonts with full Cyrillic coverage.
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage{russian}
+\setotherlanguage{english}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+% Liberation Mono has full Cyrillic coverage (JetBrainsMono NFM does not).
+\setmonofont{Liberation Mono}[
+  Scale=0.85,
+  Ligatures=TeX,
+]
+\usepackage{amsmath,amssymb}
+
+% --- Section numbering (override pandoc default -\maxdimen) ---
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% --- Page geometry ---
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.0cm,
+            headheight=14pt, footskip=1.2cm]{geometry}
+
+% --- Headings & ToC ---
+\usepackage{titlesec}
+\usepackage{tocloft}
+\titleformat{\section}{\Large\bfseries}{\thesection}{0.6em}{}
+
+% --- Headers/footers ---
+\usepackage{fancyhdr}
+\fancyhf{}
+% Use \rightmark (chapter title) — always available, no \maketitle race.
+\fancyhead[L]{\small\nouppercase{\rightmark}}
+\fancyhead[R]{\small KT-2.1 / КТ}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% --- Section numbering: add trailing dot ---
+\renewcommand{\thesection}{\arabic{section}.}
+\renewcommand{\thesubsection}{\arabic{section}.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+
+% --- Title page: vertically centered, with "Команда" line ---
+% hyperref redefines \maketitle; our \AtBeginDocument runs AFTER hyperref,
+% so it wins. Use \makeatletter for \@title/author/date access.
+\makeatletter
+\AtBeginDocument{%
+  \renewcommand{\maketitle}{%
+    \newpage
+    \null\vfill
+    \begin{center}
+      {\Huge \@title \par}
+      \vskip 1.5em
+      {\Large \@author \par}
+      \vskip 0.5em
+      {\bfseries Команда:} «Черепашки Ninja» \\
+      \vskip 1em
+      {\large \@date \par}
+    \end{center}
+    \vfill\null
+    \thispagestyle{empty}
+    \newpage
+  }%
+}
+\makeatother
+
+% --- Lists ---
+\usepackage{enumitem}
+\setlist{topsep=4pt, itemsep=0pt, parsep=2pt}
+
+% --- Code & verbatim (incl. ASCII-art) ---
+% Use fancyvrb (not listings): listings' \lstinline is not Unicode-safe
+% (breaks on ≈ ▶ ◀ ✅ etc. which appear in KT docs).
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\definecolor{codeframe}{HTML}{BFBFBF}
+\definecolor{codebg}{HTML}{F6F6F6}
+\fvset{
+  fontsize=\small,
+  baselinestretch=1.0,
+}
+% \sloppy avoids Overfull \hbox warnings on long ASCII-art lines.
+\sloppy
+\RecustomVerbatimEnvironment{Verbatim}{Verbatim}{%
+  frame=single,
+  rulecolor=\color{codeframe},
+  framerule=0.4pt,
+  framesep=4pt,
+  xleftmargin=8pt,
+  xrightmargin=8pt,
+}
+
+% --- Tables ---
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}    % pandoc uses \toprule/\midrule/\bottomrule
+\usepackage{calc}        % pandoc uses for \widthof in minipages
+\usepackage{etoolbox}    % loaded transitively by many packages; explicit for safety
+% Compact tables: tighter column padding + smaller font for longtables.
+% Compact tables: tighter column padding + smaller font for tables.
+\AtBeginEnvironment{tabular}{\footnotesize}
+\AtBeginEnvironment{longtable}{\footnotesize}
+\setlength{\tabcolsep}{2pt}        % default 6pt → 2pt (very tight columns)
+\renewcommand{\arraystretch}{1.1}  % default 1.0 → 1.1 (slight row height)
+\setlength{\LTpre}{4pt}
+\setlength{\LTpost}{4pt}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+% Wrap all longtable environments in \footnotesize font (auto-applied to multi-page tables).
+\let\oldlongtable\longtable
+\let\oldendlongtable\endlongtable
+\renewenvironment{longtable}{\begingroup\footnotesize\oldlongtable}{\oldendlongtable\endgroup}
+
+% --- Graphics ---
+\usepackage{graphicx}
+\graphicspath{{./}{./screenshots/}}
+
+% --- Hyperlinks (last, as recommended) ---
+\usepackage[unicode, hidelinks]{hyperref}
+
+% --- Misc ---
+\usepackage{csquotes}
+
+% --- Pandoc compatibility ---
+% \tightlist is defined in standalone preamble (used by pandoc for compact lists).
+% KT-Combined.tex includes fragments via \input{}, so we need it here too.
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+% Shaded environment is defined empty in standalone (pandoc only uses it for
+% syntax highlighting when --highlight-style is set; otherwise it's a no-op).
+\newenvironment{Shaded}{}{}
+% Highlighting environment — pandoc uses it for inline code (\texttt with
+% commandchars for backslash escapes). Defined via fancyvrb in standalone.
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% \pandocbounded wraps \includegraphics in standalone (image-fit helper).
+% Pass through unchanged for combined.
+\providecommand{\pandocbounded}[1]{#1}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={KT-2.1 --- Архитектура системы},
+  pdfauthor={Кадочников Лев Петрович (гр. МФТИ-1-2024)},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{KT-2.1 --- Архитектура системы}
+\usepackage{etoolbox}
+\makeatletter
+\providecommand{\subtitle}[1]{% add subtitle to \maketitle
+  \apptocmd{\@title}{\par {\large #1 \par}}{}{}
+}
+\makeatother
+\subtitle{Technical Design Document}
+\author{Кадочников Лев Петрович (гр. МФТИ-1-2024)}
+\date{2026-06-13}
+
+\begin{document}
+\maketitle
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\section{Общая схема архитектуры (System Context / Container Diagram)}\label{ux43eux431ux449ux430ux44f-ux441ux445ux435ux43cux430-ux430ux440ux445ux438ux442ux435ux43aux442ux443ux440ux44b-system-context--container-diagram}
+
+ProjectV --- десктопное приложение реального времени (нативный бинарник под Windows и Linux). Архитектура однопроцессная, не клиент-серверная: вся логика, рендер и физика выполняются в одном процессе на стороне пользователя.
+
+\textbf{Подсистемы первого уровня:}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Подсистема & Зона ответственности & Зависимости \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{Платформа} & Окно (SDL3), ввод, жизненный цикл & SDL3 \\
+\texttt{Воксельный\ мир} & Источник истины для всех воксельных данных & --- \\
+\texttt{Физика} & Walk-персонаж, столкновения со статической геометрией & Jolt \\
+\texttt{Аудио} & Фоновая музыка, плейлист, горячая замена треков & miniaudio \\
+\texttt{ECS} & Зеркало состояния мира для запросов и симуляций & flecs \\
+\texttt{Реестр\ ассетов} & glTF / Draco / meshopt-ассеты, горячая перезагрузка & fastgltf, draco, meshopt \\
+\texttt{Рендерер} & Мешинг, освещение, тени, TAA, ray march, debug-оверлей & Vulkan 1.4 \\
+\texttt{GPU} & Все вычислительные и графические ресурсы & --- \\
+\end{longtable}
+
+Поток данных (упрощённо): SDL3 → события платформы → \texttt{InputState} → \texttt{AppState} → \texttt{VoxelWorld} (источник истины) → \texttt{Физика} (Jolt) + \texttt{ECS} (зеркало) + \texttt{Реестр\ ассетов} → \texttt{Рендерер} (подготовка на CPU) → \texttt{Vulkan} → GPU.
+
+\textbf{Графическая схема архитектуры (System Context / Container Diagram):}
+
+\pandocbounded{\includegraphics[keepaspectratio]{architecture_diagram.png}}
+
+\section{Стек технологий с обоснованием}\label{ux441ux442ux435ux43a-ux442ux435ux445ux43dux43eux43bux43eux433ux438ux439-ux441-ux43eux431ux43eux441ux43dux43eux432ux430ux43dux438ux435ux43c}
+
+\textbf{Языки и сборка:}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Технология & Версия & Назначение \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+C++26 & ISO/IEC 14882:2026 & Основной язык реализации \\
+C23 & ISO/IEC 9899:2024 & Подмодули с C-API (Jolt, draco, meshopt) \\
+CMake & 3.30+ & Система сборки \\
+Ninja & 1.13+ & Бэкенд сборки (быстрые инкрементальные сборки) \\
+Clang 22 & 22.1.6 & Компилятор (мультиплатформенный, C++26-фичи) \\
+\end{longtable}
+
+\textbf{Платформа и графика:}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Технология & Версия & Назначение \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+SDL3 & 3.4.10 & Платформенный слой (окно, ввод) \\
+Vulkan 1.4 & 1.4.350 & Графический API \\
+volk & pinned & Vulkan-загрузчик (runtime-загрузка) \\
+VMA & pinned b3cbbb43 & Менеджер памяти GPU (chronos-group) \\
+GLSL → SPIR-V & 4.5 / 1.4 & Шейдеры (автокомпиляция через glslc) \\
+RenderDoc & 1.30+ & GPU-отладчик \\
+\end{longtable}
+
+\textbf{Сторонние библиотеки:}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Технология & Версия & Назначение \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+flecs & 2.2.0 & ECS (header-only, MIT) \\
+JoltPhysics & pinned & Физика (детерминированная) \\
+Tracy & 0.11+ & Профилирование (CPU + GPU-зоны) \\
+fmt & pinned & Типобезопасное форматирование \\
+glm & pinned & Математика (header-only) \\
+fastgltf & pinned & glTF-загрузчик (header-only, simdjson backend) \\
+draco & pinned & Сжатие мешей (Google decoder-only) \\
+meshoptimizer & pinned & Оптимизация мешей (vertex cache, перерисовка) \\
+miniaudio & pinned & Аудио (header-only MIT, single-file) \\
+nlohmann/json & 3.11.3 (FetchContent) & JSON-парсинг (header-only MIT) \\
+Dear ImGui & opt-in (OFF по умолчанию) & ImGui UI \\
+\end{longtable}
+
+\textbf{Итого:} 22 подмодуля + 1 FetchContent (nlohmann/json) + системные библиотеки (zlib, png, jpeg для текстур --- opt-in).
+
+\section{Структуры данных}\label{ux441ux442ux440ux443ux43aux442ux443ux440ux44b-ux434ux430ux43dux43dux44bux445}
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Структура & Поля (типы) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{VoxelWorld} & \texttt{voxels:\ vector\textless{}uint8\_t\textgreater{}}, \texttt{chunks:\ vector\textless{}...\textgreater{}} \\
+\texttt{VoxelChunk} & \texttt{min/maxExclusive:\ Int3}, \texttt{rebuildQueued:\ bool}, \texttt{nonAirVoxelCount:\ Int} \\
+\texttt{VoxelMaterial} (enum) & \texttt{Air=0,\ Glass=1,\ Fluid=2,\ FloorWhite=3,\ FloorGray=4} (uint8) \\
+\texttt{VoxelMaterialVisual} (struct) & \texttt{baseColor:\ vec4}, \texttt{surface:\ \{AO,\ roughness,\ metallic,\ reflectance\}} \\
+\texttt{AppState} (root) & см. §4 \\
+\texttt{WorldState} & \texttt{voxelWorld:\ unique\_ptr\textless{}VoxelWorld\textgreater{}}, \texttt{requestedScenePreset:\ VoxelScene} \\
+\texttt{SceneResources} & \texttt{chunkDescriptors:\ vector\textless{}...\textgreater{}}, \texttt{sceneChunkVoxelData:\ ...} \\
+\texttt{InteractionState} & \texttt{selection:\ RaycastHit}, \texttt{placementVoxel:\ Int3}, \texttt{hitNormal:\ vec3}, \texttt{hitDistance:\ float} \\
+\texttt{PackedSceneChunkDescriptor} & 64 B std430 --- см. детали ниже \\
+\texttt{PackedSceneVoxelFace} & 16 B --- см. детали ниже \\
+\texttt{VoxelSceneLighting} & 9 × \texttt{array\textless{}float,4\textgreater{}} --- см. детали ниже \\
+\end{longtable}
+
+\textbf{Детализация критичных структур:}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{\texttt{PackedSceneChunkDescriptor}} (64 B, std430, см. \texttt{src/core/Types.hpp:110-118}):
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{chunkOrigin:\ array\textless{}int32,\ 4\textgreater{}} (offset 0) --- начало чанка в мировых координатах;
+  \item
+    \texttt{chunkExtentAndNonAir:\ array\textless{}uint32,\ 4\textgreater{}} (offset 16) --- размеры + счётчик non-air;
+  \item
+    \texttt{voxelDataInfo:\ array\textless{}uint32,\ 4\textgreater{}} (offset 32) --- индексы в \texttt{sceneChunkVoxelData};
+  \item
+    \texttt{drawRanges:\ array\textless{}uint32,\ 4\textgreater{}} (offset 48) --- диапазоны draw call\textquotesingle ов.
+  \end{itemize}
+\item
+  \textbf{\texttt{PackedSceneVoxelFace}} (16 B, см. \texttt{src/core/Types.hpp:96-108}):
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{voxelCoord,\ axisMask,\ materialIndex,\ lightingData,\ packedExtents:\ uint32\_t} --- координаты воксела, маска осей, материал, освещение, packed extents.
+  \end{itemize}
+\item
+  \textbf{\texttt{VoxelSceneLighting}} (9 × \texttt{vec4}, контракт с GLSL \texttt{SceneLightingBuffer}):
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{skyColorAndFogDensity}, \texttt{horizonColorAndFogStart}, \texttt{groundColorAndFogMax}, \texttt{sunColorAndIntensity}, \texttt{sunDirectionAndWrap}, \texttt{postProcess}, \texttt{sunShadowParams}, \texttt{sunContactShadowParams}, \texttt{ambientOcclusionParams}.
+  \end{itemize}
+\end{itemize}
+
+\textbf{Связи (FK):}
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{VoxelWorld} → \texttt{VoxelChunk} (1:N) --- каждый чанк принадлежит одному миру.
+\item
+  \texttt{VoxelChunk} ↔ \texttt{VoxelWorld} (1:1) --- границы (\texttt{min/max}) задают подмножество мировых координат.
+\item
+  \texttt{VoxelMaterialVisual} → \texttt{VoxelMaterial} (N:1) --- несколько визуалов могут ссылаться на один материал.
+\item
+  \texttt{WorldState} → \texttt{VoxelWorld} (1:1) --- \texttt{unique\_ptr}.
+\item
+  \texttt{SceneResources} → \texttt{VoxelChunk} (1:1) --- \texttt{chunkDescriptors{[}i{]}} соответствует \texttt{chunks{[}i{]}}.
+\item
+  \texttt{PackedSceneChunkDescriptor} → \texttt{VoxelChunk.min} (1:1) --- \texttt{chunkOrigin} задаёт начало чанка.
+\item
+  \texttt{PackedSceneVoxelFace} → \texttt{VoxelWorld.voxels} (N:1) --- грань ссылается на конкретный воксель.
+\item
+  \texttt{VoxelSceneLighting} --- общий контракт с шейдерами (GLSL \texttt{SceneLightingBuffer}).
+\end{itemize}
+
+\section{AppState --- корневой контейнер}\label{appstate--ux43aux43eux440ux43dux435ux432ux43eux439-ux43aux43eux43dux442ux435ux439ux43dux435ux440}
+
+AppState --- единый корневой объект, через который проходят все данные между подсистемами.
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Поле & Тип \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{platform} & \texttt{PlatformState} \\
+\texttt{context} & \texttt{VulkanContextState} \\
+\texttt{swapchain} & \texttt{SwapchainState} \\
+\texttt{world} & \texttt{WorldState} \\
+\texttt{render} & \texttt{RenderState} \\
+\texttt{input} & \texttt{InputState} \\
+\texttt{interaction} & \texttt{InteractionState} \\
+\texttt{simulation} & \texttt{SimulationState} \\
+\texttt{ecs} & \texttt{EcsStatePtr} (\texttt{unique\_ptr\textless{}flecs::world\textgreater{}}) \\
+\texttt{physics} & \texttt{PhysicsStatePtr} (\texttt{unique\_ptr\textless{}PhysicsWorld\textgreater{}}) \\
+\texttt{audio} & \texttt{AudioEnginePtr} (\texttt{unique\_ptr\textless{}AudioEngine\textgreater{}}) \\
+\texttt{benchmark} & \texttt{BenchmarkAutomationState} \\
+\texttt{lookDevCapture} & \texttt{LookDevCaptureAutomationState} \\
+\texttt{frame} & \texttt{FrameState} \\
+\end{longtable}
+
+\textbf{Краткое назначение полей:}
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{platform} --- окно SDL3 и обработчик изменения размера.
+\item
+  \texttt{context} --- \texttt{VkInstance}, \texttt{Device}, очередь, аллокатор.
+\item
+  \texttt{swapchain} --- \texttt{VkSwapchainKHR}, представления изображений, extent.
+\item
+  \texttt{world} --- \texttt{requestedScenePreset}, указатель на \texttt{VoxelWorld}.
+\item
+  \texttt{render} --- \texttt{sceneResources}, \texttt{frameData}, отладочные оверлеи.
+\item
+  \texttt{input} --- дельта мыши, снимок действий, replay.
+\item
+  \texttt{interaction} --- попадание raycast, размещаемый воксель, нормаль и дистанция попадания.
+\item
+  \texttt{simulation} --- аккумулятор, \texttt{timeScale}, \texttt{frameStep}.
+\item
+  \texttt{ecs} --- мир flecs (ECS-зеркало).
+\item
+  \texttt{physics} --- мир Jolt.
+\item
+  \texttt{audio} --- аудиодвижок с пользовательским удалителем.
+\item
+  \texttt{benchmark} --- \texttt{frameCount}, средние, минимум/максимум.
+\item
+  \texttt{lookDevCapture} --- прогрев, список видов для съёмки.
+\item
+  \texttt{frame} --- профиль CPU, тайминги рендера.
+\end{itemize}
+
+\textbf{Связи между ключевыми сущностями:}
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Связь & Кард. & FK & Назначение \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{VoxelWorld} → \texttt{VoxelChunk} & 1:N & \texttt{editVersion} & версия мира (инкремент при правке) \\
+\texttt{VoxelChunk} ↔ границы & 1:1 & \texttt{min/max} & границы внутри \texttt{VoxelWorld} \\
+\texttt{SceneResources} → \texttt{VoxelChunk} & 1:1 & \texttt{chunkDescriptors{[}i{]}} & индекс чанка в \texttt{chunks} \\
+\texttt{PhysicsWorld} ↔ \texttt{VoxelWorld} & 1:1 & (read-only) & физ-мир из solid-вокселей \\
+\texttt{Renderer} → \texttt{SceneResources} & 1:1 & --- & рендер читает стейтинг \\
+\texttt{CharacterVirtual} (Jolt) → \texttt{AppState} & 1:1 & --- & корневой контейнер \\
+\end{longtable}
+
+\section{Описание ключевых программных модулей}\label{ux43eux43fux438ux441ux430ux43dux438ux435-ux43aux43bux44eux447ux435ux432ux44bux445-ux43fux440ux43eux433ux440ux430ux43cux43cux43dux44bux445-ux43cux43eux434ux443ux43bux435ux439}
+
+ProjectV декомпозирован на 11 независимых модулей:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Модуль & Зона ответственности \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{Платформа} & Окно (SDL3), обработка событий, \texttt{InputState} \\
+\texttt{Воксельный\ мир} & Хранение, редактирование, грязные чанки, raycast \\
+\texttt{Физика} & Walk-персонаж (\texttt{CharacterVirtual}), Jolt, синхронизация \\
+\texttt{Аудио} & Плейлист, 5-секундное автообновление, горячая замена \\
+\texttt{ECS} & Зеркало мира для запросов (MIT/RAII) \\
+\texttt{Реестр\ ассетов} & Конвейер glTF / Draco / meshopt, горячая перезагрузка \\
+\texttt{Рендерер\ (подготовка\ на\ CPU)} & Мешинг, освещение, данные кадра \\
+\texttt{Проекция\ теней} & Тень по сцене, CSM, контактная тень \\
+\texttt{Ray\ March} & Параллельный GPU-проход для объёмного рендера \\
+\texttt{TAA} & Temporal Anti-Aliasing, исправление гонки дескрипторов \\
+\texttt{Vulkan\ (низкий\ уровень)} & Instance, Device, Swapchain, конвейеры, командные буферы \\
+\end{longtable}
+
+\textbf{Ключевые файлы и типы по модулям (для быстрой навигации):}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \texttt{Платформа} --- \texttt{src/platform/PlatformEvents.cpp}, \texttt{InputState.hpp}
+\item
+  \texttt{Воксельный\ мир} --- \texttt{src/voxel/VoxelWorld.cpp}, \texttt{VoxelWorld.hpp}
+\item
+  \texttt{Физика} --- \texttt{src/physics/PhysicsWorld.cpp}, \texttt{PhysicsWorld.hpp}
+\item
+  \texttt{Аудио} --- \texttt{src/audio/AudioEngine.cpp}, \texttt{AudioEngine.hpp}
+\item
+  \texttt{ECS} --- \texttt{src/ecs/EcsState.*}
+\item
+  \texttt{Реестр\ ассетов} --- \texttt{src/asset/AssetManifest.cpp}, \texttt{AssetManifest.hpp}
+\item
+  \texttt{Рендерер\ (подготовка\ на\ CPU)} --- \texttt{src/render/SceneResources.cpp}, \texttt{SceneResources.hpp}
+\item
+  \texttt{Проекция\ теней} --- \texttt{src/render/ShadowProj.*}
+\item
+  \texttt{Ray\ March} --- \texttt{src/render/RayMarchPass.*}
+\item
+  \texttt{TAA} --- \texttt{src/render/Taa.*}
+\item
+  \texttt{Vulkan\ (низкий\ уровень)} --- \texttt{src/render/vulkan/*}
+\end{enumerate}
+
+\section{Описание ключевых алгоритмов}\label{ux43eux43fux438ux441ux430ux43dux438ux435-ux43aux43bux44eux447ux435ux432ux44bux445-ux430ux43bux433ux43eux440ux438ux442ux43cux43eux432}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  \textbf{Игровой цикл} (\texttt{AppMain}). Физика с фиксированным шагом (60 Гц), рендер с переменным шагом, профилирование через Tracy.
+\item
+  \textbf{Greedy-мешинг} (\texttt{voxel\_mesh.comp}). Объединение соседних solid-вокселей в четырёхугольные грани для снижения перерисовки и indirect-draw.
+\item
+  \textbf{Полномочия на walk} (\texttt{Физика\ +\ Воксельный\ мир}). \texttt{CharacterVirtual} синхронизирован с \texttt{VoxelWorld.editVersion}; только физика запрашивает столкновения, остальные подсистемы читают \texttt{VoxelWorld} read-only.
+\item
+  \textbf{Тень по сцене} (\texttt{Проекция\ теней\ +\ voxel\_mesh.comp}). Каскадные карты теней (CSM) рассчитаны по \texttt{sceneChunkVoxelData}, а не по пирамиде видимости --- оптимизация под плотные воксельные сцены.
+\item
+  \textbf{Клеточный автомат жидкости} (\texttt{voxel\_fluid.comp}). Двусторонний обмен с \texttt{VoxelWorld} для материала \texttt{Fluid=2}: каждый шаг CA читает соседние ячейки, при необходимости обновляет значение.
+\end{enumerate}
+
+\end{document}

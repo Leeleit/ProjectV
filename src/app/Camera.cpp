@@ -109,8 +109,36 @@ void HandleCameraEvent(
 			input->mouseDeltaY = 0.0f;
 			return;
 		}
-		input->mouseDeltaX += event->motion.xrel;
-		input->mouseDeltaY += event->motion.yrel;
+		// **Window-event mouse freeze (`2026-06-14`).** After
+		// fullscreen enter/leave or window resize, SDL can deliver a
+		// burst of 1-3 spurious MOUSE_MOTION events (the cursor is
+		// recentered in the new window extent, but the relative delta
+		// is non-zero on some platforms). `skipFirstMouseMotion` only
+		// drops the first event; this drops the next N events so a
+		// repeated fullscreen toggle never accumulates a slow drift
+		// ("slightly right and down" per user repro).
+		if (input->mouseMotionFreezeCount > 0) {
+			--input->mouseMotionFreezeCount;
+			return;
+		}
+		// **Fullscreen / resize defence-in-depth (`2026-06-14`).**
+		// Wayland/X11/Win32 can each deliver a stale pre-capture motion
+		// event in a different order relative to the matching window
+		// event, and on some platforms the window event itself never
+		// arrives. Clamp absurd per-event deltas so a single spurious
+		// motion can never yank the camera more than ~100 px worth,
+		// regardless of which event arrived first.
+		constexpr float kMaxMouseDeltaPerEvent = 100.0f;
+		const float dx = std::clamp(
+			event->motion.xrel,
+			-kMaxMouseDeltaPerEvent,
+			kMaxMouseDeltaPerEvent);
+		const float dy = std::clamp(
+			event->motion.yrel,
+			-kMaxMouseDeltaPerEvent,
+			kMaxMouseDeltaPerEvent);
+		input->mouseDeltaX += dx;
+		input->mouseDeltaY += dy;
 		return;
 	}
 

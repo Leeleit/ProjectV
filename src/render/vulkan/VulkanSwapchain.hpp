@@ -66,4 +66,22 @@ bool RecreateSwapchain(
 	SwapchainState *swapchain,
 	RenderState *render);
 
+// **V-sync toggle hotkey (`2026-06-13`).** Cycles the
+// `ChoosePresentMode` preference through
+// IMMEDIATE → MAILBOX → FIFO. Returns the *new*
+// preferred mode so the caller can log it. The
+// swapchain is *not* recreated from this call —
+// the next frame's `ChoosePresentMode` picks up the
+// new preference when the swapchain is rebuilt
+// (which happens automatically on window resize /
+// device lost / explicit `RecreateSwapchain` call,
+// or on the *next* swapchain create if the surface
+// is recreated). For an immediate mode change, the
+// caller should call `RecreateSwapchain` after
+// invoking this; for the operator's `V` hotkey, the
+// mode is just stashed here and picked up on the
+// next natural recreate (next frame after
+// `SDL_AppIterate` returns `SDL_APP_CONTINUE`).
+VkPresentModeKHR CyclePreferredPresentMode();
+
 #endif

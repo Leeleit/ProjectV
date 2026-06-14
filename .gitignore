@@ -9,3 +9,6 @@ tests/fixtures/
 /uv.lock
 /compile_commands.json
 /.cache/
+Testing/Temporary/
+legacy/docs/tex/.tmp/
+commits_log.md

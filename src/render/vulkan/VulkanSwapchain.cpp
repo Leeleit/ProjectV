@@ -7,6 +7,7 @@
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <vector>
 
@@ -94,8 +95,68 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &fo
 	return formats.front();
 }
 
+// **V-sync toggle (`2026-06-13`).** Live-cycled by the
+// `V` hotkey in `app/main.cpp`. Three modes cycle:
+//   0. `VK_PRESENT_MODE_IMMEDIATE_KHR` — vsync off,
+//      no FPS cap, tearing possible (max throughput;
+//      the only option for benchmarking the GPU ceiling).
+//   1. `VK_PRESENT_MODE_MAILBOX_KHR` — vsync off
+//      semantically, but the surface manager keeps a
+//      single "latest image" and only swaps it on
+//      vblank. Triple-buffered; no FPS cap. With a
+//      VRR display (G-Sync / FreeSync) this is
+//      *tear-free AND uncapped*. On a fixed-refresh
+//      display, the swap-on-vblank means MAILBOX is
+//      effectively capped at the display rate (the
+//      display only updates on vblank; an image
+//      submitted just after vblank waits almost a
+//      full frame, so 144 FPS output on a 60 Hz
+//      panel still shows ~60 Hz but with no tearing
+//      and a one-frame latency). This is what NVIDIA
+//      "Fast Sync" maps to under the hood.
+//   2. `VK_PRESENT_MODE_FIFO_KHR` — vsync on, FPS
+//      capped at the panel refresh rate (default
+//      pre-toggle behaviour).
+//
+// We only return a mode the surface actually
+// supports (`IMMEDIATE` is optional per the Vulkan
+// spec; some Wayland / headless surfaces omit it).
+// If the operator-requested mode isn't supported, the
+// function falls back to the next one down the
+// priority list so the engine always picks the
+// best *available* tear-resistance for the current
+// display rather than failing the swapchain create.
+VkPresentModeKHR g_preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+
+static VkPresentModeKHR PickBestAvailablePresentMode(
+	const std::vector<VkPresentModeKHR> &presentModes,
+	VkPresentModeKHR preferred)
+{
+	const std::array<VkPresentModeKHR, 3> priority{
+		preferred,
+		VK_PRESENT_MODE_MAILBOX_KHR,
+		VK_PRESENT_MODE_FIFO_KHR,
+	};
+	for (const VkPresentModeKHR candidate : priority) {
+		if (std::find(presentModes.begin(), presentModes.end(), candidate) != presentModes.end()) {
+			return candidate;
+		}
+	}
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+
 VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &presentModes)
 {
+	// Honour the operator's `V`-hotkey override; fall
+	// through to the standard MAILBOX-then-FIFO
+	// chain if the surface doesn't expose the
+	// requested mode.
+	if (g_preferredPresentMode != VK_PRESENT_MODE_FIFO_KHR) {
+		return PickBestAvailablePresentMode(presentModes, g_preferredPresentMode);
+	}
+	// Default chain: MAILBOX first (lower latency than
+	// FIFO under load), then FIFO as the always-
+	// available vsync-on fallback.
 	for (const VkPresentModeKHR mode : presentModes) {
 		if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
 			return mode;
@@ -532,4 +593,27 @@ bool RecreateSwapchain(
 	}
 
 	return true;
+}
+
+VkPresentModeKHR CyclePreferredPresentMode()
+{
+	// **V-sync toggle (`2026-06-13`).** Cycle through
+	// the three modes in order: IMMEDIATE → MAILBOX →
+	// FIFO → IMMEDIATE. IMMEDIATE first so the
+	// benchmark-mode operator (the most common case
+	// for `V`-hotkey use) lands on the no-cap mode
+	// after a single press from the default.
+	switch (g_preferredPresentMode) {
+	case VK_PRESENT_MODE_FIFO_KHR:
+		g_preferredPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+		break;
+	case VK_PRESENT_MODE_IMMEDIATE_KHR:
+		g_preferredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+		break;
+	case VK_PRESENT_MODE_MAILBOX_KHR:
+	default:
+		g_preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+		break;
+	}
+	return g_preferredPresentMode;
 }

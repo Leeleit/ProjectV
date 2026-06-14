@@ -703,5 +703,73 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     # The macro is the single source of truth.
 endif ()
 
+# **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+# verification of `UpdateFluidCA` (in `src/voxel/VoxelWorld.cpp`).
+# Builds a hand-constructed `VoxelWorld` per test (no AppState
+# dependency), exercises the fall-only rule, the y=0 boundary
+# guard, the deterministic-iteration-order contract, and the
+# `stats.fluidVoxelCount` ↔ `std::count(voxels, == Fluid)`
+# invariant maintained by `SetVoxelMaterial`.
+add_executable(ProjectVFluidCATests
+        FluidCATests.cpp
+        # Compile `VoxelWorld.cpp` into the test target directly:
+        # `UpdateFluidCA` is not in a shared static lib, and the
+        # test's `GetVoxelChunkIndex` / `SetVoxelMaterial` paths
+        # are in the same TU. The same self-contained-target
+        # pattern is used by `ProjectVCFrustumCullingTests` and
+        # `ProjectVSunShadowCascadeSplitsTests`.
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        # **`runtime::LogCheckFailure` / `AbortAssertFailure`**
+        # (used by the `PV_ASSERT` calls in `UpdateFluidCA` and
+        # the dimension / size-check helpers in `VoxelWorld.cpp`)
+        # live in `core/RuntimeDiagnostics.cpp`. The test build
+        # is `NDEBUG`-aware, so the asserts compile to a real
+        # call on this build tree; linking the .cpp is required.
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        # `runtime::LogVkFailure` / `LogVmaFailure` call
+        # `VkResultToString` from `core/RuntimeDiagnostics.cpp`'s
+        # helpers, defined in `render/vulkan/VulkanResult.cpp`.
+        # Same "same TU" pattern: linking the whole .cpp file
+        # rather than splitting the renderer just for one helper.
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+)
 
+target_compile_definitions(ProjectVFluidCATests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVFluidCATests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVFluidCATests PRIVATE
+        projectv_build_options
+        # `core/Types.hpp` (transitively included by
+        # `voxel/VoxelWorld.hpp`) pulls in `volk` + `glm` + VMA on
+        # its include path. Linking these three is the cheapest
+        # way to inherit those paths without splitting the
+        # renderer's POD types away from the engine TU.
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+        # `VoxelWorld.cpp` references `SDL_GetBasePath` from the
+        # snapshot path helpers (`GetVoxelWorldSnapshotPath`). The
+        # CA tests do not exercise the snapshot path, but the
+        # function is in the same TU, so the symbol is pulled in.
+        # Linking SDL3 is the cheapest way to satisfy it.
+        SDL3::SDL3
+        # `runtime::LogVkFailure` / `LogVmaFailure` use `fmt` for
+        # formatting the `VkResult` description. Linking `fmt::fmt`
+        # gives the test the same fmt symbols the engine uses
+        # (the `core/RuntimeDiagnostics.cpp` path).
+        fmt::fmt
+)
+
+add_test(NAME ProjectVFluidCATests COMMAND ProjectVFluidCATests)
+set_tests_properties(ProjectVFluidCATests PROPERTIES LABELS "unit")
+
+# **Module wiring.** `VoxelWorld.hpp` → `core/Types.hpp` → math /
+# string_id shim imports. The macro is the uniform way to wire
+# that across all test targets.
+projectv_test_add_modules(ProjectVFluidCATests)
 

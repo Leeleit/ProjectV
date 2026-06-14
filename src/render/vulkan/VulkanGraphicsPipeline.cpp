@@ -1693,7 +1693,20 @@ bool CreateGraphicsPipeline(
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	// **Fluid (2026-06-13 follow-up):** disable back-face culling for
+	// the main pass so water voxels show all 6 faces (the
+	// back faces are normally culled by `VK_CULL_MODE_BACK_BIT`,
+	// but for water we want the user to see every face even
+	// when looking at a single voxel). The operator reported
+	// "у воды вроде бы одной грани куба нет" — the water
+	// seems to be missing one face of a cube. Disabling
+	// back-face culling ensures the back face is also rendered
+	// (the depth test still hides faces occluded by closer
+	// geometry, so the visual is not "double-faced" — just
+	// complete). Other voxels (Opaque, Glass) are unaffected
+	// because their back faces are still behind the front
+	// faces and culled by the depth test.
+	rasterizer.cullMode = VK_CULL_MODE_NONE;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	VkPipelineRasterizationStateCreateInfo shadowRasterizer = rasterizer;
 	// Shadow camera looks from the light toward the scene, so a face whose normal points

@@ -112,9 +112,27 @@
 - [ ] **`UpdateApp` mirror helpers** — `MirrorDebugStatsFromRender/Audio/Physics/Camera/Input`. Сейчас ~200 строк mirror блоков вручную.
 - [ ] **Read-only safety net pattern** — `git diff > /tmp/before_<subtask>_<timestamp>.patch` per atomic-подзадача per `AGENTS.md §7.2.4`. Уже в `§11.5 memory.md`.
 
+## CA audit (Phase 2 sub-task, `2026-06-13`)
+
+- [x] **Audit `UpdateFluidCA`** (`src/voxel/VoxelWorld.cpp:1286-1434`) — CPU fluid CA, единственная в mainline.
+- [x] **Spread rule удалена** — оператор: «Только падает, не растекается». ~30 строк (spread branch, hash, side array, support check).
+- [x] **PV_ASSERTs** добавлены (debug-only): pre-conditions (voxels.size() == width*height*depth, dimensions > 0), post-condition (stats.fluidVoxelCount == std::count(voxels, == Fluid)).
+- [x] **Determinism contract** документирован в `src/voxel/VoxelWorld.hpp:154-191`.
+- [x] **Throttle tightened** — `static bool fluidTickInitialized` заменил fragile `lastFluidTickCounter == 0u` check (`src/app/main.cpp:633-643`).
+- [x] **Tests** — `tests/FluidCATests.cpp` (12 sub-tests, 100% pass) + `tests/CMakeLists.txt:706-749` (new `ProjectVFluidCATests`).
+- [x] **`agent/decisions.md §30`** — full audit + 8 operator decisions.
+- [x] **`agent/memory.md §12`** — Fluid CA audit summary.
+
+False alarms (для потомков):
+- [x] «CA в AppEvent vs AppIterate» — false alarm. Code уже в AppIterate (`main.cpp:580-639`).
+- [x] «Double-step gravity» — false alarm. Y-ascending iteration уже bottom-up. **НО:** столбец **percolates** вниз за 2N тиков (документировано в `decisions.md §30` + `TestFluidCAColumnPercolatesDownAndSettlesAtY0`).
+
+«Вода не течёт вниз» — expected behavior (fluid на glass ≠ падает). Проверено `TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks`.
+«Respawn за платформой» — был spread rule. Удаление spread rule решает его напрямую.
+
 ---
 
-## Pre-flight checklist per atomic-подзадача (per `AGENTS.md §3.5` + `§7.2.4`)
+## Pre-flight checklist per atomic-подзадача (per `AGENTS.md §7.2.6.1` + `§7.2.4`)
 
 1. **Pre:** `git diff > /tmp/before_hardcore_r0_<subtask>_<timestamp>.patch` (safety-net для destructive rollback).
 2. **Pre:** `git status -uall` clean baseline.

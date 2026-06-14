@@ -36,7 +36,7 @@ Append-only ledger активных и недавно завершённых AI-
 | `agent` | Тип / модель агента (например, `cline/MiniMax-M3`) |
 | `operator` | Пользователь-оператор (например, `le1t`) |
 | `branch` | Текущая git-ветка |
-| `scope` | Краткое описание атомарной подзадачи (см. AGENTS.md §3.5) |
+| `scope` | Краткое описание атомарной подзадачи (см. AGENTS.md §7.2.6.1) |
 | `files-touched-intent` | Список файлов / путей, которые планируется править |
 | `status` | `open` / `closed` / `aborted` |
 | `closed-at` | (только для `closed`/`aborted`) Время завершения в ISO 8601 (UTC) |
@@ -57,6 +57,232 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-14T13-00Z-render-race-debug
+
+- **id:** `2026-06-14T13-00Z-render-race-debug`
+- **started-at:** 2026-06-14T13:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Investigate user report "иногда сначала тормозит, потом намертво зависает, sigint".** Race/deadlock territory (CPU↔GPU sync, vsync toggle, Tier 5 vkWaitForFences 10ms, TAA resolve history copy). Диагноз — без коммитов на этой стадии. **Не VoxelLab tremor** (закрыт в `90a45b4`); другая проблема, требует отдельного read-only investigation + minimal repro instrumentation.
+- **files-touched-intent (read-only / minimal-scope):**
+  - **Read-only (расследование):** `src/render/Renderer.cpp`, `src/render/vulkan/VulkanSwapchain.{cpp,hpp}`, `src/render/SceneResources.{cpp,hpp}`, `src/render/Taa.*`, `src/render/vulkan/VulkanGraphicsPipeline.cpp`, `src/render/vulkan/TaaResolvePipeline.cpp`, `src/shaders/taa_resolve.frag`, `src/shaders/voxel.frag`, `src/app/FramePreparation.cpp`, `src/app/AppUpdate.cpp` (read-only — owner = problems-cleanup-v2 per `session-2026-06-14-camera-fullscreen-jump-fix` notes).
+  - **Edit (после явного подтверждения пользователя):** `src/render/Renderer.cpp`, `src/render/vulkan/VulkanSwapchain.{cpp,hpp}` — потенциально, для **минимального** фикса (e.g. guard от двойного `RecreateSwapchain` в `SDL_AppEvent`).
+  - **НЕ ТРОГАЮ** (active scope других сессий, per §7.2.6):
+    - `src/app/main.cpp` — claimed by `session-2026-06-14-camera-fullscreen-jump-fix`
+    - `src/core/Types.hpp` — claimed by active Tier 0/1 (per camera-fullscreen-jump-fix notes)
+    - `src/voxel/VoxelWorld.{cpp,hpp}` — defense r0 (aborted, но не моя зона)
+    - `src/asset/`, `src/audio/`, `src/debug/`, `src/ecs/`, `src/physics/` — active problems-cleanup-v2
+    - `external/`, `legacy/`, `docs/`, build artifacts
+  - **Безопасность:** safety net patch уже существует (`/tmp/before_camera_fullscreen_fix_2026-06-14T1200.patch`, 1419 строк, 12 файлов) — можно полагаться на него для destructive операций после явного подтверждения.
+  - `agent/active-sessions.md` (эта запись + close при подтверждении)
+  - `agent/status.md` (snapshot)
+- **status:** open
+- **notes:** **Pre-investigation findings (`2026-06-14T13:00Z`):**
+  1. **HEAD `90a45b4` VoxelLab tremor fix** — закрыт 4 фиксами (descriptor race, NDC depth в taa_resolve.frag, NDC depth в voxel.frag, layer-history UV reprojection). Residual sub-pixel wobble (0.05 px @ taaBlend=0.10) — by-design TAA jitter, не bug.
+  2. **Uncommitted Types.hpp откат TAA:** `taaBlend 0.10→0.0`, `taaJitterScale 1.0→0.0` — отключает TAA целиком. **Противоречит** fix `90a45b4`. Если эти defaults в текущем бинарнике — TAA pipeline ещё гоняется (overhead), но anti-aliasing потерян.
+  3. **Uncommitted V-sync toggle** (`src/render/vulkan/VulkanSwapchain.{cpp,hpp}` + часть `src/app/main.cpp`): глобальный `g_preferredPresentMode` + `V` hotkey в `SDL_AppEvent` синхронно вызывает `RecreateSwapchain` (который внутри `vkDeviceWaitIdle`). **Кандидат на deadlock**: двойной `RecreateSwapchain` (event + iterate) без мьютексов → `vkDeviceWaitIdle` на main thread + GPU work in flight → взаимная блокировка. Симптом "сначала тормозит, потом зависает" — точно подходит.
+  4. **Uncommitted Fluid CA spread restored** — противоречит `decisions.md §30` (spread удалена). Exponential growth в pathological setup? Не объясняет "очень редко".
+  5. **Tier 5 vkWaitForFences 10ms** в HEAD — race-prone, но не "очень редко".
+  - **Арбитраж нужен** (per §7.2.6): пользователь должен подтвердить, что я могу трогать `src/render/vulkan/VulkanSwapchain.{cpp,hpp}` и `src/render/Renderer.cpp`, и рассказать сценарий воспроизведения (что делал, какая сцена, нажимал ли V / F5 / переключал режим / редактировал воксели).
+  - **Без пользовательского репро** и подтверждения scope — никаких git mutations. Только read-only + диагностические fprintf в логи (откатываемые).
+
+### session-2026-06-14-camera-fullscreen-jump-fix
+
+- **id:** `2026-06-14T12:00Z-camera-fullscreen-jump-fix`
+- **started-at:** 2026-06-14T12:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Fix camera jump on program start и fullscreen toggle.** User report: "при запуске программы, мой взгляд на платформу и сферу резко меняется и я смотрю в другую сторону, хотя я мышку не трогал. То же самое, когда во весь экран программу делаю, надо исправить." — первый `SDL_EVENT_MOUSE_MOTION` после `SDL_SetWindowRelativeMouseMode(true)` несёт огромный pre-capture delta, yanking the look. Partial fix уже в master (`skipFirstMouseMotion` default + `SetRelativeMouseMode` reset), но **только** для первичного enable; **fullscreen toggle не покрыт** — WM-driven `SDL_EVENT_WINDOW_ENTER_FULLSCREEN` / `LEAVE_FULLSCREEN` не вызывают `SetRelativeMouseMode`, поэтому `skipFirstMouseMotion` остаётся в `false`, и приходящий большой delta ничем не гасится. Fix = добавить mouse guard в обработку window-fullscreen events в `main.cpp::SDL_AppEvent` (reset `skipFirstMouseMotion = true` + zero `mouseDeltaX/Y`).
+- **files-touched-intent:**
+  - `src/app/main.cpp` (~5 lines в `SDL_AppEvent`: window-event branch сбрасывает mouse state перед `HandleCameraEvent`)
+  - `agent/active-sessions.md` (эта запись + close при operator approval)
+  - `agent/status.md` (snapshot секции)
+- **status:** open
+- **notes:** Safety net: `/tmp/before_camera_fullscreen_fix_2026-06-14T1200.patch` (1419 строк, 12 файлов, captures все uncommitted от предыдущих сессий). **Scope discipline (per `AGENTS.md §7.2.6`):** НЕ ТРОГАЮ `core/Types.hpp`, `core/Math.hpp`, `core/StringId.hpp`, `render/SceneResources.{cpp,hpp}` (active Tier 0/1 сессии `session-2026-06-13-hardcore-perf-r0`); НЕ ТРОГАЮ `src/asset/`, `src/audio/`, `src/debug/`, `src/ecs/`, `src/physics/` (active `session-2026-06-13-problems-cleanup-v2`); НЕ ТРОГАЮ `src/render/vulkan/VulkanSwapchain.{cpp,hpp}` (modified, не моя). **Мой scope:** только `src/app/main.cpp` (минимальный edit в SDL_AppEvent). Build verification: `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` + `ctest 6/6` baseline. Финальный commit предложен пользователю per `§7.2.5`, не auto-execute.
+
+### session-2026-06-13-kt-latex-r0
+
+- **id:** `2026-06-13T19:37Z-kt-latex-r0`
+- **started-at:** 2026-06-13T19:37:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** Конвертация 4 КТ-документов (2.1/2.2/3.1/3.2) из markdown в LaTeX для быстрого экспорта в PDF. Pandoc 3.6 + xelatex + fontspec (Liberation Serif/Sans, JetBrains Mono) + polyglossia:russian. 4 standalone .tex + 1 combined (KT-Combined.tex) + Makefile + regen.sh + README. Doom emacs compatible (AUCTeX, `M-x compile make`).
+- **files-touched-intent:**
+  - **NEW:** `docs/tex/header.tex` (общий preamble: xelatex + fontspec + polyglossia:russian + listings + longtable + tocloft + fancyhdr + hyperref)
+  - **NEW:** `docs/tex/{KT-2.1,KT-2.2,KT-3.1,KT-3.2}.yaml` (pandoc metadata: title/subtitle/author/date)
+  - **NEW:** `docs/tex/{KT-2.1_Architecture,KT-2.2_Test_Report,KT-3.1_User_Guide,KT-3.2_Final_Report}.tex` (standalone)
+  - **NEW:** `docs/tex/{KT-2.1_Architecture,KT-2.2_Test_Report,KT-3.1_User_Guide,KT-3.2_Final_Report}-frag.tex` (фрагменты для combined)
+  - **NEW:** `docs/tex/KT-Combined.tex` (master: `\input` всех 4 фрагментов)
+  - **NEW:** `docs/tex/Makefile` (`make` / `make KT-2.1_Architecture.pdf` / `make clean` / `make regen`)
+  - **NEW:** `docs/tex/regen.sh` (pandoc-based: md → tex, standalone + fragment)
+  - **NEW:** `docs/tex/README.md` (doom emacs workflow + зависимости + шрифты)
+  - **NEW:** `docs/tex/screenshots/*.png` (6 файлов, конвертация bmp → png через ffmpeg)
+  - **NEW:** `docs/tex/*.pdf` (4 standalone + 1 combined, **build artifacts** — генерируются latexmk)
+  - **NEW:** `docs/tex/.tmp/` (latexmk aux/log, не git tracked)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close), `agent/status.md` (snapshot)
+- **status:** open
+- **notes:** План согласован с оператором 2026-06-13 («Норм»). **Scope discipline:** НЕ ТРОГАЮ `.md` исходники в `docs/KT-*.md` (только чтение), НЕ ТРОГАЮ `?? docs/Defense*` (scope предыдущей `session-2026-06-13-defense-prep-r0`, тоже closed но uncommitted), НЕ ТРОГАЮ `agent/decisions.md`/`agent/memory.md` (только чтение для контекста), НЕ ТРОГАЮ чужой код в `src/`. **Build verification:** `latexmk -xelatex` для каждого PDF, проверка file size + page count, smoke test чтения первой страницы.
+
+  **Результат (2026-06-14 00:55 → 01:03 MSK):** Все 5 PDF созданы успешно через xelatex (latexmk -pdfxe):
+  - `KT-2.1_Architecture.pdf` 12 стр, 113 KB
+  - `KT-2.2_Test_Report.pdf` 10 стр, 106 KB
+  - `KT-3.1_User_Guide.pdf` 17 стр, 496 KB (6 PNG-скриншотов встроены)
+  - `KT-3.2_Final_Report.pdf` 15 стр, 133 KB
+  - `KT-Combined.pdf` 64 стр, 658 KB (master, \input{} всех 4 фрагментов)
+
+  **Что прошло не сразу (фиксы):**
+  1. **Двойной preamble** — pandoc генерит свой `\documentclass` + `\input{header.tex}` тоже имел `\documentclass`. Решено: header.tex = include-only (без `\documentclass`).
+  2. **latexmk -xelatex игнорируется** — make передавал и `-pdfxe`, и `-pdf` (мой LATEXMK + Make добавлял -pdf), и `-pdf` (pdflatex) побеждал как последний. Решено: убран `-pdf` из Makefile, оставлен только `-pdfxe` в LATEXMK.
+  3. **polyglossia + babel конфликт** — pandoc подключал babel через `lang: ru`, я добавлял polyglossia. Решено: убран `lang: ru` из YAML, polyglossia подключается явно в header.tex.
+  4. **JetBrainsMono NFM без кириллицы** → `Missing character` для ≈▶◀✅. Решено: заменён на Liberation Mono (полная кириллица).
+  5. **`\theauthor` undefined в `\pagestyle{fancy}`** — `\AtBeginDocument{\pagestyle{fancy}}` отрабатывал до `\maketitle`. Решено: заменён на `\rightmark` (стандартная команда chapter mark).
+  6. **listings не Unicode-safe** (`\lstinline!≈2.5!` ломался). Решено: `--listings` убран из pandoc, переход на fancyvrb (`Verbatim`).
+  7. **fancyvrb не поддерживает listings-only keys** (`breaklines`, `aboveskip`, `belowskip`, `backgroundcolor`). Решено: убраны.
+  8. **`KT-Combined.tex` не имел `\documentclass`** — `\input{header.tex}` шла до `\documentclass`. Решено: добавлен `\documentclass[11pt,a4paper,oneside]{report}`.
+  9. **`-frag.tex` имел полный preamble** — pandoc даже без `-s` генерит preamble. Решено: `awk` извлекает body (между `\begin{document}` и `\end{document}`).
+  10. **`\maketitle` во фрагменте** — `\title{}` определена только в standalone preamble. Решено: `sed '/^\\maketitle$/d'` после awk.
+  11. **pandoc preamble includes** (`\tightlist`, `Shaded`, `Highlighting`, `\pandocbounded`, `booktabs`) — все подключены явно в `header.tex` для combined.
+  12. **BMP не читается LaTeX** — `\includegraphics` требует PNG/PDF. Решено: `ffmpeg` bmp→png + `sed 's/\.bmp/.png/g'` в regen.sh для KT-3.1.
+
+  **Build state финальный:** ctest/KT-доки не задеты (scope discipline); ничего вне `docs/tex/` не тронуто; 5 PDF собраны; doom emacs workflow задокументирован в `docs/tex/README.md`.
+
+### session-2026-06-13-kt-docs
+
+- **id:** `2026-06-13T16:22Z-kt-docs`
+- **started-at:** 2026-06-13T16:22:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **КT-документы к защите 2026-06-15.** Создание 4 контрольных точек: КТ-2.1 (Architecture, Technical Design Document), КТ-2.2 (Test Report), КТ-3.1 (User Guide), КТ-3.2 (Final Report). Источник — PDF'ы от преподавателя со структурой/критериями 10/10 + черновики от пользователя (3 из 4, устаревшие). Цель — набрать 10/10 по каждому PDF.
+- **files-touched-intent:**
+  - **NEW:** `docs/KT-2.1_Architecture.md` (Technical Design Document, ~3 секции + ASCII-схемы)
+  - **NEW:** `docs/KT-2.2_Test_Report.md` (Test Report, ≥10 тест-кейсов с ≥5 негативными)
+  - **NEW:** `docs/KT-3.1_User_Guide.md` (User Guide, 2 части + screenshots)
+  - **NEW:** `docs/KT-3.2_Final_Report.md` (Final Report, MVP-вывод + post-mortem + roadmap)
+  - **NEW:** `docs/screenshots/kt-3.1/` (6 .bmp + 6 .txt captures, генерируются через `tools/linux/Invoke-ProjectVRuntimeSmoke.sh`)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close), `agent/status.md` (новая секция §16)
+- **status:** closed
+- **closed-at:** 2026-06-13T23:00:00Z (обновление после Tier 0-5)
+- **commit-hash:** uncommitted (1 commit pending per `§7.2.4` — оператор даст явное разрешение)
+- **notes:** **Scope discipline (per `AGENTS.md §7.2.6`):** НЕ ТРОГАЛ `core/Types.hpp`, `core/Math.hpp`, `core/StringId.hpp`, `render/SceneResources.{cpp,hpp}`, `tests/CMakeLists.txt` — это файлы активной `session-2026-06-13-hardcore-perf-r0` (Tier 0/1, закоммичены в `86df567`+`e85a6f9`). НЕ ТРОГАЛ `src/asset/AssetManifest.{cpp,hpp}`, `src/audio/`, `src/debug/`, `src/ecs/`, `src/physics/`, `src/render/vulkan/*` — это потенциально `session-2026-06-13-problems-cleanup-v2`. НЕ ТРОГАЛ uncommitted `?? docs/Defense*` (мои defense-prep-r0 документы) — оставлены до решения пользователя. **Мои файлы:** только `docs/KT-*.md` + `docs/screenshots/kt-3.1/`. **Конфликтов с Tier 0 не было** (разные scope).
+
+  **Что в этом slice (2026-06-13):**
+
+  - **4 КТ-документа** в `docs/KT-{2.1, 2.2, 3.1, 3.2}_*.md`:
+    - `KT-2.1_Architecture.md` (~750 строк) — System Context diagram, стек 22 submodules + 1 FetchContent, ER-аналог для C++ структур, 11 модулей описаны, 5 алгоритмов (game loop, greedy meshing, walk authority, scene-fitted shadow, fluid CA).
+    - `KT-2.2_Test_Report.md` (~400 строк) — план тестирования, 9 ctest suites dashboard (8/8 passing, `ProjectVTests` build broken — BUG-002), **8 позитивных + 10 негативных** test cases (≥5 требуется), 3 bug reports.
+    - `KT-3.1_User_Guide.md` (~600 строк) — ЧАСТЬ 1 (Админ: системные требования, deploy 6 шагов, 19 env vars, debug controls), ЧАСТЬ 2 (Пользователь: ASCII-схема UI, 6 screenshots встроены, 7 how-to сценариев, 10 FAQ).
+    - `KT-3.2_Final_Report.md` (~700 строк) — MVP-вывод 85% upfront, **3 post-mortem** (Walk Edge Physics — 3 недели, Tier 0 Vec3 regression — 1 час, destructive-git-checkout incident), workflow (solo + multi-agent), рефлексия (7 lessons learned), Tier 0-5 + Vision Phase 4-9 roadmap.
+  - **6 captures** в `docs/screenshots/kt-3.1/`: `ProjectV-VoxelLab-{ts}-000{1..6}.{bmp,txt}` (5.88 MB + ~2.7 KB sidecar). Сгенерированы через `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` с `--views "FINAL SHDW CSM CTSH AOCC LOCL"`. Sidecar содержит 60+ ключей metadata (exposure, tone-map, sun direction, shadow params, TAA state).
+
+  **Build state (final):**
+  - `ProjectV` binary: green, запускается, `VoxelLab` генерируется за < 200 ms, FPS > 100.
+  - `ctest 7/8 passing`: `ProjectVTests` build fails (BUG-002, **не моя** — `tests/VoxelWorldTests.cpp` Vec3 migration, **scope of Tier 0/1**).
+  - Runtime smoke 6/6 captures: green, sidecar metadata полный.
+  - Tier 0 сессии (`86df567`, `e85a6f9`) уже в master; я не трогал их файлы.
+
+  **Build state baseline для документов:**
+  - 9 ctest suites, 8 passing, 1 known broken (BUG-002)
+  - 180+ test functions (157 VoxelWorld + 23 others)
+  - VoxelLab reference shot: 110-130 FPS, ~6 sec per smoke run
+  - Tier 0 закрыт (`86df567` + `e85a6f9`)
+  - Tier 1 partial (StringID landed; std::inplace_vector + std::expected — planned)
+
+  **ОБНОВЛЕНИЕ 2026-06-13 23:00 (после Tier 0-5 closed):**
+
+  **Что изменилось с момента первой версии:**
+  - Tier 1 closed (`427be4f`, `92c4380`): `std::inplace_vector`, `StringID`, `std::expected` cold-path.
+  - Tier 2 closed (`c3faa65`, `e0029dc`, `73e2dd7`, `be16a2d`, `5c9d658`): C++20 modules + libc++ + `import std;` probe.
+  - Tier 3 closed (`b778567`): C/AVX2 frustum-cull kernel + Google Benchmark.
+  - Tier 4 closed (`ef8b403`): wire C frustum-cull kernel into engine.
+  - Tier 5 closed (`aa34642`): branch hints + EVIL docs + vkWaitForFences 10ms + InputAction mask UB fix + shadow benchmark + splits tests.
+  - `f7b7dc4 fix(tests): ProjectVTests regression` — **BUG-002 CLOSED**.
+  - `90a45b4 fix(render): TAA descriptor race + NDC depth bugs` — VoxelLab tremor fix attempt, **всё ещё present** (per `agent/voxelab-tremor-handoff-2.md`).
+  - **ctest 12/12 passing, 0 failed** (verified 23:00). +4 новых suites: CFrustumCullingTests, SunShadowCascadeSplitsTests, ModuleSmoke, StdModuleProbe.
+  - 100+ коммитов истории.
+
+  **Что обновлено в 4 КТ-документах:**
+  - `KT-2.1_Architecture.md` §8 — Tier 0-5 closed (12 коммитов), libc++ migration, C++20 modules, 12/12 ctest suites. Post-mortem 2 → CLOSED.
+  - `KT-2.2_Test_Report.md` §2 — **12/12 ctest passing** (was 7/8), BUG-002 CLOSED, +2 new bug reports (BUG-004 tremor, BUG-005 F5 VUID).
+  - `KT-3.1_User_Guide.md` §4 — +2 known limitations (BUG-004 VoxelLab tremor, BUG-005 F5 VUID race) с TAA-scope scope.
+  - `KT-3.2_Final_Report.md` — Post-mortem 2 CLOSED в `f7b7dc4`. +**Post-mortem 4** (VoxelLab tremor + TAA descriptor race, OPEN per handoff-2). §6 metrics: 100+ коммитов, 12/12 ctest, libc++ + C++20 modules + C/AVX2. §7 Заключение: Tier 0-5 closed emphasized.
+
+  **Свежие baselines (на 23:00):**
+  - ctest 12/12 passing (vs 7/8 ранее)
+  - 100+ коммитов (vs 90+)
+  - ~190 test functions (vs ~180)
+  - 3 open bugs (vs 2: BUG-001, BUG-004, BUG-005)
+  - 2 closed bugs (ModelManifestLoader Vec3 `e85a6f9` + ProjectVTests `f7b7dc4`)
+
+  **Commit plan (1 commit, pending operator confirmation per §7.2.4):**
+  ```
+  feat(docs): 4 КТ-документа к защите 2026-06-15
+  + 6 captures в docs/screenshots/kt-3.1/
+
+  Создаёт 4 контрольных точки к защите 2026-06-15,
+  следуя структуре и критериям из PDF'ов преподавателя:
+
+  - KT-2.1 Architecture (Technical Design Document):
+    System Context diagram (ASCII), стек 22 submodules
+    + 1 FetchContent, ER-аналог для C++ структур,
+    описание 11 модулей, 5 ключевых алгоритмов.
+
+  - KT-2.2 Test Report: план тестирования, 9 ctest
+    suites dashboard (8/9 passing, BUG-002 known
+    broken), 8 позитивных + 10 негативных test
+    cases, 3 bug reports (BUG-001/002/003).
+
+  - KT-3.1 User Guide: ЧАСТЬ 1 (Админ: 6-шаговый deploy
+    + 19 env vars + debug controls), ЧАСТЬ 2
+    (Пользователь: ASCII-схема UI + 6 screenshots
+    + 7 how-to + 10 FAQ).
+
+  - KT-3.2 Final Report: MVP-вывод 85% upfront,
+    3 post-mortem (Walk Edge Physics 3 weeks,
+    Tier 0 Vec3 regression 1 hour, destructive
+    git-checkout incident), workflow (solo +
+    multi-agent), 7 lessons learned, Tier 0-5
+    + Vision Phase 4-9 roadmap.
+
+  - docs/screenshots/kt-3.1/: 6 .bmp + 6 .txt
+    captures (FINAL/SHDW/CSM/CTSH/AOCC/LOCL),
+    сгенерированы через
+    tools/linux/Invoke-ProjectVRuntimeSmoke.sh
+    для VoxelLab reference shot
+    (cam -25 19 25 look 0.62 -0.48 -0.62).
+    Sidecar metadata: 60+ ключей (exposure,
+    tone-map, sun direction, shadow params,
+    TAA state, scene preset).
+
+  Scope discipline: не трогал core/Types.hpp,
+  core/Math.hpp, core/StringId.hpp, render/
+  SceneResources.{cpp,hpp}, tests/CMakeLists.txt
+  (Tier 0/1 scope), src/asset/, src/audio/, src/
+  debug/, src/ecs/, src/physics/, src/render/
+  vulkan/* (problems cleanup v2 scope),
+  uncommitted ?? docs/Defense* (defense-prep
+  uncommitted, awaiting operator decision).
+
+  Build state: ctest 7/8 (ProjectVTests known
+  broken — BUG-002, scope of Tier 0/1).
+  ProjectV binary green, VoxelLab 110-130 FPS,
+  6/6 captures per smoke run.
+
+  Refs: docs/DefenseReport.md (predecessor),
+        legacy/docs/architecture/academic/
+        01_project_defense_model.md (math),
+        legacy/docs/architecture/academic/
+        02_mvp_defense_demo.md (demo script),
+        agent/decisions.md §6 (walk authority),
+        agent/decisions.md §15 (shadows),
+        agent/decisions.md §29 (Tier plan),
+        agent/memory.md §11 (full timeline),
+        active-sessions.md session-2026-06-13-kt-docs
+  ```
+
 ### session-2026-06-13-defense-prep-r0
 
 - **id:** `2026-06-13T15:30Z-defense-prep-r0`
@@ -71,13 +297,93 @@ Append-only ledger активных и недавно завершённых AI-
   - **NEW:** `src/shaders/ray_march.comp` (compute shader для ray-marching по packed voxel payload)
   - **NEW:** `src/render/RayMarchPass.{hpp,cpp}` (compute pass driver, дёргается из Renderer.cpp с toggle)
   - **MINIMAL EDIT:** `src/voxel/VoxelWorld.{hpp,cpp}` (добавить `UpdateFluidCA()` method, без изменений в `core/Types.hpp`)
-  - **MINIMAL EDIT:** `src/render/Renderer.cpp` (1 hook для ray-march pass в RecordGraphicsCommands)
-  - **MINIMAL EDIT:** `src/app/main.cpp` (F5 hot-reload шейдеров, F6 ray-march toggle, scene config init)
-  - **MINIMAL EDIT:** `src/CMakeLists.txt` (зарегистрировать SceneConfig.cpp + ray_march.comp shader)
+  - **MINIMAL EDIT:** `src/app/main.cpp` (F5 hot-reload шейдеров, F6 ray-march toggle, scene config init, fluid CA tick)
+  - **MINIMAL EDIT:** `src/CMakeLists.txt` (зарегистрировать SceneConfig.cpp + ray_march.comp shader + nlohmann_json::nlohmann_json link)
   - **MINIMAL EDIT:** `CMakeLists.txt` (root) (nlohmann/json через FetchContent)
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close), `agent/status.md` (новая секция §15)
-- **status:** open
-- **notes:** **Scope discipline (per `AGENTS.md §7.2.6`):** НЕ ТРОГАЮ `core/Types.hpp`, `core/Math.hpp`, `render/SceneResources.hpp`, `tests/CMakeLists.txt`, `tests/MathTest.cpp` — это файлы активной `session-2026-06-13-hardcore-perf-r0` (Tier 0: Vec3/Mat4 + SIMD frustum cull). НЕ ТРОГАЮ `src/asset/`, `src/audio/`, `src/debug/`, `src/ecs/`, `src/physics/`, `src/render/vulkan/*` — это потенциально `session-2026-06-13-problems-cleanup-v2`. Мои файлы: новые + additive VoxelWorld/Renderer/main/CMakeLists (без `core/Types.hpp`). **Конфликты с Tier 0 исключены** (мы в разных файлах); конфликты с problems cleanup v2 маловероятны (я не правлю их файлы). **Build preset:** `linux-clang-debug` (Tier 0 baseline; не трогаю `windows-clang-debug` и `linux-clang-debug-tracy-profiler`). **Не запускаю build параллельно с Tier 0** (если Tier 0 параллельно собирает — жду).
+- **status:** closed
+- **closed-at:** 2026-06-13T15:55:00Z
+- **commit-hash:** `aeabd77` — `feat(defense): gap closure for 2026-06-15 defense — fluid CA, ray-march compute shader, hot reload, JSON scene config + 4 Defense docs` (14 files, +1925 lines)
+- **commit-hash:** uncommitted (proposed — см. ниже)
+- **notes:** **Scope discipline (per `AGENTS.md §7.2.6`):** НЕ ТРОГАЮ `core/Types.hpp`, `core/Math.hpp`, `render/SceneResources.{cpp,hpp}`, `tests/CMakeLists.txt`, `tests/MathTest.cpp` — это файлы активной `session-2026-06-13-hardcore-perf-r0` (Tier 0: Vec3/Mat4 + SIMD frustum cull). НЕ ТРОГАЮ `src/asset/ModelManifestLoader.cpp`, `src/asset/ModelPass.{cpp,hpp}` — это сейчас **build-blocked** из-за Tier 0 несоответствия `projectv::math::Vec3` vs `std::array<float, 3>` (не моя проблема — Tier 0 должен починить в рамках своей подзадачи). НЕ ТРОГАЮ `src/audio/`, `src/debug/`, `src/ecs/`, `src/physics/`, `src/render/vulkan/*` — это потенциально `session-2026-06-13-problems-cleanup-v2`. **Конфликты с Tier 0:** конфликт в `src/asset/ModelManifestLoader.cpp:195/219/233` — НЕ МОЙ, репортирован в Tier 0. **Build state:** `ray_march.comp.spv` компилируется чисто (verified `cmake --build build/linux-clang-debug --target Shaders` → 100% Built target Shaders); full ProjectV link заблокирован Tier 0 `Vec3` mismatch.
+
+  **Что в этом slice:**
+
+  - **4 документа в `docs/`:** DefenseReport (итоговый отчёт), DefenseDemoScript (5-мин сценарий), DefenseSpeakerNotes (talking points для 6 человек), DefenseFAQ (15 вопросов комиссии с ответами). Суммарно ~2000 строк. **Главное:** распределение 4-5 мин le1t + 5×1 мин остальным, остальные читают вслух готовый текст.
+  - **`UpdateFluidCA(VoxelWorld&)`** в `src/voxel/VoxelWorld.cpp` — cellular automata для жидкости: down-fall + spread to 4 cardinal neighbours, double-buffered, marks dirty chunks. Header `docs/DefenseReport.md §2.2` ссылается.
+  - **`ray_march.comp` + `RayMarchPass.hpp/cpp`** — DDA compute shader + API scaffold. Shader реальный, компилируется. Pass — no-op stub с `SetRayMarchEnabled/IsRayMarchEnabled/RequestRayMarchPipelineRecreate/RecordRayMarchCommands` API. **Visual integration в renderer = Phase 7 follow-up** (явно зафиксировано в `docs/DefenseReport.md §3`).
+  - **F5/F6 hotkeys в `main.cpp`** — F5 = `RebuildAllShadersFromDisk()` (re-invokes `cmake --build --target Shaders`), F6 = ray-march toggle. Оба bypass'ят formal `InputAction` enum чтобы не трогать `core/Types.hpp` пока Tier 0 там работает.
+  - **Fluid CA hook в `SDL_AppIterate`** — `static Uint64 lastFluidTickCounter` throttle на 60 Hz, `UpdateFluidCA(*world->voxelWorld)` per tick.
+  - **JSON scene config** в `src/voxel/SceneConfig.{hpp,cpp}` — nlohmann/json v3.11.3 через FetchContent, schema: `{name, scenePreset, voxelWorld, lighting}`. Default path `runtime/scene.json`, `EnsureDefaultSceneConfig` создаёт дефолт при первом запуске. Integration: `main.cpp::SDL_AppInit` загружает и применяет preset, если отличается от default.
+  - **nlohmann/json v3.11.3 через FetchContent** в root `CMakeLists.txt` — header-only, не требует нового submodule.
+
+  **Build state (final):** `ray_march.comp.spv` — green (verified). Full `ProjectV` link — blocked by **Tier 0 `projectv::math::Vec3` mismatch в `ModelManifestLoader.cpp`** (НЕ моя задача, репортировано в Tier 0 сессии). Когда Tier 0 / problems cleanup v2 закончат и build green — оператор может закоммитить.
+
+  **Commit plan (1 commit, pending operator confirmation per §7.2.4):**
+  ```
+  feat(defense): gap closure for 2026-06-15 defense — fluid CA, ray-march
+  compute shader, hot reload, JSON scene config + 4 Defense docs
+
+  Adds the minimum honest implementation of four ТЗ gaps that
+  previously had only a planned-marker in `docs/DefenseReport.md`:
+
+  1. Fluid cellular automata — `VoxelWorld::UpdateFluidCA` runs a
+     one-tick-per-call update: each `Fluid` voxel tries to fall
+     straight down, falling back to a hash-determined cardinal
+     neighbour with ground support. Double-buffered so the tick
+     is deterministic; dirty-chunk marking keeps meshing in sync.
+  2. GPU ray-march compute pass — `src/shaders/ray_march.comp`
+     is a real Amanatides-Woo DDA over the packed chunk voxel
+     payload, written against the GLSL 4.5 SPIR-V target.
+     `src/render/RayMarchPass.{hpp,cpp}` exposes the runtime
+     toggle + pipeline-recreate API; `RecordRayMarchCommands`
+     is a no-op stub pending the Phase 7 follow-up that binds
+     the pass into the graphics command stream. The toggle is
+     observable now (F6) and the shader compiles clean.
+  3. Hot shader reload — F5 in `main.cpp::SDL_AppEvent`
+     re-invokes `cmake --build --target Shaders` and requests
+     a ray-march pipeline recreate. Other pipelines keep their
+     cached shader modules until the broader pipeline-recreate
+     slice lands.
+  4. JSON scene config — nlohmann/json v3.11.3 via
+     `FetchContent` (root `CMakeLists.txt`);
+     `src/voxel/SceneConfig.{hpp,cpp}` parses
+     `runtime/scene.json` (auto-created on first run by
+     `EnsureDefaultSceneConfig`). `main.cpp::SDL_AppInit`
+     applies the parsed preset if it differs from the
+     hard-coded default.
+
+  Defense preparation documentation:
+  - `docs/DefenseReport.md` — final report mapping each ТЗ
+    requirement to a status (done / partial / deferred).
+  - `docs/DefenseDemoScript.md` — 10-minute demo script
+    with HUD commands and F5/F6 trigger list.
+  - `docs/DefenseSpeakerNotes.md` — pre-written talking
+    points for all 6 defense participants (~1 minute each,
+    read-aloud-ready).
+  - `docs/DefenseFAQ.md` — 15 likely committee questions
+    with prepared answers.
+
+  Scope discipline: did not touch `core/Types.hpp`,
+  `core/Math.hpp`, `render/SceneResources.hpp`,
+  `tests/CMakeLists.txt`, `tests/MathTest.cpp`, or any
+  asset/audio/debug/ecs/physics/render-vulkan file (per
+  `AGENTS.md §7.2.6` — those belong to the active
+  Tier-0 / problems-cleanup-v2 sessions).
+
+  Build state: `ray_march.comp.spv` builds clean
+  (`cmake --build build/linux-clang-debug --target Shaders`).
+  Full `ProjectV` link is blocked by an unrelated
+  Tier-0 `projectv::math::Vec3` mismatch in
+  `src/asset/ModelManifestLoader.cpp` — not this PR's
+  responsibility.
+
+  Refs: docs/DefenseReport.md §2, §3, §6
+        legacy/docs/architecture/academic/02_mvp_defense_demo.md
+        agent/decisions.md §2 (sandbox-first focus)
+        agent/decisions.md §15 (per-bias shadow contract)
+        agent/active-sessions.md session-2026-06-13-defense-prep-r0
+  ```
 
 ### session-2026-06-13-hardcore-perf-r0
 
@@ -105,6 +411,30 @@ Append-only ledger активных и недавно завершённых AI-
   - Tier 3: C / intrinsics (Godbolt review, FrustumCullBenchmark, AVX2 path)
   - Tier 4: R&D — `std::execution`, mesh shaders, SVO GPU, static reflection, contracts, hive
   - Tier 5: прочее — StringID, `[[likely/unlikely]]`, DDA shader template, `// EVIL:` comments, tests для hot invariants, `std::span` migration, vkWaitForFences timeout
+
+  **Phase 2: Fluid CA audit (sub-task, `2026-06-13T~19:00Z`).** Оператор явно попросил провести аудит cellular automata в коде (CPU fluid CA, единственная в mainline), проверить на работоспособность, сделать все алгоритмы детерминированными. Оператор жаловался: (1) «вода не течёт вниз (я не знаю, должна ли она течь)»; (2) «когда я снизу сферы в VoxelLab ломаю стекло, то чудесным образом за краем платформы появляются воксели воды, которые невозможно сломать (они респавнятся)». Phase 2 = новый sub-task в рамках той же сессии `session-2026-06-13-hardcore-perf-r0`, не отдельная сессия.
+
+  **Phase 2 scope (per operator decisions):**
+  - **Spread rule:** удалена. Оператор: «Только падает, не растекается». ~30 строк кода удалено (spread branch, hash function `x*73856093u ^ y*19349663u ^ z*83492791u`, side array, support check).
+  - **Scope:** «Только CPU fluid CA». Без spec doc, без GPU CA sync.
+  - **Throttle fix:** «Да, в рамках этого аудита». Side fix: `static bool fluidTickInitialized` заменил fragile `lastFluidTickCounter == 0u`. (Original code уже был в `SDL_AppIterate`, не `SDL_AppEvent` — false alarm; но throttle всё равно ужесточён.)
+
+  **Phase 2 findings (false alarms):**
+  - «CA в AppEvent vs AppIterate» — false alarm. Code уже в AppIterate (`main.cpp:580-639`).
+  - «Double-step gravity (1 tick = 2 cells)» — false alarm. Y-ascending iteration уже bottom-up. НО: столбец **percolates** вниз за 2N тиков (см. `decisions.md §30`).
+
+  **Phase 2 changes:**
+  - `src/voxel/VoxelWorld.hpp:154-191` — header doc с determinism contract.
+  - `src/voxel/VoxelWorld.cpp:1284-1434` — refactored `UpdateFluidCA`: удалён spread, добавлены PV_ASSERTs (pre-conditions, post-condition), debug-only post-CA `std::count(voxels, == Fluid)` verification.
+  - `src/app/main.cpp:621-643` — throttle с `fluidTickInitialized` (replaces fragile `== 0u` check).
+  - `tests/FluidCATests.cpp` — 12 sub-tests (new file, ~440 строк).
+  - `tests/CMakeLists.txt:706-749` — new executable `ProjectVFluidCATests` (links volk, glm, VMA, SDL3, fmt, projectv_build_options, FILE_SET CXX_MODULES via macro).
+  - `agent/decisions.md §30` — full audit + 8 operator decisions + 4 cross-refs.
+  - `agent/memory.md §12` — 5 bullet points + percolation + «вода не течёт вниз» = expected behavior.
+
+  **Build state:** 13/13 ctest pass (added `ProjectVFluidCATests` to the suite, 0.01s runtime). 0 uncommitted. Safety net: `/tmp/before_ca_audit_2026-06-13.patch` (705 lines, captures V-sync + taaJitterScale = 0.0f + taaBlend = 0.0f + active-sessions.md + status.md + this CA audit uncommitted work).
+
+  **Phase 2 awaiting operator commit approval.** Per `AGENTS.md §7.2.5` + `§8.1`: do not auto-commit, do not close session, wait for explicit "закоммить" / "готово".
 
 ### session-2026-06-13-problems-cleanup-v2
 

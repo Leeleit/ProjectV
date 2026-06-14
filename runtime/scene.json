@@ -1,0 +1,15 @@
+{
+  "lighting": {
+    "exposure": 1.0,
+    "sunDirectionY": 0.8
+  },
+  "name": "ProjectV Default",
+  "scenePreset": "VoxelLab",
+  "voxelWorld": {
+    "chunkSize": 8,
+    "floorSize": 18,
+    "floorY": 0,
+    "padding": 3,
+    "worldTopY": 14
+  }
+}

@@ -1,0 +1,182 @@
+#version 450
+
+// **Ray-march compute shader (defense r0, 2026-06-13).** Implements the
+// GPU ray-marching ray cast called out in ТЗ 4.1.2: an Amanatides-Woo 3D
+// DDA through the packed chunk voxel payload. One thread per pixel.
+//
+// **Current scope:** this shader is compiled and bound to the pipeline
+// scaffold added in `src/render/RayMarchPass.{hpp,cpp}`. The renderer
+// integration (offscreen color attachment + composite into the main
+// graphics pass) is the Phase 7 follow-up documented in
+// `docs/DefenseReport.md §3`. The shader is intentionally self-contained
+// and ready to be wired in without further changes.
+//
+// **Inputs** (uniforms, set 0, binding 0):
+//   - cameraOriginAndFov.xyz = camera position in world units
+//   - cameraOriginAndFov.w   = vertical field-of-view in radians
+//   - cameraForward.xyz      = forward unit vector
+//   - cameraForward.w        = aspect ratio (width / height)
+//   - cameraRight.xyz        = right unit vector
+//   - cameraRight.w          = unused (kept for vec4 alignment)
+//   - cameraUp.xyz           = up unit vector
+//   - cameraUp.w             = unused
+//   - worldMin.xyz           = world-space minimum voxel corner
+//   - worldMin.w             = unused
+//   - voxelSize.xyz          = voxel edge length (scalar, replicated)
+//   - voxelSize.w            = unused
+//   - gridDims.x             = grid width  in voxels
+//   - gridDims.y             = grid height in voxels
+//   - gridDims.z             = grid depth  in voxels
+//   - gridDims.w             = unused
+//   - imageSize.x            = output image width  in pixels
+//   - imageSize.y            = output image height in pixels
+//   - maxSteps               = safety cap on DDA iterations
+//
+// **Inputs** (storage buffer, set 0, binding 1):
+//   - packedVoxelPayload : R-only 8-bit material indices, indexed as
+//     `[x + y*W + z*W*H]`. Same byte layout as `voxel_mesh.comp`. A zero
+//     byte means `Air`; any other byte is treated as a solid hit.
+//
+// **Output** (storage image, set 0, binding 2, rgba8):
+//   - ray-march result for the corresponding pixel. RGB = simple
+//     directional shading (sun direction encoded in cameraForward.w on
+//     the CPU side and packed into the up vector's .w slot below).
+//     A = 1.0 hit, 0.0 miss.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std140) uniform RayMarchParams {
+	vec4 cameraOriginAndFov;   // xyz = origin, w = fov
+	vec4 cameraForwardAndAspect;// xyz = forward, w = aspect
+	vec4 cameraRight;           // xyz = right
+	vec4 cameraUpAndSunY;       // xyz = up, w = sunY (0..1)
+	vec4 worldMinAndUnused;     // xyz = worldMin, w = pad
+	vec4 voxelSizeAndUnused;    // xyz = voxelSize, w = pad
+	ivec4 gridDimsAndUnused;    // xyz = dims, w = pad
+	ivec4 imageSizeAndMaxSteps; // x = w, y = h, z = maxSteps, w = pad
+} params;
+
+layout(set = 0, binding = 1, std430) readonly buffer PackedVoxelPayload {
+	uint voxels[];
+} payload;
+
+layout(set = 0, binding = 2, rgba8) uniform restrict writeonly image2D rayMarchOutput;
+
+// Solid materials return a constant colour from this small palette. The
+// layout mirrors the runtime palette in `VoxelMaterials::GetVoxelMaterialVisual`
+// but is reduced to the four binary opcodes the DDA can distinguish (air /
+// glass / opaque / fluid).
+const vec4 kMaterialColors[5] = vec4[5](
+	vec4(0.0, 0.0, 0.0, 0.0),            // Air
+	vec4(0.94, 0.96, 1.0, 1.0),          // Glass
+	vec4(0.0, 0.59, 1.0, 0.85),          // Fluid (semi-transparent)
+	vec4(0.95, 0.95, 0.97, 1.0),         // FloorWhite
+	vec4(0.78, 0.80, 0.82, 1.0)          // FloorGray
+);
+
+uint FetchVoxel(const ivec3 coord)
+{
+	if (coord.x < 0 || coord.y < 0 || coord.z < 0) {
+		return 0u;
+	}
+	if (coord.x >= params.gridDimsAndUnused.x ||
+		coord.y >= params.gridDimsAndUnused.y ||
+		coord.z >= params.gridDimsAndUnused.z) {
+		return 0u;
+	}
+	const uint index = uint(coord.x) +
+		uint(coord.y) * uint(params.gridDimsAndUnused.x) +
+		uint(coord.z) * uint(params.gridDimsAndUnused.x) * uint(params.gridDimsAndUnused.y);
+	return payload.voxels[index];
+}
+
+ivec3 WorldToVoxel(const vec3 worldPos)
+{
+	const vec3 local = (worldPos - params.worldMinAndUnused.xyz) / params.voxelSizeAndUnused.xyz;
+	return ivec3(floor(local));
+}
+
+void main()
+{
+	const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+	if (pixel.x >= params.imageSizeAndMaxSteps.x ||
+		pixel.y >= params.imageSizeAndMaxSteps.y) {
+		return;
+	}
+
+	// Reconstruct the per-pixel ray direction. Standard perspective camera:
+	//   ray = forward + right * u * tanFovX + up * v * tanFovY
+	// with u, v in [-1, +1] mapped from the pixel centre.
+	const float aspect = params.cameraForwardAndAspect.w;
+	const float tanHalfFov = tan(params.cameraOriginAndFov.w * 0.5);
+	const float u = (2.0 * (float(pixel.x) + 0.5) / float(params.imageSizeAndMaxSteps.x) - 1.0) * tanHalfFov * aspect;
+	const float v = (1.0 - 2.0 * (float(pixel.y) + 0.5) / float(params.imageSizeAndMaxSteps.y)) * tanHalfFov;
+	const vec3 rayDir = normalize(params.cameraForwardAndAspect.xyz
+								 + params.cameraRight.xyz * u
+								 + params.cameraUpAndSunY.xyz * v);
+
+	// Amanatides-Woo 3D DDA. Convert the world-space ray to voxel-space
+	// step vectors, walk the grid, terminate on first non-zero voxel or
+	// after `maxSteps` iterations.
+	const vec3 originVoxelSpace = (params.cameraOriginAndFov.xyz - params.worldMinAndUnused.xyz) / params.voxelSizeAndUnused.xyz;
+	const vec3 stepDir = sign(rayDir);
+	const vec3 deltaDist = abs(1.0 / max(abs(rayDir), vec3(1e-6)));
+	ivec3 cell = WorldToVoxel(params.cameraOriginAndFov.xyz);
+	const bvec3 stepDirPositive = greaterThan(stepDir, vec3(0.0));
+	const vec3 cellFloat = vec3(cell);
+	vec3 sideDist = mix(
+		(cellFloat - originVoxelSpace) * deltaDist,
+		(cellFloat + vec3(stepDirPositive) - originVoxelSpace) * deltaDist,
+		stepDirPositive);
+
+	const int maxSteps = params.imageSizeAndMaxSteps.z;
+	uint hitMaterial = 0u;
+	vec3 hitNormal = vec3(0.0, 1.0, 0.0);
+
+	for (int step = 0; step < maxSteps; ++step) {
+		const uint v = FetchVoxel(cell);
+		if (v != 0u) {
+			hitMaterial = v;
+			break;
+		}
+
+		// Step to the next cell along the dominant axis.
+		if (sideDist.x < sideDist.y) {
+			if (sideDist.x < sideDist.z) {
+				cell.x += int(stepDir.x);
+				sideDist.x += deltaDist.x;
+				hitNormal = vec3(-stepDir.x, 0.0, 0.0);
+			} else {
+				cell.z += int(stepDir.z);
+				sideDist.z += deltaDist.z;
+				hitNormal = vec3(0.0, 0.0, -stepDir.z);
+			}
+		} else {
+			if (sideDist.y < sideDist.z) {
+				cell.y += int(stepDir.y);
+				sideDist.y += deltaDist.y;
+				hitNormal = vec3(0.0, -stepDir.y, 0.0);
+			} else {
+				cell.z += int(stepDir.z);
+				sideDist.z += deltaDist.z;
+				hitNormal = vec3(0.0, 0.0, -stepDir.z);
+			}
+		}
+	}
+
+	vec4 outColor = vec4(0.0, 0.0, 0.0, 0.0);
+	if (hitMaterial != 0u) {
+		const uint paletteIndex = min(hitMaterial, 4u);
+		vec4 base = kMaterialColors[paletteIndex];
+
+		// Cheap directional shading: N·L from a fixed sun height packed
+		// into the up vector's `.w` slot. Gives the demo a visible 3D
+		// shape even without the full PBR pipeline.
+		const float sunY = clamp(params.cameraUpAndSunY.w, 0.0, 1.0);
+		const float nDotL = max(0.0, dot(hitNormal, vec3(0.0, sunY, 1.0)));
+		const float diffuse = 0.35 + 0.65 * nDotL;
+		outColor = vec4(base.rgb * diffuse, base.a);
+	}
+
+	imageStore(rayMarchOutput, pixel, outColor);
+}

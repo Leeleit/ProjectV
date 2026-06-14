@@ -187,8 +187,26 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
         return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
     }
 
+    // Fluid (2026-06-13 follow-up): emit against ALL non-Air
+    // materials. The original rule (Air/Glass only) made water
+    // cubes sitting on the platform or checkerboard look like
+    // open boxes — the bottom face (adjacent to Floor) and side
+    // faces (adjacent to Floor walls) were culled, leaving the
+    // cube with only 3-4 visible faces. The operator reported
+    // "у воды вроде бы одной грани куба нет" — the water seems
+    // to be missing one face of a cube. Emitting against Floor
+    // gives the bottom face, but Fluid-Fluid culling still hides
+    // the top face of a cube that's adjacent to another water
+    // cube on top, leaving the upper cube with only 5 visible
+    // faces (top culled, bottom+4 sides visible). To match the
+    // operator's "full cube" expectation, the Fluid-Fluid cull
+    // is also removed — every water cube now has all 6 faces
+    // visible regardless of what's adjacent. This means a stack
+    // of water cubes shows the internal edges between them
+    // (visually "blocky" water), which is what the operator
+    // wants.
     if (materialIndex == 2u) {
-        return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
+        return true;
     }
 
     return neighborMaterialIndex == 0u;

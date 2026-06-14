@@ -151,14 +151,61 @@ uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
 uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
 uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
 
-// **Fluid cellular automata (defense r0, 2026-06-13).** One CA tick per call:
-// each `VoxelMaterial::Fluid` voxel attempts to fall straight down by one
-// cell, falling back to the four cardinal neighbours if the cell below is
-// already solid. Uses a double-buffer copy of `voxels` so a single tick is
-// deterministic and free of read-after-write hazards. Marks every changed
-// chunk dirty via `MarkVoxelChunkDirty` so meshing picks the changes up on
-// the next frame. Caller is expected to invoke this at a fixed step
-// (typically 1/60 s) from the main app loop.
+// **Fluid cellular automata (defense r0, 2026-06-13; audited 2026-06-13;
+// spread restored 2026-06-13).**
+// One CA tick per call: every `VoxelMaterial::Fluid` voxel **first**
+// attempts to fall straight down by one cell (`f_fall` rule). If the
+// fall is blocked (cell below is `Glass`, `FloorWhite`, `FloorGray`,
+// or another `Fluid`), the fluid instead **spreads horizontally** to
+// one of the four cardinal neighbours (`f_spread` rule, radius 1, no
+// support check). The direction is hash-determined from `(x, y, z)` so
+// the spread pattern is reproducible. The 2026-06-13 audit removed the
+// "concave ground" support check because the operator's follow-up
+// "сделать, чтобы она растекалась по горизонтали ещё" required
+// unrestricted spread; the original "respawn off platform" perception
+// was a **symptom** of the commit-loop coordinate bug
+// (`decisions.md §30` "CRITICAL"), not a feature of the spread rule
+// itself. See `agent/decisions.md §30` for the full audit + rule set,
+// and `agent/memory.md §12` for the bug history.
+//
+// **Determinism contract (verified by `TestFluidCA*Deterministic`):**
+//   * Single-threaded; no atomics, no shared state.
+//   * No floating-point arithmetic; all math is `int` / `uint8_t` /
+//     `uint32_t` (the spread-hash constants were removed with the spread
+//     rule, so the only integer arithmetic left is `idx` math).
+//   * Iteration order is **fixed** at `z, y, x` ascending in both the
+//     CA loop and the commit loop. Combined with the bottom-up `y` pass
+//     this guarantees: a column of fluid falls **one cell per tick**,
+//     with no double-step (a fluid at `(x, 5, z)` reads `world.voxels`
+//     (the immutable snapshot) at `(x, 4, z)` and never sees the
+//     `(x, 4, z)` fluid that was already written to `next` by the
+//     `(x, 3, z)` step in the same tick).
+//   * No system calls (`rand`, `time`, `/dev/urandom`); no allocator
+//     dependence on pointer identity (only on contents).
+//   * `stats.fluidVoxelCount` is verified equal to
+//     `std::count(voxels, == Fluid)` after every commit (debug build).
+//
+// **Coordinate convention (critical, do not regress):** the CA pass and
+// the commit loop iterate **local** indices `x ∈ [0, width)`, etc.
+// The commit loop adds `world.min` to convert local → world before
+// calling `SetVoxelMaterial` (which expects world coordinates). A
+// pre-2026-06-13 bug had the commit loop passing local indices directly
+// as world coords, which silently dropped fall commits at the world
+// edge (`local.x == width - world.min.x` mapped to `world.x ==
+// maxExclusive.x`, rejected by `IsInsideVoxelWorld`) and corrupted
+// the rest. The VoxelLab scene's `min = (-12, 0, -12)` was hit hardest:
+// the user reported "water doesn't fall", which the
+// `TestFluidCAVoxelLabSphereFallOnGlassBreak` test pins.
+//
+// **Pre-conditions (asserted in debug builds):**
+//   * `world.voxels.size() == width * height * depth` (post-condition
+//     of `CreateEmptyVoxelWorld`, asserted here as a defence in depth).
+//   * `width, height, depth > 0`.
+//
+// **Caller contract:** invoke at a fixed step (typically 1/60 s) from
+// the main app loop. The throttle lives at the call site, not in the
+// function, so tests can drive any tick cadence. Zero-fluid worlds
+// short-circuit on the `stats.fluidVoxelCount == 0u` check.
 uint32_t UpdateFluidCA(VoxelWorld &world);
 
 #endif
