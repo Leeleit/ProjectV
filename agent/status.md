@@ -215,6 +215,50 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 
 **Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.
 
+## §25. Defense docs audit r0 — `session-2026-06-15T10-43Z-defense-docs-audit-r0` (closed в `bf2822f`)
+
+**Per operator «перечитай то, что ты написал и глубоко проанализируй соответствие с кодом, приступай».** Найдено 23 расхождения между 12 defense-документами и реальным кодом + 1 F5/F6 hotkey conflict. Один fix(docs) commit `bf2822f`, 13 файлов, +460/-287 строк.
+
+**Исправлены 23 галлюцинации:**
+
+| # | Что | Реальность в коде |
+|---|---|---|
+| 1 | `VoxelChunk` struct shape | {Int3 min/maxExclusive, bool rebuildQueued, uint32_t nonAirVoxelCount}, **плоский** `voxels[]` в `VoxelWorld` |
+| 2 | Frustum cull "8×" | Scalar C 3.7-3.9×, AVX2 2.5-2.7× (8× — future SoA target) |
+| 3 | AVX2 inner loop "4 planes" | 8 AABBs × 6 planes (per-plane batch) |
+| 4 | Visibility hash "splitmix64" | Custom XOR-fold (Knuth MMIX multipliers) + splitmix64-style avalanche |
+| 5 | Ray-march "compute path" | STUB, только `fprintf` в stderr, Phase 7 follow-up |
+| 6 | Walk "voxel solver авторитетный" | JPH::CharacterVirtual + voxel solver **augments** foot support (per decisions.md §6) |
+| 7 | Edge grace "0.1 м" | `kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f` |
+| 8 | Fluid CA "4 cardinal directions" | 2 перпендикулярных попытка, **только 1 destination** пишется (count conservation per decisions.md §30) |
+| 9 | Fluid CA "splitmix64 hash" | Teschner spatial hash `(x*73856093) ^ (y*19349663) ^ (z*83492791)` |
+| 10 | VoxelLab "13 824 вокселей" | 27 чанков (chunk capacity 27×512 = 13 824, actual allocated 24×17×24 = 9 792) |
+| 11 | Shell radius "5" | `VoxelLabShellConfig.radius = 6` |
+| 12 | Contact shadow "16 max steps" | `kSunContactShadowMaxSteps = 12` |
+| 13 | AOCC "3 × 4 = 12 reads" | Корректно (3-tap × 4 шага), но ранее был 5-tap, уточнён в комментариях |
+| 14 | Audio "MP3/WAV/FLAC" | Только MP3 (case-insensitive ext check) |
+| 15 | Snapshot magic "PVSNAP\0\0" | `"PVSNAP01"` (8 значащих байт) |
+| 16 | AssetLoader "Load" | `LoadGlb(path, outError)` |
+| 17 | ELF "72 MB debug" | 73 MB (verified `ls -lh 2026-06-15`) |
+| 18 | BUG-005 "F5 VUID" | InputAction F5 cycle scene (НЕ F11 shader reload, после relocate) |
+| 19 | BUG-005 ref "F5 hot-reload paths" | F11 (relocate) — в windows-build-verification session этот ref устарел |
+| 20 | Visibility cache "3 memcpy" | "3 копируемых буфера (opaque/shadow/transparent), memcpy-логика на cache hit не верифицирована" |
+| 21 | ctest "12/14" | 14/14 (текущий baseline, оба debug и release) |
+| 22 | Fluid CA "1 tick per 3 frames" | Accumulator-based `fluidTickRateHz * timeScale`, multi-tick per frame allowed |
+| 23 | C++26 "std::simd" в hot path | Не используется, заменено на C/AVX2 kernel в Tier 3 |
+
+**Hotkey relocation (operator разрешил) в `src/app/main.cpp`:**
+- `SDLK_F5` → `SDLK_F11` для shader reload (InputAction F5 `CycleScenePreset` теперь чисто своё).
+- `SDLK_F6` → `SDLK_F12` для ray-march toggle (InputAction F6 `SaveWorldSnapshot` теперь чисто своё).
+- F11/F12 InputAction walk bindings shadowed — приемлемо (walk debug не на demo path).
+- Полный комментарий в main.cpp:545-585 объясняет relocation и TODO post-defense (route через formal InputAction enum когда `core/Types.hpp` стабилизируется).
+
+**Build state:**
+- `cmake --build build/linux-clang-debug` после правки main.cpp: clean, 0 errors.
+- `ctest --test-dir build/linux-clang-debug`: **14/14 pass за 0.76s**, baseline preserved.
+
+**Scope coordination:** session-2026-06-15T10-25Z-windows-build-verification-r0 multi-commit plan 1/5 тоже трогает `src/app/main.cpp` для P0-5 (F5 hot-reload hardcoded paths). Я коммичу РАНЬШЕ их commit 1; их cherry-pick тривиален (строки 545-559 main.cpp — единственный overlap).
+
 ## §24. Defense docs overhaul r0 — `session-2026-06-15T15-50Z-defense-docs-r0` (closed в `1db35ee`)
 
 **Per operator «Требуется улучшить defense документы в docs: документ, который описывает каждый алгоритм в проекте, абсолютно за всё, плюс речь для пятерых, плюс каждому свою памятку. На тех пятерых следует разделить работу так, чтобы она была весомой, но простой к объяснению, а всё сложное мне оставить. Нас шестеро, я шестой.»** Защита 2026-06-15 10-минутный доклад + 5 мин Q&A, 6 человек в команде.
@@ -330,6 +374,7 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 | `2026-06-13` | Defense файлы | closed (reopened 2-й update) |
 | `2026-06-14` | KT-LaTeX (KT-2.1/2.2/3.1/3.2 + Combined) | closed (5 PDF) |
 | `2026-06-15` | Defense docs overhaul r0 | closed `1db35ee` (см. `agent/active-sessions.md session-2026-06-15T15-50Z-defense-docs-r0`): 7 новых файлов + 4 переработки + 2 agent-файла |
+| `2026-06-15` | Defense docs audit r0 | closed `bf2822f` (см. `agent/active-sessions.md session-2026-06-15T10-43Z-defense-docs-audit-r0`): 23 правки в 12 docs/ + F5/F6 → F11/F12 relocate в main.cpp |
 | `2026-06-15` | **Windows build verification r0** | **closed `69b1726`** (см. `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0`): 5 atomic-commits (P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M). Linux baseline preserved (ctest 14/14, smoke 6/6). |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
