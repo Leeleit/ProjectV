@@ -215,6 +215,43 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 
 **Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.
 
+## §26. Defense docs russian r0 — `session-2026-06-15T12-06Z-defense-docs-russian-r0` (closed в `d641967`)
+
+**Per operator «надо всё на русском, полностью. Всё английское в скобочки и слева от скобочек русское название, если это термин какой-то.»**
+
+Единый коммит `d641967` (option A по выбору оператора), 8 файлов, +511/-836 строк (нетто -325 — упрощение, не добавление текста). type=docs, auto per §7.3.1.
+
+**Что сделано:**
+
+| Файл | Действие | Строк (до → после) |
+|---|---|---|
+| `DefenseBriefer_1.md` | REWRITE (простой русский, ~150 слов verbatim) | 165 → 131 |
+| `DefenseBriefer_2.md` | REWRITE | 155 → 101 |
+| `DefenseBriefer_3.md` | REWRITE | 168 → 106 |
+| `DefenseBriefer_4.md` | REWRITE | 164 → 104 |
+| `DefenseBriefer_5.md` | REWRITE | 174 → 101 |
+| `DefenseBriefer_le1t.md` | REWRITE (вступление 2:00 + Q&A-карта 30 вопросов) | 351 → 280 |
+| `DefenseAlgorithms.md` | EDIT (заголовки 1-23 + краткая карта переведены) | 1021 → 1021 |
+| `agent/active-sessions.md` | EDIT (новая запись → перенос в «Закрытые сессии») | — |
+
+**DefenseBriefer (1..5).md — главное изменение:**
+- Удалена §6 «Если попросят подробнее» (operator: «ненужную хрень по типу объяснений, как и что работает. Этого всё равно никто не поймёт»).
+- Дословные выступления сжаты с ~220 до 141-157 русских слов на 1:30 минуты.
+- §2, §3, §4, §5, §7 — простой русский, термины в скобках.
+
+**Заголовки 23 алгоритмов переведены:** «Жадный мешинг (greedy meshing, алгоритм Лысенкова)», «Каскадные тени (CSM)», «Трассировка лучей через compute-шейдер (ray-marching)», «Клеточный автомат для жидкости (Fluid CA)» и т.д.
+
+**Формат перевода:** «Русское название (English term)» при первом использовании. Повторно — только русский. Идентификаторы кода, пути файлов, консольные команды, имена шейдеров, имена сторонних библиотек, устоявшиеся аббревиатуры (TAA, CSM, PBR, ECS, DOD, AVX2, SIMD, HUD, AABB, GPU, CPU, RAM) — оставлены на английском.
+
+**5 файлов НЕ переписывались (уже были в хорошем русском состоянии):**
+- `DefenseFAQ.md` — по-русски от audit `bf2822f`
+- `DefenseReport.md` — по-русски от audit `bf2822f`
+- `DefenseScript.md`, `DefenseDemoScript.md`, `DefenseSpeakerNotes.md` — по-русски от original `1db35ee`
+
+Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 matches.
+
+**Build state:** docs-only, build green. Code не тронут, baseline preserved.
+
 ## §25. Defense docs audit r0 — `session-2026-06-15T10-43Z-defense-docs-audit-r0` (closed в `bf2822f`)
 
 **Per operator «перечитай то, что ты написал и глубоко проанализируй соответствие с кодом, приступай».** Найдено 23 расхождения между 12 defense-документами и реальным кодом + 1 F5/F6 hotkey conflict. Один fix(docs) commit `bf2822f`, 13 файлов, +460/-287 строк.
@@ -375,6 +412,7 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 | `2026-06-14` | KT-LaTeX (KT-2.1/2.2/3.1/3.2 + Combined) | closed (5 PDF) |
 | `2026-06-15` | Defense docs overhaul r0 | closed `1db35ee` (см. `agent/active-sessions.md session-2026-06-15T15-50Z-defense-docs-r0`): 7 новых файлов + 4 переработки + 2 agent-файла |
 | `2026-06-15` | Defense docs audit r0 | closed `bf2822f` (см. `agent/active-sessions.md session-2026-06-15T10-43Z-defense-docs-audit-r0`): 23 правки в 12 docs/ + F5/F6 → F11/F12 relocate в main.cpp |
+| `2026-06-15` | Defense docs russian r0 | closed `d641967` (см. `agent/active-sessions.md session-2026-06-15T12-06Z-defense-docs-russian-r0`): полная русификация, 6 бриферов переписаны + Algorithms.md, единый коммит option A |
 | `2026-06-15` | **Windows build verification r0** | **closed `69b1726`** (см. `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0`): 5 atomic-commits (P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M). Linux baseline preserved (ctest 14/14, smoke 6/6). |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
