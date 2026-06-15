@@ -82,6 +82,28 @@
 - **Smoke policy для release-build среза:** build-config change, не правка Vulkan/bootstrap/swapchain/present. Per §4 (выше) runtime smoke — **не** mandatory; рекомендуется как sanity check первого запуска release ELF (`Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-release`). Если release binary стартует и рендерит — release-preset срез считается закрытым.
 - **Ожидаемый эффект:** ELF 25-40 MB (vs 50.5 MB debug, no LTO), FPS +1.5-2.5× vs debug на VoxelLab reference shot.
 
+### Build preset target list invariant (2026-06-14, audit fix)
+
+Решение:
+
+- Все `buildPresets` (кроме smoke-варианта) должны явно перечислять **все** ctest-registered executables в `targets`. Без этого `cmake --build --preset X-build` + `ctest --preset X-tests` ломается на чистом clone: 11+ тестов получат «cannot find executable» если build-preset не собрал соответствующий бинарь.
+- **Минимальный набор targets для debug пресетов** (17 targets): `ProjectV` + 14 test executables + 2 benchmarks (`ProjectVFrustumCullBenchmark`, `ProjectVShadowProjectionBenchmark` — потому что `PROJECTV_ENABLE_BENCHMARKS=ON` в `linux-clang-debug-base`).
+- **Минимальный набор targets для release пресетов** (15 targets): `ProjectV` + 14 test executables. Benchmarks **не** включаются (release-base устанавливает `PROJECTV_ENABLE_BENCHMARKS=OFF` per §выше).
+- **`windows-clang-debug-smoke`** — отдельный случай, оставляет `targets: [ProjectVRuntimeSmoke]` (кастомный Windows-only target, не ctest-registered).
+- **Maintenance:** при добавлении нового test executable в `tests/CMakeLists.txt` — обновить **все 5 buildPresets** (windows-clang-debug-build, windows-clang-debug-ci-build, linux-clang-debug-build, windows-clang-release-build, linux-clang-release-build). Альтернатива (helper INTERFACE target в `tests/CMakeLists.txt` который зависит от всех test executables) — отдельная подзадача, не в scope этого фикса.
+
+### `linux-clang-debug-tracy-profiler` Tracy UI fix (2026-06-14)
+
+Решение:
+
+- Linux Tracy-profiler preset устанавливает `PROJECTV_BUILD_TRACY_PROFILER=OFF` (Windows-вариант оставляет `ON`). Обоснование:
+  - Tracy UI бинарь (`tracy-profiler` GUI) **не** собирается на Linux/glibc из-за upstream bug в `tidy-html5` (`agent/memory.md §9`).
+  - `external/tracy/profiler/CMakeLists.txt:245` ссылается на `nlohmann_json::nlohmann_json`; root `CMakeLists.txt:475` делает свой `FetchContent_MakeAvailable(nlohmann_json)`. Если `PROJECTV_BUILD_TRACY_PROFILER=ON` на Linux, tracy profiler подтягивает **вторую** копию nlohmann_json через `add_subdirectory()` → `add_library cannot create target "nlohmann_json"` (CMP0002 target collision) — полная re-configure tracy-profiler дерева невозможна.
+  - Tracy **instrumentation** (`PROJECTV_ENABLE_TRACY=ON`) **сохраняется** в Linux-пресете (inherited from `linux-clang-debug-base`); пользователь получает ProjectV ELF с Tracy symbols (75.5MB), готовый к подключению к внешнему Tracy UI (например, скачанный с github.com/wolfpld/tracy).
+  - Windows-пресет `windows-clang-debug-tracy-profiler` **не** трогаем — там Tracy UI собирается нормально (Windows-специфичные фиксы в upstream).
+- **`linux-clang-debug-tracy-profiler` tree preserved** per operator «tracy нужны». Состояние после fix: configure green, `ProjectV` собирается (75.5MB, Tracy instrumentation включена), tests=0 (BUILD_TESTING=OFF), benchmarks=ON (inherited), Tracy UI=OFF.
+- Альтернатива (отдельный preset `linux-clang-debug-tracy-instrumented` который отключает только UI без BUILD_TRACY_PROFILER) — overkill, нынешний пресет с `OFF` корректно описывает своё поведение.
+
 Почему:
 
 - Operator попросил release-build чтобы увидеть готовый продукт. Release-пресет должен быть **conservative** (без `-ffast-math`, без `-march=native`) чтобы не сломать детерминизм и переносимость — это «что мы можем гарантировать» для release. PGO/CPack/install — отдельные, более крупные подзадачи, не в scope этого среза.
@@ -874,3 +896,32 @@ Cross-refs: `src/voxel/VoxelWorld.hpp:154-191` (header doc с determinism contra
 - **«V-sync MAILBOX-as-default side-effect» — explicit, не случайный.** До фикса: default = MAILBOX (visual: no tearing, low latency). После: default = FIFO (visual: vsync-strict, FPS = display rate). Оператор сам выбирал V hotkey для vsync-toggle, значит ожидал, что default = vsync. MAILBOX-as-default — over-engineering для не-продвинутых user'ов. Если когда-нибудь понадобится «MAILBOX для бенчмарков» — env var `PROJECTV_PRESENT_MODE_DEFAULT = MAILBOX` (вне scope сегодня).
 
 Cross-refs: `src/render/vulkan/VulkanSwapchain.cpp:148-180` (V-sync fix), `src/core/Types.hpp:1348-1382` (`fluidTickRateHz` + `fluidAccumulatorSeconds`), `src/app/main.cpp:626-643` (удалён CA throttle, оставлен только `benchmarkFrameCounter` для benchmark automation), `src/app/AppUpdate.cpp:693-733` (новый CA tick block), `tests/FluidCATests.cpp:763-1145` (8 новых sub-tests + `TickFluidCA` helper), `agent/memory.md §12` (V-sync bug history + CA pause/timeScale fix history).
+
+### 30.2. V hotkey auto-detect cycle + libc++ warning + HUD line (`2026-06-14`)
+
+Решение (по итогам двух operator reports: «у кнопки V 4 переключения — не понимаю, какое из них что делает» + `clang: warning: argument unused during compilation: '-stdlib=libc++'`):
+
+- **V hotkey auto-detect cycle (`src/render/vulkan/VulkanSwapchain.hpp:69-148`).** Оператор: «у кнопки V 4 переключения: 1) vsync (по умолчанию); 2) хз, 500фпс; 3) Vsync; 4) хз, 5000фпс». Root cause: hardcoded 3-state cycle `FIFO → IMMEDIATE → MAILBOX → FIFO` (per `decisions.md §30` 2026-06-13 follow-up). На Linux/Wayland без VRR surface не expose'ит IMMEDIATE → `PickBestAvailablePresentMode` silently fallthrough'ит IMMEDIATE → MAILBOX. Оператор видит 4 press'а в логе, но только 2 unique runtime mode'а (FIFO, MAILBOX), потому что press 2 и press 3 оба lands на MAILBOX. **«Press V и ничего не меняется»** failure mode. **Fix**: cycle теперь **auto-detected** from `vkGetPhysicalDeviceSurfacePresentModes` result (already called by `QuerySwapchainSupport` в `CreateOrRecreateSwapchain`). `BuildPresentModeCycle(support.presentModes)` walks priority list `{FIFO, MAILBOX, IMMEDIATE}` и keeps только surface-supported modes. Cycle length = number of physically supported modes:
+  - Windows / Linux X11 + VRR: 3 modes `[FIFO, MAILBOX, IMMEDIATE]`.
+  - Linux/Wayland без VRR: 2 modes `[FIFO, MAILBOX]`.
+  - Headless / non-conformant: 1 mode `[FIFO]`.
+  
+  `CyclePreferredPresentMode` walks the cycle по индексу, wraps в конце. **Каждый press advances the cycle** — failure mode «press V и ничего не меняется» устранён. Header-only: `g_active` + `g_cycle` — `inline` C++17 variables в `VulkanSwapchain.hpp`, `CyclePreferredPresentMode` / `BuildPresentModeCycle` / accessors — `inline` functions. Test target `ProjectVPresentModeTests` header-only dependency, no `.cpp` link.
+
+- **HUD line for VSync (`src/debug/DebugHud.cpp:553-577`).** Оператор: «не понимаю, какое из них что делает». Log line помогает, но легко пропустить. **Fix**: новая HUD строка `VSync <mode> (<index>/<size>)` — например `VSync FIFO (1/2)` на Linux/Wayland, `VSync MAILBOX (2/3)` после V press. Видно сразу: текущий mode + cycle position. Uses header-only inline accessors `GetActivePresentMode()` / `GetPresentModeCycleSize()` / `GetPresentModeCycleIndex(mode)`. **Без dependencies** на `VulkanSwapchain.cpp` (inline).
+
+- **V hotkey log message (`src/app/main.cpp:534-578`).** Pre-fix: `CycleVsync: <mode>` — без контекста cycle. **Fix**: `CycleVsync: <mode> [cycle <idx>/<size>]` — например `CycleVsync: MAILBOX (tear-free, uncapped) [cycle 2/2]`. Видно сразу: какой mode выбран, где в cycle.
+
+- **libc++ warning — kept + suppressed (`CMakeLists.txt:117-150`, `2026-06-14`).** Initial plan: удалить `add_compile_options(-stdlib=libc++)` (CMake's `CMAKE_CXX_STDLIB` already propagates). **Failed**: removing produces `undefined symbol: std::__1::__fs::filesystem::path` и `undefined symbol: fmt::v12::vformat` link errors в `external/fastgltf` и `external/fmt`. Root cause: `add_subdirectory` external subdirs **не inherit `projectv_build_options`**, **не inherit `CMAKE_CXX_STDLIB`** in their compile commands (CMake 4.3.3 + Ninja + Clang 22 behavior). Без explicit `add_compile_options(-stdlib=libc++)` они компилируются с libstdc++ (system default), генерируют `std::__cxx11::fs::path` symbols, не match с нашими `std::__1::__fs::path`. Comment в коде обновлён: «add_compile_options REQUIRED для cross-target ABI, comment про "external subdirs" больше не outdated — он **exactly** describes this failure». Warning подавлен через `add_compile_options(-Wno-unused-command-line-argument)` **scoped to this single false-positive**: «duplicate flag is necessary, not a real defect». Per `AGENTS.md §7.2.7` suppression acceptable: one flag, one toolchain artifact, well-commented.
+
+- **Why header-only API for present mode cycle.** Per `legacy/docs/philosophy/01_foundation/02_arch-design.md` (decouple): `g_active` / `g_cycle` — runtime state, observable by HUD/test/HMR. **Inline** variables in header: linker dedups per-TU, no ODR violation. `CyclePreferredPresentMode` / `BuildPresentModeCycle` — pure functions on these globals, no Vulkan deps → inline. Cost: header grows by ~50 lines, but all consumers (main.cpp, DebugHud.cpp, PresentModeTests.cpp) save a `.cpp` link dep. **Trade-off**: header `VulkanSwapchain.hpp` теперь transitively pulls `<vulkan/vulkan.h>` через `<vector>` + `VkPresentModeKHR` type — minor, все consumers уже имеют vulkan include path.
+
+- **Test coverage — `ProjectVPresentModeTests` (9 sub-tests, 100% pass).** `TestPresentModeCycleIncludesAllThree`, `TestPresentModeCycleExcludesUnsupported` (the operator's 4-press-2-modes scenario), `TestPresentModeCycleOnlyFifo`, `TestPresentModeCycleEmptyFallsBackToFifo`, `TestPresentModeCycleRespectsPriorityOrder` (mode surface order doesn't matter), `TestCycleAdvancesAndWrapsThreeMode`, `TestCycleAdvancesAndWrapsTwoMode` (operator's scenario, post-fix: every press advances), `TestPresentModeCycleIndex`, `TestPresentModeCycleSize`. Header-only, no `.cpp` link.
+
+Почему:
+
+- **«Auto-detect cycle > hardcoded 3-state»** — universal, не только V hotkey. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md` (data-driven, не hardcoded): cycle должен отражать **физическую реальность** host'а. Hardcoded `[FIFO, IMMEDIATE, MAILBOX]` — implicit assumption, что surface поддерживает все три. Auto-detect — explicit, correct. **Rule для future**: hardware-dependent capabilities (display modes, vertex formats, MSAA samples) **всегда auto-detect at startup, не hardcode cycle**.
+- **«HUD line > log line»** — operator UX. Per `legacy/docs/philosophy/01_foundation/06_execution-style.md` (visible feedback): log — для post-mortem, HUD — для live state. Cycle position — live state, должен быть в HUD. **Rule**: runtime-togglable state (vsync mode, fluid rate, timeScale) — в HUD, не только в логе.
+- **«Libc++ warning suppression — one flag, one toolchain artifact»** — minimal scope. Per `AGENTS.md §7.2.7` (no suppressions) + exception clause («DFA/IDE false-positive, можно заглушить, но только точечно и только нужную строчку»). `-Wno-unused-command-line-argument` global — это exception applied к **specific toolchain artifact** (Clang's duplicate-flag detection), не к code quality. **Rule**: suppressions — only когда compiler toolchain даёт false-positive на cross-cutting concern, и suppression имеет comment explaining the artifact. Глушить варнинги «потому что мешают» — нет.
+
+Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:69-148` (auto-detect cycle + accessors), `src/render/vulkan/VulkanSwapchain.cpp:262-275` (call to `BuildPresentModeCycle` в `CreateOrRecreateSwapchain`), `src/app/main.cpp:534-578` (V hotkey log message), `src/debug/DebugHud.cpp:553-577` (HUD line), `CMakeLists.txt:117-150` (libc++ flag + warning suppression), `tests/PresentModeTests.cpp` (9 sub-tests, new file), `tests/CMakeLists.txt:771-810` (new test target).

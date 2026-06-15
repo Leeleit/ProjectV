@@ -138,7 +138,7 @@
       "inherits": "linux-clang-debug",
       "cacheVariables": {
         "BUILD_TESTING": "OFF",
-        "PROJECTV_BUILD_TRACY_PROFILER": "ON",
+        "PROJECTV_BUILD_TRACY_PROFILER": "OFF",
         "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
         "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk": "TRUE",
         "CPM_SOURCE_CACHE": "${sourceDir}/build/cpm-source-cache",
@@ -232,7 +232,22 @@
       "configurePreset": "windows-clang-debug",
       "targets": [
         "ProjectV",
-        "ProjectVTests"
+        "ProjectVTests",
+        "ProjectVAssetTests",
+        "ProjectVMeshBakerTests",
+        "ProjectVDracoTests",
+        "ProjectVFrustumCullingTests",
+        "ProjectVCFrustumCullingTests",
+        "ProjectVSunShadowCascadeSplitsTests",
+        "ProjectVBoxUvFixtureTests",
+        "ProjectVMathTests",
+        "ProjectVStringIdTests",
+        "ProjectVModuleSmoke",
+        "ProjectVStdModuleProbe",
+        "ProjectVFluidCATests",
+        "ProjectVPresentModeTests",
+        "ProjectVFrustumCullBenchmark",
+        "ProjectVShadowProjectionBenchmark"
       ]
     },
     {
@@ -249,7 +264,22 @@
       "configurePreset": "windows-clang-debug-ci",
       "targets": [
         "ProjectV",
-        "ProjectVTests"
+        "ProjectVTests",
+        "ProjectVAssetTests",
+        "ProjectVMeshBakerTests",
+        "ProjectVDracoTests",
+        "ProjectVFrustumCullingTests",
+        "ProjectVCFrustumCullingTests",
+        "ProjectVSunShadowCascadeSplitsTests",
+        "ProjectVBoxUvFixtureTests",
+        "ProjectVMathTests",
+        "ProjectVStringIdTests",
+        "ProjectVModuleSmoke",
+        "ProjectVStdModuleProbe",
+        "ProjectVFluidCATests",
+        "ProjectVPresentModeTests",
+        "ProjectVFrustumCullBenchmark",
+        "ProjectVShadowProjectionBenchmark"
       ]
     },
     {
@@ -258,7 +288,22 @@
       "configurePreset": "linux-clang-debug",
       "targets": [
         "ProjectV",
-        "ProjectVTests"
+        "ProjectVTests",
+        "ProjectVAssetTests",
+        "ProjectVMeshBakerTests",
+        "ProjectVDracoTests",
+        "ProjectVFrustumCullingTests",
+        "ProjectVCFrustumCullingTests",
+        "ProjectVSunShadowCascadeSplitsTests",
+        "ProjectVBoxUvFixtureTests",
+        "ProjectVMathTests",
+        "ProjectVStringIdTests",
+        "ProjectVModuleSmoke",
+        "ProjectVStdModuleProbe",
+        "ProjectVFluidCATests",
+        "ProjectVPresentModeTests",
+        "ProjectVFrustumCullBenchmark",
+        "ProjectVShadowProjectionBenchmark"
       ]
     },
     {
@@ -267,7 +312,20 @@
       "configurePreset": "windows-clang-release",
       "targets": [
         "ProjectV",
-        "ProjectVTests"
+        "ProjectVTests",
+        "ProjectVAssetTests",
+        "ProjectVMeshBakerTests",
+        "ProjectVDracoTests",
+        "ProjectVFrustumCullingTests",
+        "ProjectVCFrustumCullingTests",
+        "ProjectVSunShadowCascadeSplitsTests",
+        "ProjectVBoxUvFixtureTests",
+        "ProjectVMathTests",
+        "ProjectVStringIdTests",
+        "ProjectVModuleSmoke",
+        "ProjectVStdModuleProbe",
+        "ProjectVFluidCATests",
+        "ProjectVPresentModeTests"
       ]
     },
     {
@@ -276,7 +334,20 @@
       "configurePreset": "linux-clang-release",
       "targets": [
         "ProjectV",
-        "ProjectVTests"
+        "ProjectVTests",
+        "ProjectVAssetTests",
+        "ProjectVMeshBakerTests",
+        "ProjectVDracoTests",
+        "ProjectVFrustumCullingTests",
+        "ProjectVCFrustumCullingTests",
+        "ProjectVSunShadowCascadeSplitsTests",
+        "ProjectVBoxUvFixtureTests",
+        "ProjectVMathTests",
+        "ProjectVStringIdTests",
+        "ProjectVModuleSmoke",
+        "ProjectVStdModuleProbe",
+        "ProjectVFluidCATests",
+        "ProjectVPresentModeTests"
       ]
     }
   ],

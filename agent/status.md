@@ -4,7 +4,9 @@ Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
 Updated: `2026-06-14` — 4 КТ-документа сконвертированы в LaTeX (session-2026-06-13-kt-latex-r0, см. §19). 5 PDF в `docs/tex/`.
 Updated: `2026-06-14` — V-sync FIFO bug + CA pause/timeScale + 20Hz default (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up, см. `decisions.md §30.1`, `memory.md §12.1`). 3 fixes (V-sync explicit-FIFO, CA moved to `UpdateApp` w/ `effectivePaused`+`timeScale`, default 30→20Hz). 8 new CA sub-tests (24 total, 100% pass). Build green, ctest 13/13, smoke clean.
+Updated: `2026-06-14` — V hotkey auto-detect cycle + libc++ warning + HUD line (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up #2, см. `decisions.md §30.2`, `memory.md §12.2`). 4 fixes (auto-detect cycle from surface support, HUD `VSync <mode> (<idx>/<size>)` line, V hotkey log `[cycle idx/size]`, libc++ warning suppression). 9 new present-mode sub-tests (новый `ProjectVPresentModeTests`, 100% pass). Build green, ctest 14/14, smoke clean.
 Updated: `2026-06-14` — Release presets r0 (session-2026-06-14-release-presets-r0, см. §21). 8 новых CMakePresets (linux-clang-release, windows-clang-release, +4 build/test варианта), root `CMakeLists.txt` +1 Release-блок (`-O3 -flto=thin -NDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`), `README_NEW.md` создан с нуля, `agent/decisions.md §4` +подсекция Release policy. linux-clang-release: configure 54s, build 137/137 green, ctest 13/13 (0.06s), smoke 6/6 captures, ELF 19MB (-73% vs 72MB debug).
+Updated: `2026-06-14` — Build config audit r0 (session-2026-06-14T11-29Z-build-config-audit-r0, см. §22). 5 buildPresets обновлены (3 debug × 17 targets, 2 release × 15 targets, 1 smoke × 1 unchanged) — A1 fix. `linux-clang-debug-tracy-profiler.PROJECTV_BUILD_TRACY_PROFILER: ON→OFF` (Linux Tracy UI не собирается из-за nlohmann_json target collision per `decisions.md §4` «tracy UI fix»). `build/linux-clang-debug-ci/` удалён (194M, per operator «удалить ci»). `build/linux-clang-debug-tracy-profiler/` сохранён (190M, per operator «tracy нужны»), re-configure green, ProjectV ELF 75.5MB. linux-clang-release ctest 14/14 (включая 14-й тест `ProjectVPresentModeTests` который я пропустил в первом проходе).
 
 ---
 
@@ -1046,5 +1048,71 @@ host.
 Refs: agent/decisions.md §4, agent/memory.md §6,
        legacy/docs/standards/cmake/04_advanced-optimization.md
 ```
+
+**Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.
+
+---
+
+## §22. Build config audit r0 — `session-2026-06-14-build-config-audit-r0` (open, build green)
+
+**Per operator «проверить все конфиги билдов на работоспособность и целесообразность».** Read-only audit 4 build-деревьев + 12 buildPresets на Linux-хосте. Findings + Tier 1 fix в одном коммите.
+
+**Findings (read-only phase):**
+
+| # | Severity | Issue |
+|---|----------|-------|
+| A1 | high | 4 buildPresets имели `targets: [ProjectV, ProjectVTests]`. ctest регистрирует 14 executables, на чистом clone 11+ тестов «cannot find executable» |
+| A2 | high | `linux-clang-debug/bin/` уже частично сломан (ProjectVTests + ProjectVAssetTests missing из 13) — implicit A1 fix |
+| A3 | medium | `linux-clang-debug-ci/` (194M) — configured, not built, `CMAKE_CXX_COMPILER:UNINITIALIZED` в cache |
+| A4 | medium | `linux-clang-debug-tracy-profiler/` (190M) — dead: Tracy UI build fail на Linux/glibc (`agent/memory.md §9`) + nlohmann_json target collision (CMP0002) при re-configure |
+| B1-B3 | low | Нет Linux smoke preset, нет release-ci, display name inconsistency — вне scope (operator не хочет) |
+| C1 | judgment | Benchmarks в release (PROJECTV_ENABLE_BENCHMARKS=OFF) — вне scope (operator не хочет) |
+| C4 | future | CPack/install — отдельная подзадача per `decisions.md §4` |
+
+**Operator decisions (применены в этом slice):**
+- **Tier 1 fix**: A1 (build-preset targets), A2 (implicit), A3 (ci tree), A4 (tracy fix)
+- **«Удалить ci»**: `build/linux-clang-debug-ci/` удалён (194M, exit 0)
+- **«Оставить tracy»**: `build/linux-clang-debug-tracy-profiler/` сохранён; re-configure fix через `PROJECTV_BUILD_TRACY_PROFILER=OFF` в Linux-пресете (root cause: `external/tracy/profiler/CMakeLists.txt:245` ссылается на `nlohmann_json::nlohmann_json` → conflict с root `FetchContent_MakeAvailable(nlohmann_json)`)
+- **«Только Tier 1»**: B1-B3, C1 — отложены
+
+**Files (3 modified, 0 created, +1 fs op):**
+| Файл | Что |
+|------|-----|
+| `CMakePresets.json` | 5 buildPresets обновлены (targets: 3 debug × 17, 2 release × 15, smoke × 1 unchanged); `linux-clang-debug-tracy-profiler.PROJECTV_BUILD_TRACY_PROFILER: ON→OFF` (Linux Tracy UI не собирается) |
+| `agent/active-sessions.md` | append-only `session-2026-06-14T11:29Z-build-config-audit-r0` (status: open) |
+| `agent/decisions.md §4` | +2 подсекции: «Build preset target list invariant» + «`linux-clang-debug-tracy-profiler` Tracy UI fix» |
+| `agent/status.md` | +эта §22 + Updated header |
+| `build/linux-clang-debug-ci/` | **удалён** (rm -rf, 194M, exit 0) |
+
+**Verification (`2026-06-14`):**
+- `cmake --list-presets=build` — 6 buildPresets, JSON valid (3 debug × 17 targets, 2 release × 15, 1 smoke × 1)
+- `linux-clang-release` configure: green, re-configure 0.6s
+- `cmake --build --preset linux-clang-release-build` (включая 14-й test `ProjectVPresentModeTests`): 9/9 incremental green, **все 15 binaries на диске** (ProjectV + 14 test executables)
+- `ctest --test-dir build/linux-clang-release`: **14/14 passed**, 0.07s (vs 13/13 + 1 missing до фикса)
+- `linux-clang-debug-tracy-profiler` re-configure: **green** (после `BUILD_TRACY_PROFILER=OFF` fix), `ProjectV` собирается 75.5MB (Tracy instrumentation), 0 ctest (BUILD_TESTING=OFF), 0 Tracy UI
+- `linux-clang-debug` — untouched, всё ещё работает (ProjectV 75.5MB, ctest 14/14)
+- Disk: 2.1G → 2.6G total (debug + tracy + cpm выросли от re-configures; -194M от удаления ci; net +500M из-за пере-выкачки CPM source в re-configures)
+
+**Target counts финальные:**
+| Build preset | targets | hasPresentMode | has benchmarks |
+|--------------|---------|----------------|----------------|
+| `windows-clang-debug-build` | 17 | ✓ | ✓ |
+| `windows-clang-debug-smoke` | 1 | ✗ | ✗ |
+| `windows-clang-debug-ci-build` | 17 | ✓ | ✓ |
+| `linux-clang-debug-build` | 17 | ✓ | ✓ |
+| `windows-clang-release-build` | 15 | ✓ | ✗ |
+| `linux-clang-release-build` | 15 | ✓ | ✗ |
+
+**Scope discipline (per `AGENTS.md §7.2.6`):** 0 пересечений с 6 активными сессиями. Мои 3 файла modified (CMakePresets.json + agent/active-sessions.md + agent/decisions.md + agent/status.md = 4) — все non-overlapping с чужими scope. Pre-commit: `git diff CMakePresets.json agent/decisions.md` показывает только мои правки. `agent/active-sessions.md` и `agent/status.md` имеют overlap с uncommitted notes предыдущей `session-2026-06-14-release-presets-r0` («ready to close» маркеры) — `git add -p` для selective staging.
+
+**Safety net:** `/tmp/before_build_audit_20260614T112920Z.patch` (84 KB) — captures все 5 uncommitted dirty файлов от предыдущих сессий + мои новые правки. НЕ удаляю per §8.1.
+
+**Build tree state финальный:**
+| Tree | Disk | ProjectV | ctest | Status |
+|------|------|----------|-------|--------|
+| `linux-clang-debug` | 961M | 75.5MB | 14 | ✅ works |
+| `linux-clang-debug-tracy-profiler` | 679M | 75.5MB | 0 | ✅ works (после BUILD_TRACY_PROFILER=OFF fix) |
+| `linux-clang-release` | 512M | 19.7MB | 14 | ✅ works |
+| ~~`linux-clang-debug-ci`~~ | ~~194M~~ | — | — | ❌ **removed** per operator «удалить ci» |
 
 **Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.

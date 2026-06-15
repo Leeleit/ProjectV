@@ -57,6 +57,23 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
+### session-2026-06-14T11-29Z-build-config-audit-r0
+
+- **id:** `2026-06-14T11:29Z-build-config-audit-r0`
+- **started-at:** 2026-06-14T11:29:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Аудит build-presets + cleanup мёртвых деревьев.** Per operator «проверить все конфиги билдов на работоспособность и целесообразность». Findings: 4 buildPresets имели `targets: [ProjectV, ProjectVTests]` (только 2 из 14 ctest executables), `linux-clang-debug-ci/` (194M, dead), `linux-clang-debug-tracy-profiler/` (190M, dead — Tracy UI build fail на Linux/glibc per `agent/memory.md §9`).
+- **files-touched-intent:**
+  - **EDIT:** `CMakePresets.json` (5 buildPresets обновлены с полным target list: 3 debug × 17 targets, 2 release × 15 targets, 1 smoke × 1 target; `linux-clang-debug-tracy-profiler` `PROJECTV_BUILD_TRACY_PROFILER: ON→OFF` чтобы избежать nlohmann_json target collision с Tracy profiler UI)
+  - **DELETE:** `build/linux-clang-debug-ci/` (194M, configured-not-built, dead per operator «удалить ci»)
+  - **PRESERVE:** `build/linux-clang-debug-tracy-profiler/` (190M, **не** удалять per operator «tracy нужны»; теперь конфигурируется и собирает `ProjectV` ELF с Tracy instrumentation после `PROJECTV_BUILD_TRACY_PROFILER=OFF` fix)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close при operator approval), `agent/status.md` (новая секция §22), `agent/decisions.md §4` (+подпункт «Build preset target list invariant»)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `src/**`, `tests/CMakeLists.txt`, `external/`, `legacy/`, `docs/`, `tools/`, `build/cpm-source-cache/`, чужой dirty work (5+ uncommitted файлов от других сессий)
+- **status:** open
+- **notes:** **Готово к закрытию** — все 3 actions применены, проверены. Per `AGENTS.md §8.1`, status: open сохраняется до команды «закрой сессию». **Safety net:** `/tmp/before_build_audit_20260614T112920Z.patch` (84 KB, captures все uncommitted от предыдущих сессий). **Verification:** `cmake --list-presets=build` показывает обновлённые targets, `linux-clang-release-build` собирает 15 targets (ProjectV + 14 test executables), ctest 14/14 на linux-clang-release в 0.07s, `linux-clang-debug-tracy-profiler` re-configures чисто и собирает `ProjectV` ELF (75.5MB, Tracy instrumentation включена, UI бинарь off per Linux constraint), `linux-clang-debug-ci/` удалён (-194M).
+
 ### session-2026-06-14T10-53Z-release-presets-r0
 
 - **id:** `2026-06-14T10:53Z-release-presets-r0`
