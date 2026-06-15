@@ -1,5 +1,4 @@
-#ifndef ASSET_MANIFEST_HPP
-#define ASSET_MANIFEST_HPP
+#pragma once
 
 #include <string>
 #include <string_view>
@@ -42,4 +41,3 @@ std::vector<ManifestEntry> ParseAssetManifestFromEnv();
 
 } // namespace projectv::asset
 
-#endif

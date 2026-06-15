@@ -1,5 +1,4 @@
-#ifndef TYPES_HPP
-#define TYPES_HPP
+#pragma once
 
 // **libc++ migration debug (`2026-06-13`).** Re-enabled
 // the central `import projectv.math;` + `import
@@ -1521,4 +1520,3 @@ struct AppState {
 
 void ShutdownVulkan(AppState *state);
 
-#endif

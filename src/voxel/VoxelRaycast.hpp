@@ -1,5 +1,4 @@
-#ifndef VOXEL_RAYCAST_HPP
-#define VOXEL_RAYCAST_HPP
+#pragma once
 
 #include "voxel/VoxelWorld.hpp"
 
@@ -21,4 +20,3 @@ VoxelRaycastHit RaycastVoxelWorld(
 	const std::array<float, 3> &direction,
 	float maxDistance);
 
-#endif

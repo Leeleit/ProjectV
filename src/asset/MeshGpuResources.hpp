@@ -1,5 +1,4 @@
-#ifndef ASSET_MESH_GPU_RESOURCES_HPP
-#define ASSET_MESH_GPU_RESOURCES_HPP
+#pragma once
 
 #include <string>
 
@@ -33,4 +32,3 @@ void DestroyMeshGpuResources(VmaAllocator allocator, MeshGpuResources &resources
 
 } // namespace projectv::asset
 
-#endif

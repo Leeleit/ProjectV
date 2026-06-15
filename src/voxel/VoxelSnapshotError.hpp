@@ -1,5 +1,4 @@
-#ifndef VOXEL_SNAPSHOT_ERROR_HPP
-#define VOXEL_SNAPSHOT_ERROR_HPP
+#pragma once
 
 // **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
 // `SaveVoxelWorldSnapshot` / `LoadVoxelWorldSnapshot`. Replaces the
@@ -84,4 +83,3 @@ constexpr std::string_view toString(VoxelSnapshotError e) noexcept {
 
 } // namespace projectv::voxel
 
-#endif // VOXEL_SNAPSHOT_ERROR_HPP

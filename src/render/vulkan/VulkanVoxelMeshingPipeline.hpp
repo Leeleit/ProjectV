@@ -1,5 +1,4 @@
-#ifndef VULKAN_VOXEL_MESHING_PIPELINE_HPP
-#define VULKAN_VOXEL_MESHING_PIPELINE_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -13,4 +12,3 @@ void DestroyVoxelMeshingPipeline(
 	VulkanContextState *context,
 	RenderState *render);
 
-#endif

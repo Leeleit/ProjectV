@@ -1,5 +1,4 @@
-#ifndef VULKAN_DEBUG_HPP
-#define VULKAN_DEBUG_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -9,4 +8,3 @@ void SetVulkanObjectName(
 	VkObjectType objectType,
 	const char *name);
 
-#endif

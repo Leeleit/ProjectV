@@ -1,5 +1,4 @@
-#ifndef BENCHMARK_AUTOMATION_HPP
-#define BENCHMARK_AUTOMATION_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -9,4 +8,3 @@ bool UpdateBenchmarkAutomation(
 	const DebugStats &debugStats,
 	Uint64 frameCounter);
 
-#endif

@@ -342,7 +342,7 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 
 **Сессия:** `status: open` сейчас, после commit → auto-close (move в «Закрытые сессии», `closed-at` + `commit-hash`). Эта сессия — сама пример новых правил в действии.
 
-## §24. Windows build verification r0 — `session-2026-06-15T10-25Z-windows-build-verification-r0` (closed, 5/5 atomic-commits, build green)
+## §27. Windows build verification r0 — `session-2026-06-15T10-25Z-windows-build-verification-r0` (closed, 5/5 atomic-commits, build green)
 
 **Per operator «Мы сейчас в arch linux, нужно как-то проверить, что сборки windows-clang-debug и windows-clang-release будут работать. Предлагаю проверить досконально всё там, но без возможности запустить код на винде и проверить на практике.»** Read-only static audit (3 параллельных explore-агента на платформенный код / submodule state / scripts + tools) обнаружил **3 P0 + 6 P1 + 10 P2 + 4 P3** риска. Plan утверждён оператором: 5 atomic-commits (Tier A-D), все landed в одной сессии.
 
@@ -382,6 +382,40 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 **Pre-commit gates (per `AGENTS.md §7.3.1`):** все 5 commits — `type=build/refactor/docs/chore` (auto per п.3). Commit 5 destructive (submodule ops) — operator confirm в Q&A этой сессии («Все 5 commits в одной сессии» option explicitly flagged DESTRUCTIVE per `§7.2.2`).
 
 **Cross-refs:** `agent/decisions.md §4` (+2 новые sub-section: "Windows-clang-cl libc++ gating fix 2026-06-15" + "Tracy UI standalone build split 2026-06-15"), `agent/memory.md §6` (без изменений; libc++/libstdc++ history сохранён; новая секция о Windows-build-verification append ниже), `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0` (closed per `§8.1` с `commit-hash: 69b1726` + `closed-at: 2026-06-15T10:50:00Z`).
+
+---
+
+## §28. Post-WBV-r1 batch — `session-2026-06-15T-post-wbv-r1` (closed в этом commit)
+
+**Per operator «F13-F24 нет ни на одной клавиатуре нормальной. Вариант B. Приступай, идиот.»** + «ТОлько один» — единый `fix` commit, batching T1.1 + T0.3 (3 файла) + T1.2 (55 файлов) = 58 source-файлов + 2 agent/* файла = 60 files в одном коммите.
+
+**3 sub-task'а:**
+
+| # | Item | Files | Что |
+|---|------|-------|-----|
+| T1.1 | F11/F12/V double-fire | `src/app/main.cpp:545-619` | Relocate defense-r0 hotkey bypass: shader hot-reload `SDLK_F11 → SDLK_1`, ray-march toggle `SDLK_F12 → SDLK_2`, V-sync cycle `SDLK_V → SDLK_3`. All 26 letters A-Z и F1-F12 bound в `InputAction`; digits 1, 2, 3 — единственный свободный top-row cluster. F11/F12/V → InputAction as originally intended (no shadow). |
+| T0.3 | shader contract | `src/shaders/{model.frag, model.vert, taa_resolve.frag}` | Add `vec4 taaLayerHistoryParams;` to 3 model/TAA-pipeline shader'ов — match C++ `VoxelSceneLighting` byte layout per `decisions.md §18` (1.5 anti-flicker 16 B @ offset 608, total 624 B). The 3 voxel-pipeline shaders (`voxel.frag:54`, `voxel_shadow.vert:56`, `voxel_mesh.comp:95`) уже in sync; эти 3 были missed — std430 layout mismatch, OOB-read past C++ struct end. Recurrence of `agent/memory.md §10.8` GraphicsPushConstants incident. |
+| T1.2 | pragma once | 55 `.hpp` файлов | Convert `#ifndef X / #define X / #endif` → `#pragma once` per project convention `agent/memory.md §10.1`. Inner `#if` blocks (Tracy/RenderDoc/modules guards) preserved untouched. Files across `asset/`, `app/`, `c_kernels/`, `core/`, `debug/`, `ecs/`, `physics/`, `platform/`, `render/`, `render/vulkan/`, `voxel/`. 3 pre-existing `#pragma once` headers (`core/RepoRoot.hpp`, `audio/MusicDirectoryPath.hpp`, `audio/AudioEngine.hpp`) — без изменений. |
+
+**T0.2 renumbering (bonus, inline в этом commit):** Renamed duplicate `## §24` (windows-build-verification-r0) → `## §27`. The other `## §24` (defense-docs-overhaul, 15:50Z) остаётся §24 — chronologically правильно (15:50Z = latest). `rg "status\.md §2[4-7]\b" agent/ TODO.md` → 0 matches (zero cross-refs к §24-§27 anywhere), так что renumbering не ломает ничего.
+
+**Build state:**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — **151/151 targets green**, 0 errors, 0 new warnings.
+- `ctest --test-dir build/linux-clang-debug -j 8 --output-on-failure` — **14/14 pass за 0.68s**, baseline preserved.
+- Safety-net patch: `/tmp/before_post_wbv_r1_<ts>.patch` — пустой (working tree was clean до этой сессии; единственный modified файл AGENTS.md — чужой protocol rewrite, не мой).
+
+**Pre-commit gate (§7.3.1):**
+- §7.2.5 message: `fix(post-wbv-r1): F11/F12/V double-fire + shader contract + pragma once batch`.
+- Scope discipline: AGENTS.md modified чужой сессией (operator protocol rewrite), `legacy/docs/tex/.tmp/*` (kt-latex-r0), `tests/fixtures/Untitled.colonada.glb` (defense-docs-r0) — все вне scope, не в commit'е.
+- type=fix → operator confirm = «Приступай, идиот» в этой сессии.
+
+**Defer (явно per operator «ТОлько один»):**
+- T1.3 std::expected migrations (9+ cold-path functions)
+- T2.x perf batch (6 items: tracy, shadow, audio StringId, meshing, ECS, input)
+- T3.x docs/chore/test (5 items: F-key doc, F-table, misleading VMA comment, TaaRenderTargets test, agent/memory.md append)
+- T0.1 active-sessions.md stale-entry cleanup (windows-build-verification-r0 в «Активные» section с `status: closed` — owned by other session per `§7.2.8`, не моя)
+
+**Cross-refs:** `agent/memory.md §10.1` (C++26 baseline + pragma once convention), §10.7 (Vulkan docs before grep), §10.8 (shader-C++ struct byte parity); `agent/decisions.md §18` (TAA contract).
 
 ---
 

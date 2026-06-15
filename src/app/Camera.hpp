@@ -1,5 +1,4 @@
-#ifndef CAMERA_HPP
-#define CAMERA_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -33,4 +32,3 @@ ChunkCullingParameters BuildChunkCullingParameters(
 	VkExtent2D extent,
 	float maxDistance);
 
-#endif

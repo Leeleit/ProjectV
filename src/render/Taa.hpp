@@ -1,5 +1,4 @@
-#ifndef PROJECTV_TAA_HPP
-#define PROJECTV_TAA_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -38,4 +37,3 @@ std::array<float, 4> BuildTaaLayerHistoryParams(
 
 } // namespace projectv::taa
 
-#endif

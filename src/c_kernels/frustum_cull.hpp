@@ -26,8 +26,7 @@
 //   for ABI safety — `__attribute__((target("avx2")))`
 //   is per-function and never crosses a translation
 //   unit boundary, so the parameters stay scalar.
-#ifndef PROJECTV_C_KERNELS_FRUSTUM_CULL_HPP
-#define PROJECTV_C_KERNELS_FRUSTUM_CULL_HPP
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -72,4 +71,3 @@ void projectv_cull_frustum_avx2(
 }
 #endif
 
-#endif

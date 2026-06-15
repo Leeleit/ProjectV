@@ -1,5 +1,4 @@
-#ifndef VULKAN_INIT_HPP
-#define VULKAN_INIT_HPP
+#pragma once
 
 #include <cstdint>
 #include <expected>
@@ -72,4 +71,3 @@ constexpr std::string_view toString(VulkanInitError e) noexcept {
 // for the cold-path type-safety win).
 std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState *state);
 
-#endif

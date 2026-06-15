@@ -1,5 +1,4 @@
-#ifndef ASSET_DRACO_MESH_DECODER_HPP
-#define ASSET_DRACO_MESH_DECODER_HPP
+#pragma once
 
 #include <string>
 
@@ -20,4 +19,3 @@ bool DecodeDracoPrimitive(
 
 } // namespace projectv::asset
 
-#endif

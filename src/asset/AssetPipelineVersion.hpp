@@ -1,7 +1,5 @@
-#ifndef ASSET_PIPELINE_VERSION_HPP
-#define ASSET_PIPELINE_VERSION_HPP
+#pragma once
 
 namespace projectv::asset {
 }
 
-#endif

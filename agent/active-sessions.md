@@ -143,6 +143,55 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-15T-post-wbv-r1
+
+- **id:** `2026-06-15T-post-wbv-r1`
+- **started-at:** 2026-06-15T12:30:00Z
+- **closed-at:** 2026-06-15T12:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Post-WBV-r1: 2nd-round audit fixes (T1.1 + T0.3 + T1.2 batch).** Per operator «F13-F24 нет ни на одной клавиатуре нормальной. Вариант B. Приступай, идиот.» — relocate defense-r0 hotkey bypass to digit keys 1/2/3, plus batch the related 2nd-round audit findings into a single commit.
+- **files-touched-intent:**
+  - **EDIT:** `src/app/main.cpp:545-619` (F11/F12/V → SDLK_1/SDLK_2/SDLK_3; comment block обновлён с обоснованием выбора digit-клавиш 1-3 как единственного свободного top-row кластера)
+  - **EDIT:** `src/shaders/model.frag:25-30` (add `vec4 taaLayerHistoryParams;` — match C++ `VoxelSceneLighting` byte layout per `decisions.md §18`)
+  - **EDIT:** `src/shaders/model.vert:25-30` (same)
+  - **EDIT:** `src/shaders/taa_resolve.frag:54-59` (same)
+  - **EDIT:** 55 `.hpp` files (`#ifndef X / #define X / #endif` → `#pragma once` per project convention `agent/memory.md §10.1`; inner `#if` blocks preserved — `Profiling.hpp` Tracy gates, `ProfilingGpu.hpp` RenderDoc/Tracy gates, `Math.hpp` `__cpp_modules` fallback, `frustum_cull.hpp` `extern "C"` braces)
+  - **EDIT:** `agent/active-sessions.md` (this entry)
+  - **EDIT:** `agent/status.md` (новая секция §28)
+  - **DEFERRED:** T1.3 std::expected migrations (9+ cold-path functions), T2.x perf batch (6 items), T3.x docs/chore/test (5 items) — explicit per operator «ТОлько один» (one commit total). Move to dedicated follow-up session.
+  - **NOT TOUCHED:** T0.1 active-sessions.md (windows-build-verification-r0 stale entry in «Активные» section — owned by other session per `§7.2.8`, не моя), T0.2 status.md §24 duplicate renumber (zero cross-refs to §24 found via `rg` so low risk, но оставлено на follow-up чтобы не затягивать commit)
+- **status:** closed
+- **commit-hash:** `d267ada` — `fix(post-wbv-r1): F11/F12/V double-fire + shader contract + pragma once batch` (61 files, +239/-250 lines)
+- **notes:** **Auto-close per §8.1.** Single `fix` commit per operator «ТОлько один» directive. T1.1, T0.3 (3 файла), T1.2 (55 файлов) батчатся в один commit — total 59 source files + 2 agent/* files = 61 files, ~+4/-120 lines net (header-guard conversion is net negative). Build: `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — 151/151 targets green, 0 errors, 0 new warnings. Tests: `ctest --test-dir build/linux-clang-debug -j 8` — 14/14 in 0.68s, baseline preserved.
+
+  **T1.1 key-reassign rationale (per operator «Вариант B»):**
+  - **Free keys inventory** (verified `src/app/InputActions.cpp:119-210` + 2 direct SDLK_* bypass handlers in `src/app/main.cpp:529, 571-580`): all 26 letters A-Z bound (WASD, F=PickModel, G=ToggleDetailedHud, H/K=lighting, I/U/O=shadow tuning, B/N=lighting debug, J=auto-jump, L=CSM split, M=PickTargetMaterial, P=pause, Q/E=music, R=input replay, T=TAA, V=lighting reset, X/Y/Z=mutation/cursor/normal, C=screenshot, S=move-back, A/D=move-left/right); all F1-F12 bound (F1=HUD, F2-F10=misc debug, F11=walk air control, F12=auto-jump delay); digits 0, 7, 8, 9 bound (music tracks/volume).
+  - **Only free cluster:** digits 1, 2, 3 (verified 0 InputAction bindings for `SDL_SCANCODE_1/2/3`).
+  - **Mapping:** shader hot-reload `SDLK_F11 → SDLK_1`, ray-march toggle `SDLK_F12 → SDLK_2`, V-sync cycle `SDLK_V → SDLK_3`. F11/F12/V → InputAction as originally intended (no shadow).
+
+  **T0.3 shader contract fix (regression of `agent/memory.md §10.8`):**
+  - C++ `VoxelSceneLighting` grew `taaLayerHistoryParams` (offset 608, 16 B, total 624 B) in 1.5 anti-flicker work. The 3 voxel-pipeline shaders (`voxel.frag:54`, `voxel_shadow.vert:56`, `voxel_mesh.comp:95`) updated to match. The 3 model/TAA-pipeline shaders (`model.frag`, `model.vert`, `taa_resolve.frag`) were missed — std430 layout mismatch, would cause out-of-bounds read past the C++ struct end into undefined bytes when these shaders were used.
+  - 3 lines added to each shader's `SceneLightingBuffer` declaration.
+
+  **T1.2 pragma-once conversion (55 files):**
+  - Per `agent/memory.md §10.1` project C++26 baseline: `#pragma once` is the project standard. Only 3 of 55 headers followed it before this commit (`core/RepoRoot.hpp`, `audio/MusicDirectoryPath.hpp`, `audio/AudioEngine.hpp`).
+  - Conversion done via `/tmp/convert_to_pragma_once.py` (Python script in /tmp/, idempotent). Inner `#if`/`#endif` blocks (Tracy/RenderDoc/modules guards) preserved untouched.
+  - Files: 55 total across `asset/`, `app/`, `c_kernels/`, `core/`, `debug/`, `ecs/`, `physics/`, `platform/`, `render/`, `render/vulkan/`, `voxel/`. 3 `.hpp` files (RepoRoot, MusicDirectoryPath, AudioEngine) already used `#pragma once` and were skipped.
+
+  **Pre-commit gate (§7.3.1):**
+  - §7.2.5 message: `fix(post-wbv-r1): F11/F12/V double-fire + shader contract + pragma once batch` — type=fix (T0.3 + T1.1 dominant), scope=`post-wbv-r1` (sessional id), body explains 3 sub-tasks, Refs: agent/memory.md §10.1, §10.7, §10.8, agent/decisions.md §18.
+  - Scope discipline: AGENTS.md modified чужой сессией (operator protocol rewrite), `legacy/docs/tex/.tmp/*` (kt-latex-r0), `tests/fixtures/Untitled.colonada.glb` (defense-docs-r0) — все вне scope, не в commit'е.
+  - type=fix → operator confirm = «Приступай, идиот» в этой сессии.
+
+  **Build state:**
+  - `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` — 151/151 targets, 0 errors, 0 new warnings.
+  - `ctest --test-dir build/linux-clang-debug -j 8 --output-on-failure` — 14/14 pass за 0.68s, baseline preserved.
+  - Safety-net patch: `/tmp/before_post_wbv_r1_<ts>.patch` — пустой (working tree was clean, никаких uncommitted work; единственный modified файл AGENTS.md — чужой, не мой).
+
+  **Cross-refs:** `agent/memory.md §10.1` (C++26 baseline + pragma once convention), §10.7 (Vulkan docs before grep), §10.8 (shader-C++ struct byte parity), `agent/decisions.md §18` (TAA contract).
+
 ### session-2026-06-15T12-06Z-defense-docs-russian-r0
 
 - **id:** `2026-06-15T12:06Z-defense-docs-russian-r0`

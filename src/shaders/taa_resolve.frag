@@ -52,6 +52,11 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
+    // 1.5 anti-flicker layer history params (texelX, texelY, valid, blendFactor).
+    // Mirrors the C++ `VoxelSceneLighting` byte layout. The TAA resolve pass
+    // does not currently read it, but the field is declared so the std430
+    // layout matches the C++ struct byte-for-byte (see agent/decisions.md §18).
+    vec4 taaLayerHistoryParams;
 } sceneLighting;
 
 layout(push_constant) uniform ResolvePushConstants {

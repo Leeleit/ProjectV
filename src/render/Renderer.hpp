@@ -1,5 +1,4 @@
-#ifndef RENDERER_HPP
-#define RENDERER_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -10,4 +9,3 @@ SDL_AppResult DrawFrame(
 	RenderState *render,
 	FrameState *frame);
 
-#endif

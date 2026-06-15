@@ -1,5 +1,4 @@
-#ifndef SHADOW_TYPES_HPP
-#define SHADOW_TYPES_HPP
+#pragma once
 
 #include <array>
 #include <cstddef>
@@ -39,4 +38,3 @@ inline const char *TransparentShadowPolicyToString(const TransparentShadowPolicy
 	}
 }
 
-#endif

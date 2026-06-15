@@ -1,5 +1,4 @@
-#ifndef DEBUG_HUD_HPP
-#define DEBUG_HUD_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -12,4 +11,3 @@ uint32_t BuildDebugHudVertices(
 	DebugHudVertex *outVertices,
 	uint32_t maxVertexCount);
 
-#endif

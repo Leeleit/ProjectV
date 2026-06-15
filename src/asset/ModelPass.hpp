@@ -1,5 +1,4 @@
-#ifndef ASSET_MODEL_PASS_HPP
-#define ASSET_MODEL_PASS_HPP
+#pragma once
 
 #include "core/Types.hpp"
 #include "render/TaaRenderTargets.hpp"
@@ -22,6 +21,5 @@ VkPipeline PickModelPipeline(const RenderState &render);
 
 } // namespace projectv::asset
 
-#endif
 
 

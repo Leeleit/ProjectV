@@ -1,5 +1,4 @@
-#ifndef LOOK_DEV_CAPTURE_AUTOMATION_HPP
-#define LOOK_DEV_CAPTURE_AUTOMATION_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -9,4 +8,3 @@ bool UpdateLookDevCaptureAutomation(
 	LookDevCaptureAutomationState *automation,
 	RenderState *render);
 
-#endif

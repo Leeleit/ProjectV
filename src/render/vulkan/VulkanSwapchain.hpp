@@ -1,5 +1,4 @@
-#ifndef VULKAN_SWAPCHAIN_HPP
-#define VULKAN_SWAPCHAIN_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -248,4 +247,3 @@ inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 	return projectv::present_mode::g_cycle;
 }
 
-#endif

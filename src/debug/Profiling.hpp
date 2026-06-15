@@ -1,5 +1,4 @@
-#ifndef PROFILING_HPP
-#define PROFILING_HPP
+#pragma once
 
 // ReSharper disable once CppUnusedIncludeDirective
 #include <cstddef>
@@ -183,4 +182,3 @@ inline void RecordFree(
 
 } // namespace profiling
 
-#endif

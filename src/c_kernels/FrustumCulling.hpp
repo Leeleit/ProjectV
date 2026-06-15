@@ -41,8 +41,7 @@
 // caller; if a future frame graph parallelises the
 // cull, the buffers need to move to thread-local or
 // per-frame allocation.
-#ifndef PROJECTV_C_KERNELS_FRUSTUM_CULLING_HPP
-#define PROJECTV_C_KERNELS_FRUSTUM_CULLING_HPP
+#pragma once
 
 #include "c_kernels/frustum_cull.hpp"
 #include "core/Types.hpp"
@@ -110,4 +109,3 @@ constexpr std::size_t kBatchDispatchThreshold = 8;
 
 } // namespace projectv::c_kernels
 
-#endif

@@ -1,5 +1,4 @@
-#ifndef VOXEL_INTERACTION_HPP
-#define VOXEL_INTERACTION_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -16,4 +15,3 @@ void UpdateVoxelInteraction(
 	bool allowEditing,
 	const PhysicsState *physics);
 
-#endif

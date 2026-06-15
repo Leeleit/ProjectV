@@ -1,5 +1,4 @@
-#ifndef SHADOW_PROJECTION_HPP
-#define SHADOW_PROJECTION_HPP
+#pragma once
 
 #include "core/Math.hpp"
 #include "render/ShadowTypes.hpp"
@@ -56,4 +55,3 @@ SunShadowCascadeSplits BuildSunShadowCascadeSplits(
 	float farPlane,
 	float splitLambda = 0.80f);
 
-#endif

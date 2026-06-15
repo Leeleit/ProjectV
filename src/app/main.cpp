@@ -542,7 +542,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		return SDL_APP_CONTINUE;
 	}
 
-	// **Defense r0 hotkeys (2026-06-13, relocated 2026-06-15).** Originally
+	// **Defense r0 hotkeys (2026-06-13, relocated twice 2026-06-15).** Originally
 	// F5 = hot reload shaders, F6 = ray-march pass toggle. **Relocated to
 	// F11 / F12** after a pre-defense code audit (`session-2026-06-15T10-43Z-
 	// defense-docs-audit-r0`) discovered that F5 and F6 are also bound in
@@ -551,12 +551,14 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	// produced a confusing double-fire on the same key press.
 	//
 	// F11 and F12 are also bound in `InputAction` (`ToggleWalkAirControlMode`
-	// and `ToggleWalkAutoJumpDelay`), so the bypasses **shadow** those
-	// bindings on the same physical key. The shadowed walk-controller
-	// toggles are debug internals (MinecraftLike/Realistic air control,
-	// auto-jump delay) and are not on the demo path; the visible behaviour
-	// loss is acceptable for a defense demo where shader reload and
-	// ray-march toggle are explicit features.
+	// and `ToggleWalkAutoJumpDelay`), so the second relocation to **digit
+	// keys 1 / 2 / 3** (per `session-2026-06-15T-post-windows-build-verification-r1`)
+	// frees both F-keys for their original walk-controller bindings. All 26
+	// letters A-Z and all F1-F12 are bound in `InputAction` (digits 0, 7,
+	// 8, 9 are bound to music player controls), so digits 1, 2, 3 are the
+	// only top-row non-letter, non-F-key free cluster. Walk-controller
+	// toggles and lighting debug reset now fire exclusively on F11/F12/V
+	// with no shadow from the developer bypasses.
 	//
 	// **TODO post-defense (`Phase 7+`):** route these through the formal
 	// `InputAction` system by adding `ReloadShaders` and
@@ -564,21 +566,20 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	// mid-edit by `session-2026-06-13-hardcore-perf-r0` — that constraint
 	// was the original reason for the bypass). Once `core/Types.hpp` is
 	// stable, replace the SDLK_* checks with `ConsumeInputActionPressed`
-	// on the new enum values, freeing F11/F12 for their original walk-
-	// controller bindings.
+	// on the new enum values, freeing 1/2/3 for any future use.
 	//
 	// See `docs/DefenseReport.md §2.7` for the original defense r0 contract.
 	if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
-		if (event->key.key == SDLK_F11) {
+		if (event->key.key == SDLK_1) {
 			RebuildAllShadersFromDisk();
-		} else if (event->key.key == SDLK_F12) {
+		} else if (event->key.key == SDLK_2) {
 			const bool newState = !projectv::render::IsRayMarchEnabled();
 			projectv::render::SetRayMarchEnabled(newState);
 			std::fprintf(
 				stderr,
 				"[ProjectV][App] ToggleRayMarch: %s\n",
 				newState ? "ray-march pass ENABLED" : "ray-march pass DISABLED");
-		} else if (event->key.key == SDLK_V) {
+		} else if (event->key.key == SDLK_3) {
 			// **V-sync toggle (`2026-06-13`, auto-detect
 			// cycle on `2026-06-14`).** Walks the
 			// runtime present-mode cycle (built once

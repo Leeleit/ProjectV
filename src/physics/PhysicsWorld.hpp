@@ -1,5 +1,4 @@
-#ifndef PHYSICS_WORLD_HPP
-#define PHYSICS_WORLD_HPP
+#pragma once
 
 #include "voxel/VoxelWorld.hpp"
 
@@ -90,4 +89,3 @@ bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics);
 PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics);
 uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics);
 
-#endif

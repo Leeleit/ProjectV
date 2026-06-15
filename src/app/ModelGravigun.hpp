@@ -1,5 +1,4 @@
-#ifndef MODEL_GRAVIGUN_HPP
-#define MODEL_GRAVIGUN_HPP
+#pragma once
 
 #include "core/Types.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -105,4 +104,3 @@ void TickModelGravigun(
 
 } // namespace projectv::app
 
-#endif

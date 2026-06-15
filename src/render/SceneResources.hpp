@@ -1,5 +1,4 @@
-#ifndef SCENE_RESOURCES_HPP
-#define SCENE_RESOURCES_HPP
+#pragma once
 
 #include "core/Math.hpp"
 #include "core/Types.hpp"
@@ -408,4 +407,3 @@ inline uint64_t ComputeVisibilityCacheHash(
 }
 } // namespace projectv::visibility_cache
 
-#endif

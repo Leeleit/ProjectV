@@ -1,5 +1,4 @@
-#ifndef ASSET_MESH_BAKER_HPP
-#define ASSET_MESH_BAKER_HPP
+#pragma once
 
 #include <cstdint>
 #include <optional>
@@ -39,5 +38,4 @@ BakedMesh BakeLoadedAsset(
 
 } // namespace projectv::asset
 
-#endif
 

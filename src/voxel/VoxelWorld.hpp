@@ -1,5 +1,4 @@
-#ifndef VOXEL_WORLD_HPP
-#define VOXEL_WORLD_HPP
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -208,4 +207,3 @@ uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
 // short-circuit on the `stats.fluidVoxelCount == 0u` check.
 uint32_t UpdateFluidCA(VoxelWorld &world);
 
-#endif

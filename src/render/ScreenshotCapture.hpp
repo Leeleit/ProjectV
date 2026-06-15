@@ -1,5 +1,4 @@
-#ifndef SCREENSHOT_CAPTURE_HPP
-#define SCREENSHOT_CAPTURE_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -23,4 +22,3 @@ bool SaveScreenshotCaptureMetadata(
 	std::string_view screenshotPath,
 	std::string_view metadataPath);
 
-#endif

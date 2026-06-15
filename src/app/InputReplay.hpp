@@ -1,5 +1,4 @@
-#ifndef INPUT_REPLAY_HPP
-#define INPUT_REPLAY_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -30,4 +29,3 @@ bool PrepareNextInputReplayPlaybackFrame(
 	SimulationState *simulation);
 void StopInputReplayPlayback(InputState *input);
 
-#endif

@@ -1,5 +1,4 @@
-#ifndef ECS_WORLD_HPP
-#define ECS_WORLD_HPP
+#pragma once
 
 // noinspection CppUnusedIncludeDirective
 // `<cstddef>` provides `size_t` for `GetEcsWorldChunkSummary`'s
@@ -34,4 +33,3 @@ bool GetEcsWorldChunkSummary(
 	VoxelWorldStats *outStats,
 	size_t *outChunkEntityCount);
 
-#endif

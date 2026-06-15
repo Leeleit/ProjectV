@@ -1,5 +1,4 @@
-#ifndef PROJECTV_TAA_RENDER_TARGETS_HPP
-#define PROJECTV_TAA_RENDER_TARGETS_HPP
+#pragma once
 
 #include <cstdint>
 #include <expected>
@@ -177,4 +176,3 @@ void RecordTaaHistoryCopy(
 
 } // namespace projectv::taa
 
-#endif

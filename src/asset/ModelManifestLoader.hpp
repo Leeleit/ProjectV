@@ -1,5 +1,4 @@
-#ifndef ASSET_MODEL_MANIFEST_LOADER_HPP
-#define ASSET_MODEL_MANIFEST_LOADER_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -115,4 +114,3 @@ void SnapModelInstancesAboveGroundDispatch(
 
 } // namespace projectv::asset
 
-#endif

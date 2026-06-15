@@ -1,5 +1,4 @@
-#ifndef VULKAN_GRAPHICS_PIPELINE_HPP
-#define VULKAN_GRAPHICS_PIPELINE_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -14,4 +13,3 @@ void DestroyGraphicsPipeline(
 	VulkanContextState *context,
 	RenderState *render);
 
-#endif

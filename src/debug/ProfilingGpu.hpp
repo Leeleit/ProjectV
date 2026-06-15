@@ -1,5 +1,4 @@
-#ifndef PROFILING_GPU_HPP
-#define PROFILING_GPU_HPP
+#pragma once
 
 // ReSharper disable once CppUnusedIncludeDirective
 #include "debug/Profiling.hpp"
@@ -223,4 +222,3 @@ class ScopedGpuDebugLabel {
 
 } // namespace profiling
 
-#endif

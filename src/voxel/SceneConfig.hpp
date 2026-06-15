@@ -1,5 +1,4 @@
-#ifndef VOXEL_SCENE_CONFIG_HPP
-#define VOXEL_SCENE_CONFIG_HPP
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -42,4 +41,3 @@ bool LoadSceneConfig(std::string_view path, SceneConfig &outConfig);
 
 }  // namespace projectv::voxel
 
-#endif  // VOXEL_SCENE_CONFIG_HPP

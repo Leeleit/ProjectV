@@ -1,5 +1,4 @@
-#ifndef FRAME_PREPARATION_HPP
-#define FRAME_PREPARATION_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -25,4 +24,3 @@ void BuildVisibleModelInstanceList(
 	const ChunkCullingParameters &parameters,
 	RenderState *render);
 
-#endif

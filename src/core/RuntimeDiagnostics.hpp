@@ -1,5 +1,4 @@
-#ifndef RUNTIME_DIAGNOSTICS_HPP
-#define RUNTIME_DIAGNOSTICS_HPP
+#pragma once
 
 #include "volk.h"
 
@@ -45,4 +44,3 @@ void LogCheckFailure(
 #define PV_ASSERT(condition, subsystem, step, detail) ((void)0)
 #endif
 
-#endif

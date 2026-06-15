@@ -1,5 +1,4 @@
-#ifndef RAY_MARCH_PASS_HPP
-#define RAY_MARCH_PASS_HPP
+#pragma once
 
 #include <cstdint>
 
@@ -57,4 +56,3 @@ void RecordRayMarchCommands(const VulkanContextState &context, const FrameRender
 
 }  // namespace projectv::render
 
-#endif  // RAY_MARCH_PASS_HPP

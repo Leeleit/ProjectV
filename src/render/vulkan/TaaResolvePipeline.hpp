@@ -1,5 +1,4 @@
-#ifndef VULKAN_TAA_RESOLVE_PIPELINE_HPP
-#define VULKAN_TAA_RESOLVE_PIPELINE_HPP
+#pragma once
 
 // TAA resolve pipeline. The 6th graphics pipeline in the renderer. It is
 // intentionally split out of `VulkanGraphicsPipeline.cpp` so the main file
@@ -39,4 +38,3 @@ void DestroyTaaResolvePipeline(
 	VulkanContextState *context,
 	RenderState *render);
 
-#endif

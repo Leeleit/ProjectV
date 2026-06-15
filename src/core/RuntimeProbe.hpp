@@ -1,5 +1,4 @@
-#ifndef RUNTIME_PROBE_HPP
-#define RUNTIME_PROBE_HPP
+#pragma once
 
 #include <cstdint>
 #include <string_view>
@@ -18,4 +17,3 @@ const char *InitFailureStageToString(InitFailureStage stage);
 InitFailureStage GetRequestedInitFailureStage();
 bool IsInitFailureStageRequested(InitFailureStage stage);
 
-#endif

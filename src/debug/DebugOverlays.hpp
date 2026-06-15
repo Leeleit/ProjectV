@@ -1,5 +1,4 @@
-#ifndef DEBUG_OVERLAYS_HPP
-#define DEBUG_OVERLAYS_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -11,4 +10,3 @@ void BuildDebugOverlayBoxes(
 	const CameraState &camera = CameraState{},
 	const RenderState &render = RenderState{});
 
-#endif

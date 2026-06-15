@@ -1,5 +1,4 @@
-#ifndef ASSET_REGISTRY_HPP
-#define ASSET_REGISTRY_HPP
+#pragma once
 
 #include <cstdint>
 #include <expected>
@@ -73,4 +72,3 @@ class AssetRegistry {
 
 } // namespace projectv::asset
 
-#endif

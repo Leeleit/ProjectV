@@ -1,5 +1,4 @@
-#ifndef PROJECTV_CORE_INPLACE_VECTOR_SHIM_HPP
-#define PROJECTV_CORE_INPLACE_VECTOR_SHIM_HPP
+#pragma once
 
 // **libc++ migration shim (`2026-06-13`).** libc++ 22 (the
 // version shipped on Arch as of 2026-06-13) does not yet
@@ -144,4 +143,3 @@ static_assert(std::is_trivially_destructible_v<InplaceVectorShim<int, 4>> == tru
 
 } // namespace projectv::core
 
-#endif // PROJECTV_CORE_INPLACE_VECTOR_SHIM_HPP

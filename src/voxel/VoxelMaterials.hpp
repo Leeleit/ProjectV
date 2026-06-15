@@ -1,5 +1,4 @@
-#ifndef VOXEL_MATERIALS_HPP
-#define VOXEL_MATERIALS_HPP
+#pragma once
 
 #include "core/Math.hpp"
 #include "render/ShadowTypes.hpp"
@@ -178,4 +177,3 @@ ToneMapOperator GetNextToneMapOperator(ToneMapOperator toneMapOperator);
 LightingDebugView GetNextLightingDebugView(LightingDebugView debugView);
 ShadowTuningTarget GetNextShadowTuningTarget(ShadowTuningTarget target);
 
-#endif

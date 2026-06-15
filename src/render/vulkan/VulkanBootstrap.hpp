@@ -1,5 +1,4 @@
-#ifndef VULKAN_BOOTSTRAP_HPP
-#define VULKAN_BOOTSTRAP_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -8,4 +7,3 @@ bool InitializeVulkanBase(
 	VulkanContextState *context,
 	FrameState *frame);
 
-#endif

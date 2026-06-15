@@ -1,5 +1,4 @@
-#ifndef PROJECTV_CORE_MATH_HPP
-#define PROJECTV_CORE_MATH_HPP
+#pragma once
 
 // **Tier 2.D (`2026-06-13`).** This header is now a **forwarding
 // shim** to the `projectv.math` module (`src/core/Math.ixx`).
@@ -72,4 +71,3 @@ import projectv.math;
 // TODO.md Tier 0.
 
 
-#endif // PROJECTV_CORE_MATH_HPP

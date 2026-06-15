@@ -1,5 +1,4 @@
-#ifndef ASSET_LOADER_HPP
-#define ASSET_LOADER_HPP
+#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -89,4 +88,3 @@ VoxelAlignedAabb ComputeVoxelAlignedAabb(
 
 } // namespace projectv::asset
 
-#endif

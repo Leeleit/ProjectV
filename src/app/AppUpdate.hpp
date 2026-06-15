@@ -1,5 +1,4 @@
-#ifndef APP_UPDATE_HPP
-#define APP_UPDATE_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -25,4 +24,3 @@ bool UpdateApp(
 	// header-only.
 	projectv::audio::AudioEngine *audio = nullptr);
 
-#endif

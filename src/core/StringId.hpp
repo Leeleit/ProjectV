@@ -1,5 +1,4 @@
-#ifndef PROJECTV_CORE_STRING_ID_HPP
-#define PROJECTV_CORE_STRING_ID_HPP
+#pragma once
 
 // **Tier 2.D (`2026-06-13`).** This header is a **forwarding
 // shim** to the `projectv.string_id` module
@@ -12,4 +11,3 @@
 // both shims can be deleted.
 import projectv.string_id;
 
-#endif // PROJECTV_CORE_STRING_ID_HPP

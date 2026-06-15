@@ -1,5 +1,4 @@
-#ifndef INPUT_ACTIONS_HPP
-#define INPUT_ACTIONS_HPP
+#pragma once
 
 #include "core/Types.hpp"
 
@@ -27,4 +26,3 @@ void ApplyInputActionSnapshot(
 	uint64_t pressedMask);
 VoxelMaterial GetNextPlacementMaterial(VoxelMaterial currentMaterial);
 
-#endif
