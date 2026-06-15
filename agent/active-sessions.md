@@ -79,6 +79,41 @@ config audit, agent protocol rewrite). Перед стартом новой се
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-15T15-30Z-agent-compress-r0
+
+- **id:** `2026-06-15T15:30Z-agent-compress-r0`
+- **started-at:** 2026-06-15T15:30:00Z
+- **closed-at:** 2026-06-15T15:45:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Compress service files via archive.** Per operator «Надо оптимизировать служебные файлы, а то они слишком большие. Нужно без потерь в контексте и фактах уменьшить размер». Live files: memory 205→87 KB, status 124→25 KB, active-sessions 198→82 KB, decisions unchanged. 0 KB info loss — all per-session audit detail preserved в `legacy/docs/archive/agent-*/` (328 KB) с section numbering preserved для cross-ref resolution через `agent/ARCHIVE-INDEX.md`.
+- **files-touched-intent:**
+  - **EDIT:** `agent/memory.md` (1763→554 lines; archive §10.12-§10.26, §12, §12.1-§12.3)
+  - **EDIT:** `agent/status.md` (1141→264 lines; archive §5-§20, +§99 rollup)
+  - **EDIT:** `agent/active-sessions.md` (1465→688 lines; apply §8.1 retroactively, archive 19 older closed sessions)
+  - **EDIT:** `agent/decisions.md` (header date refreshed, contracts unchanged)
+  - **EDIT:** `TODO.md` (5 cross-refs to memory §12.1-§12.3 + 2 to status §20 updated to archive links)
+  - **NEW:** `agent/ARCHIVE-INDEX.md` (96 lines, single source of truth для archive navigation)
+  - **NEW:** `legacy/docs/archive/agent-memory/2026-06-taa-sessions.md` (1130 lines, §10.12-§10.26 verbatim)
+  - **NEW:** `legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md` (109 lines, §12 + §12.1-§12.3 verbatim)
+  - **NEW:** `legacy/docs/archive/agent-sessions/2026-06-week-1.md` (805 lines, 19 closed sessions verbatim)
+  - **NEW:** `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md` (847 lines, §5-§20 verbatim)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md` (stable protocol doc, table-formatting changes от другой сессии), `src/`, `tests/`, `external/`, `legacy/docs/philosophy`, `legacy/docs/standards`, `legacy/docs/architecture`, `legacy/docs/libraries`, `CMakePresets.json`, `CMakeLists.txt`, `docs/`, `tools/`, чужой dirty work (`legacy/docs/tex/.tmp/`, `tests/fixtures/Untitled.colonada.glb`)
+- **status:** closed
+- **commit-hash:** `204142e` — `docs(agent): compress service files via archive (memory §10.x, status §5-20, sessions)`
+- **notes:** **Auto-close per §8.1.** Commit `204142e` создан автоматически по `§7.3.1` gate (type=`docs`, scope discipline clean — only my files staged, AGENTS.md + 2 untracked чужой work не в commit'е). Close-routine: (1) `git rev-parse HEAD` → `204142e`; (2) эта запись добавлена в «Закрытые сессии» (top, post-commit); (3) `agent/ARCHIVE-INDEX.md` snapshot в этой записи; (4) `agent/memory.md` header date updated to `2026-06-15`; (5) safety-net patch `/tmp/before_agent_compress_20260615T1530Z.patch` — **оставлен** с `POST-COMMIT 204142e` footer (per §8.1 п.5; fallback для следующей сессии, не «uncommitted work»).
+
+  **Verification:**
+  - `git show --stat 204142e` показывает 10 файлов, +3095/-2969 строк.
+  - `rg "memory\.md §(10\.(1[2-9]|2[0-9])|12\.[0-9]+)" agent/ TODO.md` — все ссылки резолвятся в `legacy/docs/archive/agent-memory/2026-06-*.md#X` (verified, 0 broken refs).
+  - `rg "status\.md §(5|6|7|...|20)\b" agent/ TODO.md` — все ссылки резолвятся в `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#X` (verified, 0 broken refs).
+  - Live file sizes: memory 87 KB (-58%), status 25 KB (-80%), active-sessions 82 KB (-58%), decisions 151 KB (~0%, contracts kept). Total live: 344 KB (-49%). Archive: 328 KB (new, all info preserved).
+
+  **Build state:** docs-only commit, build green не нужен per §7.3 (type=docs → auto per §7.3.1). Code not touched.
+
+  **Cross-refs:** `agent/ARCHIVE-INDEX.md` (single source of truth для navigation); `AGENTS.md` §6, §7.2.6, §7.2.8, §7.3.1, §8.1 (pre-commit gate, auto-close routine, retroactive apply).
+
 ### session-2026-06-14T11-29Z-build-config-audit-r0
 
 - **id:** `2026-06-14T11:29Z-build-config-audit-r0`
