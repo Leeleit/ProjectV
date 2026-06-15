@@ -19,13 +19,13 @@
 >
 > **Первый — каскадные тени, CSM.** У нас 4 каскада карты глубины 2048 на 2048. На каждый кадр процессор строит 4 матрицы проекции солнца — sub-frustum камеры переводится в light-space, фит по сфере для стабильности при повороте, экструзия кастеров вдоль направления солнца. Лямбда сплитов 0.80 — это near-biased, чтобы близкие объекты получали больше плотности теней. Стекло не отбрасывает тени, жидкость — отбрасывает, и это явно зафиксировано в наших решениях. Специальная полоса плавного перехода между каскадами убирает резкие границы.
 >
-> **Второй — контактные тени.** Это короткая voxel DDA-трассировка от фрагмента к солнцу, максимум 5 единиц. Дополняет CSM там, где texel size недостаточен, например под объектами на земле. Стекло пропускает, жидкость блокирует.
+> **Второй — контактные тени.** Это короткая voxel DDA-трассировка от фрагмента к солнцу, максимум 12 шагов. Дополняет CSM там, где texel size недостаточен, например под объектами на земле. Стекло пропускает, жидкость блокирует.
 >
-> **Третий — ambient occlusion, AOCC.** Локальный forward-path occlusion, 3 направления по 4 шага = 12 DDA-трассировок на фрагмент. Это не полноценный SSAO, а компактный forward-shader occlusion term, встроенный в основной проход.
+> **Третий — ambient occlusion, AOCC.** Локальный forward-path occlusion, 3 направления (1 normal + 2 перпендикулярных) по 4 шага = 12 DDA-трассировок на фрагмент. Это не полноценный SSAO, а компактный forward-shader occlusion term, встроенный в основной проход. Раньше был 5-tap, сократили до 3-tap для производительности.
 >
-> **Четвёртый — TAA, временное сглаживание.** Включено по умолчанию, потому что убирает дрожание камеры. Используем 8-sample Halton jitter, YCoCg-зажим цветовой истории — это убирает ghosting на ярких участках. Семь триггеров инвалидации истории, включая изменение размера окна и перезагрузку мира. Поверх TAA работает CAS — high-pass фильтр резкости.
+> **Четвёртый — TAA, временное сглаживание.** Включено по умолчанию, потому что убирает дрожание камеры. Используем 8-sample Halton(2,3) jitter, YCoCg-зажим цветовой истории — это убирает ghosting на ярких участках. Семь триггеров инвалидации истории, включая изменение размера окна и перезагрузку мира. Поверх TAA работает CAS — high-pass фильтр резкости.
 >
-> **И пятый, бонусом — ray-marching.** Клавиша F6 переключает compute-шейдер, который трассирует DDA через packed voxel payload. По умолчанию выключен из-за стоимости. Передаю слово коллеге.»
+> **И пятый, бонусом — ray-marching.** Клавиша F12 переключает compute-шейдер, который трассирует DDA через packed voxel payload. Compute shader скомпилирован, но graphics command stream его ещё не вызывает — это запланированный Phase 7 follow-up, пока STUB. По умолчанию выключен. Передаю слово коллеге.»
 
 ---
 
@@ -63,8 +63,8 @@
 - «Видите разницу: с TAA сглажено, без TAA — aliasing на мелких деталях.»
 
 **Демо 3 — toggle ray-marching (10 секунд):**
-- Клавиша `F6` — переключает ray-marching.
-- «Это compute-шейдер DDA по packed voxel payload. С ним мягче грани вокселей, но FPS падает. По умолчанию OFF.»
+- Клавиша `F12` — переключает ray-marching (relocated 2026-06-15 с F6; F6 теперь чисто для InputAction `SaveWorldSnapshot`).
+- «Compute shader скомпилирован, но graphics command stream его пока не вызывает — STUB, Phase 7 follow-up. В stderr увидите "ToggleRayMarch" лог — это заглушка.»
 
 **Демо 4 — захват (если попросят, 20 секунд):**
 - Клавиша `C` — сохранить .bmp + .txt sidecar.
@@ -79,9 +79,9 @@
 | Почему Vulkan, а не OpenGL | «Архитектурное решение le1t» |
 | Per-pass timings / метрики | «Это в билд-метриках, к Тиммейту 1 или le1t» |
 | DOD layout / push constants | «Архитектура, le1t» |
-| Shaders вообще (compile, hot reload) | «Hot reload F5 — к le1t, рендерер» |
+| Shaders вообще (compile, hot reload) | «Hot reload F11 (relocated с F5) — к le1t, рендерер» |
 | BUG-004 VoxelLab tremor | «TAA-scope, le1t расскажет детали» |
-| BUG-005 F5 VUID race | «Рендерер, le1t» |
+| BUG-005 InputAction F5 cycle scene race | «Рендерер, le1t (НЕ F11 shader reload — это InputAction F5 CycleScenePreset)» |
 | SSAO/GTAO отложено | «Roadmap, к le1t» |
 | HDR текстуры отложено | «Roadmap, к le1t» |
 
@@ -108,7 +108,7 @@
 > «B10G11R11 = 32-bit на пиксель, R16G16B16A16 = 64-bit. 2× экономия bandwidth, что критично на integrated GPU. 10-битный лум и 11-битная chroma — достаточно для PBR, потеря точности минимальна (визуально неразличима).»
 
 ### Если спрашивают «как работает ray-marching»:
-> «Amanatides-Woo 3D DDA через packed voxel payload. На каждый пиксель: старт в позиции фрагмента, шагаем по 3D сетке чанков, на каждом шаге читаем packed material. Если solid — return shaded color. Push constants: world min, chunk size, chunk grid. Compute-шейдер, 64 max iterations. По умолчанию OFF (F6 toggle).»
+> «Amanatides-Woo 3D DDA через packed voxel payload. На каждый пиксель: старт в позиции фрагмента, шагаем по 3D сетке чанков, на каждом шаге читаем packed material. Если solid — return shaded color. Push constants: world min, chunk size, chunk grid. Compute-шейдер скомпилирован, 64 max iterations. **ВАЖНО: на текущий момент — STUB**, graphics command stream его ещё не вызывает (только `fprintf` в stderr), полная интеграция — Phase 7 follow-up. По умолчанию OFF (F12 toggle, relocated с F6).»
 
 ### Если спрашивают «почему стекло не кастует тень»:
 > «Это зафиксированное решение в `decisions.md §15`. Реальные tinted glass shadows требуют transmission/refraction path, что в 4-каскадном CSM не помещается. Пока стекло используется только для прозрачности (видно жидкость внутри шара). Жидкость кастует — это opaque shadow-map. Physical glass shadows — в R&D roadmap Phase 5+.»

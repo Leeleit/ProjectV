@@ -79,7 +79,7 @@ CPU (cache-friendly, SIMD-friendly), а не для удобства иерар�
 ### 2.5. В чем разница между вашим сценарным кэшем видимости и обычным фрустум-кулингом?
 
 Обычный фрустум-кулинг выполняется каждый кадр: CPU берёт AABB каждого чанка и тестирует его против 6 плоскостей пирамиды видимости камеры (что на сцене из 300 чанков даёт 1500+ скалярных произведений каждый кадр).
-Наш **двухуровневый кэш видимости** (`ChunkVisibilityCache`) решает эту проблему: если камера статична (или её микродвижения лежат в пределах квантования 0.25 вокселя по позиции и 0.3° по углу поворота), хэш splitmix64 совпадает с предыдущим кадром. CPU полностью пропускает цикл прохода по чанкам и мгновенно копирует готовые команды отрисовки из кэша в GPU-буфер с помощью трёх быстрых вызовов `memcpy`.
+Наш **двухуровневый кэш видимости** (`ChunkVisibilityCache`) решает эту проблему: если камера статична (или её микродвижения лежат в пределах квантования 0.25 вокселя по позиции и 0.005 forward ≈ 0.3°), **кастомный XOR-fold хэш со splitmix64-style avalanche** совпадает с предыдущим кадром. CPU полностью пропускает цикл прохода по чанкам и мгновенно копирует готовые команды отрисовки из кэша в GPU-буфер. Второй уровень — фрустум-кулинг через C/AVX2 ядро (scalar 3.7-3.9×, AVX2 2.5-2.7× vs C++ baseline).
 
 ---
 
@@ -151,10 +151,7 @@ Ambient Occlusion Cavity Check — короткая полусферная DDA �
 
 ### 4.1. Как реализован walk controller?
 
-В `src/physics/PhysicsWorld.cpp`. Авторитетный путь — voxel-решатель, а не Jolt's
-`CharacterVirtual::ExtendedUpdate` (см. `decisions.md §6`). CharacterVirtual остаётся
-прокси/носителем стойки. Владение грунтом: непрерывная выборка опоры под стопой через
-`UpdateWalkGroundSupport`, edge grace для тонких граней, sneak с sampled top-plane.
+В `src/physics/PhysicsWorld.cpp`. **JPH::CharacterVirtual используется** для collision detection (капсула, прокси); наш voxel-решатель **augments** Jolt-сторону (см. `decisions.md §6`). Конкретно: `JPH::CharacterVirtual::ExtendedUpdate` с `BuildWalkEdgeGraceUpdateSettings()` (наша настройка) + наш `UpdateWalkGroundSupport` поверх для voxel-specific ground query. Владение грунтом: непрерывная выборка опоры под стопой через `UpdateWalkGroundSupport`, edge grace (`kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f`, НЕ 0.1 м) для тонких граней, sneak с sampled top-plane.
 3 режима управления (walk/creative/spectator) — F4 переключает, двойное нажатие Space переключает
 creative ↔ walk.
 
@@ -389,7 +386,7 @@ reference shot: **110-130 FPS** при 1920×1080 (после TAA + CAS). На 1
 
 Ответ (3 части):
 1. **Текущий scope — sandbox-first.** MVP решает задачу компактных детализированных сцен
-   (Voxel Laboratory: 27 чанков, 13 824 вокселя, 110-130 FPS), где полигональный
+   (Voxel Laboratory: 27 чанков, 110-130 FPS), где полигональный
    greedy-мешинг выигрывает по простоте и скорости.
 2. **Почему не 512³.** Mesh-based greedy не масштабируется линейно с размером сетки —
    количество граней растёт как O(n^(2/3)). На 512³ для 60 FPS потребуется переход
@@ -448,7 +445,7 @@ Tier 0-5 закрыты (12 коммитов с `427be4f` до `90a45b4`):
 Команда «Черепашки Ninja» из 6 человек. Тимлид — Кадочников Лев Петрович (le1t), он же основной разработчик, отвечает за архитектуру, выбор библиотек, DOD layout, ECS-bridge, cold paths (snapshot, JSON config), hot shader reload F5, и ведёт все Q&A комиссии. Остальные 5 участников распределены по модулям:
 
 - **Тиммейт 1** — стек и сборка: C++26, CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики.
-- **Тиммейт 2** — voxel-мир и meshing: чанки 8×8×8, материалы, greedy meshing Лысенкова, visibility cache splitmix64.
+- **Тиммейт 2** — voxel-мир и meshing: чанки 8×8×8, материалы, greedy meshing Лысенкова, visibility cache (custom XOR-fold hash).
 - **Тиммейт 3** — рендеринг: CSM, PCF, контактные тени, AOCC, TAA + YCoCg + CAS, ray-marching compute pass.
 - **Тиммейт 4** — физика и walk controller: Jolt, walk/creative/spectator, edge grace, авто-прыжок.
 - **Тиммейт 5** — демо VoxelLab + ассеты + аудио: сцена, glTF/Draco/meshopt pipeline, miniaudio.
@@ -475,7 +472,7 @@ Ray-marching — вторичный режим, переключаемый.
 ТЗ требовало «Симуляция жидкостей (CA)» (п. 4.1.3). Реализация:
 - Файл: `src/voxel/VoxelWorld.cpp` → `UpdateFluidCA()`.
 - Алгоритм: 1 tick = down-fall, fallback cardinal spread (4 направления, hash-ordered).
-- Hash = `splitmix64(voxelPos) ^ frameCounter` для детерминизма.
+- Hash = Teschner spatial hash `(x*73856093) ^ (y*19349663) ^ (z*83492791)` (НЕ splitmix64), deterministic.
 - Double-buffered (snapshot на начало tick, mutations в новый буфер).
 - 20 Hz throttle (1 tick per 3 frames @ 60 FPS).
 - Pause/timeScale integration: paused при `timeScale == 0` или `paused == true`.
@@ -540,7 +537,7 @@ VoxelLab показывает residual sub-pixel jitter при включённ�
 **Смягчение (Tier 5):** `vkDeviceWaitIdle` в `DestroySceneResources` уменьшил race, не устранил полностью.
 **Что дальше:** переработка жизненного цикла дескрипторов в Phase 5.
 
-**Hot shader reload (F5, перекомпиляция шейдеров) — другая операция, не путать с cycle scene preset.**
+**Hot shader reload (F11, перекомпиляция шейдеров) — другая операция, не путать с cycle scene preset (InputAction F5, разделённые после relocate 2026-06-15).**
 
 ---
 

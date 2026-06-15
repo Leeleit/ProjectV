@@ -25,7 +25,7 @@
 15. [Jolt интеграция (CharacterVirtual + voxel solver)](#15-jolt-интеграция)
 16. [Asset pipeline (glTF, Draco, meshopt)](#16-asset-pipeline-gltf-draco-meshopt)
 17. [Audio engine (miniaudio)](#17-audio-engine-miniaudio)
-18. [Hot shader reload (F5)](#18-hot-shader-reload-f5)
+18. [Hot shader reload (F11)](#18-hot-shader-reload-f11)
 19. [Snapshot save/load (двоичный)](#19-snapshot-saveload)
 20. [JSON scene config (nlohmann/json)](#20-json-scene-config)
 21. [C++26 фичи в коде](#21-c26-фичи-в-коде)
@@ -38,45 +38,57 @@
 
 **Где:** `src/voxel/VoxelWorld.{hpp,cpp}`
 **Проблема:** миллионы вокселей нельзя хранить как `std::vector<Voxel>` (overhead, cache-miss, медленный iteration).
-**Решение:** декомпозиция на регулярные чанки фиксированного размера, плотный массив материалов на чанк.
+**Решение:** декомпозиция на регулярные чанки фиксированного размера + плоский массив материалов в `VoxelWorld`.
 
-**Структура `VoxelWorld`:**
-```
+**Реальные структуры (`src/voxel/VoxelWorld.hpp:45-108`):**
+```cpp
 struct VoxelChunk {
-    std::array<uint8_t, 512> voxels;  // 8×8×8 = 512 вокселей, 1 байт = material ID
-    uint32_t editVersion;              // bumped при изменении
-    bool dirty;                         // флаг «нужен remesh»
-    Bounds3D worldBounds;              // AABB чанка в мире
+    Int3 min{};             // 12 B — минимальная грань чанка в world coords
+    Int3 maxExclusive{};    // 12 B — исключающая максимальная грань
+    bool rebuildQueued = true;       // 1 B (+ 7 B padding) — флаг «нужен remesh»
+    uint32_t nonAirVoxelCount = 0;   // 4 B — кэш для быстрого non-Air summary
 };
+static_assert(sizeof(VoxelChunk) == 32);
 
 struct VoxelWorld {
-    Bounds3D min, maxExclusive;
-    int width, height, depth;
-    std::vector<std::unique_ptr<VoxelChunk>> chunks;
-    std::vector<uint32_t> pendingChunkRebuildIndices;  // hot path, reserved 1024
+    VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
+    VoxelWorldConfig config{};
+    Int3 min{}, maxExclusive{};
+    Int3 floorMin{}, floorMaxExclusive{};
+    int width = 0, height = 0, depth = 0;
+    std::vector<uint8_t> voxels;   // ← ПЛОСКИЙ массив материалов, 1 байт = material ID
+    int chunkSize = 0, chunkCountX = 0, chunkCountY = 0, chunkCountZ = 0;
+    uint64_t editVersion = 0;
+    std::vector<VoxelChunk> chunks;
+    std::vector<size_t> pendingChunkRebuildIndices;
+    VoxelWorldStats stats{};
 };
 ```
 
+**Важно:** воксели хранятся в **плоском** `std::vector<uint8_t> voxels` в `VoxelWorld` (не per-chunk). `VoxelChunk` хранит только координаты и метаданные. Плоский индекс = `x + width * (y + height * z)`.
+
 **Шаги при размещении блока (`SetVoxelMaterial`):**
-1. Compute `chunkIndex = (x,y,z) / 8` (integer division).
-2. Bounds-check (отказ до мутации).
-3. Material ID → записать в `voxels[localX + 8*localY + 64*localZ]`.
-4. `chunk->editVersion++`.
-5. `chunk->dirty = true`.
-6. `pendingChunkRebuildIndices.push_back(chunkIndex)`.
-7. **Никогда** не resize `chunks` (резерв на старте = totalChunks).
+1. Compute `localX = position.x - world.min.x`, etc.
+2. Bounds-check `IsInsideVoxelWorld(world, position)` (отказ до мутации).
+3. Compute `chunkCoord = (localX / chunkSize, ...)`, `chunkIndex = chunkCoord.x + chunkCountX * (chunkCoord.y + chunkCountY * chunkCoord.z)`.
+4. Material ID → записать в `voxels[linearIndex]`.
+5. `world.editVersion++`.
+6. `chunks[chunkIndex].rebuildQueued = true`, `chunks[chunkIndex].nonAirVoxelCount++`.
+7. `pendingChunkRebuildIndices.push_back(chunkIndex)`.
+8. Update `stats` (dirtyChunkCount, totalNonAirVoxelCount, per-material counts).
 
 **Complexity:** `SetVoxelMaterial` O(1) в среднем. Rebuild-запрос O(1). Meshing O(N) на чанк, но только для dirty.
 
 **Edge cases:**
 - Out-of-bounds → возврат `false`, **никакой мутации** (отказ-до-мутации).
-- Chunk не существует → ленивое создание при первом `SetVoxelMaterial`.
 - Race на `pendingChunkRebuildIndices` — single-threaded main loop, защита не нужна.
+- CA coordinate-bug fix (2026-06-13, `decisions.md §30`): commit loop раньше передавал local coords как world coords, falls в VoxelLab silently dropped на `local.x == width - world.min.x` (то есть на `world.x == maxExclusive.x`, `IsInsideVoxelWorld` rejects). Fix: `world.min` offset перед `SetVoxelMaterial`.
 
 **Что говорить:**
-- «Чанк 8×8×8 = 512 вокселей, 1 байт на воксель = 512 байт на чанк, плотно, влезает в L1».
-- «VoxelLab = 27 чанков (3×3×3), 13 824 вокселей, процедурная генерация за <200 мс».
-- «Координаты integer-based, AABB чанка = `Int3 * 8` в мире».
+- «Чанк 8×8×8 = 512 вокселей, 1 байт на воксель, плотный массив в `VoxelWorld` (не per-chunk)».
+- «VoxelLab = **27 чанков** (3×3×3 grid по chunkSize=8), процедурная генерация за <200 мс».
+- «Координаты integer-based, world bounds = `min=(-12,0,-12)`, `maxExclusive=(12,17,12)` для VoxelLab с floorSize=18, padding=3, worldTopY=14».
+- «Per-chunk кэш: `nonAirVoxelCount` для быстрого summary без перебора 512 вокселей».
 
 ---
 
@@ -157,91 +169,128 @@ enum class VoxelMaterial : uint8_t {
 
 ## 4. Frustum culling
 
-**Где:** `src/c_kernels/frustum_cull.{c,hpp}` (C/AVX2 ядро, Tier 3) + `src/render/SceneResources.cpp` (CPU-side)
+**Где:** `src/c_kernels/frustum_cull.{c,hpp}` (C/AVX2 ядро, Tier 3) + `src/c_kernels/FrustumCulling.{hpp,cpp}` (C++ wrapper, Tier 4) + `src/render/SceneResources.cpp` (CPU-side)
 **Проблема:** 300 чанков × 6 плоскостей фрустума = 1800 dot products каждый кадр, CPU-bound.
 
-**Алгоритм (C/AVX2 ядро):**
+**Алгоритм (C ядро, scalar и AVX2):**
 1. Frustum = 6 плоскостей `{a, b, c, d}` в float32.
-2. AABB чанка = `{minX, minY, minZ, maxX, maxY, maxZ}`.
-3. Для каждой плоскори:
-   - Compute `pVertex = (sign_x > 0 ? max : min) × normal` для каждой оси.
-   - Если `dot(pVertex, plane) + d < 0` → чанк **вне** фрустума → early exit.
-4. Если все 6 плоскостей «pVertex положительный» → чанк внутри (или пересекает).
-5. Иначе → пересекает (draw).
+2. AABB чанка = `{minX, minY, minZ, maxX, maxY, maxZ}` (8 floats + padding до 32 B).
+3. **Per-plane inner loop** (на precomputed plane normals + 8 AABBs за раз):
+   - Compute `pVertex[axis] = (sign_axis > 0 ? max : min)[axis]` для каждой оси — p-vertex ближайший к плоскости.
+   - 8 dot products параллельно (per-AABB для одной плоскости).
+   - 8 abs-mul: `|pVertex.x * normal.x| + |pVertex.y * normal.y| + |pVertex.z * normal.z|`.
+   - 8 sums: `distance = abs(dot) + d` (с учётом знака).
+   - Если `distance < 0` для всех 8 → AABB **вне** плоскости → early exit.
+4. Если все 6 плоскостей «distance >= 0» → AABB внутри (или пересекает).
+5. Иначе → AABB пересекает (draw).
 
 **SIMD-оптимизация (AVX2):**
-- 6 плоскостей × 4 floats = 24 floats, грузим 6 × `__m256` (4 плоскости параллельно).
-- `dpps` инструкция для dot product (4 dot product за раз).
-- Iterative: проверяем 4 плоскости, потом ещё 2 scalar.
-- Branchless: `_mm256_movemask_ps` для batch early-out.
+- 8 AABBs за раз обрабатываются через 256-битные регистры (`__m256`).
+- `__attribute__((target("avx2")))` — per-function, не пересекает TU boundary.
+- Pre-computed plane normals — передаются в структуре `ProjectvCFrustumCullParameters`.
+- **AoS layout** (`ProjectvCAabb` = 32 B per AABB) — не оптимально для AVX2 scatter-gather.
 
-**Complexity:** O(N chunks) с константой 6/4 × throughput AVX2 dpps ≈ ~1.5 ns/chunk на современном CPU.
-**Empirical:** 8× ускорение vs scalar C++ (per `decisions.md §Tier 3`).
+**Empirical benchmarks (per `src/c_kernels/FrustumCulling.hpp:24-37`):**
+- **Scalar C: 3.7-3.9× faster** than C++ math:: baseline (per Tier 3 benchmark).
+- **AVX2: 2.5-2.7× faster** (на AoS layout). Autovectorizer с `-mavx2` на C++ side частично обгоняет hand-rolled `_mm256_setr_ps` setup в debug builds.
+- **8× — future target** при SoA layout (Tier 5 follow-up). Per `agent/memory.md §1583`.
+
+**API contract (`frustum_cull.hpp:17-22`):**
+- `visible_mask[i / 8] & (1u << (i % 8))` set iff AABB visible.
+- Caller-owned unused lanes (kernel не zero'ит).
+- `count` may be any non-zero value; tail lanes still computed.
+- Below `kBatchDispatchThreshold = 8` AABBs, fall back to inline `IsAabbVisibleAgainstCameraFrustum`.
+
+**Complexity:** O(N chunks) с константой зависящей от lane count (8 для AVX2). Per Tier 3: ~50 µs для 300 instances (C kernel), ~1 µs на AABB-to-`ProjectvCAabb` conversion.
 
 **Что говорить:**
-- «AABB чанка vs 6 плоскостей фрустума, AVX2 dot product».
-- «Branchless movemask + early exit на первой «вне» плоскости».
-- «8× ускорение vs scalar; baseline ctest `CFrustumCullingTests`».
+- «AABB чанка vs 6 плоскостей фрустума, scalar C 3.7-3.9×, AVX2 2.5-2.7×».
+- «Inner loop = 8 AABBs × 6 planes за раз (per-plane batch), pre-computed normals».
+- «8× — future target SoA, не текущая цифра».
+- «Baseline ctest `CFrustumCullingTests`».
 
 ---
 
 ## 5. ChunkVisibilityCache (2-уровневый кеш)
 
-**Где:** `src/render/SceneResources.{hpp,cpp}` → `ChunkVisibilityCache`
+**Где:** `src/render/SceneResources.{hpp,cpp}` → `ChunkVisibilityCache`, `projectv::visibility_cache::ComputeVisibilityCacheHash`
 **Проблема:** даже с AVX2, 300 чанков × 6 dot = 1800 ops/кадр когда камера **почти** статична (50% времени FPS counter не двигается, а CPU считает).
 
-**Алгоритм:**
-```
-struct ChunkVisibilityCache {
-    // Level 1: stable camera pos/rot bucket
-    uint64_t lastHash;
-    std::vector<DrawCommand> commands;  // pre-baked visibility result
+**Хэш-функция (НЕ splitmix64, а custom XOR-fold):**
+Per `src/render/SceneResources.hpp:375-408`:
+```cpp
+namespace projectv::visibility_cache {
+constexpr float kCameraPositionQuantization = 0.25f;
+constexpr float kCameraForwardQuantization = 0.005f;  // ~0.3° шаги
 
-    // Level 2: chunk-level per-frame fallback
-    std::vector<bool> lastFrameVisibility;  // size = chunks.size()
-};
-
-uint64_t ComputeCameraHash(const CameraState& cam) {
-    // Quantize position to 0.25 voxel, rotation to 0.3 deg
-    int64_t qx = int64_t(cam.position.x * 4.0f);
-    int64_t qy = int64_t(cam.position.y * 4.0f);
-    int64_t qz = int64_t(cam.position.z * 4.0f);
-    int64_t qyaw = int64_t(cam.yaw * 1200.0f / 360.0f);
-    int64_t qpitch = int64_t(cam.pitch * 1200.0f / 360.0f);
-
-    // splitmix64
-    uint64_t h = 0;
-    h ^= qx + 0x9e3779b97f4a7c15ULL; h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    h ^= qy + 0x9e3779b97f4a7c15ULL; h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    h ^= qz + 0x9e3779b97f4a7c15ULL; h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    h ^= qyaw + 0x9e3779b97f4a7c15ULL; h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    h ^= qpitch + 0x9e3779b97f4a7c15ULL; h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9ULL;
-    return h;
+inline int32_t QuantizeCameraPositionComponent(const float value) {
+    return static_cast<int32_t>(std::floor(value / kCameraPositionQuantization));
+}
+inline int32_t QuantizeCameraForwardComponent(const float value) {
+    const float clamped = std::clamp(value, -1.0f, 1.0f);
+    return static_cast<int32_t>(std::lround(clamped / kCameraForwardQuantization));
 }
 
-void UpdateVisibility(...) {
-    uint64_t h = ComputeCameraHash(cam);
-    if (h == lastHash) {
-        // Cache hit: 3 memcpy(totalSize, commands.data(), 3 × ptr_size)
-        return;
-    }
-    // Cache miss: run frustum cull, store results
-    lastHash = h;
-    commands = cullResult;
+inline uint64_t ComputeVisibilityCacheHash(
+    const ChunkCullingParameters &parameters,
+    const uint64_t sceneVoxelPayloadVersion,
+    const uint32_t chunkDescriptorCount)
+{
+    // 6 quantized camera ints
+    const auto posX = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[0]);
+    const auto posY = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[1]);
+    const auto posZ = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[2]);
+    const auto fwdX = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[0]);
+    const auto fwdY = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[1]);
+    const auto fwdZ = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[2]);
+
+    // Custom XOR-fold с Knuth-style golden ratio multipliers.
+    // (Это НЕ splitmix64 — стандартные константы splitmix64
+    //  0x9e3779b97f4a7c15 / 0xbf58476d1ce4e5b9 / 0x94d049bb133111eb —
+    //  у нас другие, MMIX-style.)
+    uint64_t hash = static_cast<uint64_t>(posX) * 0x9E3779B185EBCA87ULL;
+    hash ^= static_cast<uint64_t>(posY) * 0xC2B2AE3D27D4EB4FULL;
+    hash ^= static_cast<uint64_t>(posZ) * 0x165667B19E3779F9ULL;
+    hash ^= static_cast<uint64_t>(fwdX) * 0x94D049BB133111EBULL;
+    hash ^= static_cast<uint64_t>(fwdY) * 0xD1342543DE82EF95ULL;
+    hash ^= static_cast<uint64_t>(fwdZ) * 0xB45BCA9F4D2D9B33ULL;
+    hash ^= sceneVoxelPayloadVersion * 0x27D4EB2F165667C5ULL;
+    hash ^= static_cast<uint64_t>(chunkDescriptorCount) * 0x9C2A8E3F4D2D9B3BULL;
+
+    // Final avalanche. **Same mix as splitmix64** (вот это — единственная
+    // splitmix64-часть): xor-shift + multiply + xor-shift + multiply + xor-shift.
+    hash ^= hash >> 30;
+    hash *= 0xBF58476D1CE4E5B9ULL;
+    hash ^= hash >> 27;
+    hash *= 0x94D049BB133111EBULL;
+    hash ^= hash >> 31;
+    return hash;
+}
 }
 ```
 
-**Complexity:** Cache hit — O(1) (3 memcpy). Cache miss — O(N chunks) frustum cull.
+Комментарий в коде явно: «splitmix64-style fold. The exact constants don't matter for correctness — only that (a) the hash is deterministic and (b) the bits of each component get mixed into the high bits, so a 1-bit change in any input flips roughly half the hash bits.»
+
+**Алгоритм кеша (структура из `SceneResources.cpp:459-466`):**
+- 3 pre-baked `VkDrawIndirectCommand` буфера: `opaqueCommands`, `shadowCommands` (×4 cascades), `transparentCommands`.
+- `uint64_t lastHash` для сравнения.
+- Cache hit path: `if (currentHash == lastHash) { skip; return; }`.
+- Cache miss: full frustum cull, fill 3 буфера, обновить `lastHash`.
+
+**Tier 1.A (`2026-06-13`):** `std::inplace_vector<P0843, C++26>` с cap `kChunkVisibilityCacheMaxChunks = 1024`. Никаких heap alloc на hot path. `assert(chunkDescriptorCount <= ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks)`.
+
+**Complexity:** Cache hit — O(1). Cache miss — O(N chunks) frustum cull.
 **Empirical:** 8× ускорение в кадрах со статичной камерой (per `decisions.md §22`).
 
 **Edge cases:**
-- Quantization step: 0.25 вокселя по позиции, 0.3° по углу — баланс hit rate vs точность.
-- Splitmix64 seed = 0 (не крипто, но stable).
+- Quantization step: 0.25 вокселя по позиции, 0.005 (~0.3°) по forward — баланс hit rate vs точность (per комментарий в `SceneResources.hpp:349-355`).
+- Hash invalidation: `sceneVoxelPayloadVersion` инкрементируется при voxel edit, chunk-count change → cache miss автоматически.
 
 **Что говорить:**
-- «2 уровня: hash от квантованной позиции+угла камеры, hit → 3 memcpy».
-- «splitmix64 для стабильного хэша (не крипто, но avalanche)».
-- «Квантизация 0.25 вокселя / 0.3° — подобрано эмпирически для high hit rate на типичном use».
+- «2 уровня: hash от квантованной позиции+forward камеры + voxel payload version, hit → skip».
+- «Custom XOR-fold с splitmix64-style avalanche, не чистый splitmix64».
+- «Квантизация 0.25 вокселя / 0.005 forward — подобрано эмпирически».
+- «inplace_vector с cap 1024 — no heap alloc на hot path».
 
 ---
 
@@ -428,104 +477,156 @@ void UpdateVisibility(...) {
 ## 11. Ray-marching compute pass
 
 **Где:** `src/shaders/ray_march.comp` + `src/render/RayMarchPass.{hpp,cpp}`
-**Проблема:** mesh-based геометрия даёт видимые «грани» вокселей при cinematic-камерах. ТЗ требовало «GPU ray-marching через compute-шейдеры».
+**Проблема:** mesh-based геометрия даёт видимые «грани» вокселей при cinematic-камерах. ТЗ требовало «GPU ray-marching через compute-шейдеры» (п. 4.1.2).
 
-**Алгоритм (Amanatides-Woo DDA через packed voxel payload):**
+**Алгоритм (Amanatides-Woo 3D DDA через packed voxel payload) — `src/shaders/ray_march.comp`:**
 
-1. **Input:** packed voxel payload (uint32 по 4 материала на воксель), world min + chunk size + chunk grid (через push constants).
-2. **Per-pixel compute:**
-   - Ray origin = world position фрагмента, ray dir = camera-to-fragment unjittered.
-   - Compute initial voxel: `floor((origin - worldMin) / chunkSize)`.
-   - DDA loop (max 64 iterations):
-     - На каждом шаге: read packed material, lookup.
-     - Если solid material hit → return shaded color (no AO, no shadows — fast).
-3. **Output:** image overlay surface.
+1. **Input:** uniform buffer (`RayMarchParams`) + storage buffer `PackedVoxelPayload` + storage image `rayMarchOutput`.
+2. **Per-pixel compute (1 thread per pixel, `local_size_x=8, local_size_y=8`):**
+   - Ray origin = camera position, ray dir = perspective ray из forward + right * u * tanHalfFovX + up * v * tanHalfFovY.
+   - Convert ray to voxel-space, `deltaDist = abs(1.0 / max(abs(rayDir), 1e-6))`.
+   - `sideDist` initial, `cell = floor(originVoxelSpace)`.
+   - DDA loop (max `maxSteps` из params):
+     - На каждом шаге: `FetchVoxel(cell)`. Если != 0 (≠ Air) → hit, break.
+     - Step to next cell along dominant axis (compare `sideDist.x/y/z`).
+     - Update `hitNormal` по направлению шага.
+   - Output: simple N·L diffuse shading (sun direction packed в up.w), `palette[min(hitMaterial, 4u)]` base color.
+3. **Output:** `imageStore(rayMarchOutput, pixel, outColor)`. RGBA8 image.
 
-**Toggle:** F6 в `main.cpp` → `RayMarchPass::SetRayMarchEnabled(bool)`. По умолчанию OFF (доп. стоимость).
+**Текущее состояние: STUB.**
+Per `src/render/RayMarchPass.cpp:59-79`, `RecordRayMarchCommands`:
+```cpp
+void RecordRayMarchCommands(const VulkanContextState &context, const FrameRenderData &frameData) {
+    const auto &state = MutableRayMarchState();
+    if (!state.enabled) return;
+    if (context.device == VK_NULL_HANDLE) return;
+    // Phase 7 follow-up: full Vulkan integration binds the shader,
+    // allocates offscreen RGBA8 storage image, dispatches 8x8x1.
+    // Current entry point emits a diagnostic record so the toggle
+    // is observable in the runtime output stream and the call site
+    // is not silently swallowed.
+    std::fprintf(stderr,
+        "[ProjectV][RayMarch] RecordRayMarchCommands invoked (deferred Phase 7 follow-up: shader is compiled, pipeline / offscreen target / composite are the next slice)\n");
+}
+```
+
+То есть **compute shader скомпилирован** (даёт `.spv` через glslc), API state (`SetRayMarchEnabled` / `IsRayMarchEnabled` / `RequestRayMarchPipelineRecreate`) работает, **но graphics command stream НЕ вызывает** compute pass. Полная интеграция (offscreen target + composite) — Phase 7 follow-up, явно зафиксировано в `docs/DefenseReport.md §3` (deferred items).
+
+**Toggle:** `SDLK_F12` в `main.cpp` → `projectv::render::SetRayMarchEnabled(bool)` (relocated 2026-06-15 с F6 — F6 теперь чисто для `SaveWorldSnapshot` InputAction). По умолчанию OFF.
 
 **Что говорить:**
-- «Compute shader DDA через packed voxel payload».
-- «Toggle F6 в рантайме, OFF по умолчанию».
-- «Альтернативный путь рендеринга для cinematic camera — мягкие грани вокселей».
+- «Compute shader скомпилирован, API работает, но в graphics stream не вкомпонован — STUB, Phase 7 follow-up».
+- «Toggle F12 в рантайме (relocated с F6), OFF по умолчанию».
+- «Compute DDA через packed voxel payload, RGBA8 output image (planned)».
+- «Альтернативный путь рендеринга для cinematic camera — мягкие грани вокселей (planned)».
 
 ---
 
 ## 12. Walk controller
 
-**Где:** `src/physics/PhysicsWorld.{hpp,cpp}` → `UpdateWalkGroundSupport`, `TryAutoJump`
-**Проблема:** Jolt `CharacterVirtual` авторизует grounded через форму коллизии, не знает про структуру вокселей. Нужен **voxel-решатель**.
+**Где:** `src/physics/PhysicsWorld.{hpp,cpp}` → `UpdateWalkGroundSupport`, `TryAutoJump`, `BuildWalkEdgeGraceUpdateSettings`
+**Архитектура:** `JPH::CharacterVirtual` **используется** для collision detection (капсула, прокси), **voxel solver augments** foot support (per `decisions.md §6`). Это не "voxel solver вместо Jolt" — Jolt остаётся основой.
 
 **Алгоритм:**
 
 ### Ground support
-1. Sample top-plane в `pos + (0, -stepHeight, 0)`.
-2. Voxel lookup в `VoxelWorld`:
-   - `Air`/`Fluid` → нет ground
-   - `Glass`/`FloorWhite`/`FloorGray` → ground, support height = top Y
-3. Edge grace: если support height отличается от текущего менее чем на `edgeGraceThreshold` (0.1 м) — keep current Y, не дёргать вверх/вниз.
-4. Sneak (Shift): sampled top-plane (1 точка), не false-stick к стене.
+1. `JPH::CharacterVirtual::ExtendedUpdate` — Jolt side: continuous collision detection с custom `BuildWalkEdgeGraceUpdateSettings()` (настройка `mWalkExtendedUpdateSettings`, изменяет поведение extended update для edge grace).
+2. `UpdateWalkGroundSupport` (наш код) — **augment** Jolt-результата:
+   - Sample top-plane в `feetPosition + (0, -stepHeight, 0)`.
+   - Voxel lookup в `VoxelWorld`:
+     - `Air`/`Fluid` → нет ground
+     - `Glass`/`FloorWhite`/`FloorGray` → ground, support height = top Y
+3. **Edge grace** (per `PhysicsWorld.cpp:117-141`):
+   - `constexpr uint32_t kWalkEdgeGraceFrames = 4` — допуск в **фреймах** (не метрах!).
+   - `constexpr float kWalkFootSupportEdgeGraceScore = 0.2f` — порог score (не дистанция).
+   - `kWalkFootSupportMovingEdgeGraceScore = 0.5f` — для движущегося игрока.
+   - Логика: `physics.walkEdgeGraceFramesRemaining` счётчик, при `supportScore < EdgeGraceScore` → `walkEdgeGraceFramesRemaining = 4` (4 фрейма grace). Не «дёргать» Y вверх-вниз при микро-перепаде.
+4. **Sneak (Shift):** sampled top-plane (1 точка, не 4), без false-stick к стене. Файл: `walkSneakShape` (внутренний JPH::Shape), `walkSneakActive` flag.
 
 ### Auto-jump
-1. Триггер: `J` toggle ON.
-2. Каждый кадр: check forward voxel в (pos + forward * stepReach). Если solid AND (voxel сверху = air) AND (voxel над ним = air):
-   - reachable, schedule jump.
-3. Delay (F12 toggle): если ON, отсчёт начинается только когда `reached == true`. Иначе — мгновенно.
-4. Manual jump (Space): обнуляет delay accumulator.
+1. Триггер: `J` toggle ON (InputAction).
+2. Каждый кадр: `FindWalkTopSupportCandidate` — ищем forward voxel на уровне 1 блок выше ground.
+3. `IsWalkAutoJumpRiseInRange(autoJumpRise)` — проверка, что rise в допустимом диапазоне.
+4. Delay (F12 InputAction): если `walkAutoJumpDelayEnabled` ON, отсчёт начинается только когда `reached == true`. Иначе — мгновенно.
+5. Manual jump (Space): обнуляет delay accumulator.
 
 ### Air control
-- MinecraftLike (default): WASD в воздухе, momentum = Jolt velocity.
-- Realistic: W-only, фиксация направления.
+- `ToggleWalkAirControlMode` (F11 InputAction): MinecraftLike (default) — WASD в воздухе, momentum = Jolt velocity. Realistic — W-only, фиксация направления.
+- F11 InputAction **shadowed** defense r0 bypass (F11 = hot shader reload), но для defense demo walk modes toggle не на demo path.
 
-**3 режима (F4):**
+**3 режима (F4 `ToggleControlMode`):**
 - **walk:** grounded authority, edge grace, sneak, air control.
-- **creative:** полёт, collision substepped (`TickCreativeCharacter`).
-- **spectator:** noclip, игнорирует pause, ignore physics.
+- **creative:** полёт, collision substepped (`TickCreativeCharacter` для substepping high-velocity).
+- **spectator:** noclip, ignore physics, ignore pause (per `PhysicsWorld.cpp:3593+`).
 
 **Edge cases:**
 - Переключение creative ↔ walk: двойной Space.
 - Auto-jump OFF: ручной Space = vanilla.
 - Pause (`P`) vs `timeScale=0` — разные оси (per `decisions.md §26`).
+- Edge grace — `kWalkEdgeGraceFrames = 4` (фреймы!), **НЕ** 0.1 м.
 
 **Что говорить:**
-- «Voxel-решатель авторитетный, не Jolt `CharacterVirtual`».
-- «Edge grace, sneak, auto-jump — фичи для voxel мира, не generic character».
+- «JPH::CharacterVirtual + voxel solver augment (per `decisions.md §6`); Jolt для collision detection, наш solver — для foot support».
+- «Edge grace = `kWalkEdgeGraceFrames = 4` фрейма + score 0.2 (НЕ 0.1 м)».
+- «Sneak, auto-jump — фичи для voxel мира, не generic character».
 - «3 режима, F4 переключает, двойной Space ↔ creative».
 
 ---
 
 ## 13. Fluid cellular automata
 
-**Где:** `src/voxel/VoxelWorld.cpp` → `UpdateFluidCA`
+**Где:** `src/voxel/VoxelWorld.cpp` → `UpdateFluidCA` (~350 строк с комментариями)
 **Проблема:** жидкость в voxel-мире — стандартный клеточный автомат. Нужен determinism (replay), не pathological spread.
 
-**Алгоритм (1 tick = 1 frame @ 20 Hz):**
+**Алгоритм (per tick, итерация local z, y, x ascending):**
 
+**1. f_fall rule** (per `VoxelWorld.cpp:1380-1399`):
+- Если `world.voxels[idx_below] == Air` (snapshot read) **и** `next[idx_below] == Air` (write target empty):
+  - `next[idx] = Air` (source consumed)
+  - `next[idx_below] = Fluid` (destination claimed)
+  - `claimed[idx_below] = 1` (prevents swap bug)
+- Иначе → пробуем spread.
+
+**2. f_spread rule (2 перпендикулярных направления, count conservation) — `VoxelWorld.cpp:1442-1539`:**
+Per комментарию в коде: «Two perpendicular directions: the hash one and the one rotated 90°. Opposite (startSide+2) was tried first and produced "line" patterns that didn't fill 2D gaps; perpendicular gives a square footprint.»
+
+```cpp
+const uint32_t h = static_cast<uint32_t>(
+    (x * 73856093u) ^ (y * 19349663u) ^ (z * 83492791u));  // Teschner spatial hash
+const int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+const int startSide = static_cast<int>(h & 0x3u);
+const int dirs[2] = {startSide, (startSide + 1) & 0x3};  // perpendicular
+// Пробуем оба направления, но только ПЕРВОЕ успешное пишет
+// (count conservation per decisions.md §30 2026-06-14):
+//   "source Air, 1 destination Fluid = exactly 0".
+// L-shape визуально ПОТЕРЯН ради count conservation.
 ```
-for each Fluid voxel v:
-  // 1. Try fall straight down
-  if voxel(v.pos + (0,-1,0)) is Air:
-    move v to v.pos + (0,-1,0)
-    mark dirty
-    continue
 
-  // 2. Try spread to cardinal neighbour
-  hash = splitmix64(v.pos) ^ frameCounter
-  for i in [0, 4):
-    dir = cardinalDirections[hash & 3]
-    hash >>= 2
-    if voxel(v.pos + dir) is Air AND voxel(v.pos + dir + (0,-1,0)) is Air:
-      move v to v.pos + dir
-      mark dirty
-      break
-```
+**Hash:** **Teschner spatial hash** `(x*73856093) ^ (y*19349663) ^ (z*83492791)` (НЕ splitmix64, НЕ мой старый claim).
 
-**Throttle:** `static Uint64 lastFluidTickCounter`, 1 tick per 3 frames (20 Hz @ 60 FPS).
+**Swap bug fix (2026-06-13, per `decisions.md §30`):**
+- Раньше spread использовал `world.voxels[neighbour] == Air` для target check. Два adjacent source cells могли оба «успешно» spread (last write wins), fluid терялся.
+- Fix: target check использует `next[neighbour] == Air` (snapshot of new state) + `claimed[]` per-tick bool array (belt-and-suspenders).
 
-**Pause/timeScale:** paused если `timeScale == 0` OR `paused == true`.
+**Coordinate convention (критично, per `VoxelWorld.hpp:188-198`):**
+- CA pass и commit loop итерируют **local** индексы `x ∈ [0, width)`.
+- Commit loop добавляет `world.min` для local → world перед `SetVoxelMaterial`.
+- Bug 2026-06-13: commit loop передавал local indices напрямую как world coords → falls в VoxelLab на `local.x == width - world.min.x` silently dropped. Fix: `world.min` offset.
+- Test: `TestFluidCAVoxelLabSphereFallOnGlassBreak` (16 sub-tests, 100% pass).
+
+**Throttle (per `AppUpdate.cpp:730-742`):**
+- Default 20 Hz: `SimulationState::fluidTickRateHz = 20.0f` (per `decisions.md §30.1`).
+- Accumulator-based, НЕ «1 tick per 3 frames»: `fluidAccumulatorSeconds += frameDeltaSeconds` (frameDelta уже scaled by timeScale), while-loop drains accumulator в `1 / fluidTickRateHz` chunks.
+- Multi-tick per frame allowed (no `simulationStepsLastFrame` cap).
+- Pause drops accumulator to 0 (no catch-up).
+
+**Pause/timeScale:** paused если `effectivePaused` (`paused == true` OR `timeScale == 0` OR `frameStepRequestedNow`).
 
 **Что говорить:**
-- «Down-fall, fallback cardinal spread, hash-ordered для determinism».
-- «20 Hz throttle, double-buffered».
+- «2 правила: f_fall (down) и f_spread (2 перпендикулярных направления, но только 1 destination пишется для count conservation)».
+- «Hash = Teschner spatial hash (НЕ splitmix64), deterministic».
+- «20 Hz default, accumulator-based, multi-tick per frame allowed».
+- «Double-buffered через `next[]` snapshot + `claimed[]` swap-bug fix».
 - «Работает только с `Fluid` материалом, не путать с Glass».
 
 ---
@@ -575,16 +676,16 @@ for each Fluid voxel v:
 
 ## 16. Asset pipeline (glTF, Draco, meshopt)
 
-**Где:** `src/asset/AssetLoader.{cpp,hpp}`, `DracoMeshDecoder.{cpp,hpp}`, `MeshBaker.{cpp,hpp}`
+**Где:** `src/asset/AssetLoader.{cpp,hpp}`, `DracoMeshDecoder.{cpp,hpp}`, `MeshBaker.{cpp,hpp}`, `ModelManifestLoader.{cpp,hpp}`
 **Проблема:** glTF = стандарт, но файлы могут быть сжаты Draco. Нужно декодировать + оптимизировать для GPU.
 
-**Конвейер:**
-1. `AssetLoader::Load(path)` → fastgltf parser → `ParsedGltf`.
+**Конвейер (per `src/asset/AssetLoader.hpp:36-38`):**
+1. **`LoadGlb(const std::string &path, LoadAssetError *outError)`** (НЕ `Load` — это неправильное имя) — fastgltf parser → `LoadedAsset` (Primitives, AABB, vertex/triangle counts).
 2. Если mesh has Draco compression → `DracoMeshDecoder::Decode()` → `DecodedMesh`.
-3. `MeshBaker::Optimize()` → meshopt:
-   - vertex cache optimization (reorder indices для cache locality)
-   - overdraw optimization (reorder triangles)
-   - vertex fetch optimization (reorder vertices для memory locality)
+3. **`MeshBaker::Optimize()`** → meshopt:
+   - `meshopt_optimizeVertexCache` (reorder indices для cache locality)
+   - `meshopt_optimizeOverdraw` (reorder triangles)
+   - `meshopt_optimizeVertexFetch` (reorder vertices для memory locality)
 4. Bake textures (atlas если несколько материалов).
 5. Upload в GPU через VMA → `MeshGpuResources`.
 
@@ -592,9 +693,11 @@ for each Fluid voxel v:
 - `PROJECTV_MODELS=path.glb@x,y,z;...` env var.
 - `ModelManifestLoader` парсит, создаёт `ModelPass` per instance.
 - `SnapModelInstancesAboveGroundDispatch` — позиционирует модели над ground (Y=0 по умолчанию).
+- `ComputeGlbDimensions` (per `AssetLoader.hpp:60-68`) — pure helper для per-axis auto-scale.
 
 **Что говорить:**
 - «fastgltf → Draco decode → meshopt optimize → VMA upload».
+- «Entry point: `LoadGlb(path, outError)`, НЕ `Load`».
 - «Manifest через env var, snap above ground».
 - «Загрузчик синхронный, <1 сек на 100 МБ glb».
 
@@ -605,48 +708,76 @@ for each Fluid voxel v:
 **Где:** `src/audio/AudioEngine.{hpp,cpp}`
 **Проблема:** нужен простой audio без тяжёлых зависимостей.
 
-**Архитектура:**
-- `miniaudio` (header-only, MIT) для playback.
-- Linux backend: PipeWire → PulseAudio (через `pulse` context).
+**Архитектура (per `AudioEngine.hpp:5-15`):**
+- `miniaudio` (vendored submodule, MIT) для playback.
+- Linux backend: **PulseAudio** через `pipewire-pulse` shim → active PipeWire server (per `pactl info` → `Server String: /run/user/1000/pulse/native`).
+- Format: **16-bit signed PCM, 44.1 kHz, stereo** (per `AudioEngine.cpp:85-100`). `config.sampleRate = 44100, config.channels = 2, config.listenerCount = 1`.
 - `MusicDirectoryPath` env var (`music/` default).
 - `scanPlaylist()` каждые 5 секунд — автообновление при добавлении файлов.
 
-**Hotkeys:**
-- `Q` — play/pause
-- `E` — stop
-- `7`/`8` — volume down/up
-- `9`/`0` — next/prev track
+**Поддерживаемые форматы: ТОЛЬКО MP3.** Per `AudioEngine.cpp:206-211`:
+```cpp
+const auto &path = entry.path();
+std::string ext = path.extension().string();
+std::ranges::transform(ext, ext.begin(),
+    [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+if (ext != ".mp3") {
+    continue;  // WAV/FLAC/etc. silently ignored
+}
+m_playlist.push_back(path);
+```
+
+Сейчас в `music/` лежат 2 MP3: `Le1t - Palm Trees.mp3`, `Le1t - aCID.mp3`.
+
+**Hotkeys (per `InputActions.cpp:196-210`):**
+- `Q` (SDL_SCANCODE_Q) — `ToggleMusicPlayPause`
+- `E` (SDL_SCANCODE_E) — `StopMusic`
+- `7`/`8` (SDL_SCANCODE_7/8) — `MusicVolumeDown/Up`, step 0.05 в [0, 1] range
+- `9`/`0` (SDL_SCANCODE_9/0) — `NextMusicTrack` / `PreviousMusicTrack`, wrap-around
+
+**API state (для debug HUD / sidecar):**
+- `state()` — `Stopped` / `Playing` / `Paused` (3-state enum)
+- `volume()` — float [0, 1]
+- `positionSeconds()` / `durationSeconds()` — для HUD time display
+- `currentArtist()` / `currentTitle()` — parsed from filename (`<artist> - <title>.mp3`)
 
 **Sidecar metadata:** `music_track`, `music_state`, `music_volume` в capture sidecars.
 
 **Что говорить:**
-- «miniaudio header-only, MIT, PipeWire → PulseAudio».
+- «miniaudio header-only, MIT, PulseAudio → PipeWire на Linux».
+- «16-bit 44.1 kHz stereo».
+- «Только MP3, WAV/FLAC тихо игнорируются».
 - «Auto-refresh playlist каждые 5 секунд».
 - «6 hotkeys: Q play/pause, E stop, 7/8 volume, 9/0 next/prev».
 
 ---
 
-## 18. Hot shader reload (F5)
+## 18. Hot shader reload (F11)
 
 **Где:** `src/app/main.cpp` → `RebuildAllShadersFromDisk()`
 **Проблема:** итерация над шейдерами требует перезапуска приложения, медленно.
 
-**Алгоритм:**
-1. F5 в `SDL_AppEvent` → `RebuildAllShadersFromDisk()`.
-2. Вызывает `cmake --build build/<preset> --target Shaders` (subprocess).
-3. `glslc` / `glslangValidator` перекомпилирует `.vert`/`.frag`/`.comp` → `.spv`.
-4. На success → `RequestRayMarchPipelineRecreate()` (и другие пайплайны с invalidated shader module).
-5. На следующем кадре pipeline recreate, swapchain wait idle.
+**Hotkey: F11** (relocated 2026-06-15 с F5 — F5 теперь чисто для InputAction `CycleScenePreset`).
+**Ray-march toggle: F12** (relocated 2026-06-15 с F6 — F6 теперь чисто для InputAction `SaveWorldSnapshot`).
+
+**Алгоритм (`RebuildAllShadersFromDisk`, per `main.cpp:60-114`):**
+1. F11 в `SDL_AppEvent` → `RebuildAllShadersFromDisk()`.
+2. Get `PROJECTV_BUILD_DIR` env var (если задана) иначе `PROJECTV_CMAKE_BUILD_DIR` macro (compile-time injected, cross-platform).
+3. Subprocess: `cmake --build <buildDir> --target Shaders > "<tempdir>/projectv_shader_reload.log" 2>&1`. Cross-platform tempdir via `std::filesystem::temp_directory_path()` (Linux: `/tmp`, Windows: `%TEMP%`).
+4. `glslc` / `glslangValidator` перекомпилирует `.vert`/`.frag`/`.comp` → `.spv`.
+5. На success → `RequestRayMarchPipelineRecreate()` (ray-march pipeline is the only one with newly-added `.comp`; pre-existing graphics/shadow/TAA pipelines keep cached shader modules until fuller pipeline-recreate PR).
+6. На следующем кадре pipeline recreate.
 
 **Edge cases (BUG-005):**
-- Race на descriptor sets при cycle scene.
+- Race на descriptor sets при cycle scene (это `F5` InputAction `CycleScenePreset`, НЕ F11 shader reload).
 - `vkDeviceWaitIdle` в `DestroySceneResources` смягчает, не устраняет полностью.
 - **Defensive:** `RequestRayMarchPipelineRecreate` — ленивый, **не дёргает** swapchain wait mid-frame.
 
 **Что говорить:**
-- «F5 → cmake build --target Shaders → pipeline recreate на следующем кадре».
+- «F11 (relocated с F5) → cmake build --target Shaders → ray-march pipeline recreate на следующем кадре».
+- «F12 (relocated с F6) → toggle ray-march pass (STUB на текущий момент, см. §11)».
 - «Удобно для итераций над шейдерами без перезапуска».
-- «BUG-005: race при cycle scene, смягчён через `vkDeviceWaitIdle`, не устранён полностью».
+- «BUG-005: race при InputAction F5 cycle scene, смягчён через `vkDeviceWaitIdle`, не устранён полностью».
 
 ---
 
@@ -655,32 +786,54 @@ for each Fluid voxel v:
 **Где:** `src/voxel/VoxelSnapshotError.hpp` + `SaveVoxelWorldSnapshot`/`LoadVoxelWorldSnapshot` в `VoxelWorld.cpp`
 **Проблема:** долгая сессия → хочется сохранить/восстановить мир.
 
-**Формат (binary, little-endian):**
-```
-struct SnapshotHeader {
-    char magic[8];     // "PVSNAP\0\0"
-    uint32_t version;   // currently 1
-    uint32_t w, h, d;   // world dimensions
+**Формат (binary, little-endian), per `VoxelWorld.cpp:29-44`:**
+```cpp
+struct VoxelWorldSnapshotHeader {
+    std::array<char, 8> magic{};        // "PVSNAP01" (8 значащих байт)
+    uint32_t version = 0;               // currently 1
+    uint32_t voxelByteCount = 0;        // размер voxel payload
+    uint32_t reserved = 0;
+    uint8_t scenePreset = 0;
+    uint8_t reservedBytes[3]{};
+    VoxelWorldConfig config{};
+    Int3 min{};
+    Int3 maxExclusive{};
+    uint64_t editVersion = 0;
 };
-
-struct SnapshotData {
-    // per chunk:
-    Int3 chunkPos;
-    uint32_t voxelCount;
-    // tightly packed: 1 byte per voxel = material ID
-};
+static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
 ```
 
-**Save:**
-1. Write header.
-2. For each dirty chunk: write chunkPos + voxel data.
-3. `std::expected<void, VoxelSnapshotError>` return (cold path).
+**Magic:** `kVoxelWorldSnapshotMagic = {'P','V','S','N','A','P','0','1'}` (8 значащих байт, **НЕ** `"PVSNAP\0\0"`).
+**Version:** `kVoxelWorldSnapshotVersion = 1u`.
 
-**Load:**
-1. Read header, validate magic + version.
-2. Reject если `w*h*d > MAX_VOXELS` (defensive).
-3. Resize `chunks` vector, populate voxels.
-4. Mark all chunks dirty → meshing rebuilds.
+**Body (per chunk):**
+```cpp
+// tightly packed: 1 byte per voxel = material ID
+```
+
+**Save (`SaveVoxelWorldSnapshot`):**
+1. Open file (binary), `std::ofstream`.
+2. Write header (80 B).
+3. Write voxel payload: `world.voxels.size()` bytes (1 byte per voxel = material ID).
+4. `std::expected<bool, VoxelSnapshotError>` return (cold path, Tier 1.B).
+
+**Load (`LoadVoxelWorldSnapshot`):**
+1. Open file, read header. Validate `header.magic != kVoxelWorldSnapshotMagic` → `VoxelSnapshotError::MagicMismatch`.
+2. Validate `header.version != 1u` → `VoxelSnapshotError::UnsupportedVersion`.
+3. Validate `header.scenePreset` via `IsValidVoxelScenePresetValue` → `VoxelSnapshotError::InvalidScenePreset`.
+4. Reject if `voxelByteCount > MAX_VOXELS` (defensive) → `VoxelSnapshotError::VoxelByteCountOutOfRange`.
+5. Construct `std::unique_ptr<VoxelWorld>` from header (config, min, maxExclusive, scenePreset).
+6. `voxels.resize(voxelByteCount)`, `file.read(voxels.data(), voxelByteCount)`.
+7. Initialize chunks from config (chunkCountX/Y/Z, chunkSize).
+8. `std::expected<unique_ptr<VoxelWorld>, VoxelSnapshotError>` return.
+
+**Tier 1.B:** error handling через `std::expected` (cold path, 1× per snapshot).
+
+**Что говорить:**
+- «Binary, magic `"PVSNAP01"`, version 1, 80-B header + voxel payload».
+- «1 byte per voxel = material ID, header с config + min/max + scenePreset».
+- «std::expected на cold path, validate magic + version + scenePreset + byte count на load».
+- «Cold path (1× per snapshot), so std::expected overhead irrelevant».
 
 **Что говорить:**
 - «Binary, 1 byte per voxel, header с magic+version+dimensions».
@@ -751,12 +904,13 @@ struct SnapshotData {
 - `linux-clang-debug` ctest 14/14, 0 errors, 0 new warnings.
 - libc++ (мигрировали с libstdc++ в Tier 2.5, `c3faa65`).
 - CMake 3.30+ (тестировался 4.0).
+- **std::simd реально не используется** (planned, Tier 5 follow-up) — заменено на C/AVX2 kernel в `src/c_kernels/frustum_cull.c`.
 
 **Что говорить:**
-- «std::expected на cold path, std::inplace_vector на hot path».
-- «alignas(16) → auto-vectorization».
+- «std::expected на cold path, std::inplace_vector на hot path (cap 1024)».
+- «alignas(16) → auto-vectorization в movaps/vmovaps».
 - «Modules: Math.ixx, Probe.ixx, StringId.ixx — ускорение incremental build».
-- «libc++ мигрировали в Tier 2.5, std::simd через модули».
+- «libc++ мигрировали в Tier 2.5; SIMD через C/AVX2 kernel (Tier 3)».
 
 ---
 
@@ -765,7 +919,7 @@ struct SnapshotData {
 **Где:** корневой `CMakeLists.txt` + `CMakePresets.json`
 **Структура:**
 
-**Configure presets (7 + 8 release = 15):**
+**Configure presets (3 debug + 1 tracy + 3 release = 7 main, +8 release = 15 total per `decisions.md §4` build config audit 2026-06-14):**
 - `windows-clang-debug` (основной dev tree)
 - `windows-clang-debug-ci` (CI, suppress developer warnings)
 - `windows-clang-debug-tracy-profiler` (только Tracy config changes)
@@ -786,16 +940,17 @@ struct SnapshotData {
 - Без `-ffast-math` (ломает Fluid CA determinism + TAA YCoCg clamp)
 - Без `-march=native` (portability между CPU)
 - Link: `-flto=thin -Wl,--gc-sections`
-- **Результат:** ELF 19 MB (vs 72 MB debug), +1.5-2.5× FPS.
+- **Результат:** ELF **19 MB release vs 73 MB debug** (-73%), +1.5-2.5× FPS.
 
 **Build verification (2026-06-15, текущий baseline):**
-- `linux-clang-debug`: 137/137 targets, ctest 14/14 (release) / 14/14 (debug), smoke 6/6.
+- `linux-clang-debug`: 137/137 targets, ctest 14/14, smoke 6/6, **ELF 73 MB**.
+- `linux-clang-release`: 137/137 targets, ctest 14/14 (0.06s), smoke 6/6, **ELF 19 MB**.
 - `linux-clang-release`: ELF 19 MB, FPS +1.5-2.5× vs debug.
 
 **Что говорить:**
 - «7 debug + 8 release configure presets, 6 build, 5 test».
 - «Release: -O3 -flto=thin без -ffast-math без -march=native».
-- «ELF 19 MB release vs 72 MB debug, +1.5-2.5× FPS».
+- «ELF 19 MB release vs 73 MB debug (verified 2026-06-15), +1.5-2.5× FPS».
 
 ---
 
@@ -837,28 +992,28 @@ struct SnapshotData {
 
 | # | Алгоритм | Где | Hot/Cold | Ключевое слово |
 |---|---|---|---|---|
-| 1 | Voxel world | `voxel/VoxelWorld.cpp` | H | 8×8×8, 1B/voxel |
-| 2 | Materials | `voxel/VoxelMaterials.cpp` | H | 5 типов, 3 категории |
+| 1 | Voxel world | `voxel/VoxelWorld.{hpp,cpp}` | H | 8×8×8 chunks, плоский `voxels` |
+| 2 | Materials | `voxel/VoxelMaterials.cpp` | H | 5 типов, 3 solid |
 | 3 | Greedy meshing | `shaders/voxel_mesh.comp` | H | Лысенков, 6 проходов |
-| 4 | Frustum cull | `c_kernels/frustum_cull.c` | H | AVX2 dpps, 8× |
-| 5 | Visibility cache | `render/SceneResources.cpp` | H | splitmix64, 2 memcpy |
-| 6 | CSM | `render/ShadowProjection.cpp` | H | 4 каскада, 2048² |
-| 7 | PCF 5×5 | `shaders/voxel.frag` | H | weighted, N·L bias |
-| 8 | Contact shadows | `shaders/voxel.frag` | H | DDA, 16 max steps |
-| 9 | AOCC | `shaders/voxel.frag` | H | hemisphere, 12 reads |
-| 10 | TAA + CAS | `shaders/taa_resolve.frag` | H | YCoCg, Halton 8 |
-| 11 | Ray-march | `shaders/ray_march.comp` | H | F6 toggle, OFF default |
-| 12 | Walk controller | `physics/PhysicsWorld.cpp` | H | voxel-решатель, edge grace |
-| 13 | Fluid CA | `voxel/VoxelWorld.cpp` | H | hash-ordered, 20 Hz |
+| 4 | Frustum cull | `c_kernels/frustum_cull.c` | H | C 3.7-3.9×, AVX2 2.5-2.7× |
+| 5 | Visibility cache | `render/SceneResources.{hpp,cpp}` | H | custom XOR-fold, splitmix64-style avalanche |
+| 6 | CSM | `render/ShadowProjection.cpp` | H | 4 каскада, 2048², λ=0.80 |
+| 7 | PCF 5×5 | `shaders/voxel.frag` | H | triangular weighted, N·L bias |
+| 8 | Contact shadows | `shaders/voxel.frag` | H | DDA, 12 max steps |
+| 9 | AOCC | `shaders/voxel.frag` | H | 3-tap × 4 steps, hemisphere |
+| 10 | TAA + CAS | `shaders/taa_resolve.frag` | H | YCoCg, Halton(2,3) 8-sample |
+| 11 | Ray-march | `shaders/ray_march.comp` | H | F12 toggle, **STUB** (Phase 7) |
+| 12 | Walk controller | `physics/PhysicsWorld.cpp` | H | JPH::CharacterVirtual + voxel augment, 4-frame grace |
+| 13 | Fluid CA | `voxel/VoxelWorld.cpp` | H | Teschner hash, 2-perp, count conservation |
 | 14 | Voxel raycast | `voxel/VoxelRaycast.cpp` | H | 3D DDA через чанки |
-| 15 | Jolt | `physics/PhysicsWorld.cpp` | H | CharacterVirtual proxy |
-| 16 | Asset pipeline | `asset/AssetLoader.cpp` | C | glTF/Draco/meshopt |
-| 17 | Audio | `audio/AudioEngine.cpp` | C | miniaudio, PW→PA |
-| 18 | Hot reload | `app/main.cpp` | C | F5, cmake --target Shaders |
-| 19 | Snapshot | `voxel/VoxelWorld.cpp` | C | binary, magic+version |
+| 15 | Jolt | `physics/PhysicsWorld.cpp` | H | CharacterVirtual + voxel solver |
+| 16 | Asset pipeline | `asset/AssetLoader.cpp` | C | LoadGlb, glTF/Draco/meshopt |
+| 17 | Audio | `audio/AudioEngine.cpp` | C | miniaudio, **MP3 only**, 16/44.1 |
+| 18 | Hot reload | `app/main.cpp` | C | **F11**, cmake --target Shaders |
+| 19 | Snapshot | `voxel/VoxelWorld.cpp` | C | binary, "PVSNAP01", v1 |
 | 20 | JSON config | `voxel/SceneConfig.cpp` | C | nlohmann/json, FetchContent |
-| 21 | C++26 фичи | разные | оба | expected, simd, modules |
-| 22 | Build | `CMakeLists.txt`, `CMakePresets.json` | C | 7+8 presets, libc++ |
+| 21 | C++26 фичи | разные | оба | expected, modules, inplace_vector |
+| 22 | Build | `CMakeLists.txt`, `CMakePresets.json` | C | 7+8 presets, libc++, 73→19 MB |
 | 23 | ECS bridge | `ecs/EcsWorld.cpp` | C | Flecs mirror, sync 1×/frame |
 
 ---

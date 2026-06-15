@@ -141,7 +141,7 @@
 - 2D-метод: для каждого пикселя трассируется луч через объём/поле расстояний, цвет по ближайшему пересечению.
 - Наш `ray_march.comp` — Amanatides-Woo 3D DDA через packed voxel payload.
 - Push constants: `worldMinAndChunkSize/chunkGridAndFlags`.
-- Toggle F6, OFF по умолчанию (стоимость).
+- Toggle F12 (relocated 2026-06-15 с F6), OFF по умолчанию (стоимость). **STUB на текущий момент** — compute shader скомпилирован, но graphics command stream его ещё не вызывает (только `fprintf` в stderr), Phase 7 follow-up.
 - Подробно: `DefenseAlgorithms.md §11`, `DefenseFAQ.md §3.3`.
 
 **Q14. Что такое контактная тень (CTSH)?**
@@ -176,7 +176,7 @@
 
 **Q18. Что такое fluid CA?**
 - Клеточный автомат для жидкости: 1 tick = down-fall, fallback cardinal spread.
-- Hash-ordered для determinism (splitmix64), double-buffered.
+- Hash = Teschner spatial hash (НЕ splitmix64), double-buffered, count conservation.
 - 20 Hz throttle (1 tick per 3 frames @ 60 FPS).
 - Подробно: `DefenseAlgorithms.md §13`.
 
@@ -198,14 +198,14 @@
 
 **Q21. Какие метрики производительности?**
 - VoxelLab reference shot: **110-130 FPS**, frame time 7-9 мс (debug), 5-6 мс (release).
-- Release: ELF 19 MB (-73% vs 72 MB debug), +1.5-2.5× FPS.
+- Release: ELF 19 MB (-73% vs 73 MB debug, verified 2026-06-15), +1.5-2.5× FPS.
 - ctest wall clock: 0.06s release vs 0.78s debug (-92%).
 - Build time: 22-30s clean build.
 - Per-pass timings на release: shadow 30 µs, graphics 76 µs, TAA 3 µs.
 
 **Q22. Какие известные баги?**
 - **BUG-004 (VoxelLab tremor):** per-frame sub-pixel jitter. FPS 150, MS 6.6. Попытка фикса в `90a45b4` не устранила. **TAA-scope, post-defense follow-up.**
-- **BUG-005 (F5 VUID race):** при cycle scene — 20+ ошибок `VUID-vkCmdDraw-None-08114` per 5 секунд. `vkDeviceWaitIdle` в `DestroySceneResources` смягчил, не устранил.
+- **BUG-005 (InputAction F5 cycle scene race):** при cycle scene — 20+ ошибок `VUID-vkCmdDraw-None-08114` per 5 секунд. `vkDeviceWaitIdle` в `DestroySceneResources` смягчил, не устранил. **НЕ путать с F11 shader reload (relocated 2026-06-15) — F5 InputAction и F11 SDLK разные события.**
 - **BUG-006 (untitled):** ещё не каталогизирован, см. `TODO.md`.
 - Подробно: `DefenseReport.md §9`.
 
@@ -250,7 +250,7 @@
 
 **Q28. Как тестировали итерации с BUG-004 (VoxelLab tremor)?**
 - Tracked через `agent/voxelab-tremor-handoff-2.md`.
-- Repro: статичная камера, VoxelLab, F6 ray-march OFF, TAA ON, blend 0.10, jitter scale 1.0.
+- Repro: статичная камера, VoxelLab, F12 ray-march OFF (или STUB, не важно), TAA ON, blend 0.10, jitter scale 1.0.
 - Измерение: PerFrame sidecar `frame_time_ms` и TAA history debug view.
 - Visual capture: `tools/linux/Invoke-ProjectVRuntimeSmoke.sh --views "FINAL SHDW CSM CTSH AOCC LOCL"`.
 - Попытка фикса: `90a45b4` (TAA NDC depth), не устранила.
@@ -319,8 +319,8 @@
 │ КЛЮЧЕВЫЕ ЦИФРЫ:                                                       │
 │  • 110-130 FPS, 7-9 мс frame time (debug), 5-6 мс (release)            │
 │  • 14/14 ctest, 0.78s debug / 0.06s release                            │
-│  • 27 чанков, 13 824 вокселей в VoxelLab                                │
-│  • ELF 19 MB release vs 72 MB debug (-73%)                             │
+│  • 27 чанков (3×3×3) в VoxelLab, генерация <200 мс                       │
+│  • ELF 19 MB release vs 73 MB debug (-73%)                             │
 │  • ctest wall clock 0.06s release vs 0.78s debug (-92%)                 │
 ├────────────────────────────────────────────────────────────────────────┤
 │ 5 ВАЖНЫХ ОТВЕТОВ:                                                      │
@@ -338,7 +338,7 @@
 │  • T4: физика, walk controller                                         │
 │  • T5: демо VoxelLab, ассеты, аудио                                    │
 ├────────────────────────────────────────────────────────────────────────┤
-│ ИЗВЕСТНЫЕ БАГИ: BUG-004 VoxelLab tremor, BUG-005 F5 VUID race         │
+│ ИЗВЕСТНЫЕ БАГИ: BUG-004 VoxelLab tremor, BUG-005 InputAction F5 race  │
 │ 5 ОТЛОЖЕНО: частицы, моддинг, async, HDR, SVO (см. DefenseReport §3)   │
 ├────────────────────────────────────────────────────────────────────────┤
 │ ROADMAP: Phase 4 (Network) → 5 (SVO) → 6 (Fluid GPU) → 7 (Particles)  │

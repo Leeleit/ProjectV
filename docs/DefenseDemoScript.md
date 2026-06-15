@@ -18,7 +18,7 @@
 ### 0.2. Запуск демо
 - [ ] `PROJECTV_START_CAMERA_POSITION="-25 19 25" PROJECTV_START_CAMERA_LOOK="0.62 -0.48 -0.62" build/linux-clang-debug/bin/ProjectV`
 - [ ] Стартует Voxel Laboratory (пол-шахматка, стеклянный шар, жидкость)
-- [ ] Внизу справа HUD: `FPS: 110-130`, `CHUNKS: 27`, `VOXELS: 13 824`
+- [ ] Внизу справа HUD: `FPS: 110-130`, `CHUNKS: 27`
 - [ ] Переключить HUD в подробный режим клавишей `G`
 
 ### 0.3. Подготовка lookdev-captures
@@ -59,7 +59,7 @@
 | 5:20 | — | — | Тиммейт 2 |
 | 5:50 | Переход к Тиммейту 3 | — | le1t (cue) |
 | **6:00** | **B — cycle debug views** (медленно) | SHDW → CSM → CTSH → AOCC → LOCL → FINAL | **Тиммейт 3** (рендер) |
-| 6:30 | F6 — ray-march toggle | Разница между mesh-based и ray-marched | Тиммейт 3 |
+| 6:30 | F12 — ray-march toggle (STUB, см. §11 Algorithms) | Разница между mesh-based и ray-marched | Тиммейт 3 |
 | 7:00 | — | — | Тиммейт 3 |
 | 7:30 | Переход к Тиммейту 4 | — | le1t (cue) |
 | **7:40** | **WASD + мышь** | Walk controller, облёт | **Тиммейт 4** (физика) |
@@ -93,8 +93,8 @@
 ### 2.3. Debug / render
 - **G** — toggle HUD verbosity (compact / detailed)
 - **B** — cycle debug views (FINAL → SHDW → CSM → CTSH → AOCC → LOCL)
-- **F5** — hot shader reload
-- **F6** — toggle ray-march
+- **F11** — hot shader reload (relocated 2026-06-15 с F5)
+- **F12** — toggle ray-march (relocated 2026-06-15 с F6)
 - **T** (если есть) — toggle TAA
 - **P** — pause
 - **[** / **]** — замедление/ускорение (0-4×)

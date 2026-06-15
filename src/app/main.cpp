@@ -542,15 +542,36 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		return SDL_APP_CONTINUE;
 	}
 
-	// **Defense r0 hotkeys (2026-06-13).** F5 = hot reload shaders, F6 =
-	// ray-march pass toggle. Both bypass the formal `InputAction` enum to
-	// avoid touching `core/Types.hpp` while `session-2026-06-13-hardcore-perf-r0`
-	// is mid-edit on the same header. See
-	// `docs/DefenseReport.md §2.7` for the contract.
+	// **Defense r0 hotkeys (2026-06-13, relocated 2026-06-15).** Originally
+	// F5 = hot reload shaders, F6 = ray-march pass toggle. **Relocated to
+	// F11 / F12** after a pre-defense code audit (`session-2026-06-15T10-43Z-
+	// defense-docs-audit-r0`) discovered that F5 and F6 are also bound in
+	// the formal `InputAction` system (`CycleScenePreset` and
+	// `SaveWorldSnapshot` per `src/app/InputActions.cpp:134-135`), which
+	// produced a confusing double-fire on the same key press.
+	//
+	// F11 and F12 are also bound in `InputAction` (`ToggleWalkAirControlMode`
+	// and `ToggleWalkAutoJumpDelay`), so the bypasses **shadow** those
+	// bindings on the same physical key. The shadowed walk-controller
+	// toggles are debug internals (MinecraftLike/Realistic air control,
+	// auto-jump delay) and are not on the demo path; the visible behaviour
+	// loss is acceptable for a defense demo where shader reload and
+	// ray-march toggle are explicit features.
+	//
+	// **TODO post-defense (`Phase 7+`):** route these through the formal
+	// `InputAction` system by adding `ReloadShaders` and
+	// `ToggleRayMarchPass` enum values in `core/Types.hpp` (currently
+	// mid-edit by `session-2026-06-13-hardcore-perf-r0` — that constraint
+	// was the original reason for the bypass). Once `core/Types.hpp` is
+	// stable, replace the SDLK_* checks with `ConsumeInputActionPressed`
+	// on the new enum values, freeing F11/F12 for their original walk-
+	// controller bindings.
+	//
+	// See `docs/DefenseReport.md §2.7` for the original defense r0 contract.
 	if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
-		if (event->key.key == SDLK_F5) {
+		if (event->key.key == SDLK_F11) {
 			RebuildAllShadersFromDisk();
-		} else if (event->key.key == SDLK_F6) {
+		} else if (event->key.key == SDLK_F12) {
 			const bool newState = !projectv::render::IsRayMarchEnabled();
 			projectv::render::SetRayMarchEnabled(newState);
 			std::fprintf(

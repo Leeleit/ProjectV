@@ -115,7 +115,7 @@ ls build/linux-clang-debug/lookdev-captures/
 > «`tools/linux/Invoke-ProjectVRuntimeSmoke.sh` запускает ProjectV, ждёт N кадров, делает 6 захватов (FINAL, SHDW, CSM, CTSH, AOCC, LOCL), проверяет sidecar metadata. На VoxelLab: 6/6 captures за 1 секунду wall clock. Это integration test, не unit test — проверяет, что весь pipeline от Vulkan init до GPU output работает.»
 
 ### Если спрашивают про метрики:
-> «VoxelLab reference shot — статичная камера, все эффекты включены (TAA, CAS, CSM, AOCC, local light). Debug: 110-130 FPS, 7-9 мс. Release: 5-6 мс, +1.5-2.5× FPS. ELF 19 MB release vs 72 MB debug, -73%. Per-pass timings на release: shadow 30 µs, graphics 76 µs, TAA 3 µs.»
+> «VoxelLab reference shot — статичная камера, все эффекты включены (TAA, CAS, CSM, AOCC, local light). Debug: 110-130 FPS, 7-9 мс. Release: 5-6 мс, +1.5-2.5× FPS. ELF 19 MB release vs 73 MB debug (verified `ls -lh 2026-06-15`), -73%. Per-pass timings на release: shadow 30 µs, graphics 76 µs, TAA 3 µs.»
 
 ---
 
@@ -135,7 +135,7 @@ ls build/linux-clang-debug/lookdev-captures/
 │  • 14/14 ctest, 0.78s debug / 0.06s release                            │
 │  • Runtime smoke 6/6 captures, 1s wall clock                           │
 │  • 110-130 FPS VoxelLab debug, 5-6 мс release                          │
-│  • ELF 19 MB release (-73% vs 72 MB debug)                             │
+│  • ELF 19 MB release (-73% vs 73 MB debug, verified 2026-06-15)    │
 ├────────────────────────────────────────────────────────────────────────┤
 │ ЧТО ГОВОРИТЬ:                                                          │
 │  1. C++26, Vulkan 1.4, DOD, ECS                                        │

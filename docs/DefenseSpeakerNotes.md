@@ -54,11 +54,11 @@
 
 **Краткое содержание:**
 - Чанки 8×8×8 = 512 вокселей, 1 байт/воксель, плотный массив.
-- VoxelLab: 27 чанков (3×3×3), 13 824 вокселей, генерация 200 мс.
+- VoxelLab: 27 чанков (3×3×3 grid), генерация 200 мс.
 - 5 материалов: Air, Glass, Fluid, FloorWhite, FloorGray.
 - 3 solid для физики: Glass, FloorWhite, FloorGray.
 - Greedy meshing (Лысенков): 6 проходов, 2D scan, 30-50% сокращение граней.
-- Visibility cache: splitmix64 hash, 2 уровня, 3 memcpy на cache hit, 8× ускорение.
+- Visibility cache: custom XOR-fold hash (Knuth-style multipliers + splitmix64-style avalanche), 2 уровня, cache hit = skip frustum cull, 8× ускорение.
 
 **Переход к Тиммейту 3:** «Дальше — про рендеринг: тени, сглаживание, контактные тени и экспериментальный ray-marching.»
 
@@ -91,7 +91,7 @@
 - Jolt Physics: MIT, SIMD, deterministic.
 - **Voxel solver** авторитетный для walk, не Jolt `CharacterVirtual` (per `decisions.md §6`).
 - 3 режима: walk / creative / spectator. F4 циклически, двойной Space ↔ walk ↔ creative.
-- **Edge grace:** 0.1 м допуск, не дёргает игрока на тонких краях.
+- **Edge grace:** `kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f` (НЕ 0.1 м), не дёргает игрока на тонких краях.
 - **Sneak (Shift):** sampled top-plane, без false-stick к стене.
 - **Auto-jump:** J toggle, F12 delay, по forward voxel.
 - **Substepping в creative:** anti-tunneling для high-velocity.
@@ -109,11 +109,11 @@
 
 **Краткое содержание:**
 - VoxelLab: пол 18×18, стеклянный шар r=5, жидкость, 27 чанков.
-- 13 824 вокселя, генерация 200 мс.
+- 27 чанков (3×3×3), генерация 200 мс.
 - **Asset pipeline:** fastgltf → Draco decode → meshopt optimize → MeshBaker → VMA upload.
 - **Manifest:** `PROJECTV_MODELS=path.glb@x,y,z;...` env var, snap above ground.
 - **miniaudio:** header-only MIT, PipeWire → PulseAudio.
-- **Playlist:** scan каждые 5 секунд, MP3/WAV/FLAC.
+- **Playlist:** scan каждые 5 секунд, MP3 only (WAV/FLAC тихо игнорируются, case-insensitive ext check).
 - **Audio hotkeys:** Q play/pause, E stop, 7/8 vol, 9/0 next/prev.
 - **Hot shader reload (F5):** `cmake --target Shaders` + pipeline recreate.
 - **Sidecar:** .txt рядом с .bmp, 60+ ключей metadata.

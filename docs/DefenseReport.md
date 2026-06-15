@@ -21,7 +21,7 @@
 |---|---|---|---|---|
 | 1 | **Кадочников Лев Петрович** (le1t, тимлид) | Архитектор, ведущий, Q&A | Архитектура, DOD layout, выбор библиотек (C++26, Vulkan 1.4, Flecs, Jolt), ECS-bridge, cold paths (snapshot, JSON config), hot shader reload F5, Q&A на защите. | `src/core/`, `src/ecs/`, `src/voxel/VoxelWorld.cpp` (CA), `src/voxel/SceneConfig.*`, `src/app/main.cpp` (F5/F6), корневой `CMakeLists.txt`, `CMakePresets.json`, `docs/Defense*.md` |
 | 2 | [Имя Тимейта 1] | Стек и сборка | Технологический стек, CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики производительности (110-130 FPS, 19 MB release). | `CMakeLists.txt`, `CMakePresets.json`, `tests/CMakeLists.txt`, `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` |
-| 3 | [Имя Тимейта 2] | Voxel-мир и meshing | Структура воксельного мира (чанки 8×8×8, 5 материалов), greedy meshing (Лысенков, 6 проходов), двухуровневый кеш видимости (splitmix64 hash), voxel raycast. | `src/voxel/VoxelWorld.*`, `src/voxel/VoxelMaterials.*`, `src/voxel/VoxelRaycast.*`, `src/shaders/voxel_mesh.comp`, `src/c_kernels/frustum_cull.*` |
+| 3 | [Имя Тимейта 2] | Voxel-мир и meshing | Структура воксельного мира (чанки 8×8×8, 5 материалов), greedy meshing (Лысенков, 6 проходов), двухуровневый кеш видимости (custom XOR-fold hash со splitmix64-style avalanche), voxel raycast. | `src/voxel/VoxelWorld.*`, `src/voxel/VoxelMaterials.*`, `src/voxel/VoxelRaycast.*`, `src/shaders/voxel_mesh.comp`, `src/c_kernels/frustum_cull.*` |
 | 4 | [Имя Тимейта 3] | Рендеринг | Каскадные тени (CSM 4×2048², lambda 0.80), PCF 5×5 weighted, контактные тени (voxel DDA), AOCC, TAA + YCoCg + CAS, ray-marching compute pass (F6). | `src/render/Renderer.*`, `src/render/ShadowProjection.*`, `src/render/Taa.*`, `src/render/TaaRenderTargets.*`, `src/render/RayMarchPass.*`, `src/shaders/voxel.frag`, `src/shaders/voxel_shadow.{vert,frag}`, `src/shaders/taa_resolve.{vert,frag}`, `src/shaders/ray_march.comp` |
 | 5 | [Имя Тимейта 4] | Физика и walk controller | Интеграция Jolt, walk/creative/spectator режимы, walk controller (edge grace, sneak, авто-прыжок), voxel raycast placement/removal, отладочные клавиши (slow-motion, frame-step). | `src/physics/PhysicsWorld.*`, Jolt integration glue |
 | 6 | [Имя Тимейта 5] | Демо VoxelLab + ассеты + аудио | Демо-сцена Voxel Laboratory (пол 18×18, стеклянный шар, жидкость, 27 чанков), asset pipeline (fastgltf → Draco → meshopt → MeshBaker → VMA), audio engine (miniaudio, PipeWire → PulseAudio), playlist scan. | `src/asset/AssetLoader.*`, `src/asset/DracoMeshDecoder.*`, `src/asset/MeshBaker.*`, `src/asset/ModelManifestLoader.*`, `src/asset/ModelPass.*`, `src/audio/AudioEngine.*`, `music/`, `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` |
@@ -84,7 +84,7 @@ sandbox-проектов с воксельной графикой, научны�
 | CPU-управляемый `VoxelWorld` с чанками | ✅ | `src/voxel/VoxelWorld.cpp` |
 | Greedy meshing (по осям, 6 проходов) | ✅ | `src/shaders/voxel_mesh.comp` |
 | Frustum culling (AABB чанков) | ✅ | `src/render/SceneResources.cpp` |
-| Двухуровневый кеш видимости чанков | ✅ | `ChunkVisibilityCache` (splitmix64 hash) |
+| Двухуровневый кеш видимости чанков | ✅ | `ChunkVisibilityCache` (custom XOR-fold hash) |
 | Voxel raycast + placement | ✅ | `src/voxel/VoxelRaycast.cpp` |
 | **Клеточный автомат для жидкостей** (новое) | ✅ | `VoxelWorld::UpdateFluidCA()` |
 | Сохранение/загрузка снапшота (двоичный) | ✅ | `SaveVoxelWorldSnapshot` |
