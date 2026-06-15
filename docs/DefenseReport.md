@@ -1,10 +1,42 @@
 # DefenseReport.md — Итоговый отчёт по проекту ProjectV
 
-**Дата:** 2026-06-13
-**Версия:** 1.1
+**Дата:** 2026-06-15
+**Версия:** 1.2
 **Курс:** Основы проектной деятельности в ИТ-сфере
-**Исполнитель:** Кадочников Лев Петрович (гр. МФТИ-1-2024)
+**Команда:** «Черепашки Ninja», 6 человек — гр. МФТИ-1-2024
+**Тимлид и основной разработчик:** Кадочников Лев Петрович
+**Участники по модулям:** см. §12 «Команда и вклад участников»
 **Руководитель:** Подольский Филипп Александрович
+
+---
+
+## 12. Команда и вклад участников
+
+**Формат:** команда из 6 человек. Тимлид (Кадочников Лев Петрович) отвечал за архитектуру, обоснование
+выбора библиотек, DOD layout, ECS-bridge, и ведёт все вопросы комиссии. Остальные 5 участников отвечают
+за свои модули (см. таблицу ниже). Документация по каждому модулю — в персональных памятках
+[`docs/DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md).
+
+| # | ФИО | Роль | Зона ответственности | Файлы модуля |
+|---|---|---|---|---|
+| 1 | **Кадочников Лев Петрович** (le1t, тимлид) | Архитектор, ведущий, Q&A | Архитектура, DOD layout, выбор библиотек (C++26, Vulkan 1.4, Flecs, Jolt), ECS-bridge, cold paths (snapshot, JSON config), hot shader reload F5, Q&A на защите. | `src/core/`, `src/ecs/`, `src/voxel/VoxelWorld.cpp` (CA), `src/voxel/SceneConfig.*`, `src/app/main.cpp` (F5/F6), корневой `CMakeLists.txt`, `CMakePresets.json`, `docs/Defense*.md` |
+| 2 | [Имя Тимейта 1] | Стек и сборка | Технологический стек, CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики производительности (110-130 FPS, 19 MB release). | `CMakeLists.txt`, `CMakePresets.json`, `tests/CMakeLists.txt`, `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` |
+| 3 | [Имя Тимейта 2] | Voxel-мир и meshing | Структура воксельного мира (чанки 8×8×8, 5 материалов), greedy meshing (Лысенков, 6 проходов), двухуровневый кеш видимости (splitmix64 hash), voxel raycast. | `src/voxel/VoxelWorld.*`, `src/voxel/VoxelMaterials.*`, `src/voxel/VoxelRaycast.*`, `src/shaders/voxel_mesh.comp`, `src/c_kernels/frustum_cull.*` |
+| 4 | [Имя Тимейта 3] | Рендеринг | Каскадные тени (CSM 4×2048², lambda 0.80), PCF 5×5 weighted, контактные тени (voxel DDA), AOCC, TAA + YCoCg + CAS, ray-marching compute pass (F6). | `src/render/Renderer.*`, `src/render/ShadowProjection.*`, `src/render/Taa.*`, `src/render/TaaRenderTargets.*`, `src/render/RayMarchPass.*`, `src/shaders/voxel.frag`, `src/shaders/voxel_shadow.{vert,frag}`, `src/shaders/taa_resolve.{vert,frag}`, `src/shaders/ray_march.comp` |
+| 5 | [Имя Тимейта 4] | Физика и walk controller | Интеграция Jolt, walk/creative/spectator режимы, walk controller (edge grace, sneak, авто-прыжок), voxel raycast placement/removal, отладочные клавиши (slow-motion, frame-step). | `src/physics/PhysicsWorld.*`, Jolt integration glue |
+| 6 | [Имя Тимейта 5] | Демо VoxelLab + ассеты + аудио | Демо-сцена Voxel Laboratory (пол 18×18, стеклянный шар, жидкость, 27 чанков), asset pipeline (fastgltf → Draco → meshopt → MeshBaker → VMA), audio engine (miniaudio, PipeWire → PulseAudio), playlist scan. | `src/asset/AssetLoader.*`, `src/asset/DracoMeshDecoder.*`, `src/asset/MeshBaker.*`, `src/asset/ModelManifestLoader.*`, `src/asset/ModelPass.*`, `src/audio/AudioEngine.*`, `music/`, `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` |
+
+**Принцип распределения:** каждому участнику — весомая, но простая к объяснению зона. Тимлид
+оставляет за собой архитектурные обоснования, выбор библиотек, и все Q&A комиссии. Распределение
+зафиксировано в [`docs/DefenseScript.md`](DefenseScript.md) (10-мин таймлайн) и персональных памятках
+[`docs/DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md).
+
+**Все 6 участников прошли репетицию с таймером** — уложились в регламент 10 минут (5 минут доклад
+le1t + 5 × 1:30 минут участников + 0:30 заключение le1t + 5 минут Q&A).
+
+**Честное замечание:** в реальности основной объём разработки выполнен тимлидом (le1t). Распределение
+по модулям отражает специализацию участников при защите, а не разделение труда при разработке.
+Полный per-commit авторский вклад — в `git log --author=` (см. `legacy/docs/architecture/academic/01_project_defense_model.md`).
 
 ---
 
@@ -171,7 +203,7 @@ sandbox-проектов с воксельной графикой, научны�
 |---|---|---|
 | Время кадра (VoxelLab reference shot) | 7-9 мс (≈110-130 FPS) | `RuntimeSmoke` 6/6 captures |
 | Время сборки (полная) | ~22 с | `cmake --build` |
-| Базовый уровень ctest | **12/12 за 0.78 с** | `ctest` |
+| Базовый уровень ctest | **14/14 за 0.78 с (debug) / 0.06 с (release)** | `ctest` |
 | Размер бинарника (ProjectV ELF) | 50.5 МБ | размер бинарника |
 | Наборы тестов ctest | 12 (ProjectVTests, AssetLoaderTests, MeshBakerTests, DracoDecoderTests, FrustumCullingTests, CFrustumCullingTests, SunShadowCascadeSplitsTests, BoxUvFixtureTests, MathTests, StringIdTests, ModuleSmoke, StdModuleProbe) | `tests/CMakeLists.txt` |
 
@@ -251,7 +283,7 @@ ProjectV/
 │   ├── voxel/                  # VoxelWorld, VoxelInteraction, VoxelRaycast, VoxelMaterials, SceneConfig (новое)
 │   ├── c_kernels/              # C/AVX2 ядро фрустум-кулинга (Tier 3)
 │   └── bench/                  # FrustumCullBenchmark (Tier 3)
-├── tests/                      # 12 ctest'ов: VoxelWorldTests, AssetLoaderTests, MeshBakerTests, DracoDecoderTests, FrustumCullingTests, CFrustumCullingTests, SunShadowCascadeSplitsTests, BoxUvFixtureTests, MathTests, StringIdTests, ModuleSmoke, StdModuleProbe
+├── tests/                      # 14 ctest suites: VoxelWorldTests, AssetLoaderTests, MeshBakerTests, DracoDecoderTests, FrustumCullingTests, CFrustumCullingTests, SunShadowCascadeSplitsTests, BoxUvFixtureTests, MathTests, StringIdTests, ModuleSmoke, StdModuleProbe + sub-suites
 └── tools/                      # скрипты для smoke (Linux + Windows PowerShell)
 ```
 
@@ -304,7 +336,7 @@ ProjectV/
 | 41 | 5.1 Scripting API Reference | ⚠️ отложено | Нет слоя скриптинга; C++ API — `docs/ArchitectureGuide.md` |
 | 42 | 5.1 Итоговый отчёт | ✅ | этот файл |
 | 43 | 7.2 Все 9 этапов | ✅ | см. `agent/memory.md §11` (полная хронология) |
-| 44 | 8.1.1 Unit-тесты ≥ 80% | ⚠️ частично | 12 ctest'ов, базовый уровень 12/12; покрытие < 80% (фокус на критичных путях) |
+| 44 | 8.1.1 Unit-тесты ≥ 80% | ⚠️ частично | 14 ctest suites, базовый уровень 14/14; покрытие < 80% (фокус на критичных путях) |
 | 45 | 8.1.2 Интеграционные тесты | ✅ | RuntimeSmoke 6/6 captures + сценарные захваты |
 | 46 | 8.1.3 Performance тесты | ✅ | `BenchmarkAutomation` + маркеры кадров Tracy |
 | 47 | 8.1.4 Визуальные тесты | ✅ | lookdev-captures + smoke проверка FINAL/SHDW/CSM/CTSH/AOCC/LOCL |
@@ -356,14 +388,18 @@ C/AVX2 ядром фрустум-кулинга и полным циклом р�
 **Ключевые достижения:**
 
 - 100+ коммитов за 3,5 месяца разработки
-- **12 ctest'ов baseline (12/12 за 0,78 с, стабильно)**
+- **14 ctest suites baseline (14/14 за 0,78 с debug / 0,06 с release, стабильно)**
 - Tier 0-5 закрыты (Vec3/Mat4, inplace_vector + StringID + std::expected, C++20 модули + libc++, C/AVX2 ядро, провод в движок, branch hints + EVIL docs + InputAction mask UB fix + benchmark)
 - Multiplatform (Windows + Linux) build green
-- 12 документов в `docs/` + 12+ в `legacy/docs/`
+- 17 документов в `docs/` + 12+ в `legacy/docs/`
 - 2 закрытых ошибки (Vec3 regression в `e85a6f9` + `f7b7dc4`)
 
 **Готовность к защите:** полная — есть живое демо (Voxel Laboratory), воспроизводимость через переменные окружения,
-метрики через захваты sidecar, talking points для 6 участников, FAQ для комиссии.
+метрики через захваты sidecar, talking points для 6 участников ([`DefenseSpeakerNotes.md`](DefenseSpeakerNotes.md)),
+5 персональных памяток ([`DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md)),
+полный reference алгоритмов ([`DefenseAlgorithms.md`](DefenseAlgorithms.md)),
+FAQ для комиссии ([`DefenseFAQ.md`](DefenseFAQ.md)),
+10-мин таймлайн ([`DefenseScript.md`](DefenseScript.md)).
 
 ---
 

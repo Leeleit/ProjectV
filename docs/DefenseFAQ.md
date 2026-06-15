@@ -438,3 +438,117 @@ Tier 0-5 закрыты (12 коммитов с `427be4f` до `90a45b4`):
 - **Tier 5** (`aa34642`): branch hints, EVIL docs, `vkWaitForFences 10ms`, InputAction mask UB fix, shadow benchmark и splits tests
 
 Базовый уровень производительности установлен. Tier 0-5 — perf baseline, не bug-fixing. Известные TAA-scope проблемы (VoxelLab tremor BUG-004, F5 VUID race BUG-005) — postdefense follow-up.
+
+---
+
+## 11. Дополнительные вопросы (защита 2026-06-15, обновлено)
+
+### 11.1. Расскажите про команду — кто что делал?
+
+Команда «Черепашки Ninja» из 6 человек. Тимлид — Кадочников Лев Петрович (le1t), он же основной разработчик, отвечает за архитектуру, выбор библиотек, DOD layout, ECS-bridge, cold paths (snapshot, JSON config), hot shader reload F5, и ведёт все Q&A комиссии. Остальные 5 участников распределены по модулям:
+
+- **Тиммейт 1** — стек и сборка: C++26, CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики.
+- **Тиммейт 2** — voxel-мир и meshing: чанки 8×8×8, материалы, greedy meshing Лысенкова, visibility cache splitmix64.
+- **Тиммейт 3** — рендеринг: CSM, PCF, контактные тени, AOCC, TAA + YCoCg + CAS, ray-marching compute pass.
+- **Тиммейт 4** — физика и walk controller: Jolt, walk/creative/spectator, edge grace, авто-прыжок.
+- **Тиммейт 5** — демо VoxelLab + ассеты + аудио: сцена, glTF/Draco/meshopt pipeline, miniaudio.
+
+Полная таблица вклада — `docs/DefenseReport.md §12`. Каждому участнику — персональная памятка
+[`docs/DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md) с verbatim текстом, понятиями, cheat-card.
+
+### 11.2. Расскажите про ray-marching — что это и зачем?
+
+ТЗ требовало «GPU ray-marching через compute-шейдеры» (п. 4.1.2). Реализация:
+- Файл: `src/shaders/ray_march.comp` + `src/render/RayMarchPass.{hpp,cpp}`.
+- Алгоритм: Amanatides-Woo 3D DDA через packed voxel payload.
+- Push constants: `worldMinAndChunkSize/chunkGridAndFlags`.
+- Toggle: клавиша F6 в рантайме. По умолчанию OFF (стоимость ~30-40% FPS).
+- Назначение: альтернативный путь рендеринга для cinematic-камеры, мягкие грани вокселей.
+
+Mesh-based greedy meshing — основной путь (быстрее для статичных сцен).
+Ray-marching — вторичный режим, переключаемый.
+
+Подробно: `docs/DefenseAlgorithms.md §11`, `docs/DefenseBriefer_3.md §6`.
+
+### 11.3. Расскажите про fluid CA (клеточный автомат для жидкости)
+
+ТЗ требовало «Симуляция жидкостей (CA)» (п. 4.1.3). Реализация:
+- Файл: `src/voxel/VoxelWorld.cpp` → `UpdateFluidCA()`.
+- Алгоритм: 1 tick = down-fall, fallback cardinal spread (4 направления, hash-ordered).
+- Hash = `splitmix64(voxelPos) ^ frameCounter` для детерминизма.
+- Double-buffered (snapshot на начало tick, mutations в новый буфер).
+- 20 Hz throttle (1 tick per 3 frames @ 60 FPS).
+- Pause/timeScale integration: paused при `timeScale == 0` или `paused == true`.
+
+Подробно: `docs/DefenseAlgorithms.md §13`.
+
+### 11.4. Расскажите про hot shader reload (F5)
+
+F5 в `src/app/main.cpp` → `RebuildAllShadersFromDisk()`:
+1. Subprocess: `cmake --build build/<preset> --target Shaders`.
+2. glslc/glslangValidator перекомпилирует `.vert`/`.frag`/`.comp` → `.spv`.
+3. На success → `RequestRayMarchPipelineRecreate()` (и другие pipelines с invalidated shader module).
+4. На следующем кадре pipeline recreate, swapchain wait idle.
+
+Удобно для итераций над шейдерами без перезапуска приложения.
+
+### 11.5. Какой был workflow работы с Git?
+
+100+ коммитов за 3,5 месяца. Conventional commits с type/scope (per `AGENTS.md §7.2.5`).
+Pre-commit gates: type=fix требует operator confirm, остальное — auto per `AGENTS.md §7.3.1`.
+Multi-agent coordination через `agent/active-sessions.md` (см. `AGENTS.md §7.2.6`).
+Auto-close после commit per `AGENTS.md §8.1`.
+
+См. `git log --oneline -20` для истории:
+- Tier 0-5 (12 коммитов): `c3faa65`, `e0029dc`, ..., `aa34642`.
+- VoxelLab tremor fix attempt: `90a45b4`.
+- Release presets: `6fe9201`.
+- Build audit: `1257c1e`.
+- Defense prep: `aeabd77`.
+
+### 11.6. Какие платформы поддерживаются и как собирать?
+
+Windows 10/11 + Linux Arch. Обе платформы build green, ctest 14/14.
+- Linux: native clang 22.1.6 + lld 22 + libc++ 16. Preset `linux-clang-debug`.
+- Windows: clang-cl 22 (Visual Studio Build Tools 2026 + Vulkan SDK 1.4). Preset `windows-clang-debug`.
+- 7 debug + 8 release CMakePresets, host-independent JSON, валидируются через `cmake --list-presets`.
+
+Команды:
+```bash
+cmake --preset linux-clang-debug
+cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8
+ctest --test-dir build/linux-clang-debug --output-on-failure
+./build/linux-clang-debug/bin/ProjectV
+```
+
+Подробно: `docs/BuildAndRun.md`, `README_NEW.md`, `docs/DefenseBriefer_1.md §6`.
+
+### 11.7. Что если спросят про BUG-004 (VoxelLab tremor)?
+
+VoxelLab показывает residual sub-pixel jitter при включённом TAA. FPS ~150, MS ~6.6 (нет проблем с производительностью).
+Попытка фикса в `90a45b4` (TAA NDC depth + descriptor race) устранила race, но не устранила визуальный jitter полностью.
+
+**Рабочий workaround:** `PROJECTV_RENDERER_TAA=OFF` отключает TAA, восстанавливает стабильную картинку ценой aliasing.
+
+**Что дальше:** рефакторинг TAA-пасса в Phase 5 roadmap. Полный разбор — `agent/voxelab-tremor-handoff-2.md`.
+**Где наблюдается:** только VoxelLab, на других пресетах сцен не наблюдается.
+
+### 11.8. Что если спросят про BUG-005 (F5 VUID race)?
+
+При нажатии F5 (cycle scene preset) — серия ошибок `VUID-vkCmdDraw-None-08114` от Vulkan validation layer.
+**Физика:** дескриптор предыдущего кадра ссылается на buffer handle, который VMA re-used для нового allocation.
+**Смягчение (Tier 5):** `vkDeviceWaitIdle` в `DestroySceneResources` уменьшил race, не устранил полностью.
+**Что дальше:** переработка жизненного цикла дескрипторов в Phase 5.
+
+**Hot shader reload (F5, перекомпиляция шейдеров) — другая операция, не путать с cycle scene preset.**
+
+---
+
+## Связь с другими defense-документами
+
+Полный reference всех 23 алгоритмов проекта — [`docs/DefenseAlgorithms.md`](DefenseAlgorithms.md).
+Вербальные тексты для 6 участников — [`docs/DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md) + [`docs/DefenseBriefer_le1t.md`](DefenseBriefer_le1t.md).
+10-минутный таймлайн — [`docs/DefenseScript.md`](DefenseScript.md).
+Сценарий демо — [`docs/DefenseDemoScript.md`](DefenseDemoScript.md).
+Talking points — [`docs/DefenseSpeakerNotes.md`](DefenseSpeakerNotes.md).
+Итоговый отчёт — [`docs/DefenseReport.md`](DefenseReport.md).

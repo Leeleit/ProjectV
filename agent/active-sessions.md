@@ -67,9 +67,32 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
-**На `2026-06-15` нет truly-open сессий.** Свежие правки — это session-compress работа
-(эта запись) + см. `agent/status.md §21-§23` для текущих работ (release presets, build
-config audit, agent protocol rewrite). Перед стартом новой сессии — дописать запись сюда.
+### session-2026-06-15T15-50Z-defense-docs-r0
+
+- **id:** `2026-06-15T15:50Z-defense-docs-r0`
+- **started-at:** 2026-06-15T15:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Defense documents overhaul к защите 2026-06-15 10-минутный доклад, 6 человек в команде.** Per operator «Требуется улучшить defense документы в docs: документ, который описывает каждый алгоритм в проекте, абсолютно за всё, плюс речь для пятерых, плюс каждому свою памятку. На тех пятерых следует разделить работу так, чтобы она была весомой, но простой к объяснению, а всё сложное мне оставить.» Деливерабли: 7 новых файлов (DefenseAlgorithms.md для le1t, DefenseBriefer_le1t.md + 5×DefenseBriefer_N.md, DefenseScript.md) + 4 переработки (DefenseSpeakerNotes.md, DefenseDemoScript.md, DefenseReport.md, DefenseFAQ.md) + status.md snapshot. 0 правок в `src/`, `tests/`, `external/`, `legacy/`, `CMake*`, `tools/`.
+- **files-touched-intent:**
+  - **NEW:** `docs/DefenseAlgorithms.md` (~7000 слов, 23 алгоритма: voxel world, materials, greedy meshing, frustum culling, visibility cache, CSM, PCF, contact shadows, AOCC, TAA, ray-march, walk controller, fluid CA, voxel raycast, Jolt, asset pipeline, audio, hot reload, snapshot, JSON config, C++26 фичи, build system, ECS — для Q&A)
+  - **NEW:** `docs/DefenseBriefer_le1t.md` (~3500 слов: verbatim вступление 2:00 + закрытие 0:30 + Q&A-карта 30 вопросов + cue-карты переходов + краткая карта DefenseAlgorithms.md)
+  - **NEW:** `docs/DefenseBriefer_1.md` (~1800 слов, тиммейт 1: стек, билд, тесты, метрики; verbatim 1:30 + 10 понятий + out-of-scope)
+  - **NEW:** `docs/DefenseBriefer_2.md` (~1800 слов, тиммейт 2: voxel-мир, чанки, meshing, кеш видимости)
+  - **NEW:** `docs/DefenseBriefer_3.md` (~1800 слов, тиммейт 3: CSM, TAA, AOCC, контактные тени, ray-march)
+  - **NEW:** `docs/DefenseBriefer_4.md` (~1800 слов, тиммейт 4: Jolt, walk/creative/spectator, edge grace)
+  - **NEW:** `docs/DefenseBriefer_5.md` (~1800 слов, тиммейт 5: VoxelLab демо, glTF/Draco, miniaudio)
+  - **NEW:** `docs/DefenseScript.md` (10-мин таймлайн, cue-карты)
+  - **REWRITE:** `docs/DefenseSpeakerNotes.md` (новые темы, плейсхолдеры, ссылки на бриферы)
+  - **REWRITE:** `docs/DefenseDemoScript.md` (новый таймлайн)
+  - **EDIT:** `docs/DefenseReport.md` (+ раздел «Команда Черепашки Ninja, 6 человек»)
+  - **EDIT:** `docs/DefenseFAQ.md` (+ 8 Q&A: про команду, ray-march, fluid CA, и т.д.)
+  - **EDIT:** `agent/active-sessions.md` (эта запись; при close — перенести в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (секция defense prep snapshot)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md` (stable protocol), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/**` (LaTeX — closed scope), `docs/KT-*.md` (closed scope), чужой dirty work в `legacy/docs/tex/.tmp/` (не моя сессия)
+- **status:** open
+- **notes:** Pre-flight: per operator подтверждение плана (5 бриферов для тиммейтов + 1 для le1t = 6 спикеров, 7 новых файлов + 4 переработки). Распределение: T1=стек+билд+тесты+метрики, T2=voxel+meshing+кеш, T3=тени+TAA+AOCC+ray-march, T4=физика+walk, T5=демо+ассеты+аудио; le1t=вступление+закрытие+все Q&A. Auto-close после commit per §8.1.
 
 ---
 
