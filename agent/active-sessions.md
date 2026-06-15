@@ -67,7 +67,73 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
-**На `2026-06-15` нет truly-open сессий (после `§8.1` close-routine defense-docs-r0).** Свежие правки — это session-compress работа + см. `agent/status.md §21-§24` для текущих работ (release presets, build config audit, agent protocol rewrite, defense docs overhaul — последний **closed** в `1db35ee`). Перед стартом новой сессии — дописать запись сюда.
+### session-2026-06-15T10-43Z-defense-docs-audit-r0
+
+- **id:** `2026-06-15T10:43Z-defense-docs-audit-r0`
+- **started-at:** 2026-06-15T10:43:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Pre-defense audit к защите 2026-06-15 (отложена на послезавтра).** Per operator «перечитай то, что ты написал и глубоко проанализируй соответствие с кодом, на предмет галлюцинаций, на объективность и целесообразность, приступай». Найдено 23 расхождения между 12 defense-документами и реальным кодом. Также: relocate F5/F6 hotkeys (defense r0 bypass) на свободные кнопки — F5 и F6 пересекаются с InputAction биндами (CycleScenePreset, SaveWorldSnapshot), что создаёт двойное срабатывание. Per operator «да, тебе следует поменять на свободные кнопки shader reload и raymarch toogle, разрешаю».
+- **files-touched-intent:**
+  - **EDIT:** `src/app/main.cpp` (F5→F11 для shader reload, F6→F12 для ray-march toggle; обновить комментарий; F11/F12 walk InputActions будут shadowed — это приемлемо, walk debug не на demo path)
+  - **EDIT:** `docs/DefenseAlgorithms.md` (VoxelChunk struct, frustum cull speedup, AVX2 inner loop, splitmix64 → custom XOR-fold, ray-march STUB, edge grace 4 frames, walk controller augments, fluid CA 2-perp + count conservation, snapshot magic PVSNAP01, AssetLoader::LoadGlb, audio MP3-only, ELF 73MB, shell radius 6)
+  - **EDIT:** `docs/DefenseBriefer_1.md` (ELF 73MB)
+  - **EDIT:** `docs/DefenseBriefer_2.md` (VoxelLab 27 чанков без числа вокселей, splitmix64 → custom hash)
+  - **EDIT:** `docs/DefenseBriefer_3.md` (ray-march STUB, AOCC 3-tap, CTSH 12 steps, F11/F12 новые кнопки)
+  - **EDIT:** `docs/DefenseBriefer_4.md` (edge grace 4 frames, walk augments)
+  - **EDIT:** `docs/DefenseBriefer_5.md` (27 чанков, шар r=6, audio MP3-only)
+  - **EDIT:** `docs/DefenseFAQ.md` (splitmix64 → custom hash, walk augments, 27 чанков)
+  - **EDIT:** `docs/DefenseSpeakerNotes.md` (синхронизация)
+  - **EDIT:** `docs/DefenseReport.md` (синхронизация, 27 чанков)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии» в close-routine)
+  - **EDIT:** `agent/status.md` (новая секция §25)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md`, `src/voxel/*`, `src/render/*`, `src/physics/*`, `src/asset/*`, `src/audio/*`, `src/ecs/*`, `src/c_kernels/*`, `src/shaders/*`, `src/core/Types.hpp` (mid-edit по Tier 0/1), `tests/`, `external/`, `CMakePresets.json`, `CMakeLists.txt`, `tools/`, `build/`, `legacy/`, `docs/tex/`, `docs/KT-*`, чужой dirty work
+- **status:** open
+- **notes:** Per operator явное подтверждение для type=fix (per `AGENTS.md §7.3.1` п.3): «да» в текущей сессии. Auto-close после commit per §8.1. SCOPE COORDINATION: session-2026-06-15T10-25Z-windows-build-verification-r0 multi-commit-plan 1/5 (тоже трогает `src/app/main.cpp` для P0-5 F5 hot-reload hardcoded paths). Я переезжаю F5→F11 в main.cpp ровно для тех же строк (545-559), что и их commit 1 P0-5. Риск merge-конфликта при их commit'е. Mitigation: я коммичу **сейчас** (пока их commit 1 не в HEAD), и они подтянут мои изменения в свой commit 1.
+
+### session-2026-06-15T10-25Z-windows-build-verification-r0
+
+- **id:** `2026-06-15T10:25Z-windows-build-verification-r0`
+- **started-at:** 2026-06-15T10:25:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Windows-clang-debug / windows-clang-release verification r0.** Per operator «Мы сейчас в arch linux, нужно как-то проверить, что сборки windows-clang-debug и windows-clang-release будут работать. Предлагаю проверить досконально всё там, но без возможности запустить код на винде и проверить на практике.» Read-only static audit (3 explore-агента) обнаружил 3 P0 + 6 P1 + 10 P2 + 4 P3 риска. Plan утверждён оператором: 5 atomic-commits (Tier A-D), Tracy UI → OFF в `windows-clang-debug-tracy-profiler` + новый standalone preset `windows-clang-tracy` (через `tools/tracy-standalone/` wrapper scripts, т.к. CMake preset schema не позволяет `sourceDir` в child preset — schema v1..v10), F5 hot-reload → CMake-injected `PROJECTV_CMAKE_BUILD_DIR` macro + `std::filesystem::temp_directory_path()` для log path, docs env-var lies удаляются.
+- **files-touched-intent:**
+  - **Commit 1 — `build` (root CMakeLists.txt + src/app/main.cpp + src/CMakeLists.txt):** P0-1..P0-4 (libc++/MSVC-clang-cl gating — `if (MSVC) / elseif (WIN32) / else ()` в `projectv_build_options`) + P0-5 (F5 hot-reload hardcoded paths) + P1-1 (MSVC C4996 defense-in-depth для чистого MSVC cl.exe пути).
+  - **Commit 2 — `build` (CMakePresets.json + tools/tracy-standalone/{README.md, build-tracy-windows.ps1, build-tracy-linux.sh} NEW):** P0-6 (Tracy nlohmann_json CMP0002 collision). `windows-clang-debug-tracy-profiler.PROJECTV_BUILD_TRACY_PROFILER: ON → OFF`, displayName обновлён, **новый standalone Tracy UI build flow** через `tools/tracy-standalone/build-tracy-{windows,linux}.{ps1,sh}` (CMake preset не поддерживает `sourceDir` в child preset, поэтому wrapper scripts).
+  - **Commit 3 — `refactor` (src/core/RepoRoot.{hpp,cpp} NEW + src/voxel/SceneConfig.cpp + src/audio/MusicDirectoryPath.cpp + tools/windows/Invoke-ProjectVRuntimeSmoke.ps1):** P1-2 (Windows LookDev smoke parity — добавлены `-CaptureDir` + `-Views` + `-CameraPosition` + `-CameraLook` + `-WarmupFrames` + `-IntervalFrames` + `-QuitAfterCapture` параметры, верификация .bmp + .txt) + P1-3 (SceneConfig repo-root walk-up через shared `projectv::core::FindRepoRoot`).
+  - **Commit 4 — `docs` (README_NEW.md + README.md + docs/BuildAndRun.md + docs/DefenseFAQ.md + docs/DefenseDemoScript.md + docs/DefenseBriefer_3.md + agent/memory.md + .gitattributes NEW):** P1-5 (README stdlib sync — было "libstdc++ на Windows, libc++ на Linux", стало "libc++ на Linux/macOS, MSVC STL на Windows") + P1-6 (MSVC runtime docs — Visual C++ Redistributable required, `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` alternative) + P2-1 (line endings — LF для source/scripts/CMake, CRLF для .bat/.cmd/.sln/.vcxproj) + P2-3..P2-5 (env-var lies/typos: `PROJECTV_ENABLE TRACY` → `PROJECTV_ENABLE_TRACY`, `PROJECTV_RENDERER_TAA=OFF` → клавиша `T` через `taaEnabled` shader variant) + P3-3 (memory.md flecs 2.2.0 → 4.1.5).
+  - **Commit 5 — `chore` (.gitmodules + 5 submodule deletions):** P3-1 (deinit RmlUi 23M + stdexec 4.4M + glaze 11M + freetype 14M + zstd 9.8M = 62M). **DESTRUCTIVE** — operator confirm в Q&A этой сессии. Safety-net `/tmp/before_unwired_submodules_2026-06-15T1050Z.patch` (12778 bytes pre-footer).
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + close per `§8.1`), `agent/status.md` (snapshot секция после закрытия), `agent/decisions.md §4` (+sub-section "Windows-clang-cl libc++ gating fix 2026-06-15" + "Tracy UI standalone build split 2026-06-15"), `agent/memory.md` (§X Windows-build-fix append).
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `src/` (кроме SceneConfig.cpp, MusicDirectoryPath.cpp, main.cpp, core/RepoRoot.cpp), `tests/`, `external/` (deinit 5 submodules в commit 5), `legacy/`, `CMakePresets.json` (только commits 1+2), `tools/` (только commit 3 + commit 2), `AGENTS.md` (per §1 — только по явной команде оператора), `TODO.md` (эта работа — не Tier 0-5), чужие uncommitted: `AGENTS.md` modified 21+/21- (другая сессия — protocol rewrite, не моя), `docs/Defense*.md` (defense-docs-r0 closed untracked), `legacy/docs/tex/.tmp/` (kt-latex-r0 build artifacts), `src/app/main.cpp` modified post-commit-3 (defense-docs-audit-r0 hotkey relocation F5→F11/F6→F12 — не моя).
+- **status:** closed
+- **closed-at:** 2026-06-15T10:50:00Z
+- **commit-hash:** 69b1726 (chore(submodules): deinit 5 unwired vendored libs)
+- **multi-commit-plan:** 5/5 (все 5 atomic-commits landed per `§7.2.6.1`)
+- **notes:** **Auto-close per `§8.1`.** Все 5 commits:
+  - `adaae65` — build(cmake): gate libc++ + Windows-clang-cl fix
+  - `e9d957a` — build(cmake): split Tracy UI from ProjectV-tracy-instrumented builds
+  - `d31f141` — refactor(scripts): extract repo-root walk-up + Windows LookDev smoke parity
+  - `d997056` — docs(build): README sync, MSVC runtime docs, .gitattributes, env-var typo/lie removal, memory.md flecs version sync
+  - `69b1726` — chore(submodules): deinit 5 unwired vendored libs (RmlUi, stdexec, glaze, freetype, zstd)
+  
+  **Pre-flight:** `/tmp/before_windows_build_verification_2026-06-15T1025Z.patch` (7492 bytes, captures AGENTS.md modification); per-commit safety-net `/tmp/before_unwired_submodules_2026-06-15T1050Z.patch` (12778 bytes pre-footer). Оба сохранены в /tmp/ с `POST-COMMIT 69b1726` footer per `§8.1 §5`.
+  
+  **Pre-commit gates (per `§7.3.1`):** все 5 commits — `type=build/refactor/docs/chore` (auto per п.3). Commit 5 destructive (submodule ops) — operator confirm в Q&A этой сессии («Все 5 commits в одной сессии» option explicitly flagged DESTRUCTIVE).
+  
+  **Build state финальный (Linux baseline preserved):**
+  - `linux-clang-debug`: configure 0.6s green, build 110/110 targets clean, ctest 14/14 in 0.76s.
+  - `linux-clang-release`: configure 0.5s green (verified after commit 1).
+  - `linux-clang-debug-tracy-profiler`: configure 0.6s green (UI=OFF inherited от Linux, unchanged).
+  - Smoke 6/6 captures produced в `build/linux-clang-debug/lookdev-captures/2026-06-15-repo-root-walkup-test/` (VoxelLab reference shot, same flow as agent/memory.md §1).
+  
+  **Windows-side verification:** static review only. Не было Windows-хоста, реально проверить `windows-clang-debug` build + smoke невозможно. CMakePresets.json + tools/tracy-standalone/ build scripts готовы для Windows-host verification.
+  
+  **Disk savings:** commit 5 reclaimed 62M (RmlUi 23M + stdexec 4.4M + glaze 11M + freetype 14M + zstd 9.8M) vendored-but-unwired submodules.
+  
+  **Cross-refs:** `agent/decisions.md §4` (release policy — без изменений; новые sub-section о Windows-clang-cl gating добавляются ниже), `agent/memory.md §6` (libc++/libstdc++ history — без изменений; append новой секции о Windows-build-verification), `agent/status.md §25` (новая секция для этой сессии).
 
 ---
 

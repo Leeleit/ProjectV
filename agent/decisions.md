@@ -114,6 +114,39 @@
 
 - Это сохраняет reproducible contour для mainline без лишней хрупкости, конфликтов build tree и пустых smoke-ритуалов.
 
+### Windows-clang-cl libc++ gating fix (`2026-06-15`)
+
+Решение:
+
+- **Три explicit branches в `projectv_build_options`** (root `CMakeLists.txt:534-650`): `if (MSVC)` (pure MSVC cl.exe + `/wd4996` для flecs 4.1.5 `std::is_trivial` deprecation) / `elseif (WIN32)` (Windows clang-cl — MSVC STL, no libc++, `/clang:-Wno-deprecated-declarations` forward) / `else ()` (Linux/macOS native clang — libc++ + libstdc++ hybrid link без изменений).
+- **Глобальные `add_compile_options` gated** за `if (NOT MSVC AND NOT WIN32)`: `set(CMAKE_CXX_STDLIB libc++)` + `add_compile_options(-stdlib=libc++)` + `add_compile_options(-Wno-unused-command-line-argument)` + `set(CMAKE_CXX_MODULE_STD ON)` + libc++ stdlib modules JSON discovery. На Windows clang-cl (`if (MSVC) = FALSE`) ничего из этого не применяется; на Linux/macOS native clang всё работает как раньше.
+- **`if (MSVC)` vs `if (WIN32)` vs `if (NOT MSVC AND NOT WIN32)`:** исходный `if (MSVC) ... else ()` работал только для cl.exe. Windows-clang-cl попадал в `else()` branch и получал `c++` / `c++abi` / `-l:libstdc++.so.6` link options, которых нет на Windows → LLD link error. Решение: добавить отдельную `elseif (WIN32)` ветку для clang-cl с MSVC-compat compile flags и без дополнительных link options.
+- **F5 hot-reload (defense r0) CMake-injected:** `target_compile_definitions(ProjectV PRIVATE PROJECTV_CMAKE_BUILD_DIR="${CMAKE_BINARY_DIR}")` в `src/CMakeLists.txt` + `std::filesystem::temp_directory_path()` для log path в `src/app/main.cpp:67-90`. Compile-time macro fallback defaults to `build/linux-clang-debug` для ad-hoc `clang++ -c` builds (не через CMake). Runtime `PROJECTV_BUILD_DIR` env var всё ещё override'ит compile-time default.
+
+Почему:
+
+- Pre-`2026-06-15` code имел libc++ global + `if (MSVC) ... else ()` в `projectv_build_options` — Windows-clang-cl builds не работали с момента commit `c3faa65` (libc++ migration `2026-06-13`). Никто не пробовал `cmake --preset windows-clang-debug` после этого коммита. Linux-эквивалент работает потому что `clang` на Linux = `if (MSVC) FALSE` = `else()` branch = libc++ + libstdc++ hybrid, что валидно.
+- Без фикса любая попытка `cmake --preset windows-clang-release` или `windows-clang-debug` упадёт на link time с `library not found for -l:libstdc++.so.6` (или аналогичным для `c++` / `c++abi`).
+- `elseif (WIN32)` ветка отдельная от `if (MSVC)` потому что `if (MSVC)` тестирует `CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"` (только cl.exe), а `if (WIN32)` тестирует host platform. clang-cl на Windows имеет `COMPILER_ID = "Clang"`, не "MSVC" — попадает в `elseif (WIN32)`, не в `if (MSVC)`.
+
+### Tracy UI standalone build split (`2026-06-15`)
+
+Решение:
+
+- **`windows-clang-debug-tracy-profiler.PROJECTV_BUILD_TRACY_PROFILER: ON → OFF`** (как Linux-вариант per `decisions.md §4` "linux-clang-debug-tracy-profiler Tracy UI fix" sub-section). `ProjectV.exe` всё ещё собирается с Tracy instrumentation symbols; Tracy UI собирается отдельно.
+- **Tracy UI standalone build через `tools/tracy-standalone/`:**
+  - `README.md` — документация, почему split нужен (CMP0002 collision, Tracy profiler CMakeLists имеет собственный `project(tracy-profiler)`, cannot be `add_subdirectory`'d).
+  - `build-tracy-windows.ps1` — PowerShell wrapper, вызывает `cmake -S external/tracy/profiler -B build/windows-clang-tracy -G Ninja -A x64 -DCMAKE_CXX_COMPILER=clang-cl.exe ...` с Tracy-UI cache variables.
+  - `build-tracy-linux.sh` — bash wrapper, то же для Linux (с `sccache` launcher и ноут-про-`-DSCCACHE_DIR` для shared CPM cache).
+- **CMake preset НЕ добавлен** (`windows-clang-tracy` и т.п.) потому что CMake preset schema v1..v10 **не поддерживает `sourceDir` в child preset** — `${sourceDir}` это read-only macro resolving к directory containing `CMakePresets.json`. Решение: wrapper scripts вместо preset.
+- **Shared `CPM_SOURCE_CACHE`** указывает на `${sourceDir}/build/cpm-source-cache` (где ProjectV mainline build тоже кэширует) — Tracy UI's CPM fetches для capstone / glfw / libcurl / freetype / pugixml / md4c / nfd / usearch / tidy / base64 reuse'ятся.
+
+Почему:
+
+- Tracy profiler's `external/tracy/profiler/CMakeLists.txt:16` имеет собственный `project(tracy-profiler)` — нельзя `add_subdirectory` его из родительского проекта (CMake 3.x error "project may only be called once per directory tree"). Решение: Tracy UI = top-level project, build через `cmake -S external/tracy/profiler -B build/windows-clang-tracy`.
+- Tracy vendor.cmake CPM-adds `nlohmann/json v3.12.0` — если Tracy profiler живёт в scope root `CMakeLists.txt` (который делает `FetchContent_MakeAvailable(nlohmann_json v3.11.3)`), CMP0002 collision ("add_library cannot create target nlohmann_json"). Standalone scope избегает collision.
+- Windows-clang side раньше работал в этом preset предположительно (как указано в старом `decisions.md §4`), но проверка показала что Windows-clang-cl toolchain такой же как Linux для Tracy UI's nlohmann problem — оба подвержены CMP0002. Linux workaround (UI=OFF) перенесён на Windows; standalone UI build — новая инфраструктура.
+
 ## 5. Interaction contract
 
 Решение:

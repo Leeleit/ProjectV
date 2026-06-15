@@ -7,6 +7,8 @@ Updated: `2026-06-15` — service files compress+archive (см. `agent/ARCHIVE-I
 `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md`. Section
 numbering preserved.
 
+Updated: `2026-06-15` — **Windows build verification r0 (session-2026-06-15T10-25Z-windows-build-verification-r0, см. §24)**. 5 atomic-commits landed: libc++/Windows-clang-cl gating fix (P0-1..P0-4) + F5 hot-reload CMake-injected path (P0-5) + Tracy UI split to standalone build (P0-6) + RepoRoot extract + Windows LookDev smoke parity (P1-2/P1-3) + docs/cleanup + deinit 5 unwired submodules 62M. Linux baseline preserved (ctest 14/14, smoke 6/6).
+
 Updated: `2026-06-14` — 4 КТ-документа сконвертированы в LaTeX (session-2026-06-13-kt-latex-r0, см. §19 в archive). 5 PDF в `docs/tex/`.
 Updated: `2026-06-14` — V-sync FIFO bug + CA pause/timeScale + 20Hz default (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up, см. `decisions.md §30.1`, `legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.1` → archive). 3 fixes. 8 new CA sub-tests (24 total, 100% pass). Build green, ctest 13/13, smoke clean.
 Updated: `2026-06-14` — V hotkey auto-detect cycle + libc++ warning + HUD line (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up #2, см. `decisions.md §30.2`, `legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.2` → archive). 4 fixes. 9 new present-mode sub-tests, 100% pass. Build green, ctest 14/14, smoke clean.
@@ -259,6 +261,47 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 
 **Сессия:** `status: open` сейчас, после commit → auto-close (move в «Закрытые сессии», `closed-at` + `commit-hash`). Эта сессия — сама пример новых правил в действии.
 
+## §24. Windows build verification r0 — `session-2026-06-15T10-25Z-windows-build-verification-r0` (closed, 5/5 atomic-commits, build green)
+
+**Per operator «Мы сейчас в arch linux, нужно как-то проверить, что сборки windows-clang-debug и windows-clang-release будут работать. Предлагаю проверить досконально всё там, но без возможности запустить код на винде и проверить на практике.»** Read-only static audit (3 параллельных explore-агента на платформенный код / submodule state / scripts + tools) обнаружил **3 P0 + 6 P1 + 10 P2 + 4 P3** риска. Plan утверждён оператором: 5 atomic-commits (Tier A-D), все landed в одной сессии.
+
+**Commits (5/5 per `AGENTS.md §7.2.6.1`):**
+
+| # | SHA | type | Что |
+|---|----|------|-----|
+| 1 | `adaae65` | `build(cmake)` | gate libc++ + Windows-clang-cl fix (root CMakeLists.txt + src/app/main.cpp + src/CMakeLists.txt) |
+| 2 | `e9d957a` | `build(cmake)` | split Tracy UI from ProjectV-tracy-instrumented (CMakePresets.json + tools/tracy-standalone/) |
+| 3 | `d31f141` | `refactor(scripts)` | extract repo-root walk-up + Windows LookDev smoke parity (src/core/RepoRoot.{hpp,cpp} + Windows PS1) |
+| 4 | `d997056` | `docs(build)` | README sync + MSVC runtime docs + .gitattributes + env-var typo/lie removal + memory.md flecs version sync |
+| 5 | `69b1726` | `chore(submodules)` | deinit 5 unwired vendored libs (RmlUi, stdexec, glaze, freetype, zstd — 62M reclaimed) |
+
+**Tier A (P0 — build/feature блокеры):**
+- **Commit 1:** `add_compile_options(-stdlib=libc++)` + `set(CMAKE_CXX_STDLIB libc++)` + `-Wno-unused-command-line-argument` + `set(CMAKE_CXX_MODULE_STD ON)` были глобально — на Windows-clang-cl приводили к LLD link error `library not found for -l:libstdc++.so.6` (projectv_build_options `else()` branch при `if (MSVC) = FALSE` для clang-cl добавлял Linux-only link options). Решение: гейтить всё в `if (NOT MSVC AND NOT WIN32)` + реструктурировать `projectv_build_options` в 3 ветки: `if (MSVC)` (pure cl.exe + `/wd4996` для flecs C4996) / `elseif (WIN32)` (clang-cl + MSVC STL, без libc++ link) / `else ()` (Linux/macOS native clang, без изменений).
+- **Commit 1:** F5 hot-reload (defense r0) был hardcoded `build/linux-clang-debug` + `/tmp/projectv_shader_reload.log`. На Windows → `cmd.exe` has no `/tmp` + неверный build tree. Решение: `target_compile_definitions(ProjectV PRIVATE PROJECTV_CMAKE_BUILD_DIR="${CMAKE_BINARY_DIR}")` в src/CMakeLists.txt + `std::filesystem::temp_directory_path()` для log path.
+- **Commit 2:** `windows-clang-debug-tracy-profiler` `PROJECTV_BUILD_TRACY_PROFILER: ON → OFF` (как Linux-вариант per `decisions.md §4`). Tracy UI build → standalone через `tools/tracy-standalone/{README.md, build-tracy-windows.ps1, build-tracy-linux.sh}` (CMake preset schema v1..v10 не поддерживает `sourceDir` в child preset, поэтому wrapper scripts вместо preset).
+
+**Tier B (P1 — функциональные улучшения):**
+- **Commit 3:** `projectv::core::FindRepoRoot` extracted to `src/core/RepoRoot.{hpp,cpp}` (shared helper). `MusicDirectoryPath.cpp` refactored to use it (потерял 36 строк duplicated walk-up логики). `SceneConfig::GetDefaultSceneConfigPath` теперь делает walk-up от `SDL_GetBasePath()` вместо CWD-relative literal — на Windows при запуске из `build\windows-clang-debug\bin\` через Explorer файл теперь резолвится в `<repoRoot>\runtime\scene.json` (раньше молча создавал в `bin\runtime\scene.json`).
+- **Commit 3:** `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1` теперь поддерживает LookDev capture env-var contract (опционально, через `-CaptureDir` / `-Views` / `-CameraPosition` / `-CameraLook` / `-WarmupFrames` / `-IntervalFrames` / `-QuitAfterCapture`); раньше Windows smoke был только lifecycle (window resize / minimize / restore / maximize / CloseMainWindow). Default behavior (без `-CaptureDir`) — без изменений.
+
+**Tier C (P1/P2/P3 — docs/cleanup):**
+- **Commit 4:** `README_NEW.md` (было: "libstdc++ на Windows, libc++ на Linux" → стало: "libc++ на Linux/macOS, MSVC STL на Windows") + `README.md` (sccache install hint) + `docs/BuildAndRun.md` (Visual C++ Redistributable required, `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` alternative) + `.gitattributes` (LF для source/scripts/CMake, CRLF для .bat/.cmd/.sln/.vcxproj — per `agent/memory.md §6` CRLF/LF ghosts incident) + remove `PROJECTV_RENDERER_TAA` lies from `docs/DefenseBriefer_3.md` / `DefenseDemoScript.md` / `DefenseFAQ.md` (env var не существует в коде, заменён на клавишу `T` через `taaEnabled` shader variant per `decisions.md §18`) + fix `PROJECTV_ENABLE TRACY` typo → `PROJECTV_ENABLE_TRACY` + `agent/memory.md:201` (flecs 2.2.0 → 4.1.5 per actual pinned SHA).
+
+**Tier D (P3-1 — submodule cleanup):**
+- **Commit 5:** deinit 5 unwired submodules (RmlUi 23M + stdexec 4.4M + glaze 11M + freetype 14M + zstd 9.8M = **62M reclaimed**). Все подтверждены 0 #include references в src/ + tests/. **DESTRUCTIVE** — operator confirm через Q&A этой сессии. Safety-net `/tmp/before_unwired_submodules_2026-06-15T1050Z.patch` (12778 bytes pre-footer, 12961 bytes post-footer).
+
+**Build state финальный (Linux baseline preserved):**
+- `linux-clang-debug`: configure 0.6s green, build 110/110 targets clean, ctest 14/14 in 0.76s, smoke 6/6 (VoxelLab reference shot в `build/linux-clang-debug/lookdev-captures/2026-06-15-repo-root-walkup-test/`).
+- `linux-clang-release`: configure 0.5s green (verified after commit 1).
+- `linux-clang-debug-tracy-profiler`: configure 0.6s green (UI=OFF inherited от Linux, unchanged).
+- `linux-clang-debug-tracy-profiler` (Windows variant): `PROJECTV_BUILD_TRACY_PROFILER: ON → OFF` (per commit 2). Tracy UI standalone build через `tools/tracy-standalone/build-tracy-windows.ps1` (предполагает отдельный build tree `build/windows-clang-tracy`).
+
+**Windows-side verification:** static review only. На Arch Linux реально собрать `windows-clang-debug` / `windows-clang-release` / `windows-clang-tracy` невозможно (нет clang-cl / MSVC). CMakePresets.json + tools/tracy-standalone/ build scripts + .gitattributes готовы для Windows-host verification оператором.
+
+**Pre-commit gates (per `AGENTS.md §7.3.1`):** все 5 commits — `type=build/refactor/docs/chore` (auto per п.3). Commit 5 destructive (submodule ops) — operator confirm в Q&A этой сессии («Все 5 commits в одной сессии» option explicitly flagged DESTRUCTIVE per `§7.2.2`).
+
+**Cross-refs:** `agent/decisions.md §4` (+2 новые sub-section: "Windows-clang-cl libc++ gating fix 2026-06-15" + "Tracy UI standalone build split 2026-06-15"), `agent/memory.md §6` (без изменений; libc++/libstdc++ history сохранён; новая секция о Windows-build-verification append ниже), `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0` (closed per `§8.1` с `commit-hash: 69b1726` + `closed-at: 2026-06-15T10:50:00Z`).
+
 ---
 
 ## 99. Past closed sessions (rollup)
@@ -287,5 +330,6 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 | `2026-06-13` | Defense файлы | closed (reopened 2-й update) |
 | `2026-06-14` | KT-LaTeX (KT-2.1/2.2/3.1/3.2 + Combined) | closed (5 PDF) |
 | `2026-06-15` | Defense docs overhaul r0 | closed `1db35ee` (см. `agent/active-sessions.md session-2026-06-15T15-50Z-defense-docs-r0`): 7 новых файлов + 4 переработки + 2 agent-файла |
+| `2026-06-15` | **Windows build verification r0** | **closed `69b1726`** (см. `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0`): 5 atomic-commits (P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M). Linux baseline preserved (ctest 14/14, smoke 6/6). |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
