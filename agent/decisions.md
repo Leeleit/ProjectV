@@ -2,7 +2,9 @@
 
 Живые инженерные договорённости. Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`.
 
-Дата обновления: `2026-06-12` (+§19 + §20 TAA contracts + §26 frame-step/slow-motion + §27 per-pass timings + §28 audio engine)
+Дата обновления: `2026-06-15` (header date refreshed post `docs(agent): compress+archive` commit; per-section contracts unchanged — все §1-§30 остаются действующими договорённостями).
+
+**Cross-refs в archive:** §15, §18-§28, §30.x содержат ссылки на `agent/memory.md §X` / `agent/status.md §X` для подробного per-session detail. После `docs(agent): compress+archive` эти cross-refs обновлены на `legacy/docs/archive/agent-memory/2026-06-*.md#X` / `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#X` через `agent/ARCHIVE-INDEX.md`. Сontract содержание §15, §30 — **не заархивировано** (это действующие engineering договорённости, не per-session log).
 
 ---
 
@@ -75,7 +77,7 @@
   - **`BUILD_TESTING=ON`** — ctest baseline preserved per `AGENTS.md §9` (12/12 ожидаемо).
   - **Linker:** `CMAKE_LINKER_TYPE=LLD` (Linux: `/usr/bin/ld.lld` 22.1.6; Windows: clang-cl LLD).
 - **Категорически запрещено в Release-флагах:**
-  - `-ffast-math` — ломает детерминизм Fluid CA (`agent/memory.md §12`) и TAA YCoCg clamp (`agent/status.md §7`); оба зависят от IEEE-754 strict semantics.
+  - `-ffast-math` — ломает детерминизм Fluid CA (`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12`) и TAA YCoCg clamp (`legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#7`); оба зависят от IEEE-754 strict semantics.
   - `-march=native` — release binary должен быть переносим между CPU (dev host = AMD Zen; production target может быть Intel/AMD hybrid).
   - `-fno-omit-frame-pointer` — нет пользы без backtrace symbols в production image.
   - PGO / AutoFDO — отдельный 3-step workflow, не часть release-пресета.
@@ -629,7 +631,7 @@ Cross-refs: `agent/memory.md` §10.18 (full timeline), `TODO.md` Блок 1
 - **Pipeline-declared `pColorBlendState->attachmentCount` = 3** (VUID-VkGraphicsPipelineCreateInfo-renderPass-06055). Pre-fix имел 2. Validation layer would fire на pipeline creation; без validation driver silently dropped write.
 - **Graphics descriptor pool `combinedSamplers` = 4 = 2 frames × 2 samplers** (binding 5 shadow + binding 6 layer history). Pre-fix имел 2 = 2 frames × 1 sampler. `VUID-VkDescriptorPool-size-...` triggers when descriptor sets can't be allocated.
 
-Cross-refs: `agent/memory.md` §10.21 (full timeline + build/test/smoke + working rules), `TODO.md` Блок 1 (1.5 closed), `agent/status.md` §12 (in-progress session snapshot), `agent/active-sessions.md` session-2026-06-12-taa-quality-1.5 (closed).
+Cross-refs: `agent/memory.md` §10.21 (full timeline + build/test/smoke + working rules), `TODO.md` Блок 1 (1.5 closed), `agent/status.md` §12 (in-progress session snapshot), `legacy/docs/archive/agent-sessions/2026-06-week-1.md#session-2026-06-12-taa-quality-1.5` (closed).
 
 ## 22. Two-level chunk visibility cache (`2026-06-12`)
 
@@ -654,7 +656,7 @@ Cross-refs: `agent/memory.md` §10.21 (full timeline + build/test/smoke + workin
 - **Cache miss writes to BOTH mapped buffer and cache in one pass** because the cost of the per-chunk math dominates the cost of the vector element assignment; doubling the work to "write to cache separately" would erase the gain on miss-heavy workloads.
 - **5.3 benchmark automation** (next section) is the verification path for the cache's hit/miss ratio: `PROJECTV_BENCHMARK_FRAMES=N PROJECTV_BENCHMARK_QUIT=1` runs N frames in a controlled setting, and the `ChunkVisibilityCacheHits` plot reports the consecutive-hit count per frame.
 
-Cross-refs: `agent/memory.md` §10.19 (working rules + full build/ctest/smoke state), `TODO.md` §4 World/Render/Tooling (closed), `agent/status.md` §13 (this session's snapshot), `agent/active-sessions.md` session-2026-06-12-lowlevel-perf-tooling (closed).
+Cross-refs: `agent/memory.md` §10.19 (working rules + full build/ctest/smoke state), `TODO.md` §4 World/Render/Tooling (closed), `agent/status.md` §13 (this session's snapshot), `legacy/docs/archive/agent-sessions/2026-06-week-1.md#session-2026-06-12-lowlevel-perf-tooling` (closed).
 
 ## 23. Debug gizmo overlay contract (`5.2`, `2026-06-12`)
 
@@ -662,7 +664,7 @@ Cross-refs: `agent/memory.md` §10.19 (working rules + full build/ctest/smoke st
 
 - **Cascade split plane boxes** — 4 thin AABBs, one per CSM cascade, world-axis-aligned (because `DebugOverlayBox` is `Int3 min/maxExclusive` and cannot rotate). XZ footprint uses the cascade's `orthoWidths[cascadeIndex]` / `orthoHeights[cascadeIndex]` (so the operator gets a "shadow frustum footprint" cue), Y is a thin slab around the camera-relative Y. Four distinct hues (red/orange/cyan/magenta) so cascades 0-3 are distinguishable at a glance.
 - **Cursor hit normal shaft** — ≤2 voxel boxes along `selection.hitNormal` (±1 in one axis, guaranteed by `VoxelRaycast`), emitted *beyond* the hit voxel so it reads as a "next to selection" arrow rather than overlapping the yellow selection box. Zero-norm `hitNormal` is a no-op (defensive).
-- **Hotkeys:** `L` cycles cascade split planes (reserved per `agent/status.md §9` TAA tuning-ladder footnote: "L остался свободен на будущее"); `Z` cycles cursor hit normal. Both follow the same hotkey-on / `hudVisible`-on emission contract that `showChunkBounds` / `showDirtyChunkOverlay` already use.
+- **Hotkeys:** `L` cycles cascade split planes (reserved per `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#9` TAA tuning-ladder footnote: "L остался свободен на будущее"); `Z` cycles cursor hit normal. Both follow the same hotkey-on / `hudVisible`-on emission contract that `showChunkBounds` / `showDirtyChunkOverlay` already use.
 - **`BuildDebugOverlayBoxes` signature:** trailing `CameraState camera = CameraState{}` and `RenderState render = RenderState{}` default-valued params. The 2 existing tests at `tests/VoxelWorldTests.cpp:7302` and `:7348` keep their 4-arg call shape and stay green; expected box counts (14, 10) unchanged because gizmos default to off.
 
 Почему:
@@ -672,7 +674,7 @@ Cross-refs: `agent/memory.md` §10.19 (working rules + full build/ctest/smoke st
 - **Cursor hit normal shaft emits *after* selection box** so the dim-white shaft reads as a "next to selection" arrow, not as a replacement marker.
 - **Default-valued trailing params** keep the test API stable. If a future feature wants to render gizmos without the HUD, move the `hudVisible` early-return out of `BuildDebugOverlayBoxes` (the per-gizmo flags already gate emission independently).
 
-Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 Gameplay/Debug (closed), `agent/status.md` §13, `agent/active-sessions.md` session-2026-06-12-lowlevel-perf-tooling (closed).
+Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 Gameplay/Debug (closed), `agent/status.md` §13, `legacy/docs/archive/agent-sessions/2026-06-week-1.md#session-2026-06-12-lowlevel-perf-tooling` (closed).
 
 ## 24. Benchmark automation contract (`5.3`, `2026-06-12`)
 
@@ -691,7 +693,7 @@ Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 Gameplay/Debug (closed), `a
 - **Symmetrical with `LookDevCaptureAutomationState`** so a future "all automation types" refactor can move them behind a single `AutomationRegistry` without per-state plumbing.
 - **`PROJECTV_BENCHMARK_FRAMES` read once in `SDL_AppInit`** (not a per-frame env re-read) — the alternative would race with the operator's `$EDITOR` and invalidate in-flight measurements. If a future feature wants mid-session re-arm, the env-reader should be split out of `ConfigureBenchmarkAutomationFromEnvironment` and called from a hotkey.
 
-Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 World/Render/Tooling (closed), `agent/status.md` §13, `agent/active-sessions.md` session-2026-06-12-lowlevel-perf-tooling (closed).
+Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 World/Render/Tooling (closed), `agent/status.md` §13, `legacy/docs/archive/agent-sessions/2026-06-week-1.md#session-2026-06-12-lowlevel-perf-tooling` (closed).
 
 ## 25. Greedy meshing contract (`4.1`, `2026-06-12`)
 
@@ -729,7 +731,7 @@ Cross-refs: `agent/memory.md` §10.19, `TODO.md` §4 World/Render/Tooling (close
 - **`PackedFace` 12→16 bytes** is the minimum viable extension. Альтернатива (separate per-instance extents SSBO) добавил бы 7th binding + new descriptor set + storage cost. 16-byte struct with `static_assert`-enforced byte layout prevents drift.
 - **Cross-chunk `ReadVoxelMaterial`** уже handles OOB (returns 0=Air) — greedy pass автоматически extends to chunk boundary без chunk-coordination protocol. Worst case: chunk boundary quads merge with `neighborMaterial=0` (Air), и следующий chunk на adjacent face plane будет also have `neighborMaterial=0` (тоже Air, если сосед тоже empty) — но chunk is invisible until meshed, so independent dispatch is safe.
 
-Cross-refs: `agent/memory.md` §10.20, `TODO.md` §4 (greedy meshing closed) + §4.5 (perf budget context), `agent/status.md` §14, `agent/active-sessions.md` session-2026-06-12-greedy-meshing.
+Cross-refs: `agent/memory.md` §10.20, `TODO.md` §4 (greedy meshing closed) + §4.5 (perf budget context), `agent/status.md` §14, `legacy/docs/archive/agent-sessions/2026-06-week-1.md#session-2026-06-12-greedy-meshing`.
 
 ## 26. Frame-step / slow-motion debug contract (`2026-06-12`)
 
@@ -749,7 +751,7 @@ Cross-refs: `agent/memory.md` §10.20, `TODO.md` §4 (greedy meshing closed) + �
 - `effectivePaused` rather than mutating `simulation->paused` itself, because toggling `paused` would re-zero the accumulator (`simulation->simulationAccumulatorSeconds = 0.0f` in the `TogglePause` handler) and undo the one-step budget. The local read+clear is a one-frame escape hatch, not a state machine.
 - Frame-step does not invalidate TAA history, because every `paused`-state frame already goes through the TAA path normally — the resolve pass just sees one frame of "current only" because `taaHistoryValid` is set false by the existing triggers. The new frame-step path sits one layer up (the accumulator / sim tick) and does not need to touch the TAA contract.
 
-Cross-refs: `agent/memory.md §10.23` (working rules), `agent/status.md §15` (session snapshot), `agent/active-sessions.md session-2026-06-12-frame-step-slow-motion`, `TODO.md §4 "frame-step / slow-motion debug modes"` (closed).
+Cross-refs: `legacy/docs/archive/agent-memory/2026-06-taa-sessions.md#10.23` (working rules), `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#15` (session snapshot), `agent/active-sessions.md session-2026-06-12-frame-step-slow-motion`, `TODO.md §4 "frame-step / slow-motion debug modes"` (closed).
 
 ## 27. Per-pass CPU timing contract (`2026-06-12`)
 
@@ -771,7 +773,7 @@ Cross-refs: `agent/memory.md §10.23` (working rules), `agent/status.md §15` (s
 - Detailed-only HUD placement, because the basic HUD is meant to be readable at a glance and the per-pass breakdown is diagnostic. The "always-on" data (frame time, FPS, sim steps, triangle count) stays in the basic section; "where is my budget going" lives in detailed mode where the operator has already opted in for the verbose SHDW/BIAS/CTSH/AOCC/LOCL line family.
 - `kMaxStatsLineCount` is the one knob the operator is most likely to bump, so it stays a named constant near the top of the file rather than being computed from another constant. If the per-pass lines ever need to be 4 lines instead of 2, only the cap and the HUD block change — no renderer / struct changes.
 
-Cross-refs: `agent/memory.md §10.24` (working rules), `agent/status.md §16` (session snapshot), `agent/active-sessions.md session-2026-06-12-richer-render-stats`, `TODO.md §4 "richer render stats / explicit per-pass timings"` (closed).
+Cross-refs: `legacy/docs/archive/agent-memory/2026-06-taa-sessions.md#10.24` (working rules), `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#16` (session snapshot), `agent/active-sessions.md session-2026-06-12-richer-render-stats`, `TODO.md §4 "richer render stats / explicit per-pass timings"` (closed).
 
 ## 28. Audio engine contract (`2026-06-12`)
 
@@ -803,7 +805,7 @@ Cross-refs: `agent/memory.md §10.24` (working rules), `agent/status.md §16` (s
 - Sidecar defaults to `music_initialized=0`: capture-side audio plumbing is a separate plumbing refactor (add `FrameRenderData::audioEngine` field, thread it from `DrawFrame`); out of v1 scope.
 - 4-line music HUD over 1-line: the operator explicitly asked for "автора, названия, продолжительности, на какой мы минуте:секунде, надписи Playing/paused/stopped" — five pieces of info that don't fit in one 96-char line with the existing `kHudLineBufferSize`. Multi-line is the only sane way to expose all five; the volume was kept as a sub-field on the MUSIC line (rather than a 5th line) to preserve cap headroom and because the operator can already see the live value tick when 7/8 is pressed.
 
-Cross-refs: `agent/memory.md §10.26` (working rules), `agent/status.md §18` (session snapshot), `agent/active-sessions.md session-2026-06-12-audio-engine` + `session-2026-06-13-music-hud-4line`, `legacy/docs/architecture/practice/02_engine_bootstrap_spec.md:533` (the planned `AudioSystem` that this slice implements).
+Cross-refs: `legacy/docs/archive/agent-memory/2026-06-taa-sessions.md#10.26` (working rules), `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#18` (session snapshot), `agent/active-sessions.md session-2026-06-12-audio-engine` + `session-2026-06-13-music-hud-4line`, `legacy/docs/architecture/practice/02_engine_bootstrap_spec.md:533` (the planned `AudioSystem` that this slice implements).
 
 ## 29. Hardcore perf r0 — Tier plan + error-handling rule (`2026-06-13`)
 
@@ -835,7 +837,7 @@ Cross-refs: `agent/memory.md §10.26` (working rules), `agent/status.md §18` (s
 - **C26 отложен** — нет C в mainline, нет demand. Если потребуется (например, для audio DSP kernel), отдельная подзадача.
 - **Inline asm избегаем** — intrinsics достаточно на Clang 22 + AVX2. Godbolt-ревью покажет, нужны ли `prefetcht0` / `pause` / `mfence` (отдельные use-cases, не general policy).
 
-Cross-refs: `agent/memory.md §11` (полный technical-debt inventory + plan), `agent/status.md §20` (Phase 0 snapshot), `agent/active-sessions.md session-2026-06-13-hardcore-perf-r0`, `TODO.md` (переписан под Tier 0..5), `legacy/docs/philosophy/01_foundation/05_decision-making.md` («если прирост < 5-10% при значительном усложнении — простой»), `legacy/docs/philosophy/01_foundation/08_error-handling.md` (`std::expected` для cold path), `legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md` (C++26 модули), `legacy/docs/philosophy/02_paradigms/01_zero-cost-abstractions.md` (`std::simd`, reflection, contracts, zero-cost), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (данные → алгоритм → код, low latency > throughput).
+Cross-refs: `agent/memory.md §11` (полный technical-debt inventory + plan), `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#20` (Phase 0 snapshot), `agent/active-sessions.md session-2026-06-13-hardcore-perf-r0`, `TODO.md` (переписан под Tier 0..5), `legacy/docs/philosophy/01_foundation/05_decision-making.md` («если прирост < 5-10% при значительном усложнении — простой»), `legacy/docs/philosophy/01_foundation/08_error-handling.md` (`std::expected` для cold path), `legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md` (C++26 модули), `legacy/docs/philosophy/02_paradigms/01_zero-cost-abstractions.md` (`std::simd`, reflection, contracts, zero-cost), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (данные → алгоритм → код, low latency > throughput).
 
 ## 30. Fluid CA audit — fall-only rule, determinism, invariants (`2026-06-13`)
 
@@ -895,7 +897,7 @@ Cross-refs: `src/voxel/VoxelWorld.hpp:154-191` (header doc с determinism contra
 - **«Visual only, no cap» обосновано determinism.** Fluid CA — pure function of `world.voxels` snapshot. Multi-tick-per-frame даёт identical output к N-separate-tick calls (snapshot semantics + iteration order fixed). Cap'ить — значит introduce unobservable side-effect (slow-mo делает воду "lag").
 - **«V-sync MAILBOX-as-default side-effect» — explicit, не случайный.** До фикса: default = MAILBOX (visual: no tearing, low latency). После: default = FIFO (visual: vsync-strict, FPS = display rate). Оператор сам выбирал V hotkey для vsync-toggle, значит ожидал, что default = vsync. MAILBOX-as-default — over-engineering для не-продвинутых user'ов. Если когда-нибудь понадобится «MAILBOX для бенчмарков» — env var `PROJECTV_PRESENT_MODE_DEFAULT = MAILBOX` (вне scope сегодня).
 
-Cross-refs: `src/render/vulkan/VulkanSwapchain.cpp:148-180` (V-sync fix), `src/core/Types.hpp:1348-1382` (`fluidTickRateHz` + `fluidAccumulatorSeconds`), `src/app/main.cpp:626-643` (удалён CA throttle, оставлен только `benchmarkFrameCounter` для benchmark automation), `src/app/AppUpdate.cpp:693-733` (новый CA tick block), `tests/FluidCATests.cpp:763-1145` (8 новых sub-tests + `TickFluidCA` helper), `agent/memory.md §12` (V-sync bug history + CA pause/timeScale fix history).
+Cross-refs: `src/render/vulkan/VulkanSwapchain.cpp:148-180` (V-sync fix), `src/core/Types.hpp:1348-1382` (`fluidTickRateHz` + `fluidAccumulatorSeconds`), `src/app/main.cpp:626-643` (удалён CA throttle, оставлен только `benchmarkFrameCounter` для benchmark automation), `src/app/AppUpdate.cpp:693-733` (новый CA tick block), `tests/FluidCATests.cpp:763-1145` (8 новых sub-tests + `TickFluidCA` helper), `legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12` (V-sync bug history + CA pause/timeScale fix history).
 
 ### 30.2. V hotkey auto-detect cycle + libc++ warning + HUD line (`2026-06-14`)
 

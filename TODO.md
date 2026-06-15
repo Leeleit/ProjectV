@@ -121,7 +121,7 @@
 - [x] **Throttle tightened** — `static bool fluidTickInitialized` заменил fragile `lastFluidTickCounter == 0u` check (`src/app/main.cpp:633-643`).
 - [x] **Tests** — `tests/FluidCATests.cpp` (12 sub-tests, 100% pass) + `tests/CMakeLists.txt:706-749` (new `ProjectVFluidCATests`).
 - [x] **`agent/decisions.md §30`** — full audit + 8 operator decisions.
-- [x] **`agent/memory.md §12`** — Fluid CA audit summary.
+- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12`** — Fluid CA audit summary.
 
 False alarms (для потомков):
 - [x] «CA в AppEvent vs AppIterate» — false alarm. Code уже в AppIterate (`main.cpp:580-639`).
@@ -138,7 +138,7 @@ False alarms (для потомков):
 - [x] **`fluidAccumulatorSeconds` field** в `SimulationState` (`src/core/Types.hpp:1348-1382`). Sim-time accumulator, scaled by `timeScale`, zeroed on pause.
 - [x] **Tests** — 8 новых sub-tests (24 total, 100% pass): `TestFluidCAFluidDoesNotMoveOnPause`, `TestFluidCAFluidMovesOnUnpause`, `TestFluidCAFluidRateRespectsTimeScale`, `TestFluidCAFluidRateAboveBase`, `TestFluidCAFluidRateAtDefault`, `TestFluidCAFluidTimeScaleZeroStops`, `TestFluidCAFluidFrameStepWithTimeScaleZero`, `TestFluidCAFluidRateConfigurable`. Helper `TickFluidCA` inline-зеркало production throttle.
 - [x] **`agent/decisions.md §30.1`** — V-sync fix + CA tick move + 20Hz default plan + обоснования.
-- [x] **`agent/memory.md §12.1`** — V-sync bug history + CA pause/timeScale fix history + 4 lessons learned (subagent must для root-cause, default+override pattern, visual vs physics tickrate cap, SimulationState для sim knobs).
+- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.1`** — V-sync bug history + CA pause/timeScale fix history + 4 lessons learned (subagent must для root-cause, default+override pattern, visual vs physics tickrate cap, SimulationState для sim knobs).
 - [x] **`agent/status.md`** — обновлён с новым closed-session.
 
 ## V hotkey auto-detect cycle + libc++ warning + HUD line (`2026-06-14`)
@@ -149,14 +149,14 @@ False alarms (для потомков):
 - [x] **libc++ warning fix** (`CMakeLists.txt:117-150`). Initial plan: remove `add_compile_options(-stdlib=libc++)` (CMake's `CMAKE_CXX_STDLIB` already propagates). **Failed**: removing produces link errors в `external/fastgltf` и `external/fmt` (external `add_subdirectory` subdirs не inherit `CMAKE_CXX_STDLIB` в compile commands). **Fix**: keep `add_compile_options(-stdlib=libc++)` for cross-target ABI, suppress false-positive warning via `add_compile_options(-Wno-unused-command-line-argument)`. Per `AGENTS.md §7.2.7` exception clause applied (one flag, one toolchain artifact).
 - [x] **Tests** — `ProjectVPresentModeTests` (9 sub-tests, 100% pass): `TestPresentModeCycleIncludesAllThree`, `TestPresentModeCycleExcludesUnsupported`, `TestPresentModeCycleOnlyFifo`, `TestPresentModeCycleEmptyFallsBackToFifo`, `TestPresentModeCycleRespectsPriorityOrder`, `TestCycleAdvancesAndWrapsThreeMode`, `TestCycleAdvancesAndWrapsTwoMode`, `TestPresentModeCycleIndex`, `TestPresentModeCycleSize`. New test target в `tests/CMakeLists.txt:771-810`, header-only dependency.
 - [x] **`agent/decisions.md §30.2`** — V hotkey auto-detect + libc++ fix plan + обоснования.
-- [x] **`agent/memory.md §12.2`** — V hotkey history + libc++ warning fix + 4 lessons learned (auto-detect hardware > hardcode cycle, inline variables/functions для runtime observables, hardware-dependent toolchain flags don't remove, log vs HUD для togglable state).
+- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.2`** — V hotkey history + libc++ warning fix + 4 lessons learned (auto-detect hardware > hardcode cycle, inline variables/functions для runtime observables, hardware-dependent toolchain flags don't remove, log vs HUD для togglable state).
 
 ## V hotkey cycle walk fix (`2026-06-14` evening)
 
 - [x] **`BuildPresentModeCycle` preserve `g_active` across rebuilds** (`src/render/vulkan/VulkanSwapchain.hpp:180-220`). Оператор: «нажимаю на V, ничего не меняется» — 10 identical log lines `IMMEDIATE [cycle 2/2]`. Root cause: `BuildPresentModeCycle` unconditionally set `g_active = g_cycle.front()` (FIFO) on every rebuild. V hotkey calls `RecreateSwapchain` after each press → `CreateOrRecreateSwapchain` → `BuildPresentModeCycle` resets `g_active` → next press sees FIFO → advances to IMMEDIATE → reset. **Self-defeating state machine**. **Fix**: capture `previousActive` before rebuild; if still in new cycle, keep it; else (display hot-swap) fall back to highest-priority supported.
 - [x] **Tests** — 3 new sub-tests (`ProjectVPresentModeTests` 12 total, 100% pass): `TestPresentModeCyclePreservesActiveAcrossRebuild`, `TestPresentModeCycleFallsBackWhenActiveDropped`, `TestPresentModeCycleWalksAcrossRecreates` (operator's actual scenario: 4 V presses alternating FIFO ↔ IMMEDIATE). Pre-existing tests updated to **explicit reset pattern** (`(void)BuildPresentModeCycle({FIFO});` as first line) — inline-variable global state needs explicit reset, не assumed from previous test's final state.
 - [x] **`agent/decisions.md §30.3`** — preserve-`g_active` plan + 4 обоснования (capture-rebuild pattern, test interaction not just function, test order independence, self-defeating state machine anti-pattern).
-- [x] **`agent/memory.md §12.3`** — V hotkey cycle walk history + 4 lessons learned (capture previous state > unconditional reset, test interaction not just function, explicit reset pattern для inline-variable global state, self-defeating state machine anti-pattern).
+- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.3`** — V hotkey cycle walk history + 4 lessons learned (capture previous state > unconditional reset, test interaction not just function, explicit reset pattern для inline-variable global state, self-defeating state machine anti-pattern).
 
 ---
 
@@ -175,7 +175,7 @@ False alarms (для потомков):
 
 - [x] Полный технический отчёт сохранён в `agent/memory.md §11` (13 KB).
 - [x] Новое правило `std::expected` cold/bool hot в `agent/decisions.md §29`.
-- [x] Snapshot в `agent/status.md §20` (Phase 0 done, Phase 1+ pending operator).
+- [x] Snapshot в `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#20` (Phase 0 done, Phase 1+ pending operator).
 - [x] Active session `session-2026-06-13-hardcore-perf-r0` registered в `agent/active-sessions.md`.
 - [x] Этот TODO переписан под Tier 0..5.
 - [ ] **Phase 0 commit** — предложен пользователю (не auto-execute).
@@ -187,7 +187,7 @@ False alarms (для потомков):
 
 - `agent/memory.md §11` — comprehensive technical-debt + plan + web research bookmarks.
 - `agent/decisions.md §29` — Tier plan + error-handling rule + refactor scope.
-- `agent/status.md §20` — Phase 0 snapshot + operator answers.
+- `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#20` — Phase 0 snapshot + operator answers.
 - `agent/active-sessions.md` session-2026-06-13-hardcore-perf-r0 — active session.
 - `legacy/docs/philosophy/01_foundation/{04,05,06,07,08,09}_*.md` — anti-patterns, compiler, compile-time, memory, errors, data-layout.
 - `legacy/docs/philosophy/02_paradigms/{01,02,06}_*.md` — zero-cost, DoD, strings.
