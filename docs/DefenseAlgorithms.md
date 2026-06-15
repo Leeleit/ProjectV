@@ -1,40 +1,40 @@
-# DefenseAlgorithms.md — Полный reference всех алгоритмов ProjectV
+# DefenseAlgorithms.md — Полный справочник всех алгоритмов ProjectV
 
 **Дата:** 2026-06-15 (защита)
-**Назначение:** личная шпаргалка le1t на Q&A комиссии. Каждый алгоритм — что это, где в коде, шаги, edge cases, что говорить если спросят «расскажите подробнее про X».
+**Назначение:** личная шпаргалка le1t на Q&A комиссии. Каждый алгоритм — что это, где в коде, шаги, граничные случаи, что говорить если спросят «расскажите подробнее про X».
 **Связанные документы:** `docs/DefenseBriefer_le1t.md` (сокращённая карта для репетиции), `docs/DefenseFAQ.md` (готовые ответы на 15+ вопросов), `docs/DefenseReport.md` (формальный отчёт).
 
 ---
 
 ## Оглавление
 
-1. [Voxel world + чанки](#1-voxel-world--чанки)
-2. [Материалы и physical slice](#2-материалы-и-physical-slice)
-3. [Greedy meshing (Лысенков)](#3-greedy-meshing-алгоритм-лысенкова)
-4. [Frustum culling (scalar / SIMD / C/AVX2)](#4-frustum-culling)
-5. [ChunkVisibilityCache (splitmix64)](#5-chunkvisibilitycache-2-уровневый-кеш)
-6. [CSM — 4-каскадные карты теней](#6-csm--4-каскадные-карты-теней)
-7. [PCF 5×5 (weighted)](#7-pcf-55-weighted)
+1. [Воксельный мир и чанки (Voxel world)](#1-воксельный-мир-и-чанки-voxel-world)
+2. [Материалы и физический срез (physical slice)](#2-материалы-и-физический-срез-physical-slice)
+3. [Жадный мешинг (greedy meshing, Лысенков)](#3-жадный-мешинг-greedy-meshing-лысенков)
+4. [Фрустум-кулинг (frustum culling, scalar / SIMD / C/AVX2)](#4-фрустум-кулинг-frustum-culling)
+5. [Двухуровневый кэш видимости (ChunkVisibilityCache)](#5-двухуровневый-кэш-видимости-chunkvisibilitycache)
+6. [Каскадные тени (CSM, Cascaded Shadow Maps)](#6-каскадные-тени-csm-cascaded-shadow-maps)
+7. [PCF 5×5 (взвешенный)](#7-pcf-55-взвешенный)
 8. [Контактные тени (voxel DDA)](#8-контактные-тени-voxel-dda)
-9. [AOCC — ambient occlusion cavity check](#9-aocc--ambient-occlusion-cavity-check)
+9. [AOCC — фоновое затенение полостей (cavity check)](#9-aocc--фоновое-затенение-полостей)
 10. [TAA + YCoCg + CAS](#10-taa--ycocg--cas)
-11. [Ray-marching compute pass](#11-ray-marching-compute-pass)
-12. [Walk controller (edge grace, sneak, авто-прыжок)](#12-walk-controller)
-13. [Fluid cellular automata](#13-fluid-cellular-automata)
-14. [Voxel raycast (DDA)](#14-voxel-raycast-dda)
-15. [Jolt интеграция (CharacterVirtual + voxel solver)](#15-jolt-интеграция)
-16. [Asset pipeline (glTF, Draco, meshopt)](#16-asset-pipeline-gltf-draco-meshopt)
-17. [Audio engine (miniaudio)](#17-audio-engine-miniaudio)
-18. [Hot shader reload (F11)](#18-hot-shader-reload-f11)
-19. [Snapshot save/load (двоичный)](#19-snapshot-saveload)
-20. [JSON scene config (nlohmann/json)](#20-json-scene-config)
-21. [C++26 фичи в коде](#21-c26-фичи-в-коде)
-22. [Build system (CMake presets, ctest)](#22-build-system)
-23. [ECS / Flecs bridge](#23-ecs--flecs-bridge)
+11. [Трассировка лучей через compute-шейдер (ray-marching)](#11-трассировка-лучей-ray-marching)
+12. [Walk-контроллер (edge grace, sneak, авто-прыжок)](#12-walk-контроллер)
+13. [Жидкость: клеточный автомат (Fluid CA)](#13-жидкость-клеточный-автомат-fluid-ca)
+14. [Воксельный raycast (3D DDA)](#14-воксельный-raycast-3d-dda)
+15. [Jolt: интеграция (CharacterVirtual + voxel solver)](#15-jolt-интеграция)
+16. [Конвейер ассетов (glTF, Draco, meshopt)](#16-конвейер-ассетов)
+17. [Аудио-движок (miniaudio)](#17-аудио-движок-miniaudio)
+18. [Горячая перезагрузка шейдеров (F11)](#18-горячая-перезагрузка-шейдеров-f11)
+19. [Сохранение и загрузка мира (snapshot)](#19-снапшот)
+20. [JSON-конфиг сцены (nlohmann/json)](#20-json-конфиг-сцены)
+21. [Фичи C++26 в коде](#21-фичи-c26-в-коде)
+22. [Система сборки (CMake presets, ctest)](#22-система-сборки)
+23. [Связь с ECS через Flecs (ECS bridge)](#23-связь-с-ecs-через-flecs)
 
 ---
 
-## 1. Voxel world + чанки
+## 1. Воксельный мир и чанки (Voxel world)
 
 **Где:** `src/voxel/VoxelWorld.{hpp,cpp}`
 **Проблема:** миллионы вокселей нельзя хранить как `std::vector<Voxel>` (overhead, cache-miss, медленный iteration).
@@ -92,7 +92,7 @@ struct VoxelWorld {
 
 ---
 
-## 2. Материалы и physical slice
+## 2. Материалы и физический срез (physical slice)
 
 **Где:** `src/voxel/VoxelMaterials.{hpp,cpp}`
 **Проблема:** разное поведение материалов в физике (Air/Fluid не solid) и в рендере (Glass прозрачный, Fluid кастует тень).
@@ -130,7 +130,7 @@ enum class VoxelMaterial : uint8_t {
 
 ---
 
-## 3. Greedy meshing (алгоритм Лысенкова)
+## 3. Жадный мешинг (greedy meshing, алгоритм Лысенкова)
 
 **Где:** `src/shaders/voxel_mesh.comp` (compute shader, GPU)
 **Литературная ссылка:** «Efficient Meshes for Voxel Worlds» (Mikola Lysenko, 2012)
@@ -167,7 +167,7 @@ enum class VoxelMaterial : uint8_t {
 
 ---
 
-## 4. Frustum culling
+## 4. Фрустум-кулинг (frustum culling)
 
 **Где:** `src/c_kernels/frustum_cull.{c,hpp}` (C/AVX2 ядро, Tier 3) + `src/c_kernels/FrustumCulling.{hpp,cpp}` (C++ wrapper, Tier 4) + `src/render/SceneResources.cpp` (CPU-side)
 **Проблема:** 300 чанков × 6 плоскостей фрустума = 1800 dot products каждый кадр, CPU-bound.
@@ -211,7 +211,7 @@ enum class VoxelMaterial : uint8_t {
 
 ---
 
-## 5. ChunkVisibilityCache (2-уровневый кеш)
+## 5. Двухуровневый кэш видимости (ChunkVisibilityCache)
 
 **Где:** `src/render/SceneResources.{hpp,cpp}` → `ChunkVisibilityCache`, `projectv::visibility_cache::ComputeVisibilityCacheHash`
 **Проблема:** даже с AVX2, 300 чанков × 6 dot = 1800 ops/кадр когда камера **почти** статична (50% времени FPS counter не двигается, а CPU считает).
@@ -294,7 +294,7 @@ inline uint64_t ComputeVisibilityCacheHash(
 
 ---
 
-## 6. CSM — 4-каскадные карты теней
+## 6. Каскадные тени (CSM, Cascaded Shadow Maps)
 
 **Где:** `src/render/ShadowProjection.{hpp,cpp}` (CPU build) + `src/shaders/voxel_shadow.{vert,frag}` (depth pass) + `voxel.frag` (sample)
 **Проблема:** один shadow map 2048×2048 на всю сцену даёт texel size = 64 м (воксель 1 м) — тени «зубчатые» на близких объектах, размытые на дальних.
@@ -340,7 +340,7 @@ inline uint64_t ComputeVisibilityCacheHash(
 
 ---
 
-## 7. PCF 5×5 (weighted)
+## 7. PCF 5×5 (взвешенный)
 
 **Где:** `src/shaders/voxel.frag` → `ComputeSunShadowSample`
 **Проблема:** hard shadow comparison = резкие зубчатые границы теней. Unreal Engine 2 / Minecraft — выглядит «деревянно».
@@ -397,7 +397,7 @@ inline uint64_t ComputeVisibilityCacheHash(
 
 ---
 
-## 9. AOCC — ambient occlusion cavity check
+## 9. AOCC — фоновое затенение полостей (ambient occlusion cavity check)
 
 **Где:** `src/shaders/voxel.frag` → `ComputeAmbientOcclusionVisibility`
 **Проблема:** углы и полости выглядят «плоско» без локального occlusion term. SSAO/GTAO = screen-space, требует depth/normal prepass.
@@ -474,7 +474,7 @@ inline uint64_t ComputeVisibilityCacheHash(
 
 ---
 
-## 11. Ray-marching compute pass
+## 11. Трассировка лучей через compute-шейдер (ray-marching compute pass)
 
 **Где:** `src/shaders/ray_march.comp` + `src/render/RayMarchPass.{hpp,cpp}`
 **Проблема:** mesh-based геометрия даёт видимые «грани» вокселей при cinematic-камерах. ТЗ требовало «GPU ray-marching через compute-шейдеры» (п. 4.1.2).
@@ -522,7 +522,7 @@ void RecordRayMarchCommands(const VulkanContextState &context, const FrameRender
 
 ---
 
-## 12. Walk controller
+## 12. Walk-контроллер (walk controller)
 
 **Где:** `src/physics/PhysicsWorld.{hpp,cpp}` → `UpdateWalkGroundSupport`, `TryAutoJump`, `BuildWalkEdgeGraceUpdateSettings`
 **Архитектура:** `JPH::CharacterVirtual` **используется** для collision detection (капсула, прокси), **voxel solver augments** foot support (per `decisions.md §6`). Это не "voxel solver вместо Jolt" — Jolt остаётся основой.
@@ -573,7 +573,7 @@ void RecordRayMarchCommands(const VulkanContextState &context, const FrameRender
 
 ---
 
-## 13. Fluid cellular automata
+## 13. Клеточный автомат для жидкости (Fluid CA)
 
 **Где:** `src/voxel/VoxelWorld.cpp` → `UpdateFluidCA` (~350 строк с комментариями)
 **Проблема:** жидкость в voxel-мире — стандартный клеточный автомат. Нужен determinism (replay), не pathological spread.
@@ -631,7 +631,7 @@ const int dirs[2] = {startSide, (startSide + 1) & 0x3};  // perpendicular
 
 ---
 
-## 14. Voxel raycast (DDA)
+## 14. Воксельный raycast (3D DDA)
 
 **Где:** `src/voxel/VoxelRaycast.{hpp,cpp}`
 **Назначение:** placement (правый клик) и removal (левый клик) блоков.
@@ -651,7 +651,7 @@ const int dirs[2] = {startSide, (startSide + 1) & 0x3};  // perpendicular
 
 ---
 
-## 15. Jolt интеграция
+## 15. Интеграция с Jolt (CharacterVirtual + voxel solver)
 
 **Где:** `src/physics/PhysicsWorld.{hpp,cpp}` (обёртка)
 **Проблема:** Jolt — generic physics engine, не знает про воксели. Нужен мост.
@@ -674,7 +674,7 @@ const int dirs[2] = {startSide, (startSide + 1) & 0x3};  // perpendicular
 
 ---
 
-## 16. Asset pipeline (glTF, Draco, meshopt)
+## 16. Конвейер ассетов (asset pipeline: glTF, Draco, meshopt)
 
 **Где:** `src/asset/AssetLoader.{cpp,hpp}`, `DracoMeshDecoder.{cpp,hpp}`, `MeshBaker.{cpp,hpp}`, `ModelManifestLoader.{cpp,hpp}`
 **Проблема:** glTF = стандарт, но файлы могут быть сжаты Draco. Нужно декодировать + оптимизировать для GPU.
@@ -703,7 +703,7 @@ const int dirs[2] = {startSide, (startSide + 1) & 0x3};  // perpendicular
 
 ---
 
-## 17. Audio engine (miniaudio)
+## 17. Аудио-движок (audio engine, miniaudio)
 
 **Где:** `src/audio/AudioEngine.{hpp,cpp}`
 **Проблема:** нужен простой audio без тяжёлых зависимостей.
@@ -752,7 +752,7 @@ m_playlist.push_back(path);
 
 ---
 
-## 18. Hot shader reload (F11)
+## 18. Горячая перезагрузка шейдеров (hot shader reload, F11)
 
 **Где:** `src/app/main.cpp` → `RebuildAllShadersFromDisk()`
 **Проблема:** итерация над шейдерами требует перезапуска приложения, медленно.
@@ -781,7 +781,7 @@ m_playlist.push_back(path);
 
 ---
 
-## 19. Snapshot save/load
+## 19. Сохранение и загрузка мира (snapshot save/load)
 
 **Где:** `src/voxel/VoxelSnapshotError.hpp` + `SaveVoxelWorldSnapshot`/`LoadVoxelWorldSnapshot` в `VoxelWorld.cpp`
 **Проблема:** долгая сессия → хочется сохранить/восстановить мир.
@@ -842,7 +842,7 @@ static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
 
 ---
 
-## 20. JSON scene config
+## 20. JSON-конфиг сцены (JSON scene config, nlohmann/json)
 
 **Где:** `src/voxel/SceneConfig.{hpp,cpp}` + `runtime/scene.json`
 **Проблема:** пользователь хочет менять сцену без перекомпиляции.
@@ -914,7 +914,7 @@ static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
 
 ---
 
-## 22. Build system
+## 22. Система сборки (build system: CMake presets, ctest)
 
 **Где:** корневой `CMakeLists.txt` + `CMakePresets.json`
 **Структура:**
@@ -954,7 +954,7 @@ static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
 
 ---
 
-## 23. ECS / Flecs bridge
+## 23. Связь с ECS через Flecs (ECS bridge)
 
 **Где:** `src/ecs/EcsWorld.{hpp,cpp}`
 **Проблема:** gameplay и diagnostic systems хотят читать мир как набор сущностей, но `VoxelWorld` — single source of truth, ownership нельзя переносить.
@@ -996,7 +996,7 @@ static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
 | 2 | Materials | `voxel/VoxelMaterials.cpp` | H | 5 типов, 3 solid |
 | 3 | Greedy meshing | `shaders/voxel_mesh.comp` | H | Лысенков, 6 проходов |
 | 4 | Frustum cull | `c_kernels/frustum_cull.c` | H | C 3.7-3.9×, AVX2 2.5-2.7× |
-| 5 | Visibility cache | `render/SceneResources.{hpp,cpp}` | H | custom XOR-fold, splitmix64-style avalanche |
+| 5 | Visibility cache | `render/SceneResources.{hpp,cpp}` | H | собственный XOR-fold со splitmix64-style avalanche |
 | 6 | CSM | `render/ShadowProjection.cpp` | H | 4 каскада, 2048², λ=0.80 |
 | 7 | PCF 5×5 | `shaders/voxel.frag` | H | triangular weighted, N·L bias |
 | 8 | Contact shadows | `shaders/voxel.frag` | H | DDA, 12 max steps |

@@ -67,6 +67,31 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
+### session-2026-06-15T12-06Z-defense-docs-russian-r0
+
+- **id:** `2026-06-15T12:06Z-defense-docs-russian-r0`
+- **started-at:** 2026-06-15T12:06:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Полная русификация 12 defense-документов.** Per operator «надо всё на русском, полностью. Всё английское в скобочки и слева от скобочек русское название, если это термин какой-то. ... ты хрень написал в брифах всех: ненужную хрень по типу объяснений, как и что работает. Этого всё равно никто не поймёт, надо в общих планах всё и по-простому. ... 4. В твоём примере ты ничего не перевёл, просто пересказал другими словами, это позор, а не перевод. ... 9. A» — единый коммит, формат «русский (English)» при первом использовании термина, дословные выступления 140-150 русских слов на 1:30 минуты (простой язык, без технических дебрей), реальный перевод (не пересказ).
+- **files-touched-intent:**
+  - **REWRITE:** `docs/DefenseBriefer_1.md` (5 брифер переписан простым русским, ~150 слов verbatim, без «if asked elaborate» мусора)
+  - **REWRITE:** `docs/DefenseBriefer_2.md` (аналогично)
+  - **REWRITE:** `docs/DefenseBriefer_3.md` (аналогично)
+  - **REWRITE:** `docs/DefenseBriefer_4.md` (аналогично)
+  - **REWRITE:** `docs/DefenseBriefer_5.md` (аналогично)
+  - **REWRITE:** `docs/DefenseBriefer_le1t.md` (вступление 2:00 ≈ 280 слов + Q&A-карта остаётся)
+  - **TRANSLATE:** `docs/DefenseAlgorithms.md` (полный reference, ~9000 слов, prose на русский, код на английском, термины в скобках)
+  - **TRANSLATE:** `docs/DefenseFAQ.md` (~5500 слов, формат «русский (English)»)
+  - **TRANSLATE:** `docs/DefenseScript.md`, `docs/DefenseDemoScript.md`, `docs/DefenseSpeakerNotes.md` (~5000 слов)
+  - **TRANSLATE:** `docs/DefenseReport.md` (~4000 слов, §12 «Команда» сохраняется как есть)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии» в close-routine)
+  - **EDIT:** `agent/status.md` (новая секция §26)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, чужой dirty work
+- **status:** open
+- **notes:** Per `AGENTS.md §7.2.6.1` — единый atomic commit (option A по выбору оператора). type=`docs` — auto, без operator confirm. Auto-close после commit per §8.1. Сжатие verbatim до 140-150 русских слов на 1:30 минуты (оператор: 220 слов = 2:10, режет хронометраж).
+
 ### session-2026-06-15T10-25Z-windows-build-verification-r0
 
 - **id:** `2026-06-15T10:25Z-windows-build-verification-r0`
