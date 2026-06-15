@@ -65,23 +65,6 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
 
-### session-2026-06-15T15-00Z-agent-protocol-rewrite-r0
-
-- **id:** `2026-06-15T15:00Z-agent-protocol-rewrite-r0`
-- **started-at:** 2026-06-15T15:00:00Z
-- **agent:** cline/MiniMax-M3
-- **operator:** le1t
-- **branch:** master
-- **scope:** **Переписать протокол auto-commit + auto-close.** Per operator «git commit делать на автомате, а не спрашивать оператора, всегда думать, что после коммита сессия завершается, но быть готовым не завершить её». Конкретные правила (зафиксировано при планировании): (1) `feat`/`refactor`/`perf`/`docs`/`test`/`build`/`chore`/`revert` — auto при §7.3.1 gate; (2) `fix` — требует **явного operator confirm** что фикс работает (visual / ctest / repro); (3) destructive ops (rebase, push, force-push, reset --hard, revert, branch delete, network publish, sudo, rm -rf unverified) — **всегда** confirm; (4) keep-open: multi-commit sub-plan / operator next-step / `continues: <reason>` marker; (5) edge cases (gate fail / commit fail / scope collision / build broken) → сессия `open` + `notes: BLOCKED: <gate>`. +**доп. правило** от оператора: файлы в `agent/` — shared infrastructure, любая активная сессия может писать в них параллельно, не claim'ить эксклюзивно.
-- **files-touched-intent:**
-  - **EDIT:** `AGENTS.md` (§1.3 — drop draft-approval loop для будущих правок; §7.2.4 — убрать auto-commit ban, pointer на §7.3.1; §7.2.5 — auto-execute note; §7.2.6 — «файлы-хабы» уточнить что `agent/*` = shared infra, не hub; **NEW §7.2.8** — Shared `agent/` files rule; §7.3.1 NEW — pre-commit gate; §8 invariant 2 — commit auto-execute; §8.1 REWRITE — auto-close routine + keep-open criteria + edge cases; §9 — pre-commit gate в Definition of done)
-  - **EDIT:** `agent/active-sessions.md` (header Контракт §2 — auto-close flow; format table — добавить `held-open` + `multi-commit-plan` опц. поля; append-only правила — свою запись можно править по ходу работы)
-  - **EDIT:** `agent/session-checklist.md` («Завершение сессии» → «Post-commit close-routine» — auto-fire после commit, +4 пункта про active-sessions / safety-net / keep-open / BLOCKED retry)
-  - **APPEND-ONLY:** `agent/active-sessions.md` (this entry + close после commit), `agent/memory.md §10.27` (новый — протокол-rewrite lesson), `agent/status.md` (snapshot)
-  - **НЕ ТРОГАЮ** (out of scope per plan): `TODO.md`, `decisions.md`, `legacy/`, `docs/`, `external/`, `src/`, `tests/`, корневой `CMakeLists.txt`, `CMakePresets.json`, существующие 8+ `status: open` записи в active-sessions.md (backfill — отдельная подзадача)
-- **status:** open
-- **notes:** **Per new rules (§8.1 auto-close)**: после успешного commit — сессия закрывается автоматически (move в «Закрытые сессии», проставить `closed-at` + `commit-hash`, добавить POST-COMMIT footer в safety-net patch). Эта сессия — сама пример новых правил в действии. **Pre-flight per §7.2.4 + §7.3.1**: (1) safety-net patch сохранён `/tmp/opencode/projectv-protocol/before_agent_protocol_rewrite_20260615T1500Z.patch` (25 KB, 297 строк); (2) `git status -uall` чист кроме моих 3 файлов (нет чужих uncommitted в scope-collision); (3) commit type = `chore` (не `fix`), gate auto-commit применим; (4) build/test не запускаю — change чисто в `agent/*` + `AGENTS.md` (no code touched, baseline preserved per §6 anti-duplication / §10 «AGENTS.md — обычный коммит»). **Транзишн к новым правилам**: эта правка идёт по **старому** §1 (явная команда + draft approved), per operator «по старым». После применения — будущие правки AGENTS.md тоже auto-коммитятся. **Verification (static)**: `git diff --stat HEAD` показывает 3 файла / +136 / -37 строк. Cross-refs: §1.3 → §8.1, §7.3.1 (new), §7.2.8 (new), §7.2.6 hub-список (обновлён).
-
 ### session-2026-06-14T11-29Z-build-config-audit-r0
 
 - **id:** `2026-06-14T11:29Z-build-config-audit-r0`
@@ -1379,6 +1362,34 @@ Refs: agent/memory.md §10.20, agent/active-sessions.md
 
 <!-- Недавние закрытые сессии (последние ~10). Старые можно переносить
      в `legacy/docs/archive/agent-sessions/` для сохранения истории. -->
+
+### session-2026-06-15T15-00Z-agent-protocol-rewrite-r0
+
+- **id:** `2026-06-15T15:00Z-agent-protocol-rewrite-r0`
+- **started-at:** 2026-06-15T15:00:00Z
+- **closed-at:** 2026-06-15T15:30:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Переписать протокол auto-commit + auto-close.** Per operator «git commit делать на автомате, а не спрашивать оператора, всегда думать, что после коммита сессия завершается, но быть готовым не завершить её». Конкретные правила (зафиксировано при планировании): (1) `feat`/`refactor`/`perf`/`docs`/`test`/`build`/`chore`/`revert` — auto при §7.3.1 gate; (2) `fix` — требует **явного operator confirm** что фикс работает (visual / ctest / repro); (3) destructive ops (rebase, push, force-push, reset --hard, revert, branch delete, network publish, sudo, rm -rf unverified) — **всегда** confirm; (4) keep-open: multi-commit sub-plan / operator next-step / `continues: <reason>` marker; (5) edge cases (gate fail / commit fail / scope collision / build broken) → сессия `open` + `notes: BLOCKED: <gate>`. +**доп. правило** от оператора: файлы в `agent/` — shared infrastructure, любая активная сессия может писать в них параллельно, не claim'ить эксклюзивно.
+- **files-touched-intent:**
+  - **EDIT:** `AGENTS.md` (§1.3 — drop draft-approval loop для будущих правок; §7.2.4 — убрать auto-commit ban, pointer на §7.3.1; §7.2.5 — auto-execute note; §7.2.6 — «файлы-хабы» уточнить что `agent/*` = shared infra, не hub; **NEW §7.2.8** — Shared `agent/` files rule; §7.3.1 NEW — pre-commit gate; §8 invariant 2 — commit auto-execute; §8.1 REWRITE — auto-close routine + keep-open criteria + edge cases; §9 — pre-commit gate в Definition of done)
+  - **EDIT:** `agent/active-sessions.md` (header Контракт §2 — auto-close flow; format table — добавить `held-open` + `multi-commit-plan` опц. поля; append-only правила — свою запись можно править по ходу работы)
+  - **EDIT:** `agent/session-checklist.md` («Завершение сессии» → «Post-commit close-routine» — auto-fire после commit, +4 пункта про active-sessions / safety-net / keep-open / BLOCKED retry)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (this entry + close после commit), `agent/memory.md §10.27` (новый — протокол-rewrite lesson), `agent/status.md §23` (snapshot)
+  - **НЕ ТРОГАЮ** (out of scope per plan): `TODO.md`, `decisions.md`, `legacy/`, `docs/`, `external/`, `src/`, `tests/`, корневой `CMakeLists.txt`, `CMakePresets.json`, существующие 8+ `status: open` записи в active-sessions.md (backfill — отдельная подзадача)
+- **status:** closed
+- **commit-hash:** `92eefc3` — `chore(agent): auto-commit + auto-close after atomic subtask; fix needs operator confirm`
+- **notes:** **Auto-close per §8.1 (эта сессия — сама пример новых правил в действии).** Commit `92eefc3` создан автоматически по `§7.3.1` gate (type=`chore`, scope discipline clean, §7.2.5 message). Close-routine: (1) `git rev-parse HEAD` → `92eefc3`; (2) эта запись перенесена в «Закрытые сессии» с `closed-at: 2026-06-15T15:30:00Z` + `commit-hash: 92eefc3`; (3) `agent/status.md §23` snapshot добавлен до commit; (4) `agent/memory.md §10.27` (новый) зафиксировал протокол-rewrite; (5) safety-net patch `/tmp/opencode/projectv-protocol/before_agent_protocol_rewrite_20260615T1500Z.patch` (25 KB) — **оставлен** с `POST-COMMIT 92eefc3` footer (per §8.1 п.5; fallback для следующей сессии, не «uncommitted work»).
+
+  **Verification (static, per §7.3 — AGENTS.md правка = protocol doc, не code, baseline preserved):**
+  - `git diff HEAD~1..HEAD --stat` показывает 5 файлов / +195 / -37 строк (AGENTS.md + active-sessions + memory + session-checklist + status).
+  - Cross-refs в AGENTS.md: §1.3 → §8.1, §7.3.1; §7.2.4 → §7.3.1, §8.1; §7.2.5 → §7.3.1; §7.2.6 → §7.2.8; §7.2.8 → §1, §10.11 (memory.md), §7.2.6; §7.3.1 → §7.2.6, §7.2.8, §7.2.2, §7.2.4, §8.1; §8 → §7.3.1, §7.2.5, §8.1; §8.1 → §7.3.1, §7.2.6; §9 → §7.3.1, §7.2.5, §7.2.4. Все ссылки валидны (verified `grep -nE '^##|^###|^####'`).
+  - `git status -uall` после commit: только `legacy/docs/tex/.tmp/...` (KT-doc LaTeX temp файлы, не мои, не в scope per §6 anti-duplication / §7.2.6 hub-list).
+
+  **Build state:** не запускаю — change чисто в `AGENTS.md` + `agent/*` (no `src/`, `tests/`, `external/`, build config). Per §7.3, baseline preserved; build green не нужен для docs-only.
+
+  **Cross-refs:** AGENTS.md §1.3 (новый), §7.2.4 (modified), §7.2.5 (auto-execute note), §7.2.6 (hub-list updated), §7.2.8 (новый), §7.3.1 (новый), §8 (inv 2), §8.1 (rewrite), §9 (DoD); agent/active-sessions.md header Контракт §2 + format table (`held-open`, `multi-commit-plan`); agent/session-checklist.md Post-commit close-routine; agent/memory.md §10.27; agent/status.md §23.
 
 ### session-2026-06-12-taa-m5_2-threshold-bump
 
