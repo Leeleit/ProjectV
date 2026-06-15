@@ -174,6 +174,17 @@ endif ()
 
 target_link_libraries(ProjectV PRIVATE projectv_build_options)
 
+# **Cross-platform build-tree path for F5 hot-reload (`2026-06-15`).**
+# Inject the absolute build tree path as a compile-time macro
+# so `RebuildAllShadersFromDisk()` (`src/app/main.cpp`) can
+# re-invoke `cmake --build` against the correct tree on both
+# Linux (`build/linux-clang-debug`) and Windows
+# (`build/windows-clang-debug`) without hard-coding either.
+# The runtime `PROJECTV_BUILD_DIR` env var still overrides
+# the compile-time default when set.
+target_compile_definitions(ProjectV PRIVATE
+        PROJECTV_CMAKE_BUILD_DIR="${CMAKE_BINARY_DIR}")
+
 target_link_libraries(ProjectV PRIVATE
         # Vulkan не добавляем, потому что volk его инклюдит в себе
         volk

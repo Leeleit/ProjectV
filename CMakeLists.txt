@@ -161,32 +161,89 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # The builtin is a direct `sqrtss` instruction on x86-64
 # (the project's `mavx2 / -fpmath=sse` build flag) so
 # there's no perf cost vs `std::sqrt`.
-set(CMAKE_CXX_STDLIB libc++)
-# `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
-# despite a Clang 22 `-Wunused-command-line-argument` warning
-# that fires because the flag is duplicated by `CMAKE_CXX_STDLIB`
-# above. The flag IS used — by external subdirs (`fastgltf`,
-# `fmt`) that need the libc++ ABI to match our `.o` files
-# (verified by removing it: produces `std::__1::__fs::*`
-# undefined references at link time). The warning is a Clang
-# toolchain artifact, not a real defect. See the surrounding
-# comment block for the full rationale.
-add_compile_options(-stdlib=libc++)
-# Suppress the duplicate-flag warning described above. This
-# is the one place we deviate from "no suppressions"
-# (`AGENTS.md §7.2.7`): a single, scoped, well-commented
-# `-Wno-unused-command-line-argument` for the libc++ ABI
-# flag. Without it, the operator sees a misleading warning
-# on every compile.
-add_compile_options(-Wno-unused-command-line-argument)
-if (NOT DEFINED CMAKE_CXX_STDLIB_MODULES_JSON AND EXISTS "/usr/lib/libc++.modules.json")
-    set(CMAKE_CXX_STDLIB_MODULES_JSON "/usr/lib/libc++.modules.json"
-            CACHE FILEPATH
-            "Path to libc++'s stdlib modules JSON")
+# **libc++ is Linux/macOS-only (`2026-06-15`).** Per
+# `agent/memory.md §6`/`§8` — libc++ is the canonical Clang
+# stdlib and the only one with a C++20-format `std`
+# module that Clang 22 can consume. The migration is
+# **active on Linux/macOS**; on Windows (clang-cl) the
+# project uses the MSVC STL by default, and on pure MSVC
+# cl.exe this entire block is a no-op anyway. The pre-2026-06-15
+# code applied these globally and broke Windows builds
+# (libstdc++.so.6 doesn't exist on Windows; LLD link error).
+if (NOT MSVC AND NOT WIN32)
+    # Migration details — applies on Linux/macOS native clang:
+    #
+    #   1. `CMAKE_CXX_STDLIB=libc++` switches the project to
+    #      libc++ system-wide (this controls the `c++` /
+    #      `stdc++` link aliases — see the
+    #      `projectv_build_options` INTERFACE library below
+    #      for the actual `-stdlib=libc++` compile + link
+    #      flag).
+    #   2. `CMAKE_CXX_STDLIB_MODULES_JSON` points CMake at
+    #      the libc++ stdlib modules JSON (Arch Linux:
+    #      `/usr/lib/libc++.modules.json`; Debian/Ubuntu LLVM
+    #      packages: `/usr/lib/llvm-NN/lib/libc++.modules.json`).
+    #   3. `CMAKE_CXX_MODULE_STD=ON` enables CMake 4.2+'s
+    #      experimental gate for `import std;` (per
+    #      `TODO.md Tier 2.C`).
+    #   4. `add_compile_options(-stdlib=libc++)` is REQUIRED
+    #      for `external/fastgltf` and `external/fmt` (verified
+    #      2026-06-14: removing it produces link errors
+    #      `undefined symbol: std::__1::__fs::filesystem::path`
+    #      and `fmt::v12::vformat`). Without this global apply,
+    #      external `add_subdirectory` targets that don't link
+    #      `projectv_build_options` silently get compiled with
+    #      the system default (libstdc++ on this host), which
+    #      produces `std::filesystem::__cxx11::path` symbols
+    #      (libstdc++ ABI) inside the external `.a` while our
+    #      `ProjectV` `.o` files expect
+    #      `std::__1::__fs::filesystem::path` (libc++ ABI).
+    #      The resulting link is a `std::__1::fs::filesystem::path`
+    #      undefined reference. `add_compile_options` (not
+    #      `add_compile_definitions`) is the right tool because
+    #      the value is a flag, not a macro.
+    #
+    #      **The `-Wunused-command-line-argument` warning**:
+    #      the duplicate `-stdlib=libc++` (once from
+    #      `CMAKE_CXX_STDLIB`, once from `add_compile_options`)
+    #      is flagged by Clang 22 as a warning. The flag IS
+    #      used (by the external subdirs that need libc++
+    #      ABI); the warning is a Clang toolchain artifact
+    #      caused by the duplicate. We add
+    #      `-Wno-unused-command-line-argument` **globally** with
+    #      an explicit comment that this is a Clang false-
+    #      positive caused by the necessary cross-target ABI
+    #      flag propagation — not a code-quality issue. Per
+    #      `AGENTS.md §7.2.7` the suppression is acceptable
+    #      because it targets a specific Clang toolchain
+    #      artifact, not a real defect.
+    set(CMAKE_CXX_STDLIB libc++)
+    # `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+    # despite a Clang 22 `-Wunused-command-line-argument` warning
+    # that fires because the flag is duplicated by `CMAKE_CXX_STDLIB`
+    # above. The flag IS used — by external subdirs (`fastgltf`,
+    # `fmt`) that need the libc++ ABI to match our `.o` files
+    # (verified by removing it: produces `std::__1::__fs::*`
+    # undefined references at link time). The warning is a Clang
+    # toolchain artifact, not a real defect. See the surrounding
+    # comment block for the full rationale.
+    add_compile_options(-stdlib=libc++)
+    # Suppress the duplicate-flag warning described above. This
+    # is the one place we deviate from "no suppressions"
+    # (`AGENTS.md §7.2.7`): a single, scoped, well-commented
+    # `-Wno-unused-command-line-argument` for the libc++ ABI
+    # flag. Without it, the operator sees a misleading warning
+    # on every compile.
+    add_compile_options(-Wno-unused-command-line-argument)
+    if (NOT DEFINED CMAKE_CXX_STDLIB_MODULES_JSON AND EXISTS "/usr/lib/libc++.modules.json")
+        set(CMAKE_CXX_STDLIB_MODULES_JSON "/usr/lib/libc++.modules.json"
+                CACHE FILEPATH
+                "Path to libc++'s stdlib modules JSON")
+    endif ()
+    set(CMAKE_CXX_MODULE_STD ON CACHE BOOL
+            "CMake 4.2+ C++23+ standard-library module gate (required for \`import std;\`)")
+    mark_as_advanced(CMAKE_CXX_MODULE_STD)
 endif ()
-set(CMAKE_CXX_MODULE_STD ON CACHE BOOL
-        "CMake 4.2+ C++23+ standard-library module gate (required for \`import std;\`)")
-mark_as_advanced(CMAKE_CXX_MODULE_STD)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -476,18 +533,54 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(projectv_build_options INTERFACE)
 if (MSVC)
+    # **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+    # pre-`if (MSVC) ... else ()` rewrite below, this is
+    # the only branch that applies for cl.exe. flecs 4.1.5
+    # uses `std::is_trivial<T>::value` (in
+    # `external/flecs/include/flecs/addons/cpp/component.hpp:66, 93`)
+    # which MSVC 19.38+ marks with C4996 `[[deprecated]]`;
+    # with `/WX` this becomes a fatal error, so we silence
+    # the deprecation specifically (not blanket-suppress).
     target_compile_options(projectv_build_options INTERFACE
             /W4
             /WX
             /permissive-
             /utf-8
+            /wd4996
+    )
+    target_compile_definitions(projectv_build_options INTERFACE
+            NOMINMAX
+    )
+elseif (WIN32)
+    # **Windows clang-cl path (`2026-06-15`).** Per the
+    # pre-`if (MSVC) ... else ()` rewrite below, this is
+    # the active branch for `windows-clang-debug*` and
+    # `windows-clang-release*` presets. clang-cl on Windows
+    # uses the MSVC STL by default — **not** libc++ — so
+    # none of the `c++` / `c++abi` / `-l:libstdc++.so.6`
+    # link options from the Linux branch apply here
+    # (those don't exist on Windows; LLD would fail to
+    # find them). The MSVC-compat compile flags above
+    # (`/W4 /WX /permissive- /utf-8 /wd4996`) are accepted
+    # by clang-cl, so we keep them in this branch. We also
+    # forward the libstdc++16 `std::is_trivial` deprecation
+    # suppression here via clang's native flag form, since
+    # the `else ()` branch (where it lives for the Linux
+    # path) is not taken on Windows.
+    target_compile_options(projectv_build_options INTERFACE
+            /W4
+            /WX
+            /permissive-
+            /utf-8
+            /wd4996
+            /clang:-Wno-deprecated-declarations
     )
     target_compile_definitions(projectv_build_options INTERFACE
             NOMINMAX
     )
 else ()
-    # **libc++ migration (Phase 2, `2026-06-13`).** Per
-    # `agent/memory.md §8` — libc++ is the canonical Clang
+    # **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+    # Per `agent/memory.md §8` — libc++ is the canonical Clang
     # stdlib. The per-target flags below apply via
     # `projectv_build_options` (an INTERFACE library) so
     # every target that links against it gets
@@ -531,29 +624,14 @@ else ()
             # filter.
             "-l:libstdc++.so.6"
     )
-    # libstdc++ 16+ marks std::is_trivial deprecated; flecs 2.2.0 still uses it.
-    # Suppress that one deprecation at the build-options layer so external
-    # targets (flecs, ...) and our own code stay warning-clean until we
-    # upgrade flecs. (libc++ may or may not have the same warning; the
-    # flag is harmless either way.)
+    # libstdc++ 16+ marks std::is_trivial deprecated; flecs 4.1.5 still
+    # uses it. Suppress that one deprecation at the build-options
+    # layer so external targets (flecs, ...) and our own code stay
+    # warning-clean until we upgrade flecs. (libc++ may or may not
+    # have the same warning; the flag is harmless either way.)
     target_compile_options(projectv_build_options INTERFACE
             -Wno-deprecated-declarations
     )
-    # Force-include <cstring> because legacy project code uses std::memcpy /
-    # std::memset / std::strcmp without an explicit <cstring> include; on
-    # MSVC these come in transitively via <cstdint>/<cstdlib>, but on
-    # libstdc++ they do not, so the namespace-qualified calls break.
-    #
-    # **Tier 2.A — module support (`2026-06-13`).** Removed the
-    # global `-include cstring` flag here. C++20 modules require
-    # `export module X;` to be the first non-preprocessor token in
-    # a `.ixx` TU; a force-include injects preprocessor output
-    # *before* the file content, which would land in neither
-    # the global module fragment nor the module purview. The
-    # remaining caller that relied on the implicit include
-    # (`src/render/vulkan/VulkanBootstrap.cpp`'s `std::strcmp`
-    # per `agent/memory.md §6`) now has an explicit `<cstring>`
-    # include added in the same commit.
 endif ()
 target_compile_definitions(projectv_build_options INTERFACE
         VK_NO_PROTOTYPES

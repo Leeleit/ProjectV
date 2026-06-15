@@ -28,7 +28,19 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <string>
+
+#ifndef PROJECTV_CMAKE_BUILD_DIR
+// **Hot shader reload fallback (`2026-06-15`).** If the
+// TU was compiled outside CMake (rare — `cxx` test, ad-hoc
+// `clang++ -c`), fall back to a Linux default so the symbol
+// still resolves. The CMake-injected value (`src/CMakeLists.txt`)
+// is the production path; this is a compile-time safety net
+// only.
+#define PROJECTV_CMAKE_BUILD_DIR "build/linux-clang-debug"
+#endif
 
 namespace {
 bool WaitForDeviceIdle(VulkanContextState &context)
@@ -66,10 +78,24 @@ int RebuildAllShadersFromDisk()
 	//    for a runtime pipeline-recreate.
 	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
 	if (buildDir == nullptr) {
-		buildDir = "build/linux-clang-debug";
+		// **Cross-platform fallback (`2026-06-15`).** Per
+		// `src/CMakeLists.txt` the build tree path is injected
+		// at configure time via `target_compile_definitions(... PROJECTV_CMAKE_BUILD_DIR=...)`.
+		// On Windows that resolves to e.g. `build/windows-clang-debug`;
+		// on Linux to `build/linux-clang-debug`. The `PROJECTV_BUILD_DIR`
+		// env var still wins over the compile-time default.
+		buildDir = PROJECTV_CMAKE_BUILD_DIR;
 	}
 
-	const std::string cmakeCmd = std::string("cmake --build ") + buildDir + " --target Shaders 2>&1 > /tmp/projectv_shader_reload.log";
+	// **Cross-platform log path (`2026-06-15`).** The previous
+	// `/tmp/projectv_shader_reload.log` literal is Linux-only
+	// (`cmd.exe` has no `/tmp`); use std::filesystem's portable
+	// temp-directory lookup instead. On Windows that resolves
+	// to `%TEMP%`; on Linux to `$TMPDIR` (typically `/tmp`).
+	const std::filesystem::path logPath =
+		std::filesystem::temp_directory_path() / "projectv_shader_reload.log";
+	const std::string cmakeCmd = std::string("cmake --build ") + buildDir +
+		" --target Shaders > \"" + logPath.string() + "\" 2>&1";
 	const int rc = std::system(cmakeCmd.c_str());
 	if (rc == 0) {
 		++reloadedCount;
