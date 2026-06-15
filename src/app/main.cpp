@@ -532,28 +532,40 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 				"[ProjectV][App] ToggleRayMarch: %s\n",
 				newState ? "ray-march pass ENABLED" : "ray-march pass DISABLED");
 		} else if (event->key.key == SDLK_V) {
-			// **V-sync toggle (`2026-06-13`).** Cycles
-			// the swapchain present mode through
-			// IMMEDIATE → MAILBOX → FIFO → IMMEDIATE.
-			// The next `RecreateSwapchain` (forced on
-			// every event-loop iteration when the
-			// current swapchain is out of date, plus
-			// automatically at the end of this function
-			// if the user toggled the mode) picks up the
-			// new preference via `ChoosePresentMode`.
+			// **V-sync toggle (`2026-06-13`, auto-detect
+			// cycle on `2026-06-14`).** Walks the
+			// runtime present-mode cycle (built once
+			// per swapchain create from the surface's
+			// supported modes; see
+			// `BuildPresentModeCycle` in
+			// `VulkanSwapchain.cpp`). Cycle length is
+			// the number of modes the host surface
+			// exposes — usually 2 on Linux/Wayland
+			// (no IMMEDIATE), 3 on Windows. Every
+			// press advances the cycle by one step;
+			// the previous "press V and nothing
+			// changes" failure mode on Wayland is
+			// gone. The next `RecreateSwapchain`
+			// (forced at the end of this branch)
+			// picks up the new preference via
+			// `ChoosePresentMode`.
 			const VkPresentModeKHR newMode =
 				CyclePreferredPresentMode();
 			const char *modeName = "unknown";
 			switch (newMode) {
-			case VK_PRESENT_MODE_IMMEDIATE_KHR: modeName = "IMMEDIATE (vsync off, tearing, max FPS)"; break;
-			case VK_PRESENT_MODE_MAILBOX_KHR: modeName = "MAILBOX (tear-free with VRR, uncapped)"; break;
+			case VK_PRESENT_MODE_IMMEDIATE_KHR: modeName = "IMMEDIATE (uncapped, may tear)"; break;
+			case VK_PRESENT_MODE_MAILBOX_KHR: modeName = "MAILBOX (tear-free, uncapped)"; break;
 			case VK_PRESENT_MODE_FIFO_KHR: modeName = "FIFO (vsync on, FPS = display rate)"; break;
 			default: break;
 			}
+			const std::size_t cycleSize = GetPresentModeCycleSize();
+			const std::size_t cycleIndex = GetPresentModeCycleIndex(newMode);
 			std::fprintf(
 				stderr,
-				"[ProjectV][App] CycleVsync: %s\n",
-				modeName);
+				"[ProjectV][App] CycleVsync: %s [cycle %zu/%zu]\n",
+				modeName,
+				cycleIndex + 1u,
+				cycleSize);
 			// Force a swapchain rebuild so the new
 			// mode takes effect immediately, not on
 			// the next natural recreate.
@@ -634,40 +646,14 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			benchmarkDebug ? benchmarkDebug->stats : DebugStats{},
 			benchmarkFrameCounter);
 
-	// **Fluid CA tick (defense r0, 2026-06-13; audited 2026-06-13).**
-	// Throttled to ~60 Hz so the per-tick cost stays constant regardless
-	// of render FPS. The throttle is local to this function (static
-	// storage) and lives here to keep `AppUpdate.cpp` untouched while
-	// `session-2026-06-13-problems-cleanup-v2` is mid-edit on that file.
-	// The `initialized` flag replaces a fragile `lastFluidTickCounter
-	// == 0u` check (which could re-fire on the second call if
-	// `SDL_GetPerformanceCounter()` happened to return 0). The CA
-	// itself is a no-op when the world has zero `Fluid` voxels, so the
-	// cost on dry scenes is the `stats.fluidVoxelCount` check (one
-	// `uint32` read) plus the `voxelWorld` pointer validation.
-	{
-		static bool fluidTickInitialized = false;
-		static Uint64 lastFluidTickCounter = 0;
-		// 30 Hz tick rate (was 60 Hz before the 2026-06-13 visual
-		// feedback). The CA moves fluid 1 cell per tick; at 60 Hz
-		// the cell-to-cell teleport was visible as a "blink" at the
-		// engine's 118 FPS (each render frame captured a different
-		// CA state, the fluid looked like it was popping from cell
-		// to cell). At 30 Hz the fluid moves slower (one cell every
-		// 33 ms), which the eye reads as continuous motion rather
-		// than discrete teleports. The user can still observe the
-		// CA's per-tick granularity in Tracy / sidecar metadata.
-		const Uint64 fluidTickInterval = SDL_GetPerformanceFrequency() / 30u;
-		const bool intervalElapsed = fluidTickInitialized &&
-			(benchmarkFrameCounter - lastFluidTickCounter) >= fluidTickInterval;
-		if (!fluidTickInitialized || intervalElapsed) {
-			fluidTickInitialized = true;
-			lastFluidTickCounter = benchmarkFrameCounter;
-			if (world->voxelWorld) {
-				UpdateFluidCA(*world->voxelWorld);
-			}
-		}
-	}
+	// **Fluid CA tick — moved to `UpdateApp` on 2026-06-14.**
+	// The CA tick used to live here with a wall-clock throttle
+	// (30 Hz). It was moved to `AppUpdate.cpp` (after the
+	// `simulationAccumulatorSeconds` block) so it honours
+	// `simulation->paused`, `simulation->timeScale`, and the
+	// `frameStepRequested` flag for free. See
+	// `agent/decisions.md §30` and `agent/memory.md §12`
+	// (CA pause/timeScale fix history).
 
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(

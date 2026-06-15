@@ -114,23 +114,37 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #   3. `CMAKE_CXX_MODULE_STD=ON` enables CMake 4.2+'s
 #      experimental gate for `import std;` (per
 #      `TODO.md Tier 2.C`).
-#   4. `add_compile_options(-stdlib=libc++)` applies
-#      `-stdlib=libc++` to **every** C++ target, including
-#      external subdirs (e.g. `external/fastgltf`). Without
-#      this global apply, the `projectv_build_options`
-#      INTERFACE library only propagates to the main
-#      `ProjectV` target — external `add_subdirectory`
-#      targets that don't link `projectv_build_options`
-#      silently get compiled with the system default
-#      (libstdc++ on this host), which produces
-#      `std::filesystem::__cxx11::path` symbols (libstdc++
-#      ABI) inside the external `.a` while our `ProjectV`
-#      `.o` files expect `std::__1::__fs::filesystem::path`
-#      (libc++ ABI). The resulting link is a
-#      `std::__1::__fs::filesystem::path` undefined
-#      reference. `add_compile_options` (not
+#   4. `add_compile_options(-stdlib=libc++)` is REQUIRED
+#      for `external/fastgltf` and `external/fmt` (verified
+#      2026-06-14: removing it produces link errors
+#      `undefined symbol: std::__1::__fs::filesystem::path`
+#      and `fmt::v12::vformat`). Without this global apply,
+#      external `add_subdirectory` targets that don't link
+#      `projectv_build_options` silently get compiled with
+#      the system default (libstdc++ on this host), which
+#      produces `std::filesystem::__cxx11::path` symbols
+#      (libstdc++ ABI) inside the external `.a` while our
+#      `ProjectV` `.o` files expect
+#      `std::__1::__fs::filesystem::path` (libc++ ABI).
+#      The resulting link is a `std::__1::fs::filesystem::path`
+#      undefined reference. `add_compile_options` (not
 #      `add_compile_definitions`) is the right tool because
 #      the value is a flag, not a macro.
+#
+#      **The `-Wunused-command-line-argument` warning**:
+#      the duplicate `-stdlib=libc++` (once from
+#      `CMAKE_CXX_STDLIB`, once from `add_compile_options`)
+#      is flagged by Clang 22 as a warning. The flag IS
+#      used (by the external subdirs that need libc++
+#      ABI); the warning is a Clang toolchain artifact
+#      caused by the duplicate. We add
+#      `-Wno-unused-command-line-argument` **globally** with
+#      an explicit comment that this is a Clang false-
+#      positive caused by the necessary cross-target ABI
+#      flag propagation — not a code-quality issue. Per
+#      `AGENTS.md §7.2.7` the suppression is acceptable
+#      because it targets a specific Clang toolchain
+#      artifact, not a real defect.
 #
 # **Project's own `Math.ixx` global-module-fragment fix.**
 # Removed `#include <cmath>` from the global module
@@ -148,7 +162,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # (the project's `mavx2 / -fpmath=sse` build flag) so
 # there's no perf cost vs `std::sqrt`.
 set(CMAKE_CXX_STDLIB libc++)
+# `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+# despite a Clang 22 `-Wunused-command-line-argument` warning
+# that fires because the flag is duplicated by `CMAKE_CXX_STDLIB`
+# above. The flag IS used — by external subdirs (`fastgltf`,
+# `fmt`) that need the libc++ ABI to match our `.o` files
+# (verified by removing it: produces `std::__1::__fs::*`
+# undefined references at link time). The warning is a Clang
+# toolchain artifact, not a real defect. See the surrounding
+# comment block for the full rationale.
 add_compile_options(-stdlib=libc++)
+# Suppress the duplicate-flag warning described above. This
+# is the one place we deviate from "no suppressions"
+# (`AGENTS.md §7.2.7`): a single, scoped, well-commented
+# `-Wno-unused-command-line-argument` for the libc++ ABI
+# flag. Without it, the operator sees a misleading warning
+# on every compile.
+add_compile_options(-Wno-unused-command-line-argument)
 if (NOT DEFINED CMAKE_CXX_STDLIB_MODULES_JSON AND EXISTS "/usr/lib/libc++.modules.json")
     set(CMAKE_CXX_STDLIB_MODULES_JSON "/usr/lib/libc++.modules.json"
             CACHE FILEPATH

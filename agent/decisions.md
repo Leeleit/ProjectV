@@ -925,3 +925,35 @@ Cross-refs: `src/render/vulkan/VulkanSwapchain.cpp:148-180` (V-sync fix), `src/c
 - **«Libc++ warning suppression — one flag, one toolchain artifact»** — minimal scope. Per `AGENTS.md §7.2.7` (no suppressions) + exception clause («DFA/IDE false-positive, можно заглушить, но только точечно и только нужную строчку»). `-Wno-unused-command-line-argument` global — это exception applied к **specific toolchain artifact** (Clang's duplicate-flag detection), не к code quality. **Rule**: suppressions — only когда compiler toolchain даёт false-positive на cross-cutting concern, и suppression имеет comment explaining the artifact. Глушить варнинги «потому что мешают» — нет.
 
 Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:69-148` (auto-detect cycle + accessors), `src/render/vulkan/VulkanSwapchain.cpp:262-275` (call to `BuildPresentModeCycle` в `CreateOrRecreateSwapchain`), `src/app/main.cpp:534-578` (V hotkey log message), `src/debug/DebugHud.cpp:553-577` (HUD line), `CMakeLists.txt:117-150` (libc++ flag + warning suppression), `tests/PresentModeTests.cpp` (9 sub-tests, new file), `tests/CMakeLists.txt:771-810` (new test target).
+
+### 30.3. V hotkey cycle walk across `RecreateSwapchain` (preserve `g_active`, `2026-06-14` evening)
+
+Решение (по итогам 1 operator report: «нажимаю на V, ничего не меняется» с 10 одинаковых log lines `IMMEDIATE [cycle 2/2]` подряд):
+
+- **V hotkey cycle reset bug (`src/render/vulkan/VulkanSwapchain.hpp:69-148`).** Оператор: «нажимаю на V, ничего не меняется» — 10 одинаковых log lines `IMMEDIATE [cycle 2/2]`. Subagent analysis: cycle `[FIFO, IMMEDIATE]` (host exposes 2 modes), `g_active = FIFO` initial, press V → `CyclePreferredPresentMode` advances to `IMMEDIATE` → log `IMMEDIATE` → `RecreateSwapchain` → `CreateOrRecreateSwapchain` → **`BuildPresentModeCycle` resets `g_active = g_cycle.front() = FIFO`**. Next press: `g_active = FIFO` → advance to `IMMEDIATE` → log `IMMEDIATE` → reset. **Cycle appears stuck** — каждый press выглядит identical.
+
+- **Root cause: `BuildPresentModeCycle` unconditional reset.** Pre-fix (`2026-06-14` initial): `g_active = g_cycle.front()` (FIFO) unconditionally. Intent: «default to highest-priority supported mode on first build». Side effect: **on every rebuild** (including `RecreateSwapchain` triggered by V hotkey, window events, `vkAcquireNextImageKHR → OUT_OF_DATE`), `g_active` resets, undoing the operator's previous choice. V hotkey creates a self-defeating cycle: advance → reset → advance → reset.
+
+- **Fix: preserve `g_active` across rebuilds.** New behavior:
+  1. Capture `previousActive = g_active` **before** rebuild.
+  2. Rebuild `g_cycle` from `surfacePresentModes`.
+  3. If `previousActive` is in new cycle → keep it.
+  4. Else (display hot-swap dropped the current mode, e.g. external monitor unplugged and new surface doesn't expose IMMEDIATE) → fall back to `g_cycle.front()` (FIFO by priority).
+  
+  **V hotkey теперь walks correctly**: V press → `CyclePreferredPresentMode` advances → `RecreateSwapchain` preserves `g_active` → next press advances from preserved state. Cycle `[FIFO, IMMEDIATE]` gives `FIFO → IMMEDIATE → FIFO → IMMEDIATE` alternating.
+
+- **Display hot-swap correctness.** New code handles the rare case where the host drops a previously-supported mode (e.g. external monitor unplugged, new surface only exposes FIFO). The fallback to `g_cycle.front()` is graceful — operator sees the new mode in HUD + log, can press V to cycle to next mode (if any).
+
+- **Test design — explicit reset pattern.** Tests are order-dependent because `g_active` is a **file-scope inline variable** (not local to each test). Pre-existing tests (`TestCycleAdvancesAndWrapsTwoMode`, etc.) assumed pre-fix behavior of unconditional FIFO reset, which masked test-order dependencies. Post-fix, tests must **explicitly reset** to a known state before exercising. Pattern: `(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});` as the first line of any test that wants `g_active = FIFO`. This is documented in test comments (see `TestCycleAdvancesAndWrapsTwoMode` line 218-227). **Rule для future tests**: **inline-variable global state needs explicit reset at test start**, не assumed from previous test's final state.
+
+- **Why header-only API made this bug subtle.** The inline `BuildPresentModeCycle` in header was created to make tests header-only (no `VulkanSwapchain.cpp` link dep). But the inline function **mutates a file-scope inline variable** — same global state across all consumers (production + tests + HUD). This is a tradeoff: header-only API → no link dep, but all consumers share the same state. For runtime-togglable state (vsync mode, timeScale) это desired behavior. For test isolation это hazard. **Solution**: tests must reset explicitly (see above). **Rule для future**: inline variables in header for runtime state — production ✅, tests need explicit reset.
+
+- **Why this wasn't caught earlier.** Pre-existing tests (added in `2026-06-14` initial fix) verified cycle construction (`BuildPresentModeCycle` with various surface modes), cycle walking (`CyclePreferredPresentMode` advances), and accessors (`GetActivePresentMode` etc.) — but **none tested the V hotkey + `RecreateSwapchain` interaction**. The 3 new tests `TestPresentModeCyclePreservesActiveAcrossRebuild`, `TestPresentModeCycleFallsBackWhenActiveDropped`, `TestPresentModeCycleWalksAcrossRecreates` directly cover the operator's scenario. **Lesson**: when adding new state mutation, also test **interaction with all callers** (e.g. `RecreateSwapchain`), not just the function in isolation.
+
+Почему:
+
+- **«Capture previous state, restore on rebuild» > «unconditional reset»** — universal pattern. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md` (data-driven, не hardcoded): rebuild should **preserve invariants** (operator's choice), not **enforce defaults**. If display changes, that's a real event that needs a real decision (fall back gracefully), not a silent reset.
+- **«Test interaction, not just function»** — gap in initial test coverage. `BuildPresentModeCycle` + `CyclePreferredPresentMode` were tested in isolation, but the **V hotkey's call sequence** (`CyclePreferredPresentMode` → `RecreateSwapchain` → `BuildPresentModeCycle`) was not. The bug only manifested in this sequence. **Rule**: при добавлении новой stateful функции, test all callers that mutate the same state.
+- **«Test order independence via explicit reset»** — defensive pattern. Inline variables + global state → tests must explicitly reset to known state. `BuildPresentModeCycle({FIFO})` forces fallback to FIFO because previous `g_active` (whatever) is not in `{FIFO}`. Cleaner than having per-test fixtures.
+
+Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:180-220` (preserve-`g_active` logic в `BuildPresentModeCycle`), `tests/PresentModeTests.cpp:281-415` (3 new sub-tests + explicit-reset pattern).

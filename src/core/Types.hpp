@@ -1346,6 +1346,35 @@ struct SimulationState {
 	// only ever holds one step at a time, so back-to-back
 	// presses translate to "one tick per press".
 	bool frameStepRequested = false;
+	// **Fluid CA tick rate (2026-06-14).** Live, in-Hz, applied
+	// to the fluid CA accumulator. The CA advances
+	// `UpdateFluidCA` by exactly one cell per accumulated
+	// `1 / fluidTickRateHz` of *scaled* sim time. At the
+	// default 20 Hz and `timeScale = 1.0`, that's 20 ticks
+	// per second. With `timeScale = 0.5`, 10 ticks/sec.
+	// With `timeScale = 4.0`, 80 ticks/sec. The 20 Hz
+	// default (was 30 before the 2026-06-14 follow-up) was
+	// picked because the operator reported "вода всё равно
+	// слишком быстро льётся" — 30 Hz at default speed moved
+	// water visibly faster than the eye reads as "falling".
+	// Override via env var `PROJECTV_FLUID_TICK_HZ` in
+	// `src/app/main.cpp`. Range: any positive float; values
+	// below ~5 Hz make the CA look frozen, values above ~60
+	// Hz are clipped to one tick per render frame and look
+	// like a per-frame teleport (the same problem the 30 Hz
+	// default was supposed to fix).
+	float fluidTickRateHz = 20.0f;
+	// **Fluid CA accumulator (2026-06-14).** Wall-clock-free,
+	// sim-time accumulator in seconds. Grows by
+	// `frameDeltaSeconds * timeScale` (already scaled at
+	// `AppUpdate.cpp:669`) per render frame when not
+	// paused, and drains in `1 / fluidTickRateHz` chunks to
+	// feed `UpdateFluidCA`. Reset to 0 on pause and on
+	// frame-step. Stored on `SimulationState` so the
+	// accumulator is preserved across hotkey cycles and
+	// scene reloads (the CA itself is world-resident; the
+	// accumulator is sim-resident).
+	float fluidAccumulatorSeconds = 0.0f;
 };
 
 struct InputState {

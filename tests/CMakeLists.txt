@@ -773,3 +773,42 @@ set_tests_properties(ProjectVFluidCATests PROPERTIES LABELS "unit")
 # that across all test targets.
 projectv_test_add_modules(ProjectVFluidCATests)
 
+# **Present-mode cycle tests (auto-detect cycle,
+# `2026-06-14`).** CPU-only verification of
+# `BuildPresentModeCycle` / `CyclePreferredPresentMode` /
+# `GetActivePresentMode` / `GetPresentModeCycleSize` /
+# `GetPresentModeCycleIndex`. Tests construct controlled
+# surface-present-modes vectors and check the cycle
+# construction + walk semantics. Header-only inline
+# accessors + inline variables mean the test TU needs
+# only `VulkanSwapchain.hpp`, no `.cpp` link. The
+# `volk` / `VulkanMemoryAllocator` deps are inherited
+# from the `projectv_build_options` INTERFACE library.
+add_executable(ProjectVPresentModeTests
+        PresentModeTests.cpp
+)
+
+target_compile_definitions(ProjectVPresentModeTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVPresentModeTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVPresentModeTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVPresentModeTests PRIVATE
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVPresentModeTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVPresentModeTests COMMAND ProjectVPresentModeTests)
+set_tests_properties(ProjectVPresentModeTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVPresentModeTests)
+

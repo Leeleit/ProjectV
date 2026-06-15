@@ -2,6 +2,7 @@
 
 #include "app/Camera.hpp"
 #include "audio/AudioEngine.hpp"
+#include "render/vulkan/VulkanSwapchain.hpp"
 
 #include <algorithm>
 #include <array>
@@ -549,6 +550,31 @@ size_t BuildStatsLines(
 		"FPS %.1f  MS %.2f",
 		stats.framesPerSecond,
 		stats.frameTimeMilliseconds);
+	// **2026-06-14: VSync line.** Shows the current
+	// `g_preferredPresentMode` and the cycle index/size,
+	// so the operator can see the V hotkey's effect
+	// without parsing the log. Cycle is built at startup
+	// from the surface's exposed modes — a 2-element
+	// cycle on Linux/Wayland (no IMMEDIATE), 3 on
+	// Windows. Defaults to "FIFO" if the cycle has not
+	// been built yet (headless / pre-init).
+	{
+		const VkPresentModeKHR activeMode = GetActivePresentMode();
+		const char *modeLabel = "UNKNOWN";
+		switch (activeMode) {
+		case VK_PRESENT_MODE_IMMEDIATE_KHR: modeLabel = "IMMEDIATE"; break;
+		case VK_PRESENT_MODE_MAILBOX_KHR: modeLabel = "MAILBOX"; break;
+		case VK_PRESENT_MODE_FIFO_KHR: modeLabel = "FIFO"; break;
+		default: break;
+		}
+		PV_APPEND_HUD_LINE(
+			outLines,
+			lineCount,
+			"VSync %s (%zu/%zu)",
+			modeLabel,
+			GetPresentModeCycleIndex(activeMode) + 1u,
+			GetPresentModeCycleSize());
+	}
 	PV_APPEND_HUD_LINE(outLines, lineCount, "SCENE %s", GetScenePresetLabel(stats.scenePreset));
 	PV_APPEND_HUD_LINE(
 		outLines,

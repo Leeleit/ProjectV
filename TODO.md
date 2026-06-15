@@ -130,6 +130,34 @@ False alarms (для потомков):
 «Вода не течёт вниз» — expected behavior (fluid на glass ≠ падает). Проверено `TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks`.
 «Respawn за платформой» — был spread rule. Удаление spread rule решает его напрямую.
 
+## CA pause + timeScale + V-sync fixes (`2026-06-14`)
+
+- [x] **V-sync FIFO bug fix** в `ChoosePresentMode` (`src/render/vulkan/VulkanSwapchain.cpp:148-180`). Оператор: «vsync слетает при постановке блока, даже если V → vsync on». Root cause: `if (g_preferredPresentMode != FIFO)` branch silently fell through to MAILBOX-first default chain на Linux/Wayland VRR surface. V cycle `FIFO → IMMEDIATE → MAILBOX → FIFO` — третий press возвращал MAILBOX вместо FIFO. **Fix**: убрал `!=` branch, теперь explicit per-mode dispatch. `g_preferredPresentMode == IMMEDIATE || MAILBOX` → `PickBestAvailablePresentMode`; else → explicit FIFO honours.
+- [x] **CA tick перенесён в `UpdateApp`** (`src/app/AppUpdate.cpp:693-733`). Оператор: «вода растекается даже при паузе, не действует замедление/ускорение». Root cause: `src/app/main.cpp:637-670` имел wall-clock throttle, не консультировался с `simulation->paused` или `simulation->timeScale`. **Fix**: deleted throttle block, added CA tick в `UpdateApp` после physics accumulator, использует `effectivePaused` gate + `1/fluidTickRateHz` accumulator.
+- [x] **`fluidTickRateHz = 20.0f` (was 30)** — оператор: «слишком быстро льётся». 20 Hz = 1 cell / 50 ms, timeScale=0.5 → 10 Hz, timeScale=2.0 → 40 Hz.
+- [x] **`fluidAccumulatorSeconds` field** в `SimulationState` (`src/core/Types.hpp:1348-1382`). Sim-time accumulator, scaled by `timeScale`, zeroed on pause.
+- [x] **Tests** — 8 новых sub-tests (24 total, 100% pass): `TestFluidCAFluidDoesNotMoveOnPause`, `TestFluidCAFluidMovesOnUnpause`, `TestFluidCAFluidRateRespectsTimeScale`, `TestFluidCAFluidRateAboveBase`, `TestFluidCAFluidRateAtDefault`, `TestFluidCAFluidTimeScaleZeroStops`, `TestFluidCAFluidFrameStepWithTimeScaleZero`, `TestFluidCAFluidRateConfigurable`. Helper `TickFluidCA` inline-зеркало production throttle.
+- [x] **`agent/decisions.md §30.1`** — V-sync fix + CA tick move + 20Hz default plan + обоснования.
+- [x] **`agent/memory.md §12.1`** — V-sync bug history + CA pause/timeScale fix history + 4 lessons learned (subagent must для root-cause, default+override pattern, visual vs physics tickrate cap, SimulationState для sim knobs).
+- [x] **`agent/status.md`** — обновлён с новым closed-session.
+
+## V hotkey auto-detect cycle + libc++ warning + HUD line (`2026-06-14`)
+
+- [x] **V hotkey auto-detect cycle** (`src/render/vulkan/VulkanSwapchain.hpp:69-148`). Оператор: «у кнопки V 4 переключения — не понимаю, какое из них что делает». Root cause: hardcoded 3-state cycle `FIFO → IMMEDIATE → MAILBOX → FIFO`. На Linux/Wayland без VRR IMMEDIATE not supported → silent fallthrough to MAILBOX. **Fix**: `BuildPresentModeCycle(support.presentModes)` walks priority list и keeps только surface-supported modes. Cycle length = number of physically supported modes (2 or 3 typically). Header-only API: `inline` variables + `inline` functions.
+- [x] **HUD line for VSync** (`src/debug/DebugHud.cpp:553-577`). `VSync <mode> (<index>/<size>)` — например `VSync FIFO (1/2)` или `VSync MAILBOX (2/3)`. Видно сразу: текущий mode + cycle position.
+- [x] **V hotkey log message** (`src/app/main.cpp:534-578`). `CycleVsync: <mode> [cycle <idx>/<size>]` — например `CycleVsync: MAILBOX (tear-free, uncapped) [cycle 2/2]`.
+- [x] **libc++ warning fix** (`CMakeLists.txt:117-150`). Initial plan: remove `add_compile_options(-stdlib=libc++)` (CMake's `CMAKE_CXX_STDLIB` already propagates). **Failed**: removing produces link errors в `external/fastgltf` и `external/fmt` (external `add_subdirectory` subdirs не inherit `CMAKE_CXX_STDLIB` в compile commands). **Fix**: keep `add_compile_options(-stdlib=libc++)` for cross-target ABI, suppress false-positive warning via `add_compile_options(-Wno-unused-command-line-argument)`. Per `AGENTS.md §7.2.7` exception clause applied (one flag, one toolchain artifact).
+- [x] **Tests** — `ProjectVPresentModeTests` (9 sub-tests, 100% pass): `TestPresentModeCycleIncludesAllThree`, `TestPresentModeCycleExcludesUnsupported`, `TestPresentModeCycleOnlyFifo`, `TestPresentModeCycleEmptyFallsBackToFifo`, `TestPresentModeCycleRespectsPriorityOrder`, `TestCycleAdvancesAndWrapsThreeMode`, `TestCycleAdvancesAndWrapsTwoMode`, `TestPresentModeCycleIndex`, `TestPresentModeCycleSize`. New test target в `tests/CMakeLists.txt:771-810`, header-only dependency.
+- [x] **`agent/decisions.md §30.2`** — V hotkey auto-detect + libc++ fix plan + обоснования.
+- [x] **`agent/memory.md §12.2`** — V hotkey history + libc++ warning fix + 4 lessons learned (auto-detect hardware > hardcode cycle, inline variables/functions для runtime observables, hardware-dependent toolchain flags don't remove, log vs HUD для togglable state).
+
+## V hotkey cycle walk fix (`2026-06-14` evening)
+
+- [x] **`BuildPresentModeCycle` preserve `g_active` across rebuilds** (`src/render/vulkan/VulkanSwapchain.hpp:180-220`). Оператор: «нажимаю на V, ничего не меняется» — 10 identical log lines `IMMEDIATE [cycle 2/2]`. Root cause: `BuildPresentModeCycle` unconditionally set `g_active = g_cycle.front()` (FIFO) on every rebuild. V hotkey calls `RecreateSwapchain` after each press → `CreateOrRecreateSwapchain` → `BuildPresentModeCycle` resets `g_active` → next press sees FIFO → advances to IMMEDIATE → reset. **Self-defeating state machine**. **Fix**: capture `previousActive` before rebuild; if still in new cycle, keep it; else (display hot-swap) fall back to highest-priority supported.
+- [x] **Tests** — 3 new sub-tests (`ProjectVPresentModeTests` 12 total, 100% pass): `TestPresentModeCyclePreservesActiveAcrossRebuild`, `TestPresentModeCycleFallsBackWhenActiveDropped`, `TestPresentModeCycleWalksAcrossRecreates` (operator's actual scenario: 4 V presses alternating FIFO ↔ IMMEDIATE). Pre-existing tests updated to **explicit reset pattern** (`(void)BuildPresentModeCycle({FIFO});` as first line) — inline-variable global state needs explicit reset, не assumed from previous test's final state.
+- [x] **`agent/decisions.md §30.3`** — preserve-`g_active` plan + 4 обоснования (capture-rebuild pattern, test interaction not just function, test order independence, self-defeating state machine anti-pattern).
+- [x] **`agent/memory.md §12.3`** — V hotkey cycle walk history + 4 lessons learned (capture previous state > unconditional reset, test interaction not just function, explicit reset pattern для inline-variable global state, self-defeating state machine anti-pattern).
+
 ---
 
 ## Pre-flight checklist per atomic-подзадача (per `AGENTS.md §7.2.6.1` + `§7.2.4`)

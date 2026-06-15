@@ -3,12 +3,9 @@ build
 docs/cpp-draft-main/
 docs/VulkanSDK-Linux-Docs-1.4.350.1
 problems/
-tests/fixtures/
 /minimax_proxy.py
 /pyproject.toml
 /uv.lock
 /compile_commands.json
 /.cache/
-Testing/Temporary/
-legacy/docs/tex/.tmp/
-commits_log.md
+.venv

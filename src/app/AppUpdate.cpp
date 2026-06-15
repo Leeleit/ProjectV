@@ -9,6 +9,7 @@
 #include "physics/PhysicsWorld.hpp"
 #include "render/ShadowProjection.hpp"
 #include "voxel/VoxelInteraction.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
 #include <array>
@@ -688,6 +689,56 @@ bool UpdateApp(
 		simulation->simulationAccumulatorSeconds += simulation->frameDeltaSeconds;
 	} else {
 		simulation->simulationAccumulatorSeconds = 0.0f;
+	}
+
+	// **Fluid CA tick (2026-06-14).** Mirrors the physics-
+	// accumulator pattern above but at a configurable rate
+	// (`SimulationState::fluidTickRateHz`, default 20 Hz).
+	// Lives here, not in `SDL_AppIterate` directly, so it
+	// inherits:
+	//   - **`effectivePaused` guard** — water does not
+	//     move when paused. The accumulator is zeroed on
+	//     pause so it doesn't "catch up" the next frame.
+	//   - **`timeScale` scaling** — `frameDeltaSeconds`
+	//     is already multiplied by `timeScale` at line 669,
+	//     so the CA runs at `fluidTickRateHz * timeScale`
+	//     ticks/sec. At timeScale=0.5 (one `[` press), 10
+	//     ticks/sec; at timeScale=0.0, 0 ticks/sec. The
+	//     `[`/`]` hotkeys already do the right thing.
+	//   - **`frameStepRequested`** — when the operator
+	//     presses `\` while paused, `frameStepRequestedNow`
+	//     is true and `effectivePaused` becomes false, so
+	//     exactly one CA tick runs. (Same pattern as
+	//     physics.)
+	//
+	// The CA accumulator is separate from
+	// `simulationAccumulatorSeconds` so the CA rate is
+	// independent of the physics fixed step (60 Hz). A
+	// `fluidTickRateHz` of 20 means one CA tick per 3
+	// physics ticks, which is the right ratio for visible
+	// water "flow" without per-cell teleport.
+	//
+	// **Multiple ticks per frame**: the while-loop drains
+	// the accumulator in `1 / fluidTickRateHz` chunks, so
+	// a frame with a 1-second `frameDeltaSeconds` (e.g.
+	// timeScale=4.0, real-delta=250ms) will run
+	// `1.0 * 20 = 20` CA ticks. The
+	// `simulationStepsLastFrame` style cap (5 ticks) is
+	// intentionally **not** applied to the CA — fluid
+	// is purely visual, not gameplay-physics, and a 1-sec
+	// pause-unpause shouldn't drop 19 fluid ticks.
+	if (!effectivePaused && world->voxelWorld && simulation->fluidTickRateHz > 0.0f) {
+		simulation->fluidAccumulatorSeconds += simulation->frameDeltaSeconds;
+		const float fluidInterval = 1.0f / simulation->fluidTickRateHz;
+		while (simulation->fluidAccumulatorSeconds >= fluidInterval) {
+			simulation->fluidAccumulatorSeconds -= fluidInterval;
+			UpdateFluidCA(*world->voxelWorld);
+		}
+	} else if (effectivePaused) {
+		// On pause, drop the partial accumulator so the
+		// next unpaused frame doesn't immediately fire
+		// multiple ticks to "catch up".
+		simulation->fluidAccumulatorSeconds = 0.0f;
 	}
 
 	if (cameraCanUpdate) {

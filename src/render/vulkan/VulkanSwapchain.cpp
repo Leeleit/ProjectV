@@ -126,7 +126,17 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &fo
 // priority list so the engine always picks the
 // best *available* tear-resistance for the current
 // display rather than failing the swapchain create.
-VkPresentModeKHR g_preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+//
+// **2026-06-14:** `g_preferredPresentMode` and
+// `g_presentModeCycle` are now `inline` variables in
+// `VulkanSwapchain.hpp` (so the HUD's read-only
+// accessors can be header-only inlines without pulling
+// this TU into test targets). The `ChoosePresentMode`
+// / `CyclePreferredPresentMode` / `BuildPresentModeCycle`
+// functions below reference the inline variables
+// directly.
+using projectv::present_mode::g_active;
+using projectv::present_mode::g_cycle;
 
 static VkPresentModeKHR PickBestAvailablePresentMode(
 	const std::vector<VkPresentModeKHR> &presentModes,
@@ -147,16 +157,36 @@ static VkPresentModeKHR PickBestAvailablePresentMode(
 
 VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &presentModes)
 {
-	// Honour the operator's `V`-hotkey override; fall
-	// through to the standard MAILBOX-then-FIFO
-	// chain if the surface doesn't expose the
-	// requested mode.
-	if (g_preferredPresentMode != VK_PRESENT_MODE_FIFO_KHR) {
-		return PickBestAvailablePresentMode(presentModes, g_preferredPresentMode);
+	// **2026-06-14 fix.** Honour the operator's `V`-hotkey
+	// override for ALL three modes, not just the non-FIFO
+	// ones. The previous `if (g_preferredPresentMode !=
+	// FIFO)` branch silently fell through to a MAILBOX-
+	// first default chain whenever the operator cycled
+	// the mode back to FIFO, which on Linux/Wayland
+	// surfaces (or any surface that supports MAILBOX) meant
+	// V → "FIFO" actually returned MAILBOX — vsync never
+	// turned back on. The user reported this as "vsync
+	// слетает при постановке блока" because the swapchain
+	// recreates on block-induced re-renders re-entered
+	// `ChoosePresentMode` and re-picked MAILBOX. See
+	// `agent/decisions.md §30` and `agent/memory.md §12`
+	// (V-sync bug history).
+	if (g_active == VK_PRESENT_MODE_IMMEDIATE_KHR ||
+		g_active == VK_PRESENT_MODE_MAILBOX_KHR) {
+		return PickBestAvailablePresentMode(presentModes, g_active);
 	}
-	// Default chain: MAILBOX first (lower latency than
-	// FIFO under load), then FIFO as the always-
-	// available vsync-on fallback.
+	// Explicit FIFO request (operator chose V → "vsync on").
+	// Honour it even if the surface supports MAILBOX.
+	// FIFO is the only V-sync-capable present mode; if the
+	// surface doesn't expose it (Vulkan 1.4 spec: always
+	// supported per `VkPresentModeKHR` table), we fall back
+	// to MAILBOX so the engine never fails the swapchain
+	// create.
+	for (const VkPresentModeKHR mode : presentModes) {
+		if (mode == VK_PRESENT_MODE_FIFO_KHR) {
+			return mode;
+		}
+	}
 	for (const VkPresentModeKHR mode : presentModes) {
 		if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
 			return mode;
@@ -226,6 +256,18 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 		(support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
 
 	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
+	// **2026-06-14: build the runtime present-mode cycle
+	// here, before `ChoosePresentMode`.** The cycle is the
+	// data `CyclePreferredPresentMode` walks (instead of a
+	// hard-coded 3-state switch). Building it here means
+	// the cycle is always **fresh** — if the surface's
+	// support set changes (rare: only on display hot-swap
+	// or driver upgrade), the next swapchain create
+	// re-queries and rebuilds. `ChoosePresentMode` still
+	// reads `g_preferredPresentMode` directly (a single
+	// `VkPresentModeKHR`, set to the cycle's first element
+	// by `BuildPresentModeCycle`).
+	(void)BuildPresentModeCycle(support.presentModes);
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
 	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, platform->window);
 
@@ -595,25 +637,3 @@ bool RecreateSwapchain(
 	return true;
 }
 
-VkPresentModeKHR CyclePreferredPresentMode()
-{
-	// **V-sync toggle (`2026-06-13`).** Cycle through
-	// the three modes in order: IMMEDIATE → MAILBOX →
-	// FIFO → IMMEDIATE. IMMEDIATE first so the
-	// benchmark-mode operator (the most common case
-	// for `V`-hotkey use) lands on the no-cap mode
-	// after a single press from the default.
-	switch (g_preferredPresentMode) {
-	case VK_PRESENT_MODE_FIFO_KHR:
-		g_preferredPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-		break;
-	case VK_PRESENT_MODE_IMMEDIATE_KHR:
-		g_preferredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-		break;
-	case VK_PRESENT_MODE_MAILBOX_KHR:
-	default:
-		g_preferredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-		break;
-	}
-	return g_preferredPresentMode;
-}

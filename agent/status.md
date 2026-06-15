@@ -5,6 +5,7 @@ Short active snapshot on top of `TODO.md`; no roadmap duplication.
 Updated: `2026-06-14` — 4 КТ-документа сконвертированы в LaTeX (session-2026-06-13-kt-latex-r0, см. §19). 5 PDF в `docs/tex/`.
 Updated: `2026-06-14` — V-sync FIFO bug + CA pause/timeScale + 20Hz default (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up, см. `decisions.md §30.1`, `memory.md §12.1`). 3 fixes (V-sync explicit-FIFO, CA moved to `UpdateApp` w/ `effectivePaused`+`timeScale`, default 30→20Hz). 8 new CA sub-tests (24 total, 100% pass). Build green, ctest 13/13, smoke clean.
 Updated: `2026-06-14` — V hotkey auto-detect cycle + libc++ warning + HUD line (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up #2, см. `decisions.md §30.2`, `memory.md §12.2`). 4 fixes (auto-detect cycle from surface support, HUD `VSync <mode> (<idx>/<size>)` line, V hotkey log `[cycle idx/size]`, libc++ warning suppression). 9 new present-mode sub-tests (новый `ProjectVPresentModeTests`, 100% pass). Build green, ctest 14/14, smoke clean.
+Updated: `2026-06-14` — V hotkey cycle walk fix (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up #3, см. `decisions.md §30.3`, `memory.md §12.3`). 1 fix: `BuildPresentModeCycle` preserve `g_active` across rebuilds (cycle advance + `RecreateSwapchain` reset was self-defeating). 3 new sub-tests (12 total в `ProjectVPresentModeTests`, 100% pass). Build green, ctest 14/14, smoke clean.
 Updated: `2026-06-14` — Release presets r0 (session-2026-06-14-release-presets-r0, см. §21). 8 новых CMakePresets (linux-clang-release, windows-clang-release, +4 build/test варианта), root `CMakeLists.txt` +1 Release-блок (`-O3 -flto=thin -NDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`), `README_NEW.md` создан с нуля, `agent/decisions.md §4` +подсекция Release policy. linux-clang-release: configure 54s, build 137/137 green, ctest 13/13 (0.06s), smoke 6/6 captures, ELF 19MB (-73% vs 72MB debug).
 Updated: `2026-06-14` — Build config audit r0 (session-2026-06-14T11-29Z-build-config-audit-r0, см. §22). 5 buildPresets обновлены (3 debug × 17 targets, 2 release × 15 targets, 1 smoke × 1 unchanged) — A1 fix. `linux-clang-debug-tracy-profiler.PROJECTV_BUILD_TRACY_PROFILER: ON→OFF` (Linux Tracy UI не собирается из-за nlohmann_json target collision per `decisions.md §4` «tracy UI fix»). `build/linux-clang-debug-ci/` удалён (194M, per operator «удалить ci»). `build/linux-clang-debug-tracy-profiler/` сохранён (190M, per operator «tracy нужны»), re-configure green, ProjectV ELF 75.5MB. linux-clang-release ctest 14/14 (включая 14-й тест `ProjectVPresentModeTests` который я пропустил в первом проходе).
 
@@ -1004,7 +1005,9 @@ Refs: 90a45b4 (tremor fix attempt),
 
 **Windows:** presets готовы и JSON-valid, `cmake --list-presets` подтверждает `windows-clang-release` + `windows-clang-release-build` + `windows-clang-release-tests`. Оператор собирает на Windows-хосте: `cmake --preset windows-clang-release && cmake --build ... --preset windows-clang-release-build && ctest --test-dir build/windows-clang-release --output-on-failure`.
 
-**Commit plan (1 commit, pending operator confirmation per `AGENTS.md §7.2.4` + `§7.2.5`):**
+**Commit landed (`2026-06-14`, per operator «Коммить, разрешаю»):** SHA `6fe9201` — `build(cmake): conservative Release presets (linux-clang-release, windows-clang-release)`. Commit body per `§7.2.5` contract; full text in `git log -1 6fe9201`.
+
+**Commit plan (final, 1 commit per `AGENTS.md §7.2.4` + `§7.2.5`):**
 ```
 build(cmake): conservative Release presets (linux-clang-release, windows-clang-release)
 
