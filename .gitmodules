@@ -31,24 +31,9 @@
 [submodule "external/imgui"]
 	path = external/imgui
 	url = https://github.com/ocornut/imgui.git
-[submodule "external/glaze"]
-	path = external/glaze
-	url = https://github.com/stephenberry/glaze.git
 [submodule "external/meshoptimizer"]
 	path = external/meshoptimizer
 	url = https://github.com/zeux/meshoptimizer.git
-[submodule "external/RmlUi"]
-	path = external/RmlUi
-	url = https://github.com/mikke89/RmlUi.git
-[submodule "external/zstd"]
-	path = external/zstd
-	url = https://github.com/facebook/zstd.git
-[submodule "external/freetype"]
-	path = external/freetype
-	url = https://github.com/freetype/freetype.git
-[submodule "external/stdexec"]
-	path = external/stdexec
-	url = https://github.com/NVIDIA/stdexec.git
 [submodule "external/fmt"]
 	path = external/fmt
 	url = https://github.com/fmtlib/fmt.git
