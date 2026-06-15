@@ -60,12 +60,12 @@
     },
     {
       "name": "windows-clang-debug-tracy-profiler",
-      "displayName": "Windows Clang Debug + Tracy Profiler",
+      "displayName": "Windows Clang Debug + Tracy instrumentation (UI built separately)",
       "inherits": "windows-clang-debug",
       "cacheVariables": {
         "BUILD_TESTING": "OFF",
         "PROJECTV_ENABLE_TRACY": "ON",
-        "PROJECTV_BUILD_TRACY_PROFILER": "ON",
+        "PROJECTV_BUILD_TRACY_PROFILER": "OFF",
         "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
         "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk": "TRUE",
         "CPM_SOURCE_CACHE": "${sourceDir}/build/cpm-source-cache",
