@@ -1,5 +1,6 @@
 #include "audio/MusicDirectoryPath.hpp"
 
+#include "core/RepoRoot.hpp"
 #include "SDL3/SDL.h"
 
 #include <filesystem>
@@ -9,45 +10,7 @@ namespace projectv::audio {
 namespace {
 constexpr char kMusicDirectoryEnvVar[] = "PROJECTV_MUSIC_DIR";
 constexpr char kDefaultMusicDirectoryName[] = "music";
-constexpr char kRepoMarkerName[] = ".git";
-constexpr char kProjectMarkerName[] = "AGENTS.md";
-
-// **Walk up from `start` looking for the ProjectV
-// repo root.** The repo root is the first ancestor
-// directory that contains BOTH a `.git/` (or
-// `.git` file for submodule checkouts) AND an
-// `AGENTS.md` (a ProjectV-specific file). Returns
-// the empty path when no repo root is found. The
-// "both markers" check is more specific than
-// `.git` alone (which catches other VCS worktrees
-// in the file system) and more reliable than
-// `CMakeLists.txt` alone (which the build tree also
-// contains).
-std::filesystem::path FindRepoRootFromPath(const std::filesystem::path &start)
-{
-	std::error_code ec;
-	std::filesystem::path current = std::filesystem::absolute(start, ec);
-	if (ec) {
-		current = start;
-	}
-	while (!current.empty()) {
-		const std::filesystem::path gitPath = current / kRepoMarkerName;
-		const std::filesystem::path agentsPath = current / kProjectMarkerName;
-		const bool hasGit = std::filesystem::exists(gitPath, ec);
-		const bool hasAgents = std::filesystem::exists(agentsPath, ec);
-		if (hasGit && hasAgents && !ec) {
-			return current;
-		}
-		const std::filesystem::path parent = current.parent_path();
-		if (parent == current) {
-			// Reached filesystem root.
-			break;
-		}
-		current = parent;
-	}
-	return {};
-}
-} // namespace
+}  // namespace
 
 std::filesystem::path GetMusicDirectoryPath()
 {
@@ -78,9 +41,8 @@ std::filesystem::path GetMusicDirectoryPath()
 	// run button, CI, etc.).
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
-		const std::filesystem::path repoRoot = FindRepoRootFromPath(basePath);
-		if (!repoRoot.empty()) {
-			return repoRoot / kDefaultMusicDirectoryName;
+		if (auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
+			return *repoRoot / kDefaultMusicDirectoryName;
 		}
 	}
 
@@ -131,4 +93,4 @@ std::filesystem::path GetMusicDirectoryPath()
 	return std::filesystem::path(kDefaultMusicDirectoryName);
 }
 
-} // namespace projectv::audio
+}  // namespace projectv::audio

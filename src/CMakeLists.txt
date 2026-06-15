@@ -124,6 +124,7 @@ target_sources(ProjectV PRIVATE
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
         core/RuntimeProbe.cpp
+        core/RepoRoot.cpp
         core/ShaderIO.cpp
         core/Types.cpp
         debug/DebugHud.cpp

@@ -1,7 +1,24 @@
 param(
     [string]$ExePath = "$PSScriptRoot\..\..\build\windows-clang-debug\bin\ProjectV.exe",
     [int]$StartupTimeoutMs = 15000,
-    [int]$ShutdownTimeoutMs = 10000
+    [int]$ShutdownTimeoutMs = 10000,
+    # **LookDev capture contract (`2026-06-15`).**
+    # When `-CaptureDir` is supplied, set the same
+    # `PROJECTV_SCREENSHOT_DIR` / `PROJECTV_START_CAMERA_*` /
+    # `PROJECTV_LOOKDEV_CAPTURE_*` env vars that the Linux
+    # `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` does, then
+    # verify that the expected number of `.bmp` + `.txt` files
+    # landed in `$CaptureDir` after the process exits. Mirrors
+    # the `windows-clang-debug/lookdev-captures/2026-...-*/`
+    # artifacts that previously had to be regenerated manually
+    # (per `agent/memory.md §1`).
+    [string]$CaptureDir = "",
+    [string]$Views = "FINAL SHDW CSM CTSH AOCC LOCL",
+    [string]$CameraPosition = "",
+    [string]$CameraLook = "",
+    [int]$WarmupFrames = 30,
+    [int]$IntervalFrames = 2,
+    [switch]$QuitAfterCapture
 )
 
 Set-StrictMode -Version Latest
@@ -10,6 +27,34 @@ $ErrorActionPreference = "Stop"
 $resolvedExePath = [System.IO.Path]::GetFullPath($ExePath)
 if (-not (Test-Path -LiteralPath $resolvedExePath)) {
     throw "ProjectV executable not found: $resolvedExePath"
+}
+
+# **LookDev capture env-var setup (`2026-06-15`).**
+# Same vars as the Linux bash script. Resolve to absolute
+# paths so the operator can pass relative CaptureDir from
+# anywhere; the engine's `src/render/ScreenshotCapture.cpp`
+# uses SDL_GetBasePath for the file path so an absolute
+# path here is the safe default.
+$CaptureMode = -not [string]::IsNullOrWhiteSpace($CaptureDir)
+if ($CaptureMode) {
+    $CaptureDir = [System.IO.Path]::GetFullPath($CaptureDir)
+    if (-not (Test-Path -LiteralPath $CaptureDir)) {
+        New-Item -ItemType Directory -Path $CaptureDir -Force | Out-Null
+    }
+    $env:PROJECTV_SCREENSHOT_DIR = $CaptureDir
+    if (-not [string]::IsNullOrWhiteSpace($CameraPosition)) {
+        $env:PROJECTV_START_CAMERA_POSITION = $CameraPosition
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CameraLook)) {
+        $env:PROJECTV_START_CAMERA_LOOK = $CameraLook
+    }
+    $env:PROJECTV_LOOKDEV_CAPTURE_VIEWS = $Views
+    $env:PROJECTV_LOOKDEV_CAPTURE_WARMUP_FRAMES = "$WarmupFrames"
+    $env:PROJECTV_LOOKDEV_CAPTURE_INTERVAL_FRAMES = "$IntervalFrames"
+    if ($QuitAfterCapture) {
+        $env:PROJECTV_LOOKDEV_CAPTURE_QUIT = "1"
+    }
+    Write-Host "LookDev capture: dir=$CaptureDir views=$Views"
 }
 
 Add-Type @"
@@ -123,6 +168,25 @@ try {
     }
 
     Write-Host "ProjectV runtime smoke passed."
+
+    # **LookDev capture file verification (`2026-06-15`).**
+    if ($CaptureMode) {
+        $expectedCount = ($Views -split '[ ,|]+' | Where-Object { $_ -ne '' }).Count
+        $bmpFiles = Get-ChildItem -LiteralPath $CaptureDir -Filter '*.bmp' -File -ErrorAction SilentlyContinue
+        $txtFiles = Get-ChildItem -LiteralPath $CaptureDir -Filter '*.txt' -File -ErrorAction SilentlyContinue
+        Write-Host "LookDev capture verification: dir=$CaptureDir"
+        Write-Host "  expected views : $expectedCount"
+        Write-Host "  found .bmp     : $($bmpFiles.Count)"
+        Write-Host "  found .txt     : $($txtFiles.Count)"
+
+        if ($bmpFiles.Count -lt $expectedCount) {
+            throw "LookDev capture: expected at least $expectedCount .bmp files, found $($bmpFiles.Count)"
+        }
+        if ($txtFiles.Count -lt $expectedCount) {
+            throw "LookDev capture: expected at least $expectedCount .txt sidecar files, found $($txtFiles.Count)"
+        }
+        Write-Host "LookDev capture verification passed."
+    }
 }
 finally {
     if ($process -and -not $process.HasExited) {
