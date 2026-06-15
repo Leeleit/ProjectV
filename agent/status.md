@@ -1119,3 +1119,23 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 | ~~`linux-clang-debug-ci`~~ | ~~194M~~ | — | — | ❌ **removed** per operator «удалить ci» |
 
 **Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.
+
+## §23. Agent protocol rewrite r0 — `session-2026-06-15T15:00Z-agent-protocol-rewrite-r0` (open → close по новым правилам)
+
+**Оператор явно попросил переписать протокол**: auto-commit + auto-close, плюс явно зафиксировать что `agent/*` = shared infra. Закреплено в `AGENTS.md` §7.2.8 (новый), §7.3.1 (новый), §8.1 (rewrite). 3 файла / +136 / -37 строк.
+
+**Ключевые поведенческие изменения (для следующих сессий):**
+
+- **`type=fix` ≠ auto-commit.** Per `AGENTS.md §7.3.1`, фиксы ждут явного operator confirm что фикс работает. `feat` / `refactor` / `perf` / `docs` / `test` / `build` / `chore` / `revert` — auto.
+- **Auto-close по умолчанию.** После успешного commit — close routine (5 шагов) автоматически. Keep-open: multi-commit sub-plan / operator next-step / `continues: <reason>`.
+- **`agent/*` = shared infra.** Конкурентный edit разрешён, не claim'ить. APPEND в свою секцию, не стирай чужое. Per `AGENTS.md §7.2.8`.
+- **Destructive не трогаем.** `rebase` / `push --force` / `reset --hard` / `revert` / `branch -D` / network publish / `sudo` / `rm -rf` — **всегда** operator confirm.
+- **Edge cases → `open` + `BLOCKED: <gate>`.** Gate fail / commit fail / scope collision / build broken — сессия остаётся `open`, retry после фикса.
+
+**Транзишн к новым правилам:** эта правка идёт по **старому** §1 (явная команда + draft approved). После неё новый §1.3 отменяет draft-approval loop для будущих правок AGENTS.md.
+
+**Build state:** не запускаю — change чисто в `AGENTS.md` + `agent/*`, code не тронут, baseline preserved. 3 файла / +136 / -37 строк (per `git diff --stat`).
+
+**Verification (static):** `git diff HEAD AGENTS.md` — §1.3 / §7.2.4 / §7.2.5 / §7.2.6 (hub-list + active-sessions note) / §7.2.8 (новый) / §7.3.1 (новый) / §8 invariant 2 / §8.1 rewrite / §9 DoD + pre-commit gate. Cross-refs: §7.2.8 ↔ §7.2.6 hub-список; §7.3.1 ↔ §7.2.6, §7.2.8; §8.1 ↔ §7.3.1, §7.2.6. Без orphan rules.
+
+**Сессия:** `status: open` сейчас, после commit → auto-close (move в «Закрытые сессии», `closed-at` + `commit-hash`). Эта сессия — сама пример новых правил в действии.

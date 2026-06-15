@@ -1739,3 +1739,25 @@ Per `AGENTS.md §7.2.4` и `§7.2.6.1`:
 - **«Self-defeating state machine»** — anti-pattern. Cycle advance + reset на same trigger = no-op. **Detection**: function A advances state, function B (called by A's caller) resets state, no visible change. **Fix**: refactor B to not reset (preserve previous), or A to not call B. **Rule**: state-machine transitions should be **monotonic** (no rollback unless explicit operator action).
 
 **Cross-refs:** `agent/decisions.md §30.3` (preserve-`g_active` plan), `src/render/vulkan/VulkanSwapchain.hpp:180-220` (preserve logic), `tests/PresentModeTests.cpp:281-415` (3 new sub-tests + explicit-reset pattern).
+
+## 10.27 Agent protocol rewrite: auto-commit + auto-close + shared `agent/` files (`2026-06-15`)
+
+Оператор явно попросил переписать протокол: «git commit делать на автомате, а не спрашивать оператора, всегда думать, что после коммита сессия завершается (то есть закрывать сессию в active-sessions, записывать в служебные файлы всё и т.д.), но быть готовым не завершить её». Plus: «файлы в agent общие, что все их могут менять одновременно, а то были случаи, когда агент боялся в status что-то написать». Закреплено в `AGENTS.md` §7.3.1 (pre-commit gate) + §8.1 (auto-close routine + keep-open criteria) + §7.2.8 (shared `agent/` files). 3 файла / +136 / -37 строк.
+
+**Поведенческие правила, выученные из этой правки:**
+
+- **`type = fix` ≠ auto-commit.** Per `AGENTS.md §7.3.1`, коммиты типа `fix` ждут **явного operator confirm** что фикс работает (visual / ctest / repro / domain check). Причина: agent склонен коммитить фиксы, которые не проверены в продакшен-условиях. Все прочие типы (`feat` / `refactor` / `perf` / `docs` / `test` / `build` / `chore` / `revert`) — auto при прохождении §7.3.1 gate.
+- **Auto-close ≠ обязательное закрытие.** `AGENTS.md §8.1` ввёл keep-open criteria: (1) multi-commit sub-plan (e.g. «Tier 0.A → 0.B → 0.C») — сессия живёт через sub-commits; (2) operator next-step в последнем сообщении той же подзадачи; (3) явный `continues: <reason>` marker. Срабатывание → `notes: held-open: <criterion>`. Default = закрыть.
+- **Edge cases → `open` + `BLOCKED`.** Commit fail / hook reject / scope collision / build broken / gate fail → сессия остаётся `open`, в `notes` явно какой gate заблокировал. Retry после фикса. Это позволяет другой сессии (или оператору) видеть, что произошло, без потери uncommitted work.
+- **Destructive не трогаем.** `git rebase` / `push --force` / `reset --hard` / `revert` / `branch -D` / network publish / sudo / `rm -rf` unverified — **всегда** operator confirm, не auto. Auto-commit ≠ auto-publish. Per `AGENTS.md §7.2.2` + `§7.2.4` (без изменений).
+- **`agent/*` = shared infra, не hub.** `AGENTS.md §7.2.8` (новый): все файлы в `agent/` (active-sessions.md, status.md, memory.md, decisions.md, session-checklist.md) — общая инфраструктура, любая активная сессия может писать параллельно. Hub-файлы (которых избегать при parallel work) — `TODO.md`, `AGENTS.md`, shared shader structs, корневой `CMakeLists.txt`. Раньше `agent/status.md` часто claim'ился «своим scope» (потому что не было правила), теперь — **APPEND-only в свою секцию, не стирай чужое**. Это решает боль «агент боялся в status что-то написать».
+- **Транзишн AGENTS.md:** эта правка (commit 2026-06-15) — последняя по **старому** §1 (явная команда + draft approved). После неё новый §1.3 отменяет draft-approval loop: показываешь diff-черновик + применяешь сразу, commit auto per §8.1.
+
+**Примеры auto-close поведения (для следующих сессий):**
+
+- Single-commit subtask: сделать → §7.3.1 gate green → commit → close routine (5 шагов) → `status: closed`, перенос в «Закрытые сессии». Один commit = одна закрытая запись.
+- Multi-commit sub-plan: первый commit → `notes: held-open: multi-commit-plan: 1/3` → следующие commits → последний commit → close. Все commits в одной `open` записи с разными SHA в `commit-hash` (или новой записью на каждый sub-commit — TBD по решению следующей сессии).
+- `fix` commit без operator confirm: §7.3.1 gate fail → `notes: BLOCKED: fix-confirm` → ждать подтверждения. Когда придёт подтверждение — повторить commit flow.
+- Build broken: commit не выполняется → `notes: BLOCKED: build` → fix code → retry.
+
+**Cross-refs:** `AGENTS.md §1.3` (новый — drop draft-approval), `§7.2.4` (auto-commit ban удалён), `§7.2.5` (auto-execute note), `§7.2.8` (новый — shared `agent/` files), `§7.3.1` (новый — pre-commit gate), `§8 invariant 2` (commit auto-execute), `§8.1` (rewrite — auto-close routine), `§9` (DoD + pre-commit gate), `agent/active-sessions.md` Контракт §2 + format table (`held-open`, `multi-commit-plan` fields), `agent/session-checklist.md` «Post-commit close-routine».

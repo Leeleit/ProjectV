@@ -16,14 +16,18 @@ Append-only ledger активных и недавно завершённых AI-
 
 1. **При старте сессии** — дописать запись со статусом `open` в секцию
    «Активные сессии» ниже.
-2. **При завершении сессии** — обновить **свою** запись: статус → `closed`,
-   проставить `closed-at` и `commit-hash` (или `uncommitted` / `aborted`
-   с пояснением), затем перенести в секцию «Закрытые сессии».
-3. **При abort** — пометить `aborted` + причина, не удалять запись.
+2. **При auto-close** (после успешного `git commit` per `AGENTS.md §8.1`) — обновить
+   **свою** запись: `status: open → closed`, проставить `closed-at` (ISO 8601 UTC) и
+   `commit-hash` (SHA), затем перенести в секцию «Закрытые сессии».
+   При manual hold-open (см. `AGENTS.md §8.1` keep-open criteria) — запись остаётся
+   `open`, в `notes` добавляется `held-open: <criterion>` или `multi-commit-plan: <step>/<total>`.
+3. **При abort** — пометить `aborted` + причина, не удалять запись. Safety-net patch в
+   `/tmp/` оставить с `POST-COMMIT <sha>` footer (per §8.1 п.5).
 
-См. также `agent/session-checklist.md` (секции «Старт» / «Завершение»).
+См. также `agent/session-checklist.md` (секции «Старт» / «Post-commit close-routine»).
 Параллельный запуск нескольких сессий с **пересекающимся** scope —
-аномалия, требует arbitration через пользователя (§7.2.6).
+аномалия, требует arbitration через пользователя (§7.2.6). Файлы `agent/*` (кроме
+`AGENTS.md`) — **shared infrastructure** (§7.2.8), не claim'ить эксклюзивно.
 
 ---
 
@@ -42,6 +46,8 @@ Append-only ledger активных и недавно завершённых AI-
 | `closed-at` | (только для `closed`/`aborted`) Время завершения в ISO 8601 (UTC) |
 | `commit-hash` | (только для `closed`) SHA коммита, закрывшего работу; или `uncommitted` |
 | `notes` | Свободное примечание (конфликты, blockers, cross-refs) |
+| `held-open` | (опц.) Если сессия не закрыта после успешного commit — какой keep-open criterion сработал (`multi-commit-plan` / `operator-next-step` / `continues:<reason>`) |
+| `multi-commit-plan` | (опц.) `<step>/<total>` для multi-commit сабтасков (e.g. `1/3`); обязательно, если в `scope` прописана последовательность sub-commits |
 
 **Append-only правила:**
 
@@ -50,12 +56,31 @@ Append-only ledger активных и недавно завершённых AI-
   лучше создать новую запись с `supersedes: <id>`.
 - Не удалять закрытые записи из этого файла — при необходимости
   переносить в `legacy/docs/archive/agent-sessions/`.
+- Свою `open` запись можно править по ходу работы (добавлять notes, обновлять
+  scope/files-touched-intent). Чужие записи — read-only.
 
 ---
 
 ## Активные сессии (status: open)
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only. -->
+
+### session-2026-06-15T15-00Z-agent-protocol-rewrite-r0
+
+- **id:** `2026-06-15T15:00Z-agent-protocol-rewrite-r0`
+- **started-at:** 2026-06-15T15:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Переписать протокол auto-commit + auto-close.** Per operator «git commit делать на автомате, а не спрашивать оператора, всегда думать, что после коммита сессия завершается, но быть готовым не завершить её». Конкретные правила (зафиксировано при планировании): (1) `feat`/`refactor`/`perf`/`docs`/`test`/`build`/`chore`/`revert` — auto при §7.3.1 gate; (2) `fix` — требует **явного operator confirm** что фикс работает (visual / ctest / repro); (3) destructive ops (rebase, push, force-push, reset --hard, revert, branch delete, network publish, sudo, rm -rf unverified) — **всегда** confirm; (4) keep-open: multi-commit sub-plan / operator next-step / `continues: <reason>` marker; (5) edge cases (gate fail / commit fail / scope collision / build broken) → сессия `open` + `notes: BLOCKED: <gate>`. +**доп. правило** от оператора: файлы в `agent/` — shared infrastructure, любая активная сессия может писать в них параллельно, не claim'ить эксклюзивно.
+- **files-touched-intent:**
+  - **EDIT:** `AGENTS.md` (§1.3 — drop draft-approval loop для будущих правок; §7.2.4 — убрать auto-commit ban, pointer на §7.3.1; §7.2.5 — auto-execute note; §7.2.6 — «файлы-хабы» уточнить что `agent/*` = shared infra, не hub; **NEW §7.2.8** — Shared `agent/` files rule; §7.3.1 NEW — pre-commit gate; §8 invariant 2 — commit auto-execute; §8.1 REWRITE — auto-close routine + keep-open criteria + edge cases; §9 — pre-commit gate в Definition of done)
+  - **EDIT:** `agent/active-sessions.md` (header Контракт §2 — auto-close flow; format table — добавить `held-open` + `multi-commit-plan` опц. поля; append-only правила — свою запись можно править по ходу работы)
+  - **EDIT:** `agent/session-checklist.md` («Завершение сессии» → «Post-commit close-routine» — auto-fire после commit, +4 пункта про active-sessions / safety-net / keep-open / BLOCKED retry)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (this entry + close после commit), `agent/memory.md §10.27` (новый — протокол-rewrite lesson), `agent/status.md` (snapshot)
+  - **НЕ ТРОГАЮ** (out of scope per plan): `TODO.md`, `decisions.md`, `legacy/`, `docs/`, `external/`, `src/`, `tests/`, корневой `CMakeLists.txt`, `CMakePresets.json`, существующие 8+ `status: open` записи в active-sessions.md (backfill — отдельная подзадача)
+- **status:** open
+- **notes:** **Per new rules (§8.1 auto-close)**: после успешного commit — сессия закрывается автоматически (move в «Закрытые сессии», проставить `closed-at` + `commit-hash`, добавить POST-COMMIT footer в safety-net patch). Эта сессия — сама пример новых правил в действии. **Pre-flight per §7.2.4 + §7.3.1**: (1) safety-net patch сохранён `/tmp/opencode/projectv-protocol/before_agent_protocol_rewrite_20260615T1500Z.patch` (25 KB, 297 строк); (2) `git status -uall` чист кроме моих 3 файлов (нет чужих uncommitted в scope-collision); (3) commit type = `chore` (не `fix`), gate auto-commit применим; (4) build/test не запускаю — change чисто в `agent/*` + `AGENTS.md` (no code touched, baseline preserved per §6 anti-duplication / §10 «AGENTS.md — обычный коммит»). **Транзишн к новым правилам**: эта правка идёт по **старому** §1 (явная команда + draft approved), per operator «по старым». После применения — будущие правки AGENTS.md тоже auto-коммитятся. **Verification (static)**: `git diff --stat HEAD` показывает 3 файла / +136 / -37 строк. Cross-refs: §1.3 → §8.1, §7.3.1 (new), §7.2.8 (new), §7.2.6 hub-список (обновлён).
 
 ### session-2026-06-14T11-29Z-build-config-audit-r0
 

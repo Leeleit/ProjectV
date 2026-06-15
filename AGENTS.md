@@ -8,10 +8,11 @@
 ## 1. Мета — как менять этот документ
 
 1. Этот файл — **стабильный**, а не «неизменяемый»: история правок ведётся в git.
-2. Изменить его можно **только после явного согласия пользователя** в текущей сессии. Правка кода, даже если она
+2. Изменить его можно **только по явной команде пользователя** в текущей сессии. Правка кода, даже если она
    противоречит текущему AGENTS.md, **не даёт** права автоматически править AGENTS.md.
-3. Перед изменением — выписать пользователю diff-черновик (что добавится, что удалится, что изменится) и дождаться
-   подтверждения. Не использовать `write_to_file` / `replace_in_file` до подтверждения.
+3. Перед изменением — показать diff-черновик в чате (что добавится / что удалится / что изменится) и применить сразу.
+   Commit идёт как обычный код (auto по §8.1, pre-commit gates §7.3.1). Явная команда пользователя в текущей сессии
+   остаётся обязательным триггером — draft-approval loop больше не требуется.
 4. Любая правка AGENTS.md — это **обычный коммит** с commit message по контракту §7.2.5.
 5. Не дублировать содержимое AGENTS.md в `agent/`, `docs/`, `TODO.md` — см. §6 (anti-duplication).
 
@@ -151,7 +152,7 @@ Tactical rules (verification policy, smoke policy, tracy build policy, warning-c
 - `git reset --hard` для отката к **прошлому** состоянию (для текущего unstaged — см. ниже).
 - `git revert` существующего коммита, не упомянутого в задаче.
 - `git push --force` в любой remote.
-- `git commit` без явного текстового подтверждения пользователя в текущем диалоге.
+- `git commit` — см. §7.3.1 / §8.1 (auto при выполнении pre-commit gates; `type=fix` требует operator confirm).
 - `git push` без явного подтверждения.
 - Удаление веток: `git branch -D`, `git push origin --delete`.
 
@@ -171,7 +172,7 @@ Tactical rules (verification policy, smoke policy, tracy build policy, warning-c
     5. Только после подтверждения — destructive операция.
 - Сравнение с HEAD без деструктивного удаления: `git diff HEAD -- <path>`, `git show HEAD:<path>`,
   `git diff HEAD -- <path> > /tmp/head_orig.patch` — затем вручную отобрать, что мержить.
-- Не выполнять `git commit` или любые автоматические скрипты фиксации без явного текстового подтверждения.
+- (Удалено: единый auto-commit gate перенесён в §7.3.1.)
 
 #### 7.2.5 Commit message contract
 
@@ -207,6 +208,9 @@ stair-steps.
 Refs: agent/memory.md §10.11
 ```
 
+**Auto-execute:** commit выполняется автоматически при выполнении pre-commit gates (§7.3.1); `type=fix` требует
+operator confirm (что фикс работает — visual / ctest / repro). §7.2.5 contract остаётся обязательным.
+
 #### 7.2.6 Multi-agent concurrent work policy
 
 Над проектом может работать **более одного агента одновременно**: несколько параллельных сессий, разработчик +
@@ -236,9 +240,10 @@ Refs: agent/memory.md §10.11
   primary signal для arbitration при конфликте scope.
 - **Файлы-хабы (high-contention)**, которых следует избегать при параллельной работе без явной договорённости:
   `TODO.md`, `AGENTS.md` (см. §1), shader headers с shared structs (`SceneLightingBuffer`, `GraphicsPushConstants`),
-  корневой `CMakeLists.txt`.
-- **При завершении сессии** (§8) — **обязательно** обновить `agent/active-sessions.md` (закрыть свою запись) **до**
-  предложения коммита. Иначе другой агент не увидит, что scope освободился.
+  корневой `CMakeLists.txt`. Файлы `agent/*` (кроме самого `AGENTS.md`) — **не** хабы, а shared infra
+  (см. §7.2.8): конкурентный edit разрешён, не claim'ить эксклюзивно.
+- **При завершении сессии** (§8.1) — **обязательно** обновить `agent/active-sessions.md` (закрыть свою запись) **сразу
+  после** commit. Иначе другой агент не увидит, что scope освободился.
 
 **Conflict resolution (merge conflict / overwrite уже случился):**
 
@@ -276,6 +281,43 @@ Refs: agent/memory.md §10.11
 способ «починить» проблему. Если проблема реална — чинить код.
 Если это DFA/IDE false-positive, можно заглушить, но только точечно и только нужную строчку.
 
+#### 7.2.8 Shared `agent/` files
+
+Файлы в `agent/` (за исключением самого `AGENTS.md` — он подчиняется §1) — это **общая
+инфраструктура**, а не «claimed scope» одной сессии. Любая активная сессия **может** писать в них
+по ходу работы, **не дожидаясь** завершения других сессий и **не арбитрируя scope** через
+пользователя.
+
+| Файл | Назначение | Правило конкурентного edit |
+|---|---|---|
+| `agent/active-sessions.md` | Ledger активных/закрытых сессий | Edit **только своей** записи; чужие записи — read-only. См. header файла. |
+| `agent/status.md` | Snapshot текущего состояния | APPEND новая секция (следующий номер `§N`) или UPDATE **своей** секции. Не стирай чужую секцию. |
+| `agent/memory.md` | Долговечные факты / лимиты / run-time observations | APPEND новый `§N`; не переписывай чужие секции retroactively. |
+| `agent/decisions.md` | Архитектурные договорённости | APPEND новый `§N`; старое решение — immutable, новое может `supersede:` старое (явная ссылка). |
+| `agent/session-checklist.md` | Чеклист старта/завершения | Read-only contract; менять только при изменении протокола. |
+| `AGENTS.md` | Stable protocol doc | По §1 — отдельный contract, не shared. |
+
+**Главное правило:** если у тебя в `git status -uall` уже есть чужие uncommitted изменения
+в `agent/status.md` или `agent/memory.md` — **это нормально**. Ты просто пишешь **в свою** секцию,
+не делаешь `git checkout -- <file>` и не перетираешь чужие правки. Если видишь, что твоя
+секция уже частично занята (другая активная сессия тоже обновляет) — перейди в `notes` и явно
+скоррелируй, а не делай `git pull`/`merge` через агента.
+
+**Что НЕ делать:**
+
+- Перетирать чужие uncommitted изменения в `agent/*` под предлогом «освежить» или
+  «привести в порядок» — это мог быть прогресс, ещё не дошедший до commit (см. `agent/memory.md
+  §10.11`).
+- Делать `git checkout -- agent/status.md` чтобы «откатить свой detour», если в файле есть
+  чужие правки.
+- Claim'ить `agent/status.md` целиком как «свой scope» — это shared инфраструктура.
+- Удалять safety-net patch'и других сессий из `/tmp/`.
+
+**Связь с §7.2.6:** файлы-хабы, которых **следует избегать** при параллельной работе без явной
+договорённости — `TODO.md`, `AGENTS.md` (см. §1), shader headers с shared structs
+(`SceneLightingBuffer`, `GraphicsPushConstants`), корневой `CMakeLists.txt`. `agent/*` (кроме
+самого `AGENTS.md`) — **не** hub, а shared infra.
+
 ### 7.3 Verification (закрытие подзадачи)
 
 Tactical verification rules (build/test policy, smoke policy, tracy build policy, warning-cleanup policy) живут в
@@ -294,6 +336,28 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
 - Checked-in `Problems/*.xml` — это hint, не source of truth. Перед warning cleanup — регенерировать `Problems/`. Строки
   в XML устаревают за один refactor pass.
 
+#### 7.3.1 Pre-commit gate
+
+Перед `git commit` (auto-flow по §8.1) агент обязан проверить:
+
+1. **§7.2.5 message готов** — type, scope (опц.), short summary, body, Refs.
+2. **Scope discipline** — `git status -uall` не содержит чужих uncommitted файлов вне моего
+   `files-touched-intent` (см. §7.2.6, §7.2.8). При наличии — arbitration через оператора или
+   сессия остаётся `open` с `notes: BLOCKED: scope-collision`.
+3. **Type-dependent gate:**
+   - `type = fix` — обязательное **явное подтверждение оператора** что фикс работает
+     (visual verify, ctest-сценарий, repro, или иной domain check). Без confirm — сессия
+     `open`, `notes: BLOCKED: fix-confirm`. **Причина:** agent склонен коммитить фиксы,
+     которые не проверены в продакшен-условиях (visual / repro).
+   - все прочие type (`feat`, `refactor`, `perf`, `docs`, `test`, `build`, `chore`, `revert`)
+     — auto.
+4. **Destructive операции** (rebase, push, force-push, reset --hard, revert, branch delete, network
+   publish, sudo, rm -rf unverified, и т.д.) — **всегда** требуют operator confirm, не auto.
+   См. §7.2.2 / §7.2.4. Pre-commit gate про auto-commit, не про эти операции.
+
+При непрохождении gate — commit не выполняется, сессия `open`, в `notes` фиксируется какой gate
+заблокировал. Edge cases (commit fail / hook reject / параллельный агент / build не зелёный) — см. §8.1.
+
 ### 7.4 Synchronization (sync с документами)
 
 После изменения кода:
@@ -309,42 +373,52 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
 ## 8. Session-end protocol
 
 Перед принудительным перезапуском сессии: см. `agent/session-checklist.md` →
-секция «Завершение сессии». Этот документ фиксирует только два **обязательных инварианта**:
+секция «Post-commit close-routine». Этот документ фиксирует только два **обязательных инварианта**:
 
 1. **Код либо чистый, либо uncommitted work сохранён** в `/tmp/*.patch` или `git stash` с
    описательным именем (см. §7.2.4).
-2. **Commit предложен пользователю** в виде, удовлетворяющем §7.2.5, но не выполнен
-   без явного подтверждения.
+2. **Commit выполнен автоматически** при выполнении pre-commit gates (§7.3.1); §7.2.5 contract
+   применяется. Сразу после успешного commit запускается close-routine (см. §8.1).
 
 Всё остальное (TODO.md, status.md, memory.md, decisions.md) обновляется по необходимости
 из `session-checklist.md`, а не как ритуал.
 
-### 8.1. Кто закрывает сессию (важно)
+### 8.1. Auto-close после commit
 
-Сессия живёт в `agent/active-sessions.md` **до явной команды оператора**. Агент **не**:
+Сессия **по умолчанию** закрывается автоматически сразу после успешного commit. Manual hold-open
+возможен только при выполнении одного из keep-open критериев (см. ниже).
 
-- переносит свою запись в секцию «Закрытые сессии»;
-- выставляет `status: closed`, `closed-at`, `commit-hash`;
-- формирует финальный `git commit` / `git commit --amend` (см. §7.2.5 — commit **предлагается**, но не выполняется);
-- удаляет safety-net patch из `/tmp/`;
-- «закрывает на себе» задачу без подтверждения.
+**Close-routine (5 шагов, выполняется последовательно):**
 
-Даже если ассистент уверен, что работа завершена, build green, ctest 6/6 — без слов оператора
-«закрой сессию» / «закоммить» / «готово» сессия остаётся `open`. Это касается и случая, когда
-оператор ушёл спать / офлайн: **ждать**, а не «закрыть на автомате».
+1. `git rev-parse HEAD` → сохранить SHA в `commit-hash`.
+2. `agent/active-sessions.md`: `status: open → closed`, проставить `closed-at` (ISO 8601), `commit-hash`,
+   перенести запись из «Активные сессии» в «Закрытые сессии» (append-only ledger, см. header файла).
+3. `agent/status.md` — обновить snapshot (§7.4).
+4. `agent/memory.md` / `decisions.md` / `TODO.md` — по §7.4.
+5. Safety-net patch в `/tmp/before_*_<ts>.patch` — **оставить**, добавить footer
+   `POST-COMMIT <sha>` (теперь это fallback для следующей сессии, а не «uncommitted work»).
 
-Когда ассистент считает, что сессия завершена, он:
+**Keep-open критерии** (любой из → сессия остаётся `open`):
 
-1. Обновляет запись в `agent/active-sessions.md` (notes/commits) **с пометкой «готово к закрытию»**.
-2. Сообщает пользователю, что сессия готова к закрытию, и **ждёт команды**.
-3. Не предлагает автоматическое закрытие в каждом ответе — одно подтверждение пользователя, не ритуал.
+- **Multi-commit sub-plan.** В `scope` явно прописана последовательность sub-commits
+  (e.g. «Tier 0.A → 0.B → 0.C») и не все sub-commits сделаны. Marker в active-sessions:
+  `multi-commit-plan: <step>/<total>`.
+- **Operator next-step.** В последнем сообщении оператора есть явный next-step той же подзадачи
+  («теперь сделай X», «дальше Y»). Agent продолжает.
+- **`continues: <reason>` marker.** В `notes` текущей записи active-sessions явно стоит hold-open
+  marker (например, для multi-day сабтасков).
 
-**Когда агент записывает в `active-sessions.md`:**
+При keep-open — в `notes` добавить `held-open: <criterion>` (какой из трёх применился).
 
-- **Старт сессии** — сразу, до любой работы. Поля: id, started-at, scope, files-touched-intent.
-- **Изменение scope / целей** — сразу при получении новой задачи или смене направления. Не дожидаясь конца.
-- **Крупное завершение этапа** — в notes добавляется запись «готово к закрытию», но **status: open** сохраняется до
-  команды.
+**Edge cases (commit не происходит / сессия остаётся `open`):**
+
+- Pre-commit gate (§7.3.1) не прошёл → `open` + `notes: BLOCKED: <gate>`.
+- `git commit` fail / hook reject → `open`, в `notes` лог ошибки, retry после фикса.
+- Параллельный агент с пересекающимся scope (см. §7.2.6) → `open`, arbitration через оператора.
+- Build не зелёный → commit не выполняется, `open` + `notes: BLOCKED: build`.
+
+**Manual abort (без commit):** `status: aborted` + причина в `notes`, запись остаётся в «Активные
+сессии» с явным маркером, не переносится в «Закрытые сессии».
 
 ### 8.2. Что агент НЕ должен путать с «потерянной работой»
 
@@ -372,6 +446,7 @@ Multi-agent coordination — **текущий** контракт проекта 
 (секция «Завершение»). Здесь фиксируем только:
 
 - [ ] Build green на охватываемой платформе.
+- [ ] Pre-commit gate (§7.3.1) пройден: §7.2.5 message + scope discipline + (для `type=fix`) operator confirm.
 - [ ] `agent/status.md` отражает фактическое состояние на момент закрытия сессии.
 - [ ] Если сессия включала git-операции поверх uncommitted work — `/tmp/*.patch` сохранён,
   destructive-операция подтверждена пользователем (см. §7.2.4).
