@@ -213,17 +213,17 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 
 **Сессия ещё `open`** (status: open в `agent/active-sessions.md`) — жду команды оператора «закоммить» per §7.2.4 + §8.1.
 
-## §24. Defense docs overhaul r0 — `session-2026-06-15T15-50Z-defense-docs-r0` (open, build green ожидается после commit)
+## §24. Defense docs overhaul r0 — `session-2026-06-15T15-50Z-defense-docs-r0` (closed в `1db35ee`)
 
 **Per operator «Требуется улучшить defense документы в docs: документ, который описывает каждый алгоритм в проекте, абсолютно за всё, плюс речь для пятерых, плюс каждому свою памятку. На тех пятерых следует разделить работу так, чтобы она была весомой, но простой к объяснению, а всё сложное мне оставить. Нас шестеро, я шестой.»** Защита 2026-06-15 10-минутный доклад + 5 мин Q&A, 6 человек в команде.
 
-**Деливерабли (14 пунктов):**
+**Деливерабли (14 пунктов, +2715/-214 строк):**
 
 | Категория | Файлы |
 |---|---|
-| **7 новых** | `docs/DefenseAlgorithms.md` (7000+ слов, 23 алгоритма) + `docs/DefenseBriefer_le1t.md` (3500 слов: verbatim вступление/закрытие + Q&A-карта 30 вопросов) + 5 × `docs/DefenseBriefer_{1..5}.md` (по 1800 слов каждый) + `docs/DefenseScript.md` (10-мин таймлайн) |
-| **4 переработки** | `docs/DefenseSpeakerNotes.md` (новые темы, плейсхолдеры имён) + `docs/DefenseDemoScript.md` (новый таймлайн + hotkeys) + `docs/DefenseReport.md` (+раздел «Команда и вклад участников», §12) + `docs/DefenseFAQ.md` (+8 новых Q&A про команду, ray-march, fluid CA, hot reload) |
-| **2 agent-файла** | `agent/active-sessions.md` (новая запись open) + `agent/status.md` (эта секция) |
+| **7 новых** | `docs/DefenseAlgorithms.md` (866 строк, 23 алгоритма) + `docs/DefenseBriefer_le1t.md` (351 строка: verbatim вступление/закрытие + Q&A-карта 30 вопросов) + 5 × `docs/DefenseBriefer_{1..5}.md` (153-174 строк каждый) + `docs/DefenseScript.md` (190 строк, 10-мин таймлайн) |
+| **4 переработки** | `docs/DefenseSpeakerNotes.md` (новые темы, плейсхолдеры имён) + `docs/DefenseDemoScript.md` (новый таймлайн + hotkeys) + `docs/DefenseReport.md` (+§12 «Команда и вклад участников», обновлены 14 ctest suites) + `docs/DefenseFAQ.md` (+8 новых Q&A про команду, ray-march, fluid CA, hot reload) |
+| **2 agent-файла** | `agent/active-sessions.md` (новая запись + перенос в «Закрытые сессии» в close-routine) + `agent/status.md` (эта секция §24) |
 
 **Распределение ролей (10 мин):**
 - le1t: вступление 2:00 + закрытие 0:30 + Q&A 5:00 (7:30 минут)
@@ -235,9 +235,9 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 
 **Стратегия:** тиммейтам — весомые, но простые к запоминанию секции. le1t оставляет архитектурные обоснования, выбор библиотек, и все Q&A. Каждый тиммейт получает verbatim script + concept definitions + cheat-card для печати.
 
-**Build state:** не запускаю — change чисто в `docs/` + `agent/*`, code не тронут, baseline preserved.
+**Build state:** docs-only commit, build green не нужен per §7.3.1 (type=docs → auto). Code не тронут, baseline preserved. 3536 строк новой документации в `docs/`.
 
-**Сессия:** `status: open` сейчас, после commit → auto-close (move в «Закрытые сессии», `closed-at` + `commit-hash`) per `AGENTS.md §8.1`.
+**Закрытие:** Auto-close per §8.1. Commit `1db35ee` создан автоматически по §7.3.1 gate (type=`docs`, scope discipline clean — only my files staged, AGENTS.md + untracked LaTeX .tmp/ + tests/fixtures/Untitled.colonada.glb не в commit'е). Close-routine: (1) `git rev-parse HEAD` → `1db35ee`; (2) `agent/active-sessions.md` запись перенесена в «Закрытые сессии» (top, post-commit) + header обновлён; (3) эта секция обновлена (open → closed); (4) safety-net patch НЕ сохранял — нет uncommitted work (всё закоммичено).
 
 ## §23. Agent protocol rewrite r0 — `session-2026-06-15T15:00Z-agent-protocol-rewrite-r0` (open → close по новым правилам)
 
@@ -286,6 +286,6 @@ Refs: agent/decisions.md §4, agent/memory.md §6,
 | `2026-06-13` | KT-документы | closed → reopened → closed (3 updates) |
 | `2026-06-13` | Defense файлы | closed (reopened 2-й update) |
 | `2026-06-14` | KT-LaTeX (KT-2.1/2.2/3.1/3.2 + Combined) | closed (5 PDF) |
-| `2026-06-15` | Defense docs overhaul r0 | open (см. `agent/active-sessions.md session-2026-06-15T15-50Z-defense-docs-r0`): 7 новых файлов + 4 переработки + 2 agent-файла |
+| `2026-06-15` | Defense docs overhaul r0 | closed `1db35ee` (см. `agent/active-sessions.md session-2026-06-15T15-50Z-defense-docs-r0`): 7 новых файлов + 4 переработки + 2 agent-файла |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).

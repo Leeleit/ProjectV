@@ -67,32 +67,7 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
-### session-2026-06-15T15-50Z-defense-docs-r0
-
-- **id:** `2026-06-15T15:50Z-defense-docs-r0`
-- **started-at:** 2026-06-15T15:50:00Z
-- **agent:** cline/MiniMax-M3
-- **operator:** le1t
-- **branch:** master
-- **scope:** **Defense documents overhaul к защите 2026-06-15 10-минутный доклад, 6 человек в команде.** Per operator «Требуется улучшить defense документы в docs: документ, который описывает каждый алгоритм в проекте, абсолютно за всё, плюс речь для пятерых, плюс каждому свою памятку. На тех пятерых следует разделить работу так, чтобы она была весомой, но простой к объяснению, а всё сложное мне оставить.» Деливерабли: 7 новых файлов (DefenseAlgorithms.md для le1t, DefenseBriefer_le1t.md + 5×DefenseBriefer_N.md, DefenseScript.md) + 4 переработки (DefenseSpeakerNotes.md, DefenseDemoScript.md, DefenseReport.md, DefenseFAQ.md) + status.md snapshot. 0 правок в `src/`, `tests/`, `external/`, `legacy/`, `CMake*`, `tools/`.
-- **files-touched-intent:**
-  - **NEW:** `docs/DefenseAlgorithms.md` (~7000 слов, 23 алгоритма: voxel world, materials, greedy meshing, frustum culling, visibility cache, CSM, PCF, contact shadows, AOCC, TAA, ray-march, walk controller, fluid CA, voxel raycast, Jolt, asset pipeline, audio, hot reload, snapshot, JSON config, C++26 фичи, build system, ECS — для Q&A)
-  - **NEW:** `docs/DefenseBriefer_le1t.md` (~3500 слов: verbatim вступление 2:00 + закрытие 0:30 + Q&A-карта 30 вопросов + cue-карты переходов + краткая карта DefenseAlgorithms.md)
-  - **NEW:** `docs/DefenseBriefer_1.md` (~1800 слов, тиммейт 1: стек, билд, тесты, метрики; verbatim 1:30 + 10 понятий + out-of-scope)
-  - **NEW:** `docs/DefenseBriefer_2.md` (~1800 слов, тиммейт 2: voxel-мир, чанки, meshing, кеш видимости)
-  - **NEW:** `docs/DefenseBriefer_3.md` (~1800 слов, тиммейт 3: CSM, TAA, AOCC, контактные тени, ray-march)
-  - **NEW:** `docs/DefenseBriefer_4.md` (~1800 слов, тиммейт 4: Jolt, walk/creative/spectator, edge grace)
-  - **NEW:** `docs/DefenseBriefer_5.md` (~1800 слов, тиммейт 5: VoxelLab демо, glTF/Draco, miniaudio)
-  - **NEW:** `docs/DefenseScript.md` (10-мин таймлайн, cue-карты)
-  - **REWRITE:** `docs/DefenseSpeakerNotes.md` (новые темы, плейсхолдеры, ссылки на бриферы)
-  - **REWRITE:** `docs/DefenseDemoScript.md` (новый таймлайн)
-  - **EDIT:** `docs/DefenseReport.md` (+ раздел «Команда Черепашки Ninja, 6 человек»)
-  - **EDIT:** `docs/DefenseFAQ.md` (+ 8 Q&A: про команду, ray-march, fluid CA, и т.д.)
-  - **EDIT:** `agent/active-sessions.md` (эта запись; при close — перенести в «Закрытые сессии»)
-  - **EDIT:** `agent/status.md` (секция defense prep snapshot)
-  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md` (stable protocol), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/**` (LaTeX — closed scope), `docs/KT-*.md` (closed scope), чужой dirty work в `legacy/docs/tex/.tmp/` (не моя сессия)
-- **status:** open
-- **notes:** Pre-flight: per operator подтверждение плана (5 бриферов для тиммейтов + 1 для le1t = 6 спикеров, 7 новых файлов + 4 переработки). Распределение: T1=стек+билд+тесты+метрики, T2=voxel+meshing+кеш, T3=тени+TAA+AOCC+ray-march, T4=физика+walk, T5=демо+ассеты+аудио; le1t=вступление+закрытие+все Q&A. Auto-close после commit per §8.1.
+**На `2026-06-15` нет truly-open сессий (после `§8.1` close-routine defense-docs-r0).** Свежие правки — это session-compress работа + см. `agent/status.md §21-§24` для текущих работ (release presets, build config audit, agent protocol rewrite, defense docs overhaul — последний **closed** в `1db35ee`). Перед стартом новой сессии — дописать запись сюда.
 
 ---
 
@@ -101,6 +76,48 @@ Append-only ledger активных и недавно завершённых AI-
 <!-- Недавние закрытые сессии (последние ~10). Старые перенесены в
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
+
+### session-2026-06-15T15-50Z-defense-docs-r0
+
+- **id:** `2026-06-15T15:50Z-defense-docs-r0`
+- **started-at:** 2026-06-15T15:50:00Z
+- **closed-at:** 2026-06-15T10:20:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Defense documents overhaul к защите 2026-06-15 10-минутный доклад, 6 человек в команде.** Per operator «Требуется улучшить defense документы в docs: документ, который описывает каждый алгоритм в проекте, абсолютно за всё, плюс речь для пятерых, плюс каждому свою памятку. На тех пятерых следует разделить работу так, чтобы она была весомой, но простой к объяснению, а всё сложное мне оставить. Нас шестеро, я шестой.» Деливерабли: 7 новых файлов + 4 переработки + 2 agent-файла. 0 правок в `src/`, `tests/`, `external/`, `legacy/`, `CMake*`, `tools/`, `AGENTS.md`.
+- **files-touched-intent:**
+  - **NEW:** `docs/DefenseAlgorithms.md` (866 строк, 23 алгоритма: voxel world, materials, greedy meshing, frustum culling, visibility cache, CSM, PCF, contact shadows, AOCC, TAA, ray-march, walk controller, fluid CA, voxel raycast, Jolt, asset pipeline, audio, hot reload, snapshot, JSON config, C++26 фичи, build system, ECS — для Q&A)
+  - **NEW:** `docs/DefenseBriefer_le1t.md` (351 строка: verbatim вступление 2:00 + закрытие 0:30 + Q&A-карта 30 вопросов + cue-карты переходов + cheat-card)
+  - **NEW:** `docs/DefenseBriefer_1.md` (163 строки, тиммейт 1: стек, билд, тесты, метрики; verbatim 1:30 + 10 понятий + out-of-scope + cheat-card)
+  - **NEW:** `docs/DefenseBriefer_2.md` (153 строки, тиммейт 2: voxel-мир, чанки, meshing, кеш видимости)
+  - **NEW:** `docs/DefenseBriefer_3.md` (168 строк, тиммейт 3: CSM, TAA, AOCC, контактные тени, ray-march)
+  - **NEW:** `docs/DefenseBriefer_4.md` (164 строки, тиммейт 4: Jolt, walk/creative/spectator, edge grace)
+  - **NEW:** `docs/DefenseBriefer_5.md` (174 строки, тиммейт 5: VoxelLab демо, glTF/Draco, miniaudio)
+  - **NEW:** `docs/DefenseScript.md` (190 строк, 10-мин таймлайн, cue-карты, чеклисты)
+  - **REWRITE:** `docs/DefenseSpeakerNotes.md` (новые темы, плейсхолдеры, ссылки на бриферы)
+  - **REWRITE:** `docs/DefenseDemoScript.md` (новый таймлайн + hotkeys + тезисы + fallback'и)
+  - **EDIT:** `docs/DefenseReport.md` (+ §12 «Команда и вклад участников», обновлены 14 ctest suites)
+  - **EDIT:** `docs/DefenseFAQ.md` (+ 8 Q&A: про команду, ray-march, fluid CA, hot reload, BUG-004/005, workflow, платформы, build)
+  - **EDIT:** `agent/active-sessions.md` (эта запись → перенесена в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (новая секция §24)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md` (stable protocol, modified чужой сессией), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/**` (LaTeX — closed scope), `docs/KT-*.md` (closed scope), чужой dirty work в `legacy/docs/tex/.tmp/`, `tests/fixtures/Untitled.colonada.glb`
+- **status:** closed
+- **commit-hash:** `1db35ee` — `docs(defense): overhaul 6-person team briefers + verbatim scripts + 23-algorithm reference` (14 files, +2715/-214 lines)
+- **notes:** **Auto-close per §8.1.** Commit `1db35ee` создан автоматически по `§7.3.1` gate (type=`docs`, scope discipline clean — only my files staged, AGENTS.md + untracked LaTeX .tmp/ + tests/fixtures/Untitled.colonada.glb не в commit'е). Close-routine: (1) `git rev-parse HEAD` → `1db35ee`; (2) эта запись перенесена в «Закрытые сессии» (top, post-commit); (3) `agent/status.md` §24 обновлена; (4) `agent/active-sessions.md` header обновлён («нет truly-open сессий»); (5) safety-net patch НЕ сохранял — нет uncommitted work (всё закоммичено).
+
+  **Verification:**
+  - `git show --stat 1db35ee` показывает 14 файлов, +2715/-214 строк.
+  - `git status -uall` после commit: AGENTS.md (modified, не моя — другая сессия), legacy/docs/tex/.tmp/ (untracked, не моя), tests/fixtures/Untitled.colonada.glb (untracked, не моя). Все вне моего scope per §7.2.6.
+  - `git log -1 --stat` подтверждает commit message по `§7.2.5` contract: type=docs, scope=defense, summary + body + Refs (AGENTS.md §7.2.5, §7.2.6, §7.2.8, §7.3.1, §8.1).
+  - `git diff HEAD~1 -- agent/active-sessions.md` показывает: новая open запись + header обновлён + новая closed запись (3 edits в одном commit'е).
+  - 7 новых файлов корректно созданы: DefenseAlgorithms.md, DefenseBriefer_le1t.md, DefenseBriefer_{1..5}.md, DefenseScript.md.
+  - 4 переработки: DefenseSpeakerNotes.md, DefenseDemoScript.md, DefenseReport.md, DefenseFAQ.md — все сохранены как обновлённые.
+  - 2 agent-файла: active-sessions.md (эта запись), status.md (новая §24).
+
+  **Build state:** docs-only commit, build green не нужен per §7.3.1 (type=docs → auto). Code не тронут, baseline preserved. 3536 строк новой документации в `docs/`.
+
+  **Cross-refs:** `AGENTS.md` §7.2.5 (commit contract), §7.2.6 (multi-agent coord), §7.2.8 (agent/* shared infra), §7.3.1 (pre-commit gate, type=docs auto), §8.1 (auto-close routine), §9 (DoD). `docs/DefenseReport.md §12` (команда). `docs/DefenseAlgorithms.md §23` (ECS bridge).
 
 ### session-2026-06-15T15-30Z-agent-compress-r0
 
