@@ -19,7 +19,7 @@ winget install Ninja-build.Ninja
 6. Установить Ccache (через PowerShell):
 
 ```powershell
-winget install ccache
+winget install ccache   # или sccache — CMakePresets.json использует sccache (см. linux-clang-*-base)
 ```
 
 7. Склонировать данный репозиторий с сабмодулями:

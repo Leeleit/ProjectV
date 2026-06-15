@@ -1,0 +1,122 @@
+# **Line ending normalization (`2026-06-15`).**
+#
+# Per `agent/memory.md §6` "the pre-existing Windows-side
+# `_linux_submodule_backup/` ... mostly CRLF/LF ghosts" — Git
+# for Windows defaults to `core.autocrlf=true`, which would
+# silently CRLF-convert `.sh` / `.ps1` / CMake sources checked
+# out on Windows hosts and break bash strict-mode parsing or
+# CMake's `if (DEFINED ...)` matching. Explicitly normalize
+# line endings per file class so any Git client on any OS
+# (Windows / macOS / Linux) checks out identical byte content.
+#
+# **Why text=auto vs explicit eol=lf on `*`?**
+# `* text=auto` lets Git pick a sensible default per content
+# (binary stays binary); the per-extension `text eol=lf` rules
+# then override for files we know must be LF on disk. Files
+# without an explicit rule (e.g. an operator-authored `.dat`
+# file checked in) get Git's auto-detection — binary files stay
+# binary, unknown text files default to LF on checkout.
+#
+# **CRLF on Windows-native build artifacts:**
+# `.sln` / `.vcxproj` / `.bat` / `.cmd` are written by Visual
+# Studio with CRLF and CRLF is the canonical form on Windows,
+# so we explicitly mark them as such. Without this rule, a
+# Windows contributor who adds a new `.vcxproj` would
+# accidentally commit it with LF endings and Visual Studio
+# would either re-write the line endings (producing noisy
+# diffs) or fail to load the project.
+
+*               text=auto eol=lf
+
+# Shell / PowerShell — LF on disk on every OS.
+*.sh            text eol=lf
+*.bash          text eol=lf
+*.ps1           text eol=lf
+
+# CMake / Ninja — LF (CMake docs explicitly say "use Unix
+# line endings" for portability; Ninja and clang-cl accept
+# both but LF avoids CRLF noise in diff output).
+CMakeLists.txt  text eol=lf
+*.cmake         text eol=lf
+*.cmake.in      text eol=lf
+
+# C / C++ / GLSL / SPIR-V / headers / modules — LF.
+*.c             text eol=lf
+*.cc            text eol=lf
+*.cpp           text eol=lf
+*.cxx           text eol=lf
+*.h             text eol=lf
+*.hh            text eol=lf
+*.hpp           text eol=lf
+*.hxx           text eol=lf
+*.inc           text eol=lf
+*.inl           text eol=lf
+*.ixx           text eol=lf
+*.cppm          text eol=lf
+*.vert          text eol=lf
+*.frag          text eol=lf
+*.geom          text eol=lf
+*.comp          text eol=lf
+*.tesc          text eol=lf
+*.tese          text eol=lf
+*.mesh          text eol=lf
+*.task          text eol=lf
+*.rgen          text eol=lf
+*.rchit         text eol=lf
+*.rmiss         text eol=lf
+*.glsl          text eol=lf
+*.spv           binary
+*.hlsl          text eol=lf
+
+# Data / config — LF.
+*.json          text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.toml          text eol=lf
+*.md            text eol=lf
+*.markdown      text eol=lf
+*.txt           text eol=lf
+*.xml           text eol=lf
+*.csv           text eol=lf
+*.in            text eol=lf
+
+# Windows-native build artifacts — explicit CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.psm1          text eol=crlf
+*.sln           text eol=crlf
+*.vcxproj       text eol=crlf
+*.vcxproj.filters text eol=crlf
+*.props         text eol=crlf
+*.targets       text eol=crlf
+
+# Binary — never mangle.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.bmp           binary
+*.webp          binary
+*.pdf           binary
+*.zip           binary
+*.tar           binary
+*.gz            binary
+*.7z            binary
+*.xz            binary
+*.exe           binary
+*.dll           binary
+*.lib           binary
+*.pdb           binary
+*.so            binary
+*.dylib         binary
+*.a             binary
+*.o             binary
+*.obj           binary
+*.glb           binary
+*.gltf          text eol=lf
+*.fbx           binary
+*.obj           binary
+*.ttf           binary
+*.otf           binary
+*.woff          binary
+*.woff2         binary

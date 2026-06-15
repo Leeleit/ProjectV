@@ -15,6 +15,7 @@
 - Ninja;
 - `clang-cl`;
 - Visual Studio Build Tools / MSVC headers and linker environment;
+- **Visual C++ Redistributable** (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) — нужны `ProjectV.exe` на runtime, потому что `CMakeLists.txt` явно не override'ит `CMAKE_MSVC_RUNTIME_LIBRARY` и по дефолту это `/MD` (dynamic MSVC runtime). Либо поставь VC++ Redist с https://aka.ms/vs/17/release/vc_redist.x64.exe, либо пересобери со static runtime через `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` (тогда runtime влинкован в `ProjectV.exe`, но это +20% к размеру ELF);
 - Vulkan SDK с `glslc` или `glslangValidator` в `PATH`;
 - Git с поддержкой submodules.
 
@@ -51,8 +52,9 @@ cmake --preset windows-clang-debug
 cmake --preset windows-clang-debug-ci
 ```
 
-Отдельный `windows-clang-debug-tracy-profiler` остаётся opt-in tooling preset для bundled Tracy profiler UI и не
-считается частью основного automation contour.
+Отдельный `windows-clang-debug-tracy-profiler` остаётся opt-in tooling preset для Tracy instrumentation в
+`ProjectV.exe` (без Tracy UI — UI теперь собирается standalone через `tools/tracy-standalone/build-tracy-windows.ps1`,
+см. ниже). Не считается частью основного automation contour.
 
 ## Build presets
 
@@ -143,6 +145,23 @@ Smoke проверяет:
 - minimize/restore;
 - maximize/restore;
 - graceful shutdown.
+
+Опционально можно запустить полный LookDev capture flow (только Windows PowerShell, эквивалент Linux-варианта
+в `tools/linux/Invoke-ProjectVRuntimeSmoke.sh:120-126`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmoke.ps1 `
+  -ExePath build\windows-clang-debug\bin\ProjectV.exe `
+  -CaptureDir build\windows-clang-debug\lookdev-captures\$(Get-Date -Format yyyy-MM-dd) `
+  -Views 'FINAL SHDW CSM CTSH AOCC LOCL' `
+  -CameraPosition '-25 19 25' `
+  -CameraLook '0.62 -0.48 -0.62' `
+  -WarmupFrames 30 -IntervalFrames 2 -QuitAfterCapture
+```
+
+Скрипт выставит `PROJECTV_SCREENSHOT_DIR`, `PROJECTV_START_CAMERA_*`, `PROJECTV_LOOKDEV_CAPTURE_*` env vars,
+дождётся graceful shutdown и проверит, что ожидаемое число `.bmp` + `.txt` пар (default 6 видов × 2 = 12 файлов)
+лежит в `$CaptureDir`. Без `-CaptureDir` поведение остаётся прежним — только lifecycle window dance.
 
 Smoke почти не доказывает корректность gameplay, lighting/material look, shadow quality или shader tuning. Для таких
 изменений основной сигнал — unit tests, replay/scripted captures, sidecar metadata и осмысленная визуальная проверка.

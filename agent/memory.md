@@ -198,7 +198,7 @@ The root `CMakeLists.txt` was no longer fully cross-platform on `2026-06-09`; th
 
 A new `else ()` branch for non-MSVC adds two INTERFACE options:
 
-- `-Wno-deprecated-declarations` because libstdc++ 16+ marked `std::is_trivial` deprecated and `external/flecs 2.2.0/include/flecs/addons/cpp/component.hpp` still uses `std::is_trivial<T>::value` at lines 66 and 93. This is a `flecs` upstream lag, not a project bug.
+- `-Wno-deprecated-declarations` because libstdc++ 16+ marked `std::is_trivial` deprecated and `external/flecs v4.1.5/include/flecs/addons/cpp/component.hpp` still uses `std::is_trivial<T>::value` at lines 66 and 93. This is a `flecs` upstream lag, not a project bug.
 - `-include cstring` because legacy project code uses `std::memcpy` / `std::memset` / `std::strcmp` without an explicit `<cstring>` include. On MSVC those come in transitively via `<cstdint>` / `<cstdlib>`, on libstdc++ they do not. Force-include is the smallest-blast-radius fix; do **not** sprinkle `#include <cstring>` into the source files unless the project wants to drop this flag later.
 
 `CMakePresets.json` got a new `linux-clang-debug-base` (hidden) + `linux-clang-debug` configure preset, plus matching `linux-clang-debug-build` and `linux-clang-debug-tests` build/test presets. Windows presets are untouched.

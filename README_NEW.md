@@ -6,9 +6,9 @@ Reproducible interactive voxel MVP на C++26, Vulkan 1.4, Data-Oriented Design.
 
 ## Стек
 
-- C++26 (`CMAKE_CXX_STANDARD 26`, libstdc++ на Windows, libc++ на Linux per `agent/memory.md §6`)
+- C++26 (`CMAKE_CXX_STANDARD 26`). Stdlib: libc++ на Linux/macOS, MSVC STL на Windows. Per `agent/memory.md §6` + `agent/decisions.md §17`.
 - Vulkan 1.4 (volk + VMA), SDL3, JoltPhysics, flecs, fmt, Tracy, miniaudio, meshoptimizer, fastgltf, draco
-- Сборка: CMake 3.30+ + Ninja, clang-cl 22 на Windows, native clang 22 + lld 22 + libc++ на Linux
+- Сборка: CMake 3.30+ + Ninja, clang-cl 22 на Windows, native clang 22 + lld 22 + libc++ на Linux. Windows-side uses MSVC STL (clang-cl flag `-stdlib=libc++` is a no-op there per `CMakeLists.txt:174`).
 
 ## Development build (Debug)
 
