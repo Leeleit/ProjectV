@@ -67,31 +67,6 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
-### session-2026-06-16T22-23Z-defense-team-script-rebuild-r0
-
-- **id:** `2026-06-16T22:23Z-defense-team-script-rebuild-r0`
-- **started-at:** 2026-06-16T22:23:00Z
-- **agent:** cline/MiniMax-M3
-- **operator:** le1t
-- **branch:** master
-- **scope:** **Пересборка командного скрипта под 5-минутный формат защиты.** Per operator: «глянь DefenseScript_Team, я подправил текст 1 участника и меня (второго участника), всё дальше плохо написано» → T3-T6 надо переписать в стиле T1/T2 (простой разговорный русский, без техно-цифр вроде lambda 0.80 / 8-sample Halton / 12 трассировок). 4:30 на речь + 30с буфер = строго 5 минут. Темы: T1 вступление (45s), T2 le1t demo+стек (1:15), T3 архитектура+качество кода (40s), T4 тесты+проверки (40s), T5 прочие фичи+отложено (40s), T6 планы+закрытие (30s). Роли НЕ называются на сцене («нам надо красиво подать проект, а когда будут задавать вопросы, тут компетенция каждого уже понадобится»). Шпаргалки §6 удалить. `DefenseScript_Solo.md` удалить. Старые детальные бриферы 2-5 (воксели/рендеринг/физика/демо) → `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` для Q&A подготовки. Q&A-карта в le1t briefer — 30+ вопросов, НЕ сокращаем. Запреты: ❌ FPS/сцена/время кадра (T2 территория), ❌ TAA tremor (jitter=0 по умолчанию, BUG-004 галлюцинация), ❌ три режима walk/creative/spectator (уже в T2-демо), ❌ macOS (нет в планах), ❌ размер 73→19 МБ как плюс, ❌ Linux/PulseAudio в речи, ❌ vertex cache/fetch в речи.
-- **files-touched-intent:**
-  - **REWRITE:** `docs/DefenseScript_Team.md` (header на 4:30, T3/T4/T5/T6 verbatim)
-  - **REWRITE:** `docs/DefenseBriefer_1.md` (T1 Вступление, 45s, ~80-100 слов, 5 секций без §6)
-  - **REWRITE:** `docs/DefenseBriefer_2.md` (T3 Архитектура + статик-ассерты, 40s, ~80 слов, 5 секций без §6)
-  - **REWRITE:** `docs/DefenseBriefer_3.md` (T4 Тесты, 40s, ~80 слов, 5 секций без §6)
-  - **REWRITE:** `docs/DefenseBriefer_4.md` (T5 Прочие фичи+отложено, 40s, ~80 слов, 5 секций без §6)
-  - **REWRITE:** `docs/DefenseBriefer_5.md` (T6 Планы+закрытие, 30s, ~50-70 слов, 5 секций без §6)
-  - **REWRITE:** `docs/DefenseBriefer_le1t.md` (T2 1:15 + Q&A 30+ вопросов, 4 секции, новые cue-карты, без §6)
-  - **REWRITE:** `docs/DefensePresentation_Structure.md` (тайминги 4:30)
-  - **NEW:** `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` (консолидация старых бриферов 2-5: воксели/рендеринг/физика/демо+аудио для Q&A reference)
-  - **DELETE:** `docs/DefenseScript_Solo.md` (только team-вариант остаётся)
-  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии» в close-routine)
-  - **EDIT:** `agent/status.md` (новая секция)
-  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefenseAlgorithms.md`, `docs/DefenseFAQ.md`, `docs/DefenseReport.md`, `docs/DefenseDemoScript.md`, `docs/DefenseSpeakerNotes.md`, чужой dirty work
-- **status:** open
-- **notes:** Per `AGENTS.md §7.2.6.1` — единый atomic commit (operator: «9. A»). type=`docs` → auto, без operator confirm. Auto-close после commit per §8.1. Сжатие verbatim до ~80 русских слов на 40 секунд (оператор: «220 слов = 2:10, режет хронометраж»). Оператор явно отверг: «серьёзно поработали», «очень серьезно подошли» (фразы-паразиты); FPS/сцену в T3-T6 (T2 территория); лямбду/Halton/12 трассировок (бесполезные цифры); 3 режима управления в T5 (уже в T2-демо); macOS (нет в планах); размер EXE как плюс; TAA tremor (галлюцинация); Linux/PulseAudio и vertex cache/fetch в речи. Оператор заменил «воксельный решатель» и «пассивное зеркало» в T3 на понятные слова.
-
 ### session-2026-06-15T12-06Z-defense-docs-russian-r0
 
 - **id:** `2026-06-15T12:06Z-defense-docs-russian-r0`
@@ -167,6 +142,33 @@ Append-only ledger активных и недавно завершённых AI-
 <!-- Недавние закрытые сессии (последние ~10). Старые перенесены в
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
+
+### session-2026-06-16T22-23Z-defense-team-script-rebuild-r0
+
+- **id:** `2026-06-16T22:23Z-defense-team-script-rebuild-r0`
+- **started-at:** 2026-06-16T22:23:00Z
+- **closed-at:** 2026-06-16T22:30:56Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Пересборка командного скрипта под 5-минутный формат защиты.** Per operator: «глянь DefenseScript_Team, я подправил текст 1 участника и меня (второго участника), всё дальше плохо написано» → T3-T6 переписаны в стиле T1/T2 (простой разговорный русский, без техно-цифр). 4:30 на речь + 30с буфер = строго 5 минут. Темы: T1 вступление (45s), T2 le1t demo+стек (1:15), T3 архитектура+качество кода (40s), T4 тесты+проверки (40s), T5 прочие фичи+отложено (40s), T6 планы+закрытие (30s). Роли НЕ называются на сцене («нам надо красиво подать проект, а когда будут задавать вопросы, тут компетенция каждого уже понадобится»). Шпаргалки §6 удалены. `DefenseScript_Solo.md` удалён. Старые детальные бриферы 2-5 → `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` для Q&A подготовки. Q&A-карта в le1t briefer — 30+ вопросов, НЕ сокращена.
+- **files-touched-intent:**
+  - **REWRITE:** `docs/DefenseScript_Team.md` (header на 4:30, T3/T4/T5/T6 verbatim)
+  - **REWRITE:** `docs/DefenseBriefer_1.md` (T1 Вступление, 45s, ~80-100 слов, 5 секций без §6)
+  - **REWRITE:** `docs/DefenseBriefer_2.md` (T3 Архитектура + статик-ассерты, 40s, ~80 слов, 5 секций без §6)
+  - **REWRITE:** `docs/DefenseBriefer_3.md` (T4 Тесты, 40s, ~80 слов, 5 секций без §6)
+  - **REWRITE:** `docs/DefenseBriefer_4.md` (T5 Прочие фичи+отложено, 40s, ~80 слов, 5 секций без §6)
+  - **REWRITE:** `docs/DefenseBriefer_5.md` (T6 Планы+закрытие, 30s, ~50-70 слов, 5 секций без §6)
+  - **REWRITE:** `docs/DefenseBriefer_le1t.md` (T2 1:15 + Q&A 30+ вопросов, 4 секции, новые cue-карты, без §6)
+  - **REWRITE:** `docs/DefensePresentation_Structure.md` (тайминги 4:30)
+  - **NEW:** `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` (консолидация старых бриферов 2-5 для Q&A reference)
+  - **DELETE:** `docs/DefenseScript_Solo.md` (только team-вариант остаётся)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии» в close-routine)
+  - **EDIT:** `agent/status.md` (новая секция)
+  - **НЕ ТРОГАЮ** (out of scope per `AGENTS.md §7.2.6`): `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefenseAlgorithms.md`, `docs/DefenseFAQ.md`, `docs/DefenseReport.md`, `docs/DefenseDemoScript.md`, `docs/DefenseSpeakerNotes.md`, чужой dirty work
+- **status:** closed
+- **commit-hash:** `45a15bc` — `docs(defense): пересборка командного скрипта под 5-минутный формат защиты`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit (operator: «9. A»). type=`docs` → auto, §7.3.1 gate пройден (scope discipline clean, §7.2.5 message готов, build не требуется для docs-only). `git diff HEAD~1..HEAD --stat` показывает 10 файлов, +881/-522 строк, 3 новых файла (Script_Team, Presentation_Structure, archive/TechnicalDeepDive), 7 modified (5 briefers + le1t briefer + active-sessions). `docs/DefenseScript_Solo.md` удалён через `rm` (был untracked, не в git, в `git ls-files` не значился). Build state: `cmake --build build/linux-clang-debug --target ProjectV` — green, без warnings (other session's `VulkanSwapchain.cpp` изменение линковалось успешно). Operator явно отверг в этой сессии: «серьёзно поработали», «очень серьезно подошли» (фразы-паразиты); FPS/сцену/время кадра в T3-T6 (T2 территория); лямбду/Halton/12 трассировок (бесполезные цифры); 3 режима управления в T5 (уже в T2-демо); macOS (нет в планах); размер EXE 73→19 МБ как плюс; TAA tremor (jitter=0 по умолчанию, BUG-004 галлюцинация); Linux/PulseAudio и vertex cache/fetch в речи. Operator: «воксельный решатель» и «пассивное зеркало» в T3 заменены на «наш собственный код дополняет её для опоры игрока на блоки» и «для отладки данные дублируются в систему компонентов — но это всегда копия из основного мира, не наоборот». **Cross-refs:** `AGENTS.md §7.2.6.1` (atomic subtask), `AGENTS.md §8.1` (auto-close), `AGENTS.md §7.3.1` (pre-commit gate), `AGENTS.md §7.2.8` (shared `agent/` files — правки `active-sessions.md` не claim'ят эксклюзив), `agent/status.md` (новая секция для этого закрытия).
 
 ### session-2026-06-15T-post-wbv-r1
 

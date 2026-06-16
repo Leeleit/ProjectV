@@ -419,7 +419,67 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 
 ---
 
-## 99. Past closed sessions (rollup)
+## §29. Defense team script rebuild r0 — `session-2026-06-16T22-23Z-defense-team-script-rebuild-r0` (closed в `45a15bc`)
+
+**Per operator «глянь DefenseScript_Team, я подправил текст 1 участника и меня (второго участника), всё дальше плохо написано»** + «нам дают всего 5 минут на рассказ, а не 10: то есть мы должны рассказывать 4:30 (30 секунд на форс-мажоры)» + «строго 5 минут, после сразу останавливают».
+
+Единый atomic commit `45a15bc` (operator: «9. A»), 10 файлов, +881/-522 строк, 3 новых файла + 7 modified. type=`docs` → auto per §7.3.1.
+
+**Новый 3-актный нарратив T3-T5:**
+
+| Слот | Тема | Хрон | Слов |
+|---|---|---|---|
+| T1 | Вступление и Проблема | 0:00-0:45 | ~85 |
+| T2 (le1t) | Live Demo + Стек (C++26, Vulkan 1.4, DOD) | 0:45-2:00 | ~145 |
+| T3 | **Архитектура и качество кода** (включая статик-ассерты) | 2:00-2:40 | ~80 |
+| T4 | **Тесты и проверки** (ctest, smoke, sidecar) | 2:40-3:20 | ~80 |
+| T5 | **Прочие фичи + что отложено** | 3:20-4:00 | ~85 |
+| T6 | Планы + Закрытие | 4:00-4:30 | ~60 |
+| — | Буфер на форс-мажоры | 4:30-5:00 | тишина |
+
+**Что сделано:**
+
+| Файл | Действие |
+|---|---|
+| `docs/DefenseScript_Team.md` | REWRITE — header 4:30, T3/T4/T5/T6 verbatim (T1+T2 оставлены как есть) |
+| `docs/DefensePresentation_Structure.md` | REWRITE — тайминги 4:30, слайды привязаны к слотам |
+| `docs/DefenseBriefer_1.md` | REWRITE — T1 Вступление, 5 секций без §6 шпаргалки |
+| `docs/DefenseBriefer_2.md` | REWRITE — T3 Архитектура + статик-ассерты |
+| `docs/DefenseBriefer_3.md` | REWRITE — T4 Тесты |
+| `docs/DefenseBriefer_4.md` | REWRITE — T5 Прочие фичи + отложено |
+| `docs/DefenseBriefer_5.md` | REWRITE — T6 Планы + закрытие |
+| `docs/DefenseBriefer_le1t.md` | REWRITE — 1:15 slot + Q&A 30+ вопросов (НЕ сокращены) + новые cue-карты |
+| `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` | NEW — консолидация старых бриферов 2-5 для Q&A reference (воксели/рендеринг/физика/демо+аудио) |
+| `docs/DefenseScript_Solo.md` | DELETE — оставлен только team-вариант |
+
+**Принципы:**
+- 5 бриферов — 5 секций (без §6 шпаргалки, operator: «Шпаргалки для печати не нужны»).
+- Q&A-карта в `DefenseBriefer_le1t.md` — 30+ вопросов, НЕ сокращена (operator: «Больше вопросов и ответов – больше покрытие, не уменьшай»).
+- Технические детали из старых бриферов 2-5 → `archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` для Q&A подготовки, НЕ на сцене.
+- Роли в речи НЕ называются (operator: «нам надо красиво подать проект, а когда будут задавать вопросы, тут компетенция каждого уже понадобится»). Role separation живёт в §5 «Вне зоны ответственности» каждого брифера для Q&A.
+
+**Что явно отвергнуто в речи (per operator):**
+- ❌ FPS / сцена / время кадра / размер EXE как плюс (T2 территория)
+- ❌ Lambda 0.80 / 8-sample Halton / 12 трассировок (operator: «никому не нужная техническая информация, 12 трассировок сраный ты кусок говна»)
+- ❌ TAA tremor / BUG-004 (jitter=0 по умолчанию, BUG-004 галлюцинация)
+- ❌ Три режима walk/creative/spectator в T5 (уже в T2-демо)
+- ❌ macOS (нет в планах)
+- ❌ «серьёзно поработали», «очень серьезно подошли» (фразы-паразиты)
+- ❌ Linux / PulseAudio в речи (operator: «надо просто сказать, что работает аудиодвижок»)
+- ❌ vertex cache / fetch в речи (operator: «это опять подробности, их надо убрать»)
+- ❌ «воксельный решатель» / «пассивное зеркало» в T3 — заменены на «наш собственный код дополняет её для опоры игрока на блоки» и «для отладки данные дублируются в систему компонентов — но это всегда копия из основного мира, не наоборот»
+
+**Build state:**
+- `cmake --build build/linux-clang-debug --target ProjectV` — green (other session's `VulkanSwapchain.cpp` изменение линковалось успешно). docs-only change в моей сессии, baseline preserved.
+
+**Pre-commit gate (§7.3.1):**
+- §7.2.5 message: `docs(defense): пересборка командного скрипта под 5-минутный формат защиты` + body.
+- Scope discipline: AGENTS.md (другой сессии protocol rewrite), `src/render/vulkan/VulkanSwapchain.cpp` (другой сессии), `docs/DefenseQnA.md` (untracked, не моя), `legacy/docs/tex/.tmp/*` (kt-latex) — все вне моего scope, не в commit'е.
+- type=`docs` → auto, без operator confirm.
+
+**Cross-refs:** `AGENTS.md §7.2.6.1` (atomic subtask), `§8.1` (auto-close), `§7.3.1` (pre-commit gate), `§7.2.8` (shared `agent/` files — правки `active-sessions.md` не claim'ят эксклюзив); `agent/active-sessions.md` session-2026-06-16T22-23Z-defense-team-script-rebuild-r0; `docs/DefenseAlgorithms.md` (23 алгоритма, не переписывались); `docs/DefenseFAQ.md` (готовые ответы, не переписывались); `docs/DefenseReport.md` (отчёт + §3 deferred items, не переписывался).
+
+---
 
 Полный per-session detail в `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md`. Здесь — одна строка на сессию для быстрого navigation.
 
@@ -448,5 +508,6 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 | `2026-06-15` | Defense docs audit r0 | closed `bf2822f` (см. `agent/active-sessions.md session-2026-06-15T10-43Z-defense-docs-audit-r0`): 23 правки в 12 docs/ + F5/F6 → F11/F12 relocate в main.cpp |
 | `2026-06-15` | Defense docs russian r0 | closed `d641967` (см. `agent/active-sessions.md session-2026-06-15T12-06Z-defense-docs-russian-r0`): полная русификация, 6 бриферов переписаны + Algorithms.md, единый коммит option A |
 | `2026-06-15` | **Windows build verification r0** | **closed `69b1726`** (см. `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0`): 5 atomic-commits (P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M). Linux baseline preserved (ctest 14/14, smoke 6/6). |
+| `2026-06-16` | **Defense team script rebuild r0** | **closed `45a15bc`** (см. `agent/active-sessions.md session-2026-06-16T22-23Z-defense-team-script-rebuild-r0`): пересборка под 5-минутный формат (4:30 + 30с буфер), 10 файлов, T3-T6 переписаны в стиле T1/T2 (простой разговорный русский, без техно-цифр), Q&A-карта 30+ вопросов сохранена, archive deep-dive для reference, `DefenseScript_Solo.md` удалён. |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
