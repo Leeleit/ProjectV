@@ -69,6 +69,35 @@ Append-only ledger активных и недавно завершённых AI-
 
 ### session-2026-06-15T12-06Z-defense-docs-russian-r0
 
+- **id:** `2026-06-17T-defense-competency-faq-r0`
+- **started-at:** 2026-06-17T03:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Per-team competency FAQ + архивация 4 устаревших 10-мин скриптов.** Per operator: «FAQ для каждого участника команды о его компетенции, что ему ботать, что смотреть и списки реалистичных+ каверзных вопросов и ответов. Нужно всё максимально подробное, словно учебник. Для меня тоже, если чё. Также нужно убрать ненужные документы в docs/archive». Также per operator «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде ... Переназначаем» → speech slots переназначены на competency-matched mapping. Один файл `docs/DefenseCompetency_FAQ.md` (operator читает с телефона во время Q&A), max depth без воды, ~3000-5000 строк. Mapping компетенций: Тиммейт 1 = Сборка/тестирование → SAYS T4 (Тесты); Тиммейт 2 = Воксельный мир → SAYS T3 (Архитектура); Тиммейт 3 = Рендеринг → SAYS T5 (Прочие фичи); Тиммейт 4 = Физика → SAYS T6 (Планы); Тиммейт 5 = Ассеты+Аудио → SAYS T1 (Вступление); le1t = Всё+Q&A host → SAYS T2 (Demo+Стек).
+- **files-touched-intent:**
+  - **GIT-MV:** `docs/DefenseScript.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseScript_10min.md` (10-мин соло-скрипт, устарел)
+  - **GIT-MV:** `docs/DefenseDemoScript.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseDemoScript_10min.md`
+  - **GIT-MV:** `docs/DefenseSpeakerNotes.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseSpeakerNotes_10min.md`
+  - **GIT-MV:** `docs/DefenseQnA.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseQnA_10min.md`
+  - **NEW:** `docs/archive/DefenseOldFormat_2026-06-17/README.md` (5-10 строк — причина архивации)
+  - **NEW:** `docs/DefenseCompetency_FAQ.md` (textbook, ~3000-5000 строк, 6 секций + приложения)
+  - **REWRITE:** `docs/DefenseScript_Team.md` (reassign speeches: T1=Т5 Asset/Audio, T3=Т2 Voxel, T4=Т1 Build/Test, T5=Т3 Render, T6=Т4 Physics)
+  - **REWRITE:** `docs/DefenseBriefer_1.md` (теперь SAYS T4 Тесты, COMPETENCY=Сборка/тестирование)
+  - **REWRITE:** `docs/DefenseBriefer_2.md` (SAYS T3 Архитектура, COMPETENCY=Воксельный мир)
+  - **REWRITE:** `docs/DefenseBriefer_3.md` (SAYS T5 Прочие фичи, COMPETENCY=Рендеринг)
+  - **REWRITE:** `docs/DefenseBriefer_4.md` (SAYS T6 Планы, COMPETENCY=Физика)
+  - **REWRITE:** `docs/DefenseBriefer_5.md` (SAYS T1 Вступление, COMPETENCY=Ассеты+Аудио)
+  - **EDIT:** `docs/DefenseBriefer_le1t.md` (Q&A-карта + slot T2)
+  - **REWRITE:** `docs/DefensePresentation_Structure.md` (reassigned слайды)
+  - **EDIT:** `agent/active-sessions.md` (close)
+  - **EDIT:** `agent/status.md` (§30)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefenseAlgorithms.md`, `docs/DefenseFAQ.md`, `docs/DefenseReport.md`, `docs/DefenseDemoScript.md`, `docs/DefenseSpeakerNotes.md` (уходят в архив), `docs/VulkanSDK-Linux-Docs-*/`, чужой dirty work
+- **status:** open
+- **notes:** Per `AGENTS.md §7.2.6.1` — единый atomic commit. type=`docs` → auto, без operator confirm. Operator сказал: «при работе читай код, некоторые архивные истории коммитов, статусы и т.д. могут быть недействительными, надо код смотреть и всё перепроверять» → ВСЕ факты в FAQ проверяются против исходного кода `src/**` и актуальных `docs/DefenseAlgorithms.md` / `DefenseReport.md` / `agent/decisions.md`. **НЕ полагаться на memory.md или статус.md** для технических фактов. Build не нужен (docs-only). Auto-close per §8.1 после commit.
+
+### session-2026-06-15T12-06Z-defense-docs-russian-r0
+
 - **id:** `2026-06-15T12:06Z-defense-docs-russian-r0`
 - **started-at:** 2026-06-15T12:06:00Z
 - **agent:** cline/MiniMax-M3
@@ -134,6 +163,39 @@ Append-only ledger активных и недавно завершённых AI-
   **Disk savings:** commit 5 reclaimed 62M (RmlUi 23M + stdexec 4.4M + glaze 11M + freetype 14M + zstd 9.8M) vendored-but-unwired submodules.
   
   **Cross-refs:** `agent/decisions.md §4` (release policy — без изменений; новые sub-section о Windows-clang-cl gating добавляются ниже), `agent/memory.md §6` (libc++/libstdc++ history — без изменений; append новой секции о Windows-build-verification), `agent/status.md §25` (новая секция для этой сессии).
+
+---
+
+### session-2026-06-17T-defense-competency-faq-r0
+
+- **id:** `2026-06-17T-defense-competency-faq-r0`
+- **started-at:** 2026-06-17T03:50:00Z
+- **closed-at:** 2026-06-16T23:29:25Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Per-team competency FAQ + архивация 4 устаревших 10-мин скриптов.** Per operator: «FAQ для каждого участника команды о его компетенции, что ему ботать, что смотреть и списки реалистичных+ каверзных вопросов и ответов. Нужно всё максимально подробное, словно учебник. Для меня тоже, если чё. Также нужно убрать ненужные документы в docs/archive». Также per operator «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде ... Переназначаем» → speech slots переназначены на competency-matched mapping. Один файл `docs/DefenseCompetency_FAQ.md` (operator читает с телефона во время Q&A), max depth без воды, ~3000-5000 строк. Финальный mapping компетенций: Тиммейт 1 (Build/Test) → SAYS T1 Вступление; Тиммейт 2 (Voxel) → SAYS T3 Архитектура; Тиммейт 3 (Render) → SAYS T4 Тесты; Тиммейт 4 (Physics) → SAYS T6 Планы; Тиммейт 5 (Asset/Audio) → SAYS T5 Прочие фичи; le1t → SAYS T2 Demo+Стек.
+- **files-touched-intent:**
+  - **GIT-MV:** `docs/DefenseScript.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseScript_10min.md` (10-мин соло-скрипт, устарел)
+  - **GIT-MV:** `docs/DefenseDemoScript.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseDemoScript_10min.md`
+  - **GIT-MV:** `docs/DefenseSpeakerNotes.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseSpeakerNotes_10min.md`
+  - **GIT-MV (через `mv` для untracked):** `docs/DefenseQnA.md` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseQnA_10min.md`
+  - **NEW:** `docs/archive/DefenseOldFormat_2026-06-17/README.md` (причина архивации)
+  - **NEW:** `docs/DefenseCompetency_FAQ.md` (textbook, 1888 строк, 6 секций + 2 приложения)
+  - **REWRITE:** `docs/DefenseScript_Team.md` (reassigned speeches, таблица competency)
+  - **REWRITE:** `docs/DefenseBriefer_1.md` (SAYS T1, COMPETENCY=Build/Test)
+  - **REWRITE:** `docs/DefenseBriefer_2.md` (SAYS T3, COMPETENCY=Voxel)
+  - **REWRITE:** `docs/DefenseBriefer_3.md` (SAYS T4, COMPETENCY=Render)
+  - **REWRITE:** `docs/DefenseBriefer_4.md` (SAYS T6, COMPETENCY=Physics)
+  - **REWRITE:** `docs/DefenseBriefer_5.md` (SAYS T5, COMPETENCY=Asset+Audio)
+  - **REWRITE:** `docs/DefenseBriefer_le1t.md` (новый mapping + cue-карты)
+  - **REWRITE:** `docs/DefensePresentation_Structure.md` (reassigned слайды)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии» в close-routine)
+  - **EDIT:** `agent/status.md` (§30)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefenseAlgorithms.md`, `docs/DefenseFAQ.md`, `docs/DefenseReport.md`, `docs/DefenseDemoScript.md` (уходит в архив), `docs/DefenseSpeakerNotes.md` (уходит в архив), `docs/VulkanSDK-Linux-Docs-*/`, чужой dirty work
+- **status:** closed
+- **commit-hash:** `c14e1bd` — `docs(defense): per-team competency FAQ (textbook) + архивация 4 устаревших 10-мин скриптов`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit (operator: «9. A»). type=`docs` → auto, §7.3.1 gate пройден (scope discipline clean, §7.2.5 message готов, build не требуется для docs-only). `git diff HEAD~1..HEAD --stat` показывает 14 файлов, +2444/-156 строк, 4 renames + 4 new files + 6 modified. Build state: docs-only, baseline preserved. Operator явно сказал: «при работе читай код, некоторые архивные истории коммитов, статусы и т.д. могут быть недействительными, надо код смотреть и всё перепроверять» → ВСЕ факты в FAQ проверены против исходного кода `src/**` и актуальных `docs/DefenseAlgorithms.md` / `DefenseReport.md` / `agent/decisions.md`. **НЕ полагался на memory.md или status.md** для технических фактов. Operator сказал: «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде ... Переназначаем» → каждая секция FAQ явно показывает BOTH speech slot (что человек говорит на сцене) и real competency (что он реально знает про код). **Cross-refs:** `AGENTS.md §7.2.6.1` (atomic subtask), `§8.1` (auto-close), `§7.3.1` (pre-commit gate), `§7.2.8` (shared `agent/` files); `agent/active-sessions.md` (эта запись); `agent/status.md` (§30 — добавляется в close-routine); `docs/DefenseScript_Team.md` (commit 45a15bc — base для 5-мин формата); `docs/DefenseBriefer_{1..5}.md` + `DefenseBriefer_le1t.md` (speech slots).
 
 ---
 

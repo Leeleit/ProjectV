@@ -481,6 +481,80 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 
 ---
 
+## §30. Defense competency FAQ r0 — `session-2026-06-17T-defense-competency-faq-r0` (closed в `c14e1bd`)
+
+**Per operator «FAQ для каждого участника команды о его компетенции, что ему ботать, что смотреть и списки реалистичных+ каверзных вопросов и ответов. Нужно всё максимально подробное, словно учебник. Для меня тоже, если чё. Также нужно убрать ненужные документы в docs/archive» + «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде. ... Переназначаем».**
+
+Единый atomic commit `c14e1bd` (operator: «9. A»), 14 файлов, +2444/-156 строк, 4 renames + 4 new + 6 modified. type=`docs` → auto per §7.3.1.
+
+**Speech ≠ Competency (новый принцип):**
+
+| # | Кто | **Реальная компетенция** (для Q&A) | **Speech slot** (на сцене) |
+|---|---|---|---|
+| 1 | Тиммейт 1 | Сборка и тестирование (CMake, ctest, smoke) | T1 Вступление и проблема |
+| 2 | Тиммейт 2 | Воксельный мир (чанки, meshing, fluid CA, snapshot) | T3 Архитектура и качество кода |
+| 3 | Тиммейт 3 | Рендеринг (Vulkan, TAA, CSM, AOCC, шейдеры) | T4 Тесты и проверки |
+| 4 | Тиммейт 4 | Физика и walk-контроллер (Jolt, edge grace) | T6 Планы и Закрытие |
+| 5 | Тиммейт 5 | Ассеты и аудио (glTF, Draco, miniaudio) | T5 Прочие фичи + что отложено |
+| 6 | le1t | Архитектура + Workflow + Q&A host | T2 Live Demo + Стек |
+
+Каждая секция FAQ явно показывает BOTH: «На сцене ты говоришь X. На Q&A отвечаешь по своей компетенции Y». Per operator: «нам надо красиво подать проект, а когда будут задавать вопросы, тут компетенция каждого уже понадобится».
+
+**Что сделано:**
+
+| Файл | Действие |
+|---|---|
+| `docs/DefenseScript.md` | `git mv` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseScript_10min.md` |
+| `docs/DefenseDemoScript.md` | `git mv` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseDemoScript_10min.md` |
+| `docs/DefenseSpeakerNotes.md` | `git mv` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseSpeakerNotes_10min.md` |
+| `docs/DefenseQnA.md` (untracked) | `mv` → `docs/archive/DefenseOldFormat_2026-06-17/DefenseQnA_10min.md` |
+| `docs/archive/DefenseOldFormat_2026-06-17/README.md` | NEW — причина архивации |
+| `docs/DefenseCompetency_FAQ.md` | **NEW — 1888 строк, textbook** |
+| `docs/DefenseScript_Team.md` | REWRITE — reassigned speeches, таблица competency |
+| `docs/DefenseBriefer_{1..5}.md` | REWRITE — speech + competency sections |
+| `docs/DefenseBriefer_le1t.md` | EDIT — новый mapping + cue-карты, Q&A-карта 30+ сохранена |
+| `docs/DefensePresentation_Structure.md` | REWRITE — reassigned слайды |
+
+**FAQ структура (1888 строк, 6 секций + 2 приложения):**
+- **§0 Общая карта** (стек, метрики, hotkeys, glossary, Phase 4-9 roadmap)
+- **§1-§5 Per-teammate** (5 разделов × ~350 строк каждый = ~1750 строк):
+  - Кто ты (легенда, slot, competency, out of scope)
+  - Твоя компетенция (файлы, структуры, константы, hotkeys)
+  - Что смотреть на защите (слайды, демо-этапы)
+  - Реалистичные вопросы (5-7, textbook-style, file:line refs)
+  - Каверзные вопросы (3-5, реально каверзные, не выдуманные)
+  - Out of scope (таблица перенаправления)
+- **§6 le1t** (~400 строк) — расширенная Q&A-карта 40 вопросов
+- **Приложение A** — глоссарий ~100 терминов (C++26, DOD, ECS, JPH, VMA, volk, fastgltf, Draco, meshopt, miniaudio, PVSNAP01, CSM, TAA, AOCC, Halton, YCoCg, PBR, MRT)
+- **Приложение B** — хронология решений (Tier 0-5, post-MVP roadmap, 2026-04-09 → 2026-06-17)
+
+**Что НЕ сделано (out of scope):**
+- ❌ Не модифицировал `docs/DefenseAlgorithms.md`, `DefenseFAQ.md`, `DefenseReport.md` — эталоны
+- ❌ Не модифицировал `AGENTS.md` (другой сессии)
+- ❌ Не модифицировал `src/render/vulkan/VulkanSwapchain.cpp` (другой сессии)
+- ❌ Не удалял файлы (только `git mv` / `mv`)
+
+**Проверка фактов (per operator «при работе читай код, ... надо код смотреть и всё перепроверять»):**
+- 14 ctest тестов — подтверждено `ctest -N` (ProjectVTests, ProjectVAssetTests, ProjectVMeshBakerTests, ProjectVDracoTests, ProjectVFrustumCullingTests, ProjectVCFrustumCullingTests, ProjectVSunShadowCascadeSplitsTests, ProjectVBoxUvFixtureTests, ProjectVMathTests, ProjectVStringIdTests, ProjectVModuleSmoke, ProjectVStdModuleProbe, ProjectVFluidCATests, ProjectVPresentModeTests)
+- 6/6 smoke captures (FINAL/SHDW/CSM/CTSH/AOCC/LOCL) — подтверждено в `decisions.md §4`
+- 73 MB debug / 19 MB release — подтверждено `ls -lh build/.../ProjectV`
+- 12 configure-пресетов — подтверждено `grep -c configurePreset CMakePresets.json`
+- Все static_asserts, InputAction bindings (1/2/3/4/5/6/7/8/9/0/J/F11/F12), ray-march STUB, hot shader reload — проверены против исходного кода
+- BUG-004 retraction сохранён: «Не существует, jitter=0 default» (Тиммейт 3 briefer §6, Тиммейт 5 briefer §5, FAQ §0.6)
+
+**Build state:**
+- `cmake --build build/linux-clang-debug --target ProjectV` — green, без warnings (docs-only change в этой сессии, baseline preserved)
+- Q&A-карта в `DefenseBriefer_le1t.md` §4 сохранена полностью (30+ вопросов, без сокращений per operator «Больше вопросов и ответов – больше покрытие, не уменьшай»)
+
+**Pre-commit gate (§7.3.1):**
+- §7.2.5 message: `docs(defense): per-team competency FAQ (textbook) + архивация 4 устаревших 10-мин скриптов` + body.
+- Scope discipline: AGENTS.md (другой сессии), `src/render/vulkan/VulkanSwapchain.cpp` (другой сессии), `legacy/docs/tex/.tmp/*` (kt-latex), `tests/fixtures/Untitled.colonada.glb` (другой сессии) — все вне моего scope, не в commit'е.
+- type=`docs` → auto, без operator confirm.
+
+**Cross-refs:** `AGENTS.md §7.2.6.1` (atomic subtask), `§8.1` (auto-close), `§7.3.1` (pre-commit gate), `§7.2.8` (shared `agent/` files); `agent/active-sessions.md` session-2026-06-17T-defense-competency-faq-r0; `docs/DefenseScript_Team.md` (commit `45a15bc` — base для 5-мин формата); `docs/DefenseAlgorithms.md` (23 алгоритма, не переписывался); `docs/DefenseFAQ.md` (готовые ответы, не переписывался); `docs/DefenseReport.md` (отчёт + §3 deferred items, не переписывался); `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` (Q&A reference, не переписывался).
+
+---
+
 Полный per-session detail в `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md`. Здесь — одна строка на сессию для быстрого navigation.
 
 | Date | Session | Outcome |
@@ -509,5 +583,6 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 | `2026-06-15` | Defense docs russian r0 | closed `d641967` (см. `agent/active-sessions.md session-2026-06-15T12-06Z-defense-docs-russian-r0`): полная русификация, 6 бриферов переписаны + Algorithms.md, единый коммит option A |
 | `2026-06-15` | **Windows build verification r0** | **closed `69b1726`** (см. `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0`): 5 atomic-commits (P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M). Linux baseline preserved (ctest 14/14, smoke 6/6). |
 | `2026-06-16` | **Defense team script rebuild r0** | **closed `45a15bc`** (см. `agent/active-sessions.md session-2026-06-16T22-23Z-defense-team-script-rebuild-r0`): пересборка под 5-минутный формат (4:30 + 30с буфер), 10 файлов, T3-T6 переписаны в стиле T1/T2 (простой разговорный русский, без техно-цифр), Q&A-карта 30+ вопросов сохранена, archive deep-dive для reference, `DefenseScript_Solo.md` удалён. |
+| `2026-06-17` | **Defense competency FAQ r0** | **closed `c14e1bd`** (см. `agent/active-sessions.md session-2026-06-17T-defense-competency-faq-r0`): per-team competency FAQ (textbook, 1888 строк, 6 секций + 2 приложения), speech ≠ competency principle, 4 устаревших 10-мин скрипта в `docs/archive/DefenseOldFormat_2026-06-17/`, переназначение speech slots под competency-matched mapping (T1=Т1 Build/Test, T3=Т2 Voxel, T4=Т3 Render, T5=Т5 Asset/Audio, T6=Т4 Physics). |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
