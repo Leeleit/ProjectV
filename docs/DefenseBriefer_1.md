@@ -1,9 +1,9 @@
-# Памятка Тиммейта 1 — Вступление и Проблема
+# Памятка Тиммейта 1 — Сборка и тестирование (говорит T1 Вступление)
 
 **Участник:** [Имя Тимейта 1]
-**Слот:** 0:00–0:45 (45 секунд)
-**Что я рассказываю:** команда, проект, проблема, цель
-**Что НЕ я рассказываю (к кому перенаправлять в Q&A):** стек/демо — к le1t; архитектура/алгоритмы — к Тиммейту 2; тесты — к Тиммейту 3; фичи/roadmap — к Тиммейтам 4-5; все баги — к le1t
+**Слот на сцене:** 0:00–0:45 (45 секунд) — T1 Вступление и проблема
+**Твоя реальная компетенция:** Сборка и тестирование (CMake, ctest, runtime smoke, presets)
+**Что НЕ твоё (к кому перенаправлять в Q&A):** архитектура/стек — к le1t; воксельный мир — к Тиммейту 2; рендеринг — к Тиммейту 3; физика/walk-контроллер — к Тиммейту 4; ассеты/аудио — к Тиммейту 5; все баги/хоткеи — к le1t
 
 ---
 
@@ -23,7 +23,7 @@
 
 ---
 
-## 3. Понятия (8 терминов, чтобы понимать что говоришь)
+## 3. Понятия (8 терминов, чтобы понимать что говоришь — общие для вступления)
 
 | Термин | Что это |
 |---|---|
@@ -46,19 +46,51 @@
 
 ---
 
-## 5. Вне зоны ответственности (к кому перенаправлять в Q&A)
+## 5. Твоя настоящая компетенция (для Q&A): Сборка и тестирование
+
+**Это то, что ты реально знаешь. На сцене ты говоришь про вступление, но на вопросы комиссии отвечаешь по своей компетенции.**
+
+**Ключевые файлы:**
+- `CMakePresets.json` — 12 configure-пресетов (8 debug + 4 release)
+- `src/CMakeLists.txt` — root build, ~30 строк
+- `tests/CMakeLists.txt` — 14 test executables
+- `src/app/BenchmarkAutomation.cpp` — автобенчмарки (env: `PROJECTV_BENCHMARK_FRAMES`, `*_WARMUP_FRAMES`, `*_QUIT`, `*_LOG_EVERY`)
+- `src/app/LookDevCaptureAutomation.cpp` — рантайм smoke (env: `PROJECTV_START_CAMERA_POSITION`, `*_CAMERA_LOOK`, `*_CAPTURE_VIEWS`, `*_WARMUP_FRAMES`, `*_INTERVAL_FRAMES`, `*_QUIT`)
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` и `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1` — обёртки smoke
+
+**14 ctest-тестов (baseline 14/14, ~0.78s debug, ~0.06s release):**
+- `ProjectVTests`, `ProjectVAssetTests`, `ProjectVMeshBakerTests`, `ProjectVDracoTests`, `ProjectVFrustumCullingTests`, `ProjectVCFrustumCullingTests`, `ProjectVSunShadowCascadeSplitsTests`, `ProjectVBoxUvFixtureTests`, `ProjectVMathTests`, `ProjectVStringIdTests`, `ProjectVModuleSmoke`, `ProjectVStdModuleProbe`, `ProjectVFluidCATests`, `ProjectVPresentModeTests`
+
+**6/6 runtime smoke captures:** FINAL / SHDW / CSM / CTSH / AOCC / LOCL (эталонные debug-виды под `build/<preset>/lookdev-captures/<timestamp>/`).
+
+**Sidecar metadata** — `.txt` рядом с `.bmp`, 60+ ключей: FPS, frame time, voxel counts, TAA state, shadow params и т.д.
+
+**Hotkeys (для само-проверки):** F6 (SaveWorldSnapshot), F7 (LoadWorldSnapshot), C (CaptureScreenshot), B (CycleLightingDebugView), `B` циклически переключает debug-виды (FINAL → SHDW → CSM → CTSH → AOCC → LOCL).
+
+**Build команды (запомни):**
+- `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8`
+- `ctest --test-dir build/linux-clang-debug --output-on-failure` → 14/14 passed
+- `bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh` → exit 0
+- `cmake --preset linux-clang-release && cmake --build --preset linux-clang-release-build` → 19 MB ELF (vs 73 MB debug, -73%)
+
+Подробнее — `docs/DefenseCompetency_FAQ.md §1` (textbook для Тиммейта 1).
+
+---
+
+## 6. Вне зоны ответственности (к кому перенаправлять в Q&A)
 
 | Вопрос про… | Говори |
 |---|---|
 | C++26 / Vulkan 1.4 / DOD / SIMD / C-ядра | «К le1t» |
 | Демо / FPS / HUD / сцена VoxelLab | «К le1t» |
-| Внутри движка / чанки / meshing / Jolt / статик-ассерты | «К Тиммейту 2» |
-| ctest / smoke / sidecar / метрики | «К Тиммейту 3» |
-| Ассеты / аудио / snapshot / hot reload | «К Тиммейту 4» |
-| Phase 4-9 / roadmap | «К Тиммейту 5» |
-| BUG-005 / баги | «К le1t» |
-| Hot shader reload / хоткеи | «К le1t» |
+| Воксельный мир / чанки / meshing / Jolt / статик-ассерты | «К Тиммейту 2» |
+| Рендеринг / Vulkan / TAA / CSM / AOCC / шейдеры | «К Тиммейту 3» |
+| Физика / walk-контроллер / Jolt / edge grace | «К Тиммейту 4» |
+| Ассеты / аудио / snapshot / hot reload / meshopt | «К Тиммейту 5» |
+| BUG-005 / баги / известные проблемы | «К le1t» |
+| Hot shader reload / хоткеи (F1-F12, 1/2/3) | «К le1t» |
+| Phase 4-9 / roadmap / планы | «К Тиммейту 4 (он закрывает)» |
 
 ---
 
-**Конец памятки.** Перед защитой: прочитать §2 вслух 3 раза с таймером, уложиться в 0:45 ± 5 секунд.
+**Конец памятки.** Перед защитой: прочитать §2 вслух 3 раза с таймером, уложиться в 0:45 ± 5 секунд. §5 прочитать отдельно, чтобы Q&A был уверенным.
