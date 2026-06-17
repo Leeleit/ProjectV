@@ -14,6 +14,7 @@
 **Полный текст:** [`DefenseBriefer_le1t.md §2`](DefenseBriefer_le1t.md#2-вступление-verbatim-200) — читать дословно.
 
 **Краткое содержание:**
+
 - ProjectV — воксельный движок на C++26 + Vulkan 1.4.
 - Проблема: нет современного открытого движка воксельной графики с DOD и контролем GPU.
 - Цель: надёжный, расширяемый, измеримый фундамент.
@@ -30,9 +31,11 @@
 ## §2. Стек и сборка — 1:30
 
 **Участник:** Тиммейт 1
-**Полный текст:** [`DefenseBriefer_1.md §2`](DefenseBriefer_1.md#2-что-говорить-verbatim-130-220-слов) — читать дословно.
+**Полный текст:** [`DefenseBriefer_1.md §2`](DefenseBriefer_1.md#2-что-говорить-verbatim-130-220-слов) — читать
+дословно.
 
 **Краткое содержание:**
+
 - C++26, Vulkan 1.4, DOD, ECS.
 - Clang 22.1.6 (clang-cl на Windows, native clang 22 на Linux).
 - libc++ 16 (миграция Tier 2.5, `c3faa65`).
@@ -50,15 +53,18 @@
 ## §3. Voxel-мир и meshing — 1:30
 
 **Участник:** Тиммейт 2
-**Полный текст:** [`DefenseBriefer_2.md §2`](DefenseBriefer_2.md#2-что-говорить-verbatim-130-220-слов) — читать дословно.
+**Полный текст:** [`DefenseBriefer_2.md §2`](DefenseBriefer_2.md#2-что-говорить-verbatim-130-220-слов) — читать
+дословно.
 
 **Краткое содержание:**
+
 - Чанки 8×8×8 = 512 вокселей, 1 байт/воксель, плотный массив.
 - VoxelLab: 27 чанков (3×3×3 grid), генерация 200 мс.
 - 5 материалов: Air, Glass, Fluid, FloorWhite, FloorGray.
 - 3 solid для физики: Glass, FloorWhite, FloorGray.
 - Greedy meshing (Лысенков): 6 проходов, 2D scan, 30-50% сокращение граней.
-- Visibility cache: custom XOR-fold hash (Knuth-style multipliers + splitmix64-style avalanche), 2 уровня, cache hit = skip frustum cull, 8× ускорение.
+- Visibility cache: custom XOR-fold hash (Knuth-style multipliers + splitmix64-style avalanche), 2 уровня, cache hit =
+  skip frustum cull, 8× ускорение.
 
 **Переход к Тиммейту 3:** «Дальше — про рендеринг: тени, сглаживание, контактные тени и экспериментальный ray-marching.»
 
@@ -67,9 +73,11 @@
 ## §4. Тени, TAA, AOCC, ray-marching — 1:30
 
 **Участник:** Тиммейт 3
-**Полный текст:** [`DefenseBriefer_3.md §2`](DefenseBriefer_3.md#2-что-говорить-verbatim-130-220-слов) — читать дословно.
+**Полный текст:** [`DefenseBriefer_3.md §2`](DefenseBriefer_3.md#2-что-говорить-verbatim-130-220-слов) — читать
+дословно.
 
 **Краткое содержание:**
+
 - **CSM:** 4 каскада 2048×2048, lambda 0.80 near-biased, XY sphere fit.
 - **CTSH:** voxel DDA к солнцу, max 5 единиц, 16 max steps.
 - **AOCC:** 3 направления × 4 шага = 12 DDA, локальный forward-path occlusion, не SSAO.
@@ -85,29 +93,35 @@
 ## §5. Физика и walk controller — 1:30
 
 **Участник:** Тиммейт 4
-**Полный текст:** [`DefenseBriefer_4.md §2`](DefenseBriefer_4.md#2-что-говорить-verbatim-130-220-слов) — читать дословно.
+**Полный текст:** [`DefenseBriefer_4.md §2`](DefenseBriefer_4.md#2-что-говорить-verbatim-130-220-слов) — читать
+дословно.
 
 **Краткое содержание:**
+
 - Jolt Physics: MIT, SIMD, deterministic.
 - **Voxel solver** авторитетный для walk, не Jolt `CharacterVirtual` (per `decisions.md §6`).
 - 3 режима: walk / creative / spectator. F4 циклически, двойной Space ↔ walk ↔ creative.
-- **Edge grace:** `kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f` (НЕ 0.1 м), не дёргает игрока на тонких краях.
+- **Edge grace:** `kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f` (НЕ 0.1 м), не дёргает
+  игрока на тонких краях.
 - **Sneak (Shift):** sampled top-plane, без false-stick к стене.
 - **Auto-jump:** J toggle, F12 delay, по forward voxel.
 - **Substepping в creative:** anti-tunneling для high-velocity.
 - **Voxel raycast:** 3D DDA через чанки для placement/removal.
 - **Hotkeys:** F4 cycle, двойной Space, J/F12, P, [ ], \`, `` ` ``.
 
-**Переход к Тиммейту 5:** «И, наконец, описание демо-сцены Voxel Laboratory, ассетного конвейера и аудио. После этого я скажу заключительное слово, и мы перейдём к вопросам.»
+**Переход к Тиммейту 5:** «И, наконец, описание демо-сцены Voxel Laboratory, ассетного конвейера и аудио. После этого я
+скажу заключительное слово, и мы перейдём к вопросам.»
 
 ---
 
 ## §6. Демо VoxelLab + ассеты + аудио — 1:30
 
 **Участник:** Тиммейт 5
-**Полный текст:** [`DefenseBriefer_5.md §2`](DefenseBriefer_5.md#2-что-говорить-verbatim-130-220-слов) — читать дословно.
+**Полный текст:** [`DefenseBriefer_5.md §2`](DefenseBriefer_5.md#2-что-говорить-verbatim-130-220-слов) — читать
+дословно.
 
 **Краткое содержание:**
+
 - VoxelLab: пол 18×18, стеклянный шар r=5, жидкость, 27 чанков.
 - 27 чанков (3×3×3), генерация 200 мс.
 - **Asset pipeline:** fastgltf → Draco decode → meshopt optimize → MeshBaker → VMA upload.
@@ -127,7 +141,9 @@
 **Полный текст:** [`DefenseBriefer_le1t.md §3`](DefenseBriefer_le1t.md#3-закрытие-verbatim-030) — читать дословно.
 
 **Краткое содержание:**
-> «Подводя итог: ProjectV достиг поставленных целей MVP. У нас есть рабочий фундамент воксельного движка, 12 ctest-сьютов с baseline 14/14, runtime smoke 6/6 captures, метрики в sidecar, и воспроизводимая сборка на Windows и Linux. Открыто документируем техдолг и roadmap Phase 4–9. Готовы к вопросам.»
+> «Подводя итог: ProjectV достиг поставленных целей MVP. У нас есть рабочий фундамент воксельного движка, 12
+> ctest-сьютов с baseline 14/14, runtime smoke 6/6 captures, метрики в sidecar, и воспроизводимая сборка на Windows и
+> Linux. Открыто документируем техдолг и roadmap Phase 4–9. Готовы к вопросам.»
 
 **Переход к Q&A:** «Готовы ответить на ваши вопросы.»
 
@@ -156,6 +172,7 @@
 ---
 
 **Связанные документы:**
+
 - `docs/DefenseScript.md` — 10-мин таймлайн, чеклисты, что делать при сбоях.
 - `docs/DefenseBriefer_le1t.md` — verbatim вступление/закрытие + Q&A-карта для le1t.
 - `docs/DefenseBriefer_{1..5}.md` — verbatim тексты и cheat-card'ы для тиммейтов.

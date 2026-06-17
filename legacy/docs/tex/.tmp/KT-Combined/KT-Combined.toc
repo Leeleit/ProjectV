@@ -1,0 +1,50 @@
+\xpg@aux {}{russian}
+\contentsline {section}{\numberline {1.}Общая схема архитектуры (System Context / Container Diagram)}{3}{section.1}%
+\contentsline {section}{\numberline {2.}Стек технологий с обоснованием}{5}{section.2}%
+\contentsline {section}{\numberline {3.}Структуры данных}{5}{section.3}%
+\contentsline {section}{\numberline {4.}AppState --- корневой контейнер}{6}{section.4}%
+\contentsline {section}{\numberline {5.}Описание ключевых программных модулей}{7}{section.5}%
+\contentsline {section}{\numberline {6.}Описание ключевых алгоритмов}{8}{section.6}%
+\contentsline {section}{\numberline {7.}План и виды тестирования}{9}{section.7}%
+\contentsline {section}{\numberline {8.}Сводный дашборд}{9}{section.8}%
+\contentsline {section}{\numberline {9.}Детальные тест-кейсы}{9}{section.9}%
+\contentsline {subsection}{\numberline {9.1}TC-01. Загрузка валидного glTF-фикстуры (Box) {[}Позитивный{]}}{9}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}TC-02. Одиночная ячейка жидкости падает ровно на 1 клетку за тик {[}Позитивный{]}}{10}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}TC-03. Сохранение и загрузка snapshot восстанавливают мир побайтово {[}Позитивный{]}}{10}{subsection.9.3}%
+\contentsline {subsection}{\numberline {9.4}TC-04. Изменение воксела на границе 8 чанков помечает все 8 {[}Позитивный{]}}{10}{subsection.9.4}%
+\contentsline {subsection}{\numberline {9.5}TC-05. AABB внутри фрустума помечается как видимый {[}Позитивный{]}}{11}{subsection.9.5}%
+\contentsline {subsection}{\numberline {9.6}TC-06. BMP-screenshot содержит корректный заголовок и пиксели {[}Позитивный{]}}{11}{subsection.9.6}%
+\contentsline {subsection}{\numberline {9.7}TC-07. Загрузка несуществующего glTF-файла возвращает ошибку, без segfault {[}Негативный{]}}{11}{subsection.9.7}%
+\contentsline {subsection}{\numberline {9.8}TC-08. Манифест с невалидным transform-суффиксом отбрасывается {[}Негативный{]}}{12}{subsection.9.8}%
+\contentsline {subsection}{\numberline {9.9}TC-09. Жидкость не разрушает платформу под собой {[}Негативный{]}}{12}{subsection.9.9}%
+\contentsline {subsection}{\numberline {9.10}TC-10. Bake пустого ассета возвращает ошибку и пустой результат {[}Негативный{]}}{12}{subsection.9.10}%
+\contentsline {subsection}{\numberline {9.11}TC-11. AABB за камерой (positive Z) отсекается фрустумом {[}Негативный{]}}{13}{subsection.9.11}%
+\contentsline {subsection}{\numberline {9.12}TC-12. Невалидные параметры CSM-сплитов клампятся в безопасный диапазон {[}Негативный{]}}{13}{subsection.9.12}%
+\contentsline {section}{\numberline {10.}Обзор остальных модулей}{13}{section.10}%
+\contentsline {section}{\numberline {11.}Реестр дефектов}{14}{section.11}%
+\contentsline {section}{\numberline {12.}ЧАСТЬ 1: Руководство администратора}{16}{section.12}%
+\contentsline {subsection}{\numberline {12.1}Системные требования}{16}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}Инструкция по развёртыванию (Linux)}{16}{subsection.12.2}%
+\contentsline {subsection}{\numberline {12.3}Инструкция по развёртыванию (Windows)}{16}{subsection.12.3}%
+\contentsline {subsection}{\numberline {12.4}Переменные окружения}{17}{subsection.12.4}%
+\contentsline {subsection}{\numberline {12.5}Пресеты сцен}{17}{subsection.12.5}%
+\contentsline {section}{\numberline {13.}ЧАСТЬ 2: Руководство пользователя}{24}{section.13}%
+\contentsline {subsection}{\numberline {13.1}Обзор интерфейса}{24}{subsection.13.1}%
+\contentsline {subsection}{\numberline {13.2}Управление}{24}{subsection.13.2}%
+\contentsline {subsection}{\numberline {13.3}Типовые сценарии (How-to)}{25}{subsection.13.3}%
+\contentsline {subsubsection}{\numberline {13.3.1}Как запустить сцену VoxelLab?}{25}{subsubsection.13.3.1}%
+\contentsline {subsubsection}{\numberline {13.3.2}Как разместить воксель?}{25}{subsubsection.13.3.2}%
+\contentsline {subsubsection}{\numberline {13.3.3}Как удалить воксель?}{25}{subsubsection.13.3.3}%
+\contentsline {subsubsection}{\numberline {13.3.4}Как перезагрузить шейдеры без перезапуска?}{25}{subsubsection.13.3.4}%
+\contentsline {subsubsection}{\numberline {13.3.5}Как переключить пресет сцены?}{25}{subsubsection.13.3.5}%
+\contentsline {subsubsection}{\numberline {13.3.6}Как снять capture для профилирования?}{25}{subsubsection.13.3.6}%
+\contentsline {subsubsection}{\numberline {13.3.7}Как включить Vulkan validation layers?}{25}{subsubsection.13.3.7}%
+\contentsline {subsection}{\numberline {13.4}FAQ}{25}{subsection.13.4}%
+\contentsline {section}{\numberline {14.}Статус готовности и сравнение с ТЗ}{27}{section.14}%
+\contentsline {section}{\numberline {15.}Архитектурные и инженерные вызовы (Post-mortem)}{27}{section.15}%
+\contentsline {paragraph}{Post-mortem 1: Walk Authority --- три недели на правильную синхронизацию}{27}{paragraph*.1}%
+\contentsline {paragraph}{Post-mortem 2: SIMD-рефакторинг типов и падение тестов}{28}{paragraph*.2}%
+\contentsline {paragraph}{Post-mortem 3: VoxelLab tremor + TAA descriptor race}{28}{paragraph*.3}%
+\contentsline {section}{\numberline {16.}Организация рабочего процесса}{28}{section.16}%
+\contentsline {section}{\numberline {17.}Рефлексия и приобретённый опыт}{28}{section.17}%
+\contentsline {section}{\numberline {18.}План дальнейшего развития (Roadmap)}{29}{section.18}%

@@ -138,9 +138,9 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &fo
 using projectv::present_mode::g_active;
 using projectv::present_mode::g_cycle;
 
-static VkPresentModeKHR PickBestAvailablePresentMode(
+VkPresentModeKHR PickBestAvailablePresentMode(
 	const std::vector<VkPresentModeKHR> &presentModes,
-	VkPresentModeKHR preferred)
+	const VkPresentModeKHR preferred)
 {
 	const std::array<VkPresentModeKHR, 3> priority{
 		preferred,
@@ -148,7 +148,7 @@ static VkPresentModeKHR PickBestAvailablePresentMode(
 		VK_PRESENT_MODE_FIFO_KHR,
 	};
 	for (const VkPresentModeKHR candidate : priority) {
-		if (std::find(presentModes.begin(), presentModes.end(), candidate) != presentModes.end()) {
+		if (std::ranges::find(presentModes, candidate) != presentModes.end()) {
 			return candidate;
 		}
 	}

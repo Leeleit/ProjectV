@@ -72,14 +72,14 @@ Tactical rules (verification policy, smoke policy, tracy build policy, warning-c
 
 Перед записью новой информации — **классифицировать** её по матрице:
 
-| Что                                                            | Куда                         |
-|----------------------------------------------------------------|------------------------------|
-| Roadmap, приоритеты, риски, чекбоксы                           | `TODO.md`                    |
-| Глобальные правила автоматизации                               | `AGENTS.md`                  |
+| Что | Куда |
+|-------------------------------------------------------------- --| ------------------------------|
+| Roadmap, приоритеты, риски, чекбоксы | `TODO.md`                    |
+| Глобальные правила автоматизации | `AGENTS.md`                  |
 | Долговечные технические факты, аппаратные/архитектурные лимиты | `agent/memory.md`            |
-| Снимок текущего состояния сессии                               | `agent/status.md`            |
-| Инженерные/архитектурные договорённости                        | `agent/decisions.md`         |
-| Чеклист старта/завершения сессии                               | `agent/session-checklist.md` |
+| Снимок текущего состояния сессии | `agent/status.md`            |
+| Инженерные/архитектурные договорённости | `agent/decisions.md`         |
+| Чеклист старта/завершения сессии | `agent/session-checklist.md` |
 
 **Запрещено:**
 
@@ -288,14 +288,14 @@ operator confirm (что фикс работает — visual / ctest / repro). 
 по ходу работы, **не дожидаясь** завершения других сессий и **не арбитрируя scope** через
 пользователя.
 
-| Файл | Назначение | Правило конкурентного edit |
-|---|---|---|
-| `agent/active-sessions.md` | Ledger активных/закрытых сессий | Edit **только своей** записи; чужие записи — read-only. См. header файла. |
-| `agent/status.md` | Snapshot текущего состояния | APPEND новая секция (следующий номер `§N`) или UPDATE **своей** секции. Не стирай чужую секцию. |
-| `agent/memory.md` | Долговечные факты / лимиты / run-time observations | APPEND новый `§N`; не переписывай чужие секции retroactively. |
-| `agent/decisions.md` | Архитектурные договорённости | APPEND новый `§N`; старое решение — immutable, новое может `supersede:` старое (явная ссылка). |
-| `agent/session-checklist.md` | Чеклист старта/завершения | Read-only contract; менять только при изменении протокола. |
-| `AGENTS.md` | Stable protocol doc | По §1 — отдельный contract, не shared. |
+| Файл                         | Назначение                                         | Правило конкурентного edit                                                                      |
+|------------------------------|----------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `agent/active-sessions.md`   | Ledger активных/закрытых сессий                    | Edit **только своей** записи; чужие записи — read-only. См. header файла.                       |
+| `agent/status.md`            | Snapshot текущего состояния                        | APPEND новая секция (следующий номер `§N`) или UPDATE **своей** секции. Не стирай чужую секцию. |
+| `agent/memory.md`            | Долговечные факты / лимиты / run-time observations | APPEND новый `§N`; не переписывай чужие секции retroactively.                                   |
+| `agent/decisions.md`         | Архитектурные договорённости                       | APPEND новый `§N`; старое решение — immutable, новое может `supersede:` старое (явная ссылка).  |
+| `agent/session-checklist.md` | Чеклист старта/завершения                          | Read-only contract; менять только при изменении протокола.                                      |
+| `AGENTS.md`                  | Stable protocol doc                                | По §1 — отдельный contract, не shared.                                                          |
 
 **Главное правило:** если у тебя в `git status -uall` уже есть чужие uncommitted изменения
 в `agent/status.md` или `agent/memory.md` — **это нормально**. Ты просто пишешь **в свою** секцию,
@@ -345,12 +345,12 @@ Tactical verification rules (build/test policy, smoke policy, tracy build policy
    `files-touched-intent` (см. §7.2.6, §7.2.8). При наличии — arbitration через оператора или
    сессия остаётся `open` с `notes: BLOCKED: scope-collision`.
 3. **Type-dependent gate:**
-   - `type = fix` — обязательное **явное подтверждение оператора** что фикс работает
-     (visual verify, ctest-сценарий, repro, или иной domain check). Без confirm — сессия
-     `open`, `notes: BLOCKED: fix-confirm`. **Причина:** agent склонен коммитить фиксы,
-     которые не проверены в продакшен-условиях (visual / repro).
-   - все прочие type (`feat`, `refactor`, `perf`, `docs`, `test`, `build`, `chore`, `revert`)
-     — auto.
+    - `type = fix` — обязательное **явное подтверждение оператора** что фикс работает
+      (visual verify, ctest-сценарий, repro, или иной domain check). Без confirm — сессия
+      `open`, `notes: BLOCKED: fix-confirm`. **Причина:** agent склонен коммитить фиксы,
+      которые не проверены в продакшен-условиях (visual / repro).
+    - все прочие type (`feat`, `refactor`, `perf`, `docs`, `test`, `build`, `chore`, `revert`)
+      — auto.
 4. **Destructive операции** (rebase, push, force-push, reset --hard, revert, branch delete, network
    publish, sudo, rm -rf unverified, и т.д.) — **всегда** требуют operator confirm, не auto.
    См. §7.2.2 / §7.2.4. Pre-commit gate про auto-commit, не про эти операции.
