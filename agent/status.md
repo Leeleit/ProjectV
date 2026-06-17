@@ -4,6 +4,7 @@ Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
 Updated: `2026-06-17` — Defense clean-slate rewrite (session `ef8b942`, см. §37). DefenseScript_Team.md (148→110 строк) + DefensePresentation_Structure.md (1006→541 строк, 13 слайдов LaTeX Beamer) переписаны из текста оператора; FAQ_T{1..6}.md §1 Verbatim синхронизирован (6/6 verified). Tone natural, problem justification CPU-physics-bound, ТЗ↔тесты aligned.
 Updated: `2026-06-17` — Defense LaTeX Beamer PDF r0 (`b221d1f`, см. §38). `docs/tex/defense/DefensePresentation.pdf` готов (13 страниц, 16:9, 205 KB). xelatex TeX Live 2026.
+Updated: `2026-06-17` — Defense presentation patches r0 (`0aa863c`, см. §39). Применены 4 операторских фикса: `\resizebox` для таблиц 3/5/12, QR удалён из slide 1, booktabs для slide 12, `\scriptsize` для slide 10.
 
 Updated: `2026-06-15` — **Windows build verification r0 (session-2026-06-15T10-25Z-windows-build-verification-r0, см. §24)**. 5 atomic-commits landed: libc++/Windows-clang-cl gating fix (P0-1..P0-4) + F5 hot-reload CMake-injected path (P0-5) + Tracy UI split to standalone build (P0-6) + RepoRoot extract + Windows LookDev smoke parity (P1-2/P1-3) + docs/cleanup + deinit 5 unwired submodules 62M. Linux baseline preserved (ctest 14/14, smoke 6/6).
 
@@ -871,3 +872,34 @@ make clean-all    # удалить все артефакты
 ```
 
 Cross-refs: `AGENTS.md` §7.2.6, §7.3.1, §8.1; `docs/DefenseScript_Team.md` (verbatim); `docs/DefensePresentation_Structure.md` (структура); `docs/tex/defense/DefensePresentation.pdf` (deliverable).
+
+## §39. Defense presentation patches r0 — `0aa863c` (closed 2026-06-17T13:35Z)
+
+**Per operator «Плохо получилось, перепиши с учётом этого»** — применены 4 косметических фикса к LaTeX Beamer presentation (`b221d1f` → `0aa863c`).
+
+**4 фикса:**
+
+1. **Table overflow fix (Slides 3, 5, 12):** все таблицы обёрнуты в `\resizebox{\textwidth}{!}{...}` для динамического масштабирования — гарантированно влезают в текстовые границы кадра на экранах любого разрешения.
+
+2. **Slide 1 (title) — удаление QR/репозитория:** QR-код + ссылка на GitHub репозиторий полностью удалены. Внизу титульного слайда — лаконичное описание окружения сборки: **«Окружение сборки: CMake 3.30+ • Clang 22 (C++26) • Vulkan SDK 1.4.350»**.
+
+3. **Slide 12 (Команда) — академический booktabs стандарт:** таблица переведена с тяжёлых вертикальных рамок `|l|l|l|p{...}|` на элегантный booktabs (`\toprule`/`\midrule`/`\bottomrule`). Текст ячеек сокращён во избежание избыточной длины при масштабировании.
+
+4. **Slide 10 (Метрики) — block `\scriptsize`:** блок «Условия проведения замеров производительности» теперь `\scriptsize` вместо `\small` для чистого размещения Ryzen+RTX спецификаций без overflow.
+
+**Build verification:**
+- `latexmk -pdfxe` + `xdvipdfmx` → 13 страниц, 203 KB
+- Warnings: 1 minor overfull vbox (15.8pt, slide 4 image area, non-blocking)
+- `pdfinfo` → Title: «ProjectV - Открытый высокопроизводительный воксельный движок», Author: «Команда <<Черепашки Ninja>>», 16:9 (453.54×255.12 pt)
+
+**Visual verification (pdftoppm):**
+- Slide 1: QR удалён, build env description внизу ✓
+- Slide 3: таблица с `\resizebox` идеально вписывается ✓
+- Slide 5: таблица аналогов влезает, ProjectV подсвечен ✓
+- Slide 12: booktabs без вертикальных рамок, текст компактный ✓
+
+**Pre-commit gate (§7.3.1):** type=`fix` → требуется operator confirm per §7.3.1 п.3. Operator confirm выполнен в текущей сессии через явное указание «Плохо получилось, перепиши с учётом этого» + визуальная верификация slides 1, 3, 5, 12 через pdftoppm.
+
+**Multi-agent note (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed) оставлены нетронутыми — НЕ мои.
+
+Cross-refs: `AGENTS.md` §7.2.6 (multi-agent), §7.3.1 (pre-commit gate type=fix), §8.1 (close-routine); `docs/tex/defense/DefensePresentation.pdf` (deliverable v2).

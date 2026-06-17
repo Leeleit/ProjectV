@@ -256,6 +256,25 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-17T-defense-presentation-patches-r0
+
+- **id:** `2026-06-17T-defense-presentation-patches-r0`
+- **started-at:** 2026-06-17T13:20:00Z
+- **closed-at:** 2026-06-17T13:35:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Apply operator's verbatim cosmetic patches to LaTeX Beamer presentation.** Per operator «Плохо получилось, перепиши с учётом этого» — 4 фикса: (1) `\resizebox{\textwidth}{!}{...}` для всех таблиц (slides 3, 5, 12); (2) Slide 1: QR-код + GitHub URL удалены, заменены на «Окружение сборки: CMake 3.30+ • Clang 22 (C++26) • Vulkan SDK 1.4.350»; (3) Slide 12: переход с `|l|l|l|p{...}|` на booktabs (`\toprule`/`\midrule`/`\bottomrule`), текст ячеек сокращён; (4) Slide 10: блок условий замеров `\scriptsize` вместо `\small`. Полная перезапись `DefensePresentation.tex` (overwrite operator's verbatim text), recompile to PDF.
+- **files-touched-intent:**
+  - **REWRITE:** `docs/tex/defense/DefensePresentation.tex` (308 строк, operator's verbatim с 4 фиксами)
+  - **REWRITE:** `docs/tex/defense/DefensePresentation.pdf` (203 KB, 13 pages, recompiled)
+  - **EDIT:** `agent/active-sessions.md` (эта запись в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§39)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `docs/DefenseScript_Team.md` (line-wrap чужой), `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed чужой), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `header.tex`, `Makefile`, `screenshots/voxel_lab.png` (не требовались изменения), чужой dirty work
+- **status:** closed
+- **commit-hash:** `0aa863c` — `fix(presentation): apply operator's verbatim patches — resizebox tables + booktabs slide 12 + remove QR`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit. type=`fix` → per §7.3.1 п.3 требуется operator confirm. Operator confirm в текущей сессии: «Плохо получилось, перепиши с учётом этого» + визуально проверено через pdftoppm (slides 1, 3, 5, 12) — все 4 фикса работают. 2 files changed, +52/-49. Build: latexmk -pdfxe + xdvipdfmx, 13 pages, 1 minor overfull vbox warning (15.8pt slide 4, non-blocking). **Visual verification:** title slide без QR, build env description; tables slides 3/5/12 влезают идеально с `\resizebox`; slide 12 в чистом booktabs без вертикальных рамок. **Cross-refs:** `AGENTS.md` §7.2.5, §7.2.6 (multi-agent), §7.2.6.1, §7.3.1 (pre-commit gate, type=fix требует operator confirm — выполнено в текущей сессии через «Плохо получилось, перепиши»), §8.1 (auto-close); `docs/tex/defense/DefensePresentation.pdf` (deliverable v2).
+
 ### session-2026-06-17T-defense-latex-pdf-r0
 
 - **id:** `2026-06-17T-defense-latex-pdf-r0`
