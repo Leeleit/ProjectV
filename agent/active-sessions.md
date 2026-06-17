@@ -205,6 +205,37 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-17T-defense-competency-faq-split-r0
+
+- **id:** `2026-06-17T-defense-competency-faq-split-r0`
+- **started-at:** 2026-06-17T07:30:00Z
+- **closed-at:** 2026-06-17T07:37:23Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Split monolithic Competency FAQ на 7 файлов + удаление 6 DefenseBriefer_*** Per operator: «Всё же лучше на несколько файлов разделить» + «DefenseBirefer_* не нужны, так как у нас есть DefenseScript_Team и появятся Competency». Итого: 1 monolithic FAQ → 7 файлов (1 INDEX+Common + 6 per-person), и удалить 6 briefers (verbatim в DefenseScript_Team.md, понятия и competency — в FAQ per-person файлах).
+- **files-touched-intent:**
+  - **DELETE:** `docs/DefenseCompetency_FAQ.md` (заменяется на 7 файлов)
+  - **NEW:** `docs/DefenseCompetencyFAQ.md` (Common + INDEX, 392 строк)
+  - **NEW:** `docs/DefenseCompetencyFAQ_T1.md` (Build/Test, 168 строк)
+  - **NEW:** `docs/DefenseCompetencyFAQ_T2.md` (Voxel, 235 строк)
+  - **NEW:** `docs/DefenseCompetencyFAQ_T3.md` (Render, 253 строки)
+  - **NEW:** `docs/DefenseCompetencyFAQ_T4.md` (Physics, 251 строк)
+  - **NEW:** `docs/DefenseCompetencyFAQ_T5.md` (Asset/Audio, 223 строк)
+  - **NEW:** `docs/DefenseCompetencyFAQ_le1t.md` (Architecture + Q&A host, 422 строки, 40 вопросов)
+  - **DELETE:** `docs/DefenseBriefer_1.md` (T1 Build/Test)
+  - **DELETE:** `docs/DefenseBriefer_2.md` (T3 Voxel)
+  - **DELETE:** `docs/DefenseBriefer_3.md` (T4 Render)
+  - **DELETE:** `docs/DefenseBriefer_4.md` (T6 Physics)
+  - **DELETE:** `docs/DefenseBriefer_5.md` (T5 Asset/Audio)
+  - **DELETE:** `docs/DefenseBriefer_le1t.md` (T2 Demo + Q&A-карта, перенесена в FAQ le1t)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§31)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefenseAlgorithms.md`, `docs/DefenseFAQ.md`, `docs/DefenseReport.md`, `docs/DefenseScript_Team.md`, `docs/DefensePresentation_Structure.md`, `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md`, `docs/archive/DefenseOldFormat_2026-06-17/*`, чужой dirty work
+- **status:** closed
+- **commit-hash:** `7581963` — `docs(defense): split monolithic FAQ на 7 файлов + удалить 6 briefers`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit. type=`docs` → auto, §7.3.1 gate пройден (scope discipline clean, §7.2.5 message готов, build не требуется для docs-only). `git diff HEAD~1..HEAD --shortstat` показывает 17 files changed, +1997/-2726 строк, 7 new + 8 deleted (6 briefers + монолит FAQ). Build state: `cmake --build build/linux-clang-debug --target ProjectV` — green (docs-only change). Per operator «при работе читай код» — факты FAQ основаны на проверенном содержимом монолитного `DefenseCompetency_FAQ.md` (коммит c14e1bd), который уже был проверен против `src/**`. **Cross-refs:** `AGENTS.md §7.2.6.1` (atomic subtask), `§8.1` (auto-close), `§7.3.1` (pre-commit gate), `§7.2.8` (shared `agent/` files); `agent/active-sessions.md` (эта запись); `agent/status.md` (§31); `docs/DefenseScript_Team.md` (verbatim тексты выступлений); `docs/DefenseCompetencyFAQ*.md` (7 файлов).
+
 ### session-2026-06-16T22-23Z-defense-team-script-rebuild-r0
 
 - **id:** `2026-06-16T22:23Z-defense-team-script-rebuild-r0`

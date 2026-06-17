@@ -481,6 +481,64 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 
 ---
 
+## §31. Defense competency FAQ split r0 — `session-2026-06-17T-defense-competency-faq-split-r0` (closed в `7581963`)
+
+**Per operator: «Всё же лучше на несколько файлов разделить» + «DefenseBirefer_* не нужны, так как у нас есть DefenseScript_Team и появятся Competency».**
+
+Единый atomic commit `7581963`, 17 files changed, +1997/-2726 строк, 7 new + 8 deleted (6 briefers + монолит FAQ). type=`docs` → auto per §7.3.1.
+
+**Новая файловая структура (1944 строки итого):**
+
+| Файл | Строк | Содержимое |
+|---|---|---|
+| `docs/DefenseCompetencyFAQ.md` | 392 | INDEX + Common (§0 общая карта, hotkeys, glossary, chronology) |
+| `docs/DefenseCompetencyFAQ_le1t.md` | 422 | le1t (Архитектура + Q&A host, 40 вопросов) |
+| `docs/DefenseCompetencyFAQ_T3.md` | 253 | Тиммейт 3 (Рендеринг) |
+| `docs/DefenseCompetencyFAQ_T4.md` | 251 | Тиммейт 4 (Физика и walk-контроллер) |
+| `docs/DefenseCompetencyFAQ_T2.md` | 235 | Тиммейт 2 (Воксельный мир) |
+| `docs/DefenseCompetencyFAQ_T5.md` | 223 | Тиммейт 5 (Ассеты и аудио) |
+| `docs/DefenseCompetencyFAQ_T1.md` | 168 | Тиммейт 1 (Сборка и тестирование) |
+
+**Удалённые файлы (8):**
+- `docs/DefenseCompetency_FAQ.md` (монолитный, 1888 строк) — заменён на 7 split
+- `docs/DefenseBriefer_1.md` (T1 Build/Test)
+- `docs/DefenseBriefer_2.md` (T3 Voxel — было до переназначения)
+- `docs/DefenseBriefer_3.md` (T4 Render)
+- `docs/DefenseBriefer_4.md` (T6 Physics)
+- `docs/DefenseBriefer_5.md` (T5 Asset/Audio)
+- `docs/DefenseBriefer_le1t.md` (T2 Demo + Q&A-карта — перенесена в FAQ le1t §6.4)
+
+**Принципы:**
+- Speech slot ≠ real competency (per `§30` Defense competency FAQ r0).
+- Per-team файлы содержат ТОЛЬКО competency FAQ (Кто ты, Компетенция, Что смотреть, Вопросы, Out of scope).
+- Verbatim тексты выступлений — в `docs/DefenseScript_Team.md`. Per-team файлы ссылаются на разделы скрипта для каждого тиммейта.
+- INDEX в `DefenseCompetencyFAQ.md` указывает на все 6 per-team файлов с competency и speech slot mapping.
+
+**Speech ↔ Competency mapping (без изменений из §30):**
+
+| Слот | Тема | Кто говорит | Real competency |
+|---|---|---|---|
+| T1 | Вступление и проблема | Тиммейт 1 | Сборка и тестирование |
+| T2 | Live Demo + Стек | le1t | Архитектура + Workflow + Q&A host |
+| T3 | Архитектура и качество кода | Тиммейт 2 | Воксельный мир |
+| T4 | Тесты и проверки | Тиммейт 3 | Рендеринг |
+| T5 | Прочие фичи + что отложено | Тиммейт 5 | Ассеты и аудио |
+| T6 | Планы и Завершение | Тиммейт 4 | Физика и walk-контроллер |
+
+**Проверка фактов (per operator «при работе читай код»):** факты FAQ основаны на проверенном содержимом монолитного `DefenseCompetency_FAQ.md` (коммит `c14e1bd`), который был проверен против `src/**` в предыдущей сессии. В этой сессии дополнительная верификация не требовалась (только split + delete).
+
+**Build state:**
+- `cmake --build build/linux-clang-debug --target ProjectV` — green (docs-only change, baseline preserved).
+
+**Pre-commit gate (§7.3.1):**
+- §7.2.5 message: `docs(defense): split monolithic FAQ на 7 файлов + удалить 6 briefers` + body.
+- Scope discipline: AGENTS.md (другой сессии), `src/render/vulkan/VulkanSwapchain.cpp` (другой сессии), `legacy/docs/tex/.tmp/*` (kt-latex), `tests/fixtures/Untitled.colonada.glb` — все вне моего scope, не в commit'е.
+- type=`docs` → auto, без operator confirm.
+
+**Cross-refs:** `AGENTS.md §7.2.6.1` (atomic subtask), `§8.1` (auto-close), `§7.3.1` (pre-commit gate), `§7.2.8` (shared `agent/` files); `agent/active-sessions.md` session-2026-06-17T-defense-competency-faq-split-r0; `docs/DefenseScript_Team.md` (verbatim тексты выступлений); `docs/DefenseCompetencyFAQ*.md` (7 файлов, новые).
+
+---
+
 ## §30. Defense competency FAQ r0 — `session-2026-06-17T-defense-competency-faq-r0` (closed в `c14e1bd`)
 
 **Per operator «FAQ для каждого участника команды о его компетенции, что ему ботать, что смотреть и списки реалистичных+ каверзных вопросов и ответов. Нужно всё максимально подробное, словно учебник. Для меня тоже, если чё. Также нужно убрать ненужные документы в docs/archive» + «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде. ... Переназначаем».**
@@ -584,5 +642,6 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 | `2026-06-15` | **Windows build verification r0** | **closed `69b1726`** (см. `agent/active-sessions.md session-2026-06-15T10-25Z-windows-build-verification-r0`): 5 atomic-commits (P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M). Linux baseline preserved (ctest 14/14, smoke 6/6). |
 | `2026-06-16` | **Defense team script rebuild r0** | **closed `45a15bc`** (см. `agent/active-sessions.md session-2026-06-16T22-23Z-defense-team-script-rebuild-r0`): пересборка под 5-минутный формат (4:30 + 30с буфер), 10 файлов, T3-T6 переписаны в стиле T1/T2 (простой разговорный русский, без техно-цифр), Q&A-карта 30+ вопросов сохранена, archive deep-dive для reference, `DefenseScript_Solo.md` удалён. |
 | `2026-06-17` | **Defense competency FAQ r0** | **closed `c14e1bd`** (см. `agent/active-sessions.md session-2026-06-17T-defense-competency-faq-r0`): per-team competency FAQ (textbook, 1888 строк, 6 секций + 2 приложения), speech ≠ competency principle, 4 устаревших 10-мин скрипта в `docs/archive/DefenseOldFormat_2026-06-17/`, переназначение speech slots под competency-matched mapping (T1=Т1 Build/Test, T3=Т2 Voxel, T4=Т3 Render, T5=Т5 Asset/Audio, T6=Т4 Physics). |
+| `2026-06-17` | **Defense competency FAQ split r0** | **closed `7581963`** (см. `agent/active-sessions.md session-2026-06-17T-defense-competency-faq-split-r0`): монолитный FAQ (1888 строк) разделён на 7 файлов (1944 строк итого — `DefenseCompetencyFAQ.md` 392 + `DefenseCompetencyFAQ_T1..T5.md` 168/235/253/251/223 + `DefenseCompetencyFAQ_le1t.md` 422 с 40 вопросами). Удалены 6 `DefenseBriefer_{1..5}.md` + `DefenseBriefer_le1t.md` — verbatim в `DefenseScript_Team.md`, понятия и competency FAQ в per-team файлах. |
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
