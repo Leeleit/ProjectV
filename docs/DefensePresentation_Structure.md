@@ -1,1006 +1,541 @@
-# DefensePresentation_Structure.md — ProjectV (13 слайдов, 5 мин defense)
+# Структура презентации защиты ProjectV (13 слайдов)
 
-**Дата защиты:** 2026-06-17 (перенесена с 2026-06-15)
-**Формат:** 5 минут = 4:30 речь + 30с буфер. После 5:00 — тишина, Q&A начинается.
-**Слайдов:** 13 (один слайд = одна мысль, per критерии п.8)
-**Стиль:** PDF (рекомендация критериев п.8), шаблон МФТИ, минимум текста на слайде.
-**Целевая оценка по критериям п.6:** 81–100% (оценка 5). Все 8 блоков покрыты.
-
-> **Hand-off note для следующей сессии (LaTeX/PDF экспорт):**
-> Каждый слайд ниже описан в 5 секциях:
-> 1. **Визуальная структура** — header/subheader/body/footer + рекомендации для LaTeX Beamer
-> 2. **Body content (verbatim)** — точный текст, который появляется на слайде (для \frametitle{} и \begin{itemize})
-> 3. **Speaker notes (verbatim)** — то, что ГОВОРИТ спикер (копируется в `DefenseScript_Team.md`)
-> 4. **Тайминг** — сколько секунд на этом слайде
-> 5. **Источник данных** — где цифры/факты (для traceability)
->
-> Все цифры подтверждены против исходного кода `src/**` и `agent/decisions.md`.
+**Формат:** PDF (сгенерирован через LaTeX Beamer), 16:9.
+**Регламент:** 5 минут (4:30 доклад + 30 секунд буфер).
+**Принцип визуализации:** один слайд — одна законченная мысль, минимум текста, акцент на технических данных и схемах.
 
 ---
 
-## Важно от преподавателя
+## Слайд 1: Титульный (0:00–0:10)
 
-- Меньше текста, больше акцента на актуальности и целях.
-- Не зачитывать слайды, эксперты умеют читать.
-- Красочное оформление (использовать шаблон МФТИ).
-- Скриншоты работы приложения как подстраховка демо.
-- Строго 5 минут. После 5:00 — останавливают сразу.
+### 1. Рекомендации по верстке Beamer
+*   **Стиль:** Минималистичный корпоративный шаблон МФТИ. Сине-серые тона.
+*   **Компоновка:** Центрированный текст. Крупный заголовок, четкие шрифты без засечек.
+*   **Элементы:** В правом нижнем углу — QR-код на репозиторий.
 
----
-
-## Распределение времени (строго)
-
-| Slot | Хронометраж | Тема (слайды)                                    | Спикер         | Реальная компетенция (для Q&A) |
-|------|-------------|--------------------------------------------------|----------------|--------------------------------|
-| T1   | 0:00–0:50   | Слайды 1, 2, 3 (титул, проблема, цели)           | Тиммейт 1      | Сборка и тестирование           |
-| T2   | 0:50–1:50   | Слайды 4, 5 (Demo + Аналоги)                      | Тиммейт 2      | Воксельный мир                  |
-| T3   | 1:50–2:40   | Слайды 6, 7 (Архитектура + Voxel)                 | Тиммейт 3      | Рендеринг                       |
-| T4   | 2:40–3:15   | Слайд 8 (Тесты)                                   | Тиммейт 4      | Физика                          |
-| T5   | 3:15–4:00   | Слайды 9, 10 (Фичи + Метрики)                     | Тиммейт 5      | Ассеты и аудио                  |
-| T6   | 4:00–4:30   | Слайды 11, 12, 13 (Ограничения + Команда + Закрытие) | le1t          | Архитектура + Q&A host          |
-| —    | 4:30–5:00   | **Буфер** на форс-мажоры                          | Тишина         | —                              |
-
-**Важно:** speech slot ≠ real competency. Все 5 тиммейтов на сцене говорят «мы», роли не акцентируем. Реальные
-компетенции нужны для Q&A — см. `docs/DefenseCompetencyFAQ_T{1..6}.md`.
-
----
-
-## Слайд 1: Титульный (0:00–0:10, Т1 = Участник 1 = Тиммейт 1)
-
-### Визуальная структура (LaTeX Beamer рекомендация)
-
-- **Header (центр, \Huge):** ProjectV
-- **Subheader (ниже, \Large):** Высокопроизводительный воксельный движок
-- **Body (мелко, центр):**
-    - Стек: C++26 • Vulkan 1.4 • Data-Oriented Design • ECS
-    - Команда: «Черепашки Ninja» (6 человек)
-    - Курс: Основы проектной деятельности в ИТ-сфере, МФТИ-1-2024
-    - Руководитель: Подольский Филипп Александрович
-- **Footer:** страница 1 / 13
-- **QR-код (правый нижний угол):** https://github.com/Leeleit/ProjectV
-
-### Body content (verbatim — копировать в LaTeX)
-
+### 2. Body content (verbatim LaTeX)
 ```latex
 \frametitle{ProjectV}
-\framesubtitle{Высокопроизводительный воксельный движок}
+\framesubtitle{Открытый высокопроизводительный воксельный движок}
+
 \begin{center}
-\textbf{C++26} $\bullet$ \textbf{Vulkan 1.4} $\bullet$ \textbf{DOD} $\bullet$ \textbf{ECS}\\[0.5em]
-Команда <<Черепашки Ninja>> (6 человек)\\[0.3em]
-Основы проектной деятельности в ИТ-сфере, МФТИ-1-2024\\
-Руководитель: Подольский Филипп Александрович
+\textbf{Стек технологий:} C++26 $\bullet$ Vulkan 1.4 $\bullet$ Data-Oriented Design $\bullet$ ECS\\[1.5em]
+
+\small
+Разработчик: Команда <<Черепашки Ninja>> (6 человек)\\
+Курс: Основы проектной деятельности в ИТ-сфере, МФТИ-1-2024\\[1em]
+
+\footnotesize
+Руководитель проекта: Подольский Филипп Александрович\\[1.5em]
+
+\scriptsize
+Репозиторий проекта: \url{https://github.com/Leeleit/ProjectV}
 \end{center}
 ```
 
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
+### 3. Speaker Notes (verbatim)
+«Здравствуйте. Наша команда представляет проект ProjectV — открытый высокопроизводительный воксельный движок на базе Vulkan 1.4 и современного стандарта C++26.»
 
-«Здравствуйте. Мы команда "Черепашки Ninja", наш проект — воксельный игровой движок на базе Vulkan API и современного
-C++.»
-
-### Тайминг
-
-**10 секунд.** Не задерживаться — это вводный слайд.
-
-### Источник данных
-
-- Команда/руководитель: `docs/DefenseCompetencyFAQ_T2.md:343–354` (§3.6 команда)
-- GitHub: `https://github.com/Leeleit/ProjectV`
-
-### Подстраховка
-
-- Если демо упало: этот слайд показывается как первый, остаётся на экране дольше.
+### 4. Метрики и источники данных
+*   **Стек:** `agent/decisions.md §2`, `CMakeLists.txt:29` (стандарт C++26).
+*   **Лицензия:** Открытый код под лицензией MIT.
 
 ---
 
-## Слайд 2: Проблема и ценность (0:10–0:25, Т1 = Участник 1 = Тиммейт 1)
+## Слайд 2: Постановка проблемы и ценность (0:10–0:25)
 
-### Визуальная структура
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Двухколоночный макет (`columns`).
+*   **Визуальный акцент:** Выделение ключевых слов жирным начертанием. Избегать сплошных абзацев.
 
-- **Header (\Large):** Проблема: нет открытого современного фундамента
-- **Subheader:** Для кого и почему это важно
-- **Body (3 секции, можно 3 строки или 3 столбца):**
-
-| Секция           | Содержание                                                                                                                                            |
-|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Кто**          | Indie-разработчики воксельных игр; исследователи компьютерной графики; студенты-разработчики движков                                                  |
-| **Что**          | Существующие движки либо закрытые (Minecraft), либо high-level без контроля над GPU/CPU/memory (Unity, Godot), либо legacy OpenGL без DOD-оптимизации |
-| **Почему важно** | Ни один open-source voxel-движок не сочетает DOD + Vulkan 1.4 + compute shaders + C++26 в одном воспроизводимом фундаменте                            |
-
-- **Footer:** страница 2 / 13
-
-### Body content (verbatim)
-
+### 2. Body content (verbatim LaTeX)
 ```latex
-\frametitle{Проблема: нет открытого современного фундамента}
+\frametitle{Проблема: Отсутствие открытого низкоуровневого базиса}
 \framesubtitle{Для кого и почему это важно}
 
 \begin{columns}[T]
-\column{0.32\textwidth}
-\textbf{Кто}\\
-Indie-разработчики воксельных игр; исследователи графики; студенты-движкописатели
-
-\column{0.32\textwidth}
-\textbf{Что}\\
-Закрытые (Minecraft), high-level без контроля (Unity, Godot), legacy OpenGL без DOD
-
-\column{0.32\textwidth}
-\textbf{Почему важно}\\
-Ни один open-source voxel не сочетает DOD + Vulkan 1.4 + compute + C++26
-\end{columns}
-```
-
-### Speaker notes (verbatim)
-
-«Проблема, которую мы решаем: разработчикам воксельных игр не хватает открытого, низкоуровневого и современного движка.
-Существующие варианты либо закрыты, либо слишком перегружены, а некоторые могут быть плохо оптимизированы и не давать
-полного контроля над ресурсами компьютера. Наша цель — создать быстрый, открытый движок, который выжимает максимум из
-видеокарты. Передаю слово другому участнику, он покажет демо и расскажет об архитектуре.»
-
-### Тайминг
-
-**25 секунд.**
-
-### Источник данных
-
-- Проблема/пользователь: `docs/DefenseCompetencyFAQ_T2.md §3.7` (10.x defense questions) + `DefenseReport.md §1`
-- Аналоги для контекста «закрытые/legacy»: research exa search (Minetest, VoxelCore, Veloren, Minecraft Java)
-- «Ни один open-source не сочетает»: research finding 2026 — verified against Minetest (C++17/OpenGL), Veloren (
-  Rust/wgpu), VoxelCore (C++17/OpenGL), VIXEN (только Vulkan research), Garden (C++17), Shroom (C++20/Vulkan), Enigma (
-  C++26 но DX12+Vulkan, multi-backend)
-
----
-
-## Слайд 3: Цели и спецификации (0:25–0:50, Т1 = Участник 1 = Тиммейт 1)
-
-### Визуальная структура
-
-- **Header (\Large):** Цели и спецификации
-- **Subheader:** Измеримые критерии, верифицированные через ctest + smoke captures
-- **Body (верх):** Мини-сводка ТЗ compliance
-    - **38 ✅ / 5 ⚠️ отложено / 0 ❌ критичных** из 48 пунктов ТЗ
-- **Body (низ):** 5 ключевых измеримых критериев в виде compact grid (2 строки × 3 колонки или 5 строк):
-
-| Критерий                    | Значение                               | Источник          |
-|-----------------------------|----------------------------------------|-------------------|
-| FPS (VoxelLab reference)    | 500+ FPS (~2 мс кадр, debug)           | Runtime smoke 6/6 |
-| Размер ELF                  | 19 MB release (-73% vs 73 MB debug)    | `cmake --build`   |
-| ctest baseline              | 14/14 за 0.78 с debug / 0.06 с release | `ctest`           |
-| Smoke captures              | 6/6 (FINAL/SHDW/CSM/CTSH/AOCC/LOCL)    | LookDevCapture    |
-| Предупреждения в нашем коде | 0                                      | `decisions.md §4` |
-
-- **Footer:** страница 3 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Цели и спецификации}
-\framesubtitle{Измеримые критерии, верифицированные через ctest + smoke captures}
-
-\begin{center}
-\textbf{38 ✅ / 5 ⚠️ / 0 ❌} из 48 пунктов ТЗ
-\end{center}
-
-\vspace{0.5em}
-\begin{tabular}{lll}
-\textbf{FPS VoxelLab} & \textbf{500+ FPS ($\sim$2 мс)} & Runtime smoke 6/6 \\
-\textbf{ELF release} & \textbf{19 MB} ($-73\%$ vs 73 MB debug) & \texttt{cmake --build} \\
-\textbf{ctest baseline} & \textbf{14/14} за 0.78 с / 0.06 с & \texttt{ctest} \\
-\textbf{Smoke captures} & \textbf{6/6} (FINAL/SHDW/CSM/CTSH/AOCC/LOCL) & LookDevCapture \\
-\textbf{Warnings} & \textbf{0} в нашем коде & \texttt{decisions.md §4} \\
-\end{tabular}
-```
-
-### Speaker notes (для Тиммейта 1 — можно дословно)
-
-«Чтобы вы видели, что мы мерим. Из 48 пунктов технического задания мы закрыли 38, ещё 5 явно отложили в roadmap (это
-Phase 4–9), и ни одного критического провала. Цифры из реальных измерений: 500+ FPS на сцене VoxelLab в отладочной
-сборке, бинарник ужался с 73 мегабайт до 19 — минус 73 процента — за счёт ThinLTO и удаления неиспользуемых секций. Все
-14 автоматических тестов зелёные. Шесть эталонных снимков пиксель-в-пиксель совпадают с эталоном. И ноль предупреждений
-компилятора в нашем коде.»
-
-### Тайминг
-
-**20 секунд.**
-
-### Источник данных
-
-- ТЗ compliance 48 пунктов: `docs/DefenseCompetencyFAQ_T2.md:282–335` (§3.5)
-- 500+ FPS: `docs/DefenseCompetencyFAQ_T1.md:113`, `T2.md:368`
-- 19 MB vs 73 MB: `docs/DefenseCompetencyFAQ_T1.md:117`, `T2.md:225`
-- 14/14 ctest: `docs/DefenseCompetencyFAQ_T1.md:42–57`, `T2.md:222`
-- 6/6 smoke: `docs/DefenseCompetencyFAQ_T1.md:58`, `T4.md:116`
-- 0 warnings: `agent/decisions.md §4`
-
----
-
-## Слайд 4: Live Demo (0:50–1:35, Т2 = Участник 2 = Тиммейт 2)
-
-### Визуальная структура
-
-- **Header (\Large):** Live Demo: Voxel Laboratory
-- **Body:** минимум текста, основная часть экрана — окно приложения (скриншот или live screen)
-- **Подписи к демо (мелко, по бокам или внизу):**
-    - **Слева:** Стекло (Glass) — полупрозрачный, не кастует тень
-    - **Справа:** Жидкость (Fluid) — кастует тень, обновляется клеточным автоматом (Fluid CA)
-    - **Центр внизу:** HUD — 500+ FPS, 27 чанков (3×3×3), 5 материалов
-- **Footer:** страница 4 / 13
-
-### Подстраховка демо (если live demo упало)
-
-- Показать screenshot из `build/linux-clang-debug/lookdev-captures/FINAL/*.bmp` или sidecar
-- Вернуться на слайд 4, объяснить: «Это эталонный снимок из runtime smoke, пиксель-в-пиксель с эталоном. 500+ FPS, 27
-  чанков, генерация сцены менее 10 мс.»
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Live Demo: Voxel Laboratory}
-% Большую часть слайда занимает \includegraphics{voxellab_screenshot.png}
-% Минимум текста, чтобы не отвлекать от демо
-
-\vspace{0.5em}
-\begin{columns}[T]
-\column{0.3\textwidth}
-\textbf{Слева:} Стекло (Glass) — полупрозрачный, не кастует тень
-
-\column{0.3\textwidth}
-\textbf{Центр:} HUD — 500+ FPS, 27 чанков, 5 материалов, генерация сцены < 10 мс
-
-\column{0.3\textwidth}
-\textbf{Справа:} Жидкость (Fluid) — кастует тень, обновляется клеточным автоматом
-\end{columns}
-```
-
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
-
-«Здравствуйте. Перед вами запущенная тестовая лаборатория нашего движка. Генерация сцены менее 10 миллисекунд. Вы видите
-стекло, жидкость, тени и жадный мешинг геометрии. Сверху слева и сверху справа HUD — мы держим 500+ FPS на первой сцене.
-
-**[Я возвращаю презентацию и переключаю на 3 слайд]**
-
-Технически проект написан на современном C++ 26. Мы используем графический API Vulkan 1.4 для низкоуровневого управления
-видеокартой и работой с шейдерами. Архитектура построена на дата-ориентированном дизайне (DOD) — мы выравниваем данные в
-памяти для максимальной скорости кэша процессора и минимальных cache miss-ов. Также мы используем SIMD-инструкции и
-C-вставки на C 23. Дальше следующий участник расскажет про то, что внутри движка.»
-
-**Важно:** на этом слайде 1 минута — это самая длинная секция. Demo + объяснение стека укладываются в 65 секунд.
-
-### Тайминг
-
-**65 секунд (1:05).**
-
-### Источник данных
-
-- 500+ FPS VoxelLab debug: `docs/DefenseCompetencyFAQ_T2.md:368`, `T1.md:113`
-- 27 чанков (3×3×3): `docs/DefenseCompetencyFAQ_T3.md:85`
-- 5 материалов (Air/Glass/Fluid/FloorWhite/FloorGray): `docs/DefenseCompetencyFAQ_T3.md:65`
-- Генерация сцены < 10 мс: `DefenseCompetencyFAQ_T3.md:72`
-- Glass/Fluid кастуют тень: `decisions.md §15`, `DefenseCompetencyFAQ_T3.md §3.2`
-
----
-
-## Слайд 5: Аналоги и обоснование (1:35–1:50, Т2 = Участник 2 = Тиммейт 2)
-
-### Визуальная структура
-
-- **Header (\Large):** Существующие решения и наша ниша
-- **Subheader:** Почему именно наш стек закрывает пробел
-- **Body:** Сравнительная таблица 5 аналогов (6 колонок):
-
-| Аналог                           | Тип                              | Язык        | Graphics API            | DOD                   | Compute / Open source          |
-|----------------------------------|----------------------------------|-------------|-------------------------|-----------------------|--------------------------------|
-| **Minecraft Java Edition**       | Commercial sandbox               | Java        | OpenGL → Vulkan (2026+) | Нет                   | Нет / Закрытый                 |
-| **Minetest / Luanti**            | Open-source sandbox              | C++17 + Lua | OpenGL / Irrlicht       | Нет                   | Нет / LGPL                     |
-| **VoxelCore** (MihailRis, 1.4k⭐) | Open-source engine               | C++17       | OpenGL                  | Нет                   | Нет / MIT                      |
-| **Veloren**                      | Open-source RPG                  | Rust        | wgpu / Vulkan           | Частично (ECS)        | Да (greedy) / MIT              |
-| **ProjectV (наш)**               | **Open-source движок-фундамент** | **C++26**   | **Vulkan 1.4**          | **Да (SoA, alignas)** | **Да (voxel_mesh.comp)** / MIT |
-
-- **Под таблицей (мелко):** **Пробел ниши:** ни один open-source voxel-движок не сочетает DOD + Vulkan 1.4 + compute
-  shaders + C++26 в воспроизводимом фундаменте.
-- **Footer:** страница 5 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Существующие решения и наша ниша}
-\framesubtitle{Почему именно наш стек закрывает пробел}
-
-\scriptsize  % мелкий шрифт для таблицы
-\begin{tabular}{llllll}
-\textbf{Аналог} & \textbf{Тип} & \textbf{Язык} & \textbf{API} & \textbf{DOD} & \textbf{Compute / Лицензия} \\
-\hline
-Minecraft Java & Commercial & Java & OpenGL→Vulkan & Нет & Нет / Закрытый \\
-Minetest/Luanti & Open-source & C++17+Lua & OpenGL/Irrlicht & Нет & Нет / LGPL \\
-VoxelCore (1.4k$\star$) & Open-source & C++17 & OpenGL & Нет & Нет / MIT \\
-Veloren & Open-source RPG & Rust & wgpu/Vulkan & Частично & Да / MIT \\
-\textbf{ProjectV (наш)} & \textbf{Фундамент} & \textbf{C++26} & \textbf{Vulkan 1.4} & \textbf{Да} & \textbf{Да / MIT} \\
-\end{tabular}
-
-\vspace{0.5em}
-\normalsize
-\textbf{Пробел ниши:} ни один open-source voxel не сочетает DOD + Vulkan 1.4 + compute + C++26.
-```
-
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
-
-«Прежде чем я расскажу про архитектуру — коротко о том, кто в этой нише уже есть и почему наш стек отличается.
-Minecraft — закрытый коммерческий, плюс только в 2026 году переходит с OpenGL на Vulkan. Minetest, самый успешный
-open-source voxel — это C++ плюс Lua плюс устаревший OpenGL, без DOD и без compute shaders. VoxelCore на чистом OpenGL,
-без вычислительных шейдеров. Veloren на Rust, с ECS-архитектурой — но это action-RPG с упором на мультиплеер, не
-фундамент для песочниц. ProjectV закрывает пробел: DOD-раскладка плюс Vulkan 1.4 плюс compute-шейдеры для мешинга плюс
-современный C++26 в воспроизводимом открытом фундаменте.
-
-**Переход на 6 слайд:**
-
-Архитектурно движок построен вокруг SDL3 главного цикла, в центре — единая точка владения AppState, от которой
-расходятся три подсистемы: рендерер на Vulkan, физика на Jolt и ECS-мир Flecs. Внутри ECS уже живут воксельный мир,
-аудио-движок и реестр ассетов. Главная идея — данные-ориентированный дизайн: чанки 8 на 8 на 8 вокселей, плоский массив
-материалов в один байт на воксель, что даёт плотный cache-friendly доступ и попадание в L1 кэш процессора. Жадный мешинг
-считается compute-шейдером на видеокарте: шесть проходов по чанку для каждой оси и направления объединяют соседние грани
-одного материала в большие четырёхугольники, сокращая draw calls на 30-50 процентов. Физика — библиотека Jolt, наш
-собственный код дополняет её для коллизий блоков. Для отладки данные дублируются в систему компонентов. В коде повсюду
-статик-ассерты: на этапе компиляции проверяют размеры структур и контракты алгоритмов, чтобы ничего не сдвигалось
-случайно. Передаю слово.»
-
-### Тайминг
-
-**20 секунд.**
-
-### Источник данных
-
-- Minecraft Java переход на Vulkan: web search research (Playing Games, Mojang announcement 2026)
-- Minetest: web search research (LGPL, OpenGL/Irrlicht, 25 лет истории)
-- VoxelCore: web search research (MihailRis, 1.4k stars, MIT, OpenGL)
-- Veloren: web search research (Rust, wgpu/Vulkan, MIT, RPG focus)
-- ProjectV ниша: собственный анализ стека — все 5 open-source конкурентов НЕ сочетают DOD + Vulkan 1.4 + C++26 + compute
-
----
-
-## Слайд 6: Архитектура (1:50–2:20, Т3 = Участник 3 = Тиммейт 3)
-
-### Визуальная структура
-
-- **Header (\Large):** Архитектура движка
-- **Body (верх):** Текстовая диаграмма (ASCII-art или TikZ):
-  ```
-  SDL3 main loop (SDL_AppInit → SDL_AppEvent → SDL_AppIterate)
-                       │
-            ┌──────────┼──────────┐
-            ▼          ▼          ▼
-        Renderer   Physics   ECS (Flecs)
-        (Vulkan)   (Jolt)    + VoxelWorld
-                              + AudioEngine
-                              + AssetRegistry
-  ```
-- **Body (низ):** 4 ключевых принципа в bullets:
-    - **DOD:** чанки 8×8×8 = 512 вокселей = 512 B = 2 SSE-регистра, влезает в L1 (32 KB на Zen 3)
-    - **Voxel layout:** плоский массив `std::vector<uint8_t> voxels`, индекс = `x + width*(y + height*z)`
-    - **Greedy meshing:** compute-шейдер `voxel_mesh.comp`, 6 проходов (±X, ±Y, ±Z), сокращение draw calls 30–50%
-    - **Static asserts:** compile-time проверка контрактов структур (защита от ABI shift, per `agent/memory.md §10.8`)
-- **Footer:** страница 6 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Архитектура движка}
-
-\begin{center}
-\begin{tabular}{c}
-\texttt{SDL3 main loop} (SDL\_AppInit → SDL\_AppEvent → SDL\_AppIterate) \\[0.3em]
-$\big\downarrow$ \\[0.3em]
-\begin{tabular}{ccc}
-\texttt{Renderer} & \texttt{Physics} & \texttt{ECS (Flecs)} \\
-(Vulkan 1.4) & (Jolt) & + VoxelWorld \\
-& & + AudioEngine \\
-& & + AssetRegistry \\
-\end{tabular}
-\end{tabular}
-\end{center}
-
-\vspace{0.5em}
+\column{0.48\textwidth}
+\textbf{Целевая аудитория и контекст:}
 \begin{itemize}
-\item \textbf{DOD:} чанки 8×8×8 = 512 B = 2 SSE-регистра, влезает в L1 (32 KB на Zen 3)
-\item \textbf{Voxel layout:} плоский \texttt{std::vector<uint8\_t> voxels}, индекс $= x + w \cdot (y + h \cdot z)$
-\item \textbf{Greedy meshing:} compute-шейдер, 6 проходов, draw calls $-30{-}50\%$
-\item \textbf{Static asserts:} compile-time проверка контрактов (per \texttt{memory.md §10.8})
+    \item Разработчики воксельных инди-игр.
+    \item Исследователи компьютерной графики.
+    \item Студенты профильных IT-специальностей.
 \end{itemize}
-```
 
-### Speaker notes (verbatim)
-
-«Архитектурно движок построен вокруг SDL3 главного цикла, в центре — единая точка владения AppState, от которой
-расходятся три подсистемы: рендерер на Vulkan, физика на Jolt и ECS-мир Flecs. Внутри ECS уже живут воксельный мир,
-аудио-движок и реестр ассетов. Главная идея — данные-ориентированный дизайн: чанки 8 на 8 на 8 вокселей, плоский массив
-материалов в один байт на воксель, что даёт плотный cache-friendly доступ и попадание в L1 кэш процессора. Жадный мешинг
-считается compute-шейдером на видеокарте: шесть проходов по чанку для каждой оси и направления объединяют соседние грани
-одного материала в большие четырёхугольники, сокращая draw calls на 30-50 процентов. Физика — библиотека Jolt, наш
-собственный код дополняет её для коллизий блоков. Для отладки данные дублируются в систему компонентов. В коде повсюду
-статик-ассерты: на этапе компиляции проверяют размеры структур и контракты алгоритмов, чтобы ничего не сдвигалось
-случайно. Передаю слово.»
-
-### Тайминг
-
-**20 секунд.**
-
-### Источник данных
-
-- Диаграмма: `docs/DefenseReport.md §4`, `docs/DefenseCompetencyFAQ_T2.md:247–280` (§3.4)
-- DOD 8×8×8 = 512 B = 2 SSE-регистра: `docs/DefenseCompetencyFAQ_T3.md §3.1`, `T3.md:83`
-- Greedy meshing compute shader 6 проходов: `docs/DefenseCompetencyFAQ_T3.md §3.3` (Алгоритм 3, FULL detail)
-- 30-50% draw calls: `docs/DefenseAlgorithms.md §3`
-- Static asserts: `agent/memory.md §10.8`, `docs/DefenseCompetencyFAQ_T3.md:88–97`
-
----
-
-## Слайд 7: Реализация воксельного мира (2:20–2:40, Т3 = Участник 3 = Тиммейт 3)
-
-### Визуальная структура
-
-- **Header (\Large):** Реализация: воксельный мир
-- **Subheader:** Что создано Тиммейтом 2
-- **Body (верх):** Список файлов модуля:
-  ```
-  src/voxel/VoxelWorld.{hpp,cpp}        — main world (VoxelChunk 32 B = 2 SSE, плоский voxels)
-  src/voxel/VoxelMaterials.{hpp,cpp}    — 5 материалов, per-preset shadow params
-  src/voxel/VoxelRaycast.{hpp,cpp}      — 3D DDA raycast
-  src/voxel/VoxelInteraction.{hpp,cpp}  — placement/removal
-  src/voxel/SceneConfig.{hpp,cpp}       — JSON scene config
-  src/voxel/VoxelSnapshotError.hpp      — error enum (Tier 1.B)
-  src/shaders/voxel_mesh.comp           — compute-шейдер greedy meshing (Лысенков)
-  ```
-- **Body (середина):** VoxelLab демо-сцена
-    - Пол 18×18 (XZ), стеклянный шар радиуса 6, жидкость внутри до ~70% радиуса, 3 якоря для теней
-    - Процедурная генерация < 200 мс
-- **Body (низ):** Fluid CA (клеточный автомат)
-    - 2 правила: `f_fall` (вниз) и `f_spread` (2 перпендикулярных направления)
-    - Hash = Teschner spatial, 20 Hz, bottom-up y-pass, double-buffered, claimed-tracking
-- **Footer:** страница 7 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Реализация: воксельный мир}
-\framesubtitle{Что создано Тиммейтом 2}
-
-\scriptsize
-\texttt{src/voxel/VoxelWorld.\{hpp,cpp\}} --- main world (VoxelChunk 32 B, плоский voxels)\\
-\texttt{src/voxel/VoxelMaterials.\{hpp,cpp\}} --- 5 материалов, per-preset shadow params\\
-\texttt{src/voxel/VoxelRaycast.\{hpp,cpp\}} --- 3D DDA raycast\\
-\texttt{src/voxel/VoxelInteraction.\{hpp,cpp\}} --- placement/removal\\
-\texttt{src/voxel/SceneConfig.\{hpp,cpp\}} --- JSON scene config\\
-\texttt{src/voxel/VoxelSnapshotError.hpp} --- error enum (Tier 1.B)\\
-\texttt{src/shaders/voxel\_mesh.comp} --- compute-шейдер greedy meshing (Лысенков)
-
-\normalsize
-\vspace{0.5em}
-\textbf{VoxelLab:} пол 18×18, стеклянный шар R=6, жидкость ~70\% радиуса, 3 якоря. Генерация < 200 мс.
-
-\vspace{0.3em}
-\textbf{Fluid CA:} 2 правила (fall + spread), Teschner hash, 20 Hz, bottom-up y-pass, double-buffered.
-```
-
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
-
-«Здравствуйте. Несколько слов о том, что внутри. Мир разбит на чанки 8 на 8 на 8, воксели лежат одним плоским массивом —
-это даёт кэш-дружелюбный доступ. Мешинг считает compute-шейдер на видеокарте: жадно склеивает соседние грани одного
-материала в четырёхугольники для производительности. Физика — библиотека Jolt, наш собственный код дополняет её для
-коллизий блоков. Для отладки данные дублируются в систему компонентов. В коде повсюду статик-ассерты: на этапе
-компиляции проверяют размеры структур и контракты алгоритмов, чтобы ничего не сдвигалось случайно. Передаю слово.»
-
-### Тайминг
-
-**20 секунд.**
-
-### Источник данных
-
-- Все файлы: `docs/DefenseCompetencyFAQ_T3.md:28–36`
-- VoxelLab детали: `docs/DefenseCompetencyFAQ_T3.md §3.1` (Алгоритм 1), `T2.md §3.6 команда`
-- Fluid CA детали: `docs/DefenseCompetencyFAQ_T3.md §3.5` (Алгоритм 13 FULL detail, ~360 строк кода)
-- `<200 мс` генерация: `docs/DefenseCompetencyFAQ_T3.md:72`
-
----
-
-## Слайд 8: Тесты и проверки (2:40–3:15, Т4 = Участник 4 = Тиммейт 4)
-
-### Визуальная структура
-
-- **Header (\Large):** Тесты и проверки
-- **Subheader:** 14 ctest suites baseline + 6 smoke captures + 60+ sidecar keys
-- **Body (верх):** 14 ctest suites в compact grid (3 колонки × 5 строк или подобное):
-
-| Suite                                 | Назначение                  | Suite                          | Назначение         |
-|---------------------------------------|-----------------------------|--------------------------------|--------------------|
-| `ProjectVTests`                       | VoxelWorld (~157 sub-tests) | `ProjectVAssetTests`           | LoadGlb (9 sub)    |
-| `ProjectVMeshBakerTests`              | meshopt (4)                 | `ProjectVDracoTests`           | Draco decode (3)   |
-| `ProjectVFrustumCullingTests`         | C++ helper (5)              | `ProjectVCFrustumCullingTests` | C-kernel (Tier 3)  |
-| `ProjectVSunShadowCascadeSplitsTests` | split planning              | `ProjectVBoxUvFixtureTests`    | UV projection (2)  |
-| `ProjectVMathTests`                   | Tier 0.A                    | `ProjectVStringIdTests`        | Tier 1.D           |
-| `ProjectVModuleSmoke`                 | C++26 modules               | `ProjectVStdModuleProbe`       | std module probe   |
-| `ProjectVFluidCATests`                | Fluid CA determinism        | `ProjectVPresentModeTests`     | present mode cycle |
-
-- **Body (середина):** **14/14 ✅ baseline** — 0.78 с debug / 0.06 с release (×13 ускорение)
-- **Body (низ):** 6 smoke captures: **FINAL / SHDW / CSM / CTSH / AOCC / LOCL** — пиксель-в-пиксель с эталоном. **60+
-  sidecar keys**: FPS, frame time, voxel counts (per material), shadow params, TAA state, tone map operator, exposure
-  bias, hot shader version.
-- **Footer:** страница 8 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Тесты и проверки}
-\framesubtitle{14 ctest suites baseline + 6 smoke captures + 60+ sidecar keys}
-
-\scriptsize
-\begin{tabular}{ll|ll}
-\texttt{ProjectVTests} & VoxelWorld 157sub & \texttt{ProjectVAssetTests} & LoadGlb 9sub \\
-\texttt{ProjectVMeshBakerTests} & meshopt 4 & \texttt{ProjectVDracoTests} & Draco 3 \\
-\texttt{ProjectVFrustumCullingTests} & C++ helper 5 & \texttt{ProjectVCFrustumCullingTests} & C-kernel \\
-\texttt{ProjectVSunShadowCascadeSplitsTests} & splits & \texttt{ProjectVBoxUvFixtureTests} & UV 2 \\
-\texttt{ProjectVMathTests} & Tier 0.A & \texttt{ProjectVStringIdTests} & Tier 1.D \\
-\texttt{ProjectVModuleSmoke} & C++26 modules & \texttt{ProjectVStdModuleProbe} & std probe \\
-\texttt{ProjectVFluidCATests} & Fluid CA det. & \texttt{ProjectVPresentModeTests} & present mode \\
-\end{tabular}
-
-\normalsize
-\vspace{0.5em}
-\textbf{14/14 ✅} baseline --- 0.78 с debug / 0.06 с release ($\times 13$ ускорение).
-
-\vspace{0.3em}
-\textbf{6 smoke captures} FINAL/SHDW/CSM/CTSH/AOCC/LOCL --- пиксель-в-пиксель с эталоном.
-
-\vspace{0.3em}
-\textbf{60+ sidecar keys}: FPS, frame time, voxel counts, shadow params, TAA state, tone map, exposure.
-```
-
-### Speaker notes (verbatim)
-
-«Здравствуйте. Коротко о том, как мы проверяли результат. У нас 14 наборов автоматических тестов ядра: математика,
-инвалидация грязных чанков, walk-контроллер, жадный мешинг, frustum culling, клеточный автомат для жидкостей. Все
-зелёные при каждой сборке, ноль предупреждений в нашем коде. Плюс рантайм smoke: 6 эталонных снимков — финальный кадр,
-тени, контактные тени, затенение, локальный свет, отладочный слой. Передаю слово.»
-
-### Тайминг
-
-**20 секунд.**
-
-### Источник данных
-
-- Все 14 ctest suites: `docs/DefenseCompetencyFAQ_T1.md:42–57`
-- 0.78 с debug / 0.06 с release: `docs/DefenseCompetencyFAQ_T1.md:42`, `T2.md:222`
-- 6 smoke FINAL/SHDW/CSM/CTSH/AOCC/LOCL: `docs/DefenseCompetencyFAQ_T1.md:58`, `T4.md:116–124`
-- 60+ sidecar keys: `docs/DefenseCompetencyFAQ_T1.md:60`, `T2.md:224`
-
----
-
-## Слайд 9: Дополнительные фичи (3:15–3:35, Т5 = Участник 5 = Тиммейт 5)
-
-### Визуальная структура
-
-- **Header (\Large):** Дополнительные фичи
-- **Subheader:** Asset pipeline • Audio engine • Snapshot • Hot shader reload
-- **Body (4 секции, можно 2×2 grid):**
-
-| Фича                  | Реализация                                                                       | Хоткеи                                                   |
-|-----------------------|----------------------------------------------------------------------------------|----------------------------------------------------------|
-| **Asset pipeline**    | fastgltf → Draco decode → meshopt → VMA upload                                   | `F` pick model, `PROJECTV_MODELS=path.glb@x,y,z`         |
-| **Audio engine**      | miniaudio + PulseAudio → pipewire-pulse, MP3 only, 16/44.1 stereo                | `Q` play/pause, `E` stop, `7`/`8` vol, `9`/`0` next/prev |
-| **Snapshot мира**     | Бинарный формат PVSNAP01, 80-B header, `std::expected<bool, VoxelSnapshotError>` | `F6` save, `F7` load                                     |
-| **Hot shader reload** | cmake subprocess + glslc, ray-march pipeline recreate                            | Клавиша `1` (relocated 2026-06-15)                       |
-
-- **Body (низ):** 2 MP3 в `music/`: `Le1t - Palm Trees.mp3`, `Le1t - aCID.mp3`
-- **Footer:** страница 9 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Дополнительные фичи}
-\framesubtitle{Asset pipeline • Audio engine • Snapshot • Hot shader reload}
-
-\begin{tabular}{|p{0.22\textwidth}|p{0.45\textwidth}|p{0.25\textwidth}|}
-\hline
-\textbf{Фича} & \textbf{Реализация} & \textbf{Хоткеи / API} \\
-\hline
-Asset pipeline & fastgltf $\to$ Draco decode $\to$ meshopt $\to$ VMA upload & \texttt{F} pick, \texttt{PROJECTV\_MODELS=...} \\
-\hline
-Audio engine & miniaudio + PulseAudio $\to$ pipewire-pulse, MP3 only, 16/44.1 stereo & \texttt{Q}/\texttt{E}/\texttt{7}/\texttt{8}/\texttt{9}/\texttt{0} \\
-\hline
-Snapshot мира & Бинарный PVSNAP01, 80-B header, \texttt{std::expected} (Tier 1.B) & \texttt{F6} save, \texttt{F7} load \\
-\hline
-Hot shader reload & cmake subprocess + glslc, ray-march pipeline recreate & Клавиша \texttt{1} \\
-\hline
-\end{tabular}
-
-\vspace{0.3em}
-2 MP3 в \texttt{music/}: \textit{Le1t - Palm Trees.mp3}, \textit{Le1t - aCID.mp3}.
-```
-
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
-
-«Здравствуйте. Здесь упомяну то, что мы не успели показать в демо. У нас есть пайплайн загрузки полигональных моделей
-извне: парсер glTF, опциональное Draco-сжатие, оптимизация мешей через meshoptimizer. Аудиодвижок на miniaudio, пока
-поддерживает только MP3. Также реализованы сохранение и загрузка мира в собственный бинарный снимок и горячая
-перезагрузка шейдеров. В roadmap отложено: сетевой режим, SVO, частицы, моддинг, HDR. Дальше — о планах подробнее.»
-
-### Тайминг
-
-**20 секунд.**
-
-### Источник данных
-
-- Asset pipeline: `docs/DefenseCompetencyFAQ_T5.md §3.1` (Алгоритм 16 FULL)
-- Audio engine: `docs/DefenseCompetencyFAQ_T5.md §3.2` (Алгоритм 17 FULL)
-- Snapshot: `docs/DefenseCompetencyFAQ_T3.md §3.7` (Алгоритм 19)
-- Hot shader reload: `docs/DefenseCompetencyFAQ_T2.md §3.2.1` (Алгоритм 18)
-- MP3: `docs/DefenseCompetencyFAQ_T2.md:101`, `T5.md:104`
-
----
-
-## Слайд 10: Результаты и метрики (3:35–4:00, Т5 = Участник 5 = Тиммейт 5)
-
-### Визуальная структура
-
-- **Header (\Large):** Результаты и метрики
-- **Subheader:** Сопоставление с ТЗ, измеренные цифры
-- **Body (верх):** ТЗ compliance сводка (4 числа крупно):
-  ```
-  38 ✅   5 ⚠️   0 ❌   100% measurable
-  ```
-- **Body (середина):** 5 метрик в виде 2 столбцов (label : value):
-
-| Метрика              | Значение                          |
-|----------------------|-----------------------------------|
-| VoxelLab FPS (debug) | **500+ FPS** (~2 мс кадр)         |
-| VoxelLab release     | +1.5–2.5× FPS vs debug            |
-| ELF release          | **19 MB** (-73% от 73 MB debug)   |
-| ctest wall clock     | **0.78 с debug / 0.06 с release** |
-| Smoke captures       | **6/6** ✅ пиксель-в-пиксель       |
-
-- **Body (низ):** Сопоставление с ТЗ (per п.8 «Данные» — каждый результат имеет подпись «что / чем / когда»):
-  > **Что измеряли:** метрики VoxelLab reference shot, размер ELF, время ctest
-  > **Чем:** runtime smoke 6/6 captures, ctest 14/14, build artefact
-  > **Условия:** linux-clang-debug (development), linux-clang-release (production); Ryzen 7 5800X + RTX 3060 Ti 8 ГБ;
-  1920×1080
-- **Footer:** страница 10 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Результаты и метрики}
-\framesubtitle{Сопоставление с ТЗ, измеренные цифры}
-
-\begin{center}
-\Huge \textbf{38 ✅ \quad 5 ⚠️ \quad 0 ❌}
-\end{center}
-
-\vspace{0.5em}
-\begin{tabular}{ll}
-\textbf{VoxelLab FPS (debug)} & \textbf{500+ FPS} ($\sim$2 мс кадр) \\
-\textbf{VoxelLab release} & +1.5--2.5× FPS vs debug \\
-\textbf{ELF release} & \textbf{19 MB} ($-73\%$ от 73 MB debug) \\
-\textbf{ctest wall clock} & \textbf{0.78 с debug / 0.06 с release} \\
-\textbf{Smoke captures} & \textbf{6/6} ✅ пиксель-в-пиксель \\
-\end{tabular}
-
-\vspace{0.5em}
-\footnotesize
-\textbf{Что измеряли:} VoxelLab reference shot, размер ELF, время ctest.\\
-\textbf{Чем:} Runtime smoke, ctest 14/14, build artefact.\\
-\textbf{Условия:} linux-clang-debug/release; Ryzen 7 5800X + RTX 3060 Ti 8 ГБ; 1920×1080.
-```
-
-### Speaker notes (для Тиммейта 5 — можно кратко, дублирует слайд)
-
-«Чтобы зафиксировать измерения: 38 пунктов ТЗ закрыты, 5 явно отложены в roadmap, ноль критических провалов. На
-референсном снимке VoxelLab в отладочной сборке — больше 500 кадров в секунду, около двух миллисекунд на кадр.
-Release-бинарник ужался с 73 мегабайт до 19 — минус 73 процента. Все 14 ctest-тестов проходят менее чем за секунду.
-Шесть runtime smoke captures пиксель-в-пиксель совпадают с эталоном.»
-
-### Тайминг
-
-**15 секунд.**
-
-### Источник данных
-
-- 38 ✅ / 5 ⚠️ / 0 ❌: `docs/DefenseCompetencyFAQ_T2.md:335`
-- 500+ FPS: `docs/DefenseCompetencyFAQ_T1.md:113`, `T2.md:368`
-- 19 MB / 73 MB / -73%: `docs/DefenseCompetencyFAQ_T1.md:117`, `T2.md:225`
-- 0.78 с / 0.06 с: `docs/DefenseCompetencyFAQ_T1.md:42`
-- 6/6 smoke: `docs/DefenseCompetencyFAQ_T1.md:58`
-- Условия измерения (Ryzen 7 5800X, RTX 3060 Ti): `docs/DefenseCompetencyFAQ_T2.md:368`
-
----
-
-## Слайд 11: Ограничения, риски, безопасность (4:00–4:10, Т6 = Участник 6 = le1t)
-
-### Визуальная структура
-
-- **Header (\Large):** Ограничения, риски, безопасность
-- **Subheader:** Что отложено, какие известны проблемы, что с защитой информации
-- **Body (верх):** **5 отложенных пунктов** (Phase 4–9):
-
-| #     | Пункт                             | Планируется      |
-|-------|-----------------------------------|------------------|
-| 4.1.4 | Полная система частиц             | Phase 7 (Vision) |
-| 4.1.8 | Плагины / моддинг API             | Phase 8 (Vision) |
-| —     | Асинхронная загрузка ресурсов     | Phase 7          |
-| 4.5.1 | HDR-текстуры (`.hdr`)             | Phase 6          |
-| —     | SVO (Sparse Voxel Octree)         | Phase 5 (Vision) |
-| —     | Mesh shaders (VK_EXT_mesh_shader) | Phase 5 (Vision) |
-
-- **Body (середина):** **Известная проблема: BUG-005 (cycle scene race).**
-    - **Симптом:** `VUID-vkCmdDraw-None-08114` errors от Vulkan validation layer при F5
-    - **Смягчение:** `vkDeviceWaitIdle` в `DestroySceneResources` (Tier 5)
-    - **Полное устранение:** Phase 5 (refactoring descriptor lifetime)
-
-- **Body (низ):** **Безопасность (ТЗ 4.5.4):**
-    - «Специальные требования к защите информации и программ не предъявляются»
-    - **Нет DRM, нет шифрования, нет DRM-защищённых ассетов**
-    - Конвейер ассетов работает с открытой спецификацией glTF
-    - Все зависимости — **MIT/Apache-2.0 лицензии** (Jolt, Flecs, fastgltf, Draco, miniaudio, volk, VMA, meshopt)
-- **Footer:** страница 11 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Ограничения, риски, безопасность}
-\framesubtitle{Что отложено, какие известны проблемы, что с защитой информации}
-
-\scriptsize
-\begin{tabular}{lll}
-\# & \textbf{Отложенный пункт} & \textbf{Phase} \\
-\hline
-4.1.4 & Полная система частиц & Phase 7 (Vision) \\
-4.1.8 & Плагины / моддинг API & Phase 8 (Vision) \\
--- & Асинхронная загрузка ресурсов & Phase 7 \\
-4.5.1 & HDR-текстуры (.hdr) & Phase 6 \\
--- & SVO (Sparse Voxel Octree) & Phase 5 (Vision) \\
--- & Mesh shaders (VK\_EXT\_mesh\_shader) & Phase 5 (Vision) \\
-\end{tabular}
-
-\normalsize
-\vspace{0.5em}
-\textbf{Известная проблема: BUG-005 (cycle scene race).}\\
-Симптом: \texttt{VUID-vkCmdDraw-None-08114} при F5.\\
-Смягчение: \texttt{vkDeviceWaitIdle} в \texttt{DestroySceneResources} (Tier 5).\\
-Полное устранение: Phase 5.
-
-\vspace{0.5em}
-\textbf{Безопасность (ТЗ 4.5.4):}\\
-<<Специальные требования к защите информации не предъявляются>>.\\
-Нет DRM, нет шифрования. Все зависимости --- MIT/Apache-2.0.
-```
-
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
-
-«Здравствуйте. Что касается ограничений. Пять пунктов отложены в roadmap: частицы, моддинг, асинхронная загрузка, HDR, SVO. Есть известная проблема — гонка дескрипторов при переключении сцен, смягчена через vkDeviceWaitIdle. По защите информации — требований нет, код открытый, зависимости — MIT-лицензированные. Передаю слово.
-
-**[Переход на 12 слайд]**
-
-Наша таблица с распределением ролей представлена на экране. Спасибо за внимание, готовы ответить на вопросы!»
-
-### Тайминг
-
-**15 секунд.**
-
-### Источник данных
-
-- 5 deferred: `docs/DefenseReport.md §3`, `DefenseCompetencyFAQ_T2.md §3.5 строка 290–299`
-- BUG-005: `docs/DefenseCompetencyFAQ_T2.md §3.4`, `agent/decisions.md §18`
-- ТЗ 4.5.4: `docs/DefenseReport.md §9`, `DefenseCompetencyFAQ_T2.md §3.7`
-- Лицензии зависимостей: `docs/DefenseCompetencyFAQ_T1.md`, research exa (Garden engine аналогичный список)
-
----
-
-## Слайд 12: Команда и личный вклад (4:10–4:20, Т6 = Участник 6 = le1t)
-
-### Визуальная структура
-
-- **Header (\Large):** Команда и личный вклад
-- **Subheader:** 6 участников, slot vs real competency
-- **Body:** Полная таблица 6 строк × 5 столбцов:
-
-| # | ФИО                                 | Slot (сцена)                          | Реальная компетенция (Q&A) | Личный вклад                                                                                                                                                                                      |
-|---|-------------------------------------|---------------------------------------|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1 | **Кадочников Л. П.** (le1t, тимлид) | T2 Live Demo + Стек                   | Архитектура, Q&A host      | Архитектура, выбор библиотек, DOD layout, ECS-bridge, cold paths (snapshot, JSON config), hot shader reload, ведение Q&A на защите                                                                |
-| 2 | Тиммейт 1                           | T1 Титул, проблема, цели              | Сборка и тестирование      | CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики производительности, скрипты сборки                                                                                                          |
-| 3 | Тиммейт 2                           | T3 Реализация воксельного мира, тесты | Воксельный мир             | Структура воксельного мира (чанки 8×8×8, 5 материалов), greedy meshing (Лысенков, 6 проходов), двухуровневый кеш видимости (custom XOR-fold hash), voxel raycast, Fluid CA                        |
-| 4 | Тиммейт 3                           | (нет, см. примечание)                 | Рендеринг                  | Каскадные тени (CSM 4×2048², lambda 0.80), PCF 5×5 weighted, контактные тени (voxel DDA), AOCC, TAA + YCoCg + CAS, ray-marching compute pass                                                      |
-| 5 | Тиммейт 4                           | T6 Ограничения, команда               | Физика и walk controller   | Интеграция Jolt, walk/creative/spectator режимы, walk controller (edge grace, sneak, авто-прыжок), voxel raycast placement/removal                                                                |
-| 6 | Тиммейт 5                           | T5 Доп. фичи, метрики                 | Ассеты и аудио             | Демо-сцена VoxelLab (пол 18×18, стеклянный шар, жидкость, 27 чанков), asset pipeline (fastgltf → Draco → meshopt → MeshBaker → VMA), audio engine (miniaudio, PipeWire→PulseAudio), playlist scan |
-
-- **Body (низ):** **Честное замечание:** в реальности основной объём разработки выполнен тимлидом (le1t). Распределение
-  по модулям отражает специализацию участников при защите, а не разделение труда при разработке. Полный per-commit
-  авторский вклад — `git log --author=`.
-- **Footer:** страница 12 / 13
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Команда и личный вклад}
-\framesubtitle{6 участников, slot vs real competency}
-
-\scriptsize
-\begin{tabular}{|l|l|l|l|p{0.25\textwidth}|}
-\hline
-\# & \textbf{ФИО} & \textbf{Slot} & \textbf{Real компетенция} & \textbf{Личный вклад} \\
-\hline
-1 & \textbf{Кадочников Л.П.} (le1t) & T2 Demo + стек & Архитектура, Q\&A & Архитектура, библиотеки, DOD, ECS, snapshot, hot reload, Q\&A host \\
-\hline
-2 & Тиммейт 1 & T1 Титул, проблема, цели & Сборка, тесты & CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики \\
-\hline
-3 & Тиммейт 2 & T3 Voxel, тесты & Воксельный мир & Чанки 8×8×8, 5 материалов, greedy meshing, voxel raycast, Fluid CA \\
-\hline
-4 & Тиммейт 3 & (T4 не озвучен) & Рендеринг & CSM 4×2048² ($\lambda$=0.80), PCF 5×5, AOCC, TAA, ray-marching \\
-\hline
-5 & Тиммейт 4 & T6 Ограничения, команда & Физика, walk & Jolt, walk/creative/spectator, edge grace, sneak, авто-прыжок \\
-\hline
-6 & Тиммейт 5 & T5 Фичи, метрики & Ассеты, аудио & VoxelLab демо, glTF/Draco/meshopt, miniaudio, playlist scan \\
-\hline
-\end{tabular}
-
-\vspace{0.5em}
-\footnotesize
-\textbf{Честное замечание:} основной объём --- le1t. Распределение по модулям --- для защиты.\\
-Полный per-commit вклад: \texttt{git log -{}-author=}.
-```
-
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
-
-«Наша таблица с распределением ролей представлена на экране. Шесть участников, каждый отвечает за свой модуль, тимлид le1t — за архитектуру и вопросы комиссии. Передаю слово.
-
-### Тайминг
-
-**15 секунд.**
-
-### Источник данных
-
-- Команда + slot mapping: `docs/DefenseCompetencyFAQ_T2.md §3.6` (lines 339–354)
-- Per-participant contribution: `docs/DefenseCompetencyFAQ_T2.md §3.6` + `DefenseReport.md §12`
-- Подольский Ф.А. (руководитель): `docs/DefenseCompetencyFAQ_T2.md:350`
-
-### Примечание по real competency vs slot content
-
-- В текущей структуре slot T_N = Участник N, но содержание слайдов может НЕ совпадать с real competency участника
-  (per operator: «разницы нет, кто о чём говорит в презентации»).
-- real competency каждого Участника отображается только на слайде 12 (Команда и личный вклад) и при Q&A от комиссии.
-- per FAQ_T*.md §1 Verbatim — каждый slot T_N = Участник N с конкретными слайдами.
-
-
----
-
-## Слайд 13: Выводы + Q&A (4:20–4:30, Т6 = Участник 6 = le1t)
-
-### Визуальная структура
-
-- **Header (\Large, центр):** Выводы
-- **Body (3 bullets):**
-    - ✅ **MVP завершён:** 38 из 48 пунктов ТЗ, 14/14 ctest, 6/6 smoke, 0 warnings
-    - 📋 **Что дальше:** Phase 4 (Networking) → Phase 9 (Strategic layer). 5 deferred пунктов в roadmap.
-    - 🤝 **Команда:** 6 человек, роли на сцене vs реальная компетенция для Q&A.
-- **Body (низ, центром крупно):** **Спасибо за внимание! Готовы ответить на вопросы.**
-- **Footer:** страница 13 / 13, контакт le1t, ссылка на GitHub
-
-### Body content (verbatim)
-
-```latex
-\frametitle{Выводы}
-
+\column{0.48\textwidth}
+\textbf{Существующие ограничения:}
 \begin{itemize}
-\item ✅ \textbf{MVP завершён:} 38/48 ТЗ, 14/14 ctest, 6/6 smoke, 0 warnings
-\item 📋 \textbf{Что дальше:} Phase 4 (Networking) $\to$ Phase 9 (Strategic layer); 5 deferred пунктов в roadmap
-\item 🤝 \textbf{Команда:} 6 человек, роли на сцене vs реальная компетенция для Q\&A
+    \item \textit{Закрытость:} Исходный код коммерческих движков (Minecraft) недоступен.
+    \item \textit{Абстракция:} Универсальные движки (Unity/Godot) скрывают прямой контроль GPU.
+    \item \textit{Устаревание:} Альтернативы используют OpenGL без DOD-структур.
 \end{itemize}
+\end{columns}
 
 \vspace{1em}
 \begin{center}
-\Huge \textbf{Спасибо за внимание!}\\
-\vspace{0.3em}
-\Large Готовы ответить на вопросы.
+\textbf{Ценность проекта:} Предоставление разработчику полного контроля над памятью и ресурсами видеокарты.
 \end{center}
 ```
 
-### Speaker notes (verbatim — Т6 (Участник 6) — le1t, см. Script_Team.md §13 для тайминга slot) — le1t, см. Script_Team.md §12 для тайминга slot) — le1t, см. Script_Team.md §11 для тайминга slot) — Тиммейт 5, см. Script_Team.md §10 для тайминга slot) — Тиммейт 5, см. Script_Team.md §9 для тайминга slot) — Тиммейт 4, см. Script_Team.md §8 для тайминга slot) — Тиммейт 3, см. Script_Team.md §7 для тайминга slot) — Тиммейт 3, см. Script_Team.md §6 для тайминга slot) — Тиммейт 2, см. Script_Team.md §5 для тайминга slot) — Тиммейт 2, см. Script_Team.md §4 для тайминга slot) — Тиммейт 1, см. Script_Team.md §3 для тайминга slot) — Тиммейт 1, см. Script_Team.md §2 для тайминга slot) — Тиммейт 1, см. Script_Team.md §1 для тайминга slot)
+### 3. Speaker Notes (verbatim)
+«Разработчики воксельных миров сегодня сталкиваются с компромиссом: использовать закрытые коммерческие решения вроде движка Minecraft, готовые high-level инструменты без прямого контроля над ресурсами компьютера, либо устаревший OpenGL без современных оптимизаций памяти [T2.md]. Наша цель — создать открытый низкоуровневый фундамент, предоставляющий исследователям графики и разработчикам песочниц прямой контроль над CPU и видеокартой.»
 
-«Спасибо за внимание. MVP завершён: 38 из 48 пунктов ТЗ, все 14 тестов зелёные, ноль предупреждений. В планах — фазы с 4-й по 9-ю: сетевой режим, SVO, жидкости на GPU, частицы и моддинг. Команда готова ответить на ваши вопросы.»
-
-### Тайминг
-
-**10 секунд (slot T6: 3:55–4:30, 35 сек на 3 слайда, ~10 сек на 13).**
-
-### Источник данных
-
-- 38/48: `docs/DefenseCompetencyFAQ_T2.md:335`
-- Phase 4-9: `docs/DefenseCompetencyFAQ_T2.md §3.6` roadmap table
-- Team: `docs/DefenseCompetencyFAQ_T2.md §3.6` команда
+### 4. Метрики и источники данных
+*   **Анализ аналогов:** `docs/DefenseCompetencyFAQ_T2.md §3.7`.
+*   **Ценность:** Прямое сопоставление с архитектурой OpenGL.
 
 ---
 
-## Подстраховка демо
+## Слайд 3: Измеримые цели и спецификации (0:25–0:50)
 
-Если живое демо (слайд 4) падает:
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Сводный индикатор прогресса по ТЗ сверху, далее табличная структура с измеримыми параметрами.
 
-1. **le1t** переключается на screenshot из `build/linux-clang-debug/lookdev-captures/FINAL/*.bmp` или sidecar `.txt`
-   файл
-2. Говорит: «Это эталонный снимок из runtime smoke, пиксель-в-пиксель совпадает с эталоном. 500+ FPS, 27 чанков,
-   генерация сцены менее 10 мс»
-3. Продолжает со слайда 5 (аналоги) — текстовая часть, не требует live demo
-
----
-
-## Чеклист перед защитой (per критерии п.10)
-
-- [ ] Могу за 30 секунд объяснить проблему и ценность проекта. (Слайд 2)
-- [ ] У проекта есть измеримые цели и критерии успеха. (Слайд 3)
-- [ ] Могу объяснить, почему команда выбрала именно это решение. (Слайд 5 — аналоги и обоснование)
-- [ ] В презентации есть архитектура или схема работы системы. (Слайд 6)
-- [ ] Прототип, макет или proof-of-concept можно показать и объяснить. (Слайд 4 — Live Demo)
-- [ ] Есть тесты, данные и сравнение с требованиями. (Слайды 8, 10)
-- [ ] По каждому невыполненному требованию есть честное объяснение причины. (Слайд 11)
-- [ ] Названы ограничения, риски, безопасность и дальнейшие улучшения. (Слайд 11)
-- [ ] Вклад каждого участника прописан явно. (Слайд 12)
-- [ ] Команда провела репетицию и уложилась в регламент. **(минимум 1 раз перед защитой, per критерии п.8)**
-
----
-
-## Соответствие критериям оценки (п.6)
-
-| Блок критерия             |             41–60% (3)             |              61–80% (4)               |                    **81–100% (5) ← цель**                    |
-|---------------------------|:----------------------------------:|:-------------------------------------:|:------------------------------------------------------------:|
-| Проблема и ценность       |   Краткое объяснение значимости    | Пользователь + сценарий + ограничения |   **Слайд 2:** Кто/Что/Почему с обоснованием через аналоги   |
-| Цели и спецификации       |     Несколько измеримых целей      |   Требования и ограничения измеримо   |      **Слайд 3:** 48 пунктов ТЗ + 5 измеримых критериев      |
-| Обоснование решения       |         Базовое объяснение         |  Альтернативы, критерии, компромиссы  | **Слайд 5:** таблица 5 аналогов по 6 критериям + пробел ниши |
-| Реализация и прототип     | Макет, частичная работоспособность |    Рабочий прототип с архитектурой    |   **Слайды 4, 6, 7:** Live Demo + архитектура + реализация   |
-| Испытания и верификация   |    Отдельные тесты/демонстрации    | План, данные, графики, сопоставление  |  **Слайды 8, 10:** 14 ctest + 6 smoke + метрики с подписями  |
-| Ограничения, риски, этика |   Названы основные слабые места    |        Объяснены + предложения        |        **Слайд 11:** 5 deferred + BUG-005 + ТЗ 4.5.4         |
-| Качество защиты           |         Структура понятна          |     Логичная, слайды поддерживают     |         **13 слайдов, 4:30+30с, 1 мысль = 1 слайд**          |
-| Командная работа          |         Роли распределены          |     Каждый показывает свой вклад      |        **Слайд 12:** таблица с личным вкладом каждого        |
-
-**Итог:** все 8 блоков на 81–100% (оценка 5).
-
----
-
-## Hand-off для следующей сессии (LaTeX/PDF экспорт)
-
-1. **Использовать Beamer document class:** `\documentclass{beamer}`
-2. **Тема:** `\usetheme{Madrid}` или `\usetheme{Metropolis}` (минималистичные, читаемость с расстояния)
-3. **Цвета:** синий/серый минимализм, акценты на цифрах
-4. **Шрифты:** `\usepackage{fontspec}` + системные sans-serif (Roboto / Source Sans Pro)
-5. **Таблицы:** `tabularx` или `booktabs` (`\toprule`, `\midrule`, `\bottomrule`) для чистоты
-6. **QR-код:** `\usepackage{qrcode}` + `\qrcode[height=1.5cm]{https://github.com/Leeleit/ProjectV}`
-7. **Speaker notes:** `\begin{notes} ... \end{notes}` (видны только в presenter view)
-8. **Timing:** `\setbeamercovered{transparent}` для overlay; можно вручную через `\pause`
-9. **Backup slides:** `\appendix` для дополнительных слайдов на случай вопросов (например, defense 11/12 FAQ_T* краткая
-   сводка)
-
-**Пример минимального skeleton:**
-
+### 2. Body content (verbatim LaTeX)
 ```latex
-\documentclass[aspectratio=169]{beamer}
-\usepackage{fontspec}
-\usetheme{Madrid}
-\title{ProjectV}
-\author{Кадочников Л. П. и команда <<Черепашки Ninja>>}
-\institute{МФТИ-1-2024}
-\date{2026-06-17}
-\begin{document}
-\frame{\titlepage}
-% ... 12 frames по разделам выше ...
-\end{document}
+\frametitle{Цели проекта и требования ТЗ}
+\framesubtitle{Ход реализации и численные критерии верификации}
+
+\begin{center}
+\textbf{Статус выполнения ТЗ: 38 требований закрыто $\bullet$ 5 отложено $\bullet$ 0 критических сбоев}
+\end{center}
+
+\vspace{0.5em}
+\small
+\begin{table}[]
+\begin{tabular}{lll}
+\hline
+\textbf{Критерий успеха} & \textbf{Целевой показатель} & \textbf{Метод верификации} \\ \hline
+Кадровая частота & 500+ FPS (сцена VoxelLab, Debug) & Встроенный HUD-счетчик \\
+Размер исполняемого файла & 19 МБ (Release, сжатие $-73\%$) & Физический размер ELF \\
+Тесты ядра системы & 14 из 14 тестов успешно пройдены & Конвейер CTest \\
+Визуальная корректность & 6 из 6 графических слоев верны & Скрипты Runtime Smoke \\
+Предупреждения компилятора & 0 предупреждений в нашем коде & Сборка Clang 22 с -Wall \\ \hline
+\end{tabular}
+\end{table}
 ```
 
----
+### 3. Speaker Notes (verbatim)
+«Мы перевели эту задачу в измеримые требования. Из сорока восьми пунктов технического задания тридцать восемь закрыты в рамках текущего MVP, а пять явно отложены в роадмап [T2.md]. Основные критерии успеха: стабильные пятьсот плюс FPS на сцене VoxelLab в дебаг-сборке [T1.md, T2.md], размер релизного бинарника девятнадцать мегабайт, четырнадцать успешно проходящих тестов ядра и шесть автоматических рантайм-снимков пиксель-в-пиксель [T1.md, T4.md]. Передаю слово.»
 
-## Cross-refs
-
-- **Verbatim speech texts:** `docs/DefenseScript_Team.md` (синхронизировано по слайдам)
-- **Per-slot competency FAQ:** `docs/DefenseCompetencyFAQ_T{1..6}.md` (full detail для Q&A)
-- **Algorithms reference:** `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseAlgorithms.md` (23 алгоритма,
-  archived 2026-06-17 в 831f897)
-- **Compliance matrix 48 пунктов:** `docs/DefenseCompetencyFAQ_T2.md §3.5`
-- **Команда 6 участников:** `docs/DefenseCompetencyFAQ_T2.md §3.6`
-- **Аналоги research:** web search results (Minetest, VoxelCore, Veloren, Minecraft Java, VIXEN, Garden, Shroom, Enigma)
+### 4. Метрики и источники данных
+*   **ТЗ:** 38 из 48 требований (`docs/DefenseCompetencyFAQ_T2.md §3.5`).
+*   **Размер бинарника:** `docs/DefenseCompetencyFAQ_T1.md:117` (19 MB Release vs 73 MB Debug).
+*   **Кадровая частота:** `docs/DefenseCompetencyFAQ_T1.md:113` (500+ FPS в отладочной сборке).
 
 ---
 
-**Конец структуры.** Перед защитой: распечатать 13 слайдов, таймер держать на виду, при 4:30 — закрывающий слайд 13, при
-5:00 — тишина и Q&A.
+## Слайд 4: Демонстрация прототипа: VoxelLab (0:50–1:35)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Слайд-иллюстрация. 70% площади занимает скриншот интерфейса движка (`Voxel Laboratory`). Снизу — короткие текстовые сноски к ключевым элементам.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Прототип: Тестовая лаборатория VoxelLab}
+\framesubtitle{Демонстрация работы ключевых систем рендеринга и симуляции}
+
+\begin{center}
+% \includegraphics[width=0.75\textwidth]{voxel_lab_screenshot.png} % Место для скриншота
+\end{center}
+
+\vspace{-0.5em}
+\scriptsize
+\begin{columns}[T]
+\column{0.32\textwidth}
+\textbf{Физические свойства материалов:}
+\begin{itemize}
+    \item \textit{Стекло (Glass):} твердое, прозрачное, не отбрасывает каскадную тень.
+    \item \textit{Жидкость (Fluid):} текучая, полупрозрачная, отбрасывает тень.
+\end{itemize}
+
+\column{0.32\textwidth}
+\textbf{Счетчик производительности:}
+\begin{itemize}
+    \item Уверенное удержание 500+ FPS на сцене из 27 чанков в отладочной конфигурации.
+\end{itemize}
+
+\column{0.32\textwidth}
+\textbf{Оптимизация геометрии:}
+\begin{itemize}
+    \item Жадный мешинг объединяет смежные стороны вокселей одного типа в крупные квады.
+\end{itemize}
+\end{columns}
+```
+
+### 3. Speaker Notes (verbatim)
+«Здравствуйте. Перед вами демонстрация нашей тестовой лаборатории VoxelLab. Генерация геометрии сцены занимает менее десяти миллисекунд [T3.md]. Вы можете наблюдать рендеринг полупрозрачного стекла, динамической жидкости, каскадных теней и работу алгоритма жадного мешинга [T3.md]. На HUD-панели отображаются текущие параметры производительности — движок уверенно преодолевает порог в пятьсот кадров в секунду в режиме отладки [T2.md].»
+
+### 4. Метрики и источники данных
+*   **Генерация геометрии:** менее 10 мс (`docs/DefenseCompetencyFAQ_T3.md:72`).
+*   **Структура сцены:** 27 чанков размером $8\times8\times8$ вокселей (`docs/DefenseCompetencyFAQ_T3.md:85`).
+
+---
+
+## Слайд 5: Анализ аналогов и ниша проекта (1:35–1:50)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Четкая сравнительная таблица. Выделить строку ProjectV цветом фона (например, `lightgray`) или жирной рамкой.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Сравнение с существующими решениями}
+\framesubtitle{Ниша и архитектурные отличия ProjectV}
+
+\scriptsize
+\begin{table}[]
+\begin{tabular}{lccccc}
+\hline
+\textbf{Движок / Проект} & \textbf{Стек} & \textbf{API} & \textbf{DOD} & \textbf{Шейдерный мешинг} & \textbf{Лицензия} \\ \hline
+Minecraft Java & Java & OpenGL $\to$ Vulkan & Нет & Нет & Коммерческая \\
+Minetest & C++17, Lua & OpenGL & Нет & Нет & LGPL 2.1 \\
+VoxelCore & C++17 & OpenGL & Нет & Нет & MIT \\
+Veloren & Rust & wgpu (Vulkan) & ECS & Частично & GPL 3.0 / MIT \\
+\rowcolor{lightgray} \textbf{ProjectV (наш)} & \textbf{C++26} & \textbf{Vulkan 1.4} & \textbf{Да (SoA)} & \textbf{Да (Compute)} & \textbf{MIT} \\ \hline
+\end{tabular}
+\end{table}
+
+\normalsize
+\vspace{0.5em}
+\textbf{Ключевой технологический пробел:}
+Ни один открытый воксельный движок на рынке не предоставляет готовый низкоуровневый базис, сочетающий стандарт C++26, Vulkan 1.4 и Data-Oriented Design.
+```
+
+### 3. Speaker Notes (verbatim)
+«В отличие от аналогов, наш проект заполняет свободную нишу. Minecraft написан на Java и является закрытым продуктом. Minetest использует устаревший OpenGL и скриптовую систему Lua, создающую накладные расходы. В движке VoxelCore отсутствует поддержка вычислительных шейдеров, а проект Veloren на Rust представляет собой готовую онлайн-игру, а не переиспользуемый графический фундамент. ProjectV объединяет явный контроль Vulkan 1.4, возможности C++26 и дата-ориентированный дизайн. Передаю слово.»
+
+### 4. Метрики и источники данных
+*   **Сравнение:** Систематизировано по открытым исходным кодам аналогов (`docs/DefensePresentation_Structure.md`).
+
+---
+
+## Слайд 6: Архитектурные принципы и DOD (1:50–2:05)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Текстовая схема связей подсистем, далее подробный разбор Data-Oriented Design.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Архитектура и Data-Oriented Design}
+\framesubtitle{Распределение обязанностей и компоновка памяти}
+
+\begin{center}
+\texttt{SDL3 Main Loop} $\to$ \texttt{AppState (PIMPL)} \\
+$\big\downarrow$ \\
+\begin{tabular}{ccc}
+\texttt{Renderer (Vulkan 1.4)} & \texttt{Physics (Jolt)} & \texttt{ECS (Flecs)} \\
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+\textbf{Физика Data-Oriented Design (DOD):}
+\begin{itemize}
+    \item \textbf{Чанки $8\times8\times8$:} Размер структуры чанка равен 32 байтам ($2$ SSE-регистра). Полностью исключает промахи кэша L1 (объем 32 КБ на архитектуре Zen 3).
+    \item \textbf{Компоновка вокселей:} Хранение материалов в плоском непрерывном векторе \texttt{std::vector<uint8\_t>} внутри общего контекста \texttt{VoxelWorld}.
+    \item \textbf{Связь с ECS:} Мир Flecs работает как пассивное read-only зеркало данных \texttt{VoxelWorld} без накладных расходов на владение.
+\end{itemize}
+```
+
+### 3. Speaker Notes (verbatim)
+«Здравствуйте. Наша архитектура построена на разделении данных и систем с использованием ECS Flecs [T3.md, T2.md]. Подсистемы рендеринга и физики полностью изолированы. Мы применили Data-Oriented Design: мир разбит на регулярные чанки восемь на восемь на восемь вокселей, а материалы хранятся в одномерных массивах по одному байту на воксель [T3.md]. Это обеспечивает высокую локальность данных и минимизирует промахи кэша процессора.»
+
+### 4. Метрики и источники данных
+*   **Чанки:** $8\times8\times8 = 512$ байт (`docs/DefenseCompetencyFAQ_T3.md:83`).
+*   ** Flecs ECS связь:** `docs/DefenseCompetencyFAQ_T2.md §3.1`.
+
+---
+
+## Слайд 7: GPU-мешинг и симуляция жидкостей (2:05–2:20)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Две колонки. Слева — логика GPU-мешинга, справа — правила Fluid CA.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Реализация систем воксельного мира}
+\framesubtitle{Алгоритм жадного мешинга и клеточный автомат воды}
+
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Жадный мешинг на GPU:}
+\begin{itemize}
+    \item \textit{Алгоритм Лысенкова:} Реализован в compute-шейдере \texttt{voxel\_mesh.comp}.
+    \item \textit{Логика:} 6 поочередных проходов по осям ($\pm X, \pm Y, \pm Z$).
+    \item \textit{Эффективность:} Объединение смежных граней одного типа снижает число полигонов и вызовов отрисовки на $30{-}50\%$.
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Клеточный автомат жидкостей:}
+\begin{itemize}
+    \item \textit{Двойная буферизация:} Чтение из снимка состояния, запись — в буфер \texttt{next[]}. Устраняет баги наложения.
+    \item \textit{Правила:} Гравитационное падение (\texttt{f\_fall}) и распределение (\texttt{f\_spread}) на частоте 20 Гц.
+    \item \textit{Рандомизация:} Пространственное Teschner-хэширование для воспроизводимости потоков.
+\end{itemize}
+\end{columns}
+```
+
+### 3. Speaker Notes (verbatim)
+«Для снижения нагрузки на видеокарту жадный мешинг по алгоритму Лысенкова выполняется на GPU с помощью вычислительного шейдера [T3.md]. За шесть проходов он склеивает открытые грани одного материала в крупные четырёхугольники, сокращая количество draw-вызовов на тридцать-пятьдесят процентов [T3.md]. Симуляция воды работает по принципу клеточного автомата с двойной буферизацией и Teschner-хэшированием для сохранения объема жидкости [T3.md]. Повсюду используются статик-ассерты, гарантирующие неизменность структур данных на этапе компиляции [T3.md]. Передаю слово.»
+
+### 4. Метрики и источники данных
+*   **Эффективность мешинга:** $30{-}50\%$ снижения draw-вызовов (`docs/DefenseAlgorithms.md §3`).
+*   **Fluid CA:** `docs/DefenseCompetencyFAQ_T3.md §3.5` (алгоритм симуляции на базе Teschner hash).
+
+---
+
+## Слайд 8: Верификация: Конвейер тестирования (2:20–2:40)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Крупные плашки-категории для тестов. Две смысловые зоны: "Юнит-тесты ядра" и "Визуальные Smoke-тесты".
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Верификация и автоматическое тестирование}
+\framesubtitle{Тестирование логики ядра и графического конвейера}
+
+\begin{block}{14 наборов автоматических тестов ядра (CTest)}
+\small
+Покрытие критического кода: математика, инвалидация грязных чанков, walk-контроллер, жадный мешинг, клеточный автомат воды, отсечение по фрустуму.
+\begin{center}
+\textbf{Результат: 14/14 успешно пройдены} (0.78 с в Debug / 0.06 с в Release)
+\end{center}
+\end{block}
+
+\begin{block}{Автоматические визуальные Smoke-тесты}
+\small
+Запуск приложения в фиксированной точке сцены VoxelLab с поканальным анализом рендеринга.
+\begin{center}
+Сравнение пиксель-в-пиксель: \textbf{6 из 6 проходов успешны}
+\end{center}
+\end{center}
+\scriptsize
+\begin{tabular}{cccccc}
+\textbf{FINAL} & \textbf{SHDW} & \textbf{CSM} & \textbf{CTSH} & \textbf{AOCC} & \textbf{LOCL} \\
+Финальный кадр & Тени каскадов & Слои каскадов & Контактные тени & Фоновое затенение & Точечный свет \\
+\end{tabular}
+\end{block}
+```
+
+### 3. Speaker Notes (verbatim)
+«Здравствуйте. Процесс испытаний системы полностью автоматизирован. Четырнадцать наборов тестов ядра покрывают математику, физический walk-контроллер, отсечение по пирамиде видимости и логику жидкостей [T1.md, T4.md]. Все они успешно проходятся в CTest при каждой сборке [T1.md]. Визуальная часть проверяется скриптом поканального сравнения графики: генерируются шесть снимков, сверяющих тени, контактное затенение, локальный свет, фоновое заслонение полостей и временное сглаживание TAA [T1.md, T4.md]. Передаю слово.»
+
+### 4. Метрики и источники данных
+*   **Результаты CTest:** 14/14 пройдены (`docs/DefenseCompetencyFAQ_T1.md:42`).
+*   **Визуальные тесты:** 6 smoke-снимков с генерацией sidecar-логов метаданных (`docs/DefenseCompetencyFAQ_T1.md:58`, `T4.md:116`).
+
+---
+
+## Слайд 9: Дополнительные системы и ассеты (2:40–3:15)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Четыре логических блока с иконками или рамками.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Дополнительные функциональные возможности}
+\framesubtitle{Ассет-пайплайн, аудиоподсистема, сохранение мира и отладка}
+
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Загрузка полигональных моделей:}
+\begin{itemize}
+    \item Использование парсера \texttt{fastgltf} для glTF 2.0.
+    \item Поддержка сжатых Draco-мешей.
+    \item Оптимизация кэша вершин и индексации через \texttt{meshoptimizer}.
+\end{itemize}
+
+\vspace{0.5em}
+\textbf{Сохранение мира (Снапшоты):}
+\begin{itemize}
+    \item Компактный бинарный формат с 80-байтным заголовком \texttt{PVSNAP01}.
+    \item Безопасный разбор черезexpected-типы.
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Аудиосистема (miniaudio):}
+\begin{itemize}
+    \item Декодирование файлов формата MP3.
+    \item Вывод звука stereo 16-bit 44.1 кГц.
+    \item Нативная поддержка PulseAudio $\to$ Pipewire.
+\end{itemize}
+
+\vspace{0.5em}
+\textbf{Инструменты разработчика:}
+\begin{itemize}
+    \item Горячая перезагрузка шейдеров на лету без перезапуска приложения (клавиша <<1>>).
+    \item 10 слоев визуальной отладки.
+\end{itemize}
+\end{columns}
+```
+
+### 3. Speaker Notes (verbatim)
+«Здравствуйте. Движок оснащен конвейером ассетов: загрузчик fastgltf поддерживает распаковку моделей Draco и оптимизирует сетку через meshoptimizer [T5.md]. Аудиосистема на miniaudio работает напрямую через PipeWire на Linux и воспроизводит фоновые MP3-треки [T5.md]. Дополнительно реализовано сохранение мира в компактный бинарный формат PVSNAP01 с защитой от повреждения файлов на базе expected-типов [T3.md, T5.md], а также горячая перезагрузка шейдеров без перезапуска [T2.md].»
+
+### 4. Метрики и источники данных
+*   **Конвейер моделей:** fastgltf + Draco mesh compression (`docs/DefenseCompetencyFAQ_T5.md §3.1`).
+*   **Аудиохарактеристики:** 16-bit signed PCM, 44.1 kHz, stereo (`docs/DefenseCompetencyFAQ_T5.md §3.2`).
+*   **Заголовок снапшота:** `PVSNAP01` (`docs/DefenseCompetencyFAQ_T3.md §3.7`).
+
+---
+
+## Слайд 10: Измеренные показатели производительности (3:15–4:00)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Крупные карточки с числами. Явное описание условий измерения согласно требованиям вуза.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Результаты измерений производительности}
+\framesubtitle{Данные оптимизации сборки и кадровой частоты}
+
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Размер исполняемого файла (ELF):}
+\begin{itemize}
+    \item \textit{Debug-сборка:} 73 МБ (с инструментарием Tracy и RenderDoc).
+    \item \textit{Release-сборка:} 19 МБ (эффект ThinLTO и очистки неиспользуемых секций: $-73\%$).
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Влияние оптимизаций на FPS:}
+\begin{itemize}
+    \item Переход Debug $\to$ Release дает прирост производительности в $1.5{-}2.5$ раза.
+    \item Кадровая частота в релизе превышает 800+ FPS на тестовой сцене.
+\end{itemize}
+\end{columns}
+
+\vspace{1em}
+\small
+\begin{block}{Условия проведения замеров производительности}
+\begin{itemize}
+    \item \textbf{Аппаратная конфигурация:} процессор AMD Ryzen 7 5800X, видеокарта NVIDIA GeForce RTX 3060 Ti (8 ГБ видеопамяти), 16 ГБ ОЗУ.
+    \item \textbf{Программное окружение:} ОС Arch Linux (ядро 6.x), Clang 22.1.6, Vulkan 1.4.350, разрешение экрана $1920\times1080$.
+\end{itemize}
+\end{block}
+```
+
+### 3. Speaker Notes (verbatim)
+«Финальные метрики подтверждают эффективность выбранных решений. Все тесты CTest проходят менее чем за одну десятую секунды на релиз-конфигурации [T1.md]. Применение оптимизаций и ThinLTO сократило размер исполняемого файла с семидесяти трёх до девятнадцати мегабайт, удалив неиспользуемые секции [T1.md, T2.md]. Это дало прирост производительности в полтора-два с половиной раза по сравнению с дебаг-версией. Передаю слово.»
+
+### 4. Метрики и источники данных
+*   **Размеры ELF:** 19 МБ Release vs 73 МБ Debug (`docs/DefenseCompetencyFAQ_T1.md:117`).
+*   **Условия замеров:** Arch Linux, Ryzen 7 5800X, RTX 3060 Ti (`docs/DefenseCompetencyFAQ_T2.md:368`).
+
+---
+
+## Слайд 11: Ограничения, риски и безопасность (4:00–4:10)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Четкое разделение на три зоны: "Перенесенные функции", "Технические проблемы" и "Безопасность".
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Анализ ограничений, рисков и безопасности}
+\framesubtitle{Компромиссы MVP, технические риски и лицензии}
+
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Отложенные требования (Роадмап):}
+\begin{itemize}
+    \item \textit{Phase 5:} Интеграция октодеревьев SVO и Mesh Shaders.
+    \item \textit{Phase 6:} Поддержка HDR-текстур.
+    \item \textit{Phase 7:} Динамические частицы и асинхронный загрузчик ресурсов.
+\end{itemize}
+
+\vspace{0.5em}
+\textbf{Минимизация рисков (BUG-005):}
+\begin{itemize}
+    \item Гонка дескрипторов при частой смене сцен локализована через вызов \texttt{vkDeviceWaitIdle} в деструкторе. Полное исправление запланировано на Phase 5.
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Безопасность и правовой статус:}
+\begin{itemize}
+    \item \textit{Защита информации (ТЗ 4.5.4):} Требования к шифрованию отсутствуют.
+    \item \textit{Контент:} Открытый формат glTF, отсутствие DRM.
+    \item \textit{Лицензионная чистота:} Все сторонние зависимости (Jolt, Flecs, Draco) распространяются под свободными лицензиями MIT / Apache 2.0.
+\end{itemize}
+\end{columns}
+```
+
+### 3. Speaker Notes (verbatim)
+«Здравствуйте. Говоря об ограничениях: пять пунктов требований, включая систему частиц и октодеревья SVO, перенесены в роадмап [T2.md, T5.md]. Известная проблема гонки дескрипторов при смене сцен временно локализована через принудительное ожидание девайса на CPU [T2.md, T4.md]. Безопасность гарантирована использованием открытого исходного кода и проверенных MIT-зависимостей [T2.md].»
+
+### 4. Метрики и источники данных
+*   **BUG-005:** `docs/DefenseCompetencyFAQ_T2.md §3.4`.
+*   **ТЗ 4.5.4:** `docs/DefenseReport.md §9`.
+
+---
+
+## Слайд 12: Команда проекта и личный вклад (4:10–4:20)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Табличная структура. Краткие, емкие формулировки вклада каждого человека.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Распределение зон ответственности}
+\framesubtitle{Вклад участников в программный продукт}
+
+\scriptsize
+\begin{table}[]
+\begin{tabular}{|l|l|l|p{0.48\textwidth}|}
+\hline
+\textbf{Участник} & \textbf{Роль на сцене} & \textbf{Компетенция} & \textbf{Зона ответственности в коде} \\ \hline
+\textbf{Кадочников Л. (le1t)} & T2 Demo \& Стек & Архитектура, Q\&A host & Общая структура, PIMPL-AppState, мост ECS, snapshot-сохранения, hot shader reload \\ \hline
+Тиммейт 1 & T1 Проблема, Цели & Сборка, тесты & CMake presets, развертывание CTest, скрипты автоматизации Runtime Smoke \\ \hline
+Тиммейт 2 & T3 Архитектура, Код & Воксельный мир & Структуры чанков, материалы, Fluid CA (клеточный автомат воды), voxel raycast \\ \hline
+Тиммейт 3 & (Q\&A сессия) & Рендеринг & CSM (каскады теней), PCF 5$\times$5, контактные тени, TAA (временное сглаживание) \\ \hline
+Тиммейт 4 & T6 Роадмап, Риски & Физика движка & Интеграция Jolt Physics, walk-контроллер игрока, режимы движения (creative/spectator) \\ \hline
+Тиммейт 5 & T5 Фичи, Метрики & Ассеты, звук & glTF-пайплайн, Draco-декодер, интеграция miniaudio, сканирование плейлистов MP3 \\ \hline
+\end{tabular}
+\end{table}
+```
+
+### 3. Speaker Notes (verbatim)
+«На слайде представлено распределение ролей нашей команды из шести человек. Каждый участник отвечает за свой изолированный программный модуль, а координацию общей системной интеграции и архитектуру осуществляет тимлид.»
+
+### 4. Метрики и источники данных
+*   **Вклад участников:** `docs/DefenseCompetencyFAQ_T2.md §3.6` (полная матрица соответствия ролей).
+
+---
+
+## Слайд 13: Выводы и планы развития (4:20–4:30)
+
+### 1. Рекомендации по верстке Beamer
+*   **Компоновка:** Два логических списка. Крупный, яркий финальный призыв к диалогу по центру.
+
+### 2. Body content (verbatim LaTeX)
+```latex
+\frametitle{Выводы и дальнейшие шаги}
+\framesubtitle{Итоги MVP и долгосрочное видение}
+
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Результаты MVP:}
+\begin{itemize}
+    \item ✅ ТЗ закрыто на 79\% (38 из 48 требований).
+    \item ✅ Ядро системы покрыто 14 стабильными тестами.
+    \item ✅ Достигнут нулевой уровень предупреждений компилятора в кодовой базе.
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Планы развития движка:}
+\begin{itemize}
+    \item \textit{Phase 4:} Авторитарный сервер и предсказание ввода на клиенте.
+    \item \textit{Phase 5:} Переход на Sparse Voxel Octrees (SVO) и аппаратные меш-шейдеры.
+\end{itemize}
+\end{columns}
+
+\vspace{1.5em}
+\begin{center}
+\Large \textbf{Спасибо за внимание!}\\
+\small Будем рады ответить на ваши вопросы.
+\end{center}
+```
+
+### 3. Speaker Notes (verbatim)
+«Подводя итог: MVP полностью готов, тридцать восемь требований ТЗ закрыты с нулевым уровнем предупреждений компилятора [T2.md]. Мы создали воспроизводимый и надежный графический фундамент для дальнейших исследований. Спасибо за внимание, мы готовы ответить на ваши вопросы.»
+
+### 4. Метрики и источники данных
+*   **Роадмап:** `docs/DefenseCompetencyFAQ_T2.md §3.6` (перспективные фазы с 4-й по 9-ю).
