@@ -6,6 +6,7 @@ Updated: `2026-06-17` — Defense clean-slate rewrite (session `ef8b942`, см. 
 Updated: `2026-06-17` — Defense LaTeX Beamer PDF r0 (`b221d1f`, см. §38). `docs/tex/defense/DefensePresentation.pdf` готов (13 страниц, 16:9, 205 KB). xelatex TeX Live 2026.
 Updated: `2026-06-17` — Defense presentation patches r0 (`0aa863c`, см. §39). Применены 4 операторских фикса: `\resizebox` для таблиц 3/5/12, QR удалён из slide 1, booktabs для slide 12, `\scriptsize` для slide 10.
 Updated: `2026-06-17` — Defense presentation round 3 r0 (`341c6cf`, см. §40). 5 фиксов: subtitle белым на синем, slide 4 image 0.45, slide 11 без BUG-005, slide 12 реальные имена без колонки «Роль», новый VoxelLab screenshot.
+Updated: `2026-06-17` — Defense le1t name r0 (`538cc25`, см. §41). Slide 12: «Кадочников Л. (le1t)» → «Кадочников Лев Петрович».
 
 Updated: `2026-06-15` — **Windows build verification r0 (session-2026-06-15T10-25Z-windows-build-verification-r0, см. §24)**. 5 atomic-commits landed: libc++/Windows-clang-cl gating fix (P0-1..P0-4) + F5 hot-reload CMake-injected path (P0-5) + Tracy UI split to standalone build (P0-6) + RepoRoot extract + Windows LookDev smoke parity (P1-2/P1-3) + docs/cleanup + deinit 5 unwired submodules 62M. Linux baseline preserved (ctest 14/14, smoke 6/6).
 
@@ -945,3 +946,27 @@ Cross-refs: `AGENTS.md` §7.2.6 (multi-agent), §7.3.1 (pre-commit gate type=fix
 **Multi-agent note (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed) оставлены нетронутыми — НЕ мои.
 
 Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/DefensePresentation.pdf` (deliverable v3).
+
+## §41. Defense le1t name r0 — `538cc25` (closed 2026-06-17T14:05Z)
+
+**Per operator «Поменяй меня на 12 слайде на Кадочников Лев Петрович, а не le1t».** Заменил «Кадочников Л. (le1t)» на полное ФИО «Кадочников Лев Петрович» в строке le1t таблицы слайда 12 (`341c6cf` → `538cc25`).
+
+**Изменение:** 1 строка в `DefensePresentation.tex`, recompile → новый PDF.
+
+**Visual verification (pdftoppm slide 12):** все 6 строк корректны:
+- **Кадочников Лев Петрович** — Архитектура, Тимлид
+- Черников Максим Андреевич — Сборка, тесты
+- Бачерикова Анжелика Сергеевна — Воксельный мир
+- Туз Максим Эдуардович — Рендеринг
+- Крохалев Пётр Антонович — Физика движка
+- Филипьев Иван Евгеньевич — Ассеты, звук
+
+**Консистентность:** `docs/DefenseCompetencyFAQ_T2.md` line 4 уже содержал «Кадочников Лев Петрович — ведущий, тимлид, Q&A host» — изменение привело presentation в соответствие с FAQ.
+
+**Build:** latexmk -pdfxe + xdvipdfmx, 13 pages, 250 KB.
+
+**Pre-commit gate (§7.3.1):** type=`fix` → operator confirm выполнен через явное указание «Поменяй меня на 12 слайде на Кадочников Лев Петрович» + визуальная верификация.
+
+**Multi-agent note (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed) оставлены нетронутыми.
+
+Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/DefensePresentation.pdf` (deliverable v4); `docs/DefenseCompetencyFAQ_T2.md` (консистентное ФИО в line 4).

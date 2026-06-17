@@ -256,6 +256,25 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-17T-defense-le1t-name-r0
+
+- **id:** `2026-06-17T-defense-le1t-name-r0`
+- **started-at:** 2026-06-17T14:00:00Z
+- **closed-at:** 2026-06-17T14:05:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Slide 12 le1t row → «Кадочников Лев Петрович».** Per operator «Поменяй меня на 12 слайде на Кадочников Лев Петрович, а не le1t». Заменил «Кадочников Л. (le1t)» на полное ФИО «Кадочников Лев Петрович» в строке le1t таблицы слайда 12.
+- **files-touched-intent:**
+  - **EDIT:** `docs/tex/defense/DefensePresentation.tex` (slide 12: 1 строка, «Кадочников Л. (le1t)» → «Кадочников Лев Петрович»)
+  - **REWRITE:** `docs/tex/defense/DefensePresentation.pdf` (recompiled, 13 страниц, 250 KB)
+  - **EDIT:** `agent/active-sessions.md` (эта запись в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§41)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `docs/DefenseScript_Team.md` (line-wrap чужой), `docs/DefenseCompetencyFAQ_T2.md` (заголовок «Кадочников Лев Петрович — ведущий, тимлид, Q&A host» уже содержит правильное ФИО — оставлен нетронутым per §7.2.6), все остальные файлы
+- **status:** closed
+- **commit-hash:** `538cc25` — `fix(presentation): slide 12 le1t row → «Кадочников Лев Петрович»`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit. type=`fix` → per §7.3.1 п.3 требуется operator confirm. Operator confirm в текущей сессии через «Поменяй меня на 12 слайде на Кадочников Лев Петрович, а не le1t» + визуальная верификация через pdftoppm slide 12. 2 files changed, +1/-1. Build: latexmk -pdfxe + xdvipdfmx, 13 pages, 250 KB. **Visual verification:** все 6 строк корректны: Кадочников Лев Петрович / Черников М.А. / Бачерикова А.С. / Туз М.Э. / Крохалев П.А. / Филипьев И.Е. **Note:** FAQ_T2.md уже содержит «Кадочников Лев Петрович» в заголовке (line 4) — консистентно. **Multi-agent coordination (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed) оставлены нетронутыми. **Cross-refs:** `AGENTS.md` §7.2.5, §7.2.6 (multi-agent), §7.2.6.1, §7.3.1 (pre-commit gate type=fix operator confirm), §8.1 (auto-close); `docs/tex/defense/DefensePresentation.pdf` (deliverable v4); `docs/DefenseCompetencyFAQ_T2.md` (уже содержит правильное ФИО в line 4).
+
 ### session-2026-06-17T-defense-presentation-round3-r0
 
 - **id:** `2026-06-17T-defense-presentation-round3-r0`
