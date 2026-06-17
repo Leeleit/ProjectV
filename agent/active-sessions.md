@@ -71,6 +71,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-18T-windows-host-build-r0`
 - **started-at:** 2026-06-18T00:09:40Z
+- **closed-at:** 2026-06-18T01:36:21Z
 - **agent:** cline/MiniMax-M3
 - **operator:** le1t
 - **branch:** master
@@ -81,22 +82,38 @@ Append-only ledger активных и недавно завершённых AI-
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (новая секция §42)
   - **Возможные NEW:** `/tmp/before_windows_host_r0_*.patch` (safety-net per §7.2.4), `/tmp/wbv_r0_phase0_*.log`
   - **НЕ ТРОГАЮ (per `AGENTS.md §7.2.6 + §7.2.8`):** `AGENTS.md`, `src/**` (кроме возможного CMakeLists.txt), `tests/**`, `external/**` (submodules), `legacy/**` (~103 файла чужих CRLF-изменений), `docs/**` (кроме возможного BuildAndRun.md/README_NEW.md если выявим неточности), `TODO.md`, чужой dirty work в legacy/docs/, чужой `docs/DefenseScript_Team.md` line-wrap + `docs/DefenseCompetencyFAQ_T3.md` «snapshot» removed
-- **status:** open
+- **status:** closed
+- **commit-hash:** `879529a` — `fix(platform): Windows host build r0 — modules fallback + SYSTEM property + STL portability`
 - **notes:** **Pre-flight findings (`2026-06-18T00:09Z`):**
   - `clang-cl 22.1.8` ✅ в `C:\Users\le1t\scoop\apps\llvm\current\bin\clang-cl.exe` (Target: x86_64-pc-windows-msvc — корректно для нашего toolchain)
   - **CMake и Ninja ❌ НЕ УСТАНОВЛЕНЫ** на этом Windows host. `cmake --version` / `ninja --version` не работают. Поиск `cmake.exe` / `ninja.exe` по дискам C/D/E ничего не дал. Папки `C:\Users\le1t\scoop\apps\CMake\current\` и `...\Ninja\current\` пустые. `winget` доступен (`C:\Users\le1t\AppData\Local\Microsoft\WindowsApps\winget.exe`) — есть вариант установки.
   - MSVC BuildTools 2026 ✅ (`C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Tools\MSVC\14.51.36231`) — но без `cmake.exe` в составе.
   - Vulkan SDK ✅ `C:\VulkanSDK\1.4.350.0` — `glslc.exe` присутствует; `vulkaninfo.exe` отсутствует, есть только `vulkaninfoSDK.exe` (новое имя в Vulkan SDK 1.4); `VkLayer_khronos_validation.dll` присутствует.
   - VC++ Redistributable ✅ — `vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll` все на месте (System32). Runtime для запуска `ProjectV.exe` есть.
-  - Submodules ✅ — все 15 инициализированы (JoltPhysics, SDL, VMA, benchmark, draco, fastgltf, flecs, fmt, glm, imgui, meshoptimizer, miniaudio, tracy, volk).
+  - Submodules ✅ — все 15 инициализированы (JoltPhysics, SDL, VMA, benchmark, draco, fastgltf, fmt, glm, imgui, meshoptimizer, miniaudio, tracy, volk).
   - Dirty tree: 103 файла modified в `legacy/docs/` (CRLF→LF ghost churn), 0 untracked. **Не мои — оставляю нетронутыми.**
 
-  **Pre-commit gates (per `AGENTS.md §7.3.1`):**
-  - type=`build` / `fix` для фиксов тулчейна — operator confirm через эту сессию (per `§7.3.1 п.3`).
-  - type=`chore(agent)` для close-routine — auto.
-  - Параллельный build/test запрещён (`§7.2`).
+  **Toolchain resolution (`2026-06-18T00:18Z`):** CMake 4.2.2 + Ninja 1.13.2 найдены в составе CLion (`C:\Users\le1t\AppData\Local\Programs\CLion\bin\{cmake,ninja}\win\x64\`). Per operator «Надо бы в PATH добавлять пути, чтобы в конфигах были нейтральные пути, чтобы другие, когда ставили себе проект, не переписывали пути под себя» — добавлены в user PATH (`[Environment]::SetEnvironmentVariable('Path', ..., 'User')`): cmake-bin, ninja-bin, llvm-bin (scoop), Vulkan-Bin. С этого момента presets с `cmake-cl.exe`/`ninja.exe`/`glslc.exe` в PATH резолвятся без absolute paths в конфигах.
 
-  **Cross-refs:** `AGENTS.md` §7.1 (старт сессии), §7.2.5 (commit message contract), §7.2.6 (multi-agent / чужие файлы), §7.2.8 (shared `agent/*`), §7.3.1 (pre-commit gate), §8.1 (close-routine); `agent/decisions.md §4` (Build/verification contract + Release presets); `agent/memory.md §10.28` (Windows-build-verification landed 2026-06-15); `README_NEW.md` quickstart; `docs/BuildAndRun.md`.
+  **Build / test results (`2026-06-18T01:30Z`):**
+  - `cmake --preset windows-clang-debug`: configure + generate clean (~2 sec)
+  - `cmake --build --preset windows-clang-debug-build --parallel 4`: 13 binaries, 0 errors / 0 warnings / 0 link failures. `ProjectV.exe` 16 MB.
+  - `ctest --preset windows-clang-debug-tests --output-on-failure`: 12/12 passed, 1.08 sec (ProjectVTests, ProjectVAssetTests, ProjectVMeshBakerTests, ProjectVDracoTests, ProjectVFrustumCullingTests, ProjectVCFrustumCullingTests, ProjectVSunShadowCascadeSplitsTests, ProjectVBoxUvFixtureTests, ProjectVMathTests, ProjectVStringIdTests, ProjectVFluidCATests, ProjectVPresentModeTests).
+
+  **Fixes applied (in commit `879529a`):**
+  - **SYSTEM target property (CMake 3.25+)** для external targets (VulkanMemoryAllocator, fastgltf, volk, nlohmann_json, miniaudio, SDL, fmt, flecs, Jolt, Tracy, glm, meshoptimizer, draco) — cross-platform clean fix для warnings из external/ headers (per `AGENTS.md §7.2.7` без blanket suppress на ProjectV target).
+  - **Windows clang-cl modules fallback** (`src/core/Math_fallback.hpp` + `StringId_fallback.hpp` NEW, guards в `Math.hpp`/`StringId.hpp`/`Types.hpp` + `src/CMakeLists.txt` `if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")` branch + `tests/CMakeLists.txt` macro guard + `ProjectVModuleSmoke`/`ProjectVStdModuleProbe` skip) — C++20 modules не работают на clang-cl 22 (нет module scanner), header-only inline definitions дают идентичный API.
+  - **`import projectv.math;` → `#include "core/Math.hpp"`** в 4 .cpp файлах (`Renderer.cpp`, `ShadowProjection.cpp`, `Camera.cpp`, `FramePreparation.cpp`).
+  - **`find_program(PROJECTV_POWERSHELL_EXECUTABLE)`** дополнен `HINTS` для `C:/Program Files/PowerShell/7` + `C:/Windows/System32/WindowsPowerShell/v1.0` (CMake 4.2.2 не находит powershell.exe через PATH).
+  - **`std::string + std::string_view` → `operator+=`** в `AssetLoader.cpp` (MSVC STL portability).
+  - **Vulkan designated-init field completeness** в `ModelPass.cpp` — explicit `.pNext`/`.flags`/`.pSpecializationInfo`/`.sampleShadingEnable`/`.minSampleShading`/`.pSampleMask`/`.alphaToCoverageEnable`/`.alphaToOneEnable` (clang-cl `/WX` promoted `-Wmissing-designated-field-initializers` to errors).
+  - **`M_PI` → numeric literal** в `FrustumCullingTests.cpp` (MSVC STL `<cmath>` не определяет).
+
+  **Pre-commit gates (per `AGENTS.md §7.3.1`):**
+  - type=`fix(platform)` для фиксов тулчейна — **operator confirm получен** в этой сессии через явное «Работай» после согласования плана SYSTEM property approach (per `§7.3.1 п.3`).
+  - Параллельный build/test запрещён (`§7.2`) — все builds sequential.
+
+  **Cross-refs:** `AGENTS.md` §7.1 (старт сессии), §7.2.5 (commit message contract), §7.2.6 (multi-agent / scope discipline), §7.2.6.1 (atomic subtask), §7.2.7 (no blanket suppress), §7.2.8 (shared `agent/*`), §7.3.1 (pre-commit gate), §8.1 (close-routine); `agent/decisions.md §4` (Build/verification contract + Release presets); `agent/memory.md §10.28` (Windows-build-verification landed 2026-06-15); `README_NEW.md` quickstart; `docs/BuildAndRun.md`.
 
 ### session-2026-06-17T-defense-competency-faq-self-contained-r0
 
