@@ -74,7 +74,7 @@
 \begin{frame}{Прототип: Тестовая лаборатория VoxelLab}
   \framesubtitle{Демонстрация работы ключевых систем рендеринга и симуляции}
   \begin{center}
-    \includegraphics[width=0.55\textwidth]{screenshots/voxel_lab.png}
+    \includegraphics[width=0.45\textwidth]{screenshots/voxel_lab.png}
   \end{center}
   \vspace{-0.3em}
   \scriptsize
@@ -281,12 +281,6 @@
         \item \filament{Phase 6:} Поддержка HDR-текстур.
         \item \filament{Phase 7:} Динамические частицы и асинхронный загрузчик ресурсов.
       \end{itemize}
-      \vspace{0.5em}
-      \textbf{Минимизация рисков (BUG-005):}
-      \begin{itemize}
-        \item Гонка дескрипторов при частой смене сцен локализована через вызов
-              \code{vkDeviceWaitIdle} в деструкторе. Полное исправление запланировано на Phase 5.
-      \end{itemize}
     \end{column}
     \begin{column}{0.48\textwidth}
       \textbf{Безопасность и правовой статус:}
@@ -307,16 +301,16 @@
   \begin{table}
     \centering
     \resizebox{\textwidth}{!}{%
-      \begin{tabular}{llll}
+      \begin{tabular}{lll}
         \toprule
-        \textbf{Участник} & \textbf{Роль на сцене} & \textbf{Компетенция} & \textbf{Зона ответственности в коде} \\
+        \textbf{Участник} & \textbf{Компетенция} & \textbf{Зона ответственности в коде} \\
         \midrule
-        \textbf{Кадочников Л. (le1t)} & T2 Demo \& Стек & Архитектура, Тимлид & AppState, ECS-мост, снапшоты, горячая перезагрузка \\
-        Тиммейт 1 & T1 Проблема, Цели & Сборка, тесты & Настройка CMake presets, CTest, Runtime Smoke скрипты \\
-        Тиммейт 2 & T3 Архитектура, Код & Воксельный мир & Чанки $8\times8\times8$, материалы, Fluid CA, voxel raycast \\
-        Тиммейт 3 & (Q\&A сессия) & Рендеринг & CSM (тени), PCF 5$\times$5, контактные тени, TAA-сглаживание \\
-        Тиммейт 4 & T6 Роадмап, Риски & Физика движка & Jolt Physics, walk-контроллер, creative/spectator режимы \\
-        Тиммейт 5 & T5 Фичи, Метрики & Ассеты, звук & glTF-пайплайн, Draco, miniaudio, MP3 плейлисты \\
+        \textbf{Кадочников Л. (le1t)} & Архитектура, Тимлид & AppState, ECS-мост, снапшоты, горячая перезагрузка \\
+        Черников Максим Андреевич & Сборка, тесты & Настройка CMake presets, CTest, Runtime Smoke скрипты \\
+        Бачерикова Анжелика Сергеевна & Воксельный мир & Чанки $8\times8\times8$, материалы, Fluid CA, voxel raycast \\
+        Туз Максим Эдуардович & Рендеринг & CSM (тени), PCF 5$\times$5, контактные тени, TAA-сглаживание \\
+        Крохалев Пётр Антонович & Физика движка & Jolt Physics, walk-контроллер, creative/spectator режимы \\
+        Филипьев Иван Евгеньевич & Ассеты, звук & glTF-пайплайн, Draco, miniaudio, MP3 плейлисты \\
         \bottomrule
       \end{tabular}%
     }
