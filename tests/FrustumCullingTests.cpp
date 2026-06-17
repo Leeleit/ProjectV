@@ -44,7 +44,16 @@ struct TestContext {
 // default-argument call site and flags the parameters as
 // "always equal to X". Real test sites can pass any value.
 ChunkCullingParameters MakeForwardLookingCamera(
-	const float verticalFovRadians = static_cast<float>(M_PI) / 3.0f,
+	// **Windows portability (`2026-06-18`,
+	// windows-host-build-r0).** MSVC STL's `<cmath>` does
+	// not define `M_PI` (it's a POSIX / glibc extension).
+	// The Linux build relies on `<cmath>` pulling it in
+	// transitively; on clang-cl / MSVC STL we get the
+	// undeclared-identifier error. Define a local
+	// `kPi` constant (same numeric value, ~15 significant
+	// digits) so the test compiles on both toolchains
+	// without dragging in `<math.h>` for one symbol.
+	const float verticalFovRadians = static_cast<float>(3.14159265358979323846L) / 3.0f,
 	const float aspect = 16.0f / 9.0f,
 	const float nearPlane = 0.1f,
 	const float maxDistance = 0.0f)
@@ -136,7 +145,10 @@ void TestAabbBeyondMaxDistanceCulled(TestContext &ctx)
 	// 100 units of distance with a 0.5-unit half-extent must reject
 	// the box.
 	const ChunkCullingParameters camera = MakeForwardLookingCamera(
-		static_cast<float>(M_PI) / 3.0f,
+		// **Windows portability (`2026-06-18`,
+		// windows-host-build-r0).** Same MSVC STL has-no-
+		// `M_PI` rationale as the helper definition above.
+		static_cast<float>(3.14159265358979323846L) / 3.0f,
 		16.0f / 9.0f,
 		0.1f,
 		5.0f);

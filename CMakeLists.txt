@@ -324,21 +324,38 @@ else ()
     set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_XCB_KHR)
 endif ()
 add_subdirectory(external/volk)
+# **Volk SYSTEM property (`2026-06-18`,
+# windows-host-build-r0).** `projectv_add_volk` /
+# `projectv_suppress_external_warnings` is wired for the
+# static lib; the SYSTEM property tells the consumer TU
+# to treat the include directory as system-suppressed.
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/volk")
 
 # Vulkan Memory Allocator
 add_subdirectory(external/VulkanMemoryAllocator)
-# VMA is a header-only INTERFACE target. The upstream headers use
-# raw `T*` pointers in hundreds of public API signatures and
-# (correctly) omit Clang's `_Nonnull` / `_Nullable` annotations
-# — they're not C-only code, and Apple-clang / upstream Clang's
-# `-Wnullability-completeness` (which catches pointers crossing
-# the annotated/non-annotated boundary in *Obj-C* method families)
-# treats every such pointer as a diagnostic. VMA's contract
-# (Vulkan physical-device memory, alloc callbacks, etc.) is
-# fundamentally `void*`/nullable-by-vulkan-spec, so the warning
-# is a third-party-API false positive. Scope the suppression to
-# VMA's own INTERFACE so our own code in `src/` and `tests/` is
-# NOT affected (per AGENTS.md §7.2.7 "не глушить в ProjectV таргете").
+# **VMA SYSTEM property (`2026-06-18`,
+# windows-host-build-r0).** `add_subdirectory` + the
+# `projectv_suppress_external_warnings` call below also
+# mark the VMA target as SYSTEM via the helper, but the
+# explicit `SYSTEM TRUE` here is the canonical write so
+# downstream consumers (ProjectV / tests) reliably get
+# `-isystem` for the `vk_mem_alloc.h` include path.
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/VulkanMemoryAllocator")
+# **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+# Per `AGENTS.md §7.2.7` blanket suppressions on the consuming
+# `ProjectV` target are forbidden — they would mask the same
+# warning classes for *our* code. The clean cross-platform
+# fix for VMA's many clang-cl `-W*` diagnostics
+# (`-Wmismatched-tags`, `-Wmissing-designated-field-
+# initializers`, `-Wunused-parameter`, `-Wunused-variable`,
+# `-Wnullability-completeness`) is to mark the VMA target as
+# SYSTEM, which makes CMake emit `-isystem` for GCC/Clang
+# and `/external:I path` + `/external:W0` for MSVC. All
+# diagnostics from the SYSTEM-included header are then
+# suppressed at the consumer's TU boundary. The legacy
+# `-Wnullability-completeness` carry-over stays below as a
+# belt-and-suspenders for toolchains that pre-date CMake 3.25.
+set_target_properties(VulkanMemoryAllocator PROPERTIES SYSTEM TRUE)
 target_compile_options(VulkanMemoryAllocator INTERFACE
     -Wno-nullability-completeness
 )
@@ -530,6 +547,13 @@ FetchContent_Declare(
         GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(nlohmann_json)
+# **nlohmann_json SYSTEM property (`2026-06-18`,
+# windows-host-build-r0).** Header-only FetchContent
+# dependency; mark SYSTEM so warnings from
+# `<nlohmann/json.hpp>` are suppressed in consumer TUs
+# (ProjectV's `core/Types.hpp` pulls it in via the
+# SceneConfig include chain).
+projectv_suppress_external_warnings("${nlohmann_json_SOURCE_DIR}")
 
 add_library(projectv_build_options INTERFACE)
 if (MSVC)

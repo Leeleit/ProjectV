@@ -8,14 +8,48 @@
 # and `core/Math.hpp` / `core/StringId.hpp` resolve at
 # compile time. Without the FILE_SET, the `import`
 # statement in the shim fails with "module not found".
+# **libc++ migration (Phase 2, `2026-06-13`).** Helper
+# macro that adds the project's `.ixx` modules to a test
+# target's `FILE_SET CXX_MODULES` with the project's
+# `src/` as `BASE_DIRS`. Every test that includes
+# `core/Types.hpp` (transitively) needs the modules
+# available so the `import projectv.math;` /
+# `import projectv.string_id;` shims in `core/Types.hpp`
+# and `core/Math.hpp` / `core/StringId.hpp` resolve at
+# compile time. Without the FILE_SET, the `import`
+# statement in the shim fails with "module not found".
+#
+# **Windows clang-cl fallback (`2026-06-18`,
+# windows-host-build-r0).** Same rationale as
+# `src/CMakeLists.txt` — CMake 4.2's `FILE_SET CXX_MODULES`
+# driver requires a scanner, and clang-cl does not provide
+# one. We list `.ixx` as plain sources on Windows clang-cl;
+# the compile succeeds because clang still compiles `.ixx`
+# as a module interface unit.
 macro(projectv_test_add_modules TARGET)
-    target_sources(${TARGET} PRIVATE
-        FILE_SET CXX_MODULES FILES
-        ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
-        ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
-        BASE_DIRS
-        ${CMAKE_SOURCE_DIR}/src
-    )
+    # **Windows clang-cl fallback (`2026-06-18`,
+    # windows-host-build-r0).** Same scanner-availability
+    # rationale as `src/CMakeLists.txt`: clang-cl does not
+    # expose the module dependency scanner that
+    # `FILE_SET CXX_MODULES` requires. On Windows clang-cl
+    # we deliberately do NOT list the `.ixx` files here —
+    # doing so produces duplicate `Mat4::data` / `Vec3::data`
+    # symbols at link time because the test TUs also pull
+    # in the inline `Math_fallback.hpp` / `StringId_fallback
+    # .hpp` definitions through `core/Math.hpp` /
+    # `core/StringId.hpp`. Omitting the `.ixx` sources keeps
+    # the linker happy; the `core/Math.hpp` /
+    # `core/StringId.hpp` Windows-clang-cl guards route the
+    # consumer TUs through the inline fallback instead.
+    if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+        target_sources(${TARGET} PRIVATE
+            FILE_SET CXX_MODULES FILES
+            ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
+            ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
+            BASE_DIRS
+            ${CMAKE_SOURCE_DIR}/src
+        )
+    endif ()
 endmacro()
 
 add_executable(ProjectVTests
@@ -475,6 +509,18 @@ set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
 # is `tests/`. A future refactor (Tier 2.D) can move
 # shared modules into a common location and use
 # `BASE_DIRS` on the FILE_SET to widen the scope.
+#
+# **Windows clang-cl skip (`2026-06-18`,
+# windows-host-build-r0).** Same scanner-availability
+# rationale as the macro above: the explicit `FILE_SET
+# CXX_MODULES` block here hard-requires CMake's module
+# scanner, which clang-cl on CMake 4.2 does not provide.
+# ProjectVModuleSmoke is a developer probe, not a
+# production gate, so skipping it on Windows clang-cl
+# keeps the host build green without losing signal on
+# Linux. When CMake ships clang-cl scanner support this
+# guard can be removed.
+if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
 add_executable(ProjectVModuleSmoke
         ModuleSmokeTest.cpp
 )
@@ -521,6 +567,14 @@ set_tests_properties(ProjectVModuleSmoke PROPERTIES LABELS "unit")
 # the precompile or the consumer link fails, the failure
 # message names the exact missing piece (the libc++
 # `.cppm`, the `libc++.modules.json`, etc.).
+#
+# **Linux-only by design (2026-06-18).** Probe hard-codes
+# `/usr/sbin/clang++` and `/usr/share/libc++/v1/std.cppm`,
+# so it never builds on Windows regardless of scanner
+# support. The Windows-clang-cl guard above is
+# belt-and-suspenders here: it would be skipped anyway
+# because the absolute `/usr/...` paths do not exist on
+# the Windows host.
 add_executable(ProjectVStdModuleProbe
         StdModuleProbe.cpp
 )
@@ -572,6 +626,7 @@ target_sources(ProjectVStdModuleProbe PRIVATE
 # it's <1s.
 add_test(NAME ProjectVStdModuleProbe COMMAND ProjectVStdModuleProbe)
 set_tests_properties(ProjectVStdModuleProbe PROPERTIES LABELS "unit")
+endif ()
 
 # **Tier 3 (`2026-06-13`).** Google Benchmark harness
 # for the frustum-cull hot path. Three implementations

@@ -13,8 +13,20 @@
 //   "**libc++ migration debug (`2026-06-13`).** Removed
 //   `import projectv.math;` from this central header as
 //   well..."
+//
+// **Windows clang-cl fallback (`2026-06-18`,
+// windows-host-build-r0).** Mirrors the `Math.hpp` /
+// `StringId.hpp` branch: the module imports are replaced
+// by the fallback definitions already pulled in by the
+// corresponding `_fallback.hpp` headers.
+#if defined(__clang__) && defined(_MSC_VER)
+// Fallback definitions are pulled in via
+// `core/Math.hpp` and `core/StringId.hpp` below; nothing
+// to do here.
+#else
 import projectv.math;
 import projectv.string_id;
+#endif
 
 // `volk.h` must come before any header that pulls in `vk_mem_alloc.h`
 // (transitively: `asset/MeshGpuResources.hpp`, `render/ShadowTypes.hpp`,
@@ -37,10 +49,7 @@ import projectv.string_id;
 namespace projectv::taa {
 struct OffscreenColorTarget;
 } // namespace projectv::taa
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
 #include "vk_mem_alloc.h"
-#pragma clang diagnostic pop
 
 #include <array>
 #include <cstddef>

@@ -91,16 +91,33 @@ bool CreateModelPipeline(
 
 	const std::array stages{
 		VkPipelineShaderStageCreateInfo{
+			// **Windows clang-cl portability (`2026-06-18`,
+			// windows-host-build-r0).** `clang-cl` with
+			// `-Wmissing-designated-field-initializers`
+			// promoted to `-Werror` (via `/WX`) requires every
+			// Vulkan struct designated initializer to spell
+			// `.pNext`, `.flags`, and `.pSpecializationInfo`
+			// explicitly. All default to zero / null here
+			// (no extension chaining, no flags, no
+			// specialization constants) so the additions are
+			// purely defensive and keep the same source
+			// compiling on Linux clang too.
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
 			.module = vertexModule,
 			.pName = "main",
+			.pSpecializationInfo = nullptr,
 		},
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 			.module = fragmentModule,
 			.pName = "main",
+			.pSpecializationInfo = nullptr,
 		},
 	};
 
@@ -156,8 +173,26 @@ bool CreateModelPipeline(
 	rasterizer.depthBiasEnable = VK_FALSE;
 
 	VkPipelineMultisampleStateCreateInfo multisampling{
+		// Same Windows clang-cl designated-init rationale as
+		// above. `.sampleShadingEnable` is `VK_FALSE` here
+		// because the model pass is single-sample (1x MSAA),
+		// so `.minSampleShading` is ignored by the driver
+		// (set to `0.0f` for completeness — Vulkan says it
+		// is only meaningful when `.sampleShadingEnable` is
+		// `VK_TRUE`). `.pSampleMask` is `nullptr` and
+		// `.alphaToCoverageEnable` / `.alphaToOneEnable`
+		// are `VK_FALSE` for the same reason — single-sample
+		// MSAA does not need a per-sample coverage mask or
+		// alpha-to-coverage / alpha-to-one conversion.
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.sampleShadingEnable = VK_FALSE,
+		.minSampleShading = 0.0f,
+		.pSampleMask = nullptr,
+		.alphaToCoverageEnable = VK_FALSE,
+		.alphaToOneEnable = VK_FALSE,
 	};
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
@@ -296,16 +331,25 @@ bool CreateModelPipeline(
 	}
 	const std::array stagesTaaOn{
 		VkPipelineShaderStageCreateInfo{
+			// Same Windows clang-cl pNext / flags /
+			// pSpecializationInfo rationale as the first
+			// `stages` block above.
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
 			.module = vertexModule,
 			.pName = "main",
+			.pSpecializationInfo = nullptr,
 		},
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 			.module = fragmentModuleTaaOn,
 			.pName = "main",
+			.pSpecializationInfo = nullptr,
 		},
 	};
 	VkGraphicsPipelineCreateInfo pipelineInfoTaaOn = pipelineInfo;

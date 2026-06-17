@@ -8,12 +8,36 @@ add_executable(ProjectV)
 # TUs that still use the `#include` form (Tier 2.D will
 # migrate them to `import projectv.math;` and delete the
 # header).
-target_sources(ProjectV PRIVATE
-        FILE_SET CXX_MODULES FILES
-        core/Math.ixx
-        core/StringId.ixx
-        core/Probe.ixx
-)
+#
+# **Windows clang-cl fallback (`2026-06-18`,
+# windows-host-build-r0).** CMake 4.2's `FILE_SET CXX_MODULES`
+# driver requires a module dependency scanner, and clang-cl
+# 22 on Windows does not provide one. We deliberately do
+# NOT list the `.ixx` files here on Windows clang-cl —
+# doing so produces duplicate `Mat4::data` / `Vec3::data`
+# symbols at link time because the consumer TUs also pull
+# in the inline `Math_fallback.hpp` definitions through
+# `core/Math.hpp` (so the same `Mat4::data()` would be
+# emitted twice: once via the standalone `.ixx` compile and
+# once via the inline fallback header). Omitting the `.ixx`
+# sources keeps the linker happy and gives Windows clang-cl
+# exactly the same `projectv::math` / `projectv::core::
+# StringID` / `projectv::probe` API as native clang,
+# without using C++20 modules at all.
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    # Intentionally no `.ixx` sources here — see the
+    # `Math_fallback.hpp` / `StringId_fallback.hpp` headers
+    # and the `core/Math.hpp` / `core/StringId.hpp` /
+    # `core/Types.hpp` Windows-clang-cl guards for the
+    # inline-definition path that backs them.
+else ()
+    target_sources(ProjectV PRIVATE
+            FILE_SET CXX_MODULES FILES
+            core/Math.ixx
+            core/StringId.ixx
+            core/Probe.ixx
+    )
+endif ()
 
 # --- БЛОК АВТОКОМПИЛЯЦИИ ШЕЙДЕРОВ ---
 find_program(PROJECTV_GLSLC_EXECUTABLE glslc)
@@ -167,6 +191,13 @@ target_include_directories(ProjectV PRIVATE
 # don't pollute the build.
 add_subdirectory(${PROJECT_SOURCE_DIR}/external/miniaudio
         ${CMAKE_BINARY_DIR}/external/miniaudio EXCLUDE_FROM_ALL)
+# **miniaudio SYSTEM property (`2026-06-18`,
+# windows-host-build-r0).** miniaudio emits several
+# clang-cl warnings under `/WX` (`-Wunsafe-buffer-usage`
+# in MP3 / WAV decoders, etc.). Marking its target as
+# SYSTEM makes the include directory a system path for
+# consumer TUs.
+projectv_suppress_external_warnings("${PROJECT_SOURCE_DIR}/external/miniaudio")
 target_link_libraries(ProjectV PRIVATE miniaudio)
 
 if (LINUX)
@@ -174,6 +205,21 @@ if (LINUX)
 endif ()
 
 target_link_libraries(ProjectV PRIVATE projectv_build_options)
+
+# **Per-target mismatched-tags / missing-field-initializer
+# suppression REMOVED (`2026-06-18`, windows-host-build-r0).**
+# Per `AGENTS.md §7.2.7`, suppressions on the project's own
+# `ProjectV` target are forbidden — they would mask the same
+# warning class for *our* code, not just the vendored
+# headers. The correct fix is the `SYSTEM` target property
+# applied in `cmake/ProjectVThirdParty.cmake` /
+# `root CMakeLists.txt` / `src/CMakeLists.txt` (see the
+# `projectv_suppress_external_warnings` and the explicit
+# `set_target_properties(... PROPERTIES SYSTEM TRUE)` calls
+# near VMA / miniaudio / nlohmann_json). With SYSTEM
+# propagate, all diagnostics from external headers are
+# auto-suppressed at the consumer TU boundary on every
+# supported toolchain.
 
 # **Cross-platform build-tree path for F5 hot-reload (`2026-06-15`).**
 # Inject the absolute build tree path as a compile-time macro
@@ -262,7 +308,23 @@ endif ()
 target_link_libraries(ProjectV PRIVATE projectv_c_kernels)
 
 if (WIN32)
-    find_program(PROJECTV_POWERSHELL_EXECUTABLE NAMES pwsh powershell REQUIRED)
+    # **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+    # windows-host-build-r0).** CMake 4.2's `find_program` did
+    # not locate `powershell.exe` through `PATH` alone on the
+    # Windows host build verification even though
+    # `C:\WINDOWS\System32\WindowsPowerShell\v1.0\` was in
+    # `PATH`. Adding the well-known Windows PowerShell 5.1
+    # and PowerShell 7 install paths as `HINTS` lets the
+    # runtime smoke target resolve a script host without
+    # relying on the fragile `PATH`-based discovery path.
+    # This is a host-config fix, not a semantic change: the
+    # project still prefers whatever `pwsh` / `powershell`
+    # is on `PATH` first.
+    find_program(PROJECTV_POWERSHELL_EXECUTABLE
+            NAMES pwsh powershell
+            HINTS "C:/Program Files/PowerShell/7"
+                  "C:/Windows/System32/WindowsPowerShell/v1.0"
+            REQUIRED)
 
     add_custom_target(ProjectVRuntimeSmoke
             COMMAND

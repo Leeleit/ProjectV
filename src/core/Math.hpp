@@ -27,25 +27,25 @@
 // declaration in module projectv.math" — a hard
 // ODR violation. The shim avoids that by re-issuing the
 // import on behalf of the consumer.
-import projectv.math;
-
-// **Legacy fallback** for toolchains that don't support
-// C++20 module imports (none of our TUs fall in this bucket
-// today — the project's `CMAKE_CXX_STANDARD 26` + Clang 22
-// always support modules — but the guard keeps the header
-// parseable if someone copies it into a non-modules TU).
-#ifdef __cpp_modules
-// Type definitions are provided by the import above; nothing
-// else needed here. The function bodies (`dot`, `cross`,
-// `lengthSq`, `normalize`, `operator*`, etc.) live in
-// `src/core/Math.ixx` and are visible via the module.
+//
+// **Windows clang-cl fallback (`2026-06-18`,
+// windows-host-build-r0).** CMake 4.2's `FILE_SET CXX_MODULES`
+// driver requires a module scanner, and clang-cl 22 does
+// not provide one. To keep the Windows host build green
+// without forking the mainline math type definitions,
+// the Windows clang-cl branch pulls in
+// `Math_fallback.hpp` (a header-only duplicate of the
+// `projectv.math` module). The branch condition
+// `defined(__clang__) && defined(_MSC_VER)` matches
+// clang-cl specifically; native clang on Linux/macOS and
+// pure MSVC cl.exe keep consuming the `projectv.math`
+// module. When CMake or clang-cl ship the missing scanner,
+// this branch drops and `Math_fallback.hpp` becomes dead
+// code (delete both).
+#if defined(__clang__) && defined(_MSC_VER)
+#include "core/Math_fallback.hpp"
 #else
-// **Pre-Tier 2.D fallback** (kept for source-compatibility
-// with non-modules TUs). Defines the same types and
-// functions as `src/core/Math.ixx` so the project still
-// compiles if a downstream consumer turns modules off.
-#error "core/Math.hpp requires C++20 modules (Clang 18+). Disable this guard once a non-modules fallback is needed."
-
+import projectv.math;
 #endif
 
 // **Original Tier 0.A doc preserved below for git-blame

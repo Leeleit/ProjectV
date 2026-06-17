@@ -2,7 +2,15 @@
 // of `projectv.math`. See `src/app/Camera.cpp` for the
 // full rationale (upstream ODR fix via `__builtin_sqrtf`
 // in `Math.ixx`).
-import projectv.math;
+//
+// **Windows clang-cl fallback (`2026-06-18`,
+// windows-host-build-r0).** Switched to `#include
+// "core/Math.hpp"` so the same TU compiles on clang-cl
+// (which cannot use `import` without CMake scanner support).
+// The header itself branches into the inline fallback under
+// `defined(__clang__) && defined(_MSC_VER)`; on native
+// clang it still re-issues `import projectv.math;`.
+#include "core/Math.hpp"
 
 #include "app/FramePreparation.hpp"
 

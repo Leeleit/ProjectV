@@ -397,7 +397,14 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 
 	auto dataBuffer = fastgltf::GltfDataBuffer::FromPath(path);
 	if (dataBuffer.error() != fastgltf::Error::None) {
-		const std::string message = std::string("GltfDataBuffer::FromPath failed: ") + fastgltf::getErrorMessage(dataBuffer.error());
+		// **Windows STL portability (`2026-06-18`,
+		// windows-host-build-r0).** MSVC STL does not provide
+		// `operator+(string, string_view)` (libc++ does as an
+		// extension). Build the message via `+=` instead so the
+		// same code compiles on clang-cl + MSVC STL and on
+		// native clang + libc++.
+		std::string message = "GltfDataBuffer::FromPath failed: ";
+		message += fastgltf::getErrorMessage(dataBuffer.error());
 		SetLastError(message);
 		if (outError) {
 			outError->message = message;
@@ -412,7 +419,9 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 	const std::filesystem::path directory = std::filesystem::path(path).parent_path();
 	auto assetExpected = parser.loadGltf(dataBuffer.get(), directory, options, categories);
 	if (assetExpected.error() != fastgltf::Error::None) {
-		const std::string message = std::string("loadGltf failed: ") + fastgltf::getErrorMessage(assetExpected.error());
+		// Same Windows-STL portability rationale as above.
+		std::string message = "loadGltf failed: ";
+		message += fastgltf::getErrorMessage(assetExpected.error());
 		SetLastError(message);
 		if (outError) {
 			outError->message = message;

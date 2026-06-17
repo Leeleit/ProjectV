@@ -67,6 +67,37 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
+### session-2026-06-18T-windows-host-build-r0
+
+- **id:** `2026-06-18T-windows-host-build-r0`
+- **started-at:** 2026-06-18T00:09:40Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Реальная сборка `windows-clang-debug` / `windows-clang-release` на Windows host (первая верификация на живом Windows после static-only audit 2026-06-15).** Per operator «продолжаем реализацию поддержки windows-сборки» (Windows host, не Linux static-audit). Цель: configure → build → ctest 14/14 baseline → smoke, реально запустив тулчейн. **Scope:** mainline CMakePresets/CMakeLists.txt + tools/windows/ (если нужны правки), НЕ трогаю ~103 чужих uncommitted файлов (legacy/docs/ — CRLF ghost churn от предыдущих defense-сессий).
+- **files-touched-intent:**
+  - **Phase 0 read-only:** проверка toolchain (clang-cl, MSVC env, Vulkan SDK, VC++ Redist, submodules, presets) — без изменений
+  - **Возможные EDITs:** `CMakePresets.json` (если нужно override CMAKE_CXX_COMPILER на абсолютный путь), корневой `CMakeLists.txt` (если потребуется platform-specific твик), `tools/windows/*.ps1` (если нужен фикс)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (новая секция §42)
+  - **Возможные NEW:** `/tmp/before_windows_host_r0_*.patch` (safety-net per §7.2.4), `/tmp/wbv_r0_phase0_*.log`
+  - **НЕ ТРОГАЮ (per `AGENTS.md §7.2.6 + §7.2.8`):** `AGENTS.md`, `src/**` (кроме возможного CMakeLists.txt), `tests/**`, `external/**` (submodules), `legacy/**` (~103 файла чужих CRLF-изменений), `docs/**` (кроме возможного BuildAndRun.md/README_NEW.md если выявим неточности), `TODO.md`, чужой dirty work в legacy/docs/, чужой `docs/DefenseScript_Team.md` line-wrap + `docs/DefenseCompetencyFAQ_T3.md` «snapshot» removed
+- **status:** open
+- **notes:** **Pre-flight findings (`2026-06-18T00:09Z`):**
+  - `clang-cl 22.1.8` ✅ в `C:\Users\le1t\scoop\apps\llvm\current\bin\clang-cl.exe` (Target: x86_64-pc-windows-msvc — корректно для нашего toolchain)
+  - **CMake и Ninja ❌ НЕ УСТАНОВЛЕНЫ** на этом Windows host. `cmake --version` / `ninja --version` не работают. Поиск `cmake.exe` / `ninja.exe` по дискам C/D/E ничего не дал. Папки `C:\Users\le1t\scoop\apps\CMake\current\` и `...\Ninja\current\` пустые. `winget` доступен (`C:\Users\le1t\AppData\Local\Microsoft\WindowsApps\winget.exe`) — есть вариант установки.
+  - MSVC BuildTools 2026 ✅ (`C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Tools\MSVC\14.51.36231`) — но без `cmake.exe` в составе.
+  - Vulkan SDK ✅ `C:\VulkanSDK\1.4.350.0` — `glslc.exe` присутствует; `vulkaninfo.exe` отсутствует, есть только `vulkaninfoSDK.exe` (новое имя в Vulkan SDK 1.4); `VkLayer_khronos_validation.dll` присутствует.
+  - VC++ Redistributable ✅ — `vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll` все на месте (System32). Runtime для запуска `ProjectV.exe` есть.
+  - Submodules ✅ — все 15 инициализированы (JoltPhysics, SDL, VMA, benchmark, draco, fastgltf, flecs, fmt, glm, imgui, meshoptimizer, miniaudio, tracy, volk).
+  - Dirty tree: 103 файла modified в `legacy/docs/` (CRLF→LF ghost churn), 0 untracked. **Не мои — оставляю нетронутыми.**
+
+  **Pre-commit gates (per `AGENTS.md §7.3.1`):**
+  - type=`build` / `fix` для фиксов тулчейна — operator confirm через эту сессию (per `§7.3.1 п.3`).
+  - type=`chore(agent)` для close-routine — auto.
+  - Параллельный build/test запрещён (`§7.2`).
+
+  **Cross-refs:** `AGENTS.md` §7.1 (старт сессии), §7.2.5 (commit message contract), §7.2.6 (multi-agent / чужие файлы), §7.2.8 (shared `agent/*`), §7.3.1 (pre-commit gate), §8.1 (close-routine); `agent/decisions.md §4` (Build/verification contract + Release presets); `agent/memory.md §10.28` (Windows-build-verification landed 2026-06-15); `README_NEW.md` quickstart; `docs/BuildAndRun.md`.
+
 ### session-2026-06-17T-defense-competency-faq-self-contained-r0
 
 - **id:** `2026-06-17T-defense-competency-faq-self-contained-r0`

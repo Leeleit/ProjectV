@@ -9,5 +9,15 @@
 // (commit `73e2dd7`). Per the comment in `Math.hpp`, once
 // every mainline TU is a direct importer of the module,
 // both shims can be deleted.
+//
+// **Windows clang-cl fallback (`2026-06-18`,
+// windows-host-build-r0).** Mirrors the `Math.hpp`
+// branch: clang-cl on Windows pulls in
+// `StringId_fallback.hpp` (a header-only duplicate of
+// `projectv.string_id`) instead of the module.
+#if defined(__clang__) && defined(_MSC_VER)
+#include "core/StringId_fallback.hpp"
+#else
 import projectv.string_id;
+#endif
 
