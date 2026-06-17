@@ -3,6 +3,7 @@
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
 Updated: `2026-06-17` — Defense clean-slate rewrite (session `ef8b942`, см. §37). DefenseScript_Team.md (148→110 строк) + DefensePresentation_Structure.md (1006→541 строк, 13 слайдов LaTeX Beamer) переписаны из текста оператора; FAQ_T{1..6}.md §1 Verbatim синхронизирован (6/6 verified). Tone natural, problem justification CPU-physics-bound, ТЗ↔тесты aligned.
+Updated: `2026-06-17` — Defense LaTeX Beamer PDF r0 (`b221d1f`, см. §38). `docs/tex/defense/DefensePresentation.pdf` готов (13 страниц, 16:9, 205 KB). xelatex TeX Live 2026.
 
 Updated: `2026-06-15` — **Windows build verification r0 (session-2026-06-15T10-25Z-windows-build-verification-r0, см. §24)**. 5 atomic-commits landed: libc++/Windows-clang-cl gating fix (P0-1..P0-4) + F5 hot-reload CMake-injected path (P0-5) + Tracy UI split to standalone build (P0-6) + RepoRoot extract + Windows LookDev smoke parity (P1-2/P1-3) + docs/cleanup + deinit 5 unwired submodules 62M. Linux baseline preserved (ctest 14/14, smoke 6/6).
 
@@ -828,3 +829,45 @@ Cross-refs на архив полных версий: \`agent/ARCHIVE-INDEX.md\`
 **Safety-net:** `/tmp/before_cleanslate_script_2026-06-17T1235Z.patch` (13 строк исходного dirty diff, footer `POST-COMMIT ef8b942`).
 
 Cross-refs: `AGENTS.md` §7.2.5, §7.2.6.1, §7.2.8, §7.3.1, §7.4, §8.1; `docs/DefenseScript_Team.md` (authoritative verbatim); `docs/DefensePresentation_Structure.md` (LaTeX Beamer-ready); `agent/active-sessions.md` session-2026-06-17T-defense-cleanslate-script-r0.
+
+## §38. Defense LaTeX Beamer PDF r0 — `b221d1f` (closed 2026-06-17T13:15Z)
+
+**Per operator «Теперь делай презентацию»** — LaTeX Beamer compilation of `DefensePresentation_Structure.md` → готовый PDF deliverable для защиты 2026-06-17.
+
+**Deliverable:** `docs/tex/defense/DefensePresentation.pdf` (13 страниц, 16:9, 205 KB).
+
+**Инфраструктура (новое, `docs/tex/defense/`):**
+
+| Файл | Назначение |
+|------|-----------|
+| `header.tex` | Beamer preamble: Madrid theme + Liberation Sans с polyglossia:russian, projectvblue/projectvgray colors, qrcode package, navigation symbols off |
+| `DefensePresentation.tex` | 13 фреймов (title с QR + Problem + Goals + VoxelLab demo + Аналоги + Архитектура + Voxel мир + Тесты + Фичи + Метрики + Ограничения + Команда + Закрытие) |
+| `Makefile` | `latexmk -pdfxe -interaction=nonstopmode -halt-on-error`, цели all/notes/clean/clean-all |
+| `screenshots/voxel_lab.png` | 1896×1034 RGB, конвертировано из `build/linux-clang-debug/lookdev-captures/2026-06-15-repo-root-walkup-test/0001.bmp` через PIL |
+| `DefensePresentation.pdf` | Готовый deliverable, 13 страниц, 453.54×255.12 pt, 205 KB |
+
+**Build verification:**
+- `xelatex --version` → XeTeX 3.141592653-2.6-0.999998 (TeX Live 2026/Arch Linux)
+- `latexmk -pdfxe` → `xdvipdfmx` pipeline, 13 страниц, 0 errors
+- `pdfinfo` → Title: «ProjectV - Открытый высокопроизводительный воксельный движок», Author: «Команда <<Черепашки Ninja>>», 13 pages, PDF version 1.7
+- Визуальная проверка через `pdftoppm` (slides 1, 4, 13): QR-code на титульном, VoxelLab screenshot в слайде 4, «Спасибо за внимание!» на закрытии
+
+**Warnings:** minor overfull/underfull hbox в Beamer таблицах (типично), нет блокеров.
+
+**`.gitignore`:** добавлены паттерны для LaTeX artifacts (`*.aux`, `*.log`, `*.out`, `*.toc`, `*.nav`, `*.snm`, `*.fls`, `*.fdb_latexmk`, `*.xdv`, `*.bbl`, `*.blg`, `*.idx`, `*.ilg`, `*.ind`, `*.lof`, `*.lot`, `*.run.xml`, `*.vrb`).
+
+**Multi-agent coordination note (per §7.2.6):** в процессе работы в working tree появились чужие uncommitted изменения:
+- `docs/DefenseScript_Team.md` (line-wrap reformat, content identical)
+- `docs/DefenseCompetencyFAQ_T3.md` (убрали «snapshot» из competency line, ~7 строк)
+
+Обе модификации НЕ тронуты, оставлены нетронутыми для другой сессии per §7.2.6 «Не делать `git add -A`, не делать `git checkout -- <file>` для файлов вне scope».
+
+**Использование для оператора:**
+```bash
+cd docs/tex/defense
+make              # собрать PDF заново
+make notes        # собрать версию с заметками спикера
+make clean-all    # удалить все артефакты
+```
+
+Cross-refs: `AGENTS.md` §7.2.6, §7.3.1, §8.1; `docs/DefenseScript_Team.md` (verbatim); `docs/DefensePresentation_Structure.md` (структура); `docs/tex/defense/DefensePresentation.pdf` (deliverable).

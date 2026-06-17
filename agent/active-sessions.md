@@ -256,6 +256,29 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-17T-defense-latex-pdf-r0
+
+- **id:** `2026-06-17T-defense-latex-pdf-r0`
+- **started-at:** 2026-06-17T12:55:00Z
+- **closed-at:** 2026-06-17T13:15:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **LaTeX Beamer presentation — 13 слайдов compiled to PDF.** Per operator «Теперь делай презентацию» после clean-slate script rewrite (`ef8b942`). Создать `docs/tex/defense/` инфраструктуру: header.tex (Beamer preamble с Madrid theme + Liberation Sans + polyglossia:russian), DefensePresentation.tex (13 фреймов 1:1 из DefensePresentation_Structure.md), Makefile (latexmk -pdfxe), screenshots/voxel_lab.png (конвертация .bmp → .png через PIL). Скомпилировать через xelatex/xdvipdfmx → готовый PDF deliverable.
+- **files-touched-intent:**
+  - **NEW:** `docs/tex/defense/header.tex` (98 строк: Beamer preamble, Madrid theme, projectvblue/projectvgray цвета, qrcode package, navigation symbols отключены)
+  - **NEW:** `docs/tex/defense/DefensePresentation.tex` (308 строк: 13 фреймов — title с QR + Problem + Goals + VoxelLab demo + Аналоги + Архитектура + Voxel мир + Тесты + Фичи + Метрики + Ограничения + Команда + Закрытие)
+  - **NEW:** `docs/tex/defense/Makefile` (latexmk -pdfxe pipeline, цели all/notes/clean/clean-all)
+  - **NEW:** `docs/tex/defense/screenshots/voxel_lab.png` (1896×1034 RGB, конвертировано из `build/linux-clang-debug/lookdev-captures/2026-06-15-repo-root-walkup-test/0001.bmp` через PIL)
+  - **NEW:** `docs/tex/defense/DefensePresentation.pdf` (готовый deliverable, 13 страниц, 453.54×255.12 pt = 16:9, 205 KB)
+  - **EDIT:** `.gitignore` (+LaTeX build artifacts patterns: *.aux/*.log/*.out/*.toc/*.nav/*.snm/*.fls/*.fdb_latexmk/*.xdv и т.д.)
+  - **EDIT:** `agent/active-sessions.md` (эта запись в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§38 + rollup)
+  - **НЕ ТРОГАЮ:** `AGENTS.md` (другой сессии), `docs/DefenseScript_Team.md` + `docs/DefenseCompetencyFAQ_T3.md` (uncommitted modifications чужих сессий — line-wrap для Script_Team + «snapshot» removed из T3 competency — оставлены нетронутыми per §7.2.6), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, чужой dirty work
+- **status:** closed
+- **commit-hash:** `b221d1f` — `docs(defense): LaTeX Beamer presentation — 13 slides compiled to PDF`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit. type=`docs` → auto (§7.3.1). 6 files changed, +463/-1 строк. Build: xelatex TeX Live 2026/Arch Linux 3.141592653-2.6-0.999998 + latexmk + xdvipdfmx pipeline. 0 errors, minor underfull/overfull hbox warnings (типично для Beamer таблиц, не блокеры). **Verification:** `pdfinfo DefensePresentation.pdf` → Title: «ProjectV - Открытый высокопроизводительный воксельный движок», Author: «Команда <<Черепашки Ninja>>», 13 pages, 453.54×255.12 pt (16:9), 205 KB. Preview pages 1, 4, 13 визуально проверены через pdftoppm — title slide с QR-кодом, VoxelLab screenshot в слайде 4, «Спасибо за внимание!» в финале. **Multi-agent coordination note (per §7.2.6):** в процессе работы в working tree появились чужие uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap изменения, content identical) и `docs/DefenseCompetencyFAQ_T3.md` (убрали «snapshot» из competency line). НЕ тронуты, оставлены для другой сессии. **Cross-refs:** `AGENTS.md` §7.2.5, §7.2.6.1, §7.2.6 (multi-agent), §7.3.1 (pre-commit gate type=docs auto), §8.1 (auto-close); `docs/DefenseScript_Team.md` (verbatim text); `docs/DefensePresentation_Structure.md` (структура слайдов); `docs/tex/defense/DefensePresentation.pdf` (deliverable).
+
 ### session-2026-06-17T-defense-cleanslate-script-r0
 
 - **id:** `2026-06-17T-defense-cleanslate-script-r0`
