@@ -5,15 +5,16 @@
 
 \input{header.tex}
 
-% --- Титульный слайд (генерируется Beamer из \title/\author/\institute в header.tex) ---
 \begin{document}
 
+% === Слайд 1: Титульный слайд (без ссылок на репозиторий, с описанием сборки) ===
 \begin{frame}[plain]
   \titlepage
-  \vspace{0.5em}
-  \begin{flushright}
-    \qrcode[height=1.5cm]{https://github.com/Leeleit/ProjectV}
-  \end{flushright}
+  \vspace{0.8em}
+  \begin{center}
+    \scriptsize\textcolor{projectvblue}{\textbf{Окружение сборки:}}
+    CMake 3.30+ $\bullet$ Clang 22 (C++26) $\bullet$ Vulkan SDK 1.4.350
+  \end{center}
 \end{frame}
 
 % === Слайд 2: Проблема и ценность ===
@@ -43,7 +44,7 @@
   \end{center}
 \end{frame}
 
-% === Слайд 3: Цели и спецификации ===
+% === Слайд 3: Цели и спецификации (исправлено выпирание таблицы) ===
 \begin{frame}{Цели проекта и требования ТЗ}
   \framesubtitle{Ход реализации и численные критерии верификации}
   \begin{center}
@@ -53,17 +54,19 @@
   \small
   \begin{table}
     \centering
-    \begin{tabular}{lll}
-      \toprule
-      \textbf{Критерий успеха} & \textbf{Целевой показатель} & \textbf{Метод верификации} \\
-      \midrule
-      Кадровая частота & 500+ FPS (сцена VoxelLab, Debug) & Встроенный HUD-счетчик \\
-      Размер исполняемого файла & 19 МБ (Release, сжатие $-73\%$) & Физический размер ELF \\
-      Тесты ядра системы & 14 из 14 тестов успешно пройдены & Конвейер CTest \\
-      Визуальная корректность & 6 из 6 графических слоев верны & Скрипты Runtime Smoke \\
-      Предупреждения компилятора & 0 предупреждений в нашем коде & Сборка Clang 22 с -Wall \\
-      \bottomrule
-    \end{tabular}
+    \resizebox{\textwidth}{!}{%
+      \begin{tabular}{lll}
+        \toprule
+        \textbf{Критерий успеха} & \textbf{Целевой показатель} & \textbf{Метод верификации} \\
+        \midrule
+        Кадровая частота & 500+ FPS (сцена VoxelLab, Debug) & Встроенный HUD-счетчик \\
+        Размер исполняемого файла & 19 МБ (Release, сжатие $-73\%$) & Физический размер ELF \\
+        Тесты ядра системы & 14 из 14 тестов успешно пройдены & Конвейер CTest \\
+        Визуальная корректность & 6 из 6 графических слоев верны & Скрипты Runtime Smoke \\
+        Предупреждения компилятора & 0 предупреждений в нашем коде & Сборка Clang 22 с -Wall \\
+        \bottomrule
+      \end{tabular}%
+    }
   \end{table}
 \end{frame}
 
@@ -98,24 +101,26 @@
   \end{columns}
 \end{frame}
 
-% === Слайд 5: Анализ аналогов и ниша проекта ===
+% === Слайд 5: Анализ аналогов и ниша проекта (исправлено выпирание таблицы) ===
 \begin{frame}{Сравнение с существующими решениями}
   \framesubtitle{Ниша и архитектурные отличия ProjectV}
   \scriptsize
   \begin{table}
     \centering
-    \begin{tabular}{lccccc}
-      \toprule
-      \textbf{Движок / Проект} & \textbf{Стек} & \textbf{API} & \textbf{DOD} & \textbf{Шейдерный мешинг} & \textbf{Лицензия} \\
-      \midrule
-      Minecraft Java & Java & OpenGL $\to$ Vulkan & Нет & Нет & Коммерческая \\
-      Minetest & C++17, Lua & OpenGL & Нет & Нет & LGPL 2.1 \\
-      VoxelCore & C++17 & OpenGL & Нет & Нет & MIT \\
-      Veloren & Rust & wgpu (Vulkan) & ECS & Частично & GPL 3.0 / MIT \\
-      \rowcolor{projectvgray}
-      \textbf{ProjectV (наш)} & \textbf{C++26} & \textbf{Vulkan 1.4} & \textbf{Да (SoA)} & \textbf{Да (Compute)} & \textbf{MIT} \\
-      \bottomrule
-    \end{tabular}
+    \resizebox{\textwidth}{!}{%
+      \begin{tabular}{lccccc}
+        \toprule
+        \textbf{Движок / Проект} & \textbf{Стек} & \textbf{API} & \textbf{DOD} & \textbf{Шейдерный мешинг} & \textbf{Лицензия} \\
+        \midrule
+        Minecraft Java & Java & OpenGL $\to$ Vulkan & Нет & Нет & Коммерческая \\
+        Minetest & C++17, Lua & OpenGL & Нет & Нет & LGPL 2.1 \\
+        VoxelCore & C++17 & OpenGL & Нет & Нет & MIT \\
+        Veloren & Rust & wgpu (Vulkan) & ECS & Частично & GPL 3.0 / MIT \\
+        \rowcolor{projectvgray}
+        \textbf{ProjectV (наш)} & \textbf{C++26} & \textbf{Vulkan 1.4} & \textbf{Да (SoA)} & \textbf{Да (Compute)} & \textbf{MIT} \\
+        \bottomrule
+      \end{tabular}%
+    }
   \end{table}
   \normalsize
   \vspace{0.5em}
@@ -252,9 +257,10 @@
       \end{itemize}
     \end{column}
   \end{columns}
-  \vspace{1em}
+  \vspace{1.0em}
   \small
   \begin{block}{Условия проведения замеров производительности}
+    \scriptsize
     \begin{itemize}
       \item \textbf{Аппаратная конфигурация:} процессор AMD Ryzen 7 5800X,
             видеокарта NVIDIA GeForce RTX 3060 Ti (8 ГБ видеопамяти), 16 ГБ ОЗУ.
@@ -294,29 +300,26 @@
   \end{columns}
 \end{frame}
 
-% === Слайд 12: Команда проекта и личный вклад ===
+% === Слайд 12: Команда проекта и личный вклад (переработан во избежание выпирания) ===
 \begin{frame}{Распределение зон ответственности}
   \framesubtitle{Вклад участников в программный продукт}
   \scriptsize
   \begin{table}
     \centering
-    \begin{tabular}{|l|l|l|p{0.42\textwidth}|}
-      \hline
-      \textbf{Участник} & \textbf{Роль на сцене} & \textbf{Компетенция} & \textbf{Зона ответственности в коде} \\
-      \hline
-      \textbf{Кадочников Л. (le1t)} & T2 Demo \& Стек & Архитектура, Q\&A host & Общая структура, PIMPL-AppState, мост ECS, snapshot-сохранения, hot shader reload \\
-      \hline
-      Тиммейт 1 & T1 Проблема, Цели & Сборка, тесты & CMake presets, развертывание CTest, скрипты автоматизации Runtime Smoke \\
-      \hline
-      Тиммейт 2 & T3 Архитектура, Код & Воксельный мир & Структуры чанков, материалы, Fluid CA, voxel raycast \\
-      \hline
-      Тиммейт 3 & (Q\&A сессия) & Рендеринг & CSM, PCF 5$\times$5, контактные тени, TAA \\
-      \hline
-      Тиммейт 4 & T6 Роадмап, Риски & Физика движка & Интеграция Jolt Physics, walk-контроллер игрока, режимы движения \\
-      \hline
-      Тиммейт 5 & T5 Фичи, Метрики & Ассеты, звук & glTF-пайплайн, Draco-декодер, интеграция miniaudio, сканирование плейлистов MP3 \\
-      \hline
-    \end{tabular}
+    \resizebox{\textwidth}{!}{%
+      \begin{tabular}{llll}
+        \toprule
+        \textbf{Участник} & \textbf{Роль на сцене} & \textbf{Компетенция} & \textbf{Зона ответственности в коде} \\
+        \midrule
+        \textbf{Кадочников Л. (le1t)} & T2 Demo \& Стек & Архитектура, Тимлид & AppState, ECS-мост, снапшоты, горячая перезагрузка \\
+        Тиммейт 1 & T1 Проблема, Цели & Сборка, тесты & Настройка CMake presets, CTest, Runtime Smoke скрипты \\
+        Тиммейт 2 & T3 Архитектура, Код & Воксельный мир & Чанки $8\times8\times8$, материалы, Fluid CA, voxel raycast \\
+        Тиммейт 3 & (Q\&A сессия) & Рендеринг & CSM (тени), PCF 5$\times$5, контактные тени, TAA-сглаживание \\
+        Тиммейт 4 & T6 Роадмап, Риски & Физика движка & Jolt Physics, walk-контроллер, creative/spectator режимы \\
+        Тиммейт 5 & T5 Фичи, Метрики & Ассеты, звук & glTF-пайплайн, Draco, miniaudio, MP3 плейлисты \\
+        \bottomrule
+      \end{tabular}%
+    }
   \end{table}
 \end{frame}
 
