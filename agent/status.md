@@ -5,6 +5,7 @@ Short active snapshot on top of `TODO.md`; no roadmap duplication.
 Updated: `2026-06-17` — Defense clean-slate rewrite (session `ef8b942`, см. §37). DefenseScript_Team.md (148→110 строк) + DefensePresentation_Structure.md (1006→541 строк, 13 слайдов LaTeX Beamer) переписаны из текста оператора; FAQ_T{1..6}.md §1 Verbatim синхронизирован (6/6 verified). Tone natural, problem justification CPU-physics-bound, ТЗ↔тесты aligned.
 Updated: `2026-06-17` — Defense LaTeX Beamer PDF r0 (`b221d1f`, см. §38). `docs/tex/defense/DefensePresentation.pdf` готов (13 страниц, 16:9, 205 KB). xelatex TeX Live 2026.
 Updated: `2026-06-17` — Defense presentation patches r0 (`0aa863c`, см. §39). Применены 4 операторских фикса: `\resizebox` для таблиц 3/5/12, QR удалён из slide 1, booktabs для slide 12, `\scriptsize` для slide 10.
+Updated: `2026-06-17` — Defense presentation round 3 r0 (`341c6cf`, см. §40). 5 фиксов: subtitle белым на синем, slide 4 image 0.45, slide 11 без BUG-005, slide 12 реальные имена без колонки «Роль», новый VoxelLab screenshot.
 
 Updated: `2026-06-15` — **Windows build verification r0 (session-2026-06-15T10-25Z-windows-build-verification-r0, см. §24)**. 5 atomic-commits landed: libc++/Windows-clang-cl gating fix (P0-1..P0-4) + F5 hot-reload CMake-injected path (P0-5) + Tracy UI split to standalone build (P0-6) + RepoRoot extract + Windows LookDev smoke parity (P1-2/P1-3) + docs/cleanup + deinit 5 unwired submodules 62M. Linux baseline preserved (ctest 14/14, smoke 6/6).
 
@@ -903,3 +904,44 @@ Cross-refs: `AGENTS.md` §7.2.6, §7.3.1, §8.1; `docs/DefenseScript_Team.md` (v
 **Multi-agent note (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed) оставлены нетронутыми — НЕ мои.
 
 Cross-refs: `AGENTS.md` §7.2.6 (multi-agent), §7.3.1 (pre-commit gate type=fix), §8.1 (close-routine); `docs/tex/defense/DefensePresentation.pdf` (deliverable v2).
+
+## §40. Defense presentation round 3 r0 — `341c6cf` (closed 2026-06-17T13:55Z)
+
+**Per operator «Проблемы: ...» + «Ещё поменяй фото на это»** — round 3 patches к LaTeX Beamer presentation (`0aa863c` → `341c6cf`).
+
+**5 фиксов:**
+
+1. **Subtitle color (header.tex):** `\setbeamercolor{framesubtitle}{bg=projectvblue,fg=white}` (было bg=projectvgray,fg=black) — субтитры теперь белым на синем фоне.
+
+2. **Slide 4 — уменьшен размер изображения** с 0.55 до 0.45\textwidth — текст «Жидкость (Fluid): ... отбрасывает тень.» помещается без overflow.
+
+3. **Slide 11 — удалён раздел «Минимизация рисков (BUG-005)»:** остаются только «Отложенные требования (Роадмап)» + «Безопасность и правовой статус».
+
+4. **Slide 12 — реальные имена + удалена колонка «Роль на сцене»:**
+   - Тиммейт 1 → Черников Максим Андреевич (Сборка, тесты)
+   - Тиммейт 2 → Бачерикова Анжелика Сергеевна (Воксельный мир)
+   - Тиммейт 3 → Туз Максим Эдуардович (Рендеринг)
+   - Тиммейт 4 → Крохалев Пётр Антонович (Физика движка)
+   - Тиммейт 5 → Филипьев Иван Евгеньевич (Ассеты, звук)
+   - le1t row сохранён «Кадочников Л. (le1t)» (оператор просил заменить только Тиммейтов 1-5)
+   - Таблица: 3 колонки (Участник | Компетенция | Зона ответственности в коде)
+
+5. **VoxelLab screenshot заменён:** `/home/le1t/Pictures/Screenshots/2026-06-17_18-16.png` (1920×1080 RGB, 153 KB) → `docs/tex/defense/screenshots/voxel_lab.png`.
+
+**Build verification:**
+- `latexmk -pdfxe` + `xdvipdfmx` → 13 страниц, 250 KB (вырос с 203 KB из-за нового скриншота)
+- Warnings: 0 overfull/underfull errors
+
+**Visual verification (pdftoppm):**
+- Slide 2: subtitle «Для кого и почему это важно» — белый на синем ✓
+- Slide 4: новый пользовательский скриншот, текст влезает ✓
+- Slide 11: BUG-005 отсутствует, два раздела ✓
+- Slide 12: 6 строк с реальными именами, 3 колонки ✓
+
+**Self-correction note:** первоначально в slide 12 ошибочно переименовал le1t «Кадочников Леонид Петрович» (выход за scope оператора, который просил заменить только Тиммейтов 1-5). Исправлено перед коммитом — le1t row сохранён «Кадочников Л. (le1t)».
+
+**Pre-commit gate (§7.3.1):** type=`fix` → operator confirm выполнен через явное указание «Проблемы: ...» + визуальная верификация через pdftoppm.
+
+**Multi-agent note (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed) оставлены нетронутыми — НЕ мои.
+
+Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/DefensePresentation.pdf` (deliverable v3).

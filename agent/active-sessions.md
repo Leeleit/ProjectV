@@ -256,6 +256,27 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-17T-defense-presentation-round3-r0
+
+- **id:** `2026-06-17T-defense-presentation-round3-r0`
+- **started-at:** 2026-06-17T13:40:00Z
+- **closed-at:** 2026-06-17T13:55:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Round 3 patches к LaTeX Beamer presentation + replace VoxelLab screenshot.** Per operator «Проблемы: ...» — 4 косметических фикса: (1) subtitle color — белый на синем (было чёрный на синем); (2) Slide 4 — уменьшить размер изображения для вмещения текста «Жидкость (Fluid): ... отбрасывает тень.»; (3) Slide 11 — удалить раздел «Минимизация рисков (BUG-005)»; (4) Slide 12 — реальные имена участников (Черников М.А., Бачерикова А.С., Туз М.Э., Крохалев П.А., Филипьев И.Е.), убрать колонку «Роль на сцене». Плюс заменить VoxelLab screenshot на пользовательский `/home/le1t/Pictures/Screenshots/2026-06-17_18-16.png` (1920×1080).
+- **files-touched-intent:**
+  - **EDIT:** `docs/tex/defense/header.tex` (`\setbeamercolor{framesubtitle}{bg=projectvblue,fg=white}` — subtitle белым на синем)
+  - **EDIT:** `docs/tex/defense/DefensePresentation.tex` (slide 4: 0.55→0.45 image width; slide 11: убран BUG-005 block; slide 12: 3 колонки, реальные имена, le1t row сохранён «Кадочников Л. (le1t)»)
+  - **REPLACE:** `docs/tex/defense/screenshots/voxel_lab.png` (новый пользовательский screenshot 1920×1080 RGB, 153 KB)
+  - **REWRITE:** `docs/tex/defense/DefensePresentation.pdf` (recompiled, 13 страниц, 250 KB)
+  - **EDIT:** `agent/active-sessions.md` (эта запись в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§40)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `docs/DefenseScript_Team.md` (line-wrap чужой), `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed чужой), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `Makefile` (не требовался), чужой dirty work
+- **status:** closed
+- **commit-hash:** `341c6cf` — `fix(presentation): 4 cosmetic fixes + replace VoxelLab screenshot`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit. type=`fix` → per §7.3.1 п.3 требуется operator confirm. Operator confirm в текущей сессии через «Проблемы: ... Ещё поменяй фото на это ...» — явное указание + визуальная верификация через pdftoppm всех 4 изменённых слайдов (2, 4, 11, 12). 4 files changed, +10/-16. Build: latexmk -pdfxe + xdvipdfmx, 13 pages, 250 KB (вырос с 203 KB из-за нового скриншота 153 KB vs старый ~125 KB). Warnings: 0 overfull/underfull errors. **Self-correction note:** первоначально в slide 12 ошибочно переименовал le1t «Кадочников Леонид Петрович» вместо сохранения «Кадочников Л. (le1t)» — оператор просил заменить только Тиммейтов 1-5, не le1t. Исправлено перед коммитом. **Multi-agent coordination (per §7.2.6):** uncommitted модификации `docs/DefenseScript_Team.md` (line-wrap чужой) и `docs/DefenseCompetencyFAQ_T3.md` («snapshot» removed чужой) оставлены нетронутыми. **Cross-refs:** `AGENTS.md` §7.2.5, §7.2.6 (multi-agent), §7.2.6.1, §7.3.1 (pre-commit gate type=fix требует operator confirm — выполнено через явное указание в текущей сессии), §8.1 (auto-close); `docs/tex/defense/DefensePresentation.pdf` (deliverable v3).
+
 ### session-2026-06-17T-defense-presentation-patches-r0
 
 - **id:** `2026-06-17T-defense-presentation-patches-r0`
