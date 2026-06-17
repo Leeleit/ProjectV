@@ -672,3 +672,36 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 **Coverage check:** все 23 алгоритма + все 40+ FAQ Q&A + report §1-§12 inline в FAQ_T*.
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
+
+| `2026-06-17` | **Defense presentation restructure r0** | **closed `f1b92a6`** (см. `agent/active-sessions.md session-2026-06-17T-defense-presentation-restructure-r0`): `docs/DefensePresentation_Structure.md` 8 → 13 слайдов (102 → 872 строк, +770). Каждый слайд описан в 5 секциях: визуальная структура (LaTeX Beamer header/subheader/body/footer), body content (verbatim LaTeX), speaker notes (verbatim речь), тайминг (секунды), источник данных (для traceability). Hand-off notes для LaTeX/PDF экспорта (Madrid theme, tabularx/booktabs, qrcode, \begin{notes}). `docs/DefenseScript_Team.md` slot mapping обновлён под 13 слайдов: T1 [1,2,3], T2 le1t [4,5,6], T3 [7,8], T5 [9,10], T6 [11,12], le1t [13]. 8/8 блоков критериев п.6 на 81-100%. Exa search research: Minecraft (Java+OpenGL→Vulkan 2026+), Minetest (C++17+OpenGL), VoxelCore (C++17+OpenGL), Veloren (Rust+Vulkan, RPG focus), VIXEN/Garden/Shroom/Enigma (M0-M5 milestones). Пробел ниши: ни один open-source voxel не сочетает DOD + Vulkan 1.4 + compute + C++26 в воспроизводимом фундаменте. Safety-net patch: `/tmp/before_presentation_restruct_2026-06-17T1033Z.patch` (84 KB). |
+
+## §34. Defense presentation restructure r0 — `f1b92a6` (closed 2026-06-17T10:33Z)
+
+**Снимок после commit `f1b92a6`:**
+- `docs/DefensePresentation_Structure.md` (872 строк) — 13 слайдов, каждый в 5 секциях (visual structure / body content verbatim / speaker notes verbatim / timing / data source). Hand-off для LaTeX Beamer экспорта в следующей сессии
+- `docs/DefenseScript_Team.md` (124 строки) — slot mapping обновлён под 13 слайдов, verbatim тексты речи сохранены
+
+**Coverage against criteria п.6 (8 blocks × 81-100% target):**
+- ✓ Проблема и ценность (Слайд 2: Кто/Что/Почему)
+- ✓ Цели и спецификации (Слайд 3: 48 пунктов ТЗ + 5 критериев)
+- ✓ Обоснование решения (Слайд 5: таблица 5 аналогов по 6 критериям + пробел ниши)
+- ✓ Реализация и прототип (Слайды 4, 6, 7: Demo + Архитектура + Реализация)
+- ✓ Испытания и верификация (Слайды 8, 10: 14 ctest + 6 smoke + метрики с подписями)
+- ✓ Ограничения, риски, этика (Слайд 11: 5 deferred + BUG-005 + ТЗ 4.5.4)
+- ✓ Качество защиты (13 слайдов, 4:30+30с буфер)
+- ✓ Командная работа (Слайд 12: таблица с личным вкладом каждого)
+
+**13 слайдов → 5 мин распределение:**
+| Slot | Хрон | Слайды | Спикер |
+|------|------|--------|--------|
+| T1 | 0:00-0:55 | 1, 2, 3 | Тиммейт 1 |
+| T2 le1t | 0:55-2:20 | 4, 5, 6 | le1t |
+| T3 | 2:20-3:00 | 7, 8 | Тиммейт 2 |
+| T5 | 3:00-3:55 | 9, 10 | Тиммейт 5 |
+| T6 | 3:55-4:25 | 11, 12 | Тиммейт 4 |
+| le1t | 4:25-4:30 | 13 | le1t |
+| (буфер) | 4:30-5:00 | — | — |
+
+**Hand-off для следующей сессии (LaTeX/PDF):** оператор загружает `.md` в LaTeX Beamer document class + Madrid theme → получает готовый PDF для защиты 2026-06-17.
+
+Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
