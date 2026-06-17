@@ -9,3 +9,22 @@ problems/
 /compile_commands.json
 /.cache/
 .venv
+# LaTeX build artifacts (docs/tex/**)
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.xdv
+*.bbl
+*.blg
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.run.xml
