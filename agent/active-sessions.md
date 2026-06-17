@@ -1194,3 +1194,39 @@ Append-only ledger активных и недавно завершённых AI-
   Safety-net patch: `/tmp/before_script_team_v2_2026-06-17T1133Z.patch` (1051 lines).
 
   Cross-refs: `AGENTS.md §7.2.5, §7.2.6.1, §7.3.1, §8.1`; `docs/DefenseCompetencyFAQ_T{1..6}.md §1` Verbatim; operator criteria п.7-8.
+
+---
+
+### session-2026-06-17T-defense-script-team-renumber-r0
+
+- **id:** `2026-06-17T-defense-script-team-renumber-r0`
+- **started-at:** 2026-06-17T11:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Renumber slots T1-T6 = Участник 1-6 strictly. Fix all 6 FAQ_T*.md §1 Verbatim to match new slot mapping. Update Presentation_Structure.md distribution table + slide section headers.** Per operator: «Ты галлюцинируешь: в Script_Team всё ещё нету Т6 и одни и те же участники по несколько раз говорят здравствуйте, это дебилизм. Т6 – это участник 6, Т1 - участник 1 и т.д. Всё должно быть по порядку: от 1 участника к 6, разницы нет, кто о чём говорит в презентации».
+- **files-touched-intent:**
+  - **REWRITE:** `docs/DefenseScript_Team.md` (148 lines). Slot naming T1-T6 strictly = Участник 1-6. Each participant says "Здравствуйте" ONCE. T1 slide 2 schizophrenia (promise demo+architecture to "next participant") REMOVED — T1 now ends naturally. T6 slide 11/12/13 properly closed guillemets.
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T{1..6}.md §1 Verbatim` (6 files). §2 Slot header updated to "**Slot:** T_N (хрон, Участник N = Тиммейт N, slides X-Y)". §1 Verbatim block rewritten to match new Script_Team.md slot text. FAQ_T6 §1 split into 3 separate quoted blocks (one per slide).
+  - **EDIT:** `docs/DefensePresentation_Structure.md`. Distribution table: added T4 row (was missing), renumbered T2/T3/T5/T6 timings. All 13 slide section headers updated to show "Т_N = Участник N = Тиммейт N". "Speaker notes" labels updated. Replaced "Примечание по slot Тиммейта 3" with "Примечание по real competency vs slot content" (T4 = Тиммейт 4 now exists as proper slot).
+- **status:** closed
+- **commit-hash:** `03eb4d3` — `docs(defense): renumber slots T1-T6 = Участник 1-6 + fix all §1 Verbatim sync`
+- **notes:** **Auto-close per §8.1.** Per `AGENTS.md §7.2.6.1` — единый atomic commit. type=`docs` → auto (§7.3.1, не fix). 8 files changed: 1 rewrite (Script_Team.md) + 6 §1 syncs + 1 distribution/header sync. +118/-109 строк.
+
+  Slot distribution after fix:
+  | Slot | Участник | Хрон | Слайды | Спикер(и) |
+  |------|----------|------|--------|-----------|
+  | T1 | 1 (Тиммейт 1) | 0:00-0:50 (50s) | 1, 2, 3 | 1 «Здравствуйте» |
+  | T2 | 2 (Тиммейт 2) | 0:50-1:50 (60s) | 4, 5 | 1 «Здравствуйте» |
+  | T3 | 3 (Тиммейт 3) | 1:50-2:40 (50s) | 6, 7 | 1 «Здравствуйте» |
+  | T4 | 4 (Тиммейт 4) | 2:40-3:15 (35s) | 8 | 1 «Здравствуйте» |
+  | T5 | 5 (Тиммейт 5) | 3:15-4:00 (45s) | 9, 10 | 1 «Здравствуйте» |
+  | T6 | 6 (le1t) | 4:00-4:30 (30s) | 11, 12, 13 | 1 «Здравствуйте» |
+  | — | Буфер | 4:30-5:00 | — | — |
+  
+  Total: 50+60+50+35+45+30 = 270 sec = 4:30 ✓ + 30с буфер ✓
+
+  Final sync verification: 6/6 slots match between Script_Team.md and FAQ_T*.md §1.
+
+  Cross-refs: `AGENTS.md §7.2.5, §7.2.6.1, §7.3.1, §8.1`; operator «Т_N = Участник N» + «разницы нет кто что говорит».
+

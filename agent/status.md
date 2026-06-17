@@ -735,3 +735,29 @@ Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (
 **Slot duration verification:** 55 + 85 + 45 + 50 + 35 = 270 sec = 4:30 ✓ + 30 sec buffer ✓
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
+
+| \`2026-06-17\` | **Defense Script_Team renumber r0** | **closed \`03eb4d3\`** (см. \`agent/active-sessions.md session-2026-06-17T-defense-script-team-renumber-r0\`): slots T1-T6 переименованы строго = Участник 1-6. T1=Тиммейт1: slides 1-2-3, T2=Тиммейт2: slides 4-5 (Demo+Аналоги), T3=Тиммейт3: slides 6-7 (Архитектура+Voxel), T4=Тиммейт4: slide 8 (Тесты), T5=Тиммейт5: slides 9-10, T6=le1t: slides 11-12-13 (Ограничения+Команда+Закрытие). Each «Здравствуйте» 1× per slot. T1 schizophrenia (slide 2 promise demo+arch) REMOVED. FAQ_T{1..6}.md §1 Verbatim полностью переписан под новый slot mapping. FAQ_T6 §1 split into 3 quoted blocks. Presentation_Structure.md distribution table: added T4 row, renumbered timings. 8 files changed, +118/-109. Final sync: 6/6 slots match. |
+
+## §36. Defense Script_Team renumber r0 — \`03eb4d3\` (closed 2026-06-17T12:11Z)
+
+**Critical fix per operator:** Slot T_N must strictly = Участник N (1-6 in order).
+
+**Slot distribution after fix:**
+
+| Slot | Участник | Хрон | Слайды | «Здравствуйте» count |
+|------|----------|------|--------|---------------------|
+| T1 | 1 (Тиммейт 1) | 0:00-0:50 (50s) | 1, 2, 3 | 1 |
+| T2 | 2 (Тиммейт 2) | 0:50-1:50 (60s) | 4, 5 | 1 |
+| T3 | 3 (Тиммейт 3) | 1:50-2:40 (50s) | 6, 7 | 1 |
+| T4 | 4 (Тиммейт 4) | 2:40-3:15 (35s) | 8 | 1 |
+| T5 | 5 (Тиммейт 5) | 3:15-4:00 (45s) | 9, 10 | 1 |
+| T6 | 6 (le1t) | 4:00-4:30 (30s) | 11, 12, 13 | 1 |
+| — | Буфер | 4:30-5:00 | — | — |
+
+**Total: 50+60+50+35+45+30 = 270 sec = 4:30 ✓ + 30с буфер ✓**
+
+**Files changed:** 8 (Script_Team.md rewrite + 6 FAQ_T*.md §1 syncs + Presentation_Structure.md), +118/-109 строк.
+
+**Final sync verification:** 6/6 slots match between Script_Team.md and FAQ_T*.md §1 (with marker-stripping normalization).
+
+Cross-refs на архив полных версий: \`agent/ARCHIVE-INDEX.md\` (single source of truth для navigation).
