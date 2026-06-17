@@ -67,6 +67,57 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
+### session-2026-06-17T-defense-competency-faq-self-contained-r0
+
+- **id:** `2026-06-17T-defense-competency-faq-self-contained-r0`
+- **started-at:** 2026-06-17T07:47:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **FAQ_T(1-6) самодостаточные — renumber по speech slot, inline verbatim + glossary + hotkeys + chronology, удалить Common+INDEX, дополнительные каверзные Q для le1t.** Per operator: «Переделать, там не соответствует Script_Team'у» (verbatim не инлайнен, только ссылка) + «full entries» (полные inline-entries, не summary) + «Целиком блок» (verbatim целиком) + «Да, и придумай другим ещё» (12+ tricky questions для le1t + новые). Итого: переименовать 6 файлов по slot number (T1-T6), inline content per файл, удалить `DefenseCompetencyFAQ.md`, обновить out-of-scope на T1-T6, придумать дополнительные каверзные вопросы.
+- **files-touched-intent:**
+  - **GIT-MV:** `docs/DefenseCompetencyFAQ_le1t.md` → `docs/DefenseCompetencyFAQ_T2.md` (le1t / T2 / Architecture+Q&A)
+  - **GIT-MV:** `docs/DefenseCompetencyFAQ_T2.md` → `docs/DefenseCompetencyFAQ_T3.md` (Тиммейт 2 / T3 / Voxel)
+  - **GIT-MV:** `docs/DefenseCompetencyFAQ_T3.md` → `docs/DefenseCompetencyFAQ_T4.md` (Тиммейт 3 / T4 / Render)
+  - **GIT-MV:** `docs/DefenseCompetencyFAQ_T4.md` → `docs/DefenseCompetencyFAQ_T6.md` (Тиммейт 4 / T6 / Physics)
+  - **UNCHANGE:** `docs/DefenseCompetencyFAQ_T1.md`, `docs/DefenseCompetencyFAQ_T5.md`
+  - **DELETE:** `docs/DefenseCompetencyFAQ.md` (Common+INDEX больше не нужен)
+  - **EDIT:** каждый из 6 FAQ файлов — inline verbatim (полный блок из Script_Team.md), inline hotkeys/glossary/chronology subsets, обновить out-of-scope таблицы на T1-T6, добавить каверзные вопросы в T2.md (le1t)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§32)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefenseAlgorithms.md`, `docs/DefenseFAQ.md`, `docs/DefenseReport.md`, `docs/DefenseScript_Team.md`, `docs/DefensePresentation_Structure.md`, `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md`, `docs/archive/DefenseOldFormat_2026-06-17/*`, чужой dirty work
+- **status:** closed
+- **commit-hash:** `b0feee8` — `docs(defense): FAQ_T(1-6) self-contained (renumber per slot + inline verbatim + glossary/hotkeys/chronology + new tricky Qs)`
+- **notes:** **Auto-close per §8.1.** Per `AGENTS.md §7.2.6.1` — единый atomic commit. type=`docs` → auto, без operator confirm. Operator: «при работе читай код» — verbatim inline копируется из `DefenseScript_Team.md` (verified source of truth), факты FAQ из `src/**` (verified в предыдущих сессиях). 8 files changed, +1700/-1464 строк. Size итог: T1=244, T2=591, T3=322, T4=359, T5=318, T6=346 (2180 total). Commit зафиксирован 2026-06-17T07:47Z.
+
+---
+
+### session-2026-06-17T-defense-root-docs-archive-r0
+
+- **id:** `2026-06-17T-defense-root-docs-archive-r0`
+- **started-at:** 2026-06-17T07:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Inline все алгоритмы/FAQ/report детали в FAQ_T{1..6}, archive 3 root-level defense docs (DefenseReport/DefenseFAQ/DefenseAlgorithms) → legacy/docs/archive/DefenseOldFormat_2026-06-17/.** Per operator: «Всё, что можно, перенести в наши файлы (FAQ_T(1-6))», «описание greedy meshing это не вода» (full inline detail, не summary), «legacy ты никогда не обновляешь» (immutable historical record). Финальная структура: 6 FAQ_T* (полные textbook) + DefenseScript_Team.md + DefensePresentation_Structure.md в docs/, 3 root-level docs в legacy archive.
+- **files-touched-intent:**
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T1.md` (+62) — Build system + env vars + comment policy
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T2.md` (+332) — C++26 фичи, ECS bridge, hot shader reload, DOD/ECS↔VoxelWorld/hot-cold error split, tech choice, архитектура diagram, ТЗ compliance matrix (48 пунктов), команда (§12), defense questions §10
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T3.md` (+480) — Алгоритмы 1, 2, 3, 4, 5, 13, 14, 19, 20 (voxel world, materials, greedy meshing FULL, frustum cull, visibility cache, fluid CA FULL, voxel raycast, snapshot, JSON config)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T4.md` (+248) — Алгоритмы 6, 7, 8, 9, 10, 11 (CSM FULL, PCF 5x5 FULL, contact shadows, AOCC, TAA FULL, ray-march FULL) + LOCL обоснование
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T5.md` (+115) — Алгоритмы 16 (asset pipeline), 17 (audio engine)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T6.md` (+73) — Алгоритмы 12 (walk controller FULL), 15 (Jolt integration)
+  - **EDIT:** `docs/DefenseScript_Team.md` — fix broken ref `DefenseCompetency_FAQ.md` (УДАЛЁН в 7581963) → `DefenseCompetencyFAQ_T{1..6}.md`
+  - **GIT-MV:** `docs/DefenseReport.md` → `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseReport.md` (10-мин формат v1.2, 2026-06-15)
+  - **GIT-MV:** `docs/DefenseFAQ.md` → `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseFAQ.md` (40+ Q&A, 10-мин)
+  - **GIT-MV:** `docs/DefenseAlgorithms.md` → `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseAlgorithms.md` (§18 F11 устарело, line 5/1021 → удалённый briefers)
+  - **EDIT:** `agent/active-sessions.md` (эта запись + close-routine предыдущей сессии)
+  - **EDIT:** `agent/status.md` (§32)
+  - **НЕ ТРОГАЮ:** `AGENTS.md` (другой сессии), `src/**`, `tests/**`, `external/**`, корневой `CMakeLists.txt`, `CMakePresets.json`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/DefensePresentation_Structure.md`, чужой dirty work
+- **status:** closed
+- **commit-hash:** `831f897` — `docs(defense): inline all algorithm + FAQ + report detail into FAQ_T* + archive 3 root-level docs`
+- **notes:** **Auto-close per §8.1.** Per `AGENTS.md §7.2.6.1` — единый atomic commit. type=`docs` → auto (§7.3.1, не fix). 10 files changed: 7 modified (FAQ_T{1..6} + DefenseScript_Team.md), 3 renamed (git mv detection 100% rename). +1265/-110 строк + 3 renames. Net file size: FAQ_T* 2180 → 3306 (+1126 detail inline). Operator критиковал меня за план редактирования legacy архива: «Файлы в legacy ты никогда не обновляешь, на то оно и легаси, идиот» — исправлено, legacy файлы immutable (NO edits), только git mv. Source code проверен (VoxelWorld.cpp:1284-1643 fluid CA, AudioEngine.cpp:85-100 формат, SceneResources.hpp:374-407 visibility cache hash, PhysicsWorld.hpp:19-40 walk debug info, ShadowProjection.cpp:17-23 cascade constants). Per `agent/decisions.md §18` + `agent/memory.md §10.8`. Safety-net patch `/tmp/before_archive_root_2026-06-17T0828Z.patch` (124 KB).
+
 ### session-2026-06-15T12-06Z-defense-docs-russian-r0
 
 - **id:** `2026-06-17T-defense-competency-faq-r0`

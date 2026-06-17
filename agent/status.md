@@ -643,5 +643,32 @@ Cross-check: `rg "13 824|MP3/WAV/FLAC|72 MB|0\\.1 м" docs/Defense*.md` → 0 ma
 | `2026-06-16` | **Defense team script rebuild r0** | **closed `45a15bc`** (см. `agent/active-sessions.md session-2026-06-16T22-23Z-defense-team-script-rebuild-r0`): пересборка под 5-минутный формат (4:30 + 30с буфер), 10 файлов, T3-T6 переписаны в стиле T1/T2 (простой разговорный русский, без техно-цифр), Q&A-карта 30+ вопросов сохранена, archive deep-dive для reference, `DefenseScript_Solo.md` удалён. |
 | `2026-06-17` | **Defense competency FAQ r0** | **closed `c14e1bd`** (см. `agent/active-sessions.md session-2026-06-17T-defense-competency-faq-r0`): per-team competency FAQ (textbook, 1888 строк, 6 секций + 2 приложения), speech ≠ competency principle, 4 устаревших 10-мин скрипта в `docs/archive/DefenseOldFormat_2026-06-17/`, переназначение speech slots под competency-matched mapping (T1=Т1 Build/Test, T3=Т2 Voxel, T4=Т3 Render, T5=Т5 Asset/Audio, T6=Т4 Physics). |
 | `2026-06-17` | **Defense competency FAQ split r0** | **closed `7581963`** (см. `agent/active-sessions.md session-2026-06-17T-defense-competency-faq-split-r0`): монолитный FAQ (1888 строк) разделён на 7 файлов (1944 строк итого — `DefenseCompetencyFAQ.md` 392 + `DefenseCompetencyFAQ_T1..T5.md` 168/235/253/251/223 + `DefenseCompetencyFAQ_le1t.md` 422 с 40 вопросами). Удалены 6 `DefenseBriefer_{1..5}.md` + `DefenseBriefer_le1t.md` — verbatim в `DefenseScript_Team.md`, понятия и competency FAQ в per-team файлах. |
+| `2026-06-17` | **Defense competency FAQ self-contained r0** | **closed `b0feee8`** (см. `agent/active-sessions.md session-2026-06-17T-defense-competency-faq-self-contained-r0`): 6 FAQ файлов перенумерованы по speech slot (T1-T6), inline verbatim (полный блок из Script_Team.md), inline hotkeys/glossary/chronology (full entries, не summary), out-of-scope обновлены на T1-T6 slot names, Common+INDEX (`DefenseCompetencyFAQ.md`) удалён, `DefenseCompetencyFAQ_le1t.md` → `DefenseCompetencyFAQ_T2.md`, T2.md расширен с 12 до 33 Q&A. 8 files changed, +1700/-1464 строк. Размеры: T1=244, T2=591, T3=322, T4=359, T5=318, T6=346 (2180 total). |
+| `2026-06-17` | **Defense root docs archive r0** | **closed `831f897`** (см. `agent/active-sessions.md session-2026-06-17T-defense-root-docs-archive-r0`): inline всех 23 алгоритмов + FAQ Q&A + report секций (ТЗ compliance matrix, команда §12, defense questions §10) в FAQ_T{1..6}. 3 root-level defense docs (DefenseReport v1.2 / DefenseFAQ / DefenseAlgorithms с устаревшим F11 и битыми refs на удалённые briefers) → legacy/docs/archive/DefenseOldFormat_2026-06-17/ через git mv (NO file content edits per operator: «legacy ты никогда не обновляешь»). FAQ_T* 2180 → 3306 строк (+1126 detail inline). 10 files changed (7 modified + 3 git mv renames 100%), +1265/-110 строк. Source code проверен (`src/voxel/VoxelWorld.cpp:1284-1643` fluid CA, `src/audio/AudioEngine.cpp:85-100` формат, `src/render/SceneResources.hpp:374-407` visibility cache hash, `src/physics/PhysicsWorld.hpp:19-40` walk debug info, `src/render/ShadowProjection.cpp:17-23` cascade constants). Safety-net patch `/tmp/before_archive_root_2026-06-17T0828Z.patch` (124 KB). |
+
+## §32. Defense competency FAQ self-contained r0 — `b0feee8` (closed 2026-06-17T07:47Z)
+
+**Snapshot:** финальная структура per-slot FAQ перед inline-archive:
+- `docs/DefenseCompetencyFAQ_T{1..6}.md` (6 файлов, 2180 строк итого) — renumber по speech slot
+- `docs/DefenseScript_Team.md` — verbatim source of truth (5 мин)
+- `docs/DefensePresentation_Structure.md` — структура 8 слайдов
+- `docs/DefenseReport.md` / `DefenseFAQ.md` / `DefenseAlgorithms.md` — root-level docs (устаревшие, см. §33)
+
+## §33. Defense root docs archive r0 — `831f897` (closed 2026-06-17T08:28Z)
+
+**Snapshot после commit `831f897`:**
+- `docs/DefenseCompetencyFAQ_T{1..6}.md` — 3306 строк итого (2180 → 3306, +1126 detail)
+  - T1: 244 → 306 (+62)
+  - T2: 591 → 869 (+278) — le1t textbook: 33 Q&A + 23 algorithms overview + DOD/ECS/hot-cold/tech choice/architecture diagram/ТЗ matrix/команда
+  - T3: 322 → 738 (+416) — voxel textbook: 9 algorithms (1, 2, 3 FULL greedy meshing, 4, 5, 13 FULL fluid CA, 14, 19, 20)
+  - T4: 359 → 581 (+222) — render textbook: 6 algorithms (6 FULL CSM, 7 FULL PCF, 8, 9, 10 FULL TAA, 11 FULL ray-march)
+  - T5: 318 → 393 (+75) — asset+audio: 2 algorithms (16 asset pipeline FULL, 17 audio engine FULL)
+  - T6: 346 → 419 (+73) — physics: 2 algorithms (12 walk controller FULL, 15 Jolt integration)
+- `docs/DefenseScript_Team.md` — broken ref fix: `DefenseCompetency_FAQ.md` → `DefenseCompetencyFAQ_T{1..6}.md`
+- `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseReport.md` — git mv (10-мин v1.2, 2026-06-15, §12 → удалённые briefers)
+- `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseFAQ.md` — git mv (40+ Q&A, 10-мин)
+- `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseAlgorithms.md` — git mv (§18 F11 устарело, line 5/1021 → удалённый briefer)
+
+**Coverage check:** все 23 алгоритма + все 40+ FAQ Q&A + report §1-§12 inline в FAQ_T*.
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
