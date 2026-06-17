@@ -26,13 +26,94 @@
 ## 3. Твоя компетенция: Воксельный мир
 
 **Файлы:**
-- `src/voxel/VoxelWorld.hpp` / `src/voxel/VoxelWorld.cpp` — main world
-- `src/voxel/VoxelMaterials.hpp` / `src/voxel/VoxelMaterials.cpp` — materials + lighting
+- `src/voxel/VoxelWorld.hpp` / `src/voxel/VoxelWorld.cpp` — main world (1284-1643 = Fluid CA, 1284-1400 = комментарии)
+- `src/voxel/VoxelMaterials.hpp` / `src/voxel/VoxelMaterials.cpp` — materials + lighting + per-preset shadow params
 - `src/voxel/VoxelRaycast.hpp` / `src/voxel/VoxelRaycast.cpp` — DDA raycast
 - `src/voxel/VoxelInteraction.hpp` / `src/voxel/VoxelInteraction.cpp` — placement/removal
 - `src/voxel/SceneConfig.hpp` / `src/voxel/SceneConfig.cpp` — JSON config
-- `src/voxel/VoxelSnapshotError.hpp` — error enum
-- `src/shaders/voxel_mesh.comp` — compute-шейдер greedy meshing
+- `src/voxel/VoxelSnapshotError.hpp` — error enum (Tier 1.B)
+- `src/shaders/voxel_mesh.comp` — compute-шейдер greedy meshing (Лысенков 6 проходов)
+- `src/c_kernels/FrustumCulling.{hpp,cpp}` + `c_kernels/frustum_cull.{c,hpp}` — C/AVX2 ядро
+- `src/render/SceneResources.{hpp,cpp}` — ChunkVisibilityCache (XOR-fold splitmix64-style)
+
+### 3.1. Алгоритм 1 — Воксельный мир и чанки
+
+**Проблема:** миллионы вокселей нельзя хранить как `std::vector<Voxel>` (overhead, cache-miss, медленный iteration).
+**Решение:** декомпозиция на регулярные чанки фиксированного размера + плоский массив материалов в `VoxelWorld`.
+
+**Реальные структуры (`src/voxel/VoxelWorld.hpp:45-108`):**
+```cpp
+struct VoxelChunk {
+    Int3 min{};             // 12 B — минимальная грань чанка в world coords
+    Int3 maxExclusive{};    // 12 B — исключающая максимальная грань
+    bool rebuildQueued = true;       // 1 B (+ 7 B padding) — флаг «нужен remesh»
+    uint32_t nonAirVoxelCount = 0;   // 4 B — кэш для быстрого non-Air summary
+};
+static_assert(sizeof(VoxelChunk) == 32);
+
+struct VoxelWorld {
+    VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
+    VoxelWorldConfig config{};
+    Int3 min{}, maxExclusive{};
+    Int3 floorMin{}, floorMaxExclusive{};
+    int width = 0, height = 0, depth = 0;
+    std::vector<uint8_t> voxels;   // ← ПЛОСКИЙ массив материалов, 1 байт = material ID
+    int chunkSize = 0, chunkCountX = 0, chunkCountY = 0, chunkCountZ = 0;
+    uint64_t editVersion = 0;
+    std::vector<VoxelChunk> chunks;
+    std::vector<size_t> pendingChunkRebuildIndices;
+    VoxelWorldStats stats{};
+};
+```
+
+**Важно:** воксели хранятся в **плоском** `std::vector<uint8_t> voxels` в `VoxelWorld` (не per-chunk). `VoxelChunk` хранит только координаты и метаданные. Плоский индекс = `x + width * (y + height * z)`.
+
+**Шаги при размещении блока (`SetVoxelMaterial`):**
+1. Compute `localX = position.x - world.min.x`, etc.
+2. Bounds-check `IsInsideVoxelWorld(world, position)` (отказ до мутации).
+3. Compute `chunkCoord = (localX / chunkSize, ...)`, `chunkIndex = chunkCoord.x + chunkCountX * (chunkCoord.y + chunkCountY * chunkCoord.z)`.
+4. Material ID → записать в `voxels[linearIndex]`.
+5. `world.editVersion++`.
+6. `chunks[chunkIndex].rebuildQueued = true`, `chunks[chunkIndex].nonAirVoxelCount++`.
+7. `pendingChunkRebuildIndices.push_back(chunkIndex)`.
+8. Update `stats` (dirtyChunkCount, totalNonAirVoxelCount, per-material counts).
+
+**Complexity:** `SetVoxelMaterial` O(1) в среднем. Rebuild-запрос O(1). Meshing O(N) на чанк, но только для dirty.
+
+**Edge cases:**
+- Out-of-bounds → возврат `false`, **никакой мутации** (отказ-до-мутации).
+- Race на `pendingChunkRebuildIndices` — single-threaded main loop, защита не нужна.
+- CA coordinate-bug fix (2026-06-13, `decisions.md §30`): commit loop раньше передавал local coords как world coords, falls в VoxelLab silently dropped на `local.x == width - world.min.x` (то есть на `world.x == maxExclusive.x`, `IsInsideVoxelWorld` rejects). Fix: `world.min` offset перед `SetVoxelMaterial`.
+
+### 3.2. Алгоритм 2 — Материалы и физический срез
+
+**Проблема:** разное поведение материалов в физике (Air/Fluid не solid) и в рендере (Glass прозрачный, Fluid кастует тень).
+
+**Enum `VoxelMaterial`:**
+```cpp
+enum class VoxelMaterial : uint8_t {
+    Air = 0,         // не solid, прозрачный
+    Glass = 1,       // solid, прозрачный, **не кастует тень** (decisions.md §15)
+    Fluid = 2,       // не solid, полупрозрачный, кастует тень
+    FloorWhite = 3,  // solid, непрозрачный
+    FloorGray = 4    // solid, непрозрачный
+};
+```
+
+**Physical slice** (что считается твёрдым для Jolt):
+- `Glass`, `FloorWhite`, `FloorGray` → solid
+- `Air`, `Fluid` → не solid (проходимый)
+
+**Render slice** (материал → material response в `voxel.frag`):
+- `Air` → не рисуется
+- `Glass` → пропускает свет, не кастует CSM-тень
+- `Fluid` → пропускает свет, кастует CSM-тень
+- `FloorWhite`/`FloorGray` → диффузный PBR
+
+**Per-face ambient visibility** (compute meshing bake):
+- `Air/Open`, `Glass/Open`, `Fluid/Occluder`, `Opaque/Occluder`
+- Per-face visibility byte в `PackedSceneVoxelFace`
+- Используется в `voxel.frag` для умножения sky/horizon/ground fill
 
 **Структуры (per `VoxelWorld.hpp:17-107`):**
 
@@ -98,44 +179,289 @@ struct VoxelWorld {
 - `static_assert(sizeof(VoxelSceneLighting) == 624)` — `VoxelMaterials.hpp:140` (shader-contract!)
 - `static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528)` — `VoxelMaterials.hpp:159` (TAA field)
 
-**Greedy meshing (`voxel_mesh.comp:613-619`):**
+**Greedy meshing — Алгоритм 3 (Лысенков, 6 проходов):**
+
+**Где:** `src/shaders/voxel_mesh.comp` (compute shader, GPU).
+**Литературная ссылка:** «Efficient Meshes for Voxel Worlds» (Mikola Lysenko, 2012).
+**Проблема:** 27 чанков × 512 вокселей × 6 граней = 82 944 квада при per-voxel. CPU bottleneck на `vkCmdDraw`.
+
 > «6 per-axis greedy passes, one per face direction. Each pass walks the 2D plane of cells that emit a face in that direction and merges adjacent cells with the same exposed state into a single W×H quad. For oversized chunks (>kMaxChunkExtentForGreedy in any in-plane axis) the pass falls back to per-voxel emission.»
 
-- 6 проходов (±X, ±Y, ±Z), каждый объединяет смежные грани одного exposed state в W×H quad
-- Packing (W, H) в 6+6 бит = 12 бит → max quad extent = 64 вокселя
-- `kMaxChunkExtentForGreedy` fallback на per-voxel emission (1×1 quads) для oversized chunks
-- Compute-шейдер: чанк-параллельный, thousands of threads
+**Алгоритм (6 проходов, по одному на ось ±X, ±Y, ±Z):**
 
-**Voxel raycast (DDA, `VoxelRaycast.cpp`):**
+Для каждой оси `axis` ∈ {X, Y, Z}:
+  Для каждой sign ∈ {-1, +1}:
+    Для каждой плоскости slice ∈ [0, 8):
+      1. Построить 2D маску `mask[8][8]` где `mask[u][v] = 1` если:
+         - voxel на `slice` существует
+         - voxel в направлении `+sign` — сосед другого материала (или out-of-bounds)
+         - voxel в направлении `-sign` — того же материала
+      2. **Жадный проход по 2D маске:**
+         - Найти первый непосещённый `(u, v)` с `mask = 1`
+         - Расширить вправо по `u`: пока `mask[u'][v] = 1` и тот же материал → `uMax`
+         - Расширить вниз по `v`: пока для всех `u ∈ [u0, uMax]` `mask[u][v'] = 1` и тот же материал → `vMax`
+         - Emit **один quad** с вершинами `(u0..uMax, v0..vMax)`, пометить посещёнными
+         - Повторять пока есть непосещённые
+      3. Append `PackedSceneVoxelFace { v0, v1, v2, v3, material, normal, aoByte }` в output buffer
+
+**Packing (W, H) в 6+6 бит = 12 бит → max quad extent = 64 вокселя.**
+**`kMaxChunkExtentForGreedy` fallback на per-voxel emission (1×1 quads) для oversized chunks.**
+**Compute-шейдер: чанк-параллельный, thousands of threads.**
+
+**Complexity:** O(N) на чанк, N = 512 вокселей, но константа мала (6 проходов × 64 ячейки × greedy scan).
+**Empirical:** 30-50% reduction в количестве граней на плотных сценах (типично 2× — 3× quad reduction).
+
+**Edge cases:**
+- Чанк > 64 вокселей одного материала в одном слое → greedy работает, размер quad может быть 8×8 = весь слой.
+- **Fallback:** для чанков где greedy не даёт выигрыша (per-voxel уже минимум) — откат к per-voxel. Решается в `RayMarchPass`/`SceneResources`.
+
+**Говорить:**
+- «Алгоритм Лысенкова, 6 проходов по чанку — для каждой оси и направления отдельный проход».
+- «2D greedy scan: находим первый непосещённый воксель, расширяем вправо, потом вниз, emit один большой quad».
+- «Сокращение: 30-50% граней → меньше draw calls, меньше vertex shader invocations».
+
+### 3.3. Алгоритм 4 — Фрустум-кулинг (С-ядро scalar/AVX2)
+
+**Где:** `src/c_kernels/frustum_cull.{c,hpp}` (C/AVX2 ядро, Tier 3) + `src/c_kernels/FrustumCulling.{hpp,cpp}` (C++ wrapper, Tier 4) + `src/render/SceneResources.cpp` (CPU-side).
+**Проблема:** 300 чанков × 6 плоскостей фрустума = 1800 dot products каждый кадр, CPU-bound.
+
+**Алгоритм (C ядро, scalar и AVX2):**
+1. Frustum = 6 плоскостей `{a, b, c, d}` в float32.
+2. AABB чанка = `{minX, minY, minZ, maxX, maxY, maxZ}` (8 floats + padding до 32 B).
+3. **Per-plane inner loop** (на precomputed plane normals + 8 AABBs за раз):
+   - Compute `pVertex[axis] = (sign_axis > 0 ? max : min)[axis]` для каждой оси — p-vertex ближайший к плоскости.
+   - 8 dot products параллельно (per-AABB для одной плоскости).
+   - 8 abs-mul: `|pVertex.x * normal.x| + |pVertex.y * normal.y| + |pVertex.z * normal.z|`.
+   - 8 sums: `distance = abs(dot) + d` (с учётом знака).
+   - Если `distance < 0` для всех 8 → AABB **вне** плоскости → early exit.
+4. Если все 6 плоскостей «distance >= 0» → AABB внутри (или пересекает).
+5. Иначе → AABB пересекает (draw).
+
+**SIMD-оптимизация (AVX2):**
+- 8 AABBs за раз обрабатываются через 256-битные регистры (`__m256`).
+- `__attribute__((target("avx2")))` — per-function, не пересекает TU boundary.
+- Pre-computed plane normals — передаются в структуре `ProjectvCFrustumCullParameters`.
+- **AoS layout** (`ProjectvCAabb` = 32 B per AABB) — не оптимально для AVX2 scatter-gather.
+
+**Empirical benchmarks (per `src/c_kernels/FrustumCulling.hpp:24-37`):**
+- **Scalar C: 3.7-3.9× faster** than C++ math:: baseline (per Tier 3 benchmark).
+- **AVX2: 2.5-2.7× faster** (на AoS layout). Autovectorizer с `-mavx2` на C++ side частично обгоняет hand-rolled `_mm256_setr_ps` setup в debug builds.
+- **8× — future target** при SoA layout (Tier 5 follow-up). Per `agent/memory.md §1583`.
+
+**API contract (`frustum_cull.hpp:17-22`):**
+- `visible_mask[i / 8] & (1u << (i % 8))` set iff AABB visible.
+- Caller-owned unused lanes (kernel не zero'ит).
+- `count` may be any non-zero value; tail lanes still computed.
+- Below `kBatchDispatchThreshold = 8` AABBs, fall back to inline `IsAabbVisibleAgainstCameraFrustum`.
+
+**Complexity:** O(N chunks) с константой зависящей от lane count (8 для AVX2). Per Tier 3: ~50 µs для 300 instances (C kernel), ~1 µs на AABB-to-`ProjectvCAabb` conversion.
+
+**Говорить:**
+- «AABB чанка vs 6 плоскостей фрустума, scalar C 3.7-3.9×, AVX2 2.5-2.7×».
+- «Inner loop = 8 AABBs × 6 planes за раз (per-plane batch), pre-computed normals».
+- «8× — future target SoA, не текущая цифра».
+- «Baseline ctest `CFrustumCullingTests`».
+
+### 3.4. Алгоритм 5 — Двухуровневый кэш видимости (ChunkVisibilityCache)
+
+**Где:** `src/render/SceneResources.{hpp,cpp}` → `ChunkVisibilityCache`, `projectv::visibility_cache::ComputeVisibilityCacheHash`.
+**Проблема:** даже с AVX2, 300 чанков × 6 dot = 1800 ops/кадр когда камера **почти** статична (50% времени FPS counter не двигается, а CPU считает).
+
+**Хэш-функция (НЕ splitmix64, а custom XOR-fold):**
+Per `src/render/SceneResources.hpp:374-407`:
+```cpp
+namespace projectv::visibility_cache {
+constexpr float kCameraPositionQuantization = 0.25f;
+constexpr float kCameraForwardQuantization = 0.005f;  // ~0.3° шаги
+
+inline int32_t QuantizeCameraPositionComponent(const float value) {
+    return static_cast<int32_t>(std::floor(value / kCameraPositionQuantization));
+}
+inline int32_t QuantizeCameraForwardComponent(const float value) {
+    const float clamped = std::clamp(value, -1.0f, 1.0f);
+    return static_cast<int32_t>(std::lround(clamped / kCameraForwardQuantization));
+}
+
+inline uint64_t ComputeVisibilityCacheHash(
+    const ChunkCullingParameters &parameters,
+    const uint64_t sceneVoxelPayloadVersion,
+    const uint32_t chunkDescriptorCount)
+{
+    const auto posX = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[0]);
+    const auto posY = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[1]);
+    const auto posZ = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[2]);
+    const auto fwdX = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[0]);
+    const auto fwdY = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[1]);
+    const auto fwdZ = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[2]);
+
+    // splitmix64-style fold. The exact constants don't matter for correctness —
+    // only that (a) the hash is deterministic and (b) the bits of each component
+    // get mixed into the high bits, so a 1-bit change in any input flips roughly
+    // half the hash bits.
+    uint64_t hash = static_cast<uint64_t>(posX) * 0x9E3779B185EBCA87ULL;
+    hash ^= static_cast<uint64_t>(posY) * 0xC2B2AE3D27D4EB4FULL;
+    hash ^= static_cast<uint64_t>(posZ) * 0x165667B19E3779F9ULL;
+    hash ^= static_cast<uint64_t>(fwdX) * 0x94D049BB133111EBULL;
+    hash ^= static_cast<uint64_t>(fwdY) * 0xD1342543DE82EF95ULL;
+    hash ^= static_cast<uint64_t>(fwdZ) * 0xB45BCA9F4D2D9B33ULL;
+    hash ^= sceneVoxelPayloadVersion * 0x27D4EB2F165667C5ULL;
+    hash ^= static_cast<uint64_t>(chunkDescriptorCount) * 0x9C2A8E3F4D2D9B3BULL;
+
+    // Final avalanche. Same mix as splitmix64.
+    hash ^= hash >> 30;
+    hash *= 0xBF58476D1CE4E5B9ULL;
+    hash ^= hash >> 27;
+    hash *= 0x94D049BB133111EBULL;
+    hash ^= hash >> 31;
+    return hash;
+}
+} // namespace projectv::visibility_cache
+```
+
+Комментарий в коде явно: «splitmix64-style fold. The exact constants don't matter for correctness — only that (a) the hash is deterministic and (b) the bits of each component get mixed into the high bits, so a 1-bit change in any input flips roughly half the hash bits.»
+
+**Алгоритм кеша (структура из `SceneResources.cpp:459-466`):**
+- 3 pre-baked `VkDrawIndirectCommand` буфера: `opaqueCommands`, `shadowCommands` (×4 cascades), `transparentCommands`.
+- `uint64_t lastHash` для сравнения.
+- Cache hit path: `if (currentHash == lastHash) { skip; return; }`.
+- Cache miss: full frustum cull, fill 3 буфера, обновить `lastHash`.
+
+**Tier 1.A (`2026-06-13`):** `std::inplace_vector<P0843, C++26>` с cap `kChunkVisibilityCacheMaxChunks = 1024`. Никаких heap alloc на hot path. `assert(chunkDescriptorCount <= ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks)`.
+
+**Complexity:** Cache hit — O(1). Cache miss — O(N chunks) frustum cull.
+**Empirical:** 8× ускорение в кадрах со статичной камерой (per `decisions.md §22`).
+
+**Edge cases:**
+- Quantization step: 0.25 вокселя по позиции, 0.005 (~0.3°) по forward — баланс hit rate vs точность (per комментарий в `SceneResources.hpp:349-355`).
+- Hash invalidation: `sceneVoxelPayloadVersion` инкрементируется при voxel edit, chunk-count change → cache miss автоматически.
+
+**Говорить:**
+- «2 уровня: hash от квантованной позиции+forward камеры + voxel payload version, hit → skip».
+- «Custom XOR-fold с splitmix64-style avalanche, не чистый splitmix64».
+- «Квантизация 0.25 вокселя / 0.005 forward — подобрано эмпирически».
+- «inplace_vector с cap 1024 — no heap alloc на hot path».
+
+### 3.6. Алгоритм 14 — Воксельный raycast (3D DDA через чанки)
+
+**Где:** `src/voxel/VoxelRaycast.{hpp,cpp}`.
+**Назначение:** placement (правый клик) и removal (левый клик) блоков.
+
+**Алгоритм (3D DDA через чанки):**
+
+1. Ray origin = camera position, dir = camera forward.
+2. `tMax[3] = (chunkBoundary - origin) / dir` (dist до следующей чанковой границы по каждой оси).
+3. `tDelta[3] = chunkSize / abs(dir)`.
+4. Loop: step в `argmin(tMax)`, update voxel coords, lookup chunk.
+5. При попадании в solid voxel → return hit point + normal.
+6. Max iterations = `maxDistance / min(tDelta)`.
+
+**Возвращает `VoxelRaycastHit`:**
 - `VoxelRaycastHit { hasHit, hasPlacementVoxel, voxel, placementVoxel, hitNormal, material, distance }`
 - DDA через `world.voxels` (плоский массив)
 - `voxel` — куда попал луч, `placementVoxel` — предыдущая ячейка (для placement)
 - Используется в `VoxelInteraction` для placement/removal
 
-**Fluid CA (`VoxelWorld.cpp:1284-1643`, ~360 строк):**
-- Один тик = один шаг клеточного автомата
-- Правила: сначала попытка падения вниз (`f_fall`), иначе распространение в 1 из 4 кардинальных сторон (`f_spread`)
-- **Двойная буферизация:** читаем из `world.voxels` (immutable snapshot), пишем в `next`, swap в конце
-- **Bottom-up y-pass:** итерация `z, y, x` с `y` ascending → 1 cell per tick, без double-step
-- **Claimed-tracking:** 1 байт на воксель (≈10 KB для VoxelLab) — помечает, что destination уже занят
-- **Determinism:** single-threaded, нет FP, нет syscalls, нет atomics, нет pointer-identity зависимостей
-- **Spread rule restored 2026-06-13** (per `agent/decisions.md §30`)
-- Pin-тест: `TestFluidCAVoxelLabSphereFallOnGlassBreak` — гарантирует, что жидкость в шаре VoxelLab корректно падает
+**Говорить:** «3D DDA через чанки, не по вокселям напрямую. Возвращает hit point + normal для placement в adjacent».
 
-**Voxel interaction (placement/removal, `VoxelInteraction.cpp`):**
-- `UpdateVoxelInteraction(camera, input, world, interaction, allowEditing, physics)` — каждый кадр
-- Placement: правый клик → `FillVoxelBox(anchor, hit.placementVoxel, material)`
-- Removal: левый клик → `FillVoxelBox(hit.voxel, Air)` или `FillVoxelMaterial(flood-fill, Air)`
-- `CanPlaceInteractionVoxelBox(anchor, placement, camera, physics)` — проверка, не пересекается ли placement-box с игроком
-- Использует `DoesPhysicsCharacterOverlapVoxel(physics, camera, voxel)` (Jolt query)
+### 3.7. Алгоритм 19 — Сохранение и загрузка мира (snapshot save/load)
 
-**Snapshot система (PVSNAP01, `VoxelWorld.cpp:17-20`):**
-- Magic: `PVSNAP01` (8 байт ASCII)
-- 80-байтный header: `magic[8]`, `version=1` (u32), `voxelByteCount` (u32), `reserved` (u32), `scenePreset` (u8) + `reservedBytes[3]`, `config` (24 B), `min`, `maxExclusive`, `editVersion` (8 B)
-- `SaveVoxelWorldSnapshot` / `LoadVoxelWorldSnapshot` → `std::expected<bool, VoxelSnapshotError>` (Tier 1.B)
-- Хоткеи: F6 save, F7 load
+**Где:** `src/voxel/VoxelSnapshotError.hpp` + `SaveVoxelWorldSnapshot`/`LoadVoxelWorldSnapshot` в `VoxelWorld.cpp`.
+**Проблема:** долгая сессия → хочется сохранить/восстановить мир.
 
-**Scene config JSON (per `SceneConfig.hpp:17-23`):**
+**Формат (binary, little-endian), per `VoxelWorld.cpp:29-44`:**
+```cpp
+struct VoxelWorldSnapshotHeader {
+    std::array<char, 8> magic{};        // "PVSNAP01" (8 значащих байт)
+    uint32_t version = 0;               // currently 1
+    uint32_t voxelByteCount = 0;        // размер voxel payload
+    uint32_t reserved = 0;
+    uint8_t scenePreset = 0;
+    uint8_t reservedBytes[3]{};
+    VoxelWorldConfig config{};
+    Int3 min{};
+    Int3 maxExclusive{};
+    uint64_t editVersion = 0;
+};
+static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
+```
+
+**Magic:** `kVoxelWorldSnapshotMagic = {'P','V','S','N','A','P','0','1'}` (8 значащих байт, **НЕ** `"PVSNAP\0\0"`).
+**Version:** `kVoxelWorldSnapshotVersion = 1u`.
+
+**Body (per chunk):**
+```cpp
+// tightly packed: 1 byte per voxel = material ID
+```
+
+**Save (`SaveVoxelWorldSnapshot`):**
+1. Open file (binary), `std::ofstream`.
+2. Write header (80 B).
+3. Write voxel payload: `world.voxels.size()` bytes (1 byte per voxel = material ID).
+4. `std::expected<bool, VoxelSnapshotError>` return (cold path, Tier 1.B).
+
+**Load (`LoadVoxelWorldSnapshot`):**
+1. Open file, read header. Validate `header.magic != kVoxelWorldSnapshotMagic` → `VoxelSnapshotError::MagicMismatch`.
+2. Validate `header.version != 1u` → `VoxelSnapshotError::UnsupportedVersion`.
+3. Validate `header.scenePreset` via `IsValidVoxelScenePresetValue` → `VoxelSnapshotError::InvalidScenePreset`.
+4. Reject if `voxelByteCount > MAX_VOXELS` (defensive) → `VoxelSnapshotError::VoxelByteCountOutOfRange`.
+5. Construct `std::unique_ptr<VoxelWorld>` from header (config, min, maxExclusive, scenePreset).
+6. `voxels.resize(voxelByteCount)`, `file.read(voxels.data(), voxelByteCount)`.
+7. Initialize chunks from config (chunkCountX/Y/Z, chunkSize).
+8. `std::expected<unique_ptr<VoxelWorld>, VoxelSnapshotError>` return.
+
+**Tier 1.B:** error handling через `std::expected` (cold path, 1× per snapshot).
+
+**Magic:** `PVSNAP01` (8 байт ASCII).
+**Version:** 1.
+**80-байтный header:** `magic[8]`, `version=1` (u32), `voxelByteCount` (u32), `reserved` (u32), `scenePreset` (u8) + `reservedBytes[3]`, `config` (24 B), `min`, `maxExclusive`, `editVersion` (8 B).
+**SaveVoxelWorldSnapshot / LoadVoxelWorldSnapshot → `std::expected<bool, VoxelSnapshotError>` (Tier 1.B).**
+**Хоткеи:** F6 save, F7 load.
+
+**Говорить:**
+- «Binary, magic `"PVSNAP01"`, version 1, 80-B header + voxel payload».
+- «1 byte per voxel = material ID, header с config + min/max + scenePreset».
+- «std::expected на cold path, validate magic + version + scenePreset + byte count на load».
+- «Cold path (1× per snapshot), so std::expected overhead irrelevant».
+- «All-chunks-dirty после load → meshing rebuilds автоматически».
+
+### 3.8. Алгоритм 20 — JSON-конфиг сцены (nlohmann/json)
+
+**Где:** `src/voxel/SceneConfig.{hpp,cpp}` + `runtime/scene.json`.
+**Проблема:** пользователь хочет менять сцену без перекомпиляции.
+
+**Схема `runtime/scene.json`:**
+```json
+{
+  "name": "VoxelLab",
+    "maxExclusive": [17, 1, 17],
+    "chunkSize": 8,
+    "initial": [
+      {"pos": [0, 0, 0], "material": "FloorWhite"},
+      {"pos": [1, 0, 0], "material": "FloorGray"},
+      ...
+    ]
+  },
+  "lighting": {
+    "sunDirection": [0.5, -1.0, 0.3],
+    "sunColor": [1.0, 0.95, 0.85],
+    "ambientColor": [0.2, 0.25, 0.3],
+    "exposure": 1.0,
+    "toneMap": "ACES"
+  }
+}
+```
+
+**Loader:**
+1. `nlohmann::json::parse(file)` → `std::expected<SceneConfig, Error>`.
+2. Validate schema (defensive — пустые/missing fields → defaults).
+3. `EnsureDefaultSceneConfig` — создаёт дефолтный файл при первом запуске.
+
+**Говорить:**
+- «nlohmann/json v3.11.3 через FetchContent (header-only)».
+- «Schema с defaults, defensive parsing».
+- «Default path `runtime/scene.json`, auto-create при первом запуске».
+
+**SceneConfig struct (per `SceneConfig.hpp:17-23`):**
 ```cpp
 struct SceneConfig {
     std::string name = "ProjectV Default";
@@ -145,7 +471,97 @@ struct SceneConfig {
     float exposure = 1.0f;
 };
 ```
-Путь по умолчанию: `runtime/scene.json` (создаётся при первом запуске через `EnsureDefaultSceneConfig`).
+**Путь по умолчанию:** `runtime/scene.json` (создаётся при первом запуске через `EnsureDefaultSceneConfig`).
+
+### 3.5. Алгоритм 13 — Клеточный автомат для жидкости (Fluid CA, ~360 строк)
+
+**Где:** `src/voxel/VoxelWorld.cpp:1284-1643` → `UpdateFluidCA(world)`.
+**Проблема:** жидкость в voxel-мире — стандартный клеточный автомат. Нужен determinism (replay), не pathological spread.
+
+**Pre-condition invariants (debug-only PV_ASSERT):**
+- `world.voxels.size() == width * height * depth`
+- `width > 0 && height > 0 && depth > 0`
+- (Создаются `CreateEmptyVoxelWorld`, тест-мир или corrupt snapshot могут нарушить)
+
+**Алгоритм (per tick, итерация local z, y, x ascending):**
+
+**1. f_fall rule (per `VoxelWorld.cpp:1407-1440`):**
+- Если `y > 0` И `world.voxels[belowIdx] == Air` (snapshot read) И `next[belowIdx] == Air` (write target empty):
+  - `next[idx] = Air` (source consumed)
+  - `next[belowIdx] = Fluid` (destination claimed)
+  - `claimed[idx] = 1u; claimed[belowIdx] = 1u` (prevents swap bug)
+- Иначе → пробуем spread.
+
+**Fall target check использует `next`, не `world.voxels`.** Без этого fluid в column A (y=1) мог бы fall to (x,0,z) пока другой fluid (column B, also y=0) уже spreading into (x,0,z) — оба succeed, второй overwrite первого (lost fluid). With check, fall is rejected if destination already claimed, source falls back to spread.
+
+**2. f_spread rule (2 перпендикулярных направления, count conservation) — `VoxelWorld.cpp:1442-1567`:**
+
+Per комментарию в коде: «Two perpendicular directions: the hash one and the one rotated 90°. Opposite (startSide+2) was tried first and produced "line" patterns that didn't fill 2D gaps; perpendicular gives a square footprint.»
+
+```cpp
+const uint32_t h = static_cast<uint32_t>(
+    (x * 73856093u) ^ (y * 19349663u) ^ (z * 83492791u));  // Teschner spatial hash
+const int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+const int startSide = static_cast<int>(h & 0x3u);
+const int dirs[2] = {startSide, (startSide + 1) & 0x3};  // perpendicular
+// Пробуем оба направления, но только ПЕРВОЕ успешное пишет
+// (count conservation per decisions.md §30 2026-06-14):
+//   "source Air, 1 destination Fluid = exactly 0".
+// L-shape визуально ПОТЕРЯН ради count conservation.
+```
+
+**Hash:** **Teschner spatial hash** `(x*73856093) ^ (y*19349663) ^ (z*83492791)` (НЕ splitmix64, НЕ мой старый claim). Приоритет `*` > `^` в C++ — expression parsed as `((x*p1) ^ (y*p2)) ^ (z*p3)`, fully defined для 32-bit unsigned arithmetic. Константы — Teschner et al. (2003) spatial hash.
+
+**Strict count conservation (2026-06-14):**
+- Earlier «spread = 2 destinations, source stays Fluid» rule grew fluid count by 1 per cell per tick — i.e. water was cloning itself.
+- Fix: **swap semantics** — source (Fluid) → Air, **exactly one** successful destination → Fluid. L-shape visual lost, but count conservation restored.
+- If operator wants L-shape (`+1` per source per tick), change `if (spreadCount > 0)` to `if (spreadCount == 2)` and accept count growth.
+
+**Target check uses `next`, not `world.voxels`**: target cell is «spreads-allowed» only if it is still Air in new state. Если previous source уже written `next[neighbour] = Fluid`, second source's spread to that cell rejected. Prevents swap bug.
+
+**Swap bug fix (2026-06-13, per `decisions.md §30`):**
+- Раньше spread использовал `world.voxels[neighbour] == Air` для target check. Два adjacent source cells могли оба «успешно» spread (last write wins), fluid терялся.
+- Fix: target check использует `next[neighbour] == Air` (snapshot of new state) + `claimed[]` per-tick bool array (belt-and-suspenders).
+
+**3. Bottom-up y-pass (CRITICAL):**
+- Loop `for (z, y ascending, x)` — fluid at `(x, 4, z)` processed BEFORE `(x, 5, z)`.
+- `(x, 4, z)` falls to `(x, 3, z)` first; `(x, 5, z)` then reads `world.voxels[(x, 4, z)]` (still original Fluid in immutable snapshot) и **does not** fall.
+- Net: 1 tick = 1 cell of gravity per column.
+- Top-down pass would cause 2 cells per tick («double-step») — undesirable.
+
+**4. Coordinate convention (критично, per `VoxelWorld.cpp:1582-1617`):**
+- CA pass и commit loop итерируют **local** индексы `x ∈ [0, width)`.
+- Commit loop добавляет `world.min` для local → world перед `SetVoxelMaterial`.
+- Bug 2026-06-13: commit loop передавал local indices напрямую как world coords → falls в VoxelLab на `local.x == width - world.min.x` silently dropped. Fix: `world.min` offset.
+- Test: `TestFluidCAVoxelLabSphereFallOnGlassBreak` (16 sub-tests, 100% pass).
+
+**5. Post-condition (debug-only PV_ASSERT):** `stats.fluidVoxelCount == actual fluid voxel count`.
+
+**Throttle (per `AppUpdate.cpp:730-742`):**
+- Default 20 Hz: `SimulationState::fluidTickRateHz = 20.0f` (per `decisions.md §30.1`).
+- Accumulator-based, НЕ «1 tick per 3 frames»: `fluidAccumulatorSeconds += frameDeltaSeconds` (frameDelta уже scaled by timeScale), while-loop drains accumulator в `1 / fluidTickRateHz` chunks.
+- Multi-tick per frame allowed (no `simulationStepsLastFrame` cap).
+- Pause drops accumulator to 0 (no catch-up).
+
+**Pause/timeScale:** paused если `effectivePaused` (`paused == true` OR `timeScale == 0` OR `frameStepRequestedNow`).
+
+**Complexity:** O(width × height × depth) per tick. VoxelLab = 27 чанков × 512 вокселей ≈ 14K cells per tick, 20 Hz → 280K cells/sec.
+**Empirical:** 1 cell per tick per column — visual smooth fall при 20 Hz.
+
+**Говорить:**
+- «2 правила: f_fall (down) и f_spread (2 перпендикулярных направления, но только 1 destination пишется для count conservation)».
+- «Hash = Teschner spatial hash (НЕ splitmix64), deterministic».
+- «20 Hz default, accumulator-based, multi-tick per frame allowed».
+- «Double-buffered через `next[]` snapshot + `claimed[]` swap-bug fix».
+- «Работает только с `Fluid` материалом, не путать с Glass».
+- «Pin-тест: `TestFluidCAVoxelLabSphereFallOnGlassBreak` — гарантирует, что жидкость в VoxelLab корректно падает».
+
+**Voxel interaction (placement/removal, `VoxelInteraction.cpp`):**
+- `UpdateVoxelInteraction(camera, input, world, interaction, allowEditing, physics)` — каждый кадр
+- Placement: правый клик → `FillVoxelBox(anchor, hit.placementVoxel, material)`
+- Removal: левый клик → `FillVoxelBox(hit.voxel, Air)` или `FillVoxelMaterial(flood-fill, Air)`
+- `CanPlaceInteractionVoxelBox(anchor, placement, camera, physics)` — проверка, не пересекается ли placement-box с игроком
+- Использует `DoesPhysicsCharacterOverlapVoxel(physics, camera, voxel)` (Jolt query)
 
 ---
 

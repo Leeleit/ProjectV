@@ -62,6 +62,52 @@
 - Переключение: `F4` (`ToggleControlMode`, cycle walk → creative → spectator)
 - Двойной `Space` — toggle walk ↔ creative (быстрый)
 
+### 3.1. Алгоритм 12 — Walk-контроллер (walk controller)
+
+**Где:** `src/physics/PhysicsWorld.{hpp,cpp}` → `UpdateWalkGroundSupport`, `TryAutoJump`, `BuildWalkEdgeGraceUpdateSettings`.
+**Архитектура:** `JPH::CharacterVirtual` **используется** для collision detection (капсула, прокси), **voxel solver augments** foot support (per `decisions.md §6`). Это не "voxel solver вместо Jolt" — Jolt остаётся основой.
+
+**Алгоритм:**
+
+### Ground support
+
+1. `JPH::CharacterVirtual::ExtendedUpdate` — Jolt side: continuous collision detection с custom `BuildWalkEdgeGraceUpdateSettings()` (настройка `mWalkExtendedUpdateSettings`, изменяет поведение extended update для edge grace).
+2. `UpdateWalkGroundSupport` (наш код) — **augment** Jolt-результата:
+   - Sample top-plane в `feetPosition + (0, -stepHeight, 0)`.
+   - Voxel lookup в `VoxelWorld`:
+     - `Air`/`Fluid` → нет ground
+     - `Glass`/`FloorWhite`/`FloorGray` → ground, support height = top Y
+3. **Edge grace** (per `PhysicsWorld.cpp`):
+   - `constexpr uint32_t kWalkEdgeGraceFrames = 4` — допуск в **фреймах** (не метрах!).
+   - `constexpr float kWalkFootSupportEdgeGraceScore = 0.2f` — порог score (не дистанция).
+   - `kWalkFootSupportMovingEdgeGraceScore = 0.5f` — для движущегося игрока.
+   - Логика: `physics.walkEdgeGraceFramesRemaining` счётчик, при `supportScore < EdgeGraceScore` → `walkEdgeGraceFramesRemaining = 4` (4 фрейма grace). Не «дёргать» Y вверх-вниз при микро-перепаде.
+4. **Sneak (Shift):** sampled top-plane (1 точка, не 4), без false-stick к стене. Файл: `walkSneakShape` (внутренний JPH::Shape), `walkSneakActive` flag.
+
+### Auto-jump
+
+1. Триггер: `J` toggle ON (InputAction).
+2. Каждый кадр: `FindWalkTopSupportCandidate` — ищем forward voxel на уровне 1 блок выше ground.
+3. `IsWalkAutoJumpRiseInRange(autoJumpRise)` — проверка, что rise в допустимом диапазоне.
+4. Delay (F12 InputAction): если `walkAutoJumpDelayEnabled` ON, отсчёт начинается только когда `reached == true`. Иначе — мгновенно.
+5. Manual jump (Space): обнуляет delay accumulator.
+
+### Air control
+
+- `ToggleWalkAirControlMode` (F11 InputAction): MinecraftLike (default) — WASD в воздухе, momentum = Jolt velocity. Realistic — W-only, фиксация направления.
+- F11 InputAction **shadowed** defense r0 bypass (F11 = hot shader reload), но для defense demo walk modes toggle не на demo path.
+
+**3 режима (F4 `ToggleControlMode`):**
+- **walk:** grounded authority, edge grace, sneak, air control.
+- **creative:** полёт, collision substepped (`TickCreativeCharacter` для substepping high-velocity).
+- **spectator:** noclip, ignore physics, ignore pause (per `PhysicsWorld.cpp`).
+
+**Edge cases:**
+- Переключение creative ↔ walk: двойной Space.
+- Auto-jump OFF: ручной Space = vanilla.
+- Pause (`P`) vs `timeScale=0` — разные оси (per `decisions.md §26`).
+- Edge grace — `kWalkEdgeGraceFrames = 4` (фреймы!), **НЕ** 0.1 м.
+
 **Walk controller features (per `PhysicsWalkDebugInfo` struct, `PhysicsWorld.hpp:19-40`):**
 
 **Edge grace (допуск тонкого края):**
@@ -94,10 +140,37 @@
 - Переключатель: «насколько сильно игрок может влиять на направление в воздухе»
 - `GetPhysicsWalkAirControlMode(physics)` / `SetPhysicsWalkAirControlMode`
 
+**Говорить:**
+- «JPH::CharacterVirtual + voxel solver augment (per `decisions.md §6`); Jolt для collision detection, наш solver — для foot support».
+- «Edge grace = `kWalkEdgeGraceFrames = 4` фрейма + score 0.2 (НЕ 0.1 м)».
+- «Sneak, auto-jump — фичи для voxel мира, не generic character».
+- «3 режима, F4 переключает, двойной Space ↔ creative».
+
 **Voxel raycast для character:**
 - `DoesPhysicsCharacterOverlapVoxel(physics, camera, voxel)` — проверяет, пересекается ли AABB персонажа с заданным вокселем
 - Используется в `VoxelInteraction::CanPlaceInteractionVoxelBox` для предотвращения placement внутрь игрока
 - `InteractionState` хранит `placementVoxel`, `placementChunkCoord`, `placementChunkMin/Max`, `placementChunkDirty/Active/Index`, `placementChunkNonAirVoxelCount`, `placementVoxelInChunk`
+
+### 3.2. Алгоритм 15 — Интеграция с Jolt (CharacterVirtual + voxel solver)
+
+**Где:** `src/physics/PhysicsWorld.{hpp,cpp}` (обёртка).
+**Проблема:** Jolt — generic physics engine, не знает про воксели. Нужен мост.
+
+**Интеграция:**
+- `JPH::PhysicsSystem` для rigid bodies.
+- `JPH::CharacterVirtual` как proxy для character (collision detection).
+- **Ground authority** = voxel solver (см. §12), не `CharacterVirtual::ExtendedUpdate`.
+- **Static voxel world** = `JPH::Body` с `JPH::Shape` per solid voxel (lazy creation, cached).
+- **Voxel edits** = invalidate Jolt body cache для affected chunks, recreate.
+
+**Substepping (creative):**
+- High velocity в creative может skip чанки за один шаг.
+- `TickCreativeCharacter` разбивает deltaTime на N substeps, clamp velocity на каждый.
+
+**Говорить:**
+- «JPH::CharacterVirtual как proxy, voxel solver авторитетный для ground».
+- «Static voxel world = JPH::Body per solid voxel, lazy cached».
+- «Substepping в creative для high-velocity пропусков чанков».
 
 **PhysicsWalkDebugInfo (struct, `PhysicsWorld.hpp:19-40`):**
 ```cpp

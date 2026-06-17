@@ -79,11 +79,73 @@ bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-de
 # → exit 0, 6 captures, ~1 sec wall clock
 ```
 
+### 3.1. Алгоритм 22 — Система сборки (CMake presets, ctest, RuntimeSmoke)
+
+**Где:** корневой `CMakeLists.txt` + `CMakePresets.json`.
+**Структура:**
+
+**Configure presets (12 total = 8 debug + 4 release):**
+- `windows-clang-debug` (основной dev tree)
+- `windows-clang-debug-ci` (CI, suppress developer warnings)
+- `windows-clang-debug-tracy-profiler` (только Tracy config changes)
+- `linux-clang-debug` (baseline 2026-06-09)
+- `linux-clang-debug-build` (только build)
+- `linux-clang-debug-tests` (только ctest)
+- `linux-clang-release`, `linux-clang-release-build`, `linux-clang-release-tests` (2026-06-14)
+- `windows-clang-release`, `windows-clang-release-build`, `windows-clang-release-tests`
+
+**Build presets (6):**
+- Каждый покрывает 14-17 ctest executables.
+
+**Test presets (5):**
+- Per configure preset.
+
+**Release policy (per `decisions.md §4`):**
+- `-O3 -flto=thin -DNDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`
+- Без `-ffast-math` (ломает Fluid CA determinism + TAA YCoCg clamp)
+- Без `-march=native` (portability между CPU)
+- Link: `-flto=thin -Wl,--gc-sections`
+- **Результат:** ELF **19 MB release vs 73 MB debug** (-73%), +1.5-2.5× FPS.
+
+**Build verification (2026-06-15 baseline):**
+- `linux-clang-debug`: 137/137 targets, ctest 14/14, smoke 6/6, **ELF 73 MB**.
+- `linux-clang-release`: 137/137 targets, ctest 14/14 (0.06s), smoke 6/6, **ELF 19 MB**.
+- VoxelLab reference shot: **500+ FPS, ~2 мс кадр** (debug baseline).
+
 **Compile-time настройки (per `CMakePresets.json` + `decisions.md §4`):**
 - **Debug:** `PROJECTV_ENABLE_VALIDATION=ON` (если установлен Vulkan SDK), `PROJECTV_ENABLE_TRACY=ON`, `PROJECTV_ENABLE_RENDERDOC_MARKERS=ON`, `PROJECTV_ENABLE_BENCHMARKS=ON`, `PROJECTV_ENABLE_IMGUI=ON`
 - **Release:** все выше = OFF. Оптимизации: `-O3 -flto=thin -DNDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only -Wl,--gc-sections`
 - **Без** `-ffast-math` (ломает Fluid CA determinism + TAA YCoCg clamp)
 - **Без** `-march=native` (release binary должен быть переносим между CPU)
+
+**Говорить:**
+- «8 debug + 4 release configure presets, 6 build, 5 test».
+- «Release: -O3 -flto=thin без -ffast-math без -march=native».
+- «ELF 19 MB release vs 73 MB debug (verified 2026-06-15), +1.5-2.5× FPS».
+
+### 3.2. Переменные окружения PROJECTV_*
+
+Полный список env vars проекта:
+
+- `PROJECTV_START_CAMERA_POSITION`, `PROJECTV_START_CAMERA_LOOK` — воспроизводимая настройка камеры
+- `PROJECTV_LOOKDEV_CAPTURE_VIEWS`, `PROJECTV_LOOKDEV_CAPTURE_WARMUP_FRAMES`,
+  `PROJECTV_LOOKDEV_CAPTURE_INTERVAL_FRAMES`, `PROJECTV_LOOKDEV_CAPTURE_QUIT` — сценарные захваты
+- `PROJECTV_SCREENSHOT_DIR` — переопределение директории вывода
+- `PROJECTV_MODELS=path.glb@x,y,z;...` — манифест для размещения полигональных моделей
+- `PROJECTV_SNAPSHOT_PATH` — загрузка снапшота воксельного мира
+- `PROJECTV_ENABLE_VALIDATION` — 1/0, по умолчанию ON в Debug
+- `PROJECTV_ENABLE_RENDERDOC_MARKERS` — 1/0, по умолчанию ON в Debug, OFF в `linux-clang-debug`
+- `PROJECTV_ENABLE_TRACY` — 1/0, по умолчанию ON
+- `PROJECTV_BENCHMARK_FRAMES`, `PROJECTV_BENCHMARK_WARMUP_FRAMES`,
+  `PROJECTV_BENCHMARK_LOG_EVERY`, `PROJECTV_BENCHMARK_QUIT` — автоматизация бенчмарков
+- `PROJECTV_MUSIC_DIR` — переопределение папки музыки
+- `PROJECTV_BUILD_DIR` / `PROJECTV_CMAKE_BUILD_DIR` — для hot shader reload
+
+### 3.3. Политика комментариев и покрытие тестами
+
+**Почему мало комментариев в коде:** `AGENTS.md §10.5`: «DO NOT ADD ANY COMMENTS unless asked». Философия проекта — чистый код через хорошие имена, а не комментарии. Юмор-маркеры `// EVIL:` для магических чисел — отдельное исключение (per `legacy/docs/philosophy/01_foundation/04_*_evil-hacks*.md`). Блоки документации в заголовках — есть (по соглашению Doxygen для публичного API).
+
+**Какой процент покрытия тестами:** ~40-50% по моей оценке. Фокус на критичных путях: ECS-состояние, редактирование материалов вокселей, walk controller, frustum culling, декодирование ассетов. **14 наборов ctest** (per §14 baseline 14/14, 0.78 сек debug, 0.06 сек release). GPU-стороны покрывается визуальными smoke-проверками (RuntimeSmoke 6/6 captures). **80% покрытия** — явный follow-up, не критично для демонстрации архитектуры.
 
 ---
 

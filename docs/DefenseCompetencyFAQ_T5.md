@@ -53,6 +53,28 @@
 - Извлекает POSITION (3 floats), NORMAL (3 floats), TEX_COORD (2 floats), face indices
 - Degenerate geometry detection (no faces)
 
+### 3.1. Алгоритм 16 — Конвейер ассетов (asset pipeline: glTF, Draco, meshopt)
+
+**Где:** `src/asset/AssetLoader.{cpp,hpp}`, `DracoMeshDecoder.{cpp,hpp}`, `MeshBaker.{cpp,hpp}`, `ModelManifestLoader.{cpp,hpp}`.
+**Проблема:** glTF = стандарт, но файлы могут быть сжаты Draco. Нужно декодировать + оптимизировать для GPU.
+
+**Конвейер (per `src/asset/AssetLoader.hpp:36-38`):**
+
+1. **`LoadGlb(const std::string &path, LoadAssetError *outError)`** (НЕ `Load` — это неправильное имя) — fastgltf parser → `LoadedAsset` (Primitives, AABB, vertex/triangle counts).
+2. Если mesh has Draco compression → `DracoMeshDecoder::Decode()` → `DecodedMesh`.
+3. **`MeshBaker::Optimize()`** → meshopt:
+   - `meshopt_optimizeVertexCache` (reorder indices для cache locality)
+   - `meshopt_optimizeOverdraw` (reorder triangles)
+   - `meshopt_optimizeVertexFetch` (reorder vertices для memory locality)
+4. Bake textures (atlas если несколько материалов).
+5. Upload в GPU через VMA → `MeshGpuResources`.
+
+**Manifest loading:**
+- `PROJECTV_MODELS=path.glb@x,y,z;...` env var.
+- `ModelManifestLoader` парсит, создаёт `ModelPass` per instance.
+- `SnapModelInstancesAboveGroundDispatch` — позиционирует модели над ground (Y=0 по умолчанию).
+- `ComputeGlbDimensions` (per `AssetLoader.hpp:60-68`) — pure helper для per-axis auto-scale.
+
 **Meshopt (per `MeshBaker.cpp:56-87`):**
 1. `meshopt_optimizeVertexCache` — reorder indices for vertex cache locality
 2. `meshopt_generateVertexRemap` — vertex deduplication
@@ -60,6 +82,12 @@
 4. `meshopt_remapIndexBuffer` — apply remap к index buffer
 5. `meshopt_optimizeVertexFetch` — compact vertices (cache locality)
 6. `meshopt_analyzeVertexFetch` — overfetch ratio (BakedMesh.overfetch)
+
+**Говорить:**
+- «fastgltf → Draco decode → meshopt optimize → VMA upload».
+- «Entry point: `LoadGlb(path, outError)`, НЕ `Load`».
+- «Manifest через env var, snap above ground».
+- «Загрузчик синхронный, <1 сек на 100 МБ glb».
 
 **Baked mesh struct (`MeshBaker.hpp`):**
 ```cpp
@@ -90,25 +118,72 @@ PROJECTV_MODELS=pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s;pathC.glb
 - `CreateModelPipeline` — создаёт оба варианта
 - `PickModelPipeline(render)` — выбирает `modelPipeline` или `modelPipelineTaaOn` по `render.taaEnabled`
 
-**Audio engine (`AudioEngine.hpp:95-306`):**
-- `ma_engine` + `ma_sound_group` (music volume bus) + `ma_sound` (current track)
-- Singleton on `AppState`, plain (not ECS system)
-- Format: 16-bit signed PCM, 44.1 kHz, stereo
-- Linux backend: PulseAudio → `pipewire-pulse` shim → active PipeWire
-- 3 states: `Stopped` / `Playing` / `Paused`
-- 5-second playlist refresh (`m_lastPlaylistRefresh`)
-- `ParseArtistTitle(filename, &artist, &title)`:
-  - Strip case-insensitive `.mp3` tail
-  - Split on first ` - ` (space-dash-space)
-  - Fallback: `artist = "-"` (em-dash sentinel) when no separator
-- 2 MP3 в `music/`: `Le1t - Palm Trees.mp3`, `Le1t - aCID.mp3`
-- Хоткеи: `Q` play/pause, `E` stop, `7`/`8` volume, `9`/`0` next/prev
+### 3.2. Алгоритм 17 — Аудио-движок (audio engine, miniaudio)
 
-**Snapshot мира (per `VoxelWorld.cpp:17-20`):**
-- Magic: `PVSNAP01` (8 B ASCII)
-- 80-B header: `magic[8]`, `version=1` (u32), `voxelByteCount` (u32), `reserved` (u32), `scenePreset` (u8) + `reservedBytes[3]`, `config` (24 B), `min`, `maxExclusive`, `editVersion` (8 B)
-- `SaveVoxelWorldSnapshot` / `LoadVoxelWorldSnapshot` → `std::expected<bool, VoxelSnapshotError>` (Tier 1.B)
-- Хоткеи: F6 save, F7 load
+**Где:** `src/audio/AudioEngine.{hpp,cpp}`.
+**Проблема:** нужен простой audio без тяжёлых зависимостей.
+
+**Архитектура (per `AudioEngine.hpp:5-15`):**
+- `miniaudio` (vendored submodule, MIT) для playback.
+- Linux backend: **PulseAudio** через `pipewire-pulse` shim → active PipeWire server (per `pactl info` → `Server String: /run/user/1000/pulse/native`).
+- Format: **16-bit signed PCM, 44.1 kHz, stereo** (per `AudioEngine.cpp:85-100`). `config.sampleRate = 44100, config.channels = 2, config.listenerCount = 1`.
+- `MusicDirectoryPath` env var (`music/` default).
+- `scanPlaylist()` каждые 5 секунд — автообновление при добавлении файлов.
+
+**Поддерживаемые форматы: ТОЛЬКО MP3.** Per `AudioEngine.cpp:206-211`:
+```cpp
+const auto &path = entry.path();
+std::string ext = path.extension().string();
+std::ranges::transform(ext, ext.begin(),
+    [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+if (ext != ".mp3") {
+    continue;  // WAV/FLAC/etc. silently ignored
+}
+m_playlist.push_back(path);
+```
+
+Сейчас в `music/` лежат 2 MP3: `Le1t - Palm Trees.mp3`, `Le1t - aCID.mp3`.
+
+**Hotkeys (per `InputActions.cpp:196-210`):**
+- `Q` (SDL_SCANCODE_Q) — `ToggleMusicPlayPause`
+- `E` (SDL_SCANCODE_E) — `StopMusic`
+- `7`/`8` (SDL_SCANCODE_7/8) — `MusicVolumeDown/Up`, step 0.05 в [0, 1] range
+- `9`/`0` (SDL_SCANCODE_9/0) — `NextMusicTrack` / `PreviousMusicTrack`, wrap-around
+
+**API state (для debug HUD / sidecar):**
+- `state()` — `Stopped` / `Playing` / `Paused` (3-state enum)
+- `volume()` — float [0, 1] (default 0.8)
+- `positionSeconds()` / `durationSeconds()` — для HUD time display
+- `currentArtist()` / `currentTitle()` — parsed from filename (`<artist> - <title>.mp3`)
+
+**Cursor semantics (2026-06-13, two iterations):**
+- Q during Playing → Paused: `ma_sound_stop` only sets node state to stopped (miniaudio.h:78774); audio thread's last-read position kept in `pSound->cursor`. Q again resumes from there.
+- E during Playing → Stopped: `stop()` calls `ma_sound_seek_to_pcm_frame(&m_sound, 0)` after `ma_sound_stop`, atomically sets `pSound->seekTarget` to 0 (miniaudio.h:79437); mixing thread applies seek on next read cycle (miniaudio.h:76908-76916) and resets decoder to start. E+Q (stop+rewind, then play) starts track from beginning.
+
+**Sidecar metadata:** `music_track`, `music_state`, `music_volume` в capture sidecars.
+
+**Audio engine fields (per `AudioEngine.hpp:255-308`):**
+- `ma_sound m_sound{}` — current sound
+- `bool m_engineInitialized = false`
+- `bool m_musicGroupInitialized = false`
+- `bool m_soundLoaded = false`
+- `std::filesystem::path m_musicFolder`
+- `std::vector<std::filesystem::path> m_playlist`
+- `size_t m_currentIndex = 0`
+- `float m_volume = 0.8f`
+- `MusicState m_state = MusicState::Stopped`
+- `ma_uint64 m_pausedCursorMs = 0` (dead code 2026-06-13, kept for field-shape stability)
+- `std::chrono::steady_clock::time_point m_lastPlaylistRefresh` — 5-second refresh
+- `std::string m_currentTrackName`
+- `std::string m_currentArtist`, `m_currentTitle` — artist/title cache (2026-06-13)
+
+**Говорить:**
+- «miniaudio header-only, MIT, PulseAudio → PipeWire на Linux».
+- «16-bit 44.1 kHz stereo».
+- «Только MP3, WAV/FLAC тихо игнорируются».
+- «Auto-refresh playlist каждые 5 секунд».
+- «6 hotkeys: Q play/pause, E stop, 7/8 volume, 9/0 next/prev».
+- «Per-frame tick обновляет playlist + обрабатывает "current track removed from disk" gracefully».
 
 **Hot shader reload (per `main.cpp:68-114`):**
 - Клавиша `1` (relocated from F5/F11 2026-06-15)
@@ -125,7 +200,7 @@ PROJECTV_MODELS=pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s;pathC.glb
 - Per-frame `RecordRayMarchCommands` — `fprintf` в stderr, no-op
 - Compute-шейдер `ray_march.comp` скомпилирован, но в graphics stream не вкомпонован
 
-**5 отложенных пунктов (per `docs/DefenseReport.md §3`):**
+**5 отложенных пунктов (Phase 4-9):**
 1. **Полная система частиц** (ТЗ 4.1.4) — Phase 7
 2. **Плагины / моддинг API** (ТЗ 4.1.8) — Phase 8
 3. **Асинхронная загрузка ресурсов** — Phase 7
@@ -133,7 +208,7 @@ PROJECTV_MODELS=pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s;pathC.glb
 5. **SVO (Sparse Voxel Octree)** — Phase 5
 6. **Mesh shaders (VK_EXT_mesh_shader)** — Phase 5
 
-**Roadmap (per `docs/DefenseReport.md §3`):**
+**Roadmap (Phase 4-9):**
 - Phase 4: Networking (server-authoritative + client prediction)
 - Phase 5: SVO (Sparse Voxel Octree) + Mesh shaders
 - Phase 6: HDR-текстуры + полный клеточный автомат жидкости на GPU

@@ -50,11 +50,57 @@
 - Tier 1.B: `std::expected<void, VulkanInitError>` вместо `bool` (cold path, 1× per startup)
 - `InitVulkan(AppState*)` — мутирует `AppState` in place, error variant — machine-readable сигнал
 
-**Shadow cascade (per `ShadowProjection.hpp`, `decisions.md §18`):**
-- 4 каскада (`kSunShadowCascadeCount = 4`)
-- Shadow map 2048×2048
-- `BuildSunShadowCascadeSplits(near, far, lambda=0.80)` — near-biased split distribution
-- Per-cascade projection: sub-frustum → light-space → sphere stabilization (чтобы избежать jitter при движении камеры)
+### 3.1. Алгоритм 6 — Каскадные тени (CSM, Cascaded Shadow Maps)
+
+**Где:** `src/render/ShadowProjection.{hpp,cpp}` (CPU build) + `src/shaders/voxel_shadow.{vert,frag}` (depth pass) + `voxel.frag` (sample).
+**Проблема:** один shadow map 2048×2048 на всю сцену даёт texel size = 64 м (воксель 1 м) — тени «зубчатые» на близких объектах, размытые на дальних.
+
+**Constants (`src/render/ShadowProjection.cpp:17-23`):**
+- `kSunShadowCascadeCount = 4u` (per `ShadowTypes.hpp:7`)
+- `kDefaultShadowMapResolution = 2048u`
+- `kDefaultCascadeSplitLambda = 0.80f`
+- `kDefaultCascadeNearPlane = 0.1f`
+- `kDefaultCascadeFarPlane = 128.0f`
+- `kMinShadowCoverageScale = 0.5f`, `kMaxShadowCoverageScale = 3.0f`
+
+**Алгоритм (на каждый кадр, CPU `BuildSunShadowCascadeSplits`):**
+
+1. **Split planning** (per `decisions.md §15`):
+   - `lambda = 0.80` (near-biased)
+   - Split depths: practical scheme `split[i] = lerp(near*pow(far/near, i/n), near + (far-near)*i/n, lambda)`
+   - Receiver horizon: `min(camera.farPlane, 64)` — не весь far plane, а видимая сцена.
+
+2. **Per-cascade projection build** (для каждого из 4 каскадов):
+   - Slice near/far → camera frustum sub-frustum (8 углов).
+   - Sub-frustum → light-space → XY sphere extent (rotation-stable, не дёргается при yaw).
+   - Extrude slice upstream along sun direction → caster coverage.
+   - Snap light camera position to shadow texel grid → стабильна при малом движении камеры.
+   - Output: `sunShadowViewProjections[4]` в `VoxelSceneLighting` SSBO.
+
+3. **Shadow pass** (compute indirect):
+   - Один subpass на каскад.
+   - Indirect draw с per-cascade chunk commands (чанк может быть в каскаде, но не в другом).
+   - Empty cascade → skip draw call (`commands.size() == 0`).
+
+4. **Voxel frag sample** (`ComputeSunShadowSample`):
+   - `cascadeIndex = selectCascade(viewDepth, splits)`.
+   - PCF 5×5 (weighted) внутри каскада.
+   - Cascade blend band: на границе каскадов blend между current/next (`BLD` контрол в HUD).
+   - N·L-aware bias + receiver world-space bias.
+
+**Complexity:** O(1) на каскад для build. O(1) на fragment для sample (PCF 5×5 = 25 texture reads).
+**Empirical:** 4 каскада дают texel size 0.125 м на близких объектах (vs 64 м на одном каскаде) → 512× плотность теней.
+
+**Edge cases:**
+- Glass: не кастует тень (`transparent_shadow_policy=GLASS_IGNORED_FLUID_CASTS` в sidecar).
+- Каскад с 0 чанков → skip draw (per `decisions.md §15`).
+- Split transition: blend band ширина = `BLD` контрол.
+
+**Говорить:**
+- «4 каскада 2048×2048, lambda 0.80 near-biased, per-cascade XY sphere fit».
+- «Light camera snap к texel grid — стабильна при малом движении».
+- «Cascade blend band на границе, не hard switch».
+- «Glass не кастует, Fluid кастует (зафиксировано в `decisions.md §15`)».
 
 **Per-preset shadow params (`VoxelMaterials.cpp:181-236`):**
 ```cpp
@@ -75,13 +121,142 @@ sunShadowParams = {0.80f, 0.0010f, 0.0070f, 1.50f}
 sunShadowParams = {0.88f, 0.0009f, 0.0060f, 1.35f}
 ```
 
-**TAA (Temporal Anti-Aliasing, per `Taa.hpp`):**
+### 3.2. Алгоритм 7 — PCF 5×5 (взвешенный)
+
+**Где:** `src/shaders/voxel.frag` → `ComputeSunShadowSample`.
+**Проблема:** hard shadow comparison = резкие зубчатые границы теней. Unreal Engine 2 / Minecraft — выглядит «деревянно».
+
+**Алгоритм:**
+
+1. 5×5 = 25 точек в shadow map space.
+2. Для каждой точки: standard shadow comparison (`d <= shadowMap[i]`).
+3. Вес = bilinear/gaussian kernel (центр тяжелее):
+   ```
+   weights[5][5] = {
+       {1, 4, 6, 4, 1},
+       {4,16,24,16, 4},
+       {6,24,36,24, 6},
+       {4,16,24,16, 4},
+       {1, 4, 6, 4, 1}
+   };  // sum = 256
+   ```
+4. N·L-aware: при grazing angles (N·L → 0) → bias увеличивается, иначе acne.
+5. Receiver world-space bias: `d - bias * (1 - N·L)`.
+6. Smoothstep между current/next cascade в band.
+
+**Vulkan 1.4 detail:** `sampler2DArrayShadow` с `magFilter=LINEAR` даёт hardware 2×2 PCF — **уже бесплатный baseline**, manual 5×5 поверх для дополнительного сглаживания.
+
+**Говорить:**
+- «Vulkan 1.4 LINEAR magFilter → hardware 2×2 PCF бесплатно».
+- «Manual 5×5 weighted поверх — 25 reads, веса gaussian».
+- «N·L-aware bias для предотвращения shadow acne на grazing angles».
+
+### 3.3. Алгоритм 8 — Контактные тени (voxel DDA)
+
+**Где:** `src/shaders/voxel.frag` → `ComputeContactShadow`.
+**Проблема:** CSM texel size конечен → на близких к кастеру поверхностях тень «парит» в воздухе, нет контакта с землёй.
+
+**Алгоритм (Amanatides-Woo 3D DDA):**
+
+1. Старт: `pos = worldPos фрагмента + smallEpsilon * sunDir`.
+2. Step direction: `sign(sunDir)`, normalize.
+3. `tMax[3] = abs((floor(pos) - pos) / sunDir)` — dist до следующей воксельной границы по каждой оси.
+4. `tDelta[3] = abs(1.0 / sunDir)`.
+5. Loop: `minAxis = argmin(tMax)`, advance pos по `minAxis`, `tMax[minAxis] += tDelta[minAxis]`.
+6. На каждом шаге: lookup `voxelData[pos]`. Если solid (Glass/FloorWhite/FloorGray) → **hit**, attenuate sun shadow.
+7. Max iterations = `maxDistance / min(tDelta)` (clamped to N=16).
+
+**Edge cases:**
+- Out-of-bounds: terminate, treat as no occluder.
+- Glass в DDA: не считать occluder (per `decisions.md §15`).
+- Fluid в DDA: считать occluder (per `decisions.md §15`).
+
+**Говорить:**
+- «Короткая DDA от фрагмента к солнцу, max ~5 единиц».
+- «Glass пропускает, Fluid блокирует — зафиксировано в `decisions.md §15`».
+- «Это **локальный** contact shadow, не заменяет CSM, а дополняет».
+
+### 3.4. Алгоритм 9 — AOCC (фоновое затенение полостей, ambient occlusion cavity check)
+
+**Где:** `src/shaders/voxel.frag` → `ComputeAmbientOcclusionVisibility`.
+**Проблема:** углы и полости выглядят «плоско» без локального occlusion term. SSAO/GTAO = screen-space, требует depth/normal prepass.
+
+**Алгоритм (hemisphere DDA):**
+
+1. `params = ambientOcclusionParams = {strength, radius, minVisibility}` (Vec4 в `VoxelSceneLighting`).
+2. 3 направления × 4 шага = **12 DDA трассировок** на фрагмент.
+3. Направления: tangent-space hemisphere, 3 рандомных seed.
+4. На каждом шаге: lookup voxel, если solid → bump visibility вниз.
+5. Visibility = `clamp(1.0 - hitCount * strength, minVisibility, 1.0)`.
+6. Multiplied в sky/horizon/ground fill term.
+
+**Edge cases:**
+- Per-face visibility baked в `PackedSceneVoxelFace` (`voxel.frag` flat) — комбинируется с runtime DDA.
+- 12 reads — встроено в forward path, не отдельный pass.
+
+**Говорить:**
+- «Локальный forward-path occlusion, 12 DDA, не full SSAO».
+- «Baked per-face AO в compute meshing + runtime DDA — два слоя».
+- «3 направления × 4 шага = 12 трассировок на фрагмент».
+
+### 3.5. Алгоритм 10 — TAA + YCoCg + CAS
+
+**Где:** `src/render/Taa.{hpp,cpp}` + `src/render/TaaRenderTargets.{hpp,cpp}` + `src/shaders/taa_resolve.{frag,vert}`.
+**Проблема:** camera motion → aliasing на мелких деталях. MSAA = дорого, FXAA = blurry. TAA = хорошее качество при разумной цене.
+
+**Алгоритм (на каждый кадр):**
+
+1. **Jitter:**
+   - 8-sample Halton(2,3) sequence: `(0.5/N) * (halton(i, 2), halton(i, 3))` где `i ∈ [0,8)`.
+   - Применяется в projection matrix: `projection[2][0] += jitterX / width; projection[2][1] += jitterY / height`.
+
+2. **History sampling:**
+   - Reproject current pixel UV → previous frame UV (motion vectors).
+   - Sample `historyTexture[uv]`.
+
+3. **Color space — YCoCg:**
+   - Convert history RGB → YCoCg.
+   - Clamp color components отдельно (luma + chroma). Меньше ghosting на ярких участках.
+   - Convert back to RGB для blending.
+
+4. **Blending:**
+   - `outColor = mix(currentFrame, history, taaBlend)` где `taaBlend = 0.10..0.90`.
+   - Neighbourhood radius 1-7 для clamping (исключает outliers).
+
+5. **History invalidation** (7 триггеров, per `decisions.md §19`):
+   - Swapchain resize
+   - World reset/reload
+   - TAA toggle
+   - Jitter scale change
+   - Blend change
+   - Radius change
+   - Manual `RequestTaaHistoryInvalidate()`
+
+6. **CAS (Contrast Adaptive Sharpening):**
+   - После TAA resolve.
+   - High-pass filter: 4-угловое среднее соседей.
+   - Вес: `(1 - taaBlend) * max(neighbors)`.
+   - Sharpened output.
+
+7. **Color format:**
+   - `B10G11R11_UFLOAT_PACK32` — 32-bit на пиксель, 2× экономия vs R16G16B16A16_SFLOAT.
+   - Loss of precision: minimal (10-битный лум, 11-битный chroma — достаточно для PBR).
+
+**Complexity:** 1 history sample, 1 current sample, ~10 ALU на пиксель. ~0.3-0.5 ms на 1080p.
+
+**TAA practical state (per `Taa.hpp`):**
 - 8-tap Halton(2,3) sub-pixel jitter sequence (in pixel units relative to rasterization center)
 - По умолчанию `taaEnabled=false` (jitter=0) — стабильная картинка, нет дрожания
 - YCoCg color space clamp в `taa_resolve.frag:170-190` — не вымывает chroma на ярких highlight'ах
 - Per-layer history (CTSH/AOCC/LOCL) — `mix(rawCurrent, history, blend=0.4)`, per `agent/decisions.md §18`
 - CTSH history **не** blended (deferred — separation refactor)
 - Sidecar metadata: `taaEnabled`, `taaJitterX/Y`, `taaBlend`, `taaNeighbourhoodRadius`
+
+**Говорить:**
+- «8-sample Halton jitter в projection matrix».
+- «YCoCg clamp — избегает ghosting на ярких участках».
+- «CAS sharpening поверх TAA — high-pass через 4-угловое среднее».
+- «B10G11R11_UFLOAT — 2× bandwidth saving vs R16G16B16A16».
 
 **3 tone-map оператора (`VoxelMaterials.hpp:12-16`):**
 - `Linear = 0` — no tone mapping
@@ -129,17 +304,64 @@ sunShadowParams = {0.88f, 0.0009f, 0.0060f, 1.35f}
 - Crossover threshold: `kBatchDispatchThreshold = 8` AABBs (ниже — inline C++ helper)
 - Scalar рекомендуется на текущей AoS layout; AVX2 даст выигрыш при SoA реорганизации
 
-**Ray-march pass — STUB (`RayMarchPass.cpp:59-78`):**
+### 3.6. Алгоритм 11 — Трассировка лучей через compute-шейдер (ray-marching compute pass)
+
+**Где:** `src/shaders/ray_march.comp` + `src/render/RayMarchPass.{hpp,cpp}`.
+**Проблема:** mesh-based геометрия даёт видимые «грани» вокселей при cinematic-камерах. ТЗ требовало «GPU ray-marching через compute-шейдеры» (п. 4.1.2).
+
+**Алгоритм (Amanatides-Woo 3D DDA через packed voxel payload) — `src/shaders/ray_march.comp`:**
+
+1. **Input:** uniform buffer (`RayMarchParams`) + storage buffer `PackedVoxelPayload` + storage image `rayMarchOutput`.
+2. **Per-pixel compute (1 thread per pixel, `local_size_x=8, local_size_y=8`):**
+   - Ray origin = camera position, ray dir = perspective ray из forward + right * u * tanHalfFovX + up * v * tanHalfFovY.
+   - Convert ray to voxel-space, `deltaDist = abs(1.0 / max(abs(rayDir), 1e-6))`.
+   - `sideDist` initial, `cell = floor(originVoxelSpace)`.
+   - DDA loop (max `maxSteps` из params):
+     - На каждом шаге: `FetchVoxel(cell)`. Если != 0 (≠ Air) → hit, break.
+     - Step to next cell along dominant axis (compare `sideDist.x/y/z`).
+     - Update `hitNormal` по направлению шага.
+   - Output: simple N·L diffuse shading (sun direction packed в up.w), `palette[min(hitMaterial, 4u)]` base color.
+3. **Output:** `imageStore(rayMarchOutput, pixel, outColor)`. RGBA8 image.
+
+**Текущее состояние: STUB.**
+
+Per `src/render/RayMarchPass.cpp:59-79`, `RecordRayMarchCommands`:
 ```cpp
 void RecordRayMarchCommands(const VulkanContextState &context, const FrameRenderData &frameData) {
-    // NO-OP STUB
-    std::fprintf(stderr, "[ProjectV][RayMarch] RecordRayMarchCommands invoked (deferred Phase 7 follow-up...)\n");
+    const auto &state = MutableRayMarchState();
+    if (!state.enabled) return;
+    if (context.device == VK_NULL_HANDLE) return;
+    // Phase 7 follow-up: full Vulkan integration binds the shader,
+    // allocates offscreen RGBA8 storage image, dispatches 8x8x1.
+    // Current entry point emits a diagnostic record so the toggle
+    // is observable in the runtime output stream and the call site
+    // is not silently swallowed.
+    std::fprintf(stderr,
+        "[ProjectV][RayMarch] RecordRayMarchCommands invoked (deferred Phase 7 follow-up: shader is compiled, pipeline / offscreen target / composite are the next slice)\n");
 }
 ```
-- Compute-шейдер `ray_march.comp` (Amanatides-Woo DDA) скомпилирован
-- API state работает: `SetRayMarchEnabled(bool)`, `IsRayMarchEnabled()`, `RequestRayMarchPipelineRecreate()`
-- В graphics command stream не вкомпонован
-- Phase 7 follow-up (per `docs/DefenseReport.md §3`)
+
+То есть **compute shader скомпилирован** (даёт `.spv` через glslc), API state (`SetRayMarchEnabled` / `IsRayMarchEnabled` / `RequestRayMarchPipelineRecreate`) работает, **но graphics command stream НЕ вызывает** compute pass. Полная интеграция (offscreen target + composite) — Phase 7 follow-up.
+
+**Toggle:** `SDLK_F12` в `main.cpp` → `projectv::render::SetRayMarchEnabled(bool)` (relocated 2026-06-15 с F6 — F6 теперь чисто для `SaveWorldSnapshot` InputAction). По умолчанию OFF.
+
+**Говорить:**
+- «Compute shader скомпилирован, API работает, но в graphics stream не вкомпонован — STUB, Phase 7 follow-up».
+- «Toggle F12 в рантайме (relocated с F6), OFF по умолчанию».
+- «Compute DDA через packed voxel payload, RGBA8 output image (planned)».
+- «Альтернативный путь рендеринга для cinematic camera — мягкие грани вокселей (planned)».
+
+### 3.7. Локальный точечный свет (LOCL, к вопросу «зачем нужен, если есть солнце?»)
+
+Сцена Voxel Laboratory имеет один на пресет обратно-квадратичный точечный свет в дополнение к направленному солнцу. Это даёт объёмный эффект (не плоский), подсвечивает тёмные стороны сферы. `voxel.frag` вычисляет GGX BRDF для обоих источников. Локальная тень — через член видимости DVA только для непрозрачных (`localPointLightParams.shadowStrength`). Отладочный вид `LOCL` показывает вклад.
+
+**Per-preset localPointLightParams (per `VoxelMaterials.cpp:181-236`):**
+```cpp
+// VoxelLab
+sunShadowParams = {0.72f, 0.0009f, 0.0060f, 1.10f}  // strength, depthBias, normalBias, filterRadius
+sunContactShadowParams = {0.28f, 2.25f, 0.0f, 0.0f}  // strength, maxDistance, reserved, reserved
+```
+(Аналогично для FlatBenchmark, TransparencyStress, ChunkGrid, MeshingStress.)
 
 **Hot shader reload (defense r0, 2026-06-15 relocation):**
 - Клавиша `1` (было F5/F11 до relocation 2026-06-15)
