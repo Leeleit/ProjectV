@@ -1159,3 +1159,38 @@ Append-only ledger активных и недавно завершённых AI-
   Safety-net patch: `/tmp/before_presentation_restruct_2026-06-17T1033Z.patch` (84 KB).
 
   Cross-refs: `AGENTS.md §7.2.5, §7.2.6.1, §7.3.1, §8.1`; `docs/DefenseCompetencyFAQ_T2.md §3.6` (команда); `docs/DefenseReport.md §3` (deferred items), §4 (architecture), §8 (ТЗ compliance), §9 (limitations); `agent/decisions.md §4` (warning cleanup), §18 (TAA/layers), §30 (fluid CA); `agent/memory.md §10.7-10.8` (Vulkan docs, shader contract).
+
+---
+
+### session-2026-06-17T-defense-script-team-v2-r0
+
+- **id:** `2026-06-17T-defense-script-team-v2-r0`
+- **started-at:** 2026-06-17T11:00:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Fix Script_Team.md структура (1 абзац на слайд), T6 = Закрытие (slides 11-12-13), sync FAQ_T{1..6}.md §1 Verbatim, sync Presentation_Structure.md distribution table + speaker notes.** Per operator: «Ты испортил Script_Team, там отдела для Т6 нету, текста слишком много в целом для 45 секунд, предлагай исправления. Также ты не синхронизировал Script_Team с FAQ_T*». Также per operator: «Там оно уже есть, смотри, в Т5 два абзаца и два здравствуйте» — pattern «1 абзац на слайд» применён ко всем slots.
+- **files-touched-intent:**
+  - **REWRITE:** `docs/DefenseScript_Team.md` (124 → 134 lines, +10 net). Restructured T1 (3 абзаца slides 1, 2, 3), T2 le1t (Аналоги 80→35 слов + Архитектура 100→60 слов), T3 (2 абзаца slides 7, 8), T5 (2 абзаца slides 9, 10), T6 (3 абзаца slides 11, 12, 13 в slot 35 sec, Тиммейт 4 + le1t).
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T1.md §1` (+3-й абзац Цели), `T2.md §1` (rewrite slides 4-5-6), `T3.md §1` (+2-й абзац Тесты), `T5.md §1` (+2-й абзац Метрики), `T6.md §1` (rewrite slides 11-12-13). T4.md §1 — БЕЗ ИЗМЕНЕНИЙ.
+  - **EDIT:** `docs/DefensePresentation_Structure.md` (distribution table: T3 2:20-3:05, T5 3:05-3:55, T6 3:55-4:30, drop le1t отдельный slot. Slide 11/12/13 speaker notes sync с Script_Team.md).
+  - **EDIT:** `agent/active-sessions.md` (эта запись)
+  - **EDIT:** `agent/status.md` (§35)
+  - **НЕ ТРОГАЮ:** `AGENTS.md`, `src/**`, корневой `CMakeLists.txt`, `CMakePresets.json`, `docs/DefenseCompetencyFAQ_T4.md` (резервный slot), legacy archive docs.
+- **status:** closed
+- **commit-hash:** `2e3cd3e` — `docs(defense): fix Script_Team structure (1 абзац на слайд) + T6=Закрытие + sync FAQ_T* §1`
+- **notes:** **Auto-close per §8.1.** Per `AGENTS.md §7.2.6.1` — единый atomic commit. type=`docs` → auto (§7.3.1, не fix). 7 files changed: 1 rewrite (Script_Team) + 5 §1 syncs + 1 distribution table sync. +337/-179 строк.
+
+  Pattern применён: каждый slot имеет «1 абзац на слайд» с маркерами **[Переход на X слайд]**. Новый абзац в slot (т.е. для нового слайда) стартует с «Здравствуйте». Это даёт:
+  - T1: 3 абзаца (slides 1, 2, 3)
+  - T2 le1t: 3 абзаца (slides 4, 5, 6)
+  - T3: 2 абзаца (slides 7, 8)
+  - T5: 2 абзаца (slides 9, 10)
+  - T6: 3 абзаца (slides 11, 12, 13) — Тиммейт 4 + le1t
+  - Drop дубль «Спасибо за внимание» — теперь только в slide 13
+
+  Slot duration verification: 55 + 85 + 45 + 50 + 35 = 270 sec = 4:30 ✓ + 30 sec buffer ✓
+
+  Safety-net patch: `/tmp/before_script_team_v2_2026-06-17T1133Z.patch` (1051 lines).
+
+  Cross-refs: `AGENTS.md §7.2.5, §7.2.6.1, §7.3.1, §8.1`; `docs/DefenseCompetencyFAQ_T{1..6}.md §1` Verbatim; operator criteria п.7-8.

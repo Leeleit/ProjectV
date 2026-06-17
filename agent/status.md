@@ -705,3 +705,33 @@ Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (
 **Hand-off для следующей сессии (LaTeX/PDF):** оператор загружает `.md` в LaTeX Beamer document class + Madrid theme → получает готовый PDF для защиты 2026-06-17.
 
 Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
+
+| `2026-06-17` | **Defense Script_Team v2 r0** | **closed `2e3cd3e`** (см. `agent/active-sessions.md session-2026-06-17T-defense-script-team-v2-r0`): fix Script_Team структура (1 абзац на слайд). T1: +3-й абзац (Цели), T2 le1t: Аналоги 80→35 + Архитектура 100→60 слов, T3: +2-й абзац (Тесты), T5: +2-й абзац (Метрики), T6 = slides 11-12-13 (35s, Тиммейт 4 + le1t, drop дубль «Спасибо за внимание»). FAQ_T{1,2,3,5,6}.md §1 Verbatim sync с Script_Team.md (T4 §1 = резервный slot, без изменений). Presentation_Structure.md distribution table обновлён: T3 2:20-3:05, T5 3:05-3:55, T6 3:55-4:30. Slide 11/12/13 speaker notes sync. 7 files changed, +337/-179. Safety-net: `/tmp/before_script_team_v2_2026-06-17T1133Z.patch`. |
+
+## §35. Defense Script_Team v2 r0 — `2e3cd3e` (closed 2026-06-17T11:33Z)
+
+**Снимок после commit `2e3cd3e`:**
+
+**Script_Team.md (134 строк) — структура «1 абзац на слайд»:**
+| Slot | Хрон | Слайды | Абзацев | Спикер(ы) |
+|------|------|--------|---------|-----------|
+| T1 | 0:00-0:55 (55s) | 1, 2, 3 | 3 | Тиммейт 1 |
+| T2 le1t | 0:55-2:20 (85s, demo 35s) | 4, 5, 6 | 3 | le1t |
+| T3 | 2:20-3:05 (45s) | 7, 8 | 2 | Тиммейт 2 |
+| T5 | 3:05-3:55 (50s) | 9, 10 | 2 | Тиммейт 5 |
+| T6 | 3:55-4:30 (35s) | 11, 12, 13 | 3 | Тиммейт 4 + le1t |
+| — | 4:30-5:00 | — | — | Буфер |
+
+**FAQ_T*.md §1 sync:**
+- T1 §1: +3-й абзац (Цели) ✓
+- T2 §1: rewrite для slides 4-5-6 ✓
+- T3 §1: +2-й абзац (Тесты) ✓
+- T4 §1: без изменений (резервный slot)
+- T5 §1: +2-й абзац (Метрики) ✓
+- T6 §1: rewrite для slides 11-12-13 ✓
+
+**Pattern:** каждый slot имеет «1 абзац на слайд» с маркерами **[Переход на X слайд]**. Новый абзац в slot (т.е. для нового слайда) стартует с «Здравствуйте». Это применено ко всем 5 slots.
+
+**Slot duration verification:** 55 + 85 + 45 + 50 + 35 = 270 sec = 4:30 ✓ + 30 sec buffer ✓
+
+Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (single source of truth для navigation).
