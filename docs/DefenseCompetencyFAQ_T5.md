@@ -1,17 +1,19 @@
-# Defense Competency FAQ — Тиммейт 5 (Ассеты и аудио)
+# Defense Competency FAQ — T5 (Прочие фичи + что отложено)
 
-**Участник:** [Имя Тимейта 5]
+**Slot:** T5 Прочие фичи + что отложено (3:20–4:00)
+**Кто говорит:** Тиммейт 5
 **Реальная компетенция:** Ассеты и аудио (glTF pipeline, Draco, meshopt, miniaudio, snapshot, hot reload)
-**Speech slot на сцене:** T5 Прочие фичи + что отложено (3:20-4:00)
-**Verbatim текст выступления:** `docs/DefenseScript_Team.md` → раздел «Участник 5 (Прочие фичи + что отложено)»
-
-**Out of scope (к кому перенаправлять в Q&A):** архитектура — к le1t; стек/сборка — к Тиммейту 1; воксельный мир — к Тиммейту 2; рендеринг — к Тиммейту 3; физика — к Тиммейту 4; все баги — к le1t.
-
-**Common (стек, метрики, хоткеи, glossary, chronology):** `docs/DefenseCompetencyFAQ.md`
+**Out of scope (к кому перенаправить в Q&A):** архитектура — к T2 (le1t); стек/сборка — к T1; воксельный мир — к T3; рендеринг — к T4; физика — к T6; все баги — к T2.
 
 ---
 
-## 5.1. Кто ты
+## 1. Verbatim твоей речи (T5)
+
+> «Здравствуйте. Здесь упомяну то, что мы не успели показать в демо. У нас есть пайплайн загрузки полигональных моделей извне: парсер glTF, опциональное Draco-сжатие, оптимизация мешей через meshoptimizer. Аудиодвижок на miniaudio, пока поддерживает только MP3. Также реализованы сохранение и загрузка мира в собственный бинарный снимок и горячая перезагрузка шейдеров. В roadmap отложено: сетевой режим, SVO, частицы, моддинг, HDR. Дальше — о планах подробнее.»
+
+---
+
+## 2. Кто ты
 
 **Легенда:** ты отвечал за ассетный конвейер (glTF + Draco + meshopt) и аудио (miniaudio + MP3). Также знаешь про snapshot save/load и hot shader reload.
 
@@ -19,7 +21,9 @@
 
 **На Q&A:** ты отвечаешь на вопросы про **ассеты, аудио, snapshot мира, hot shader reload, deferred items**.
 
-## 5.2. Твоя компетенция: Ассеты и аудио
+---
+
+## 3. Твоя компетенция: Ассеты и аудио
 
 **Asset pipeline файлы:**
 - `src/asset/AssetLoader.{hpp,cpp}` — entry point `LoadGlb(path, outError) → std::unique_ptr<LoadedAsset>`
@@ -137,13 +141,85 @@ PROJECTV_MODELS=pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s;pathC.glb
 - Phase 8: Плагины / моддинг API
 - Phase 9: Многопользовательский режим (Academic vision)
 
-## 5.3. Что смотреть на защите
+---
 
-**Слайд 6** (твой) — Прочие фичи + что отложено. Показывает asset pipeline, audio, snapshot, hot reload, deferred items.
+## 4. Hotkeys в твоей зоне
 
-**Демо во время T2 (le1t):** Hot shader reload (клавиша `1`), audio playback (Q для play, 9/0 для треков), asset loading.
+- `1` — hot shader reload (defense r0, 2026-06-15 relocation)
+- `2` — toggle ray-march pass
+- `Q` — audio play/pause
+- `E` — audio stop
+- `7` — volume down
+- `8` — volume up
+- `9` — next track
+- `0` — previous track
+- `F` — pick model (HL2-style physicsgun, использует PROJECTV_MODELS manifest)
+- `F5` — cycle scene preset
+- `F6` — save world snapshot (PVSNAP01)
+- `F7` — load world snapshot
+- `C` — capture screenshot
 
-## 5.4. Реалистичные вопросы (5-7)
+---
+
+## 5. Глоссарий (твоя зона)
+
+**GLTF / GLB** — Graphics Language Transmission Format (стандарт Khronos). glTF = JSON, GLB = binary.
+
+**FASTGLTF** — MIT, C++17 парсер glTF 2.0. Vendored.
+
+**DRACO** — Google mesh compression library. `KHR_draco_mesh_compression` extension в glTF.
+
+**MESHOPT / MESHOPTIMIZER** — vertex cache + vertex fetch optimization. Reorder indices, deduplicate vertices, compact vertices.
+
+**ACMR** — Average Cache Miss Ratio (meshopt). Метрика cache-efficiency после mesh optimization.
+
+**ATVR** — Average Transform-to-Vertex Ratio (meshopt). Метрика vertex transform redundancy.
+
+**OVERFETCH** — extra vertex data fetched beyond what's needed (meshopt metric). 1.0 = идеал.
+
+**VERTEX_CACHE_OPTIMIZATION** — reordering triangles to maximize GPU vertex cache hits.
+
+**VERTEX_FETCH_OPTIMIZATION** — interleaving/compressing vertex data to minimize memory bandwidth.
+
+**STRINGID** — `projectv::core::StringID` (16 B = hash + length + pad). O(1) equality, hashable. Tier 1.D/E.
+
+**PROJECTV_MODELS** — env var. Manifest формат: `pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s`. Список моделей для загрузки.
+
+**MINIAUDIO** — single-header C audio library (MIT). Built-in MP3 decoder. Vendored.
+
+**PULSEAUDIO** — Linux audio backend для miniaudio. Routes через `pipewire-pulse` shim → active PipeWire server.
+
+**PIPEWIRE** — современный Linux sound server (`/run/user/1000/pulse/native`). `pipewire-pulse` shim для PulseAudio-совместимости.
+
+**MP3 (MPEG-1 Layer III)** — единственный поддерживаемый формат аудио. OGG/WAV/FLAC — deferred.
+
+**PCM (Pulse-Code Modulation)** — несжатый формат. miniaudio: 16-bit signed PCM, 44.1 kHz, stereo.
+
+**PLAYLIST_REFRESH** — 5-секундный interval (`m_lastPlaylistRefresh`). Новые MP3 подхватываются автоматически.
+
+**ARTIST_TITLE_PARSER** — `ParseArtistTitle(filename, &artist, &title)`. Strip `.mp3`, split on ` - `, fallback `-`.
+
+**HL2_PHYSICSGUN** — `F` клавиша. Pick model через PROJECTV_MODELS manifest. Позволяет swap между загруженными моделями.
+
+**PVSNAP01** — магический заголовок snapshot мира. 8 B ASCII. 80-B header + voxel payload.
+
+**SNAPSHOT_F6/F7** — F6 = save, F7 = load. Tier 1.B error enum для failure cases.
+
+**HOT_SHADER_RELOAD** — клавиша `1` (relocation). `cmake --build $BUILD_DIR --target Shaders` + `RequestRayMarchPipelineRecreate()`. Per-frame no-op для других pipelines.
+
+**RAY_MARCH_STUB** — `RecordRayMarchCommands` — `fprintf` в stderr. Compute-шейдер скомпилирован. Phase 7.
+
+**DEFERRED_ITEMS** — 6 пунктов из ТЗ: частицы, моддинг, async load, HDR, SVO, mesh shaders. Phase 4-9.
+
+**SVO (Sparse Voxel Octree)** — разреженное октодерево вокселей. Альтернатива плоскому массиву. Phase 5.
+
+**MESH_SHADERS (VK_EXT_mesh_shader)** — Vulkan extension для mesh-level шейдеров вместо vertex. Phase 5.
+
+**HDR-TEXTURES (.hdr)** — High Dynamic Range текстуры. Формат Radiance. Phase 6.
+
+---
+
+## 6. Реалистичные вопросы (5-7)
 
 **Q1. Что такое Draco и зачем?**
 - Алгоритм сжатия 3D-мешей от Google
@@ -184,7 +260,9 @@ PROJECTV_MODELS=pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s;pathC.glb
 - Формат имён: `<artist> - <title>.mp3` — парсер для HUD
 - 5-секундный refresh плейлиста
 
-## 5.5. Каверзные вопросы (3-5)
+---
+
+## 7. Каверзные вопросы (3-5)
 
 **Q8. Почему именно meshopt, а не просто GPU draw call batching?**
 - Meshopt на этапе bake'а — один раз, бесплатно в runtime
@@ -208,16 +286,33 @@ PROJECTV_MODELS=pathA.glb@x,y,z;pathB.glb@x,y,z,rx,ry,rz,s;pathC.glb
 - HL2-style physicsgun (`F` key) — переключение моделей на лету
 - Default id = basename без расширения
 
-## 5.6. Out of scope
+---
+
+## 8. Хронология (релевантные события)
+
+**2026-04-12 (M5.1d asset-pipeline):** 4 commits landed: `8cc71f8` + др. Asset loader + bake + GPU upload chain.
+
+**2026-04-12 (M1 audio engine):** `AudioEngine` + `miniaudio` integration. PulseAudio backend → PipeWire. 16/44100/stereo. MP3 only.
+
+**2026-04-13 (Tier 1.D/E):** `projectv::core::StringID` для manifest entry id. 16 B (hash + length + pad), O(1) equality, hashable.
+
+**2026-04-13 (Music HUD 1-line → 4-line):** commit `723edc5`. 4 lines per state: `MUSIC <state> VOL 0.80` (always), `ARTIST <name>`, `TITLE <name>`, `POS m:ss / m:ss` (when engine initialized + playlist non-empty).
+
+**2026-04-15 (Post-WBV-r1):** F11/F12/V relocate → 1/2/3. pragma once conversion (55 files).
+
+---
+
+## 9. Out of scope (Q&A redirect)
 
 | Вопрос про… | Говори |
 |---|---|
-| Почему fastgltf, а не tinygltf | «Архитектурное решение — к le1t» |
-| PipeWire vs PulseAudio подробно | «Linux audio, к le1t» |
-| Стек/Clang/cmake/ctest | «К Тиммейту 1» |
-| Voxel-мир / чанки / мешинг | «К Тиммейту 2» |
-| Тени / TAA / AOCC | «К Тиммейту 3» |
-| Физика / walk controller | «К Тиммейту 4» |
-| BUG-005 cycle scene race | «К le1t (InputAction F5)» |
-| Hot shader reload (клавиша 1) | «К le1t» |
-| JSON config / snapshot PVSNAP01 | «К le1t» |
+| Почему fastgltf, а не tinygltf | «К T2 (le1t)» |
+| PipeWire vs PulseAudio подробно | «К T2 (le1t)» |
+| Стек/Clang/cmake/ctest | «К T1» |
+| Voxel-мир / чанки / мешинг | «К T3» |
+| Тени / TAA / AOCC | «К T4» |
+| Физика / walk controller | «К T6» |
+| BUG-005 cycle scene race | «К T2 (le1t, InputAction F5)» |
+| Hot shader reload (клавиша 1) | «К T2 (le1t)» |
+| JSON config / snapshot PVSNAP01 | «К T2 (le1t)» |
+| Phase 4-9 / roadmap | «К T6» |

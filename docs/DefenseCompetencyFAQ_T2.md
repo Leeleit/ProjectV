@@ -1,235 +1,591 @@
-# Defense Competency FAQ — Тиммейт 2 (Воксельный мир)
+# Defense Competency FAQ — T2 (Live Demo + Стек)
 
-**Участник:** [Имя Тимейта 2]
-**Реальная компетенция:** Воксельный мир (чанки, мешинг, fluid CA, snapshot)
-**Speech slot на сцене:** T3 Архитектура и качество кода (2:00-2:40)
-**Verbatim текст выступления:** `docs/DefenseScript_Team.md` → раздел «Участник 3 (Архитектура и качество кода)»
-
-**Out of scope (к кому перенаправлять в Q&A):** выбор технологий — к le1t; рендеринг чанков — к Тиммейту 3; физика/raycast — к Тиммейту 4; стек/сборка — к Тиммейту 1; демо — к Тиммейту 5; все баги — к le1t.
-
-**Common (стек, метрики, хоткеи, glossary, chronology):** `docs/DefenseCompetencyFAQ.md`
+**Slot:** T2 Live Demo + Стек (0:45–2:00)
+**Кто говорит:** le1t (Кадочников Лев Петрович) — ведущий, тимлид, Q&A host
+**Реальная компетенция:** Архитектура + Workflow + Q&A host (отвечает на ВСЕ сложные технические вопросы)
+**Out of scope:** нет. le1t — единственный человек, который отвечает на все вопросы. Тиммейты подключаются по своим компетенциям.
 
 ---
 
-## 2.1. Кто ты
+## 1. Verbatim твоей речи (T2)
 
-**Легенда:** ты отвечал за воксельный мир — структура данных чанков, материалы, мешинг, raycast, fluid CA, snapshot. Это самая фундаментальная часть движка.
+> «Здравствуйте. Перед вами запущенная тестовая лаборатория нашего движка. Генерация сцены менее 10 миллисекунд. Вы видите стекло, жидкость, тени и жадный мешинг геометрии. Сверху слева и сверху справа HUD — мы держим 500+ FPS на первой сцене.
+>
+> **[Я возвращаю презентацию и переключаю на 3 слайд]**
+>
+> Технически проект написан на современном C++ 26. Мы используем графический API Vulkan 1.4 для низкоуровневого управления видеокартой и работой с шейдерами. Архитектура построена на дата-ориентированном дизайне (DOD) — мы выравниваем данные в памяти для максимальной скорости кэша процессора и минимальных cache miss-ов. Также мы используем SIMD-инструкции и C-вставки на C 23. Дальше следующий участник расскажет про то, что внутри движка.»
 
-**На сцене:** ты говоришь T3 (Архитектура и качество кода) — общий обзор внутренностей.
+---
 
-**На Q&A:** ты отвечаешь на вопросы про **воксельный мир, мешинг, материалы, fluid CA, snapshot, статик-ассерты**.
+## 2. Кто ты
 
-## 2.2. Твоя компетенция: Воксельный мир
+**Реальность:** ты — Кадочников Лев Петрович, единственный разработчик ProjectV. Команда «Черепашки Ninja» — для защиты.
 
-**Файлы:**
-- `src/voxel/VoxelWorld.hpp` / `src/voxel/VoxelWorld.cpp` — main world
-- `src/voxel/VoxelMaterials.hpp` / `src/voxel/VoxelMaterials.cpp` — materials + lighting
-- `src/voxel/VoxelRaycast.hpp` / `src/voxel/VoxelRaycast.cpp` — DDA raycast
-- `src/voxel/VoxelInteraction.hpp` / `src/voxel/VoxelInteraction.cpp` — placement/removal
-- `src/voxel/SceneConfig.hpp` / `src/voxel/SceneConfig.cpp` — JSON config
-- `src/voxel/VoxelSnapshotError.hpp` — error enum
-- `src/shaders/voxel_mesh.comp` — compute-шейдер greedy meshing
+**На сцене:** ты ведущий, говоришь T2 (Live Demo + Стек) 1:15.
 
-**Структуры (per `VoxelWorld.hpp:17-107`):**
+**На Q&A:** ты отвечаешь на **ВСЕ сложные технические вопросы**. Тиммейты подключаются по своим компетенциям. Если вопрос выходит за пределы твоих знаний (что вряд ли) — «не знаю, уточню у команды».
 
-```cpp
-enum class VoxelMaterial : uint8_t {
-    Air = 0, Glass = 1, Fluid = 2, FloorWhite = 3, FloorGray = 4
-};
+---
 
-struct Int3 { int x, y, z; };  // 12 B
-struct VoxelChunk {
-    Int3 min, maxExclusive;     // 24 B
-    bool rebuildQueued;         // 1 B (+ padding)
-    uint32_t nonAirVoxelCount;  // 4 B
-};  // 32 B total
-struct VoxelWorld {
-    VoxelScenePreset scenePreset;
-    VoxelWorldConfig config;
-    Int3 min, maxExclusive;
-    Int3 floorMin, floorMaxExclusive;
-    int width, height, depth;
-    std::vector<uint8_t> voxels;  // плоский массив
-    int chunkSize, chunkCountX, chunkCountY, chunkCountZ;
-    uint64_t editVersion;
-    std::vector<VoxelChunk> chunks;
-    std::vector<size_t> pendingChunkRebuildIndices;
-    VoxelWorldStats stats;
-};
-```
+## 3. Твоя компетенция: Архитектура + Workflow
 
-**5 материалов:** Air (0) — проходимый, не рисуется. Glass (1) — полупрозрачный, не отбрасывает тень. Fluid (2) — жидкость, отбрасывает тень, обновляется fluid CA. FloorWhite (3) / FloorGray (4) — твёрдые полы.
+### 3.1. Стек (C++26, Vulkan 1.4, DOD, ECS)
 
-**VoxelLab (демо-сцена, `VoxelWorld.cpp:417-474`):**
-- Пол-шахматка 18×18 (XZ), `floorSize=18, padding=3, worldTopY=14`
-- Стеклянный шар радиуса 6 вокруг (0, 8, 0), толщина стенки 1
-- Жидкость внутри шара до `fluidTop` (≈70% внутреннего радиуса)
-- 3 якоря: правый куб 4×4×1, левый столбик 2×2×5, передний 1×1×3 — для стабильных теней
-- Процедурная генерация <200 мс
+**Язык: C++26** (`CMAKE_CXX_STANDARD 26` в `CMakeLists.txt:29`).
+- `std::expected<T, E>` для холодных путей (Vulkan init, snapshot, audio load)
+- `std::simd` для горячих путей
+- C++26 модули (`Math.ixx`, `Probe.ixx`, `StringId.ixx` per `agent/memory.md §2.D`)
+- `import std;` probe в mainline
+- Hot-cold split: `bool`+`CORE_ASSERT` на горячих, `std::expected` на холодных
 
-**5 scene presets (`VoxelWorld.hpp:26-32`):**
-- `VoxelLab` — демо (default)
-- `FlatBenchmark` — плоский пол для замеров
-- `TransparencyStress` — Glass-колонны (тест прозрачности)
-- `ChunkGrid` — маркеры по углам чанков
-- `MeshingStress` — большой объём для нагрузки мешинга
-- Переключение: F5 (`CycleScenePreset`)
+**Графика: Vulkan 1.4** (per `legacy/docs/architecture/specs/`):
+- Dynamic rendering (no VkRenderPass)
+- Timeline semaphores
+- Compute shaders (mesh generation)
+- `volk` как loader (`VK_NO_PROTOTYPES`)
+- `VMA` для GPU memory
+- Сторонние: `fastgltf`, `draco`, `meshoptimizer`, `fmt`, `glm`, `nlohmann/json`, `stb_image`, `spdlog`
 
-**Chunk layout (8×8×8):**
-- 8×8×8 = 512 вокселей = 512 B = 2 SSE-регистра
-- Влезает в L1 кэш (32 KB на Zen 3 = 4 строки по 64 B)
-- VoxelLab = 3×3×3 = 27 чанков
-- Padding: `world.min = (-12, 0, -12)`, `world.maxExclusive = (12, 17, 12)`, `floorMin = (-9, 0, -9)`, `floorMaxExclusive = (9, 17, 9)`
+**Архитектура: DOD (Data-Oriented Design):**
+- `alignas(16)` на `VoxelChunk` (32 B)
+- Плоский `std::vector<uint8_t> voxels` в `VoxelWorld`
+- Итерация по индексу, не по итератору
+- 3-column thinking: данные vs код vs pipeline
+- per `legacy/docs/philosophy/`
 
-**Static asserts (compile-time contracts):**
-- `static_assert(sizeof(Int3) == 12)` — `VoxelWorld.hpp:42`
-- `static_assert(std::is_standard_layout_v<Int3>)` — `VoxelWorld.hpp:40`
-- `static_assert(std::is_trivially_copyable_v<Int3>)` — `VoxelWorld.hpp:41`
-- `static_assert(sizeof(VoxelChunk) == 32)` — `VoxelWorld.hpp:52`
-- `static_assert(offsetof(VoxelChunk, min) == 0)` — `VoxelWorld.hpp:53`
-- `static_assert(offsetof(VoxelChunk, maxExclusive) == 12)` — `VoxelWorld.hpp:54`
-- `static_assert(offsetof(VoxelChunk, rebuildQueued) == 24)` — `VoxelWorld.hpp:55`
-- `static_assert(offsetof(VoxelChunk, nonAirVoxelCount) == 28)` — `VoxelWorld.hpp:56`
-- `static_assert(sizeof(VoxelMaterial) == sizeof(uint8_t))` — `VoxelWorld.hpp:24`
-- `static_assert(sizeof(VoxelSceneLighting) == 624)` — `VoxelMaterials.hpp:140` (shader-contract!)
-- `static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528)` — `VoxelMaterials.hpp:159` (TAA field)
+**ECS: Flecs:**
+- `EcsWorld::InitializeAppEcs(state)` — init
+- `SyncEcsWorldState(ecs)` — 1× за кадр
+- Flecs — MIT, header-only C++
+- Single Source of Truth: `VoxelWorld` владеет, ECS — пассивное зеркало
 
-**Greedy meshing (`voxel_mesh.comp:613-619`):**
-> «6 per-axis greedy passes, one per face direction. Each pass walks the 2D plane of cells that emit a face in that direction and merges adjacent cells with the same exposed state into a single W×H quad. For oversized chunks (>kMaxChunkExtentForGreedy in any in-plane axis) the pass falls back to per-voxel emission.»
+**Физика: Jolt:**
+- MIT, детерминированный, SIMD
+- `JPH::CharacterVirtual` для коллизий
+- Наш собственный код дополняет для walk controller
 
-- 6 проходов (±X, ±Y, ±Z), каждый объединяет смежные грани одного exposed state в W×H quad
-- Packing (W, H) в 6+6 бит = 12 бит → max quad extent = 64 вокселя
-- `kMaxChunkExtentForGreedy` fallback на per-voxel emission (1×1 quads) для oversized chunks
-- Compute-шейдер: чанк-параллельный, thousands of threads
+### 3.2. Алгоритмы (все 23, per `docs/DefenseAlgorithms.md`)
 
-**Voxel raycast (DDA, `VoxelRaycast.cpp`):**
-- `VoxelRaycastHit { hasHit, hasPlacementVoxel, voxel, placementVoxel, hitNormal, material, distance }`
-- DDA через `world.voxels` (плоский массив)
-- `voxel` — куда попал луч, `placementVoxel` — предыдущая ячейка (для placement)
-- Используется в `VoxelInteraction` для placement/removal
+| # | Алгоритм | Где реализован |
+|---|---|---|
+| 1 | Жадный мешинг (greedy meshing) | `voxel_mesh.comp:613-619` |
+| 2 | Каскадные тени (CSM) | `ShadowProjection.hpp:42-51` |
+| 3 | Контактные тени (CTSH) | `voxel.frag` (sun-to-fragment ray) |
+| 4 | Фоновое затенение (AOCC) | `voxel.frag:ComputeAmbientOcclusionVisibility` |
+| 5 | Локальный точечный свет (LOCL) | `voxel.frag` (per-fragment lighting) |
+| 6 | TAA (Temporal Anti-Aliasing) | `Taa.hpp` + `taa_resolve.frag` |
+| 7 | Ray-marching (DDA) | `ray_march.comp` (STUB) |
+| 8 | Fluid CA (клеточный автомат) | `VoxelWorld.cpp:1284-1643` |
+| 9 | Voxel raycast (DDA) | `VoxelRaycast.cpp` |
+| 10 | Frustum culling (С-ядро) | `c_kernels/frustum_cull.{hpp,c}` |
+| 11 | Chunk visibility cache | `SceneResources.hpp:359-407` |
+| 12 | Walk controller (Jolt + voxel solver) | `PhysicsWorld.cpp` |
+| 13 | Auto-jump (1-block detection) | `PhysicsWorld.cpp` |
+| 14 | Edge grace (тонкие края) | `PhysicsWorld.cpp` |
+| 15 | Sneak (Shift) | `PhysicsWorld.cpp` |
+| 16 | glTF parser | `AssetLoader.cpp:408-431` |
+| 17 | Draco decode | `DracoMeshDecoder.cpp` |
+| 18 | meshopt (vertex cache/fetch) | `MeshBaker.cpp:56-87` |
+| 19 | Audio engine (miniaudio) | `AudioEngine.cpp` |
+| 20 | Snapshot save/load (PVSNAP01) | `VoxelWorld.cpp:1284-1643` |
+| 21 | Hot shader reload | `main.cpp:68-114` |
+| 22 | Hot/cold error split (std::expected) | `Tier 1.B` |
+| 23 | DOD layout (alignas, SoA) | `VoxelChunk`, `VoxelWorld` |
 
-**Fluid CA (`VoxelWorld.cpp:1284-1643`, ~360 строк):**
-- Один тик = один шаг клеточного автомата
-- Правила: сначала попытка падения вниз (`f_fall`), иначе распространение в 1 из 4 кардинальных сторон (`f_spread`)
-- **Двойная буферизация:** читаем из `world.voxels` (immutable snapshot), пишем в `next`, swap в конце
-- **Bottom-up y-pass:** итерация `z, y, x` с `y` ascending → 1 cell per tick, без double-step
-- **Claimed-tracking:** 1 байт на воксель (≈10 KB для VoxelLab) — помечает, что destination уже занят
-- **Determinism:** single-threaded, нет FP, нет syscalls, нет atomics, нет pointer-identity зависимостей
-- **Spread rule restored 2026-06-13** (per `agent/decisions.md §30`)
-- Pin-тест: `TestFluidCAVoxelLabSphereFallOnGlassBreak` — гарантирует, что жидкость в шаре VoxelLab корректно падает
+### 3.3. Тесты и метрики
 
-**Voxel interaction (placement/removal, `VoxelInteraction.cpp`):**
-- `UpdateVoxelInteraction(camera, input, world, interaction, allowEditing, physics)` — каждый кадр
-- Placement: правый клик → `FillVoxelBox(anchor, hit.placementVoxel, material)`
-- Removal: левый клик → `FillVoxelBox(hit.voxel, Air)` или `FillVoxelMaterial(flood-fill, Air)`
-- `CanPlaceInteractionVoxelBox(anchor, placement, camera, physics)` — проверка, не пересекается ли placement-box с игроком
-- Использует `DoesPhysicsCharacterOverlapVoxel(physics, camera, voxel)` (Jolt query)
+- **14 ctest** baseline 14/14 (0.78s debug, 0.06s release)
+- **6/6 runtime smoke** captures (FINAL/SHDW/CSM/CTSH/AOCC/LOCL)
+- **60+ sidecar keys** в `.txt` файле
+- **73 MB debug / 19 MB release** ELF (-73%)
+- **2 MP3** в `music/`
+- **0 предупреждений** в нашем коде (per `agent/decisions.md §4`)
 
-**Snapshot система (PVSNAP01, `VoxelWorld.cpp:17-20`):**
-- Magic: `PVSNAP01` (8 байт ASCII)
-- 80-байтный header: `magic[8]`, `version=1` (u32), `voxelByteCount` (u32), `reserved` (u32), `scenePreset` (u8) + `reservedBytes[3]`, `config` (24 B), `min`, `maxExclusive`, `editVersion` (8 B)
-- `SaveVoxelWorldSnapshot` / `LoadVoxelWorldSnapshot` → `std::expected<bool, VoxelSnapshotError>` (Tier 1.B)
-- Хоткеи: F6 save, F7 load
+### 3.4. Известные баги (на момент защиты)
 
-**Scene config JSON (per `SceneConfig.hpp:17-23`):**
-```cpp
-struct SceneConfig {
-    std::string name = "ProjectV Default";
-    VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;
-    VoxelWorldConfig voxelWorldConfig{};
-    float sunDirectionY = 0.80f;
-    float exposure = 1.0f;
-};
-```
-Путь по умолчанию: `runtime/scene.json` (создаётся при первом запуске через `EnsureDefaultSceneConfig`).
+**BUG-005 (cycle scene race):**
+- Гонка дескрипторов при переключении сцен (F5)
+- Частично смягчена: `vkDeviceWaitIdle` в `DestroySceneResources`
+- Полное устранение — Phase 5 (per `agent/memory.md §10.5` + `decisions.md`)
 
-## 2.3. Что смотреть на защите
+**BUG-004 (VoxelLab tremor) — ОТВЕРГНУТ:**
+- Галлюцинация предыдущей сессии
+- TAA по умолчанию ВЫКЛЮЧЕН (`taaEnabled=false`, jitter=0)
+- Нет дрожания при default config
+- Если кто-то спросит: «не существует, jitter=0 default, не воспроизводится»
 
-**Слайд 4** (твой) — Архитектура. Показывает чанки 8×8×8, плоский массив, мешинг compute, Jolt, ECS, статик-ассерты.
+**Ray-march pass — STUB:**
+- `RecordRayMarchCommands` — no-op, `fprintf` в stderr
+- Compute-шейдер `ray_march.comp` скомпилирован
+- Phase 7 follow-up
 
-**Демо во время T2 (le1t):** Voxel Laboratory сцена, облёт камерой, демонстрация voxel raycast (placement/removal блоков).
+### 3.5. Workflow (multi-agent)
 
-**HUD:** `CHUNKS: 27` (VoxelLab = 3×3×3 = 27 чанков).
+**AGENTS.md** — стабильный протокол:
+- §1: Изменение только по явной команде
+- §7.2.5: Commit message contract (type/scope/summary/body/Refs)
+- §7.2.6: Multi-agent concurrent work policy
+- §7.2.8: Shared `agent/` files (не claim'ить эксклюзив)
+- §7.3.1: Pre-commit gate
+- §8.1: Auto-close после commit
+- §9: Definition of done
 
-## 2.4. Реалистичные вопросы (5-7)
+**TODO.md** — живой roadmap + бэклог
 
-**Q1. Почему чанк именно 8×8×8, а не 16 или 32?**
-- 512 вокселей × 1 байт = 512 B = 2 SSE-регистра (16 B каждый) или 4 AVX-регистра (32 B)
-- Влезает в L1 кэш (32 KB на Zen 3 = 4 строки по 64 B)
-- 16×16×16 = 4 KB — промахи кэша при meshing
-- 32×32×32 = 32 KB — еле влезает, плохая амортизация
-- 8 — sweet spot
+**agent/active-sessions.md** — append-only ledger координации
 
-**Q2. Зачем compute-шейдер для мешинга?**
-- 6 проходов × тысячи чанков = массивный параллелизм
-- GPU: тысячи потоков, CPU: десятки ядер
-- 3D-окружение — embarrassingly parallel (каждый чанк независим)
+**agent/decisions.md** — зафиксированные архитектурные решения
 
-**Q3. Что такое greedy meshing простыми словами?**
-- Объединяет соседние грани одного exposed state (материал + видимость) в один quad
-- Без greedy: каждый кубик = 6 граней = 12 треугольников (для OpenGL)
-- С greedy: 1 quad = 2 треугольника для 4×4 блока одного материала
+**agent/memory.md** — долговечные факты, lessons learned, run-time observations
+
+**agent/status.md** — snapshot состояния сессий
+
+**Multi-agent сессии:**
+- Параллельный запуск нескольких сессий — нормальный сценарий
+- Пересекающийся scope — arbitration через оператора
+- Известный инцидент 2026-06-10: `git checkout -- .` стёр uncommitted work
+- Урок: safety-net patch в `/tmp/` обязательно
+
+### 3.6. Roadmap (Phase 4-9)
+
+| Phase | Цель |
+|---|---|
+| 4 | Networking (server-authoritative + client prediction) |
+| 5 | SVO (Sparse Voxel Octree) + Mesh shaders (VK_EXT_mesh_shader) |
+| 6 | HDR-текстуры + полный клеточный автомат жидкости на GPU |
+| 7 | Полная система частиц + асинхронная загрузка ресурсов |
+| 8 | Плагины / моддинг API |
+| 9 | Многопользовательский режим (Academic vision) |
+
+---
+
+## 4. Твой слот: T2 Live Demo + Стек (1:15)
+
+**Действия:**
+1. Запустить приложение (сцена `VoxelLab`).
+2. Включить подробный HUD клавишей `G`.
+3. Показать облёт камеры (WASD + мышь).
+4. Поставить/сломать пару блоков (правый/левый клик).
+5. Переключить debug view (`B` — cycle FINAL/SHDW/CSM/CTSH/AOCC/LOCL).
+6. Захватить screenshot (`C`).
+
+---
+
+## 5. Hotkeys (полный список, ты должен знать все)
+
+**Движение (walk mode):**
+- `W` `A` `S` `D` — движение
+- `Space` — прыжок
+- `LShift` / `RShift` — sneak (красться)
+- `LCTRL` / `RCTRL` — speed boost (×3)
+- `LALT` / `RALT` — speed slow (×0.25)
+- `F11` — toggle walk air control mode
+- `J` — toggle auto-jump
+- `F12` — toggle auto-jump delay
+
+**Режимы и камера:**
+- `F4` — toggle Walk/Creative/Spectator mode
+- Двойной `Space` — toggle Walk ↔ Creative
+- `F3` — reset camera
+- `TAB` — toggle relative mouse mode
+- `F11` (InputAction) vs `1` (defense) — разные клавиши! `F11` = walk air control, `1` = hot shader reload (relocation после conflict с F11 InputAction)
+
+**Voxel interaction:**
+- Левый клик — removal (VoxelMaterial::Air)
+- Правый клик — placement
+- `F` — pick model (HL2-style physicsgun)
+- `F2` — cycle placement material
+- `F8` — cycle editor tool
+- `M` — pick target material
+- `X` — toggle mutation anchor
+
+**Сцена и snapshot:**
+- `F5` — cycle scene preset
+- `F6` — save world snapshot (PVSNAP01)
+- `F7` — load world snapshot
+
+**Визуализация:**
+- `F1` — toggle HUD
+- `G` — toggle detailed HUD
+- `B` — cycle lighting debug view (10 views)
+- `C` — capture screenshot
+- `L` — toggle cascade split planes
+- `Z` — toggle cursor hit normal
+- `O` — cycle shadow tuning target
+- `U` / `I` — decrease / increase shadow tuning value
+- `V` — reset lighting debug controls
+- `H` / `K` — decrease / increase lighting exposure
+- `N` — cycle tone map operator
+
+**TAA:**
+- `T` — toggle TAA on/off
+- `;` / `'` — decrease / increase TAA jitter scale
+- `-` / `=` — decrease / increase TAA blend
+- `,` — cycle TAA neighbourhood radius
+- `.` — invalidate TAA history
+
+**Frame-step / slow-motion:**
+- `P` — toggle pause
+- `[` / `]` — decrease / increase time scale
+- `\` — step single frame
+- `` ` `` — reset time scale
+
+**Audio:**
+- `Q` — play/pause toggle
+- `E` — stop
+- `7` / `8` — volume down / up
+- `9` / `0` — next / previous track
+
+**Chunk debug:**
+- `F9` — toggle chunk bounds
+- `F10` — toggle dirty chunk overlay
+
+**Input replay:**
+- `R` — toggle input replay recording
+- `Y` — play last input replay
+
+**Defense r0 hotkeys (relocated 2026-06-15):**
+- `1` — hot shader reload (было F5/F11)
+- `2` — toggle ray-march pass (было F6/F12)
+- `3` — cycle V-sync mode (было V)
+- `ESC` — exit
+
+---
+
+## 6. Глоссарий (полный для архитектуры)
+
+**C++26** — стандарт языка образца 2026 года. Ключевые фичи: `std::expected`, `std::simd`, modules, `import std;`.
+
+**STL (Standard Template Library)** — стандартная библиотека шаблонов C++.
+
+**STD::EXPECTED<T, E>** — strongly-typed error wrapper (Tier 1.B, 2026-04-13). Альтернатива exceptions / `std::variant` / `bool`. 9+ cold-path functions переведены.
+
+**STD::SIMD** — параллельные SIMD-операции через STL (C++26).
+
+**MODULES (C++26)** — `import std;`, `import projectv.math;`. Ускоряют инкрементальную сборку. CMake `FILE_SET CXX_MODULES`.
+
+**COLD_PATH** — нечастые вызовы (1× per startup/snapshot/init). Используют `std::expected<T, E>`.
+
+**HOT_PATH** — каждый кадр (voxel meshing dispatch, frame prep). Используют `bool` + `CORE_ASSERT` (assert вырезается в release).
+
+**HOT-COLD_SPLIT** — гибридный подход: cold = `std::expected`, hot = `bool`+assert. Оптимизация overhead'а error handling.
+
+**VULKAN 1.4** — low-overhead graphics API с явным контролем GPU. Dynamic rendering (no VkRenderPass), timeline semaphores, compute shaders.
+
+**VK_API_VERSION_1_4** — define в коде, проверяется через `VK_VERSION_1_4`.
+
+**DYNAMIC_RENDERING (Vulkan)** — `vkCmdBeginRendering`/`vkCmdEndRendering` вместо `VkRenderPass`/`VkFramebuffer`. Упрощает код, поддерживается с Vulkan 1.3.
+
+**TIMELINE_SEMAPHORES (Vulkan)** — `VkSemaphoreTypeCreateInfo` с `VK_SEMAPHORE_TYPE_TIMELINE`. Асинхронная синхронизация GPU-GPU без хаков.
+
+**COMPUTE_SHADER** — `VkComputePipeline`, используется для мешинга (`voxel_mesh.comp`) и ray-march (`ray_march.comp`).
+
+**VOLK** — Vulkan meta-loader, обёртка над `VK_NO_PROTOTYPES`. Vendored.
+
+**VMA (VulkanMemoryAllocator)** — аллокатор GPU памяти, vendored.
+
+**DOD (Data-Oriented Design)** — дизайн, ориентированный на данные. Чанк 8×8×8 = 512 B = 2 SSE-регистра, влезает в L1.
+
+**ALIGNAS(16)** — `alignas(16)` на `VoxelChunk`. Авто-векторизация в `movaps`/`vmovaps`.
+
+**SIMD** — Single Instruction, Multiple Data (AVX2, SSE). Параллельные операции.
+
+**ECS (Entity-Component System)** — Flecs (MIT, header-only C++). Пассивное зеркало VoxelWorld.
+
+**FLECS** — MIT, header-only C++ ECS. Альтернативы: EnTT (header-only, runtime overhead выше), Bevy ECS (Rust).
+
+**SOA (Structure of Arrays)** — данные хранятся в массивах, не массивах структур. Cache-friendly.
+
+**AOS (Array of Structures)** — классический ООП layout. Менее cache-friendly.
+
+**CACHE_MISS** — промах кэша CPU, штраф ~200 циклов для L1 miss, ~200-300 для L3 miss.
+
+**JOLT_PHYSICS** — MIT, deterministic, SIMD-оптимизирован. Альтернативы: PhysX (NVIDIA, проприетарный), Bullet (устарел).
+
+**JPH (Jolt namespace)** — `JPH::CharacterVirtual`, `JPH::Body`, etc.
+
+**MVP (Minimum Viable Product)** — minimum жизнеспособный продукт. Tier 0-5 closed (2026-06-15). 14/14 ctest + 6/6 smoke — доказательство завершённости MVP.
+
+**PHASE 4-9** — пост-MVP roadmap (Networking, SVO, HDR+fluid GPU, Particles, Modding, Academic vision).
+
+**AGENTS.MD** — стабильный протокол проекта (§1-§10). Меняется только по явной команде оператора.
+
+**TODO.MD** — живой roadmap + бэклог.
+
+**DECISIONS.MD** — зафиксированные архитектурные решения.
+
+**MEMORY.MD** — долговечные факты, lessons learned.
+
+**STATUS.MD** — snapshot состояния сессий.
+
+**MULTI-AGENT** — параллельные сессии через append-only ledger в `agent/active-sessions.md`. Пересекающийся scope → arbitration через оператора.
+
+**SAFETY-NET PATCH** — `/tmp/before_*_<ts>.patch` — fallback для следующей сессии. Per AGENTS.md §8.1 п.5.
+
+**BUG-005** — cycle scene race (гонка дескрипторов при F5). Частично смягчена через `vkDeviceWaitIdle` в `DestroySceneResources`.
+
+**BUG-004** — VoxelLab tremor — ОТВЕРГНУТ (галлюцинация). TAA jitter=0 по умолчанию.
+
+**RAY-MARCH STUB** — `RecordRayMarchCommands` — no-op, `fprintf` в stderr. Compute-шейдер скомпилирован, graphics stream не вкомпонован. Phase 7.
+
+---
+
+## 7. Реалистичные вопросы (8 вопросов)
+
+### 7.1. Архитектура и стек (4 вопроса)
+
+**Q1. Почему C++26, а не Rust/Zig/Go?**
+- Все зависимости (Jolt, fastgltf, VMA, Draco, Flecs) — C/C++ с нативным API
+- C++26 даёт `std::expected` для холодных путей, `std::simd` для горячих, модули для ускорения инкрементальной сборки
+- Rust — рассматривался, но Vulkan bindings + ECS + asset pipeline зрелые на C++
+
+**Q2. Почему Vulkan 1.4, а не OpenGL/DX12/Metal?**
+- Vulkan — явный контроль GPU (пайплайны, память, синхронизация)
+- OpenGL — driver управляет, дорого для миллионов draw items
+- Compute shaders нужны для мешинга
+- Кросс-платформенный (Windows + Linux)
+
+**Q3. Что такое DOD и зачем?**
+- Дизайн, ориентированный на данные (Data-Oriented Design)
+- Данные организованы для эффективной обработки CPU, а не для удобства иерархии классов
+- Чанк 8×8×8 = 512 вокселей = 512 B = 2 SSE-регистра, влезает в L1
+- `alignas(16)` → авто-векторизация в `movaps`/`vmovaps`
+
+**Q4. Как связаны ECS и VoxelWorld?**
+- Single Source of Truth: `VoxelWorld` — единственный владелец, все мутации только через него
+- ECS (Flecs) — пассивное зеркало, обновляется 1 раз за кадр через `SyncEcsWorldState`
+- HUD читает из ECS (только чтение), не из VoxelWorld (изменяемый)
+
+### 7.2. Алгоритмы и рендеринг (4 вопроса)
+
+**Q5. Что такое жадный мешинг и зачем?**
+- Объединяет соседние грани вокселей одного exposed state в один четырёхугольник (quad)
+- 6 проходов на чанк: ±X, ±Y, ±Z
+- Compute-шейдер `voxel_mesh.comp:613-619`
 - Сокращение draw calls на 30-50%
 
-**Q4. Как работает fluid CA?**
-- Каждый тик: жидкость пытается упасть вниз на 1 клетку
-- Если заблокировано — распространяется в 1 из 4 сторон
-- Детерминирован: bottom-up y-pass, двойная буферизация, claimed-tracking
-- 1 cell per tick (без double-step)
+**Q6. Как работают каскадные тени (CSM)?**
+- 4 каскада карты глубины 2048×2048
+- Лямбда 0.80 (near-biased)
+- Per-cascade проекция солнца: sub-frustum → light-space → sphere stabilization
+- Стекло не отбрасывает тень, жидкость — отбрасывает (per `decisions.md`)
 
-**Q5. Зачем нужен `std::expected` в snapshot API?**
-- Tier 1.B migration (2026-06-13) — заменил `bool` + per-step `fprintf` лог
-- Холодный путь (1× per snapshot), ~2× cost несущественен
-- Strongly-typed error enum: `PreconditionFailed`, `FolderCreateFailed`, `ScanFailed`
-- Машиночитаемый сигнал для caller'а, не "true/false + log"
+**Q7. Что такое TAA и зачем?**
+- Временное сглаживание: смешивает кадры, убирает дрожание камеры
+- 8-sample Halton(2,3) jitter, YCoCg-зажим
+- Поверх TAA — CAS (фильтр резкости)
+- **По умолчанию TAA jitter = 0 (стабильная картинка, нет дрожания)**
 
-**Q6. Зачем столько static_assert?**
-- Compile-time проверка контрактов: размеры структур, alignment, field offsets
-- Если кто-то добавит `padding` в `Int3` → компиляция упадёт, не молча сломает GPU upload
-- `static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528)` — гарантирует shader-C++ ABI parity
-- Защита от регрессий (per `agent/memory.md §10.8` — реальный инцидент с GraphicsPushConstants сдвигом в shadow-pass)
+**Q8. Что такое ray-marching и как реализован?**
+- Трассировка лучей через воксели (Amanatides-Woo DDA)
+- Compute-шейдер `ray_march.comp` скомпилирован
+- API state (`SetRayMarchEnabled`/`IsRayMarchEnabled`/`RequestRayMarchPipelineRecreate`) работает
+- Graphics command stream его пока не вызывает — **STUB, Phase 7 follow-up**
+- Per `RayMarchPass.hpp:9-30`
 
-**Q7. Сколько чанков в VoxelLab и почему так мало?**
-- 27 чанков (3×3×3)
-- floorSize=18 в XZ direction, height=14 в Y
-- Padding=3 вокруг пола для chunk allocation (chunk 8×8×8 → 3×3×3 = 27)
-- Сцена демо, не stress-test. Для production: 100+ чанков, ray-march на GPU
+### 7.3. Тесты и workflow
 
-## 2.5. Каверзные вопросы (3-5)
+**Q9. Какие тесты, сколько?**
+- 14 наборов в `tests/CMakeLists.txt`
+- Baseline 14/14, 0.78 сек debug, 0.06 сек release
+- Runtime smoke 6/6 captures
+- 60+ sidecar keys
 
-**Q8. Что произойдёт, если чанк больше 64 вокселей в одной оси?**
-- `voxel_mesh.comp:616` `kMaxChunkExtentForGreedy` — fallback на per-voxel emission (1×1 quads per face)
-- VoxelLab 8×8×8 не попадает в этот fallback
-- Для production сцен >64 вокселей на ось — либо поднять `kMaxChunkExtentForGreedy`, либо разбить на sub-chunks
+**Q10. Какие метрики производительности?**
+- VoxelLab reference shot: 500+ FPS, ~2 мс кадр
+- Release: 19 МБ (vs 73 МБ debug, -73%)
+- 14/14 ctest, 6/6 smoke
 
-**Q9. Как spread rule взаимодействует с fall rule?**
-- Приоритет: сначала fall (`f_fall`), иначе spread (`f_spread`) в 1 из 4 сторон
-- Spread direction — hash-determined из `(x, y, z)` для воспроизводимости
-- Без claimed-tracking: два fluid'а могут "обменяться" клетками (swap bug) — один исчезает
-- С claimed-tracking: помечаем destination, второй fluid не может перезаписать
+**Q11. Какие известные баги?**
+- BUG-005 (cycle scene race): гонка дескрипторов при переключении сцен, частично смягчена через `vkDeviceWaitIdle` в `DestroySceneResources`
+- **BUG-004 (VoxelLab tremor) — отвергнут, не существует**
+- Ray-march STUB (Phase 7)
 
-**Q10. Что если изменить `sizeof(VoxelChunk)`?**
-- `static_assert(sizeof(VoxelChunk) == 32)` в `VoxelWorld.hpp:52` — компиляция упадёт
-- ABI change: GPU upload сместится, render сломается
-- Защита от случайных регрессий при добавлении полей
+**Q12. Что отложено и почему?**
+- 6 пунктов: частицы, моддинг, асинхронная загрузка, HDR, SVO, mesh shaders
+- Все явно в Phase 4-9 roadmap
+- per `docs/DefenseReport.md §3`
 
-**Q11. Чем DOD отличается от ООП в вашем коде?**
-- `alignas(16)` на `VoxelChunk` (32 B = 2 SSE)
-- Плоский `std::vector<uint8_t> voxels` — все воксели подряд, без `std::vector<std::vector<...>>`
-- ООП-стиль = разбросанные аллокации, cache miss'ы
-- DOD-стиль = cache-friendly iteration, авто-векторизация
+**Q13. Какие платформы поддерживаются?**
+- Windows 10/11 (clang-cl 22) + Linux Arch (clang 22 native + libc++ 16)
+- Обе сборки зелёные, 14/14 тестов
+- macOS — НЕ в планах (per `decisions.md`)
 
-## 2.6. Out of scope
+**Q14. Hot shader reload — как работает?**
+- Клавиша `1` (relocated 2026-06-15)
+- `RebuildAllShadersFromDisk()` → `cmake --build $BUILD_DIR --target Shaders`
+- `RequestRayMarchPipelineRecreate()` — re-bind ray-march compute
+- Другие pipelines (graphics, shadow, TAA) переиспользуют кэшированные модули до Phase 7+
+
+---
+
+## 8. Каверзные вопросы (15 вопросов — расширенный список)
+
+### 8.1. Базовые каверзные (10)
+
+**Q15. Почему вы не сделали ECS зеркало по-другому? (например, без копирования)**
+- Alternative: ECS reads directly from VoxelWorld (no mirror)
+- Per `decisions.md` — chosen approach: passive mirror for HUD decoupling
+- Trade-off: extra copy (small) vs lock contention (bigger)
+- HUD reads once per frame, lock-free через mirror
+
+**Q16. Почему std::expected, а не std::variant или exceptions?**
+- `std::expected<T, E>` — strongly-typed error, like Result в Rust
+- `std::variant` — нет «error vs value» semantics, нужен visitor
+- Exceptions — hidden cost, не noexcept-friendly, не compile-time
+- Tier 1.B migration: 9+ cold-path functions переведены на `std::expected`
+
+**Q17. Что произойдёт, если hot shader reload упадёт?**
+- `cmake --build` return code != 0 → `RebuildAllShadersFromDisk` returns 0 (reloadedCount=0)
+- `RequestRayMarchPipelineRecreate()` всё равно вызывается
+- Следующий frame может fail в `vkCreateComputePipelines` → pipeline stays in old state
+- Per `agent/decisions.md` — explicit follow-up (Phase 7+)
+
+**Q18. Почему 4 каскада, а не 2 или 8?**
+- 2 — слишком грубая тени в дали
+- 8 — overhead, complexity, marginal quality gain
+- 4 — sweet spot для 1920×1080, near-biased split (lambda 0.80)
+- Каскады: 0-15м, 15-30м, 30-50м, 50-200м (примерно)
+
+**Q19. Как работает spread rule? (fluid CA)**
+- Fall-through после fall: spread в 1 из 4 сторон
+- Direction — hash-determined из `(x, y, z)` для воспроизводимости
+- Claimed-tracking: destination помечается, второй fluid не перезаписывает
+- Без claimed-tracking — swap bug (два fluid обмениваются, один исчезает)
+- 2026-06-13: spread rule restored (per `agent/decisions.md §30`)
+
+**Q20. Почему 73 MB debug, а не меньше?**
+- Tracy instrumentation (debug build)
+- RenderDoc markers
+- Vulkan validation layers (если ON)
+- Google Benchmark (debug presets)
+- ImGui
+- -O0 debug info + DWARF
+- Без них: ~19 MB release
+
+**Q21. Что такое R11G11B10 UFLOAT?**
+- HDR color format для TAA scene color attachment (per `decisions.md`)
+- 11+11+10 = 32 B/пиксель, no alpha
+- 11-bit floating point через `unsigned int` mantissa+exponent
+- Хватает для HDR scenes без banding
+
+**Q22. Почему `lambda = 0.80`, а не 0.5 (logarithmic)?**
+- lambda=0 — uniform split (каскады равной ширины)
+- lambda=1 — logarithmic split (по глубине)
+- 0.80 — near-biased, баланс между uniform и logarithmic
+- per `decisions.md` — current mainline default
+
+**Q23. Почему std::expected только на cold paths?**
+- Hot path: `bool`+`CORE_ASSERT` → 0 overhead в release (assert вырезается)
+- Cold path: `std::expected<T, E>` — машиночитаемый error enum
+- 9+ cold-path functions переведены (Tier 1.B): Vulkan init, snapshot, audio load, scene config, ECS sync, physics state, scene resources, etc.
+- Hot paths не переводятся — overhead
+
+**Q24. Какова роль ECS зеркала, если не используется?**
+- Используется для HUD и отладки
+- Типизированные компоненты (lock-free read через mirror)
+- Разделение gameplay и render
+- Hot reload: ECS state не теряется при VoxelWorld rebuild
+
+**Q25. Что такое `MVP` в контексте ProjectV?**
+- Minimum Viable Product — minimum жизнеспособный продукт
+- Tier 0-5 closed (2026-06-15): все запланированные для MVP tasks
+- Phase 4-9 — post-MVP roadmap
+- 14/14 ctest + 6/6 smoke — доказательство завершённости MVP
+
+**Q26. Какие сложности с Vulkan 1.4?**
+- Vulkan API verbose — много boilerplate
+- `volk` решает loader часть
+- VMA для memory management
+- Свой hot shader reload вместо `vkDestroyShaderModule` + `vkCreateShaderModule` каждый frame
+- C++26 modules (Math.ixx) ускоряют инкрементальную сборку
+
+### 8.2. Дополнительные каверзные (5 — придуманы оператором)
+
+**Q27. Почему именно chunk 8×8×8, а не 4×4×4 или 16×16×16?**
+- 4×4×4 = 64 вокселя = 64 B — слишком мало, overhead на chunks
+- 16×16×16 = 4 KB — не влезает в L1 (32 KB на Zen 3)
+- 8×8×8 = 512 B = 2 SSE-регистра — sweet spot для L1
+- 32×32×32 = 32 KB — еле влезает, нет headroom
+
+**Q28. Что если пользователь переключит scene preset посреди load/initialize pipeline?**
+- `VoxelWorld` уничтожается через `DestroyVoxelSceneWorld`
+- Новый создаётся через `CreateVoxelSceneWorld(state, preset)`
+- Частично смягчено через `vkDeviceWaitIdle` в `DestroySceneResources`
+- Полное устранение race condition — Phase 5
+
+**Q29. Почему static_assert, а не runtime check?**
+- Compile-time проверка → 0 overhead в release (assert вырезается)
+- Гарантирует что struct-контракт с шейдерами не сдвинется (per `agent/memory.md §10.8`)
+- Если `sizeof(VoxelChunk)` изменится с 32 до 40 — компиляция упадёт, не молча сломает GPU upload
+- Runtime check был бы бесполезен (race condition, perf overhead)
+
+**Q30. Можно ли добавить новый material type без переписывания всего pipeline?**
+- `VoxelMaterial` — enum (Air=0, Glass=1, Fluid=2, FloorWhite=3, FloorGray=4)
+- Добавление нового material требует: обновить enum + добавить `VoxelMaterialVisual` в `VoxelMaterials.cpp` + обновить switch в fragment shader + обновить smoke-capture эталоны
+- По сути — touch 5-7 файлов, требует перетестирование
+- Архитектура чистая: всё в `VoxelMaterials.cpp:139-236` в одной таблице
+
+**Q31. Что произойдёт, если все 6 smoke captures упадут одновременно?**
+- Скорее всего, серьёзный регресс (например, GPU не поддерживает формат, или шейдер не компилируется)
+- Investigate: проверить `vkCreateComputePipelines`/`vkCreateGraphicsPipelines` → может быть missing feature
+- Investigate: проверить `glslc` errors при пересборке shaders
+- Investigate: проверить вывод `dmesg` для GPU errors
+- Recovery: `git bisect` по последним 5-10 коммитам с shader changes
+
+**Q32. Почему `expected<bool, VoxelSnapshotError>` а не просто `bool` с errno?**
+- Per Tier 1.B: `bool` не различает типы ошибок (кроме errno), теряется контекст
+- `std::expected<T, E>` — strongly-typed enum, машинно-читаемый
+- Caller может `if (!result)` → обработать, или `result.value()` → получить
+- Cold path (1× per snapshot), overhead `std::expected` несущественен
+
+**Q33. Как тестировать multi-threading в ECS sync?**
+- `SyncEcsWorldState` — single-threaded (per `VoxelWorld.hpp:201-208`)
+- ECS mirror — read-only из render thread
+- Lock-free для HUD (atomic snapshot)
+- Multi-threading в ECS deferred (Phase 7+)
+- Если кто-то спросит про race conditions — текущий код их избегает через single-thread + lock-free reads
+
+---
+
+## 9. Хронология (релевантные события)
+
+**2026-04-09 (Tier 0.B):** `Mat4` (16-byte aligned) заменил `std::array<float, 16>` для GPU ABI parity в `VoxelSceneLighting` и `SunShadowCascadeProjections`. ABI change: `Vec3` (12→16 B), `VoxelSceneLighting` (+16 B = 624 B total).
+
+**2026-04-12 (Tier 0.A):** Math foundation. `core/Math.hpp` + `core/Math.ixx`. per `agent/memory.md §10.1`.
+
+**2026-04-12 (M5.1d, Tier 5):** Two-level chunk visibility cache (XOR-fold splitmix64 hash). Quantization: camera position 0.25 voxel units, camera forward 0.005 (~0.3°).
+
+**2026-04-12 (Tier 4):** С-ядро `frustum_cull` scalar (3.7-3.9× faster than C++ baseline). AVX2 version kept in tree (2.5-2.7× faster). Crossover threshold 8 AABBs.
+
+**2026-04-13 (Tier 1.B):** `std::expected<T, E>` migration на холодных путях. VulkanInit (16 variants), snapshot (3 variants), audio load (3 variants), scene config, ECS sync, physics state.
+
+**2026-04-13 (Tier 2.D):** C++26 modules в mainline (Math.ixx, Probe.ixx, StringId.ixx). `import projectv.math;` probe работает.
+
+**2026-04-14 (Release presets):** commits `6fe9201`. linux-clang-release / windows-clang-release. Conservative policy: -O3 -flto=thin -DNDEBUG. Без -ffast-math, без -march=native.
+
+**2026-04-15 (Post-WBV-r1 batch):** F11/F12/V relocate → 1/2/3 (F5/F6 conflicts with InputAction). pragma once conversion (55 files). Shader contract fix (3 model/TAA-pipeline shaders).
+
+**2026-06-10 (incident):** `git checkout -- .` стёр uncommitted work. Урок: safety-net patch в `/tmp/` обязательно.
+
+**2026-06-13 (Fluid CA audit):** spread rule restored per `agent/decisions.md §30`. Без claimed-tracking — swap bug (два fluid'а обмениваются, один исчезает).
+
+---
+
+## 10. Out of scope
+
+le1t — единственный человек, который отвечает на все вопросы. Если вопрос выходит за пределы знаний:
 
 | Вопрос про… | Говори |
 |---|---|
-| DOD layout / `alignas(16)` / SoA в других модулях | «Архитектурное решение — к le1t» |
-| C++26 фичи / std::simd / std::expected / модули | «К le1t» |
-| Build / Clang / CMake / ctest | «К Тиммейту 1» |
-| CSM / PCF / TAA / AOCC / шейдеры рендера | «К Тиммейту 3» |
-| Walk controller / Jolt / edge grace / auto-jump | «К Тиммейту 4» |
-| glTF / Draco / meshopt / miniaudio / snapshot save | «К Тиммейту 5» |
-| BUG-005 cycle scene race | «К le1t» |
-| Hot shader reload (клавиша 1) | «К le1t» |
-| Демо VoxelLab / FPS / сцена | «К le1t» |
-| Phase 4-9 / roadmap | «К Тиммейту 4 (он закрывает)» |
+| Детальный код конкретной функции | «Сейчас не смотрю код, но могу объяснить концепцию» |
+| Личные мнения о других движках | «Не слежу за рынком, наш выбор основан на конкретных требованиях» |
+| Будущее после Phase 9 | «За пределами roadmap, не планировал» |
+| Сравнение с конкретным коммерческим движком | «Не проводил сравнительный анализ, наш проект для другой ниши» |
+
+Все остальные вопросы — в зоне твоей ответственности. Тиммейты подключаются по компетенциям:
+- T3 — воксельный мир (Тиммейт 2)
+- T4 — рендеринг (Тиммейт 3)
+- T5 — ассеты+аудио (Тиммейт 5)
+- T6 — физика (Тиммейт 4)
+- T1 — сборка/тесты (Тиммейт 1)

@@ -1,17 +1,23 @@
-# Defense Competency FAQ — Тиммейт 1 (Сборка и тестирование)
+# Defense Competency FAQ — T1 (Вступление и проблема)
 
-**Участник:** [Имя Тимейта 1]
+**Slot:** T1 Вступление и проблема (0:00–0:45)
+**Кто говорит:** Тиммейт 1
 **Реальная компетенция:** Сборка и тестирование (CMake, ctest, runtime smoke, presets)
-**Speech slot на сцене:** T1 Вступление и проблема (0:00-0:45)
-**Verbatim текст выступления:** `docs/DefenseScript_Team.md` → раздел «Участник 1 (Вступление и Проблема)»
-
-**Out of scope (к кому перенаправлять в Q&A):** архитектура/стек — к le1t; воксельный мир — к Тиммейту 2; рендеринг — к Тиммейту 3; физика — к Тиммейту 4; ассеты/аудио — к Тиммейту 5; все баги — к le1t.
-
-**Common (стек, метрики, хоткеи, glossary, chronology):** `docs/DefenseCompetencyFAQ.md`
+**Out of scope (к кому перенаправить в Q&A):** архитектура/стек — к T2 (le1t); воксельный мир — к T3; рендеринг — к T4; физика — к T6; ассеты/аудио — к T5; все баги — к T2.
 
 ---
 
-## 1.1. Кто ты
+## 1. Verbatim твоей речи (T1)
+
+> «Здравствуйте. Мы команда "Черепашки Ninja", наш проект — воксельный игровой движок на базе Vulkan API и современного C++.
+>
+> **[Переход на второй слайд]**
+>
+> Проблема, которую мы решаем: разработчикам воксельных игр не хватает открытого, низкоуровневого и современного движка. Существующие варианты либо закрыты, либо слишком перегружены, а некоторые могут быть плохо оптимизированы и не давать полного контроля над ресурсами компьютера. Наша цель — создать быстрый, открытый движок, который выжимает максимум из видеокарты. Передаю слово другому участнику, он покажет демо и расскажет об архитектуре.»
+
+---
+
+## 2. Кто ты
 
 **Легенда:** ты отвечал за сборку проекта и инфраструктуру тестирования. CMake пресеты, ctest 14 наборов, runtime smoke 6 captures, бенчмарки, документация. Ты НЕ отвечаешь за архитектуру, воксели, рендеринг, физику или ассеты — это другие тиммейты.
 
@@ -19,7 +25,9 @@
 
 **На Q&A:** ты отвечаешь на вопросы про **сборку, тесты, метрики, пресеты**.
 
-## 1.2. Твоя компетенция: Сборка и тестирование
+---
+
+## 3. Твоя компетенция: Сборка и тестирование
 
 **Файлы (что ты реально знаешь):**
 - `CMakePresets.json` — 12 configure-пресетов (8 debug + 4 release)
@@ -77,16 +85,68 @@ bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-de
 - **Без** `-ffast-math` (ломает Fluid CA determinism + TAA YCoCg clamp)
 - **Без** `-march=native` (release binary должен быть переносим между CPU)
 
-## 1.3. Что смотреть на защите
+---
 
-**Слайды 1-2** (твои) — титульный + проблема. Говори глядя на аудиторию, не в слайд.
+## 4. Hotkeys в твоей зоне
 
-**Демо во время T2 (le1t)** — не твоя зона, но знай где искать:
-- `build/linux-clang-debug/lookdev-captures/` — 6 эталонных capture'ов (FINAL/SHDW/CSM/CTSH/AOCC/LOCL)
-- `ctest --test-dir build/linux-clang-debug` — 14/14 tests
-- HUD на экране: `FPS`, `CHUNKS: 27`, `DRAW CALLS`, etc.
+- `B` — cycle lighting debug view (для sidecar-метаданных в smoke-captures)
+- `C` — capture screenshot (.bmp + .txt sidecar, 60+ ключей)
+- `F5` — cycle scene preset (VoxelLab, FlatBenchmark, TransparencyStress, ChunkGrid, MeshingStress)
+- `F6` — save world snapshot (PVSNAP01, формат для тестов save/load)
+- `F7` — load world snapshot
+- `1` — hot shader reload (defense r0, 2026-06-15 relocation)
 
-## 1.4. Реалистичные вопросы комиссии (5-7)
+---
+
+## 5. Глоссарий (твоя зона)
+
+**BUILD-TEST** — набор из 14 ctest-тестов, запуск через `ctest --test-dir build/<preset>`.
+
+**CTest** — стандартный тестовый runner из CMake, не требует внешних зависимостей (Google Test не нужен). Тесты регистрируются через `add_test()`.
+
+**CTEST_BASELINE** — все 14 тестов должны быть зелёными (14/14). Если красный — release не считается готовым (`decisions.md §4`).
+
+**SMOKE (smoke-проверки)** — runtime capture-ы эталона, пиксель-в-пиксель. 6 captures: FINAL/SHDW/CSM/CTSH/AOCC/LOCL. Запуск `bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh`. Exit 0 = прошло.
+
+**SIDECAR** — текстовый `.txt` рядом с `.bmp`, содержит 60+ ключей метаданных (FPS, frame time, voxel counts, shadow params, TAA state).
+
+**PRESETS (configure-пресеты)** — 12 штук в `CMakePresets.json`: 8 debug (linux-clang-debug, linux-clang-debug-tracy-profiler, windows-clang-debug, windows-clang-debug-ci, windows-clang-debug-tracy-profiler) + 4 release (linux-clang-release-base, linux-clang-release, windows-clang-release-base, windows-clang-release).
+
+**BUILD_PRESETS** — отдельные target-lists: debug-build × 3, release-build × 2, debug-tests/release-tests.
+
+**RELEASE_BIN_SIZE** — 19 MB ELF (vs 73 MB debug, -73%). За счёт ThinLTO + gc-sections + dead code removal.
+
+**THIN_LTO** — `-flto=thin` — параллельный LTO, low memory overhead, совместим с разными CPU.
+
+**GC-SECTIONS** — `-ffunction-sections -fdata-sections -Wl,--gc-sections` — удаление unused секций.
+
+**CMakePresets.json** — корневой файл с 12 configure-пресетами + build-presets + test-presets.
+
+**CLANG 22.1.6** — `clang-22` (Linux Arch), `clang-cl.exe` (Windows). Используется с `-std=c++26` и C++26 modules (`FILE_SET CXX_MODULES`).
+
+**CMAKE 4.0** — минимум для C++26 modules. CMake 4.x на mainline, 3.30+ поддерживается.
+
+**LIBC++ 16** — LLVM C++ Standard Library (на Linux). libstdc++ 16.1 (тоже поддерживается).
+
+**TRACY** — performance profiler (MIT). `PROJECTV_ENABLE_TRACY=ON` (только debug).
+
+**RENDERDOC_MARKERS** — debug-utility метки для RenderDoc. `PROJECTV_ENABLE_RENDERDOC_MARKERS=ON` (только debug).
+
+**VULKAN_VALIDATION_LAYERS** — `PROJECTV_ENABLE_VALIDATION=ON` (только debug, требует установленный Vulkan SDK).
+
+**GOOGLE_BENCHMARK** — `PROJECTV_ENABLE_BENCHMARKS=ON` (только debug). Используется в `src/bench/FrustumCullBenchmark.cpp` и `ShadowProjectionBenchmark.cpp`.
+
+**IMGUI** — `PROJECTV_ENABLE_IMGUI=ON` (только debug). Debug UI.
+
+**LTO (Link-Time Optimization)** — `-flto=thin`. Conservative policy в release (per `decisions.md §4`).
+
+**DEBUG_INFO** — DWARF debug info в debug build, удалён в release.
+
+**NDEBUG** — `NDEBUG` макро для release builds, отключает asserts.
+
+---
+
+## 6. Реалистичные вопросы (5-7)
 
 **Q1. Сколько у вас тестов и сколько они идут?**
 - 14 наборов (`ctest -N`), baseline 14/14, debug 0.78 сек, release 0.06 сек.
@@ -122,7 +182,9 @@ bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-de
 - Покрыто: математика, инвалидация грязных чанков, walk-контроллер, meshopt, fluid CA determinism, snapshot, scene config, C-kernel, splits, math, StringId, modules, present mode, asset loader, Draco.
 - Не покрыто unit-тестами: рендеринг (заменён runtime smoke), input actions, audio engine (manual), hot shader reload path. Визуальная корректность — через RuntimeSmoke.
 
-## 1.5. Каверзные вопросы (3-5)
+---
+
+## 7. Каверзные вопросы (3-5)
 
 **Q8. Что если сломается тест в release-сборке?**
 - `ctest --test-dir build/linux-clang-release --output-on-failure` — если какой-то тест красный, **release не считается готовым** per `decisions.md §4`. Все 14 должны быть зелёными.
@@ -153,16 +215,30 @@ bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh --build-dir build/linux-clang-de
 - Затем **обновить все 5 buildPresets** (`*-debug-build` × 3 + `*-release-build` × 2) — добавить `ProjectVNewTest` в targets list.
 - Альтернатива (per `decisions.md §4` follow-up) — INTERFACE target в `tests/CMakeLists.txt` который зависит от всех test executables, тогда buildPresets ссылаются только на него. Не сделано (out of scope).
 
-## 1.6. Куда перенаправить (Out of scope)
+---
+
+## 8. Хронология (релевантные события)
+
+**2026-04-13 (Tier 1.B):** `std::expected<T, E>` migration на холодных путях. VulkanInit (16 variants), snapshot (3 variants), audio load (3 variants), scene config, ECS sync, physics state. Позволяет error enum вместо bool+per-step лога.
+
+**2026-04-14 (Release presets r0):** commits `6fe9201`. linux-clang-release / windows-clang-release. Conservative policy: `-O3 -flto=thin -DNDEBUG`. Без `-ffast-math`, без `-march=native`. 19 MB ELF vs 73 MB debug (-73%).
+
+**2026-04-14 (Build config audit r0):** 5 buildPresets обновлены. linux-clang-debug-tracy-profiler `PROJECTV_BUILD_TRACY_PROFILER ON→OFF` (Linux Tracy UI не собирается). 14/14 ctest на release.
+
+**2026-04-15 (Windows build verification r0):** 5 atomic-commits. P0 libc++/Windows-clang-cl gating + Tracy UI split + RepoRoot extract + docs/cleanup + deinit 5 submodules 62M. commit `69b1726`.
+
+---
+
+## 9. Out of scope (Q&A redirect)
 
 | Вопрос про… | Говори |
 |---|---|
-| C++26 / Vulkan 1.4 / DOD / SIMD / C-ядра / std::expected | «Архитектурное решение — к le1t» |
-| Демо / FPS / HUD / сцена VoxelLab / стек | «К le1t» |
-| Воксельный мир / чанки / meshing / статик-ассерты / fluid CA / snapshot | «К Тиммейту 2» |
-| Рендеринг / Vulkan / TAA / CSM / AOCC / шейдеры / C-ядро | «К Тиммейту 3» |
-| Физика / walk-контроллер / Jolt / edge grace | «К Тиммейту 4» |
-| Ассеты / аудио / glTF / Draco / meshopt / miniaudio / hot reload | «К Тиммейту 5» |
-| BUG-005 cycle scene race / баги / known issues | «К le1t» |
-| Hot shader reload (клавиша 1) / ray-march (клавиша 2) | «К le1t» |
-| Phase 4-9 / roadmap / планы | «К Тиммейту 4 (он закрывает)» |
+| C++26 / Vulkan 1.4 / DOD / SIMD / C-ядра / std::expected | «К T2 (le1t)» |
+| Демо / FPS / HUD / сцена VoxelLab / стек | «К T2 (le1t)» |
+| Воксельный мир / чанки / meshing / статик-ассерты / fluid CA / snapshot | «К T3» |
+| Рендеринг / Vulkan / TAA / CSM / AOCC / шейдеры / C-ядро | «К T4» |
+| Физика / walk-контроллер / Jolt / edge grace | «К T6» |
+| Ассеты / аудио / glTF / Draco / meshopt / miniaudio / hot reload | «К T5» |
+| BUG-005 cycle scene race / баги / known issues | «К T2 (le1t)» |
+| Hot shader reload (клавиша 1) / ray-march (клавиша 2) | «К T2 (le1t)» |
+| Phase 4-9 / roadmap / планы | «К T6» |
