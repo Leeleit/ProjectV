@@ -2,10 +2,7 @@
 
 Short active snapshot on top of `TODO.md`; no roadmap duplication.
 
-Updated: `2026-06-15` — service files compress+archive (см. `agent/ARCHIVE-INDEX.md`).
-Подробный per-session history (§5-§20, 1000+ строк) вынесен в
-`legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md`. Section
-numbering preserved.
+Updated: `2026-06-17` — Defense clean-slate rewrite (session `ef8b942`, см. §37). DefenseScript_Team.md (148→110 строк) + DefensePresentation_Structure.md (1006→541 строк, 13 слайдов LaTeX Beamer) переписаны из текста оператора; FAQ_T{1..6}.md §1 Verbatim синхронизирован (6/6 verified). Tone natural, problem justification CPU-physics-bound, ТЗ↔тесты aligned.
 
 Updated: `2026-06-15` — **Windows build verification r0 (session-2026-06-15T10-25Z-windows-build-verification-r0, см. §24)**. 5 atomic-commits landed: libc++/Windows-clang-cl gating fix (P0-1..P0-4) + F5 hot-reload CMake-injected path (P0-5) + Tracy UI split to standalone build (P0-6) + RepoRoot extract + Windows LookDev smoke parity (P1-2/P1-3) + docs/cleanup + deinit 5 unwired submodules 62M. Linux baseline preserved (ctest 14/14, smoke 6/6).
 
@@ -15,6 +12,7 @@ Updated: `2026-06-14` — V hotkey auto-detect cycle + libc++ warning + HUD line
 Updated: `2026-06-14` — V hotkey cycle walk fix (session-2026-06-13-hardcore-perf-r0, Phase 2 follow-up #3, см. `decisions.md §30.3`, `legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.3` → archive). 1 fix. 3 new sub-tests (12 total). Build green, ctest 14/14, smoke clean.
 Updated: `2026-06-14` — Release presets r0 (session-2026-06-14-release-presets-r0, см. §21). 8 CMakePresets, root `CMakeLists.txt` +Release-блок, `README_NEW.md` создан, `agent/decisions.md §4` +Release policy. linux-clang-release: configure 54s, build 137/137 green, ctest 13/13, smoke 6/6, ELF 19MB (-73% vs debug).
 Updated: `2026-06-14` — Build config audit r0 (session-2026-06-14T11-29Z-build-config-audit-r0, см. §22). 5 buildPresets (3 debug × 17, 2 release × 15, 1 smoke). `linux-clang-debug-tracy-profiler.PROJECTV_BUILD_TRACY_PROFILER: ON→OFF`. `linux-clang-debug-ci/` удалён (194M). `linux-clang-debug-tracy-profiler/` сохранён. linux-clang-release ctest 14/14.
+Updated: `2026-06-17` — Defense clean-slate script rewrite r0 (`ef8b942`, см. §37). Script_Team 148→110 строк, Presentation_Structure 1006→541 строк (13 слайдов LaTeX Beamer с `\_` `\&` `\%` `$..$` экранированием), FAQ_T{1..6}.md §1 Verbatim 6/6 sync verified через `/tmp/verify_faq_sync.py`. Tone natural, technical-mature, требования↔тесты aligned.
 
 ---
 
@@ -761,3 +759,72 @@ Cross-refs на архив полных версий: `agent/ARCHIVE-INDEX.md` (
 **Final sync verification:** 6/6 slots match between Script_Team.md and FAQ_T*.md §1 (with marker-stripping normalization).
 
 Cross-refs на архив полных версий: \`agent/ARCHIVE-INDEX.md\` (single source of truth для navigation).
+
+
+## §37. Defense clean-slate script rewrite r0 — `ef8b942` (closed 2026-06-17T12:50Z)
+
+**Per operator «Нет, плохо всё. Перепиши, как порекомендовал другой агент».** Full clean-slate rewrite of `DefenseScript_Team.md` + `DefensePresentation_Structure.md` из текста оператора.
+
+**5 фиксов по критериям оператора:**
+1. **Problem justification** привязана к CPU physics / OpenGL limits / отсутствию low-level open альтернатив (не абстрактные «open-source» утверждения).
+2. **T3 transition fix** — «Передаю слово» строго в конце slot, не между слайдами одного спикера.
+3. **«Здравствуйте»** ровно 1× per slot (T1..T6).
+4. **Требования↔тесты aligned** — ThinLTO/Fluid CA/рендеринг метрики привязаны к спецификациям (ELF 19MB release / ctest 14/14 / smoke 6/6 / 38 из 48 ТЗ закрыты).
+5. **Balanced timing** ~110-130 слов/мин, slot distribution неизменна (50+60+50+35+45+30=270с = 4:30 + 30с буфер).
+
+**Script_Team.md (110 строк, было 148):**
+| Slot | Участник | Хрон | Слайды | «Здравствуйте» count |
+|------|----------|------|--------|---------------------|
+| T1 | 1 (Тиммейт 1) | 0:00-0:50 (50s) | 1, 2, 3 | 1 |
+| T2 | 2 (Тиммейт 2) | 0:50-1:50 (60s) | 4, 5 | 1 |
+| T3 | 3 (Тиммейт 3) | 1:50-2:40 (50s) | 6, 7 | 1 |
+| T4 | 4 (Тиммейт 4) | 2:40-3:15 (35s) | 8 | 1 |
+| T5 | 5 (Тиммейт 5) | 3:15-4:00 (45s) | 9, 10 | 1 |
+| T6 | 6 (le1t) | 4:00-4:30 (30s) | 11, 12, 13 | 1 |
+| — | Буфер | 4:30-5:00 | — | — |
+
+**Presentation_Structure.md (541 строка, было 1006):** 13 слайдов в LaTeX Beamer-стиле (Madrid theme). Все 5 секций на слайд: визуальная структура (Beamer рекомендация) / body LaTeX (`\frametitle{}` `\framesubtitle{}` `columns` `itemize` `tabular` `block`) / speaker notes (verbatim) / тайминг / источник данных. Все символы экранированы: `\\_` `\&` `\
+## §37. Defense clean-slate script rewrite r0 — `ef8b942` (closed 2026-06-17T12:50Z)
+
+**Per operator «Нет, плохо всё. Перепиши, как порекомендовал другой агент».** Full clean-slate rewrite of `DefenseScript_Team.md` + `DefensePresentation_Structure.md` из текста оператора.
+
+**5 фиксов по критериям оператора:**
+1. **Problem justification** привязана к CPU physics / OpenGL limits / отсутствию low-level open альтернатив (не абстрактные «open-source» утверждения).
+2. **T3 transition fix** — «Передаю слово» строго в конце slot, не между слайдами одного спикера.
+3. **«Здравствуйте»** ровно 1× per slot (T1..T6).
+4. **Требования↔тесты aligned** — ThinLTO/Fluid CA/рендеринг метрики привязаны к спецификациям (ELF 19MB release / ctest 14/14 / smoke 6/6 / 38 из 48 ТЗ закрыты).
+5. **Balanced timing** ~110-130 слов/мин, slot distribution неизменна (50+60+50+35+45+30=270с = 4:30 + 30с буфер).
+
+**Script_Team.md (110 строк, было 148):**
+| Slot | Участник | Хрон | Слайды | «Здравствуйте» count |
+|------|----------|------|--------|---------------------|
+| T1 | 1 (Тиммейт 1) | 0:00-0:50 (50s) | 1, 2, 3 | 1 |
+| T2 | 2 (Тиммейт 2) | 0:50-1:50 (60s) | 4, 5 | 1 |
+| T3 | 3 (Тиммейт 3) | 1:50-2:40 (50s) | 6, 7 | 1 |
+| T4 | 4 (Тиммейт 4) | 2:40-3:15 (35s) | 8 | 1 |
+| T5 | 5 (Тиммейт 5) | 3:15-4:00 (45s) | 9, 10 | 1 |
+| T6 | 6 (le1t) | 4:00-4:30 (30s) | 11, 12, 13 | 1 |
+| — | Буфер | 4:30-5:00 | — | — |
+
+**Presentation_Structure.md (541 строка, было 1006):** 13 слайдов в LaTeX Beamer-стиле (Madrid theme). Все 5 секций на слайд: визуальная структура (Beamer рекомендация) / body LaTeX (`\frametitle{}` `\framesubtitle{}` `columns` `itemize` `tabular` `block`) / speaker notes (verbatim) / тайминг / источник данных. Все символы экранированы: `\_` `\&` `\%`, math в `$..$`.
+
+**FAQ_T{1..6}.md §1 Verbatim sync:** 6/6 SLOTS IN SYNC ✓ — Python verification script `/tmp/verify_faq_sync.py` (normalize для `> ` blockquote markers, `**[Переход]**` markers, whitespace collapse).
+
+| File | §1 chars | Slot | Status |
+|------|----------|------|--------|
+| `docs/DefenseCompetencyFAQ_T1.md` | 1060 | T1 | ✓ MATCH |
+| `docs/DefenseCompetencyFAQ_T2.md` | 931 | T2 | ✓ MATCH |
+| `docs/DefenseCompetencyFAQ_T3.md` | 1000 | T3 | ✓ MATCH |
+| `docs/DefenseCompetencyFAQ_T4.md` | 517 | T4 | ✓ MATCH |
+| `docs/DefenseCompetencyFAQ_T5.md` | 904 | T5 | ✓ MATCH |
+| `docs/DefenseCompetencyFAQ_T6.md` | 875 | T6 | ✓ MATCH |
+
+**Files changed:** 8 (Script_Team.md 110 + Presentation_Structure.md 541 + 6 FAQ_T*.md §1 edits), +546/-1049 строк.
+
+**Pre-commit gate (§7.3.1):** type=`docs` → auto, §7.2.5 message готов, scope discipline clean (only my 8 files staged).
+
+**Build state:** docs-only, baseline preserved.
+
+**Safety-net:** `/tmp/before_cleanslate_script_2026-06-17T1235Z.patch` (13 строк исходного dirty diff, footer `POST-COMMIT ef8b942`).
+
+Cross-refs: `AGENTS.md` §7.2.5, §7.2.6.1, §7.2.8, §7.3.1, §7.4, §8.1; `docs/DefenseScript_Team.md` (authoritative verbatim); `docs/DefensePresentation_Structure.md` (LaTeX Beamer-ready); `agent/active-sessions.md` session-2026-06-17T-defense-cleanslate-script-r0.

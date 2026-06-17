@@ -256,6 +256,32 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-17T-defense-cleanslate-script-r0
+
+- **id:** `2026-06-17T-defense-cleanslate-script-r0`
+- **started-at:** 2026-06-17T12:35:00Z
+- **closed-at:** 2026-06-17T12:50:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Clean-slate rewrite DefenseScript_Team.md + DefensePresentation_Structure.md (5 фиксов из рекомендации другого агента).** Per operator: «Нет, плохо всё. Перепиши, как порекомендовал другой агент» + verbatim text для Script_Team (110 строк) + LaTeX Beamer Presentation_Structure (541 строк, 13 слайдов с экранированными `\_` `\&` `\%` и `$..$` math mode). Фиксы: (1) problem justification — CPU physics / OpenGL limits / отсутствие low-level open альтернатив; (2) T3 transition fix — «Передаю слово» строго в конце slot; (3) «Здравствуйте» ровно 1× per slot; (4) требования↔тесты aligned — ThinLTO/Fluid CA/рендеринг метрики привязаны к спецификациям (ELF 19MB / ctest 14/14 / smoke 6/6); (5) timing ~110-130 слов/мин, сбалансирован (50+60+50+35+45+30=270с = 4:30 + 30с буфер). FAQ_T{1..6}.md §1 Verbatim полностью переписан под новый slot mapping (verified 6/6 sync через `/tmp/verify_faq_sync.py` с normalize для `> ` blockquote markers, `**[Переход]**` markers, whitespace collapse).
+- **files-touched-intent:**
+  - **REWRITE:** `docs/DefenseScript_Team.md` (148→110 строк, новый clean-slate verbatim для всех 6 слотов, 13 слайдов, pattern «1 quote per slot с [Переход] markers внутри»)
+  - **REWRITE:** `docs/DefensePresentation_Structure.md` (1006→541 строк, 13 слайдов, каждая 5 секций: визуальная структура / body LaTeX / speaker notes verbatim / тайминг / источники данных; LaTeX Beamer-экранирование: `\_` `\&` `\%` + `$..$` math mode)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T1.md` (§1 Verbatim → clean-slate T1: 1060 chars, match Script_Team slot T1)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T2.md` (§1 Verbatim → clean-slate T2: 931 chars)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T3.md` (§1 Verbatim → clean-slate T3: 1000 chars)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T4.md` (§1 Verbatim → clean-slate T4: 517 chars)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T5.md` (§1 Verbatim → clean-slate T5: 904 chars)
+  - **EDIT:** `docs/DefenseCompetencyFAQ_T6.md` (§1 Verbatim → clean-slate T6: 875 chars, ОДИН quote с [Переход] markers внутри, не 3 split blocks)
+  - **NEW:** `/tmp/verify_faq_sync.py` (sync verification script: extract «..» quotes per slot, normalize for `> ` markers / `**[Переход]**` / `**Слайд N — Title**` / whitespace, exit 0 only if 6/6 match)
+  - **EDIT:** `agent/active-sessions.md` (эта запись в «Закрытые сессии»)
+  - **EDIT:** `agent/status.md` (§37 + rollup row)
+  - **НЕ ТРОГАЮ:** `AGENTS.md` (другой сессии), `src/**`, `tests/**`, `external/**`, `legacy/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, `docs/tex/`, `docs/KT-*`, `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md`, `docs/archive/DefenseOldFormat_2026-06-17/*`, `legacy/docs/archive/DefenseOldFormat_2026-06-17/*` (immutable legacy)
+- **status:** closed
+- **commit-hash:** `ef8b942` — `docs(defense): clean-slate Script_Team rewrite + Presentation_Structure v2 (natural tone, no robotic phrasing)`
+- **notes:** **Auto-close per §8.1.** Единый atomic commit. type=`docs` → auto (§7.3.1 gate пройден — no operator confirm needed для docs). 8 files changed, +546/-1049 строк. Build не требуется (docs-only). Пре-коммит gate (§7.3.1): §7.2.5 message готов (type=docs, scope=defense, summary 86 chars, body 20 lines с Refs); scope discipline clean — only my 8 files staged; нет чужих uncommitted в моих путях. Sync verification: `/tmp/verify_faq_sync.py` показывает **6/6 SLOTS IN SYNC ✓** для всех FAQ_T*.md §1 vs Script_Team.md. Safety-net patch `/tmp/before_cleanslate_script_2026-06-17T1235Z.patch` (13 строк исходного dirty diff, footer `POST-COMMIT ef8b942`) сохранён per §8.1 п.5. **Cross-refs:** `AGENTS.md` §7.2.5 (commit contract), §7.2.6.1 (atomic subtask), §7.2.8 (shared `agent/` files), §7.3.1 (pre-commit gate, type=docs auto), §7.4 (sync с docs), §8.1 (auto-close routine); `docs/DefenseScript_Team.md` (authoritative verbatim); `docs/DefensePresentation_Structure.md` (LaTeX Beamer-ready).
+
 ### session-2026-06-17T-defense-competency-faq-split-r0
 
 - **id:** `2026-06-17T-defense-competency-faq-split-r0`
