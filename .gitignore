@@ -8,23 +8,5 @@ problems/
 /uv.lock
 /compile_commands.json
 /.cache/
-.venv
-# LaTeX build artifacts (docs/tex/**)
-*.aux
-*.fdb_latexmk
-*.fls
-*.log
-*.nav
-*.out
-*.snm
-*.toc
-*.vrb
-*.xdv
-*.bbl
-*.blg
-*.idx
-*.ilg
-*.ind
-*.lof
-*.lot
-*.run.xml
+.venv/
+/docs/VulkanSDK-Windows-Docs-1.4.350.0/
