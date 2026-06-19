@@ -173,7 +173,7 @@ bool TryComputeVoxelBufferSize(
 void QueueChunkRebuildRequest(VoxelWorld &world, const size_t chunkIndex)
 {
 	VoxelChunk &chunk = world.chunks[chunkIndex];
-	if (chunk.rebuildQueued) {
+	if (chunk.rebuildQueued) [[unlikely]] {
 		return;
 	}
 

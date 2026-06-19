@@ -15,6 +15,38 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-20
+
+### Changed
+
+- `src/voxel/VoxelWorld.cpp:176` — Tier 0.D hardening.** `[[unlikely]]` on the
+  `chunk.rebuildQueued` early-out in `QueueChunkRebuildRequest`. The branch
+  predictor (and the branch hint) target the common path "chunk fresh,
+  process rebuild request"; the early-return is rare and correctly marked.
+
+### Verified (Tier 0.D audit, no code change)
+
+- `src/voxel/VoxelWorld.cpp:366,1162` — `pendingChunkRebuildIndices.reserve(world->chunks.size())`
+  on scene-load and `MarkAllVoxelChunksDirty`. Capacity matches `chunks.size()`,
+  bounded — no realloc during voxel-edit `QueueChunkRebuildRequest` calls.
+- `src/render/SceneResources.cpp:1074,1076,1078,1129,1162` — `latestVoxelPayloadChunkIndices`,
+  `completedChunkRebuildIndices`, `pendingChunkRebuildIndices` reserved at scene rebuild
+  and snapshot restore boundaries. No per-frame realloc in steady state.
+- `src/render/VoxelMeshingPushConstants.hpp:32-37` — `ChunkVisibilityCache` uses
+  `std::array<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks>` (fixed-cap,
+  1024 entries). No `std::vector` here — `std::inplace_vector` (Tier 1.A) not needed.
+- `src/debug/DebugOverlays.cpp:224-226` — `debugOverlayBoxes.reserve(requiredBoxCount)`
+  before the per-frame build loop. Capacity grows lazily only when `requiredBoxCount`
+  exceeds previous capacity.
+- `src/app/InputReplay.cpp:176,278` — `InputReplayCapture.frames.reserve(expectedFrameCount)`
+  on load; `capture.frames.reserve(512)` on `StartInputReplayRecording` start. Recording
+  amortizes O(1) push_back per frame even past 512 frames (geometric growth).
+- `src/app/FramePreparation.cpp:30,45` — local `cullCandidates.reserve(modelInstances.size())`
+  and `visibleModelInstances.reserve(visible.size())` before push_back loops.
+- `src/voxel/VoxelWorld.cpp:1068` — local BFS `queue.reserve(256)` in `FillVoxelMaterial`.
+
+---
+
 ## [Unreleased] — pre-2026-06-12 / un-dated history
 
 ### Added
