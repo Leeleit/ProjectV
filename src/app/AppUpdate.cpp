@@ -835,7 +835,11 @@ bool UpdateApp(
 	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
 	debug->stats.walkDebugValid = walkDebugInfo.valid;
 	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);
-	debug->stats.walkFeetPosition = walkDebugInfo.feetPosition;
+	debug->stats.walkFeetPosition = projectv::math::Vec3{
+		walkDebugInfo.feetPosition[0],
+		walkDebugInfo.feetPosition[1],
+		walkDebugInfo.feetPosition[2],
+	};
 	debug->stats.walkFootSupportScore = walkDebugInfo.footSupportScore;
 	debug->stats.walkFootSupportHitSamples = walkDebugInfo.footSupportHitSamples;
 	debug->stats.walkFootSupportTotalSamples = walkDebugInfo.footSupportTotalSamples;

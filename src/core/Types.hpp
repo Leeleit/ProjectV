@@ -171,7 +171,7 @@ struct InputActionBinding {
 };
 
 struct CameraState {
-	std::array<float, 3> position{0.0f, 8.0f, 24.0f};
+	projectv::math::Vec3 position{0.0f, 8.0f, 24.0f};
 	float yawRadians = 0.0f;
 	float pitchRadians = -0.2f;
 	float moveSpeed = 10.0f;
@@ -193,8 +193,8 @@ enum class WalkAirControlMode : uint8_t {
 
 struct GraphicsPushConstants {
 	projectv::math::Mat4 viewProjection{};
-	std::array<float, 4> cameraPosition{};
-	std::array<float, 4> cameraForward{};
+	projectv::math::Vec4 cameraPosition{};
+	projectv::math::Vec4 cameraForward{};
 	std::array<int32_t, 4> worldMinAndChunkSize{};
 	std::array<uint32_t, 4> chunkGridAndFlags{};
 };
@@ -232,9 +232,9 @@ static_assert(offsetof(ResolvePushConstants, taaCasSharpnessMax) == 140);
 
 struct DebugOverlayPushConstants {
 	projectv::math::Mat4 viewProjection{};
-	std::array<float, 4> overlayData0{};
-	std::array<float, 4> overlayData1{};
-	std::array<float, 4> overlayColor{};
+	projectv::math::Vec4 overlayData0{};
+	projectv::math::Vec4 overlayData1{};
+	projectv::math::Vec4 overlayColor{};
 };
 static_assert(std::is_standard_layout_v<DebugOverlayPushConstants>);
 static_assert(std::is_trivially_copyable_v<DebugOverlayPushConstants>);
@@ -246,13 +246,13 @@ static_assert(offsetof(DebugOverlayPushConstants, overlayColor) == 96);
 
 struct DebugHudVertex {
 	std::array<float, 2> positionNdc{};
-	std::array<float, 4> color{};
+	projectv::math::Vec4 color{};
 };
 static_assert(std::is_standard_layout_v<DebugHudVertex>);
 static_assert(std::is_trivially_copyable_v<DebugHudVertex>);
-static_assert(sizeof(DebugHudVertex) == 24);
+static_assert(sizeof(DebugHudVertex) == 32);
 static_assert(offsetof(DebugHudVertex, positionNdc) == 0);
-static_assert(offsetof(DebugHudVertex, color) == 8);
+static_assert(offsetof(DebugHudVertex, color) == 16);
 
 constexpr uint32_t DEBUG_HUD_MAX_VERTEX_COUNT = 262144;
 
@@ -336,7 +336,7 @@ struct InputReplayState {
 struct DebugOverlayBox {
 	Int3 min{};
 	Int3 maxExclusive{};
-	std::array<float, 4> color{};
+	projectv::math::Vec4 color{};
 };
 
 struct ChunkCullingParameters {
@@ -424,7 +424,7 @@ struct DebugStats {
 	bool showDirtyChunkOverlay = false;
 	bool walkDebugValid = false;
 	uint8_t walkSupportState = 0;
-	std::array<float, 3> walkFeetPosition{};
+	projectv::math::Vec3 walkFeetPosition{};
 	float walkFootSupportScore = 0.0f;
 	uint32_t walkFootSupportHitSamples = 0;
 	uint32_t walkFootSupportTotalSamples = 0;
@@ -468,7 +468,7 @@ struct DebugStats {
 
 	uint32_t taaCameraCutCount = 0;
 	float taaCameraCutMaxDelta = 0.0f;
-	std::array<float, 3> sunDirection{};
+	projectv::math::Vec3 sunDirection{};
 	float sunIntensity = 0.0f;
 	float sunShadowStrength = 0.0f;
 	float sunShadowDepthBias = 0.0f;
@@ -487,8 +487,8 @@ struct DebugStats {
 	float ambientOcclusionStrength = 0.0f;
 	float ambientOcclusionRadius = 0.0f;
 	float ambientOcclusionMinVisibility = 0.0f;
-	std::array<float, 3> localPointLightPosition{};
-	std::array<float, 3> localPointLightColor{};
+	projectv::math::Vec3 localPointLightPosition{};
+	projectv::math::Vec3 localPointLightColor{};
 	float localPointLightRadius = 0.0f;
 	float localPointLightIntensity = 0.0f;
 	bool localPointLightEnabled = false;
@@ -561,7 +561,7 @@ struct ModelInstanceData {
 	projectv::math::Vec3 worldAabbMin{};
 	projectv::math::Vec3 worldAabbMax{};
 
-	std::array<float, 3> sourceAabbMin{};
+	projectv::math::Vec3 sourceAabbMin{};
 	VkBuffer vertexBuffer = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
 	uint32_t indexCount = 0;
@@ -570,8 +570,8 @@ struct ModelInstanceData {
 struct ModelRegistryEntry {
 	projectv::core::StringID id;
 	projectv::asset::MeshGpuResources gpu;
-	std::array<float, 3> aabbMin{0.0f};
-	std::array<float, 3> aabbMax{0.0f};
+	projectv::math::Vec3 aabbMin{0.0f, 0.0f, 0.0f};
+	projectv::math::Vec3 aabbMax{0.0f, 0.0f, 0.0f};
 };
 
 struct RenderPassTimings {

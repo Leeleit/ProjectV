@@ -6,21 +6,21 @@
 #include <algorithm>
 
 namespace {
-constexpr std::array kSelectionOverlayColor{1.0f, 0.82f, 0.22f, 0.95f};
-constexpr std::array kPlacementOverlayColor{0.28f, 0.94f, 0.54f, 0.88f};
-constexpr std::array kMutationAnchorOverlayColor{0.96f, 0.56f, 0.18f, 0.92f};
-constexpr std::array kMutationPreviewOverlayColor{0.42f, 0.92f, 0.72f, 0.26f};
-constexpr std::array kInspectChunkOverlayColor{0.27f, 0.87f, 1.0f, 0.90f};
-constexpr std::array kChunkBoundsOverlayColor{0.16f, 0.52f, 0.95f, 0.32f};
-constexpr std::array kDirtyChunkOverlayColor{1.0f, 0.33f, 0.16f, 0.78f};
+constexpr projectv::math::Vec4 kSelectionOverlayColor{1.0f, 0.82f, 0.22f, 0.95f};
+constexpr projectv::math::Vec4 kPlacementOverlayColor{0.28f, 0.94f, 0.54f, 0.88f};
+constexpr projectv::math::Vec4 kMutationAnchorOverlayColor{0.96f, 0.56f, 0.18f, 0.92f};
+constexpr projectv::math::Vec4 kMutationPreviewOverlayColor{0.42f, 0.92f, 0.72f, 0.26f};
+constexpr projectv::math::Vec4 kInspectChunkOverlayColor{0.27f, 0.87f, 1.0f, 0.90f};
+constexpr projectv::math::Vec4 kChunkBoundsOverlayColor{0.16f, 0.52f, 0.95f, 0.32f};
+constexpr projectv::math::Vec4 kDirtyChunkOverlayColor{1.0f, 0.33f, 0.16f, 0.78f};
 
-constexpr std::array<std::array<float, 4>, kSunShadowCascadeCount> kCascadeSplitPlaneColors = {{
-	{0.95f, 0.20f, 0.20f, 0.55f},
-	{0.96f, 0.62f, 0.18f, 0.55f},
-	{0.30f, 0.85f, 0.95f, 0.55f},
-	{0.85f, 0.40f, 0.95f, 0.55f},
+constexpr std::array<projectv::math::Vec4, kSunShadowCascadeCount> kCascadeSplitPlaneColors = {{
+	projectv::math::Vec4{0.95f, 0.20f, 0.20f, 0.55f},
+	projectv::math::Vec4{0.96f, 0.62f, 0.18f, 0.55f},
+	projectv::math::Vec4{0.30f, 0.85f, 0.95f, 0.55f},
+	projectv::math::Vec4{0.85f, 0.40f, 0.95f, 0.55f},
 }};
-constexpr std::array kCursorHitNormalOverlayColor{0.92f, 0.92f, 0.92f, 0.70f};
+constexpr projectv::math::Vec4 kCursorHitNormalOverlayColor{0.92f, 0.92f, 0.92f, 0.70f};
 constexpr float kCascadeSplitPlaneThinVoxels = 0.10f;
 constexpr float kCascadeSplitPlaneSizePadding = 4.0f;
 constexpr int32_t kCursorHitNormalShaftLength = 2;
@@ -29,7 +29,7 @@ void AppendOverlayBox(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const Int3 min,
 	const Int3 maxExclusive,
-	const std::array<float, 4> &color)
+	const projectv::math::Vec4 &color)
 {
 	outBoxes.push_back({
 		.min = min,
@@ -79,7 +79,7 @@ Int3 MakeVoxelMaxExclusive(const Int3 voxel)
 void AppendVoxelOverlayBox(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const Int3 voxel,
-	const std::array<float, 4> &color)
+	const projectv::math::Vec4 &color)
 {
 	AppendOverlayBox(outBoxes, voxel, MakeVoxelMaxExclusive(voxel), color);
 }

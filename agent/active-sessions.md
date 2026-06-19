@@ -65,6 +65,33 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-tier0b-math-migration-r0
+
+- **id:** `2026-06-20T-tier0b-math-migration-r0`
+- **started-at:** 2026-06-20T19:30:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 0.B (per `TODO.md` r0 + `agent/memory.md §11.1 A8` Critical + `agent/decisions.md §29`): миграция оставшихся `std::array<float, N>` hot-path полей в `src/core/Types.hpp` на `projectv::math::Vec3/Vec4/Mat4` (alignas 16). Per план одобрен оператором в Plan Mode (`2026-06-20`).** Scope = только `src/core/Types.hpp` (+ transitive `#include "core/Math.hpp"` уже на месте). Математика: `Vec3` 16 bytes same as `std::array<float,3>` padded; `Vec4` 16 bytes same as `std::array<float,4>`; `Mat4` 64 bytes same as `std::array<float,16>`. **Zero ABI-change** (same sizes, только alignment меняется — компилятор начнёт использовать `movaps` вместо `movups` для mat4/vec3/vec4). Atomic single commit. Pre-flight safety net в `/tmp/before_tier0b_<timestamp>.patch` (per `AGENTS.md §6.4`).
+- **files-touched-intent:**
+  - **EDIT:** `src/core/Types.hpp` (15 полей `std::array<float,N>` → `projectv::math::Vec3/Vec4/Mat4`: L174 `position[3]`, L196-197 `cameraPosition/cameraForward[4]`, L220 `renderExtentInverse[2]` — оставить std::array (2-vec не в Mat scope), L235-237 `overlayData0/1/color[4]`, L248-249 `positionNdc[2]`/color[4], L339 color[4], L427 `walkFeetPosition[3]`, L471 `sunDirection[3]`, L480 `sunShadowCascadeDepthSplits[kSunShadowCascadeCount]` — оставить std::array<float, N> (массив скаляров не Vec), L490-491 `localPointLightPosition/Color[3]`, L564 `sourceAabbMin[3]`, L573-574 `aabbMin/Max[3]`).
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/core/Math.ixx` (уже содержит типы), `src/core/Math_fallback.hpp` (Windows fallback), `src/core/StringId.ixx`, чужие uncommitted.
+- **status:** open
+- **commit-hash:** — (atomic commit после verify, type=perf требует operator confirm per `AGENTS.md §6.9`)
+- **notes:**
+  - **Pre-flight findings:** HEAD `283e984`, +21 над origin/master, working tree clean.
+  - **Plan approved:** План из 15 подзадач (Tier 0..5) одобрен оператором `2026-06-20` в Plan Mode. Стартуем с **подзадачи 1: Tier 0.B** (HIGH priority, Critical per memory.md A8).
+  - **Tier 0.B sub-classification:**
+    - **Vec3 candidates** (15+ полей): `position[3]`, `walkFeetPosition[3]`, `sunDirection[3]`, `localPointLightPosition[3]`, `localPointLightColor[3]`, `sourceAabbMin[3]`, `aabbMin[3]`, `aabbMax[3]`.
+    - **Vec4 candidates**: `cameraPosition[4]`, `cameraForward[4]`, `overlayData0[4]`, `overlayData1[4]`, `overlayColor[4]`, color[4] (L249, L339).
+    - **Mat4 candidates**: `Mat4 GPU` field at L309-313 (already Mat4 per `CHANGELOG.md` Tier 0.B note? verify).
+    - **KEEP std::array<float, N>**: `renderExtentInverse[2]` (2-vec, не в Mat scope), `sunShadowCascadeDepthSplits[N]` (массив скаляров float, не Vec3), `positionNdc[2]` (2-vec).
+  - **Stuck loop limit per `AGENTS.md §6.7`:** 3-4 compile fails → `BLOCKED`.
+  - **Commit policy per `AGENTS.md §6.9` + v3 lessons:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=perf → explicit operator confirm обязателен.
+  - **Safety-net patch:** `/tmp/before_tier0b_<timestamp>.patch` (per `AGENTS.md §6.4`).
+  - **Cross-refs:** `TODO.md Tier 0.B`, `agent/memory.md §11.1 A8`, `agent/decisions.md §29`, `legacy/docs/philosophy/01_foundation/09_data-layout-philosophy.md`, `legacy/docs/philosophy/01_foundation/05_compiler-philosophy.md` (SIMD/alignas).
+
 ### session-2026-06-19T-inspection-fix-v3-r0
 
 - **id:** `2026-06-19T-inspection-fix-v3-r0`

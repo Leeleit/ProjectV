@@ -421,8 +421,9 @@ void UpdateVoxelInteraction(
 	}
 
 	const std::array<float, 3> direction = GetCameraForwardVector(camera);
+	const std::array<float, 3> origin{camera.position[0], camera.position[1], camera.position[2]};
 	const auto raycast = [&] {
-		return RaycastVoxelWorld(*world, camera.position, direction, interaction->maxInteractionDistance);
+		return RaycastVoxelWorld(*world, origin, direction, interaction->maxInteractionDistance);
 	};
 
 	if (interaction->mutationAnchorValid &&

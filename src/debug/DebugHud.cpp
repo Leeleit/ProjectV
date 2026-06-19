@@ -162,7 +162,7 @@ void AppendQuad(
 	const float minYPx,
 	const float maxXPx,
 	const float maxYPx,
-	const std::array<float, 4> &color)
+	const projectv::math::Vec4 &color)
 {
 	if (vertexCount + 6u > maxVertexCount) {
 		return;
@@ -190,7 +190,7 @@ void AppendTextLine(
 	const VkExtent2D extent,
 	const float originYPx,
 	const std::string_view text,
-	const std::array<float, 4> &color,
+	const projectv::math::Vec4 &color,
 	const float xOffsetPx = 0.0f,
 	const float originXPx = kPanelOriginXPx)
 {
@@ -236,7 +236,7 @@ void AppendShadowedTextLine(
 	const VkExtent2D extent,
 	const float originYPx,
 	const std::string_view text,
-	const std::array<float, 4> &color,
+	const projectv::math::Vec4 &color,
 	const float originXPx = kPanelOriginXPx)
 {
 	AppendTextLine(
@@ -269,8 +269,8 @@ void AppendPanel(
 	const float minYPx,
 	const float panelWidthPx,
 	const float panelHeightPx,
-	const std::array<float, 4> &panelColor,
-	const std::array<float, 4> &accentColor,
+	const projectv::math::Vec4 &panelColor,
+	const projectv::math::Vec4 &accentColor,
 	const float minXPx = kPanelOriginXPx)
 {
 	const float maxXPx = minXPx + panelWidthPx;
@@ -1025,12 +1025,12 @@ uint32_t BuildDebugHudVertices(
 	}
 
 	uint32_t vertexCount = 0;
-	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
-	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
-	constexpr std::array musicPanelColor{0.08f, 0.07f, 0.13f, 0.78f};
-	constexpr std::array accentColor{0.96f, 0.79f, 0.31f, 0.95f};
-	constexpr std::array titleColor{0.98f, 0.96f, 0.88f, 0.98f};
-	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
+	constexpr projectv::math::Vec4 statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
+	constexpr projectv::math::Vec4 helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
+	constexpr projectv::math::Vec4 musicPanelColor{0.08f, 0.07f, 0.13f, 0.78f};
+	constexpr projectv::math::Vec4 accentColor{0.96f, 0.79f, 0.31f, 0.95f};
+	constexpr projectv::math::Vec4 titleColor{0.98f, 0.96f, 0.88f, 0.98f};
+	constexpr projectv::math::Vec4 textColor{0.95f, 0.97f, 0.98f, 0.96f};
 	constexpr float titleOffsetPx = 2.0f;
 	constexpr float textBoundsHeightPx = kGlyphHeightPx + kTextShadowOffsetPx;
 	std::array<std::array<char, kHudLineBufferSize>, kMaxStatsLineCount> statsLines{};

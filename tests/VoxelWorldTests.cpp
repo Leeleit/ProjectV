@@ -85,6 +85,26 @@ bool ColorsMatch(
 	return true;
 }
 
+bool ColorsMatch(
+	const projectv::math::Vec4 &expected,
+	const projectv::math::Vec4 &actual)
+{
+	constexpr float kColorEpsilon = 0.0001f;
+	if (std::abs(expected[0] - actual[0]) > kColorEpsilon) {
+		return false;
+	}
+	if (std::abs(expected[1] - actual[1]) > kColorEpsilon) {
+		return false;
+	}
+	if (std::abs(expected[2] - actual[2]) > kColorEpsilon) {
+		return false;
+	}
+	if (std::abs(expected[3] - actual[3]) > kColorEpsilon) {
+		return false;
+	}
+	return true;
+}
+
 std::array<float, 4> TransformPoint(
 	const projectv::math::Mat4 &matrix,
 	const std::array<float, 3> &point)
@@ -1491,7 +1511,7 @@ void SendRepeatedKeyEvent(
 CameraState MakeTestCamera(const std::array<float, 3> &position)
 {
 	CameraState camera{};
-	camera.position = position;
+	camera.position = projectv::math::Vec3{position[0], position[1], position[2]};
 	camera.yawRadians = 0.0f;
 	camera.pitchRadians = 0.0f;
 	return camera;
@@ -2959,7 +2979,7 @@ void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestConte
 
 		camera.yawRadians = 0.0f;
 		for (int step = 0; step < 24; ++step) {
-			const std::array<float, 3> previousPosition = camera.position;
+			const std::array<float, 3> previousPosition{camera.position[0], camera.position[1], camera.position[2]};
 			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
@@ -3025,7 +3045,7 @@ void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestConte
 
 		camera.yawRadians = 0.78539816f;
 		for (int step = 0; step < 24; ++step) {
-			const std::array<float, 3> previousPosition = camera.position;
+			const std::array<float, 3> previousPosition{camera.position[0], camera.position[1], camera.position[2]};
 			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
@@ -7134,9 +7154,9 @@ void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] < 0.0f);
 	EXPECT_TRUE(context, detailedVertexCount > basicVertexCount);
 
-	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
-	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
-	constexpr std::array textColor{0.95f, 0.97f, 0.98f, 0.96f};
+constexpr projectv::math::Vec4 helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
+constexpr projectv::math::Vec4 statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
+constexpr projectv::math::Vec4 textColor{0.95f, 0.97f, 0.98f, 0.96f};
 	float statsPanelMaxX = -1.0f;
 	float helperPanelMaxX = -1.0f;
 	float textMaxX = -1.0f;

@@ -246,7 +246,7 @@ void ApplyStartupCameraOverrideFromEnvironment(CameraState *camera)
 		positionText && *positionText) {
 		std::array<float, 3> position{};
 		if (TryParseFloat3(positionText, &position)) {
-			camera->position = position;
+			camera->position = projectv::math::Vec3{position[0], position[1], position[2]};
 		} else {
 			SDL_Log("[ProjectV][LookDevCapture] ignored invalid %s='%s'", kCameraPositionEnvVar, positionText);
 		}

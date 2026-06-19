@@ -32,11 +32,11 @@ Float3 FlattenToPlane(const Float3 vector)
 	return projectv::math::normalize(Float3{vector.x, 0.0f, vector.z, 0.0f});
 }
 
-void AddScaled(std::array<float, 3> *target, const Float3 vector, const float scale)
+void AddScaled(Float3 *target, const Float3 vector, const float scale)
 {
-	target->at(0) += vector.x * scale;
-	target->at(1) += vector.y * scale;
-	target->at(2) += vector.z * scale;
+	target->x += vector.x * scale;
+	target->y += vector.y * scale;
+	target->z += vector.z * scale;
 }
 } // namespace
 

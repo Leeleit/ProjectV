@@ -2716,7 +2716,7 @@ bool CameraNeedsGroundRecovery(const PhysicsState &physics, const VoxelWorld &wo
 	const std::array<float, 3> feetPosition = BuildFallbackWalkFeetPosition(physics, camera);
 	return IsSolidAtPosition(world, feetPosition) ||
 		   IsSolidAtPosition(world, {feetPosition[0], feetPosition[1] + 0.9f, feetPosition[2]}) ||
-		   IsSolidAtPosition(world, camera.position);
+		   IsSolidAtPosition(world, {camera.position[0], camera.position[1], camera.position[2]});
 }
 
 void ApplyWalkCharacterState(
