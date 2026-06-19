@@ -65,6 +65,40 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-tier0c-frustum-cull-template-r0
+
+- **id:** `2026-06-20T-tier0c-frustum-cull-template-r0`
+- **started-at:** 2026-06-20T00:55:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 0.C (per `TODO.md` Tier 0.C + `agent/memory.md §11.1 A3` + `agent/decisions.md §29`): унификация 3 функций frustum cull в `src/render/SceneResources.hpp:21-209` через одну template `FrustumCullVsCamera<GetOrigin, GetHalfExtent>(parameters, ...)`.** Per план одобрен оператором `2026-06-20` после Tier 0.B (`cf4b535`). SIMD-вариант через C-kernel уже существует (`src/c_kernels/frustum_cull.c` + `projectv_cull_frustum_avx2`), Tier 3 verifies 8× speedup. C++ scalar path остаётся как fallback для small-instance case (`FrustumCulling.cpp:81-93` < kBatchDispatchThreshold) и для shadow cascade. Tier 0.C фокус = (a) DRY: объединить `IsSceneChunkVisible` + `IsAabbVisibleAgainstCameraFrustum` (идентичный каркас: extract camera params + 5 plane tests + max-distance sphere cull), (b) `[[likely]]/[[unlikely]]` annotations (per memory.md P6), (c) inline sqrt only when needed (avoid для chunks failing near-plane), (d) bit-identical verification: `FrustumCullBenchmark.cpp:282` main() проверяет cpp_scalar == c_scalar == c_avx2.
+- **files-touched-intent:**
+  - **EDIT:** `src/render/SceneResources.hpp` (replace 2 inline cull functions `IsSceneChunkVisible` L21-119 + `IsAabbVisibleAgainstCameraFrustum` L121-215 with one template `FrustumCullVsCamera` + thin public-API wrappers; preserve `IsSceneChunkVisibleInShadowCascade` L217-270 unchanged in this commit)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/c_kernels/frustum_cull.c` (already AVX2, Tier 3), `src/c_kernels/FrustumCulling.cpp` (callsites), `src/bench/FrustumCullBenchmark.cpp` (bit-identical verification), `src/render/SceneResources.cpp` (callsites unchanged), чужие uncommitted.
+- **status:** open
+- **commit-hash:** — (atomic commit после verify, type=perf требует operator confirm per `AGENTS.md §6.9`)
+- **notes:**
+  - **Pre-flight findings:** HEAD `d39b9f4` (close-routine commit предыдущего Tier 0.B), +23 над origin/master, working tree clean. Safety-net patch `/tmp/before_tier0c_20260619T1956Z.patch` saved (0 bytes, чистое дерево).
+  - **Plan context:** подзадача 2 из 15 (Tier 0..5). Tier 0.B (`cf4b535`) закрыт. Tier 0.C — текущий.
+  - **Tier 0.C sub-tasks per TODO:**
+    - [x] Pre-flight safety net
+    - [ ] Прочитать SceneResources.hpp L21-209 (3 cull functions)
+    - [ ] Спроектировать template signature: `FrustumCullVsCamera<GetOrigin, GetHalfExtent>(parameters, getOrigin, getHalfExtent) → bool`
+    - [ ] Реализовать template + thin wrappers (preserve public API)
+    - [ ] Lazy sqrt: вычислять `sqrt(lengthSq(halfExtent))` только если `maxDistance > 0.0f` (avoid для chunks failing near-plane)
+    - [ ] `[[likely]]/[[unlikely]]` систематически на early-out путях
+    - [ ] Build verify: cmake --build green
+    - [ ] ctest verify: 14/14 baseline preserved
+    - [ ] FrustumCullBenchmark main() verify: cpp_scalar == c_scalar == c_avx2 (bit-identical)
+    - [ ] Commit? → operator → git commit
+    - [ ] §8.1 close-routine
+  - **Shadow cascade:** `IsSceneChunkVisibleInShadowCascade` оставлен в этом коммите — он использует другой алгоритм (8-corner transform + clip-space check), унификация с camera-frustum потребовала бы отдельного template с другим signature (Mat4 вместо ChunkCullingParameters). Потенциальный Tier 5 follow-up.
+  - **Stuck loop limit per `AGENTS.md §6.7`:** 3-4 compile fails → `BLOCKED`.
+  - **Commit policy per `AGENTS.md §6.9` + v3 lessons:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=perf → explicit operator confirm обязателен.
+  - **Cross-refs:** `TODO.md Tier 0.C`, `agent/memory.md §11.1 A3 + §11.2 P1,P6`, `agent/decisions.md §29`, `legacy/docs/philosophy/01_foundation/05_compiler-philosophy.md` (auto-vectorize), `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` (SoA / batch processing).
+
 ### session-2026-06-20T-tier0b-math-migration-r0
 
 - **id:** `2026-06-20T-tier0b-math-migration-r0`
