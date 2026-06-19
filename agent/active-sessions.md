@@ -69,6 +69,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-20T-tier0c-frustum-cull-template-r0`
 - **started-at:** 2026-06-20T00:55:00Z
+- **closed-at:** 2026-06-20T01:05:00Z
 - **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
@@ -77,23 +78,33 @@ Append-only ledger активных и недавно завершённых AI-
   - **EDIT:** `src/render/SceneResources.hpp` (replace 2 inline cull functions `IsSceneChunkVisible` L21-119 + `IsAabbVisibleAgainstCameraFrustum` L121-215 with one template `FrustumCullVsCamera` + thin public-API wrappers; preserve `IsSceneChunkVisibleInShadowCascade` L217-270 unchanged in this commit)
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/c_kernels/frustum_cull.c` (already AVX2, Tier 3), `src/c_kernels/FrustumCulling.cpp` (callsites), `src/bench/FrustumCullBenchmark.cpp` (bit-identical verification), `src/render/SceneResources.cpp` (callsites unchanged), чужие uncommitted.
-- **status:** open
-- **commit-hash:** — (atomic commit после verify, type=perf требует operator confirm per `AGENTS.md §6.9`)
+- **status:** closed
+- **commit-hash:** `af69d06` — `perf(render): unify camera-frustum cull into templated FrustumCullVsCamera`
 - **notes:**
   - **Pre-flight findings:** HEAD `d39b9f4` (close-routine commit предыдущего Tier 0.B), +23 над origin/master, working tree clean. Safety-net patch `/tmp/before_tier0c_20260619T1956Z.patch` saved (0 bytes, чистое дерево).
   - **Plan context:** подзадача 2 из 15 (Tier 0..5). Tier 0.B (`cf4b535`) закрыт. Tier 0.C — текущий.
   - **Tier 0.C sub-tasks per TODO:**
     - [x] Pre-flight safety net
-    - [ ] Прочитать SceneResources.hpp L21-209 (3 cull functions)
-    - [ ] Спроектировать template signature: `FrustumCullVsCamera<GetOrigin, GetHalfExtent>(parameters, getOrigin, getHalfExtent) → bool`
-    - [ ] Реализовать template + thin wrappers (preserve public API)
-    - [ ] Lazy sqrt: вычислять `sqrt(lengthSq(halfExtent))` только если `maxDistance > 0.0f` (avoid для chunks failing near-plane)
-    - [ ] `[[likely]]/[[unlikely]]` систематически на early-out путях
-    - [ ] Build verify: cmake --build green
-    - [ ] ctest verify: 14/14 baseline preserved
-    - [ ] FrustumCullBenchmark main() verify: cpp_scalar == c_scalar == c_avx2 (bit-identical)
-    - [ ] Commit? → operator → git commit
-    - [ ] §8.1 close-routine
+    - [x] Прочитать SceneResources.hpp L21-209 (3 cull functions)
+    - [x] Спроектировать template signature: `FrustumCullVsCamera<GetOrigin, GetHalfExtent>(parameters, getOrigin, getHalfExtent) → bool`
+    - [x] Реализовать template + thin wrappers (preserve public API)
+    - [x] Lazy sqrt: вычислять `sqrt(lengthSq(halfExtent))` только если `maxDistance > 0.0f` (avoid для chunks failing near-plane)
+    - [x] `[[likely]]/[[unlikely]]` систематически на early-out путях
+    - [x] Build verify: cmake --build green
+    - [x] ctest verify: 14/14 baseline preserved
+    - [x] FrustumCullBenchmark main() verify: cpp_scalar == c_scalar == c_avx2 (bit-identical)
+    - [x] Commit? → operator → git commit
+    - [ ] §8.1 close-routine (in progress)
+  - **CLOSE NOTES (2026-06-20T01:05Z):**
+    - **Commit landed:** `af69d06` — 2 files, +121/-129 lines. Net -8 lines (DRY win: 200+ строк duplicated cull algorithm → 1 template + 2 thin wrappers).
+    - **Refactor scope:** `src/render/SceneResources.hpp` only. Public API сохранён (`IsSceneChunkVisible`, `IsAabbVisibleAgainstCameraFrustum` — inline wrappers). `IsSceneChunkVisibleInShadowCascade` нетронут (другой алгоритм, Tier 5 follow-up).
+    - **Branch hints added:** `[[unlikely]]` на near-plane fail (L73), maxDistance sphere fail (L80), side planes fail (L109), top/bottom fail (L112). `[[likely]]` на `if (maxDistance > 0.0f)` (L77).
+    - **Lazy sqrt:** вынесен из unconditional pre-compute в `if (maxDistance > 0.0f) [[likely]]` блок — экономия sqrt для chunks failing near-plane или когда maxDistance == 0.
+    - **Verification (build + tests + bit-identical):** `cmake --build` 1003+ targets green, `ctest` 14/14 passed (0.83 sec, baseline 0.78 noise), `FrustumCullBenchmark` prints `[Tier3 frustum_cull] bit-identical across all implementations (cpp, c_scalar, c_avx2)`.
+    - **Performance:** BM_CppScalar 534 ns, BM_CScalar 165 ns (3.2×), BM_CAvx2 240 ns (small fixture; AVX2 wins on larger batches — Tier 3 territory, out of scope here).
+    - **Stuck loop:** 0 compile-fail итераций (template instantiates сразу для 2 call sites, no errors). Well within 3-4 limit per `AGENTS.md §6.7`.
+    - **Honest scope:** только SceneResources.hpp + agent/* bookkeeping. Build green, ctest baseline, bit-identical cull verified. Никаких scope-creep.
+    - **Next sub-task (по плану):** **Tier 0.D** — pre-reserve / `inplace_vector` для hot vectors: `VoxelWorld.hpp:93` `pendingChunkRebuildIndices` (std::vector, push_back per voxel edit), `SceneResources.hpp:ChunkVisibilityCache` `opaqueCommands/shadowCommands/transparentCommands` (push_back per chunk per frame). Per `decisions.md §29` «fixed-cap, stack-friendly, no realloc». Ждёт явной команды «продолжай Tier 0.D».
   - **Shadow cascade:** `IsSceneChunkVisibleInShadowCascade` оставлен в этом коммите — он использует другой алгоритм (8-corner transform + clip-space check), унификация с camera-frustum потребовала бы отдельного template с другим signature (Mat4 вместо ChunkCullingParameters). Потенциальный Tier 5 follow-up.
   - **Stuck loop limit per `AGENTS.md §6.7`:** 3-4 compile fails → `BLOCKED`.
   - **Commit policy per `AGENTS.md §6.9` + v3 lessons:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=perf → explicit operator confirm обязателен.
