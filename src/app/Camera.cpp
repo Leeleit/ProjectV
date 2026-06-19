@@ -198,8 +198,12 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	const Float3 right = projectv::math::normalize(projectv::math::cross(forward, Float3{0.0f, 1.0f, 0.0f, 0.0f}));
 	const Float3 up = projectv::math::normalize(projectv::math::cross(right, forward));
 
-	// View matrix (column-major): right/up/-forward basis + translation.
-	// Each `c[i]` is column i of the matrix.
+	/// \brief View matrix (column-major):
+	///
+	/// \details
+	/// right/up/-forward basis + translation.
+	///  Each `c[i]` is column i of the matrix.
+
 	projectv::math::Mat4 view{};
 	view.c[0] = projectv::math::Vec4{right.x, up.x, -forward.x, 0.0f};
 	view.c[1] = projectv::math::Vec4{right.y, up.y, -forward.y, 0.0f};
@@ -216,13 +220,22 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	const float nearPlane = camera.nearPlane;
 	const float farPlane = camera.farPlane;
 
-	// TAA jitter: the projection matrix translates NDC X/Y by `2 * jitterNdc / extent`
-	// in clip space (because the GPU does `ndc.xy = clip.xy / clip.w`, and on the
-	// standard column-major `viewProjection = projection * view` used below the
-	// `m[2]` and `m[6]` cells become the third column's first/second row). This
-	// shifts the entire rasterization of the current frame by a sub-pixel amount
-	// so successive frames can be averaged out to a stable image. Caller passes
-	// zero when TAA is disabled or the camera is static for diagnostics.
+	/// \brief TAA jitter:
+	///
+	/// \details
+	/// the projection matrix translates NDC X/Y by `2 * jitterNdc / extent`
+	///  in clip space (because the GPU does `ndc.xy = clip.xy / clip.w`, and on the
+
+	///  standard column-major `viewProjection = projection * view` used below the
+
+	///  `m[2]` and `m[6]` cells become the third column's first/second row). This
+
+	///  shifts the entire rasterization of the current frame by a sub-pixel amount
+
+	///  so successive frames can be averaged out to a stable image. Caller passes
+
+	///  zero when TAA is disabled or the camera is static for diagnostics.
+
 	const float jitterNdcX = extent.width > 0 ? taaJitterNdcX * 2.0f / static_cast<float>(extent.width) : 0.0f;
 	const float jitterNdcY = extent.height > 0 ? taaJitterNdcY * 2.0f / static_cast<float>(extent.height) : 0.0f;
 	projectv::math::Mat4 projection{};

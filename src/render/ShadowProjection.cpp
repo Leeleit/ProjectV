@@ -283,9 +283,13 @@ SunShadowProjection BuildSunShadowProjection(
 		coverageScale,
 		kMinShadowCoverageScale,
 		kMaxShadowCoverageScale);
-	// Scene lighting stores the vector toward the sun because the shading pass
-	// evaluates N.L against that direction. The shadow camera needs the opposite
-	// vector: the direction sunlight actually travels through the scene.
+	/// \brief Scene lighting stores the vector toward the sun because the shading pass
+	///
+	/// \details
+	///  evaluates N.L against that direction. The shadow camera needs the opposite
+
+	///  vector: the direction sunlight actually travels through the scene.
+
 	const Float3 lightForward = projectv::math::normalize(Float3{
 		-sunDirection[0],
 		-sunDirection[1],
@@ -516,9 +520,14 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 		}
 		cascadeRadius = std::max(cascadeRadius, 0.5f);
 
-		// Use a sphere fit for the receiver slice instead of a tight light-space AABB. It is less
-		// aggressive on texel density, but keeps cascade extents stable under small camera rotations
-		// and therefore reduces split-edge swimming/shimmer.
+		/// \brief Use a sphere fit for the receiver slice instead of a tight light-space AABB.
+		///
+		/// \details
+		/// It is less
+		///  aggressive on texel density, but keeps cascade extents stable under small camera rotations
+
+		///  and therefore reduces split-edge swimming/shimmer.
+
 		const float cascadeCenterLightX = projectv::math::dot(lightRight, cascadeCenter);
 		const float cascadeCenterLightY = projectv::math::dot(lightUp, cascadeCenter);
 		const float minimumReceiverHalfExtent =

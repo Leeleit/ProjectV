@@ -3,11 +3,17 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
-// The header deliberately keeps `VmaAllocation` as a `void*` so it
-// does not have to pull in `vk_mem_alloc.h` (which itself is only
-// reachable through `core/Types.hpp` *after* the `VulkanContextState`
-// forward declaration). Pull the real definition in here, where the
-// `vmaCreateImage` / `vmaDestroyImage` calls actually need it.
+/// \brief The header deliberately keeps `VmaAllocation` as a `void*` so it
+///
+/// \details
+///  does not have to pull in `vk_mem_alloc.h` (which itself is only
+
+///  reachable through `core/Types.hpp` *after* the `VulkanContextState`
+
+///  forward declaration). Pull the real definition in here, where the
+
+///  `vmaCreateImage` / `vmaDestroyImage` calls actually need it.
+
 #include "vk_mem_alloc.h"
 
 namespace projectv::taa {
@@ -86,9 +92,14 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			"CreateOrRecreateTaaRenderTargets.Preconditions", "extent is zero-sized");
 	}
 
-	// Tear down the previous pair before we allocate. The recreate path
-	// is the only legal way to resize these targets so any partial state
-	// from a failed create is the same as "no allocation yet".
+	/// \brief Tear down the previous pair before we allocate.
+	///
+	/// \details
+	/// The recreate path
+	///  is the only legal way to resize these targets so any partial state
+
+	///  from a failed create is the same as "no allocation yet".
+
 	DestroyTaaRenderTargets(
 		context,
 		sceneColor,
@@ -98,16 +109,26 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 		linearSampler);
 
 	const VkExtent3D imageExtent{extent.width, extent.height, 1u};
-	// Source of truth: `kTaaSceneColorFormat` and
-	// `kTaaLayerHistoryColorFormat` in `TaaRenderTargets.hpp`. The
-	// graphics pipeline declaration in `VulkanGraphicsPipeline.cpp`
-	// reads the same constants so they cannot drift.
+	/// \brief Source of truth:
+	///
+	/// \details
+	/// `kTaaSceneColorFormat` and
+	///  `kTaaLayerHistoryColorFormat` in `TaaRenderTargets.hpp`. The
+
+	///  graphics pipeline declaration in `VulkanGraphicsPipeline.cpp`
+
+	///  reads the same constants so they cannot drift.
+
 	constexpr VkFormat sceneColorFormat = kTaaSceneColorFormat;
 	constexpr VkFormat layerColorFormat = kTaaLayerHistoryColorFormat;
 
-	// Both image sets share the same `VkImageCreateInfo` (usage
-	// flags, tiling, samples) — only the format differs. Build a
-	// common template and have the lambda copy it per call.
+	/// \brief Both image sets share the same `VkImageCreateInfo` (usage
+	///
+	/// \details
+	///  flags, tiling, samples) — only the format differs. Build a
+
+	///  common template and have the lambda copy it per call.
+
 	const VkImageCreateInfo imageInfoTemplate{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.pNext = nullptr,
@@ -139,33 +160,60 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 							  const VkFormat format,
 							  const char *name,
 							  const VkImageLayout initialLayout) -> std::expected<void, projectv::taa::TaaError> {
-		// Cast the `void*` handle back to its real VMA type for the
-		// call. The `void*` representation in the public header is
-		// just there to avoid leaking `vk_mem_alloc.h` into every
-		// translation unit that needs the offscreen-target struct.
+		/// \brief Cast the `void*` handle back to its real VMA type for the
+		///
+		/// \details
+		///  call. The `void*` representation in the public header is
+
+		///  just there to avoid leaking `vk_mem_alloc.h` into every
+
+		///  translation unit that needs the offscreen-target struct.
+
 		VkImageCreateInfo imageInfo = imageInfoTemplate;
 		imageInfo.format = format;
-		// The two ping-pong roles in the colour + layer history
-		// pairs want different `initialLayout` values:
-		//   - the *scene* image is written by the voxel pass
-		//     (via `vkCmdBeginRendering`'s `imageLayout`),
-		//     so its initial state of `UNDEFINED` is the right
-		//     Vulkan idiom and lets the first write transition
-		//     to `COLOR_ATTACHMENT_OPTIMAL` for free.
-		//   - the *history* image is read-only in the voxel
-		//     pass (via the `sampler2D` descriptor at binding 6
-		//     for the layer pair, binding 3 for the colour pair),
-		//     so its descriptor's `imageLayout` is
-		//     `SHADER_READ_ONLY_OPTIMAL`. To avoid the first
-		//     validation warning about "current layout is
-		//     `UNDEFINED` when the descriptor expects
-		//     `SHADER_READ_ONLY_OPTIMAL`", the history image
-		//     is created with `initialLayout = SHADER_READ_ONLY_OPTIMAL`
-		//     so the first frame's voxel pass already sees the
-		//     right layout. The voxel pass never writes to
-		//     the history, so the initial layout sticks for
-		//     the rest of the session until the swapchain
-		//     recreate resets it.
+		/// \brief The two ping-pong roles in the colour + layer history
+		///
+		/// \details
+		///  pairs want different `initialLayout` values:
+
+		///    - the *scene* image is written by the voxel pass
+
+		///      (via `vkCmdBeginRendering`'s `imageLayout`),
+
+		///      so its initial state of `UNDEFINED` is the right
+
+		///      Vulkan idiom and lets the first write transition
+
+		///      to `COLOR_ATTACHMENT_OPTIMAL` for free.
+
+		///    - the *history* image is read-only in the voxel
+
+		///      pass (via the `sampler2D` descriptor at binding 6
+
+		///      for the layer pair, binding 3 for the colour pair),
+
+		///      so its descriptor's `imageLayout` is
+
+		///      `SHADER_READ_ONLY_OPTIMAL`. To avoid the first
+
+		///      validation warning about "current layout is
+
+		///      `UNDEFINED` when the descriptor expects
+
+		///      `SHADER_READ_ONLY_OPTIMAL`", the history image
+
+		///      is created with `initialLayout = SHADER_READ_ONLY_OPTIMAL`
+
+		///      so the first frame's voxel pass already sees the
+
+		///      right layout. The voxel pass never writes to
+
+		///      the history, so the initial layout sticks for
+
+		///      the rest of the session until the swapchain
+
+		///      recreate resets it.
+
 		imageInfo.initialLayout = initialLayout;
 		VmaAllocation allocation = nullptr;
 		if (vmaCreateImage(
@@ -361,13 +409,21 @@ void RecordTaaHistoryCopy(
 		return;
 	}
 
-	// Both images must be in `TRANSFER_*` for `vkCmdCopyImage` to read
-	// from the source and write to the destination. The caller is
-	// expected to have just placed the scene colour in the sample-read
-	// state (resolve output). We leave the history image in
-	// `TRANSFER_DST_OPTIMAL` after the copy; the next frame's
-	// `TransitionTaaHistoryForSample` will move it to
-	// `SHADER_READ_ONLY_OPTIMAL` again.
+	/// \brief Both images must be in `TRANSFER_*` for `vkCmdCopyImage` to read
+	///
+	/// \details
+	///  from the source and write to the destination. The caller is
+
+	///  expected to have just placed the scene colour in the sample-read
+
+	///  state (resolve output). We leave the history image in
+
+	///  `TRANSFER_DST_OPTIMAL` after the copy; the next frame's
+
+	///  `TransitionTaaHistoryForSample` will move it to
+
+	///  `SHADER_READ_ONLY_OPTIMAL` again.
+
 	TransitionImageLayout(
 		cmd,
 		sceneColor.image,
@@ -387,11 +443,17 @@ void RecordTaaHistoryCopy(
 		VK_PIPELINE_STAGE_2_COPY_BIT,
 		VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
-	// Default-initialised `VkImageCopy` is already correct for a
-	// 2D full-color copy of the swapchain-sized area. The subresource
-	// is set explicitly to keep the intent obvious in a code review
-	// and to make the helper robust to any future change in the
-	// struct's zero-initialised field semantics.
+	/// \brief Default-initialised `VkImageCopy` is already correct for a
+	///
+	/// \details
+	///  2D full-color copy of the swapchain-sized area. The subresource
+
+	///  is set explicitly to keep the intent obvious in a code review
+
+	///  and to make the helper robust to any future change in the
+
+	///  struct's zero-initialised field semantics.
+
 	VkImageCopy region{};
 	region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
 	region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
@@ -408,8 +470,11 @@ void RecordTaaHistoryCopy(
 		1,
 		&region);
 
-	// Move the history image into the read state for the *next* frame's
-	// resolve pass.
+	/// \brief Move the history image into the read state for the *next* frame's
+	///
+	/// \details
+	///  resolve pass.
+
 	TransitionImageLayout(
 		cmd,
 		historyColor.image,

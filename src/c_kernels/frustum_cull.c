@@ -35,16 +35,25 @@ static inline void projectv_build_planes(
     const float th = parameters->tanHalfHorizontalFov;
     const float tv = parameters->tanHalfVerticalFov;
 
-    // **Plane 0: near** (offset = nearPlane; the
-    // `passesPlane` test subtracts the offset, so the
-    // cull test is `dot(toCenter, forward) +
-    // projectedRadius < nearPlane`).
+    /// \brief **Plane 0:
+    ///
+    /// \details
+    /// near** (offset = nearPlane; the
+    ///  `passesPlane` test subtracts the offset, so the
+
+    ///  cull test is `dot(toCenter, forward) +
+
+    ///  projectedRadius < nearPlane`).
+
     planes[0].n[0] = fx;
     planes[0].n[1] = fy;
     planes[0].n[2] = fz;
     planes[0].offset = parameters->nearPlane;
 
-    // **Planes 1..4: left/right/bottom/top** (offset = 0).
+    /// \brief **Planes 1..4:
+    ///
+    /// \details
+    /// left/right/bottom/top** (offset = 0).
     planes[1].n[0] = fx * th + rx;
     planes[1].n[1] = fy * th + ry;
     planes[1].n[2] = fz * th + rz;
@@ -122,13 +131,21 @@ void projectv_cull_frustum_scalar(
 #if defined(__AVX2__)
 #include <immintrin.h>
 
-// **AVX2 8-way batched cull.** `__attribute__((target("avx2")))`
-// forces the function to be compiled with AVX2 instructions
-// available; the rest of the binary stays at the global
-// baseline level. This sidesteps the Clang 22 whole-TU
-// AVX2 + ASan regression (issue #194008 in `agent/memory.md`)
-// and keeps the ABI per-function — the C++ caller doesn't
-// need to know whether AVX2 is available at the call site.
+/// \brief **AVX2 8-way batched cull.** `__attribute__((target("avx2")))`
+///
+/// \details
+///  forces the function to be compiled with AVX2 instructions
+
+///  available; the rest of the binary stays at the global
+
+///  baseline level. This sidesteps the Clang 22 whole-TU
+
+///  AVX2 + ASan regression (issue #194008 in `agent/memory.md`)
+
+///  and keeps the ABI per-function — the C++ caller doesn't
+
+///  need to know whether AVX2 is available at the call site.
+
 __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
     uint8_t *visible_mask,
     const ProjectvCAabb *aabbs,
@@ -142,9 +159,13 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
     const float py = parameters->cameraPosition[1];
     const float pz = parameters->cameraPosition[2];
 
-    // Pre-broadcast plane-normal abs values as scalar
-    // floats; we `_mm256_set1_ps` them per batch (the
-    // set1 is hoisted out of the inner loop body).
+    /// \brief Pre-broadcast plane-normal abs values as scalar
+    ///
+    /// \details
+    ///  floats; we `_mm256_set1_ps` them per batch (the
+
+    ///  set1 is hoisted out of the inner loop body).
+
     const float abs_n[5][3] = {
         {projectv_absf(planes[0].n[0]), projectv_absf(planes[0].n[1]), projectv_absf(planes[0].n[2])},
         {projectv_absf(planes[1].n[0]), projectv_absf(planes[1].n[1]), projectv_absf(planes[1].n[2])},
@@ -153,15 +174,24 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
         {projectv_absf(planes[4].n[0]), projectv_absf(planes[4].n[1]), projectv_absf(planes[4].n[2])},
     };
 
-    // Compute maxCenterDistance^2 (used by the maxDistance
-    // branch). aabbRadius varies per AABB, so the per-AABB
-    // value is computed inside the loop.
+    /// \brief Compute maxCenterDistance^2 (used by the maxDistance
+    ///
+    /// \details
+    ///  branch). aabbRadius varies per AABB, so the per-AABB
+
+    ///  value is computed inside the loop.
+
     const bool useMaxDistance = maxDistance > 0.0f;
 
-    // **Pre-broadcast the camera-position offset.** The
-    // `toCenter = center - cameraPos` subtraction is done
-    // in SIMD; the cameraPos is broadcast once outside
-    // the loop.
+    /// \brief **Pre-broadcast the camera-position offset.** The
+    ///
+    /// \details
+    ///  `toCenter = center - cameraPos` subtraction is done
+
+    ///  in SIMD; the cameraPos is broadcast once outside
+
+    ///  the loop.
+
     const __m256 v_px = _mm256_set1_ps(px);
     const __m256 v_py = _mm256_set1_ps(py);
     const __m256 v_pz = _mm256_set1_ps(pz);
@@ -172,24 +202,39 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
     for (size_t batch = 0; batch < fullBatches; ++batch) {
         const ProjectvCAabb *lane = &aabbs[batch * 8];
 
-        // **Gather 8 AABBs into 6 `__m256`s** (cx, cy, cz,
-        // hx, hy, hz). The `ProjectvCAabb` struct is
-        // 32 B (4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 floats) per
-        // AABB, so adjacent AABBs are 32 B apart in
-        // memory. There is no contiguous SIMD load
-        // possible from the AoS layout. Two paths:
-        //
-        // 1. `_mm256_setr_ps` with the 8 axis values
-        //    computed inline. The compiler folds the
-        //    scalar arithmetic into the SIMD constants
-        //    and emits 6 `vmovaps` from stack / registers
-        //    with no intermediate buffer round-trip. This
-        //    is the path the AVX2 kernel takes.
-        //
-        // 2. (Reference, not used) gather via
-        //    `_mm256_i32gather_ps` with an 8-int index
-        //    vector [0,32,64,...,224] — high latency on
-        //    most CPUs, not worth it for 8 lanes.
+        /// \brief **Gather 8 AABBs into 6 `__m256`s** (cx, cy, cz,
+        ///
+        /// \details
+        ///  hx, hy, hz). The `ProjectvCAabb` struct is
+
+        ///  32 B (4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 floats) per
+
+        ///  AABB, so adjacent AABBs are 32 B apart in
+
+        ///  memory. There is no contiguous SIMD load
+
+        ///  possible from the AoS layout. Two paths:
+
+        ///  1. `_mm256_setr_ps` with the 8 axis values
+
+        ///     computed inline. The compiler folds the
+
+        ///     scalar arithmetic into the SIMD constants
+
+        ///     and emits 6 `vmovaps` from stack / registers
+
+        ///     with no intermediate buffer round-trip. This
+
+        ///     is the path the AVX2 kernel takes.
+
+        ///  2. (Reference, not used) gather via
+
+        ///     `_mm256_i32gather_ps` with an 8-int index
+
+        ///     vector [0,32,64,...,224] — high latency on
+
+        ///     most CPUs, not worth it for 8 lanes.
+
         const float cx0 = (lane[0].min[0] + lane[0].max[0]) * 0.5f;
         const float cy0 = (lane[0].min[1] + lane[0].max[1]) * 0.5f;
         const float cz0 = (lane[0].min[2] + lane[0].max[2]) * 0.5f;
@@ -246,17 +291,27 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
         const __m256 v_hy = _mm256_setr_ps(hy0, hy1, hy2, hy3, hy4, hy5, hy6, hy7);
         const __m256 v_hz = _mm256_setr_ps(hz0, hz1, hz2, hz3, hz4, hz5, hz6, hz7);
 
-        // **toCenter = center - cameraPos.** Broadcast
-        // the camera position was hoisted out of the
-        // loop. 3 independent subtractions.
+        /// \brief **toCenter = center - cameraPos.** Broadcast
+        ///
+        /// \details
+        ///  the camera position was hoisted out of the
+
+        ///  loop. 3 independent subtractions.
+
         const __m256 v_tx = _mm256_sub_ps(v_cx, v_px);
         const __m256 v_ty = _mm256_sub_ps(v_cy, v_py);
         const __m256 v_tz = _mm256_sub_ps(v_cz, v_pz);
 
-        // **5 plane culls.** For each plane: dot
-        // (3 mul-add) + abs_mul_sum (3 mul-add) + compare
-        // → 8-bit mask. We accumulate the cull bitmask
-        // across the 5 planes (plus maxDistance below).
+        /// \brief **5 plane culls.** For each plane:
+        ///
+        /// \details
+        /// dot
+        ///  (3 mul-add) + abs_mul_sum (3 mul-add) + compare
+
+        ///  → 8-bit mask. We accumulate the cull bitmask
+
+        ///  across the 5 planes (plus maxDistance below).
+
         uint32_t cullMask = 0;
         for (int p = 0; p < 5; ++p) {
             const __m256 v_nx = _mm256_set1_ps(planes[p].n[0]);
@@ -267,9 +322,13 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
             const __m256 v_anz = _mm256_set1_ps(abs_n[p][2]);
             const __m256 v_offset = _mm256_set1_ps(planes[p].offset);
 
-            // **dot = tx*nx + ty*ny + tz*nz.** Three muls
-            // + two adds. We then subtract the plane
-            // offset to get `centerDistance`.
+            /// \brief **dot = tx*nx + ty*ny + tz*nz.** Three muls
+            ///
+            /// \details
+            ///  + two adds. We then subtract the plane
+
+            ///  offset to get `centerDistance`.
+
             const __m256 v_dot =
                 _mm256_add_ps(
                     _mm256_add_ps(
@@ -278,9 +337,13 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
                     _mm256_mul_ps(v_tz, v_nz));
             const __m256 v_centerDistance = _mm256_sub_ps(v_dot, v_offset);
 
-            // **projectedRadius = |nx|*hx + |ny|*hy + |nz|*hz.**
-            // Identical arithmetic shape; no abs needed
-            // (abs is folded into the pre-broadcast).
+            /// \brief **projectedRadius = |nx|*hx + |ny|*hy + |nz|*hz.**
+            ///
+            /// \details
+            ///  Identical arithmetic shape; no abs needed
+
+            ///  (abs is folded into the pre-broadcast).
+
             const __m256 v_radius =
                 _mm256_add_ps(
                     _mm256_add_ps(
@@ -288,27 +351,46 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
                         _mm256_mul_ps(v_hy, v_any)),
                     _mm256_mul_ps(v_hz, v_anz));
 
-            // **Cull test: centerDistance + radius < 0.**
-            // `_mm256_cmp_ps` returns 0xFFFFFFFF for
-            // "true" and 0 for "false" per lane. We
-            // `_mm256_movemask_ps` to extract the 8 bits
-            // (high bit of each lane's float) into a
-            // uint8_t, then OR into the cumulative
-            // cullMask.
+            /// \brief **Cull test:
+            ///
+            /// \details
+            /// centerDistance + radius < 0.**
+            ///  `_mm256_cmp_ps` returns 0xFFFFFFFF for
+
+            ///  "true" and 0 for "false" per lane. We
+
+            ///  `_mm256_movemask_ps` to extract the 8 bits
+
+            ///  (high bit of each lane's float) into a
+
+            ///  uint8_t, then OR into the cumulative
+
+            ///  cullMask.
+
             const __m256 v_sum = _mm256_add_ps(v_centerDistance, v_radius);
             const __m256 v_culled = _mm256_cmp_ps(v_sum, _mm256_setzero_ps(), _CMP_LT_OQ);
             const uint32_t planeMask = (uint32_t)_mm256_movemask_ps(v_culled);
             cullMask |= planeMask;
         }
 
-        // **maxDistance test.** Per-AABB: lengthSq
-        // (toCenter) > (maxDistance + aabbRadius)^2. We
-        // compute lengthSq in SIMD; aabbRadius is per-AABB
-        // (different half_extents) so we already have it
-        // in v_hx/v_hy/v_hz — sqrtf lane-wise and
-        // compare. The branch is taken only if
-        // useMaxDistance is true (set once outside the
-        // batch loop).
+        /// \brief **maxDistance test.** Per-AABB:
+        ///
+        /// \details
+        /// lengthSq
+        ///  (toCenter) > (maxDistance + aabbRadius)^2. We
+
+        ///  compute lengthSq in SIMD; aabbRadius is per-AABB
+
+        ///  (different half_extents) so we already have it
+
+        ///  in v_hx/v_hy/v_hz — sqrtf lane-wise and
+
+        ///  compare. The branch is taken only if
+
+        ///  useMaxDistance is true (set once outside the
+
+        ///  batch loop).
+
         if (useMaxDistance) {
             const __m256 v_lengthSq =
                 _mm256_add_ps(
@@ -316,9 +398,13 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
                         _mm256_mul_ps(v_tx, v_tx),
                         _mm256_mul_ps(v_ty, v_ty)),
                     _mm256_mul_ps(v_tz, v_tz));
-            // aabbRadius = sqrt(hx*hx + hy*hy + hz*hz)
-            // per lane. We do the sqrts on the
-            // already-computed half-extent SIMD lanes.
+            /// \brief aabbRadius = sqrt(hx*hx + hy*hy + hz*hz)
+            ///
+            /// \details
+            ///  per lane. We do the sqrts on the
+
+            ///  already-computed half-extent SIMD lanes.
+
             const __m256 v_heSq =
                 _mm256_add_ps(
                     _mm256_add_ps(
@@ -334,18 +420,28 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
             cullMask |= farMask;
         }
 
-        // **Pack the 8 visible bits into the caller's
-        // mask byte.** `cullMask` is the bitwise-OR of
-        // all plane-cull masks; AABB i is visible iff
-        // bit i is NOT set.
+        /// \brief **Pack the 8 visible bits into the caller's
+        ///
+        /// \details
+        ///  mask byte.** `cullMask` is the bitwise-OR of
+
+        ///  all plane-cull masks; AABB i is visible iff
+
+        ///  bit i is NOT set.
+
         const uint8_t visible = (uint8_t)(~cullMask & 0xFFu);
         visible_mask[batch] |= visible;
     }
 
-    // **Tail (count % 8 != 0).** The scalar kernel
-    // handles 1..7 remaining AABBs. We share the
-    // already-built planes struct, so the math is
-    // identical to the scalar path.
+    /// \brief **Tail (count % 8 != 0).** The scalar kernel
+    ///
+    /// \details
+    ///  handles 1..7 remaining AABBs. We share the
+
+    ///  already-built planes struct, so the math is
+
+    ///  identical to the scalar path.
+
     for (size_t i = tailStart; i < count; ++i) {
         const ProjectvCAabb aabb = aabbs[i];
         const float cx = (aabb.min[0] + aabb.max[0]) * 0.5f;

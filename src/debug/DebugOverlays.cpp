@@ -14,11 +14,18 @@ constexpr std::array kMutationPreviewOverlayColor{0.42f, 0.92f, 0.72f, 0.26f};
 constexpr std::array kInspectChunkOverlayColor{0.27f, 0.87f, 1.0f, 0.90f};
 constexpr std::array kChunkBoundsOverlayColor{0.16f, 0.52f, 0.95f, 0.32f};
 constexpr std::array kDirtyChunkOverlayColor{1.0f, 0.33f, 0.16f, 0.78f};
-// 5.2 debug gizmos. Cascade split planes get four distinct hues
-// (red, orange, cyan, magenta) so the operator can tell cascade
-// 0/1/2/3 apart at a glance. The cursor hit normal is a single
-// dim-white shaft so it doesn't compete with the yellow selection
-// box.
+/// \brief 5.2 debug gizmos.
+///
+/// \details
+/// Cascade split planes get four distinct hues
+///  (red, orange, cyan, magenta) so the operator can tell cascade
+
+///  0/1/2/3 apart at a glance. The cursor hit normal is a single
+
+///  dim-white shaft so it doesn't compete with the yellow selection
+
+///  box.
+
 constexpr std::array<std::array<float, 4>, kSunShadowCascadeCount> kCascadeSplitPlaneColors = {{
 	{0.95f, 0.20f, 0.20f, 0.55f},
 	{0.96f, 0.62f, 0.18f, 0.55f},
@@ -107,16 +114,28 @@ void AppendMutationPreviewOverlayBox(
 	AppendOverlayBox(outBoxes, min, maxExclusive, kMutationPreviewOverlayColor);
 }
 
-// 5.2 debug gizmo: draw 4 axis-aligned "split plane" boxes — one
-// per CSM cascade — at the camera's `viewDepthSplits[i]` distance
-// along the camera forward vector. The box XZ size is taken from
-// the cascade's ortho width/height (so the operator gets a
-// "shadow frustum footprint" cue on the ground plane), and the
-// Y extent is one voxel. Caveat: `DebugOverlayBox` is
-// axis-aligned, so the box is world-aligned, not camera-aligned.
-// This is a deliberate trade-off — the visual cue is "somewhere
-// in this XY column, the cascade transition happens at this
-// depth", which is enough to tune split lambda by eye.
+/// \brief 5.2 debug gizmo:
+///
+/// \details
+/// draw 4 axis-aligned "split plane" boxes — one
+///  per CSM cascade — at the camera's `viewDepthSplits[i]` distance
+
+///  along the camera forward vector. The box XZ size is taken from
+
+///  the cascade's ortho width/height (so the operator gets a
+
+///  "shadow frustum footprint" cue on the ground plane), and the
+
+///  Y extent is one voxel. Caveat: `DebugOverlayBox` is
+
+///  axis-aligned, so the box is world-aligned, not camera-aligned.
+
+///  This is a deliberate trade-off — the visual cue is "somewhere
+
+///  in this XY column, the cascade transition happens at this
+
+///  depth", which is enough to tune split lambda by eye.
+
 void AppendCascadeSplitPlaneOverlayBoxes(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const CameraState &camera,
@@ -133,8 +152,12 @@ void AppendCascadeSplitPlaneOverlayBoxes(
 			continue;
 		}
 
-		// World-space position: camera eye + splitDepth * forward.
-		// Floored to Int3 for the box min.
+		/// \brief World-space position:
+		///
+		/// \details
+		/// camera eye + splitDepth * forward.
+		///  Floored to Int3 for the box min.
+
 		const float worldX = camera.position[0] + forward[0] * splitDepth;
 		const float worldY = camera.position[1] + forward[1] * splitDepth;
 		const float worldZ = camera.position[2] + forward[2] * splitDepth;
@@ -142,12 +165,19 @@ void AppendCascadeSplitPlaneOverlayBoxes(
 		const float halfWidth = std::max(orthoWidths[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
 		const float halfHeight = std::max(orthoHeights[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
 
-		// AABB on the world XZ plane, centered at (worldX, _, worldZ),
-		// thin in Y. We pick a thin slab around the camera-relative
-		// Y so the box stays visible from any camera angle (it's
-		// not a true camera-aligned frustum, but the XZ footprint
-		// matches the cascade's ortho extent which is the useful
-		// diagnostic for split tuning).
+		/// \brief AABB on the world XZ plane, centered at (worldX, _, worldZ),
+		///
+		/// \details
+		///  thin in Y. We pick a thin slab around the camera-relative
+
+		///  Y so the box stays visible from any camera angle (it's
+
+		///  not a true camera-aligned frustum, but the XZ footprint
+
+		///  matches the cascade's ortho extent which is the useful
+
+		///  diagnostic for split tuning).
+
 		const Int3 min{
 			static_cast<int32_t>(std::floor(worldX - halfWidth)),
 			static_cast<int32_t>(std::floor(worldY - kCascadeSplitPlaneThinVoxels)),
@@ -166,19 +196,30 @@ void AppendCascadeSplitPlaneOverlayBoxes(
 	}
 }
 
-// 5.2 debug gizmo: draw a 1-voxel-wide shaft along the cursor
-// hit normal (an axis-aligned Int3 in {-1, 0, 1}) for 2 voxels.
-// Helps disambiguate "which face is selected" on top-down or
-// side-on views where the yellow selection box alone can be
-// confusing.
+/// \brief 5.2 debug gizmo:
+///
+/// \details
+/// draw a 1-voxel-wide shaft along the cursor
+///  hit normal (an axis-aligned Int3 in {-1, 0, 1}) for 2 voxels.
+
+///  Helps disambiguate "which face is selected" on top-down or
+
+///  side-on views where the yellow selection box alone can be
+
+///  confusing.
+
 void AppendCursorHitNormalOverlayBox(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const Int3 targetVoxel,
 	const Int3 hitNormal)
 {
-	// hitNormal is guaranteed to be a unit axis by VoxelRaycast
-	// (one component is ±1, others 0). Build a thin box from
-	// targetVoxel to targetVoxel + normal * length.
+	/// \brief hitNormal is guaranteed to be a unit axis by VoxelRaycast
+	///
+	/// \details
+	///  (one component is ±1, others 0). Build a thin box from
+
+	///  targetVoxel to targetVoxel + normal * length.
+
 	if (hitNormal.x == 0 && hitNormal.y == 0 && hitNormal.z == 0) {
 		return;
 	}
@@ -189,10 +230,16 @@ void AppendCursorHitNormalOverlayBox(
 		targetVoxel.z + hitNormal.z * kCursorHitNormalShaftLength,
 	};
 
-	// Shaft: a 1x1x1 box at each voxel along the normal. Avoid
-	// the yellow selection box overlap by emitting the shaft
-	// only beyond the hit voxel (the selection box already
-	// covers the hit voxel itself).
+	/// \brief Shaft:
+	///
+	/// \details
+	/// a 1x1x1 box at each voxel along the normal. Avoid
+	///  the yellow selection box overlap by emitting the shaft
+
+	///  only beyond the hit voxel (the selection box already
+
+	///  covers the hit voxel itself).
+
 	for (int32_t step = 1; step <= kCursorHitNormalShaftLength; ++step) {
 		const Int3 voxel{
 			targetVoxel.x + hitNormal.x * step,
@@ -202,8 +249,12 @@ void AppendCursorHitNormalOverlayBox(
 		AppendVoxelOverlayBox(outBoxes, voxel, kCursorHitNormalOverlayColor);
 	}
 
-	// Suppress the unused-shaftEnd warning: kept for
-	// documentation of where the shaft conceptually ends.
+	/// \brief Suppress the unused-shaftEnd warning:
+	///
+	/// \details
+	/// kept for
+	///  documentation of where the shaft conceptually ends.
+
 	(void)shaftEnd;
 }
 } // namespace
@@ -250,10 +301,16 @@ void BuildDebugOverlayBoxes(
 	if (debug.showDirtyChunkOverlay) {
 		requiredBoxCount += CountDirtyChunkOverlays(*world);
 	}
-	// 5.2 gizmos: 4 cascade split plane boxes + 1 cursor hit normal
-	// shaft (≤2 boxes). They emit only when the corresponding flag
-	// is on; the flag is keyed by `L` / `Z` so a clean run with no
-	// keypress allocates zero extra boxes.
+	/// \brief 5.2 gizmos:
+	///
+	/// \details
+	/// 4 cascade split plane boxes + 1 cursor hit normal
+	///  shaft (≤2 boxes). They emit only when the corresponding flag
+
+	///  is on; the flag is keyed by `L` / `Z` so a clean run with no
+
+	///  keypress allocates zero extra boxes.
+
 	if (debug.showCascadeSplitPlanes) {
 		requiredBoxCount += kSunShadowCascadeCount;
 	}
@@ -288,18 +345,28 @@ void BuildDebugOverlayBoxes(
 		}
 	}
 
-	// 5.2 cascade split plane overlay. Emit before the selection
-	// box so the yellow selection box (when present) wins Z-test
-	// for ties against the dimmer cascade boxes.
+	/// \brief 5.2 cascade split plane overlay.
+	///
+	/// \details
+	/// Emit before the selection
+	///  box so the yellow selection box (when present) wins Z-test
+
+	///  for ties against the dimmer cascade boxes.
+
 	if (debug.showCascadeSplitPlanes) {
 		AppendCascadeSplitPlaneOverlayBoxes(*outBoxes, camera, render);
 	}
 
 	if (interaction.selection.hasHit) {
 		AppendVoxelOverlayBox(*outBoxes, interaction.selection.targetVoxel, kSelectionOverlayColor);
-		// 5.2 cursor hit normal shaft. Emit *after* the selection
-		// box so the dim-white shaft reads as a "next to selection"
-		// arrow, not as a replacement marker.
+		/// \brief 5.2 cursor hit normal shaft.
+		///
+		/// \details
+		/// Emit *after* the selection
+		///  box so the dim-white shaft reads as a "next to selection"
+
+		///  arrow, not as a replacement marker.
+
 		if (debug.showCursorHitNormal) {
 			AppendCursorHitNormalOverlayBox(
 				*outBoxes,

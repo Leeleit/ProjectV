@@ -6,8 +6,12 @@ namespace projectv::taa {
 
 namespace {
 
-// Halton sequence helper. Returns the `index`-th value in the low-discrepancy
-// `base`-Halton sequence. Indices start at 0; the first call returns 0.
+/// \brief Halton sequence helper.
+///
+/// \details
+/// Returns the `index`-th value in the low-discrepancy
+///  `base`-Halton sequence. Indices start at 0; the first call returns 0.
+
 float HaltonSequence(uint32_t index, const uint32_t base)
 {
 	float result = 0.0f;
@@ -29,11 +33,17 @@ std::array<float, 2> AdvanceTaaPixelJitter(uint32_t *frameCounter)
 	}
 	const uint32_t index = *frameCounter;
 	*frameCounter = (index + 1u) % 8u;
-	// Halton(2,3) outputs [0, 1); remap to [-0.5, +0.5] so the projection-matrix
-	// jitter sits within a single sub-pixel cell. The +0.5/W, +0.5/H offsets
-	// are applied by `BuildGraphicsPushConstants` when it scales the pixel
-	// offset into NDC; this helper stays in *pixel* units because that is the
-	// contract `VoxelSceneLighting.taaParams` documents in the header.
+	/// \brief Halton(2,3) outputs [0, 1); remap to [-0.5, +0.5] so the projection-matrix
+	///
+	/// \details
+	///  jitter sits within a single sub-pixel cell. The +0.5/W, +0.5/H offsets
+
+	///  are applied by `BuildGraphicsPushConstants` when it scales the pixel
+
+	///  offset into NDC; this helper stays in *pixel* units because that is the
+
+	///  contract `VoxelSceneLighting.taaParams` documents in the header.
+
 	const float hx = HaltonSequence(index, 2u) - 0.5f;
 	const float hy = HaltonSequence(index, 3u) - 0.5f;
 	return {hx, hy};
@@ -54,12 +64,20 @@ std::array<float, 4> BuildTaaHistoryParams(
 	};
 }
 
-// 1.5 anti-flicker: per-layer history parameters. Layout matches
-// `taaHistoryParams` (texelX, texelY, valid, blend) but the last
-// slot is the layer blend factor instead of the TAA neighbourhood
-// radius — those are independent. The layer history matches the
-// colour history's resolution (both render targets are allocated
-// at the swapchain extent), so the texel-size is the same.
+/// \brief 1.5 anti-flicker:
+///
+/// \details
+/// per-layer history parameters. Layout matches
+///  `taaHistoryParams` (texelX, texelY, valid, blend) but the last
+
+///  slot is the layer blend factor instead of the TAA neighbourhood
+
+///  radius — those are independent. The layer history matches the
+
+///  colour history's resolution (both render targets are allocated
+
+///  at the swapchain extent), so the texel-size is the same.
+
 std::array<float, 4> BuildTaaLayerHistoryParams(
 	const VkExtent2D extent,
 	const bool historyValid,

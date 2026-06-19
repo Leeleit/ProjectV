@@ -32,27 +32,43 @@ class AssetRegistry {
 	AssetRegistry(const AssetRegistry &) = delete;
 	AssetRegistry &operator=(const AssetRegistry &) = delete;
 
-	// Synchronous load: parses the .glb at `path` and stores the result under
-	// `id`. Returns `std::expected<const LoadedAsset*, AssetLoadError>` —
-	// the success value is the freshly-loaded pointer (already in the
-	// registry, so no second `Get(id)` round-trip), the error variant
-	// names the specific failure (currently `LoadGlbFailed` for parse
-	// errors; the diagnostic message is on
-	// `GetAssetLoaderLastErrorMessage`).
+	/// \brief Synchronous load:
+	///
+	/// \details
+	/// parses the .glb at `path` and stores the result under
+	///  `id`. Returns `std::expected<const LoadedAsset*, AssetLoadError>` —
+
+	///  the success value is the freshly-loaded pointer (already in the
+
+	///  registry, so no second `Get(id)` round-trip), the error variant
+
+	///  names the specific failure (currently `LoadGlbFailed` for parse
+
+	///  errors; the diagnostic message is on
+
+	///  `GetAssetLoaderLastErrorMessage`).
+
 	std::expected<const LoadedAsset *, AssetLoadError> Load(const std::string &id, const std::string &path);
 
-	// Returns the previously-loaded asset, or nullptr if `id` is unknown.
-	// The returned pointer is owned by the registry and is invalidated on
-	// `Unload` / `Clear` / destruction.
+	/// \brief Returns the previously-loaded asset, or nullptr if `id` is unknown.
+	///
+	/// \details
+	///  The returned pointer is owned by the registry and is invalidated on
+
+	///  `Unload` / `Clear` / destruction.
+
 	const LoadedAsset *Get(const std::string &id) const;
 
-	// Drops a single entry. No-op if the id is unknown.
+	/// \brief Drops a single entry.
+	///
+	/// \details
+	/// No-op if the id is unknown.
 	void Unload(const std::string &id);
 
-	// Drops every entry.
+	/// \brief Drops every entry.
 	void Clear();
 
-	// All known ids in insertion order.
+	/// \brief All known ids in insertion order.
 	std::vector<std::string> Ids() const;
 
 	std::size_t Size() const;

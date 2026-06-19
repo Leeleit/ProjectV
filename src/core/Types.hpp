@@ -1,9 +1,13 @@
 #pragma once
 
 #if defined(__clang__) && defined(_MSC_VER)
-// Fallback definitions are pulled in via
-// `core/Math.hpp` and `core/StringId.hpp` below; nothing
-// to do here.
+/// \brief Fallback definitions are pulled in via
+///
+/// \details
+///  `core/Math.hpp` and `core/StringId.hpp` below; nothing
+
+///  to do here.
+
 #else
 import projectv.math;
 import projectv.string_id;
@@ -65,14 +69,26 @@ using AudioEnginePtr = std::unique_ptr<projectv::audio::AudioEngine,
 									   void (*)(projectv::audio::AudioEngine *)>;
 
 struct PackedSceneVoxelFace {
-	// A1 (4.1 greedy meshing): this struct now covers both 1×1 voxels and
-	// greedy W×H merged quads. `localVoxelFace` still packs the START voxel
-	// coord + face index (same as before — the minimum-corner anchor);
-	// `packedExtents` carries the in-plane (width, height) in 8 bits each so
-	// the vertex shader can stretch the 4-corner unit offset to the merged
-	// quad size. Lighting stays on `lightingData` as a no-op for now
-	// (per-vertex AO disabled per `decisions.md §14` v2, AO no longer blocks
-	// greedy merge).
+	/// \brief A1 (4.1 greedy meshing):
+	///
+	/// \details
+	/// this struct now covers both 1×1 voxels and
+	///  greedy W×H merged quads. `localVoxelFace` still packs the START voxel
+
+	///  coord + face index (same as before — the minimum-corner anchor);
+
+	///  `packedExtents` carries the in-plane (width, height) in 8 bits each so
+
+	///  the vertex shader can stretch the 4-corner unit offset to the merged
+
+	///  quad size. Lighting stays on `lightingData` as a no-op for now
+
+	///  (per-vertex AO disabled per `decisions.md §14` v2, AO no longer blocks
+
+	///  greedy merge).
+
+	///
+	/// \see agent/decisions.md §14
 	uint32_t localVoxelFace = 0;
 	uint32_t chunkIndexMaterial = 0;
 	uint32_t lightingData = 0;
@@ -377,12 +393,20 @@ struct ChunkVisibilityCache {
 	bool valid = false;
 	uint64_t sceneVoxelPayloadVersion = 0;
 	uint32_t chunkDescriptorCount = 0;
-	// Quantized camera state: position to 0.25 voxel (so
-	// 1-voxel camera moves always invalidate), forward to
-	// 0.005 (~0.3° steps) so sub-1° rotations also
-	// invalidate. Forward is stored as fixed-point
-	// (forward * 1000, clamped + rounded) to keep the
-	// cache key as a small integer tuple.
+	/// \brief Quantized camera state:
+	///
+	/// \details
+	/// position to 0.25 voxel (so
+	///  1-voxel camera moves always invalidate), forward to
+
+	///  0.005 (~0.3° steps) so sub-1° rotations also
+
+	///  invalidate. Forward is stored as fixed-point
+
+	///  (forward * 1000, clamped + rounded) to keep the
+
+	///  cache key as a small integer tuple.
+
 	int32_t quantizedCameraX = 0;
 	int32_t quantizedCameraY = 0;
 	int32_t quantizedCameraZ = 0;
@@ -396,13 +420,23 @@ struct ChunkVisibilityCache {
 	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands;
 	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands;
 	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> transparentCommands;
-	// Cached values for the chunk-culling profiler plots. Mirrors
-	// the "Visible Chunks" / "Culled Chunks" values written by
-	// `UpdateSceneFrameChunkVisibility` so the plot stays
-	// populated even on cache-hit frames.
+	/// \brief Cached values for the chunk-culling profiler plots.
+	///
+	/// \details
+	/// Mirrors
+	///  the "Visible Chunks" / "Culled Chunks" values written by
+
+	///  `UpdateSceneFrameChunkVisibility` so the plot stays
+
+	///  populated even on cache-hit frames.
+
 	uint32_t culledChunkCount = 0;
-	// 0 = miss (rebuild), 1+ = Nth consecutive hit. Useful
-	// when correlating profiler traces with cache behaviour.
+	/// \brief 0 = miss (rebuild), 1+ = Nth consecutive hit.
+	///
+	/// \details
+	/// Useful
+	///  when correlating profiler traces with cache behaviour.
+
 	uint64_t consecutiveHitCount = 0;
 };
 static_assert(std::is_standard_layout_v<VoxelMeshingPushConstants>);
@@ -524,38 +558,67 @@ struct DebugStats {
 	float sceneMaxExposure = 4.0f;
 	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
 	LightingDebugView lightingDebugView = LightingDebugView::Final;
-	// TAA runtime state mirrored in the public debug HUD. `taaEnabled` is
-	// the master gate; the active blend factor, current frame counter and
-	// history-valid flag are also queryable here for HUD lines and the
-	// scripted capture sidecar. The per-frame jitter values
-	// (`taaJitterX/Y`) and the previous-frame view-projection matrix live
-	// only in `RenderState` because they feed the push-constant uploads
-	// and the scene-lighting buffer, not the debug HUD.
+	/// \brief TAA runtime state mirrored in the public debug HUD.
+	///
+	/// \details
+	/// `taaEnabled` is
+	///  the master gate; the active blend factor, current frame counter and
+
+	///  history-valid flag are also queryable here for HUD lines and the
+
+	///  scripted capture sidecar. The per-frame jitter values
+
+	///  (`taaJitterX/Y`) and the previous-frame view-projection matrix live
+
+	///  only in `RenderState` because they feed the push-constant uploads
+
+	///  and the scene-lighting buffer, not the debug HUD.
+
 	bool taaEnabled = false;
 	float taaBlend = 0.0f;
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
-	// Default 1.0 (pre-ladder Halton output). The
-	// per-frame projection jitter is the smaller of
-	// the two TAA-side contributions to the tremor;
-	// the bigger one was the temporal blend (see above).
+	/// \brief Default 1.0 (pre-ladder Halton output).
+	///
+	/// \details
+	/// The
+	///  per-frame projection jitter is the smaller of
+
+	///  the two TAA-side contributions to the tremor;
+
+	///  the bigger one was the temporal blend (see above).
+
 	float taaJitterScale = 1.0f;
 	int32_t taaNeighbourhoodRadius = 1;
-	// CAS (1.3) ceiling mirror; see `RenderState` for the contract.
+	/// \brief CAS (1.3) ceiling mirror; see `RenderState` for the contract.
 	float taaCasSharpnessMax = 0.5f;
-	// 1.5 — layer history validity mirror. See `RenderState` for the
-	// contract; the HUD exposes a single boolean.
+	/// \brief 1.5 — layer history validity mirror.
+	///
+	/// \details
+	/// See `RenderState` for the
+	///  contract; the HUD exposes a single boolean.
+
 	bool taaLayerHistoryValid = false;
-	// 1.5 — layer blend factor mirror; see `RenderState` for the
-	// contract. Not currently surfaced in the HUD (the value is
-	// authored at startup and only changed via env var), but
-	// exposed through this mirror so sidecar captures can verify
-	// it.
+	/// \brief 1.5 — layer blend factor mirror; see `RenderState` for the
+	///
+	/// \details
+	///  contract. Not currently surfaced in the HUD (the value is
+
+	///  authored at startup and only changed via env var), but
+
+	///  exposed through this mirror so sidecar captures can verify
+
+	///  it.
+
 	float taaLayerBlendFactor = 0.4f;
-	// Camera-cut detection mirror (1.2). Same source fields as in
-	// `RenderState`; see that block for the contract.
+	/// \brief Camera-cut detection mirror (1.2).
+	///
+	/// \details
+	/// Same source fields as in
+	///  `RenderState`; see that block for the contract.
+
 	uint32_t taaCameraCutCount = 0;
 	float taaCameraCutMaxDelta = 0.0f;
 	std::array<float, 3> sunDirection{};
@@ -650,16 +713,28 @@ struct ModelInstanceData {
 	projectv::math::Mat4 modelTransform{};
 	projectv::math::Vec3 worldAabbMin{};
 	projectv::math::Vec3 worldAabbMax{};
-	// Source (asset-local) AABB min in model-local space. The
-	// load path's `aabbMinOffset = T(-srcMin*scale)` shifts the
-	// model basis so the translation column of `modelTransform`
-	// ends up at `pos - srcAabbMin` (NOT `pos`); the renderer
-	// then adds `srcAabbMin` back when transforming each vertex.
-	// Snap / drag paths that mutate the AABB min must also update
-	// `modelTransform[12..14]` to `newMin - sourceAabbMin` — see
-	// `ModelManifestLoader.cpp` and `ModelGravigun.cpp`. The
-	// field is captured at load time from
-	// `ModelRegistryEntry::aabbMin` and never changes after that.
+	/// \brief Source (asset-local) AABB min in model-local space.
+	///
+	/// \details
+	/// The
+	///  load path's `aabbMinOffset = T(-srcMin*scale)` shifts the
+
+	///  model basis so the translation column of `modelTransform`
+
+	///  ends up at `pos - srcAabbMin` (NOT `pos`); the renderer
+
+	///  then adds `srcAabbMin` back when transforming each vertex.
+
+	///  Snap / drag paths that mutate the AABB min must also update
+
+	///  `modelTransform[12..14]` to `newMin - sourceAabbMin` — see
+
+	///  `ModelManifestLoader.cpp` and `ModelGravigun.cpp`. The
+
+	///  field is captured at load time from
+
+	///  `ModelRegistryEntry::aabbMin` and never changes after that.
+
 	std::array<float, 3> sourceAabbMin{};
 	VkBuffer vertexBuffer = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
@@ -680,11 +755,18 @@ struct RenderPassTimings {
 	float taaResolveMs = 0.0f;
 	float debugOverlayMs = 0.0f;
 	float debugHudMs = 0.0f;
-	// Derived: `frameTimeMs - (shadow + meshing + graphics +
-	// taaResolve + debugOverlay + debugHud)`. Computed at
-	// the stats-mirror site in `AppUpdate.cpp` so the
-	// caller can keep it consistent with whatever total
-	// the rest of the dashboard reads.
+	/// \brief Derived:
+	///
+	/// \details
+	/// `frameTimeMs - (shadow + meshing + graphics +
+	///  taaResolve + debugOverlay + debugHud)`. Computed at
+
+	///  the stats-mirror site in `AppUpdate.cpp` so the
+
+	///  caller can keep it consistent with whatever total
+
+	///  the rest of the dashboard reads.
+
 	float otherMs = 0.0f;
 	uint32_t dirtyChunkRebuiltCount = 0;
 };
@@ -731,15 +813,26 @@ struct RenderState {
 	VkDescriptorSetLayout voxelMeshingDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool voxelMeshingDescriptorPool = VK_NULL_HANDLE;
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
-	// Two-level chunk visibility cache. Lives on RenderState (not
-	// SceneFrameResources) because the cached commands are
-	// frame-independent — both `sceneFrameResources[0]` and
-	// `[1]` get the same `memcpy`'d commands from this single
-	// cache on a hit. The cache is invalidated by
-	// `UpdateSceneFrameChunkVisibility` whenever the camera
-	// moved past the quantization threshold or the world
-	// version changed. See `ChunkVisibilityCache` for the
-	// per-field contract.
+	/// \brief Two-level chunk visibility cache.
+	///
+	/// \details
+	/// Lives on RenderState (not
+	///  SceneFrameResources) because the cached commands are
+
+	///  frame-independent — both `sceneFrameResources[0]` and
+
+	///  `[1]` get the same `memcpy`'d commands from this single
+
+	///  cache on a hit. The cache is invalidated by
+
+	///  `UpdateSceneFrameChunkVisibility` whenever the camera
+
+	///  moved past the quantization threshold or the world
+
+	///  version changed. See `ChunkVisibilityCache` for the
+
+	///  per-field contract.
+
 	ChunkVisibilityCache chunkVisibilityCache{};
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
@@ -753,39 +846,74 @@ struct RenderState {
 	VkSampler shadowSampler = VK_NULL_HANDLE;
 	bool depthImageNeedsInit = false;
 	bool shadowImageNeedsInit = false;
-	// Per-image layout trackers. The `*NeedsInit` flags above only
-	// cover the very first transition (UNDEFINED → first layout);
-	// once cleared, the renderer is responsible for keeping the
-	// per-frame layout transitions consistent. The trackers below let
-	// `Renderer.cpp::RecordGraphicsCommands` pick the right `oldLayout`
-	// for each transition (depth lands in `DEPTH_ATTACHMENT_OPTIMAL` at
-	// the end of a TAA-off frame and `DEPTH_READ_ONLY_OPTIMAL` at the
-	// end of a TAA-on frame, so the next frame's start-of-frame
-	// transition needs to know which one it is). Same story for the
-	// TAA offscreen pair, which lands in `SHADER_READ_ONLY_OPTIMAL` at
-	// the end of every frame so the next frame's resolve pass can sample
-	// it without an extra barrier.
+	/// \brief Per-image layout trackers.
+	///
+	/// \details
+	/// The `*NeedsInit` flags above only
+	///  cover the very first transition (UNDEFINED → first layout);
+
+	///  once cleared, the renderer is responsible for keeping the
+
+	///  per-frame layout transitions consistent. The trackers below let
+
+	///  `Renderer.cpp::RecordGraphicsCommands` pick the right `oldLayout`
+
+	///  for each transition (depth lands in `DEPTH_ATTACHMENT_OPTIMAL` at
+
+	///  the end of a TAA-off frame and `DEPTH_READ_ONLY_OPTIMAL` at the
+
+	///  end of a TAA-on frame, so the next frame's start-of-frame
+
+	///  transition needs to know which one it is). Same story for the
+
+	///  TAA offscreen pair, which lands in `SHADER_READ_ONLY_OPTIMAL` at
+
+	///  the end of every frame so the next frame's resolve pass can sample
+
+	///  it without an extra barrier.
+
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	// Vulkan spec VUID-VkImageCreateInfo-initialLayout-00993
-	// requires `initialLayout` to be `UNDEFINED` /
-	// `PREINITIALIZED` / `ZERO_INITIALIZED`, so both the
-	// colour and layer history images are created with
-	// `initialLayout = UNDEFINED` and the first-frame
-	// per-frame transition in `Renderer.cpp` moves them to
-	// `SHADER_READ_ONLY_OPTIMAL` for the resolve pass / the
-	// voxel pass's binding-6 sample. The trackers here mirror
-	// that initial state.
+	/// \brief Vulkan spec VUID-VkImageCreateInfo-initialLayout-00993
+	///
+	/// \details
+	///  requires `initialLayout` to be `UNDEFINED` /
+
+	///  `PREINITIALIZED` / `ZERO_INITIALIZED`, so both the
+
+	///  colour and layer history images are created with
+
+	///  `initialLayout = UNDEFINED` and the first-frame
+
+	///  per-frame transition in `Renderer.cpp` moves them to
+
+	///  `SHADER_READ_ONLY_OPTIMAL` for the resolve pass / the
+
+	///  voxel pass's binding-6 sample. The trackers here mirror
+
+	///  that initial state.
+
 	VkImageLayout taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	// 1.5 anti-flicker: per-layer (CTSH/AOCC/LOCL) image
-	// layout trackers. Same shape and lifecycle as the colour
-	// history layout trackers above — both go through the
-	// per-frame transition + copy block in `Renderer.cpp` and
-	// are reset on swapchain recreate. The scene target is
-	// born in `UNDEFINED` (the voxel pass writes to it via
-	// `vkCmdBeginRendering`'s `imageLayout`); the history
-	// target is also born in `UNDEFINED` for the same
-	// Vulkan-spec reason as the colour history.
+	/// \brief 1.5 anti-flicker:
+	///
+	/// \details
+	/// per-layer (CTSH/AOCC/LOCL) image
+	///  layout trackers. Same shape and lifecycle as the colour
+
+	///  history layout trackers above — both go through the
+
+	///  per-frame transition + copy block in `Renderer.cpp` and
+
+	///  are reset on swapchain recreate. The scene target is
+
+	///  born in `UNDEFINED` (the voxel pass writes to it via
+
+	///  `vkCmdBeginRendering`'s `imageLayout`); the history
+
+	///  target is also born in `UNDEFINED` for the same
+
+	///  Vulkan-spec reason as the colour history.
+
 	VkImageLayout taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
@@ -802,21 +930,38 @@ struct RenderState {
 	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
-	// TAA (Temporal Anti-Aliasing) runtime state. `taaEnabled` is the master
-	// gate; when false, the main pass writes straight to the swapchain and
-	// no TAA resolve runs. `taaBlend` is the per-frame history blend factor
-	// (lower = more ghosting on moving silhouettes, higher = less stable on
-	// stationary detail). `taaFrameCounter` advances an 8-tap Halton(2,3)
-	// sequence so the projection-matrix jitter spans the full sub-pixel
-	// neighbourhood over eight frames before repeating. `taaHistoryValid`
-	// drops to false for one frame after resize / world reload / preset
-	// change / pause toggle / Taa toggle so the next resolve takes the
-	// current scene as the only sample instead of the stale history.
-	// `taaPrevViewProjectionMatrix` is the previous frame's viewProjection,
-	// uploaded as the `prevViewProjectionMatrix` field of `VoxelSceneLighting`
-	// and consumed by the TAA resolve pass for depth-based reprojection.
-	// `taaJitterX/Y` are the current frame's NDC sub-pixel offsets and are
-	// written into `VoxelSceneLighting.taaParams` for the same resolve pass.
+	/// \brief TAA (Temporal Anti-Aliasing) runtime state.
+	///
+	/// \details
+	/// `taaEnabled` is the master
+	///  gate; when false, the main pass writes straight to the swapchain and
+
+	///  no TAA resolve runs. `taaBlend` is the per-frame history blend factor
+
+	///  (lower = more ghosting on moving silhouettes, higher = less stable on
+
+	///  stationary detail). `taaFrameCounter` advances an 8-tap Halton(2,3)
+
+	///  sequence so the projection-matrix jitter spans the full sub-pixel
+
+	///  neighbourhood over eight frames before repeating. `taaHistoryValid`
+
+	///  drops to false for one frame after resize / world reload / preset
+
+	///  change / pause toggle / Taa toggle so the next resolve takes the
+
+	///  current scene as the only sample instead of the stale history.
+
+	///  `taaPrevViewProjectionMatrix` is the previous frame's viewProjection,
+
+	///  uploaded as the `prevViewProjectionMatrix` field of `VoxelSceneLighting`
+
+	///  and consumed by the TAA resolve pass for depth-based reprojection.
+
+	///  `taaJitterX/Y` are the current frame's NDC sub-pixel offsets and are
+
+	///  written into `VoxelSceneLighting.taaParams` for the same resolve pass.
+
 	bool taaEnabled = true;
 	float taaBlend = 0.10f;
 	uint32_t taaFrameCounter = 0u;
@@ -828,90 +973,178 @@ struct RenderState {
 	float taaJitterY = 0.0f;
 	float taaJitterScale = 0.0f;
 	int32_t taaNeighbourhoodRadius = 1;
-	// CAS (Contrast Adaptive Sharpening) post-TAA (1.3). The shader
-	// derives the effective sharpening amount as
-	// `(1.0 - taaBlend) * taaCasSharpnessMax`, so this field is the
-	// *ceiling* on top of the per-frame blend-driven attenuation;
-	// high-blend frames (more history, already stable) get less
-	// sharpening, low-blend frames (less history, more noise) get
-	// more. 0.5 matches the AMD CAS reference for a default 0.10
-	// TAA blend, i.e. `(1 - 0.10) * 0.5 = 0.45` effective sharpening
-	// for the first-frame-after-invalidation sample. Range [0, 1];
-	// 0 disables the CAS step entirely (`ApplyCasLinear` short-
-	// circuits). The value is uploaded as part of `ResolvePushConstants`
-	// and consumed by `taa_resolve.frag::ApplyCasLinear` (see
-	// `decisions.md` §19).
+	/// \brief CAS (Contrast Adaptive Sharpening) post-TAA (1.3).
+	///
+	/// \details
+	/// The shader
+	///  derives the effective sharpening amount as
+
+	///  `(1.0 - taaBlend) * taaCasSharpnessMax`, so this field is the
+
+	///  *ceiling* on top of the per-frame blend-driven attenuation;
+
+	///  high-blend frames (more history, already stable) get less
+
+	///  sharpening, low-blend frames (less history, more noise) get
+
+	///  more. 0.5 matches the AMD CAS reference for a default 0.10
+
+	///  TAA blend, i.e. `(1 - 0.10) * 0.5 = 0.45` effective sharpening
+
+	///  for the first-frame-after-invalidation sample. Range [0, 1];
+
+	///  0 disables the CAS step entirely (`ApplyCasLinear` short-
+
+	///  circuits). The value is uploaded as part of `ResolvePushConstants`
+
+	///  and consumed by `taa_resolve.frag::ApplyCasLinear` (see
+
+	///  `decisions.md` §19).
+
 	float taaCasSharpnessMax = 0.5f;
-	// Camera-cut detection (1.2). The Chebyshev (max-abs-element) distance
-	// between the previous and current frame's `viewProjection` is computed
-	// each frame in `FramePreparation::BuildFrameData`; if it exceeds
-	// `kTaaCameraCutThreshold` (0.10) the camera has moved far enough in
-	// one frame that motion vectors can't sensibly reproject the history,
-	// and `taaHistoryValid` is dropped the same way swapchain resize /
-	// world reload / Taa toggle already do. `taaCameraCutCount` accumulates
-	// across the session (resets only on world reload); `taaCameraCutMaxDelta`
-	// records the worst Chebyshev distance seen since startup so the operator
-	// can compare a live repro against `decisions.md` §19's expected delta
-	// ranges. The first frame is skipped because the zero-initialised
-	// `taaPrevViewProjectionMatrix` would always register as a "cut".
+	/// \brief Camera-cut detection (1.2).
+	///
+	/// \details
+	/// The Chebyshev (max-abs-element) distance
+	///  between the previous and current frame's `viewProjection` is computed
+
+	///  each frame in `FramePreparation::BuildFrameData`; if it exceeds
+
+	///  `kTaaCameraCutThreshold` (0.10) the camera has moved far enough in
+
+	///  one frame that motion vectors can't sensibly reproject the history,
+
+	///  and `taaHistoryValid` is dropped the same way swapchain resize /
+
+	///  world reload / Taa toggle already do. `taaCameraCutCount` accumulates
+
+	///  across the session (resets only on world reload); `taaCameraCutMaxDelta`
+
+	///  records the worst Chebyshev distance seen since startup so the operator
+
+	///  can compare a live repro against `decisions.md` §19's expected delta
+
+	///  ranges. The first frame is skipped because the zero-initialised
+
+	///  `taaPrevViewProjectionMatrix` would always register as a "cut".
+
 	uint32_t taaCameraCutCount = 0;
 	float taaCameraCutMaxDelta = 0.0f;
-	// 1.2 — companion flag to `taaPrevViewProjectionMatrix`. Set
-	// after the first successful stash so the camera-cut detector
-	// knows the previous-frame matrix is real (rather than the
-	// zero-initialised default). Reset by `VulkanSwapchain.cpp`
-	// on swapchain recreate, since that path also zeroes
-	// `taaPrevViewProjectionMatrix`; without this flag the very
-	// first frame after (re)init would always register as a
-	// "cut" with `maxDelta` equal to the largest |viewProj| entry.
+	/// \brief 1.2 — companion flag to `taaPrevViewProjectionMatrix`.
+	///
+	/// \details
+	/// Set
+	///  after the first successful stash so the camera-cut detector
+
+	///  knows the previous-frame matrix is real (rather than the
+
+	///  zero-initialised default). Reset by `VulkanSwapchain.cpp`
+
+	///  on swapchain recreate, since that path also zeroes
+
+	///  `taaPrevViewProjectionMatrix`; without this flag the very
+
+	///  first frame after (re)init would always register as a
+
+	///  "cut" with `maxDelta` equal to the largest |viewProj| entry.
+
 	bool taaPrevViewProjectionMatrixInitialized = false;
-	// TAA offscreen render targets + linear sampler + resolve pipeline.
-	// Allocated by `projectv::taa::CreateOrRecreateTaaRenderTargets` from
-	// `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays in
-	// lockstep with the swapchain. The TAA resolve pipeline reads from the
-	// `historyColor` target while writing the resolved scene to the
-	// swapchain image; the freshly-resolved frame is then
-	// `vkCmdCopyImage`'d back into `historyColor` for the next frame.
-	// The fields are heap-allocated pointers (rather than raw `VkImage`
-	// handles) so `TaaRenderTargets.{hpp,cpp}` owns the full lifecycle
-	// and `RenderState` just keeps a borrowed reference.
-	// `projectv::taa::OffscreenColorTarget` is forward-declared at the
-	// top of this header; the full definition is only visible in
-	// `TaaRenderTargets.hpp` and the .cpp that actually performs the
-	// allocation.
+	/// \brief TAA offscreen render targets + linear sampler + resolve pipeline.
+	///
+	/// \details
+	///  Allocated by `projectv::taa::CreateOrRecreateTaaRenderTargets` from
+
+	///  `VulkanSwapchain::CreateOrRecreateSwapchain` so the size stays in
+
+	///  lockstep with the swapchain. The TAA resolve pipeline reads from the
+
+	///  `historyColor` target while writing the resolved scene to the
+
+	///  swapchain image; the freshly-resolved frame is then
+
+	///  `vkCmdCopyImage`'d back into `historyColor` for the next frame.
+
+	///  The fields are heap-allocated pointers (rather than raw `VkImage`
+
+	///  handles) so `TaaRenderTargets.{hpp,cpp}` owns the full lifecycle
+
+	///  and `RenderState` just keeps a borrowed reference.
+
+	///  `projectv::taa::OffscreenColorTarget` is forward-declared at the
+
+	///  top of this header; the full definition is only visible in
+
+	///  `TaaRenderTargets.hpp` and the .cpp that actually performs the
+
+	///  allocation.
+
 	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;
 	projectv::taa::OffscreenColorTarget *taaHistoryColorTarget = nullptr;
-	// 1.5 anti-flicker: per-layer (CTSH, AOCC, LOCL) temporal history
-	// attachments. R8G8B8A8_UNORM (4 B/pixel) for the 3 layer values
-	// in RGB + alpha=1.0. The voxel pass reads from
-	// `taaLayerHistoryColorTarget` and writes the freshly-computed raw
-	// values to `taaLayerSceneColorTarget`; the per-frame
-	// `vkCmdCopyImage` in `Renderer.cpp` makes the current frame's
-	// values the next frame's history input. See
-	// `TaaRenderTargets.hpp::kTaaLayerHistoryColorFormat` for the
-	// format choice rationale.
+	/// \brief 1.5 anti-flicker:
+	///
+	/// \details
+	/// per-layer (CTSH, AOCC, LOCL) temporal history
+	///  attachments. R8G8B8A8_UNORM (4 B/pixel) for the 3 layer values
+
+	///  in RGB + alpha=1.0. The voxel pass reads from
+
+	///  `taaLayerHistoryColorTarget` and writes the freshly-computed raw
+
+	///  values to `taaLayerSceneColorTarget`; the per-frame
+
+	///  `vkCmdCopyImage` in `Renderer.cpp` makes the current frame's
+
+	///  values the next frame's history input. See
+
+	///  `TaaRenderTargets.hpp::kTaaLayerHistoryColorFormat` for the
+
+	///  format choice rationale.
+
 	projectv::taa::OffscreenColorTarget *taaLayerSceneColorTarget = nullptr;
 	projectv::taa::OffscreenColorTarget *taaLayerHistoryColorTarget = nullptr;
-	// 1.5 — companion init flag for the layer history. Mirrors the
-	// 1.2 `taaPrevViewProjectionMatrixInitialized` pattern: the voxel
-	// pass should not sample the layer history on the very first
-	// frame after (re)init because the zero-initialised content is
-	// not a real previous-frame value (it would still blend cleanly
-	// because layer values are 0-1 floats, but the explicit gate
-	// matches the existing init-flag contract and keeps the
-	// history-invalidation semantics consistent). Reset by
-	// `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` next to the
-	// `taaHistoryColorTarget` reset.
+	/// \brief 1.5 — companion init flag for the layer history.
+	///
+	/// \details
+	/// Mirrors the
+	///  1.2 `taaPrevViewProjectionMatrixInitialized` pattern: the voxel
+
+	///  pass should not sample the layer history on the very first
+
+	///  frame after (re)init because the zero-initialised content is
+
+	///  not a real previous-frame value (it would still blend cleanly
+
+	///  because layer values are 0-1 floats, but the explicit gate
+
+	///  matches the existing init-flag contract and keeps the
+
+	///  history-invalidation semantics consistent). Reset by
+
+	///  `VulkanSwapchain.cpp::CreateOrRecreateSwapchain` next to the
+
+	///  `taaHistoryColorTarget` reset.
+
 	bool taaLayerHistoryValid = false;
-	// 1.5 anti-flicker layer blend factor. 0 = no temporal
-	// smoothing (raw current value used in lighting), 1 = full
-	// reliance on history (previous-frame value used in lighting,
-	// current frame is just written to history for next frame's
-	// read). Default 0.4 matches a 1-frame temporal filter
-	// (`final = 0.6 * raw_current + 0.4 * raw_previous`) — enough
-	// to kill per-frame flicker on AOCC and local-light DDA, not
-	// so high that legitimate one-frame lighting changes
-	// (e.g. toggling a light on/off) are smeared across frames.
+	/// \brief 1.5 anti-flicker layer blend factor.
+	///
+	/// \details
+	/// 0 = no temporal
+	///  smoothing (raw current value used in lighting), 1 = full
+
+	///  reliance on history (previous-frame value used in lighting,
+
+	///  current frame is just written to history for next frame's
+
+	///  read). Default 0.4 matches a 1-frame temporal filter
+
+	///  (`final = 0.6 * raw_current + 0.4 * raw_previous`) — enough
+
+	///  to kill per-frame flicker on AOCC and local-light DDA, not
+
+	///  so high that legitimate one-frame lighting changes
+
+	///  (e.g. toggling a light on/off) are smeared across frames.
+
 	float taaLayerBlendFactor = 0.4f;
 	VkSampler taaLinearSampler = VK_NULL_HANDLE;
 	VkImageView taaResolveAttachmentImageView = VK_NULL_HANDLE;
@@ -920,24 +1153,44 @@ struct RenderState {
 	VkDescriptorSetLayout taaResolveDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool taaResolveDescriptorPool = VK_NULL_HANDLE;
 	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> taaResolveDescriptorSets{};
-	// Polygon-model import pipeline (M4). Each `ModelRegistryEntry`
-	// owns the device-local VBO/IBO for one baked .glb / .gltf asset.
-	// `modelInstances` is the per-frame list of draw commands, built
-	// by `FramePreparation::BuildModelDrawList` from the current ECS
-	// snapshot + the camera frustum. The model pass reuses the main
-	// `graphicsDescriptorSet` (binding 3 = SceneLightingBuffer is the
-	// only descriptor it needs), so no new descriptor set
-	// allocation is required for M4.
+	/// \brief Polygon-model import pipeline (M4).
+	///
+	/// \details
+	/// Each `ModelRegistryEntry`
+	///  owns the device-local VBO/IBO for one baked .glb / .gltf asset.
+
+	///  `modelInstances` is the per-frame list of draw commands, built
+
+	///  by `FramePreparation::BuildModelDrawList` from the current ECS
+
+	///  snapshot + the camera frustum. The model pass reuses the main
+
+	///  `graphicsDescriptorSet` (binding 3 = SceneLightingBuffer is the
+
+	///  only descriptor it needs), so no new descriptor set
+
+	///  allocation is required for M4.
+
 	std::vector<ModelRegistryEntry> modelRegistry;
 	std::vector<ModelInstanceData> modelInstances;
-	// M5: per-frame frustum-culled subset of `modelInstances`. Built
-	// each frame in `FramePreparation::BuildVisibleModelInstanceList`
-	// from the same `ChunkCullingParameters` that drives chunk
-	// visibility. The render command buffer iterates this filtered
-	// list rather than `modelInstances` so off-screen / max-distance
-	// instances do not generate draw calls. The allocation is
-	// reused across frames; capacity tracks the worst-case
-	// `modelInstances.size()`.
+	/// \brief M5:
+	///
+	/// \details
+	/// per-frame frustum-culled subset of `modelInstances`. Built
+	///  each frame in `FramePreparation::BuildVisibleModelInstanceList`
+
+	///  from the same `ChunkCullingParameters` that drives chunk
+
+	///  visibility. The render command buffer iterates this filtered
+
+	///  list rather than `modelInstances` so off-screen / max-distance
+
+	///  instances do not generate draw calls. The allocation is
+
+	///  reused across frames; capacity tracks the worst-case
+
+	///  `modelInstances.size()`.
+
 	std::vector<ModelInstanceData> visibleModelInstances;
 	VkPipelineLayout modelPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline modelPipeline = VK_NULL_HANDLE;
@@ -1002,14 +1255,23 @@ struct InputState {
 	bool removePressed = false;
 	bool placePressed = false;
 	bool relativeMouseModeEnabled = true;
-	// When `SDL_SetWindowRelativeMouseMode(true)` is first enabled (or
-	// re-enabled after a tab-toggle) the first SDL_EVENT_MOUSE_MOTION can carry
-	// a very large `xrel` / `yrel` because the cursor was still at its
-	// pre-capture screen position. Without this flag, that one event
-	// yanks the camera sharply (typically pitching the look down to the
-	// floor) the moment the program starts. Defaulted to true so the first
-	// capture-mode motion on launch is silently dropped; reset to true from
-	// `SetRelativeMouseMode` whenever the user re-toggles relative mode.
+	/// \brief When `SDL_SetWindowRelativeMouseMode(true)` is first enabled (or
+	///
+	/// \details
+	///  re-enabled after a tab-toggle) the first SDL_EVENT_MOUSE_MOTION can carry
+
+	///  a very large `xrel` / `yrel` because the cursor was still at its
+
+	///  pre-capture screen position. Without this flag, that one event
+
+	///  yanks the camera sharply (typically pitching the look down to the
+
+	///  floor) the moment the program starts. Defaulted to true so the first
+
+	///  capture-mode motion on launch is silently dropped; reset to true from
+
+	///  `SetRelativeMouseMode` whenever the user re-toggles relative mode.
+
 	bool skipFirstMouseMotion = true;
 	int mouseMotionFreezeCount = 0;
 	Uint64 lastMoveUpPressedTimestampNs = 0;
@@ -1025,12 +1287,20 @@ struct DebugState {
 	bool detailedHudVisible = false;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
-	// 5.2 debug gizmos. See `InputAction::ToggleCascadeSplitPlanes`
-	// and `InputAction::ToggleCursorHitNormal` for the hotkey
-	// contracts. Both overlays only emit when `hudVisible` is also
-	// true (matches the existing `showChunkBounds` /
-	// `showDirtyChunkOverlay` contract — the boxes are a
-	// diagnostic aid, not a primary UI element).
+	/// \brief 5.2 debug gizmos.
+	///
+	/// \details
+	/// See `InputAction::ToggleCascadeSplitPlanes`
+	///  and `InputAction::ToggleCursorHitNormal` for the hotkey
+
+	///  contracts. Both overlays only emit when `hudVisible` is also
+
+	///  true (matches the existing `showChunkBounds` /
+
+	///  `showDirtyChunkOverlay` contract — the boxes are a
+
+	///  diagnostic aid, not a primary UI element).
+
 	bool showCascadeSplitPlanes = false;
 	bool showCursorHitNormal = false;
 };
@@ -1050,19 +1320,33 @@ struct VulkanContextState {
 	uint32_t queueFamilyIndex = 0;
 	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkCommandPool commandPool = VK_NULL_HANDLE;
-	// `dynamicRenderingUnusedAttachments` is the runtime gate that lets the
-	// main voxel graphics pipeline declare two color attachment formats
-	// (`swapchain_format` + `R16G16B16A16_SFLOAT`) and still bind it with
-	// `imageView = VK_NULL_HANDLE` on the unused slot when TAA is off. The
-	// pipeline would otherwise trip
-	// VUID-VkRenderingAttachmentInfo-imageView-06135 (`imageView` must be
-	// non-NULL when the pipeline declared a non-`VK_FORMAT_UNDEFINED`
-	// format for that slot). Set during `InitializeVulkanBase` from the
-	// result of `TryPickPhysicalDevice`; read by
-	// `VulkanGraphicsPipeline::CreateGraphicsPipeline` to fail fast on
-	// devices that lack the extension. The TAA-off path itself works
-	// without this feature, but the dual-format pipeline declaration does
-	// not.
+	/// \brief `dynamicRenderingUnusedAttachments` is the runtime gate that lets the
+	///
+	/// \details
+	///  main voxel graphics pipeline declare two color attachment formats
+
+	///  (`swapchain_format` + `R16G16B16A16_SFLOAT`) and still bind it with
+
+	///  `imageView = VK_NULL_HANDLE` on the unused slot when TAA is off. The
+
+	///  pipeline would otherwise trip
+
+	///  VUID-VkRenderingAttachmentInfo-imageView-06135 (`imageView` must be
+
+	///  non-NULL when the pipeline declared a non-`VK_FORMAT_UNDEFINED`
+
+	///  format for that slot). Set during `InitializeVulkanBase` from the
+
+	///  result of `TryPickPhysicalDevice`; read by
+
+	///  `VulkanGraphicsPipeline::CreateGraphicsPipeline` to fail fast on
+
+	///  devices that lack the extension. The TAA-off path itself works
+
+	///  without this feature, but the dual-format pipeline declaration does
+
+	///  not.
+
 	bool supportsDynamicRenderingUnusedAttachments = false;
 };
 
@@ -1074,23 +1358,40 @@ struct SwapchainState {
 	bool supportsTransferSrc = false;
 	std::vector<VkImage> images;
 	std::vector<VkImageView> imageViews;
-	// Per-swapchain-image "submit finished" semaphores. Indexed by the
-	// `imageIndex` returned by `vkAcquireNextImageKHR`, *not* by the
-	// in-flight frame counter. The submit pipeline signals
-	// `submitSemaphores[imageIndex]` and the present pipeline waits on
-	// the same handle. The canonical Vulkan pattern (per the SDK 1.4
-	// guide `swapchain_semaphore_reuse.html`) requires this indexing —
-	// a per-in-flight-frame array is what triggers the validation
-	// layer's "semaphore may still be in use by VkSwapchainKHR" warning
-	// because two consecutive in-flight frames can be handed the same
-	// `imageIndex` before the first one's present has retired its
-	// `pWaitSemaphores`. Created in `CreateOrRecreateSwapchain` so the
-	// size always matches the current swapchain image count.
-	//
-	// Note: the per-in-flight-frame `imageAvailableSemaphore` in
-	// `FrameState` (the `acquire_semaphore` in the guide's pseudocode)
-	// stays per-frame. The guide uses a per-frame *semaphore* for
-	// acquire and a per-image *semaphore* for submit; we do the same.
+	/// \brief Per-swapchain-image "submit finished" semaphores.
+	///
+	/// \details
+	/// Indexed by the
+	///  `imageIndex` returned by `vkAcquireNextImageKHR`, *not* by the
+
+	///  in-flight frame counter. The submit pipeline signals
+
+	///  `submitSemaphores[imageIndex]` and the present pipeline waits on
+
+	///  the same handle. The canonical Vulkan pattern (per the SDK 1.4
+
+	///  guide `swapchain_semaphore_reuse.html`) requires this indexing —
+
+	///  a per-in-flight-frame array is what triggers the validation
+
+	///  layer's "semaphore may still be in use by VkSwapchainKHR" warning
+
+	///  because two consecutive in-flight frames can be handed the same
+
+	///  `imageIndex` before the first one's present has retired its
+
+	///  `pWaitSemaphores`. Created in `CreateOrRecreateSwapchain` so the
+
+	///  size always matches the current swapchain image count.
+
+	///  Note: the per-in-flight-frame `imageAvailableSemaphore` in
+
+	///  `FrameState` (the `acquire_semaphore` in the guide's pseudocode)
+
+	///  stays per-frame. The guide uses a per-frame *semaphore* for
+
+	///  acquire and a per-image *semaphore* for submit; we do the same.
+
 	std::vector<VkSemaphore> submitSemaphores;
 };
 
@@ -1105,11 +1406,18 @@ struct AppState {
 	InputState input{};
 	InteractionState interaction{};
 	LookDevCaptureAutomationState lookDevCapture{};
-	// 5.3 benchmark automation. See `BenchmarkAutomationState` for the
-	// per-frame field contract; the env var reader is in
-	// `app/BenchmarkAutomation.cpp` and the per-frame tick is wired in
-	// `main.cpp::SDL_AppIterate` right after the look-dev capture
-	// automation. Inactive when `PROJECTV_BENCHMARK_FRAMES` is unset.
+	/// \brief 5.3 benchmark automation.
+	///
+	/// \details
+	/// See `BenchmarkAutomationState` for the
+	///  per-frame field contract; the env var reader is in
+
+	///  `app/BenchmarkAutomation.cpp` and the per-frame tick is wired in
+
+	///  `main.cpp::SDL_AppIterate` right after the look-dev capture
+
+	///  automation. Inactive when `PROJECTV_BENCHMARK_FRAMES` is unset.
+
 	BenchmarkAutomationState benchmark{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
 	PhysicsStatePtr physics{nullptr, DestroyPhysicsState};

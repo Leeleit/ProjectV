@@ -64,11 +64,17 @@ bool CopyBufferViaStaging(
 	const VkBuffer destination,
 	const VkDeviceSize size)
 {
-	// `allocator` is currently unused — staging buffers are
-	// created with the legacy `vkCreateBuffer + vkAllocateMemory`
-	// path below, not through VMA. Kept in the signature so the
-	// helper can be re-pointed at VMA in a future slice without
-	// changing every call site.
+	/// \brief `allocator` is currently unused — staging buffers are
+	///
+	/// \details
+	///  created with the legacy `vkCreateBuffer + vkAllocateMemory`
+
+	///  path below, not through VMA. Kept in the signature so the
+
+	///  helper can be re-pointed at VMA in a future slice without
+
+	///  changing every call site.
+
 	(void)allocator;
 
 	VkCommandBufferAllocateInfo allocateInfo{};
@@ -112,14 +118,23 @@ bool CopyBufferViaStaging(
 		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 		return false;
 	}
-	// Wait for the GPU to finish the staging copy before freeing the
-	// command buffer. Without this `vkFreeCommandBuffers` is called
-	// while the command buffer is still pending on the queue, which
-	// the Vulkan spec (VUID-vkFreeCommandBuffers-pCommandBuffers-00047)
-	// explicitly forbids and trips the validation layer / segfaults
-	// on some drivers when called during the model-pipeline init
-	// path that runs before the first `vkWaitForFences` in the
-	// regular frame loop.
+	/// \brief Wait for the GPU to finish the staging copy before freeing the
+	///
+	/// \details
+	///  command buffer. Without this `vkFreeCommandBuffers` is called
+
+	///  while the command buffer is still pending on the queue, which
+
+	///  the Vulkan spec (VUID-vkFreeCommandBuffers-pCommandBuffers-00047)
+
+	///  explicitly forbids and trips the validation layer / segfaults
+
+	///  on some drivers when called during the model-pipeline init
+
+	///  path that runs before the first `vkWaitForFences` in the
+
+	///  regular frame loop.
+
 	if (vkQueueWaitIdle(queue) != VK_SUCCESS) {
 		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 		return false;

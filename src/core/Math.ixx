@@ -19,11 +19,17 @@ struct alignas(16) Vec3 {
 	constexpr Vec3(const float xVal, const float yVal, const float zVal, const float padVal) noexcept
 		: x(xVal), y(yVal), z(zVal), _pad(padVal) {}
 
-	// **Single-arg subscript** for the `camera.c[i]` /
-	// `result.c[i]` codepaths where the caller is
-	// iterating a Vec3's components by index. Mirrors
-	// the `glm::vec3[i]` convention. Without this,
-	// `.c[0]`-style code in callers wouldn't compile.
+	/// \brief **Single-arg subscript** for the `camera.c[i]` /
+	///
+	/// \details
+	///  `result.c[i]` codepaths where the caller is
+
+	///  iterating a Vec3's components by index. Mirrors
+
+	///  the `glm::vec3[i]` convention. Without this,
+
+	///  `.c[0]`-style code in callers wouldn't compile.
+
 	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept {
 		return (&x)[i];
 	}
@@ -42,12 +48,19 @@ struct alignas(16) Vec4 {
 	constexpr Vec4(const float xVal, const float yVal, const float zVal, const float wVal) noexcept
 		: x(xVal), y(yVal), z(zVal), w(wVal) {}
 
-	// **Single-arg subscript** for the `mat * vec` and
-	// `mat[row, col]` codepaths where the caller is
-	// iterating a Vec4's components by index. Without
-	// this, `m.c[col][row]` would fail because Vec4
-	// doesn't have a one-arg `operator[]` (Mat4 has
-	// `operator[](col, row)`, not Vec4).
+	/// \brief **Single-arg subscript** for the `mat * vec` and
+	///
+	/// \details
+	///  `mat[row, col]` codepaths where the caller is
+
+	///  iterating a Vec4's components by index. Without
+
+	///  this, `m.c[col][row]` would fail because Vec4
+
+	///  doesn't have a one-arg `operator[]` (Mat4 has
+
+	///  `operator[](col, row)`, not Vec4).
+
 	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept {
 		return (&x)[i];
 	}
@@ -63,11 +76,17 @@ struct alignas(16) Mat4 {
 	constexpr Mat4(const Vec4 c0, const Vec4 c1, const Vec4 c2, const Vec4 c3) noexcept
 		: c{c0, c1, c2, c3} {}
 
-	// **Column accessor** (the original `Math.hpp` form, kept
-	// for ABI/grep compat). `m.column(col)[row]` or
-	// `m.c[col][row]` both work. Matches the column-major
-	// convention used everywhere in the project
-	// (`Renderer.cpp::InvertColumnMajorMat4`, `Camera.cpp`).
+	/// \brief **Column accessor** (the original `Math.hpp` form, kept
+	///
+	/// \details
+	///  for ABI/grep compat). `m.column(col)[row]` or
+
+	///  `m.c[col][row]` both work. Matches the column-major
+
+	///  convention used everywhere in the project
+
+	///  (`Renderer.cpp::InvertColumnMajorMat4`, `Camera.cpp`).
+
 	[[nodiscard]] constexpr Vec4 &column(const std::size_t i) noexcept {
 		return c[i];
 	}
@@ -75,9 +94,13 @@ struct alignas(16) Mat4 {
 		return c[i];
 	}
 
-	// **2-arg (col, row) accessor.** Returns the (row, col)
-	// element. Mirrors `glm::mat4[col][row]` and is what
-	// `operator*(Mat4, Mat4)` uses internally.
+	/// \brief **2-arg (col, row) accessor.** Returns the (row, col)
+	///
+	/// \details
+	///  element. Mirrors `glm::mat4[col][row]` and is what
+
+	///  `operator*(Mat4, Mat4)` uses internally.
+
 	[[nodiscard]] constexpr float &m(const std::size_t col, const std::size_t row) noexcept {
 		return c[col][row];
 	}
@@ -85,9 +108,13 @@ struct alignas(16) Mat4 {
 		return c[col][row];
 	}
 
-	// **Direct column access via .c[col].xyz.** Avoids the
-	// `glm::mat4[col][row]` ↔ `Mat4.c[col][row]` translation
-	// friction.
+	/// \brief **Direct column access via .c[col].xyz.** Avoids the
+	///
+	/// \details
+	///  `glm::mat4[col][row]` ↔ `Mat4.c[col][row]` translation
+
+	///  friction.
+
 	[[nodiscard]] float *data() noexcept { return &c[0].x; }
 	[[nodiscard]] const float *data() const noexcept { return &c[0].x; }
 };
@@ -99,7 +126,7 @@ static_assert(alignof(Vec4) == 16, "Vec4 must be 16-byte aligned");
 static_assert(sizeof(Mat4) == 64, "Mat4 must be 64 bytes");
 static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 
-// **Free functions.**
+/// \brief **Free functions.**
 
 [[nodiscard]] inline float dot(const Vec3 a, const Vec3 b) noexcept {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -167,21 +194,35 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 }
 
 [[nodiscard]] inline Mat4 inverse(const Mat4 m) noexcept {
-	// **Gauss-Jordan elimination** on a 4x4 column-major matrix.
-	// Kept from `Math.hpp` (was the implementation
-	// `Renderer.cpp::InvertColumnMajorMat4` was based on).
-	// The output is the inverse of `m`; `m` itself is
-	// unmodified. Degenerate (singular) input is detected
-	// via the zero-pivot guard at the end of each column
-	// step; the function falls through to `zero()` in that
-	// case (the same fallback the pre-module code used).
+	/// \brief **Gauss-Jordan elimination** on a 4x4 column-major matrix.
+	///
+	/// \details
+	///  Kept from `Math.hpp` (was the implementation
+
+	///  `Renderer.cpp::InvertColumnMajorMat4` was based on).
+
+	///  The output is the inverse of `m`; `m` itself is
+
+	///  unmodified. Degenerate (singular) input is detected
+
+	///  via the zero-pivot guard at the end of each column
+
+	///  step; the function falls through to `zero()` in that
+
+	///  case (the same fallback the pre-module code used).
+
 	Mat4 augmented{
 		m.c[0], m.c[1], m.c[2], m.c[3],
 	};
-	// Augment with identity by overlaying onto the second
-	// half; for column-major, this means we treat the
-	// 4x8 working buffer as 4 rows × 8 cols (transposed view).
-	// Easier: do row-wise Gauss-Jordan in transposed space.
+	/// \brief Augment with identity by overlaying onto the second
+	///
+	/// \details
+	///  half; for column-major, this means we treat the
+
+	///  4x8 working buffer as 4 rows × 8 cols (transposed view).
+
+	///  Easier: do row-wise Gauss-Jordan in transposed space.
+
 	float a[4][8]{};
 	for (int row = 0; row < 4; ++row) {
 		for (int col = 0; col < 4; ++col) {
@@ -193,7 +234,7 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 		a[row][7] = (row == 3) ? 1.0f : 0.0f;
 	}
 	for (int pivot = 0; pivot < 4; ++pivot) {
-		// **Find a non-zero pivot row at or below `pivot`.**
+		/// \brief **Find a non-zero pivot row at or below `pivot`.**
 		int pivotRow = pivot;
 		while (pivotRow < 4 && a[pivotRow][pivot] == 0.0f) {
 			++pivotRow;
@@ -343,9 +384,13 @@ template <std::size_t N>
 }
 
 [[nodiscard]] inline Vec3 fromArray4(const std::array<float, 4> &src) noexcept {
-	// 4-element array → Vec3 (first 3 elements, sentinel
-	// w=0 on the Vec3 per the `_pad` field's default-init
-	// contract).
+	/// \brief 4-element array → Vec3 (first 3 elements, sentinel
+	///
+	/// \details
+	///  w=0 on the Vec3 per the `_pad` field's default-init
+
+	///  contract).
+
 	return Vec3{src[0], src[1], src[2], 0.0f};
 }
 

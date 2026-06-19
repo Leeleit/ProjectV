@@ -364,8 +364,12 @@ void RecordShadowCommands(
 			frameRenderData.shadowIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Shadow Cascade");
-			// Shadows follow sparse per-chunk opaque face ranges. Transparent
-			// casters follow the current material policy encoded by the shadow shader.
+			/// \brief Shadows follow sparse per-chunk opaque face ranges.
+			///
+			/// \details
+			/// Transparent
+			///  casters follow the current material policy encoded by the shadow shader.
+
 			const VkDeviceSize shadowIndirectOffset =
 				static_cast<VkDeviceSize>(cascadeIndex) *
 				static_cast<VkDeviceSize>(frameRenderData.shadowIndirectCommandCount) *
@@ -468,13 +472,21 @@ void RecordVoxelMeshingCommands(
 	const VkCommandBuffer cmd)
 {
 	ScopedPassTimer passTimer(render.renderPassTimings.meshingMs);
-	// Snapshot the dirty chunk count for HUD/sidecar at the
-	// start of the function (so the value is what was
-	// requested this frame, even if the function early-
-	// returns because the pipeline is null). On a real
-	// dispatch path the value is the same as the
-	// `vkCmdDispatch(cmd, frameRenderData.dirtyChunkCount, 1, 1)`
-	// count at line ~540 below.
+	/// \brief Snapshot the dirty chunk count for HUD/sidecar at the
+	///
+	/// \details
+	///  start of the function (so the value is what was
+
+	///  requested this frame, even if the function early-
+
+	///  returns because the pipeline is null). On a real
+
+	///  dispatch path the value is the same as the
+
+	///  `vkCmdDispatch(cmd, frameRenderData.dirtyChunkCount, 1, 1)`
+
+	///  count at line ~540 below.
+
 	render.renderPassTimings.dirtyChunkRebuiltCount = frameRenderData.dirtyChunkCount;
 	PV_PROFILE_ZONE_N("RecordVoxelMeshingCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Voxel Meshing");
@@ -549,14 +561,23 @@ void RecordGraphicsCommands(
 	const VkCommandBuffer cmd,
 	const uint32_t imageIndex)
 {
-	// Per-pass CPU timing for the outer `RecordGraphicsCommands`
-	// body. Covers transitions, main pass recording, TAA
-	// resolve setup, history copy, etc. — i.e. the
-	// `Record*Commands` time minus the explicitly-timed
-	// sub-passes (`shadowMs`, `meshingMs`, `taaResolveMs`,
-	// `debugOverlayMs`, `debugHudMs`). Each sub-pass has its
-	// own `ScopedPassTimer` further down so the HUD line can
-	// show both the total and the breakdown.
+	/// \brief Per-pass CPU timing for the outer `RecordGraphicsCommands`
+	///
+	/// \details
+	///  body. Covers transitions, main pass recording, TAA
+
+	///  resolve setup, history copy, etc. — i.e. the
+
+	///  `Record*Commands` time minus the explicitly-timed
+
+	///  sub-passes (`shadowMs`, `meshingMs`, `taaResolveMs`,
+
+	///  `debugOverlayMs`, `debugHudMs`). Each sub-pass has its
+
+	///  own `ScopedPassTimer` further down so the HUD line can
+
+	///  show both the total and the breakdown.
+
 	ScopedPassTimer passTimer(render.renderPassTimings.graphicsMs);
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
@@ -566,26 +587,44 @@ void RecordGraphicsCommands(
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 		RecordShadowCommands(render, frameRenderData, cmd);
 
-		// The main voxel pipeline is declared with two color attachment
-		// formats (slot 0 = swapchain, slot 1 = R16G16B16A16_SFLOAT TAA
-		// offscreen) and the `dynamicRenderingUnusedAttachments` feature
-		// is enabled in `VulkanBootstrap.cpp`. Per-frame the *active* slot
-		// is chosen here: in TAA-off mode slot 0 is the swapchain image
-		// and slot 1 is `VK_NULL_HANDLE` (writes discarded), in TAA-on
-		// mode slot 0 is `VK_NULL_HANDLE` and slot 1 is the TAA scene
-		// color target. The previous code wrote straight to the
-		// swapchain; the contract below keeps that exact behaviour for
-		// the TAA-off path (slot 0 is the only used attachment, slot 1 =
-		// NULL).
+		/// \brief The main voxel pipeline is declared with two color attachment
+		///
+		/// \details
+		///  formats (slot 0 = swapchain, slot 1 = R16G16B16A16_SFLOAT TAA
+
+		///  offscreen) and the `dynamicRenderingUnusedAttachments` feature
+
+		///  is enabled in `VulkanBootstrap.cpp`. Per-frame the *active* slot
+
+		///  is chosen here: in TAA-off mode slot 0 is the swapchain image
+
+		///  and slot 1 is `VK_NULL_HANDLE` (writes discarded), in TAA-on
+
+		///  mode slot 0 is `VK_NULL_HANDLE` and slot 1 is the TAA scene
+
+		///  color target. The previous code wrote straight to the
+
+		///  swapchain; the contract below keeps that exact behaviour for
+
+		///  the TAA-off path (slot 0 is the only used attachment, slot 1 =
+
+		///  NULL).
+
 		const bool taaOn = render.taaEnabled &&
 						   render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
 						   render.taaResolvePipeline != VK_NULL_HANDLE && render.taaResolvePipelineLayout != VK_NULL_HANDLE;
 
-		// === Voxel color attachment transitions ===
-		// The TAA-on path skips the swapchain transition here; the
-		// resolve pass writes to it. The TAA-on path *does* transition
-		// the offscreen scene color (UNDEFINED or SHADER_READ_ONLY from
-		// last frame → COLOR_ATTACHMENT) for the main pass write.
+		/// \brief === Voxel color attachment transitions ===
+		///
+		/// \details
+		///  The TAA-on path skips the swapchain transition here; the
+
+		///  resolve pass writes to it. The TAA-on path *does* transition
+
+		///  the offscreen scene color (UNDEFINED or SHADER_READ_ONLY from
+
+		///  last frame → COLOR_ATTACHMENT) for the main pass write.
+
 		if (!taaOn) {
 			TransitionImage(
 				cmd,
@@ -619,18 +658,32 @@ void RecordGraphicsCommands(
 			render.taaSceneColorNeedsInit = false;
 		}
 
-		// 1.5 anti-flicker: layer scene color transition. The
-		// layer scene color is written by the voxel pass
-		// (Location 2 in `vkCmdBeginRendering`) on BOTH the
-		// TAA-on and TAA-off paths, so the transition runs
-		// unconditionally. Same `oldLayout = current tracker`
-		// pattern as the depth + TAA scene transitions above:
-		// on the first frame `oldLayout = UNDEFINED` (matches
-		// the image's `initialLayout`), on subsequent frames
-		// `oldLayout = SHADER_READ_ONLY_OPTIMAL` (matches the
-		// post-copy layout tracker). The rendering pass's
-		// `imageLayout` declaration is `COLOR_ATTACHMENT_OPTIMAL`
-		// so we transition to that here.
+		/// \brief 1.5 anti-flicker:
+		///
+		/// \details
+		/// layer scene color transition. The
+		///  layer scene color is written by the voxel pass
+
+		///  (Location 2 in `vkCmdBeginRendering`) on BOTH the
+
+		///  TAA-on and TAA-off paths, so the transition runs
+
+		///  unconditionally. Same `oldLayout = current tracker`
+
+		///  pattern as the depth + TAA scene transitions above:
+
+		///  on the first frame `oldLayout = UNDEFINED` (matches
+
+		///  the image's `initialLayout`), on subsequent frames
+
+		///  `oldLayout = SHADER_READ_ONLY_OPTIMAL` (matches the
+
+		///  post-copy layout tracker). The rendering pass's
+
+		///  `imageLayout` declaration is `COLOR_ATTACHMENT_OPTIMAL`
+
+		///  so we transition to that here.
+
 		{
 			const VkImageLayout oldLayerSceneLayout = render.taaLayerSceneColorCurrentLayout;
 			const VkPipelineStageFlags2 oldLayerSceneStage =
@@ -653,16 +706,28 @@ void RecordGraphicsCommands(
 				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 			render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		}
-		// 1.5 anti-flicker: layer history transition. The
-		// layer history is read by the voxel pass (binding 6
-		// as `sampler2D layerHistory`) on BOTH paths, so the
-		// transition runs unconditionally. The descriptor's
-		// `imageLayout` is `SHADER_READ_ONLY_OPTIMAL`, so we
-		// transition to that here. On the first frame,
-		// `oldLayout = UNDEFINED` (matches the image's
-		// `initialLayout`); on subsequent frames,
-		// `oldLayout = SHADER_READ_ONLY_OPTIMAL` (matches the
-		// post-copy layout tracker).
+		/// \brief 1.5 anti-flicker:
+		///
+		/// \details
+		/// layer history transition. The
+		///  layer history is read by the voxel pass (binding 6
+
+		///  as `sampler2D layerHistory`) on BOTH paths, so the
+
+		///  transition runs unconditionally. The descriptor's
+
+		///  `imageLayout` is `SHADER_READ_ONLY_OPTIMAL`, so we
+
+		///  transition to that here. On the first frame,
+
+		///  `oldLayout = UNDEFINED` (matches the image's
+
+		///  `initialLayout`); on subsequent frames,
+
+		///  `oldLayout = SHADER_READ_ONLY_OPTIMAL` (matches the
+
+		///  post-copy layout tracker).
+
 		{
 			const VkImageLayout oldLayerHistoryLayout = render.taaLayerHistoryColorCurrentLayout;
 			const VkPipelineStageFlags2 oldLayerHistoryStage =
@@ -686,11 +751,17 @@ void RecordGraphicsCommands(
 			render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		}
 
-		// === Depth image transition (shared by both paths) ===
-		// Per-frame: from `depthImageCurrentLayout` (UNDEFINED on the
-		// very first frame, `DEPTH_ATTACHMENT_OPTIMAL` after a TAA-off
-		// frame, `DEPTH_READ_ONLY_OPTIMAL` after a TAA-on frame) into
-		// `DEPTH_ATTACHMENT_OPTIMAL` for the main pass write.
+		/// \brief === Depth image transition (shared by both paths) ===
+		///
+		/// \details
+		///  Per-frame: from `depthImageCurrentLayout` (UNDEFINED on the
+
+		///  very first frame, `DEPTH_ATTACHMENT_OPTIMAL` after a TAA-off
+
+		///  frame, `DEPTH_READ_ONLY_OPTIMAL` after a TAA-on frame) into
+
+		///  `DEPTH_ATTACHMENT_OPTIMAL` for the main pass write.
+
 		const VkImageLayout oldDepthLayout = render.depthImageCurrentLayout;
 		const VkPipelineStageFlags2 oldDepthStage =
 			oldDepthLayout == VK_IMAGE_LAYOUT_UNDEFINED
@@ -729,45 +800,82 @@ void RecordGraphicsCommands(
 		};
 		constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
 
-		// Main pass uses both pipeline slots. The `imageView` is NULL
-		// on the slot that's not in use this frame; with
-		// `dynamicRenderingUnusedAttachments` enabled, the driver
-		// discards those writes.
-		// 1.5 anti-flicker: the main pass also binds the
-		// per-layer history pair (Location 2) so the voxel pass
-		// can write `outLayerMask` (R = CTSH, G = AOCC, B = LOCL,
-		// A = 1.0) into it. The image view is the layer scene
-		// color target — the per-frame `vkCmdCopyImage` at the
-		// bottom of the frame moves its contents into the layer
-		// history target so the next frame's voxel pass can
-		// sample them. The pipeline's
-		// `pColorAttachmentFormats[2]` is
-		// `projectv::taa::kTaaLayerHistoryColorFormat`
-		// (`R8G8B8A8_UNORM`), so the format must match — the
-		// `VulkanGraphicsPipeline.cpp` `colorAttachmentCount`
-		// is now 3 to match. Without this 3rd binding here,
-		// the voxel pass writes to Location 2 would be silently
-		// dropped by the driver (no validation layer in the
-		// current smoke path), and the next frame's history
-		// sample would read uninitialised memory — which is
-		// what caused the dim regression in the first 1.5
-		// smoke before this fix.
+		/// \brief Main pass uses both pipeline slots.
+		///
+		/// \details
+		/// The `imageView` is NULL
+		///  on the slot that's not in use this frame; with
+
+		///  `dynamicRenderingUnusedAttachments` enabled, the driver
+
+		///  discards those writes.
+
+		///  1.5 anti-flicker: the main pass also binds the
+
+		///  per-layer history pair (Location 2) so the voxel pass
+
+		///  can write `outLayerMask` (R = CTSH, G = AOCC, B = LOCL,
+
+		///  A = 1.0) into it. The image view is the layer scene
+
+		///  color target — the per-frame `vkCmdCopyImage` at the
+
+		///  bottom of the frame moves its contents into the layer
+
+		///  history target so the next frame's voxel pass can
+
+		///  sample them. The pipeline's
+
+		///  `pColorAttachmentFormats[2]` is
+
+		///  `projectv::taa::kTaaLayerHistoryColorFormat`
+
+		///  (`R8G8B8A8_UNORM`), so the format must match — the
+
+		///  `VulkanGraphicsPipeline.cpp` `colorAttachmentCount`
+
+		///  is now 3 to match. Without this 3rd binding here,
+
+		///  the voxel pass writes to Location 2 would be silently
+
+		///  dropped by the driver (no validation layer in the
+
+		///  current smoke path), and the next frame's history
+
+		///  sample would read uninitialised memory — which is
+
+		///  what caused the dim regression in the first 1.5
+
+		///  smoke before this fix.
+
 		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
 		const VkImageView mainColor1View = taaOn ? render.taaSceneColorTarget->imageView : VK_NULL_HANDLE;
 		const VkImageView mainColor2View = render.taaLayerSceneColorTarget != nullptr
 											   ? render.taaLayerSceneColorTarget->imageView
 											   : VK_NULL_HANDLE;
-		// JetBrains DFA flags `mainColorXView != VK_NULL_HANDLE` as
-		// "always false" because the indexer can't follow the runtime
-		// `taaOn` ternary that produces these views. The branch IS
-		// reachable: when `taaOn` is false, slot 0 is the swapchain
-		// (non-null) and we must STORE; when TAA is on, slot 0 is
-		// unused (`dynamicRenderingUnusedAttachments` feature)
-		// and DONT_CARE is correct. The DFA path-insensitive
-		// `?:` folding misses this, so suppress the
-		// `CppDFAConstantConditions` / `CppDFAUnreachableCode`
-		// report per-line. The actual condition is exercised in
-		// production on every TAA-off frame.
+		/// \brief JetBrains DFA flags `mainColorXView != VK_NULL_HANDLE` as
+		///
+		/// \details
+		///  "always false" because the indexer can't follow the runtime
+
+		///  `taaOn` ternary that produces these views. The branch IS
+
+		///  reachable: when `taaOn` is false, slot 0 is the swapchain
+
+		///  (non-null) and we must STORE; when TAA is on, slot 0 is
+
+		///  unused (`dynamicRenderingUnusedAttachments` feature)
+
+		///  and DONT_CARE is correct. The DFA path-insensitive
+
+		///  `?:` folding misses this, so suppress the
+
+		///  `CppDFAConstantConditions` / `CppDFAUnreachableCode`
+
+		///  report per-line. The actual condition is exercised in
+
+		///  production on every TAA-off frame.
+
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -881,20 +989,36 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-		// M4: polygon-model import pass. Same depth attachment as the
-		// opaque pass, same descriptor set (kept bound from the opaque
-		// pass — the model pipeline reuses the same
-		// `graphicsPipelineLayout`). Per-instance world transform
-		// lives in `render.modelInstances`; `model.vert` reuses the
-		// same push constant struct as the voxel pass and only reads
-		// `viewProjection` (offset 0) and `modelTransform` (offset
-		// 64).
-		// M5: iterate `visibleModelInstances` (the per-frame
-		// frustum-culled subset built in
-		// `FramePreparation::BuildVisibleModelInstanceList`) instead
-		// of the raw `modelInstances`. Off-screen / max-distance
-		// instances never generate a draw call, so the GPU side
-		// stays untouched even when the manifest grows.
+		/// \brief M4:
+		///
+		/// \details
+		/// polygon-model import pass. Same depth attachment as the
+		///  opaque pass, same descriptor set (kept bound from the opaque
+
+		///  pass — the model pipeline reuses the same
+
+		///  `graphicsPipelineLayout`). Per-instance world transform
+
+		///  lives in `render.modelInstances`; `model.vert` reuses the
+
+		///  same push constant struct as the voxel pass and only reads
+
+		///  `viewProjection` (offset 0) and `modelTransform` (offset
+
+		///  64).
+
+		///  M5: iterate `visibleModelInstances` (the per-frame
+
+		///  frustum-culled subset built in
+
+		///  `FramePreparation::BuildVisibleModelInstanceList`) instead
+
+		///  of the raw `modelInstances`. Off-screen / max-distance
+
+		///  instances never generate a draw call, so the GPU side
+
+		///  stays untouched even when the manifest grows.
+
 		if (render.modelPipeline != VK_NULL_HANDLE && !render.visibleModelInstances.empty()) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Model Pass");
 			vkCmdBindPipeline(
@@ -960,12 +1084,19 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-		// Debug overlay / debug HUD are written *on top of* the final
-		// image. TAA-off: they go straight to the swapchain in the same
-		// main pass. TAA-on: the main pass writes to the offscreen scene
-		// color, so we move the overlay / HUD into the resolve pass
-		// block below where the swapchain is the active color
-		// attachment.
+		/// \brief Debug overlay / debug HUD are written *on top of* the final
+		///
+		/// \details
+		///  image. TAA-off: they go straight to the swapchain in the same
+
+		///  main pass. TAA-on: the main pass writes to the offscreen scene
+
+		///  color, so we move the overlay / HUD into the resolve pass
+
+		///  block below where the swapchain is the active color
+
+		///  attachment.
+
 		if (!taaOn) {
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
 			RecordDebugHudCommands(render, frameRenderData, cmd);
@@ -973,32 +1104,58 @@ void RecordGraphicsCommands(
 
 		vkCmdEndRendering(cmd);
 
-		// 1.5 anti-flicker: sync the layout trackers with the actual
-		// GPU image layouts after the main pass ends. The voxel pass
-		// auto-transitioned the layer scene color target from
-		// `UNDEFINED` to `COLOR_ATTACHMENT_OPTIMAL` (via the
-		// rendering pass's `imageLayout` in `VkRenderingAttachmentInfo`),
-		// and the layer history target is still in
-		// `SHADER_READ_ONLY_OPTIMAL` (read-only during the voxel pass,
-		// no transition triggered). The copy block below uses these
-		// trackers as `oldLayout` for the `vkCmdPipelineBarrier2`
-		// calls, so they have to match the actual GPU state — without
-		// this sync, the first frame's barrier would have
-		// `oldLayout = UNDEFINED` but actual = `COLOR_ATTACHMENT_OPTIMAL`
-		// and validation would fail (VUID-VkImageMemoryBarrier2-oldLayout-01197).
-		// The voxel pass writes to the layer scene color target
-		// (Location 2) in BOTH the TAA-on and TAA-off paths, so the
-		// post-pass layout is `COLOR_ATTACHMENT_OPTIMAL` for both.
-		// The history target is read-only in both paths, so it
-		// stays in its initial `SHADER_READ_ONLY_OPTIMAL` (set by
-		// the `initialLayout` in `TaaRenderTargets.cpp` and tracked
-		// in `taaLayerHistoryColorCurrentLayout`).
+		/// \brief 1.5 anti-flicker:
+		///
+		/// \details
+		/// sync the layout trackers with the actual
+		///  GPU image layouts after the main pass ends. The voxel pass
+
+		///  auto-transitioned the layer scene color target from
+
+		///  `UNDEFINED` to `COLOR_ATTACHMENT_OPTIMAL` (via the
+
+		///  rendering pass's `imageLayout` in `VkRenderingAttachmentInfo`),
+
+		///  and the layer history target is still in
+
+		///  `SHADER_READ_ONLY_OPTIMAL` (read-only during the voxel pass,
+
+		///  no transition triggered). The copy block below uses these
+
+		///  trackers as `oldLayout` for the `vkCmdPipelineBarrier2`
+
+		///  calls, so they have to match the actual GPU state — without
+
+		///  this sync, the first frame's barrier would have
+
+		///  `oldLayout = UNDEFINED` but actual = `COLOR_ATTACHMENT_OPTIMAL`
+
+		///  and validation would fail (VUID-VkImageMemoryBarrier2-oldLayout-01197).
+
+		///  The voxel pass writes to the layer scene color target
+
+		///  (Location 2) in BOTH the TAA-on and TAA-off paths, so the
+
+		///  post-pass layout is `COLOR_ATTACHMENT_OPTIMAL` for both.
+
+		///  The history target is read-only in both paths, so it
+
+		///  stays in its initial `SHADER_READ_ONLY_OPTIMAL` (set by
+
+		///  the `initialLayout` in `TaaRenderTargets.cpp` and tracked
+
+		///  in `taaLayerHistoryColorCurrentLayout`).
+
 		render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-		// === TAA resolve pass + history copy (TAA on only) ===
+		/// \brief === TAA resolve pass + history copy (TAA on only) ===
 		if (taaOn) {
-			// Scene color: COLOR_ATTACHMENT → SHADER_READ_ONLY for
-			// the resolve pass to sample it.
+			/// \brief Scene color:
+			///
+			/// \details
+			/// COLOR_ATTACHMENT → SHADER_READ_ONLY for
+			///  the resolve pass to sample it.
+
 			TransitionImage(
 				cmd,
 				render.taaSceneColorTarget->image,
@@ -1011,9 +1168,14 @@ void RecordGraphicsCommands(
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			// Depth: DEPTH_ATTACHMENT → DEPTH_READ_ONLY so the
-			// resolve pass can sample it for depth-based
-			// reprojection.
+			/// \brief Depth:
+			///
+			/// \details
+			/// DEPTH_ATTACHMENT → DEPTH_READ_ONLY so the
+			///  resolve pass can sample it for depth-based
+
+			///  reprojection.
+
 			TransitionImage(
 				cmd,
 				render.depthImage,
@@ -1026,15 +1188,26 @@ void RecordGraphicsCommands(
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
 
-			// History: SHADER_READ_ONLY is the *default* end-of-frame
-			// layout; if this is the very first frame after a
-			// recreate / Taa toggle, the offscreen image is fresh
-			// and is still UNDEFINED. Skip the layout transition in
-			// that case and use UNDEFINED → SHADER_READ_ONLY
-			// directly, so the resolve pass can sample it (it just
-			// reads garbage; `taaHistoryValid == false` gates the
-			// shader's blend factor to fall back to the current
-			// frame).
+			/// \brief History:
+			///
+			/// \details
+			/// SHADER_READ_ONLY is the *default* end-of-frame
+			///  layout; if this is the very first frame after a
+
+			///  recreate / Taa toggle, the offscreen image is fresh
+
+			///  and is still UNDEFINED. Skip the layout transition in
+
+			///  that case and use UNDEFINED → SHADER_READ_ONLY
+
+			///  directly, so the resolve pass can sample it (it just
+
+			///  reads garbage; `taaHistoryValid == false` gates the
+
+			///  shader's blend factor to fall back to the current
+
+			///  frame).
+
 			TransitionImage(
 				cmd,
 				render.taaHistoryColorTarget->image,
@@ -1051,11 +1224,18 @@ void RecordGraphicsCommands(
 			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			render.taaHistoryNeedsInit = false;
 
-			// Swapchain: UNDEFINED (fresh from presentation engine) →
-			// COLOR_ATTACHMENT_OPTIMAL for the resolve pass. The TAA-off
-			// path transitions the swapchain at the top of the frame, but
-			// the TAA-on path skips that because the main pass writes to
-			// the offscreen target instead.
+			/// \brief Swapchain:
+			///
+			/// \details
+			/// UNDEFINED (fresh from presentation engine) →
+			///  COLOR_ATTACHMENT_OPTIMAL for the resolve pass. The TAA-off
+
+			///  path transitions the swapchain at the top of the frame, but
+
+			///  the TAA-on path skips that because the main pass writes to
+
+			///  the offscreen target instead.
+
 			TransitionImage(
 				cmd,
 				swapchain.images[imageIndex],
@@ -1067,7 +1247,7 @@ void RecordGraphicsCommands(
 				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
-			// === Begin resolve pass ===
+			/// \brief === Begin resolve pass ===
 			const VkRenderingAttachmentInfo resolveColorAttachment{
 				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 				.pNext = nullptr,
@@ -1106,25 +1286,45 @@ void RecordGraphicsCommands(
 			// so each `_pvGpuLabel<N>` is unique and there is no
 			// shadow. Build (clang++ 22) is green.
 			PV_PROFILE_GPU_LABEL_COLOR(cmd, "TAA Resolve", 0.20f, 0.65f, 1.00f, 1.0f);
-			// Per-pass CPU timing for the inline TAA resolve
-			// section. Manual start/end (not `ScopedPassTimer`)
-			// because the function is too large to wrap a
-			// timer around the whole thing — the timer only
-			// covers the resolve-push-constant build + bind +
-			// draw, not the surrounding `vkCmdBeginRendering` /
-			// `vkCmdSetViewport` / `vkCmdSetScissor` setup
-			// (those are part of the TAA-on `graphicsMs` body
-			// measurement instead, so the operator can still
-			// see the cost when TAA is on).
+			/// \brief Per-pass CPU timing for the inline TAA resolve
+			///
+			/// \details
+			///  section. Manual start/end (not `ScopedPassTimer`)
+
+			///  because the function is too large to wrap a
+
+			///  timer around the whole thing — the timer only
+
+			///  covers the resolve-push-constant build + bind +
+
+			///  draw, not the surrounding `vkCmdBeginRendering` /
+
+			///  `vkCmdSetViewport` / `vkCmdSetScissor` setup
+
+			///  (those are part of the TAA-on `graphicsMs` body
+
+			///  measurement instead, so the operator can still
+
+			///  see the cost when TAA is on).
+
 			const Uint64 taaResolveStartCounter = SDL_GetPerformanceCounter();
 
-			// Push constants for the resolve pass. The current
-			// viewProjection comes from the per-frame
-			// `graphicsPushConstants`; the inverse is computed via
-			// `projectv::math::inverse(Mat4)` from `core/Math.hpp`
-			// (Gauss-Jordan with partial pivoting, see header for
-			// the contract). The resolve shader expects both in
-			// the same column-major layout the CPU uses.
+			/// \brief Push constants for the resolve pass.
+			///
+			/// \details
+			/// The current
+			///  viewProjection comes from the per-frame
+
+			///  `graphicsPushConstants`; the inverse is computed via
+
+			///  `projectv::math::inverse(Mat4)` from `core/Math.hpp`
+
+			///  (Gauss-Jordan with partial pivoting, see header for
+
+			///  the contract). The resolve shader expects both in
+
+			///  the same column-major layout the CPU uses.
+
 			const projectv::math::Mat4 currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
 			const projectv::math::Mat4 inverseCurrentViewProj = projectv::math::inverse(currentViewProj);
 			ResolvePushConstants resolvePushConstants{};
@@ -1134,10 +1334,16 @@ void RecordGraphicsCommands(
 				1.0f / static_cast<float>(swapchain.extent.width),
 				1.0f / static_cast<float>(swapchain.extent.height),
 			};
-			// CAS (1.3) inputs. `taaBlend` is 0 when TAA is off so the
-			// sharpen derivation in `taa_resolve.frag` falls back to
-			// `1.0 * taaCasSharpnessMax` (the user-authored ceiling)
-			// without a separate toggle.
+			/// \brief CAS (1.3) inputs.
+			///
+			/// \details
+			/// `taaBlend` is 0 when TAA is off so the
+			///  sharpen derivation in `taa_resolve.frag` falls back to
+
+			///  `1.0 * taaCasSharpnessMax` (the user-authored ceiling)
+
+			///  without a separate toggle.
+
 			resolvePushConstants.taaBlend = render.taaEnabled ? render.taaBlend : 0.0f;
 			resolvePushConstants.taaCasSharpnessMax = render.taaCasSharpnessMax;
 
@@ -1160,10 +1366,13 @@ void RecordGraphicsCommands(
 				0,
 				sizeof(resolvePushConstants),
 				&resolvePushConstants);
-			// Fullscreen triangle, no vertex buffer — `taa_resolve.vert`
-			// synthesizes positions from `gl_VertexIndex` (0, 1, 2).
+			/// \brief Fullscreen triangle, no vertex buffer — `taa_resolve.vert`
+			///
+			/// \details
+			///  synthesizes positions from `gl_VertexIndex` (0, 1, 2).
+
 			vkCmdDraw(cmd, 3, 1, 0, 0);
-			// Close out the TAA resolve CPU timing.
+			/// \brief Close out the TAA resolve CPU timing.
 			{
 				const Uint64 taaResolveEndCounter = SDL_GetPerformanceCounter();
 				const double seconds = static_cast<double>(taaResolveEndCounter - taaResolveStartCounter) /
@@ -1171,21 +1380,31 @@ void RecordGraphicsCommands(
 				render.renderPassTimings.taaResolveMs = static_cast<float>(seconds * 1000.0);
 			}
 
-			// Debug overlay / debug HUD go on top of the resolved
-			// swapchain image, in the same `vkCmdBeginRendering`
-			// block as the resolve pass so they share the swapchain
-			// attachment and the same `vkCmdSetViewport` /
-			// `vkCmdSetScissor` already bound for the resolve pass.
+			/// \brief Debug overlay / debug HUD go on top of the resolved
+			///
+			/// \details
+			///  swapchain image, in the same `vkCmdBeginRendering`
+
+			///  block as the resolve pass so they share the swapchain
+
+			///  attachment and the same `vkCmdSetViewport` /
+
+			///  `vkCmdSetScissor` already bound for the resolve pass.
+
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
 			RecordDebugHudCommands(render, frameRenderData, cmd);
 
 			vkCmdEndRendering(cmd);
 
-			// === History copy (skip on the first frame after
-			// recreate / Taa toggle so the shader's `taaHistoryValid`
-			// flag is allowed to drop to zero) ===
+			/// \brief === History copy (skip on the first frame after
+			///
+			/// \details
+			///  recreate / Taa toggle so the shader's `taaHistoryValid`
+
+			///  flag is allowed to drop to zero) ===
+
 			if (render.taaHistoryValid) {
-				// Scene → TRANSFER_SRC, History → TRANSFER_DST.
+				/// \brief Scene → TRANSFER_SRC, History → TRANSFER_DST.
 				TransitionImage(
 					cmd,
 					render.taaSceneColorTarget->image,
@@ -1209,9 +1428,13 @@ void RecordGraphicsCommands(
 					VK_ACCESS_2_TRANSFER_WRITE_BIT);
 				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-				// Same-format copy is simpler than blit (no scaling,
-				// no filter). The two images were created with the
-				// same extent, format, and sample count.
+				/// \brief Same-format copy is simpler than blit (no scaling,
+				///
+				/// \details
+				///  no filter). The two images were created with the
+
+				///  same extent, format, and sample count.
+
 				const VkImageCopy historyCopyRegion{
 					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
 					.srcOffset = {0, 0, 0},
@@ -1228,8 +1451,11 @@ void RecordGraphicsCommands(
 					1,
 					&historyCopyRegion);
 
-				// Transition both back to SHADER_READ_ONLY so the
-				// next frame's resolve pass can sample them.
+				/// \brief Transition both back to SHADER_READ_ONLY so the
+				///
+				/// \details
+				///  next frame's resolve pass can sample them.
+
 				TransitionImage(
 					cmd,
 					render.taaSceneColorTarget->image,
@@ -1253,29 +1479,52 @@ void RecordGraphicsCommands(
 					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			} else {
-				// First valid frame: from the next frame on, the
-				// shader can blend against the freshly-resolved
-				// history instead of falling back to the current
-				// scene as the only sample.
+				/// \brief First valid frame:
+				///
+				/// \details
+				/// from the next frame on, the
+				///  shader can blend against the freshly-resolved
+
+				///  history instead of falling back to the current
+
+				///  scene as the only sample.
+
 				render.taaHistoryValid = true;
 			}
 		}
 
-		// 1.5 anti-flicker: copy the current frame's
-		// `outLayerMask` from the layer scene color target to the
-		// layer history color target. Same ping-pong shape as
-		// the colour history above, except the copy happens
-		// every frame (the colour history copy is conditional
-		// on `taaHistoryValid` for the resolve-pass init dance,
-		// but the voxel pass always writes `outLayerMask` so
-		// the layer history is unconditionally valid after the
-		// first frame — `taaLayerHistoryValid` is set true on
-		// the very first frame's copy, just like the colour
-		// history's `else` branch above). The 1.5 init flag
-		// still exists for the first-frame-after-recreate
-		// case where the swapchain was just rebuilt and the
-		// voxel pass shouldn't try to read a zero-initialised
-		// history.
+		/// \brief 1.5 anti-flicker:
+		///
+		/// \details
+		/// copy the current frame's
+		///  `outLayerMask` from the layer scene color target to the
+
+		///  layer history color target. Same ping-pong shape as
+
+		///  the colour history above, except the copy happens
+
+		///  every frame (the colour history copy is conditional
+
+		///  on `taaHistoryValid` for the resolve-pass init dance,
+
+		///  but the voxel pass always writes `outLayerMask` so
+
+		///  the layer history is unconditionally valid after the
+
+		///  first frame — `taaLayerHistoryValid` is set true on
+
+		///  the very first frame's copy, just like the colour
+
+		///  history's `else` branch above). The 1.5 init flag
+
+		///  still exists for the first-frame-after-recreate
+
+		///  case where the swapchain was just rebuilt and the
+
+		///  voxel pass shouldn't try to read a zero-initialised
+
+		///  history.
+
 		if (render.taaLayerSceneColorTarget != nullptr && render.taaLayerHistoryColorTarget != nullptr && render.taaLayerSceneColorTarget->image != VK_NULL_HANDLE && render.taaLayerHistoryColorTarget->image != VK_NULL_HANDLE) {
 			if (render.taaLayerHistoryValid) {
 				TransitionImage(
@@ -1340,13 +1589,22 @@ void RecordGraphicsCommands(
 					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 				render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			} else {
-				// First valid frame: same pattern as the colour
-				// history `else` branch above. The next frame's
-				// voxel pass can sample the freshly-copied
-				// history instead of falling back to the raw
-				// current value (the `blend = mix(raw, history,
-				// layerBlend)` then weights 0% history, 100% raw,
-				// which is the no-temporal-smoothing baseline).
+				/// \brief First valid frame:
+				///
+				/// \details
+				/// same pattern as the colour
+				///  history `else` branch above. The next frame's
+
+				///  voxel pass can sample the freshly-copied
+
+				///  history instead of falling back to the raw
+
+				///  current value (the `blend = mix(raw, history,
+
+				///  layerBlend)` then weights 0% history, 100% raw,
+
+				///  which is the no-temporal-smoothing baseline).
+
 				render.taaLayerHistoryValid = true;
 			}
 		}
@@ -1430,15 +1688,25 @@ SDL_AppResult DrawFrame(
 	const VkFormat captureFormat = swapchain->format;
 
 	uint32_t imageIndex = 0;
-	// `vkAcquireNextImageKHR` is given the per-in-flight-frame
-	// `imageAvailableSemaphore`. The driver signals it when the
-	// returned `imageIndex` becomes writable. The submit pipeline (below)
-	// waits on this same handle, so the command buffer does not start
-	// rendering before the swapchain image is actually writable. The
-	// guide `swapchain_semaphore_reuse.html` uses *exactly* this pattern:
-	// per-frame acquire-semaphore, per-image submit-semaphore, no
-	// per-image acquire fence (the fence pattern requires
-	// `VK_KHR_swapchain_maintenance1`).
+	/// \brief `vkAcquireNextImageKHR` is given the per-in-flight-frame
+	///
+	/// \details
+	///  `imageAvailableSemaphore`. The driver signals it when the
+
+	///  returned `imageIndex` becomes writable. The submit pipeline (below)
+
+	///  waits on this same handle, so the command buffer does not start
+
+	///  rendering before the swapchain image is actually writable. The
+
+	///  guide `swapchain_semaphore_reuse.html` uses *exactly* this pattern:
+
+	///  per-frame acquire-semaphore, per-image submit-semaphore, no
+
+	///  per-image acquire fence (the fence pattern requires
+
+	///  `VK_KHR_swapchain_maintenance1`).
+
 	const VkResult acquireRes = vkAcquireNextImageKHR(
 		context->device,
 		swapchain->handle,
@@ -1494,29 +1762,48 @@ SDL_AppResult DrawFrame(
 
 	VkSemaphoreSubmitInfo waitSemaphoreInfo{};
 	waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-	// `pWaitSemaphores[0]` is the per-in-flight-frame `imageAvailableSemaphore`,
-	// signaled by the `vkAcquireNextImageKHR` call above when the swapchain
-	// image became available. The submit pipeline waits on it so the
-	// command buffer does not start rendering before the swapchain image
-	// is actually writable.
+	/// \brief `pWaitSemaphores[0]` is the per-in-flight-frame `imageAvailableSemaphore`,
+	///
+	/// \details
+	///  signaled by the `vkAcquireNextImageKHR` call above when the swapchain
+
+	///  image became available. The submit pipeline waits on it so the
+
+	///  command buffer does not start rendering before the swapchain image
+
+	///  is actually writable.
+
 	waitSemaphoreInfo.semaphore = imageAvailableSemaphore;
 	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-	// `pSignalSemaphores[0]` is the per-swapchain-image `submitSemaphore`,
-	// *not* the per-in-flight-frame `renderFinishedSemaphore`. The
-	// canonical Vulkan pattern (per the SDK 1.4 guide
-	// `swapchain_semaphore_reuse.html`) is to index the submit-finished
-	// semaphore by `imageIndex` rather than by frame counter, because
-	// two consecutive in-flight frames can be handed the same
-	// `imageIndex` before the first one's present has retired its
-	// `pWaitSemaphores`. We then present the same `submitSemaphore`
-	// below in `presentInfo.pWaitSemaphores`.
+	/// \brief `pSignalSemaphores[0]` is the per-swapchain-image `submitSemaphore`,
+	///
+	/// \details
+	///  *not* the per-in-flight-frame `renderFinishedSemaphore`. The
+
+	///  canonical Vulkan pattern (per the SDK 1.4 guide
+
+	///  `swapchain_semaphore_reuse.html`) is to index the submit-finished
+
+	///  semaphore by `imageIndex` rather than by frame counter, because
+
+	///  two consecutive in-flight frames can be handed the same
+
+	///  `imageIndex` before the first one's present has retired its
+
+	///  `pWaitSemaphores`. We then present the same `submitSemaphore`
+
+	///  below in `presentInfo.pWaitSemaphores`.
+
 	const VkSemaphore submitSemaphore = swapchain->submitSemaphores[imageIndex];
 	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
 	signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 	signalSemaphoreInfo.semaphore = submitSemaphore;
-	// Screenshot capture records a transfer copy after color rendering; present
-	// must not observe the swapchain image before that copy and layout transition finish.
+	/// \brief Screenshot capture records a transfer copy after color rendering; present
+	///
+	/// \details
+	///  must not observe the swapchain image before that copy and layout transition finish.
+
 	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
 	VkCommandBufferSubmitInfo cmdBufferInfo{};

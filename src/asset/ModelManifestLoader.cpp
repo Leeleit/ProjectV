@@ -127,9 +127,13 @@ bool LoadAndRegisterModelsFromManifest(
 		const glm::vec3 srcMin = glm::vec3(reg.aabbMin[0], reg.aabbMin[1], reg.aabbMin[2]);
 		const glm::vec3 srcMax = glm::vec3(reg.aabbMax[0], reg.aabbMax[1], reg.aabbMax[2]);
 		const glm::vec3 srcDim = srcMax - srcMin;
-		// Shift the model-space origin so AABB min lands at entry.position.
-		// BuildEntryWorldMatrix assumed model-space origin == entry.position;
-		// we correct by `-srcMin * scale` to land AABB min at entry.position.
+		/// \brief Shift the model-space origin so AABB min lands at entry.position.
+		///
+		/// \details
+		///  BuildEntryWorldMatrix assumed model-space origin == entry.position;
+
+		///  we correct by `-srcMin * scale` to land AABB min at entry.position.
+
 		const glm::mat4 aabbMinOffset = glm::translate(glm::mat4(1.0f), -srcMin * entry.scale);
 		const glm::mat4 worldWithAabbMin = world * aabbMinOffset;
 		StoreMatrixColumnMajor(worldWithAabbMin, instance.modelTransform);
@@ -142,18 +146,31 @@ bool LoadAndRegisterModelsFromManifest(
 		instance.vertexBuffer = reg.gpu.vertexBuffer;
 		instance.indexBuffer = reg.gpu.indexBuffer;
 		instance.indexCount = reg.gpu.indexCount;
-		// Capture the source AABB min in model-local space.
-		// The load path's `aabbMinOffset = T(-srcMin*scale)`
-		// shifts the model basis so the translation column of
-		// `modelTransform` ends up at `pos - srcAabbMin`. Snap
-		// and drag paths that mutate the AABB min must update
-		// `modelTransform[12..14]` by the same `−srcAabbMin`
-		// offset — see the docstring on `ModelInstanceData::sourceAabbMin`
-		// in `core/Types.hpp`. Without this, the rendered mesh
-		// is offset by `srcAabbMin` from the operator's chosen
-		// AABB min (e.g. dragging the lamp to AABB min.x=-9
-		// renders the model with its AABB at -9 + srcMin.x =
-		// -11.36, sticking 2.36 voxels out past -9).
+		/// \brief Capture the source AABB min in model-local space.
+		///
+		/// \details
+		///  The load path's `aabbMinOffset = T(-srcMin*scale)`
+
+		///  shifts the model basis so the translation column of
+
+		///  `modelTransform` ends up at `pos - srcAabbMin`. Snap
+
+		///  and drag paths that mutate the AABB min must update
+
+		///  `modelTransform[12..14]` by the same `−srcAabbMin`
+
+		///  offset — see the docstring on `ModelInstanceData::sourceAabbMin`
+
+		///  in `core/Types.hpp`. Without this, the rendered mesh
+
+		///  is offset by `srcAabbMin` from the operator's chosen
+
+		///  AABB min (e.g. dragging the lamp to AABB min.x=-9
+
+		///  renders the model with its AABB at -9 + srcMin.x =
+
+		///  -11.36, sticking 2.36 voxels out past -9).
+
 		instance.sourceAabbMin = {
 			static_cast<float>(reg.aabbMin[0]),
 			static_cast<float>(reg.aabbMin[1]),
@@ -249,10 +266,16 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			continue;
 		}
 
-		// Per-axis: pick the snap path that satisfies both
-		// invariants on that axis. The "AABB max on grid" path
-		// wins when the operator's drag would make the model
-		// stick out; the "AABB min on grid" path wins otherwise.
+		/// \brief Per-axis:
+		///
+		/// \details
+		/// pick the snap path that satisfies both
+		///  invariants on that axis. The "AABB max on grid" path
+
+		///  wins when the operator's drag would make the model
+
+		///  stick out; the "AABB min on grid" path wins otherwise.
+
 		const float rawMaxX = instance.worldAabbMin.x + dimX;
 		const float rawMaxY = instance.worldAabbMin.y + dimY;
 		const float rawMaxZ = instance.worldAabbMin.z + dimZ;
@@ -276,22 +299,35 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 				newMinX = roundedX;
 				newMaxX = roundedX + dimX;
 			} else {
-				// Rounded AABB min would push AABB max past
-				// worldMax (dim is non-integer, rounded to
-				// the high side). Clamp AABB max to the
-				// world bound and derive AABB min.
+				/// \brief Rounded AABB min would push AABB max past
+				///
+				/// \details
+				///  worldMax (dim is non-integer, rounded to
+
+				///  the high side). Clamp AABB max to the
+
+				///  world bound and derive AABB min.
+
 				newMaxX = std::floor(worldMaxX);
 				newMinX = newMaxX - dimX;
 			}
 		}
 
-		// **Y axis.** The operator sets `position.y` explicitly;
-		// the snap does NOT lift. If the AABB sticks out
-		// (the model is too tall for the world), snap the max
-		// to the world max. Otherwise leave Y alone — the
-		// operator's integer Y is preserved. Y doesn't get the
-		// post-round fit check because Y is operator-controlled
-		// and `position.y` is read verbatim (no `std::round`).
+		/// \brief **Y axis.** The operator sets `position.y` explicitly;
+		///
+		/// \details
+		///  the snap does NOT lift. If the AABB sticks out
+
+		///  (the model is too tall for the world), snap the max
+
+		///  to the world max. Otherwise leave Y alone — the
+
+		///  operator's integer Y is preserved. Y doesn't get the
+
+		///  post-round fit check because Y is operator-controlled
+
+		///  and `position.y` is read verbatim (no `std::round`).
+
 		if (ySticksOut) {
 			newMaxY = std::floor(std::min(rawMaxY, worldMaxY));
 			newMinY = newMaxY - dimY;
@@ -300,14 +336,23 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			newMaxY = newMinY + dimY;
 		}
 
-		// **Z axis.** Same contract as X (with the post-round
-		// fit check). For the lamp-post column with
-		// `dim.z=8.13` in an 18-voxel Z range, the operator
-		// can place the model at the front edge with
-		// `aabbMax.z=9` and `aabbMin.z=0.87` — the post-round
-		// fit check is what makes that placement survive the
-		// snap (without it, the snap would round `0.87 → 1`
-		// and the AABB would stick out 0.13 voxels).
+		/// \brief **Z axis.** Same contract as X (with the post-round
+		///
+		/// \details
+		///  fit check). For the lamp-post column with
+
+		///  `dim.z=8.13` in an 18-voxel Z range, the operator
+
+		///  can place the model at the front edge with
+
+		///  `aabbMax.z=9` and `aabbMin.z=0.87` — the post-round
+
+		///  fit check is what makes that placement survive the
+
+		///  snap (without it, the snap would round `0.87 → 1`
+
+		///  and the AABB would stick out 0.13 voxels).
+
 		if (zSticksOut) {
 			newMaxZ = std::floor(std::min(rawMaxZ, worldMaxZ));
 			newMinZ = newMaxZ - dimZ;
@@ -322,7 +367,10 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			}
 		}
 
-		// Update the AABB in place. AABB dim is preserved.
+		/// \brief Update the AABB in place.
+		///
+		/// \details
+		/// AABB dim is preserved.
 		instance.worldAabbMin.x = newMinX;
 		instance.worldAabbMin.y = newMinY;
 		instance.worldAabbMin.z = newMinZ;
@@ -330,19 +378,33 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 		instance.worldAabbMax.y = newMaxY;
 		instance.worldAabbMax.z = newMaxZ;
 
-		// Update the model basis translation column so the
-		// rendered mesh stays aligned with the AABB. The load
-		// path's `aabbMinOffset = T(-srcMin*scale)` puts the
-		// translation at `pos - sourceAabbMin` (NOT `pos`); the
-		// GPU shader then adds `sourceAabbMin` back per vertex
-		// (or rather, the model-local vertex (0,0,0) lands at
-		// `pos` in world space). Re-derive the translation
-		// from the snapped AABB min by the same `-sourceAabbMin`
-		// offset, otherwise the rendered mesh would shift by
-		// `sourceAabbMin` from the operator's chosen AABB
-		// (e.g. snap to AABB min.x=-9 with srcMin.x=-2.36
-		// would render the model with its actual AABB at
-		// -9 + (-2.36) = -11.36).
+		/// \brief Update the model basis translation column so the
+		///
+		/// \details
+		///  rendered mesh stays aligned with the AABB. The load
+
+		///  path's `aabbMinOffset = T(-srcMin*scale)` puts the
+
+		///  translation at `pos - sourceAabbMin` (NOT `pos`); the
+
+		///  GPU shader then adds `sourceAabbMin` back per vertex
+
+		///  (or rather, the model-local vertex (0,0,0) lands at
+
+		///  `pos` in world space). Re-derive the translation
+
+		///  from the snapped AABB min by the same `-sourceAabbMin`
+
+		///  offset, otherwise the rendered mesh would shift by
+
+		///  `sourceAabbMin` from the operator's chosen AABB
+
+		///  (e.g. snap to AABB min.x=-9 with srcMin.x=-2.36
+
+		///  would render the model with its actual AABB at
+
+		///  -9 + (-2.36) = -11.36).
+
 		instance.modelTransform.c[3].x = newMinX - instance.sourceAabbMin[0];
 		instance.modelTransform.c[3].y = newMinY - instance.sourceAabbMin[1];
 		instance.modelTransform.c[3].z = newMinZ - instance.sourceAabbMin[2];
@@ -379,25 +441,40 @@ void SnapModelInstancesCenterAnchored(
 			continue;
 		}
 
-		// Re-anchor: AABB min ↔ AABB centre. The load path
-		// stored the translation at the AABB min, but the
-		// centred snap treats the current AABB **centre** as
-		// the snap target. Compute the centre, snap to the
-		// integer grid (X, Y, Z), clamp to the world bounds
-		// so the AABB fits, then derive the new AABB min.
+		/// \brief Re-anchor:
+		///
+		/// \details
+		/// AABB min ↔ AABB centre. The load path
+		///  stored the translation at the AABB min, but the
+
+		///  centred snap treats the current AABB **centre** as
+
+		///  the snap target. Compute the centre, snap to the
+
+		///  integer grid (X, Y, Z), clamp to the world bounds
+
+		///  so the AABB fits, then derive the new AABB min.
+
 		float centerX = 0.5f * (instance.worldAabbMin.x + instance.worldAabbMax.x);
 		float centerY = 0.5f * (instance.worldAabbMin.y + instance.worldAabbMax.y);
 		float centerZ = 0.5f * (instance.worldAabbMin.z + instance.worldAabbMax.z);
 
-		// Snap to integer voxel grid (all 3 axes; the
-		// operator's `position` becomes the integer centre).
+		/// \brief Snap to integer voxel grid (all 3 axes; the
+		///
+		/// \details
+		///  operator's `position` becomes the integer centre).
+
 		centerX = std::round(centerX);
 		centerY = std::round(centerY);
 		centerZ = std::round(centerZ);
 
-		// Clamp the centre so the resulting AABB fits within
-		// the world bounds: centre must be in
-		// [worldMin + dim/2, worldMax - dim/2].
+		/// \brief Clamp the centre so the resulting AABB fits within
+		///
+		/// \details
+		///  the world bounds: centre must be in
+
+		///  [worldMin + dim/2, worldMax - dim/2].
+
 		const float halfDimX = 0.5f * dimX;
 		const float halfDimY = 0.5f * dimY;
 		const float halfDimZ = 0.5f * dimZ;
@@ -405,9 +482,14 @@ void SnapModelInstancesCenterAnchored(
 		centerY = std::clamp(centerY, worldMinY + halfDimY, worldMaxY - halfDimY);
 		centerZ = std::clamp(centerZ, worldMinZ + halfDimZ, worldMaxZ - halfDimZ);
 
-		// Derive the new AABB from the clamped centre. The
-		// AABB dims are preserved; the AABB min shifts
-		// outward by the same amount the centre shifts.
+		/// \brief Derive the new AABB from the clamped centre.
+		///
+		/// \details
+		/// The
+		///  AABB dims are preserved; the AABB min shifts
+
+		///  outward by the same amount the centre shifts.
+
 		const float newMinX = centerX - halfDimX;
 		const float newMinY = centerY - halfDimY;
 		const float newMinZ = centerZ - halfDimZ;
@@ -418,11 +500,18 @@ void SnapModelInstancesCenterAnchored(
 		instance.worldAabbMax.y = newMinY + dimY;
 		instance.worldAabbMax.z = newMinZ + dimZ;
 
-		// Update the model basis translation column. Same
-		// `-sourceAabbMin` offset as the bottom-anchored snap
-		// above — the load path's aabbMinOffset puts the
-		// translation at `pos - sourceAabbMin`, and the snap
-		// must preserve that relationship.
+		/// \brief Update the model basis translation column.
+		///
+		/// \details
+		/// Same
+		///  `-sourceAabbMin` offset as the bottom-anchored snap
+
+		///  above — the load path's aabbMinOffset puts the
+
+		///  translation at `pos - sourceAabbMin`, and the snap
+
+		///  must preserve that relationship.
+
 		instance.modelTransform.c[3].x = newMinX - instance.sourceAabbMin[0];
 		instance.modelTransform.c[3].y = newMinY - instance.sourceAabbMin[1];
 		instance.modelTransform.c[3].z = newMinZ - instance.sourceAabbMin[2];
@@ -435,14 +524,23 @@ void SnapModelInstancesAboveGroundDispatch(
 {
 	const char *snapMode = std::getenv("PROJECTV_MODEL_SNAP");
 	if (snapMode != nullptr && std::string(snapMode) == "centre") {
-		// Centre-anchored snap first (centred → integer grid),
-		// then the bottom-anchored default to enforce clamp-to-
-		// world on the resulting AABB. The order doesn't
-		// matter for the final AABB (both are idempotent) but
-		// centred-first gives an `AABB centre` at the integer
-		// grid, while bottom-first gives an `AABB min` at the
-		// integer grid; the centred snap is the user-visible
-		// semantic when the env var is set.
+		/// \brief Centre-anchored snap first (centred → integer grid),
+		///
+		/// \details
+		///  then the bottom-anchored default to enforce clamp-to-
+
+		///  world on the resulting AABB. The order doesn't
+
+		///  matter for the final AABB (both are idempotent) but
+
+		///  centred-first gives an `AABB centre` at the integer
+
+		///  grid, while bottom-first gives an `AABB min` at the
+
+		///  integer grid; the centred snap is the user-visible
+
+		///  semantic when the env var is set.
+
 		SnapModelInstancesCenterAnchored(world, render);
 	}
 	SnapModelInstancesAboveGround(world, render);

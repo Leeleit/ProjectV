@@ -225,18 +225,30 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 			"InitVulkan.LoadAndRegisterModelsFromManifest", "LoadAndRegisterModelsFromManifest returned false");
 	}
 
-	// M5.1b follow-up: lift the loaded `modelInstances` to sit
-	// cleanly on top of the voxel floor instead of half-submerged
-	// in it. The same call is also wired into
-	// `FinalizeActiveVoxelWorldReload` for F5 / F6 / replay; this
-	// startup branch covers the initial VoxelLab default scene
-	// (which doesn't go through `FinalizeActiveVoxelWorldReload`).
-	//
-	// M5.1d: routes through the dispatch wrapper, which honours
-	// the `PROJECTV_MODEL_SNAP=centre` env var for the optional
-	// centre-anchored snap (see `ModelManifestLoader.hpp` for the
-	// contract). The default branch (no env var, or any other
-	// value) is bottom-anchored.
+	/// \brief M5.1b follow-up:
+	///
+	/// \details
+	/// lift the loaded `modelInstances` to sit
+	///  cleanly on top of the voxel floor instead of half-submerged
+
+	///  in it. The same call is also wired into
+
+	///  `FinalizeActiveVoxelWorldReload` for F5 / F6 / replay; this
+
+	///  startup branch covers the initial VoxelLab default scene
+
+	///  (which doesn't go through `FinalizeActiveVoxelWorldReload`).
+
+	///  M5.1d: routes through the dispatch wrapper, which honours
+
+	///  the `PROJECTV_MODEL_SNAP=centre` env var for the optional
+
+	///  centre-anchored snap (see `ModelManifestLoader.hpp` for the
+
+	///  contract). The default branch (no env var, or any other
+
+	///  value) is bottom-anchored.
+
 	projectv::asset::SnapModelInstancesAboveGroundDispatch(*state->world.voxelWorld, &state->render);
 
 	return {};

@@ -15,9 +15,13 @@ std::optional<std::filesystem::path> FindRepoRoot(
     std::error_code ec;
     std::filesystem::path current = std::filesystem::absolute(start, ec);
     if (ec) {
-        // `std::filesystem::absolute` failed (rare — usually a
-        // permission / encoding issue). Fall back to `start`
-        // verbatim and let the walk-up proceed.
+        /// \brief `std::filesystem::absolute` failed (rare — usually a
+        ///
+        /// \details
+        ///  permission / encoding issue). Fall back to `start`
+
+        ///  verbatim and let the walk-up proceed.
+
         current = start;
     }
     while (!current.empty()) {
@@ -30,7 +34,7 @@ std::optional<std::filesystem::path> FindRepoRoot(
         }
         const std::filesystem::path parent = current.parent_path();
         if (parent == current) {
-            // Reached filesystem root.
+            /// \brief Reached filesystem root.
             break;
         }
         current = parent;

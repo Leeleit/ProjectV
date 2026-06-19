@@ -10,12 +10,19 @@ namespace projectv::c_kernels {
 
 namespace {
 
-// **AoS → C-kernel AoS conversion.** 300 `ModelInstanceData`
-// AABBs = 300 `ProjectvCAabb` = 300 * 32 B = 9.6 KB.
-// The conversion is 6 stores per AABB (min[0..2] +
-// max[0..2] + 2 pad stores) — scalar stores, the
-// compiler turns them into 3 `vmovss` (or 1 `vmovups`
-// for the full 32 B with alignment hints).
+/// \brief **AoS → C-kernel AoS conversion.** 300 `ModelInstanceData`
+///
+/// \details
+///  AABBs = 300 `ProjectvCAabb` = 300 * 32 B = 9.6 KB.
+
+///  The conversion is 6 stores per AABB (min[0..2] +
+
+///  max[0..2] + 2 pad stores) — scalar stores, the
+
+///  compiler turns them into 3 `vmovss` (or 1 `vmovups`
+
+///  for the full 32 B with alignment hints).
+
 [[nodiscard]] std::vector<ProjectvCAabb> ToCAabbs(
 	const std::span<const ModelInstanceData> &instances) {
 	std::vector<ProjectvCAabb> aabbs(instances.size());
@@ -82,10 +89,15 @@ std::vector<ModelInstanceData> FilterVisibleInstances(
 	const ChunkCullingParameters &parameters) {
 	std::vector<ModelInstanceData> visible;
 	if (instances.size() < kBatchDispatchThreshold) {
-		// **Fallback to inline C++ helper** for tiny
-		// inputs. Avoids the kernel's per-batch setup
-		// cost (~3 µs of fixed overhead) when we have
-		// fewer AABBs than a single SIMD batch.
+		/// \brief **Fallback to inline C++ helper** for tiny
+		///
+		/// \details
+		///  inputs. Avoids the kernel's per-batch setup
+
+		///  cost (~3 µs of fixed overhead) when we have
+
+		///  fewer AABBs than a single SIMD batch.
+
 		visible.reserve(instances.size());
 		for (const auto &instance : instances) {
 			if (IsAabbVisibleAgainstCameraFrustum(

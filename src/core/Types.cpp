@@ -30,15 +30,25 @@ void ShutdownVulkan(AppState *state)
 		projectv::asset::UnloadAllModels(&state->context, &state->render);
 		projectv::asset::DestroyModelPipeline(&state->context, &state->render);
 
-		// Tear down the TAA offscreen colour targets here, after every other
-		// Vulkan resource consumer is gone. They are `new`-allocated by
-		// `VulkanSwapchain.cpp::RecreateSwapchain` and were never freed
-		// on shutdown, which left VMA holding dedicated-allocation entries
-		// (and the `delete` itself missing), tripping
-		// `~VmaDedicatedAllocationList` on exit with
-		// `Unfreed dedicated allocations found!`. The TAA resolve pipeline
-		// and its descriptor sets were already torn down by
-		// `DestroyGraphicsPipeline` above.
+		/// \brief Tear down the TAA offscreen colour targets here, after every other
+		///
+		/// \details
+		///  Vulkan resource consumer is gone. They are `new`-allocated by
+
+		///  `VulkanSwapchain.cpp::RecreateSwapchain` and were never freed
+
+		///  on shutdown, which left VMA holding dedicated-allocation entries
+
+		///  (and the `delete` itself missing), tripping
+
+		///  `~VmaDedicatedAllocationList` on exit with
+
+		///  `Unfreed dedicated allocations found!`. The TAA resolve pipeline
+
+		///  and its descriptor sets were already torn down by
+
+		///  `DestroyGraphicsPipeline` above.
+
 		if (state->render.taaSceneColorTarget != nullptr || state->render.taaHistoryColorTarget != nullptr || state->render.taaLayerSceneColorTarget != nullptr || state->render.taaLayerHistoryColorTarget != nullptr) {
 			projectv::taa::DestroyTaaRenderTargets(
 				&state->context,
@@ -51,11 +61,18 @@ void ShutdownVulkan(AppState *state)
 			state->render.taaSceneColorTarget = nullptr;
 			delete state->render.taaHistoryColorTarget;
 			state->render.taaHistoryColorTarget = nullptr;
-			// 1.5 — also tear down the per-layer history pair. Same
-			// pattern as the colour history above: the helper frees
-			// the GPU resources, then we drop the host-side pointer
-			// and reset the slot so a re-init starts from a clean
-			// state.
+			/// \brief 1.5 — also tear down the per-layer history pair.
+			///
+			/// \details
+			/// Same
+			///  pattern as the colour history above: the helper frees
+
+			///  the GPU resources, then we drop the host-side pointer
+
+			///  and reset the slot so a re-init starts from a clean
+
+			///  state.
+
 			delete state->render.taaLayerSceneColorTarget;
 			state->render.taaLayerSceneColorTarget = nullptr;
 			delete state->render.taaLayerHistoryColorTarget;

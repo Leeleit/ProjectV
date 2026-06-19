@@ -21,22 +21,36 @@ void BuildVisibleModelInstanceList(
 		return;
 	}
 	if (render->modelInstances.empty()) {
-		// No models loaded (manifest empty or never set) — keep
-		// the culled list empty and skip the per-instance loop
-		// entirely. Cheap, and the renderer already short-circuits
-		// on an empty `visibleModelInstances`.
+		/// \brief No models loaded (manifest empty or never set) — keep
+		///
+		/// \details
+		///  the culled list empty and skip the per-instance loop
+
+		///  entirely. Cheap, and the renderer already short-circuits
+
+		///  on an empty `visibleModelInstances`.
+
 		render->visibleModelInstances.clear();
 		return;
 	}
 
-	// **Pre-filter empty registrations.** The registry /
-	// loader can produce entries with `indexCount == 0` or
-	// null buffers (e.g. a primitive that failed to
-	// upload) and those would have been skipped by the
-	// renderer anyway — no point culling them through the
-	// frustum math first. We collect the remaining
-	// `ModelInstanceData`s into a `std::vector` and
-	// batch-cull them via the C kernel.
+	/// \brief **Pre-filter empty registrations.** The registry /
+	///
+	/// \details
+	///  loader can produce entries with `indexCount == 0` or
+
+	///  null buffers (e.g. a primitive that failed to
+
+	///  upload) and those would have been skipped by the
+
+	///  renderer anyway — no point culling them through the
+
+	///  frustum math first. We collect the remaining
+
+	///  `ModelInstanceData`s into a `std::vector` and
+
+	///  batch-cull them via the C kernel.
+
 	std::vector<ModelInstanceData> cullCandidates;
 	cullCandidates.reserve(render->modelInstances.size());
 	for (const ModelInstanceData &instance : render->modelInstances) {
@@ -125,12 +139,19 @@ bool PrepareFrameRenderData(
 	VkResult waitResult = vkWaitForFences(
 		context->device, 1, &inFlightFence, VK_TRUE, 10'000'000);
 	if (waitResult == VK_TIMEOUT) {
-		// **GPU is behind.** Block and wait for
-		// the fence; the engine has no choice
-		// (we cannot issue this frame's
-		// GPU work onto a still-pending
-		// command buffer slot for this
-		// in-flight frame index).
+		/// \brief **GPU is behind.** Block and wait for
+		///
+		/// \details
+		///  the fence; the engine has no choice
+
+		///  (we cannot issue this frame's
+
+		///  GPU work onto a still-pending
+
+		///  command buffer slot for this
+
+		///  in-flight frame index).
+
 		PV_PROFILE_ZONE_N("PrepareFrameRenderData.GPUStallFallback");
 		waitResult = vkWaitForFences(
 			context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
@@ -169,22 +190,40 @@ bool PrepareFrameRenderData(
 		return false;
 	}
 
-	// M5: per-frame model-instance frustum cull. The same camera
-	// basis that drives chunk visibility (`chunkCullingParameters`,
-	// built above) is reused so chunk cull + model cull share a
-	// consistent view of the frustum. Off-screen and max-distance
-	// instances never reach `RecordModelCommands`. Empty manifests
-	// short-circuit to a clear; non-empty manifests re-use
-	// `visibleModelInstances` capacity to avoid per-frame
-	// allocations.
+	/// \brief M5:
+	///
+	/// \details
+	/// per-frame model-instance frustum cull. The same camera
+	///  basis that drives chunk visibility (`chunkCullingParameters`,
+
+	///  built above) is reused so chunk cull + model cull share a
+
+	///  consistent view of the frustum. Off-screen and max-distance
+
+	///  instances never reach `RecordModelCommands`. Empty manifests
+
+	///  short-circuit to a clear; non-empty manifests re-use
+
+	///  `visibleModelInstances` capacity to avoid per-frame
+
+	///  allocations.
+
 	BuildVisibleModelInstanceList(chunkCullingParameters, render);
 
-	// M5.1d gravigun: hold F to pick and drag a model under the
-	// crosshair, snapping AABB min to integer voxel grid. Must
-	// run AFTER BuildVisibleModelInstanceList (so the frustum
-	// cull sees the just-updated AABB) but BEFORE the model pass
-	// records commands (so the new worldAabbMin/Max and the
-	// modelTransform translation column are uploaded to the GPU).
+	/// \brief M5.1d gravigun:
+	///
+	/// \details
+	/// hold F to pick and drag a model under the
+	///  crosshair, snapping AABB min to integer voxel grid. Must
+
+	///  run AFTER BuildVisibleModelInstanceList (so the frustum
+
+	///  cull sees the just-updated AABB) but BEFORE the model pass
+
+	///  records commands (so the new worldAabbMin/Max and the
+
+	///  modelTransform translation column are uploaded to the GPU).
+
 	if (world->voxelWorld) {
 		static projectv::app::ModelGravigunState gravigunState;
 		TickModelGravigun(
@@ -239,10 +278,15 @@ bool PrepareFrameRenderData(
 	const std::array taaPixelJitter = render->taaEnabled
 										  ? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
 										  : std::array{0.0f, 0.0f};
-	// `taaJitterScale` is the per-pass TAA tuning-ladder multiplier
-	// (live `;`/`'` keys, see `InputAction::*TaaJitterScale`). At 1.0 the
-	// behaviour matches the pre-ladder Halton output; 0.0 freezes the
-	// projection jitter entirely, 2.0 lets it wander across a full pixel.
+	/// \brief `taaJitterScale` is the per-pass TAA tuning-ladder multiplier
+	///
+	/// \details
+	///  (live `;`/`'` keys, see `InputAction::*TaaJitterScale`). At 1.0 the
+
+	///  behaviour matches the pre-ladder Halton output; 0.0 freezes the
+
+	///  projection jitter entirely, 2.0 lets it wander across a full pixel.
+
 	render->taaJitterX = taaPixelJitter[0] * render->taaJitterScale;
 	render->taaJitterY = taaPixelJitter[1] * render->taaJitterScale;
 	frame->renderData.graphicsPushConstants = {};
@@ -253,29 +297,54 @@ bool PrepareFrameRenderData(
 			render->taaJitterX,
 			render->taaJitterY);
 	}
-	// Camera-cut detection (1.2). The Chebyshev (L-infinity over the 16
-	// floats of the matrix) distance between the previous and current
-	// frame's `viewProjection` is a cheap one-shot cut detector: ordinary
-	// mouse-look / WASD / spectator-fly stays well below 0.01 per frame,
-	// while snap rotations, teleports, or scene-preset changes push the
-	// delta above 0.20. When the delta exceeds `kTaaCameraCutThreshold`
-	// the history is dropped the same way swapchain resize / world reload
-	// / Taa toggle already do, so the next resolve falls back to the
-	// current sample only. The threshold lives as a single constant
-	// rather than a live hotkey because the operator data shows 0.10
-	// cleanly separates "ordinary continuous motion" from "intentional
-	// viewpoint change" without needing a per-session dial.
+	/// \brief Camera-cut detection (1.2).
+	///
+	/// \details
+	/// The Chebyshev (L-infinity over the 16
+	///  floats of the matrix) distance between the previous and current
+
+	///  frame's `viewProjection` is a cheap one-shot cut detector: ordinary
+
+	///  mouse-look / WASD / spectator-fly stays well below 0.01 per frame,
+
+	///  while snap rotations, teleports, or scene-preset changes push the
+
+	///  delta above 0.20. When the delta exceeds `kTaaCameraCutThreshold`
+
+	///  the history is dropped the same way swapchain resize / world reload
+
+	///  / Taa toggle already do, so the next resolve falls back to the
+
+	///  current sample only. The threshold lives as a single constant
+
+	///  rather than a live hotkey because the operator data shows 0.10
+
+	///  cleanly separates "ordinary continuous motion" from "intentional
+
+	///  viewpoint change" without needing a per-session dial.
+
 	constexpr float kTaaCameraCutThreshold = 0.10f;
-	// 1.2 — camera-cut detection runs only after the first successful
-	// stash. The first frame after a swapchain recreate (or session
-	// start) would otherwise compare the real current `viewProjection`
-	// against the zero-initialised default and register a
-	// `maxDelta ≈ 40` "cut" every time, which the sidecar would log
-	// as a noise floor rather than a real viewpoint discontinuity.
-	// `taaPrevViewProjectionMatrixInitialized` is the companion flag;
-	// it's set here on the first stash and cleared by
-	// `VulkanSwapchain.cpp` on every swapchain recreate so the next
-	// run is a clean baseline again.
+	/// \brief 1.2 — camera-cut detection runs only after the first successful
+	///
+	/// \details
+	///  stash. The first frame after a swapchain recreate (or session
+
+	///  start) would otherwise compare the real current `viewProjection`
+
+	///  against the zero-initialised default and register a
+
+	///  `maxDelta ≈ 40` "cut" every time, which the sidecar would log
+
+	///  as a noise floor rather than a real viewpoint discontinuity.
+
+	///  `taaPrevViewProjectionMatrixInitialized` is the companion flag;
+
+	///  it's set here on the first stash and cleared by
+
+	///  `VulkanSwapchain.cpp` on every swapchain recreate so the next
+
+	///  run is a clean baseline again.
+
 	if (render->taaEnabled && render->taaPrevViewProjectionMatrixInitialized) {
 		const auto &currentVP = frame->renderData.graphicsPushConstants.viewProjection;
 		const auto &prevVP = render->taaPrevViewProjectionMatrix;
@@ -296,13 +365,21 @@ bool PrepareFrameRenderData(
 			render->taaCameraCutMaxDelta = maxDelta;
 		}
 	}
-	// Stash the current frame's viewProjection as the next frame's `prev`.
-	// The TAA resolve pass consumes `prevViewProjectionMatrix` from
-	// `VoxelSceneLighting`; on the *first* frame `taaPrevViewProjectionMatrix`
-	// is zero-initialised, so the first resolve correctly treats the history
-	// as invalid and falls back to the current sample only. The companion
-	// `taaPrevViewProjectionMatrixInitialized` flag is set unconditionally
-	// so the camera-cut detector above runs on every subsequent frame.
+	/// \brief Stash the current frame's viewProjection as the next frame's `prev`.
+	///
+	/// \details
+	///  The TAA resolve pass consumes `prevViewProjectionMatrix` from
+
+	///  `VoxelSceneLighting`; on the *first* frame `taaPrevViewProjectionMatrix`
+
+	///  is zero-initialised, so the first resolve correctly treats the history
+
+	///  as invalid and falls back to the current sample only. The companion
+
+	///  `taaPrevViewProjectionMatrixInitialized` flag is set unconditionally
+
+	///  so the camera-cut detector above runs on every subsequent frame.
+
 	if (render->taaEnabled) {
 		render->taaPrevViewProjectionMatrix = frame->renderData.graphicsPushConstants.viewProjection;
 		render->taaPrevViewProjectionMatrixInitialized = true;

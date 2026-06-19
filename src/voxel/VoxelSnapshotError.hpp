@@ -7,13 +7,13 @@
 namespace projectv::voxel {
 
 enum class VoxelSnapshotError : std::uint8_t {
-	// **Save-side errors.**
+	/// \brief **Save-side errors.**
 	EmptyPath = 0,
 	CreateDirectoriesFailed,
 	VoxelBufferTooLarge,
 	OpenForWriteFailed,
 	WriteFailed,
-	// **Load-side errors.**
+	/// \brief **Load-side errors.**
 	FileSizeQueryFailed,
 	FileTooSmall,
 	OpenForReadFailed,
@@ -30,12 +30,20 @@ enum class VoxelSnapshotError : std::uint8_t {
 	InvalidVoxelMaterial,
 };
 
-// **Human-readable name** for the error variant. Used in log lines
-// so the operator can grep for the variant without having to read
-// the per-step log strings in `VoxelWorld.cpp`. The detail string
-// is the original runtime-failure detail (e.g. errno message,
-// file path), so the combination of `toString(variant)` + detail
-// is what shows up in `runtime::LogRuntimeFailure`.
+/// \brief **Human-readable name** for the error variant.
+///
+/// \details
+/// Used in log lines
+///  so the operator can grep for the variant without having to read
+
+///  the per-step log strings in `VoxelWorld.cpp`. The detail string
+
+///  is the original runtime-failure detail (e.g. errno message,
+
+///  file path), so the combination of `toString(variant)` + detail
+
+///  is what shows up in `runtime::LogRuntimeFailure`.
+
 constexpr std::string_view toString(VoxelSnapshotError e) noexcept {
 	switch (e) {
 		case VoxelSnapshotError::EmptyPath: return "EmptyPath";

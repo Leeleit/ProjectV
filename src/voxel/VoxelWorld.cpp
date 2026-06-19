@@ -1051,7 +1051,7 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMateria
 		--world.stats.activeChunkCount;
 	}
 
-	// A voxel edit only needs its own chunk plus face-sharing border neighbors.
+	/// \brief A voxel edit only needs its own chunk plus face-sharing border neighbors.
 	MarkChunksTouchedByVoxelEditDirty(world, position);
 }
 
@@ -1231,11 +1231,18 @@ uint32_t CountVoxelsByMaterial(const VoxelWorld &world, const VoxelMaterial mate
 
 uint32_t UpdateFluidCA(VoxelWorld &world)
 {
-	// Fast-path: a world with no fluid never needs a tick. This is the
-	// only early-out in the function; everything else runs even when
-	// the world has 0 fluid voxels that *can* move (e.g. fluid already
-	// settled on a floor), so the per-tick cost stays predictable for
-	// performance instrumentation.
+	/// \brief Fast-path:
+	///
+	/// \details
+	/// a world with no fluid never needs a tick. This is the
+	///  only early-out in the function; everything else runs even when
+
+	///  the world has 0 fluid voxels that *can* move (e.g. fluid already
+
+	///  settled on a floor), so the per-tick cost stays predictable for
+
+	///  performance instrumentation.
+
 	if (world.stats.fluidVoxelCount == 0u || world.voxels.empty()) {
 		return 0u;
 	}
@@ -1244,11 +1251,18 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 	const int height = world.height;
 	const int depth = world.depth;
 
-	// **Pre-condition invariants** (debug-only). The world is built by
-	// `CreateEmptyVoxelWorld` which guarantees these, but a
-	// hand-constructed test world or a corrupt snapshot could violate
-	// them; `PV_ASSERT` is the cheapest way to catch that before the
-	// CA does an out-of-bounds read.
+	/// \brief **Pre-condition invariants** (debug-only).
+	///
+	/// \details
+	/// The world is built by
+	///  `CreateEmptyVoxelWorld` which guarantees these, but a
+
+	///  hand-constructed test world or a corrupt snapshot could violate
+
+	///  them; `PV_ASSERT` is the cheapest way to catch that before the
+
+	///  CA does an out-of-bounds read.
+
 #if !defined(NDEBUG)
 	{
 		const size_t expectedVoxelCount = static_cast<size_t>(width) *
@@ -1271,31 +1285,54 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 			 + static_cast<size_t>(z) * static_cast<size_t>(width) * static_cast<size_t>(height);
 	};
 
-	// 1. Double-buffer copy of the voxel array. Cheap: 4-8 KB for the
-	//    bounded `VoxelLab` scene. Avoids read-after-write hazards in a
-	//    single tick: we read from `world.voxels` (the immutable
-	//    snapshot of the current state) and write into `next` (the new
-	//    state), then swap at the end. The allocation is required for
-	//    determinism — without the snapshot, a fluid at `(x, 5, z)`
-	//    could see the (x, 4, z) that was *just written* to `next` and
-	//    either fall into it (if we wrote Fluid) or fail to fall (if
-	//    we wrote Air), depending on the iteration order.
+	/// \brief 1.
+	///
+	/// \details
+	/// Double-buffer copy of the voxel array. Cheap: 4-8 KB for the
+	///     bounded `VoxelLab` scene. Avoids read-after-write hazards in a
+
+	///     single tick: we read from `world.voxels` (the immutable
+
+	///     snapshot of the current state) and write into `next` (the new
+
+	///     state), then swap at the end. The allocation is required for
+
+	///     determinism — without the snapshot, a fluid at `(x, 5, z)`
+
+	///     could see the (x, 4, z) that was *just written* to `next` and
+
+	///     either fall into it (if we wrote Fluid) or fail to fall (if
+
+	///     we wrote Air), depending on the iteration order.
+
 	std::vector<uint8_t> next = world.voxels;
 
 	std::vector<uint8_t> claimed(world.voxels.size(), 0u);
 
 	uint32_t movedCount = 0u;
 
-	// 2. Pass: scan the world in `z, y, x` order with **y ascending**
-	//    (bottom-up). The bottom-up order is critical: a fluid at
-	//    `(x, 4, z)` is processed BEFORE the fluid at `(x, 5, z)`, so
-	//    the `(x, 4, z)` fluid falls to `(x, 3, z)` first; the
-	//    `(x, 5, z)` fluid then reads `world.voxels[(x, 4, z)]`
-	//    (still the original Fluid in the immutable snapshot) and
-	//    does **not** fall. Net: 1 tick = 1 cell of gravity per
-	//    column. A top-down pass would cause the `(x, 5, z)` fluid to
-	//    fall into `(x, 4, z)`'s target (x, 3, z), giving 2 cells per
-	//    tick ("double-step") which the audit found undesirable.
+	/// \brief 2.
+	///
+	/// \details
+	/// Pass: scan the world in `z, y, x` order with **y ascending**
+	///     (bottom-up). The bottom-up order is critical: a fluid at
+
+	///     `(x, 4, z)` is processed BEFORE the fluid at `(x, 5, z)`, so
+
+	///     the `(x, 4, z)` fluid falls to `(x, 3, z)` first; the
+
+	///     `(x, 5, z)` fluid then reads `world.voxels[(x, 4, z)]`
+
+	///     (still the original Fluid in the immutable snapshot) and
+
+	///     does **not** fall. Net: 1 tick = 1 cell of gravity per
+
+	///     column. A top-down pass would cause the `(x, 5, z)` fluid to
+
+	///     fall into `(x, 4, z)`'s target (x, 3, z), giving 2 cells per
+
+	///     tick ("double-step") which the audit found undesirable.
+
 	for (int z = 0; z < depth; ++z) {
 		for (int y = 0; y < height; ++y) {
 			for (int x = 0; x < width; ++x) {
@@ -1303,47 +1340,81 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 				if (world.voxels[idx] != static_cast<uint8_t>(VoxelMaterial::Fluid)) {
 					continue;
 				}
-				// **Source claim check:** if this cell was the
-				// destination of an earlier cell's fall/spread in
-				// the same tick, it is no longer an "original" source
-				// — it has been "consumed" by the spread/fall that
-				// moved into it. Processing it again would overwrite
-				// the destination write and lose the original
-				// source's fluid (the "swap" bug). The earlier
-				// source's `next[idx]` write to Fluid is unchanged
-				// by us skipping, so the count is preserved.
+				/// \brief **Source claim check:** if this cell was the
+				///
+				/// \details
+				///  destination of an earlier cell's fall/spread in
+
+				///  the same tick, it is no longer an "original" source
+
+				///  — it has been "consumed" by the spread/fall that
+
+				///  moved into it. Processing it again would overwrite
+
+				///  the destination write and lose the original
+
+				///  source's fluid (the "swap" bug). The earlier
+
+				///  source's `next[idx]` write to Fluid is unchanged
+
+				///  by us skipping, so the count is preserved.
+
 				if (claimed[idx] != 0u) {
 					continue;
 				}
 
 				if (y > 0) {
 					const size_t belowIdx = index(x, y - 1, z);
-					// **Fall target check uses `next`, not
-					// `world.voxels`**, same as the spread rule.
-					// A fall is only allowed if the cell below is
-					// Air in the **new** state (`next`). Without
-					// this, a fluid in column A (at y=1) could fall
-					// to (x, 0, z) while another fluid (in column
-					// B, also at y=0) is **already** spreading into
-					// (x, 0, z) — both succeed and the second
-					// overwrites the first (losing a fluid). With
-					// this check, the fall is rejected if the
-					// destination is already claimed, and the
-					// source falls back to spread (or stays put if
-					// no spread is possible).
+					/// \brief **Fall target check uses `next`, not
+					///
+					/// \details
+					///  `world.voxels`**, same as the spread rule.
+
+					///  A fall is only allowed if the cell below is
+
+					///  Air in the **new** state (`next`). Without
+
+					///  this, a fluid in column A (at y=1) could fall
+
+					///  to (x, 0, z) while another fluid (in column
+
+					///  B, also at y=0) is **already** spreading into
+
+					///  (x, 0, z) — both succeed and the second
+
+					///  overwrites the first (losing a fluid). With
+
+					///  this check, the fall is rejected if the
+
+					///  destination is already claimed, and the
+
+					///  source falls back to spread (or stays put if
+
+					///  no spread is possible).
+
 					if (world.voxels[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)
 						&& next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
 						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
 						next[belowIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
-						// Mark both source and destination as
-						// "claimed" — see the comment above on the
-						// "swap" bug. Marking the source is
-						// belt-and-suspenders (the iteration order
-						// processes each cell exactly once), but the
-						// destination claim is the critical one:
-						// without it, a fluid voxel at the
-						// destination (in the snapshot) would also
-						// try to act, overwriting our write.
+						/// \brief Mark both source and destination as
+						///
+						/// \details
+						///  "claimed" — see the comment above on the
+
+						///  "swap" bug. Marking the source is
+
+						///  belt-and-suspenders (the iteration order
+
+						///  processes each cell exactly once), but the
+
+						///  destination claim is the critical one:
+
+						///  without it, a fluid voxel at the
+
+						///  destination (in the snapshot) would also
+
+						///  try to act, overwriting our write.
+
 						claimed[idx] = 1u;
 						claimed[belowIdx] = 1u;
 						++movedCount;
@@ -1356,12 +1427,20 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 						(x * 73856093u) ^ (y * 19349663u) ^ (z * 83492791u));
 					const int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 					const int startSide = static_cast<int>(h & 0x3u);
-					// Two perpendicular directions: the hash one
-					// and the one rotated 90° (the next side in
-					// the `sides` table). Opposite (startSide+2)
-					// was tried first and produced "line" patterns
-					// that didn't fill 2D gaps; perpendicular gives
-					// a square footprint.
+					/// \brief Two perpendicular directions:
+					///
+					/// \details
+					/// the hash one
+					///  and the one rotated 90° (the next side in
+
+					///  the `sides` table). Opposite (startSide+2)
+
+					///  was tried first and produced "line" patterns
+
+					///  that didn't fill 2D gaps; perpendicular gives
+
+					///  a square footprint.
+
 					const int dirs[2] = {startSide, (startSide + 1) & 0x3};
 					int spreadDir = -1;
 					for (int d = 0; d < 2; ++d) {
@@ -1416,13 +1495,22 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		}
 	}
 
-	// 4. Post-condition invariant (debug-only). `SetVoxelMaterial`
-	//    is the only place that mutates `stats.fluidVoxelCount`, and
-	//    the commit loop is the only caller per tick; the counts
-	//    should match the array contents exactly. A mismatch would
-	//    indicate a bug in `AccumulateMaterialCount` or in
-	//    `SetVoxelMaterial`'s delta path, **not** in the CA itself,
-	//    but it's cheap to verify here.
+	/// \brief 4.
+	///
+	/// \details
+	/// Post-condition invariant (debug-only). `SetVoxelMaterial`
+	///     is the only place that mutates `stats.fluidVoxelCount`, and
+
+	///     the commit loop is the only caller per tick; the counts
+
+	///     should match the array contents exactly. A mismatch would
+
+	///     indicate a bug in `AccumulateMaterialCount` or in
+
+	///     `SetVoxelMaterial`'s delta path, **not** in the CA itself,
+
+	///     but it's cheap to verify here.
+
 #if !defined(NDEBUG)
 	{
 		size_t actualFluidCount = 0u;

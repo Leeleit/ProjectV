@@ -144,8 +144,11 @@ BakedMesh BakeLoadedAsset(
 		return {};
 	}
 
-	// ACMR (Average Cache Miss Ratio) = vertex shader invocations / triangle count.
-	// Ideal 0.5; well-optimized cube sits around 0.55-0.65 depending on topology.
+	/// \brief ACMR (Average Cache Miss Ratio) = vertex shader invocations / triangle count.
+	///
+	/// \details
+	///  Ideal 0.5; well-optimized cube sits around 0.55-0.65 depending on topology.
+
 	result.acmr = static_cast<float>(totalIndexTriples * 3) / static_cast<float>(totalUniqueVertices);
 	result.atvr = result.acmr;
 	return result;
