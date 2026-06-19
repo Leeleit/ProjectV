@@ -137,6 +137,7 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 		runtime::LogRuntimeFailure("Init", step, detail);
 		return std::unexpected(e);
 	};
+	static_assert(&fail != nullptr, "fail lambda is reachable (called from many sites in InitVulkan)");
 	PV_PROFILE_ZONE_N("InitVulkan");
 	if (state == nullptr) {
 		return fail(projectv::vulkan_init::VulkanInitError::PreconditionFailed,

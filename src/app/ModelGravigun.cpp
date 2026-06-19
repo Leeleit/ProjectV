@@ -113,7 +113,8 @@ void TickModelGravigun(
 	if (fPressed && state->pickedInstanceIndex < 0) {
 
 		const Ray ray = BuildCameraRay(camera);
-		std::optional<size_t> bestIndex;
+		bool hasBest = false;
+		size_t bestIndex = 0;
 		float bestTNear = 0.0f;
 		for (size_t i = 0; i < render->modelInstances.size(); ++i) {
 			const ModelInstanceData &inst = render->modelInstances[i];
@@ -126,17 +127,18 @@ void TickModelGravigun(
 								 glm::vec3(inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2]),
 								 glm::vec3(inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2]),
 								 tNear, tFar)) {
-				if (!bestIndex.has_value() || tNear < bestTNear) {
+				if (!hasBest || tNear < bestTNear) {
 					bestTNear = tNear;
 					bestIndex = i;
+					hasBest = true;
 				}
 			}
 		}
-		if (bestIndex.has_value()) {
-			state->pickedInstanceIndex = static_cast<int>(*bestIndex);
+		if (hasBest) {
+			state->pickedInstanceIndex = static_cast<int>(bestIndex);
 
 			state->targetY = 0.0f;
-			const ModelInstanceData &inst = render->modelInstances[*bestIndex];
+			const ModelInstanceData &inst = render->modelInstances[bestIndex];
 
 			state->pickAnchorAabbMin = glm::vec3(
 				inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2]);
@@ -149,7 +151,7 @@ void TickModelGravigun(
 				state->pickAnchorHit = state->pickAnchorAabbMin;
 			}
 			std::fprintf(stderr,
-						 "[Gravigun-DBG] PICKED: index=%d aabbMin=(%.3f,%.3f,%.3f) aabbMax=(%.3f,%.3f,%.3f) anchorHit=(%.3f,%.3f,%.3f) targetY=%.1f\n",
+						 "[Gravigun-DBG] PICKED: index=%zu aabbMin=(%.3f,%.3f,%.3f) aabbMax=(%.3f,%.3f,%.3f) anchorHit=(%.3f,%.3f,%.3f) targetY=%.1f\n",
 						 bestIndex,
 						 inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2],
 						 inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2],

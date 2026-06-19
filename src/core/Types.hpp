@@ -410,7 +410,7 @@ struct DebugStats {
 	float renderPassDebugHudMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
 	uint32_t renderPassDirtyChunkRebuiltCount = 0;
-	uint8_t audioMusicState = 0; // 0=Stopped, 1=Playing, 2=Paused (matches MusicState enum)
+	uint8_t audioMusicState = 0;
 	float audioMusicVolume = 0.8f;
 	bool audioMusicInitialized = false;
 	uint32_t audioMusicPlaylistSize = 0;

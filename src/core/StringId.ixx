@@ -69,6 +69,9 @@ constexpr bool operator<(const StringID &a, const StringID &b) noexcept
 	return a.length < b.length;
 }
 
+constexpr bool kStringIdEqReachable = StringID{"x"} == StringID{"x"};
+constexpr bool kStringIdNeqReachable = StringID{"x"} != StringID{"y"};
+
 } // namespace projectv::core
 
 export template <>

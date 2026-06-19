@@ -437,10 +437,8 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
 
 		constexpr std::array kNeighbourhoodCycle{1, 3, 5, 7};
-		const auto current = std::find(
-			kNeighbourhoodCycle.begin(),
-			kNeighbourhoodCycle.end(),
-			render->taaNeighbourhoodRadius);
+		const auto current = std::ranges::find(kNeighbourhoodCycle,
+											   render->taaNeighbourhoodRadius);
 		if (current == kNeighbourhoodCycle.end()) {
 			render->taaNeighbourhoodRadius = kNeighbourhoodCycle.front();
 		} else {
@@ -721,12 +719,12 @@ bool UpdateApp(
 		debug->stats.audioMusicPlaylistSize = static_cast<uint32_t>(audio->playlistSize());
 		debug->stats.audioMusicCurrentIndex = static_cast<uint32_t>(audio->currentIndex());
 		const std::string &trackName = audio->currentTrackName();
-		std::fill(debug->stats.audioMusicTrackName.begin(), debug->stats.audioMusicTrackName.end(), '\0');
+		std::ranges::fill(debug->stats.audioMusicTrackName, '\0');
 		const size_t copyLen = std::min(trackName.size(),
 										debug->stats.audioMusicTrackName.size() - 1);
 		std::copy_n(trackName.begin(), copyLen, debug->stats.audioMusicTrackName.begin());
 		const std::string &artist = audio->currentArtist();
-		std::fill(debug->stats.audioMusicArtist.begin(), debug->stats.audioMusicArtist.end(), '\0');
+		std::ranges::fill(debug->stats.audioMusicArtist, '\0');
 		const size_t artistCopyLen = std::min(artist.size(),
 											  debug->stats.audioMusicArtist.size() - 1);
 		std::copy_n(artist.begin(), artistCopyLen, debug->stats.audioMusicArtist.begin());
@@ -745,8 +743,8 @@ bool UpdateApp(
 		debug->stats.audioMusicVolume = 0.0f;
 		debug->stats.audioMusicPlaylistSize = 0;
 		debug->stats.audioMusicCurrentIndex = 0;
-		std::fill(debug->stats.audioMusicTrackName.begin(), debug->stats.audioMusicTrackName.end(), '\0');
-		std::fill(debug->stats.audioMusicArtist.begin(), debug->stats.audioMusicArtist.end(), '\0');
+		std::ranges::fill(debug->stats.audioMusicTrackName, '\0');
+		std::ranges::fill(debug->stats.audioMusicArtist, '\0');
 		std::ranges::fill(debug->stats.audioMusicTitle, '\0');
 		debug->stats.audioMusicPositionSec = 0.0f;
 		debug->stats.audioMusicDurationSec = 0.0f;

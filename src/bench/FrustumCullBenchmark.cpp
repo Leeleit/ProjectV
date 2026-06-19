@@ -165,7 +165,7 @@ void RunCScalar(
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 		std::ranges::fill(*masks, 0);
-		[[maybe_unused]] const auto cparams = ToCParams(fixture.parameters[r]);
+		const ProjectvCFrustumCullParameters cparams = ToCParams(fixture.parameters[r]);
 		projectv_cull_frustum_scalar(masks->data(), aabbs.data(), &cparams, kBatchSize);
 	}
 }
@@ -178,7 +178,7 @@ void RunCAvx2(
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 		std::ranges::fill(*masks, 0);
-		[[maybe_unused]] const auto cparams = ToCParams(fixture.parameters[r]);
+		const ProjectvCFrustumCullParameters cparams = ToCParams(fixture.parameters[r]);
 		projectv_cull_frustum_avx2(masks->data(), aabbs.data(), &cparams, kBatchSize);
 	}
 }
@@ -214,7 +214,7 @@ static void BM_CppScalar(benchmark::State &state)
 {
 	const VisibilityFixture fixture = VisibilityFixture::Make(0xC0FFEE01u);
 	std::vector<uint8_t> masks((kBatchSize + 7) / 8, 0);
-	for (auto _ : state) {
+	while (state.KeepRunningBatch(kBatchSize)) {
 		RunCppScalar(fixture, &masks);
 		benchmark::DoNotOptimize(masks.data());
 	}
@@ -227,7 +227,7 @@ static void BM_CScalar(benchmark::State &state)
 	const VisibilityFixture fixture = VisibilityFixture::Make(0xC0FFEE01u);
 	const auto aabbs = ToCAabbs(fixture);
 	std::vector<uint8_t> masks((kBatchSize + 7) / 8, 0);
-	for (auto _ : state) {
+	while (state.KeepRunningBatch(kBatchSize)) {
 		RunCScalar(aabbs, fixture, &masks);
 		benchmark::DoNotOptimize(masks.data());
 	}
@@ -241,7 +241,7 @@ static void BM_CAvx2(benchmark::State &state)
 	const VisibilityFixture fixture = VisibilityFixture::Make(0xC0FFEE01u);
 	const auto aabbs = ToCAabbs(fixture);
 	std::vector<uint8_t> masks((kBatchSize + 7) / 8, 0);
-	for (auto _ : state) {
+	while (state.KeepRunningBatch(kBatchSize)) {
 		RunCAvx2(aabbs, fixture, &masks);
 		benchmark::DoNotOptimize(masks.data());
 	}
@@ -252,49 +252,54 @@ static void BM_CAvx2(benchmark::State &state)
 
 int main(int argc, char *argv[])
 {
+	try {
 
-	{
-		const VisibilityFixture fixture = VisibilityFixture::Make(0xC0FFEE01u);
-		const auto aabbs = ToCAabbs(fixture);
-		std::vector<uint8_t> cppMasks((kBatchSize + 7) / 8, 0);
-		std::vector<uint8_t> cMasks((kBatchSize + 7) / 8, 0);
-		std::vector<uint8_t> avxMasks((kBatchSize + 7) / 8, 0);
-		for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-			std::ranges::fill(cppMasks, 0);
-			const auto &params = fixture.parameters[r];
-			for (size_t i = 0; i < kBatchSize; ++i) {
-				if (IsAabbVisibleAgainstCameraFrustum(
-						fixture.aabbMin[i], fixture.aabbMax[i], params)) {
-					cppMasks[i / 8] |= static_cast<uint8_t>(1u << (i % 8));
+		{
+			const VisibilityFixture fixture = VisibilityFixture::Make(0xC0FFEE01u);
+			const auto aabbs = ToCAabbs(fixture);
+			std::vector<uint8_t> cppMasks((kBatchSize + 7) / 8, 0);
+			std::vector<uint8_t> cMasks((kBatchSize + 7) / 8, 0);
+			std::vector<uint8_t> avxMasks((kBatchSize + 7) / 8, 0);
+			for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
+				std::ranges::fill(cppMasks, 0);
+				const auto &params = fixture.parameters[r];
+				for (size_t i = 0; i < kBatchSize; ++i) {
+					if (IsAabbVisibleAgainstCameraFrustum(
+							fixture.aabbMin[i], fixture.aabbMax[i], params)) {
+						cppMasks[i / 8] |= static_cast<uint8_t>(1u << (i % 8));
+					}
 				}
+				std::ranges::fill(cMasks, 0);
+				const ProjectvCFrustumCullParameters cparams = ToCParams(params);
+				projectv_cull_frustum_scalar(cMasks.data(), aabbs.data(), &cparams, kBatchSize);
+				VerifyBitIdentical(cppMasks, cMasks, "cpp_scalar", "c_scalar");
+#if defined(__AVX2__)
+				std::ranges::fill(avxMasks, 0);
+				projectv_cull_frustum_avx2(avxMasks.data(), aabbs.data(), &cparams, kBatchSize);
+				VerifyBitIdentical(cMasks, avxMasks, "c_scalar", "c_avx2");
+#endif
 			}
-			std::ranges::fill(cMasks, 0);
-			const auto cparams = ToCParams(params);
-			projectv_cull_frustum_scalar(cMasks.data(), aabbs.data(), &cparams, kBatchSize);
-			VerifyBitIdentical(cppMasks, cMasks, "cpp_scalar", "c_scalar");
+			std::printf("[Tier3 frustum_cull] bit-identical across all implementations (cpp, c_scalar");
 #if defined(__AVX2__)
-			std::ranges::fill(avxMasks, 0);
-			projectv_cull_frustum_avx2(avxMasks.data(), aabbs.data(), &cparams, kBatchSize);
-			VerifyBitIdentical(cMasks, avxMasks, "c_scalar", "c_avx2");
+			std::printf(", c_avx2");
 #endif
+			std::printf(")\n");
 		}
-		std::printf("[Tier3 frustum_cull] bit-identical across all implementations (cpp, c_scalar");
-#if defined(__AVX2__)
-		std::printf(", c_avx2");
-#endif
-		std::printf(")\n");
-	}
 
-	benchmark::RegisterBenchmark("BM_CppScalar", &BM_CppScalar);
-	benchmark::RegisterBenchmark("BM_CScalar", &BM_CScalar);
+		benchmark::RegisterBenchmark("BM_CppScalar", &BM_CppScalar);
+		benchmark::RegisterBenchmark("BM_CScalar", &BM_CScalar);
 #if defined(__AVX2__)
-	benchmark::RegisterBenchmark("BM_CAvx2", &BM_CAvx2);
+		benchmark::RegisterBenchmark("BM_CAvx2", &BM_CAvx2);
 #endif
-	benchmark::Initialize(&argc, argv);
-	if (benchmark::ReportUnrecognizedArguments(argc, argv)) {
+		benchmark::Initialize(&argc, argv);
+		if (benchmark::ReportUnrecognizedArguments(argc, argv)) {
+			return 1;
+		}
+		benchmark::RunSpecifiedBenchmarks();
+		benchmark::Shutdown();
+		return 0;
+	} catch (...) {
+		std::fprintf(stderr, "[FrustumCullBenchmark] main() threw an unhandled exception\n");
 		return 1;
 	}
-	benchmark::RunSpecifiedBenchmarks();
-	benchmark::Shutdown();
-	return 0;
 }

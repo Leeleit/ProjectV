@@ -85,7 +85,7 @@ constexpr void VerifyMat4Identity()
 	const Mat4 id = identity();
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
-			constexpr float expected = col == row ? 1.0f : 0.0f;
+			const float expected = col == row ? 1.0f : 0.0f;
 			if (id.m(col, row) != expected) {
 				std::fprintf(stderr, "identity(%zu, %zu) = %.9f\n",
 					col, row, static_cast<double>(id.m(col, row)));
@@ -146,7 +146,7 @@ constexpr void VerifyMat4Inverse()
 	const Mat4 invId = inverse(identity());
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
-			constexpr float expected = col == row ? 1.0f : 0.0f;
+			const float expected = col == row ? 1.0f : 0.0f;
 			if (invId.m(col, row) != expected) {
 				std::fprintf(stderr, "inverse(identity)(%zu, %zu) = %.9f\n",
 					col, row, static_cast<double>(invId.m(col, row)));
@@ -164,7 +164,7 @@ constexpr void VerifyMat4Inverse()
 	const Mat4 prod = a * invA;
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
-			constexpr float expected = col == row ? 1.0f : 0.0f;
+			const float expected = col == row ? 1.0f : 0.0f;
 			if (std::fabs(prod.m(col, row) - expected) >= 1e-5f) {
 				std::fprintf(stderr, "a * inv(a) at (%zu, %zu) = %.9f, expected %.9f\n",
 					col, row, static_cast<double>(prod.m(col, row)),

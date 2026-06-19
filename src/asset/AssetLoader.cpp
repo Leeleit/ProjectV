@@ -433,7 +433,7 @@ VoxelAlignedAabb ComputeVoxelAlignedAabb(
 	const float voxelSize)
 {
 
-	(void)voxelSize; // voxelSize is implicit in the per-axis `round`
+	(void)voxelSize;
 
 	const float srcX = std::max(aabbMax.x - aabbMin.x, 1e-6f);
 	const float srcY = std::max(aabbMax.y - aabbMin.y, 1e-6f);

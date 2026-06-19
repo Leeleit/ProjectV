@@ -8,6 +8,9 @@
 #include <string_view>
 
 namespace {
+constexpr float kDefaultAspect = 16.0f / 9.0f;
+constexpr float kDefaultNearPlane = 0.1f;
+
 struct TestContext {
 	int failures = 0;
 
@@ -19,18 +22,16 @@ struct TestContext {
 };
 
 ChunkCullingParameters MakeForwardLookingCamera(
-	const float aspect = 16.0f / 9.0f,
-	const float nearPlane = 0.1f,
 	const float maxDistance = 0.0f)
 {
 	constexpr float verticalFovRadians = static_cast<float>(3.14159265358979323846L) / 3.0f;
 	ChunkCullingParameters parameters{};
 	const float tanHalfVerticalFov = std::tan(verticalFovRadians * 0.5f);
-	const float tanHalfHorizontalFov = tanHalfVerticalFov * aspect;
+	const float tanHalfHorizontalFov = tanHalfVerticalFov * kDefaultAspect;
 	parameters.cameraPositionAndMaxDistance = {0.0f, 0.0f, 0.0f, maxDistance};
 	parameters.cameraForwardAndTanHalfVerticalFov = {0.0f, 0.0f, -1.0f, tanHalfVerticalFov};
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, tanHalfHorizontalFov};
-	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, nearPlane};
+	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, kDefaultNearPlane};
 	return parameters;
 }
 
@@ -92,10 +93,7 @@ void TestAabbStraddlingNearPlaneVisible(TestContext &ctx)
 void TestAabbBeyondMaxDistanceCulled(TestContext &ctx)
 {
 
-	const ChunkCullingParameters camera = MakeForwardLookingCamera(
-		16.0f / 9.0f,
-		0.1f,
-		5.0f);
+	const ChunkCullingParameters camera = MakeForwardLookingCamera(5.0f);
 	constexpr projectv::math::Vec3 aabbMin{-0.5f, -0.5f, -100.5f, 0.0f};
 	constexpr projectv::math::Vec3 aabbMax{0.5f, 0.5f, -99.5f, 0.0f};
 	PV_EXPECT_TRUE(

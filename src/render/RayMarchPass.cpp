@@ -1,7 +1,5 @@
 #include "render/RayMarchPass.hpp"
 
-#include <cstdio>
-
 namespace projectv::render {
 
 namespace {
@@ -47,21 +45,6 @@ bool IsRayMarchPipelineRecreatePending()
 		return true;
 	}
 	return false;
-}
-
-void RecordRayMarchCommands(const VulkanContextState &context, [[maybe_unused]] const FrameRenderData &frameData)
-{
-	const auto &[enabled, recreatePending] = MutableRayMarchState();
-	if (!enabled) {
-		return;
-	}
-	if (context.device == VK_NULL_HANDLE) {
-		return;
-	}
-
-	std::fprintf(
-		stderr,
-		"[ProjectV][RayMarch] RecordRayMarchCommands invoked (deferred Phase 7 follow-up: shader is compiled, pipeline / offscreen target / composite are the next slice)\n");
 }
 
 } // namespace projectv::render

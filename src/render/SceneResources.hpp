@@ -69,8 +69,7 @@ inline bool IsSceneChunkVisible(
 			   std::abs(planeNormal.z) * chunkHalfExtent.z;
 	};
 	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
-		[[maybe_unused]] const float centerDistance = dot(toChunkCenter, planeNormal) - planeOffset;
-		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
+		return (dot(toChunkCenter, planeNormal) - planeOffset) + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 	const float chunkRadius = std::sqrt(lengthSquared(chunkHalfExtent));
 	if (!passesPlane(cameraForward, nearPlane)) [[unlikely]] {
@@ -118,7 +117,6 @@ inline bool IsSceneChunkVisible(
 
 	return true;
 }
-
 
 inline bool IsAabbVisibleAgainstCameraFrustum(
 	const projectv::math::Vec3 &aabbMin,
@@ -168,8 +166,7 @@ inline bool IsAabbVisibleAgainstCameraFrustum(
 			   std::abs(planeNormal.z) * aabbHalfExtent.z;
 	};
 	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
-		[[maybe_unused]] const float centerDistance = dot(toAabbCenter, planeNormal) - planeOffset;
-		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
+		return (dot(toAabbCenter, planeNormal) - planeOffset) + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 	const float aabbRadius = std::sqrt(lengthSquared(aabbHalfExtent));
 	if (!passesPlane(cameraForward, nearPlane)) {
@@ -238,7 +235,6 @@ inline bool IsSceneChunkVisibleInShadowCascade(
 		0.0f,
 	};
 
-
 	bool outsideLeft = true;
 	bool outsideRight = true;
 	bool outsideBottom = true;
@@ -253,8 +249,7 @@ inline bool IsSceneChunkVisibleInShadowCascade(
 			0.0f,
 		};
 
-		const projectv::math::Vec4 clipCorner = lightViewProjection
-			* projectv::math::Vec4{corner.x, corner.y, corner.z, 1.0f};
+		const projectv::math::Vec4 clipCorner = lightViewProjection * projectv::math::Vec4{corner.x, corner.y, corner.z, 1.0f};
 		outsideLeft = outsideLeft && clipCorner[0] < -clipCorner[3];
 		outsideRight = outsideRight && clipCorner[0] > clipCorner[3];
 		outsideBottom = outsideBottom && clipCorner[1] < -clipCorner[3];
@@ -308,26 +303,17 @@ inline int32_t QuantizeCameraForwardComponent(const float value)
 	const float clamped = std::clamp(value, -1.0f, 1.0f);
 	return static_cast<int32_t>(std::lround(clamped / kCameraForwardQuantization));
 }
-
 inline uint64_t ComputeVisibilityCacheHash(
 	const ChunkCullingParameters &parameters,
 	const uint64_t sceneVoxelPayloadVersion,
 	const uint32_t chunkDescriptorCount)
 {
-	const auto posX = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[0]);
-	const auto posY = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[1]);
-	const auto posZ = QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[2]);
-	const auto fwdX = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[0]);
-	const auto fwdY = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[1]);
-	const auto fwdZ = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[2]);
-
-
-	uint64_t hash = static_cast<uint64_t>(posX) * 0x9E3779B185EBCA87ULL;
-	hash ^= static_cast<uint64_t>(posY) * 0xC2B2AE3D27D4EB4FULL;
-	hash ^= static_cast<uint64_t>(posZ) * 0x165667B19E3779F9ULL;
-	hash ^= static_cast<uint64_t>(fwdX) * 0x94D049BB133111EBULL;
-	hash ^= static_cast<uint64_t>(fwdY) * 0xD1342543DE82EF95ULL;
-	hash ^= static_cast<uint64_t>(fwdZ) * 0xB45BCA9F4D2D9B33ULL;
+	uint64_t hash = static_cast<uint64_t>(QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[0])) * 0x9E3779B185EBCA87ULL;
+	hash ^= static_cast<uint64_t>(QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[1])) * 0xC2B2AE3D27D4EB4FULL;
+	hash ^= static_cast<uint64_t>(QuantizeCameraPositionComponent(parameters.cameraPositionAndMaxDistance[2])) * 0x165667B19E3779F9ULL;
+	hash ^= static_cast<uint64_t>(QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[0])) * 0x94D049BB133111EBULL;
+	hash ^= static_cast<uint64_t>(QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[1])) * 0xD1342543DE82EF95ULL;
+	hash ^= static_cast<uint64_t>(QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[2])) * 0xB45BCA9F4D2D9B33ULL;
 	hash ^= sceneVoxelPayloadVersion * 0x27D4EB2F165667C5ULL;
 	hash ^= static_cast<uint64_t>(chunkDescriptorCount) * 0x9C2A8E3F4D2D9B3BULL;
 
@@ -339,4 +325,3 @@ inline uint64_t ComputeVisibilityCacheHash(
 	return hash;
 }
 } // namespace projectv::visibility_cache
-

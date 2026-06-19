@@ -42,7 +42,7 @@ std::string_view GetAssetLoaderLastErrorMessage();
 struct GlbDimensions {
 	glm::vec3 aabbMin{0.0f};
 	glm::vec3 aabbMax{0.0f};
-	glm::vec3 size{0.0f}; // = aabbMax - aabbMin
+	glm::vec3 size{0.0f};
 };
 
 std::optional<GlbDimensions> ComputeGlbDimensions(

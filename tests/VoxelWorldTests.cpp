@@ -203,8 +203,7 @@ void ResetDirtyFlags(VoxelWorld &world);
 
 PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
 	const Int3 min,
-	const Int3 maxExclusive,
-	const uint32_t nonAirVoxelCount)
+	const Int3 maxExclusive)
 {
 	const uint32_t extentX = static_cast<uint32_t>(maxExclusive.x - min.x);
 	const uint32_t extentY = static_cast<uint32_t>(maxExclusive.y - min.y);
@@ -212,17 +211,10 @@ PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
 	const uint32_t voxelCount = extentX * extentY * extentZ;
 	return {
 		.chunkOrigin = {min.x, min.y, min.z, 0},
-		.chunkExtentAndNonAir = {extentX, extentY, extentZ, nonAirVoxelCount},
+		.chunkExtentAndNonAir = {extentX, extentY, extentZ, 1u},
 		.voxelDataInfo = {0u, voxelCount, (voxelCount + 3u) / 4u, 0u},
 		.drawRanges = {0u, 0u, 0u, 0u},
 	};
-}
-
-PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
-	const Int3 min,
-	const Int3 maxExclusive)
-{
-	return MakePackedSceneChunkDescriptor(min, maxExclusive, 1u);
 }
 
 Int3 AddInt3(const Int3 a, const Int3 b)
@@ -723,7 +715,7 @@ void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &conte
 
 	EXPECT_EQ(context, static_cast<uint32_t>(8), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(8), world.pendingChunkRebuildIndices.size());
-	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
+	std::ranges::sort(world.pendingChunkRebuildIndices);
 	for (size_t chunkIndex = 0; chunkIndex < 8; ++chunkIndex) {
 		EXPECT_EQ(context, chunkIndex, world.pendingChunkRebuildIndices[chunkIndex]);
 	}
@@ -737,7 +729,7 @@ void TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(TestContext &co
 
 	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(2), world.pendingChunkRebuildIndices.size());
-	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
+	std::ranges::sort(world.pendingChunkRebuildIndices);
 	EXPECT_EQ(context, static_cast<size_t>(0), world.pendingChunkRebuildIndices[0]);
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices[1]);
 }
@@ -1662,7 +1654,7 @@ int RunReplayAnalysisFromEnvironment()
 		ToString(camera.controlMode));
 
 	PhysicsWalkDebugInfo previousInfo = GetPhysicsWalkDebugInfo(physics.get());
-	[[maybe_unused]] CameraState::ControlMode previousMode = camera.controlMode;
+	CameraState::ControlMode previousMode = camera.controlMode;
 	uint32_t previousDownMask = 0u;
 	float maxFeetY = previousInfo.feetPosition[1];
 	float maxCameraY = camera.position[1];
@@ -2178,13 +2170,18 @@ void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &con
 													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 0u),
+													 []() {
+														 PackedSceneChunkDescriptor d = MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1});
+														 d.chunkExtentAndNonAir[3] = 0u;
+														 return d;
+													 }(),
 													 identityMat));
 					 }
 
 void TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(TestContext &context)
 {
-	PackedSceneChunkDescriptor sourceDescriptor = MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}, 11u);
+	PackedSceneChunkDescriptor sourceDescriptor = MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8});
+	sourceDescriptor.chunkExtentAndNonAir[3] = 11u;
 	sourceDescriptor.drawRanges = {32u, 0u, 96u, 0u};
 	PackedSceneChunkDescriptor existingDescriptor = sourceDescriptor;
 	existingDescriptor.drawRanges = {32u, 17u, 96u, 9u};

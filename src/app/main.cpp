@@ -359,7 +359,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		return SDL_APP_FAILURE;
 	}
 	state->audio = AudioEnginePtr(
-		new projectv::audio::AudioEngine(),
+		// ReSharper disable once CppDFAMemoryLeak
+		new projectv::audio::AudioEngine(), // EVIL: tranfer ownership
 		DestroyAudioEngine);
 	if (!state->audio->init()) {
 		SDL_Log("[ProjectV][Audio] miniaudio init failed; running without music");

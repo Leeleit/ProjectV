@@ -9,7 +9,7 @@
 
 namespace projectv::asset {
 
-constexpr size_t kBakedVertexStride = sizeof(float) * 8; // float3 pos + float3 normal + float2 uv
+constexpr size_t kBakedVertexStride = sizeof(float) * 8;
 
 struct BakedPrimitive {
 	std::vector<uint8_t> vertexBuffer;
