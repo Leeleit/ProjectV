@@ -79,7 +79,7 @@ void ResetReplayFrameApplication(InputState &input)
 bool WriteReplayCapture(std::ostream &stream, const InputReplayCapture &capture)
 {
 	stream << kInputReplayMagic << ' ' << kInputReplayVersion << '\n';
-	stream << "snapshot_path " << std::quoted(capture.snapshotPath) << '\n';
+	stream << "snapshot_path " << std::quoted(capture.snapshotPath.string()) << '\n';
 	stream << "camera_pos "
 		   << capture.initialCamera.position[0] << ' '
 		   << capture.initialCamera.position[1] << ' '
@@ -138,7 +138,9 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 	std::string key;
 	while (stream >> key) {
 		if (key == "snapshot_path") {
-			stream >> std::quoted(capture.snapshotPath);
+			std::string snapshotPathString;
+			stream >> std::quoted(snapshotPathString);
+			capture.snapshotPath = std::filesystem::path(snapshotPathString);
 		} else if (key == "camera_pos") {
 			stream >> capture.initialCamera.position[0] >> capture.initialCamera.position[1] >> capture.initialCamera.position[2];
 		} else if (key == "camera_angles") {
@@ -269,7 +271,7 @@ bool StartInputReplayRecording(
 	}
 
 	InputReplayCapture capture{};
-	capture.snapshotPath = GetInputReplaySnapshotPath();
+	capture.snapshotPath = std::filesystem::path(GetInputReplaySnapshotPath());
 	capture.initialCamera = camera;
 	capture.initialInteraction = interaction;
 	capture.walkAirControlMode = walkAirControlMode;
@@ -277,21 +279,20 @@ bool StartInputReplayRecording(
 	capture.walkAutoJumpDelayEnabled = walkAutoJumpDelayEnabled;
 	capture.frames.reserve(512);
 
-	const std::filesystem::path snapshotPath = capture.snapshotPath;
-	if (!EnsureParentDirectoryExists(snapshotPath, "StartInputReplayRecording.CreateDirectories")) {
+	if (!EnsureParentDirectoryExists(capture.snapshotPath, "StartInputReplayRecording.CreateDirectories")) {
 		return false;
 	}
-	const auto saveResult = SaveVoxelWorldSnapshot(world, capture.snapshotPath);
+	const auto saveResult = SaveVoxelWorldSnapshot(world, capture.snapshotPath.string());
 	if (!saveResult.has_value()) {
 		runtime::LogRuntimeFailure(
 			"InputReplay",
 			"StartInputReplayRecording.SaveSnapshot",
-			std::string{capture.snapshotPath} + " (variant=" + std::string{toString(saveResult.error())} + ")");
+			capture.snapshotPath.string() + " (variant=" + std::string{toString(saveResult.error())} + ")");
 		return false;
 	}
 
 	input->replay.capture = std::move(capture);
-	input->replay.replayPath = GetInputReplayPath();
+	input->replay.replayPath = std::filesystem::path(GetInputReplayPath());
 	input->replay.recording = true;
 	input->replay.playbackRequested = false;
 	input->replay.playbackActive = false;
@@ -299,8 +300,8 @@ bool StartInputReplayRecording(
 	input->replay.playbackFrameIndex = 0;
 	SDL_Log(
 		"[ProjectV][InputReplay] recording started replay=%s snapshot=%s",
-		input->replay.replayPath.c_str(),
-		input->replay.capture.snapshotPath.c_str());
+		input->replay.replayPath.string().c_str(),
+		input->replay.capture.snapshotPath.string().c_str());
 	return true;
 }
 
@@ -314,7 +315,7 @@ bool StopInputReplayRecording(InputState *input)
 		return true;
 	}
 
-	if (!SaveInputReplayCapture(input->replay.capture, input->replay.replayPath)) {
+	if (!SaveInputReplayCapture(input->replay.capture, input->replay.replayPath.string())) {
 		return false;
 	}
 
@@ -322,7 +323,7 @@ bool StopInputReplayRecording(InputState *input)
 	input->replay.captureAvailable = true;
 	SDL_Log(
 		"[ProjectV][InputReplay] recording saved replay=%s frames=%zu",
-		input->replay.replayPath.c_str(),
+		input->replay.replayPath.string().c_str(),
 		input->replay.capture.frames.size());
 	return true;
 }
@@ -360,7 +361,7 @@ bool LoadLatestInputReplay(InputState *input)
 	}
 
 	input->replay.capture = std::move(capture);
-	input->replay.replayPath = replayPath;
+	input->replay.replayPath = std::filesystem::path(replayPath);
 	input->replay.captureAvailable = true;
 	input->replay.playbackRequested = true;
 	input->replay.playbackActive = false;

@@ -261,7 +261,7 @@ bool StartLastInputReplayPlayback(AppState *state)
 	}
 
 	std::unique_ptr<VoxelWorld> loadedWorld = [&]() -> std::unique_ptr<VoxelWorld> {
-		auto result = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath);
+		auto result = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath.string());
 		if (!result.has_value()) {
 			runtime::LogRuntimeFailure(
 				"App",
@@ -331,7 +331,7 @@ bool StartLastInputReplayPlayback(AppState *state)
 	state->input.replay.playbackFrameIndex = 0;
 	SDL_Log(
 		"[ProjectV][InputReplay] playback started replay=%s frames=%zu",
-		state->input.replay.replayPath.c_str(),
+		state->input.replay.replayPath.string().c_str(),
 		state->input.replay.capture.frames.size());
 	return true;
 }

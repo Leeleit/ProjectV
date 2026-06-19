@@ -23,6 +23,7 @@ struct OffscreenColorTarget;
 
 #include <array>
 #include <cstddef>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -314,7 +315,7 @@ struct InputReplayFrame {
 };
 
 struct InputReplayCapture {
-	std::string snapshotPath;
+	std::filesystem::path snapshotPath;
 	CameraState initialCamera{};
 	InteractionState initialInteraction{};
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
@@ -325,7 +326,7 @@ struct InputReplayCapture {
 
 struct InputReplayState {
 	InputReplayCapture capture{};
-	std::string replayPath;
+	std::filesystem::path replayPath;
 	bool recording = false;
 	bool playbackRequested = false;
 	bool playbackActive = false;

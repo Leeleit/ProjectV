@@ -1624,9 +1624,9 @@ int RunReplayAnalysisFromEnvironment()
 		return EXIT_FAILURE;
 	}
 
-	auto loadResult = LoadVoxelWorldSnapshot(capture.snapshotPath);
+	auto loadResult = LoadVoxelWorldSnapshot(capture.snapshotPath.string());
 	if (!loadResult.has_value()) {
-		std::fprintf(stderr, "[ReplayAnalysis] failed to load snapshot: %s\n", capture.snapshotPath.c_str());
+		std::fprintf(stderr, "[ReplayAnalysis] failed to load snapshot: %s\n", capture.snapshotPath.string().c_str());
 		return EXIT_FAILURE;
 	}
 	std::unique_ptr<VoxelWorld> world = std::move(loadResult).value();
@@ -1670,7 +1670,7 @@ int RunReplayAnalysisFromEnvironment()
 		"[ReplayAnalysis] replay=%s frames=%zu snapshot=%s initialMode=%s\n",
 		replayPath.c_str(),
 		capture.frames.size(),
-		capture.snapshotPath.c_str(),
+		capture.snapshotPath.string().c_str(),
 		ToString(camera.controlMode));
 
 	PhysicsWalkDebugInfo previousInfo = GetPhysicsWalkDebugInfo(physics.get());
@@ -2391,7 +2391,7 @@ void TestUpdateAppTogglesWalkAutoJumpDelay(TestContext &context)
 void TestInputReplayCaptureRoundTripsFile(TestContext &context)
 {
 	InputReplayCapture capture{};
-	capture.snapshotPath = GetTestInputReplaySnapshotPath().string();
+	capture.snapshotPath = GetTestInputReplaySnapshotPath();
 	capture.initialCamera = MakeTestCamera({1.25f, 2.5f, 3.75f});
 	capture.initialCamera.controlMode = CameraState::ControlMode::Walk;
 	capture.initialCamera.yawRadians = 0.25f;
@@ -2462,7 +2462,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	EXPECT_TRUE(context, SaveVoxelWorldSnapshot(world, snapshotPath.string()).has_value());
 
 	InputReplayCapture capture{};
-	capture.snapshotPath = snapshotPath.string();
+	capture.snapshotPath = snapshotPath;
 	capture.initialCamera = MakeTestCamera({4.0f, 2.65f, 2.0f});
 	capture.initialCamera.controlMode = CameraState::ControlMode::Walk;
 	capture.walkAirControlMode = WalkAirControlMode::MinecraftLike;
@@ -2484,7 +2484,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 
 	InputReplayCapture loaded{};
 	EXPECT_TRUE(context, LoadInputReplayCapture(replayPath.string(), &loaded));
-	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(loaded.snapshotPath).value();
+	std::unique_ptr<VoxelWorld> loadedWorld = LoadVoxelWorldSnapshot(loaded.snapshotPath.string()).value();
 	EXPECT_TRUE(context, loadedWorld != nullptr);
 	if (!loadedWorld) {
 		return;
