@@ -69,13 +69,6 @@ constexpr bool operator<(const StringID &a, const StringID &b) noexcept
 	return a.length < b.length;
 }
 
-// Anchor: operator==/!= are used by std::unordered_map<StringID, int>
-// (see tests/StringIdTest.cpp:111). Static analyzer reports "All calls
-// of operator== are unreachable" because it does not see the unordered_map
-// call site; this compile-time use proves operator== is reachable.
-static_assert(StringID{"x"} == StringID{"x"}, "StringID equality is reachable");
-static_assert(StringID{"x"} != StringID{"y"}, "StringID inequality is reachable");
-
 } // namespace projectv::core
 
 export template <>

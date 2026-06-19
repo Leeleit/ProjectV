@@ -33,7 +33,7 @@ void ParseArtistTitle(const std::string &filename,
 	if (stem.size() >= 4) {
 		std::string ext = stem.substr(stem.size() - 4);
 		std::transform(ext.begin(), ext.end(), ext.begin(),
-							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+					   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext == ".mp3") {
 			stem = stem.substr(0, stem.size() - 4);
 		}
@@ -157,14 +157,14 @@ size_t AudioEngine::scanPlaylist()
 		const auto &path = entry.path();
 		std::string ext = path.extension().string();
 		std::transform(ext.begin(), ext.end(), ext.begin(),
-							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+					   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext != ".mp3") {
 			continue;
 		}
 		m_playlist.push_back(path);
 	}
 
-	std::ranges::sort(m_playlist);
+	std::sort(m_playlist.begin(), m_playlist.end());
 
 	if (m_playlist.empty()) {
 		m_currentIndex = 0;

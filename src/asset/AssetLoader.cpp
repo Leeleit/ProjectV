@@ -12,7 +12,7 @@
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
-#include <fastgltf/glm_element_traits.hpp>
+#include <fastgltf/glm_element_traits.hpp> // IWYU pragma: keep — ElementTraits<glm::vec3/2/4> specialization needed by CopyAccessorToVec3/2 (see Phase A refactor note)
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>

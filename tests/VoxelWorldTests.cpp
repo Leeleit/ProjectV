@@ -218,6 +218,13 @@ PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
 	};
 }
 
+PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
+	const Int3 min,
+	const Int3 maxExclusive)
+{
+	return MakePackedSceneChunkDescriptor(min, maxExclusive, 1u);
+}
+
 Int3 AddInt3(const Int3 a, const Int3 b)
 {
 	return {a.x + b.x, a.y + b.y, a.z + b.z};
@@ -1655,7 +1662,7 @@ int RunReplayAnalysisFromEnvironment()
 		ToString(camera.controlMode));
 
 	PhysicsWalkDebugInfo previousInfo = GetPhysicsWalkDebugInfo(physics.get());
-	CameraState::ControlMode previousMode = camera.controlMode;
+	[[maybe_unused]] CameraState::ControlMode previousMode = camera.controlMode;
 	uint32_t previousDownMask = 0u;
 	float maxFeetY = previousInfo.feetPosition[1];
 	float maxCameraY = camera.position[1];
@@ -2109,16 +2116,16 @@ void TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(TestContext &context)
 	const ChunkCullingParameters parameters = BuildChunkCullingParameters(camera, {1280u, 720u}, 64.0f);
 
 	EXPECT_TRUE(context, IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}, 1u),
+							 MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({0, 0, 28}, {8, 8, 36}, 1u),
+							 MakePackedSceneChunkDescriptor({0, 0, 28}, {8, 8, 36}),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({0, 0, -84}, {8, 8, -76}, 1u),
+							 MakePackedSceneChunkDescriptor({0, 0, -84}, {8, 8, -76}),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({80, 0, 0}, {88, 8, 8}, 1u),
+							 MakePackedSceneChunkDescriptor({80, 0, 0}, {88, 8, 8}),
 							 parameters));
 }
 
@@ -2130,10 +2137,10 @@ void TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(TestContext &conte
 	const ChunkCullingParameters parameters = BuildChunkCullingParameters(camera, {1280u, 720u}, 64.0f);
 
 	EXPECT_TRUE(context, IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({34, 0, -8}, {42, 8, 0}, 1u),
+							 MakePackedSceneChunkDescriptor({34, 0, -8}, {42, 8, 0}),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({42, 0, -8}, {50, 8, 0}, 1u),
+							 MakePackedSceneChunkDescriptor({42, 0, -8}, {50, 8, 0}),
 							 parameters));
 }
 
@@ -2162,13 +2169,13 @@ void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &con
 							 projectv::math::fromArray16(identityProjection);
 
 						 EXPECT_TRUE(context, IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 1u),
+													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}, 1u),
+													 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}, 1u),
+													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
 													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 0u),

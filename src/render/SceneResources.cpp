@@ -1,5 +1,7 @@
 #include "render/SceneResources.hpp"
 
+#include "render/VoxelMeshingPushConstants.hpp"
+
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/ShadowProjection.hpp"
@@ -396,14 +398,14 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	assert(chunkDescriptorCount <= ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks);
 	assert(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount <=
 		   ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount);
-	if (cache.opaqueCommands.size() != chunkDescriptorCount) {
-		cache.opaqueCommands.resize(chunkDescriptorCount);
+	if (cache.opaqueCommandsSize != chunkDescriptorCount) {
+		cache.opaqueCommandsSize = chunkDescriptorCount;
 	}
-	if (cache.shadowCommands.size() != static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount) {
-		cache.shadowCommands.resize(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount);
+	if (cache.shadowCommandsSize != static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount) {
+		cache.shadowCommandsSize = static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount;
 	}
-	if (cache.transparentCommands.size() != chunkDescriptorCount) {
-		cache.transparentCommands.resize(chunkDescriptorCount);
+	if (cache.transparentCommandsSize != chunkDescriptorCount) {
+		cache.transparentCommandsSize = chunkDescriptorCount;
 	}
 
 	const uint32_t shadowCommandStride = chunkDescriptorCount;
@@ -453,26 +455,26 @@ void ApplyCachedChunkVisibilityCommands(
 	SceneFrameResources &frameResources)
 {
 	if (frameResources.opaqueIndirectMappedData &&
-		cache.opaqueCommands.size() == frameResources.chunkDescriptorCount) {
+		cache.opaqueCommandsSize == frameResources.chunkDescriptorCount) {
 		std::memcpy(
 			frameResources.opaqueIndirectMappedData,
 			cache.opaqueCommands.data(),
-			cache.opaqueCommands.size() * sizeof(VkDrawIndirectCommand));
+			cache.opaqueCommandsSize * sizeof(VkDrawIndirectCommand));
 	}
 	if (frameResources.shadowIndirectMappedData &&
-		cache.shadowCommands.size() ==
+		cache.shadowCommandsSize ==
 			static_cast<size_t>(frameResources.chunkDescriptorCount) * kSunShadowCascadeCount) {
 		std::memcpy(
 			frameResources.shadowIndirectMappedData,
 			cache.shadowCommands.data(),
-			cache.shadowCommands.size() * sizeof(VkDrawIndirectCommand));
+			cache.shadowCommandsSize * sizeof(VkDrawIndirectCommand));
 	}
 	if (frameResources.transparentIndirectMappedData &&
-		cache.transparentCommands.size() == frameResources.chunkDescriptorCount) {
+		cache.transparentCommandsSize == frameResources.chunkDescriptorCount) {
 		std::memcpy(
 			frameResources.transparentIndirectMappedData,
 			cache.transparentCommands.data(),
-			cache.transparentCommands.size() * sizeof(VkDrawIndirectCommand));
+			cache.transparentCommandsSize * sizeof(VkDrawIndirectCommand));
 	}
 }
 } // namespace
@@ -533,10 +535,10 @@ bool UpdateSceneFrameChunkVisibility(
 		cache.hash == hash &&
 		cache.chunkDescriptorCount == frameResources.chunkDescriptorCount &&
 		cache.sceneVoxelPayloadVersion == render.sceneVoxelPayloadVersion &&
-		cache.opaqueCommands.size() == frameResources.chunkDescriptorCount &&
-		cache.shadowCommands.size() ==
+		cache.opaqueCommandsSize == frameResources.chunkDescriptorCount &&
+		cache.shadowCommandsSize ==
 			static_cast<size_t>(frameResources.chunkDescriptorCount) * kSunShadowCascadeCount &&
-		cache.transparentCommands.size() == frameResources.chunkDescriptorCount) {
+		cache.transparentCommandsSize == frameResources.chunkDescriptorCount) {
 		ApplyCachedChunkVisibilityCommands(cache, frameResources);
 		frameResources.shadowCascadeVisibleChunkCounts = cache.shadowCascadeVisibleChunkCounts;
 		++cache.consecutiveHitCount;

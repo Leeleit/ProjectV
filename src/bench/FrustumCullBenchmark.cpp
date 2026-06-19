@@ -178,7 +178,7 @@ void RunCAvx2(
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 		std::ranges::fill(*masks, 0);
-		const auto cparams = ToCParams(fixture.parameters[r]);
+		[[maybe_unused]] const auto cparams = ToCParams(fixture.parameters[r]);
 		projectv_cull_frustum_avx2(masks->data(), aabbs.data(), &cparams, kBatchSize);
 	}
 }

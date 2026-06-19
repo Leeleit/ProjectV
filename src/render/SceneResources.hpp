@@ -168,7 +168,7 @@ inline bool IsAabbVisibleAgainstCameraFrustum(
 			   std::abs(planeNormal.z) * aabbHalfExtent.z;
 	};
 	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
-		const float centerDistance = dot(toAabbCenter, planeNormal) - planeOffset;
+		[[maybe_unused]] const float centerDistance = dot(toAabbCenter, planeNormal) - planeOffset;
 		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 	const float aabbRadius = std::sqrt(lengthSquared(aabbHalfExtent));

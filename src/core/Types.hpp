@@ -13,6 +13,7 @@ import projectv.string_id;
 #include "core/StringId.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
+#include "render/VoxelMeshingPushConstants.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 namespace projectv::taa {
@@ -26,14 +27,6 @@ struct OffscreenColorTarget;
 #include <string>
 #include <type_traits>
 #include <vector>
-
-#ifdef __GLIBCXX__
-#include <inplace_vector>
-#define PROJECTV_INPLACE_VECTOR std::inplace_vector
-#else
-#include "core/InplaceVectorShim.hpp"
-#define PROJECTV_INPLACE_VECTOR ::projectv::core::InplaceVectorShim
-#endif
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 constexpr uint32_t MAX_LOOK_DEV_CAPTURE_VIEW_COUNT = 8;
@@ -345,44 +338,6 @@ struct DebugOverlayBox {
 	Int3 maxExclusive{};
 	std::array<float, 4> color{};
 };
-
-struct VoxelMeshingPushConstants {
-	std::array<int32_t, 4> worldMinAndChunkSize{};
-	std::array<int32_t, 4> worldMaxExclusiveAndChunkCount{};
-	std::array<uint32_t, 4> chunkGridAndTransparentFaceBase{};
-	std::array<uint32_t, 4> faceCapacities{};
-};
-
-struct ChunkVisibilityCache {
-	bool valid = false;
-	uint64_t sceneVoxelPayloadVersion = 0;
-	uint32_t chunkDescriptorCount = 0;
-
-	int32_t quantizedCameraX = 0;
-	int32_t quantizedCameraY = 0;
-	int32_t quantizedCameraZ = 0;
-	int32_t quantizedForwardX1000 = 0;
-	int32_t quantizedForwardY1000 = 0;
-	int32_t quantizedForwardZ1000 = 0;
-	uint64_t hash = 0;
-	uint32_t visibleChunkCount = 0;
-	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
-	static constexpr std::size_t kChunkVisibilityCacheMaxChunks = 1024;
-	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands;
-	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands;
-	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> transparentCommands;
-
-	uint32_t culledChunkCount = 0;
-
-	uint64_t consecutiveHitCount = 0;
-};
-static_assert(std::is_standard_layout_v<VoxelMeshingPushConstants>);
-static_assert(std::is_trivially_copyable_v<VoxelMeshingPushConstants>);
-static_assert(sizeof(VoxelMeshingPushConstants) == 64);
-static_assert(offsetof(VoxelMeshingPushConstants, worldMinAndChunkSize) == 0);
-static_assert(offsetof(VoxelMeshingPushConstants, worldMaxExclusiveAndChunkCount) == 16);
-static_assert(offsetof(VoxelMeshingPushConstants, chunkGridAndTransparentFaceBase) == 32);
-static_assert(offsetof(VoxelMeshingPushConstants, faceCapacities) == 48);
 
 struct ChunkCullingParameters {
 	projectv::math::Vec4 cameraPositionAndMaxDistance{};

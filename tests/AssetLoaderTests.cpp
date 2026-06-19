@@ -139,7 +139,7 @@ void TestManifestParsingDefaults(TestContext &context)
 	if (two.size() != 2) {
 		context.Fail(__LINE__, "two semi-separated paths should yield two entries");
 	}
-	if (two[1].id != "b") {
+	if (two[1].id != projectv::core::StringID{"b"}) {
 		context.Fail(__LINE__, "second id should default to file stem 'b'");
 	}
 }

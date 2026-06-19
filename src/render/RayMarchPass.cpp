@@ -49,7 +49,7 @@ bool IsRayMarchPipelineRecreatePending()
 	return false;
 }
 
-void RecordRayMarchCommands(const VulkanContextState &context, const FrameRenderData &frameData)
+void RecordRayMarchCommands(const VulkanContextState &context, [[maybe_unused]] const FrameRenderData &frameData)
 {
 	const auto &[enabled, recreatePending] = MutableRayMarchState();
 	if (!enabled) {

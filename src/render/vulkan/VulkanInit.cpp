@@ -48,7 +48,7 @@ bool TryCreateCalibratedTracyGpuContext(
 // cross-function call site through the #if PROJECTV_ENABLE_TRACY guard.
 // This compile-time address-of proves the function is reachable.
 static_assert(&TryCreateCalibratedTracyGpuContext != nullptr,
-	"TryCreateCalibratedTracyGpuContext is reachable (called from CreateTracyGpuContext)");
+			  "TryCreateCalibratedTracyGpuContext is reachable (called from CreateTracyGpuContext)");
 
 bool CreateTracyGpuContext(
 	VulkanContextState *context,
@@ -214,12 +214,13 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 					"InitVulkan.CreateVoxelMeshingPipeline", "CreateVoxelMeshingPipeline returned false");
 	}
 
-	if (!projectv::asset::CreateModelPipeline(
-			&state->context,
-			state->render.graphicsPipelineLayout,
-			state->swapchain.format,
-			ChooseModelDepthFormat(state->context.physicalDevice),
-			&state->render)) [[unlikely]] {
+	const bool modelPipelineCreated = projectv::asset::CreateModelPipeline(
+		&state->context,
+		state->render.graphicsPipelineLayout,
+		state->swapchain.format,
+		ChooseModelDepthFormat(state->context.physicalDevice),
+		&state->render);
+	if (!modelPipelineCreated) [[unlikely]] {
 		return fail(projectv::vulkan_init::VulkanInitError::ModelPipelineFailed,
 					"InitVulkan.CreateModelPipeline", "CreateModelPipeline returned false");
 	}

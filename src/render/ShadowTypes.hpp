@@ -1,8 +1,8 @@
 #pragma once
 
 #include <array>
-#include <cstddef>
-#include <cstdint>
+#include <cstddef> // IWYU pragma: keep — size_t at L8 needs <cstddef>
+#include <cstdint> // IWYU pragma: keep <cstdint>
 
 constexpr uint32_t kSunShadowCascadeCount = 4u;
 constexpr size_t kSunShadowMatrixElementCount = 16u * static_cast<size_t>(kSunShadowCascadeCount);
