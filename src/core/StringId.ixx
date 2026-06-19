@@ -75,7 +75,7 @@ export namespace std {
 template <>
 struct hash<projectv::core::StringID> {
 	constexpr std::size_t operator()(const projectv::core::StringID &id) const noexcept {
-		return static_cast<std::size_t>(id.hash ^ (static_cast<std::uint64_t>(id.length) << 32));
+		return static_cast<std::size_t>(id.hash ^ static_cast<std::uint64_t>(id.length) << 32);
 	}
 };
 } // namespace std

@@ -115,18 +115,18 @@ void AudioEngine::shutdown()
 	updateCurrentTrackMetadata();
 }
 
-std::expected<size_t, projectv::audio::AudioLoadError> AudioEngine::loadMusicFolder(const std::filesystem::path &folderPath)
+std::expected<size_t, AudioLoadError> AudioEngine::loadMusicFolder(const std::filesystem::path &folderPath)
 {
 	m_musicFolder = folderPath;
 	if (m_musicFolder.empty()) {
-		return std::unexpected(projectv::audio::AudioLoadError::PreconditionFailed);
+		return std::unexpected(AudioLoadError::PreconditionFailed);
 	}
 	std::error_code createEc;
 	std::filesystem::create_directories(m_musicFolder, createEc);
 	if (createEc) {
 
 		runtime::LogRuntimeFailure("Audio", "loadMusicFolder.create_directories", createEc.message());
-		return std::unexpected(projectv::audio::AudioLoadError::FolderCreateFailed);
+		return std::unexpected(AudioLoadError::FolderCreateFailed);
 	}
 	return scanPlaylist();
 }

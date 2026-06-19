@@ -1,7 +1,5 @@
 #include "render/RayMarchPass.hpp"
 
-#include "core/RuntimeDiagnostics.hpp"
-
 #include <cstdio>
 
 namespace projectv::render {
@@ -23,12 +21,12 @@ RayMarchState &MutableRayMarchState()
 
 void SetRayMarchEnabled(const bool enabled)
 {
-	auto &state = MutableRayMarchState();
-	if (state.enabled == enabled) {
+	auto &[isEnabled, recreatePending] = MutableRayMarchState();
+	if (isEnabled) {
 		return;
 	}
-	state.enabled = enabled;
-	state.recreatePending = true;
+	isEnabled = enabled;
+	recreatePending = true;
 }
 
 bool IsRayMarchEnabled()
@@ -43,9 +41,9 @@ void RequestRayMarchPipelineRecreate()
 
 bool IsRayMarchPipelineRecreatePending()
 {
-	auto &state = MutableRayMarchState();
-	if (state.recreatePending) {
-		state.recreatePending = false;
+	auto &[enabled, recreatePending] = MutableRayMarchState();
+	if (recreatePending) {
+		recreatePending = false;
 		return true;
 	}
 	return false;
@@ -53,8 +51,8 @@ bool IsRayMarchPipelineRecreatePending()
 
 void RecordRayMarchCommands(const VulkanContextState &context, const FrameRenderData &frameData)
 {
-	const auto &state = MutableRayMarchState();
-	if (!state.enabled) {
+	const auto &[enabled, recreatePending] = MutableRayMarchState();
+	if (!enabled) {
 		return;
 	}
 	if (context.device == VK_NULL_HANDLE) {

@@ -11,8 +11,8 @@
 #include <vector>
 
 #include <fastgltf/core.hpp>
-#include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
+#include <fastgltf/glm_element_traits.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -84,7 +84,6 @@ bool CopyIndicesToU32(
 	}
 	case fastgltf::ComponentType::Byte: {
 		fastgltf::iterateAccessorWithIndex<std::int8_t>(asset, accessor, [&](const std::int8_t v, std::size_t) {
-
 			out.push_back(static_cast<std::uint32_t>(v));
 		});
 		return true;
@@ -182,7 +181,6 @@ void AccumulateAabb(
 } // namespace
 
 namespace {
-
 
 glm::mat4 ComposeNodeLocalMatrix(const fastgltf::Node &node)
 {
@@ -359,7 +357,6 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 	auto loaded = std::make_unique<LoadedAsset>();
 	loaded->sourcePath = path;
 
-
 	for (const auto &mesh : asset.meshes) {
 		for (const auto &primitive : mesh.primitives) {
 			if (primitive.type != fastgltf::PrimitiveType::Triangles) {
@@ -395,7 +392,6 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 		}
 		return nullptr;
 	}
-
 
 	if (!ApplyNodeHierarchyTransforms(asset, *loaded)) {
 		if (outError) {

@@ -135,19 +135,19 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				VoxelChunk &chunk = world.chunks[chunkIndex];
-				chunk.min = {
+				auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
 					world.min.z + chunkZ * world.chunkSize,
 				};
-				chunk.maxExclusive = {
-					chunk.min.x + std::min(world.chunkSize, world.maxExclusive.x - chunk.min.x),
-					chunk.min.y + std::min(world.chunkSize, world.maxExclusive.y - chunk.min.y),
-					chunk.min.z + std::min(world.chunkSize, world.maxExclusive.z - chunk.min.z),
+				maxExclusive = {
+					min.x + std::min(world.chunkSize, world.maxExclusive.x - min.x),
+					min.y + std::min(world.chunkSize, world.maxExclusive.y - min.y),
+					min.z + std::min(world.chunkSize, world.maxExclusive.z - min.z),
 				};
-				chunk.rebuildQueued = false;
-				chunk.nonAirVoxelCount = 0;
+				rebuildQueued = false;
+				nonAirVoxelCount = 0;
 			}
 		}
 	}
@@ -3074,7 +3074,7 @@ void TestVoxelLabWalkFreeFallDoesNotSnapToTopPlaneTooEarly(TestContext &context)
 	};
 	constexpr std::array startCameraY{3.2f, 3.3f, 3.4f, 3.8f};
 
-	for (const std::array<float, 2> xz : startXZ) {
+	for (const std::array xz : startXZ) {
 		for (const float cameraY : startCameraY) {
 			AppState state{};
 			EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));

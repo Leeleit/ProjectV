@@ -150,10 +150,6 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 
 [[nodiscard]] inline Mat4 inverse(const Mat4 &m) noexcept {
 
-	Mat4 augmented{
-		m.c[0], m.c[1], m.c[2], m.c[3],
-	};
-
 	float a[4][8]{};
 	for (int row = 0; row < 4; ++row) {
 		for (int col = 0; col < 4; ++col) {
@@ -205,7 +201,7 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Mat4 operator*(const Mat4 a, const Mat4 b) noexcept {
+[[nodiscard]] inline Mat4 operator*(const Mat4 &a, const Mat4 &b) noexcept {
 	Mat4 result{};
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {

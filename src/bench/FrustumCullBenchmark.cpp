@@ -48,8 +48,8 @@ struct VisibilityFixture {
 		Xorshift32 rng{seed};
 
 		for (size_t i = 0; i < kBatchSize; ++i) {
-			const int gx = static_cast<int>((i % 32u)) - 16;
-			const int gz = static_cast<int>((i / 32u)) - 5;
+			const int gx = static_cast<int>(i % 32u) - 16;
+			const int gz = static_cast<int>(i / 32u) - 5;
 			const float minX = static_cast<float>(gx) * 8.0f;
 			const float minZ = static_cast<float>(gz) * 8.0f;
 			const float minY = rng.Range(-4.0f, 4.0f);
@@ -60,9 +60,9 @@ struct VisibilityFixture {
 			f.aabbMax[i] = projectv::math::Vec3{maxX, maxY, maxZ, 0.0f};
 		}
 
-		const std::array<float, kVisibilityRuns> yaws{
+		constexpr std::array<float, kVisibilityRuns> yaws{
 			0.0f, 0.45f, -0.45f, 1.10f, -1.10f};
-		const std::array<float, kVisibilityRuns> pitches{
+		constexpr std::array<float, kVisibilityRuns> pitches{
 			-0.20f, -0.45f, -0.05f, -0.65f, -0.15f};
 		for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 			const float yaw = yaws[r];
@@ -220,7 +220,7 @@ static void BM_CppScalar(benchmark::State &state)
 		RunCppScalar(fixture, &masks);
 		benchmark::DoNotOptimize(masks.data());
 	}
-	state.SetItemsProcessed(state.iterations() * kBatchSize * kVisibilityRuns);
+	state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * kBatchSize * kVisibilityRuns));
 	state.SetLabel("C++ scalar (projectv::math, IsAabbVisible...)");
 }
 
@@ -233,7 +233,7 @@ static void BM_CScalar(benchmark::State &state)
 		RunCScalar(aabbs, fixture, &masks);
 		benchmark::DoNotOptimize(masks.data());
 	}
-	state.SetItemsProcessed(state.iterations() * kBatchSize * kVisibilityRuns);
+	state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * kBatchSize * kVisibilityRuns));
 	state.SetLabel("C scalar (projectv_cull_frustum_scalar)");
 }
 
@@ -247,7 +247,7 @@ static void BM_CAvx2(benchmark::State &state)
 		RunCAvx2(aabbs, fixture, &masks);
 		benchmark::DoNotOptimize(masks.data());
 	}
-	state.SetItemsProcessed(state.iterations() * kBatchSize * kVisibilityRuns);
+	state.SetItemsProcessed(static_cast<int64_t>(state.iterations() * kBatchSize * kVisibilityRuns));
 	state.SetLabel("C AVX2 8-way (projectv_cull_frustum_avx2)");
 }
 #endif

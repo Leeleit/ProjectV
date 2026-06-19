@@ -42,8 +42,8 @@ struct TestFixture {
 
         f.instances.reserve(kBatchSize);
         for (size_t i = 0; i < kBatchSize; ++i) {
-            const int gx = static_cast<int>((i % 32u)) - 16;
-            const int gz = static_cast<int>((i / 32u)) - 5;
+            const int gx = static_cast<int>(i % 32u) - 16;
+            const int gz = static_cast<int>(i / 32u) - 5;
             const float minX = static_cast<float>(gx) * 8.0f;
             const float minZ = static_cast<float>(gz) * 8.0f;
             const float minY = rng.Range(-4.0f, 4.0f);
@@ -60,9 +60,9 @@ struct TestFixture {
             f.instances.push_back(instance);
         }
 
-        const std::array<float, kVisibilityRuns> yaws{
+        constexpr std::array<float, kVisibilityRuns> yaws{
             0.0f, 0.45f, -0.45f, 1.10f, -1.10f};
-        const std::array<float, kVisibilityRuns> pitches{
+        constexpr std::array<float, kVisibilityRuns> pitches{
             -0.20f, -0.45f, -0.05f, -0.65f, -0.15f};
         for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
             const float yaw = yaws[r];

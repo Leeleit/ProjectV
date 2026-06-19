@@ -1,6 +1,7 @@
 #define VMA_IMPLEMENTATION
 #define VMA_STATIC_VULKAN_FUNCTIONS 0
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
+#include "volk.h"
 #include "core/Types.hpp"
 #include "asset/ModelManifestLoader.hpp"
 #include "asset/ModelPass.hpp"

@@ -83,7 +83,7 @@ static void BM_BuildSunShadowProjection(benchmark::State &state)
 {
 	const VoxelWorld world = BuildBenchmarkWorld();
 	const std::array<float, 3> sunDirection{0.35f, 0.88f, 0.22f};
-	const float coverageScale = 1.10f;
+	constexpr float coverageScale = 1.10f;
 	for (auto _ : state) {
 		SunShadowProjection result =
 			BuildSunShadowProjection(world, sunDirection, coverageScale);

@@ -722,7 +722,6 @@ VoxelScenePreset GetRequestedVoxelScenePreset()
 		return kDefaultVoxelScenePreset;
 	}
 
-	VoxelScenePreset scenePreset = kDefaultVoxelScenePreset;
 	if (const auto parsedPreset = ParseVoxelScenePreset(requestedPreset)) {
 		return *parsedPreset;
 	}

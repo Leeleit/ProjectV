@@ -65,10 +65,10 @@ void TestPresentModeCycleIncludesAllThree(TestContext &context)
 	};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(3), cycle.size());
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), cycle[0]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), cycle[1]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR), cycle[2]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, cycle[1]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, cycle[2]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, GetActivePresentMode());
 }
 
 
@@ -80,9 +80,9 @@ void TestPresentModeCycleExcludesUnsupported(TestContext &context)
 	};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(2), cycle.size());
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), cycle[0]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), cycle[1]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, cycle[1]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, GetActivePresentMode());
 }
 
 
@@ -93,7 +93,7 @@ void TestPresentModeCycleOnlyFifo(TestContext &context)
 	};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(1), cycle.size());
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), cycle[0]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);
 	const VkPresentModeKHR before = GetActivePresentMode();
 	CyclePreferredPresentMode();
 	EXPECT_EQ(context, before, GetActivePresentMode());
@@ -105,7 +105,7 @@ void TestPresentModeCycleEmptyFallsBackToFifo(TestContext &context)
 	const std::vector<VkPresentModeKHR> surfaceModes{};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(1), cycle.size());
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), cycle[0]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);
 }
 
 void TestPresentModeCycleRespectsPriorityOrder(TestContext &context)
@@ -117,9 +117,9 @@ void TestPresentModeCycleRespectsPriorityOrder(TestContext &context)
 	};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(3), cycle.size());
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), cycle[0]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), cycle[1]);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR), cycle[2]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, cycle[1]);
+	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, cycle[2]);
 }
 
 
@@ -131,15 +131,15 @@ void TestCycleAdvancesAndWrapsThreeMode(TestContext &context)
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 	};
 	(void)BuildPresentModeCycle(surfaceModes);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, GetActivePresentMode());
 	const VkPresentModeKHR m1 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), m1);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, m1);
 	const VkPresentModeKHR m2 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR), m2);
+	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, m2);
 	const VkPresentModeKHR m3 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), m3);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, m3);
 	const VkPresentModeKHR m4 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), m4);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, m4);
 }
 
 
@@ -151,13 +151,13 @@ void TestCycleAdvancesAndWrapsTwoMode(TestContext &context)
 	};
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
 	(void)BuildPresentModeCycle(surfaceModes);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, GetActivePresentMode());
 	const VkPresentModeKHR m1 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), m1);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, m1);
 	const VkPresentModeKHR m2 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), m2);
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, m2);
 	const VkPresentModeKHR m3 = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_MAILBOX_KHR), m3);
+	EXPECT_EQ(context, VK_PRESENT_MODE_MAILBOX_KHR, m3);
 
 }
 
@@ -213,15 +213,15 @@ void TestPresentModeCyclePreservesActiveAcrossRebuild(TestContext &context)
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 	};
 	(void)BuildPresentModeCycle(surfaceModes);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, GetActivePresentMode());
 	const VkPresentModeKHR afterPress = CyclePreferredPresentMode();
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR), afterPress);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, afterPress);
+	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, GetActivePresentMode());
 
 	(void)BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR),
+		VK_PRESENT_MODE_IMMEDIATE_KHR,
 		GetActivePresentMode());
 }
 
@@ -237,7 +237,7 @@ void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 		(void)BuildPresentModeCycle(surfaceModes);
 		CyclePreferredPresentMode();  // advance FIFO -> IMMEDIATE
 	}
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, GetActivePresentMode());
 
 	{
 		const std::vector<VkPresentModeKHR> surfaceModes{
@@ -247,7 +247,7 @@ void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 	}
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR),
+		VK_PRESENT_MODE_FIFO_KHR,
 		GetActivePresentMode());
 }
 
@@ -260,42 +260,42 @@ void TestPresentModeCycleWalksAcrossRecreates(TestContext &context)
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 	};
 	(void)BuildPresentModeCycle(surfaceModes);
-	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
+	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, GetActivePresentMode());
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR),
+		VK_PRESENT_MODE_IMMEDIATE_KHR,
 		CyclePreferredPresentMode());
 	(void)BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR),
+		VK_PRESENT_MODE_IMMEDIATE_KHR,
 		GetActivePresentMode());
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR),
+		VK_PRESENT_MODE_FIFO_KHR,
 		CyclePreferredPresentMode());
 	(void)BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR),
+		VK_PRESENT_MODE_FIFO_KHR,
 		GetActivePresentMode());
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR),
+		VK_PRESENT_MODE_IMMEDIATE_KHR,
 		CyclePreferredPresentMode());
 	(void)BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_IMMEDIATE_KHR),
+		VK_PRESENT_MODE_IMMEDIATE_KHR,
 		GetActivePresentMode());
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR),
+		VK_PRESENT_MODE_FIFO_KHR,
 		CyclePreferredPresentMode());
 	(void)BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(
 		context,
-		static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR),
+		VK_PRESENT_MODE_FIFO_KHR,
 		GetActivePresentMode());
 }
 } // namespace

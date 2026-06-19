@@ -96,7 +96,6 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &fo
 }
 
 using projectv::present_mode::g_active;
-using projectv::present_mode::g_cycle;
 
 VkPresentModeKHR PickBestAvailablePresentMode(
 	const std::vector<VkPresentModeKHR> &presentModes,

@@ -56,7 +56,6 @@ std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 
 namespace projectv::present_mode {
 inline VkPresentModeKHR g_active = VK_PRESENT_MODE_FIFO_KHR;
-inline std::vector<VkPresentModeKHR> g_cycle = {VK_PRESENT_MODE_FIFO_KHR};
 } // namespace projectv::present_mode
 
 inline VkPresentModeKHR GetActivePresentMode()
@@ -64,37 +63,41 @@ inline VkPresentModeKHR GetActivePresentMode()
 	return projectv::present_mode::g_active;
 }
 
+namespace projectv::present_mode {
+inline std::vector<VkPresentModeKHR> &MutableCycle() noexcept
+{
+	static std::vector<VkPresentModeKHR> g_cycle = {VK_PRESENT_MODE_FIFO_KHR};
+	return g_cycle;
+}
+} // namespace projectv::present_mode
+
 inline std::size_t GetPresentModeCycleSize()
 {
-	return projectv::present_mode::g_cycle.size();
+	return projectv::present_mode::MutableCycle().size();
 }
 
 inline std::size_t GetPresentModeCycleIndex(const VkPresentModeKHR mode)
 {
-	const auto it = std::find(
-		projectv::present_mode::g_cycle.begin(),
-		projectv::present_mode::g_cycle.end(),
-		mode);
-	if (it == projectv::present_mode::g_cycle.end()) {
+	const auto &cycle = projectv::present_mode::MutableCycle();
+	const auto it = std::find(cycle.begin(), cycle.end(), mode);
+	if (it == cycle.end()) {
 		return 0u;
 	}
-	return static_cast<std::size_t>(it - projectv::present_mode::g_cycle.begin());
+	return static_cast<std::size_t>(it - cycle.begin());
 }
 
 inline VkPresentModeKHR CyclePreferredPresentMode()
 {
-	if (projectv::present_mode::g_cycle.size() <= 1) {
+	auto &cycle = projectv::present_mode::MutableCycle();
+	if (cycle.size() <= 1) {
 		return projectv::present_mode::g_active;
 	}
-	const auto it = std::find(
-		projectv::present_mode::g_cycle.begin(),
-		projectv::present_mode::g_cycle.end(),
-		projectv::present_mode::g_active);
-	const std::size_t currentIndex = (it == projectv::present_mode::g_cycle.end())
+	const auto it = std::find(cycle.begin(), cycle.end(), projectv::present_mode::g_active);
+	const std::size_t currentIndex = (it == cycle.end())
 		? 0u
-		: static_cast<std::size_t>(it - projectv::present_mode::g_cycle.begin());
-	const std::size_t nextIndex = (currentIndex + 1u) % projectv::present_mode::g_cycle.size();
-	projectv::present_mode::g_active = projectv::present_mode::g_cycle[nextIndex];
+		: static_cast<std::size_t>(it - cycle.begin());
+	const std::size_t nextIndex = (currentIndex + 1u) % cycle.size();
+	projectv::present_mode::g_active = cycle[nextIndex];
 	return projectv::present_mode::g_active;
 }
 
@@ -107,29 +110,26 @@ inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 	};
 	const VkPresentModeKHR previousActive = projectv::present_mode::g_active;
-	projectv::present_mode::g_cycle.clear();
-	projectv::present_mode::g_cycle.reserve(kPriority.size());
+	auto &cycle = projectv::present_mode::MutableCycle();
+	cycle.clear();
+	cycle.reserve(kPriority.size());
 	for (const VkPresentModeKHR mode : kPriority) {
 		if (std::find(surfacePresentModes.begin(), surfacePresentModes.end(), mode)
 			!= surfacePresentModes.end()) {
-			projectv::present_mode::g_cycle.push_back(mode);
+			cycle.push_back(mode);
 		}
 	}
-	if (projectv::present_mode::g_cycle.empty()) {
+	if (cycle.empty()) {
 
-		projectv::present_mode::g_cycle.push_back(VK_PRESENT_MODE_FIFO_KHR);
+		cycle.push_back(VK_PRESENT_MODE_FIFO_KHR);
 	}
 
-	if (std::find(
-			projectv::present_mode::g_cycle.begin(),
-			projectv::present_mode::g_cycle.end(),
-			previousActive)
-		!= projectv::present_mode::g_cycle.end()) {
+	if (std::find(cycle.begin(), cycle.end(), previousActive) != cycle.end()) {
 		projectv::present_mode::g_active = previousActive;
 	} else {
 
-		projectv::present_mode::g_active = projectv::present_mode::g_cycle.front();
+		projectv::present_mode::g_active = cycle.front();
 	}
-	return projectv::present_mode::g_cycle;
+	return cycle;
 }
 

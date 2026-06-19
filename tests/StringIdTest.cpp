@@ -42,7 +42,7 @@ void VerifyLayout() {
 	VERIFY(alignof(StringID) == 16);
 	VERIFY(std::is_trivially_copyable_v<StringID>);
 	VERIFY(std::is_standard_layout_v<StringID>);
-	const StringID kDefault{};
+	constexpr StringID kDefault{};
 	VERIFY_EQ(kDefault.hash, 0ULL);
 	VERIFY_EQ(kDefault.length, 0U);
 }
@@ -56,45 +56,45 @@ void VerifyConstexprLiteralCtor() {
 	VERIFY_EQ(kEmpty.hash, StringID::kFnv1aOffsetBasis);
 	VERIFY_EQ(kEmpty.length, 0U);
 	constexpr StringID kA{"a"};
-	const std::uint64_t expectedA = (StringID::kFnv1aOffsetBasis ^ 0x61) * StringID::kFnv1aPrime;
+	constexpr std::uint64_t expectedA = (StringID::kFnv1aOffsetBasis ^ 0x61) * StringID::kFnv1aPrime;
 	VERIFY_EQ(kA.hash, expectedA);
 	VERIFY_EQ(kA.length, 1U);
 }
 
 void VerifyRuntimeStringViewCtor() {
 
-	const std::string_view runtimeView{"rock_diffuse"};
-	const StringID runtimeID{runtimeView};
-	const StringID literalID{"rock_diffuse"};
+	constexpr std::string_view runtimeView{"rock_diffuse"};
+	constexpr StringID runtimeID{runtimeView};
+	constexpr StringID literalID{"rock_diffuse"};
 	VERIFY(runtimeID == literalID);
 	VERIFY_EQ(runtimeID.hash, literalID.hash);
 	VERIFY_EQ(runtimeID.length, literalID.length);
-	const std::string s{"rock_diffuse"};
-	const StringID fromString{std::string_view{s}};
+	constexpr std::string s{"rock_diffuse"};
+	constexpr StringID fromString{std::string_view{s}};
 	VERIFY(fromString == literalID);
-	const StringID partial{std::string_view{"rock_"}};
+	constexpr StringID partial{std::string_view{"rock_"}};
 	VERIFY(partial != literalID);
 	VERIFY_EQ(partial.length, 5U);
 }
 
 void VerifyFnv1aKnownVectors() {
 
-	const StringID emptyStr{std::string_view{""}};
+	constexpr StringID emptyStr{std::string_view{""}};
 	VERIFY_EQ(emptyStr.hash, 0xcbf29ce484222325ULL);
-	const StringID aStr{std::string_view{"a"}};
+	constexpr StringID aStr{std::string_view{"a"}};
 	VERIFY_EQ(aStr.hash, 0xaf63dc4c8601ec8cULL);
-	const StringID foobarStr{std::string_view{"foobar"}};
+	constexpr StringID foobarStr{std::string_view{"foobar"}};
 	VERIFY_EQ(foobarStr.hash, 0x85944171f73967e8ULL);
 }
 
 void VerifyEqualityAndOrdering() {
-	const StringID a{"alpha"};
-	const StringID a2{"alpha"};
-	const StringID b{"beta"};
+	constexpr StringID a{"alpha"};
+	constexpr StringID a2{"alpha"};
+	constexpr StringID b{"beta"};
 	VERIFY(a == a2);
 	VERIFY(!(a != a2));
 	VERIFY(a != b);
-	const StringID a3{"alphb"};
+	constexpr StringID a3{"alphb"};
 	VERIFY(a != a3);
 	VERIFY_EQ(a.length, a3.length);
 	VERIFY(a.hash != a3.hash);
@@ -104,8 +104,8 @@ void VerifyEqualityAndOrdering() {
 
 void VerifyStdHashSpecialisation() {
 
-	const StringID a{"hashable_id"};
-	const StringID a2{"hashable_id"};
+	constexpr StringID a{"hashable_id"};
+	constexpr StringID a2{"hashable_id"};
 	const std::hash<StringID> hasher{};
 	VERIFY(hasher(a) == hasher(a2));
 	std::unordered_map<StringID, int> m;
@@ -121,29 +121,29 @@ void VerifyStdHashSpecialisation() {
 
 void VerifyToViewReverseMapping() {
 
-	const std::array<const char *, 3> kTable{"rock_diffuse", "metal_rusty", "wood_oak"};
-	const StringID rock{"rock_diffuse"};
-	const StringID metal{"metal_rusty"};
-	const StringID oak{"wood_oak"};
-	const StringID unknown{std::string_view{"unknown_id"}};
+	constexpr std::array<const char *, 3> kTable{"rock_diffuse", "metal_rusty", "wood_oak"};
+	constexpr StringID rock{"rock_diffuse"};
+	constexpr StringID metal{"metal_rusty"};
+	constexpr StringID oak{"wood_oak"};
+	constexpr StringID unknown{std::string_view{"unknown_id"}};
 	VERIFY(std::strcmp(StringID::toView(rock, kTable), "rock_diffuse") == 0);
 	VERIFY(std::strcmp(StringID::toView(metal, kTable), "metal_rusty") == 0);
 	VERIFY(std::strcmp(StringID::toView(oak, kTable), "wood_oak") == 0);
 	VERIFY(StringID::toView(unknown, kTable) == nullptr);
-	const std::array<const char *, 0> kEmptyTable{};
+	constexpr std::array<const char *, 0> kEmptyTable{};
 	VERIFY(StringID::toView(rock, kEmptyTable) == nullptr);
-	const StringID kDefault{};
+	constexpr StringID kDefault{};
 	VERIFY(StringID::toView(kDefault, kTable) == nullptr);
 }
 
 void VerifyEmptyString() {
-	const StringID emptyLit{""};
-	const StringID emptyView{std::string_view{""}};
+	constexpr StringID emptyLit{""};
+	constexpr StringID emptyView{std::string_view{""}};
 	VERIFY(emptyLit == emptyView);
 	VERIFY_EQ(emptyLit.length, 0U);
-	const StringID partial{std::string_view{""}};
+	constexpr StringID partial{std::string_view{""}};
 	VERIFY(partial == emptyLit);
-	const StringID aStr{"a"};
+	constexpr StringID aStr{"a"};
 	VERIFY(aStr != emptyLit);
 	VERIFY_EQ(aStr.length, 1U);
 	VERIFY(aStr.hash != emptyLit.hash);

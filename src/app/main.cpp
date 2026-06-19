@@ -65,6 +65,7 @@ int RebuildAllShadersFromDisk()
 		std::filesystem::temp_directory_path() / "projectv_shader_reload.log";
 	const std::string cmakeCmd = std::string("cmake --build ") + buildDir +
 								 " --target Shaders > \"" + logPath.string() + "\" 2>&1";
+	// NOLINT(bugprone-system-call) - intentional cmake invocation for shader hot-reload
 	const int rc = std::system(cmakeCmd.c_str());
 	if (rc == 0) {
 		++reloadedCount;

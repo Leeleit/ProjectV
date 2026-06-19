@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstring>
 
 namespace {
 constexpr uint32_t kMaxSimulationStepsPerFrame = 5;

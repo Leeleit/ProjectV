@@ -1,17 +1,14 @@
+#include "volk.h"
+
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-
-#include <cstring>
-
-#include "volk.h"
 
 #include "SDL3/SDL_vulkan.h"
 #include "fmt/format.h"
 
 #define VK_KHR_swapchain_maintenance1 1
 #define VK_EXT_dynamic_rendering_unused_attachments 1
-#include "volk.h" // IWYU pragma: keep — see the comment above (already pulled in above)
 #include <vulkan/vulkan.h>
 
 #include <array>

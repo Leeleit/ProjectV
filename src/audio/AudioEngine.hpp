@@ -54,7 +54,7 @@ class AudioEngine {
 
 	void shutdown();
 
-	std::expected<size_t, projectv::audio::AudioLoadError> loadMusicFolder(const std::filesystem::path &folderPath);
+	std::expected<size_t, AudioLoadError> loadMusicFolder(const std::filesystem::path &folderPath);
 
 	void tick();
 

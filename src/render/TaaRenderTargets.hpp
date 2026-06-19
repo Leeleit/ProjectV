@@ -48,7 +48,7 @@ struct OffscreenColorTarget {
 	VmaAllocationHandle allocation = nullptr;
 };
 
-std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
+std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 	VulkanContextState *context,
 	VkExtent2D extent,
 	OffscreenColorTarget &sceneColor,

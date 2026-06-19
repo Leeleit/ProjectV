@@ -377,10 +377,10 @@ void TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(TestContext &context)
 void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 {
 
-	const int width = 24;
-	const int height = 17;
-	const int depth = 24;
-	const int chunkSize = 8;
+	constexpr int width = 24;
+	constexpr int height = 17;
+	constexpr int depth = 24;
+	constexpr int chunkSize = 8;
 	VoxelWorld world{};
 	world.min = {-12, 0, -12};
 	world.maxExclusive = {width - 12, height, depth - 12};
@@ -421,9 +421,9 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	}
 
 
-	const int centerY = 8;
-	const int radius = 6;
-	const int innerR = 5;
+	constexpr int centerY = 8;
+	constexpr int radius = 6;
+	constexpr int innerR = 5;
 	const int fluidTop = centerY - innerR + 7;
 	for (int dz = -radius; dz <= radius; ++dz) {
 		for (int dy = -radius; dy <= radius; ++dy) {
@@ -575,7 +575,7 @@ void TestFluidCAFluidRateAboveBase(TestContext &context)
 	simulation.fluidTickRateHz = 20.0f;
 
 	const float kFrameDelta = 1.0f / 60.0f;
-	const int kFrameCount = 60;
+	constexpr int kFrameCount = 60;
 	int tickCount = 0;
 	for (int frame = 0; frame < kFrameCount; ++frame) {
 		const float scaledDelta = kFrameDelta * simulation.timeScale;
@@ -609,7 +609,7 @@ void TestFluidCAFluidRateAtDefault(TestContext &context)
 	simulation.fluidTickRateHz = 20.0f;
 
 	const float kFrameDelta = 1.0f / 60.0f;
-	const int kFrameCount = 60;
+	constexpr int kFrameCount = 60;
 	int tickCount = 0;
 	for (int frame = 0; frame < kFrameCount; ++frame) {
 		const float scaledDelta = kFrameDelta * simulation.timeScale;
