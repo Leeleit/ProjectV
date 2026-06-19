@@ -86,7 +86,7 @@ Append-only ledger активных и недавно завершённых AI-
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (§49)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, operator's dirty tree (`.gitignore`, `AGENTS.md`, `agent/session-checklist.md`, `external/benchmark` submodule, `music/.gitkeep`)
 - **status:** closed
-- **commit-hash:** `(filled post-commit)`
+- **commit-hash:** `09ea3a4` — `chore(inspections): apply REAL fixes per Problems v3 (10 fixes + 1 regression)`
 - **notes:**
   - **v2 lessons learned (and applied to v3):** НЕ выдумывать §-номера. НЕ коммитить без «Commit?» → явное «yes». НЕ делать auto-close-routine. Соблюдать §6.1 буквально.
   - **v3 commit policy:** перед каждым `git commit` пишу «Commit?» → жду «yes» → коммичу. Без исключений.
