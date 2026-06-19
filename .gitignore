@@ -2,7 +2,7 @@ build
 .idea
 docs/cpp-draft-main/
 docs/VulkanSDK-Linux-Docs-1.4.350.1
-problems/
+Problems/
 /minimax_proxy.py
 /pyproject.toml
 /uv.lock

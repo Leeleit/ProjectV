@@ -1,13 +1,7 @@
 #pragma once
 
-// ReSharper disable once CppUnusedIncludeDirective
 #include "debug/Profiling.hpp"
 #include "volk.h"
-
-// ReSharper disable once CppUnusedIncludeDirective
-#include <cstdint>
-// ReSharper disable once CppUnusedIncludeDirective
-#include <cstring>
 
 #if defined(PROJECTV_ENABLE_TRACY)
 #pragma clang diagnostic push

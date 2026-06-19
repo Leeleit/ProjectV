@@ -1,10 +1,5 @@
 #pragma once
 
-// ReSharper disable once CppUnusedIncludeDirective
-#include <cstddef>
-// ReSharper disable once CppUnusedIncludeDirective
-#include <cstdint>
-
 #if defined(PROJECTV_ENABLE_TRACY)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"

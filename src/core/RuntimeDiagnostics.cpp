@@ -5,7 +5,7 @@
 
 #include "fmt/format.h"
 
-#include <cstdlib> // IWYU pragma: keep
+#include <cstdlib>
 
 namespace {
 void LogFormattedMessage(

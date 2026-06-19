@@ -99,7 +99,7 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 		.pNext = nullptr,
 		.flags = 0,
 		.imageType = VK_IMAGE_TYPE_2D,
-		.format = VK_FORMAT_UNDEFINED, // patched per call
+		.format = VK_FORMAT_UNDEFINED,
 		.extent = imageExtent,
 		.mipLevels = 1u,
 		.arrayLayers = 1u,
