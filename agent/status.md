@@ -1182,7 +1182,7 @@ Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/De
 
 **Cross-refs:** `AGENTS.md` §6.4 (safety-net workflow), §6.7 (stuck loop limit — не достигнут), §6.9 (pre-commit gate), §7.3.1 (auto-commit для `chore`), §8.1 (close-routine); `agent/decisions.md §12` (static-analysis cleanup contract), `agent/memory.md §12` (regenerate Problems/); `agent/active-sessions.md session-2026-06-19T-inspection-fix-mega-r0`; commit `0fa26f4`.
 
-## §46. Inspection sweep r3 — `session-2026-06-19T-inspection-fix-v3-r0` (closed `(post-commit)`)
+## §46. Inspection sweep r3 — `session-2026-06-19T-inspection-fix-v3-r0` (closed `2026-06-19T22:48Z` in `09ea3a4`)
 
 **Per operator handoff (после ошибок предыдущего агента):** принял сессию в Plan Mode, верифицировал план через `rg`/`git log`/`git blame`, обнаружил несколько ошибок в плане (завышенный счёт «20», stale HTML line numbers, items already committed в v3+v4, несуществующий `ShadowProjection.cpp:453 receiverBoundsMax`). После 6 Q&A с оператором применены REAL fixes per categories A-F + bonus:
 
