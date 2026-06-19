@@ -19,10 +19,16 @@ layout(set = 0, binding = 1, std430) readonly buffer PackedVoxelPayload {
 
 layout(set = 0, binding = 2, rgba8) uniform restrict writeonly image2D rayMarchOutput;
 
-// Solid materials return a constant colour from this small palette. The
-// layout mirrors the runtime palette in `VoxelMaterials::GetVoxelMaterialVisual`
-// but is reduced to the four binary opcodes the DDA can distinguish (air /
-// glass / opaque / fluid).
+/// \brief Solid materials return a constant colour from this small palette.
+///
+/// \details
+/// The
+///  layout mirrors the runtime palette in `VoxelMaterials::GetVoxelMaterialVisual`
+
+///  but is reduced to the four binary opcodes the DDA can distinguish (air /
+
+///  glass / opaque / fluid).
+
 const vec4 kMaterialColors[5] = vec4[5](
 	vec4(0.0, 0.0, 0.0, 0.0),            // Air
 	vec4(0.94, 0.96, 1.0, 1.0),          // Glass
@@ -61,9 +67,14 @@ void main()
 		return;
 	}
 
-	// Reconstruct the per-pixel ray direction. Standard perspective camera:
-	//   ray = forward + right * u * tanFovX + up * v * tanFovY
-	// with u, v in [-1, +1] mapped from the pixel centre.
+	/// \brief Reconstruct the per-pixel ray direction.
+	///
+	/// \details
+	/// Standard perspective camera:
+	///    ray = forward + right * u * tanFovX + up * v * tanFovY
+
+	///  with u, v in [-1, +1] mapped from the pixel centre.
+
 	const float aspect = params.cameraForwardAndAspect.w;
 	const float tanHalfFov = tan(params.cameraOriginAndFov.w * 0.5);
 	const float u = (2.0 * (float(pixel.x) + 0.5) / float(params.imageSizeAndMaxSteps.x) - 1.0) * tanHalfFov * aspect;
@@ -72,9 +83,14 @@ void main()
 								 + params.cameraRight.xyz * u
 								 + params.cameraUpAndSunY.xyz * v);
 
-	// Amanatides-Woo 3D DDA. Convert the world-space ray to voxel-space
-	// step vectors, walk the grid, terminate on first non-zero voxel or
-	// after `maxSteps` iterations.
+	/// \brief Amanatides-Woo 3D DDA.
+	///
+	/// \details
+	/// Convert the world-space ray to voxel-space
+	///  step vectors, walk the grid, terminate on first non-zero voxel or
+
+	///  after `maxSteps` iterations.
+
 	const vec3 originVoxelSpace = (params.cameraOriginAndFov.xyz - params.worldMinAndUnused.xyz) / params.voxelSizeAndUnused.xyz;
 	const vec3 stepDir = sign(rayDir);
 	const vec3 deltaDist = abs(1.0 / max(abs(rayDir), vec3(1e-6)));
@@ -97,7 +113,7 @@ void main()
 			break;
 		}
 
-		// Step to the next cell along the dominant axis.
+		/// \brief Step to the next cell along the dominant axis.
 		if (sideDist.x < sideDist.y) {
 			if (sideDist.x < sideDist.z) {
 				cell.x += int(stepDir.x);
@@ -126,9 +142,14 @@ void main()
 		const uint paletteIndex = min(hitMaterial, 4u);
 		vec4 base = kMaterialColors[paletteIndex];
 
-		// Cheap directional shading: N·L from a fixed sun height packed
-		// into the up vector's `.w` slot. Gives the demo a visible 3D
-		// shape even without the full PBR pipeline.
+		/// \brief Cheap directional shading:
+		///
+		/// \details
+		/// N·L from a fixed sun height packed
+		///  into the up vector's `.w` slot. Gives the demo a visible 3D
+
+		///  shape even without the full PBR pipeline.
+
 		const float sunY = clamp(params.cameraUpAndSunY.w, 0.0, 1.0);
 		const float nDotL = max(0.0, dot(hitNormal, vec3(0.0, sunY, 1.0)));
 		const float diffuse = 0.35 + 0.65 * nDotL;

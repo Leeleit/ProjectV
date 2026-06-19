@@ -40,14 +40,25 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
-    // TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
-    // taaParams = (jitterX, jitterY, blend, enabled); prevViewProjectionMatrix
-    // is the previous frame's viewProjection (used by the TAA resolve pass for
-    // depth-based reprojection); taaHistoryParams = (texelX, texelY, valid, neighbourhoodRadius).
-    // The voxel pass doesn't read .w, but the field is declared here so the
-    // std430 layout matches `VoxelSceneLighting` byte-for-byte.
-    // 1.5 anti-flicker layer history params (texelX, texelY, valid, blendFactor);
-    // the voxel pass USES these for per-layer temporal blending of CTSH/AOCC/LOCL.
+    /// \brief TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
+    ///
+    /// \details
+    ///  taaParams = (jitterX, jitterY, blend, enabled); prevViewProjectionMatrix
+
+    ///  is the previous frame's viewProjection (used by the TAA resolve pass for
+
+    ///  depth-based reprojection); taaHistoryParams = (texelX, texelY, valid, neighbourhoodRadius).
+
+    ///  The voxel pass doesn't read .w, but the field is declared here so the
+
+    ///  std430 layout matches `VoxelSceneLighting` byte-for-byte.
+
+    ///  1.5 anti-flicker layer history params (texelX, texelY, valid, blendFactor);
+
+    ///  the voxel pass USES these for per-layer temporal blending of CTSH/AOCC/LOCL.
+
+    ///
+    /// \see agent/decisions.md §18
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
@@ -60,14 +71,24 @@ layout(set = 0, binding = 5, std430) readonly buffer PackedChunkVoxelPayload {
     uint chunkVoxelWords[];
 };
 
-// 1.5 anti-flicker: per-layer temporal history. Voxel pass reads
-// this at the current fragment UV, blends the freshly-computed
-// raw CTSH/AOCC/LOCL with the previous frame's values, and uses
-// the blended values for this frame's lighting. The freshly
-// computed raw values are then written to the layer scene color
-// target via the new `outLayerMask` MRT output (Location 2); a
-// per-frame `vkCmdCopyImage` in `Renderer.cpp` makes the current
-// frame's data the next frame's history input.
+/// \brief 1.5 anti-flicker:
+///
+/// \details
+/// per-layer temporal history. Voxel pass reads
+///  this at the current fragment UV, blends the freshly-computed
+
+///  raw CTSH/AOCC/LOCL with the previous frame's values, and uses
+
+///  the blended values for this frame's lighting. The freshly
+
+///  computed raw values are then written to the layer scene color
+
+///  target via the new `outLayerMask` MRT output (Location 2); a
+
+///  per-frame `vkCmdCopyImage` in `Renderer.cpp` makes the current
+
+///  frame's data the next frame's history input.
+
 layout(set = 0, binding = 6) uniform sampler2D layerHistory;
 
 layout(push_constant) uniform PushConstants {
@@ -91,21 +112,38 @@ layout(location = 0) out vec4 outColor;
 #define OUT_COLOR outColor
 #endif
 
-// 1.5 anti-flicker: per-layer temporal mask. R = CTSH (sun contact
-// shadow), G = AOCC (local ambient occlusion visibility), B = LOCL
-// (local-point-light shadow visibility), A = 1.0 (reserved).
-// Both TAA-on and TAA-off variants declare the same output so the
-// pipeline's `pColorAttachmentFormats[2]` declaration (3 attachments
-// total) stays valid for both. In TAA-on path the voxel pass uses
-// 8 components (outSceneColor + outLayerMask); in TAA-off path
-// 8 components (outColor + outLayerMask). The third attachment
-// slot is bound in both paths but the TAA-on variant doesn't write
-// to slot 0 (outColor) and the TAA-off variant doesn't write to
-// slot 1 (outSceneColor) — `dynamicRenderingUnusedAttachments`
-// allows the rendering to have more attachments than the
-// pipeline declares, and the per-frame
-// `VkRenderingAttachmentInfo::imageView` for the unused slot is
-// VK_NULL_HANDLE.
+/// \brief 1.5 anti-flicker:
+///
+/// \details
+/// per-layer temporal mask. R = CTSH (sun contact
+///  shadow), G = AOCC (local ambient occlusion visibility), B = LOCL
+
+///  (local-point-light shadow visibility), A = 1.0 (reserved).
+
+///  Both TAA-on and TAA-off variants declare the same output so the
+
+///  pipeline's `pColorAttachmentFormats[2]` declaration (3 attachments
+
+///  total) stays valid for both. In TAA-on path the voxel pass uses
+
+///  8 components (outSceneColor + outLayerMask); in TAA-off path
+
+///  8 components (outColor + outLayerMask). The third attachment
+
+///  slot is bound in both paths but the TAA-on variant doesn't write
+
+///  to slot 0 (outColor) and the TAA-off variant doesn't write to
+
+///  slot 1 (outSceneColor) — `dynamicRenderingUnusedAttachments`
+
+///  allows the rendering to have more attachments than the
+
+///  pipeline declares, and the per-frame
+
+///  `VkRenderingAttachmentInfo::imageView` for the unused slot is
+
+///  VK_NULL_HANDLE.
+
 layout(location = 2) out vec4 outLayerMask;
 
 const uint kSunShadowCascadeCount = 4u;
@@ -249,15 +287,26 @@ const float maxDistance,
 const float shadowStrength,
 const float bias) {
     const float surfaceOffset = max(bias, 0.02);
-    // Push the ray origin *along the face normal only*, never along rayDirection. The
-    // old `+ rayDirection * surfaceOffset` term pushed the start voxel into the next
-    // neighbor when the light approached from a low angle, which made the DDA start
-    // inside the local-light source's own voxel when the direction had a downward
-    // component and the receiver was the *top* face of an opaque voxel. That first
-    // DDA cell would then be classified as an occluder by the local-light policy and
-    // produce a hard "self-shadow" patch on what should be a fully lit face. Pushing
-    // along the face normal only keeps the start voxel strictly on the lit side of
-    // the receiver plane regardless of light direction.
+    /// \brief Push the ray origin *along the face normal only*, never along rayDirection.
+    ///
+    /// \details
+    /// The
+    ///  old `+ rayDirection * surfaceOffset` term pushed the start voxel into the next
+
+    ///  neighbor when the light approached from a low angle, which made the DDA start
+
+    ///  inside the local-light source's own voxel when the direction had a downward
+
+    ///  component and the receiver was the *top* face of an opaque voxel. That first
+
+    ///  DDA cell would then be classified as an occluder by the local-light policy and
+
+    ///  produce a hard "self-shadow" patch on what should be a fully lit face. Pushing
+
+    ///  along the face normal only keeps the start voxel strictly on the lit side of
+
+    ///  the receiver plane regardless of light direction.
+
     const vec3 rayOrigin = stableFacePoint + faceNormal * surfaceOffset;
     ivec3 currentVoxel = ivec3(floor(rayOrigin));
     const ivec3 stepDirection = ivec3(
@@ -469,11 +518,18 @@ float ComputeAmbientOcclusionVisibility(const vec3 worldPosition, const vec3 nor
     const float sideSpread = 0.55;
     float occlusion = 0.0;
     float weight = 0.0;
-    // Three-tap AOCC: the surface normal plus two side rays. The previous five-tap
-    // configuration sampled tangentA± and tangentB± separately, which doubled the
-    // fragment budget on AOCC for no visible quality difference at the tuned
-    // strength/radius. The new direction set keeps a strong normal axis and a single
-    // lateral pair, which still produces a readable cavity layer.
+    /// \brief Three-tap AOCC:
+    ///
+    /// \details
+    /// the surface normal plus two side rays. The previous five-tap
+    ///  configuration sampled tangentA± and tangentB± separately, which doubled the
+
+    ///  fragment budget on AOCC for no visible quality difference at the tuned
+
+    ///  strength/radius. The new direction set keeps a strong normal axis and a single
+
+    ///  lateral pair, which still produces a readable cavity layer.
+
     occlusion += SampleAmbientOcclusionDirection(worldPosition, normal, normal, radius, kAmbientOcclusionMaxSteps) * normalWeight;
     weight += normalWeight;
     occlusion += SampleAmbientOcclusionDirection(worldPosition, normal, normal * normalLift + tangentA * sideSpread, radius, kAmbientOcclusionMaxSteps) * sideWeight;
@@ -495,9 +551,13 @@ const vec3 normal) {
     const float bias = max(sceneLighting.localPointLightParams.w, 0.0);
     const vec3 stableFacePoint = ComputeStableVoxelFacePoint(worldPosition, normal);
     const vec3 faceNormal = QuantizeVoxelFaceNormal(normal);
-    // Local-light visibility must stay tied to the owning voxel face without collapsing to one constant value
-    // for the whole face. A stabilized face-plane point keeps close-range traces continuous across a face while
-    // still preventing the old sub-voxel DDA leaks from raw interpolated boundary positions.
+    /// \brief Local-light visibility must stay tied to the owning voxel face without collapsing to one constant value
+    ///
+    /// \details
+    ///  for the whole face. A stabilized face-plane point keeps close-range traces continuous across a face while
+
+    ///  still preventing the old sub-voxel DDA leaks from raw interpolated boundary positions.
+
     const vec3 lightCenter = sceneLighting.localPointLightPositionAndRadius.xyz;
     const vec3 centerDelta = lightCenter - stableFacePoint;
     const float centerDistanceSq = dot(centerDelta, centerDelta);
@@ -681,12 +741,20 @@ const float localPointLightVisibility) {
         return vec3(0.0);
     }
 
-    // 1.5 anti-flicker: caller is expected to have already blended
-    // `localPointLightVisibility` with the previous-frame history
-    // (see `main()` below). The DDA is no longer invoked here
-    // because that would either do the work twice or require
-    // duplicating the early-out logic; the caller's `main()` keeps
-    // the unconditional pre-blend invocation.
+    /// \brief 1.5 anti-flicker:
+    ///
+    /// \details
+    /// caller is expected to have already blended
+    ///  `localPointLightVisibility` with the previous-frame history
+
+    ///  (see `main()` below). The DDA is no longer invoked here
+
+    ///  because that would either do the work twice or require
+
+    ///  duplicating the early-out logic; the caller's `main()` keeps
+
+    ///  the unconditional pre-blend invocation.
+
     const float visibility = localPointLightVisibility;
     const vec3 lightRadiance =
     sceneLighting.localPointLightColorAndIntensity.rgb *
@@ -781,8 +849,11 @@ const float shadowStrength) {
         return vec2(mix(1.0 - shadowStrength, 1.0, lit), 1.0);
     }
 
-    // A small weighted PCF kernel is still cheap enough for the current CSM baseline,
-    // but hides the nearest-neighbor texel staircase better than the old 3x3 box filter.
+    /// \brief A small weighted PCF kernel is still cheap enough for the current CSM baseline,
+    ///
+    /// \details
+    ///  but hides the nearest-neighbor texel staircase better than the old 3x3 box filter.
+
     const vec2 texelSize = 1.0 / vec2(textureSize(sunShadowMap, 0).xy);
     float litAccum = 0.0;
     float weightAccum = 0.0;
@@ -816,14 +887,23 @@ vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
     const vec3 sunDirection = normalize(sceneLighting.sunDirectionAndWrap.xyz);
     const float depthBias = max(sceneLighting.sunShadowParams.y, 0.0);
     const float normalBias = max(sceneLighting.sunShadowParams.z, 0.0);
-    // The PCF kernel is `5 * 5` taps with `pcfStepScale = filterRadius * 0.75` texels
-    // per tap. Preset values land in [1.10, 1.50] (roughly ±1.5 texels from center),
-    // which is the visual sweet spot. The debug-ladder `H/K` controls let the user
-    // push the authored filter radius up to 8.0, which expands the kernel to ±12
-    // texels (roughly 50% of a cascade's texel budget at 2048). That over-blooms
-    // adjacent casters into each other and starts to *erase* the contact-shadow
-    // detail. Clamp to a sane upper bound here so the runtime never produces a
-    // visually broken filter, even with the debug controls at their extreme.
+    /// \brief The PCF kernel is `5 * 5` taps with `pcfStepScale = filterRadius * 0.75` texels
+    ///
+    /// \details
+    ///  per tap. Preset values land in [1.10, 1.50] (roughly ±1.5 texels from center),
+
+    ///  which is the visual sweet spot. The debug-ladder `H/K` controls let the user
+
+    ///  push the authored filter radius up to 8.0, which expands the kernel to ±12
+
+    ///  texels (roughly 50% of a cascade's texel budget at 2048). That over-blooms
+
+    ///  adjacent casters into each other and starts to *erase* the contact-shadow
+
+    ///  detail. Clamp to a sane upper bound here so the runtime never produces a
+
+    ///  visually broken filter, even with the debug controls at their extreme.
+
     const float filterRadius = clamp(sceneLighting.sunShadowParams.w, 0.0, 2.0);
     const float nDotL = clamp(dot(normal, sunDirection), 0.0, 1.0);
     if (nDotL <= 0.02) {
@@ -831,8 +911,11 @@ vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
     }
 
     const float shadowSlope = 1.0 - nDotL;
-    // Keep the authored bias controls stable, but make them respond to the sun angle so
-    // acne on grazing receivers does not require the same brute-force offset on flat tops.
+    /// \brief Keep the authored bias controls stable, but make them respond to the sun angle so
+    ///
+    /// \details
+    ///  acne on grazing receivers does not require the same brute-force offset on flat tops.
+
     const float receiverDepthBias = depthBias * (1.0 + shadowSlope * 2.0);
     const float receiverNormalBias = normalBias * mix(0.25, 1.0, shadowSlope);
     const float receiverLightBias = max(normalBias * 0.5, depthBias * 4.0);
@@ -891,24 +974,43 @@ void main() {
     const float wrappedDiffuse = clamp((dot(normal, sunDirection) + diffuseWrap) / (1.0 + diffuseWrap), 0.0, 1.0);
     const vec3 albedo = material.baseColor.rgb;
     const float ambientOcclusion = mix(0.35, 1.0, ao);
-    // This is the cheap meshing-side local sky-visibility term, not screen-space AO/GI.
+    /// \brief This is the cheap meshing-side local sky-visibility term, not screen-space AO/GI.
     const float geometryAmbientVisibility = clamp(inAmbientVisibility, 0.0, 1.0);
     const float localAmbientOcclusionVisibility = ComputeAmbientOcclusionVisibility(inWorldPosition, normal);
-    // 1.5 anti-flicker: pre-blend the per-layer values with the
-    // previous-frame history. The blend is `mix(raw, history, blend)`
-    // with `blend = taaLayerHistoryParams.w` (default 0.4) — the
-    // current frame's lighting uses the blended value, while the
-    // raw current-frame value is what `outLayerMask` writes to the
-    // next frame's history (blend-at-read, not blend-at-write, so
-    // each frame's contribution to the temporal filter is uniform
-    // — see `agent/memory.md §10.19` for the contract).
-    // `taaLayerHistoryParams.z` is the history-valid flag: if 0,
-    // the history is not yet initialised (post-swapchain-recreate /
-    // first frame), and we fall through to the raw current value
-    // without sampling. `taaLayerHistoryParams.x/y` are the
-    // texel-size reciprocals in the layer-history texel space (the
-    // layer history matches the swapchain extent, same as the
-    // colour history).
+    /// \brief 1.5 anti-flicker:
+    ///
+    /// \details
+    /// pre-blend the per-layer values with the
+    ///  previous-frame history. The blend is `mix(raw, history, blend)`
+
+    ///  with `blend = taaLayerHistoryParams.w` (default 0.4) — the
+
+    ///  current frame's lighting uses the blended value, while the
+
+    ///  raw current-frame value is what `outLayerMask` writes to the
+
+    ///  next frame's history (blend-at-read, not blend-at-write, so
+
+    ///  each frame's contribution to the temporal filter is uniform
+
+    ///  — see `agent/memory.md §10.19` for the contract).
+
+    ///  `taaLayerHistoryParams.z` is the history-valid flag: if 0,
+
+    ///  the history is not yet initialised (post-swapchain-recreate /
+
+    ///  first frame), and we fall through to the raw current value
+
+    ///  without sampling. `taaLayerHistoryParams.x/y` are the
+
+    ///  texel-size reciprocals in the layer-history texel space (the
+
+    ///  layer history matches the swapchain extent, same as the
+
+    ///  colour history).
+
+    ///
+    /// \see agent/memory.md §10.19
     const bool layerHistoryValid = sceneLighting.taaLayerHistoryParams.z > 0.5;
     const vec2 layerTexelSize = sceneLighting.taaLayerHistoryParams.xy;
     const float layerBlend = clamp(sceneLighting.taaLayerHistoryParams.w, 0.0, 1.0);
@@ -929,31 +1031,59 @@ void main() {
     const vec4 historyLayerSample = layerHistoryValid
         ? texture(layerHistory, layerUv)
         : vec4(1.0, 1.0, 1.0, 1.0);
-    // 1.5 anti-flicker: also blend local-point-light visibility.
-    // Always compute the DDA at the top of main() so the raw value
-    // is available for `outLayerMask` write (this is a small cost
-    // increase vs the previous "compute on demand" approach, but
-    // the DDA is only 12 steps and the layer mask is the whole
-    // point of this slice). The blended value goes into
-    // `ComputeLocalPointLightDirect` below.
+    /// \brief 1.5 anti-flicker:
+    ///
+    /// \details
+    /// also blend local-point-light visibility.
+    ///  Always compute the DDA at the top of main() so the raw value
+
+    ///  is available for `outLayerMask` write (this is a small cost
+
+    ///  increase vs the previous "compute on demand" approach, but
+
+    ///  the DDA is only 12 steps and the layer mask is the whole
+
+    ///  point of this slice). The blended value goes into
+
+    ///  `ComputeLocalPointLightDirect` below.
+
     const float rawLocalPointLightVisibility = ComputeLocalPointLightVisibility(inWorldPosition, normal);
-    // 1.5 anti-flicker: AOCC is the per-pixel ray-cast cavity term;
-    // smoothing it removes the per-frame jitter that's most visible
-    // in enclosed niches. The blended value goes into
-    // `ambientVisibility` below.
+    /// \brief 1.5 anti-flicker:
+    ///
+    /// \details
+    /// AOCC is the per-pixel ray-cast cavity term;
+    ///  smoothing it removes the per-frame jitter that's most visible
+
+    ///  in enclosed niches. The blended value goes into
+
+    ///  `ambientVisibility` below.
+
     const float blendedLocalAmbientOcclusionVisibility = mix(localAmbientOcclusionVisibility, historyLayerSample.y, layerBlend);
-    // 1.5 — sun contact shadow (CTSH, in `.x` of the history sample)
-    // is currently written to history but not yet blended in main
-    // lighting. Smoothing CTSH needs `ComputeSunShadowSample` to
-    // separate the contact visibility from the cascade shadow so
-    // the blended contact can be applied at the end (the function
-    // currently multiplies them internally). That's a follow-up
-    // slice — the data is already in history, so the future
-    // change is local to `main()` and the call to
-    // `ComputeSunShadowSample`. Tracking the `.x` history read
-    // here so the value doesn't go unused in the next slice
-    // (compiler is fine with the read, the value will just
-    // participate in the future blend).
+    /// \brief 1.5 — sun contact shadow (CTSH, in `.x` of the history sample)
+    ///
+    /// \details
+    ///  is currently written to history but not yet blended in main
+
+    ///  lighting. Smoothing CTSH needs `ComputeSunShadowSample` to
+
+    ///  separate the contact visibility from the cascade shadow so
+
+    ///  the blended contact can be applied at the end (the function
+
+    ///  currently multiplies them internally). That's a follow-up
+
+    ///  slice — the data is already in history, so the future
+
+    ///  change is local to `main()` and the call to
+
+    ///  `ComputeSunShadowSample`. Tracking the `.x` history read
+
+    ///  here so the value doesn't go unused in the next slice
+
+    ///  (compiler is fine with the read, the value will just
+
+    ///  participate in the future blend).
+
     const float blendedSunContactVisibility = mix(sunContactVisibility, historyLayerSample.x, layerBlend);
     const float blendedLocalPointLightVisibility = mix(rawLocalPointLightVisibility, historyLayerSample.z, layerBlend);
     const float ambientVisibility = geometryAmbientVisibility * blendedLocalAmbientOcclusionVisibility;
@@ -1050,16 +1180,30 @@ void main() {
     color = ApplyToneMap(color);
     color = ApplyColorGrading(color);
 
-    // 1.5 anti-flicker: write the *raw* per-layer values to
-    // `outLayerMask` so the next frame's voxel pass can sample them
-    // as history. Layout: R = sun contact shadow visibility (raw,
-    // not yet smoothed in this slice — see `agent/memory.md §10.19`
-    // for the rationale and follow-up work), G = local ambient
-    // occlusion visibility (raw), B = local point light visibility
-    // (raw), A = 1.0 (reserved). The actual temporal blend is
-    // applied above in the lighting block via the `blended*`
-    // variables; the next frame's voxel pass will read the values
-    // we wrote here as the previous-frame input.
+    /// \brief 1.5 anti-flicker:
+    ///
+    /// \details
+    /// write the *raw* per-layer values to
+    ///  `outLayerMask` so the next frame's voxel pass can sample them
+
+    ///  as history. Layout: R = sun contact shadow visibility (raw,
+
+    ///  not yet smoothed in this slice — see `agent/memory.md §10.19`
+
+    ///  for the rationale and follow-up work), G = local ambient
+
+    ///  occlusion visibility (raw), B = local point light visibility
+
+    ///  (raw), A = 1.0 (reserved). The actual temporal blend is
+
+    ///  applied above in the lighting block via the `blended*`
+
+    ///  variables; the next frame's voxel pass will read the values
+
+    ///  we wrote here as the previous-frame input.
+
+    ///
+    /// \see agent/memory.md §10.19
     outLayerMask = vec4(sunContactVisibility, localAmbientOcclusionVisibility, rawLocalPointLightVisibility, 1.0);
 
 #ifdef TAA_ENABLED

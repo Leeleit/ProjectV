@@ -33,18 +33,32 @@ vec3 ProjectV_FresnelSchlick(const float cosTheta, const vec3 f0) {
     return f0 + (1.0 - f0) * pow(1.0 - clamp(cosTheta, 0.0, 1.0), 5.0);
 }
 
-// Wrapped-diffuse + GGX direct-light evaluation. Inputs:
-//   lightDirection, lightRadiance -- the per-light L vector and
-//     incoming radiance (already attenuated for distance / cone
-//     falloff in the caller);
-//   normal, viewDirection -- world-space N and V;
-//   albedo, roughness, metallic, reflectance -- PBR surface;
-//   directDiffuseStrength -- authored diffuse response weight;
-//   diffuseWrap -- authored wrap parameter (0 = Lambert, >0 softens
-//     the terminator).
-// Returns the unshadowed direct contribution. Shadow visibility is
-// the caller's responsibility (voxel pass adds the CSM visibility
-// term; the M4 model pass is unshadowed direct light only).
+/// \brief Wrapped-diffuse + GGX direct-light evaluation.
+///
+/// \details
+/// Inputs:
+///    lightDirection, lightRadiance -- the per-light L vector and
+
+///      incoming radiance (already attenuated for distance / cone
+
+///      falloff in the caller);
+
+///    normal, viewDirection -- world-space N and V;
+
+///    albedo, roughness, metallic, reflectance -- PBR surface;
+
+///    directDiffuseStrength -- authored diffuse response weight;
+
+///    diffuseWrap -- authored wrap parameter (0 = Lambert, >0 softens
+
+///      the terminator).
+
+///  Returns the unshadowed direct contribution. Shadow visibility is
+
+///  the caller's responsibility (voxel pass adds the CSM visibility
+
+///  term; the M4 model pass is unshadowed direct light only).
+
 vec3 ProjectV_EvaluateDirectLighting(
     const vec3 lightDirection,
     const vec3 lightRadiance,

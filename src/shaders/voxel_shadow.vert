@@ -4,8 +4,14 @@ struct PackedFace {
     uint localVoxelFace;
     uint chunkIndexMaterial;
     uint lightingData;
-    // A1 (4.1 greedy meshing): (width, height) in 8 bits each for the
-    // in-plane quad size. See `decisions.md §25`.
+    /// \brief A1 (4.1 greedy meshing):
+    ///
+    /// \details
+    /// (width, height) in 8 bits each for the
+    ///  in-plane quad size. See `decisions.md §25`.
+
+    ///
+    /// \see agent/decisions.md §25
     uint packedExtents;
 };
 
@@ -42,17 +48,29 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
-    // TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
-    // Currently shadow pass only consumes sceneLighting fields it already uses;
-    // the TAA fields are present for byte-layout parity with voxel.frag /
-    // voxel_mesh.comp. Layout is enforced by static_assert on the C++ side.
+    /// \brief TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
+    ///
+    /// \details
+    ///  Currently shadow pass only consumes sceneLighting fields it already uses;
+
+    ///  the TAA fields are present for byte-layout parity with voxel.frag /
+
+    ///  voxel_mesh.comp. Layout is enforced by static_assert on the C++ side.
+
+    ///
+    /// \see agent/decisions.md §18
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
-    // 1.5 anti-flicker layer history params (texelX, texelY, valid,
-    // blendFactor). Mirrors the C++ `VoxelSceneLighting` byte layout.
-    // This shader doesn't read it, but the field is declared so the
-    // std430 layout matches the C++ struct byte-for-byte.
+    /// \brief 1.5 anti-flicker layer history params (texelX, texelY, valid,
+    ///
+    /// \details
+    ///  blendFactor). Mirrors the C++ `VoxelSceneLighting` byte layout.
+
+    ///  This shader doesn't read it, but the field is declared so the
+
+    ///  std430 layout matches the C++ struct byte-for-byte.
+
     vec4 taaLayerHistoryParams;
 } sceneLighting;
 
@@ -108,8 +126,12 @@ uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
     }
 }
 
-// A1 (4.1 greedy meshing): scale the unit corner offset by the merged
-// quad extents. Mirror of `voxel.vert::ApplyGreedyScale`.
+/// \brief A1 (4.1 greedy meshing):
+///
+/// \details
+/// scale the unit corner offset by the merged
+///  quad extents. Mirror of `voxel.vert::ApplyGreedyScale`.
+
 uvec3 ApplyGreedyScale(const uint faceIndex, const uvec3 unitOffset, const uvec2 quadExtents) {
     if (faceIndex == 0u || faceIndex == 1u) {
         return uvec3(unitOffset.x, unitOffset.y * quadExtents.x, unitOffset.z * quadExtents.y);
@@ -133,7 +155,10 @@ void main() {
     (localVoxelFace >> 8u) & 0xFFu,
     (localVoxelFace >> 16u) & 0xFFu);
 
-    // A1 (4.1 greedy meshing): decode merged-quad extents.
+    /// \brief A1 (4.1 greedy meshing):
+    ///
+    /// \details
+    /// decode merged-quad extents.
     const uvec2 quadExtents = uvec2(
     packedFace.packedExtents & 0xFFu,
     (packedFace.packedExtents >> 8u) & 0xFFu);

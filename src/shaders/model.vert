@@ -23,20 +23,35 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
-    // 1.5 anti-flicker layer history params (texelX, texelY, valid, blendFactor).
-    // Mirrors the C++ `VoxelSceneLighting` byte layout. This vertex shader does
-    // not read it, but the field is declared so the std430 layout matches the
-    // C++ struct byte-for-byte (see agent/decisions.md §18).
+    /// \brief 1.5 anti-flicker layer history params (texelX, texelY, valid, blendFactor).
+    ///
+    /// \details
+    ///  Mirrors the C++ `VoxelSceneLighting` byte layout. This vertex shader does
+
+    ///  not read it, but the field is declared so the std430 layout matches the
+
+    ///  C++ struct byte-for-byte (see agent/decisions.md §18).
+
+    ///
+    /// \see agent/decisions.md §18
     vec4 taaLayerHistoryParams;
 } sceneLighting;
 
-// Reuses the existing `GraphicsPushConstants` layout from
-// `voxel.vert` (offset 0, size 128) so the model pipeline shares
-// one push constant range with the main voxel pass. `viewProjection`
-// is at offset 0; `modelTransform` rides along at offset 64 in
-// the same struct. This is intentionally co-allocated with the
-// existing struct so we can re-use the same `vkCmdPushConstants`
-// call instead of issuing a second push for the model transform.
+/// \brief Reuses the existing `GraphicsPushConstants` layout from
+///
+/// \details
+///  `voxel.vert` (offset 0, size 128) so the model pipeline shares
+
+///  one push constant range with the main voxel pass. `viewProjection`
+
+///  is at offset 0; `modelTransform` rides along at offset 64 in
+
+///  the same struct. This is intentionally co-allocated with the
+
+///  existing struct so we can re-use the same `vkCmdPushConstants`
+
+///  call instead of issuing a second push for the model transform.
+
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
     mat4 modelTransform;

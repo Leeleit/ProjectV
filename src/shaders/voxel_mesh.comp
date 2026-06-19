@@ -20,11 +20,20 @@ struct PackedFace {
     uint localVoxelFace;
     uint chunkIndexMaterial;
     uint lightingData;
-    // A1 (4.1 greedy meshing): `packedExtents` packs (width, height) in 8
-    // bits each for the in-plane quad size. width = how many voxels the quad
-    // spans in axisU, height = axisV. For non-greedy paths, set (1, 1) and
-    // the vertex shader still produces the same unit quad. See
-    // `agent/decisions.md §25` for the merge contract.
+    /// \brief A1 (4.1 greedy meshing):
+    ///
+    /// \details
+    /// `packedExtents` packs (width, height) in 8
+    ///  bits each for the in-plane quad size. width = how many voxels the quad
+
+    ///  spans in axisU, height = axisV. For non-greedy paths, set (1, 1) and
+
+    ///  the vertex shader still produces the same unit quad. See
+
+    ///  `agent/decisions.md §25` for the merge contract.
+
+    ///
+    /// \see agent/decisions.md §25
     uint packedExtents;
 };
 
@@ -81,17 +90,29 @@ layout(set = 0, binding = 8, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
-    // TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
-    // Currently the meshing pass only reads sceneLighting fields it already
-    // uses; the TAA fields are present for byte-layout parity with voxel.frag /
-    // voxel_shadow.vert. Layout is enforced by static_assert on the C++ side.
+    /// \brief TAA contract (mirrors VoxelSceneLighting, see agent/decisions.md §18):
+    ///
+    /// \details
+    ///  Currently the meshing pass only reads sceneLighting fields it already
+
+    ///  uses; the TAA fields are present for byte-layout parity with voxel.frag /
+
+    ///  voxel_shadow.vert. Layout is enforced by static_assert on the C++ side.
+
+    ///
+    /// \see agent/decisions.md §18
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
-    // 1.5 anti-flicker layer history params (texelX, texelY, valid,
-    // blendFactor). Mirrors the C++ `VoxelSceneLighting` byte layout.
-    // This compute shader doesn't read it, but the field is declared
-    // so the std430 layout matches the C++ struct byte-for-byte.
+    /// \brief 1.5 anti-flicker layer history params (texelX, texelY, valid,
+    ///
+    /// \details
+    ///  blendFactor). Mirrors the C++ `VoxelSceneLighting` byte layout.
+
+    ///  This compute shader doesn't read it, but the field is declared
+
+    ///  so the std430 layout matches the C++ struct byte-for-byte.
+
     vec4 taaLayerHistoryParams;
 } sceneLighting;
 
@@ -112,12 +133,20 @@ ivec3(0, 0, -1)
 );
 const uint kSunShadowCascadeCount = 4u;
 
-// A1 (4.1 greedy meshing): max in-plane chunk extent for the greedy pass.
-// The visited bitmask needs `extent * extent` bits; 64² = 4096 bits = 128
-// uints = 512 bytes per axis+direction pass. Past this extent we fall back
-// to per-voxel emission (1×1 quad per face). 64 covers the practical
-// chunk size in the project (TODO §4.5 perf budget); PackedFace's 8-bit
-// per-axis packing still allows up to 256 for non-greedy paths.
+/// \brief A1 (4.1 greedy meshing):
+///
+/// \details
+/// max in-plane chunk extent for the greedy pass.
+///  The visited bitmask needs `extent * extent` bits; 64² = 4096 bits = 128
+
+///  uints = 512 bytes per axis+direction pass. Past this extent we fall back
+
+///  to per-voxel emission (1×1 quad per face). 64 covers the practical
+
+///  chunk size in the project (TODO §4.5 perf budget); PackedFace's 8-bit
+
+///  per-axis packing still allows up to 256 for non-greedy paths.
+
 const uint kMaxChunkExtentForGreedy = 64u;
 
 uint PackLocalVoxelFace(const uvec3 localVoxelCoord, const uint faceIndex) {
@@ -127,11 +156,18 @@ uint PackLocalVoxelFace(const uvec3 localVoxelCoord, const uint faceIndex) {
     ((faceIndex & 0xFFu) << 24u);
 }
 
-// A1 (4.1 greedy meshing): pack (width, height) of a merged quad into the
-// 4th uint of PackedFace. width and height are 8 bits each (max 255); a
-// chunk extent of 64 means a quad can span up to 64 voxels in either
-// in-plane axis. Beyond kMaxChunkExtentForGreedy (64) we fall back to
-// per-voxel emission and this packing is unused.
+/// \brief A1 (4.1 greedy meshing):
+///
+/// \details
+/// pack (width, height) of a merged quad into the
+///  4th uint of PackedFace. width and height are 8 bits each (max 255); a
+
+///  chunk extent of 64 means a quad can span up to 64 voxels in either
+
+///  in-plane axis. Beyond kMaxChunkExtentForGreedy (64) we fall back to
+
+///  per-voxel emission and this packing is unused.
+
 uint PackQuadExtents(const uint width, const uint height) {
     return (width & 0xFFu) | ((height & 0xFFu) << 8u);
 }
@@ -181,8 +217,11 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
         return false;
     }
 
-    // Opaque voxels must still emit against glass so the covered top face remains
-    // visible through the transparent block above it.
+    /// \brief Opaque voxels must still emit against glass so the covered top face remains
+    ///
+    /// \details
+    ///  visible through the transparent block above it.
+
     if (materialIndex >= 3u) {
         return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
     }
@@ -342,28 +381,48 @@ bool IsChunkInsideShadowCascade(const ChunkDescriptor chunkDescriptor, const uin
     return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
 }
 
-// A1 (4.1 greedy meshing): per-axis greedy pass for one face direction.
-//
-// Walks the 2D plane of cells that emit a face in the direction
-// (axisN, signN), merging adjacent cells with the same exposed state into a
-// single W×H quad. A face is "emitted" by cell (pN, pU, pV) when
-// `ShouldEmitVoxelFace(voxel(pN,pU,pV), neighbor(pN+signN, pU, pV))` is
-// true. Two adjacent cells on the same plane can merge iff they share the
-// same {cellMaterial, neighborIsAirOrGlass} state. AO merge condition is
-// not required: per-vertex AO is disabled (see `decisions.md §14` v2) and
-// `lightingData` is a no-op.
-//
-// `axisN`/`axisU`/`axisV` are 0=X/1=Y/2=Z world axes; `signN` is +1 for
-// face+ directions and -1 for face- directions. Plane iteration is
-// per-pN slice: for each pN in [0, extentN), walk the (pU, pV) plane and
-// greedily extend in axisU first, then axisV, then emit one quad and
-// mark visited.
-//
-// The visited bitmask is `kMaxChunkExtentForGreedy` uints (one bit per
-// cell, one uint per row in axisU direction). For chunks where extentU
-// or extentV exceeds `kMaxChunkExtentForGreedy`, the function falls back
-// to per-voxel emission (1×1 quad per face, identical to the previous
-// non-greedy behavior).
+/// \brief A1 (4.1 greedy meshing):
+///
+/// \details
+/// per-axis greedy pass for one face direction.
+///  Walks the 2D plane of cells that emit a face in the direction
+
+///  (axisN, signN), merging adjacent cells with the same exposed state into a
+
+///  single W×H quad. A face is "emitted" by cell (pN, pU, pV) when
+
+///  `ShouldEmitVoxelFace(voxel(pN,pU,pV), neighbor(pN+signN, pU, pV))` is
+
+///  true. Two adjacent cells on the same plane can merge iff they share the
+
+///  same {cellMaterial, neighborIsAirOrGlass} state. AO merge condition is
+
+///  not required: per-vertex AO is disabled (see `decisions.md §14` v2) and
+
+///  `lightingData` is a no-op.
+
+///  `axisN`/`axisU`/`axisV` are 0=X/1=Y/2=Z world axes; `signN` is +1 for
+
+///  face+ directions and -1 for face- directions. Plane iteration is
+
+///  per-pN slice: for each pN in [0, extentN), walk the (pU, pV) plane and
+
+///  greedily extend in axisU first, then axisV, then emit one quad and
+
+///  mark visited.
+
+///  The visited bitmask is `kMaxChunkExtentForGreedy` uints (one bit per
+
+///  cell, one uint per row in axisU direction). For chunks where extentU
+
+///  or extentV exceeds `kMaxChunkExtentForGreedy`, the function falls back
+
+///  to per-voxel emission (1×1 quad per face, identical to the previous
+
+///  non-greedy behavior).
+
+///
+/// \see agent/decisions.md §14
 void GreedyFacePass(
     const uint faceIndex,
     const uint axisN,
@@ -386,8 +445,12 @@ void GreedyFacePass(
 
     for (uint pN = 0u; pN < extentN; ++pN) {
         if (useGreedy) {
-            // Visited bitmask: bit pU of visited[pV] = "cell (pU, pV) consumed".
-            // Cleared per pN slice because each face plane is independent.
+            /// \brief Visited bitmask:
+            ///
+            /// \details
+            /// bit pU of visited[pV] = "cell (pU, pV) consumed".
+            ///  Cleared per pN slice because each face plane is independent.
+
             uint visited[kMaxChunkExtentForGreedy];
             for (uint i = 0u; i < kMaxChunkExtentForGreedy; ++i) {
                 visited[i] = 0u;
@@ -399,7 +462,7 @@ void GreedyFacePass(
                         continue;
                     }
 
-                    // Build (pN, pU, pV) voxel coord + read cell material.
+                    /// \brief Build (pN, pU, pV) voxel coord + read cell material.
                     uvec3 localVoxelCoord;
                     localVoxelCoord[axisN] = pN;
                     localVoxelCoord[axisU] = pU;
@@ -409,8 +472,11 @@ void GreedyFacePass(
                         continue;
                     }
 
-                    // Read neighbor at (pN+signN, pU, pV); may be outside chunk
-                    // or world — `ReadVoxelMaterial` returns 0 (Air) for OOB.
+                    /// \brief Read neighbor at (pN+signN, pU, pV); may be outside chunk
+                    ///
+                    /// \details
+                    ///  or world — `ReadVoxelMaterial` returns 0 (Air) for OOB.
+
                     ivec3 worldVoxelPosition = ivec3(chunkDescriptor.chunkOrigin.xyz) + ivec3(localVoxelCoord);
                     ivec3 neighborPosition = worldVoxelPosition;
                     neighborPosition[axisN] += signN;
@@ -419,7 +485,7 @@ void GreedyFacePass(
                         continue;
                     }
 
-                    // Greedy extend in axisU direction (width).
+                    /// \brief Greedy extend in axisU direction (width).
                     uint W = 0u;
                     while (pU + W < extentU) {
                         if (((visited[pV] >> (pU + W)) & 1u) != 0u) {
@@ -444,7 +510,7 @@ void GreedyFacePass(
                         continue;
                     }
 
-                    // Greedy extend in axisV direction (height), constrained by W.
+                    /// \brief Greedy extend in axisV direction (height), constrained by W.
                     uint H = 1u;
                     while (pV + H < extentV) {
                         bool rowValid = true;
@@ -477,7 +543,10 @@ void GreedyFacePass(
                         ++H;
                     }
 
-                    // Emit the merged quad: start = (pN, pU, pV), extents = (W, H).
+                    /// \brief Emit the merged quad:
+                    ///
+                    /// \details
+                    /// start = (pN, pU, pV), extents = (W, H).
                     const PackedFace packedFace = PackedFace(
                     PackLocalVoxelFace(localVoxelCoord, faceIndex),
                     PackChunkIndexMaterial(chunkIndex, cellMaterial),
@@ -496,7 +565,7 @@ void GreedyFacePass(
                         }
                     }
 
-                    // Mark the (W × H) block visited in one shot per row.
+                    /// \brief Mark the (W × H) block visited in one shot per row.
                     const uint visitedMask = ((1u << W) - 1u) << pU;
                     for (uint v = 0u; v < H; ++v) {
                         visited[pV + v] |= visitedMask;
@@ -504,8 +573,12 @@ void GreedyFacePass(
                 }
             }
         } else {
-            // Fallback path for oversized chunks: emit 1×1 quads per face.
-            // Identical to the previous per-voxel loop, no merge.
+            /// \brief Fallback path for oversized chunks:
+            ///
+            /// \details
+            /// emit 1×1 quads per face.
+            ///  Identical to the previous per-voxel loop, no merge.
+
             for (uint pV = 0u; pV < extentV; ++pV) {
                 for (uint pU = 0u; pU < extentU; ++pU) {
                     uvec3 localVoxelCoord;
@@ -575,13 +648,22 @@ void main() {
     uint opaqueFaceCount = 0u;
     uint transparentFaceCount = 0u;
 
-    // A1 (4.1 greedy meshing): 6 per-axis greedy passes, one per face
-    // direction. Each pass walks the 2D plane of cells that emit a face in
-    // that direction and merges adjacent cells with the same exposed state
-    // into a single W×H quad. For oversized chunks (>kMaxChunkExtentForGreedy
-    // in any in-plane axis) the pass falls back to per-voxel emission. This
-    // replaces the previous triple-nested loop over (X, Y, Z) × 6 directions
-    // that emitted one PackedFace per voxel-face.
+    /// \brief A1 (4.1 greedy meshing):
+    ///
+    /// \details
+    /// 6 per-axis greedy passes, one per face
+    ///  direction. Each pass walks the 2D plane of cells that emit a face in
+
+    ///  that direction and merges adjacent cells with the same exposed state
+
+    ///  into a single W×H quad. For oversized chunks (>kMaxChunkExtentForGreedy
+
+    ///  in any in-plane axis) the pass falls back to per-voxel emission. This
+
+    ///  replaces the previous triple-nested loop over (X, Y, Z) × 6 directions
+
+    ///  that emitted one PackedFace per voxel-face.
+
     GreedyFacePass(0u, 0u, 1u, 2u, 1,
     chunkDescriptor, chunkIndex,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
