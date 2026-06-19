@@ -68,7 +68,7 @@ std::vector<uint8_t> CullVisibleMask(
 	projectv_cull_frustum_scalar(
 		mask.data(),
 		aabbs.data(),
-		&cparams,
+		cparams,
 		instances.size());
 	return mask;
 }

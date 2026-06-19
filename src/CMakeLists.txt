@@ -177,11 +177,11 @@ add_custom_command(TARGET ProjectV POST_BUILD
 )
 
 add_library(projectv_c_kernels STATIC
-        c_kernels/frustum_cull.c
+        c_kernels/frustum_cull.cpp
 )
 target_include_directories(projectv_c_kernels PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(projectv_c_kernels PUBLIC c_std_23)
-if (CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
+target_compile_features(projectv_c_kernels PUBLIC cxx_std_26)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(projectv_c_kernels PRIVATE -mavx2)
 endif ()
 target_link_libraries(ProjectV PRIVATE projectv_c_kernels)

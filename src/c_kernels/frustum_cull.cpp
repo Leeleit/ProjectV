@@ -1,46 +1,54 @@
 #include "frustum_cull.hpp"
 
-#include <math.h>
-#include <stddef.h>
-#include <stdint.h>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 
-typedef struct ProjectvCPlane3 {
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
+namespace projectv::c_kernels {
+
+namespace {
+
+struct ProjectvCPlane3 {
 	float n[3];
 	float offset;
-} ProjectvCPlane3;
+};
 
-static float projectv_absf(const float value)
+[[nodiscard]] inline float projectv_absf(const float value) noexcept
 {
 	return value < 0.0f ? -value : value;
 }
 
-static float projectv_dot3(
+[[nodiscard]] inline float projectv_dot3(
 	const float ax, const float ay, const float az,
-	const float bx, const float by, const float bz)
+	const float bx, const float by, const float bz) noexcept
 {
 	return ax * bx + ay * by + az * bz;
 }
 
-static void projectv_build_planes(
-	const ProjectvCFrustumCullParameters *parameters,
-	ProjectvCPlane3 planes[5])
+inline void projectv_build_planes(
+	const ProjectvCFrustumCullParameters &parameters,
+	ProjectvCPlane3 (&planes)[5]) noexcept
 {
-	const float fx = parameters->cameraForward[0];
-	const float fy = parameters->cameraForward[1];
-	const float fz = parameters->cameraForward[2];
-	const float rx = parameters->cameraRight[0];
-	const float ry = parameters->cameraRight[1];
-	const float rz = parameters->cameraRight[2];
-	const float ux = parameters->cameraUp[0];
-	const float uy = parameters->cameraUp[1];
-	const float uz = parameters->cameraUp[2];
-	const float th = parameters->tanHalfHorizontalFov;
-	const float tv = parameters->tanHalfVerticalFov;
+	const float fx = parameters.cameraForward[0];
+	const float fy = parameters.cameraForward[1];
+	const float fz = parameters.cameraForward[2];
+	const float rx = parameters.cameraRight[0];
+	const float ry = parameters.cameraRight[1];
+	const float rz = parameters.cameraRight[2];
+	const float ux = parameters.cameraUp[0];
+	const float uy = parameters.cameraUp[1];
+	const float uz = parameters.cameraUp[2];
+	const float th = parameters.tanHalfHorizontalFov;
+	const float tv = parameters.tanHalfVerticalFov;
 
 	planes[0].n[0] = fx;
 	planes[0].n[1] = fy;
 	planes[0].n[2] = fz;
-	planes[0].offset = parameters->nearPlane;
+	planes[0].offset = parameters.nearPlane;
 
 	planes[1].n[0] = fx * th + rx;
 	planes[1].n[1] = fy * th + ry;
@@ -63,21 +71,23 @@ static void projectv_build_planes(
 	planes[4].offset = 0.0f;
 }
 
+} // namespace
+
 void projectv_cull_frustum_scalar(
 	uint8_t *visible_mask,
 	const ProjectvCAabb *aabbs,
-	const ProjectvCFrustumCullParameters *parameters,
-	const size_t count)
+	const ProjectvCFrustumCullParameters &parameters,
+	const std::size_t count) noexcept
 {
 	ProjectvCPlane3 planes[5];
 	projectv_build_planes(parameters, planes);
 
-	const float maxDistance = parameters->maxDistance;
-	const float px = parameters->cameraPosition[0];
-	const float py = parameters->cameraPosition[1];
-	const float pz = parameters->cameraPosition[2];
+	const float maxDistance = parameters.maxDistance;
+	const float px = parameters.cameraPosition[0];
+	const float py = parameters.cameraPosition[1];
+	const float pz = parameters.cameraPosition[2];
 
-	for (size_t i = 0; i < count; ++i) {
+	for (std::size_t i = 0; i < count; ++i) {
 		const ProjectvCAabb aabb = aabbs[i];
 		const float cx = (aabb.min[0] + aabb.max[0]) * 0.5f;
 		const float cy = (aabb.min[1] + aabb.max[1]) * 0.5f;
@@ -89,50 +99,49 @@ void projectv_cull_frustum_scalar(
 		const float ty = cy - py;
 		const float tz = cz - pz;
 
-		int visible = 1;
+		bool visible = true;
 		for (int p = 0; p < 5; ++p) {
 			const float nx = planes[p].n[0];
 			const float ny = planes[p].n[1];
 			const float nz = planes[p].n[2];
 			const float centerDistance = projectv_dot3(tx, ty, tz, nx, ny, nz) - planes[p].offset;
 			const float projectedRadius = projectv_absf(nx) * hx + projectv_absf(ny) * hy + projectv_absf(nz) * hz;
-			if (centerDistance + projectedRadius < 0.0f) {
-				visible = 0;
+			if (centerDistance + projectedRadius < 0.0f) [[unlikely]] {
+				visible = false;
 				break;
 			}
 		}
 
-		if (visible && maxDistance > 0.0f) {
+		if (visible && maxDistance > 0.0f) [[likely]] {
 			const float lengthSq = tx * tx + ty * ty + tz * tz;
-			const float aabbRadius = sqrtf(hx * hx + hy * hy + hz * hz);
+			const float aabbRadius = std::sqrt(hx * hx + hy * hy + hz * hz);
 			const float maxCenterDistance = maxDistance + aabbRadius;
-			if (lengthSq > maxCenterDistance * maxCenterDistance) {
-				visible = 0;
+			if (lengthSq > maxCenterDistance * maxCenterDistance) [[unlikely]] {
+				visible = false;
 			}
 		}
 
-		if (visible) {
-			visible_mask[i / 8] |= (uint8_t)(1u << (i % 8));
+		if (visible) [[likely]] {
+			visible_mask[i / 8] |= static_cast<std::uint8_t>(1u << (i % 8));
 		}
 	}
 }
 
 #if defined(__AVX2__)
-#include <immintrin.h>
 
 __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
 	uint8_t *visible_mask,
 	const ProjectvCAabb *aabbs,
-	const ProjectvCFrustumCullParameters *parameters,
-	size_t count)
+	const ProjectvCFrustumCullParameters &parameters,
+	const std::size_t count) noexcept
 {
 	ProjectvCPlane3 planes[5];
 	projectv_build_planes(parameters, planes);
 
-	const float maxDistance = parameters->maxDistance;
-	const float px = parameters->cameraPosition[0];
-	const float py = parameters->cameraPosition[1];
-	const float pz = parameters->cameraPosition[2];
+	const float maxDistance = parameters.maxDistance;
+	const float px = parameters.cameraPosition[0];
+	const float py = parameters.cameraPosition[1];
+	const float pz = parameters.cameraPosition[2];
 
 	const float abs_n[5][3] = {
 		{projectv_absf(planes[0].n[0]), projectv_absf(planes[0].n[1]), projectv_absf(planes[0].n[2])},
@@ -148,10 +157,10 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
 	const __m256 v_py = _mm256_set1_ps(py);
 	const __m256 v_pz = _mm256_set1_ps(pz);
 
-	const size_t fullBatches = count / 8;
-	const size_t tailStart = fullBatches * 8;
+	const std::size_t fullBatches = count / 8;
+	const std::size_t tailStart = fullBatches * 8;
 
-	for (size_t batch = 0; batch < fullBatches; ++batch) {
+	for (std::size_t batch = 0; batch < fullBatches; ++batch) {
 		const ProjectvCAabb *lane = &aabbs[batch * 8];
 
 		const float cx0 = (lane[0].min[0] + lane[0].max[0]) * 0.5f;
@@ -214,7 +223,7 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
 		const __m256 v_ty = _mm256_sub_ps(v_cy, v_py);
 		const __m256 v_tz = _mm256_sub_ps(v_cz, v_pz);
 
-		uint32_t cullMask = 0;
+		std::uint32_t cullMask = 0;
 		for (int p = 0; p < 5; ++p) {
 			const __m256 v_nx = _mm256_set1_ps(planes[p].n[0]);
 			const __m256 v_ny = _mm256_set1_ps(planes[p].n[1]);
@@ -241,7 +250,7 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
 
 			const __m256 v_sum = _mm256_add_ps(v_centerDistance, v_radius);
 			const __m256 v_culled = _mm256_cmp_ps(v_sum, _mm256_setzero_ps(), _CMP_LT_OQ);
-			const uint32_t planeMask = (uint32_t)_mm256_movemask_ps(v_culled);
+			const std::uint32_t planeMask = static_cast<std::uint32_t>(_mm256_movemask_ps(v_culled));
 			cullMask |= planeMask;
 		}
 
@@ -264,15 +273,15 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
 			const __m256 v_maxCenterDistance = _mm256_add_ps(v_maxCenter, v_aabbRadius);
 			const __m256 v_maxCenterDistanceSq = _mm256_mul_ps(v_maxCenterDistance, v_maxCenterDistance);
 			const __m256 v_tooFar = _mm256_cmp_ps(v_lengthSq, v_maxCenterDistanceSq, _CMP_GT_OQ);
-			const uint32_t farMask = (uint32_t)_mm256_movemask_ps(v_tooFar);
+			const std::uint32_t farMask = static_cast<std::uint32_t>(_mm256_movemask_ps(v_tooFar));
 			cullMask |= farMask;
 		}
 
-		const uint8_t visible = (uint8_t)(~cullMask & 0xFFu);
+		const std::uint8_t visible = static_cast<std::uint8_t>(~cullMask & 0xFFu);
 		visible_mask[batch] |= visible;
 	}
 
-	for (size_t i = tailStart; i < count; ++i) {
+	for (std::size_t i = tailStart; i < count; ++i) {
 		const ProjectvCAabb aabb = aabbs[i];
 		const float cx = (aabb.min[0] + aabb.max[0]) * 0.5f;
 		const float cy = (aabb.min[1] + aabb.max[1]) * 0.5f;
@@ -284,29 +293,32 @@ __attribute__((target("avx2"))) void projectv_cull_frustum_avx2(
 		const float ty = cy - py;
 		const float tz = cz - pz;
 
-		int visible = 1;
+		bool visible = true;
 		for (int p = 0; p < 5; ++p) {
 			const float nx = planes[p].n[0];
 			const float ny = planes[p].n[1];
 			const float nz = planes[p].n[2];
 			const float centerDistance = projectv_dot3(tx, ty, tz, nx, ny, nz) - planes[p].offset;
 			const float projectedRadius = projectv_absf(nx) * hx + projectv_absf(ny) * hy + projectv_absf(nz) * hz;
-			if (centerDistance + projectedRadius < 0.0f) {
-				visible = 0;
+			if (centerDistance + projectedRadius < 0.0f) [[unlikely]] {
+				visible = false;
 				break;
 			}
 		}
-		if (visible && useMaxDistance) {
+		if (visible && useMaxDistance) [[likely]] {
 			const float lengthSq = tx * tx + ty * ty + tz * tz;
-			const float aabbRadius = sqrtf(hx * hx + hy * hy + hz * hz);
+			const float aabbRadius = std::sqrt(hx * hx + hy * hy + hz * hz);
 			const float maxCenterDistance = maxDistance + aabbRadius;
-			if (lengthSq > maxCenterDistance * maxCenterDistance) {
-				visible = 0;
+			if (lengthSq > maxCenterDistance * maxCenterDistance) [[unlikely]] {
+				visible = false;
 			}
 		}
-		if (visible) {
-			visible_mask[i / 8] |= (uint8_t)(1u << (i % 8));
+		if (visible) [[likely]] {
+			visible_mask[i / 8] |= static_cast<std::uint8_t>(1u << (i % 8));
 		}
 	}
 }
-#endif
+
+#endif // __AVX2__
+
+} // namespace projectv::c_kernels

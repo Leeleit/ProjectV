@@ -12,6 +12,9 @@
 
 namespace {
 
+using projectv::c_kernels::ProjectvCAabb;
+using projectv::c_kernels::ProjectvCFrustumCullParameters;
+
 constexpr size_t kBatchSize = 300;
 constexpr uint32_t kVisibilityRuns = 5;
 
@@ -166,7 +169,7 @@ void RunCScalar(
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 		std::ranges::fill(*masks, 0);
 		const ProjectvCFrustumCullParameters cparams = ToCParams(fixture.parameters[r]);
-		projectv_cull_frustum_scalar(masks->data(), aabbs.data(), &cparams, kBatchSize);
+		projectv_cull_frustum_scalar(masks->data(), aabbs.data(), cparams, kBatchSize);
 	}
 }
 
@@ -179,7 +182,7 @@ void RunCAvx2(
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 		std::ranges::fill(*masks, 0);
 		const ProjectvCFrustumCullParameters cparams = ToCParams(fixture.parameters[r]);
-		projectv_cull_frustum_avx2(masks->data(), aabbs.data(), &cparams, kBatchSize);
+		projectv_cull_frustum_avx2(masks->data(), aabbs.data(), cparams, kBatchSize);
 	}
 }
 #endif
@@ -271,11 +274,11 @@ int main(int argc, char *argv[])
 				}
 				std::ranges::fill(cMasks, 0);
 				const ProjectvCFrustumCullParameters cparams = ToCParams(params);
-				projectv_cull_frustum_scalar(cMasks.data(), aabbs.data(), &cparams, kBatchSize);
+				projectv_cull_frustum_scalar(cMasks.data(), aabbs.data(), cparams, kBatchSize);
 				VerifyBitIdentical(cppMasks, cMasks, "cpp_scalar", "c_scalar");
 #if defined(__AVX2__)
 				std::ranges::fill(avxMasks, 0);
-				projectv_cull_frustum_avx2(avxMasks.data(), aabbs.data(), &cparams, kBatchSize);
+				projectv_cull_frustum_avx2(avxMasks.data(), aabbs.data(), cparams, kBatchSize);
 				VerifyBitIdentical(cMasks, avxMasks, "c_scalar", "c_avx2");
 #endif
 			}

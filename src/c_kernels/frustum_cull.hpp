@@ -1,45 +1,40 @@
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace projectv::c_kernels {
 
-typedef struct ProjectvCFrustumCullParameters {
-    float cameraPosition[3];
-    float maxDistance;
-    float cameraForward[3];
-    float tanHalfVerticalFov;
-    float cameraRight[3];
-    float tanHalfHorizontalFov;
-    float cameraUp[3];
-    float nearPlane;
-} ProjectvCFrustumCullParameters;
+struct ProjectvCFrustumCullParameters {
+	float cameraPosition[3];
+	float maxDistance;
+	float cameraForward[3];
+	float tanHalfVerticalFov;
+	float cameraRight[3];
+	float tanHalfHorizontalFov;
+	float cameraUp[3];
+	float nearPlane;
+};
 
-typedef struct ProjectvCAabb {
-    float min[3];
-    float _pad0;
-    float max[3];
-    float _pad1;
-} ProjectvCAabb;
+struct ProjectvCAabb {
+	float min[3];
+	float _pad0;
+	float max[3];
+	float _pad1;
+};
 
 void projectv_cull_frustum_scalar(
-    uint8_t *visible_mask,
-    const ProjectvCAabb *aabbs,
-    const ProjectvCFrustumCullParameters *parameters,
-    size_t count);
+	std::uint8_t *visible_mask,
+	const ProjectvCAabb *aabbs,
+	const ProjectvCFrustumCullParameters &parameters,
+	std::size_t count) noexcept;
 
 #if defined(__AVX2__)
 void projectv_cull_frustum_avx2(
-    uint8_t *visible_mask,
-    const ProjectvCAabb *aabbs,
-    const ProjectvCFrustumCullParameters *parameters,
-    size_t count);
+	std::uint8_t *visible_mask,
+	const ProjectvCAabb *aabbs,
+	const ProjectvCFrustumCullParameters &parameters,
+	std::size_t count) noexcept;
 #endif
 
-#ifdef __cplusplus
-}
-#endif
-
+} // namespace projectv::c_kernels
