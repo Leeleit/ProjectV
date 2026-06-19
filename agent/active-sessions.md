@@ -67,6 +67,27 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
+### session-2026-06-19T-agents-md-rewrite-r0
+
+- **id:** `2026-06-19T-agents-md-rewrite-r0`
+- **started-at:** 2026-06-19T09:05:35Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **AGENTS.md full restructure per operator «надо переписать AGENTS.md» + 5 diagnostics (over-commits как ритуал / постоянная тревога про `agent/` / постоянная проверка грязноты дерева / постоянный smoke / долгое обдумывание простых git фактов).** Plan утверждён через 4 Q&A: full restructure (новая нумерация), без правки `session-checklist.md` и `active-sessions.md` формата. Затем 2 follow-up раунда правок по фидбэку оператора: (1) **запрет `Co-authored-by:`** в commit message (агент галлюцинирует claude/cline, на самом деле opencode); (2) **новый раздел про обязательность web search (Exa)** для сложных тем; (3) **`libstdc++` → `libc++`** на Linux (был устаревший claim); (4) **§9 Stack conventions удалён** (technical detail → `agent/memory.md §10-§11`); (5) **внутренние cross-refs между секциями AGENTS.md убраны** (правила не повторяются и не разбросаны); (6) **§1.4 удалён** (дубликат §4); (7) **`agent/decisions.md` всегда читается** на старте сессии; (8) **классификация mainline/extension/R&D удалена** (TODO.md уже содержит порядок); (9) **атомарность удалена** — сессия = логическая работа (несколько коммитов), auto-close запрещён; (10) **subagent delegation запрещена для фундаментальных работ**.
+- **files-touched-intent:**
+  - **REWRITE:** `AGENTS.md` (~200 строк → ~150, новая нумерация, удалены §1.4 / §6.1 atomic / §6.4 smoke (→ decisions.md) / §9 stack (→ memory.md); добавлены §6.3 Web search / §7 «Что дальше?»)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись + перенос в «Закрытые сессии» после «Что дальше?» + commit-hash + closed-at)
+  - **APPEND-ONLY:** `agent/status.md` (1 строка post-commit)
+  - **НЕ ТРОГАЮ:** `TODO.md`, `agent/memory.md`, `agent/decisions.md`, `agent/session-checklist.md`, `src/**`, `tests/**`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, `CMakeLists.txt`, `tools/**`, `build/**`, чужие uncommitted (submodule `external/benchmark`, `docs/tex/defense/*` LaTeX artifacts, `tools/scratch/*` от comment-minimization session)
+- **status:** open
+- **commit-hash:** — (multi-commit session per AGENTS.md §7; будет заполнен при close после «Что дальше?»)
+- **notes:**
+  - **Cross-refs old → new (mental model):** §7.2.4 git safety → §6.4, §7.2.5 commit msg → §6.1, §7.2.6 multi-agent → §6.5, §7.2.8 shared agent/ → §6.6, §7.3.1 pre-commit gate → §6.9, §7.4 sync docs → растворён в §7, §8.1 auto-close → §7 «Что дальше?», §8.2 «не путать с потерянной работой» → inline в §6.5.
+  - **Pre-commit gate per AGENTS.md §6.9:** message готов (type=docs, scope=agent, без `Co-authored-by:`), scope discipline (только мои 2 файла: AGENTS.md + agent/active-sessions.md), type=docs → auto (без operator confirm).
+  - **Build state:** docs-only, build green не нужен.
+  - **Safety-net patch:** НЕ сохраняю (нет destructive op).
+
 ### session-2026-06-19T-jolt-api-drift-sweep-r0
 
 - **id:** `2026-06-19T-jolt-api-drift-sweep-r0`
