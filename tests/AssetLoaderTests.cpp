@@ -229,9 +229,13 @@ void TestAssetRegistry(TestContext &context)
 
 void TestComputeGlbDimensionsReportsBoxFixture(TestContext &context)
 {
-	// Sanity check on the well-known box fixture before reporting
-	// dimensions of friend-supplied models. The box is 1x1x1 centered
-	// at the origin, so size = (1, 1, 1) and aabbMin = (-0.5, -0.5, -0.5).
+	/// \brief Sanity check on the well-known box fixture before reporting
+	///
+	/// \details
+	///  dimensions of friend-supplied models. The box is 1x1x1 centered
+
+	///  at the origin, so size = (1, 1, 1) and aabbMin = (-0.5, -0.5, -0.5).
+
 	if (!std::filesystem::exists(BoxFixturePath())) {
 		context.Fail(__LINE__, "box.glb fixture not found");
 		return;
@@ -249,27 +253,49 @@ void TestComputeGlbDimensionsReportsBoxFixture(TestContext &context)
 
 void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context)
 {
-	// The friend-supplied lamp-post model — a multi-mesh glTF that
-	// uses the node hierarchy for layout (Cylinder + Cube + Sphere
-	// nodes, each with its own TRS). The expected AABB after
-	// walking the node hierarchy is:
-	//   - Cylinder is a horizontal cylinder (-2.32, -1, -3.42)..(3.68, 1.73, 4.71)
-	//     in glb space, then the node TRS = T(-0.04, 5.94, 0) * S(1, 5, 1)
-	//     lifts the long axis to vertical, so the cylinder's world
-	//     AABB is ~6×13.5×8.1.
-	//   - Cube is a unit cube scaled (1.26, 0.52, 1.35), translated
-	//     to (-0.01, 0.61, 0.07) — the wide base of the lamp post.
-	//   - Sphere is a unit sphere scaled 0.61, translated to
-	//     (-1.40, 12.49, 3.89) — the lamp head at the top of the arm.
-	// The combined AABB after node transforms is roughly
-	//   min = (-2.36, 0.08, -3.42)
-	//   max = ( 3.64, 14.57,  4.71)
-	//   size = (5.99, 14.49, 8.13)  — vertical post 14 voxels tall
-	// The pre-M5.1c loader would have returned the Cylinder's
-	// raw glb-space AABB of (6.0, 2.7, 8.1) and rendered a
-	// horizontal cylinder, not a lamp post. This test would have
-	// failed silently — the model would just look wrong in
-	// VoxelLab without any unit test catching the regression.
+	/// \brief The friend-supplied lamp-post model — a multi-mesh glTF that
+	///
+	/// \details
+	///  uses the node hierarchy for layout (Cylinder + Cube + Sphere
+
+	///  nodes, each with its own TRS). The expected AABB after
+
+	///  walking the node hierarchy is:
+
+	///    - Cylinder is a horizontal cylinder (-2.32, -1, -3.42)..(3.68, 1.73, 4.71)
+
+	///      in glb space, then the node TRS = T(-0.04, 5.94, 0) * S(1, 5, 1)
+
+	///      lifts the long axis to vertical, so the cylinder's world
+
+	///      AABB is ~6×13.5×8.1.
+
+	///    - Cube is a unit cube scaled (1.26, 0.52, 1.35), translated
+
+	///      to (-0.01, 0.61, 0.07) — the wide base of the lamp post.
+
+	///    - Sphere is a unit sphere scaled 0.61, translated to
+
+	///      (-1.40, 12.49, 3.89) — the lamp head at the top of the arm.
+
+	///  The combined AABB after node transforms is roughly
+
+	///    min = (-2.36, 0.08, -3.42)
+
+	///    max = ( 3.64, 14.57,  4.71)
+
+	///    size = (5.99, 14.49, 8.13)  — vertical post 14 voxels tall
+
+	///  The pre-M5.1c loader would have returned the Cylinder's
+
+	///  raw glb-space AABB of (6.0, 2.7, 8.1) and rendered a
+
+	///  horizontal cylinder, not a lamp post. This test would have
+
+	///  failed silently — the model would just look wrong in
+
+	///  VoxelLab without any unit test catching the regression.
+
 	const auto path = UntitledColonadaFixturePath();
 	if (!std::filesystem::exists(path)) {
 		context.Fail(__LINE__, "Untitled.colonada.glb fixture not found at " + path.string());
@@ -281,12 +307,19 @@ void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context
 		context.Fail(__LINE__, std::string("ComputeGlbDimensions(Untitled.colonada.glb) returned nullopt: ") + error.message);
 		return;
 	}
-	// After node-hierarchy walk, the lamp post is ~6 wide × ~14.5
-	// tall × ~8.1 deep. Width/depth come from the Cylinder's
-	// Z (post) and Z (arm) extents. The Y dim is the Cylinder's
-	// Y dim (2.73) scaled by node scale 5 = 13.6, plus the Sphere
-	// and Cube contributions. We assert 6 ≤ X ≤ 6.1, 14 ≤ Y ≤ 15,
-	// 8 ≤ Z ≤ 8.2 to leave room for floating-point tolerance.
+	/// \brief After node-hierarchy walk, the lamp post is ~6 wide × ~14.5
+	///
+	/// \details
+	///  tall × ~8.1 deep. Width/depth come from the Cylinder's
+
+	///  Z (post) and Z (arm) extents. The Y dim is the Cylinder's
+
+	///  Y dim (2.73) scaled by node scale 5 = 13.6, plus the Sphere
+
+	///  and Cube contributions. We assert 6 ≤ X ≤ 6.1, 14 ≤ Y ≤ 15,
+
+	///  8 ≤ Z ≤ 8.2 to leave room for floating-point tolerance.
+
 	constexpr float xMin = 5.5f, xMax = 6.5f;
 	constexpr float yMin = 14.0f, yMax = 15.0f;
 	constexpr float zMin = 7.5f, zMax = 8.5f;
@@ -302,8 +335,11 @@ void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context
 		std::fprintf(stderr, "Untitled.colonada Z size=%.3f, expected in [%.1f, %.1f]\n", dims->size.z, zMin, zMax);
 		context.Fail(__LINE__, "Z dim is not ~8.1 — node hierarchy not applied?");
 	}
-	// Print the AABB for human inspection (one-shot debugging —
-	// the reusable inspector is `tools/compute-glb-dimensions`).
+	/// \brief Print the AABB for human inspection (one-shot debugging —
+	///
+	/// \details
+	///  the reusable inspector is `tools/compute-glb-dimensions`).
+
 	std::fprintf(stderr,
 				 "ComputeGlbDimensions: path=%s aabbMin=(%.6f %.6f %.6f) aabbMax=(%.6f %.6f %.6f) size=(%.6f %.6f %.6f)\n",
 				 path.string().c_str(),
@@ -314,8 +350,12 @@ void TestComputeGlbDimensionsReportsUntitledColonadaFixture(TestContext &context
 
 void TestComputeVoxelAlignedAabbBoxFixture(TestContext &context)
 {
-	// 1x1x1 box already on the voxel grid. Identity: no scaling, no
-	// shift. The helper should round-trip.
+	/// \brief 1x1x1 box already on the voxel grid.
+	///
+	/// \details
+	/// Identity: no scaling, no
+	///  shift. The helper should round-trip.
+
 	constexpr glm::vec3 aabbMin(0.0f, 1.0f, 0.0f);
 	constexpr glm::vec3 aabbMax(1.0f, 2.0f, 1.0f);
 	const auto &[alignedAabbMin, alignedAabbMax] = projectv::asset::ComputeVoxelAlignedAabb(aabbMin, aabbMax, 1.0f);
@@ -329,13 +369,21 @@ void TestComputeVoxelAlignedAabbBoxFixture(TestContext &context)
 
 void TestComputeVoxelAlignedAabbUntitledColonada(TestContext &context)
 {
-	// The friend-supplied column has src dims 6.0 x 2.7 x 8.1 (X, Y, Z).
-	// After auto-scale to integer voxel dims: 6 x 3 x 8. With the
-	// operator's integer position (-9, 0, 9), the XZ corner snap
-	// is a no-op (round(-9) = -9, round(9) = 9), and the AABB min
-	// stays at (-9, 0, 9). The Y is left untouched here because the
-	// ground-snap step (which is not part of this pure helper) is
-	// what enforces `topVoxelY + 1`.
+	/// \brief The friend-supplied column has src dims 6.0 x 2.7 x 8.1 (X, Y, Z).
+	///
+	/// \details
+	///  After auto-scale to integer voxel dims: 6 x 3 x 8. With the
+
+	///  operator's integer position (-9, 0, 9), the XZ corner snap
+
+	///  is a no-op (round(-9) = -9, round(9) = 9), and the AABB min
+
+	///  stays at (-9, 0, 9). The Y is left untouched here because the
+
+	///  ground-snap step (which is not part of this pure helper) is
+
+	///  what enforces `topVoxelY + 1`.
+
 	constexpr glm::vec3 aabbMin(-9.0f, 0.0f, 9.0f);
 	constexpr glm::vec3 aabbMax(-3.0f, 2.7f, 17.1f);
 	const auto &[alignedAabbMin, alignedAabbMax] = projectv::asset::ComputeVoxelAlignedAabb(aabbMin, aabbMax, 1.0f);

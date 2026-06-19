@@ -1,36 +1,61 @@
-// Generate `tests/fixtures/box_uv.glb`: same canonical unit box as
-// `box.glb` (AABB (-0.5..0.5)³, 24 vertices, 36 indices, 12 triangles,
-// 6 face groups) but with face-projected UVs. Used by M6 to verify
-// the model pass correctly reads `inUv` from `model.vert` and lets
-// `model.frag` use it (procedural checkerboard or texture sample).
-//
-// We hand-author the GLB blob here (no python-gltf dependency).
-//
-// Vertex / normal / index layout copied byte-for-byte from the
-// Khronos `box.glb` fixture (`COLLADA2GLTF` output, used as the M1
-// baseline). We re-use its winding, AABB, and per-face vertex
-// ordering so this fixture is a strict superset: same triangles,
-// same normals, plus a UV attribute. The M5 regression test
-// (`ProjectVAssetTests`) loads the original `box.glb` and asserts
-// the same AABB; if we change winding here we would silently break
-// the asset test.
-//
-// The 4 UVs per face (face-projected, [0..1] across the face's
-// 1×1 quad) are appended in the same order as the vertices, so
-// `addVertex(pos, normal, uv)` reads cleanly:
-//
-//   face 0 (+Z):  v0, v1, v2, v3
-//   face 1 (-Y):  v4, v5, v6, v7
-//   face 2 (+X):  v8, v9, v10, v11
-//   face 3 (+Y):  v12, v13, v14, v15
-//   face 4 (-X):  v16, v17, v18, v19
-//   face 5 (-Z):  v20, v21, v22, v23
-//
-// We have to be careful with the per-vertex UV mapping because the
-// Khronos vertex order is not "bottom-left, bottom-right, top-right,
-// top-left" for every face — the original fixture rotates the UV
-// quads to match the face's local orientation. We mirror that
-// rotation here.
+/// \brief Generate `tests/fixtures/box_uv.glb`:
+///
+/// \details
+/// same canonical unit box as
+///  `box.glb` (AABB (-0.5..0.5)³, 24 vertices, 36 indices, 12 triangles,
+
+///  6 face groups) but with face-projected UVs. Used by M6 to verify
+
+///  the model pass correctly reads `inUv` from `model.vert` and lets
+
+///  `model.frag` use it (procedural checkerboard or texture sample).
+
+///  We hand-author the GLB blob here (no python-gltf dependency).
+
+///  Vertex / normal / index layout copied byte-for-byte from the
+
+///  Khronos `box.glb` fixture (`COLLADA2GLTF` output, used as the M1
+
+///  baseline). We re-use its winding, AABB, and per-face vertex
+
+///  ordering so this fixture is a strict superset: same triangles,
+
+///  same normals, plus a UV attribute. The M5 regression test
+
+///  (`ProjectVAssetTests`) loads the original `box.glb` and asserts
+
+///  the same AABB; if we change winding here we would silently break
+
+///  the asset test.
+
+///  The 4 UVs per face (face-projected, [0..1] across the face's
+
+///  1×1 quad) are appended in the same order as the vertices, so
+
+///  `addVertex(pos, normal, uv)` reads cleanly:
+
+///    face 0 (+Z):  v0, v1, v2, v3
+
+///    face 1 (-Y):  v4, v5, v6, v7
+
+///    face 2 (+X):  v8, v9, v10, v11
+
+///    face 3 (+Y):  v12, v13, v14, v15
+
+///    face 4 (-X):  v16, v17, v18, v19
+
+///    face 5 (-Z):  v20, v21, v22, v23
+
+///  We have to be careful with the per-vertex UV mapping because the
+
+///  Khronos vertex order is not "bottom-left, bottom-right, top-right,
+
+///  top-left" for every face — the original fixture rotates the UV
+
+///  quads to match the face's local orientation. We mirror that
+
+///  rotation here.
+
 
 #include <array>
 #include <cstdint>
@@ -48,40 +73,67 @@ struct Vertex {
 	float uv[2];
 };
 
-// 24 vertices in the exact order the Khronos `box.glb` uses. The
-// per-face winding is therefore already correct for the model's
-// `cullMode = VK_CULL_MODE_BACK_BIT, frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE`
-// pipeline: the original fixture is the live baseline and any
-// deviation in winding would show up as a missing face in the
-// ProjectV render. The UV field is added per vertex and is not
-// read by the existing M1 asset tests.
+/// \brief 24 vertices in the exact order the Khronos `box.glb` uses.
+///
+/// \details
+/// The
+///  per-face winding is therefore already correct for the model's
+
+///  `cullMode = VK_CULL_MODE_BACK_BIT, frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE`
+
+///  pipeline: the original fixture is the live baseline and any
+
+///  deviation in winding would show up as a missing face in the
+
+///  ProjectV render. The UV field is added per vertex and is not
+
+///  read by the existing M1 asset tests.
+
 const std::array<Vertex, 24> kBoxVertices = {{
-// face 0: +Z, normal = (0, 0, +1)
+/// \brief face 0:
+///
+/// \details
+/// +Z, normal = (0, 0, +1)
 	Vertex{ {-0.5f, -0.5f, +0.5f}, { 0.0f,  0.0f, +1.0f}, {0.0f, 0.0f} },
 	Vertex{ {+0.5f, -0.5f, +0.5f}, { 0.0f,  0.0f, +1.0f}, {1.0f, 0.0f} },
 	Vertex{ {-0.5f, +0.5f, +0.5f}, { 0.0f,  0.0f, +1.0f}, {0.0f, 1.0f} },
 	Vertex{ {+0.5f, +0.5f, +0.5f}, { 0.0f,  0.0f, +1.0f}, {1.0f, 1.0f} },
-// face 1: -Y, normal = (0, -1, 0)
+/// \brief face 1:
+///
+/// \details
+/// -Y, normal = (0, -1, 0)
 	Vertex{ {+0.5f, -0.5f, +0.5f}, { 0.0f, -1.0f,  0.0f}, {1.0f, 0.0f} },
 	Vertex{ {-0.5f, -0.5f, +0.5f}, { 0.0f, -1.0f,  0.0f}, {0.0f, 0.0f} },
 	Vertex{ {+0.5f, -0.5f, -0.5f}, { 0.0f, -1.0f,  0.0f}, {1.0f, 1.0f} },
 	Vertex{ {-0.5f, -0.5f, -0.5f}, { 0.0f, -1.0f,  0.0f}, {0.0f, 1.0f} },
-// face 2: +X, normal = (+1, 0, 0)
+/// \brief face 2:
+///
+/// \details
+/// +X, normal = (+1, 0, 0)
 	Vertex{ {+0.5f, +0.5f, +0.5f}, {+1.0f,  0.0f,  0.0f}, {0.0f, 1.0f} },
 	Vertex{ {+0.5f, -0.5f, +0.5f}, {+1.0f,  0.0f,  0.0f}, {0.0f, 0.0f} },
 	Vertex{ {+0.5f, +0.5f, -0.5f}, {+1.0f,  0.0f,  0.0f}, {1.0f, 1.0f} },
 	Vertex{ {+0.5f, -0.5f, -0.5f}, {+1.0f,  0.0f,  0.0f}, {1.0f, 0.0f} },
-// face 3: +Y, normal = (0, +1, 0)
+/// \brief face 3:
+///
+/// \details
+/// +Y, normal = (0, +1, 0)
 	Vertex{ {-0.5f, +0.5f, +0.5f}, { 0.0f, +1.0f,  0.0f}, {0.0f, 1.0f} },
 	Vertex{ {+0.5f, +0.5f, +0.5f}, { 0.0f, +1.0f,  0.0f}, {1.0f, 1.0f} },
 	Vertex{ {-0.5f, +0.5f, -0.5f}, { 0.0f, +1.0f,  0.0f}, {0.0f, 0.0f} },
 	Vertex{ {+0.5f, +0.5f, -0.5f}, { 0.0f, +1.0f,  0.0f}, {1.0f, 0.0f} },
-// face 4: -X, normal = (-1, 0, 0)
+/// \brief face 4:
+///
+/// \details
+/// -X, normal = (-1, 0, 0)
 	Vertex{ {-0.5f, -0.5f, +0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 0.0f} },
 	Vertex{ {-0.5f, +0.5f, +0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f} },
 	Vertex{ {-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {0.0f, 0.0f} },
 	Vertex{ {-0.5f, +0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {0.0f, 1.0f} },
-// face 5: -Z, normal = (0, 0, -1)
+/// \brief face 5:
+///
+/// \details
+/// -Z, normal = (0, 0, -1)
 	Vertex{ {-0.5f, -0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {1.0f, 0.0f} },
 	Vertex{ {-0.5f, +0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {1.0f, 1.0f} },
 	Vertex{ {+0.5f, -0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {0.0f, 0.0f} },
@@ -89,17 +141,35 @@ const std::array<Vertex, 24> kBoxVertices = {{
 }};
 
 const std::array<uint16_t, 36> kBoxIndices = {
-	// face 0: +Z
+	/// \brief face 0:
+	///
+	/// \details
+	/// +Z
 	0, 1, 2,  3, 2, 1,
-	// face 1: -Y
+	/// \brief face 1:
+	///
+	/// \details
+	/// -Y
 	4, 5, 6,  7, 6, 5,
-	// face 2: +X
+	/// \brief face 2:
+	///
+	/// \details
+	/// +X
 	8, 9, 10,  11, 10, 9,
-	// face 3: +Y
+	/// \brief face 3:
+	///
+	/// \details
+	/// +Y
 	12, 13, 14,  15, 14, 13,
-	// face 4: -X
+	/// \brief face 4:
+	///
+	/// \details
+	/// -X
 	16, 17, 18,  19, 18, 17,
-	// face 5: -Z
+	/// \brief face 5:
+	///
+	/// \details
+	/// -Z
 	20, 21, 22,  23, 22, 21,
 };
 

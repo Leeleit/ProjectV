@@ -53,11 +53,17 @@ struct TestFixture {
             ModelInstanceData instance{};
             instance.worldAabbMin = projectv::math::Vec3{minX, minY, minZ, 0.0f};
             instance.worldAabbMax = projectv::math::Vec3{maxX, maxY, maxZ, 0.0f};
-            // **Non-empty registration.** The engine's
-            // pre-filter drops `indexCount == 0` and
-            // null-buffer entries before culling, so
-            // every test instance has a real (but
-            // throwaway) buffer handle + index count.
+            /// \brief **Non-empty registration.** The engine's
+            ///
+            /// \details
+            ///  pre-filter drops `indexCount == 0` and
+
+            ///  null-buffer entries before culling, so
+
+            ///  every test instance has a real (but
+
+            ///  throwaway) buffer handle + index count.
+
             instance.vertexBuffer = reinterpret_cast<VkBuffer>(0x1u);
             instance.indexBuffer = reinterpret_cast<VkBuffer>(0x2u);
             instance.indexCount = 12u;
@@ -144,7 +150,10 @@ void ExpectVectorEqual(
 int main() {
     const TestFixture fixture = TestFixture::Make();
 
-    // **Sanity: fixture has 300 instances.**
+    /// \brief **Sanity:
+    ///
+    /// \details
+    /// fixture has 300 instances.**
     if (fixture.instances.size() != kBatchSize) {
         std::fprintf(
             stderr,
@@ -153,8 +162,12 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    // **Test 1: wrapper output matches inline C++ helper
-    // for 300-AABB batched path (count >= 8 → C kernel).**
+    /// \brief **Test 1:
+    ///
+    /// \details
+    /// wrapper output matches inline C++ helper
+    ///  for 300-AABB batched path (count >= 8 → C kernel).**
+
     for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
         const std::span<const ModelInstanceData> span(
             fixture.instances.data(), fixture.instances.size());
@@ -168,8 +181,12 @@ int main() {
     }
     std::printf("[OK] wrapper matches reference for 300-AABB batched path (5 runs)\n");
 
-    // **Test 2: wrapper output matches inline C++ helper
-    // for 4-AABB fallback path (count < 8 → inline).**
+    /// \brief **Test 2:
+    ///
+    /// \details
+    /// wrapper output matches inline C++ helper
+    ///  for 4-AABB fallback path (count < 8 → inline).**
+
     {
         const std::span<const ModelInstanceData> span(
             fixture.instances.data(), 4);
@@ -181,8 +198,12 @@ int main() {
     }
     std::printf("[OK] wrapper matches reference for 4-AABB fallback path\n");
 
-    // **Test 3: wrapper output matches inline C++ helper
-    // for 1-AABB fallback path (count == 1 → inline).**
+    /// \brief **Test 3:
+    ///
+    /// \details
+    /// wrapper output matches inline C++ helper
+    ///  for 1-AABB fallback path (count == 1 → inline).**
+
     {
         const std::span<const ModelInstanceData> span(
             fixture.instances.data(), 1);
@@ -194,9 +215,14 @@ int main() {
     }
     std::printf("[OK] wrapper matches reference for 1-AABB fallback path\n");
 
-    // **Test 4: `CullVisibleMask` low-level entry point
-    // returns a mask that, when applied to the input,
-    // matches the reference filter.**
+    /// \brief **Test 4:
+    ///
+    /// \details
+    /// `CullVisibleMask` low-level entry point
+    ///  returns a mask that, when applied to the input,
+
+    ///  matches the reference filter.**
+
     for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
         const std::span<const ModelInstanceData> span(
             fixture.instances.data(), fixture.instances.size());
@@ -223,8 +249,12 @@ int main() {
     }
     std::printf("[OK] CullVisibleMask matches reference for 300-AABB batched path (5 runs)\n");
 
-    // **Test 5: empty input returns empty result (no UB
-    // on zero-count C kernel call).**
+    /// \brief **Test 5:
+    ///
+    /// \details
+    /// empty input returns empty result (no UB
+    ///  on zero-count C kernel call).**
+
     {
         const std::span<const ModelInstanceData> empty;
         const std::vector<ModelInstanceData> result =

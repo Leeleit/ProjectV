@@ -48,10 +48,16 @@ void ExpectInRange(
 } // namespace
 
 int main() {
-	// **Test 1: happy path.** 0.1 → 128 with the
-	// default 0.80 lambda. Splits should be
-	// strictly monotonic, with the last one
-	// exactly at `farPlane`.
+	/// \brief **Test 1:
+	///
+	/// \details
+	/// happy path.** 0.1 → 128 with the
+	///  default 0.80 lambda. Splits should be
+
+	///  strictly monotonic, with the last one
+
+	///  exactly at `farPlane`.
+
 	{
 		const SunShadowCascadeSplits splits =
 			BuildSunShadowCascadeSplits(0.1f, 128.0f);
@@ -72,12 +78,20 @@ int main() {
 	}
 	std::printf("[OK] happy path: 0.1→128, default lambda\n");
 
-	// **Test 2: minimum cascade depth step.** A
-	// near-zero near-plane (0.01) and a moderate
-	// far-plane (1.0) stress the `minDepthStep`
-	// clamp — splits must still be strictly
-	// monotonic, never collapsing to a single
-	// depth.
+	/// \brief **Test 2:
+	///
+	/// \details
+	/// minimum cascade depth step.** A
+	///  near-zero near-plane (0.01) and a moderate
+
+	///  far-plane (1.0) stress the `minDepthStep`
+
+	///  clamp — splits must still be strictly
+
+	///  monotonic, never collapsing to a single
+
+	///  depth.
+
 	{
 		const SunShadowCascadeSplits splits =
 			BuildSunShadowCascadeSplits(0.01f, 1.0f);
@@ -89,8 +103,12 @@ int main() {
 	}
 	std::printf("[OK] minDepthStep clamp: 0.01→1.0\n");
 
-	// **Test 3: splitLambda == 0 → pure uniform.**
-	// Each split should be `nearPlane + (i+1) * depthRange / 4`.
+	/// \brief **Test 3:
+	///
+	/// \details
+	/// splitLambda == 0 → pure uniform.**
+	///  Each split should be `nearPlane + (i+1) * depthRange / 4`.
+
 	{
 		const SunShadowCascadeSplits splits =
 			BuildSunShadowCascadeSplits(1.0f, 100.0f, 0.0f);
@@ -99,8 +117,11 @@ int main() {
 			const float expected = splits.nearPlane +
 				depthRange * static_cast<float>(i + 1u) /
 				static_cast<float>(kSunShadowCascadeCount);
-			// Last split is forced to farPlane (clamp
-			// exempt for the final cascade).
+			/// \brief Last split is forced to farPlane (clamp
+			///
+			/// \details
+			///  exempt for the final cascade).
+
 			if (i + 1u < kSunShadowCascadeCount) {
 				Expect(
 					std::abs(splits.viewDepthSplits[i] - expected) < 1e-4f,
@@ -110,24 +131,40 @@ int main() {
 	}
 	std::printf("[OK] splitLambda=0 → pure uniform\n");
 
-	// **Test 4: splitLambda == 1 → pure logarithmic.**
-	// The logarithmic distribution allocates **more
-	// depth resolution to the near cascades** —
-	// each split (other than the last, which is
-	// forced to `farPlane`) is **shallower** than
-	// the corresponding uniform split. The near
-	// cascades cover less world depth, so the
-	// texel-wise depth resolution is finer; the
-	// far cascades (especially the last) cover
-	// proportionally more world depth.
+	/// \brief **Test 4:
+	///
+	/// \details
+	/// splitLambda == 1 → pure logarithmic.**
+	///  The logarithmic distribution allocates **more
+
+	///  depth resolution to the near cascades** —
+
+	///  each split (other than the last, which is
+
+	///  forced to `farPlane`) is **shallower** than
+
+	///  the corresponding uniform split. The near
+
+	///  cascades cover less world depth, so the
+
+	///  texel-wise depth resolution is finer; the
+
+	///  far cascades (especially the last) cover
+
+	///  proportionally more world depth.
+
 	{
 		const SunShadowCascadeSplits uniformSplits =
 			BuildSunShadowCascadeSplits(1.0f, 100.0f, 0.0f);
 		const SunShadowCascadeSplits logSplits =
 			BuildSunShadowCascadeSplits(1.0f, 100.0f, 1.0f);
-		// Splits 0, 1, 2 (cascade 1, 2, 3) are
-		// shallower under log; split 3 is forced
-		// to `farPlane` (== uniform).
+		/// \brief Splits 0, 1, 2 (cascade 1, 2, 3) are
+		///
+		/// \details
+		///  shallower under log; split 3 is forced
+
+		///  to `farPlane` (== uniform).
+
 		for (uint32_t i = 0; i + 1u < kSunShadowCascadeCount; ++i) {
 			Expect(
 				logSplits.viewDepthSplits[i] < uniformSplits.viewDepthSplits[i],
@@ -140,11 +177,18 @@ int main() {
 	}
 	std::printf("[OK] splitLambda=1 → pure logarithmic\n");
 
-	// **Test 5: defensive defaults.** Non-finite
-	// inputs (NaN, +inf) should fall back to the
-	// `kDefaultCascade*` constants without
-	// invoking UB on the `std::pow` /
-	// `std::isfinite` / `std::clamp` calls.
+	/// \brief **Test 5:
+	///
+	/// \details
+	/// defensive defaults.** Non-finite
+	///  inputs (NaN, +inf) should fall back to the
+
+	///  `kDefaultCascade*` constants without
+
+	///  invoking UB on the `std::pow` /
+
+	///  `std::isfinite` / `std::clamp` calls.
+
 	{
 		const SunShadowCascadeSplits nanSplits = BuildSunShadowCascadeSplits(
 			std::numeric_limits<float>::quiet_NaN(),
@@ -157,8 +201,12 @@ int main() {
 	}
 	std::printf("[OK] defensive defaults: NaN inputs\n");
 
-	// **Test 6: lambda clamp.** `splitLambda < 0`
-	// clamps to 0, `splitLambda > 1` clamps to 1.
+	/// \brief **Test 6:
+	///
+	/// \details
+	/// lambda clamp.** `splitLambda < 0`
+	///  clamps to 0, `splitLambda > 1` clamps to 1.
+
 	{
 		const SunShadowCascadeSplits lowLambda =
 			BuildSunShadowCascadeSplits(1.0f, 100.0f, -0.5f);
@@ -171,14 +219,24 @@ int main() {
 	}
 	std::printf("[OK] lambda clamp: out-of-range inputs\n");
 
-	// **Test 7: degenerate farPlane <= nearPlane.**
-	// `farPlane == nearPlane` should fall back to
-	// the `kDefaultCascadeFarPlane` (128) so the
-	// shadow map still has depth range to work
-	// with. With `safeNear = 0.1` and a degenerate
-	// `farPlane = 0.05`, the function bumps
-	// `safeFar` to `max(kDefaultCascadeFarPlane,
-	// safeNear + 1.0f) = 128.0f`.
+	/// \brief **Test 7:
+	///
+	/// \details
+	/// degenerate farPlane <= nearPlane.**
+	///  `farPlane == nearPlane` should fall back to
+
+	///  the `kDefaultCascadeFarPlane` (128) so the
+
+	///  shadow map still has depth range to work
+
+	///  with. With `safeNear = 0.1` and a degenerate
+
+	///  `farPlane = 0.05`, the function bumps
+
+	///  `safeFar` to `max(kDefaultCascadeFarPlane,
+
+	///  safeNear + 1.0f) = 128.0f`.
+
 	{
 		const SunShadowCascadeSplits splits =
 			BuildSunShadowCascadeSplits(0.1f, 0.05f);
