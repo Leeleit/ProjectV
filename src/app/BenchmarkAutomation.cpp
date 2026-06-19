@@ -5,8 +5,6 @@
 #include "SDL3/SDL.h"
 
 #include <algorithm>
-#include <cctype>
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>

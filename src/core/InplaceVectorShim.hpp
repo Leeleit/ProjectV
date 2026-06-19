@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstring>
 #include <type_traits>
 
 namespace projectv::core {
@@ -65,10 +64,10 @@ private:
 	size_type size_ = 0;
 };
 
-static_assert(std::is_trivially_copyable_v<InplaceVectorShim<int, 4>> == true,
+static_assert(std::is_trivially_copyable_v<InplaceVectorShim<int, 4>>,
 	"InplaceVectorShim must be trivially copyable (std::array + size_t are both trivially copyable); the data pointer is therefore stable across moves, which is the Tier 1.A fixed-cap contract");
 
-static_assert(std::is_trivially_destructible_v<InplaceVectorShim<int, 4>> == true,
+static_assert(std::is_trivially_destructible_v<InplaceVectorShim<int, 4>>,
 	"InplaceVectorShim must be trivially destructible (no user-provided dtor)");
 
 } // namespace projectv::core

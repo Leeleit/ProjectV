@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -793,7 +792,7 @@ void DestroyVoxelSceneWorld(AppState *state)
 
 std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snapshotPath)
 {
-	const auto fail = [](projectv::voxel::VoxelSnapshotError e, std::string_view step, std::string_view detail) {
+	const auto fail = [](projectv::voxel::VoxelSnapshotError e, const std::string_view step, const std::string_view detail) {
 		runtime::LogRuntimeFailure("VoxelWorld", step, detail);
 		return std::unexpected(e);
 	};
@@ -850,7 +849,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 
 std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> LoadVoxelWorldSnapshot(const std::string_view snapshotPath)
 {
-	const auto fail = [](projectv::voxel::VoxelSnapshotError e, std::string_view step, std::string_view detail) {
+	const auto fail = [](projectv::voxel::VoxelSnapshotError e, const std::string_view step, const std::string_view detail) {
 		runtime::LogRuntimeFailure("VoxelWorld", step, detail);
 		return std::unexpected(e);
 	};
@@ -1292,12 +1291,11 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 				}
 
 				{
-					const uint32_t h = static_cast<uint32_t>(
-						(x * 73856093u) ^ (y * 19349663u) ^ (z * 83492791u));
-					const int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+					const uint32_t h = x * 73856093u ^ y * 19349663u ^ z * 83492791u;
+					constexpr int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 					const int startSide = static_cast<int>(h & 0x3u);
 
-					const int dirs[2] = {startSide, (startSide + 1) & 0x3};
+					const int dirs[2] = {startSide, startSide + 1 & 0x3};
 					int spreadDir = -1;
 					for (int d = 0; d < 2; ++d) {
 						const int sideIdx = dirs[d];
@@ -1332,11 +1330,11 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		return 0u;
 	}
 
-	const Int3 min = world.min;
-	for (int z = 0; z < depth; ++z) {
-		for (int y = 0; y < height; ++y) {
-			for (int x = 0; x < width; ++x) {
-				const size_t idx = index(x, y, z);
+	const auto [x, y, z] = world.min;
+	for (int zz = 0; zz < depth; ++zz) {
+		for (int yy = 0; yy < height; ++yy) {
+			for (int xx = 0; xx < width; ++xx) {
+				const size_t idx = index(xx, yy, zz);
 				const uint8_t previous = world.voxels[idx];
 				const uint8_t current = next[idx];
 				if (previous == current) {
@@ -1345,7 +1343,7 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 				const auto material = static_cast<VoxelMaterial>(current);
 				SetVoxelMaterial(
 					world,
-					{min.x + x, min.y + y, min.z + z},
+					{x + xx, y + yy, z + zz},
 					material);
 			}
 		}

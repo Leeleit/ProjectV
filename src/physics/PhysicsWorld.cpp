@@ -141,9 +141,9 @@ struct WalkFootSupportInfo {
 	std::array<float, 3> centroid{};
 };
 
-bool HasInputActionMaskBit(const uint32_t mask, const InputAction action)
+bool HasMoveUpInputActionMaskBit(const uint32_t mask)
 {
-	return (mask & 1u << static_cast<uint32_t>(action)) != 0u;
+	return (mask & 1u << static_cast<uint32_t>(InputAction::MoveUp)) != 0u;
 }
 
 struct WalkSneakSupportFace {
@@ -3080,7 +3080,7 @@ bool TickWalkCharacter(
 
 	const bool jumpHeld = IsInputActionDown(*input, InputAction::MoveUp);
 	const bool jumpPressedForSupport =
-		HasInputActionMaskBit(GetInputActionPressedMask(*input), InputAction::MoveUp);
+		HasMoveUpInputActionMaskBit(GetInputActionPressedMask(*input));
 	UpdateWalkGroundSupport(*physics, *world, jumpHeld || jumpPressedForSupport);
 
 	if (deltaSeconds <= 0.0f) {
@@ -3298,9 +3298,7 @@ bool TickWalkCharacter(
 			physics->walkAutoJumpDelayFramesRemaining = kWalkAutoJumpDelayFrames;
 		} else {
 			--physics->walkAutoJumpDelayFramesRemaining;
-			autoJumpPressed =
-				hasAutoJumpReadyCandidate &&
-				physics->walkAutoJumpDelayFramesRemaining == 0;
+			autoJumpPressed = physics->walkAutoJumpDelayFramesRemaining == 0;
 		}
 	}
 	const bool wantsJump = (jumpPressed || jumpHeld || autoJumpPressed) && (isGroundedLike || hasJumpTakeoffFeetPosition);

@@ -2,13 +2,10 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <cstring>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <string>
-#include <utility>
 
 #include "asset/AssetLoader.hpp"
 #include "asset/AssetManifest.hpp"
@@ -32,10 +29,10 @@ glm::mat4 BuildEntryWorldMatrix(const ManifestEntry &entry)
 	return translation * rotation * scale;
 }
 
-void StoreMatrixColumnMajor(const glm::mat4 &source, projectv::math::Mat4 &out)
+void StoreMatrixColumnMajor(const glm::mat4 &source, math::Mat4 &out)
 {
 	const float *src = glm::value_ptr(source);
-	std::memcpy(out.data(), src, sizeof(projectv::math::Mat4));
+	std::memcpy(out.data(), src, sizeof(math::Mat4));
 }
 
 } // namespace
@@ -156,26 +153,26 @@ bool LoadAndRegisterModelsFromManifest(
 		if (!reg.gpu.vertexBuffer) {
 			continue;
 		}
-		const projectv::math::Vec3 srcDim{
+		const math::Vec3 srcDim{
 			reg.aabbMax[0] - reg.aabbMin[0],
 			reg.aabbMax[1] - reg.aabbMin[1],
 			reg.aabbMax[2] - reg.aabbMin[2],
 			0.0f,
 		};
-		projectv::math::Mat4 modelTransform = projectv::math::identity();
+		math::Mat4 modelTransform = math::identity();
 		modelTransform.c[0].x = entry.scale;
 		modelTransform.c[1].y = entry.scale;
 		modelTransform.c[2].z = entry.scale;
-		modelTransform.c[3] = projectv::math::Vec4{
-			entry.position.x - (reg.aabbMin[0] * entry.scale),
-			entry.position.y - (reg.aabbMin[1] * entry.scale),
-			entry.position.z - (reg.aabbMin[2] * entry.scale),
+		modelTransform.c[3] = math::Vec4{
+			entry.position.x - reg.aabbMin[0] * entry.scale,
+			entry.position.y - reg.aabbMin[1] * entry.scale,
+			entry.position.z - reg.aabbMin[2] * entry.scale,
 			1.0f,
 		};
 		ModelInstanceData instance{};
 		instance.modelTransform = modelTransform;
 		instance.worldAabbMin = {entry.position.x, entry.position.y, entry.position.z, 0.0f};
-		instance.worldAabbMax = projectv::math::Vec3{
+		instance.worldAabbMax = math::Vec3{
 			entry.position.x + srcDim.x * entry.scale,
 			entry.position.y + srcDim.y * entry.scale,
 			entry.position.z + srcDim.z * entry.scale,

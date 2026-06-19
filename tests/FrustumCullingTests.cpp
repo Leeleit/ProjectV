@@ -3,7 +3,6 @@
 #include "core/Types.hpp"
 #include "render/SceneResources.hpp"
 
-#include <array>
 #include <cmath>
 #include <cstdio>
 #include <string_view>
@@ -20,11 +19,11 @@ struct TestContext {
 };
 
 ChunkCullingParameters MakeForwardLookingCamera(
-	const float verticalFovRadians = static_cast<float>(3.14159265358979323846L) / 3.0f,
 	const float aspect = 16.0f / 9.0f,
 	const float nearPlane = 0.1f,
 	const float maxDistance = 0.0f)
 {
+	constexpr float verticalFovRadians = static_cast<float>(3.14159265358979323846L) / 3.0f;
 	ChunkCullingParameters parameters{};
 	const float tanHalfVerticalFov = std::tan(verticalFovRadians * 0.5f);
 	const float tanHalfHorizontalFov = tanHalfVerticalFov * aspect;
@@ -94,7 +93,6 @@ void TestAabbBeyondMaxDistanceCulled(TestContext &ctx)
 {
 
 	const ChunkCullingParameters camera = MakeForwardLookingCamera(
-		static_cast<float>(3.14159265358979323846L) / 3.0f,
 		16.0f / 9.0f,
 		0.1f,
 		5.0f);

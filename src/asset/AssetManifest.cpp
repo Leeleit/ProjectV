@@ -1,7 +1,6 @@
 #include "asset/AssetManifest.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
@@ -119,12 +118,12 @@ bool ParseEntry(const std::string &rawEntry, ManifestEntry &out)
 	if (out.path.empty()) {
 		return false;
 	}
-	out.id = projectv::core::StringID{std::string_view{DefaultIdStemForPath(out.path)}};
+	out.id = core::StringID{std::string_view{DefaultIdStemForPath(out.path)}};
 	out.position = glm::vec3(0.0f);
 	out.rotationDegrees = glm::vec3(0.0f);
 	out.scale = 1.0f;
 
-	const auto commaCount = std::ranges::count(transformView, ',');
+	const auto commaCount = std::count(transformView.begin(), transformView.end(), ',');
 	if (transformView.empty()) {
 		return true;
 	}

@@ -7,8 +7,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstdint>
-#include <cstring>
 #include <random>
 #include <vector>
 
@@ -60,9 +58,9 @@ struct VisibilityFixture {
 			f.aabbMax[i] = projectv::math::Vec3{maxX, maxY, maxZ, 0.0f};
 		}
 
-		constexpr std::array<float, kVisibilityRuns> yaws{
+		constexpr std::array yaws{
 			0.0f, 0.45f, -0.45f, 1.10f, -1.10f};
-		constexpr std::array<float, kVisibilityRuns> pitches{
+		constexpr std::array pitches{
 			-0.20f, -0.45f, -0.05f, -0.65f, -0.15f};
 		for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 			const float yaw = yaws[r];
@@ -148,10 +146,10 @@ void RunCppScalar(
 	const VisibilityFixture &fixture,
 	std::vector<uint8_t> *masks)
 {
-		for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-			std::ranges::fill(*masks, 0);
-			const auto &params = fixture.parameters[r];
-			for (size_t i = 0; i < kBatchSize; ++i) {
+	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
+		std::ranges::fill(*masks, 0);
+		const auto &params = fixture.parameters[r];
+		for (size_t i = 0; i < kBatchSize; ++i) {
 			if (IsAabbVisibleAgainstCameraFrustum(
 					fixture.aabbMin[i], fixture.aabbMax[i], params)) {
 				(*masks)[i / 8] |= static_cast<uint8_t>(1u << (i % 8));
@@ -167,7 +165,7 @@ void RunCScalar(
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
 		std::ranges::fill(*masks, 0);
-		const auto cparams = ToCParams(fixture.parameters[r]);
+		[[maybe_unused]] const auto cparams = ToCParams(fixture.parameters[r]);
 		projectv_cull_frustum_scalar(masks->data(), aabbs.data(), &cparams, kBatchSize);
 	}
 }

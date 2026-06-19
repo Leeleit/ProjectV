@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <limits>
 
 namespace {
@@ -112,10 +111,10 @@ std::array<Float3, 8> BuildFrustumSliceCorners(
 		const Float3 center = cameraPosition + cameraForward * depth;
 		const Float3 right = cameraRight * (tanHalfHorizontalFov * depth);
 		const Float3 up = cameraUp * (tanHalfVerticalFov * depth);
-		corners[cornerIndex++] = (center - right) - up;
-		corners[cornerIndex++] = (center + right) - up;
-		corners[cornerIndex++] = (center - right) + up;
-		corners[cornerIndex++] = (center + right) + up;
+		corners[cornerIndex++] = center - right - up;
+		corners[cornerIndex++] = center + right - up;
+		corners[cornerIndex++] = center - right + up;
+		corners[cornerIndex++] = center + right + up;
 	}
 	return corners;
 }
@@ -380,6 +379,223 @@ SunShadowProjection BuildSunShadowProjection(
 	return projection;
 }
 
+struct CascadeCameraFrame {
+	Float3 position;
+	Float3 forward;
+	Float3 right;
+	Float3 up;
+	float tanHalfVerticalFov;
+	float tanHalfHorizontalFov;
+};
+
+CascadeCameraFrame BuildCascadeCameraFrame(
+	const SunShadowCascadeProjectionInputs &inputs,
+	uint32_t &outShadowMapResolution)
+{
+	CascadeCameraFrame frame{};
+	frame.position = Float3{
+		inputs.cameraPosition[0],
+		inputs.cameraPosition[1],
+		inputs.cameraPosition[2],
+	};
+	frame.forward = projectv::math::normalize(Float3{
+		inputs.cameraForward[0],
+		inputs.cameraForward[1],
+		inputs.cameraForward[2],
+	});
+	frame.right = projectv::math::normalize(Float3{
+		inputs.cameraRight[0],
+		inputs.cameraRight[1],
+		inputs.cameraRight[2],
+		0.0f,
+	});
+	frame.up = projectv::math::normalize(Float3{
+		inputs.cameraUp.x,
+		inputs.cameraUp.y,
+		inputs.cameraUp.z,
+		0.0f,
+	});
+	frame.tanHalfVerticalFov = std::max(inputs.tanHalfVerticalFov, 0.01f);
+	frame.tanHalfHorizontalFov = std::max(inputs.tanHalfHorizontalFov, 0.01f);
+	outShadowMapResolution =
+		inputs.shadowMapResolution > 0u ? inputs.shadowMapResolution : kDefaultShadowMapResolution;
+	return frame;
+}
+
+struct CascadeBuildContext {
+	const CascadeCameraFrame &camera;
+	uint32_t shadowMapResolution;
+	Float3 sceneMin;
+	Float3 sceneMax;
+	Float3 lightForward;
+	Float3 lightRight;
+	Float3 lightUp;
+	float clampedCoverageScale;
+};
+
+void BuildSingleCascade(
+	SunShadowCascadeProjections &projections,
+	const uint32_t cascadeIndex,
+	const float cascadeNearDepth,
+	const float cascadeFarDepth,
+	const CascadeBuildContext &ctx)
+{
+	const std::array<Float3, 8> frustumCorners = BuildFrustumSliceCorners(
+		ctx.camera.position,
+		ctx.camera.forward,
+		ctx.camera.right,
+		ctx.camera.up,
+		ctx.camera.tanHalfVerticalFov,
+		ctx.camera.tanHalfHorizontalFov,
+		cascadeNearDepth,
+		cascadeFarDepth);
+	Float3 receiverBoundsMin{};
+	Float3 receiverBoundsMax{};
+	ComputeBounds(frustumCorners, receiverBoundsMin, receiverBoundsMax);
+	Float3 casterBoundsMin = receiverBoundsMin;
+	Float3 casterBoundsMax = receiverBoundsMax;
+	ExpandBoundsUpstreamForShadowCasters(
+		casterBoundsMin,
+		casterBoundsMax,
+		ctx.sceneMin,
+		ctx.sceneMax,
+		ctx.lightForward);
+	const std::array<Float3, 8> casterCorners = BuildBoundsCorners(casterBoundsMin, casterBoundsMax);
+
+	Float3 cascadeCenter{};
+	for (const Float3 &corner : frustumCorners) {
+		cascadeCenter = cascadeCenter + corner;
+	}
+	cascadeCenter = cascadeCenter * (1.0f / static_cast<float>(frustumCorners.size()));
+
+	float cascadeRadius = 0.0f;
+	for (const Float3 &corner : frustumCorners) {
+		cascadeRadius = std::max(cascadeRadius, projectv::math::length(corner - cascadeCenter));
+	}
+	cascadeRadius = std::max(cascadeRadius, 0.5f);
+
+	const float cascadeCenterLightX = projectv::math::dot(ctx.lightRight, cascadeCenter);
+	const float cascadeCenterLightY = projectv::math::dot(ctx.lightUp, cascadeCenter);
+	const float minimumReceiverHalfExtent =
+		std::max((cascadeRadius + kShadowExtentPadding) * ctx.clampedCoverageScale, 0.5f);
+	float halfExtentX = minimumReceiverHalfExtent;
+	float halfExtentY = minimumReceiverHalfExtent;
+	float texelSizeX = halfExtentX * 2.0f / static_cast<float>(ctx.shadowMapResolution);
+	float texelSizeY = halfExtentY * 2.0f / static_cast<float>(ctx.shadowMapResolution);
+	float snappedCenterLightX = SnapToTexelGrid(cascadeCenterLightX, texelSizeX);
+	float snappedCenterLightY = SnapToTexelGrid(cascadeCenterLightY, texelSizeY);
+	halfExtentX = ComputeRequiredProjectedHalfExtent(
+		casterCorners,
+		ctx.lightRight,
+		snappedCenterLightX,
+		minimumReceiverHalfExtent,
+		ctx.clampedCoverageScale);
+	halfExtentY = ComputeRequiredProjectedHalfExtent(
+		casterCorners,
+		ctx.lightUp,
+		snappedCenterLightY,
+		minimumReceiverHalfExtent,
+		ctx.clampedCoverageScale);
+	texelSizeX = halfExtentX * 2.0f / static_cast<float>(ctx.shadowMapResolution);
+	texelSizeY = halfExtentY * 2.0f / static_cast<float>(ctx.shadowMapResolution);
+	snappedCenterLightX = SnapToTexelGrid(cascadeCenterLightX, texelSizeX);
+	snappedCenterLightY = SnapToTexelGrid(cascadeCenterLightY, texelSizeY);
+	halfExtentX = ComputeRequiredProjectedHalfExtent(
+		casterCorners,
+		ctx.lightRight,
+		snappedCenterLightX,
+		minimumReceiverHalfExtent,
+		ctx.clampedCoverageScale);
+	halfExtentY = ComputeRequiredProjectedHalfExtent(
+		casterCorners,
+		ctx.lightUp,
+		snappedCenterLightY,
+		minimumReceiverHalfExtent,
+		ctx.clampedCoverageScale);
+	const Float3 snappedCascadeCenter = cascadeCenter + ctx.lightRight * (snappedCenterLightX - cascadeCenterLightX) + ctx.lightUp * (snappedCenterLightY - cascadeCenterLightY);
+	float minRelativeLightDepth = std::numeric_limits<float>::max();
+	float maxRelativeLightDepth = std::numeric_limits<float>::lowest();
+	ComputeRelativeDepthRange(
+		frustumCorners,
+		snappedCascadeCenter,
+		ctx.lightForward,
+		minRelativeLightDepth,
+		maxRelativeLightDepth);
+	ComputeRelativeDepthRange(
+		casterCorners,
+		snappedCascadeCenter,
+		ctx.lightForward,
+		minRelativeLightDepth,
+		maxRelativeLightDepth);
+	const float lightForwardOffset = std::max(
+		cascadeRadius + kShadowDepthPadding,
+		kShadowDepthPadding + kMinShadowNearPlane - minRelativeLightDepth);
+	const Float3 lightPosition = snappedCascadeCenter - ctx.lightForward * lightForwardOffset;
+	projectv::math::Mat4 lightView{};
+	lightView.c[0] = projectv::math::Vec4{ctx.lightRight.x, ctx.lightUp.x, -ctx.lightForward.x, 0.0f};
+	lightView.c[1] = projectv::math::Vec4{ctx.lightRight.y, ctx.lightUp.y, -ctx.lightForward.y, 0.0f};
+	lightView.c[2] = projectv::math::Vec4{ctx.lightRight.z, ctx.lightUp.z, -ctx.lightForward.z, 0.0f};
+	lightView.c[3] = projectv::math::Vec4{
+		-projectv::math::dot(ctx.lightRight, lightPosition),
+		-projectv::math::dot(ctx.lightUp, lightPosition),
+		projectv::math::dot(ctx.lightForward, lightPosition),
+		1.0f,
+	};
+
+	float minZ = std::numeric_limits<float>::max();
+	float maxZ = std::numeric_limits<float>::lowest();
+	float casterMinZ = std::numeric_limits<float>::max();
+	float casterMaxZ = std::numeric_limits<float>::lowest();
+	const auto accumulateLightDepth = [&](const Float3 corner) {
+		const Float3 relativeCorner = corner - lightPosition;
+		const float lightZ = projectv::math::dot(ctx.lightForward, relativeCorner);
+		minZ = std::min(minZ, lightZ);
+		maxZ = std::max(maxZ, lightZ);
+	};
+	const auto accumulateCasterLightDepth = [&](const Float3 corner) {
+		const Float3 relativeCorner = corner - lightPosition;
+		const float lightZ = projectv::math::dot(ctx.lightForward, relativeCorner);
+		casterMinZ = std::min(casterMinZ, lightZ);
+		casterMaxZ = std::max(casterMaxZ, lightZ);
+		minZ = std::min(minZ, lightZ);
+		maxZ = std::max(maxZ, lightZ);
+	};
+	for (const Float3 corner : frustumCorners) {
+		accumulateLightDepth(corner);
+	}
+	for (const Float3 corner : casterCorners) {
+		accumulateCasterLightDepth(corner);
+	}
+	const float minX = -halfExtentX;
+	const float maxX = halfExtentX;
+	const float minY = -halfExtentY;
+	const float maxY = halfExtentY;
+
+	const float nearPlane = std::max(kMinShadowNearPlane, minZ - kShadowDepthPadding);
+	const float farPlane = std::max(nearPlane + 1.0f, maxZ + kShadowDepthPadding);
+	projectv::math::Mat4 lightProjection{};
+	lightProjection.c[0] = projectv::math::Vec4{2.0f / (maxX - minX), 0.0f, 0.0f, 0.0f};
+	lightProjection.c[1] = projectv::math::Vec4{0.0f, -2.0f / (maxY - minY), 0.0f, 0.0f};
+	lightProjection.c[2] = projectv::math::Vec4{0.0f, 0.0f, 1.0f / (nearPlane - farPlane), 0.0f};
+	lightProjection.c[3] = projectv::math::Vec4{
+		-(maxX + minX) / (maxX - minX),
+		-(maxY + minY) / (maxY - minY),
+		nearPlane / (nearPlane - farPlane),
+		1.0f,
+	};
+	StoreCascadeMatrix(
+		projections.lightViewProjections,
+		cascadeIndex,
+		lightProjection * lightView);
+	projections.diagnostics.viewNearDepths[cascadeIndex] = cascadeNearDepth;
+	projections.diagnostics.viewFarDepths[cascadeIndex] = cascadeFarDepth;
+	projections.diagnostics.orthoWidths[cascadeIndex] = halfExtentX * 2.0f;
+	projections.diagnostics.orthoHeights[cascadeIndex] = halfExtentY * 2.0f;
+	projections.diagnostics.texelWorldSizes[cascadeIndex] = std::max(texelSizeX, texelSizeY);
+	projections.diagnostics.casterLightNearDepths[cascadeIndex] = casterMinZ;
+	projections.diagnostics.casterLightFarDepths[cascadeIndex] = casterMaxZ;
+}
+
 SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 	const VoxelWorld &world,
 	const std::array<float, 3> &sunDirection,
@@ -403,32 +619,8 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 
 	const Float3 lightRight = projectv::math::normalize(projectv::math::cross(lightForward, worldUp));
 	const Float3 lightUp = projectv::math::normalize(projectv::math::cross(lightRight, lightForward));
-	const Float3 cameraPosition{
-		inputs.cameraPosition[0],
-		inputs.cameraPosition[1],
-		inputs.cameraPosition[2],
-	};
-	const Float3 cameraForward = projectv::math::normalize(Float3{
-		inputs.cameraForward[0],
-		inputs.cameraForward[1],
-		inputs.cameraForward[2],
-	});
-	const Float3 cameraRight = projectv::math::normalize(Float3{
-		inputs.cameraRight[0],
-		inputs.cameraRight[1],
-		inputs.cameraRight[2],
-		0.0f,
-	});
-	const Float3 cameraUp = projectv::math::normalize(Float3{
-		inputs.cameraUp.x,
-		inputs.cameraUp.y,
-		inputs.cameraUp.z,
-		0.0f,
-	});
-	const float tanHalfVerticalFov = std::max(inputs.tanHalfVerticalFov, 0.01f);
-	const float tanHalfHorizontalFov = std::max(inputs.tanHalfHorizontalFov, 0.01f);
-	const uint32_t shadowMapResolution =
-		inputs.shadowMapResolution > 0u ? inputs.shadowMapResolution : kDefaultShadowMapResolution;
+	uint32_t shadowMapResolution = 0;
+	const CascadeCameraFrame cameraFrame = BuildCascadeCameraFrame(inputs, shadowMapResolution);
 
 	Float3 sceneMin{
 		static_cast<float>(world.min.x),
@@ -450,6 +642,17 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 			splits.splitLambda);
 	}
 
+	const CascadeBuildContext ctx{
+		cameraFrame,
+		shadowMapResolution,
+		sceneMin,
+		sceneMax,
+		lightForward,
+		lightRight,
+		lightUp,
+		clampedCoverageScale,
+	};
+
 	SunShadowCascadeProjections projections{};
 	float previousSplitDepth = std::max(splits.nearPlane, kMinCascadeNearPlane);
 	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
@@ -457,160 +660,7 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 		const float cascadeFarDepth = std::max(
 			splits.viewDepthSplits[cascadeIndex],
 			previousSplitDepth + kMinCascadeNearPlane);
-		const std::array<Float3, 8> frustumCorners = BuildFrustumSliceCorners(
-			cameraPosition,
-			cameraForward,
-			cameraRight,
-			cameraUp,
-			tanHalfVerticalFov,
-			tanHalfHorizontalFov,
-			previousSplitDepth,
-			cascadeFarDepth);
-		Float3 receiverBoundsMin{};
-		Float3 receiverBoundsMax{};
-		ComputeBounds(frustumCorners, receiverBoundsMin, receiverBoundsMax);
-		Float3 casterBoundsMin = receiverBoundsMin;
-		Float3 casterBoundsMax = receiverBoundsMax;
-		ExpandBoundsUpstreamForShadowCasters(
-			casterBoundsMin,
-			casterBoundsMax,
-			sceneMin,
-			sceneMax,
-			lightForward);
-		const std::array<Float3, 8> casterCorners = BuildBoundsCorners(casterBoundsMin, casterBoundsMax);
-
-		Float3 cascadeCenter{};
-		for (const Float3 &corner : frustumCorners) {
-			cascadeCenter = cascadeCenter + corner;
-		}
-		cascadeCenter = cascadeCenter * (1.0f / static_cast<float>(frustumCorners.size()));
-
-		float cascadeRadius = 0.0f;
-		for (const Float3 &corner : frustumCorners) {
-			cascadeRadius = std::max(cascadeRadius, projectv::math::length(corner - cascadeCenter));
-		}
-		cascadeRadius = std::max(cascadeRadius, 0.5f);
-
-		const float cascadeCenterLightX = projectv::math::dot(lightRight, cascadeCenter);
-		const float cascadeCenterLightY = projectv::math::dot(lightUp, cascadeCenter);
-		const float minimumReceiverHalfExtent =
-			std::max((cascadeRadius + kShadowExtentPadding) * clampedCoverageScale, 0.5f);
-		float halfExtentX = minimumReceiverHalfExtent;
-		float halfExtentY = minimumReceiverHalfExtent;
-		float texelSizeX = halfExtentX * 2.0f / static_cast<float>(shadowMapResolution);
-		float texelSizeY = halfExtentY * 2.0f / static_cast<float>(shadowMapResolution);
-		float snappedCenterLightX = SnapToTexelGrid(cascadeCenterLightX, texelSizeX);
-		float snappedCenterLightY = SnapToTexelGrid(cascadeCenterLightY, texelSizeY);
-		halfExtentX = ComputeRequiredProjectedHalfExtent(
-			casterCorners,
-			lightRight,
-			snappedCenterLightX,
-			minimumReceiverHalfExtent,
-			clampedCoverageScale);
-		halfExtentY = ComputeRequiredProjectedHalfExtent(
-			casterCorners,
-			lightUp,
-			snappedCenterLightY,
-			minimumReceiverHalfExtent,
-			clampedCoverageScale);
-		texelSizeX = halfExtentX * 2.0f / static_cast<float>(shadowMapResolution);
-		texelSizeY = halfExtentY * 2.0f / static_cast<float>(shadowMapResolution);
-		snappedCenterLightX = SnapToTexelGrid(cascadeCenterLightX, texelSizeX);
-		snappedCenterLightY = SnapToTexelGrid(cascadeCenterLightY, texelSizeY);
-		halfExtentX = ComputeRequiredProjectedHalfExtent(
-			casterCorners,
-			lightRight,
-			snappedCenterLightX,
-			minimumReceiverHalfExtent,
-			clampedCoverageScale);
-		halfExtentY = ComputeRequiredProjectedHalfExtent(
-			casterCorners,
-			lightUp,
-			snappedCenterLightY,
-			minimumReceiverHalfExtent,
-			clampedCoverageScale);
-		const Float3 snappedCascadeCenter = cascadeCenter + lightRight * (snappedCenterLightX - cascadeCenterLightX) + lightUp * (snappedCenterLightY - cascadeCenterLightY);
-		float minRelativeLightDepth = std::numeric_limits<float>::max();
-		float maxRelativeLightDepth = std::numeric_limits<float>::lowest();
-		ComputeRelativeDepthRange(
-			frustumCorners,
-			snappedCascadeCenter,
-			lightForward,
-			minRelativeLightDepth,
-			maxRelativeLightDepth);
-		ComputeRelativeDepthRange(
-			casterCorners,
-			snappedCascadeCenter,
-			lightForward,
-			minRelativeLightDepth,
-			maxRelativeLightDepth);
-		const float lightForwardOffset = std::max(
-			cascadeRadius + kShadowDepthPadding,
-			kShadowDepthPadding + kMinShadowNearPlane - minRelativeLightDepth);
-		const Float3 lightPosition = snappedCascadeCenter - lightForward * lightForwardOffset;
-		projectv::math::Mat4 lightView{};
-		lightView.c[0] = projectv::math::Vec4{lightRight.x, lightUp.x, -lightForward.x, 0.0f};
-		lightView.c[1] = projectv::math::Vec4{lightRight.y, lightUp.y, -lightForward.y, 0.0f};
-		lightView.c[2] = projectv::math::Vec4{lightRight.z, lightUp.z, -lightForward.z, 0.0f};
-		lightView.c[3] = projectv::math::Vec4{
-			-projectv::math::dot(lightRight, lightPosition),
-			-projectv::math::dot(lightUp, lightPosition),
-			projectv::math::dot(lightForward, lightPosition),
-			1.0f,
-		};
-
-		float minZ = std::numeric_limits<float>::max();
-		float maxZ = std::numeric_limits<float>::lowest();
-		float casterMinZ = std::numeric_limits<float>::max();
-		float casterMaxZ = std::numeric_limits<float>::lowest();
-		const auto accumulateLightDepth = [&](const Float3 corner) {
-			const Float3 relativeCorner = corner - lightPosition;
-			const float lightZ = projectv::math::dot(lightForward, relativeCorner);
-			minZ = std::min(minZ, lightZ);
-			maxZ = std::max(maxZ, lightZ);
-		};
-		const auto accumulateCasterLightDepth = [&](const Float3 corner) {
-			const Float3 relativeCorner = corner - lightPosition;
-			const float lightZ = projectv::math::dot(lightForward, relativeCorner);
-			casterMinZ = std::min(casterMinZ, lightZ);
-			casterMaxZ = std::max(casterMaxZ, lightZ);
-			minZ = std::min(minZ, lightZ);
-			maxZ = std::max(maxZ, lightZ);
-		};
-		for (const Float3 corner : frustumCorners) {
-			accumulateLightDepth(corner);
-		}
-		for (const Float3 corner : casterCorners) {
-			accumulateCasterLightDepth(corner);
-		}
-		const float minX = -halfExtentX;
-		const float maxX = halfExtentX;
-		const float minY = -halfExtentY;
-		const float maxY = halfExtentY;
-
-		const float nearPlane = std::max(kMinShadowNearPlane, minZ - kShadowDepthPadding);
-		const float farPlane = std::max(nearPlane + 1.0f, maxZ + kShadowDepthPadding);
-		projectv::math::Mat4 lightProjection{};
-		lightProjection.c[0] = projectv::math::Vec4{2.0f / (maxX - minX), 0.0f, 0.0f, 0.0f};
-		lightProjection.c[1] = projectv::math::Vec4{0.0f, -2.0f / (maxY - minY), 0.0f, 0.0f};
-		lightProjection.c[2] = projectv::math::Vec4{0.0f, 0.0f, 1.0f / (nearPlane - farPlane), 0.0f};
-		lightProjection.c[3] = projectv::math::Vec4{
-			-(maxX + minX) / (maxX - minX),
-			-(maxY + minY) / (maxY - minY),
-			nearPlane / (nearPlane - farPlane),
-			1.0f,
-		};
-		StoreCascadeMatrix(
-			projections.lightViewProjections,
-			cascadeIndex,
-			lightProjection * lightView);
-		projections.diagnostics.viewNearDepths[cascadeIndex] = cascadeNearDepth;
-		projections.diagnostics.viewFarDepths[cascadeIndex] = cascadeFarDepth;
-		projections.diagnostics.orthoWidths[cascadeIndex] = halfExtentX * 2.0f;
-		projections.diagnostics.orthoHeights[cascadeIndex] = halfExtentY * 2.0f;
-		projections.diagnostics.texelWorldSizes[cascadeIndex] = std::max(texelSizeX, texelSizeY);
-		projections.diagnostics.casterLightNearDepths[cascadeIndex] = casterMinZ;
-		projections.diagnostics.casterLightFarDepths[cascadeIndex] = casterMaxZ;
+		BuildSingleCascade(projections, cascadeIndex, cascadeNearDepth, cascadeFarDepth, ctx);
 		previousSplitDepth = cascadeFarDepth;
 	}
 

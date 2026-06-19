@@ -3,7 +3,6 @@
 #include "render/SceneResources.hpp"
 
 #include <array>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <span>
@@ -60,9 +59,9 @@ struct TestFixture {
             f.instances.push_back(instance);
         }
 
-        constexpr std::array<float, kVisibilityRuns> yaws{
+        constexpr std::array yaws{
             0.0f, 0.45f, -0.45f, 1.10f, -1.10f};
-        constexpr std::array<float, kVisibilityRuns> pitches{
+        constexpr std::array pitches{
             -0.20f, -0.45f, -0.05f, -0.65f, -0.15f};
         for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
             const float yaw = yaws[r];
@@ -138,60 +137,60 @@ void ExpectVectorEqual(
 } // namespace
 
 int main() {
-    const TestFixture fixture = TestFixture::Make();
+    const auto [instances, parameters] = TestFixture::Make();
 
-    if (fixture.instances.size() != kBatchSize) {
+    if (instances.size() != kBatchSize) {
         std::fprintf(
             stderr,
             "FAIL: fixture has %zu instances, expected %zu\n",
-            fixture.instances.size(), kBatchSize);
+            instances.size(), kBatchSize);
         return EXIT_FAILURE;
     }
 
 
     for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-        const std::span<const ModelInstanceData> span(
-            fixture.instances.data(), fixture.instances.size());
+        const std::span span(
+            instances.data(), instances.size());
         const std::vector<ModelInstanceData> reference =
-            ReferenceFilter(span, fixture.parameters[r]);
+            ReferenceFilter(span, parameters[r]);
         const std::vector<ModelInstanceData> wrapper =
-            projectv::c_kernels::FilterVisibleInstances(span, fixture.parameters[r]);
+            projectv::c_kernels::FilterVisibleInstances(span, parameters[r]);
         const std::string label =
-            "run " + std::to_string(r) + " (count=" + std::to_string(fixture.instances.size()) + ")";
+            "run " + std::to_string(r) + " (count=" + std::to_string(instances.size()) + ")";
         ExpectVectorEqual(reference, wrapper, label.c_str());
     }
     std::printf("[OK] wrapper matches reference for 300-AABB batched path (5 runs)\n");
 
 
     {
-        const std::span<const ModelInstanceData> span(
-            fixture.instances.data(), 4);
+        const std::span span(
+            instances.data(), 4);
         const std::vector<ModelInstanceData> reference =
-            ReferenceFilter(span, fixture.parameters[0]);
+            ReferenceFilter(span, parameters[0]);
         const std::vector<ModelInstanceData> wrapper =
-            projectv::c_kernels::FilterVisibleInstances(span, fixture.parameters[0]);
+            projectv::c_kernels::FilterVisibleInstances(span, parameters[0]);
         ExpectVectorEqual(reference, wrapper, "4-AABB fallback");
     }
     std::printf("[OK] wrapper matches reference for 4-AABB fallback path\n");
 
 
     {
-        const std::span<const ModelInstanceData> span(
-            fixture.instances.data(), 1);
+        const std::span span(
+            instances.data(), 1);
         const std::vector<ModelInstanceData> reference =
-            ReferenceFilter(span, fixture.parameters[0]);
+            ReferenceFilter(span, parameters[0]);
         const std::vector<ModelInstanceData> wrapper =
-            projectv::c_kernels::FilterVisibleInstances(span, fixture.parameters[0]);
+            projectv::c_kernels::FilterVisibleInstances(span, parameters[0]);
         ExpectVectorEqual(reference, wrapper, "1-AABB fallback");
     }
     std::printf("[OK] wrapper matches reference for 1-AABB fallback path\n");
 
 
     for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-        const std::span<const ModelInstanceData> span(
-            fixture.instances.data(), fixture.instances.size());
+        const std::span span(
+            instances.data(), instances.size());
         const std::vector<uint8_t> mask =
-            projectv::c_kernels::CullVisibleMask(span, fixture.parameters[r]);
+            projectv::c_kernels::CullVisibleMask(span, parameters[r]);
         if (mask.size() != (kBatchSize + 7) / 8) {
             std::fprintf(
                 stderr,
@@ -200,7 +199,7 @@ int main() {
             return EXIT_FAILURE;
         }
         const std::vector<ModelInstanceData> reference =
-            ReferenceFilter(span, fixture.parameters[r]);
+            ReferenceFilter(span, parameters[r]);
         std::vector<ModelInstanceData> fromMask;
         fromMask.reserve(reference.size());
         for (size_t i = 0; i < kBatchSize; ++i) {
@@ -215,9 +214,9 @@ int main() {
 
 
     {
-        const std::span<const ModelInstanceData> empty;
+		constexpr std::span<const ModelInstanceData> empty;
         const std::vector<ModelInstanceData> result =
-            projectv::c_kernels::FilterVisibleInstances(empty, fixture.parameters[0]);
+            projectv::c_kernels::FilterVisibleInstances(empty, parameters[0]);
         if (!result.empty()) {
             std::fprintf(
                 stderr,
@@ -226,7 +225,7 @@ int main() {
             return EXIT_FAILURE;
         }
         const std::vector<uint8_t> mask =
-            projectv::c_kernels::CullVisibleMask(empty, fixture.parameters[0]);
+            projectv::c_kernels::CullVisibleMask(empty, parameters[0]);
         if (!mask.empty()) {
             std::fprintf(
                 stderr,

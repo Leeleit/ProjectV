@@ -3,21 +3,20 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 typedef struct ProjectvCPlane3 {
 	float n[3];
 	float offset;
 } ProjectvCPlane3;
 
-static float projectv_absf(float value)
+static float projectv_absf(const float value)
 {
 	return value < 0.0f ? -value : value;
 }
 
 static float projectv_dot3(
-	float ax, float ay, float az,
-	float bx, float by, float bz)
+	const float ax, const float ay, const float az,
+	const float bx, const float by, const float bz)
 {
 	return ax * bx + ay * by + az * bz;
 }
@@ -68,7 +67,7 @@ void projectv_cull_frustum_scalar(
 	uint8_t *visible_mask,
 	const ProjectvCAabb *aabbs,
 	const ProjectvCFrustumCullParameters *parameters,
-	size_t count)
+	const size_t count)
 {
 	ProjectvCPlane3 planes[5];
 	projectv_build_planes(parameters, planes);

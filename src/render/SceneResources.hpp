@@ -69,7 +69,7 @@ inline bool IsSceneChunkVisible(
 			   std::abs(planeNormal.z) * chunkHalfExtent.z;
 	};
 	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
-		const float centerDistance = dot(toChunkCenter, planeNormal) - planeOffset;
+		[[maybe_unused]] const float centerDistance = dot(toChunkCenter, planeNormal) - planeOffset;
 		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 	const float chunkRadius = std::sqrt(lengthSquared(chunkHalfExtent));

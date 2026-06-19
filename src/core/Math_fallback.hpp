@@ -148,7 +148,7 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Mat4 transpose(const Mat4 m) noexcept
+[[nodiscard]] inline Mat4 transpose(const Mat4 &m) noexcept
 {
 	Mat4 result{};
 	for (std::size_t col = 0; col < 4; ++col) {

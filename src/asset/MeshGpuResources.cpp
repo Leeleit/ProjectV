@@ -1,8 +1,5 @@
 #include "asset/MeshGpuResources.hpp"
 
-#include <cstring>
-#include <utility>
-
 #include "core/RuntimeDiagnostics.hpp"
 
 namespace projectv::asset {

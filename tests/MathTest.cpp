@@ -22,8 +22,8 @@ constexpr void VerifyLayout()
 
 constexpr void VerifyVec3Arithmetic()
 {
-	const Vec3 a{1.0f, 2.0f, 3.0f, 0.0f};
-	const Vec3 b{4.0f, 5.0f, 6.0f, 0.0f};
+	constexpr Vec3 a{1.0f, 2.0f, 3.0f, 0.0f};
+	constexpr Vec3 b{4.0f, 5.0f, 6.0f, 0.0f};
 	if (dot(a, b) != 1.0f * 4.0f + 2.0f * 5.0f + 3.0f * 6.0f) {
 		std::fprintf(stderr, "Vec3 dot: %.9f\n", static_cast<double>(dot(a, b)));
 		std::abort();
@@ -59,8 +59,8 @@ constexpr void VerifyVec3Arithmetic()
 
 constexpr void VerifyVec4Arithmetic()
 {
-	const Vec4 a{1.0f, 2.0f, 3.0f, 4.0f};
-	const Vec4 b{5.0f, 6.0f, 7.0f, 8.0f};
+	constexpr Vec4 a{1.0f, 2.0f, 3.0f, 4.0f};
+	constexpr Vec4 b{5.0f, 6.0f, 7.0f, 8.0f};
 	if (dot(a, b) != 1.0f * 5.0f + 2.0f * 6.0f + 3.0f * 7.0f + 4.0f * 8.0f) {
 		std::fprintf(stderr, "Vec4 dot: %.9f\n", static_cast<double>(dot(a, b)));
 		std::abort();
@@ -85,7 +85,7 @@ constexpr void VerifyMat4Identity()
 	const Mat4 id = identity();
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
-			constexpr float expected = (col == row) ? 1.0f : 0.0f;
+			constexpr float expected = col == row ? 1.0f : 0.0f;
 			if (id.m(col, row) != expected) {
 				std::fprintf(stderr, "identity(%zu, %zu) = %.9f\n",
 					col, row, static_cast<double>(id.m(col, row)));
@@ -94,7 +94,7 @@ constexpr void VerifyMat4Identity()
 		}
 	}
 
-	const Vec4 v{1.0f, 2.0f, 3.0f, 4.0f};
+	constexpr Vec4 v{1.0f, 2.0f, 3.0f, 4.0f};
 	const Vec4 r = id * v;
 	if (r.x != 1.0f || r.y != 2.0f || r.z != 3.0f || r.w != 4.0f) {
 		std::fprintf(stderr, "identity * vec: %.9f %.9f %.9f %.9f\n",
@@ -113,7 +113,7 @@ constexpr void VerifyMat4Transpose()
 	m.c[3] = Vec4{13.0f, 14.0f, 15.0f, 16.0f};
 
 	const Mat4 t = transpose(m);
-	const float expected[4][4] = {
+	constexpr float expected[4][4] = {
 		{1.0f, 5.0f, 9.0f, 13.0f},
 		{2.0f, 6.0f, 10.0f, 14.0f},
 		{3.0f, 7.0f, 11.0f, 15.0f},
@@ -146,7 +146,7 @@ constexpr void VerifyMat4Inverse()
 	const Mat4 invId = inverse(identity());
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
-			constexpr float expected = (col == row) ? 1.0f : 0.0f;
+			constexpr float expected = col == row ? 1.0f : 0.0f;
 			if (invId.m(col, row) != expected) {
 				std::fprintf(stderr, "inverse(identity)(%zu, %zu) = %.9f\n",
 					col, row, static_cast<double>(invId.m(col, row)));
@@ -164,7 +164,7 @@ constexpr void VerifyMat4Inverse()
 	const Mat4 prod = a * invA;
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
-			constexpr float expected = (col == row) ? 1.0f : 0.0f;
+			constexpr float expected = col == row ? 1.0f : 0.0f;
 			if (std::fabs(prod.m(col, row) - expected) >= 1e-5f) {
 				std::fprintf(stderr, "a * inv(a) at (%zu, %zu) = %.9f, expected %.9f\n",
 					col, row, static_cast<double>(prod.m(col, row)),
@@ -197,14 +197,14 @@ constexpr void VerifyMat4Mul()
 
 constexpr void VerifyFromArrayHelpers()
 {
-	const std::array<float, 3> a3{1.0f, 2.0f, 3.0f};
+	constexpr std::array a3{1.0f, 2.0f, 3.0f};
 	const Vec3 v3 = fromArray3(a3);
 	if (v3.x != 1.0f || v3.y != 2.0f || v3.z != 3.0f) {
 		std::fprintf(stderr, "fromArray3 failed\n");
 		std::abort();
 	}
 
-	const std::array<float, 4> a4{4.0f, 5.0f, 6.0f, 7.0f};
+	constexpr std::array a4{4.0f, 5.0f, 6.0f, 7.0f};
 	const Vec3 v3from4 = fromArray4(a4);
 	if (v3from4.x != 4.0f || v3from4.y != 5.0f || v3from4.z != 6.0f) {
 		std::fprintf(stderr, "fromArray4 (Vec3) failed\n");
@@ -216,7 +216,7 @@ constexpr void VerifyFromArrayHelpers()
 		std::abort();
 	}
 
-	const std::array<float, 16> a16{
+	constexpr std::array a16{
 		1.0f, 2.0f, 3.0f, 4.0f,
 		5.0f, 6.0f, 7.0f, 8.0f,
 		9.0f, 10.0f, 11.0f, 12.0f,

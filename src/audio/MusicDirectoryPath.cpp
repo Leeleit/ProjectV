@@ -22,7 +22,7 @@ std::filesystem::path GetMusicDirectoryPath()
 
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
-		if (const auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
+		if (const auto repoRoot = core::FindRepoRoot(basePath)) {
 			return *repoRoot / kDefaultMusicDirectoryName;
 		}
 	}

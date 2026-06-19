@@ -17,7 +17,7 @@ using nlohmann::json;
 
 constexpr const char *kDefaultPath = "runtime/scene.json";
 
-bool ParseScenePreset(std::string_view text, VoxelScenePreset &outPreset)
+bool ParseScenePreset(const std::string_view text, VoxelScenePreset &outPreset)
 {
 	if (text == "VoxelLab") {
 		outPreset = VoxelScenePreset::VoxelLab;
@@ -48,7 +48,7 @@ std::string GetDefaultSceneConfigPath()
 {
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
-		if (const auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
+		if (const auto repoRoot = core::FindRepoRoot(basePath)) {
 			return (*repoRoot / "runtime" / "scene.json").string();
 		}
 	}

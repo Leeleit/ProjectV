@@ -4,10 +4,8 @@
 #include "core/Types.hpp"
 
 #include <algorithm>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <numeric>
 #include <string_view>
 #include <vector>
 
@@ -55,8 +53,9 @@ void ExpectTrue(TestContext &context, const bool condition, const int line, cons
 #define EXPECT_EQ(context, expected, actual) ExpectEqual(context, (expected), (actual), __LINE__, #actual)
 
 
-VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int depth, const int chunkSize = 4)
+VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int depth)
 {
+	constexpr int chunkSize = 4;
 	VoxelWorld world{};
 	world.min = {0, 0, 0};
 	world.maxExclusive = {width, height, depth};
@@ -79,19 +78,19 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				VoxelChunk &chunk = world.chunks[chunkIndex];
-				chunk.min = {
+				auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
 					world.min.z + chunkZ * world.chunkSize,
 				};
-				chunk.maxExclusive = {
-					std::min(chunk.min.x + world.chunkSize, world.maxExclusive.x),
-					std::min(chunk.min.y + world.chunkSize, world.maxExclusive.y),
-					std::min(chunk.min.z + world.chunkSize, world.maxExclusive.z),
+				maxExclusive = {
+					std::min(min.x + world.chunkSize, world.maxExclusive.x),
+					std::min(min.y + world.chunkSize, world.maxExclusive.y),
+					std::min(min.z + world.chunkSize, world.maxExclusive.z),
 				};
-				chunk.rebuildQueued = false;
-				chunk.nonAirVoxelCount = 0;
+				rebuildQueued = false;
+				nonAirVoxelCount = 0;
 			}
 		}
 	}
@@ -403,19 +402,19 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				VoxelChunk &chunk = world.chunks[chunkIndex];
-				chunk.min = {
+				auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
 					world.min.z + chunkZ * world.chunkSize,
 				};
-				chunk.maxExclusive = {
-					std::min(chunk.min.x + world.chunkSize, world.maxExclusive.x),
-					std::min(chunk.min.y + world.chunkSize, world.maxExclusive.y),
-					std::min(chunk.min.z + world.chunkSize, world.maxExclusive.z),
+				maxExclusive = {
+					std::min(min.x + world.chunkSize, world.maxExclusive.x),
+					std::min(min.y + world.chunkSize, world.maxExclusive.y),
+					std::min(min.z + world.chunkSize, world.maxExclusive.z),
 				};
-				chunk.rebuildQueued = false;
-				chunk.nonAirVoxelCount = 0;
+				rebuildQueued = false;
+				nonAirVoxelCount = 0;
 			}
 		}
 	}
@@ -424,13 +423,13 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	constexpr int centerY = 8;
 	constexpr int radius = 6;
 	constexpr int innerR = 5;
-	const int fluidTop = centerY - innerR + 7;
+	constexpr int fluidTop = centerY - innerR + 7;
 	for (int dz = -radius; dz <= radius; ++dz) {
 		for (int dy = -radius; dy <= radius; ++dy) {
 			for (int dx = -radius; dx <= radius; ++dx) {
 				const int d2 = dx * dx + dy * dy + dz * dz;
-				const int outer2 = radius * radius;
-				const int inner2 = innerR * innerR;
+				constexpr int outer2 = radius * radius;
+				constexpr int inner2 = innerR * innerR;
 				if (d2 > outer2) {
 					continue;
 				}
@@ -574,7 +573,7 @@ void TestFluidCAFluidRateAboveBase(TestContext &context)
 	simulation.timeScale = 2.0f;
 	simulation.fluidTickRateHz = 20.0f;
 
-	const float kFrameDelta = 1.0f / 60.0f;
+	constexpr float kFrameDelta = 1.0f / 60.0f;
 	constexpr int kFrameCount = 60;
 	int tickCount = 0;
 	for (int frame = 0; frame < kFrameCount; ++frame) {
@@ -608,7 +607,7 @@ void TestFluidCAFluidRateAtDefault(TestContext &context)
 	simulation.timeScale = 1.0f;
 	simulation.fluidTickRateHz = 20.0f;
 
-	const float kFrameDelta = 1.0f / 60.0f;
+	constexpr float kFrameDelta = 1.0f / 60.0f;
 	constexpr int kFrameCount = 60;
 	int tickCount = 0;
 	for (int frame = 0; frame < kFrameCount; ++frame) {
@@ -642,7 +641,7 @@ void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 	simulation.fluidTickRateHz = 20.0f;
 
 	const std::vector<uint8_t> before = world.voxels;
-	const float kFrameDelta = 1.0f / 60.0f;
+	constexpr float kFrameDelta = 1.0f / 60.0f;
 	for (int frame = 0; frame < 60; ++frame) {
 		const float scaledDelta = kFrameDelta * simulation.timeScale;
 		simulation.fluidAccumulatorSeconds += scaledDelta;
@@ -698,7 +697,7 @@ void TestFluidCAFluidRateConfigurable(TestContext &context)
 		simulation.timeScale = 1.0f;
 		simulation.fluidTickRateHz = hz;
 
-		const float kFrameDelta = 1.0f / 60.0f;
+		constexpr float kFrameDelta = 1.0f / 60.0f;
 		int tickCount = 0;
 		for (int frame = 0; frame < 60; ++frame) {
 			const float scaledDelta = kFrameDelta * simulation.timeScale;

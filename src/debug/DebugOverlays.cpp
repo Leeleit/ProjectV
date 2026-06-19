@@ -4,7 +4,6 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
-#include <cmath>
 
 namespace {
 constexpr std::array kSelectionOverlayColor{1.0f, 0.82f, 0.22f, 0.95f};

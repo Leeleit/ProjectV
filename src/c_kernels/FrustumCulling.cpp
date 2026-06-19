@@ -3,7 +3,6 @@
 #include "render/SceneResources.hpp"
 
 #include <algorithm>
-#include <cstring>
 #include <vector>
 
 namespace projectv::c_kernels {
@@ -16,15 +15,15 @@ namespace {
 	std::vector<ProjectvCAabb> aabbs(instances.size());
 	for (std::size_t i = 0; i < instances.size(); ++i) {
 		const auto &src = instances[i];
-		auto &dst = aabbs[i];
-		dst.min[0] = src.worldAabbMin.x;
-		dst.min[1] = src.worldAabbMin.y;
-		dst.min[2] = src.worldAabbMin.z;
-		dst._pad0 = 0.0f;
-		dst.max[0] = src.worldAabbMax.x;
-		dst.max[1] = src.worldAabbMax.y;
-		dst.max[2] = src.worldAabbMax.z;
-		dst._pad1 = 0.0f;
+		auto &[min, _pad0, max, _pad1] = aabbs[i];
+		min[0] = src.worldAabbMin.x;
+		min[1] = src.worldAabbMin.y;
+		min[2] = src.worldAabbMin.z;
+		_pad0 = 0.0f;
+		max[0] = src.worldAabbMax.x;
+		max[1] = src.worldAabbMax.y;
+		max[2] = src.worldAabbMax.z;
+		_pad1 = 0.0f;
 	}
 	return aabbs;
 }
@@ -60,7 +59,7 @@ std::vector<uint8_t> CullVisibleMask(
 	const std::span<const ModelInstanceData> &instances,
 	const ChunkCullingParameters &parameters)
 {
-	std::vector<ProjectvCAabb> aabbs = ToCAabbs(instances);
+	const std::vector<ProjectvCAabb> aabbs = ToCAabbs(instances);
 	const ProjectvCFrustumCullParameters cparams = ToCParameters(parameters);
 	std::vector<uint8_t> mask((instances.size() + 7) / 8, 0);
 	if (instances.empty()) {

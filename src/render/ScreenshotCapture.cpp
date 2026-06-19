@@ -7,7 +7,6 @@
 #include "fmt/format.h"
 
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <system_error>
@@ -91,7 +90,7 @@ std::filesystem::path BuildScreenshotCapturePath(
 	const uint64_t captureSequence)
 {
 	const auto now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-	const uint64_t epochMilliseconds = static_cast<uint64_t>(now.time_since_epoch().count());
+	const uint64_t epochMilliseconds = now.time_since_epoch().count();
 	return GetScreenshotCaptureDirectoryPath() /
 		   fmt::format(
 			   "ProjectV-{}-{}-{:04}.bmp",

@@ -437,8 +437,9 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
 
 		constexpr std::array kNeighbourhoodCycle{1, 3, 5, 7};
-		const auto current = std::ranges::find(
-			kNeighbourhoodCycle,
+		const auto current = std::find(
+			kNeighbourhoodCycle.begin(),
+			kNeighbourhoodCycle.end(),
 			render->taaNeighbourhoodRadius);
 		if (current == kNeighbourhoodCycle.end()) {
 			render->taaNeighbourhoodRadius = kNeighbourhoodCycle.front();

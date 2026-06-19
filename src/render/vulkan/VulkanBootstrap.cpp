@@ -141,7 +141,7 @@ bool HasDeviceExtension(
 	const VkPhysicalDevice physicalDevice,
 	const char *extensionName)
 {
-	if (!extensionName) {
+	if (!extensionName) [[unlikely]] {
 		return false;
 	}
 
@@ -262,20 +262,18 @@ bool CheckRequiredFeatures(
 	features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenanceFeatures{};
+	VkBaseOutStructure *lastChainTarget = reinterpret_cast<VkBaseOutStructure *>(&features12);
 	if (outSwapchainMaintenance1Features != nullptr) {
 		maintenanceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 		features12.pNext = &maintenanceFeatures;
+		lastChainTarget = reinterpret_cast<VkBaseOutStructure *>(&maintenanceFeatures);
 	}
 
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
 	if (outDynamicRenderingUnusedAttachmentsFeatures != nullptr) {
 		dynamicRenderingUnusedAttachmentsFeatures.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
-		if (outSwapchainMaintenance1Features != nullptr) {
-			maintenanceFeatures.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
-		} else {
-			features12.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
-		}
+		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&dynamicRenderingUnusedAttachmentsFeatures);
 	}
 	features13.pNext = &features12;
 	VkPhysicalDeviceFeatures2 features2{};

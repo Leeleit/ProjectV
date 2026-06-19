@@ -92,13 +92,13 @@ void VerifyEqualityAndOrdering() {
 	constexpr StringID a2{"alpha"};
 	constexpr StringID b{"beta"};
 	VERIFY(a == a2);
-	VERIFY(!(a != a2));
+	VERIFY(a == a2);
 	VERIFY(a != b);
 	constexpr StringID a3{"alphb"};
 	VERIFY(a != a3);
 	VERIFY_EQ(a.length, a3.length);
 	VERIFY(a.hash != a3.hash);
-	VERIFY((a < b) || (b < a));
+	VERIFY(a < b || b < a);
 	VERIFY(!(a < a2));
 }
 
@@ -106,7 +106,7 @@ void VerifyStdHashSpecialisation() {
 
 	constexpr StringID a{"hashable_id"};
 	constexpr StringID a2{"hashable_id"};
-	const std::hash<StringID> hasher{};
+	constexpr std::hash<StringID> hasher{};
 	VERIFY(hasher(a) == hasher(a2));
 	std::unordered_map<StringID, int> m;
 	m[StringID{"one"}] = 1;
@@ -121,7 +121,7 @@ void VerifyStdHashSpecialisation() {
 
 void VerifyToViewReverseMapping() {
 
-	constexpr std::array<const char *, 3> kTable{"rock_diffuse", "metal_rusty", "wood_oak"};
+	constexpr std::array kTable{"rock_diffuse", "metal_rusty", "wood_oak"};
 	constexpr StringID rock{"rock_diffuse"};
 	constexpr StringID metal{"metal_rusty"};
 	constexpr StringID oak{"wood_oak"};

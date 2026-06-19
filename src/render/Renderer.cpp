@@ -12,7 +12,6 @@
 
 #include "fmt/format.h"
 
-#include <cstring>
 #include <filesystem>
 
 namespace {

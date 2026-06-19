@@ -7,7 +7,6 @@
 #include "render/vulkan/TaaResolvePipeline.hpp"
 
 #include <array>
-#include <cstdio>
 #include <vector>
 
 namespace {

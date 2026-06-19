@@ -24,8 +24,9 @@ struct TestContext {
 	}
 };
 
-bool ApproxEqual(const float a, const float b, const float epsilon = 1e-5f)
+bool ApproxEqual(const float a, const float b)
 {
+	constexpr float epsilon = 1e-5f;
 	return std::fabs(a - b) <= epsilon;
 }
 
@@ -124,7 +125,7 @@ void TestManifestParsingDefaults(TestContext &context)
 	if (single[0].path != "path/tree.glb") {
 		context.Fail(__LINE__, "single path mismatch");
 	}
-	if (single[0].id != "tree") {
+	if (single[0].id != projectv::core::StringID{"tree"}) {
 		context.Fail(__LINE__, "single path default id should be file stem");
 	}
 	if (single[0].position != glm::vec3(0.0f)) {

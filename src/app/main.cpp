@@ -28,7 +28,6 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <cstdio>
-#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -65,7 +64,11 @@ int RebuildAllShadersFromDisk()
 		std::filesystem::temp_directory_path() / "projectv_shader_reload.log";
 	const std::string cmakeCmd = std::string("cmake --build ") + buildDir +
 								 " --target Shaders > \"" + logPath.string() + "\" 2>&1";
-	// NOLINT(bugprone-system-call) - intentional cmake invocation for shader hot-reload
+	// EVIL: shell-out to cmake for dev-time shader hot-reload. std::system
+	// is a command-processor call (shell metacharacters in buildDir could
+	// be a vector), but buildDir is PROJECTV_CMAKE_BUILD_DIR or argv[0]'s
+	// sibling dir — both controlled by the developer. Intentionally not
+	// using execvp here to keep the code portable and the build log on disk.
 	const int rc = std::system(cmakeCmd.c_str());
 	if (rc == 0) {
 		++reloadedCount;
@@ -390,7 +393,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 				config.name.c_str(),
 				configPath.c_str(),
 				std::string{VoxelScenePresetToString(config.scenePreset)}.c_str());
-			WorldState *worldState = GetWorldState(state->ecs.get());
+			const WorldState *worldState = GetWorldState(state->ecs.get());
 			if (worldState && worldState->voxelWorld &&
 				worldState->voxelWorld->scenePreset != config.scenePreset) {
 				if (ReloadActiveVoxelScene(state.get(), config.scenePreset)) {
@@ -408,6 +411,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		state->input.relativeMouseModeEnabled = false;
 	}
 
+	// EVIL: state.release() transfers ownership of the heap-allocated AppState
+	// to SDL via *appstate. SDL_AppEvent/Iterate/Quit receive the raw pointer
+	// and SDL_AppQuit (line 624) calls `delete state;` to free it. This is
+	// the documented SDL3 ownership contract for appstate. The static
+	// analyzer reports this as a "Leak of memory allocated in function
+	// 'SDL_AppInit'" because it cannot see the SDL_AppQuit cleanup; the
+	// memory is freed in SDL_AppQuit, not leaked.
 	*appstate = state.release();
 	return SDL_APP_CONTINUE;
 }

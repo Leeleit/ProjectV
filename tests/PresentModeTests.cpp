@@ -1,10 +1,7 @@
 
 #include "render/vulkan/VulkanSwapchain.hpp"
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
@@ -45,7 +42,7 @@ void ExpectEqual(
 	}
 }
 
-void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
+[[maybe_unused]] void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (!condition) {
 		context.Fail(line, expr);
@@ -58,7 +55,7 @@ void ExpectTrue(TestContext &context, const bool condition, const int line, cons
 
 void TestPresentModeCycleIncludesAllThree(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
@@ -74,7 +71,7 @@ void TestPresentModeCycleIncludesAllThree(TestContext &context)
 
 void TestPresentModeCycleExcludesUnsupported(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 	};
@@ -88,7 +85,7 @@ void TestPresentModeCycleExcludesUnsupported(TestContext &context)
 
 void TestPresentModeCycleOnlyFifo(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 	};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
@@ -102,7 +99,7 @@ void TestPresentModeCycleOnlyFifo(TestContext &context)
 
 void TestPresentModeCycleEmptyFallsBackToFifo(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{};
+	constexpr std::vector<VkPresentModeKHR> surfaceModes{};
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(1), cycle.size());
 	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);
@@ -110,7 +107,7 @@ void TestPresentModeCycleEmptyFallsBackToFifo(TestContext &context)
 
 void TestPresentModeCycleRespectsPriorityOrder(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
@@ -125,7 +122,7 @@ void TestPresentModeCycleRespectsPriorityOrder(TestContext &context)
 
 void TestCycleAdvancesAndWrapsThreeMode(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
@@ -145,7 +142,7 @@ void TestCycleAdvancesAndWrapsThreeMode(TestContext &context)
 
 void TestCycleAdvancesAndWrapsTwoMode(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 	};
@@ -164,7 +161,7 @@ void TestCycleAdvancesAndWrapsTwoMode(TestContext &context)
 
 void TestPresentModeCycleIndex(TestContext &context)
 {
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
@@ -180,14 +177,14 @@ void TestPresentModeCycleIndex(TestContext &context)
 void TestPresentModeCycleSize(TestContext &context)
 {
 	{
-		const std::vector<VkPresentModeKHR> surfaceModes{
+		const std::vector surfaceModes{
 			VK_PRESENT_MODE_FIFO_KHR,
 		};
 		(void)BuildPresentModeCycle(surfaceModes);
 		EXPECT_EQ(context, static_cast<std::size_t>(1), GetPresentModeCycleSize());
 	}
 	{
-		const std::vector<VkPresentModeKHR> surfaceModes{
+		const std::vector surfaceModes{
 			VK_PRESENT_MODE_FIFO_KHR,
 			VK_PRESENT_MODE_MAILBOX_KHR,
 		};
@@ -195,7 +192,7 @@ void TestPresentModeCycleSize(TestContext &context)
 		EXPECT_EQ(context, static_cast<std::size_t>(2), GetPresentModeCycleSize());
 	}
 	{
-		const std::vector<VkPresentModeKHR> surfaceModes{
+		const std::vector surfaceModes{
 			VK_PRESENT_MODE_FIFO_KHR,
 			VK_PRESENT_MODE_MAILBOX_KHR,
 			VK_PRESENT_MODE_IMMEDIATE_KHR,
@@ -208,7 +205,7 @@ void TestPresentModeCycleSize(TestContext &context)
 void TestPresentModeCyclePreservesActiveAcrossRebuild(TestContext &context)
 {
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 	};
@@ -230,7 +227,7 @@ void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 {
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
 	{
-		const std::vector<VkPresentModeKHR> surfaceModes{
+		const std::vector surfaceModes{
 			VK_PRESENT_MODE_FIFO_KHR,
 			VK_PRESENT_MODE_IMMEDIATE_KHR,
 		};
@@ -240,7 +237,7 @@ void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 	EXPECT_EQ(context, VK_PRESENT_MODE_IMMEDIATE_KHR, GetActivePresentMode());
 
 	{
-		const std::vector<VkPresentModeKHR> surfaceModes{
+		const std::vector surfaceModes{
 			VK_PRESENT_MODE_FIFO_KHR,
 		};
 		(void)BuildPresentModeCycle(surfaceModes);
@@ -255,7 +252,7 @@ void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 void TestPresentModeCycleWalksAcrossRecreates(TestContext &context)
 {
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
-	const std::vector<VkPresentModeKHR> surfaceModes{
+	const std::vector surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_IMMEDIATE_KHR,
 	};

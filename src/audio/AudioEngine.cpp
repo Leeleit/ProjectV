@@ -5,8 +5,6 @@
 #include "fmt/format.h"
 
 #include <algorithm>
-#include <cctype>
-
 
 void DestroyAudioEngine(projectv::audio::AudioEngine *engine)
 {
@@ -34,7 +32,7 @@ void ParseArtistTitle(const std::string &filename,
 	std::string stem = filename;
 	if (stem.size() >= 4) {
 		std::string ext = stem.substr(stem.size() - 4);
-		std::ranges::transform(ext, ext.begin(),
+		std::transform(ext.begin(), ext.end(), ext.begin(),
 							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext == ".mp3") {
 			stem = stem.substr(0, stem.size() - 4);
@@ -51,9 +49,16 @@ void ParseArtistTitle(const std::string &filename,
 	}
 }
 
-AudioEngine::~AudioEngine()
+AudioEngine::~AudioEngine() noexcept
 {
-	shutdown();
+	try {
+		shutdown();
+	} catch (...) {
+		runtime::LogRuntimeFailure(
+			"Audio",
+			"AudioEngine.~AudioEngine",
+			"shutdown() threw during destruction; exception swallowed to satisfy noexcept");
+	}
 }
 
 bool AudioEngine::init()
@@ -77,7 +82,6 @@ bool AudioEngine::init()
 		return false;
 	}
 	m_engineInitialized = true;
-
 
 	const ma_result groupResult =
 		ma_sound_group_init(&m_engine, /*flags=*/0, /*pParentGroup=*/nullptr, &m_musicGroup);
@@ -152,14 +156,13 @@ size_t AudioEngine::scanPlaylist()
 		}
 		const auto &path = entry.path();
 		std::string ext = path.extension().string();
-		std::ranges::transform(ext, ext.begin(),
+		std::transform(ext.begin(), ext.end(), ext.begin(),
 							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext != ".mp3") {
 			continue;
 		}
 		m_playlist.push_back(path);
 	}
-
 
 	std::ranges::sort(m_playlist);
 
@@ -168,7 +171,6 @@ size_t AudioEngine::scanPlaylist()
 	} else if (m_currentIndex >= m_playlist.size()) {
 		m_currentIndex = m_playlist.size() - 1;
 	}
-
 
 	if (!m_playlist.empty()) {
 		m_currentTrackName = m_playlist[m_currentIndex].filename().string();
@@ -197,7 +199,6 @@ bool AudioEngine::loadCurrentTrack()
 	unloadCurrentTrack();
 
 	const std::filesystem::path &trackPath = m_playlist[m_currentIndex];
-
 
 	const ma_result initResult = ma_sound_init_from_file(
 		&m_engine,
@@ -351,7 +352,6 @@ bool AudioEngine::goToTrack(size_t newIndex)
 	m_currentTrackName = m_playlist[m_currentIndex].filename().string();
 	m_pausedCursorMs = 0;
 
-
 	unloadCurrentTrack();
 
 	switch (m_state) {
@@ -411,7 +411,6 @@ void AudioEngine::tick()
 	if (!m_engineInitialized) {
 		return;
 	}
-
 
 	const auto now = std::chrono::steady_clock::now();
 	if (now - m_lastPlaylistRefresh >= std::chrono::seconds(5)) {

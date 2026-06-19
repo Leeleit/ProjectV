@@ -39,6 +39,7 @@ void TestGenerateAndValidateHeader(TestContext &ctx)
 		input.good(),
 		"tests/fixtures/box_uv.glb must be present on disk (run GenerateBoxUvFixture first)");
 
+	// ReSharper disable once CppLocalVariableMayBeConst
 	uint32_t header[3] = {0, 0, 0};
 	input.read(reinterpret_cast<char *>(header), sizeof(header));
 	PV_EXPECT_TRUE(

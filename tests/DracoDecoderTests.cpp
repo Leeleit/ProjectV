@@ -22,8 +22,9 @@ struct TestContext {
 	}
 };
 
-bool ApproxEqual(const float a, const float b, const float epsilon = 1e-5f)
+bool ApproxEqual(const float a, const float b)
 {
+	constexpr float epsilon = 1e-5f;
 	return std::fabs(a - b) <= epsilon;
 }
 

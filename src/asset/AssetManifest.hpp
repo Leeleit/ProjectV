@@ -11,7 +11,7 @@
 namespace projectv::asset {
 
 struct ManifestEntry {
-	projectv::core::StringID id;
+	core::StringID id;
 	std::string path;
 	glm::vec3 position{0.0f};
 	glm::vec3 rotationDegrees{0.0f};

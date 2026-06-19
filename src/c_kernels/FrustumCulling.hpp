@@ -3,7 +3,6 @@
 #include "c_kernels/frustum_cull.hpp"
 #include "core/Types.hpp"
 
-#include <cstdint>
 #include <span>
 #include <vector>
 

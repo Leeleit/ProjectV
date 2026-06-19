@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <expected>
 #include <string_view>
 #include <vector>
@@ -66,7 +65,7 @@ inline VkPresentModeKHR GetActivePresentMode()
 namespace projectv::present_mode {
 inline std::vector<VkPresentModeKHR> &MutableCycle() noexcept
 {
-	static std::vector<VkPresentModeKHR> g_cycle = {VK_PRESENT_MODE_FIFO_KHR};
+	static std::vector g_cycle = {VK_PRESENT_MODE_FIFO_KHR};
 	return g_cycle;
 }
 } // namespace projectv::present_mode
@@ -93,7 +92,7 @@ inline VkPresentModeKHR CyclePreferredPresentMode()
 		return projectv::present_mode::g_active;
 	}
 	const auto it = std::find(cycle.begin(), cycle.end(), projectv::present_mode::g_active);
-	const std::size_t currentIndex = (it == cycle.end())
+	const std::size_t currentIndex = it == cycle.end()
 		? 0u
 		: static_cast<std::size_t>(it - cycle.begin());
 	const std::size_t nextIndex = (currentIndex + 1u) % cycle.size();
@@ -104,7 +103,7 @@ inline VkPresentModeKHR CyclePreferredPresentMode()
 inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 	const std::vector<VkPresentModeKHR> &surfacePresentModes)
 {
-	static constexpr std::array<VkPresentModeKHR, 3> kPriority{
+	static constexpr std::array kPriority{
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 		VK_PRESENT_MODE_IMMEDIATE_KHR,

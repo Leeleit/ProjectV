@@ -7,8 +7,6 @@ import projectv.math;
 import projectv.string_id;
 #endif
 
-#include "volk.h"
-
 #include "SDL3/SDL.h"
 #include "asset/MeshGpuResources.hpp"
 #include "core/Math.hpp"
@@ -890,4 +888,3 @@ struct AppState {
 };
 
 void ShutdownVulkan(AppState *state);
-

@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstdio>
 #include <vector>
 
 namespace {
@@ -101,7 +100,7 @@ VkPresentModeKHR PickBestAvailablePresentMode(
 	const std::vector<VkPresentModeKHR> &presentModes,
 	const VkPresentModeKHR preferred)
 {
-	const std::array<VkPresentModeKHR, 3> priority{
+	const std::array priority{
 		preferred,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 		VK_PRESENT_MODE_FIFO_KHR,
@@ -160,7 +159,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 	VulkanContextState *context,
 	SwapchainState *swapchain)
 {
-	const auto fail = [](projectv::swapchain::SwapchainError e, std::string_view step, std::string_view detail) {
+	const auto fail = [](projectv::swapchain::SwapchainError e, const std::string_view step, const std::string_view detail) {
 		runtime::LogRuntimeFailure("Swapchain", step, detail);
 		return std::unexpected(e);
 	};

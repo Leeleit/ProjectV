@@ -1,10 +1,8 @@
 import std;
 
-#include <cstdio>
-
 int main()
 {
-	const std::vector<int> v{1, 2, 3, 4, 5};
+	const std::vector v{1, 2, 3, 4, 5};
 	int sum = 0;
 	for (const int x : v) {
 		sum += x;

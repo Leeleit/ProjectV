@@ -204,7 +204,7 @@ void ResetDirtyFlags(VoxelWorld &world);
 PackedSceneChunkDescriptor MakePackedSceneChunkDescriptor(
 	const Int3 min,
 	const Int3 maxExclusive,
-	const uint32_t nonAirVoxelCount = 1u)
+	const uint32_t nonAirVoxelCount)
 {
 	const uint32_t extentX = static_cast<uint32_t>(maxExclusive.x - min.x);
 	const uint32_t extentY = static_cast<uint32_t>(maxExclusive.y - min.y);
@@ -716,7 +716,7 @@ void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &conte
 
 	EXPECT_EQ(context, static_cast<uint32_t>(8), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(8), world.pendingChunkRebuildIndices.size());
-	std::ranges::sort(world.pendingChunkRebuildIndices);
+	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
 	for (size_t chunkIndex = 0; chunkIndex < 8; ++chunkIndex) {
 		EXPECT_EQ(context, chunkIndex, world.pendingChunkRebuildIndices[chunkIndex]);
 	}
@@ -730,7 +730,7 @@ void TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(TestContext &co
 
 	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(2), world.pendingChunkRebuildIndices.size());
-	std::ranges::sort(world.pendingChunkRebuildIndices);
+	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
 	EXPECT_EQ(context, static_cast<size_t>(0), world.pendingChunkRebuildIndices[0]);
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices[1]);
 }
@@ -956,7 +956,7 @@ void TestBuildSunShadowProjectionFitsSceneBounds(TestContext &context)
 	constexpr float kClipEpsilon = 0.02f;
 
 	for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
-		const std::array corner{
+		[[maybe_unused]] const std::array corner{
 			static_cast<float>((cornerIndex & 1) != 0 ? world.maxExclusive.x : world.min.x),
 			static_cast<float>((cornerIndex & 2) != 0 ? world.maxExclusive.y : world.min.y),
 			static_cast<float>((cornerIndex & 4) != 0 ? world.maxExclusive.z : world.min.z),
@@ -2109,16 +2109,16 @@ void TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(TestContext &context)
 	const ChunkCullingParameters parameters = BuildChunkCullingParameters(camera, {1280u, 720u}, 64.0f);
 
 	EXPECT_TRUE(context, IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}),
+							 MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8}, 1u),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({0, 0, 28}, {8, 8, 36}),
+							 MakePackedSceneChunkDescriptor({0, 0, 28}, {8, 8, 36}, 1u),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({0, 0, -84}, {8, 8, -76}),
+							 MakePackedSceneChunkDescriptor({0, 0, -84}, {8, 8, -76}, 1u),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({80, 0, 0}, {88, 8, 8}),
+							 MakePackedSceneChunkDescriptor({80, 0, 0}, {88, 8, 8}, 1u),
 							 parameters));
 }
 
@@ -2130,10 +2130,10 @@ void TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(TestContext &conte
 	const ChunkCullingParameters parameters = BuildChunkCullingParameters(camera, {1280u, 720u}, 64.0f);
 
 	EXPECT_TRUE(context, IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({34, 0, -8}, {42, 8, 0}),
+							 MakePackedSceneChunkDescriptor({34, 0, -8}, {42, 8, 0}, 1u),
 							 parameters));
 	EXPECT_TRUE(context, !IsSceneChunkVisible(
-							 MakePackedSceneChunkDescriptor({42, 0, -8}, {50, 8, 0}),
+							 MakePackedSceneChunkDescriptor({42, 0, -8}, {50, 8, 0}, 1u),
 							 parameters));
 }
 
@@ -2162,13 +2162,13 @@ void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &con
 							 projectv::math::fromArray16(identityProjection);
 
 						 EXPECT_TRUE(context, IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}),
+													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 1u),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}),
+													 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}, 1u),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
+													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}, 1u),
 													 identityMat));
 						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
 													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}, 0u),

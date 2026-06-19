@@ -1,13 +1,11 @@
 #include "benchmark/benchmark.h"
 
-#include "core/Math.hpp"
 #include "core/Types.hpp"
 #include "render/ShadowProjection.hpp"
 #include "render/ShadowTypes.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <array>
-#include <cstdint>
 #include <vector>
 
 namespace {
@@ -82,9 +80,9 @@ VoxelWorld BuildBenchmarkWorld()
 static void BM_BuildSunShadowProjection(benchmark::State &state)
 {
 	const VoxelWorld world = BuildBenchmarkWorld();
-	const std::array<float, 3> sunDirection{0.35f, 0.88f, 0.22f};
+	constexpr std::array sunDirection{0.35f, 0.88f, 0.22f};
 	constexpr float coverageScale = 1.10f;
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		SunShadowProjection result =
 			BuildSunShadowProjection(world, sunDirection, coverageScale);
 		benchmark::DoNotOptimize(result);
@@ -95,7 +93,7 @@ static void BM_BuildSunShadowProjection(benchmark::State &state)
 
 static void BM_BuildSunShadowCascadeSplits(benchmark::State &state)
 {
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		SunShadowCascadeSplits splits =
 			BuildSunShadowCascadeSplits(0.1f, 128.0f);
 		benchmark::DoNotOptimize(splits);
