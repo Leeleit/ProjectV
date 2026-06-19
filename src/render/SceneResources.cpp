@@ -36,11 +36,6 @@ VoxelSceneLighting BuildSceneLighting(
 	return BuildVoxelSceneLighting(world.scenePreset, render.lightingDebugControls);
 }
 
-// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
-// `std::array<float, 16>`. Same column-major field order, same
-// 64 B byte size; the destination is a `std::array<float, 64>`
-// (raw storage for the `sunShadowViewProjections` UBO field,
-// std430 GLSL `mat4[4]`) which is memcpy'd from the source.
 void StoreSunShadowProjection(
 	VoxelSceneLighting &lighting,
 	const uint32_t cascadeIndex,
@@ -401,11 +396,6 @@ void UpdateGeneratedFaceStatsFromFrameResources(
 }
 
 namespace {
-// **Two-level cache rebuild path (2026-06-12).** Per-chunk
-// loop that also fills `cache.opaqueCommands` / `cache.shadowCommands` /
-// `cache.transparentCommands` so the next call can short-circuit
-// the loop entirely on a cache hit. The cache path is opt-in
-// via `UpdateSceneFrameChunkVisibility`'s hash check.
 struct ChunkVisibilityRebuildResult {
 	uint32_t visibleChunkCount = 0;
 	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
@@ -430,12 +420,6 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	auto *shadowCommands = static_cast<VkDrawIndirectCommand *>(frameResources.shadowIndirectMappedData);
 	auto *transparentCommands = static_cast<VkDrawIndirectCommand *>(frameResources.transparentIndirectMappedData);
 	result.shadowCascadeVisibleChunkCounts.fill(0u);
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) per
-	// element replaces `std::array<float, 16>`. Same column-major
-	// field order, same 64 B byte size. The `sunShadowViewProjections`
-	// UBO field stays `std::array<float, 64>` (raw storage for
-	// the std430 GLSL `mat4[4]`) and is memcpy'd into the
-	// per-cascade `Mat4`.
 	std::array<projectv::math::Mat4, kSunShadowCascadeCount> shadowCascadeMatrices{};
 	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
 		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * 16u;
@@ -446,13 +430,6 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	}
 
 	const uint32_t chunkDescriptorCount = frameResources.chunkDescriptorCount;
-	// **Tier 1.A (`2026-06-13`).** `ChunkVisibilityCache` now uses
-	// `std::inplace_vector` (P0843, C++26) with a fixed cap of
-	// `kChunkVisibilityCacheMaxChunks` (1024). The cap covers
-	// VoxelLab + MeshingStress worst case; exceeding it is a logic
-	// error and would have been an OOM on the old `std::vector`
-	// path. `resize()` value-initialises new slots in-place
-	// (no heap allocation, no realloc copy of existing data).
 	assert(chunkDescriptorCount <= ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks);
 	assert(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount <=
 		ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount);
@@ -508,14 +485,6 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	return result;
 }
 
-// **Two-level cache hit path (2026-06-12).** Copies the cached
-// `VkDrawIndirectCommand` arrays into the per-frame mapped GPU
-// indirect buffers. Three `memcpy` calls (opaque, shadow,
-// transparent) replace the 1500+ dot products of the per-chunk
-// loop. The shadow buffer is `chunkDescriptorCount *
-// kSunShadowCascadeCount` `VkDrawIndirectCommand` entries — at
-// 300 chunks and 4 cascades that's 300*4*16 = ~19 KB, well
-// under any L1 cache.
 void ApplyCachedChunkVisibilityCommands(
 	const ChunkVisibilityCache &cache,
 	SceneFrameResources &frameResources)
@@ -592,16 +561,6 @@ bool UpdateSceneFrameChunkVisibility(
 		std::memcpy(frameResources.chunkCullingMappedData, &parameters, sizeof(parameters));
 	}
 
-	// **Two-level cache check, 2026-06-12.** The hash folds
-	// quantized camera position (0.25 voxel) + quantized
-	// camera forward (0.005, ~0.3°) + scene voxel payload
-	// version + chunk descriptor count. On a hit we skip the
-	// per-chunk loop entirely and `memcpy` the cached
-	// `VkDrawIndirectCommand` arrays straight into the
-	// per-frame mapped GPU indirect buffers. See
-	// `ChunkVisibilityCache` and
-	// `projectv::visibility_cache::ComputeVisibilityCacheHash`
-	// for the per-field contract and rationale.
 	const uint64_t hash = projectv::visibility_cache::ComputeVisibilityCacheHash(
 		parameters,
 		render.sceneVoxelPayloadVersion,
@@ -624,12 +583,6 @@ bool UpdateSceneFrameChunkVisibility(
 		return true;
 	}
 
-	// **Cache miss path (2026-06-12).** Run the canonical
-	// per-chunk loop AND fill the cache in the same pass so the
-	// next frame's hit check has data to `memcpy`. The two side
-	// effects (frameResources mapped writes + cache fills) share
-	// the same per-chunk math, so we don't pay an extra pass
-	// here.
 	const auto &[resultVisibleChunkCount, resultShadowCascadeVisibleChunkCounts] = RebuildChunkVisibilityAndFillCache(
 		render,
 		frameResources,
@@ -720,30 +673,6 @@ void DestroySceneResources(
 		return;
 	}
 
-	// **Pre-existing race fix (`2026-06-13`).** Wait for
-	// the GPU to finish before destroying the
-	// per-frame buffers. The validation layer
-	// reports: "the storage buffer descriptor
-	// sceneLighting is using buffer ... that is
-	// invalid or has been destroyed" on
-	// `vkCmdDraw` calls issued after a scene preset
-	// switch (`F5` or the startup auto-cycle) — the
-	// previous frame's draw is still in flight when
-	// we tear down its descriptor-backed buffers.
-	// The fix is the brute-force `vkDeviceWaitIdle`:
-	// a per-resource timeline-semaphore lifetime
-	// tracker would be cleaner, but `DestroySceneResources`
-	// is only called on scene switches / allocation
-	// error rollbacks (not per-frame), so the
-	// pipeline stall is acceptable. The pre-existing
-	// call sites that follow this preamble
-	// (`CreateSceneResources` and the per-buffer
-	// `vmaCreateBuffer` failure-rollback paths) all
-	// destroy a known set of buffers that may be
-	// in-flight in any of the
-	// `render->sceneFrameResources` slots, so a
-	// single device-wide idle is the simplest
-	// correct fix.
 	if (context->device != VK_NULL_HANDLE) {
 		const VkResult idleResult = vkDeviceWaitIdle(context->device);
 		if (idleResult != VK_SUCCESS) {

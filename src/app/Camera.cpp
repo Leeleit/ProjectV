@@ -1,29 +1,3 @@
-// **Tier 2.D (`2026-06-13`).** Re-enabled direct importer
-// of `projectv.math` here. The upstream Clang 22 +
-// libc++ 22.1.6 / libstdc++ 16.1.1 ODR bug on
-// `__type_traits/promote.h` was triggered by `import` +
-// the same TU's `#include <string>` (the redefinition
-// fires inside libc++'s own `<compare>` / `tuple` chain).
-// Resolved by removing `<cmath>` from the `Math.ixx`
-// global module fragment (now uses `__builtin_sqrtf`
-// directly) — the conflict in this TU is independent
-// of the libc++ / libstdc++ stdlib choice and is fixed
-// by the same `<cmath>` removal.
-//
-// Original Tier 2.D text (preserved below for git-blame
-// archeology):
-//   "**libc++ migration debug / `import` regression
-//   (`2026-06-13`).** Removed the direct `import
-//   projectv.math;` from this TU. Per the upstream
-//   Clang 22 + libc++ 22.1.6 bug..."
-//
-// **Windows clang-cl fallback (`2026-06-18`,
-// windows-host-build-r0).** Switched to `#include
-// "core/Math.hpp"` so the same TU compiles on clang-cl
-// (which cannot use `import` without CMake scanner support).
-// The header itself branches into the inline fallback under
-// `defined(__clang__) && defined(_MSC_VER)`; on native
-// clang it still re-issues `import projectv.math;`.
 #include "core/Math.hpp"
 
 #include "app/Camera.hpp"
@@ -106,36 +80,16 @@ void HandleCameraEvent(
 	}
 
 	if (event->type == SDL_EVENT_MOUSE_MOTION && input->relativeMouseModeEnabled) {
-		// P0.3 follow-up: drop the first MOUSE_MOTION event after relative
-		// mode is enabled. The pre-capture cursor position can be many
-		// hundred pixels away from the window center, so the first
-		// relative delta after `SDL_SetWindowRelativeMouseMode(true)` is
-		// huge and would otherwise yank the camera look on launch.
 		if (input->skipFirstMouseMotion) {
 			input->skipFirstMouseMotion = false;
 			input->mouseDeltaX = 0.0f;
 			input->mouseDeltaY = 0.0f;
 			return;
 		}
-		// **Window-event mouse freeze (`2026-06-14`).** After
-		// fullscreen enter/leave or window resize, SDL can deliver a
-		// burst of 1-3 spurious MOUSE_MOTION events (the cursor is
-		// recentered in the new window extent, but the relative delta
-		// is non-zero on some platforms). `skipFirstMouseMotion` only
-		// drops the first event; this drops the next N events so a
-		// repeated fullscreen toggle never accumulates a slow drift
-		// ("slightly right and down" per user repro).
 		if (input->mouseMotionFreezeCount > 0) {
 			--input->mouseMotionFreezeCount;
 			return;
 		}
-		// **Fullscreen / resize defence-in-depth (`2026-06-14`).**
-		// Wayland/X11/Win32 can each deliver a stale pre-capture motion
-		// event in a different order relative to the matching window
-		// event, and on some platforms the window event itself never
-		// arrives. Clamp absurd per-event deltas so a single spurious
-		// motion can never yank the camera more than ~100 px worth,
-		// regardless of which event arrived first.
 		constexpr float kMaxMouseDeltaPerEvent = 100.0f;
 		const float dx = std::clamp(
 			event->motion.xrel,

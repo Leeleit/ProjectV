@@ -168,44 +168,14 @@ void InitializeInputState(InputState &input)
 	// будущее"). `Z` is unused.
 	BindAction(input, InputAction::ToggleCascadeSplitPlanes, SDL_SCANCODE_L);
 	BindAction(input, InputAction::ToggleCursorHitNormal, SDL_SCANCODE_Z);
-	// Frame-step / slow-motion debug (2026-06-12). `[` / `]`
-	// are visually a "rewind" / "fast-forward" pair on a QWERTY
-	// keyboard; `\` is the "step once" trigger (low traffic on
-	// the main alphanumeric cluster, no overlap with the TAA
-	// ladder `;`/`'`/`-`/`=`/`,`/`.`); `` ` `` resets
-	// `timeScale` to 1.0 — the backtick is the rightmost
-	// top-row key, mirroring the read-only hotkey shape used
-	// by `V` (reset lighting debug controls).
 	BindAction(input, InputAction::DecreaseTimeScale, SDL_SCANCODE_LEFTBRACKET);
 	BindAction(input, InputAction::IncreaseTimeScale, SDL_SCANCODE_RIGHTBRACKET);
 	BindAction(input, InputAction::StepSingleFrame, SDL_SCANCODE_BACKSLASH);
 	BindAction(input, InputAction::ResetTimeScale, SDL_SCANCODE_GRAVE);
-	// **Audio engine, 2026-06-12.** Music
-	// player controls. v1 hotkey layout is
-	// placeholder per `decisions.md §28` —
-	// the operator plans a full hotkey
-	// rebind as a follow-up. The current
-	// letters/digits were chosen because they
-	// were free in the existing `InputAction`
-	// table (Q/E are not used; digits 7/8
-	// are not used; the digit pair keeps
-	// the volume-down / volume-up mnemonic
-	// intuitive without stealing letters
-	// from the existing edit/lighting
-	// ladders).
 	BindAction(input, InputAction::ToggleMusicPlayPause, SDL_SCANCODE_Q);
 	BindAction(input, InputAction::StopMusic, SDL_SCANCODE_E);
 	BindAction(input, InputAction::MusicVolumeDown, SDL_SCANCODE_7);
 	BindAction(input, InputAction::MusicVolumeUp, SDL_SCANCODE_8);
-	// **Track switching, 2026-06-12.** `9` and `0`
-	// are the only adjacent free digit pair in
-	// the existing `InputAction` table (the
-	// adjacent digits `7` and `8` were taken
-	// by the volume-up / volume-down actions
-	// above). `9` conventionally means "skip
-	// ahead in time" (next track); `0`
-	// conventionally means "rewind" (previous
-	// track). Both wrap around the playlist.
 	BindAction(input, InputAction::NextMusicTrack, SDL_SCANCODE_9);
 	BindAction(input, InputAction::PreviousMusicTrack, SDL_SCANCODE_0);
 }
@@ -258,9 +228,6 @@ bool ConsumeInputActionPressed(
 	return wasPressed;
 }
 
-// **Tier 5 (`2026-06-13`).** `uint64_t` return type
-// and `1ull << actionIndex` shift (the `1u` 32-bit
-// shift with `actionIndex >= 32` was UB).
 uint64_t GetInputActionDownMask(const InputState &input)
 {
 	uint64_t mask = 0;

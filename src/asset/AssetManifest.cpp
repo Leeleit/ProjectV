@@ -119,13 +119,6 @@ bool ParseEntry(const std::string &rawEntry, ManifestEntry &out)
 	if (out.path.empty()) {
 		return false;
 	}
-	// **Tier 1.D/E (`2026-06-13`).** `ManifestEntry::id` is now a
-	// `StringID` (16 B hash + length). Computing the id from the
-	// path stem means a runtime ctor call (path stem is only
-	// known after the env-var parse), so we go through
-	// `std::string_view` rather than the `consteval` literal
-	// ctor. The FNV-1a hash is computed once here and stored
-	// for the rest of the manifest's lifetime.
 	out.id = projectv::core::StringID{std::string_view{DefaultIdStemForPath(out.path)}};
 	out.position = glm::vec3(0.0f);
 	out.rotationDegrees = glm::vec3(0.0f);

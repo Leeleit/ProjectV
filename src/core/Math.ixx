@@ -1,30 +1,3 @@
-// **Tier 2.A — `Math.ixx` (`2026-06-13`).** C++20 module
-// form of the Tier 0.A `projectv::math::Vec3/Vec4/Mat4`
-// types. Mirrors `src/core/Math.hpp` 1:1 — same struct
-// layout, same `alignas(16)`, same column-major `Mat4` —
-// so any `.cpp` that switches from `#include "core/Math.hpp"`
-// to `import projectv.math;` gets the identical ABI /
-// layout / hot-path codegen.
-//
-// The header (`core/Math.hpp`) is **kept** as a thin
-// re-export shim for now: it forwards `import projectv.math;`
-// for any TU that still uses the `#include` form (Tier 2.D
-// migration). Once Tier 2.D is complete, the header can
-// be deleted and every TU moves to `import`.
-//
-// **Module structure:**
-//   - Global module fragment (`module;`) brings in `<cmath>`
-//     for `std::sqrt` / `std::cos` / `std::sin` and `<cstddef>`
-//     for `std::size_t`.
-//   - Module purview exports `projectv::math::Vec3`,
-//     `Vec4`, `Mat4`, the `dot` / `cross` / `lengthSq` /
-//     `normalize` / `identity` / `zero` / `transpose` /
-//     `inverse` / `fromArray{3,4,16}` free functions, and
-//     the `operator*` / `operator+` / `operator-` overloads.
-//   - The `fromArray` and `data` helpers are intentionally
-//     NOT exported — they're internal to the
-//     cast-between-`glm::mat4`-and-`Mat4` plumbing and
-//     shouldn't be part of the public surface.
 module;
 
 #include <array>
@@ -153,21 +126,6 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 }
 
 [[nodiscard]] inline float length(const Vec3 v) noexcept {
-	// **libc++ migration / `import` regression (`2026-06-13`).**
-	// Use `__builtin_sqrtf` instead of `std::sqrt` so we
-	// don't need to `#include <cmath>` in the global
-	// module fragment. Including `<cmath>` here would
-	// put `std::sqrt` in the global module purview;
-	// any consumer TU that also `#include <cmath>`
-	// (e.g. for its own `std::sqrt` use) would then
-	// ODR-clash on the redefinition. The Clang
-	// builtin is a direct call to the `sqrtss`
-	// instruction on x86-64 (the project's
-	// `mavx2 / -fpmath=sse` build flag) so there's
-	// no performance cost vs `std::sqrt`. The
-	// original `std::sqrt` was used in commit
-	// `86df567` (Tier 0.A) before the modules
-	// pipeline was set up.
 	return __builtin_sqrtf(lengthSq(v));
 }
 
@@ -362,17 +320,6 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return Vec4{-a.x, -a.y, -a.z, -a.w};
 }
 
-// **Cast helpers** from `glm::mat4` / `float[N]` to
-// `Mat4` so the existing ModelManifestLoader /
-// ShadowProjection code can memcpy-glm->Mat4 without
-// having to include glm in this module.
-//
-// **`std::array` overloads (Tier 2.D `2026-06-13`).** The
-// raw-pointer overloads are the canonical ones (memcpy
-// from `glm::mat4::data()`); the `std::array` overloads
-// are convenience for callers that have a sized buffer
-// already in scope (e.g. the `ProjectVMathTests`
-// `fromArray*` test cases).
 [[nodiscard]] inline Mat4 fromArray16(const float *src) noexcept {
 	Mat4 result{};
 	for (std::size_t i = 0; i < 16; ++i) {

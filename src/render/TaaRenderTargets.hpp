@@ -24,15 +24,6 @@ struct VulkanContextState;
 namespace projectv::taa {
 using VmaAllocationHandle = void *;
 
-// **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
-// `CreateOrRecreateTaaRenderTargets`. Replaces the old `bool` return
-// + per-step log-line pattern with `std::expected<void, TaaError>`
-// so callers can `match` on the exact failure (image create vs
-// image-view create vs sampler create vs precondition violation).
-// Cold path (1× per swapchain recreate), so the ~2× `std::expected`
-// cost is irrelevant. Each variant maps to a `toString(e)` for log
-// lines and a per-step `runtime::LogRuntimeFailure` call inside the
-// implementation.
 enum class TaaError : std::uint8_t {
 	PreconditionFailed = 0,
 	ImageCreateFailed,
@@ -112,23 +103,6 @@ struct OffscreenColorTarget {
 	VmaAllocationHandle allocation = nullptr;
 };
 
-// Build / recreate the TAA offscreen color images (colour +
-// per-layer history) + linear sampler. Returns false on any
-// allocation / view creation failure; the caller is expected to
-// clean up partial state and abort frame submission until the next
-// successful recreate.
-//
-// 1.5 anti-flicker: the function now also allocates the
-// per-layer history pair (CTSH, AOCC, LOCL). The same extent
-// and recreate cadence applies — both image sets follow the
-// swapchain extent and re-allocate together on resize. Same
-// ping-pong shape (current + previous) as the colour history.
-// **Tier 1.B (`2026-06-13`).** Returns `std::expected<void, TaaError>`
-// (was `bool`). The 4 failure points — precondition violation,
-// `vmaCreateImage` failure, `vkCreateImageView` failure, and
-// `vkCreateSampler` failure — each map to a distinct
-// `TaaError` variant. Cold path (1× per swapchain recreate), so
-// the `std::expected` cost is irrelevant.
 std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 	VulkanContextState *context,
 	VkExtent2D extent,

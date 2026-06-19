@@ -1,14 +1,3 @@
-// **Tier 2.D (`2026-06-13`).** Re-enabled direct importer
-// of `projectv.math`. See `src/app/Camera.cpp` for the
-// full rationale.
-//
-// **Windows clang-cl fallback (`2026-06-18`,
-// windows-host-build-r0).** Switched to `#include
-// "core/Math.hpp"` so the same TU compiles on clang-cl
-// (which cannot use `import` without CMake scanner support).
-// The header itself branches into the inline fallback under
-// `defined(__clang__) && defined(_MSC_VER)`; on native
-// clang it still re-issues `import projectv.math;`.
 #include "core/Math.hpp"
 
 #include "render/ShadowProjection.hpp"
@@ -84,11 +73,6 @@ float SnapToTexelGrid(
 	return std::round(value / texelSize) * texelSize;
 }
 
-// **Tier 0.B.** `matrix` is now `projectv::math::Mat4` (16-byte
-// aligned, same column-major field order). The destination is still
-// a flat `std::array<float, 64>` because that array is later
-// memcpy'd into the `sunShadowViewProjections` UBO field whose
-// std430 GLSL layout requires `float[64]`-shaped raw bytes.
 void StoreCascadeMatrix(
 	std::array<float, kSunShadowMatrixElementCount> &target,
 	const uint32_t cascadeIndex,

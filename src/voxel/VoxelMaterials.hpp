@@ -113,16 +113,6 @@ struct VoxelSceneLighting {
 	// exposes texel size + a one-frame validity flag set to 0 after
 	// resize / world reload / preset change / pause.
 	std::array<float, 4> taaParams{};
-	// previous frame's viewProjection (column-major, same layout as
-	// `GraphicsPushConstants::viewProjection`). Reused by the TAA resolve
-	// pass for depth-based reprojection; zeroed on the first frame.
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
-	// `std::array<float, 16>`. Same byte size (64 B), the
-	// `static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528)`
-	// below still holds because `Mat4` and `std::array<float, 16>` have
-	// the same size and alignment; the column-major field order
-	// (`m[col*4 + row]`) matches the std430 GLSL `mat4` layout that the
-	// shader uses.
 	projectv::math::Mat4 prevViewProjectionMatrix{};
 	// texel size x, texel size y, history valid (0/1), neighbourhood radius (1/3/5/7)
 	std::array<float, 4> taaHistoryParams{};

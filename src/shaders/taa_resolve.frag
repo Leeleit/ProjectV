@@ -73,35 +73,6 @@ layout(push_constant) uniform ResolvePushConstants {
 layout(location = 0) out vec4 outColor;
 
 const float kHugeTaaRayT = 1e20;
-// Color-distance rejection threshold in YCoCg space. When the current
-// sample is farther than this from the neighborhood centroid, the
-// shader assumes the surrounding samples are from a different
-// material/surface (e.g. a polygon-model pass output surrounded by
-// voxel pass samples — see M5.2 follow-up from the asset-pipeline
-// closeout) and skips both the YCoCg clamp and the temporal blend.
-//
-// Bumped `2026-06-12` from `0.20` to `0.40` after a runtime repro on
-// the model pass in VoxelLab (`PROJECTV_MODELS=box.glb@0,1,0`,
-// reference shot `cam -25 19 25 look 0.62 -0.48 -0.62`): the
-// `model.frag` 4×4 procedural UV checker (originally lines 62-67,
-// now triplanar on `inWorldPosition` per `agent/memory.md` §10.20)
-// has two tint variants — `(0.85, 0.62, 0.38)` and
-// `(0.60, 0.55, 0.45)` — which after the ambient + direct-sun
-// path produce YCoCg samples around `(0.66, 0.235, 0.12)` (yellow,
-// Euclidean distance ≈ 0.27 to the gray voxel centroid) and
-// `(0.57, 0.075, 0.05)` (blue, distance ≈ 0.16 to the voxel
-// centroid). At the old 0.20 threshold the yellow parts passed
-// rejection (visible) and the blue parts failed (clamped to voxel
-// range, invisible) — the "block half in textures" symptom reported
-// after M5.1b revert. 0.40 catches both tint variants and leaves
-// enough headroom for chroma-dim outliers (e.g. close-to-gray future
-// model materials). The 0.20 baseline was tuned for the voxel-
-// pass-only case (`voxel.frag` neighbor set) where the centroid-
-// variance is low; with a small model pass output the centroid is
-// dominated by voxels, not the model, so a wider threshold is the
-// lever. False-positive risk on natural voxel variation is bounded:
-// voxel surfaces are typically within 0.05 YCoCg of their 3×3 mean,
-// well under 0.40.
 const float kTaaColorDistanceRejectionThreshold = 0.40;
 
 vec3 ApplyTaaToneMap(const vec3 linearColor) {
@@ -258,34 +229,6 @@ void main()
     vec3 historySample = vec3(0.0);
     bool reprojectionOk = false;
     if (historyValid && texelSize.x > 0.0 && texelSize.y > 0.0) {
-        // Reconstruct the world position of the *current* pixel from its
-        // depth value. `inverseCurrentViewProjection` is a column-major
-        // mat4; multiplying by a homogeneous `(uv, depth, 1)` gives clip,
-        // and dividing by `w` gives the world-space position. Then we
-        // reproject that point through the previous viewProjection to
-        // get the previous-frame NDC, convert to UV, and sample history.
-        //
-        // **Vulkan NDC depth range is [0, 1], NOT [-1, 1] like OpenGL.**
-        // The pre-2026-06-13 code used the OpenGL convention
-        // `ndcDepth = rawDepth * 2.0 - 1.0` which mapped Vulkan's
-        // [0, 1] depth into the wrong half of the NDC space,
-        // making the reprojection sample wildly off-screen
-        // UVs (the closer the depth to 0.0, the more the
-        // reconstructed world position flew behind the camera
-        // and out of the valid reprojection region). The
-        // visible symptom was a per-frame "tremor" on VoxelLab
-        // (compact scene, small UV offset) and a "psychedelic"
-        // full-screen artifact on TransparencyStress /
-        // FlatBenchmark / ChunkGrid (large far-distance scenes
-        // where the off-screen UV wrapped into random history
-        // texture memory). This is the same NDC-convention
-        // bug that has bitten every Vulkan port of an OpenGL
-        // engine at least once; the projection matrix in
-        // `src/app/Camera.cpp:241` writes the Vulkan [0, 1] range
-        // (third column's `farPlane / (nearPlane - farPlane)` and
-        // fourth column's `nearPlane * farPlane / (nearPlane - farPlane)`
-        // are the standard Vulkan depth terms), so the inverse
-        // application on the shader side must NOT rescale.
         const float rawDepth = texture(depth, uv).r;
         const float ndcDepth = rawDepth;
         const vec4 ndcNear = vec4(uv * 2.0 - 1.0, ndcDepth, 1.0);

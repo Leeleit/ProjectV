@@ -1,15 +1,3 @@
-// **Tier 2.D (`2026-06-13`).** Re-enabled direct importer
-// of `projectv.math`. See `src/app/Camera.cpp` for the
-// full rationale (upstream ODR fix via `__builtin_sqrtf`
-// in `Math.ixx`).
-//
-// **Windows clang-cl fallback (`2026-06-18`,
-// windows-host-build-r0).** Switched to `#include
-// "core/Math.hpp"` so the same TU compiles on clang-cl
-// (which cannot use `import` without CMake scanner support).
-// The header itself branches into the inline fallback under
-// `defined(__clang__) && defined(_MSC_VER)`; on native
-// clang it still re-issues `import projectv.math;`.
 #include "core/Math.hpp"
 
 #include "app/FramePreparation.hpp"
@@ -60,16 +48,6 @@ void BuildVisibleModelInstanceList(
 		cullCandidates.push_back(instance);
 	}
 
-	// **Tier 4 (`2026-06-13`).** C / AVX2 frustum-cull
-	// kernel (`src/c_kernels/FrustumCulling.cpp`).
-	// `FilterVisibleInstances` does the conversion +
-	// batched C-kernel call + mask-to-vector filter in
-	// one call. Per the Tier 3 benchmark this is
-	// 3.7-3.9× faster than the per-AABB
-	// `IsAabbVisibleAgainstCameraFrustum` path on this
-	// hardware. For `count < 8` it falls back to the
-	// inline C++ helper (the kernel's per-batch setup
-	// cost is not amortised for tiny inputs).
 	const std::vector<ModelInstanceData> visible = projectv::c_kernels::FilterVisibleInstances(
 		std::span<const ModelInstanceData>(cullCandidates.data(), cullCandidates.size()),
 		parameters);
@@ -258,13 +236,6 @@ bool PrepareFrameRenderData(
 		&frame->renderData.debugOverlayBoxes,
 		*camera,
 		*render);
-	// TAA jitter: advance the 8-tap Halton(2,3) sub-pixel sequence and stash
-	// the offset so the next frame can reproject through it. The jitter sits
-	// in pixel units here; `BuildGraphicsPushConstants` converts it to NDC
-	// when it writes the projection matrix. TAA is the source of the
-	// anti-jitter that closed the user-reported 2026-06-11 jitter bug, so
-	// even at this hook we treat `taaEnabled` as a master gate and force
-	// the jitter to zero when it is off.
 	const std::array taaPixelJitter = render->taaEnabled
 										  ? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
 										  : std::array{0.0f, 0.0f};

@@ -1,14 +1,3 @@
-// **Tier 1.D (`2026-06-13`).** Tests for `projectv::core::StringID`.
-//
-// 8 tests verifying the design contract from `StringId.hpp`:
-//   - Layout (16 B / 16-byte align, trivially copyable)
-//   - Constexpr / consteval ctor
-//   - Runtime ctor from `std::string_view` matches literal ctor
-//   - FNV-1a hash known-vector (Wikipedia FNV test vectors)
-//   - Equality / inequality / less-than
-//   - `std::hash<StringID>` specialisation
-//   - `toView` reverse-mapping table lookup
-//   - Empty string handling
 #include <cassert>
 #include <cstdio>
 #include <cstring>

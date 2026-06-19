@@ -1,48 +1,5 @@
 #version 450
 
-// **Ray-march compute shader (defense r0, 2026-06-13).** Implements the
-// GPU ray-marching ray cast called out in ТЗ 4.1.2: an Amanatides-Woo 3D
-// DDA through the packed chunk voxel payload. One thread per pixel.
-//
-// **Current scope:** this shader is compiled and bound to the pipeline
-// scaffold added in `src/render/RayMarchPass.{hpp,cpp}`. The renderer
-// integration (offscreen color attachment + composite into the main
-// graphics pass) is the Phase 7 follow-up documented in
-// `docs/DefenseReport.md §3`. The shader is intentionally self-contained
-// and ready to be wired in without further changes.
-//
-// **Inputs** (uniforms, set 0, binding 0):
-//   - cameraOriginAndFov.xyz = camera position in world units
-//   - cameraOriginAndFov.w   = vertical field-of-view in radians
-//   - cameraForward.xyz      = forward unit vector
-//   - cameraForward.w        = aspect ratio (width / height)
-//   - cameraRight.xyz        = right unit vector
-//   - cameraRight.w          = unused (kept for vec4 alignment)
-//   - cameraUp.xyz           = up unit vector
-//   - cameraUp.w             = unused
-//   - worldMin.xyz           = world-space minimum voxel corner
-//   - worldMin.w             = unused
-//   - voxelSize.xyz          = voxel edge length (scalar, replicated)
-//   - voxelSize.w            = unused
-//   - gridDims.x             = grid width  in voxels
-//   - gridDims.y             = grid height in voxels
-//   - gridDims.z             = grid depth  in voxels
-//   - gridDims.w             = unused
-//   - imageSize.x            = output image width  in pixels
-//   - imageSize.y            = output image height in pixels
-//   - maxSteps               = safety cap on DDA iterations
-//
-// **Inputs** (storage buffer, set 0, binding 1):
-//   - packedVoxelPayload : R-only 8-bit material indices, indexed as
-//     `[x + y*W + z*W*H]`. Same byte layout as `voxel_mesh.comp`. A zero
-//     byte means `Air`; any other byte is treated as a solid hit.
-//
-// **Output** (storage image, set 0, binding 2, rgba8):
-//   - ray-march result for the corresponding pixel. RGB = simple
-//     directional shading (sun direction encoded in cameraForward.w on
-//     the CPU side and packed into the up vector's .w slot below).
-//     A = 1.0 hit, 0.0 miss.
-
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0, std140) uniform RayMarchParams {

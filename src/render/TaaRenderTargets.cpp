@@ -73,13 +73,6 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler)
 {
-	// **Tier 1.B (`2026-06-13`).** Returns `std::expected<void, TaaError>`.
-	// Each failure point maps to a distinct enum variant. The
-	// implementation logs the per-step detail in
-	// `runtime::LogRuntimeFailure("Taa", step, detail)` and
-	// returns `std::unexpected(TaaError::Variant)`. The caller
-	// in `VulkanSwapchain.cpp::RecreateSwapchain` logs the
-	// variant name and tears down.
 	const auto fail = [](projectv::taa::TaaError e, std::string_view step, std::string_view detail) {
 		runtime::LogRuntimeFailure("Taa", step, detail);
 		return std::unexpected(e);

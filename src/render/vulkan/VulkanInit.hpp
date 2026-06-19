@@ -8,14 +8,6 @@
 
 namespace projectv::vulkan_init {
 
-// **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
-// `InitVulkan`. Cold path (1× per session startup), so the
-// `std::expected` cost is irrelevant. The error variants are
-// grouped by init stage (Precondition, Bootstrap, Tracy,
-// Swapchain, World, Ecs, Physics, SceneResources, Pipelines,
-// Manifest). The per-step `runtime::LogRuntimeFailure` log
-// line is preserved inside the implementation — the variant
-// is the machine-readable signal for the caller.
 enum class VulkanInitError : std::uint8_t {
 	PreconditionFailed = 0,
 	BootstrapFailed,
@@ -60,14 +52,5 @@ constexpr std::string_view toString(VulkanInitError e) noexcept {
 }
 } // namespace projectv::vulkan_init
 
-// **Tier 1.B (`2026-06-13`).** Returns
-// `std::expected<void, projectv::vulkan_init::VulkanInitError>`.
-// The function still mutates `AppState` in place (the init
-// path is the canonical "build the whole thing" entry point);
-// the error variant is the only new return value. The TODO's
-// `std::expected<VulkanContext, VulkanInitError>` design would
-// require a separate "build context" struct + move semantics
-// on `AppState` — out of scope for Tier 1 (and not necessary
-// for the cold-path type-safety win).
 std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState *state);
 

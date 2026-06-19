@@ -1,25 +1,5 @@
 #pragma once
 
-// **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
-// `SaveVoxelWorldSnapshot` / `LoadVoxelWorldSnapshot`. Replaces the
-// old `bool` return + log-line-per-failure pattern with a
-// `std::expected<T, VoxelSnapshotError>` return that callers can
-// `match` / `.and_then` / `.or_else` on.
-//
-// **Cold path only.** These functions run at save / load time (1×
-// per snapshot), not per frame, so the ~2× cost of `std::expected`
-// over a raw `bool` is irrelevant. The win is in the API: callers
-// see exactly *which* error variant occurred, can chain
-// `.transform(...)` to convert the error into a fallback world,
-// and don't have to dig through log lines to figure out which
-// step failed.
-//
-// **Per-error log mapping** lives in `VoxelWorld.cpp` itself: the
-// implementation maps each variant to the original
-// `runtime::LogRuntimeFailure(subsystem, step, detail)` call so the
-// diagnostic log output is unchanged. The error variant is the
-// "machine-readable" part, the log line is the "human-readable"
-// part.
 #include <cstdint>
 #include <string>
 #include <string_view>

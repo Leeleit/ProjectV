@@ -325,20 +325,6 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
 	world->chunkSize = config.chunkSize;
 	world->min = min;
 	world->maxExclusive = maxExclusive;
-	// **Floor bounds (M5.1d, 2026-06-12):** the XZ extent of
-	// the visible checkerboard, without the world padding
-	// (which exists for chunk allocation, not for the model
-	// snap). The snap should clamp models to the floor (the
-	// visible platform), not to the world (which extends
-	// `padding` voxels of invisible Air beyond the floor on
-	// every side). Y is unchanged — there's no horizontal
-	// padding for the height, only XZ. The convention: floor
-	// is centered at world origin, halfFloor = `floorSize/2`,
-	// so `floorMin = (-halfFloor, 0, -halfFloor)` and
-	// `floorMaxExclusive = (halfFloor, maxY, halfFloor)`.
-	// Padding on the world is uniformly subtracted from the XZ
-	// extents. For VoxelLab (floorSize=18, padding=3): floor
-	// is X∈[-9,9], Z∈[-9,9].
 	world->floorMin = Int3{
 		min.x + config.padding,
 		min.y,
@@ -670,13 +656,6 @@ std::filesystem::path ResolveVoxelWorldSnapshotPath(const std::string_view snaps
 
 std::optional<VoxelScenePreset> ParseVoxelScenePreset(const std::string_view text)
 {
-	// **Tier 1.E (`2026-06-13`).** Replaced `bool TryParse(..., &out)`
-	// out-param pattern with `std::optional<VoxelScenePreset>`.
-	// Cold path (preset switch from JSON / CLI), so the small
-	// `optional` overhead is irrelevant. The `std::nullopt` return
-	// is more idiomatic than a magic empty preset — the caller
-	// does `.value_or(VoxelScenePreset::VoxelLab)` to get the
-	// historical "fall through to default" behavior.
 	if (text.empty()) {
 		return std::nullopt;
 	}
@@ -702,14 +681,6 @@ std::optional<VoxelScenePreset> ParseVoxelScenePreset(const std::string_view tex
 
 std::string_view VoxelScenePresetToString(const VoxelScenePreset preset)
 {
-	// **Tier 1.E (`2026-06-13`).** `constexpr std::string_view` return
-	// (was `const char *`). The literal stays in `.rodata` either
-	// way; the new return type lets callers use the result in
-	// `string_view` / `fmt::format` / `unordered_map<std::string_view, …>`
-	// contexts without an implicit conversion. The fallback
-	// `"VoxelLab"` (formerly the "shouldn't happen" default) is
-	// preserved — any unknown enum value is treated as VoxelLab,
-	// matching the original contract.
 	switch (preset) {
 	case VoxelScenePreset::VoxelLab:
 		return "VoxelLab";
@@ -752,9 +723,6 @@ VoxelScenePreset GetRequestedVoxelScenePreset()
 	}
 
 	VoxelScenePreset scenePreset = kDefaultVoxelScenePreset;
-	// **Tier 1.E (`2026-06-13`).** `ParseVoxelScenePreset` returns
-	// `std::optional<VoxelScenePreset>`; `.value_or(default)` replaces
-	// the old `if (TryParse(...)) return out;` out-param pattern.
 	if (const auto parsedPreset = ParseVoxelScenePreset(requestedPreset)) {
 		return *parsedPreset;
 	}
@@ -826,15 +794,6 @@ void DestroyVoxelSceneWorld(AppState *state)
 
 std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snapshotPath)
 {
-	// **Tier 1.B (`2026-06-13`).** Returns `std::expected<bool,
-	// VoxelSnapshotError>` instead of `bool`. Each early-return
-	// site is a `std::unexpected(VoxelSnapshotError::Variant)`
-	// that names the failure. The original log-line is preserved
-	// via `runtime::LogRuntimeFailure(subsystem, step, detail)`
-	// so the operator's log greps still work; the error variant
-	// is the new machine-readable channel for callers that want
-	// to react programmatically (e.g. `auto _ = save(...).or_else([](auto e){
-	//   return fallbackWorldFromPreset(); });`).
 	const auto fail = [](projectv::voxel::VoxelSnapshotError e, std::string_view step, std::string_view detail) {
 		runtime::LogRuntimeFailure("VoxelWorld", step, detail);
 		return std::unexpected(e);
@@ -892,11 +851,6 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 
 std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> LoadVoxelWorldSnapshot(const std::string_view snapshotPath)
 {
-	// **Tier 1.B (`2026-06-13`).** Returns `std::expected<unique_ptr<VoxelWorld>,
-	// VoxelSnapshotError>`. Each early-return site is a
-	// `std::unexpected(VoxelSnapshotError::Variant)` so callers
-	// can match on the exact failure (e.g.
-	// `.transform_error([](auto e){ return fallback(e); })`).
 	const auto fail = [](projectv::voxel::VoxelSnapshotError e, std::string_view step, std::string_view detail) {
 		runtime::LogRuntimeFailure("VoxelWorld", step, detail);
 		return std::unexpected(e);
@@ -1275,12 +1229,6 @@ uint32_t CountVoxelsByMaterial(const VoxelWorld &world, const VoxelMaterial mate
 	return 0;
 }
 
-// **Fluid cellular automata (defense r0, 2026-06-13; audited 2026-06-13).**
-// See header doc-comment for the per-tick contract + determinism guarantees.
-// This is a small bounded forward-shader-style implementation: one CA step
-// per call, **fall-only** (spread rule was removed in the 2026-06-13
-// audit — see `agent/decisions.md §30`). Cheap enough to run on every
-// fixed simulation tick (1/60 s).
 uint32_t UpdateFluidCA(VoxelWorld &world)
 {
 	// Fast-path: a world with no fluid never needs a tick. This is the
@@ -1334,15 +1282,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 	//    we wrote Air), depending on the iteration order.
 	std::vector<uint8_t> next = world.voxels;
 
-	// **Claimed tracking (2026-06-13 spread restore).** When a fluid
-	// falls or spreads, the destination cell is "claimed" by the
-	// source — a later iteration of the CA pass must not also process
-	// the destination as a source, or the destination will be
-	// overwritten and the source's fluid is "lost" (the "swap" bug:
-	// two adjacent fluids both want to spread into each other, both
-	// succeed (last-write-wins), one fluid disappears). Per-cell
-	// `uint8_t` flag (0 = unclaimed, 1 = claimed). Cheap: 1 byte per
-	// voxel ≈ 10 KB for the production `VoxelLab` world.
 	std::vector<uint8_t> claimed(world.voxels.size(), 0u);
 
 	uint32_t movedCount = 0u;
@@ -1377,33 +1316,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 					continue;
 				}
 
-				// **f_fall rule:** if the cell below is `Air`,
-				// swap this cell to `Air` and the cell below to
-				// `Fluid`. The `y > 0` check is the world-floor
-				// guard: a fluid at y=0 cannot fall (it is at
-				// the bottom of the world; everything below is
-				// out of bounds). Fluid resting on `Glass`,
-				// `FloorWhite`, `FloorGray`, or another `Fluid`
-				// does **not** fall — the snapshot read keeps the
-				// check stable even when the same column has
-				// multiple fluid voxels stacked.
-				//
-				// **2026-06-13 audit note:** an earlier version of
-				// this rule also allowed falling through
-				// `FloorWhite`/`FloorGray` (treating the
-				// platform/columns as "permeable" so the water
-				// could flow off the platform). That worked but
-				// had a critical side-effect: the water overwrote
-				// the `FloorWhite`/`FloorGray` cell at the
-				// destination, leaving an Air "hole" at the
-				// source. The operator reported "платформа
-				// исчезает из-за воды" — the platform disappears
-				// because of water. The fix is to keep the
-				// platform/columns intact: the fall rule is
-				// restricted to `Air` only. Water on the
-				// platform drains off via the spread rule (which
-				// also lets the water spread to Air sides and from
-				// there fall to the floor below).
 				if (y > 0) {
 					const size_t belowIdx = index(x, y - 1, z);
 					// **Fall target check uses `next`, not
@@ -1439,56 +1351,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 					}
 				}
 
-				// **f_spread rule (2-direction perpendicular):** if
-				// the fluid did **not** fall this tick (it is at
-				// rest on something solid), try to spread to two
-				// perpendicular cardinal neighbours at the same
-				// y-level. The first direction is hash-determined
-				// from `(x, y, z)`; the second is the perpendicular
-				// (`startSide + 1` & 3, i.e. rotated 90° in the
-				// `sides` table). This produces an "L" of fluid per
-				// source per tick: the source becomes Air, the two
-				// perpendicular neighbours become Fluid.
-				//
-				// **Why 2 perpendicular directions (not 1 or 4)?**
-				// The 2026-06-13 single-direction spread produced
-				// "stripes" — adjacent cells with matching hash
-				// start sides all moved in the same direction,
-				// leaving a checkerboard of empty cells. The
-				// operator reported "вода неравномерно заполняет
-				// пустоты" (water doesn't fill the gaps evenly).
-				// 4-direction spread ("plus" shape) would fill
-				// faster but explodes the count by 3 per cell per
-				// tick — too aggressive for the VoxelLab scale.
-				// 2 perpendicular directions grows the count by
-				// 1 per cell per tick (1 source → Air, 2
-				// destinations → Fluid), and the L-shape grows
-				// into a square/blob over a few ticks. The exact
-				// 2 directions (perpendicular vs opposite) is a
-				// tunable: perpendicular gives a more "square"
-				// local footprint, opposite gives a "line"
-				// footprint. The 2026-06-13 follow-up picked
-				// perpendicular for better gap-filling.
-				//
-				// **Target check uses `next`, not `world.voxels`**:
-				// a target cell is "spreads-allowed" only if it is
-				// still Air in the **new** state. If a previous
-				// source in this same tick has already written
-				// `next[neighbour] = Fluid`, the second source's
-				// spread to that cell is rejected. This prevents
-				// the "swap" bug where two adjacent sources both
-				// succeed and the second overwrites the first (losing
-				// one fluid voxel per swap).
-				//
-				// **Determinism note:** the hash `x*73856093u ^
-				// y*19349663u ^ z*83492791u` is identical to the
-				// 2026-06-12 original. `*` binds tighter than `^` in
-				// C++ (per `[expr.mul]` / `[expr.xor]` precedence), so
-				// the expression is parsed as
-				// `((x*p1) ^ (y*p2)) ^ (z*p3)`, fully defined for
-				// 32-bit unsigned arithmetic. The prime constants
-				// are the same as in the Teschner et al. (2003)
-				// spatial hash.
 				{
 					const uint32_t h = static_cast<uint32_t>(
 						(x * 73856093u) ^ (y * 19349663u) ^ (z * 83492791u));
@@ -1501,44 +1363,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 					// that didn't fill 2D gaps; perpendicular gives
 					// a square footprint.
 					const int dirs[2] = {startSide, (startSide + 1) & 0x3};
-					// **Strict count conservation (2026-06-14).** The
-					// earlier "spread = 2 destinations, source stays
-					// Fluid" rule grew the fluid count by 1 per cell
-					// per tick — i.e. water was *cloning itself*
-					// (`вода дюпается, клонируется`). The fix is
-					// **swap semantics**: source (Fluid) → Air, every
-					// successful destination → Fluid. Net change per
-					// spread = `0` if both directions succeed (1 source
-					// removed, 2 added — actually `+1`!), `−1` if only
-					// one direction succeeds (1 removed, 1 added),
-					// and `0` (no change) if no direction succeeds.
-					//
-					// Hmm — that's not conserved either. The real
-					// conservation invariant for "swap L-shape spread"
-					// is: **a tick can perform at most one of {fall,
-					// spread, stay}; if spread, source turns to Air
-					// and exactly one destination becomes Fluid**
-					// (not two). This is the only way to keep count
-					// strictly conserved while still producing
-					// meaningful horizontal movement.
-					//
-					// Below: we try both perpendicular directions,
-					// but only the **first** one that succeeds flips
-					// the source to Air. The second direction is
-					// skipped entirely (no second destination write).
-					// Net change: source Air, 1 destination Fluid =
-					// exactly 0. **The "L-shape" visual is lost**, but
-					// count conservation is restored. The trade-off
-					// is documented in `agent/decisions.md §30`
-					// (2026-06-14 follow-up) and `agent/memory.md
-					// §12` (item "2-direction perpendicular spread
-					// count growth").
-					//
-					// If the operator later wants both perpendicular
-					// destinations to succeed (L-shape) at the cost of
-					// a `+1` per source per tick, change `if
-					// (spreadCount > 0)` to `if (spreadCount == 2)`
-					// and accept the count growth.
 					int spreadDir = -1;
 					for (int d = 0; d < 2; ++d) {
 						const int sideIdx = dirs[d];
@@ -1573,30 +1397,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		return 0u;
 	}
 
-	// 3. Commit the new state through the public `SetVoxelMaterial`
-	//    path so all downstream counters (chunk dirty flags,
-	//    `fluidVoxelCount`, `activeChunkCount`, etc.) stay consistent.
-	//    The pixel-by-pixel rewrite is fine for MVP-scale scenes; for
-	//    larger worlds a chunk-level delta would be the next step.
-	//
-	//    **Coordinate convention:** the loop iterates **local** indices
-	//    `x ∈ [0, width)`, `y ∈ [0, height)`, `z ∈ [0, depth)` (matching
-	//    the CA pass above), but `SetVoxelMaterial` expects **world**
-	//    coordinates. `world.min` is the offset from local to world, so
-	//    we add it before calling `SetVoxelMaterial`. **Without this
-	//    offset, the production VoxelLab scene (`min = (-12, 0, -12)`)
-	//    silently dropped most fall commits:** `SetVoxelMaterial`
-	//    would receive local coords like `{12, 3, 12}` and map them to
-	//    world `{12, 3, 12}`, which is **at the world edge** (x == 12
-	//    == `maxExclusive.x`) and rejected by `IsInsideVoxelWorld`. For
-	//    cells with local x < 12, the commit landed at the wrong world
-	//    position (local (5, 3, 5) → world (5, 3, 5) → local (17, 3,
-	//    17)), silently corrupting the voxel array. **This was the root
-	//    cause of the user's report that "water doesn't fall" in
-	//    VoxelLab.** The 2026-06-13 audit surfaced it via the new
-	//    `TestFluidCAVoxelLabSphereFallOnGlassBreak` test, which uses
-	//    a `min = (-12, 0, -12)` world to mirror the production
-	//    `VoxelLab` scene's offset.
 	const Int3 min = world.min;
 	for (int z = 0; z < depth; ++z) {
 		for (int y = 0; y < height; ++y) {

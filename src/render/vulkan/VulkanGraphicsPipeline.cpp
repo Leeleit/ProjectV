@@ -74,12 +74,6 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.binding = 5,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
-		// P0.3 follow-up (final): per-vertex AO was removed (see voxel.vert
-		// header for the full rationale). The fragment stage still consumes
-		// this storage buffer for the local-light / AOCC / contact-shadow
-		// DDA reads, so we keep FRAGMENT_BIT. The vertex shader no longer
-		// needs access because the `inAmbientVisibility` interpolator is
-		// driven from a constant 1.0.
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
@@ -1250,27 +1244,6 @@ bool RefreshGraphicsResourceBindings(
 			0,
 			nullptr);
 
-		// **TAA resolve descriptor update (`2026-06-13`).** The
-		// TAA resolve pass has its own per-frame descriptor
-		// set (`render->taaResolveDescriptorSets[frameIndex]`,
-		// allocated inside `CreateTaaResolvePipeline` and
-		// not recreated by `RefreshGraphicsResourceBindings`).
-		// Without this patch, the TAA resolve set's
-		// binding 3 (sceneLighting) keeps the *old*
-		// `sceneLightingBuffer` handle across a scene
-		// preset switch (F5) and the next `vkCmdDraw`
-		// issued by the TAA resolve pass triggers
-		// `VUID-vkCmdDraw-None-08114`
-		// ("the storage buffer descriptor
-		// sceneLighting is using buffer ... that is
-		// invalid or has been destroyed"). The
-		// validation error references the *TAA resolve*
-		// descriptor set, not the graphics set, which
-		// is why the F5 validation persists even after
-		// `RefreshGraphicsResourceBindings` correctly
-		// rewrites the graphics set. Mirroring the
-		// `sceneLightingBufferInfo` write into the TAA
-		// resolve set's binding 3 here closes the race.
 		if (render->taaResolveDescriptorSets[frameIndex] != VK_NULL_HANDLE) {
 			const VkWriteDescriptorSet taaResolveWrite{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1693,19 +1666,6 @@ bool CreateGraphicsPipeline(
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	// **Fluid (2026-06-13 follow-up):** disable back-face culling for
-	// the main pass so water voxels show all 6 faces (the
-	// back faces are normally culled by `VK_CULL_MODE_BACK_BIT`,
-	// but for water we want the user to see every face even
-	// when looking at a single voxel). The operator reported
-	// "у воды вроде бы одной грани куба нет" — the water
-	// seems to be missing one face of a cube. Disabling
-	// back-face culling ensures the back face is also rendered
-	// (the depth test still hides faces occluded by closer
-	// geometry, so the visual is not "double-faced" — just
-	// complete). Other voxels (Opaque, Glass) are unaffected
-	// because their back faces are still behind the front
-	// faces and culled by the depth test.
 	rasterizer.cullMode = VK_CULL_MODE_NONE;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	VkPipelineRasterizationStateCreateInfo shadowRasterizer = rasterizer;

@@ -91,17 +91,6 @@ bool CreateModelPipeline(
 
 	const std::array stages{
 		VkPipelineShaderStageCreateInfo{
-			// **Windows clang-cl portability (`2026-06-18`,
-			// windows-host-build-r0).** `clang-cl` with
-			// `-Wmissing-designated-field-initializers`
-			// promoted to `-Werror` (via `/WX`) requires every
-			// Vulkan struct designated initializer to spell
-			// `.pNext`, `.flags`, and `.pSpecializationInfo`
-			// explicitly. All default to zero / null here
-			// (no extension chaining, no flags, no
-			// specialization constants) so the additions are
-			// purely defensive and keep the same source
-			// compiling on Linux clang too.
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,

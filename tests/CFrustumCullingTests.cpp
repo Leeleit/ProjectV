@@ -1,33 +1,3 @@
-// **Tier 4 (`2026-06-13`).** Unit test for the
-// `c_kernels/FrustumCulling` C++ wrapper.
-//
-// The test exercises three paths against a fixed
-// 300-AABB fixture (same seed as the Tier 3
-// benchmark) and verifies that the wrapper output
-// matches the inline `IsAabbVisibleAgainstCameraFrustum`
-// C++ helper **and** the C kernel's scalar output
-// for every AABB.
-//
-// **Why a separate test, not the benchmark.** The
-// benchmark's startup check verifies all three
-// implementations agree on a small fixture
-// (256 AABBs, 5 visibility runs). This test exercises
-// the same fixture the benchmark uses (300 AABBs,
-// 5 visibility runs) but with a focus on the wrapper
-// API contract: it builds a `std::vector<ModelInstanceData>`
-// (not the AoS `ProjectvCAabb` array), calls
-// `FilterVisibleInstances`, and checks the filtered
-// vector is exactly the expected set of `ModelInstanceData`s
-// (not just a mask). It also covers the
-// `instances.size() < kBatchDispatchThreshold` fallback
-// path with 4-AABB and 1-AABB inputs.
-//
-// **Tracy / runtime integration.** None — this is a
-// pure CPU unit test, no Vulkan, no asset pipeline.
-// Same shape as the existing `ProjectVFrustumCullingTests`
-// (which tests the inline C++ helper) and
-// `ProjectVMathTests` (which tests the `projectv::math`
-// types).
 #include "c_kernels/FrustumCulling.hpp"
 #include "core/Types.hpp"
 #include "render/SceneResources.hpp"
@@ -70,10 +40,6 @@ struct TestFixture {
         TestFixture f;
         Xorshift32 rng{kTestSeed};
 
-        // **300 AABBs in a 32x32 chunk grid centred on
-        // the origin.** Same geometry as the Tier 3
-        // benchmark (see
-        // `src/bench/FrustumCullBenchmark.cpp`).
         f.instances.reserve(kBatchSize);
         for (size_t i = 0; i < kBatchSize; ++i) {
             const int gx = static_cast<int>((i % 32u)) - 16;
@@ -98,10 +64,6 @@ struct TestFixture {
             f.instances.push_back(instance);
         }
 
-        // **5 visibility runs** with the camera at
-        // fixed position (64, 64, 64), looking at the
-        // origin, varying yaw / pitch. Same as Tier 3
-        // benchmark.
         const std::array<float, kVisibilityRuns> yaws{
             0.0f, 0.45f, -0.45f, 1.10f, -1.10f};
         const std::array<float, kVisibilityRuns> pitches{

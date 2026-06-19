@@ -85,13 +85,6 @@ bool ColorsMatch(
 	return true;
 }
 
-// **Tier 0 (`2026-06-13`) signature change:**
-// the production `Mat4` (`projectv::math::Mat4`) replaced
-// the legacy `std::array<float, 16>` for the column-major
-// matrix. The matrix layout is identical (column-major
-// 4x4 with `c[col][row]` storage), so the math is the
-// same; only the indexing changes from flat-array
-// `matrix[col*4+row]` to the new `matrix.c[col][row]`.
 std::array<float, 4> TransformPoint(
 	const projectv::math::Mat4 &matrix,
 	const std::array<float, 3> &point)
@@ -348,10 +341,6 @@ void TestWorldBoundsAndChunkIndexing(TestContext &context)
 void TestVoxelScenePresetParsingAcceptsCanonicalAndFlexibleNames(TestContext &context)
 {
 	VoxelScenePreset preset = VoxelScenePreset::VoxelLab;
-	// **Tier 1.E (`2026-06-13`).** `TryParseVoxelScenePreset(text, &out)`
-	// was renamed to `ParseVoxelScenePreset(text)` and now returns
-	// `std::optional<VoxelScenePreset>` (no out-param). Same logic,
-	// std::optional for success/failure.
 	preset = ParseVoxelScenePreset("VoxelLab").value();
 	EXPECT_EQ(context, VoxelScenePreset::VoxelLab, preset);
 	preset = ParseVoxelScenePreset("flat_benchmark").value();
@@ -363,9 +352,6 @@ void TestVoxelScenePresetParsingAcceptsCanonicalAndFlexibleNames(TestContext &co
 	preset = ParseVoxelScenePreset("meshingstress").value();
 	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, preset);
 	EXPECT_TRUE(context, !ParseVoxelScenePreset("not_a_scene").has_value());
-	// **Tier 1.E.** `VoxelScenePresetToString` now returns
-	// `std::string_view` directly; the previous explicit
-	// `std::string_view(...)` cast is a no-op.
 	EXPECT_TRUE(context, VoxelScenePresetToString(VoxelScenePreset::MeshingStress) == "MeshingStress");
 }
 
@@ -1000,10 +986,6 @@ void TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(Test
 	const auto [paddedLightViewProjection] =
 		BuildSunShadowProjection(paddedWorld, {0.35f, 0.88f, 0.22f}, 1.10f);
 
-	// **Tier 0.B (`2026-06-13`).** `SunShadowProjection::lightViewProjection`
-	// is now `projectv::math::Mat4` (16-byte aligned) instead of
-	// `std::array<float, 16>`. Element comparison switches from flat
-	// array indexing to the column-major `c[col][row]` accessor.
 	for (size_t col = 0; col < 4; ++col) {
 		for (size_t row = 0; row < 4; ++row) {
 			EXPECT_TRUE(
@@ -1128,11 +1110,6 @@ void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &cont
 			inputs.cameraPosition[1] + inputs.cameraForward[1] * centerDepth,
 			inputs.cameraPosition[2] + inputs.cameraForward[2] * centerDepth,
 		};
-		// **Tier 0.B (`2026-06-13`).** `lightViewProjections` (the
-		// UBO-bound raw storage) stays as `std::array<float, 64>`,
-		// but the test's local helper `TransformPoint` now takes
-		// `Mat4`. We copy the 16 floats out of the raw UBO storage
-		// and lift them into a `Mat4` via `fromArray16`.
 		const projectv::math::Mat4 cascadeMat = projectv::math::fromArray16(cascadeMatrix);
 		const std::array<float, 4> clipCenter = TransformPoint(cascadeMat, sliceCenter);
 		EXPECT_TRUE(context, std::abs(clipCenter[3]) > 0.0001f);
@@ -1694,11 +1671,6 @@ int RunReplayAnalysisFromEnvironment()
 	for (size_t frameIndex = 0; frameIndex < capture.frames.size(); ++frameIndex) {
 		const InputReplayFrame &frame = capture.frames[frameIndex];
 		const bool downMaskChanged = frame.actionDownMask != previousDownMask;
-		// **Tier 5.** `1ull <<` (not `1u <<`) — the
-		// action indices here are all < 32 so the old
-		// 32-bit shift happened to work, but the mask
-		// type is now `uint64_t` and the future-proof
-		// pattern is the 64-bit shift.
 		const bool jumpPressed =
 			(frame.actionPressedMask & 1ull << static_cast<uint32_t>(InputAction::MoveUp)) != 0u;
 		const bool toggleWalkCreativePressed =
@@ -2194,14 +2166,6 @@ void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &con
 							 1.0f,
 						 };
 
-						 // **Tier 0 (`2026-06-13`) signature change:**
-						 // `IsSceneChunkVisibleInShadowCascade` now takes
-						 // a `projectv::math::Mat4` 2nd argument (16-byte
-						 // aligned) instead of a `std::array<float, 16>`.
-						 // The legacy POD array is still the simplest
-						 // way to write out a 4x4 column-major matrix
-						 // literal in test source, so we convert at the
-						 // call site with the project's `fromArray16`.
 						 const projectv::math::Mat4 identityMat =
 							 projectv::math::fromArray16(identityProjection);
 
@@ -2491,11 +2455,6 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	for (int frameIndex = 0; frameIndex < 30; ++frameIndex) {
 		InputReplayFrame frame{};
 		frame.deltaSeconds = 1.0f / 60.0f;
-		// **Tier 5.** `1ull <<` (was `1u <<`) — the mask
-		// type is now `uint64_t`; the 32-bit shift
-		// worked here because all action indices used
-		// are < 32, but the future-proof pattern is the
-		// 64-bit shift.
 		frame.actionDownMask = 1ull << static_cast<size_t>(InputAction::MoveForward);
 		if (frameIndex == 4) {
 			frame.actionPressedMask |= 1ull << static_cast<size_t>(InputAction::MoveUp);

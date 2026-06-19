@@ -1,24 +1,5 @@
 #pragma once
 
-// **libc++ migration debug (`2026-06-13`).** Re-enabled
-// the central `import projectv.math;` + `import
-// projectv.string_id;` now that the global-module-fragment
-// ODR conflict on `<cmath>` (per the commit-time
-// deprecation note below) has been resolved — the
-// `Math.ixx` global fragment no longer pulls in
-// `<cmath>` (it uses `__builtin_sqrtf` directly, per
-// the change in `src/core/Math.ixx`).
-//
-// Original text (preserved below for git-blame archeology):
-//   "**libc++ migration debug (`2026-06-13`).** Removed
-//   `import projectv.math;` from this central header as
-//   well..."
-//
-// **Windows clang-cl fallback (`2026-06-18`,
-// windows-host-build-r0).** Mirrors the `Math.hpp` /
-// `StringId.hpp` branch: the module imports are replaced
-// by the fallback definitions already pulled in by the
-// corresponding `_fallback.hpp` headers.
 #if defined(__clang__) && defined(_MSC_VER)
 // Fallback definitions are pulled in via
 // `core/Math.hpp` and `core/StringId.hpp` below; nothing
@@ -58,16 +39,6 @@ struct OffscreenColorTarget;
 #include <type_traits>
 #include <vector>
 
-// **libc++ migration shim (`2026-06-13`).** `std::inplace_vector`
-// (P0843, C++26) is in libstdc++ 16.1.1 but NOT yet in
-// libc++ 22. Per `agent/memory.md §8` — until libc++
-// catches up, we use a local drop-in shim
-// (`core/InplaceVectorShim.hpp`) that provides the same
-// surface used by the Tier 1.A call sites in
-// `render/SceneResources.cpp`. The `__GLIBCXX__` macro
-// (defined by libstdc++) selects the stdlib path; libc++
-// (which defines `_LIBCPP_VERSION` instead) falls back
-// to the shim.
 #ifdef __GLIBCXX__
 #include <inplace_vector>
 #define PROJECTV_INPLACE_VECTOR std::inplace_vector
@@ -188,80 +159,17 @@ enum class InputAction : uint8_t {
 	IncreaseTaaBlend,
 	CycleTaaNeighbourhoodRadius,
 	InvalidateTaaHistory,
-	// **M5.1d debug tool, 2026-06-12:** Half-Life 2 / Garry's Mod
-	// style physics-gun for interactively positioning loaded
-	// models. Hold F to "pick" the closest model in front of
-	// the camera; the picked model then snaps to integer voxel
-	// coords under the crosshair on a horizontal plane (default
-	// Y=1, the top of the VoxelLab floor voxel). Release F to
-	// drop. Prints "PICKED: <id> aabbMin=(...)" on grab and
-	// "DROPPED: <id> final_aabbMin=(...)" on release, so the
-	// operator can read the integer voxel coordinates out of
-	// the smoke log and hard-code the manifest position
-	// (or verify the snap math). See `app/ModelGravigun.hpp`
-	// for the contract.
 	PickModel,
-	// **5.2 Debug gizmos, 2026-06-12:** `L` cycles a world-aligned
-	// "split plane" overlay at each of the four `viewDepthSplits`
-	// distances along the camera forward vector. Useful when tuning
-	// cascade split lambda / split distribution by eye against a
-	// static scene. The boxes are intentionally axis-aligned
-	// (`DebugOverlayBox` is `Int3 min/maxExclusive`) so they read
-	// as a coarse "where does each cascade start" cue rather
-	// than a precise world frustum — see
-	// `debug/DebugOverlays.cpp::AppendCascadeSplitPlaneOverlayBoxes`
-	// for the math.
 	ToggleCascadeSplitPlanes,
-	// **5.2 Debug gizmos, 2026-06-12:** `Z` toggles a 1-voxel-wide
-	// shaft along the cursor hit normal (`selection.hitNormal`,
-	// ±1 in one axis) for 2 voxels. Helps visualise face selection
-	// at extreme angles (top-down, side-on) where the yellow
-	// selection box alone is ambiguous.
 	ToggleCursorHitNormal,
-	// **Frame-step / slow-motion debug, 2026-06-12:** live time-scale
-	// control for visual debugging. 4 hotkeys: `[` halves the current
-	// `SimulationState::timeScale` (snapping to 0 below 0.01 for a
-	// discrete "pause" stop), `]` doubles it (clamped to 4.0 max),
-	// `\` queues exactly one fixed-step physics tick regardless of the
-	// current pause state (consumed in `UpdateApp` after the input
-	// action block), and `` ` `` resets `timeScale` to 1.0. These are
-	// independent of the existing `TogglePause` (`P`) action — pause
-	// and slow-motion are distinct runtime debug paths so the operator
-	// can keep the time-scale axis at, e.g., 0.25x while still being
-	// free to single-step one frame for screenshot alignment. See
-	// `agent/decisions.md §26` for the per-field contract.
 	DecreaseTimeScale,
 	IncreaseTimeScale,
 	StepSingleFrame,
 	ResetTimeScale,
-	// **Audio engine, 2026-06-12.** Music player
-	// controls. v1 layout uses free letters/digits
-	// per the operator's request ("надо
-	// переназначить все кнопки ... но это потом.
-	// Сейчас назначай там, где свободно"); the full
-	// hotkey rebind is a follow-up slice. See
-	// `decisions.md §28` and `InputActions.cpp` for
-	// the current bindings (Q / E / 7 / 8). The
-	// `MusicState` enum (Stopped / Playing / Paused)
-	// lives in `src/audio/AudioEngine.hpp`.
 	ToggleMusicPlayPause,
 	StopMusic,
 	MusicVolumeDown,
 	MusicVolumeUp,
-	// **Track switching, 2026-06-12.** Next /
-	// previous track through the 5-sec-refresh
-	// playlist. Hotkeys `9` (next) and `0`
-	// (previous) are the only adjacent free
-	// digits in the existing `InputAction` table
-	// (1-6 are also free, but 9/0 are the
-	// conventional "skip ahead / rewind" pair in
-	// media-player UX). v1 layout is placeholder;
-	// the full hotkey rebind (per the operator's
-	// note in the audio-engine session) remains
-	// the follow-up slice. `nextTrack()` and
-	// `previousTrack()` wrap around the playlist
-	// (next from last → 0; prev from 0 → last);
-	// empty playlist = no-op.
 	NextMusicTrack,
 	PreviousMusicTrack,
 	Count,
@@ -270,35 +178,6 @@ enum class InputAction : uint8_t {
 constexpr size_t kInputActionCount = static_cast<size_t>(InputAction::Count);
 constexpr size_t kInputActionBindingSlotCount = 2;
 
-// **Tier 5 (`2026-06-13`).** Bit-mask overflow fix.
-//
-// The `InputAction` enum has 58 values today
-// (well over 32). The pre-Tier-5 code stored
-// the per-frame replay mask in a `uint32_t`
-// (`InputReplayFrame::actionDownMask` /
-// `actionPressedMask`), which silently lost
-// bits 32..57 and invoked **undefined behavior**
-// (`1u << actionIndex` with `actionIndex >= 32`
-// is UB on a 32-bit shift). The 58-action
-// inventory had reached the overflow point
-// some time ago when the music / track controls
-// were added; nobody noticed because the
-// most-used actions are all in the low bits
-// (MoveForward, MoveBackward, MoveLeft, MoveRight,
-// MoveUp, MoveDown, etc.) and the high-bit
-// actions (ToggleCascadeSplitPlanes,
-// ToggleCursorHitNormal, DecreaseTimeScale, ...)
-// are debug-only and rarely pressed in practice.
-//
-// **Fix.** Widen the mask type to `uint64_t` and
-// bump the on-disk replay format version
-// (`kInputReplayVersion` 2 → 3). The 64-bit
-// shift `1ull << actionIndex` is well-defined up
-// to 64. The `static_assert` below makes adding
-// a 65th action a compile-time failure; bumping
-// past 64 requires a multi-mask representation
-// (e.g. `std::array<uint64_t, N>` with N masks
-// for 64*N actions).
 static_assert(
 	kInputActionCount <= 64,
 	"InputAction bit-mask overflow: InputReplayFrame::actionDownMask / "
@@ -340,11 +219,6 @@ enum class WalkAirControlMode : uint8_t {
 };
 
 struct GraphicsPushConstants {
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned
-	// per `core/Math.hpp`) replaces `std::array<float, 16>` so the
-	// compiler can emit `movaps` / `vmovaps` (alignment-required
-	// SSE/AVX) instead of `movups`. Same byte size (64 B),
-	// static_asserts below still hold.
 	projectv::math::Mat4 viewProjection{};
 	std::array<float, 4> cameraPosition{};
 	std::array<float, 4> cameraForward{};
@@ -368,23 +242,6 @@ static_assert(std::is_trivially_copyable_v<ShadowPushConstants>);
 static_assert(sizeof(ShadowPushConstants) == 4);
 
 struct ResolvePushConstants {
-	// Matches the `ResolvePushConstants` struct declared in
-	// `src/shaders/taa_resolve.frag` (lines 38-43). Byte layout is enforced
-	// with `static_assert` so a future re-ordering of either side fails to
-	// compile. The TAA resolve pass is a fullscreen triangle that needs the
-	// inverse of the current viewProjection (for depth-to-world
-	// reprojection), the current viewProjection (uploaded alongside for
-	// potential future motion-vector work), the inverse render extent in
-	// pixels (to convert `gl_FragCoord` to UV), and the CAS sharpening
-	// inputs at the end. Total: 144 B. The trailing `taaBlend` /
-	// `taaCasSharpnessMax` pair (1.3) replaced the original
-	// `vec2 reservedPadding` slot with the same 8 B total; byte layout
-	// is unchanged so existing SPIR-V / push-constant expectations stay
-	// intact.
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned)
-	// replaces `std::array<float, 16>` for the two viewProjection
-	// matrices. Same byte size (64 B each, 128 B total), byte
-	// layout preserved for SPIR-V / push-constant expectations.
 	projectv::math::Mat4 inverseCurrentViewProjection{};
 	projectv::math::Mat4 currentViewProjection{};
 	std::array<float, 2> renderExtentInverse{};
@@ -401,9 +258,6 @@ static_assert(offsetof(ResolvePushConstants, taaBlend) == 136);
 static_assert(offsetof(ResolvePushConstants, taaCasSharpnessMax) == 140);
 
 struct DebugOverlayPushConstants {
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
-	// `std::array<float, 16>`. Same byte size (64 B), static_asserts
-	// still hold.
 	projectv::math::Mat4 viewProjection{};
 	std::array<float, 4> overlayData0{};
 	std::array<float, 4> overlayData1{};
@@ -480,14 +334,6 @@ struct InputReplayFrame {
 	float deltaSeconds = 0.0f;
 	float mouseDeltaX = 0.0f;
 	float mouseDeltaY = 0.0f;
-	// **Tier 5 (`2026-06-13`).** Widened from `uint32_t`
-	// to `uint64_t` to match the 64-input-action inventory
-	// (the previous 32-bit mask lost bits 32..57 silently
-	// and invoked UB on the `1u << actionIndex` shift).
-	// The on-disk replay format version was bumped
-	// (`kInputReplayVersion` 2 → 3) to match — old
-	// version-2 replay files cannot be loaded by a
-	// version-3 binary.
 	uint64_t actionDownMask = 0;
 	uint64_t actionPressedMask = 0;
 	bool removePressed = false;
@@ -527,22 +373,6 @@ struct VoxelMeshingPushConstants {
 	std::array<uint32_t, 4> faceCapacities{};
 };
 
-// **Two-level chunk visibility cache (2026-06-12).** When the
-// CPU-side cull pass in `UpdateChunkVisibilityAndIndirectCommands`
-// runs every frame, it re-iterates every chunk descriptor and
-// re-evaluates the camera frustum + 4 shadow cascade clip volumes,
-// even on a perfectly static camera + static world. That's
-// measurable on a mainline look-dev scene (300+ chunks × 5
-// visibility tests = 1500+ dot products / frame) and pure waste
-// when nothing moved. This struct caches the resulting
-// `VkDrawIndirectCommand` arrays + visible-chunk counts keyed
-// on a hash of `(sceneVoxelPayloadVersion, chunkDescriptorCount,
-// quantized camera position, quantized camera forward)`. On
-// cache hit, the per-chunk loop is skipped entirely and the
-// cached command buffers are `memcpy`'d straight into the
-// per-frame mapped GPU indirect buffers. The thresholds are
-// chosen so a static-camera replay / capture run keeps the
-// entire cull pass off the per-frame critical path.
 struct ChunkVisibilityCache {
 	bool valid = false;
 	uint64_t sceneVoxelPayloadVersion = 0;
@@ -562,29 +392,6 @@ struct ChunkVisibilityCache {
 	uint64_t hash = 0;
 	uint32_t visibleChunkCount = 0;
 	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
-	// **Tier 1.A (`2026-06-13`).** `std::inplace_vector` (P0843, C++26)
-	// replaces `std::vector` for the per-frame cached indirect-draw
-	// command arrays. Capacity is fixed at `kChunkVisibilityCacheMaxChunks`
-	// (1024 — covers VoxelLab + MeshingStress worst case per
-	// `TODO.md §Tier 1.A`); the shadow array is sized for
-	// `kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount` so all
-	// per-cascade slots fit in a single inplace_vector. Compared to
-	// `std::vector`:
-	//   - **No heap allocation per resize.** `std::vector::assign(N, x)`
-	//     allocates on the first miss; `inplace_vector::resize(N)`
-	//     value-initializes the slack region in-place.
-	//   - **No realloc copy on growth.** Once sized to N entries, the
-	//     data pointer is stable — the `memcpy` from `cache.data()`
-	//     to the per-frame mapped GPU buffer (in
-	//     `ApplyCachedChunkVisibilityCommands`) cannot be invalidated
-	//     by a later resize (we do resize() once per cache miss, then
-	//     only index-write into the array, never grow).
-	//   - **Stack-friendly.** The 16-byte-aligned `VkDrawIndirectCommand`
-	//     lives in the same cache line as the rest of the cache
-	//     struct, eliminating a heap-pointer chase on the hot path.
-	// The cap is asserted at the call site (`assert(chunkDescriptorCount
-	// <= kChunkVisibilityCacheMaxChunks)`) — exceeding it is a logic
-	// error, not a runtime overflow.
 	static constexpr std::size_t kChunkVisibilityCacheMaxChunks = 1024;
 	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands;
 	PROJECTV_INPLACE_VECTOR<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands;
@@ -607,11 +414,6 @@ static_assert(offsetof(VoxelMeshingPushConstants, chunkGridAndTransparentFaceBas
 static_assert(offsetof(VoxelMeshingPushConstants, faceCapacities) == 48);
 
 struct ChunkCullingParameters {
-	// **Tier 0.B (`2026-06-13`).** Four `Vec4`s (16-byte aligned
-	// per `core/Math.hpp`) replace four `std::array<float, 4>`s. Each
-	// Vec4 packs (xyz, sentinel_w): camera position + max distance,
-	// camera forward + tan half-vertical-fov, etc. Same byte size
-	// (64 B total), static_asserts still hold.
 	projectv::math::Vec4 cameraPositionAndMaxDistance{};
 	projectv::math::Vec4 cameraForwardAndTanHalfVerticalFov{};
 	projectv::math::Vec4 cameraRightAndTanHalfHorizontalFov{};
@@ -672,26 +474,8 @@ struct DebugStats {
 	bool walkAutoJumpEnabled = false;
 	bool walkAutoJumpDelayEnabled = true;
 	bool simulationPaused = false;
-	// **Frame-step / slow-motion mirrors, 2026-06-12.** See
-	// `SimulationState::timeScale` and `::frameStepRequested`
-	// for the per-field contract. The mirror exists so the HUD
-	// and the runtime capture sidecar (added by the same
-	// change) can read the current time-scale without poking
-	// into `SimulationState` directly. `simulationFrameStepPending`
-	// is set true on the same frame the user pressed
-	// `StepSingleFrame` and is cleared at the top of `UpdateApp`,
-	// so it is a one-frame indicator for "the next tick is a
-	// forced step" — not a sticky latched flag.
 	float simulationTimeScale = 1.0f;
 	bool simulationFrameStepPending = false;
-	// Per-pass CPU timing mirrors (2026-06-12). Source fields
-	// live in `RenderState::renderPassTimings`; the mirror
-	// exists so the HUD and runtime capture sidecar can read
-	// the per-pass breakdown without poking into
-	// `RenderState` directly. `renderPassOtherMs` is derived
-	// in `AppUpdate.cpp` as
-	// `frameTimeMs - sum(measured passes)` so the dashboard
-	// shows what the unaccounted-for slice of the frame is.
 	float renderPassShadowMs = 0.0f;
 	float renderPassMeshingMs = 0.0f;
 	float renderPassGraphicsMs = 0.0f;
@@ -700,42 +484,12 @@ struct DebugStats {
 	float renderPassDebugHudMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
 	uint32_t renderPassDirtyChunkRebuiltCount = 0;
-	// **Audio engine mirrors, 2026-06-12.** Source of
-	// truth lives in `AudioEngine` (singleton on
-	// `AppState`); these mirrors feed the HUD line
-	// and the capture sidecar without poking into
-	// `AppState` directly. `audioMusicState` is
-	// `uint8_t` (the underlying `MusicState` is
-	// 1-byte too) for ABI stability across the
-	// `DebugStats` mirror boundary. The string
-	// mirrors are populated on every frame the
-	// playlist rescan or current-index change
-	// (see `AudioEngine::scanPlaylist`).
 	uint8_t audioMusicState = 0; // 0=Stopped, 1=Playing, 2=Paused (matches MusicState enum)
 	float audioMusicVolume = 0.8f;
 	bool audioMusicInitialized = false;
 	uint32_t audioMusicPlaylistSize = 0;
 	uint32_t audioMusicCurrentIndex = 0;
 	std::array<char, 128> audioMusicTrackName{};
-	// **Music HUD mirrors, 2026-06-13.** Parsed
-	// from `audioMusicTrackName` on the C++ side
-	// (see `audio::ParseArtistTitle`); the engine
-	// re-parses only when the underlying track
-	// changes, so the mirror update in
-	// `AppUpdate` is a cheap per-frame copy.
-	// `audioMusicArtist` is `"-"` (em-dash) when
-	// the filename has no ` - ` separator;
-	// `audioMusicTitle` is the stem with `.mp3`
-	// stripped. Both are empty when the playlist
-	// is empty. Position / duration are in
-	// seconds; 0.0f means "not loaded" (position)
-	// or "decoder did not expose length"
-	// (duration). 96 / 128 are the same char
-	// budgets as the existing track name —
-	// the artist line and title line fit
-	// comfortably in the 96-char HUD buffer
-	// (`kHudLineBufferSize`) because each has
-	// a 6-7 char label prefix.
 	std::array<char, 96> audioMusicArtist{};
 	std::array<char, 128> audioMusicTitle{};
 	float audioMusicPositionSec = 0.0f;
@@ -778,22 +532,6 @@ struct DebugStats {
 	// only in `RenderState` because they feed the push-constant uploads
 	// and the scene-lighting buffer, not the debug HUD.
 	bool taaEnabled = false;
-	// **Tier 5 follow-up (`2026-06-13`).** Default 0.0
-	// (was 0.10). The per-frame temporal blend against
-	// `taaHistory` was producing the user-reported
-	// tremor: the history sample is reprojected via
-	// `prevViewProjectionMatrix` and read at a slightly
-	// off-position per frame, so blending 10% of an
-	// oscillating history into the current frame
-	// produces a per-frame colour wobble. Setting
-	// `taaBlend = 0` removes the temporal blend entirely
-	// (output = current frame only); the TAA pipeline
-	// still runs (the resolve pass's 3x3 neighbourhood
-	// clamp and outlier rejection still apply) but the
-	// colour comes straight from the rasteriser. The
-	// hotkey ladder (`;` / `=`) still dials blend in
-	// [0, 1] for operators who want the anti-flicker
-	// benefit at the cost of the per-frame motion.
 	float taaBlend = 0.0f;
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
@@ -909,13 +647,6 @@ struct WorldState {
 };
 
 struct ModelInstanceData {
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned) replaces
-	// `std::array<float, 16>` for the model transform. `Vec3`
-	// (16-byte aligned) replaces `std::array<float, 3>` for the
-	// AABB bounds: 12-byte `std::array` grows to 16 bytes with
-	// `Vec3` so the `ModelInstanceData` struct grows by 8 bytes
-	// total. ABI change in cold model-pipeline path; not a hot
-	// per-chunk cost.
 	projectv::math::Mat4 modelTransform{};
 	projectv::math::Vec3 worldAabbMin{};
 	projectv::math::Vec3 worldAabbMax{};
@@ -936,38 +667,12 @@ struct ModelInstanceData {
 };
 
 struct ModelRegistryEntry {
-	// **Tier 1.D/E (`2026-06-13`).** Replaced `std::string` with
-	// `projectv::core::StringID` — 16 B (hash + length + pad),
-	// trivially copyable, hashable. `std::string` is forbidden in
-	// hot path per `legacy/docs/philosophy/02_paradigms/06_strings-philosophy.md`
-	// (allocates, doesn't fit in a cache line, forces unordered_map
-	// to rehash bytes every lookup). The `id` is set once at manifest
-	// load time and then read-only for the rest of the session;
-	// StringID costs a single 16-byte copy instead of a 32-byte
-	// `std::string` (heap-allocated, refcounted-or-SSO).
 	projectv::core::StringID id;
 	projectv::asset::MeshGpuResources gpu;
 	std::array<float, 3> aabbMin{0.0f};
 	std::array<float, 3> aabbMax{0.0f};
 };
 
-// **Per-pass CPU timing, 2026-06-12.** Wall-clock
-// microsecond-precision time spent inside each
-// `Record*Commands` function in `Renderer.cpp`, plus the
-// inlined TAA resolve block. Measured with
-// `SDL_GetPerformanceCounter` (same primitive as
-// `ComputeFrameDeltaSeconds` in `AppUpdate.cpp`). All 6
-// fields are CPU-side; for GPU-accurate numbers (e.g. shadow
-// GPU time vs shadow CPU time on different drivers) the
-// follow-up would be `vkCmdWriteTimestamp` queries on each
-// pass, but for the "where is my frame budget going" use
-// case CPU is sufficient and avoids the per-frame query
-// pool reset overhead. `*Ms` fields default to `0.0f` so
-// the HUD line never shows garbage on the first frame.
-// `dirtyChunkRebuiltCount` mirrors `FrameRenderData::dirtyChunkCount`
-// at the time of `RecordVoxelMeshingCommands` — that count
-// is already tracked; this struct just snapshots it for
-// the HUD/sidecar.
 struct RenderPassTimings {
 	float shadowMs = 0.0f;
 	float meshingMs = 0.0f;
@@ -1118,30 +823,9 @@ struct RenderState {
 	bool taaHistoryValid = false;
 	bool taaSceneColorNeedsInit = true;
 	bool taaHistoryNeedsInit = true;
-	// **Tier 0.B (`2026-06-13`).** `Mat4` (16-byte aligned)
-	// replaces `std::array<float, 16>`. Same byte size (64 B);
-	// the `taaPrevViewProjectionMatrixInitialized` companion
-	// flag below stays the same.
 	projectv::math::Mat4 taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
-	// Per-pass TAA tuning ladder (live `;`/`'`/`-`/`=`/`,`/`.` ladder, see
-	// `InputAction::*Taa*`). `taaJitterScale` multiplies the Halton(2,3) output
-	// before it lands in `taaParams.xy`; range [0, 2], step 0.25. Default 1.0
-	// matches the pre-ladder behaviour. `taaNeighbourhoodRadius` drives the
-	// 3x3 / 5x5 / 7x7 history clamp in `taa_resolve.frag`; allowed values are
-	// 1 / 3 / 5 / 7 (the shader treats it as the per-axis loop bound), default
-	// 1 keeps the original 3x3 clamp (`-1, 0, +1`).
-	// **VoxelLab tremor fix (`2026-06-13`).** Default 0.0
-	// (was 1.0). The user confirmed: pressing `-` to dial
-	// `taaJitterScale` down to 0 makes the visible tremor
-	// disappear. Setting the default to 0 removes the
-	// per-frame projection jitter (the only TAA-side
-	// contribution to the visible tremor once the
-	// `taaBlend` was already at 0 in a prior fix). The
-	// hotkey ladder (`-` / `'`) still dials jitter in
-	// [0, 2] for operators who want the sub-pixel AA
-	// benefit at the cost of the per-frame motion.
 	float taaJitterScale = 0.0f;
 	int32_t taaNeighbourhoodRadius = 1;
 	// CAS (Contrast Adaptive Sharpening) post-TAA (1.3). The shader
@@ -1258,15 +942,6 @@ struct RenderState {
 	VkPipelineLayout modelPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline modelPipeline = VK_NULL_HANDLE;
 	VkPipeline modelPipelineTaaOn = VK_NULL_HANDLE;
-	// The model pipeline reuses the main `graphicsPipelineLayout`
-	// (`modelPipelineLayout` stays null); the TAA-on variant is a
-	// separate VkPipeline object that binds the TAA-on shader variant.
-	// Per-pass CPU timings (2026-06-12). Each `Record*Commands`
-	// function in `Renderer.cpp` writes its own field at exit;
-	// `AppUpdate.cpp` computes `otherMs` from
-	// `frameTimeMs - sum(measured passes)` and mirrors the
-	// whole struct into `DebugStats` for HUD/sidecar
-	// consumption. Field semantics per `RenderPassTimings`.
 	RenderPassTimings renderPassTimings{};
 };
 
@@ -1282,20 +957,6 @@ struct LookDevCaptureAutomationState {
 	uint32_t nextViewIndex = 0;
 };
 
-// **5.3 Benchmark automation, 2026-06-12.** Tracks per-frame timings
-// over a fixed-frame target driven by `PROJECTV_BENCHMARK_FRAMES` so the
-// operator can capture stable FPS / min-ms / max-ms numbers from a
-// CI-style headless run without writing a one-off test harness. The
-// state mirrors `LookDevCaptureAutomationState`'s shape (active /
-// quitWhenDone / completed) so the wiring in `main.cpp` is
-// symmetrical. Warmup frames are discarded (the first ~30 frames of
-// any ProjectV run include Vulkan pipeline compile, VMA pool warmup,
-// shader SPIR-V load, and the first chunk meshing dispatch — none of
-// which represent steady-state cost). `minFrameSeconds` /
-// `maxFrameSeconds` use a "first-sample" sentinel (`1e30f` / `0.0f`)
-// so the first valid frame always wins. The cumulative
-// `totalFrameSeconds` is what `LogBenchmarkSummary` divides by
-// `framesRendered` to compute the mean.
 struct BenchmarkAutomationState {
 	bool active = false;
 	bool quitWhenDone = false;
@@ -1329,59 +990,9 @@ struct SimulationState {
 	uint32_t simulationStepsLastFrame = 0;
 	uint64_t simulationTick = 0;
 	bool paused = false;
-	// **Frame-step / slow-motion debug, 2026-06-12.** Live
-	// runtime multiplier on the per-frame delta. 1.0 = realtime,
-	// 0.5 = half speed, 0 = effectively paused (same end-state as
-	// `TogglePause` but on a continuous axis, not a discrete
-	// toggle). Applied to `frameDeltaSeconds` after
-	// `ComputeFrameDeltaSeconds` in `UpdateApp` so the
-	// fixed-step physics accumulator, look-dev capture
-	// automation, and input replay recording all see the
-	// scaled delta. Clamped to [0, 4] by the action handlers;
-	// the `[` key halves and snaps to 0 below 0.01 for a
-	// discrete "pause" stop, the `]` key doubles and clamps
-	// at 4.0, the `` ` `` key resets to 1.0.
 	float timeScale = 1.0f;
-	// **Frame-step request, 2026-06-12.** One-shot flag. Set by
-	// the `StepSingleFrame` action handler, consumed at the
-	// top of the `UpdateApp` accumulator block. The consumer
-	// forces `simulationAccumulatorSeconds = fixedSimulationDeltaSeconds`
-	// and computes `effectivePaused = paused && !frameStepRequestedNow`
-	// so exactly one fixed tick runs that frame even when
-	// `paused == true`. The flag is read-then-cleared, so a
-	// second press while the first tick is still in the
-	// accumulator queue is impossible to lose — but the queue
-	// only ever holds one step at a time, so back-to-back
-	// presses translate to "one tick per press".
 	bool frameStepRequested = false;
-	// **Fluid CA tick rate (2026-06-14).** Live, in-Hz, applied
-	// to the fluid CA accumulator. The CA advances
-	// `UpdateFluidCA` by exactly one cell per accumulated
-	// `1 / fluidTickRateHz` of *scaled* sim time. At the
-	// default 20 Hz and `timeScale = 1.0`, that's 20 ticks
-	// per second. With `timeScale = 0.5`, 10 ticks/sec.
-	// With `timeScale = 4.0`, 80 ticks/sec. The 20 Hz
-	// default (was 30 before the 2026-06-14 follow-up) was
-	// picked because the operator reported "вода всё равно
-	// слишком быстро льётся" — 30 Hz at default speed moved
-	// water visibly faster than the eye reads as "falling".
-	// Override via env var `PROJECTV_FLUID_TICK_HZ` in
-	// `src/app/main.cpp`. Range: any positive float; values
-	// below ~5 Hz make the CA look frozen, values above ~60
-	// Hz are clipped to one tick per render frame and look
-	// like a per-frame teleport (the same problem the 30 Hz
-	// default was supposed to fix).
 	float fluidTickRateHz = 20.0f;
-	// **Fluid CA accumulator (2026-06-14).** Wall-clock-free,
-	// sim-time accumulator in seconds. Grows by
-	// `frameDeltaSeconds * timeScale` (already scaled at
-	// `AppUpdate.cpp:669`) per render frame when not
-	// paused, and drains in `1 / fluidTickRateHz` chunks to
-	// feed `UpdateFluidCA`. Reset to 0 on pause and on
-	// frame-step. Stored on `SimulationState` so the
-	// accumulator is preserved across hotkey cycles and
-	// scene reloads (the CA itself is world-resident; the
-	// accumulator is sim-resident).
 	float fluidAccumulatorSeconds = 0.0f;
 };
 
@@ -1400,15 +1011,6 @@ struct InputState {
 	// capture-mode motion on launch is silently dropped; reset to true from
 	// `SetRelativeMouseMode` whenever the user re-toggles relative mode.
 	bool skipFirstMouseMotion = true;
-	// **Window-event mouse freeze (`2026-06-14`).** When the WM
-	// toggles fullscreen or resizes the window, SDL can deliver a
-	// small burst of 1-3 spurious MOUSE_MOTION events (the cursor
-	// is recentered in the new window extent, but the relative
-	// delta is non-zero on some platforms). `skipFirstMouseMotion`
-	// only drops the first event; this counter drops the next N
-	// events after any window-state change. Set in
-	// `main.cpp::SDL_AppEvent`, decremented in
-	// `HandleCameraEvent`.
 	int mouseMotionFreezeCount = 0;
 	Uint64 lastMoveUpPressedTimestampNs = 0;
 	std::array<InputActionButtonState, kInputActionCount> actions{};
@@ -1511,15 +1113,6 @@ struct AppState {
 	BenchmarkAutomationState benchmark{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
 	PhysicsStatePtr physics{nullptr, DestroyPhysicsState};
-	// **Audio engine, 2026-06-12.** Single
-	// `AudioEngine` instance mirroring the
-	// `physics` / `ecs` / `render` singletons.
-	// Stays `nullptr` if `init` failed (logs and
-	// returns false) so the rest of the program
-	// keeps running without audio. The
-	// destructor is the engine's own
-	// `~AudioEngine`, which calls `shutdown`
-	// unconditionally.
 	AudioEnginePtr audio{nullptr, DestroyAudioEngine};
 
 	bool shutdownDone = false;

@@ -34,23 +34,6 @@ bool ParseScenePreset(std::string_view text, VoxelScenePreset &outPreset)
 
 std::string GetDefaultSceneConfigPath()
 {
-	// **Repo-root walk-up (`2026-06-15`).** Per
-	// `src/core/RepoRoot.hpp` rationale — previously
-	// this returned the CWD-relative literal
-	// `"runtime/scene.json"`, which failed when the
-	// operator launched `ProjectV.exe` from
-	// `build\windows-clang-debug\bin\` via Explorer
-	// (CWD ends up at the binary directory, not the
-	// repo root, and `EnsureDefaultSceneConfig` would
-	// silently write the default JSON into
-	// `bin\runtime\scene.json`). Walking up from
-	// `SDL_GetBasePath()` finds the repo root by
-	// looking for `.git` + `AGENTS.md`, then returns
-	// `<repoRoot>/runtime/scene.json`. Falls back to
-	// the CWD-relative literal if the walk-up fails
-	// (e.g. the operator stripped `.git/` from the
-	// working tree, or installed the binary
-	// system-wide).
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
 		if (auto repoRoot = projectv::core::FindRepoRoot(basePath)) {

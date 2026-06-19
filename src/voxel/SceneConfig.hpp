@@ -8,12 +8,6 @@
 
 namespace projectv::voxel {
 
-// **Scene configuration (defense r0, 2026-06-13).** Runtime-readable
-// JSON config that overrides the hard-coded scene defaults in
-// `VoxelWorld::CreateVoxelSceneWorld`. The minimal contract is the
-// subset of `VoxelWorldConfig` + `VoxelScenePreset` we care about for
-// first-day reproducibility (per ТЗ 4.5.1 "Использование
-// структурированных форматов для сохранения сцен").
 struct SceneConfig {
 	std::string name = "ProjectV Default";
 	VoxelScenePreset scenePreset = VoxelScenePreset::VoxelLab;

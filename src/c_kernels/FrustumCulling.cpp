@@ -1,7 +1,3 @@
-// **Tier 4 (`2026-06-13`).** C++ wrapper implementation
-// for `c_kernels/frustum_cull`. See
-// `FrustumCulling.hpp` for the design rationale and the
-// `// EVIL:` notes on the 8-AABB crossover threshold.
 #include "c_kernels/FrustumCulling.hpp"
 
 #include "render/SceneResources.hpp"
@@ -73,11 +69,6 @@ std::vector<uint8_t> CullVisibleMask(
 	if (instances.empty()) {
 		return mask;
 	}
-	// **Scalar C kernel.** Per the Tier 3 benchmark, this
-	// is 3.7-3.9× faster than the C++ math:: baseline on
-	// this hardware + AoS layout. The AVX2 path stays in
-	// the tree for future SoA work (see
-	// `src/c_kernels/frustum_cull.c` for the rationale).
 	projectv_cull_frustum_scalar(
 		mask.data(),
 		aabbs.data(),

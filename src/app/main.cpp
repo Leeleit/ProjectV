@@ -33,12 +33,6 @@
 #include <string>
 
 #ifndef PROJECTV_CMAKE_BUILD_DIR
-// **Hot shader reload fallback (`2026-06-15`).** If the
-// TU was compiled outside CMake (rare — `cxx` test, ad-hoc
-// `clang++ -c`), fall back to a Linux default so the symbol
-// still resolves. The CMake-injected value (`src/CMakeLists.txt`)
-// is the production path; this is a compile-time safety net
-// only.
 #define PROJECTV_CMAKE_BUILD_DIR "build/linux-clang-debug"
 #endif
 
@@ -58,13 +52,6 @@ bool WaitForDeviceIdle(VulkanContextState &context)
 	return true;
 }
 
-// **Hot shader reload (defense r0, 2026-06-13).** F5 re-runs `cmake --build`
-// for the `Shaders` target (which re-invokes `glslc` on every
-// `.comp` / `.frag` / `.vert` under `src/shaders/`) and re-loads the produced
-// `.spv` files from disk. Pipeline recreation is scoped to the ray-march
-// pass for now (it owns the only freshly-added `.comp`); the pre-existing
-// graphics / shadow / TAA pipelines keep their cached shader modules until
-// a real pipeline-recreate PR lands (per ТЗ 4.1.6).
 int RebuildAllShadersFromDisk()
 {
 	int reloadedCount = 0;
@@ -78,20 +65,9 @@ int RebuildAllShadersFromDisk()
 	//    for a runtime pipeline-recreate.
 	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
 	if (buildDir == nullptr) {
-		// **Cross-platform fallback (`2026-06-15`).** Per
-		// `src/CMakeLists.txt` the build tree path is injected
-		// at configure time via `target_compile_definitions(... PROJECTV_CMAKE_BUILD_DIR=...)`.
-		// On Windows that resolves to e.g. `build/windows-clang-debug`;
-		// on Linux to `build/linux-clang-debug`. The `PROJECTV_BUILD_DIR`
-		// env var still wins over the compile-time default.
 		buildDir = PROJECTV_CMAKE_BUILD_DIR;
 	}
 
-	// **Cross-platform log path (`2026-06-15`).** The previous
-	// `/tmp/projectv_shader_reload.log` literal is Linux-only
-	// (`cmd.exe` has no `/tmp`); use std::filesystem's portable
-	// temp-directory lookup instead. On Windows that resolves
-	// to `%TEMP%`; on Linux to `$TMPDIR` (typically `/tmp`).
 	const std::filesystem::path logPath =
 		std::filesystem::temp_directory_path() / "projectv_shader_reload.log";
 	const std::string cmakeCmd = std::string("cmake --build ") + buildDir +
@@ -230,12 +206,6 @@ bool SaveActiveVoxelWorldSnapshot(AppState *state)
 		"active voxel world is unavailable");
 
 	const std::string snapshotPath = GetVoxelWorldSnapshotPath();
-	// **Tier 1.B (`2026-06-13`).** `std::expected` returns the
-	// exact `VoxelSnapshotError` variant. The implementation has
-	// already logged the per-step detail; the high-level caller
-	// logs the variant name so the operator gets a single
-	// "variant" log line + the deeper "step" log line in the
-	// diagnostic output.
 	const auto saveResult = SaveVoxelWorldSnapshot(*world->voxelWorld, snapshotPath);
 	if (!saveResult.has_value()) {
 		runtime::LogRuntimeFailure(
@@ -259,10 +229,6 @@ bool LoadActiveVoxelWorldSnapshot(AppState *state)
 	}
 
 	const std::string snapshotPath = GetVoxelWorldSnapshotPath();
-	// **Tier 1.B (`2026-06-13`).** `std::expected` returns the
-	// exact `VoxelSnapshotError` variant. On error, the high-level
-	// caller logs the variant name; the per-step detail is in the
-	// lower-level log line emitted inside `LoadVoxelWorldSnapshot`.
 	auto loadedResult = LoadVoxelWorldSnapshot(snapshotPath);
 	if (!loadedResult.has_value()) {
 		runtime::LogRuntimeFailure(
@@ -313,9 +279,6 @@ bool StartLastInputReplayPlayback(AppState *state)
 	}
 
 	std::unique_ptr<VoxelWorld> loadedWorld = [&]() -> std::unique_ptr<VoxelWorld> {
-		// **Tier 1.B (`2026-06-13`).** `std::expected` carries the
-		// `VoxelSnapshotError` variant through; we unwrap it here
-		// and convert the error variant into a high-level log line.
 		auto result = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath);
 		if (!result.has_value()) {
 			runtime::LogRuntimeFailure(
@@ -355,10 +318,6 @@ bool StartLastInputReplayPlayback(AppState *state)
 	state->input.mouseDeltaY = 0.0f;
 	state->input.removePressed = false;
 	state->input.placePressed = false;
-	// **Tier 5.** `0ull` (was `0u`) — the mask type
-	// is now `uint64_t`. The 0 value implicit-converts
-	// to either width, but matching the function
-	// signature explicitly avoids the narrowing warning.
 	ApplyInputActionSnapshot(state->input, 0ull, 0ull);
 	SetPhysicsWalkAirControlMode(state->physics.get(), state->input.replay.capture.walkAirControlMode);
 	SetPhysicsWalkAutoJumpEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpEnabled);
@@ -408,10 +367,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
-	// **Tier 1.B (`2026-06-13`).** `InitVulkan` now returns
-	// `std::expected<void, VulkanInitError>`. The per-step
-	// detail is logged inside the implementation; the
-	// high-level caller logs the variant name and tears down.
 	const auto initResult = InitVulkan(state.get());
 	if (!initResult.has_value()) {
 		runtime::LogRuntimeFailure(
@@ -421,34 +376,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
-	// **Audio engine, 2026-06-12.** Init is non-fatal
-	// on failure (per `decisions.md §28` — graceful
-	// degradation so a miniaudio/PulseAudio init
-	// failure on the host doesn't break the rest
-	// of the program). The deleter (`AudioEnginePtr`
-	// in `core/Types.hpp`) takes care of
-	// `shutdown()` in the deleter TU, so
-	// `SDL_AppQuit` only needs to reset the
-	// `unique_ptr` (which happens implicitly when
-	// `state` is destroyed). Construct via the
-	// `AudioEnginePtr` alias explicitly because the
-	// custom function-pointer deleter does not
-	// accept the `std::default_delete<T>` returned
-	// by `std::make_unique<AudioEngine>()`.
-	// `CppDFAMemoryLeak` false positive: the engine is
-	// transferred into `state->audio` (a
-	// `unique_ptr<AudioEngine, DestroyAudioEngine>`)
-	// and `state` itself is handed off to SDL via
-	// `*appstate = state.release()` on the line below.
-	// `SDL_AppQuit` does `delete state` which destroys
-	// the engine and runs the deleter. The DFA doesn't
-	// see the SDL3 callback round-trip, so it
-	// reports a leak. Suppress per-line.
-	// noinspection CppDFAMemoryLeak
-	// AudioEngine is owned by `state` (an `std::unique_ptr` with
-	// custom deleter `DestroyAudioEngine`). `SDL_AppQuit` retrieves
-	// `appstate` via `state.release()` and runs the deleter. The DFA
-	// doesn't see the SDL3 callback round-trip, so it reports a leak.
 	state->audio = AudioEnginePtr(
 		new projectv::audio::AudioEngine(),
 		DestroyAudioEngine);
@@ -474,13 +401,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
 	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark);
 
-	// **Scene config (defense r0, 2026-06-13).** Read the JSON
-	// scene-config at `runtime/scene.json` and apply it as a runtime
-	// scene-preset override (per ТЗ 4.5.1 "Использование
-	// структурированных форматов"). The reload path mirrors the
-	// `PROJECTV_VOXEL_SCENE_PRESET` env-var flow that
-	// `GetRequestedVoxelScenePreset` already supports, so a failed
-	// JSON parse simply falls back to the hard-coded default.
 	{
 		const std::string configPath = projectv::voxel::GetDefaultSceneConfigPath();
 		projectv::voxel::EnsureDefaultSceneConfig(configPath);
@@ -542,33 +462,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		return SDL_APP_CONTINUE;
 	}
 
-	// **Defense r0 hotkeys (2026-06-13, relocated twice 2026-06-15).** Originally
-	// F5 = hot reload shaders, F6 = ray-march pass toggle. **Relocated to
-	// F11 / F12** after a pre-defense code audit (`session-2026-06-15T10-43Z-
-	// defense-docs-audit-r0`) discovered that F5 and F6 are also bound in
-	// the formal `InputAction` system (`CycleScenePreset` and
-	// `SaveWorldSnapshot` per `src/app/InputActions.cpp:134-135`), which
-	// produced a confusing double-fire on the same key press.
-	//
-	// F11 and F12 are also bound in `InputAction` (`ToggleWalkAirControlMode`
-	// and `ToggleWalkAutoJumpDelay`), so the second relocation to **digit
-	// keys 1 / 2 / 3** (per `session-2026-06-15T-post-windows-build-verification-r1`)
-	// frees both F-keys for their original walk-controller bindings. All 26
-	// letters A-Z and all F1-F12 are bound in `InputAction` (digits 0, 7,
-	// 8, 9 are bound to music player controls), so digits 1, 2, 3 are the
-	// only top-row non-letter, non-F-key free cluster. Walk-controller
-	// toggles and lighting debug reset now fire exclusively on F11/F12/V
-	// with no shadow from the developer bypasses.
-	//
-	// **TODO post-defense (`Phase 7+`):** route these through the formal
-	// `InputAction` system by adding `ReloadShaders` and
-	// `ToggleRayMarchPass` enum values in `core/Types.hpp` (currently
-	// mid-edit by `session-2026-06-13-hardcore-perf-r0` — that constraint
-	// was the original reason for the bypass). Once `core/Types.hpp` is
-	// stable, replace the SDLK_* checks with `ConsumeInputActionPressed`
-	// on the new enum values, freeing 1/2/3 for any future use.
-	//
-	// See `docs/DefenseReport.md §2.7` for the original defense r0 contract.
 	if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
 		if (event->key.key == SDLK_1) {
 			RebuildAllShadersFromDisk();
@@ -580,23 +473,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 				"[ProjectV][App] ToggleRayMarch: %s\n",
 				newState ? "ray-march pass ENABLED" : "ray-march pass DISABLED");
 		} else if (event->key.key == SDLK_3) {
-			// **V-sync toggle (`2026-06-13`, auto-detect
-			// cycle on `2026-06-14`).** Walks the
-			// runtime present-mode cycle (built once
-			// per swapchain create from the surface's
-			// supported modes; see
-			// `BuildPresentModeCycle` in
-			// `VulkanSwapchain.cpp`). Cycle length is
-			// the number of modes the host surface
-			// exposes — usually 2 on Linux/Wayland
-			// (no IMMEDIATE), 3 on Windows. Every
-			// press advances the cycle by one step;
-			// the previous "press V and nothing
-			// changes" failure mode on Wayland is
-			// gone. The next `RecreateSwapchain`
-			// (forced at the end of this branch)
-			// picks up the new preference via
-			// `ChoosePresentMode`.
 			const VkPresentModeKHR newMode =
 				CyclePreferredPresentMode();
 			const char *modeName = "unknown";
@@ -631,13 +507,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	}
 
 	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
-	// **Fullscreen / window-resize mouse guard (`2026-06-14`).**
-	// WM-driven fullscreen toggle and DPI-driven resize can drop SDL's
-	// relative mouse mode, then re-deliver a pre-capture MOUSE_MOTION with
-	// a huge `xrel` / `yrel` on the next frame. `skipFirstMouseMotion` only
-	// drops one event, and SDL can deliver a 1-3 event burst here, so set
-	// `mouseMotionFreezeCount` to drop the next N events. The clamp in
-	// `HandleCameraEvent` is the final safety net for huge single events.
 	if (event->type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN ||
 		event->type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN ||
 		event->type == SDL_EVENT_WINDOW_RESIZED ||
@@ -693,15 +562,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			&state->benchmark,
 			benchmarkDebug ? benchmarkDebug->stats : DebugStats{},
 			benchmarkFrameCounter);
-
-	// **Fluid CA tick — moved to `UpdateApp` on 2026-06-14.**
-	// The CA tick used to live here with a wall-clock throttle
-	// (30 Hz). It was moved to `AppUpdate.cpp` (after the
-	// `simulationAccumulatorSeconds` block) so it honours
-	// `simulation->paused`, `simulation->timeScale`, and the
-	// `frameStepRequested` flag for free. See
-	// `agent/decisions.md §30` and `agent/memory.md §12`
-	// (CA pause/timeScale fix history).
 
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(

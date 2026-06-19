@@ -1,21 +1,3 @@
-// **Fluid CA unit tests (audit `2026-06-13`).**
-// Self-contained CPU tests for `UpdateFluidCA` (declared in
-// `src/voxel/VoxelWorld.hpp`; defined in `src/voxel/VoxelWorld.cpp`).
-// The tests construct a minimal `VoxelWorld` by hand (via
-// `MakeFluidCATestWorld` below) so they do not depend on the full
-// `CreateVoxelSceneWorld` / `AppState` initialisation path — that
-// path is exercised end-to-end in `ProjectVTests` (see
-// `TestCreateVoxelSceneWorldBuildsExpectedBaselineScenes`).
-//
-// **Determinism contract verified by these tests** (also documented
-// in `src/voxel/VoxelWorld.hpp` near the `UpdateFluidCA` declaration):
-//   * Same input + same tick count → same `world.voxels` bytes.
-//   * `stats.fluidVoxelCount` stays equal to
-//     `std::count(world.voxels, == Fluid)` across ticks.
-//   * A settled fluid (Air below at y=0 boundary, or solid below)
-//     stays put across ticks (no infinite oscillation).
-//   * Removing the spread rule (the `2026-06-13` audit change) means
-//     fluid on a flat surface does **not** spread sideways.
 
 #include "voxel/VoxelWorld.hpp"
 
@@ -155,50 +137,6 @@ void TestFluidCASingleCellFallsOneCellPerTick(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {4, 4, 4}));
 }
 
-// **A column of N fluid voxels over Air "percolates" downward in
-// 2N ticks, not N.** This is a property of the snapshot-read CA:
-// each fluid cell reads `world.voxels[below]` (the **immutable
-// snapshot**, not the `next` array being written in this tick),
-// so a cell only falls when the cell directly below it is Air in
-// the **pre-tick** state. Tick-by-tick trace for a 4-cell column
-// starting at y=5..y=8 with Air below:
-//
-//   tick 0: y=5→4. New state: y=4, 6, 7, 8. (1 cell moved.)
-//   tick 1: y=4→3 (Air below in snapshot) AND y=6→5 (now Air
-//           below in snapshot). New: y=3, 5, 7, 8. (2 cells moved.)
-//   tick 2: y=3→2, y=5→4, y=7→6. New: y=2, 4, 6, 8. (3 cells moved.)
-//   tick 3: y=2→1, y=4→3, y=6→5, y=8→7. New: y=1, 3, 5, 7.
-//   tick 4: y=1→0, y=3→2, y=5→4, y=7→6. New: y=0, 2, 4, 6.
-//   tick 5: y=0 doesn't fall (y > 0 guard). y=2→1, y=4→3, y=6→5.
-//           New: y=0, 1, 3, 5. (3 cells moved.)
-//   tick 6: y=1: below y=0=Fluid, no fall. y=3→2, y=5→4.
-//           New: y=0, 1, 2, 4. (2 cells moved.)
-//   tick 7: y=2: below y=1=Fluid, no fall. y=4→3.
-//           New: y=0, 1, 2, 3. (1 cell moved.)
-//   tick 8: column settled at y=0..y=3. (0 cells moved.)
-//
-// So 2N ticks to settle a column of N. **No cell moves more than
-// 1 per tick** (the "no double-step" property the audit verified).
-// **A column of N fluid over Air percolates downward and
-// eventually disperses across the floor (with spread enabled).**
-// This combines two properties:
-//   1. The fall rule (1 cell per tick, bottom-up) — the bottom
-//      fluid cell falls first; the next falls only after the cell
-//      below it is Air in the snapshot (which happens after the
-//      first tick's commit). The column "drains" downward over
-//      `2 * kColumnHeight + 1` ticks (without spread).
-//   2. The spread rule (hash-based, no support check) — once the
-//      bottom cell can no longer fall (y=0 boundary or solid
-//      below), it spreads to a cardinal neighbour. With a column
-//      of N cells over a 4x4 floor, the column spreads out into
-//      a roughly-square puddle around the original x/z position.
-//
-// **Count conservation:** the spread-rule's `next[neighbour] == Air`
-// + fall-rule's `next[below] == Air` target checks (added
-// 2026-06-13 alongside the spread restore) prevent the "swap" bug
-// where two sources both move into the same destination and one
-// fluid voxel is silently lost. The count is preserved across all
-// ticks.
 void TestFluidCAColumnPercolatesAndSpreadsOnFloor(TestContext &context)
 {
 	constexpr int kColumnHeight = 4;
@@ -210,10 +148,6 @@ void TestFluidCAColumnPercolatesAndSpreadsOnFloor(TestContext &context)
 	const uint32_t initialCount = world.stats.fluidVoxelCount;
 	EXPECT_EQ(context, static_cast<uint32_t>(kColumnHeight), initialCount);
 
-	// Run many ticks. With the 2026-06-13 2-direction spread
-	// rule, the count grows by 0..1 per cell per tick. We
-	// assert the high-level property: count never DECREASES
-	// (no fluid is lost).
 	for (int tick = 0; tick < 30; ++tick) {
 		UpdateFluidCA(world);
 		EXPECT_TRUE(context, world.stats.fluidVoxelCount >= initialCount);
@@ -225,18 +159,6 @@ void TestFluidCAColumnPercolatesAndSpreadsOnFloor(TestContext &context)
 	}
 }
 
-// **Fluid stops falling when it hits a solid floor.** A fluid at
-// `(2, 1, 2)` with a `FloorWhite` cell at `(2, 0, 2)` does not fall
-// (the `f_fall` rule is gated on `world.voxels[below] == Air` and
-// the snapshot still reads `FloorWhite`). It may **spread** to a
-// cardinal neighbour (the `2026-06-13` follow-up restored the spread
-// rule), but the fall-through-floor property holds: the floor is
-// never overwritten, and the fluid at y=0 is always `FloorWhite`.
-// We assert the `f_fall` rule's no-through-Glass invariant: a
-// fluid on top of `Glass` cannot fall through the glass. The
-// `FloorWhite` / `FloorGray` pass-through (2026-06-13 follow-up)
-// is asserted in `TestFluidCAFluidFallsThroughPlatformToFloor`
-// below; this test pins the `Glass` boundary specifically.
 void TestFluidCARestingOnFloorStaysPut(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -280,9 +202,6 @@ void TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(TestContext &contex
 	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass);
 	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
 
-	// **Before break:** glass is solid, fluid cannot fall through.
-	// The fluid may spread sideways (the 2026-06-13 spread restore),
-	// but the fall-through-glass invariant must hold.
 	UpdateFluidCA(world);
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {2, 0, 2}));
 	EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
@@ -332,35 +251,12 @@ void TestFluidCAFluidAtY0IsStable(TestContext &context)
 	}
 }
 
-// **Fluid on a `FloorWhite` cell does NOT fall through (the
-// platform stays intact).** The 2026-06-13 follow-up:
-// an earlier version of the fall rule allowed water to "drain
-// through" `FloorWhite`/`FloorGray` (the platform/column
-// material) to the floor below. This had a critical side-effect:
-// the water overwrote the `FloorWhite` cell at the destination
-// AND the source cell became `Air`, so the platform cell that
-// the water had been sitting on became a hole. The operator
-// reported "платформа исчезает из-за воды" — the platform
-// disappears because of water. The fix is to keep the
-// platform intact: the fall rule is restricted to `Air` only
-// (matching the original behavior). Water drains off the
-// platform via the spread rule (which lets the water spread
-// to Air sides of the platform and from there fall to the
-// floor below).
 void TestFluidCAFluidDoesNotFallThroughPlatform(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
 	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
 	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
 
-	// First tick: fluid at (2, 1, 2) cannot fall through the
-	// FloorWhite at (2, 0, 2) — the platform stays intact.
-	// The fluid **spreads** to an Air neighbour (with the
-	// 2026-06-13 follow-up that makes fluid emit against all
-	// materials, the spread target check is `next[neighbour]
-	// == Air`). With the 2026-06-14 swap-semantics spread,
-	// the source (2, 1, 2) → Air and **exactly one** of the
-	// 4 cardinal neighbours at y=1 → Fluid. Count conserved.
 	const uint32_t moved = UpdateFluidCA(world);
 	EXPECT_TRUE(context, moved > 0u);
 	// **The platform cell at (2, 0, 2) MUST stay FloorWhite**
@@ -374,25 +270,6 @@ void TestFluidCAFluidDoesNotFallThroughPlatform(TestContext &context)
 	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
 }
 
-// **Fluid on a flat surface (where the fall rule can't fire —
-// i.e., on top of `Glass`, not `FloorWhite`/`FloorGray`) spreads
-// to one of the 4 cardinal neighbours each tick.** The
-// direction is hash-determined from `(x, y, z)`. We use
-// `Glass` at y=0 (non-passable per the 2026-06-13 fall-through
-// rule) so the fall rule is blocked, and the spread rule fires.
-// The hash picks one of `+X, -X, +Z, -Z` and the fluid moves
-// there in the first tick. We don't pin the exact target (the
-// **Fluid on a flat surface (where the fall rule can't fire —
-// i.e., on top of `Glass`) spreads to TWO perpendicular
-// cardinal neighbours each tick (the 2026-06-13 follow-up
-// for even gap-filling).** The direction is hash-determined
-// from `(x, y, z)`, and the second direction is the
-// perpendicular. We don't pin the exact targets (the hash
-// constants are documented but verifying them would couple
-// the test to a specific value), but we pin the property:
-// after one tick, the source cell is Air AND exactly two
-// of the 4 cardinal neighbours are Fluid (the two
-// perpendicular targets).
 void TestFluidCASpreadsToCardinalNeighbour(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -411,13 +288,6 @@ void TestFluidCASpreadsToCardinalNeighbour(TestContext &context)
 	const bool spreadToZMinus = GetVoxelMaterial(world, {2, 1, 1}) == VoxelMaterial::Fluid;
 	const int spreadCount = static_cast<int>(spreadToXPlus) + static_cast<int>(spreadToXMinus)
 		+ static_cast<int>(spreadToZPlus) + static_cast<int>(spreadToZMinus);
-	// **Strict count conservation (2026-06-14 fix).** Earlier
-	// "L-shape" spread wrote 2 destinations per source, growing
-	// the count by 1 per tick. The user reported "вода дюпается,
-	// клонируется". The fix: only the **first** direction that
-	// succeeds flips the source to Air. The second direction is
-	// skipped. Net change: source Air, 1 destination Fluid = 0.
-	// After 1 tick, **exactly 1** of the 4 neighbours is Fluid.
 	EXPECT_EQ(context, 1, spreadCount);
 	// Count is conserved: 1 source turned to Air, 1 destination
 	// became Fluid, net 0. Total fluid count is still 1.
@@ -495,15 +365,6 @@ void TestFluidCADeterministicAcrossRuns(TestContext &context)
 	EXPECT_TRUE(context, first == second);
 }
 
-// **`stats.fluidVoxelCount` stays in sync with `world.voxels`
-// (no desync between the count and the array).** The
-// `SetVoxelMaterial` path is responsible for keeping the count
-// accurate; the CA relies on it for its `== 0` fast-path. If a
-// regression in `AccumulateMaterialCount` desyncs the count, the
-// CA might do the wrong number of ticks. With the 2026-06-14
-// swap-semantics spread, the count is **strictly conserved** for
-// spread, fall, and resting; the count MUST still match the
-// actual array contents (no leaks, no duplications).
 void TestFluidCAStatsCountStaysConsistent(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
@@ -538,10 +399,6 @@ void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
 		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid);
 	}
 
-	// Run enough ticks for the column to spread out. With the
-	// 2026-06-14 swap-semantics spread, the count is **strictly
-	// conserved** at kColumnHeight. We assert the count equals
-	// kColumnHeight every tick.
 	for (int tick = 0; tick < 20; ++tick) {
 		UpdateFluidCA(world);
 		EXPECT_EQ(
@@ -566,15 +423,6 @@ void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
 	EXPECT_TRUE(context, y0FluidCount > 0u);
 }
 
-// **Fluid column over Air + platform: platform stays intact,
-// water drains via swap-semantics spread.** The 2026-06-14
-// fix (responding to the operator's "вода дюпается, клонируется"
-// report) restored **strict count conservation** in the spread
-// rule: source (Fluid) → Air, exactly **one** successful
-// destination becomes Fluid. Net change = 0 per spread. The
-// "L-shape" visual is lost (only 1 destination per source per
-// tick, not 2), but the count is conserved. The fall-through-
-// floor rule is reverted so the platform stays intact.
 void TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(TestContext &context)
 {
 	constexpr int kColumnHeight = 4;
@@ -589,11 +437,6 @@ void TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(TestContext &context)
 		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid);
 	}
 
-	// Run enough ticks for the column to settle. With the
-	// 2026-06-14 swap-semantics spread, count is **strictly
-	// conserved** at kColumnHeight (4). Fall rule conserves
-	// count too (vol → vol, no change). Resting cells don't
-	// move. Net result: count == kColumnHeight every tick.
 	for (int tick = 0; tick < 30; ++tick) {
 		UpdateFluidCA(world);
 		EXPECT_EQ(context, static_cast<uint32_t>(kColumnHeight), world.stats.fluidVoxelCount);
@@ -726,12 +569,6 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	// Sanity: glass below the bottom fluid.
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {0, 2, 0}));
 
-	// **Before break:** fluid on glass → no fall. The fluid may
-	// spread sideways inside the sphere, but cannot fall through
-	// the glass shell. The fall-through-glass invariant is what
-	// the user reported (and what the 2026-06-13 commit-loop
-	// critical fix restored); we pin the invariant, not the
-	// `moved == 0` (which would be false with spread enabled).
 	UpdateFluidCA(world);
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {0, 2, 0}));
 
@@ -751,10 +588,6 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	EXPECT_TRUE(context, moved > 0u);
 	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {0, 2, 0}));
 
-	// **Subsequent ticks:** the fluid continues to fall and spread.
-	// We assert the count is never DECREASED (no fluid is
-	// lost) — with the 2026-06-13 2-direction spread the
-	// count may grow, but it never drops.
 	const uint32_t initialFluidCount = world.stats.fluidVoxelCount;
 	for (int tick = 0; tick < 10; ++tick) {
 		UpdateFluidCA(world);
@@ -762,28 +595,6 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// **Pause / timeScale / frame-step tests (2026-06-14).**
-// ---------------------------------------------------------------------------
-//
-// **2026-06-14 fix.** The fluid CA tick was moved from
-// `SDL_AppIterate` (wall-clock throttle, ignored pause /
-// timeScale) into `AppUpdate.cpp` (sim-time accumulator,
-// honours `effectivePaused`, `timeScale`, and
-// `frameStepRequested`). The throttle below mirrors the
-// exact logic in `AppUpdate.cpp:693-734` (after the
-// 2026-06-14 follow-up) so the tests exercise the real
-// behaviour without dragging in the full `AppState`
-// initialisation path.
-
-// **Helper: drive the CA via the same throttle the
-// production code uses.** Mirrors the block in
-// `AppUpdate.cpp` after the 2026-06-14 follow-up. The
-// caller sets `simulation.fluidTickRateHz`,
-// `simulation.timeScale`, and `simulation.paused`; this
-// helper runs `frameCount` render frames at
-// `frameDeltaSeconds` each, calling `UpdateFluidCA` per
-// accumulated tick.
 void TickFluidCA(
 	SimulationState &simulation,
 	VoxelWorld &world,
@@ -816,13 +627,6 @@ void TickFluidCA(
 	}
 }
 
-// **Fluid does NOT move when paused (2026-06-14 invariant).**
-// The user reported "вода растекается даже при паузе". The
-// fix: the CA tick is gated by `effectivePaused`, and the
-// accumulator is zeroed on pause so the next unpaused
-// frame doesn't catch up. We assert the entire `world.voxels`
-// byte array is unchanged after a full second of paused
-// render frames at 60 FPS.
 void TestFluidCAFluidDoesNotMoveOnPause(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);

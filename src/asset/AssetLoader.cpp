@@ -254,32 +254,6 @@ glm::mat4 ComposeNodeLocalMatrix(const fastgltf::Node &node)
 	return t * r * s;
 }
 
-// Walk the default scene's node hierarchy in DFS order, applying
-// each node's global TRS to every referenced mesh's vertices, and
-// accumulating the transformed AABB. Mutates `loaded->prim[*].positions`
-// in place (positions are now in asset-local space, after node
-// transforms) and updates `loaded->aabbMin` / `aabbMax`.
-//
-// glTF spec §3.5.3: "The global transformation matrix of a node is
-// the product of the global transformation matrix of its parent
-// node and its own local transformation matrix." So the recursion
-// is `global(node) = global(parent) * local(node)`, root nodes
-// having `global = local`.
-//
-// **Bug history (M5.1c, 2026-06-12):** the pre-M5.1c loader read
-// `asset.meshes` directly without consulting the node hierarchy,
-// so the per-mesh TRS (translation / rotation / scale baked into
-// each glTF node) was silently dropped. For a single-mesh
-// fixture (box.glb, Cube) the resulting AABB and rendered mesh
-// were correct. For multi-mesh glTFs that use the node hierarchy
-// for layout (e.g. `Untitled.colonada.glb`, a lamp post with
-// Cylinder + Cube + Sphere nodes each with their own translation
-// and scale), the loader collapsed all three primitives into a
-// single AABB and rendered all three at the same world position
-// with the same model transform — turning the lamp post into an
-// unreadable pile of overlapping geometry. The fix is to walk
-// the scene and bake the node TRS into the positions before
-// computing the AABB and shipping the mesh to the GPU.
 bool ApplyNodeHierarchyTransforms(
 	const fastgltf::Asset &asset,
 	LoadedAsset &loaded)
@@ -397,12 +371,6 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 
 	auto dataBuffer = fastgltf::GltfDataBuffer::FromPath(path);
 	if (dataBuffer.error() != fastgltf::Error::None) {
-		// **Windows STL portability (`2026-06-18`,
-		// windows-host-build-r0).** MSVC STL does not provide
-		// `operator+(string, string_view)` (libc++ does as an
-		// extension). Build the message via `+=` instead so the
-		// same code compiles on clang-cl + MSVC STL and on
-		// native clang + libc++.
 		std::string message = "GltfDataBuffer::FromPath failed: ";
 		message += fastgltf::getErrorMessage(dataBuffer.error());
 		SetLastError(message);

@@ -1,16 +1,5 @@
 #pragma once
 
-// **StringID fallback header for Windows clang-cl
-// (`2026-06-18`, windows-host-build-r0).** Mirrors the
-// `projectv::core::StringID` API exposed by
-// `core/StringId.ixx` in inline form so consumers
-// (`core/Types.hpp`, `StringIdTest.cpp`,
-// `ModelRegistryEntry::id`, ...) on a toolchain that
-// cannot consume C++20 modules still get identical ABI
-// and constexpr-hash semantics. See `Math_fallback.hpp`
-// header for the parallel rationale; same deletion path
-// when CMake/clang-cl ship the missing scanner.
-
 #include <array>
 #include <cstddef>
 #include <cstdint>

@@ -1,11 +1,3 @@
-// **Tier 0.A — r0 hardcore perf (`2026-06-13`).** Smoke test for
-// `projectv::math::Vec3/Vec4/Mat4` types. Verifies the layout /
-// alignment contracts and the most-used arithmetic ops
-// (`dot`, `cross`, `length`, `normalize`, `Mat4*Vec4`,
-// `Mat4*Mat4`, `transpose`, `inverse`).
-//
-// Refs: src/core/Math.hpp, agent/memory.md §11.4 Tier 0.A,
-// agent/decisions.md §29, TODO.md Tier 0.
 
 #include "core/Math.hpp"
 

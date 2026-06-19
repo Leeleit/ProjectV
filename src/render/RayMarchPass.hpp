@@ -6,28 +6,6 @@
 
 namespace projectv::render {
 
-// **Ray-march compute pass (defense r0, 2026-06-13).** A second, optional
-// rendering path that re-casts the scene through a DDA ray-march over the
-// packed chunk voxel payload, on top of (or in place of) the mesh-based
-// primary path. Intended as the GPU ray-marching demonstration called out
-// in ТЗ 4.1.2: "визуализация воксельной сцены через GPU ray-marching с
-// использованием compute shaders".
-//
-// **Current scope:** the pass owns:
-//   - a runtime `enabled` flag, toggled by F6 in `main.cpp::SDL_AppEvent`;
-//   - a compute-shader source file at `src/shaders/ray_march.comp` that
-//     does an Amanatides-Woo DDA through the packed voxel payload;
-//   - a pipeline-recreate request flag, set by F5 hot-reload and consumed
-//     at the next frame boundary.
-//
-// The current implementation is an **API + state contract only** — the
-// `RecordRayMarchCommands` entry point logs the per-frame state and is a
-// no-op until a small follow-up slice binds the compute pass into the
-// graphics command stream. That follow-up is documented in
-// `docs/DefenseReport.md §3` and `agent/decisions.md` (deferred to Phase 7
-// — full compute pipeline + offscreen color attachment + blit to
-// swapchain). The shape of the API is stable; consumers can wire their
-// side of the call site now.
 void SetRayMarchEnabled(bool enabled);
 bool IsRayMarchEnabled();
 

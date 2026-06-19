@@ -1,31 +1,3 @@
-// **Tier 5 (`2026-06-13`).** Unit test for
-// `BuildSunShadowCascadeSplits` from
-// `src/render/ShadowProjection.cpp`. Verifies:
-//
-// 1. **Happy path** — typical near/far planes and a
-//    moderate split lambda produce strictly-monotonic
-//    splits within `[nearPlane, farPlane]`, with
-//    `viewDepthSplits.back() == farPlane` and
-//    `normalizedSplits.back() == 1.0f`.
-// 2. **Boundary** — `viewDepthSplits[i] > viewDepthSplits[i - 1]`
-//    for all `i > 0` (no cascade collapses to a zero-width
-//    slab — this is the regression check for the
-//    `minDepthStep` clamp added in
-//    `BuildSunShadowCascadeSplits:BuildSunShadowCascadeSplits()`).
-// 3. **Lambda sweep** — `splitLambda == 0` produces a
-//    pure-uniform split (each `viewDepthSplits[i]` is
-//    exactly `nearPlane + (i+1) * (farPlane - nearPlane) /
-//    kSunShadowCascadeCount`), and `splitLambda == 1`
-//    produces a pure-logarithmic split
-//    (`viewDepthSplits[i] ≈ nearPlane * (farPlane / nearPlane)^((i+1) / kSunShadowCascadeCount)`).
-// 4. **Defensive defaults** — non-finite inputs
-//    (`NaN`, `inf`) fall back to the
-//    `kDefaultCascade*` constants without UB.
-// 5. **Lambda clamp** — `splitLambda < 0` clamps to 0
-//    and `splitLambda > 1` clamps to 1.
-//
-// The test is CPU-only, no Vulkan. Same shape as
-// `ProjectVFrustumCullingTests` and `ProjectVBoxUvFixtureTests`.
 #include "render/ShadowProjection.hpp"
 #include "render/ShadowTypes.hpp"
 

@@ -125,15 +125,6 @@ VkFormat ChooseModelDepthFormat(const VkPhysicalDevice physicalDevice)
 
 std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState *state)
 {
-	// **Tier 1.B (`2026-06-13`).** Returns
-	// `std::expected<void, VulkanInitError>`. Each
-	// `return false;` site is replaced with
-	// `return std::unexpected(VulkanInitError::Variant);` and
-	// the per-step `runtime::LogRuntimeFailure` log line is
-	// preserved. The `PV_CHECK_OR_RETURN` macro short-circuits
-	// on a `false` precondition — we replace it with an
-	// explicit `if + return std::unexpected` for the two
-	// preconditions so the error variant is preserved.
 	const auto fail = [](projectv::vulkan_init::VulkanInitError e, std::string_view step, std::string_view detail) {
 		runtime::LogRuntimeFailure("Init", step, detail);
 		return std::unexpected(e);

@@ -1,14 +1,3 @@
-// **Tier 2.D (`2026-06-13`).** Re-enabled direct importer
-// of `projectv.math`. See `src/app/Camera.cpp` for the
-// full rationale.
-//
-// **Windows clang-cl fallback (`2026-06-18`,
-// windows-host-build-r0).** Switched to `#include
-// "core/Math.hpp"` so the same TU compiles on clang-cl
-// (which cannot use `import` without CMake scanner support).
-// The header itself branches into the inline fallback under
-// `defined(__clang__) && defined(_MSC_VER)`; on native
-// clang it still re-issues `import projectv.math;`.
 #include "core/Math.hpp"
 
 #include "render/Renderer.hpp"
@@ -27,29 +16,6 @@
 #include <filesystem>
 
 namespace {
-// `BuildGraphicsPushConstants` is non-singular for any sensible near/far
-// pair, and the resolve pass is downstream of the voxel pass, so a
-// singular input would already have failed before reaching here.
-//
-// **Tier 0.B (`2026-06-13`).** Removed; replaced by
-// `projectv::math::inverse(Mat4)` from `core/Math.hpp`. Same
-// Gauss-Jordan with partial pivoting, same singular-matrix
-// fallback (returns partial-inverse state). The new helper takes
-// `Mat4` (16-byte aligned) directly so the resolve pass no
-// longer needs to construct a temporary `std::array<float, 16>`.
-//
-// **Per-pass CPU timing helper, 2026-06-12.** RAII wrapper
-// that converts `SDL_GetPerformanceCounter` ticks at
-// destruction into a millisecond float and writes it to the
-// referenced output slot. Used by each `Record*Commands`
-// function below to populate
-// `RenderState::renderPassTimings::*Ms`. RAII matters for
-// the early-return paths in `RecordShadowCommands` /
-// `RecordVoxelMeshingCommands` / `RecordDebugOverlayCommands`
-// / `RecordDebugHudCommands` — without RAII each early
-// return would need its own `writeTiming()` call site, and
-// one missed call would silently leave the previous frame's
-// stale number on the HUD.
 class ScopedPassTimer {
   public:
 	explicit ScopedPassTimer(float &outMs)
@@ -92,14 +58,6 @@ DebugOverlayPushConstants BuildBoxOverlayPushConstants(
 	pushConstants.overlayColor = box.color;
 	return pushConstants;
 }
-
-// **Tier 0.B (`2026-06-13`).** The local `InvertColumnMajorMat4` is
-// removed; replaced by `projectv::math::inverse(Mat4)` from
-// `core/Math.hpp`. Same Gauss-Jordan with partial pivoting, same
-// singular-matrix fallback (returns partial-inverse state). The
-// new helper takes `Mat4` (16-byte aligned) directly so the
-// resolve pass no longer needs to construct a temporary
-// `std::array<float, 16>`.
 
 DebugOverlayPushConstants BuildCrosshairOverlayPushConstants(const SwapchainState &swapchain)
 {
@@ -236,15 +194,6 @@ bool SaveRequestedScreenshot(
 		return true;
 	}
 
-	// **Tier 5 (`2026-06-13`).** Tight fence-wait
-	// latency — same pattern as
-	// `FramePreparation.cpp:115`. 10 ms quick
-	// poll, blocking fallback if the GPU is
-	// behind. See the comment there for the
-	// full rationale; this is the screenshot
-	// capture path, which has the same p99
-	// latency sensitivity as the per-frame
-	// path.
 	VkResult waitResult = vkWaitForFences(
 		context.device, 1, &inFlightFence, VK_TRUE, 10'000'000);
 	if (waitResult == VK_TIMEOUT) {

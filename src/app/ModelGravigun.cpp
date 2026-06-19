@@ -91,18 +91,6 @@ Ray BuildCameraRay(const CameraState &camera)
 	return ray;
 }
 
-// **M5.1d, 2026-06-12:** the gravigun's default behaviour
-// is **no snap on drag/drop** (operator request — they want
-// raw, exact coordinates out of the drop log so they can
-// bake the placement into the manifest without any rounding
-// bias). Operators who want the pre-M5.1d "per-axis smart
-// snap" behaviour (integer AABB min on X/Z, AABB max
-// clamped to world bound on stick-out axes) opt in with
-// `PROJECTV_GRAVIGUN_SNAP=on`. The helper is queried once
-// per drag and once per drop — not cached in the state
-// struct — so a future hotkey can flip the env var (or
-// the operator can change it between pick/drop frames)
-// without invalidating the state.
 bool GravigunSnapEnabled()
 {
 	const char *value = std::getenv("PROJECTV_GRAVIGUN_SNAP");
@@ -218,26 +206,6 @@ void TickModelGravigun(
 	}
 
 	if (state->pickedInstanceIndex >= 0 && !fDown) {
-		// **Drop** the picked model. The default behaviour
-		// (operator request, 2026-06-12) is **no snap on
-		// drop**: the final AABB is exactly the AABB the
-		// drag landed at, with no per-axis smart snap and
-		// no clamp-to-world. The drop log records the
-		// operator's exact position so they can read the
-		// coordinates out of the smoke log and bake them
-		// into the manifest (or into future code) without
-		// any rounding bias. Operators who want the
-		// pre-snap M5.1d behaviour (per-axis smart snap on
-		// release, with `AABB max ≤ worldMax` enforced and
-		// AABB min snapped to the integer grid on axes that
-		// fit) can opt in with the env var
-		// `PROJECTV_GRAVIGUN_SNAP=on`. Note: in
-		// no-snap mode the operator can place the AABB
-		// outside the world bounds, in which case the
-		// renderer will cull the instance (frustum or
-		// bounds) and the model disappears from view —
-		// the drop log still reports the out-of-bounds
-		// AABB so the operator can correct the position.
 		const bool snapOnDrop = GravigunSnapEnabled();
 		if (snapOnDrop) {
 			asset::SnapModelInstancesAboveGround(world, render);
@@ -258,34 +226,6 @@ void TickModelGravigun(
 	}
 
 	if (state->pickedInstanceIndex >= 0 && fDown) {
-		// **Drag.** Cast a ray from the camera through the
-		// crosshair (the camera forward direction), intersect
-		// with the horizontal plane at targetY, and compute
-		// the new AABB min as the **pick anchor + crosshair
-		// delta**: `newMin = pickAnchorAabbMin + (currentHit
-		// - pickAnchorHit)`. The model only moves when the
-		// cursor moves relative to the pick position; on the
-		// first frame of F-held (and every frame the cursor
-		// is stationary) the delta is zero and the model
-		// stays put. The AABB min is **NOT snapped** to the
-		// integer grid by default (operator request,
-		// 2026-06-12) — the operator wants raw, exact
-		// coordinates out of the drop log so they can bake
-		// the placement into the manifest without any
-		// rounding bias. AABB dims are preserved.
-		//
-		// The model basis translation column must move by
-		// the same amount AND re-apply the load-time
-		// `-sourceAabbMin` offset, otherwise the rendered
-		// mesh is offset from the AABB by `sourceAabbMin`
-		// (the load path's `aabbMinOffset = T(-srcMin*scale)`
-		// puts the translation at `pos - sourceAabbMin`,
-		// not at `pos`; writing `modelTransform[12] =
-		// newMinX` would shift the rendered AABB by
-		// `sourceAabbMin` to the left of the operator's
-		// chosen AABB min). See
-		// `ModelInstanceData::sourceAabbMin` docstring in
-		// `core/Types.hpp` for the full invariant.
 		const Ray ray = BuildCameraRay(camera);
 		const std::optional<glm::vec3> hit = IntersectRayHorizontalPlane(ray, state->targetY);
 		if (hit.has_value()) {

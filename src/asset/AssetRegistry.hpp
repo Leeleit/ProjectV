@@ -13,13 +13,6 @@
 
 namespace projectv::asset {
 
-// **Tier 1.B (`2026-06-13`).** Strongly-typed error enum for
-// `AssetRegistry::Load`. Cold path (1× per asset), so the
-// `std::expected` cost is irrelevant. The success value is
-// the previously-loaded `LoadedAsset*` (already in the
-// registry's `mEntries` map) so the caller doesn't have to
-// do a second `Get(id)` lookup; `std::unexpected` carries
-// the specific failure variant.
 enum class AssetLoadError : std::uint8_t {
 	LoadGlbFailed = 0,
 };

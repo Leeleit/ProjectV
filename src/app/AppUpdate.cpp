@@ -153,12 +153,6 @@ bool SetRelativeMouseMode(
 	input.relativeMouseModeEnabled = enableRelativeMouseMode;
 	input.mouseDeltaX = 0.0f;
 	input.mouseDeltaY = 0.0f;
-	// P0.3 follow-up: any (re-)enable of relative mouse mode risks a large
-	// spurious first MOUSE_MOTION because the cursor was unrestrained
-	// between the previous disable and this enable, so the next relative
-	// delta is measured from the unrestrained position. Drop the first
-	// motion after each (re-)enable. The init path already defaults the
-	// flag to true, so this line is what protects tab-toggle in-flight.
 	input.skipFirstMouseMotion = true;
 	return true;
 }
@@ -483,12 +477,6 @@ bool UpdateApp(
 		// pre-invalidated data.
 		render->taaLayerHistoryValid = false;
 	}
-	// Frame-step / slow-motion debug (2026-06-12). The
-	// `timeScale` axis is independent of the existing
-	// `TogglePause` action (`P`) — the operator can leave
-	// `timeScale=0.25` for fine-tuning camera framing and
-	// still step one frame at a time with `\`. See
-	// `decisions.md §26` for the per-field contract.
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTimeScale)) {
 		// `[` halves the time scale. Below 0.01 it snaps to
 		// 0 so the user gets a discrete "pause" stop
@@ -570,13 +558,6 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseShadowTuningValue)) {
 		AdjustShadowTuning(*render, 1.0f);
 	}
-	// **Audio engine handlers, 2026-06-12.** All four
-	// are no-ops if the engine didn't init
-	// (`audio == nullptr`) so a miniaudio init
-	// failure on the host doesn't break the rest
-	// of the program. Step matches the
-	// `kLightingExposureStepStops` style: 0.05
-	// in the [0, 1] volume range.
 	if (audio) {
 		constexpr float kMusicVolumeStep = 0.05f;
 		if (ConsumeInputActionPressed(*input, InputAction::ToggleMusicPlayPause)) {
@@ -637,19 +618,6 @@ bool UpdateApp(
 	const bool spectatorMode = IsSpectatorMode(*camera);
 	const bool walkMode = IsWalkMode(*camera);
 
-	// Frame-step / slow-motion accumulator override
-	// (2026-06-12). Read-then-clear the one-shot
-	// `frameStepRequested` flag. The accumulator override
-	// below forces exactly one fixed tick that frame even
-	// when `simulation->paused` is true. `effectivePaused`
-	// is the per-frame unpaused-equivalent: it is true
-	// only when the user explicitly paused AND did not
-	// press `\` this frame. Used in place of
-	// `simulation->paused` for the accumulator, the
-	// physics-tick while loop, and the camera-tick-on-
-	// pause block below. Declared here (before
-	// `cameraCanUpdate`) so the camera-look path can
-	// honour a same-frame step request too.
 	const bool frameStepRequestedNow = simulation->frameStepRequested;
 	simulation->frameStepRequested = false;
 	const bool effectivePaused = simulation->paused && !frameStepRequestedNow;
@@ -691,42 +659,6 @@ bool UpdateApp(
 		simulation->simulationAccumulatorSeconds = 0.0f;
 	}
 
-	// **Fluid CA tick (2026-06-14).** Mirrors the physics-
-	// accumulator pattern above but at a configurable rate
-	// (`SimulationState::fluidTickRateHz`, default 20 Hz).
-	// Lives here, not in `SDL_AppIterate` directly, so it
-	// inherits:
-	//   - **`effectivePaused` guard** — water does not
-	//     move when paused. The accumulator is zeroed on
-	//     pause so it doesn't "catch up" the next frame.
-	//   - **`timeScale` scaling** — `frameDeltaSeconds`
-	//     is already multiplied by `timeScale` at line 669,
-	//     so the CA runs at `fluidTickRateHz * timeScale`
-	//     ticks/sec. At timeScale=0.5 (one `[` press), 10
-	//     ticks/sec; at timeScale=0.0, 0 ticks/sec. The
-	//     `[`/`]` hotkeys already do the right thing.
-	//   - **`frameStepRequested`** — when the operator
-	//     presses `\` while paused, `frameStepRequestedNow`
-	//     is true and `effectivePaused` becomes false, so
-	//     exactly one CA tick runs. (Same pattern as
-	//     physics.)
-	//
-	// The CA accumulator is separate from
-	// `simulationAccumulatorSeconds` so the CA rate is
-	// independent of the physics fixed step (60 Hz). A
-	// `fluidTickRateHz` of 20 means one CA tick per 3
-	// physics ticks, which is the right ratio for visible
-	// water "flow" without per-cell teleport.
-	//
-	// **Multiple ticks per frame**: the while-loop drains
-	// the accumulator in `1 / fluidTickRateHz` chunks, so
-	// a frame with a 1-second `frameDeltaSeconds` (e.g.
-	// timeScale=4.0, real-delta=250ms) will run
-	// `1.0 * 20 = 20` CA ticks. The
-	// `simulationStepsLastFrame` style cap (5 ticks) is
-	// intentionally **not** applied to the CA — fluid
-	// is purely visual, not gameplay-physics, and a 1-sec
-	// pause-unpause shouldn't drop 19 fluid ticks.
 	if (!effectivePaused && world->voxelWorld && simulation->fluidTickRateHz > 0.0f) {
 		simulation->fluidAccumulatorSeconds += simulation->frameDeltaSeconds;
 		const float fluidInterval = 1.0f / simulation->fluidTickRateHz;
@@ -839,17 +771,6 @@ bool UpdateApp(
 		debug->stats.worldEditVersion = world->voxelWorld->editVersion;
 		debug->stats.scenePreset = world->voxelWorld->scenePreset;
 	}
-	// Per-pass CPU timing mirrors (2026-06-12). Each
-	// `Record*Commands` function in `Renderer.cpp` writes its
-	// own `*Ms` field via `ScopedPassTimer`; we mirror all
-	// of them into `DebugStats` here so the HUD and capture
-	// sidecar can read the per-pass breakdown without poking
-	// into `RenderState` directly. `renderPassOtherMs` is
-	// derived as `frameTimeMs - graphicsMs` — the slice of
-	// the wall-clock frame time not spent inside
-	// `RecordGraphicsCommands` (SDL event handling, scene
-	// resource upload, ECS sync, physics tick, AppUpdate
-	// itself, etc.).
 	debug->stats.renderPassShadowMs = render->renderPassTimings.shadowMs;
 	debug->stats.renderPassMeshingMs = render->renderPassTimings.meshingMs;
 	debug->stats.renderPassGraphicsMs = render->renderPassTimings.graphicsMs;
@@ -860,17 +781,6 @@ bool UpdateApp(
 	debug->stats.renderPassOtherMs = std::max(
 		0.0f,
 		debug->stats.frameTimeMilliseconds - render->renderPassTimings.graphicsMs);
-	// **Audio engine mirrors, 2026-06-12.** Source
-	// of truth is the `AudioEngine` singleton on
-	// `AppState` (passed in as the 10th
-	// `UpdateApp` parameter). Mirrors feed the
-	// HUD line + the capture sidecar without
-	// poking into the engine. The track name is
-	// a fixed-size `std::array<char, 128>` so the
-	// mirror boundary is ABI-stable and doesn't
-	// allocate per frame; the engine keeps the
-	// canonical name on the heap and only
-	// re-copies on playlist rescan.
 	if (audio) {
 		debug->stats.audioMusicInitialized = audio->isInitialized();
 		debug->stats.audioMusicState = static_cast<uint8_t>(audio->state());
@@ -882,20 +792,6 @@ bool UpdateApp(
 		const size_t copyLen = std::min(trackName.size(),
 										debug->stats.audioMusicTrackName.size() - 1);
 		std::copy_n(trackName.begin(), copyLen, debug->stats.audioMusicTrackName.begin());
-		// **Music HUD mirrors, 2026-06-13.**
-		// Artist / title are cached on the engine
-		// side and re-parsed only on track
-		// changes, so the per-frame mirror copy is
-		// a single `std::copy_n` per field.
-		// Position / duration are queried each
-		// frame; both calls are O(1) in miniaudio
-		// (one counter read + one divide by
-		// sample rate) and the per-frame cost is
-		// in the nanosecond range. The 1-byte
-		// `char` arrays are zero-filled before
-		// the copy so a shorter-than-buffer
-		// string is null-terminated for the HUD's
-		// `snprintf("%s", ...)`.
 		const std::string &artist = audio->currentArtist();
 		std::ranges::fill(debug->stats.audioMusicArtist, '\0');
 		const size_t artistCopyLen = std::min(artist.size(),

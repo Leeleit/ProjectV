@@ -1,13 +1,3 @@
-// **Repo root discovery (`2026-06-15`).**
-//
-// Helper extracted from `src/audio/MusicDirectoryPath.cpp` so the
-// same walk-up algorithm can be shared by `src/voxel/SceneConfig.cpp`
-// (which also needs to find the ProjectV repo root to locate
-// `runtime/scene.json` regardless of CWD). Previously duplicated
-// logic existed only in MusicDirectoryPath; SceneConfig relied on
-// a CWD-relative fallback that broke when ProjectV.exe was launched
-// from `build\windows-clang-debug\bin\` via Explorer (no CWD = repo
-// root, but the binary lives 2 directories deeper).
 
 #pragma once
 

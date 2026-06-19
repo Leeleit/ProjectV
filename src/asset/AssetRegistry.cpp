@@ -7,12 +7,6 @@ namespace projectv::asset {
 
 std::expected<const LoadedAsset *, AssetLoadError> AssetRegistry::Load(const std::string &id, const std::string &path)
 {
-	// **Tier 1.B (`2026-06-13`).** `std::expected<const LoadedAsset *,
-	// AssetLoadError>` — the success value is the freshly-loaded
-	// pointer (already in `mEntries` after the std::move, so the
-	// caller can use it directly without a second `Get(id)` round
-	// trip). The error variant surfaces the specific failure
-	// (currently `LoadGlbFailed`).
 	auto loaded = LoadGlb(path);
 	if (!loaded) {
 		return std::unexpected(AssetLoadError::LoadGlbFailed);

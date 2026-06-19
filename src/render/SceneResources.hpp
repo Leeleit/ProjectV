@@ -18,17 +18,6 @@ inline PackedSceneChunkDescriptor MakeUploadedSceneChunkDescriptor(
 	return uploadedDescriptor;
 }
 
-// **Tier 5 (`2026-06-13`).** `[[unlikely]]` on the
-// early-out branch (empty AABBs are common in the chunk
-// grid: chunks with no solid voxels are dropped from the
-// descriptor stream before they reach this function, but
-// the descriptor set still carries them as zero-extent
-// sentinels to keep the index stream flat). `[[likely]]`
-// on the final return — for a fully populated chunk grid
-// inside the camera frustum, the dominant path is "all
-// 6 planes pass, return true". The branch predictor
-// benefits even on debug builds where the hint is a
-// `__builtin_expect` wrapper.
 inline bool IsSceneChunkVisible(
 	const PackedSceneChunkDescriptor &chunkDescriptor,
 	const ChunkCullingParameters &parameters)
@@ -84,11 +73,6 @@ inline bool IsSceneChunkVisible(
 		return centerDistance + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 	const float chunkRadius = std::sqrt(lengthSquared(chunkHalfExtent));
-	// **Tier 5.** `[[unlikely]]` on the near-plane cull.
-	// The camera's near plane is at 0.5 world units; only
-	// chunks directly behind the camera are culled, and
-	// the camera is rarely inside a chunk's volume in the
-	// VoxelLab / FlatBenchmark / ChunkGrid presets.
 	if (!passesPlane(cameraForward, nearPlane)) [[unlikely]] {
 		return false;
 	}
@@ -129,11 +113,6 @@ inline bool IsSceneChunkVisible(
 		cameraForward.z * tanHalfVerticalFov - cameraUp.z,
 		0.0f,
 	};
-	// **Tier 5.** `[[unlikely]]` on the 4 side-plane
-	// culls. The chunk grid is large enough that
-	// chunks spilling out of the L/R/B/T frustum are
-	// a minority of the visible set; the dominant
-	// case is "all 4 pass → return true".
 	if (!passesPlane(leftPlane) || !passesPlane(rightPlane)) [[unlikely]] {
 		return false;
 	}
@@ -343,19 +322,6 @@ void DestroySceneResources(
 	VulkanContextState *context,
 	RenderState *render);
 
-// **Two-level chunk visibility cache, 2026-06-12.** The hash
-// used by `ChunkVisibilityCache::valid` to decide between
-// cache-hit `memcpy` and full per-chunk rebuild. Quantization
-// thresholds are picked to keep a static-camera look-dev /
-// replay run entirely off the cull critical path:
-//   * camera position → 0.25 voxel units (so a single-voxel
-//     move always invalidates),
-//   * camera forward → 0.005 (~0.3° steps) so sub-1° rotations
-//     also invalidate.
-// The hash is the XOR-fold of 6 quantized camera ints + the
-// world payload version + the chunk descriptor count. Stored
-// on `ChunkVisibilityCache` so the next frame can compare
-// without recomputing.
 namespace projectv::visibility_cache {
 constexpr float kCameraPositionQuantization = 0.25f;
 constexpr float kCameraForwardQuantization = 0.005f;

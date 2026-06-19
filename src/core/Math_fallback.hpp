@@ -1,31 +1,5 @@
 #pragma once
 
-// **Math fallback header for Windows clang-cl
-// (`2026-06-18`, windows-host-build-r0).** Mirrors the
-// `projectv::math` API exposed by `core/Math.ixx` in
-// inline form so TUs that include `core/Math.hpp` on a
-// toolchain that cannot consume C++20 modules still get
-// identical ABI / layout / hot-path codegen. This file is
-// a **header-only fallback only**: it is gated by the
-// clang-cl branch in `core/Math.hpp` and is not the
-// canonical source of truth for the math types. When
-// CMake ships clang-cl scanner support (or when this
-// project migrates to a modules-aware MSVC cl.exe-only
-// build), this file becomes unreachable and can be
-// deleted together with the corresponding branch in
-// `Math.hpp`.
-//
-// **Why duplicate?** Per `agent/memory.md §10.1` and
-// `decisions.md §4`, the mainline default is to ship
-// math types as a C++20 module (`core/Math.ixx`). The
-// Windows clang-cl 22 + CMake 4.2 toolchain on this
-// host does not provide a module-scanner driver, so
-// `FILE_SET CXX_MODULES` cannot be wired in (CMake aborts
-// configure with "the compiler does not provide a way to
-// discover the import graph dependencies"). The fallback
-// path here keeps the rest of the toolchain happy until
-// CMake or clang-cl ship the missing integration.
-
 #include <array>
 #include <cstddef>
 

@@ -1,23 +1,3 @@
-// **Tier 2.A — `StringId.ixx` (`2026-06-13`).** C++20
-// module form of the Tier 1.D `projectv::core::StringID`
-// type. Mirrors `src/core/StringId.hpp` 1:1 — same
-// 16-byte (hash + length + pad) layout, same FNV-1a 64-bit
-// hash, same `consteval` literal ctor / `constexpr
-// string_view` ctor / `std::hash<StringID>` specialisation
-// / `toView` reverse-mapping.
-//
-// **No `export` on `_pad`.** The `std::hash<StringID>`
-// specialisation lives at namespace scope, not in the
-// `projectv::core` namespace — C++20 modules require
-// that namespace-scope specialisations be re-declared
-// inside the module's purview if they are to be
-// exported; otherwise the `std::hash` lookup at the
-// call site falls back to the standard library's
-// non-specialised hash. Per C++20 modules §10.4, a
-// `template<> struct std::hash<T>` declared at namespace
-// scope in a module is implicitly exported if the
-// primary template's namespace is reachable, which is
-// the case for `std` (always reachable).
 module;
 
 #include <array>

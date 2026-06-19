@@ -25,59 +25,12 @@ constexpr float kGlyphWidthPx = 5.0f * kGlyphPixelSizePx;
 constexpr float kGlyphHeightPx = 7.0f * kGlyphPixelSizePx;
 constexpr float kStatsPanelMinWidthPx = 276.0f;
 constexpr float kHelperPanelMinWidthPx = 244.0f;
-// **Music panel, 2026-06-13.** Minimum width
-// fits the longest expected `ARTIST` / `TITLE`
-// line. 4 lines max (`MUSIC`, `ARTIST`,
-// `TITLE`, `POS`), at ~10 px/glyph + 16 px
-// padding (2 × 8) on each side. 260 px covers
-// artist / title up to ~25 chars after
-// uppercase. Wider font sizes (e.g. 2x scale)
-// would need a re-tune.
 constexpr float kMusicPanelMinWidthPx = 260.0f;
 constexpr size_t kHudLineBufferSize = 96;
 constexpr size_t kMaxStatsLineCount = 38;
-// **Music panel cap, 2026-06-13.** Four lines
-// (`MUSIC <state> VOL <vol>`, `ARTIST <name>`,
-// `TITLE <name>`, `POS m:ss / m:ss`). The cap
-// exists so `BuildMusicLines` can use the same
-// `BeginHudLine` / `PV_APPEND_HUD_LINE`
-// pattern as the stats / helper panels without
-// overflow checks; `kHudLineBufferSize * 4`
-// bytes of stack storage on the renderer.
 constexpr size_t kMaxMusicLineCount = 4;
-// **Helper-panel cap, 2026-06-12 bump.** Was 16
-// (per-line at the time of the original
-// implementation); over the next several
-// sessions the panel accumulated more hotkey
-// lines than 16 can hold, and `BeginHudLine`
-// silently drops the tail. Bumped to 24 to
-// fit the new "MOVE / SPD / L Z" additions
-// (and a few lines of headroom for the
-// follow-up hotkey-rebind slice the operator
-// committed to).
 constexpr size_t kMaxHelperLineCount = 24;
 
-// **mm:ss formatter, 2026-06-13.** Used by the
-// music HUD line `POS mm:ss / mm:ss`. The
-// `treatZeroAsValid` flag distinguishes the two
-// callers:
-//   - **Position** uses `treatZeroAsValid = true`:
-//     "0:00" is the legitimate display for
-//     "at the start of the track" (cursor is 0
-//     before playback begins or right after a
-//     play-from-stop transition).
-//   - **Duration** uses `treatZeroAsValid = false`:
-//     0.0f means "decoder did not expose a
-//     length" (rare for MP3 but possible for
-//     malformed streams), and `--:--` is the
-//     HUD-visible "no data" sentinel.
-// The output is always 5 chars (`m:ss` or
-// `--:--`), 4 bytes wide for a 2-digit minute
-// cap (so a 600-minute track would still fit).
-// Negative inputs are clamped to 0 before the
-// minute/second split (the float can briefly
-// go negative on stream underflows, and a
-// `-1:59` would corrupt the HUD).
 std::string FormatMmSs(const float seconds, const bool treatZeroAsValid)
 {
 	if (seconds <= 0.0f && !treatZeroAsValid) {
@@ -92,31 +45,6 @@ std::string FormatMmSs(const float seconds, const bool treatZeroAsValid)
 	return std::string(buf);
 }
 
-// **HUD uppercase helper, 2026-06-13.** Copies
-// `in` into `out`, uppercasing ASCII `a-z` to
-// `A-Z`. Other characters (digits, `-`, `.`,
-// `:`, ` `, `\0`) pass through unchanged. The
-// output is always null-terminated (truncated
-// at `outSize - 1` if necessary). The engine
-// keeps the canonical case in
-// `audioMusicArtist` / `audioMusicTitle`; the
-// HUD uppercases at display time because the
-// 5×7 bitmap font only supports A-Z — lowercase
-// `a-z` falls through to the `default:` arm of
-// `GetGlyphRows` (empty 7-byte array) and
-// renders as blank, which is what produced the
-// "Artist L Title P" garble the operator
-// flagged in the 2026-06-13 screenshot (e.g.
-// "Le1t" → "L 1", "Palm Trees" → "P   T").
-// Truncation is intentional: long artist /
-// title names that don't fit in the 96-char
-// mirror are cut at the panel edge by the
-// 5x7 glyph render (each char = 10 px advance,
-// panel min-width = 260 px → ~25 chars max
-// per line). Returning the truncated string
-// keeps the alignment predictable; the
-// alternative (scrolling marquee) is a v2
-// feature.
 void FormatUppercaseForHud(
 	const char *in, char *out, const size_t outSize)
 {
@@ -550,14 +478,6 @@ size_t BuildStatsLines(
 		"FPS %.1f  MS %.2f",
 		stats.framesPerSecond,
 		stats.frameTimeMilliseconds);
-	// **2026-06-14: VSync line.** Shows the current
-	// `g_preferredPresentMode` and the cycle index/size,
-	// so the operator can see the V hotkey's effect
-	// without parsing the log. Cycle is built at startup
-	// from the surface's exposed modes — a 2-element
-	// cycle on Linux/Wayland (no IMMEDIATE), 3 on
-	// Windows. Defaults to "FIFO" if the cycle has not
-	// been built yet (headless / pre-init).
 	{
 		const VkPresentModeKHR activeMode = GetActivePresentMode();
 		const char *modeLabel = "UNKNOWN";
@@ -686,41 +606,10 @@ size_t BuildStatsLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "SUP NONE");
 	}
 
-	// **Music HUD moved out, 2026-06-13.** The
-	// music block (state / volume / artist / title
-	// / position) used to live here in the regular
-	// section, but the operator asked for a
-	// separate top-right panel (per the 2026-06-13
-	// screenshot complaint about the
-	// "Artist L Title P" garble — see
-	// `FormatUppercaseForHud` for the case-folding
-	// rationale and `BuildMusicLines` for the new
-	// block). This function now stops emitting
-	// music lines; the music panel is built and
-	// rendered separately at the end of
-	// `BuildDebugHudVertices`.
-
 	if (!detailedHudVisible) {
 		return lineCount;
 	}
 
-	// Per-pass CPU timing lines (2026-06-12). Two-line
-	// format: first line shows the total graphics time
-	// (`GFX`) and the unaccounted-for slice (`OTH` =
-	// `frameTimeMs - GFX`, i.e. SDL events, scene upload,
-	// AppUpdate itself). Second line shows the breakdown
-	// of sub-passes inside `RecordGraphicsCommands` so the
-	// operator can see which sub-pass is dominating. The
-	// `CHNK N` tail mirrors the per-frame dirty-chunk
-	// count that was actually requested for re-meshing —
-	// useful for the TODO §4.5 perf-budget analysis
-	// ("halve-res AO/contact upscale" needs to know which
-	// pass is the bottleneck, not just the total). Lives
-	// in the detailed-only section because the per-pass
-	// breakdown is diagnostic data — the basic HUD keeps
-	// the high-level `frameTimeMilliseconds` line and
-	// stops there, the detailed HUD shows where the budget
-	// is going.
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
@@ -1027,41 +916,6 @@ size_t BuildStatsLines(
 	return lineCount;
 }
 
-// **Music HUD block builder, 2026-06-13.** Emits
-// up to 4 lines for the top-right music panel:
-//   1. `MUSIC <state>  VOL 0.80` (always)
-//   2. `ARTIST <name>`           (gated on init + playlist)
-//   3. `TITLE  <name>`           (gated)
-//   4. `POS    m:ss / m:ss`      (gated)
-//
-// The artist and title are uppercased via
-// `FormatUppercaseForHud` before snprintf,
-// because the 5×7 bitmap font in `GetGlyphRows`
-// supports only A-Z, 0-9, `.`, `-`, `:` — the
-// lowercase characters in the operator's music
-// folder names ("Le1t - Palm Trees.mp3",
-// "Le1t - aCID.mp3") would otherwise render as
-// blank glyphs. The uppercase copy is local to
-// this function and to the local `upperArtist` /
-// `upperTitle` stack buffers; the engine keeps
-// the canonical case in `audioMusicArtist` /
-// `audioMusicTitle` mirrors and the sidecar
-// (when plumbed) will see the original case.
-//
-// Gating: line 1 is always emitted so the panel
-// is never empty (operator can see "MUSIC OFF"
-// at a glance when audio is not initialized).
-// Lines 2-4 are gated on `init && playlist > 0`
-// because ARTIST / TITLE / POS are undefined
-// when there's no track to play — emitting
-// empty fields would be confusing.
-//
-// The "POS 0:00" position display always shows
-// the cursor (so 0:00 is shown at the start of
-// a track); "--:--" is reserved for duration
-// when `ma_sound_get_length_in_seconds` returns
-// MA_FAILURE (rare for MP3 but possible for
-// malformed streams).
 size_t BuildMusicLines(
 	const DebugStats &stats,
 	std::array<std::array<char, kHudLineBufferSize>, kMaxMusicLineCount> &outLines)
@@ -1143,48 +997,11 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F8 TOOL  F9 BND");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F10 DIRTY  F11 AIR");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "J AUTOJUMP  F12 DELAY");
-		// **Movement / speed, 2026-06-12.** WASD
-		// moves the character (or the camera in
-		// spectator mode). `SPACE` is "up": jump
-		// in walk mode, ascend in creative /
-		// spectator flight. `LSHIFT` is "down":
-		// sneak in walk, descend in creative /
-		// spectator flight. `LCTRL` is the
-		// speed-boost hold-key (doubles the
-		// configured `CameraState::moveSpeed`).
-		// `LALT` is the slow-mo hold-key (halves
-		// it). `RSHIFT` / `RCTRL` / `RALT` are
-		// the right-hand alternates; the helper
-		// shows the left-hand form for brevity
-		// but the binding in `InputActions.cpp`
-		// accepts both. This line was missing
-		// from the helper before the v1 cap
-		// bump; the operator shouldn't have to
-		// grep the source to know that `W`
-		// moves forward.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "MOVE WASD  SPC UP  SHFT DN");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "SPD  CTL+ FAST  ALT- SLOW");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  N TMAP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "H EXP-  K EXPUP  V RESET");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "O SHDW  U DEC  I INC");
-		// **Debug gizmos, 2026-06-12.** `L`
-		// toggles the cascade split-plane
-		// overlay (4 thin AABBs at the
-		// `viewDepthSplits[i]` distances along
-		// the camera forward vector, sized from
-		// each cascade's ortho footprint; the
-		// colors are 4 distinct hues
-		// red/orange/cyan/magenta so the
-		// operator can tell cascades apart at
-		// a glance). `Z` toggles the cursor
-		// hit-normal shaft (1-voxel-wide shaft
-		// along `selection.hitNormal` for 2
-		// voxels beyond the hit voxel; helps
-		// disambiguate face selection at
-		// extreme angles where the yellow
-		// selection box alone is ambiguous).
-		// Both were missing from the helper
-		// before the v1 cap bump.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "L CASC  Z HITNRM");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
@@ -1201,25 +1018,7 @@ size_t BuildHelperLines(
 		// not redefined — the binding stays at the
 		// SDL_SCANCODE level in `InputActions.cpp`.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TIME [ DN  ] UP  \\ STEP  ` 1X");
-		// **Audio engine, 2026-06-12.** Music
-		// player controls. v1 layout per
-		// `decisions.md §28` (full hotkey rebind
-		// is the follow-up slice). The bracket
-		// and backslash / backtick keys are
-		// spelled out because their raw glyphs
-		// are not in the HUD font (only A-Z,
-		// 0-9, `.`, `-`, `:`). Q = play/pause,
-		// E = stop, 7/8 = vol-/vol+.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC Q PLY  E STP  7- 8+");
-		// **Track switching, 2026-06-12.** `9` =
-		// next, `0` = previous. The bracket and
-		// backslash / backtick keys are spelled
-		// out in `TIMECTL` above; the digits are
-		// also too narrow for the long-form
-		// "NEXT" / "PREV" labels, so the helper
-		// uses the same "9 SKIP  0 BACK" shape
-		// that the volume-down / volume-up line
-		// uses for the digit pair.
 		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC 9 NXT  0 PRV");
 	} else {
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
@@ -1249,14 +1048,6 @@ uint32_t BuildDebugHudVertices(
 	uint32_t vertexCount = 0;
 	constexpr std::array statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
 	constexpr std::array helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
-	// **Music panel color, 2026-06-13.** Slightly
-	// purplish-blue vs the stats / helper panels
-	// (which are more navy-grey) so the operator
-	// can spot it instantly. Same alpha as
-	// helperPanelColor so the three panels read
-	// as a balanced "set" rather than one
-	// dominating. The accent strip on top
-	// (gold) is shared across all three.
 	constexpr std::array musicPanelColor{0.08f, 0.07f, 0.13f, 0.78f};
 	constexpr std::array accentColor{0.96f, 0.79f, 0.31f, 0.95f};
 	constexpr std::array titleColor{0.98f, 0.96f, 0.88f, 0.98f};
@@ -1267,10 +1058,6 @@ uint32_t BuildDebugHudVertices(
 	const size_t statsLineCount = BuildStatsLines(stats, camera, interaction, statsLines);
 	std::array<std::array<char, kHudLineBufferSize>, kMaxHelperLineCount> helperLines{};
 	const size_t helperLineCount = BuildHelperLines(stats, helperLines);
-	// **Music lines, 2026-06-13.** Built and
-	// rendered separately (top-right panel) per
-	// the operator request; see `BuildMusicLines`
-	// for the line-level rationale.
 	std::array<std::array<char, kHudLineBufferSize>, kMaxMusicLineCount> musicLines{};
 	const size_t musicLineCount = BuildMusicLines(stats, musicLines);
 	const float statsPanelWidthPx = ComputePanelWidthPx(statsLines, "STAT", kStatsPanelMinWidthPx);
@@ -1286,20 +1073,6 @@ uint32_t BuildDebugHudVertices(
 	constexpr float statsPanelMinY = kPanelOriginYPx;
 	const float statsPanelMaxY = statsPanelMinY + statsPanelHeightPx;
 	const float helperPanelMinY = statsPanelMaxY + kPanelGapPx;
-	// **Music panel anchored at top-right,
-	// 2026-06-13.** `extent.width -
-	// musicPanelWidthPx - kPanelOriginXPx` puts
-	// the right edge of the panel 12 px from the
-	// right side of the viewport (same
-	// `kPanelOriginXPx` margin as the top-left
-	// stack). Independent of the top-left stack
-	// (which uses `kPanelOriginXPx` directly);
-	// the two stacks never overlap unless the
-	// viewport is narrower than
-	// `hudStackWidthPx + musicPanelWidthPx + 3 *
-	// kPanelOriginXPx` (~560 px at the current
-	// minimum widths — well below any practical
-	// 1280+ render target).
 	const float musicPanelMinXPx = static_cast<float>(extent.width) - musicPanelWidthPx - kPanelOriginXPx;
 	constexpr float musicPanelMinY = kPanelOriginYPx;
 	AppendPanel(

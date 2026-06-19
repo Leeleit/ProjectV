@@ -95,46 +95,6 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &fo
 	return formats.front();
 }
 
-// **V-sync toggle (`2026-06-13`).** Live-cycled by the
-// `V` hotkey in `app/main.cpp`. Three modes cycle:
-//   0. `VK_PRESENT_MODE_IMMEDIATE_KHR` — vsync off,
-//      no FPS cap, tearing possible (max throughput;
-//      the only option for benchmarking the GPU ceiling).
-//   1. `VK_PRESENT_MODE_MAILBOX_KHR` — vsync off
-//      semantically, but the surface manager keeps a
-//      single "latest image" and only swaps it on
-//      vblank. Triple-buffered; no FPS cap. With a
-//      VRR display (G-Sync / FreeSync) this is
-//      *tear-free AND uncapped*. On a fixed-refresh
-//      display, the swap-on-vblank means MAILBOX is
-//      effectively capped at the display rate (the
-//      display only updates on vblank; an image
-//      submitted just after vblank waits almost a
-//      full frame, so 144 FPS output on a 60 Hz
-//      panel still shows ~60 Hz but with no tearing
-//      and a one-frame latency). This is what NVIDIA
-//      "Fast Sync" maps to under the hood.
-//   2. `VK_PRESENT_MODE_FIFO_KHR` — vsync on, FPS
-//      capped at the panel refresh rate (default
-//      pre-toggle behaviour).
-//
-// We only return a mode the surface actually
-// supports (`IMMEDIATE` is optional per the Vulkan
-// spec; some Wayland / headless surfaces omit it).
-// If the operator-requested mode isn't supported, the
-// function falls back to the next one down the
-// priority list so the engine always picks the
-// best *available* tear-resistance for the current
-// display rather than failing the swapchain create.
-//
-// **2026-06-14:** `g_preferredPresentMode` and
-// `g_presentModeCycle` are now `inline` variables in
-// `VulkanSwapchain.hpp` (so the HUD's read-only
-// accessors can be header-only inlines without pulling
-// this TU into test targets). The `ChoosePresentMode`
-// / `CyclePreferredPresentMode` / `BuildPresentModeCycle`
-// functions below reference the inline variables
-// directly.
 using projectv::present_mode::g_active;
 using projectv::present_mode::g_cycle;
 
@@ -157,20 +117,6 @@ VkPresentModeKHR PickBestAvailablePresentMode(
 
 VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &presentModes)
 {
-	// **2026-06-14 fix.** Honour the operator's `V`-hotkey
-	// override for ALL three modes, not just the non-FIFO
-	// ones. The previous `if (g_preferredPresentMode !=
-	// FIFO)` branch silently fell through to a MAILBOX-
-	// first default chain whenever the operator cycled
-	// the mode back to FIFO, which on Linux/Wayland
-	// surfaces (or any surface that supports MAILBOX) meant
-	// V → "FIFO" actually returned MAILBOX — vsync never
-	// turned back on. The user reported this as "vsync
-	// слетает при постановке блока" because the swapchain
-	// recreates on block-induced re-renders re-entered
-	// `ChoosePresentMode` and re-picked MAILBOX. See
-	// `agent/decisions.md §30` and `agent/memory.md §12`
-	// (V-sync bug history).
 	if (g_active == VK_PRESENT_MODE_IMMEDIATE_KHR ||
 		g_active == VK_PRESENT_MODE_MAILBOX_KHR) {
 		return PickBestAvailablePresentMode(presentModes, g_active);
@@ -216,25 +162,11 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &caps, SDL_Window *window
 }
 } // namespace
 
-// **Tier 1.B (`2026-06-13`).** Moved `CreateOrRecreateSwapchain` to
-// file scope so the header declaration (also file scope) doesn't
-// conflict with an anonymous-namespace definition. The function
-// still uses the file-scope helpers from the anonymous namespace
-// above (anonymous-namespace contents are visible at file scope).
 std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwapchain(
 	PlatformState *platform,
 	VulkanContextState *context,
 	SwapchainState *swapchain)
 {
-	// **Tier 1.B (`2026-06-13`).** Returns
-	// `std::expected<VkFormat, SwapchainError>`. The chosen
-	// `VkFormat` is returned on success and also written to
-	// `swapchain->format` so callers that read the format through
-	// the struct keep working. Each `return false;` is replaced
-	// with `return std::unexpected(SwapchainError::Variant);` —
-	// the per-step `runtime::LogRuntimeFailure` / `LogVkFailure`
-	// calls are preserved inside this function so the
-	// diagnostic log line carries the same detail as before.
 	const auto fail = [](projectv::swapchain::SwapchainError e, std::string_view step, std::string_view detail) {
 		runtime::LogRuntimeFailure("Swapchain", step, detail);
 		return std::unexpected(e);
@@ -256,17 +188,6 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 		(support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
 
 	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
-	// **2026-06-14: build the runtime present-mode cycle
-	// here, before `ChoosePresentMode`.** The cycle is the
-	// data `CyclePreferredPresentMode` walks (instead of a
-	// hard-coded 3-state switch). Building it here means
-	// the cycle is always **fresh** — if the surface's
-	// support set changes (rare: only on display hot-swap
-	// or driver upgrade), the next swapchain create
-	// re-queries and rebuilds. `ChoosePresentMode` still
-	// reads `g_preferredPresentMode` directly (a single
-	// `VkPresentModeKHR`, set to the cycle's first element
-	// by `BuildPresentModeCycle`).
 	(void)BuildPresentModeCycle(support.presentModes);
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
 	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, platform->window);
@@ -513,12 +434,6 @@ bool RecreateSwapchain(
 		render->graphicsPipelineLayout != VK_NULL_HANDLE;
 	{
 		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateSwapchainResources");
-		// **Tier 1.B (`2026-06-13`).** `CreateOrRecreateSwapchain`
-		// now returns `std::expected<VkFormat, SwapchainError>`.
-		// `RecreateSwapchain` keeps its `bool` contract (it's the
-		// per-frame hot path that wraps the cold init); the
-		// variant is logged at high level so the operator still
-		// gets the specific failure reason.
 		const auto swapResult = CreateOrRecreateSwapchain(platform, context, swapchain);
 		if (!swapResult.has_value()) {
 			runtime::LogRuntimeFailure(
@@ -561,11 +476,6 @@ bool RecreateSwapchain(
 	if (render->taaLayerHistoryColorTarget == nullptr) {
 		render->taaLayerHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
 	}
-	// **Tier 1.B (`2026-06-13`).** `std::expected<void, TaaError>`
-	// returns the specific failure variant (image / image-view /
-	// sampler create). The per-step detail is logged inside
-	// `CreateOrRecreateTaaRenderTargets`; the high-level caller
-	// logs the variant name and tears down.
 	const auto taaResult = projectv::taa::CreateOrRecreateTaaRenderTargets(
 		context,
 		swapchain->extent,

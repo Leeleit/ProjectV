@@ -1,33 +1,3 @@
-// **Present-mode cycle tests (auto-detect cycle,
-// `2026-06-14`).**
-//
-// Verifies the runtime present-mode cycle logic in
-// `src/render/vulkan/VulkanSwapchain.hpp/cpp`:
-//   * `BuildPresentModeCycle(surfacePresentModes)` constructs
-//     a cycle vector containing only the surface's exposed
-//     modes, in priority order `{FIFO, MAILBOX, IMMEDIATE}`.
-//   * `CyclePreferredPresentMode()` advances the cycle by
-//     one step, wrapping at the end.
-//   * `GetActivePresentMode()` / `GetPresentModeCycleSize()`
-//     / `GetPresentModeCycleIndex(mode)` reflect the cycle
-//     state read-only.
-//
-// The tests reset the cycle state at the start of each test
-// by calling `BuildPresentModeCycle` with a controlled
-// surface-present-modes vector. The inline global
-// `projectv::present_mode::g_active` is set by
-// `BuildPresentModeCycle` to the first element of the
-// returned cycle, so we don't need to manually reset it.
-//
-// The previous 3-mode hard-coded cycle (`FIFO → IMMEDIATE →
-// MAILBOX → FIFO`) had a failure mode on Linux/Wayland
-// surfaces that don't expose IMMEDIATE: the operator
-// reported "4 presses but only 2 unique runtime modes" —
-// the IMMEDIATE step silently fell through to MAILBOX (via
-// `PickBestAvailablePresentMode`). The new auto-detect
-// cycle builds the cycle from the actual surface support,
-// so this failure mode is gone. The user-visible cycle
-// length matches the number of physically-supported modes.
 
 #include "render/vulkan/VulkanSwapchain.hpp"
 
@@ -149,16 +119,6 @@ void TestPresentModeCycleEmptyFallsBackToFifo(TestContext &context)
 	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), cycle[0]);
 }
 
-// **Modes appear in the surface support in a different
-// order than the priority list — the cycle must be in
-// priority order, not surface order.** Some Wayland
-// compositors expose modes in {IMMEDIATE, FIFO, MAILBOX}
-// order; the cycle must always be `{FIFO, MAILBOX,
-// IMMEDIATE}` so the operator's "first press lands on the
-// no-cap mode" comment from the 2026-06-13 cycle becomes
-// the correct new behavior (first press lands on MAILBOX
-// if supported — the "tear-free" mode is the new default
-// for benchmarking, vs the old IMMEDIATE step).
 void TestPresentModeCycleRespectsPriorityOrder(TestContext &context)
 {
 	const std::vector<VkPresentModeKHR> surfaceModes{
@@ -208,17 +168,6 @@ void TestCycleAdvancesAndWrapsTwoMode(TestContext &context)
 		VK_PRESENT_MODE_FIFO_KHR,
 		VK_PRESENT_MODE_MAILBOX_KHR,
 	};
-	// **2026-06-14 fix:** explicitly reset `g_active` to
-	// FIFO before this test, since the previous test
-	// (3-mode walk) leaves `g_active = MAILBOX`. The
-	// post-2026-06-14-evening `BuildPresentModeCycle`
-	// preserves `g_active` if it's in the new cycle, so
-	// simply calling `BuildPresentModeCycle({FIFO,
-	// MAILBOX})` here would carry MAILBOX over from the
-	// previous test. Build with `{FIFO}` first to force
-	// the fallback to FIFO, then build the actual 2-mode
-	// cycle. This pattern is the documented "test reset
-	// for cycle-preservation semantics".
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
 	(void)BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<VkPresentModeKHR>(VK_PRESENT_MODE_FIFO_KHR), GetActivePresentMode());
@@ -285,26 +234,8 @@ void TestPresentModeCycleSize(TestContext &context)
 	}
 }
 
-// **Cycle rebuild preserves `g_active` (2026-06-14 fix).**
-// The operator reported "V hotkey stuck on IMMEDIATE":
-// every V press logged `IMMEDIATE [cycle 2/2]`. Root
-// cause: `BuildPresentModeCycle` unconditionally reset
-// `g_active = g_cycle.front()` (FIFO) on every rebuild,
-// and the V hotkey triggers a `RecreateSwapchain` after
-// each press — so the cycle advance was followed by an
-// immediate reset to FIFO, and the next press would
-// advance from FIFO back to IMMEDIATE. Net effect: the
-// cycle appeared stuck. **Fix:** capture the previous
-// `g_active` before rebuild; if it's still in the new
-// cycle, keep it. Display hot-swap (mode dropped) falls
-// back to highest-priority supported.
 void TestPresentModeCyclePreservesActiveAcrossRebuild(TestContext &context)
 {
-	// **2026-06-14 fix:** explicit reset to FIFO before
-	// this test (see comment in
-	// `TestCycleAdvancesAndWrapsTwoMode` for the
-	// rationale). Previous tests may leave `g_active`
-	// in some non-FIFO state.
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
 	const std::vector<VkPresentModeKHR> surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,
@@ -333,11 +264,6 @@ void TestPresentModeCyclePreservesActiveAcrossRebuild(TestContext &context)
 // is no longer supported (display hot-swap case).**
 void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 {
-	// **2026-06-14 fix:** explicit reset to FIFO before
-	// this test (see comment in
-	// `TestCycleAdvancesAndWrapsTwoMode` for the
-	// rationale). Previous tests leave `g_active` in
-	// some non-FIFO state.
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
 	// First build: 2-mode cycle, advance to IMMEDIATE.
 	{
@@ -373,10 +299,6 @@ void TestPresentModeCycleFallsBackWhenActiveDropped(TestContext &context)
 // time. Post-fix: alternating.
 void TestPresentModeCycleWalksAcrossRecreates(TestContext &context)
 {
-	// **2026-06-14 fix:** explicit reset to FIFO before
-	// this test (see comment in
-	// `TestCycleAdvancesAndWrapsTwoMode` for the
-	// rationale).
 	(void)BuildPresentModeCycle({VK_PRESENT_MODE_FIFO_KHR});
 	const std::vector<VkPresentModeKHR> surfaceModes{
 		VK_PRESENT_MODE_FIFO_KHR,

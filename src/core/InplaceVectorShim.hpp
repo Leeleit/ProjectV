@@ -1,39 +1,5 @@
 #pragma once
 
-// **libc++ migration shim (`2026-06-13`).** libc++ 22 (the
-// version shipped on Arch as of 2026-06-13) does not yet
-// have `<inplace_vector>` (P0843, C++26). The stdlib
-// feature is in libstdc++ 16.1.1 (we found it at
-// `/usr/include/c++/16.1.1/inplace_vector`) but the
-// libc++ patch is still in flight upstream as of
-// `commit e0029dc`-era research.
-//
-// Until libc++ catches up, `core/Types.hpp` (which
-// conditionally does `#include <inplace_vector>` only
-// when the libstdc++ path resolves it — see
-// `core/Types.hpp` line 51) falls back to this shim on
-// libc++. The shim provides only the surface that the
-// Tier 1.A call sites in
-// `render/SceneResources.cpp::RebuildChunkVisibilityAndFillCache`
-// / `ApplyCachedChunkVisibilityCommands` actually use:
-// `size()`, `empty()`, `data()`, `operator[]`,
-// `resize(N)` (value-init new slots). No `push_back` /
-// `try_push_back` / `begin()` / `end()` are used (verified
-// via `rg "opaqueCommands\.(begin|end|push|back|try_)"
-// src/ tests/`).
-//
-// **Why not use `std::vector` instead?** The Tier 1.A
-// commit `427be4f` picked `std::inplace_vector` over
-// `std::vector` precisely because the fixed cap means
-// the data pointer is stable (the `memcpy` from
-// `cache.data()` to the per-frame mapped GPU buffer
-// in `ApplyCachedChunkVisibilityCommands` cannot be
-// invalidated by a later resize — for `std::vector` it
-// could). The shim preserves that contract by using a
-// `std::array` of `Capacity` `T`s plus an explicit
-// `size_` field, which is exactly what the upstream
-// `std::inplace_vector` does internally.
-
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -54,13 +20,6 @@ public:
 
 	constexpr InplaceVectorShim() noexcept = default;
 
-	// **No copy/move ctors / assignment.** Matches
-	// `std::inplace_vector`'s default (the C++26
-	// spec makes it move-constructible when the
-	// element type is; we don't need move for the
-	// Tier 1.A use cases — `ChunkVisibilityCache`
-	// lives inside `RenderState` which is moved by
-	// pointer only).
 	InplaceVectorShim(const InplaceVectorShim &) = delete;
 	InplaceVectorShim &operator=(const InplaceVectorShim &) = delete;
 	InplaceVectorShim(InplaceVectorShim &&) = delete;
