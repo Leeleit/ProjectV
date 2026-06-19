@@ -10,3 +10,9 @@ problems/
 /.cache/
 .venv/
 /docs/VulkanSDK-Windows-Docs-1.4.350.0/
+# Doxygen HTML output (regenerated locally via `doxygen Doxyfile`,
+# per operator decision in session-2026-06-19T-comment-minimization-r0
+# recorded in agent/status.md §44 + agent/active-sessions.md; only
+# docs/api/.gitkeep + docs/api/README.md are tracked, see Doxyfile).
+docs/api/html/
+docs/api/doxygen-warnings.log
