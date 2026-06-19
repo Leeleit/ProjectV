@@ -1019,3 +1019,49 @@ Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/De
 - Все сохранены per §8.1 step 5; footer `POST-COMMIT 1f7f2ab` будет добавлен при закрытии сессии.
 
 **Cross-refs:** `AGENTS.md` §7.2.4 (safety-net), §7.2.5 (commit contract), §7.2.6 (multi-agent), §7.2.6.1 (atomic), §7.2.7 (no blanked suppress), §7.2.8 (shared agent/*), §7.3.1 (pre-commit gate), §8.1 (close-routine); `agent/active-sessions.md` session-2026-06-19T-deps-bump-and-cleanup-r0; safety-net patches в `C:\Users\le1t\AppData\Local\Temp\opencode\before_deps_bump_*.patch`.
+
+---
+
+## §44. Comment minimization r0 — Phase A inventory (open, Phase A landed)
+
+**Per operator «глянь код в проекте: там больше комментариев, чем кода. Можно решить проблему? Типа убрать полностью комментарии из кода, но перенести их куда-то в одно место. Надо Doxygen использовать, я его установил на винду».**
+
+**План (5 фаз, atomic per `AGENTS.md §7.2.6.1`):**
+- **Phase A (этот slice, read-only, no commit):** inventory comments via `tools/scratch/inventory_comments.py`. Категоризация на 5 buckets. Output → `tools/scratch/comment-inventory.{json,csv}` + `SUMMARY.md`. **Done.**
+- **Phase B (будущий, `chore`):** создать `CHANGELOG.md` (Keep a Changelog format) + удалить 3962 строк refactor-history комментариев в `src/`, `tests/`, `src/shaders/`.
+- **Phase C (будущий, `docs` + `chore(build)`):** создать `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` (manual) + конвертировать design-rationale + intent в `src/` в Doxygen `\brief` / `\details` / `\see`.
+- **Phase D (будущий, `docs`):** конвертировать `tests/` + `src/shaders/` в Doxygen (`/** \file ... */` + `/// \brief` на TEST_CASE).
+- **Phase E (no commit, just verify):** `cmake --build build/linux-clang-debug` green + `ctest 14/14` baseline + `doxygen Doxyfile` exit 0.
+
+**Решения (4 Q&A, утверждено):**
+1. refactor/bug history → **MOVE в `CHANGELOG.md`** (Keep a Changelog: Changed/Added/Removed/Fixed).
+2. design rationale + in-test narrative → **CONVERT в Doxygen `\details`** над объявлением. Test narrative — над TEST_CASE.
+3. 5 коммитов по фазам A→E (per `§7.2.6.1` atomic subtask).
+4. Doxygen HTML **НЕ коммитится** — только `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` («run `doxygen Doxyfile`»).
+
+**Phase A inventory (read-only, finished `2026-06-19T13:35Z`):**
+
+| Bucket | Blocks | Lines | % | В 5 фаз пойдёт в |
+|---|---:|---:|---:|---|
+| `refactor-history` | 283 | **3962** | 48.3% | → Phase B (DELETE, MOVE to `CHANGELOG.md`) |
+| `design-rationale` | 58 | 447 | 5.4% | → Phase C/D (CONVERT to `\details` + `\see`) |
+| `intent` (docstring) | 684 | 3519 | 42.9% | → Phase C/D (CONVERT to `\brief` + `\details`) |
+| `test-narrative` | 24 | 95 | 1.2% | → Phase D (CONVERT to `\details` над TEST_CASE) |
+| `keep` (license/IDE/EVIL/include-order) | 24 | 181 | 2.2% | → LEAVE UNTOUCHED |
+| **ИТОГО** | **1073** | **8204** | 100% | — |
+
+**Files (Phase A, 1 new tool, 0 modified):**
+- `tools/scratch/inventory_comments.py` (NEW, ~330 lines) — pure-read classifier, no suppressions per `AGENTS.md §7.2.7`. Walks `src/`, `tests/`, `src/shaders/` recursively (163 files, 103 with comments), groups consecutive `//` lines into blocks (allowing 1 blank-line separator), classifies via regex precedence `keep > refactor-history > test-narrative > design-rationale > intent`.
+- `tools/scratch/comment-inventory.json` (NEW, ~370 KB) — full structured data, all 1073 blocks with `file:line_range`, `line_count`, `category`, `keywords_matched`, `preview`.
+- `tools/scratch/comment-inventory.csv` (NEW, ~120 KB) — flat CSV for spreadsheet review.
+- `tools/scratch/SUMMARY.md` (NEW) — current stdout capture of the summary table.
+
+**Not modified (per `AGENTS.md §7.2.6`):** 89 staged deletions в `legacy/docs/tex/*`, `legacy/CMakeLists.txt`, `legacy/docs/{KT,Defense,README}.md` — оставлены нетронутыми (чужие, от предыдущей `session-2026-06-19T-deps-bump-and-cleanup-r0`, без commit'a). `src/**`, `tests/**`, `src/shaders/**` (Phase A only read), `AGENTS.md`, `TODO.md`, `agent/decisions.md`, `agent/memory.md`, корневой `CMakeLists.txt`, `CMakePresets.json`, `tools/linux/`, `tools/windows/`, `external/**`, `legacy/**`, `docs/**`, `build/**`.
+
+**Refactor-history sample (Phase B target):** 3962 lines distributed across 72 files, heaviest: `src/core/Types.hpp` (29 blocks), `src/render/Renderer.cpp` (29 blocks), `src/audio/AudioEngine.cpp` (29 blocks), `src/voxel/VoxelWorld.cpp` (15 blocks), `tests/FluidCATests.cpp` (15 blocks). Patterns: `// **Tier X.Y (2026-06-13).**`, `// **Windows clang-cl fallback (2026-06-18).**`, `// **Removed; replaced by ...**`, `// **libc++ migration debug ...**`, `// **M5.1d debug tool, 2026-06-12:**`, `// **Hot shader reload fallback (2026-06-15).**`.
+
+**Intent sample (Phase C/D target):** 3519 lines — function/struct/field docstrings. Per `// 1.5 anti-flicker: layer scene color transition. The ...`, `// Shadows follow sparse per-chunk opaque face ranges. ...`, `// Per-pass CPU timing for the outer RecordGraphicsCommands...`, `// **Hotkey actions.**`, `// Cached values for the chunk-culling profiler plots. ...`. These become `/// \brief` + `/// \details` directly above the declaration.
+
+**Test-narrative sample (Phase D target):** 95 lines in 6 files, mostly `tests/FluidCATests.cpp` (60 lines). Patterns: `// **A column of N fluid voxels over Air "percolates" downward in N ticks**`, `// **The platform cell at (2, 0, 2) MUST stay FloorWhite**`, `// **X axis.** Two valid placements per axis:`. These become `/// \details` blocks above each `TEST_CASE` / sub-function.
+
+**Cross-refs:** `AGENTS.md` §1 (AGENTS.md only on explicit operator command — не трогаю), §7.1 (start checklist), §7.2.5 (commit contract), §7.2.6 (multi-agent / scope discipline — грязное дерево 89 staged deletions оставлено), §7.2.6.1 (atomic subtask), §7.2.7 (no blanket suppress), §7.2.8 (shared `agent/*` infra — append-only запись), §7.3.1 (pre-commit gate), §7.4 (sync), §8.1 (close-routine), §10.1 (C++26 baseline), §10.2 (Vulkan 1.4 — Doxygen не трогает shader contract); `agent/active-sessions.md session-2026-06-19T-comment-minimization-r0`; `TODO.md` (Tier 5+ queue — comment minimization не listed, может быть добавлен как Tier 5.x sub-task).

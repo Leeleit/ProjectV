@@ -2331,7 +2331,7 @@ bool TryRestoreWalkGroundReturnAnchorPlane(
 	float bestUpDot = -std::numeric_limits<float>::infinity();
 	float bestCentroidDistanceSq = std::numeric_limits<float>::infinity();
 	float bestContactY = std::numeric_limits<float>::infinity();
-	for (const JPH::CharacterVirtual::Contact &contact : character->GetActiveContacts()) {
+	for (const JPH::CharacterContact &contact : character->GetActiveContacts()) {
 		if (!contact.mHadCollision ||
 			contact.mBodyB.IsInvalid() ||
 			contact.mMotionTypeB != JPH::EMotionType::Static ||

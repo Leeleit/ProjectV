@@ -37,7 +37,7 @@ Append-only ledger активных и недавно завершённых AI-
 |---|---|
 | `id` | Уникальный идентификатор сессии (timestamp ISO 8601 + короткий суффикс) |
 | `started-at` | Время старта в ISO 8601 (UTC) |
-| `agent` | Тип / модель агента (например, `cline/MiniMax-M3`) |
+| `agent` | Тип / модель агента (например, `MiniMax-M3`) |
 | `operator` | Пользователь-оператор (например, `le1t`) |
 | `branch` | Текущая git-ветка |
 | `scope` | Краткое описание атомарной подзадачи (см. AGENTS.md §7.2.6.1) |
@@ -67,12 +67,74 @@ Append-only ledger активных и недавно завершённых AI-
      Если при apply §8.1 retroactively все записи оказались closed — они перенесены в
      «Закрытые сессии» (см. ниже) или в `legacy/docs/archive/agent-sessions/`. -->
 
+### session-2026-06-19T-jolt-api-drift-sweep-r0
+
+- **id:** `2026-06-19T-jolt-api-drift-sweep-r0`
+- **started-at:** 2026-06-19T08:44:15Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Preventive sweep Jolt API drift после submodule bump `d458ba3` (e2fb3a21 → 36c909c0).** Per operator: «после рефакторинга для винды, на линуксе не собирается бинарник» — Linux `linux-clang-debug` build red, error в `PhysicsWorld.cpp:2334` `CharacterVirtual::Contact` not found. Per operator choice «Preventive sweep now»: сначала собрать ВСЕ Jolt API drift через build --keep-going, потом batch fix + один atomic commit. **Не пересекается** с активной `session-2026-06-19T-comment-minimization-r0` (comment minimization) — disjoint scope, shared infra write (§7.2.8).
+- **files-touched-intent:**
+  - **EDIT:** `src/physics/PhysicsWorld.cpp` (Jolt API renames после `d458ba3` — primary target `CharacterVirtual::Contact` → `CharacterContact`)
+  - **Возможные EDITs:** другие `src/**/*.cpp` где всплывут API drift при `--keep-going` build (e.g. `VulkanVoxelMeshingPipeline.cpp` failed в `[949/955]` без деталей — нужно rerun)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись, сверху «Активные сессии»), `agent/status.md` (новая §X в конце файла per §7.2.8)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §7.2.6` + `§7.2.8` scope discipline):**
+    - **89 staged deletions в `legacy/docs/{CMakeLists.txt, KT-*, Defense*, README.md, tex/}`** — остатки предыдущей session `2026-06-19T-deps-bump-and-cleanup-r0` (`1f7f2ab` move). Чужие, не мои.
+    - **`external/benchmark` modified content** — submodule dirty per `d458ba3` message (Windows FS file-mode drift 100755→100644 на 3 файлах, resolved через `core.filemode false`, **no real content discarded** per `agent/status.md:1007`).
+    - **`AGENTS.md`, `TODO.md`, `agent/decisions.md`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `CMakePresets.json`** — файлы-хабы, не claim'ить.
+    - **`external/**` (submodules)**, **`build/**`, `cmake/**`, `tests/**`, `src/shaders/**`, `docs/**`, корневой `legacy/docs/**`**.
+    - Untracked: `tools/scratch/*` (scratch-вывод предыдущей comment-minimization сессии), `docs/tex/defense/*` (LaTeX build artifacts).
+- **status:** open
+- **commit-hash:** — (один atomic commit после sweep + batch fix; type=fix требует operator confirm per §7.3.1)
+- **notes:**
+  - **Pre-flight findings:**
+    - `external/JoltPhysics` submodule: `v5.5.0-170-g36c909c0` (на ~170 коммиктов впереди от v5.5.0 tag, что и делает «после рефакторинга для винды» на самом деле «после submodule bump»).
+    - Linux build failure (`PhysicsWorld.cpp:2334`): `CharacterVirtual::Contact` → `CharacterContact` (verified, поля 1:1 в `external/JoltPhysics/Jolt/Physics/Character/CharacterVirtual.h:129-151`: `mPosition`, `mLinearVelocity`, `mContactNormal`, `mMotionTypeB`, `mIsSensorB`, `mHadCollision` + унаследованные от `CharacterContactKey` `mBodyB`, `mSubShapeIDB`).
+    - `VulkanVoxelMeshingPipeline.cpp` failed в `[949/955]` без деталей — вероятно parallel-build fail после первой ошибки; нужен rerun с `--keep-going`.
+    - **libc++ / C++20 modules / `import std;` pipeline на Linux проверен живой:** root `CMakeLists.txt:230` `add_compile_options(-stdlib=libc++)` под `if (NOT MSVC AND NOT WIN32)`, `set(CMAKE_CXX_STDLIB libc++)` + `CMAKE_CXX_MODULE_STD ON` + `-Wno-unused-command-line-argument` для false-positive; `src/CMakeLists.txt:33-40` `FILE_SET CXX_MODULES FILES core/{Math,StringId,Probe}.ixx` под `else()` (не Windows). `import std;` в нашем mainline не используется (Tier 2, opt-in probe target `ProjectVStdModuleProbe` only per `agent/memory.md:402, 455`). Pipeline **живой, не regression**.
+  - **Следующий шаг:** build `--keep-going` для сбора всех Jolt-related errors, потом batch edit.
+
+### session-2026-06-19T-comment-minimization-r0
+
+- **id:** `2026-06-19T-comment-minimization-r0`
+- **started-at:** 2026-06-19T13:35:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Минимизация комментариев в `src/`, `tests/`, `src/shaders/`.** Per operator: «глянь код в проекте: там больше комментариев, чем кода. Можно решить проблему? Типа убрать полностью комментарии из кода, но перенести их куда-то в одно место. Надо Doxygen использовать, я его установил на винду». Решения (4 Q&A, утверждено):
+  1. **refactor/bug history** (`// **Tier X.Y (2026-06-13)...**`, `// **Windows clang-cl fallback (2026-06-18)...**`) — **MOVE в новый `CHANGELOG.md`** (Keep a Changelog format с группами Changed/Added/Removed/Fixed).
+  2. **design rationale** + **in-test narrative** (`// per decisions.md §N`, `// 1x1x1 cube centred on camera axis...` внутри тестов) — **CONVERT в Doxygen `\details` + `\brief`** над объявлением (function/struct/TEST_CASE). Cross-refs к `agent/decisions.md` сохраняются как `/// \see agent/decisions.md §N`.
+  3. **5 коммитов по фазам A→E** (per `AGENTS.md §7.2.6.1` atomic subtask — нельзя 8200 deletions в 1 commit, размажет git blame).
+  4. **Doxygen HTML НЕ коммитится** — только `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` («run `doxygen Doxyfile`»). Противоречит первоначальному «docs/api/ коммитится» — operator скорректировал.
+- **Phase A (этот commit):** **read-only inventory**. Скрипт `tools/scratch/inventory_comments.py` классифицирует все `//`-комментарии в `src/`, `tests/`, `src/shaders/` на 5 категорий (refactor-history / design-rationale / intent / test-narrative / keep) → `tools/scratch/comment-inventory.{csv,json}` + markdown summary в stdout. **Не трогает src/tests/shaders.**
+- **Phase B (будущий commit, `chore`):** создать `CHANGELOG.md` + удалить все refactor-history комментарии в `src/`, `tests/`, `src/shaders/`. Doxygen `@changelog` alias не используется (HTML не коммитим, нет смысла).
+- **Phase C (будущий commit, `docs` + `chore(build)`):** создать `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` (manual); конвертировать design-rationale + intent комментарии в `src/` в Doxygen `\brief` / `\details` / `\see`.
+- **Phase D (будущий commit, `docs`):** конвертировать `tests/` + `src/shaders/` в Doxygen (`/** \file ... */` на уровне файла, `/// \brief` на TEST_CASE).
+- **Phase E (no commit, just verify):** `cmake --build build/linux-clang-debug` + `ctest 14/14` baseline + `doxygen Doxyfile` exit 0 + `git diff --stat` показывает ожидаемое сокращение.
+- **files-touched-intent (Phase A only):**
+  - **NEW:** `tools/scratch/inventory_comments.py` (throwaway audit tool, не в git — `.gitignore`'нется или останется scratch)
+  - **NEW (output, не в git):** `tools/scratch/comment-inventory.{csv,json}` + markdown summary в `tools/scratch/SUMMARY.md`
+  - **EDIT (append-only):** `agent/active-sessions.md` (эта запись)
+  - **EDIT (append-only):** `agent/status.md` (новая §44 в конце файла per `§7.2.8` shared infra)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §7.2.6` scope discipline):** грязные 89 staged deletions в `legacy/docs/tex/*`, `legacy/CMakeLists.txt`, `legacy/docs/{KT,Defense,README}.md` — это остатки предыдущей session-2026-06-19T-deps-bump-and-cleanup-r0 (`1f7f2ab` move, без commit'a последующего reloc). `src/**`, `tests/**`, `src/shaders/**` (Phase A только read), `AGENTS.md`, `TODO.md`, `agent/decisions.md`, `agent/memory.md`, корневой `CMakeLists.txt`, `CMakePresets.json`, `tools/linux/`, `tools/windows/`, `external/**`, `legacy/**`, `docs/**` (кроме возможного нового `docs/api/`), `build/**`
+- **status:** open
+- **commit-hash:** — (Phase A — no commit per «read-only inventory» scope; в active-sessions §44 запись указывает `commit-hash` = `pending-phase-B`)
+- **notes:** **Структура и оценки (per Phase A pre-flight sampling):**
+  - `src/` = 6539 `//`-строк в 62 файлах, `tests/` = 1026 в 16 файлах (446 в `FluidCATests.cpp` + 140 в `PresentModeTests.cpp`), `src/shaders/` = 635 в 14 файлах. ИТОГО **8200 строк в 92 файлах**.
+  - Существующих `/**` Doxygen-блоков: 0. `docs/api/` directory: не существует. Doxygen на Linux: НЕ установлен (per `agent/memory.md §9`).
+  - Ожидаемый net diff после Phase B+C+D: -5500..-6200 строк `//` → +2000-3000 строк `///` Doxygen + +N строк в `CHANGELOG.md` (1500-2500).
+  - **Pre-flight classification (sampling 6 файлов, ~30% от total):** ~50% refactor/bug history (MOVE), ~30% design-rationale (CONVERT), ~10% test-narrative (CONVERT в `\details` над TEST_CASE), ~10% intent (CONVERT в `\brief`).
+  - **NOT touched (в Phase B+C+D):** лицензионные хедеры, IDE-маркеры (`// noinspection ...`), `// EVIL:` (magic numbers per `legacy/docs/standards/04_evil-hacks-philosophy.md §3`), include-order комментарии (VMA+volk), `// M_PI` portability markers.
+  - **Build baseline invariant:** `ctest 14/14` на `linux-clang-debug` preserved (комментарии не влияют на build). `windows-clang-debug` ctest 12/12 preserved (operator verifies). `docs/api/README.md` укажет на `doxygen Doxyfile` для локальной генерации HTML.
+  - **Cross-refs:** `AGENTS.md §1` (AGENTS.md changes only on explicit operator command — не трогаю), §7.1 (session start checklist — followed), §7.2.5 (commit message contract), §7.2.6 (multi-agent / scope discipline — грязное дерево 89 staged deletions оставляю), §7.2.6.1 (atomic subtask — 5 фаз = 5 коммитов), §7.2.7 (no blanket suppress — phase A скрипт не глушит warnings, не suppress'ит), §7.2.8 (shared `agent/*` infra — append-only entry), §7.3.1 (pre-commit gate), §8.1 (close-routine, применяется на каждом из 5 коммитов), §10.1 (C++26 baseline, header convention), §10.2 (Vulkan 1.4 — Doxygen не трогает shader contract).
+
 ### session-2026-06-18T-windows-host-build-r0
 
 - **id:** `2026-06-18T-windows-host-build-r0`
 - **started-at:** 2026-06-18T00:09:40Z
 - **closed-at:** 2026-06-18T01:36:21Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Реальная сборка `windows-clang-debug` / `windows-clang-release` на Windows host (первая верификация на живом Windows после static-only audit 2026-06-15).** Per operator «продолжаем реализацию поддержки windows-сборки» (Windows host, не Linux static-audit). Цель: configure → build → ctest 14/14 baseline → smoke, реально запустив тулчейн. **Scope:** mainline CMakePresets/CMakeLists.txt + tools/windows/ (если нужны правки), НЕ трогаю ~103 чужих uncommitted файлов (legacy/docs/ — CRLF ghost churn от предыдущих defense-сессий).
@@ -119,7 +181,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-17T-defense-competency-faq-self-contained-r0`
 - **started-at:** 2026-06-17T07:47:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **FAQ_T(1-6) самодостаточные — renumber по speech slot, inline verbatim + glossary + hotkeys + chronology, удалить Common+INDEX, дополнительные каверзные Q для le1t.** Per operator: «Переделать, там не соответствует Script_Team'у» (verbatim не инлайнен, только ссылка) + «full entries» (полные inline-entries, не summary) + «Целиком блок» (verbatim целиком) + «Да, и придумай другим ещё» (12+ tricky questions для le1t + новые). Итого: переименовать 6 файлов по slot number (T1-T6), inline content per файл, удалить `DefenseCompetencyFAQ.md`, обновить out-of-scope на T1-T6, придумать дополнительные каверзные вопросы.
@@ -144,7 +206,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-17T-defense-root-docs-archive-r0`
 - **started-at:** 2026-06-17T07:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Inline все алгоритмы/FAQ/report детали в FAQ_T{1..6}, archive 3 root-level defense docs (DefenseReport/DefenseFAQ/DefenseAlgorithms) → legacy/docs/archive/DefenseOldFormat_2026-06-17/.** Per operator: «Всё, что можно, перенести в наши файлы (FAQ_T(1-6))», «описание greedy meshing это не вода» (full inline detail, не summary), «legacy ты никогда не обновляешь» (immutable historical record). Финальная структура: 6 FAQ_T* (полные textbook) + DefenseScript_Team.md + DefensePresentation_Structure.md в docs/, 3 root-level docs в legacy archive.
@@ -170,7 +232,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-17T-defense-competency-faq-r0`
 - **started-at:** 2026-06-17T03:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Per-team competency FAQ + архивация 4 устаревших 10-мин скриптов.** Per operator: «FAQ для каждого участника команды о его компетенции, что ему ботать, что смотреть и списки реалистичных+ каверзных вопросов и ответов. Нужно всё максимально подробное, словно учебник. Для меня тоже, если чё. Также нужно убрать ненужные документы в docs/archive». Также per operator «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде ... Переназначаем» → speech slots переназначены на competency-matched mapping. Один файл `docs/DefenseCompetency_FAQ.md` (operator читает с телефона во время Q&A), max depth без воды, ~3000-5000 строк. Mapping компетенций: Тиммейт 1 = Сборка/тестирование → SAYS T4 (Тесты); Тиммейт 2 = Воксельный мир → SAYS T3 (Архитектура); Тиммейт 3 = Рендеринг → SAYS T5 (Прочие фичи); Тиммейт 4 = Физика → SAYS T6 (Планы); Тиммейт 5 = Ассеты+Аудио → SAYS T1 (Вступление); le1t = Всё+Q&A host → SAYS T2 (Demo+Стек).
@@ -199,7 +261,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-15T12:06Z-defense-docs-russian-r0`
 - **started-at:** 2026-06-15T12:06:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Полная русификация 12 defense-документов.** Per operator «надо всё на русском, полностью. Всё английское в скобочки и слева от скобочек русское название, если это термин какой-то. ... ты хрень написал в брифах всех: ненужную хрень по типу объяснений, как и что работает. Этого всё равно никто не поймёт, надо в общих планах всё и по-простому. ... 4. В твоём примере ты ничего не перевёл, просто пересказал другими словами, это позор, а не перевод. ... 9. A» — единый коммит, формат «русский (English)» при первом использовании термина, дословные выступления 140-150 русских слов на 1:30 минуты (простой язык, без технических дебрей), реальный перевод (не пересказ).
@@ -224,7 +286,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-15T10:25Z-windows-build-verification-r0`
 - **started-at:** 2026-06-15T10:25:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Windows-clang-debug / windows-clang-release verification r0.** Per operator «Мы сейчас в arch linux, нужно как-то проверить, что сборки windows-clang-debug и windows-clang-release будут работать. Предлагаю проверить досконально всё там, но без возможности запустить код на винде и проверить на практике.» Read-only static audit (3 explore-агента) обнаружил 3 P0 + 6 P1 + 10 P2 + 4 P3 риска. Plan утверждён оператором: 5 atomic-commits (Tier A-D), Tracy UI → OFF в `windows-clang-debug-tracy-profiler` + новый standalone preset `windows-clang-tracy` (через `tools/tracy-standalone/` wrapper scripts, т.к. CMake preset schema не позволяет `sourceDir` в child preset — schema v1..v10), F5 hot-reload → CMake-injected `PROJECTV_CMAKE_BUILD_DIR` macro + `std::filesystem::temp_directory_path()` для log path, docs env-var lies удаляются.
@@ -270,7 +332,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-competency-faq-r0`
 - **started-at:** 2026-06-17T03:50:00Z
 - **closed-at:** 2026-06-16T23:29:25Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Per-team competency FAQ + архивация 4 устаревших 10-мин скриптов.** Per operator: «FAQ для каждого участника команды о его компетенции, что ему ботать, что смотреть и списки реалистичных+ каверзных вопросов и ответов. Нужно всё максимально подробное, словно учебник. Для меня тоже, если чё. Также нужно убрать ненужные документы в docs/archive». Также per operator «Ты путаешь у участников темы в речи защитной и настоящая компетентность в коде ... Переназначаем» → speech slots переназначены на competency-matched mapping. Один файл `docs/DefenseCompetency_FAQ.md` (operator читает с телефона во время Q&A), max depth без воды, ~3000-5000 строк. Финальный mapping компетенций: Тиммейт 1 (Build/Test) → SAYS T1 Вступление; Тиммейт 2 (Voxel) → SAYS T3 Архитектура; Тиммейт 3 (Render) → SAYS T4 Тесты; Тиммейт 4 (Physics) → SAYS T6 Планы; Тиммейт 5 (Asset/Audio) → SAYS T5 Прочие фичи; le1t → SAYS T2 Demo+Стек.
@@ -309,7 +371,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-19T-deps-bump-and-cleanup-r0`
 - **started-at:** 2026-06-19T07:59:21Z
 - **closed-at:** 2026-06-19T08:12:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Bump 13 submodules to upstream HEAD + 1 cleanup commit (~124 files).** Per operator «обновить сабмодули до последних коммитов (HEAD в master и main, смотря у кого что), а также сделать коммит для очистки дерева: там около 100 файлов надо закоммитить, это просто перенос документов в legacy, ничего страшного, и ещё изменение .gitignore». Two commits by operator decision (one combined submodule bump + one cleanup), not bundled per `§7.2.6.1` because they're logically distinct operations on disjoint file sets.
@@ -335,7 +397,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-le1t-name-r0`
 - **started-at:** 2026-06-17T14:00:00Z
 - **closed-at:** 2026-06-17T14:05:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Slide 12 le1t row → «Кадочников Лев Петрович».** Per operator «Поменяй меня на 12 слайде на Кадочников Лев Петрович, а не le1t». Заменил «Кадочников Л. (le1t)» на полное ФИО «Кадочников Лев Петрович» в строке le1t таблицы слайда 12.
@@ -354,7 +416,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-presentation-round3-r0`
 - **started-at:** 2026-06-17T13:40:00Z
 - **closed-at:** 2026-06-17T13:55:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Round 3 patches к LaTeX Beamer presentation + replace VoxelLab screenshot.** Per operator «Проблемы: ...» — 4 косметических фикса: (1) subtitle color — белый на синем (было чёрный на синем); (2) Slide 4 — уменьшить размер изображения для вмещения текста «Жидкость (Fluid): ... отбрасывает тень.»; (3) Slide 11 — удалить раздел «Минимизация рисков (BUG-005)»; (4) Slide 12 — реальные имена участников (Черников М.А., Бачерикова А.С., Туз М.Э., Крохалев П.А., Филипьев И.Е.), убрать колонку «Роль на сцене». Плюс заменить VoxelLab screenshot на пользовательский `/home/le1t/Pictures/Screenshots/2026-06-17_18-16.png` (1920×1080).
@@ -375,7 +437,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-presentation-patches-r0`
 - **started-at:** 2026-06-17T13:20:00Z
 - **closed-at:** 2026-06-17T13:35:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Apply operator's verbatim cosmetic patches to LaTeX Beamer presentation.** Per operator «Плохо получилось, перепиши с учётом этого» — 4 фикса: (1) `\resizebox{\textwidth}{!}{...}` для всех таблиц (slides 3, 5, 12); (2) Slide 1: QR-код + GitHub URL удалены, заменены на «Окружение сборки: CMake 3.30+ • Clang 22 (C++26) • Vulkan SDK 1.4.350»; (3) Slide 12: переход с `|l|l|l|p{...}|` на booktabs (`\toprule`/`\midrule`/`\bottomrule`), текст ячеек сокращён; (4) Slide 10: блок условий замеров `\scriptsize` вместо `\small`. Полная перезапись `DefensePresentation.tex` (overwrite operator's verbatim text), recompile to PDF.
@@ -394,7 +456,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-latex-pdf-r0`
 - **started-at:** 2026-06-17T12:55:00Z
 - **closed-at:** 2026-06-17T13:15:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **LaTeX Beamer presentation — 13 слайдов compiled to PDF.** Per operator «Теперь делай презентацию» после clean-slate script rewrite (`ef8b942`). Создать `docs/tex/defense/` инфраструктуру: header.tex (Beamer preamble с Madrid theme + Liberation Sans + polyglossia:russian), DefensePresentation.tex (13 фреймов 1:1 из DefensePresentation_Structure.md), Makefile (latexmk -pdfxe), screenshots/voxel_lab.png (конвертация .bmp → .png через PIL). Скомпилировать через xelatex/xdvipdfmx → готовый PDF deliverable.
@@ -417,7 +479,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-cleanslate-script-r0`
 - **started-at:** 2026-06-17T12:35:00Z
 - **closed-at:** 2026-06-17T12:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Clean-slate rewrite DefenseScript_Team.md + DefensePresentation_Structure.md (5 фиксов из рекомендации другого агента).** Per operator: «Нет, плохо всё. Перепиши, как порекомендовал другой агент» + verbatim text для Script_Team (110 строк) + LaTeX Beamer Presentation_Structure (541 строк, 13 слайдов с экранированными `\_` `\&` `\%` и `$..$` math mode). Фиксы: (1) problem justification — CPU physics / OpenGL limits / отсутствие low-level open альтернатив; (2) T3 transition fix — «Передаю слово» строго в конце slot; (3) «Здравствуйте» ровно 1× per slot; (4) требования↔тесты aligned — ThinLTO/Fluid CA/рендеринг метрики привязаны к спецификациям (ELF 19MB / ctest 14/14 / smoke 6/6); (5) timing ~110-130 слов/мин, сбалансирован (50+60+50+35+45+30=270с = 4:30 + 30с буфер). FAQ_T{1..6}.md §1 Verbatim полностью переписан под новый slot mapping (verified 6/6 sync через `/tmp/verify_faq_sync.py` с normalize для `> ` blockquote markers, `**[Переход]**` markers, whitespace collapse).
@@ -443,7 +505,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-17T-defense-competency-faq-split-r0`
 - **started-at:** 2026-06-17T07:30:00Z
 - **closed-at:** 2026-06-17T07:37:23Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Split monolithic Competency FAQ на 7 файлов + удаление 6 DefenseBriefer_*** Per operator: «Всё же лучше на несколько файлов разделить» + «DefenseBirefer_* не нужны, так как у нас есть DefenseScript_Team и появятся Competency». Итого: 1 monolithic FAQ → 7 файлов (1 INDEX+Common + 6 per-person), и удалить 6 briefers (verbatim в DefenseScript_Team.md, понятия и competency — в FAQ per-person файлах).
@@ -474,7 +536,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-16T22:23Z-defense-team-script-rebuild-r0`
 - **started-at:** 2026-06-16T22:23:00Z
 - **closed-at:** 2026-06-16T22:30:56Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Пересборка командного скрипта под 5-минутный формат защиты.** Per operator: «глянь DefenseScript_Team, я подправил текст 1 участника и меня (второго участника), всё дальше плохо написано» → T3-T6 переписаны в стиле T1/T2 (простой разговорный русский, без техно-цифр). 4:30 на речь + 30с буфер = строго 5 минут. Темы: T1 вступление (45s), T2 le1t demo+стек (1:15), T3 архитектура+качество кода (40s), T4 тесты+проверки (40s), T5 прочие фичи+отложено (40s), T6 планы+закрытие (30s). Роли НЕ называются на сцене («нам надо красиво подать проект, а когда будут задавать вопросы, тут компетенция каждого уже понадобится»). Шпаргалки §6 удалены. `DefenseScript_Solo.md` удалён. Старые детальные бриферы 2-5 → `docs/archive/DefenseBriefer_TechnicalDeepDive_2026-06-15.md` для Q&A подготовки. Q&A-карта в le1t briefer — 30+ вопросов, НЕ сокращена.
@@ -501,7 +563,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-15T-post-wbv-r1`
 - **started-at:** 2026-06-15T12:30:00Z
 - **closed-at:** 2026-06-15T12:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Post-WBV-r1: 2nd-round audit fixes (T1.1 + T0.3 + T1.2 batch).** Per operator «F13-F24 нет ни на одной клавиатуре нормальной. Вариант B. Приступай, идиот.» — relocate defense-r0 hotkey bypass to digit keys 1/2/3, plus batch the related 2nd-round audit findings into a single commit.
@@ -550,7 +612,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-15T12:06Z-defense-docs-russian-r0`
 - **started-at:** 2026-06-15T12:06:00Z
 - **closed-at:** 2026-06-15T12:16:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Полная русификация 12 defense-документов.** Per operator «надо всё на русском, полностью. Всё английское в скобочки и слева от скобочек русское название, если это термин какой-то. ... 9. A» — единый коммит, формат «русский (English)» при первом использовании термина, дословные выступления 140-150 русских слов на 1:30 минуты, реальный перевод.
@@ -584,7 +646,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-15T10:43Z-defense-docs-audit-r0`
 - **started-at:** 2026-06-15T10:43:00Z
 - **closed-at:** 2026-06-15T10:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Pre-defense audit к защите 2026-06-15 (отложена на послезавтра).** Per operator «перечитай то, что ты написал и глубоко проанализируй соответствие с кодом, на предмет галлюцинаций, на объективность и целесообразность, приступай». Найдено 23 расхождения между 12 defense-документами и реальным кодом. Также: relocate F5/F6 hotkeys (defense r0 bypass) на свободные кнопки — F5 и F6 пересекаются с InputAction биндами (CycleScenePreset, SaveWorldSnapshot), что создаёт двойное срабатывание. Per operator «да, тебе следует поменять на свободные кнопки shader reload и raymarch toogle, разрешаю».
@@ -625,7 +687,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-15T15:50Z-defense-docs-r0`
 - **started-at:** 2026-06-15T15:50:00Z
 - **closed-at:** 2026-06-15T10:20:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Defense documents overhaul к защите 2026-06-15 10-минутный доклад, 6 человек в команде.** Per operator «Требуется улучшить defense документы в docs: документ, который описывает каждый алгоритм в проекте, абсолютно за всё, плюс речь для пятерых, плюс каждому свою памятку. На тех пятерых следует разделить работу так, чтобы она была весомой, но простой к объяснению, а всё сложное мне оставить. Нас шестеро, я шестой.» Деливерабли: 7 новых файлов + 4 переработки + 2 agent-файла. 0 правок в `src/`, `tests/`, `external/`, `legacy/`, `CMake*`, `tools/`, `AGENTS.md`.
@@ -667,7 +729,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-15T15:30Z-agent-compress-r0`
 - **started-at:** 2026-06-15T15:30:00Z
 - **closed-at:** 2026-06-15T15:45:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Compress service files via archive.** Per operator «Надо оптимизировать служебные файлы, а то они слишком большие. Нужно без потерь в контексте и фактах уменьшить размер». Live files: memory 205→87 KB, status 124→25 KB, active-sessions 198→82 KB, decisions unchanged. 0 KB info loss — all per-session audit detail preserved в `legacy/docs/archive/agent-*/` (328 KB) с section numbering preserved для cross-ref resolution через `agent/ARCHIVE-INDEX.md`.
@@ -701,7 +763,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-14T11:29Z-build-config-audit-r0`
 - **started-at:** 2026-06-14T11:29:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Аудит build-presets + cleanup мёртвых деревьев.** Per operator «проверить все конфиги билдов на работоспособность и целесообразность». Findings: 4 buildPresets имели `targets: [ProjectV, ProjectVTests]` (только 2 из 14 ctest executables), `linux-clang-debug-ci/` (194M, dead), `linux-clang-debug-tracy-profiler/` (190M, dead — Tracy UI build fail на Linux/glibc per `agent/memory.md §9`).
@@ -718,7 +780,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-14T10:53Z-release-presets-r0`
 - **started-at:** 2026-06-14T10:53:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Release-пресеты для Linux + Windows** (per operator request «нужно создать release билд для линукса и винды, чтобы увидеть готовый продукт»). Conservative policy: `-O3 -flto=thin -DNDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only -Wl,--gc-sections`. Без `-ffast-math` (Fluid CA determinism + TAA YCoCg clamp), без `-march=native` (portability). Validation/Tracy/RenderDoc/Benchmarks — OFF. `BUILD_TESTING=ON` сохраняет ctest baseline. Только build-config change — без правок `src/`, `tests/`, `external/`, `legacy/`, `docs/`, `tools/`.
@@ -742,7 +804,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-14T13-00Z-render-race-debug`
 - **started-at:** 2026-06-14T13:00:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Investigate user report "иногда сначала тормозит, потом намертво зависает, sigint".** Race/deadlock territory (CPU↔GPU sync, vsync toggle, Tier 5 vkWaitForFences 10ms, TAA resolve history copy). Диагноз — без коммитов на этой стадии. **Не VoxelLab tremor** (закрыт в `90a45b4`); другая проблема, требует отдельного read-only investigation + minimal repro instrumentation.
@@ -772,7 +834,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-14T12:00Z-camera-fullscreen-jump-fix`
 - **started-at:** 2026-06-14T12:00:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Fix camera jump on program start и fullscreen toggle.** User report: "при запуске программы, мой взгляд на платформу и сферу резко меняется и я смотрю в другую сторону, хотя я мышку не трогал. То же самое, когда во весь экран программу делаю, надо исправить." — первый `SDL_EVENT_MOUSE_MOTION` после `SDL_SetWindowRelativeMouseMode(true)` несёт огромный pre-capture delta, yanking the look. Partial fix уже в master (`skipFirstMouseMotion` default + `SetRelativeMouseMode` reset), но **только** для первичного enable; **fullscreen toggle не покрыт** — WM-driven `SDL_EVENT_WINDOW_ENTER_FULLSCREEN` / `LEAVE_FULLSCREEN` не вызывают `SetRelativeMouseMode`, поэтому `skipFirstMouseMotion` остаётся в `false`, и приходящий большой delta ничем не гасится. Fix = добавить mouse guard в обработку window-fullscreen events в `main.cpp::SDL_AppEvent` (reset `skipFirstMouseMotion = true` + zero `mouseDeltaX/Y`).
@@ -787,7 +849,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-13T19:37Z-kt-latex-r0`
 - **started-at:** 2026-06-13T19:37:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** Конвертация 4 КТ-документов (2.1/2.2/3.1/3.2) из markdown в LaTeX для быстрого экспорта в PDF. Pandoc 3.6 + xelatex + fontspec (Liberation Serif/Sans, JetBrains Mono) + polyglossia:russian. 4 standalone .tex + 1 combined (KT-Combined.tex) + Makefile + regen.sh + README. Doom emacs compatible (AUCTeX, `M-x compile make`).
@@ -834,7 +896,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-13T16:22Z-kt-docs`
 - **started-at:** 2026-06-13T16:22:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **КT-документы к защите 2026-06-15.** Создание 4 контрольных точек: КТ-2.1 (Architecture, Technical Design Document), КТ-2.2 (Test Report), КТ-3.1 (User Guide), КТ-3.2 (Final Report). Источник — PDF'ы от преподавателя со структурой/критериями 10/10 + черновики от пользователя (3 из 4, устаревшие). Цель — набрать 10/10 по каждому PDF.
@@ -968,7 +1030,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-13T15:30Z-defense-prep-r0`
 - **started-at:** 2026-06-13T15:30:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Defense preparation r0** (защита 2026-06-15). Атомарная подзадача — закрыть критичные gap'ы ТЗ к защите (ray-marching compute pass, fluid CA cellular automata, hot reload шейдеров, JSON scene config) + подготовить документацию (DefenseReport, DefenseDemoScript, DefenseSpeakerNotes для 6 человек, DefenseFAQ). Оператор один разрабатывал, но защищают 6 человек — 4-5 минут le1t, по ~1 минуте остальным из готовых talking points.
@@ -1070,7 +1132,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-13T13:30Z-hardcore-perf-r0`
 - **started-at:** 2026-06-13T13:30:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Hardcore performance / architecture pass r0 — перезапись приоритетов.** Оператор явно сказал: «сейчас то, что ты написал в отчёте — приоритет номер 1, плюём на всё, что в TODO, занимаемся хардкором». Полный отчёт по проекту (философия × 22 файла прочитана, код src/× обойдён, web-разведка по C++26/Clang 22/C26) — сохранён в `agent/memory.md §11` + `TODO.md` переписан + `agent/decisions.md §29` (новое правило `std::expected`). Phase 0 = документация. Phase 1+ = Tier-0 код (Vec3/Vec4/Mat4 + SIMD frustum cull) и далее по плану.
@@ -1173,7 +1235,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-13T03:32Z-problems-cleanup-v2`
 - **started-at:** 2026-06-13T03:32:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Problems-driven warning cleanup v2** поверх свежей выгрузки `Problems/*.xml` (после того как оператор явно разрешил менять любые файлы, и предыдущие сессии закрыли свои правки). 26 XML файлов, **285 проблем** (vs 224 в v1). Per `decisions.md §12`: `Problems/*.xml` — hint, не source of truth. v1 уже починил ~170 из 224, оставшиеся ~52 (включая 5 dirty файлов, которые сейчас уже закоммичены) теперь доступны + новые 60+ warnings добавлены JetBrains после моих правок (т.к. structured binding / new includes / dead code removal). Полный scope.
@@ -1192,7 +1254,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-13T02:55Z-problems-cleanup-v1`
 - **started-at:** 2026-06-13T02:55:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Problems-driven warning cleanup** поверх свежей выгрузки `Problems/*.xml` (JetBrains inspection export, .gitignored, 25 XML файлов, 224 проблемы, 39 уникальных файлов). Стратегия по `decisions.md §12`: `Problems/*.xml` — hint, не source of truth; фиксим только то, что воспроизводится на current source. **Не трогаю:** 4-5 файлов в dirty tree от других сессий — `src/asset/ModelPass.{cpp,hpp}` (asset-pipeline M5.1b), `src/audio/AudioEngine.{cpp,hpp}` (audio-engine), `src/debug/DebugHud.cpp` (audio), `src/render/vulkan/VulkanBootstrap.cpp` (TAA M5.2). На них приходится 52 проблемы (≈23%) из общего списка — для них нужен отдельный скоуп после коммита их владельцами.
@@ -1209,7 +1271,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-15T15:00Z-agent-protocol-rewrite-r0`
 - **started-at:** 2026-06-15T15:00:00Z
 - **closed-at:** 2026-06-15T15:30:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Переписать протокол auto-commit + auto-close.** Per operator «git commit делать на автомате, а не спрашивать оператора, всегда думать, что после коммита сессия завершается, но быть готовым не завершить её». Конкретные правила (зафиксировано при планировании): (1) `feat`/`refactor`/`perf`/`docs`/`test`/`build`/`chore`/`revert` — auto при §7.3.1 gate; (2) `fix` — требует **явного operator confirm** что фикс работает (visual / ctest / repro); (3) destructive ops (rebase, push, force-push, reset --hard, revert, branch delete, network publish, sudo, rm -rf unverified) — **всегда** confirm; (4) keep-open: multi-commit sub-plan / operator next-step / `continues: <reason>` marker; (5) edge cases (gate fail / commit fail / scope collision / build broken) → сессия `open` + `notes: BLOCKED: <gate>`. +**доп. правило** от оператора: файлы в `agent/` — shared infrastructure, любая активная сессия может писать в них параллельно, не claim'ить эксклюзивно.
@@ -1237,7 +1299,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-12T15:35Z-taa-m5_2-threshold-bump`
 - **started-at:** 2026-06-12T15:35:00Z
 - **closed-at:** 2026-06-12T18:25:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** M5.2 follow-up — bump `kTaaColorDistanceRejectionThreshold` `0.20 → 0.40` + dual-MRT model pipeline fix (`ModelPass.cpp:200-224` pColorAttachmentCount 1→2, `ModelPass.hpp` include `TaaRenderTargets.hpp` для namespace'а, `VulkanBootstrap.cpp` redundant `volk.h` include).
@@ -1251,7 +1313,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-11T20:45Z-taa-ycocg-clamp`
 - **started-at:** 2026-06-11T20:45:00Z
 - **closed-at:** 2026-06-11T20:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** TAA Блок 1 / 1.1 — YCoCg neighbourhood clamp в TAA resolve (замена RGB clamp). Lossless transform Y/Co/Cg, chroma highlight'ов не вымывается в grey. Sidecar metadata `taa_clamp_color_space=YCoCg`.
@@ -1265,7 +1327,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-11T16:30Z-multi-agent-policy`
 - **started-at:** 2026-06-11T16:25:00Z
 - **closed-at:** 2026-06-11T16:35:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** Добавить §7.2.6 «Multi-agent concurrent work policy» в `AGENTS.md` + создать `agent/active-sessions.md` как append-only ledger координации.
@@ -1279,7 +1341,7 @@ Append-only ledger активных и недавно завершённых AI-
 - **id:** `2026-06-13T01:10Z-music-hud-4line`
 - **started-at:** 2026-06-13T01:10:00Z
 - **closed-at:** 2026-06-13T01:20:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Music HUD: 1-line → 4-line.** Replaces the 2026-06-12 1-line `MUSIC <state> VOL 0.80 TRK <name>` block with 4 lines per the operator's request: `MUSIC <state>  VOL 0.80` (always), then 3 gated lines `ARTIST <name>` / `TITLE <name>` / `POS m:ss / m:ss` (only when engine initialized AND playlist non-empty). HUD font supports only uppercase ASCII, digits, `.`, `-`, `:`, so labels are ASCII-only. Layout lives in the regular (non-detailed-only) section because music is a feature, not a debug tool. **Не трогаю:** TAA-agent's 4 uncommitted files per §7.2.6; `legacy/CMakeLists.txt`; `external/miniaudio/*`.
@@ -1311,7 +1373,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-17T-defense-presentation-restructure-r0`
 - **started-at:** 2026-06-17T10:15:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Restructure `docs/DefensePresentation_Structure.md` с 8 на 13 слайдов, sync `docs/DefenseScript_Team.md` с новыми слайдами. Полное покрытие 8 блоков критериев п.6 на уровне 81-100% (оценка 5).** Per operator: «Теперь надо переделать Presentation_structure и глянуть уже сделанную работу, проверить на соответствия критериям» + «Целься в 81% (5)» + «Только в слайде 12» (личный вклад) + «Сравнительная таблица 3-5» (аналоги). Также per operator: «Не забудь расписать, что на каждом слайде в подробностях, я планирую тебе в следующей сессии скинуть этот md, а ты с помощью latex или других штук накодишь презентацию (pdf).»
@@ -1348,7 +1410,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-17T-defense-script-team-v2-r0`
 - **started-at:** 2026-06-17T11:00:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Fix Script_Team.md структура (1 абзац на слайд), T6 = Закрытие (slides 11-12-13), sync FAQ_T{1..6}.md §1 Verbatim, sync Presentation_Structure.md distribution table + speaker notes.** Per operator: «Ты испортил Script_Team, там отдела для Т6 нету, текста слишком много в целом для 45 секунд, предлагай исправления. Также ты не синхронизировал Script_Team с FAQ_T*». Также per operator: «Там оно уже есть, смотри, в Т5 два абзаца и два здравствуйте» — pattern «1 абзац на слайд» применён ко всем slots.
@@ -1383,7 +1445,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-17T-defense-script-team-renumber-r0`
 - **started-at:** 2026-06-17T11:50:00Z
-- **agent:** cline/MiniMax-M3
+- **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
 - **scope:** **Renumber slots T1-T6 = Участник 1-6 strictly. Fix all 6 FAQ_T*.md §1 Verbatim to match new slot mapping. Update Presentation_Structure.md distribution table + slide section headers.** Per operator: «Ты галлюцинируешь: в Script_Team всё ещё нету Т6 и одни и те же участники по несколько раз говорят здравствуйте, это дебилизм. Т6 – это участник 6, Т1 - участник 1 и т.д. Всё должно быть по порядку: от 1 участника к 6, разницы нет, кто о чём говорит в презентации».
