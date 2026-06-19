@@ -390,3 +390,1055 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `src/CMakeLists.txt:153` — **Per-target mismatched-tags / missing-field-initializer
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `src/CMakeLists.txt:137` — **Per-target mismatched-tags / missing-field-initializer
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `src/CMakeLists.txt:137` — **Per-target mismatched-tags / missing-field-initializer
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:162` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:172` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:187` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:228` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:244` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:289` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:162` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:172` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:187` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:228` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:244` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:289` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:65` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:167` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:177` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:192` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:233` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:249` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:294` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:25` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:223` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:232` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:349` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:382` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:430` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:513` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:562` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:584` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:643` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:713` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+- `cmake/ProjectVThirdParty.cmake:27` — **SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `cmake/ProjectVThirdParty.cmake:46` — **Legacy per-target warnings-as-errors gate
+- `src/CMakeLists.txt:3` — **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
+- `src/CMakeLists.txt:71` — Defense r0 (2026-06-13): GPU ray-march compute shader for the
+- `src/CMakeLists.txt:184` — **Audio engine, 2026-06-12.** miniaudio is vendored as
+- `src/CMakeLists.txt:194` — **miniaudio SYSTEM property (`2026-06-18`,
+- `src/CMakeLists.txt:209` — **Per-target mismatched-tags / missing-field-initializer
+- `src/CMakeLists.txt:250` — Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
+- `src/CMakeLists.txt:266` — **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
+- `src/CMakeLists.txt:311` — **Explicit PATHS for PowerShell lookup (`2026-06-18`,
+- `tests/CMakeLists.txt:1` — **libc++ migration (Phase 2, `2026-06-13`).** Helper
+- `tests/CMakeLists.txt:30` — **Windows clang-cl fallback (`2026-06-18`,
+- `tests/CMakeLists.txt:103` — Audio engine (2026-06-12). `miniaudio` is needed
+- `tests/CMakeLists.txt:120` — **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
+- `tests/CMakeLists.txt:291` — **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
+- `tests/CMakeLists.txt:341` — **Tier 4 — module wiring.** The test includes
+- `tests/CMakeLists.txt:350` — **Tier 5 (`2026-06-13`).** Unit test for
+- `tests/CMakeLists.txt:467` — StringID smoke test (Tier 1.D, 2026-06-13). Header-only
+- `tests/CMakeLists.txt:500` — C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
+- `tests/CMakeLists.txt:548` — C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
+- `tests/CMakeLists.txt:631` — **Tier 3 (`2026-06-13`).** Google Benchmark harness
+- `tests/CMakeLists.txt:680` — **Tier 0.B / 2 alignment.** The benchmark includes
+- `tests/CMakeLists.txt:702` — **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
+- `tests/CMakeLists.txt:761` — **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
+- `tests/CMakeLists.txt:831` — **Present-mode cycle tests (auto-detect cycle,
+
+## 2026-06-19 — CMake / build-system refactor-history (post-Phase B follow-up)
+
+Refactor-history blocks from CMakeLists.txt + cmake/*.cmake that were
+outside Phase B scope (`src/`, `tests/`, `src/shaders/` only). Moved here
+by Phase F of session-2026-06-19T-comment-minimization-r0.
+
+### Removed
+
+- `CMakeLists.txt:3` — **Tier 2.C (`2026-06-13`).** CMake 4.2+ experimental gate
+- `CMakeLists.txt:70` — **Tier 3 (`2026-06-13`).** Google Benchmark wired as a
+- `CMakeLists.txt:81` — **Tier 2.C (`2026-06-13`).** Disable GNU language
+- `CMakeLists.txt:98` — **libc++ migration (Phase 2, `2026-06-13`).** Per
+- `CMakeLists.txt:174` — Migration details — applies on Linux/macOS native clang:
+- `CMakeLists.txt:221` — `add_compile_options(-stdlib=libc++)` kept on 2026-06-14
+- `CMakeLists.txt:252` — **Release-only compile + link policy (2026-06-14).**
+- `CMakeLists.txt:327` — **Volk SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:336` — **VMA SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:344` — **VMA SYSTEM property (2026-06-18, windows-host-build-r0).**
+- `CMakeLists.txt:406` — --- Asset / model import libs (ProjectV voxel renderer stays unchanged;
+- `CMakeLists.txt:472` — Google Benchmark (Tier 3, 2026-06-13). Dev-only perf
+- `CMakeLists.txt:533` — nlohmann/json (defense r0, 2026-06-13). Header-only JSON parser
+- `CMakeLists.txt:550` — **nlohmann_json SYSTEM property (`2026-06-18`,
+- `CMakeLists.txt:560` — **Pure MSVC cl.exe path (`2026-06-15`).** Per the
+- `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
+- `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
+- `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
