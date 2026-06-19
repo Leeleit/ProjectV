@@ -69,6 +69,7 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-20T-tier0b-math-migration-r0`
 - **started-at:** 2026-06-20T19:30:00Z
+- **closed-at:** 2026-06-20T00:55:00Z
 - **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
@@ -77,8 +78,8 @@ Append-only ledger активных и недавно завершённых AI-
   - **EDIT:** `src/core/Types.hpp` (15 полей `std::array<float,N>` → `projectv::math::Vec3/Vec4/Mat4`: L174 `position[3]`, L196-197 `cameraPosition/cameraForward[4]`, L220 `renderExtentInverse[2]` — оставить std::array (2-vec не в Mat scope), L235-237 `overlayData0/1/color[4]`, L248-249 `positionNdc[2]`/color[4], L339 color[4], L427 `walkFeetPosition[3]`, L471 `sunDirection[3]`, L480 `sunShadowCascadeDepthSplits[kSunShadowCascadeCount]` — оставить std::array<float, N> (массив скаляров не Vec), L490-491 `localPointLightPosition/Color[3]`, L564 `sourceAabbMin[3]`, L573-574 `aabbMin/Max[3]`).
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/core/Math.ixx` (уже содержит типы), `src/core/Math_fallback.hpp` (Windows fallback), `src/core/StringId.ixx`, чужие uncommitted.
-- **status:** open
-- **commit-hash:** — (atomic commit после verify, type=perf требует operator confirm per `AGENTS.md §6.9`)
+- **status:** closed
+- **commit-hash:** `cf4b535` — `perf(core): migrate hot-path Vec3/Vec4 from std::array<float,N> to projectv::math types`
 - **notes:**
   - **Pre-flight findings:** HEAD `283e984`, +21 над origin/master, working tree clean.
   - **Plan approved:** План из 15 подзадач (Tier 0..5) одобрен оператором `2026-06-20` в Plan Mode. Стартуем с **подзадачи 1: Tier 0.B** (HIGH priority, Critical per memory.md A8).
@@ -86,10 +87,19 @@ Append-only ledger активных и недавно завершённых AI-
     - **Vec3 candidates** (15+ полей): `position[3]`, `walkFeetPosition[3]`, `sunDirection[3]`, `localPointLightPosition[3]`, `localPointLightColor[3]`, `sourceAabbMin[3]`, `aabbMin[3]`, `aabbMax[3]`.
     - **Vec4 candidates**: `cameraPosition[4]`, `cameraForward[4]`, `overlayData0[4]`, `overlayData1[4]`, `overlayColor[4]`, color[4] (L249, L339).
     - **Mat4 candidates**: `Mat4 GPU` field at L309-313 (already Mat4 per `CHANGELOG.md` Tier 0.B note? verify).
-    - **KEEP std::array<float, N>**: `renderExtentInverse[2]` (2-vec, не в Mat scope), `sunShadowCascadeDepthSplits[N]` (массив скаляров float, не Vec3), `positionNdc[2]` (2-vec).
+    - **KEEP std::array<float, N>**: `renderExtentInverse[2]` (2-vec, не в Mat scope), `sunShadowCascadeDepthSplits[N]` (массив скаляров не Vec), `positionNdc[2]` (2-vec).
   - **Stuck loop limit per `AGENTS.md §6.7`:** 3-4 compile fails → `BLOCKED`.
   - **Commit policy per `AGENTS.md §6.9` + v3 lessons:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=perf → explicit operator confirm обязателен.
-  - **Safety-net patch:** `/tmp/before_tier0b_<timestamp>.patch` (per `AGENTS.md §6.4`).
+  - **Safety-net patch:** `/tmp/before_tier0b_20260619T1922Z.patch` (4698 bytes, только session registration — чистое дерево перед стартом). Удалён после successful commit per `AGENTS.md §7`.
+  - **CLOSE NOTES (2026-06-20T00:55Z):**
+    - **Commit landed:** `cf4b535` — 10 files, +109/-57 lines, atomic single commit per `AGENTS.md §6.1`. Commit policy соблюдена: type=perf → explicit «Commit?» → operator «Делай коммит и ответь на вопрос, чем glm не понравилась» → коммит.
+    - **Migrated fields (15 total):** 8 Vec3 + 7 Vec4 (см. commit body).
+    - **Layout delta:** DebugHudVertex 24→32 bytes (color offset 8→16, vertex stride via sizeof auto-adjusted в `VulkanGraphicsPipeline.cpp:885`; GPU buffer `sizeof(DebugHudVertex) * 262144` = 8 MB via `SceneResources.cpp:838`); остальные struct'ы — same byte layout, только alignment tighten.
+    - **Downstream touch-ups:** 9 файлов с минимальными surgical правками. AddScaled: std::array<float,3>* → Float3*. DebugHud/DebugOverlays: 14 constexpr + 2 сигнатуры → Vec4. AppUpdate walkFeetPosition: explicit Vec3 ctor от std::array<float,3> на границе (PhysicsWalkDebugInfo kept std::array). PhysicsWorld: IsSolidAtPosition helper signature preserved (std::array literal at call site). VoxelInteraction: RaycastVoxelWorld helper signature preserved (origin std::array built from Vec3). LookDevCaptureAutomation: аналогично. Tests: ColorsMatch(Vec4,Vec4) overload, 2 prevPosition conversions, 3 constexpr → Vec4.
+    - **Verification:** `cmake --build --clean-first` 1003/1003 targets green, 0 errors, 0 new warnings. `ctest --output-on-failure` 14/14 passed, 0.78 sec (baseline 0.76 sec, noise level).
+    - **Stuck loop:** 3 итерации compile-fail (DebugHud, DebugOverlays, tests ColorsMatch) — все в пределах 3-4 лимита per `AGENTS.md §6.7`, не BLOCKED.
+    - **Honest scope:** все 15 полей мигрированы per plan. Build green, ctest 14/14, никаких scope-creep.
+    - **Next sub-task (по плану):** **Tier 0.C** — templated `FrustumCull<Lambda>` + `std::simd<float,8>` в `src/render/SceneResources.hpp:21-209` (3 раздельные функции cull объединяются в один template). Ждёт явной команды «продолжай Tier 0.C» от оператора. Per `decisions.md §29` «один модуль изменений, локальный scope, измеримый bottleneck (TracyPlot «FrustumCulling (ms)»)».
   - **Cross-refs:** `TODO.md Tier 0.B`, `agent/memory.md §11.1 A8`, `agent/decisions.md §29`, `legacy/docs/philosophy/01_foundation/09_data-layout-philosophy.md`, `legacy/docs/philosophy/01_foundation/05_compiler-philosophy.md` (SIMD/alignas).
 
 ### session-2026-06-19T-inspection-fix-v3-r0
