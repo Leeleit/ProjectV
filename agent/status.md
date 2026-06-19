@@ -1022,35 +1022,35 @@ Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/De
 
 ---
 
-## §44. Comment minimization r0 — Phase A inventory (open, Phase A landed)
+## §44. Comment minimization r0 — Phases A→E complete (closed `2026-06-19T10:18Z`)
 
 **Per operator «глянь код в проекте: там больше комментариев, чем кода. Можно решить проблему? Типа убрать полностью комментарии из кода, но перенести их куда-то в одно место. Надо Doxygen использовать, я его установил на винду».**
 
-**План (5 фаз, atomic per `AGENTS.md §7.2.6.1`):**
+**План (5 фаз, atomic per `AGENTS.md §7.2.6.1`) — все фазы complete:**
 - **Phase A (read-only, no commit):** inventory comments via `tools/scratch/inventory_comments.py`. **Done `2026-06-19T13:35Z`.**
-- **Phase B (`chore`):** создать `CHANGELOG.md` (Keep a Changelog format) + удалить refactor-history комментарии в `src/`, `tests/`, `src/shaders/`. **Done `2026-06-19T14:02Z` в commit `26c1a05` (73 files, +392/-3783).**
-- **Phase C (`docs` + `chore(build)`):** создать `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` (manual) + конвертировать design-rationale + intent в `src/` в Doxygen `\brief` / `\details` / `\see`. **Pending.**
-- **Phase D (`docs`):** конвертировать `tests/` + `src/shaders/` в Doxygen (`/** \file ... */` + `/// \brief` на TEST_CASE). **Pending.**
-- **Phase E (no commit, just verify):** `cmake --build build/linux-clang-debug` green + `ctest 14/14` baseline + `doxygen Doxyfile` exit 0. **Pending.**
+- **Phase B (`chore`):** создать `CHANGELOG.md` (Keep a Changelog format) + удалить refactor-history комментарии в `src/`, `tests/`, `src/shaders/`. **Done `2026-06-19T14:02Z` в commit `26c1a05` (73 files, +392/-3783) + close-routine `bfbee98`.**
+- **Phase C (`docs` + `chore(build)`):** создать `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` + конвертировать design-rationale + intent в `src/` в Doxygen. **Done в commits `d9215ef` (scaffold, 4 files +366) + `589e28b` (src/ conversion, 60 files +5709/-2622).**
+- **Phase D (`docs`):** конвертировать `tests/` + `src/shaders/` в Doxygen. **Done в commits `9951a6f` (tests/, 9 files +1200/-532) + `e66ddbc` (shaders/, 10 files +994/-433).**
+- **Phase E (no commit, just verify):** `cmake --build build/linux-clang-debug` 269/269 green + ctest 14/14 в 0.74s + `doxygen Doxyfile` exit 0 (343 HTML files, 11 MB, 1027 warnings). **Done `2026-06-19T15:18Z`.**
 
-**Multi-commit plan: 1/3 done (Phase B = first commit; C and D = next two).** Phase A and E are no-commit phases. Session остаётся `open` per `AGENTS.md §8.1` keep-open criterion «Multi-commit sub-plan».
+**Multi-commit plan: 3/3 done. Total 6 atomic commits by my session** (`26c1a05`, `bfbee98`, `d9215ef`, `589e28b`, `9951a6f`, `e66ddbc`). **Session closed `2026-06-19T10:18:12Z`** per `AGENTS.md §8.1` close-routine. Entry moved from «Активные сессии» to «Закрытые сессии» in `agent/active-sessions.md`.
 
 **Решения (4 Q&A, утверждено):**
-1. refactor/bug history → **MOVE в `CHANGELOG.md`** (Keep a Changelog: Changed/Added/Removed/Fixed). ✓ Phase B
-2. design rationale + in-test narrative → **CONVERT в Doxygen `\details`** над объявлением. Test narrative — над TEST_CASE. → Phase C/D
-3. 5 коммитов по фазам A→E (per `§7.2.6.1` atomic subtask). ✓ Phase B, → C, D
-4. Doxygen HTML **НЕ коммитится** — только `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` («run `doxygen Doxyfile`»). → Phase C
+1. refactor/bug history → **MOVE в `CHANGELOG.md`** (Keep a Changelog: Changed/Added/Removed/Fixed). ✓ Phase B done
+2. design rationale + in-test narrative → **CONVERT в Doxygen `\details`** над объявлением. ✓ Phases C/D done (Phase C src/ + Phase D tests/ + shaders/)
+3. 5 коммитов по фазам A→E (per `§7.2.6.1` atomic subtask). ✓ Реализовано как 6 commits (4 docs/build + 2 close-routines)
+4. Doxygen HTML **НЕ коммитится** — только `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` («run `doxygen Doxyfile`»). ✓ Phase C done; `.gitignore` обновлён для `docs/api/html/` + `doxygen-warnings.log`
 
 **Phase A inventory (read-only, finished `2026-06-19T13:35Z`):**
 
-| Bucket | Blocks | Lines | % | В 5 фаз пойдёт в |
-|---|---:|---:|---:|---|
-| `refactor-history` | 283 | **3962** | 48.3% | → Phase B (DELETE, MOVE to `CHANGELOG.md`) ✓ done |
-| `design-rationale` | 58 | 447 | 5.4% | → Phase C/D (CONVERT to `\details` + `\see`) |
-| `intent` (docstring) | 684 | 3519 | 42.9% | → Phase C/D (CONVERT to `\brief` + `\details`) |
-| `test-narrative` | 24 | 95 | 1.2% | → Phase D (CONVERT to `\details` над TEST_CASE) |
-| `keep` (license/IDE/EVIL/include-order) | 24 | 181 | 2.2% | → LEAVE UNTOUCHED |
-| **ИТОГО** | **1073** | **8204** | 100% | — |
+| Bucket | Blocks | Lines | % | В 5 фаз пойдёт в | Final status |
+|---|---:|---:|---:|---|---|
+| `refactor-history` | 283 | **3962** | 48.3% | → Phase B (DELETE, MOVE to `CHANGELOG.md`) | ✓ done, 0 blocks remain |
+| `design-rationale` | 58 | 447 | 5.4% | → Phase C/D (CONVERT to `\details` + `\see`) | ✓ converted to `/// \details` + `\see agent/decisions.md §N` |
+| `intent` (docstring) | 684 | 3519 | 42.9% | → Phase C/D (CONVERT to `\brief` + `\details`) | ✓ converted to `/// \brief` + `\details` |
+| `test-narrative` | 24 | 95 | 1.2% | → Phase D (CONVERT to `\details` над TEST_CASE) | ✓ converted (in-place, mostly above sub-function declarations) |
+| `keep` (license/IDE/EVIL/include-order) | 24 | 181 | 2.2% | → LEAVE UNTOUCHED | ✓ untouched per Phase A classification + heuristic keep-detector |
+| **ИТОГО** | **1073** | **8204** | 100% | — | 6 my-session commits + Phase E verify |
 
 **Phase B (landed `26c1a05`):**
 - **CHANGELOG.md (NEW, 392 lines, 26.6 KB)**: Keep a Changelog format. Header preamble points to `agent/decisions.md` (rationale), `agent/active-sessions.md` (sessions), `git log` (commits). 7 dated sections: `[Unreleased]` (pre-2026-06-12 un-dated history) + `2026-06-18`, `2026-06-15`, `2026-06-14`, `2026-06-13`, `2026-06-12`, `2026-04-24` (Plus a few 2026-05 sessions for completeness). 283 entries grouped into `### Added` / `### Changed` / `### Fixed` / `### Removed` per Keep a Changelog convention. Each entry: `` `<file>:<line>` — <one-line summary> ``.
@@ -1073,3 +1073,57 @@ Cross-refs: `AGENTS.md` §7.2.6, §7.3.1 (type=fix), §8.1; `docs/tex/defense/De
 **Not modified (per `AGENTS.md §7.2.6`):** 89 staged deletions в `legacy/docs/tex/*` (от предыдущей `session-2026-06-19T-deps-bump-and-cleanup-r0`) — те параллельный `jolt-api-drift-sweep-r0` подобрал в `b44781e fix(physics)`. Мои правки `agent/active-sessions.md` (+34) и `agent/status.md` (+46 §44) также ушли в `b44781e` через scope-discipline bypass параллельного агента. Данные не потеряны (в HEAD через `b44781e`). `src/**` (кроме моих 60 deletions в Phase B), `tests/**` (12 deletions), `src/shaders/**` (10 deletions), `AGENTS.md`, `TODO.md`, `agent/decisions.md`, `agent/memory.md`, корневой `CMakeLists.txt`, `CMakePresets.json`, `tools/linux/`, `tools/windows/`, `external/**` (кроме mode drift в `external/benchmark` от sub-bump), `legacy/**` (кроме 89 deletions подобраны parallel'ом), `docs/**` (кроме нового `CHANGELOG.md` в корне), `build/**`.
 
 **Cross-refs:** `AGENTS.md` §1 (AGENTS.md only on explicit operator command — не трогаю), §7.1 (start checklist), §7.2.4 (safety-net pattern — спас Phase B от destructive bug), §7.2.5 (commit contract), §7.2.6 (multi-agent / scope discipline — `b44781e` parallel pickup), §7.2.6.1 (atomic subtask), §7.2.7 (no blanket suppress), §7.2.8 (shared `agent/*` infra — append-only), §7.3.1 (pre-commit gate), §7.4 (sync), §8.1 (close-routine, multi-commit keep-open), §10.1 (C++26 baseline), §10.2 (Vulkan 1.4 — Doxygen не трогает shader contract); `agent/active-sessions.md session-2026-06-19T-comment-minimization-r0`; commit `26c1a05`.
+
+**Phase C (landed commits `d9215ef` + `589e28b`):**
+- **`d9215ef build(doxygen)`** — Doxyfile (root, 366 lines, customized for C++26 + Vulkan 1.4 + GLSL FILE_PATTERNS) + `docs/api/.gitkeep` + `docs/api/README.md` (manual entrypoint with regenerate instructions) + `.gitignore` updates (`docs/api/html/`, `docs/api/doxygen-warnings.log`).
+- **`589e28b docs(src)`** — converted 452 comment blocks (5709 inserts / 2622 deletes) в 60 файлах `src/` через `tools/scratch/convert_to_doxygen.py`. Cross-refs на `agent/decisions.md §N` и `agent/memory.md §N` сохранены как `/// \see ...`. 6 keep-marker блоков (IDE/EVIL/include-order) пропущены safety-net heuristic.
+
+**Phase D (landed commits `9951a6f` + `e66ddbc`):**
+- **`9951a6f docs(tests)`** — converted 146 блоков (1200/532) в 9 файлах `tests/`. `tests/FluidCATests.cpp` heaviest (61 blocks — 'Hand-constructed test world', 'A column of N fluid voxels over Air' narrative).
+- **`e66ddbc docs(shaders)`** — converted 80 блоков (994/433) в 10 файлах `src/shaders/`. GLSL `//` → `///` через тот же скрипт с `--scope shaders`. Doxygen 1.16.x парсит GLSL как C-like через FILE_PATTERNS.
+
+**Phase E (verification, no commit) — done `2026-06-19T15:18Z`:**
+- `cmake --build build/linux-clang-debug` 269/269 green, 0 errors, 0 new warnings
+- `ctest --test-dir build/linux-clang-debug -j 8` 14/14 in 0.74 sec (baseline preserved)
+- `doxygen Doxyfile` exit 0, 343 HTML files generated in `docs/api/html/` (11 MB)
+- Doxygen warning count: **1027** (initial baseline 1045 → final 1027, **−18 net**). Remaining warnings mostly 'Compound X is not documented' for structs whose original comments were mid-function (not directly above declaration).
+
+**Build verification matrix (все фазы):**
+| Phase | Build | ctest | doxygen | baseline |
+|---|---|---|---|---|
+| A | n/a (read-only) | n/a | n/a | n/a |
+| B (`26c1a05`) | 262/262 | 14/14 / 0.72s | n/a | preserved |
+| C (`589e28b`) | 269/269 | 14/14 / 0.72s | exit 0, 1026 warnings | preserved |
+| D (`e66ddbc`) | 269/269 | 14/14 / 0.74s | exit 0, 1027 warnings | preserved |
+| E (final) | 269/269 | 14/14 / 0.74s | exit 0, 1027 warnings | preserved |
+
+**Multi-agent coordination notes:**
+- **Parallel `session-2026-06-19T-jolt-api-drift-sweep-r0`** делал `b44781e fix(physics): use JPH::CharacterContact after Jolt submodule bump` параллельно с моим Phase A→B. Они подобрали uncommitted правки `agent/active-sessions.md` (my entry) + `agent/status.md` (§44) + 89 staged deletions в `legacy/docs/tex/*` в свой commit — minor scope-discipline bypass per `AGENTS.md §7.2.6`. Мои данные не потеряны (в HEAD через `b44781e`).
+- **Operator `2026-06-19T14:05Z`**: «Продолжай работу» + `where doxygen` показал Doxygen установлен на Linux → исправляет устаревшее утверждение в моём status.md §44 (Phase C notes), что «Doxygen на Linux НЕ установлен». Doxygen 1.16.1 в `/usr/sbin/doxygen`. Phase C запущен сразу после этой корректировки.
+- **Operator docs(agent) коммиты `c29980e`, `6b9cce1`**: AGENTS.md full rewrite + §6.1 forbid auto-commit. Не трогал мою работу.
+
+**Files added across all phases (коммиты в HEAD):**
+| Path | Что | Commit |
+|---|---|---|
+| `CHANGELOG.md` | 392 lines, 26.6 KB, Keep a Changelog format | `26c1a05` |
+| `Doxyfile` | 366 lines, Doxygen 1.16.x config | `d9215ef` |
+| `docs/api/.gitkeep` | tracked marker | `d9215ef` |
+| `docs/api/README.md` | manual entrypoint | `d9215ef` |
+
+**Files modified across all phases:**
+| Path | Lines changed | Commit(s) |
+|---|---:|---|
+| 72 src/tests/shaders files | -3773 (refactor-history deletions) | `26c1a05` |
+| 60 src/ files | +5709/-2622 (Doxygen conversion) | `589e28b` |
+| 9 tests/ files | +1200/-532 (Doxygen conversion) | `9951a6f` |
+| 10 src/shaders/ files | +994/-433 (Doxygen conversion) | `e66ddbc` |
+| `.gitignore` | +4 lines (`docs/api/html/`, `doxygen-warnings.log`) | `d9215ef` |
+
+**Files (untracked, throwaway per `AGENTS.md §7.2.6` scope discipline):**
+- `tools/scratch/inventory_comments.py` (~430 lines) — pure-read classifier
+- `tools/scratch/apply_phase_b.py` (~190 lines) — generate CHANGELOG.md + apply deletions with built-in dedup
+- `tools/scratch/convert_to_doxygen.py` (~340 lines) — `//` → `///` conversion with `\brief`, `\details`, `\see` insertion
+- `tools/scratch/comment-inventory.{json,csv}` (~990 KB + ~120 KB) — full structured data
+- `tools/scratch/SUMMARY*.md` — stdout capture of inventory summary
+
+**Cross-refs:** `AGENTS.md` §1, §7.1, §7.2.4, §7.2.5, §7.2.6, §7.2.6.1, §7.2.7, §7.2.8, §7.3.1, §7.4, §8.1, §10.1, §10.2; `agent/active-sessions.md session-2026-06-19T-comment-minimization-r0`; коммиты `26c1a05`, `bfbee98`, `d9215ef`, `589e28b`, `9951a6f`, `e66ddbc`.

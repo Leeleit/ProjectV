@@ -116,43 +116,6 @@ Append-only ledger активных и недавно завершённых AI-
     - **libc++ / C++20 modules / `import std;` pipeline на Linux проверен живой:** root `CMakeLists.txt:230` `add_compile_options(-stdlib=libc++)` под `if (NOT MSVC AND NOT WIN32)`, `set(CMAKE_CXX_STDLIB libc++)` + `CMAKE_CXX_MODULE_STD ON` + `-Wno-unused-command-line-argument` для false-positive; `src/CMakeLists.txt:33-40` `FILE_SET CXX_MODULES FILES core/{Math,StringId,Probe}.ixx` под `else()` (не Windows). `import std;` в нашем mainline не используется (Tier 2, opt-in probe target `ProjectVStdModuleProbe` only per `agent/memory.md:402, 455`). Pipeline **живой, не regression**.
   - **Следующий шаг:** build `--keep-going` для сбора всех Jolt-related errors, потом batch edit.
 
-### session-2026-06-19T-comment-minimization-r0
-
-- **id:** `2026-06-19T-comment-minimization-r0`
-- **started-at:** 2026-06-19T13:35:00Z
-- **agent:** MiniMax-M3
-- **operator:** le1t
-- **branch:** master
-- **scope:** **Минимизация комментариев в `src/`, `tests/`, `src/shaders/`.** Per operator: «глянь код в проекте: там больше комментариев, чем кода. Можно решить проблему? Типа убрать полностью комментарии из кода, но перенести их куда-то в одно место. Надо Doxygen использовать, я его установил на винду». Решения (4 Q&A, утверждено):
-  1. **refactor/bug history** (`// **Tier X.Y (2026-06-13)...**`, `// **Windows clang-cl fallback (2026-06-18)...**`) — **MOVE в новый `CHANGELOG.md`** (Keep a Changelog format с группами Changed/Added/Removed/Fixed).
-  2. **design rationale** + **in-test narrative** (`// per decisions.md §N`, `// 1x1x1 cube centred on camera axis...` внутри тестов) — **CONVERT в Doxygen `\details` + `\brief`** над объявлением (function/struct/TEST_CASE). Cross-refs к `agent/decisions.md` сохраняются как `/// \see agent/decisions.md §N`.
-  3. **5 коммитов по фазам A→E** (per `AGENTS.md §7.2.6.1` atomic subtask — нельзя 8200 deletions в 1 commit, размажет git blame).
-  4. **Doxygen HTML НЕ коммитится** — только `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` («run `doxygen Doxyfile`»). Противоречит первоначальному «docs/api/ коммитится» — operator скорректировал.
-- **Phase A (read-only, no commit):** **DONE `2026-06-19T13:35Z`.** Скрипт `tools/scratch/inventory_comments.py` классифицирует все `//`-комментарии в `src/`, `tests/`, `src/shaders/` на 5 категорий (refactor-history / design-rationale / intent / test-narrative / keep) → `tools/scratch/comment-inventory.{csv,json}` + markdown summary в stdout. **Не трогает src/tests/shaders.**
-- **Phase B (`chore`):** **DONE `2026-06-19T14:02Z` в commit `26c1a05`** (73 files, +392/-3783 net). Создал `CHANGELOG.md` (Keep a Changelog, 392 lines, 26.6 KB) + удалил 273 unique refactor-history блоков (3773 lines) из 72 файлов в `src/`, `tests/`, `src/shaders/`. Build green, ctest 14/14 в 0.72s baseline preserved. **Incident:** первая попытка без dedup сломала build (10 дубликатов в inventory → второй pass удалил не-comment код в `src/shaders/ray_march.comp` и `voxel_mesh.comp`); safety-net snapshot в `/tmp/phase_B_snapshot_HEAD/` спас, восстановил, добавил dedup в `apply_phase_b.py`, пере-запустил. См. `agent/status.md §44` подробности.
-- **Phase C (будущий commit, `docs` + `chore(build)`):** создать `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` (manual); конвертировать design-rationale + intent комментарии в `src/` (3740 lines) в Doxygen `\brief` / `\details` / `\see`. Doxygen на Linux НЕ установлен (per `agent/memory.md §9`) — operator генерирует HTML на Windows-хосте где Doxygen есть.
-- **Phase D (будущий commit, `docs`):** конвертировать `tests/` + `src/shaders/` в Doxygen (447 + 95 + 181 lines = 723 lines, but tests/shaders могут иметь дубликаты; см. Phase B dedup pattern). 14 файлов шейдеров с 0 существующих Doxygen-блоков.
-- **Phase E (no commit, just verify):** `cmake --build build/linux-clang-debug` + `ctest 14/14` baseline + `doxygen Doxyfile` exit 0 + `git diff --stat` показывает ожидаемое сокращение.
-- **files-touched-intent (Phase A+B, 1/3 commits done):**
-  - **NEW:** `tools/scratch/inventory_comments.py` + `tools/scratch/apply_phase_b.py` (throwaway audit tools, не в git)
-  - **NEW (output, не в git):** `tools/scratch/comment-inventory.{csv,json}` + `tools/scratch/SUMMARY*.md`
-  - **NEW (COMMITTED in 26c1a05):** `CHANGELOG.md` (392 lines, root)
-  - **EDIT (COMMITTED in 26c1a05):** 72 файла в `src/`, `tests/`, `src/shaders/` (refactor-history deletions)
-  - **EDIT (append-only):** `agent/active-sessions.md` (эта запись + multi-commit-plan marker)
-  - **EDIT (append-only):** `agent/status.md` (новая §44 + Phase B landed)
-  - **НЕ ТРОГАЮ (per `AGENTS.md §7.2.6` scope discipline):** `AGENTS.md`, `TODO.md`, `agent/decisions.md`, `agent/memory.md`, корневой `CMakeLists.txt`, `CMakePresets.json`, `tools/linux/`, `tools/windows/`, `external/**`, `legacy/**` (89 deletions подобраны parallel-агентом в `b44781e`, моё scope не задевает), `docs/**` (кроме будущего `docs/api/` в Phase C), `build/**`
-- **status:** open
-- **commit-hash (Phase B):** `26c1a05` — `chore(docs): extract refactor-history comments to CHANGELOG.md`
-- **multi-commit-plan: 1/3** (Phase B done; Phase C = Doxyfile + src/ conversion; Phase D = tests/ + shaders/ conversion. Phase A and E are no-commit phases.)
-- **notes:** **Структура и оценки (per Phase A pre-flight sampling):**
-  - `src/` = 6539 `//`-строк в 62 файлах, `tests/` = 1026 в 16 файлах (446 в `FluidCATests.cpp` + 140 в `PresentModeTests.cpp`), `src/shaders/` = 635 в 14 файлах. ИТОГО **8200 строк в 92 файлах**.
-  - Существующих `/**` Doxygen-блоков: 0. `docs/api/` directory: не существует. Doxygen на Linux: НЕ установлен (per `agent/memory.md §9`).
-  - Ожидаемый net diff после Phase B+C+D: -5500..-6200 строк `//` → +2000-3000 строк `///` Doxygen + +N строк в `CHANGELOG.md` (1500-2500).
-  - **Pre-flight classification (sampling 6 файлов, ~30% от total):** ~50% refactor/bug history (MOVE), ~30% design-rationale (CONVERT), ~10% test-narrative (CONVERT в `\details` над TEST_CASE), ~10% intent (CONVERT в `\brief`).
-  - **NOT touched (в Phase B+C+D):** лицензионные хедеры, IDE-маркеры (`// noinspection ...`), `// EVIL:` (magic numbers per `legacy/docs/standards/04_evil-hacks-philosophy.md §3`), include-order комментарии (VMA+volk), `// M_PI` portability markers.
-  - **Build baseline invariant:** `ctest 14/14` на `linux-clang-debug` preserved (комментарии не влияют на build). `windows-clang-debug` ctest 12/12 preserved (operator verifies). `docs/api/README.md` укажет на `doxygen Doxyfile` для локальной генерации HTML.
-  - **Cross-refs:** `AGENTS.md §1` (AGENTS.md changes only on explicit operator command — не трогаю), §7.1 (session start checklist — followed), §7.2.5 (commit message contract), §7.2.6 (multi-agent / scope discipline — грязное дерево 89 staged deletions оставляю), §7.2.6.1 (atomic subtask — 5 фаз = 5 коммитов), §7.2.7 (no blanket suppress — phase A скрипт не глушит warnings, не suppress'ит), §7.2.8 (shared `agent/*` infra — append-only entry), §7.3.1 (pre-commit gate), §8.1 (close-routine, применяется на каждом из 5 коммитов), §10.1 (C++26 baseline, header convention), §10.2 (Vulkan 1.4 — Doxygen не трогает shader contract).
-
 ### session-2026-06-18T-windows-host-build-r0
 
 - **id:** `2026-06-18T-windows-host-build-r0`
@@ -389,6 +352,51 @@ Append-only ledger активных и недавно завершённых AI-
 <!-- Недавние закрытые сессии (последние ~10). Старые перенесены в
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
+
+### session-2026-06-19T-comment-minimization-r0
+
+- **id:** `2026-06-19T-comment-minimization-r0`
+- **started-at:** 2026-06-19T13:35:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Минимизация комментариев в `src/`, `tests/`, `src/shaders/`.** Per operator: «глянь код в проекте: там больше комментариев, чем кода. Можно решить проблему? Типа убрать полностью комментарии из кода, но перенести их куда-то в одно место. Надо Doxygen использовать, я его установил на винду». Решения (4 Q&A, утверждено):
+  1. **refactor/bug history** (`// **Tier X.Y (2026-06-13)...**`, `// **Windows clang-cl fallback (2026-06-18)...**`) — **MOVE в новый `CHANGELOG.md`** (Keep a Changelog format с группами Changed/Added/Removed/Fixed).
+  2. **design rationale** + **in-test narrative** (`// per decisions.md §N`, `// 1x1x1 cube centred on camera axis...` внутри тестов) — **CONVERT в Doxygen `\details` + `\brief`** над объявлением (function/struct/TEST_CASE). Cross-refs к `agent/decisions.md` сохраняются как `/// \see agent/decisions.md §N`.
+  3. **5 коммитов по фазам A→E** (per `AGENTS.md §7.2.6.1` atomic subtask — нельзя 8200 deletions в 1 commit, размажет git blame).
+  4. **Doxygen HTML НЕ коммитится** — только `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` («run `doxygen Doxyfile`»). Противоречит первоначальному «docs/api/ коммитится» — operator скорректировал.
+- **Phase A (read-only, no commit):** **DONE `2026-06-19T13:35Z`.** Скрипт `tools/scratch/inventory_comments.py` классифицирует все `//`-комментарии в `src/`, `tests/`, `src/shaders/` на 5 категорий (refactor-history / design-rationale / intent / test-narrative / keep) → `tools/scratch/comment-inventory.{csv,json}` + markdown summary в stdout. **Не трогает src/tests/shaders.**
+- **Phase B (`chore`):** **DONE `2026-06-19T14:02Z` в commit `26c1a05`** (73 files, +392/-3783 net). Создал `CHANGELOG.md` (Keep a Changelog, 392 lines, 26.6 KB) + удалил 273 unique refactor-history блоков (3773 lines) из 72 файлов в `src/`, `tests/`, `src/shaders/`. Build green, ctest 14/14 в 0.72s baseline preserved. **Incident:** первая попытка без dedup сломала build (10 дубликатов в inventory → второй pass удалил не-comment код в `src/shaders/ray_march.comp` и `voxel_mesh.comp`); safety-net snapshot в `/tmp/phase_B_snapshot_HEAD/` спас, восстановил, добавил dedup в `apply_phase_b.py`, пере-запустил. См. `agent/status.md §44` подробности.
+- **Phase C (`docs` + `chore(build)`):** **DONE в commits `d9215ef` + `589e28b`** (`2026-06-19T14:30Z` и `2026-06-19T15:10Z`). Создал `Doxyfile` (root, customized, 366 lines) + `docs/api/.gitkeep` + `docs/api/README.md` + `.gitignore` (`docs/api/html/`, `docs/api/doxygen-warnings.log`) в `d9215ef`. Конвертировал 452 блока (5709 inserts / 2622 deletes) `// → ///` в 60 файлах `src/` через `tools/scratch/convert_to_doxygen.py` в `589e28b`. Doxygen 1.16.x УСТАНОВЛЕН на Linux (per `where doxygen` от оператора `2026-06-19T14:05Z`); предыдущая запись в `agent/memory.md §9` устарела, исправлю в Phase E memory update.
+- **Phase D (`docs`):** **DONE в commits `9951a6f` + `e66ddbc`** (`2026-06-19T15:13Z` и `2026-06-19T15:18Z`). Конвертировал 146 блоков (1200/532) в 9 файлах `tests/` в `9951a6f` + 80 блоков (994/433) в 10 файлах `src/shaders/` в `e66ddbc`. Dedup pattern из Phase B защитил от duplicate-block bug (safety-net проверен на snapshot-восстановлении). GLSL через FILE_PATTERNS Doxyfile парсится как C-like в Doxygen 1.16.
+- **Phase E (no commit, just verify):** **DONE `2026-06-19T15:18Z`.** `cmake --build build/linux-clang-debug` 269/269 green, ctest 14/14 в 0.74s, `doxygen Doxyfile` exit 0, 343 HTML files (11 MB), warning count 1027 (down from initial 1045 pre-Phase-C). См. `agent/status.md §44` финальный.
+- **files-touched-intent (Phase A+B+C+D, 5/3 commits done — 6 atomic commits):**
+  - **NEW (untracked, throwaway):** `tools/scratch/inventory_comments.py` + `tools/scratch/apply_phase_b.py` + `tools/scratch/convert_to_doxygen.py` (audit/conversion scripts)
+  - **NEW (untracked, throwaway):** `tools/scratch/comment-inventory.{csv,json}` + `tools/scratch/SUMMARY*.md`
+  - **NEW (COMMITTED):** `CHANGELOG.md` (392 lines, root) в `26c1a05`
+  - **NEW (COMMITTED):** `Doxyfile` + `docs/api/.gitkeep` + `docs/api/README.md` в `d9215ef`
+  - **EDIT (COMMITTED):** 72 файла в `src/`, `tests/`, `src/shaders/` (refactor-history deletions) в `26c1a05`
+  - **EDIT (COMMITTED):** 60 файлов в `src/` (Doxygen `// → ///` conversion) в `589e28b`
+  - **EDIT (COMMITTED):** 9 файлов в `tests/` (Doxygen conversion) в `9951a6f`
+  - **EDIT (COMMITTED):** 10 файлов в `src/shaders/` (Doxygen conversion) в `e66ddbc`
+  - **EDIT (COMMITTED):** `.gitignore` (`docs/api/html/`, `docs/api/doxygen-warnings.log`) в `d9215ef`
+  - **EDIT (append-only):** `agent/active-sessions.md` (эта запись, multi-commit-plan markers, phase status updates, close-routine move) — final commit pending
+  - **EDIT (append-only):** `agent/status.md` (§44 expanded with Phases B, C, D, E)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §7.2.6`):** `AGENTS.md`, `TODO.md`, корневой `CMakeLists.txt`, `CMakePresets.json`, `tools/linux/`, `tools/windows/`, `external/**`, `legacy/**`, `docs/{ArchitectureGuide,BuildAndRun,Debugging,Profiling,RenderArchitecture,source_layout,VoxelWorld}.md`, `build/**`
+- **status:** closed
+- **closed-at:** 2026-06-19T10:18:12Z
+- **final-commit-hash:** `e66ddbc` — `docs(shaders): convert src/shaders/ comments to Doxygen /// format (Phase D step 2)` (last of 6 my-session commits)
+- **commit-hash (Phase B):** `26c1a05` — `chore(docs): extract refactor-history comments to CHANGELOG.md`
+- **multi-commit-plan: 3/3 done** (Phases B, C, D1, D2 + close-routine for B = 5 commits; Phase A and E are no-commit phases). **All phases complete `2026-06-19T10:18Z`.**
+- **notes:** **Структура и оценки (per Phase A pre-flight sampling):**
+  - `src/` = 6539 `//`-строк в 62 файлах, `tests/` = 1026 в 16 файлах (446 в `FluidCATests.cpp` + 140 в `PresentModeTests.cpp`), `src/shaders/` = 635 в 14 файлах. ИТОГО **8200 строк в 92 файлах**.
+  - Существующих `/**` Doxygen-блоков: 0. `docs/api/` directory: не существует. Doxygen на Linux: НЕ установлен (per `agent/memory.md §9`).
+  - Ожидаемый net diff после Phase B+C+D: -5500..-6200 строк `//` → +2000-3000 строк `///` Doxygen + +N строк в `CHANGELOG.md` (1500-2500).
+  - **Pre-flight classification (sampling 6 файлов, ~30% от total):** ~50% refactor/bug history (MOVE), ~30% design-rationale (CONVERT), ~10% test-narrative (CONVERT в `\details` над TEST_CASE), ~10% intent (CONVERT в `\brief`).
+  - **NOT touched (в Phase B+C+D):** лицензионные хедеры, IDE-маркеры (`// noinspection ...`), `// EVIL:` (magic numbers per `legacy/docs/standards/04_evil-hacks-philosophy.md §3`), include-order комментарии (VMA+volk), `// M_PI` portability markers.
+  - **Build baseline invariant:** `ctest 14/14` на `linux-clang-debug` preserved (комментарии не влияют на build). `windows-clang-debug` ctest 12/12 preserved (operator verifies). `docs/api/README.md` укажет на `doxygen Doxyfile` для локальной генерации HTML.
+  - **Cross-refs:** `AGENTS.md §1` (AGENTS.md changes only on explicit operator command — не трогаю), §7.1 (session start checklist — followed), §7.2.5 (commit message contract), §7.2.6 (multi-agent / scope discipline — грязное дерево 89 staged deletions оставляю), §7.2.6.1 (atomic subtask — 5 фаз = 5 коммитов), §7.2.7 (no blanket suppress — phase A скрипт не глушит warnings, не suppress'ит), §7.2.8 (shared `agent/*` infra — append-only entry), §7.3.1 (pre-commit gate), §8.1 (close-routine, применяется на каждом из 5 коммитов), §10.1 (C++26 baseline, header convention), §10.2 (Vulkan 1.4 — Doxygen не трогает shader contract).
+
 
 ### session-2026-06-19T-deps-bump-and-cleanup-r0
 
