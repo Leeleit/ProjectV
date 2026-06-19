@@ -48,10 +48,6 @@ std::string FormatMmSs(const float seconds, const bool treatZeroAsValid)
 void FormatUppercaseForHud(
 	const char *in, char *out, const size_t outSize)
 {
-	/// \brief Callers always pass a non-zero stack-buffer size; the
-	///
-	/// \details
-	///  `outSize == 0` defensive check was dead code and DFA-flagged.
 
 	size_t i = 0;
 	for (; i + 1 < outSize && in[i] != '\0'; ++i) {
@@ -513,19 +509,6 @@ size_t BuildStatsLines(
 		GetControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "ON" : "OFF",
 		GetWalkAirControlModeLabel(stats.walkAirControlMode));
-	/// \brief Frame-step / slow-motion line.
-	///
-	/// \details
-	/// Default `TIME 1.00`. The
-	///  `STEP` line is only emitted on the same frame the
-
-	///  operator pressed `\` — it is a one-frame indicator for
-
-	///  "the next tick is a forced step", not a sticky latched
-
-	///  flag. Stays adjacent to the `PAUSE` line above so the
-
-	///  two pause-related runtime axes read as a group.
 
 	PV_APPEND_HUD_LINE(
 		outLines,
@@ -767,21 +750,6 @@ size_t BuildStatsLines(
 		2 * stats.taaNeighbourhoodRadius + 1,
 		GetBoolLabel(stats.taaHistoryValid),
 		stats.taaCasSharpnessMax);
-	/// \brief 1.5 anti-flicker layer history:
-	///
-	/// \details
-	/// `LYR` shows whether the
-	///  previous-frame layer mask is currently valid (false on
-
-	///  the first frame after swapchain-recreate / world-reload /
-
-	///  Taa-toggle / etc., true afterwards). `BLF` is the
-
-	///  per-frame blend factor for the per-layer temporal filter
-
-	///  (default 0.4). Together they tell the operator whether
-
-	///  the layer anti-flicker is currently active.
 
 	PV_APPEND_HUD_LINE(
 		outLines,
@@ -789,19 +757,6 @@ size_t BuildStatsLines(
 		"TAALYR %s BLF %.2f",
 		GetBoolLabel(stats.taaLayerHistoryValid),
 		stats.taaLayerBlendFactor);
-	/// \brief 1.2 camera-cut detector.
-	///
-	/// \details
-	/// `CUT` accumulates the number of
-	///  view-projection discontinuities seen since startup; `CLR`
-
-	///  tracks the worst Chebyshev distance so the operator can
-
-	///  compare a live repro against `decisions.md` §19's expected
-
-	///  delta ranges. Stays on its own line so the TAA summary
-
-	///  above stays compact.
 
 	PV_APPEND_HUD_LINE(
 		outLines,
@@ -973,12 +928,6 @@ size_t BuildMusicLines(
 		musicState,
 		stats.audioMusicVolume);
 	if (showMetaLines) {
-		/// \brief Uppercase transform is in-place on a
-		///
-		/// \details
-		///  local stack buffer; the engine mirror
-
-		///  is read-only here.
 
 		char upperArtist[96];
 		char upperTitle[128];
@@ -1021,13 +970,6 @@ size_t BuildHelperLines(
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F2 MAT  F3 CAM");
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F4 MODE  F5 SCENE");
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F6 SAVE  F7 LOAD");
-	/// \brief M5.1d gravigun:
-	///
-	/// \details
-	/// F picks/drops a model under the crosshair
-	///  and snaps its AABB min to integer voxel grid; logs the
-
-	///  final integer coords on drop.
 
 	PV_APPEND_HUD_LINE(outLines, lineCount, "F GRAVIGUN");
 	if (stats.detailedHudVisible) {
@@ -1046,23 +988,6 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "T TAA  ;' JIT  -= BLND");
 		PV_APPEND_HUD_LINE(outLines, lineCount, ", NHOOD  . INVHIST");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
-		/// \brief Frame-step / slow-motion:
-		///
-		/// \details
-		/// `[` halves, `]` doubles
-		///  (clamped 0..4, snapped to 0 below 0.01), `\` queues
-
-		///  one fixed tick, `` ` `` resets to 1.0. The bracket
-
-		///  and backslash / backtick keys have no glyph in the
-
-		///  HUD font (only A-Z, 0-9, `.`, `-`, `:`), so the
-
-		///  helper spells them out. The keys themselves are
-
-		///  not redefined — the binding stays at the
-
-		///  SDL_SCANCODE level in `InputActions.cpp`.
 
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TIME [ DN  ] UP  \\ STEP  ` 1X");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "MUSIC Q PLY  E STP  7- 8+");
@@ -1206,14 +1131,6 @@ uint32_t BuildDebugHudVertices(
 			textColor);
 	}
 
-	/// \brief Music lines (top-right panel) — pass the
-	///
-	/// \details
-	///  panel's `minXPx` as the per-line `originXPx`
-
-	///  so the text starts inside the panel's
-
-	///  padding, not at the viewport left edge.
 
 	for (size_t lineIndex = 0; lineIndex < musicLineCount; ++lineIndex) {
 		const float originYPx =

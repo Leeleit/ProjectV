@@ -135,7 +135,6 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				// ReSharper disable once CppUseStructuredBinding
 				VoxelChunk &chunk = world.chunks[chunkIndex];
 				chunk.min = {
 					world.min.x + chunkX * world.chunkSize,
@@ -1499,13 +1498,6 @@ CameraState MakeTestCamera(const std::array<float, 3> &position)
 	return camera;
 }
 
-// `CppDFAConstantParameter` false positive on `deltaSeconds`:
-// the DFA cannot track that the call site in the input-replay
-// tests passes `capture.frames[i].deltaSeconds` which is
-// read from the `.replay` fixture and varies per frame. The
-// `1.0f / 60.0f` literal in other tests is a *test default*,
-// not the only value. Suppress per-line.
-// noinspection CppDFAConstantParameter
 bool AdvanceUpdateAppWithSimulatedFrameDelta(
 	PlatformState *platform,
 	SimulationState *simulation,

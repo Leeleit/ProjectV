@@ -4,16 +4,6 @@ struct PackedFace {
     uint localVoxelFace;
     uint chunkIndexMaterial;
     uint lightingData;
-    /// \brief A1 (4.1 greedy meshing):
-    ///
-    /// \details
-    /// (width, height) in 8 bits each for the
-    ///  in-plane quad size. width = axisU extent, height = axisV extent.
-
-    ///  (1, 1) = unit quad (no merge). See `decisions.md §25`.
-
-    ///
-    /// \see agent/decisions.md §25
     uint packedExtents;
 };
 
@@ -40,32 +30,6 @@ layout(push_constant) uniform PushConstants {
     uvec4 chunkGridAndFlags;
 } pushConstants;
 
-/// \brief Per-vertex ambient occlusion has been **disabled** as a deliberate follow-up
-///
-/// \details
-///  to P0.3. The earlier face-corner AO (Lysenko 3-neighbor), the 8-surrounding
-
-///  formula, and the 4-axis-aligned variant all produced a "pseudo-shadow" at
-
-///  3D-угол 2x2x2 cube (or any 4-voxel junction) because the count of solid
-
-///  axis-aligned neighbors peaks at convex corners with three abutting voxels
-
-///  (3 of 4 = AO 64 = 25% lit), even though sky is visible from the outward
-
-///  diagonal direction. A face-independent model cannot distinguish "concave"
-
-///  from "convex" from a single neighbor count, so any per-corner AO will
-
-///  always have a discrete darkening at the cube-corner junctions of a 2x2x2
-
-///  mass. AO is now supplied entirely by the fragment shader's
-
-///  `ComputeAmbientOcclusionVisibility` ray-cast AOCC, which evaluates sky
-
-///  visibility per-pixel from a stable face-plane origin and produces smooth
-
-///  cavity darkening without face-boundary seams.
 
 layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec3 outWorldPosition;
@@ -129,38 +93,13 @@ uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
     }
 }
 
-/// \brief A1 (4.1 greedy meshing):
-///
-/// \details
-/// scale the unit corner offset by the merged
-///  quad extents in the face's in-plane channels. `unitOffset.x/y/z` are 0
-
-///  or 1 (per existing `GetFaceCornerOffset`); the in-plane channels get
-
-///  multiplied by `quadExtents.x` (width = axisU) and `quadExtents.y`
-
-///  (height = axisV) respectively, while the normal-axis channel stays at
-
-///  its 0/1 value. For unit quads (W=H=1) this is a no-op.
 
 uvec3 ApplyGreedyScale(const uint faceIndex, const uvec3 unitOffset, const uvec2 quadExtents) {
     if (faceIndex == 0u || faceIndex == 1u) {
-        /// \brief Face 0/1 (X±):
-        ///
-        /// \details
-        /// in-plane = (Y, Z). axisU = Y, axisV = Z.
         return uvec3(unitOffset.x, unitOffset.y * quadExtents.x, unitOffset.z * quadExtents.y);
     } else if (faceIndex == 2u || faceIndex == 3u) {
-        /// \brief Face 2/3 (Y±):
-        ///
-        /// \details
-        /// in-plane = (X, Z). axisU = X, axisV = Z.
         return uvec3(unitOffset.x * quadExtents.x, unitOffset.y, unitOffset.z * quadExtents.y);
     } else {
-        /// \brief Face 4/5 (Z±):
-        ///
-        /// \details
-        /// in-plane = (X, Y). axisU = X, axisV = Y.
         return uvec3(unitOffset.x * quadExtents.x, unitOffset.y * quadExtents.y, unitOffset.z);
     }
 }
@@ -178,11 +117,6 @@ void main() {
     (localVoxelFace >> 8u) & 0xFFu,
     (localVoxelFace >> 16u) & 0xFFu);
 
-    /// \brief A1 (4.1 greedy meshing):
-    ///
-    /// \details
-    /// decode (width, height) of the merged quad.
-    ///  Unit quads carry (1, 1) and behave exactly like the pre-A1 path.
 
     const uvec2 quadExtents = uvec2(
     packedFace.packedExtents & 0xFFu,
@@ -199,23 +133,6 @@ void main() {
     outNormal = DecodeFaceNormal(faceIndex);
     outWorldPosition = worldPosition;
     outMaterialIndex = materialIndex;
-    /// \brief Per-vertex AO is now a no-op:
-    ///
-    /// \details
-    /// the AO term is supplied entirely by the
-    ///  fragment shader's `ComputeAmbientOcclusionVisibility` (per-pixel ray-cast
-
-    ///  AOCC, see voxel.frag), which has no face-boundary discontinuities and
-
-    ///  produces smooth cavity darkening for genuine concavities (e.g. a 1x1
-
-    ///  hole) while leaving flat voxel faces and convex cube corners at full
-
-    ///  brightness. The `inAmbientVisibility` interpolator is kept non-`flat` so
-
-    ///  a future per-vertex AO term can be re-introduced without re-plumbing
-
-    ///  the input layout.
 
     outAmbientVisibility = 1.0;
 }

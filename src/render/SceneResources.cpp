@@ -144,47 +144,6 @@ void RefreshSceneLightingBuffer(
 	StoreSunShadowCascadeProjections(render.currentSceneLighting, cascadeProjections);
 	render.currentSunShadowCascadeDiagnostics = cascadeProjections.diagnostics;
 	StoreSunShadowCascadeSplits(render.currentSceneLighting, render.currentSunShadowCascadeSplits);
-	/// \brief TAA fields:
-	///
-	/// \details
-	/// `taaParams` carries the runtime gate (`enabled` = 1 / 0), the
-	///  current-frame sub-pixel jitter in *pixel* units (jitterX/jitterY) and the
-
-	///  per-frame history blend factor. `prevViewProjectionMatrix` is the previous
-
-	///  frame's viewProjection, sampled from `render.taaPrevViewProjectionMatrix`
-
-	///  (FramePreparation stashes that *after* BuildGraphicsPushConstants so it
-
-	///  matches the matrix the voxel pass actually rendered with). `taaHistoryParams`
-
-	///  exposes texel size + a one-frame validity flag. The first frame is treated
-
-	///  as invalid because `taaPrevViewProjectionMatrix` is zero-initialised and
-
-	///  would reproject every fragment to a single pixel.
-
-	///  The taaHistoryParams texel-size cells default to 0 in this refresh path
-
-	///  because `RefreshSceneLightingBuffer` is only called from the CPU side
-
-	///  and has no direct view of the swapchain extent. The TAA resolve pass
-
-	///  (and the TAA contract documented in `VoxelSceneLighting`) treat 0-sized
-
-	///  texels as "skip the per-pixel reprojection step" and instead fall back
-
-	///  to a direct current-pixel sample, which is the correct behaviour on
-
-	///  frames where the swapchain is being recreated or the TAA path is
-
-	///  temporarily disabled. The actual texel size for the *next* frame is
-
-	///  patched in by `FramePreparation` via `UploadSceneFrameResources` once
-
-	///  the swapchain extent is known; until then this zeroed value is the
-
-	///  conservative correct choice.
 
 	render.currentSceneLighting.taaParams = {
 		render.taaJitterX,
@@ -193,41 +152,6 @@ void RefreshSceneLightingBuffer(
 		render.taaEnabled ? 1.0f : 0.0f,
 	};
 	render.currentSceneLighting.prevViewProjectionMatrix = render.taaPrevViewProjectionMatrix;
-	/// \brief 1.5 (and TAA fix in the same edit):
-	///
-	/// \details
-	/// the colour history
-	///  texel-size cells were previously left at 0 by this refresh
-
-	///  path; the comment claimed the size was "patched in by
-
-	///  FramePreparation via UploadSceneFrameResources" but no
-
-	///  such patch existed in the codebase, which meant the
-
-	///  `taa_resolve.frag` reprojection step ran with
-
-	///  `texelSize = (0, 0)` and silently fell back to the
-
-	///  "current-pixel-only" branch — the temporal blend was
-
-	///  effectively disabled even when the user said `TAA on`.
-
-	///  The fix is to populate the size here, since this function
-
-	///  already has the swapchain extent available in
-
-	///  `renderExtent`; the comment claiming a separate patch was
-
-	///  the symptom of the bug, not the bug itself. Same fix
-
-	///  applies to `taaLayerHistoryParams.xy` for the 1.5 layer
-
-	///  anti-flicker history (without the texel size, the layer
-
-	///  sampling would do `gl_FragCoord.xy * vec2(0)` and read
-
-	///  from a single texel, breaking the temporal blend).
 
 	const float texelX = renderExtent.width > 0u
 							 ? 1.0f / static_cast<float>(renderExtent.width)
@@ -634,95 +558,9 @@ bool UpdateSceneFrameChunkVisibility(
 		frameResources.chunkDescriptorCount > resultVisibleChunkCount
 			? frameResources.chunkDescriptorCount - resultVisibleChunkCount
 			: 0u;
-	/// \brief Stamp the cache with the just-rebuilt result, BUT only once
-	///
-	/// \details
-	///  the CPU can actually see the dispatch's face counts. On the
-
-	///  first two frames after startup `render.sceneOpaqueFaceCount`
-
-	///  (read into `frameResources.opaqueFaceCount` in
-
-	///  `UploadSceneFrameResources` from `chunkDescriptor.drawRanges[1]`)
-
-	///  is 0 because the voxel meshing compute has not yet written
-
-	///  anything the CPU can observe. If we stamped the cache in that
-
-	///  state, the miss path would persist `instanceCount = 0`
-
-	///  commands; the very next frame the dispatch would skip (its
-
-	///  per-frame `meshedSceneVersion` already matches
-
-	///  `sceneVoxelPayloadVersion`), the cache would HIT, and the
-
-	///  zero-instance commands would be `memcpy`'d back over the
-
-	///  indirect buffer forever — the swapchain would render with no
-
-	///  voxels drawn (just the clear-color sky) until a camera move
-
-	///  invalidated the cache hash and forced another miss-path read,
-
-	///  by which point the CPU could finally observe the dispatch's
-
-	///  real output. Gating on `opaqueFaceCount`/`transparentFaceCount
-
-	///  > 0` keeps the cache invalid until the GPU has actually
-
-	///  produced faces this generation, so the first validated stamp
-
-	///  happens on the frame where the miss path can read correct
-
-	///  values. Verified end-to-end via Tracy `Generated Opaque
-
-	///  Faces` plot (steps from 0 → 908 on the validation frame) and
-
-	///  by visual smoke: VoxelLab reference shot now renders the
-
-	///  world from frame 0 without any camera input.
 
 	const bool hasGeneratedFaces = frameResources.opaqueFaceCount > 0u ||
 								   frameResources.transparentFaceCount > 0u;
-	/// \brief `dirtyChunkCount > 0` means the voxel meshing compute will run
-	///
-	/// \details
-	///  for this frame's per-frame resource. In that case the
-
-	///  `chunkDescriptor.drawRanges` we just read is the *pre-dispatch*
-
-	///  state — the GPU hasn't run yet, and on the very first frame
-
-	///  after a world edit (or a startup frame) the read is the source
-
-	///  descriptor's `0` rather than the dispatch's real output. If we
-
-	///  stamped the cache in that state, the miss path would persist
-
-	///  `instanceCount = 0` (or any other stale pre-dispatch value) and
-
-	///  the next frame's `ApplyCached…` `memcpy` would pin those stale
-
-	///  commands into the indirect buffer for as long as the camera
-
-	///  hash holds — the user sees a voxel's face vanish forever after
-
-	///  breaking a neighbor (the cache only refreshes once a camera
-
-	///  move changes the hash, and by then the GPU has the right
-
-	///  output sitting in `drawRanges` but the cache is locked to
-
-	///  yesterday's instance count). Gating on `dirtyChunkCount == 0`
-
-	///  forces the next frame to take the miss path one more time, by
-
-	///  which point the dispatch's write is visible to the CPU (via
-
-	///  the per-frame resource rotation's 1-frame staleness window)
-
-	///  and the cache can validate with the real face count.
 
 	const bool dispatchDoneThisFrame = frameResources.dirtyChunkCount == 0u;
 	if (hasGeneratedFaces && dispatchDoneThisFrame) {
@@ -735,23 +573,6 @@ bool UpdateSceneFrameChunkVisibility(
 		cache.culledChunkCount = culledChunkCount;
 		cache.consecutiveHitCount = 0;
 	} else {
-		/// \brief CPU cannot yet observe any GPU-written face counts.
-		///
-		/// \details
-		/// If we
-		///  validated the cache here, every future frame would apply
-
-		///  the `instanceCount = 0` commands via `ApplyCached…` and
-
-		///  the swapchain would render empty until something else
-
-		///  (camera move, world edit) tripped the cache hash. Force
-
-		///  the next frame to take the miss path so it re-reads
-
-		///  `chunkDescriptor.drawRanges[1]` after the dispatch has had
-
-		///  a chance to populate it.
 
 		cache.valid = false;
 	}
@@ -1247,7 +1068,6 @@ bool CreateSceneResources(
 	render->sceneOpaqueFaceCount = 0;
 	render->sceneTransparentFaceCount = 0;
 	render->sceneTriangleCount = 0;
-	/// \brief Force the first frame on each swapchain image to upload descriptor layout/state once.
 	render->sceneUploadVersion = 1;
 	render->sceneVoxelPayloadVersion = 0;
 	render->latestVoxelPayloadChunkIndices.clear();
@@ -1309,10 +1129,6 @@ bool UpdateSceneResources(
 	render->pendingChunkRebuildIndices.clear();
 
 	if (!render->completedChunkRebuildIndices.empty()) {
-		/// \brief Per-voxel edits only change payload data plus the dirty chunks' non-air counts.
-		///
-		/// \details
-		///  Full descriptor reuploads would wipe GPU-generated drawRanges for every chunk.
 
 		++render->sceneVoxelPayloadVersion;
 	}

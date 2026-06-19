@@ -17,14 +17,6 @@ namespace {
 constexpr size_t kBatchSize = 300;
 constexpr uint32_t kVisibilityRuns = 5;
 
-/// \brief **xorshift32 LCG.** Same as the test harness'
-///
-/// \details
-///  `MakeTestWorld` PRNG; deterministic across runs and
-
-///  platforms (no `<random>` engine overhead, no
-
-///  threading concerns).
 
 struct Xorshift32 {
     uint32_t state = 0x9E3779B9u;
@@ -52,20 +44,6 @@ struct VisibilityFixture {
         VisibilityFixture f;
         Xorshift32 rng{seed};
 
-        /// \brief **300 AABBs in a 32×32 chunk grid centred on the
-        ///
-        /// \details
-        ///  origin.** Chunks are 8 units on a side; min corner
-
-        ///  spans (-128, -128, -128)..(128, 128, 128), with
-
-        ///  each chunk's Y range randomly within (-4, 12).
-
-        ///  Roughly 60% of the AABBs are world-space visible
-
-        ///  from a camera at (64, 64, 64) looking at the
-
-        ///  origin; the rest are far / behind.
 
         for (size_t i = 0; i < kBatchSize; ++i) {
             const int gx = static_cast<int>((i % 32u)) - 16;
@@ -80,16 +58,6 @@ struct VisibilityFixture {
             f.aabbMax[i] = projectv::math::Vec3{maxX, maxY, maxZ, 0.0f};
         }
 
-        /// \brief **5 visibility runs** with the camera at fixed
-        ///
-        /// \details
-        ///  position (64, 64, 64), looking at the origin, with
-
-        ///  varying yaw / pitch. FOV: 75° vertical, 100°
-
-        ///  horizontal (matches the engine default). Far plane:
-
-        ///  200 units.
 
         const std::array<float, kVisibilityRuns> yaws{
             0.0f, 0.45f, -0.45f, 1.10f, -1.10f};
@@ -122,25 +90,10 @@ struct VisibilityFixture {
             };
             f.parameters[r].cameraPositionAndMaxDistance =
                 projectv::math::Vec4{64.0f, 64.0f, 64.0f, 200.0f};
-            // EVIL: `0.829f` and `1.192f` are pre-computed
-            // `tan(halfFOV)` values for the engine's default
-            // 75° vertical / 100° horizontal FOV. The literals
-            // are not obvious without the derivation. A
-            // future refactor should compute them at fixture
-            // build time from the angle constants (so the
-            // comment is preserved as the source of truth) and
-            // assert the rounding matches `std::tan(deg2rad(37.5))`
-            // / `std::tan(deg2rad(50.0))` to within 1e-5.
             f.parameters[r].cameraForwardAndTanHalfVerticalFov =
                 projectv::math::Vec4{forward.x, forward.y, forward.z, 0.829f /*tan(39.7°)*/};
             f.parameters[r].cameraRightAndTanHalfHorizontalFov =
                 projectv::math::Vec4{right.x, right.y, right.z, 1.192f /*tan(50°)*/};
-            // EVIL: `0.5f` is the near plane distance in
-            // world units (matches `FramePreparation`'s
-            // `kCameraNearPlane` default). The literal is
-            // shared with `src/app/FramePreparation.cpp`'s
-            // near-plane construction. If the engine default
-            // changes, this benchmark fixture must follow.
             f.parameters[r].cameraUpAndNearPlane =
                 projectv::math::Vec4{up.x, up.y, up.z, 0.5f};
         }
@@ -290,12 +243,6 @@ static void BM_CAvx2(benchmark::State &state) {
 #endif
 
 int main(int argc, char *argv[]) {
-    /// \brief **Cross-check:** all three implementations must
-    ///
-    /// \details
-    ///  produce bit-identical visible masks for the same
-
-    ///  fixture. If any pair disagrees, fail loudly.
 
     {
         const VisibilityFixture fixture = VisibilityFixture::Make(0xC0FFEE01u);

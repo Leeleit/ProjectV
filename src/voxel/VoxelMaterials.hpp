@@ -59,11 +59,8 @@ static_assert(std::is_trivially_copyable_v<VoxelLightingDebugControls>);
 
 struct VoxelMaterialVisual {
 	std::array<float, 4> baseColor{};
-	/// \brief ambient occlusion, roughness, metallic, reflectance
 	std::array<float, 4> surface{};
-	/// \brief medium/scattering tint rgb, transmission
 	std::array<float, 4> medium{};
-	/// \brief fog factor, emissive strength, ambient response, direct diffuse response
 	std::array<float, 4> shading{};
 };
 static_assert(std::is_standard_layout_v<VoxelMaterialVisual>);
@@ -80,70 +77,22 @@ struct VoxelSceneLighting {
 	std::array<float, 4> groundColorAndFogMax{};
 	std::array<float, 4> sunColorAndIntensity{};
 	std::array<float, 4> sunDirectionAndWrap{};
-	/// \brief exposure, environment diffuse intensity, tone-map operator, lighting debug view
 	std::array<float, 4> postProcess{};
 	std::array<float, 4> sunShadowParams{};
-	/// \brief contact shadow strength, max distance, reserved, reserved
 	std::array<float, 4> sunContactShadowParams{};
-	/// \brief ambient occlusion strength, radius, minimum visibility, reserved
 	std::array<float, 4> ambientOcclusionParams{};
 	std::array<float, kSunShadowMatrixElementCount> sunShadowViewProjections{};
-	/// \brief white point, contrast, saturation, lift
 	std::array<float, 4> colorGrading{};
-	/// \brief metering mode, target scene key, minimum exposure, maximum exposure
 	std::array<float, 4> exposureControl{};
 	std::array<float, 4> shadowCascadeDepthSplits{};
-	/// \brief cascade blend fraction, first cascade near plane, reserved, reserved
 	std::array<float, 4> shadowCascadeBlendParams{};
-	/// \brief position xyz, radius
 	std::array<float, 4> localPointLightPositionAndRadius{};
-	/// \brief color rgb, intensity
 	std::array<float, 4> localPointLightColorAndIntensity{};
-	/// \brief enabled, source radius, shadow strength, shadow bias
 	std::array<float, 4> localPointLightParams{};
-	/// \brief TAA (Temporal Anti-Aliasing) contract.
-	///
-	/// \details
-	/// Layout byte-for-byte matches
-	///  the three shader-side `SceneLightingBuffer` declarations
-
-	///  (`voxel.frag`, `voxel_shadow.vert`, `voxel_mesh.comp`); see
-
-	///  `agent/decisions.md` §18 — `taaEnabled` is the runtime gate
-
-	///  (1.0 = on, 0.0 = off), `taaBlend` is the history blend factor
-
-	///  (lower = more ghosting, higher = less stable). `taaJitterX/Y` carry
-
-	///  the current-frame sub-pixel Halton offset in NDC. `prevViewProjectionMatrix`
-
-	///  is the previous frame's viewProjection, used by the TAA resolve pass to
-
-	///  reproject the current pixel into the history buffer. `taaHistoryParams`
-
-	///  exposes texel size + a one-frame validity flag set to 0 after
-
-	///  resize / world reload / preset change / pause.
 
 	std::array<float, 4> taaParams{};
 	projectv::math::Mat4 prevViewProjectionMatrix{};
-	/// \brief texel size x, texel size y, history valid (0/1), neighbourhood radius (1/3/5/7)
 	std::array<float, 4> taaHistoryParams{};
-	/// \brief 1.5 anti-flicker:
-	///
-	/// \details
-	/// per-layer temporal history parameters.
-	///  texel size x, texel size y, history valid (0/1), blend factor
-
-	///  (default 0.4 — `final = mix(raw, history, blend)`). Mirrors the
-
-	///  `taaHistoryParams` layout so the shader contract stays
-
-	///  predictable. Byte layout preserved as 16 B `vec4` after
-
-	///  `taaHistoryParams`; the new `static_assert` block below
-
-	///  confirms.
 
 	std::array<float, 4> taaLayerHistoryParams{};
 };

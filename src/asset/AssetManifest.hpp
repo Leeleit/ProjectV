@@ -20,10 +20,6 @@ struct ManifestEntry {
 
 std::vector<ManifestEntry> ParseAssetManifestString(const std::string &raw);
 
-/// \brief Reads the `PROJECTV_MODELS` environment variable and parses it.
-///
-/// \details
-///  Returns an empty vector if the variable is unset or empty.
 
 std::vector<ManifestEntry> ParseAssetManifestFromEnv();
 

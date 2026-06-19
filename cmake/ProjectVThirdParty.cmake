@@ -24,38 +24,8 @@ function(projectv_suppress_external_warnings directory_path)
             continue()
         endif ()
 
-        # **SYSTEM property (2026-06-18, windows-host-build-r0).**
-        # Per `AGENTS.md §7.2.7` no blanket `-Wno-X` suppressions
-        # belong on the consuming target. The clean cross-
-        # platform fix is to mark external headers as SYSTEM
-        # include directories — CMake (3.25+) propagates that
-        # via the `SYSTEM` target property, which makes the
-        # generator emit `-isystem` for GCC/Clang (warnings
-        # auto-suppressed) and `/external:I path` +
-        # `/external:W0` for MSVC (warnings in external
-        # headers auto-suppressed under Ninja + MSVC 16.10+).
-        # Works for INTERFACE / STATIC / SHARED / OBJECT
-        # / EXECUTABLE targets alike — the INTERFACE branch
-        # (was previously skipped) is exactly what we need for
-        # header-only libraries like `VulkanMemoryAllocator`
-        # and `fastgltf`, where the warning surfaces when the
-        # header is parsed inside a consumer TU rather than
-        # when the library itself is compiled.
         set_target_properties("${target_name}" PROPERTIES SYSTEM TRUE)
 
-        # **Legacy per-target warnings-as-errors gate
-        # (2026-06-15, windows-build-verification).** The
-        # `/W0` + `-w` blanket-suppress below is kept for
-        # projects that still configure against the old
-        # `PROJECTV_BUILD_*` / `MSVC` shape (e.g. when
-        # consuming ProjectV from a sibling workspace that
-        # has not yet picked up the CMake 3.25+ SYSTEM
-        # property). New builds should rely on the
-        # `SYSTEM` flag above and do not need this.
-        # `target_compile_options` / `target_compile_definitions`
-        # only accept INTERFACE scope on INTERFACE targets,
-        # so we branch on `target_type` to keep the call shape
-        # valid for header-only libraries too.
         if (target_type STREQUAL "INTERFACE_LIBRARY")
             set(_PROJECTV_PROP_SCOPE INTERFACE)
         else ()

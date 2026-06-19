@@ -22,9 +22,6 @@ struct TestContext {
 	}
 };
 
-// `CppDFAConstantParameter` false positive: see
-// `tests/AssetLoaderTests.cpp:27` for the same helper.
-// noinspection CppDFAConstantParameter
 bool ApproxEqual(const float a, const float b, const float epsilon = 1e-5f)
 {
 	return std::fabs(a - b) <= epsilon;

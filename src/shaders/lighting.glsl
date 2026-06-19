@@ -1,17 +1,3 @@
-// SPDX-License-Identifier: MIT
-// lighting.glsl — shared PBR direct-light math for the voxel pass
-// (`voxel.frag`) and the new model pass (`model.frag`). The actual
-// SceneLightingBuffer struct declaration stays per-shader for now
-// because `voxel.frag` and `voxel_shadow.vert` and `voxel_mesh.comp`
-// all carry their own byte-identical copy of the buffer (see
-// `agent/decisions.md` §18); pulling that declaration out of the
-// three `.frag`/`.vert`/`.comp` files is a separate refactor and
-// not in M4's scope. This file is just the math.
-
-// Schlick-GGX distribution, geometry, Smith, and Fresnel-Schlick
-// are the canonical direct-light PBR building blocks, lifted from
-// `voxel.frag` (lines 575-594 in the pre-M4 mainline) so the model
-// pass evaluates the same BRDF as the voxel pass.
 float ProjectV_DistributionGGX(const float nDotH, const float roughness) {
     const float alpha = roughness * roughness;
     const float alphaSq = alpha * alpha;
@@ -33,31 +19,6 @@ vec3 ProjectV_FresnelSchlick(const float cosTheta, const vec3 f0) {
     return f0 + (1.0 - f0) * pow(1.0 - clamp(cosTheta, 0.0, 1.0), 5.0);
 }
 
-/// \brief Wrapped-diffuse + GGX direct-light evaluation.
-///
-/// \details
-/// Inputs:
-///    lightDirection, lightRadiance -- the per-light L vector and
-
-///      incoming radiance (already attenuated for distance / cone
-
-///      falloff in the caller);
-
-///    normal, viewDirection -- world-space N and V;
-
-///    albedo, roughness, metallic, reflectance -- PBR surface;
-
-///    directDiffuseStrength -- authored diffuse response weight;
-
-///    diffuseWrap -- authored wrap parameter (0 = Lambert, >0 softens
-
-///      the terminator).
-
-///  Returns the unshadowed direct contribution. Shadow visibility is
-
-///  the caller's responsibility (voxel pass adds the CSM visibility
-
-///  term; the M4 model pass is unshadowed direct light only).
 
 vec3 ProjectV_EvaluateDirectLighting(
     const vec3 lightDirection,

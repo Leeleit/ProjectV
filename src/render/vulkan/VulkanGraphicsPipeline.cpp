@@ -17,25 +17,6 @@ constexpr VkDescriptorPoolSize kGraphicsStorageDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 	.descriptorCount = kGraphicsDescriptorSetCount * 5u,
 };
-/// \brief 1.5 anti-flicker:
-///
-/// \details
-/// bump the COMBINED_IMAGE_SAMPLER count from
-///  1 per frame to 2 per frame — binding 4 (sunShadowMap) and
-
-///  binding 6 (layerHistory) both need combined image samplers
-
-///  for the voxel pass. With `MAX_FRAMES_IN_FLIGHT = 2` the pool
-
-///  now needs `2 * 2 = 4` descriptors. The previous
-
-///  `descriptorCount = 1 * kGraphicsDescriptorSetCount = 2` was
-
-///  sized for the pre-1.5 single-sampler case and triggered
-
-///  validation `VUID-VkDescriptorPool-size-...` on the first
-
-///  `vkAllocateDescriptorSets` after binding 6 was added.
 
 constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -88,27 +69,6 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	/// \brief 1.5 anti-flicker:
-	///
-	/// \details
-	/// per-layer temporal history. The voxel pass
-	///  reads this at the current fragment UV, blends the freshly-
-
-	///  computed raw CTSH/AOCC/LOCL with the previous frame's
-
-	///  values, and uses the blended values for this frame's lighting.
-
-	///  The freshly-computed raw values are then written to
-
-	///  `outLayerMask` (Location 2 MRT output) and copied to this
-
-	///  history at end of frame. The previous-frame TAA colour
-
-	///  history is read-only inside the resolve pass and lives
-
-	///  outside the graphics descriptor set, so this binding
-
-	///  is the voxel pass's only layer-history access point.
 
 	VkDescriptorSetLayoutBinding{
 		.binding = 6,
@@ -220,23 +180,6 @@ bool SupportsSampledImage(const VkPhysicalDevice physicalDevice, const VkFormat 
 
 VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 {
-	/// \brief Mirrors `ChooseShadowDepthFormat`:
-	///
-	/// \details
-	/// the depth image is now also
-	///  bound as a `COMBINED_IMAGE_SAMPLER` by the TAA resolve pass
-
-	///  (binding 2 in `TaaResolvePipeline.cpp`), so the chosen format
-
-	///  must support `SAMPLED_IMAGE_BIT` in addition to
-
-	///  `DEPTH_STENCIL_ATTACHMENT_BIT`. Rejecting formats that lack
-
-	///  sampled-image support fails fast here instead of silently
-
-	///  selecting a stencil layout that the shadow path would later
-
-	///  reject at `vkCreateImageView` time.
 
 	constexpr std::array candidates{
 		VK_FORMAT_D32_SFLOAT,
@@ -1163,31 +1106,6 @@ bool RefreshGraphicsResourceBindings(
 			.imageView = render->shadowImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
 		};
-		/// \brief 1.5 anti-flicker:
-		///
-		/// \details
-		/// layer history. Uses the same linear
-		///  sampler as the colour history (the resolve pass and
-
-		///  other consumers also share this sampler). The voxel
-
-		///  pass uses the texture's texel size from
-
-		///  `VoxelSceneLighting.taaLayerHistoryParams.xy` to step
-
-		///  the read UV, not the sampler's filtering mode, so
-
-		///  `LINEAR` / `NEAREST` is a non-issue for the layer
-
-		///  history read; we keep the project's shared sampler
-
-		///  for consistency. `SHADER_READ_ONLY_OPTIMAL` matches
-
-		///  the layout the layer history is in after the per-
-
-		///  frame `vkCmdCopyImage` (history copy block in
-
-		///  `Renderer.cpp`).
 
 		const VkDescriptorImageInfo layerHistoryImageInfo{
 			.sampler = render->taaLinearSampler,
@@ -1269,11 +1187,6 @@ bool RefreshGraphicsResourceBindings(
 				.pBufferInfo = &chunkVoxelPayloadBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
-			/// \brief 1.5 anti-flicker:
-			///
-			/// \details
-			/// per-layer temporal history (binding 6).
-			///  See `kGraphicsDescriptorBindings` for the contract.
 
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1720,18 +1633,6 @@ bool CreateGraphicsPipeline(
 	rasterizer.cullMode = VK_CULL_MODE_NONE;
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	VkPipelineRasterizationStateCreateInfo shadowRasterizer = rasterizer;
-	/// \brief Shadow camera looks from the light toward the scene, so a face whose normal points
-	///
-	/// \details
-	///  away from the light is a *back* face from the main pass's view, but a *front* face
-
-	///  from the shadow pass's view. With VK_CULL_MODE_BACK_BIT inherited from the main
-
-	///  rasterizer, the shadow pass culls faces that it actually needs to write, which
-
-	///  produces a checkerboard of holes in the shadow map and shows up as stair-stepped
-
-	///  patches in the receiver pass. Disable face culling for the shadow pass.
 
 	shadowRasterizer.cullMode = VK_CULL_MODE_NONE;
 	shadowRasterizer.depthBiasEnable = VK_TRUE;
@@ -1762,36 +1663,6 @@ bool CreateGraphicsPipeline(
 		VK_COLOR_COMPONENT_G_BIT |
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
-	/// \brief The third slot of the dual-format pipeline is unused at the
-	///
-	/// \details
-	///  shader level in the TAA-on variant (TAA-on writes to Location
-
-	///  1 only, the per-frame `VkRenderingAttachmentInfo` for slot 2
-
-	///  can be `VK_NULL_HANDLE`), but the pipeline still has to
-
-	///  declare all 3 slots so VUID-VkGraphicsPipelineCreateInfo-renderPass-06055
-
-	///  (`pColorBlendState->attachmentCount == colorAttachmentCount`)
-
-	///  is satisfied and `dynamicRenderingUnusedAttachments` lets
-
-	///  the per-frame `imageView` go null on any unused slot.
-
-	///  VUID-VkPipelineColorBlendStateCreateInfo-pAttachments-00605
-
-	///  requires all entries to be identical when `independentBlend`
-
-	///  is not enabled, so all three slots point at the same blend
-
-	///  state. The third (1.5 layer history) slot uses a write mask
-
-	///  of `0xF` even though the layer mask only carries meaningful
-
-	///  data in the RGB channels; writing to alpha (the reserved 1.0
-
-	///  channel) is a no-op since the value is constant.
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachments[3] = {
 		colorBlendAttachment,
@@ -1923,40 +1794,6 @@ bool CreateGraphicsPipeline(
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelShadowPipelineLayout");
 
-	/// \brief The main voxel pipeline declares two color attachment formats so the
-	///
-	/// \details
-	///  same pipeline can drive both the TAA-on path (render to slot 1 =
-
-	///  TAA offscreen target, slot 0 = NULL) and the TAA-off path (render
-
-	///  to slot 0 = swapchain, slot 1 = NULL). The TAA offscreen format
-
-	///  is consumed from the same `kTaaSceneColorFormat` constant that
-
-	///  the image allocator in `TaaRenderTargets.cpp` uses, so the
-
-	///  pipeline declaration and the actual `VkImage` format cannot
-
-	///  drift. The ability to bind with `imageView = VK_NULL_HANDLE` on
-
-	///  the unused slot requires the `dynamicRenderingUnusedAttachments`
-
-	///  feature, enabled by `VK_EXT_dynamic_rendering_unused_attachments`
-
-	///  in `VulkanBootstrap.cpp::InitializeVulkanBase`. Without that
-
-	///  feature the pipeline declaration itself is still valid (formats
-
-	///  can be `VK_FORMAT_UNDEFINED` for unused slots) but the per-frame
-
-	///  `VkRenderingAttachmentInfo::imageView` would have to match, which
-
-	///  would force a second pipeline variant. We fail fast on devices
-
-	///  that lack the feature so the failure mode is a clear init error
-
-	///  rather than a runtime VUID every frame.
 
 	if (!context->supportsDynamicRenderingUnusedAttachments) {
 		LogGraphicsPipelineTextFailure(
@@ -1968,27 +1805,6 @@ bool CreateGraphicsPipeline(
 	const VkFormat mainColorAttachmentFormats[3] = {
 		swapchain->format,
 		projectv::taa::kTaaSceneColorFormat,
-		/// \brief 1.5 anti-flicker:
-		///
-		/// \details
-		/// per-layer temporal mask (R8G8B8A8_UNORM,
-		///  4 B/pixel). The voxel pass writes the raw per-layer values
-
-		///  (CTSH, AOCC, LOCL) here; the next frame samples them as
-
-		///  `sampler2D layerHistory` (binding 6) for temporal blending.
-
-		///  `dynamicRenderingUnusedAttachments` allows the per-frame
-
-		///  `VkRenderingAttachmentInfo::imageView` to be
-
-		///  `VK_NULL_HANDLE` for slots the current variant doesn't
-
-		///  actually write to (TAA-on skips slot 0, TAA-off skips
-
-		///  slot 1), so the same pipeline declaration works for
-
-		///  both shader variants.
 
 		projectv::taa::kTaaLayerHistoryColorFormat,
 	};

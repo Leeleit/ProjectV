@@ -237,7 +237,6 @@ bool ApplyAnchoredPaintInteraction(
 	VoxelWorld &world,
 	const InteractionState &interaction)
 {
-	/// \brief Caller only reaches this helper for a concrete hit and a non-air placement material.
 	if (!interaction.mutationAnchorValid) {
 		return false;
 	}

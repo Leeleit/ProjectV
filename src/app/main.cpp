@@ -56,21 +56,6 @@ int RebuildAllShadersFromDisk()
 {
 	int reloadedCount = 0;
 
-	/// \brief 1.
-	///
-	/// \details
-	/// The `Shaders` custom target in `src/CMakeLists.txt:78` depends on
-	///     the source `.comp` / `.frag` / `.vert` files. Re-invoking
-
-	///     `cmake --build` for that target is the canonical way to refresh
-
-	///     the `.spv` outputs. The user's environment has `glslc`
-
-	///     available; the build host uses the same compiler at build time
-
-	///     and at run time, so re-compiled `.spv` are byte-stable enough
-
-	///     for a runtime pipeline-recreate.
 
 	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
 	if (buildDir == nullptr) {
@@ -86,15 +71,6 @@ int RebuildAllShadersFromDisk()
 		++reloadedCount;
 	}
 
-	/// \brief 2.
-	///
-	/// \details
-	/// Recreate the ray-march pass so the freshly compiled compute
-	///     shader is re-bound next frame. Other pipelines keep their
-
-	///     cached shader modules until a fuller pipeline-recreate slice
-
-	///     lands.
 
 	projectv::render::RequestRayMarchPipelineRecreate();
 
@@ -151,19 +127,6 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 		return false;
 	}
 
-	/// \brief M5.1b follow-up:
-	///
-	/// \details
-	/// lift the loaded `modelInstances` to sit
-	///  cleanly on top of the voxel floor instead of half-submerged
-
-	///  in it (the "half in textures" symptom after the
-
-	///  `box.glb@0,1,0` env-var spawn). Idempotent + cheap
-
-	///  (one `GetVoxelMaterial` probe per AABB sample); safe to
-
-	///  re-run on every world reload / preset switch.
 
 	projectv::asset::SnapModelInstancesAboveGroundDispatch(*world->voxelWorld, &state->render);
 
@@ -406,25 +369,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		SDL_Log("[ProjectV][Audio] miniaudio init failed; running without music");
 		state->audio.reset();
 	} else {
-		/// \brief First playlist scan.
-		///
-		/// \details
-		/// `loadMusicFolder` now
-		///  returns `std::expected<size_t, AudioLoadError>`.
-
-		///  `.value_or(0)` preserves the historical "0 is
-
-		///  valid" contract: an empty folder (or a
-
-		///  `create_directories` failure the caller chose
-
-		///  to fall through) yields 0 tracks and the engine
-
-		///  is still alive. The operator can drop a file
-
-		///  in the folder and the next 5-second tick will
-
-		///  pick it up — no app restart required.
 
 		const size_t trackCount = state->audio->loadMusicFolder(
 			projectv::audio::GetMusicDirectoryPath()).value_or(0);
@@ -466,9 +410,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	}
 
 	*appstate = state.release();
-	// noinspection CppDFAMemoryLeak
-	// Same AudioEngine ownership handoff as in `SDL_AppInit` —
-	// DFA doesn't see the `SDL_AppQuit` -> `delete state` path.
 	return SDL_APP_CONTINUE;
 }
 
@@ -524,12 +465,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 				modeName,
 				cycleIndex + 1u,
 				cycleSize);
-			/// \brief Force a swapchain rebuild so the new
-			///
-			/// \details
-			///  mode takes effect immediately, not on
-
-			///  the next natural recreate.
 
 			if (!RecreateSwapchain(
 					&state->platform,

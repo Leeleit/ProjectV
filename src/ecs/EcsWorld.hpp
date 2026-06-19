@@ -1,13 +1,6 @@
 #pragma once
 
-// noinspection CppUnusedIncludeDirective
-// `<cstddef>` provides `size_t` for `GetEcsWorldChunkSummary`'s
-// `size_t *outChunkEntityCount` out-parameter.
 #include <cstddef>
-// noinspection CppUnusedIncludeDirective
-// `<cstdint>` provides `uint64_t` for the three `Get*EntityId`
-// helpers. JetBrains' indexer doesn't see the use through the
-// forward-declared pointer / return-type signatures.
 #include <cstdint>
 
 struct AppState;

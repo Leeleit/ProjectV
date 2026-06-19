@@ -14,40 +14,8 @@ constexpr VkFormat kModelVertexPositionFormat = VK_FORMAT_R32G32B32_SFLOAT;
 constexpr VkFormat kModelVertexNormalFormat = VK_FORMAT_R32G32B32_SFLOAT;
 constexpr VkFormat kModelVertexUvFormat = VK_FORMAT_R32G32_SFLOAT;
 
-/// \brief The model pass reuses the same 128-byte push constant range as
-///
-/// \details
-///  the main graphics pipeline (`GraphicsPushConstants` in
-
-///  `core/Types.hpp`): `viewProjection` at offset 0, four other
-
-///  vec4 fields in the middle (cameraPosition/cameraForward/
-
-///  worldMinAndChunkSize/chunkGridAndFlags), and our
-
-///  `modelTransform` packed into the trailing 64 bytes. The shader
-
-///  only reads the first 64 bytes and the last 64 bytes, so the
-
-///  middle 64 bytes are not meaningful for the model pass — we just
-
-///  don't write them.
 
 struct ModelPushConstants {
-	/// \brief Fields are not accessed from C++ — they exist solely to give
-	///
-	/// \details
-	///  the struct a known size for the SPIR-V `PushConstant` block.
-
-	///  The shader reads the first 64 bytes (viewProjection) and the
-
-	///  last 64 bytes (modelTransform) but C++ never touches them.
-
-	///  `[[maybe_unused]]` makes the field-use intent obvious to the
-
-	///  compiler (suppresses -Wunused-private-field) and to IDE DFA
-
-	///  analyses that flag "field is never used".
 
 	[[maybe_unused]] std::array<float, 16> viewProjection{};
 	[[maybe_unused]] std::array<float, 16> modelTransform{};
@@ -180,28 +148,6 @@ bool CreateModelPipeline(
 	rasterizer.depthBiasEnable = VK_FALSE;
 
 	VkPipelineMultisampleStateCreateInfo multisampling{
-		/// \brief Same Windows clang-cl designated-init rationale as
-		///
-		/// \details
-		///  above. `.sampleShadingEnable` is `VK_FALSE` here
-
-		///  because the model pass is single-sample (1x MSAA),
-
-		///  so `.minSampleShading` is ignored by the driver
-
-		///  (set to `0.0f` for completeness — Vulkan says it
-
-		///  is only meaningful when `.sampleShadingEnable` is
-
-		///  `VK_TRUE`). `.pSampleMask` is `nullptr` and
-
-		///  `.alphaToCoverageEnable` / `.alphaToOneEnable`
-
-		///  are `VK_FALSE` for the same reason — single-sample
-
-		///  MSAA does not need a per-sample coverage mask or
-
-		///  alpha-to-coverage / alpha-to-one conversion.
 
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.pNext = nullptr,
@@ -222,33 +168,6 @@ bool CreateModelPipeline(
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
 
-	/// \brief M5.2 follow-up fix:
-	///
-	/// \details
-	/// the dual-MRT rendering info above
-	///  (2 attachments) requires a matching `attachmentCount` on
-
-	///  `VkPipelineColorBlendStateCreateInfo` per Vulkan spec
-
-	///  VUID-VkGraphicsPipelineCreateInfo-renderPass-06055. Both
-
-	///  blend attachments are configured the same way (no blend,
-
-	///  all color channels written) because the model pass uses
-
-	///  opaque writes — slot 0 (swapchain / TAA-off `outColor`) and
-
-	///  slot 1 (TAA scene color / TAA-on `outSceneColor`) only ever
-
-	///  receive one of the two at runtime, with the other slot
-
-	///  bound as `VK_NULL_HANDLE` via the per-frame
-
-	///  `VkRenderingAttachmentInfo::imageView`. The first attachment's
-
-	///  state is the existing `colorBlendAttachment`; the second is
-
-	///  an identical copy.
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -277,65 +196,10 @@ bool CreateModelPipeline(
 	pushRange.offset = 0;
 	pushRange.size = sizeof(ModelPushConstants);
 
-	/// \brief The model pass reuses the SAME `VkPipelineLayout` as the main
-	///
-	/// \details
-	///  graphics pipeline (`render->graphicsPipelineLayout`). This
-
-	///  keeps the `graphicsDescriptorSet` bound across the opaque,
-
-	///  model, and transparent passes (the validation layer otherwise
-
-	///  flags `set 0 is not compatible with the VkPipelineLayout` on
-
-	///  every `vkCmdDrawIndexed` after the pipeline switch). The shared
-
-	///  layout already declares the push constant range we need
-
-	///  (`size = 128`, `offset = 0`, `VERTEX|FRAGMENT` stages), so
-
-	///  `model.vert` reads `viewProjection` (offset 0) and
-
-	///  `modelTransform` (offset 64) the same way the voxel pass
-
-	///  reads `GraphicsPushConstants`.
 
 
 	VkPipelineRenderingCreateInfo renderingInfo{};
 	renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-	/// \brief M5.2 follow-up fix:
-	///
-	/// \details
-	/// model pipeline uses the *same* dual-MRT
-	///  attachment layout as the main graphics pipeline
-
-	///  (`VulkanGraphicsPipeline.cpp:1792-1802`). Slot 0 is the swapchain
-
-	///  (TAA-off output of `voxel.frag` / `model.frag`), slot 1 is the
-
-	///  TAA-on output (`outSceneColor` at Location 1 in
-
-	///  `voxel.frag:78` / `model.frag:33`). The previous single-attachment
-
-	///  declaration silently dropped the Location 1 write when the
-
-	///  model pipeline ran inside the main pass's
-
-	///  `vkCmdBeginRendering(...)` (which has 2 attachments), so with TAA
-
-	///  on the model color never reached `taaSceneColorTarget` and the
-
-	///  resolve pass sampled an empty image at model pixels — model
-
-	///  appeared invisible despite the M5.2 color-distance rejection
-
-	///  being correctly raised. `VK_KHR_dynamic_rendering_unused_
-
-	///  attachments` allows the rendering to have more attachments
-
-	///  than the pipeline declares, but NOT the inverse — the
-
-	///  pipeline must declare every format it writes to.
 
 	const VkFormat modelColorAttachmentFormats[2] = {
 		colorFormat,
@@ -367,30 +231,9 @@ bool CreateModelPipeline(
 		runtime::LogRuntimeFailure("Model", "CreateModelPipeline.vkCreateGraphicsPipelines", "model pipeline creation failed");
 		return false;
 	}
-	/// \brief The model pipeline reuses the main `graphicsPipelineLayout`; no
-	///
-	/// \details
-	///  separate layout to clean up here. `render->modelPipelineLayout`
-
-	///  is intentionally left as `VK_NULL_HANDLE` so the destructor
-
-	///  short-circuits the layout-free call below.
 
 	render->modelPipelineLayout = VK_NULL_HANDLE;
 
-	/// \brief TAA-on variant:
-	///
-	/// \details
-	/// the only difference is the fragment shader
-	///  module. The shader contract difference is purely "writes to
-
-	///  outSceneColor (Location 1) instead of outColor (Location 0)"
-
-	///  so the model pass lands on the same color attachment the TAA
-
-	///  resolve pass then samples. The rest of the pipeline is
-
-	///  identical.
 
 	std::vector<char> fragmentShaderCodeTaaOn = ReadShaderFile("model.frag.taa_on.spv");
 	VkShaderModule fragmentModuleTaaOn = CreateModelShaderModule(
@@ -408,12 +251,6 @@ bool CreateModelPipeline(
 	}
 	const std::array stagesTaaOn{
 		VkPipelineShaderStageCreateInfo{
-			/// \brief Same Windows clang-cl pNext / flags /
-			///
-			/// \details
-			///  pSpecializationInfo rationale as the first
-
-			///  `stages` block above.
 
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.pNext = nullptr,
@@ -472,10 +309,6 @@ void DestroyModelPipeline(VulkanContextState *context, RenderState *render)
 		vkDestroyPipeline(context->device, render->modelPipelineTaaOn, nullptr);
 		render->modelPipelineTaaOn = VK_NULL_HANDLE;
 	}
-	/// \brief The model pipeline reuses the main `graphicsPipelineLayout`; do
-	///
-	/// \details
-	///  not destroy it here (DestroyGraphicsPipeline owns its lifetime).
 
 }
 

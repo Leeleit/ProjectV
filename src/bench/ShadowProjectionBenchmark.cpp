@@ -12,16 +12,6 @@
 
 namespace {
 
-/// \brief **Test fixture builder.** Lifted from
-///
-/// \details
-///  `tests/VoxelWorldTests.cpp::MakeTestWorld` (the
-
-///  internal helper). The benchmark owns its own copy
-
-///  to avoid coupling the `bench/` directory to the
-
-///  `tests/` directory's internal headers.
 
 VoxelWorld BuildBenchmarkWorld() {
 	VoxelWorld world{};
@@ -43,22 +33,6 @@ VoxelWorld BuildBenchmarkWorld() {
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
 		static_cast<size_t>(world.chunkCountZ));
-	/// \brief **Voxelise the floor.** Y=0 is the floor layer;
-	///
-	/// \details
-	///  we mark it `FloorWhite` so
-
-	///  `BuildSunShadowProjection` finds non-trivial
-
-	///  scene bounds via `TryGetActiveSceneBounds`.
-
-	///  Without any solid voxels, the helper would
-
-	///  short-circuit to the `min/max` world bounds,
-
-	///  which is a degenerate path we don't want to
-
-	///  measure here.
 
 	for (int x = 0; x < world.width; ++x) {
 		for (int z = 0; z < world.depth; ++z) {
@@ -71,20 +45,6 @@ VoxelWorld BuildBenchmarkWorld() {
 			world.voxels[index] = static_cast<uint8_t>(VoxelMaterial::FloorWhite);
 		}
 	}
-	/// \brief **Populate chunk metadata.** The shadow helper
-	///
-	/// \details
-	///  iterates `world.chunks` to compute its bounds;
-
-	///  a chunk with `nonAirVoxelCount == 0` is treated
-
-	///  as empty. We need to set the Y=0 floor chunks'
-
-	///  `min` / `maxExclusive` to the chunk's voxel
-
-	///  extent and `nonAirVoxelCount` to a non-zero
-
-	///  value so the bounds accumulator finds them.
 
 	for (int chunkZ = 0; chunkZ < world.chunkCountZ; ++chunkZ) {
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
@@ -97,14 +57,6 @@ VoxelWorld BuildBenchmarkWorld() {
 					static_cast<size_t>(world.chunkCountX) +
 					static_cast<size_t>(chunkX);
 				VoxelChunk &chunk = world.chunks[chunkIndex];
-				/// \brief `chunk.min` is the chunk's world-space
-				///
-				/// \details
-				///  minimum corner. The world origin is
-
-				///  at `world.min`, so chunk 0 has
-
-				///  min = world.min.
 
 				chunk.min = Int3{
 					world.min.x + chunkX * world.chunkSize,
@@ -116,12 +68,6 @@ VoxelWorld BuildBenchmarkWorld() {
 					chunk.min.z + world.chunkSize};
 				chunk.nonAirVoxelCount = 0u;
 				if (chunkY == 0) {
-					/// \brief The Y=0 floor layer has
-					///
-					/// \details
-					///  non-air voxels (the
-
-					///  voxelise-floor loop above).
 
 					chunk.nonAirVoxelCount = static_cast<uint32_t>(world.chunkSize) * static_cast<uint32_t>(world.chunkSize);
 				}
@@ -146,20 +92,6 @@ static void BM_BuildSunShadowProjection(benchmark::State &state) {
 	state.SetLabel("BuildSunShadowProjection (per-frame shadow VP)");
 }
 
-/// \brief **Cascade splits benchmark.** `BuildSunShadowCascadeSplits`
-///
-/// \details
-///  is the other shadow-projection hot path — called once
-
-///  per `FramePreparation` to compute the
-
-///  `SunShadowCascadeSplits` for the cascaded shadow map.
-
-///  The cost is dominated by `std::pow` (logarithmic
-
-///  depth distribution); the benchmark tracks that cost
-
-///  across refactors.
 
 static void BM_BuildSunShadowCascadeSplits(benchmark::State &state) {
 	for (auto _ : state) {

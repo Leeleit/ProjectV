@@ -391,19 +391,6 @@ bool UpdateApp(
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleDirtyChunkOverlay)) {
 		debug->showDirtyChunkOverlay = !debug->showDirtyChunkOverlay;
 	}
-	/// \brief 5.2 debug gizmos:
-	///
-	/// \details
-	/// cascade split planes + cursor hit normal.
-	///  Both overlays follow the same hotkey-on/visibility-on pair
-
-	///  already used for chunk bounds / dirty chunk overlay: the
-
-	///  key only flips the flag, the actual emission gate is in
-
-	///  `BuildDebugOverlayBoxes` and additionally requires
-
-	///  `debug->hudVisible` to be true.
 
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleCascadeSplitPlanes)) {
 		debug->showCascadeSplitPlanes = !debug->showCascadeSplitPlanes;
@@ -424,37 +411,9 @@ bool UpdateApp(
 		world->voxelWorld) {
 		render->taaEnabled = !render->taaEnabled;
 		render->taaHistoryValid = false;
-		/// \brief 1.5 — same reset for the layer history pair.
-		///
-		/// \details
-		/// Toggling
-		///  TAA on/off should also drop the layer history (same
-
-		///  underlying reason — the next frame's blending would
-
-		///  be against stale per-layer data from before the
-
-		///  toggle).
 
 		render->taaLayerHistoryValid = false;
 	}
-	/// \brief TAA tuning ladder:
-	///
-	/// \details
-	/// 4 live parameters behind `;`/`'`/`-`/`=`/`,`/`.`.
-	///  Jitter scale is a continuous multiplier in [0, 2] (step 0.25) on the
-
-	///  Halton(2,3) output; blend is the per-frame history weight in [0, 1]
-
-	///  (step 0.05); neighbourhood radius cycles through 1/3/5/7 for the
-
-	///  history clamp in `taa_resolve.frag`; history-invalidate forces one
-
-	///  frame of `taaHistoryValid=false` so the next resolve takes the current
-
-	///  scene as the only sample. All four invalidate history on change so
-
-	///  the next frame uses the new blend/jitter/radius cleanly.
 
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaJitterScale)) {
 		render->taaJitterScale = std::clamp(render->taaJitterScale - 0.25f, 0.0f, 2.0f);
@@ -477,11 +436,6 @@ bool UpdateApp(
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
-		/// \brief Cycle 1 -> 3 -> 5 -> 7 -> 1.
-		///
-		/// \details
-		/// The shader clamps to the same
-		///  1/3/5/7 set, so odd values outside that set won't be applied.
 
 		constexpr std::array kNeighbourhoodCycle{1, 3, 5, 7};
 		const auto current = std::ranges::find(
@@ -498,33 +452,10 @@ bool UpdateApp(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::InvalidateTaaHistory)) {
 		render->taaHistoryValid = false;
-		/// \brief 1.5 — `.` invalidates both the colour and layer
-		///
-		/// \details
-		///  history. The user's intent is "reset all TAA
-
-		///  history so the next frame starts fresh"; dropping
-
-		///  just the colour would leave the layer history
-
-		///  stale and the voxel pass would blend against
-
-		///  pre-invalidated data.
 
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTimeScale)) {
-		/// \brief `[` halves the time scale.
-		///
-		/// \details
-		/// Below 0.01 it snaps to
-		///  0 so the user gets a discrete "pause" stop
-
-		///  (paired with `]` to escape the snap), avoiding
-
-		///  the operator nudging toward 0.001 and wondering
-
-		///  why the sim crawled.
 
 		constexpr float kTimeScaleDownStep = 0.5f;
 		constexpr float kTimeScaleSnapToZeroThreshold = 0.01f;
@@ -534,23 +465,6 @@ bool UpdateApp(
 		}
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTimeScale)) {
-		/// \brief `]` doubles the time scale.
-		///
-		/// \details
-		/// `timeScale == 0` is
-		///  the only stop that "doubling" can't escape on its
-
-		///  own (`0 * 2 = 0`), so the handler additionally
-
-		///  bounces out of zero to the smallest non-zero
-
-		///  value in the ladder (0.5, the result of one `]`
-
-		///  press from 0.25; for one `]` press from 0.0 the
-
-		///  ladder is just `0.5`). This matches the symmetric
-
-		///  `[` handler snapping to 0 below 0.01.
 
 		constexpr float kTimeScaleUpStep = 2.0f;
 		constexpr float kTimeScaleSnapFromZeroTarget = 0.5f;
@@ -562,45 +476,10 @@ bool UpdateApp(
 		simulation->timeScale = std::min(simulation->timeScale, 4.0f);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ResetTimeScale)) {
-		/// \brief `` ` `` resets `timeScale` to 1.0 (realtime).
-		///
-		/// \details
-		/// Note
-		///  this leaves `simulation->paused` untouched —
-
-		///  `timeScale` and `paused` are orthogonal axes, so
-
-		///  resetting one does not reset the other. If the
-
-		///  operator wants to fully resume after stepping
-
-		///  through a frame, they press `P` to unpause and
-
-		///  then `` ` `` to reset time-scale.
 
 		simulation->timeScale = 1.0f;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::StepSingleFrame)) {
-		/// \brief `\` queues exactly one fixed-step tick,
-		///
-		/// \details
-		///  regardless of `paused` and regardless of the
-
-		///  current accumulator. Consumed at the top of
-
-		///  the accumulator block below — see
-
-		///  `effectivePaused` derivation and the
-
-		///  `simulationAccumulatorSeconds = fixedDelta`
-
-		///  override. The flag is read-then-cleared, so
-
-		///  back-to-back presses translate to "one tick
-
-		///  per press" even when the per-frame loop
-
-		///  processes a tick faster than `UpdateApp` returns.
 
 		simulation->frameStepRequested = true;
 	}
@@ -651,17 +530,6 @@ bool UpdateApp(
 		if (ConsumeInputActionPressed(*input, InputAction::PreviousMusicTrack)) {
 			audio->previousTrack();
 		}
-		/// \brief Per-frame tick:
-		///
-		/// \details
-		/// 5-second playlist refresh
-		///  + "current track removed" handling.
-
-		///  Cheap when `m_lastPlaylistRefresh` is
-
-		///  recent (just one `steady_clock::now()`
-
-		///  call).
 
 		audio->tick();
 	}
@@ -707,23 +575,6 @@ bool UpdateApp(
 		!world->scenePresetReloadRequested &&
 		!world->snapshotLoadRequested;
 
-	/// \brief Apply `timeScale` to the per-frame delta.
-	///
-	/// \details
-	/// Default 1.0
-	///  is a no-op; at 0 the delta is 0 and the accumulator
-
-	///  does not advance, but the renderer and input replay
-
-	///  recording still see the unscaled clock. The scaling
-
-	///  is applied after `ComputeFrameDeltaSeconds` so the
-
-	///  `framesPerSecond` / `frameTimeMilliseconds` stats
-
-	///  below still report the wall-clock frame time (not
-
-	///  the scaled sim time).
 
 	simulation->frameDeltaSeconds *= simulation->timeScale;
 
@@ -736,18 +587,6 @@ bool UpdateApp(
 	}
 
 	if (frameStepRequestedNow) {
-		/// \brief One forced fixed tick this frame, regardless of
-		///
-		/// \details
-		///  the unscaled accumulator. Override after the
-
-		///  scaling above so a non-zero `timeScale` doesn't
-
-		///  double-apply — we want exactly one step, not
-
-		///  one step + whatever fractional remainder the
-
-		///  scaled delta accumulated.
 
 		simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds;
 	} else if (!effectivePaused) {
@@ -764,12 +603,6 @@ bool UpdateApp(
 			UpdateFluidCA(*world->voxelWorld);
 		}
 	} else if (effectivePaused) {
-		/// \brief On pause, drop the partial accumulator so the
-		///
-		/// \details
-		///  next unpaused frame doesn't immediately fire
-
-		///  multiple ticks to "catch up".
 
 		simulation->fluidAccumulatorSeconds = 0.0f;
 	}
@@ -925,17 +758,6 @@ bool UpdateApp(
 	debug->stats.walkAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics);
 	debug->stats.walkAutoJumpDelayEnabled = IsPhysicsWalkAutoJumpDelayEnabled(physics);
 	debug->stats.simulationPaused = simulation->paused;
-	/// \brief Frame-step / slow-motion mirrors.
-	///
-	/// \details
-	/// `simulationFrameStepPending`
-	///  is set to the pre-clear value of
-
-	///  `simulation->frameStepRequested` so the HUD and capture
-
-	///  sidecar see the indicator during the same frame the
-
-	///  accumulator override consumed the request.
 
 	debug->stats.simulationTimeScale = simulation->timeScale;
 	debug->stats.simulationFrameStepPending = frameStepRequestedNow;
@@ -1010,19 +832,6 @@ bool UpdateApp(
 	debug->stats.taaCasSharpnessMax = render->taaCasSharpnessMax;
 	debug->stats.taaCameraCutCount = render->taaCameraCutCount;
 	debug->stats.taaCameraCutMaxDelta = render->taaCameraCutMaxDelta;
-	/// \brief 1.5 anti-flicker mirror.
-	///
-	/// \details
-	/// `taaLayerHistoryValid` is reset by
-	///  the same triggers as the colour history (`taaHistoryValid`)
-
-	///  — swapchain recreate, world reload, Taa toggle, jitter
-
-	///  scale, blend, neighbourhood radius, `.` invalidate, and
-
-	///  the 1.2 camera-cut detector — so the per-frame DebugStats
-
-	///  mirror reflects the same flag the voxel pass will sample.
 
 	debug->stats.taaLayerHistoryValid = render->taaLayerHistoryValid;
 	debug->stats.taaLayerBlendFactor = render->taaLayerBlendFactor;

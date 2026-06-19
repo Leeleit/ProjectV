@@ -1,35 +1,6 @@
 add_executable(ProjectV)
 
-# **Tier 2.A (`2026-06-13`).** First real `.ixx` module for
-# the project: `core/Math.ixx` exports
-# `projectv::math::{Vec3,Vec4,Mat4,dot,cross,lengthSq,length,
-# normalize,identity,zero,transpose,inverse,operator*+,-,fromArray16}`.
-# The header `core/Math.hpp` is kept as a re-export shim for
-# TUs that still use the `#include` form (Tier 2.D will
-# migrate them to `import projectv.math;` and delete the
-# header).
-#
-# **Windows clang-cl fallback (`2026-06-18`,
-# windows-host-build-r0).** CMake 4.2's `FILE_SET CXX_MODULES`
-# driver requires a module dependency scanner, and clang-cl
-# 22 on Windows does not provide one. We deliberately do
-# NOT list the `.ixx` files here on Windows clang-cl —
-# doing so produces duplicate `Mat4::data` / `Vec3::data`
-# symbols at link time because the consumer TUs also pull
-# in the inline `Math_fallback.hpp` definitions through
-# `core/Math.hpp` (so the same `Mat4::data()` would be
-# emitted twice: once via the standalone `.ixx` compile and
-# once via the inline fallback header). Omitting the `.ixx`
-# sources keeps the linker happy and gives Windows clang-cl
-# exactly the same `projectv::math` / `projectv::core::
-# StringID` / `projectv::probe` API as native clang,
-# without using C++20 modules at all.
 if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # Intentionally no `.ixx` sources here — see the
-    # `Math_fallback.hpp` / `StringId_fallback.hpp` headers
-    # and the `core/Math.hpp` / `core/StringId.hpp` /
-    # `core/Types.hpp` Windows-clang-cl guards for the
-    # inline-definition path that backs them.
 else ()
     target_sources(ProjectV PRIVATE
             FILE_SET CXX_MODULES FILES
@@ -39,7 +10,6 @@ else ()
     )
 endif ()
 
-# --- БЛОК АВТОКОМПИЛЯЦИИ ШЕЙДЕРОВ ---
 find_program(PROJECTV_GLSLC_EXECUTABLE glslc)
 find_program(PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
 
@@ -68,9 +38,6 @@ set(SHADERS
         ${SHADER_DIR}/debug_hud.frag
         ${SHADER_DIR}/model.vert
         ${SHADER_DIR}/model.frag
-        # Defense r0 (2026-06-13): GPU ray-march compute shader for the
-        # optional ray-march pass (toggle F6). See
-        # `src/render/RayMarchPass.hpp` and `docs/DefenseReport.md §2.1`.
         ${SHADER_DIR}/ray_march.comp
 )
 
@@ -88,8 +55,6 @@ foreach (SHADER ${SHADERS})
     list(APPEND SPV_SHADERS ${SPV})
 endforeach ()
 
-# TAA-on variant of voxel.frag: declares outSceneColor (Location 1) instead
-# of outColor (Location 0), eliminating unused MRT write warnings.
 set(VOXEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/voxel.frag.taa_on.spv)
 add_custom_command(
         OUTPUT ${VOXEL_FRAG_TAA_SPV}
@@ -101,12 +66,6 @@ add_custom_command(
 )
 list(APPEND SPV_SHADERS ${VOXEL_FRAG_TAA_SPV})
 
-# TAA-on variant of model.frag: declares `outSceneColor` (Location 1) so
-# the model pass writes to the same slot as the voxel pass on the TAA-on
-# path (where the first color attachment is NULL and the second holds
-# the offscreen scene color). Without this variant, the model pass
-# writes to a NULL slot and trips the validation layer's "writes to
-# output variable but imageView is VK_NULL_HANDLE" warning.
 set(MODEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/model.frag.taa_on.spv)
 add_custom_command(
         OUTPUT ${MODEL_FRAG_TAA_SPV}
@@ -120,7 +79,6 @@ list(APPEND SPV_SHADERS ${MODEL_FRAG_TAA_SPV})
 
 add_custom_target(Shaders ALL DEPENDS ${SPV_SHADERS})
 add_dependencies(ProjectV Shaders)
-# --- КОНЕЦ БЛОКА ШЕЙДЕРОВ ---
 
 target_sources(ProjectV PRIVATE
         app/AppUpdate.cpp
@@ -174,29 +132,14 @@ target_sources(ProjectV PRIVATE
         voxel/VoxelRaycast.cpp
         voxel/VoxelWorld.cpp
         voxel/SceneConfig.cpp
-        # Add new files here
 )
 
 target_include_directories(ProjectV PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# **Audio engine, 2026-06-12.** miniaudio is vendored as
-# a submodule at `external/miniaudio/`. Built as a static
-# library (the default per miniaudio's CMakeLists.txt) and
-# linked into `ProjectV`. On Linux, miniaudio's
-# `find_package(PulseAudio)` resolves `libpulse.so.0` (the
-# `pipewire-pulse` shim), which routes audio to PipeWire.
-# `EXCLUDE_FROM_ALL` so the miniaudio examples and tests
-# don't pollute the build.
 add_subdirectory(${PROJECT_SOURCE_DIR}/external/miniaudio
         ${CMAKE_BINARY_DIR}/external/miniaudio EXCLUDE_FROM_ALL)
-# **miniaudio SYSTEM property (`2026-06-18`,
-# windows-host-build-r0).** miniaudio emits several
-# clang-cl warnings under `/WX` (`-Wunsafe-buffer-usage`
-# in MP3 / WAV decoders, etc.). Marking its target as
-# SYSTEM makes the include directory a system path for
-# consumer TUs.
 projectv_suppress_external_warnings("${PROJECT_SOURCE_DIR}/external/miniaudio")
 target_link_libraries(ProjectV PRIVATE miniaudio)
 
@@ -206,50 +149,20 @@ endif ()
 
 target_link_libraries(ProjectV PRIVATE projectv_build_options)
 
-# **Per-target mismatched-tags / missing-field-initializer
-# suppression REMOVED (`2026-06-18`, windows-host-build-r0).**
-# Per `AGENTS.md §7.2.7`, suppressions on the project's own
-# `ProjectV` target are forbidden — they would mask the same
-# warning class for *our* code, not just the vendored
-# headers. The correct fix is the `SYSTEM` target property
-# applied in `cmake/ProjectVThirdParty.cmake` /
-# `root CMakeLists.txt` / `src/CMakeLists.txt` (see the
-# `projectv_suppress_external_warnings` and the explicit
-# `set_target_properties(... PROPERTIES SYSTEM TRUE)` calls
-# near VMA / miniaudio / nlohmann_json). With SYSTEM
-# propagate, all diagnostics from external headers are
-# auto-suppressed at the consumer TU boundary on every
-# supported toolchain.
-
-# **Cross-platform build-tree path for F5 hot-reload (`2026-06-15`).**
-# Inject the absolute build tree path as a compile-time macro
-# so `RebuildAllShadersFromDisk()` (`src/app/main.cpp`) can
-# re-invoke `cmake --build` against the correct tree on both
-# Linux (`build/linux-clang-debug`) and Windows
-# (`build/windows-clang-debug`) without hard-coding either.
-# The runtime `PROJECTV_BUILD_DIR` env var still overrides
-# the compile-time default when set.
 target_compile_definitions(ProjectV PRIVATE
         PROJECTV_CMAKE_BUILD_DIR="${CMAKE_BINARY_DIR}")
 
 target_link_libraries(ProjectV PRIVATE
-        # Vulkan не добавляем, потому что volk его инклюдит в себе
         volk
         fmt::fmt
         flecs::flecs_static
         Jolt::Jolt
         GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
-        # Polygon-model import pipeline (M0–M5). `meshoptimizer` propagates its
-        # `src/` include dir through the INTERFACE property, so the rest of
-        # the project picks up `<meshoptimizer.h>` automatically.
         meshoptimizer
         glm
         fastgltf::fastgltf
         draco::draco
-        # Defense r0 (2026-06-13): nlohmann/json for runtime scene-config
-        # loading (per ТЗ 4.5.1). Pulled in via FetchContent at the root
-        # `CMakeLists.txt`; here we only attach the target.
         nlohmann_json::nlohmann_json
 )
 
@@ -263,26 +176,6 @@ add_custom_command(TARGET ProjectV POST_BUILD
         $<TARGET_FILE_DIR:ProjectV>
 )
 
-# **Tier 3 (`2026-06-13`).** C / intrinsics hot-kernel
-# compilation. `frustum_cull.c` is a C TU with hand-rolled
-# AVX2 intrinsics behind a `__attribute__((target("avx2")))`
-# per-function ABI switch. The kernel is built with
-# `-std=c2x` (the C23/C2y alias) so the `__attribute__`
-# extensions and the `_mm256_*` intrinsics are available;
-# `-mavx2` is added on the C side only (the rest of the
-# engine does not need the AVX2 ABI level by default).
-#
-# **Why a separate C library.** The kernel ships as
-# `projectv_c_kernels` so:
-# - the C++ engine does not need to know about the
-#   intrinsics build flags (avoids polluting the main
-#   target's `target_compile_options`).
-# - benchmark targets link the same object files the
-#   engine uses (no source-duplication, no risk of
-#   scalar-vs-intrinsic skew in the comparison).
-# - the per-function `__attribute__((target("avx2")))`
-#   stays scoped to `frustum_cull.c`; other C TUs
-#   (none yet) compile with the host baseline.
 add_library(projectv_c_kernels STATIC
         c_kernels/frustum_cull.c
 )
@@ -291,35 +184,9 @@ target_compile_features(projectv_c_kernels PUBLIC c_std_23)
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_compile_options(projectv_c_kernels PRIVATE -mavx2)
 endif ()
-# **C++ wrapper lives in `ProjectV`, not in
-# `projectv_c_kernels`.** The wrapper TU
-# (`c_kernels/FrustumCulling.cpp`) includes
-# `core/Types.hpp` transitively, which in turn
-# `#import projectv.math;` / `projectv.string_id;`
-# via the shim headers. C++20 modules cannot span
-# two CMake targets' `FILE_SET CXX_MODULES`
-# (CMake errors with "Disagreement of the location
-# of the 'projectv.math' module" if both `ProjectV`
-# and `projectv_c_kernels` declare the same .ixx).
-# Keeping the wrapper in `ProjectV` puts it in the
-# target that already owns the modules; the kernel
-# stays in a pure-C static lib (no C++ TUs, no
-# ODR risk, no module interaction).
 target_link_libraries(ProjectV PRIVATE projectv_c_kernels)
 
 if (WIN32)
-    # **Explicit PATHS for PowerShell lookup (`2026-06-18`,
-    # windows-host-build-r0).** CMake 4.2's `find_program` did
-    # not locate `powershell.exe` through `PATH` alone on the
-    # Windows host build verification even though
-    # `C:\WINDOWS\System32\WindowsPowerShell\v1.0\` was in
-    # `PATH`. Adding the well-known Windows PowerShell 5.1
-    # and PowerShell 7 install paths as `HINTS` lets the
-    # runtime smoke target resolve a script host without
-    # relying on the fragile `PATH`-based discovery path.
-    # This is a host-config fix, not a semantic change: the
-    # project still prefers whatever `pwsh` / `powershell`
-    # is on `PATH` first.
     find_program(PROJECTV_POWERSHELL_EXECUTABLE
             NAMES pwsh powershell
             HINTS "C:/Program Files/PowerShell/7"

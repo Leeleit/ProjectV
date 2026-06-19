@@ -16,20 +16,6 @@
 #pragma clang diagnostic pop
 #endif
 
-/// \brief `VK_EXT_debug_utils` is enabled in `VulkanBootstrap` regardless of the
-///
-/// \details
-///  `PROJECTV_ENABLE_RENDERDOC_MARKERS` compile-time option, so the function
-
-///  pointers are always loaded; the option only gates *whether* the labels
-
-///  get emitted at runtime. Gated through `ScopedGpuDebugLabel` /
-
-///  `BeginGpuDebugLabel` / `EndGpuDebugLabel` so the call sites stay short.
-
-///  `__COUNTER__` gives a fresh identifier per macro expansion so the same
-
-///  label can be nested without `redefinition` warnings.
 
 #if defined(PROJECTV_ENABLE_RENDERDOC_MARKERS)
 #define PV_PROFILE_GPU_LABEL(cmd, name) \
@@ -179,20 +165,6 @@ inline void DestroyVulkanGpuContext(void *contextHandle)
 }
 
 #if defined(PROJECTV_ENABLE_RENDERDOC_MARKERS)
-/// \brief RAII wrapper around `vkCmdBeginDebugUtilsLabelEXT` /
-///
-/// \details
-///  `vkCmdEndDebugUtilsLabelEXT`. Drawn by RenderDoc, Tracy, validation
-
-///  layers, and any Vulkan tool that hooks the debug-utils extension. Use
-
-///  through the `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR` macros
-
-///  at hot sites in `Renderer.cpp`; the macros are no-ops when
-
-///  `PROJECTV_ENABLE_RENDERDOC_MARKERS=0`, so call sites don't need their
-
-///  own `#if` guards.
 
 class ScopedGpuDebugLabel {
   public:

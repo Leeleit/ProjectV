@@ -17,12 +17,6 @@ using nlohmann::json;
 
 constexpr const char *kDefaultPath = "runtime/scene.json";
 
-/// \brief Inverse of `VoxelScenePresetToString` — parse the preset name back to
-///
-/// \details
-///  the enum. Returns false on an unknown label so the caller can fall back
-
-///  to `VoxelLab`.
 
 bool ParseScenePreset(std::string_view text, VoxelScenePreset &outPreset)
 {
@@ -54,21 +48,10 @@ bool EnsureDefaultSceneConfig(const std::string_view path)
 		return true;
 	}
 
-	/// \brief Create parent directories if missing so the user can `git clone`
-	///
-	/// \details
-	///  the project and immediately run the binary without manually
-
-	///  creating the `runtime/` folder.
 
 	if (fsPath.has_parent_path()) {
 		std::error_code ec;
 		std::filesystem::create_directories(fsPath.parent_path(), ec);
-		/// \brief Non-fatal:
-		///
-		/// \details
-		/// we still try to write the file below and report
-		///  the actual I/O failure to the caller.
 
 	}
 

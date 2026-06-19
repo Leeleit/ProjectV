@@ -11,37 +11,6 @@
 namespace {
 constexpr uint32_t kTaaResolveDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 
-/// \brief Descriptor set layout for the TAA resolve pass.
-///
-/// \details
-/// Matches the
-///  `layout(set = 0, binding = N)` declarations in
-
-///  `src/shaders/taa_resolve.frag`:
-
-///    b0 uniform sampler2D  sceneColor       (R16G16B16A16_SFLOAT, written
-
-///                                           by the main voxel pass this frame)
-
-///    b1 uniform sampler2D  historyColor     (R16G16B16A16_SFLOAT, written
-
-///                                           by the previous frame's
-
-///                                           RecordTaaHistoryCopy)
-
-///    b2 uniform sampler2D  depth            (D32_SFLOAT, sampled via the
-
-///                                           same linear sampler as the
-
-///                                           colour targets)
-
-///    b3 readonly buffer     sceneLighting   (std430 SSBO carrying the
-
-///                                           full VoxelSceneLighting struct
-
-///                                           including prevViewProjectionMatrix
-
-///                                           and taaHistoryParams)
 
 constexpr std::array kTaaResolveDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -195,17 +164,6 @@ bool CreateTaaResolvePipeline(
 		},
 	};
 
-	/// \brief Vertexless fullscreen triangle.
-	///
-	/// \details
-	/// The vertex shader reads
-	///  `gl_VertexIndex` to emit a single oversized triangle that covers the
-
-	///  entire framebuffer, so the pipeline does not bind a vertex buffer
-
-	///  and `vertexBindingDescriptionCount` / `vertexAttributeDescriptionCount`
-
-	///  both stay at zero.
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -247,11 +205,6 @@ bool CreateTaaResolvePipeline(
 		.alphaToOneEnable = VK_FALSE,
 	};
 
-	/// \brief No depth attachment on the resolve pass.
-	///
-	/// \details
-	/// The depth view is sampled
-	///  from the main pass, not written.
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -259,13 +212,6 @@ bool CreateTaaResolvePipeline(
 	depthStencil.depthWriteEnable = VK_FALSE;
 	depthStencil.depthCompareOp = VK_COMPARE_OP_ALWAYS;
 
-	/// \brief No blend.
-	///
-	/// \details
-	/// The resolve pass is the final image-writing stage for the
-	///  frame; history is blended in the fragment shader, not via fixed-function
-
-	///  blending.
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask =
@@ -279,20 +225,12 @@ bool CreateTaaResolvePipeline(
 	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = &colorBlendAttachment;
 
-	/// \brief Push constant range.
-	///
-	/// \details
-	/// The TAA resolve shader takes 144 B of push
-	///  constants (mat4 inverseViewProj + mat4 viewProj + vec2 renderExtentInverse
-
-	///  + vec2 reservedPadding). See `ResolvePushConstants` in `core/Types.hpp`.
 
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 	pushConstantRange.offset = 0;
 	pushConstantRange.size = sizeof(ResolvePushConstants);
 
-	/// \brief Descriptor set layout.
 	{
 		PV_PROFILE_ZONE_N("CreateTaaResolvePipeline.DescriptorSetLayout");
 		const VkResult descriptorSetLayoutResult = vkCreateDescriptorSetLayout(
@@ -315,7 +253,6 @@ bool CreateTaaResolvePipeline(
 		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
 		"TaaResolveDescriptorSetLayout");
 
-	/// \brief Pipeline layout (1 descriptor set + 1 push constant range).
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
@@ -344,16 +281,6 @@ bool CreateTaaResolvePipeline(
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"TaaResolvePipelineLayout");
 
-	/// \brief Color attachment format is the swapchain format (B8G8R8A8_UNORM on
-	///
-	/// \details
-	///  most desktops). The resolve writes directly to the swapchain image
-
-	///  — no offscreen resolve target, no blit, no format conversion. The
-
-	///  shader handles the linear-SFLOAT input -> UNORM output conversion
-
-	///  implicitly through tone-mapping + grading.
 
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,

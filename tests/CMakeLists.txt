@@ -1,46 +1,4 @@
-# **libc++ migration (Phase 2, `2026-06-13`).** Helper
-# macro that adds the project's `.ixx` modules to a test
-# target's `FILE_SET CXX_MODULES` with the project's
-# `src/` as `BASE_DIRS`. Every test that includes
-# `core/Types.hpp` (transitively) needs the modules
-# available so the `import projectv.math;` /
-# `import projectv.string_id;` shims in `core/Types.hpp`
-# and `core/Math.hpp` / `core/StringId.hpp` resolve at
-# compile time. Without the FILE_SET, the `import`
-# statement in the shim fails with "module not found".
-# **libc++ migration (Phase 2, `2026-06-13`).** Helper
-# macro that adds the project's `.ixx` modules to a test
-# target's `FILE_SET CXX_MODULES` with the project's
-# `src/` as `BASE_DIRS`. Every test that includes
-# `core/Types.hpp` (transitively) needs the modules
-# available so the `import projectv.math;` /
-# `import projectv.string_id;` shims in `core/Types.hpp`
-# and `core/Math.hpp` / `core/StringId.hpp` resolve at
-# compile time. Without the FILE_SET, the `import`
-# statement in the shim fails with "module not found".
-#
-# **Windows clang-cl fallback (`2026-06-18`,
-# windows-host-build-r0).** Same rationale as
-# `src/CMakeLists.txt` — CMake 4.2's `FILE_SET CXX_MODULES`
-# driver requires a scanner, and clang-cl does not provide
-# one. We list `.ixx` as plain sources on Windows clang-cl;
-# the compile succeeds because clang still compiles `.ixx`
-# as a module interface unit.
 macro(projectv_test_add_modules TARGET)
-    # **Windows clang-cl fallback (`2026-06-18`,
-    # windows-host-build-r0).** Same scanner-availability
-    # rationale as `src/CMakeLists.txt`: clang-cl does not
-    # expose the module dependency scanner that
-    # `FILE_SET CXX_MODULES` requires. On Windows clang-cl
-    # we deliberately do NOT list the `.ixx` files here —
-    # doing so produces duplicate `Mat4::data` / `Vec3::data`
-    # symbols at link time because the test TUs also pull
-    # in the inline `Math_fallback.hpp` / `StringId_fallback
-    # .hpp` definitions through `core/Math.hpp` /
-    # `core/StringId.hpp`. Omitting the `.ixx` sources keeps
-    # the linker happy; the `core/Math.hpp` /
-    # `core/StringId.hpp` Windows-clang-cl guards route the
-    # consumer TUs through the inline fallback instead.
     if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
         target_sources(${TARGET} PRIVATE
             FILE_SET CXX_MODULES FILES
@@ -94,22 +52,7 @@ target_link_libraries(ProjectVTests PRIVATE
         Jolt::Jolt
         SDL3::SDL3
         GPUOpen::VulkanMemoryAllocator
-        # Pulled in transitively by `core/Types.hpp` after the asset
-        # pipeline landed `MeshGpuResources.hpp`; the `glm` target's
-        # INTERFACE include directory (`external/glm/`) has to be on
-        # the test TU's include path or the build dies on the very
-        # first TU that opens `AssetLoader.hpp`.
         glm
-        # Audio engine (2026-06-12). `miniaudio` is needed
-        # because `AppUpdate.cpp` now `#include`s
-        # `audio/AudioEngine.hpp`, which includes the
-        # library header. Linking the library is the
-        # cheapest way to inherit `external/miniaudio/`
-        # on the test TU's include path. The audio
-        # engine itself is not used in any test (the
-        # test path passes `nullptr` for the engine),
-        # but the include is needed to compile
-        # `AppUpdate.cpp`.
         miniaudio
 )
 
@@ -117,33 +60,11 @@ if (PROJECTV_ENABLE_TRACY)
     target_link_libraries(ProjectVTests PRIVATE Tracy::TracyClient)
 endif ()
 
-# **Tier 2 + Phase 2 libc++ migration (`2026-06-13`).**
-# `ProjectVTests` includes `core/Types.hpp` transitively
-# (via `VoxelWorld.cpp`, `Camera.cpp`, `PhysicsWorld.cpp`,
-# `DebugHud.cpp`, `DebugOverlays.cpp`, `ScreenshotCapture.cpp`),
-# so the `projectv.math` and `projectv.string_id` module
-# `import` statements at the top of `core/Types.hpp`
-# need the modules in this target's `FILE_SET CXX_MODULES`
-# to resolve. Without this call, the build fails with
-# "fatal error: module 'projectv.math' not found" on every
-# TU that includes `core/Types.hpp`. **The same
-# regression appeared in the Tier 1.B phase 2 commit
-# (`92c4380`); the per-test `projectv_test_add_modules()`
-# call was added to the new M-pipeline tests but never to
-# the legacy `ProjectVTests` target.** Wiring it up here
-# is the build-system side of the same fix the operator
-# applied by hand to `src/core/Types.hpp` to migrate to
-# libc++.
 projectv_test_add_modules(ProjectVTests)
 
 add_test(NAME ProjectVTests COMMAND ProjectVTests)
 set_tests_properties(ProjectVTests PROPERTIES LABELS "unit")
 
-# Asset-pipeline test executable (M1). Separate from `ProjectVTests`
-# so its `main()` does not collide with the existing harness, and so
-# it can link `fastgltf` and `glm` without dragging the full
-# voxel-test link line in. The test fixture `tests/fixtures/box.glb`
-# is referenced through `PROJECTV_TESTS_SOURCE_DIR`.
 add_executable(ProjectVAssetTests
         AssetLoaderTests.cpp
         ../src/asset/AssetLoader.cpp
@@ -170,15 +91,8 @@ target_link_libraries(ProjectVAssetTests PRIVATE
 add_test(NAME ProjectVAssetTests COMMAND ProjectVAssetTests)
 set_tests_properties(ProjectVAssetTests PROPERTIES LABELS "unit")
 
-# AssetTests pulls in `core/Types.hpp` (transitively via
-# `asset/AssetLoader.cpp` → `asset/MeshGpuResources.hpp`),
-# so it needs the projectv.math and projectv.string_id
-# modules in its FILE_SET so the shim's `import`s resolve.
 projectv_test_add_modules(ProjectVAssetTests)
 
-# Mesh-baker test executable (M2). CPU-only, no Vulkan init needed
-# because `MeshBaker` is the unit; GPU upload (`MeshGpuResources`)
-# is exercised at runtime in M4 when the model is actually drawn.
 add_executable(ProjectVMeshBakerTests
         MeshBakerTests.cpp
         ../src/asset/AssetLoader.cpp
@@ -205,21 +119,8 @@ target_link_libraries(ProjectVMeshBakerTests PRIVATE
 add_test(NAME ProjectVMeshBakerTests COMMAND ProjectVMeshBakerTests)
 set_tests_properties(ProjectVMeshBakerTests PROPERTIES LABELS "unit")
 
-# MeshBakerTests pulls in `core/Types.hpp` (transitively
-# via `asset/MeshBaker.cpp` → `core/Types.hpp` for the
-# `MeshGpuResources` field), so it needs the modules.
 projectv_test_add_modules(ProjectVMeshBakerTests)
 
-# MeshBakerTests pulls in `core/Types.hpp` (transitively via
-# `asset/MeshBaker.cpp` → `core/Types.hpp` for the
-# `MeshGpuResources` field), so it needs the modules.
-
-# it's a separate executable to keep its own `main()` and its
-# own draco / fastgltf link line. The draco-compressed fixture
-# `tests/fixtures/box_draco.glb` is the smallest self-contained
-# draco file we have; the non-draco Box.glb is also loaded
-# through the same code path to verify the M3 change did not
-# regress M1.
 add_executable(ProjectVDracoTests
         DracoDecoderTests.cpp
         ../src/asset/AssetLoader.cpp
@@ -246,21 +147,8 @@ target_link_libraries(ProjectVDracoTests PRIVATE
 add_test(NAME ProjectVDracoTests COMMAND ProjectVDracoTests)
 set_tests_properties(ProjectVDracoTests PROPERTIES LABELS "unit")
 
-# DracoTests pulls in `core/Types.hpp` (transitively via
-# `asset/DracoMeshDecoder.cpp` → `asset/MeshGpuResources.hpp`),
-# so it needs the modules.
 projectv_test_add_modules(ProjectVDracoTests)
 
-# DracoTests pulls in `core/Types.hpp` (transitively via
-# `asset/DracoMeshDecoder.cpp` → `asset/MeshGpuResources.hpp`),
-# so it needs the modules.
-# Frustum-cull test executable (M5). CPU-only: the helper under
-# test (`IsAabbVisibleAgainstCameraFrustum`) is an inline camera-
-# not touch Vulkan. The executable links `projectv_build_options`
-# for warning flags but does not need any of the asset pipeline
-# libraries — keeping it lean keeps the test runtime well under
-# 100 ms so the per-test budget in
-# `decisions.md §4` stays comfortable.
 add_executable(ProjectVFrustumCullingTests
         FrustumCullingTests.cpp
 )
@@ -274,43 +162,13 @@ target_include_directories(ProjectVFrustumCullingTests PRIVATE
 )
 
 target_link_libraries(ProjectVFrustumCullingTests PRIVATE projectv_build_options)
-# `core/Types.hpp` (transitively included by
-# `render/SceneResources.hpp`) needs `volk.h` on the include path;
-# linking `volk` is the cheapest way to inherit that since the
-# library exports `external/volk/` as a PUBLIC include directory.
-# `glm` is pulled in the same way by the asset-pipeline headers
-# (`AssetLoader.hpp` → `MeshBaker.hpp`); its INTERFACE include
-# path (`external/glm/`) is also needed. `vk_mem_alloc.h` is
-# pulled in transitively by `MeshGpuResources.hpp` →
-# `core/Types.hpp` and is exported by the VMA target.
 target_link_libraries(ProjectVFrustumCullingTests PRIVATE volk glm GPUOpen::VulkanMemoryAllocator)
 
 add_test(NAME ProjectVFrustumCullingTests COMMAND ProjectVFrustumCullingTests)
 set_tests_properties(ProjectVFrustumCullingTests PROPERTIES LABELS "unit")
 
-# **Tier 4 (`2026-06-13`).** C / AVX2 kernel wrapper test.
-# Verifies the `c_kernels::FrustumCulling` C++ wrapper
-# (used by `BuildVisibleModelInstanceList` in
-# `app/FramePreparation.cpp`) produces identical results
-# to the inline `IsAabbVisibleAgainstCameraFrustum`
-# helper for the same fixture. Covers the 300-AABB
-# batched path, the 4-AABB and 1-AABB fallback
-# paths, the `CullVisibleMask` low-level entry point,
-# and the empty-input edge case.
 add_executable(ProjectVCFrustumCullingTests
         CFrustumCullingTests.cpp
-        # **Compile the C++ wrapper into the test target
-        # directly.** `FrustumCulling.cpp` is normally
-        # compiled into the `ProjectV` binary (it lives
-        # in `src/CMakeLists.txt`'s `target_sources`
-        # block). Tests can't reuse that .o file because
-        # the `c_kernels::CullVisibleMask` / `FilterVisibleInstances`
-        # symbols are part of the engine library, not a
-        # shared static lib. Compiling the wrapper into
-        # the test target keeps the test self-contained
-        # and avoids forcing `projectv_c_kernels` to
-        # depend on the engine's C++20 module set (which
-        # is target-scoped to `ProjectV`).
         ${CMAKE_SOURCE_DIR}/src/c_kernels/FrustumCulling.cpp
 )
 
@@ -327,49 +185,16 @@ target_link_libraries(ProjectVCFrustumCullingTests PRIVATE
         volk
         glm
         GPUOpen::VulkanMemoryAllocator
-        # **C kernel lib.** `c_kernels::CullVisibleMask` calls
-        # `projectv_cull_frustum_scalar` from the static
-        # `projectv_c_kernels` library (built from
-        # `src/c_kernels/frustum_cull.c` in
-        # `src/CMakeLists.txt`).
         projectv_c_kernels
 )
 
 add_test(NAME ProjectVCFrustumCullingTests COMMAND ProjectVCFrustumCullingTests)
 set_tests_properties(ProjectVCFrustumCullingTests PROPERTIES LABELS "unit")
 
-# **Tier 4 — module wiring.** The test includes
-# `c_kernels/FrustumCulling.hpp` (transitively
-# `core/Types.hpp` → math/string_id shim imports),
-# so the project's C++20 modules need to be in
-# the `FILE_SET CXX_MODULES` for this target to
-# resolve. The macro is the uniform way to wire
-# that across all test targets.
 projectv_test_add_modules(ProjectVCFrustumCullingTests)
 
-# **Tier 5 (`2026-06-13`).** Unit test for
-# `BuildSunShadowCascadeSplits`. Verifies the
-# happy path, the `minDepthStep` regression
-# check, the lambda sweep (0 → uniform,
-# 1 → logarithmic), the defensive defaults for
-# non-finite inputs, the lambda clamp, and the
-# degenerate `farPlane <= nearPlane` case.
-# CPU-only — no Vulkan, no asset pipeline.
 add_executable(ProjectVSunShadowCascadeSplitsTests
         SunShadowCascadeSplitsTests.cpp
-        # **Compile the implementation into the test
-        # target directly.** `BuildSunShadowCascadeSplits`
-        # is a non-template function in
-        # `src/render/ShadowProjection.cpp`; the
-        # test includes the header but the .o file
-        # lives in the `ProjectV` binary, not in
-        # a shared static lib. Compiling the
-        # implementation into the test target keeps
-        # the test self-contained and avoids forcing
-        # `ShadowProjection.cpp` into a shared lib
-        # (which would require splitting the
-        # renderer's `SceneLightingBuffer` POD
-        # types away from the engine TU).
         ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
 )
 
@@ -383,14 +208,6 @@ target_include_directories(ProjectVSunShadowCascadeSplitsTests PRIVATE
 
 target_link_libraries(ProjectVSunShadowCascadeSplitsTests PRIVATE
         projectv_build_options
-        # **No Vulkan, no asset pipeline.** The shadow
-        # projection helpers in `src/render/ShadowProjection.{hpp,cpp}`
-        # are pure CPU; the only transitive include is
-        # `core/Types.hpp` (for the `ChunkCullingParameters`
-        # type used in `SunShadowCascadeProjectionInputs`).
-        # Linking `volk` + `glm` + VMA is required to get
-        # the include paths on the TU that includes
-        # `core/Types.hpp`.
         volk
         glm
         GPUOpen::VulkanMemoryAllocator
@@ -399,26 +216,10 @@ target_link_libraries(ProjectVSunShadowCascadeSplitsTests PRIVATE
 add_test(NAME ProjectVSunShadowCascadeSplitsTests COMMAND ProjectVSunShadowCascadeSplitsTests)
 set_tests_properties(ProjectVSunShadowCascadeSplitsTests PROPERTIES LABELS "unit")
 
-# **Module wiring.** The test includes
-# `render/ShadowProjection.hpp` (transitively
-# `core/Types.hpp` → math/string_id shim imports).
 projectv_test_add_modules(ProjectVSunShadowCascadeSplitsTests)
 
-# FrustumCullingTests is a header-only test (no
-# `core/Types.hpp` include), but the helper is cheap
-# and keeps the macro use uniform across tests.
 projectv_test_add_modules(ProjectVFrustumCullingTests)
 
-# FrustumCullingTests is a header-only test (no
-# `core/Types.hpp` include), but the helper is cheap
-# and keeps the macro use uniform across tests.
-# header byte order (`magic, version, length`) by reading the
-# fixture back from disk. The original M6 generator wrote the
-# header in the wrong order and fastgltf reported
-# `Error::UnsupportedVersion`, which is a misleading symptom for
-# a header-byte-order bug. This test catches the regression at
-# the byte level so the next person doesn't have to debug a
-# fastgltf error message that points to the wrong place.
 add_executable(ProjectVBoxUvFixtureTests
         BoxUvFixtureTests.cpp
 )
@@ -436,19 +237,12 @@ target_link_libraries(ProjectVBoxUvFixtureTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVBoxUvFixtureTests COMMAND ProjectVBoxUvFixtureTests)
 set_tests_properties(ProjectVBoxUvFixtureTests PROPERTIES LABELS "unit")
 
-# BoxUvFixtureTests is a header-only test (no
-# `core/Types.hpp` include), but the helper is cheap
-# and keeps the macro use uniform across tests.
 projectv_test_add_modules(ProjectVBoxUvFixtureTests)
 
-# No Vulkan init, no Jolt, no asset pipeline.
 add_executable(ProjectVMathTests
         MathTest.cpp
 )
 
-# MathTest needs the modules so the `core/Math.hpp` shim
-# can `import projectv.math;` (and the `string_id` import
-# via `core/Types.hpp` if any test-only header pulls it in).
 projectv_test_add_modules(ProjectVMathTests)
 
 target_compile_definitions(ProjectVMathTests PRIVATE
@@ -464,24 +258,10 @@ target_link_libraries(ProjectVMathTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVMathTests COMMAND ProjectVMathTests)
 set_tests_properties(ProjectVMathTests PROPERTIES LABELS "unit")
 
-# StringID smoke test (Tier 1.D, 2026-06-13). Header-only
-# `projectv::core::StringID` (`src/core/StringId.hpp`) — 16 B
-# FNV-1a hash + length tuple with constexpr literal ctor.
-# Same target shape as `ProjectVMathTests`: pure C++ standard
-# library, no third-party deps, no Vulkan, no asset pipeline.
 add_executable(ProjectVStringIdTests
         StringIdTest.cpp
 )
 
-# StringIdTest needs the modules so the `core/StringId.hpp` shim
-# can `import projectv.string_id;` (and the `math` import via
-# `core/Types.hpp` if any test-only header pulls it in).
-# The `projectv_test_add_modules` macro below adds both
-# `Math.ixx` and `StringId.ixx` to the target's
-# `FILE_SET CXX_MODULES` — adding them manually here too
-# triggers a CMake developer warning ("has source file ... in
-# a 'FILE_SET TYPE CXX_MODULES' multiple times"). The macro
-# is the single source of truth for module wiring.
 projectv_test_add_modules(ProjectVStringIdTests)
 
 target_compile_definitions(ProjectVStringIdTests PRIVATE
@@ -497,29 +277,6 @@ target_link_libraries(ProjectVStringIdTests PRIVATE projectv_build_options)
 add_test(NAME ProjectVStringIdTests COMMAND ProjectVStringIdTests)
 set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
 
-# C++20 modules smoke test (Tier 2.A, 2026-06-13). Tiny
-# executable that `import projectv.probe;` and prints the
-# value. Validates the CMake `FILE_SET CXX_MODULES` +
-# `CMAKE_CXX_SCAN_FOR_MODULES=ON` pipeline end-to-end
-# before we commit to converting the real `Math.ixx`.
-#
-# The probe module is duplicated into `tests/` because
-# CMake's `FILE_SET CXX_MODULES` base directory is the
-# target's source dir, and the test target's source dir
-# is `tests/`. A future refactor (Tier 2.D) can move
-# shared modules into a common location and use
-# `BASE_DIRS` on the FILE_SET to widen the scope.
-#
-# **Windows clang-cl skip (`2026-06-18`,
-# windows-host-build-r0).** Same scanner-availability
-# rationale as the macro above: the explicit `FILE_SET
-# CXX_MODULES` block here hard-requires CMake's module
-# scanner, which clang-cl on CMake 4.2 does not provide.
-# ProjectVModuleSmoke is a developer probe, not a
-# production gate, so skipping it on Windows clang-cl
-# keeps the host build green without losing signal on
-# Linux. When CMake ships clang-cl scanner support this
-# guard can be removed.
 if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
 add_executable(ProjectVModuleSmoke
         ModuleSmokeTest.cpp
@@ -545,36 +302,6 @@ target_link_libraries(ProjectVModuleSmoke PRIVATE projectv_build_options)
 add_test(NAME ProjectVModuleSmoke COMMAND ProjectVModuleSmoke)
 set_tests_properties(ProjectVModuleSmoke PROPERTIES LABELS "unit")
 
-# C++23+ `import std;` probe (Tier 2.C, 2026-06-13).
-# Per the libc++ docs (https://libcxx.llvm.org/docs/Modules.html)
-# and the research in commit `e0029dc`-era, **`import std;` is
-# ONLY available with libc++**, not with libstdc++ (libstdc++
-# 16.1.1 ships `bits/std.cc` in GCC's legacy `-fmodules` format
-# which Clang 22 cannot consume).
-#
-# **Phase 2 (`2026-06-13`).** The main `ProjectV` build
-# has now switched to libc++ (via the root
-# `CMakeLists.txt`'s `CMAKE_CXX_STDLIB=libc++` + the
-# `projectv_build_options` INTERFACE library). This
-# probe inherits libc++ from there; the per-target
-# `-stdlib=libc++` override that was here in Phase 1
-# is gone.
-#
-# The probe precompiles `std.pcm` from
-# `/usr/share/libc++/v1/std.cppm` as a CMake custom
-# command (output goes into the binary dir), then links
-# the consumer TU with `-fmodule-file=std=<...>`. If
-# the precompile or the consumer link fails, the failure
-# message names the exact missing piece (the libc++
-# `.cppm`, the `libc++.modules.json`, etc.).
-#
-# **Linux-only by design (2026-06-18).** Probe hard-codes
-# `/usr/sbin/clang++` and `/usr/share/libc++/v1/std.cppm`,
-# so it never builds on Windows regardless of scanner
-# support. The Windows-clang-cl guard above is
-# belt-and-suspenders here: it would be skipped anyway
-# because the absolute `/usr/...` paths do not exist on
-# the Windows host.
 add_executable(ProjectVStdModuleProbe
         StdModuleProbe.cpp
 )
@@ -591,12 +318,6 @@ target_link_libraries(ProjectVStdModuleProbe PRIVATE
         "-l:libstdc++.so.6"
 )
 
-# **Precompile `std.pcm` as a custom target.** Output goes
-# into the build's binary dir so the consumer TU can
-# `-fmodule-file=std=...` find it. The precompile command
-# is the canonical libc++ + Clang invocation from
-# https://0xstubs.org/using-the-c23-std-module-with-clang-18/
-# — same flags, just modernised for `-std=c++26`.
 add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
         COMMAND /usr/sbin/clang++
@@ -621,33 +342,10 @@ target_sources(ProjectVStdModuleProbe PRIVATE
         ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
 )
 
-# Re-enable the test. The probe takes ~30s on a cold
-# cache because of the precompile step; on warm sccache
-# it's <1s.
 add_test(NAME ProjectVStdModuleProbe COMMAND ProjectVStdModuleProbe)
 set_tests_properties(ProjectVStdModuleProbe PROPERTIES LABELS "unit")
 endif ()
 
-# **Tier 3 (`2026-06-13`).** Google Benchmark harness
-# for the frustum-cull hot path. Three implementations
-# are measured side-by-side:
-# - `BM_CppScalar` — `projectv::math::` types via the
-#   production M5 helper
-#   (`IsAabbVisibleAgainstCameraFrustum`).
-# - `BM_CScalar` — `projectv_cull_frustum_scalar`
-#   (the same algorithm in plain C).
-# - `BM_CAvx2` — `projectv_cull_frustum_avx2`
-#   (8-way batched intrinsics, gated on
-#   `__AVX2__` being defined at compile time).
-#
-# The harness is **not** added to `ctest` (Google
-# Benchmark is for perf measurement, not pass/fail). The
-# binary runs from `bin/ProjectVFrustumCullBenchmark`
-# with `--benchmark_min_time=0.1s` (default).
-#
-# Build flag: gated by `PROJECTV_ENABLE_BENCHMARKS=ON`
-# (the `linux-clang-debug` preset enables it; the
-# `windows-clang-debug` preset leaves it OFF for now).
 if (PROJECTV_ENABLE_BENCHMARKS)
     add_executable(ProjectVFrustumCullBenchmark
             ${CMAKE_SOURCE_DIR}/src/bench/FrustumCullBenchmark.cpp
@@ -661,70 +359,19 @@ if (PROJECTV_ENABLE_BENCHMARKS)
             projectv_build_options
             benchmark::benchmark
             projectv_c_kernels
-            # **volk + glm + VMA** for the include path.
-            # `core/Types.hpp` (transitively included by
-            # `render/SceneResources.hpp` → `core/Math.hpp` →
-            # `core/Types.hpp`) needs `volk.h` on the include
-            # path. Linking `volk` is the cheapest way to
-            # inherit that since the library exports
-            # `external/volk/` as a PUBLIC include directory.
-            # `glm` and `GPUOpen::VulkanMemoryAllocator`
-            # follow the same pattern (the `AssetLoader`
-            # headers pull in `vk_mem_alloc.h` and
-            # `<glm/glm.hpp>`).
             volk
             glm
             GPUOpen::VulkanMemoryAllocator
     )
 
-    # **Tier 0.B / 2 alignment.** The benchmark includes
-    # `core/Types.hpp` (transitively via
-    # `core/Math.hpp`), so it needs the project's C++20
-    # modules in the `FILE_SET CXX_MODULES` to resolve
-    # the `import projectv.math;` / `import projectv.string_id;`
-    # statements. The macro is the uniform way to wire
-    # that across all test targets.
     projectv_test_add_modules(ProjectVFrustumCullBenchmark)
 
-    # **AVX2 ABI on the consumer side.** The C kernel
-    # uses `__attribute__((target("avx2")))` per function
-    # (per-TU ABI is not required); the consumer does
-    # not need `-mavx2` to *call* the kernel, but
-    # `-mavx2` is harmless and makes the inner scalar
-    # baseline auto-vectorise (which is the point of
-    # the comparison — does the hand-rolled kernel beat
-    # what Clang 22's autovectorizer produces on the
-    # scalar path?).
     target_compile_options(ProjectVFrustumCullBenchmark PRIVATE
             -mavx2
     )
 
-    # **Tier 5 (`2026-06-13`).** `ShadowProjectionBenchmark` —
-    # measures the per-frame cost of
-    # `BuildSunShadowProjection` and
-    # `BuildSunShadowCascadeSplits`. Both are called
-    # once per frame from the shadow-cascade rebuild
-    # path. The benchmark's output is a numeric
-    # `ns/op` (not pass/fail), used for perf
-    # regression tracking per `decisions.md §777`
-    # "Google Benchmark'и для всех hot path".
     add_executable(ProjectVShadowProjectionBenchmark
             ${CMAKE_SOURCE_DIR}/src/bench/ShadowProjectionBenchmark.cpp
-            # **Compile the implementation into the
-            # benchmark target directly.** `BuildSunShadowProjection`
-            # is not in a shared static lib, so we
-            # compile `ShadowProjection.cpp` into the
-            # benchmark target as a separate source
-            # (same pattern as
-            # `ProjectVSunShadowCascadeSplitsTests`).
-            # The shadow projection helpers reference
-            # `core/Types.hpp` (for `VoxelWorld`,
-            # `Int3`, `VoxelMaterial`, etc.) which
-            # transitively pulls in `volk` /
-            # `vk_mem_alloc.h`. **The .cpp is in
-            # `target_sources`, not `target_link_libraries`**
-            # — `target_link_libraries` passes the path
-            # to the linker (which would not compile it).
             ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
     )
 
@@ -742,50 +389,12 @@ if (PROJECTV_ENABLE_BENCHMARKS)
 
     projectv_test_add_modules(ProjectVShadowProjectionBenchmark)
 
-    # **Module wiring for `ShadowProjection.cpp`.** The
-    # implementation TU has `import projectv.math;` at
-    # the top, so the project's C++20 modules need to
-    # be in this target's `FILE_SET CXX_MODULES` for the
-    # `import` to resolve. `projectv_test_add_modules`
-    # **Module wiring is via the macro above.**
-    # `projectv_test_add_modules` adds both `Math.ixx`
-    # and `StringId.ixx` to the target's
-    # `FILE_SET CXX_MODULES`. A separate manual
-    # `target_sources(... FILE_SET ...)` block for
-    # the same `.ixx` files triggers a CMake
-    # developer warning ("has source file ... in a
-    # 'FILE_SET TYPE CXX_MODULES' multiple times").
-    # The macro is the single source of truth.
 endif ()
 
-# **Fluid CA unit tests (audit `2026-06-13`).** CPU-only
-# verification of `UpdateFluidCA` (in `src/voxel/VoxelWorld.cpp`).
-# Builds a hand-constructed `VoxelWorld` per test (no AppState
-# dependency), exercises the fall-only rule, the y=0 boundary
-# guard, the deterministic-iteration-order contract, and the
-# `stats.fluidVoxelCount` ↔ `std::count(voxels, == Fluid)`
-# invariant maintained by `SetVoxelMaterial`.
 add_executable(ProjectVFluidCATests
         FluidCATests.cpp
-        # Compile `VoxelWorld.cpp` into the test target directly:
-        # `UpdateFluidCA` is not in a shared static lib, and the
-        # test's `GetVoxelChunkIndex` / `SetVoxelMaterial` paths
-        # are in the same TU. The same self-contained-target
-        # pattern is used by `ProjectVCFrustumCullingTests` and
-        # `ProjectVSunShadowCascadeSplitsTests`.
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
-        # **`runtime::LogCheckFailure` / `AbortAssertFailure`**
-        # (used by the `PV_ASSERT` calls in `UpdateFluidCA` and
-        # the dimension / size-check helpers in `VoxelWorld.cpp`)
-        # live in `core/RuntimeDiagnostics.cpp`. The test build
-        # is `NDEBUG`-aware, so the asserts compile to a real
-        # call on this build tree; linking the .cpp is required.
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
-        # `runtime::LogVkFailure` / `LogVmaFailure` call
-        # `VkResultToString` from `core/RuntimeDiagnostics.cpp`'s
-        # helpers, defined in `render/vulkan/VulkanResult.cpp`.
-        # Same "same TU" pattern: linking the whole .cpp file
-        # rather than splitting the renderer just for one helper.
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
 )
 
@@ -799,46 +408,18 @@ target_include_directories(ProjectVFluidCATests PRIVATE
 
 target_link_libraries(ProjectVFluidCATests PRIVATE
         projectv_build_options
-        # `core/Types.hpp` (transitively included by
-        # `voxel/VoxelWorld.hpp`) pulls in `volk` + `glm` + VMA on
-        # its include path. Linking these three is the cheapest
-        # way to inherit those paths without splitting the
-        # renderer's POD types away from the engine TU.
         volk
         glm
         GPUOpen::VulkanMemoryAllocator
-        # `VoxelWorld.cpp` references `SDL_GetBasePath` from the
-        # snapshot path helpers (`GetVoxelWorldSnapshotPath`). The
-        # CA tests do not exercise the snapshot path, but the
-        # function is in the same TU, so the symbol is pulled in.
-        # Linking SDL3 is the cheapest way to satisfy it.
         SDL3::SDL3
-        # `runtime::LogVkFailure` / `LogVmaFailure` use `fmt` for
-        # formatting the `VkResult` description. Linking `fmt::fmt`
-        # gives the test the same fmt symbols the engine uses
-        # (the `core/RuntimeDiagnostics.cpp` path).
         fmt::fmt
 )
 
 add_test(NAME ProjectVFluidCATests COMMAND ProjectVFluidCATests)
 set_tests_properties(ProjectVFluidCATests PROPERTIES LABELS "unit")
 
-# **Module wiring.** `VoxelWorld.hpp` → `core/Types.hpp` → math /
-# string_id shim imports. The macro is the uniform way to wire
-# that across all test targets.
 projectv_test_add_modules(ProjectVFluidCATests)
 
-# **Present-mode cycle tests (auto-detect cycle,
-# `2026-06-14`).** CPU-only verification of
-# `BuildPresentModeCycle` / `CyclePreferredPresentMode` /
-# `GetActivePresentMode` / `GetPresentModeCycleSize` /
-# `GetPresentModeCycleIndex`. Tests construct controlled
-# surface-present-modes vectors and check the cycle
-# construction + walk semantics. Header-only inline
-# accessors + inline variables mean the test TU needs
-# only `VulkanSwapchain.hpp`, no `.cpp` link. The
-# `volk` / `VulkanMemoryAllocator` deps are inherited
-# from the `projectv_build_options` INTERFACE library.
 add_executable(ProjectVPresentModeTests
         PresentModeTests.cpp
 )

@@ -11,13 +11,6 @@
 #include <vector>
 
 #include <fastgltf/core.hpp>
-// noinspection CppUnusedIncludeDirective
-// `<fastgltf/glm_element_traits.hpp>` is required for
-// `iterateAccessorWithIndex<glm::vec3>` with a const lambda
-// in `LoadMeshNodeFromAccessor` — JetBrains' indexer doesn't
-// see the const `Element<glm::vec3>` instantiation through the
-// `<fastgltf/glm_element_traits.hpp>` header, but the build
-// (clang++ 22) does.
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <glm/glm.hpp>
@@ -45,16 +38,6 @@ bool CopyAccessorToVec3(
 	}
 	out.clear();
 	out.reserve(accessor.count);
-	/// \brief `iterateAccessorWithIndex` in fastgltf has `requires Element<ElementType>`
-	///
-	/// \details
-	///  — `Element` is only defined for non-const types, so the lambda parameter
-
-	///  must stay `glm::vec3` / `glm::vec2` (NOT `const glm::vec3`), even though
-
-	///  JetBrains flags it as `CppParameterMayBeConst`. The build break is the
-
-	///  authoritative source of truth here.
 
 	fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, accessor,
 												  [&](const glm::vec3 value, std::size_t) {
@@ -101,16 +84,6 @@ bool CopyIndicesToU32(
 	}
 	case fastgltf::ComponentType::Byte: {
 		fastgltf::iterateAccessorWithIndex<std::int8_t>(asset, accessor, [&](const std::int8_t v, std::size_t) {
-			/// \brief `int8_t` → `uint32_t` is a signed-to-unsigned widening
-			///
-			/// \details
-			///  conversion. Without an explicit cast the compiler
-
-			///  issues `-Wsign-conversion` (and -Werror in
-
-			///  downstream `Werror=sign-conversion` builds), so keep
-
-			///  the cast even though JetBrains flags it as redundant.
 
 			out.push_back(static_cast<std::uint32_t>(v));
 		});
@@ -210,47 +183,11 @@ void AccumulateAabb(
 
 namespace {
 
-/// \brief Compose the local transform of a glTF node as a glm::mat4.
-///
-/// \details
-///  The glTF spec §3.5.3 says the local transform is `T * R * S`,
-
-///  applied to vertices in the right-to-left order (scale, then
-
-///  rotate, then translate). glm's left-to-right multiplication
-
-///  means the equivalent glTF matrix is `T * R * S` literally
-
-///  (as a product of three glm matrices, leftmost applied last).
-
-///  fastgltf's Node stores the transform as
-
-///  `std::variant<TRS, math::fmat4x4>`. We unpack the variant,
-
-///  convert each field to glm types, and re-build a glm::mat4.
-
-///  Both `math::fvec3` / `glm::vec3` and `math::fmat4x4` /
-
-///  `glm::mat4` are column-major 3/4-wide float arrays, so the
-
-///  reinterpret_cast path is safe (we do a per-element copy to
-
-///  be paranoid about future fastgltf changes).
 
 glm::mat4 ComposeNodeLocalMatrix(const fastgltf::Node &node)
 {
 	if (std::holds_alternative<fastgltf::math::fmat4x4>(node.transform)) {
 		const auto &m = std::get<fastgltf::math::fmat4x4>(node.transform);
-		/// \brief fastgltf stores matrices column-major (m.col(0) is the
-		///
-		/// \details
-		///  first column). glm::mat4 is also column-major, so the
-
-		///  element-wise copy is the right layout. We do it column
-
-		///  by column to honour the (col, row) semantics on both
-
-		///  sides — `glm[col][row]` is the same as `m.col(col)[row]`.
 
 		glm::mat4 result(0.0f);
 		for (int col = 0; col < 4; ++col) {
@@ -267,12 +204,6 @@ glm::mat4 ComposeNodeLocalMatrix(const fastgltf::Node &node)
 		srcTranslation.x(),
 		srcTranslation.y(),
 		srcTranslation.z());
-	/// \brief fastgltf's quat stores (X, Y, Z, W) in the order w is the
-	///
-	/// \details
-	///  scalar; glm::quat is the same. The constructor takes W
-
-	///  first per the glTF spec.
 
 	const glm::quat rotation(
 		srcRotation.w(),
@@ -328,11 +259,6 @@ bool ApplyNodeHierarchyTransforms(
 			return false;
 		}
 		if (nodeVisited[nodeIndex]) {
-			/// \brief glTF §3.5.2:
-			///
-			/// \details
-			/// hierarchy MUST be disjoint strict
-			///  trees. A duplicate visit is a malformed asset.
 
 			continue;
 		}
@@ -340,7 +266,6 @@ bool ApplyNodeHierarchyTransforms(
 		const glm::mat4 local = ComposeNodeLocalMatrix(node);
 		const glm::mat4 global = parentGlobal * local;
 
-		/// \brief Apply the global transform to every referenced mesh.
 		if (node.meshIndex.has_value()) {
 			const auto meshIdx = *node.meshIndex;
 			if (meshIdx >= asset.meshes.size()) {
@@ -348,16 +273,6 @@ bool ApplyNodeHierarchyTransforms(
 				return false;
 			}
 			const fastgltf::Mesh &mesh = asset.meshes[meshIdx];
-			/// \brief Find the matching `loaded->primitives` slot for
-			///
-			/// \details
-			///  this mesh's primitives. The loader pushes
-
-			///  primitives in mesh order, so the cumulative
-
-			///  primitive count up to and including this mesh
-
-			///  is the index of the first primitive in this mesh.
 
 			size_t primitiveOffset = 0;
 			for (size_t m = 0; m < meshIdx; ++m) {
@@ -370,27 +285,6 @@ bool ApplyNodeHierarchyTransforms(
 					p = glm::vec3(transformed);
 				}
 				for (glm::vec3 &n_local : prim.normals) {
-					/// \brief Normal transform:
-					///
-					/// \details
-					/// take the upper-left 3x3 of
-					///  the global matrix, normalise to recover the
-
-					///  direction. The triplanar shader in
-
-					///  `model.frag` does not currently use the
-
-					///  interpolated normal, so this is mostly a
-
-					///  correctness placeholder for future PBR
-
-					///  work — but it costs nothing to do right
-
-					///  now and avoids the trap of "the model
-
-					///  looks fine until someone adds a normal-
-
-					///  dependent shading pass."
 
 					const glm::mat3 normalMatrix = glm::mat3(global);
 					const glm::vec3 nTransformed = normalMatrix * n_local;
@@ -444,7 +338,6 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 	const std::filesystem::path directory = std::filesystem::path(path).parent_path();
 	auto assetExpected = parser.loadGltf(dataBuffer.get(), directory, options, categories);
 	if (assetExpected.error() != fastgltf::Error::None) {
-		/// \brief Same Windows-STL portability rationale as above.
 		std::string message = "loadGltf failed: ";
 		message += fastgltf::getErrorMessage(assetExpected.error());
 		SetLastError(message);
@@ -466,15 +359,6 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 	auto loaded = std::make_unique<LoadedAsset>();
 	loaded->sourcePath = path;
 
-	/// \brief Pass 1:
-	///
-	/// \details
-	/// read each primitive's POSITION / NORMAL / UV /
-	///  indices into the loaded asset. The positions are still in
-
-	///  the primitive's local space at this point — node TRS is
-
-	///  applied in pass 2.
 
 	for (const auto &mesh : asset.meshes) {
 		for (const auto &primitive : mesh.primitives) {
@@ -512,13 +396,6 @@ std::unique_ptr<LoadedAsset> LoadGlb(
 		return nullptr;
 	}
 
-	/// \brief Pass 2:
-	///
-	/// \details
-	/// walk the default scene's node hierarchy, apply
-	///  each node's TRS to its referenced mesh's vertices in
-
-	///  place, and accumulate the asset-local AABB.
 
 	if (!ApplyNodeHierarchyTransforms(asset, *loaded)) {
 		if (outError) {
@@ -559,66 +436,8 @@ VoxelAlignedAabb ComputeVoxelAlignedAabb(
 	const glm::vec3 &aabbMax,
 	const float voxelSize)
 {
-	/// \brief Pure helper extracted from the snap-loop in
-	///
-	/// \details
-	///  `SnapModelInstancesAboveGround`. See `AssetLoader.hpp` for
-
-	///  the contract. Math:
-
-	///    srcDim_i = aabbMax_i - aabbMin_i
-
-	///    targetDim_i = max(1, round(srcDim_i / voxelSize)) * voxelSize
-
-	///    s_i = targetDim_i / srcDim_i   (clamped to srcDim_i >= 1e-6 to
-
-	///                                    avoid div-by-zero on degenerate
-
-	///                                    input)
-
-	///    newAabbMin_i = aabbMin_i * s_i
-
-	///    newAabbMax_i = aabbMax_i * s_i
-
-	///    finalAabbMin_i.x/z = round(newAabbMin_i.x/z)  (XZ corner snap)
-
-	///    finalAabbMin_i.y = newAabbMin_i.y             (Y is left for
-
-	///                                                   the ground-snap
-
-	///                                                   pass to override)
-
-	///    finalAabbMax_i.x/z = finalAabbMin_i.x/z + targetDim_i.x/z
-
-	///  Note: the `aabbMin * s_i` form scales the AABB about the
-
-	///  world-space origin (0, 0, 0), NOT about the AABB min. This
-
-	///  matches the snap-loop's `worldAabbMin[i] *= s_i` and
-
-	///  `worldAabbMax[i] *= s_i` semantics because the load path has
-
-	///  already placed the model's source AABB min at `entry.position`
-
-	///  (and source AABB max at `entry.position + srcDim * scale`), so
-
-	///  both `aabbMin` and `aabbMax` are translated by the same
-
-	///  `entry.position` and the relative offset
-
-	///  `(aabbMax - aabbMin) = srcDim` scales by `s_i` to give the
-
-	///  integer-aligned target.
 
 	(void)voxelSize; // voxelSize is implicit in the per-axis `round`
-					 /// \brief (which assumes 1.0 — the VoxelLab contract).
-					 ///
-					 /// \details
-					 ///  Kept in the signature for future per-world
-
-					 ///  voxelSize support (e.g. sub-voxel worlds).
-
-					 ///  Tests construct the 1.0 case explicitly.
 
 	const float srcX = std::max(aabbMax.x - aabbMin.x, 1e-6f);
 	const float srcY = std::max(aabbMax.y - aabbMin.y, 1e-6f);
@@ -632,11 +451,6 @@ VoxelAlignedAabb ComputeVoxelAlignedAabb(
 	VoxelAlignedAabb result{};
 	result.aabbMin = glm::vec3(aabbMin.x * sx, aabbMin.y * sy, aabbMin.z * sz);
 	result.aabbMax = glm::vec3(aabbMax.x * sx, aabbMax.y * sy, aabbMax.z * sz);
-	/// \brief XZ corner snap (round to nearest integer).
-	///
-	/// \details
-	/// Y is left for the
-	///  caller to handle via the ground-snap pass.
 
 	result.aabbMin.x = std::round(result.aabbMin.x);
 	result.aabbMin.z = std::round(result.aabbMin.z);

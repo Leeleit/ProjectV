@@ -121,20 +121,6 @@ VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR> &presentM
 		g_active == VK_PRESENT_MODE_MAILBOX_KHR) {
 		return PickBestAvailablePresentMode(presentModes, g_active);
 	}
-	/// \brief Explicit FIFO request (operator chose V → "vsync on").
-	///
-	/// \details
-	///  Honour it even if the surface supports MAILBOX.
-
-	///  FIFO is the only V-sync-capable present mode; if the
-
-	///  surface doesn't expose it (Vulkan 1.4 spec: always
-
-	///  supported per `VkPresentModeKHR` table), we fall back
-
-	///  to MAILBOX so the engine never fails the swapchain
-
-	///  create.
 
 	for (const VkPresentModeKHR mode : presentModes) {
 		if (mode == VK_PRESENT_MODE_FIFO_KHR) {
@@ -330,22 +316,6 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 	swapchain->images = std::move(newImages);
 	swapchain->imageViews = std::move(newViews);
 
-	/// \brief Per-swapchain-image submit-finished semaphores, created here so
-	///
-	/// \details
-	///  the size always matches the current swapchain image count. See
-
-	///  `SwapchainState::submitSemaphores` for the contract; the
-
-	///  per-swapchain-image indexing is the canonical fix for the
-
-	///  "semaphore may still be in use by VkSwapchainKHR" validation
-
-	///  warning (per the Vulkan SDK 1.4
-
-	///  `swapchain_semaphore_reuse.html` guide, chapter "Swapchain
-
-	///  Semaphore Reuse").
 
 	{
 		PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain.CreatePerImageSemaphores");
@@ -370,12 +340,6 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 					vkDestroySemaphore(context->device, semaphore, nullptr);
 				}
 			}
-			/// \brief The imageViews and swapchain itself were already created;
-			///
-			/// \details
-			///  we cannot roll them back here, so just return false and
-
-			///  let the caller handle the failure.
 
 			runtime::LogRuntimeFailure(
 				"Swapchain",
@@ -383,14 +347,6 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 				"failed to create per-swapchain-image submit semaphores");
 			return std::unexpected(projectv::swapchain::SwapchainError::CreateSemaphoreFailed);
 		}
-		/// \brief Destroy the previous per-image semaphores before overwriting
-		///
-		/// \details
-		///  the vector. The earlier `vkDeviceWaitIdle` in
-
-		///  `RecreateSwapchain` should have retired any in-flight work
-
-		///  that referenced them.
 
 		for (VkSemaphore semaphore : swapchain->submitSemaphores) {
 			if (semaphore != VK_NULL_HANDLE) {
@@ -474,24 +430,6 @@ bool RecreateSwapchain(
 		return true;
 	}
 
-	/// \brief TAA offscreen colour targets stay in lockstep with the swapchain
-	///
-	/// \details
-	///  extent. The pair is intentionally allocated even when TAA is
-
-	///  currently disabled — the targets are only ~24 MiB at 1440p with
-
-	///  R16G16B16A16_SFLOAT, and pre-allocating them means toggling TAA on
-
-	///  at runtime does not have to wait for a swapchain resize to reattach.
-
-	///  The just-resolved history from the *previous* swapchain is no
-
-	///  longer valid; the next frame's resolve pass therefore starts with
-
-	///  `taaHistoryValid = false` and uses the current scene as the only
-
-	///  sample until a fresh history has been resolved at least once.
 
 	if (render->taaSceneColorTarget == nullptr) {
 		render->taaSceneColorTarget = new projectv::taa::OffscreenColorTarget();
@@ -499,21 +437,6 @@ bool RecreateSwapchain(
 	if (render->taaHistoryColorTarget == nullptr) {
 		render->taaHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
 	}
-	/// \brief 1.5 anti-flicker:
-	///
-	/// \details
-	/// also lazy-allocate the per-layer history
-	///  pair. Same lifecycle as the colour history — both pairs go
-
-	///  through `CreateOrRecreateTaaRenderTargets` and re-allocate
-
-	///  together on swapchain resize. The pair is intentionally
-
-	///  allocated even when anti-flicker is conceptually disabled
-
-	///  (TAA off) so toggling it on at runtime does not have to
-
-	///  wait for a swapchain resize.
 
 	if (render->taaLayerSceneColorTarget == nullptr) {
 		render->taaLayerSceneColorTarget = new projectv::taa::OffscreenColorTarget();
@@ -540,22 +463,6 @@ bool RecreateSwapchain(
 	render->taaSceneColorNeedsInit = true;
 	render->taaHistoryNeedsInit = true;
 	render->taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	/// \brief Both history images are reset to `UNDEFINED` (matching
-	///
-	/// \details
-	///  their `initialLayout` in `TaaRenderTargets.cpp`); the
-
-	///  first-frame per-frame transition in `Renderer.cpp` will
-
-	///  move them to `SHADER_READ_ONLY_OPTIMAL` for the next
-
-	///  resolve pass / the next voxel pass's binding-6 sample.
-
-	///  The depth and the layer scene trackers also go back to
-
-	///  `UNDEFINED` so the first frame after recreate starts
-
-	///  from a clean state.
 
 	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -563,40 +470,10 @@ bool RecreateSwapchain(
 	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaFrameCounter = 0u;
 	render->taaPrevViewProjectionMatrix = {};
-	/// \brief 1.2 — companion reset for the camera-cut detector.
-	///
-	/// \details
-	/// The
-	///  swapchain recreate path zeroes `taaPrevViewProjectionMatrix`,
-
-	///  so the next frame's cut check would otherwise see the real
-
-	///  current matrix next to a zero `prev` and register a false
-
-	///  "cut" with `maxDelta` equal to the largest |viewProj| entry.
-
-	///  Clear both the init flag and the cut accumulator so the
-
-	///  post-recreate counter is a clean baseline again.
 
 	render->taaPrevViewProjectionMatrixInitialized = false;
 	render->taaCameraCutCount = 0u;
 	render->taaCameraCutMaxDelta = 0.0f;
-	/// \brief 1.5 — same companion reset for the layer history.
-	///
-	/// \details
-	/// The
-	///  swapchain recreate path zero-initialises the layer history
-
-	///  pair (same as the colour history above), so the next
-
-	///  frame's layer history sample would otherwise read garbage.
-
-	///  Reset the valid flag so the voxel pass falls through to
-
-	///  the raw current value (without sampling history) for the
-
-	///  first frame after recreate.
 
 	render->taaLayerHistoryValid = false;
 

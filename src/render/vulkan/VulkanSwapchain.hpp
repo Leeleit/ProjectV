@@ -116,22 +116,9 @@ inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 		}
 	}
 	if (projectv::present_mode::g_cycle.empty()) {
-		/// \brief Vulkan 1.4 spec:
-		///
-		/// \details
-		/// `FIFO_KHR` is mandatory. If the
-		///  surface didn't report it, fall back to a single-
-
-		///  element cycle of FIFO so the engine still creates
-
-		///  a swapchain.
 
 		projectv::present_mode::g_cycle.push_back(VK_PRESENT_MODE_FIFO_KHR);
 	}
-	/// \brief Preserve the previous `g_active` if it's still
-	///
-	/// \details
-	///  supported; otherwise fall back to highest-priority.
 
 	if (std::find(
 			projectv::present_mode::g_cycle.begin(),
@@ -140,16 +127,6 @@ inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 		!= projectv::present_mode::g_cycle.end()) {
 		projectv::present_mode::g_active = previousActive;
 	} else {
-		/// \brief Display hot-swap dropped the current mode
-		///
-		/// \details
-		///  (e.g. external monitor unplugged and the new
-
-		///  surface doesn't expose IMMEDIATE). Fall back
-
-		///  to highest-priority supported mode, which is
-
-		///  FIFO on every conformant Vulkan 1.4 surface.
 
 		projectv::present_mode::g_active = projectv::present_mode::g_cycle.front();
 	}

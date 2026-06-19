@@ -79,16 +79,6 @@ inline bool IsSceneChunkVisible(
 
 	if (maxDistance > 0.0f) {
 		const float maxCenterDistance = maxDistance + chunkRadius;
-		/// \brief `[[unlikely]]` on the max-distance cull.
-		///
-		/// \details
-		///  Chunks within 200 world units of the camera
-
-		///  are by far the dominant case; the cull only
-
-		///  fires for chunks the user has loaded far
-
-		///  past the visible frustum.
 
 		if (lengthSquared(toChunkCenter) > maxCenterDistance * maxCenterDistance) [[unlikely]] {
 			return false;
@@ -129,21 +119,6 @@ inline bool IsSceneChunkVisible(
 	return true;
 }
 
-/// \brief M5:
-///
-/// \details
-/// world-space AABB vs the same camera frustum that
-///  `IsSceneChunkVisible` builds. Used by `FramePreparation` to cull
-
-///  polygon-model instances per frame without paying the cost of an
-
-///  indirect buffer + GPU readback. Planes are constructed inline rather
-
-///  than refactoring the chunk helper because the chunk hot path is owned
-
-///  by another agent's work-in-progress and the cost of an additional ~30
-
-///  lines of math is negligible compared to touching a shared function.
 
 inline bool IsAabbVisibleAgainstCameraFrustum(
 	const projectv::math::Vec3 &aabbMin,
@@ -263,38 +238,6 @@ inline bool IsSceneChunkVisibleInShadowCascade(
 		0.0f,
 	};
 
-	/// \brief Two valid contracts feed this culling, both rely on `clip.z < 0` for the
-	///
-	/// \details
-	///  near-plane test:
-
-	///    1. The real shadow projection, which uses an inverted light-space Z
-
-	///       (`lightView` row 2 has `-lightForward.xyz`, and the orthographic
-
-	///       `m[2][2] = 1/(near - far)` is negative). For points in front of the
-
-	///       light `clip.z > 0`; for points *behind* the near plane `clip.z < 0`.
-
-	///    2. A vanilla identity projection (used in unit tests). In that case
-
-	///       `clip.z = corner.z` and standard NDC applies, so `clip.z < 0` culls
-
-	///       behind the near plane as expected.
-
-	///  Both contracts want the same predicate here, so we keep it. A near-only
-
-	///  visibility test was previously proposed and removed because it read as
-
-	///  a no-op under the inverted-Z contract, but the analysis was wrong: the
-
-	///  inversion is in `lightView`'s row 2 only, *not* in the resulting `clip.z`
-
-	///  sign. Removing the test regresses `TestIsSceneChunkVisibleInShadowCascade`
-
-	///  (line 2157 of `tests/VoxelWorldTests.cpp`), which feeds an identity
-
-	///  projection and expects a chunk at z=-2..-1 to be culled by the near plane.
 
 	bool outsideLeft = true;
 	bool outsideRight = true;
@@ -309,14 +252,6 @@ inline bool IsSceneChunkVisibleInShadowCascade(
 			(cornerIndex & 4u) != 0u ? chunkMax.z : chunkMin.z,
 			0.0f,
 		};
-		/// \brief Column-major mat4 * homogeneous vec4 (w=1.0).
-		///
-		/// \details
-		///  `math::operator*(Mat4, Vec4)` matches the original
-
-		///  `std::array` formula `m[col*4+row] * v[col]` (which is
-
-		///  the standard column-major mat*vec contract).
 
 		const projectv::math::Vec4 clipCorner = lightViewProjection
 			* projectv::math::Vec4{corner.x, corner.y, corner.z, 1.0f};
@@ -386,17 +321,6 @@ inline uint64_t ComputeVisibilityCacheHash(
 	const auto fwdY = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[1]);
 	const auto fwdZ = QuantizeCameraForwardComponent(parameters.cameraForwardAndTanHalfVerticalFov[2]);
 
-	/// \brief splitmix64-style fold.
-	///
-	/// \details
-	/// The exact constants don't matter
-	///  for correctness — only that (a) the hash is
-
-	///  deterministic and (b) the bits of each component get
-
-	///  mixed into the high bits, so a 1-bit change in any input
-
-	///  flips roughly half the hash bits.
 
 	uint64_t hash = static_cast<uint64_t>(posX) * 0x9E3779B185EBCA87ULL;
 	hash ^= static_cast<uint64_t>(posY) * 0xC2B2AE3D27D4EB4FULL;
@@ -407,10 +331,6 @@ inline uint64_t ComputeVisibilityCacheHash(
 	hash ^= sceneVoxelPayloadVersion * 0x27D4EB2F165667C5ULL;
 	hash ^= static_cast<uint64_t>(chunkDescriptorCount) * 0x9C2A8E3F4D2D9B3BULL;
 
-	/// \brief Final avalanche.
-	///
-	/// \details
-	/// Same mix as splitmix64.
 	hash ^= hash >> 30;
 	hash *= 0xBF58476D1CE4E5B9ULL;
 	hash ^= hash >> 27;

@@ -4,52 +4,12 @@
 
 #include <cstring>
 
-/// \brief volk.h must be visible *before* `vk_mem_alloc.h` (transitively pulled
-///
-/// \details
-///  in by `core/Types.hpp`) so that `VULKAN_API_VERSION_1_4` /
-
-///  `VOLK_HEADER_VERSION` are defined when VMA's volk-aware import
-
-///  helpers are declared. Without this, `vmaImportVulkanFunctionsFromVolk`
-
-///  shows up as undeclared the moment any TU starts a clean build of
-
-///  `VulkanBootstrap.cpp.o` (VMA's
-
-///  `vmaImportVulkanFunctionsFromVolk` is gated on
-
-///  `#ifdef VOLK_HEADER_VERSION`).
 
 #include "volk.h"
 
 #include "SDL3/SDL_vulkan.h"
 #include "fmt/format.h"
 
-/// \brief `volk.h` does not enable extension-specific feature structs (only the
-///
-/// \details
-///  function pointers) and `<vulkan/vulkan.h>` requires the extension
-
-///  preprocessor `#define` to be set *before* its own include. We need
-
-///  `VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR` and
-
-///  `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR`
-
-///  unconditionally, even on devices that do not have the extension, so
-
-///  that the optional `pNext` chain in `VkDeviceCreateInfo` can compile
-
-///  without an `#ifdef`. The feature struct itself is a no-op when the
-
-///  extension is not enabled (the loader only acts on `sType`).
-
-///  `volk.h` is transitively included via `core/Types.hpp`; we re-include
-
-///  it here *after* the `#define` so the extension function pointers stay
-
-///  visible.
 
 #define VK_KHR_swapchain_maintenance1 1
 #define VK_EXT_dynamic_rendering_unused_attachments 1
@@ -60,67 +20,17 @@
 #include <vector>
 
 namespace {
-/// \brief Имя приложения видно и в заголовке окна, и в логах Vulkan.
 inline constexpr char PROJECT_NAME[] = "ProjectV v0.0.1";
 
-/// \brief Базовый набор слоёв для отладки.
 constexpr std::array<const char *, 1> kValidationLayers{"VK_LAYER_KHRONOS_validation"};
-/// \brief Для нашего рендера достаточно swapchain-расширения.
 constexpr std::array<const char *, 1> kRequiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr char kOptionalTracyCalibratedTimestampsExtension[] = VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME;
-/// \brief `VK_KHR_swapchain_maintenance1` lets us use a `VkFence` for both the
-///
-/// \details
-///  `vkAcquireNextImageKHR` "image available" signal and the present wait
-
-///  (instead of the in-use-by-swapchain semaphore that was the previous
-
-///  20-per-smoke-run validation warning). Enabled opportunistically when
-
-///  supported; the fallback path (no maintenance1) is to use a single
-
-///  `imageInFlightFences[imageIndex]` ownership tracker and wait on the
-
-///  *previous* in-flight frame's fence after acquire.
-
-///  `volk.h` does not define `VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME`
-
-///  at the C-preprocessor level, so we use the literal name string.
 
 constexpr char kOptionalSwapchainMaintenance1Extension[] = "VK_KHR_swapchain_maintenance1";
-/// \brief `VK_EXT_dynamic_rendering_unused_attachments` (extension #500, ratified)
-///
-/// \details
-///  is the device-level feature that lets one graphics pipeline declared with
-
-///  `pColorAttachmentFormats = {swapchain_format, R16G16B16A16_SFLOAT}` be
-
-///  used both for the TAA-on path (render to slot 1, slot 0 = NULL) and the
-
-///  TAA-off path (render to slot 0 = swapchain, slot 1 = NULL). Per the spec
-
-///  (chap54.html §VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT),
-
-///  any writes to a `pColorAttachments` slot with `imageView = VK_NULL_HANDLE`
-
-///  are discarded — so a single main pipeline serves both paths without
-
-///  building a second variant. Core in 1.3/1.4? No, still an extension; see
-
-///  `legacy/docs/libraries/vulkan/` for the per-version support matrix. We
-
-///  enable it opportunistically when supported; if the extension is missing
-
-///  the project still builds and runs the TAA-off path correctly, but the
-
-///  `taaEnabled` runtime toggle would fail with a VUID (we guard this in
-
-///  `VulkanGraphicsPipeline.cpp::CreateGraphicsPipeline`).
 
 constexpr char kOptionalDynamicRenderingUnusedAttachmentsExtension[] =
 	"VK_EXT_dynamic_rendering_unused_attachments";
 
-/// \brief Callback, через который Vulkan присылает предупреждения и ошибки прямо в SDL-лог.
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	const VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -134,7 +44,6 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	return VK_FALSE;
 }
 
-/// \brief Проверяем, доступны ли те слои, которые мы попросим у instance.
 bool CheckValidationLayerSupport()
 {
 	uint32_t layerCount = 0;
@@ -164,7 +73,6 @@ bool CheckValidationLayerSupport()
 	return true;
 }
 
-/// \brief Конфигурируем messenger заранее, чтобы Vulkan смог отправлять сообщения уже на этапе vkCreateInstance.
 VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 {
 	VkDebugUtilsMessengerCreateInfoEXT info{};
@@ -180,7 +88,6 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 	return info;
 }
 
-/// \brief Создаём сам messenger после instance.
 bool CreateDebugMessenger(VulkanContextState *context)
 {
 #if PROJECTV_ENABLE_VALIDATION
@@ -198,7 +105,6 @@ bool CreateDebugMessenger(VulkanContextState *context)
 #endif
 }
 
-/// \brief Проверяем, что у физического устройства есть нужные расширения.
 bool CheckDeviceExtensionSupport(const VkPhysicalDevice physicalDevice)
 {
 	uint32_t extensionCount = 0;
@@ -236,7 +142,6 @@ bool CheckDeviceExtensionSupport(const VkPhysicalDevice physicalDevice)
 	return true;
 }
 
-/// \brief Ищем очередь, которая умеет и рисовать, и презентовать изображение в окно.
 bool HasDeviceExtension(
 	const VkPhysicalDevice physicalDevice,
 	const char *extensionName)
@@ -309,7 +214,6 @@ bool FindGraphicsPresentQueueFamily(
 	return false;
 }
 
-/// \brief Без форматов и present mode swapchain мы просто не соберём.
 bool CheckSwapchainSurfaceSupport(const VkPhysicalDevice physicalDevice, const VkSurfaceKHR surface)
 {
 	uint32_t formatCount = 0;
@@ -349,7 +253,6 @@ bool CheckSwapchainSurfaceSupport(const VkPhysicalDevice physicalDevice, const V
 	return true;
 }
 
-/// \brief Проверяем фичи Vulkan 1.3, которые использует рендерер.
 bool CheckRequiredFeatures(
 	const VkPhysicalDevice physicalDevice,
 	VkPhysicalDeviceFeatures *outFeatures,
@@ -362,58 +265,20 @@ bool CheckRequiredFeatures(
 	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 	VkPhysicalDeviceVulkan13Features features13{};
 	features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-	/// \brief The swapchain-maintenance1 features struct is *optionally* queried
-	///
-	/// \details
-	///  (only when the extension is enabled on the device, see the caller's
-
-	///  pre-check). When the caller's `outSwapchainMaintenance1Features` is
-
-	///  non-null, the caller *has already* enabled the extension and we can
-
-	///  safely chain the struct; otherwise we omit it (VUID-04025 says we
-
-	///  cannot query a features struct for an extension the device does
-
-	///  not have).
 
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenanceFeatures{};
 	if (outSwapchainMaintenance1Features != nullptr) {
 		maintenanceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 		features12.pNext = &maintenanceFeatures;
 	}
-	/// \brief The `dynamicRenderingUnusedAttachments` features struct follows the
-	///
-	/// \details
-	///  same optional-query pattern as swapchain-maintenance1: the caller
-
-	///  passes a non-null out pointer only when the corresponding extension
-
-	///  has already been verified on the device.
 
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
 	if (outDynamicRenderingUnusedAttachmentsFeatures != nullptr) {
 		dynamicRenderingUnusedAttachmentsFeatures.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
-		// Both branches below are reachable at runtime. The
-		// caller in `SelectPhysicalDevice` passes
-		// `deviceHasSwapchainMaintenance1 ? &xxx : nullptr` —
-		// that is a runtime decision based on the device's
-		// supported extension list, not a compile-time constant.
-		// The DFA can't follow the call-site indirection and
-		// reports `outSwapchainMaintenance1Features != nullptr`
-		// as "always true" plus the `else` branch (line ~341)
-		// as unreachable. Suppress per-line.
-		// noinspection CppDFAConstantConditions
-		// `outSwapchainMaintenance1Features != nullptr` is a runtime
-		// decision based on the device's supported extension list
-		// (see `VulkanBootstrap::QueryOptionalDeviceFeatures`).
-		// The DFA can't follow the call-site indirection and reports
-		// it as "always true" plus the `else` branch as unreachable.
 		if (outSwapchainMaintenance1Features != nullptr) {
 			maintenanceFeatures.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
 		} else {
-			// noinspection CppDFAUnreachableCode
 			features12.pNext = &dynamicRenderingUnusedAttachmentsFeatures;
 		}
 	}
@@ -484,10 +349,6 @@ bool CheckRequiredFeatures(
 	return true;
 }
 
-/// \brief Кандидат на выбор физического устройства:
-///
-/// \details
-/// сам устройство, его очередь и поддерживаемые фичи.
 struct PhysicalDeviceCandidate {
 	VkPhysicalDevice device = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = UINT32_MAX;
@@ -519,7 +380,6 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	return enabled;
 }
 
-/// \brief Переносим в enabled только те фичи, которые реально поддержаны устройством.
 VkPhysicalDeviceVulkan13Features BuildEnabledFeatures13(const PhysicalDeviceCandidate &selected)
 {
 	VkPhysicalDeviceVulkan13Features enabled{};
@@ -529,7 +389,6 @@ VkPhysicalDeviceVulkan13Features BuildEnabledFeatures13(const PhysicalDeviceCand
 	return enabled;
 }
 
-/// \brief Полная проверка кандидата на роль GPU для нашего приложения.
 bool TryPickPhysicalDevice(
 	const VkPhysicalDevice physicalDevice,
 	const VkSurfaceKHR surface,
@@ -597,7 +456,6 @@ bool InitializeVulkanBase(
 		"Init",
 		"InitializeVulkanBase.Preconditions",
 		"platform/context/frame is null");
-	/// \brief SDL нужен нам до Vulkan, потому что именно он создаёт окно и surface-совместимость.
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
 		runtime::LogSdlFailure("InitializeVulkanBase.SDL_Init");
 		return false;
@@ -609,14 +467,12 @@ bool InitializeVulkanBase(
 		return false;
 	}
 
-	/// \brief Volk поднимает таблицу функций Vulkan, чтобы дальше не делать ручной загрузки указателей.
 	const VkResult volkInitializeResult = volkInitialize();
 	if (volkInitializeResult != VK_SUCCESS) {
 		runtime::LogVkFailure("InitializeVulkanBase.volkInitialize", volkInitializeResult);
 		return false;
 	}
 
-	/// \brief SDL сообщает, какие instance extensions нужны именно для этого окна и платформы.
 	Uint32 extCount = 0;
 	const char *const *sdlExtNames = SDL_Vulkan_GetInstanceExtensions(&extCount);
 	if (!sdlExtNames) {
@@ -630,24 +486,6 @@ bool InitializeVulkanBase(
 		instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 #endif
-	/// \brief `VK_KHR_surface_maintenance1` is the instance-level dependency of
-	///
-	/// \details
-	///  the (optional) device extension `VK_KHR_swapchain_maintenance1`.
-
-	///  It itself depends on `VK_KHR_get_surface_capabilities2` and
-
-	///  `VK_KHR_surface`. `VK_KHR_surface` is in `sdlExtNames` already; we
-
-	///  add `VK_KHR_get_surface_capabilities2` next. Every NVIDIA / AMD /
-
-	///  Intel Vulkan 1.3+ driver in `vulkaninfo` (including the one on
-
-	///  this host) reports both extensions.
-
-	///  The literals are used because `volk.h` does not define the
-
-	///  matching `VK_KHR_*_EXTENSION_NAME` macros.
 
 	instanceExtensions.push_back("VK_KHR_get_surface_capabilities2");
 	instanceExtensions.push_back("VK_KHR_surface_maintenance1");
@@ -667,7 +505,6 @@ bool InitializeVulkanBase(
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.apiVersion = VK_API_VERSION_1_4;
 
-	/// \brief Базовая "анкета" для vkCreateInstance.
 	VkInstanceCreateInfo instanceCreateInfo{};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pApplicationInfo = &appInfo;
@@ -684,7 +521,6 @@ bool InitializeVulkanBase(
 	}
 #endif
 
-	/// \brief Instance — это верхний объект Vulkan, от которого стартует вся остальная графическая жизнь.
 	const VkResult createInstanceResult = vkCreateInstance(&instanceCreateInfo, nullptr, &context->instance);
 	if (createInstanceResult != VK_SUCCESS) {
 		runtime::LogVkFailure("InitializeVulkanBase.vkCreateInstance", createInstanceResult);
@@ -697,13 +533,11 @@ bool InitializeVulkanBase(
 		return false;
 	}
 
-	/// \brief Surface связывает окно SDL и Vulkan-instance в один канал вывода.
 	if (!SDL_Vulkan_CreateSurface(platform->window, context->instance, nullptr, &context->surface)) {
 		runtime::LogSdlFailure("InitializeVulkanBase.SDL_Vulkan_CreateSurface");
 		return false;
 	}
 
-	/// \brief Ищем физическое устройство, которое вообще умеет работать с нашим surface.
 	uint32_t deviceCount = 0;
 	const VkResult enumeratePhysicalDevicesCountResult =
 		vkEnumeratePhysicalDevices(context->instance, &deviceCount, nullptr);
@@ -748,12 +582,10 @@ bool InitializeVulkanBase(
 		return false;
 	}
 
-	/// \brief Фиксируем выбранную видеокарту и семейство очереди в общем состоянии.
 	context->physicalDevice = selected.device;
 	context->queueFamilyIndex = selected.queueFamilyIndex;
 	context->supportsDynamicRenderingUnusedAttachments = selected.supportsDynamicRenderingUnusedAttachments;
 
-	/// \brief Логическое устройство создаёт то API, которым мы будем реально пользоваться.
 	float queuePriority = 1.0f;
 	VkDeviceQueueCreateInfo queueInfo{};
 	queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -777,40 +609,12 @@ bool InitializeVulkanBase(
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
 	VkPhysicalDeviceVulkan13Features enabledFeatures13 = BuildEnabledFeatures13(selected);
-	/// \brief Chain the swapchain-maintenance1 features struct at the end of the
-	///
-	/// \details
-	///  pNext list when the extension is enabled. There is no extra feature
-
-	///  bit to enable beyond "the extension exists"; we just need the
-
-	///  struct present in the chain so the loader treats it as an
-
-	///  enabled-extension request. The `swapchainMaintenance1` field is
-
-	///  intentionally left at its default-constructed value (zero, which
-
-	///  is also the only valid value for a feature bit that does not
-
-	///  exist on this extension).
 
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR enabledSwapchainMaintenance1Features{};
 	if (selected.supportsSwapchainMaintenance1) {
 		enabledSwapchainMaintenance1Features.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 	}
-	/// \brief `dynamicRenderingUnusedAttachments` is the *only* opt-in feature bit
-	///
-	/// \details
-	///  we actually want from the EXT — when the struct is present in the
-
-	///  device pNext chain the loader treats the request as "enable the
-
-	///  extension", and the feature bit is the runtime gate that allows
-
-	///  `pColorAttachments[i].imageView = VK_NULL_HANDLE` on the unused
-
-	///  slot of a `VkPipelineRenderingCreateInfo`-shaped pipeline.
 
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT enabledDynamicRenderingUnusedAttachmentsFeatures{};
 	if (selected.supportsDynamicRenderingUnusedAttachments) {
@@ -842,7 +646,6 @@ bool InitializeVulkanBase(
 		return false;
 	}
 
-	/// \brief После создания device Vulkan-вызывам нужен device-level loader.
 	volkLoadDevice(context->device);
 	vkGetDeviceQueue(context->device, context->queueFamilyIndex, 0, &context->queue);
 	SetVulkanObjectName(
@@ -851,7 +654,6 @@ bool InitializeVulkanBase(
 		VK_OBJECT_TYPE_QUEUE,
 		"GraphicsPresentQueue");
 
-	/// \brief VMA берет на себя буферы и аллокации памяти, чтобы не писать это руками в каждом месте.
 	VmaAllocatorCreateInfo allocInfo{};
 	allocInfo.physicalDevice = context->physicalDevice;
 	allocInfo.device = context->device;
@@ -874,7 +676,6 @@ bool InitializeVulkanBase(
 		return false;
 	}
 
-	/// \brief Command pool хранит временные command buffer'ы.
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = context->queueFamilyIndex;
@@ -892,7 +693,6 @@ bool InitializeVulkanBase(
 		VK_OBJECT_TYPE_COMMAND_POOL,
 		"MainCommandPool");
 
-	/// \brief На каждый кадр держим отдельный primary command buffer.
 	frame->commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	VkCommandBufferAllocateInfo cmdAllocInfo{};
 	cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -916,7 +716,6 @@ bool InitializeVulkanBase(
 			name);
 	}
 
-	/// \brief Семафоры и fence'ы синхронизируют CPU и GPU между кадрами.
 	frame->imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	frame->renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
 	frame->inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
