@@ -304,6 +304,32 @@ Append-only ledger активных и недавно завершённых AI-
      `legacy/docs/archive/agent-sessions/` (full per-session detail preserved).
      Список в архиве см. `agent/ARCHIVE-INDEX.md`. -->
 
+### session-2026-06-19T-deps-bump-and-cleanup-r0
+
+- **id:** `2026-06-19T-deps-bump-and-cleanup-r0`
+- **started-at:** 2026-06-19T07:59:21Z
+- **closed-at:** 2026-06-19T08:12:00Z
+- **agent:** cline/MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Bump 13 submodules to upstream HEAD + 1 cleanup commit (~124 files).** Per operator «обновить сабмодули до последних коммитов (HEAD в master и main, смотря у кого что), а также сделать коммит для очистки дерева: там около 100 файлов надо закоммитить, это просто перенос документов в legacy, ничего страшного, и ещё изменение .gitignore». Two commits by operator decision (one combined submodule bump + one cleanup), not bundled per `§7.2.6.1` because they're logically distinct operations on disjoint file sets.
+- **files-touched-intent:**
+  - **FETCH+CHECKOUT** всех 14 submodules на origin default branch HEAD (master для volk/VMA/glm/flecs/JoltPhysics/miniaudio/tracy/imgui/meshoptimizer; main для SDL/benchmark/draco/fastgltf/fmt)
+  - **DISCARD** external/benchmark «dirty state»: 3 файла (`.github/libcxx-setup.sh`, `tools/compare.py`, `tools/strip_asm.py`) показали Windows FS file-mode drift (100755→100644), не реальные правки. Зафиксировано через `git config core.filemode false` внутри сабмодуля. Safety-net: `/tmp/benchmark_dirty_20260619T075921Z.patch` (261 bytes)
+  - **REVERT** `agent/active-sessions.md`: per operator «Удали это, эта сессия прервана и не будет восстановлена» — запись session-2026-06-18T-comment-cleanup-r0 откачена (operator-authorized override §7.2.8 shared-infra rule)
+  - **EDIT** `.gitignore`: drop commented LaTeX artifact block (артефакты теперь tracked в legacy/docs/tex/defense/); `.venv` → `.venv/` (dir-only); add `/docs/VulkanSDK-Windows-Docs-1.4.350.0/`
+  - **DELETE + ADD (rename detection сработал)** defense-документы: `docs/DefenseCompetencyFAQ_T{1..6}.md` + `docs/DefensePresentation_Structure.md` + `docs/DefenseScript_Team.md` + `docs/tex/defense/{pdf,tex,Makefile,header.tex,screenshots/voxel_lab.png}` → `legacy/docs/`. git rename detection: 100% для всех, кроме `DefenseScript_Team.md` (delete + create, content slightly differed)
+  - **NEW** `legacy/docs/tex/defense/`: 13 файлов (DefensePresentation.{aux,fdb_latexmk,fls,log,nav,out,pdf,snm,tex,toc,xdv} + Makefile + header.tex + screenshots/voxel_lab.png) — historical build artifacts, intentionally tracked
+  - **MODIFIED** 102 `legacy/docs/**/*.md`: CRLF→LF normalization (`git diff -w` empty → 100% whitespace-only)
+  - **APPEND-ONLY** `agent/active-sessions.md` (эта запись) + `agent/status.md` (§43)
+  - **Safety-net** `C:\Users\le1t\AppData\Local\Temp\opencode\before_deps_bump_20260619T075921Z.patch` (6.16 MB, full diff) + `before_deps_bump_subs_20260619T075921Z.patch` (с --submodule=diff) — kept per §8.1 step 5
+  - **НЕ ТРОГАЮ (per `§7.2.6 + §7.2.8`):** AGENTS.md, src/**, tests/**, TODO.md, docs/KT-*, docs/BuildAndRun.md, README.md, README_NEW.md, CMakeLists.txt, CMakePresets.json, tools/**, чужой `agent/*` (status.md TODO-чекбоксы не мои)
+- **status:** closed
+- **commit-hash:**
+  - `d458ba3` — `chore(deps): bump 13 submodules to upstream HEAD (2026-06-19)`
+  - `1f7f2ab` — `chore(docs): move defense/* from docs/ to legacy/docs/, normalize CRLF→LF + .gitignore tidy`
+- **notes:** **Auto-close per §8.1.** Two commits by operator decision (one combined submodule bump + one cleanup). Both `chore` type → auto per §7.3.1 п.3 (not fix). **Submodule bump details:** 13 of 14 bumped (miniaudio already at HEAD). Per-submodule origin/master or origin/main: JoltPhysics e2fb3a21→36c909c0, SDL f61a22e10→f8dc19e65, VMA b3cbbb4→3aa9212, benchmark eddb024→11ca63f, draco b882d62→8c1f17b, fastgltf ce52187→a31be25, flecs a0b78c166→1bf3e7c3d, fmt 9396f77f→588b3a0f, glm e8642318→6f14f479, imgui 49df3116b→d15966ff6, meshoptimizer dc09ed→a688b704, tracy 00a069d6→34395f97, volk bd406d4→477a354. **Cleanup details:** 124 files changed (1 .gitignore + 9 deletions + 102 CRLF→LF mods + 21 new files), +79370/-77418 LOC. `git diff -w` for all 102 legacy/docs/ modifications пуст → 100% whitespace-only (CRLF drift from Windows-side file saves). **Multi-agent coordination (per §7.2.6 + §7.2.8):** (1) Откатил `agent/active-sessions.md` modification от session-2026-06-18T-comment-cleanup-r0 — operator explicit («Удали это, эта сессия прервана и не будет восстановлена»), override §7.2.8 «shared-infra no foreign entry edits»; (2) НЕ включил чужую comment-cleanup-r0 запись в cleanup commit; (3) TODO.md не правил (out of scope для deps-bump + cleanup). **Note для следующих сессий:** §42 секция в status.md была запланирована windows-host-build-r0 (`7c612d5` close-routine commit ссылается), но не была написана. Я её не claim'ил — использовал §43. Filling §42 — ответственность windows-host-build-r0 close-routine или отдельной housekeeping сессии. **Pre-commit gates (§7.3.1):** оба commit `chore` → auto. type ≠ `fix`, operator confirm не требуется. **Cross-refs:** `AGENTS.md` §7.2.4 (safety-net patch перед destructive op), §7.2.5 (commit contract), §7.2.6 (multi-agent scope), §7.2.6.1 (atomic), §7.2.8 (shared agent/*), §7.3.1 (pre-commit gate), §8.1 (close-routine); `agent/memory.md §10.x` (existing submodule build flags, не модифицировал); `agent/status.md` §43 (эта сессия); safety-net patches в `C:\Users\le1t\AppData\Local\Temp\opencode\`.
+
 ### session-2026-06-17T-defense-le1t-name-r0
 
 - **id:** `2026-06-17T-defense-le1t-name-r0`
