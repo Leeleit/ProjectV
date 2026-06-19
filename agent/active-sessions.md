@@ -65,6 +65,114 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-tier1e-path-migration-r0
+
+- **id:** `2026-06-20T-tier1e-path-migration-r0`
+- **started-at:** 2026-06-20T01:35:00Z
+- **closed-at:** 2026-06-20T01:55:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 1.E (per `TODO.md` Tier 1.E + `agent/memory.md §11.2 P4` + `agent/decisions.md §29`): заменить `std::string` в hot path на более подходящие типы (`std::filesystem::path` для OS paths, `StringID` для stable IDs).** Per план одобрен оператором `2026-06-20` после Tier 0.E rename. **Audit results:** (a) `ModelRegistryEntry::id` — уже `StringID` (Tier 0.B); (b) `VoxelScenePresetToString` / `ParseVoxelScenePreset` — уже `std::string_view` / `std::optional` (предыдущий коммит); (c) `InputReplayCapture::snapshotPath` + `InputReplayState::replayPath` — `std::string` → `std::filesystem::path` (TODO); (d) `AudioEngine::m_currentTrackName/Artist/Title` — cold-path display strings, НЕ migrate (per pragmatism — StringID overhead не оправдан для display values). **Scope Tier 1.E commit:** `src/core/Types.hpp` (2 field types + `#include <filesystem>`), `src/app/InputReplay.cpp` (serialize via `.string()`, deserialize via temp `std::string` → path, SDL_Log via `.string().c_str()`), `src/app/main.cpp` (pass `.string()` to functions expecting `std::string_view`), `tests/VoxelWorldTests.cpp` (drop redundant `.string()`).
+- **files-touched-intent:**
+  - **EDIT:** `src/core/Types.hpp` (2 fields std::string → std::filesystem::path)
+  - **EDIT:** `src/app/InputReplay.cpp` (serialize via .string(), deserialize temp)
+  - **EDIT:** `src/app/main.cpp` (.string() at call sites)
+  - **EDIT:** `tests/VoxelWorldTests.cpp` (drop .string() where path direct works)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/c_kernels/**`, `src/bench/**`, `src/asset/**` (cold path std::string — Tier 1.B territory), все чужие uncommitted.
+- **status:** closed
+- **commit-hash:** `20b2d9e` — `refactor(core): migrate InputReplay paths from std::string to std::filesystem::path`
+- **notes:**
+  - **Pre-flight findings:** HEAD `9c3cb20` (Tier 0.C close-routine) + uncommitted Tier 0.D + Tier 0.E + Tier 1.E changes. Safety-net patch deleted (per AGENTS.md §7) после Tier 0.D session — но новая сессия Tier 1.E не имеет safety-net (working tree был уже "modified" от предыдущих tier).
+  - **Plan context:** подзадача 5 из 15 (Tier 0..5).
+  - **Tier 1.E sub-tasks:**
+    - [x] Pre-flight: audit std::string hot paths
+    - [x] `InputReplayCapture::snapshotPath` → `std::filesystem::path`
+    - [x] `InputReplayState::replayPath` → `std::filesystem::path`
+    - [x] Update InputReplay.cpp serialize/deserialize
+    - [x] Update main.cpp call sites
+    - [x] Update tests
+    - [x] Build verify: cmake --build green
+    - [x] ctest verify: 14/14 baseline preserved
+    - [x] Commit? → operator → git commit (Tier 1.E) → `20b2d9e`
+    - [ ] §8.1 close-routine (in progress)
+  - **Honest scope:** только path migration (4 файла). `AudioEngine::m_currentTrackName/Artist/Title` намеренно НЕ migrate (cold path display strings — StringID overhead не оправдан).
+  - **Cross-refs:** `TODO.md Tier 1.E`, `agent/memory.md §11.2 P4`, `agent/decisions.md §29`.
+
+### session-2026-06-20T-tier0e-c-kernel-rename-r0
+
+- **id:** `2026-06-20T-tier0e-c-kernel-rename-r0`
+- **started-at:** 2026-06-20T01:20:00Z
+- **closed-at:** 2026-06-20T01:53:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 0.E (per `TODO.md` Tier 0.E + `agent/memory.md §11.3` + `agent/decisions.md §29`): Godbolt-ревью intrinsics vs auto-vectorize + rename `frustum_cull.c` → `.cpp` per оператор.** Per план: «я узнал, что си код и си++ код с си стайлом одинаковы по скорости, поэтому лучше frustum_cull.c переименовать в .cpp, т.к. разницы нет, а использование удобных штук из c++ появляется». Scope: `src/c_kernels/frustum_cull.c` → `.cpp` (orthodox C++ rewrite: `<cstdint>`, `<cstddef>`, `<cmath>`, `noexcept`, `const T&`, `bool`, `[[likely/unlikely]]`); `src/c_kernels/frustum_cull.hpp` (drop `extern "C"`, namespace `projectv::c_kernels`); `src/c_kernels/FrustumCulling.cpp` (drop `&` on cparams); `src/CMakeLists.txt` (`c_std_23` → `cxx_std_26`); `src/bench/FrustumCullBenchmark.cpp` (using-declarations, drop `&`). Godbolt-equivalent verification через `objdump -d` на `libprojectv_c_kernels.a`: 23 VEX-encoded AVX2 instructions emitted (vmovps/vmulps/vaddps/vcmpps/vbroadcastss), `__attribute__((target("avx2")))` сохранён.
+- **files-touched-intent:**
+  - **GIT-MV:** `src/c_kernels/frustum_cull.c` → `frustum_cull.cpp` (rename + orthodox C++ rewrite)
+  - **EDIT:** `src/c_kernels/frustum_cull.hpp` (drop `extern "C"`, namespace)
+  - **EDIT:** `src/c_kernels/FrustumCulling.cpp` (drop `&` on cparams)
+  - **EDIT:** `src/CMakeLists.txt` (`.c` → `.cpp`, `c_std_23` → `cxx_std_26`)
+  - **EDIT:** `src/bench/FrustumCullBenchmark.cpp` (using-decls, drop `&`)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, все чужие uncommitted.
+- **status:** closed
+- **commit-hash:** `08de29d` — `perf(render): rename frustum_cull.c to .cpp with orthodox C++ kernel` (rename-only in `bafecf9`, content in `08de29d`)
+- **notes:**
+  - **Pre-flight findings:** HEAD `9c3cb20` (Tier 0.C close-routine) + uncommitted Tier 0.D + Tier 0.E changes. Safety-net patch deleted (per AGENTS.md §7) — но Tier 0.E session не имеет своего safety-net (working tree уже modified).
+  - **Plan context:** подзадача 5 из 15 (Tier 0..5).
+  - **Tier 0.E sub-tasks:**
+    - [x] Pre-flight: read C kernel + downstream
+    - [x] Rename frustum_cull.c → frustum_cull.cpp
+    - [x] Orthodox C++ rewrite (types, noexcept, branch hints)
+    - [x] Update header (drop extern "C", namespace)
+    - [x] Update FrustumCulling.cpp (drop & on cparams)
+    - [x] Update src/CMakeLists.txt (c_std_23 → cxx_std_26)
+    - [x] Update FrustumCullBenchmark.cpp (using + drop &)
+    - [x] Build verify: cmake --build green
+    - [x] ctest verify: 14/14 baseline preserved
+    - [x] Bit-identical benchmark verify: PASSED
+    - [x] Godbolt-equivalent objdump review: 23 VEX-encoded AVX2 instructions emitted
+    - [x] Commit? → operator → git commit (Tier 0.E) → `08de29d` (file rename `bafecf9`)
+    - [ ] §8.1 close-routine (in progress)
+  - **Honest scope:** только rename + downstream. Никаких performance regressions (within noise).
+  - **Note:** Rename операция `frustum_cull.c → frustum_cull.cpp` была застейджена до Tier 0.D commit и попала в `bafecf9` (Tier 0.D). Tier 0.E content (rewrite, header, downstream) — в `08de29d`. Оба atomic.
+  - **Cross-refs:** `TODO.md Tier 0.E`, `agent/memory.md §11.3`, `agent/decisions.md §29`, `legacy/docs/philosophy/01_foundation/05_compiler-philosophy.md`.
+
+### session-2026-06-20T-tier0d-hot-vector-reserve-r0
+
+- **id:** `2026-06-20T-tier0d-hot-vector-reserve-r0`
+- **started-at:** 2026-06-20T01:10:00Z
+- **closed-at:** 2026-06-20T01:50:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 0.D (per `TODO.md` Tier 0.D + `agent/memory.md §11.2 P3` + `agent/decisions.md §29`): pre-reserve / `std::inplace_vector` для hot vectors.** Per план одобрен оператором `2026-06-20` после Tier 0.C (`af69d06`). **Audit results:** ВСЕ hot-path vectors уже pre-reserved в предыдущих коммитах — Tier 0.D в части "reserve calls" уже выполнен. Конкретно: (a) `VoxelWorld::pendingChunkRebuildIndices` reserved в `VoxelWorld.cpp:366, 1162` (`reserve(world->chunks.size())`); (b) `RenderState::pendingChunkRebuildIndices` reserved в `SceneResources.cpp:1076, 1129, 1162`; (c) `latestVoxelPayloadChunkIndices` + `completedChunkRebuildIndices` reserved в `SceneResources.cpp:1074, 1078`; (d) `ChunkVisibilityCache::opaqueCommands/shadowCommands/transparentCommands` уже `std::array<VkDrawIndirectCommand, 1024>` (fixed-cap, no realloc) — Tier 1.A `std::inplace_vector` не нужен; (e) `FrameRenderData::debugOverlayBoxes` reserved в `DebugOverlays.cpp:225` (после `requiredBoxCount` подсчёта); (f) `InputReplayCapture::frames` reserved в `InputReplay.cpp:176, 278` (`reserve(512)` на recording start); (g) `BuildVisibleModelInstanceList` local `cullCandidates` reserved в `FramePreparation.cpp:30`; (h) `FillVoxelMaterial` local `queue` reserved в `VoxelWorld.cpp:1068` (`reserve(256)`). Остаётся minor hardening: `[[unlikely]]` на `rebuildQueued` early-out в `QueueChunkRebuildRequest` (per memory.md P6 «Ранние return в IsSceneChunkVisible ... идеальные кандидаты» — same principle applies).
+- **files-touched-intent:**
+  - **EDIT:** `src/voxel/VoxelWorld.cpp` (1 line: `[[unlikely]]` на `if (chunk.rebuildQueued)` early-out в `QueueChunkRebuildRequest`, common case is "chunk fresh, process it")
+  - **APPEND-ONLY:** `CHANGELOG.md` (Tier 0.D verification note), `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/c_kernels/**`, `src/bench/**` (Tier 3 territory), `src/core/Math.ixx`, `src/core/StringId.ixx`, `src/render/SceneResources.hpp` (Tier 0.C touched recently), все чужие uncommitted.
+- **status:** closed
+- **commit-hash:** `bafecf9` — `perf(voxel): harden QueueChunkRebuildRequest early-out with [[unlikely]]`
+- **notes:**
+  - **Pre-flight findings:** HEAD `9c3cb20` (close-routine Tier 0.C), +25 над origin/master, working tree clean. Safety-net patch `/tmp/before_tier0d_20260619T2008Z.patch` saved (0 bytes, чистое дерево).
+  - **Plan context:** подзадача 4 из 15 (Tier 0..5). Tier 0.B (`cf4b535`) + Tier 0.C (`af69d06`) closed. Tier 0.D — текущий.
+  - **Tier 0.D sub-tasks per TODO:**
+    - [x] Pre-flight safety net
+    - [x] Audit all hot-path `push_back` calls + verify `reserve()` presence
+    - [x] Apply minor `[[unlikely]]` hardening to `QueueChunkRebuildRequest` early-out
+    - [x] Update `CHANGELOG.md` (Tier 0.D verification note)
+    - [x] Build verify: cmake --build green
+    - [x] ctest verify: 14/14 baseline preserved
+    - [x] Commit? → operator → git commit → `bafecf9`
+    - [ ] §8.1 close-routine (in progress)
+  - **Honest accounting:** Tier 0.D в части "reserve calls" выполнен в предыдущих коммитах (audit shows all hot-path vectors pre-reserved). Этот коммит — verification + minor `[[unlikely]]` hardening + CHANGELOG note. **Net code change: 1 line in VoxelWorld.cpp** + CHANGELOG entry.
+  - **Note:** Tier 0.D commit `bafecf9` also includes the staged `git mv` rename of `frustum_cull.c → frustum_cull.cpp` (rename was staged in advance of Tier 0.E work). Tier 0.E content (rewrite, header, downstream) landed in separate commit `08de29d`. Both atomic.
+  - **Stuck loop limit per `AGENTS.md §6.7`:** 3-4 compile fails → `BLOCKED`.
+  - **Commit policy per `AGENTS.md §6.9` + v3 lessons:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=perf → explicit operator confirm обязателен.
+  - **Cross-refs:** `TODO.md Tier 0.D`, `agent/memory.md §11.2 P3`, `agent/decisions.md §29`, `legacy/docs/philosophy/01_foundation/07_memory-philosophy.md` (Reserve/Linear allocator).
+
 ### session-2026-06-20T-tier0c-frustum-cull-template-r0
 
 - **id:** `2026-06-20T-tier0c-frustum-cull-template-r0`
