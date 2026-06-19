@@ -163,7 +163,7 @@ bool TryComputeVoxelBufferSize(
 		static_cast<int64_t>(height) *
 		static_cast<int64_t>(depth);
 	if (voxelCount <= 0 ||
-		static_cast<uint64_t>(voxelCount) > std::numeric_limits<size_t>::max()) {
+		static_cast<std::uint64_t>(voxelCount) > std::numeric_limits<size_t>::max()) {
 		return false;
 	}
 
@@ -314,7 +314,7 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
 		static_cast<int64_t>(chunkCountY) *
 		static_cast<int64_t>(chunkCountZ);
 	if (chunkCount64 <= 0 ||
-		static_cast<uint64_t>(chunkCount64) > std::numeric_limits<size_t>::max()) {
+		static_cast<std::uint64_t>(chunkCount64) > std::numeric_limits<size_t>::max()) {
 		return nullptr;
 	}
 	const size_t chunkCount = static_cast<size_t>(chunkCount64);
@@ -800,7 +800,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 	};
 	if (snapshotPath.empty()) {
 		return fail(projectv::voxel::VoxelSnapshotError::EmptyPath,
-			"SaveVoxelWorldSnapshot.Path", "snapshot path is empty");
+					"SaveVoxelWorldSnapshot.Path", "snapshot path is empty");
 	}
 
 	const std::filesystem::path resolvedPath = ResolveVoxelWorldSnapshotPath(snapshotPath);
@@ -810,7 +810,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 		!std::filesystem::create_directories(parentPath, createDirectoriesError) &&
 		createDirectoriesError) {
 		return fail(projectv::voxel::VoxelSnapshotError::CreateDirectoriesFailed,
-			"SaveVoxelWorldSnapshot.CreateDirectories", createDirectoriesError.message());
+					"SaveVoxelWorldSnapshot.CreateDirectories", createDirectoriesError.message());
 	}
 
 	VoxelWorldSnapshotHeader header{};
@@ -819,7 +819,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 	ClearSnapshotReservedFields(&header);
 	if (world.voxels.size() > std::numeric_limits<uint32_t>::max()) {
 		return fail(projectv::voxel::VoxelSnapshotError::VoxelBufferTooLarge,
-			"SaveVoxelWorldSnapshot.Size", "voxel buffer exceeds snapshot format limit");
+					"SaveVoxelWorldSnapshot.Size", "voxel buffer exceeds snapshot format limit");
 	}
 	header.voxelByteCount = static_cast<uint32_t>(world.voxels.size());
 	header.scenePreset = static_cast<uint8_t>(world.scenePreset);
@@ -831,7 +831,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 	std::ofstream file(resolvedPath, std::ios::binary | std::ios::trunc);
 	if (!file.is_open()) {
 		return fail(projectv::voxel::VoxelSnapshotError::OpenForWriteFailed,
-			"SaveVoxelWorldSnapshot.Open", "failed to open snapshot file for write: " + resolvedPath.string());
+					"SaveVoxelWorldSnapshot.Open", "failed to open snapshot file for write: " + resolvedPath.string());
 	}
 
 	file.write(reinterpret_cast<const char *>(&header), sizeof(header));
@@ -842,7 +842,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 	}
 	if (!file.good()) {
 		return fail(projectv::voxel::VoxelSnapshotError::WriteFailed,
-			"SaveVoxelWorldSnapshot.Write", "failed to write snapshot file: " + resolvedPath.string());
+					"SaveVoxelWorldSnapshot.Write", "failed to write snapshot file: " + resolvedPath.string());
 	}
 
 	SDL_Log("Saved voxel world snapshot: %s", resolvedPath.string().c_str());
@@ -857,7 +857,7 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> 
 	};
 	if (snapshotPath.empty()) {
 		return fail(projectv::voxel::VoxelSnapshotError::EmptyPath,
-			"LoadVoxelWorldSnapshot.Path", "snapshot path is empty");
+					"LoadVoxelWorldSnapshot.Path", "snapshot path is empty");
 	}
 
 	const std::filesystem::path resolvedPath = ResolveVoxelWorldSnapshotPath(snapshotPath);
@@ -865,45 +865,45 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> 
 	const std::uintmax_t fileSize = std::filesystem::file_size(resolvedPath, fileSizeError);
 	if (fileSizeError) {
 		return fail(projectv::voxel::VoxelSnapshotError::FileSizeQueryFailed,
-			"LoadVoxelWorldSnapshot.FileSize", fileSizeError.message());
+					"LoadVoxelWorldSnapshot.FileSize", fileSizeError.message());
 	}
 	if (fileSize < sizeof(VoxelWorldSnapshotHeader)) {
 		return fail(projectv::voxel::VoxelSnapshotError::FileTooSmall,
-			"LoadVoxelWorldSnapshot.FileSize", "snapshot file is smaller than the header");
+					"LoadVoxelWorldSnapshot.FileSize", "snapshot file is smaller than the header");
 	}
 
 	std::ifstream file(resolvedPath, std::ios::binary);
 	if (!file.is_open()) {
 		return fail(projectv::voxel::VoxelSnapshotError::OpenForReadFailed,
-			"LoadVoxelWorldSnapshot.Open", "failed to open snapshot file for read: " + resolvedPath.string());
+					"LoadVoxelWorldSnapshot.Open", "failed to open snapshot file for read: " + resolvedPath.string());
 	}
 
 	VoxelWorldSnapshotHeader header{};
 	file.read(reinterpret_cast<char *>(&header), sizeof(header));
 	if (!file.good()) {
 		return fail(projectv::voxel::VoxelSnapshotError::ReadHeaderFailed,
-			"LoadVoxelWorldSnapshot.ReadHeader", "failed to read snapshot header: " + resolvedPath.string());
+					"LoadVoxelWorldSnapshot.ReadHeader", "failed to read snapshot header: " + resolvedPath.string());
 	}
 
 	if (header.magic != kVoxelWorldSnapshotMagic) {
 		return fail(projectv::voxel::VoxelSnapshotError::MagicMismatch,
-			"LoadVoxelWorldSnapshot.Header", "snapshot magic mismatch");
+					"LoadVoxelWorldSnapshot.Header", "snapshot magic mismatch");
 	}
 	if (header.version != kVoxelWorldSnapshotVersion) {
 		return fail(projectv::voxel::VoxelSnapshotError::UnsupportedVersion,
-			"LoadVoxelWorldSnapshot.Header", "unsupported snapshot version");
+					"LoadVoxelWorldSnapshot.Header", "unsupported snapshot version");
 	}
 	if (!IsValidVoxelScenePresetValue(header.scenePreset)) {
 		return fail(projectv::voxel::VoxelSnapshotError::InvalidScenePreset,
-			"LoadVoxelWorldSnapshot.Header", "snapshot scene preset is invalid");
+					"LoadVoxelWorldSnapshot.Header", "snapshot scene preset is invalid");
 	}
 	if (!HasClearSnapshotReservedFields(header)) {
 		return fail(projectv::voxel::VoxelSnapshotError::ReservedFieldsNonZero,
-			"LoadVoxelWorldSnapshot.Header", "snapshot reserved fields must stay zero");
+					"LoadVoxelWorldSnapshot.Header", "snapshot reserved fields must stay zero");
 	}
 	if (header.config.chunkSize <= 0) {
 		return fail(projectv::voxel::VoxelSnapshotError::InvalidChunkSize,
-			"LoadVoxelWorldSnapshot.Header", "snapshot chunk size must stay positive");
+					"LoadVoxelWorldSnapshot.Header", "snapshot chunk size must stay positive");
 	}
 
 	std::unique_ptr<VoxelWorld> world = CreateEmptyVoxelWorld(
@@ -913,15 +913,15 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> 
 		header.maxExclusive);
 	if (!world) {
 		return fail(projectv::voxel::VoxelSnapshotError::CreateWorldFailed,
-			"LoadVoxelWorldSnapshot.CreateWorld", "failed to create world layout for snapshot");
+					"LoadVoxelWorldSnapshot.CreateWorld", "failed to create world layout for snapshot");
 	}
 	if (world->voxels.size() != header.voxelByteCount) {
 		return fail(projectv::voxel::VoxelSnapshotError::VoxelCountMismatch,
-			"LoadVoxelWorldSnapshot.Header", "snapshot voxel count does not match world layout");
+					"LoadVoxelWorldSnapshot.Header", "snapshot voxel count does not match world layout");
 	}
 	if (fileSize != sizeof(VoxelWorldSnapshotHeader) + header.voxelByteCount) {
 		return fail(projectv::voxel::VoxelSnapshotError::FileSizeMismatch,
-			"LoadVoxelWorldSnapshot.FileSize", "snapshot file size does not match header payload size");
+					"LoadVoxelWorldSnapshot.FileSize", "snapshot file size does not match header payload size");
 	}
 
 	if (header.voxelByteCount > 0) {
@@ -930,14 +930,14 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> 
 			header.voxelByteCount);
 		if (!file.good()) {
 			return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
-				"LoadVoxelWorldSnapshot.ReadPayload", "failed to read snapshot payload: " + resolvedPath.string());
+						"LoadVoxelWorldSnapshot.ReadPayload", "failed to read snapshot payload: " + resolvedPath.string());
 		}
 	}
 
 	for (const uint8_t materialValue : world->voxels) {
 		if (!IsValidVoxelMaterialValue(materialValue)) {
 			return fail(projectv::voxel::VoxelSnapshotError::InvalidVoxelMaterial,
-				"LoadVoxelWorldSnapshot.Payload", "snapshot contains invalid voxel material id");
+						"LoadVoxelWorldSnapshot.Payload", "snapshot contains invalid voxel material id");
 		}
 	}
 
@@ -1239,11 +1239,10 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 	const int height = world.height;
 	const int depth = world.depth;
 
-
 #if !defined(NDEBUG)
 	{
 		const size_t expectedVoxelCount = static_cast<size_t>(width) *
-			static_cast<size_t>(height) * static_cast<size_t>(depth);
+										  static_cast<size_t>(height) * static_cast<size_t>(depth);
 		PV_ASSERT(
 			world.voxels.size() == expectedVoxelCount,
 			"VoxelWorld",
@@ -1258,17 +1257,14 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 #endif
 
 	const auto index = [width, height](const int x, const int y, const int z) -> size_t {
-		return static_cast<size_t>(x) + static_cast<size_t>(y) * static_cast<size_t>(width)
-			 + static_cast<size_t>(z) * static_cast<size_t>(width) * static_cast<size_t>(height);
+		return static_cast<size_t>(x) + static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(z) * static_cast<size_t>(width) * static_cast<size_t>(height);
 	};
-
 
 	std::vector<uint8_t> next = world.voxels;
 
 	std::vector<uint8_t> claimed(world.voxels.size(), 0u);
 
 	uint32_t movedCount = 0u;
-
 
 	for (int z = 0; z < depth; ++z) {
 		for (int y = 0; y < height; ++y) {
@@ -1285,8 +1281,7 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 				if (y > 0) {
 					const size_t belowIdx = index(x, y - 1, z);
 
-					if (world.voxels[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)
-						&& next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
+					if (world.voxels[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air) && next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
 						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
 						next[belowIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
 
@@ -1356,7 +1351,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 			}
 		}
 	}
-
 
 #if !defined(NDEBUG)
 	{

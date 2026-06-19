@@ -26,7 +26,6 @@ void BuildVisibleModelInstanceList(
 		return;
 	}
 
-
 	std::vector<ModelInstanceData> cullCandidates;
 	cullCandidates.reserve(render->modelInstances.size());
 	for (const ModelInstanceData &instance : render->modelInstances) {
@@ -130,9 +129,7 @@ bool PrepareFrameRenderData(
 		return false;
 	}
 
-
 	BuildVisibleModelInstanceList(chunkCullingParameters, render);
-
 
 	if (world->voxelWorld) {
 		static projectv::app::ModelGravigunState gravigunState;

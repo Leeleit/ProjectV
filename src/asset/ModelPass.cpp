@@ -14,7 +14,6 @@ constexpr VkFormat kModelVertexPositionFormat = VK_FORMAT_R32G32B32_SFLOAT;
 constexpr VkFormat kModelVertexNormalFormat = VK_FORMAT_R32G32B32_SFLOAT;
 constexpr VkFormat kModelVertexUvFormat = VK_FORMAT_R32G32_SFLOAT;
 
-
 struct ModelPushConstants {
 
 	[[maybe_unused]] std::array<float, 16> viewProjection{};
@@ -168,7 +167,6 @@ bool CreateModelPipeline(
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.stencilTestEnable = VK_FALSE;
 
-
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	colorBlendAttachment.blendEnable = VK_FALSE;
@@ -195,8 +193,6 @@ bool CreateModelPipeline(
 	pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	pushRange.offset = 0;
 	pushRange.size = sizeof(ModelPushConstants);
-
-
 
 	VkPipelineRenderingCreateInfo renderingInfo{};
 	renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
@@ -233,7 +229,6 @@ bool CreateModelPipeline(
 	}
 
 	render->modelPipelineLayout = VK_NULL_HANDLE;
-
 
 	std::vector<char> fragmentShaderCodeTaaOn = ReadShaderFile("model.frag.taa_on.spv");
 	VkShaderModule fragmentModuleTaaOn = CreateModelShaderModule(
@@ -309,7 +304,6 @@ void DestroyModelPipeline(VulkanContextState *context, RenderState *render)
 		vkDestroyPipeline(context->device, render->modelPipelineTaaOn, nullptr);
 		render->modelPipelineTaaOn = VK_NULL_HANDLE;
 	}
-
 }
 
 VkPipeline PickModelPipeline(const RenderState &render)

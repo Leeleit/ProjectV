@@ -6,7 +6,6 @@ namespace projectv::taa {
 
 namespace {
 
-
 float HaltonSequence(uint32_t index, const uint32_t base)
 {
 	float result = 0.0f;
@@ -48,7 +47,6 @@ std::array<float, 4> BuildTaaHistoryParams(
 		0.0f,
 	};
 }
-
 
 std::array<float, 4> BuildTaaLayerHistoryParams(
 	const VkExtent2D extent,

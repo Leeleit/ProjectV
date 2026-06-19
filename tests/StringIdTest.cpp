@@ -106,7 +106,7 @@ void VerifyStdHashSpecialisation() {
 
 	const StringID a{"hashable_id"};
 	const StringID a2{"hashable_id"};
-	std::hash<StringID> hasher{};
+	const std::hash<StringID> hasher{};
 	VERIFY(hasher(a) == hasher(a2));
 	std::unordered_map<StringID, int> m;
 	m[StringID{"one"}] = 1;

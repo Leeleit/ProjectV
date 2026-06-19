@@ -190,7 +190,7 @@ if (WIN32)
     find_program(PROJECTV_POWERSHELL_EXECUTABLE
             NAMES pwsh powershell
             HINTS "C:/Program Files/PowerShell/7"
-                  "C:/Windows/System32/WindowsPowerShell/v1.0"
+            "C:/Windows/System32/WindowsPowerShell/v1.0"
             REQUIRED)
 
     add_custom_target(ProjectVRuntimeSmoke

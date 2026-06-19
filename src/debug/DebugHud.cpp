@@ -481,10 +481,17 @@ size_t BuildStatsLines(
 		const VkPresentModeKHR activeMode = GetActivePresentMode();
 		const char *modeLabel = "UNKNOWN";
 		switch (activeMode) {
-		case VK_PRESENT_MODE_IMMEDIATE_KHR: modeLabel = "IMMEDIATE"; break;
-		case VK_PRESENT_MODE_MAILBOX_KHR: modeLabel = "MAILBOX"; break;
-		case VK_PRESENT_MODE_FIFO_KHR: modeLabel = "FIFO"; break;
-		default: break;
+		case VK_PRESENT_MODE_IMMEDIATE_KHR:
+			modeLabel = "IMMEDIATE";
+			break;
+		case VK_PRESENT_MODE_MAILBOX_KHR:
+			modeLabel = "MAILBOX";
+			break;
+		case VK_PRESENT_MODE_FIFO_KHR:
+			modeLabel = "FIFO";
+			break;
+		default:
+			break;
 		}
 		PV_APPEND_HUD_LINE(
 			outLines,
@@ -1130,7 +1137,6 @@ uint32_t BuildDebugHudVertices(
 			helperLines[lineIndex].data(),
 			textColor);
 	}
-
 
 	for (size_t lineIndex = 0; lineIndex < musicLineCount; ++lineIndex) {
 		const float originYPx =

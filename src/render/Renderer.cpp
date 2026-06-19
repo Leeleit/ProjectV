@@ -552,11 +552,9 @@ void RecordGraphicsCommands(
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 		RecordShadowCommands(render, frameRenderData, cmd);
 
-
 		const bool taaOn = render.taaEnabled &&
 						   render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
 						   render.taaResolvePipeline != VK_NULL_HANDLE && render.taaResolvePipelineLayout != VK_NULL_HANDLE;
-
 
 		if (!taaOn) {
 			TransitionImage(
@@ -590,7 +588,6 @@ void RecordGraphicsCommands(
 			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 			render.taaSceneColorNeedsInit = false;
 		}
-
 
 		{
 			const VkImageLayout oldLayerSceneLayout = render.taaLayerSceneColorCurrentLayout;
@@ -638,7 +635,6 @@ void RecordGraphicsCommands(
 			render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		}
 
-
 		const VkImageLayout oldDepthLayout = render.depthImageCurrentLayout;
 		const VkPipelineStageFlags2 oldDepthStage =
 			oldDepthLayout == VK_IMAGE_LAYOUT_UNDEFINED
@@ -676,7 +672,6 @@ void RecordGraphicsCommands(
 			},
 		};
 		constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
-
 
 		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
 		const VkImageView mainColor1View = taaOn ? render.taaSceneColorTarget->imageView : VK_NULL_HANDLE;
@@ -796,7 +791,6 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-
 		if (render.modelPipeline != VK_NULL_HANDLE && !render.visibleModelInstances.empty()) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Model Pass");
 			vkCmdBindPipeline(
@@ -862,14 +856,12 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-
 		if (!taaOn) {
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
 			RecordDebugHudCommands(render, frameRenderData, cmd);
 		}
 
 		vkCmdEndRendering(cmd);
-
 
 		render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
@@ -887,7 +879,6 @@ void RecordGraphicsCommands(
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-
 			TransitionImage(
 				cmd,
 				render.depthImage,
@@ -899,7 +890,6 @@ void RecordGraphicsCommands(
 				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-
 
 			TransitionImage(
 				cmd,
@@ -916,7 +906,6 @@ void RecordGraphicsCommands(
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			render.taaHistoryNeedsInit = false;
-
 
 			TransitionImage(
 				cmd,
@@ -962,7 +951,6 @@ void RecordGraphicsCommands(
 
 			const Uint64 taaResolveStartCounter = SDL_GetPerformanceCounter();
 
-
 			const projectv::math::Mat4 currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
 			const projectv::math::Mat4 inverseCurrentViewProj = projectv::math::inverse(currentViewProj);
 			ResolvePushConstants resolvePushConstants{};
@@ -1004,12 +992,10 @@ void RecordGraphicsCommands(
 				render.renderPassTimings.taaResolveMs = static_cast<float>(seconds * 1000.0);
 			}
 
-
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
 			RecordDebugHudCommands(render, frameRenderData, cmd);
 
 			vkCmdEndRendering(cmd);
-
 
 			if (render.taaHistoryValid) {
 				TransitionImage(
@@ -1035,7 +1021,6 @@ void RecordGraphicsCommands(
 					VK_ACCESS_2_TRANSFER_WRITE_BIT);
 				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-
 				const VkImageCopy historyCopyRegion{
 					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
 					.srcOffset = {0, 0, 0},
@@ -1051,7 +1036,6 @@ void RecordGraphicsCommands(
 					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 					1,
 					&historyCopyRegion);
-
 
 				TransitionImage(
 					cmd,
@@ -1080,7 +1064,6 @@ void RecordGraphicsCommands(
 				render.taaHistoryValid = true;
 			}
 		}
-
 
 		if (render.taaLayerSceneColorTarget != nullptr && render.taaLayerHistoryColorTarget != nullptr && render.taaLayerSceneColorTarget->image != VK_NULL_HANDLE && render.taaLayerHistoryColorTarget->image != VK_NULL_HANDLE) {
 			if (render.taaLayerHistoryValid) {
@@ -1289,7 +1272,6 @@ SDL_AppResult DrawFrame(
 
 	waitSemaphoreInfo.semaphore = imageAvailableSemaphore;
 	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-
 
 	const VkSemaphore submitSemaphore = swapchain->submitSemaphores[imageIndex];
 	VkSemaphoreSubmitInfo signalSemaphoreInfo{};

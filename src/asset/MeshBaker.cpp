@@ -144,7 +144,6 @@ BakedMesh BakeLoadedAsset(
 		return {};
 	}
 
-
 	result.acmr = static_cast<float>(totalIndexTriples * 3) / static_cast<float>(totalUniqueVertices);
 	result.atvr = result.acmr;
 	return result;

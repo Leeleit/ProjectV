@@ -1062,7 +1062,7 @@ bool RefreshGraphicsResourceBindings(
 	allocateInfo.descriptorSetCount = static_cast<uint32_t>(setLayouts.size());
 	allocateInfo.pSetLayouts = setLayouts.data();
 	const VkResult allocateDescriptorSetsResult =
-		vkAllocateDescriptorSets(context->device, &allocateInfo, 		descriptorSets.data());
+		vkAllocateDescriptorSets(context->device, &allocateInfo, descriptorSets.data());
 	if (allocateDescriptorSetsResult != VK_SUCCESS) {
 		LogGraphicsPipelineVkFailure(
 			"RefreshGraphicsResourceBindings.vkAllocateDescriptorSets",
@@ -1793,7 +1793,6 @@ bool CreateGraphicsPipeline(
 		reinterpret_cast<uint64_t>(render->shadowPipelineLayout),
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelShadowPipelineLayout");
-
 
 	if (!context->supportsDynamicRenderingUnusedAttachments) {
 		LogGraphicsPipelineTextFailure(

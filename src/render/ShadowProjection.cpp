@@ -491,7 +491,6 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 		}
 		cascadeRadius = std::max(cascadeRadius, 0.5f);
 
-
 		const float cascadeCenterLightX = projectv::math::dot(lightRight, cascadeCenter);
 		const float cascadeCenterLightY = projectv::math::dot(lightUp, cascadeCenter);
 		const float minimumReceiverHalfExtent =
@@ -530,9 +529,7 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 			snappedCenterLightY,
 			minimumReceiverHalfExtent,
 			clampedCoverageScale);
-		const Float3 snappedCascadeCenter = cascadeCenter
-			+ lightRight * (snappedCenterLightX - cascadeCenterLightX)
-			+ lightUp * (snappedCenterLightY - cascadeCenterLightY);
+		const Float3 snappedCascadeCenter = cascadeCenter + lightRight * (snappedCenterLightX - cascadeCenterLightX) + lightUp * (snappedCenterLightY - cascadeCenterLightY);
 		float minRelativeLightDepth = std::numeric_limits<float>::max();
 		float maxRelativeLightDepth = std::numeric_limits<float>::lowest();
 		ComputeRelativeDepthRange(
@@ -550,8 +547,7 @@ SunShadowCascadeProjections BuildSunShadowCascadeProjections(
 		const float lightForwardOffset = std::max(
 			cascadeRadius + kShadowDepthPadding,
 			kShadowDepthPadding + kMinShadowNearPlane - minRelativeLightDepth);
-		const Float3 lightPosition = snappedCascadeCenter
-			- lightForward * lightForwardOffset;
+		const Float3 lightPosition = snappedCascadeCenter - lightForward * lightForwardOffset;
 		projectv::math::Mat4 lightView{};
 		lightView.c[0] = projectv::math::Vec4{lightRight.x, lightUp.x, -lightForward.x, 0.0f};
 		lightView.c[1] = projectv::math::Vec4{lightRight.y, lightUp.y, -lightForward.y, 0.0f};

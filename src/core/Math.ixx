@@ -148,7 +148,7 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Mat4 inverse(const Mat4 m) noexcept {
+[[nodiscard]] inline Mat4 inverse(const Mat4 &m) noexcept {
 
 	Mat4 augmented{
 		m.c[0], m.c[1], m.c[2], m.c[3],
@@ -219,7 +219,7 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Vec4 operator*(const Mat4 m, const Vec4 v) noexcept {
+[[nodiscard]] inline Vec4 operator*(const Mat4 &m, const Vec4 &v) noexcept {
 	Vec4 result{};
 	for (std::size_t row = 0; row < 4; ++row) {
 		float sum = 0.0f;
@@ -231,19 +231,19 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Vec3 operator+(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline Vec3 operator+(const Vec3 &a, const Vec3 &b) noexcept {
 	return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
-[[nodiscard]] inline Vec3 operator+(const Vec3 v, const float s) noexcept {
+[[nodiscard]] inline Vec3 operator+(const Vec3 &v, const float s) noexcept {
 	return Vec3{v.x + s, v.y + s, v.z + s};
 }
 
-[[nodiscard]] inline Vec3 operator-(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline Vec3 operator-(const Vec3 &a, const Vec3 &b) noexcept {
 	return Vec3{a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
-[[nodiscard]] inline Vec3 operator-(const Vec3 a) noexcept {
+[[nodiscard]] inline Vec3 operator-(const Vec3 &a) noexcept {
 	return Vec3{-a.x, -a.y, -a.z};
 }
 

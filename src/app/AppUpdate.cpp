@@ -575,7 +575,6 @@ bool UpdateApp(
 		!world->scenePresetReloadRequested &&
 		!world->snapshotLoadRequested;
 
-
 	simulation->frameDeltaSeconds *= simulation->timeScale;
 
 	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {

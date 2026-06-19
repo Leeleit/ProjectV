@@ -28,7 +28,7 @@ enum class VulkanInitError : std::uint8_t {
 	ModelManifestFailed,
 };
 
-constexpr std::string_view toString(VulkanInitError e) noexcept {
+constexpr std::string_view toString(VulkanInitError const e) noexcept {
 	switch (e) {
 	case VulkanInitError::PreconditionFailed: return "PreconditionFailed";
 	case VulkanInitError::BootstrapFailed: return "BootstrapFailed";

@@ -4,12 +4,10 @@
 
 #include <cstring>
 
-
 #include "volk.h"
 
 #include "SDL3/SDL_vulkan.h"
 #include "fmt/format.h"
-
 
 #define VK_KHR_swapchain_maintenance1 1
 #define VK_EXT_dynamic_rendering_unused_attachments 1

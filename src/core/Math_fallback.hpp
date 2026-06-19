@@ -17,10 +17,12 @@ struct alignas(16) Vec3 {
 	constexpr Vec3(const float xVal, const float yVal, const float zVal, const float padVal) noexcept
 		: x(xVal), y(yVal), z(zVal), _pad(padVal) {}
 
-	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept {
+	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept
+	{
 		return (&x)[i];
 	}
-	[[nodiscard]] constexpr const float &operator[](const std::size_t i) const noexcept {
+	[[nodiscard]] constexpr const float &operator[](const std::size_t i) const noexcept
+	{
 		return (&x)[i];
 	}
 };
@@ -35,10 +37,12 @@ struct alignas(16) Vec4 {
 	constexpr Vec4(const float xVal, const float yVal, const float zVal, const float wVal) noexcept
 		: x(xVal), y(yVal), z(zVal), w(wVal) {}
 
-	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept {
+	[[nodiscard]] constexpr float &operator[](const std::size_t i) noexcept
+	{
 		return (&x)[i];
 	}
-	[[nodiscard]] constexpr const float &operator[](const std::size_t i) const noexcept {
+	[[nodiscard]] constexpr const float &operator[](const std::size_t i) const noexcept
+	{
 		return (&x)[i];
 	}
 };
@@ -50,17 +54,21 @@ struct alignas(16) Mat4 {
 	constexpr Mat4(const Vec4 c0, const Vec4 c1, const Vec4 c2, const Vec4 c3) noexcept
 		: c{c0, c1, c2, c3} {}
 
-	[[nodiscard]] constexpr Vec4 &column(const std::size_t i) noexcept {
+	[[nodiscard]] constexpr Vec4 &column(const std::size_t i) noexcept
+	{
 		return c[i];
 	}
-	[[nodiscard]] constexpr const Vec4 &column(const std::size_t i) const noexcept {
+	[[nodiscard]] constexpr const Vec4 &column(const std::size_t i) const noexcept
+	{
 		return c[i];
 	}
 
-	[[nodiscard]] constexpr float &m(const std::size_t col, const std::size_t row) noexcept {
+	[[nodiscard]] constexpr float &m(const std::size_t col, const std::size_t row) noexcept
+	{
 		return c[col][row];
 	}
-	[[nodiscard]] constexpr const float &m(const std::size_t col, const std::size_t row) const noexcept {
+	[[nodiscard]] constexpr const float &m(const std::size_t col, const std::size_t row) const noexcept
+	{
 		return c[col][row];
 	}
 
@@ -75,15 +83,18 @@ static_assert(alignof(Vec4) == 16, "Vec4 must be 16-byte aligned");
 static_assert(sizeof(Mat4) == 64, "Mat4 must be 64 bytes");
 static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 
-[[nodiscard]] inline float dot(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline float dot(const Vec3 a, const Vec3 b) noexcept
+{
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-[[nodiscard]] inline float dot(const Vec4 a, const Vec4 b) noexcept {
+[[nodiscard]] inline float dot(const Vec4 a, const Vec4 b) noexcept
+{
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
-[[nodiscard]] inline Vec3 cross(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline Vec3 cross(const Vec3 a, const Vec3 b) noexcept
+{
 	return Vec3{
 		a.y * b.z - a.z * b.y,
 		a.z * b.x - a.x * b.z,
@@ -91,23 +102,28 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	};
 }
 
-[[nodiscard]] inline float lengthSq(const Vec3 v) noexcept {
+[[nodiscard]] inline float lengthSq(const Vec3 v) noexcept
+{
 	return dot(v, v);
 }
 
-[[nodiscard]] inline float lengthSq(const Vec4 v) noexcept {
+[[nodiscard]] inline float lengthSq(const Vec4 v) noexcept
+{
 	return dot(v, v);
 }
 
-[[nodiscard]] inline float length(const Vec3 v) noexcept {
+[[nodiscard]] inline float length(const Vec3 v) noexcept
+{
 	return __builtin_sqrtf(lengthSq(v));
 }
 
-[[nodiscard]] inline float length(const Vec4 v) noexcept {
+[[nodiscard]] inline float length(const Vec4 v) noexcept
+{
 	return __builtin_sqrtf(lengthSq(v));
 }
 
-[[nodiscard]] inline Vec3 normalize(const Vec3 v) noexcept {
+[[nodiscard]] inline Vec3 normalize(const Vec3 v) noexcept
+{
 	const float len = length(v);
 	if (len == 0.0f) {
 		return Vec3{0.0f, 0.0f, 0.0f};
@@ -116,7 +132,8 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return Vec3{v.x * invLen, v.y * invLen, v.z * invLen, 0.0f};
 }
 
-[[nodiscard]] inline Mat4 identity() noexcept {
+[[nodiscard]] inline Mat4 identity() noexcept
+{
 	Mat4 result{};
 	result.c[0] = Vec4{1.0f, 0.0f, 0.0f, 0.0f};
 	result.c[1] = Vec4{0.0f, 1.0f, 0.0f, 0.0f};
@@ -125,12 +142,14 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Mat4 zero() noexcept {
+[[nodiscard]] inline Mat4 zero() noexcept
+{
 	Mat4 result{};
 	return result;
 }
 
-[[nodiscard]] inline Mat4 transpose(const Mat4 m) noexcept {
+[[nodiscard]] inline Mat4 transpose(const Mat4 m) noexcept
+{
 	Mat4 result{};
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
@@ -140,9 +159,13 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Mat4 inverse(const Mat4 m) noexcept {
+[[nodiscard]] inline Mat4 inverse(const Mat4 m) noexcept
+{
 	Mat4 augmented{
-		m.c[0], m.c[1], m.c[2], m.c[3],
+		m.c[0],
+		m.c[1],
+		m.c[2],
+		m.c[3],
 	};
 	float a[4][8]{};
 	for (int row = 0; row < 4; ++row) {
@@ -195,7 +218,8 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Mat4 operator*(const Mat4 a, const Mat4 b) noexcept {
+[[nodiscard]] inline Mat4 operator*(const Mat4 a, const Mat4 b) noexcept
+{
 	Mat4 result{};
 	for (std::size_t col = 0; col < 4; ++col) {
 		for (std::size_t row = 0; row < 4; ++row) {
@@ -209,7 +233,8 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Vec4 operator*(const Mat4 m, const Vec4 v) noexcept {
+[[nodiscard]] inline Vec4 operator*(const Mat4 m, const Vec4 v) noexcept
+{
 	Vec4 result{};
 	for (std::size_t row = 0; row < 4; ++row) {
 		float sum = 0.0f;
@@ -221,67 +246,83 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 	return result;
 }
 
-[[nodiscard]] inline Vec3 operator+(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline Vec3 operator+(const Vec3 a, const Vec3 b) noexcept
+{
 	return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
-[[nodiscard]] inline Vec3 operator+(const Vec3 v, const float s) noexcept {
+[[nodiscard]] inline Vec3 operator+(const Vec3 v, const float s) noexcept
+{
 	return Vec3{v.x + s, v.y + s, v.z + s};
 }
 
-[[nodiscard]] inline Vec3 operator-(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline Vec3 operator-(const Vec3 a, const Vec3 b) noexcept
+{
 	return Vec3{a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
-[[nodiscard]] inline Vec3 operator-(const Vec3 a) noexcept {
+[[nodiscard]] inline Vec3 operator-(const Vec3 a) noexcept
+{
 	return Vec3{-a.x, -a.y, -a.z};
 }
 
-[[nodiscard]] inline Vec3 operator*(const Vec3 v, const float s) noexcept {
+[[nodiscard]] inline Vec3 operator*(const Vec3 v, const float s) noexcept
+{
 	return Vec3{v.x * s, v.y * s, v.z * s};
 }
 
-[[nodiscard]] inline Vec3 operator*(const float s, const Vec3 v) noexcept {
+[[nodiscard]] inline Vec3 operator*(const float s, const Vec3 v) noexcept
+{
 	return Vec3{s * v.x, s * v.y, s * v.z};
 }
 
-[[nodiscard]] inline Vec3 operator*(const Vec3 a, const Vec3 b) noexcept {
+[[nodiscard]] inline Vec3 operator*(const Vec3 a, const Vec3 b) noexcept
+{
 	return Vec3{a.x * b.x, a.y * b.y, a.z * b.z};
 }
 
-[[nodiscard]] inline Vec4 operator*(const Vec4 a, const Vec4 b) noexcept {
+[[nodiscard]] inline Vec4 operator*(const Vec4 a, const Vec4 b) noexcept
+{
 	return Vec4{a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w};
 }
 
-[[nodiscard]] inline Vec4 operator*(const Vec4 v, const float s) noexcept {
+[[nodiscard]] inline Vec4 operator*(const Vec4 v, const float s) noexcept
+{
 	return Vec4{v.x * s, v.y * s, v.z * s, v.w * s};
 }
 
-[[nodiscard]] inline Vec4 operator*(const float s, const Vec4 v) noexcept {
+[[nodiscard]] inline Vec4 operator*(const float s, const Vec4 v) noexcept
+{
 	return Vec4{s * v.x, s * v.y, s * v.z, s * v.w};
 }
 
-[[nodiscard]] inline Vec3 operator/(const Vec3 v, const float s) noexcept {
+[[nodiscard]] inline Vec3 operator/(const Vec3 v, const float s) noexcept
+{
 	return Vec3{v.x / s, v.y / s, v.z / s};
 }
 
-[[nodiscard]] inline Vec4 operator/(const Vec4 v, const float s) noexcept {
+[[nodiscard]] inline Vec4 operator/(const Vec4 v, const float s) noexcept
+{
 	return Vec4{v.x / s, v.y / s, v.z / s, v.w / s};
 }
 
-[[nodiscard]] inline Vec4 operator+(const Vec4 a, const Vec4 b) noexcept {
+[[nodiscard]] inline Vec4 operator+(const Vec4 a, const Vec4 b) noexcept
+{
 	return Vec4{a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w};
 }
 
-[[nodiscard]] inline Vec4 operator-(const Vec4 a, const Vec4 b) noexcept {
+[[nodiscard]] inline Vec4 operator-(const Vec4 a, const Vec4 b) noexcept
+{
 	return Vec4{a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w};
 }
 
-[[nodiscard]] inline Vec4 operator-(const Vec4 a) noexcept {
+[[nodiscard]] inline Vec4 operator-(const Vec4 a) noexcept
+{
 	return Vec4{-a.x, -a.y, -a.z, -a.w};
 }
 
-[[nodiscard]] inline Mat4 fromArray16(const float *src) noexcept {
+[[nodiscard]] inline Mat4 fromArray16(const float *src) noexcept
+{
 	Mat4 result{};
 	for (std::size_t i = 0; i < 16; ++i) {
 		result.c[i / 4][i % 4] = src[i];
@@ -290,7 +331,8 @@ static_assert(alignof(Mat4) == 16, "Mat4 must be 16-byte aligned");
 }
 
 template <std::size_t N>
-[[nodiscard]] inline Mat4 fromArray16(const std::array<float, N> &src) noexcept {
+[[nodiscard]] inline Mat4 fromArray16(const std::array<float, N> &src) noexcept
+{
 	static_assert(N >= 16, "fromArray16 needs at least 16 floats");
 	Mat4 result{};
 	for (std::size_t i = 0; i < 16; ++i) {
@@ -299,15 +341,18 @@ template <std::size_t N>
 	return result;
 }
 
-[[nodiscard]] inline Vec3 fromArray3(const std::array<float, 3> &src) noexcept {
+[[nodiscard]] inline Vec3 fromArray3(const std::array<float, 3> &src) noexcept
+{
 	return Vec3{src[0], src[1], src[2]};
 }
 
-[[nodiscard]] inline Vec3 fromArray4(const std::array<float, 4> &src) noexcept {
+[[nodiscard]] inline Vec3 fromArray4(const std::array<float, 4> &src) noexcept
+{
 	return Vec3{src[0], src[1], src[2], 0.0f};
 }
 
-[[nodiscard]] inline Vec4 fromArray4asVec4(const std::array<float, 4> &src) noexcept {
+[[nodiscard]] inline Vec4 fromArray4asVec4(const std::array<float, 4> &src) noexcept
+{
 	return Vec4{src[0], src[1], src[2], src[3]};
 }
 

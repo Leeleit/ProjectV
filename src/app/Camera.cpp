@@ -198,7 +198,6 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	const Float3 right = projectv::math::normalize(projectv::math::cross(forward, Float3{0.0f, 1.0f, 0.0f, 0.0f}));
 	const Float3 up = projectv::math::normalize(projectv::math::cross(right, forward));
 
-
 	projectv::math::Mat4 view{};
 	view.c[0] = projectv::math::Vec4{right.x, up.x, -forward.x, 0.0f};
 	view.c[1] = projectv::math::Vec4{right.y, up.y, -forward.y, 0.0f};
@@ -214,7 +213,6 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	const float tanHalfFov = std::tan(camera.verticalFovRadians * 0.5f);
 	const float nearPlane = camera.nearPlane;
 	const float farPlane = camera.farPlane;
-
 
 	const float jitterNdcX = extent.width > 0 ? taaJitterNdcX * 2.0f / static_cast<float>(extent.width) : 0.0f;
 	const float jitterNdcY = extent.height > 0 ? taaJitterNdcY * 2.0f / static_cast<float>(extent.height) : 0.0f;
@@ -264,16 +262,28 @@ ChunkCullingParameters BuildChunkCullingParameters(
 
 	ChunkCullingParameters parameters{};
 	parameters.cameraPositionAndMaxDistance = projectv::math::Vec4{
-		cameraPosition.x, cameraPosition.y, cameraPosition.z, maxDistance,
+		cameraPosition.x,
+		cameraPosition.y,
+		cameraPosition.z,
+		maxDistance,
 	};
 	parameters.cameraForwardAndTanHalfVerticalFov = projectv::math::Vec4{
-		forward.x, forward.y, forward.z, tanHalfVerticalFov,
+		forward.x,
+		forward.y,
+		forward.z,
+		tanHalfVerticalFov,
 	};
 	parameters.cameraRightAndTanHalfHorizontalFov = projectv::math::Vec4{
-		right.x, right.y, right.z, tanHalfHorizontalFov,
+		right.x,
+		right.y,
+		right.z,
+		tanHalfHorizontalFov,
 	};
 	parameters.cameraUpAndNearPlane = projectv::math::Vec4{
-		up.x, up.y, up.z, camera.nearPlane,
+		up.x,
+		up.y,
+		up.z,
+		camera.nearPlane,
 	};
 	return parameters;
 }

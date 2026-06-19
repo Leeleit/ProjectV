@@ -139,7 +139,7 @@ bool SaveScreenshotCaptureBmp(
 		return false;
 	}
 
-	const uint64_t pixelRowStride = static_cast<uint64_t>(width) * kBmpPixelBytesPerPixel;
+	const uint64_t pixelRowStride = static_cast<std::uint64_t>(width) * kBmpPixelBytesPerPixel;
 	const uint32_t rowPadding = static_cast<uint32_t>((4u - pixelRowStride % 4u) % 4u);
 	const uint64_t fileRowStride = pixelRowStride + rowPadding;
 	const uint64_t pixelDataSize = fileRowStride * height;

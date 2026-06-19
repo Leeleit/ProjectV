@@ -30,7 +30,6 @@ void ShutdownVulkan(AppState *state)
 		projectv::asset::UnloadAllModels(&state->context, &state->render);
 		projectv::asset::DestroyModelPipeline(&state->context, &state->render);
 
-
 		if (state->render.taaSceneColorTarget != nullptr || state->render.taaHistoryColorTarget != nullptr || state->render.taaLayerSceneColorTarget != nullptr || state->render.taaLayerHistoryColorTarget != nullptr) {
 			projectv::taa::DestroyTaaRenderTargets(
 				&state->context,

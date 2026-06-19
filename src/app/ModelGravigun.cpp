@@ -21,12 +21,10 @@ namespace projectv::app {
 
 namespace {
 
-
 struct Ray {
 	glm::vec3 origin;
 	glm::vec3 direction; // unit length
 };
-
 
 bool RayAabbIntersect(const Ray &ray, const glm::vec3 &aabbMin, const glm::vec3 &aabbMax, float &outTNear, float &outTFar)
 {
@@ -61,7 +59,6 @@ bool RayAabbIntersect(const Ray &ray, const glm::vec3 &aabbMin, const glm::vec3 
 	outTFar = tFar;
 	return true;
 }
-
 
 std::optional<glm::vec3> IntersectRayHorizontalPlane(const Ray &ray, const float planeY)
 {
@@ -109,7 +106,6 @@ void TickModelGravigun(
 	if (!state || !render || !input) {
 		return;
 	}
-
 
 	const bool fDown = IsInputActionDown(*input, InputAction::PickModel);
 	const bool fPressed = ConsumeInputActionPressed(*input, InputAction::PickModel);

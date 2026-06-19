@@ -56,7 +56,6 @@ int RebuildAllShadersFromDisk()
 {
 	int reloadedCount = 0;
 
-
 	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
 	if (buildDir == nullptr) {
 		buildDir = PROJECTV_CMAKE_BUILD_DIR;
@@ -65,12 +64,11 @@ int RebuildAllShadersFromDisk()
 	const std::filesystem::path logPath =
 		std::filesystem::temp_directory_path() / "projectv_shader_reload.log";
 	const std::string cmakeCmd = std::string("cmake --build ") + buildDir +
-		" --target Shaders > \"" + logPath.string() + "\" 2>&1";
+								 " --target Shaders > \"" + logPath.string() + "\" 2>&1";
 	const int rc = std::system(cmakeCmd.c_str());
 	if (rc == 0) {
 		++reloadedCount;
 	}
-
 
 	projectv::render::RequestRayMarchPipelineRecreate();
 
@@ -126,7 +124,6 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 			"SyncPhysicsWorld returned false after world reload");
 		return false;
 	}
-
 
 	projectv::asset::SnapModelInstancesAboveGroundDispatch(*world->voxelWorld, &state->render);
 
@@ -371,7 +368,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	} else {
 
 		const size_t trackCount = state->audio->loadMusicFolder(
-			projectv::audio::GetMusicDirectoryPath()).value_or(0);
+												  projectv::audio::GetMusicDirectoryPath())
+									  .value_or(0);
 		SDL_Log("[ProjectV][Audio] miniaudio initialized; %zu mp3 track(s) in %s",
 				trackCount,
 				state->audio->musicFolder().string().c_str());
@@ -452,10 +450,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 				CyclePreferredPresentMode();
 			const char *modeName = "unknown";
 			switch (newMode) {
-			case VK_PRESENT_MODE_IMMEDIATE_KHR: modeName = "IMMEDIATE (uncapped, may tear)"; break;
-			case VK_PRESENT_MODE_MAILBOX_KHR: modeName = "MAILBOX (tear-free, uncapped)"; break;
-			case VK_PRESENT_MODE_FIFO_KHR: modeName = "FIFO (vsync on, FPS = display rate)"; break;
-			default: break;
+			case VK_PRESENT_MODE_IMMEDIATE_KHR:
+				modeName = "IMMEDIATE (uncapped, may tear)";
+				break;
+			case VK_PRESENT_MODE_MAILBOX_KHR:
+				modeName = "MAILBOX (tear-free, uncapped)";
+				break;
+			case VK_PRESENT_MODE_FIFO_KHR:
+				modeName = "FIFO (vsync on, FPS = display rate)";
+				break;
+			default:
+				break;
 			}
 			const std::size_t cycleSize = GetPresentModeCycleSize();
 			const std::size_t cycleIndex = GetPresentModeCycleIndex(newMode);

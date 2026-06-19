@@ -9,7 +9,7 @@
 
 namespace {
 
-void Expect(bool condition, const char *label)
+void Expect(const bool condition, const char *label)
 {
 	if (!condition) {
 		std::fprintf(stderr, "FAIL: %s\n", label);

@@ -17,24 +17,38 @@ using nlohmann::json;
 
 constexpr const char *kDefaultPath = "runtime/scene.json";
 
-
 bool ParseScenePreset(std::string_view text, VoxelScenePreset &outPreset)
 {
-	if (text == "VoxelLab") { outPreset = VoxelScenePreset::VoxelLab; return true; }
-	if (text == "FlatBenchmark") { outPreset = VoxelScenePreset::FlatBenchmark; return true; }
-	if (text == "TransparencyStress") { outPreset = VoxelScenePreset::TransparencyStress; return true; }
-	if (text == "ChunkGrid") { outPreset = VoxelScenePreset::ChunkGrid; return true; }
-	if (text == "MeshingStress") { outPreset = VoxelScenePreset::MeshingStress; return true; }
+	if (text == "VoxelLab") {
+		outPreset = VoxelScenePreset::VoxelLab;
+		return true;
+	}
+	if (text == "FlatBenchmark") {
+		outPreset = VoxelScenePreset::FlatBenchmark;
+		return true;
+	}
+	if (text == "TransparencyStress") {
+		outPreset = VoxelScenePreset::TransparencyStress;
+		return true;
+	}
+	if (text == "ChunkGrid") {
+		outPreset = VoxelScenePreset::ChunkGrid;
+		return true;
+	}
+	if (text == "MeshingStress") {
+		outPreset = VoxelScenePreset::MeshingStress;
+		return true;
+	}
 	return false;
 }
 
-}  // namespace
+} // namespace
 
 std::string GetDefaultSceneConfigPath()
 {
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
-		if (auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
+		if (const auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
 			return (*repoRoot / "runtime" / "scene.json").string();
 		}
 	}
@@ -48,27 +62,25 @@ bool EnsureDefaultSceneConfig(const std::string_view path)
 		return true;
 	}
 
-
 	if (fsPath.has_parent_path()) {
 		std::error_code ec;
 		std::filesystem::create_directories(fsPath.parent_path(), ec);
-
 	}
 
 	const json defaultDoc = {
 		{"name", "ProjectV Default"},
 		{"scenePreset", "VoxelLab"},
 		{"voxelWorld", {
-			{"floorSize", 18},
-			{"floorY", 0},
-			{"worldTopY", 14},
-			{"padding", 3},
-			{"chunkSize", 8},
-		}},
+						   {"floorSize", 18},
+						   {"floorY", 0},
+						   {"worldTopY", 14},
+						   {"padding", 3},
+						   {"chunkSize", 8},
+					   }},
 		{"lighting", {
-			{"sunDirectionY", 0.80},
-			{"exposure", 1.0},
-		}},
+						 {"sunDirectionY", 0.80},
+						 {"exposure", 1.0},
+					 }},
 	};
 
 	std::ofstream out{fsPath};
@@ -148,4 +160,4 @@ bool LoadSceneConfig(const std::string_view path, SceneConfig &outConfig)
 	return true;
 }
 
-}  // namespace projectv::voxel
+} // namespace projectv::voxel

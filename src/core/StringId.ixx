@@ -23,11 +23,11 @@ struct alignas(16) StringID {
 
 
 	template <std::size_t N>
-		consteval StringID(const char (&literal)[N]) noexcept
+	consteval explicit StringID(const char (&literal)[N]) noexcept
 		: StringID(std::string_view{literal, N - 1}) {}
 
 
-	constexpr StringID(std::string_view view) noexcept
+	constexpr explicit StringID(std::string_view view) noexcept
 		: hash(computeHash(view)), length(static_cast<std::uint32_t>(view.size())) {}
 
 

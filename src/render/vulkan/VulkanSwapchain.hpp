@@ -22,7 +22,7 @@ enum class SwapchainError : std::uint8_t {
 	CreateSemaphoreFailed,
 };
 
-constexpr std::string_view toString(SwapchainError e) noexcept {
+constexpr std::string_view toString(SwapchainError const e) noexcept {
 	switch (e) {
 	case SwapchainError::PreconditionFailed: return "PreconditionFailed";
 	case SwapchainError::QuerySupportFailed: return "QuerySupportFailed";

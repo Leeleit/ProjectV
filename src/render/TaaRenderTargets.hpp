@@ -20,7 +20,7 @@ enum class TaaError : std::uint8_t {
 	SamplerCreateFailed,
 };
 
-constexpr std::string_view toString(TaaError e) noexcept {
+constexpr std::string_view toString(TaaError const e) noexcept {
 	switch (e) {
 	case TaaError::PreconditionFailed: return "PreconditionFailed";
 	case TaaError::ImageCreateFailed: return "ImageCreateFailed";

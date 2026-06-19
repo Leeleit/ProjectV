@@ -3,7 +3,6 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
-
 #include "vk_mem_alloc.h"
 
 namespace projectv::taa {
@@ -60,7 +59,7 @@ void DestroyTarget(VulkanContextState *context, OffscreenColorTarget &target)
 
 } // namespace
 
-std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
+std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 	VulkanContextState *context,
 	const VkExtent2D extent,
 	OffscreenColorTarget &sceneColor,
@@ -69,19 +68,18 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 	OffscreenColorTarget &layerHistoryColor,
 	VkSampler &linearSampler)
 {
-	const auto fail = [](projectv::taa::TaaError e, std::string_view step, std::string_view detail) {
+	const auto fail = [](const TaaError e, const std::string_view step, const std::string_view detail) {
 		runtime::LogRuntimeFailure("Taa", step, detail);
 		return std::unexpected(e);
 	};
 	if (!context || !context->allocator || context->device == VK_NULL_HANDLE) {
-		return fail(projectv::taa::TaaError::PreconditionFailed,
-			"CreateOrRecreateTaaRenderTargets.Preconditions", "context/allocator/device null");
+		return fail(TaaError::PreconditionFailed,
+					"CreateOrRecreateTaaRenderTargets.Preconditions", "context/allocator/device null");
 	}
 	if (extent.width == 0u || extent.height == 0u) {
-		return fail(projectv::taa::TaaError::PreconditionFailed,
-			"CreateOrRecreateTaaRenderTargets.Preconditions", "extent is zero-sized");
+		return fail(TaaError::PreconditionFailed,
+					"CreateOrRecreateTaaRenderTargets.Preconditions", "extent is zero-sized");
 	}
-
 
 	DestroyTaaRenderTargets(
 		context,
@@ -95,7 +93,6 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 
 	constexpr VkFormat sceneColorFormat = kTaaSceneColorFormat;
 	constexpr VkFormat layerColorFormat = kTaaLayerHistoryColorFormat;
-
 
 	const VkImageCreateInfo imageInfoTemplate{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -127,8 +124,7 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 							  OffscreenColorTarget &target,
 							  const VkFormat format,
 							  const char *name,
-							  const VkImageLayout initialLayout) -> std::expected<void, projectv::taa::TaaError> {
-
+							  const VkImageLayout initialLayout) -> std::expected<void, TaaError> {
 		VkImageCreateInfo imageInfo = imageInfoTemplate;
 		imageInfo.format = format;
 
@@ -141,8 +137,8 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 				&target.image,
 				&allocation,
 				nullptr) != VK_SUCCESS) {
-			return fail(projectv::taa::TaaError::ImageCreateFailed,
-				"CreateOrRecreateTaaRenderTargets.vmaCreateImage", name);
+			return fail(TaaError::ImageCreateFailed,
+						"CreateOrRecreateTaaRenderTargets.vmaCreateImage", name);
 		}
 		target.allocation = allocation;
 		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(target.image), VK_OBJECT_TYPE_IMAGE, name);
@@ -166,8 +162,8 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			1,
 		};
 		if (vkCreateImageView(context->device, &viewInfo, nullptr, &target.imageView) != VK_SUCCESS) {
-			return fail(projectv::taa::TaaError::ImageViewCreateFailed,
-				"CreateOrRecreateTaaRenderTargets.vkCreateImageView", name);
+			return fail(TaaError::ImageViewCreateFailed,
+						"CreateOrRecreateTaaRenderTargets.vkCreateImageView", name);
 		}
 		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(target.imageView), VK_OBJECT_TYPE_IMAGE_VIEW, name);
 		return {};
@@ -181,7 +177,7 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
+		return std::unexpected(TaaError::ImageCreateFailed);
 	}
 	if (!allocateTarget(historyColor, sceneColorFormat, "TaaHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
@@ -191,7 +187,7 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
+		return std::unexpected(TaaError::ImageCreateFailed);
 	}
 	if (!allocateTarget(layerSceneColor, layerColorFormat, "TaaLayerSceneColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
@@ -201,7 +197,7 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
+		return std::unexpected(TaaError::ImageCreateFailed);
 	}
 	if (!allocateTarget(layerHistoryColor, layerColorFormat, "TaaLayerHistoryColorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
 		DestroyTaaRenderTargets(
@@ -211,7 +207,7 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return std::unexpected(projectv::taa::TaaError::ImageCreateFailed);
+		return std::unexpected(TaaError::ImageCreateFailed);
 	}
 
 	VkSamplerCreateInfo samplerInfo{};
@@ -234,8 +230,8 @@ std::expected<void, projectv::taa::TaaError> CreateOrRecreateTaaRenderTargets(
 			layerSceneColor,
 			layerHistoryColor,
 			linearSampler);
-		return fail(projectv::taa::TaaError::SamplerCreateFailed,
-			"CreateOrRecreateTaaRenderTargets.vkCreateSampler", "TaaLinearSampler");
+		return fail(TaaError::SamplerCreateFailed,
+					"CreateOrRecreateTaaRenderTargets.vkCreateSampler", "TaaLinearSampler");
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(linearSampler), VK_OBJECT_TYPE_SAMPLER, "TaaLinearSampler");
 
@@ -327,7 +323,6 @@ void RecordTaaHistoryCopy(
 		return;
 	}
 
-
 	TransitionImageLayout(
 		cmd,
 		sceneColor.image,
@@ -347,7 +342,6 @@ void RecordTaaHistoryCopy(
 		VK_PIPELINE_STAGE_2_COPY_BIT,
 		VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
-
 	VkImageCopy region{};
 	region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
 	region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
@@ -363,7 +357,6 @@ void RecordTaaHistoryCopy(
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		1,
 		&region);
-
 
 	TransitionImageLayout(
 		cmd,

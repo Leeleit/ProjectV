@@ -10,9 +10,9 @@ namespace projectv::c_kernels {
 
 namespace {
 
-
 [[nodiscard]] std::vector<ProjectvCAabb> ToCAabbs(
-	const std::span<const ModelInstanceData> &instances) {
+	const std::span<const ModelInstanceData> &instances)
+{
 	std::vector<ProjectvCAabb> aabbs(instances.size());
 	for (std::size_t i = 0; i < instances.size(); ++i) {
 		const auto &src = instances[i];
@@ -32,7 +32,8 @@ namespace {
 } // namespace
 
 ProjectvCFrustumCullParameters ToCParameters(
-	const ChunkCullingParameters &parameters) noexcept {
+	const ChunkCullingParameters &parameters) noexcept
+{
 	ProjectvCFrustumCullParameters out{};
 	out.cameraPosition[0] = parameters.cameraPositionAndMaxDistance.x;
 	out.cameraPosition[1] = parameters.cameraPositionAndMaxDistance.y;
@@ -57,7 +58,8 @@ ProjectvCFrustumCullParameters ToCParameters(
 
 std::vector<uint8_t> CullVisibleMask(
 	const std::span<const ModelInstanceData> &instances,
-	const ChunkCullingParameters &parameters) {
+	const ChunkCullingParameters &parameters)
+{
 	std::vector<ProjectvCAabb> aabbs = ToCAabbs(instances);
 	const ProjectvCFrustumCullParameters cparams = ToCParameters(parameters);
 	std::vector<uint8_t> mask((instances.size() + 7) / 8, 0);
@@ -74,7 +76,8 @@ std::vector<uint8_t> CullVisibleMask(
 
 std::vector<ModelInstanceData> FilterVisibleInstances(
 	const std::span<const ModelInstanceData> &instances,
-	const ChunkCullingParameters &parameters) {
+	const ChunkCullingParameters &parameters)
+{
 	std::vector<ModelInstanceData> visible;
 	if (instances.size() < kBatchDispatchThreshold) {
 

@@ -10,7 +10,7 @@ namespace projectv::audio {
 namespace {
 constexpr char kMusicDirectoryEnvVar[] = "PROJECTV_MUSIC_DIR";
 constexpr char kDefaultMusicDirectoryName[] = "music";
-}  // namespace
+} // namespace
 
 std::filesystem::path GetMusicDirectoryPath()
 {
@@ -20,14 +20,12 @@ std::filesystem::path GetMusicDirectoryPath()
 		return std::filesystem::path(overridePath);
 	}
 
-
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
-		if (auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
+		if (const auto repoRoot = projectv::core::FindRepoRoot(basePath)) {
 			return *repoRoot / kDefaultMusicDirectoryName;
 		}
 	}
-
 
 	{
 		const std::filesystem::path cwdCandidate =
@@ -38,7 +36,6 @@ std::filesystem::path GetMusicDirectoryPath()
 		}
 	}
 
-
 	if (const char *basePath = SDL_GetBasePath();
 		basePath && *basePath) {
 		const std::filesystem::path resolvedPath =
@@ -46,8 +43,7 @@ std::filesystem::path GetMusicDirectoryPath()
 		return resolvedPath;
 	}
 
-
 	return std::filesystem::path(kDefaultMusicDirectoryName);
 }
 
-}  // namespace projectv::audio
+} // namespace projectv::audio

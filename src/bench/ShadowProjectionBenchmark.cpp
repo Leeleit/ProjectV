@@ -12,8 +12,8 @@
 
 namespace {
 
-
-VoxelWorld BuildBenchmarkWorld() {
+VoxelWorld BuildBenchmarkWorld()
+{
 	VoxelWorld world{};
 	world.min = Int3{-12, 0, -12};
 	world.maxExclusive = Int3{12, 16, 12};
@@ -26,8 +26,8 @@ VoxelWorld BuildBenchmarkWorld() {
 	world.chunkCountZ = (world.depth + world.chunkSize - 1) / world.chunkSize;
 	world.voxels.resize(
 		static_cast<size_t>(world.width) *
-		static_cast<size_t>(world.height) *
-		static_cast<size_t>(world.depth),
+			static_cast<size_t>(world.height) *
+			static_cast<size_t>(world.depth),
 		static_cast<uint8_t>(VoxelMaterial::Air));
 	world.chunks.resize(
 		static_cast<size_t>(world.chunkCountX) *
@@ -38,10 +38,10 @@ VoxelWorld BuildBenchmarkWorld() {
 		for (int z = 0; z < world.depth; ++z) {
 			const size_t index =
 				static_cast<size_t>(z) *
-				static_cast<size_t>(world.width) *
-				static_cast<size_t>(world.height) +
+					static_cast<size_t>(world.width) *
+					static_cast<size_t>(world.height) +
 				static_cast<size_t>(x) *
-				static_cast<size_t>(world.height);
+					static_cast<size_t>(world.height);
 			world.voxels[index] = static_cast<uint8_t>(VoxelMaterial::FloorWhite);
 		}
 	}
@@ -51,10 +51,10 @@ VoxelWorld BuildBenchmarkWorld() {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex =
 					static_cast<size_t>(chunkZ) *
-					static_cast<size_t>(world.chunkCountX) *
-					static_cast<size_t>(world.chunkCountY) +
+						static_cast<size_t>(world.chunkCountX) *
+						static_cast<size_t>(world.chunkCountY) +
 					static_cast<size_t>(chunkY) *
-					static_cast<size_t>(world.chunkCountX) +
+						static_cast<size_t>(world.chunkCountX) +
 					static_cast<size_t>(chunkX);
 				VoxelChunk &chunk = world.chunks[chunkIndex];
 
@@ -79,31 +79,33 @@ VoxelWorld BuildBenchmarkWorld() {
 
 } // namespace
 
-static void BM_BuildSunShadowProjection(benchmark::State &state) {
+static void BM_BuildSunShadowProjection(benchmark::State &state)
+{
 	const VoxelWorld world = BuildBenchmarkWorld();
 	const std::array<float, 3> sunDirection{0.35f, 0.88f, 0.22f};
 	const float coverageScale = 1.10f;
 	for (auto _ : state) {
-		const SunShadowProjection result =
+		SunShadowProjection result =
 			BuildSunShadowProjection(world, sunDirection, coverageScale);
 		benchmark::DoNotOptimize(result);
 	}
-	state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
+	state.SetItemsProcessed(state.iterations());
 	state.SetLabel("BuildSunShadowProjection (per-frame shadow VP)");
 }
 
-
-static void BM_BuildSunShadowCascadeSplits(benchmark::State &state) {
+static void BM_BuildSunShadowCascadeSplits(benchmark::State &state)
+{
 	for (auto _ : state) {
-		const SunShadowCascadeSplits splits =
+		SunShadowCascadeSplits splits =
 			BuildSunShadowCascadeSplits(0.1f, 128.0f);
 		benchmark::DoNotOptimize(splits);
 	}
-	state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
+	state.SetItemsProcessed(state.iterations());
 	state.SetLabel("BuildSunShadowCascadeSplits (per-frame cascade splits)");
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	benchmark::RegisterBenchmark("BM_BuildSunShadowProjection", &BM_BuildSunShadowProjection);
 	benchmark::RegisterBenchmark("BM_BuildSunShadowCascadeSplits", &BM_BuildSunShadowCascadeSplits);
 	benchmark::Initialize(&argc, argv);

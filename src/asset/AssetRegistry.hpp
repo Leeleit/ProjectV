@@ -17,7 +17,7 @@ enum class AssetLoadError : std::uint8_t {
 	LoadGlbFailed = 0,
 };
 
-constexpr std::string_view toString(AssetLoadError e) noexcept {
+constexpr std::string_view toString(AssetLoadError const e) noexcept {
 	switch (e) {
 	case AssetLoadError::LoadGlbFailed: return "LoadGlbFailed";
 	}

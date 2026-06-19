@@ -11,7 +11,6 @@
 namespace {
 constexpr uint32_t kTaaResolveDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 
-
 constexpr std::array kTaaResolveDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
@@ -164,7 +163,6 @@ bool CreateTaaResolvePipeline(
 		},
 	};
 
-
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
@@ -205,13 +203,11 @@ bool CreateTaaResolvePipeline(
 		.alphaToOneEnable = VK_FALSE,
 	};
 
-
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = VK_FALSE;
 	depthStencil.depthWriteEnable = VK_FALSE;
 	depthStencil.depthCompareOp = VK_COMPARE_OP_ALWAYS;
-
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask =
@@ -224,7 +220,6 @@ bool CreateTaaResolvePipeline(
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = &colorBlendAttachment;
-
 
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -280,7 +275,6 @@ bool CreateTaaResolvePipeline(
 		reinterpret_cast<uint64_t>(render->taaResolvePipelineLayout),
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"TaaResolvePipelineLayout");
-
 
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,

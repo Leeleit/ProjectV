@@ -397,7 +397,7 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	const uint32_t chunkDescriptorCount = frameResources.chunkDescriptorCount;
 	assert(chunkDescriptorCount <= ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks);
 	assert(static_cast<size_t>(chunkDescriptorCount) * kSunShadowCascadeCount <=
-		ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount);
+		   ChunkVisibilityCache::kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount);
 	if (cache.opaqueCommands.size() != chunkDescriptorCount) {
 		cache.opaqueCommands.resize(chunkDescriptorCount);
 	}

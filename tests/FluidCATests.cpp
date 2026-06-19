@@ -100,9 +100,8 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 
 size_t CountFluid(const VoxelWorld &world)
 {
-	return static_cast<size_t>(std::count(
-		world.voxels.begin(),
-		world.voxels.end(),
+	return static_cast<size_t>(std::ranges::count(
+		world.voxels,
 		static_cast<uint8_t>(VoxelMaterial::Fluid)));
 }
 }
@@ -234,7 +233,7 @@ void TestFluidCASpreadsToCardinalNeighbour(TestContext &context)
 
 void TestFluidCASpreadIsDeterministic(TestContext &context)
 {
-	auto run = []() {
+	auto run = [] {
 		VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
 		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
 		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
@@ -261,7 +260,7 @@ void TestFluidCAEmptyWorldShortCircuits(TestContext &context)
 
 void TestFluidCADeterministicAcrossRuns(TestContext &context)
 {
-	auto runScenario = []() {
+	auto runScenario = [] {
 		VoxelWorld world = MakeFluidCATestWorld(8, 12, 8);
 		SetVoxelMaterial(world, {3, 5, 3}, VoxelMaterial::Fluid);
 		SetVoxelMaterial(world, {3, 6, 3}, VoxelMaterial::Fluid);

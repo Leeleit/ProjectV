@@ -108,7 +108,7 @@ bool LoadAndRegisterModelsFromManifest(
 			loaded->aabbMax.y,
 			loaded->aabbMax.z,
 		};
-		render->modelRegistry.push_back(std::move(registryEntry));
+		render->modelRegistry.push_back(registryEntry);
 	}
 
 	if (render->modelRegistry.empty()) {
@@ -236,7 +236,6 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			continue;
 		}
 
-
 		const float rawMaxX = instance.worldAabbMin.x + dimX;
 		const float rawMaxY = instance.worldAabbMin.y + dimY;
 		const float rawMaxZ = instance.worldAabbMin.z + dimZ;
@@ -266,7 +265,6 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			}
 		}
 
-
 		if (ySticksOut) {
 			newMaxY = std::floor(std::min(rawMaxY, worldMaxY));
 			newMinY = newMaxY - dimY;
@@ -274,7 +272,6 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 			newMinY = instance.worldAabbMin.y;
 			newMaxY = newMinY + dimY;
 		}
-
 
 		if (zSticksOut) {
 			newMaxZ = std::floor(std::min(rawMaxZ, worldMaxZ));
@@ -296,7 +293,6 @@ void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 		instance.worldAabbMax.x = newMaxX;
 		instance.worldAabbMax.y = newMaxY;
 		instance.worldAabbMax.z = newMaxZ;
-
 
 		instance.modelTransform.c[3].x = newMinX - instance.sourceAabbMin[0];
 		instance.modelTransform.c[3].y = newMinY - instance.sourceAabbMin[1];
@@ -334,16 +330,13 @@ void SnapModelInstancesCenterAnchored(
 			continue;
 		}
 
-
 		float centerX = 0.5f * (instance.worldAabbMin.x + instance.worldAabbMax.x);
 		float centerY = 0.5f * (instance.worldAabbMin.y + instance.worldAabbMax.y);
 		float centerZ = 0.5f * (instance.worldAabbMin.z + instance.worldAabbMax.z);
 
-
 		centerX = std::round(centerX);
 		centerY = std::round(centerY);
 		centerZ = std::round(centerZ);
-
 
 		const float halfDimX = 0.5f * dimX;
 		const float halfDimY = 0.5f * dimY;
@@ -351,7 +344,6 @@ void SnapModelInstancesCenterAnchored(
 		centerX = std::clamp(centerX, worldMinX + halfDimX, worldMaxX - halfDimX);
 		centerY = std::clamp(centerY, worldMinY + halfDimY, worldMaxY - halfDimY);
 		centerZ = std::clamp(centerZ, worldMinZ + halfDimZ, worldMaxZ - halfDimZ);
-
 
 		const float newMinX = centerX - halfDimX;
 		const float newMinY = centerY - halfDimY;
@@ -362,7 +354,6 @@ void SnapModelInstancesCenterAnchored(
 		instance.worldAabbMax.x = newMinX + dimX;
 		instance.worldAabbMax.y = newMinY + dimY;
 		instance.worldAabbMax.z = newMinZ + dimZ;
-
 
 		instance.modelTransform.c[3].x = newMinX - instance.sourceAabbMin[0];
 		instance.modelTransform.c[3].y = newMinY - instance.sourceAabbMin[1];

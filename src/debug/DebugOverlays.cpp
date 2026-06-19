@@ -103,7 +103,6 @@ void AppendMutationPreviewOverlayBox(
 	AppendOverlayBox(outBoxes, min, maxExclusive, kMutationPreviewOverlayColor);
 }
 
-
 void AppendCascadeSplitPlaneOverlayBoxes(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const CameraState &camera,
@@ -120,14 +119,12 @@ void AppendCascadeSplitPlaneOverlayBoxes(
 			continue;
 		}
 
-
 		const float worldX = camera.position[0] + forward[0] * splitDepth;
 		const float worldY = camera.position[1] + forward[1] * splitDepth;
 		const float worldZ = camera.position[2] + forward[2] * splitDepth;
 
 		const float halfWidth = std::max(orthoWidths[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
 		const float halfHeight = std::max(orthoHeights[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
-
 
 		const Int3 min{
 			static_cast<int32_t>(std::floor(worldX - halfWidth)),
@@ -147,7 +144,6 @@ void AppendCascadeSplitPlaneOverlayBoxes(
 	}
 }
 
-
 void AppendCursorHitNormalOverlayBox(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const Int3 targetVoxel,
@@ -164,7 +160,6 @@ void AppendCursorHitNormalOverlayBox(
 		targetVoxel.z + hitNormal.z * kCursorHitNormalShaftLength,
 	};
 
-
 	for (int32_t step = 1; step <= kCursorHitNormalShaftLength; ++step) {
 		const Int3 voxel{
 			targetVoxel.x + hitNormal.x * step,
@@ -173,7 +168,6 @@ void AppendCursorHitNormalOverlayBox(
 		};
 		AppendVoxelOverlayBox(outBoxes, voxel, kCursorHitNormalOverlayColor);
 	}
-
 
 	(void)shaftEnd;
 }
@@ -255,7 +249,6 @@ void BuildDebugOverlayBoxes(
 				kDirtyChunkOverlayColor);
 		}
 	}
-
 
 	if (debug.showCascadeSplitPlanes) {
 		AppendCascadeSplitPlaneOverlayBoxes(*outBoxes, camera, render);

@@ -26,21 +26,21 @@ public:
 	InplaceVectorShim &operator=(InplaceVectorShim &&) = delete;
 
 
-	constexpr T *data() noexcept { return data_.data(); }
-	constexpr const T *data() const noexcept { return data_.data(); }
+	[[nodiscard]] constexpr T *data() noexcept { return data_.data(); }
+	[[nodiscard]] constexpr const T *data() const noexcept { return data_.data(); }
 
-	constexpr T &operator[](const size_type i) noexcept { return data_[i]; }
-	constexpr const T &operator[](const size_type i) const noexcept { return data_[i]; }
+	[[nodiscard]] constexpr T &operator[](const size_type i) noexcept { return data_[i]; }
+	[[nodiscard]] constexpr const T &operator[](const size_type i) const noexcept { return data_[i]; }
 
-	constexpr T &front() noexcept { return data_[0]; }
-	constexpr const T &front() const noexcept { return data_[0]; }
-	constexpr T &back() noexcept { return data_[size_ - 1]; }
-	constexpr const T &back() const noexcept { return data_[size_ - 1]; }
+	[[nodiscard]] constexpr T &front() noexcept { return data_[0]; }
+	[[nodiscard]] constexpr const T &front() const noexcept { return data_[0]; }
+	[[nodiscard]] constexpr T &back() noexcept { return data_[size_ - 1]; }
+	[[nodiscard]] constexpr const T &back() const noexcept { return data_[size_ - 1]; }
 
 
-	constexpr size_type size() const noexcept { return size_; }
-	constexpr bool empty() const noexcept { return size_ == 0; }
-	constexpr bool full() const noexcept { return size_ == Capacity; }
+	[[nodiscard]] constexpr size_type size() const noexcept { return size_; }
+	[[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
+	[[nodiscard]] constexpr bool full() const noexcept { return size_ == Capacity; }
 
 
 	constexpr void resize(const size_type n) noexcept(std::is_nothrow_default_constructible_v<T>) {

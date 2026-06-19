@@ -29,7 +29,7 @@ enum class VoxelSnapshotError : std::uint8_t {
 };
 
 
-constexpr std::string_view toString(VoxelSnapshotError e) noexcept {
+constexpr std::string_view toString(VoxelSnapshotError const e) noexcept {
 	switch (e) {
 		case VoxelSnapshotError::EmptyPath: return "EmptyPath";
 		case VoxelSnapshotError::CreateDirectoriesFailed: return "CreateDirectoriesFailed";

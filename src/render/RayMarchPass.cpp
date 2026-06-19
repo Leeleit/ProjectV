@@ -19,7 +19,7 @@ RayMarchState &MutableRayMarchState()
 	return state;
 }
 
-}  // namespace
+} // namespace
 
 void SetRayMarchEnabled(const bool enabled)
 {
@@ -66,4 +66,4 @@ void RecordRayMarchCommands(const VulkanContextState &context, const FrameRender
 		"[ProjectV][RayMarch] RecordRayMarchCommands invoked (deferred Phase 7 follow-up: shader is compiled, pipeline / offscreen target / composite are the next slice)\n");
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

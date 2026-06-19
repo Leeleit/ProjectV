@@ -18,11 +18,15 @@ enum class AudioLoadError : std::uint8_t {
 	ScanFailed,
 };
 
-constexpr std::string_view toString(AudioLoadError e) noexcept {
+constexpr std::string_view toString(AudioLoadError const e) noexcept
+{
 	switch (e) {
-	case AudioLoadError::PreconditionFailed: return "PreconditionFailed";
-	case AudioLoadError::FolderCreateFailed: return "FolderCreateFailed";
-	case AudioLoadError::ScanFailed: return "ScanFailed";
+	case AudioLoadError::PreconditionFailed:
+		return "PreconditionFailed";
+	case AudioLoadError::FolderCreateFailed:
+		return "FolderCreateFailed";
+	case AudioLoadError::ScanFailed:
+		return "ScanFailed";
 	}
 	return "Unknown";
 }
@@ -38,7 +42,6 @@ enum class MusicState : uint8_t {
 
 const char *MusicStateToString(MusicState state);
 
-
 class AudioEngine {
   public:
 	AudioEngine() = default;
@@ -47,16 +50,13 @@ class AudioEngine {
 	AudioEngine(const AudioEngine &) = delete;
 	AudioEngine &operator=(const AudioEngine &) = delete;
 
-
 	bool init();
 
 	void shutdown();
 
 	std::expected<size_t, projectv::audio::AudioLoadError> loadMusicFolder(const std::filesystem::path &folderPath);
 
-
 	void tick();
-
 
 	void togglePlayPause();
 	void stop();
@@ -64,7 +64,6 @@ class AudioEngine {
 	void decreaseVolume(float step);
 	void nextTrack();
 	void previousTrack();
-
 
 	[[nodiscard]] MusicState state() const { return m_state; }
 	[[nodiscard]] float volume() const { return m_volume; }
@@ -81,19 +80,15 @@ class AudioEngine {
 	[[nodiscard]] size_t currentIndex() const { return m_currentIndex; }
 
   private:
-
 	size_t scanPlaylist();
-
 
 	bool loadCurrentTrack();
 
 	void unloadCurrentTrack();
 
-
 	bool goToTrack(size_t newIndex);
 
 	void applyVolume();
-
 
 	void pauseImpl();
 
@@ -115,9 +110,7 @@ class AudioEngine {
 
 	ma_uint64 m_pausedCursorMs = 0;
 
-
 	std::chrono::steady_clock::time_point m_lastPlaylistRefresh;
-
 
 	std::string m_currentTrackName;
 	std::string m_currentArtist;

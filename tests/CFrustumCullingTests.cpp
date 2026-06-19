@@ -27,7 +27,7 @@ struct Xorshift32 {
     [[nodiscard]] float UnitFloat() noexcept {
         return static_cast<float>(Next() & 0x00FFFFFFu) / static_cast<float>(0x01000000u);
     }
-    [[nodiscard]] float Range(float min, float max) noexcept {
+    [[nodiscard]] float Range(const float min, const float max) noexcept {
         return min + (max - min) * UnitFloat();
     }
 };
