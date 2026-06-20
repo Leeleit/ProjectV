@@ -83,7 +83,16 @@ Append-only ledger активных и недавно завершённых AI-
   - **EDIT:** `agent/decisions.md` — append §31 «Ray-march path removal: defense stub with no production use, removed per pet-project directive 2026-06-20; future SVO reimplements DDA from scratch»
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/session-checklist.md`, `agent/memory.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `tests/**`, `tools/**`, `build/**`, `src/c_kernels/**`, `src/bench/**`, все production src файлы кроме 4 заявленных, чужие uncommitted, `legacy/docs/archive/Defense*` (archived, не чистим, иначе потеряем историю защиты)
-- **status:** open
+- **status:** closed
+- **closed-at:** 2026-06-20T10:05:00Z
+- **commit-hash:** `f7fb8f2` — `chore(render): remove dead ray-march compute pass (defense stub)` (9 files changed, +97/-207 net)
+- **post-commit notes:**
+  - Build: `cmake --build build/linux-clang-debug` green, 0 errors, 0 warnings
+  - ctest: 16/16 passed (0.77s, baseline parity)
+  - Stale `build/linux-clang-debug/{src,bin}/ray_march.comp.spv` artifacts removed manually (CMake custom_command not regenerating deleted shader artifacts in already-configured build tree)
+  - 0 raymarch references в `src/` (verified via `rg -n "RayMarch|ray_march|raymarch" src/`)
+  - No new tests needed — zero callers, zero behavior
+  - **Cross-refs:** `decisions.md §31`, `CHANGELOG.md` 2026-06-20 **Removed** секция
 
 ### session-2026-06-20T-tier2-mainline-modules-r0
 
