@@ -15,6 +15,7 @@ import projectv.string_id;
 #include "render/TaaRenderTargets.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
 #include "render/HizCulling.hpp"
+#include "voxel/NanoVdb.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 namespace projectv::taa {
@@ -373,6 +374,7 @@ struct FrameRenderData {
 	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkAabbBuffer = VK_NULL_HANDLE;
 	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
+	VkBuffer hzbVisibleCountBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
@@ -556,17 +558,33 @@ struct SceneFrameResources {
 	void *visibilityMaskMappedData = nullptr;
 	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
 	VmaAllocation visibilityMaskAllocation = nullptr;
+	void *hzbVisibleCountMappedData = nullptr;
+	VkBuffer hzbVisibleCountBuffer = VK_NULL_HANDLE;
+	VmaAllocation hzbVisibleCountAllocation = nullptr;
 	void *visibleChunkIdMappedData = nullptr;
 	VkBuffer visibleChunkIdBuffer = VK_NULL_HANDLE;
 	VmaAllocation visibleChunkIdAllocation = nullptr;
 	void *visibilityCounterMappedData = nullptr;
 	VkBuffer visibilityCounterBuffer = VK_NULL_HANDLE;
 	VmaAllocation visibilityCounterAllocation = nullptr;
+	void *fluidCaSourceMappedData = nullptr;
+	VkBuffer fluidCaSourceBuffer = VK_NULL_HANDLE;
+	VmaAllocation fluidCaSourceAllocation = nullptr;
+	void *fluidCaDestinationMappedData = nullptr;
+	VkBuffer fluidCaDestinationBuffer = VK_NULL_HANDLE;
+	VmaAllocation fluidCaDestinationAllocation = nullptr;
+	void *fluidCaActiveChunkIdMappedData = nullptr;
+	VkBuffer fluidCaActiveChunkIdBuffer = VK_NULL_HANDLE;
+	VmaAllocation fluidCaActiveChunkIdAllocation = nullptr;
+	void *fluidCaStatsMappedData = nullptr;
+	VkBuffer fluidCaStatsBuffer = VK_NULL_HANDLE;
+	VmaAllocation fluidCaStatsAllocation = nullptr;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet fluidCaDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;
 	uint64_t uploadedVoxelPayloadVersion = 0;
 	uint64_t meshedSceneVersion = 0;
@@ -625,6 +643,8 @@ struct RenderState {
 	std::vector<size_t> latestVoxelPayloadChunkIndices;
 	std::vector<size_t> pendingChunkRebuildIndices;
 	std::vector<size_t> completedChunkRebuildIndices;
+	projectv::voxel::nanovdb::NanoVdbFlattenResult sceneNanoVdbFlatten;
+	uint64_t sceneNanoVdbVersion = 0;
 	uint32_t sceneFaceCapacity = 0;
 	uint32_t sceneTransparentFaceBase = 0;
 	uint32_t sceneOpaqueFaceCount = 0;
@@ -716,6 +736,14 @@ struct RenderState {
 	uint32_t visibleChunkIdCapacity = 0u;
 	uint32_t meshShaderMaxOutputVertices = 0u;
 	uint32_t meshShaderMaxOutputPrimitives = 0u;
+	bool fluidCaPipelineEnabled = false;
+	uint32_t fluidCaPingPongBufferBytes = 0u;
+	uint32_t fluidCaMaxActiveChunks = 0u;
+	VkShaderModule fluidCaShaderModule = VK_NULL_HANDLE;
+	VkPipelineLayout fluidCaPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline fluidCaPipeline = VK_NULL_HANDLE;
+	VkDescriptorSetLayout fluidCaDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool fluidCaDescriptorPool = VK_NULL_HANDLE;
 
 	bool taaEnabled = true;
 	float taaBlend = 0.10f;
@@ -813,6 +841,7 @@ struct SimulationState {
 	bool effectivePaused = false;
 	float fluidTickRateHz = 20.0f;
 	float fluidAccumulatorSeconds = 0.0f;
+	uint32_t fluidGpuTicksPending = 0u;
 };
 
 struct InputState {

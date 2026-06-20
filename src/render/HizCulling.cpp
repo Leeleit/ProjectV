@@ -14,7 +14,7 @@ namespace {
 constexpr uint32_t kHizCullingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kHizCullingShaderFilename[] = "hzb_cull.comp.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 4> kHizCullingDescriptorBindings{
+constexpr std::array<VkDescriptorSetLayoutBinding, 5> kHizCullingDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -43,6 +43,13 @@ constexpr std::array<VkDescriptorSetLayoutBinding, 4> kHizCullingDescriptorBindi
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.pImmutableSamplers = nullptr,
 	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 4,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
 };
 
 constexpr VkDescriptorSetLayoutCreateInfo kHizCullingDescriptorSetLayoutInfo{
@@ -56,7 +63,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kHizCullingDescriptorSetLayoutInfo{
 constexpr std::array<VkDescriptorPoolSize, 4> kHizCullingDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = kHizCullingDescriptorSetCount * 2u,
+		.descriptorCount = kHizCullingDescriptorSetCount * 3u,
 	},
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -664,13 +671,54 @@ bool RecordHzbCullingDispatch(
 	}
 	if (frameResources.hizCullingDescriptorSet == VK_NULL_HANDLE ||
 		frameResources.chunkAabbBuffer == VK_NULL_HANDLE ||
-		frameResources.visibilityMaskBuffer == VK_NULL_HANDLE) {
+		frameResources.visibilityMaskBuffer == VK_NULL_HANDLE ||
+		frameResources.hzbVisibleCountBuffer == VK_NULL_HANDLE) {
 		return false;
 	}
 	if (render.hizBuffer.imageView == VK_NULL_HANDLE ||
 		render.hizBuffer.sampler == VK_NULL_HANDLE) {
 		return false;
 	}
+
+	const uint32_t visibilityMaskWordCount =
+		(chunkDescriptorCount + 31u) / 32u;
+
+	if (visibilityMaskWordCount > 0u) {
+		vkCmdFillBuffer(
+			commandBuffer,
+			frameResources.visibilityMaskBuffer,
+			0u,
+			static_cast<VkDeviceSize>(visibilityMaskWordCount) * sizeof(uint32_t),
+			0u);
+	}
+	vkCmdFillBuffer(
+		commandBuffer,
+		frameResources.hzbVisibleCountBuffer,
+		0u,
+		sizeof(uint32_t),
+		0u);
+
+	VkBufferMemoryBarrier2 fillBarriers[2]{};
+	fillBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	fillBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+	fillBarriers[0].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+	fillBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	fillBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	fillBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	fillBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	fillBarriers[0].buffer = frameResources.visibilityMaskBuffer;
+	fillBarriers[0].offset = 0u;
+	fillBarriers[0].size = static_cast<VkDeviceSize>(visibilityMaskWordCount) * sizeof(uint32_t);
+
+	fillBarriers[1] = fillBarriers[0];
+	fillBarriers[1].buffer = frameResources.hzbVisibleCountBuffer;
+	fillBarriers[1].size = sizeof(uint32_t);
+
+	VkDependencyInfo fillDepInfo{};
+	fillDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	fillDepInfo.bufferMemoryBarrierCount = 2u;
+	fillDepInfo.pBufferMemoryBarriers = fillBarriers;
+	vkCmdPipelineBarrier2(commandBuffer, &fillDepInfo);
 
 	VkDescriptorBufferInfo chunkAabbInfo{};
 	chunkAabbInfo.buffer = frameResources.chunkAabbBuffer;
@@ -692,7 +740,12 @@ bool RecordHzbCullingDispatch(
 	hizSamplerInfo.imageView = VK_NULL_HANDLE;
 	hizSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-	std::array<VkWriteDescriptorSet, 4> writes{};
+	VkDescriptorBufferInfo visibleCountInfo{};
+	visibleCountInfo.buffer = frameResources.hzbVisibleCountBuffer;
+	visibleCountInfo.offset = 0;
+	visibleCountInfo.range = sizeof(uint32_t);
+
+	std::array<VkWriteDescriptorSet, 5> writes{};
 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[0].dstSet = frameResources.hizCullingDescriptorSet;
 	writes[0].dstBinding = 0;
@@ -724,6 +777,14 @@ bool RecordHzbCullingDispatch(
 	writes[3].descriptorCount = 1;
 	writes[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
 	writes[3].pImageInfo = &hizSamplerInfo;
+
+	writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[4].dstSet = frameResources.hizCullingDescriptorSet;
+	writes[4].dstBinding = 4;
+	writes[4].dstArrayElement = 0;
+	writes[4].descriptorCount = 1;
+	writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[4].pBufferInfo = &visibleCountInfo;
 
 	vkUpdateDescriptorSets(
 		context->device,

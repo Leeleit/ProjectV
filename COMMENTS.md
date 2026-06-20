@@ -282,6 +282,40 @@ pre-count quads → call `SetMeshOutputsEXT(vCount, pCount)` → re-emit. This p
 required because `SetMeshOutputsEXT` must precede any output write (Khronos GLSL_EXT_mesh_shader
 spec).
 
+## `src/render/vulkan/VulkanFluidCaPipeline.hpp`
+
+### L1-L48 (design-rationale)
+
+Stage 3.1 GPU Fluid CA full pipeline integration per `TODO.md §3.1` + `agent/knowledge.md §30.4` 3-step migration precedent. `FluidCaPushConstants` (48 bytes) + `FluidCaGpuFrameStats` (16 bytes) cross-shader byte-exact contracts. Public API surface minimal: env-gate (`IsFluidCaGpuPipelineRequested`), pipeline lifecycle (`CreateFluidCaPipelines` / `DestroyFluidCaPipelines`), per-frame record (`RecordFluidCaDispatch`), cross-queue submit (`SubmitFluidCaToComputeQueue` via `vkQueueSubmit2` + `VkSemaphoreSubmitInfo` + `renderTimelineSemaphore`), stats readback (`ReadFluidCaFrameStats` via `vmaInvalidateAllocation` mapped buffer). Atomic strategy: `fluid_ca.comp` uses `atomicOr` + bit-check (functionally equivalent to CAS for "set bit if unset" claim per `2026-06-21-gpu-fluid-ca-atomic-strategy` in-progress experiment).
+
+## `src/render/vulkan/VulkanFluidCaPipeline.cpp`
+
+### L1-L88 (design-rationale)
+
+Constants block: 5 descriptor bindings (PackedChunkDescriptors / ActiveChunkIds / SourceFluidCells / DestinationFluidCells / FluidStats) match `fluid_ca.comp` layout 1:1; 5*MAX_FRAMES_IN_FLIGHT pool size for storage buffer descriptors; `kFluidCaStatsResetValue=0u` for `vkCmdFillBuffer` reset. Shader module loader mirrors `VulkanMeshShaderPipeline::CreateMeshShaderModule` pattern (extracted helper to avoid duplication with the mesh shader code path). `CreateFluidCaPipelines` does graceful fallback (returns false on missing spv or device creation failure; caller in `VulkanInit.cpp` logs informational and continues with CPU path per `agent/knowledge.md §30.4` Step 1).
+
+### L120-L250 (design-rationale)
+
+`CreateFluidCaPipelines` builds compute pipeline from `fluid_ca.comp.spv` via `vkCreateComputePipelines`. Pipeline layout uses single 5-binding descriptor set layout + 48-byte push constant range. Shader module named "FluidCaShader", pipeline layout "FluidCaPipelineLayout", pipeline "FluidCaPipeline", descriptor set layout "FluidCaDescriptorSetLayout" via `SetVulkanObjectName` for Validation Layer debug. Sets `render->fluidCaPipelineEnabled = true` on success. `DestroyFluidCaPipelines` tears down in reverse order (pipeline, pipeline layout, descriptor pool, descriptor set layout, shader module, all 4 per-frame buffers per SceneFrameResources). Safe to call on `pipelineEnabled=false` (no-op).
+
+### L260-L380 (design-rationale)
+
+`RefreshFluidCaResourceBindings` creates descriptor pool + allocates 1 descriptor set per `SceneFrameResources` + writes 5 `VkWriteDescriptorSet` entries (chunkDescriptorBuffer, fluidCaActiveChunkIdBuffer, fluidCaSourceBuffer, fluidCaDestinationBuffer, fluidCaStatsBuffer). Skips sets where any binding is null (graceful for frames with partial init). `RecordFluidCaDispatch` resets stats buffer via `std::memset` (mapped memory) + 3 pre-dispatch `VkBufferMemoryBarrier2` (stats fill + source + activeChunkId HOST→COMPUTE) + binds pipeline + descriptor set + push constants + `vkCmdDispatch(activeChunkCount, 1, 1)` + 2 post-dispatch barriers (stats + dest COMPUTE→HOST).
+
+### L420-L530 (design-rationale)
+
+`SubmitFluidCaToComputeQueue` uses `vkQueueSubmit2` with `VkCommandBufferSubmitInfo` + `VkSemaphoreSubmitInfo` wait on `renderTimelineSemaphore` (value = previous) + `VkSemaphoreSubmitInfo` signal on same semaphore (value = incremented). Bumps `context->renderTimelineValue += 1u` to advance the timeline. RAW hazard: compute→graphics (writeOutput → readInput) satisfied by semaphore signal+wait. Cross-queue submission ready but not yet wired in `Renderer.cpp` (current path uses main graphics command buffer for dispatch, then SubmitFluidCaToComputeQueue can route to dedicated compute queue once dedicated compute command pool is added — see `agent/workspace.md §2`).
+
+### L540-L620 (design-rationale)
+
+`ReadFluidCaFrameStats` invalidates the mapped stats buffer via `vmaInvalidateAllocation` + copies 16 bytes (4 × uint32: activeFluidCells / droppedFluidCells / iteration / reserved) for CPU-side debug HUD. Per `agent/knowledge.md §30.4` contract the stats are debug-only — count conservation invariant enforced by `fluid_ca.comp:101-105` `atomicOr` + bit-check, not by stats counter.
+
+## `src/voxel/VoxelLodDownsample.{hpp,cpp}`
+
+### L1-L132 (design-rationale)
+
+Stage 4.2 LOD chunk 2 B_SurfacePreserve downsampling kernel + per-chunk `LodDownsampleJob` orchestrator per `2026-06-21-lod-mesh-downsampling` verdict=mixed. Lives in `projectv::voxel` namespace (separate from `voxel/VoxelWorld.cpp` to minimize transitive include cost for the test target). `LodDownsampleStepForLod` maps LOD 0/1/2/3 → step 1/2/4/8 (per `SelectLodLevelForDistance` distance thresholds <32m/<64m/<128m/≥128m). `LodDownsampledExtentForLod` returns `chunkSize/step` (clamped to ≥1 for safety). `SurfacePreserveVote8` reads step³ source voxels in fixed `sz,sy,sx` order, returns first non-Air material found OR Air if all step³ are Air — 0 T-junction holes across 75 boundary configurations per experiment. `DownsampleChunkForLodSurfacePreserve` allocates `outDownsampled` of size `outExtent³`, populates from `chunk.min` origin. `RunLodDownsampleJobs` iterates all chunks, calls downsample, sets `lodDownsampledNonAirCount` byte. `IsLodDownsampleEnabled` env gate (`PROJECTV_LOD_DOWNSAMPLE=ON`, default OFF).
+
 ## `src/render/vulkan/VulkanBootstrap.cpp`
 
 ### L447-L454 (intent)

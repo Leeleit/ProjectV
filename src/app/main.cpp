@@ -583,6 +583,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"PrepareFrameRenderData returned false");
 	} else {
 		result = DrawFrame(
+			state,
 			&state->platform(),
 			&state->context(),
 			&state->swapchain(),

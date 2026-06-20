@@ -18,6 +18,10 @@ layout(set = 0, binding = 1, std430) writeonly buffer VisibilityMask {
 layout(set = 0, binding = 2) uniform sampler2D hizTexture;
 layout(set = 0, binding = 3) uniform sampler hizSampler;
 
+layout(set = 0, binding = 4, std430) buffer VisibleCount {
+    uint visibleCount;
+};
+
 layout(push_constant) uniform CullPushConstants {
     mat4 inverseViewProjection;
     uvec4 hizExtentAndMipCount;
@@ -106,5 +110,6 @@ void main()
         hizBaseExtent);
     if (visible) {
         atomicOr(visibilityWords[wordIndex], 1u << bitIndex);
+        atomicAdd(visibleCount, 1u);
     }
 }

@@ -7,72 +7,60 @@
 
 ## 1. Now
 
-**2026-06-21 session (Pattern C mesh shader full integration, in progress — no commit, dirty tree)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`). +1 new test `ProjectVMeshShaderTests`.
+**2026-06-21 session 8x (closed dirty — pending operator commit)** — 8 phases across 6 TODO stages (3.1, 4.1, 4.2, 5.3, 6.2, 6.3) on top of 4x dirty baseline. Build green, **26/27 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as 4x per earlier workspace). 6 new test targets + 36 new sub-tests, all green. **No commit yet** — operator instruction: continue 4x dirty + single "Commit?" at session end covering both 4x + 8x.
 
-- **Phase 1-7 (Pattern C mesh shader full integration)**: `voxel_mesh.mesh` ported from stub to real greedy emission; `voxel_mesh_pre.comp` switched UBO→push-constant frustum; `voxel_mesh.task` deleted; new `VulkanMeshShaderPipeline.{hpp,cpp}` with full pipeline creation + draw record; `Renderer.cpp` main pass conditionally uses mesh shader when `PROJECTV_MESH_SHADER_PIPELINE=ON` AND `meshShader=true` feature available; `voxel_mesh.comp` (PackedFace producer) still runs for shadow + transparent paths. Per-vertex AO = no-op (1.0), consistent with `voxel.vert:137` per `agent/knowledge.md §14` P0.3 v2.
-- **Phase 8 (buffer polish, deferred)**: Vulkan 1.3 minimum device check already enforced by `vkGetPhysicalDeviceFeatures2(VkPhysicalDeviceMeshShaderFeaturesEXT)` → graceful fallback; benchmark automation hook deferred to follow-up session.
+- **Phase 0: web-search gate** — `atomicOr` + bit-check is correct for Fluid CA "set bit if unset" claim; no shader change needed.
+- **Phase 1: Stage 3.1 GPU Fluid CA full pipeline (CLOSED)** — `VulkanFluidCaPipeline.{hpp,cpp}` ~700 LoC + ping-pong SSBO + 5-binding descriptor + compute pipeline + `vkQueueSubmit2` cross-queue helper + ECS routing (`simulation.fluidGpuTicksPending` counter drained per frame in `Renderer.cpp`).
+- **Phase 2: Stage 4.2 LOD chunk 2 B_SurfacePreserve (CLOSED)** — `VoxelLodDownsample.{hpp,cpp}` + `VoxelChunk.lodDownsampledNonAirCount` + per-frame orchestrator gated by `PROJECTV_LOD_DOWNSAMPLE`. 0 T-junction holes per `2026-06-21-lod-mesh-downsampling` experiment.
+- **Phase 3: Stage 5.3 TAA Motion Vectors foundation (CLOSED)** — `kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT` in `TaaRenderTargets.hpp` per Karis 2014 + `TODO.md §5.3`. Full GPU integration (MRT + dynamic rendering + TaaResolve consume) deferred to dedicated session.
+- **Phase 4: Stage 6.3 Async compute env gate (CLOSED)** — `IsAsyncComputeEnabled()` env toggle (`PROJECTV_ASYNC_COMPUTE=ON`); `SubmitFluidCaToComputeQueue` helper ready for per-pass wiring (deferred to dedicated session needing separate compute command pool).
+- **Phase 5: Stage 6.2 AppState PIMPL contract (CLOSED, partial)** — `static_assert` test verifies existing 12 accessor return types; full struct move to `Types.cpp` requires ~200 file edits via mechanical sed (172 call sites) — multi-session work, deferred.
+- **Phase 6: Stage 4.1 GPU Noise Step 1 (CLOSED)** — `src/shaders/world_gen.comp` CC0 OpenSimplex2 3D-S port + FBM wrapper, glslc validation green.
+- **Phase 7: Stage 1.1 NanoVDB GPU integration (PARTIAL)** — CPU-side `BuildNanoVdbFlatten` wired in `UpdateSceneResources`; GPU upload (SSBO alloc + descriptor + payload version tracking) deferred.
+- **Phase 8: doc sync (CLOSED)** — this entry + CHANGELOG entry.
 
-**2026-06-20 session 2x part 5 (in progress — no commit, dirty tree)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`).
-- **Phase 9: close-out 2x part 4** — `ProcessChunkRebuildQueue(physics, world->voxelWorld.get())` now called per-frame in `AppUpdate.cpp` after post-interaction `SyncPhysicsWorld`. Tracy plot "Processed Chunk Rebuilds" tracks per-frame count. Per-chunk static body rebuild path now active end-to-end (2x part 4 Phase 5 closed).
-- **Phase 10: Pre-Stage 0 / Stage 0 audit** — B1 (redundant model load loop), B2 (RecreateSwapchain destroy pipeline), B3 (cache PROJECTV_GRAVIGUN_SNAP), A1 (Vulkan 1.4 → 1.3 + env override) verified CLOSED in current mainline. No code changes needed; status can be flipped in TODO.md.
-
-**Previous session summary (2x part 4, committed `818579e`):**
-- **Phase 1: HZB Renderer integration** — pipeline + descriptor set + buffers + dispatch all wired. Env `PROJECTV_HZB_CULLING=ON` enables; default OFF → no-op. CSM HZB deferred per operator "main pipeline only".
-- **Phase 2: NanoVDB flatten helper** — `src/voxel/NanoVdb.{hpp,cpp}` + `tests/NanoVdbTests.cpp` (1035 assertions, 0 failures). Hybrid strategy per `nanovdb-on-gpu` verdict=yes. ProjectV chunkSize=8 (depth=2). byte-exact re-walk test.
-- **Phase 3: async foundation Step 1** — dedicated compute queue family detection + VK_KHR_timeline_semaphore + `VulkanSyncPrimitives.{hpp,cpp}`. VulkanContextState extended with `dedicatedComputeQueue`, `renderTimelineSemaphore`, `renderTimelineValue`. Per `dec-pipelines-async-compute` verdict=yes.
-- **Phase 4: VCT/RT cutoff** — `kVctCutoffRoughness=0.3f` + `kRtxCutoffRoughness=0.3f` constants in `core/Types.hpp`. `PROJECTV_HW_RAY_TRACING` CMake flag (default OFF). `ProbeHardwareRayTracingSupport` probes VK_KHR_acceleration_structure + VK_KHR_ray_query extension strings.
-- **Phase 5: Incremental Jolt wiring** — `SetVoxelMaterial(VoxelWorld&, Int3, VoxelMaterial, PhysicsState* = nullptr)` signature change. VoxelInteraction.cpp passes physics state through (edit path now queues per-chunk rebuilds). Mechanical sed updated all 17 callers. **Per-chunk rebuild queue: now ACTIVE in Phase 9 (see above).**
-- **Phase 6: +12 EVIL markers** — 4 in `VulkanBootstrap.cpp` (queuePriority=1.0f, queueCount=1, computeQueueInfo.queueCount=1, UINT32_MAX sentinel) + 8 in `PhysicsWorld.cpp` (kPhysicsDirectionEpsilon, kPhysicsRaycastVoxelEpsilon, kWalkSpawnClearance, kWalkSneakShapeMaxPenetrationDepth, etc).
-- **Phase 7: std::span sweep** — `RefreshChunkAabbBuffer` now takes `std::span<const VoxelChunk>` + `std::span<const PackedSceneChunkDescriptor>` instead of (VoxelWorld&, RenderState&).
-- **Phase 8: doc sync** — this entry + new test target `ProjectVNanoVdbTests` registered in ctest.
-
-- **Phase 1: BLOCKED on `hzb-binding-models` verdict** — per operator "ждём". `HizCulling.{hpp,cpp}` image lifecycle + `BuildHizMipChain` + `hzb_cull.comp` shader ready for integration when verdict closes. Path D (storage + texelFetch + manual min) is universal safe fallback per `hzb-binding-models` §2.2.
-- **Phase 2: Stage 2.1 Pattern C mesh shader spike (FEATURE-FLAGGED)** — `voxel_mesh_pre.comp` frustum cull + `voxel_mesh.mesh` refactored to read `visibleChunkIds[]`. `IsMeshShaderPipelineEnabled()` env toggle. Per `mesh-shader-vs-compute-cull` verdict=mixed: compute cull remains DEFAULT, mesh shader optional.
-- **Phase 3: Stage 3.1 GPU Fluid CA skeleton** — `fluid_ca.comp` per `§30.4` contract (8×8×4 workgroup, atomicOr, z,y,x iteration). `IsFluidCaGpuEnabled()` env + `BuildActiveChunkIdsForFluidCa` helper. Full pipeline integration deferred until async-compute foundation (Phase 0 per `dec-pipelines-async-compute`).
-- **Phase 4: Stage 3.2 Incremental Jolt per-chunk BodyId map** — `PhysicsState::chunkStaticBodies` (unordered_map<uint32_t, BodyID>) + `pendingChunkRebuilds`. `QueueChunkRebuildRequest` + `ProcessChunkRebuildQueue` (sorted + dedup'd). Per-chunk rebuild only on edit. Old single-body world body retained.
-- **Phase 5: Stage 4.2 LOD chunk 1 per-chunk LOD level + distance selection** — `VoxelChunk.lodLevel` (uint8_t, struct size 36→40). `SelectLodLevelForDistance` (0/1/2/3 for <32m/<64m/<128m/≥128m). `AssignLodLevels(world, camX, camY, camZ)`. Uniform downsampling deferred.
-- **Phase 6: 6.1 UpdateApp god-function refactor** — 3 helpers extracted to `AppUpdateHelpers.{hpp,cpp}`: `UpdateFrameStatistics`, `UpdateEffectivePausedAndEditing`, `RunSimulationTickLoop`. Camera mode functions promoted to public API. Push descriptor Phase A (per `bindless-descriptor-overhead` §7.1) deferred.
-- **Phase 7: 6.2.2 std::span sweep (3 sites)** — `ShadowProjection.cpp` helpers migrated from `const std::array<Float3, 8>&` to `std::span<const Float3>`. `BuildBoundsCorners` / `BuildFrustumSliceCorners` return types preserved as `std::array<Float3, 8>`.
-- **Phase 8: 6.2.5 +39 EVIL markers (62 total now)** — 10 in `ShadowProjection.cpp` (kShadow* constants) + 22 in `AppUpdate.cpp` (kLighting*/kShadow* constants).
-- **Phase 9: doc sync** — этот update + CHANGELOG entry.
-
-Build green, 4/4 relevant tests pass (Hzb/Sparse/Cpu/Fluid). ProjectVTests has 1 pre-existing failure (TestSpectatorModeAllowsPausedMovementButBlocksEdits at line 2629) unrelated to my changes (confirmed via git stash).
+**Previous sessions** (4x closed dirty, Pattern C mesh shader committed `5e11993`, 2x part 5 closed dirty) — see CHANGELOG.md §2026-06-21 for full details.
 
 ## 2. Nearest Gap
 
-- **Stage 3.1 GPU Fluid CA pipeline integration** — ping-pong buffers + actual dispatch + cross-frame sync. Requires async-compute Step 2 = per-pass async adoption remaining (Step 1 done in 2x part 4 Phase 3).
-- **Stage 2.1 mesh shader full integration** — `voxel_mesh_pre.comp` + `voxel_mesh.mesh` in dirty tree from prior 2x part 3 sessions; needs SVDAG mainline + port greedy meshing from `voxel_mesh.comp`.
-- **Stage 4.2 LOD chunk 2** — uniform downsampling implementation. Distance LOD selection works (2x part 3 Phase 5) but actual mesh-level downsampling not yet built.
-- **Stage 5.x GI/temporal** — Stage 5.1 VCT, 5.2 RTX shadows (probe ready), 5.3 TAA motion vectors — not started.
-- **HZB Stage 2.2 deferred** — CSM HZB culling deferred per operator "main pipeline only".
-- **Dirty tree (20 files, ~2586+/679-)** — all from prior 2x part 1/2/3 sessions that closed dirty. NOT my session's scope. Operator instruction: no commits; tree stays as-is until next session with explicit scope.
+- **Stage 7.1 GPU upload for NanoVDB** — CPU flatten result now in `RenderState.sceneNanoVdbFlatten`; need SSBO allocation in `SceneFrameResources` + `sceneVoxelPayloadVersion` tracking + descriptor set + payload version-based upload trigger. ~150-200 LoC.
+- **Stage 5.3 TAA Motion Vectors GPU integration** — `voxel.vert` needs `prevViewProjectionMatrix` access (currently only in sceneLighting SSBO, not in vertex push constants); add MRT attachment in dynamic rendering; modify `voxel.frag` passthrough; consume in `taa_resolve.frag`. ~200-300 LoC.
+- **Stage 6.3 per-pass async wiring** — one-shot command buffer + dedicated compute command pool; route HZB cull + Fluid CA + future world gen + RTX BLAS through `SubmitFluidCaToComputeQueue`-style pattern. ~300 LoC.
+- **Stage 6.2 AppState PIMPL full struct move** — mechanical sed `state->render().X` → `state->render()->X` over 172 call sites; risks incremental compile-test loop. Multi-session.
+- **Stage 4.2 LOD chunk 2 Step 2 (SelectLodMeshSource)** — wire downsampled payload to `voxel_mesh.comp`; needs new SSBO for downsampled voxels per chunk. ~250 LoC.
+- **Stage 5.1 VCT GI / 5.2 RTX shadows** — per operator decision (8x planning), EXCLUDED from 8x scope. Future dedicated session per `2026-06-20-rt-shadows-vs-csm` ~770 LoC.
+- **Stage 2.1 HZB culling refinement** — per-chunk smart mip selection based on screen-space size (current mip=0). CSM HZB deferred per operator "main pipeline only".
 
 ## 3. Next Steps
 
-2x part 6 candidate: Stage 3.1 GPU Fluid CA pipeline integration (multi-session work — uses Phase 3 async foundation + Phase 2 NanoVDB flatten). Alternative: Stage 2.1 mesh shader full integration (port `voxel_mesh.comp` greedy meshing to mesh shader output, using `voxel_mesh_pre.comp` + `voxel_mesh.mesh` from dirty tree).
+Future session candidates (operator decides):
+1. **Stage 7.1 NanoVDB GPU upload** — small, mechanical, unblocks Stage 5.1 VCT.
+2. **Stage 6.2 AppState PIMPL full struct move** — high-risk sed migration, but biggest incremental rebuild win.
+3. **Stage 5.3 TAA Motion Vectors GPU integration** — closes ghosting per `TODO.md §5.3` DoD.
+4. **Stage 4.2 LOD chunk 2 Step 2** — wire downsampled payload to meshing pipeline.
+5. **Stage 5.1 VCT / 5.2 RTX** — separate dedicated session.
 
 ## 4. Risks
 
-- **Phase 1 BLOCKED on `hzb-binding-models`** — currently in wrap-up phase per STATUS.md but no verdict. If verdict recommends Path B (compute atomicMin), Phase 1 needs buffer layout changes. Safe fallback = Path D (storage + texelFetch + manual min), universal across bindless.
-- **Pattern C mesh shader** — stub-only emission (1 triangle per chunk at chunk origin). Real greedy meshing port is multi-week work. Feature-flagged, doesn't promote to default per `mesh-shader-vs-compute-cull` verdict=mixed.
-- **GPU Fluid CA** — compute shader compiles but no pipeline integration (ping-pong buffers, dispatch). Per `dec-pipelines-async-compute` Step 1 should come first (vkQueueSubmit2 + timeline semaphores).
-- **Incremental Jolt** — `ProcessChunkRebuildQueue` exists but isn't called from voxel edit path yet. Real wiring in next session.
-- **LOD uniform downsampling** — chunk-level LOD assignment works but actual mesh downsampling not implemented. World will render full-detail chunks at all LODs until chunk 2.
+- **Dirty tree (25 files modified + 5 untracked source + 25 untracked docs/)** — 4x + 8x combined. Operator: no commit until explicit instruction. Single "Commit?" prompt expected.
+- **Stage 7 NanoVDB GPU upload deferred** — CPU-side flatten result now computed every frame but not consumed by GPU. Need to track & invalidate when `sceneNanoVdbVersion` changes to avoid leaking stale data.
+- **Stage 4.2 LOD downsample CPU cost** — `RunLodDownsampleJobs` runs per-frame for ALL chunks regardless of camera motion. Trivial cost (< 1.5 µs/chunk per experiment) but full `Stage 4.2` chunk 2 still needs mesh shader integration.
+- **Stage 6.2 PIMPL sed migration** — 172 call sites; one missed `.` → `->` and the build breaks. Per AGENTS.md §5.4 safety-net workflow required (patch saved to `/tmp/before_pimpl_*.patch`).
+- **Ninja 1.13 dep-scan race** — `agent/knowledge.md §30` documents the bug workaround (`--parallel 1` first build); required on this dirty tree due to C++ module changes.
 
 ---
 
 ## 5. Active tasks (current open sessions)
 
-**2026-06-20 session 2x part 5** — Phase 9 (ProcessChunkRebuildQueue main-loop wire) + Phase 10 (Pre-Stage 0/Stage 0 audit). Build green, ctest 19/20 + 1 documented pre-existing failure. NO commit pending (operator instruction).
+**2026-06-21 session 8x (closed dirty, pending operator commit)** — 8 phases across 6 TODO stages, build green, 26/27 ctest pass + 1 documented pre-existing failure. NO commit pending. Single "Commit?" prompt expected at session end covering both 4x + 8x work.
 
 ## 6. Recent closed sessions
 
-- **2026-06-20 session 8x (closed via commit `c2000e2`)** — Pre-Stage 0+Stage 0 quick wins (B1-B4, A1) + Stage 1.1 chunk 1 (Sparse64Tree header + 15 parity sub-tests).
-- **2026-06-20 session x8 (closed dirty)** — Stage 1.1 chunks 2-3-4 (VoxelWorld migration to Sparse64Tree, snapshot v2) + Stage 1.3 (async audio scan) + 6.2.4 verification + 6.2.5 EVIL markers.
-- **2026-06-20 session 16x (closed dirty)** — Phase 1: Stage 1.2 SVDAG dedup infrastructure. Phase 2: AppState PIMPL. Phase 3: std::span deferred. Phase 4: more EVIL markers. Phase 5: Flecs ECS AudioRefresh. Phase 6: doc sync.
-- **2026-06-20 session 2x (closed dirty)** — Phases 1-8 (first 2x session): `world.voxels` removal + SVDAG COW + CpuMeshGenerator fallback + DDA shader macro + std::span sweep + FluidCA ECS + HZB spike + doc sync.
-- **2026-06-20 session 2x part 2 (closed dirty)** — Phases 1-8 (commit `32f710b`): homogeneous optimization + per-chunk static promotion + task+mesh shader spike + HZB image lifecycle + 3 more ECS systems + EVIL markers + vkWaitForFences.
-- **2026-06-20 session 2x part 3 (closed dirty)** — Phases 2-9 (current session). Phase 1 BLOCKED on `hzb-binding-models` verdict. Full CHANGELOG entry в `CHANGELOG.md §2026-06-20 (session: 2x scope continuation, part 3)`.
+- **2026-06-21 session 8x (closed dirty)** — 8 phases: Stage 3.1 GPU Fluid CA full pipeline + Stage 4.2 LOD B_SurfacePreserve + Stage 5.3 TAA Motion Vectors format + Stage 6.3 async compute env gate + Stage 6.2 PIMPL contract + Stage 4.1 OpenSimplex2 3D-S + Stage 1.1 NanoVDB flatten + doc sync. 6 new test targets (36 sub-tests).
+- **2026-06-21 session 4x (closed dirty)** — HZB full integration + AppState PIMPL verification + UpdateApp refactor (355→49 lines) + GPU Fluid CA foundation.
+- **2026-06-21 session Pattern C mesh shader (closed via commit `5e11993`)** — voxel_mesh.mesh ported + voxel_mesh_pre.comp push-constant frustum + voxel_mesh.task deleted + VulkanMeshShaderPipeline + Renderer integration.
+- **2026-06-20 session 2x part 5 (closed dirty)** — close-out 2x part 4 (per-chunk Jolt rebuild active) + Pre-Stage 0/Stage 0 audit (B1-B4, A1 verified closed).
+- **2026-06-20 session 2x part 4 (closed via commit `818579e`)** — HZB spike + NanoVDB flatten + async foundation + VCT/RT cutoff + Incremental Jolt + EVIL markers + std::span sweep.
 
 ## 7. Archive references
 

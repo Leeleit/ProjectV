@@ -108,6 +108,17 @@ bool PrepareFrameRenderData(
 		return false;
 	}
 
+	if (world->voxelWorld && IsLodDownsampleEnabled()) {
+		AssignLodLevels(
+			*world->voxelWorld,
+			camera->position.x,
+			camera->position.y,
+			camera->position.z);
+		const uint32_t lodJobsProcessed = RunLodDownsampleJobs(*world->voxelWorld);
+		profiling::PlotValue("LOD Downsample Chunks", static_cast<int64_t>(lodJobsProcessed));
+		profiling::PlotValue("LOD Active Chunks", static_cast<int64_t>(world->voxelWorld->stats.activeChunkCount));
+	}
+
 	if (world->voxelWorld && !render->completedChunkRebuildIndices.empty()) {
 		CommitDirtyVoxelChunkRebuildRequests(*world->voxelWorld, render->completedChunkRebuildIndices);
 		render->completedChunkRebuildIndices.clear();
@@ -167,6 +178,7 @@ bool PrepareFrameRenderData(
 	frame->renderData.debugHudVertexBuffer = sceneFrameResources.debugHudVertexBuffer;
 	frame->renderData.chunkAabbBuffer = sceneFrameResources.chunkAabbBuffer;
 	frame->renderData.visibilityMaskBuffer = sceneFrameResources.visibilityMaskBuffer;
+	frame->renderData.hzbVisibleCountBuffer = sceneFrameResources.hzbVisibleCountBuffer;
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
 	frame->renderData.shadowDescriptorSet = sceneFrameResources.shadowDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;

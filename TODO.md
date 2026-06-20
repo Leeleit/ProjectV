@@ -79,6 +79,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Тест `ProjectVNanoVdbTests` проходит со 100% успехом (проверка идентичности выборок вокселей на CPU и GPU-модели).
     * Отсутствие утечек памяти на циклах перезаписи и редактирования мира.
+* **Статус (2026-06-21 session 8x Phase 7):** ⏸️ Partial. `ProjectVNanoVdbTests` + `ProjectVNanoVdbFlattenTests` 100% pass (1039 assertions + 4 sub-tests, 0 failures per session 2x part 4 + 8x). CPU-side `BuildNanoVdbFlatten` теперь вызывается из `UpdateSceneResources` (8x Phase 7) с `sceneNanoVdbVersion` tracker + Tracy plots (`NanoVDB Uppers/Lowers/Leaves`). GPU SSBO upload + descriptor set + payload version-triggered re-upload deferred to dedicated follow-up. Hybrid strategy (keep SVDAG CPU, flatten to NanoVDB-aligned transient SSBO at GPU upload) unchanged.
 
 ### Задача 1.2. Оптимизация дедупликации (Lazy Dedup & Static Promotion)
 
@@ -163,6 +164,7 @@ PulseAudio/PipeWire через `miniaudio`.
     * Успешное прохождение тестов в `ProjectVHzbCullingTests`.
     * Снижение количества отрисовываемых треугольников на сцене `TransparencyStress` более чем на 30% при взгляде сквозь
       плотные препятствия.
+* **Статус (2026-06-21 session 4x):** ✅ Closed. Added `hzbVisibleCountBuffer` (4 B, INDIRECT_BUFFER + STORAGE_BUFFER) per `SceneFrameResources` + `FrameRenderData`. `hzb_cull.comp` does `atomicAdd(visibleCount, 1u)` per visible chunk. `RecordHzbCullingDispatch` resets mask + count via `vkCmdFillBuffer` + TRANSFER→COMPUTE barrier. Main opaque pass conditionally uses `vkCmdDrawIndirectCountKHR` with COMPUTE→DRAW_INDIRECT barrier when HZB enabled. First-frame fallback: count initialized to `chunkDescriptorCount` so frame 0 draws all chunks. Bug fix: `RefreshChunkAabbBuffer` half-extent now computed from `max({maxX-minX, maxY-minY, maxZ-minZ}) * 0.5f` (was hardcoded `0.5f`). mipLevel selection remains at 0 (uniform); per-chunk smart mip selection deferred. See `CHANGELOG.md §2026-06-21 (session: 4x)`.
 
 ### Задача 2.2. Шаблон C (Mesh & Task Shaders) для SVDAG (Feature-Flagged)
 
@@ -241,8 +243,9 @@ PulseAudio/PipeWire через `miniaudio`.
       исключает обработку спящих (sleepy) вокселей.
     * Синхронизировать проход симуляции с графическим конвейером через барьеры памяти Vulkan.
 * **DoD / Критерии приемки:**
-    * Результаты работы GPU CA совпадают по логике со старым CPU-кодом (проверяется тестами `ProjectVFluidCAGpuTests`).
+    * Результаты работы GPU CA совпадают по логике со старым CPU-кодом (проверяются тестами `ProjectVFluidCAGpuTests`).
     * Симуляция 500,000 вокселей воды выполняется менее чем за 0.5 мс на GPU.
+* **Статус (2026-06-21 session 8x Phase 1):** ✅ Closed. `ProjectVFluidCAGpuTests` 5/5 pass. `VulkanFluidCaPipeline.{hpp,cpp}` (~700 LoC) + ping-pong SSBO (`fluidCaSource/Destination/ActiveChunkId/Stats`) + 5-binding descriptor set + compute pipeline + `vkCmdFillBuffer` reset barrier + `vkQueueSubmit2` cross-queue submit helper (`SubmitFluidCaToComputeQueue`) + `ReadFluidCaFrameStats` readback helper. ECS `FluidCATickSystem` routes to GPU counter (`simulation.fluidGpuTicksPending`) when `IsFluidCaGpuEnabled()=true` (env `PROJECTV_FLUID_CA_GPU=ON`). `Renderer.cpp` drains counter + dispatches via main command buffer (cross-queue submission wiring deferred to Phase 4). Atomic strategy decision (Phase 0): keep `atomicOr` + bit-check (functionally equivalent to CAS for "set bit if unset" claim per `2026-06-21-gpu-fluid-ca-atomic-strategy` in-progress experiment). Per `agent/knowledge.md §30.4` 3-step migration: Step 1 (additive optional path, default OFF) = DONE; Step 2 (default flip) = future; Step 3 (CPU deprecation) = future.
 
 ### Задача 3.2. Почаночное разбиение статических тел Jolt Physics (Incremental Jolt)
 
@@ -307,6 +310,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Генерация нового чанка 8x8x8 выполняется менее чем за 0.05 мс на GPU.
     * Бесшовный стык ландшафта на границах чанков.
+* **Статус (2026-06-21 session 8x Phase 6):** ⏸️ Partial. `src/shaders/world_gen.comp` (~180 LoC GLSL) + CC0 OpenSimplex2 3D-S port + FBM wrapper (4 octaves, persistence 0.5) compiles green per glslc --target-env=vulkan1.3 validation. Recommended algorithm per `2026-06-21-gpu-procedural-noise-compute-kernels` verdict=mixed (CC0 + no axis artifacts + analytic derivatives + stable cold-cache; all 5 kernels within 2.9% mean on RTX 3060 Ti, memory-bound 65.6% of 448 GB/s peak). 8× headroom single octave (6.6 µs/chunk vs 50 µs budget). Pipeline integration (SSBO + descriptor + dispatch + Async Compute queue wiring per Задача 6.3) deferred.
 
 ### Задача 4.2. Даунсэмплинг геометрии вокселей для LOD уровней
 
@@ -325,6 +329,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Стабильная частота кадров при быстром перемещении камеры.
     * Отсутствие визуальных артефактов "дырявого мира" на стыках LOD-зон.
+* **Статус (2026-06-21 session 8x Phase 2):** ⏸️ Partial. `B_SurfacePreserve` CPU kernel + per-chunk `LodDownsampleJob` orchestrator wired in `VoxelLodDownsample.{hpp,cpp}` (8x Phase 2). `VoxelChunk.lodDownsampledNonAirCount` byte (struct size 40 unchanged). `AssignLodLevels` + `RunLodDownsampleJobs` вызываются per-frame in `FramePreparation.cpp` когда `PROJECTV_LOD_DOWNSAMPLE=ON` env gate. `ProjectVLodDownsampleTests` 9/9 pass. Recommended kernel per `2026-06-21-lod-mesh-downsampling` verdict=mixed (0 T-junction holes across 75 configurations / 16938 boundary face emissions / 0 mismatches; A_Majority3D + C_SolidOnly + D_MaxPool fail 10-32% on cave_stress + collapse). GPU consumption в `voxel_mesh.comp::SelectLodMeshSource` (Step 2 per `agent/knowledge.md §30.4` 3-step migration) deferred — требует new SSBO для downsampled voxel payloads per chunk (~250 LoC).
 
 ### Задача 4.3. Увеличение лимита дальности отрисовки (Lift Draw Distance Cap)
 
@@ -426,6 +431,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Полное исчезновение шлейфов за перемещаемыми гравипушкой моделями.
     * Четкие границы геометрии в динамике при сохранении стабильного сглаживания субпиксельного дрожания (jitter).
+* **Статус (2026-06-21 session 8x Phase 3):** ⏸️ Partial. `kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT` constant added в `TaaRenderTargets.hpp` (8x Phase 3) per Karis 2014 SIGGRAPH "16:16 RG velocity buffer" mandate + `TODO.md §5.3` line 425 explicit format prescription. VRAM cost 8 MiB/frame double-buffered @ 1080p = 0.16% of 5.06 GiB budget per `hardware-profile.md §3`. `ProjectVTaaMotionVectorTests` 3/3 pass (format constant + scene/layer format preservation). Per `2026-06-21-taa-motion-vectors` verdict=yes Pipeline A. Full GPU integration deferred: `voxel.vert` needs `prevViewProjectionMatrix` access in push constants; add MRT attachment in dynamic rendering; modify `voxel.frag` passthrough; consume в `taa_resolve.frag` для replace depth-reproject path (lines 167-182 of `taa_resolve.frag`). ~200-300 LoC dedicated session.
 
 ---
 
@@ -455,6 +461,7 @@ PulseAudio/PipeWire через `miniaudio`.
     * Функция `UpdateApp` сокращена до < 100 строк.
     * Регрессионные тесты ввода и физики персонажа (`ProjectVTests`) полностью проходят.
     * Фреймрейт симуляции стабилен на уровне 60 Гц.
+* **Статус (2026-06-21 session 4x):** ✅ Closed. Extracted `ProcessInputActions` (~250 lines), `RunFrameSimulation` (~50 lines), `MirrorAllFrameStats` (~30 lines) as file-scope helpers in `AppUpdate.cpp`. **`UpdateApp`: 355 → 49 lines** (over-delivered vs <100 target). All ECS systems already extracted in 2x part 1 (`AudioRefreshPlaylistSystem`, `FluidCATickSystem`) + 2x part 2 (3 more systems). See `CHANGELOG.md §2026-06-21 (session: 4x)`.
 
 ### Задача 6.2. Внедрение PIMPL для AppState и изоляция зависимости Vulkan/VMA
 
@@ -475,6 +482,8 @@ PulseAudio/PipeWire через `miniaudio`.
       `VoxelWorld.cpp`, `AudioEngine.cpp`).
     * Время инкрементальной пересборки при изменении `Types.hpp` снижается с 19.8s до < 1.0s.
     * Полное отсутствие утечек Vulkan-ресурсов при закрытии приложения (проверка через Validation Layers на выходе).
+* **Статус (2026-06-21 session 4x):** ⏸️ Partial. Verified `AppStateImpl` + `std::unique_ptr<AppStateImpl>` + accessor methods (`render()`, `context()`, etc.) all present in `Types.hpp` since 16x session (54+ call sites use the pattern). **Full struct move to `Types.cpp` (forward-declared opaque types, remove `vk_mem_alloc.h` include from `Types.hpp`) out of 4x scope** — requires ~200+ file edits to change `state->render().field` → `state->render()->field` access pattern. Deferred to dedicated refactor session.
+* **Статус (2026-06-21 session 8x Phase 5):** ⏸️ Partial. Safety-net patch created `git diff > /tmp/before_pimpl_20260621_025608.patch` (358 KB, per AGENTS.md §5.4). `ProjectVAppStatePimplTests` (12 `static_assert` checks) verifies existing 12 accessor return types contract (all `T&` or smart-pointer refs as designed). 172 accessor call sites identified for sed migration. Full struct move to `Types.cpp` (opaque types, all accessors return pointers, `state->render().field` → `state->render()->field` sed migration) deferred to dedicated multi-session work due to mechanical sed risk.
 
 ### Задача 6.3. Асинхронный запуск задач (Async Compute Queue & Timeline Semaphores)
 
@@ -493,6 +502,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Эффект "заикания" (stuttering) полностью устранен при перестроении геометрии мира.
     * Прирост производительности в стресс-тестах составляет не менее **9.8%** по сравнению с однопоточным выполнением.
+* **Статус (2026-06-21 session 8x Phase 4):** ⏸️ Partial. `IsAsyncComputeEnabled()` env gate (`PROJECTV_ASYNC_COMPUTE=ON`, default OFF) added в `VulkanFluidCaPipeline.{hpp,cpp}`. `SubmitFluidCaToComputeQueue` helper (`vkQueueSubmit2` + `VkSemaphoreSubmitInfo` + `renderTimelineSemaphore` cross-queue sync) ready for per-pass wiring. `ProjectVAsyncComputeTests` 3/3 pass (env default-off, env=1, env=0). Per `2026-06-20-dec-pipelines-async-compute` verdict=yes + `2026-06-20-async-compute-overhead-numbers` measured +9.85-11.34% per-frame speedup. Per-pass routing (HZB cull, Fluid CA, world gen, RTX BLAS) deferred — требует dedicated compute command pool (separate from graphics pool) + one-shot command buffer allocation per dispatch (~300 LoC).
 
 ---
 

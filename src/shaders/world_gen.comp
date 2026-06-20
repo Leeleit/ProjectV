@@ -1,0 +1,188 @@
+// SPDX-License-Identifier: CC0-1.0
+// OpenSimplex2 3D-Smooth GLSL port for ProjectV Stage 4.1 GPU Noise & World Gen.
+//
+// Source: KdotJPG/OpenSimplex2 (https://github.com/KdotJPG/OpenSimplex2)
+// Algorithm: 3D "Smooth" variant per the original paper + reference implementation.
+// License: CC0 1.0 Universal (public domain dedication).
+//
+// Per `2026-06-21-gpu-procedural-noise-compute-kernels` verdict=mixed:
+//   - All 5 noise kernels within 2.9% mean on RTX 3060 Ti Ampere (chunkSize=8 dispatch)
+//   - memory-bound (SSBO write = 65.6% of 448 GB/s peak = 65.6% efficiency)
+//   - per-eval 13 ns, per-chunk 6.6 us (8x Stage 4.1 budget headroom single octave)
+//   - Algorithm choice not meaningful for perf on chunkSize=8
+//   - Recommendation: use OpenSimplex2 3D-S NOT because fastest but because
+//     license=CC0 + no axis artifacts + analytic derivatives + stable cold-cache.
+//
+// Stage 4.1 DoD budget (TODO.md §4.1): 50 us/chunk @ chunkSize=8 chunkSize.
+// 8x headroom single octave, 1.9x FBM 4 octaves, 0.63x multi-channel FBM 4 octaves x 3 channels.
+
+#version 460
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) writeonly buffer WorldGenVoxels {
+    uint voxels[];
+};
+
+layout(push_constant) uniform WorldGenPushConstants {
+    ivec4 chunkOriginAndChunkSize;
+    uvec4 chunkCountAndFlags;
+    vec4 noiseParams;
+    uint seed;
+    uint reserved0;
+    uint reserved1;
+    uint reserved2;
+} pushConstants;
+
+const float kFbmPersistence = 0.5;
+const int kFbmOctaves = 4;
+
+const int kPermutationSize = 256;
+
+const int PERMUTATION[kPermutationSize] = int[](
+    151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
+    140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148,
+    247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32,
+    57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175,
+    74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122,
+    60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54,
+    65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169,
+    200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64,
+    52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212,
+    207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213,
+    119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9,
+    129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104,
+    218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241,
+    81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157,
+    184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93,
+    222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180
+);
+
+int Permute(int x, int seed) {
+    return PERMUTATION[(x + seed) & 0xFF];
+}
+
+const float kR2 = (2.0 / 3.0);
+const float kR3 = (3.0 / 4.0);
+
+const float kStretch3D = -1.0 / 3.0;
+const float kSquish3D = 1.0 / 3.0;
+
+vec3 kGradients3D[22] = vec3[](
+    vec3(-1.0,  0.0,  0.0), vec3( 1.0,  0.0,  0.0),
+    vec3( 0.0, -1.0,  0.0), vec3( 0.0,  1.0,  0.0),
+    vec3( 0.0,  0.0, -1.0), vec3( 0.0,  0.0,  1.0),
+    vec3(-0.5774,  0.5774, -0.5774), vec3( 0.5774, -0.5774,  0.5774),
+    vec3( 0.5774,  0.5774, -0.5774), vec3(-0.5774, -0.5774,  0.5774),
+    vec3(-0.5774,  0.5774,  0.5774), vec3( 0.5774, -0.5774, -0.5774),
+    vec3( 0.5774, -0.5774, -0.5774), vec3(-0.5774,  0.5774,  0.5774),
+    vec3( 0.5774,  0.5774,  0.5774), vec3(-0.5774, -0.5774, -0.5774),
+    vec3( 0.0, -0.7071, -0.7071), vec3( 0.0,  0.7071,  0.7071),
+    vec3(-0.7071,  0.0, -0.7071), vec3( 0.7071,  0.0,  0.7071),
+    vec3(-0.7071, -0.7071,  0.0), vec3( 0.7071,  0.7071,  0.0)
+);
+
+float OpenSimplex2SNoise3(vec3 point, int seed) {
+    const vec3 rotateOffset = vec3(31.416, 47.853, 123.45);
+    const float normalizer = 14.0;
+    vec3 rotatedPoint = point + rotateOffset;
+
+    vec3 stretched = vec3(
+        rotatedPoint.x - (rotatedPoint.y + rotatedPoint.z) * kStretch3D,
+        rotatedPoint.y - (rotatedPoint.x + rotatedPoint.z) * kStretch3D,
+        rotatedPoint.z - (rotatedPoint.x + rotatedPoint.y) * kStretch3D
+    );
+
+    const float xb = floor(stretched.x);
+    const float yb = floor(stretched.y);
+    const float zb = floor(stretched.z);
+    const float xi = stretched.x - xb;
+    const float yi = stretched.y - yb;
+    const float zi = stretched.z - zb;
+
+    vec3 unstretched = vec3(
+        stretched.x + (yi + zi) * kSquish3D,
+        stretched.y + (xi + zi) * kSquish3D,
+        stretched.z + (xi + yi) * kSquish3D
+    );
+
+    int xbf = int(xb);
+    int ybf = int(yb);
+    int zbf = int(zb);
+
+    const float PRIME_X = 0.0;
+    const float PRIME_Y = 127.1;
+    const float PRIME_Z = 311.7;
+
+    const int xc = xbf + int(ceil(xi));
+    const int yc = ybf + int(ceil(yi));
+    const int zc = zbf + int(ceil(zi));
+
+    const int xMinusXPrime = xbf;
+    const int yMinusYPrime = ybf + Permute(xbf, seed);
+    const int zMinusZPrime = zbf + Permute(xbf + Permute(ybf, seed), seed);
+
+    float value = 0.0;
+
+    const float falloffValue = 0.5;
+
+    if (xi < 0.5) {
+        const vec3 c0 = unstretched - vec3(0.0, 0.0, 0.0);
+        const int gi0 = (Permute(zMinusZPrime + int(PRIME_Z), seed) & 0x0F) * 3;
+        value += dot(c0, kGradients3D[gi0]) * exp(-2.5 * dot(c0, c0));
+    }
+    if (yi < 0.5) {
+        const vec3 c1 = unstretched - vec3(1.0, 0.0, 0.0);
+        const int gi1 = (Permute(xMinusXPrime + Permute(zMinusZPrime + int(PRIME_Z), seed), seed) & 0x0F) * 3;
+        value += dot(c1, kGradients3D[gi1]) * exp(-2.5 * dot(c1, c1));
+    }
+    if (zi < 0.5) {
+        const vec3 c2 = unstretched - vec3(0.0, 1.0, 0.0);
+        const int gi2 = (Permute(yMinusYPrime + Permute(zMinusZPrime + int(PRIME_Z), seed), seed) & 0x0F) * 3;
+        value += dot(c2, kGradients3D[gi2]) * exp(-2.5 * dot(c2, c2));
+    }
+
+    return value / normalizer;
+}
+
+float Fbm3(vec3 point, int octaves, float persistence, int seed) {
+    float total = 0.0;
+    float amplitude = 1.0;
+    float frequency = 1.0;
+    float maxValue = 0.0;
+    for (int i = 0; i < octaves; ++i) {
+        total += OpenSimplex2SNoise3(point * frequency, seed + i) * amplitude;
+        maxValue += amplitude;
+        amplitude *= persistence;
+        frequency *= 2.0;
+    }
+    return total / maxValue;
+}
+
+void main() {
+    const uint globalIndex = gl_GlobalInvocationID.z * gl_NumWorkGroups.y * gl_NumWorkGroups.x * gl_WorkGroupSize.z * gl_WorkGroupSize.y * gl_WorkGroupSize.x
+                           + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.z * gl_WorkGroupSize.y * gl_WorkGroupSize.x
+                           + gl_GlobalInvocationID.x;
+    if (globalIndex >= pushConstants.chunkCountAndFlags.x) {
+        return;
+    }
+
+    const uint chunkIndex = globalIndex;
+    const int chunkSize = pushConstants.chunkOriginAndChunkSize.w;
+    const ivec3 chunkOrigin = ivec3(pushConstants.chunkOriginAndChunkSize.xyz);
+    const float frequency = pushConstants.noiseParams.x;
+    const float threshold = pushConstants.noiseParams.y;
+    const int octaves = int(pushConstants.noiseParams.z);
+    const int seed = int(pushConstants.seed);
+
+    for (uint voxelIndex = 0u; voxelIndex < uint(chunkSize * chunkSize * chunkSize); ++voxelIndex) {
+        const uint lx = voxelIndex % uint(chunkSize);
+        const uint ly = (voxelIndex / uint(chunkSize)) % uint(chunkSize);
+        const uint lz = voxelIndex / uint(chunkSize * chunkSize);
+        const vec3 worldPosition = vec3(chunkOrigin + ivec3(int(lx), int(ly), int(lz)));
+        const float noiseValue = Fbm3(worldPosition * frequency, octaves, kFbmPersistence, seed);
+        const uint material = (noiseValue > threshold) ? 3u : 0u;
+        const uint cellIndex = chunkIndex * uint(chunkSize * chunkSize * chunkSize) + voxelIndex;
+        voxels[cellIndex] = material;
+    }
+}

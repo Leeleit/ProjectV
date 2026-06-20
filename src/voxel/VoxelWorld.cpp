@@ -2,6 +2,7 @@ import projectv.math;
 import projectv.string_id;
 
 #include "voxel/VoxelWorld.hpp"
+#include "voxel/VoxelLodDownsample.hpp"
 
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
@@ -1184,6 +1185,35 @@ uint8_t SelectLodLevelForDistance(const float distanceMeters)
 		return 2;
 	}
 	return 3;
+}
+
+uint32_t LodDownsampleStepForLod(const uint8_t lodLevel)
+{
+	return projectv::voxel::LodDownsampleStepForLod(lodLevel);
+}
+
+uint32_t LodDownsampledExtentForLod(const uint8_t lodLevel, const uint8_t chunkSize)
+{
+	return projectv::voxel::LodDownsampledExtentForLod(lodLevel, chunkSize);
+}
+
+void DownsampleChunkForLodSurfacePreserve(
+	const VoxelWorld &world,
+	const size_t chunkIndex,
+	const uint8_t lodLevel,
+	std::vector<uint8_t> &outDownsampled)
+{
+	projectv::voxel::DownsampleChunkForLodSurfacePreserve(world, chunkIndex, lodLevel, outDownsampled);
+}
+
+uint32_t RunLodDownsampleJobs(VoxelWorld &world)
+{
+	return projectv::voxel::RunLodDownsampleJobs(world);
+}
+
+bool IsLodDownsampleEnabled()
+{
+	return projectv::voxel::IsLodDownsampleEnabled();
 }
 
 void AssignLodLevels(VoxelWorld &world, const float cameraX, const float cameraY, const float cameraZ)

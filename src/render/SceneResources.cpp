@@ -11,6 +11,7 @@ import projectv.math;
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
+#include "voxel/NanoVdb.hpp"
 #include "voxel/VoxelMaterials.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -604,7 +605,7 @@ void DestroySceneResources(
 		}
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -661,6 +662,26 @@ void DestroySceneResources(
 			profiling::RecordFree(visibilityCounterAllocation, "SceneVisibilityCounterBufferAllocation");
 			vmaDestroyBuffer(context->allocator, visibilityCounterBuffer, visibilityCounterAllocation);
 		}
+		if (hzbVisibleCountBuffer && hzbVisibleCountAllocation) {
+			profiling::RecordFree(hzbVisibleCountAllocation, "SceneHzbVisibleCountBufferAllocation");
+			vmaDestroyBuffer(context->allocator, hzbVisibleCountBuffer, hzbVisibleCountAllocation);
+		}
+		if (fluidCaSourceBuffer && fluidCaSourceAllocation) {
+			profiling::RecordFree(fluidCaSourceAllocation, "SceneFluidCaSourceBufferAllocation");
+			vmaDestroyBuffer(context->allocator, fluidCaSourceBuffer, fluidCaSourceAllocation);
+		}
+		if (fluidCaDestinationBuffer && fluidCaDestinationAllocation) {
+			profiling::RecordFree(fluidCaDestinationAllocation, "SceneFluidCaDestinationBufferAllocation");
+			vmaDestroyBuffer(context->allocator, fluidCaDestinationBuffer, fluidCaDestinationAllocation);
+		}
+		if (fluidCaActiveChunkIdBuffer && fluidCaActiveChunkIdAllocation) {
+			profiling::RecordFree(fluidCaActiveChunkIdAllocation, "SceneFluidCaActiveChunkIdBufferAllocation");
+			vmaDestroyBuffer(context->allocator, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation);
+		}
+		if (fluidCaStatsBuffer && fluidCaStatsAllocation) {
+			profiling::RecordFree(fluidCaStatsAllocation, "SceneFluidCaStatsBufferAllocation");
+			vmaDestroyBuffer(context->allocator, fluidCaStatsBuffer, fluidCaStatsAllocation);
+		}
 
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
@@ -704,11 +725,27 @@ sceneLightingMappedData = nullptr;
 		visibilityCounterMappedData = nullptr;
 		visibilityCounterBuffer = VK_NULL_HANDLE;
 		visibilityCounterAllocation = nullptr;
+		hzbVisibleCountMappedData = nullptr;
+		hzbVisibleCountBuffer = VK_NULL_HANDLE;
+		hzbVisibleCountAllocation = nullptr;
+		fluidCaSourceMappedData = nullptr;
+		fluidCaSourceBuffer = VK_NULL_HANDLE;
+		fluidCaSourceAllocation = nullptr;
+		fluidCaDestinationMappedData = nullptr;
+		fluidCaDestinationBuffer = VK_NULL_HANDLE;
+		fluidCaDestinationAllocation = nullptr;
+		fluidCaActiveChunkIdMappedData = nullptr;
+		fluidCaActiveChunkIdBuffer = VK_NULL_HANDLE;
+		fluidCaActiveChunkIdAllocation = nullptr;
+		fluidCaStatsMappedData = nullptr;
+		fluidCaStatsBuffer = VK_NULL_HANDLE;
+		fluidCaStatsAllocation = nullptr;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
 		meshShaderDescriptorSet = VK_NULL_HANDLE;
 		shadowDescriptorSet = VK_NULL_HANDLE;
 		voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 		hizCullingDescriptorSet = VK_NULL_HANDLE;
+		fluidCaDescriptorSet = VK_NULL_HANDLE;
 		uploadedSceneVersion = 0;
 		uploadedVoxelPayloadVersion = 0;
 		meshedSceneVersion = 0;
@@ -822,6 +859,8 @@ bool CreateSceneResources(
 	StoreSunShadowCascadeSplits(render->currentSceneLighting, render->currentSunShadowCascadeSplits);
 
 	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
+		(void)frameResources;
+		const size_t frameResourceIndex = static_cast<size_t>(&frameResources - render->sceneFrameResources.data());
 		{
 			VmaAllocationInfo sceneLightingAllocationInfo{};
 			if (!CreateBuffer(
@@ -1133,8 +1172,116 @@ bool CreateSceneResources(
 				sizeof(uint32_t) * visibilityMaskWordCount);
 		}
 
+		VmaAllocationInfo hzbVisibleCountAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(uint32_t),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.hzbVisibleCountBuffer,
+				&frameResources.hzbVisibleCountAllocation,
+				&hzbVisibleCountAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.hzbVisibleCountMappedData = hzbVisibleCountAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.hzbVisibleCountAllocation,
+			hzbVisibleCountAllocationInfo.size,
+			"SceneHzbVisibleCountBufferAllocation");
+		render->sceneMemoryBytes += hzbVisibleCountAllocationInfo.size;
+		const uint32_t initialHzbVisibleCount =
+			static_cast<uint32_t>(world->voxelWorld->chunks.size());
+		std::memcpy(
+			frameResources.hzbVisibleCountMappedData,
+			&initialHzbVisibleCount,
+			sizeof(uint32_t));
+
+		const uint32_t fluidCaMaxActiveChunks = static_cast<uint32_t>(world->voxelWorld->chunks.size());
+		const VkDeviceSize fluidCaActiveChunkIdBytes = sizeof(uint32_t) * std::max(fluidCaMaxActiveChunks, 1u);
+		VmaAllocationInfo fluidCaActiveChunkIdAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				fluidCaActiveChunkIdBytes,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.fluidCaActiveChunkIdBuffer,
+				&frameResources.fluidCaActiveChunkIdAllocation,
+				&fluidCaActiveChunkIdAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.fluidCaActiveChunkIdMappedData = fluidCaActiveChunkIdAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.fluidCaActiveChunkIdAllocation,
+			fluidCaActiveChunkIdAllocationInfo.size,
+			"SceneFluidCaActiveChunkIdBufferAllocation");
+		render->sceneMemoryBytes += fluidCaActiveChunkIdAllocationInfo.size;
+		std::memset(frameResources.fluidCaActiveChunkIdMappedData, 0, fluidCaActiveChunkIdBytes);
+
+		VmaAllocationInfo fluidCaStatsAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(uint32_t) * 4u,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.fluidCaStatsBuffer,
+				&frameResources.fluidCaStatsAllocation,
+				&fluidCaStatsAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.fluidCaStatsMappedData = fluidCaStatsAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.fluidCaStatsAllocation,
+			fluidCaStatsAllocationInfo.size,
+			"SceneFluidCaStatsBufferAllocation");
+		render->sceneMemoryBytes += fluidCaStatsAllocationInfo.size;
+		std::memset(frameResources.fluidCaStatsMappedData, 0, sizeof(uint32_t) * 4u);
+
+		if (frameResourceIndex == 0) {
+			render->fluidCaMaxActiveChunks = fluidCaMaxActiveChunks;
+		}
+
+		const uint32_t chunkVoxelCount = static_cast<uint32_t>(world->voxelWorld->chunkSize) *
+			static_cast<uint32_t>(world->voxelWorld->chunkSize) *
+			static_cast<uint32_t>(world->voxelWorld->chunkSize);
+		const VkDeviceSize fluidCaPingPongBytes = std::max<VkDeviceSize>(
+			sizeof(uint32_t) * 4u * std::max(chunkVoxelCount, 1u) * std::max(fluidCaMaxActiveChunks, 1u),
+			sizeof(uint32_t) * 4u);
+		if (frameResourceIndex == 0) {
+			render->fluidCaPingPongBufferBytes = static_cast<uint32_t>(fluidCaPingPongBytes);
+		}
+
+		for (uint32_t pingPong = 0u; pingPong < 2u; ++pingPong) {
+			VkBuffer &targetBuffer = (pingPong == 0u) ? frameResources.fluidCaSourceBuffer
+													   : frameResources.fluidCaDestinationBuffer;
+			VmaAllocation &targetAllocation = (pingPong == 0u) ? frameResources.fluidCaSourceAllocation
+																 : frameResources.fluidCaDestinationAllocation;
+			void *&targetMappedData = (pingPong == 0u) ? frameResources.fluidCaSourceMappedData
+														: frameResources.fluidCaDestinationMappedData;
+			VmaAllocationInfo pingPongAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					fluidCaPingPongBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&targetBuffer,
+					&targetAllocation,
+					&pingPongAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			targetMappedData = pingPongAllocationInfo.pMappedData;
+			profiling::RecordAllocation(
+				targetAllocation,
+				pingPongAllocationInfo.size,
+				pingPong == 0u ? "SceneFluidCaSourceBufferAllocation" : "SceneFluidCaDestinationBufferAllocation");
+			render->sceneMemoryBytes += pingPongAllocationInfo.size;
+			std::memset(targetMappedData, 0, static_cast<size_t>(fluidCaPingPongBytes));
+		}
+
 		char bufferName[64]{};
-		const size_t frameResourceIndex = static_cast<size_t>(&frameResources - render->sceneFrameResources.data());
 
 		std::snprintf(bufferName, sizeof(bufferName), "ScenePackedFaceBuffer[%zu]", frameResourceIndex);
 		SetVulkanObjectName(
@@ -1188,6 +1335,30 @@ bool CreateSceneResources(
 		SetVulkanObjectName(
 			*context,
 			reinterpret_cast<uint64_t>(frameResources.chunkCullingBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaActiveChunkIdBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.fluidCaActiveChunkIdBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaStatsBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.fluidCaStatsBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaSourceBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.fluidCaSourceBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaDestinationBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.fluidCaDestinationBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
 		frameResources.debugHudVertexCount = 0;
@@ -1259,6 +1430,30 @@ bool UpdateSceneResources(
 	if (!render->completedChunkRebuildIndices.empty()) {
 
 		++render->sceneVoxelPayloadVersion;
+	}
+
+	if (!render->completedChunkRebuildIndices.empty() || render->sceneNanoVdbVersion == 0u) {
+		const std::array<uint8_t, 256> materialLookup = []() {
+			std::array<uint8_t, 256> lookup{};
+			for (uint32_t i = 0; i < 256; ++i) {
+				lookup[i] = static_cast<uint8_t>(i);
+			}
+			return lookup;
+		}();
+		projectv::voxel::nanovdb::BuildNanoVdbFlatten(
+			world->voxelWorld->sparseStorage,
+			materialLookup.data(),
+			render->sceneNanoVdbFlatten);
+		++render->sceneNanoVdbVersion;
+		profiling::PlotValue(
+			"NanoVDB Uppers",
+			static_cast<int64_t>(render->sceneNanoVdbFlatten.upperCount));
+		profiling::PlotValue(
+			"NanoVDB Lowers",
+			static_cast<int64_t>(render->sceneNanoVdbFlatten.lowerCount));
+		profiling::PlotValue(
+			"NanoVDB Leaves",
+			static_cast<int64_t>(render->sceneNanoVdbFlatten.leafCount));
 	}
 
 	RefreshSceneLightingBuffer(*world->voxelWorld, *render, shadowProjectionParameters, swapchainExtent);
@@ -1427,7 +1622,8 @@ bool RefreshChunkAabbBuffer(
 		const float centerX = (minX + maxX) * 0.5f;
 		const float centerY = (minY + maxY) * 0.5f;
 		const float centerZ = (minZ + maxZ) * 0.5f;
-		const float halfExtent = 0.5f;
+		const float halfExtent =
+			std::max({maxX - minX, maxY - minY, maxZ - minZ}) * 0.5f;
 		packedAabbs[chunkIndex].centerAndHalfExtent = {
 			centerX,
 			centerY,

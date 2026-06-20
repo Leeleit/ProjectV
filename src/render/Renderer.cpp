@@ -8,6 +8,7 @@ import projectv.math;
 #include "render/ScreenshotCapture.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
@@ -799,12 +800,44 @@ void RecordGraphicsCommands(
 					0,
 					sizeof(frameRenderData.graphicsPushConstants),
 					&frameRenderData.graphicsPushConstants);
-				vkCmdDrawIndirect(
-					cmd,
-					frameRenderData.opaqueIndirectBuffer,
-					0,
-					frameRenderData.chunkDescriptorCount,
-					sizeof(VkDrawIndirectCommand));
+				const bool hzbCullingActive =
+					projectv::render::IsHzbCullingEnabled() &&
+					frameRenderData.hzbVisibleCountBuffer != VK_NULL_HANDLE;
+				if (hzbCullingActive) {
+					VkBufferMemoryBarrier2 indirectBarrier{};
+					indirectBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+					indirectBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+					indirectBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+					indirectBarrier.dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+					indirectBarrier.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+					indirectBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					indirectBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+					indirectBarrier.buffer = frameRenderData.hzbVisibleCountBuffer;
+					indirectBarrier.offset = 0u;
+					indirectBarrier.size = sizeof(uint32_t);
+
+					VkDependencyInfo indirectDepInfo{};
+					indirectDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+					indirectDepInfo.bufferMemoryBarrierCount = 1u;
+					indirectDepInfo.pBufferMemoryBarriers = &indirectBarrier;
+					vkCmdPipelineBarrier2(cmd, &indirectDepInfo);
+
+					vkCmdDrawIndirectCountKHR(
+						cmd,
+						frameRenderData.opaqueIndirectBuffer,
+						0u,
+						frameRenderData.hzbVisibleCountBuffer,
+						0u,
+						frameRenderData.chunkDescriptorCount,
+						sizeof(VkDrawIndirectCommand));
+				} else {
+					vkCmdDrawIndirect(
+						cmd,
+						frameRenderData.opaqueIndirectBuffer,
+						0,
+						frameRenderData.chunkDescriptorCount,
+						sizeof(VkDrawIndirectCommand));
+				}
 			}
 		}
 
@@ -1172,6 +1205,7 @@ void RecordGraphicsCommands(
 } // namespace
 
 SDL_AppResult DrawFrame(
+	AppState *state,
 	PlatformState *platform,
 	VulkanContextState *context,
 	SwapchainState *swapchain,
@@ -1315,6 +1349,44 @@ SDL_AppResult DrawFrame(
 				*reinterpret_cast<const float (*)[16]>(inverseViewProjectionFlat.data()),
 				frame->renderData.chunkDescriptorCount);
 		}
+	}
+
+	if (render->fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
+		PV_PROFILE_ZONE_N("RecordFluidCaCommands");
+		VoxelWorld *voxelWorld = state->world().voxelWorld.get();
+		if (voxelWorld != nullptr) {
+			const std::vector<uint32_t> activeChunkIds = BuildActiveChunkIdsForFluidCa(*voxelWorld);
+			SceneFrameResources &frameResources = render->sceneFrameResources[frame->currentFrame];
+			if (frameResources.fluidCaActiveChunkIdMappedData != nullptr && !activeChunkIds.empty()) {
+				std::memcpy(
+					frameResources.fluidCaActiveChunkIdMappedData,
+					activeChunkIds.data(),
+					activeChunkIds.size() * sizeof(uint32_t));
+			}
+			projectv::render::FluidCaPushConstants fluidCaPush{};
+			fluidCaPush.chunkDimensions = {
+				static_cast<uint32_t>(voxelWorld->chunkSize),
+				static_cast<uint32_t>(voxelWorld->chunkSize),
+				static_cast<uint32_t>(voxelWorld->chunkSize),
+				0u,
+			};
+			fluidCaPush.chunkCountAndFlags = {
+				static_cast<uint32_t>(activeChunkIds.size()),
+				0u,
+				0u,
+				0u,
+			};
+			fluidCaPush.fluidTickInterval = 1.0f / std::max(state->simulation().fluidTickRateHz, 1.0f);
+			for (uint32_t tickIndex = 0; tickIndex < state->simulation().fluidGpuTicksPending; ++tickIndex) {
+				projectv::render::RecordFluidCaDispatch(
+					cmd,
+					*render,
+					frameResources,
+					fluidCaPush,
+					static_cast<uint32_t>(activeChunkIds.size()));
+			}
+		}
+		state->simulation().fluidGpuTicksPending = 0u;
 	}
 
 	const VkResult endCommandBufferResult = vkEndCommandBuffer(cmd);

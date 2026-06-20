@@ -11,6 +11,7 @@ import projectv.string_id;
 #include "debug/ProfilingGpu.hpp"
 #include "render/SceneResources.hpp"
 #include "render/TaaRenderTargets.hpp"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
@@ -31,6 +32,7 @@ void ShutdownVulkan(AppState *state)
 		state->render().tracyGraphicsContextCalibrated = false;
 		DestroyVoxelMeshingPipeline(&state->context(), &state->render());
 		projectv::render::DestroyMeshShaderPipelines(&state->context(), &state->render());
+		projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());
 		DestroyGraphicsPipeline(&state->context(), &state->render());
 		DestroyDepthResources(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());

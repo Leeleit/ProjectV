@@ -670,3 +670,196 @@ set_tests_properties(ProjectVMeshShaderTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVMeshShaderTests)
 
+add_executable(ProjectVFluidCAGpuTests
+        FluidCAGpuTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanSyncPrimitives.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVFluidCAGpuTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVFluidCAGpuTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+)
+
+target_link_libraries(ProjectVFluidCAGpuTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVFluidCAGpuTests PRIVATE volk)
+target_link_libraries(ProjectVFluidCAGpuTests PRIVATE glm)
+target_link_libraries(ProjectVFluidCAGpuTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVFluidCAGpuTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVFluidCAGpuTests PRIVATE SDL3::SDL3)
+
+add_test(NAME ProjectVFluidCAGpuTests COMMAND ProjectVFluidCAGpuTests)
+set_tests_properties(ProjectVFluidCAGpuTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVFluidCAGpuTests)
+
+add_executable(ProjectVLodDownsampleTests
+        LodDownsampleTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+)
+
+target_compile_definitions(ProjectVLodDownsampleTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVLodDownsampleTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+        ${CMAKE_SOURCE_DIR}/external/draco
+        ${CMAKE_SOURCE_DIR}/external/draco/src
+        ${CMAKE_SOURCE_DIR}/build/linux-clang-debug/_deps/nlohmann_json-src/include
+)
+
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE volk)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE glm)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE flecs::flecs_static)
+target_link_libraries(ProjectVLodDownsampleTests PRIVATE meshoptimizer)
+
+add_test(NAME ProjectVLodDownsampleTests COMMAND ProjectVLodDownsampleTests)
+set_tests_properties(ProjectVLodDownsampleTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVLodDownsampleTests)
+
+add_executable(ProjectVTaaMotionVectorTests
+        TaaMotionVectorTests.cpp
+)
+
+target_compile_definitions(ProjectVTaaMotionVectorTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVTaaMotionVectorTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVTaaMotionVectorTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVTaaMotionVectorTests PRIVATE volk)
+target_link_libraries(ProjectVTaaMotionVectorTests PRIVATE glm)
+
+add_test(NAME ProjectVTaaMotionVectorTests COMMAND ProjectVTaaMotionVectorTests)
+set_tests_properties(ProjectVTaaMotionVectorTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVTaaMotionVectorTests)
+
+add_executable(ProjectVAsyncComputeTests
+        AsyncComputeTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanSyncPrimitives.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVAsyncComputeTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVAsyncComputeTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE volk)
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE glm)
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE SDL3::SDL3)
+
+add_test(NAME ProjectVAsyncComputeTests COMMAND ProjectVAsyncComputeTests)
+set_tests_properties(ProjectVAsyncComputeTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVAsyncComputeTests)
+
+add_executable(ProjectVAppStatePimplTests
+        AppStatePimplTests.cpp
+)
+
+target_compile_definitions(ProjectVAppStatePimplTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVAppStatePimplTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics/Build/..
+        ${CMAKE_SOURCE_DIR}/external/draco
+        ${CMAKE_SOURCE_DIR}/external/draco/src
+        ${CMAKE_SOURCE_DIR}/build/linux-clang-debug/_deps/nlohmann_json-src/include
+        ${CMAKE_SOURCE_DIR}/external/fastgltf/include
+        ${CMAKE_SOURCE_DIR}/external/fmt/include
+        ${CMAKE_SOURCE_DIR}/external/flecs/include
+        ${CMAKE_SOURCE_DIR}/external/meshoptimizer/src
+)
+
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE volk)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE glm)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE flecs::flecs_static)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE meshoptimizer)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE fastgltf::fastgltf)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE Jolt::Jolt)
+target_link_libraries(ProjectVAppStatePimplTests PRIVATE nlohmann_json::nlohmann_json)
+
+add_test(NAME ProjectVAppStatePimplTests COMMAND ProjectVAppStatePimplTests)
+set_tests_properties(ProjectVAppStatePimplTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVAppStatePimplTests)
+
+add_executable(ProjectVNanoVdbFlattenTests
+        NanoVdbFlattenTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
+)
+
+target_compile_definitions(ProjectVNanoVdbFlattenTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVNanoVdbFlattenTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+        ${CMAKE_SOURCE_DIR}/external/fmt/include
+)
+
+target_link_libraries(ProjectVNanoVdbFlattenTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVNanoVdbFlattenTests PRIVATE volk)
+target_link_libraries(ProjectVNanoVdbFlattenTests PRIVATE glm)
+target_link_libraries(ProjectVNanoVdbFlattenTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVNanoVdbFlattenTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVNanoVdbFlattenTests COMMAND ProjectVNanoVdbFlattenTests)
+set_tests_properties(ProjectVNanoVdbFlattenTests PROPERTIES LABELS "unit")
+

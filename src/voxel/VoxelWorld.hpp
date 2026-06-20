@@ -52,7 +52,7 @@ struct VoxelChunk {
 	uint32_t nonAirVoxelCount = 0;
 	uint32_t ticksSinceLastEdit = 0;
 	uint8_t lodLevel = 0;
-	uint8_t reserved0 = 0;
+	uint8_t lodDownsampledNonAirCount = 0;
 	uint8_t reserved1 = 0;
 	uint8_t reserved2 = 0;
 };
@@ -66,6 +66,7 @@ static_assert(offsetof(VoxelChunk, isStatic) == 25);
 static_assert(offsetof(VoxelChunk, nonAirVoxelCount) == 28);
 static_assert(offsetof(VoxelChunk, ticksSinceLastEdit) == 32);
 static_assert(offsetof(VoxelChunk, lodLevel) == 36);
+static_assert(offsetof(VoxelChunk, lodDownsampledNonAirCount) == 37);
 
 struct VoxelWorldStats {
 	uint32_t dirtyChunkCount = 0;
@@ -135,6 +136,15 @@ void ToggleFluidCaGpuEnabledForTesting(bool enabled);
 uint8_t SelectLodLevelForDistance(const float distanceMeters);
 void AssignLodLevels(VoxelWorld &world, const float cameraX, const float cameraY, const float cameraZ);
 uint32_t CountChunksAtLod(const VoxelWorld &world, uint8_t lodLevel);
+uint32_t LodDownsampleStepForLod(uint8_t lodLevel);
+uint32_t LodDownsampledExtentForLod(uint8_t lodLevel, uint8_t chunkSize);
+void DownsampleChunkForLodSurfacePreserve(
+	const VoxelWorld &world,
+	size_t chunkIndex,
+	uint8_t lodLevel,
+	std::vector<uint8_t> &outDownsampled);
+uint32_t RunLodDownsampleJobs(VoxelWorld &world);
+bool IsLodDownsampleEnabled();
 uint32_t FillVoxelMaterial(VoxelWorld &world, Int3 start, VoxelMaterial material);
 uint32_t FillVoxelBox(VoxelWorld &world, Int3 first, Int3 second, VoxelMaterial material);
 void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);

@@ -41,6 +41,13 @@ inline constexpr VkFormat kTaaSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK
 inline constexpr VkFormat kTaaLayerHistoryColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
 
+// Per `2026-06-21-taa-motion-vectors` verdict=yes Pipeline A + `TODO.md §5.3` line 425 explicit format prescription.
+// 16:16 RG velocity buffer per Karis 2014 SIGGRAPH ("16:16 RG velocity buffer" + "velocity accuracy is super important"
+// drives vertex-out recommendation). VRAM cost 8 MiB/frame double-buffered @ 1080p = 0.16% of 5.06 GiB budget per
+// `hardware-profile.md §3`. R16G16_SFLOAT is signed; motion vector = NDC delta between current and previous frame.
+inline constexpr VkFormat kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT;
+
+
 struct OffscreenColorTarget {
 	VkImage image = VK_NULL_HANDLE;
 	VkImageView imageView = VK_NULL_HANDLE;

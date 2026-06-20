@@ -10,6 +10,7 @@
 #include "physics/PhysicsWorld.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
@@ -226,6 +227,19 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 			SDL_LogInfo(
 				SDL_LOG_CATEGORY_APPLICATION,
 				"Mesh shader pipeline not created (feature disabled or unavailable); continuing with PackedFace main draw");
+		}
+	}
+
+	if (projectv::render::IsFluidCaGpuPipelineRequested()) {
+		if (!projectv::render::CreateFluidCaPipelines(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Fluid CA GPU pipeline not created (feature disabled or unavailable); continuing with CPU path");
+		} else if (!projectv::render::RefreshFluidCaResourceBindings(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Fluid CA GPU descriptor bindings failed; disabling GPU path");
+			projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());
 		}
 	}
 

@@ -7,6 +7,7 @@ import projectv.string_id;
 #include "app/BenchmarkAutomation.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
 #include "core/Types.hpp"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -218,9 +219,14 @@ bool InitializeAppEcs(AppState *state)
 			}
 			tickState.accumulatorSeconds += simulation.frameDeltaSeconds;
 			const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+			const bool gpuEnabled = IsFluidCaGpuEnabled();
 			while (tickState.accumulatorSeconds >= fluidInterval) {
 				tickState.accumulatorSeconds -= fluidInterval;
-				UpdateFluidCA(*voxelWorld);
+				if (gpuEnabled) {
+					++simulation.fluidGpuTicksPending;
+				} else {
+					UpdateFluidCA(*voxelWorld);
+				}
 			}
 			simulation.fluidAccumulatorSeconds = tickState.accumulatorSeconds;
 		});

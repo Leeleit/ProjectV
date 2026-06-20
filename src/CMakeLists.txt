@@ -36,6 +36,7 @@ set(SHADERS
         ${SHADER_DIR}/voxel_mesh.mesh
         ${SHADER_DIR}/hzb_cull.comp
         ${SHADER_DIR}/fluid_ca.comp
+        ${SHADER_DIR}/world_gen.comp
         ${SHADER_DIR}/taa_resolve.vert
         ${SHADER_DIR}/taa_resolve.frag
         ${SHADER_DIR}/debug_overlay.vert
@@ -136,9 +137,12 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanSyncPrimitives.cpp
         render/vulkan/VulkanVoxelMeshingPipeline.cpp
         render/vulkan/VulkanMeshShaderPipeline.cpp
+        render/vulkan/VulkanFluidCaPipeline.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp
+        voxel/VoxelLodDownsample.cpp
+        voxel/NanoVdb.cpp
         voxel/VoxelWorld.cpp
         voxel/SceneConfig.cpp
 )

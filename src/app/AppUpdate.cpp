@@ -461,10 +461,10 @@ void MirrorInputReplayStatsToDebugStats(
 }
 } // namespace
 
-bool UpdateApp(
+bool ProcessInputActions(
 	PlatformState *platform,
-	SimulationState *simulation,
 	CameraState *camera,
+	SimulationState *simulation,
 	InputState *input,
 	InteractionState *interaction,
 	WorldState *world,
@@ -473,18 +473,6 @@ bool UpdateApp(
 	DebugState *debug,
 	projectv::audio::AudioEngine *audio)
 {
-	PV_PROFILE_ZONE_N("UpdateApp");
-	if (!platform || !simulation || !camera || !input || !interaction || !world || !render || !debug) {
-		return false;
-	}
-
-	simulation->frameDeltaSeconds = ComputeFrameDeltaSeconds(*simulation);
-	projectv::app::UpdateFrameStatistics(*simulation, *debug, *render);
-
-	if (input->replay.recording) {
-		RecordInputReplayFrame(input, simulation->frameDeltaSeconds);
-	}
-
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleHud)) {
 		debug->hudVisible = !debug->hudVisible;
 	}
@@ -585,7 +573,6 @@ bool UpdateApp(
 		world->voxelWorld) {
 		render->taaEnabled = !render->taaEnabled;
 		render->taaHistoryValid = false;
-
 		render->taaLayerHistoryValid = false;
 	}
 
@@ -600,22 +587,18 @@ bool UpdateApp(
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaBlend)) {
-		// EVIL: 0.05 step is empirically tuned for TAA blend ladder, do not retune casually
 		render->taaBlend = std::clamp(render->taaBlend - 0.05f, 0.0f, 1.0f);
 		render->taaHistoryValid = false;
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaBlend)) {
-		// EVIL: 0.05 step is empirically tuned for TAA blend ladder, do not retune casually
 		render->taaBlend = std::clamp(render->taaBlend + 0.05f, 0.0f, 1.0f);
 		render->taaHistoryValid = false;
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
-
 		constexpr std::array kNeighbourhoodCycle{1, 3, 5, 7};
-		const auto current = std::ranges::find(kNeighbourhoodCycle,
-											   render->taaNeighbourhoodRadius);
+		const auto current = std::ranges::find(kNeighbourhoodCycle, render->taaNeighbourhoodRadius);
 		if (current == kNeighbourhoodCycle.end()) {
 			render->taaNeighbourhoodRadius = kNeighbourhoodCycle.front();
 		} else {
@@ -627,11 +610,9 @@ bool UpdateApp(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::InvalidateTaaHistory)) {
 		render->taaHistoryValid = false;
-
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTimeScale)) {
-
 		constexpr float kTimeScaleDownStep = 0.5f;
 		constexpr float kTimeScaleSnapToZeroThreshold = 0.01f;
 		simulation->timeScale *= kTimeScaleDownStep;
@@ -640,7 +621,6 @@ bool UpdateApp(
 		}
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTimeScale)) {
-
 		constexpr float kTimeScaleUpStep = 2.0f;
 		constexpr float kTimeScaleSnapFromZeroTarget = 0.5f;
 		if (simulation->timeScale <= 0.0f) {
@@ -651,18 +631,16 @@ bool UpdateApp(
 		simulation->timeScale = std::min(simulation->timeScale, 4.0f);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ResetTimeScale)) {
-
 		simulation->timeScale = 1.0f;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::StepSingleFrame)) {
-
 		simulation->frameStepRequested = true;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseLightingExposure)) {
-		AdjustLightingExposure(*render, -kLightingExposureStepStops);
+		AdjustLightingExposure(*render, -0.25f);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseLightingExposure)) {
-		AdjustLightingExposure(*render, kLightingExposureStepStops);
+		AdjustLightingExposure(*render, 0.25f);
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::CycleToneMapOperator)) {
 		render->lightingDebugControls.toneMapOperator =
@@ -705,7 +683,6 @@ bool UpdateApp(
 		if (ConsumeInputActionPressed(*input, InputAction::PreviousMusicTrack)) {
 			audio->previousTrack();
 		}
-
 		audio->tick();
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleInputReplayRecording)) {
@@ -736,11 +713,17 @@ bool UpdateApp(
 		!input->replay.playbackActive) {
 		input->replay.playbackRequested = true;
 	}
+	return true;
+}
 
-	const bool effectivePaused = projectv::app::UpdateEffectivePausedAndEditing(*camera, *world, *simulation);
-	const bool spectatorMode = IsSpectatorMode(*camera);
-	const bool cameraCanUpdate = spectatorMode || !effectivePaused;
-
+bool RunFrameSimulation(
+	CameraState *camera,
+	InputState *input,
+	WorldState *world,
+	PhysicsState *physics,
+	SimulationState *simulation,
+	const bool cameraCanUpdate)
+{
 	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
 			"App",
@@ -787,14 +770,27 @@ bool UpdateApp(
 		}
 	}
 
-	profiling::PlotValue("Frame Delta (ms)", simulation->frameDeltaSeconds * 1000.0f);
+	return true;
+}
+
+void MirrorAllFrameStats(
+	CameraState *camera,
+	WorldState *world,
+	RenderState *render,
+	DebugState *debug,
+	PhysicsState *physics,
+	InputState &input,
+	projectv::audio::AudioEngine *audio,
+	const SimulationState &simulation)
+{
+	profiling::PlotValue("Frame Delta (ms)", simulation.frameDeltaSeconds * 1000.0f);
 	profiling::PlotValue(
 		"Simulation Accumulator (ms)",
-		simulation->simulationAccumulatorSeconds * 1000.0f);
-	profiling::PlotValue("Simulation Steps", static_cast<int64_t>(simulation->simulationStepsLastFrame));
+		simulation.simulationAccumulatorSeconds * 1000.0f);
+	profiling::PlotValue("Simulation Steps", static_cast<int64_t>(simulation.simulationStepsLastFrame));
 
 	if (world->voxelWorld) {
-		debug->stats.simulationStepsLastFrame = simulation->simulationStepsLastFrame;
+		debug->stats.simulationStepsLastFrame = simulation.simulationStepsLastFrame;
 		MirrorVoxelStatsToDebugStats(*world->voxelWorld, *render, debug->stats);
 	}
 	MirrorRenderPassTimingsToDebugStats(*render, debug->stats);
@@ -804,16 +800,63 @@ bool UpdateApp(
 	debug->stats.detailedHudVisible = debug->detailedHudVisible;
 	debug->stats.walkAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics);
 	debug->stats.walkAutoJumpDelayEnabled = IsPhysicsWalkAutoJumpDelayEnabled(physics);
-	debug->stats.simulationPaused = simulation->paused;
-
-	debug->stats.simulationTimeScale = simulation->timeScale;
-	debug->stats.simulationFrameStepPending = simulation->frameStepRequested;
+	debug->stats.simulationPaused = simulation.paused;
+	debug->stats.simulationTimeScale = simulation.timeScale;
+	debug->stats.simulationFrameStepPending = simulation.frameStepRequested;
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
 	MirrorRenderLightingToDebugStats(*render, *camera, debug->stats);
-
 	MirrorWalkStatsToDebugStats(GetPhysicsWalkDebugInfo(physics), debug->stats);
-	MirrorInputReplayStatsToDebugStats(*input, debug->stats);
+	MirrorInputReplayStatsToDebugStats(input, debug->stats);
+}
+
+bool UpdateApp(
+	PlatformState *platform,
+	SimulationState *simulation,
+	CameraState *camera,
+	InputState *input,
+	InteractionState *interaction,
+	WorldState *world,
+	PhysicsState *physics,
+	RenderState *render,
+	DebugState *debug,
+	projectv::audio::AudioEngine *audio)
+{
+	PV_PROFILE_ZONE_N("UpdateApp");
+	if (!platform || !simulation || !camera || !input || !interaction || !world || !render || !debug) {
+		return false;
+	}
+
+	simulation->frameDeltaSeconds = ComputeFrameDeltaSeconds(*simulation);
+	projectv::app::UpdateFrameStatistics(*simulation, *debug, *render);
+
+	if (input->replay.recording) {
+		RecordInputReplayFrame(input, simulation->frameDeltaSeconds);
+	}
+
+	if (!ProcessInputActions(
+			platform,
+			camera,
+			simulation,
+			input,
+			interaction,
+			world,
+			physics,
+			render,
+			debug,
+			audio)) {
+		return false;
+	}
+
+	const bool effectivePaused = projectv::app::UpdateEffectivePausedAndEditing(*camera, *world, *simulation);
+	const bool spectatorMode = IsSpectatorMode(*camera);
+	const bool cameraCanUpdate = spectatorMode || !effectivePaused;
+
+	if (!RunFrameSimulation(camera, input, world, physics, simulation, cameraCanUpdate)) {
+		return false;
+	}
+
+	MirrorAllFrameStats(camera, world, render, debug, physics, *input, audio, *simulation);
 
 	return true;
 }
