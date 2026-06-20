@@ -171,11 +171,13 @@ bool PrepareFrameRenderData(
 	frame->renderData.shadowDescriptorSet = sceneFrameResources.shadowDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
 	frame->renderData.hizCullingDescriptorSet = sceneFrameResources.hizCullingDescriptorSet;
+	frame->renderData.meshShaderDescriptorSet = sceneFrameResources.meshShaderDescriptorSet;
 	frame->renderData.taaResolveDescriptorSet = render->taaResolveDescriptorSets[frameIndex];
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
 	frame->renderData.shadowIndirectBuffer = sceneFrameResources.shadowIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
+	frame->renderData.chunkCullingParameters = chunkCullingParameters;
 	frame->renderData.shadowIndirectCommandCount = sceneFrameResources.shadowIndirectCommandCount;
 	frame->renderData.shadowCascadeVisibleChunkCounts = sceneFrameResources.shadowCascadeVisibleChunkCounts;
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;

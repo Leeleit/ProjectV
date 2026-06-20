@@ -33,7 +33,6 @@ set(SHADERS
         ${SHADER_DIR}/voxel_shadow.frag
         ${SHADER_DIR}/voxel_mesh.comp
         ${SHADER_DIR}/voxel_mesh_pre.comp
-        ${SHADER_DIR}/voxel_mesh.task
         ${SHADER_DIR}/voxel_mesh.mesh
         ${SHADER_DIR}/hzb_cull.comp
         ${SHADER_DIR}/fluid_ca.comp
@@ -136,6 +135,7 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanSwapchain.cpp
         render/vulkan/VulkanSyncPrimitives.cpp
         render/vulkan/VulkanVoxelMeshingPipeline.cpp
+        render/vulkan/VulkanMeshShaderPipeline.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp

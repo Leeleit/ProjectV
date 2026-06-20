@@ -7,6 +7,11 @@
 
 ## 1. Now
 
+**2026-06-21 session (Pattern C mesh shader full integration, in progress — no commit, dirty tree)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`). +1 new test `ProjectVMeshShaderTests`.
+
+- **Phase 1-7 (Pattern C mesh shader full integration)**: `voxel_mesh.mesh` ported from stub to real greedy emission; `voxel_mesh_pre.comp` switched UBO→push-constant frustum; `voxel_mesh.task` deleted; new `VulkanMeshShaderPipeline.{hpp,cpp}` with full pipeline creation + draw record; `Renderer.cpp` main pass conditionally uses mesh shader when `PROJECTV_MESH_SHADER_PIPELINE=ON` AND `meshShader=true` feature available; `voxel_mesh.comp` (PackedFace producer) still runs for shadow + transparent paths. Per-vertex AO = no-op (1.0), consistent with `voxel.vert:137` per `agent/knowledge.md §14` P0.3 v2.
+- **Phase 8 (buffer polish, deferred)**: Vulkan 1.3 minimum device check already enforced by `vkGetPhysicalDeviceFeatures2(VkPhysicalDeviceMeshShaderFeaturesEXT)` → graceful fallback; benchmark automation hook deferred to follow-up session.
+
 **2026-06-20 session 2x part 5 (in progress — no commit, dirty tree)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`).
 - **Phase 9: close-out 2x part 4** — `ProcessChunkRebuildQueue(physics, world->voxelWorld.get())` now called per-frame in `AppUpdate.cpp` after post-interaction `SyncPhysicsWorld`. Tracy plot "Processed Chunk Rebuilds" tracks per-frame count. Per-chunk static body rebuild path now active end-to-end (2x part 4 Phase 5 closed).
 - **Phase 10: Pre-Stage 0 / Stage 0 audit** — B1 (redundant model load loop), B2 (RecreateSwapchain destroy pipeline), B3 (cache PROJECTV_GRAVIGUN_SNAP), A1 (Vulkan 1.4 → 1.3 + env override) verified CLOSED in current mainline. No code changes needed; status can be flipped in TODO.md.

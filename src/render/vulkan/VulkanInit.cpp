@@ -12,6 +12,7 @@
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanInit.hpp"
+#include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -218,6 +219,14 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 	if (!CreateVoxelMeshingPipeline(&state->context(), &state->render())) {
 		return fail(projectv::vulkan_init::VulkanInitError::VoxelMeshingPipelineFailed,
 					"InitVulkan.CreateVoxelMeshingPipeline", "CreateVoxelMeshingPipeline returned false");
+	}
+
+	if (projectv::render::IsMeshShaderPipelineRequested()) {
+		if (!projectv::render::CreateMeshShaderPipelines(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Mesh shader pipeline not created (feature disabled or unavailable); continuing with PackedFace main draw");
+		}
 	}
 
 	const bool modelPipelineCreated = projectv::asset::CreateModelPipeline(

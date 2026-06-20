@@ -427,12 +427,17 @@ if (PROJECTV_ENABLE_BENCHMARKS)
             ${CMAKE_SOURCE_DIR}/src/bench/ShadowProjectionBenchmark.cpp
             ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
             ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+            ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+            ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
             ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
             ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
     )
 
     target_include_directories(ProjectVShadowProjectionBenchmark PRIVATE
             ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_SOURCE_DIR}/external/JoltPhysics
+            ${CMAKE_SOURCE_DIR}/external/tracy/public
+            ${CMAKE_SOURCE_DIR}/external/volk
     )
 
     target_link_libraries(ProjectVShadowProjectionBenchmark PRIVATE
@@ -443,6 +448,7 @@ if (PROJECTV_ENABLE_BENCHMARKS)
             GPUOpen::VulkanMemoryAllocator
             fmt::fmt
             SDL3::SDL3
+            Jolt::Jolt
     )
 
     projectv_test_add_modules(ProjectVShadowProjectionBenchmark)
@@ -452,6 +458,8 @@ endif ()
 add_executable(ProjectVFluidCATests
         FluidCATests.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
 )
@@ -462,6 +470,9 @@ target_compile_definitions(ProjectVFluidCATests PRIVATE
 
 target_include_directories(ProjectVFluidCATests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
 )
 
 target_link_libraries(ProjectVFluidCATests PRIVATE
@@ -471,6 +482,7 @@ target_link_libraries(ProjectVFluidCATests PRIVATE
         GPUOpen::VulkanMemoryAllocator
         SDL3::SDL3
         fmt::fmt
+        Jolt::Jolt
 )
 
 add_test(NAME ProjectVFluidCATests COMMAND ProjectVFluidCATests)
@@ -596,6 +608,7 @@ add_executable(ProjectVHzbCullingTests
         ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
 )
 
@@ -625,4 +638,35 @@ add_test(NAME ProjectVHzbCullingTests COMMAND ProjectVHzbCullingTests)
 set_tests_properties(ProjectVHzbCullingTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVHzbCullingTests)
+
+add_executable(ProjectVMeshShaderTests
+        MeshShaderTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanMeshShaderPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+)
+
+target_compile_definitions(ProjectVMeshShaderTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVMeshShaderTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+)
+
+target_link_libraries(ProjectVMeshShaderTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVMeshShaderTests PRIVATE volk)
+target_link_libraries(ProjectVMeshShaderTests PRIVATE glm)
+target_link_libraries(ProjectVMeshShaderTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVMeshShaderTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVMeshShaderTests PRIVATE SDL3::SDL3)
+
+add_test(NAME ProjectVMeshShaderTests COMMAND ProjectVMeshShaderTests)
+set_tests_properties(ProjectVMeshShaderTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVMeshShaderTests)
 

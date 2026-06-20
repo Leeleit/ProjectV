@@ -74,6 +74,8 @@ constexpr char kOptionalSwapchainMaintenance1Extension[] = "VK_KHR_swapchain_mai
 constexpr char kOptionalDynamicRenderingUnusedAttachmentsExtension[] =
 	"VK_EXT_dynamic_rendering_unused_attachments";
 
+constexpr char kMeshShaderExtension[] = "VK_EXT_mesh_shader";
+
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	const VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -336,6 +338,7 @@ bool CheckRequiredFeatures(
 	VkPhysicalDeviceFeatures *outFeatures,
 	VkPhysicalDeviceVulkan12Features *outFeatures12,
 	VkPhysicalDeviceVulkan13Features *outFeatures13,
+	VkPhysicalDeviceMeshShaderFeaturesEXT *outMeshShaderFeatures,
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR *outSwapchainMaintenance1Features,
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT *outDynamicRenderingUnusedAttachmentsFeatures)
 {
@@ -357,6 +360,12 @@ bool CheckRequiredFeatures(
 		dynamicRenderingUnusedAttachmentsFeatures.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
 		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&dynamicRenderingUnusedAttachmentsFeatures);
+	}
+
+	VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+	meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+	if (outMeshShaderFeatures != nullptr) {
+		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&meshShaderFeatures);
 	}
 	features13.pNext = &features12;
 	VkPhysicalDeviceFeatures2 features2{};
@@ -422,6 +431,9 @@ bool CheckRequiredFeatures(
 	if (outDynamicRenderingUnusedAttachmentsFeatures != nullptr) {
 		*outDynamicRenderingUnusedAttachmentsFeatures = dynamicRenderingUnusedAttachmentsFeatures;
 	}
+	if (outMeshShaderFeatures != nullptr) {
+		*outMeshShaderFeatures = meshShaderFeatures;
+	}
 	return true;
 }
 
@@ -432,12 +444,14 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDeviceFeatures features{};
 	VkPhysicalDeviceVulkan12Features features12{};
 	VkPhysicalDeviceVulkan13Features features13{};
+	VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenance1Features{};
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
 	bool supportsTracyCalibratedTimestamps = false;
 	bool supportsSwapchainMaintenance1 = false;
 	bool supportsDynamicRenderingUnusedAttachments = false;
 	bool supportsDedicatedComputeQueue = false;
+	bool supportsMeshShader = false;
 };
 
 VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
@@ -455,6 +469,7 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	enabled.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 	enabled.drawIndirectCount = selected.features12.drawIndirectCount ? VK_TRUE : VK_FALSE;
 	enabled.hostQueryReset = selected.features12.hostQueryReset ? VK_TRUE : VK_FALSE;
+	enabled.timelineSemaphore = selected.features12.timelineSemaphore ? VK_TRUE : VK_FALSE;
 	return enabled;
 }
 
@@ -464,6 +479,7 @@ VkPhysicalDeviceVulkan13Features BuildEnabledFeatures13(const PhysicalDeviceCand
 	enabled.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 	enabled.dynamicRendering = selected.features13.dynamicRendering ? VK_TRUE : VK_FALSE;
 	enabled.synchronization2 = selected.features13.synchronization2 ? VK_TRUE : VK_FALSE;
+	enabled.shaderDemoteToHelperInvocation = selected.features13.shaderDemoteToHelperInvocation ? VK_TRUE : VK_FALSE;
 	return enabled;
 }
 
@@ -506,11 +522,14 @@ bool TryPickPhysicalDevice(
 	const bool deviceHasDynamicRenderingUnusedAttachments =
 		HasDeviceExtension(physicalDevice, kOptionalDynamicRenderingUnusedAttachmentsExtension);
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT supportedDynamicRenderingUnusedAttachmentsFeatures{};
+	const bool deviceHasMeshShader = HasDeviceExtension(physicalDevice, kMeshShaderExtension);
+	VkPhysicalDeviceMeshShaderFeaturesEXT supportedMeshShaderFeatures{};
 	if (!CheckRequiredFeatures(
 			physicalDevice,
 			&supportedFeatures,
 			&supportedFeatures12,
 			&supportedFeatures13,
+			deviceHasMeshShader ? &supportedMeshShaderFeatures : nullptr,
 			deviceHasSwapchainMaintenance1 ? &supportedSwapchainMaintenance1Features : nullptr,
 			deviceHasDynamicRenderingUnusedAttachments ? &supportedDynamicRenderingUnusedAttachmentsFeatures : nullptr)) {
 		return false;
@@ -523,6 +542,8 @@ bool TryPickPhysicalDevice(
 	outCandidate->features = supportedFeatures;
 	outCandidate->features12 = supportedFeatures12;
 	outCandidate->features13 = supportedFeatures13;
+	outCandidate->meshShaderFeatures = supportedMeshShaderFeatures;
+	outCandidate->supportsMeshShader = deviceHasMeshShader;
 	outCandidate->swapchainMaintenance1Features = supportedSwapchainMaintenance1Features;
 	outCandidate->dynamicRenderingUnusedAttachmentsFeatures = supportedDynamicRenderingUnusedAttachmentsFeatures;
 	outCandidate->supportsTracyCalibratedTimestamps =
@@ -717,6 +738,10 @@ bool InitializeVulkanBase(
 	if (selected.supportsDynamicRenderingUnusedAttachments) {
 		deviceExtensions.push_back(kOptionalDynamicRenderingUnusedAttachmentsExtension);
 	}
+	const bool meshShaderRequested = std::getenv("PROJECTV_MESH_SHADER_PIPELINE") != nullptr;
+	if (meshShaderRequested && selected.supportsMeshShader) {
+		deviceExtensions.push_back(kMeshShaderExtension);
+	}
 
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
@@ -734,6 +759,15 @@ bool InitializeVulkanBase(
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
 		enabledDynamicRenderingUnusedAttachmentsFeatures.dynamicRenderingUnusedAttachments = VK_TRUE;
 	}
+
+	VkPhysicalDeviceMeshShaderFeaturesEXT enabledMeshShaderFeatures{};
+	const bool meshShaderEnabled = meshShaderRequested && selected.supportsMeshShader;
+	if (meshShaderEnabled) {
+		enabledMeshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+		enabledMeshShaderFeatures.meshShader = VK_TRUE;
+		enabledMeshShaderFeatures.taskShader = VK_TRUE;
+	}
+
 	enabledFeatures13.pNext = &enabledFeatures12;
 	enabledFeatures12.pNext = selected.supportsSwapchainMaintenance1
 								  ? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
@@ -741,7 +775,10 @@ bool InitializeVulkanBase(
 	enabledSwapchainMaintenance1Features.pNext = selected.supportsDynamicRenderingUnusedAttachments
 													 ? reinterpret_cast<VkBaseOutStructure *>(&enabledDynamicRenderingUnusedAttachmentsFeatures)
 													 : nullptr;
-	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = nullptr;
+	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = meshShaderEnabled
+														   ? reinterpret_cast<VkBaseOutStructure *>(&enabledMeshShaderFeatures)
+														   : nullptr;
+	enabledMeshShaderFeatures.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;

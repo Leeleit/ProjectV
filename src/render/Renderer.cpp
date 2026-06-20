@@ -7,6 +7,7 @@ import projectv.math;
 #include "debug/ProfilingGpu.hpp"
 #include "render/ScreenshotCapture.hpp"
 #include "render/vulkan/VulkanInit.hpp"
+#include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
@@ -541,7 +542,6 @@ void RecordGraphicsCommands(
 	const VkCommandBuffer cmd,
 	const uint32_t imageIndex)
 {
-
 	ScopedPassTimer passTimer(render.renderPassTimings.graphicsMs);
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
@@ -774,20 +774,38 @@ void RecordGraphicsCommands(
 			frameRenderData.opaqueIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Opaque Pass");
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline);
-			vkCmdPushConstants(
-				cmd,
-				render.graphicsPipelineLayout,
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				sizeof(frameRenderData.graphicsPushConstants),
-				&frameRenderData.graphicsPushConstants);
-			vkCmdDrawIndirect(
-				cmd,
-				frameRenderData.opaqueIndirectBuffer,
-				0,
-				frameRenderData.chunkDescriptorCount,
-				sizeof(VkDrawIndirectCommand));
+			if (render.meshShaderEnabled) {
+				projectv::render::MeshDrawPushConstants meshDrawPush{};
+				const auto &viewProj = frameRenderData.graphicsPushConstants.viewProjection;
+				for (size_t i = 0; i < 16; ++i) {
+					meshDrawPush.viewProjection[i] = viewProj.data()[i];
+				}
+				meshDrawPush.worldMinAndChunkSize = frameRenderData.voxelMeshingPushConstants.worldMinAndChunkSize;
+				meshDrawPush.worldMaxExclusiveAndChunkCount = frameRenderData.voxelMeshingPushConstants.worldMaxExclusiveAndChunkCount;
+				meshDrawPush.chunkGridAndTransparentFaceBase = frameRenderData.voxelMeshingPushConstants.chunkGridAndTransparentFaceBase;
+				meshDrawPush.faceCapacities = frameRenderData.voxelMeshingPushConstants.faceCapacities;
+				projectv::render::RecordMeshShaderDraw(
+					cmd,
+					render,
+					render.sceneFrameResources[frameRenderData.frameIndex],
+					meshDrawPush,
+					frameRenderData.chunkDescriptorCount);
+			} else {
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline);
+				vkCmdPushConstants(
+					cmd,
+					render.graphicsPipelineLayout,
+					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					0,
+					sizeof(frameRenderData.graphicsPushConstants),
+					&frameRenderData.graphicsPushConstants);
+				vkCmdDrawIndirect(
+					cmd,
+					frameRenderData.opaqueIndirectBuffer,
+					0,
+					frameRenderData.chunkDescriptorCount,
+					sizeof(VkDrawIndirectCommand));
+			}
 		}
 
 		if (render.modelPipeline != VK_NULL_HANDLE && !render.visibleModelInstances.empty()) {
@@ -1256,6 +1274,19 @@ SDL_AppResult DrawFrame(
 	if (beginCommandBufferResult != VK_SUCCESS) {
 		runtime::LogVkFailure("DrawFrame.vkBeginCommandBuffer", beginCommandBufferResult);
 		return SDL_APP_FAILURE;
+	}
+
+	if (render->meshShaderEnabled && frame->renderData.chunkDescriptorCount > 0) {
+		const projectv::render::MeshCullPushConstants cullPush =
+			projectv::render::BuildMeshCullPushConstants(
+				frame->renderData.chunkCullingParameters,
+				frame->renderData.chunkDescriptorCount);
+		projectv::render::RecordMeshShaderPreCull(
+			cmd,
+			context,
+			*render,
+			render->sceneFrameResources[frame->currentFrame],
+			cullPush);
 	}
 
 	RecordGraphicsCommands(*render, *swapchain, frame->renderData, cmd, imageIndex);

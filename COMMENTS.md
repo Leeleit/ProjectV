@@ -231,3 +231,88 @@ to make the specialisation distinguishable from the
 
 primary template.
 
+
+## `src/render/vulkan/VulkanMeshShaderPipeline.cpp`
+
+### L1-L41 (design-rationale)
+
+Pattern C mesh shader pipeline per `TODO.md §2.1` + `mesh-shader-vs-compute-cull` verdict=mixed
++ `agent/knowledge.md §10.11` per-vertex AO no-op contract. Three sub-pipelines share one
+descriptor set layout (4 SSBOs): pre-cull compute + mesh-shader graphics + future pipelines.
+Push-constant range 128 bytes (Vulkan min) covers VoxelMeshingPushConstants(64) +
+viewProjection(64) exactly. `vkGetPhysicalDeviceMeshShaderFeaturesEXT.meshShader == VK_TRUE`
+probed at init; graceful fallback to PackedFace indirect draw when absent or env unset.
+Cross-vendor support: NVIDIA (RTX 30/40/50), AMD RDNA2/3/4, Intel Arc Battlemage+.
+
+### L210-L240 (design-rationale)
+
+`BuildMeshCullPushConstants` extracts 6 frustum planes from `ChunkCullingParameters` (camera
+position, forward/right/up, FOV tangents, near/max distance). Planes unnormalized (so they
+include camera position offset baked into `plane.w`) — shader uses linear radius scale, so
+magnitude cancels out. Per `agent/knowledge.md §30.4` async-compute precedent for pre-cull
+separation: cull runs as compute, draw runs as graphics, both gated by
+`PROJECTV_MESH_SHADER_PIPELINE=ON`.
+
+### L268-L340 (intent)
+
+`RecordMeshShaderPreCull`: per-frame contract — CPU memsets `visibilityCounter` to 0 via
+mapped memory, dispatch pre-cull compute with 6 planes + chunk count, barrier from
+COMPUTE→MESH stage. Returns true if dispatch happened. Counter overflow safe (capacity =
+chunk count, which is upper bound for visible set per camera frustum).
+
+--
+## `src/shaders/voxel_mesh.mesh`
+
+### L1-L4 (design-rationale)
+
+`#extension GL_EXT_mesh_shader : enable` per Vulkan 1.3 EXT (core in 1.3, ratified 2022-03-08).
+Layout declaration `layout(triangles, max_vertices = 256, max_primitives = 256) out` is the
+Vulkan 1.3 spec minimum for `VkPhysicalDeviceMeshShaderPropertiesEXT`. ProjectV chunkSize=8 →
+worst case 6×8×8 = 384 isolated quads/chunk. Greedy merge reduces to <64 quads for typical
+scenes. Bump `max_vertices`/`max_primitives` to per-device `maxMeshOutputVertices/Primitives`
+if a real chunk exceeds the cap (would require dynamic specialization).
+
+### L165-L255 (design-rationale)
+
+`GreedyFacePass` is a 1:1 port of `voxel_mesh.comp::GreedyFacePass` adapted to mesh-shader
+output: instead of writing to `packedFaces[]` SSBO, it writes to `gl_MeshVerticesEXT[]` +
+`gl_PrimitiveTriangleIndicesEXT[]`. Per-vertex outputs match `voxel.vert:107-138` byte-for-byte
+(outNormal, outWorldPosition, outMaterialIndex flat, outAmbientVisibility). 2-pass:
+pre-count quads → call `SetMeshOutputsEXT(vCount, pCount)` → re-emit. This pattern is
+required because `SetMeshOutputsEXT` must precede any output write (Khronos GLSL_EXT_mesh_shader
+spec).
+
+## `src/render/vulkan/VulkanBootstrap.cpp`
+
+### L447-L454 (intent)
+
+`PhysicalDeviceCandidate` gained `meshShaderFeatures` (VkPhysicalDeviceMeshShaderFeaturesEXT)
++ `supportsMeshShader` (bool). Probed in `CheckRequiredFeatures` via pNext chain; only
+queried if `HasDeviceExtension(physicalDevice, "VK_EXT_mesh_shader")` returns true (avoids
+spurious pNext struct ignored on devices without extension).
+
+### L743-L748 (design-rationale)
+
+`PROJECTV_MESH_SHADER_PIPELINE=ON` env var gates `deviceExtensions.push_back(kMeshShaderExtension)`
++ `enabledMeshShaderFeatures{meshShader=VK_TRUE, taskShader=VK_TRUE}` chaining in
+`VkDeviceCreateInfo::pNext`. Per `agent/knowledge.md §32` Pattern C contract, feature is
+opt-in. When env unset, device is created without the extension — same mainline as before.
+Both `meshShader` and `taskShader` enabled together because Pattern C uses task shader only
+indirectly via compute pre-cull, but the feature must be linked for the pipeline to compile.
+
+### L459 (intent)
+
+`BuildEnabledFeatures12` now enables `timelineSemaphore` feature (was previously missing →
+validation error on `vkCreateSemaphore` with `VK_SEMAPHORE_TYPE_TIMELINE`). This caused
+`renderTimelineSemaphore` to leak on shutdown (created but never destroyed because the
+device rejected the create call silently, OR the destroy was simply missing). Fixed in
+`ShutdownVulkan` (Types.cpp L88-91) by adding explicit `vkDestroySemaphore` for
+`renderTimelineSemaphore`.
+
+### L470 (intent)
+
+`BuildEnabledFeatures13` now enables `shaderDemoteToHelperInvocation` feature. Per
+`agent/knowledge.md §15` lighting contract, `voxel.frag` uses `demote_to_helper` extension
+for branchless shadow path. Without this feature enabled, validation layer reports
+`SPIR-V Capability DemoteToHelperInvocation was declared` and the shader may behave
+unexpectedly on drivers that optimize differently.

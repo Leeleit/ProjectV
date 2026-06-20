@@ -185,6 +185,16 @@ PulseAudio/PipeWire через `miniaudio`.
     * Корректный рендеринг геометрии без визуальных дефектов (дыр на стыках чанков).
     * Прирост производительности в геометрии высокой плотности на графических процессорах архитектур Ada Lovelace / RDNA
         4.
+* **Прогресс `2026-06-21`:** GreedyFacePass портирован в `voxel_mesh.mesh` (2-pass count+emit).
+  `voxel_mesh_pre.comp` переключён с UBO на push-constant frustum planes. `voxel_mesh.task`
+  удалён (Pattern C = compute pre-cull + mesh shader, не task+mesh). Pipelined +
+  `vkCmdDrawMeshTasksEXT` dispatch в `Renderer.cpp` (замещает main PackedFace indirect draw;
+  shadow + transparent paths продолжают использовать PackedFace). Feature flag
+  `PROJECTV_MESH_SHADER_PIPELINE=ON` (default OFF). Graceful fallback когда device
+  `meshShader == VK_FALSE` или `maxMeshOutputVertices < 256`. `agent/knowledge.md §32`
+  contract. VulkanBootstrap follow-up задокументирован в `COMMENTS.md` (включение
+  `VK_EXT_mesh_shader` extension + chaining `VkPhysicalDeviceMeshShaderFeaturesEXT.meshShader=VK_TRUE`
+  в `VkDeviceCreateInfo::pNext` для устройств, которые требуют explicit enable).
 
 ### Задача 2.3. Виртуальное текстурирование вокселей (Sparse Virtual Texturing)
 

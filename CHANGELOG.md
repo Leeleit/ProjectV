@@ -15,6 +15,94 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-21 (session: Pattern C mesh shader full integration)
+
+### Stage 2.1 Pattern C — mesh shader pipeline + renderer integration
+
+- `src/shaders/voxel_mesh.mesh` — stub (1 triangle/chunk) **replaced** with full GreedyFacePass port
+  from `voxel_mesh.comp`. The mesh shader now does 6-axis greedy merging per visible chunk and
+  emits quads via `gl_MeshVerticesEXT[].gl_Position` + `gl_PrimitiveTriangleIndicesEXT[]`.
+  Per-vertex outputs match `voxel.vert:107-138` byte-for-byte: `outNormal` (loc 0),
+  `outWorldPosition` (loc 1), `flat outMaterialIndex` (loc 2), `outAmbientVisibility` (loc 3,
+  constant 1.0 per `agent/knowledge.md §14` P0.3 v2 contract). 2-pass: pre-count quads to call
+  `SetMeshOutputsEXT(vCount, pCount)`, then re-emit. `max_vertices=256`, `max_primitives=256` =
+  Vulkan 1.3 spec minimum; chunkSize=8 means 8³ worst case = 384 quads, with greedy merge
+  typically <64 quads/chunk.
+- `src/shaders/voxel_mesh_pre.comp` — **replaced** UBO `binding=3` (CameraFrustum) with
+  push-constant `vec4 frustumPlanes[6]`. 16 + 96 = 112 bytes total push (under 128-byte min).
+  Unnormalized planes OK because shader uses linear radius scale.
+- `src/shaders/voxel_mesh.task` — **DELETED** (vestigial spike; Pattern C = compute pre-cull
+  + mesh shader, not task + mesh per `mesh-shader-vs-compute-cull` verdict=mixed).
+- `src/CMakeLists.txt` — `voxel_mesh.task` removed from `SHADERS` list. New
+  `render/vulkan/VulkanMeshShaderPipeline.cpp` added to `ProjectV` source list.
+- `src/core/Types.hpp` — `SceneFrameResources` gained `visibleChunkIdBuffer` +
+  `visibleChunkIdMappedData` + `visibilityCounterBuffer` + `visibilityCounterMappedData` +
+  `meshShaderDescriptorSet` (SSBOs + descriptor set, MAPPED for visibleCount reset).
+  `FrameRenderData` gained `chunkCullingParameters` + `meshShaderDescriptorSet`.
+  `RenderState` gained `meshShaderEnabled` (bool), `visibleChunkIdCapacity` (uint32),
+  `meshShaderMaxOutputVertices/Primitives` (uint32), pipeline handles
+  (`meshCullShaderModule`, `meshShaderModule`, `meshCullPipelineLayout`, `meshShaderPipelineLayout`,
+  `meshCullPipeline`, `meshShaderPipeline`, `meshShaderDescriptorSetLayout`, `meshShaderDescriptorPool`).
+- `src/render/SceneResources.cpp` — allocation+destruction of `visibleChunkIdBuffer` (capacity =
+  chunk count) and `visibilityCounterBuffer` (4 B). Counter initialized to 0 once at allocation.
+  Per-frame CPU reset handled in `RecordMeshShaderPreCull` via mapped memory.
+- `src/render/vulkan/VulkanMeshShaderPipeline.{hpp,cpp}` — NEW. Public API:
+  `IsMeshShaderPipelineRequested()` (env `PROJECTV_MESH_SHADER_PIPELINE=ON`),
+  `BuildMeshCullPushConstants()` (camera → 6 planes via `MakeFrustumPlane` helper),
+  `CreateMeshShaderPipelines()` (probes `VkPhysicalDeviceMeshShaderFeaturesEXT.meshShader`,
+  graceful fallback if absent), `DestroyMeshShaderPipelines()`, `RefreshMeshShaderResourceBindings()`,
+  `RecordMeshShaderPreCull()` (CPU memset visibleCount + barrier + pre-cull compute dispatch
+  + barrier for mesh stage), `RecordMeshShaderDraw()` (`vkCmdDrawMeshTasksEXT`).
+  Single descriptor set layout (4 SSBOs) shared between cull (compute) and draw (graphics).
+- `src/render/vulkan/VulkanInit.cpp` — calls `CreateMeshShaderPipelines` after
+  `CreateVoxelMeshingPipeline` (only when env requested). Failure logs informational
+  message and continues with PackedFace main draw (graceful).
+- `src/render/Renderer.cpp` — main pass split: when `render.meshShaderEnabled` is true, the
+  opaque pass uses `RecordMeshShaderDraw` (replacing `vkCmdDrawIndirect`). The PackedFace
+  indirect draw remains the path for transparent pass + shadow pass (no change).
+  `voxel_mesh.comp` (greedy PackedFace producer) still runs every frame for shadow.
+- `src/app/FramePreparation.cpp` — populates `frame->renderData.chunkCullingParameters` and
+  `frame->renderData.meshShaderDescriptorSet`.
+- `src/core/Types.cpp` — `ShutdownVulkan` now calls `DestroyMeshShaderPipelines` before
+  graphics pipeline destruction.
+- `tests/CMakeLists.txt` — `ProjectVFluidCATests` + `ProjectVShadowProjectionBenchmark` +
+  `ProjectVHzbCullingTests` updated to add `PhysicsWorld.cpp` + `InputActions.cpp` +
+  `ShaderIO.cpp` + tracy/volk/Jolt include paths (links were broken by added dependencies).
+  New `ProjectVMeshShaderTests` (compile-only + cull-push helper test).
+- `tests/MeshShaderTests.cpp` — NEW. 4 sub-tests: `IsMeshShaderPipelineRequested` default
+  off, `BuildMeshCullPushConstants` dispatchParams propagation, near-plane (forward, near
+  offset), far-plane (back, max distance). Catches regressions in CPU-side frustum extraction.
+
+### EVIL markers added (5 total)
+
+- `src/shaders/voxel_mesh.mesh:104-110` — `kMeshMaxVertices=256` + `kMeshMaxPrimitives=256`
+  = Vulkan 1.3 spec minimum; 8³ worst case is 384 quads; bump to per-device max if exceeded.
+- `src/shaders/voxel_mesh.mesh:112` — `kMeshMaxQuads=64` reserved for future single-pass.
+- `src/shaders/voxel_mesh_pre.comp:20-22` — 6 unnormalized planes in push constants
+  (Vulkan 128-byte min); 16+96=112 bytes, OK.
+- `src/render/vulkan/VulkanMeshShaderPipeline.cpp:18-23` — `kMeshMaxOutputVertices/Primitives=256`
+  = spec min (clamped for cross-vendor safety); `kMeshPushConstantSize=128` = VoxelMeshingPushConstants(64)
+  + viewProjection(64) exactly, must not grow.
+
+### Validation error fixes (3 pre-existing issues from prior sessions)
+
+- `src/render/vulkan/VulkanBootstrap.cpp:457` — `BuildEnabledFeatures12` now enables
+  `timelineSemaphore` (was missing → `vkCreateSemaphore(VK_SEMAPHORE_TYPE_TIMELINE)` validation
+  error on dev host + `renderTimelineSemaphore` leak on shutdown).
+- `src/render/vulkan/VulkanBootstrap.cpp:467` — `BuildEnabledFeatures13` now enables
+  `shaderDemoteToHelperInvocation` (was missing → `voxel.frag` uses `demote_to_helper` per
+  `agent/knowledge.md §15` lighting contract; validation reported missing capability).
+- `src/core/Types.cpp:88-91` — `ShutdownVulkan` now calls `vkDestroySemaphore` for
+  `context.renderTimelineSemaphore` (previously created but never destroyed → 1 leaked
+  VkSemaphore on device shutdown).
+- `src/render/vulkan/VulkanBootstrap.cpp:447-450` — `PhysicalDeviceCandidate` gained
+  `meshShaderFeatures` + `supportsMeshShader` probe gated on `HasDeviceExtension` check
+  for `VK_EXT_mesh_shader`. `CreateDevice` chains `VkPhysicalDeviceMeshShaderFeaturesEXT{meshShader=VK_TRUE, taskShader=VK_TRUE}`
+  in `VkDeviceCreateInfo::pNext` + adds `VK_EXT_mesh_shader` to device extensions when
+  `PROJECTV_MESH_SHADER_PIPELINE=ON` (per `agent/knowledge.md §32` opt-in contract).
+
+---
+
 ## 2026-06-20 (session: 2x scope continuation, part 2)
 
 ### Stage 1.1 chunk 7 — homogeneous optimization

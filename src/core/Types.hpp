@@ -378,6 +378,7 @@ struct FrameRenderData {
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet taaResolveDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
@@ -391,6 +392,7 @@ struct FrameRenderData {
 	bool debugUiVisible = true;
 	GraphicsPushConstants graphicsPushConstants{};
 	VoxelMeshingPushConstants voxelMeshingPushConstants{};
+	ChunkCullingParameters chunkCullingParameters{};
 	InteractionSelectionState interactionSelection{};
 	std::vector<DebugOverlayBox> debugOverlayBoxes;
 };
@@ -554,7 +556,14 @@ struct SceneFrameResources {
 	void *visibilityMaskMappedData = nullptr;
 	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
 	VmaAllocation visibilityMaskAllocation = nullptr;
+	void *visibleChunkIdMappedData = nullptr;
+	VkBuffer visibleChunkIdBuffer = VK_NULL_HANDLE;
+	VmaAllocation visibleChunkIdAllocation = nullptr;
+	void *visibilityCounterMappedData = nullptr;
+	VkBuffer visibilityCounterBuffer = VK_NULL_HANDLE;
+	VmaAllocation visibilityCounterAllocation = nullptr;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
@@ -695,6 +704,18 @@ struct RenderState {
 	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
+	VkShaderModule meshCullShaderModule = VK_NULL_HANDLE;
+	VkShaderModule meshShaderModule = VK_NULL_HANDLE;
+	VkPipelineLayout meshShaderPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline meshShaderPipeline = VK_NULL_HANDLE;
+	VkPipelineLayout meshCullPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline meshCullPipeline = VK_NULL_HANDLE;
+	VkDescriptorSetLayout meshShaderDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool meshShaderDescriptorPool = VK_NULL_HANDLE;
+	bool meshShaderEnabled = false;
+	uint32_t visibleChunkIdCapacity = 0u;
+	uint32_t meshShaderMaxOutputVertices = 0u;
+	uint32_t meshShaderMaxOutputPrimitives = 0u;
 
 	bool taaEnabled = true;
 	float taaBlend = 0.10f;

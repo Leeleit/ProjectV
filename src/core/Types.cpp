@@ -12,6 +12,7 @@ import projectv.string_id;
 #include "render/SceneResources.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
+#include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -29,6 +30,7 @@ void ShutdownVulkan(AppState *state)
 		state->render().tracyGraphicsContext = nullptr;
 		state->render().tracyGraphicsContextCalibrated = false;
 		DestroyVoxelMeshingPipeline(&state->context(), &state->render());
+		projectv::render::DestroyMeshShaderPipelines(&state->context(), &state->render());
 		DestroyGraphicsPipeline(&state->context(), &state->render());
 		DestroyDepthResources(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());
@@ -87,6 +89,11 @@ void ShutdownVulkan(AppState *state)
 
 		if (state->context().commandPool) {
 			vkDestroyCommandPool(state->context().device, state->context().commandPool, nullptr);
+		}
+
+		if (state->context().renderTimelineSemaphore) {
+			vkDestroySemaphore(state->context().device, state->context().renderTimelineSemaphore, nullptr);
+			state->context().renderTimelineSemaphore = VK_NULL_HANDLE;
 		}
 	}
 

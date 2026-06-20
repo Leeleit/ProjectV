@@ -13,30 +13,26 @@ layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
     ChunkDescriptor chunkDescriptors[];
 };
 
-layout(set = 0, binding = 1, std430) writeonly buffer VisibleChunkIdBuffer {
+layout(set = 0, binding = 2, std430) writeonly buffer VisibleChunkIdBuffer {
     uint visibleChunkIds[];
 };
 
-layout(set = 0, binding = 2, std430) buffer VisibilityCounter {
+layout(set = 0, binding = 3, std430) buffer VisibilityCounter {
     uint visibleCount;
-};
-
-layout(set = 0, binding = 3) uniform CameraFrustum {
-    vec4 planes[6];
-    vec4 cameraPositionAndMaxDistance;
-    uvec4 chunkCountAndFlags;
 };
 
 layout(push_constant) uniform CullPushConstants {
     uvec4 dispatchParams;
+    // EVIL: 6 unnormalized frustum planes packed into push constants. Vulkan guarantees 128-byte push constant min; this is 16 + 96 = 112 bytes. Planes unnormalized OK because shader uses `r = halfExtent * (absN.x + absN.y + absN.z)` which scales linearly with plane magnitude.
+    vec4 frustumPlanes[6];
 } pushConstants;
 
 bool AabbOutsideFrustum(const vec3 origin, const float halfExtent)
 {
     for (int i = 0; i < 6; ++i) {
-        const vec3 absN = abs(planes[i].xyz);
+        const vec3 absN = abs(pushConstants.frustumPlanes[i].xyz);
         const float r = halfExtent * (absN.x + absN.y + absN.z);
-        if (dot(planes[i].xyz, origin) + planes[i].w < -r) {
+        if (dot(pushConstants.frustumPlanes[i].xyz, origin) + pushConstants.frustumPlanes[i].w < -r) {
             return true;
         }
     }

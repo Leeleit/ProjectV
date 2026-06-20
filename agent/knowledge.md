@@ -1858,3 +1858,82 @@ detail для случая, когда он действительно нуже�
 - `AGENTS.md` §4 (sources of truth), §6 (anti-duplication classification), §7.2.6 (multi-agent), §7.2.8 (shared `agent/` files), §7.3.1 (pre-commit gate, type=docs auto), §8.1 (auto-close routine).
 - `legacy/docs/archive/agent_memory_§10_shadow_audit_2026-06-09.md` — pre-existing archive example, тот же формат.
 - `legacy/docs/archive/agent_status_now_2026-06-10_pre_compaction.md` — pre-existing archive example, тот же формат.
+
+## 32. Pattern C mesh shader pipeline contract (`2026-06-21`)
+
+### Решение:
+
+- **Pattern C layout** = `voxel_mesh_pre.comp` (compute pre-cull: AABB-vs-frustum + atomicAdd
+  `visibleCount` + `visibleChunkIds[]`) → `vkCmdDrawMeshTasksEXT(visibleCount, 1, 1)` →
+  `voxel_mesh.mesh` (greedy emission: 6-axis `GreedyFacePass` ported from `voxel_mesh.comp`,
+  2-pass count+emit, per-vertex outputs match `voxel.vert:107-138` byte-for-byte).
+- **Feature flag:** `PROJECTV_MESH_SHADER_PIPELINE=ON` (default OFF per
+  `mesh-shader-vs-compute-cull` verdict=mixed). Default = compute cull + PackedFace indirect
+  draw remains mainline contract.
+- **Graceful fallback:** `vkGetPhysicalDeviceFeatures2(VkPhysicalDeviceMeshShaderFeaturesEXT).meshShader
+  == VK_FALSE` → `IsMeshShaderPipelineRequested()` returns true but `CreateMeshShaderPipelines`
+  returns false; renderer continues with PackedFace main draw.
+- **PackedFace path preserved:** `voxel_mesh.comp` still runs every frame to produce
+  `packedFaces[]` for **shadow pass** (via `voxel_shadow.vert`) and **transparent pass** (via
+  `voxel.frag` + transparent indirect draw). Mesh shader only replaces the **main opaque pass**
+  indirect draw.
+- **One descriptor set layout** shared by 3 sub-pipelines (pre-cull compute + mesh-shader
+  graphics): 4 SSBOs (binding 0=PackedChunkDescriptors, 1=PackedChunkVoxelPayload,
+  2=VisibleChunkIdBuffer, 3=VisibilityCounter). Push-constant range 128 bytes
+  (Vulkan min) covers `VoxelMeshingPushConstants(64) + viewProjection(64)` exactly.
+- **Per-vertex AO no-op:** `outAmbientVisibility = 1.0` matches `voxel.vert:137` per
+  §14 P0.3 v2 contract. Per-corner AO inside mesh shader is separate future work (multi-session).
+- **Cross-vendor:** Universal across NVIDIA RTX 30/40/50, AMD RDNA2/3/4, Intel Arc Battlemage+
+  (all support `VK_EXT_mesh_shader` per Vulkan 1.3 core).
+- **Mesh shader limits:** `max_vertices=256`, `max_primitives=256` = Vulkan 1.3 spec minimum
+  for `VkPhysicalDeviceMeshShaderPropertiesEXT`. ProjectV chunkSize=8 means worst case
+  6×8×8=384 isolated quads/chunk. Greedy merge typically reduces to <64 quads/chunk for
+  realistic scenes. If a real chunk exceeds the cap, must bump to per-device
+  `maxMeshOutputVertices/Primitives` (requires dynamic specialization — separate work).
+- **Pre-cull frustum planes:** 6 unnormalized planes packed into push constants
+  (`vec4 frustumPlanes[6]`, 96 bytes) per `BuildMeshCullPushConstants`. Shader uses
+  `r = halfExtent * (absN.x + absN.y + absN.z)` which scales linearly with plane magnitude,
+  so unnormalized planes OK. Replaces the previous UBO at binding 3 (was `CameraFrustum`
+  in `voxel_mesh_pre.comp` spike — moved to push constant to share descriptor set layout
+  with mesh shader pipeline).
+- **Pre-cull counter reset:** CPU memsets `visibilityCounter` to 0 via VMA-mapped memory
+  in `RecordMeshShaderPreCull` (per-frame, before each dispatch). Counter capacity = chunk
+  count (upper bound on visible set per camera frustum).
+
+### Почему:
+
+- **Pattern C = compute pre-cull + mesh shader** per `mesh-shader-vs-compute-cull` verdict=mixed
+  + TODO §2.1: compute cull + indirect draw is the safe default; mesh shader is feature-flagged
+  optional path (the 3-step migration with `ProjectV_MESH_SHADER_PIPELINE=ON`).
+- **2-pass count+emit required** because `SetMeshOutputsEXT(vCount, pCount)` must precede any
+  output write per Khronos GLSL_EXT_mesh_shader spec. Final count is data-dependent (greedy
+  merge), so pre-compute is mandatory. Cost = 2x reads in single workgroup = negligible.
+- **One descriptor set layout** for cull + draw simplifies barrier graph and resource binding.
+  Pre-cull reads chunk descriptors, writes `visibleChunkIds[]` + `visibilityCounter`; mesh shader
+  reads chunk descriptors + voxel payload + visible chunks + counter. Layout = 4 SSBOs at
+  bindings 0-3; both stages have access to the same physical buffers.
+- **Default OFF, not ON:** per `mesh-shader-vs-compute-cull` cross-vendor matrix, mesh shader
+  is universally supported (1.3 core), but the compute-cull + indirect-draw path is the
+  better-tested mainline. Pattern C is opt-in for projects that want to validate mesh shader
+  advantages (reduced CPU→GPU sync, optional async compute, better LOD integration later).
+- **PackedFace shadow path preserved:** the shadow pass reads `PackedFace[]` via
+  `voxel_shadow.vert` for opaque-only CSM rendering. Adding a separate mesh-shader shadow
+  pipeline is multi-session follow-up (requires CSM mesh shader + BLAS or shadow meshlet
+  integration per `rt-shadows-vs-csm` follow-up).
+
+### Cross-refs:
+
+- `agent/knowledge.md §10.11` — per-vertex AO no-op contract.
+- `agent/knowledge.md §14` — per-corner AO disabled.
+- `agent/knowledge.md §15` — CSM shadow baseline (PackedFace path unchanged for shadows).
+- `agent/knowledge.md §30.4` — 3-step migration precedent (foundation→adoption→default flip).
+- `docs/experiments/2026-06-20-mesh-shader-vs-compute-cull/` — verdict + cross-vendor matrix.
+- `docs/experiments/2026-06-20-hzb-binding-models/` — `texelFetch` pattern for HZB cull,
+  future Stage 2.2 HZB integrates with mesh shader pipeline.
+- `TODO.md §2.1` — Pattern C design literal, replaces naive task+mesh (Pattern B).
+- `src/shaders/voxel_mesh.comp` — `GreedyFacePass` source (1:1 port into `voxel_mesh.mesh`).
+- `src/shaders/voxel.vert:107-138` — per-vertex output contract that mesh shader must match.
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — main graphics pipeline (mesh shader
+  pipeline mirrors layout but replaces vertex stage with mesh stage).
+- `src/render/vulkan/VulkanMeshShaderPipeline.{hpp,cpp}` — full implementation.
+- `tests/MeshShaderTests.cpp` — compile + `BuildMeshCullPushConstants` regression coverage.

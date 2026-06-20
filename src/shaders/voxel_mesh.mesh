@@ -2,7 +2,9 @@
 #extension GL_EXT_mesh_shader : enable
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(triangles, max_vertices = 3, max_primitives = 1) out;
+layout(triangles, max_vertices = 256, max_primitives = 256) out;
+// EVIL: `local_size_x = 1` is fixed compile-time constant. Spec note: GL_EXT_mesh_shader LocalSizeId requires `maintenance4` (Vulkan 1.3 core) — using LocalSize (not LocalSizeId) avoids the feature dependency. Same trade-off applies to GL_NV_mesh_shader.
+
 
 struct ChunkDescriptor {
     ivec4 chunkOrigin;
@@ -15,32 +17,376 @@ layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
     ChunkDescriptor chunkDescriptors[];
 };
 
-layout(set = 0, binding = 1, std430) readonly buffer VisibleChunkIdBuffer {
+layout(set = 0, binding = 1, std430) readonly buffer PackedChunkVoxelPayload {
+    uint chunkVoxelWords[];
+};
+
+layout(set = 0, binding = 2, std430) readonly buffer VisibleChunkIdBuffer {
     uint visibleChunkIds[];
 };
 
-layout(push_constant) uniform MeshPushConstants {
-    uvec4 meshDispatchParams;
+layout(set = 0, binding = 3, std430) readonly buffer VisibilityCounter {
+    uint visibleCount;
+};
+
+layout(location = 0) out vec3 outNormal[];
+layout(location = 1) out vec3 outWorldPosition[];
+layout(location = 2) flat out uint outMaterialIndex[];
+layout(location = 3) out float outAmbientVisibility[];
+
+layout(push_constant) uniform PushConstants {
+    mat4 viewProjection;
+    ivec4 worldMinAndChunkSize;
+    ivec4 worldMaxExclusiveAndChunkCount;
+    uvec4 chunkGridAndTransparentFaceBase;
+    uvec4 faceCapacities;
 } pushConstants;
 
-void main()
-{
-    SetMeshOutputsEXT(3u, 1u);
+const uint kMaxChunkExtentForGreedy = 64u;
+// EVIL: kMeshMaxVertices=256 + kMeshMaxPrimitives=256 = Vulkan 1.3 spec minimum per VkPhysicalDeviceMeshShaderPropertiesEXT. Real 8³ chunk worst case = 6×8×8=384 quads; greedy merge reduces to <64 quads for typical scenes. Bump these to 512/256 (or per-device maxMeshOutputVertices/Primitives) if a real chunk exceeds the limit.
+const uint kMeshMaxVertices = 256u;
+const uint kMeshMaxPrimitives = 256u;
+// EVIL: kMeshMaxQuads=64 reserved for future single-pass emission; current implementation does 2-pass count+emit. Unused but kept to anchor the 256/256 limit in code.
+const uint kMeshMaxQuads = 64u;
 
+uint DecodeChunkVoxelMaterial(const ChunkDescriptor chunkDescriptor, const uvec3 localCoord) {
+    const uint localIndex =
+        localCoord.x +
+        chunkDescriptor.chunkExtentAndNonAir.x *
+            (localCoord.y + chunkDescriptor.chunkExtentAndNonAir.y * localCoord.z);
+    if (localIndex >= chunkDescriptor.voxelDataInfo.y) {
+        return 0u;
+    }
+
+    const uint wordIndex = chunkDescriptor.voxelDataInfo.x + localIndex / 4u;
+    const uint shift = (localIndex & 3u) * 8u;
+    return (chunkVoxelWords[wordIndex] >> shift) & 0xFFu;
+}
+
+uint ReadVoxelMaterial(const ivec3 worldPosition) {
+    const ivec3 worldMin = pushConstants.worldMinAndChunkSize.xyz;
+    const ivec3 worldMaxExclusive = pushConstants.worldMaxExclusiveAndChunkCount.xyz;
+    if (worldPosition.x < worldMin.x || worldPosition.y < worldMin.y || worldPosition.z < worldMin.z ||
+        worldPosition.x >= worldMaxExclusive.x ||
+        worldPosition.y >= worldMaxExclusive.y ||
+        worldPosition.z >= worldMaxExclusive.z) {
+        return 0u;
+    }
+
+    const uint chunkSize = uint(pushConstants.worldMinAndChunkSize.w);
+    const uvec3 chunkGrid = pushConstants.chunkGridAndTransparentFaceBase.xyz;
+    const ivec3 localWorldPosition = worldPosition - worldMin;
+    const uvec3 chunkCoord = uvec3(localWorldPosition) / chunkSize;
+    const uint chunkIndex =
+        chunkCoord.x +
+        chunkGrid.x * (chunkCoord.y + chunkGrid.y * chunkCoord.z);
+    const ChunkDescriptor chunkDescriptor = chunkDescriptors[chunkIndex];
+    const uvec3 localChunkCoord = uvec3(worldPosition - chunkDescriptor.chunkOrigin.xyz);
+    return DecodeChunkVoxelMaterial(chunkDescriptor, localChunkCoord);
+}
+
+bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIndex) {
+    if (materialIndex == 0u) {
+        return false;
+    }
+    if (materialIndex >= 3u) {
+        return neighborMaterialIndex == 0u || neighborMaterialIndex == 1u;
+    }
+    if (materialIndex == 2u) {
+        return true;
+    }
+    return neighborMaterialIndex == 0u;
+}
+
+vec3 DecodeFaceNormal(const uint faceIndex) {
+    switch (faceIndex) {
+        case 0u: return vec3(1.0, 0.0, 0.0);
+        case 1u: return vec3(-1.0, 0.0, 0.0);
+        case 2u: return vec3(0.0, 1.0, 0.0);
+        case 3u: return vec3(0.0, -1.0, 0.0);
+        case 4u: return vec3(0.0, 0.0, 1.0);
+        default : return vec3(0.0, 0.0, -1.0);
+    }
+}
+
+uvec3 GetFaceCornerOffset(const uint faceIndex, const uint cornerIndex) {
+    switch (faceIndex) {
+        case 0u:
+            return cornerIndex == 0u ? uvec3(1u, 0u, 0u) :
+                cornerIndex == 1u ? uvec3(1u, 1u, 0u) :
+                cornerIndex == 2u ? uvec3(1u, 1u, 1u) :
+                uvec3(1u, 0u, 1u);
+        case 1u:
+            return cornerIndex == 0u ? uvec3(0u, 0u, 1u) :
+                cornerIndex == 1u ? uvec3(0u, 1u, 1u) :
+                cornerIndex == 2u ? uvec3(0u, 1u, 0u) :
+                uvec3(0u, 0u, 0u);
+        case 2u:
+            return cornerIndex == 0u ? uvec3(0u, 1u, 0u) :
+                cornerIndex == 1u ? uvec3(0u, 1u, 1u) :
+                cornerIndex == 2u ? uvec3(1u, 1u, 1u) :
+                uvec3(1u, 1u, 0u);
+        case 3u:
+            return cornerIndex == 0u ? uvec3(0u, 0u, 1u) :
+                cornerIndex == 1u ? uvec3(0u, 0u, 0u) :
+                cornerIndex == 2u ? uvec3(1u, 0u, 0u) :
+                uvec3(1u, 0u, 1u);
+        case 4u:
+            return cornerIndex == 0u ? uvec3(1u, 0u, 1u) :
+                cornerIndex == 1u ? uvec3(1u, 1u, 1u) :
+                cornerIndex == 2u ? uvec3(0u, 1u, 1u) :
+                uvec3(0u, 0u, 1u);
+        default :
+            return cornerIndex == 0u ? uvec3(0u, 0u, 0u) :
+                cornerIndex == 1u ? uvec3(0u, 1u, 0u) :
+                cornerIndex == 2u ? uvec3(1u, 1u, 0u) :
+                uvec3(1u, 0u, 0u);
+    }
+}
+
+uvec3 ApplyGreedyScale(const uint faceIndex, const uvec3 unitOffset, const uvec2 quadExtents) {
+    if (faceIndex == 0u || faceIndex == 1u) {
+        return uvec3(unitOffset.x, unitOffset.y * quadExtents.x, unitOffset.z * quadExtents.y);
+    } else if (faceIndex == 2u || faceIndex == 3u) {
+        return uvec3(unitOffset.x * quadExtents.x, unitOffset.y, unitOffset.z * quadExtents.y);
+    } else {
+        return uvec3(unitOffset.x * quadExtents.x, unitOffset.y * quadExtents.y, unitOffset.z);
+    }
+}
+
+void EmitQuad(
+    const uvec3 localVoxelCoord,
+    const uint faceIndex,
+    const uint materialIndex,
+    const uvec2 quadExtents,
+    const vec3 chunkOrigin,
+    inout uint vertexCount,
+    inout uint primitiveCount) {
+    if (vertexCount + 4u > kMeshMaxVertices || primitiveCount + 2u > kMeshMaxPrimitives) {
+        return;
+    }
+    const vec3 normal = DecodeFaceNormal(faceIndex);
+    for (uint i = 0u; i < 4u; ++i) {
+        const uvec3 scaledOffset = ApplyGreedyScale(faceIndex, GetFaceCornerOffset(faceIndex, i), quadExtents);
+        const vec3 worldPos = chunkOrigin + vec3(localVoxelCoord + scaledOffset);
+        gl_MeshVerticesEXT[vertexCount + i].gl_Position = pushConstants.viewProjection * vec4(worldPos, 1.0);
+        outNormal[vertexCount + i] = normal;
+        outWorldPosition[vertexCount + i] = worldPos;
+        outMaterialIndex[vertexCount + i] = materialIndex;
+        outAmbientVisibility[vertexCount + i] = 1.0;
+    }
+    gl_PrimitiveTriangleIndicesEXT[primitiveCount] = uvec3(vertexCount, vertexCount + 1u, vertexCount + 2u);
+    gl_PrimitiveTriangleIndicesEXT[primitiveCount + 1u] = uvec3(vertexCount, vertexCount + 2u, vertexCount + 3u);
+    vertexCount += 4u;
+    primitiveCount += 2u;
+}
+
+void GreedyFacePass(
+    const uint faceIndex,
+    const uint axisN, const uint axisU, const uint axisV,
+    const int signN,
+    const ChunkDescriptor chunkDescriptor,
+    const bool doEmit,
+    inout uint vertexCount,
+    inout uint primitiveCount) {
+    const uint extentN = chunkDescriptor.chunkExtentAndNonAir[axisN];
+    const uint extentU = chunkDescriptor.chunkExtentAndNonAir[axisU];
+    const uint extentV = chunkDescriptor.chunkExtentAndNonAir[axisV];
+
+    const bool useGreedy = (extentU <= kMaxChunkExtentForGreedy) && (extentV <= kMaxChunkExtentForGreedy);
+    const vec3 chunkOrigin = vec3(chunkDescriptor.chunkOrigin.xyz);
+
+    for (uint pN = 0u; pN < extentN; ++pN) {
+        if (useGreedy) {
+            uint visited[kMaxChunkExtentForGreedy];
+            for (uint i = 0u; i < kMaxChunkExtentForGreedy; ++i) {
+                visited[i] = 0u;
+            }
+
+            for (uint pV = 0u; pV < extentV; ++pV) {
+                for (uint pU = 0u; pU < extentU; ++pU) {
+                    if (((visited[pV] >> pU) & 1u) != 0u) {
+                        continue;
+                    }
+
+                    uvec3 localVoxelCoord;
+                    localVoxelCoord[axisN] = pN;
+                    localVoxelCoord[axisU] = pU;
+                    localVoxelCoord[axisV] = pV;
+                    const uint cellMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                    if (cellMaterial == 0u) {
+                        continue;
+                    }
+                    if (cellMaterial == 1u) {
+                        continue;
+                    }
+
+                    ivec3 worldVoxelPosition = ivec3(chunkDescriptor.chunkOrigin.xyz) + ivec3(localVoxelCoord);
+                    ivec3 neighborPosition = worldVoxelPosition;
+                    neighborPosition[axisN] += signN;
+                    const uint neighborMaterial = ReadVoxelMaterial(neighborPosition);
+                    if (!ShouldEmitVoxelFace(cellMaterial, neighborMaterial)) {
+                        continue;
+                    }
+
+                    uint W = 0u;
+                    while (pU + W < extentU) {
+                        if (((visited[pV] >> (pU + W)) & 1u) != 0u) {
+                            break;
+                        }
+                        uvec3 testCoord = localVoxelCoord;
+                        testCoord[axisU] = pU + W;
+                        const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
+                        if (testMaterial != cellMaterial) {
+                            break;
+                        }
+                        ivec3 testNeighbor = worldVoxelPosition;
+                        testNeighbor[axisN] += signN;
+                        testNeighbor[axisU] += int(W);
+                        const uint testNeighborMaterial = ReadVoxelMaterial(testNeighbor);
+                        if (!ShouldEmitVoxelFace(testMaterial, testNeighborMaterial)) {
+                            break;
+                        }
+                        ++W;
+                    }
+                    if (W == 0u) {
+                        continue;
+                    }
+
+                    uint H = 1u;
+                    while (pV + H < extentV) {
+                        bool rowValid = true;
+                        for (uint wi = 0u; wi < W; ++wi) {
+                            if (((visited[pV + H] >> (pU + wi)) & 1u) != 0u) {
+                                rowValid = false;
+                                break;
+                            }
+                            uvec3 testCoord = localVoxelCoord;
+                            testCoord[axisU] = pU + wi;
+                            testCoord[axisV] = pV + H;
+                            const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
+                            if (testMaterial != cellMaterial) {
+                                rowValid = false;
+                                break;
+                            }
+                            ivec3 testNeighbor = worldVoxelPosition;
+                            testNeighbor[axisN] += signN;
+                            testNeighbor[axisU] += int(wi);
+                            testNeighbor[axisV] += int(H);
+                            const uint testNeighborMaterial = ReadVoxelMaterial(testNeighbor);
+                            if (!ShouldEmitVoxelFace(testMaterial, testNeighborMaterial)) {
+                                rowValid = false;
+                                break;
+                            }
+                        }
+                        if (!rowValid) {
+                            break;
+                        }
+                        ++H;
+                    }
+
+                    if (doEmit) {
+                        EmitQuad(
+                            localVoxelCoord,
+                            faceIndex,
+                            cellMaterial,
+                            uvec2(W, H),
+                            chunkOrigin,
+                            vertexCount,
+                            primitiveCount);
+                    } else {
+                        if (vertexCount + 4u <= kMeshMaxVertices && primitiveCount + 2u <= kMeshMaxPrimitives) {
+                            vertexCount += 4u;
+                            primitiveCount += 2u;
+                        }
+                    }
+
+                    const uint visitedMask = ((1u << W) - 1u) << pU;
+                    for (uint v = 0u; v < H; ++v) {
+                        visited[pV + v] |= visitedMask;
+                    }
+                }
+            }
+        } else {
+            for (uint pV = 0u; pV < extentV; ++pV) {
+                for (uint pU = 0u; pU < extentU; ++pU) {
+                    uvec3 localVoxelCoord;
+                    localVoxelCoord[axisN] = pN;
+                    localVoxelCoord[axisU] = pU;
+                    localVoxelCoord[axisV] = pV;
+                    const uint cellMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                    if (cellMaterial == 0u) {
+                        continue;
+                    }
+                    if (cellMaterial == 1u) {
+                        continue;
+                    }
+                    ivec3 worldVoxelPosition = ivec3(chunkDescriptor.chunkOrigin.xyz) + ivec3(localVoxelCoord);
+                    ivec3 neighborPosition = worldVoxelPosition;
+                    neighborPosition[axisN] += signN;
+                    const uint neighborMaterial = ReadVoxelMaterial(neighborPosition);
+                    if (!ShouldEmitVoxelFace(cellMaterial, neighborMaterial)) {
+                        continue;
+                    }
+                    if (doEmit) {
+                        EmitQuad(
+                            localVoxelCoord,
+                            faceIndex,
+                            cellMaterial,
+                            uvec2(1u, 1u),
+                            chunkOrigin,
+                            vertexCount,
+                            primitiveCount);
+                    } else {
+                        if (vertexCount + 4u <= kMeshMaxVertices && primitiveCount + 2u <= kMeshMaxPrimitives) {
+                            vertexCount += 4u;
+                            primitiveCount += 2u;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void main() {
     const uint meshletIndex = gl_WorkGroupID.x;
-    if (meshletIndex >= pushConstants.meshDispatchParams.x) {
+
+    if (meshletIndex >= visibleCount) {
+        SetMeshOutputsEXT(0u, 0u);
         return;
     }
 
     const uint chunkIndex = visibleChunkIds[meshletIndex];
     const ChunkDescriptor chunk = chunkDescriptors[chunkIndex];
 
-    const float extent = float(chunk.chunkExtentAndNonAir.x);
-    const vec3 origin = vec3(chunk.chunkOrigin.xyz);
+    if (chunk.chunkExtentAndNonAir.w == 0u) {
+        SetMeshOutputsEXT(0u, 0u);
+        return;
+    }
 
-    gl_MeshVerticesEXT[0].gl_Position = vec4(origin + vec3(0.0, 0.0, 0.0), 1.0);
-    gl_MeshVerticesEXT[1].gl_Position = vec4(origin + vec3(extent, 0.0, 0.0), 1.0);
-    gl_MeshVerticesEXT[2].gl_Position = vec4(origin + vec3(0.0, extent, 0.0), 1.0);
+    uint vertexCount = 0u;
+    uint primitiveCount = 0u;
 
-    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0u, 1u, 2u);
+    GreedyFacePass(0u, 0u, 1u, 2u,  1, chunk, false, vertexCount, primitiveCount);
+    GreedyFacePass(1u, 0u, 1u, 2u, -1, chunk, false, vertexCount, primitiveCount);
+    GreedyFacePass(2u, 1u, 0u, 2u,  1, chunk, false, vertexCount, primitiveCount);
+    GreedyFacePass(3u, 1u, 0u, 2u, -1, chunk, false, vertexCount, primitiveCount);
+    GreedyFacePass(4u, 2u, 0u, 1u,  1, chunk, false, vertexCount, primitiveCount);
+    GreedyFacePass(5u, 2u, 0u, 1u, -1, chunk, false, vertexCount, primitiveCount);
+
+    vertexCount = min(vertexCount, kMeshMaxVertices);
+    primitiveCount = min(primitiveCount, kMeshMaxPrimitives);
+
+    SetMeshOutputsEXT(vertexCount, primitiveCount);
+
+    vertexCount = 0u;
+    primitiveCount = 0u;
+
+    GreedyFacePass(0u, 0u, 1u, 2u,  1, chunk, true, vertexCount, primitiveCount);
+    GreedyFacePass(1u, 0u, 1u, 2u, -1, chunk, true, vertexCount, primitiveCount);
+    GreedyFacePass(2u, 1u, 0u, 2u,  1, chunk, true, vertexCount, primitiveCount);
+    GreedyFacePass(3u, 1u, 0u, 2u, -1, chunk, true, vertexCount, primitiveCount);
+    GreedyFacePass(4u, 2u, 0u, 1u,  1, chunk, true, vertexCount, primitiveCount);
+    GreedyFacePass(5u, 2u, 0u, 1u, -1, chunk, true, vertexCount, primitiveCount);
 }

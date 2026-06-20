@@ -604,7 +604,7 @@ void DestroySceneResources(
 		}
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -653,6 +653,14 @@ void DestroySceneResources(
 			profiling::RecordFree(visibilityMaskAllocation, "SceneVisibilityMaskBufferAllocation");
 			vmaDestroyBuffer(context->allocator, visibilityMaskBuffer, visibilityMaskAllocation);
 		}
+		if (visibleChunkIdBuffer && visibleChunkIdAllocation) {
+			profiling::RecordFree(visibleChunkIdAllocation, "SceneVisibleChunkIdBufferAllocation");
+			vmaDestroyBuffer(context->allocator, visibleChunkIdBuffer, visibleChunkIdAllocation);
+		}
+		if (visibilityCounterBuffer && visibilityCounterAllocation) {
+			profiling::RecordFree(visibilityCounterAllocation, "SceneVisibilityCounterBufferAllocation");
+			vmaDestroyBuffer(context->allocator, visibilityCounterBuffer, visibilityCounterAllocation);
+		}
 
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
@@ -690,7 +698,14 @@ sceneLightingMappedData = nullptr;
 		visibilityMaskMappedData = nullptr;
 		visibilityMaskBuffer = VK_NULL_HANDLE;
 		visibilityMaskAllocation = nullptr;
+		visibleChunkIdMappedData = nullptr;
+		visibleChunkIdBuffer = VK_NULL_HANDLE;
+		visibleChunkIdAllocation = nullptr;
+		visibilityCounterMappedData = nullptr;
+		visibilityCounterBuffer = VK_NULL_HANDLE;
+		visibilityCounterAllocation = nullptr;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
+		meshShaderDescriptorSet = VK_NULL_HANDLE;
 		shadowDescriptorSet = VK_NULL_HANDLE;
 		voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 		hizCullingDescriptorSet = VK_NULL_HANDLE;
@@ -908,6 +923,47 @@ bool CreateSceneResources(
 			chunkVoxelPayloadAllocationInfo.size,
 			"SceneChunkVoxelPayloadBufferAllocation");
 		render->sceneMemoryBytes += chunkVoxelPayloadAllocationInfo.size;
+
+		const uint32_t visibleChunkIdCapacity = static_cast<uint32_t>(world->voxelWorld->chunks.size());
+		render->visibleChunkIdCapacity = visibleChunkIdCapacity;
+		VmaAllocationInfo visibleChunkIdAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(uint32_t) * static_cast<VkDeviceSize>(std::max(visibleChunkIdCapacity, 1u)),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.visibleChunkIdBuffer,
+				&frameResources.visibleChunkIdAllocation,
+				&visibleChunkIdAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.visibleChunkIdMappedData = visibleChunkIdAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.visibleChunkIdAllocation,
+			visibleChunkIdAllocationInfo.size,
+			"SceneVisibleChunkIdBufferAllocation");
+		render->sceneMemoryBytes += visibleChunkIdAllocationInfo.size;
+
+		VmaAllocationInfo visibilityCounterAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(uint32_t),
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.visibilityCounterBuffer,
+				&frameResources.visibilityCounterAllocation,
+				&visibilityCounterAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.visibilityCounterMappedData = visibilityCounterAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.visibilityCounterAllocation,
+			visibilityCounterAllocationInfo.size,
+			"SceneVisibilityCounterBufferAllocation");
+		render->sceneMemoryBytes += visibilityCounterAllocationInfo.size;
+		std::memset(frameResources.visibilityCounterMappedData, 0, sizeof(uint32_t));
 
 		VmaAllocationInfo opaqueIndirectAllocationInfo{};
 		if (!CreateBuffer(
