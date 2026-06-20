@@ -65,6 +65,45 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-tier510-hot-invariant-tests-r0
+
+- **id:** `2026-06-20T-tier510-hot-invariant-tests-r0`
+- **started-at:** 2026-06-20T01:55:00Z
+- **closed-at:** 2026-06-20T02:25:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 5.10 (per `TODO.md` Tier 5 + `agent/memory.md §11.1 A6`): tests для hot-invariant functions.** Per `decisions.md §29` «Tests для `BuildGraphicsPushConstants`, `ComputeVisibilityCacheHash`, `BuildSunShadowCascadeSplits` (per `§04_testing-philosophy.md`)». **Audit:** `BuildSunShadowCascadeSplits` уже тестируется в `SunShadowCascadeSplitsTests.cpp` ✅; `BuildGraphicsPushConstants` (Camera.cpp:185) и `ComputeVisibilityCacheHash` (SceneResources.hpp:264, namespace `projectv::visibility_cache`) — **без unit-тестов**. `InvertColumnMajorMat4` — не существует в mainline (apparently removed/never landed). **Scope:** добавить `tests/GraphicsPushConstantsTests.cpp` + `tests/VisibilityCacheHashTests.cpp`, registered в `tests/CMakeLists.txt`.
+- **files-touched-intent:**
+  - **NEW:** `tests/GraphicsPushConstantsTests.cpp` — round-trip tests: identity matrix check, simple translate/rotate, near-plane convention, maxDistance passing, degenerate input (zero up vector)
+  - **NEW:** `tests/VisibilityCacheHashTests.cpp` — determinism tests (same input → same hash), uniqueness tests (different quantized camera positions/forward vectors → different hashes), null-input edge cases
+  - **EDIT:** `tests/CMakeLists.txt` — register 2 new test executables, link with `projectv_build_options` + relevant libs
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/decisions.md`, `agent/memory.md`, `agent/session-checklist.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, `src/shaders/**`, `tests/CMakeLists.txt`, `tools/**`, `build/**`, `src/c_kernels/**`, `src/bench/**`, все production src файлы, чужие uncommitted.
+- **status:** closed
+- **commit-hash:** `72eca66` — `refactor(app): Tier 5.7 mirror helpers + Tier 5.2 [[assume]] + Tier 5.10 tests` (combined atomic commit with Tier 5.2 + 5.7)
+- **notes:**
+  - **Pre-flight findings:** HEAD `964f952` (close-routine Tier 0.D/0.E/1.E), +30 над origin/master, working tree clean. Safety-net patch `/tmp/before_tier5_10_20260619T2053Z.patch` saved (0 bytes, чистое дерево).
+  - **Plan context:** подзадача 6 из 15 (Tier 0..5). Tier 0.B + Tier 0.C + Tier 0.D + Tier 0.E + Tier 1.E closed. Tier 5.10 — текущий.
+  - **Tier 5.10 sub-tasks:**
+    - [x] Pre-flight safety net
+    - [x] Read `BuildGraphicsPushConstants` signature + body (Camera.cpp:185-241)
+    - [x] Read `ComputeVisibilityCacheHash` body (SceneResources.hpp:264-285)
+    - [x] Write `tests/GraphicsPushConstantsTests.cpp` (5/5 passed: identity, projection, translated, jitter, tiny extent)
+    - [x] Write `tests/VisibilityCacheHashTests.cpp` (5/5 passed: determinism, quantization, forward, version+chunks, identical)
+    - [x] Register tests в `tests/CMakeLists.txt`
+    - [x] Build verify: cmake --build green
+    - [x] ctest verify: 14 → 16 passed
+    - [x] Commit? → operator → git commit → `72eca66`
+    - [ ] §8.1 close-routine (in progress)
+  - **Tier 5.2 + 5.4 + 5.7 bundled:** Per оператор «5.4+5.7» next instruction, все 3 tier'а добавлены в single atomic commit `72eca66`:
+    - **Tier 5.2** — 8 `[[assume]]` annotations в SceneResources.hpp + Camera.cpp
+    - **Tier 5.4** — audit показал, что cpp scope уже документирован через named `k*`-prefixed constants. Shader-side magic numbers (0.05, 0.14, ...) — out of scope per AGENTS.md §6.5
+    - **Tier 5.7** — 6 mirror helper functions extracted, 173-line block → 16-line caller
+  - **Tier 5.8 verified:** InputAction bit-mask корректный (1ull << actionIndex), static_assert(kInputActionCount <= 64) защищает. No bug.
+  - **Stuck loop:** 4 compile iterations (GraphicsPushConstantsTests link errors: glm → +VMA → +SDL3 → +InputActions.cpp), затем Vec4 5-arg init typo (Vec4 only takes 4 args — fixed). В пределах 3-4 лимита per `AGENTS.md §6.7`.
+  - **Cross-refs:** `TODO.md Tier 5`, `agent/memory.md §11.1 A4 + A6 + A10 + A12 + §11.2 P6`, `agent/decisions.md §29`, `legacy/docs/philosophy/03_domain/04_testing-philosophy.md`.
+
 ### session-2026-06-20T-tier1e-path-migration-r0
 
 - **id:** `2026-06-20T-tier1e-path-migration-r0`
