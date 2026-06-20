@@ -1,3 +1,5 @@
+import projectv.math;
+
 #include "debug/DebugOverlays.hpp"
 
 #include "app/Camera.hpp"

@@ -1,3 +1,6 @@
+import projectv.math;
+import projectv.string_id;
+
 #include "voxel/VoxelWorld.hpp"
 
 #include "SDL3/SDL_log.h"

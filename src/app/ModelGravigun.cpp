@@ -1,3 +1,6 @@
+import projectv.math;
+import projectv.string_id;
+
 #include "app/ModelGravigun.hpp"
 
 #include "app/Camera.hpp"

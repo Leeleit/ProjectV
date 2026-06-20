@@ -1,5 +1,6 @@
+import projectv.math;
+
 #include "app/Camera.hpp"
-#include "core/Math.hpp"
 #include "core/Types.hpp"
 
 #include <cmath>

@@ -1,3 +1,6 @@
+import projectv.math;
+import projectv.string_id;
+
 #include "app/BenchmarkAutomation.hpp"
 
 #include "core/Types.hpp"

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Math.hpp"
+import projectv.math;
 #include "core/Types.hpp"
 
 #include <algorithm>

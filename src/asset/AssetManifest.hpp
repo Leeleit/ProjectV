@@ -6,7 +6,7 @@
 
 #include <glm/glm.hpp>
 
-#include "core/StringId.hpp"
+import projectv.string_id;
 
 namespace projectv::asset {
 

@@ -1,4 +1,4 @@
-#include "core/Math.hpp"
+import projectv.math;
 
 #include "render/Renderer.hpp"
 

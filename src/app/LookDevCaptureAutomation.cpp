@@ -1,3 +1,5 @@
+import projectv.math;
+
 #include "app/LookDevCaptureAutomation.hpp"
 
 #include "voxel/VoxelMaterials.hpp"

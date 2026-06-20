@@ -1,7 +1,9 @@
+import projectv.string_id;
+
 #include "benchmark/benchmark.h"
 
 #include "c_kernels/frustum_cull.hpp"
-#include "core/Math.hpp"
+import projectv.math;
 #include "core/Types.hpp"
 #include "render/SceneResources.hpp"
 

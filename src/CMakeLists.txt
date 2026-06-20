@@ -7,6 +7,8 @@ else ()
             core/Math.ixx
             core/StringId.ixx
             core/Probe.ixx
+            core/Types.ixx
+            ecs/EcsWorld.ixx
     )
 endif ()
 

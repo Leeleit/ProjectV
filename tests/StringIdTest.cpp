@@ -1,3 +1,5 @@
+import projectv.string_id;
+
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -5,8 +7,6 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
-
-#include "core/StringId.hpp"
 
 namespace {
 

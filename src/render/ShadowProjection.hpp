@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/Math.hpp"
+import projectv.math;
 #include "render/ShadowTypes.hpp"
 #include "voxel/VoxelWorld.hpp"
 

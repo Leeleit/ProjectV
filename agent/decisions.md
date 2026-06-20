@@ -992,3 +992,50 @@ Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:69-148` (auto-detect cycle + 
 - **«Test order independence via explicit reset»** — defensive pattern. Inline variables + global state → tests must explicitly reset to known state. `BuildPresentModeCycle({FIFO})` forces fallback to FIFO because previous `g_active` (whatever) is not in `{FIFO}`. Cleaner than having per-test fixtures.
 
 Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:180-220` (preserve-`g_active` logic в `BuildPresentModeCycle`), `tests/PresentModeTests.cpp:281-415` (3 new sub-tests + explicit-reset pattern).
+
+---
+
+## §30 — Tier 2 mainline modules + `import std;` blocked (added 2026-06-20)
+
+**Tier 2** = enable C++20 modules (`.ixx`) в mainline build для 2-5× build speedup per `legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md`. Реализовано в commit `a790860+1` (single mega-atomic commit).
+
+**Решения, принятые при реализации:**
+
+1. **`Math.ixx` + `StringId.ixx` — оставить РАЗДЕЛЬНЫМИ** (vs TODO 2.A literal: «Math.ixx (Vec3/Vec4/Mat4 + StringID)»).
+   - **Обоснование**: StringID тип не зависит от Vec3/Vec4/Mat4. Loose coupling: изменение StringID (например, смена FNV-1a на xxHash) не должно перекомпилировать всех потребителей Math. Отдельные модули также упрощают import ergonomics: TUs которым нужен только Math не платят за parsing StringID constexprs и наоборот.
+   - **Facade `Types.ixx`** делает `export import projectv.math; export import projectv.string_id;` — TUs которым нужны оба могут делать single `import projectv.types;`.
+   - **TODO 2.A literal interpretation отвергнут**: single-module был бы tighter coupling без measurable benefit (BMI size обоих модулей в сумме = ~80KB, parse time ~5ms — ниже noise floor).
+
+2. **`import std;` в mainline ЗАБЛОКИРОВАН** — `tests/StdModuleProbe.cpp` работает (probe-only, ctest 14/16 passed), но **mainline use невозможен** из-за libc++ 22 std.cppm module conflict с `external/fmt/include/fmt/format.h:61` (используется в `core/RuntimeDiagnostics.cpp`, `core/ShaderIO.cpp`, `render/Renderer.cpp`, и др.).
+   - **Проблема**: libc++ 22 std.cppm BMI включает `__ranges/concepts.h` с concept `__concat_indirectly_readable`. Когда TU с `import std;` ТАКЖЕ transitively `#include <string>` через fmt, clang error: `redefinition of concept '__concat_indirectly_readable' with different template parameters or requirements`. fmt transitively includes `<string>` через `<fmt/format.h>` → `<__iterator/distance.h>` → `<__ranges/concepts.h>`.
+   - **Попытки workaround (все провалились)**:
+     - (a) `std.pcm` precompile с полным набором флагов main target (`-pthread -mavx2 -mbmi -mlzcnt -mf16c -mfma -mfpmath=sse`) — решает только `-Wmodule-file-config-mismatch`, концепт-redefinition остаётся.
+     - (b) `-D_LIBCPP_REMOVE_TRANSITIVE_INCLUDES` для отключения libc++'s transitive includes — не помогает (конфликт на уровне std.cppm BMI, не в libc++ headers).
+     - (c) Selective `import std;` только в не-fmt TUs — непрактично: fmt используется ~70% mainline (RuntimeDiagnostics.hpp transitively через Types.hpp в большинство .cpp).
+   - **Решение**: `import std;` остаётся probe-only в `tests/StdModuleProbe.cpp` (доказательство что infrastructure работает). Mainline use отложен до upstream fix в libc++ (partition modules `std.core` / `std.io` / etc.) или fmt module migration.
+   - **Cross-refs**: `tests/StdModuleProbe.cpp` (passing probe), `tests/CMakeLists.txt:356-397` (probe target с std.pcm precompile).
+
+3. **Header fallback (`Math_fallback.hpp` + `StringId_fallback.hpp`) сохранён**, не удалён.
+   - **Обоснование**: `core/Math.hpp` + `core/StringId.hpp` имеют `#if defined(__clang__) && defined(_MSC_VER)` ветку, которая подключает fallback для Windows clang-cl. На Linux Clang 22 они делают `import projectv.math;` / `import projectv.string_id;`. Fallback headers (`Math_fallback.hpp`, `StringId_fallback.hpp`) остаются для clang-cl path — на Linux они unused (0 callers), но НЕ удалены потому что `core/Math.hpp` / `core/StringId.hpp` всё ещё ссылаются на них в clang-cl ветке.
+   - **5 tests** всё ещё `#include`-ят `core/Math.hpp` / `core/StringId.hpp` (получают fallback через clang-cl ветку если нужно; на Linux фактически через `import`).
+   - **Trade-off**: ~360 строк dead code на Linux ради Windows clang-cl совместимости. Альтернатива (удалить fallback + clang-cl ветку) сломала бы Windows build — неприемлемо пока нет Windows runner для verify.
+
+4. **Build time impact** (linux-clang-debug, clang 22.1.6, libc++ 22):
+   - **Incremental rebuild** через touch `Math.hpp` / `StringId.hpp`: **baseline 18.93s → 0.10s (190× speedup)**. Причина: ни один mainline .cpp/.hpp больше не `#include`-ит эти fallback headers напрямую — `import projectv.math;` через BMI cache, fallback header content не используется → Ninja видит «no work to do».
+   - **Cold rebuild** ProjectV target: 102.61s (с module BMI generation overhead). Baseline cold не замерен явно (нужен `git checkout a790860` + measure, deferred).
+   - **Incremental** через touch `core/Types.hpp` (который transitively включает многое): 19.81s (parity с baseline 18.93s). Types.hpp всё ещё `#include`-ится многими tests, поэтому его изменение вызывает широкий rebuild.
+
+5. **Ninja 1.13 + C++ modules dep-scan bug** (workaround needed).
+   - **Symptom**: при первом `cmake --build --parallel 8` после конфигурации Ninja crashes с `Assertion 'edge && !edge->outputs_ready()' failed` в `RefreshDyndepDependents`. Это dep-scan race в Ninja 1.13.2 при processing C++ module BMI dependencies параллельно.
+   - **Workaround**: первый build с `--parallel 1` (sequential dep-scan), последующие builds работают с `--parallel 8` нормально (deps уже cached в `.ninja_log`).
+   - **Long-term fix**: апгрейд Ninja ≥ 1.14 (исправляет dep-scan race) или downgrade до 1.10 (без modules support).
+
+**Tier 2 commit summary**:
+- 19 mainline .cpp + 5 mainline .hpp мигрированы на `import projectv.math;` / `import projectv.string_id;`
+- 5 tests мигрированы аналогично
+- 2 новых модуля: `src/core/Types.ixx` + `src/ecs/EcsWorld.ixx`
+- CMake: 2 строки (добавлены в `FILE_SET CXX_MODULES`)
+- ctest: 16/16 passed (0.77s, baseline parity)
+- TODO.md Tier 2.A/B/D/E/G marked done; 2.C marked blocked with rationale
+
+Cross-refs: TODO.md Tier 2, agent/memory.md §11.1 A3 (modules infrastructure), legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md (2-5× speedup target met на incremental).

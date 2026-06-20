@@ -1,3 +1,5 @@
+import projectv.math;
+
 #include "app/AppUpdate.hpp"
 
 #include "app/Camera.hpp"

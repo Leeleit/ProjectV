@@ -1,5 +1,6 @@
 
-#include "core/Math.hpp"
+import projectv.math;
+
 #include "core/Types.hpp"
 #include "render/SceneResources.hpp"
 

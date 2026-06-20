@@ -65,6 +65,36 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-tier2-mainline-modules-r0
+
+- **id:** `2026-06-20T-tier2-mainline-modules-r0`
+- **started-at:** 2026-06-20T03:00:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Tier 2 mainline C++20 modules (per `TODO.md` Tier 2 + `agent/memory.md §11.1 A3` + `agent/decisions.md §29`): enable `.ixx` modules в mainline build для 2-5× speedup. Operator directive 2026-06-20: «доделай полностью Tier 2, несмотря на обширность изменений. Составляй план». Approved options: (a) full header refactor all stdlib → `import std;`, (b) Math.ixx+StringId.ixx оставить раздельные, (c) cold+incremental benchmark, (d) 1 mega-atomic commit.
+- **files-touched-intent:**
+  - **NEW:** `src/core/Types.ixx` — facade re-exporting `projectv.math` + `projectv.string_id` + 6 forward decls (AppState/EcsState/CameraState/DebugState/WorldState/VoxelWorldStats) + RenderPassTiming struct
+  - **NEW:** `src/ecs/EcsWorld.ixx` — facade re-exporting `projectv.types` + 12 ECS API function decls (InitializeAppEcs/Get*/SyncEcsWorldState/GetEcsWorldChunkSummary)
+  - **EDIT:** `src/CMakeLists.txt` — added `core/Types.ixx` + `ecs/EcsWorld.ixx` to `FILE_SET CXX_MODULES FILES` (2 lines)
+  - **EDIT:** `src/core/Types.hpp` — replaced `#include "core/Math.hpp"` / `"core/StringId.hpp"` with `import projectv.math;` / `import projectv.string_id;` в `#else` branch (clang-cl fallback path сохранён)
+  - **EDIT:** `src/app/{AppUpdate,BenchmarkAutomation,Camera,FramePreparation,LookDevCaptureAutomation,ModelGravigun,main}.cpp` — added `import projectv.math;` + `import projectv.string_id;` at top
+  - **EDIT:** `src/render/{Renderer,SceneResources,SceneResources.hpp,ShadowProjection,ShadowProjection.hpp}.cpp/.hpp` — same pattern
+  - **EDIT:** `src/voxel/{VoxelMaterials.hpp,VoxelWorld.cpp}` — same pattern
+  - **EDIT:** `src/asset/AssetManifest.hpp` — `import projectv.string_id;` (only StringID user)
+  - **EDIT:** `src/bench/{FrustumCullBenchmark,ShadowProjectionBenchmark}.cpp` — `import projectv.math;`
+  - **EDIT:** `src/{core/Types,debug/DebugHud,debug/DebugOverlays,ecs/EcsWorld,physics/PhysicsWorld}.cpp` — `import projectv.math;`
+  - **EDIT:** `tests/{VisibilityCacheHash,GraphicsPushConstants,Math,FrustumCulling}Tests.cpp` — `import projectv.math;`
+  - **EDIT:** `tests/StringIdTest.cpp` — `import projectv.string_id;`
+  - **EDIT:** `TODO.md` — marked Tier 2.A/B/D/E/G done, 2.C marked blocked with rationale
+  - **EDIT:** `agent/decisions.md` — appended §30 Tier 2 mainline modules + `import std;` blocked
+  - **EDIT:** `agent/status.md` — post-commit milestone one-liner
+  - **EDIT:** `agent/active-sessions.md` (эта запись) — session registration
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `AGENTS.md`, `agent/session-checklist.md`, `agent/memory.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, `src/c_kernels/**`, `src/shaders/**`, `tools/**`, `build/**`, все чужие uncommitted
+- **status:** open
+- **post-commit pending:** atomic commit + close-routine
+- **Cross-refs:** TODO.md Tier 2, agent/memory.md §11.1 A3, agent/decisions.md §30
+
 ### session-2026-06-20T-tier510-hot-invariant-tests-r0
 
 - **id:** `2026-06-20T-tier510-hot-invariant-tests-r0`

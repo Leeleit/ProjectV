@@ -9,8 +9,8 @@ import projectv.string_id;
 
 #include "SDL3/SDL.h"
 #include "asset/MeshGpuResources.hpp"
-#include "core/Math.hpp"
-#include "core/StringId.hpp"
+import projectv.math;
+import projectv.string_id;
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
