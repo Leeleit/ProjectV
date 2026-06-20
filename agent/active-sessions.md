@@ -4,7 +4,7 @@ Append-only ledger активных и недавно завершённых AI-
 Используется для координации между параллельными сессиями и для arbitration
 при конфликте scope (см. `AGENTS.md` §7.2.6).
 
-**Это НЕ источник истины** для архитектурных решений — для этого `agent/decisions.md`.
+**Это НЕ источник истины** для архитектурных решений — для этого `agent/knowledge.md Part A`.
 Здесь только оперативный signal «кто сейчас что трогает», чтобы параллельные
 агенты не вытирали работу друг друга.
 
@@ -24,7 +24,7 @@ Append-only ledger активных и недавно завершённых AI-
 3. **При abort** — пометить `aborted` + причина, не удалять запись. Safety-net patch в
    `/tmp/` оставить с `POST-COMMIT <sha>` footer (per §8.1 п.5).
 
-См. также `agent/session-checklist.md` (секции «Старт» / «Post-commit close-routine»).
+См. также `AGENTS.md §9` (секции «Старт» / «Post-commit close-routine»).
 Параллельный запуск нескольких сессий с **пересекающимся** scope —
 аномалия, требует arbitration через пользователя (§7.2.6). Файлы `agent/*` (кроме
 `AGENTS.md`) — **shared infrastructure** (§7.2.8), не claim'ить эксклюзивно.
@@ -79,18 +79,18 @@ Append-only ledger активных и недавно завершённых AI-
 - **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
-- **scope:** **Full consolidation of `agent/` directory per operator directive `2026-06-20`.** Plan: 5 sequential commits (L1 + L2.1 + L2.2 + L2.3 + close-routine). All old `agent/memory.md` + `agent/decisions.md` + `agent/ARCHIVE-INDEX.md` → `agent/knowledge.md`. All old `agent/status.md` + `agent/active-sessions.md` → `agent/workspace.md` (after this commit). `agent/session-checklist.md` → inline in `AGENTS.md §9` (Commit D). Closed sessions from `agent/active-sessions.md` → `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (L1.5). All `§N` cross-refs preserved verbatim per `AGENTS.md §1` operator approval. Anchor script `tools/verify_section_anchors.sh` added in Commit A.
+- **scope:** **Full consolidation of `agent/` directory per operator directive `2026-06-20`.** Plan: 5 sequential commits (L1 + L2.1 + L2.2 + L2.3 + close-routine). All old `agent/knowledge.md Part B` + `agent/knowledge.md Part A` + `agent/knowledge.md Part C` → `agent/knowledge.md`. All old `agent/workspace.md §1 (Now)` + `agent/workspace.md §5 (Active tasks)` → `agent/workspace.md` (after this commit). `AGENTS.md §9` → inline in `AGENTS.md §9` (Commit D). Closed sessions from `agent/workspace.md §5 (Active tasks)` → `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (L1.5). All `§N` cross-refs preserved verbatim per `AGENTS.md §1` operator approval. Anchor script `tools/verify_section_anchors.sh` added in Commit A.
 - **files-touched-intent:**
   - **NEW:** `agent/knowledge.md` (~1860 lines, merged from memory.md + decisions.md + ARCHIVE-INDEX.md)
   - **NEW:** `agent/workspace.md` (~500 lines target, merged from status.md + active-sessions.md after L1.5 archive)
   - **NEW:** `tools/verify_section_anchors.sh` (anchor verification bash script)
   - **NEW:** `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (1214 lines, all pre-`2026-06-20` closed sessions)
-  - **DELETE:** `agent/memory.md`, `agent/decisions.md`, `agent/ARCHIVE-INDEX.md`, `agent/status.md`, `agent/session-checklist.md`
+  - **DELETE:** `agent/knowledge.md Part B`, `agent/knowledge.md Part A`, `agent/knowledge.md Part C`, `agent/workspace.md §1 (Now)`, `AGENTS.md §9`
   - **EDIT:** `AGENTS.md` (§3 sources-of-truth list, §4 classification table, §9 session-checklist inlined)
   - **EDIT:** `TODO.md` (anchor-form cross-refs, Commit A)
   - **EDIT:** `COMMENTS.md` (footer + L-anchor audit, Commit A)
   - **EDIT:** `CHANGELOG.md` (consolidation entry, Commit E)
-  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись, will be merged into workspace.md §5 in Commit C, then close-routine here)
+  - **APPEND-ONLY:** `agent/workspace.md §5 (Active tasks)` (эта запись, will be merged into workspace.md §5 in Commit C, then close-routine here)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** никакого production кода (`src/`, `tests/`, `external/`, `legacy/` кроме нового archive файла, `docs/`, `build/`, `tools/` кроме нового verify script, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, шейдеры), operator's dirty tree, чужие uncommitted.
 - **status:** open
 - **notes:**

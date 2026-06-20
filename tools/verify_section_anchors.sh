@@ -1,53 +1,75 @@
 #!/usr/bin/env bash
-# Verify that §N refs in service files resolve to actual headers in target files.
+# Verify that §N refs in live service files resolve to actual headers in agent/knowledge.md.
+# After 2026-06-20 consolidation:
+#   - `decisions.md §X` → resolves in `agent/knowledge.md` Part A (engineering contracts)
+#   - `memory.md §X` → resolves in `agent/knowledge.md` Part B (runtime facts)
+#   - `workspace.md §X` → resolves in `agent/workspace.md` itself
+#
 # Usage: tools/verify_section_anchors.sh
 # Exits 0 if all refs resolve, 1 if any broken.
 
 set -uo pipefail
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
 LIVE_FILES=(
   TODO.md
   CHANGELOG.md
   AGENTS.md
-  agent/knowledge.md
-  agent/workspace.md
 )
 
-# Target files where §N refs can resolve
-TARGETS=(
-  "agent/knowledge.md"
-  "agent/workspace.md"
-)
+declare -i broken=0
+declare -i checked=0
 
-broken=0
-checked=0
+# Patterns to verify.
+# Group 1: `decisions.md §X` → must exist in knowledge.md
+# Group 2: `memory.md §X` → must exist in knowledge.md
+# Group 3: `workspace.md §X` → must exist in workspace.md
+verify_ref() {
+  local file="$1"
+  local target="$2"
+  local section="$3"
+  local prefix="$4"
+  checked=$((checked + 1))
 
-# Match patterns like "knowledge.md §30.4" or "workspace.md §5"
-# Captures: 1=file, 2=section number (may be 30.4 or 30.4.1)
-pattern='(agent/knowledge|agent/workspace)\.md §([0-9]+(\.[0-9]+)*)'
+  # Escape dots for grep -E
+  local section_re="${section//./\\.}"
+  # Match header: "^#{1,3} <optional §> <section><separator>"
+  # Separator: . (subsection), space, colon, dash, or opening paren.
+  # Also try without `prefix` (workspace.md uses `## 1. Now`, knowledge.md uses `## 1. Document boundaries`).
+  local pattern1="^#{1,3} ${prefix}${section_re}(\\.| |:|-|\\()"
+  local pattern2="^#{1,3} ${section_re}(\\.| |:|-|\\()"
+  if grep -qE "$pattern1" "$target" 2>/dev/null; then
+    return 0
+  fi
+  if grep -qE "$pattern2" "$target" 2>/dev/null; then
+    return 0
+  fi
+  echo "BROKEN: $file → $target §$section"
+  broken=$((broken + 1))
+}
 
 for f in "${LIVE_FILES[@]}"; do
-  if [[ ! -f "$f" ]]; then continue; fi
-  while IFS= read -r match; do
-    [[ -z "$match" ]] && continue
-    target=$(echo "$match" | sed -E "s/.*($pattern).*/\1/")
-    section=$(echo "$match" | sed -E "s/.*$pattern/\2/")
-    checked=$((checked + 1))
+  [[ -f "$f" ]] || continue
 
-    # Escape dots for grep -F
-    section_escaped=$(echo "$section" | sed 's/\./\\./g')
-    if grep -qE "^(##|###) ${section_escaped}( |\\.|:|-|$)" "$target" 2>/dev/null; then
-      : # resolved
-    else
-      echo "BROKEN: $f → $target §$section"
-      broken=$((broken + 1))
-    fi
-  done < <(grep -hoE "$pattern" "$f" 2>/dev/null | sort -u)
+  # Extract (decisions|memory).md §X refs
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    section=$(echo "$line" | sed -E 's/.*(decisions|memory)\.md §([0-9]+(\.[0-9]+)*).*/\2/')
+    [[ -n "$section" ]] || continue
+    verify_ref "$f" "agent/knowledge.md" "$section" ""
+  done < <(grep -oE '(decisions|memory)\.md §[0-9]+(\.[0-9]+)*' "$f" 2>/dev/null | sort -u)
+
+  # Extract workspace.md §X refs
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    section=$(echo "$line" | sed -E 's/.*workspace\.md §([0-9]+(\.[0-9]+)*).*/\1/')
+    [[ -n "$section" ]] || continue
+    verify_ref "$f" "agent/workspace.md" "$section" "§ "
+  done < <(grep -oE 'workspace\.md §[0-9]+(\.[0-9]+)*' "$f" 2>/dev/null | sort -u)
 done
 
 echo ""
 echo "Checked: $checked refs, Broken: $broken"
-if [[ $broken -gt 0 ]]; then
-  exit 1
-fi
-exit 0
+[[ $broken -eq 0 ]] && exit 0 || exit 1

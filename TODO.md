@@ -296,4 +296,4 @@
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — perf philosophy.
 - `legacy/docs/philosophy/03_domain/04_testing-philosophy.md` — test coverage requirements for hot invariants.
 - `legacy/docs/standards/04_evil-hacks-philosophy.md` — `// EVIL:` markers for magic numbers.
-- `agent/active-sessions.md` — current session state; coordinate with parallel sessions via scope discipline.
+- `agent/workspace.md §5 (Active tasks)` — current session state; coordinate with parallel sessions via scope discipline.

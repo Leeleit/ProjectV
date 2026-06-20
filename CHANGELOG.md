@@ -10,12 +10,65 @@ This CHANGELOG consolidates **refactor / bug-fix history** that previously lived
 Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML by
 `doxygen Doxyfile` per `docs/api/README.md`.
 
-**For design rationale and ongoing decisions**, see `agent/decisions.md`.
-**For session log / commit narrative**, see `agent/active-sessions.md` and `git log`.
+**For design rationale and ongoing decisions**, see `agent/knowledge.md Part A`.
+**For session log / commit narrative**, see `agent/workspace.md §5 (Active tasks)` and `git log`.
 
 ---
 
 ## 2026-06-20
+
+### Changed (agent-file-consolidation r0 — commits `3c148e3`, `f1eeb6a`, `1bf096f`, `4f5f379`, `<this-commit>`)
+
+- **`agent/knowledge.md`** (~1860 lines, new) — single source of truth for
+  engineering contracts (Part A, formerly `agent/decisions.md` §1-§31)
+  and runtime facts (Part B, formerly `agent/memory.md` §1-§11). Part C
+  inlines the archive index (formerly `agent/ARCHIVE-INDEX.md`).
+  Per-section contracts unchanged — all §N refs in live files resolve
+  via `tools/verify_section_anchors.sh`.
+- **`agent/workspace.md`** (~250 lines, new) — consolidated live snapshot
+  + active tasks ledger. §1 Now / §2 Gap / §3 Next Steps / §4 Risks /
+  §5 Active tasks (formerly `agent/active-sessions.md`) / §6 Recent
+  closed (archive pointer) / §7 Archive references.
+- **`agent/session-checklist.md`** deleted — inlined as `AGENTS.md §9`
+  ("Session checklist"), with `§9.1`-`§9.6` matching the original 6
+  sections. Old `§9` (Comment management protocol) renumbered to `§10`.
+- **`agent/active-sessions.md`** compressed (1951 → 114 lines) — all
+  20 pre-`2026-06-20` closed sessions moved to
+  `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (1214 lines,
+  full per-session detail preserved: commit hashes, file-touched-intent,
+  notes). Per operator directive «удалить все сессии, кроме текущей».
+- **`agent/status.md`** deleted — content merged into `agent/workspace.md`
+  §1-§4 + §7.
+- **`AGENTS.md`** updated — §3 sources-of-truth list, §4 classification
+  table, §7.2.6.1 file format table, §7.2.8 shared infra list, §7 close-
+  routine refs all point to new `agent/knowledge.md` /
+  `agent/workspace.md` / `AGENTS.md §9` instead of the deleted files.
+  10 cross-refs updated total.
+- **`agent/memory.md`, `agent/decisions.md`, `agent/ARCHIVE-INDEX.md`,
+  `agent/status.md`, `agent/session-checklist.md`** all deleted.
+  Content preserved in `agent/knowledge.md` / `agent/workspace.md` /
+  `AGENTS.md §9` / archive files.
+- **`tools/verify_section_anchors.sh`** (new, 53 lines) — bash script
+  that greps `decisions.md §X` / `memory.md §X` / `workspace.md §X`
+  refs in live files (`TODO.md`, `CHANGELOG.md`, `AGENTS.md`) and
+  verifies each §N header exists in `agent/knowledge.md` /
+  `agent/workspace.md`. Exits 0 if all resolve, 1 if any broken.
+  Required by per-commit gate per `AGENTS.md §6.9` for any change
+  touching service-file cross-refs.
+- **TODO.md** anchor-form cross-refs (Commit A): 14 `decisions.md §X.Y`
+  refs converted to hybrid form `§X.Y ([name](#anchor))` with GFM
+  auto-generated anchors. Old §N semantics preserved verbatim.
+- **TODO.md / README_NEW.md / CHANGELOG.md / agent/active-sessions.md**
+  bulk file-path replacement (Commit E): `agent/decisions.md` →
+  `agent/knowledge.md Part A`, `agent/memory.md` → `agent/knowledge.md
+  Part B`, `agent/status.md` → `agent/workspace.md §1 (Now)`,
+  `agent/active-sessions.md` → `agent/workspace.md §5 (Active tasks)`,
+  `agent/ARCHIVE-INDEX.md` → `agent/knowledge.md Part C`,
+  `agent/session-checklist.md` → `AGENTS.md §9`.
+- **COMMENTS.md** footer + audit (Commit A): `<!-- Last validated
+  2026-06-20 against src/core/Math.ixx (commit 44362d1) and
+  src/core/StringId.ixx (same). -->`. All 15 L-anchor ranges
+  spot-checked, all match current code (post-`44362d1`).
 
 ### Removed
 

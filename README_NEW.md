@@ -2,7 +2,7 @@
 
 Reproducible interactive voxel MVP на C++26, Vulkan 1.4, Data-Oriented Design.
 Детальная архитектура — `legacy/docs/architecture/`, инженерные принципы — `legacy/docs/philosophy/`,
-статус проекта — `agent/status.md`.
+статус проекта — `agent/workspace.md §1 (Now)`.
 
 ## Стек
 
