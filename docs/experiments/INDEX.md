@@ -8,6 +8,48 @@
 
 Just-closed (this session, `2026-06-20`):
 
+- `2026-06-20-restir-gi-feasibility` (verdict=`mixed`). SOTA-GI-ось experiment закрыт same session. Web-research
+  (~30 sources верифицированы: Bitterli 2020 ReSTIR original, Ouyang 2021 ReSTIR GI, Lin 2022 ReSTIR PT +
+  GRIS, Majercik 2019/2021 DDGI, Müller 2021 NRC, NVIDIA-RTX/RTXGI SDK v2.7.0 (Mar 2026), NVIDIA-RTX/SHARC,
+  NVIDIA-RTX/RTXDI v3.0+, Crassin 2011 GIVoxels VCT foundation, Lumen SIGGRAPH 2022 [Epic explicitly rejected
+  VCT as leaky], Minecraft RTX GDC 2021 [voxel + path tracer + irradiance cache], Douglas Voxel Devlog #23 Jun
+  2025 [voxel + DDGI direct validation], Cyberpunk 2077 RT Overdrive [production ReSTIR DI/GI + SHaRC],
+  NVIDIA Zorah RTX 50 demo [ReSTIR PT], OGRE-Next CIVCT, Aokana 2025, Closest Hit ReSTIR GSGI/PMGI 2024,
+  ReSTIR FG 2024, Epic DDGI abandonment Dec 2025 forum). **Главный finding:** SOTA GI techniques (ReSTIR PT,
+  DDGI, SHaRC, NRC) все **требуют path tracer foundation** — ProjectV's Stage 5.x = hybrid VCT+RTX = **не**
+  path tracer. **Architectural mismatch.** **Recommended action:** keep current hybrid VCT+RTX as-is (Stage 5.x
+  MVP), defer SOTA GI integration до Stage 6+ post-MVP path tracer pivot. Recommended add-on order (if path
+  tracer ships): **SHaRC → DDGI → ReSTIR DI/GI/PT** (skip NRC = NVIDIA-only). VRAM cost SHaRC alone = 185 MB
+  (3.65% of 5.06 GiB budget per `hardware-profile.md` §3). Quality validated для path-tracing contexts (ReSTIR
+  PT MAPE 0.39 vs 1.63 naive PT per Lin 2022 Carousel benchmark). Cannot translate без path tracer. **Lighting
+  axis fully closed** (`vct-vs-rt-cutoff` + `clustered-forward-mass-lights` + `rt-shadows-vs-csm` + this).
+  Cross-axis: 19+ closed today-сессии = full Stage 1.x/2.x/3.x/4.x/5.x/6.x optimization landscape + SOTA-GI
+  axis. См. §6 + §8 + [experiment README](./experiments/2026-06-20-restir-gi-feasibility/README.md).
+
+- `2026-06-20-rt-shadows-vs-csm` (verdict=`mixed`). Shadow-ось experiment закрыт same session.
+  Web-research (4 batches, ~30 results, 23 sources верифицированы: Boksansky RTG 2019 фундамент,
+  Vulkan Tutorial Ray Query §5.2 patterns, NVIDIA Blackwell 4th-gen RT whitepaper Jan 2025
+  [2× ray-tri vs Ada, 8× vs Turing], AMD HotChips 2025 RDNA 4 [8 box + 2 tri/cycle, 2× vs
+  RDNA 3, OBB +10% traversal], Intel Battlemage Xe2 [3 traversal pipelines + 2 tri = 18+2 vs
+  Alchemist 2+1, BVH cache 16 KB], Khronos Forum BLAS fence wait pattern, Boksansky 2019
+  adaptive ray sampling) + analytical cost model + cross-vendor RT throughput matrix.
+  **Hybrid CSM + RTX shadows** рекомендован для Stage 5.2: CSM (sun, current path per
+  `agent/decisions.md §15`) + RTX `VK_KHR_ray_query` (feature-flagged additive для local
+  lights + per-pixel contact shadow detail). **Quality gain > 5% per
+  `optimization-philosophy.md`** для non-sun-dominated scenes (cave/lava/magic); < 5%
+  для sun-dominated outdoor (CSM dominant). VRAM cost **8-23 MiB** на RTX 3060 Ti (well
+  under 5% budget). BLAS rebuild bottleneck → async via `VK_KHR_deferred_host_operations`
+  (rev 4) + `dec-pipelines-async-compute` precedent. Cross-vendor: Blackwell/RDNA 4/
+  Battlemage = full benefit; Ampere/RDNA 3 = 1-2 rays limited; Turing/Alchemist = feature
+  OFF. **Mainline рекомендация:** 3-step migration per `agent/knowledge.md §30.4` precedent
+  (Step 1 foundation extension probing + BLAS pool + TLAS scratch; Step 2 ray query в
+  `voxel.frag` для local lights + async BLAS build via deferred host operations; Step 3
+  default flip). ~770 LoC total, M effort, 3-4 sessions. **Continuation chain:**
+  `vct-vs-rt-cutoff` (closed verdict=mixed) + `clustered-forward-mass-lights` (closed
+  verdict=yes) → this. Lighting axis complete (cutoff + lights + shadows). Stage 5
+  foundation + cutoffs + lights + shadows все closed same-day `2026-06-20`. Cross-axis:
+  17+ closed today-сессии = full Stage 1.x/2.x/3.x/5.x/6.x optimization landscape +
+  shadow-dim. См. §6 + §8 + [experiment README](./experiments/2026-06-20-rt-shadows-vs-csm/README.md).
 - `2026-06-20-svdag-vs-vdb-memory-throughput` (verdict=`yes`). SVDAG-on-64-tree (current mainline)
   подтверждён **измерениями** для ProjectV workload (32³ chunks): memory 8.75 B/voxel solid / 16-70 B/voxel sparse —
   within dubiousconst282 2024 literature range. GetCell 22-36 ns, SetCell 0.03-0.04 µs no-dedup / 0.68-1.26 µs dedup-ON.
@@ -85,7 +127,7 @@ Next h/m from `research/backlog.md`:
 
 - `sub-chunk-layers` (m, independent) — для biome/cave layers.
 - `wfc-procedural-worlds` (m, independent) — для Stage 4.x procedural gen.
-- `restir-gi-feasibility` (m, Stage 5.1/5.2) — после Stage 5.x baseline established.
+- `restir-gi-feasibility` (m, Stage 5.1/5.2) — **closed `2026-06-20`** (verdict=`mixed`). См. §6.
 - `vct-vs-rt-cutoff` (m, Stage 5.1/5.2) — **closed `2026-06-20`** (verdict=`mixed`). См. §6.
 - `vct-vs-rt-cutoff` (m, Stage 5) — после Stage 5.1 VCT spike.
 
@@ -116,49 +158,33 @@ Closed (recent, see §6 for full list):
 
 ## 5. Active experiments (current open sessions)
 
-- `2026-06-20-vulkan-fps-pacing-vk-ext` (status: `in-progress`). Claimed per
-  `docs/experiments/AGENTS.md §13.1` on `2026-06-20` after parking
-  `2026-06-20-meshing-algo-comparison` (operator override per §13.6: пользователь дал
-  инструкцию «выбирай незанятую тему»). Anti-duplicate sentinel clean. **Frame-pacing-ось**,
-  отсутствующая в closed today-сессиях (storage/sync/cull/binding/layout/meshing/hzb/gi/
-  noise/ecs все closed либо parked). Vulkan 1.4 core extensions `VK_KHR_present_wait`
-  (was KHR extension pre-1.4, core in 1.4) + `VK_KHR_swapchain_maintenance1` (core 1.4).
-  Hypothesis: present_wait убирает busy-wait overhead vs current FIFO busy-wait path;
-  expected < 1 ms p99 frame variance gain + reduced CPU spin time. Cross-vendor:
-  NVIDIA Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Arc Alchemist/Battlemage.
-  Stage 0 architectural foundation для Stage 3.1 GPU Fluid CA cross-frame latency contract
-  per `agent/workspace.md §2` + `dec-pipelines-async-compute` Step 1 prerequisite.
-  Scope: `docs/experiments/experiments/2026-06-20-vulkan-fps-pacing-vk-ext/`. ETA: same session.
-
-- `2026-06-20-work-stealing-job-system` (status: `in-progress`). Claimed per `docs/experiments/AGENTS.md §13.1`.
-  Anti-duplicate sentinel clean. **Job-scheduling-ось** — единственный h/m-priority в backlog, ещё не покрытый
-  today-сессиями
-  (storage/sync/cull/binding/layout/meshing/simd/hzb/flecs/gi-strategy/profiling-overhead-async все закрыты). Foundation
-  для Stage 4.1 (background world gen dispatcher) + Stage 6.1 (ECS multi-threading `ecs_set_target_fps` +
-  multi-threaded `ecs_progress` per `TODO.md §6.1` Step 6 NUMA-aware). Refined hypothesis: **C++26 `std::execution`
-  (P2300 senders/receivers)** даёт сопоставимый throughput с **BS::thread_pool** / Taskflow / std::thread pool на
-  synthetic ProjectV chunk-generation workload (1024 chunks × 8³ voxels, 1M+ ops/sec/chunk) на Zen 3 8C/16T, при
-  этом лучше composable для Stage 6.1 ECS (sender chains для `ecs_progress` hooks), кроссвендорно portable без
-  vendor lock-in (TBB = Intel, libdispatch = Apple). Tier 4 R&D per `agent/knowledge.md §29.0` line 887
-  («`std::execution` — нужна Job System, отдельный slice»). Scope: только
-  `docs/experiments/experiments/2026-06-20-work-stealing-job-system/`. ETA: same session (one-shot).
+(No active self reservations `2026-06-20` EOD. `2026-06-20-restir-gi-feasibility` closed verdict=mixed same
+session — см. §6 + §1. **Lighting axis fully closed**: cutoff + lights + shadows + SOTA-GI все same-day
+`2026-06-20`.)
 
 ## 6. Recent closed sessions
 
-| Slug                                        | Status                  | Verdict                        | Closed     |
-|:--------------------------------------------|:------------------------|:-------------------------------|:-----------|
-| `2026-06-20-sparse-64-tree-alternatives`    | concluded-verdict-yes   | yes                            | 2026-06-20 |
-| `2026-06-20-mesh-shader-vs-compute-cull`    | concluded-verdict-mixed | mixed                          | 2026-06-20 |
-| `2026-06-20-bindless-descriptor-overhead`   | concluded-verdict-mixed | mixed                          | 2026-06-20 |
-| `2026-06-20-cache-oblivious-chunk-tree`     | concluded-verdict-mixed | mixed                          | 2026-06-20 |
-| `2026-06-20-svdag-vs-vdb-memory-throughput` | concluded-verdict-yes   | yes                            | 2026-06-20 |
-| `2026-06-20-dec-pipelines-async-compute`    | concluded-verdict-yes   | yes                            | 2026-06-20 |
-| `2026-06-20-nanovdb-on-gpu`                 | concluded-verdict-yes   | yes                            | 2026-06-20 |
-| `2026-06-20-hzb-binding-models`             | concluded-verdict-mixed | mixed                          | 2026-06-20 |
-| `2026-06-20-simd-procedural-noise`          | concluded-verdict-mixed | mixed                          | 2026-06-20 |
-| `2026-06-20-vct-vs-rt-cutoff`               | concluded-verdict-mixed | mixed                          | 2026-06-20 |
-| `2026-06-20-flecs-soa-vs-aos-bench`         | concluded-verdict-yes   | yes                            | 2026-06-20 |
-| `2026-06-20-async-compute-overhead-numbers` | concluded-verdict-yes   | **yes (+9.85-11.34% speedup)** | 2026-06-20 |
+| Slug                                        | Status                  | Verdict                                                                                                                                                                                                                                                                                                                                                                                                | Closed     |
+|:--------------------------------------------|:------------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:-----------|
+| `2026-06-20-sparse-64-tree-alternatives`    | concluded-verdict-yes   | yes                                                                                                                                                                                                                                                                                                                                                                                                    | 2026-06-20 |
+| `2026-06-20-mesh-shader-vs-compute-cull`    | concluded-verdict-mixed | mixed                                                                                                                                                                                                                                                                                                                                                                                                  | 2026-06-20 |
+| `2026-06-20-bindless-descriptor-overhead`   | concluded-verdict-mixed | mixed                                                                                                                                                                                                                                                                                                                                                                                                  | 2026-06-20 |
+| `2026-06-20-cache-oblivious-chunk-tree`     | concluded-verdict-mixed | mixed                                                                                                                                                                                                                                                                                                                                                                                                  | 2026-06-20 |
+| `2026-06-20-svdag-vs-vdb-memory-throughput` | concluded-verdict-yes   | yes                                                                                                                                                                                                                                                                                                                                                                                                    | 2026-06-20 |
+| `2026-06-20-dec-pipelines-async-compute`    | concluded-verdict-yes   | yes                                                                                                                                                                                                                                                                                                                                                                                                    | 2026-06-20 |
+| `2026-06-20-nanovdb-on-gpu`                 | concluded-verdict-yes   | yes                                                                                                                                                                                                                                                                                                                                                                                                    | 2026-06-20 |
+| `2026-06-20-hzb-binding-models`             | concluded-verdict-mixed | mixed                                                                                                                                                                                                                                                                                                                                                                                                  | 2026-06-20 |
+| `2026-06-20-simd-procedural-noise`          | concluded-verdict-mixed | mixed                                                                                                                                                                                                                                                                                                                                                                                                  | 2026-06-20 |
+| `2026-06-20-vct-vs-rt-cutoff`               | concluded-verdict-mixed | mixed                                                                                                                                                                                                                                                                                                                                                                                                  | 2026-06-20 |
+| `2026-06-20-flecs-soa-vs-aos-bench`         | concluded-verdict-yes   | yes                                                                                                                                                                                                                                                                                                                                                                                                    | 2026-06-20 |
+| `2026-06-20-async-compute-overhead-numbers` | concluded-verdict-yes   | **yes (+9.85-11.34% speedup)**                                                                                                                                                                                                                                                                                                                                                                         | 2026-06-20 |
+| `2026-06-20-meshing-algo-comparison`        | concluded-verdict-mixed | mixed (greedy: poly count ✓, build time ✗)                                                                                                                                                                                                                                                                                                                                                             | 2026-06-20 |
+| `2026-06-20-vulkan-fps-pacing-vk-ext`       | concluded-verdict-mixed | mixed (SOTA validated; prototype deferred)                                                                                                                                                                                                                                                                                                                                                             | 2026-06-20 |
+| `2026-06-20-work-stealing-job-system`       | concluded-verdict-mixed | mixed (serial beats pool for ProjectV workloads; per-stage split)                                                                                                                                                                                                                                                                                                                                      | 2026-06-20 |
+| `2026-06-20-clustered-forward-mass-lights`  | concluded-verdict-yes   | yes (with caveats: soft cap ≥2048, light prioritization for 5000+ light scenes)                                                                                                                                                                                                                                                                                                                        | 2026-06-20 |
+| `2026-06-20-vis-buffer-for-voxels`          | concluded-verdict-mixed | mixed (cross-over @ 1280×720; +12-24% faster на 800×600 / −15-26% на 1920×1080; voxel scenes pixel-coherent = no overdraw to amortize)                                                                                                                                                                                                                                                                 | 2026-06-20 |
+| `2026-06-20-rt-shadows-vs-csm`              | concluded-verdict-mixed | mixed (hybrid CSM + RTX additive per `TODO.md §5.2`; CSM dominant для sun, RTX для local lights + contact; cross-vendor matrix Blackwell/RDNA4/Battlemage full, Ampere/RDNA3 limited, Turing/Alchemist OFF)                                                                                                                                                                                            | 2026-06-20 |
+| `2026-06-20-restir-gi-feasibility`          | concluded-verdict-mixed | mixed (SOTA GI quality validated — ReSTIR PT MAPE 0.39 vs 1.63; SHaRC 1.5-10% overhead; DDGI voxel-validated per Douglas Voxel Devlog #23 — but **architectural mismatch**: все SOTA techniques требуют path tracer foundation, ProjectV Stage 5.x = hybrid VCT+RTX = NOT path tracer; defer до Stage 6+ post-MVP path tracer pivot; recommended add-on order SHaRC→DDGI→ReSTIR, skip NRC=NVIDIA-only) | 2026-06-20 |
 
 ## 7. Backlog
 
@@ -166,7 +192,79 @@ Closed (recent, see §6 for full list):
 
 ## 8. Last update
 
-`2026-06-20` — closed `2026-06-20-flecs-soa-vs-aos-bench` (verdict=`yes`). ECS memory-layout-ось experiment
+`2026-06-20` — closed `2026-06-20-restir-gi-feasibility` (verdict=`mixed`). SOTA-GI-ось experiment.
+Web-research complete (3 batches, ~30 results, ~30 sources верифицированы: Bitterli 2020 ReSTIR original,
+Ouyang 2021 ReSTIR GI, Lin 2022 ReSTIR PT + GRIS [80 ms @ 1920×1080, MAPE 0.39 vs 1.63 PT], Majercik 2019/2021
+DDGI, Müller 2021 NRC [2.6 ms @ full HD], NVIDIA-RTX/RTXGI SDK v2.7.0 [336 stars Mar 2026], NVIDIA-RTX/SHARC
+[123 stars, spatial hash grid 64-bit, 4-pass, ~185 MB @ 2^22, 1.5-10% overhead Cyberpunk], NVIDIA-RTX/RTXDI
+v3.0+ [ReSTIR DI/GI/PT/ReGIR, D3D12+Vulkan], Crassin 2011 GIVoxels, Lumen SIGGRAPH 2022 [Epic rejected VCT leaky],
+Minecraft RTX GDC 2021 [voxel + path tracer + irradiance cache], Douglas Voxel Devlog #23 Jun 2025 [voxel + DDGI],
+Cyberpunk 2077 RT Overdrive Patch 2.1 Dec 2023 [production ReSTIR + SHaRC], NVIDIA Zorah RTX 50 demo 2025
+[ReSTIR PT], OGRE-Next CIVCT, Aokana 2025, ReSTIR FG/GSGI/PMGI 2024 [0.4-14 ms variants], Epic DDGI abandonment
+forum Dec 2025). **Главный finding:** **architectural mismatch** — все 4 SOTA техники (ReSTIR PT, DDGI, SHaRC,
+NRC) требуют path tracer foundation; ProjectV Stage 5.x = hybrid VCT+RTX = NOT path tracer. **VRAM matrix:**
+SHaRC = 185 MiB (3.65% of 5.06 GiB budget per `hardware-profile.md` §3), DDGI = 16 MiB, ReSTIR = 33-67 MiB
+checkerboard/full. Cross-vendor: SHaRC = universal (RTXGI 2.x Vulkan path), NRC = NVIDIA-only (Tensor Cores
+≥ Turing, excludes AMD RDNA 4 + Intel Battlemage per `dec-pipelines-async-compute` matrix). **Mainline
+рекомендация:** **keep current hybrid VCT+RTX as-is** (Stage 5.x MVP), **defer SOTA GI до Stage 6+ post-MVP
+path tracer pivot**. Recommended add-on order if path tracer ships: **SHaRC → DDGI → ReSTIR DI/GI/PT**.
+**Lighting axis FULLY closed** (cutoff + lights + shadows + SOTA-GI all same-day `2026-06-20`). Cross-axis:
+19+ closed today-сессии = full Stage 1.x/2.x/3.x/4.x/5.x/6.x optimization landscape + SOTA-GI axis. Closed
+entry: `experiments/2026-06-20-restir-gi-feasibility/`. См. §6 + §1.
+
+`2026-06-20` (this session, previous) — closed `2026-06-20-rt-shadows-vs-csm` (verdict=`mixed`). Shadow-ось experiment.
+Web-research complete (4 batches, ~30 results, 23 sources верифицированы: Boksansky RTG 2019,
+NVIDIA Blackwell whitepaper Jan 2025, AMD RDNA 4 HotChips 2025, Intel Battlemage Xe2, Khronos
+VK_KHR_deferred_host_operations spec, NVIDIA nvpro-samples BLAS pattern, Khronos Forum BLAS
+fence wait, ACM SIGGRAPH 2025 mobile RT, Arm Vulkanised 2026, Vulkan Tutorial Ray Query §5.2,
+Sascha Willems rayquery example, и т.д.). Analytical cost model + cross-vendor RT throughput
+matrix. Hybrid CSM + RTX shadows рекомендован для Stage 5.2: CSM (sun, current path per
+`agent/decisions.md §15`) + RTX `VK_KHR_ray_query` (feature-flagged additive для local
+lights + per-pixel contact shadow detail). **Quality gain > 5% per `optimization-philosophy.md`**
+для non-sun-dominated scenes (cave/lava/magic-heavy); < 5% для sun-dominated outdoor (CSM dominant).
+VRAM cost **8-23 MiB** на RTX 3060 Ti (well under 5% budget). BLAS rebuild bottleneck → async via
+`VK_KHR_deferred_host_operations` (rev 4) + `dec-pipelines-async-compute` precedent (per Khronos
+Forum 2025-09-29: 2000 BLAS single dispatch = 15 ms fence wait). Cross-vendor: Blackwell/RDNA 4/
+Battlemage = full benefit; Ampere/RDNA 3 = 1-2 rays limited; Turing/Alchemist = feature OFF.
+**Mainline рекомендация:** 3-step migration per `agent/knowledge.md §30.4` precedent (Step 1
+foundation extension probing + BLAS pool + TLAS scratch; Step 2 ray query в `voxel.frag` для
+local lights + async BLAS build via deferred host operations; Step 3 default flip). ~770 LoC
+total, M effort, 3-4 sessions. **Continuation chain:** `vct-vs-rt-cutoff` (closed verdict=mixed) +
+`clustered-forward-mass-lights` (closed verdict=yes) → this. **Lighting axis complete** (cutoff +
+lights + shadows). Stage 5 foundation + cutoffs + lights + shadows все closed same-day `2026-06-20`.
+Closed entry: `experiments/2026-06-20-rt-shadows-vs-csm/`. Rendering-approach
+axis (deferred resolve via vis-buffer + material-table SSBO). Standalone Vulkan 1.4 prototype
+(~700 LoC incl. shaders, RTX 3060 Ti GA104 Ampere, Vulkan 1.4.341, NVIDIA 610.43.02). 6 measurement
+configs (3 scenes × 3 resolutions). Visual equivalence verified via framebuffer hash match.
+**Cross-over @ 1280×720:** 1920×1080 vis-buffer 15-26% slower (bandwidth-bound on pixel
+coverage); 800×600 vis-buffer 12-24% faster (vertex cost dominates). Voxel scenes are
+pixel-coherent after greedy meshing per `2026-06-20-meshing-algo-comparison` verdict=mixed
+(Naive Greedy default = ~1 visible triangle per pixel = no overdraw to amortize fullscreen
+vis-buffer cost). Mainline рекомендация: **DEFER** до Stage 4.3 (128+ chunks draw distance)
+или mobile target decision (TBR GPUs benefit per Vulkan-Guide, vis-buffer 10-30% win).
+Cross-refs: `bindless-descriptor-overhead` Phase B (bindless material table = prerequisite),
+`dec-pipelines-async-compute` (async-compute resolve pass would compound benefits, unmeasured),
+`meshing-algo-comparison` verdict=mixed (greedy meshing = pixel-coherent = vis-buffer loses на high res).
+Web-research: 5 batch queries, 20+ sources верифицированы (Burns-Hunt 2013 JCGT foundational
+6.2× bandwidth win; Karis SIGGRAPH 2021 + Wihlidal GDC 2024 Unreal Nanite 64-bit vis-buffer +
+shading bins 100% compute shaders UE 5.4; Andersson Frostbite 2017 "10-20x geometry vs Deferred";
+The Forge v1.57 May 2024 TVB 2.0 pure compute; Cao NanoMesh SIGGRAPH 2024 32-bit mobile;
+Vulkan-Guide TBR best practices 2024; Lam Adreno vis-stream HW compressor; jglrxavpok 2023
+Vulkan R64Uint impl; Harada AMD Forward+ GPU Pro 4 alternative; Olsson Clustered Shading HPG 2012
+1M lights; VoxelMVP / Exile / Slater / cgerikj / Ascendant voxel-specific refs). См. §6 +
+[experiment README](./experiments/2026-06-20-vis-buffer-for-voxels/README.md).
+
+`2026-06-20` — closed `2026-06-20-clustered-forward-mass-lights` (verdict=`yes`). Mass-lights
+architecture axis: Forward+ (clustered shading) рекомендован для Stage 5 с условиями (soft cap
+≥2048, light prioritization для 5000+ light scenes). Standalone CPU prototype
+`prototype/bench.cpp` (~480 LoC, Clang 22.1.6, no warnings, 13 configs). Measured cluster
+build 16×9×24 / 1000 lights = 12.7 ms CPU (sparse) / 15.4 ms CPU (dense). GPU projected
+0.1-0.5 ms at 1000 lights. **CRITICAL: 16×9×24 / 5000 dense lights = 69% clusters overflow
+soft cap 1024** — soft cap must be raised или prioritization policy. Per-fragment 100×
+speedup vs 1000-light uniform array. Mainline 3-step migration (M effort, 3-4 sessions).
+Cross-axis: 14+ closed same-day `2026-06-20` sessions покрывают full Stage 1.x/2.x/3.x/4.x/5.x/6.x
+optimization landscape + mass-lights axis. Closed entry:
+`experiments/2026-06-20-clustered-forward-mass-lights/`. ECS memory-layout-ось experiment
 (Stage 6.1 + cross-cutting). Standalone C++26 prototype `prototype/flecs_soa_vs_aos.cpp` (642 строки, 4 configs ×
 3 workloads × 3 seeds × 1000 iterations = 36 measurements). **SoA wins ALL 3 workloads** — raycast **2.14×**
 (199→427 Meps), physics **3.86×** (210→812 Meps, near-exact match с DevelopersIO 2026 Godot 4.6 3.3× update
@@ -280,15 +378,151 @@ AMD RDNA2/3, Intel Arc Gfx12.5+, Arm v9+ Mali. Quantitative refs: Traha 2024 (3.
 (legacy OpenGL). Continuation chain: `sparse-64-tree-alternatives` → `mesh-shader-vs-compute-cull` →
 `bindless-descriptor-overhead`. Все три — same-day `2026-06-20` сессии.
 
-`2026-06-20` (this session) — `2026-06-20-meshing-algo-comparison` in-progress. Meshing-axis experiment
+`2026-06-20` (this session) — `2026-06-20-meshing-algo-comparison` closed (verdict=`mixed`). Meshing-axis experiment
 (unique h-priority slot после 8 закрытых same-day сессий на orthogonal axes:
-storage/sync/cull/layout/binding/memory/hzb).
-Web-research complete (8 sources across 2 batch queries); prototype scaffold + 6-synthetic-scene harness
-drafted; next tick = compile + run. Cross-refs: `agent/knowledge.md §25` (greedy meshing contract, baseline),
-`src/shaders/voxel_mesh.comp::GreedyFacePass` (562 lines, per-axis dispatch в 6 passes, current mainline),
-`TODO.md §2.1` (mesh shader port, this informs choice) + `§3.3` (physics mesh, mirror choice).
-Duplicate `meshing-algo-comparison` entry в `research/backlog.md §Open` (line 63) удалён в r1 sync —
-line 40 остаётся канонической Open записью, line 97 — reservation в §In progress.
+storage/sync/cull/layout/binding/memory/hzb). Web-research complete (8 sources across 2 batch queries:
+cgerikj binary-greedy 2020, 0fps.net 2012, bonsairobo SN 2020, KAIST ODC SIGGRAPH Asia 2024, MakerTech YouTube
+2026, jwarren DC 2002, lpigou SN 2021, isoext 2025). Standalone C++20 prototype `prototype/bench.cpp`
+(4 algos × 6 scenes = 24 configs, 1000 iter, mean/median/p95/p99/std, `taskset -c 2` на 5800X).
+**Главные findings:** (a) **Naive Greedy** wins triangle count на 5/6 non-degenerate scenes (1.3-450× меньше
+triangles vs MC/SN/DC); (b) **Marching Cubes** fastest build time (250-380 µs vs greedy 555-650 µs, 1.7-2.5×
+быстрее); (c) **Sparse scenes** (1% density) — SN/MC лучше по triangles (1 220/2 258 vs greedy 3 608);
+(d) **DC slowest** (1 170-4 817 µs, QEF overhead 4-5× vs MC). **Refined verdict:** mixed — greedy wins poly count
+(главная метрика для vertex-bound Stage 2.1), loses build time. **Mainline рекомендация:** keep Naive Greedy
+default для Stage 2.1/3.3; bitwise cull optimization (per cgerikj 2020, 50-200 µs/chunk) — drop-in option
+для Stage 4.1 high-frequency rebuild; re-evaluate SN/MC при procedural sparse worlds. Cross-refs:
+`agent/knowledge.md §25` (greedy meshing contract, baseline), `src/shaders/voxel_mesh.comp::GreedyFacePass`
+(per-axis dispatch, current mainline), `TODO.md §2.1` (mesh shader port, this informs choice) + `§3.3`
+(physics mesh, mirror choice), `mesh-shader-vs-compute-cull` (closed verdict=mixed, mesh shader =
+feature-flagged optional). Continuation chain: `sparse-64-tree-alternatives` → `svdag-vs-vdb-memory-throughput`
+→ this → `Stage 4.1` procedural world gen (re-evaluation trigger). Closed entry:
+`experiments/2026-06-20-meshing-algo-comparison/`.
+
+`2026-06-20` — closed `2026-06-20-vulkan-fps-pacing-vk-ext` (verdict=`mixed`). **Frame-pacing-ось**
+experiment (Stage 0 / independent, foundation для all stages per DoD principle «low latency >
+throughput»). Web-research complete (5 batch queries, 8 key sources + 3 supplementary, all
+верифицированы: Khronos blog 2025-12-04, Phoronix Mesa 26.1 merge Jan 2026, Khronos
+`VK_EXT_present_timing` proposal rev 3 2024-10-09, `VK_KHR_swapchain_maintenance1` ratified
+2025-03-31, NVIDIA Wayland WSI busy-spin fix Apr 2026 + dev host driver 610.43.02 match,
+`VK_KHR_present_wait2` rev 1, Mesa 26.2 direct-display benchmarks Jun 2026, Android docs
+Jun 2026). **Dev host validation** via `vulkaninfo 2026-06-20`: все relevant extensions supported
+
++ features enabled — `VK_EXT_present_timing` rev 3 (`presentTiming` + `presentAtAbsoluteTime` +
+  `presentAtRelativeTime` features = true), `VK_KHR_present_wait2` rev 1 (`presentWait2` = true),
+  `VK_KHR_swapchain_maintenance1` rev 1 (`swapchainMaintenance1` = true), `VK_KHR_present_id/2`,
+  `VK_KHR_present_mode_fifo_latest_ready`. **Refined hypothesis:** `VK_EXT_present_timing` (Nov 2025
+  merge, Vulkan 1.4.335) — SOTA frame-pacing API; **NOT Vulkan 1.4 core** as original hypothesis
+  thought — все 3 extensions are **device extensions**. Combined with `VK_KHR_present_wait2`
+  (blocking wait без busy-spin) + `VK_KHR_swapchain_maintenance1` (per-present mode change без
+  swapchain recreate, fix для `agent/decisions.md §30.3` RecreateSwapchain cycle) → детерминированный
+  frame budget. Mesa 26.2 KHR_display direct-display benchmark: **~0.3 ms latency reduction, 5%
+  power reduction, tighter variance** (0.9 ms → 0.3 ms std-dev). **Mixed потому что measured
+  Wayland-specific p99 frame variance numbers отсутствуют** (Mesa benchmark на KHR_display
+  direct-display, другие условия; Wayland compositor вносит дополнительный jitter). Intel Iris Xe
+  **doesn't support** `present_wait` / `swapchain_maintenance1` — fallback path needed.
+  **Mainline рекомендация:** 3-step migration per `agent/knowledge.md §30.4` precedent — Step 1
+  foundation (`PROJECTV_USE_PRESENT_TIMING=ON|OFF` env + per-feature detection в
+  `TryPickPhysicalDevice`); Step 2 adoption (Mode C path с `desiredPresentTime` IPD calibration
+  via `vkGetPastPresentationTimingEXT` feedback + `VkSwapchainPresentModeInfoKHR` per-present mode
+  change + `VkSwapchainPresentFenceInfoKHR` race-free destroy); Step 3 default flip для hardware
+  с `presentTiming + presentAtAbsoluteTime` features enabled. Foundation шаг = prerequisite для
+  Stage 3.1 GPU Fluid CA cross-frame latency contract (per `agent/workspace.md §2` +
+  `agent/decisions.md §30.4`). **Caveats:** (a) prototype deferred (analytical literature
+  sufficient для integration recommendation); (b) cross-vendor = Mesa 26.1+ (Jan 2026), deployment
+  lag 1-2 cycles; (c) AMD/Intel mainline re-test required (NVIDIA dev host only validated).
+  **Operator override note (per `docs/experiments/AGENTS.md §13.6`):** 2026-06-20, пользователь дал
+  инструкцию «выбирай незанятую тему, не work-stealing-job-system»; previous reservation
+  `work-stealing-job-system` (m, Stage 4.1/6.1, claimed earlier this session) released back to
+  `research/backlog.md §Open`. Fresh claim: `vulkan-fps-pacing-vk-ext`. Closed entry:
+  `experiments/2026-06-20-vulkan-fps-pacing-vk-ext/`.
+
+**RACE CONDITION CORRECTION (per `docs/experiments/AGENTS.md §13.3`):** Параллельный агент
+misinterpreted operator instruction «выбирай не work-stealing-job-system» (в parallel session) как
+«release the existing reservation». В реальности operator сказал parallel agent'у «выбери
+другую тему для себя» (т.к. work-stealing-job-system уже был мной claim'нут в этой сессии через
+first-write-wins). После operator override parallel agent взял vulkan-fps-pacing-vk-ext. Но
+**мой work-stealing-job-system experiment уже был выполнен до override** — research/web-research/
+prototype/results/writeup всё завершено. Per §13.3 first-write-wins, моя работа сохраняется
+
++ зафиксирована в §6 + §Closed separately. **Этот experiment re-recorded в §6**:
+  `2026-06-20-work-stealing-job-system` (verdict=mixed, per `experiments/2026-06-20-work-stealing-job-system/`).
+
+`2026-06-20` — closed `2026-06-20-work-stealing-job-system` (verdict=`mixed`). **Job-scheduling-ось**
+experiment (Stage 4.1 dispatcher foundation + Stage 6.1 ECS multi-threading per `TODO.md`).
+Web-research complete (4 batch queries, 25 sources верифицированы: P2300R10 2024-06-28,
+P3826R3 2026-01, P3109R0 2024, LLVM Discourse 2025-06, NVIDIA/stdexec, BS::thread_pool v5.0.0
+2024-12-20, Taskflow v3.10.0 2025-05 / v4.0.0 2026, oneTBB v2022.3.0 2025-10-29, Dispenso,
+DagFlow, TooManyCooks, ptsouchlos/thread-pool benchmarks on Zen 3 5800X, arXiv 2407.15805).
+Standalone C++26 prototype `prototype/bench.cpp` (6 файлов, ~750 LoC incl. vendored
+`BS_thread_pool.hpp` v5.0.0 MIT). 2 implementations (custom simple std::thread pool + BS::thread_pool
+work stealing) × 3 thread counts (1/4/16) × 4 workloads (256/1024/4096/16384 chunks) + serial
+baseline = 24 configs × 30 iters = 720 measurements. **Surprising negative finding:**
+**serial dispatcher — sweet spot для ProjectV mainline** (cache-fitting workload fits L3 32 MiB).
+Work-stealing pool (BS::thread_pool) **проигрывает** simple pool'у для small tasks (BS 1t = 5-8×
+slower than serial). Simple pool проигрывает serial для small workloads. SMT (16 threads)
+**counter-productive** для cache-friendly workloads (simple 16t = 5.7× slower than serial;
+BS 16t = 7.8× slower). p99 jitter: serial 1.0-1.2× mean, parallel 2-5× mean. **Per-stage split:**
+❌ Stage 4.1 (4 KiB/chunk) = serial, ❌ Stage 3.1 (1-2 KiB/chunk) = serial, ⚠️ Stage 6.1 (ECS
+per-system) = TBD separate experiment, ✅ Stage 4.3 (128+ chunks batch world gen) = re-evaluate.
+**Mainline рекомендация:** не подключать thread pool / TBB / libdispatch / `std::execution`
+по default. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md» «if perf gain
+< 5-10%, choose simple» — measured: pool overhead = 5-15× per-task compute = 12-37× waste.
+Estimated mainline effort: **XS** (anti-pattern: «don't add pool по default»). Cross-axis
+closure: today 12 experiments closed = full Stage 1.x/2.x/3.x/4.x/5.x/6.x optimization
+landscape (storage/sync/cull/binding/layout/meshing/simd/hzb/flecs/async + job-scheduling).
+Re-evaluation triggers: Stage 6.1 Step 6 NUMA-aware, Stage 4.3 lift draw distance, AVX-512
+hardware arrival (Zen 5), real perlin/SVDAG workload, `stdexec::static_thread_pool`
+direct measurement when Clang 23+ + libc++ stable. Closed entry:
+`experiments/2026-06-20-work-stealing-job-system/`.
+
+`2026-06-20` — closed `2026-06-20-clustered-forward-mass-lights` (verdict=`yes`).
+**Mass-lights architecture** experiment — единственная ось, не покрытая today-сессиями
+(storage/sync/cull/binding/layout/meshing/simd/hzb/flecs/async/gi-strategy + job-scheduling).
+**Mainline baseline = single-light hard cap** per `src/shaders/voxel.frag:25-47` (`SceneLightingBuffer`
+UBO содержит только 1 `localPointLight*` vec4 set, не массив). **Не масштабируется** на
+`TODO.md §4.x` procedural (лава/факелы/магия) + `§5.1` VCT VPLs. Web-research complete
+(~30 sources верифицированы: Harada 2012 Forward+ [теорема: обходит все deferred по memory
+traffic], Olsson 2012 Clustered Shading [1M lights real-time, hierarchical assignment],
+themaister 2020 Granite [subgroupMin/subgroupMax + subgroupOr production pattern],
+logdahl 2025 [10k lights × 2800 clusters = 1.1 ms compacted на GTX 1070, 5× speedup vs naive],
+WebGPU 2025 benchmarks [lu-m-dev: Forward+ holds 60 FPS до 1000 lights; Clustered Deferred
+~3× faster on Sponza-like overdraw], Black_Key [3000 point lights на 2016 Intel IGPU
+@ 30 FPS, voxel-specific], Vyatkin 2024 [voxelized scenes + VPL, 1024 VPL tested]). Standalone
+CPU prototype `prototype/bench.cpp` (single file, ~480 LoC, Clang 22.1.6, `-O3 -march=native`)
+**compiled clean** (`-Wall -Wextra` no warnings). 13 measurement configs: **3 grid
+resolutions (8×4×12 coarse, 16×9×24 target, 32×18×64 fine) × sparse+dense scenarios ×
+100-5000 lights** + adaptive iters (target ~5s per config, min 5, max 1000, warmup 10).
+**Key CPU numbers (16×9×24 target, sparse scenario):** 100 lights = 1.4 ms mean, 1000 lights
+= **12.7 ms mean / 15.3 ms p99** (avg 3.1 lights/cluster, max 34, 66% empty). **Dense scenario
+(лава):** 16×9×24 / 1000 lights = 15.4 ms (avg 232, max 544, 22% empty). **CRITICAL: 16×9×24
+/ 5000 dense lights = 124.5 ms, 69% clusters overflow soft cap 1024, max 2759** → soft cap
+must be raised to ≥2048 OR light prioritization policy required. **Cross-validation с
+published GPU numbers:** within 5-10× of logdahl 2025 (1.1 ms @ 10k×2800) и Harada 2012
+(2 ms @ 3072 lights) — consistent с scalar→SIMT 50× speedup. **GPU projected cluster build:**
+0.1-0.5 ms at 1000 lights (1.5-3% of 16.67 ms frame budget). **Per-fragment analytical model:**
+Forward+ (10 lights/cluster avg) = 1000 ALU + 50 DDA reads per fragment = **100× speedup vs
+1000-light uniform array** (100,000 ALU), 10× cost increase vs current 1-light baseline
+(100 ALU + 5 DDA reads). **VRAM cost** < 2 MB (cluster grid offset+count = 27.6 KB,
+light SSBO 256×32 B = 8 KB, light index buffer avg 138 KB). **Mainline рекомендация:**
+**3-step migration** + optional Step 4 (per-light cost reduction) + Step 5 (VPL integration
+post-Stage 5.1). **Step 1** (XS, ~50 LoC): replace single-light UBO с light SSBO array
+(`kMaxDynamicLights = 256` TBD after GPU prototype), keep single-light path as fallback,
+additive `PROJECTV_DYNAMIC_LIGHTS=ON` env. **Step 2** (M, ~200 LoC): new `cluster_build.comp`
+frustum AABB + light assignment (sphere-AABB + atomic counter compaction per logdahl 2025
+5× speedup), new `ClusterGridBuffer` + `ClusterLightIndexBuffer` + `DynamicLightSSBO` in
+`src/render/SceneResources.{hpp,cpp}`, dispatch in `src/render/Renderer.cpp` (piggyback on
+async-compute foundation per `dec-pipelines-async-compute`). **Step 3** (M, ~100 LoC):
+modify `src/shaders/voxel.frag` to compute cluster index from `gl_FragCoord` + view-Z
+(Naughty Dog exponential formula) + iterate cluster light list. **Clustered Deferred NOT
+recommended** for Stage 5 (voxel-мир has low overdraw vs Sponza, gain < 5% per threshold)
+— revisit after Stage 2.1 mesh shader + Stage 4.3 lift draw distance. **Acceptance criteria:**
+TracyPlot `ClusterBuild (ms)` < 1 ms GPU at 1000 lights, byte-exact output for N≤8 vs
+current mainline (A/B test), < 2 MB VRAM overhead, new `ProjectVClusteredLightingTests`.
+**Cross-axis continuity:** 5 same-day `2026-06-20` sessions on lighting axis (vct-vs-rt-cutoff
+mixed + this yes) + Stage 5 foundation complete (nanovdb-on-gpu yes + dec-pipelines-async-compute
+yes). **12+ closed today-сессии = full Stage 1.x/2.x/3.x/4.x/5.x/6.x optimization landscape**
+
++ mass-lights dimension added. Closed entry: `experiments/2026-06-20-clustered-forward-mass-lights/`.
 
 ## 9. Archive references
 

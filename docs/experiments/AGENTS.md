@@ -1,5 +1,32 @@
 # AGENTS.md — протокол исследователя `docs/experiments/`
 
+> ## ⛔ HARDWARE PROBE BLOCKER (per operator directive 2026-06-20)
+>
+> Прежде чем запускать `lscpu`, `free`, `vulkaninfo`, `nvidia-smi`, `dmidecode`, `lshw`, `uname -a`,
+> `cat /proc/cpuinfo` или любой другой **hardware-probe** для проверки текущего хоста — **СТОП**.
+>
+> **Правило:**
+> 1. Прочитай [`hardware-profile.md`](./hardware-profile.md).
+> 2. Если `**Captured:**` в шапке файла **<14 дней назад** (от текущей даты) — данные актуальны. **Используй файл.
+     > НЕ ЗАПУСКАЙ probe-команды.**
+> 3. Если `**Captured:**` **≥14 дней назад** или файл отсутствует — запусти refresh-команду из шапки файла,
+     > перезапиши данные, обнови дату, **затем** работай.
+> 4. При обновлении файла — зафиксировать новую дату + сообщить оператору.
+>
+> **Запрещено как ритуал:**
+> - ❌ «просто проверю, не поменялся ли CPU» — `lscpu` / `cat /proc/cpuinfo` без необходимости.
+> - ❌ «на всякий случай гляну `vulkaninfo`» — если данные уже в `hardware-profile.md` и свежие.
+> - ❌ «сделаю `nvidia-smi` чтобы уточнить VRAM» — если VRAM уже в §3 файла.
+> - ❌ «посмотрю `free` для RAM» — если RAM уже в §2 файла.
+> - ❌ «проверю `uname` для ядра» — если kernel уже в §5 файла.
+> - ❌ Любой другой probe «для уверенности» при наличии свежего `hardware-profile.md`.
+>
+> **Файл = single source of truth.** Дублирование probe — пустая трата времени + риск получить разные ответы
+> в разных сессиях (driver state меняется между запусками).
+>
+> Подробности, исключения, edge-cases: §14. Hardware baseline для каждого experiment README: cross-ref
+> в `experiments/_TEMPLATE/README.md §9`.
+
 Файл стабильный, но изменяемый. Правка — **только по явной команде оператора**. Правка кода (вне моей папки) не даёт
 права
 править этот файл.
@@ -300,6 +327,11 @@ ls docs/experiments/experiments/<slug>/ 2>/dev/null
 
 ## 14. Hardware profile reference
 
+> **⛔ См. STOP-блок в начале файла.** Прежде чем запускать любой hardware-probe (`lscpu`, `free`, `vulkaninfo`,
+> `nvidia-smi`, `dmidecode`, `lshw`, `uname -a`, `cat /proc/cpuinfo`) — прочитай `hardware-profile.md` и проверь
+> дату в шапке. Свежие данные (<14 дней) — используй файл, **не запускай probe**. Устаревшие (≥14 дней) — refresh
+> из шапки файла, **затем** работай.
+
 **Один файл = single source of truth для hardware data:** [`hardware-profile.md`](./hardware-profile.md).
 
 **Что там:** CPU (модель, кэши, ISA-флаги), RAM, GPU (модель, VRAM, частоты), Vulkan extensions (subset
@@ -314,19 +346,24 @@ references.
 - Перед формулировкой hypothesis о perf / cache / VRAM — cross-ref к §8 «Per-stage references» (какие данные
   релевантны для какой стадии ProjectV).
 
-**Когда обновлять:**
+**Когда обновлять (только если реально изменилось):**
 
-- Host менялся (upgrade, swap, переустановка) → перезапустить refresh-команду из шапки `hardware-profile.md`,
-  перезаписать файл, зафиксировать дату в шапке.
+- Host менялся (upgrade, swap, переустановка, второй GPU) → перезапустить refresh-команду из шапки
+  `hardware-profile.md`, перезаписать файл, зафиксировать дату в шапке.
 - Новая стадия ProjectV попадает в scope → добавить строку в §8 «Per-stage references».
-- Dev host добавляет второй GPU → обновить §3 + §4 (multi-GPU extensions).
 
-**Что НЕ делать:**
+**Anti-ritual (явный список запрещённых действий):**
 
 - ❌ **Не дублировать** данные из `hardware-profile.md` в README эксперимента. Использовать cross-ref.
-- ❌ **Не прогонять** `vulkaninfo`/`lscpu` повторно если данные уже там и host не менялся.
-- ❌ **Не игнорировать** при формировании hypothesis о hardware-specific perf — почти все Stage 2.x/3.x/5.x
-  имеют hardware dependency.
+- ❌ **Не прогонять** `vulkaninfo`/`lscpu`/`nvidia-smi` повторно если данные в `hardware-profile.md` свежие
+  (<14 дней).
+- ❌ **Не прогонять** «освежающий» probe с фиксацией результата в чате — данные уже в файле, **обнови файл**
+  refresh-командой, не дублируй в чат.
+- ❌ **Не игнорировать** `hardware-profile.md` при формировании hypothesis о hardware-specific perf — почти все
+  Stage 2.x/3.x/5.x имеют hardware dependency.
+- ❌ **Не использовать** probe для «проверки актуальности» файла — если файл существует и дата в шапке <14 дней,
+  он актуален по определению (refresh = ручная операция оператора / агента при реальном апгрейде).
+- ❌ **Не «проверять на всякий случай»** — STOP-блок в начале файла запрещает это явно.
 
 **Пример cross-ref в README эксперимента:**
 
@@ -334,6 +371,15 @@ references.
 **Hardware baseline:** см. [`docs/experiments/hardware-profile.md`](../hardware-profile.md) §3 (RTX 3060 Ti, 8 GiB
 VRAM) + §4 (`VK_EXT_mesh_shader` rev 1).
 ```
+
+**Edge cases (когда probe РАЗРЕШЁН):**
+
+- ✅ Файл `hardware-profile.md` отсутствует → создать через refresh-команду, **это и есть первый probe**.
+- ✅ Дата в шапке ≥14 дней назад → обновить через refresh-команду (явная команда агента, не ритуал).
+- ✅ Оператор явно попросил "проверь, не поменялся ли CPU" → probe + обновление файла.
+- ✅ Нужны данные, которых в файле нет (например, конкретный sub-test VRAM budget под нагрузкой) → probe +
+  дополнить файл новой секцией.
+- ✅ Multi-GPU setup / новый extension / новая toolchain → дополнить файл, не дублировать.
 
 ---
 

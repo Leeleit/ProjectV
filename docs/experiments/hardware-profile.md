@@ -1,5 +1,16 @@
 # Hardware profile — dev host для ProjectV research
 
+> ## ⛔ Перед ЧТЕНИЕМ этого файла для агентов
+>
+> **Не запускай hardware-probe (`lscpu`, `free`, `vulkaninfo`, `nvidia-smi`, `dmidecode`, `lshw`, `uname -a`,
+> `cat /proc/cpuinfo`) если этот файл существует и дата в шапке <14 дней назад.**
+>
+> Полный протокол: [`AGENTS.md`](./AGENTS.md) — STOP-блок в начале файла + §14 «Hardware profile reference».
+> Краткая версия:
+> - Дата в шапке **<14 дней** → использовать файл, **не запускать probe**.
+> - Дата **≥14 дней** или файл отсутствует → запустить refresh-команду ниже, обновить данные, обновить дату.
+> - Любой probe «для проверки» при свежем файле = **ЗАПРЕЩЁННЫЙ ритуал**.
+
 **Captured:** 2026-06-20
 **Hostname:** `obvium`
 **Refresh:** `bash -c "$(cat <<'EOF'

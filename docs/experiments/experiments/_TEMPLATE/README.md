@@ -114,3 +114,8 @@ _Обязательно_, если эксперимент включал изм�
 - Какой участок движка соответствует прототипу.
 - Какие допущения/упрощения.
 - Что осталось неизмеренным (driver overhead, kernel launch, и т.п.).
+
+**Hardware baseline:** см. [`docs/experiments/hardware-profile.md`](../../hardware-profile.md) — CPU/RAM/GPU/Vulkan
+data captured `2026-06-20`, dev host `obvium`. Если эксперимент hardware-specific — указать §1/§2/§3/§4
+(например, «§3 (RTX 3060 Ti, 8 GiB VRAM) + §4 (`VK_EXT_mesh_shader` rev 1)»). **Не дублировать данные
+в README**, использовать cross-ref. Если данных в файле не хватает — **сначала дополнить файл**, не probe.

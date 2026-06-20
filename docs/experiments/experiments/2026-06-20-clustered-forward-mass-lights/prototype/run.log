@@ -1,0 +1,23 @@
+ProjectV-ClusteredForward Cluster Build CPU Benchmark
+CPU: Zen 3 5800X, governor=powersave, single-core (taskset -c 2)
+Camera: pos=(0,0,0), forward=(0,0,-1), FOV=60deg, near=0.1, far=200
+Cluster build: adaptive iters per config (10 warmup, target ~5s)
+Two scenarios: sparse (lights in [-50,50]^3, VPL-like) + dense (20m sphere, lava/torches)
+
+scenario config     lights    mean_ms  median_ms     p95_ms     p99_ms     std_ms     min_ms     max_ms
+-------- ------     ------    -------  ---------     ------     ------     ------     ------     ------
+sparse   8x4x12        100      0.147      0.133      0.222      0.258      0.031      0.123      0.304  (occ avg=0.7 med=0 max=11 empty=77.1% over=0.00%, n=1000)
+sparse   8x4x12       1000      1.589      1.509      2.157      2.579      0.257      1.334      2.878  (occ avg=9.0 med=1 max=107 empty=49.7% over=0.00%, n=1000)
+sparse   16x9x24       100      1.412      1.267      2.071      2.345      0.338      1.046      2.602  (occ avg=0.3 med=0 max=7 empty=82.1% over=0.00%, n=1000)
+sparse   16x9x24      1000     12.681     12.521     14.443     15.286      0.811     11.130     17.360  (occ avg=3.1 med=0 max=34 empty=65.6% over=0.00%, n=384)
+sparse   32x18x64      100     13.362     13.110     15.306     17.789      1.198     11.788     23.947  (occ avg=0.2 med=0 max=4 empty=86.9% over=0.00%, n=398)
+sparse   32x18x64     1000    137.618    136.944    149.094    150.932      6.719    126.615    150.932  (occ avg=1.5 med=0 max=17 empty=63.4% over=0.00%, n=36)
+dense    8x4x12        100      0.192      0.166      0.305      0.353      0.051      0.155      0.410  (occ avg=28.5 med=29 max=70 empty=20.1% over=0.00%, n=1000)
+dense    8x4x12       1000      2.071      1.980      2.773      3.132      0.297      1.768      3.393  (occ avg=267.2 med=263 max=630 empty=17.7% over=0.00%, n=1000)
+dense    16x9x24       100      1.608      1.463      2.442      2.650      0.351      1.286      2.771  (occ avg=24.9 med=26 max=59 empty=23.8% over=0.00%, n=1000)
+dense    16x9x24      1000     15.429     15.110     17.908     24.534      1.565     13.618     24.917  (occ avg=231.7 med=243 max=544 empty=21.6% over=0.00%, n=305)
+dense    16x9x24      5000    124.484    130.635    152.100    158.724     20.930     78.507    158.724  (occ avg=1165.0 med=1248 max=2759 empty=21.1% over=69.27%, n=37)
+dense    32x18x64      100     22.766     24.446     34.969     63.256      8.479     13.470     69.780  (occ avg=17.8 med=20 max=47 empty=24.9% over=0.00%, n=198)
+dense    32x18x64     1000    155.036    153.855    163.299    164.050      5.157    146.861    164.050  (occ avg=212.6 med=251 max=506 empty=23.5% over=0.00%, n=30)
+
+results.csv: per-iter rows (warmup excluded).
