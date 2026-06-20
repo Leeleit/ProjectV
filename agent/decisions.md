@@ -842,6 +842,20 @@ Cross-refs: `legacy/docs/archive/agent-memory/2026-06-taa-sessions.md#10.26` (wo
 
 ## 29. Hardcore perf r0 — Tier plan + error-handling rule (`2026-06-13`)
 
+> **OUTDATED 2026-06-20** — superseded by `TODO.md` Roadmap v1 (6 Stages GPU-driven,
+> dependency-aware). Tier 0..5 sub-tasks mostly closed (`cf4b535`, `af69d06`,
+> `bafecf9`, `08de29d`, `20b2d9e`, `44362d1`, `72eca66`). Tier 0.A (Math.hpp create)
+> and Tier 1.A (std::inplace_vector) superseded by Tier 0.B+C (Vec3/Vec4/Mat4 +
+> FrustumCull template) and `std::array<…, 1024>` in `VoxelMeshingPushConstants.hpp`.
+> Tier 3 (C kernels) closed via `08de29d` (rename + orthodox C++ rewrite). Tier 4
+> R&D items promoted to Roadmap v1 mainline with **new dependency-aware
+> numbering** (per 2026-06-20 dependency-analysis: Stage 1 storage MUST land
+> before Stage 2-5 GPU geometry work): Mesh Shaders → Stage 2.1, SVO/Sparse
+> 64-trees → Stage 1.1, SVDAG → Stage 1.2, RT shadows → Stage 5.2. Flecs ECS
+> migration moved from tech-debt backlog to Stage 6.1 (parallel with Stages
+> 2-5). Old content preserved below as historical record. Cold/hot
+> `std::expected` rule (§29.0) **remains valid** for new code per `§30.4`.
+
 Решение (по итогам r0 pass, оператор явно одобрил 2026-06-13):
 
 - **`std::expected<T, E>` для cold path, `bool + CORE_ASSERT` для hot path.** Per CppCon 2025 (Fanaskov) synthetic micro-benchmark: `std::expected` ~2.18× медленнее raw returns. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md`: «если прирост производительности меньше 5–10% при значительном усложнении кода — выбираем простой вариант» — наоборот: `std::expected` **стоит** производительности в hot, поэтому горячий код остаётся на `bool` + инвариантных `CORE_ASSERT` (которые компилируются в nothing в Release, §07_memory-philosophy §«Crash Culture»). Cold path (file I/O, asset load, scene preset switch, snapshot save/load, vulkan init) переходит на `std::expected<T, E>` для **типобезопасной композиции** через `.and_then()` / `.or_else()` / `.transform()`. Граница cold vs hot — per `decisions.md §4` runtime-smoke policy: cold = пути, которые выполняются при init/load, не per-frame per-entity.
@@ -873,6 +887,15 @@ Cross-refs: `legacy/docs/archive/agent-memory/2026-06-taa-sessions.md#10.26` (wo
 Cross-refs: `agent/memory.md §11` (полный technical-debt inventory + plan), `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#20` (Phase 0 snapshot), `agent/active-sessions.md session-2026-06-13-hardcore-perf-r0`, `TODO.md` (переписан под Tier 0..5), `legacy/docs/philosophy/01_foundation/05_decision-making.md` («если прирост < 5-10% при значительном усложнении — простой»), `legacy/docs/philosophy/01_foundation/08_error-handling.md` (`std::expected` для cold path), `legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md` (C++26 модули), `legacy/docs/philosophy/02_paradigms/01_zero-cost-abstractions.md` (`std::simd`, reflection, contracts, zero-cost), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (данные → алгоритм → код, low latency > throughput).
 
 ## 30. Fluid CA audit — fall-only rule, determinism, invariants (`2026-06-13`)
+
+> **OUTDATED 2026-06-20** — mainline Fluid CA переносится на GPU compute (operator reversal).
+> §30.4 «GPU Fluid CA contract» = new binding contract. Old CPU fall-only content preserved
+> below as **reference implementation** (для re-implementation на GPU, для тестов на CPU-side
+> fixtures, и для исторической записи решений 2026-06-13).
+> Specifics that **переносятся** в GPU port: (a) per-tile determinism guarantees (single-threaded
+> семантика на уровне tile), (b) iteration order (z, y, x ascending) сохраняется внутри compute
+> shader workgroup, (c) `stats.fluidVoxelCount` invariant через `imageAtomicOr` accumulator
+> pattern, (d) `claimed[]` per-tick tracking заменяется на `imageAtomicCompareExchange`.
 
 Решение (по итогам CA audit, оператор явно одобрил «Только падает, не растекается» + «Только CPU fluid CA» + «Да, фиксить throttle»):
 
@@ -992,6 +1015,56 @@ Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:69-148` (auto-detect cycle + 
 - **«Test order independence via explicit reset»** — defensive pattern. Inline variables + global state → tests must explicitly reset to known state. `BuildPresentModeCycle({FIFO})` forces fallback to FIFO because previous `g_active` (whatever) is not in `{FIFO}`. Cleaner than having per-test fixtures.
 
 Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:180-220` (preserve-`g_active` logic в `BuildPresentModeCycle`), `tests/PresentModeTests.cpp:281-415` (3 new sub-tests + explicit-reset pattern).
+
+---
+
+### 30.4. Fluid CA reversal: GPU compute (ping-pong + atomicOr + active chunk list) (`2026-06-20`)
+
+Решение (по operator reversal `2026-06-20`, supersedes §30 CPU fall-only rule):
+
+- **Mainline Fluid CA переносится на GPU compute (Stage 3.1 в новом `TODO.md`, dependency-aware reordering 2026-06-20).** Per operator «Reversal — переносить Fluid CA на GPU». Старый §30 (CPU `UpdateFluidCA` с fall-only rule + spread recovery + percolation) становится **reference implementation** для порта и для CPU-side test fixtures, но **не mainline**. Stage 3.1 теперь **depends on Stage 1.2 (SVDAG)** — GPU CA shader оперирует на SVDAG node pool, не на flat array.
+
+- **Архитектура ping-pong + atomicOr + active chunk list:**
+  - **Ping-pong voxel buffers** — два 3D textures / SSBO (read source, write target), swap каждый tick. Identical to old `std::vector<uint8_t> next = world.voxels` pattern, but on GPU.
+  - **`imageAtomicOr` / `atomicOr` для бесконфликтного распределения воды.** Spread destination claim: `imageAtomicCompareExchange` проверяет target cell == Air перед write (replaces CPU `claimed[]` bool array + count conservation). Two adjacent source cells competing for same target cell — только один succeeds (через CAS loop), count invariant сохраняется.
+  - **Active chunk list (per «R&D не делаем, не обрабатывать спящие воксели»).** Frontend CPU проходит voxel data, identifies chunks с non-Air fluid cells (или non-stable cells), appends в `activeChunks` SSBO. Compute shader dispatch = `activeChunks.count` workgroups, не world size. Sleepy chunks skip entirely (zero GPU cost).
+  - **Multi-tile determinism.** Per `decisions.md §30` determinism contract пересмотрен для GPU: single-workgroup single-tile семантика сохраняется (atomic operations дают serialized writes в пределах workgroup), но cross-tile races не детерминированы (две fluid cells в смежных tiles могут конкурировать). **Frontend test fixture contract** = «один fluid tick на world без соседних write-tiles» = deterministic; «multiple tiles concurrent» = статистически стабильный, но не bit-identical между GPU vendors. Для save/load и replay consistency = single-tile или single-thread fallback path.
+
+- **Итерационный order внутри compute shader workgroup — fixed `z, y, x` ascending** (per old §30 iteration order). Workgroup size = `4×4×4` or `8×8×8` block of voxels, dispatch order = chunk order in active list. Детерминизм в пределах workgroup: да. Между workgroups: нет (но семантически identical для fluid CA — конечное состояние after one tick не зависит от order, только intermediate states).
+
+- **Performance target**: 20 Hz tick rate per `SimulationState::fluidTickRateHz` (per `decisions.md §30.1`), now dispatched as compute pass, not CPU loop. Skip-tile оптимизация (active chunk list) даёт sub-linear scaling с world size. Expected: 1M+ fluid voxels without mainline FPS drop.
+
+- **CPU `UpdateFluidCA` остаётся в коде как:**
+  - Reference для GPU re-implementation (reference math).
+  - CPU-side test fixture (per `tests/FluidCATests.cpp` — determinism tests, percolation, glass interaction). Compute shader version должна проходить **те же тесты** (но с GPU-side determinism contract).
+  - Optional CPU fallback для headless / test environments без GPU.
+
+- **`SimulationState` не меняется** — `fluidTickRateHz`, `fluidAccumulatorSeconds`, `effectivePaused` gate остаются в `UpdateApp` (per `decisions.md §30.1`). Tick dispatcher меняется: вместо `if (accumulator >= interval) { for (... UpdateFluidCA(...)) }` → `if (accumulator >= interval) { vkCmdDispatch(update_fluid_CA_pipeline, activeChunks.count, 1, 1) }`. Pipeline barrier для swap ping-pong textures.
+
+- **Visual / rendering path не меняется** — `voxel.frag` (sun shadow / contact shadow / local light shadows) и `voxel_mesh.comp` (greedy meshing) читают тот же packed voxel payload. GPU CA записывает в тот же `world.voxels` SSBO/buffer; meshing срабатывает на dirty-chunk signal (как и для CPU edit). Render path = unaware of CPU-vs-GPU source.
+
+- **Тестовый coverage** — старые `ProjectVFluidCATests` (24 sub-tests, 100% pass) остаются CPU-side, переходят в `ProjectVFluidCACpuReferenceTests` (renamed). Новые `ProjectVFluidCAGpuTests` пишутся параллельно: те же сценарии + GPU-specific tests (active chunk list filtering, workgroup determinism, multi-tile race semantics, performance benchmarks).
+
+- **Migration path** (3-step, не breaking):
+  1. **Step 1**: GPU CA как **additive optional path** (`PROJECTV_FLUID_CA_GPU=ON` env var), CPU path остаётся default. Both produce same render output. A/B test side-by-side, validate per `ProjectVFluidCAGpuTests`.
+  2. **Step 2**: Default flip — `PROJECTV_FLUID_CA_GPU=ON` for Linux/Windows dev presets, `=OFF` как emergency fallback.
+  3. **Step 3**: CPU path deprecated (kept as reference), new tests в `ProjectVFluidCAGpuTests` only. Old `ProjectVFluidCACpuReferenceTests` — opt-in (`PROJECTV_RUN_CPU_REFERENCE_TESTS=ON`).
+
+- **Cross-policy с другими решениями:**
+  - `decisions.md §30.1` (CA tick rate, pause, timeScale) — **сохраняется** (SimulationState, UpdateApp integration). Только dispatcher меняется.
+  - `decisions.md §30` (determinism contract) — **пересмотрен** для GPU (multi-tile semantics, см. выше).
+  - `decisions.md §4` (build / verification contract) — новый pipeline (`update_fluid_CA.comp` + descriptor set) добавляется в `src/CMakeLists.txt` + `src/render/Renderer.cpp::RecordGraphicsCommands` (per-frame dispatch).
+  - `decisions.md §14` (lighting look-dev) — fluid tick rate остаётся в `SimulationState`, не в lighting. TimeScale по-прежнему gate'ит.
+  - `TODO.md Stage 3.1` — owner этой подзадачи.
+
+Почему:
+
+- **Reversal обоснован масштабом.** Per `agent/status.md §Tier 0.B/0.C/0.D` benchmark: current CPU Fluid CA handles VoxelLab reference shot (24×17×24 chunks) at 20 Hz без проблем, но extension на 64+ chunks draw distance (Stage 4.3 в dependency-aware reordering, бывший Stage 5.3) или procedural big-world generation = O(N³) CPU bottleneck. GPU CA = constant-cost per active chunk, не per world volume.
+- **«GPU CA как additive, не breaking»** — standard A/B migration pattern. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md`: «если прирост функциональности меньше 5-10% при значительном усложнении кода — выбираем простой вариант», здесь наоборот: GPU CA = **3-step migration** (additive → default → deprecate) = explicit, no risk of breaking VoxelLab baseline.
+- **«Determinism contract пересмотрен, не сломан»** — старый contract (bit-identical cross-run) больше не achievable на multi-tile GPU. New contract (single-tile deterministic, multi-tile statistically stable) — explicit, documentable, testable. Save/load consistency через single-tile path или CPU fallback.
+- **«CPU reference не удаляем»** — debuggability + test fixtures + reference для GPU re-implementation. Per `legacy/docs/philosophy/01_foundation/07_memory-philosophy.md §3»: «GPU код без CPU reference = undebuggable».
+
+Cross-refs: `TODO.md Stage 3.1`, `decisions.md §30` (CPU reference, OUTDATED marker), `decisions.md §30.1` (tick rate + pause + timeScale), `src/voxel/VoxelWorld.cpp::UpdateFluidCA` (CPU reference), `src/voxel/VoxelWorld.hpp:154-191` (determinism contract header), `tests/FluidCATests.cpp` (24 sub-tests, CPU reference).
 
 ---
 

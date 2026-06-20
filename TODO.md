@@ -1,203 +1,299 @@
-# TODO — Hardcore perf / architecture r0 (`2026-06-13`)
+# TODO — ProjectV Roadmap (`2026-06-20`)
 
-**Снимок:** `2026-06-13` — Phase 0 (документация) закрыт, Phase 1+ (код) **после явного одобрения operator + commit'a Phase 0**.
+**Build preset baseline:** `linux-clang-debug` (Clang 22.1.6 + libstdc++ 16 + sccache, ctest 16/16 ≈ 0.77s).
+**Scope discipline:** `external/`, `legacy/`, `docs/`, build-артефакты — out of scope.
 
-**Source-of-truth shift:** По явной команде оператора «сейчас то, что ты написал в отчёте — приоритет номер 1, плюём на всё, что в TODO, сейчас занимаемся хардкором, который ты расписал». Все 846 строк старого TODO (всё `[x]`, history closed) — **отменены в части дальнейших приоритетов**; **сохранены** в `/tmp/before_todo_rewrite_20260613T1330.md` как historical record. **Новый roadmap** ниже построен вокруг Tier 0..5 плана из `agent/memory.md §11` + `agent/decisions.md §29`.
+**Project context (so a fresh session can orient):**
+- ProjectV = reproducible interactive voxel MVP. C++26 + Vulkan 1.4 (see A1 for 1.3 option) + Flecs ECS + Jolt Physics + GPU-driven greedy meshing.
+- Current voxel storage: flat `std::vector<uint8_t>` (1 byte/voxel, no SIMD, no SoA) — **will be replaced in Stage 1**.
+- Current draw distance cap: `min(camera.farPlane, 64)` chunks (`src/render/ShadowProjection.cpp::BuildSunShadowCascadeSplits`) — lifted in Stage 4.3.
+- Current shadow path: 4-cascade CSM (`agent/decisions.md §15` — stable, do NOT replace with RTX blindly; RTX = additive feature-flag per Stage 5.2).
+- Current lighting: direct GGX + ambient + contact shadow + local point light. Forward voxel DDA, no RT, no SSAO/GTAO.
+- Current Fluid CA: CPU fall-only rule (`agent/decisions.md §30`, soon-to-be-superseded by GPU per `§30.4`).
+- Per `AGENTS.md §6.3`: do `web_search` (Exa) for unfamiliar Vulkan / C++26 / Jolt API before writing code.
 
-**Build preset baseline:** `linux-clang-debug` (Clang 22.1.6 + libstdc++ 16 + sccache, ctest 6/6 ≈ 1.38-1.50s). **Не трогать** `windows-clang-debug` / `linux-clang-debug-tracy-profiler` до явного «переключись».
+**How to read this file:**
+- Each `- [ ]` = one logical task (small = 1 commit, large = multi-commit slice).
+- **Pre-Stage 0** = quick-win bugfixes. Do these first; they unblock subsequent work.
+- **Stage 0** = architectural decisions (low risk, high impact on subsequent stages).
+- **Stage 1** = NEW Voxel Database & Compression (Sparse 64-trees + SVDAG + async audio scan).
+  - **CRITICAL DEPENDENCY**: All subsequent GPU geometry, cull, sim, GI, LOD code (Stages 2-5) **MUST read from the new SVDAG/64-tree storage**, not the flat `std::vector<uint8_t>`. Building any of those on top of the flat array would require a full rewrite when Stage 1 lands. The migration is large; Stages 2-5 are designed to assume Stage 1 is already in mainline.
+- **Stage 2** = GPU-Driven Geometry & Culling (Mesh Shaders, HZB cull, Virtual Texturing). Depends on Stage 1.
+- **Stage 3** = Physics & Simulation (GPU Fluid CA, Incremental Jolt, Greedy Physics Meshing). Depends on Stage 1.
+- **Stage 4** = Procedural Generation & LOD (GPU noise gen, geometry LOD, lift draw distance). Depends on Stage 1.
+- **Stage 5** = GI & Temporal (VCT, RTX shadows, TAA + Motion Vectors). Depends on Stage 1.
+- **Stage 6** = Tech-debt & ECS refactor. **Do in parallel with Stages 2-5** (per dependency-aware plan), not as a final cleanup. Converting each new system to a Flecs system as it lands is cheaper than retro-fitting a 989-line god-function later.
+- Each item: **What** / **Why** / **Files** / **Approach** / **Verify** / **Acceptance**.
 
-**Scope discipline per `AGENTS.md §7.2.6`:** `external/`, `legacy/`, `docs/`, build-артефакты — **out of scope**. Build pipeline / submodule'и — frozen. Трогаю mainline `src/`, `tests/`, корневой `CMakeLists.txt`/`CMakePresets.json` (если нужно), `cmake/` (если нужно).
-
----
-
-## Tier 0 — `Vec3/Vec4/Mat4` (alignas) + SIMD frustum cull + pre-reserve hot vectors
-
-**Цель:** устранить zero-SIMD в hot path (P1, P2, P3 из `memory.md §11.2`). Локальный scope, измеримый bottleneck, нулевой ABI-влияние (Vec3 = 16 bytes = alignment pad, Mat4 = 64 bytes = уже aligned). Один atomic-подзадача = один commit.
-
-- [ ] **A. `projectv::math::Vec3/Vec4/Mat4` (alignas 16/32)** — new `src/core/Math.hpp` (header-only). `Vec3` 16-byte aligned (pad), `Vec4` 16-byte aligned, `Mat4` 16-byte aligned. Scalar member access (`x`, `y`, `z`, `w`, `m[0]..m[15]`). Free functions: `dot(Vec3,Vec3)`, `cross(Vec3,Vec3)`, `length(Vec3)`, `normalize(Vec3)`, `operator*(Mat4,Vec4)`, `inverse(Mat4)`, `transpose(Mat4)`. **Verify:** `static_assert(sizeof(Vec3)==16)`, `static_assert(alignof(Vec3)==16)`, `static_assert(alignof(Mat4)==16)`, Godbolt: компилятор использует `movaps` / `vmovaps` (alignment-required SSE/AVX).
-- [ ] **B. Заменить `std::array<float, N>` в hot structures** на `Vec3/Vec4/Mat4`: `src/core/Types.hpp` (CameraState, ChunkCullingParameters, GraphicsPushConstants, PackedSceneChunkDescriptor, etc.), `src/render/SceneResources.hpp` (PackedSceneChunkDescriptor fields, ChunkCullingParameters, FrameRenderData), `src/voxel/VoxelWorld.hpp` (Int3 → остаётся, но chunk координаты можно конвертировать), `src/app/Camera.cpp` (mat4 mul, inverse, perspective). **Zero ABI-change** (same sizes, только alignment).
-- [ ] **C. Frustum cull — single templated SIMD function** — `IsSceneChunkVisible` + `IsAabbVisibleAgainstCameraFrustum` + `IsSceneChunkVisibleInShadowCascade` объединяются в одну `template<typename GetOrigin, typename GetHalfExtent> bool FrustumCull(GetOrigin, GetHalfExtent, ChunkCullingParameters)`. SIMD-вариант через `std::simd<float, 8>` (8 chunks параллельно), fallback на scalar. **Verify:** `TracyPlot("FrustumCulling (ms)")` до/после; ожидаем 8× speedup.
-- [ ] **D. Pre-reserve `std::vector` в hot paths** — `src/voxel/VoxelWorld.cpp::QueueChunkRebuildRequest` (`pendingChunkRebuildIndices.push_back` per voxel edit), `src/render/SceneResources.cpp` (`ChunkVisibilityCache.opaqueCommands/shadowCommands/transparentCommands` push_back per chunk per frame), `src/render/Renderer.cpp` (`DebugOverlayBoxes` push_back per frame), `src/app/InputReplay.cpp` (`InputReplayCapture.frames` per recorded frame). Либо `reserve(maxPossible)` на init, либо `std::inplace_vector<T, N>` (Tier 1, если cap известен).
-- [ ] **E. Godbolt-ревью intrinsics vs auto-vectorize** — для каждой hot-функции после Tier 0.C проверить, что SIMD реально компилируется в AVX (не остался scalar из-за зависимостей). Если auto-vectorize даёт то же — `[[likely]]` / loop restructuring помогут.
-- [ ] **F. **Tier 0 commit (atomic)** — `<type>(<scope>): <summary>` per `§7.2.5`. Заголовок: `perf(render): alignas Vec3/Mat4 + SIMD frustum cull + pre-reserve hot vectors` (или split на 2-3 commit'а если diff > 800 lines). Body: per-commit motivation, expected regression risk, build state.
-- [ ] **G. Verify build green** — `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` clean. `ctest 6/6` baseline preserved. `TracyPlot` показывает >5% FrustumCulling speedup (Tier 0.C). Sidecar captures VoxelLab/FlatBenchmark/MeshingStress unchanged.
-
-**Tier 0 exit criteria:** SIMD working в cull + cull time measurably снижен + zero new warnings + ctest baseline. **Следующий Tier начинается только после явного одобрения operator + apply commit'a.**
-
----
-
-## Tier 1 — `std::inplace_vector` + `std::expected` (cold) + StringID
-
-**Цель:** устранить hot-path `std::vector` realloc (Tier 0.D follow-up), cold-path `bool` → `std::expected<T,E>` (A1, P4 из `memory.md §11.1-§11.2`), ввести StringID тип (P4 — 0 StringID в проекте).
-
-- [ ] **A. `std::inplace_vector<VkDrawIndirectCommand, 1024>`** — заменить `std::vector` в `src/core/Types.hpp::ChunkVisibilityCache` (cap 1024 покрывает worst-case VoxelLab + MeshingStress). Fixed-cap, stack-friendly, no realloc. `static_assert(inplace_vector<VkDrawIndirectCommand, 1024>::capacity() == 1024)`.
-- [ ] **B. `std::expected<T, E>` для cold path** — рефакторинг следующих функций (cold = init/load/file I/O, не per-frame per-entity):
-  - `src/voxel/VoxelWorld.cpp::SaveVoxelWorldSnapshot` → `std::expected<bool, VoxelSnapshotError>` (enum `FileNotFound`, `WriteError`, `HeaderCorrupted`)
-  - `src/voxel/VoxelWorld.cpp::LoadVoxelWorldSnapshot` → `std::expected<std::unique_ptr<VoxelWorld>, VoxelSnapshotError>`
-  - `src/asset/AssetLoader.cpp::Load*` → `std::expected<AssetData, AssetLoadError>` per asset type
-  - `src/audio/AudioEngine.cpp::loadMusicFolder` → `std::expected<size_t, AudioLoadError>` (size_t = track count, 0 = valid)
-  - `src/asset/ModelManifestLoader.cpp::load*` → `std::expected<ModelManifest, ManifestError>`
-  - `src/render/vulkan/VulkanInit.cpp::InitVulkan` → `std::expected<VulkanContext, VulkanInitError>` (per-step error)
-  - `src/render/vulkan/VulkanSwapchain.cpp::CreateOrRecreateSwapchain` → `std::expected<VkFormat, SwapchainError>`
-  - `src/render/TaaRenderTargets.cpp::CreateOrRecreateTaaRenderTargets` → `std::expected<TaaRenderTarget, TaaError>`
-- [ ] **C. `.and_then()` / `.or_else()` / `.transform()` композиция** в cold-path вызовах (main.cpp::SDL_AppInit, SDL_AppIterate snapshot load, asset load). Не заставлять каждый caller обрабатывать все error variants — `.or_else(fallback)` где есть fallback.
-- [ ] **D. `StringID` тип** — new `src/core/StringId.hpp`: `struct alignas(8) StringID { uint64_t hash; uint32_t length; };` + `constexpr StringID` ctor от `const char (&)[N]` (FNV-1a 64-bit на compile time). `operator==`/`!=` по (hash, length). `StringID("rock_diffuse")` constexpr.
-- [ ] **E. Заменить `std::string` в hot path на StringID**:
-  - `src/core/Types.hpp::ModelRegistryEntry::id: std::string` → `StringID`
-  - `src/audio/AudioEngine::m_currentTrackName` → `StringID` (track filename); `m_currentArtist` / `m_currentTitle` → `StringID` (parsed sub-fields); `currentTrackName()` возвращает `StringID`, mirror в `DebugStats::audioMusicTrackName` — `std::array<char, 128>` остаётся (HMI readable).
-  - `src/core/Types.hpp::InputReplayState::replayPath` / `InputReplayCapture::snapshotPath` → `std::filesystem::path` (это OS path, не StringID).
-  - `VoxelScenePresetToString` → `constexpr std::string_view` (compile-time), `ParseVoxelScenePreset` → `std::optional<VoxelScenePreset>`.
-- [ ] **F. **Tier 1 commit (atomic)** — `feat(core): std::inplace_vector + std::expected cold + StringID type`. Body: scope list, refactor count, error contract per функция. Verify ctest 6/6.
-- [ ] **G. Verify build green + ctest baseline** — `linux-clang-debug` clean, ctest 6/6.
-
-**Tier 1 exit criteria:** 0 `std::string` в hot path; cold path типобезопасный; inplace_vector заменил 1+ hot vector; StringID constexpr-constructed в hot path.
+**Verification policy (cross-cutting, applies to all stages):**
+1. **A/B test buffers** during data-format migrations (Stage 1). Keep the old code path as an inactive branch, populate both structures in parallel, compare per-chunk bytewise. Roll forward only when byte-equal across all existing test fixtures.
+2. **MeshingStress measurement on every optimization** (`src/bench/` or `TracyPlot` per `decisions.md §4`). Each implementation must improve the relevant Tracy metric by **> 5%** on the stress scene. If not, simplify the implementation or revert to the scalar version with `[[likely]]` / `[[unlikely]]` / branchless optimizations. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md`: «если прирост < 5-10% при значительном усложнении — простой».
+3. **Per-`decisions.md §15` close-out rule for any rendering work**: inspected runtime captures required (FINAL + relevant debug views like SHDW / CSM / CTSH / AOCC / LOCL / MOTION / VOXLIGHT), not sidecar numbers alone.
 
 ---
 
-## Tier 2 — C++20 modules (`.ixx`) — mainline
+## Pre-Stage 0 — Quick wins (low-risk bugfixes)
 
-**Цель:** ускорить сборку 2-5× per `§06_compile-time-philosophy.md`. Оператор явно сказал «mainline, не probe build tree».
+- [ ] **B1. Remove redundant model load loop** — `src/asset/ModelManifestLoader.cpp::LoadAndRegisterModelsFromManifest` (lines ~87-183)
 
-- [x] **A. Подготовить module files** — `src/core/Math.ixx` (Vec3/Vec4/Mat4) + `src/core/StringId.ixx` (StringID тип, отдельный модуль — обоснование в `decisions.md §29`: loose coupling, Math не зависит от StringID), `src/core/Types.ixx` (re-export Math + StringId + forward decls AppState/EcsState/CameraState/DebugState/WorldState/VoxelWorldStats + RenderPassTiming), `src/ecs/EcsWorld.ixx` (re-export Types + 12 ECS API function decls). Каждый `export module projectv.{math,string_id,types,ecs};` + `export import` chains.
-- [x] **B. CMake support** — `src/CMakeLists.txt`: `target_sources(ProjectV PRIVATE FILE_SET CXX_MODULES FILES core/Math.ixx core/StringId.ixx core/Probe.ixx core/Types.ixx ecs/EcsWorld.ixx)`. CMake 4.3 на mainline, проверено с `cmake_minimum_required(3.30)`.
-- [x] **C. `import std;`** — Probe работает в `tests/StdModuleProbe.cpp` (ctest 14/16). **`import std;` в mainline ЗАБЛОКИРОВАН**: libc++ 22 std.cppm BMI конфликтует с transitive `<string>`/`<vector>`/etc. из `fmt/format.h` (используется в `core/RuntimeDiagnostics.cpp`, `core/ShaderIO.cpp`, `render/Renderer.cpp` и др.) — clang error "redefinition of concept '__concat_indirectly_readable'". Попытки: (a) flag matching `-pthread -mavx2 ...` — pthread mismatch исправлен; (b) `_LIBCPP_REMOVE_TRANSITIVE_INCLUDES` — не помогает (конфликт на уровне std.cppm BMI); (c) selective `import std;` только в не-fmt TUs — непрактично (fmt используется ~70% mainline). Решение: `import std;` остаётся probe-only в `tests/`, для mainline отложен до решения проблемы с libc++ std.cppm module partition (C++26 `<std.compat>` не помогает — single-partition std.cppm в libc++ 22).
-- [x] **D. Миграция** — 19 mainline .cpp + 5 mainline .hpp используют `import projectv.math;` и `import projectv.string_id;` вместо `#include "core/Math.hpp"` / `"core/StringId.hpp"`. 5 tests тоже мигрированы. Vulkan/SDL/flecs/Jolt headers оставлены в `#include` (TODO directive соблюдён).
-- [x] **E. Замер build time** — incremental rebuild через touch `Math.hpp`/`StringId.hpp`: baseline 18.93s → **0.10s (190× speedup, "ninja: no work to do")** потому что ни один mainline .cpp/.hpp больше не `#include`-ит fallback headers напрямую. Cold rebuild ProjectV: 102.61s (module BMI generation overhead). Incremental через `Types.hpp` touch: 19.81s (parity с baseline 18.93s — Types.hpp ещё transitively подтягивается многими tests).
-- [x] **F. **Tier 2 commit (atomic)** — `build(cmake): enable C++20 modules + import projectv.* migration (Tier 2)` — done, commit `44362d1` (35 files changed + 2 new modules) + close-routine `7ddb06d`. Body: build time before/after, modules file list, `import std;` blocked rationale, Math+StringId split justification.
-- [x] **G. Verify build green + ctest baseline** — `linux-clang-debug` clean (sequential `-j 1` для первого build из-за Ninja 1.13 + C++ modules dep-scan bug, после первого build параллельный работает), ctest 16/16 passed (0.77s). `windows-clang-debug` не верифицировано (нет Windows в sandbox) — `core/Math.hpp` + `core/StringId.hpp` оставлены с `#if defined(__clang__) && defined(_MSC_VER)` fallback для clang-cl path.
+  **What:** Function builds `render->modelInstances` in two consecutive loops; the first loop's results are wiped by a second `clear()` before the second loop starts. The first loop is dead code.
+  **Why:** Per-block CPU time wasted on matrix math that is then discarded. Misleading: future readers may think the first loop is authoritative and the second is a refinement.
+  **Files:** `src/asset/ModelManifestLoader.cpp` only.
+  **Approach:** (1) Read full function. (2) Identify the `clear()` between the two loops. (3) Delete the first loop + the now-redundant `clear()` + its preceding `reserve()` if only the first loop used it. (4) Keep only the second loop as the single source of truth.
+  **Verify:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests` green, `ctest 16/16`, 0 new warnings. Spot-check `render->modelInstances` content byte-identical to pre-fix.
+  **Acceptance:** One loop, no double `clear()`, identical render output.
 
-**Tier 2 exit criteria:**
-- ✅ "все mainline `.cpp` импортируют modules вместо `#include`-of-our-headers" — 24 mainline files (19 .cpp + 5 .hpp)
-- ✅ "Build measurably faster" — 190× на incremental через fallback .hpp touch
-- ⚠️ "Clang 22 + clang-cl 22 оба green" — Clang 22 ✅, clang-cl fallback path сохранён но не верифицирован (нет Windows)
+- [ ] **B2. Don't destroy graphics pipeline on `RecreateSwapchain`** — `src/render/vulkan/VulkanSwapchain.cpp::RecreateSwapchain`
 
-**Follow-up Tier 2 items (deferred):**
-- [ ] `import std;` в mainline — требует фикса libc++ std.cppm partition (R&D, не mainline)
-- [ ] Ninja 1.13 dep-scan bug с C++ modules — workaround: первый build sequential
-- [ ] Windows clang-cl verification — needs Windows runner
+  **What:** Currently destroys and recompiles the entire graphics pipeline on every window resize. Pipeline does not depend on swapchain extent (viewport + scissor are dynamic state), so this destroy/recreate is unnecessary.
+  **Why:** Shader compile = 100-300 ms hitch on resize. Vulkan API allows keeping the pipeline and just rebuilding swapchain + depth image + framebuffers.
+  **Files:** `src/render/vulkan/VulkanSwapchain.cpp` (primary), `src/render/vulkan/VulkanGraphicsPipeline.cpp` (verify no leak — pipeline outlives swapchain), possibly `src/core/Types.hpp::RenderState` if pipeline ownership moves up.
+  **Approach:** (1) Read current `RecreateSwapchain`. (2) Verify render pass format is stable across resize (same color/depth format). (3) Move pipeline creation out into one-shot init (`CreateGraphicsPipeline` in `VulkanGraphicsPipeline.cpp`, called once). (4) `RecreateSwapchain` only swaps images + framebuffers + depth.
+  **Verify:** Resize window 10× in a row, measure frame time before/after via `TracyPlot`. `ctest 16/16` baseline. Smoke run with mid-run resize — captures before/after resize visually identical.
+  **Acceptance:** No pipeline destroy on resize. 0 visible hitches during resize. ctest baseline preserved.
 
----
+- [ ] **B3. Cache `PROJECTV_GRAVIGUN_SNAP` once at startup** — `src/app/ModelGravigun.cpp::GravigunSnapEnabled`
 
-## Tier 3 — C / intrinsics (Godbolt + benchmark)
+  **What:** Currently calls `std::getenv("PROJECTV_GRAVIGUN_SNAP")` every frame. `std::getenv` is platform-dependent and may take locks inside the standard library.
+  **Why:** Per-frame hot-path call to a non-hot-path lookup. The env var never changes during runtime.
+  **Files:** `src/app/ModelGravigun.cpp` only.
+  **Approach:** (1) Add `static const bool kSnapEnabled = [] { const char *v = std::getenv("PROJECTV_GRAVIGUN_SNAP"); return v != nullptr && v[0] != '\0' && v[0] != '0'; }();` at function-scope. (2) Replace per-frame `getenv` with the cached value.
+  **Verify:** Build green, ctest baseline, smoke run with and without env var set — behavior identical to pre-fix.
+  **Acceptance:** 0 `getenv` calls per frame in `ModelGravigun.cpp`, behavior unchanged.
 
-**Цель:** устранить оставшийся scalar hot path (если после Tier 0 ещё есть bottleneck по Tracy). Godbolt-ревью каждого intrinsics.
+- [ ] **B4. Verify closed: VSync FIFO bug fix** — read-only verification, no code change
 
-- [ ] **A. `src/bench/FrustumCullBenchmark.cpp`** — Google Benchmark. Замер: 300 chunks × 5 visibility tests, scalar vs `std::simd<float, 8>` vs AVX2 intrinsics. Compile flags: `-O2 -mavx2 -fno-sanitize=address` (Clang 22 Issue #194008 workaround для ASan + AVX2 vectorizer stack smash). `--benchmark_min_time=2s` для стабильности.
-- [ ] **B. CMake support** — `cmake/ProjectVThirdParty.cmake` (existing) или новый `cmake/GoogleBenchmark.cmake` — `find_package(benchmark REQUIRED)`. Если нет — `FetchContent` или git submodule. **Verify:** `ctest -L BENCHMARK` (отдельный label, не в основном ctest 6/6).
-- [ ] **C. `src/c_kernels/frustum_cull.c`** — C26 kernel, extern "C" wrapper, `__attribute__((target("avx2")))`. Header `src/c_kernels/frustum_cull.h` для C++ caller. **Godbolt-ревью** (https://godbolt.org/, Clang 22, x86-64-clang 22.1.6, -O2 -mavx2): убедиться, что компилятор выдаёт `vbroadcastss` / `vdpps` / `vmovmskps` для dot product, не остаётся scalar.
-- [ ] **D. Если SIMD win > 5%** — оставляем. Если ≤5% — rollback, `[[likely]]` + branchless reorg дают то же.
-- [ ] **E. **Tier 3 commit (atomic)** — `perf(bench): FrustumCullBenchmark + C kernel + intrinsics`. Body: до/после measurements, Godbolt screenshots, decision rationale.
-
-**Tier 3 exit criteria:** benchmark показывает выигрыш ИЛИ документирует, что SIMD не нужен (auto-vectorize достаточно).
-
----
-
-## Tier 4 — R&D (отложено, не блокирует mainline)
-
-- [ ] `std::execution` (P2300, Senders/Receivers) — нужна Job System, отдельный slice. **Не делаем**, пока нет demand на многопоточность.
-- [ ] Static reflection (P2996) — Clang fork only (Dan Katz). Mainline Clang не имеет. Подождать Clang 23+ или stdlib C++26.
-- [ ] Contracts (P2900) — Clang 22 experimental, не zero-cost в debug. Подождать Clang 23+ или production-ready.
-- [ ] `std::hive` (P0447) — MSVC preview, libstdc++ stable, libc++ in progress. Подождать libc++ 19+.
-- [ ] Mesh shaders (VK_EXT_mesh_shader) — mainline MVP не требует. R&D для future, не в Tier 0..3.
-- [ ] SVO GPU (Sparse Voxel Octree on GPU) — R&D, огромный scope, не mainline.
-- [ ] C26 / C-kernels (отдельно от Tier 3 C-frustum-cull) — нет C файлов в mainline, отложено до demand (audio DSP kernel, например).
-- [ ] Inline asm (`__asm__`) — отложено до конкретного use-case (prefetcht0 в SPSC queue, pause в spinlock).
+  **What:** Operator reported the VSync bug `2026-06-14`. Fix landed in commits `af69d06` family per `agent/decisions.md §30.1-§30.3`. This entry exists so a fresh session verifies the fix is still in place before anyone tries to re-fix.
+  **Why:** Pre-Stage 0 quick wins should not silently re-open a closed bug.
+  **Files:** None (read-only).
+  **Approach:** (1) `git log --oneline -- src/render/vulkan/VulkanSwapchain.cpp src/render/vulkan/VulkanSwapchain.hpp | head -10` — confirm VSync-fix lineage. (2) Read `agent/decisions.md §30.1, §30.2, §30.3` — three VSync-related contracts. (3) Read `tests/PresentModeTests.cpp` — 12 sub-tests covering auto-detect cycle, rebuild preservation, walk scenarios. (4) Optionally runtime: press V on a supported host, confirm cycle walks through physically-supported modes without sticking.
+  **Verify:** All three decision sections present, test count ≥ 12, no TODO/XXX/FIXME in `VulkanSwapchain.{hpp,cpp}` related to VSync cycle.
+  **Acceptance:** Read-only confirmation recorded in commit body. No code change.
 
 ---
 
-## Tier 5 — прочее (по ходу Tier 0..3)
+## Stage 0 — Architectural decisions (do before Stage 1)
 
-- [ ] **`[[likely]] / [[unlikely]]`** в `IsSceneChunkVisible` early-out (`chunkExtentAndNonAir[3] == 0u` return false — 50% chunks = air).
-- [ ] **`[[assume]]`** в hot loops: `IsSceneChunkVisible(assume(parameters.cameraUpAndNearPlane[3] >= 0.0f))` (assertion безопасна, не проверяется в Release).
-- [ ] **3 копии DDA trace в `voxel.frag`** → шаблонизировать через `#define IS_OCCLUDER` или function pointer parameter (медленнее, не делать). Или macro `#define DDA_BODY(IS_OCCLUDER_FN)` 3× substitute.
-- [ ] **`// EVIL:` комментарии** на magic numbers per `§04_evil-hacks-philosophy.md §3`. VoxelLab имеет `0.05, 0.14, 0.03, 0.02, 0.001, 0.0001, 0.75, 0.35, 0.65, 0.55, 0.08, 0.28, 0.45, 1.10, 1.50, 8.0, 12.0, 0.10, 0.4, 0.5` — все без `EVIL:`.
-- [ ] **Google Benchmarks** для всех hot path: `ShadowProjectionBenchmark`, `VoxelStorageBenchmark`, `MatMulBenchmark`, `BuildGraphicsPushConstantsBenchmark`. Каждый Tier 0/1/2/3 закрывает соответствующий benchmark slice.
-- [ ] **Tests** для `BuildGraphicsPushConstants`, `ComputeVisibilityCacheHash`, `BuildSunShadowCascadeSplits`, `CreateOrRecreateTaaRenderTargets` (per `§04_testing-philosophy.md` — критичные инварианты).
-- [ ] **`std::array` → `std::span`** для non-owning buffer views (после Tier 1 inplace_vector, остальные `std::array<T,N>` где `T` — opaque handle).
-- [ ] **`vkWaitForFences` с timeout=10ms** вместо `UINT64_MAX` (per `§01_optimization-philosophy.md` «low latency > throughput»).
-- [ ] **Проверить и починить** `InputAction` bit-mask overflow в `InputReplayFrame` (uint32_t vs 60+ actions) — `src/app/InputActions.cpp` — bit-маска или raw indices?
-- [ ] **`AppState` PIMPL refactor**: `AppState = std::unique_ptr<AppStateImpl>` (forward-decl в `core/Types.hpp`), `AppStateImpl` владеет `RenderContext` + `SimulationContext` + `BootstrapContext`. `~AppStateImpl()` в правильном порядке.
-- [ ] **`UpdateApp` mirror helpers** — `MirrorDebugStatsFromRender/Audio/Physics/Camera/Input`. Сейчас ~200 строк mirror блоков вручную.
-- [ ] **Read-only safety net pattern** — `git diff > /tmp/before_<subtask>_<timestamp>.patch` per atomic-подзадача per `AGENTS.md §7.2.4`. Уже в `§11.5 memory.md`.
+- [ ] **A1. Lower Vulkan API requirement 1.4 → 1.3** — `src/render/vulkan/VulkanBootstrap.cpp::TryPickPhysicalDevice`
 
-## CA audit (Phase 2 sub-task, `2026-06-13`)
+  **What:** Hard requirement `props.apiVersion >= VK_API_VERSION_1_4` blocks MoltenVK, older dGPUs, integrated graphics, and Vulkan 1.3-only hardware. Used features (Dynamic Rendering, Synchronization 2, push descriptors, buffer device address, dynamic state) are all 1.3. 1.4-specific features (e.g. `VK_KHR_dynamic_rendering_local_read`) are NOT currently used.
+  **Why:** Per `legacy/docs/philosophy/01_foundation/05_decision-making.md` — minimum spec should match real usage, not marketing. Lowering 1.4 → 1.3 unlocks significant install base for marginal engineering risk.
+  **Files:** `src/render/vulkan/VulkanBootstrap.cpp::TryPickPhysicalDevice` (change hard floor), `src/core/Types.hpp` if there's a `kMinVulkanApiVersion` constant, root `CMakeLists.txt` if there's a version gate. Add new env override `PROJECTV_MIN_VULKAN_API_VERSION` for testing.
+  **Approach:** (1) Grep for `VK_API_VERSION_1_4` and `VK_VERSION_1_4` to confirm nothing requires 1.4. (2) Grep `VkPhysicalDeviceVulkan14Properties` and similar — should be 0 results. (3) Change hard floor to `VK_API_VERSION_1_3`. (4) Add `PROJECTV_MIN_VULKAN_API_VERSION` env override (parse "1.X.Y" string, default `1.3.0`). (5) If 1.4-only feature is discovered, decide: feature-flag that subsystem, or revert this task.
+  **Verify:** `vulkaninfo` on a 1.3-only host (MoltenVK via DXVK or a CI matrix). ctest 16/16. Runtime smoke run.
+  **Acceptance:** Boots on Vulkan 1.3 hardware. All features still work. Env override accepted. ctest baseline preserved.
 
-- [x] **Audit `UpdateFluidCA`** (`src/voxel/VoxelWorld.cpp:1286-1434`) — CPU fluid CA, единственная в mainline.
-- [x] **Spread rule удалена** — оператор: «Только падает, не растекается». ~30 строк (spread branch, hash, side array, support check).
-- [x] **PV_ASSERTs** добавлены (debug-only): pre-conditions (voxels.size() == width*height*depth, dimensions > 0), post-condition (stats.fluidVoxelCount == std::count(voxels, == Fluid)).
-- [x] **Determinism contract** документирован в `src/voxel/VoxelWorld.hpp:154-191`.
-- [x] **Throttle tightened** — `static bool fluidTickInitialized` заменил fragile `lastFluidTickCounter == 0u` check (`src/app/main.cpp:633-643`).
-- [x] **Tests** — `tests/FluidCATests.cpp` (12 sub-tests, 100% pass) + `tests/CMakeLists.txt:706-749` (new `ProjectVFluidCATests`).
-- [x] **`agent/decisions.md §30`** — full audit + 8 operator decisions.
-- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12`** — Fluid CA audit summary.
+- [ ] **A2. Fluid CA reversal (planning marker — code lives in Stage 3.1)**
 
-False alarms (для потомков):
-- [x] «CA в AppEvent vs AppIterate» — false alarm. Code уже в AppIterate (`main.cpp:580-639`).
-- [x] «Double-step gravity» — false alarm. Y-ascending iteration уже bottom-up. **НО:** столбец **percolates** вниз за 2N тиков (документировано в `decisions.md §30` + `TestFluidCAColumnPercolatesDownAndSettlesAtY0`).
-
-«Вода не течёт вниз» — expected behavior (fluid на glass ≠ падает). Проверено `TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks`.
-«Respawn за платформой» — был spread rule. Удаление spread rule решает его напрямую.
-
-## CA pause + timeScale + V-sync fixes (`2026-06-14`)
-
-- [x] **V-sync FIFO bug fix** в `ChoosePresentMode` (`src/render/vulkan/VulkanSwapchain.cpp:148-180`). Оператор: «vsync слетает при постановке блока, даже если V → vsync on». Root cause: `if (g_preferredPresentMode != FIFO)` branch silently fell through to MAILBOX-first default chain на Linux/Wayland VRR surface. V cycle `FIFO → IMMEDIATE → MAILBOX → FIFO` — третий press возвращал MAILBOX вместо FIFO. **Fix**: убрал `!=` branch, теперь explicit per-mode dispatch. `g_preferredPresentMode == IMMEDIATE || MAILBOX` → `PickBestAvailablePresentMode`; else → explicit FIFO honours.
-- [x] **CA tick перенесён в `UpdateApp`** (`src/app/AppUpdate.cpp:693-733`). Оператор: «вода растекается даже при паузе, не действует замедление/ускорение». Root cause: `src/app/main.cpp:637-670` имел wall-clock throttle, не консультировался с `simulation->paused` или `simulation->timeScale`. **Fix**: deleted throttle block, added CA tick в `UpdateApp` после physics accumulator, использует `effectivePaused` gate + `1/fluidTickRateHz` accumulator.
-- [x] **`fluidTickRateHz = 20.0f` (was 30)** — оператор: «слишком быстро льётся». 20 Hz = 1 cell / 50 ms, timeScale=0.5 → 10 Hz, timeScale=2.0 → 40 Hz.
-- [x] **`fluidAccumulatorSeconds` field** в `SimulationState` (`src/core/Types.hpp:1348-1382`). Sim-time accumulator, scaled by `timeScale`, zeroed on pause.
-- [x] **Tests** — 8 новых sub-tests (24 total, 100% pass): `TestFluidCAFluidDoesNotMoveOnPause`, `TestFluidCAFluidMovesOnUnpause`, `TestFluidCAFluidRateRespectsTimeScale`, `TestFluidCAFluidRateAboveBase`, `TestFluidCAFluidRateAtDefault`, `TestFluidCAFluidTimeScaleZeroStops`, `TestFluidCAFluidFrameStepWithTimeScaleZero`, `TestFluidCAFluidRateConfigurable`. Helper `TickFluidCA` inline-зеркало production throttle.
-- [x] **`agent/decisions.md §30.1`** — V-sync fix + CA tick move + 20Hz default plan + обоснования.
-- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.1`** — V-sync bug history + CA pause/timeScale fix history + 4 lessons learned (subagent must для root-cause, default+override pattern, visual vs physics tickrate cap, SimulationState для sim knobs).
-- [x] **`agent/status.md`** — обновлён с новым closed-session.
-
-## V hotkey auto-detect cycle + libc++ warning + HUD line (`2026-06-14`)
-
-- [x] **V hotkey auto-detect cycle** (`src/render/vulkan/VulkanSwapchain.hpp:69-148`). Оператор: «у кнопки V 4 переключения — не понимаю, какое из них что делает». Root cause: hardcoded 3-state cycle `FIFO → IMMEDIATE → MAILBOX → FIFO`. На Linux/Wayland без VRR IMMEDIATE not supported → silent fallthrough to MAILBOX. **Fix**: `BuildPresentModeCycle(support.presentModes)` walks priority list и keeps только surface-supported modes. Cycle length = number of physically supported modes (2 or 3 typically). Header-only API: `inline` variables + `inline` functions.
-- [x] **HUD line for VSync** (`src/debug/DebugHud.cpp:553-577`). `VSync <mode> (<index>/<size>)` — например `VSync FIFO (1/2)` или `VSync MAILBOX (2/3)`. Видно сразу: текущий mode + cycle position.
-- [x] **V hotkey log message** (`src/app/main.cpp:534-578`). `CycleVsync: <mode> [cycle <idx>/<size>]` — например `CycleVsync: MAILBOX (tear-free, uncapped) [cycle 2/2]`.
-- [x] **libc++ warning fix** (`CMakeLists.txt:117-150`). Initial plan: remove `add_compile_options(-stdlib=libc++)` (CMake's `CMAKE_CXX_STDLIB` already propagates). **Failed**: removing produces link errors в `external/fastgltf` и `external/fmt` (external `add_subdirectory` subdirs не inherit `CMAKE_CXX_STDLIB` в compile commands). **Fix**: keep `add_compile_options(-stdlib=libc++)` for cross-target ABI, suppress false-positive warning via `add_compile_options(-Wno-unused-command-line-argument)`. Per `AGENTS.md §7.2.7` exception clause applied (one flag, one toolchain artifact).
-- [x] **Tests** — `ProjectVPresentModeTests` (9 sub-tests, 100% pass): `TestPresentModeCycleIncludesAllThree`, `TestPresentModeCycleExcludesUnsupported`, `TestPresentModeCycleOnlyFifo`, `TestPresentModeCycleEmptyFallsBackToFifo`, `TestPresentModeCycleRespectsPriorityOrder`, `TestCycleAdvancesAndWrapsThreeMode`, `TestCycleAdvancesAndWrapsTwoMode`, `TestPresentModeCycleIndex`, `TestPresentModeCycleSize`. New test target в `tests/CMakeLists.txt:771-810`, header-only dependency.
-- [x] **`agent/decisions.md §30.2`** — V hotkey auto-detect + libc++ fix plan + обоснования.
-- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.2`** — V hotkey history + libc++ warning fix + 4 lessons learned (auto-detect hardware > hardcode cycle, inline variables/functions для runtime observables, hardware-dependent toolchain flags don't remove, log vs HUD для togglable state).
-
-## V hotkey cycle walk fix (`2026-06-14` evening)
-
-- [x] **`BuildPresentModeCycle` preserve `g_active` across rebuilds** (`src/render/vulkan/VulkanSwapchain.hpp:180-220`). Оператор: «нажимаю на V, ничего не меняется» — 10 identical log lines `IMMEDIATE [cycle 2/2]`. Root cause: `BuildPresentModeCycle` unconditionally set `g_active = g_cycle.front()` (FIFO) on every rebuild. V hotkey calls `RecreateSwapchain` after each press → `CreateOrRecreateSwapchain` → `BuildPresentModeCycle` resets `g_active` → next press sees FIFO → advances to IMMEDIATE → reset. **Self-defeating state machine**. **Fix**: capture `previousActive` before rebuild; if still in new cycle, keep it; else (display hot-swap) fall back to highest-priority supported.
-- [x] **Tests** — 3 new sub-tests (`ProjectVPresentModeTests` 12 total, 100% pass): `TestPresentModeCyclePreservesActiveAcrossRebuild`, `TestPresentModeCycleFallsBackWhenActiveDropped`, `TestPresentModeCycleWalksAcrossRecreates` (operator's actual scenario: 4 V presses alternating FIFO ↔ IMMEDIATE). Pre-existing tests updated to **explicit reset pattern** (`(void)BuildPresentModeCycle({FIFO});` as first line) — inline-variable global state needs explicit reset, не assumed from previous test's final state.
-- [x] **`agent/decisions.md §30.3`** — preserve-`g_active` plan + 4 обоснования (capture-rebuild pattern, test interaction not just function, test order independence, self-defeating state machine anti-pattern).
-- [x] **`legacy/docs/archive/agent-memory/2026-06-fluid-ca-sessions.md#12.3`** — V hotkey cycle walk history + 4 lessons learned (capture previous state > unconditional reset, test interaction not just function, explicit reset pattern для inline-variable global state, self-defeating state machine anti-pattern).
+  **What:** No code in this item. The contract is already in `agent/decisions.md §30.4` (GPU Fluid CA: ping-pong + atomicOr + active chunk list). This TODO entry is a planning marker so the actual implementation (Stage 3.1) has its decision contract clearly cross-referenced.
+  **Why:** Operator explicitly reversed `§30` (CPU fall-only) → GPU compute on `2026-06-20`. The contract is binding; do not deviate from it when implementing Stage 3.1.
+  **Files:** None for this entry. Cross-refs:
+  - `agent/decisions.md §30.4` — full contract (must-read before Stage 3.1)
+  - `agent/decisions.md §30` — CPU reference (preserved, OUTDATED marker, content kept for test fixtures + reference implementation)
+  - `agent/decisions.md §30.1` — tick rate (20 Hz default), `effectivePaused` gate, `timeScale` integration in `UpdateApp` (still applies, only the dispatcher changes)
+  **Verify:** N/A (planning marker).
+  **Acceptance:** When Stage 3.1 is implemented, the contract in `§30.4` is followed literally.
 
 ---
 
-## Pre-flight checklist per atomic-подзадача (per `AGENTS.md §7.2.6.1` + `§7.2.4`)
+## Stage 1 — NEW Voxel Database & Compression (foundation for Stages 2-5)
 
-1. **Pre:** `git diff > /tmp/before_hardcore_r0_<subtask>_<timestamp>.patch` (safety-net для destructive rollback).
-2. **Pre:** `git status -uall` clean baseline.
-3. **Work:** только файлы в `files-touched-intent` active-session записи. Никаких `external/`, `legacy/`, `docs/`, build-артефактов.
-4. **Verify:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8` clean. `ctest 6/6` baseline.
-5. **Commit:** предложен пользователю per `§7.2.5`, **не auto-execute**. Commit message формат: `<type>(<scope>): <summary>` + body + Refs.
-6. **Update active-sessions.md:** status `closed` + commit-hash только после явного `git commit` от оператора.
+**CRITICAL:** This stage establishes the storage format that all subsequent GPU geometry, cull, sim, GI, LOD code (Stages 2-5) reads from. Do not start any Stage 2-5 work until Stage 1 is in mainline.
+
+- [ ] **1.1. Sparse 64-trees** — `src/voxel/VoxelWorld.{hpp,cpp}` (replace flat `std::vector<uint8_t>`)
+
+  **What:** Replace flat `std::vector<uint8_t>` storage with a sparse 64-ary tree. Each internal node covers a `4×4×4 = 64` cell sub-volume; child occupancy stored as `uint64_t fillMask` (one bit per child slot). Walk via `findFirstSet` / `clearBit` intrinsics. Leaves store material IDs (1-2 bytes each, or 1 byte with material table for >256 materials).
+  **Why:** (1) Memory: empty space = single `fillMask = 0` per empty 4×4×4 = 8 bytes for 64 cells instead of 64 bytes — 8× reduction for sparse worlds. (2) Cache locality: tree walks are predictable; leaf material data is dense. (3) Enables SVO raytracing later (1.2, 5.1) without a second storage rewrite. (4) SIMD-friendly: 64-bit mask = single `__builtin_ctzll` / `_pdep_u64` operations.
+  **Files:** `src/voxel/VoxelWorld.hpp` (replace `voxels: std::vector<uint8_t>`), `src/voxel/VoxelWorld.cpp` (all access sites), new `src/voxel/Sparse64Tree.hpp` (the tree itself), `src/voxel/VoxelRaycast.{hpp,cpp}` (raycast now tree-walking), `src/shaders/voxel_mesh.comp` (or replacement — needs read access to tree leaves), `src/physics/PhysicsWorld.cpp` (read access for collision), `src/voxel/UpdateFluidCA` (read + write access).
+  **Approach:** (1) **A/B test buffers** per Verification policy: implement `Sparse64Tree` as standalone header-only template, unit-test with byte-exact parity against flat `std::vector<uint8_t>`. Keep both paths. (2) Add `VoxelWorld::SetVoxelMaterial` / `GetVoxelMaterial` on top of tree. (3) **3-step migration** (per `decisions.md §30.4` precedent): (a) additive `PROJECTV_SPARSE_64_STORAGE=ON` env, both paths run in parallel, output cross-checked per chunk; (b) flip default; (c) delete flat path. (4) **Verify byte-equal output** on VoxelLab, MeshingStress, all `tests/VoxelWorldTests.cpp` fixtures. (5) MeshingStress measurement: TracyPlot for `VoxelAccess (ms)` should drop ≥ 5% on sparse scenes.
+  **Verify:** `ctest 16/16` (existing 24 FluidCA + others). New `ProjectVSparse64TreeTests` with byte-exact comparison vs flat snapshot. Snapshot save/load round-trip. Memory profiling: VoxelLab + 10× empty chunks before/after.
+  **Acceptance:** Storage swap complete, byte-equal output across all existing test fixtures, 5-10× memory reduction measured on VoxelLab. All Stage 2-5 features are free to assume this storage format.
+
+- [ ] **1.2. SVDAG (Sparse Voxel Directed Acyclic Graph)** — extends 1.1
+
+  **What:** For static geometry (chunks that haven't been edited in N ticks), deduplicate identical subtrees. Two `Sparse64Tree` nodes with the same `fillMask` AND same child material/structure share a single allocation. DAG pointer replaces one of the two node references. Active (mutable) chunks use plain trees; static chunks use DAG nodes. Lazy promotion: chunk becomes "static" after N ticks without edits.
+  **Why:** 50-100× memory reduction for worlds with repeating structure (most procedural worlds). This is the difference between "fits in 8 GB VRAM" and "fits in 80 MB VRAM" for the same world.
+  **Files:** `src/voxel/Sparse64Tree.hpp` (add `NodeId` indirection + DAG node pool), `src/voxel/VoxelWorld.hpp` (track per-chunk `isStatic` flag), `src/voxel/MarkAllVoxelChunksDirty` (clears static flag), `src/shaders/voxel_mesh.comp` (or replacement — handles DAG indirection on GPU side; possibly via SSBO of node IDs).
+  **Approach:** (1) Wait for 1.1 to land — SVDAG = Sparse 64-tree + dedup. (2) Add node pool with `NodeId = uint32_t` indirection. (3) Add `tryMerge(nodeA, nodeB) → NodeId` (structural + material hash). (4) Lazy dedup: when chunk becomes static, walk subtree, dedup identical siblings. (5) Mutation invalidates DAG: if a static chunk is edited, revert to plain tree. (6) GPU access: SSBO of node IDs, shader traverses DAG.
+  **Verify:** Memory profiling on VoxelLab + synthetic test scene with deliberate repetition (e.g. 10× 4×4×4 brick patterns). Byte-exact output. Mutation correctness: edit a previously-static chunk, verify visual change appears.
+  **Acceptance:** SVDAG on by default for static chunks. 50-100× memory reduction on repetitive test scenes. Mutation safety verified. GPU traversal performance ≥ scalar CPU (MeshingStress measurement).
+
+- [ ] **1.3. Async audio playlist scan** — `src/audio/AudioEngine.cpp::tick`
+
+  **What:** `AudioEngine::tick()` currently calls `scanPlaylist()` every 5 seconds on the main thread. `scanPlaylist` does `std::filesystem::directory_iterator` over the music folder. On slow disks (HDD, network share) this is 50-200 ms freeze.
+  **Why:** Regular micro-stutter every 5 seconds. Easy fix. Also makes the data-layer I/O pattern consistent with Stage 1.3 (async I/O theme).
+  **Files:** `src/audio/AudioEngine.cpp` (move `scanPlaylist` to background thread or trigger only on demand / file watcher event).
+  **Approach:** (1) Read `AudioEngine::tick` and identify the 5-second timer block. (2) Replace with: (a) on startup, scan once async (background thread); (b) on user-initiated playlist refresh (e.g. `R` keybind, or `RefreshPlaylist()` API), scan async; (c) remove the periodic timer entirely. (3) Use a `std::jthread` or `std::async` with `std::filesystem::directory_iterator` in the background.
+  **Verify:** `ctest 16/16`. Runtime smoke: idle for 30 seconds with slow disk, no frame stalls > 4 ms. Test playlist refresh on keypress: scan completes within 1 second, playlist updates.
+  **Acceptance:** Zero periodic main-thread disk I/O. Manual refresh path works. No regression in playlist contents.
 
 ---
 
-## Done (Phase 0, doc-only, `2026-06-13`)
+## Stage 2 — GPU-Driven Geometry & Culling (depends on Stage 1 SVDAG)
 
-- [x] Полный технический отчёт сохранён в `agent/memory.md §11` (13 KB).
-- [x] Новое правило `std::expected` cold/bool hot в `agent/decisions.md §29`.
-- [x] Snapshot в `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#20` (Phase 0 done, Phase 1+ pending operator).
-- [x] Active session `session-2026-06-13-hardcore-perf-r0` registered в `agent/active-sessions.md`.
-- [x] Этот TODO переписан под Tier 0..5.
-- [ ] **Phase 0 commit** — предложен пользователю (не auto-execute).
-- [ ] **Phase 1+ (Tier 0 код)** — после явного одобрения operator.
+**All Stage 2 shaders MUST read from SVDAG (Stage 1.2), not the flat array.** Building them on top of the flat array would require a full rewrite when Stage 1 lands.
+
+- [ ] **2.1. Mesh + Task Shaders for SVDAG (`VK_EXT_mesh_shader`)** — `src/shaders/voxel_mesh.comp` → new `voxel_mesh.task` + `voxel_mesh.mesh`
+
+  **What:** Replace the compute-shader-driven indirect draw pipeline (`voxel_mesh.comp` writes vertex/index payloads to `packedFaces` SSBO) with mesh-shader-driven pipeline. **Task shader** does cluster-level cull (micro-frustum + Hi-Z + back-face reject) on the GPU workgroup level, **traversing the SVDAG**. **Mesh shader** generates vertices and indices directly into LDS/shared memory and outputs to the rasterizer — no intermediate global-memory geometry buffer. `VK_EXT_mesh_shader` must be available.
+  **Why:** Eliminates per-frame `packedFaces` VRAM allocation growth. Mesh shader output goes directly to the rasterizer. Aligns with current 2.2 HZB work: task shader cull = same AABB-vs-HiZ as compute cull, but per-cluster (sub-chunk granularity) instead of per-chunk. **Direct dependency on Stage 1**: shader reads `NodeId` SSBO from SVDAG, not flat voxel array.
+  **Files:** `src/shaders/voxel_mesh.comp` (replace or branch), new `src/shaders/voxel_mesh.task` + `src/shaders/voxel_mesh.mesh`, `src/render/Renderer.cpp::RecordGraphicsCommands` (replace `vkCmdDispatch` + `vkCmdDrawIndexedIndirect` with `vkCmdDrawMeshTasksIndirect[Count]KHR`), `src/render/SceneResources.{hpp,cpp}` (drop `packedFaces` buffer or keep as fallback).
+  **Approach:** (1) **Hardware check first**: `vkGetPhysicalDeviceMeshShaderPropertiesEXT` — feature-gate entire task (`PROJECTV_MESH_SHADER_PIPELINE=ON` env, default off if extension unsupported). (2) **A/B test**: dual pipeline (compute + mesh), runtime switch, parity test. (3) Port `voxel_mesh.comp` cull logic → task shader; port vertex/index emit → mesh shader. Task shader reads SVDAG NodeId SSBO. (4) Verify pixel-identical output (framebuffer hash compare). (5) Once stable, switch default to mesh path on supported hardware.
+  **Verify:** Hardware check on RTX 3060 Ti (current dev host) and any RTX 20+/AMD RDNA2+ hardware available. Bit-identical framebuffer via `lookdev-captures` (FINAL + SHDW + AOCC + LOCL all match). Performance: `TracyPlot("Meshing (ms)")` + `TracyPlot("Render (ms)")` should drop or stay flat. ctest 16/16. MeshingStress: 5%+ improvement.
+  **Acceptance:** Mesh shader path produces byte-identical output to compute path on VoxelLab + MeshingStress. Hardware feature-gated. Fallback to compute on unsupported hardware verified. Reads SVDAG, not flat array.
+
+- [ ] **2.2. Two-pass HZB Occlusion Culling** — `src/render/SceneResources.{hpp,cpp}` + new `src/shaders/hzb_cull.comp`
+
+  **What:** Currently CPU frustum cull produces per-frame `ChunkVisibilityCache`; nothing rejects chunks hidden by already-rasterized geometry (overdraw in caves, behind hills, interior of dense structures). Replace with GPU two-pass: (1) render prev-frame-visible chunks, (2) build Hi-Z mip chain from depth buffer (`vkCmdBlitImage` with `MIN` filter for reverse-Z, `MAX` for forward-Z), (3) compute shader tests all chunks' AABBs against HZB and writes a visibility bitmask, (4) render only newly-disoccluded chunks (`vkCmdDrawIndirectCountKHR`/`vkCmdDrawIndexedIndirectCountKHR` — indirect count buffer populated by the compute shader). **Chunk AABBs are derived from SVDAG (Stage 1.2)** — clusters update their AABBs lazily as SVDAG mutates.
+  **Why:** 40-70% FPS gain in closed spaces (per upstream plan benchmark). Eliminates overdraw that frustum cull cannot catch. Removes per-frame CPU chunk-visibility-rebuild work for the cull step.
+  **Files:** `src/render/SceneResources.{hpp,cpp}` (new `HizBuffer`, `HizMipChain`, `OccludedDrawCommandBuffer`), `src/shaders/hzb_cull.comp` (new — AABB-vs-mip test), `src/render/Renderer.cpp::RecordGraphicsCommands` (insert 4 dispatches: prev-frame draw, HZB build, compute cull, disoccluded draw), `src/render/ShadowProjection.cpp` (CSM also benefits — same HZB test for per-cascade caster visibility).
+  **Approach:** (1) **Spike first**: add `HizBuffer` as optional (`PROJECTV_HZB_CULLING=ON` env), keep CPU cull as fallback. (2) Build mip chain via `vkCmdBlitImage` after main pass; chain levels = `log2(min(width, height))`. (3) `hzb_cull.comp` reads `ChunkAabb` SSBO + HZB image, writes `uint32_t visibleMask[chunkCount/32]` + `VkDrawIndirectCommand` for visible chunks only. (4) Wire `vkCmdDrawIndirectCountKHR` with `drawCount = visibleCount`. (5) AABB source: SVDAG chunk AABB cache (computed at chunk-mesh time, invalidated on edit). (6) Compare FPS / draw count before/after on VoxelLab + MeshingStress + a synthetic closed-space test scene.
+  **Verify:** `TracyPlot` for `ChunkCulling (ms)` before/after. Per-frame draw count drops 30-60% in closed scenes. ctest 16/16. Runtime smoke with `PROJECTV_HZB_CULLING=ON` and `=OFF` both produce visually identical output. MeshingStress measurement: 5%+ improvement.
+  **Acceptance:** HZB-driven cull path on by default in dev, off-by-default in release until stable. Measurable FPS gain in closed scenes. Fallback path verified.
+
+- [ ] **2.3. 3D Virtual Texturing (Megatexture + Feedback Buffer)** — new `src/asset/TextureStreamer.{hpp,cpp}`
+
+  **What:** Today's per-block textures fit in `Texture Arrays`; this breaks when block variety grows (1k+ unique blocks). Replace with virtual texturing: (1) all block textures baked into a single physical atlas; (2) page table maps (block_id, mip) → atlas (page_x, page_y, mip); (3) fragment shader writes "this page is visible" feedback to a low-res Feedback Buffer; (4) CPU async streamer reads Feedback Buffer, evicts cold pages, loads hot pages from disk into atlas slots.
+  **Why:** Decouples "number of unique blocks" from "max descriptor count + max texture array size". Enables world-scale material variety on hardware with small descriptor limits.
+  **Files:** New `src/asset/TextureStreamer.{hpp,cpp}` (page allocator + async loader), new `src/shaders/virtual_texture_sample.glsl` (or include into `voxel.frag`), new `src/shaders/feedback.frag` (writes visible pages), modified `src/asset/AssetLoader.cpp` (block → page binding), `src/render/SceneResources.{hpp,cpp}` (atlas + page table + feedback buffer), `src/debug/DebugHud.cpp` (page residency HUD line).
+  **Approach:** (1) **Design doc first** — page size, atlas size, feedback resolution, mip levels per page. (2) **Spike**: single-page test (atlas = 1 page, no streaming yet). (3) Add feedback pass + page allocator. (4) Add async streamer (background thread + frame-paced uploads). (5) Wire sample path in `voxel.frag`. (6) HUD page-residency indicator.
+  **Verify:** VoxelLab material set renders identically. HUD shows page residency count rising as camera moves. No visual artifacts at page boundaries (seamless). ctest 16/16. MeshingStress: 5%+ improvement in atlas upload cost.
+  **Acceptance:** Megatexture path on by default. Page residency in HUD. Async streamer doesn't block main thread. Visual parity with current array path on existing test scenes.
 
 ---
 
-## Cross-refs
+## Stage 3 — Physics & Simulation (depends on Stage 1 SVDAG)
 
-- `agent/memory.md §11` — comprehensive technical-debt + plan + web research bookmarks.
-- `agent/decisions.md §29` — Tier plan + error-handling rule + refactor scope.
-- `legacy/docs/archive/agent-status-snapshots/2026-06-week-1.md#20` — Phase 0 snapshot + operator answers.
-- `agent/active-sessions.md` session-2026-06-13-hardcore-perf-r0 — active session.
-- `legacy/docs/philosophy/01_foundation/{04,05,06,07,08,09}_*.md` — anti-patterns, compiler, compile-time, memory, errors, data-layout.
-- `legacy/docs/philosophy/02_paradigms/{01,02,06}_*.md` — zero-cost, DoD, strings.
-- `legacy/docs/philosophy/03_domain/{01,04}_*.md` — optimization, testing.
-- `/tmp/before_todo_rewrite_20260613T1330.md` — backup старого TODO (846 строк history, все `[x]`).
+- [ ] **3.1. GPU Fluid CA (REVERSAL — implements `agent/decisions.md §30.4`)** — new `src/shaders/fluid_ca.comp`
+
+  **What:** Per `decisions.md §30.4` — implement GPU compute fluid CA. (1) Two `VkImage` (or SSBO) ping-pong buffers for voxel state, **reading and writing SVDAG nodes** (not flat array). (2) `atomicOr` for fluid destination claim; `imageAtomicCompareExchange` for the "is target Air?" check. (3) Frontend CPU builds `activeChunks` list (chunks with non-stable fluid or recent edits); dispatch `activeChunks.count` workgroups. (4) Iteration order inside workgroup: `z, y, x` ascending (preserves per-tile determinism). (5) `SimulationState` (tick rate, accumulator, pause/timeScale) unchanged — only the dispatcher changes.
+  **Why:** Reversal of `§30` per operator `2026-06-20`. CPU CA scales as O(N³); GPU CA scales as O(active_chunks). Required for 64+ chunk draw distance (Stage 4.3) and procedural worlds. **Direct dependency on Stage 1**: shader operates on SVDAG nodes, so this stage cannot begin meaningfully until SVDAG (1.2) is in mainline.
+  **Files:** New `src/shaders/fluid_ca.comp`, `src/render/Renderer.cpp::RecordComputeCommands` (new compute pass dispatch), `src/voxel/VoxelWorld.{hpp,cpp}` (add `activeChunks` SSBO, add GPU-side dispatch helper), `src/core/Types.hpp::SimulationState` (no change to fields, but add `fluidCaGpuEnabled` flag), `src/app/AppUpdate.cpp` (dispatch instead of CPU loop), `src/shaders/voxel.frag` (not affected — reads same voxel buffer).
+  **Approach:** Per `§30.4` 3-step migration: (1) **Additive**: `PROJECTV_FLUID_CA_GPU=ON` env, CPU path remains default. Both produce same visual output. A/B validate. (2) **Default flip**: GPU on for dev presets, CPU = emergency fallback. (3) **Deprecate CPU**: CPU kept as reference + test fixture only (`PROJECTV_RUN_CPU_REFERENCE_TESTS=ON` for opt-in). Reuse 24 sub-tests from `tests/FluidCATests.cpp` as CPU reference; write new `tests/FluidCAGpuTests.cpp` with same scenarios + GPU-specific tests (workgroup determinism, multi-tile race semantics, performance).
+  **Verify:** Per `§30.4` acceptance: (a) VoxelLab glass-break scenario: fluid falls and spreads identically to CPU version. (b) Pause / timeScale honored. (c) Snapshot save/load round-trip with multi-tile determinism contract. (d) Performance: 1M+ fluid voxels without mainline FPS drop. (e) `ctest 16/16` (CPU ref) + new GPU tests pass. MeshingStress: 5%+ improvement on multi-chunk fluid scenarios.
+  **Acceptance:** GPU CA produces visually identical result to CPU CA on VoxelLab. 24+24 tests pass (CPU ref + GPU new). Reversal contract from `§30.4` implemented. Operates on SVDAG, not flat array.
+
+- [ ] **3.2. Incremental Jolt Physics (per-chunk static bodies)** — `src/physics/PhysicsWorld.cpp::SyncPhysicsWorld` + `BuildStaticVoxelCollisionBody`
+
+  **What:** Currently `BuildStaticVoxelCollisionBody` rebuilds the entire static physics world (`CompoundShape` of `BoxShape` per voxel) on any voxel edit. Replace with per-chunk static bodies (e.g. 16×16×16 voxel chunks). On edit, destroy + rebuild only the affected chunk's body. `HeightFieldShape` for terrain (heightmap chunks, local-area update). **Chunk indices align with SVDAG (Stage 1.2) chunks.**
+  **Why:** Current path = 100-500 ms spike on single voxel edit. Breaks gameplay on any build/break action. Per-chunk granularity reduces rebuild cost by ~chunk_factor.
+  **Files:** `src/physics/PhysicsWorld.cpp::SyncPhysicsWorld` (rebuild only diff chunks), `src/physics/PhysicsWorld.hpp` (new per-chunk body map: `chunkIndex → BodyId`), `src/physics/BuildStaticVoxelCollisionBody` (now per-chunk, not global), `src/physics/PhysicsWorld.cpp::QueueChunkRebuildRequest` (mark chunk body for rebuild), `src/voxel/VoxelWorld.cpp` (call site on voxel edit, was triggering global rebuild).
+  **Approach:** (1) **Audit current behavior**: measure spike time on a 1000-voxel world. (2) **Design per-chunk body layout**: BodyId per chunk, Jolt `BodyInterface::RemoveBody` + `CreateAndAddBody` for incremental update. (3) **Per-chunk rebuild**: `BuildChunkStaticBody(chunkIndex) → BodyId`, called from `SyncPhysicsWorld` when `world->chunks[i].rebuildQueued`. (4) **HeightFieldShape path** for terrain: `HeightFieldShapeSettings` with local heightmap. (5) **3.3 Greedy Physics Meshing** provides the per-chunk collision shape (without 3.3, fallback to per-voxel BoxShapes within the chunk).
+  **Verify:** Single voxel edit: spike drops from 100-500 ms to < 16 ms. 1000 voxel edits in a single frame: total spike < 100 ms. Character collision still works (existing walk/creative tests). ctest 16/16 (especially `ProjectVPhysicsTests`).
+  **Acceptance:** Per-chunk body rebuild. No global rebuild. Existing physics tests pass. Spike time < 1 frame.
+
+- [ ] **3.3. Greedy Physics Meshing** — new `src/shaders/voxel_physics_mesh.comp` + integration in `src/physics/`
+
+  **What:** Current physics uses per-voxel `BoxShape`. Visual meshing uses greedy meshing. Add a compute-shader-driven greedy physics meshing: each chunk produces a `JPH::MeshShape` (triangle mesh) or `HeightFieldShape` (heightmap), not a `CompoundShape` of `BoxShape`. **Same algorithm as 2.1 visual meshing, but output is collision geometry.** Reads SVDAG (Stage 1.2) directly.
+  **Why:** Per-voxel BoxShape = N body shapes per chunk (N = non-air voxels). Greedy mesh = O(visible faces) triangles. 5-50× fewer shapes. Aligns with DoD philosophy: data prepared efficiently for both GPU rendering and CPU physics.
+  **Files:** New `src/shaders/voxel_physics_mesh.comp` (mirror of `voxel_mesh.comp` but writes triangle/index buffers for Jolt), `src/physics/PhysicsWorld.cpp::BuildChunkStaticBody` (consume the mesh output, build Jolt `MeshShape`), `src/physics/PhysicsWorld.hpp` (per-chunk mesh buffer).
+  **Approach:** (1) Port `voxel_mesh.comp` greedy meshing logic to a new compute shader that outputs triangle list instead of vertex/index runs. (2) `BuildChunkStaticBody` reads the triangle list, builds Jolt `MeshShapeSettings`, creates the body. (3) Coordinate with 3.2 (Incremental Jolt) — both per-chunk; share the same per-chunk body lifecycle.
+  **Verify:** Per-chunk shape count drops 5-50×. Character collision behavior unchanged. `ctest 16/16`. MeshingStress: 5%+ improvement in physics step time.
+  **Acceptance:** Per-chunk mesh shape. Fewer total shapes. Same collision behavior. 5-50× reduction measured.
+
+---
+
+## Stage 4 — Procedural Generation & LOD (depends on Stage 1 SVDAG)
+
+- [ ] **4.1. GPU noise generation** — new `src/shaders/world_gen.comp`
+
+  **What:** Currently `WorldGen.cpp` generates voxel data on CPU using Perlin/Simplex noise. Move to compute shader. GPU writes voxel data directly to the **SVDAG node pool (Stage 1.2)**. CPU submits dispatch (`PROJECTV_GENERATE_CHUNK(chunkCoord)`), GPU returns when done. For big batch generation: one dispatch covers a `N×N` chunk region.
+  **Why:** CPU bottleneck during fast flight. GPU is 10-100× faster for noise compute.
+  **Files:** New `src/shaders/world_gen.comp` (Perlin/Simplex/fBm), `src/voxel/WorldGen.cpp` (CPU-side dispatcher + queue), `src/asset/AsyncChunkLoader.{hpp,cpp}` (consumer for newly-generated chunks), `src/core/Types.hpp::WorldState` (chunk generation request queue).
+  **Approach:** (1) **CPU reference first**: verify current CPU noise produces expected output (snapshot test). (2) Port to compute shader — bit-exact or visually-equivalent noise function. (3) Wire dispatcher. (4) Cross-check GPU output vs CPU reference for random chunk coordinates.
+  **Verify:** Generated chunks visually identical to CPU version. CPU `tests/WorldGenTests.cpp` (if exists) + new GPU tests pass. Stress test: generate 100 chunks in one frame, measure time. MeshingStress: 5%+ improvement.
+  **Acceptance:** GPU world gen on by default. 10×+ speedup measured on batch generation. Output byte-equal to CPU reference on test fixtures. Writes to SVDAG, not flat array.
+
+- [ ] **4.2. Geometry LOD (MIP-level chunks with geomorphing)** — `src/render/SceneResources.cpp` (LOD assignment) + `src/shaders/voxel_mesh.comp` (or replacement)
+
+  **What:** For chunks far from camera, use a downsampled voxel representation (e.g. 2×, 4×, 8× coarser). Generate coarser representation on chunk creation (or lazily on first LOD need). Render with geomorphing: at LOD transition boundary, blend between two LOD levels to hide the pop. **Coarser levels are SVDAG sub-graphs sampled at lower resolution** (no separate storage).
+  **Why:** Poly count grows O(N²) with distance for naive mesh. With 4× LOD, distant chunks have 1/64 the poly count. Required for 128+ chunk draw distance (4.3) at 60 FPS.
+  **Files:** `src/voxel/VoxelWorld.{hpp,cpp}` (per-chunk LOD level), `src/render/SceneResources.{hpp,cpp}` (LOD selection per chunk based on distance), `src/shaders/voxel_mesh.comp` (or `voxel_mesh.task` from 2.1 — handle variable-density mesh).
+  **Approach:** (1) **Spike on VoxelLab**: generate 2× and 4× LOD versions of a chunk, verify visual quality. (2) Add geomorphing blend (between LOD N and N+1 across a transition band). (3) Wire LOD selection (camera distance → LOD level). (4) Validate that transitions don't show seams (cracks at LOD boundaries).
+  **Verify:** VoxelLab at 32+ chunks distance: poly count significantly reduced, no visible LOD seams during slow camera move. ctest 16/16. `LOD` debug view shows per-chunk LOD level. MeshingStress: 5%+ improvement at distance.
+  **Acceptance:** LOD on by default for distance > threshold. Visible transition smoothing. Poly count reduction measured.
+
+- [ ] **4.3. Lift draw distance cap** — `src/render/ShadowProjection.cpp::BuildSunShadowCascadeSplits` + `src/core/Types.hpp::kChunkVisibilityCacheMaxChunks`
+
+  **What:** Current cap: `min(camera.farPlane, 64)` chunks. Lift to 128-256 chunks. **Depends on Stages 1-3** (HZB cull, SVDAG, greedy physics) and **Stage 5 (VCT + RTX)** to be in place — otherwise FPS will drop.
+  **Why:** Stages 1-3 enable larger worlds. Without lifting the cap, the new infrastructure is unused.
+  **Files:** `src/render/ShadowProjection.cpp::BuildSunShadowCascadeSplits` (cap constant), `src/core/Types.hpp::kChunkVisibilityCacheMaxChunks` (1024 → 4096 or similar), `src/render/SceneResources.{hpp,cpp}` (any fixed-cap buffers tied to chunk count), `src/debug/DebugHud.cpp` (show current draw distance).
+  **Approach:** (1) Verify all Stages 1-3 are stable. (2) Lift cap to 128. (3) Profile: FPS, GPU memory, CPU memory, ctest. (4) Lift to 256 if 128 is stable. (5) HUD: current draw distance + chunk count visible.
+  **Verify:** 128 chunk draw distance runs at acceptable FPS (target 60+ on VoxelLab, 30+ on MeshingStress). ctest 16/16. CSM still covers (no shadow pop at new distance). MeshingStress: FPS at max draw distance ≥ 30.
+  **Acceptance:** Draw distance cap lifted to at least 128. Performance acceptable. All previous tests pass.
+
+---
+
+## Stage 5 — GI & Temporal (depends on Stage 1 SVDAG)
+
+- [ ] **5.1. Voxel Cone Tracing (VCT)** — new `src/shaders/voxelize.comp` + new `src/shaders/vct.frag`
+
+  **What:** Build a low-res 3D texture (e.g. 256³ R8G8B8A8) per frame, populated by a compute shader that **voxelizes the SVDAG scene (Stage 1.2)** — avg color + opacity per voxel. Generate mipmap chain via `vkCmdBlitImage` (MIN/MAX for opacity, AVG-style box filter for color). Fragment shader does cone traces into this mip chain: diffuse cone (wide) for indirect bounce, specular cone (narrow) for glossy reflections.
+  **Why:** Real-time global illumination without pre-baked lightmaps or full RT. Adds indirect bounce to cavities, specular reflections off indirect light, ambient that respects scene geometry. Cheaper than RT (5.2), no hardware dependency.
+  **Files:** New `src/shaders/voxelize.comp` (SVDAG → 3D atlas), new `src/shaders/vct.frag` (or extend `voxel.frag`), `src/render/SceneResources.{hpp,cpp}` (3D atlas + mip chain), `src/render/Renderer.cpp::RecordGraphicsCommands` (voxelize dispatch + mip generation after main pass).
+  **Approach:** (1) **Spike on VoxelLab**: voxelize at 64³, see if indirect light is visible. (2) Add mip chain. (3) Add cone trace to fragment shader. (4) Tune: cone angle, mip selection, integration count, max distance. (5) `VOXLIGHT` debug view (visualize voxelized scene).
+  **Verify:** Visible indirect bounce in VoxelLab (e.g. glass sphere interior shows tinted color from surrounding opaque). Debug view shows correct voxelization. `ctest 16/16`. Runtime smoke: 2-3 captured frames in `lookdev-captures/` showing indirect light contribution. MeshingStress: 5%+ improvement in cavity lighting.
+  **Acceptance:** Voxel Cone Tracing on by default in dev. Measurable indirect bounce in closed spaces. Debug view functional. No regression in direct lighting. Voxelizes from SVDAG, not flat array.
+
+- [ ] **5.2. RTX shadows (feature-flag)** — new `src/render/RayTracedShadows.{hpp,cpp}`
+
+  **What:** Add `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` support. Build a **BLAS per chunk from the SVDAG mesh data (Stage 1.2 + 2.1)**. TLAS updated as chunks become visible/hidden. Fragment shader uses `rayQueryEXT` to trace a hard shadow ray + a few samples for soft shadow PCF. Feature-flagged: `PROJECTV_ENABLE_HW_RAY_TRACING=ON` (default OFF in release, ON in dev if hardware supports).
+  **Why:** Per-pixel soft shadows with proper area light integration. CSM (current `decisions.md §15` path) is cheap and good for sun, but doesn't handle small light sources or fine detail. RTX shadows are additive — they don't replace CSM, they complement it.
+  **Files:** New `src/render/RayTracedShadows.{hpp,cpp}` (BLAS/TLAS build, ray query shader), `src/shaders/voxel.frag` (ray query call), `src/render/SceneResources.{hpp,cpp}` (BLAS per-chunk, TLAS), `src/render/Renderer.cpp::RecordGraphicsCommands` (TLAS update), root `CMakeLists.txt` (RTX extension gating).
+  **Approach:** (1) **Hardware check first**: `vkGetPhysicalDeviceAccelerationStructurePropertiesKHR`. (2) **Spike**: single hard shadow ray, no soft sampling. (3) Add BLAS build per chunk (use existing mesh data from SVDAG + 2.1). (4) Add TLAS update per frame. (5) Add soft shadow sampling (4-8 rays). (6) Feature-gate: hardware absent → skip; hardware present + env off → skip; env on → use. (7) Coexist with CSM: CSM for sun, RTX for local lights and additional contact details.
+  **Verify:** Hardware check on RTX 3060 Ti. `PROJECTV_ENABLE_HW_RAY_TRACING=ON` produces visibly better shadows on VoxelLab. `=OFF` produces identical output to baseline (CSM only). ctest 16/16.
+  **Acceptance:** RTX path on by default in dev on supported hardware. Fallback to CSM on unsupported. Visual improvement visible in VoxelLab. Coexists with CSM (not replacement). BLAS built from SVDAG-derived mesh.
+
+- [ ] **5.3. TAA + Motion Vectors** — `src/shaders/voxel.frag` (motion vector emit) + `src/render/Taa.cpp` (disocclusion reject)
+
+  **What:** Currently TAA accumulates history per-pixel. Two improvements: (1) **Motion vectors**: fragment shader emits per-pixel motion = previous-clip-position - current-clip-position. Used to reproject history buffer; if reprojected sample is occluded in current frame (depth test fails), reject history sample. (2) **Disocclusion detection**: where current-frame depth is closer to camera than reprojected-history depth, history is "stale" — reset accumulator for that pixel.
+  **Why:** Removes TAA ghosting during fast camera yaw / motion.
+  **Files:** `src/shaders/voxel.frag` (compute motion vector, output to MRT or separate buffer), `src/shaders/voxel.vert` (pass world position to fragment for motion calc), new `src/shaders/motion_vector.frag` (if separate pass preferred), `src/render/Taa.cpp` (reproject + disocclusion test), `src/render/SceneResources.{hpp,cpp}` (motion vector buffer), `src/render/Renderer.cpp::RecordGraphicsCommands` (motion vector pass before TAA resolve).
+  **Approach:** (1) **Spike**: motion vector pass only, no TAA change yet — visualize in `MOTION` debug view. (2) Wire TAA reprojection using motion vectors. (3) Add disocclusion reject. (4) Verify ghosting reduction on VoxelLab fast-yaw test scene.
+  **Verify:** `MOTION` debug view shows correct motion. Fast yaw in VoxelLab: no ghosting, history correctly reset on disocclusion. ctest 16/16. Per `decisions.md §15` close-out rule: inspected runtime captures required (FINAL + SHDW + relevant debug views).
+  **Acceptance:** TAA ghosting eliminated. Motion vector debug view functional. No regression in TAA quality for static camera.
+
+---
+
+## Stage 6 — Tech-debt & ECS refactor (parallel with Stages 2-5)
+
+**Run in parallel with Stages 2-5.** Per the dependency-aware plan: retrofitting a 989-line god-function (`UpdateApp`) after adding 5 new systems is much more expensive than converting each new system to a Flecs system as it lands. Stage 6.1 should grow incrementally — convert the new physics system when Stage 3.2 lands, convert the new async streamer when Stage 1.3 lands, etc.
+
+- [ ] **6.1. Flecs ECS migration (incremental)** — `src/app/AppUpdate.cpp::UpdateApp` + `src/physics/PhysicsWorld.cpp`
+
+  **What:** Currently `UpdateApp` is a 989-line god-function with 60+ input actions and a 200-line manual mirror block. `PhysicsWorld` is procedural, passing `AppState` by reference. Both bypass ECS systems. Migrate incrementally: each new system (per Stages 1.3, 2.x, 3.x, 4.x, 5.x) is implemented as a Flecs system from the start. The god-function shrinks by attrition. Flecs is already in the project (per `agent/memory.md §4`).
+  **Why:** Per `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md`: data-oriented systems, parallel-friendly, cache-friendly. Enables future multi-threading without a per-system rewrite. Doing this incrementally (vs. as a final cleanup) is the only way the migration stays tractable.
+  **Files:** `src/app/AppUpdate.cpp` (split into per-system functions as new systems are added), `src/ecs/EcsWorld.{hpp,cpp}` (system registration for each new system), `src/physics/PhysicsWorld.cpp` (extract voxel-solver into a Flecs system when Stage 3.2 lands).
+  **Approach:** (1) **Spike first**: convert the async audio scan (Stage 1.3) to a Flecs system. (2) When Stage 2.2 HZB cull lands, wrap its CPU-side bookkeeping in a Flecs system. (3) When Stage 3.2 Incremental Jolt lands, extract the per-chunk rebuild into a Flecs system. (4) Iterate: convert 1-2 systems per Stage 2-5 commit. (5) After all Stages land, the god-function should be small enough to split without a dedicated refactor session. (6) Optional: enable Flecs multi-threading (`ecs_set_target_fps` + `ecs_progress` multi-threaded mode).
+  **Verify:** Behavior byte-identical (input replay fixtures). ctest 16/16. Per `decisions.md §10` rule: live walk bugs need fixed-step tests, not blind heuristic patches — same applies here.
+  **Acceptance:** Each new system (Stages 1.3, 2.x, 3.x, 4.x, 5.x) lands as a Flecs system. After Stages 1-5 complete, `UpdateApp` is small enough that no dedicated refactor session is needed. Future multi-threading unblocked.
+
+- [ ] **6.2. AppState PIMPL + `std::span` migration + r0 carry-overs** — `src/core/Types.hpp::AppState` + small refactors
+
+  **What:** Several small refactors from old `TODO.md Tier 5` that weren't closed in the r0 pass:
+  - **AppState PIMPL refactor** (`src/core/Types.hpp::AppState`): `AppState = std::unique_ptr<AppStateImpl>`, `AppStateImpl` owns `RenderContext + SimulationContext + BootstrapContext`. Reduces include bloat, clarifies ownership.
+  - **`std::array` → `std::span`** for non-owning buffer views. After Stage 1.2 (SVDAG) and Stage 2.2 (HZB) settle, the remaining `std::array<T, N>` buffer-view sites can become `std::span<T>`.
+  - **DDA shader template macro**: 3 copies of DDA trace in `voxel.frag` (`TraceLocalPointLightShadowRay`, `ComputeSunContactVisibility`, `TraceAmbientOcclusionRay`) — identical 12-step DDA, different occluder predicates. Macro `#define DDA_BODY(IS_OCCLUDER_FN)` substitutes 3 times.
+  - **`vkWaitForFences` timeout**: per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` "low latency > throughput", `UINT64_MAX` → `10ms` on remaining call sites. Audit `src/render/Renderer.cpp` for current values.
+  - **`// EVIL:` comments on magic numbers** per `legacy/docs/standards/04_evil-hacks-philosophy.md` §3. VoxelLab has many (0.05, 0.14, etc.) without EVIL markers.
+  **Why:** Cleanup. None are critical; all improve maintainability. AppState PIMPL + `std::span` specifically unblock Stage 6.1 ECS migration (smaller `AppState` → cleaner ECS component contracts).
+  **Files:** Various. Each sub-item is a separate small commit.
+  **Approach:** One commit per sub-item. Each is small enough to land in a single session. Order: AppState PIMPL first (largest), then `std::span` migration, then the 3 small items (DDA macro, vkWaitForFences, EVIL markers).
+  **Verify:** ctest 16/16 for each. No behavior change.
+  **Acceptance:** Each sub-item closed individually. No behavior change.
+
+---
+
+## Cross-refs (for orientation)
+
+- `agent/decisions.md §15` — CSM shadow path baseline (do not break; RTX = additive).
+- `agent/decisions.md §30` — CPU Fluid CA reference (OUTDATED for new code, kept for test fixtures).
+- `agent/decisions.md §30.1` — CA tick rate (20 Hz), `effectivePaused` gate, `timeScale` integration.
+- `agent/decisions.md §30.4` — GPU Fluid CA binding contract (ping-pong + atomicOr + active chunk list).
+- `agent/decisions.md §4` — Build / verification contract (build presets, ctest baseline, smoke policy).
+- `legacy/docs/philosophy/01_foundation/05_decision-making.md` — design heuristics (data → algo → code; "low latency > throughput"; "if perf gain < 5-10%, choose simple").
+- `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` — DoD, Flecs, greedy meshing.
+- `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — perf philosophy.
+- `legacy/docs/philosophy/03_domain/04_testing-philosophy.md` — test coverage requirements for hot invariants.
+- `legacy/docs/standards/04_evil-hacks-philosophy.md` — `// EVIL:` markers for magic numbers.
+- `agent/active-sessions.md` — current session state; coordinate with parallel sessions via scope discipline.

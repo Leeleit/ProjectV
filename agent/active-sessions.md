@@ -65,6 +65,46 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-todo-rewrite-v1-r0
+
+- **id:** `2026-06-20T-todo-rewrite-v1-r0`
+- **started-at:** 2026-06-20T10:29:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **TODO.md rewrite: GPU-driven roadmap v1 (dependency-aware, 6 Stages, ~340 lines with detailed per-item approach).** Per operator `2026-06-20` «требуется обновить TODO, переписать, основываясь на плане, который сгенерировал другой агент» + later «доделать TODO, исходя из советов другого агента» (dependency-mismatch analysis). Supersedes Tier 0..5 r0 (`2026-06-13`). Operator decisions: (1) numbering = «Stages 1-6» without Tier word (collision with archived r0); (2) flat list, no section separation; (3) old TODO fully archived to `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md`; (4) Fluid CA reversal (CPU → GPU per Stage 3.1); (5) Mesh Shaders + SVDAG + RTX → all mainline (not R&D); (6) VSync fix → verify closed (no code change); (7) §30 header OUTDATED, content preserved; (8) mega-atomic single commit (not multi-commit); (9) Stage 0 architectural decisions (A1 Vulkan 1.4→1.3, A2 Fluid CA reversal) = future «housekeeping» commit (not this one). **CRITICAL reordering per dependency-mismatch analysis (second agent)**: Stage 1 (new voxel storage: Sparse 64-trees + SVDAG) MUST land before any Stage 2-5 work, because all Stage 2-5 GPU geometry/cull/sim/GI/LOD code reads from SVDAG. Building those on top of the flat array would require a full rewrite. Stage 6 (Flecs ECS) moved from tech-debt backlog to mainline-and-parallel (converting each new system to Flecs as it lands is cheaper than retrofitting later). **Bug audit integration:** Pre-Stage 0 quick wins (B1-B3) + B4 VSync verify-closed. Stage 1.3 = bug 2.2 (blocking audio scanPlaylist). Stage 3.2 = bug 2.1 (full static physics rebuild). Stage 3.3 = philosophy §4 (greedy physics meshing). Stage 3.1 addresses bug 2.3 (alloc in Fluid CA tick) by GPU transfer. Bug 3.1 (Vulkan 1.4 hard requirement) = Stage 0 A1. **Verification policy** (cross-cutting, in TODO header): A/B test buffers during data-format migrations, MeshingStress 5% threshold for adoption, inspected runtime captures for rendering close-out.
+- **files-touched-intent:**
+  - **REWRITE:** `TODO.md` (203 lines Tier 0..5 r0 → ~340 lines 6-Stage dependency-aware roadmap v1, second pass after dependency-mismatch analysis)
+  - **NEW:** `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md` (verbatim copy of old TODO with `SUPERSEDED 2026-06-20` header)
+  - **EDIT:** `agent/status.md §1 Active sub-plan` (OUTDATED marker on «Tier 0..5 (Hardcore perf r0)» line, replace with «Roadmap v1 per `TODO.md`»)
+  - **EDIT:** `agent/decisions.md §29` header (OUTDATED marker + reference to TODO v1)
+  - **EDIT:** `agent/decisions.md §30` header (OUTDATED marker + reference to §30.4 reversal)
+  - **NEW SECTION:** `agent/decisions.md §30.4` (GPU Fluid CA contract: ping-pong compute + atomicOr + active chunk list + multi-tile determinism)
+  - **EDIT:** `CHANGELOG.md` (new `### Changed` entry 2026-06-20: TODO.md rewrite + archive + decisions.md §30.4)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись, close-routine после commit)
+  - **APPEND-ONLY:** `agent/status.md` (post-commit milestone one-liner)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** никакого production кода (`src/`, `tests/`, `external/`, `legacy/` кроме нового archive файла, `docs/`, `build/`, `tools/`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, шейдеры), operator's dirty tree, чужие uncommitted.
+- **status:** open
+- **notes:**
+  - **Pre-flight findings:** HEAD `303e1bb` (raymarch removal close-routine), +37 над origin/master, working tree clean (только `repomix-output.xml` untracked, не в scope). Safety-net patch `/tmp/before_todo_rewrite_v1_20260620T102935Z.patch` saved (0 bytes — clean tree).
+  - **Plan approval:** все 9 operator clarifying questions answered (Q1 numbering, Q2 archival, Q3 Fluid CA, Q4 R&D promotion, Q5 VSync, Q6 structure, Q7 §30 handling, Q8 commit granularity, Q9 housekeeping). План финализирован.
+  - **Sub-tasks:**
+    - [x] Pre-flight safety net (0 bytes — clean)
+    - [x] Write new flat `TODO.md` (28 lines)
+    - [x] Write archive copy `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md`
+    - [x] Edit `agent/status.md §1 Active sub-plan` (OUTDATED marker → «Roadmap v1 per `TODO.md`»)
+    - [x] Edit `agent/decisions.md §29, §30` (OUTDATED markers)
+    - [x] Add `agent/decisions.md §30.4` (GPU Fluid CA contract)
+    - [x] Edit `CHANGELOG.md` (Changed entry — TODO rewrite + archive + decisions + status)
+    - [x] Register session in `agent/active-sessions.md` (эта запись)
+    - [ ] `git add` (точечно: 4 modified + 1 new)
+    - [ ] `git diff --stat` (показать оператору)
+    - [ ] Ask «Commit?» → ждать «yes» → `git commit` per `AGENTS.md §6.9`
+    - [ ] Close-routine: post-commit milestone в `agent/status.md` + move active-sessions записи в «Закрытые»
+  - **Honest scope:** только doc-файлы (TODO, agent/status, agent/decisions, CHANGELOG, new archive). 0 production code touched. Build green не нужен (docs-only per `AGENTS.md §7.3.1`).
+  - **Commit policy per `AGENTS.md §6.9`:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=docs → docs-only, auto-eligible per §7.3.1, но всё равно confirm per mega-atomic + safety-net.
+  - **Cross-refs:** новая `decisions.md §30.4`, OUTDATED markers на `§29` + `§30`, `agent/status.md §1`, `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md`.
+
 ### session-2026-06-20T-raymarch-stub-removal-r0
 
 - **id:** `2026-06-20T-raymarch-stub-removal-r0`

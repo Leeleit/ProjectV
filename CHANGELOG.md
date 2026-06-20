@@ -38,6 +38,60 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ### Changed
 
+- **`TODO.md` rewritten to GPU-driven roadmap v1 (dependency-aware, 6
+  Stages, ~340 lines with detailed per-item approach).** Supersedes
+  Tier 0..5 r0 (`2026-06-13` plan). Old TODO content archived verbatim at
+  `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md` (207 lines,
+  `SUPERSEDED 2026-06-20` header). **Re-ordered to fix a critical
+  dependency mismatch**: Stage 1 (new voxel storage: Sparse 64-trees +
+  SVDAG + async audio) MUST land before any Stage 2-5 work, because all
+  Stage 2-5 GPU geometry, cull, sim, GI, LOD code reads from the new
+  SVDAG storage. Building those on top of the flat `std::vector<uint8_t>`
+  would require a full rewrite when Stage 1 lands. Stage 6 (Flecs ECS
+  migration) moved from tech-debt backlog to mainline-and-parallel —
+  converting each new system to a Flecs system as it lands is cheaper
+  than retrofitting a 989-line god-function later. New TODO covers:
+  Pre-Stage 0 quick wins (B1 redundant model load loop, B2 pipeline
+  destroy on resize, B3 `getenv` per frame, B4 verify VSync closed),
+  Stage 0 architectural decisions (A1 Vulkan 1.4→1.3, A2 Fluid CA
+  reversal planning marker), **Stage 1 Voxel Database & Compression**
+  (1.1 Sparse 64-trees, 1.2 SVDAG, 1.3 async audio scanPlaylist),
+  **Stage 2 GPU-Driven Geometry & Culling** (2.1 Mesh+Task shaders for
+  SVDAG, 2.2 HZB cull, 2.3 Virtual Texturing), **Stage 3 Physics &
+  Simulation** (3.1 GPU Fluid CA per §30.4, 3.2 incremental Jolt, 3.3
+  greedy physics meshing), **Stage 4 Procedural Generation & LOD** (4.1
+  GPU noise, 4.2 geometry LOD, 4.3 lift draw distance cap), **Stage 5
+  GI & Temporal** (5.1 VCT, 5.2 RTX shadows feature-flag, 5.3 TAA +
+  motion vectors), **Stage 6 Tech-debt & ECS refactor** (6.1 Flecs ECS
+  migration parallel with Stages 2-5, 6.2 AppState PIMPL + std::span +
+  r0 carry-overs). **Verification policy** (cross-cutting): A/B test
+  buffers during data-format migrations (Stage 1), MeshingStress
+  measurement on every optimization (5% threshold for adoption per
+  `decisions.md §5_decision-making.md`), inspected runtime captures
+  required for rendering close-out per `decisions.md §15`. All Tier
+  0..5 r0 sub-tasks remain closed (commits `cf4b535`, `af69d06`,
+  `bafecf9`, `08de29d`, `20b2d9e`, `44362d1`, `72eca66`).
+- **`agent/status.md §1 Active sub-plan` updated** to «Roadmap v1 per
+  `TODO.md`» (was «Tier 0..5 (Hardcore perf r0)»).
+- **`agent/decisions.md §29` header marked OUTDATED** (Tier 0..5 plan
+  superseded; old content preserved as historical record; cold/hot
+  `std::expected` rule remains valid).
+- **`agent/decisions.md §29` R&D-promotion cross-refs updated** to match
+  new 6-Stage numbering: Mesh Shaders → Stage 2.1, Sparse 64-trees →
+  Stage 1.1, SVDAG → Stage 1.2, RT shadows → Stage 5.2.
+- **`agent/decisions.md §30` header marked OUTDATED** (CPU Fluid CA
+  fall-only superseded by GPU compute per §30.4).
+- **`agent/decisions.md §30.4` added** — «Fluid CA reversal: GPU compute
+  (ping-pong + atomicOr + active chunk list)». New binding contract for
+  Stage 3.1 in new TODO. Defines: ping-pong voxel buffers, `imageAtomicOr` /
+  CAS for destination claim, active chunk list for skipping sleepy
+  voxels, multi-tile determinism contract (single-tile deterministic,
+  multi-tile statistically stable), 3-step migration path (additive → default
+  → deprecate CPU), `SimulationState` unchanged, render path unaware of
+  CPU-vs-GPU source. CPU `UpdateFluidCA` retained as reference implementation
+  and test fixture per memory policy. Cross-ref to draw-distance cap
+  updated from old `Stage 5.3` to new `Stage 4.3`.
+
 - `src/voxel/VoxelWorld.cpp:176` — Tier 0.D hardening.** `[[unlikely]]` on the
   `chunk.rebuildQueued` early-out in `QueueChunkRebuildRequest`. The branch
   predictor (and the branch hint) target the common path "chunk fresh,
