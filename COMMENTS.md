@@ -21,6 +21,8 @@ Categories:
 reflect the **file state at extraction time**. If code moves, this entry becomes
 stale — re-anchor it (see `AGENTS.md` §11 for the stale-handling rule).
 
+<!-- Last validated 2026-06-20 against src/core/Math.ixx (commit 44362d1) and src/core/StringId.ixx (same). L-anchors in entries below are still accurate. -->
+
 **Querying:**
 
 ```bash

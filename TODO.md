@@ -7,9 +7,9 @@
 - ProjectV = reproducible interactive voxel MVP. C++26 + Vulkan 1.4 (see A1 for 1.3 option) + Flecs ECS + Jolt Physics + GPU-driven greedy meshing.
 - Current voxel storage: flat `std::vector<uint8_t>` (1 byte/voxel, no SIMD, no SoA) — **will be replaced in Stage 1**.
 - Current draw distance cap: `min(camera.farPlane, 64)` chunks (`src/render/ShadowProjection.cpp::BuildSunShadowCascadeSplits`) — lifted in Stage 4.3.
-- Current shadow path: 4-cascade CSM (`agent/decisions.md §15` — stable, do NOT replace with RTX blindly; RTX = additive feature-flag per Stage 5.2).
+- Current shadow path: 4-cascade CSM (`agent/decisions.md §15` [First sun-shadow path](#15-first-sun-shadow-path) — stable, do NOT replace with RTX blindly; RTX = additive feature-flag per Stage 5.2).
 - Current lighting: direct GGX + ambient + contact shadow + local point light. Forward voxel DDA, no RT, no SSAO/GTAO.
-- Current Fluid CA: CPU fall-only rule (`agent/decisions.md §30`, soon-to-be-superseded by GPU per `§30.4`).
+- Current Fluid CA: CPU fall-only rule (`agent/decisions.md §30` [Fluid CA audit](#30-fluid-ca-audit), soon-to-be-superseded by GPU per `§30.4`).
 - Per `AGENTS.md §6.3`: do `web_search` (Exa) for unfamiliar Vulkan / C++26 / Jolt API before writing code.
 
 **How to read this file:**
@@ -27,8 +27,8 @@
 
 **Verification policy (cross-cutting, applies to all stages):**
 1. **A/B test buffers** during data-format migrations (Stage 1). Keep the old code path as an inactive branch, populate both structures in parallel, compare per-chunk bytewise. Roll forward only when byte-equal across all existing test fixtures.
-2. **MeshingStress measurement on every optimization** (`src/bench/` or `TracyPlot` per `decisions.md §4`). Each implementation must improve the relevant Tracy metric by **> 5%** on the stress scene. If not, simplify the implementation or revert to the scalar version with `[[likely]]` / `[[unlikely]]` / branchless optimizations. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md`: «если прирост < 5-10% при значительном усложнении — простой».
-3. **Per-`decisions.md §15` close-out rule for any rendering work**: inspected runtime captures required (FINAL + relevant debug views like SHDW / CSM / CTSH / AOCC / LOCL / MOTION / VOXLIGHT), not sidecar numbers alone.
+2. **MeshingStress measurement on every optimization** (`src/bench/` or `TracyPlot` per `decisions.md §4` [Build / verification contract](#4-build--verification-contract)). Each implementation must improve the relevant Tracy metric by **> 5%** on the stress scene. If not, simplify the implementation or revert to the scalar version with `[[likely]]` / `[[unlikely]]` / branchless optimizations. Per `legacy/docs/philosophy/01_foundation/05_decision-making.md`: «если прирост < 5-10% при значительном усложнении — простой».
+3. **Per-`decisions.md §15` close-out rule for any rendering work**: inspected runtime captures required (FINAL + relevant debug views like SHDW / CSM / CTSH / AOCC / LOCL / MOTION / VOXLIGHT), not sidecar numbers alone. Cross-ref: [§15 First sun-shadow path](#15-first-sun-shadow-path).
 
 ---
 
@@ -63,10 +63,10 @@
 
 - [ ] **B4. Verify closed: VSync FIFO bug fix** — read-only verification, no code change
 
-  **What:** Operator reported the VSync bug `2026-06-14`. Fix landed in commits `af69d06` family per `agent/decisions.md §30.1-§30.3`. This entry exists so a fresh session verifies the fix is still in place before anyone tries to re-fix.
+  **What:** Operator reported the VSync bug `2026-06-14`. Fix landed in commits `af69d06` family per `agent/decisions.md §30.1-§30.3` (VSync fix lineage: [§30.1](#301-ca-tick-в-updateapp-pause--timescale-default-20-hz-2026-06-14), [§30.2](#302-v-hotkey-auto-detect-cycle--libc-warning--hud-line-2026-06-14), [§30.3](#303-v-hotkey-cycle-walk-across-recreateswapchain-preserve-g_active-2026-06-14-evening)). This entry exists so a fresh session verifies the fix is still in place before anyone tries to re-fix.
   **Why:** Pre-Stage 0 quick wins should not silently re-open a closed bug.
   **Files:** None (read-only).
-  **Approach:** (1) `git log --oneline -- src/render/vulkan/VulkanSwapchain.cpp src/render/vulkan/VulkanSwapchain.hpp | head -10` — confirm VSync-fix lineage. (2) Read `agent/decisions.md §30.1, §30.2, §30.3` — three VSync-related contracts. (3) Read `tests/PresentModeTests.cpp` — 12 sub-tests covering auto-detect cycle, rebuild preservation, walk scenarios. (4) Optionally runtime: press V on a supported host, confirm cycle walks through physically-supported modes without sticking.
+  **Approach:** (1) `git log --oneline -- src/render/vulkan/VulkanSwapchain.cpp src/render/vulkan/VulkanSwapchain.hpp | head -10` — confirm VSync-fix lineage. (2) Read `agent/decisions.md §30.1, §30.2, §30.3` — three VSync-related contracts. (3) Read `tests/PresentModeTests.cpp` — 12 sub-tests covering auto-detect cycle, rebuild preservation, walk scenarios. (4) Optionally runtime: press V on a supported host, confirm cycle walks through physically-supported modes without sticking. Cross-refs: [§30.1](#301-ca-tick-в-updateapp-pause--timescale-default-20-hz-2026-06-14), [§30.2](#302-v-hotkey-auto-detect-cycle--libc-warning--hud-line-2026-06-14), [§30.3](#303-v-hotkey-cycle-walk-across-recreateswapchain-preserve-g_active-2026-06-14-evening).
   **Verify:** All three decision sections present, test count ≥ 12, no TODO/XXX/FIXME in `VulkanSwapchain.{hpp,cpp}` related to VSync cycle.
   **Acceptance:** Read-only confirmation recorded in commit body. No code change.
 
@@ -85,12 +85,12 @@
 
 - [ ] **A2. Fluid CA reversal (planning marker — code lives in Stage 3.1)**
 
-  **What:** No code in this item. The contract is already in `agent/decisions.md §30.4` (GPU Fluid CA: ping-pong + atomicOr + active chunk list). This TODO entry is a planning marker so the actual implementation (Stage 3.1) has its decision contract clearly cross-referenced.
+  **What:** No code in this item. The contract is already in `agent/decisions.md §30.4` ([GPU Fluid CA reversal](#304-fluid-ca-reversal-gpu-compute-ping-pong--atomicor--active-chunk-list-2026-06-20), GPU Fluid CA: ping-pong + atomicOr + active chunk list). This TODO entry is a planning marker so the actual implementation (Stage 3.1) has its decision contract clearly cross-referenced.
   **Why:** Operator explicitly reversed `§30` (CPU fall-only) → GPU compute on `2026-06-20`. The contract is binding; do not deviate from it when implementing Stage 3.1.
   **Files:** None for this entry. Cross-refs:
-  - `agent/decisions.md §30.4` — full contract (must-read before Stage 3.1)
-  - `agent/decisions.md §30` — CPU reference (preserved, OUTDATED marker, content kept for test fixtures + reference implementation)
-  - `agent/decisions.md §30.1` — tick rate (20 Hz default), `effectivePaused` gate, `timeScale` integration in `UpdateApp` (still applies, only the dispatcher changes)
+  - `agent/decisions.md §30.4` ([GPU Fluid CA reversal](#304-fluid-ca-reversal-gpu-compute-ping-pong--atomicor--active-chunk-list-2026-06-20)) — full contract (must-read before Stage 3.1)
+  - `agent/decisions.md §30` ([Fluid CA audit](#30-fluid-ca-audit)) — CPU reference (preserved, OUTDATED marker, content kept for test fixtures + reference implementation)
+  - `agent/decisions.md §30.1` ([CA tick в UpdateApp](#301-ca-tick-в-updateapp-pause--timescale-default-20-hz-2026-06-14)) — tick rate (20 Hz default), `effectivePaused` gate, `timeScale` integration in `UpdateApp` (still applies, only the dispatcher changes)
   **Verify:** N/A (planning marker).
   **Acceptance:** When Stage 3.1 is implemented, the contract in `§30.4` is followed literally.
 
@@ -105,7 +105,7 @@
   **What:** Replace flat `std::vector<uint8_t>` storage with a sparse 64-ary tree. Each internal node covers a `4×4×4 = 64` cell sub-volume; child occupancy stored as `uint64_t fillMask` (one bit per child slot). Walk via `findFirstSet` / `clearBit` intrinsics. Leaves store material IDs (1-2 bytes each, or 1 byte with material table for >256 materials).
   **Why:** (1) Memory: empty space = single `fillMask = 0` per empty 4×4×4 = 8 bytes for 64 cells instead of 64 bytes — 8× reduction for sparse worlds. (2) Cache locality: tree walks are predictable; leaf material data is dense. (3) Enables SVO raytracing later (1.2, 5.1) without a second storage rewrite. (4) SIMD-friendly: 64-bit mask = single `__builtin_ctzll` / `_pdep_u64` operations.
   **Files:** `src/voxel/VoxelWorld.hpp` (replace `voxels: std::vector<uint8_t>`), `src/voxel/VoxelWorld.cpp` (all access sites), new `src/voxel/Sparse64Tree.hpp` (the tree itself), `src/voxel/VoxelRaycast.{hpp,cpp}` (raycast now tree-walking), `src/shaders/voxel_mesh.comp` (or replacement — needs read access to tree leaves), `src/physics/PhysicsWorld.cpp` (read access for collision), `src/voxel/UpdateFluidCA` (read + write access).
-  **Approach:** (1) **A/B test buffers** per Verification policy: implement `Sparse64Tree` as standalone header-only template, unit-test with byte-exact parity against flat `std::vector<uint8_t>`. Keep both paths. (2) Add `VoxelWorld::SetVoxelMaterial` / `GetVoxelMaterial` on top of tree. (3) **3-step migration** (per `decisions.md §30.4` precedent): (a) additive `PROJECTV_SPARSE_64_STORAGE=ON` env, both paths run in parallel, output cross-checked per chunk; (b) flip default; (c) delete flat path. (4) **Verify byte-equal output** on VoxelLab, MeshingStress, all `tests/VoxelWorldTests.cpp` fixtures. (5) MeshingStress measurement: TracyPlot for `VoxelAccess (ms)` should drop ≥ 5% on sparse scenes.
+  **Approach:** (1) **A/B test buffers** per Verification policy: implement `Sparse64Tree` as standalone header-only template, unit-test with byte-exact parity against flat `std::vector<uint8_t>`. Keep both paths. (2) Add `VoxelWorld::SetVoxelMaterial` / `GetVoxelMaterial` on top of tree. (3) **3-step migration** (per `decisions.md §30.4` ([GPU Fluid CA reversal](#304-fluid-ca-reversal-gpu-compute-ping-pong--atomicor--active-chunk-list-2026-06-20)) precedent): (a) additive `PROJECTV_SPARSE_64_STORAGE=ON` env, both paths run in parallel, output cross-checked per chunk; (b) flip default; (c) delete flat path. (4) **Verify byte-equal output** on VoxelLab, MeshingStress, all `tests/VoxelWorldTests.cpp` fixtures. (5) MeshingStress measurement: TracyPlot for `VoxelAccess (ms)` should drop ≥ 5% on sparse scenes.
   **Verify:** `ctest 16/16` (existing 24 FluidCA + others). New `ProjectVSparse64TreeTests` with byte-exact comparison vs flat snapshot. Snapshot save/load round-trip. Memory profiling: VoxelLab + 10× empty chunks before/after.
   **Acceptance:** Storage swap complete, byte-equal output across all existing test fixtures, 5-10× memory reduction measured on VoxelLab. All Stage 2-5 features are free to assume this storage format.
 
@@ -164,9 +164,9 @@
 
 ## Stage 3 — Physics & Simulation (depends on Stage 1 SVDAG)
 
-- [ ] **3.1. GPU Fluid CA (REVERSAL — implements `agent/decisions.md §30.4`)** — new `src/shaders/fluid_ca.comp`
+- [ ] **3.1. GPU Fluid CA (REVERSAL — implements `agent/decisions.md §30.4` [GPU Fluid CA reversal](#304-fluid-ca-reversal-gpu-compute-ping-pong--atomicor--active-chunk-list-2026-06-20))** — new `src/shaders/fluid_ca.comp`
 
-  **What:** Per `decisions.md §30.4` — implement GPU compute fluid CA. (1) Two `VkImage` (or SSBO) ping-pong buffers for voxel state, **reading and writing SVDAG nodes** (not flat array). (2) `atomicOr` for fluid destination claim; `imageAtomicCompareExchange` for the "is target Air?" check. (3) Frontend CPU builds `activeChunks` list (chunks with non-stable fluid or recent edits); dispatch `activeChunks.count` workgroups. (4) Iteration order inside workgroup: `z, y, x` ascending (preserves per-tile determinism). (5) `SimulationState` (tick rate, accumulator, pause/timeScale) unchanged — only the dispatcher changes.
+  **What:** Per `decisions.md §30.4` ([GPU Fluid CA reversal](#304-fluid-ca-reversal-gpu-compute-ping-pong--atomicor--active-chunk-list-2026-06-20)) — implement GPU compute fluid CA. (1) Two `VkImage` (or SSBO) ping-pong buffers for voxel state, **reading and writing SVDAG nodes** (not flat array). (2) `atomicOr` for fluid destination claim; `imageAtomicCompareExchange` for the "is target Air?" check. (3) Frontend CPU builds `activeChunks` list (chunks with non-stable fluid or recent edits); dispatch `activeChunks.count` workgroups. (4) Iteration order inside workgroup: `z, y, x` ascending (preserves per-tile determinism). (5) `SimulationState` (tick rate, accumulator, pause/timeScale) unchanged — only the dispatcher changes.
   **Why:** Reversal of `§30` per operator `2026-06-20`. CPU CA scales as O(N³); GPU CA scales as O(active_chunks). Required for 64+ chunk draw distance (Stage 4.3) and procedural worlds. **Direct dependency on Stage 1**: shader operates on SVDAG nodes, so this stage cannot begin meaningfully until SVDAG (1.2) is in mainline.
   **Files:** New `src/shaders/fluid_ca.comp`, `src/render/Renderer.cpp::RecordComputeCommands` (new compute pass dispatch), `src/voxel/VoxelWorld.{hpp,cpp}` (add `activeChunks` SSBO, add GPU-side dispatch helper), `src/core/Types.hpp::SimulationState` (no change to fields, but add `fluidCaGpuEnabled` flag), `src/app/AppUpdate.cpp` (dispatch instead of CPU loop), `src/shaders/voxel.frag` (not affected — reads same voxel buffer).
   **Approach:** Per `§30.4` 3-step migration: (1) **Additive**: `PROJECTV_FLUID_CA_GPU=ON` env, CPU path remains default. Both produce same visual output. A/B validate. (2) **Default flip**: GPU on for dev presets, CPU = emergency fallback. (3) **Deprecate CPU**: CPU kept as reference + test fixture only (`PROJECTV_RUN_CPU_REFERENCE_TESTS=ON` for opt-in). Reuse 24 sub-tests from `tests/FluidCATests.cpp` as CPU reference; write new `tests/FluidCAGpuTests.cpp` with same scenarios + GPU-specific tests (workgroup determinism, multi-tile race semantics, performance).
@@ -238,7 +238,7 @@
 - [ ] **5.2. RTX shadows (feature-flag)** — new `src/render/RayTracedShadows.{hpp,cpp}`
 
   **What:** Add `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` support. Build a **BLAS per chunk from the SVDAG mesh data (Stage 1.2 + 2.1)**. TLAS updated as chunks become visible/hidden. Fragment shader uses `rayQueryEXT` to trace a hard shadow ray + a few samples for soft shadow PCF. Feature-flagged: `PROJECTV_ENABLE_HW_RAY_TRACING=ON` (default OFF in release, ON in dev if hardware supports).
-  **Why:** Per-pixel soft shadows with proper area light integration. CSM (current `decisions.md §15` path) is cheap and good for sun, but doesn't handle small light sources or fine detail. RTX shadows are additive — they don't replace CSM, they complement it.
+  **Why:** Per-pixel soft shadows with proper area light integration. CSM (current `decisions.md §15` [First sun-shadow path](#15-first-sun-shadow-path) path) is cheap and good for sun, but doesn't handle small light sources or fine detail. RTX shadows are additive — they don't replace CSM, they complement it.
   **Files:** New `src/render/RayTracedShadows.{hpp,cpp}` (BLAS/TLAS build, ray query shader), `src/shaders/voxel.frag` (ray query call), `src/render/SceneResources.{hpp,cpp}` (BLAS per-chunk, TLAS), `src/render/Renderer.cpp::RecordGraphicsCommands` (TLAS update), root `CMakeLists.txt` (RTX extension gating).
   **Approach:** (1) **Hardware check first**: `vkGetPhysicalDeviceAccelerationStructurePropertiesKHR`. (2) **Spike**: single hard shadow ray, no soft sampling. (3) Add BLAS build per chunk (use existing mesh data from SVDAG + 2.1). (4) Add TLAS update per frame. (5) Add soft shadow sampling (4-8 rays). (6) Feature-gate: hardware absent → skip; hardware present + env off → skip; env on → use. (7) Coexist with CSM: CSM for sun, RTX for local lights and additional contact details.
   **Verify:** Hardware check on RTX 3060 Ti. `PROJECTV_ENABLE_HW_RAY_TRACING=ON` produces visibly better shadows on VoxelLab. `=OFF` produces identical output to baseline (CSM only). ctest 16/16.
@@ -250,7 +250,7 @@
   **Why:** Removes TAA ghosting during fast camera yaw / motion.
   **Files:** `src/shaders/voxel.frag` (compute motion vector, output to MRT or separate buffer), `src/shaders/voxel.vert` (pass world position to fragment for motion calc), new `src/shaders/motion_vector.frag` (if separate pass preferred), `src/render/Taa.cpp` (reproject + disocclusion test), `src/render/SceneResources.{hpp,cpp}` (motion vector buffer), `src/render/Renderer.cpp::RecordGraphicsCommands` (motion vector pass before TAA resolve).
   **Approach:** (1) **Spike**: motion vector pass only, no TAA change yet — visualize in `MOTION` debug view. (2) Wire TAA reprojection using motion vectors. (3) Add disocclusion reject. (4) Verify ghosting reduction on VoxelLab fast-yaw test scene.
-  **Verify:** `MOTION` debug view shows correct motion. Fast yaw in VoxelLab: no ghosting, history correctly reset on disocclusion. ctest 16/16. Per `decisions.md §15` close-out rule: inspected runtime captures required (FINAL + SHDW + relevant debug views).
+  **Verify:** `MOTION` debug view shows correct motion. Fast yaw in VoxelLab: no ghosting, history correctly reset on disocclusion. ctest 16/16. Per `decisions.md §15` ([First sun-shadow path](#15-first-sun-shadow-path)) close-out rule: inspected runtime captures required (FINAL + SHDW + relevant debug views).
   **Acceptance:** TAA ghosting eliminated. Motion vector debug view functional. No regression in TAA quality for static camera.
 
 ---
@@ -265,7 +265,7 @@
   **Why:** Per `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md`: data-oriented systems, parallel-friendly, cache-friendly. Enables future multi-threading without a per-system rewrite. Doing this incrementally (vs. as a final cleanup) is the only way the migration stays tractable.
   **Files:** `src/app/AppUpdate.cpp` (split into per-system functions as new systems are added), `src/ecs/EcsWorld.{hpp,cpp}` (system registration for each new system), `src/physics/PhysicsWorld.cpp` (extract voxel-solver into a Flecs system when Stage 3.2 lands).
   **Approach:** (1) **Spike first**: convert the async audio scan (Stage 1.3) to a Flecs system. (2) When Stage 2.2 HZB cull lands, wrap its CPU-side bookkeeping in a Flecs system. (3) When Stage 3.2 Incremental Jolt lands, extract the per-chunk rebuild into a Flecs system. (4) Iterate: convert 1-2 systems per Stage 2-5 commit. (5) After all Stages land, the god-function should be small enough to split without a dedicated refactor session. (6) Optional: enable Flecs multi-threading (`ecs_set_target_fps` + `ecs_progress` multi-threaded mode).
-  **Verify:** Behavior byte-identical (input replay fixtures). ctest 16/16. Per `decisions.md §10` rule: live walk bugs need fixed-step tests, not blind heuristic patches — same applies here.
+  **Verify:** Behavior byte-identical (input replay fixtures). ctest 16/16. Per `decisions.md §10` ([Debug / repro contract](#10-debug--repro-contract)) rule: live walk bugs need fixed-step tests, not blind heuristic patches — same applies here.
   **Acceptance:** Each new system (Stages 1.3, 2.x, 3.x, 4.x, 5.x) lands as a Flecs system. After Stages 1-5 complete, `UpdateApp` is small enough that no dedicated refactor session is needed. Future multi-threading unblocked.
 
 - [ ] **6.2. AppState PIMPL + `std::span` migration + r0 carry-overs** — `src/core/Types.hpp::AppState` + small refactors
@@ -286,10 +286,10 @@
 
 ## Cross-refs (for orientation)
 
-- `agent/decisions.md §15` — CSM shadow path baseline (do not break; RTX = additive).
-- `agent/decisions.md §30` — CPU Fluid CA reference (OUTDATED for new code, kept for test fixtures).
-- `agent/decisions.md §30.1` — CA tick rate (20 Hz), `effectivePaused` gate, `timeScale` integration.
-- `agent/decisions.md §30.4` — GPU Fluid CA binding contract (ping-pong + atomicOr + active chunk list).
+- `agent/decisions.md §15` [First sun-shadow path](#15-first-sun-shadow-path) — CSM shadow path baseline (do not break; RTX = additive).
+- `agent/decisions.md §30` [Fluid CA audit](#30-fluid-ca-audit) — CPU Fluid CA reference (OUTDATED for new code, kept for test fixtures).
+- `agent/decisions.md §30.1` [CA tick в UpdateApp](#301-ca-tick-в-updateapp-pause--timescale-default-20-hz-2026-06-14) — CA tick rate (20 Hz), `effectivePaused` gate, `timeScale` integration.
+- `agent/decisions.md §30.4` [GPU Fluid CA reversal](#304-fluid-ca-reversal-gpu-compute-ping-pong--atomicor--active-chunk-list-2026-06-20) — GPU Fluid CA binding contract (ping-pong + atomicOr + active chunk list).
 - `agent/decisions.md §4` — Build / verification contract (build presets, ctest baseline, smoke policy).
 - `legacy/docs/philosophy/01_foundation/05_decision-making.md` — design heuristics (data → algo → code; "low latency > throughput"; "if perf gain < 5-10%, choose simple").
 - `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` — DoD, Flecs, greedy meshing.
