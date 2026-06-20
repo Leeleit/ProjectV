@@ -76,30 +76,33 @@ Append-only ledger активных и недавно завершённых AI-
 
 - **id:** `2026-06-20T-agent-file-consolidation-L1L2-r0`
 - **started-at:** 2026-06-20T11:20:00Z
+- **closed-at:** 2026-06-20T16:35:00Z
+- **commit-hash:** `f5dad16` — `chore(agent): §8.1 close-routine + post-consolidation verification (commits A-D)` (5 commits total in slice: `3c148e3`, `f1eeb6a`, `1bf096f`, `4f5f379`, `f5dad16`)
 - **agent:** MiniMax-M3
 - **operator:** le1t
 - **branch:** master
-- **scope:** **Full consolidation of `agent/` directory per operator directive `2026-06-20`.** Plan: 5 sequential commits (L1 + L2.1 + L2.2 + L2.3 + close-routine). All old `agent/knowledge.md Part B` + `agent/knowledge.md Part A` + `agent/knowledge.md Part C` → `agent/knowledge.md`. All old `agent/workspace.md §1 (Now)` + `agent/workspace.md §5 (Active tasks)` → `agent/workspace.md` (after this commit). `AGENTS.md §9` → inline in `AGENTS.md §9` (Commit D). Closed sessions from `agent/workspace.md §5 (Active tasks)` → `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (L1.5). All `§N` cross-refs preserved verbatim per `AGENTS.md §1` operator approval. Anchor script `tools/verify_section_anchors.sh` added in Commit A.
+- **scope:** **Full consolidation of `agent/` directory per operator directive `2026-06-20`.** Plan: 5 sequential commits (L1 + L2.1 + L2.2 + L2.3 + close-routine). All old `agent/memory.md` + `agent/decisions.md` + `agent/ARCHIVE-INDEX.md` → `agent/knowledge.md`. All old `agent/status.md` + `agent/active-sessions.md` (closed sessions) → `agent/workspace.md` + `legacy/docs/archive/agent-sessions/2026-06-week-3.md`. `agent/session-checklist.md` → inline in `AGENTS.md §9` (Commit D). All `§N` cross-refs preserved verbatim per `AGENTS.md §1` operator approval. Anchor script `tools/verify_section_anchors.sh` added in Commit A.
 - **files-touched-intent:**
   - **NEW:** `agent/knowledge.md` (~1860 lines, merged from memory.md + decisions.md + ARCHIVE-INDEX.md)
-  - **NEW:** `agent/workspace.md` (~500 lines target, merged from status.md + active-sessions.md after L1.5 archive)
+  - **NEW:** `agent/workspace.md` (~250 lines, merged from status.md + active-sessions.md after L1.5 archive)
   - **NEW:** `tools/verify_section_anchors.sh` (anchor verification bash script)
   - **NEW:** `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (1214 lines, all pre-`2026-06-20` closed sessions)
-  - **DELETE:** `agent/knowledge.md Part B`, `agent/knowledge.md Part A`, `agent/knowledge.md Part C`, `agent/workspace.md §1 (Now)`, `AGENTS.md §9`
-  - **EDIT:** `AGENTS.md` (§3 sources-of-truth list, §4 classification table, §9 session-checklist inlined)
-  - **EDIT:** `TODO.md` (anchor-form cross-refs, Commit A)
-  - **EDIT:** `COMMENTS.md` (footer + L-anchor audit, Commit A)
-  - **EDIT:** `CHANGELOG.md` (consolidation entry, Commit E)
-  - **APPEND-ONLY:** `agent/workspace.md §5 (Active tasks)` (эта запись, will be merged into workspace.md §5 in Commit C, then close-routine here)
+  - **DELETE:** `agent/memory.md`, `agent/decisions.md`, `agent/ARCHIVE-INDEX.md`, `agent/status.md`, `agent/session-checklist.md`
+  - **EDIT:** `AGENTS.md` (§3 sources-of-truth list, §4 classification table, §9 session-checklist inlined, ~10 cross-refs updated)
+  - **EDIT:** `TODO.md` (anchor-form cross-refs Commit A + bulk file-path replacement Commit E)
+  - **EDIT:** `COMMENTS.md` (footer + L-anchor audit Commit A)
+  - **EDIT:** `CHANGELOG.md` (consolidation entry Commit E + header cross-refs)
+  - **EDIT:** `README_NEW.md` (bulk file-path replacement Commit E)
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись, will be marked closed in this commit)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** никакого production кода (`src/`, `tests/`, `external/`, `legacy/` кроме нового archive файла, `docs/`, `build/`, `tools/` кроме нового verify script, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, шейдеры), operator's dirty tree, чужие uncommitted.
-- **status:** open
-- **notes:**
-  - **Pre-flight findings:** HEAD `76465ea` (todo-rewrite close-routine), +39 над origin/master, working tree clean (только `repomix-output.xml` untracked, не в scope). Safety-net patch `/tmp/before_agent_consolidation_<ts>.patch` saved (0 bytes — clean tree).
-  - **Plan approval:** 5 questions answered (scope = L1+L2; anchor format = script-based; AGENTS.md = explicit operator approval granted; commit pacing = mega-atomic all 5; L1.5 = delete all sessions except current).
-  - **Sequential commits** (no pauses between, per mega-atomic pacing): (A) L1 + verify script + COMMENTS footer. (B) L2.1+2.4 = knowledge.md merge. (C) L2.2+1.5 = workspace.md merge + closed-sessions archive. (D) L2.3 = session-checklist inline in AGENTS.md §9. (E) Close-routine + post-consolidation verification.
-  - **Honest scope:** только doc-файлы + 1 new bash script + 1 new archive file. 0 production code touched. Build green не нужен (docs-only per `AGENTS.md §7.3.1`).
-  - **Commit policy per `AGENTS.md §6.9`:** user explicit `go` = all 5 commits, no per-commit «Commit?» pauses.
-  - **Cross-refs:** `TODO.md`, `CHANGELOG.md`, `AGENTS.md` (hub files), `agent/knowledge.md` (formerly decisions.md + memory.md), `agent/workspace.md` (new), `legacy/docs/archive/agent-sessions/2026-06-week-3.md` (new archive).
+- **status:** closed
+- **post-commit notes:**
+  - **Stuck loop limit per `AGENTS.md §6.7`:** 0 compile iterations (docs-only, no code touched). Well within 3-4 limit.
+  - **Scope discipline clean:** 5 commits touching only doc-files + 1 new bash script + 1 new archive file. 0 production code, 0 submodules, 0 uncommitted-included.
+  - **Anchor verification final:** 17 refs checked, 0 broken (`tools/verify_section_anchors.sh` exit 0).
+  - **Safety-net cleanup:** `/tmp/before_agent_consolidation_20260620T112047Z.patch` (0 bytes — clean tree pre-work, deleted per §7).
+  - **Close-routine per `AGENTS.md §8.1`:** (1) `git rev-parse HEAD` → `f5dad16`. (2) Эта запись обновлена: `status: open → closed`, `closed-at` + `commit-hash` проставлены, `notes` раздел переименован в `post-commit notes` (per §8.1 п.3). (3) Все 5 commits сессии зафиксированы в `CHANGELOG.md` 2026-06-20 §Changed. (4) Safety-net удалён. (5) Запись остаётся в блоке «Активные сессии» со статусом `closed` (transfer в «Закрытые сессии» не требуется, т.к. эта сессия — единственная в файле post-L1.5, и у archived-closed сессий отдельный файл).
+  - **Cross-refs:** `agent/knowledge.md`, `agent/workspace.md`, `AGENTS.md §9`, `legacy/docs/archive/agent-sessions/2026-06-week-3.md`, `tools/verify_section_anchors.sh`.
 
 ---
 
