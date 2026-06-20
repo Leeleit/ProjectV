@@ -218,6 +218,57 @@ set_tests_properties(ProjectVSunShadowCascadeSplitsTests PROPERTIES LABELS "unit
 
 projectv_test_add_modules(ProjectVSunShadowCascadeSplitsTests)
 
+add_executable(ProjectVGraphicsPushConstantsTests
+        GraphicsPushConstantsTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/Camera.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
+)
+
+target_compile_definitions(ProjectVGraphicsPushConstantsTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVGraphicsPushConstantsTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVGraphicsPushConstantsTests PRIVATE
+        projectv_build_options
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+        SDL3::SDL3
+)
+
+add_test(NAME ProjectVGraphicsPushConstantsTests COMMAND ProjectVGraphicsPushConstantsTests)
+set_tests_properties(ProjectVGraphicsPushConstantsTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVGraphicsPushConstantsTests)
+
+add_executable(ProjectVVisibilityCacheHashTests
+        VisibilityCacheHashTests.cpp
+)
+
+target_compile_definitions(ProjectVVisibilityCacheHashTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVVisibilityCacheHashTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVVisibilityCacheHashTests PRIVATE
+        projectv_build_options
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+add_test(NAME ProjectVVisibilityCacheHashTests COMMAND ProjectVVisibilityCacheHashTests)
+set_tests_properties(ProjectVVisibilityCacheHashTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVVisibilityCacheHashTests)
+
 projectv_test_add_modules(ProjectVFrustumCullingTests)
 
 add_executable(ProjectVBoxUvFixtureTests

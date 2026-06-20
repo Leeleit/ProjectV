@@ -213,6 +213,10 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	const float tanHalfFov = std::tan(camera.verticalFovRadians * 0.5f);
 	const float nearPlane = camera.nearPlane;
 	const float farPlane = camera.farPlane;
+	[[assume(nearPlane > 0.0f)]];
+	[[assume(farPlane > nearPlane)]];
+	[[assume(extent.width > 0u)]];
+	[[assume(extent.height > 0u)]];
 
 	const float jitterNdcX = extent.width > 0 ? taaJitterNdcX * 2.0f / static_cast<float>(extent.width) : 0.0f;
 	const float jitterNdcY = extent.height > 0 ? taaJitterNdcY * 2.0f / static_cast<float>(extent.height) : 0.0f;

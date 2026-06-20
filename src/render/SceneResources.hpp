@@ -52,6 +52,9 @@ template <typename GetOrigin, typename GetHalfExtent>
 	const float tanHalfVerticalFov = std::max(parameters.cameraForwardAndTanHalfVerticalFov.w, 0.0f);
 	const float tanHalfHorizontalFov = std::max(parameters.cameraRightAndTanHalfHorizontalFov.w, 0.0f);
 	const float nearPlane = std::max(parameters.cameraUpAndNearPlane.w, 0.0f);
+	[[assume(nearPlane >= 0.0f)]];
+	[[assume(tanHalfVerticalFov >= 0.0f)]];
+	[[assume(tanHalfHorizontalFov >= 0.0f)]];
 
 	const projectv::math::Vec3 origin = getOrigin();
 	const projectv::math::Vec3 halfExtent = getHalfExtent();
@@ -148,6 +151,7 @@ inline bool IsSceneChunkVisible(
 	if (chunkDescriptor.chunkExtentAndNonAir[3] == 0u) [[unlikely]] {
 		return false;
 	}
+	[[assume(chunkDescriptor.chunkExtentAndNonAir[3] > 0u)]];
 
 	return FrustumCullVsCamera(
 		parameters,

@@ -280,6 +280,198 @@ void AdjustShadowTuning(
 		break;
 	}
 }
+
+void MirrorVoxelStatsToDebugStats(
+	const VoxelWorld &world,
+	const RenderState &render,
+	DebugStats &stats)
+{
+	stats.dirtyChunkCount = world.stats.dirtyChunkCount;
+	stats.activeChunkCount = world.stats.activeChunkCount;
+	stats.glassVoxelCount = world.stats.glassVoxelCount;
+	stats.fluidVoxelCount = world.stats.fluidVoxelCount;
+	stats.floorVoxelCount =
+		world.stats.floorWhiteVoxelCount + world.stats.floorGrayVoxelCount;
+	stats.nonAirVoxelCount = world.stats.nonAirVoxelCount;
+	stats.sceneTriangleCount = render.sceneTriangleCount;
+	stats.sceneMemoryBytes = render.sceneMemoryBytes;
+	stats.worldEditVersion = world.editVersion;
+	stats.scenePreset = world.scenePreset;
+}
+
+void MirrorRenderPassTimingsToDebugStats(
+	const RenderState &render,
+	DebugStats &stats)
+{
+	stats.renderPassShadowMs = render.renderPassTimings.shadowMs;
+	stats.renderPassMeshingMs = render.renderPassTimings.meshingMs;
+	stats.renderPassGraphicsMs = render.renderPassTimings.graphicsMs;
+	stats.renderPassTaaResolveMs = render.renderPassTimings.taaResolveMs;
+	stats.renderPassDebugOverlayMs = render.renderPassTimings.debugOverlayMs;
+	stats.renderPassDebugHudMs = render.renderPassTimings.debugHudMs;
+	stats.renderPassDirtyChunkRebuiltCount = render.renderPassTimings.dirtyChunkRebuiltCount;
+	stats.renderPassOtherMs = std::max(
+		0.0f,
+		stats.frameTimeMilliseconds - render.renderPassTimings.graphicsMs);
+}
+
+void MirrorAudioStatsToDebugStats(
+	const projectv::audio::AudioEngine *audio,
+	DebugStats &stats)
+{
+	if (!audio) {
+		stats.audioMusicInitialized = false;
+		stats.audioMusicState = 0;
+		stats.audioMusicVolume = 0.0f;
+		stats.audioMusicPlaylistSize = 0;
+		stats.audioMusicCurrentIndex = 0;
+		std::ranges::fill(stats.audioMusicTrackName, '\0');
+		std::ranges::fill(stats.audioMusicArtist, '\0');
+		std::ranges::fill(stats.audioMusicTitle, '\0');
+		stats.audioMusicPositionSec = 0.0f;
+		stats.audioMusicDurationSec = 0.0f;
+		return;
+	}
+
+	stats.audioMusicInitialized = audio->isInitialized();
+	stats.audioMusicState = static_cast<uint8_t>(audio->state());
+	stats.audioMusicVolume = audio->volume();
+	stats.audioMusicPlaylistSize = static_cast<uint32_t>(audio->playlistSize());
+	stats.audioMusicCurrentIndex = static_cast<uint32_t>(audio->currentIndex());
+	const std::string &trackName = audio->currentTrackName();
+	std::ranges::fill(stats.audioMusicTrackName, '\0');
+	const size_t copyLen = std::min(trackName.size(),
+									stats.audioMusicTrackName.size() - 1);
+	std::copy_n(trackName.begin(), copyLen, stats.audioMusicTrackName.begin());
+	const std::string &artist = audio->currentArtist();
+	std::ranges::fill(stats.audioMusicArtist, '\0');
+	const size_t artistCopyLen = std::min(artist.size(),
+											stats.audioMusicArtist.size() - 1);
+	std::copy_n(artist.begin(), artistCopyLen, stats.audioMusicArtist.begin());
+
+	const std::string &title = audio->currentTitle();
+	std::ranges::fill(stats.audioMusicTitle, '\0');
+	const size_t titleCopyLen = std::min(title.size(),
+										stats.audioMusicTitle.size() - 1);
+	std::copy_n(title.begin(), titleCopyLen, stats.audioMusicTitle.begin());
+
+	stats.audioMusicPositionSec = audio->positionSeconds();
+	stats.audioMusicDurationSec = audio->durationSeconds();
+}
+
+void MirrorRenderLightingToDebugStats(
+	RenderState &render,
+	const CameraState &camera,
+	DebugStats &stats)
+{
+	stats.sceneExposure = render.currentSceneLighting.postProcess[0];
+	stats.sceneEnvironmentIntensity = render.currentSceneLighting.postProcess[1];
+	stats.sceneColorGradeWhitePoint = render.currentSceneLighting.colorGrading[0];
+	stats.sceneColorGradeContrast = render.currentSceneLighting.colorGrading[1];
+	stats.sceneColorGradeSaturation = render.currentSceneLighting.colorGrading[2];
+	stats.sceneColorGradeLift = render.currentSceneLighting.colorGrading[3];
+	stats.sceneExposureMeteringMode =
+		static_cast<ExposureMeteringMode>(std::lround(render.currentSceneLighting.exposureControl[0]));
+	stats.sceneExposureKey = EstimateVoxelSceneExposureKey(render.currentSceneLighting);
+	stats.sceneExposureTargetKey = render.currentSceneLighting.exposureControl[1];
+	stats.sceneMinExposure = render.currentSceneLighting.exposureControl[2];
+	stats.sceneMaxExposure = render.currentSceneLighting.exposureControl[3];
+	stats.toneMapOperator = render.lightingDebugControls.toneMapOperator;
+	stats.lightingDebugView = render.lightingDebugControls.debugView;
+	stats.sunDirection = {
+		render.currentSceneLighting.sunDirectionAndWrap[0],
+		render.currentSceneLighting.sunDirectionAndWrap[1],
+		render.currentSceneLighting.sunDirectionAndWrap[2],
+	};
+	stats.sunIntensity = render.currentSceneLighting.sunColorAndIntensity[3];
+	stats.sunShadowStrength = render.currentSceneLighting.sunShadowParams[0];
+	stats.sunShadowDepthBias = render.currentSceneLighting.sunShadowParams[1];
+	stats.sunShadowNormalBias = render.currentSceneLighting.sunShadowParams[2];
+	stats.sunShadowFilterRadius = render.currentSceneLighting.sunShadowParams[3];
+	stats.sunContactShadowStrength = render.currentSceneLighting.sunContactShadowParams[0];
+	stats.sunContactShadowDistance = render.currentSceneLighting.sunContactShadowParams[1];
+	stats.ambientOcclusionStrength = render.currentSceneLighting.ambientOcclusionParams[0];
+	stats.ambientOcclusionRadius = render.currentSceneLighting.ambientOcclusionParams[1];
+	stats.ambientOcclusionMinVisibility = render.currentSceneLighting.ambientOcclusionParams[2];
+	stats.localPointLightPosition = {
+		render.currentSceneLighting.localPointLightPositionAndRadius[0],
+		render.currentSceneLighting.localPointLightPositionAndRadius[1],
+		render.currentSceneLighting.localPointLightPositionAndRadius[2],
+	};
+	stats.localPointLightColor = {
+		render.currentSceneLighting.localPointLightColorAndIntensity[0],
+		render.currentSceneLighting.localPointLightColorAndIntensity[1],
+		render.currentSceneLighting.localPointLightColorAndIntensity[2],
+	};
+	stats.localPointLightRadius = render.currentSceneLighting.localPointLightPositionAndRadius[3];
+	stats.localPointLightIntensity = render.currentSceneLighting.localPointLightColorAndIntensity[3];
+	stats.localPointLightEnabled = static_cast<bool>(render.currentSceneLighting.localPointLightParams[0]);
+	stats.localPointLightSourceRadius = render.currentSceneLighting.localPointLightParams[1];
+	stats.localPointLightShadowStrength = render.currentSceneLighting.localPointLightParams[2];
+	stats.localPointLightShadowBias = render.currentSceneLighting.localPointLightParams[3];
+	stats.sunShadowCoverageScale = render.lightingDebugControls.shadowCoverageScale;
+	stats.sunShadowCascadeBlend = render.currentSceneLighting.shadowCascadeBlendParams[0];
+	const float sunShadowReceiverMaxDistance = GetCameraVisibleSceneMaxDistance(camera);
+	render.currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
+		camera.nearPlane,
+		sunShadowReceiverMaxDistance,
+		render.sunShadowCascadeSplitLambda);
+	stats.sunShadowCascadeSplitLambda = render.currentSunShadowCascadeSplits.splitLambda;
+	stats.sunShadowCascadeDepthSplits = render.currentSunShadowCascadeSplits.viewDepthSplits;
+	stats.sunShadowCascadeDiagnostics = render.currentSunShadowCascadeDiagnostics;
+	stats.shadowMapResolution = render.shadowMapExtent.width;
+	stats.transparentShadowPolicy = render.transparentShadowPolicy;
+	stats.shadowTuningTarget = render.lightingDebugControls.shadowTuningTarget;
+	stats.taaEnabled = render.taaEnabled;
+	stats.taaBlend = render.taaBlend;
+	stats.taaFrameCounter = render.taaFrameCounter;
+	stats.taaHistoryValid = render.taaHistoryValid;
+	stats.taaJitterX = render.taaJitterX;
+	stats.taaJitterY = render.taaJitterY;
+	stats.taaJitterScale = render.taaJitterScale;
+	stats.taaNeighbourhoodRadius = render.taaNeighbourhoodRadius;
+	stats.taaCasSharpnessMax = render.taaCasSharpnessMax;
+	stats.taaCameraCutCount = render.taaCameraCutCount;
+	stats.taaCameraCutMaxDelta = render.taaCameraCutMaxDelta;
+	stats.taaLayerHistoryValid = render.taaLayerHistoryValid;
+	stats.taaLayerBlendFactor = render.taaLayerBlendFactor;
+}
+
+void MirrorWalkStatsToDebugStats(
+	const PhysicsWalkDebugInfo &walkDebugInfo,
+	DebugStats &stats)
+{
+	stats.walkDebugValid = walkDebugInfo.valid;
+	stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);
+	stats.walkFeetPosition = projectv::math::Vec3{
+		walkDebugInfo.feetPosition[0],
+		walkDebugInfo.feetPosition[1],
+		walkDebugInfo.feetPosition[2],
+	};
+	stats.walkFootSupportScore = walkDebugInfo.footSupportScore;
+	stats.walkFootSupportHitSamples = walkDebugInfo.footSupportHitSamples;
+	stats.walkFootSupportTotalSamples = walkDebugInfo.footSupportTotalSamples;
+	stats.walkEdgeGraceFramesRemaining = walkDebugInfo.edgeGraceFramesRemaining;
+	stats.walkGroundTakeoffGraceFramesRemaining = walkDebugInfo.groundTakeoffGraceFramesRemaining;
+	stats.walkSneakSupportGraceFramesRemaining = walkDebugInfo.sneakSupportGraceFramesRemaining;
+	stats.walkLedgeReleaseGraceFramesRemaining = walkDebugInfo.ledgeReleaseGraceFramesRemaining;
+	stats.walkAutoJumpDelayFramesRemaining = walkDebugInfo.autoJumpDelayFramesRemaining;
+	stats.walkGroundTakeoffCached = walkDebugInfo.groundTakeoffCached;
+	stats.walkSneakActive = walkDebugInfo.sneakActive;
+	stats.walkJumpLockActive = walkDebugInfo.jumpLockActive;
+	stats.walkSuppressPassiveSlide = walkDebugInfo.suppressPassiveSlide;
+}
+
+void MirrorInputReplayStatsToDebugStats(
+	const InputState &input,
+	DebugStats &stats)
+{
+	stats.inputReplayRecording = input.replay.recording;
+	stats.inputReplayPlaybackActive = input.replay.playbackActive;
+	stats.inputReplayReady = input.replay.captureAvailable;
+	stats.inputReplayFrameCount = static_cast<uint32_t>(input.replay.capture.frames.size());
+	stats.inputReplayPlaybackFrameIndex = static_cast<uint32_t>(input.replay.playbackFrameIndex);
+}
 } // namespace
 
 bool UpdateApp(
@@ -689,66 +881,10 @@ bool UpdateApp(
 
 	if (world->voxelWorld) {
 		debug->stats.simulationStepsLastFrame = simulation->simulationStepsLastFrame;
-		debug->stats.dirtyChunkCount = world->voxelWorld->stats.dirtyChunkCount;
-		debug->stats.activeChunkCount = world->voxelWorld->stats.activeChunkCount;
-		debug->stats.glassVoxelCount = world->voxelWorld->stats.glassVoxelCount;
-		debug->stats.fluidVoxelCount = world->voxelWorld->stats.fluidVoxelCount;
-		debug->stats.floorVoxelCount =
-			world->voxelWorld->stats.floorWhiteVoxelCount +
-			world->voxelWorld->stats.floorGrayVoxelCount;
-		debug->stats.nonAirVoxelCount = world->voxelWorld->stats.nonAirVoxelCount;
-		debug->stats.sceneTriangleCount = render->sceneTriangleCount;
-		debug->stats.sceneMemoryBytes = render->sceneMemoryBytes;
-		debug->stats.worldEditVersion = world->voxelWorld->editVersion;
-		debug->stats.scenePreset = world->voxelWorld->scenePreset;
+		MirrorVoxelStatsToDebugStats(*world->voxelWorld, *render, debug->stats);
 	}
-	debug->stats.renderPassShadowMs = render->renderPassTimings.shadowMs;
-	debug->stats.renderPassMeshingMs = render->renderPassTimings.meshingMs;
-	debug->stats.renderPassGraphicsMs = render->renderPassTimings.graphicsMs;
-	debug->stats.renderPassTaaResolveMs = render->renderPassTimings.taaResolveMs;
-	debug->stats.renderPassDebugOverlayMs = render->renderPassTimings.debugOverlayMs;
-	debug->stats.renderPassDebugHudMs = render->renderPassTimings.debugHudMs;
-	debug->stats.renderPassDirtyChunkRebuiltCount = render->renderPassTimings.dirtyChunkRebuiltCount;
-	debug->stats.renderPassOtherMs = std::max(
-		0.0f,
-		debug->stats.frameTimeMilliseconds - render->renderPassTimings.graphicsMs);
-	if (audio) {
-		debug->stats.audioMusicInitialized = audio->isInitialized();
-		debug->stats.audioMusicState = static_cast<uint8_t>(audio->state());
-		debug->stats.audioMusicVolume = audio->volume();
-		debug->stats.audioMusicPlaylistSize = static_cast<uint32_t>(audio->playlistSize());
-		debug->stats.audioMusicCurrentIndex = static_cast<uint32_t>(audio->currentIndex());
-		const std::string &trackName = audio->currentTrackName();
-		std::ranges::fill(debug->stats.audioMusicTrackName, '\0');
-		const size_t copyLen = std::min(trackName.size(),
-										debug->stats.audioMusicTrackName.size() - 1);
-		std::copy_n(trackName.begin(), copyLen, debug->stats.audioMusicTrackName.begin());
-		const std::string &artist = audio->currentArtist();
-		std::ranges::fill(debug->stats.audioMusicArtist, '\0');
-		const size_t artistCopyLen = std::min(artist.size(),
-											  debug->stats.audioMusicArtist.size() - 1);
-		std::copy_n(artist.begin(), artistCopyLen, debug->stats.audioMusicArtist.begin());
-
-		const std::string &title = audio->currentTitle();
-		std::ranges::fill(debug->stats.audioMusicTitle, '\0');
-		const size_t titleCopyLen = std::min(title.size(),
-											 debug->stats.audioMusicTitle.size() - 1);
-		std::copy_n(title.begin(), titleCopyLen, debug->stats.audioMusicTitle.begin());
-
-		debug->stats.audioMusicPositionSec = audio->positionSeconds();
-		debug->stats.audioMusicDurationSec = audio->durationSeconds();
-	} else {
-		debug->stats.audioMusicInitialized = false;
-		debug->stats.audioMusicState = 0;
-		debug->stats.audioMusicVolume = 0.0f;
-		debug->stats.audioMusicPlaylistSize = 0;
-		debug->stats.audioMusicCurrentIndex = 0;
-		std::ranges::fill(debug->stats.audioMusicTrackName, '\0');
-		std::ranges::fill(debug->stats.audioMusicArtist, '\0');
-		std::ranges::fill(debug->stats.audioMusicTitle, '\0');
-		debug->stats.audioMusicPositionSec = 0.0f;
-		debug->stats.audioMusicDurationSec = 0.0f;
-	}
+	MirrorRenderPassTimingsToDebugStats(*render, debug->stats);
+	MirrorAudioStatsToDebugStats(audio, debug->stats);
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
 	debug->stats.detailedHudVisible = debug->detailedHudVisible;
@@ -760,103 +896,10 @@ bool UpdateApp(
 	debug->stats.simulationFrameStepPending = frameStepRequestedNow;
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
-	debug->stats.sceneExposure = render->currentSceneLighting.postProcess[0];
-	debug->stats.sceneEnvironmentIntensity = render->currentSceneLighting.postProcess[1];
-	debug->stats.sceneColorGradeWhitePoint = render->currentSceneLighting.colorGrading[0];
-	debug->stats.sceneColorGradeContrast = render->currentSceneLighting.colorGrading[1];
-	debug->stats.sceneColorGradeSaturation = render->currentSceneLighting.colorGrading[2];
-	debug->stats.sceneColorGradeLift = render->currentSceneLighting.colorGrading[3];
-	debug->stats.sceneExposureMeteringMode =
-		static_cast<ExposureMeteringMode>(std::lround(render->currentSceneLighting.exposureControl[0]));
-	debug->stats.sceneExposureKey = EstimateVoxelSceneExposureKey(render->currentSceneLighting);
-	debug->stats.sceneExposureTargetKey = render->currentSceneLighting.exposureControl[1];
-	debug->stats.sceneMinExposure = render->currentSceneLighting.exposureControl[2];
-	debug->stats.sceneMaxExposure = render->currentSceneLighting.exposureControl[3];
-	debug->stats.toneMapOperator = render->lightingDebugControls.toneMapOperator;
-	debug->stats.lightingDebugView = render->lightingDebugControls.debugView;
-	debug->stats.sunDirection = {
-		render->currentSceneLighting.sunDirectionAndWrap[0],
-		render->currentSceneLighting.sunDirectionAndWrap[1],
-		render->currentSceneLighting.sunDirectionAndWrap[2],
-	};
-	debug->stats.sunIntensity = render->currentSceneLighting.sunColorAndIntensity[3];
-	debug->stats.sunShadowStrength = render->currentSceneLighting.sunShadowParams[0];
-	debug->stats.sunShadowDepthBias = render->currentSceneLighting.sunShadowParams[1];
-	debug->stats.sunShadowNormalBias = render->currentSceneLighting.sunShadowParams[2];
-	debug->stats.sunShadowFilterRadius = render->currentSceneLighting.sunShadowParams[3];
-	debug->stats.sunContactShadowStrength = render->currentSceneLighting.sunContactShadowParams[0];
-	debug->stats.sunContactShadowDistance = render->currentSceneLighting.sunContactShadowParams[1];
-	debug->stats.ambientOcclusionStrength = render->currentSceneLighting.ambientOcclusionParams[0];
-	debug->stats.ambientOcclusionRadius = render->currentSceneLighting.ambientOcclusionParams[1];
-	debug->stats.ambientOcclusionMinVisibility = render->currentSceneLighting.ambientOcclusionParams[2];
-	debug->stats.localPointLightPosition = {
-		render->currentSceneLighting.localPointLightPositionAndRadius[0],
-		render->currentSceneLighting.localPointLightPositionAndRadius[1],
-		render->currentSceneLighting.localPointLightPositionAndRadius[2],
-	};
-	debug->stats.localPointLightColor = {
-		render->currentSceneLighting.localPointLightColorAndIntensity[0],
-		render->currentSceneLighting.localPointLightColorAndIntensity[1],
-		render->currentSceneLighting.localPointLightColorAndIntensity[2],
-	};
-	debug->stats.localPointLightRadius = render->currentSceneLighting.localPointLightPositionAndRadius[3];
-	debug->stats.localPointLightIntensity = render->currentSceneLighting.localPointLightColorAndIntensity[3];
-	debug->stats.localPointLightEnabled = static_cast<bool>(render->currentSceneLighting.localPointLightParams[0]);
-	debug->stats.localPointLightSourceRadius = render->currentSceneLighting.localPointLightParams[1];
-	debug->stats.localPointLightShadowStrength = render->currentSceneLighting.localPointLightParams[2];
-	debug->stats.localPointLightShadowBias = render->currentSceneLighting.localPointLightParams[3];
-	debug->stats.sunShadowCoverageScale = render->lightingDebugControls.shadowCoverageScale;
-	debug->stats.sunShadowCascadeBlend = render->currentSceneLighting.shadowCascadeBlendParams[0];
-	const float sunShadowReceiverMaxDistance = GetCameraVisibleSceneMaxDistance(*camera);
-	render->currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
-		camera->nearPlane,
-		sunShadowReceiverMaxDistance,
-		render->sunShadowCascadeSplitLambda);
-	debug->stats.sunShadowCascadeSplitLambda = render->currentSunShadowCascadeSplits.splitLambda;
-	debug->stats.sunShadowCascadeDepthSplits = render->currentSunShadowCascadeSplits.viewDepthSplits;
-	debug->stats.sunShadowCascadeDiagnostics = render->currentSunShadowCascadeDiagnostics;
-	debug->stats.shadowMapResolution = render->shadowMapExtent.width;
-	debug->stats.transparentShadowPolicy = render->transparentShadowPolicy;
-	debug->stats.shadowTuningTarget = render->lightingDebugControls.shadowTuningTarget;
-	debug->stats.taaEnabled = render->taaEnabled;
-	debug->stats.taaBlend = render->taaBlend;
-	debug->stats.taaFrameCounter = render->taaFrameCounter;
-	debug->stats.taaHistoryValid = render->taaHistoryValid;
-	debug->stats.taaJitterX = render->taaJitterX;
-	debug->stats.taaJitterY = render->taaJitterY;
-	debug->stats.taaJitterScale = render->taaJitterScale;
-	debug->stats.taaNeighbourhoodRadius = render->taaNeighbourhoodRadius;
-	debug->stats.taaCasSharpnessMax = render->taaCasSharpnessMax;
-	debug->stats.taaCameraCutCount = render->taaCameraCutCount;
-	debug->stats.taaCameraCutMaxDelta = render->taaCameraCutMaxDelta;
+	MirrorRenderLightingToDebugStats(*render, *camera, debug->stats);
 
-	debug->stats.taaLayerHistoryValid = render->taaLayerHistoryValid;
-	debug->stats.taaLayerBlendFactor = render->taaLayerBlendFactor;
-	const PhysicsWalkDebugInfo walkDebugInfo = GetPhysicsWalkDebugInfo(physics);
-	debug->stats.walkDebugValid = walkDebugInfo.valid;
-	debug->stats.walkSupportState = static_cast<uint8_t>(walkDebugInfo.supportState);
-	debug->stats.walkFeetPosition = projectv::math::Vec3{
-		walkDebugInfo.feetPosition[0],
-		walkDebugInfo.feetPosition[1],
-		walkDebugInfo.feetPosition[2],
-	};
-	debug->stats.walkFootSupportScore = walkDebugInfo.footSupportScore;
-	debug->stats.walkFootSupportHitSamples = walkDebugInfo.footSupportHitSamples;
-	debug->stats.walkFootSupportTotalSamples = walkDebugInfo.footSupportTotalSamples;
-	debug->stats.walkEdgeGraceFramesRemaining = walkDebugInfo.edgeGraceFramesRemaining;
-	debug->stats.walkGroundTakeoffGraceFramesRemaining = walkDebugInfo.groundTakeoffGraceFramesRemaining;
-	debug->stats.walkSneakSupportGraceFramesRemaining = walkDebugInfo.sneakSupportGraceFramesRemaining;
-	debug->stats.walkLedgeReleaseGraceFramesRemaining = walkDebugInfo.ledgeReleaseGraceFramesRemaining;
-	debug->stats.walkAutoJumpDelayFramesRemaining = walkDebugInfo.autoJumpDelayFramesRemaining;
-	debug->stats.walkGroundTakeoffCached = walkDebugInfo.groundTakeoffCached;
-	debug->stats.walkSneakActive = walkDebugInfo.sneakActive;
-	debug->stats.walkJumpLockActive = walkDebugInfo.jumpLockActive;
-	debug->stats.walkSuppressPassiveSlide = walkDebugInfo.suppressPassiveSlide;
-	debug->stats.inputReplayRecording = input->replay.recording;
-	debug->stats.inputReplayPlaybackActive = input->replay.playbackActive;
-	debug->stats.inputReplayReady = input->replay.captureAvailable;
-	debug->stats.inputReplayFrameCount = static_cast<uint32_t>(input->replay.capture.frames.size());
-	debug->stats.inputReplayPlaybackFrameIndex = static_cast<uint32_t>(input->replay.playbackFrameIndex);
+	MirrorWalkStatsToDebugStats(GetPhysicsWalkDebugInfo(physics), debug->stats);
+	MirrorInputReplayStatsToDebugStats(*input, debug->stats);
 
 	return true;
 }
