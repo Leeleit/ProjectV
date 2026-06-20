@@ -209,6 +209,7 @@ VkFormat ChooseShadowDepthFormat(const VkPhysicalDevice physicalDevice)
 	}
 	return VK_FORMAT_UNDEFINED;
 }
+} // namespace
 
 bool CreateDepthResources(
 	VulkanContextState *context,
@@ -548,6 +549,8 @@ bool CreateScreenshotReadbackResources(
 		"ScreenshotReadbackBuffer");
 	return true;
 }
+
+namespace {
 
 void DestroyGraphicsResourceBindings(
 	VulkanContextState &context,
@@ -1393,65 +1396,6 @@ void DestroyGraphicsPipeline(
 		vkDestroyPipelineLayout(context->device, render->shadowPipelineLayout, nullptr);
 		render->shadowPipelineLayout = VK_NULL_HANDLE;
 	}
-
-	if (render->depthImageView) {
-		PV_PROFILE_ZONE_N("DestroyDepthImageView");
-		vkDestroyImageView(context->device, render->depthImageView, nullptr);
-		render->depthImageView = VK_NULL_HANDLE;
-	}
-
-	if (render->shadowSampler) {
-		PV_PROFILE_ZONE_N("DestroyShadowSampler");
-		vkDestroySampler(context->device, render->shadowSampler, nullptr);
-		render->shadowSampler = VK_NULL_HANDLE;
-	}
-
-	for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
-		if (cascadeImageView) {
-			PV_PROFILE_ZONE_N("DestroyShadowCascadeImageView");
-			vkDestroyImageView(context->device, cascadeImageView, nullptr);
-			cascadeImageView = VK_NULL_HANDLE;
-		}
-	}
-
-	if (render->shadowImageView) {
-		PV_PROFILE_ZONE_N("DestroyShadowImageView");
-		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
-		render->shadowImageView = VK_NULL_HANDLE;
-	}
-
-	if (render->shadowImage && render->shadowAllocation) {
-		PV_PROFILE_ZONE_N("DestroyShadowImage");
-		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
-		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
-		render->shadowImage = VK_NULL_HANDLE;
-		render->shadowAllocation = VK_NULL_HANDLE;
-	}
-
-	if (render->depthImage && render->depthAllocation) {
-		PV_PROFILE_ZONE_N("DestroyDepthImage");
-		profiling::RecordFree(render->depthAllocation, "DepthImageAllocation");
-		vmaDestroyImage(context->allocator, render->depthImage, render->depthAllocation);
-		render->depthImage = VK_NULL_HANDLE;
-		render->depthAllocation = VK_NULL_HANDLE;
-	}
-	if (render->screenshotReadbackBuffer && render->screenshotReadbackAllocation) {
-		PV_PROFILE_ZONE_N("DestroyScreenshotReadbackBuffer");
-		profiling::RecordFree(render->screenshotReadbackAllocation, "ScreenshotReadbackAllocation");
-		vmaDestroyBuffer(
-			context->allocator,
-			render->screenshotReadbackBuffer,
-			render->screenshotReadbackAllocation);
-		render->screenshotReadbackBuffer = VK_NULL_HANDLE;
-		render->screenshotReadbackAllocation = VK_NULL_HANDLE;
-	}
-
-	render->depthImageNeedsInit = false;
-	render->shadowImageNeedsInit = false;
-	render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
-	render->screenshotReadbackMappedData = nullptr;
-	render->screenshotReadbackBufferSize = 0;
-	render->screenshotCaptureSupported = false;
 }
 
 bool CreateGraphicsPipeline(
@@ -1465,24 +1409,6 @@ bool CreateGraphicsPipeline(
 		"Graphics",
 		"CreateGraphicsPipeline.Preconditions",
 		"context/swapchain/render is incomplete");
-
-	{
-		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.DepthResources");
-		if (!CreateDepthResources(context, swapchain, render)) {
-			LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DepthResources", "depth resource creation failed");
-			return false;
-		}
-		if (!CreateShadowResources(context, render)) {
-			LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ShadowResources", "shadow resource creation failed");
-			DestroyGraphicsPipeline(context, render);
-			return false;
-		}
-		if (!CreateScreenshotReadbackResources(context, swapchain, render)) {
-			LogGraphicsPipelineTextFailure(
-				"CreateGraphicsPipeline.ScreenshotResources",
-				"screenshot readback buffer creation failed");
-		}
-	}
 
 	std::vector<char> vertexShaderCode;
 	std::vector<char> fragmentShaderCode;
@@ -1984,4 +1910,96 @@ bool CreateGraphicsPipeline(
 
 	destroyShaderModules();
 	return true;
+}
+
+void DestroyDepthResources(
+	VulkanContextState *context,
+	RenderState *render)
+{
+	PV_PROFILE_ZONE_N("DestroyDepthResources");
+	if (!context || !render) {
+		return;
+	}
+
+	if (render->depthImageView) {
+		PV_PROFILE_ZONE_N("DestroyDepthImageView");
+		vkDestroyImageView(context->device, render->depthImageView, nullptr);
+		render->depthImageView = VK_NULL_HANDLE;
+	}
+
+	if (render->depthImage && render->depthAllocation) {
+		PV_PROFILE_ZONE_N("DestroyDepthImage");
+		profiling::RecordFree(render->depthAllocation, "DepthImageAllocation");
+		vmaDestroyImage(context->allocator, render->depthImage, render->depthAllocation);
+		render->depthImage = VK_NULL_HANDLE;
+		render->depthAllocation = VK_NULL_HANDLE;
+	}
+
+	render->depthImageNeedsInit = false;
+}
+
+void DestroyShadowResources(
+	VulkanContextState *context,
+	RenderState *render)
+{
+	PV_PROFILE_ZONE_N("DestroyShadowResources");
+	if (!context || !render || !context->device) {
+		return;
+	}
+
+	if (render->shadowSampler) {
+		PV_PROFILE_ZONE_N("DestroyShadowSampler");
+		vkDestroySampler(context->device, render->shadowSampler, nullptr);
+		render->shadowSampler = VK_NULL_HANDLE;
+	}
+
+	for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
+		if (cascadeImageView) {
+			PV_PROFILE_ZONE_N("DestroyShadowCascadeImageView");
+			vkDestroyImageView(context->device, cascadeImageView, nullptr);
+			cascadeImageView = VK_NULL_HANDLE;
+		}
+	}
+
+	if (render->shadowImageView) {
+		PV_PROFILE_ZONE_N("DestroyShadowImageView");
+		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
+		render->shadowImageView = VK_NULL_HANDLE;
+	}
+
+	if (render->shadowImage && render->shadowAllocation) {
+		PV_PROFILE_ZONE_N("DestroyShadowImage");
+		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
+		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
+		render->shadowImage = VK_NULL_HANDLE;
+		render->shadowAllocation = VK_NULL_HANDLE;
+	}
+
+	render->shadowImageNeedsInit = false;
+	render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+}
+
+void DestroyScreenshotReadbackResources(
+	VulkanContextState *context,
+	RenderState *render)
+{
+	PV_PROFILE_ZONE_N("DestroyScreenshotReadbackResources");
+	if (!context || !render) {
+		return;
+	}
+
+	if (render->screenshotReadbackBuffer && render->screenshotReadbackAllocation) {
+		PV_PROFILE_ZONE_N("DestroyScreenshotReadbackBuffer");
+		profiling::RecordFree(render->screenshotReadbackAllocation, "ScreenshotReadbackAllocation");
+		vmaDestroyBuffer(
+			context->allocator,
+			render->screenshotReadbackBuffer,
+			render->screenshotReadbackAllocation);
+		render->screenshotReadbackBuffer = VK_NULL_HANDLE;
+		render->screenshotReadbackAllocation = VK_NULL_HANDLE;
+	}
+
+	render->screenshotReadbackMappedData = nullptr;
+	render->screenshotReadbackBufferSize = 0;
+	render->screenshotCaptureSupported = false;
 }

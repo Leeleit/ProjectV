@@ -3,6 +3,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/TaaRenderTargets.hpp"
+#include "render/vulkan/TaaResolvePipeline.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 
@@ -408,10 +409,9 @@ bool RecreateSwapchain(
 		}
 	}
 
-	const bool hadGraphicsPipeline =
-		render->graphicsPipeline != VK_NULL_HANDLE ||
-		render->graphicsPipelineTaaOn != VK_NULL_HANDLE ||
-		render->graphicsPipelineLayout != VK_NULL_HANDLE;
+	const bool hadSwapchainResources =
+		render->depthImage != VK_NULL_HANDLE ||
+		render->screenshotReadbackBuffer != VK_NULL_HANDLE;
 	{
 		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateSwapchainResources");
 		const auto swapResult = CreateOrRecreateSwapchain(platform, context, swapchain);
@@ -428,6 +428,26 @@ bool RecreateSwapchain(
 		return true;
 	}
 
+	if (hadSwapchainResources) {
+		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroySwapchainResources");
+		DestroyDepthResources(context, render);
+		DestroyScreenshotReadbackResources(context, render);
+	}
+
+	if (!CreateDepthResources(context, swapchain, render)) {
+		runtime::LogRuntimeFailure(
+			"Swapchain",
+			"RecreateSwapchain.CreateDepthResources",
+			"CreateDepthResources returned false after swapchain recreation");
+		return false;
+	}
+	if (!CreateScreenshotReadbackResources(context, swapchain, render)) {
+		runtime::LogRuntimeFailure(
+			"Swapchain",
+			"RecreateSwapchain.CreateScreenshotReadbackResources",
+			"CreateScreenshotReadbackResources returned false after swapchain recreation");
+		return false;
+	}
 
 	if (render->taaSceneColorTarget == nullptr) {
 		render->taaSceneColorTarget = new projectv::taa::OffscreenColorTarget();
@@ -475,18 +495,20 @@ bool RecreateSwapchain(
 
 	render->taaLayerHistoryValid = false;
 
-	if (hadGraphicsPipeline) {
-		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroyGraphicsPipeline");
-		DestroyGraphicsPipeline(context, render);
-	}
-
-	if (hadGraphicsPipeline) {
-		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateGraphicsPipeline");
-		if (!CreateGraphicsPipeline(context, swapchain, render)) {
+	if (render->graphicsPipeline != VK_NULL_HANDLE) {
+		PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
+		if (!RefreshGraphicsResourceBindings(context, render)) {
 			runtime::LogRuntimeFailure(
 				"Swapchain",
-				"RecreateSwapchain.CreateGraphicsPipeline",
-				"CreateGraphicsPipeline returned false after swapchain recreation");
+				"RecreateSwapchain.RefreshGraphicsResourceBindings",
+				"RefreshGraphicsResourceBindings returned false after swapchain recreation");
+			return false;
+		}
+		if (!RefreshTaaResolveResourceBindings(context, render)) {
+			runtime::LogRuntimeFailure(
+				"Swapchain",
+				"RecreateSwapchain.RefreshTaaResolveResourceBindings",
+				"RefreshTaaResolveResourceBindings returned false after swapchain recreation");
 			return false;
 		}
 	}

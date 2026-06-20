@@ -499,3 +499,31 @@ set_tests_properties(ProjectVPresentModeTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVPresentModeTests)
 
+add_executable(ProjectVSparse64TreeTests
+        Sparse64TreeTests.cpp
+)
+
+target_compile_definitions(ProjectVSparse64TreeTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVSparse64TreeTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVSparse64TreeTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVSparse64TreeTests PRIVATE
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVSparse64TreeTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVSparse64TreeTests COMMAND ProjectVSparse64TreeTests)
+set_tests_properties(ProjectVSparse64TreeTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVSparse64TreeTests)
+

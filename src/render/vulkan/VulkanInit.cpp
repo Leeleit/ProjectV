@@ -202,6 +202,11 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 					"InitVulkan", "intentional failure probe requested before graphics pipeline creation");
 	}
 
+	if (!CreateShadowResources(&state->context, &state->render)) {
+		return fail(projectv::vulkan_init::VulkanInitError::ShadowResourcesFailed,
+					"InitVulkan.CreateShadowResources", "CreateShadowResources returned false");
+	}
+
 	if (!CreateGraphicsPipeline(&state->context, &state->swapchain, &state->render)) {
 		return fail(projectv::vulkan_init::VulkanInitError::GraphicsPipelineFailed,
 					"InitVulkan.CreateGraphicsPipeline", "CreateGraphicsPipeline returned false");

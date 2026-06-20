@@ -21,6 +21,7 @@ enum class VulkanInitError : std::uint8_t {
 	SceneResourcesFailureProbe,
 	GraphicsPipelineProbe,
 	GraphicsPipelineFailed,
+	ShadowResourcesFailed,
 	VoxelMeshingPipelineProbe,
 	VoxelMeshingPipelineFailed,
 	ModelPipelineFailed,
@@ -42,6 +43,7 @@ constexpr std::string_view toString(VulkanInitError const e) noexcept {
 	case VulkanInitError::SceneResourcesFailureProbe: return "SceneResourcesFailureProbe";
 	case VulkanInitError::GraphicsPipelineProbe: return "GraphicsPipelineProbe";
 	case VulkanInitError::GraphicsPipelineFailed: return "GraphicsPipelineFailed";
+	case VulkanInitError::ShadowResourcesFailed: return "ShadowResourcesFailed";
 	case VulkanInitError::VoxelMeshingPipelineProbe: return "VoxelMeshingPipelineProbe";
 	case VulkanInitError::VoxelMeshingPipelineFailed: return "VoxelMeshingPipelineFailed";
 	case VulkanInitError::ModelPipelineFailed: return "ModelPipelineFailed";

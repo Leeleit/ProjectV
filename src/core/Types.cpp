@@ -30,6 +30,9 @@ void ShutdownVulkan(AppState *state)
 		state->render.tracyGraphicsContextCalibrated = false;
 		DestroyVoxelMeshingPipeline(&state->context, &state->render);
 		DestroyGraphicsPipeline(&state->context, &state->render);
+		DestroyDepthResources(&state->context, &state->render);
+		DestroyShadowResources(&state->context, &state->render);
+		DestroyScreenshotReadbackResources(&state->context, &state->render);
 		DestroySceneResources(&state->context, &state->render);
 		projectv::asset::UnloadAllModels(&state->context, &state->render);
 		projectv::asset::DestroyModelPipeline(&state->context, &state->render);

@@ -86,12 +86,15 @@ Ray BuildCameraRay(const CameraState &camera)
 
 bool GravigunSnapEnabled()
 {
-	const char *value = std::getenv("PROJECTV_GRAVIGUN_SNAP");
-	if (value == nullptr) {
-		return false;
-	}
-	const std::string v(value);
-	return v == "on" || v == "1" || v == "true";
+	static const bool kSnapEnabled = [] {
+		const char *value = std::getenv("PROJECTV_GRAVIGUN_SNAP");
+		if (value == nullptr) {
+			return false;
+		}
+		const std::string v(value);
+		return v == "on" || v == "1" || v == "true";
+	}();
+	return kSnapEnabled;
 }
 
 } // namespace

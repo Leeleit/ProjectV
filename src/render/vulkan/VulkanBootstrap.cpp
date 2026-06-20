@@ -12,10 +12,58 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <cstdlib>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
 inline constexpr char PROJECT_NAME[] = "ProjectV v0.0.1";
+
+inline constexpr uint32_t kDefaultMinVulkanApiVersion = VK_API_VERSION_1_3;
+
+uint32_t ParseVulkanApiVersionString(const std::string_view raw)
+{
+	if (raw.empty()) {
+		return kDefaultMinVulkanApiVersion;
+	}
+	uint32_t major = 0;
+	uint32_t minor = 0;
+	uint32_t patch = 0;
+	const std::size_t firstDot = raw.find('.');
+	if (firstDot == std::string_view::npos) {
+		try {
+			major = static_cast<uint32_t>(std::stoul(std::string{raw}));
+		} catch (const std::exception &) {
+			return kDefaultMinVulkanApiVersion;
+		}
+	} else {
+		const std::string_view majorPart = raw.substr(0, firstDot);
+		const std::string_view rest = raw.substr(firstDot + 1);
+		const std::size_t secondDot = rest.find('.');
+		try {
+			major = static_cast<uint32_t>(std::stoul(std::string{majorPart}));
+			if (secondDot == std::string_view::npos) {
+				minor = static_cast<uint32_t>(std::stoul(std::string{rest}));
+			} else {
+				minor = static_cast<uint32_t>(std::stoul(std::string{rest.substr(0, secondDot)}));
+				patch = static_cast<uint32_t>(std::stoul(std::string{rest.substr(secondDot + 1)}));
+			}
+		} catch (const std::exception &) {
+			return kDefaultMinVulkanApiVersion;
+		}
+	}
+	return VK_MAKE_API_VERSION(0, major, minor, patch);
+}
+
+uint32_t GetMinVulkanApiVersion()
+{
+	const char *overrideValue = std::getenv("PROJECTV_MIN_VULKAN_API_VERSION");
+	if (overrideValue == nullptr) {
+		return kDefaultMinVulkanApiVersion;
+	}
+	return ParseVulkanApiVersionString(std::string_view{overrideValue});
+}
 
 constexpr std::array<const char *, 1> kValidationLayers{"VK_LAYER_KHRONOS_validation"};
 constexpr std::array<const char *, 1> kRequiredDeviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -389,7 +437,7 @@ bool TryPickPhysicalDevice(
 {
 	VkPhysicalDeviceProperties props{};
 	vkGetPhysicalDeviceProperties(physicalDevice, &props);
-	if (props.apiVersion < VK_API_VERSION_1_4) {
+	if (props.apiVersion < GetMinVulkanApiVersion()) {
 		return false;
 	}
 
@@ -496,7 +544,7 @@ bool InitializeVulkanBase(
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.apiVersion = VK_API_VERSION_1_4;
+	appInfo.apiVersion = GetMinVulkanApiVersion();
 
 	VkInstanceCreateInfo instanceCreateInfo{};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -651,7 +699,7 @@ bool InitializeVulkanBase(
 	allocInfo.physicalDevice = context->physicalDevice;
 	allocInfo.device = context->device;
 	allocInfo.instance = context->instance;
-	allocInfo.vulkanApiVersion = VK_API_VERSION_1_4;
+	allocInfo.vulkanApiVersion = GetMinVulkanApiVersion();
 
 	VmaVulkanFunctions vulkanFunctions{};
 	const VkResult importFunctionsResult = vmaImportVulkanFunctionsFromVolk(&allocInfo, &vulkanFunctions);

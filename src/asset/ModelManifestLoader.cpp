@@ -1,10 +1,6 @@
 #include "asset/ModelManifestLoader.hpp"
 
 #include <algorithm>
-#include <array>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <string>
 
 #include "asset/AssetLoader.hpp"
@@ -17,25 +13,6 @@
 #include "fmt/format.h"
 
 namespace projectv::asset {
-
-namespace {
-
-glm::mat4 BuildEntryWorldMatrix(const ManifestEntry &entry)
-{
-	const glm::vec3 rotationRadians = glm::radians(entry.rotationDegrees);
-	const glm::mat4 translation = glm::translate(glm::mat4(1.0f), entry.position);
-	const glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), rotationRadians.y, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), rotationRadians.x, glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), rotationRadians.z, glm::vec3(0.0f, 0.0f, 1.0f));
-	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(entry.scale));
-	return translation * rotation * scale;
-}
-
-void StoreMatrixColumnMajor(const glm::mat4 &source, math::Mat4 &out)
-{
-	const float *src = glm::value_ptr(source);
-	std::memcpy(out.data(), src, sizeof(math::Mat4));
-}
-
-} // namespace
 
 bool LoadAndRegisterModelsFromManifest(
 	VulkanContextState *context,
@@ -66,13 +43,6 @@ bool LoadAndRegisterModelsFromManifest(
 		}
 		std::string bakeError;
 		const BakedMesh baked = BakeLoadedAsset(*loaded, {}, &bakeError);
-		if (!bakeError.empty() || baked.primitives.empty()) {
-			runtime::LogRuntimeFailure(
-				"Model",
-				"LoadAndRegisterModelsFromManifest.BakeLoadedAsset",
-				fmt::format("path={} error={}", entry.path, bakeError));
-			continue;
-		}
 		if (!bakeError.empty() || baked.primitives.empty()) {
 			runtime::LogRuntimeFailure(
 				"Model",
@@ -112,38 +82,6 @@ bool LoadAndRegisterModelsFromManifest(
 		return true;
 	}
 
-	render->modelInstances.clear();
-	render->modelInstances.reserve(render->modelRegistry.size());
-	for (size_t i = 0; i < render->modelRegistry.size() && i < manifest.size(); ++i) {
-		const ManifestEntry &entry = manifest[i];
-		const ModelRegistryEntry &reg = render->modelRegistry[i];
-
-		const glm::mat4 world = BuildEntryWorldMatrix(entry);
-		ModelInstanceData instance{};
-		StoreMatrixColumnMajor(world, instance.modelTransform);
-		const glm::vec3 srcMin = glm::vec3(reg.aabbMin[0], reg.aabbMin[1], reg.aabbMin[2]);
-		const glm::vec3 srcMax = glm::vec3(reg.aabbMax[0], reg.aabbMax[1], reg.aabbMax[2]);
-		const glm::vec3 srcDim = srcMax - srcMin;
-
-		const glm::mat4 aabbMinOffset = glm::translate(glm::mat4(1.0f), -srcMin * entry.scale);
-		const glm::mat4 worldWithAabbMin = world * aabbMinOffset;
-		StoreMatrixColumnMajor(worldWithAabbMin, instance.modelTransform);
-		instance.worldAabbMin = {entry.position.x, entry.position.y, entry.position.z};
-		instance.worldAabbMax = {
-			entry.position.x + srcDim.x * entry.scale,
-			entry.position.y + srcDim.y * entry.scale,
-			entry.position.z + srcDim.z * entry.scale,
-		};
-		instance.vertexBuffer = reg.gpu.vertexBuffer;
-		instance.indexBuffer = reg.gpu.indexBuffer;
-		instance.indexCount = reg.gpu.indexCount;
-
-		instance.sourceAabbMin = {
-			static_cast<float>(reg.aabbMin[0]),
-			static_cast<float>(reg.aabbMin[1]),
-			static_cast<float>(reg.aabbMin[2]),
-		};
-	}
 	render->modelInstances.clear();
 	render->modelInstances.reserve(render->modelRegistry.size());
 	const size_t instanceCount = std::min(render->modelRegistry.size(), manifest.size());
@@ -203,9 +141,6 @@ void UnloadAllModels(VulkanContextState *context, RenderState *render)
 	render->modelInstances.clear();
 }
 
-namespace {
-
-} // namespace
 void SnapModelInstancesAboveGround(const VoxelWorld &world, RenderState *render)
 {
 	if (!render) {
