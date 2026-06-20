@@ -13,13 +13,14 @@ For git-archeology (refactor/bug-fix history of past commits), see `CHANGELOG.md
 Categories:
 - `refactor-history` — git-archeology (`// **Tier X.Y (2026-MM-DD).** Removed; replaced by ...`)
 - `design-rationale` — why this code exists / this choice was made. Cross-refs to
-  `agent/decisions.md` and `agent/memory.md` are preserved verbatim.
+  `agent/knowledge.md Part A` (formerly decisions.md) and `agent/knowledge.md Part B` (formerly memory.md) are preserved verbatim.
 - `intent` — what the code does / contract of a function, struct, or field.
 - `test-narrative` — test scenario description (`// M5: ...`, `// **X axis.** ...`).
 
 **Anchoring:** each entry has a line range (`L<start>-L<end>`). The line numbers
 reflect the **file state at extraction time**. If code moves, this entry becomes
-stale — re-anchor it (see `AGENTS.md` §11 for the stale-handling rule).
+stale — re-anchor it (see `AGENTS.md` §10 for the stale-handling rule; was §9
+pre-`2026-06-20` consolidation r0).
 
 <!-- Last validated 2026-06-20 against src/core/Math.ixx (commit 44362d1) and src/core/StringId.ixx (same). L-anchors in entries below are still accurate. -->
 
@@ -28,7 +29,7 @@ stale — re-anchor it (see `AGENTS.md` §11 for the stale-handling rule).
 ```bash
 rg -A 20 '^## .src/core/Types.hpp.\$' COMMENTS.md
 rg -B 1 '^### L.*design-rationale' COMMENTS.md
-rg 'decisions.md §30' COMMENTS.md
+rg 'knowledge.md Part A §30' COMMENTS.md
 ```
 
 ---
