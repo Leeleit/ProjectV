@@ -1,0 +1,31 @@
+#version 450
+
+// Sample from a combined image sampler using explicit LOD.
+// CRITICAL TEST TARGET: per foijord/vk-textureLod-repro (2026), textureLod may ignore
+// explicit LOD when bound via VK_EXT_descriptor_heap on NVIDIA.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D uDepthPyramid;
+
+layout(push_constant) uniform Pc {
+    ivec2 imageSize;
+    int mipLevel;
+    int sampleCount;
+} pc;
+
+layout(set = 0, binding = 1) buffer OutSamples {
+    float results[];
+} outSamples;
+
+void main() {
+    uvec3 tid = gl_GlobalInvocationID;
+    if (uint(tid.x) >= uint(pc.sampleCount)) return;
+
+    // Decompose linear sample index into (x, y) using mip dimensions
+    uint x = tid.x % uint(pc.imageSize.x);
+    uint y = tid.x / uint(pc.imageSize.x);
+
+    vec2 uv = (vec2(x, y) + 0.5) / vec2(pc.imageSize);
+    float depth = textureLod(uDepthPyramid, uv, float(pc.mipLevel)).r;
+    outSamples.results[tid.x] = depth;
+}

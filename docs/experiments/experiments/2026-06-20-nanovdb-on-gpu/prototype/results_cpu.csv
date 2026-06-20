@@ -1,0 +1,11 @@
+tree,scene,nonAir,bytes,bytesPerVoxel,nodes,buildMs,verifyMismatches,rayMarchNsMean
+svdag64,solid_8,512,4520,8.82812,9,0.02114,0,12.09
+nanovdb_aligned,solid_8,512,2192,4.28125,73,0.00491,0,9.61
+svdag64,ground_8,64,2280,35.625,5,0.00177,0,8.55
+nanovdb_aligned,ground_8,64,1264,19.75,21,0.00115,0,8.56
+svdag64,brick_8,512,4520,8.82812,9,0.015879,0,8.53
+nanovdb_aligned,brick_8,512,2192,4.28125,73,0.00415,0,8.51
+svdag64,voxel_lab_8,86,4520,52.5581,9,0.00302,0,8.53
+nanovdb_aligned,voxel_lab_8,86,2192,25.4884,53,0.00338,0,13.93
+svdag64,sparse_random_8,53,4520,85.283,9,0.00325,0,13.38
+nanovdb_aligned,sparse_random_8,53,2192,41.3585,44,0.00254,0,15.32

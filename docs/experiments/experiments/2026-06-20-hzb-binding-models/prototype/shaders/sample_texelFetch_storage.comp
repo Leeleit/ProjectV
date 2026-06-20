@@ -1,0 +1,29 @@
+#version 450
+
+// Sample from a storage image using texelFetch (imageLoad equivalent).
+// Works correctly through VK_EXT_descriptor_heap per foijord repro.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r32f) readonly uniform image2D uDepthPyramid;
+
+layout(push_constant) uniform Pc {
+    ivec2 imageSize;
+    int mipLevel;
+    int sampleCount;
+} pc;
+
+layout(set = 0, binding = 1) buffer OutSamples {
+    float results[];
+} outSamples;
+
+void main() {
+    uvec3 tid = gl_GlobalInvocationID;
+    if (uint(tid.x) >= uint(pc.sampleCount)) return;
+
+    uint x = tid.x % uint(pc.imageSize.x);
+    uint y = tid.x / uint(pc.imageSize.x);
+    ivec2 coord = ivec2(int(x), int(y));
+
+    float depth = imageLoad(uDepthPyramid, coord).r;
+    outSamples.results[tid.x] = depth;
+}

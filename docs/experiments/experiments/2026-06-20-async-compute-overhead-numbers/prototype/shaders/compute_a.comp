@@ -1,0 +1,52 @@
+#version 450
+
+// Workload A: VCT-like 3D box-filter blur (light ~0.5-1 ms GPU).
+// Iterates over a volume, blurring with 3x3x3 box filter, multiple substeps.
+// Models Stage 5.1 VCT voxelization mip-chain generation.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout(set = 0, binding = 0, r8ui) readonly uniform uimage3D volumeIn;
+layout(set = 0, binding = 1, r8ui) writeonly uniform uimage3D volumeOut;
+layout(set = 0, binding = 2) uniform Params {
+    uint sizeX;
+    uint sizeY;
+    uint sizeZ;
+    uint substeps;
+} params;
+
+shared uint localCache[8][8][8];
+
+void main() {
+    ivec3 id = ivec3(gl_GlobalInvocationID);
+    if (id.x >= int(params.sizeX) || id.y >= int(params.sizeY) || id.z >= int(params.sizeZ)) return;
+
+    // Cache current slice.
+    localCache[id.x][id.y][id.z] = imageLoad(volumeIn, id).r;
+
+    barrier();
+    memoryBarrierShared();
+
+    // Box filter 3x3x3 over neighbour cells.
+    uint sum = 0u;
+    uint count = 0u;
+    for (int dz = -1; dz <= 1; ++dz) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                ivec3 p = id + ivec3(dx, dy, dz);
+                if (all(greaterThanEqual(p, ivec3(0))) && all(lessThan(p, ivec3(int(params.sizeX), int(params.sizeY), int(params.sizeZ))))) {
+                    sum += imageLoad(volumeIn, p).r;
+                    ++count;
+                }
+            }
+        }
+    }
+
+    // Iterative mip-chain (simulate multiple substeps).
+    uint result = sum / max(count, 1u);
+    for (uint s = 1u; s < params.substeps; ++s) {
+        result = (result * 7u + 13u) & 0xFFu;
+    }
+
+    imageStore(volumeOut, id, uvec4(result, 0u, 0u, 0u));
+}

@@ -1,0 +1,11 @@
+kernel,scene,meanMs,mraysPerSec,verifyMismatches,gpuBytes
+svdag64,solid_8,0.0499494,1312.05,0,2640
+nanovdb_aligned,solid_8,0.0518266,1264.53,0,1128
+svdag64,ground_8,0.103443,633.55,0,1584
+nanovdb_aligned,ground_8,0.058953,1111.67,0,392
+svdag64,brick_8,0.0500806,1308.61,0,2640
+nanovdb_aligned,brick_8,0.0533082,1229.38,0,1128
+svdag64,voxel_lab_8,0.120083,545.758,0,2640
+nanovdb_aligned,voxel_lab_8,0.057191,1145.91,0,888
+svdag64,sparse_random_8,0.13137,498.865,0,2640
+nanovdb_aligned,sparse_random_8,0.0618221,1060.07,0,780

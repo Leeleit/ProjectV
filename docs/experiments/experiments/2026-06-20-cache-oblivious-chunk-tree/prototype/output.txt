@@ -1,0 +1,25 @@
+Building synthetic scene (24^3 chunks x 8^3 voxels, 30% fill, seed=42)...
+  baseline nodes: 124416, total bytes: 34836480 (~33.2 MiB)
+  morton-reorder nodes: 124416, ~33.2 MiB
+Host: L1d=32 KiB, L2=512 KiB, L3=32 MiB; node=280 B (~5 cache lines).
+Governor=powersave (per-run note in RESULTS.md).
+
+--- walk seed 1 ---
+baseline warm                             mean=    57.92  p50=    50.00  p95=    70.00  p99=   200.00  p99.9=   260.00  std=    97.72  min=       50  max=     6820  N=5000
+baseline cold                             mean=    57.04  p50=    50.00  p95=    70.00  p99=   140.00  p99.9=   270.00  std=    20.69  min=       49  max=      370  N=5000
+morton warm                               mean=    58.05  p50=    50.00  p95=    60.00  p99=   140.00  p99.9=   280.00  std=   102.58  min=       50  max=     7170  N=5000
+morton cold                               mean=    56.33  p50=    50.00  p95=    60.00  p99=   150.00  p99.9=   270.00  std=    20.17  min=       50  max=      300  N=5000
+
+--- walk seed 2 ---
+baseline warm                             mean=    48.14  p50=    40.00  p95=    70.00  p99=   180.00  p99.9=   300.00  std=    22.32  min=       30  max=      320  N=5000
+baseline cold                             mean=    39.69  p50=    40.00  p95=    40.00  p99=    40.00  p99.9=   200.00  std=    16.19  min=       30  max=      200  N=5000
+morton warm                               mean=    49.34  p50=    40.00  p95=    40.00  p99=   200.00  p99.9=   230.00  std=   481.74  min=       30  max=    33080  N=5000
+morton cold                               mean=    39.74  p50=    40.00  p95=    40.00  p99=    40.00  p99.9=   200.00  std=    16.16  min=       30  max=      210  N=5000
+
+--- walk seed 3 ---
+baseline warm                             mean=    41.36  p50=    40.00  p95=    40.00  p99=    80.00  p99.9=   210.00  std=    70.21  min=       30  max=     4850  N=5000
+baseline cold                             mean=    42.94  p50=    40.00  p95=    40.00  p99=    40.00  p99.9=   210.00  std=   199.77  min=       30  max=    14120  N=5000
+morton warm                               mean=    41.10  p50=    40.00  p95=    40.00  p99=   150.00  p99.9=   210.00  std=    62.92  min=       29  max=     4320  N=5000
+morton cold                               mean=    40.07  p50=    40.00  p95=    40.00  p99=    40.00  p99.9=   210.00  std=    16.31  min=       30  max=      210  N=5000
+
+Results written to /tmp/cobl_results.csv

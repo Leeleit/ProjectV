@@ -1,0 +1,75 @@
+#version 450
+
+// Workload C: Fluid CA-like ping-pong (heavy ~3-5 ms GPU).
+// Models Stage 3.1 GPU Fluid CA per `agent/knowledge.md §30.4`.
+// Uses atomicOr for write claim + ping-pong SSBOs.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer VoxelIn {
+    uint voxelsIn[];
+} inVoxels;
+
+layout(set = 0, binding = 1, std430) buffer VoxelOut {
+    uint voxelsOut[];
+} outVoxels;
+
+layout(set = 0, binding = 2) uniform FluidParams {
+    uint sizeX;
+    uint sizeY;
+    uint sizeZ;
+    uint substeps;
+} params;
+
+uint idx(ivec3 p, uint sx, uint sy) {
+    return uint(p.z) * sx * sy + uint(p.y) * sx + uint(p.x);
+}
+
+shared uint localLDS[8][8][8];
+
+void main() {
+    ivec3 id = ivec3(gl_GlobalInvocationID);
+    uint sx = params.sizeX;
+    uint sy = params.sizeY;
+    uint sz = params.sizeZ;
+
+    if (id.x >= int(sx) || id.y >= int(sy) || id.z >= int(sz)) return;
+
+    uint selfVal = inVoxels.voxelsIn[idx(id, sx, sy)];
+    localLDS[id.x][id.y][id.z] = selfVal;
+    barrier();
+    memoryBarrierShared();
+
+    // Simplified fluid CA: fluid falls (z-1) if cell below is empty.
+    // Multiple substeps simulate Stage 3.1 fluid dynamics.
+    uint result = selfVal;
+    for (uint s = 0u; s < params.substeps; ++s) {
+        // Try fall down.
+        if (id.z > 0) {
+            uint below = inVoxels.voxelsIn[idx(ivec3(id.x, id.y, id.z - 1), sx, sy)];
+            uint cellId = idx(id, sx, sy);
+            if (below == 0u && (selfVal & 0x80000000u) != 0u) {
+                // atomicOr claim for "I am moving down this step".
+                atomicOr(outVoxels.voxelsOut[cellId], 0x01u << (s % 24u));
+            }
+        }
+        // Try spread sideways.
+        if (s % 2u == 0u) {
+            for (int dy = -1; dy <= 1; dy += 2) {
+                ivec3 p = id + ivec3(0, dy, 0);
+                if (p.y >= 0 && p.y < int(sy)) {
+                    uint neighbour = inVoxels.voxelsIn[idx(p, sx, sy)];
+                    if (neighbour == 0u && (selfVal & 0x80000000u) != 0u) {
+                        uint cellId = idx(id, sx, sy);
+                        atomicOr(outVoxels.voxelsOut[cellId], 0x01u << ((s + 8u) % 24u));
+                    }
+                }
+            }
+        }
+    }
+
+    // Bit-rotation to keep ALU active.
+    uint r = outVoxels.voxelsOut[idx(id, sx, sy)];
+    r = ((r << 7) | (r >> 25));
+    outVoxels.voxelsOut[idx(id, sx, sy)] = r;
+}

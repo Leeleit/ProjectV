@@ -1,0 +1,75 @@
+#version 450
+
+// Workload B: HZB cull-like (medium ~1-2 ms GPU).
+// Tests N chunk AABBs against a fake "Hi-Z" buffer.
+// Models Stage 2.2 HZB cull shader per `TODO.md §2.2`.
+
+layout(local_size_x = 64) in;
+
+struct ChunkAabb {
+    vec4 minXYZMaxX;
+    vec4 minYMaxYMinZMaxZ;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer Aabbs {
+    ChunkAabb aabbs[];
+} inAabbs;
+
+layout(set = 0, binding = 1, std430) readonly buffer HzbData {
+    uint hzbMips[];
+} inHzb;
+
+layout(set = 0, binding = 2, std430) buffer VisibleMask {
+    uint visibleMask[];
+} outMask;
+
+layout(set = 0, binding = 3) uniform CullParams {
+    uint chunkCount;
+    uint mipCount;
+    uint mipResLog2;
+    uint substeps;
+} params;
+
+shared uint sharedResults[64];
+
+void main() {
+    uint lid = gl_LocalInvocationIndex;
+    uint gid = gl_GlobalInvocationID.x;
+    sharedResults[lid] = 0u;
+    barrier();
+
+    if (gid >= params.chunkCount) return;
+
+    ChunkAabb aabb = inAabbs.aabbs[gid];
+
+    // Test chunk against mip chain (fake depth: read from hzb buffer).
+    uint visible = 1u;
+    for (uint mip = 0u; mip < params.mipCount; ++mip) {
+        uint mipRes = 1u << max(int(params.mipResLog2) - int(mip), 0);
+        ivec2 hzbCoord = ivec2(
+            int(mod(uint(aabb.minXYZMaxX.x * float(mipRes)), mipRes)),
+            int(mod(uint(aabb.minXYZMaxX.y * float(mipRes)), mipRes))
+        );
+        uint hzbIdx = (mip * mipRes * mipRes) + uint(hzbCoord.y) * mipRes + uint(hzbCoord.x);
+        uint depthVal = inHzb.hzbMips[hzbIdx];
+
+        // Multi-substep per mip (simulate heavier cull).
+        for (uint s = 0u; s < params.substeps; ++s) {
+            uint aabbDepth = uint(aabb.minYMaxYMinZMaxZ.y * 100.0) + s * 7u;
+            if (depthVal > aabbDepth) {
+                visible = 0u;
+            }
+        }
+    }
+
+    outMask.visibleMask[gid] = visible;
+    sharedResults[lid] = visible;
+    barrier();
+
+    // Reduce to bitmask (warp-style scan).
+    if (lid < 32u) {
+        uint v = sharedResults[lid] | sharedResults[lid + 32u];
+        sharedResults[lid] = v;
+    }
+    barrier();
+}
