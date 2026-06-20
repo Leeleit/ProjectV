@@ -412,30 +412,28 @@ void AudioEngine::tick()
 		return;
 	}
 
-	const auto now = std::chrono::steady_clock::now();
-	if (now - m_lastPlaylistRefresh >= std::chrono::seconds(5)) {
-		const size_t prevSize = m_playlist.size();
-		const std::filesystem::path prevTrack =
-			m_currentIndex < m_playlist.size() ? m_playlist[m_currentIndex] : std::filesystem::path{};
-		scanPlaylist();
-
-		if (m_soundLoaded && !prevTrack.empty() && !m_playlist.empty()) {
-			const auto it = std::ranges::find(m_playlist, prevTrack);
-			if (it == m_playlist.end()) {
-
-				if (m_state == MusicState::Playing) {
-					stop();
-				} else {
-					unloadCurrentTrack();
-				}
-			} else {
-
-				m_currentIndex = static_cast<size_t>(std::distance(m_playlist.begin(), it));
-			}
-		}
-
-		(void)prevSize;
+	if (m_scanThread.joinable()) {
+		m_scanThread.join();
 	}
+}
+
+void AudioEngine::RefreshPlaylistAsync()
+{
+	if (!m_engineInitialized) {
+		return;
+	}
+	if (m_scanInProgress.load()) {
+		return;
+	}
+	if (m_scanThread.joinable()) {
+		m_scanThread.join();
+	}
+	m_scanInProgress.store(true);
+	m_scanThread = std::thread([this]() {
+		const std::lock_guard<std::mutex> lock(m_playlistMutex);
+		scanPlaylist();
+		m_scanInProgress.store(false);
+	});
 }
 
 void AudioEngine::updateCurrentTrackMetadata()

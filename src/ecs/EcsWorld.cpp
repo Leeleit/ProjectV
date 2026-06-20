@@ -261,7 +261,7 @@ bool InitializeAppEcs(AppState *state)
 			}
 			const DebugState *debug = GetDebugState(binding->state->ecs().get());
 			const DebugStats debugStats = debug ? debug->stats : DebugStats{};
-			const Uint64 frameCounter = SDL_GetPerformanceCounter();
+			const Uint64 frameCounter = static_cast<Uint64>(SDL_GetPerformanceCounter());
 			result.quitAfterFrame = UpdateBenchmarkAutomation(
 				&binding->state->benchmark(),
 				debugStats,

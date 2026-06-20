@@ -110,6 +110,101 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-20 (session: 2x scope continuation, part 3)
+
+### Stage 1.1 chunk 7 finalization — homogeneous expansion semantics
+
+- `src/voxel/Sparse64Tree.hpp` — leaf-expansion path now sets `fillMask = full` for the freshly-allocated
+  Node (treating the leaf as "all 64 cells = material M"). Combined with the cascade-collapse check,
+  re-edits that revert to the original material now collapse back to a homogeneous marker.
+
+### Stage 2.1 chunk 2 — Pattern C mesh shader spike
+
+- `src/shaders/voxel_mesh_pre.comp` (new) — frustum-cull compute pre-pass. Reads `PackedChunkDescriptors`
+  SSBO + frustum planes uniform, writes `visibleChunkIds[]` SSBO + `visibilityWords` atomic counter.
+  Per `mesh-shader-vs-compute-cull` experiment recommendation: **Pattern C** (mesh + indirect count),
+  no task shader. Compute cull remains default production path per experiment verdict.
+- `src/shaders/voxel_mesh.mesh` refactored — reads `visibleChunkIds[gl_WorkGroupID.x]` instead of
+  `chunkDescriptors[gl_WorkGroupID.x]`. Stub triangle emission unchanged.
+- `src/CMakeLists.txt` — `--target-env vulkan1.3` for shader compile (required for mesh shaders).
+- `src/render/HizCulling.{hpp,cpp}` — added `IsMeshShaderPipelineEnabled()` env toggle
+  (`PROJECTV_MESH_SHADER_PIPELINE=ON`).
+
+### Stage 2.2 chunk 2 — HZB image lifecycle
+
+- `src/render/HizCulling.{hpp,cpp}` — real Vulkan lifecycle for `HizBuffer`. `CreateHizBuffer()` allocates
+  image (R32_SFLOAT, mip chain) + image view via VMA. `DestroyHizBuffer()` releases. `BuildHizMipChain()`
+  builds mip chain via `vkCmdBlitImage` NEAREST (level 0 from depth) + LINEAR (between mips) + image layout
+  barriers. Stage 2.2 Renderer integration (Phase 1 of next session) gated on `hzb-binding-models` verdict.
+
+### Stage 3.1 chunk 1 — GPU Fluid CA skeleton
+
+- `src/shaders/fluid_ca.comp` (new) — compute shader per `agent/knowledge.md §30.4` contract. 8×8×4 workgroup,
+  reads chunk descriptor + activeChunkIds SSBO + source fluid cells SSBO, writes destination fluid cells
+  SSBO + stats. `atomicOr` for destination claim. Iteration order: z,y,x ascending per workgroup.
+- `src/voxel/VoxelWorld.{hpp,cpp}` — `IsFluidCaGpuEnabled()` env toggle (`PROJECTV_FLUID_CA_GPU`),
+  `BuildActiveChunkIdsForFluidCa(world)` helper, `ToggleFluidCaGpuEnabledForTesting(bool)` for unit tests.
+- Stage 3.1 GPU pipeline integration (ping-pong buffers + actual dispatch) deferred until async-compute
+  foundation lands (Phase 0 of next session per `dec-pipelines-async-compute` recommendation).
+
+### Stage 3.2 chunk 1 — Incremental Jolt per-chunk BodyId map
+
+- `src/physics/PhysicsWorld.{hpp,cpp}` — `PhysicsState` gains `std::unordered_map<uint32_t, BodyID>
+  chunkStaticBodies` + `std::vector<uint32_t> pendingChunkRebuilds`. New API: `BuildChunkStaticCollisionBody`
+  (per-chunk CompoundShape + BodyId), `DestroyChunkStaticBody`, `QueueChunkRebuildRequest`,
+  `ProcessChunkRebuildQueue` (sorted + dedup'd rebuild), `GetPendingChunkRebuildCount`,
+  `GetChunkBodyCount`. Old single-body `staticWorldBodyId` retained for backward compatibility.
+
+### Stage 4.2 chunk 1 — per-chunk LOD level + distance selection
+
+- `src/voxel/VoxelWorld.hpp` — `VoxelChunk` gains `uint8_t lodLevel` + 3 reserved bytes (struct size 36 → 40).
+- `src/voxel/VoxelWorld.{hpp,cpp}` — `SelectLodLevelForDistance(distanceMeters)` returns 0/1/2/3 for
+  <32m / <64m / <128m / ≥128m. `AssignLodLevels(world, camX, camY, camZ)` writes LOD per chunk.
+  `CountChunksAtLod(world, lod)` counts. **Uniform downsampling** (every Nth voxel) deferred to Phase 2.
+
+### Stage 6.1 — UpdateApp god-function refactor
+
+- `src/app/AppUpdateHelpers.{hpp,cpp}` (new) — `UpdateFrameStatistics(simulation, debug, render)`,
+  `UpdateEffectivePausedAndEditing(camera, world, simulation)`,
+  `RunSimulationTickLoop(camera, input, world, simulation, physics)`. Extracted from `UpdateApp` body.
+- `src/app/Camera.{hpp,cpp}` — promoted `IsCreativeMode`, `IsWalkMode`, `IsSpectatorMode`,
+  `kMaxSimulationStepsPerFrame` from anonymous namespace to public API.
+- `src/app/AppUpdate.cpp` — calls `projectv::app::UpdateFrameStatistics` etc. Push descriptor Phase A
+  (per `bindless-descriptor-overhead` §7.1 Phase A) deferred to a future session.
+
+### Stage 6.2.2 — std::span sweep (3 sites)
+
+- `src/render/ShadowProjection.cpp` — `ComputeBounds`, `ComputeRequiredProjectedHalfExtent`,
+  `ComputeRelativeDepthRange` parameters: `const std::array<Float3, 8>&` → `std::span<const Float3>`.
+  Return values (std::array<Float3, 8>) preserved.
+
+### Stage 6.2.5 — +39 EVIL markers (62 total now)
+
+- `src/render/ShadowProjection.cpp` — 10 markers on kShadow* constants (kMinShadowNearPlane,
+  kShadowExtentPadding, kShadowDepthPadding, kMinShadowCoverageScale, kMaxShadowCoverageScale,
+  kMinCascadeNearPlane, kDefaultCascadeNearPlane, kDefaultCascadeFarPlane,
+  kDefaultShadowMapResolution, kDefaultCascadeSplitLambda).
+- `src/app/AppUpdate.cpp` — 22 markers on kLighting*/kShadow*/kMinShadow*/kMaxShadow* constants.
+
+### Verified
+
+- `cmake --build build/linux-clang-debug --target ProjectV` — green
+- `ctest --test-dir build/linux-clang-debug -R "Hzb|Sparse|Cpu|Fluid"` — 4/4 pass (~0.4 sec)
+- `ProjectVSparse64TreeTests` 24 sub-tests pass (homogeneous + dedup)
+- `ProjectVVoxelWorldTests` — 1 pre-existing failure (TestSpectatorModeAllowsPausedMovementButBlocksEdits at line 2629),
+  unrelated to my changes (confirmed via git stash)
+- `ProjectVCpuMeshGeneratorTests` 4 sub-tests pass
+- `ProjectVHzbCullingTests` 4 sub-tests pass
+- 62 EVIL markers across codebase
+
+### Blocked
+
+- **Phase 1 (HZB Renderer integration)** — gated on `hzb-binding-models` verdict. Per operator decision
+  ("ждём"), deferred to a future session when verdict closes. Current STATUS.md shows experiment at
+  wrap-up but no concluded verdict.
+
+---
+
 ## 2026-06-20 (session: 2x scope continuation)
 
 ### Stage 1.1 chunks 5-7 — `world.voxels` fully removed

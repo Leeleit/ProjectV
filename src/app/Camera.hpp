@@ -2,6 +2,8 @@
 
 #include "core/Types.hpp"
 
+inline constexpr uint32_t kMaxSimulationStepsPerFrame = 5;
+
 void InitializeCamera(
 	CameraState *camera,
 	SimulationState *simulation,
@@ -18,6 +20,9 @@ void TickCamera(
 	CameraState *camera,
 	const InputState &input,
 	float deltaSeconds);
+bool IsCreativeMode(const CameraState &camera);
+bool IsWalkMode(const CameraState &camera);
+bool IsSpectatorMode(const CameraState &camera);
 std::array<float, 3> GetCameraForwardVector(
 	const CameraState &camera);
 float GetCameraVisibleSceneMaxDistance(

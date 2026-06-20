@@ -5,18 +5,19 @@ import projectv.math;
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <span>
 
 namespace {
-constexpr float kMinShadowNearPlane = 0.1f;
-constexpr float kShadowExtentPadding = 2.0f;
-constexpr float kShadowDepthPadding = 8.0f;
-constexpr float kMinShadowCoverageScale = 0.5f;
-constexpr float kMaxShadowCoverageScale = 3.0f;
-constexpr float kMinCascadeNearPlane = 0.01f;
-constexpr float kDefaultCascadeNearPlane = 0.1f;
-constexpr float kDefaultCascadeFarPlane = 128.0f;
-constexpr uint32_t kDefaultShadowMapResolution = 2048u;
-constexpr float kDefaultCascadeSplitLambda = 0.80f;
+constexpr float kMinShadowNearPlane = 0.1f;				// EVIL: 10cm near plane floor; below this triggers perspective divide singularity
+constexpr float kShadowExtentPadding = 2.0f;			// EVIL: 2-voxel extent padding for shadow coverage; wider → wasted texels, narrower → culling pop
+constexpr float kShadowDepthPadding = 8.0f;				// EVIL: 8-voxel depth padding; matches far plane precision vs near plane precision asymmetry
+constexpr float kMinShadowCoverageScale = 0.5f;			// EVIL: 0.5x coverage floor; lower → texel starvation, higher → wasted GPU memory
+constexpr float kMaxShadowCoverageScale = 3.0f;			// EVIL: 3x coverage ceiling; per legacy/docs/standards/04_evil-hacks-philosophy.md >3x destabilizes cascade splits
+constexpr float kMinCascadeNearPlane = 0.01f;			// EVIL: 1cm absolute floor; below triggers Vulkan validation layer Z-fighting
+constexpr float kDefaultCascadeNearPlane = 0.1f;		// EVIL: 10cm default; matches typical voxel game camera near plane
+constexpr float kDefaultCascadeFarPlane = 128.0f;		// EVIL: 128-voxel default; matches TODO §4.3 draw distance baseline
+constexpr uint32_t kDefaultShadowMapResolution = 2048u; // EVIL: 2048² default; per decisions.md §15 baseline CSM resolution, do not retune casually
+constexpr float kDefaultCascadeSplitLambda = 0.80f;		// EVIL: 0.80 split lambda; per agent/knowledge.md §15 mid-late 2025 retune (was 0.65)
 
 using Float3 = projectv::math::Vec3;
 
@@ -120,7 +121,7 @@ std::array<Float3, 8> BuildFrustumSliceCorners(
 }
 
 void ComputeBounds(
-	const std::array<Float3, 8> &corners,
+	const std::span<const Float3> corners,
 	Float3 &outMin,
 	Float3 &outMax)
 {
@@ -176,7 +177,7 @@ void ExpandBoundsUpstreamForShadowCasters(
 }
 
 float ComputeRequiredProjectedHalfExtent(
-	const std::array<Float3, 8> &corners,
+	const std::span<const Float3> corners,
 	const Float3 axis,
 	const float snappedCenterCoordinate,
 	const float minimumHalfExtent,
@@ -192,7 +193,7 @@ float ComputeRequiredProjectedHalfExtent(
 }
 
 void ComputeRelativeDepthRange(
-	const std::array<Float3, 8> &corners,
+	const std::span<const Float3> corners,
 	const Float3 origin,
 	const Float3 axis,
 	float &outMinDepth,

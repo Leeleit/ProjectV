@@ -15,6 +15,10 @@ layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
     ChunkDescriptor chunkDescriptors[];
 };
 
+layout(set = 0, binding = 1, std430) readonly buffer VisibleChunkIdBuffer {
+    uint visibleChunkIds[];
+};
+
 layout(push_constant) uniform MeshPushConstants {
     uvec4 meshDispatchParams;
 } pushConstants;
@@ -23,10 +27,12 @@ void main()
 {
     SetMeshOutputsEXT(3u, 1u);
 
-    const uint chunkIndex = gl_WorkGroupID.x;
-    if (chunkIndex >= pushConstants.meshDispatchParams.x) {
+    const uint meshletIndex = gl_WorkGroupID.x;
+    if (meshletIndex >= pushConstants.meshDispatchParams.x) {
         return;
     }
+
+    const uint chunkIndex = visibleChunkIds[meshletIndex];
     const ChunkDescriptor chunk = chunkDescriptors[chunkIndex];
 
     const float extent = float(chunk.chunkExtentAndNonAir.x);

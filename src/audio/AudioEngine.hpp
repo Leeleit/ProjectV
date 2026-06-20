@@ -1,11 +1,14 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include <miniaudio.h>
@@ -55,6 +58,8 @@ class AudioEngine {
 	void shutdown();
 
 	std::expected<size_t, AudioLoadError> loadMusicFolder(const std::filesystem::path &folderPath);
+
+	void RefreshPlaylistAsync();
 
 	void tick();
 
@@ -111,6 +116,10 @@ class AudioEngine {
 	ma_uint64 m_pausedCursorMs = 0;
 
 	std::chrono::steady_clock::time_point m_lastPlaylistRefresh;
+
+	std::mutex m_playlistMutex;
+	std::atomic<bool> m_scanInProgress{false};
+	std::thread m_scanThread;
 
 	std::string m_currentTrackName;
 	std::string m_currentArtist;

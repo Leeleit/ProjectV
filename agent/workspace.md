@@ -7,12 +7,16 @@
 
 ## 1. Now
 
-**2026-06-20 session 2x part 4 (CLOSED DIRTY — all 8 phases done)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`).
+**2026-06-20 session 2x part 5 (in progress — no commit, dirty tree)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`).
+- **Phase 9: close-out 2x part 4** — `ProcessChunkRebuildQueue(physics, world->voxelWorld.get())` now called per-frame in `AppUpdate.cpp` after post-interaction `SyncPhysicsWorld`. Tracy plot "Processed Chunk Rebuilds" tracks per-frame count. Per-chunk static body rebuild path now active end-to-end (2x part 4 Phase 5 closed).
+- **Phase 10: Pre-Stage 0 / Stage 0 audit** — B1 (redundant model load loop), B2 (RecreateSwapchain destroy pipeline), B3 (cache PROJECTV_GRAVIGUN_SNAP), A1 (Vulkan 1.4 → 1.3 + env override) verified CLOSED in current mainline. No code changes needed; status can be flipped in TODO.md.
+
+**Previous session summary (2x part 4, committed `818579e`):**
 - **Phase 1: HZB Renderer integration** — pipeline + descriptor set + buffers + dispatch all wired. Env `PROJECTV_HZB_CULLING=ON` enables; default OFF → no-op. CSM HZB deferred per operator "main pipeline only".
 - **Phase 2: NanoVDB flatten helper** — `src/voxel/NanoVdb.{hpp,cpp}` + `tests/NanoVdbTests.cpp` (1035 assertions, 0 failures). Hybrid strategy per `nanovdb-on-gpu` verdict=yes. ProjectV chunkSize=8 (depth=2). byte-exact re-walk test.
 - **Phase 3: async foundation Step 1** — dedicated compute queue family detection + VK_KHR_timeline_semaphore + `VulkanSyncPrimitives.{hpp,cpp}`. VulkanContextState extended with `dedicatedComputeQueue`, `renderTimelineSemaphore`, `renderTimelineValue`. Per `dec-pipelines-async-compute` verdict=yes.
-- **Phase 4: VCT cutoff + HW RT probe** — `kVctCutoffRoughness=0.3f` + `kRtxCutoffRoughness=0.3f` constants in `core/Types.hpp`. `PROJECTV_HW_RAY_TRACING` CMake flag (default OFF). `ProbeHardwareRayTracingSupport` probes VK_KHR_acceleration_structure + VK_KHR_ray_query extension strings.
-- **Phase 5: Incremental Jolt wiring** — `SetVoxelMaterial(VoxelWorld&, Int3, VoxelMaterial, PhysicsState* = nullptr)` signature change. VoxelInteraction.cpp passes physics state through (edit path now queues per-chunk rebuilds). Mechanical sed updated all 17 callers.
+- **Phase 4: VCT/RT cutoff** — `kVctCutoffRoughness=0.3f` + `kRtxCutoffRoughness=0.3f` constants in `core/Types.hpp`. `PROJECTV_HW_RAY_TRACING` CMake flag (default OFF). `ProbeHardwareRayTracingSupport` probes VK_KHR_acceleration_structure + VK_KHR_ray_query extension strings.
+- **Phase 5: Incremental Jolt wiring** — `SetVoxelMaterial(VoxelWorld&, Int3, VoxelMaterial, PhysicsState* = nullptr)` signature change. VoxelInteraction.cpp passes physics state through (edit path now queues per-chunk rebuilds). Mechanical sed updated all 17 callers. **Per-chunk rebuild queue: now ACTIVE in Phase 9 (see above).**
 - **Phase 6: +12 EVIL markers** — 4 in `VulkanBootstrap.cpp` (queuePriority=1.0f, queueCount=1, computeQueueInfo.queueCount=1, UINT32_MAX sentinel) + 8 in `PhysicsWorld.cpp` (kPhysicsDirectionEpsilon, kPhysicsRaycastVoxelEpsilon, kWalkSpawnClearance, kWalkSneakShapeMaxPenetrationDepth, etc).
 - **Phase 7: std::span sweep** — `RefreshChunkAabbBuffer` now takes `std::span<const VoxelChunk>` + `std::span<const PackedSceneChunkDescriptor>` instead of (VoxelWorld&, RenderState&).
 - **Phase 8: doc sync** — this entry + new test target `ProjectVNanoVdbTests` registered in ctest.
@@ -31,15 +35,16 @@ Build green, 4/4 relevant tests pass (Hzb/Sparse/Cpu/Fluid). ProjectVTests has 1
 
 ## 2. Nearest Gap
 
-- **Phase 1-8 (2x part 4 session)** all closed. Open follow-ups from Phase 5: per-chunk rebuild queue is wired but `ProcessChunkRebuildQueue` is not yet called from main loop.
-- **Stage 3.1 GPU Fluid CA pipeline integration** — ping-pong buffers + actual dispatch + cross-frame sync. Requires async-compute foundation (Phase 3 done, Step 2 = per-pass async adoption remaining).
-- **Stage 4.2 LOD chunk 2** — uniform downsampling implementation. Distance LOD selection works but actual mesh-level downsampling not yet built.
+- **Stage 3.1 GPU Fluid CA pipeline integration** — ping-pong buffers + actual dispatch + cross-frame sync. Requires async-compute Step 2 = per-pass async adoption remaining (Step 1 done in 2x part 4 Phase 3).
+- **Stage 2.1 mesh shader full integration** — `voxel_mesh_pre.comp` + `voxel_mesh.mesh` in dirty tree from prior 2x part 3 sessions; needs SVDAG mainline + port greedy meshing from `voxel_mesh.comp`.
+- **Stage 4.2 LOD chunk 2** — uniform downsampling implementation. Distance LOD selection works (2x part 3 Phase 5) but actual mesh-level downsampling not yet built.
 - **Stage 5.x GI/temporal** — Stage 5.1 VCT, 5.2 RTX shadows (probe ready), 5.3 TAA motion vectors — not started.
 - **HZB Stage 2.2 deferred** — CSM HZB culling deferred per operator "main pipeline only".
+- **Dirty tree (20 files, ~2586+/679-)** — all from prior 2x part 1/2/3 sessions that closed dirty. NOT my session's scope. Operator instruction: no commits; tree stays as-is until next session with explicit scope.
 
 ## 3. Next Steps
 
-2x part 5 candidate: hook `ProcessChunkRebuildQueue` into UpdateApp per-frame, port `voxel_mesh.comp` greedy meshing to mesh shader output (Stage 2.1 full integration), GPU Fluid CA pipeline integration.
+2x part 6 candidate: Stage 3.1 GPU Fluid CA pipeline integration (multi-session work — uses Phase 3 async foundation + Phase 2 NanoVDB flatten). Alternative: Stage 2.1 mesh shader full integration (port `voxel_mesh.comp` greedy meshing to mesh shader output, using `voxel_mesh_pre.comp` + `voxel_mesh.mesh` from dirty tree).
 
 ## 4. Risks
 
@@ -53,7 +58,7 @@ Build green, 4/4 relevant tests pass (Hzb/Sparse/Cpu/Fluid). ProjectVTests has 1
 
 ## 5. Active tasks (current open sessions)
 
-None (2x part 3 complete except Phase 1 BLOCKED on hzb-binding-models, dirty tree waiting for commit).
+**2026-06-20 session 2x part 5** — Phase 9 (ProcessChunkRebuildQueue main-loop wire) + Phase 10 (Pre-Stage 0/Stage 0 audit). Build green, ctest 19/20 + 1 documented pre-existing failure. NO commit pending (operator instruction).
 
 ## 6. Recent closed sessions
 

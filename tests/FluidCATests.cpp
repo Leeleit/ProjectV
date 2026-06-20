@@ -67,7 +67,13 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 	world.chunkCountY = (height + chunkSize - 1) / chunkSize;
 	world.chunkCountZ = (depth + chunkSize - 1) / chunkSize;
 	world.sparseStorage.Reset(width, height, depth);
-	for (int z = 0; z < depth; ++z) { for (int y = 0; y < height; ++y) { for (int x = 0; x < width; ++x) { SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air); } } }
+	for (int z = 0; z < depth; ++z) {
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air, nullptr);
+			}
+		}
+	}
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
@@ -77,7 +83,7 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel, reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
 				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
@@ -108,7 +114,7 @@ size_t CountFluid(const VoxelWorld &world)
 void TestFluidCASingleCellFallsOneCellPerTick(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(8, 8, 8);
-	SetVoxelMaterial(world, {4, 5, 4}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {4, 5, 4}, VoxelMaterial::Fluid, nullptr);
 
 	const uint32_t moved = UpdateFluidCA(world);
 	EXPECT_EQ(context, 1u, moved);
@@ -122,7 +128,7 @@ void TestFluidCAColumnPercolatesAndSpreadsOnFloor(TestContext &context)
 	constexpr int kStartY = 5;
 	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
 	for (int y = kStartY; y < kStartY + kColumnHeight; ++y) {
-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
 	}
 	const uint32_t initialCount = world.stats.fluidVoxelCount;
 	EXPECT_EQ(context, static_cast<uint32_t>(kColumnHeight), initialCount);
@@ -141,8 +147,8 @@ void TestFluidCARestingOnFloorStaysPut(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
 
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 
 	for (int tick = 0; tick < 5; ++tick) {
 		UpdateFluidCA(world);
@@ -159,16 +165,14 @@ void TestFluidCARestingOnFloorStaysPut(TestContext &context)
 void TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 
 	UpdateFluidCA(world);
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {2, 0, 2}));
 	EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
 
-
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Air);
-
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Air, nullptr);
 
 	for (int tick = 0; tick < 5; ++tick) {
 		UpdateFluidCA(world);
@@ -180,8 +184,7 @@ void TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(TestContext &contex
 void TestFluidCAFluidAtY0IsStable(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid);
-
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid, nullptr);
 
 	for (int tick = 0; tick < 5; ++tick) {
 		UpdateFluidCA(world);
@@ -192,8 +195,8 @@ void TestFluidCAFluidAtY0IsStable(TestContext &context)
 void TestFluidCAFluidDoesNotFallThroughPlatform(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 
 	const uint32_t moved = UpdateFluidCA(world);
 	EXPECT_TRUE(context, moved > 0u);
@@ -210,8 +213,8 @@ void TestFluidCASpreadsToCardinalNeighbour(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
 
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 
 	const uint32_t moved = UpdateFluidCA(world);
 	EXPECT_TRUE(context, moved > 0u);
@@ -233,8 +236,8 @@ void TestFluidCASpreadIsDeterministic(TestContext &context)
 {
 	auto run = [] {
 		VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 		for (int tick = 0; tick < 5; ++tick) {
 			UpdateFluidCA(world);
 		}
@@ -260,13 +263,13 @@ void TestFluidCADeterministicAcrossRuns(TestContext &context)
 {
 	auto runScenario = [] {
 		VoxelWorld world = MakeFluidCATestWorld(8, 12, 8);
-		SetVoxelMaterial(world, {3, 5, 3}, VoxelMaterial::Fluid);
-		SetVoxelMaterial(world, {3, 6, 3}, VoxelMaterial::Fluid);
-		SetVoxelMaterial(world, {4, 7, 3}, VoxelMaterial::Fluid);
-		SetVoxelMaterial(world, {5, 8, 3}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {3, 5, 3}, VoxelMaterial::Fluid, nullptr);
+		SetVoxelMaterial(world, {3, 6, 3}, VoxelMaterial::Fluid, nullptr);
+		SetVoxelMaterial(world, {4, 7, 3}, VoxelMaterial::Fluid, nullptr);
+		SetVoxelMaterial(world, {5, 8, 3}, VoxelMaterial::Fluid, nullptr);
 		for (int x = 0; x < 8; ++x) {
 			for (int z = 0; z < 8; ++z) {
-				SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+				SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 			}
 		}
 		for (int tick = 0; tick < 20; ++tick) {
@@ -285,7 +288,7 @@ void TestFluidCAStatsCountStaysConsistent(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
 	for (int y = 5; y < 10; ++y) {
-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
 	}
 
 	for (int tick = 0; tick < 30; ++tick) {
@@ -302,7 +305,7 @@ void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
 	constexpr int kColumnHeight = 4;
 	VoxelWorld world = MakeFluidCATestWorld(4, 8, 4);
 	for (int y = 0; y < kColumnHeight; ++y) {
-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
 	}
 
 	for (int tick = 0; tick < 20; ++tick) {
@@ -331,11 +334,11 @@ void TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(TestContext &context)
 	VoxelWorld world = MakeFluidCATestWorld(4, 12, 4);
 	for (int x = 0; x < 4; ++x) {
 		for (int z = 0; z < 4; ++z) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
 	for (int y = 2; y < 2 + kColumnHeight; ++y) {
-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
 	}
 
 	for (int tick = 0; tick < 30; ++tick) {
@@ -390,7 +393,13 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	world.chunkCountY = (height + chunkSize - 1) / chunkSize;
 	world.chunkCountZ = (depth + chunkSize - 1) / chunkSize;
 	world.sparseStorage.Reset(width, height, depth);
-	for (int z = 0; z < depth; ++z) { for (int y = 0; y < height; ++y) { for (int x = 0; x < width; ++x) { SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air); } } }
+	for (int z = 0; z < depth; ++z) {
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air, nullptr);
+			}
+		}
+	}
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
@@ -400,7 +409,7 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel, reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
 				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
@@ -433,9 +442,9 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 				}
 				const Int3 pos{dx, centerY + dy, dz};
 				if (d2 > inner2) {
-					SetVoxelMaterial(world, pos, VoxelMaterial::Glass);
+					SetVoxelMaterial(world, pos, VoxelMaterial::Glass, nullptr);
 				} else if (pos.y <= fluidTop) {
-					SetVoxelMaterial(world, pos, VoxelMaterial::Fluid);
+					SetVoxelMaterial(world, pos, VoxelMaterial::Fluid, nullptr);
 				}
 			}
 		}
@@ -447,8 +456,7 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	UpdateFluidCA(world);
 	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {0, 2, 0}));
 
-	SetVoxelMaterial(world, {0, 2, 0}, VoxelMaterial::Air);
-
+	SetVoxelMaterial(world, {0, 2, 0}, VoxelMaterial::Air, nullptr);
 
 	const uint32_t moved = UpdateFluidCA(world);
 	EXPECT_TRUE(context, moved > 0u);
@@ -490,7 +498,7 @@ void TickFluidCA(
 void TestFluidCAFluidDoesNotMoveOnPause(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);
 
 	SimulationState simulation{};
 	simulation.paused = true;
@@ -509,8 +517,8 @@ void TestFluidCAFluidDoesNotMoveOnPause(TestContext &context)
 void TestFluidCAFluidMovesOnUnpause(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);
 
 	SimulationState simulation{};
 	simulation.paused = false;
@@ -528,10 +536,10 @@ void TestFluidCAFluidMovesOnUnpause(TestContext &context)
 void TestFluidCAFluidRateRespectsTimeScale(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid, nullptr);
 
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 
 	SimulationState simulation{};
 	simulation.paused = false;
@@ -558,11 +566,11 @@ void TestFluidCAFluidRateAboveBase(TestContext &context)
 {
 
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 	for (int x = 0; x < 4; ++x) {
 		for (int z = 0; z < 4; ++z) {
-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass);
+			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
 		}
 	}
 
@@ -592,11 +600,11 @@ void TestFluidCAFluidRateAboveBase(TestContext &context)
 void TestFluidCAFluidRateAtDefault(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 	for (int x = 0; x < 4; ++x) {
 		for (int z = 0; z < 4; ++z) {
-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass);
+			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
 		}
 	}
 
@@ -625,11 +633,11 @@ void TestFluidCAFluidRateAtDefault(TestContext &context)
 void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 	for (int x = 0; x < 4; ++x) {
 		for (int z = 0; z < 4; ++z) {
-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass);
+			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
 		}
 	}
 
@@ -654,11 +662,11 @@ void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 void TestFluidCAFluidFrameStepWithTimeScaleZero(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 	for (int x = 0; x < 4; ++x) {
 		for (int z = 0; z < 4; ++z) {
-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass);
+			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
 		}
 	}
 
@@ -683,11 +691,11 @@ void TestFluidCAFluidRateConfigurable(TestContext &context)
 {
 	auto runRate = [](const float hz) {
 		VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
-		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite);
-		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid);
+		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
 		for (int x = 0; x < 4; ++x) {
 			for (int z = 0; z < 4; ++z) {
-				SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass);
+				SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
 			}
 		}
 		SimulationState simulation{};

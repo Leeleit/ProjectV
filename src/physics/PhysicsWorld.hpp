@@ -50,6 +50,10 @@ struct PhysicsRaycastHit {
 PhysicsState *CreatePhysicsState();
 void DestroyPhysicsState(PhysicsState *physics);
 bool SyncPhysicsWorld(PhysicsState *physics, const VoxelWorld *world);
+void QueueChunkRebuildRequest(PhysicsState *physics, uint32_t chunkIndex);
+uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world);
+uint32_t GetPendingChunkRebuildCount(const PhysicsState *physics);
+uint32_t GetChunkBodyCount(const PhysicsState *physics);
 PhysicsRaycastHit RaycastPhysicsWorld(
 	const PhysicsState *physics,
 	const std::array<float, 3> &origin,

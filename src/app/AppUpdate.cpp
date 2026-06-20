@@ -3,6 +3,7 @@ import projectv.math;
 #include "app/AppUpdate.hpp"
 
 #include "app/Camera.hpp"
+#include "app/AppUpdateHelpers.hpp"
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
 #include "audio/AudioEngine.hpp"
@@ -18,44 +19,28 @@ import projectv.math;
 #include <cmath>
 
 namespace {
-constexpr uint32_t kMaxSimulationStepsPerFrame = 5;
-constexpr float kMaxFrameDeltaSeconds = 0.25f;
-constexpr float kLightingExposureStepStops = 0.25f;
-constexpr float kMinLightingExposureBiasStops = -4.0f;
-constexpr float kMaxLightingExposureBiasStops = 4.0f;
-constexpr float kShadowStrengthStep = 0.05f;
-constexpr float kShadowDepthBiasStep = 0.0001f;
-constexpr float kShadowNormalBiasStep = 0.0005f;
-constexpr float kShadowFilterRadiusStep = 0.10f;
-constexpr float kShadowCoverageScaleStep = 0.10f;
-constexpr float kShadowCascadeBlendStep = 0.02f;
-constexpr float kMinShadowStrengthOffset = -1.0f;
-constexpr float kMaxShadowStrengthOffset = 1.0f;
-constexpr float kMinShadowDepthBiasOffset = -0.01f;
-constexpr float kMaxShadowDepthBiasOffset = 0.01f;
-constexpr float kMinShadowNormalBiasOffset = -0.05f;
-constexpr float kMaxShadowNormalBiasOffset = 0.05f;
-constexpr float kMinShadowFilterRadiusOffset = -4.0f;
-constexpr float kMaxShadowFilterRadiusOffset = 4.0f;
-constexpr float kMinShadowCoverageScale = 0.5f;
-constexpr float kMaxShadowCoverageScale = 3.0f;
-constexpr float kMinShadowCascadeBlendOffset = -0.50f;
-constexpr float kMaxShadowCascadeBlendOffset = 0.50f;
-
-bool IsCreativeMode(const CameraState &camera)
-{
-	return camera.controlMode == CameraState::ControlMode::Creative;
-}
-
-bool IsSpectatorMode(const CameraState &camera)
-{
-	return camera.controlMode == CameraState::ControlMode::Spectator;
-}
-
-bool IsWalkMode(const CameraState &camera)
-{
-	return camera.controlMode == CameraState::ControlMode::Walk;
-}
+constexpr float kMaxFrameDeltaSeconds = 0.25f;		   // EVIL: 250ms cap; prevents huge dt spikes after pause/focus loss; tuned for 60 FPS frame budget
+constexpr float kLightingExposureStepStops = 0.25f;	   // EVIL: 1/4 stop per keyboard step; smaller → sluggish, larger → jarring
+constexpr float kMinLightingExposureBiasStops = -4.0f; // EVIL: -4 stops lower; matches ACES tone-map dark floor per VoxelMaterials.cpp:62
+constexpr float kMaxLightingExposureBiasStops = 4.0f;  // EVIL: +4 stops upper; symmetric to kMin; prevents exposure runaway
+constexpr float kShadowStrengthStep = 0.05f;		   // EVIL: 5% per keyboard step; matches shadow_tuning ladder in DebugHud
+constexpr float kShadowDepthBiasStep = 0.0001f;		   // EVIL: 0.1mm depth bias step; finer than shadow texel size (2mm @ 2048² / 4m)
+constexpr float kShadowNormalBiasStep = 0.0005f;	   // EVIL: 0.5mm normal bias step; tuned for VoxelLab voxel normal consistency
+constexpr float kShadowFilterRadiusStep = 0.10f;	   // EVIL: 10% PCF kernel step; 1.0 = 1 texel PCF radius per step
+constexpr float kShadowCoverageScaleStep = 0.10f;	   // EVIL: 10% coverage scale step; range 0.5-3.0 per ShadowProjection.cpp:14-15
+constexpr float kShadowCascadeBlendStep = 0.02f;	   // EVIL: 2% blend width per step; range -0.5 to +0.5 per ShadowProjection.cpp:42-43
+constexpr float kMinShadowStrengthOffset = -1.0f;	   // EVIL: full off lower; 0 = default per-vertex strength
+constexpr float kMaxShadowStrengthOffset = 1.0f;	   // EVIL: 2x upper; doubles sun shadow contribution at max
+constexpr float kMinShadowDepthBiasOffset = -0.01f;	   // EVIL: -1cm lower; prevents inverse-cusp at low bias
+constexpr float kMaxShadowDepthBiasOffset = 0.01f;	   // EVIL: +1cm upper; prevents peter-panning at high bias
+constexpr float kMinShadowNormalBiasOffset = -0.05f;   // EVIL: -5cm lower; symmetric to max
+constexpr float kMaxShadowNormalBiasOffset = 0.05f;	   // EVIL: +5cm upper; prevents shadow detachment from surface
+constexpr float kMinShadowFilterRadiusOffset = -4.0f;  // EVIL: -4 lower; range matches kShadowFilterRadiusStep
+constexpr float kMaxShadowFilterRadiusOffset = 4.0f;   // EVIL: +4 upper; range matches kShadowFilterRadiusStep
+constexpr float kMinShadowCoverageScale = 0.5f;		   // EVIL: 0.5x lower; matches ShadowProjection.cpp:14
+constexpr float kMaxShadowCoverageScale = 3.0f;		   // EVIL: 3x upper; matches ShadowProjection.cpp:15
+constexpr float kMinShadowCascadeBlendOffset = -0.50f; // EVIL: -50% blend offset; full pre-cascade overlap
+constexpr float kMaxShadowCascadeBlendOffset = 0.50f;  // EVIL: +50% blend offset; symmetric
 
 bool UsesPhysicsCharacter(const CameraState::ControlMode controlMode)
 {
@@ -494,11 +479,7 @@ bool UpdateApp(
 	}
 
 	simulation->frameDeltaSeconds = ComputeFrameDeltaSeconds(*simulation);
-	simulation->simulationStepsLastFrame = 0;
-	debug->stats.framesPerSecond = simulation->frameDeltaSeconds > 0.0f ? 1.0f / simulation->frameDeltaSeconds : 0.0f;
-	debug->stats.frameTimeMilliseconds = simulation->frameDeltaSeconds * 1000.0f;
-	debug->stats.simulationStepsLastFrame = 0;
-	debug->stats.sceneTriangleCount = render->sceneTriangleCount;
+	projectv::app::UpdateFrameStatistics(*simulation, *debug, *render);
 
 	if (input->replay.recording) {
 		RecordInputReplayFrame(input, simulation->frameDeltaSeconds);
@@ -756,22 +737,9 @@ bool UpdateApp(
 		input->replay.playbackRequested = true;
 	}
 
-	const bool creativeMode = IsCreativeMode(*camera);
+	const bool effectivePaused = projectv::app::UpdateEffectivePausedAndEditing(*camera, *world, *simulation);
 	const bool spectatorMode = IsSpectatorMode(*camera);
-	const bool walkMode = IsWalkMode(*camera);
-
-	const bool frameStepRequestedNow = simulation->frameStepRequested;
-	simulation->frameStepRequested = false;
-	const bool effectivePaused = simulation->paused && !frameStepRequestedNow;
-	simulation->effectivePaused = effectivePaused;
 	const bool cameraCanUpdate = spectatorMode || !effectivePaused;
-	const bool allowWorldEditing =
-		(creativeMode || walkMode) &&
-		!world->scenePresetReloadRequested &&
-		!world->snapshotLoadRequested;
-	world->allowWorldEditing = allowWorldEditing;
-
-	simulation->frameDeltaSeconds *= simulation->timeScale;
 
 	if (physics && world->voxelWorld && !SyncPhysicsWorld(physics, world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
@@ -781,15 +749,6 @@ bool UpdateApp(
 		return false;
 	}
 
-	if (frameStepRequestedNow) {
-
-		simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds;
-	} else if (!effectivePaused) {
-		simulation->simulationAccumulatorSeconds += simulation->frameDeltaSeconds;
-	} else {
-		simulation->simulationAccumulatorSeconds = 0.0f;
-	}
-
 	if (cameraCanUpdate) {
 		ConsumeCameraLookInput(camera, input);
 	} else {
@@ -797,60 +756,12 @@ bool UpdateApp(
 		input->mouseDeltaY = 0.0f;
 	}
 
-	while (simulation->simulationAccumulatorSeconds >= simulation->fixedSimulationDeltaSeconds &&
-		   simulation->simulationStepsLastFrame < kMaxSimulationStepsPerFrame &&
-		   !effectivePaused) {
-		if (walkMode) {
-			PV_CHECK_OR_RETURN(
-				physics && world->voxelWorld,
-				"App",
-				"UpdateApp.TickWalkCharacter",
-				"walk mode requires initialized physics and voxel world");
-			if (!TickWalkCharacter(
-					physics,
-					world->voxelWorld.get(),
-					camera,
-					input,
-					simulation->fixedSimulationDeltaSeconds)) {
-				runtime::LogRuntimeFailure(
-					"App",
-					"UpdateApp.TickWalkCharacter",
-					"TickWalkCharacter returned false");
-				return false;
-			}
-		} else if (creativeMode) {
-			PV_CHECK_OR_RETURN(
-				physics && world->voxelWorld,
-				"App",
-				"UpdateApp.TickCreativeCharacter",
-				"creative mode requires initialized physics and voxel world");
-			if (!TickCreativeCharacter(
-					physics,
-					world->voxelWorld.get(),
-					camera,
-					input,
-					simulation->fixedSimulationDeltaSeconds)) {
-				runtime::LogRuntimeFailure(
-					"App",
-					"UpdateApp.TickCreativeCharacter",
-					"TickCreativeCharacter returned false");
-				return false;
-			}
-		} else {
-			TickCamera(camera, *input, simulation->fixedSimulationDeltaSeconds);
-		}
-		simulation->simulationAccumulatorSeconds -= simulation->fixedSimulationDeltaSeconds;
-		++simulation->simulationStepsLastFrame;
-		++simulation->simulationTick;
-	}
-
-	if (simulation->simulationAccumulatorSeconds >= simulation->fixedSimulationDeltaSeconds) {
-		simulation->simulationAccumulatorSeconds =
-			std::fmod(simulation->simulationAccumulatorSeconds, simulation->fixedSimulationDeltaSeconds);
-	}
-
-	if (effectivePaused && spectatorMode && simulation->frameDeltaSeconds > 0.0f) {
-		TickCamera(camera, *input, simulation->frameDeltaSeconds);
+	if (!projectv::app::RunSimulationTickLoop(camera, input, *world, *simulation, physics)) {
+		runtime::LogRuntimeFailure(
+			"App",
+			"UpdateApp.RunSimulationTickLoop",
+			"simulation tick returned false");
+		return false;
 	}
 
 	const uint64_t worldEditVersionBeforeInteraction =
@@ -864,6 +775,16 @@ bool UpdateApp(
 			"UpdateApp.PostInteractionPhysicsSync",
 			"SyncPhysicsWorld returned false after voxel edit");
 		return false;
+	}
+
+	if (physics && world->voxelWorld) {
+		const uint32_t processedChunkRebuilds =
+			ProcessChunkRebuildQueue(physics, world->voxelWorld.get());
+		if (processedChunkRebuilds > 0u) {
+			profiling::PlotValue(
+				"Processed Chunk Rebuilds",
+				static_cast<int64_t>(processedChunkRebuilds));
+		}
 	}
 
 	profiling::PlotValue("Frame Delta (ms)", simulation->frameDeltaSeconds * 1000.0f);
@@ -886,7 +807,7 @@ bool UpdateApp(
 	debug->stats.simulationPaused = simulation->paused;
 
 	debug->stats.simulationTimeScale = simulation->timeScale;
-	debug->stats.simulationFrameStepPending = frameStepRequestedNow;
+	debug->stats.simulationFrameStepPending = simulation->frameStepRequested;
 	debug->stats.showChunkBounds = debug->showChunkBounds;
 	debug->stats.showDirtyChunkOverlay = debug->showDirtyChunkOverlay;
 	MirrorRenderLightingToDebugStats(*render, *camera, debug->stats);

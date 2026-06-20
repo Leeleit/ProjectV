@@ -2,6 +2,21 @@ import projectv.math;
 
 #include "app/Camera.hpp"
 
+bool IsCreativeMode(const CameraState &camera)
+{
+	return camera.controlMode == CameraState::ControlMode::Creative;
+}
+
+bool IsSpectatorMode(const CameraState &camera)
+{
+	return camera.controlMode == CameraState::ControlMode::Spectator;
+}
+
+bool IsWalkMode(const CameraState &camera)
+{
+	return camera.controlMode == CameraState::ControlMode::Walk;
+}
+
 #include "app/InputActions.hpp"
 
 #include <algorithm>

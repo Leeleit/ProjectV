@@ -145,7 +145,7 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 	for (int z = 0; z < world.depth; ++z) {
 		for (int y = 0; y < world.height; ++y) {
 			for (int x = 0; x < world.width; ++x) {
-				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air);
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air, nullptr);
 			}
 		}
 	}
@@ -158,7 +158,7 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit] = world.chunks[chunkIndex];
+				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel, reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
 				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
@@ -591,7 +591,7 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 void TestVoxelFaceAmbientVisibilityStaysOpenForExposedTopFace(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {4, 4, 4}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::FloorWhite, nullptr);
 
 	EXPECT_EQ(context, 255u, ComputeVoxelFaceAmbientVisibilityByte(world, {1, 1, 1}, 2u));
 }
@@ -599,11 +599,11 @@ void TestVoxelFaceAmbientVisibilityStaysOpenForExposedTopFace(TestContext &conte
 void TestVoxelFaceAmbientVisibilityDarkensEnclosedTopFace(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {5, 5, 5}, 5);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::FloorGray);
-	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::FloorGray);
-	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::FloorGray);
-	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::FloorGray, nullptr);
+	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::FloorGray, nullptr);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::FloorGray, nullptr);
+	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::FloorGray, nullptr);
 
 	EXPECT_EQ(context, 0u, ComputeVoxelFaceAmbientVisibilityByte(world, {2, 1, 2}, 2u));
 }
@@ -611,11 +611,11 @@ void TestVoxelFaceAmbientVisibilityDarkensEnclosedTopFace(TestContext &context)
 void TestVoxelFaceAmbientVisibilityTreatsGlassAsNonOccluder(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {5, 5, 5}, 5);
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::Glass, nullptr);
 
 	EXPECT_EQ(context, 255u, ComputeVoxelFaceAmbientVisibilityByte(world, {2, 1, 2}, 2u));
 }
@@ -629,10 +629,10 @@ void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
 	world.config.worldTopY = 12;
 	world.config.padding = 5;
 	world.config.chunkSize = 4;
-	SetVoxelMaterial(world, {-4, 1, -4}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {-1, 2, 3}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {5, 4, 6}, VoxelMaterial::Fluid);
-	SetVoxelMaterial(world, {11, 8, 11}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {-4, 1, -4}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {-1, 2, 3}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {5, 4, 6}, VoxelMaterial::Fluid, nullptr);
+	SetVoxelMaterial(world, {11, 8, 11}, VoxelMaterial::FloorGray, nullptr);
 	world.editVersion = 77;
 	ResetDirtyFlags(world);
 
@@ -705,7 +705,7 @@ void TestMarkVoxelRegionDirtyQueuesExpectedChunks(TestContext &context)
 void TestSetVoxelMaterialTracksCountsAndQueuesRebuild(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Fluid, nullptr);
 
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountVoxelsByMaterial(world, VoxelMaterial::Fluid));
 	EXPECT_EQ(context, static_cast<uint32_t>(1), world.stats.nonAirVoxelCount);
@@ -713,7 +713,7 @@ void TestSetVoxelMaterialTracksCountsAndQueuesRebuild(TestContext &context)
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices.size());
 
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Fluid, nullptr);
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices.size());
 
@@ -722,7 +722,7 @@ void TestSetVoxelMaterialTracksCountsAndQueuesRebuild(TestContext &context)
 	CommitDirtyVoxelChunkRebuildRequests(world, rebuildRequests);
 	EXPECT_EQ(context, static_cast<uint32_t>(0), CountDirtyVoxelChunks(world));
 
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air, nullptr);
 	EXPECT_EQ(context, static_cast<uint32_t>(0), CountVoxelsByMaterial(world, VoxelMaterial::Fluid));
 	EXPECT_EQ(context, static_cast<uint32_t>(0), world.stats.nonAirVoxelCount);
 	EXPECT_EQ(context, static_cast<uint32_t>(0), CountActiveVoxelChunks(world));
@@ -734,7 +734,7 @@ void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &conte
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 16, 16}, 8);
 
-	SetVoxelMaterial(world, {7, 7, 7}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {7, 7, 7}, VoxelMaterial::Glass, nullptr);
 
 	EXPECT_EQ(context, static_cast<uint32_t>(8), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(8), world.pendingChunkRebuildIndices.size());
@@ -748,7 +748,7 @@ void TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(TestContext &co
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 16, 16}, 8);
 
-	SetVoxelMaterial(world, {7, 4, 4}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {7, 4, 4}, VoxelMaterial::Glass, nullptr);
 
 	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(2), world.pendingChunkRebuildIndices.size());
@@ -761,7 +761,7 @@ void TestSetVoxelMaterialDoesNotQueueMissingWorldNeighbors(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 16, 16}, 8);
 
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::Glass, nullptr);
 
 	EXPECT_EQ(context, static_cast<uint32_t>(1), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices.size());
@@ -1041,7 +1041,7 @@ void TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(Test
 void TestBuildSunShadowProjectionInterpretsSunDirectionAsTowardsSun(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({-1, 0, -1}, {1, 2, 1}, 2);
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
 
 	const auto [lightViewProjection] = BuildSunShadowProjection(world, {0.0f, 1.0f, 0.0f}, 1.0f);
 	const std::array<float, 4> topClip = TransformPoint(lightViewProjection, {0.0f, 2.0f, 0.0f});
@@ -1103,7 +1103,7 @@ void TestBuildSunShadowCascadeSplitsClampsInvalidInputs(TestContext &context)
 void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({-32, 0, -32}, {32, 32, 96}, 16);
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
 	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
 	const SunShadowCascadeProjectionInputs inputs{
 		.cameraPosition = {0.0f, 8.0f, -20.0f},
@@ -1150,7 +1150,7 @@ void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &cont
 void TestBuildSunShadowCascadeProjectionsSnapToShadowTexelGrid(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({-32, 0, -32}, {32, 32, 96}, 16);
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
 	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
 	const SunShadowCascadeProjectionInputs baseInputs{
 		.cameraPosition = {0.0f, 8.0f, -20.0f},
@@ -1191,8 +1191,8 @@ void TestBuildSunShadowCascadeProjectionsSnapToShadowTexelGrid(TestContext &cont
 void TestBuildSunShadowCascadeProjectionsUseCascadeSpecificCasterCoverage(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({-32, 0, -256}, {32, 32, 256}, 16);
-	SetVoxelMaterial(world, {-32, 0, -256}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {31, 31, 255}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {-32, 0, -256}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {31, 31, 255}, VoxelMaterial::FloorWhite, nullptr);
 	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.65f);
 	const SunShadowCascadeProjectionInputs inputs{
 		.cameraPosition = {0.0f, 8.0f, 0.0f},
@@ -1255,8 +1255,8 @@ void TestBuildSunShadowCascadeProjectionsExpandOrthoExtentForTallCasters(TestCon
 void TestBuildSunShadowCascadeProjectionsKeepExpandedCastersAheadOfNearPlane(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({-96, 0, -96}, {96, 72, 224}, 16);
-	SetVoxelMaterial(world, {-96, 0, -96}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(world, {95, 71, 223}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {-96, 0, -96}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {95, 71, 223}, VoxelMaterial::FloorWhite, nullptr);
 
 	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.80f);
 	const SunShadowCascadeProjectionInputs inputs{
@@ -1422,7 +1422,7 @@ void TestLookDevCaptureAutomationRequestsConfiguredViews(TestContext &context)
 void TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	world.pendingChunkRebuildIndices.clear();
 	world.stats.dirtyChunkCount = 0;
 	for (VoxelChunk &chunk : world.chunks) {
@@ -1447,7 +1447,7 @@ void TestVoxelRaycastHitsSolidVoxelAndReturnsPlacementCell(TestContext &context)
 void TestVoxelRaycastStopsAtWorldBoundaryWithoutPlacementCell(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {4, 4, 4}, 4);
-	SetVoxelMaterial(world, {0, 1, 1}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {0, 1, 1}, VoxelMaterial::Fluid, nullptr);
 	world.pendingChunkRebuildIndices.clear();
 	world.stats.dirtyChunkCount = 0;
 	for (VoxelChunk &chunk : world.chunks) {
@@ -1799,7 +1799,7 @@ VoxelWorld MakeWalkTestWorld()
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
 	ResetDirtyFlags(world);
@@ -1811,7 +1811,7 @@ VoxelWorld MakeWalkLedgeTestWorld()
 	VoxelWorld world = MakeWalkTestWorld();
 	for (int z = 4; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray);
+			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray, nullptr);
 		}
 	}
 	ResetDirtyFlags(world);
@@ -1823,12 +1823,12 @@ VoxelWorld MakeWalkLongLedgeTestWorld()
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {32, 8, 12}, 8);
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
 	for (int z = 4; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray);
+			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray, nullptr);
 		}
 	}
 	ResetDirtyFlags(world);
@@ -1840,7 +1840,7 @@ VoxelWorld MakeWalkCornerLedgeTestWorld()
 	VoxelWorld world = MakeWalkTestWorld();
 	for (int z = 4; z < world.maxExclusive.z; ++z) {
 		for (int x = 4; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray);
+			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray, nullptr);
 		}
 	}
 	ResetDirtyFlags(world);
@@ -1852,7 +1852,7 @@ VoxelWorld MakeWalkCornerLedgeLowCeilingTestWorld()
 	VoxelWorld world = MakeWalkCornerLedgeTestWorld();
 	for (int z = 4; z < world.maxExclusive.z; ++z) {
 		for (int x = 4; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 4, z}, VoxelMaterial::FloorGray);
+			SetVoxelMaterial(world, {x, 4, z}, VoxelMaterial::FloorGray, nullptr);
 		}
 	}
 	ResetDirtyFlags(world);
@@ -1864,10 +1864,10 @@ VoxelWorld MakeWalkNegativeSingleBlockTestWorld()
 	VoxelWorld world = MakeTestWorld({-8, 0, 0}, {8, 8, 12}, 4);
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
-	SetVoxelMaterial(world, {-6, 1, 6}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {-6, 1, 6}, VoxelMaterial::FloorGray, nullptr);
 	ResetDirtyFlags(world);
 	return world;
 }
@@ -1877,10 +1877,10 @@ VoxelWorld MakeWalkPositiveSingleBlockTestWorld()
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {12, 8, 12}, 4);
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
-	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::FloorGray, nullptr);
 	ResetDirtyFlags(world);
 	return world;
 }
@@ -1890,11 +1890,11 @@ VoxelWorld MakeWalkPositiveTwoBlockTestWorld()
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {12, 10, 12}, 4);
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
-	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {5, 2, 6}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {5, 2, 6}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 	return world;
 }
@@ -1903,7 +1903,7 @@ VoxelWorld MakeWalkGlassColumnWallTestWorld()
 {
 	VoxelWorld world = MakeWalkTestWorld();
 	for (int y = 1; y <= 4; ++y) {
-		SetVoxelMaterial(world, {4, y, 5}, VoxelMaterial::Glass);
+		SetVoxelMaterial(world, {4, y, 5}, VoxelMaterial::Glass, nullptr);
 	}
 	ResetDirtyFlags(world);
 	return world;
@@ -1912,7 +1912,7 @@ VoxelWorld MakeWalkGlassColumnWallTestWorld()
 VoxelWorld MakeWalkNegativeSingleBlockSneakTestWorld()
 {
 	VoxelWorld world = MakeTestWorld({-12, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {-8, 3, 3}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {-8, 3, 3}, VoxelMaterial::FloorGray, nullptr);
 	ResetDirtyFlags(world);
 	return world;
 }
@@ -1920,7 +1920,7 @@ VoxelWorld MakeWalkNegativeSingleBlockSneakTestWorld()
 VoxelWorld MakeWalkIsolatedCornerSingleBlockTestWorld()
 {
 	VoxelWorld world = MakeTestWorld({-4, 0, -4}, {8, 24, 8}, 4);
-	SetVoxelMaterial(world, {-1, 15, 0}, VoxelMaterial::FloorGray);
+	SetVoxelMaterial(world, {-1, 15, 0}, VoxelMaterial::FloorGray, nullptr);
 	ResetDirtyFlags(world);
 	return world;
 }
@@ -2635,7 +2635,7 @@ void TestSpectatorModeAllowsPausedMovementButBlocksEdits(TestContext &context)
 void TestPhysicsRaycastHitsStaticVoxelCollision(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
@@ -2667,7 +2667,7 @@ void TestPhysicsWorldSyncTracksVoxelEdits(TestContext &context)
 		8.0f);
 	EXPECT_TRUE(context, !hit.hasHit);
 
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
 	EXPECT_EQ(context, world.editVersion, GetPhysicsWorldSyncVersion(physics.get()));
 
@@ -2679,7 +2679,7 @@ void TestPhysicsWorldSyncTracksVoxelEdits(TestContext &context)
 	EXPECT_TRUE(context, hit.hasHit);
 	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), hit.voxel);
 
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air, nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
 
 	hit = RaycastPhysicsWorld(
@@ -2762,8 +2762,8 @@ void TestUpdateAppDoubleSpaceTogglesCreativeAndWalk(TestContext &context)
 void TestWalkCharacterCollidesWithVoxelWall(TestContext &context)
 {
 	VoxelWorld world = MakeWalkTestWorld();
-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Glass, nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
@@ -4245,7 +4245,7 @@ void TestWalkCharacterMidairSneakDoesNotAcquireTwoBlockWallTop(TestContext &cont
 void TestWalkCharacterFallsAfterEditedSupportIsRemoved(TestContext &context)
 {
 	VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
-	SetVoxelMaterial(world, {8, 1, 8}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {8, 1, 8}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
@@ -4260,10 +4260,10 @@ void TestWalkCharacterFallsAfterEditedSupportIsRemoved(TestContext &context)
 	EXPECT_TRUE(context, beforeEdit.valid);
 	EXPECT_TRUE(context, beforeEdit.feetPosition[1] > 3.0f);
 
-	SetVoxelMaterial(world, {8, 1, 8}, VoxelMaterial::Air);
+	SetVoxelMaterial(world, {8, 1, 8}, VoxelMaterial::Air, nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
-	SetVoxelMaterial(world, {5, 2, 6}, VoxelMaterial::Air);
-	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::Air);
+	SetVoxelMaterial(world, {5, 2, 6}, VoxelMaterial::Air, nullptr);
+	SetVoxelMaterial(world, {5, 1, 6}, VoxelMaterial::Air, nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
 
 	InputState input{};
@@ -6645,7 +6645,7 @@ void TestUpdateAppAdjustsShadowTuningControls(TestContext &context)
 void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6669,7 +6669,7 @@ void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
 void TestUpdateVoxelInteractionPlacesConfiguredBlock(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6698,7 +6698,7 @@ void TestUpdateVoxelInteractionRejectsPlacementInsidePhysicsCharacter(TestContex
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
 	ResetDirtyFlags(world);
@@ -6735,7 +6735,7 @@ void TestUpdateVoxelInteractionRejectsPlacementInsidePhysicsCharacter(TestContex
 void TestUpdateVoxelInteractionSkipsEditingWhenDisabled(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6759,7 +6759,7 @@ void TestUpdateVoxelInteractionSkipsEditingWhenDisabled(TestContext &context)
 void TestUpdateVoxelInteractionPaintModePaintsTargetedBlock(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6787,7 +6787,7 @@ void TestUpdateVoxelInteractionPaintModePaintsTargetedBlock(TestContext &context
 void TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6811,9 +6811,9 @@ void TestUpdateVoxelInteractionEraseModeRemovesTargetedBlock(TestContext &contex
 void TestUpdateVoxelInteractionFillModeFloodFillsConnectedRegion(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {4, 1, 1}, VoxelMaterial::Fluid);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {4, 1, 1}, VoxelMaterial::Fluid, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6841,7 +6841,7 @@ void TestUpdateVoxelInteractionFillModeFloodFillsConnectedRegion(TestContext &co
 void TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 	MarkVoxelChunkDirty(world, {1, 1, 1});
 
@@ -6887,7 +6887,7 @@ void TestUpdateVoxelInteractionInspectModeKeepsWorldAndCapturesChunkInfo(TestCon
 void TestUpdateVoxelInteractionPickTargetMaterialCopiesSelectedVoxelMaterial(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InputState input{};
@@ -6915,8 +6915,8 @@ void TestUpdateVoxelInteractionPickTargetMaterialCopiesSelectedVoxelMaterial(Tes
 void TestUpdateVoxelInteractionPaintModeAnchoredPlacementFillsVoxelBox(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {3, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {3, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InteractionState interaction{};
@@ -6960,9 +6960,9 @@ void TestUpdateVoxelInteractionPaintModeAnchoredPlacementFillsVoxelBox(TestConte
 void TestUpdateVoxelInteractionEraseModeAnchoredRemovalClearsVoxelBox(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(world, {3, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {3, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 
 	InteractionState interaction{};
@@ -7004,7 +7004,7 @@ void TestUpdateVoxelInteractionEraseModeAnchoredRemovalClearsVoxelBox(TestContex
 void TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 	MarkVoxelChunkDirty(world, {1, 1, 1});
 
@@ -7053,7 +7053,7 @@ void TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(TestContext &con
 void TestBuildDebugOverlayBoxesHidesDetailedSelectionOverlaysInBasicHud(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
 	ResetDirtyFlags(world);
 	MarkVoxelChunkDirty(world, {1, 1, 1});
 
@@ -7338,7 +7338,7 @@ void TestVoxelChunkStaticPromotion(TestContext &context)
 	}
 	EXPECT_EQ(context, totalChunks, CountStaticVoxelChunks(world));
 
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
 	const uint32_t staticAfterEdit = CountStaticVoxelChunks(world);
 	EXPECT_TRUE(context, staticAfterEdit < totalChunks);
 }
@@ -7353,6 +7353,79 @@ void TestVoxelChunkStaticPromotionThresholdFromEnv(TestContext &context)
 		TickVoxelChunkStaticPromotion(world, defaultThreshold);
 	}
 	EXPECT_EQ(context, static_cast<uint32_t>(world.chunks.size()), CountStaticVoxelChunks(world));
+}
+
+void TestIncrementalJoltPerChunkBodyMap(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	auto physics = std::unique_ptr<PhysicsState, decltype(&DestroyPhysicsState)>(
+		CreatePhysicsState(), &DestroyPhysicsState);
+
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::FloorWhite, nullptr);
+	QueueChunkRebuildRequest(physics.get(), 0);
+	EXPECT_EQ(context, 1u, GetPendingChunkRebuildCount(physics.get()));
+	const uint32_t rebuilt = ProcessChunkRebuildQueue(physics.get(), &world);
+	EXPECT_EQ(context, 1u, rebuilt);
+	EXPECT_EQ(context, 0u, GetPendingChunkRebuildCount(physics.get()));
+	EXPECT_EQ(context, 1u, GetChunkBodyCount(physics.get()));
+
+	QueueChunkRebuildRequest(physics.get(), 0);
+	QueueChunkRebuildRequest(physics.get(), 0);
+	EXPECT_EQ(context, 2u, GetPendingChunkRebuildCount(physics.get()));
+	const uint32_t rebuiltDedup = ProcessChunkRebuildQueue(physics.get(), &world);
+	EXPECT_EQ(context, 1u, rebuiltDedup);
+	EXPECT_EQ(context, 1u, GetChunkBodyCount(physics.get()));
+
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air, nullptr);
+	QueueChunkRebuildRequest(physics.get(), 0);
+	ProcessChunkRebuildQueue(physics.get(), &world);
+	EXPECT_EQ(context, 0u, GetChunkBodyCount(physics.get()));
+}
+
+void TestLodLevelSelectionAndAssignment(TestContext &context)
+{
+	EXPECT_EQ(context, static_cast<uint8_t>(0), SelectLodLevelForDistance(0.0f));
+	EXPECT_EQ(context, static_cast<uint8_t>(0), SelectLodLevelForDistance(31.9f));
+	EXPECT_EQ(context, static_cast<uint8_t>(1), SelectLodLevelForDistance(32.0f));
+	EXPECT_EQ(context, static_cast<uint8_t>(1), SelectLodLevelForDistance(63.9f));
+	EXPECT_EQ(context, static_cast<uint8_t>(2), SelectLodLevelForDistance(64.0f));
+	EXPECT_EQ(context, static_cast<uint8_t>(2), SelectLodLevelForDistance(127.9f));
+	EXPECT_EQ(context, static_cast<uint8_t>(3), SelectLodLevelForDistance(128.0f));
+	EXPECT_EQ(context, static_cast<uint8_t>(3), SelectLodLevelForDistance(500.0f));
+
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {16, 8, 16}, 8);
+	const uint32_t totalChunks = static_cast<uint32_t>(world.chunks.size());
+	AssignLodLevels(world, 4.0f, 4.0f, 4.0f);
+	const uint32_t nearCount = CountChunksAtLod(world, 0);
+	EXPECT_TRUE(context, nearCount >= 1u);
+	EXPECT_TRUE(context, nearCount <= totalChunks);
+
+	const uint32_t totalAssigned = CountChunksAtLod(world, 0) + CountChunksAtLod(world, 1) + CountChunksAtLod(world, 2) + CountChunksAtLod(world, 3);
+	EXPECT_EQ(context, totalChunks, totalAssigned);
+}
+
+void TestFluidCaGpuEnvToggleDefaultsOff(TestContext &context)
+{
+	ToggleFluidCaGpuEnabledForTesting(false);
+	EXPECT_TRUE(context, !IsFluidCaGpuEnabled());
+	ToggleFluidCaGpuEnabledForTesting(true);
+	EXPECT_TRUE(context, IsFluidCaGpuEnabled());
+	ToggleFluidCaGpuEnabledForTesting(false);
+}
+
+void TestBuildActiveChunkIdsForFluidCa(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	EXPECT_TRUE(context, BuildActiveChunkIdsForFluidCa(world).empty());
+
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::Fluid, nullptr);
+	const auto one = BuildActiveChunkIdsForFluidCa(world);
+	EXPECT_EQ(context, static_cast<size_t>(1), one.size());
+	EXPECT_EQ(context, static_cast<uint32_t>(0), one[0]);
+
+	SetVoxelMaterial(world, {5, 5, 5}, VoxelMaterial::FloorWhite, nullptr);
+	const auto two = BuildActiveChunkIdsForFluidCa(world);
+	EXPECT_EQ(context, static_cast<size_t>(2), two.size());
 }
 
 } // namespace
@@ -7379,6 +7452,10 @@ int main() // NOLINT(*-exception-escape)
 	TestVoxelFaceAmbientVisibilityTreatsGlassAsNonOccluder(context);
 	TestVoxelChunkStaticPromotion(context);
 	TestVoxelChunkStaticPromotionThresholdFromEnv(context);
+	TestIncrementalJoltPerChunkBodyMap(context);
+	TestLodLevelSelectionAndAssignment(context);
+	TestFluidCaGpuEnvToggleDefaultsOff(context);
+	TestBuildActiveChunkIdsForFluidCa(context);
 	TestVoxelWorldSnapshotRoundTripsWorldState(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);

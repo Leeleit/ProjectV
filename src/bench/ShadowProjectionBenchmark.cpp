@@ -25,11 +25,7 @@ VoxelWorld BuildBenchmarkWorld()
 	world.chunkCountX = (world.width + world.chunkSize - 1) / world.chunkSize;
 	world.chunkCountY = (world.height + world.chunkSize - 1) / world.chunkSize;
 	world.chunkCountZ = (world.depth + world.chunkSize - 1) / world.chunkSize;
-	world.voxels.resize(
-		static_cast<size_t>(world.width) *
-			static_cast<size_t>(world.height) *
-			static_cast<size_t>(world.depth),
-		static_cast<uint8_t>(VoxelMaterial::Air));
+	world.sparseStorage.Reset(world.width, world.height, world.depth);
 	world.chunks.resize(
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
@@ -37,13 +33,7 @@ VoxelWorld BuildBenchmarkWorld()
 
 	for (int x = 0; x < world.width; ++x) {
 		for (int z = 0; z < world.depth; ++z) {
-			const size_t index =
-				static_cast<size_t>(z) *
-					static_cast<size_t>(world.width) *
-					static_cast<size_t>(world.height) +
-				static_cast<size_t>(x) *
-					static_cast<size_t>(world.height);
-			world.voxels[index] = static_cast<uint8_t>(VoxelMaterial::FloorWhite);
+			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
 		}
 	}
 
