@@ -17,6 +17,25 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ## 2026-06-20
 
+### Removed
+
+- **Dead ray-march compute pass** (defense stub, never integrated). Removed
+  `src/render/RayMarchPass.hpp` (15 lines), `src/render/RayMarchPass.cpp` (50
+  lines), `src/shaders/ray_march.comp` (129 lines), 2 lines in
+  `src/CMakeLists.txt` (shader + source registration), 4 lines in
+  `src/app/main.cpp` (`#include "render/RayMarchPass.hpp"`,
+  `RequestRayMarchPipelineRecreate()` call in `HotReloadShaders`, and the
+  `SDLK_2` toggle branch). Per pet-project directive 2026-06-20: the path
+  was created for diploma defense 2026-06-13 (ТЗ п. 4.1.2), remained a STUB
+  with `SetRayMarchEnabled` containing a no-op `if (isEnabled) return;` guard,
+  the compute shader was compiled but never dispatched in
+  `Renderer::RecordGraphicsCommands`, and the `SDLK_2` hotkey only flipped
+  a flag with no visual effect. The real renderer is the voxel mesh path
+  (`voxel_mesh.comp` + `voxel.frag`/`voxel_shadow.*` + TAA + CSM). Future SVO
+  rendering per `legacy/docs/architecture/practice/00_svo-architecture.md`
+  re-implements DDA from scratch (the removed shader used a flat 3D-grid
+  payload, not an SVO). Net −185 lines.
+
 ### Changed
 
 - `src/voxel/VoxelWorld.cpp:176` — Tier 0.D hardening.** `[[unlikely]]` on the

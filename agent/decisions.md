@@ -1039,3 +1039,57 @@ Cross-refs: `src/render/vulkan/VulkanSwapchain.hpp:180-220` (preserve-`g_active`
 - TODO.md Tier 2.A/B/D/E/G marked done; 2.C marked blocked with rationale
 
 Cross-refs: TODO.md Tier 2, agent/memory.md §11.1 A3 (modules infrastructure), legacy/docs/philosophy/01_foundation/06_compile-time-philosophy.md (2-5× speedup target met на incremental).
+
+---
+
+## §31 — Ray-march path removed (defense stub, pet-project cleanup) (added 2026-06-20)
+
+**Дата:** `2026-06-20`
+**Автор:** MiniMax-M3 (operator-approved Option A)
+**Сессия:** `session-2026-06-20T-raymarch-stub-removal-r0`
+
+### Контекст
+Ray-march compute pass был добавлен 2026-06-13 для защиты дипломной работы (ТЗ п. 4.1.2 «GPU ray-marching через compute-шейдеры»). Реализация:
+- `src/shaders/ray_march.comp` — Amanatides-Woo 3D DDA через `PackedVoxelPayload` storage buffer
+- `src/render/RayMarchPass.{hpp,cpp}` — 4-функциональный API (`SetRayMarchEnabled` / `IsRayMarchEnabled` / `RequestRayMarchPipelineRecreate` / `IsRayMarchPipelineRecreatePending`)
+- `SDLK_2` hotkey в `main.cpp` — toggle флага с выводом в stderr
+- Вызов `RequestRayMarchPipelineRecreate()` из `HotReloadShaders` после пересборки шейдеров
+
+В defense docs (`legacy/docs/archive/DefenseOldFormat_2026-06-17/`) явно помечен как **STUB / Phase 7 follow-up** — graphics command stream НЕ вызывал compute pass. После защиты 2026-06-15 stub остался в коде.
+
+### Решение
+**Полное удаление** (Option A, рекомендованный). Удалено:
+- `src/render/RayMarchPass.hpp` (15 lines)
+- `src/render/RayMarchPass.cpp` (50 lines)
+- `src/shaders/ray_march.comp` (129 lines)
+- 2 строки регистрации в `src/CMakeLists.txt` (L43 shader, L118 source)
+- 4 строки в `src/app/main.cpp` (L24 include, L75 recreate call, L445-451 hotkey branch)
+
+**Net:** −185 lines, build green, ctest 16/16 baseline preserved (0.82s).
+
+### Обоснование
+
+1. **Runtime cost = zero, dead code**. Shader компилировался в `.spv`, но никогда не диспатчился в `Renderer::RecordGraphicsCommands` (используется `voxel_mesh.comp` + graphics pipeline). `RayMarchPass.cpp` — pure state holder, ни одной Vulkan-команды.
+2. **Bug в toggle**: `SetRayMarchEnabled` в `RayMarchPass.cpp:23-25` содержит `if (isEnabled) return;` → после первого включения нельзя ни выключить, ни пересоздать. Hotkey `SDLK_2` в `main.cpp:445-451` только менял флаг и печатал в stderr — никакого визуального эффекта. `RequestRayMarchPipelineRecreate()` (вызывался из hot-reload) указывал на несуществующий pipeline.
+3. **Defense обязательства выполнены** (защита 2026-06-15 пройдена). Archived docs в `legacy/docs/archive/DefenseOldFormat_2026-06-17/` сохраняют историческое описание ray-march path для reference; новые defense docs (после миграции в `docs/`) этот path не упоминают.
+4. **Pet-project priority**: per operator «сейчас работаем над проектом как над пет-проектом, надо решить удалять ли» — pet-project mode ценит чистую кодовую базу выше defense coverage. Защита уже позади.
+
+### Альтернативы (рассмотрены и отклонены)
+
+- **B (удалить API, оставить shader как reference)**: не даёт ощутимого выигрыша — DDA можно переписать за 1-2 часа из SVO docs, сохранённый в `src/` shader всё равно будет dead code, ухудшающий grep-noise.
+- **C (оставить как есть)**: +200 строк dead code + 1 broken toggle + 0 production use. Worst trade-off.
+- **D (довести до рабочего состояния)**: ~300-500 строк реальной работы (offscreen target, descriptor pool, compute pipeline, dispatch, composite), результат медленнее voxel mesh path (плотный 3D grid DDA per-pixel per-frame = O(n) per chunk per ray). Pet-project этого не оправдывает.
+
+### Когда возвращать (future trigger conditions)
+
+Если/когда в `TODO.md` появится задача с SVO rendering, refraction, или volumetric effects, **DDA переписывается с нуля** на основе:
+- `legacy/docs/architecture/practice/00_svo-architecture.md:374-405, 755, 767, 1004-1005` — SVO DDA pattern (octree traversal, отличается от плоского grid)
+- `legacy/docs/architecture/adr/0002-svo-storage.md:519-570` — SVO payload layout (`RayMarchParams` struct уже спроектирован)
+- `legacy/docs/architecture/academic/01_project_defense_model.md:250-294, 401` — reference Slang-модуль `ProjectV.Render.Voxel.RayMarch`
+
+Сохранённый shader `ray_march.comp` использовал **плоский 3D-grid `PackedVoxelPayload`**, а не SVO — переиспользование ограничено ~30% кода (только loop body), проще переписать.
+
+### Cross-refs
+- `CHANGELOG.md` (2026-06-20, **Removed** секция)
+- `agent/active-sessions.md` (`session-2026-06-20T-raymarch-stub-removal-r0`)
+- `legacy/docs/archive/DefenseOldFormat_2026-06-17/DefenseAlgorithms.md §11` (историческое описание)

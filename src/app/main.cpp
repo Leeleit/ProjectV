@@ -21,7 +21,6 @@ import projectv.string_id;
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
-#include "render/RayMarchPass.hpp"
 #include "render/Renderer.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanInit.hpp"
@@ -72,11 +71,10 @@ int RebuildAllShadersFromDisk()
 		++reloadedCount;
 	}
 
-	projectv::render::RequestRayMarchPipelineRecreate();
-
 	std::fprintf(
 		stderr,
-		"[ProjectV][App] HotReloadShaders: re-built shaders, requested ray-march pipeline recreate\n");
+		"[ProjectV][App] HotReloadShaders: re-built shaders (%d)\n",
+		reloadedCount);
 	return reloadedCount;
 }
 
@@ -442,13 +440,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
 		if (event->key.key == SDLK_1) {
 			RebuildAllShadersFromDisk();
-		} else if (event->key.key == SDLK_2) {
-			const bool newState = !projectv::render::IsRayMarchEnabled();
-			projectv::render::SetRayMarchEnabled(newState);
-			std::fprintf(
-				stderr,
-				"[ProjectV][App] ToggleRayMarch: %s\n",
-				newState ? "ray-march pass ENABLED" : "ray-march pass DISABLED");
 		} else if (event->key.key == SDLK_3) {
 			const VkPresentModeKHR newMode =
 				CyclePreferredPresentMode();

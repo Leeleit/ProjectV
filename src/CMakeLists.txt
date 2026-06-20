@@ -40,7 +40,6 @@ set(SHADERS
         ${SHADER_DIR}/debug_hud.frag
         ${SHADER_DIR}/model.vert
         ${SHADER_DIR}/model.frag
-        ${SHADER_DIR}/ray_march.comp
 )
 
 foreach (SHADER ${SHADERS})
@@ -115,7 +114,6 @@ target_sources(ProjectV PRIVATE
         debug/DebugOverlays.cpp
         platform/PlatformEvents.cpp
         render/Renderer.cpp
-        render/RayMarchPass.cpp
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
         render/ShadowProjection.cpp

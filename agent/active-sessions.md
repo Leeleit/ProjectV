@@ -65,6 +65,26 @@ Append-only ledger активных и недавно завершённых AI-
 
 <!-- Новые записи добавлять СВЕРХУ этой секции. Append-only.
 
+### session-2026-06-20T-raymarch-stub-removal-r0
+
+- **id:** `2026-06-20T-raymarch-stub-removal-r0`
+- **started-at:** 2026-06-20T09:54:00Z
+- **agent:** MiniMax-M3
+- **operator:** le1t
+- **branch:** master
+- **scope:** **Pet-project cleanup: remove dead ray-march stub** (per operator directive 2026-06-20 «raymarching неэффективен, надо решить удалять ли» → confirmed Option A full delete). The ray-march path was created 2026-06-13 for defense (ТЗ п. 4.1.2) as STUB, never integrated into graphics command stream: shader compiles to `.spv` but is never dispatched, `RayMarchPass.cpp` is pure state holder with broken `SetRayMarchEnabled` toggle (`if (isEnabled) return;` блокирует OFF-ветку), `SDLK_2` hotkey only changes a flag with no visual effect, `RequestRayMarchPipelineRecreate()` (called from shader hot-reload) targets a non-existent pipeline. Voxel mesh path (`voxel_mesh.comp` + `voxel.frag`/`voxel_shadow.*` + TAA + CSM) is the real renderer. **Option A per analysis:** delete `src/render/RayMarchPass.{hpp,cpp}` + `src/shaders/ray_march.comp` + 2 lines in `src/CMakeLists.txt` + 4 lines in `src/app/main.cpp` (include, hotkey, recreate call). Future SVO can reimplement DDA from scratch per `legacy/docs/architecture/practice/00_svo-architecture.md` (current shader uses flat 3D-grid payload, not SVO).
+- **files-touched-intent:**
+  - **DELETE:** `src/render/RayMarchPass.hpp` (15 lines)
+  - **DELETE:** `src/render/RayMarchPass.cpp` (50 lines)
+  - **DELETE:** `src/shaders/ray_march.comp` (129 lines)
+  - **EDIT:** `src/CMakeLists.txt` — remove `ray_march.comp` from SHADERS list (L43) + remove `RayMarchPass.cpp` from target_sources (L118)
+  - **EDIT:** `src/app/main.cpp` — remove `#include "render/RayMarchPass.hpp"` (L24), remove `RequestRayMarchPipelineRecreate()` call in `HotReloadShaders` (L75), remove `SDLK_2` hotkey branch (L445-451) + adjust comment
+  - **EDIT:** `CHANGELOG.md` — `### Changed` entry: «Removed dead ray-march compute pass (defense stub, never integrated): `ray_march.comp`, `RayMarchPass.{hpp,cpp}`, hotkey `SDLK_2` toggle, `RequestRayMarchPipelineRecreate()` from shader hot-reload»
+  - **EDIT:** `agent/decisions.md` — append §31 «Ray-march path removal: defense stub with no production use, removed per pet-project directive 2026-06-20; future SVO reimplements DDA from scratch»
+  - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись), `agent/status.md` (post-commit milestone)
+  - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `TODO.md`, `AGENTS.md`, `agent/session-checklist.md`, `agent/memory.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, корневой `CMakeLists.txt`, `tests/**`, `tools/**`, `build/**`, `src/c_kernels/**`, `src/bench/**`, все production src файлы кроме 4 заявленных, чужие uncommitted, `legacy/docs/archive/Defense*` (archived, не чистим, иначе потеряем историю защиты)
+- **status:** open
+
 ### session-2026-06-20T-tier2-mainline-modules-r0
 
 - **id:** `2026-06-20T-tier2-mainline-modules-r0`
