@@ -77,32 +77,22 @@ Append-only ledger активных и недавно завершённых AI-
   - **REWRITE:** `TODO.md` (203 lines Tier 0..5 r0 → ~340 lines 6-Stage dependency-aware roadmap v1, second pass after dependency-mismatch analysis)
   - **NEW:** `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md` (verbatim copy of old TODO with `SUPERSEDED 2026-06-20` header)
   - **EDIT:** `agent/status.md §1 Active sub-plan` (OUTDATED marker on «Tier 0..5 (Hardcore perf r0)» line, replace with «Roadmap v1 per `TODO.md`»)
-  - **EDIT:** `agent/decisions.md §29` header (OUTDATED marker + reference to TODO v1)
+  - **EDIT:** `agent/decisions.md §29` header (OUTDATED marker + reference to TODO v1, dependency-aware cross-refs renumbered)
   - **EDIT:** `agent/decisions.md §30` header (OUTDATED marker + reference to §30.4 reversal)
   - **NEW SECTION:** `agent/decisions.md §30.4` (GPU Fluid CA contract: ping-pong compute + atomicOr + active chunk list + multi-tile determinism)
   - **EDIT:** `CHANGELOG.md` (new `### Changed` entry 2026-06-20: TODO.md rewrite + archive + decisions.md §30.4)
   - **APPEND-ONLY:** `agent/active-sessions.md` (эта запись, close-routine после commit)
   - **APPEND-ONLY:** `agent/status.md` (post-commit milestone one-liner)
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** никакого production кода (`src/`, `tests/`, `external/`, `legacy/` кроме нового archive файла, `docs/`, `build/`, `tools/`, `CMakePresets.json`, корневой `CMakeLists.txt`, `src/CMakeLists.txt`, шейдеры), operator's dirty tree, чужие uncommitted.
-- **status:** open
-- **notes:**
-  - **Pre-flight findings:** HEAD `303e1bb` (raymarch removal close-routine), +37 над origin/master, working tree clean (только `repomix-output.xml` untracked, не в scope). Safety-net patch `/tmp/before_todo_rewrite_v1_20260620T102935Z.patch` saved (0 bytes — clean tree).
-  - **Plan approval:** все 9 operator clarifying questions answered (Q1 numbering, Q2 archival, Q3 Fluid CA, Q4 R&D promotion, Q5 VSync, Q6 structure, Q7 §30 handling, Q8 commit granularity, Q9 housekeeping). План финализирован.
-  - **Sub-tasks:**
-    - [x] Pre-flight safety net (0 bytes — clean)
-    - [x] Write new flat `TODO.md` (28 lines)
-    - [x] Write archive copy `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md`
-    - [x] Edit `agent/status.md §1 Active sub-plan` (OUTDATED marker → «Roadmap v1 per `TODO.md`»)
-    - [x] Edit `agent/decisions.md §29, §30` (OUTDATED markers)
-    - [x] Add `agent/decisions.md §30.4` (GPU Fluid CA contract)
-    - [x] Edit `CHANGELOG.md` (Changed entry — TODO rewrite + archive + decisions + status)
-    - [x] Register session in `agent/active-sessions.md` (эта запись)
-    - [ ] `git add` (точечно: 4 modified + 1 new)
-    - [ ] `git diff --stat` (показать оператору)
-    - [ ] Ask «Commit?» → ждать «yes» → `git commit` per `AGENTS.md §6.9`
-    - [ ] Close-routine: post-commit milestone в `agent/status.md` + move active-sessions записи в «Закрытые»
-  - **Honest scope:** только doc-файлы (TODO, agent/status, agent/decisions, CHANGELOG, new archive). 0 production code touched. Build green не нужен (docs-only per `AGENTS.md §7.3.1`).
-  - **Commit policy per `AGENTS.md §6.9`:** перед `git commit` пишу «Commit?» → жду «yes» → коммичу. type=docs → docs-only, auto-eligible per §7.3.1, но всё равно confirm per mega-atomic + safety-net.
+- **status:** closed
+- **closed-at:** 2026-06-20T11:35:00Z
+- **commit-hash:** `6709ca9` — `docs(todo): rewrite as dependency-aware 6-Stage GPU-driven roadmap v1` (6 files changed, 620 insertions / 152 deletions, 1 new file)
+- **post-commit notes:**
+  - **Stuck loop limit per `AGENTS.md §6.7`:** 0 compile iterations (docs-only, no code touched). Well within 3-4 limit.
+  - **Scope discipline clean:** `git diff --stat` shows only my 6 files (5 modified + 1 new). 0 production code, 0 untracked changes included, 0 third-party uncommitted touched.
+  - **Safety-net cleanup:** `/tmp/before_todo_rewrite_v1_20260620T102935Z.patch` was 0 bytes (clean tree before work). No destructive operations on dirty tree → per `AGENTS.md §7` safe to delete.
+  - **Close-routine per `AGENTS.md §8.1`:** (1) `git rev-parse HEAD` → `6709ca9`. (2) `agent/active-sessions.md` запись обновлена: `status: open → closed`, `closed-at` + `commit-hash` проставлены, `notes` раздел переименован в `post-commit notes` (per §8.1 п.3). (3) `agent/status.md` post-commit milestone one-liner (next line below). (4) Safety-net patch удаляется при close-routine success per §7. (5) Запись в `agent/active-sessions.md` остаётся в блоке «Активные сессии» со статусом `closed` (transfer в «Закрытые» — отдельный retro-action per `agent/status.md §87`).
+  - **Cross-refs:** `TODO.md` v1, `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md`, `agent/decisions.md §30.4`, `agent/decisions.md §29` (OUTDATED), `agent/decisions.md §30` (OUTDATED), `CHANGELOG.md` 2026-06-20 §Changed.
   - **Cross-refs:** новая `decisions.md §30.4`, OUTDATED markers на `§29` + `§30`, `agent/status.md §1`, `legacy/docs/archive/agent-todos/2026-06-tier-0-5-r0.md`.
 
 ### session-2026-06-20T-raymarch-stub-removal-r0
