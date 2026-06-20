@@ -91,8 +91,19 @@ Append-only ledger активных и недавно завершённых AI-
   - **EDIT:** `agent/status.md` — post-commit milestone one-liner
   - **EDIT:** `agent/active-sessions.md` (эта запись) — session registration
   - **НЕ ТРОГАЮ (per `AGENTS.md §6.5` scope discipline):** `AGENTS.md`, `agent/session-checklist.md`, `agent/memory.md`, `external/**`, `legacy/**`, `docs/**`, `CMakePresets.json`, `src/c_kernels/**`, `src/shaders/**`, `tools/**`, `build/**`, все чужие uncommitted
-- **status:** open
-- **post-commit pending:** atomic commit + close-routine
+- **status:** closed
+- **closed-at:** 2026-06-20T03:45:00Z
+- **commit-hash:** `44362d1` — `build(cmake): enable C++20 modules + mainline projectv.* migration (Tier 2)` (mega-atomic commit, 35 files changed + 2 new modules)
+- **post-commit notes:**
+  - Block 1.1+1.2+1.3 (`import std;` в mainline) отменён после 2 попыток — блокирован libc++ 22 std.cppm concept redefinition conflict с fmt's transitive includes. Probe-only в tests/StdModuleProbe.cpp. Decision в §30.
+  - Block 2 (tests migration): 5 tests мигрированы ✅
+  - Block 3.1 (benchmark): incremental `Math.hpp` touch = 0.10s vs baseline 18.93s = **190× speedup** ✅
+  - Block 3.2 (TODO.md): Tier 2.A/B/D/E/G marked done, 2.C marked blocked ✅
+  - Block 3.3 (decisions.md §30): 5 sub-decisions зафиксированы (Math+StringId split, `import std;` blocked, fallback headers preserved, build time, Ninja bug) ✅
+  - Mega-atomic commit per operator directive
+  - ctest: 16/16 passed (0.77s, baseline parity)
+  - Stuck loop: 2 compile-fail iterations в Block 1.x (`import std;` transitive conflict) → cancelled + reverted после 2 попыток per §6.7
+  - 1 ninja-assertion issue (parallel dep-scan + C++ modules race) → workaround sequential `-j 1` first build
 - **Cross-refs:** TODO.md Tier 2, agent/memory.md §11.1 A3, agent/decisions.md §30
 
 ### session-2026-06-20T-tier510-hot-invariant-tests-r0
