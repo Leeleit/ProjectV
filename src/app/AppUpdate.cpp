@@ -619,11 +619,13 @@ bool UpdateApp(
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaBlend)) {
+		// EVIL: 0.05 step is empirically tuned for TAA blend ladder, do not retune casually
 		render->taaBlend = std::clamp(render->taaBlend - 0.05f, 0.0f, 1.0f);
 		render->taaHistoryValid = false;
 		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaBlend)) {
+		// EVIL: 0.05 step is empirically tuned for TAA blend ladder, do not retune casually
 		render->taaBlend = std::clamp(render->taaBlend + 0.05f, 0.0f, 1.0f);
 		render->taaHistoryValid = false;
 		render->taaLayerHistoryValid = false;
@@ -761,11 +763,13 @@ bool UpdateApp(
 	const bool frameStepRequestedNow = simulation->frameStepRequested;
 	simulation->frameStepRequested = false;
 	const bool effectivePaused = simulation->paused && !frameStepRequestedNow;
+	simulation->effectivePaused = effectivePaused;
 	const bool cameraCanUpdate = spectatorMode || !effectivePaused;
 	const bool allowWorldEditing =
 		(creativeMode || walkMode) &&
 		!world->scenePresetReloadRequested &&
 		!world->snapshotLoadRequested;
+	world->allowWorldEditing = allowWorldEditing;
 
 	simulation->frameDeltaSeconds *= simulation->timeScale;
 
@@ -784,18 +788,6 @@ bool UpdateApp(
 		simulation->simulationAccumulatorSeconds += simulation->frameDeltaSeconds;
 	} else {
 		simulation->simulationAccumulatorSeconds = 0.0f;
-	}
-
-	if (!effectivePaused && world->voxelWorld && simulation->fluidTickRateHz > 0.0f) {
-		simulation->fluidAccumulatorSeconds += simulation->frameDeltaSeconds;
-		const float fluidInterval = 1.0f / simulation->fluidTickRateHz;
-		while (simulation->fluidAccumulatorSeconds >= fluidInterval) {
-			simulation->fluidAccumulatorSeconds -= fluidInterval;
-			UpdateFluidCA(*world->voxelWorld);
-		}
-	} else if (effectivePaused) {
-
-		simulation->fluidAccumulatorSeconds = 0.0f;
 	}
 
 	if (cameraCanUpdate) {
@@ -863,7 +855,6 @@ bool UpdateApp(
 
 	const uint64_t worldEditVersionBeforeInteraction =
 		world->voxelWorld ? world->voxelWorld->editVersion : 0;
-	UpdateVoxelInteraction(*camera, input, world->voxelWorld.get(), interaction, allowWorldEditing, physics);
 	if (physics &&
 		world->voxelWorld &&
 		world->voxelWorld->editVersion != worldEditVersionBeforeInteraction &&

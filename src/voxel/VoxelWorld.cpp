@@ -6,6 +6,7 @@ import projectv.string_id;
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
+#include "fmt/format.h"
 
 #include <algorithm>
 #include <array>
@@ -19,7 +20,7 @@ namespace {
 constexpr VoxelScenePreset kDefaultVoxelScenePreset = VoxelScenePreset::VoxelLab;
 constexpr char kDefaultVoxelWorldSnapshotFilename[] = "ProjectV.snapshot.bin";
 constexpr std::array kVoxelWorldSnapshotMagic{'P', 'V', 'S', 'N', 'A', 'P', '0', '1'};
-constexpr uint32_t kVoxelWorldSnapshotVersion = 1u;
+constexpr uint32_t kVoxelWorldSnapshotVersion = 2u;
 
 struct VoxelLabShellConfig {
 	int radius = 6;
@@ -84,6 +85,35 @@ bool IsAirMaterial(const VoxelMaterial material)
 bool IsValidVoxelMaterialValue(const uint8_t materialValue)
 {
 	return materialValue <= static_cast<uint8_t>(VoxelMaterial::FloorGray);
+}
+
+bool IsSparse64StorageEnabled()
+{
+	static const bool kEnabled = [] {
+		const char *value = std::getenv("PROJECTV_SPARSE_64_STORAGE");
+		if (value == nullptr) {
+			return false;
+		}
+		const std::string v(value);
+		return v == "on" || v == "1" || v == "true";
+	}();
+	return kEnabled;
+}
+
+void WriteVoxelToSparseStorage(VoxelWorld &world, const Int3 position, const uint8_t material)
+{
+	const int localX = position.x - world.min.x;
+	const int localY = position.y - world.min.y;
+	const int localZ = position.z - world.min.z;
+	world.sparseStorage.SetCell(localX, localY, localZ, material);
+}
+
+uint8_t ReadVoxelFromSparseStorage(const VoxelWorld &world, const Int3 position)
+{
+	const int localX = position.x - world.min.x;
+	const int localY = position.y - world.min.y;
+	const int localZ = position.z - world.min.z;
+	return world.sparseStorage.GetCell(localX, localY, localZ);
 }
 
 bool IsValidVoxelScenePresetValue(const uint8_t presetValue)
@@ -340,7 +370,7 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
 	world->width = width;
 	world->height = height;
 	world->depth = depth;
-	world->voxels.resize(voxelCount, static_cast<uint8_t>(VoxelMaterial::Air));
+	world->sparseStorage.Reset(width, height, depth);
 
 	world->chunkCountX = chunkCountX;
 	world->chunkCountY = chunkCountY;
@@ -630,15 +660,16 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
 	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
 		for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
 			for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-				const uint8_t materialValue = world.voxels[voxelIndex++];
-				if (materialValue == static_cast<uint8_t>(VoxelMaterial::Air)) {
+				const VoxelMaterial material = GetVoxelMaterial(world, {x, y, z});
+				if (material == VoxelMaterial::Air) {
+					++voxelIndex;
 					continue;
 				}
 
-				const VoxelMaterial material = static_cast<VoxelMaterial>(materialValue);
 				AccumulateMaterialCount(world.stats, material, 1);
 				VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, {x, y, z}))];
 				++chunk.nonAirVoxelCount;
+				++voxelIndex;
 			}
 		}
 	}
@@ -767,17 +798,17 @@ bool CreateVoxelSceneWorld(AppState *state, const VoxelScenePreset preset)
 		return false;
 	}
 
-	state->world.voxelWorld = std::move(world);
-	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
-	state->world.scenePresetReloadRequested = false;
-	state->world.snapshotSaveRequested = false;
-	state->world.snapshotLoadRequested = false;
-	if (state->world.voxelWorld) {
+	state->world().voxelWorld = std::move(world);
+	state->world().requestedScenePreset = state->world().voxelWorld->scenePreset;
+	state->world().scenePresetReloadRequested = false;
+	state->world().snapshotSaveRequested = false;
+	state->world().snapshotLoadRequested = false;
+	if (state->world().voxelWorld) {
 		SDL_Log(
 			"Using voxel scene preset: %s",
-			std::string{VoxelScenePresetToString(state->world.voxelWorld->scenePreset)}.c_str());
+			std::string{VoxelScenePresetToString(state->world().voxelWorld->scenePreset)}.c_str());
 	}
-	return static_cast<bool>(state->world.voxelWorld);
+	return static_cast<bool>(state->world().voxelWorld);
 }
 
 void DestroyVoxelSceneWorld(AppState *state)
@@ -786,11 +817,11 @@ void DestroyVoxelSceneWorld(AppState *state)
 		return;
 	}
 
-	state->world.voxelWorld.reset();
-	state->world.scenePresetReloadRequested = false;
-	state->world.requestedScenePreset = kDefaultVoxelScenePreset;
-	state->world.snapshotSaveRequested = false;
-	state->world.snapshotLoadRequested = false;
+	state->world().voxelWorld.reset();
+	state->world().scenePresetReloadRequested = false;
+	state->world().requestedScenePreset = kDefaultVoxelScenePreset;
+	state->world().snapshotSaveRequested = false;
+	state->world().snapshotLoadRequested = false;
 }
 
 std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(const VoxelWorld &world, const std::string_view snapshotPath)
@@ -818,11 +849,7 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 	header.magic = kVoxelWorldSnapshotMagic;
 	header.version = kVoxelWorldSnapshotVersion;
 	ClearSnapshotReservedFields(&header);
-	if (world.voxels.size() > std::numeric_limits<uint32_t>::max()) {
-		return fail(projectv::voxel::VoxelSnapshotError::VoxelBufferTooLarge,
-					"SaveVoxelWorldSnapshot.Size", "voxel buffer exceeds snapshot format limit");
-	}
-	header.voxelByteCount = static_cast<uint32_t>(world.voxels.size());
+	header.voxelByteCount = 0;
 	header.scenePreset = static_cast<uint8_t>(world.scenePreset);
 	header.config = world.config;
 	header.min = world.min;
@@ -836,17 +863,27 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
 	}
 
 	file.write(reinterpret_cast<const char *>(&header), sizeof(header));
-	if (!world.voxels.empty()) {
-		file.write(
-			reinterpret_cast<const char *>(world.voxels.data()),
-			static_cast<std::streamsize>(world.voxels.size()));
+
+	const std::size_t numNodes = world.sparseStorage.NodeCount();
+	if (numNodes > std::numeric_limits<uint32_t>::max()) {
+		return fail(projectv::voxel::VoxelSnapshotError::VoxelBufferTooLarge,
+					"SaveVoxelWorldSnapshot.Size", "sparse node count exceeds snapshot format limit");
 	}
+	const uint32_t numNodesU32 = static_cast<uint32_t>(numNodes);
+	file.write(reinterpret_cast<const char *>(&numNodesU32), sizeof(numNodesU32));
+	const uint32_t rootSlotU32 = world.sparseStorage.RootSlot();
+	file.write(reinterpret_cast<const char *>(&rootSlotU32), sizeof(rootSlotU32));
+	for (std::size_t i = 0; i < numNodes; ++i) {
+		const projectv::voxel::Sparse64Tree::Node &node = world.sparseStorage.GetNodes()[i];
+		file.write(reinterpret_cast<const char *>(&node), sizeof(node));
+	}
+
 	if (!file.good()) {
 		return fail(projectv::voxel::VoxelSnapshotError::WriteFailed,
 					"SaveVoxelWorldSnapshot.Write", "failed to write snapshot file: " + resolvedPath.string());
 	}
 
-	SDL_Log("Saved voxel world snapshot: %s", resolvedPath.string().c_str());
+	SDL_Log("Saved voxel world snapshot: %s (sparse nodes=%zu)", resolvedPath.string().c_str(), numNodes);
 	return true;
 }
 
@@ -916,33 +953,33 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> 
 		return fail(projectv::voxel::VoxelSnapshotError::CreateWorldFailed,
 					"LoadVoxelWorldSnapshot.CreateWorld", "failed to create world layout for snapshot");
 	}
-	if (world->voxels.size() != header.voxelByteCount) {
-		return fail(projectv::voxel::VoxelSnapshotError::VoxelCountMismatch,
-					"LoadVoxelWorldSnapshot.Header", "snapshot voxel count does not match world layout");
+
+	uint32_t numNodesU32 = 0;
+	if (!file.read(reinterpret_cast<char *>(&numNodesU32), sizeof(numNodesU32))) {
+		return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
+					"LoadVoxelWorldSnapshot.ReadNodeCount", "failed to read sparse node count");
 	}
-	if (fileSize != sizeof(VoxelWorldSnapshotHeader) + header.voxelByteCount) {
-		return fail(projectv::voxel::VoxelSnapshotError::FileSizeMismatch,
-					"LoadVoxelWorldSnapshot.FileSize", "snapshot file size does not match header payload size");
+	uint32_t rootSlotU32 = 0;
+	if (!file.read(reinterpret_cast<char *>(&rootSlotU32), sizeof(rootSlotU32))) {
+		return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
+					"LoadVoxelWorldSnapshot.ReadRootSlot", "failed to read sparse root slot");
 	}
 
-	if (header.voxelByteCount > 0) {
-		file.read(
-			reinterpret_cast<char *>(world->voxels.data()),
-			header.voxelByteCount);
-		if (!file.good()) {
+	std::vector<projectv::voxel::Sparse64Tree::Node> nodes;
+	nodes.reserve(numNodesU32);
+	for (uint32_t i = 0; i < numNodesU32; ++i) {
+		projectv::voxel::Sparse64Tree::Node node{};
+		if (!file.read(reinterpret_cast<char *>(&node), sizeof(node))) {
 			return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
-						"LoadVoxelWorldSnapshot.ReadPayload", "failed to read snapshot payload: " + resolvedPath.string());
+						"LoadVoxelWorldSnapshot.ReadNode", "failed to read sparse node data");
 		}
+		nodes.push_back(node);
 	}
 
-	for (const uint8_t materialValue : world->voxels) {
-		if (!IsValidVoxelMaterialValue(materialValue)) {
-			return fail(projectv::voxel::VoxelSnapshotError::InvalidVoxelMaterial,
-						"LoadVoxelWorldSnapshot.Payload", "snapshot contains invalid voxel material id");
-		}
-	}
+	world->sparseStorage.RestoreFrom(rootSlotU32, std::move(nodes));
 
 	world->editVersion = header.editVersion;
+
 	RebuildVoxelWorldDerivedState(*world);
 	SDL_Log("Loaded voxel world snapshot: %s", resolvedPath.string().c_str());
 	return world;
@@ -960,8 +997,7 @@ VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, const Int3 position)
 	if (!IsInsideVoxelWorld(world, position)) {
 		return VoxelMaterial::Air;
 	}
-
-	return static_cast<VoxelMaterial>(world.voxels[ToVoxelIndex(world, position)]);
+	return static_cast<VoxelMaterial>(ReadVoxelFromSparseStorage(world, position));
 }
 
 Int3 GetVoxelChunkCoord(const VoxelWorld &world, const Int3 position)
@@ -1020,24 +1056,25 @@ void MarkVoxelRegionDirty(VoxelWorld &world, const Int3 min, const Int3 maxExclu
 	}
 }
 
-void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMaterial material)
+void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material)
 {
 	if (!IsInsideVoxelWorld(world, position)) {
 		return;
 	}
 
-	const size_t voxelIndex = ToVoxelIndex(world, position);
-	const VoxelMaterial previousMaterial = static_cast<VoxelMaterial>(world.voxels[voxelIndex]);
+	const VoxelMaterial previousMaterial = GetVoxelMaterial(world, position);
 	if (previousMaterial == material) {
 		return;
 	}
 
-	world.voxels[voxelIndex] = static_cast<uint8_t>(material);
+	WriteVoxelToSparseStorage(world, position, static_cast<uint8_t>(material));
 	++world.editVersion;
 	AccumulateMaterialCount(world.stats, previousMaterial, -1);
 	AccumulateMaterialCount(world.stats, material, 1);
 
 	VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, position))];
+	chunk.isStatic = false;
+	chunk.ticksSinceLastEdit = 0;
 	const bool wasActive = chunk.nonAirVoxelCount > 0;
 	if (!IsAirMaterial(previousMaterial)) {
 		--chunk.nonAirVoxelCount;
@@ -1055,6 +1092,46 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, const VoxelMateria
 	MarkChunksTouchedByVoxelEditDirty(world, position);
 }
 
+uint32_t GetVoxelChunkStaticPromotionThreshold()
+{
+	if (const char *value = std::getenv("PROJECTV_SVDAG_STATIC_PROMOTION_TICKS")) {
+		const int parsed = std::atoi(value);
+		if (parsed > 0) {
+			return static_cast<uint32_t>(parsed);
+		}
+	}
+	return 60u;
+}
+
+void TickVoxelChunkStaticPromotion(VoxelWorld &world, const uint32_t threshold)
+{
+	for (VoxelChunk &chunk : world.chunks) {
+		if (chunk.isStatic) {
+			continue;
+		}
+		if (chunk.ticksSinceLastEdit < UINT32_MAX) {
+			++chunk.ticksSinceLastEdit;
+		}
+		if (chunk.ticksSinceLastEdit >= threshold) {
+			chunk.isStatic = true;
+		}
+	}
+	if (world.sparseStorage.IsDeduplicationEnabled()) {
+		world.sparseStorage.DedupPass();
+	}
+}
+
+uint32_t CountStaticVoxelChunks(const VoxelWorld &world)
+{
+	uint32_t count = 0;
+	for (const VoxelChunk &chunk : world.chunks) {
+		if (chunk.isStatic) {
+			++count;
+		}
+	}
+	return count;
+}
+
 uint32_t FillVoxelMaterial(VoxelWorld &world, const Int3 start, const VoxelMaterial material)
 {
 	if (!IsInsideVoxelWorld(world, start)) {
@@ -1066,7 +1143,8 @@ uint32_t FillVoxelMaterial(VoxelWorld &world, const Int3 start, const VoxelMater
 		return 0;
 	}
 
-	std::vector<uint8_t> visited(world.voxels.size(), 0u);
+	const size_t totalCells = static_cast<size_t>(world.width) * world.height * world.depth;
+	std::vector<uint8_t> visited(totalCells, 0u);
 	std::vector<Int3> queue;
 	queue.reserve(256);
 
@@ -1081,7 +1159,7 @@ uint32_t FillVoxelMaterial(VoxelWorld &world, const Int3 start, const VoxelMater
 		}
 
 		visited[voxelIndex] = 1u;
-		if (static_cast<VoxelMaterial>(world.voxels[voxelIndex]) != sourceMaterial) {
+		if (GetVoxelMaterial(world, position) != sourceMaterial) {
 			return;
 		}
 
@@ -1214,8 +1292,10 @@ uint32_t CountActiveVoxelChunks(const VoxelWorld &world)
 uint32_t CountVoxelsByMaterial(const VoxelWorld &world, const VoxelMaterial material)
 {
 	switch (material) {
-	case VoxelMaterial::Air:
-		return static_cast<uint32_t>(world.voxels.size()) - world.stats.nonAirVoxelCount;
+	case VoxelMaterial::Air: {
+		const size_t totalCells = static_cast<size_t>(world.width) * world.height * world.depth;
+		return static_cast<uint32_t>(totalCells) - world.stats.nonAirVoxelCount;
+	}
 	case VoxelMaterial::Glass:
 		return world.stats.glassVoxelCount;
 	case VoxelMaterial::Fluid:
@@ -1229,10 +1309,24 @@ uint32_t CountVoxelsByMaterial(const VoxelWorld &world, const VoxelMaterial mate
 	return 0;
 }
 
+std::vector<uint8_t> BuildFlatVoxelSnapshot(const VoxelWorld &world)
+{
+	std::vector<uint8_t> flat;
+	flat.reserve(static_cast<size_t>(world.width) * world.height * world.depth);
+	for (int z = 0; z < world.depth; ++z) {
+		for (int y = 0; y < world.height; ++y) {
+			for (int x = 0; x < world.width; ++x) {
+				flat.push_back(static_cast<uint8_t>(GetVoxelMaterial(world, {world.min.x + x, world.min.y + y, world.min.z + z})));
+			}
+		}
+	}
+	return flat;
+}
+
 uint32_t UpdateFluidCA(VoxelWorld &world)
 {
 
-	if (world.stats.fluidVoxelCount == 0u || world.voxels.empty()) {
+	if (world.stats.fluidVoxelCount == 0u) {
 		return 0u;
 	}
 
@@ -1242,13 +1336,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 
 #if !defined(NDEBUG)
 	{
-		const size_t expectedVoxelCount = static_cast<size_t>(width) *
-										  static_cast<size_t>(height) * static_cast<size_t>(depth);
-		PV_ASSERT(
-			world.voxels.size() == expectedVoxelCount,
-			"VoxelWorld",
-			"UpdateFluidCA",
-			"world.voxels.size() must equal width*height*depth");
 		PV_ASSERT(
 			width > 0 && height > 0 && depth > 0,
 			"VoxelWorld",
@@ -1261,9 +1348,17 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		return static_cast<size_t>(x) + static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(z) * static_cast<size_t>(width) * static_cast<size_t>(height);
 	};
 
-	std::vector<uint8_t> next = world.voxels;
+	const size_t totalCells = static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth);
+	std::vector<uint8_t> next(totalCells, 0u);
+	for (int z = 0; z < depth; ++z) {
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				next[index(x, y, z)] = ReadVoxelFromSparseStorage(world, {world.min.x + x, world.min.y + y, world.min.z + z});
+			}
+		}
+	}
 
-	std::vector<uint8_t> claimed(world.voxels.size(), 0u);
+	std::vector<uint8_t> claimed(totalCells, 0u);
 
 	uint32_t movedCount = 0u;
 
@@ -1271,7 +1366,7 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		for (int y = 0; y < height; ++y) {
 			for (int x = 0; x < width; ++x) {
 				const size_t idx = index(x, y, z);
-				if (world.voxels[idx] != static_cast<uint8_t>(VoxelMaterial::Fluid)) {
+				if (next[idx] != static_cast<uint8_t>(VoxelMaterial::Fluid)) {
 					continue;
 				}
 
@@ -1282,7 +1377,7 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 				if (y > 0) {
 					const size_t belowIdx = index(x, y - 1, z);
 
-					if (world.voxels[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air) && next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
+					if (next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
 						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
 						next[belowIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
 
@@ -1338,30 +1433,34 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		for (int yy = 0; yy < height; ++yy) {
 			for (int xx = 0; xx < width; ++xx) {
 				const size_t idx = index(xx, yy, zz);
-				const uint8_t previous = world.voxels[idx];
 				const uint8_t current = next[idx];
-				if (previous == current) {
+				const VoxelMaterial currentMaterial = static_cast<VoxelMaterial>(current);
+				const VoxelMaterial previousMaterial = GetVoxelMaterial(world, {x + xx, y + yy, z + zz});
+				if (previousMaterial == currentMaterial) {
 					continue;
 				}
-				const auto material = static_cast<VoxelMaterial>(current);
 				SetVoxelMaterial(
 					world,
 					{x + xx, y + yy, z + zz},
-					material);
+					currentMaterial);
 			}
 		}
 	}
 
 #if !defined(NDEBUG)
 	{
-		size_t actualFluidCount = 0u;
-		for (const uint8_t voxel : world.voxels) {
-			if (voxel == static_cast<uint8_t>(VoxelMaterial::Fluid)) {
-				++actualFluidCount;
+		uint32_t actualFluidCount = 0u;
+		for (int zz = 0; zz < depth; ++zz) {
+			for (int yy = 0; yy < height; ++yy) {
+				for (int xx = 0; xx < width; ++xx) {
+					if (GetVoxelMaterial(world, {x + xx, y + yy, z + zz}) == VoxelMaterial::Fluid) {
+						++actualFluidCount;
+					}
+				}
 			}
 		}
 		PV_ASSERT(
-			static_cast<uint32_t>(actualFluidCount) == world.stats.fluidVoxelCount,
+			actualFluidCount == world.stats.fluidVoxelCount,
 			"VoxelWorld",
 			"UpdateFluidCA",
 			"stats.fluidVoxelCount diverged from actual fluid voxel count");

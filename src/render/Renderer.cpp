@@ -194,10 +194,10 @@ bool SaveRequestedScreenshot(
 	}
 
 	VkResult waitResult = vkWaitForFences(
-		context.device, 1, &inFlightFence, VK_TRUE, 10'000'000);
+		context.device, 1, &inFlightFence, VK_TRUE, kVulkanFenceWaitTimeoutNs);
 	if (waitResult == VK_TIMEOUT) {
 		waitResult = vkWaitForFences(
-			context.device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+			context.device, 1, &inFlightFence, VK_TRUE, kVulkanFenceWaitTimeoutUnboundedNs);
 	}
 	if (waitResult != VK_SUCCESS) {
 		runtime::LogVkFailure("DrawFrame.ScreenshotWaitFence", waitResult);

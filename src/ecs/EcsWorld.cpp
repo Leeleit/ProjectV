@@ -3,8 +3,16 @@ import projectv.string_id;
 
 #include "ecs/EcsWorld.hpp"
 
+#include "audio/AudioEngine.hpp"
+#include "app/BenchmarkAutomation.hpp"
+#include "app/LookDevCaptureAutomation.hpp"
 #include "core/Types.hpp"
+#include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
+
+#include <SDL3/SDL.h>
+
+#include <cmath>
 
 #include <string>
 #include <vector>
@@ -34,6 +42,30 @@ struct ChunkState {
 struct WorldChunkSummary {
 	VoxelWorldStats stats{};
 	size_t chunkEntityCount = 0;
+};
+
+struct AudioPlaylistRefreshRequest {
+	bool requested = false;
+};
+
+struct FluidCATickState {
+	float accumulatorSeconds = 0.0f;
+};
+
+struct VoxelInteractionTickState {
+	bool dummy = false;
+};
+
+struct BenchmarkTickResult {
+	bool quitAfterFrame = false;
+};
+
+struct LookDevCaptureTickResult {
+	bool quitAfterFrame = false;
+};
+
+struct AppStateBinding {
+	AppState *state = nullptr;
 };
 
 struct EcsStateImpl {
@@ -131,12 +163,18 @@ bool InitializeAppEcs(AppState *state)
 		return false;
 	}
 
-	state->ecs.reset(new EcsState{});
-	EcsStateImpl &ecs = state->ecs->impl;
+	state->ecs().reset(new EcsState{});
+	EcsStateImpl &ecs = state->ecs()->impl;
 
-	ecs.world.set<WorldBinding>({&state->world});
+	ecs.world.set<WorldBinding>({&state->world()});
 	ecs.world.set<WorldChunkSummary>({});
 	ecs.world.set<DebugState>({});
+	ecs.world.set<AudioPlaylistRefreshRequest>({});
+	ecs.world.set<FluidCATickState>({});
+	ecs.world.set<VoxelInteractionTickState>({});
+	ecs.world.set<BenchmarkTickResult>({});
+	ecs.world.set<LookDevCaptureTickResult>({});
+	ecs.world.set<AppStateBinding>({state});
 
 	const auto cameraEntity = ecs.world.entity("Camera.Primary").add<CameraTag>().set<CameraState>({});
 	ecs.primaryCameraEntity = cameraEntity.id();
@@ -145,7 +183,187 @@ bool InitializeAppEcs(AppState *state)
 								  .add<PlayerTag>()
 								  .set<PlayerControlledCamera>({ecs.primaryCameraEntity});
 	ecs.primaryPlayerEntity = playerEntity.id();
+
+	ecs.world.system<AudioPlaylistRefreshRequest>("AudioRefreshPlaylistSystem")
+		.kind(flecs::OnUpdate)
+		.each([](flecs::entity e, AudioPlaylistRefreshRequest &req) {
+			if (req.requested) {
+				if (AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>()) {
+					if (auto *audio = binding->state->audio().get()) {
+						audio->RefreshPlaylistAsync();
+					}
+				}
+				req.requested = false;
+			}
+		});
+
+	ecs.world.system<FluidCATickState>("FluidCATickSystem")
+		.kind(flecs::OnUpdate)
+		.each([](flecs::entity e, FluidCATickState &tickState) {
+			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			if (!binding || !binding->state) {
+				return;
+			}
+			SimulationState &simulation = binding->state->simulation();
+			if (simulation.effectivePaused || simulation.fluidTickRateHz <= 0.0f) {
+				tickState.accumulatorSeconds = 0.0f;
+				simulation.fluidAccumulatorSeconds = 0.0f;
+				return;
+			}
+			VoxelWorld *voxelWorld = binding->state->world().voxelWorld.get();
+			if (!voxelWorld) {
+				tickState.accumulatorSeconds = 0.0f;
+				simulation.fluidAccumulatorSeconds = 0.0f;
+				return;
+			}
+			tickState.accumulatorSeconds += simulation.frameDeltaSeconds;
+			const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+			while (tickState.accumulatorSeconds >= fluidInterval) {
+				tickState.accumulatorSeconds -= fluidInterval;
+				UpdateFluidCA(*voxelWorld);
+			}
+			simulation.fluidAccumulatorSeconds = tickState.accumulatorSeconds;
+		});
+
+	ecs.world.system<VoxelInteractionTickState>("VoxelInteractionTickSystem")
+		.kind(flecs::OnUpdate)
+		.each([](flecs::entity e, VoxelInteractionTickState &) {
+			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			if (!binding || !binding->state) {
+				return;
+			}
+			CameraState *camera = GetPrimaryCameraState(binding->state->ecs().get());
+			if (!camera) {
+				return;
+			}
+			WorldState *world = GetWorldState(binding->state->ecs().get());
+			if (!world) {
+				return;
+			}
+			const DebugState *debug = GetDebugState(binding->state->ecs().get());
+			const bool allowEditing = world->allowWorldEditing;
+			UpdateVoxelInteraction(
+				*camera,
+				&binding->state->input(),
+				world->voxelWorld.get(),
+				&binding->state->interaction(),
+				allowEditing,
+				binding->state->physics().get());
+		});
+
+	ecs.world.system<BenchmarkTickResult>("BenchmarkAutomationTickSystem")
+		.kind(flecs::OnUpdate)
+		.each([](flecs::entity e, BenchmarkTickResult &result) {
+			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			if (!binding || !binding->state) {
+				result.quitAfterFrame = false;
+				return;
+			}
+			const DebugState *debug = GetDebugState(binding->state->ecs().get());
+			const DebugStats debugStats = debug ? debug->stats : DebugStats{};
+			const Uint64 frameCounter = SDL_GetPerformanceCounter();
+			result.quitAfterFrame = UpdateBenchmarkAutomation(
+				&binding->state->benchmark(),
+				debugStats,
+				frameCounter);
+		});
+
+	ecs.world.system<LookDevCaptureTickResult>("LookDevCaptureTickSystem")
+		.kind(flecs::OnUpdate)
+		.each([](flecs::entity e, LookDevCaptureTickResult &result) {
+			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			if (!binding || !binding->state) {
+				result.quitAfterFrame = false;
+				return;
+			}
+			result.quitAfterFrame = UpdateLookDevCaptureAutomation(
+				&binding->state->lookDevCapture(),
+				&binding->state->render());
+		});
 	return true;
+}
+
+void RequestAudioPlaylistRefresh(EcsState *ecs)
+{
+	if (!ecs) {
+		return;
+	}
+	if (auto *req = ecs->impl.world.try_get_mut<AudioPlaylistRefreshRequest>()) {
+		req->requested = true;
+	}
+}
+
+void TickAudioRefreshPlaylistSystem(EcsState *ecs)
+{
+	if (!ecs) {
+		return;
+	}
+	ecs->impl.world.progress();
+}
+
+void TickFluidCASystem(EcsState *ecs)
+{
+	if (!ecs) {
+		return;
+	}
+	ecs->impl.world.progress();
+}
+
+void TickVoxelInteractionSystem(EcsState *ecs)
+{
+	if (!ecs) {
+		return;
+	}
+	ecs->impl.world.progress();
+}
+
+void TickBenchmarkAutomationSystem(EcsState *ecs)
+{
+	if (!ecs) {
+		return;
+	}
+	ecs->impl.world.progress();
+}
+
+bool IsBenchmarkAutomationQuitRequested(const EcsState *ecs)
+{
+	if (!ecs) {
+		return false;
+	}
+	if (const auto *result = ecs->impl.world.try_get<BenchmarkTickResult>()) {
+		return result->quitAfterFrame;
+	}
+	return false;
+}
+
+void TickLookDevCaptureSystem(EcsState *ecs)
+{
+	if (!ecs) {
+		return;
+	}
+	ecs->impl.world.progress();
+}
+
+bool IsLookDevCaptureQuitRequested(const EcsState *ecs)
+{
+	if (!ecs) {
+		return false;
+	}
+	if (const auto *result = ecs->impl.world.try_get<LookDevCaptureTickResult>()) {
+		return result->quitAfterFrame;
+	}
+	return false;
+}
+
+bool IsAudioPlaylistRefreshRequested(const EcsState *ecs)
+{
+	if (!ecs) {
+		return false;
+	}
+	if (const auto *req = ecs->impl.world.try_get<AudioPlaylistRefreshRequest>()) {
+		return req->requested;
+	}
+	return false;
 }
 
 CameraState *GetPrimaryCameraState(EcsState *ecs)

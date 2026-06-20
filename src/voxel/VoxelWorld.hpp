@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "voxel/Sparse64Tree.hpp"
 #include "voxel/VoxelSnapshotError.hpp"
 
 struct AppState;
@@ -45,15 +46,19 @@ struct VoxelChunk {
 	Int3 min{};
 	Int3 maxExclusive{};
 	bool rebuildQueued = true;
+	bool isStatic = false;
 	uint32_t nonAirVoxelCount = 0;
+	uint32_t ticksSinceLastEdit = 0;
 };
 static_assert(std::is_standard_layout_v<VoxelChunk>);
 static_assert(std::is_trivially_copyable_v<VoxelChunk>);
-static_assert(sizeof(VoxelChunk) == 32);
+static_assert(sizeof(VoxelChunk) == 36);
 static_assert(offsetof(VoxelChunk, min) == 0);
 static_assert(offsetof(VoxelChunk, maxExclusive) == 12);
 static_assert(offsetof(VoxelChunk, rebuildQueued) == 24);
+static_assert(offsetof(VoxelChunk, isStatic) == 25);
 static_assert(offsetof(VoxelChunk, nonAirVoxelCount) == 28);
+static_assert(offsetof(VoxelChunk, ticksSinceLastEdit) == 32);
 
 struct VoxelWorldStats {
 	uint32_t dirtyChunkCount = 0;
@@ -83,7 +88,7 @@ struct VoxelWorld {
 	int width = 0;
 	int height = 0;
 	int depth = 0;
-	std::vector<uint8_t> voxels;
+	projectv::voxel::Sparse64Tree sparseStorage;
 	int chunkSize = 0;
 	int chunkCountX = 0;
 	int chunkCountY = 0;
@@ -109,6 +114,10 @@ VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
 Int3 GetVoxelChunkCoord(const VoxelWorld &world, Int3 position);
 size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);
 void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material);
+
+uint32_t GetVoxelChunkStaticPromotionThreshold();
+void TickVoxelChunkStaticPromotion(VoxelWorld &world, uint32_t threshold);
+uint32_t CountStaticVoxelChunks(const VoxelWorld &world);
 uint32_t FillVoxelMaterial(VoxelWorld &world, Int3 start, VoxelMaterial material);
 uint32_t FillVoxelBox(VoxelWorld &world, Int3 first, Int3 second, VoxelMaterial material);
 void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);
@@ -119,6 +128,6 @@ void CommitDirtyVoxelChunkRebuildRequests(VoxelWorld &world, const std::vector<s
 uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
 uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
 uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
-
+std::vector<uint8_t> BuildFlatVoxelSnapshot(const VoxelWorld &world);
 uint32_t UpdateFluidCA(VoxelWorld &world);
 

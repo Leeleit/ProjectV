@@ -5,25 +5,25 @@
 #include <cmath>
 
 namespace {
-constexpr float kMinSceneExposure = 0.05f;
-constexpr float kDefaultMaxSceneExposure = 4.0f;
-constexpr float kMinSceneKey = 0.001f;
-constexpr float kMinExposureTargetKey = 0.05f;
-constexpr float kMaxExposureTargetKey = 4.0f;
-constexpr float kMinEnvironmentIntensity = 0.0f;
-constexpr float kMaxEnvironmentIntensity = 2.0f;
-constexpr float kMinColorGradeWhitePoint = 0.25f;
-constexpr float kMaxColorGradeWhitePoint = 4.0f;
-constexpr float kMinColorGradeContrast = 0.0f;
-constexpr float kMaxColorGradeContrast = 2.0f;
-constexpr float kMinColorGradeSaturation = 0.0f;
-constexpr float kMaxColorGradeSaturation = 2.0f;
-constexpr float kMinColorGradeLift = -0.25f;
-constexpr float kMaxColorGradeLift = 0.25f;
-constexpr float kMaxShadowDepthBias = 0.02f;
-constexpr float kMaxShadowNormalBias = 0.05f;
-constexpr float kMaxShadowFilterRadius = 8.0f;
-constexpr float kMaxContactShadowDistance = 12.0f;
+constexpr float kMinSceneExposure = 0.05f; // EVIL: 1/200s effective minimum shutter; clamps very dim scenes, do not retune casually
+constexpr float kDefaultMaxSceneExposure = 4.0f; // EVIL: 4x max over-exposure; prevents HDR scene-key blowout, tuned to VoxelLab
+constexpr float kMinSceneKey = 0.001f; // EVIL: 1/1000 lower bound on authored scene key; 0 would cause log-domain div-by-zero downstream
+constexpr float kMinExposureTargetKey = 0.05f; // EVIL: matched to kMinSceneExposure; both floors must stay symmetric to avoid negative EV comp
+constexpr float kMaxExposureTargetKey = 4.0f; // EVIL: matched to kDefaultMaxSceneExposure; ceiling is intentional artistic headroom
+constexpr float kMinEnvironmentIntensity = 0.0f; // EVIL: 0 = pure ambient sky/horizon/ground fill; -ε would invert normal response
+constexpr float kMaxEnvironmentIntensity = 2.0f; // EVIL: 2x boost; >2x destabilizes VoxelLab ambient occlusion weighting
+constexpr float kMinColorGradeWhitePoint = 0.25f; // EVIL: white-point floor prevents pitch-black highlights on bright scenes
+constexpr float kMaxColorGradeWhitePoint = 4.0f; // EVIL: 4x max white-point; >4x blows past displayable range even after tone-map
+constexpr float kMinColorGradeContrast = 0.0f; // EVIL: 0 = identity contrast (no S-curve); -ε inverts highlights/shadows unpredictably
+constexpr float kMaxColorGradeContrast = 2.0f; // EVIL: 2x max S-curve; >2x creates posterization artifacts in mid-tones
+constexpr float kMinColorGradeSaturation = 0.0f; // EVIL: 0 = full desaturation (monochrome); -ε would invert chroma
+constexpr float kMaxColorGradeSaturation = 2.0f; // EVIL: 2x max boost; >2x overshoots into neon, breaks VoxelLab material identity
+constexpr float kMinColorGradeLift = -0.25f; // EVIL: -0.25 lift floor; more negative crushes blacks into noise
+constexpr float kMaxColorGradeLift = 0.25f; // EVIL: +0.25 lift ceiling; more positive washes out highlights
+constexpr float kMaxShadowDepthBias = 0.02f; // EVIL: 2cm depth bias; larger introduces peter-panning, smaller → shadow acne
+constexpr float kMaxShadowNormalBias = 0.05f; // EVIL: 5cm normal bias; matches depth bias scale, larger → shadow detachment
+constexpr float kMaxShadowFilterRadius = 8.0f; // EVIL: 8-tap PCF radius; wider blurs past voxel resolution, smaller → aliased
+constexpr float kMaxContactShadowDistance = 12.0f; // EVIL: 12-voxel ray distance for contact shadow; longer bleeds across chunk boundaries
 constexpr float kMaxAmbientOcclusionRadius = 6.0f;
 constexpr float kMaxLocalPointLightRadius = 96.0f;
 constexpr float kMaxLocalPointLightColor = 4.0f;
@@ -59,6 +59,7 @@ std::array<float, 3> ApplyToneMap(
 	default: {
 		const auto applyAcesChannel = [](const float channel) {
 			const float linear = std::max(channel, 0.0f);
+			// EVIL: Narkowicz ACES filmic tone-map approximation constants (industry-standard, no need to retune)
 			const float mapped =
 				linear * (2.51f * linear + 0.03f) /
 				(linear * (2.43f * linear + 0.59f) + 0.14f);
@@ -178,8 +179,11 @@ VoxelSceneLighting GetVoxelSceneLighting(const VoxelScenePreset preset)
 			.sunColorAndIntensity = {0.98f, 0.99f, 1.00f, 0.55f},
 			.sunDirectionAndWrap = {-0.20f, 0.95f, -0.24f, 0.55f},
 			.postProcess = {1.20f, 0.90f, static_cast<float>(ToneMapOperator::AcesApprox), 0.0f},
+			// EVIL: sunShadowParams strength=0.72 / depthBias=0.0009 / normalBias=0.006 per VoxelLab tuned shot
 			.sunShadowParams = {0.72f, 0.0009f, 0.0060f, 1.10f},
+			// EVIL: sunContactShadowParams strength=0.28 / maxDistance=2.25 per VoxelLab tuned shot
 			.sunContactShadowParams = {0.28f, 2.25f, 0.0f, 0.0f},
+			// EVIL: ambientOcclusionParams strength=0.16 / radius=1.25 per VoxelLab tuned shot
 			.ambientOcclusionParams = {0.16f, 1.25f, 0.78f, 0.0f},
 			.colorGrading = {1.00f, 1.00f, 0.98f, 0.00f},
 			.exposureControl = {static_cast<float>(ExposureMeteringMode::SceneKey), 0.785f, 0.45f, 2.50f},

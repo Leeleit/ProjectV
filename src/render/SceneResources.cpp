@@ -16,19 +16,21 @@ import projectv.math;
 
 #include <algorithm>
 #include <array>
+#include <span>
 
 namespace {
 constexpr uint32_t kVoxelMaterialsPerWord = 4u;
 
-std::array<VoxelMaterialVisual, kVoxelMaterialCount> BuildMaterialVisualTable()
+std::span<const VoxelMaterialVisual> BuildMaterialVisualTable()
 {
-	return {
+	static const std::array<VoxelMaterialVisual, kVoxelMaterialCount> visuals{
 		GetVoxelMaterialVisual(VoxelMaterial::Air),
 		GetVoxelMaterialVisual(VoxelMaterial::Glass),
 		GetVoxelMaterialVisual(VoxelMaterial::Fluid),
 		GetVoxelMaterialVisual(VoxelMaterial::FloorWhite),
 		GetVoxelMaterialVisual(VoxelMaterial::FloorGray),
 	};
+	return visuals;
 }
 
 VoxelSceneLighting BuildSceneLighting(
@@ -238,7 +240,8 @@ uint32_t GetShadowIndirectBufferCommandCount(const uint32_t chunkDescriptorCount
 
 uint32_t GetMaxSceneFaceCount(const VoxelWorld &world)
 {
-	return static_cast<uint32_t>(world.voxels.size()) * 6u;
+	const size_t totalCells = static_cast<size_t>(world.width) * world.height * world.depth;
+	return static_cast<uint32_t>(totalCells) * 6u;
 }
 
 void InitializeSceneChunkDescriptorsAndVoxelPayloadLayout(
@@ -758,11 +761,11 @@ bool CreateSceneResources(
 			materialVisualAllocationInfo.size,
 			"VoxelMaterialVisualBufferAllocation");
 		render->sceneMemoryBytes += materialVisualAllocationInfo.size;
-		const auto materialVisuals = BuildMaterialVisualTable();
+		const std::span<const VoxelMaterialVisual> materialVisuals = BuildMaterialVisualTable();
 		std::memcpy(
 			render->materialVisualMappedData,
 			materialVisuals.data(),
-			sizeof(materialVisuals));
+			materialVisuals.size_bytes());
 		SetVulkanObjectName(
 			*context,
 			reinterpret_cast<uint64_t>(render->materialVisualBuffer),

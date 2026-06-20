@@ -5,8 +5,8 @@
 #include <limits>
 
 namespace {
-constexpr float kEpsilon = 0.0001f;
-constexpr float kDirectionEpsilon = 0.00001f;
+constexpr float kEpsilon = 0.0001f; // EVIL: ray-vs-plane intersection tolerance, 100µm in voxel units; smaller → false negatives, larger → false hits
+constexpr float kDirectionEpsilon = 0.00001f; // EVIL: zero-direction guard for axis-step divide-by-zero protection; tuned to ignore IEEE denormals
 
 struct Float3 {
 	float x = 0.0f;
@@ -132,6 +132,7 @@ VoxelRaycastHit RaycastVoxelWorld(
 	const float maxDistance)
 {
 	VoxelRaycastHit result{};
+	// EVIL: maxDistance <= 0.0f short-circuit is intentional (matches RaycastVoxelWorldCallers contract)
 	if (maxDistance <= 0.0f) {
 		return result;
 	}

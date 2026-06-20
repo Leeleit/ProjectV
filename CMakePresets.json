@@ -247,6 +247,8 @@
         "ProjectVFluidCATests",
         "ProjectVPresentModeTests",
         "ProjectVSparse64TreeTests",
+        "ProjectVCpuMeshGeneratorTests",
+        "ProjectVHzbCullingTests",
         "ProjectVFrustumCullBenchmark",
         "ProjectVShadowProjectionBenchmark"
       ]
@@ -279,7 +281,9 @@
         "ProjectVStdModuleProbe",
         "ProjectVFluidCATests",
         "ProjectVPresentModeTests",
+        "ProjectVCpuMeshGeneratorTests",
         "ProjectVSparse64TreeTests",
+        "ProjectVHzbCullingTests",
         "ProjectVFrustumCullBenchmark",
         "ProjectVShadowProjectionBenchmark"
       ]
@@ -303,8 +307,10 @@
         "ProjectVModuleSmoke",
         "ProjectVStdModuleProbe",
         "ProjectVFluidCATests",
+        "ProjectVCpuMeshGeneratorTests",
         "ProjectVPresentModeTests",
         "ProjectVSparse64TreeTests",
+        "ProjectVHzbCullingTests",
         "ProjectVFrustumCullBenchmark",
         "ProjectVShadowProjectionBenchmark"
       ]
@@ -327,7 +333,9 @@
         "ProjectVStringIdTests",
         "ProjectVModuleSmoke",
         "ProjectVStdModuleProbe",
+        "ProjectVCpuMeshGeneratorTests",
         "ProjectVFluidCATests",
+        "ProjectVHzbCullingTests",
         "ProjectVPresentModeTests",
         "ProjectVSparse64TreeTests"
       ]
@@ -349,8 +357,10 @@
         "ProjectVMathTests",
         "ProjectVStringIdTests",
         "ProjectVModuleSmoke",
+        "ProjectVCpuMeshGeneratorTests",
         "ProjectVStdModuleProbe",
         "ProjectVFluidCATests",
+        "ProjectVHzbCullingTests",
         "ProjectVPresentModeTests",
         "ProjectVSparse64TreeTests"
       ]

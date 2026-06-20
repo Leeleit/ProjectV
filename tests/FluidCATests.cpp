@@ -66,9 +66,8 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 	world.chunkCountX = (width + chunkSize - 1) / chunkSize;
 	world.chunkCountY = (height + chunkSize - 1) / chunkSize;
 	world.chunkCountZ = (depth + chunkSize - 1) / chunkSize;
-	world.voxels.assign(
-		static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth),
-		static_cast<uint8_t>(VoxelMaterial::Air));
+	world.sparseStorage.Reset(width, height, depth);
+	for (int z = 0; z < depth; ++z) { for (int y = 0; y < height; ++y) { for (int x = 0; x < width; ++x) { SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air); } } }
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
@@ -100,7 +99,7 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 size_t CountFluid(const VoxelWorld &world)
 {
 	return static_cast<size_t>(std::ranges::count(
-		world.voxels,
+		BuildFlatVoxelSnapshot(world),
 		static_cast<uint8_t>(VoxelMaterial::Fluid)));
 }
 }
@@ -239,7 +238,7 @@ void TestFluidCASpreadIsDeterministic(TestContext &context)
 		for (int tick = 0; tick < 5; ++tick) {
 			UpdateFluidCA(world);
 		}
-		return world.voxels;
+		return BuildFlatVoxelSnapshot(world);
 	};
 	const std::vector<uint8_t> first = run();
 	const std::vector<uint8_t> second = run();
@@ -273,7 +272,7 @@ void TestFluidCADeterministicAcrossRuns(TestContext &context)
 		for (int tick = 0; tick < 20; ++tick) {
 			UpdateFluidCA(world);
 		}
-		return world.voxels;
+		return BuildFlatVoxelSnapshot(world);
 	};
 
 	const std::vector<uint8_t> first = runScenario();
@@ -365,11 +364,11 @@ void TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
 	EXPECT_EQ(context, 0u, world.stats.fluidVoxelCount);
-	const std::vector<uint8_t> snapshot = world.voxels;
+	const std::vector<uint8_t> snapshot = BuildFlatVoxelSnapshot(world);
 	for (int tick = 0; tick < 20; ++tick) {
 		EXPECT_EQ(context, 0u, UpdateFluidCA(world));
 	}
-	EXPECT_TRUE(context, snapshot == world.voxels);
+	EXPECT_TRUE(context, snapshot == BuildFlatVoxelSnapshot(world));
 }
 
 
@@ -390,9 +389,8 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	world.chunkCountX = (width + chunkSize - 1) / chunkSize;
 	world.chunkCountY = (height + chunkSize - 1) / chunkSize;
 	world.chunkCountZ = (depth + chunkSize - 1) / chunkSize;
-	world.voxels.assign(
-		static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth),
-		static_cast<uint8_t>(VoxelMaterial::Air));
+	world.sparseStorage.Reset(width, height, depth);
+	for (int z = 0; z < depth; ++z) { for (int y = 0; y < height; ++y) { for (int x = 0; x < width; ++x) { SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air); } } }
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
@@ -499,9 +497,9 @@ void TestFluidCAFluidDoesNotMoveOnPause(TestContext &context)
 	simulation.timeScale = 1.0f;
 	simulation.fluidTickRateHz = 20.0f;
 
-	const std::vector<uint8_t> before = world.voxels;
+	const std::vector<uint8_t> before = BuildFlatVoxelSnapshot(world);
 	TickFluidCA(simulation, world, 1.0f / 60.0f, 60);
-	const std::vector<uint8_t> after = world.voxels;
+	const std::vector<uint8_t> after = BuildFlatVoxelSnapshot(world);
 
 	EXPECT_TRUE(context, before == after);
 	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
@@ -640,7 +638,7 @@ void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 	simulation.timeScale = 0.0f;
 	simulation.fluidTickRateHz = 20.0f;
 
-	const std::vector<uint8_t> before = world.voxels;
+	const std::vector<uint8_t> before = BuildFlatVoxelSnapshot(world);
 	constexpr float kFrameDelta = 1.0f / 60.0f;
 	for (int frame = 0; frame < 60; ++frame) {
 		const float scaledDelta = kFrameDelta * simulation.timeScale;
@@ -648,7 +646,7 @@ void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 
 		EXPECT_EQ(context, 0.0f, simulation.fluidAccumulatorSeconds);
 	}
-	const std::vector<uint8_t> after = world.voxels;
+	const std::vector<uint8_t> after = BuildFlatVoxelSnapshot(world);
 	EXPECT_TRUE(context, before == after);
 }
 
@@ -670,10 +668,10 @@ void TestFluidCAFluidFrameStepWithTimeScaleZero(TestContext &context)
 	simulation.fluidTickRateHz = 20.0f;
 	simulation.frameStepRequested = true;
 
-	const std::vector<uint8_t> before = world.voxels;
+	const std::vector<uint8_t> before = BuildFlatVoxelSnapshot(world);
 
 	TickFluidCA(simulation, world, 1.0f / 60.0f, 1);
-	const std::vector<uint8_t> after = world.voxels;
+	const std::vector<uint8_t> after = BuildFlatVoxelSnapshot(world);
 
 	EXPECT_TRUE(context, !simulation.frameStepRequested);
 	EXPECT_TRUE(context, before == after);

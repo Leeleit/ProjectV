@@ -88,12 +88,12 @@ bool PrepareFrameRenderData(
 
 	const VkFence inFlightFence = frame->inFlightFences[frameIndex];
 	VkResult waitResult = vkWaitForFences(
-		context->device, 1, &inFlightFence, VK_TRUE, 10'000'000);
+		context->device, 1, &inFlightFence, VK_TRUE, kVulkanFenceWaitTimeoutNs);
 	if (waitResult == VK_TIMEOUT) {
 
 		PV_PROFILE_ZONE_N("PrepareFrameRenderData.GPUStallFallback");
 		waitResult = vkWaitForFences(
-			context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+			context->device, 1, &inFlightFence, VK_TRUE, kVulkanFenceWaitTimeoutUnboundedNs);
 	}
 	if (waitResult != VK_SUCCESS) {
 		runtime::LogVkFailure("PrepareFrameRenderData.vkWaitForFences", waitResult);

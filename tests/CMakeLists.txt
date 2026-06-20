@@ -424,6 +424,9 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     add_executable(ProjectVShadowProjectionBenchmark
             ${CMAKE_SOURCE_DIR}/src/bench/ShadowProjectionBenchmark.cpp
             ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
+            ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+            ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+            ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
     )
 
     target_include_directories(ProjectVShadowProjectionBenchmark PRIVATE
@@ -436,6 +439,8 @@ if (PROJECTV_ENABLE_BENCHMARKS)
             volk
             glm
             GPUOpen::VulkanMemoryAllocator
+            fmt::fmt
+            SDL3::SDL3
     )
 
     projectv_test_add_modules(ProjectVShadowProjectionBenchmark)
@@ -526,4 +531,62 @@ add_test(NAME ProjectVSparse64TreeTests COMMAND ProjectVSparse64TreeTests)
 set_tests_properties(ProjectVSparse64TreeTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVSparse64TreeTests)
+
+add_executable(ProjectVCpuMeshGeneratorTests
+        CpuMeshGeneratorTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/CpuMeshGenerator.cpp
+)
+
+target_compile_definitions(ProjectVCpuMeshGeneratorTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVCpuMeshGeneratorTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVCpuMeshGeneratorTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVCpuMeshGeneratorTests PRIVATE
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVCpuMeshGeneratorTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVCpuMeshGeneratorTests COMMAND ProjectVCpuMeshGeneratorTests)
+set_tests_properties(ProjectVCpuMeshGeneratorTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVCpuMeshGeneratorTests)
+
+add_executable(ProjectVHzbCullingTests
+        HzbCullingTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
+)
+
+target_compile_definitions(ProjectVHzbCullingTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVHzbCullingTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVHzbCullingTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVHzbCullingTests PRIVATE
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVHzbCullingTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVHzbCullingTests COMMAND ProjectVHzbCullingTests)
+set_tests_properties(ProjectVHzbCullingTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVHzbCullingTests)
 

@@ -17,10 +17,10 @@ find_program(PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
 
 if (PROJECTV_GLSLC_EXECUTABLE)
     set(PROJECTV_SHADER_COMPILER "${PROJECTV_GLSLC_EXECUTABLE}")
-    set(PROJECTV_SHADER_COMPILER_ARGS)
+    set(PROJECTV_SHADER_COMPILER_ARGS --target-env=vulkan1.3)
 elseif (PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE)
     set(PROJECTV_SHADER_COMPILER "${PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE}")
-    set(PROJECTV_SHADER_COMPILER_ARGS -V)
+    set(PROJECTV_SHADER_COMPILER_ARGS -V --target-env vulkan1.3)
 else ()
     message(FATAL_ERROR "ProjectV requires either glslc or glslangValidator from the Vulkan SDK in PATH")
 endif ()
@@ -32,6 +32,9 @@ set(SHADERS
         ${SHADER_DIR}/voxel_shadow.vert
         ${SHADER_DIR}/voxel_shadow.frag
         ${SHADER_DIR}/voxel_mesh.comp
+        ${SHADER_DIR}/voxel_mesh.task
+        ${SHADER_DIR}/voxel_mesh.mesh
+        ${SHADER_DIR}/hzb_cull.comp
         ${SHADER_DIR}/taa_resolve.vert
         ${SHADER_DIR}/taa_resolve.frag
         ${SHADER_DIR}/debug_overlay.vert
@@ -116,6 +119,7 @@ target_sources(ProjectV PRIVATE
         render/Renderer.cpp
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
+        render/HizCulling.cpp
         render/ShadowProjection.cpp
         render/Taa.cpp
         render/TaaRenderTargets.cpp

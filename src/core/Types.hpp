@@ -555,6 +555,7 @@ struct WorldState {
 	VoxelScenePreset requestedScenePreset = VoxelScenePreset::VoxelLab;
 	bool snapshotSaveRequested = false;
 	bool snapshotLoadRequested = false;
+	bool allowWorldEditing = false;
 };
 
 struct ModelInstanceData {
@@ -759,6 +760,7 @@ struct SimulationState {
 	bool paused = false;
 	float timeScale = 1.0f;
 	bool frameStepRequested = false;
+	bool effectivePaused = false;
 	float fluidTickRateHz = 20.0f;
 	float fluidAccumulatorSeconds = 0.0f;
 };
@@ -809,6 +811,9 @@ struct VulkanContextState {
 	bool supportsDynamicRenderingUnusedAttachments = false;
 };
 
+inline constexpr uint64_t kVulkanFenceWaitTimeoutNs = 10'000'000;
+inline constexpr uint64_t kVulkanFenceWaitTimeoutUnboundedNs = UINT64_MAX;
+
 struct SwapchainState {
 	VkSwapchainKHR handle = VK_NULL_HANDLE;
 	VkFormat format = VK_FORMAT_UNDEFINED;
@@ -821,7 +826,7 @@ struct SwapchainState {
 	std::vector<VkSemaphore> submitSemaphores;
 };
 
-struct AppState {
+struct AppStateImpl {
 	PlatformState platform{};
 	VulkanContextState context{};
 	SwapchainState swapchain{};
@@ -839,8 +844,41 @@ struct AppState {
 	AudioEnginePtr audio{nullptr, DestroyAudioEngine};
 
 	bool shutdownDone = false;
+};
 
-	~AppState() = default;
+struct AppState {
+	std::unique_ptr<AppStateImpl> impl{std::make_unique<AppStateImpl>()};
+
+	PlatformState &platform() noexcept { return impl->platform; }
+	const PlatformState &platform() const noexcept { return impl->platform; }
+	VulkanContextState &context() noexcept { return impl->context; }
+	const VulkanContextState &context() const noexcept { return impl->context; }
+	SwapchainState &swapchain() noexcept { return impl->swapchain; }
+	const SwapchainState &swapchain() const noexcept { return impl->swapchain; }
+	WorldState &world() noexcept { return impl->world; }
+	const WorldState &world() const noexcept { return impl->world; }
+	RenderState &render() noexcept { return impl->render; }
+	const RenderState &render() const noexcept { return impl->render; }
+	FrameState &frame() noexcept { return impl->frame; }
+	const FrameState &frame() const noexcept { return impl->frame; }
+	SimulationState &simulation() noexcept { return impl->simulation; }
+	const SimulationState &simulation() const noexcept { return impl->simulation; }
+	InputState &input() noexcept { return impl->input; }
+	const InputState &input() const noexcept { return impl->input; }
+	InteractionState &interaction() noexcept { return impl->interaction; }
+	const InteractionState &interaction() const noexcept { return impl->interaction; }
+	LookDevCaptureAutomationState &lookDevCapture() noexcept { return impl->lookDevCapture; }
+	const LookDevCaptureAutomationState &lookDevCapture() const noexcept { return impl->lookDevCapture; }
+	BenchmarkAutomationState &benchmark() noexcept { return impl->benchmark; }
+	const BenchmarkAutomationState &benchmark() const noexcept { return impl->benchmark; }
+	EcsStatePtr &ecs() noexcept { return impl->ecs; }
+	const EcsStatePtr &ecs() const noexcept { return impl->ecs; }
+	PhysicsStatePtr &physics() noexcept { return impl->physics; }
+	const PhysicsStatePtr &physics() const noexcept { return impl->physics; }
+	AudioEnginePtr &audio() noexcept { return impl->audio; }
+	const AudioEnginePtr &audio() const noexcept { return impl->audio; }
+	bool &shutdownDone() noexcept { return impl->shutdownDone; }
+	const bool &shutdownDone() const noexcept { return impl->shutdownDone; }
 };
 
 void ShutdownVulkan(AppState *state);

@@ -406,6 +406,141 @@ void TestNonAirCount(TestContext &context)
 	ExpectTrue(context, !tree.IsEmpty(), __LINE__, "2 cells set -> not empty");
 }
 
+void TestDedupOffBaseline(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(4, 4, 4);
+	ExpectTrue(context, !tree.IsDeduplicationEnabled(), __LINE__, "dedup OFF by default");
+	tree.SetCell(0, 0, 0, 1);
+	tree.SetCell(1, 1, 1, 2);
+	ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(0, 0, 0)), __LINE__, "dedup-off (0,0,0)");
+	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(1, 1, 1)), __LINE__, "dedup-off (1,1,1)");
+}
+
+void TestDedupExplicitMerge(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(8, 8, 8);
+	const size_t beforeNodeCount = tree.NodeCount();
+	tree.SetDeduplicationEnabled(true);
+	tree.SetCell(0, 0, 0, 1);
+	const size_t afterOneCellNodeCount = tree.NodeCount();
+	ExpectTrue(context, afterOneCellNodeCount > beforeNodeCount, __LINE__, "dedup enabled grows nodes on SetCell");
+	tree.SetCell(7, 7, 7, 1);
+	const size_t afterTwoCellsNodeCount = tree.NodeCount();
+	ExpectTrue(context, afterTwoCellsNodeCount >= afterOneCellNodeCount, __LINE__, "more cells -> more or equal nodes");
+}
+
+void TestCopyOnWriteOnMutation(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(8, 8, 8);
+	tree.SetDeduplicationEnabled(true);
+	tree.SetCell(0, 0, 0, 1);
+	tree.SetCell(7, 7, 7, 1);
+	const size_t nodesBefore = tree.NodeCount();
+	ExpectTrue(context, nodesBefore > 0, __LINE__, "tree has nodes after edits");
+	tree.SetCell(0, 0, 0, 2);
+	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(0, 0, 0)), __LINE__, "after mutation cell (0,0,0)");
+	ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(7, 7, 7)), __LINE__, "other cell unchanged");
+	const size_t nodesAfter = tree.NodeCount();
+	ExpectTrue(context, nodesAfter >= nodesBefore, __LINE__, "mutation may add nodes (COW)");
+}
+
+void TestHomogeneousCollapseSmall(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(4, 4, 4);
+	for (int z = 0; z < 4; ++z) {
+		for (int y = 0; y < 4; ++y) {
+			for (int x = 0; x < 4; ++x) {
+				tree.SetCell(x, y, z, 1);
+			}
+		}
+	}
+	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "4x4x4 fully filled same material -> homogeneous root slot");
+	ExpectTrue(context, tree.LiveNodeCount() == 0, __LINE__, "no live nodes after homogeneous collapse");
+	for (int z = 0; z < 4; ++z) {
+		for (int y = 0; y < 4; ++y) {
+			for (int x = 0; x < 4; ++x) {
+				ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(x, y, z)), __LINE__, "all cells material 1");
+			}
+		}
+	}
+	ExpectEqualI(context, 64, static_cast<int>(tree.NonAirCount()), __LINE__, "NonAirCount 64");
+}
+
+void TestHomogeneousExpansionOnSingleEdit(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(4, 4, 4);
+	for (int z = 0; z < 4; ++z) {
+		for (int y = 0; y < 4; ++y) {
+			for (int x = 0; x < 4; ++x) {
+				tree.SetCell(x, y, z, 1);
+			}
+		}
+	}
+	ExpectTrue(context, tree.LiveNodeCount() == 0, __LINE__, "pre-edit homogeneous -> 0 live nodes");
+	tree.SetCell(1, 1, 1, 2);
+	ExpectTrue(context, !projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "after 1 different edit -> heterogeneous root");
+	ExpectTrue(context, tree.LiveNodeCount() > 0, __LINE__, "live node allocated on expansion");
+	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(1, 1, 1)), __LINE__, "edited cell material 2");
+	for (int z = 0; z < 4; ++z) {
+		for (int y = 0; y < 4; ++y) {
+			for (int x = 0; x < 4; ++x) {
+				if (x == 1 && y == 1 && z == 1) continue;
+				ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(x, y, z)), __LINE__, "other cells still material 1");
+			}
+		}
+	}
+}
+
+void TestHomogeneousCascadeSixteen(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(16, 16, 16);
+	for (int z = 0; z < 16; ++z) {
+		for (int y = 0; y < 16; ++y) {
+			for (int x = 0; x < 16; ++x) {
+				tree.SetCell(x, y, z, 1);
+			}
+		}
+	}
+	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "16x16x16 fully filled -> homogeneous at every level");
+	ExpectTrue(context, tree.LiveNodeCount() == 0, __LINE__, "16x16x16 homogeneous cascade -> 0 live nodes");
+	ExpectEqualI(context, 4096, static_cast<int>(tree.NonAirCount()), __LINE__, "16x16x16 NonAirCount 4096");
+}
+
+void TestHomogeneousRecollapseAfterEdit(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree tree(16, 16, 16);
+	for (int z = 0; z < 16; ++z) {
+		for (int y = 0; y < 16; ++y) {
+			for (int x = 0; x < 16; ++x) {
+				tree.SetCell(x, y, z, 1);
+			}
+		}
+	}
+	tree.SetCell(7, 7, 7, 2);
+	ExpectTrue(context, !projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "after edit -> heterogeneous");
+	ExpectTrue(context, tree.LiveNodeCount() > 0, __LINE__, "live nodes allocated during edit");
+	tree.SetCell(7, 7, 7, 1);
+	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "after revert to uniform -> homogeneous again");
+	ExpectTrue(context, tree.LiveNodeCount() == 0, __LINE__, "internal nodes collapsed back to 0 live");
+}
+
+void TestHomogeneousDedupEqual(TestContext &context)
+{
+	projectv::voxel::Sparse64Tree treeA(16, 16, 16);
+	projectv::voxel::Sparse64Tree treeB(16, 16, 16);
+	for (int z = 0; z < 16; ++z) {
+		for (int y = 0; y < 16; ++y) {
+			for (int x = 0; x < 16; ++x) {
+				treeA.SetCell(x, y, z, 1);
+				treeB.SetCell(x, y, z, 1);
+			}
+		}
+	}
+	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(treeA.RootSlot()), __LINE__, "tree A homogeneous");
+	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(treeB.RootSlot()), __LINE__, "tree B homogeneous");
+	ExpectEqualI(context, static_cast<int>(treeA.RootSlot()), static_cast<int>(treeB.RootSlot()), __LINE__, "identical homogeneous root slot");
+}
+
 } // namespace
 
 int main()
@@ -424,6 +559,14 @@ int main()
 	TestLargerTree(context);
 	TestSubNodeSplitting(context);
 	TestNonAirCount(context);
+	TestDedupOffBaseline(context);
+	TestDedupExplicitMerge(context);
+	TestCopyOnWriteOnMutation(context);
+	TestHomogeneousCollapseSmall(context);
+	TestHomogeneousExpansionOnSingleEdit(context);
+	TestHomogeneousCascadeSixteen(context);
+	TestHomogeneousRecollapseAfterEdit(context);
+	TestHomogeneousDedupEqual(context);
 	TestFullSweepParity(context);
 	TestByteExactParityVsFlat(context);
 	TestOverwriteParity(context);

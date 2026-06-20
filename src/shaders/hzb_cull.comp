@@ -1,0 +1,90 @@
+#version 460
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct ChunkAabb {
+    vec4 centerAndHalfExtent;
+    vec4 originAndPadding;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer ChunkAabbBuffer {
+    ChunkAabb chunkAabbs[];
+};
+
+layout(set = 0, binding = 1, std430) writeonly buffer VisibilityMask {
+    uint visibilityWords[];
+};
+
+layout(set = 0, binding = 2) uniform sampler2D hizTexture;
+
+layout(push_constant) uniform CullPushConstants {
+    mat4 inverseViewProjection;
+    uvec4 hizExtentAndMipCount;
+    vec4 depthUnpackParams;
+} pushConstants;
+
+const uint kBitsPerWord = 32u;
+
+bool AabbVisibleAgainstMip(
+    const ChunkAabb aabb,
+    const float mipLevel,
+    const mat4 inverseViewProjection,
+    const sampler2D mipSampler)
+{
+    const vec3 center = aabb.centerAndHalfExtent.xyz;
+    const vec3 halfExtent = vec3(aabb.centerAndHalfExtent.w);
+
+    vec3 ndcMin = vec3( 1.0);
+    vec3 ndcMax = vec3(-1.0);
+    for (int cornerX = 0; cornerX < 2; ++cornerX) {
+        for (int cornerY = 0; cornerY < 2; ++cornerY) {
+            for (int cornerZ = 0; cornerZ < 2; ++cornerZ) {
+                const vec3 corner = center + halfExtent * vec3(
+                    cornerX == 0 ? -1.0 : 1.0,
+                    cornerY == 0 ? -1.0 : 1.0,
+                    cornerZ == 0 ? -1.0 : 1.0);
+                const vec4 clip = inverseViewProjection * vec4(corner, 1.0);
+                const vec3 ndc = clip.xyz / clip.w;
+                ndcMin = min(ndcMin, ndc);
+                ndcMax = max(ndcMax, ndc);
+            }
+        }
+    }
+
+    if (ndcMax.x < -1.0 || ndcMin.x > 1.0 ||
+        ndcMax.y < -1.0 || ndcMin.y > 1.0 ||
+        ndcMax.z <  0.0 || ndcMin.z > 1.0) {
+        return true;
+    }
+
+    const float uMin = clamp(ndcMin.x * 0.5 + 0.5, 0.0, 1.0);
+    const float uMax = clamp(ndcMax.x * 0.5 + 0.5, 0.0, 1.0);
+    const float vMin = clamp(ndcMin.y * 0.5 + 0.5, 0.0, 1.0);
+    const float vMax = clamp(ndcMax.y * 0.5 + 0.5, 0.0, 1.0);
+
+    const float minDepth = clamp(ndcMin.z, 0.0, 1.0);
+    const float maxDepth = clamp(ndcMax.z, 0.0, 1.0);
+
+    const float mipDepth = textureLod(mipSampler, vec2((uMin + uMax) * 0.5, (vMin + vMax) * 0.5), mipLevel).r;
+    return mipDepth >= maxDepth;
+}
+
+void main()
+{
+    const uint chunkIndex = gl_GlobalInvocationID.x;
+    const uint wordIndex = chunkIndex / kBitsPerWord;
+    const uint bitIndex = chunkIndex % kBitsPerWord;
+
+    if (chunkIndex >= pushConstants.hizExtentAndMipCount.z) {
+        return;
+    }
+
+    const bool visible = AabbVisibleAgainstMip(
+        chunkAabbs[chunkIndex],
+        0.0,
+        pushConstants.inverseViewProjection,
+        hizTexture);
+    if (visible) {
+        atomicOr(visibilityWords[wordIndex], 1u << bitIndex);
+    }
+}

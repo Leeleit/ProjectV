@@ -26,3 +26,17 @@ bool GetEcsWorldChunkSummary(
 	VoxelWorldStats *outStats,
 	size_t *outChunkEntityCount);
 
+void RequestAudioPlaylistRefresh(EcsState *ecs);
+void TickAudioRefreshPlaylistSystem(EcsState *ecs);
+bool IsAudioPlaylistRefreshRequested(const EcsState *ecs);
+
+void TickFluidCASystem(EcsState *ecs);
+
+void TickVoxelInteractionSystem(EcsState *ecs);
+
+void TickBenchmarkAutomationSystem(EcsState *ecs);
+bool IsBenchmarkAutomationQuitRequested(const EcsState *ecs);
+
+void TickLookDevCaptureSystem(EcsState *ecs);
+bool IsLookDevCaptureQuitRequested(const EcsState *ecs);
+

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace projectv::voxel {
@@ -12,20 +13,38 @@ inline constexpr int kSparse64NodeSide = 1 << kSparse64BitsPerAxis;
 inline constexpr int kSparse64ChildrenPerNode = 1 << (3 * kSparse64BitsPerAxis);
 
 inline constexpr uint32_t kSparse64LeafFlag = 0x80000000u;
-inline constexpr uint32_t kSparse64NodeIndexMask = 0x7FFFFFFFu;
+inline constexpr uint32_t kSparse64HomogeneousFlag = 0x40000000u;
+inline constexpr uint32_t kSparse64NodeIndexMask = 0x3FFFFFFFu;
 inline constexpr uint32_t kSparse64MaterialMask = 0xFFu;
+inline constexpr uint32_t kSparse64InvalidNodeIndex = kSparse64NodeIndexMask;
 
 inline constexpr uint32_t MakeSparse64Leaf(uint8_t material) noexcept
 {
 	return kSparse64LeafFlag | static_cast<uint32_t>(material);
 }
 
+inline constexpr uint32_t MakeSparse64Homogeneous(uint8_t material) noexcept
+{
+	return kSparse64LeafFlag | kSparse64HomogeneousFlag | static_cast<uint32_t>(material);
+}
+
 inline constexpr bool IsSparse64Leaf(uint32_t slot) noexcept
 {
-	return (slot & kSparse64LeafFlag) != 0u;
+	return (slot & (kSparse64LeafFlag | kSparse64HomogeneousFlag)) == kSparse64LeafFlag;
+}
+
+inline constexpr bool IsSparse64Homogeneous(uint32_t slot) noexcept
+{
+	return (slot & (kSparse64LeafFlag | kSparse64HomogeneousFlag)) ==
+		   (kSparse64LeafFlag | kSparse64HomogeneousFlag);
 }
 
 inline constexpr uint8_t Sparse64LeafMaterial(uint32_t slot) noexcept
+{
+	return static_cast<uint8_t>(slot & kSparse64MaterialMask);
+}
+
+inline constexpr uint8_t Sparse64HomogeneousMaterial(uint32_t slot) noexcept
 {
 	return static_cast<uint8_t>(slot & kSparse64MaterialMask);
 }
@@ -56,6 +75,13 @@ inline int ComputeSparse64Depth(int side) noexcept
 
 class Sparse64Tree {
 public:
+	struct Node {
+		uint64_t fillMask = 0;
+		std::array<uint32_t, kSparse64ChildrenPerNode> slots{};
+		uint64_t structuralHash = 0;
+		uint32_t refCount = 0;
+	};
+
 	Sparse64Tree() noexcept = default;
 
 	explicit Sparse64Tree(int sideX, int sideY, int sideZ)
@@ -79,6 +105,7 @@ public:
 			maxDepth_ = depthZ_;
 		}
 		nodes_.clear();
+		dedupIndex_.clear();
 		rootSlot_ = MakeSparse64Leaf(0);
 	}
 
@@ -90,16 +117,49 @@ public:
 	int DepthZ() const noexcept { return depthZ_; }
 	int MaxDepth() const noexcept { return maxDepth_; }
 
+	bool IsDeduplicationEnabled() const noexcept
+	{
+		return deduplicationEnabled_;
+	}
+
+	void SetDeduplicationEnabled(const bool enabled) noexcept
+	{
+		if (enabled == deduplicationEnabled_) {
+			return;
+		}
+		deduplicationEnabled_ = enabled;
+		for (std::size_t i = 0; i < nodes_.size(); ++i) {
+			nodes_[i].refCount = (nodes_[i].refCount > 0) ? 1 : 0;
+		}
+		if (!enabled) {
+			dedupIndex_.clear();
+			for (std::size_t i = 0; i < nodes_.size(); ++i) {
+				nodes_[i].structuralHash = 0;
+			}
+		} else {
+			dedupIndex_.clear();
+			for (std::size_t i = 0; i < nodes_.size(); ++i) {
+				RebuildHashAndIndexForNode(static_cast<uint32_t>(i));
+			}
+		}
+	}
+
 	uint8_t GetCell(int x, int y, int z) const noexcept
 	{
 		if (!Contains(x, y, z)) {
 			return 0;
 		}
 		if (maxDepth_ == 0) {
+			if (IsSparse64Homogeneous(rootSlot_)) {
+				return Sparse64HomogeneousMaterial(rootSlot_);
+			}
 			return IsSparse64Leaf(rootSlot_) ? Sparse64LeafMaterial(rootSlot_) : 0;
 		}
 		uint32_t slot = rootSlot_;
 		for (int level = maxDepth_; level > 0; --level) {
+			if (IsSparse64Homogeneous(slot)) {
+				return Sparse64HomogeneousMaterial(slot);
+			}
 			if (IsSparse64Leaf(slot)) {
 				return Sparse64LeafMaterial(slot);
 			}
@@ -112,6 +172,9 @@ public:
 				return 0;
 			}
 			slot = node.slots[childIndex];
+		}
+		if (IsSparse64Homogeneous(slot)) {
+			return Sparse64HomogeneousMaterial(slot);
 		}
 		if (IsSparse64Leaf(slot)) {
 			return Sparse64LeafMaterial(slot);
@@ -141,6 +204,42 @@ public:
 		return nodes_.size();
 	}
 
+	size_t LiveNodeCount() const noexcept
+	{
+		size_t live = 0;
+		for (const Node &node : nodes_) {
+			if (node.refCount > 0) {
+				++live;
+			}
+		}
+		return live;
+	}
+
+	const Node *GetNodes() const noexcept
+	{
+		return nodes_.data();
+	}
+
+	uint32_t RootSlot() const noexcept
+	{
+		return rootSlot_;
+	}
+
+	void RestoreFrom(uint32_t rootSlot, std::vector<Node> nodes) noexcept
+	{
+		rootSlot_ = rootSlot;
+		nodes_ = std::move(nodes);
+		dedupIndex_.clear();
+		for (std::size_t i = 0; i < nodes_.size(); ++i) {
+			nodes_[i].refCount = 0;
+		}
+		if (deduplicationEnabled_) {
+			for (std::size_t i = 0; i < nodes_.size(); ++i) {
+				RebuildHashAndIndexForNode(static_cast<uint32_t>(i));
+			}
+		}
+	}
+
 	size_t NonAirCount() const noexcept
 	{
 		return CountNonAirRecursive(rootSlot_, maxDepth_);
@@ -154,15 +253,11 @@ public:
 	void Clear() noexcept
 	{
 		nodes_.clear();
+		dedupIndex_.clear();
 		rootSlot_ = MakeSparse64Leaf(0);
 	}
 
 private:
-	struct Node {
-		uint64_t fillMask = 0;
-		std::array<uint32_t, kSparse64ChildrenPerNode> slots{};
-	};
-
 	int sideX_ = 0;
 	int sideY_ = 0;
 	int sideZ_ = 0;
@@ -171,7 +266,96 @@ private:
 	int depthZ_ = 0;
 	int maxDepth_ = 0;
 	std::vector<Node> nodes_;
+	std::unordered_multimap<uint64_t, uint32_t> dedupIndex_;
+	bool deduplicationEnabled_ = false;
 	uint32_t rootSlot_ = MakeSparse64Leaf(0);
+
+	static uint64_t MixSplitMix64(uint64_t seed, uint64_t value) noexcept
+	{
+		uint64_t z = seed + value;
+		z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+		z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+		return z ^ (z >> 31);
+	}
+
+	uint64_t ComputeNodeStructuralHash(const Node &node) const noexcept
+	{
+		uint64_t h = MixSplitMix64(0x9E3779B97F4A7C15ull, node.fillMask);
+		for (std::size_t i = 0; i < node.slots.size(); ++i) {
+			h = MixSplitMix64(h, node.slots[i]);
+		}
+		return h;
+	}
+
+	void RebuildHashAndIndexForNode(uint32_t nodeIndex) noexcept
+	{
+		Node &node = nodes_[nodeIndex];
+		node.structuralHash = ComputeNodeStructuralHash(node);
+		dedupIndex_.emplace(node.structuralHash, nodeIndex);
+	}
+
+	bool NodesStructurallyEqual(const Node &a, const Node &b) const noexcept
+	{
+		if (a.fillMask != b.fillMask) {
+			return false;
+		}
+		if (a.structuralHash != b.structuralHash) {
+			return false;
+		}
+		for (std::size_t i = 0; i < a.slots.size(); ++i) {
+			if (a.slots[i] != b.slots[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	uint32_t FindEquivalentNode(const Node &candidate) noexcept
+	{
+		if (!deduplicationEnabled_) {
+			return kSparse64InvalidNodeIndex;
+		}
+		const uint64_t hash = ComputeNodeStructuralHash(candidate);
+		const auto range = dedupIndex_.equal_range(hash);
+		for (auto it = range.first; it != range.second; ++it) {
+			if (NodesStructurallyEqual(nodes_[it->second], candidate)) {
+				return it->second;
+			}
+		}
+		return kSparse64InvalidNodeIndex;
+	}
+
+	void AddNodeToDedupIndex(uint32_t nodeIndex) noexcept
+	{
+		if (!deduplicationEnabled_) {
+			return;
+		}
+		RebuildHashAndIndexForNode(nodeIndex);
+	}
+
+	void RemoveNodeFromDedupIndex(uint32_t nodeIndex) noexcept
+	{
+		if (!deduplicationEnabled_) {
+			return;
+		}
+		const uint64_t hash = nodes_[nodeIndex].structuralHash;
+		const auto range = dedupIndex_.equal_range(hash);
+		for (auto it = range.first; it != range.second; ++it) {
+			if (it->second == nodeIndex) {
+				dedupIndex_.erase(it);
+				return;
+			}
+		}
+	}
+
+	void UpdateNodeInDedupIndex(uint32_t nodeIndex) noexcept
+	{
+		if (!deduplicationEnabled_) {
+			return;
+		}
+		RemoveNodeFromDedupIndex(nodeIndex);
+		AddNodeToDedupIndex(nodeIndex);
+	}
 
 	int ExtractSubCoord(int coord, int level) const noexcept
 	{
@@ -184,6 +368,16 @@ private:
 
 	size_t CountNonAirRecursive(uint32_t slot, int level) const noexcept
 	{
+		if (IsSparse64Homogeneous(slot)) {
+			if (Sparse64HomogeneousMaterial(slot) == 0) {
+				return 0;
+			}
+			size_t cells = 1;
+			for (int i = 0; i < level; ++i) {
+				cells *= kSparse64ChildrenPerNode;
+			}
+			return cells;
+		}
 		if (IsSparse64Leaf(slot)) {
 			return Sparse64LeafMaterial(slot) != 0 ? 1 : 0;
 		}
@@ -203,9 +397,36 @@ private:
 		return count;
 	}
 
+	bool CanCollapseToHomogeneous(const Node &node, uint8_t &outMaterial) const noexcept
+	{
+		if (node.fillMask != 0xFFFFFFFFFFFFFFFFull) {
+			return false;
+		}
+		uint8_t material = 0;
+		for (int i = 0; i < kSparse64ChildrenPerNode; ++i) {
+			const uint32_t slot = node.slots[i];
+			if (IsSparse64Homogeneous(slot)) {
+				const uint8_t slotMaterial = Sparse64HomogeneousMaterial(slot);
+				if (i > 0 && slotMaterial != material) {
+					return false;
+				}
+				material = slotMaterial;
+			} else if (IsSparse64Leaf(slot)) {
+				const uint8_t slotMaterial = Sparse64LeafMaterial(slot);
+				if (i > 0 && slotMaterial != material) {
+					return false;
+				}
+				material = slotMaterial;
+			} else {
+				return false;
+			}
+		}
+		outMaterial = material;
+		return true;
+	}
+
 	uint32_t AllocateNode(uint32_t fillMaterial) noexcept
 	{
-		const uint32_t index = static_cast<uint32_t>(nodes_.size());
 		Node newNode{};
 		if (IsSparse64Leaf(fillMaterial)) {
 			const uint8_t material = Sparse64LeafMaterial(fillMaterial);
@@ -217,8 +438,76 @@ private:
 				newNode.slots[i] = MakeSparse64Leaf(0);
 			}
 		}
+		newNode.refCount = 1;
+		if (deduplicationEnabled_) {
+			newNode.structuralHash = ComputeNodeStructuralHash(newNode);
+			const uint32_t existing = FindEquivalentNode(newNode);
+			if (existing != kSparse64InvalidNodeIndex) {
+				++nodes_[existing].refCount;
+				return existing;
+			}
+		}
+		const uint32_t index = static_cast<uint32_t>(nodes_.size());
 		nodes_.push_back(newNode);
+		if (deduplicationEnabled_) {
+			AddNodeToDedupIndex(index);
+		}
 		return index;
+	}
+
+	uint32_t MarkNodeUnique(uint32_t nodeIndex) noexcept
+	{
+		if (!deduplicationEnabled_ || nodes_[nodeIndex].refCount == 1) {
+			return nodeIndex;
+		}
+		--nodes_[nodeIndex].refCount;
+		RemoveNodeFromDedupIndex(nodeIndex);
+		Node copy = nodes_[nodeIndex];
+		copy.refCount = 1;
+		const uint32_t newIndex = static_cast<uint32_t>(nodes_.size());
+		nodes_.push_back(copy);
+		AddNodeToDedupIndex(newIndex);
+		return newIndex;
+	}
+
+	void DecrementRefCount(uint32_t nodeIndex) noexcept
+	{
+		if (nodes_[nodeIndex].refCount > 0) {
+			--nodes_[nodeIndex].refCount;
+		}
+	}
+
+	uint32_t GetRefCount(uint32_t nodeIndex) const noexcept
+	{
+		return nodes_[nodeIndex].refCount;
+	}
+
+	bool IsHomogeneousRoot() const noexcept
+	{
+		return IsSparse64Homogeneous(rootSlot_);
+	}
+
+public:
+	void DedupPass() noexcept
+	{
+		if (!deduplicationEnabled_ || IsSparse64Leaf(rootSlot_)) {
+			return;
+		}
+		rootSlot_ = DedupSubtree(rootSlot_, maxDepth_);
+	}
+
+	uint32_t DedupSubtree(uint32_t slot, int level) noexcept
+	{
+		if (level <= 0 || IsSparse64Leaf(slot)) {
+			return slot;
+		}
+		const uint32_t nodeIndex = Sparse64NodeIndex(slot);
+		Node &node = nodes_[nodeIndex];
+		for (std::size_t i = 0; i < node.slots.size(); ++i) {
+			node.slots[i] = DedupSubtree(node.slots[i], level - 1);
+		}
+		UpdateNodeInDedupIndex(nodeIndex);
+		return slot;
 	}
 
 	uint32_t SetCellRecursive(uint32_t slot, int x, int y, int z, uint8_t material, int level) noexcept
@@ -226,22 +515,45 @@ private:
 		if (level <= 0) {
 			return MakeSparse64Leaf(material);
 		}
+		if (IsSparse64Homogeneous(slot)) {
+			const uint8_t existingMaterial = Sparse64HomogeneousMaterial(slot);
+			if (existingMaterial == material) {
+				return slot;
+			}
+			const uint32_t newNodeIndex = AllocateNode(MakeSparse64Leaf(existingMaterial));
+			nodes_[newNodeIndex].fillMask = 0xFFFFFFFFFFFFFFFFull;
+			slot = newNodeIndex;
+		} else if (IsSparse64Leaf(slot)) {
+			if (Sparse64LeafMaterial(slot) == material) {
+				return slot;
+			}
+			const uint32_t nodeIndex = AllocateNode(slot);
+			nodes_[nodeIndex].fillMask = 0xFFFFFFFFFFFFFFFFull;
+			slot = nodeIndex;
+		}
+
 		const int subX = ExtractSubCoord(x, level);
 		const int subY = ExtractSubCoord(y, level);
 		const int subZ = ExtractSubCoord(z, level);
 		const int childIndex = ComputeSparse64ChildSlotIndex(subX, subY, subZ);
 
-		if (IsSparse64Leaf(slot)) {
-			const uint32_t nodeIndex = AllocateNode(slot);
-			slot = nodeIndex;
-		}
-
-		const uint32_t nodeIndex = Sparse64NodeIndex(slot);
+		const uint32_t nodeIndex = MarkNodeUnique(Sparse64NodeIndex(slot));
 		const uint32_t existingSlot = nodes_[nodeIndex].slots[childIndex];
 		const uint32_t updatedSlot = SetCellRecursive(existingSlot, x, y, z, material, level - 1);
 		nodes_[nodeIndex].slots[childIndex] = updatedSlot;
 		nodes_[nodeIndex].fillMask |= (1ull << childIndex);
-		return slot;
+
+		uint8_t collapseMaterial = 0;
+		if (CanCollapseToHomogeneous(nodes_[nodeIndex], collapseMaterial)) {
+			if (deduplicationEnabled_) {
+				RemoveNodeFromDedupIndex(nodeIndex);
+			}
+			DecrementRefCount(nodeIndex);
+			return MakeSparse64Homogeneous(collapseMaterial);
+		}
+
+		UpdateNodeInDedupIndex(nodeIndex);
+		return nodeIndex;
 	}
 };
 

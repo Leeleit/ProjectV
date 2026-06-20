@@ -85,6 +85,37 @@ const uint kAmbientOcclusionMaxSteps = 4u;
 const uint kLocalPointLightShadowMaxSteps = 12u;
 const float kHugeRayT = 1e20;
 
+#define DDA_BODY(MAX_STEPS, TRAVELED_OP, PRED, RETURN_EXPR, DEFAULT_RETURN) \
+    for (uint stepIndex = 0u; stepIndex < (MAX_STEPS); ++stepIndex) { \
+        if (tMax.x < tMax.y) { \
+            if (tMax.x < tMax.z) { \
+                traveled = tMax.x; \
+                currentVoxel.x += stepDirection.x; \
+                tMax.x += tDelta.x; \
+            } else { \
+                traveled = tMax.z; \
+                currentVoxel.z += stepDirection.z; \
+                tMax.z += tDelta.z; \
+            } \
+        } else if (tMax.y < tMax.z) { \
+            traveled = tMax.y; \
+            currentVoxel.y += stepDirection.y; \
+            tMax.y += tDelta.y; \
+        } else { \
+            traveled = tMax.z; \
+            currentVoxel.z += stepDirection.z; \
+            tMax.z += tDelta.z; \
+        } \
+        if (traveled TRAVELED_OP maxDistance) { \
+            break; \
+        } \
+        const uint hitMaterial = ReadVoxelMaterial(currentVoxel); \
+        if ((PRED)(hitMaterial)) { \
+            return (RETURN_EXPR); \
+        } \
+    } \
+    return (DEFAULT_RETURN);
+
 bool IsGlass(const uint materialIndex) {
     return materialIndex == 1u;
 }
@@ -235,42 +266,7 @@ const float bias) {
     const uint maxSteps = uint(clamp(ceil(maxDistance * 2.0), 1.0, float(kLocalPointLightShadowMaxSteps)));
     float traveled = 0.0;
 
-    for (uint stepIndex = 0u; stepIndex < kLocalPointLightShadowMaxSteps; ++stepIndex) {
-        if (stepIndex >= maxSteps) {
-            break;
-        }
-
-        if (tMax.x < tMax.y) {
-            if (tMax.x < tMax.z) {
-                traveled = tMax.x;
-                currentVoxel.x += stepDirection.x;
-                tMax.x += tDelta.x;
-            } else {
-                traveled = tMax.z;
-                currentVoxel.z += stepDirection.z;
-                tMax.z += tDelta.z;
-            }
-        } else if (tMax.y < tMax.z) {
-            traveled = tMax.y;
-            currentVoxel.y += stepDirection.y;
-            tMax.y += tDelta.y;
-        } else {
-            traveled = tMax.z;
-            currentVoxel.z += stepDirection.z;
-            tMax.z += tDelta.z;
-        }
-
-        if (traveled >= maxDistance) {
-            break;
-        }
-
-        const uint hitMaterial = ReadVoxelMaterial(currentVoxel);
-        if (IsLocalPointLightShadowOccluder(hitMaterial)) {
-            return 1.0 - shadowStrength;
-        }
-    }
-
-    return 1.0;
+    DDA_BODY(maxSteps, >=, IsLocalPointLightShadowOccluder, 1.0 - shadowStrength, 1.0)
 }
 
 float ComputeSunContactVisibility(const vec3 worldPosition, const vec3 normal, const vec3 sunDirection) {
@@ -294,39 +290,7 @@ float ComputeSunContactVisibility(const vec3 worldPosition, const vec3 normal, c
     vec3 tMax = ComputeRayStepTMax(rayOrigin, currentVoxel, stepDirection, rayDirection);
     float traveled = 0.0;
 
-    for (uint stepIndex = 0u; stepIndex < kSunContactShadowMaxSteps; ++stepIndex) {
-        if (tMax.x < tMax.y) {
-            if (tMax.x < tMax.z) {
-                traveled = tMax.x;
-                currentVoxel.x += stepDirection.x;
-                tMax.x += tDelta.x;
-            } else {
-                traveled = tMax.z;
-                currentVoxel.z += stepDirection.z;
-                tMax.z += tDelta.z;
-            }
-        } else if (tMax.y < tMax.z) {
-            traveled = tMax.y;
-            currentVoxel.y += stepDirection.y;
-            tMax.y += tDelta.y;
-        } else {
-            traveled = tMax.z;
-            currentVoxel.z += stepDirection.z;
-            tMax.z += tDelta.z;
-        }
-
-        if (traveled > maxDistance) {
-            break;
-        }
-
-        const uint hitMaterial = ReadVoxelMaterial(currentVoxel);
-        if (IsSunContactShadowOccluder(hitMaterial)) {
-            const float distanceFade = 1.0 - clamp(traveled / maxDistance, 0.0, 1.0);
-            return 1.0 - contactStrength * distanceFade;
-        }
-    }
-
-    return 1.0;
+    DDA_BODY(kSunContactShadowMaxSteps, >, IsSunContactShadowOccluder, 1.0 - contactStrength * (1.0 - clamp(traveled / maxDistance, 0.0, 1.0)), 1.0)
 }
 
 float TraceAmbientOcclusionRay(
@@ -350,43 +314,7 @@ const uint maxSteps) {
     vec3 tMax = ComputeRayStepTMax(rayOrigin, currentVoxel, stepDirection, rayDirection);
     float traveled = 0.0;
 
-    for (uint stepIndex = 0u; stepIndex < kAmbientOcclusionMaxSteps; ++stepIndex) {
-        if (stepIndex >= maxSteps) {
-            break;
-        }
-
-        if (tMax.x < tMax.y) {
-            if (tMax.x < tMax.z) {
-                traveled = tMax.x;
-                currentVoxel.x += stepDirection.x;
-                tMax.x += tDelta.x;
-            } else {
-                traveled = tMax.z;
-                currentVoxel.z += stepDirection.z;
-                tMax.z += tDelta.z;
-            }
-        } else if (tMax.y < tMax.z) {
-            traveled = tMax.y;
-            currentVoxel.y += stepDirection.y;
-            tMax.y += tDelta.y;
-        } else {
-            traveled = tMax.z;
-            currentVoxel.z += stepDirection.z;
-            tMax.z += tDelta.z;
-        }
-
-        if (traveled > maxDistance) {
-            break;
-        }
-
-        const uint hitMaterial = ReadVoxelMaterial(currentVoxel);
-        if (IsAmbientOcclusionOccluder(hitMaterial)) {
-            const float distanceFade = 1.0 - clamp(traveled / maxDistance, 0.0, 1.0);
-            return distanceFade * distanceFade;
-        }
-    }
-
-    return 0.0;
+    DDA_BODY(maxSteps, >, IsAmbientOcclusionOccluder, (1.0 - clamp(traveled / maxDistance, 0.0, 1.0)) * (1.0 - clamp(traveled / maxDistance, 0.0, 1.0)), 0.0)
 }
 
 void BuildSurfaceTangentBasis(const vec3 normal, out vec3 tangentA, out vec3 tangentB) {

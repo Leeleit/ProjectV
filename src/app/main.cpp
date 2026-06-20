@@ -80,9 +80,9 @@ int RebuildAllShadersFromDisk()
 
 bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view operationStep)
 {
-	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
-	DebugState *debug = GetDebugState(state->ecs.get());
-	WorldState *world = GetWorldState(state->ecs.get());
+	CameraState *camera = GetPrimaryCameraState(state->ecs().get());
+	DebugState *debug = GetDebugState(state->ecs().get());
+	WorldState *world = GetWorldState(state->ecs().get());
 	PV_CHECK_OR_RETURN(
 		camera && debug && world && world->voxelWorld,
 		"App",
@@ -91,16 +91,16 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 
 	ResetCameraState(camera);
 	ApplyStartupCameraOverrideFromEnvironment(camera);
-	state->input.mouseDeltaX = 0.0f;
-	state->input.mouseDeltaY = 0.0f;
-	state->input.removePressed = false;
-	state->input.placePressed = false;
-	state->interaction.selection = {};
-	state->frame.renderData.interactionSelection = {};
-	state->simulation.simulationAccumulatorSeconds = 0.0f;
-	state->simulation.simulationStepsLastFrame = 0;
+	state->input().mouseDeltaX = 0.0f;
+	state->input().mouseDeltaY = 0.0f;
+	state->input().removePressed = false;
+	state->input().placePressed = false;
+	state->interaction().selection = {};
+	state->frame().renderData.interactionSelection = {};
+	state->simulation().simulationAccumulatorSeconds = 0.0f;
+	state->simulation().simulationStepsLastFrame = 0;
 
-	if (!SyncEcsWorldState(state->ecs.get())) {
+	if (!SyncEcsWorldState(state->ecs().get())) {
 		runtime::LogRuntimeFailure(
 			"App",
 			std::string(operationStep) + ".SyncEcsWorldState",
@@ -108,7 +108,7 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 		return false;
 	}
 
-	if (!CreateSceneResources(&state->context, world, &state->render)) {
+	if (!CreateSceneResources(&state->context(), world, &state->render())) {
 		runtime::LogRuntimeFailure(
 			"App",
 			std::string(operationStep) + ".CreateSceneResources",
@@ -116,8 +116,8 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 		return false;
 	}
 
-	if (state->physics &&
-		!SyncPhysicsWorld(state->physics.get(), world->voxelWorld.get())) {
+	if (state->physics() &&
+		!SyncPhysicsWorld(state->physics().get(), world->voxelWorld.get())) {
 		runtime::LogRuntimeFailure(
 			"App",
 			std::string(operationStep) + ".SyncPhysicsWorld",
@@ -125,11 +125,11 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 		return false;
 	}
 
-	projectv::asset::SnapModelInstancesAboveGroundDispatch(*world->voxelWorld, &state->render);
+	projectv::asset::SnapModelInstancesAboveGroundDispatch(*world->voxelWorld, &state->render());
 
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
-		ConsumeInputActionPressed(state->input, InputAction::MoveUp);
-		if (!SnapWalkCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+		ConsumeInputActionPressed(state->input(), InputAction::MoveUp);
+		if (!SnapWalkCharacterToCamera(state->physics().get(), world->voxelWorld.get(), camera)) {
 			runtime::LogRuntimeFailure(
 				"App",
 				std::string(operationStep) + ".SnapWalkCharacterToCamera",
@@ -137,7 +137,7 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 			return false;
 		}
 	} else if (camera->controlMode == CameraState::ControlMode::Creative) {
-		if (!SnapCreativeCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+		if (!SnapCreativeCharacterToCamera(state->physics().get(), world->voxelWorld.get(), camera)) {
 			runtime::LogRuntimeFailure(
 				"App",
 				std::string(operationStep) + ".SnapCreativeCharacterToCamera",
@@ -145,14 +145,14 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 			return false;
 		}
 	} else {
-		ResetWalkCharacter(state->physics.get());
+		ResetWalkCharacter(state->physics().get());
 	}
 
 	debug->stats.scenePreset = world->voxelWorld ? world->voxelWorld->scenePreset : VoxelScenePreset::VoxelLab;
 	world->scenePresetReloadRequested = false;
 	world->snapshotSaveRequested = false;
 	world->snapshotLoadRequested = false;
-	state->render.taaHistoryValid = false;
+	state->render().taaHistoryValid = false;
 	return true;
 }
 
@@ -161,7 +161,7 @@ bool ReloadActiveVoxelScene(AppState *state, const VoxelScenePreset preset)
 	PV_PROFILE_ZONE_N("ReloadActiveVoxelScene");
 	PV_CHECK_OR_RETURN(state != nullptr, "App", "ReloadActiveVoxelScene.Preconditions", "AppState is null");
 
-	if (!WaitForDeviceIdle(state->context)) {
+	if (!WaitForDeviceIdle(state->context())) {
 		return false;
 	}
 
@@ -181,7 +181,7 @@ bool SaveActiveVoxelWorldSnapshot(AppState *state)
 	PV_PROFILE_ZONE_N("SaveActiveVoxelWorldSnapshot");
 	PV_CHECK_OR_RETURN(state != nullptr, "App", "SaveActiveVoxelWorldSnapshot.Preconditions", "AppState is null");
 
-	WorldState *world = GetWorldState(state->ecs.get());
+	WorldState *world = GetWorldState(state->ecs().get());
 	PV_CHECK_OR_RETURN(
 		world && world->voxelWorld,
 		"App",
@@ -207,7 +207,7 @@ bool LoadActiveVoxelWorldSnapshot(AppState *state)
 	PV_PROFILE_ZONE_N("LoadActiveVoxelWorldSnapshot");
 	PV_CHECK_OR_RETURN(state != nullptr, "App", "LoadActiveVoxelWorldSnapshot.Preconditions", "AppState is null");
 
-	if (!WaitForDeviceIdle(state->context)) {
+	if (!WaitForDeviceIdle(state->context())) {
 		return false;
 	}
 
@@ -222,8 +222,8 @@ bool LoadActiveVoxelWorldSnapshot(AppState *state)
 	}
 	std::unique_ptr<VoxelWorld> loadedWorld = std::move(*loadedResult);
 
-	state->world.voxelWorld = std::move(loadedWorld);
-	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
+	state->world().voxelWorld = std::move(loadedWorld);
+	state->world().requestedScenePreset = state->world().voxelWorld->scenePreset;
 	return FinalizeActiveVoxelWorldReload(state, "LoadActiveVoxelWorldSnapshot");
 }
 
@@ -247,22 +247,22 @@ bool StartLastInputReplayPlayback(AppState *state)
 	PV_PROFILE_ZONE_N("StartLastInputReplayPlayback");
 	PV_CHECK_OR_RETURN(state != nullptr, "App", "StartLastInputReplayPlayback.Preconditions", "AppState is null");
 
-	if (!LoadLatestInputReplay(&state->input)) {
+	if (!LoadLatestInputReplay(&state->input())) {
 		return false;
 	}
-	if (!state->input.replay.captureAvailable) {
+	if (!state->input().replay.captureAvailable) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"StartLastInputReplayPlayback.Capture",
 			"no replay capture is available");
 		return false;
 	}
-	if (!WaitForDeviceIdle(state->context)) {
+	if (!WaitForDeviceIdle(state->context())) {
 		return false;
 	}
 
 	std::unique_ptr<VoxelWorld> loadedWorld = [&]() -> std::unique_ptr<VoxelWorld> {
-		auto result = LoadVoxelWorldSnapshot(state->input.replay.capture.snapshotPath.string());
+		auto result = LoadVoxelWorldSnapshot(state->input().replay.capture.snapshotPath.string());
 		if (!result.has_value()) {
 			runtime::LogRuntimeFailure(
 				"App",
@@ -276,38 +276,38 @@ bool StartLastInputReplayPlayback(AppState *state)
 		return false;
 	}
 
-	state->world.voxelWorld = std::move(loadedWorld);
-	state->world.requestedScenePreset = state->world.voxelWorld->scenePreset;
+	state->world().voxelWorld = std::move(loadedWorld);
+	state->world().requestedScenePreset = state->world().voxelWorld->scenePreset;
 	if (!FinalizeActiveVoxelWorldReload(state, "StartLastInputReplayPlayback")) {
 		return false;
 	}
 
-	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
-	const WorldState *const world = GetWorldState(state->ecs.get());
+	CameraState *camera = GetPrimaryCameraState(state->ecs().get());
+	const WorldState *const world = GetWorldState(state->ecs().get());
 	PV_CHECK_OR_RETURN(
 		camera && world && world->voxelWorld,
 		"App",
 		"StartLastInputReplayPlayback.World",
 		"playback requires initialized camera and voxel world");
 
-	*camera = state->input.replay.capture.initialCamera;
-	state->interaction = state->input.replay.capture.initialInteraction;
-	state->simulation.lastFrameCounter = 0;
-	state->simulation.frameDeltaSeconds = 0.0f;
-	state->simulation.simulationAccumulatorSeconds = 0.0f;
-	state->simulation.simulationStepsLastFrame = 0;
-	state->simulation.simulationTick = 0;
-	state->input.mouseDeltaX = 0.0f;
-	state->input.mouseDeltaY = 0.0f;
-	state->input.removePressed = false;
-	state->input.placePressed = false;
-	ApplyInputActionSnapshot(state->input, 0ull, 0ull);
-	SetPhysicsWalkAirControlMode(state->physics.get(), state->input.replay.capture.walkAirControlMode);
-	SetPhysicsWalkAutoJumpEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(state->physics.get(), state->input.replay.capture.walkAutoJumpDelayEnabled);
+	*camera = state->input().replay.capture.initialCamera;
+	state->interaction() = state->input().replay.capture.initialInteraction;
+	state->simulation().lastFrameCounter = 0;
+	state->simulation().frameDeltaSeconds = 0.0f;
+	state->simulation().simulationAccumulatorSeconds = 0.0f;
+	state->simulation().simulationStepsLastFrame = 0;
+	state->simulation().simulationTick = 0;
+	state->input().mouseDeltaX = 0.0f;
+	state->input().mouseDeltaY = 0.0f;
+	state->input().removePressed = false;
+	state->input().placePressed = false;
+	ApplyInputActionSnapshot(state->input(), 0ull, 0ull);
+	SetPhysicsWalkAirControlMode(state->physics().get(), state->input().replay.capture.walkAirControlMode);
+	SetPhysicsWalkAutoJumpEnabled(state->physics().get(), state->input().replay.capture.walkAutoJumpEnabled);
+	SetPhysicsWalkAutoJumpDelayEnabled(state->physics().get(), state->input().replay.capture.walkAutoJumpDelayEnabled);
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
-		ConsumeInputActionPressed(state->input, InputAction::MoveUp);
-		if (!SnapWalkCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+		ConsumeInputActionPressed(state->input(), InputAction::MoveUp);
+		if (!SnapWalkCharacterToCamera(state->physics().get(), world->voxelWorld.get(), camera)) {
 			runtime::LogRuntimeFailure(
 				"App",
 				"StartLastInputReplayPlayback.SnapWalkCharacterToCamera",
@@ -315,7 +315,7 @@ bool StartLastInputReplayPlayback(AppState *state)
 			return false;
 		}
 	} else if (camera->controlMode == CameraState::ControlMode::Creative) {
-		if (!SnapCreativeCharacterToCamera(state->physics.get(), world->voxelWorld.get(), camera)) {
+		if (!SnapCreativeCharacterToCamera(state->physics().get(), world->voxelWorld.get(), camera)) {
 			runtime::LogRuntimeFailure(
 				"App",
 				"StartLastInputReplayPlayback.SnapCreativeCharacterToCamera",
@@ -323,17 +323,17 @@ bool StartLastInputReplayPlayback(AppState *state)
 			return false;
 		}
 	} else {
-		ResetWalkCharacter(state->physics.get());
+		ResetWalkCharacter(state->physics().get());
 	}
 
-	state->input.replay.recording = false;
-	state->input.replay.playbackRequested = false;
-	state->input.replay.playbackActive = !state->input.replay.capture.frames.empty();
-	state->input.replay.playbackFrameIndex = 0;
+	state->input().replay.recording = false;
+	state->input().replay.playbackRequested = false;
+	state->input().replay.playbackActive = !state->input().replay.capture.frames.empty();
+	state->input().replay.playbackFrameIndex = 0;
 	SDL_Log(
 		"[ProjectV][InputReplay] playback started replay=%s frames=%zu",
-		state->input.replay.replayPath.string().c_str(),
-		state->input.replay.capture.frames.size());
+		state->input().replay.replayPath.string().c_str(),
+		state->input().replay.capture.frames.size());
 	return true;
 }
 } // namespace
@@ -359,24 +359,24 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		ShutdownVulkan(state.get());
 		return SDL_APP_FAILURE;
 	}
-	state->audio = AudioEnginePtr(
+	state->audio() = AudioEnginePtr(
 		// ReSharper disable once CppDFAMemoryLeak
 		new projectv::audio::AudioEngine(), // EVIL: tranfer ownership
 		DestroyAudioEngine);
-	if (!state->audio->init()) {
+	if (!state->audio()->init()) {
 		SDL_Log("[ProjectV][Audio] miniaudio init failed; running without music");
-		state->audio.reset();
+		state->audio().reset();
 	} else {
 
-		const size_t trackCount = state->audio->loadMusicFolder(
+		const size_t trackCount = state->audio()->loadMusicFolder(
 												  projectv::audio::GetMusicDirectoryPath())
 									  .value_or(0);
 		SDL_Log("[ProjectV][Audio] miniaudio initialized; %zu mp3 track(s) in %s",
 				trackCount,
-				state->audio->musicFolder().string().c_str());
+				state->audio()->musicFolder().string().c_str());
 	}
-	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture);
-	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark);
+	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture());
+	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark());
 
 	{
 		const std::string configPath = projectv::voxel::GetDefaultSceneConfigPath();
@@ -390,7 +390,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 				config.name.c_str(),
 				configPath.c_str(),
 				std::string{VoxelScenePresetToString(config.scenePreset)}.c_str());
-			const WorldState *worldState = GetWorldState(state->ecs.get());
+			const WorldState *worldState = GetWorldState(state->ecs().get());
 			if (worldState && worldState->voxelWorld &&
 				worldState->voxelWorld->scenePreset != config.scenePreset) {
 				if (ReloadActiveVoxelScene(state.get(), config.scenePreset)) {
@@ -403,9 +403,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		}
 	}
 
-	if (!SDL_SetWindowRelativeMouseMode(state->platform.window, state->input.relativeMouseModeEnabled)) {
+	if (!SDL_SetWindowRelativeMouseMode(state->platform().window, state->input().relativeMouseModeEnabled)) {
 		runtime::LogSdlFailure("SDL_AppInit.SDL_SetWindowRelativeMouseMode");
-		state->input.relativeMouseModeEnabled = false;
+		state->input().relativeMouseModeEnabled = false;
 	}
 
 	*appstate = state.release();
@@ -431,9 +431,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 	}
 
 	if (ShouldRequestSwapchainRefreshForWindowEvent(event->type)) {
-		state->platform.windowResized = true;
+		state->platform().windowResized = true;
 	}
-	if (state->input.replay.playbackActive && IsInteractiveInputEvent(*event)) {
+	if (state->input().replay.playbackActive && IsInteractiveInputEvent(*event)) {
 		return SDL_APP_CONTINUE;
 	}
 
@@ -467,10 +467,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 				cycleSize);
 
 			if (!RecreateSwapchain(
-					&state->platform,
-					&state->context,
-					&state->swapchain,
-					&state->render)) {
+					&state->platform(),
+					&state->context(),
+					&state->swapchain(),
+					&state->render())) {
 				runtime::LogRuntimeFailure(
 					"App",
 					"SDL_AppEvent.CycleVsync.RecreateSwapchain",
@@ -479,19 +479,19 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		}
 	}
 
-	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
+	CameraState *camera = GetPrimaryCameraState(state->ecs().get());
 	if (event->type == SDL_EVENT_WINDOW_ENTER_FULLSCREEN ||
 		event->type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN ||
 		event->type == SDL_EVENT_WINDOW_RESIZED ||
 		event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
-		state->input.skipFirstMouseMotion = true;
-		state->input.mouseMotionFreezeCount = 5;
-		state->input.mouseDeltaX = 0.0f;
-		state->input.mouseDeltaY = 0.0f;
+		state->input().skipFirstMouseMotion = true;
+		state->input().mouseMotionFreezeCount = 5;
+		state->input().mouseDeltaX = 0.0f;
+		state->input().mouseDeltaY = 0.0f;
 	}
-	HandleInputActionEvent(state->input, event);
-	HandleCameraEvent(camera, &state->input, event);
-	HandleInteractionEvent(&state->input, event);
+	HandleInputActionEvent(state->input(), event);
+	HandleCameraEvent(camera, &state->input(), event);
+	HandleInteractionEvent(&state->input(), event);
 	return SDL_APP_CONTINUE;
 }
 
@@ -504,9 +504,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		return SDL_APP_FAILURE;
 	}
 
-	CameraState *camera = GetPrimaryCameraState(state->ecs.get());
-	DebugState *debug = GetDebugState(state->ecs.get());
-	WorldState *world = GetWorldState(state->ecs.get());
+	CameraState *camera = GetPrimaryCameraState(state->ecs().get());
+	DebugState *debug = GetDebugState(state->ecs().get());
+	WorldState *world = GetWorldState(state->ecs().get());
 	if (!camera || !debug || !world) {
 		runtime::LogRuntimeFailure(
 			"App",
@@ -514,7 +514,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"primary camera, debug singleton or world singleton is unavailable");
 		return SDL_APP_FAILURE;
 	}
-	if (state->input.replay.playbackRequested &&
+	if (state->input().replay.playbackRequested &&
 		!StartLastInputReplayPlayback(state)) {
 		runtime::LogRuntimeFailure(
 			"App",
@@ -522,34 +522,32 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"StartLastInputReplayPlayback returned false");
 		return SDL_APP_FAILURE;
 	}
-	if (state->input.replay.playbackActive &&
-		!PrepareNextInputReplayPlaybackFrame(&state->input, &state->simulation)) {
-		StopInputReplayPlayback(&state->input);
+	if (state->input().replay.playbackActive &&
+		!PrepareNextInputReplayPlaybackFrame(&state->input(), &state->simulation())) {
+		StopInputReplayPlayback(&state->input());
 	}
-	const bool quitAfterLookDevCaptureFrame =
-		UpdateLookDevCaptureAutomation(&state->lookDevCapture, &state->render);
-	const DebugState *benchmarkDebug = GetDebugState(state->ecs.get());
-	const Uint64 benchmarkFrameCounter = SDL_GetPerformanceCounter();
-	const bool quitAfterBenchmarkFrame =
-		UpdateBenchmarkAutomation(
-			&state->benchmark,
-			benchmarkDebug ? benchmarkDebug->stats : DebugStats{},
-			benchmarkFrameCounter);
 
 	SDL_AppResult result = SDL_APP_FAILURE;
 	if (!UpdateApp(
-			&state->platform,
-			&state->simulation,
+			&state->platform(),
+			&state->simulation(),
 			camera,
-			&state->input,
-			&state->interaction,
+			&state->input(),
+			&state->interaction(),
 			world,
-			state->physics.get(),
-			&state->render,
+			state->physics().get(),
+			&state->render(),
 			debug,
-			state->audio.get())) {
+			state->audio().get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");
-	} else if (world->snapshotSaveRequested &&
+	} else {
+		TickAudioRefreshPlaylistSystem(state->ecs().get());
+		TickFluidCASystem(state->ecs().get());
+		TickVoxelInteractionSystem(state->ecs().get());
+		TickLookDevCaptureSystem(state->ecs().get());
+		TickBenchmarkAutomationSystem(state->ecs().get());
+	}
+	if (world->snapshotSaveRequested &&
 			   !SaveActiveVoxelWorldSnapshot(state)) {
 		runtime::LogRuntimeFailure(
 			"App",
@@ -567,39 +565,39 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"App",
 			"SDL_AppIterate.LoadActiveVoxelWorldSnapshot",
 			"LoadActiveVoxelWorldSnapshot returned false");
-	} else if (!SyncEcsWorldState(state->ecs.get())) {
+	} else if (!SyncEcsWorldState(state->ecs().get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.SyncEcsWorldState", "SyncEcsWorldState returned false");
 	} else if (!PrepareFrameRenderData(
-				   &state->context,
-				   &state->swapchain,
+				   &state->context(),
+				   &state->swapchain(),
 				   camera,
-				   &state->interaction,
+				   &state->interaction(),
 				   debug,
 				   world,
-				   &state->render,
-				   &state->frame,
-				   &state->input)) {
+				   &state->render(),
+				   &state->frame(),
+				   &state->input())) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"SDL_AppIterate.PrepareFrameRenderData",
 			"PrepareFrameRenderData returned false");
 	} else {
 		result = DrawFrame(
-			&state->platform,
-			&state->context,
-			&state->swapchain,
-			&state->render,
-			&state->frame);
-		if (quitAfterLookDevCaptureFrame && result == SDL_APP_CONTINUE) {
+			&state->platform(),
+			&state->context(),
+			&state->swapchain(),
+			&state->render(),
+			&state->frame());
+		if (IsLookDevCaptureQuitRequested(state->ecs().get()) && result == SDL_APP_CONTINUE) {
 			result = SDL_APP_SUCCESS;
 		}
-		if (quitAfterBenchmarkFrame && result == SDL_APP_CONTINUE) {
+		if (IsBenchmarkAutomationQuitRequested(state->ecs().get()) && result == SDL_APP_CONTINUE) {
 			result = SDL_APP_SUCCESS;
 		}
 	}
-	if (state->input.replay.playbackActive &&
-		state->input.replay.playbackFrameIndex >= state->input.replay.capture.frames.size()) {
-		StopInputReplayPlayback(&state->input);
+	if (state->input().replay.playbackActive &&
+		state->input().replay.playbackFrameIndex >= state->input().replay.capture.frames.size()) {
+		StopInputReplayPlayback(&state->input());
 	}
 
 	PV_PROFILE_FRAME_MARK();

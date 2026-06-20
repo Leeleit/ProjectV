@@ -43,7 +43,7 @@ void PopulateChunkSelectionInfo(
 
 	const Int3 chunkCoord = GetVoxelChunkCoord(world, voxel);
 	const size_t chunkIndex = GetVoxelChunkIndex(world, chunkCoord);
-	const auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+	const auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit] = world.chunks[chunkIndex];
 	outHasChunk = true;
 	outChunkCoord = chunkCoord;
 	outChunkMin = min;

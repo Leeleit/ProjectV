@@ -1,0 +1,40 @@
+#version 460
+#extension GL_EXT_mesh_shader : enable
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
+layout(push_constant) uniform MeshPushConstants {
+    uvec4 meshDispatchParams;
+} pushConstants;
+
+void main()
+{
+    SetMeshOutputsEXT(3u, 1u);
+
+    const uint chunkIndex = gl_WorkGroupID.x;
+    if (chunkIndex >= pushConstants.meshDispatchParams.x) {
+        return;
+    }
+    const ChunkDescriptor chunk = chunkDescriptors[chunkIndex];
+
+    const float extent = float(chunk.chunkExtentAndNonAir.x);
+    const vec3 origin = vec3(chunk.chunkOrigin.xyz);
+
+    gl_MeshVerticesEXT[0].gl_Position = vec4(origin + vec3(0.0, 0.0, 0.0), 1.0);
+    gl_MeshVerticesEXT[1].gl_Position = vec4(origin + vec3(extent, 0.0, 0.0), 1.0);
+    gl_MeshVerticesEXT[2].gl_Position = vec4(origin + vec3(0.0, extent, 0.0), 1.0);
+
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0u, 1u, 2u);
+}

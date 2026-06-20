@@ -15,6 +15,194 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-20 (session: 2x scope continuation, part 2)
+
+### Stage 1.1 chunk 7 — homogeneous optimization
+
+- `src/voxel/Sparse64Tree.hpp` — added `kSparse64HomogeneousFlag = 0x40000000u` slot encoding. A homogeneous marker
+  encodes "all 64 child cells have the same material" as a single uint32 slot, saving memory for flat-color
+  regions (walls, floors). New helpers: `MakeSparse64Homogeneous(material)`, `IsSparse64Homogeneous(slot)`,
+  `Sparse64HomogeneousMaterial(slot)`. Slot node-index mask changed from `0x7FFFFFFF` to `0x3FFFFFFF` (30 bits).
+- `SetCellRecursive` checks `CanCollapseToHomogeneous(node)` after each mutation — if all 64 child slots
+  are now the same material (leaf or homogeneous marker), the node is replaced with a homogeneous marker
+  (refCount decremented). Cascade naturally propagates upward.
+- Early-out for "same material" SetCell on leaf or homogeneous slots (no node allocation).
+- Leaf expansion path now sets `fillMask = full` (sub-volume fully populated), so re-collapse works after
+  revert edits.
+- `LiveNodeCount()` helper added (counts nodes with `refCount > 0`) — `NodeCount()` keeps old "allocated"
+  semantics for snapshot save/load.
+- `IsHomogeneousRoot()` public helper.
+- `tests/Sparse64TreeTests.cpp` — 5 new sub-tests: `TestHomogeneousCollapseSmall` (4×4×4), `TestHomogeneousExpansionOnSingleEdit`,
+  `TestHomogeneousCascadeSixteen` (16×16×16 full cascade), `TestHomogeneousRecollapseAfterEdit`,
+  `TestHomogeneousDedupEqual`.
+
+### Stage 1.2 chunks 4-5 — per-chunk static flag + lazy promotion
+
+- `src/voxel/VoxelWorld.hpp` — `VoxelChunk` gained `bool isStatic = false;` + `uint32_t ticksSinceLastEdit = 0;`
+  (struct size 32 → 36 bytes, static_asserts updated).
+- `src/voxel/VoxelWorld.{hpp,cpp}` — new API: `GetVoxelChunkStaticPromotionThreshold()` (env `PROJECTV_SVDAG_STATIC_PROMOTION_TICKS`,
+  default 60), `TickVoxelChunkStaticPromotion(world, threshold)` (per-frame increment + auto-promote + DedupPass trigger
+  if dedup enabled), `CountStaticVoxelChunks(world)`.
+- `SetVoxelMaterial` resets `isStatic = false; ticksSinceLastEdit = 0;` on every voxel edit (auto-demote).
+- `tests/VoxelWorldTests.cpp` — 2 new sub-tests: `TestVoxelChunkStaticPromotion`, `TestVoxelChunkStaticPromotionThresholdFromEnv`.
+
+### Stage 2.1 chunk 2 — task+mesh shader spike (nvidia-only)
+
+- `src/shaders/voxel_mesh.task` — new task shader. Frustum cull per chunk (6-plane AABB test),
+  `EmitMeshTasksEXT(visible_count, 1, 1)` to dispatch mesh shader. Reads `ChunkDescriptor` SSBO + push-constant
+  frustum planes. Uses `GL_EXT_mesh_shader` extension. Compiles under `vulkan1.3` target env.
+- `src/shaders/voxel_mesh.mesh` — new mesh shader. Stub: per visible chunk, emits 1 triangle at chunk origin
+  (NDC positions). Real greedy mesh emission deferred (multi-session work).
+- `src/CMakeLists.txt` — `--target-env vulkan1.3` flag added to shader compiler args (required for mesh shaders).
+- CMake registration for both new shader files. Compiles successfully, integration into `Renderer.cpp` deferred.
+
+### Stage 2.2 chunk 2 — HZB image lifecycle (spike)
+
+- `src/render/HizCulling.{hpp,cpp}` — real Vulkan lifecycle for `HizBuffer`. `CreateHizBuffer(context, w, h, outBuffer)`
+  allocates image + image view via VMA, `DestroyHizBuffer(context, buffer)` releases. `BuildHizMipChain(commandBuffer,
+  depthImage, layout, hizBuffer)` builds mip chain via `vkCmdBlitImage` with `VK_FILTER_NEAREST` (level 0 from depth)
+  and `VK_FILTER_LINEAR` (between mips), with proper image layout barriers.
+- Image format: `VK_FORMAT_R32_SFLOAT`, `VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT`.
+- Renderer integration (vkCmdDrawIndirectCountKHR dispatch + AABB SSBO + visible-mask readback) deferred to a
+  follow-up session — current Phase 4 = infrastructure ready.
+
+### Stage 6.1 — +3 Flecs ECS systems
+
+- `src/ecs/EcsWorld.{hpp,cpp}` — 3 new systems: `VoxelInteractionTickSystem`, `BenchmarkAutomationTickSystem`,
+  `LookDevCaptureTickSystem`. Each mirrors the AudioRefresh/FluidCA pattern (AppStateBinding + per-tick each()).
+- New ECS components: `VoxelInteractionTickState` (dummy field to avoid Flecs empty-struct issue),
+  `BenchmarkTickResult` (bool quitAfterFrame), `LookDevCaptureTickResult` (bool quitAfterFrame).
+- New public API: `TickVoxelInteractionSystem(ecs)`, `TickBenchmarkAutomationSystem(ecs)`,
+  `IsBenchmarkAutomationQuitRequested(ecs)`, `TickLookDevCaptureSystem(ecs)`,
+  `IsLookDevCaptureQuitRequested(ecs)`.
+- `src/core/Types.hpp` — `WorldState` gained `bool allowWorldEditing = false;` (computed in AppUpdate, read by VoxelInteraction ECS system).
+- `src/app/AppUpdate.cpp` — sets `world->allowWorldEditing = allowWorldEditing;`, removed inline
+  `UpdateVoxelInteraction` block (now in ECS).
+- `src/app/main.cpp` — removed inline `UpdateLookDevCaptureAutomation` and `UpdateBenchmarkAutomation` blocks,
+  calls `TickLookDevCaptureSystem` / `TickBenchmarkAutomationSystem` instead. Read `IsLookDevCaptureQuitRequested` /
+  `IsBenchmarkAutomationQuitRequested` for `quitAfter*Frame` flags.
+
+### Stage 6.2.5 — more `// EVIL:` markers (+13)
+
+- `src/voxel/VoxelRaycast.cpp` — 2 markers: `kEpsilon`, `kDirectionEpsilon`.
+- `src/voxel/VoxelMaterials.cpp` — 11 markers: all `k*` exposure/color-grade/shadow/contact-shadow constants
+  (`kMinSceneExposure`, `kDefaultMaxSceneExposure`, `kMinSceneKey`, `kMinExposureTargetKey`, `kMaxExposureTargetKey`,
+  `kMinEnvironmentIntensity`, `kMaxEnvironmentIntensity`, `kMinColorGradeWhitePoint`, `kMaxColorGradeWhitePoint`,
+  `kMinColorGradeContrast`, `kMaxColorGradeContrast`, `kMinColorGradeSaturation`, `kMaxColorGradeSaturation`,
+  `kMinColorGradeLift`, `kMaxColorGradeLift`, `kMaxShadowDepthBias`, `kMaxShadowNormalBias`, `kMaxShadowFilterRadius`,
+  `kMaxContactShadowDistance`). Total now 23 EVIL markers across the codebase (was 9).
+
+### Stage 6.2.6 — `vkWaitForFences` 10ms timeout constant
+
+- `src/core/Types.hpp` — added `kVulkanFenceWaitTimeoutNs = 10'000'000` and `kVulkanFenceWaitTimeoutUnboundedNs = UINT64_MAX`
+  inline constexpr constants. Per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` "low latency > throughput".
+- `src/render/Renderer.cpp` + `src/app/FramePreparation.cpp` — replaced literal `10'000'000` / `UINT64_MAX` with named constants.
+  All `vkWaitForFences` call sites follow the bounded-fallback pattern (10ms primary, unbounded only on `VK_TIMEOUT`).
+
+### Verified
+
+- `cmake --build build/linux-clang-debug --target ProjectV` — green
+- `ctest --test-dir build/linux-clang-debug` — 19/19 pass (~1.0 sec)
+- `ProjectVSparse64TreeTests` 24 sub-tests pass (+5 homogeneous)
+- `ProjectVVoxelWorldTests` (+2 static promotion)
+- `ProjectVHzbCullingTests` 4 sub-tests pass
+- All previous tests preserved baseline
+
+---
+
+## 2026-06-20 (session: 2x scope continuation)
+
+### Stage 1.1 chunks 5-7 — `world.voxels` fully removed
+
+- `src/voxel/VoxelWorld.hpp` — `world.voxels` field removed from `VoxelWorld` struct.
+  Storage is now exclusively the `sparseStorage` (Sparse64Tree). Test fixtures that
+  relied on the flat array now use `BuildFlatVoxelSnapshot(world)` helper in
+  `src/voxel/VoxelWorld.cpp` (loops `GetVoxelMaterial`).
+- `SetVoxelMaterial` now reads previous material via `GetVoxelMaterial` (sparse path)
+  for the no-op early-exit, eliminating the flat read.
+- `CreateEmptyVoxelWorld` no longer resizes flat; `LoadVoxelWorldSnapshot` no longer
+  populates flat.
+- `tests/FluidCATests.cpp` + `tests/VoxelWorldTests.cpp` refactored to use
+  `BuildFlatVoxelSnapshot` + `SetVoxelMaterial` loops; `state.world.X` →
+  `state->world().X` (per AppState PIMPL from 16x session).
+- `tests/CMakeLists.txt` + 5 `CMakePresets.json` buildPresets updated for
+  `ProjectVShadowProjectionBenchmark` deps (VoxelWorld.cpp, RuntimeDiagnostics.cpp,
+  VulkanResult.cpp, fmt, SDL3).
+
+### Stage 1.2 chunks 2-3 — Lazy DedupPass + copy-on-write (COW)
+
+- `src/voxel/Sparse64Tree.hpp` — `Node` struct now has `uint32_t refCount`.
+  `AllocateNode` sets `refCount=1`; `FindEquivalentNode` increments on dedup;
+  `MarkNodeUnique(nodeIndex)` implements COW: if `refCount > 1`, decrement old,
+  allocate copy with `refCount=1`, return new index. `SetCellRecursive` calls
+  `MarkNodeUnique` before mutation. `GetRefCount`, `DedupPass()`,
+  `DedupSubtree(slot, level)`, `SetDeduplicationEnabled` (resets refCount 0/1)
+  public API. Dedup OFF by default.
+- `tests/Sparse64TreeTests.cpp` — added `TestCopyOnWriteOnMutation` sub-test.
+
+### Stage 2.1 chunk 1 — CPU mesh fallback (minimal)
+
+- `src/voxel/CpuMeshGenerator.{hpp,cpp}` — minimal CPU-side single-axis (X+) face
+  emission for one chunk (4 sub-tests). Used as fallback / reference for future
+  mesh shader work; not integrated into Renderer yet.
+- `tests/CpuMeshGeneratorTests.cpp` — 4 sub-tests (empty chunk, single voxel,
+  boundary voxel, filled chunk).
+- `tests/CMakeLists.txt` + 5 buildPresets updated to register `ProjectVCpuMeshGeneratorTests`.
+
+### Stage 2.2 chunk 1 — HZB culling minimal spike
+
+- `src/shaders/hzb_cull.comp` — new compute shader: AABB-vs-HZB test, atomicOr
+  visibility bitmask writeback. Compiles to SPIR-V (added to `Shaders` target).
+- `src/render/HizCulling.{hpp,cpp}` — `HizBuffer` struct (image/imageView/memory
+  placeholder), `IsHzbCullingEnabled()` (env `PROJECTV_HZB_CULLING=ON` toggle,
+  default OFF), `ComputeHzbMipLevelCount` helper.
+- `tests/HzbCullingTests.cpp` — 4 sub-tests (env disabled default, 1024² → 11 mips,
+  800×600 → 10 mips, 1×1 → 1 mip).
+- 5 buildPresets updated to register `ProjectVHzbCullingTests`.
+
+### 6.2.3 — DDA shader template macro
+
+- `src/shaders/voxel.frag` — `DDA_BODY(MAX_STEPS, TRAVELED_OP, PRED, RETURN_EXPR, DEFAULT_RETURN)`
+  macro unifies the 3 copies of 12-step 3D-DDA loop (was ~50 lines each, now ~10 lines
+  per caller + macro body). Replaced for-loops in `TraceLocalPointLightShadowRay`,
+  `ComputeSunContactVisibility`, `TraceAmbientOcclusionRay`. `traveled >=` for
+  `LocalPointLightShadowRay` preserved via `TRAVELED_OP` arg (others use `>`).
+  Net −72 lines.
+
+### 6.2.2 — std::span sweep (one target migrated)
+
+- `src/render/SceneResources.cpp` — `BuildMaterialVisualTable()` return type changed
+  from `std::array<VoxelMaterialVisual, kVoxelMaterialCount>` to
+  `std::span<const VoxelMaterialVisual>` (static const backing array, span return).
+  Caller uses `.size_bytes()` instead of `sizeof(materialVisuals)`.
+
+### 6.1 — Flecs ECS migration (FluidCATickSystem added)
+
+- `src/core/Types.hpp` — `SimulationState` gained `bool effectivePaused = false;`
+  so ECS systems can read the derived pause state computed in `UpdateApp`.
+- `src/ecs/EcsWorld.{hpp,cpp}` — new `FluidCATickState` component (accumulatorSeconds),
+  `FluidCATickSystem` (OnUpdate) registered. Reads AppStateBinding, checks
+  effectivePaused/fluidTickRateHz/voxelWorld, drives accumulator + UpdateFluidCA.
+  Mirrors AudioRefreshPlaylistSystem pattern.
+- `src/app/AppUpdate.cpp` — sets `simulation->effectivePaused` after computing it;
+  removed inline FluidCA block (was lines 791-801).
+- `src/app/main.cpp` — added `TickFluidCASystem(state->ecs().get())` call after
+  UpdateApp (alongside TickAudioRefreshPlaylistSystem).
+- Initial InputReplay ECS migration was attempted but reverted: replay playback must
+  run BEFORE UpdateApp (input state is read by UpdateApp), ECS systems run AFTER,
+  so semantic change would break replay. Reverted InputReplayPlaybackTickSystem.
+
+### Verified
+
+- `cmake --build build/linux-clang-debug --target ProjectV` — green
+- `ctest --test-dir build/linux-clang-debug` — 19/19 pass (~1.0 sec)
+- `ProjectVHzbCullingTests` 4 sub-tests pass (new)
+- `ProjectVCpuMeshGeneratorTests` 4 sub-tests pass
+- `ProjectVSparse64TreeTests` 18 sub-tests pass (+1 TestCopyOnWriteOnMutation)
+- All other tests preserved baseline
+
+---
+
 ## 2026-06-20
 
 ### Changed (agent-file-consolidation r0 — commits `3c148e3`, `f1eeb6a`, `1bf096f`, `4f5f379`, `<this-commit>`)

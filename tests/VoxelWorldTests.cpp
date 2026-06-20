@@ -141,11 +141,14 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 	world.chunkCountX = (world.width + chunkSize - 1) / chunkSize;
 	world.chunkCountY = (world.height + chunkSize - 1) / chunkSize;
 	world.chunkCountZ = (world.depth + chunkSize - 1) / chunkSize;
-	world.voxels.resize(
-		static_cast<size_t>(world.width) *
-			static_cast<size_t>(world.height) *
-			static_cast<size_t>(world.depth),
-		static_cast<uint8_t>(VoxelMaterial::Air));
+	world.sparseStorage.Reset(world.width, world.height, world.depth);
+	for (int z = 0; z < world.depth; ++z) {
+		for (int y = 0; y < world.height; ++y) {
+			for (int x = 0; x < world.width; ++x) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air);
+			}
+		}
+	}
 	world.chunks.resize(
 		static_cast<size_t>(world.chunkCountX) *
 		static_cast<size_t>(world.chunkCountY) *
@@ -155,7 +158,7 @@ VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chun
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
-				auto &[min, maxExclusive, rebuildQueued, nonAirVoxelCount] = world.chunks[chunkIndex];
+				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit] = world.chunks[chunkIndex];
 				min = {
 					world.min.x + chunkX * world.chunkSize,
 					world.min.y + chunkY * world.chunkSize,
@@ -378,30 +381,30 @@ void TestCreateVoxelSceneWorldBuildsExpectedBaselineScenes(TestContext &context)
 	AppState state{};
 
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
-	EXPECT_EQ(context, VoxelScenePreset::VoxelLab, state.world.voxelWorld->scenePreset);
-	EXPECT_TRUE(context, state.world.voxelWorld->config.worldTopY >= 14);
-	EXPECT_TRUE(context, state.world.voxelWorld->stats.glassVoxelCount > 0);
-	EXPECT_TRUE(context, state.world.voxelWorld->stats.fluidVoxelCount > 0);
-	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(*state.world.voxelWorld, {8, 1, 4}));
-	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(*state.world.voxelWorld, {7, 6, 4}));
-	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(*state.world.voxelWorld, {5, 5, 6}));
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
+	EXPECT_EQ(context, VoxelScenePreset::VoxelLab, state.world().voxelWorld->scenePreset);
+	EXPECT_TRUE(context, state.world().voxelWorld->config.worldTopY >= 14);
+	EXPECT_TRUE(context, state.world().voxelWorld->stats.glassVoxelCount > 0);
+	EXPECT_TRUE(context, state.world().voxelWorld->stats.fluidVoxelCount > 0);
+	EXPECT_EQ(context, VoxelMaterial::FloorGray, GetVoxelMaterial(*state.world().voxelWorld, {8, 1, 4}));
+	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(*state.world().voxelWorld, {7, 6, 4}));
+	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(*state.world().voxelWorld, {5, 5, 6}));
 
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::FlatBenchmark));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
-	EXPECT_EQ(context, VoxelScenePreset::FlatBenchmark, state.world.voxelWorld->scenePreset);
-	EXPECT_TRUE(context, state.world.voxelWorld->stats.floorWhiteVoxelCount > 0);
-	EXPECT_EQ(context, 0u, state.world.voxelWorld->stats.glassVoxelCount);
-	EXPECT_EQ(context, 0u, state.world.voxelWorld->stats.fluidVoxelCount);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
+	EXPECT_EQ(context, VoxelScenePreset::FlatBenchmark, state.world().voxelWorld->scenePreset);
+	EXPECT_TRUE(context, state.world().voxelWorld->stats.floorWhiteVoxelCount > 0);
+	EXPECT_EQ(context, 0u, state.world().voxelWorld->stats.glassVoxelCount);
+	EXPECT_EQ(context, 0u, state.world().voxelWorld->stats.fluidVoxelCount);
 
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::TransparencyStress));
-	EXPECT_EQ(context, VoxelScenePreset::TransparencyStress, state.world.voxelWorld->scenePreset);
-	EXPECT_TRUE(context, state.world.voxelWorld->stats.glassVoxelCount > 0);
-	EXPECT_EQ(context, 0u, state.world.voxelWorld->stats.fluidVoxelCount);
+	EXPECT_EQ(context, VoxelScenePreset::TransparencyStress, state.world().voxelWorld->scenePreset);
+	EXPECT_TRUE(context, state.world().voxelWorld->stats.glassVoxelCount > 0);
+	EXPECT_EQ(context, 0u, state.world().voxelWorld->stats.fluidVoxelCount);
 
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::MeshingStress));
-	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, state.world.voxelWorld->scenePreset);
-	EXPECT_TRUE(context, state.world.voxelWorld->stats.nonAirVoxelCount > state.world.voxelWorld->stats.floorWhiteVoxelCount);
+	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, state.world().voxelWorld->scenePreset);
+	EXPECT_TRUE(context, state.world().voxelWorld->stats.nonAirVoxelCount > state.world().voxelWorld->stats.floorWhiteVoxelCount);
 }
 
 void TestCreateVoxelSceneWorldReadsEnvironmentPreset(TestContext &context)
@@ -410,8 +413,8 @@ void TestCreateVoxelSceneWorldReadsEnvironmentPreset(TestContext &context)
 	SDL_setenv_unsafe("PROJECTV_SCENE_PRESET", "ChunkGrid", 1);
 
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
-	EXPECT_EQ(context, VoxelScenePreset::ChunkGrid, state.world.voxelWorld->scenePreset);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
+	EXPECT_EQ(context, VoxelScenePreset::ChunkGrid, state.world().voxelWorld->scenePreset);
 
 	SDL_unsetenv_unsafe("PROJECTV_SCENE_PRESET");
 }
@@ -657,7 +660,7 @@ void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
 	EXPECT_EQ(context, world.maxExclusive.y, loadedWorld->maxExclusive.y);
 	EXPECT_EQ(context, world.maxExclusive.z, loadedWorld->maxExclusive.z);
 	EXPECT_EQ(context, world.editVersion, loadedWorld->editVersion);
-	EXPECT_TRUE(context, world.voxels == loadedWorld->voxels);
+	EXPECT_TRUE(context, BuildFlatVoxelSnapshot(world) == BuildFlatVoxelSnapshot(*loadedWorld));
 	EXPECT_EQ(context, world.stats.nonAirVoxelCount, loadedWorld->stats.nonAirVoxelCount);
 	EXPECT_EQ(context, world.stats.glassVoxelCount, loadedWorld->stats.glassVoxelCount);
 	EXPECT_EQ(context, world.stats.fluidVoxelCount, loadedWorld->stats.fluidVoxelCount);
@@ -2809,15 +2812,15 @@ void TestVoxelLabWalkDebugInfoMatchesLiveCenterReference(TestContext &context)
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 	EXPECT_TRUE(context, info.valid);
@@ -2834,38 +2837,38 @@ void TestVoxelLabWalkJumpFromSideEdgeDoesNotImmediatelyDrop(TestContext &context
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 12; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 	EXPECT_TRUE(context, camera.position[2] > 9.25f);
 	EXPECT_TRUE(context, camera.position[2] < 9.55f);
 
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	const PhysicsWalkDebugInfo beforeJump = GetPhysicsWalkDebugInfo(physics.get());
 	const float jumpStartY = camera.position[1];
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	const float afterJumpTickY = camera.position[1];
 	float minY = afterJumpTickY;
 	for (int step = 0; step < 12; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minY = std::min(minY, camera.position[1]);
 	}
 
@@ -2891,38 +2894,38 @@ void TestVoxelLabWalkJumpFromCornerEdgeDoesNotImmediatelyDrop(TestContext &conte
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = -2.35619449f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 17; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 	EXPECT_TRUE(context, camera.position[0] < -9.2f);
 	EXPECT_TRUE(context, camera.position[2] > 9.2f);
 
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	const PhysicsWalkDebugInfo beforeJump = GetPhysicsWalkDebugInfo(physics.get());
 	const float jumpStartY = camera.position[1];
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	const float afterJumpTickY = camera.position[1];
 	float minY = afterJumpTickY;
 	for (int step = 0; step < 12; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minY = std::min(minY, camera.position[1]);
 	}
 
@@ -2950,37 +2953,37 @@ void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestConte
 	const auto runSideCase = [&](const int outwardFrames) -> bool {
 		AppState state{};
 		EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-		EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+		EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 		EXPECT_TRUE(context, physics != nullptr);
-		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 		CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 		camera.controlMode = CameraState::ControlMode::Walk;
 		camera.yawRadians = kPi;
-		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 		InputState input{};
 		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 		for (int step = 0; step < 12; ++step) {
-			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		}
 
 		const float jumpStartY = camera.position[1];
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 		for (int step = 0; step < outwardFrames; ++step) {
-			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		}
 
 		camera.yawRadians = 0.0f;
 		for (int step = 0; step < 24; ++step) {
 			const std::array<float, 3> previousPosition{camera.position[0], camera.position[1], camera.position[2]};
-			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
 			const float horizontalDeltaZ = camera.position[2] - previousPosition[2];
@@ -3016,37 +3019,37 @@ void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestConte
 	const auto runCornerCase = [&](const int outwardFrames) -> bool {
 		AppState state{};
 		EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-		EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+		EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 		const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 		EXPECT_TRUE(context, physics != nullptr);
-		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+		EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 		CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 		camera.controlMode = CameraState::ControlMode::Walk;
 		camera.yawRadians = -2.35619449f;
-		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+		EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 		InputState input{};
 		InitializeInputState(input);
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 		for (int step = 0; step < 17; ++step) {
-			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		}
 
 		const float jumpStartY = camera.position[1];
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 		for (int step = 0; step < outwardFrames; ++step) {
-			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		}
 
 		camera.yawRadians = 0.78539816f;
 		for (int step = 0; step < 24; ++step) {
 			const std::array<float, 3> previousPosition{camera.position[0], camera.position[1], camera.position[2]};
-			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
 			const float horizontalDeltaZ = camera.position[2] - previousPosition[2];
@@ -3102,21 +3105,21 @@ void TestVoxelLabWalkFreeFallDoesNotSnapToTopPlaneTooEarly(TestContext &context)
 		for (const float cameraY : startCameraY) {
 			AppState state{};
 			EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-			EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+			EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 			const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 			EXPECT_TRUE(context, physics != nullptr);
-			EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+			EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 			CameraState camera = MakeTestCamera({xz[0], cameraY, xz[1]});
 			camera.controlMode = CameraState::ControlMode::Walk;
-			EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+			EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 			InputState input{};
 			InitializeInputState(input);
 			float previousCameraY = camera.position[1];
 			for (int step = 0; step < 20; ++step) {
-				EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+				EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 				const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 				const float cameraDrop = previousCameraY - camera.position[1];
 				if (previousCameraY > 3.0f && cameraDrop > 0.18f) {
@@ -3169,21 +3172,21 @@ void TestVoxelLabWalkJumpInPlaceDoesNotMagnetSnapToCenterTopPlane(TestContext &c
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float previousCameraY = camera.position[1];
@@ -3193,7 +3196,7 @@ void TestVoxelLabWalkJumpInPlaceDoesNotMagnetSnapToCenterTopPlane(TestContext &c
 	int maxDropStep = -1;
 	PhysicsWalkDebugInfo maxDropInfo{};
 	for (int step = 0; step < 60; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 		const float frameDrop = previousCameraY - camera.position[1];
 		if (frameDrop > maxFrameDrop) {
@@ -3239,40 +3242,40 @@ void TestVoxelLabWalkJumpFromSideEdgeLandsBackOnTopPlane(TestContext &context)
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 12; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float minCameraY = camera.position[1];
 	float maxCameraY = camera.position[1];
 	for (int step = 0; step < 75; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 		maxCameraY = std::max(maxCameraY, camera.position[1]);
 	}
 
 	float postLandingMinCameraY = camera.position[1];
 	for (int step = 0; step < 180; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		postLandingMinCameraY = std::min(postLandingMinCameraY, camera.position[1]);
 	}
 
@@ -3308,40 +3311,40 @@ void TestVoxelLabWalkJumpFromCornerEdgeLandsBackOnTopPlane(TestContext &context)
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = -2.35619449f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 17; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float minCameraY = camera.position[1];
 	float maxCameraY = camera.position[1];
 	for (int step = 0; step < 75; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 		maxCameraY = std::max(maxCameraY, camera.position[1]);
 	}
 
 	float postLandingMinCameraY = camera.position[1];
 	for (int step = 0; step < 180; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		postLandingMinCameraY = std::min(postLandingMinCameraY, camera.position[1]);
 	}
 
@@ -3377,36 +3380,36 @@ void TestVoxelLabWalkSneakJumpFromSideEdgeLandsBackOnTopPlane(TestContext &conte
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 26; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 	EXPECT_TRUE(context, camera.position[2] > 9.25f);
 	EXPECT_TRUE(context, camera.position[2] < 9.5f);
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float minCameraY = camera.position[1];
 	float maxCameraY = camera.position[1];
 	for (int step = 0; step < 180; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 		maxCameraY = std::max(maxCameraY, camera.position[1]);
 	}
@@ -3441,37 +3444,37 @@ void TestVoxelLabWalkJumpFromSideEdgeCanMoveAfterLanding(TestContext &context)
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 12; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 	for (int step = 0; step < 75; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 
 	const float landedZ = camera.position[2];
 	const float landedY = camera.position[1];
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_S);
 	for (int step = 0; step < 12; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_S);
 
@@ -3502,26 +3505,26 @@ void TestVoxelLabWalkJumpFromExactSideEdgeWithHeldWDoesNotLoseSupportOnLanding(T
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 0.0f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 6; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	int touchedSupportPlaneFrames = 0;
@@ -3529,7 +3532,7 @@ void TestVoxelLabWalkJumpFromExactSideEdgeWithHeldWDoesNotLoseSupportOnLanding(T
 	int maxConsecutiveAirOnSupportPlane = 0;
 	float minCameraY = camera.position[1];
 	for (int step = 0; step < 180; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 		EXPECT_TRUE(context, info.valid);
@@ -3582,36 +3585,36 @@ void TestVoxelLabWalkSneakJumpFromSideEdgeStillHoldsEdgeAfterLanding(TestContext
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 8.5f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 26; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 	for (int step = 0; step < 120; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
 	for (int step = 0; step < 18; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_W);
 
@@ -3649,27 +3652,27 @@ void TestVoxelLabWalkSneakJumpInPlaceFromExactSideEdgeStaysGrounded(TestContext 
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float minCameraY = camera.position[1];
 	for (int step = 0; step < 240; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 	}
 
@@ -3707,27 +3710,27 @@ void TestVoxelLabWalkSneakJumpInPlaceFromExactCornerEdgeStaysGrounded(TestContex
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-9.39f, 2.65f, 9.39f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float minCameraY = camera.position[1];
 	for (int step = 0; step < 240; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 	}
 
@@ -3768,18 +3771,18 @@ void RunUpdateAppVoxelLabSneakJumpInPlaceFromExactEdgeAtHighRenderRate(
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	PlatformState platform{};
 	SimulationState simulation{};
 	CameraState camera = MakeTestCamera(cameraStart);
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
@@ -3803,7 +3806,7 @@ void RunUpdateAppVoxelLabSneakJumpInPlaceFromExactEdgeAtHighRenderRate(
 				&camera,
 				&input,
 				&interaction,
-				&state.world,
+				&state.world(),
 				physics.get(),
 				&render,
 				&debug,
@@ -5395,28 +5398,28 @@ void TestVoxelLabReleasingSneakOnExactSideEdgeDoesNotDrop(TestContext &context)
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	for (int step = 0; step < 5; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
 
 	float minCameraY = camera.position[1];
 	for (int step = 0; step < 180; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 	}
 
@@ -5455,35 +5458,35 @@ void TestVoxelLabReleaseSneakThenJumpInPlaceFromExactSideEdgeLandsAndHolds(TestC
 {
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
-	EXPECT_TRUE(context, state.world.voxelWorld != nullptr);
+	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world.voxelWorld.get()));
+	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), state.world().voxelWorld.get()));
 
 	CameraState camera = MakeTestCamera({-8.5f, 2.65f, 9.39f});
 	camera.controlMode = CameraState::ControlMode::Walk;
 	camera.yawRadians = 3.1415926535f;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world.voxelWorld.get(), &camera));
+	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), state.world().voxelWorld.get(), &camera));
 
 	InputState input{};
 	InitializeInputState(input);
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RSHIFT);
 	for (int step = 0; step < 5; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
 	for (int step = 0; step < 25; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	}
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE);
-	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+	EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_SPACE);
 
 	float minCameraY = camera.position[1];
 	for (int step = 0; step < 240; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world.voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
+		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		minCameraY = std::min(minCameraY, camera.position[1]);
 	}
 
@@ -7267,21 +7270,21 @@ void TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(TestContext &co
 	AppState state{};
 
 	EXPECT_TRUE(context, InitializeAppEcs(&state));
-	EXPECT_TRUE(context, state.ecs != nullptr);
-	EXPECT_TRUE(context, GetPrimaryCameraEntityId(state.ecs.get()) != 0u);
-	EXPECT_TRUE(context, GetPrimaryPlayerEntityId(state.ecs.get()) != 0u);
-	EXPECT_EQ(context, GetPrimaryCameraEntityId(state.ecs.get()), GetPlayerControlledCameraEntityId(state.ecs.get()));
+	EXPECT_TRUE(context, state.ecs() != nullptr);
+	EXPECT_TRUE(context, GetPrimaryCameraEntityId(state.ecs().get()) != 0u);
+	EXPECT_TRUE(context, GetPrimaryPlayerEntityId(state.ecs().get()) != 0u);
+	EXPECT_EQ(context, GetPrimaryCameraEntityId(state.ecs().get()), GetPlayerControlledCameraEntityId(state.ecs().get()));
 
-	CameraState *camera = GetPrimaryCameraState(state.ecs.get());
-	const DebugState *debug = GetDebugState(state.ecs.get());
-	const WorldState *world = GetWorldState(state.ecs.get());
+	CameraState *camera = GetPrimaryCameraState(state.ecs().get());
+	const DebugState *debug = GetDebugState(state.ecs().get());
+	const WorldState *world = GetWorldState(state.ecs().get());
 
 	EXPECT_TRUE(context, camera != nullptr);
 	EXPECT_TRUE(context, debug != nullptr);
-	EXPECT_TRUE(context, world == &state.world);
+	EXPECT_TRUE(context, world == &state.world());
 
 	camera->moveSpeed = 17.0f;
-	EXPECT_NEAR(context, 17.0f, GetPrimaryCameraState(state.ecs.get())->moveSpeed);
+	EXPECT_NEAR(context, 17.0f, GetPrimaryCameraState(state.ecs().get())->moveSpeed);
 	EXPECT_TRUE(context, debug->hudVisible);
 }
 
@@ -7290,30 +7293,68 @@ void TestSyncEcsWorldStateMirrorsVoxelChunksAndWorldSummary(TestContext &context
 	AppState state{};
 	EXPECT_TRUE(context, InitializeAppEcs(&state));
 
-	state.world.voxelWorld = std::make_unique<VoxelWorld>(MakeTestWorld({0, 0, 0}, {16, 8, 16}, 8));
-	SetVoxelMaterial(*state.world.voxelWorld, {1, 1, 1}, VoxelMaterial::Glass);
-	SetVoxelMaterial(*state.world.voxelWorld, {9, 1, 1}, VoxelMaterial::Fluid);
+	state.world().voxelWorld = std::make_unique<VoxelWorld>(MakeTestWorld({0, 0, 0}, {16, 8, 16}, 8));
+	SetVoxelMaterial(*state.world().voxelWorld, {1, 1, 1}, VoxelMaterial::Glass);
+	SetVoxelMaterial(*state.world().voxelWorld, {9, 1, 1}, VoxelMaterial::Fluid);
 
-	DebugState *debug = GetDebugState(state.ecs.get());
+	DebugState *debug = GetDebugState(state.ecs().get());
 	EXPECT_TRUE(context, debug != nullptr);
 	debug->stats.dirtyChunkCount = 99;
 	debug->stats.activeChunkCount = 99;
 	debug->stats.nonAirVoxelCount = 99;
 
-	EXPECT_TRUE(context, SyncEcsWorldState(state.ecs.get()));
+	EXPECT_TRUE(context, SyncEcsWorldState(state.ecs().get()));
 
 	VoxelWorldStats summary{};
 	size_t chunkEntityCount = 0;
-	EXPECT_TRUE(context, GetEcsWorldChunkSummary(state.ecs.get(), &summary, &chunkEntityCount));
+	EXPECT_TRUE(context, GetEcsWorldChunkSummary(state.ecs().get(), &summary, &chunkEntityCount));
 
-	EXPECT_EQ(context, state.world.voxelWorld->chunks.size(), chunkEntityCount);
-	EXPECT_EQ(context, state.world.voxelWorld->stats.dirtyChunkCount, summary.dirtyChunkCount);
-	EXPECT_EQ(context, state.world.voxelWorld->stats.activeChunkCount, summary.activeChunkCount);
-	EXPECT_EQ(context, state.world.voxelWorld->stats.nonAirVoxelCount, summary.nonAirVoxelCount);
+	EXPECT_EQ(context, state.world().voxelWorld->chunks.size(), chunkEntityCount);
+	EXPECT_EQ(context, state.world().voxelWorld->stats.dirtyChunkCount, summary.dirtyChunkCount);
+	EXPECT_EQ(context, state.world().voxelWorld->stats.activeChunkCount, summary.activeChunkCount);
+	EXPECT_EQ(context, state.world().voxelWorld->stats.nonAirVoxelCount, summary.nonAirVoxelCount);
 	EXPECT_EQ(context, summary.dirtyChunkCount, debug->stats.dirtyChunkCount);
 	EXPECT_EQ(context, summary.activeChunkCount, debug->stats.activeChunkCount);
 	EXPECT_EQ(context, summary.nonAirVoxelCount, debug->stats.nonAirVoxelCount);
 }
+
+void TestVoxelChunkStaticPromotion(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	const uint32_t totalChunks = static_cast<uint32_t>(world.chunks.size());
+	EXPECT_TRUE(context, totalChunks > 1u);
+	EXPECT_EQ(context, 0u, CountStaticVoxelChunks(world));
+
+	for (uint32_t tick = 0; tick < 59u; ++tick) {
+		TickVoxelChunkStaticPromotion(world, 60u);
+		EXPECT_EQ(context, 0u, CountStaticVoxelChunks(world));
+	}
+
+	TickVoxelChunkStaticPromotion(world, 60u);
+	EXPECT_EQ(context, totalChunks, CountStaticVoxelChunks(world));
+
+	for (uint32_t tick = 0; tick < 30u; ++tick) {
+		TickVoxelChunkStaticPromotion(world, 60u);
+	}
+	EXPECT_EQ(context, totalChunks, CountStaticVoxelChunks(world));
+
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite);
+	const uint32_t staticAfterEdit = CountStaticVoxelChunks(world);
+	EXPECT_TRUE(context, staticAfterEdit < totalChunks);
+}
+
+void TestVoxelChunkStaticPromotionThresholdFromEnv(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
+	const uint32_t defaultThreshold = GetVoxelChunkStaticPromotionThreshold();
+	EXPECT_TRUE(context, defaultThreshold > 0u);
+
+	for (uint32_t tick = 0; tick < defaultThreshold; ++tick) {
+		TickVoxelChunkStaticPromotion(world, defaultThreshold);
+	}
+	EXPECT_EQ(context, static_cast<uint32_t>(world.chunks.size()), CountStaticVoxelChunks(world));
+}
+
 } // namespace
 
 int main() // NOLINT(*-exception-escape)
@@ -7336,6 +7377,8 @@ int main() // NOLINT(*-exception-escape)
 	TestVoxelFaceAmbientVisibilityStaysOpenForExposedTopFace(context);
 	TestVoxelFaceAmbientVisibilityDarkensEnclosedTopFace(context);
 	TestVoxelFaceAmbientVisibilityTreatsGlassAsNonOccluder(context);
+	TestVoxelChunkStaticPromotion(context);
+	TestVoxelChunkStaticPromotionThresholdFromEnv(context);
 	TestVoxelWorldSnapshotRoundTripsWorldState(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);
