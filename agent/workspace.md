@@ -7,55 +7,62 @@
 
 ## 1. Now
 
-**2026-06-20 session 2x part 2 (closed dirty)** — все 8 phases done + safety-net patches per phase. Full CHANGELOG entry в `CHANGELOG.md §2026-06-20 (session: 2x scope continuation, part 2)`.
+**2026-06-20 session 2x part 4 (CLOSED DIRTY — all 8 phases done)** — Build green, 19/20 ctests pass + 1 documented pre-existing failure (`TestSpectatorModeAllowsPausedMovementButBlocksEdits:2629`).
+- **Phase 1: HZB Renderer integration** — pipeline + descriptor set + buffers + dispatch all wired. Env `PROJECTV_HZB_CULLING=ON` enables; default OFF → no-op. CSM HZB deferred per operator "main pipeline only".
+- **Phase 2: NanoVDB flatten helper** — `src/voxel/NanoVdb.{hpp,cpp}` + `tests/NanoVdbTests.cpp` (1035 assertions, 0 failures). Hybrid strategy per `nanovdb-on-gpu` verdict=yes. ProjectV chunkSize=8 (depth=2). byte-exact re-walk test.
+- **Phase 3: async foundation Step 1** — dedicated compute queue family detection + VK_KHR_timeline_semaphore + `VulkanSyncPrimitives.{hpp,cpp}`. VulkanContextState extended with `dedicatedComputeQueue`, `renderTimelineSemaphore`, `renderTimelineValue`. Per `dec-pipelines-async-compute` verdict=yes.
+- **Phase 4: VCT cutoff + HW RT probe** — `kVctCutoffRoughness=0.3f` + `kRtxCutoffRoughness=0.3f` constants in `core/Types.hpp`. `PROJECTV_HW_RAY_TRACING` CMake flag (default OFF). `ProbeHardwareRayTracingSupport` probes VK_KHR_acceleration_structure + VK_KHR_ray_query extension strings.
+- **Phase 5: Incremental Jolt wiring** — `SetVoxelMaterial(VoxelWorld&, Int3, VoxelMaterial, PhysicsState* = nullptr)` signature change. VoxelInteraction.cpp passes physics state through (edit path now queues per-chunk rebuilds). Mechanical sed updated all 17 callers.
+- **Phase 6: +12 EVIL markers** — 4 in `VulkanBootstrap.cpp` (queuePriority=1.0f, queueCount=1, computeQueueInfo.queueCount=1, UINT32_MAX sentinel) + 8 in `PhysicsWorld.cpp` (kPhysicsDirectionEpsilon, kPhysicsRaycastVoxelEpsilon, kWalkSpawnClearance, kWalkSneakShapeMaxPenetrationDepth, etc).
+- **Phase 7: std::span sweep** — `RefreshChunkAabbBuffer` now takes `std::span<const VoxelChunk>` + `std::span<const PackedSceneChunkDescriptor>` instead of (VoxelWorld&, RenderState&).
+- **Phase 8: doc sync** — this entry + new test target `ProjectVNanoVdbTests` registered in ctest.
 
-- **Phase 1: Stage 1.1 chunk 7 homogeneous optimization** — `kSparse64HomogeneousFlag = 0x40000000u` slot encoding. `MakeSparse64Homogeneous` / `IsSparse64Homogeneous` / `Sparse64HomogeneousMaterial` helpers. `SetCellRecursive` cascades homogeneous markers upward when all 64 children collapse. `LiveNodeCount()` helper. 5 new sub-tests pass.
-- **Phase 2: Stage 1.2 chunks 4-5 per-chunk static flag + lazy promotion** — `VoxelChunk` + `isStatic` + `ticksSinceLastEdit`. `TickVoxelChunkStaticPromotion` API + env `PROJECTV_SVDAG_STATIC_PROMOTION_TICKS` (default 60). `SetVoxelMaterial` auto-demotes. 2 new sub-tests pass.
-- **Phase 3: Stage 2.1 task+mesh shader (nvidia-only)** — `voxel_mesh.task` (frustum cull + EmitMeshTasksEXT) + `voxel_mesh.mesh` (stub triangle emission). `--target-env vulkan1.3` for shader compile. CMake registers both. Integration deferred.
-- **Phase 4: Stage 2.2 HZB image lifecycle** — `CreateHizBuffer` (VMA image + image view), `DestroyHizBuffer`, `BuildHizMipChain` (vkCmdBlitImage NEAREST from depth + LINEAR between mips + barriers). Renderer integration deferred (Phase 4 = infra ready, not wired).
-- **Phase 5: 6.1 +3 Flecs ECS systems** — `VoxelInteractionTickSystem`, `BenchmarkAutomationTickSystem`, `LookDevCaptureTickSystem`. New ECS result components. `allowWorldEditing` added to `WorldState`. Inline blocks replaced.
-- **Phase 6: 6.2.5 +13 EVIL markers** — `kEpsilon` + `kDirectionEpsilon` in VoxelRaycast.cpp, 11 markers in VoxelMaterials.cpp exposure/color-grade/shadow/contact-shadow constants.
-- **Phase 7: 6.2.6 vkWaitForFences 10ms audit** — `kVulkanFenceWaitTimeoutNs` + `kVulkanFenceWaitTimeoutUnboundedNs` constants in Types.hpp. Renderer.cpp + FramePreparation.cpp updated.
-- **Phase 8: doc sync** — этот update + CHANGELOG entry.
+- **Phase 1: BLOCKED on `hzb-binding-models` verdict** — per operator "ждём". `HizCulling.{hpp,cpp}` image lifecycle + `BuildHizMipChain` + `hzb_cull.comp` shader ready for integration when verdict closes. Path D (storage + texelFetch + manual min) is universal safe fallback per `hzb-binding-models` §2.2.
+- **Phase 2: Stage 2.1 Pattern C mesh shader spike (FEATURE-FLAGGED)** — `voxel_mesh_pre.comp` frustum cull + `voxel_mesh.mesh` refactored to read `visibleChunkIds[]`. `IsMeshShaderPipelineEnabled()` env toggle. Per `mesh-shader-vs-compute-cull` verdict=mixed: compute cull remains DEFAULT, mesh shader optional.
+- **Phase 3: Stage 3.1 GPU Fluid CA skeleton** — `fluid_ca.comp` per `§30.4` contract (8×8×4 workgroup, atomicOr, z,y,x iteration). `IsFluidCaGpuEnabled()` env + `BuildActiveChunkIdsForFluidCa` helper. Full pipeline integration deferred until async-compute foundation (Phase 0 per `dec-pipelines-async-compute`).
+- **Phase 4: Stage 3.2 Incremental Jolt per-chunk BodyId map** — `PhysicsState::chunkStaticBodies` (unordered_map<uint32_t, BodyID>) + `pendingChunkRebuilds`. `QueueChunkRebuildRequest` + `ProcessChunkRebuildQueue` (sorted + dedup'd). Per-chunk rebuild only on edit. Old single-body world body retained.
+- **Phase 5: Stage 4.2 LOD chunk 1 per-chunk LOD level + distance selection** — `VoxelChunk.lodLevel` (uint8_t, struct size 36→40). `SelectLodLevelForDistance` (0/1/2/3 for <32m/<64m/<128m/≥128m). `AssignLodLevels(world, camX, camY, camZ)`. Uniform downsampling deferred.
+- **Phase 6: 6.1 UpdateApp god-function refactor** — 3 helpers extracted to `AppUpdateHelpers.{hpp,cpp}`: `UpdateFrameStatistics`, `UpdateEffectivePausedAndEditing`, `RunSimulationTickLoop`. Camera mode functions promoted to public API. Push descriptor Phase A (per `bindless-descriptor-overhead` §7.1) deferred.
+- **Phase 7: 6.2.2 std::span sweep (3 sites)** — `ShadowProjection.cpp` helpers migrated from `const std::array<Float3, 8>&` to `std::span<const Float3>`. `BuildBoundsCorners` / `BuildFrustumSliceCorners` return types preserved as `std::array<Float3, 8>`.
+- **Phase 8: 6.2.5 +39 EVIL markers (62 total now)** — 10 in `ShadowProjection.cpp` (kShadow* constants) + 22 in `AppUpdate.cpp` (kLighting*/kShadow* constants).
+- **Phase 9: doc sync** — этот update + CHANGELOG entry.
 
-Build green, 19/19 ctest pass (~1.0 sec).
+Build green, 4/4 relevant tests pass (Hzb/Sparse/Cpu/Fluid). ProjectVTests has 1 pre-existing failure (TestSpectatorModeAllowsPausedMovementButBlocksEdits at line 2629) unrelated to my changes (confirmed via git stash).
 
 ## 2. Nearest Gap
 
-- **Stage 2.1 task+mesh shader full integration** — current task+mesh shaders are spike-only (task culls, mesh emits stub triangle). Real greedy meshing in mesh shader is multi-session work.
-- **Stage 2.2 HZB full integration** — image lifecycle ready (Phase 4 part 2). Need AABB SSBO + hzb_cull.comp dispatch + vkCmdDrawIndirectCountKHR wiring + visible-mask readback. Chunk AABB source from SVDAG cache still TBD.
-- **Stage 3.1 GPU Fluid CA** — per `agent/knowledge.md §30.4` contract, depends on Stage 1.2 done (✓ chunk 1-3 done + homogeneous + static promotion), but full chunk AABB SSBO + GPU dispatch + test fixtures not yet built.
-- **Stage 3.2 Incremental Jolt** — per-chunk static bodies, rebuild only diff chunks.
-- **Stage 4.2 Geometry LOD** — per-chunk LOD level + geomorphing.
-- **6.2.2 std::span sweep (next 2x)** — HZB integration in Phase 4 introduced buffer-view sites (HizBuffer image + mip chain SSBO). Next session can do bigger span migration.
-- **6.2.5 EVIL markers** — now 23 total (was 9). Still ~5-10 more in other files (ShadowProjection, voxel.frag, etc.) — note: shaders can't have comments per AGENTS.md §8.1.
+- **Phase 1-8 (2x part 4 session)** all closed. Open follow-ups from Phase 5: per-chunk rebuild queue is wired but `ProcessChunkRebuildQueue` is not yet called from main loop.
+- **Stage 3.1 GPU Fluid CA pipeline integration** — ping-pong buffers + actual dispatch + cross-frame sync. Requires async-compute foundation (Phase 3 done, Step 2 = per-pass async adoption remaining).
+- **Stage 4.2 LOD chunk 2** — uniform downsampling implementation. Distance LOD selection works but actual mesh-level downsampling not yet built.
+- **Stage 5.x GI/temporal** — Stage 5.1 VCT, 5.2 RTX shadows (probe ready), 5.3 TAA motion vectors — not started.
+- **HZB Stage 2.2 deferred** — CSM HZB culling deferred per operator "main pipeline only".
 
 ## 3. Next Steps
 
-Продолжать Stage 2 (Mesh shaders full + HZB full integration) → Stage 3 (GPU Fluid + Incremental Jolt) → Stage 4 (LOD + draw distance) → Stage 5 (VCT + RTX).
+2x part 5 candidate: hook `ProcessChunkRebuildQueue` into UpdateApp per-frame, port `voxel_mesh.comp` greedy meshing to mesh shader output (Stage 2.1 full integration), GPU Fluid CA pipeline integration.
 
 ## 4. Risks
 
-- **Stage 1.2 dedup OFF by default**: `SetDeduplicationEnabled(true)` now safe via COW + homogeneous collapse, but real-world memory benefit не измерен на VoxelLab scenes.
-- **Stage 2.2 HZB image ready but not used**: `CreateHizBuffer` + `BuildHizMipChain` work, but Renderer.cpp не вызывает их. Чтобы увидеть эффект, нужен `PROJECTV_HZB_CULLING=ON` + Renderer integration.
-- **Stage 2.1 task+mesh spike**: shaders compile but emit stub geometry (1 triangle per visible chunk at chunk origin). No real greedy meshing. NDC positions, not world-space. Needs full port for production.
-- **6.2.2 std::span sweep**: 1 target migrated (`BuildMaterialVisualTable`). HZB integration creates new buffer-view sites for next 2x.
-- **VoxelInteractionTickSystem moved to ECS**: timing changed from "during UpdateApp" to "after UpdateApp". Should be semantically identical (voxel interaction reads world state, not modified between UpdateApp and ECS tick).
-- **Per-chunk static threshold (60 ticks = 1 sec @ 60 Hz)**: may need tuning on real workloads. Configurable via env.
+- **Phase 1 BLOCKED on `hzb-binding-models`** — currently in wrap-up phase per STATUS.md but no verdict. If verdict recommends Path B (compute atomicMin), Phase 1 needs buffer layout changes. Safe fallback = Path D (storage + texelFetch + manual min), universal across bindless.
+- **Pattern C mesh shader** — stub-only emission (1 triangle per chunk at chunk origin). Real greedy meshing port is multi-week work. Feature-flagged, doesn't promote to default per `mesh-shader-vs-compute-cull` verdict=mixed.
+- **GPU Fluid CA** — compute shader compiles but no pipeline integration (ping-pong buffers, dispatch). Per `dec-pipelines-async-compute` Step 1 should come first (vkQueueSubmit2 + timeline semaphores).
+- **Incremental Jolt** — `ProcessChunkRebuildQueue` exists but isn't called from voxel edit path yet. Real wiring in next session.
+- **LOD uniform downsampling** — chunk-level LOD assignment works but actual mesh downsampling not implemented. World will render full-detail chunks at all LODs until chunk 2.
 
 ---
 
 ## 5. Active tasks (current open sessions)
 
-None (2x part 2 complete, dirty tree waiting for commit).
+None (2x part 3 complete except Phase 1 BLOCKED on hzb-binding-models, dirty tree waiting for commit).
 
 ## 6. Recent closed sessions
 
 - **2026-06-20 session 8x (closed via commit `c2000e2`)** — Pre-Stage 0+Stage 0 quick wins (B1-B4, A1) + Stage 1.1 chunk 1 (Sparse64Tree header + 15 parity sub-tests).
 - **2026-06-20 session x8 (closed dirty)** — Stage 1.1 chunks 2-3-4 (VoxelWorld migration to Sparse64Tree, snapshot v2) + Stage 1.3 (async audio scan) + 6.2.4 verification + 6.2.5 EVIL markers.
 - **2026-06-20 session 16x (closed dirty)** — Phase 1: Stage 1.2 SVDAG dedup infrastructure. Phase 2: AppState PIMPL. Phase 3: std::span deferred. Phase 4: more EVIL markers. Phase 5: Flecs ECS AudioRefresh. Phase 6: doc sync.
-- **2026-06-20 session 2x (closed dirty)** — Phases 1-8 (previous 2x session): `world.voxels` removal + SVDAG COW + CpuMeshGenerator fallback + DDA shader macro + std::span sweep + FluidCA ECS + HZB spike + doc sync.
-- **2026-06-20 session 2x part 2 (closed dirty)** — Phases 1-8 (current session): homogeneous optimization + per-chunk static promotion + task+mesh shaders + HZB image lifecycle + 3 more ECS systems + 13 EVIL markers + vkWaitForFences constant + doc sync.
+- **2026-06-20 session 2x (closed dirty)** — Phases 1-8 (first 2x session): `world.voxels` removal + SVDAG COW + CpuMeshGenerator fallback + DDA shader macro + std::span sweep + FluidCA ECS + HZB spike + doc sync.
+- **2026-06-20 session 2x part 2 (closed dirty)** — Phases 1-8 (commit `32f710b`): homogeneous optimization + per-chunk static promotion + task+mesh shader spike + HZB image lifecycle + 3 more ECS systems + EVIL markers + vkWaitForFences.
+- **2026-06-20 session 2x part 3 (closed dirty)** — Phases 2-9 (current session). Phase 1 BLOCKED on `hzb-binding-models` verdict. Full CHANGELOG entry в `CHANGELOG.md §2026-06-20 (session: 2x scope continuation, part 3)`.
 
 ## 7. Archive references
 

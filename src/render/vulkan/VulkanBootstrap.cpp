@@ -257,6 +257,41 @@ bool FindGraphicsPresentQueueFamily(
 	return false;
 }
 
+bool FindDedicatedComputeQueueFamily(
+	const VkPhysicalDevice physicalDevice,
+	uint32_t graphicsFamilyIndex,
+	uint32_t *outQueueFamilyIndex)
+{
+	uint32_t familyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familyCount, nullptr);
+	if (familyCount == 0) {
+		return false;
+	}
+
+	std::vector<VkQueueFamilyProperties> families(familyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &familyCount, families.data());
+
+	for (uint32_t i = 0; i < familyCount; ++i) {
+		if (i == graphicsFamilyIndex) {
+			continue;
+		}
+		const VkQueueFamilyProperties &family = families[i];
+		if ((family.queueFlags & VK_QUEUE_COMPUTE_BIT) == 0) {
+			continue;
+		}
+		if ((family.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0) {
+			continue;
+		}
+		if (family.queueCount == 0) {
+			continue;
+		}
+		*outQueueFamilyIndex = i;
+		return true;
+	}
+
+	return false;
+}
+
 bool CheckSwapchainSurfaceSupport(const VkPhysicalDevice physicalDevice, const VkSurfaceKHR surface)
 {
 	uint32_t formatCount = 0;
@@ -393,6 +428,7 @@ bool CheckRequiredFeatures(
 struct PhysicalDeviceCandidate {
 	VkPhysicalDevice device = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = UINT32_MAX;
+	uint32_t dedicatedComputeQueueFamilyIndex = UINT32_MAX;
 	VkPhysicalDeviceFeatures features{};
 	VkPhysicalDeviceVulkan12Features features12{};
 	VkPhysicalDeviceVulkan13Features features13{};
@@ -401,6 +437,7 @@ struct PhysicalDeviceCandidate {
 	bool supportsTracyCalibratedTimestamps = false;
 	bool supportsSwapchainMaintenance1 = false;
 	bool supportsDynamicRenderingUnusedAttachments = false;
+	bool supportsDedicatedComputeQueue = false;
 };
 
 VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
@@ -446,6 +483,13 @@ bool TryPickPhysicalDevice(
 		return false;
 	}
 
+	uint32_t dedicatedComputeQueueFamilyIndex = UINT32_MAX;
+	const bool supportsDedicatedComputeQueue =
+		FindDedicatedComputeQueueFamily(
+			physicalDevice,
+			queueFamilyIndex,
+			&dedicatedComputeQueueFamilyIndex);
+
 	if (!CheckDeviceExtensionSupport(physicalDevice)) {
 		return false;
 	}
@@ -474,6 +518,8 @@ bool TryPickPhysicalDevice(
 
 	outCandidate->device = physicalDevice;
 	outCandidate->queueFamilyIndex = queueFamilyIndex;
+	outCandidate->dedicatedComputeQueueFamilyIndex = dedicatedComputeQueueFamilyIndex;
+	outCandidate->supportsDedicatedComputeQueue = supportsDedicatedComputeQueue;
 	outCandidate->features = supportedFeatures;
 	outCandidate->features12 = supportedFeatures12;
 	outCandidate->features13 = supportedFeatures13;
@@ -626,13 +672,38 @@ bool InitializeVulkanBase(
 	context->physicalDevice = selected.device;
 	context->queueFamilyIndex = selected.queueFamilyIndex;
 	context->supportsDynamicRenderingUnusedAttachments = selected.supportsDynamicRenderingUnusedAttachments;
+	context->hasDedicatedComputeQueue = selected.supportsDedicatedComputeQueue;
+	context->dedicatedComputeQueueFamilyIndex = selected.dedicatedComputeQueueFamilyIndex;
 
+	// EVIL: queuePriority = 1.0f is Vulkan's max priority; we request max priority for both graphics+compute
+	// queues to keep scheduling decisions predictable. Lower values would be ignored on hosts that round up.
 	float queuePriority = 1.0f;
 	VkDeviceQueueCreateInfo queueInfo{};
 	queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 	queueInfo.queueFamilyIndex = context->queueFamilyIndex;
+	// EVIL: queueCount = 1 single-queue per family is intentional; multi-queue families invite priority inversion
+	// and we don't currently exploit parallel queue submits. Re-evaluate when adding async compute dispatch.
 	queueInfo.queueCount = 1;
 	queueInfo.pQueuePriorities = &queuePriority;
+
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	queueCreateInfos.push_back(queueInfo);
+
+	if (selected.supportsDedicatedComputeQueue) {
+		context->dedicatedComputeQueueFamilyIndex = selected.dedicatedComputeQueueFamilyIndex;
+		VkDeviceQueueCreateInfo computeQueueInfo{};
+		computeQueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		computeQueueInfo.queueFamilyIndex = selected.dedicatedComputeQueueFamilyIndex;
+		// EVIL: computeQueueInfo.queueCount = 1 mirrors the graphics queue policy; future async-compute adoption
+		// may need 2+ compute queues to overlap Fluid CA + HZB cull submissions.
+		computeQueueInfo.queueCount = 1;
+		computeQueueInfo.pQueuePriorities = &queuePriority;
+		queueCreateInfos.push_back(computeQueueInfo);
+	} else {
+		// EVIL: UINT32_MAX sentinel for "no dedicated compute queue" is implicit; reading code must know the
+		// convention. A std::optional<uint32_t> would be cleaner but introduces a transitive include cycle.
+		context->dedicatedComputeQueueFamilyIndex = UINT32_MAX;
+	}
 
 	std::vector deviceExtensions(
 		kRequiredDeviceExtensions.begin(),
@@ -675,8 +746,8 @@ bool InitializeVulkanBase(
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;
 	deviceCreateInfo.pEnabledFeatures = &enabledFeatures;
-	deviceCreateInfo.queueCreateInfoCount = 1;
-	deviceCreateInfo.pQueueCreateInfos = &queueInfo;
+	deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
 	deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
 	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
@@ -694,6 +765,44 @@ bool InitializeVulkanBase(
 		reinterpret_cast<uint64_t>(context->queue),
 		VK_OBJECT_TYPE_QUEUE,
 		"GraphicsPresentQueue");
+
+	if (context->hasDedicatedComputeQueue) {
+		vkGetDeviceQueue(
+			context->device,
+			context->dedicatedComputeQueueFamilyIndex,
+			0,
+			&context->dedicatedComputeQueue);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(context->dedicatedComputeQueue),
+			VK_OBJECT_TYPE_QUEUE,
+			"DedicatedComputeQueue");
+	}
+
+	VkSemaphoreTypeCreateInfo timelineTypeInfo{};
+	timelineTypeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+	timelineTypeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+	timelineTypeInfo.initialValue = 0;
+	VkSemaphoreCreateInfo timelineInfo{};
+	timelineInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	timelineInfo.pNext = &timelineTypeInfo;
+	const VkResult timelineResult = vkCreateSemaphore(
+		context->device,
+		&timelineInfo,
+		nullptr,
+		&context->renderTimelineSemaphore);
+	if (timelineResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"InitializeVulkanBase.vkCreateSemaphore",
+			timelineResult);
+		return false;
+	}
+	context->renderTimelineValue = 0;
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(context->renderTimelineSemaphore),
+		VK_OBJECT_TYPE_SEMAPHORE,
+		"RenderTimelineSemaphore");
 
 	VmaAllocatorCreateInfo allocInfo{};
 	allocInfo.physicalDevice = context->physicalDevice;

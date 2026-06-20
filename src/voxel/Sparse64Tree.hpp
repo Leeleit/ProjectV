@@ -204,6 +204,16 @@ public:
 		return nodes_.size();
 	}
 
+	size_t RawNodeCount() const noexcept
+	{
+		return nodes_.size();
+	}
+
+	const Node &NodeAt(uint32_t nodeIndex) const noexcept
+	{
+		return nodes_[nodeIndex];
+	}
+
 	size_t LiveNodeCount() const noexcept
 	{
 		size_t live = 0;

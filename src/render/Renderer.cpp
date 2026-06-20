@@ -1260,6 +1260,32 @@ SDL_AppResult DrawFrame(
 
 	RecordGraphicsCommands(*render, *swapchain, frame->renderData, cmd, imageIndex);
 
+	if (projectv::render::IsHzbCullingEnabled() &&
+		render->hizBuffer.image != VK_NULL_HANDLE) {
+		projectv::render::BuildHizMipChain(
+			cmd,
+			render->depthImage,
+			render->depthImageCurrentLayout,
+			render->hizBuffer);
+		if (render->hizBuffer.imageView != VK_NULL_HANDLE &&
+			render->hizBuffer.sampler != VK_NULL_HANDLE &&
+			frame->renderData.hizCullingDescriptorSet != VK_NULL_HANDLE) {
+			projectv::math::Mat4 inverseViewProjection =
+				projectv::math::inverse(frame->renderData.graphicsPushConstants.viewProjection);
+			std::array<float, 16> inverseViewProjectionFlat{};
+			for (uint32_t i = 0; i < 16u; ++i) {
+				inverseViewProjectionFlat[i] = inverseViewProjection.data()[i];
+			}
+			projectv::render::RecordHzbCullingDispatch(
+				cmd,
+				context,
+				*render,
+				render->sceneFrameResources[frame->currentFrame],
+				*reinterpret_cast<const float (*)[16]>(inverseViewProjectionFlat.data()),
+				frame->renderData.chunkDescriptorCount);
+		}
+	}
+
 	const VkResult endCommandBufferResult = vkEndCommandBuffer(cmd);
 	if (endCommandBufferResult != VK_SUCCESS) {
 		runtime::LogVkFailure("DrawFrame.vkEndCommandBuffer", endCommandBufferResult);

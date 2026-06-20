@@ -13,6 +13,8 @@ endmacro()
 add_executable(ProjectVTests
         VoxelWorldTests.cpp
         ../src/app/AppUpdate.cpp
+        ../src/app/AppUpdateHelpers.cpp
+        ../src/app/BenchmarkAutomation.cpp
         ../src/app/Camera.cpp
         ../src/app/InputActions.cpp
         ../src/app/InputReplay.cpp
@@ -532,6 +534,33 @@ set_tests_properties(ProjectVSparse64TreeTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVSparse64TreeTests)
 
+add_executable(ProjectVNanoVdbTests
+        NanoVdbTests.cpp
+        ../src/voxel/NanoVdb.cpp
+)
+
+target_compile_definitions(ProjectVNanoVdbTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVNanoVdbTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVNanoVdbTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVNanoVdbTests PRIVATE
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVNanoVdbTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVNanoVdbTests COMMAND ProjectVNanoVdbTests)
+set_tests_properties(ProjectVNanoVdbTests PROPERTIES LABELS "unit")
+
 add_executable(ProjectVCpuMeshGeneratorTests
         CpuMeshGeneratorTests.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/CpuMeshGenerator.cpp
@@ -563,7 +592,14 @@ projectv_test_add_modules(ProjectVCpuMeshGeneratorTests)
 
 add_executable(ProjectVHzbCullingTests
         HzbCullingTests.cpp
+        vma_implementation.cpp
         ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+)
+
+target_sources(ProjectVHzbCullingTests PRIVATE
 )
 
 target_compile_definitions(ProjectVHzbCullingTests PRIVATE
@@ -575,11 +611,11 @@ target_include_directories(ProjectVHzbCullingTests PRIVATE
 )
 
 target_link_libraries(ProjectVHzbCullingTests PRIVATE projectv_build_options)
-target_link_libraries(ProjectVHzbCullingTests PRIVATE
-        volk
-        glm
-        GPUOpen::VulkanMemoryAllocator
-)
+target_link_libraries(ProjectVHzbCullingTests PRIVATE volk)
+target_link_libraries(ProjectVHzbCullingTests PRIVATE glm)
+target_link_libraries(ProjectVHzbCullingTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVHzbCullingTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVHzbCullingTests PRIVATE SDL3::SDL3)
 
 if (PROJECTV_ENABLE_TRACY)
     target_link_libraries(ProjectVHzbCullingTests PRIVATE Tracy::TracyClient)

@@ -604,7 +604,7 @@ void DestroySceneResources(
 		}
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, graphicsDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -645,6 +645,14 @@ void DestroySceneResources(
 			profiling::RecordFree(sceneLightingAllocation, "VoxelSceneLightingBufferAllocation");
 			vmaDestroyBuffer(context->allocator, sceneLightingBuffer, sceneLightingAllocation);
 		}
+		if (chunkAabbBuffer && chunkAabbAllocation) {
+			profiling::RecordFree(chunkAabbAllocation, "SceneChunkAabbBufferAllocation");
+			vmaDestroyBuffer(context->allocator, chunkAabbBuffer, chunkAabbAllocation);
+		}
+		if (visibilityMaskBuffer && visibilityMaskAllocation) {
+			profiling::RecordFree(visibilityMaskAllocation, "SceneVisibilityMaskBufferAllocation");
+			vmaDestroyBuffer(context->allocator, visibilityMaskBuffer, visibilityMaskAllocation);
+		}
 
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
@@ -673,12 +681,19 @@ void DestroySceneResources(
 		chunkCullingMappedData = nullptr;
 		chunkCullingBuffer = VK_NULL_HANDLE;
 		chunkCullingAllocation = VK_NULL_HANDLE;
-		sceneLightingMappedData = nullptr;
+sceneLightingMappedData = nullptr;
 		sceneLightingBuffer = VK_NULL_HANDLE;
-		sceneLightingAllocation = VK_NULL_HANDLE;
+		sceneLightingAllocation = nullptr;
+		chunkAabbMappedData = nullptr;
+		chunkAabbBuffer = VK_NULL_HANDLE;
+		chunkAabbAllocation = nullptr;
+		visibilityMaskMappedData = nullptr;
+		visibilityMaskBuffer = VK_NULL_HANDLE;
+		visibilityMaskAllocation = nullptr;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
 		shadowDescriptorSet = VK_NULL_HANDLE;
 		voxelMeshingDescriptorSet = VK_NULL_HANDLE;
+		hizCullingDescriptorSet = VK_NULL_HANDLE;
 		uploadedSceneVersion = 0;
 		uploadedVoxelPayloadVersion = 0;
 		meshedSceneVersion = 0;
@@ -1010,6 +1025,58 @@ bool CreateSceneResources(
 		render->sceneMemoryBytes += chunkCullingAllocationInfo.size;
 		std::memset(frameResources.chunkCullingMappedData, 0, sizeof(ChunkCullingParameters));
 
+		const VkDeviceSize chunkAabbStrideBytes = sizeof(PackedSceneChunkAabb);
+		const VkDeviceSize chunkAabbBufferBytes = chunkAabbStrideBytes *
+			static_cast<VkDeviceSize>(world->voxelWorld->chunks.size());
+		if (chunkAabbBufferBytes > 0) {
+			VmaAllocationInfo chunkAabbAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					chunkAabbBufferBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.chunkAabbBuffer,
+					&frameResources.chunkAabbAllocation,
+					&chunkAabbAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.chunkAabbMappedData = chunkAabbAllocationInfo.pMappedData;
+			profiling::RecordAllocation(
+				frameResources.chunkAabbAllocation,
+				chunkAabbAllocationInfo.size,
+				"SceneChunkAabbBufferAllocation");
+			render->sceneMemoryBytes += chunkAabbAllocationInfo.size;
+			std::memset(frameResources.chunkAabbMappedData, 0, chunkAabbBufferBytes);
+		}
+
+		const uint32_t visibilityMaskWordCount = (static_cast<uint32_t>(
+			world->voxelWorld->chunks.size()) + 31u) / 32u;
+		if (visibilityMaskWordCount > 0u) {
+			VmaAllocationInfo visibilityMaskAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					sizeof(uint32_t) * visibilityMaskWordCount,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.visibilityMaskBuffer,
+					&frameResources.visibilityMaskAllocation,
+					&visibilityMaskAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.visibilityMaskMappedData = visibilityMaskAllocationInfo.pMappedData;
+			profiling::RecordAllocation(
+				frameResources.visibilityMaskAllocation,
+				visibilityMaskAllocationInfo.size,
+				"SceneVisibilityMaskBufferAllocation");
+			render->sceneMemoryBytes += visibilityMaskAllocationInfo.size;
+			std::memset(
+				frameResources.visibilityMaskMappedData,
+				0,
+				sizeof(uint32_t) * visibilityMaskWordCount);
+		}
+
 		char bufferName[64]{};
 		const size_t frameResourceIndex = static_cast<size_t>(&frameResources - render->sceneFrameResources.data());
 
@@ -1279,5 +1346,53 @@ bool UploadSceneFrameResources(
 	profiling::PlotValue(
 		"Upload Chunk Voxel Bytes",
 		static_cast<int64_t>(uploadedChunkVoxelWordCount * sizeof(uint32_t)));
+	return true;
+}
+
+bool RefreshChunkAabbBuffer(
+	std::span<const VoxelChunk> chunks,
+	std::span<const PackedSceneChunkDescriptor> descriptors,
+	SceneFrameResources &frameResources)
+{
+	(void)descriptors;
+	if (!frameResources.chunkAabbMappedData) {
+		return false;
+	}
+	const size_t chunkCount = std::min(chunks.size(), descriptors.size());
+	auto *packedAabbs = static_cast<PackedSceneChunkAabb *>(frameResources.chunkAabbMappedData);
+	for (size_t chunkIndex = 0; chunkIndex < chunkCount; ++chunkIndex) {
+		const VoxelChunk &chunk = chunks[chunkIndex];
+		const float minX = static_cast<float>(chunk.min.x);
+		const float minY = static_cast<float>(chunk.min.y);
+		const float minZ = static_cast<float>(chunk.min.z);
+		const float maxX = static_cast<float>(chunk.maxExclusive.x);
+		const float maxY = static_cast<float>(chunk.maxExclusive.y);
+		const float maxZ = static_cast<float>(chunk.maxExclusive.z);
+		const float centerX = (minX + maxX) * 0.5f;
+		const float centerY = (minY + maxY) * 0.5f;
+		const float centerZ = (minZ + maxZ) * 0.5f;
+		const float halfExtent = 0.5f;
+		packedAabbs[chunkIndex].centerAndHalfExtent = {
+			centerX,
+			centerY,
+			centerZ,
+			halfExtent,
+		};
+		packedAabbs[chunkIndex].originAndPadding = {
+			minX,
+			minY,
+			minZ,
+			0.0f,
+		};
+	}
+	for (size_t chunkIndex = chunkCount;
+		chunkIndex < static_cast<size_t>(frameResources.chunkDescriptorCount);
+		++chunkIndex) {
+		packedAabbs[chunkIndex] = {};
+	}
+	if (frameResources.visibilityMaskMappedData) {
+		const uint32_t wordCount = (static_cast<uint32_t>(chunkCount) + 31u) / 32u;
+		std::memset(frameResources.visibilityMaskMappedData, 0, sizeof(uint32_t) * wordCount);
+	}
 	return true;
 }

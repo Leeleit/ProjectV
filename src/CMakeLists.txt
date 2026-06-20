@@ -32,9 +32,11 @@ set(SHADERS
         ${SHADER_DIR}/voxel_shadow.vert
         ${SHADER_DIR}/voxel_shadow.frag
         ${SHADER_DIR}/voxel_mesh.comp
+        ${SHADER_DIR}/voxel_mesh_pre.comp
         ${SHADER_DIR}/voxel_mesh.task
         ${SHADER_DIR}/voxel_mesh.mesh
         ${SHADER_DIR}/hzb_cull.comp
+        ${SHADER_DIR}/fluid_ca.comp
         ${SHADER_DIR}/taa_resolve.vert
         ${SHADER_DIR}/taa_resolve.frag
         ${SHADER_DIR}/debug_overlay.vert
@@ -86,6 +88,7 @@ add_dependencies(ProjectV Shaders)
 
 target_sources(ProjectV PRIVATE
         app/AppUpdate.cpp
+        app/AppUpdateHelpers.cpp
         app/BenchmarkAutomation.cpp
         app/Camera.cpp
         app/FramePreparation.cpp
@@ -127,9 +130,11 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp
+        render/vulkan/HardwareRayTracingProbe.cpp
         render/vulkan/VulkanInit.cpp
         render/vulkan/VulkanResult.cpp
         render/vulkan/VulkanSwapchain.cpp
+        render/vulkan/VulkanSyncPrimitives.cpp
         render/vulkan/VulkanVoxelMeshingPipeline.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp

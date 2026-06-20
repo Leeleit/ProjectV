@@ -1,17 +1,91 @@
 #include "render/HizCulling.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
+#include <vector>
 
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
+#include "core/ShaderIO.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
+
+namespace {
+constexpr uint32_t kHizCullingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+constexpr char kHizCullingShaderFilename[] = "hzb_cull.comp.spv";
+
+constexpr std::array<VkDescriptorSetLayoutBinding, 4> kHizCullingDescriptorBindings{
+	VkDescriptorSetLayoutBinding{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 2,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 3,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+};
+
+constexpr VkDescriptorSetLayoutCreateInfo kHizCullingDescriptorSetLayoutInfo{
+	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+	.pNext = nullptr,
+	.flags = 0,
+	.bindingCount = static_cast<uint32_t>(kHizCullingDescriptorBindings.size()),
+	.pBindings = kHizCullingDescriptorBindings.data(),
+};
+
+constexpr std::array<VkDescriptorPoolSize, 4> kHizCullingDescriptorPoolSizes{
+	VkDescriptorPoolSize{
+		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = kHizCullingDescriptorSetCount * 2u,
+	},
+	VkDescriptorPoolSize{
+		.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		.descriptorCount = kHizCullingDescriptorSetCount,
+	},
+	VkDescriptorPoolSize{
+		.type = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.descriptorCount = kHizCullingDescriptorSetCount,
+	},
+	VkDescriptorPoolSize{
+		.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		.descriptorCount = 0u,
+	},
+};
+}  // namespace
 
 namespace projectv::render {
 
 bool IsHzbCullingEnabled()
 {
 	if (const char *value = std::getenv("PROJECTV_HZB_CULLING")) {
+		return value[0] != '\0' && value[0] != '0';
+	}
+	return false;
+}
+
+bool IsMeshShaderPipelineEnabled()
+{
+	if (const char *value = std::getenv("PROJECTV_MESH_SHADER_PIPELINE")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;
@@ -100,6 +174,33 @@ bool CreateHizBuffer(
 		return false;
 	}
 
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_NEAREST;
+	samplerInfo.minFilter = VK_FILTER_NEAREST;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = VK_LOD_CLAMP_NONE;
+	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.maxAnisotropy = 1.0f;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+	if (vkCreateSampler(context->device, &samplerInfo, nullptr, &outBuffer.sampler) != VK_SUCCESS) {
+		vkDestroyImageView(context->device, outBuffer.imageView, nullptr);
+		vmaDestroyImage(context->allocator, outBuffer.image, outBuffer.allocation);
+		outBuffer = {};
+		runtime::LogRuntimeFailure(
+			"Render",
+			"CreateHizBuffer.vkCreateSampler",
+			"failed to create Hi-Z sampler");
+		return false;
+	}
+
 	outBuffer.baseWidth = baseWidth;
 	outBuffer.baseHeight = baseHeight;
 	outBuffer.mipLevelCount = mipLevels;
@@ -114,6 +215,11 @@ bool CreateHizBuffer(
 		reinterpret_cast<uint64_t>(outBuffer.imageView),
 		VK_OBJECT_TYPE_IMAGE_VIEW,
 		"HizBufferImageView");
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(outBuffer.sampler),
+		VK_OBJECT_TYPE_SAMPLER,
+		"HizBufferSampler");
 	return true;
 }
 
@@ -121,6 +227,9 @@ void DestroyHizBuffer(VulkanContextState *context, HizBuffer &buffer)
 {
 	if (!context || !context->allocator) {
 		return;
+	}
+	if (buffer.sampler != VK_NULL_HANDLE && context->device != VK_NULL_HANDLE) {
+		vkDestroySampler(context->device, buffer.sampler, nullptr);
 	}
 	if (buffer.imageView != VK_NULL_HANDLE && context->device != VK_NULL_HANDLE) {
 		vkDestroyImageView(context->device, buffer.imageView, nullptr);
@@ -312,6 +421,355 @@ void BuildHizMipChain(
 		nullptr,
 		1u,
 		&restoreDepth);
+}
+
+bool CreateHizCullingPipeline(
+	VulkanContextState *context,
+	RenderState *render)
+{
+	if (!context || !render || context->device == VK_NULL_HANDLE) {
+		return false;
+	}
+
+	DestroyHizCullingPipeline(context, render);
+
+	const std::vector<char> cullShaderCode = ReadShaderFile(kHizCullingShaderFilename);
+	if (cullShaderCode.empty()) {
+		runtime::LogRuntimeFailure(
+			"Render",
+			"CreateHizCullingPipeline.ReadShaderFile",
+			"failed to read hzb_cull.comp.spv");
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+
+	VkShaderModuleCreateInfo moduleInfo{};
+	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	moduleInfo.codeSize = cullShaderCode.size();
+	moduleInfo.pCode = reinterpret_cast<const uint32_t *>(cullShaderCode.data());
+
+	const VkResult moduleResult = vkCreateShaderModule(
+		context->device,
+		&moduleInfo,
+		nullptr,
+		&render->hizCullingShaderModule);
+	if (moduleResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"CreateHizCullingPipeline.vkCreateShaderModule",
+			moduleResult);
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->hizCullingShaderModule),
+		VK_OBJECT_TYPE_SHADER_MODULE,
+		"HizCullingShaderModule");
+
+	const VkResult layoutResult = vkCreateDescriptorSetLayout(
+		context->device,
+		&kHizCullingDescriptorSetLayoutInfo,
+		nullptr,
+		&render->hizCullingDescriptorSetLayout);
+	if (layoutResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"CreateHizCullingPipeline.vkCreateDescriptorSetLayout",
+			layoutResult);
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->hizCullingDescriptorSetLayout),
+		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+		"HizCullingDescriptorSetLayout");
+
+	VkPushConstantRange pushConstantRange{};
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(HizCullingPushConstants);
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &render->hizCullingDescriptorSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+	const VkResult pipelineLayoutResult = vkCreatePipelineLayout(
+		context->device,
+		&pipelineLayoutInfo,
+		nullptr,
+		&render->hizCullingPipelineLayout);
+	if (pipelineLayoutResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"CreateHizCullingPipeline.vkCreatePipelineLayout",
+			pipelineLayoutResult);
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->hizCullingPipelineLayout),
+		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+		"HizCullingPipelineLayout");
+
+	const VkPipelineShaderStageCreateInfo cullStage{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = render->hizCullingShaderModule,
+		.pName = "main",
+		.pSpecializationInfo = nullptr,
+	};
+
+	VkComputePipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.stage = cullStage;
+	pipelineInfo.layout = render->hizCullingPipelineLayout;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = 0;
+
+	const VkResult pipelineResult = vkCreateComputePipelines(
+		context->device,
+		VK_NULL_HANDLE,
+		1u,
+		&pipelineInfo,
+		nullptr,
+		&render->hizCullingPipeline);
+	if (pipelineResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"CreateHizCullingPipeline.vkCreateComputePipelines",
+			pipelineResult);
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->hizCullingPipeline),
+		VK_OBJECT_TYPE_PIPELINE,
+		"HizCullingPipeline");
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.maxSets = kHizCullingDescriptorSetCount;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(kHizCullingDescriptorPoolSizes.size());
+	poolInfo.pPoolSizes = kHizCullingDescriptorPoolSizes.data();
+
+	const VkResult poolResult = vkCreateDescriptorPool(
+		context->device,
+		&poolInfo,
+		nullptr,
+		&render->hizCullingDescriptorPool);
+	if (poolResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"CreateHizCullingPipeline.vkCreateDescriptorPool",
+			poolResult);
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->hizCullingDescriptorPool),
+		VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+		"HizCullingDescriptorPool");
+
+	std::array<VkDescriptorSetLayout, kHizCullingDescriptorSetCount> layouts{};
+	for (uint32_t i = 0; i < kHizCullingDescriptorSetCount; ++i) {
+		layouts[i] = render->hizCullingDescriptorSetLayout;
+	}
+
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = render->hizCullingDescriptorPool;
+	allocInfo.descriptorSetCount = kHizCullingDescriptorSetCount;
+	allocInfo.pSetLayouts = layouts.data();
+
+	std::array<VkDescriptorSet, kHizCullingDescriptorSetCount> sets{};
+	const VkResult allocResult = vkAllocateDescriptorSets(
+		context->device,
+		&allocInfo,
+		sets.data());
+	if (allocResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"CreateHizCullingPipeline.vkAllocateDescriptorSets",
+			allocResult);
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	for (uint32_t i = 0; i < kHizCullingDescriptorSetCount && i < render->sceneFrameResources.size(); ++i) {
+		render->sceneFrameResources[i].hizCullingDescriptorSet = sets[i];
+	}
+
+	render->hizCullingEnabled = true;
+	return true;
+}
+
+void DestroyHizCullingPipeline(
+	VulkanContextState *context,
+	RenderState *render)
+{
+	if (!context || !render) {
+		return;
+	}
+
+	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
+		frameResources.hizCullingDescriptorSet = VK_NULL_HANDLE;
+	}
+
+	if (context->device != VK_NULL_HANDLE) {
+		if (render->hizCullingPipeline != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context->device, render->hizCullingPipeline, nullptr);
+			render->hizCullingPipeline = VK_NULL_HANDLE;
+		}
+		if (render->hizCullingPipelineLayout != VK_NULL_HANDLE) {
+			vkDestroyPipelineLayout(context->device, render->hizCullingPipelineLayout, nullptr);
+			render->hizCullingPipelineLayout = VK_NULL_HANDLE;
+		}
+		if (render->hizCullingDescriptorSetLayout != VK_NULL_HANDLE) {
+			vkDestroyDescriptorSetLayout(context->device, render->hizCullingDescriptorSetLayout, nullptr);
+			render->hizCullingDescriptorSetLayout = VK_NULL_HANDLE;
+		}
+		if (render->hizCullingShaderModule != VK_NULL_HANDLE) {
+			vkDestroyShaderModule(context->device, render->hizCullingShaderModule, nullptr);
+			render->hizCullingShaderModule = VK_NULL_HANDLE;
+		}
+		if (render->hizCullingDescriptorPool != VK_NULL_HANDLE) {
+			vkDestroyDescriptorPool(context->device, render->hizCullingDescriptorPool, nullptr);
+			render->hizCullingDescriptorPool = VK_NULL_HANDLE;
+		}
+	}
+
+	render->hizCullingEnabled = false;
+}
+
+bool RecordHzbCullingDispatch(
+	VkCommandBuffer commandBuffer,
+	VulkanContextState *context,
+	RenderState &render,
+	SceneFrameResources &frameResources,
+	const float (&inverseViewProjection)[16],
+	const uint32_t chunkDescriptorCount)
+{
+	if (!IsHzbCullingEnabled()) {
+		return false;
+	}
+	if (commandBuffer == VK_NULL_HANDLE || context == nullptr) {
+		return false;
+	}
+	if (render.hizCullingPipeline == VK_NULL_HANDLE ||
+		render.hizCullingPipelineLayout == VK_NULL_HANDLE) {
+		return false;
+	}
+	if (frameResources.hizCullingDescriptorSet == VK_NULL_HANDLE ||
+		frameResources.chunkAabbBuffer == VK_NULL_HANDLE ||
+		frameResources.visibilityMaskBuffer == VK_NULL_HANDLE) {
+		return false;
+	}
+	if (render.hizBuffer.imageView == VK_NULL_HANDLE ||
+		render.hizBuffer.sampler == VK_NULL_HANDLE) {
+		return false;
+	}
+
+	VkDescriptorBufferInfo chunkAabbInfo{};
+	chunkAabbInfo.buffer = frameResources.chunkAabbBuffer;
+	chunkAabbInfo.offset = 0;
+	chunkAabbInfo.range = VK_WHOLE_SIZE;
+
+	VkDescriptorBufferInfo visibilityMaskInfo{};
+	visibilityMaskInfo.buffer = frameResources.visibilityMaskBuffer;
+	visibilityMaskInfo.offset = 0;
+	visibilityMaskInfo.range = VK_WHOLE_SIZE;
+
+	VkDescriptorImageInfo hizImageInfo{};
+	hizImageInfo.sampler = VK_NULL_HANDLE;
+	hizImageInfo.imageView = render.hizBuffer.imageView;
+	hizImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+	VkDescriptorImageInfo hizSamplerInfo{};
+	hizSamplerInfo.sampler = render.hizBuffer.sampler;
+	hizSamplerInfo.imageView = VK_NULL_HANDLE;
+	hizSamplerInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	std::array<VkWriteDescriptorSet, 4> writes{};
+	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[0].dstSet = frameResources.hizCullingDescriptorSet;
+	writes[0].dstBinding = 0;
+	writes[0].dstArrayElement = 0;
+	writes[0].descriptorCount = 1;
+	writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[0].pBufferInfo = &chunkAabbInfo;
+
+	writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[1].dstSet = frameResources.hizCullingDescriptorSet;
+	writes[1].dstBinding = 1;
+	writes[1].dstArrayElement = 0;
+	writes[1].descriptorCount = 1;
+	writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[1].pBufferInfo = &visibilityMaskInfo;
+
+	writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[2].dstSet = frameResources.hizCullingDescriptorSet;
+	writes[2].dstBinding = 2;
+	writes[2].dstArrayElement = 0;
+	writes[2].descriptorCount = 1;
+	writes[2].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	writes[2].pImageInfo = &hizImageInfo;
+
+	writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[3].dstSet = frameResources.hizCullingDescriptorSet;
+	writes[3].dstBinding = 3;
+	writes[3].dstArrayElement = 0;
+	writes[3].descriptorCount = 1;
+	writes[3].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+	writes[3].pImageInfo = &hizSamplerInfo;
+
+	vkUpdateDescriptorSets(
+		context->device,
+		static_cast<uint32_t>(writes.size()),
+		writes.data(),
+		0u,
+		nullptr);
+
+	HizCullingPushConstants pushConstants{};
+	for (uint32_t i = 0; i < 16u; ++i) {
+		pushConstants.inverseViewProjection[i] = inverseViewProjection[i];
+	}
+	pushConstants.hizExtentAndMipCount = {
+		render.hizBuffer.baseWidth,
+		render.hizBuffer.baseHeight,
+		chunkDescriptorCount,
+		0u,
+	};
+	pushConstants.depthUnpackParams = {1.0f, 0.0f, 0.0f, 0.0f};
+
+	vkCmdBindPipeline(
+		commandBuffer,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		render.hizCullingPipeline);
+	vkCmdBindDescriptorSets(
+		commandBuffer,
+		VK_PIPELINE_BIND_POINT_COMPUTE,
+		render.hizCullingPipelineLayout,
+		0u,
+		1u,
+		&frameResources.hizCullingDescriptorSet,
+		0u,
+		nullptr);
+	vkCmdPushConstants(
+		commandBuffer,
+		render.hizCullingPipelineLayout,
+		VK_SHADER_STAGE_COMPUTE_BIT,
+		0u,
+		sizeof(HizCullingPushConstants),
+		&pushConstants);
+
+	const uint32_t workgroupCount = (chunkDescriptorCount + 63u) / 64u;
+	if (workgroupCount > 0u) {
+		vkCmdDispatch(commandBuffer, workgroupCount, 1u, 1u);
+	}
+	return true;
 }
 
 }  // namespace projectv::render

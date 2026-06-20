@@ -14,6 +14,7 @@ import projectv.string_id;
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
+#include "render/HizCulling.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 namespace projectv::taa {
@@ -73,6 +74,16 @@ static_assert(offsetof(PackedSceneChunkDescriptor, chunkOrigin) == 0);
 static_assert(offsetof(PackedSceneChunkDescriptor, chunkExtentAndNonAir) == 16);
 static_assert(offsetof(PackedSceneChunkDescriptor, voxelDataInfo) == 32);
 static_assert(offsetof(PackedSceneChunkDescriptor, drawRanges) == 48);
+
+struct PackedSceneChunkAabb {
+	std::array<float, 4> centerAndHalfExtent{};
+	std::array<float, 4> originAndPadding{};
+};
+static_assert(std::is_standard_layout_v<PackedSceneChunkAabb>);
+static_assert(std::is_trivially_copyable_v<PackedSceneChunkAabb>);
+static_assert(sizeof(PackedSceneChunkAabb) == 32);
+static_assert(offsetof(PackedSceneChunkAabb, centerAndHalfExtent) == 0);
+static_assert(offsetof(PackedSceneChunkAabb, originAndPadding) == 16);
 
 struct SceneChunkVoxelPayloadRange {
 	uint32_t wordOffset = 0;
@@ -360,10 +371,13 @@ struct FrameRenderData {
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
 	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
+	VkBuffer chunkAabbBuffer = VK_NULL_HANDLE;
+	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet taaResolveDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
@@ -506,37 +520,44 @@ struct DebugStats {
 struct SceneFrameResources {
 	void *packedFaceMappedData = nullptr;
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
-	VmaAllocation packedFaceAllocation = VK_NULL_HANDLE;
+	VmaAllocation packedFaceAllocation = nullptr;
 	void *debugHudVertexMappedData = nullptr;
 	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
-	VmaAllocation debugHudVertexAllocation = VK_NULL_HANDLE;
+	VmaAllocation debugHudVertexAllocation = nullptr;
 	void *chunkDescriptorMappedData = nullptr;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
-	VmaAllocation chunkDescriptorAllocation = VK_NULL_HANDLE;
+	VmaAllocation chunkDescriptorAllocation = nullptr;
 	void *chunkVoxelPayloadMappedData = nullptr;
 	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
-	VmaAllocation chunkVoxelPayloadAllocation = VK_NULL_HANDLE;
+	VmaAllocation chunkVoxelPayloadAllocation = nullptr;
 	void *opaqueIndirectMappedData = nullptr;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
-	VmaAllocation opaqueIndirectAllocation = VK_NULL_HANDLE;
+	VmaAllocation opaqueIndirectAllocation = nullptr;
 	void *shadowIndirectMappedData = nullptr;
 	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
-	VmaAllocation shadowIndirectAllocation = VK_NULL_HANDLE;
+	VmaAllocation shadowIndirectAllocation = nullptr;
 	void *transparentIndirectMappedData = nullptr;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
-	VmaAllocation transparentIndirectAllocation = VK_NULL_HANDLE;
+	VmaAllocation transparentIndirectAllocation = nullptr;
 	void *dirtyChunkIndexMappedData = nullptr;
 	VkBuffer dirtyChunkIndexBuffer = VK_NULL_HANDLE;
-	VmaAllocation dirtyChunkIndexAllocation = VK_NULL_HANDLE;
+	VmaAllocation dirtyChunkIndexAllocation = nullptr;
 	void *chunkCullingMappedData = nullptr;
 	VkBuffer chunkCullingBuffer = VK_NULL_HANDLE;
-	VmaAllocation chunkCullingAllocation = VK_NULL_HANDLE;
+	VmaAllocation chunkCullingAllocation = nullptr;
 	void *sceneLightingMappedData = nullptr;
 	VkBuffer sceneLightingBuffer = VK_NULL_HANDLE;
-	VmaAllocation sceneLightingAllocation = VK_NULL_HANDLE;
+	VmaAllocation sceneLightingAllocation = nullptr;
+	void *chunkAabbMappedData = nullptr;
+	VkBuffer chunkAabbBuffer = VK_NULL_HANDLE;
+	VmaAllocation chunkAabbAllocation = nullptr;
+	void *visibilityMaskMappedData = nullptr;
+	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
+	VmaAllocation visibilityMaskAllocation = nullptr;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;
 	uint64_t uploadedVoxelPayloadVersion = 0;
 	uint64_t meshedSceneVersion = 0;
@@ -634,16 +655,24 @@ struct RenderState {
 	ChunkVisibilityCache chunkVisibilityCache{};
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
-	VmaAllocation depthAllocation = VK_NULL_HANDLE;
+	VmaAllocation depthAllocation = nullptr;
 	VkFormat shadowDepthFormat = VK_FORMAT_UNDEFINED;
 	VkExtent2D shadowMapExtent{2048u, 2048u};
 	VkImage shadowImage = VK_NULL_HANDLE;
 	VkImageView shadowImageView = VK_NULL_HANDLE;
 	std::array<VkImageView, kSunShadowCascadeCount> shadowCascadeImageViews{};
-	VmaAllocation shadowAllocation = VK_NULL_HANDLE;
+	VmaAllocation shadowAllocation = nullptr;
 	VkSampler shadowSampler = VK_NULL_HANDLE;
 	bool depthImageNeedsInit = false;
 	bool shadowImageNeedsInit = false;
+	projectv::render::HizBuffer hizBuffer{};
+	VkPipelineLayout hizCullingPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline hizCullingPipeline = VK_NULL_HANDLE;
+	VkShaderModule hizCullingShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout hizCullingDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool hizCullingDescriptorPool = VK_NULL_HANDLE;
+	bool hizBufferNeedsInit = false;
+	bool hizCullingEnabled = false;
 
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -805,6 +834,11 @@ struct VulkanContextState {
 	VkDevice device = VK_NULL_HANDLE;
 	VkQueue queue = VK_NULL_HANDLE;
 	uint32_t queueFamilyIndex = 0;
+	VkQueue dedicatedComputeQueue = VK_NULL_HANDLE;
+	uint32_t dedicatedComputeQueueFamilyIndex = UINT32_MAX;
+	bool hasDedicatedComputeQueue = false;
+	VkSemaphore renderTimelineSemaphore = VK_NULL_HANDLE;
+	uint64_t renderTimelineValue = 0;
 	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkCommandPool commandPool = VK_NULL_HANDLE;
 
@@ -813,6 +847,9 @@ struct VulkanContextState {
 
 inline constexpr uint64_t kVulkanFenceWaitTimeoutNs = 10'000'000;
 inline constexpr uint64_t kVulkanFenceWaitTimeoutUnboundedNs = UINT64_MAX;
+
+inline constexpr float kVctCutoffRoughness = 0.3f;
+inline constexpr float kRtxCutoffRoughness = 0.3f;
 
 struct SwapchainState {
 	VkSwapchainKHR handle = VK_NULL_HANDLE;

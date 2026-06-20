@@ -31,6 +31,7 @@ option(
 )
 option(PROJECTV_BUILD_TRACY_PROFILER "Build bundled Tracy profiler UI" OFF)
 option(PROJECTV_ENABLE_BENCHMARKS "Build Google Benchmark perf-test harness" OFF)
+option(PROJECTV_HW_RAY_TRACING "Enable hardware ray tracing probes (RTX path, feature-flagged)" OFF)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_C_STANDARD 23)
@@ -247,6 +248,12 @@ if (PROJECTV_ENABLE_VALIDATION)
     target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_VALIDATION=1)
 else ()
     target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_VALIDATION=0)
+endif ()
+
+if (PROJECTV_HW_RAY_TRACING)
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_HW_RAY_TRACING=1)
+else ()
+    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_HW_RAY_TRACING=0)
 endif ()
 
 if (PROJECTV_ENABLE_RENDERDOC_MARKERS)

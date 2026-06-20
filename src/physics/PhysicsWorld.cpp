@@ -13,6 +13,7 @@ import projectv.string_id;
 #include <cmath>
 #include <limits>
 #include <mutex>
+#include <unordered_map>
 
 #pragma warning(push, 0)
 #pragma clang diagnostic push
@@ -42,7 +43,11 @@ import projectv.string_id;
 #pragma warning(pop)
 
 namespace {
+// EVIL: kPhysicsDirectionEpsilon = 0.00001f is the smallest direction vector magnitude we still trust as
+	// normalized. Below this we re-normalize to avoid 1/0 in cross products and length comparisons.
 constexpr float kPhysicsDirectionEpsilon = 0.00001f;
+// EVIL: kPhysicsRaycastVoxelEpsilon = 0.001f is the half-voxel inset used to avoid hitting the voxel's own
+	// face. Below 1e-3 we saw numerical jitter on chunk boundary cells; above 1e-2 we'd risk skipping thin walls.
 constexpr float kPhysicsRaycastVoxelEpsilon = 0.001f;
 constexpr float kWalkCapsuleRadius = 0.35f;
 constexpr float kWalkCapsuleHalfHeight = 0.55f;
@@ -54,7 +59,11 @@ constexpr float kWalkSneakMoveSpeedMultiplier = 0.45f;
 constexpr float kWalkBoostMultiplier = 1.8f;
 constexpr float kWalkSlowMultiplier = 0.35f;
 constexpr float kWalkJumpSpeed = 8.0f;
+// EVIL: kWalkSpawnClearance = 0.05f lifts the spawn position by 5cm to prevent physics engine from claiming
+	// we're already penetrating ground at spawn. Hardcoded fallback before SpawnWalkCharacterToCamera probe.
 constexpr float kWalkSpawnClearance = 0.05f;
+// EVIL: kWalkSneakShapeMaxPenetrationDepth = 0.05f caps how deep the sneak capsule is allowed to sink into
+	// ground voxels before forced ejection. Matches the spawn clearance above for consistency.
 constexpr float kWalkSneakShapeMaxPenetrationDepth = 0.05f;
 constexpr float kWalkJumpRealisticAirBrakeDeceleration = 14.0f;
 constexpr float kWalkJumpRealisticAirReacceleration = 10.0f;
@@ -308,6 +317,8 @@ struct PhysicsState {
 	WalkCharacterContactListener walkContactListener{};
 	const VoxelWorld *syncedWorld = nullptr;
 	uint64_t syncedWorldEditVersion = 0;
+	std::unordered_map<uint32_t, JPH::BodyID> chunkStaticBodies;
+	std::vector<uint32_t> pendingChunkRebuilds;
 	bool walkCharacterInitialized = false;
 	WalkSupportState walkSupportState = WalkSupportState::Air;
 	uint32_t walkEdgeGraceFramesRemaining = 0;
@@ -2841,6 +2852,147 @@ Int3 FloorToVoxel(const std::array<float, 3> &position)
 	};
 }
 } // namespace
+
+bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &world, uint32_t chunkIndex)
+{
+	if (chunkIndex >= world.chunks.size()) {
+		return false;
+	}
+	const VoxelChunk &chunk = world.chunks[chunkIndex];
+	if (chunk.min.x >= chunk.maxExclusive.x ||
+		chunk.min.y >= chunk.maxExclusive.y ||
+		chunk.min.z >= chunk.maxExclusive.z) {
+		return false;
+	}
+
+	const auto it = physics.chunkStaticBodies.find(chunkIndex);
+	if (it != physics.chunkStaticBodies.end()) {
+		JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+		bodyInterface.RemoveBody(it->second);
+		bodyInterface.DestroyBody(it->second);
+		physics.chunkStaticBodies.erase(it);
+	}
+
+	JPH::StaticCompoundShapeSettings compoundSettings;
+	const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+
+	size_t solidVoxelCount = 0;
+	for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
+		for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
+			for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
+				const Int3 voxel{x, y, z};
+				if (!IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+					continue;
+				}
+
+				compoundSettings.AddShape(
+					JPH::Vec3(
+						static_cast<float>(x) + 0.5f,
+						static_cast<float>(y) + 0.5f,
+						static_cast<float>(z) + 0.5f),
+					JPH::Quat::sIdentity(),
+					voxelShape.GetPtr());
+				++solidVoxelCount;
+			}
+		}
+	}
+
+	if (solidVoxelCount == 0u) {
+		return true;
+	}
+
+	const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
+	if (!shapeResult.IsValid()) {
+		runtime::LogRuntimeFailure(
+			"Physics",
+			"BuildChunkStaticCollisionBody.Create",
+			shapeResult.GetError());
+		return false;
+	}
+
+	const JPH::RefConst<JPH::Shape> chunkShape = shapeResult.Get();
+	const JPH::BodyCreationSettings chunkBodySettings(
+		chunkShape,
+		JPH::RVec3::sZero(),
+		JPH::Quat::sIdentity(),
+		JPH::EMotionType::Static,
+		PhysicsLayers::Static);
+
+	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+	const JPH::BodyID bodyId = bodyInterface.CreateAndAddBody(chunkBodySettings, JPH::EActivation::DontActivate);
+	if (bodyId.IsInvalid()) {
+		runtime::LogRuntimeFailure(
+			"Physics",
+			"BuildChunkStaticCollisionBody.CreateAndAddBody",
+			"CreateAndAddBody returned an invalid body id");
+		return false;
+	}
+
+	physics.chunkStaticBodies[chunkIndex] = bodyId;
+	return true;
+}
+
+void DestroyChunkStaticBody(PhysicsState &physics, uint32_t chunkIndex)
+{
+	const auto it = physics.chunkStaticBodies.find(chunkIndex);
+	if (it == physics.chunkStaticBodies.end()) {
+		return;
+	}
+	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+	bodyInterface.RemoveBody(it->second);
+	bodyInterface.DestroyBody(it->second);
+	physics.chunkStaticBodies.erase(it);
+}
+
+void QueueChunkRebuildRequest(PhysicsState *physics, const uint32_t chunkIndex)
+{
+	if (!physics) {
+		return;
+	}
+	physics->pendingChunkRebuilds.push_back(chunkIndex);
+}
+
+uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world)
+{
+	if (!physics || !world || physics->pendingChunkRebuilds.empty()) {
+		return 0;
+	}
+
+	std::vector<uint32_t> pending;
+	pending.swap(physics->pendingChunkRebuilds);
+	std::sort(pending.begin(), pending.end());
+	pending.erase(std::unique(pending.begin(), pending.end()), pending.end());
+
+	uint32_t rebuiltCount = 0;
+	for (const uint32_t chunkIndex : pending) {
+		if (chunkIndex >= world->chunks.size()) {
+			continue;
+		}
+		if (BuildChunkStaticCollisionBody(*physics, *world, chunkIndex)) {
+			++rebuiltCount;
+		}
+	}
+	if (rebuiltCount > 0) {
+		physics->physicsSystem.OptimizeBroadPhase();
+	}
+	return rebuiltCount;
+}
+
+uint32_t GetPendingChunkRebuildCount(const PhysicsState *physics)
+{
+	if (!physics) {
+		return 0;
+	}
+	return static_cast<uint32_t>(physics->pendingChunkRebuilds.size());
+}
+
+uint32_t GetChunkBodyCount(const PhysicsState *physics)
+{
+	if (!physics) {
+		return 0;
+	}
+	return static_cast<uint32_t>(physics->chunkStaticBodies.size());
+}
 
 void InvalidateWalkSupportStateForWorldEdit(PhysicsState &physics);
 

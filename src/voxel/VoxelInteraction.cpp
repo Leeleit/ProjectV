@@ -43,7 +43,7 @@ void PopulateChunkSelectionInfo(
 
 	const Int3 chunkCoord = GetVoxelChunkCoord(world, voxel);
 	const size_t chunkIndex = GetVoxelChunkIndex(world, chunkCoord);
-	const auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit] = world.chunks[chunkIndex];
+	const auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel, reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
 	outHasChunk = true;
 	outChunkCoord = chunkCoord;
 	outChunkMin = min;
@@ -281,7 +281,7 @@ bool ApplyClassicInteraction(
 	const InteractionState &interaction)
 {
 	if (input.removePressed && hit.hasHit) {
-		SetVoxelMaterial(world, hit.voxel, VoxelMaterial::Air);
+		SetVoxelMaterial(world, hit.voxel, VoxelMaterial::Air, const_cast<PhysicsState *>(physics));
 		return true;
 	}
 
@@ -290,7 +290,7 @@ bool ApplyClassicInteraction(
 		CanPlaceInteractionVoxel(hit, camera, physics) &&
 		GetVoxelMaterial(world, hit.placementVoxel) == VoxelMaterial::Air &&
 		interaction.placementMaterial != VoxelMaterial::Air) {
-		SetVoxelMaterial(world, hit.placementVoxel, interaction.placementMaterial);
+		SetVoxelMaterial(world, hit.placementVoxel, interaction.placementMaterial, const_cast<PhysicsState *>(physics));
 		return true;
 	}
 
@@ -315,14 +315,14 @@ bool ApplyPaintInteraction(
 
 	if (input.removePressed &&
 		GetVoxelMaterial(world, hit.voxel) != interaction.placementMaterial) {
-		SetVoxelMaterial(world, hit.voxel, interaction.placementMaterial);
+		SetVoxelMaterial(world, hit.voxel, interaction.placementMaterial, const_cast<PhysicsState *>(physics));
 		return true;
 	}
 
 	if (input.placePressed &&
 		CanPlaceInteractionVoxel(hit, camera, physics) &&
 		GetVoxelMaterial(world, hit.placementVoxel) == VoxelMaterial::Air) {
-		SetVoxelMaterial(world, hit.placementVoxel, interaction.placementMaterial);
+		SetVoxelMaterial(world, hit.placementVoxel, interaction.placementMaterial, const_cast<PhysicsState *>(physics));
 		return true;
 	}
 
@@ -332,6 +332,7 @@ bool ApplyPaintInteraction(
 bool ApplyEraseInteraction(
 	const VoxelRaycastHit &hit,
 	const InputState &input,
+	const PhysicsState *physics,
 	VoxelWorld &world,
 	const InteractionState &interaction)
 {
@@ -340,7 +341,7 @@ bool ApplyEraseInteraction(
 	}
 
 	if ((input.removePressed || input.placePressed) && hit.hasHit) {
-		SetVoxelMaterial(world, hit.voxel, VoxelMaterial::Air);
+		SetVoxelMaterial(world, hit.voxel, VoxelMaterial::Air, const_cast<PhysicsState *>(physics));
 		return true;
 	}
 
@@ -376,7 +377,7 @@ bool ApplyEditorInteraction(
 	case DebugEditorTool::Paint:
 		return ApplyPaintInteraction(hit, camera, input, physics, world, interaction);
 	case DebugEditorTool::Erase:
-		return ApplyEraseInteraction(hit, input, world, interaction);
+		return ApplyEraseInteraction(hit, input, physics, world, interaction);
 	case DebugEditorTool::Fill:
 		return ApplyFillInteraction(hit, input, world, interaction);
 	case DebugEditorTool::Inspect:

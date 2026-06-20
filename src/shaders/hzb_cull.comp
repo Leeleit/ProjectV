@@ -16,6 +16,7 @@ layout(set = 0, binding = 1, std430) writeonly buffer VisibilityMask {
 };
 
 layout(set = 0, binding = 2) uniform sampler2D hizTexture;
+layout(set = 0, binding = 3) uniform sampler hizSampler;
 
 layout(push_constant) uniform CullPushConstants {
     mat4 inverseViewProjection;
@@ -27,9 +28,10 @@ const uint kBitsPerWord = 32u;
 
 bool AabbVisibleAgainstMip(
     const ChunkAabb aabb,
-    const float mipLevel,
+    const int mipLevel,
     const mat4 inverseViewProjection,
-    const sampler2D mipSampler)
+    const sampler2D mipTexture,
+    const ivec2 hizBaseExtent)
 {
     const vec3 center = aabb.centerAndHalfExtent.xyz;
     const vec3 halfExtent = vec3(aabb.centerAndHalfExtent.w);
@@ -57,15 +59,29 @@ bool AabbVisibleAgainstMip(
         return true;
     }
 
+    const int mipWidth = max(1, hizBaseExtent.x >> mipLevel);
+    const int mipHeight = max(1, hizBaseExtent.y >> mipLevel);
+
     const float uMin = clamp(ndcMin.x * 0.5 + 0.5, 0.0, 1.0);
     const float uMax = clamp(ndcMax.x * 0.5 + 0.5, 0.0, 1.0);
     const float vMin = clamp(ndcMin.y * 0.5 + 0.5, 0.0, 1.0);
     const float vMax = clamp(ndcMax.y * 0.5 + 0.5, 0.0, 1.0);
 
+    const int pixMinX = clamp(int(floor(uMin * float(mipWidth))), 0, mipWidth - 1);
+    const int pixMinY = clamp(int(floor(vMin * float(mipHeight))), 0, mipHeight - 1);
+    const int pixMaxX = clamp(int(floor(uMax * float(mipWidth))), 0, mipWidth - 1);
+    const int pixMaxY = clamp(int(floor(vMax * float(mipHeight))), 0, mipHeight - 1);
+
     const float minDepth = clamp(ndcMin.z, 0.0, 1.0);
     const float maxDepth = clamp(ndcMax.z, 0.0, 1.0);
 
-    const float mipDepth = textureLod(mipSampler, vec2((uMin + uMax) * 0.5, (vMin + vMax) * 0.5), mipLevel).r;
+    float mipDepth = 1.0;
+    for (int y = pixMinY; y <= pixMaxY; ++y) {
+        for (int x = pixMinX; x <= pixMaxX; ++x) {
+            const float depth = texelFetch(mipTexture, ivec2(x, y), mipLevel).r;
+            mipDepth = min(mipDepth, depth);
+        }
+    }
     return mipDepth >= maxDepth;
 }
 
@@ -79,11 +95,15 @@ void main()
         return;
     }
 
+    const int mipLevel = int(pushConstants.hizExtentAndMipCount.w);
+    const ivec2 hizBaseExtent = ivec2(pushConstants.hizExtentAndMipCount.x, pushConstants.hizExtentAndMipCount.y);
+
     const bool visible = AabbVisibleAgainstMip(
         chunkAabbs[chunkIndex],
-        0.0,
+        mipLevel,
         pushConstants.inverseViewProjection,
-        hizTexture);
+        hizTexture,
+        hizBaseExtent);
     if (visible) {
         atomicOr(visibilityWords[wordIndex], 1u << bitIndex);
     }

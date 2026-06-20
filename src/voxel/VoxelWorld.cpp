@@ -7,6 +7,7 @@ import projectv.string_id;
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "fmt/format.h"
+#include "physics/PhysicsWorld.hpp"
 
 #include <algorithm>
 #include <array>
@@ -427,7 +428,7 @@ void BuildCheckerboardFloor(VoxelWorld &world, const VoxelWorldConfig &config)
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
 			const VoxelMaterial material = (x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray;
-			SetVoxelMaterial(world, {x, config.floorY, z}, material);
+			SetVoxelMaterial(world, {x, config.floorY, z}, material, nullptr);
 		}
 	}
 }
@@ -457,12 +458,12 @@ void BuildVoxelLabShellAndFluid(VoxelWorld &world, const VoxelLabShellConfig &co
 				};
 
 				if (distanceSquared > innerRadiusSquared) {
-					SetVoxelMaterial(world, position, VoxelMaterial::Glass);
+					SetVoxelMaterial(world, position, VoxelMaterial::Glass, nullptr);
 					continue;
 				}
 
 				if (innerRadius > 0 && position.y <= fluidTop) {
-					SetVoxelMaterial(world, position, VoxelMaterial::Fluid);
+					SetVoxelMaterial(world, position, VoxelMaterial::Fluid, nullptr);
 				}
 			}
 		}
@@ -474,20 +475,20 @@ void BuildVoxelLabOpaqueAnchors(VoxelWorld &world, const VoxelWorldConfig &confi
 	const int baseY = config.floorY + 1;
 	for (int z = 4; z <= 6; ++z) {
 		for (int x = 5; x <= 8; ++x) {
-			SetVoxelMaterial(world, {x, baseY, z}, VoxelMaterial::FloorGray);
+			SetVoxelMaterial(world, {x, baseY, z}, VoxelMaterial::FloorGray, nullptr);
 		}
 	}
 
 	for (int y = baseY + 1; y <= baseY + 5; ++y) {
 		for (int z = 4; z <= 5; ++z) {
 			for (int x = 6; x <= 7; ++x) {
-				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::FloorWhite);
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::FloorWhite, nullptr);
 			}
 		}
 	}
 
 	for (int y = baseY + 1; y <= baseY + 3; ++y) {
-		SetVoxelMaterial(world, {5, y, 6}, VoxelMaterial::FloorWhite);
+		SetVoxelMaterial(world, {5, y, 6}, VoxelMaterial::FloorWhite, nullptr);
 	}
 }
 
@@ -498,7 +499,7 @@ void BuildTransparencyStressColumns(VoxelWorld &world, const VoxelWorldConfig &c
 		for (int x = -halfFloor + 2; x < halfFloor - 2; x += 2) {
 			const int columnHeight = 4 + (std::abs(x) + std::abs(z)) % 8;
 			for (int y = config.floorY + 1; y <= config.floorY + columnHeight; ++y) {
-				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass);
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass, nullptr);
 			}
 		}
 	}
@@ -512,7 +513,7 @@ void BuildChunkGridMarkers(VoxelWorld &world, const VoxelWorldConfig &config)
 			const int markerZ = world.min.z + chunkZ * world.chunkSize;
 			const VoxelMaterial material = (chunkX + chunkZ & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray;
 			for (int y = config.floorY + 1; y < world.maxExclusive.y; ++y) {
-				SetVoxelMaterial(world, {markerX, y, markerZ}, material);
+				SetVoxelMaterial(world, {markerX, y, markerZ}, material, nullptr);
 			}
 		}
 	}
@@ -530,7 +531,7 @@ void BuildMeshingStressVolume(VoxelWorld &world, const VoxelWorldConfig &config)
 				}
 
 				const VoxelMaterial material = (x + z & 2) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray;
-				SetVoxelMaterial(world, {x, y, z}, material);
+				SetVoxelMaterial(world, {x, y, z}, material, nullptr);
 			}
 		}
 	}
@@ -1056,7 +1057,7 @@ void MarkVoxelRegionDirty(VoxelWorld &world, const Int3 min, const Int3 maxExclu
 	}
 }
 
-void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material)
+void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, PhysicsState *physics)
 {
 	if (!IsInsideVoxelWorld(world, position)) {
 		return;
@@ -1090,6 +1091,11 @@ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material)
 	}
 
 	MarkChunksTouchedByVoxelEditDirty(world, position);
+
+	if (physics != nullptr) {
+		const uint32_t chunkIndex = GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, position));
+		QueueChunkRebuildRequest(physics, chunkIndex);
+	}
 }
 
 uint32_t GetVoxelChunkStaticPromotionThreshold()
@@ -1126,6 +1132,79 @@ uint32_t CountStaticVoxelChunks(const VoxelWorld &world)
 	uint32_t count = 0;
 	for (const VoxelChunk &chunk : world.chunks) {
 		if (chunk.isStatic) {
+			++count;
+		}
+	}
+	return count;
+}
+
+namespace {
+bool gFluidCaGpuEnabledForTesting = false;
+}
+
+bool IsFluidCaGpuEnabled()
+{
+	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
+		return value[0] != '\0' && value[0] != '0';
+	}
+	return gFluidCaGpuEnabledForTesting;
+}
+
+void ToggleFluidCaGpuEnabledForTesting(const bool enabled)
+{
+	gFluidCaGpuEnabledForTesting = enabled;
+}
+
+std::vector<uint32_t> BuildActiveChunkIdsForFluidCa(const VoxelWorld &world)
+{
+	std::vector<uint32_t> active;
+	active.reserve(world.chunks.size());
+	for (size_t chunkIndex = 0; chunkIndex < world.chunks.size(); ++chunkIndex) {
+		const VoxelChunk &chunk = world.chunks[chunkIndex];
+		if (chunk.nonAirVoxelCount == 0u) {
+			continue;
+		}
+		if (chunk.isStatic && (chunk.ticksSinceLastEdit < 30u)) {
+			continue;
+		}
+		active.push_back(static_cast<uint32_t>(chunkIndex));
+	}
+	return active;
+}
+
+uint8_t SelectLodLevelForDistance(const float distanceMeters)
+{
+	if (distanceMeters < 32.0f) {
+		return 0;
+	}
+	if (distanceMeters < 64.0f) {
+		return 1;
+	}
+	if (distanceMeters < 128.0f) {
+		return 2;
+	}
+	return 3;
+}
+
+void AssignLodLevels(VoxelWorld &world, const float cameraX, const float cameraY, const float cameraZ)
+{
+	for (VoxelChunk &chunk : world.chunks) {
+		const float cx = 0.5f * static_cast<float>(chunk.min.x + chunk.maxExclusive.x);
+		const float cy = 0.5f * static_cast<float>(chunk.min.y + chunk.maxExclusive.y);
+		const float cz = 0.5f * static_cast<float>(chunk.min.z + chunk.maxExclusive.z);
+		const float dx = cx - cameraX;
+		const float dy = cy - cameraY;
+		const float dz = cz - cameraZ;
+		const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+		chunk.lodLevel = SelectLodLevelForDistance(distance);
+	}
+}
+
+uint32_t CountChunksAtLod(const VoxelWorld &world, const uint8_t lodLevel)
+{
+	uint32_t count = 0;
+	for (const VoxelChunk &chunk : world.chunks) {
+		if (chunk.lodLevel == lodLevel) {
 			++count;
 		}
 	}
@@ -1178,7 +1257,7 @@ uint32_t FillVoxelMaterial(VoxelWorld &world, const Int3 start, const VoxelMater
 	}
 
 	for (const Int3 position : queue) {
-		SetVoxelMaterial(world, position, material);
+		SetVoxelMaterial(world, position, material, nullptr);
 	}
 
 	return static_cast<uint32_t>(queue.size());
@@ -1221,7 +1300,7 @@ uint32_t FillVoxelBox(VoxelWorld &world, const Int3 first, const Int3 second, co
 					continue;
 				}
 
-				SetVoxelMaterial(world, position, material);
+				SetVoxelMaterial(world, position, material, nullptr);
 				++changedVoxelCount;
 			}
 		}

@@ -5,6 +5,7 @@ import projectv.math;
 
 #include <algorithm>
 #include <cmath>
+#include <span>
 
 inline PackedSceneChunkDescriptor MakeUploadedSceneChunkDescriptor(
 	const PackedSceneChunkDescriptor &sourceDescriptor,
@@ -247,6 +248,10 @@ bool UpdateSceneFrameChunkVisibility(
 	RenderState &render,
 	uint32_t frameIndex,
 	const ChunkCullingParameters &parameters);
+bool RefreshChunkAabbBuffer(
+	std::span<const VoxelChunk> chunks,
+	std::span<const PackedSceneChunkDescriptor> descriptors,
+	SceneFrameResources &frameResources);
 void DestroySceneResources(
 	VulkanContextState *context,
 	RenderState *render);

@@ -432,6 +432,8 @@ bool RecreateSwapchain(
 		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroySwapchainResources");
 		DestroyDepthResources(context, render);
 		DestroyScreenshotReadbackResources(context, render);
+		projectv::render::DestroyHizBuffer(context, render->hizBuffer);
+		projectv::render::DestroyHizCullingPipeline(context, render);
 	}
 
 	if (!CreateDepthResources(context, swapchain, render)) {
@@ -439,6 +441,28 @@ bool RecreateSwapchain(
 			"Swapchain",
 			"RecreateSwapchain.CreateDepthResources",
 			"CreateDepthResources returned false after swapchain recreation");
+		return false;
+	}
+
+	if (projectv::render::IsHzbCullingEnabled() &&
+		!projectv::render::CreateHizBuffer(
+			context,
+			swapchain->extent.width,
+			swapchain->extent.height,
+			render->hizBuffer)) {
+		runtime::LogRuntimeFailure(
+			"Swapchain",
+			"RecreateSwapchain.CreateHizBuffer",
+			"CreateHizBuffer returned false after swapchain recreation");
+		return false;
+	}
+
+	if (projectv::render::IsHzbCullingEnabled() &&
+		!projectv::render::CreateHizCullingPipeline(context, render)) {
+		runtime::LogRuntimeFailure(
+			"Swapchain",
+			"RecreateSwapchain.CreateHizCullingPipeline",
+			"CreateHizCullingPipeline returned false after swapchain recreation");
 		return false;
 	}
 	if (!CreateScreenshotReadbackResources(context, swapchain, render)) {

@@ -154,14 +154,23 @@ bool PrepareFrameRenderData(
 			static_cast<DebugHudVertex *>(sceneFrameResources.debugHudVertexMappedData),
 			DEBUG_HUD_MAX_VERTEX_COUNT);
 	}
+	if (world->voxelWorld && sceneFrameResources.chunkAabbMappedData) {
+		RefreshChunkAabbBuffer(
+			std::span<const VoxelChunk>(world->voxelWorld->chunks.data(), world->voxelWorld->chunks.size()),
+			std::span<const PackedSceneChunkDescriptor>(render->sceneChunkDescriptors.data(), render->sceneChunkDescriptors.size()),
+			sceneFrameResources);
+	}
 	frame->renderData.frameIndex = frame->currentFrame;
 	frame->renderData.packedFaceBuffer = sceneFrameResources.packedFaceBuffer;
 	frame->renderData.chunkDescriptorBuffer = sceneFrameResources.chunkDescriptorBuffer;
 	frame->renderData.chunkVoxelPayloadBuffer = sceneFrameResources.chunkVoxelPayloadBuffer;
 	frame->renderData.debugHudVertexBuffer = sceneFrameResources.debugHudVertexBuffer;
+	frame->renderData.chunkAabbBuffer = sceneFrameResources.chunkAabbBuffer;
+	frame->renderData.visibilityMaskBuffer = sceneFrameResources.visibilityMaskBuffer;
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
 	frame->renderData.shadowDescriptorSet = sceneFrameResources.shadowDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
+	frame->renderData.hizCullingDescriptorSet = sceneFrameResources.hizCullingDescriptorSet;
 	frame->renderData.taaResolveDescriptorSet = render->taaResolveDescriptorSets[frameIndex];
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
 	frame->renderData.shadowIndirectBuffer = sceneFrameResources.shadowIndirectBuffer;
