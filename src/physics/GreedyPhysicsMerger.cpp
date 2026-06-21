@@ -1,5 +1,6 @@
 #include "physics/GreedyPhysicsMerger.hpp"
 
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -156,6 +157,30 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 			}
 		}
 	}
+
+#ifndef NDEBUG
+	{
+		uint64_t sumBoxVolume = 0u;
+		for (const MergedVoxelBox &box : outBoxes) {
+			const int64_t dx = static_cast<int64_t>(box.maxX) - static_cast<int64_t>(box.minX);
+			const int64_t dy = static_cast<int64_t>(box.maxY) - static_cast<int64_t>(box.minY);
+			const int64_t dz = static_cast<int64_t>(box.maxZ) - static_cast<int64_t>(box.minZ);
+			sumBoxVolume += static_cast<uint64_t>(dx * dy * dz);
+		}
+		uint64_t solidVoxelCount = 0u;
+		for (int z = startZ; z < endZ; ++z) {
+			for (int y = startY; y < endY; ++y) {
+				for (int x = startX; x < endX; ++x) {
+					if (IsSolidAt(world, x, y, z)) {
+						++solidVoxelCount;
+					}
+				}
+			}
+		}
+		assert(sumBoxVolume == solidVoxelCount &&
+			"GreedyMergeSolidVoxelsInBounds: merged box volume must equal solid voxel count (no gaps/overlaps)");
+	}
+#endif
 
 	return static_cast<uint32_t>(outBoxes.size());
 }

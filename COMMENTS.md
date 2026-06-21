@@ -1170,3 +1170,85 @@ void OnChunkUnloaded(PhysicsState &physics, uint32_t chunkIndex) {
     // ... existing destroy logic
 }
 ```
+
+---
+
+## `src/voxel/VoxelWorld.cpp` (AUDIT-PV-005 editVersion/NanoVdb, 2026-06-21)
+
+### Fluid↔Air editVersion suppression (design-rationale)
+
+`SetVoxelMaterial` (`VoxelWorld.cpp:1074`) suppresses `++world.editVersion`
+for `isFluidAirTransition` (Fluid→Air or Air→Fluid). This is intentional
+per 17x session's "Stage 3.2 Incremental Jolt" work: fluid is not a
+physics-solid material (per `IsPhysicsSolidMaterial` in
+`PhysicsWorld.cpp:548`), so Fluid↔Air transitions don't need a physics
+rebuild.
+
+**Side effect:** `BuildNanoVdbFlatten` in `SceneResources.cpp:1716-1717` is
+gated by:
+
+```cpp
+const bool fluidOnlyChunkRebuilds = world->voxelWorld->editVersion == render->lastNanoVdbSyncedEditVersion;
+if ((!render->completedChunkRebuildIndices.empty() && !fluidOnlyChunkRebuilds) ||
+    render->sceneNanoVdbVersion == 0u) {
+    BuildNanoVdbFlatten(...);
+}
+```
+
+When a fluid-only edit happens, `editVersion` doesn't change but
+`completedChunkRebuildIndices` IS populated (line 1112: every edit
+calls `MarkChunksTouchedByVoxelEditDirty`). The gate `!fluidOnlyChunkRebuilds`
+becomes `false`, so the flatten is **skipped** for the fluid-only case.
+
+**Why this is acceptable:**
+- NanoVdb flatten is consumed by VCT diffuse/specular cone tracing
+  (`voxel.frag` binding 9/10) and RTX ray queries (binding 11) — both
+  for SOLID geometry. Fluid is rendered via `volumetric_fog.comp`
+  (binding 12), which has its own update path independent of NanoVdb.
+- Fluid state in sparse storage is read directly by `GetVoxelMaterial`
+  in fragment shaders for transparency classification (line 608 of
+  voxel.frag), not via NanoVdb.
+- A separate `meshVersion` for fluid would add a per-edit bump that
+  re-triggers a full NanoVdb flatten (defeating the 17x session's
+  optimization).
+
+**If fluid lighting/sampling is added that requires NanoVdb data,
+the gate would need a third condition `|| voxelWorld.fluidVoxelCount > previousFluidCount`.**
+Documented as future-work refactor.
+
+---
+
+## `src/voxel/VoxelWorld.cpp` (AUDIT-PV-006 MarkChunksTouched, 2026-06-21)
+
+### 3×3×3 neighborhood marking (design-rationale)
+
+`MarkChunksTouchedByVoxelEditDirty` (`VoxelWorld.cpp:222`) iterates
+`[minChunkX..maxChunkX] × [minChunkY..maxChunkY] × [minChunkZ..maxChunkZ]`,
+which includes the center chunk (offset 0,0,0). The audit suggested
+adding `if (offset == {0,0,0}) continue;` to skip the self-chunk.
+
+**The center chunk MUST be marked dirty** when its voxel is edited —
+that's literally what "MarkChunksTouchedByVoxelEditDirty" does. The
+boundary expansion (lines 234-251) only ADDS neighbor chunks; it
+never REMOVES the center. The audit's suggested optimization would be
+a bug. False alarm.
+
+---
+
+## `src/voxel/NanoVdb.cpp` (AUDIT-PV-008 ChunkLoadingState, 2026-06-21)
+
+### BuildNanoVdbFlatten partial-chunk assert (design-rationale)
+
+The audit suggested adding `assert(chunk.loadingState == ChunkLoadingState::Complete)`
+in `BuildNanoVdbFlatten`. There is no `ChunkLoadingState` enum in mainline
+— the `VoxelChunk` struct (`VoxelWorld.hpp`) does not track loading state.
+Chunks in mainline are either present (`nonAirVoxelCount` set, sparse
+storage populated) or absent (not in `world.chunks`).
+
+`BuildNanoVdbFlatten` (`NanoVdb.cpp`) iterates `world.sparseStorage`
+directly; the flatten is bounded by `sparseStorage.GetWidth/Height/Depth()`
+which represent fully-loaded chunk extents. No partial-chunk hazard in
+current architecture. If streaming chunk loading introduces a
+`ChunkLoadingState` (per `AUDIT-PV-004` future-work), the assert would
+become meaningful and should be added at the iteration entry point.
+False alarm for current mainline.

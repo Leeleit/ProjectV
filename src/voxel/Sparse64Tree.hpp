@@ -508,6 +508,8 @@ public:
 
 	uint32_t DedupSubtree(uint32_t slot, int level) noexcept
 	{
+		// Tree depth bounded by chunkSize (default 8 = depth 2; max chunkSize 32 = depth 3).
+		// Max recursion: log2(32) + 1 = 6 levels. Safe from stack overflow.
 		if (level <= 0 || IsSparse64Leaf(slot)) {
 			return slot;
 		}
