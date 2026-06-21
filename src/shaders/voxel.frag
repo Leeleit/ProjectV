@@ -64,6 +64,28 @@ layout(set = 0, binding = 11) uniform sampler3D vctClipmap;
 // consume. Bound to fallback 1x1x1 RGBA16F dummy when PROJECTV_FOG=ON not set.
 layout(set = 0, binding = 12) uniform sampler3D volumetricFog;
 
+#ifdef VOXEL_RTX_ENABLED
+#extension GL_EXT_ray_query : require
+// EVIL: binding 13 = RTX top-level acceleration structure (TLAS) for ray-query
+// smooth specular GI per Stage 5.2. Bound to scene TLAS when RTX env-gate ON;
+// otherwise (non-RTX compile) binding slot is unused. Per
+// docs/VulkanSDK-Linux-Docs-1.4.350.1/chunked_spec/chap63.html the
+// accelerationStructureEXT uniform is GLSL-side; C++ side uses
+// VkAccelerationStructureKHR via VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR.
+layout(set = 0, binding = 13) uniform accelerationStructureEXT rtxTlas;
+
+vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir, const float maxDistance) {
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, rtxTlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFFu,
+        worldOrigin, 0.001, reflectionDir, maxDistance);
+    rayQueryProceedEXT(rq);
+    if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+        return vec3(0.0);
+    }
+    return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
+}
+#endif
+
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
     vec4 cameraPosition;
@@ -905,6 +927,19 @@ void main() {
         vctSpecular = reflectionIrradiance * (0.04 + 0.96 * fresnel) * (1.0 - metallic);
     }
 
+#ifdef VOXEL_RTX_ENABLED
+    vec3 rtxSmoothSpecular = vec3(0.0);
+    if (roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
+        const vec3 reflectionDir = reflect(-viewDirection, normal);
+        const float smoothSpecMaxDistance = min(vctMaxDistance, kVctMaxDistanceMeters);
+        const vec3 rtxHit = TraceRtxSmoothSpecularRay(inWorldPosition, reflectionDir, smoothSpecMaxDistance);
+        const float fresnel = pow(1.0 - nDotV, 5.0);
+        rtxSmoothSpecular = rtxHit * (0.04 + 0.96 * fresnel) * (1.0 - metallic);
+    }
+#else
+    const vec3 rtxSmoothSpecular = vec3(0.0);
+#endif
+
     const vec3 directSun = EvaluateDirectLighting(
     sunDirection,
     shadowedSunColor,
@@ -929,7 +964,7 @@ void main() {
     const float grazing = pow(1.0 - nDotV, 5.0);
     const vec3 mediumTint = material.medium.rgb;
     const vec3 grazingTint = mediumTint * material.medium.w * grazing * (1.0 - metallic) * 0.12;
-    vec3 color = ambient + directSun + localDirect + grazingTint + vctDiffuse + vctSpecular;
+    vec3 color = ambient + directSun + localDirect + grazingTint + vctDiffuse + vctSpecular + rtxSmoothSpecular;
 
     if (material.medium.w > 0.0) {
         float transmission = material.medium.w * mix(0.35, 1.0, wrappedDiffuse);
@@ -1017,6 +1052,12 @@ void main() {
         color = volumetricFogAccum;
     } else if (lightingDebugView == 13u) {
         color = vec3(volumetricFogTransmittance);
+    } else if (lightingDebugView == 14u) {
+#ifdef VOXEL_RTX_ENABLED
+        color = rtxSmoothSpecular;
+#else
+        color = vec3(0.0);
+#endif
     }
 
     if (lightingDebugView != 8u) {

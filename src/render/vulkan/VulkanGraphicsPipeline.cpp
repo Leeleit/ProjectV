@@ -3,6 +3,7 @@
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
 #include "render/TaaRenderTargets.hpp"
+#include "render/RayTracedShadows.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/TaaResolvePipeline.hpp"
 
@@ -21,9 +22,14 @@ constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 	.descriptorCount = kGraphicsDescriptorSetCount * 4u,
 };
+constexpr VkDescriptorPoolSize kGraphicsAccelerationStructureDescriptorPoolSize{
+	.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+	.descriptorCount = kGraphicsDescriptorSetCount * 1u,
+};
 constexpr std::array kGraphicsDescriptorPoolSizes{
 	kGraphicsStorageDescriptorPoolSize,
 	kGraphicsShadowSamplerDescriptorPoolSize,
+	kGraphicsAccelerationStructureDescriptorPoolSize,
 };
 constexpr std::array kGraphicsDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -1064,13 +1070,24 @@ bool RefreshGraphicsResourceBindings(
 		render->graphicsDescriptorPool = VK_NULL_HANDLE;
 	}
 
-	constexpr VkDescriptorPoolCreateInfo poolInfo{
+	const bool rtxLayoutActive = context->rayTracing.rayQuery
+		&& context->rayTracing.accelerationStructure
+		&& projectv::render::IsRayTracedShadowEnabled();
+	std::vector<VkDescriptorPoolSize> poolSizes{};
+	poolSizes.reserve(kGraphicsDescriptorPoolSizes.size());
+	for (const VkDescriptorPoolSize &size : kGraphicsDescriptorPoolSizes) {
+		if (size.type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR && !rtxLayoutActive) {
+			continue;
+		}
+		poolSizes.push_back(size);
+	}
+	const VkDescriptorPoolCreateInfo poolInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
 		.maxSets = kGraphicsDescriptorSetCount,
-		.poolSizeCount = static_cast<uint32_t>(kGraphicsDescriptorPoolSizes.size()),
-		.pPoolSizes = kGraphicsDescriptorPoolSizes.data(),
+		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+		.pPoolSizes = poolSizes.data(),
 	};
 	const VkResult descriptorPoolResult =
 		vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->graphicsDescriptorPool);
@@ -1266,10 +1283,41 @@ bool RefreshGraphicsResourceBindings(
 				.pTexelBufferView = nullptr,
 			},
 		};
+
+		const bool rtxActive = render->rayTracedShadows != nullptr
+			&& render->rayTracedShadows->IsEnabled()
+			&& render->rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+		std::vector<VkWriteDescriptorSet> allWrites{};
+		allWrites.reserve(descriptorWrites.size() + (rtxActive ? 1u : 0u));
+		for (const VkWriteDescriptorSet &w : descriptorWrites) {
+			allWrites.push_back(w);
+		}
+		if (rtxActive) {
+			VkWriteDescriptorSet tlasWrite{};
+			tlasWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			tlasWrite.pNext = nullptr;
+			tlasWrite.dstSet = frameResources.graphicsDescriptorSet;
+			tlasWrite.dstBinding = 13;
+			tlasWrite.dstArrayElement = 0;
+			tlasWrite.descriptorCount = 1;
+			tlasWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+			tlasWrite.pImageInfo = nullptr;
+			tlasWrite.pBufferInfo = nullptr;
+			tlasWrite.pTexelBufferView = nullptr;
+			VkAccelerationStructureKHR tlasHandle = render->rayTracedShadows->GetConfig().tlas;
+			const VkWriteDescriptorSetAccelerationStructureKHR tlasWriteInfo{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+				.pNext = nullptr,
+				.accelerationStructureCount = 1u,
+				.pAccelerationStructures = &tlasHandle,
+			};
+			tlasWrite.pNext = &tlasWriteInfo;
+			allWrites.push_back(tlasWrite);
+		}
 		vkUpdateDescriptorSets(
 			context->device,
-			static_cast<uint32_t>(descriptorWrites.size()),
-			descriptorWrites.data(),
+			static_cast<uint32_t>(allWrites.size()),
+			allWrites.data(),
 			0,
 			nullptr);
 
@@ -1447,6 +1495,16 @@ void DestroyGraphicsPipeline(
 		vkDestroyPipeline(context->device, render->graphicsPipelineTaaOn, nullptr);
 		render->graphicsPipelineTaaOn = VK_NULL_HANDLE;
 	}
+	if (render->graphicsPipelineRtx) {
+		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipelineRtx");
+		vkDestroyPipeline(context->device, render->graphicsPipelineRtx, nullptr);
+		render->graphicsPipelineRtx = VK_NULL_HANDLE;
+	}
+	if (render->graphicsPipelineRtxTaaOn) {
+		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipelineRtxTaaOn");
+		vkDestroyPipeline(context->device, render->graphicsPipelineRtxTaaOn, nullptr);
+		render->graphicsPipelineRtxTaaOn = VK_NULL_HANDLE;
+	}
 
 	if (render->graphicsPipelineLayout) {
 		PV_PROFILE_ZONE_N("DestroyGraphicsPipelineLayout");
@@ -1476,18 +1534,28 @@ bool CreateGraphicsPipeline(
 	std::vector<char> vertexShaderCode;
 	std::vector<char> fragmentShaderCode;
 	std::vector<char> fragmentShaderCodeTaaOn;
+	std::vector<char> fragmentShaderCodeRtx;
+	std::vector<char> fragmentShaderCodeRtxTaaOn;
 	std::vector<char> shadowVertexShaderCode;
 	std::vector<char> shadowFragmentShaderCode;
+	const bool rtxProbeAvailable = context->rayTracing.rayQuery
+		&& context->rayTracing.accelerationStructure
+		&& projectv::render::IsRayTracedShadowEnabled();
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ReadShaders");
 		vertexShaderCode = ReadShaderFile("voxel.vert.spv");
 		fragmentShaderCode = ReadShaderFile("voxel.frag.spv");
 		fragmentShaderCodeTaaOn = ReadShaderFile("voxel.frag.taa_on.spv");
+		if (rtxProbeAvailable) {
+			fragmentShaderCodeRtx = ReadShaderFile("voxel.frag.rtx.spv");
+			fragmentShaderCodeRtxTaaOn = ReadShaderFile("voxel.frag.rtx_taa_on.spv");
+		}
 		shadowVertexShaderCode = ReadShaderFile("voxel_shadow.vert.spv");
 		shadowFragmentShaderCode = ReadShaderFile("voxel_shadow.frag.spv");
 	}
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty() ||
 		fragmentShaderCodeTaaOn.empty() ||
+		(rtxProbeAvailable && (fragmentShaderCodeRtx.empty() || fragmentShaderCodeRtxTaaOn.empty())) ||
 		shadowVertexShaderCode.empty() || shadowFragmentShaderCode.empty()) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ReadShaders", "voxel shader blob is empty");
 		DestroyGraphicsPipeline(context, render);
@@ -1497,6 +1565,8 @@ bool CreateGraphicsPipeline(
 	VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModuleTaaOn = VK_NULL_HANDLE;
+	VkShaderModule fragmentShaderModuleRtx = VK_NULL_HANDLE;
+	VkShaderModule fragmentShaderModuleRtxTaaOn = VK_NULL_HANDLE;
 	VkShaderModule shadowVertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule shadowFragmentShaderModule = VK_NULL_HANDLE;
 	const auto destroyShaderModules = [&] {
@@ -1507,6 +1577,14 @@ bool CreateGraphicsPipeline(
 		if (shadowVertexShaderModule) {
 			vkDestroyShaderModule(context->device, shadowVertexShaderModule, nullptr);
 			shadowVertexShaderModule = VK_NULL_HANDLE;
+		}
+		if (fragmentShaderModuleRtxTaaOn) {
+			vkDestroyShaderModule(context->device, fragmentShaderModuleRtxTaaOn, nullptr);
+			fragmentShaderModuleRtxTaaOn = VK_NULL_HANDLE;
+		}
+		if (fragmentShaderModuleRtx) {
+			vkDestroyShaderModule(context->device, fragmentShaderModuleRtx, nullptr);
+			fragmentShaderModuleRtx = VK_NULL_HANDLE;
 		}
 		if (fragmentShaderModuleTaaOn) {
 			vkDestroyShaderModule(context->device, fragmentShaderModuleTaaOn, nullptr);
@@ -1526,10 +1604,15 @@ bool CreateGraphicsPipeline(
 		vertexShaderModule = CreateShaderModule(context->device, vertexShaderCode);
 		fragmentShaderModule = CreateShaderModule(context->device, fragmentShaderCode);
 		fragmentShaderModuleTaaOn = CreateShaderModule(context->device, fragmentShaderCodeTaaOn);
+		if (rtxProbeAvailable) {
+			fragmentShaderModuleRtx = CreateShaderModule(context->device, fragmentShaderCodeRtx);
+			fragmentShaderModuleRtxTaaOn = CreateShaderModule(context->device, fragmentShaderCodeRtxTaaOn);
+		}
 		shadowVertexShaderModule = CreateShaderModule(context->device, shadowVertexShaderCode);
 		shadowFragmentShaderModule = CreateShaderModule(context->device, shadowFragmentShaderCode);
 	}
 	if (!vertexShaderModule || !fragmentShaderModule || !fragmentShaderModuleTaaOn ||
+		(rtxProbeAvailable && (!fragmentShaderModuleRtx || !fragmentShaderModuleRtxTaaOn)) ||
 		!shadowVertexShaderModule || !shadowFragmentShaderModule) {
 		LogGraphicsPipelineTextFailure(
 			"CreateGraphicsPipeline.CreateShaderModules",
@@ -1566,8 +1649,28 @@ bool CreateGraphicsPipeline(
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
+	const VkPipelineShaderStageCreateInfo fragStageRtx{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = fragmentShaderModuleRtx,
+		.pName = "main",
+		.pSpecializationInfo = nullptr,
+	};
+	const VkPipelineShaderStageCreateInfo fragStageRtxTaaOn{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.module = fragmentShaderModuleRtxTaaOn,
+		.pName = "main",
+		.pSpecializationInfo = nullptr,
+	};
 	const std::array shaderStagesTaaOff{vertexStageInfo, fragStageTaaOff};
 	const std::array shaderStagesTaaOn{vertexStageInfo, fragStageTaaOn};
+	const std::array shaderStagesRtxOff{vertexStageInfo, fragStageRtx};
+	const std::array shaderStagesRtxOn{vertexStageInfo, fragStageRtxTaaOn};
 	const std::array shadowShaderStages{
 		VkPipelineShaderStageCreateInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -1688,11 +1791,40 @@ bool CreateGraphicsPipeline(
 	pushConstantRange.offset = 0;
 	pushConstantRange.size = sizeof(GraphicsPushConstants);
 
+	const bool rtxLayoutActiveForCreate = context->rayTracing.rayQuery
+		&& context->rayTracing.accelerationStructure
+		&& projectv::render::IsRayTracedShadowEnabled();
+	std::vector<VkDescriptorSetLayoutBinding> layoutBindings{};
+	layoutBindings.reserve(kGraphicsDescriptorBindings.size() + (rtxLayoutActiveForCreate ? 1u : 0u));
+	for (const VkDescriptorSetLayoutBinding &b : kGraphicsDescriptorBindings) {
+		layoutBindings.push_back(b);
+	}
+	if (rtxLayoutActiveForCreate) {
+		// EVIL: binding 13 = accelerationStructureKHR FRAGMENT (Stage 5.2 RTX smooth specular
+		// ray query). Only added when VK_KHR_acceleration_structure + VK_KHR_ray_query are
+		// device-enabled via PROJECTV_HW_RAY_TRACING=ON. Per Vulkan spec VUID-VkDescriptorSetLayoutBinding-descriptorType-04616
+		// the type VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR requires the device extension.
+		layoutBindings.push_back(VkDescriptorSetLayoutBinding{
+			.binding = 13,
+			.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.pImmutableSamplers = nullptr,
+		});
+	}
+	const VkDescriptorSetLayoutCreateInfo graphicsDescriptorSetLayoutInfo{
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+		.pBindings = layoutBindings.data(),
+	};
+
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.DescriptorSetLayout");
 		const VkResult descriptorSetLayoutResult = vkCreateDescriptorSetLayout(
 			context->device,
-			&kGraphicsDescriptorSetLayoutInfo,
+			&graphicsDescriptorSetLayoutInfo,
 			nullptr,
 			&render->graphicsDescriptorSetLayout);
 		if (descriptorSetLayoutResult != VK_SUCCESS) {
@@ -1866,6 +1998,47 @@ bool CreateGraphicsPipeline(
 		reinterpret_cast<uint64_t>(render->graphicsPipelineTaaOn),
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelOpaquePipelineTaaOn");
+
+	if (rtxProbeAvailable) {
+		VkGraphicsPipelineCreateInfo opaqueInfoRtxOff = pipelineBase;
+		opaqueInfoRtxOff.stageCount = static_cast<uint32_t>(shaderStagesRtxOff.size());
+		opaqueInfoRtxOff.pStages = shaderStagesRtxOff.data();
+		VkGraphicsPipelineCreateInfo opaqueInfoRtxOn = pipelineBase;
+		opaqueInfoRtxOn.stageCount = static_cast<uint32_t>(shaderStagesRtxOn.size());
+		opaqueInfoRtxOn.pStages = shaderStagesRtxOn.data();
+		const VkGraphicsPipelineCreateInfo opaqueRtxPipelineInfos[2] = {opaqueInfoRtxOff, opaqueInfoRtxOn};
+		VkPipeline opaqueRtxPipelines[2]{};
+		{
+			PV_PROFILE_ZONE_N("CreateGraphicsPipeline.OpaqueRtxPipeline");
+			const VkResult opaqueRtxPipelinesResult = vkCreateGraphicsPipelines(
+				context->device,
+				VK_NULL_HANDLE,
+				2,
+				opaqueRtxPipelineInfos,
+				nullptr,
+				opaqueRtxPipelines);
+			if (opaqueRtxPipelinesResult != VK_SUCCESS) {
+				LogGraphicsPipelineVkFailure(
+					"CreateGraphicsPipeline.OpaqueRtx.vkCreateGraphicsPipelines",
+					opaqueRtxPipelinesResult);
+				destroyShaderModules();
+				DestroyGraphicsPipeline(context, render);
+				return false;
+			}
+		}
+		render->graphicsPipelineRtx = opaqueRtxPipelines[0];
+		render->graphicsPipelineRtxTaaOn = opaqueRtxPipelines[1];
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(render->graphicsPipelineRtx),
+			VK_OBJECT_TYPE_PIPELINE,
+			"VoxelOpaquePipelineRtx");
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(render->graphicsPipelineRtxTaaOn),
+			VK_OBJECT_TYPE_PIPELINE,
+			"VoxelOpaquePipelineRtxTaaOn");
+	}
 
 	VkGraphicsPipelineCreateInfo transparentInfoTaaOff = pipelineBase;
 	transparentInfoTaaOff.pDepthStencilState = &transparentDepthStencil;
