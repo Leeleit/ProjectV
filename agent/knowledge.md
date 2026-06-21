@@ -105,8 +105,8 @@ Roadmap живёт в `TODO.md`, общий протокол — в `AGENTS.md`,
 Решение:
 
 - Все `buildPresets` (кроме smoke-варианта) должны явно перечислять **все** ctest-registered executables в `targets`. Без этого `cmake --build --preset X-build` + `ctest --preset X-tests` ломается на чистом clone: 11+ тестов получат «cannot find executable» если build-preset не собрал соответствующий бинарь.
-- **Минимальный набор targets для debug пресетов** (17 targets): `ProjectV` + 14 test executables + 2 benchmarks (`ProjectVFrustumCullBenchmark`, `ProjectVShadowProjectionBenchmark` — потому что `PROJECTV_ENABLE_BENCHMARKS=ON` в `linux-clang-debug-base`).
-- **Минимальный набор targets для release пресетов** (15 targets): `ProjectV` + 14 test executables. Benchmarks **не** включаются (release-base устанавливает `PROJECTV_ENABLE_BENCHMARKS=OFF` per §выше).
+- **Минимальный набор targets для debug пресетов** (all ctest-registered executables per `tests/CMakeLists.txt add_executable`): `ProjectV` + 42 test executables (count grows as new tests are added) + 2 benchmarks (`ProjectVFrustumCullBenchmark`, `ProjectVShadowProjectionBenchmark` — потому что `PROJECTV_ENABLE_BENCHMARKS=ON` в `linux-clang-debug-base`). **Always re-run `grep -cE 'add_executable' tests/CMakeLists.txt` and update all 5 buildPresets when adding a new test** per `agent/workspace.md §1 16x Phase 15` (backfilled `ProjectVRayTracedShadowTests`, `ProjectVPhysicsSyncTests` etc).
+- **Минимальный набор targets для release пресетов** (all ctest-registered executables, no benchmarks): `ProjectV` + test executables. Benchmarks **не** включаются (release-base устанавливает `PROJECTV_ENABLE_BENCHMARKS=OFF` per §выше).
 - **`windows-clang-debug-smoke`** — отдельный случай, оставляет `targets: [ProjectVRuntimeSmoke]` (кастомный Windows-only target, не ctest-registered).
 - **Maintenance:** при добавлении нового test executable в `tests/CMakeLists.txt` — обновить **все 5 buildPresets** (windows-clang-debug-build, windows-clang-debug-ci-build, linux-clang-debug-build, windows-clang-release-build, linux-clang-release-build). Альтернатива (helper INTERFACE target в `tests/CMakeLists.txt` который зависит от всех test executables) — отдельная подзадача, не в scope этого фикса.
 
@@ -1271,6 +1271,14 @@ Shadow-path update `2026-04-22`:
 - `VoxelSceneLighting` layout is duplicated in multiple shaders (`voxel.frag`, `voxel_shadow.vert`,
   `voxel_mesh.comp`). When a field is inserted, every `SceneLightingBuffer` declaration must be updated in lockstep;
   missing the shadow-pass copy shifts cascade matrices and destroys visible sun shadows.
+- Graphics descriptor set (set 0) now has 9 entries (bindings 0-8 + 11 + 12) per
+  8x V C session's volumetric fog froxel plumbing + 17x's deferred-destroy
+  infrastructure. Binding 9 (lodDownsampled SSBO) and binding 10 (chunkLodLevels SSBO)
+  live in the voxel meshing compute descriptor set, not graphics. All bindings
+  have explicit fallback images/buffers when env gate is OFF (vctClipmap fallback
+  for binding 11, volumetricFogFallbackView for binding 12, fallback 1×1×1 RGBA16F
+  dummy for both). No "unbound descriptor" validation errors per
+  `agent/workspace.md §1 16x` post-8x-V-C verification.
 - For shadow and lighting-look work, sidecar metadata alone is not enough to call the task closed. The current stricter
   check is actual runtime capture review of `FINAL` plus the relevant debug frames (`SHDW`, `CSM`, `CTSH`, `AOCC`,
   `LOCL` when applicable).
