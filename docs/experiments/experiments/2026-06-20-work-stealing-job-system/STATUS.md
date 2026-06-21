@@ -1,6 +1,6 @@
 # STATUS — 2026-06-20-work-stealing-job-system
 
-**Phase:** wrap-up (closed same session)
+**Phase:** concluded-verdict-mixed (closed same session)
 **Last action:** 2026-06-20 — experiment closed, verdict=`mixed`. README.md + RESULTS.md + sources.md + prototype/
 ready. `backlog.md §In progress → §Closed`, `INDEX.md §5 → §6` (next tick).
 **Blocker:** нет.

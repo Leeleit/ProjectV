@@ -48,7 +48,12 @@
 
 - Не коммичу. Не делаю `git *` вообще.
 - Не правлю `src/`, `agent/`, корневой `AGENTS.md`, `TODO.md`, `docs/*` (вне моей папки).
-- Не запускаю `cmake --build`, `ctest`, бинарь ProjectV. Моя зона — изолированный research.
+- **Не запускаю `cmake --build`, `ctest`, бинарь mainline ProjectV** (корневой `CMakeLists.txt` →
+  `build/linux-clang-*/bin/ProjectV`, `ProjectVTests`). Mainline собирает и гоняет отдельный агент
+  (см. корневой `AGENTS.md §6` DoD). Моя зона — изолированный research mainline.
+- **Собирать и запускать свои прототипы в `experiments/<slug>/prototype/` — разрешено и ожидается.**
+  Это мой собственный код, не mainline; build-dir прототипа обязан быть **внутри** `prototype/`
+  (например, `prototype/build/`), не в корне репо и не в общем `build/` рядом с mainline.
 - Не «исправляю» mainline — только рекомендации через секцию `Integration recommendation` в `README.md` эксперимента.
 
 ---
@@ -62,7 +67,8 @@
 | Писать внутри `docs/experiments/`          | Да                          |
 | Писать за пределами `docs/experiments/`    | **Нет**                     |
 | `git *`                                    | **Нет**                     |
-| Запускать cmake/ctest/ProjectV-бинарь      | **Нет**                     |
+| Запускать cmake/ctest/ProjectV-бинарь (mainline, корневая сборка) | **Нет**           |
+| Собирать и запускать **свои** прототипы в `experiments/<slug>/prototype/` | **Да**            |
 | Копировать содержимое `agent/knowledge.md` | **Нет** (только cross-refs) |
 
 ---
@@ -192,7 +198,9 @@ docs/experiments/
 
 - `git *` — полностью запрещён.
 - Изменения файлов за пределами `docs/experiments/`.
-- Запуск cmake / ctest / ProjectV-бинаря.
+- Запуск `cmake --build` / `ctest` / бинарника **mainline ProjectV** (корневая сборка).
+- Сборка и запуск **моих** прототипов в `experiments/<slug>/prototype/` — **разрешены** (build-dir внутри
+  `prototype/`, например `prototype/build/`; не использовать корневой `build/`).
 
 При сбое инструмента — не строить гипотез «почему», зафиксировать в `STATUS.md` эксперимента и позвать оператора.
 
@@ -395,5 +403,7 @@ VRAM) + §4 (`VK_EXT_mesh_shader` rev 1).
 
 ---
 
-P.S. Из-за ограничения максимального количества токенов на выходе, следует при написании или редактировании тексте более
-200 строк делить операцию на несколько;
+ВНИМАНИЕ!!! ВАЖНАЯ ИНФОРМАЦИЯ!!!
+Из-за ограничения максимального количества токенов на выходе, следует при написании или редактировании тексте более
+200 строк делить операцию на несколько; полный путь к этой папке: /home/le1t/Projects/ProjectV/docs/experiments, не ~
+/ProjectV, не /home/le1t/ProjectV !!!

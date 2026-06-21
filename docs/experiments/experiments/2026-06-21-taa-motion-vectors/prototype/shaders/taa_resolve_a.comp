@@ -1,0 +1,78 @@
+#version 450
+
+// TAA resolve for Pipeline A (vertex-out motion vector MRT).
+// Karis 2014 "Brute Force" pattern with YCoCg + 3x3 AABB neighborhood clamping.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba8) uniform image2D inColorCurr;
+layout(set = 0, binding = 1, rg16f) uniform image2D inMotionCurr;
+layout(set = 0, binding = 2, rgba8) uniform image2D inColorPrev;
+layout(set = 0, binding = 3) uniform UboResolve {
+    mat4 viewProjPrev;       // for prev-frame reprojection
+    vec2 jitterOffset;       // sub-pixel jitter (halton 2,3)
+    vec2 resolution;
+    float blendFactor;       // 0.1 (heavy history) to 0.5 (responsive)
+    uint frameIndex;
+} ubo;
+
+layout(set = 0, binding = 4, rgba8) uniform image2D outColor;
+
+vec3 rgb2yCoCg(vec3 c) {
+    return vec3(0.25 * c.r + 0.5 * c.g + 0.25 * c.b,
+                0.5 * c.r - 0.5 * c.b,
+                -0.25 * c.r + 0.5 * c.g - 0.25 * c.b);
+}
+
+vec3 yCoCg2rgb(vec3 c) {
+    return vec3(c.x + c.y - c.z,
+                c.x + c.z,
+                c.x - c.y - c.z);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= int(ubo.resolution.x) || pixel.y >= int(ubo.resolution.y)) return;
+
+    // Read current frame (jittered)
+    vec2 uv = (vec2(pixel) + 0.5) / ubo.resolution + ubo.jitterOffset;
+    vec3 currColor = imageLoad(inColorCurr, pixel).rgb;
+    vec2 motion = imageLoad(inMotionCurr, pixel).rg * 2.0 - 1.0;  // undo R16G16_SFLOAT->[0,1] bias
+
+    // Reproject to previous frame
+    vec2 prevUV = uv + motion;
+
+    // Sample history with bounds check
+    vec3 history = vec3(0.0);
+    if (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0) {
+        ivec2 prevPixel = ivec2(prevUV * ubo.resolution);
+        history = imageLoad(inColorPrev, prevPixel).rgb;
+    }
+
+    // Karis 2014 neighborhood clamping in YCoCg space
+    vec3 currYCoCg = rgb2yCoCg(currColor);
+    vec3 histYCoCg = rgb2yCoCg(history);
+
+    // 3x3 AABB around current pixel
+    vec3 minAABB = currYCoCg;
+    vec3 maxAABB = currYCoCg;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 p = pixel + ivec2(dx, dy);
+            if (p.x < 0 || p.x >= int(ubo.resolution.x) || p.y < 0 || p.y >= int(ubo.resolution.y)) continue;
+            vec3 n = imageLoad(inColorCurr, p).rgb;
+            vec3 nyCoCg = rgb2yCoCg(n);
+            minAABB = min(minAABB, nyCoCg);
+            maxAABB = max(maxAABB, nyCoCg);
+        }
+    }
+
+    // Clamp history to AABB (clip ghosting)
+    histYCoCg = clamp(histYCoCg, minAABB, maxAABB);
+
+    // Blend
+    vec3 outYCoCg = mix(currYCoCg, histYCoCg, ubo.blendFactor);
+    vec3 outRGB = yCoCg2rgb(outYCoCg);
+
+    imageStore(outColor, pixel, vec4(outRGB, 1.0));
+}

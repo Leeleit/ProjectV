@@ -1,0 +1,84 @@
+// voxel_mesh_minimal.mesh — Representative ProjectV mesh shader (GLSL).
+// Mimics structure of src/shaders/voxel_mesh.mesh (388 lines): reads chunk
+// descriptors from SSBO, emits up to 256 vertices / 256 primitives as
+// triangle mesh, with normal/position/material outputs. Uses the same
+// gl_MeshVerticesEXT[] + gl_PrimitiveTriangleIndicesEXT[] pattern as ProjectV
+// mainline.
+//
+// Target: Vulkan 1.4, glslc, --target-env=vulkan1.4,
+//         GL_EXT_mesh_shader required.
+
+#version 460
+#extension GL_EXT_mesh_shader : enable
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(triangles, max_vertices = 256, max_primitives = 256) out;
+
+struct ChunkDescriptor {
+    vec4 chunkOrigin;
+    ivec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer ChunkDescriptors {
+    ChunkDescriptor descriptors[];
+} chunkDescriptors;
+
+layout(set = 0, binding = 1, std430) readonly buffer VoxelPayload {
+    uint voxelWords[];
+} voxels;
+
+layout(set = 0, binding = 2, std430) readonly buffer VisibleChunkIds {
+    uint visibleIds[];
+} visibleChunks;
+
+layout(push_constant) uniform PushConstants {
+    mat4 viewProjection;
+    ivec4 worldMinAndChunkSize;
+    ivec4 worldMaxAndChunkCount;
+} pc;
+
+const uint kMaxQuads = 64u;
+
+uint decodeMaterial(uvec4 voxelInfo, uint localIndex) {
+    if (localIndex >= voxelInfo.y) return 0u;
+    uint wordIndex = voxelInfo.x + localIndex / 4u;
+    uint shift = (localIndex & 3u) * 8u;
+    return (voxels.voxelWords[wordIndex] >> shift) & 0xFFu;
+}
+
+void main() {
+    uint chunkId = visibleChunks.visibleIds[gl_WorkGroupID.x];
+    ChunkDescriptor desc = chunkDescriptors.descriptors[chunkId];
+
+    SetMeshOutputsEXT(0u, 0u);
+
+    if (desc.chunkExtentAndNonAir.x <= 0) return;
+
+    vec3 origin = desc.chunkOrigin.xyz;
+    uint quadCount = min(desc.chunkExtentAndNonAir.w, kMaxQuads);
+
+    uint vIdx = 0u;
+    uint pIdx = 0u;
+    for (uint q = 0u; q < quadCount; ++q) {
+        if (vIdx + 4u > 256u || pIdx + 2u > 256u) break;
+
+        vec3 base = origin + vec3(float(q & 0x3Fu), float((q >> 6u) & 0x3Fu), float((q >> 12u) & 0x3Fu));
+        uint material = decodeMaterial(desc.voxelDataInfo, q);
+
+        // Emit a 2-triangle quad: 4 verts, 2 primitives (matching ProjectV
+        // EmitQuad pattern).
+        gl_MeshVerticesEXT[vIdx + 0u].gl_Position = pc.viewProjection * vec4(base, 1.0);
+        gl_MeshVerticesEXT[vIdx + 1u].gl_Position = pc.viewProjection * vec4(base + vec3(1.0, 0.0, 0.0), 1.0);
+        gl_MeshVerticesEXT[vIdx + 2u].gl_Position = pc.viewProjection * vec4(base + vec3(0.0, 0.0, 1.0), 1.0);
+        gl_MeshVerticesEXT[vIdx + 3u].gl_Position = pc.viewProjection * vec4(base + vec3(1.0, 0.0, 1.0), 1.0);
+
+        gl_PrimitiveTriangleIndicesEXT[pIdx + 0u] = uvec3(vIdx + 0u, vIdx + 1u, vIdx + 2u);
+        gl_PrimitiveTriangleIndicesEXT[pIdx + 1u] = uvec3(vIdx + 0u, vIdx + 2u, vIdx + 3u);
+
+        vIdx += 4u;
+        pIdx += 2u;
+    }
+
+    SetMeshOutputsEXT(vIdx, pIdx);
+}

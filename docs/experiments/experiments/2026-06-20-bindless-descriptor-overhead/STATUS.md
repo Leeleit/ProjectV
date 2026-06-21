@@ -1,6 +1,6 @@
 # STATUS — bindless-descriptor-overhead
 
-**Phase:** concluded (verdict `mixed`, recommendation complete)
+**Phase:** concluded-verdict-mixed (recommendation complete)
 **Last action:** 2026-06-20 — research complete. `README.md` заполнен всеми 9 секциями (Hypothesis, Prior art, Method,
 Prototype, Results, Verdict, Integration recommendation, Sources, Mapping to ProjectV hot-path).
 `prototype/bindless_layout_sketch.cpp` (C++26, standalone CPU-side analytical model, ~280 lines) +

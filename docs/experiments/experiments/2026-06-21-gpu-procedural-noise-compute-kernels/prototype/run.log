@@ -1,0 +1,19 @@
+=== gpu-procedural-noise-compute-kernels benchmark ===
+Dev host: NVIDIA RTX 3060 Ti (Ampere GA104, Vulkan 1.4)
+Dispatch: 4096 chunks × 512 voxels = 2097152 invocations per dispatch
+Workgroup size: 64 threads (sweet spot for Ampere occupancy per Nsight)
+Iterations: 1000 (warmup 10)
+
+GPU: NVIDIA GeForce RTX 3060 Ti (Vulkan 1.4.341)
+Variant 1/5: VALUE - 3D Value noise (cheapest baseline)
+  VALUE        mean= 0.0312 ms  median= 0.0312  p95= 0.0324  p99= 0.0330  std=0.0008  min= 0.0292  max= 0.0417
+Variant 2/5: PERLIN - 3D Perlin improved (pure ALU, ~77 inst)
+  PERLIN       mean= 0.0311 ms  median= 0.0310  p95= 0.0322  p99= 0.0329  std=0.0008  min= 0.0294  max= 0.0415
+Variant 3/5: SIMPLEX - 3D Simplex (Gustavson, ~71 inst)
+  SIMPLEX      mean= 0.0280 ms  median= 0.0273  p95= 0.0313  p99= 0.0318  std=0.0017  min= 0.0255  max= 0.0372
+Variant 4/5: OPENSIMPLEX2 - 3D OpenSimplex2 (KdotJPG, BCC lattice)
+  OPENSIMPLEX2 mean= 0.0272 ms  median= 0.0271  p95= 0.0283  p99= 0.0291  std=0.0008  min= 0.0254  max= 0.0391
+Variant 5/5: WORLEY - 3D Worley F1 cellular (27 cells, expensive)
+  WORLEY       mean= 0.0280 ms  median= 0.0280  p95= 0.0293  p99= 0.0299  std=0.0008  min= 0.0260  max= 0.0370
+
+Results written to results.csv

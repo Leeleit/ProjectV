@@ -1,0 +1,28 @@
+strategy,scene,seed,mean_ms,median_ms,p95_ms,p99_ms,stddev_ms,min_ms,max_ms,mean_atten_db,mean_probes
+A_None (Phase 1, 1 ray occlusion),cave_stress,1,0.000116006,0.00011,0.00017,0.00027,4.01449e-05,3e-05,0.00045,0,1
+B_Schissler (4-8 edge probes, UTD),cave_stress,1,0.0802733,0.074771,0.10724,0.122171,0.0132694,0.06579,0.15135,0,17
+C_Tsingos (32 depth-mip samples),cave_stress,1,0.00296056,0.00287,0.00398,0.006,0.000783855,0.00165,0.01042,0,33
+A_None (Phase 1, 1 ray occlusion),cave_stress,7,0.000105801,8e-05,0.00018,0.00024,0.000198461,4e-05,0.00778,-1.25,1
+B_Schissler (4-8 edge probes, UTD),cave_stress,7,0.0818537,0.074331,0.115211,0.13877,0.0156496,0.0651,0.15556,-1.25,17
+C_Tsingos (32 depth-mip samples),cave_stress,7,0.0032192,0.00318,0.00655,0.00764,0.0014422,0.00132,0.00915,-1.1799,33
+A_None (Phase 1, 1 ray occlusion),cave_stress,42,0.000111106,0.00011,0.00017,0.00022,3.60533e-05,4e-05,0.00032,-1.25,1
+B_Schissler (4-8 edge probes, UTD),cave_stress,42,0.0790197,0.07375,0.10397,0.13496,0.0127611,0.06727,0.1479,-1.25,17
+C_Tsingos (32 depth-mip samples),cave_stress,42,0.00324858,0.00285,0.00494,0.007831,0.00171906,0.00138,0.03427,-1.15399,33
+A_None (Phase 1, 1 ray occlusion),open_plains,1,0.000132432,0.00013,0.00019,0.00033,4.82526e-05,3e-05,0.00048,0,1
+B_Schissler (4-8 edge probes, UTD),open_plains,1,0.0260336,0.0231,0.03922,0.04671,0.0061817,0.0193,0.058021,0,17
+C_Tsingos (32 depth-mip samples),open_plains,1,0.00312893,0.00291,0.00511,0.0069,0.000970863,0.00196,0.01202,0,33
+A_None (Phase 1, 1 ray occlusion),open_plains,7,9.88438e-05,8e-05,0.00018,0.00018,4.6497e-05,4e-05,0.00049,0,1
+B_Schissler (4-8 edge probes, UTD),open_plains,7,0.0254296,0.02339,0.03592,0.04286,0.0052154,0.019071,0.0522,0,17
+C_Tsingos (32 depth-mip samples),open_plains,7,0.0031608,0.00322,0.00485,0.00745,0.00137822,0.00121,0.02508,0,33
+A_None (Phase 1, 1 ray occlusion),open_plains,42,0.000113401,0.00011,0.00016,0.00021,5.62122e-05,4e-05,0.00189,0,1
+B_Schissler (4-8 edge probes, UTD),open_plains,42,0.0240092,0.02337,0.030391,0.0376,0.00293499,0.01997,0.04419,0,17
+C_Tsingos (32 depth-mip samples),open_plains,42,0.00266211,0.00241,0.00405,0.00628,0.00107073,0.00121,0.00844,0,33
+A_None (Phase 1, 1 ray occlusion),multi_room,1,0.000107187,9e-05,0.00023,0.00026,6.09659e-05,3e-05,0.00039,-12.5,1
+B_Schissler (4-8 edge probes, UTD),multi_room,1,0.0396506,0.03798,0.05056,0.06148,0.0052693,0.032851,0.06748,-12.5,17
+C_Tsingos (32 depth-mip samples),multi_room,1,0.00291595,0.00275,0.00392,0.00608,0.000861003,0.0017,0.01937,-11.2719,33
+A_None (Phase 1, 1 ray occlusion),multi_room,7,6.95687e-05,6e-05,0.00016,0.00023,4.00203e-05,3e-05,0.00038,-11.25,1
+B_Schissler (4-8 edge probes, UTD),multi_room,7,0.0404351,0.03867,0.05616,0.06602,0.00664787,0.03326,0.07525,-11.25,17
+C_Tsingos (32 depth-mip samples),multi_room,7,0.00252773,0.00236,0.00392,0.004521,0.000987783,0.00067,0.01348,-10.1372,33
+A_None (Phase 1, 1 ray occlusion),multi_room,42,0.0001146,0.0001,0.00021,0.00024,5.87013e-05,3e-05,0.00033,-13.75,1
+B_Schissler (4-8 edge probes, UTD),multi_room,42,0.0407269,0.03841,0.05608,0.06663,0.00625183,0.03452,0.07353,-13.75,17
+C_Tsingos (32 depth-mip samples),multi_room,42,0.00256887,0.00231,0.00399,0.00553,0.00103593,0.00117,0.01247,-12.375,33

@@ -1,0 +1,50 @@
+=== 2026-06-21-full-rt-tensor-cores-load cycle_budget ===
+GPU: RTX 3060 Ti GA104 Ampere (boost 1.665 GHz)
+RT cores: 38, Tensor cores: 152
+SMs: 38
+RT throughput: 126.54 G ops/sec
+Tensor throughput (FP16 practical): 310.985 TOPS
+
+Warmup (10 iterations)...
+Warmup done in 0 us
+
+Main measurements: 490 configs × 1000 inner iter = 490000 total main measurements in 31 ms
+CSV written to build/results.csv
+
+=== RT CANDIDATES RANKED BY SPEEDUP ===
+candidate                           mean_spd     min_spd     max_spd   ratio_gen   ratio_acc    PSNRVRAM_KiB     LoC5pct?
+RT_ContactShadowShortRay                1.60        1.60        1.60        0.00%        0.00%    0.50    2048     220   yes
+RT_GISurfelVisibility                   0.40        0.40        0.40        0.00%        0.00%    1.20    4096     290    no
+RT_HBAO_8RayHemi                        0.40        0.40        0.40        0.00%        0.01%    0.80    2048     260    no
+RT_MeshletCulling                       6.25        6.25        6.25        0.00%        0.00%    0.50    8192     310   yes
+RT_SharpReflectionProbe                 1.60        1.60        1.60        0.00%        0.00%    1.50    4096     310   yes
+RT_SoftShadow_RRQSS                     1.60        1.60        1.60        0.00%        0.00%    2.00    2048     280   yes
+RT_TaskShaderCullBVH                    2.60        2.60        2.60        0.00%        0.00%    0.30    4096     370   yes
+RT_VCT_PerPixelConeTrace                3.20        3.20        3.20        0.00%        0.00%    1.00    4096     340   yes
+
+=== TENSOR CANDIDATES RANKED BY SPEEDUP ===
+candidate                             mean_spd     min_spd     max_spd   ratio_gen   ratio_acc    PSNRVRAM_KiB     LoC5pct?
+Tensor_BRF_LUT_Interp                    48.00       48.00       48.00        0.15%        0.00%    0.00      64     100   yes
+Tensor_ColorGradingMatrix               230.40      230.40      230.40        0.03%        0.00%    0.10      64     130   yes
+Tensor_EdgeAware_Upsample               307.20      307.20      307.20        0.03%        0.00%    1.00     256     420   yes
+Tensor_SmallMLP_PostEffect               38.40       38.40       38.40        0.12%        0.00%    0.00     256     550   yes
+Tensor_TAA_HistoryBlend                  76.80       76.80       76.80        0.01%        0.00%    0.30     128     160   yes
+Tensor_VCT_TemporalDenoise              307.20      307.20      307.20        0.06%        0.00%    2.50     256     340   yes
+
+=== TOP RANKING (combined) ===
+1. [Tensor] Tensor_EdgeAware_Upsample                    307.20x speedup
+2. [Tensor] Tensor_VCT_TemporalDenoise                   307.20x speedup
+3. [Tensor] Tensor_ColorGradingMatrix                    230.40x speedup
+4. [Tensor] Tensor_TAA_HistoryBlend                       76.80x speedup
+5. [Tensor] Tensor_BRF_LUT_Interp                         48.00x speedup
+6. [Tensor] Tensor_SmallMLP_PostEffect                    38.40x speedup
+7. [RT] RT_MeshletCulling                                  6.25x speedup
+8. [RT] RT_VCT_PerPixelConeTrace                           3.20x speedup
+9. [RT] RT_TaskShaderCullBVH                               2.60x speedup
+10. [RT] RT_SoftShadow_RRQSS                                1.60x speedup
+11. [RT] RT_ContactShadowShortRay                           1.60x speedup
+12. [RT] RT_SharpReflectionProbe                            1.60x speedup
+13. [RT] RT_GISurfelVisibility                              0.40x speedup
+14. [RT] RT_HBAO_8RayHemi                                   0.40x speedup
+
+Done. sink=590.63

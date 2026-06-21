@@ -1,0 +1,7 @@
+strategy,scene,seed,frames,warmup,mean_us,median_us,p95_us,p99_us,stddev_us,min_us,max_us,conservation_violations,fluid_before,fluid_after,atomic_ops_count
+A_AtomicOr_Blind,vertical_column,0,200,20,2.96224,2.912,3.424,3.904,0.546737,2.368,9.184,0,64,64,0
+B_CAS,vertical_column,0,200,20,2.98432,2.976,3.456,4.032,0.457569,2.24,7.328,0,64,64,0
+C_SharedMem_2Stage,vertical_column,0,200,20,3.17984,3.168,3.936,4.16,0.379363,2.432,4.672,0,64,64,0
+D_SubgroupBallot,vertical_column,0,200,20,2.91952,2.912,3.424,3.648,0.324417,2.304,3.872,0,64,64,0
+E_HierLock,vertical_column,0,200,20,0,0,0,0,0,0,0,1,64,0,0
+F_Checkerboard,vertical_column,0,200,20,3.70864,3.712,4.128,4.736,0.730774,3.072,12.992,0,64,64,0

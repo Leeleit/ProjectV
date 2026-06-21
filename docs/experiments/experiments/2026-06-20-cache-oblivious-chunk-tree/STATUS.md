@@ -1,6 +1,6 @@
 # STATUS — cache-oblivious-chunk-tree
 
-**Phase:** concluded
+**Phase:** concluded-verdict-mixed
 **Last action:** 2026-06-20 — concluded. Verdict `mixed` (см. README §6). Prototype harness validated; 3 walk
 seeds × 4 conditions (baseline/morton × warm/cold) measured; mean latency similar (~40-60 ns), p99 inconsistent
 across seeds, cold cache unaffected. Implementation cost low but measured benefit below 5% threshold per

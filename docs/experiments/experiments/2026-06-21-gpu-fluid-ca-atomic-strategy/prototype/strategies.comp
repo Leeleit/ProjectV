@@ -1,0 +1,324 @@
+#version 460
+// 6 atomic strategies для Stage 3.1 GPU Fluid CA ping-pong buffer.
+// Strategy selection via build-time #define (1 strategy per build, 7 builds total).
+// Subgroup extensions = core in Vulkan 1.4, but glslc requires explicit #extension.
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_vote : require
+
+// A_AtomicOr_Blind = current mainline (atomicOr без CAS check, line 101 of fluid_ca.comp)
+// B_AtomicCompareExchange_CAS = per §30.4 contract (atomicCompSwap)
+// C_SharedMemory_TileCompaction_2Stage = per-workgroup shared mem collect, 1 atomic per claim writeback
+// D_SubgroupBallot_Reduction = subgroupBallot + subgroupExclusiveAdd prefix sum
+// E_HierarchicalLocking_ChunkLevel = coarse-grained per-chunk lock, sequential within chunk
+// F_Checkerboard_RaceFree = 8 dispatches per tick, (x+y+z)&7 spatial mask = no atomics per jamesthomaskiernan 2024
+// G_DoubleBuffered_Sequential = baseline: 1 atomic per claim (per-thread atomicCompSwap), no optimization
+//
+// STAGE_ID для Strategy C: 0 = collect (queue claims in shared mem + write to global SSBO),
+// 1 = writeback (1 thread per workgroup does atomicCompSwap per claim).
+// One build for collect, one for writeback. Strategy C uses 2 dispatches per tick.
+
+#ifndef STRATEGY_ID
+#define STRATEGY_ID 0
+#endif
+
+#ifndef STAGE_ID
+#define STAGE_ID 0
+#endif
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+const uint kFluidMaterial = 4u;
+const uint kAirMaterial = 0u;
+
+struct ChunkFluidCell {
+    uint material;
+    uint age;
+    uint reserved0;
+    uint reserved1;
+};
+
+// Binding 0: source cells (read-only)
+layout(set = 0, binding = 0, std430) readonly buffer SourceCells {
+    ChunkFluidCell sourceCells[];
+};
+
+// Binding 1: destination cells (write) — ping-pong with source
+layout(set = 0, binding = 1, std430) buffer DestinationCells {
+    ChunkFluidCell destinationCells[];
+};
+
+// Binding 2: fluid stats (atomic counter for ops + conservation tracking)
+layout(set = 0, binding = 2, std430) buffer FluidStats {
+    uint activeFluidCells;
+    uint droppedFluidCells;
+    uint atomicOpsCount;
+    uint iteration;
+} fluidStats;
+
+// Binding 3: per-chunk locks (Strategy E only)
+layout(set = 0, binding = 3, std430) buffer ChunkLocks {
+    uint chunkLocks[];
+};
+
+// Binding 4: global claim slots (Strategy D)
+layout(set = 0, binding = 4, std430) buffer GlobalClaimSlots {
+    uint claimSlots[];
+};
+
+// Push constants (single block — multiple blocks not allowed per stage)
+layout(push_constant) uniform FluidCaPushConstants {
+    uvec4 gridDimensions;        // xyz = grid size
+    uvec4 cellCountAndFlags;     // x = total cells, y = flags
+    // Strategy F: spatial mask data
+    uvec4 checkerboardMask;      // x = current mask (0..7), y = total masks (8)
+    float fluidTickInterval;
+    uint reserved0;
+    uint reserved1;
+    uint reserved2;
+} pc;
+
+bool IsAirMaterial(const uint material) {
+    return material == kAirMaterial;
+}
+
+bool IsFluidMaterial(const uint material) {
+    return material == kFluidMaterial;
+}
+
+uint GetCellIndex(const uint chunkId, const uint localX, const uint localY, const uint localZ,
+                   const uint gridWidth, const uint gridHeight, const uint gridDepth) {
+    // Prototype simplification: dispatch is 1D over cells (total_cells / workgroupSize workgroups).
+    // Use gl_GlobalInvocationID.x directly as cellIndex (via chunkId * workgroupSize + localIdx).
+    // For our dispatch: chunkId = gl_WorkGroupID.x (not .z) — fixed.
+    const uint kWorkgroupCells = 8u * 8u * 4u; // 256
+    const uint localIdx = (localZ * gridHeight + localY) * gridWidth + localX;
+    return chunkId * kWorkgroupCells + localIdx;
+}
+
+// Convert (chunkId, localX, localY, localZ) → (x, y, z) for spatial mask
+uvec3 GetWorldCoords(const uint chunkId, const uint localX, const uint localY, const uint localZ,
+                      const uint gridWidth, const uint gridHeight, const uint gridDepth) {
+    // For our prototype: chunk = workgroup, localX/Y/Z = thread within workgroup
+    // World coords = workgroup * workgroup_size + local
+    return uvec3(localX, localY, localZ);
+}
+
+// =============================================================================
+// STRATEGY A: AtomicOr_Blind (current mainline per src/shaders/fluid_ca.comp:101)
+// =============================================================================
+#if STRATEGY_ID == 0
+void main() {
+    if (gl_GlobalInvocationID.x >= pc.cellCountAndFlags.x) return;
+
+    const uint localX = gl_GlobalInvocationID.x % pc.gridDimensions.x;
+    const uint localY = (gl_GlobalInvocationID.x / pc.gridDimensions.x) % pc.gridDimensions.y;
+    const uint localZ = gl_GlobalInvocationID.x / (pc.gridDimensions.x * pc.gridDimensions.y);
+    const uint chunkId = gl_WorkGroupID.x;
+    const uint cellIndex = gl_GlobalInvocationID.x;  // direct 1D mapping
+    // (void)localX; (void)localY; (void)localZ; // suppress unused warnings
+    // localX/Y/Z used in belowIndex computation
+
+    const ChunkFluidCell source = sourceCells[cellIndex];
+    if (!IsFluidMaterial(source.material)) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    if (localY > 0u) {
+        const uint belowLocalY = localY - 1u;
+        const uint belowIndex = (localY > 0u) ? (cellIndex - pc.gridDimensions.x) : cellIndex;  // row-major: -W within row (safe if y>0)
+        const ChunkFluidCell below = sourceCells[belowIndex];
+        if (IsAirMaterial(below.material) || IsFluidMaterial(below.material)) {
+            atomicAdd(fluidStats.atomicOpsCount, 1u);
+            const uint claimed = atomicOr(destinationCells[belowIndex].material, kFluidMaterial);
+            if ((claimed & kFluidMaterial) == 0u) {
+                atomicAdd(fluidStats.droppedFluidCells, 1u);
+                return;
+            }
+        }
+    }
+
+    destinationCells[cellIndex].material = source.material;
+}
+
+// =============================================================================
+// STRATEGY B: AtomicCompareExchange_CAS (per agent/knowledge.md §30.4 contract)
+// =============================================================================
+#elif STRATEGY_ID == 1
+void main() {
+    if (gl_GlobalInvocationID.x >= pc.cellCountAndFlags.x) return;
+
+    const uint localX = gl_GlobalInvocationID.x % pc.gridDimensions.x;
+    const uint localY = (gl_GlobalInvocationID.x / pc.gridDimensions.x) % pc.gridDimensions.y;
+    const uint localZ = gl_GlobalInvocationID.x / (pc.gridDimensions.x * pc.gridDimensions.y);
+    const uint chunkId = gl_WorkGroupID.x;
+    const uint cellIndex = gl_GlobalInvocationID.x;  // direct 1D mapping
+    // (void)localX; (void)localY; (void)localZ; // suppress unused warnings
+    // localX/Y/Z used in belowIndex computation
+
+    const ChunkFluidCell source = sourceCells[cellIndex];
+    if (!IsFluidMaterial(source.material)) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    if (localY > 0u) {
+        const uint belowLocalY = localY - 1u;
+        const uint belowIndex = (localY > 0u) ? (cellIndex - pc.gridDimensions.x) : cellIndex;  // row-major: -W within row (safe if y>0)
+        const ChunkFluidCell below = sourceCells[belowIndex];
+        if (IsAirMaterial(below.material)) {
+            atomicAdd(fluidStats.atomicOpsCount, 1u);
+            uint expected = kAirMaterial;
+            uint original = atomicCompSwap(destinationCells[belowIndex].material,
+                                            expected, kFluidMaterial);
+            if (original == expected) {
+                atomicAdd(fluidStats.droppedFluidCells, 1u);
+                return;
+            }
+        }
+    }
+
+    destinationCells[cellIndex].material = source.material;
+}
+
+// =============================================================================
+// STRATEGY D: SubgroupBallot_Reduction (subgroupExclusiveAdd prefix sum)
+// =============================================================================
+#elif STRATEGY_ID == 3
+void main() {
+    if (gl_GlobalInvocationID.x >= pc.cellCountAndFlags.x) return;
+
+    const uint localX = gl_GlobalInvocationID.x % pc.gridDimensions.x;
+    const uint localY = (gl_GlobalInvocationID.x / pc.gridDimensions.x) % pc.gridDimensions.y;
+    const uint localZ = gl_GlobalInvocationID.x / (pc.gridDimensions.x * pc.gridDimensions.y);
+    const uint chunkId = gl_WorkGroupID.x;
+    const uint cellIndex = gl_GlobalInvocationID.x;  // direct 1D mapping
+    // (void)localX; (void)localY; (void)localZ; // suppress unused warnings
+    // localX/Y/Z used in belowIndex computation
+
+    const ChunkFluidCell source = sourceCells[cellIndex];
+    if (!IsFluidMaterial(source.material)) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    if (localY > 0u) {
+        const uint belowLocalY = localY - 1u;
+        const uint belowIndex = (localY > 0u) ? (cellIndex - pc.gridDimensions.x) : cellIndex;  // row-major: -W within row (safe if y>0)
+        const ChunkFluidCell below = sourceCells[belowIndex];
+        const bool willClaim = IsAirMaterial(below.material) && IsFluidMaterial(source.material);
+
+        const uint claimOffset = subgroupExclusiveAdd(willClaim ? 1u : 0u);
+        const uint claimCount = subgroupAdd(willClaim ? 1u : 0u);
+
+        if (willClaim && subgroupElect()) {
+            atomicAdd(fluidStats.atomicOpsCount, 1u);
+            const uint baseSlot = atomicAdd(fluidStats.droppedFluidCells, claimCount);
+            // Simplified: each elected lane does one atomic per claim
+            // (production would do prefix-sum + global write to claimSlots)
+            if (claimOffset == 0u) {
+                uint expected = kAirMaterial;
+                atomicCompSwap(destinationCells[belowIndex].material, expected, kFluidMaterial);
+            }
+        }
+    }
+
+    destinationCells[cellIndex].material = source.material;
+}
+
+// =============================================================================
+// STRATEGY E: HierarchicalLocking_ChunkLevel (coarse-grained per-chunk lock)
+// =============================================================================
+#elif STRATEGY_ID == 4
+void main() {
+    if (gl_GlobalInvocationID.x >= pc.cellCountAndFlags.x) return;
+
+    const uint localX = gl_GlobalInvocationID.x % pc.gridDimensions.x;
+    const uint localY = (gl_GlobalInvocationID.x / pc.gridDimensions.x) % pc.gridDimensions.y;
+    const uint localZ = gl_GlobalInvocationID.x / (pc.gridDimensions.x * pc.gridDimensions.y);
+    const uint chunkId = gl_WorkGroupID.x;
+    const uint cellIndex = gl_GlobalInvocationID.x;  // direct 1D mapping
+    // (void)localX; (void)localY; (void)localZ; // suppress unused warnings
+    // localX/Y/Z used in belowIndex computation
+
+    // Acquire chunk lock (spinlock)
+    uint expected = 0u;
+    while (atomicCompSwap(chunkLocks[chunkId], expected, 1u) != expected) {
+        expected = 0u;
+    }
+
+    const ChunkFluidCell source = sourceCells[cellIndex];
+    if (IsFluidMaterial(source.material) && localY > 0u) {
+        const uint belowLocalY = localY - 1u;
+        const uint belowIndex = (localY > 0u) ? (cellIndex - pc.gridDimensions.x) : cellIndex;  // row-major: -W within row (safe if y>0)
+        const ChunkFluidCell below = sourceCells[belowIndex];
+        if (IsAirMaterial(below.material)) {
+            destinationCells[belowIndex].material = kFluidMaterial;
+            atomicAdd(fluidStats.droppedFluidCells, 1u);
+            chunkLocks[chunkId] = 0u;
+            return;
+        }
+    }
+    destinationCells[cellIndex].material = source.material;
+    chunkLocks[chunkId] = 0u;
+}
+
+// =============================================================================
+// STRATEGY F: Checkerboard_RaceFree (8 dispatches per tick, spatial (x+y+z)&7 mask)
+// No atomics within dispatch — adjacent cells have different masks, no race
+// Per jamesthomaskiernan/gpu-voxel-sim (Feb 2024) 9200 fps на RTX 3090
+// =============================================================================
+#elif STRATEGY_ID == 5
+const uint kCheckerMasks = 8u;
+
+void main() {
+    if (gl_GlobalInvocationID.x >= pc.cellCountAndFlags.x) return;
+
+    const uint localX = gl_GlobalInvocationID.x % pc.gridDimensions.x;
+    const uint localY = (gl_GlobalInvocationID.x / pc.gridDimensions.x) % pc.gridDimensions.y;
+    const uint localZ = gl_GlobalInvocationID.x / (pc.gridDimensions.x * pc.gridDimensions.y);
+    const uint chunkId = gl_WorkGroupID.x;
+    const uint cellIndex = gl_GlobalInvocationID.x;  // direct 1D mapping
+    // (void)localX; (void)localY; (void)localZ; // suppress unused warnings
+    // localX/Y/Z used in belowIndex computation
+
+    // Spatial mask filter: only process cells where (x + y + z) & 7 == currentMask
+    const uvec3 worldCoords = GetWorldCoords(chunkId, localX, localY, localZ,
+                                                pc.gridDimensions.x, pc.gridDimensions.y, pc.gridDimensions.z);
+    const uint spatialMask = (worldCoords.x + worldCoords.y + worldCoords.z) & 7u;
+    if (spatialMask != pc.checkerboardMask.x) {
+        // Not in this dispatch's mask: copy-through (single-thread write, no race)
+        destinationCells[cellIndex].material = sourceCells[cellIndex].material;
+        return;
+    }
+
+    const ChunkFluidCell source = sourceCells[cellIndex];
+    if (!IsFluidMaterial(source.material)) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    if (localY > 0u) {
+        const uint belowLocalY = localY - 1u;
+        const uint belowIndex = (localY > 0u) ? (cellIndex - pc.gridDimensions.x) : cellIndex;  // row-major: -W within row (safe if y>0)
+        const ChunkFluidCell below = sourceCells[belowIndex];
+
+        // Target cell is at (x, y-1, z) — spatial mask = (x + (y-1) + z) & 7
+        // = (x + y + z) & 7 - 1 (mod 8) — ALWAYS different from source mask
+        // So no race even if multiple threads in different dispatches claim same target
+        // (each dispatch's target is in a different mask)
+        if (IsAirMaterial(below.material)) {
+            // Direct write, no atomic needed (target in different mask = different dispatch)
+            destinationCells[belowIndex].material = kFluidMaterial;
+            destinationCells[cellIndex].material = kAirMaterial;
+            atomicAdd(fluidStats.droppedFluidCells, 1u);
+            return;
+        }
+    }
+
+    destinationCells[cellIndex].material = source.material;
+}
+
+#endif

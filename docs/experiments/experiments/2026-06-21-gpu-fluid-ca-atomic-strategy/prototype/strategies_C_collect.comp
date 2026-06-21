@@ -1,0 +1,118 @@
+#version 460
+// Strategy C Stage 0: collect claims into shared mem, flush to global SSBO.
+// Companion to strategies_C_writeback.comp (Stage 1).
+// No subgroup extensions needed.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+const uint kFluidMaterial = 4u;
+const uint kAirMaterial = 0u;
+
+const uint kWorkgroupSize = 8u * 8u * 4u; // 256
+
+struct ChunkFluidCell {
+    uint material;
+    uint age;
+    uint reserved0;
+    uint reserved1;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer SourceCells {
+    ChunkFluidCell sourceCells[];
+};
+
+layout(set = 0, binding = 1, std430) buffer DestinationCells {
+    ChunkFluidCell destinationCells[];
+};
+
+layout(set = 0, binding = 2, std430) buffer FluidStats {
+    uint activeFluidCells;
+    uint droppedFluidCells;
+    uint atomicOpsCount;
+    uint iteration;
+} fluidStats;
+
+// Inter-stage buffers (written by collect, read by writeback)
+layout(set = 0, binding = 5, std430) buffer WorkgroupClaimCounters {
+    uint workgroupClaimCounters[];
+};
+layout(set = 0, binding = 6, std430) buffer ClaimDestinations {
+    uint claimDestinations[];
+};
+layout(set = 0, binding = 7, std430) buffer ClaimSourceIndices {
+    uint claimSourceIndices[];
+};
+
+layout(push_constant) uniform FluidCaPushConstants {
+    uvec4 gridDimensions;
+    uvec4 cellCountAndFlags;
+    uvec4 checkerboardMask;  // unused
+    float fluidTickInterval;
+    uint reserved0;
+    uint reserved1;
+    uint reserved2;
+} pc;
+
+bool IsAirMaterial(const uint material) { return material == kAirMaterial; }
+bool IsFluidMaterial(const uint material) { return material == kFluidMaterial; }
+
+uint GetCellIndex(const uint chunkId, const uint localX, const uint localY, const uint localZ,
+                   const uint gridWidth, const uint gridHeight, const uint gridDepth) {
+    const uint cellsPerChunk = gridWidth * gridHeight * gridDepth;
+    const uint localIdx = (localZ * gridHeight + localY) * gridWidth + localX;
+    return chunkId * cellsPerChunk + localIdx;
+}
+
+shared uint sharedClaimCount;
+shared uint sharedClaimDests[kWorkgroupSize];
+shared uint sharedClaimSrcIdx[kWorkgroupSize];
+
+void main() {
+    if (gl_LocalInvocationIndex == 0u) {
+        sharedClaimCount = 0u;
+    }
+    barrier();
+
+    const uint localX = gl_GlobalInvocationID.x % pc.gridDimensions.x;
+    const uint localY = (gl_GlobalInvocationID.x / pc.gridDimensions.x) % pc.gridDimensions.y;
+    const uint localZ = gl_GlobalInvocationID.x / (pc.gridDimensions.x * pc.gridDimensions.y);
+    const uint chunkId = gl_WorkGroupID.z;
+    const uint cellIndex = GetCellIndex(chunkId, localX, localY, localZ,
+                                          pc.gridDimensions.x, pc.gridDimensions.y, pc.gridDimensions.z);
+
+    const ChunkFluidCell source = sourceCells[cellIndex];
+
+    if (!IsFluidMaterial(source.material)) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    if (localY == 0u) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    const uint belowLocalY = localY - 1u;
+    const uint belowIndex = GetCellIndex(chunkId, localX, belowLocalY, localZ,
+                                           pc.gridDimensions.x, pc.gridDimensions.y, pc.gridDimensions.z);
+    const ChunkFluidCell below = sourceCells[belowIndex];
+
+    if (!IsAirMaterial(below.material)) {
+        destinationCells[cellIndex].material = source.material;
+        return;
+    }
+
+    const uint slot = atomicAdd(sharedClaimCount, 1u);
+    sharedClaimDests[slot] = belowIndex;
+    sharedClaimSrcIdx[slot] = cellIndex;
+
+    barrier();
+
+    if (gl_LocalInvocationIndex == 0u) {
+        workgroupClaimCounters[gl_WorkGroupID.x] = sharedClaimCount;
+        for (uint i = 0u; i < sharedClaimCount; ++i) {
+            claimDestinations[gl_WorkGroupID.x * kWorkgroupSize + i] = sharedClaimDests[i];
+            claimSourceIndices[gl_WorkGroupID.x * kWorkgroupSize + i] = sharedClaimSrcIdx[i];
+        }
+    }
+}

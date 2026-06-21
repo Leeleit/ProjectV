@@ -1,0 +1,257 @@
+// SPDX-License-Identifier: MIT
+// Per-variant compute kernels for gpu-procedural-noise-compute-kernels experiment.
+// Each variant writes one float per voxel into the output SSBO at index
+// gl_GlobalInvocationID.x; chunkSize=8 means 8x8x8 = 512 voxels per chunk.
+//
+// All variants implement the SAME interface:
+//   in : push.chunkOrigin (vec3)
+//        gl_GlobalInvocationID.x (uint, 0..511 for chunkSize=8)
+//   out: ssbo.floats[idx] (float, noise value in [-1, 1] approximately)
+
+#version 450
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) restrict writeonly buffer OutSSBO {
+    float values[];
+} ssbo;
+
+layout(push_constant) uniform PC {
+    vec4 chunkOriginAndSeed;  // xyz = chunk origin in world voxels, w = seed
+} pc;
+
+// ---------------------------------------------------------------------------
+// Common: hash + lattice traversal helpers
+// ---------------------------------------------------------------------------
+
+// PCG3D hash (Mark Jarzynski / Marko Jarzynski, public domain) - 16-bit output, simple.
+uvec3 pcg3d(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v.x ^= v.x >> 16u;
+    v.y ^= v.y >> 16u;
+    v.z ^= v.z >> 16u;
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    return v;
+}
+
+float hash13(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+// 12 standard gradient vectors for Perlin improved noise (Ken Perlin 2002).
+const vec3 PERLIN_GRADS[16] = vec3[16](
+    vec3( 1.0,  1.0,  0.0), vec3(-1.0,  1.0,  0.0), vec3( 1.0, -1.0,  0.0), vec3(-1.0, -1.0,  0.0),
+    vec3( 1.0,  0.0,  1.0), vec3(-1.0,  0.0,  1.0), vec3( 1.0,  0.0, -1.0), vec3(-1.0,  0.0, -1.0),
+    vec3( 0.0,  1.0,  1.0), vec3( 0.0, -1.0,  1.0), vec3( 0.0,  1.0, -1.0), vec3( 0.0, -1.0, -1.0),
+    vec3( 1.0,  1.0,  0.0), vec3(-1.0,  1.0,  0.0), vec3( 0.0, -1.0,  1.0), vec3( 0.0, -1.0, -1.0)
+);
+
+vec3 perlinGrad3(int hash) {
+    return PERLIN_GRADS[hash & 15];
+}
+
+float quinticFade(float t) {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+// ---------------------------------------------------------------------------
+// VARIANT 1: Value Noise 3D (cheapest baseline, no gradient table)
+// ---------------------------------------------------------------------------
+#ifdef VARIANT_VALUE
+float noise3d(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = vec3(quinticFade(f.x), quinticFade(f.y), quinticFade(f.z));
+    float n000 = hash13(i + vec3(0.0, 0.0, 0.0));
+    float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+    float nx00 = mix(n000, n100, u.x);
+    float nx10 = mix(n010, n110, u.x);
+    float nx01 = mix(n001, n101, u.x);
+    float nx11 = mix(n011, n111, u.x);
+    float nxy0 = mix(nx00, nx10, u.y);
+    float nxy1 = mix(nx01, nx11, u.y);
+    return mix(nxy0, nxy1, u.z) * 2.0 - 1.0;
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// VARIANT 2: Perlin Improved 3D (textured LUT variant - GPU Gems 2 Ch 26,
+// ~50 PS2.0 instructions). Pure ALU hash, no texture.
+// ---------------------------------------------------------------------------
+#ifdef VARIANT_PERLIN
+float noise3d(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    vec3 u = vec3(quinticFade(f.x), quinticFade(f.y), quinticFade(f.z));
+    uvec3 h = uvec3(i) + uvec3(pc.chunkOriginAndSeed.w * 1000.0);
+    uvec3 ih = pcg3d(h);
+    float n000 = dot(perlinGrad3(int(ih.x & 255u) >> 4), f - vec3(0.0));
+    float n100 = dot(perlinGrad3(int((ih.x >> 8) & 255u) >> 4), f - vec3(1.0, 0.0, 0.0));
+    float n010 = dot(perlinGrad3(int(ih.y & 255u) >> 4), f - vec3(0.0, 1.0, 0.0));
+    float n110 = dot(perlinGrad3(int((ih.y >> 8) & 255u) >> 4), f - vec3(1.0, 1.0, 0.0));
+    float n001 = dot(perlinGrad3(int(ih.z & 255u) >> 4), f - vec3(0.0, 0.0, 1.0));
+    float n101 = dot(perlinGrad3(int((ih.z >> 8) & 255u) >> 4), f - vec3(1.0, 0.0, 1.0));
+    float n011 = dot(perlinGrad3(int((ih.x >> 16) & 255u) >> 4), f - vec3(0.0, 1.0, 1.0));
+    float n111 = dot(perlinGrad3(int((ih.y >> 16) & 255u) >> 4), f - vec3(1.0, 1.0, 1.0));
+    float nx00 = mix(n000, n100, u.x);
+    float nx10 = mix(n010, n110, u.x);
+    float nx01 = mix(n001, n101, u.x);
+    float nx11 = mix(n011, n111, u.x);
+    float nxy0 = mix(nx00, nx10, u.y);
+    float nxy1 = mix(nx01, nx11, u.y);
+    return mix(nxy0, nxy1, u.z);
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// VARIANT 3: Simplex 3D (Stefan Gustavson / bitangent_noise, ~71 instructions)
+// Adapted from https://github.com/atyuwen/bitangent_noise Develop/SimplexNoise.hlsl
+// Uses PCG3D hash + permutation.
+// ---------------------------------------------------------------------------
+#ifdef VARIANT_SIMPLEX
+const vec2 SIMPLEX_C = vec2(1.0/6.0, 1.0/3.0);
+const vec4 SIMPLEX_D = vec4(0.0, 0.5, 1.0, 2.0);
+
+vec3 grad3(uint hash) {
+    vec3 cube = mod(floor(vec3(hash, hash >> 8u, hash >> 16u) / vec3(1.0, 2.0, 4.0)), 2.0) * 2.0 - 1.0;
+    return cube;  // 8 corner gradients
+}
+
+float noise3d(vec3 p) {
+    vec3 b = floor(p + dot(p, SIMPLEX_C.yyy));
+    vec3 x0 = p - b + dot(b, SIMPLEX_C.xxx);
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min(g.xyz, l.zxy);
+    vec3 i2 = max(g.xyz, l.zxy);
+    vec3 x1 = x0 - i1 + SIMPLEX_C.xxx;
+    vec3 x2 = x0 - i2 + SIMPLEX_C.yyy;
+    vec3 x3 = x0 - SIMPLEX_D.yyy;
+    uvec3 ib = uvec3(b + 32768.5);
+    uint h0 = pcg3d(ib).x;
+    uint h1 = pcg3d(ib + uvec3(i1) + uvec3(32768.5)).x;
+    uint h2 = pcg3d(ib + uvec3(i2) + uvec3(32768.5)).x;
+    uint h3 = pcg3d(ib + uvec3(1.0) + uvec3(32768.5)).x;
+    vec3 g0 = grad3(h0);
+    vec3 g1 = grad3(h1);
+    vec3 g2 = grad3(h2);
+    vec3 g3 = grad3(h3);
+    vec4 m = max(0.5 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    vec4 m4 = m * m * m * m;
+    return 62.6 * dot(m4, vec4(dot(x0,g0), dot(x1,g1), dot(x2,g2), dot(x3,g3)));
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// VARIANT 4: OpenSimplex2 (KdotJPG, "Re-oriented 4-Point BCC Noise")
+// Adapted from https://github.com/KdotJPG/OpenSimplex2/blob/master/glsl/OpenSimplex2.glsl
+// Pure ALU BCC lattice, ~similar to Simplex in cost.
+// ---------------------------------------------------------------------------
+#ifdef VARIANT_OPENSIMPLEX2
+vec4 os2_permute(vec4 t) {
+    return t * (t * 34.0 + 133.0);
+}
+
+vec3 os2_grad(float hash) {
+    vec3 cube = mod(floor(vec3(hash, hash / 256.0, hash / 65536.0)), 2.0) * 2.0 - 1.0;
+    vec3 cuboct = cube;
+    float type = floor(hash / 4.0);
+    type = mod(type, 2.0);
+    vec3 rhomb = (1.0 - type) * cube + type * (cuboct + cross(cube, cuboct));
+    return rhomb;
+}
+
+float noise3d(vec3 X) {
+    vec3 v1 = round(X);
+    vec3 d1 = X - v1;
+    vec3 score1 = abs(d1);
+    vec3 dir1 = step(max(score1.yzx, score1.zxy), score1);
+    vec3 v2 = v1 + dir1 * sign(d1);
+    vec3 d2 = X - v2;
+    vec3 X2 = X + 144.5;
+    vec3 v3 = round(X2);
+    vec3 d3 = X2 - v3;
+    vec3 score2 = abs(d3);
+    vec3 dir2 = step(max(score2.yzx, score2.zxy), score2);
+    vec3 v4 = v3 + dir2 * sign(d3);
+    vec3 d4 = X2 - v4;
+    vec4 h = mod(vec4(v1.x, v2.x, v3.x, v4.x), 289.0);
+    h = os2_permute(h);
+    h = os2_permute(mod(h + vec4(v1.y, v2.y, v3.y, v4.y), 289.0));
+    h = mod(os2_permute(mod(h + vec4(v1.z, v2.z, v3.z, v4.z), 289.0)), 48.0);
+    vec3 g1 = os2_grad(h.x), g2 = os2_grad(h.y), g3 = os2_grad(h.z), g4 = os2_grad(h.w);
+    vec4 a = max(0.5 - vec4(dot(d1,d1), dot(d2,d2), dot(d3,d3), dot(d4,d4)), 0.0);
+    vec4 aa = a * a; vec4 aaaa = aa * aa;
+    vec4 extr = vec4(dot(d1,g1), dot(d2,g2), dot(d3,g3), dot(d4,g4));
+    // Orientation transform for isotropic appearance.
+    float n = dot(aaaa, extr);
+    X = dot(X, vec3(2.0/3.0)) - X;
+    return n * 8.0;  // normalize to ~[-1, 1]
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// VARIANT 5: Worley/Cellular Noise 3D (Worley 1996, F1 distance).
+// 27 cell lookups - most expensive baseline.
+// ---------------------------------------------------------------------------
+#ifdef VARIANT_WORLEY
+vec3 cellCoord(vec3 p) {
+    return floor(p);
+}
+
+float cellHash(vec3 c) {
+    return fract(sin(dot(c, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
+vec3 cellPoint(vec3 c, float idx) {
+    return c + vec3(
+        cellHash(c + idx * 13.0),
+        cellHash(c + idx * 17.0 + 1.0),
+        cellHash(c + idx * 19.0 + 2.0)
+    );
+}
+
+float noise3d(vec3 p) {
+    vec3 c = cellCoord(p);
+    float f1 = 8.0;
+    for (int z = -1; z <= 1; z++) {
+        for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+                vec3 nb = c + vec3(float(x), float(y), float(z));
+                vec3 pt = cellPoint(nb, 1.0);
+                float d = length(p - pt);
+                f1 = min(f1, d);
+            }
+        }
+    }
+    return f1 / 1.732 - 1.0;  // normalize (max distance = sqrt(3))
+}
+#endif
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= 512u) return;  // chunkSize=8 means 8*8*8 = 512 voxels
+    uint z = idx >> 6u;       // / 64
+    uint y = (idx >> 3u) & 7u;  // / 8 & 7
+    uint x = idx & 7u;
+    vec3 worldPos = pc.chunkOriginAndSeed.xyz + vec3(float(x), float(y), float(z));
+    vec3 noiseInput = worldPos * 0.05;  // typical frequency for terrain
+    float n = noise3d(noiseInput);
+    ssbo.values[idx] = n;
+}

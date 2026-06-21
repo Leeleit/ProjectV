@@ -1,0 +1,128 @@
+// cone_march.comp — voxel cone tracing march shader.
+// Compiled with -DCONE_6, -DCONE_12, -DCONE_24, or -DCONE_1024.
+// 1024 = brute-force Fibonacci reference.
+//
+// Each thread: 1 sample point on kSampleGrid × kSampleGrid image.
+// For each cone direction: march along axis, sample atlas with mip level
+// log2(coneDiameter / voxelSize), accumulate (1-alpha) * sample.
+//
+// Atlas format: VK_FORMAT_R8G8B8A8_UNORM or _SFLOAT variant (passed via sampler).
+
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler3D uAtlas;
+layout(set = 0, binding = 1, r32f) uniform restrict writeonly image2D uOut;
+
+layout(push_constant) uniform PC {
+    uint uFrameW;
+    uint uFrameH;
+    uint uAtlasSize;
+    float uSunY;  // sun direction (pointing down)
+} pc;
+
+#define PI 3.14159265359
+
+#ifdef CONE_6
+const uint N_CONES = 6u;
+const vec3 CONE_DIRS[6] = vec3[6](
+    vec3( 1, 0, 0), vec3(-1, 0, 0),
+    vec3( 0, 1, 0), vec3( 0,-1, 0),
+    vec3( 0, 0, 1), vec3( 0, 0,-1));
+#elif defined(CONE_12)
+const uint N_CONES = 12u;
+const vec3 CONE_DIRS[12] = vec3[12](
+    vec3( 1, 0, 0), vec3(-1, 0, 0),
+    vec3( 0, 1, 0), vec3( 0,-1, 0),
+    vec3( 0, 0, 1), vec3( 0, 0,-1),
+    normalize(vec3( 1, 1, 1)), normalize(vec3(-1, 1, 1)),
+    normalize(vec3( 1,-1, 1)), normalize(vec3(-1,-1, 1)),
+    normalize(vec3( 1, 1,-1)), normalize(vec3(-1, 1,-1)));
+#elif defined(CONE_24)
+const uint N_CONES = 24u;
+// Icosahedral-style: 6 axis + 12 face-diag + 6 corner (approximation)
+const vec3 CONE_DIRS[24] = vec3[24](
+    vec3( 1, 0, 0), vec3(-1, 0, 0),
+    vec3( 0, 1, 0), vec3( 0,-1, 0),
+    vec3( 0, 0, 1), vec3( 0, 0,-1),
+    normalize(vec3( 1, 1, 0)), normalize(vec3(-1, 1, 0)),
+    normalize(vec3( 1,-1, 0)), normalize(vec3(-1,-1, 0)),
+    normalize(vec3( 1, 0, 1)), normalize(vec3(-1, 0, 1)),
+    normalize(vec3( 1, 0,-1)), normalize(vec3(-1, 0,-1)),
+    normalize(vec3( 0, 1, 1)), normalize(vec3( 0,-1, 1)),
+    normalize(vec3( 0, 1,-1)), normalize(vec3( 0,-1,-1)),
+    normalize(vec3( 1, 1, 1)), normalize(vec3(-1, 1, 1)),
+    normalize(vec3( 1,-1, 1)), normalize(vec3(-1,-1, 1)),
+    normalize(vec3( 1, 1,-1)), normalize(vec3(-1, 1,-1)));
+#elif defined(CONE_1024)
+// Fibonacci sphere — compile-time unrolled for 1024
+const uint N_CONES = 1024u;
+// Stored as runtime array to keep compile time sane
+vec3 fibDir(uint i) {
+    float phi = float(i) * 2.39996323;  // golden angle
+    float cosTheta = 1.0 - 2.0 * (float(i) + 0.5) / float(N_CONES);
+    float sinTheta = sqrt(max(0.0, 1.0 - cosTheta*cosTheta));
+    return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+#endif
+
+vec4 coneTrace(vec3 origin, vec3 dir, float aperture) {
+    vec3 accum = vec3(0.0);
+    float alpha = 0.0;
+    float t = 1.0;  // start at 1 voxel out
+    float voxelSize = 1.0 / float(pc.uAtlasSize);
+    const float maxT = 1.0;  // walk full atlas
+    for (int step = 0; step < 32; ++step) {
+        if (t > maxT || alpha > 0.99) break;
+        float coneDiam = 2.0 * tan(aperture * 0.5) * t;
+        float lod = log2(max(1.0, coneDiam / voxelSize));
+        vec3 pos = origin + dir * t;
+        if (any(lessThan(pos, vec3(0.0))) || any(greaterThan(pos, vec3(1.0)))) { t += coneDiam; continue; }
+        vec4 s = textureLod(uAtlas, pos, lod);
+        float w = (1.0 - alpha) * s.a;
+        accum += w * s.rgb;
+        alpha += w;
+        t += max(coneDiam, voxelSize);
+    }
+    return vec4(accum, alpha);
+}
+
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    if (uint(gid.x) >= pc.uFrameW || uint(gid.y) >= pc.uFrameH) return;
+    // Sample point: top-down view of ground at y=0.5
+    vec2 uv = (vec2(gid) + 0.5) / vec2(pc.uFrameW, pc.uFrameH);
+    vec3 origin = vec3(uv.x, 0.5, uv.y);  // y=0.5 = ground
+    vec3 normal = vec3(0, 1, 0);  // ground normal points up
+    // Add walls (sky-blocking) at x=0.1 and x=0.9 to create scene variation
+    float leftWall = (uv.x < 0.2) ? 1.0 : 0.0;
+    float rightWall = (uv.x > 0.8) ? 1.0 : 0.0;
+    float sky = 1.0 - leftWall - rightWall;
+    vec3 result = vec3(0.0);
+    float totalWeight = 0.0;
+    float aperture = radians(60.0);
+#ifdef CONE_1024
+    for (uint i = 0u; i < N_CONES; ++i) {
+        vec3 d = fibDir(i);
+        if (dot(d, normal) <= 0.0) continue;  // only upper hemisphere
+        vec4 s = coneTrace(origin, d, aperture);
+        result += s.rgb;
+        totalWeight += 1.0;
+    }
+#else
+    for (uint i = 0u; i < N_CONES; ++i) {
+        vec3 d = CONE_DIRS[i];
+        if (dot(d, normal) <= 0.0) continue;
+        vec4 s = coneTrace(origin, d, aperture);
+        result += s.rgb;
+        totalWeight += 1.0;
+    }
+#endif
+    if (totalWeight > 0.0) result /= totalWeight;
+    // Sky/wall modulation: inject test variation
+    result = mix(result, vec3(0.1, 0.05, 0.05), leftWall);
+    result = mix(result, vec3(0.05, 0.05, 0.1), rightWall);
+    imageStore(uOut, gid, vec4(result, 1.0));
+}

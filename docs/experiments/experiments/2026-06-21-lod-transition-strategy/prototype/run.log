@@ -1,0 +1,101 @@
+LOD Transition Strategy Benchmark
+=================================
+Strategies: 5 | Scenes: 5 | Seeds: 5 | Iter/meas: 1000 | Warmup: 10
+
+[A_Pop]
+  uniform_floor    seed=1: build=4.500us mem=24576by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=7: build=4.459us mem=24576by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=42: build=5.129us mem=24576by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=1234: build=5.365us mem=24576by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=31337: build=4.193us mem=24576by tris=384 psnr=27.93dB disc=0.707
+  forest_floor     seed=1: build=5.076us mem=32768by tris=512 psnr=27.66dB disc=0.723
+  forest_floor     seed=7: build=5.040us mem=32512by tris=508 psnr=27.66dB disc=0.723
+  forest_floor     seed=42: build=5.035us mem=34304by tris=536 psnr=27.66dB disc=0.723
+  forest_floor     seed=1234: build=6.823us mem=34304by tris=536 psnr=27.66dB disc=0.723
+  forest_floor     seed=31337: build=6.770us mem=32768by tris=512 psnr=27.66dB disc=0.723
+  cave_stress      seed=1: build=27.931us mem=77824by tris=1216 psnr=27.66dB disc=0.723
+  cave_stress      seed=7: build=25.356us mem=77824by tris=1216 psnr=27.66dB disc=0.723
+  cave_stress      seed=42: build=24.549us mem=77824by tris=1216 psnr=27.66dB disc=0.723
+  cave_stress      seed=1234: build=23.590us mem=77824by tris=1216 psnr=27.66dB disc=0.723
+  cave_stress      seed=31337: build=24.054us mem=77824by tris=1216 psnr=27.66dB disc=0.723
+  mixed_biome      seed=1: build=8.899us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=7: build=7.011us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=42: build=7.120us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=1234: build=7.199us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=31337: build=7.464us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  biome_boundary   seed=1: build=18.177us mem=69632by tris=1088 psnr=27.59dB disc=0.723
+  biome_boundary   seed=7: build=19.201us mem=69632by tris=1088 psnr=27.59dB disc=0.723
+  biome_boundary   seed=42: build=19.057us mem=69632by tris=1088 psnr=27.59dB disc=0.723
+  biome_boundary   seed=1234: build=19.161us mem=69632by tris=1088 psnr=27.59dB disc=0.723
+  biome_boundary   seed=31337: build=18.335us mem=69632by tris=1088 psnr=27.59dB disc=0.723
+
+[B_Crossfade]
+  uniform_floor    seed=1: build=7.791us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  uniform_floor    seed=7: build=8.911us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  uniform_floor    seed=42: build=8.358us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  uniform_floor    seed=1234: build=9.899us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  uniform_floor    seed=31337: build=10.153us mem=49152by tris=768 psnr=27.93dB disc=0.707
+  forest_floor     seed=1: build=10.047us mem=61440by tris=960 psnr=18.31dB disc=4.272
+  forest_floor     seed=7: build=8.356us mem=61184by tris=956 psnr=18.13dB disc=4.153
+  forest_floor     seed=42: build=9.453us mem=62976by tris=984 psnr=17.79dB disc=4.387
+  forest_floor     seed=1234: build=9.444us mem=62976by tris=984 psnr=17.79dB disc=4.387
+  forest_floor     seed=31337: build=8.535us mem=61440by tris=960 psnr=18.31dB disc=4.272
+  cave_stress      seed=1: build=47.093us mem=139264by tris=2176 psnr=15.71dB disc=5.852
+  cave_stress      seed=7: build=46.758us mem=139264by tris=2176 psnr=15.67dB disc=5.679
+  cave_stress      seed=42: build=45.394us mem=139264by tris=2176 psnr=15.70dB disc=5.679
+  cave_stress      seed=1234: build=46.007us mem=139264by tris=2176 psnr=15.81dB disc=5.852
+  cave_stress      seed=31337: build=46.607us mem=139264by tris=2176 psnr=15.74dB disc=5.852
+  mixed_biome      seed=1: build=27.610us mem=98304by tris=1536 psnr=27.93dB disc=0.707
+  mixed_biome      seed=7: build=27.893us mem=98304by tris=1536 psnr=27.93dB disc=0.707
+  mixed_biome      seed=42: build=29.754us mem=98304by tris=1536 psnr=27.93dB disc=0.707
+  mixed_biome      seed=1234: build=28.482us mem=98304by tris=1536 psnr=27.93dB disc=0.707
+  mixed_biome      seed=31337: build=28.019us mem=98304by tris=1536 psnr=27.93dB disc=0.707
+  biome_boundary   seed=1: build=40.924us mem=118784by tris=1856 psnr=15.64dB disc=5.657
+  biome_boundary   seed=7: build=38.734us mem=118784by tris=1856 psnr=15.64dB disc=5.657
+  biome_boundary   seed=42: build=41.837us mem=118784by tris=1856 psnr=15.64dB disc=5.657
+  biome_boundary   seed=1234: build=42.071us mem=118784by tris=1856 psnr=15.64dB disc=5.657
+  biome_boundary   seed=31337: build=43.335us mem=118784by tris=1856 psnr=15.64dB disc=5.657
+
+[C_Geomorph]
+  uniform_floor    seed=1: build=8.482us mem=52224by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=7: build=9.356us mem=52224by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=42: build=8.787us mem=52224by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=1234: build=10.372us mem=52224by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=31337: build=8.454us mem=52224by tris=384 psnr=27.93dB disc=0.707
+  forest_floor     seed=1: build=9.202us mem=66560by tris=512 psnr=18.31dB disc=4.272
+  forest_floor     seed=7: build=9.388us mem=66208by tris=508 psnr=18.13dB disc=4.153
+  forest_floor     seed=42: build=9.156us mem=68672by tris=536 psnr=17.79dB disc=4.387
+  forest_floor     seed=1234: build=9.607us mem=68672by tris=536 psnr=17.79dB disc=4.387
+  forest_floor     seed=31337: build=8.689us mem=66560by tris=512 psnr=18.31dB disc=4.272
+  cave_stress      seed=1: build=49.917us mem=153088by tris=1216 psnr=15.71dB disc=5.852
+  cave_stress      seed=7: build=49.074us mem=153088by tris=1216 psnr=15.67dB disc=5.679
+  cave_stress      seed=42: build=46.023us mem=153088by tris=1216 psnr=15.70dB disc=5.679
+  cave_stress      seed=1234: build=45.550us mem=153088by tris=1216 psnr=15.81dB disc=5.852
+  cave_stress      seed=31337: build=44.081us mem=153088by tris=1216 psnr=15.74dB disc=5.852
+  mixed_biome      seed=1: build=27.305us mem=104448by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=7: build=28.064us mem=104448by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=42: build=26.890us mem=104448by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=1234: build=28.207us mem=104448by tris=768 psnr=27.93dB disc=0.707
+  mixed_biome      seed=31337: build=29.457us mem=104448by tris=768 psnr=27.93dB disc=0.707
+  biome_boundary   seed=1: build=40.546us mem=132608by tris=1088 psnr=15.64dB disc=5.657
+  biome_boundary   seed=7: build=38.147us mem=132608by tris=1088 psnr=15.64dB disc=5.657
+  biome_boundary   seed=42: build=41.882us mem=132608by tris=1088 psnr=15.64dB disc=5.657
+  biome_boundary   seed=1234: build=40.330us mem=132608by tris=1088 psnr=15.64dB disc=5.657
+  biome_boundary   seed=31337: build=42.706us mem=132608by tris=1088 psnr=15.64dB disc=5.657
+
+[D_PreComputedMorphTargets]
+  uniform_floor    seed=1: build=9.577us mem=79872by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=7: build=10.060us mem=79872by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=42: build=9.023us mem=79872by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=1234: build=9.882us mem=79872by tris=384 psnr=27.93dB disc=0.707
+  uniform_floor    seed=31337: build=9.284us mem=79872by tris=384 psnr=27.93dB disc=0.707
+  forest_floor     seed=1: build=10.125us mem=103424by tris=512 psnr=18.31dB disc=4.272
+  forest_floor     seed=7: build=10.851us mem=102784by tris=508 psnr=18.13dB disc=4.153
+  forest_floor     seed=42: build=33.728us mem=107264by tris=536 psnr=17.79dB disc=4.387
+  forest_floor     seed=1234: build=33.211us mem=107264by tris=536 psnr=17.79dB disc=4.387
+  forest_floor     seed=31337: build=10.382us mem=103424by tris=512 psnr=18.31dB disc=4.272
+  cave_stress      seed=1: build=93.888us mem=240640by tris=1216 psnr=15.71dB disc=5.852
+  cave_stress      seed=7: build=95.437us mem=240640by tris=1216 psnr=15.67dB disc=5.679
+  cave_stress      seed=42: build=99.097us mem=240640by tris=1216 psnr=15.70dB disc=5.679
+  cave_stress      seed=1234: build=100.396us mem=240640by tris=1216 psnr=15.81dB disc=5.852
+  cave_stress      seed=31337: build=100.623us mem=240640by tris=121

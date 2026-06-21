@@ -1,0 +1,11 @@
+shader,toolchain,iters,mean_ms,median_ms,p95_ms,p99_ms,std_ms,mean_spv_bytes,validation_rate
+voxel_minimal.vert,glslc,30,117.245,116.634,123.526,123.931,3.322,3340.000,1
+voxel_minimal.vert,dxc,30,10.751,10.902,11.764,11.994,0.621,2736.000,1
+voxel_minimal.frag,glslc,30,121.906,120.761,129.423,132.085,5.005,3888.000,1
+voxel_minimal.frag,dxc,30,12.160,12.395,13.062,13.330,0.715,3056.000,1
+voxel_mesh_minimal.mesh,glslc,30,124.766,122.614,145.508,158.355,8.685,6804.000,1
+voxel_mesh_minimal.mesh,dxc,30,13.479,13.375,14.894,15.300,0.831,3904.000,1
+hzb_cull_minimal.comp,glslc,30,121.939,120.654,132.098,133.520,4.720,4272.000,1
+hzb_cull_minimal.comp,dxc,30,12.334,12.433,13.464,13.753,0.781,3320.000,1
+fluid_ca_minimal.comp,glslc,30,122.690,122.076,138.465,139.913,5.772,5516.000,1
+fluid_ca_minimal.comp,dxc,30,13.470,13.365,14.684,15.648,0.846,3692.000,1

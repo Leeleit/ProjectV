@@ -1,6 +1,6 @@
 # STATUS — `2026-06-20-rt-shadows-vs-csm`
 
-**Phase:** closed (verdict=`mixed`).
+**Phase:** concluded-verdict-mixed.
 **Started:** 2026-06-20.
 **Closed:** 2026-06-20 (single session).
 **Last action:** Все 4 sync points complete per §13.5:

@@ -1,6 +1,6 @@
 # STATUS — 2026-06-20-restir-gi-feasibility
 
-**Phase:** wrap-up (analytical + literature complete, prototype deferred per `rt-shadows-vs-csm` precedent)
+**Phase:** concluded-verdict-mixed (analytical + literature complete, prototype deferred per `rt-shadows-vs-csm` precedent)
 **Last action:** 2026-06-20 — web-research complete (~30 sources верифицированы), analytical cost model +
 cross-vendor matrix + voxel-adaptation matrix, integration recommendation written.
 **Next tick:** N/A (closed)

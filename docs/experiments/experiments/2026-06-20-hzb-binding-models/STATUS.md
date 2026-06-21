@@ -1,6 +1,6 @@
 # STATUS — 2026-06-20-hzb-binding-models
 
-**Phase:** wrap-up
+**Phase:** concluded-verdict-mixed
 **Last action:** 2026-06-20 — prototype complete, sampling correctness measured, RESULTS.md written.
 **Next tick:** verdict integration в mainline `bindless-descriptor-overhead` (Phase E update + Stage 2.2
 integration notes).

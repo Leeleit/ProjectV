@@ -11,8 +11,10 @@
 > - Дата **≥14 дней** или файл отсутствует → запустить refresh-команду ниже, обновить данные, обновить дату.
 > - Любой probe «для проверки» при свежем файле = **ЗАПРЕЩЁННЫЙ ритуал**.
 
-**Captured:** 2026-06-21 (refresh: добавлен `VK_KHR_present_mode_fifo_latest_ready` row в §4 — ratified 2025-03-18,
-поддержка подтверждена на dev host driver 610.43.2.0 per `vulkaninfo 2026-06-21` probe для
+**Captured:** 2026-06-21 (refresh: добавлены 12 `VK_KHR_video_*` extension rows в §4 — ratified 2022-12-19 → 2025-06-09,
+поддержка подтверждена на dev host driver 610.43.2.0 + Vulkan 1.4.341 per `vulkaninfo 2026-06-21` probe для
+`experiments/2026-06-21-vk-video-decoder-replay/` [self-invented Vulkan Video decode axis]; плюс prior refresh
+2026-06-21 для `VK_KHR_present_mode_fifo_latest_ready` row для
 `experiments/2026-06-21-vulkan-fps-pacing-wayland-prototype/`; остальные секции unchanged от 2026-06-20 capture).
 **Hostname:** `obvium`
 **Refresh:** `bash -c "$(cat <<'EOF'
@@ -137,6 +139,20 @@ draw distance (128+ chunks) **может** упереться в VRAM budget.
 | `VK_KHR_swapchain` + maintenance1 + mutable_format | —   | ProjectV current                  |
 | `VK_KHR_deferred_host_operations`                  | 4   | Stage 5.2 (BLAS build)            |
 | `VK_KHR_present_mode_fifo_latest_ready`          | 1   | **Stage 0** frame pacing (added 2026-06-21 per `2026-06-21-vulkan-fps-pacing-wayland-prototype`) |
+| `VK_KHR_video_queue`                             | 8   | **Stage 6+** content tooling — base queue extension (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_decode_queue`                      | 8   | **Stage 6+** content tooling — common decode APIs (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_decode_h264`                       | 9   | **Stage 6+** content tooling — H.264/AVC decode (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_decode_h265`                       | 8   | **Stage 6+** content tooling — H.265/HEVC decode (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_decode_av1`                        | 1   | **Stage 6+** content tooling — AV1 decode (royalty-free, added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_decode_vp9`                        | 1   | **Stage 6+** content tooling — VP9 decode (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_encode_queue`                      | 12  | **Stage 6+** content tooling — encode APIs (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_encode_h264`                       | 14  | **Stage 6+** content tooling — H.264 encode (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_encode_h265`                       | 14  | **Stage 6+** content tooling — H.265 encode (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_encode_intra_refresh`              | 1   | Optional (low-latency encode tuning, added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_encode_quantization_map`           | 2   | Optional (rate-control, added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_maintenance1`                      | 1   | Optional (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_video_maintenance2`                      | 1   | Optional (added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
+| `VK_KHR_sampler_ycbcr_conversion`                | 14  | **Stage 6+** content tooling — YCbCr→RGB shader sampling (already supported mainline, added 2026-06-21 per `2026-06-21-vk-video-decoder-replay`) |
 | `VK_KHR_buffer_device_address` (via features)      | —   | ProjectV current                |
 | `VK_EXT_conservative_rasterization`                | 1   | future option                     |
 | `VK_EXT_conditional_rendering`                     | 2   | future option                     |
@@ -222,6 +238,7 @@ representative), validate on HDD (worst-case disk).
 | **Stage 5.1 VCT**                    | 3D texture max size + memory heap                                                           | §3           |
 | **Stage 5.2 RTX shadows**            | `VK_KHR_acceleration_structure` + `ray_query` + RT cores (RTX 3060 Ti = GA104, 38 RT cores) | §3, §4       |
 | **Stage 6.1 Flecs ECS multi-thread** | 8C/16T + `amd-pstate-epp` governor                                                          | §1           |
+| **Stage 6+ Content tooling (cutscenes/replay)** | `VK_KHR_video_decode_*` extensions + `VK_KHR_sampler_ycbcr_conversion` + NVDEC/VCN/QSV silicon | §3, §4       |
 
 ---
 

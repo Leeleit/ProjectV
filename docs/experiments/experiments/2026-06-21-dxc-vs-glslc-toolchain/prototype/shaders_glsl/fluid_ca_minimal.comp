@@ -1,0 +1,82 @@
+// fluid_ca_minimal.comp — Representative ProjectV fluid cellular-automata (GLSL).
+// Mimics structure of src/shaders/fluid_ca.comp: ping-pong SSBO update of a
+// 3D fluid grid with workgroup barriers and shared memory, classical
+// cellular-automata neighborhood.
+//
+// Target: Vulkan 1.4, glslc, --target-env=vulkan1.4
+
+#version 460
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer FluidIn {
+    float cellsIn[];
+} fluidIn;
+
+layout(set = 0, binding = 1, std430) buffer FluidOut {
+    float cellsOut[];
+} fluidOut;
+
+layout(push_constant) uniform FluidParams {
+    ivec4 gridDims;
+    uint timestep;
+    float flowRate;
+    float decay;
+    uint enableGravity;
+} fluidParams;
+
+shared float localCache[64];
+
+ivec3 cellIndexToCoord(uint idx, ivec3 dims) {
+    return ivec3(
+        int(idx % uint(dims.x)),
+        int((idx / uint(dims.x)) % uint(dims.y)),
+        int(idx / (uint(dims.x) * uint(dims.y)))
+    );
+}
+
+uint coordToCellIndex(ivec3 coord, ivec3 dims) {
+    return uint(coord.x + dims.x * (coord.y + dims.y * coord.z));
+}
+
+void main() {
+    ivec3 dims = fluidParams.gridDims.xyz;
+    ivec3 coord = ivec3(gl_GlobalInvocationID.xyz);
+    if (any(greaterThanEqual(coord, dims))) return;
+
+    uint flatIndex = coordToCellIndex(coord, dims);
+
+    // Cache neighborhood to LDS for barrier-bound sync.
+    uint localIndex = gl_LocalInvocationIndex;
+    localCache[localIndex] = fluidIn.cellsIn[flatIndex];
+    barrier();
+
+    // 4-cell neighborhood average (von Neumann neighborhood).
+    float sum = 0.0;
+    uint count = 0u;
+    for (int dz = -1; dz <= 1; ++dz) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                ivec3 ncoord = coord + ivec3(dx, dy, dz);
+                if (any(lessThan(ncoord, ivec3(0))) || any(greaterThanEqual(ncoord, dims))) continue;
+                uint nflat = coordToCellIndex(ncoord, dims);
+                sum += fluidIn.cellsIn[nflat];
+                count += 1u;
+            }
+        }
+    }
+
+    float avg = (count > 0u) ? (sum / float(count)) : 0.0;
+    float value = fluidIn.cellsIn[flatIndex];
+
+    // Cellular-automata update rule: blend with neighborhood, apply decay.
+    float updated = mix(value, avg, fluidParams.flowRate) * fluidParams.decay;
+
+    if (fluidParams.enableGravity == 1u) {
+        // Gravity pulls down — bias the cell based on Y position.
+        float heightBias = float(coord.y) / float(max(dims.y - 1, 1));
+        updated *= (1.0 - 0.05 * heightBias);
+    }
+
+    fluidOut.cellsOut[flatIndex] = updated;
+}

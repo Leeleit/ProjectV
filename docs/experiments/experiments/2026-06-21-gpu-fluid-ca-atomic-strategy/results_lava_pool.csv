@@ -1,0 +1,2 @@
+strategy,scene,seed,frames,warmup,mean_us,median_us,p95_us,p99_us,stddev_us,min_us,max_us,conservation_violations,fluid_before,fluid_after,atomic_ops_count
+A_AtomicOr_Blind,lava_pool,0,50,5,3.12448,3.136,3.712,4.48,0.387914,2.528,4.48,1,4096,128,3072

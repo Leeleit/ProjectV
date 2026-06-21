@@ -1,0 +1,70 @@
+#version 460
+// Strategy C Stage 1: 1 thread per workgroup, sequential atomicCompSwap per queued claim.
+// Companion to strategies_C_collect.comp (Stage 0).
+// No subgroup extensions needed.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+const uint kFluidMaterial = 4u;
+const uint kAirMaterial = 0u;
+
+const uint kWorkgroupSize = 8u * 8u * 4u; // 256
+
+struct ChunkFluidCell {
+    uint material;
+    uint age;
+    uint reserved0;
+    uint reserved1;
+};
+
+layout(set = 0, binding = 1, std430) buffer DestinationCells {
+    ChunkFluidCell destinationCells[];
+};
+
+layout(set = 0, binding = 2, std430) buffer FluidStats {
+    uint activeFluidCells;
+    uint droppedFluidCells;
+    uint atomicOpsCount;
+    uint iteration;
+} fluidStats;
+
+layout(set = 0, binding = 5, std430) readonly buffer WorkgroupClaimCounters {
+    uint workgroupClaimCounters[];
+};
+layout(set = 0, binding = 6, std430) readonly buffer ClaimDestinations {
+    uint claimDestinations[];
+};
+layout(set = 0, binding = 7, std430) readonly buffer ClaimSourceIndices {
+    uint claimSourceIndices[];
+};
+
+layout(push_constant) uniform FluidCaPushConstants {
+    uvec4 gridDimensions;
+    uvec4 cellCountAndFlags;
+    uvec4 checkerboardMask;  // unused
+    float fluidTickInterval;
+    uint reserved0;
+    uint reserved1;
+    uint reserved2;
+} pc;
+
+void main() {
+    if (gl_LocalInvocationIndex != 0u) return;
+
+    const uint wg = gl_WorkGroupID.x;
+    const uint count = workgroupClaimCounters[wg];
+    atomicAdd(fluidStats.atomicOpsCount, count);
+
+    for (uint i = 0u; i < count; ++i) {
+        const uint belowIndex = claimDestinations[wg * kWorkgroupSize + i];
+        const uint srcIdx = claimSourceIndices[wg * kWorkgroupSize + i];
+
+        uint expected = kAirMaterial;
+        uint original = atomicCompSwap(destinationCells[belowIndex].material,
+                                        expected, kFluidMaterial);
+        if (original == expected) {
+            atomicAdd(fluidStats.droppedFluidCells, 1u);
+            destinationCells[srcIdx].material = kAirMaterial;
+        }
+    }
+}

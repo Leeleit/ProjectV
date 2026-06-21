@@ -1,0 +1,69 @@
+// hzb_cull_minimal.comp — Representative ProjectV Hi-Z cull compute (GLSL).
+// Mimics structure of src/shaders/hzb_cull.comp: reads draw data from SSBO,
+// computes per-instance bounding box vs frustum, atomically writes visible
+// count + per-instance visibility flag.
+//
+// Target: Vulkan 1.4, glslc, --target-env=vulkan1.4
+
+#version 460
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct DrawData {
+    mat4 mvp;
+    vec4 boundingSphere;
+    vec4 boundingBoxMin;
+    vec4 boundingBoxMax;
+    uint meshId;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer DrawBuffer {
+    DrawData draws[];
+} drawBuffer;
+
+// Unsized array MUST be the last member of the SSBO struct.
+// Split into two SSBOs to allow independent flag/counter atomicity semantics.
+layout(set = 0, binding = 1, std430) buffer VisibilityFlags {
+    uint flagCount;
+    uint flags[];
+} visibilityFlags;
+
+layout(set = 0, binding = 2, std430) buffer VisibilityCounter {
+    uint visibleCount;
+} visibilityCounter;
+
+layout(push_constant) uniform CullParams {
+    mat4 viewProjection;
+    vec4 frustumPlanes[6];
+    uint drawCount;
+    uint enableOcclusionCulling;
+    uint enableFrustumCulling;
+    uint pad;
+} cullParams;
+
+bool sphereInFrustum(vec4 sphere, vec4 planes[6]) {
+    for (int i = 0; i < 6; ++i) {
+        if (dot(planes[i], sphere) < -sphere.w) return false;
+    }
+    return true;
+}
+
+void main() {
+    uint drawId = gl_GlobalInvocationID.x;
+    if (drawId >= cullParams.drawCount) return;
+
+    DrawData draw = drawBuffer.draws[drawId];
+
+    bool visible = true;
+    if (cullParams.enableFrustumCulling == 1u) {
+        visible = visible && sphereInFrustum(draw.boundingSphere, cullParams.frustumPlanes);
+    }
+
+    visibilityFlags.flags[drawId] = visible ? 1u : 0u;
+    if (visible) {
+        atomicAdd(visibilityCounter.visibleCount, 1u);
+    }
+}

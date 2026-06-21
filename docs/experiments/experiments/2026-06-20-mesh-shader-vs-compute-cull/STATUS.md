@@ -1,6 +1,6 @@
 # STATUS — 2026-06-20-mesh-shader-vs-compute-cull
 
-**Phase:** concluded (2026-06-20).
+**Phase:** concluded-verdict-mixed.
 **Verdict:** `mixed` (compute cull + indirect draw = correct default; mesh shader = feature-flagged optional, not
 default).
 **Last action:** CPU-side analytical model compiled + run successfully. `STATUS.md` + `INDEX.md` + `research/backlog.md`

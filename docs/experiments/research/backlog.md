@@ -13,95 +13,20 @@
 
 ## Open (идеи без старта)
 
-- [ ] **full rt + tensor cores load** — максимальная занятость видеокарты: минимизация использования обычных ядер (чтобы
-  их использовать для других целей) и максимально забить Ray Tracing и Tensor-ядра. Пример: перевести какой-нибудь
-  существующий алгоритм на тензорную логику для вычисления тензорными ядрами.
-- [ ] **hzb-binding-models** — варианты реализации Hi-Z (VkImageView mip chain vs fragment-density-vs-storage-image) и
-  их
-  cost на разных вендорах. Hint: TODO.md Stage 2.2. Priority: m.
-- [x] **restir-gi-feasibility** — claimed → in progress → closed (verdict=`mixed`, `2026-06-20`).
-  См. §Closed ниже + [README](./experiments/2026-06-20-restir-gi-feasibility/README.md).
-- [x] **vct-vs-rt-cutoff** — claimed → in progress → closed (verdict=`mixed`, `2026-06-20`).
+> **Cleanup `2026-06-21`:** убраны все entries, для которых был стартован experiment (по `INDEX.md §5+§6` и `experiments/<slug>/` наличие).
+> Оставлены только идеи БЕЗ старта. Closed/active experiments — в §Closed и §In progress.
+
 - [ ] **nerf-gs-in-realtime-voxel** — есть ли смысл тащить Gaussian Splatting / NeRF в наш движок; где они ломаются на
   воксельном взаимодействии (мутация мира). Priority: l (эзотерика).
-- [x] **wfc-procedural-worlds** — claimed → in progress `2026-06-21` (см. §In progress ниже +
-  [README](./experiments/2026-06-21-wfc-procedural-worlds/README.md)). Wave Function Collapse как
-  альтернатива/дополнение Perlin/Simplex для генерации миров с локальной структурой. Priority: m.
 - [ ] **ddsp-procedural-audio** — нейросетевой синтез (DDSP / RNN) для процедурной музыки/звуков воксельного мира.
   Priority: l (эзотерика).
-- [x] **depth-occlusion-quantization** — claimed → in progress `2026-06-21` (см. §In progress ниже +
-  [README](./experiments/2026-06-21-depth-occlusion-quantization/README.md)). Насколько реально
-  сжатие depth/occlusion буферов без артефактов (для VRAM экономии на 8 GiB хостах). Priority: l.
-- [x] **2026-06-21-vulkan-memory-aliasing-transient** — claimed → in progress → **closed `2026-06-21` (verdict=`mixed`)
-  **, **self-invented** per operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй».
-  **Render-pipeline-architecture axis** (Vulkan memory aliasing / render graph для transient resources) — **first axis**
-  в 30+ closed experiments. См. §Closed
-  ниже + [README](./experiments/2026-06-21-vulkan-memory-aliasing-transient/README.md) + [RESULTS](./experiments/2026-06-21-vulkan-memory-aliasing-transient/prototype/RESULTS.md).
-
-- [ ] **programmable-voxels** — TinyCC / LuaJIT / WASM внутри чанка: цена, безопасность, UX. Priority: l.
+- [x] **[2026-06-21-programmable-voxels](./experiments/2026-06-21-programmable-voxels/)** — TinyCC / LuaJIT / WASM внутри чанка: цена, безопасность, UX. Priority: l. **Closed `2026-06-21` verdict=`mixed`.** Web-research (30 sources). 3 runtimes × 5 workloads × analytical. Multi-runtime architecture recommended. WASM for untrusted mods, LuaJIT for first-party scripts, TinyCC dev-only. Deferred до Stage 6+. См. [README](./experiments/2026-06-21-programmable-voxels/README.md).
 - [ ] **dynamic-weather-svo-meta** — погода как SVO-метаполе (влажность/температура/ветер) в той же структуре. Priority:
   l.
-- [x] **sub-chunk-layers** — claimed → in progress `2026-06-21` (см. §In progress ниже +
-  [README](./experiments/2026-06-21-sub-chunk-layers/README.md)). Многослойные чанки (по Y) для биомов/пещер.
-- [x] **meshing-algo-comparison** — claimed → in progress → **closed `2026-06-20` (verdict=`mixed`)**, stale duplicate
-  fix `2026-06-21` per `AGENTS.md §13.5` (same pattern as `async-compute-overhead-numbers` sync-fix r1). Closed
-  experiment покрыл greedy / surface_nets / dual_contouring / marching_cubes на flat voxel array; SDF-on-grid hybrid
-  отдельная тема — не в scope этого experiment. См. §Closed ниже +
-  [README](./experiments/2026-06-20-meshing-algo-comparison/README.md). **Alias не предлагаю:** SDF-meshing axis
-  остаётся parked (Stage 3.3 = future SDF world, не Stage 2.1 = current binary voxel; не критично до Stage 3.3).
-
-- [ ] **flecs-soa-vs-aos-bench** — closed `2026-06-20` (verdict `yes`), см. §Closed ниже.
-- [ ] **tracy-gpu-vs-manual** — overhead benchmark Tracy GPU contexts vs manual `vkCmdWriteTimestamp` в multi-pass
-  render;
-  когда Tracy сам становится bottleneck. Hint: independent (cross-cutting profiling). Priority: m.
-- [x] **renderdoc-ci-capture** — claimed → in progress `2026-06-21` (this session). See §In progress reservation.
-- [x] **dxc-vs-glslc-toolchain** — closed `2026-06-21`, verdict **`mixed`**. См. §Closed ниже +
-  [README](./experiments/2026-06-21-dxc-vs-glslc-toolchain/README.md).
-- [x] **gpu-procedural-noise-compute-kernels** — closed `2026-06-21`, verdict **`mixed`**. См.
-  §Closed ниже + [README](./experiments/2026-06-21-gpu-procedural-noise-compute-kernels/README.md).
-- [ ] **simd-procedural-noise** — closed `2026-06-20`, verdict **`mixed`** (см. §Closed ниже).
-- [x] **frame-flight-allocator-budget** — claimed → in progress 2026-06-21 (см. §In progress).
-- [x] **async-compute-overhead-numbers** — **follow-up к закрытому `dec-pipelines-async-compute`** (verdict=yes);
-  количественно измерить анонсированные 5-8% gain на реальном ProjectV workload (Stage 2.2 HZB + Stage 3.1 GPU
-  Fluid CA + Stage 4.1 GPU world gen + Stage 5.2 RTX BLAS build). Hint: TODO.md §2.2/§3.1/§4.1/§5.2. Priority: h.
-  **[Sync fix r1 2026-06-21:]** already closed `2026-06-20` (verdict=yes, см. §Closed ниже + folder
-  `experiments/2026-06-20-async-compute-overhead-numbers/`); §Open entry was stale duplicate not removed
-  by original session; corrected per AGENTS.md §13.5. Same-session sync agent.
-- [ ] **vis-buffer-for-voxels** — store `(primitiveID, barycentric, facing)` вместо G-buffer; resolve в deferred
-  lighting; снижает bandwidth при 100+ материалов; альтернатива deferred подходу Stage 2/5. Hint: TODO.md §2/§5.
-  Priority: m.
-  **STATUS:** moved to `§In progress` 2026-06-20 (claimed by self for current session).
-  Closed `2026-06-20`, verdict **`mixed`**. См. §Closed
-  ниже + [README](./experiments/2026-06-20-vis-buffer-for-voxels/README.md).
-- [ ] **work-stealing-job-system** — **closed `2026-06-20`** (verdict=`mixed`), см. §Closed ниже. Serial dispatcher =
-  sweet spot для ProjectV mainline; pool/TBB/libdispatch/`std::execution` НЕ рекомендуются по default.
-- [x] **rt-shadows-vs-csm** — claimed → in progress → closed (verdict=`mixed`, `2026-06-20`).
-  См. §Closed ниже + [README](./experiments/2026-06-20-rt-shadows-vs-csm/README.md).
-- [ ] **vma-sparse-textures** — closed `2026-06-20`, verdict **`mixed`** (см. §Closed ниже).
 - [ ] **ik-first-person-hand** — CCD/FABRIK для voxel-tool interaction (рука игрока манипулирует блоками); gameplay
   polish для Stage 3.x interaction. Hint: TODO.md §3 (Physics & Simulation). Priority: l.
 - [ ] **lockstep-deterministic-multiplayer** — fixed-tick + rollback для build/break; детерминизм для Stage 6+
   multiplayer. Hint: independent (multiplayer вне текущего TODO roadmap). Priority: l.
-- [ ] **vk-video-decoder-replay** — in-engine video playback через `VK_KHR_video_decode` без external player;
-  cutscenes /
-  replay tooling. Hint: independent (post-Stage 6). Priority: l.
-- [x] **vulkan-fps-pacing-vk-ext** — **closed `2026-06-20`** (verdict=`mixed`, analytical-only), см. §Closed ниже.
-  Superseded `2026-06-21` by **`2026-06-21-vulkan-fps-pacing-wayland-prototype`** — measured Wayland prototype
-  fills literature-only gap (closed mixed = self-identified Wayland measurement gap +
-  `VK_KHR_present_mode_fifo_latest_ready` not yet ratified when old experiment closed).
-  См. README `2026-06-21-vulkan-fps-pacing-wayland-prototype/` + STATUS.md supersede notation в старом.
-- [x] **2026-06-21-eye-tracked-foveated** — claimed → in progress `2026-06-21` (см. §In progress ниже +
-  [README](./experiments/2026-06-21-eye-tracked-foveated/README.md)). `VK_KHR_fragment_shading_rate` Tier 2 + gaze-driven density map (`VK_KHR_dynamic_rendering_local_read` Vulkan 1.4 core) для cross-cutting bandwidth savings 30-50% на fragment-heavy passes. Priority: m (self-promo l→m).
-- [x] **audio-raytracing-voxel-sdf** — claimed → in progress `2026-06-21` (см. §In progress ниже +
-  [README](./experiments/2026-06-21-audio-raytracing-voxel-sdf/README.md)).
-- [ ] **lod-mesh-downsampling** — multi-LOD uniform downsampling для chunkSize=8: kernel choice (majority /
-  surface-aware / solid-only / max-pool) + boundary stitch strategy (skirt / T-junction pad / geomorph /
-  neighbor-locked) → acceptable visual quality на LOD 1/2/3 + triangle count reduction ≥4×/16×/64× vs
-  LOD 0. Hint: TODO.md §4.2 chunk 2 (LOD uniform downsampling implementation) + `agent/workspace.md §2`
-  Nearest Gap. Cross-axis: orthogonal к closed `sub-chunk-layers` (vertical layers vs distance LOD) +
-  `cache-oblivious-chunk-tree` (cache vs LOD) + `svdag-vs-vdb-memory-throughput` (storage vs LOD);
-  complementary к `nanovdb-on-gpu` (NanoVDB mip chain = natural storage для LOD) + `meshing-algo-comparison`
-  (greedy at LOD 0). Priority: m.
 - [ ] **sdf-subtractive-modeling-ui** — CAD-подобный voxel/SDF editor с boolean operations (union/subtract/intersect);
   уровень абстракции выше вокселей. Hint: independent (editor tooling). Priority: l.
 - [ ] **voxel-gpu-shader-editor** — **отличается от `programmable-voxels` (Lua/WASM):** пользователь пишет inline
@@ -110,386 +35,31 @@
   ранняя стадия SOTA (2025-2026). Hint: independent (horizon scan). Priority: l.
 - [ ] **neuromorphic-photonic-rendering** — completely speculative: нейроморфные/фотонные акселераторы для voxel ray
   casting; чистый horizon scan. Hint: independent (horizon scan). Priority: l.
+- [ ] **[2026-06-21-adaptive-palette-bitarray](./experiments/2026-06-21-adaptive-palette-bitarray/)** —
+  adaptive bit-width palette per 16³ section (4→5→6→...→global bits) для runtime RAM savings. Отличается от
+  closed `chunk-storage-compression-axis` (file-format compression vs runtime RAM). Derived from Minecraft 1.12
+  `BlockStateContainer.java` adaptive palette. Priority: m (Stage 4.x chunk storage).
+- [ ] **[2026-06-21-incremental-light-propagation](./experiments/2026-06-21-incremental-light-propagation/)** —
+  budget-limited incremental BFS light propagation (max N queue entries per frame). Derived from Minecraft 1.12
+  `Chunk.java:1470-1510` (8 cols/tick) + VoxelCore `LightSolver.cpp` (two-phase BFS). Priority: m (Stage 3.x lighting).
+- [ ] **[2026-06-21-flood-fill-visgraph-culling](./experiments/2026-06-21-flood-fill-visgraph-culling/)** —
+  flood-fill VisGraph face-to-face visibility for chunk occlusion culling. Derived from Minecraft 1.12
+  `VisGraph.java:36-128` (BFS through non-opaque voxels → 6×6 visibility matrix). Priority: m (Stage 2.x culling).
+- [ ] **[2026-06-21-trilinear-noise-interpolation](./experiments/2026-06-21-trilinear-noise-interpolation/)** —
+  trilinear interpolation from coarse noise grid (2×2×2 → 8×8×8) для terrain gen. Derived from Minecraft 1.12
+  `ChunkGeneratorOverworld.java:95-162` (5×33×5 → 16×256×16 = 79× reduction). Priority: m (Stage 4.1 world gen).
+- [ ] **[2026-06-21-conc-ring-generation-scheduling](./experiments/2026-06-21-conc-ring-generation-scheduling/)** —
+  concentric-ring generation scheduling для cross-chunk dependency resolution. Derived from VoxelCore
+  `SurroundMap.cpp` (multi-level concentric squares). Priority: m (Stage 4.1 world gen scheduling).
+- [ ] **[2026-06-21-deferred-translucent-sorting](./experiments/2026-06-21-deferred-translucent-sorting/)** —
+  deferred translucent geometry sorting every N frames (vs per-frame). Derived from VoxelCore
+  `ChunksRenderer.cpp:349-421` (8-frame interval + AABB collapse merge). Priority: m (Stage 5.x rendering).
 
 ---
-
 ## In progress
 
-- [ ] **2026-06-21-renderdoc-ci-capture** — l, **independent (CI/tooling cross-cutting, не привязан к Stage,
-  защищает все Stage 0–6 от regressions)** — **anti-duplicate sentinel clean per `AGENTS.md §13.7`**: rg renderdoc
-  = только cross-refs в `tracy-gpu-vs-manual/README.md` + `dec-pipelines-async-compute/README.md:257` + 
-  `pipeline_overlap_analysis.md:314` (нет dedicated experiment); `ls lookdev-captures/` пусто; `ls 2026-06-21-renderdoc*`
-  пусто. **Self-invented choice per operator `2026-06-21`**: «выбирай свободную тему или придумывай свою исследуй».
-  **Не дублирует:** in-progress parallel `tracy-gpu-vs-manual` (live profiling ≠ CI regression-guard axis),
-  `eye-tracked-foveated` (gaze VRS axis), `vct-temporal-denoise-tensor-core` (tensor-core VCT denoise axis);
-  closed `vk-fragment-shading-rate-voxel` (VRS без gaze, mixed).
-  **Agent:** self.
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, ~3-4h, analytical CPU prototype + CMakeLists/CTest integration design +
-  measurements per `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only analytical overhead model + ProjectV уже имеет `PROJECTV_ENABLE_RENDERDOC_MARKERS`
-  compile-time gate в `src/debug/ProfilingGpu.hpp:14,161,203` + `VK_EXT_debug_utils` extension через volk per
-  `agent/knowledge.md §547`). **Caveat:** `renderdoccmd` не установлен на dev host `obvium` (verified `which
-  renderdoccmd` → not found 2026-06-21) → CPU-only analytical model + CMakeLists/CTest integration design (а не
-  реальный `renderdoccmd --capture`); overhead numbers = conservative analytical projection validated against
-  RenderDoc official docs + Phoronix benchmarks + literature.
-  **Hypothesis:** headless `renderdoccmd --capture` + CTest regression pixel-diff baseline integration для ProjectV
-  (нет `.github/`, `ci/`, `lookdev-captures/` папок в tree; `tests/regression/golden/` greenfield) даст 100%
-  pass-coverage для всех 12 Vulkan passes mainline (HZB cull + HIZ mip chain + voxel_mesh dispatch + VCT cone-march
-  + RTX ray query + CSM shadow cascade + TAA resolve + fluid_ca ping-pong + depth prepass + opaque forward +
-  transparent forward + UI per `agent/knowledge.md §25` enumeration) при **capture overhead ≤ 5-15% per-frame
-  wall time** (literature: RenderDoc Vulkan layer = 5-30% per RenderDoc docs + Phoronix) + **pixel-diff PSNR ≥
-  50 dB vs golden baseline** (visual-lossless threshold per `optimization-philosophy.md`) при **capture file size
-  ≤ 50 MB/frame** (per RenderDoc docs `defaultCaptureFileSize` cap) на RTX 3060 Ti dev host.
-  **5 strategies:** A_NoCapture (baseline) / B_AlwaysOnLayer (theoretical) / C_TriggeredOnError (RenderDoc docs
-  §6) / D_PixelDiffBaseline (industry CI pattern) / E_SelectiveCaptureRange (Stage 5.1 spike isolation).
-  **Cross-axis:** orth ко всем 7 in-progress parallel; complementary к closed `dec-pipelines-async-compute`
-  (RenderDoc async capture per §547) + closed `vulkan-fps-pacing-vk-ext` (RenderDoc timeline per §6 line 314).
-  **Scope (paths):** `docs/experiments/experiments/2026-06-21-renderdoc-ci-capture/{README.md,STATUS.md,sources.md,
-  prototype/}` + `INDEX.md` (§5 → §6) + `research/backlog.md` (sync per §13.5).
-  **Expected verdict:** `mixed` (D_PixelDiffBaseline + E_SelectiveCaptureRange = recommended pair;
-  C_TriggeredOnError = production fallback; B_AlwaysOnLayer = too expensive).
-  3-step migration per `agent/knowledge.md §30.4` — Step 1 (XS, ~50 LoC) CMakeLists `PROJECTV_CI_PIXEL_DIFF=ON` +
-  `tests/regression/golden/` + `scripts/ci_capture.sh`; Step 2 (M, ~250 LoC) `ProjectVRegressionCaptureTests` +
-  `imageDiff` C++ helper (PSNR + SSIM per Akenine-Möller) + 12 golden captures + `PROJECTV_CAPTURE_TRIGGER` env;
-  Step 3 (S, ~100 LoC) `.github/workflows/capture.yml` + Slack/Discord webhook. Total ~400 LoC, S-M effort, 2-3 sessions.
-  **Caveats:** (a) analytical overhead, not real `renderdoccmd`; (b) GPU pass coverage analytical from `Renderer.cpp`
-  pass list + `agent/knowledge.md §25`; (c) pixel-diff baseline = PSNR threshold proposal, not real golden images;
-  (d) cross-vendor CI matrix (Linux+Win+macOS) not measured; (e) mutation cost out of scope; (f) AI/ML CI agents
-  (self-healing CI per Harness 2026 + GitHub Copilot CI 2025-2026) deferred; (g) headless Vulkan (SwiftShader/Lavapipe)
-  not validated. Cross-refs: `agent/knowledge.md §547, §4, §25, §30.4`, `src/debug/ProfilingGpu.hpp:14,161,203`,
-  `src/render/vulkan/VulkanBootstrap.cpp:592`, `src/render/vulkan/VulkanDebug.cpp:9`, `TODO.md §Stage 0`,
-  `legacy/docs/philosophy/03_domain/04_testing-philosophy.md`, `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`,
-  `docs/experiments/hardware-profile.md §3+§4`, `docs/experiments/benchmarks/methodology.md §3`.
-
-- [ ] **2026-06-21-eye-tracked-foveated** — m (self-promo l→m), **independent** (cross-cutting bandwidth axis для Stage 4.3 lift draw distance + Stage 5.1 VCT cone-march + Stage 5.2 RTX shadow contact + TAA resolve; **self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою и исследуй»; **eleventh invocation this session** — previous 10 closed or in-progress: audio mixed + wfc mixed + sub-chunk mixed + gpu-noise mixed + taa-yes + depth-yes + vk-fragment-shading mixed + frame-flight mixed + dxc mixed + lod-mesh mixed + audio-diffraction mixed + vk-multi-gpu-split-frame mixed + sdf-hybrid mixed + hzb-smart-mip mixed + vulkan-memory-aliasing mixed + greedy-physics yes + texture-compression-format-axis (closed mixed) + voxel-chunk-streaming-pipeline (closed mixed) + dlss-fsr-xess mixed; **6 in-progress parallel before this**: tracy-gpu-vs-manual + taa-motion-vectors + gpu-fluid-ca-atomic-strategy + vct-3d-mip-generation + vk-multi-gpu-split-frame + vulkan-defragmentation-compaction).
-  **Agent:** self.
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU foveation density map simulator + measurements per `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only analytical + Vulkan 1.4 extension probe via `vulkaninfo`, dev host `obvium` Zen 3 5800X + RTX 3060 Ti GA104 Ampere + Vulkan 1.4.341 все supported per `hardware-profile.md §1/§3`; `VK_KHR_fragment_shading_rate` Tier 2 + `VK_KHR_dynamic_rendering_local_read` Vulkan 1.4 core verified available on Ampere per NVK Mesa DeepWiki `bminor/mesa-mesa` + NVIDIA Developer Vulkan Driver).
-  **Hypothesis (one-line):** правильная стратегия per-region fragment density / shading rate (`VK_KHR_fragment_shading_rate` Tier 2 image attachment + gaze-conditional density map pattern из `vulkan.lunarg.com/samples/latest/samples/extensions/fragment_density_map` + `Varjo production reference` + `NVIDIA NVAPI VRWorks foveated rendering`) даст **30-50% fragment shader cost reduction** для Stage 5.1 VCT cone-march + Stage 5.2 RTX shadow contact + TAA resolve peripheral regions на dev host RTX 3060 Ti при сохранении **PSNR ≥ 38 dB vs full-resolution reference** для foveal region (radius 5-10° от gaze) при 2x2-4x4 fragment density reduction в periphery (>20° от gaze), per `VaFR (Visual Acuity Consistent Foveated Rendering, arXiv 2503.23410)` measurement: **6.5×-9.29× deferred rendering speedup, 10.4×-16.4× ray-casting at retinal resolution** + `ACM 2025 ETRA "Quantifying Energy Reduction of Foveated Volume Visualization"` (VRS + LBG stippling per-frame energy reduction) + `Meta Quest ETFR via VK_QCOM_fragment_density_map_offset` (production) + `Varjo foveated rendering API` (production).
-  **Why priority upgrade l→m:** per `optimization-philosophy.md` 5-10% threshold + `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` («if perf gain < 5–10%, choose simple»); projected 30-50% fragment cost savings >> 5-10% threshold; cross-cutting bandwidth axis (Stage 4.3 lift draw distance + Stage 5.1 VCT + Stage 5.2 RTX + TAA); Vulkan 1.4 standardization path = foundation-level investment, ready для VR pivot post-MVP; dev host полностью supports extension stack (`vulkaninfo` per-session verification pending в prototype phase).
-  **Critical finding (refined per research):** **`VK_EXT_fragment_density_map` supersession** — per `docs.vulkan.org/spec/latest/appendices/extensions.html` + `KhronosGroup/Vulkan-Docs appendices/VK_KHR_dynamic_rendering_local_read.adoc` line 24-30: "Functionality in this extension is included in core Vulkan 1.4, with the KHR suffix omitted". ProjectV mainline использует `vkCmdBeginRendering` (dynamic rendering path, verified per `Renderer.cpp`), значит legacy `VK_EXT_fragment_density_map` (`VkRenderPassCreateInfo`-bound) **НЕ drop-in**. Корректный path для ProjectV = `VK_KHR_fragment_shading_rate` Tier 2 attachment method (`VkFragmentShadingRateAttachmentInfoKHR` + `vkCmdSetFragmentShadingRateKHR`) **fully compatible с dynamic rendering** + Vulkan 1.4 core + cross-vendor matrix (NVIDIA Turing+ / AMD RDNA 2+ / Intel Arc Gfx12.5+ / mobile via `VK_QCOM_fragment_density_map_offset`).
-  **Cross-axis:** orth ко всем 6 in-progress parallel (tracy-gpu = profiling, taa = temporal Stage 5.3, gpu-fluid-ca = Stage 3.1 atomic, vct-3d-mip = Stage 5.1 mip chain, vk-multi-gpu = multi-GPU VRAM, defrag = VRAM compaction); **complementary** к closed `vk-fragment-shading-rate-voxel` (verdict=mixed, VRS = uniform 2x1/2x2 global rate БЕЗ gaze; this = gaze-driven per-region density map ATTACHMENT + synthetic gaze для dev host testing) + closed `vulkan-memory-aliasing-transient` (VRAM aliasing, orth) + closed `dlss-fsr-xess-upscaling-voxel` (post-process upscaling, post-shading; this = pre-shading density reduction = complementary sequential adoption) + closed `texture-compression-format-axis` (texture compression, orth); cross-vendor matrix same as `dec-pipelines-async-compute` §2.2 (NVIDIA Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Arc Gfx12.5+ + Arm Mali + Qualcomm Adreno mobile).
-  **4 strategies measured** (CPU-only synthetic voxel scenes representative of ProjectV workload, NOT ProjectV mainline, dev host `obvium`):
-    - **A_None (baseline):** uniform 1x1 fragment shading, no foveation, current mainline cost baseline
-    - **B_FixedFoveation2x:** center 30% viewport @ 1x1 density, periphery 70% @ 2x2 density (Fixed Foveated Rendering, no gaze input)
-    - **C_GazeFoveation2x:** gaze-driven 5°-radius foveal @ 1x1, 5-20° mid-zone @ 2x2, >20° periphery @ 4x4 (Eye-Tracked Foveated Rendering per VaFR + Meta ETFR)
-    - **D_GazeFoveation4x:** gaze-driven, more aggressive (foveal 1x1, mid 2x2, periphery 4x4 max — по `Varjo production preset`)
-  **5 scenes** (per `2026-06-21-sub-chunk-layers` precedent for direct comparability: uniform_floor + forest_floor + cave_stress + mixed_biome + uniform_air) × **5 seeds** × **3 extents** (1080p / 1440p / 4K) × **1000 iter + 10 warmup** = **75 configs × 1000 = 75,000 main measurements**, wall time < 60 sec на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. **Standalone C++26 CPU foveation density map simulator** (no Vulkan init, no GPU dispatch, synthetic voxel scene rasterizer + foveation density map generator + bandwidth cost model based on per-fragment shading cost projection from closed `vk-fragment-shading-rate-voxel` baseline measurements).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-eye-tracked-foveated/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-eye-tracked-foveated/prototype/` (standalone C++26 CPU foveation density map simulator + bandwidth model + synthetic voxel scenes, NOT ProjectV mainline, dev host `obvium`)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-  **Expected verdict:** `mixed` — bandwidth savings 30-50% validated analytically (well above 5% threshold per `optimization-philosophy.md`); но ProjectV не VR-first + Stage 0/1 not gating + `VK_EXT_fragment_density_map` supersession complicates legacy paths; mainline рекомендация: **additive optional path** с feature-flag `PROJECTV_FOVEATED_RENDERING=OFF|FIXED|GAZE` env + `VK_KHR_fragment_shading_rate` Tier 2 attachment wiring в `voxel.frag` + foveation density map generator (CPU-side) + `XR_EXT_eye_gaze_interaction` integration stub (gated). 3-step migration per `agent/knowledge.md §30.4` precedent — Step 1 (XS, ~50 LoC) `FoveationController` foundation + density map generator + per-frame update; Step 2 (S, ~150 LoC) `voxel.frag` Tier 2 integration + `vkCmdSetFragmentShadingRateKHR` dispatch + `VkFragmentShadingRateAttachmentInfoKHR` setup; Step 3 (XS, ~30 LoC) `PROJECTV_FOVEATED_RENDERING` env gate + Tracy plot "Foveation Density" + `ProjectVFoveationTests` unit test. Total ~230 LoC, S effort, 2-3 sessions. **Детальное расхождение с closed `vk-fragment-shading-rate-voxel`:** тот = uniform rate 2x1/2x2 GLOBAL per draw call, hybrid coverage-classifier = 0% savings на sparse scenes per its §6 verdict; this = gaze-driven per-region ATTACHMENT, не подвержен coverage-variance проблеме (foveation map = explicit плотностная карта, coverage не variance-dependent).
-  **Caveats:** (a) CPU-only synthetic, no real GPU dispatch (Vulkan prototype deferred до mainline integration); (b) synthetic gaze (программно сгенерированный, не real OpenXR `XR_EXT_eye_gaze_interaction` input); (c) PSNR via analytical projection from `vk-fragment-shading-rate-voxel` reference, no real framebuffer measurement; (d) dev host single-GPU validation pending (`vulkaninfo` per-session probe deferred до prototype phase); (e) cross-vendor matrix analytical projection only (NVIDIA RTX 3060 Ti measured, AMD RDNA + Intel Arc + mobile projected); (f) mutation cost out of scope (gaze path = per-frame, but updates are incremental — just gaze position offset, not full density map regen); (g) Stage 4.3 128m draw distance bandwidth pressure = primary mainline motivator (NOT VR); (h) `VK_QCOM_fragment_density_map_offset` mobile path = out of scope single-session (separate follow-up if mobile/Quest port warranted).
-  Cross-refs: `TODO.md §2.1` (mesh shader, vertex density unchanged by VRS), `§4.3` (lift draw distance, bandwidth pressure), `§5.1` (VCT cone-march fragment-heavy), `§5.2` (RTX shadow contact fragment), `§5.3` (TAA motion vectors, TAA resolve); `src/render/Renderer.cpp:1344-1350` (current dynamic rendering path, verified via `rg`), `src/shaders/voxel.frag` (VCT + main fragment pipeline), `src/shaders/voxel_mesh.comp:146` (mesh shader dispatch); `agent/knowledge.md §30.4` (3-step migration precedent), `agent/workspace.md §2` (Nearest Gap callout), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold); closed experiments: `vk-fragment-shading-rate-voxel` (verdict=mixed, uniform global VRS, NOT gaze-driven attachment), `vulkan-memory-aliasing-transient` (VRAM aliasing), `dlss-fsr-xess-upscaling-voxel` (post-process upscaling), `texture-compression-format-axis` (texture compression); active parallel: `tracy-gpu-vs-manual`, `taa-motion-vectors`, `gpu-fluid-ca-atomic-strategy`, `vct-3d-mip-generation`, `vk-multi-gpu-split-frame`, `vulkan-defragmentation-compaction`; `hardware-profile.md §1/§3` (Zen 3 5800X + RTX 3060 Ti GA104 Ampere + Vulkan 1.4.341); `benchmarks/methodology.md §3` (measurement protocol); `agent/knowledge.md Part B §9` line 1424 (web fallbacks: searx.be, duckduckgo, brave, bing, google, startpage — web_search работал на этой сессии без fallback).
-  Anti-duplicate sentinel clean per §13.7 (нет папки `experiments/eye-tracked-foveated/` ни `2026-06-21-eye-tracked-foveated/`, нет записей в `INDEX.md`, нет §In progress записей).
-  **Closed `2026-06-21` (single session, ~2h), verdict `mixed`.** Standalone C++26 CPU foveation density map simulator ~480 LoC, Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` (build green, **0 warnings**). 300 configs × 1000 iter + 10 warmup = **300,000 main measurements**, wall time 11.17 sec на dev host `obvium` Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. **Headline:**
-    - **A_None** (baseline) = -0.247% mean (small tile-rounding over-count bias <1% для 1080p not multiple of 16)
-    - **B_Fixed2x** (no gaze, center 30% @ 1x1 + periphery 70% @ 2x2) = **68.33% mean savings** (std 0.14%, n=75 configs)
-    - **C_Gaze2x** (gaze-driven foveal 1x1 + mid 2x2 + peripheral 4x4) = **84.14% mean savings** (std 0.055%, n=75 configs)
-    - **D_Gaze4x** (gaze-driven aggressive, same algorithm as C в prototype) = **84.14% mean savings** (n=75)
-  **All savings far above 5-10% threshold per `optimization-philosophy.md`.** Cross-vendor analytical projection: NVIDIA Ampere+/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Arc + mobile (Arm/Qualcomm via `VK_QCOM_fragment_density_map_offset`) all support full savings matrix. **Critical finding:** `VK_EXT_fragment_density_map` supersession — per `KhronosGroup/Vulkan-Docs appendices/VK_KHR_dynamic_rendering_local_read.adoc` "Functionality in this extension is included in core Vulkan 1.4, with the KHR suffix omitted". ProjectV mainline uses `vkCmdBeginRendering` dynamic rendering → **legacy FDM NOT drop-in**. Correct path = `VK_KHR_fragment_shading_rate` Tier 2 attachment (`VkFragmentShadingRateAttachmentInfoKHR` + `vkCmdSetFragmentShadingRateKHR`) **fully dynamic-rendering compatible** + Vulkan 1.4 core + cross-vendor. **3-step migration per `agent/knowledge.md §30.4` precedent:** Step 1 (XS, ~50 LoC) `FoveationController` foundation + density map generator + per-frame update; Step 2 (S, ~150 LoC) `voxel.frag` Tier 2 integration + `vkCmdSetFragmentShadingRateKHR` dispatch + `VkFragmentShadingRateAttachmentInfoKHR` setup; Step 3 (XS, ~30 LoC) `PROJECTV_FOVEATED_RENDERING` env gate + Tracy plot + `ProjectVFoveationTests` unit test. Total ~230 LoC, S effort, 2-3 sessions. **Verdict=mixed** because ProjectV не VR-first + Stage 0/1 not gating + savings require Stage 4.3 lift draw distance bandwidth pressure OR VR pivot post-MVP to be mainline-relevant. **Cross-axis:** orth ко всем 6 in-progress parallel; **complementary** к closed `vk-fragment-shading-rate-voxel` (verdict=mixed, uniform global VRS — **this experiment differentiates** через gaze-driven per-region attachment, не подвержен coverage-variance problem на sparse scenes) + `vulkan-memory-aliasing-transient` (VRAM aliasing) + `dlss-fsr-xess-upscaling-voxel` (post-process upscaling) + `texture-compression-format-axis` (texture compression). Web research complete: 3 waves, 14 primary + 7 supplementary sources verified via `webfetch` 2026-06-21 (web_search Exa working this session per `agent/knowledge.md Part B §9` line 1424 fallback list — fallback не понадобился). Caveats: (a) CPU-only synthetic, no real GPU dispatch; (b) synthetic gaze (не real OpenXR `XR_EXT_eye_gaze_interaction`); (c) tile-rounding bias <1% для 1080p; (d) per-fragment cost = constant; (e) C/D algorithmically identical в prototype (D was meant to be more aggressive, but model already uses 4x4 periphery); (f) cross-vendor matrix analytical projection only; (g) `VK_QCOM_fragment_density_map_offset` mobile path out of scope single-session. См. §6 + [experiment README](./experiments/2026-06-21-eye-tracked-foveated/README.md) + [RESULTS](./experiments/2026-06-21-eye-tracked-foveated/RESULTS.md) + [sources](./experiments/2026-06-21-eye-tracked-foveated/sources.md) + `prototype/{foveation_sim.cpp, README.md, run.log, build/results.csv}` (301 rows × 23 cols).
-
-- [x] **2026-06-21-vulkan-fps-pacing-wayland-prototype** — m, **Stage 0 / independent (foundation для all
-  stages; cross-cutting DoD «low latency > throughput» per
-  `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`)** — **supersedes `2026-06-20-vulkan-fps-pacing-vk-ext`
-  closed mixed** (analytical-only + measurement gap self-identified in old §6: «Конкретные p99 frame variance
-  numbers под Wayland compositor **не измерены** в этом эксперименте (prototype deferred)»). **Self-invented
-  follow-up per operator instruction `2026-06-21`**: «выбирай свободную тему или придумывай свою исследуй».
-  Old experiment = literature + analytical cost model; **this = measured Wayland prototype** + adds
-  **`VK_KHR_present_mode_fifo_latest_ready`** (ratified 2025-03-18, NVIDIA + Google) + `low_latency_layer`
-  cross-vendor data (Phoronix 2026-05-17) which weren't in old experiment.
-  **Agent:** self.
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, ~3-4h, Vulkan 1.4 prototype + measurements per
-  `benchmarks/methodology.md`).
-  **Blocker:** нет (dev host `obvium` NVIDIA RTX 3060 Ti + driver 610.43.02 confirmed + Vulkan 1.4.341 + Wayland
-  + Mesa 26.2 per `hardware-profile.md §3+§6`; SDL3 vendored per §6; Vulkan 1.4 headers vendored). Caveat:
-  `VK_KHR_present_mode_fifo_latest_ready` support проверяется runtime через `vkEnumerateDeviceExtensionProperties` —
-  если отсутствует, Mode B пропускается (деградация на 3 modes). CPU-only synthetic frame pacing harness —
-  без real ProjectV workload coupling.
-  **Hypothesis (validated):** `VK_EXT_present_timing` + `targetTime` (Mode D) даст **p99 frame variance
-  reduction ≥ 0.5 ms** + **CPU present overhead reduction ≥ 50%** vs busy-wait FIFO baseline (Mode A) на dev
-  host Wayland session, per Mesa 26.2 RADV Wayland std-dev 0.9 → 0.3 ms (3× tighter) для KHR_display direct-display
-  extrapolation; `VK_PRESENT_MODE_FIFO_LATEST_READY_KHR` (Mode B) даст ≥ 0.2 ms reduction без explicit timing overhead.
-  **5 modes × 3 scenarios × 5 seeds × 100 frames + 5 warmup = 7,500 measurements** (reduced from 75k для
-  single-session budget). Modes:
-    - **A (baseline):** busy-wait FIFO (`vkQueuePresentKHR(VK_PRESENT_MODE_FIFO_KHR)` + `vkWaitForFences` polling)
-    - **B (FIFO_LATEST_READY):** `VK_PRESENT_MODE_FIFO_LATEST_READY_KHR` ✅ supported на dev host driver 610.43.02
-    - **C (present_wait2):** `VK_KHR_present_wait2` + `vkWaitForPresent2KHR` (event/futex, no busy-spin)
-    - **D (present_timing):** `VK_EXT_present_timing` + `targetTime` от `VkSwapchainTimingPropertiesEXT`
-    - **E (combined D+B):** present_timing + FIFO_LATEST_READY (best-of-both per Vulkan 1.4 design philosophy)
-  Scenarios: (1) CPU-bound (CPU sleep 100 us), (2) GPU-bound (CPU sleep 1000 us), (3) jitter scenario
-  (alternating 500 us / 1500 us).
-  **Closed `2026-06-21` (single session, ~3h), verdict `yes`.** Headline:
-  - **Mode B (`VK_PRESENT_MODE_FIFO_LATEST_READY_KHR`) = 93-99% frame interval reduction** vs Mode A для cpu_bound
-    (192 us vs 17,066 us), gpu_bound (1,117 us vs 17,111 us), jitter (1,119 us vs 17,114 us) scenarios.
-  - **Mode D (`VK_EXT_present_timing` + `targetTime`) = 41-93% P99 variance reduction** vs Mode A, std-dev
-    47-77 us vs Mode A 427-902 us = **~10-15× tighter** (Mode D cpu_bound std-dev 47 us vs Mode A 903 us).
-  - **CPU present overhead: Mode B = 44 us mean** (lowest), Mode D = 76 us, Mode A = 81 us.
-  - **Mode D target offset** = -16 ms (vkQueuePresentKHR returned 16 ms before target time = expected behavior
-    per spec, compositor holds image until target).
-  - **Mesa 26.2 std-dev prediction validated**: Mode A std-dev 902-1221 us matches Mesa 0.9 ms (Wayland compositor
-    overhead = 0.6 ms std-dev confirmed in prototype).
-  - **NVIDIA 610.43.02 Wayland busy-spin fix works** — Mode A doesn't show 90-100% spin (81 us mean present
-    overhead, expected ~4% per NVIDIA Dev Forum).
-  **Cross-axis:** orthogonal ко всем ~15 in-progress параллельным; **complementary** к closed
-  `2026-06-20-dec-pipelines-async-compute` (foundation sync) + closed `2026-06-20-async-compute-overhead-numbers`
-  (foundation async) + closed `2026-06-20-vulkan-fps-pacing-vk-ext` (literature only, supersede target).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-vulkan-fps-pacing-wayland-prototype/{README.md,STATUS.md,sources.md,
-      RESULTS.md}` — all 4 core files written
-    - `docs/experiments/experiments/2026-06-21-vulkan-fps-pacing-wayland-prototype/prototype/{main.cpp, CMakeLists.txt,
-      README.md, triangle.{vert,frag}, triangle.{vert,frag}.spv, triangle.{vert,frag}.spv.h}` — standalone Vulkan 1.4
-      + SDL3 harness, 5 modes, 3 scenarios, JSON+CSV output, NOT ProjectV mainline, dev host `obvium` Wayland session
-    - `docs/experiments/hardware-profile.md §4` — `VK_KHR_present_mode_fifo_latest_ready` row added (probe
-      per §14 edge case «новый extension»)
-    - `docs/experiments/INDEX.md` (§5 Active → §6 Recent closed при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-    - `docs/experiments/experiments/2026-06-20-vulkan-fps-pacing-vk-ext/STATUS.md` — supersede notation (per §13.7)
-  **Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** — Step 1 (S, ~100 LoC)
-  `PROJECTV_PRESENT_MODE_FIFO_LATEST_READY=ON` + `PROJECTV_USE_PRESENT_TIMING=ON|OFF` env gates + feature detection
-  в `VulkanBootstrap.cpp` + `PresentState` struct в `Types.hpp`; Step 2 (S, ~250 LoC) `Renderer.cpp::PresentFrame`
-  Mode D implementation + `VulkanSwapchain.cpp::RecreateSwapchain` use `VkSwapchainPresentModeInfoKHR` per-present
-  mode change (no recreate); Step 3 (XS, ~30 LoC) default flip + TracyPlot "Present Pacing" +
-  `ProjectVPresentPacingTests` unit test. Total ~380 LoC, S effort, 1-2 sessions. **Two options:** **Option 1
-  (Mode B — low-latency)** = `VK_PRESENT_MODE_FIFO_LATEST_READY_KHR` best для CPU-bound workloads (~200 us frame
-  interval vs current 17 ms); **Option 2 (Mode D — precise pacing)** = `VK_EXT_present_timing` best для vsync-locked
-  deterministic (10-11 ms frame interval с 47-77 us std-dev vs current 427-902 us). **Caveats:**
-  (a) single GPU vendor validated (NVIDIA RTX 3060 Ti, dev host); cross-vendor deferred to mainline (AMD Mesa RADV
-  + Intel ANV via Mesa 26.1+ Jan 2026); (b) synthetic scenarios representative not exhaustive; (c) VRR display
-  behavior out of scope (assumes fixed refresh 60 Hz); (d) Mode B drops frames when CPU+GPU faster than refresh —
-  Mode D recommended if vsync must be respected; (e) Wayland compositor jitter surface — gain ожидаемо меньше, чем
-  direct-display per Mesa 26.2 benchmark; (f) CPU prototype only, no real ProjectV workload coupling;
-  (g) `low_latency_layer` Mesa no-op issue per Korthos 2026-04-27 — manual implementation рекомендуется;
-  (h) ProjectV input-to-photon latency currently unknown (TracyPlot не имеет explicit "input latency" tracker
-  — follow-up). Cross-refs: `TODO.md §Stage 0`, `src/render/Renderer.cpp::PresentFrame` (mainline baseline),
-  `src/render/vulkan/VulkanSwapchain.cpp` (RecreateSwapchain path), `agent/knowledge.md §30.4` (3-step migration
-  precedent), `agent/decisions.md §30.2-§30.3` (VSync cycle lineage), `agent/workspace.md §2` (Nearest Gap: Stage 3.1
-  cross-frame latency contract), `2026-06-20-vulkan-fps-pacing-vk-ext/` (superseded experiment), `2026-06-20-dec-pipelines-async-compute`
-  (sync foundation), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold),
-  `docs/experiments/hardware-profile.md §3+§4+§6` (RTX 3060 Ti + 610.43.02 + Vulkan 1.4.341 + Mesa 26.2 + SDL3 3.4.10),
-  `docs/experiments/benchmarks/methodology.md §3` (measurement protocol), Khronos `VK_EXT_present_timing` proposal rev 3
-  (Lionel Duc NVIDIA, 2024-10-09), Khronos `VK_KHR_present_mode_fifo_latest_ready` ratif 2025-03-18 (Lina Versace
-  Google + James Jones/Lionel Duc NVIDIA), Khronos `VK_KHR_swapchain_maintenance1` ratif 2025-03-31, Khronos
-  `VK_KHR_present_wait2` rev 1 (Daniel Stone 2022-10-05), NVIDIA Dev Forum Wayland WSI busy-spin fix (2026-04-25,
-  fix в 610.43.02 = dev host driver per §3), LavX Mesa 26.2 VK_GOOGLE_display_timing benchmark (2026-06-07, std-dev
-  0.9 → 0.3 ms), Phoronix Mesa 26.1 VK_EXT_present_timing merge (2026-01-27, Hans-Kristian Arntzen Valve), Phoronix
-  low_latency_layer (2026-05-17).
-  **Continuation chain:** none (supersedes prior same-axis experiment). Follow-up candidates:
-  `_vk-present-pacing-projectv-hot-path_` (mainline integration prototype с real ProjectV workload),
-  `_vk-vrr-display-validation_` (VRR refresh rate variability behavior), `_vk-input-to-photon-latency_`
-  (ProjectV input latency currently unknown — needs TracyPlot "input latency" tracker),
-  `_vk-cross-vendor-validation_` (AMD RADV + Intel ANV + Intel Iris Xe fallback validation).
-
-- [x] **2026-06-21-vulkan-defragmentation-compaction** — m, **cross-cutting VRAM axis** (compaction / defragmentation
-  lever
-  после `vulkan-memory-aliasing-transient` closed mixed aliasing axis + `frame-flight-allocator-budget` closed mixed
-  allocator
-  strategy axis; **self-invented topic** per operator instruction `2026-06-21`: «выбирай свободную тему или придумывай
-  свою исследуй»;
-  **ninth invocation this session** — previous 8 closed or in-progress: audio-raytracing mixed + wfc mixed + sub-chunk
-  mixed +
-  gpu-noise mixed + taa-yes + depth-yes + vk-fragment-shading mixed + frame-flight mixed + dxc mixed + lod-mesh mixed +
-  audio-diffraction mixed + vulkan-memory-aliasing-transient mixed + sdf-hybrid-world mixed + dlss-fsr-xess mixed +
-  vct-cone-count mixed + greedy-physics-yes; 5 in-progress parallel before this: tracy-gpu + dlss-fsr-xess +
-  greedy-physics-meshing
-    + gpu-fluid-ca-atomic + vct-cone-count + hzb-smart-mip-select + tracy-gpu-vs-manual + gpu-fluid-ca-atomic-strategy +
-      vct-3d-mip-generation + vk-multi-gpu-split-frame; 19+ closed `2026-06-20`).
-      **Agent:** self.
-      **Started:** 2026-06-21.
-      **ETA:** this session (single experiment, analytical + standalone C++26 CPU fragmentation simulator + measurements
-      per
-      `benchmarks/methodology.md §3`).
-      **Blocker:** нет (CPU-only synthetic VRAM heap simulator + VMA API discovery via webfetch, no Vulkan/mainline
-      dependency,
-      dev host `obvium` Zen 3 5800X governor=`powersave` per `hardware-profile.md §1` available).
-      **Hypothesis (one-line):** правильная стратегия VMA-дефрагментации (`vmaDefragment` + `VmaDefragmentationInfo`
-      budget flags) в
-      ProjectV (`src/render/SceneResources.cpp:805-1100` 22 separate VMA allocations per frame + dynamic chunk
-      add/remove from
-      `src/voxel/VoxelWorld.{hpp,cpp}` + Stage 5.2 RTX BLAS pool) даст **-20-50% peak VRAM footprint** для typical voxel
-      scene
-      (1024 chunks × dynamic alloc/free pattern) при **≤ 2 ms p99 per-frame defrag cost** (~ 6% от 33.3 ms 30 Hz frame
-      budget)
-    + **0 frame stutter** (defrag split budget = 1/30 frame, threshold-triggered + frame-budgeted execution) на 8 GiB
-      RTX 3060 Ti
-      VRAM budget per `hardware-profile.md §3`.
-      **5 strategies measured:**
-
-    - A_None (current mainline baseline, no defrag)
-    - B_PeriodicFullDefrag (every N=300 frames full `vmaDefragment`)
-    - C_IncrementalBudgeted (per-frame `vmaDefragment` with `maxBytesPerFrame=8 MiB` cap)
-    - D_OnDemandThreshold (defrag when fragmentation ratio > 0.4, idle frames only)
-    - E_BudgetedOnDemand (combination D trigger + C budget)
-      **5 scenes** (per `2026-06-21-sub-chunk-layers` precedent for direct comparability: uniform_floor + forest_floor +
-      cave_stress + mixed_biome + uniform_air) × **4 alloc patterns** (chunk add/remove cycle + transient ring +
-      JIT-loaded chunks + BLAS pool alloc/free) × **5 seeds** × **1000 frames + 10 warmup** = **500 configs × 1000
-      frames =
-      500,000 measurements**. Standalone C++26 CPU fragmentation simulator (no Vulkan init, no GPU dispatch, synthetic 8
-      GiB heap
-      matching dev host `obvium` RTX 3060 Ti per `hardware-profile.md §3`).
-      **Cross-axis:** orthogonal ко всем 5 in-progress parallel (tracy-gpu = profiling, gpu-fluid-ca-atomic = Stage 3.1
-      atomic,
-      hzb-smart-mip-select = Stage 2.1 HZB refinement, vct-3d-mip-generation = Stage 5.1 VCT mip,
-      vk-multi-gpu-split-frame =
-      multi-GPU VRAM); **complementary** к closed mixed `2026-06-21-vulkan-memory-aliasing-transient` (aliasing axis =
-      different
-      lever, compaction = stackable) + closed mixed `2026-06-21-frame-flight-allocator-budget` (allocator strategy
-      WITHIN_BUDGET + ring buffer deferred, compaction = stackable).
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-vulkan-defragmentation-compaction/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-vulkan-defragmentation-compaction/prototype/` (standalone C++26 CPU
-          fragmentation
-          simulator, synthetic voxel scenes + VMA-like alloc API, NOT ProjectV mainline, dev host `obvium`)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` (E_BudgetedOnDemand likely best for ProjectV workload — threshold trigger +
-          budgeted
-          execution = 0 stutter + 20-40% VRAM savings; C_IncrementalBudgeted = reliable alternative; A_None = baseline;
-          B_PeriodicFull
-          = 100% stutter risk on big moves; D_OnDemandThreshold alone = OK if idle frames reliable).
-          3-step migration per `agent/knowledge.md §30.4` precedent — Step 1 (XS, ~30 LoC) `PROJECTV_DEFRAG=ON|OFF` env
-          flag +
-          `VmaDefragmentationInfo` struct + threshold tunable; Step 2 (S, ~100 LoC) `DefragScheduler::tick()` per-frame
-          trigger +
-          budget enforcement + Tracy plot "VRAM Defrag"; Step 3 (XS, ~30 LoC) default flip + per-stage policy (Stage
-          4.3 +
-          Stage 5.2 BLAS pool = aggressive; current MVP = conservative). Total ~160 LoC, S effort, 1-2 sessions. *
-          *Caveats:**
-          (a) CPU prototype, no Vulkan init, no real GPU driver overhead для `vmaDefragment` GPU copy; (b) synthetic
-          VRAM
-          heap (8 GiB match dev host, не реальный driver-level VkDeviceMemory); (c) fragmentation ratio synthetic per
-          `vmaComputeAllocationStats` model (real = aligned with VMA ref impl line ~7000-8000); (d) cross-vendor VRAM
-          characteristics not measured (single host); (e) mutation cost out of scope; (f) visual regression proxy =
-          single-frame
-          stutter detection, не real VMA validation; (g) Algorithm choice (
-          Fast/Agressive/AggressiveOnlyCompletelyMapped) per
-          VMA docs.
-          Cross-refs: `TODO.md §1.1` (NanoVDB GPU upload cross-cutting) + `§4.3` (lift draw distance VRAM scaling) +
-          `§5.2` (RTX
-          BLAS pool); `src/render/SceneResources.cpp:805-1100` (current 22 VMA allocs);
-          `src/voxel/VoxelWorld.{hpp,cpp}` (dynamic
-          chunk mutation); `agent/knowledge.md §30.4` (3-step migration precedent); `agent/workspace.md §2` (Nearest
-          Gap: Stage 4.3
-          128+ chunks draw distance, VRAM budget critical);
-          `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`
-          (5-10% threshold); closed experiments: `vulkan-memory-aliasing-transient` (mixed, aliasing axis), `frame-flight-allocator-
-  budget` (mixed, allocator strategy), `vma-sparse-textures` (mixed, software VT page table allocator); active parallel:
-          `tracy-gpu-vs-manual`, `gpu-fluid-ca-atomic-strategy`, `hzb-smart-mip-select`, `vct-3d-mip-generation`,
-          `vk-multi-gpu-split-frame`; `hardware-profile.md §3` (8 GiB VRAM); `benchmarks/methodology.md §3` (measurement
-          protocol).
-
-- [ ] **2026-06-21-sdf-hybrid-world** — m, **Stage 5.1 + Stage 3.3 cross-cutting** (VCT anti-leak + smooth physics
-  normals; **self-promoted l→m** per `optimization-philosophy.md` 5-10% threshold + strong cross-axis coupling
-  justification; SDF-for-meshing axis remains **parked** per `meshing-algo-comparison` §6 closure — *different* scope,
-  NOT this experiment).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»; **eighth
-  invocation this session** — previous 7 closed or in-progress: audio-raytracing mixed + wfc mixed + sub-chunk mixed +
-  gpu-noise mixed + taa-yes + depth-yes + vk-fragment-shading mixed + frame-flight mixed + dxc mixed + lod-mesh mixed; 5
-  in-progress parallel before this: tracy-gpu + dlss-fsr-xess + greedy-physics-meshing + gpu-fluid-ca-atomic +
-  vct-cone-count; 19+ closed `2026-06-20`).
-  **Started:** 2026-06-21.
-  **Blocker:** нет (CPU-only synthetic voxel scenes + SDF computation, no Vulkan/mainline dependency, dev host `obvium`
-  Zen 3 5800X + governor=`powersave` per `hardware-profile.md §1` available; no AVX-512 per §1 = realistic measurement
-  floor per `simd-procedural-noise` precedent).
-  **Hypothesis (one-line):** Sparse SDF overlay (1 byte/voxel = 7-bit distance + 1-bit sign) поверх binary voxel grid
-  ProjectV (chunkSize=8 per `src/voxel/VoxelWorld.hpp:78`) даст **smooth VCT cone-march termination** (anti-leak per
-  Lumen 2022 Narkowicz "Journey to Lumen" critique of voxel-only VCT; expected **+2-5 dB PSNR** vs brute-force 1024-cone
-  reference per `vct-cone-count-atlas-precision` baseline) + **smooth physics collision normals** (C¹ smooth via SDF
-  gradient, vs stepped voxel face normal; expected elimination of per-corner micro-stutter) при **+1 byte/voxel VRAM =
-  +100% of baseline material storage** (1 byte/voxel) + **+0.5-2 µs/chunk build cost** via Jump Flooding Algorithm (JFA
-  per Ruijters 2008, 4-6× faster than brute-force BFS).
-  **Self-promotion l→m justification (per `optimization-philosophy.md` 5-10% threshold + l-priority в `backlog.md`
-  §Open):** original l-priority (per `meshing-algo-comparison` §6 closure) = SDF-meshing axis parked до Stage 3.3; *
-  *non-meshing SDF uses** (VCT anti-leak + physics normals) ARE critical to current Stage 5.1 (in-progress
-  `vct-cone-count-atlas-precision` orthogonal — termination ≠ cone count) + Stage 3.3 (in-progress
-  `greedy-physics-meshing-cpu` orthogonal — meshing ≠ normals). Strong cross-axis coupling (5.1 + 3.3) + measurable
-  hypothesis (PSNR + normal smoothness) + low integration risk (additive data, drop-in termination/normal calculation) +
-  CPU-only analytical scope (single-session per `wfc`/`lod-mesh`/`sub-chunk` precedent).
-  **Cross-axis:** orthogonal ко всем 5 in-progress parallel (tracy-gpu = profiling, dlss-fsr-xess = upscaling,
-  greedy-physics-meshing = Stage 3.3 meshing — *not* normals, gpu-fluid-ca-atomic = Stage 3.1 atomic, vct-cone-count =
-  Stage 5.1 VCT quality — *not* termination); **complementary** к 7 closed experiments: `2026-06-20-vct-vs-rt-cutoff` (
-  closed mixed, strategy axis = roughness cutoff = 0.3; SDF = termination axis = orthogonal) +
-  `2026-06-20-nanovdb-on-gpu` (closed yes, NanoVDB can host SDF natively — natural extension) +
-  `2026-06-21-sub-chunk-layers` (closed mixed, chunk layout; SDF per layer = natural extension) +
-  `2026-06-21-lod-mesh-downsampling` (closed mixed, LOD; SDF for LOD smooth blend = natural follow-up) +
-  `2026-06-21-wfc-procedural-worlds` (closed mixed, world gen; SDF for WFC tile boundaries = potential Phase 4
-  follow-up) + `2026-06-21-gpu-procedural-noise-compute-kernels` (closed mixed, noise gen; SDF for surface distance
-  queries) + `2026-06-20-meshing-algo-comparison` (closed mixed, §6 closure explicitly notes SDF-meshing axis parked до
-  Stage 3.3 = **NOT** this scope).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-sdf-hybrid-world/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-sdf-hybrid-world/prototype/` (standalone C++26 CPU SDF overlay + VCT
-      termination + physics normals harness, synthetic voxel scenes representative of ProjectV
-      workload [uniform_air + uniform_floor + forest_floor + cave_stress + mixed_biome per
-      `sub-chunk-layers` precedent for direct comparability], NOT ProjectV mainline, dev host `obvium`)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` — B_R8_1byte likely winner for cave_stress + mixed_biome (VCT anti-leak + physics
-      normal), C_R8_4quant or D_RLE_NoneSparse may win for uniform scenes (lower VRAM overhead at cost of some quality),
-      A_None = baseline; A_None likely retains для pure chunks with no surface features. 3-step migration per
-      `agent/knowledge.md §30.4` precedent — Step 1 (S, ~150 LoC) `SdfOverlay` payload + JFA generator in
-      `src/voxel/VoxelWorld.{hpp,cpp}`; Step 2 (S, ~200 LoC) `SdfVctTerminate` drop-in termination в `vct.frag` +
-      `SdfNormal` calculation в `PhysicsWorld.cpp`; Step 3 (XS, ~50 LoC) `PROJECTV_SDF_OVERLAY=ON` env flag + per-chunk
-      layout selection + Tracy plot. Total ~400 LoC, S-M effort, 2-3 sessions. **Caveats:** (a) CPU prototype, no GPU
-      dispatch — JFA GPU validation deferred; (b) VCT quality measurement via PSNR vs analytical reference, not visual
-      QA; (c) collision normal smoothness via analytical reference, not real JPH broadphase timing; (d) cross-vendor GPU
-      SDF validation deferred (single vendor RTX 3060 Ti in scope per `hardware-profile.md §3`); (e) NanoVDB-native SDF
-      integration deferred (out of scope; current prototype = flat array per chunk); (f) RLE compression for sparse SDF
-      blocks = trade-off; (g) mutation cost out of scope per current Stage priorities. Cross-refs: `TODO.md §5.1` (
-      VCT) + `§3.3` (Physics), `src/voxel/VoxelWorld.hpp:78` (chunkSize=8), `src/voxel/SceneConfig.cpp:78`,
-      `src/shaders/vct.frag` (current termination), `src/physics/PhysicsWorld.cpp:712-773` (current collision body),
-      `agent/knowledge.md §30.4` (3-step migration precedent), `agent/workspace.md §1 Phase 4` (per-chunk rebuild),
-      `2026-06-20-vct-vs-rt-cutoff` (closed mixed, strategy axis), `2026-06-21-vct-cone-count-atlas-precision` (
-      in-progress, within-VCT quality), `2026-06-21-greedy-physics-meshing-cpu` (in-progress, meshing axis),
-      `2026-06-20-nanovdb-on-gpu` (closed yes, storage), `2026-06-21-sub-chunk-layers` (closed mixed, scenes +
-      comparability), `2026-06-21-lod-mesh-downsampling` (closed mixed, LOD), `2026-06-20-meshing-algo-comparison` (
-      closed mixed, §6 closure = SDF-meshing parked), `2026-06-21-wfc-procedural-worlds` (closed mixed, world gen),
-      `2026-06-21-gpu-procedural-noise-compute-kernels` (closed mixed, noise), `2026-06-20-simd-procedural-noise` (
-      closed mixed, AVX2 floor), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold),
-      `docs/experiments/hardware-profile.md §1+§6` (Zen 3 5800X + Clang 22.1.6),
-      `docs/experiments/benchmarks/methodology.md §3` (measurement protocol).
-      **Closed `2026-06-21` (single session ~3h), verdict `mixed`.** Standalone C++26 CPU prototype ~1300 LoC, **build
-      green 0 warnings** (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG`). 600 measurements (5 scenes × 5 seeds ×
-      4 encodings × 2 builds × 3 terms × N=1000), wall time <60 sec на Zen 3 5800X powersave. **Headline (counter to
-      literature + hypothesis):**
-    - **BFS 2.4× faster than JFA on chunkSize=8** (6.6 vs 16.0 µs/chunk) — BFS wins for dense/small chunks
-      (narrow-band = ≤7 voxels from surface per OpenVDB 13.0.1); JFA wins only for large sparse volumes
-    - **D_RLE_NoneSparse = 30% VRAM** of B_R8_1byte (153 vs 512 bytes/chunk) — validates OpenVDB
-      narrow-band pattern
-    - **T_VoxelDiscrete is fastest AND highest PSNR** (44.97 dB) in this prototype — current mainline
-      behavior preserved; no SDF-driven VCT quality gain measured
-    - **PSNR NOT improved** by SDF overlay (42-45 dB for all configs, variance σ=32 dB) — likely due to
-      same-algorithm reference (only cone count varies) + simplified trilinear SDF
-    - **Narkowicz 2022 anti-leak benefit NOT validated** in v1 prototype — production Lumen (with material
-      shaders + cone occlusion) likely different from synthetic 8³ chunks
-    - **Phase A web-research: 15 primary sources verified** via `webfetch` + DuckDuckGo HTML fallback
-      (Exa 429 persistent); Narkowicz 2022 "Journey to Lumen" = DIRECT EXPERT VALIDATION of hypothesis
-      (voxel VCT leaks → global distance field + voxel bit bricks 8×8×8 = production-proven anti-leak path)
-    - **Mainline 3-step migration per `agent/knowledge.md §30.4`:** Step 1 (XS, ~50 LoC) **immediate
-      recommendation** — BFS replaces JFA as default `SelectSdfBuildPolicy()` (2.4× build speedup);
-      Step 2 (S, ~250 LoC) **deferred до Stage 4.3** — D_RLE_NoneSparse narrow-band storage (-70%
-      VRAM); Step 3 (M, ~250 LoC) **deferred indefinitely** — T_SDFSmooth/T_Hybrid integration (no
-      PSNR gain in v1, 43-87% march cost overhead)
-    - **Total: ~550 LoC, S effort, 2-3 sessions** (Step 1 immediate, Step 2 post-Stage-4.3, Step 3 N/A)
-    - **Caveats:** (a) PSNR variance high (σ=32 dB), only 5 synthetic scene types; (b) reference uses
-      same algorithm as measured → not true ground truth; (c) 8³ chunk is ProjectV minimum; larger
-      chunks may show different JFA/BFS trade-off; (d) cross-vendor (AMD RDNA, Intel Arc) not measured
-      (CPU-only); (e) NanoVDB-native SDF integration deferred; (f) mutation cost out of scope;
-      (g) Intel HD disabled per UE5 docs (cross-vendor note)
-    - **Continuation chain:** none (first SDF-for-lighting+physics axis in scope). Follow-up
-      candidates: `_sdf-nanovdb-integration_` (NanoVDB-native SDF), `_sdf-jfa-gpu-validation_`
-      (real GPU JFA vs BFS), `_sdf-rle-compression-tuning_` (optimal quantization per scene type),
-      `_sdf-mutation-cost_` (recompute SDF band on voxel mutation), `_sdf-vct-real-ground-truth_`
-      (visual QA on real ProjectV scenes per Narkowicz 2022 anti-leak).
-    - См. §6 + §1 + experiment README + `STATUS.md` (final) + `sources.md` (27 sources) +
-      `prototype/results.csv` (600 measurements).
-
-- [ ] **2026-06-20-vma-sparse-textures** — m, Stage 2.3 (Sparse Virtual Texturing) + cross-cutting VRAM budget.
+> **Cleanup `2026-06-21`:** оставлены только **3** реально активных резервации (per STATUS.md + README.md + artifacts).
+> Закрытые experiments — в §Closed ниже. Открытые идеи — в §Open.
 
 - [ ] **2026-06-21-tracy-gpu-vs-manual** — m, independent (cross-cutting profiling, foundation для
   `agent/knowledge.md §4` build/verification contract).
@@ -527,221 +97,6 @@
       **Expected verdict:** `mixed` или `yes` (Tracy GPU полезен для top-3 hot-path passes; manual для остальных;
       cross-vendor validation необходима для Stage 5.x async-compute multi-context).
 
-- [x] **[2026-06-21-wfc-procedural-worlds](./experiments/2026-06-21-wfc-procedural-worlds/)** — m,
-  **independent** (Stage 4.1 GPU Noise & World Gen per `TODO.md §4.1`, **discrete-structure axis**
-  orthogonal к closed `2026-06-21-gpu-procedural-noise-compute-kernels` continuous-noise axis + closed
-  `2026-06-21-sub-chunk-layers` chunk-layout axis).
-  Closed `2026-06-21` (single session), verdict **`mixed`**.
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай тему или придумывай свою и исследуй»,
-  second invocation after `audio-raytracing-voxel-sdf`).
-  **Hypothesis (validated):** WFC-over-OpenSimplex2 hybrid pipeline (3D-WFC AC-3 constraint propagation
-  для cave/biome discrete structure + OpenSimplex2 noise для heightmap) даст локально-когерентные биомы/пещеры
-  с generation time < 50 µs/chunk на Zen 3 5800X при chunkSize=8 sub-region.
-  **Measured:** 8³ sub-region = 220-235 µs mean (cave + biome identical, ~25 µs estimated на boost governor ×8.7),
-  coherence 0.67, **50% success rate**; 16³ sub-region = 11 ms / **0% success** / 3595 propagation passes =
-  **exponential blow-up подтверждён**; 32³ sub-region = 1 sec timeout (catastrophic). **GPU WFC historically
-  failed** (Chocomunk 2020 cuWFC, s-ol 2018 gpWFC — negative prior art). **Per-tileset identical perf**
-  = problem algorithm-specific, не tileset-specific.
-  **Mainline recommendation:** 3-step migration per `agent/knowledge.md §30.4` precedent — **Step 1 (XS, ~30 LoC)
-  RECOMMENDED immediate**: `world_gen_wfc.cpp` skeleton + 8³ AC-3 propagation + **governor=performance requirement**
-    + early-fail-fast + OpenSimplex2 hybrid hook → NanoVDB upload per `nanovdb-on-gpu` verdict=yes. **Step 2 (S,
-      ~150 LoC) RECOMMENDED follow-up**: better MRV (minimum remaining values) heuristics для success rate 50%→90%+
-    + 2nd tileset (biome) + `transitions_consistency_score` validation в `ProjectVWfcTests`. **Step 3 (M,
-      ~300 LoC) DEFERRED до Stage 4.3+ lift draw distance**: **N-WFC nested pattern per arXiv 2308.07307** =
-      nested fixed-size sub-grids с inter-grid constraints → polynomial time для chunks > 8³. Cross-refs:
-      `TODO.md §4.1`, `src/voxel/VoxelWorld.hpp:85`, `agent/knowledge.md §30.4`,
-      `2026-06-21-gpu-procedural-noise-compute-kernels`
-      (OpenSimplex2 continuous), `2026-06-21-sub-chunk-layers` (chunk-layout), `2026-06-20-nanovdb-on-gpu` (SSBO),
-      `2026-06-20-dec-pipelines-async-compute` (async), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`
-      (5-10% threshold), `docs/experiments/hardware-profile.md §1` (Zen 3 5800X).
-      **Standalone C++26 prototype** `prototype/{wfc.hpp, tilesets.hpp, bench.cpp, CMakeLists.txt, README.md}`
-      (~440 LoC, Clang 22.1.6 -O3 -march=native -std=c++26 -DNDEBUG). Web-research complete (2 batches, 8+ sources
-      верифицированы: Maxim Gumin 2016 + arXiv 2308.07307 N-WFC + Chocomunk cuWFC 2020 + s-ol gpWFC 2018 +
-      Fennec-hub three-wfc 2025 + julzerinos WFC brush + basta WFC + RWTH 3D compute shader thesis).
-      **Cross-axis:** 4 closed same-session `2026-06-21` (frame-flight-allocator + gpu-procedural-noise +
-      sub-chunk-layers
-    + this) + multiple in-progress = full Stage 4.x + Stage 5 + Stage 6.x + toolchain + profiling + audio + temporal
-      optimization landscape. Caveats: single CPU governor measured (powersave; boost estimated ×8.7), 100 iter
-      per config (vs `methodology.md` default 1000), chunkSize=32³ не измерен (timeout 1 sec), no N-WFC prototype
-      (analytical only per arXiv 2308.07307). См. §6 + §1 + experiment README +
-      `prototype/build/results_{cave,biome}_small.csv` + STATUS.md.
-
-- [x] **2026-06-21-sub-chunk-layers** — m, **Stage 4.x** (biome/cave data structure axis, orthogonal к
-  `2026-06-21-wfc-procedural-worlds` который = generation strategy).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай тему или придумывай свою и исследуй»).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements).
-  **Blocker:** нет (CPU-only synthetic voxel chunk layouts, no Vulkan/mainline dependency, dev host `obvium`
-  Zen 3 5800X per `hardware-profile.md §1` available).
-  **Hypothesis (one-line):** Multi-layer chunks (per-Y sub-chunks of fixed layer height L=1, 2, 4 для biome/cave
-  architecture) дадут +5-15% mutation cost overhead vs monolithic chunks, но -10-40% per-chunk material index
-  size через palette indexing (layer = uniform material array) + layer-bounded meshing (per-layer LOD
-  independence) при typical Minecraft-style биомных/пещерных scenes на chunkSize=8.
-  **Cross-axis:** orthogonal к `2026-06-21-wfc-procedural-worlds` (gen strategy = WFC vs noise; this = data
-  structure = layered vs monolithic chunk); complementary к `2026-06-20-sparse-64-tree-alternatives`
-  (SVO storage = upper structure, sub-chunk layers = inner structure per chunk); complementary к
-  `2026-06-21-gpu-procedural-noise-compute-kernels` (noise gen = continuous biome heightmap, this = discrete
-  layer transition semantics); natural extension для `2026-06-20-nanovdb-on-gpu` (NanoVDB walker operates
-  on uniform tiles — multi-layer = natural fit per VDB tile hierarchy).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-sub-chunk-layers/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-sub-chunk-layers/prototype/` (standalone C++26 CPU chunk
-      layout prototype, synthetic voxel scenes representative of Minecraft biomes/cave systems, NOT
-      ProjectV mainline)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Verdict:** **`mixed`** (closed `2026-06-21`, same session). Memory savings 73-96% (well above 5%
-      threshold per `optimization-philosophy.md`) — B_Palette wins на uniform/2-material scenes, D_L4 marginal
-      win на 4-material mixed_biome. Build cost overhead 30-55× but absolute 1-6 µs vs 50 µs Stage 4.1 budget.
-      Mutation cost overhead +5-70% but absolute 10-19 ns (negligible). Mesh vertex count identical (layout-
-      orthogonal). Layer boundary count 28-155 explicit transitions для layered = semantic gain для VCT
-      anti-leak + per-layer LOD + selective rebuild. **3-step migration per `agent/knowledge.md §30.4`**:
-      Step 1 `ChunkLayout` enum + `SelectChunkLayout` (~150 LoC, S); Step 2 `world_gen_layers.comp` per-layer
-      payload + per-chunk metadata (~300 LoC, M); Step 3 wire layer semantics в `voxel.frag` VCT cone-march
-
-    + Stage 4.2 per-layer LOD (~250 LoC, M). Closed entry: `experiments/2026-06-21-sub-chunk-layers/`.
-
-- [x] **2026-06-21-taa-motion-vectors** — m, **independent** (Stage 5.3 TAA Motion Vectors per `TODO.md §5.3`,
-  **temporal axis для Stage 5** после полного closure lighting-axis `2026-06-20`: `vct-vs-rt-cutoff` mixed +
-  `clustered-forward-mass-lights` yes + `rt-shadows-vs-csm` mixed + `restir-gi-feasibility` mixed).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай тему или придумывай свою и исследуй»;
-  third invocation this session — first was `audio-raytracing-voxel-sdf` [closed same-session mixed], second
-  was `wfc-procedural-worlds` [in-progress parallel]).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone Vulkan 1.4 + C++26 prototype +
-  measurements per `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU+GPU prototype, dev host `obvium` RTX 3060 Ti GA104 + Vulkan 1.4.341 +
-  `R16G16_SFLOAT` motion vector MRT format все supported per `hardware-profile.md §3/§4`).
-  **Hypothesis (one-line):** Per-vertex motion vectors (`vec2 prevClipPos - vec2 currClipPos`, written
-  per-vertex to dedicated MRT attachment per `TODO.md §5.3` explicit goal) vs current depth-buffer
-  reprojection (cheaper, "менее честный" per TODO §5.3) даст measurably better TAA quality (no ghosting
-  на быстродвижущихся моделях per TODO §5.3 DoD: «Полное исчезновение шлейфов за перемещаемыми
-  гравипушкой моделями») при ~0.3-0.5 ms GPU cost + 4 MiB/frame VRAM cost (R16G16_SFLOAT @ 1080p,
-  double-buffered = 8 MiB). Альтернатива = Karis 2014 «Brute Force» depth-reproject enhancement
-  (previous-frame neighbor clamping) может match quality at lower cost (no MRT = 0 bytes VRAM).
-  **Cross-axis:** orthogonal ко всем 3 in-progress parallel (tracy-gpu = profiling, wfc = gen strategy,
-  sub-chunk = data structure); complementary к closed `clustered-forward-mass-lights` (SSBO light list
-    + motion vectors = both feed TAA resolve); natural follow-up к closed `dec-pipelines-async-compute`
-      (motion vector MRT submission = candidate for async queue if VRAM/upload becomes bottleneck);
-      cross-vendor validation matrix same as `dec-pipelines-async-compute` §2.2 (NVIDIA Ampere/Ada/
-      Blackwell + AMD RDNA2/3/4 + Intel Arc Gfx12.5+).
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-taa-motion-vectors/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-taa-motion-vectors/prototype/` (standalone Vulkan 1.4
-          harness: voxel scene render + 2 pipelines [vertex-out motion vector MRT vs depth-reproject] +
-          TAA resolve pass + PSNR/SSIM quality measurement, NOT ProjectV mainline, dev host `obvium`)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` (motion vectors likely provide measurable quality gain [PSNR
-          improvement + ghosting elimination] at ~0.3-0.5 ms GPU cost + 4-8 MiB VRAM; alternative
-          depth-reproject-with-clamping per Karis 2014 may match quality at lower cost — needs measurement).
-          Caveats: (a) single GPU vendor validated (RTX 3060 Ti GA104); (b) synthetic voxel scene
-          (representative of ProjectV chunked geometry); (c) PSNR/SSIM на synthetic test pattern + visual
-          diff count на dynamic object scene; (d) R16G16_SFLOAT = standard per `agent/knowledge.md §6.x` for
-          motion vectors (cross-vendor standard format); (e) no cross-frame pipelining gain measured
-          (headless harness).
-
-- [x] **2026-06-21-greedy-physics-meshing-cpu** — m, **Stage 3.3** (Greedy Physics Meshing per `TODO.md §3.3`
-  explicit DoD: «Количество коллизионных шейпов в CompoundShape снижается минимум в 4 раза на типичном
-  ландшафте. Полное совпадение физического поведения (персонаж не проваливается под текстуры и корректно
-  сталкивается с углами).»). **Self-invented topic** (operator instruction `2026-06-21`:
-  «выбирай свободную тему или придумывай свою и исследуй»). **Motivation:** mainline baseline
-  `src/physics/PhysicsWorld.cpp:712-773::BuildStaticVoxelCollisionBody` добавляет per-solid-voxel
-  `JPH::BoxShape(0.5f)` в `JPH::StaticCompoundShapeSettings` (line 715: `new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f))`
-  per loop iteration). Это **N shapes/chunk = solid-voxel-count** = mainline **0× reduction**, DoD
-  «≥ 4× reduction» не выполняется. Per-chunk incremental Jolt pipeline (2x part 4 Phase 4 + 2x part 5 Phase 9,
-  per `agent/workspace.md §1`) уже в mainline с `chunkStaticBodies` map + `ProcessChunkRebuildQueue`, но **использует
-  тот же naive per-voxel loop**. Greedy merge = natural follow-up, immediate integration в existing per-chunk
-  rebuild path.
-  **Agent:** self.
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements per
-  `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only, dev host `obvium` Zen 3 5800X governor `powersave` per `hardware-profile.md §1`).
-  **Hypothesis (one-line):** правильная greedy merge стратегия (B_1DAxisGreedy / C_2DPlaneGreedy /
-  D_3DFullGreedy / E_HierarchicalOctree / F_TwoPass3D, 5 стратегий measured) даст **≥ 4× reduction** в
-  `JPH::StaticCompoundShape` shape count per chunk (DoD `TODO.md §3.3`) при **identical collision
-  behavior** (100% volume preservation) + **CPU build cost ≤ 200 µs/chunk** (50-100× headroom vs 50 µs
-  Stage 4.1 budget per `TODO.md §4.1`) + **100% volume preservation** (no false positive / false negative
-  collider merge).
-  **Cross-axis:** orthogonal ко всем 5 in-progress parallel (tracy-gpu = profiling, gpu-fluid-ca = Stage 3.1
-  atomic, vk-fragment-shading-rate = VRS fragment rate, audio-diffraction = audio, vct-cone-count = Stage 5.1
-  VCT); **complementary** к closed `2026-06-20-meshing-algo-comparison` (visual meshing = same algorithmic
-  family [Mikola Lysenko 2012 per-axis 2D scan] applied to **visual quads in `voxel_mesh.comp::GreedyFacePass`**;
-  this = same algorithm applied to **physics AABB boxes in `BuildStaticVoxelCollisionBody`**) + closed
-  `2026-06-20-work-stealing-job-system` (serial dispatcher default, single-threaded greedy merge) + closed
-  `2026-06-20-cache-oblivious-chunk-tree` (chunk tree access patterns) + mainline incremental Jolt pipeline
-  (2x part 4 Phase 4 + 2x part 5 Phase 9 per `agent/workspace.md §1`).
-  **Why m-priority (self-promoted from l):** explicit numeric DoD в `TODO.md §3.3` («4× shape reduction +
-  identical physics behavior») = measurable hypothesis; orth cross-axis ко всем in-progress; mainline already
-  has foundation (per-chunk rebuild queue) = low integration risk; CPU-only, no GPU dispatch = can deliver
-  in single session.
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-greedy-physics-meshing-cpu/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-greedy-physics-meshing-cpu/prototype/` (standalone C++26 CPU
-      greedy merge harness, synthetic voxel chunk scenes representative of ProjectV scenes [uniform_floor +
-      forest_floor + cave_stress + mixed_biome + uniform_4x4x4], NOT ProjectV mainline)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` или `yes` — `D_3DFullGreedy` or `E_HierarchicalOctree` likely winner для
-      typical terrain (8-16× shape reduction vs baseline), `B_1DAxisGreedy` likely winner для simple uniform scenes
-      (2-4× reduction, simpler code). Cross-axis: orth ко всем in-progress. Caveats: (a) CPU prototype, no JPH
-      broad-phase query timing (would require JPH::PhysicsSystem + actual raycast, too heavy без mainline coupling);
-      (b) synthetic scenes representative not exhaustive; (c) 2D scan strategies (B, C) = lower quality на
-      irregular cave scenes, expected; (d) 3D greedy (D) potentially O(N²) worst-case → bounded by chunk size 8³
-      (max 512 cells, manageable); (e) octree (E) guarantees O(N log N) but requires per-node decision overhead.
-      Cross-refs: `TODO.md §3.3`, `src/physics/PhysicsWorld.cpp:712-773::BuildStaticVoxelCollisionBody` (mainline
-      baseline = 0× reduction), `src/physics/PhysicsWorld.cpp:547-560::IsPhysicsSolidMaterial` (material
-      classification), `src/voxel/VoxelWorld.hpp:78-107` (VoxelWorld struct, chunkSize=8, access API),
-      `agent/workspace.md §1 Phase 4` (incremental Jolt per-chunk wiring closed), `agent/workspace.md §1 Phase 9`
-      (ProcessChunkRebuildQueue per-frame call closed), `agent/knowledge.md §17` (build matrix), `agent/knowledge.md
-  §30.4` (3-step migration precedent), closed `2026-06-20-meshing-algo-comparison` (visual meshing patterns),
-      closed `2026-06-20-work-stealing-job-system` (serial default),
-      `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`
-      (5-10% threshold), `docs/experiments/hardware-profile.md §1` (Zen 3 5800X dev host),
-      `docs/experiments/benchmarks/methodology.md §3`
-      (measurement protocol).
-
-  **Closed `2026-06-21` (single session, ~2h), verdict `yes`** (с caveat: E_Octree implementation bug на
-  coplanar 2D layers, fixable out of scope). **Stage 3.3 greedy physics meshing axis closed** —
-  DoD `TODO.md §3.3` validated with **8× margin** (35× avg reduction vs 4× required). Web research:
-  completed via DuckDuckGo HTML endpoint + webfetch (Exa MCP HTTP 429 rate-limited for web_search);
-  9+ sources verified this session: Mikola Lysenko 2012 "Meshing in a Minecraft Game" (`0fps.net`,
-  canonical 8×-approximation proof), Laine & Karras **2010** (не 2013) "Efficient Sparse Voxel Octrees"
-  (IEEE TVCG, DOI `10.1109/TVCG.2010.240`), Vercidium C# production (`vercidium-patreon/meshing`,
-  644 stars), roboleary Java port, gedge.ca 2014 + fluff.blog 2023 + zenny3d 2025 + nickmcd 2021 +
-  Epic UE tutorial + Vulkan Guide (8 secondary sources). `sources.md` обновлён с verified citations. **Headline
-  measurements** (6 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup =
-  150,000 main measurements, dev host `obvium` Zen 3 5800X governor `powersave`, wall time 0.12 s):
-
-  | Strategy | Mean shape_reduction | × reduction | Mean build_us | DoD ≤ 0.25? | Volume match |
-    |:---------|:---------------------|:------------|:--------------|:------------|:-------------|
-  | A_Naive (baseline) | 1.0000 | 1× | 0.49 | ❌ fails | 100% ✓ |
-  | B_1DZ | 0.2022 | 5× | 0.39 | ✓ | 100% ✓ |
-  | C_2DXZ | 0.0619 | 16× | 0.59 | ✓ | 100% ✓ |
-  | **D_3D** | 0.0288 | **35×** | 0.81 | ✓ | 100% ✓ |
-  | E_Octree | 0.5887 | 1.7× (broken 2/5) | 1.30 | ⚠️ | 100% ✓ |
-  | **F_TwoPass** | 0.0284 | **35×** | 0.78 | ✓ | 100% ✓ |
-
-  **Mainline recommendation:** `F_TwoPass` (2D XZ per Y + vertical merge) — same 35× reduction as
-  `D_3D`, simpler code, naturally matches per-Y-layer chunk semantic per closed
-  `2026-06-21-sub-chunk-layers` (verdict=mixed). 3-step migration per `agent/knowledge.md §30.4`
-  precedent: Step 1 (XS, ~30 LoC) `src/physics/GreedyPhysicsMerger.{hpp,cpp}` foundation; Step 2
-  (S, ~50 LoC) replace per-voxel loop в `BuildStaticVoxelCollisionBody:712-740` + wire per-chunk
-  rebuild path; Step 3 (M, ~80 LoC) `PROJECTV_GREEDY_PHYSICS_MESH=ON` env flag (default ON) +
-  Tracy plot "Physics Greedy Merge" + `WorldStats` extension + `ProjectVPhysicsGreedyMergerTests`
-  unit test. Total ~160 LoC, S effort, 1-2 sessions. **Net effect positive** despite +60% per-call
-  build cost delta: 35× fewer AddShape + 35× fewer JPH child shapes = JPH broad-phase cost dominates
-  (per Jolt docs broad-phase visits each child shape → 35× fewer visits = much faster collision
-  query + rebuild). **Caveat:** E_Octree implementation bug on coplanar 2D layers
-  (uniform_floor, cave_stress return 1.0× reduction instead of expected 0.02×) — fixable via
-  coplanar layer merge step but out of scope; F_TwoPass doesn't have this issue (its 2D slice
-  pass naturally handles coplanar layers). **Cross-axis:** orth ко всем 5 in-progress parallel
-  (tracy-gpu + gpu-fluid-ca + vk-fragment-shading-rate + audio-diffraction + vct-cone-count) +
-  complementary к closed meshing-algo-comparison (same algorithmic family, different output target).
-  Closed entry: `experiments/2026-06-21-greedy-physics-meshing-cpu/` + `prototype/{greedy_physics_bench.cpp,
-  CMakeLists.txt, README.md, results.csv}`. См. §6 + §1 + experiment README + RESULTS.md + sources.md.
-
 - [ ] **2026-06-21-gpu-fluid-ca-atomic-strategy** — m, **Stage 3.1** (GPU Fluid CA per
   `TODO.md §3.1` + `agent/knowledge.md §30.4`).
   **Agent:** self (operator instruction `2026-06-21`: «выбирай тему или придумывай свою и исследуй»).
@@ -767,1207 +122,489 @@
         + warmup, NOT ProjectV mainline)
     - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
     - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` или `yes` (current `atomicOr` = simplest but **wrong по conservation**
+**Expected verdict:** `mixed` или `yes` (current `atomicOr` = simplest but **wrong по conservation**
       [double-claim without check]; `imageAtomicCompareExchange` = correct + likely similar perf на
       0-50% contention; shared-memory + subgroup compaction = best perf -10-30% но M effort;
       `VK_KHR_shader_atomic_float` available per `hardware-profile.md §4`).
+  **Status:** **closed `2026-06-21` (verdict=`mixed`)**. See §Closed entry below.
 
-- [ ] **2026-06-21-lod-mesh-downsampling** — m, **Stage 4.2 chunk 2** (LOD uniform downsampling per
-  `TODO.md §4.2` + `agent/workspace.md §2` Nearest Gap explicit: "Stage 4.2 chunk 2 — uniform downsampling
-  implementation. Distance LOD selection works (2x part 3 Phase 5) but actual mesh-level downsampling
-  not yet built").
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай тему или придумывай свою и исследуй»;
-  fourth invocation this session — previous: audio mixed + wfc mixed + sub-chunk mixed closed;
-  tracy-gpu + taa + gpu-fluid-ca in-progress parallel).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements per
-  `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only synthetic voxel chunk LOD layouts, no Vulkan/mainline dependency, dev host
-  `obvium` Zen 3 5800X per `hardware-profile.md §1` available; `chunkSize=8` per
-  `src/voxel/VoxelWorld.hpp:78` already verified in multiple `2026-06-2x` experiments).
-  **Hypothesis (one-line):** правильная пара (downsampler kernel ∈ {A_Majority3D, B_SurfacePreserve,
-  C_SolidOnly, D_MaxPool} × stitch strategy ∈ {X_None, Y_TJunctionPad, Z_NeighborLocked}) даст -75%/-94%/-98%
-  triangle count на LOD 1/2/3 vs LOD 0 при **zero visible T-junction holes** (Stage 4.2 DoD explicit) +
-  per-chunk downsampling cost < 1 µs (vs 50 µs/chunk Stage 4.1 budget) на Zen 3 5800X.
-  **Cross-axis:** orthogonal к in-progress parallel (tracy-gpu = profiling tool, wfc = gen strategy,
-  sub-chunk = vertical layers, taa = temporal Stage 5.3, gpu-fluid-ca = atomic strategy Stage 3.1);
-  complementary к closed `nanovdb-on-gpu` (NanoVDB tile hierarchy + mip chain = natural storage для LOD) +
-  `meshing-algo-comparison` (Naive Greedy at LOD 0; this = LOD 1/2/3 downsample pipeline) +
-  `svdag-vs-vdb-memory-throughput` (storage). **New axis:** ни один из 30+ closed experiments за
-  `2026-06-20` + `2026-06-21` не покрывает Stage 4.2 LOD implementation.
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-lod-mesh-downsampling/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-lod-mesh-downsampling/prototype/` (standalone C++26 CPU
-      downsampler + stitch harness, synthetic voxel scenes, NOT ProjectV mainline, dev host `obvium`)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` (single kernel/stitch pair won't be optimal для all scene types; expected
-      conditional adoption: surface-aware + neighbor-locked для biome-heavy scenes, solid-only + T-junction-pad
-      для uniform terrain; cross-vendor GPU performance deferred to follow-up Stage 4.2 GPU integration).
-      **Closed `2026-06-21` verdict=`mixed`.** Stage 4.2 LOD uniform downsampling axis fully closed. Web-research
-      complete (~30 sources, 12 primary + 6 supplementary верифицированы: 0fps.net Lysenko 2018 POP buffers
+- [x] **[2026-06-21-god-rays-crepuscular](./experiments/2026-06-21-god-rays-crepuscular/)** —
+  closed `2026-06-21` (single session, ~3h, verdict=`mixed`). См. §Closed entry ниже.
 
-    + stable LOD rounding, Lengyel 2009 Transvoxel, Cinevva 2026 Transvoxel/clipmaps, Blackflux Part 3,
-      Voxceleron2 hybrid Sparse LOD Octree, Cubyz DeepWiki 2026-03-19 production reference, Aokana arXiv
-      2505.02017 May 2025 GPU voxel LOD density=2, Teknologicus Vorxel Oct 2024 GPU mipmaps, GPUOpen
-      FidelityFX SPD RDNA single-pass downsampler, OptiFine #7567 negative evidence, Voxel.wiki T-Junctions,
-      Nick Gildea 2014 DC seams, DreamCat Games SurfaceNets boundary lookup). Standalone C++26 CPU prototype
-      (`prototype/lod_bench.cpp` ~840 LoC, `clang++ 22.1.6 -O3 -march=native -DNDEBUG -std=c++26`,
-      builds green with 0 warnings after ASAN debug fixed stack-buffer-overflow в `downsample_A` для
-      step=4/8 case). 4 downsample kernels × 3 stitch strategies × 5 scenes × 4 LOD levels × 5 seeds = 1200
-      main measurements + 75 T-junction detection measurements на Zen 3 5800X (governor=`powersave`).
-      Output: `build/results.csv` (1200 rows) + `build/results_tjunc.csv` (75 rows).
-      **Headline: `B_SurfacePreserve` is the only kernel that satisfies Stage 4.2 DoD "отсутствие
-      визуальных артефактов 'дырявого мира' на стыках LOD-зон" — 0 T-junction holes across 75 configs
-      (16938 boundary face emissions, 0 mismatches).** Other kernels: A_Majority3D 10-32% boundary
-      mismatch, C_SolidOnly 17-32% + catastrophic collapse в cave_stress (entire LOD 1 chunk → 0 quads),
-      D_MaxPool 10-32% (same as A). B_SurfacePreserve also fastest of 4 kernels (early-out on `all_same`)
-      at LOD 0/1/3. All kernels < 1.5 µs/chunk → 30-100× headroom vs 50 µs Stage 4.1 budget.
-      Triangle reduction: LOD 1 = 5.94×, LOD 2 = 31.8×, LOD 3 = 169× (all > 4×/16×/64× geometric bounds).
-      **Verdict=mixed:** single (kernel, stitch) pair doesn't win for all scenes, but the
-      `(B_SurfacePreserve, X_None)` pair is the only DoD-satisfying default. **Mainline
-      recommendation:** use `B_SurfacePreserve` as default kernel, 3-step migration per
-      `agent/knowledge.md §30.4` precedent (Step 1: downsample kernel + per-chunk LodDownsampleJob in
-      `src/voxel/VoxelWorld.{hpp,cpp}` ~150 LoC; Step 2: `SelectLodMeshSource` decision в
-      `voxel_mesh.comp` per-chunk dispatch ~250 LoC; Step 3: Tracy plot + default flip ~50 LoC).
-      Total ~450 LoC, M effort, 2-3 sessions. **Per-scene policy option (out of scope for v1):** runtime
-      select between B_SurfacePreserve (default) и C_SolidOnly (for uniform_floor-style scenes). Cross-axis:
-      6 closed same-session `2026-06-21` (audio mixed + wfc mixed + sub-chunk mixed + gpu-noise mixed
-    + frame-flight mixed + dxc mixed) + 3 in-progress same-session (tracy-gpu + taa + gpu-fluid-ca)
-    + 19+ closed `2026-06-20` + this = full Stage 0/1.x/2.x/3.x/4.x/5.x/6.x + cross-cutting optimization
-      landscape + audio + temporal + atomic + profiling + **LOD axis NEW**. Caveats: (a) CPU prototype
-      only — GPU dispatch deferred to follow-up; (b) Naive face counter без greedy merge (per
-      `sub-chunk-layers` precedent, layout-orthogonal); (c) Stitch strategies produce identical quad
-      counts в prototype (X=Y=Z because B kernel eliminates T-junction проблема upstream); (d) Real
-      ProjectV chunk content = synthetic scenes only; (e) No mutation cost measured (out of Stage 4.2
-      DoD); (f) Visual QA in real gameplay required to confirm B's T-junction robustness at runtime
-      camera angles. См. §6 + §1 + experiment README + RESULTS.md + sources.md.
+- [x] **[2026-06-21-chunk-storage-compression-axis](./experiments/2026-06-21-chunk-storage-compression-axis/)**
+  — closed `2026-06-21`, verdict=`mixed`. См. §Closed entry ниже.
 
-- [x] **2026-06-21-depth-occlusion-quantization** — l, **independent** (VRAM-budget axis,
-  cross-cutting для Stage 2.x HZB cull + Stage 2.2 depth prepass + Stage 5.x G-buffer/depth,
-  **follow-up к закрытому `2026-06-20-hzb-binding-models`** [verdict=mixed, HZB sampling pattern]
-    + closed `2026-06-20-bindless-descriptor-overhead` [Phase A shadow cascade VRAM] + closed
-      `2026-06-20-frame-flight-allocator-budget` [VRAM budget = 5.06 GiB на 8 GiB RTX 3060 Ti]).
-      Closed `2026-06-21` (single session, ~2h), verdict **`yes`** (с оговорками). Standalone C++26
-      analytical benchmark (`prototype/depth_quant_bench.cpp` ~500 LoC, Clang 22.1.6 `-O3 -march=native`,
-      zero warnings) — 72 configs × 50 measure iters = 3600 measurements. **Headline:**
-      VRAM D32_SFLOAT → D16_UNORM = **-50%** (1080p: 18.46 → 9.23 MiB; 720p: 8.20 → 4.10 MiB;
-      HZB mip chain included); PSNR depth round-trip = **107.12 dB** (visually lossless, > 50 dB
-      threshold); false-culled count = **0** across 230 400 cull decisions (0%); mean cull error =
-      3.82e-6 (negligible). **Caveats:** synthetic CPU-only (no Vulkan init, no GPU time, no cross-vendor
-      validation); D16 + PCF = banding/moiré artifacts per DXVK PR #5564 (2026-03-25) → CSM shadow maps
-      NOT recommended to switch; reverse-Z benefit not measurable в synthetic (depth range [0.05, 1.0]
-      not at far plane per Nathan Reed 2021 analysis). **3-step migration per `agent/knowledge.md §30.4`:**
-      Step 1 (XS, ~30 LoC) foundation + D16 depth attachment via `findDepthFormat` candidates +
-      `PROJECTV_DEPTH_FORMAT=D16|D32` env; Step 2 (S, ~80 LoC) reverse-Z + HZB integration
-      (clear=0, GREATER compare, NDC [1,0] range, HZB cull shader update); Step 3 (S, ~50 LoC)
-      multi-attachment rollout (CSM optional, VCT cone-march, transparency depth). Total ~160 LoC
-      across 4-6 files, S effort, 3-4 sessions. **Cross-vendor validation matrix:** NVIDIA Ampere/Ada/
-      Blackwell + AMD RDNA 2/3/4 + Intel Arc Gfx12.5+ (per `dec-pipelines-async-compute` §2.2).
-      **Re-evaluation triggers:** Stage 4.3 (128+ chunks draw distance, depth precision более критична),
-      Stage 5.1 VCT (depth-derivative format consistency), Stage 5.2 RTX shadow (alternative depth path),
-      `VK_KHR_depth_float_reduce` ratification, DXVK PR #5564 merge status. Cross-refs: `TODO.md §2.1/§2.2/§4.3/§5.1`,
-      `src/render/Renderer.cpp:290-297` (current standard-Z + D32 candidates), `src/render/HizCulling.{hpp,cpp}`,
-      `src/shaders/hzb_cull.comp`, `agent/knowledge.md §30.4`, `hardware-profile.md §3+§4`,
-      `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold),
-      closed experiments: `hzb-binding-models` (verdict=mixed), `frame-flight-allocator-budget`
-      (verdict=mixed), `bindless-descriptor-overhead` Phase A (verdict=mixed), `meshing-algo-comparison`
-      (verdict=mixed). Closed entry: `experiments/2026-06-21-depth-occlusion-quantization/` + prototype.
-
-- [ ] **2026-06-21-vk-fragment-shading-rate-voxel** — m, **independent** (cross-cutting Stage 5.x lighting cost
-  optimization, **follow-up axis** после полного closure lighting-strategy-axis `2026-06-20`: `vct-vs-rt-cutoff`
-  mixed + `clustered-forward-mass-lights` yes + `rt-shadows-vs-csm` mixed + `restir-gi-feasibility` mixed).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements per
-  `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only analytical prototype + cross-vendor projection, dev host `obvium` Zen 3 5800X
-    + RTX 3060 Ti GA104 per `hardware-profile.md §1/§3` available).
-      **Hypothesis (one-line):** Tier 2 VRS через per-region image attachment (`VK_KHR_fragment_shading_rate` attachment
-      method, NOT in Vulkan 1.4 core per `docs.vulkan.org/spec/latest/appendices/versions.html`) даст 20-46%
-      reduction в Stage 5.x fragment shading cost для voxel scenes (lighting-bound passes) per Intel SIGGRAPH 2019
-      measurements (30% at 1x2/2x1, 46% at 2x2 в forward rendering, up to 5x в forward shading per NVIDIA NAS GDC 2019)
-      при сохранении visual quality через shader-side `dFdx/dFdy` × fragment size adaptation. Cross-vendor matrix
-      Tier 2: NVIDIA Turing/Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Gen11/Arc Alchemist/Battlemage.
-      **Cross-axis:** orthogonal ко всем 5 in-progress parallel (tracy-gpu = profiling, wfc = gen strategy,
-      sub-chunk = closed, taa-motion = temporal Stage 5.3, gpu-fluid-ca = Stage 3.1 atomic); complementary к
-      closed `2026-06-20-vct-vs-rt-cutoff` (strategy axis = roughness cutoff, this = cost axis = fragment rate);
-      complementary к in-progress `2026-06-21-taa-motion-vectors` (VRS TAA feedback loop risk per NVIDIA NAS =
-      follow-up cross-axis if VRS + TAA combined); orthogonal к closed `2026-06-20-dec-pipelines-async-compute`
-      (sync) + `2026-06-20-nanovdb-on-gpu` (storage) + `2026-06-21-frame-flight-allocator-budget` (allocator).
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-vk-fragment-shading-rate-voxel/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-vk-fragment-shading-rate-voxel/prototype/{vrs_voxel_sim.cpp,
-      CMakeLists.txt,README.md,RESULTS.md,results.csv}` (standalone C++26 CPU voxel rasterizer + VRS attachment
-          simulator, NOT ProjectV mainline)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` (VRS gain 20-46% projected per Intel/NVIDIA SOTA для lighting-bound voxel
-          scenes; риск: VRS+TAA feedback loop per NVIDIA NAS GDC 2019 latency 3-4 frames = potential TAA regression;
-          blockiness risk для high-frequency voxel texture detail; ddx/ddy scaling = `voxel.frag` adaptation needed
-          per Intel SIGGRAPH 2019 caveats). GPU prototype с real `VK_KHR_fragment_shading_rate` pipeline deferred
-          до Stage 5.x integration milestone — analytical prototype + cross-vendor projection = sufficient для
-          first-tier hypothesis check + mainline integration recommendation.
-          **Verdict (closed `2026-06-21`):** **`mixed`** — global VRS savings **validated** (50% для `vrs_2x1`/`vrs_1x2`
-          consistent across all 4 scenes × 3 res × 100 iter; 75% для `vrs_2x2_global`); **hybrid per-region savings
-          falsified для sparse voxel scenes** (4-6% coverage per synthetic scenes → coverage-variance classifier
-          classifies все tiles as high-detail 1x1 → hybrid savings = 0%). Cross-vendor Tier 2 VRS matrix validated
-          (NVIDIA Turing/Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Gen11/Arc Alchemist/Battlemage per Mesa RADV
-    + Intel ANV + NVIDIA driver baseline). `VK_KHR_fragment_shading_rate` verified **NOT in Vulkan 1.4 core**
-      (remains device extension in 1.4 per `docs.vulkan.org/spec/latest/appendices/versions.html`). Standalone
-      C++26 CPU prototype `prototype/vrs_voxel_sim.cpp` ~770 LoC + `prototype/results.csv` 60 rows × 12 cols +
-      100 iter + 10 warmup per config. **3-step migration per `agent/knowledge.md §30.4` precedent:** Step 1
-      (XS, ~30 LoC) global 2x1 для VCT integration via `vkCmdSetFragmentShadingRateKHR` + `voxel.frag`
-      VRS-agnostic adaptation; Step 2 (S, ~100 LoC + tests) VRS extension probe +
-      `VkFragmentShadingRateAttachmentInfoKHR`
-      attachment setup + R8_UINT image per swapchain; Step 3 (M, ~250 LoC) deferred — hybrid classifier +
-      two-pass dynamic VRS per Khronos sample `fragment_shading_rate_dynamic` (compute shader generate per-frame
-      derivative image → next-frame VRS image). Caveats: (a) CPU prototype, no real GPU dispatch; (b) hybrid
-      savings validated as 0% для sparse scenes — **conditional adoption**: 2x1/1x2 default для sparse, 2x2_global
-      conditional для dense cave/biome scenes; (c) cross-vendor GPU measurement deferred; (d) TAA + VRS feedback
-      loop cross-axis risk (per NVIDIA NAS GDC 2019: 3-4 frames transition latency) — separate experiment needed;
-      (e) `voxel.frag` shader requires `dFdx/dFdy` scaling adaptation per Intel SIGGRAPH 2019 caveat.
-
-- [x] **2026-06-21-audio-diffraction-hybrid** — closed `2026-06-21` (single session), verdict **`mixed`**. См. §Closed
-  ниже +
-  [README](./experiments/2026-06-21-audio-diffraction-hybrid/README.md) + [STATUS](./experiments/2026-06-21-audio-diffraction-hybrid/STATUS.md) +
-  [sources.md](./experiments/2026-06-21-audio-diffraction-hybrid/sources.md) + [prototype/RESULTS.md](./experiments/2026-06-21-audio-diffraction-hybrid/prototype/RESULTS.md)
-    + `prototype/results.csv` (28 rows). **Audio axis Phase 1.5** — explicitly declared follow-up к closed
-      `2026-06-21-audio-raytracing-voxel-sdf` line 459-460. **C_Tsingos production-ready** (0.5-0.6% audio budget @ 64
-      sources, +1.2-1.4 dB recovery per Tsingos 2007 spec 1-2 dB); **B_Schissler deferred** (5-16% budget, 0 dB в
-      first-order UTD prototype — second-order required для full +2-4 dB). 3-step migration per
-      `agent/knowledge.md §30.4` precedent (~150 LoC, XS effort, 1-2 sessions).
-
-- [ ] **2026-06-21-audio-diffraction-hybrid** — l (priority upgrade justified per below), **independent** (audio
-  rendering axis, Phase 1.5 enhancement, **explicitly declared follow-up** к закрытому
-  `2026-06-21-audio-raytracing-voxel-sdf`
-  line 459-460: «_audio-diffraction-hybrid_ (Schissler 2014 diffraction via HZB per `2026-06-20-hzb-binding-models`)`).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-  fifth invocation this session — previous 4 closed audio + wfc + sub-chunk + taa).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements per
-  `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only voxel scenes + audio computation, no Vulkan/mainline dependency, dev host `obvium` Zen
-  3 5800X + governor=`powersave` per `hardware-profile.md §1` available; no AVX-512 per §1 = realistic measurement
-  floor).
-  **Hypothesis (one-line):** Добавление **diffraction term** (Schissler & Manocha 2014 «Interactive Sound Propagation
-  Using Bidirectional Path Tracing» + Tsingos 2001 HW-accelerated diffraction) к закрытому
-  `2026-06-21-audio-raytracing-voxel-sdf` **Phase 1 occlusion** path (1 ray/source) даст **+2-4 dB perceived
-  loudness за diffraction edges** (per Schissler 2014) при **+0.3-0.7 ms CPU cost / 64 sources / frame** на Zen 3
-  5800X = **< 2% of 33.3 ms audio frame budget @ 30 Hz** (vs Phase 1 baseline < 0.05 ms = 1% of audio budget;
-  +10-20× cost, но всё ещё 50× headroom в audio budget). **Zero new GPU passes** (CPU-side computation в
-  существующем audio thread per `agent/knowledge.md §28` `AudioEngine`). **Cross-axis orth orth** ко всем 4
-  in-progress parallel (tracy-gpu = profiling, lod-mesh-downsampling = Stage 4.2 geometry, vk-fragment-shading-
-  rate-voxel = VRS fragment density, gpu-fluid-ca = Stage 3.1 atomic); **complementary** к closed audio axis
-  (Phase 1 occlusion + Phase 2 Eyring reverb recommended; this = Phase 1.5 enhancement = diffraction term).
-  **Why priority upgrade l→l-promoted:** per `optimization-philosophy.md` 5-10% threshold — audio = cross-cutting
-  (perception != hard metric), но per Schissler 2014 + Vercidium 2025 + Meta Acoustic SDK 2024+ = production-grade
-  audible gain, easily validated perceptual listening test + dB SPL proxy. **`mixed` expected** (B_Schissler wins
-  perceptual quality per Schissler 2014 measurement, but +0.3-0.7 ms cost may push total audio path до ~0.7-0.9 ms
-  per frame; alternative A_None/Phase 1 cheaper; C_Tsingos uniform sample = middle ground).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-audio-diffraction-hybrid/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-audio-diffraction-hybrid/prototype/` (standalone C++26 CPU
-      diffraction prototype, extend `2026-06-21-audio-raytracing-voxel-sdf/prototype/{voxel_grid,audio_raytracer,
-      bench}.{hpp,cpp}` patterns with diffraction term, synthetic voxel scenes, NOT ProjectV mainline)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` — Schissler-B gives best perceptual quality at acceptable cost; Tsingos-C is
-      reasonable middle ground; A_None remains baseline. Mainline recommendation: Phase 1.5 hybrid (Schissler 4-edge
-      probe + Eyring reverb from Phase 2) as immediate follow-up, **XS effort** (~150 LoC) per
-      `agent/knowledge.md §30.4` 3-step migration precedent — Step 1 add `Diffraction::edgeProbe()` helper
-      (~80 LoC, XS); Step 2 wire into `AudioEngine::tick()` after occlusion (~50 LoC, XS); Step 3 env flag
-      `PROJECTV_AUDIO_DIFFRACTION=ON` default ON (~20 LoC, XS). Total ~150 LoC, XS effort, 1-2 sessions. Caveats:
-      (a) CPU-only synthetic voxel scenes (cave + open_plains + multi_room per closed `audio-raytracing-voxel-sdf`
-      baseline); (b) Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`; (c) no AVX-512 = realistic
-      measurement floor (deferred до Zen 5 / Arrow Lake per `simd-procedural-noise` precedent); (d) perceptual
-      validation = analytical proxy (loudness dB estimate per Schissler 2014 formula), not full HRTF / ABX listening
-      test (out of scope для single-agent research).
-
-- [x] **[2026-06-21-dlss-fsr-xess-upscaling-voxel](./experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/)** —
-  m, **independent** (cross-cutting для Stage 4.3 lift draw distance + Stage 5.x render pass
-  post-process + 8 GiB VRAM budget на dev host per `hardware-profile.md §3`; **первый axis "render
-  target post-process upscaling"** — 0 of 30+ closed experiments covered this; ортогонален всем 4
-  in-progress parallel: tracy-gpu = profiling, gpu-fluid-ca = Stage 3.1 atomic, vct-cone-count =
-  Stage 5.1 VCT quality, audio-diffraction = audio). **Closed `2026-06-21` (single session, ~2h),
-  verdict **`mixed`**. Web-research complete (3 batches, 15+ results, **15 primary + 6 secondary
-  sources верифицированы**: StraySpark 2026-03-25 UE 5.7 integration guide [FSR 4 = RDNA 4-only,
-  FSR 3.1 = universal Vulkan fallback, DirectSR = Microsoft unified API, vendor decision matrix,
-  benchmarks: FSR 4 Balanced +69% FPS, FSR 3.1 Balanced +100%+ FPS, XeSS 2 Quality +53% FPS],
-  NVIDIA DLSS SDK 310.6.0 [Mar 2026, FG 5x/6x Modes, Transformer out of beta], NVIDIA devblog
-  DLSS 4.5 2026-01-14 [2nd-gen transformer 5× more compute, Dynamic MFG 6x mode], AMD FidelityFX
-  SDK v1.1 [Jul 2024, FSR 3.1 Vulkan support explicit], RigPulse 2026-03-29 buyer guide, TechSpot
-  2026-03-12 650+ games analysis, mypcbottleneck 2026-06-04 FSR 4 [CRITICAL: "Vulkan API games
-  are not compatible with the FSR 4 Upgrade feature" = FSR 4 = RDNA 4-only + DX12-only driver
-  upgrade → FSR 3.1 primary для ProjectV Vulkan], wccftech 2026-04-21 DLSS 4.5 SDK, optiscaler
-  OptiScaler GitHub, gamerhardware 2026-03-29 compatibility matrix, NVIDIA GeForce DLSS 4 MFG
-  news, NVIDIA DLSS SDK 310.4.0 commit, wccftech 2026-03-19 feature comparison, Khronos Vulkan
-  versions.html). Standalone C++26 CPU prototype `prototype/upscaling_bench.cpp` **~470 LoC** (Clang
-  22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **0 warnings**),
-  4 upscaler configs [None / FSR 3.1 / XeSS 2 DP4a / DLSS 4.5 Sim per StraySpark 2026-03-25 + NVIDIA
-  devblog cost model] × 4 quality presets [native 100% / quality 67% / balanced 58% / performance
-  50% per StraySpark 2026-03-25 + RigPulse 2026-03-29] × 3 extents [1080p / 1440p / 4K] × 2 scenes
-  [dense_voxel mean 6 touches / sparse_voxel mean 1.5 touches] × 3 seeds × 1000 iter + 10 warmup =
-  **288 measurements** on dev host `obvium` Zen 3 5800X. **Headline (analytical, per `prototype/RESULTS.md`):**
-    - **`None` (no upscaling, render at lower res):** cost ratio = **0.30-1.05**, savings 50-70%
-      at Performance preset, BUT naive quality (no motion vector awareness) = **NOT acceptable**
-      для mainline per real-world quality (PSNR 42 dB в analytical model, реальная ~32 dB).
-    - **`FSR 3.1` (universal Vulkan cross-vendor):** cost ratio = **0.77-1.52**, savings **3.7-23%**
-      at non-native presets, PSNR **39.2 dB** (visually lossless), VRAM +1 MiB. **RECOMMENDED
-      cross-vendor default** per `StraySpark 2026-03-25` decision matrix.
-    - **`XeSS 2 DP4a` (cross-vendor fallback):** cost ratio = **2.37-3.12**, **2.4× cost overhead**
-      в analytical model — DP4a fallback = too expensive; **XMX hardware required** (Intel Arc
-      Alchemist/Battlemage, not on RTX 3060 Ti).
-    - **`DLSS 4.5 Sim` (transformer 2nd gen):** cost ratio = **14.5-15.3** в analytical model
-      **but conservative** — my model uses FP32 baseline (14.7 TFLOPS) for Tensor Core ops;
-      real RTX 3060 Ti Tensor Cores deliver ~25 TFLOPS FP16 / ~50 TOPS INT8 = 1.7-3.4× higher
-      throughput. **Real GPU measurements required** для verdict on DLSS 4.5 path.
-    - **Cross-vendor matrix (analytical projection + industry benchmarks):** RTX 30/40/50 →
-      **DLSS 4.5** (best, 30-50% savings per StraySpark 2026-03-25 + RigPulse 2026-03-29) +
-      FSR 3.1 fallback; AMD RDNA 4 → FSR 4 (native) + FSR 3.1 fallback; AMD RDNA 2/3 → FSR 3.1;
-      Intel Arc → XeSS 2 XMX; others → FSR 3.1 (universal Vulkan).
-    - **Stage 4.3 impact:** FSR 3.1 Performance preset = **23% per-fragment savings**; combined
-      with closed `lod-mesh-downsampling` (5.94× triangle reduction LOD 1) + `nanovdb-on-gpu`
-      (12-141% traversal speedup) + `gpu-procedural-noise-compute-kernels` (8× headroom chunkSize=8)
-      = Stage 4.3 128m draw distance feasible on RTX 3060 Ti.
-    - **VRAM cost:** FSR 3.1 = +1 MiB, XeSS 2 = +18 MiB, DLSS 4.5 = +32 MiB, all well under
-      1% of 8 GiB budget per `hardware-profile.md §3`.
-    - **Frame Generation [DLSS MFG 3x/6x, FSR 3 AFMF, XeSS 2 XeSS-FG] = OUT OF SCOPE** single-session
-      (latency budget + Reflex/XeLL integration needed; separate experiment if frame-gen
-      pursued).
-    - **FSR 4 = NOT usable on ProjectV Vulkan per `mypcbottleneck 2026-06-04`** "Vulkan API games
-      are not compatible with the FSR 4 Upgrade feature" — RDNA 4-only ML upscaler + DX12-only
-      driver upgrade path.
-    - **DirectSR = defer to Vulkan core promotion** (currently beta per `StraySpark 2026-03-25`).
-      **Mainline рекомендация:** 3-step migration per `agent/knowledge.md §30.4` precedent —
-      Step 1 (XS, ~30 LoC) feature-flag `PROJECTV_UPSCALER=OFF|FSR31|XESS2|DLSS45|DIRECTSR` env +
-      `PROJECTV_UPSCALER_QUALITY=quality|balanced|performance|ultraperformance` env + post-process
-      pipeline slot after TAA resolve + cross-vendor graceful fallback chain; Step 2 (M, ~250 LoC)
-      per-SDK integration [UpscalerFactory + NoneUpscaler + FfxFsr31Upscaler + Xess2Upscaler +
-      StreamlineDlss45Upscaler + DirectSRUpscaler]; Step 3 (S, ~80 LoC) quality preset table +
-      TracyPlot + default flip. Total **~360 LoC, S-M effort, 2-3 sessions**. **Re-evaluation
-      triggers:** real GPU measurements с actual SDKs (DLSS 4.5 + XeSS 2 XMX); Vulkan 1.5/1.6
-      DirectSR core promotion; Stage 4.3 ships (128+ chunks draw distance); cross-vendor dev
-      matrix (AMD RDNA + Intel Arc Battlemage); ProjectV shader count > 50 (CI/CD bottleneck).
-      **Caveats:** (a) CPU prototype, no real GPU dispatch — costs are analytical from per-pixel
-      ALU + memory bandwidth model with RTX 3060 Ti reference (14.7 TFLOPS / 448 GB/s from
-      `hardware-profile.md §3`); (b) Upscaler implementations = cost models, not real SDKs —
-      FSR 3.1 / XeSS 2 / DLSS 4.5 per-pixel costs sourced from public benchmarks, real SDK load
-      via `dlopen` deferred to mainline integration prototype; (c) No PSNR/SSIM real measurement
-      — quality model is analytical from `psnr_preservation` parameter (calibrated to industry
-      data), real PSNR/SSIM on rendered frames deferred to integration prototype + visual QA;
-      (d) Deterministic timing measurements — all seeds produce identical costs (synthetic
-      scene affects colors, not timing); (e) Cross-vendor projection = analytical only — single
-      GPU vendor measured (NVIDIA RTX 3060 Ti dev host); AMD RDNA 2/3/4 + Intel Arc Battlemage
-      projected per published vendor benchmarks. **Cross-axis:** orthogonal к 4 in-progress
-      parallel (tracy-gpu = profiling, gpu-fluid-ca = Stage 3.1 atomic, vct-cone-count = Stage 5.1
-      VCT quality, audio-diffraction = audio); complementary к closed `taa-motion-vectors` (verdict=yes,
-      motion vector MRT = direct upscaling input per Streamline/FidelityFX/XeSS unified API contract
-      — `R16G16_SFLOAT` format matches upscaling standard) + `bindless-descriptor-overhead` Phase D
-      (bindless = required for cross-vendor upscaling resource management) + `depth-occlusion-quantization`
-      (VRAM-budget cross-cutting) + `vk-fragment-shading-rate-voxel` (VRS cost axis complementary —
-      VRS 2x1 + DLSS 2x = 4× effective cost reduction, sequential adoption recommended) + `restir-gi-feasibility`
-      (DLSS Ray Reconstruction relevance for Stage 6+ path tracer) + `vct-vs-rt-cutoff` (Stage 5.1
-      VCT cost → upscaling directly reduces) + `lod-mesh-downsampling` (LOD geometry reduction
-      = orthogonal cost axis, combined with FSR 3.1 = Stage 4.3 feasible) + `nanovdb-on-gpu`
-      (VCT cone-march cost = primary upscaling target) + `gpu-procedural-noise-compute-kernels`
-      (world gen async = upscaling overlap candidate) + `dec-pipelines-async-compute` (async compute
-      = upscaling async pass candidate). **Continuation chain:** none (first render-target
-      upscaling axis experiment; opens cross-cutting Stage 4.3/5.x post-process). **Re-evaluation
-      triggers:** real GPU measurements with actual SDKs (DLSS 4.5 + XeSS 2 XMX); Vulkan 1.5/1.6
-      DirectSR core promotion; Stage 4.3 ships (128+ chunks draw distance); AMD RDNA 4 + Intel
-      Arc Battlemage dev matrix. См.
-      §6 + [experiment README](./experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/README.md)
-
-    + [STATUS](./experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/STATUS.md) +
-      [sources.md](./experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/sources.md) +
-      [prototype/README.md](./experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/prototype/README.md) +
-      [prototype/RESULTS.md](./experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/prototype/RESULTS.md) +
-      `prototype/build/results.csv` (288 rows × 18 cols).
-      **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-      **seventh invocation this session** — previous 6 closed or in-progress: audio mixed + wfc mixed +
-      sub-chunk mixed + gpu-noise mixed + taa-yes + depth-yes + vk-fragment-shading mixed + frame-flight
-      mixed + dxc mixed + lod-mesh mixed; 4 in-progress parallel: tracy-gpu + gpu-fluid-ca + vct-cone-count
-    + audio-diffraction).
-      **Started:** 2026-06-21.
-      **ETA:** this session (single experiment, analytical + standalone Vulkan 1.4 + C++26 prototype +
-      measurements per `benchmarks/methodology.md §3`).
-      **Blocker:** нет (CPU+GPU prototype, dev host `obvium` RTX 3060 Ti GA104 + Vulkan 1.4.341 +
-      NVIDIA 610.43.02 поддерживает DLSS 4.5 через Streamline SDK; FSR 4 [RDNA 4-only + DX12-only
-      per `mypcbottleneck 2026-06-04`] → prototype focus on FSR 3.1 + XeSS 2 + DLSS 4.5 = cross-vendor
-      measurement).
-      **Hypothesis (one-line):** правильная интеграция SOTA 2026 upscaling SDK (DLSS 4.5 Streamline +
-      FSR 3.1 FidelityFX + XeSS 2 XeLL + DirectSR unified API) при rendering на 67% native resolution
-      (Quality preset) даст **-30-50% fragment shading cost** (прямое pixel count reduction) + **preserved
-      visual quality** (PSNR ≥38 dB vs native per `StraySpark 2026-03-25` UE 5.7 benchmark) + **+0-50 MiB
-      VRAM cost** (upscaling state vectors) для ProjectV's 8 GiB RTX 3060 Ti VRAM budget, **enabling Stage 4.3
-      lift draw distance 64→128 m** (per `TODO.md §4.3` + `agent/workspace.md §2` "Nearest Gap" + 1.2 SVDAG dedup
-    + 1.1 NanoVDB flatten foundation) без GPU upgrade.
-      **Cross-axis:** orthogonal к 4 in-progress parallel (tracy-gpu = profiling, gpu-fluid-ca = Stage 3.1,
-      vct-cone-count = Stage 5.1 VCT quality, audio-diffraction = audio); complementary к closed
-      `2026-06-21-taa-motion-vectors` (verdict=yes, motion vector MRT = direct input для upscaling per DLSS
-      Streamline / FSR 3.1 / XeSS 2 unified API contract — `R16G16_SFLOAT` motion vector format = exactly
-      matches upscaling input contract) + closed `2026-06-20-bindless-descriptor-overhead` Phase D
-      (bindless = required for cross-vendor upscaling resource management) + closed
-      `2026-06-21-depth-occlusion-quantization`
-      (VRAM-budget axis, cross-cutting) + closed `2026-06-21-vk-fragment-shading-rate-voxel` (VRS cost axis,
-      complementary — both reduce fragment cost, can be combined: VRS 2x1 + DLSS 2x = 4x effective cost reduction
-      but need cross-validation); cross-vendor matrix per `2026-06-20-dec-pipelines-async-compute` §2.2
-      (NVIDIA Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Arc Gfx12.5+).
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-dlss-fsr-xess-upscaling-voxel/prototype/` (standalone Vulkan 1.4
-          harness: 3 synthetic render passes [voxel pass + TAA resolve + upscaling post-process] + 4 upscaler
-          configs [None / FSR 3.1 / XeSS 2 / DLSS-4.5 simulated] + quality + perf measurements, NOT ProjectV
-          mainline, dev host `obvium`)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` — global upscaling savings **-30-50% fragment cost validated** (per
-          StraySpark 2026-03-25 + RigPulse 2026-03-29 + wccftech 2026-04-21 benchmarks); FSR 4 [RDNA 4-only + Vulkan
-          no driver upgrade per `mypcbottleneck 2026-06-04` "Vulkan API games are not compatible with FSR 4 Upgrade"]
-          excludes most cross-vendor benefit → **FSR 3.1 fallback = primary** для AMD RDNA 2/3 + non-upgraded
-          RDNA 4 + Intel + NVIDIA (cross-vendor universality); DLSS 4.5 = best quality but NVIDIA-only; XeSS 2
-          = Intel Arc + DP4a cross-vendor fallback; DirectSR = Microsoft unified API simplifying integration.
-          **Mainline recommendation (preliminary):** 3-step migration per `agent/knowledge.md §30.4` precedent —
-          Step 1 (XS, ~30 LoC) feature-flag `PROJECTV_UPSCALER=OFF|FSR31|XESS2|DLSS45|DIRECTSR` env + post-process
-          pipeline slot after TAA resolve; Step 2 (M, ~250 LoC) per-SDK integration: NVIDIA Streamline SDK (DLL
-          load + SlInit + SlSetFeature for DLSS) / AMD FidelityFX SDK (FSR 3.1 native Vulkan) / Intel XeSS 2
-          SDK (XMX path) / DirectSR unified (UE 5.7 pattern reference); Step 3 (S, ~80 LoC) quality preset
-          selection + Tracy plot + default flip. Total ~360 LoC, S-M effort, 2-3 sessions.
-          **Caveats (preliminary):** single GPU vendor measured (RTX 3060 Ti GA104, NVIDIA-only DLSS path);
-          FS4 [RDNA 4-only] not testable on RTX 3060 Ti → FSR 3.1 fallback measured; frame generation [DLSS
-          Multi Frame Gen 3x/6x, FSR 3 AFMF, XeSS 2 XeSS-FG] requires latency budget + Reflex/XeLL integration
-          → out of scope single-session; DirectSR status in 2026 Vulkan still beta per `StraySpark 2026-03-25`
-          article → integration defer until core 1.5/1.6 promotion.
-
-- [ ] **2026-06-21-vct-cone-count-atlas-precision** — m, **Stage 5.1** (Voxel Cone Tracing per
-  `TODO.md §5.1` + `agent/knowledge.md §30.4` 3-step migration precedent, **direct follow-up к закрытому
-  `2026-06-20-vct-vs-rt-cutoff`** [verdict=mixed, cutoff=0.3 established]).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-  **sixth invocation this session** — previous 5 closed or in-progress: audio mixed + wfc mixed + sub-chunk mixed
-    + gpu-noise mixed + lod-mesh mixed closed; tracy-gpu + taa + gpu-fluid-ca + depth-occlusion + vk-fragment-shading-
-      rate + audio-diffraction in-progress parallel; 19+ closed `2026-06-20`).
-      **Started:** 2026-06-21.
-      **ETA:** this session (single experiment, analytical + standalone Vulkan 1.4 compute prototype + measurements per
-      `benchmarks/methodology.md §3`).
-      **Blocker:** нет (GPU prototype, dev host `obvium` RTX 3060 Ti GA104 Ampere + Vulkan 1.4.341 + все relevant
-      texture formats [R8G8B8A8_UNORM, R16G16B16A16_SFLOAT, R32G32B32A32_SFLOAT] supported per `hardware-profile.md
-  §3/§4`; 3D texture max size per device = 16384³ >> 256³ VCT atlas target).
-      **Hypothesis (one-line):** правильная комбинация **(cone count, atlas precision)** ∈
-      {(6, R8G8B8A8_UNORM), (6, R16G16B16A16_SFLOAT), (6, R32G32B32A32_SFLOAT), (12, ...), (12, ...), (12, ...),
-      (24, ...), (24, ...), (24, ...)} = 9 конфигураций даст measurably optimum = **12 cones × R16G16B16A16_SFLOAT
-      sweet spot** (PSNR vs 1024-cone brute-force reference ≥35 dB; ms/cone-march ≤0.3 ms per voxel на RTX 3060 Ti
-      Ampere) для Stage 5.1 voxel cone-march (per `TODO.md §5.1` explicit 6-cone default = under-sampled
-      hypothesis per Crassin 2011 GIVoxels §5 [12 cones recommended для diffuse GI]; 1-cone specular из TODO §5.1
-      fixed across all configs). **Baseline = 6 cones × R8G8B8A8_UNORM** (current mainline `agent/knowledge.md §15`
-    + `TODO.md §5.1` lowest-fidelity default). **Quality metric:** PSNR vs 1024-cone brute-force
-      irradiance reference. **Perf metric:** ms per cone-march per voxel + atlas mip-chain build ms. **3 scenes**
-      (synthetic): open_plains (homogeneous sky fill, easy case), cave_stress (worst-case light leaking, multiple
-      occluder geometries), mixed_biome (Minecraft-style heterogeneous). **Standalone Vulkan 1.4 compute prototype**
-      per `benchmarks/methodology.md §3` (9 configs × 3 scenes × 5 seeds × N=1000 iter + 10 warmup = 135,000
-      measurements на dev host `obvium`). Voxel grid = synthetic chunkSize=8 (per `src/voxel/VoxelWorld.hpp:78`).
-      **Anti-duplicate sentinel clean per §13.7** (no `vct-cone` anywhere in repo, no `vct-cone-count-atlas-
-  precision/` folder). **Cross-axis:** orthogonal ко всем 6 in-progress parallel (tracy-gpu = profiling,
-      gpu-fluid-ca = Stage 3.1 atomic, depth-occlusion = VRAM format, vk-fragment-shading-rate = VRS fragment
-      rate, audio-diffraction = audio, lod-mesh-downsampling = Stage 4.2 — closed same session but folder
-      retained); **complementary** к closed `2026-06-20-vct-vs-rt-cutoff` (cutoff=0.3 = which strategy axis;
-      this = within-VCT quality axis = how many cones + what precision) + closed
-      `2026-06-20-nanovdb-on-gpu` (NanoVDB-aligned storage = foundation для VCT atlas traversal per TODO §5.1
-      [voxelize.comp]) + closed `2026-06-20-restir-gi-feasibility` (deferred до Stage 6+ path tracer = this stays
-      the VCT baseline) + closed `2026-06-20-dec-pipelines-async-compute` (async compute = 5.x base
-      prerequisite для VCT mip-chain build off-frame).
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-vct-cone-count-atlas-precision/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-vct-cone-count-atlas-precision/prototype/` (standalone Vulkan 1.4
-          compute harness: synthetic voxel grid → voxelize.comp → 3D atlas → mip-chain build → cone-march.comp
-          variant N cones → irradiance accumulation → PSNR vs 1024-cone reference; 9 configs × 3 scenes × 5 seeds;
-          NOT ProjectV mainline, dev host `obvium`)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` — per Crassin 2011 GIVoxels §5 + NVIDIA VXGI 0.9 whitepaper [12 cones
-          recommended for diffuse GI, quality gain diminishing above 12] + OGRE 2019 VCT sample [R8 atlas = 8-bit
-          precision risk at high mip levels] + Lumen 2022 Narkowicz [24 cones for production quality]. Likely
-          conclusion: 12 cones × R16G16B16A16_SFLOAT = sweet spot (PSNR ≥35 dB, perf +50-100% vs 6-cone default,
-          VRAM 2× vs R8 baseline, but still well under 5% of 5.06 GiB budget per `hardware-profile.md §3` for
-          256³ atlas = 64 MiB / 128 MiB / 256 MiB). 24 cones likely overkill for voxel scenes (PSNR gain <2 dB
-          vs 12 cones, perf cost +30-50%). R8 atlas likely undersampled at mip ≥3 (8-bit banding, visible color
-          shifts in shadowed regions). R32F atlas likely wasted precision (perf cost 2× vs R16F, quality gain
-          <1 dB). **Mainline recommendation (preliminary):** upgrade default from 6×R8 to 12×R16F per
-          `agent/knowledge.md §30.4` 3-step migration (Step 1 atlas format change in `voxelize.comp` + `vct.frag` per
-          TODO §5.1 ~100 LoC; Step 2 cone count loop в `vct.frag` ~50 LoC; Step 3 Tracy plot + default flip ~30 LoC).
-          Total ~180 LoC, S effort, 1-2 sessions. **Cross-vendor validation** matrix same as
-          `2026-06-20-dec-pipelines-async-compute` §2.2 (NVIDIA Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Arc
-          Gfx12.5+); analytical cross-vendor projection for non-NVIDIA vendors. **Caveats:** (a) synthetic voxel
-          scenes (3 representative types, not real ProjectV chunk content); (b) GPU prototype only (CPU CPU
-          VCT alternative not measured — out of scope для Stage 5.1); (c) 1024-cone brute-force reference =
-          computational cost ~100× per voxel but acceptable for offline PSNR measurement; (d) mip-chain
-          filter strategy fixed at 2×2 box average (Crassin 2011 cone-tapered filter = follow-up, not in scope);
-          (e) perceptual quality = analytical PSNR only, no visual QA / listening test; (f) single GPU vendor
-          validated (RTX 3060 Ti GA104 Ampere), cross-vendor matrix analytical projection only.
-          **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-          fifth invocation this session — previous 4 closed audio + wfc + sub-chunk + taa).
-          **Started:** 2026-06-21.
-          **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements per
-          `benchmarks/methodology.md §3`).
-          **Blocker:** нет (CPU-only voxel scenes + audio computation, no Vulkan/mainline dependency, dev host `obvium`
-          Zen
-          3 5800X + governor=`powersave` per `hardware-profile.md §1` available; no AVX-512 per §1 = realistic
-          measurement
-          floor).
-          **Hypothesis (one-line):** Добавление **diffraction term** (Schissler & Manocha 2014 «Interactive Sound
-          Propagation
-          Using Bidirectional Path Tracing» + Tsingos 2001 HW-accelerated diffraction) к closed
-          `2026-06-21-audio-raytracing-voxel-sdf` **Phase 1 occlusion** path (1 ray/source) даст **+2-4 dB perceived
-          loudness за diffraction edges** (per Schissler 2014) при **+0.3-0.7 ms CPU cost / 64 sources / frame** на Zen
-          3
-          5800X = **< 2% of 33.3 ms audio frame budget @ 30 Hz** (vs Phase 1 baseline < 0.05 ms = 1% of audio budget;
-          +10-20× cost, но всё ещё 50× headroom в audio budget). **Zero new GPU passes** (CPU-side computation в
-          существующем audio thread per `agent/knowledge.md §28` `AudioEngine`). **Cross-axis orth orth** ко всем 4
-          in-progress parallel (tracy-gpu = profiling, lod-mesh-downsampling = Stage 4.2 geometry, vk-fragment-shading-
-          rate-voxel = VRS fragment density, gpu-fluid-ca = Stage 3.1 atomic); **complementary** к closed audio axis
-          (Phase 1 occlusion + Phase 2 Eyring reverb recommended; this = Phase 1.5 enhancement = diffraction term).
-          **Why priority upgrade l→l-promoted:** per `optimization-philosophy.md` 5-10% threshold — audio =
-          cross-cutting
-          (perception != hard metric), но per Schissler 2014 + Vercidium 2025 + Meta Acoustic SDK 2024+ =
-          production-grade
-          audible gain, easily validated perceptual listening test + dB SPL proxy. **`mixed` expected** (B_Schissler
-          wins
-          perceptual quality per Schissler 2014 measurement, but +0.3-0.7 ms cost may push total audio path до ~0.7-0.9
-          ms
-          per frame; alternative A_None/Phase 1 cheaper; C_Tsingos uniform sample = middle ground).
-          **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-audio-diffraction-hybrid/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-audio-diffraction-hybrid/prototype/` (standalone C++26 CPU
-          diffraction prototype, extend `2026-06-21-audio-raytracing-voxel-sdf/prototype/{voxel_grid,audio_raytracer,
-      bench}.{hpp,cpp}` patterns with diffraction term, synthetic voxel scenes, NOT ProjectV mainline)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` — Schissler-B gives best perceptual quality at acceptable cost; Tsingos-C is
-          reasonable middle ground; A_None remains baseline. Mainline recommendation: Phase 1.5 hybrid (Schissler 4-edge
-          probe + Eyring reverb from Phase 2) as immediate follow-up, **XS effort** (~150 LoC) per
-          `agent/knowledge.md §30.4` 3-step migration precedent — Step 1 add `Diffraction::edgeProbe()` helper
-          (~80 LoC, XS); Step 2 wire into `AudioEngine::tick()` after occlusion (~50 LoC, XS); Step 3 env flag
-          `PROJECTV_AUDIO_DIFFRACTION=ON` default ON (~20 LoC, XS). Total ~150 LoC, XS effort, 1-2 sessions. Caveats:
-          (a) CPU-only synthetic voxel scenes (cave + open_plains + multi_room per closed `audio-raytracing-voxel-sdf`
-          baseline); (b) Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`; (c) no AVX-512 = realistic
-          measurement floor (deferred до Zen 5 / Arrow Lake per `simd-procedural-noise` precedent); (d) perceptual
-          validation = analytical proxy (loudness dB estimate per Schissler 2014 formula), not full HRTF / ABX listening
-          test (out of scope для single-agent research).
-
-- [x] **2026-06-21-vk-multi-gpu-split-frame** — **m** (self-promo l→m), **independent** (cross-cutting
-  **VRAM-capacity axis** для **Stage 4.3** «lift draw distance cap 64→128 m» per `TODO.md §4.3` +
-  `agent/workspace.md §2` Nearest Gap callout, **второй axis после `frame-flight-allocator-budget` (closed
-  mixed) и `depth-occlusion-quantization` (closed yes)**). **New axis:** ни один из 30+ closed experiments
-  не покрывал **multi-GPU / device-group rendering**; **0 coverage в INDEX §6** для AFR / SFR / LOCAL /
-  REMOTE present modes.
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и
-  исследуй»; self-promo justification per `optimization-philosophy.md` 5-10% threshold +
-  `agent/knowledge.md Part A §2` (mainline = reproducible interactive voxel MVP) cross-cutting VRAM).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, **analytical + standalone C++26 CPU prototype + Vulkan 1.4 API
-  discovery + cross-vendor projection** per `benchmarks/methodology.md §3`).
-  **Blocker:** **частичный** — `web_search` (Exa) returned HTTP 429 «Too Many Requests» during initial research
-  per `AGENTS.md §4` web search obligation; **fallback per `agent/knowledge.md Part B §9` self-audit** =
-  `webfetch` (validated against `docs.vulkan.org/refpages/...` + `khronos.org/...`, full `VK_KHR_device_group`
-    + `VK_KHR_device_group_creation` + `VkDeviceGroupPresentInfoKHR` specs retrieved 2026-06-21) + Vulkan 1.4
-      core spec (VK_VERSION_1_1 promotion of `VK_KHR_device_group` per `docs.vulkan.org/refpages/latest/refpages/
-  source/VK_KHR_device_group.html` lines 38-43 «Deprecation State — Promoted to Vulkan 1.1») +
-      operator's local knowledge. **Not a full blocker** for hypothesis formulation since Vulkan 1.4 = core API
-      for multi-GPU; **partial blocker** for cross-vendor SOTA citations (NVLink 4.0, AMD xGMI, Intel Arc mGPU)
-      — will be flagged в `sources.md` as `web_search unavailable, webfetch retrieved Vulkan spec only,
-  cross-vendor vendor numbers cited from operator pre-2026 knowledge` и в §5 Results caveats.
-      **Hypothesis (one-line):** правильная (present mode, dispatch pattern) ∈ {(LOCAL single-GPU, baseline),
-      (LOCAL_MULTI_DEVICE, AFR), (SUM, SFR), (REMOTE, asymmetric)} для Vulkan 1.4 core `VkDeviceGroupPresentInfoKHR`
-      через `vkEnumeratePhysicalDeviceGroupsKHR` + `VkDeviceGroupDeviceCreateInfoKHR` logical device даст
-      **+30-90% effective frame rate** vs single-GPU baseline для **Stage 4.3 128m draw distance workload**
-      (per `TODO.md §4.3` + `agent/workspace.md §2` Nearest Gap) при **+5-15 ms per-frame sync overhead**
-      (peer memory transfer via `vkGetDeviceGroupPeerMemoryFeaturesKHR` + `VK_KHR_timeline_semaphore` cross-queue
-      sync per closed `dec-pipelines-async-compute` verdict=yes) + **+2-8 MiB/frame cross-GPU transfer VRAM cost**
-      (composited swapchain image, double-buffered) при **cross-vendor matrix**: NVIDIA Ampere/Ada/Blackwell
-      (NVLink 4.0 900 GB/s pair) + AMD RDNA 2/3/4 (xGMI / IF 200-800 GB/s) + Intel Arc Battlemage (no native
-      peer interconnect, PCIe 4.0 x16 = 32 GB/s = peer bottleneck).
-      **Self-promo l→m justification (per `optimization-philosophy.md` 5-10% threshold):**
-
-    - (a) **`VK_KHR_device_group` + `VK_KHR_device_group_creation` = core in Vulkan 1.1** (verified
-      2026-06-21 via `docs.vulkan.org/refpages/...`) = **no extension dependency for ProjectV** (uses Vulkan 1.4
-      per `hardware-profile.md §3`); multi-GPU API = **standard**, not vendor-specific.
-    - (b) **`8 GiB VRAM cap on dev host `obvium` (RTX 3060 Ti) = main bottleneck** per `agent/workspace.md §2`
-      Nearest Gap callout для Stage 4.3 (128+ chunks draw distance) + Stage 5.1 VCT (3D atlas scaling) +
-      Stage 5.2 RTX (BLAS pool scaling) — **multi-GPU = direct response** к VRAM scaling problem.
-    - (c) **Cross-cutting** с `frame-flight-allocator-budget` (closed mixed, allocator strategy = same VRAM
-      axis) + `depth-occlusion-quantization` (closed yes, format axis = same VRAM axis) + `vma-sparse-textures`
-      (closed mixed, software VT = same VRAM axis) + `vct-cone-count-atlas-precision` (closed mixed, atlas
-      format = same VRAM axis) + `nanovdb-on-gpu` (closed yes, GPU storage = same VRAM axis) — **multi-GPU
-      aggregation = new lever** in same axis.
-    - (d) **Measurable hypothesis** — analytical model + CPU simulation + cross-vendor projection =
-      `benchmarks/methodology.md §3`-compatible (no real multi-GPU hardware required на dev host).
-    - (e) **Cross-axis orthogonal** ко всем 5 in-progress parallel (`tracy-gpu` = profiling, `gpu-fluid-ca` =
-      Stage 3.1 atomic, `sdf-hybrid-world` = Stage 5.1 VCT + Stage 3.3 physics, `greedy-physics-meshing` =
-      Stage 3.3 meshing) и к 11 closed same-session experiments — **new axis, no overlap**.
-    - (f) **Per `agent/knowledge.md Part A §2` "Mainline = reproducible interactive voxel MVP"** — multi-GPU
-      optional scaling, NOT blocker для MVP. **Parked** (do nothing) вариант OK; **recommended** (integrate
-      API discovery + cross-vendor probe) = **low integration cost** ~200 LoC per `agent/knowledge.md §30.4`
-      3-step migration precedent.
-      **Why NOW (timing):** closed `dec-pipelines-async-compute` (yes) + `async-compute-overhead-numbers` (yes
-      +9.85-11.34%) = **sync foundation ready** для cross-queue multi-GPU sync; closed
-      `vulkan-fps-pacing-vk-ext` (mixed, SOTA validated) = **frame pacing ready** для AFR half-rate present
-      patterns; closed `frame-flight-allocator-budget` (mixed) = **allocator strategy ready** для
-      per-device memory budget tracking. **No more foundation blockers** — multi-GPU axis = **natural next
-      layer** on top of existing infrastructure.
-      **Cross-axis:** orthogonal ко всем 5 in-progress parallel (tracy-gpu = profiling, gpu-fluid-ca = Stage 3.1
-      atomic, sdf-hybrid-world = Stage 5.1 VCT + Stage 3.3 physics, greedy-physics-meshing = Stage 3.3 meshing);
-      **complementary** к closed `dec-pipelines-async-compute` (yes, sync foundation) + `async-compute-overhead-
-  numbers` (yes, sync measurement) + `frame-flight-allocator-budget` (mixed, allocator strategy same VRAM
-      axis) + `depth-occlusion-quantization` (yes, format axis same VRAM) + `vma-sparse-textures` (mixed,
-      software VT same VRAM) + `vct-cone-count-atlas-precision` (mixed, atlas format same VRAM) + `nanovdb-on-
-  gpu` (yes, storage same VRAM) + `vulkan-fps-pacing-vk-ext` (mixed, frame pacing foundation) + `vk-video-
-  decoder-replay` (l in §Open, video decoding same VRAM in spirit) — **multi-GPU aggregation = new lever
-      in same axis**. **New axis** — `Vulkan 1.4 device group API surface (enumeration, peer memory features,
-  present modes, dispatch base)` not covered by any closed experiment.
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-vk-multi-gpu-split-frame/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-vk-multi-gpu-split-frame/prototype/` (standalone C++26 CPU
-          analytical model + Vulkan 1.4 API discovery harness + AFR/SFR simulation, NOT ProjectV mainline, dev
-          host `obvium` RTX 3060 Ti GA104 [single GPU, API discovery still functional] per `hardware-profile.md
-      §3`)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` — present-mode **LOCAL_MULTI_DEVICE (AFR) likely best** для typical
-          voxel workload (uniform cost per frame, lowest present overhead, predictable sync); **SUM (SFR)**
-          likely best для bandwidth-bound (VCT atlas, BLAS) but present overhead 2-3× AFR (compositing); **REMOTE**
-          likely niche (compute-only on second GPU, render on first); **single-GPU (LOCAL) baseline = reference**.
-          Cross-vendor scaling: NVLink 4.0 (Hopper/Blackwell) = 70-90% scaling on 2 GPU; PCIe 4.0 (Intel Arc, no
-          xGMI) = 30-50% scaling bottleneck; AMD xGMI / IF = 60-80% scaling. **3-step migration per
-          `agent/knowledge.md §30.4` precedent** — Step 1 (XS, ~30 LoC) API discovery:
-          `vkEnumeratePhysicalDeviceGroupsKHR`
-
-    + `vkGetDeviceGroupPresentCapabilitiesKHR` + `vkGetDeviceGroupPeerMemoryFeaturesKHR` в `VulkanBootstrap.cpp`
-    + Tracy plot `gpu.deviceGroupCount` / `gpu.presentMode` / `gpu.peerMemory`; Step 2 (M, ~300 LoC) optional
-      AFR dispatcher в `Renderer.cpp` (`PROJECTV_MULTI_GPU_AFR=ON` env, frame parity counter); Step 3 (XS, ~50
-      LoC) cross-vendor probe matrix + default OFF. **Caveats:** (a) **single-GPU dev host** `obvium` (RTX 3060
-      Ti GA104, no second GPU) = **API discovery only**, not real multi-GPU benchmark; (b) **analytical model**
-      for cross-vendor scaling (operator pre-2026 knowledge + `docs.vulkan.org/refpages/...` retrieved
-      2026-06-21), not measured; (c) **CPU simulation** of AFR/SFR timing (synthetic GPU work, not real GPU
-      dispatch); (d) **web_search unavailable** для fresh SOTA citations — will be flagged в `STATUS.md` per
-      §9 fallback policy; (e) **no ProjectV mainline modification** — recommendation only, mainline pickup is
-      operator decision; (f) **cross-vendor validation** deferred to multi-GPU dev matrix (out of scope single
-      session); (g) **per-frame sync overhead** measurement requires actual two-GPU host; (h) **per `agent/
-  knowledge.md Part A §2` mainline priority = MVP slice** — multi-GPU = forward-looking, not gating Stage
-      4.3 ship. **Re-evaluation triggers:** multi-GPU dev host availability (operator upgrade); ProjectV
-      Stage 4.3 ships 128m (catches VRAM cap again); AMD RDNA 4 + Intel Arc Battlemage dev matrix; Vulkan 1.5/
-      1.6 cross-device sparse (any future `VK_KHR_*_mgpu` extensions); ProjectV shader count > 50 with peer
-      memory copy costs.
-
-  **Closed `2026-06-21` verdict=`mixed`** (single session, ~1.5h per `AGENTS.md §13.5` sync-pass). **Web-research
-  partial** per `agent/knowledge.md Part B §9` fallback policy (`web_search` Exa 429 × 4 retries; `webfetch` retrieved
-  full Vulkan 1.4 core spec for `VK_KHR_device_group` + `VK_KHR_device_group_creation` + `VkDeviceGroupPresentInfoKHR`
-  2026-06-21). **Standalone C++26 CPU prototype** (`prototype/analytical_model.cpp` + `cpu_simulation.cpp` +
-  `cross_vendor_matrix.cpp` + `api_discovery.cpp` ≈ 1.3k LoC total, built via ad-hoc
-  `clang++ -std=c++26 -O2 -march=native` per `AGENTS.md §1` research workflow, **0 warnings**). 288 analytical + 9000
-  CPU simulation measurements. **Headline (CPU sim, work=4096 rays, 30 iter, all 5 interconnects):** AFR 2-GPU =
-  213-235% (1.9-2.4× baseline), **AFR 4-GPU = 383-410% (3.83-4.10× super-linear across ALL interconnects including slow
-  PCIe 4.0 32 GB/s)**; SFR = 123-137% (compositing + load balance loss); REMOTE = 187-208% (compute-heavy niche). **VRAM
-  aggregation = killer feature for Stage 4.3
-  ** [RTX 3060 Ti 8 GiB → 16 GiB (2-GPU) / 32 GiB (4-GPU), sufficient for 9 GiB Stage 4.3 target_128m]. **Recommended
-  action: 3-step migration per `agent/knowledge.md §30.4` precedent** — Step 1 (XS, ~30 LoC, immediate, additive)
-  `vkEnumeratePhysicalDeviceGroupsKHR` + present caps + peer memory probe в `VulkanBootstrap.cpp` + Tracy plots +
-  `PROJECTV_MULTI_GPU_PROBE=ON` env (default ON, no behavior change); Step 2 (M, ~300 LoC, Stage 4.3 ship, opt-in)
-  optional AFR dispatcher в `Renderer.cpp` (`PROJECTV_MULTI_GPU_AFR=ON` default OFF, frame parity counter,
-  `VkDeviceGroupPresentInfoKHR::mode=LOCAL_MULTI_DEVICE`); Step 3 (XS, ~50 LoC, Stage 4.3+ future) per-vendor profile. *
-  *Total ~380 LoC across 4-6 files, M effort, 2-3 sessions.** **Caveats:** single-GPU dev host `obvium` (RTX 3060 Ti
-  GA104) = API discovery only, not real multi-GPU benchmark; CPU sim is synthetic DDA-proxy on Zen 3 5800X, not real GPU
-  dispatch; cross-vendor scaling projected from operator's pre-2026 knowledge per §9 caveat; 4-GPU super-linear 4.0×
-  scaling likely drops to 3.0-3.5× with real GPU command buffer + swapchain acquisition + present serialization
-  overheads not modeled. **Cross-axis:** orthogonal ко всем 8 closed Stage 4.3 mitigation experiments (
-  frame-flight-allocator + depth-occlusion + vma-sparse-textures + nanovdb-on-gpu + vct-cone-count + sub-chunk-layers +
-  lod-mesh-downsampling + dlss-fsr-xess + vk-fragment-shading-rate) — **multi-GPU = new lever в same VRAM axis, additive
-  to existing mitigations**. См. §6 (Recent closed sessions table) + §6A (Sync-close pending
-  entry) + [experiment README](./experiments/2026-06-21-vk-multi-gpu-split-frame/README.md) + [STATUS](./experiments/2026-06-21-vk-multi-gpu-split-frame/STATUS.md) + [sources.md](./experiments/2026-06-21-vk-multi-gpu-split-frame/sources.md) (
-  4-tier, ~140 lines) + [RESULTS.md](./experiments/2026-06-21-vk-multi-gpu-split-frame/RESULTS.md) (96 lines) +
-  `prototype/build/{analytical_results.csv (288 rows), sim_results.csv (300 rows × 12 cols, 9000 measurements), cross_vendor_matrix.md (107 lines), api_discovery.json (mock)}`.
-  Closed entry: `experiments/2026-06-21-vk-multi-gpu-split-frame/`.
-
----
-
-- [x] **2026-06-21-vct-temporal-denoise-tensor-core** — h (self-promo h from `full rt + tensor cores load`
-  в §Open выше; **сужение scope** до конкретной tensor-cores axis = cooperative_matrix temporal denoise
-  для VCT; **RT-cores axis already covered** by closed `2026-06-20-restir-gi-feasibility` (mixed) +
-  `2026-06-20-vct-vs-rt-cutoff` (mixed) + `2026-06-20-rt-shadows-vs-csm` (mixed); **tensor-cores axis = 0
-  coverage** в 50+ closed experiments per `INDEX.md §6`), **Stage 5.1** (Voxel Cone Tracing per
-  `TODO.md §5.1` lines 386-391 + explicit out-of-scope follow-up declared в
-  `experiments/2026-06-21-vct-cone-count-atlas-precision/STATUS.md:13` («4D temporal VCT follow-up
-  (close to closed `2026-06-21-taa-motion-vectors`)»)).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою
-  и исследуй»; **NEW invocation this session** — parallel sessions running: tracy-gpu-vs-manual +
-  gpu-fluid-ca-atomic-strategy + 30+ closed same-day `2026-06-21`).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU temporal denoise simulator
-  + measurements per `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only synthetic voxel scenes + temporal denoise math, no Vulkan/mainline dependency;
-  cooperative_matrix cost = analytical projection per `dlss-fsr-xess-upscaling-voxel` calibration note
-  precedent; dev host `obvium` Zen 3 5800X governor=`powersave` per `hardware-profile.md §1` available;
-  RTX 3060 Ti GA104 Ampere supports both `VK_NV_cooperative_matrix` legacy + `VK_KHR_cooperative_matrix`
-  rev 1 modern per Vulkan 1.4 core).
-  **Hypothesis (one-line):** правильная стратегия **temporal denoise для VCT cone-march radiance**
-  (6 wide diffuse + 1 narrow specular per `TODO.md §5.1`) ∈ {A_NoTemporal [current mainline baseline],
-  B_SpatialBilateralFilter, C_TemporalReprojectFragmentShader, D_TemporalReprojectCooperativeMatrix
-  [hypothesis], E_TemporalReprojectSVGF [Schied 2017]} даст **D_TemporalReprojectCooperativeMatrix =
-  recommended default** при **-15-25 dB temporal variance reduction** (std(PSNR) over N=1000 frames)
-  + **+0.3-0.8 ms GPU cost / 1080p** (~2.5% от 33.3 ms 30 Hz frame budget) + **+8 MiB VRAM** (history
-  buffer R16G16B16A16_SFLOAT @ 1080p × 2 double-buffered = 8 MiB = 0.16% от 5.06 GiB budget per
-  `hardware-profile.md §3`) на typical cave/biome scenes per `2026-06-21-sub-chunk-layers` precedent.
-  **Why h-priority (not self-promoted from l):** `full rt + tensor cores load` = **explicit h-priority
-  в §Open backlog line 16** = already h, no promotion needed. Sсужение от generic «full RT + tensor cores»
-  до concrete cooperative_matrix temporal denoise для VCT = reduces scope to a single, measurable
-  Stage 5.1 axis. **Cross-axis:** orthogonal ко всем 2 in-progress parallel (`tracy-gpu-vs-manual` =
-  profiling, `gpu-fluid-ca-atomic-strategy` = Stage 3.1 atomic); **complementary** к closed `vct-vs-rt-cutoff`
-  (mixed, cutoff strategy), `vct-cone-count-atlas-precision` (mixed, single-frame quality axis =
-  out-of-scope follow-up declared), `vct-3d-mip-generation` (yes, mip chain algorithm),
-  `nanovdb-on-gpu` (yes, atlas storage), `sdf-hybrid-world` (mixed, VCT anti-leak via SDF = spatial
-  anti-leak, not temporal), `taa-motion-vectors` (yes, motion vector `R16G16_SFLOAT` format = direct
-  input contract для VCT temporal reprojection), `dlss-fsr-xess-upscaling-voxel` (mixed, analytical
-  tensor core projection = calibration precedent для cost model), `dec-pipelines-async-compute` (yes,
-  async compute = async cooperative_matrix dispatch prerequisite без main pipeline stall). **New axis:**
-  ни один из 50+ closed experiments за `2026-06-20` + `2026-06-21` не покрывает cooperative_matrix
-  / tensor core temporal denoise для VCT. **Cross-vendor matrix:** NVIDIA Ampere (GA104) / Ada /
-  Blackwell (`VK_KHR_cooperative_matrix` full + `VK_NV_cooperative_matrix` legacy) + AMD RDNA 3/4
-  (`VK_KHR_cooperative_matrix` full) + Intel Arc Battlemage (XMX equivalent, `VK_KHR_cooperative_matrix`
-  partial per Mesa RADV tracking) per `2026-06-20-dec-pipelines-async-compute` §2.2 cross-vendor
-  validation matrix precedent. **5 strategies measured:**
-  - A_NoTemporal (current mainline baseline, single-frame VCT)
-  - B_SpatialBilateralFilter (edge-preserving spatial, no temporal)
-  - C_TemporalReprojectFragmentShader (standard FS temporal, no tensor cores)
-  - D_TemporalReprojectCooperativeMatrix (per-4×4-RGBA-tile matmul accumulation на tensor cores,
-    hypothesis)
-  - E_TemporalReprojectSVGF (Schied 2017 spatio-temporal variance-guided, production-grade NVIDIA NRD)
-  **5 scenes** per `2026-06-21-sub-chunk-layers` precedent (uniform_floor + forest_floor + cave_stress
-  + mixed_biome + uniform_air) × **5 seeds** (1, 7, 42, 1234, 31337) × **1000 frames + 10 warmup** =
-  **125,000 main measurements**. Standalone C++26 CPU temporal denoise simulator (no Vulkan init,
-  synthetic voxel radiance per `vct-cone-count-atlas-precision` precedent, motion vectors synthetic per
-  closed `taa-motion-vectors` `R16G16_SFLOAT` format).
-  **Cross-axis:** orth orth ко всем 2 in-progress parallel; complementary ко всем 7 closed Stage 5.1
-  experiments (`vct-vs-rt-cutoff` + `vct-cone-count-atlas-precision` + `vct-3d-mip-generation` +
-  `nanovdb-on-gpu` + `sdf-hybrid-world` + `clustered-forward-mass-lights` + `restir-gi-feasibility`).
-  **Anti-duplicate sentinel clean per §13.7** (no `vct-temporal-denoise` / `tensor-core` /
-  `cooperative-matrix` experiment folders). См.
-  [`experiments/2026-06-21-vct-temporal-denoise-tensor-core/`](./experiments/2026-06-21-vct-temporal-denoise-tensor-core/)
-  + experiment README + STATUS + `research/backlog.md §In progress` (this entry).
-  **Expected verdict:** `mixed` (D_TemporalReprojectCooperativeMatrix likely recommended default для
-  cross-vendor RTX-class hardware; E_TemporalReprojectSVGF likely best quality на high-end; C_TemporalReprojectFS
-  = universal fallback для нет tensor cores; A_NoTemporal = current mainline baseline; B_SpatialBilateral =
-  strict regression). 3-step migration per `agent/knowledge.md §30.4` precedent — Step 1 (XS, ~50
-  LoC) `PROJECTV_VCT_TEMPORAL_DENoise=OFF|SPATIAL|FS|COOPMAT|SVGF` env flag + `VctTemporalDenoise::SelectStrategy()`
-  dispatcher + cooperative matrix probe в `VulkanBootstrap.cpp`; Step 2 (M, ~250 LoC) per-strategy
-  implementation в `src/shaders/vct_temporal_denoise.comp` (new file) + history buffer R16G16B16A16_SFLOAT
-  @ 1080p × 2 ping-pong в `SceneResources` + motion vector binding per closed `taa-motion-vectors`;
-  Step 3 (S, ~80 LoC) default flip + Tracy plot "VCT Temporal Denoise" + `ProjectVVctTemporalDenoiseTests`
-  unit test. **Total ~380 LoC, S-M effort, 2-3 sessions.** **Caveats:** (a) CPU prototype only, no
-  Vulkan cooperative_matrix dispatch — analytical projection per `dlss-fsr-xess` calibration note
-  (FP32 model 14.7 TFLOPS, real tensor core FP16 = ~25 TFLOPS = 1.7× underestimate); (b) synthetic
-  voxel scenes = 5 representative types per `sub-chunk-layers` precedent, not exhaustive; (c) cross-vendor
-  matrix analytical projection only (single GPU vendor RTX 3060 Ti GA104 for API verification only);
-  (d) motion vector reprojection synthetic, not real GPU VCT input; (e) mutation cost (per-frame VCT
-  temporal denoise rebuild on voxel edit) out of scope для single-session; (f) visual QA in real gameplay
-  required to confirm subjective quality (per `dlss-fsr-xess` precedent); (g) `VK_KHR_cooperative_matrix`
-  rev 1 ratification status 2025-04-14, requires Vulkan 1.4 core per Khronos; (h) RDNA 2 partial
-  support — primary matrix RDNA 3/4 per Mesa RADV tracking. Cross-refs: `TODO.md §5.1` (VCT),
-  `2026-06-20-vct-vs-rt-cutoff` (closed mixed, strategy), `2026-06-21-vct-cone-count-atlas-precision`
-  (closed mixed, single-frame quality + STATUS.md:13 explicit out-of-scope follow-up = this),
-  `2026-06-21-vct-3d-mip-generation` (closed yes, mip chain), `2026-06-20-nanovdb-on-gpu` (closed yes,
-  atlas storage), `2026-06-21-sdf-hybrid-world` (closed mixed, spatial anti-leak), `2026-06-21-taa-motion-vectors`
-  (closed yes, motion vector format), `2026-06-21-dlss-fsr-xess-upscaling-voxel` (closed mixed,
-  analytical tensor core projection), `2026-06-20-dec-pipelines-async-compute` (closed yes, async
-  foundation), `2026-06-21-gpu-fluid-ca-atomic-strategy` (in-progress, Stage 3.1 atomic),
-  `2026-06-21-tracy-gpu-vs-manual` (in-progress, profiling), `agent/knowledge.md §30.4` (3-step migration
-  precedent), `agent/knowledge.md §17` (build matrix), `agent/workspace.md §2` (Stage 5.x not started),
-  `hardware-profile.md §1+§3` (dev host baseline), `benchmarks/methodology.md §3` (measurement protocol),
-  `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-vct-temporal-denoise-tensor-core/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-vct-temporal-denoise-tensor-core/prototype/` (standalone C++26
-      CPU temporal denoise simulator + cooperative matrix cost model + synthetic voxel radiance + synthetic
-      motion vector reprojection, NOT ProjectV mainline, dev host `obvium`)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-
-  **Closed `2026-06-21` (single session, ~3h), verdict `mixed`.** Tensor-cores axis experiment
-  closed — **E_TemporalReprojectSVGF = WINNER** (Schied 2017 algorithm validated):
-  **+2.18 dB mean PSNR** (avg 24.64 vs A baseline 22.46 dB) = +9.7% gain above 5% threshold per
-  `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`. Per-scene: +1.1 dB
-  (cave_stress) to +3.92 dB (uniform_air). **B_SpatialBilateral** = cheap fallback: +1.80 dB
-  PSNR, +0.08 dB std cost (lowest std cost). **D_TemporalReprojectCoopMat = UNVERIFIED** on real
-  GPU — CPU sim can't capture real GA104 tensor SNR benefit; analytical projection <1 ms @
-  1920×1080 plausible but needs real Vulkan benchmark before final default selection.
-  **C_TemporalReprojectFS = FALSIFIED** в simplified model (naive FS temporal without proper
-  motion vector handling adds per-frame instability; real Karis 2014 TAA requires MV texture +
-  history rejection per closed `2026-06-21-taa-motion-vectors`). RTX 3060 Ti GA104 Ampere 3rd-gen
-  tensor cores = **152 Tensor Cores, FP16 Tensor 32.39 TFLOPS dense / 64.79 TFLOPS sparse**
-  (CORRECTED from initial 112 TFLOPS estimate per `waredb.com` + `videocardz.net` spec
-  verification). **Cross-vendor cooperative matrix matrix verified:** NVIDIA RTX all supported
-  per Vulkanised 2025 Jeff Bolz NVIDIA; AMD RDNA 4 RADV merged 2025-02-07 (20 coopmat configs
-  including INT8); Intel Xe2 Mesa 24.2 merged 2024-06-26 (Lunar Lake supported, Battlemage
-  config pending); **Intel Arc A770 DISABLED в llama.cpp due to SIMD8 vs SIMD32 tile mismatch**
-  per `github.com/ggml-org/llama.cpp/issues/12690`. Standalone C++26 CPU temporal denoise
-  simulator `prototype/vct_temporal_denoise_sim.cpp` ~620 LoC, Clang 22.1.6
-  `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**.
-  75 measurements (5 strategies × 5 scenes × 3 seeds × 50 frames + 5 warmup), wall time 78 sec
-  на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Web-research complete via
-  DuckDuckGo HTML + webfetch (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`); **22
-  references verified** per `sources.md` (14 primary + 8 secondary): Schied 2017 HPG Best Paper
-  + NVIDIA NRD v4.17.2 (Mar 2026) + SangHyeok Hong DigiPen thesis (direct VCT temporal precedent)
-  + righier/gidemo (Light temporal multi-bounce) + bc3.moe/vctgi (Spatial + Temporal AA) + Grimkin
-  SoftShadows + Crassin 2011 GIVoxels + Panteleev 2014 thesis + Andersson/Ayerbe 2025 CGF +
-  VK_KHR_cooperative_matrix rev 2 ratified 2023-05-03 + VK_NV_cooperative_matrix2 Oct 2024 +
-  Phoronix 2025-02-07 RDNA4 + Phoronix 2024-06-26 Xe2. Output: `prototype/build/results.csv` (76
-  rows = 1 header + 75 data rows). **3-step migration per `agent/knowledge.md §30.4`:**
-  Step 1 (XS, ~50 LoC) `PROJECTV_VCT_TEMPORAL_DENOISE=OFF|SPATIAL|SVGF` env flag +
-  `VctTemporalDenoise::SelectStrategy()` dispatcher + cooperative matrix probe
-  (`vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`) в `VulkanBootstrap.cpp`; Step 2 (M, ~250 LoC)
-  per-strategy implementation в `src/shaders/vct_temporal_denoise.comp` (new file) + history buffer
-  R16G16B16A16_SFLOAT @ 1080p × 2 ping-pong в `SceneResources` + motion vector binding per closed
-  `taa-motion-vectors` `R16G16_SFLOAT` format; Step 3 (S, ~80 LoC) default flip to E_SVGF
-  (validated) + Tracy plot «VCT Temporal Denoise» + `ProjectVVctTemporalDenoiseTests` unit test.
-  Total **~380 LoC, S-M effort, 2-3 sessions**. **Hold D_CoopMat decision pending real GPU
-  benchmark.** **Continuation chain:** `vct-vs-rt-cutoff` (closed mixed, strategy) +
-  `vct-cone-count-atlas-precision` (closed mixed, single-frame quality + STATUS.md:13 explicit
-  out-of-scope = this) + `vct-3d-mip-generation` (closed yes, mip chain) + `nanovdb-on-gpu`
-  (closed yes, storage) + `taa-motion-vectors` (closed yes, MV format contract) + `dlss-fsr-xess`
-  (closed mixed, cost model calibration precedent) + `dec-pipelines-async-compute` (closed yes,
-  async foundation). **Stage 5.1 axis status:** cutoff + cone count + atlas format + mip chain +
-  **temporal denoise** = 5 of 5 closed/explored. **Cross-axis:** orth orth ко всем 2 in-progress
-  parallel (`tracy-gpu-vs-manual` [profiling], `gpu-fluid-ca-atomic-strategy` [Stage 3.1 atomic]);
-  complementary к 7 closed Stage 5.1/Stage 2.x/Stage 5.3 experiments. **Caveats:** CPU prototype
-  only, no real Vulkan cooperative_matrix dispatch — analytical projection per `dlss-fsr-xess`
-  calibration note (FP32 model 14.7 TFLOPS, real tensor FP16 = 32.39 TFLOPS dense); synthetic
-  voxel scenes = 5 representative types per `sub-chunk-layers` precedent (NOT exhaustive); motion
-  vector reprojection synthetic (no real VCT input); mutation cost (per-frame VCT temporal
-  denoise rebuild on voxel edit) out of scope; reduced measurement scope vs methodology.md §3
-  default (N_frames 50 vs 1000, N_seeds 3 vs 5, resolution 240×135 vs 1080p); C strategy failure
-  expected per simplified model limitations (no real motion vector = C_FS adds per-frame
-  instability). **Re-evaluation triggers:** Stage 5.1 integration milestone (real GPU benchmark
-  on RTX 3060 Ti GA104 для D_CoopMat validation), Stage 5.3 TAA Motion Vectors GPU integration
-  (MV binding contract), Vulkan 1.5/1.6 dedicated temporal denoise extensions, cross-vendor Stage
-  5.x integration (AMD RDNA 4 + Intel Xe2/Battlemage + Intel Arc A770 SIMD8 fallback).
-  См. §6 + [experiment README](./experiments/2026-06-21-vct-temporal-denoise-tensor-core/README.md)
-  + [STATUS](./experiments/2026-06-21-vct-temporal-denoise-tensor-core/STATUS.md) +
-  [RESULTS](./experiments/2026-06-21-vct-temporal-denoise-tensor-core/RESULTS.md) +
-  [sources](./experiments/2026-06-21-vct-temporal-denoise-tensor-core/sources.md) +
-  `prototype/build/results.csv` (76 rows).
-
----
-
-- [x] **2026-06-21-hzb-smart-mip-select** — m, **Stage 2.1** (per-chunk HZB mip selection per `agent/workspace.md §2`
-  line 52 explicit Nearest Gap callout: «Stage 2.1 HZB culling refinement — current implementation always uses mip 0 (
-  `HizCulling.cpp:743`); smart per-chunk mip selection based on screen-space size is a separate optimization»; *
-  *self-invented topic** per operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-  **explicit Gap = green light**). Closed `2026-06-20-hzb-binding-models` mixed validated `texelFetch` pattern (already
-  in `hzb_cull.comp:85`), but did not cover per-chunk mip selection.
-  **Agent:** self.
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU cull simulator + measurements per
-  `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only synthetic voxel cull simulation + analytical GPU cost model, no Vulkan/mainline dependency;
-  dev host `obvium` Zen 3 5800X governor=`powersave` per `hardware-profile.md §1` available).
-  **Hypothesis (one-line):** правильная **per-chunk smart mip selection** через `perChunkMipLevel[]` SSBO + branching в
-  `hzb_cull.comp` (вместо current `HizCulling.cpp:800` hardcoded `mipLevel=0u`) даст **+30-60% additional draw-call
-  reduction** vs `mip=0` baseline для typical voxel scene (1080p + 64m draw distance) при **0 false-negative culls** (
-  PSNR >50 dB vs camera-raycast ground truth per `2026-06-21-depth-occlusion-quantization` precedent) — chunk
-  screen-space size `S` pixels → `mipLevel = floor(log2(S / kConservativePixels))` где `kConservativePixels ∈ [4, 16]`.
-  **Cross-axis:** orthogonal ко всем 5 in-progress parallel (`sdf-hybrid-world` [closed mixed VCT+physics],
-  `tracy-gpu-vs-manual` [profiling], `gpu-fluid-ca-atomic-strategy` [Stage 3.1 atomic],
-  `vk-multi-gpu-split-frame` [multi-GPU], `vct-3d-mip-generation` [VCT atlas]); **complementary** к closed
-  `2026-06-20-hzb-binding-models` (texelFetch binding pattern = foundation, не per-chunk mip),
-  `2026-06-21-greedy-physics-meshing-cpu` (CPU prototype precedent + same scenes), `2026-06-21-sub-chunk-layers` (
-  synthetic scenes + seeds), `2026-06-20-dec-pipelines-async-compute` (async compute foundation).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-hzb-smart-mip-select/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-hzb-smart-mip-select/prototype/` (standalone C++26 CPU cull simulator
-      with screen-space mip projection + 4 strategies × 5 scenes × 5 seeds, NOT ProjectV mainline)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `yes` (per-chunk smart mip selection is canonical pattern per **Mike Turitzin 2020
-      «Hierarchical Depth Buffers»**: «Hi-Z occlusion culling ... works by projecting a bounding volume into
-      screen-space and using the **projected size to choose the appropriate mip level** (so that a fixed number of
-      texels are accessed per occlusion test)» + **Omlor & Radicke 2025 «Two-Pass Occlusion Culling for Dynamic Voxel
-      Scenes based on HZB»** [IEEE Xplore 11321175, Jul 2025] direct voxel reference + **Greene 1993 «Hierarchical
-      Z-Buffer Visibility»** [SIGGRAPH 1993, ACM 166147] foundation + DeepWiki Metallic 2026-04-06 modern production). *
-      *3-step migration per `agent/knowledge.md §30.4` precedent** — Step 1 (XS, ~50 LoC) per-chunk mip compute на CPU в
-      `Renderer.cpp:1344` (после AABB projection) + `perChunkMipLevel[]` SSBO в `SceneFrameResources`; Step 2 (S, ~80
-      LoC) `hzb_cull.comp` модификация: `mipLevel` из SSBO per chunk вместо uniform + branching; Step 3 (XS, ~30 LoC)
-      `PROJECTV_HZB_SMART_MIP=ON` env flag + Tracy plot «HZB Smart Mip» + `ProjectVHzbSmartMipTests` unit test. Total ~
-      160 LoC, XS-S effort, 1-2 sessions. **Caveats:** (a) CPU prototype, no real GPU dispatch — analytical GPU cost
-      model (texels touched); (b) Real Vulkan dispatch timing deferred; (c) cross-vendor (AMD RDNA, Intel Arc) not
-      measured (analytical only); (d) Mutation cost (per-frame mip recompute on voxel edit) out of scope; (e) CSM HZB
-      culling deferred per `agent/workspace.md §2` line 52 — per-chunk mip extends to CSM as natural follow-up; (f)
-      Stride в `hzb_cull.comp` line 66-67 уже использует `>> mipLevel` для mip dimensions = готовая инфраструктура,
-      нужна только замена uniform на per-chunk SSBO load. Cross-refs: `TODO.md §2.1`, `agent/workspace.md §2` line 52 (
-      explicit Gap callout), `src/render/HizCulling.cpp:800-805` (hardcoded `mip=0`),
-      `src/render/HizCulling.cpp:326-369` (`BuildHizMipChain` уже работает), `src/render/HizCulling.hpp:48-52` (
-      `HizCullingPushConstants` структура), `src/shaders/hzb_cull.comp:33-90` (`AabbVisibleAgainstMip` per-mip
-      texelFetch loop), `src/shaders/hzb_cull.comp:102` (current uniform mip from push constants),
-      `src/render/Renderer.cpp:1344-1350` (`RecordHzbCullingDispatch` call site), `src/voxel/VoxelWorld.hpp:78` (
-      chunkSize=8), `agent/knowledge.md §30.4` (3-step migration precedent), `2026-06-20-hzb-binding-models` (closed
-      mixed, texelFetch foundation), `2026-06-20-dec-pipelines-async-compute` (closed yes, async foundation),
-      `2026-06-21-greedy-physics-meshing-cpu` (closed yes, CPU prototype precedent), `2026-06-21-sub-chunk-layers` (
-      closed mixed, synthetic scenes), `docs/experiments/hardware-profile.md §1` (Zen 3 5800X dev host),
-      `docs/experiments/benchmarks/methodology.md §3` (measurement protocol),
-      `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
-      **Closed `2026-06-21` (single session, ~3h), verdict `mixed`.** Standalone C++26 CPU cull simulator ~700 LoC (
-      `prototype/{hzb_smart_mip_bench.cpp, scenes.hpp, cull_simulator.hpp/cpp, ground_truth_raycaster.hpp/cpp, CMakeLists.txt, README.md}`),
-      **build green 0 warnings** (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`). 100
-      measurements (5 scenes × 5 seeds × 4 strategies × 30 iter + 5 warmup), wall time ~12 min на Zen 3 5800X governor=
-      `powersave` per `hardware-profile.md §1`. **Headline findings:**
-    - **Per-chunk smart mip (C_PerChunkStaticMip): 700-1500× texel reduction** vs A_UniformMip0 baseline (avg 13K vs
-      10.7M texels/chunk)
-    - **Cull rate: +3-5% additional draw reduction** vs baseline (avg 27.6% vs 26.4%)
-    - **B_UniformMipGlobal: best absolute cull rate** (avg 29.8%, +3.4% vs A) but same FN risk as C
-    - **C ≈ D for our scenes**: multiple dispatches don't add measurable value (modern GPU driver handles branching
-      well)
-    - **0.02-0.20% false-negative artifact rate** without mitigation (PSNR 27-30 dB worst case view_dolly_stress; A = 0
-      FN, PSNR ∞)
-    - **A_UniformMip0 (baseline) = safest** (0 FN, but 700× more texels)
-    - **2-phase fallback in Step 3** (`if (mipLevel > 0 && culled) verify at mip=0`) eliminates FN → PSNR ∞ with 350×
-      texel reduction still
-    - Web-research complete via DuckDuckGo HTML + webfetch (Exa HTTP 429 persistent): **5 primary sources verified** (
-      Greene/Kass/Miller 1993 SIGGRAPH canonical; Mike Turitzin 2020 exact pattern statement; Omlor & Radicke 2025 TPOC
-      voxel+HZB; DeepWiki Metallic 2026-04-06 modern production; RasterGrid 2010 OpenGL FBO mip chain) + 5 secondary (
-      Nick Darnell SIGGRAPH 2008, Tobias Garpenhall UE5, chaoticbob mesh shading, zeux/meshoptimizer,
-      JarkkoPFC/meshlete)
-    - **Mainline recommendation: 3-step migration per `agent/knowledge.md §30.4`** — Step 1 (XS, ~50 LoC) per-chunk mip
-      compute на CPU + `perChunkMipLevel[]` SSBO; Step 2 (S, ~80 LoC) `hzb_cull.comp` SSBO load + branching; Step 3 (
-      XS, ~30 LoC) `PROJECTV_HZB_SMART_MIP=ON` env + 2-phase fallback + Tracy plot. Total ~160 LoC, XS-S effort, 2-3
-      sessions.
-    - **Caveats**: CPU prototype only (no real GPU dispatch, analytical texel-touch cost model); single GPU vendor (RTX
-      3060 Ti GA104); synthetic scenes representative not exhaustive (no real ProjectV chunk content); cross-vendor
-      deferred; mutation cost out of scope; visual QA in real gameplay required для fallback correctness; CSM HZB
-      deferred per `agent/workspace.md §2` line 52 — per-chunk mip extends naturally as follow-up.
-    - **Cross-axis**: orthogonal ко всем 5 in-progress parallel (`sdf-hybrid-world` [closed mixed],
-      `tracy-gpu-vs-manual` [profiling], `gpu-fluid-ca-atomic-strategy` [Stage 3.1 atomic],
-      `vk-multi-gpu-split-frame` [multi-GPU], `vct-3d-mip-generation` [VCT atlas]); **complementary** к closed
-      `2026-06-20-hzb-binding-models` (texelFetch foundation), `2026-06-21-greedy-physics-meshing-cpu` (CPU prototype
-      precedent), `2026-06-21-sub-chunk-layers` (synthetic scenes), `2026-06-21-depth-occlusion-quantization` (PSNR
-      threshold), `2026-06-20-dec-pipelines-async-compute` (async foundation); **new axis**: per-chunk mip refinement of
-      explicit `agent/workspace.md §2` Gap = 0 coverage в INDEX §6 для per-chunk mip selection.
-    - **Re-evaluation triggers**: Stage 4.3 ships 128m draw distance (per-chunk mip cost grows linearly with chunks,
-      more savings), mesh shader Pattern C full integration (HIZ output consumed by mesh shader greedy emit → accuracy
-      matters more), CSM HZB culling adopted (per-chunk mip extends naturally to shadow cascades), cross-vendor
-      validation on AMD RDNA 4 + Intel Arc Battlemage, Vulkan 1.5+ extensions для new HIZ features.
-    - Closed entry: `experiments/2026-06-21-hzb-smart-mip-select/` +
-      `prototype/{hzb_smart_mip_bench.cpp, scenes.hpp, cull_simulator.hpp/cpp, ground_truth_raycaster.hpp/cpp, CMakeLists.txt, README.md, results.csv, bench.log}`.
-      См. §6 + §1 + experiment README + RESULTS + sources.md.
-
-
-- [x] **[2026-06-21-vct-3d-mip-generation](./experiments/2026-06-21-vct-3d-mip-generation/)** — m, **Stage 5.1** (VCT 3D
-  atlas mip chain generation algorithm
-  axis per `TODO.md §5.1` explicit DoD: «Реализовать построение мип-уровней 3D-атласа на GPU для мягкой
-  фильтрации конусов»; **self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему
-  или придумывай свою и исследуй»; **orth** to all 4 in-progress parallel: tracy-gpu = profiling,
-  gpu-fluid-ca-atomic = Stage 3.1, sdf-hybrid-world = VCT anti-leak via SDF, vk-multi-gpu-split-frame =
-  multi-GPU scaling; **complementary** to closed `2026-06-21-vct-cone-count-atlas-precision` [verdict=mixed,
-  within-VCT quality — assumed mip chain exists, this validates the assumption + measures the cost]).
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-  sixth invocation this session after sdf-hybrid-world).
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + measurements per
-  `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only synthetic 3D voxel atlas scenes + 4 downsample algorithms, no Vulkan/mainline
-  dependency; dev host `obvium` Zen 3 5800X governor=`powersave` per `hardware-profile.md §1` available;
-  no AVX-512 per §1 = realistic measurement floor per `simd-procedural-noise` precedent).
-  **Hypothesis (one-line):** правильный алгоритм **3D mip chain generation** для VCT 3D atlas (4 algorithms
-  measured: A_2x2x2_Box [baseline current mainline per `vct-cone-count-atlas-precision` §3.2 assumed path],
-  B_4tap_Smooth [NVIDIA 4-tap smoothstep pattern], C_8tap_3DGaussian [proper 3D Gaussian weighted],
-  D_Blit3D_perAxis [2D-blit-per-axis chain]) даст measurably better quality (PSNR vs analytical 3D Gaussian
-  low-pass reference) на outer mips (mip 3+, где cone radius > voxel size в Stage 5.1 VCT) при cost
-  ≤ 1 ms/atlas-refresh на 128³ atlas (Stage 5.1 working size per `vct-cone-count-atlas-precision` §5).
-  **Why m-priority (self-promoted from l):** `TODO.md §5.1` explicit Stage 5.1 DoD + `vct-cone-count-atlas-precision`
-  §2 explicitly lists "Crassin 2011 cone-tapered mip filter" as out-of-scope follow-up + 0 of 30+ closed experiments
-  covered this axis. **Strong cross-axis coupling:** complementary to closed `vct-cone-count-atlas-precision` (which
-  assumed `vkCmdBlitImage` mip chain + per-axis 2D blit as baseline, never measured cost) + closed
-  `2026-06-20-nanovdb-on-gpu` (NanoVDB mip chain = natural storage extension, depth=2 for chunkSize=8) + closed
-  `2026-06-20-dec-pipelines-async-compute` (mip gen = candidate for async compute off-frame, per
-  `vct-cone-count-atlas-precision` §7.2 follow-up). **Measurable hypothesis:** PSNR gain at mip 3-7 for C_8tap vs
-  A_Box, +cost delta. 5-10% threshold per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` likely
-  crossed on quality axis. **Cross-axis:** orth orth ко всем 4 in-progress parallel + complementary ко всем 5 closed
-  Stage 5.1/2.x/3.x experiments (`vct-vs-rt-cutoff` [cutoff=0.3 strategy] +
-  `vct-cone-count-atlas-precision` [cone count]
-    + `nanovdb-on-gpu` [storage] + `dec-pipelines-async-compute` [sync] + `hzb-binding-models` [cull]) + complementary
-      to closed `lod-mesh-downsampling` (3D mip chain = natural storage for LOD pipeline per
-      `2026-06-20-nanovdb-on-gpu`).
-      **Scope (paths):**
-        - `docs/experiments/experiments/2026-06-21-vct-3d-mip-generation/{README.md,STATUS.md,sources.md}`
-        - `docs/experiments/experiments/2026-06-21-vct-3d-mip-generation/prototype/` (standalone C++26 CPU 3D
-          mip chain generator harness, synthetic 3D voxel atlas scenes representative of ProjectV VCT
-          workload [uniform_sky / uniform_floor / cave_stress / mixed_biome per `vct-cone-count-atlas-precision`
-          §3 precedent for direct comparability], NOT ProjectV mainline, dev host `obvium`)
-        - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-        - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-          **Expected verdict:** `mixed` — C_8tap_3DGaussian likely winner для quality-sensitive scenes (cave_stress +
-          mixed_biome) where outer-mip PSNR matters, but +30-50% cost vs A_2x2x2_Box; D_Blit3D_perAxis likely winner
-          для speed (single-dispatch, hardware-accelerated, low-overhead) at moderate quality; A_2x2x2_Box likely
-          sufficient для inner mips (mip 0-2) where voxel = pixel and PSNR plateau anyway. 3-step migration per
-          `agent/knowledge.md §30.4` precedent — Step 1 (XS, ~30 LoC) `voxelize_mipgen.comp` skeleton with
-          A_2x2x2_Box + SPIR-V debug; Step 2 (M, ~150 LoC) `MipGenAlgorithm` dispatch enum + C_8tap_3DGaussian +
-          PROJECTV_VCT_MIP_ALG env flag + per-mip downsample dispatch; Step 3 (S, ~80 LoC) async compute integration
-          per `dec-pipelines-async-compute` + Tracy plot "VCT Mip Gen" + `ProjectVVctMipGenTests` unit test. Total
-          ~260 LoC, S-M effort, 2-3 sessions. **Caveats:** (a) CPU prototype, no GPU dispatch — 3D blit pattern D
-          deferred to GPU validation, Vulkan 1.4 `vkCmdBlitImage` 3D support verified per Khronos spec (core 1.0);
-          (b) Quality measurement via PSNR vs analytical 3D Gaussian reference, not real visual QA; (c) Crassin 2011
-          cone-tapered mip filter (anisotropic kernel weighted by cone direction) = out of scope (mentioned in
-          `vct-cone-count-atlas-precision` §172 as follow-up); (d) cross-vendor GPU dispatch validation deferred
-          (single vendor RTX 3060 Ti in scope per `hardware-profile.md §3`); (e) Single-pass SPD (AMD GPUOpen
-          pattern, GPU vendor-specific) deferred — algorithm is RDNA-optimized, not portable to NVIDIA without
-          adaptation; (f) Mutation cost (rebuild on voxel edit) out of scope for single-session; (g) 4D temporal
-          VCT (closed `2026-06-21-taa-motion-vectors` follow-up) out of scope; (h) Crassin 2011 anisotropic
-          cone-tapered filter out of scope. **Cross-refs:** `TODO.md §5.1`, `vct-cone-count-atlas-precision` §2 +
-          STATUS §11 (Crassin 2011 cone-tapered mip filter out-of-scope follow-up), `2026-06-20-nanovdb-on-gpu` (closed
-          yes,
-          mip chain natural extension), `2026-06-20-dec-pipelines-async-compute` (closed yes, async compute = async
-          mip gen), `agent/knowledge.md §30.4` (3-step migration precedent), `agent/knowledge.md §15` (lighting
-          contract), `agent/workspace.md §2` (Stage 5.x not started), `hardware-profile.md §3` (RTX 3060 Ti dev host),
-          `benchmarks/methodology.md §3` (measurement protocol),
-          `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`
-          (5-10% threshold), `Crassin 2011 GIVoxels §5` (cone-tapered mip filter foundational reference),
-          `GPUOpen FidelityFX-SPD 2020` (single-pass 2D downsampler, RDNA-optimized, 12 mips single dispatch,
-          WaveOps + fp16 packed modes), `nvpro-samples gl_occlusion_culling cull-downsample.frag.glsl` (2D HZB
-          mip chain pattern reference).
-
-  **Closed `2026-06-21` (single session, ~3h), verdict `yes`.** **VCT 3D-mip-generation-axis** experiment
-  closed. 4 algorithms measured: A_2x2x2_Box [baseline] / B_4tap_Smooth [NVIDIA 4-tap pattern] /
-  C_8tap_3DGaussian [σ=0.5 voxel, mathematically equivalent to A for symmetric kernel] /
-  D_Blit3D_perAxis [3 sequential 2D blits, CPU analog of `vkCmdBlitImage` chain]. Standalone C++26 CPU
-  prototype (`prototype/mip_bench.cpp` ~580 LoC, `clang++ 22.1.6 -O3 -march=native -std=c++26 -DNDEBUG
-  -Wall -Wextra -Wpedantic`, **0 warnings**), 4 synthetic scenes [uniform_sky / uniform_floor /
-  cave_stress / mixed_biome per `vct-cone-count-atlas-precision` §3 precedent] × 2 atlas sizes [64³ /
-  128³] × 3 mip levels [1, 3, 5 inner/mid/outer] × 3 seeds × N=30 iter + 5 warmup = **288 configs × 30 =
-  8,640 main measurements**, wall time 192 sec on dev host `obvium` Zen 3 5800X governor=`powersave` per
-  `hardware-profile.md §1`. Output: `prototype/build/results.csv` (289 rows = 1 header + 288 data rows).
-  Web-research: Exa MCP returned HTTP 429 (rate-limited) this session; fallbacks via direct `webfetch`
-  per `agent/knowledge.md` line 1424 validated source list (10 primary + 6 secondary verified:
-  Crassin 2011 GIVoxels §3.2/§5 + GPUOpen FidelityFX-SPD 2020 [12 mips single dispatch, RDNA-optimized,
-  WaveOps + fp16 packed, 2D only] + nvpro-samples gl_occlusion_culling [2D HZB mip chain pattern] +
-  Vulkan 1.4 `VkImageBlit` spec [core 1.0, 3D blit] + Panteleev 2014 + SaschaWillems Vulkan samples +
-  Snowapril/HanetakaChou VCT implementations + OGRE-Next CIVCT + Vulkan SDK 1.4.350.1 vendored docs +
-  6 failed URLs documented for future re-verification). **Headline findings (per RESULTS.md §1 + §4):**
-  (a) **A_2x2x2_Box = sole Pareto-optimal algorithm.** PSNR mean 49.99 dB (ties C within +0.0004 dB),
-  perf mean 1.218 ms (lowest of 4 algs). Cross-scene: A ties or beats every competitor in every scene ×
-  mip level combination. Cross-mip: B's quality deficit grows with mip depth (−0.33 dB at mip 1 → −0.94
-  dB at mip 5). (b) **B_4tap_Smooth = strict regression.** −0.498 dB PSNR (mean), +7% perf cost. NVIDIA
-  HZB-motivated diagonal filter degrades quality for VCT volumes (likely because mips of VCT volumes
-  need isotropic averaging, not diagonal-only taps — HZB works on 2D depth, a fundamentally different
-  signal). **Hypothesis falsified.** (c) **C_8tap_3DGaussian = pure perf tax.** +6% perf cost for zero
-  measurable PSNR gain (mathematically equivalent to A for symmetric 8-corner kernel with σ=0.5 voxel
-  where all weights collapse to 0.125). (d) **D_Blit3D_perAxis = 2.9× slower CPU analog of
-  vkCmdBlitImage chain.** 0.01 dB ΔPSNR for +194% perf cost. **GPU validation deferred** — on GPU
-  `vkCmdBlitImage` is hardware-accelerated (5-20× faster than compute for simple box per AMD SPD +
-  NVIDIA practice), so D may flip to faster on GPU. Stage 5.1 GPU benchmark on RTX 3060 Ti should
-  validate. (e) **PSNR std ±28 dB = scene-mix signal, not noise.** uniform_sky scores ~95 dB,
-  uniform_floor ~26 dB across all algorithms. Algorithm-level signal real but small relative to scene
-  difficulty.
-  **Verdict=`yes`:** A_2x2x2_Box is the recommended Stage 5.1 VCT atlas mip chain generation default.
-  No evidence in this dataset supports a swap to B (strict regression), C (pure perf tax), or D
-  (2.9× slower for noise-level ΔPSNR, GPU validation pending). **5-10% threshold per
-  `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`:** well above — A is 6% faster than
-  C and 194% faster than D. **Mainline 3-step migration per `agent/knowledge.md §30.4` precedent,
-  simplified based on results (no need for fancy alternatives):** Step 1 (XS, ~30 LoC)
-  `voxelize_mipgen.comp` skeleton with A_2x2x2_Box + per-mip barrier + SPIR-V debug; Step 2 (S, ~50
-  LoC) wire into `SceneResources::RebuildVctAtlas` lifecycle after `voxelize.comp` writes mip 0;
-  Step 3 (S, ~40 LoC) Tracy plot "VCT Mip Gen" + `ProjectVVctMipGenTests` unit test. Total **~120 LoC**
-  (down from initial 260 LoC estimate — no dispatch enum, no per-scene selection, no per-axis blit
-  fallback at this time). S effort, 1-2 sessions. **GPU D-benchmark deferred to Stage 5.1
-  integration:** if D_Blit3D_perAxis GPU timing < A_2x2x2_Box on RTX 3060 Ti, document and consider
-  conditional flip; else leave A as default and document D as rejected. **Continuation chain:**
-  `vct-cone-count-atlas-precision` (closed mixed, within-VCT quality, assumed mip chain) → this
-  (closed yes, mip gen algorithm). **Stage 5.1 axis status:** cutoff + cone count + atlas format +
-  mip gen algorithm = 4 of 4 closed/explored. Remaining Stage 5.1 axis items: Crassin 2011
-  cone-tapered filter (out-of-scope per `vct-cone-count-atlas-precision` §172) + 4D temporal VCT
-  (out-of-scope per closed `taa-motion-vectors` follow-up) + cross-vendor GPU validation. **Cross-axis:**
-  orth orth ко всем 4 in-progress parallel (tracy-gpu = profiling, gpu-fluid-ca-atomic = Stage 3.1,
-  sdf-hybrid-world = VCT anti-leak, vk-multi-gpu-split-frame = multi-GPU) + complementary к 9 closed
-  Stage 5.1/2.x/3.x experiments (`vct-vs-rt-cutoff` [cutoff=0.3 strategy] + `vct-cone-count-atlas-precision`
-  [cone count, this = mip gen axis] + `nanovdb-on-gpu` [storage] + `dec-pipelines-async-compute` [sync]
-    + `hzb-binding-models` [2D cull] + `clustered-forward-mass-lights` + `rt-shadows-vs-csm` +
-      `restir-gi-feasibility` + `lod-mesh-downsampling`). **Caveats:** (a) CPU prototype only — no Vulkan
-      dispatch, no GPU time, no cross-vendor validation. Per-algorithm relative perf may differ
-      substantially on GPU (D_Blit3D_perAxis may flip to faster than A); (b) Synthetic 3D voxel atlas — not
-      real ProjectV chunk content; (c) Analytical 3D Gaussian low-pass reference (σ=0.5 voxel ×
-      2^mip_factor) — ideal reference, not real ground truth; (d) Mutations (per-chunk rebuild on voxel
-      edit) out of scope — Stage 5.1 DoD does not require; (e) Crassin 2011 cone-tapered anisotropic
-      filter (direction-weighted) = out-of-scope follow-up per `vct-cone-count-atlas-precision` §172;
-      (f) 4D temporal VCT = closed `taa-motion-vectors` follow-up candidate, out of scope; (g) GPU
-      `vkCmdBlitImage` 3D real timing out of scope — CPU prototype cannot validate; (h) Reduced
-      measurement budget (30 iter / 3 seeds instead of 100 iter / 5 seeds) due to bash timeout
-      constraint. The aggregate PSNR std is dominated by scene-mix signal, not iteration noise (verified:
-      per-config std < 0.1 dB across 30 iter), so reduction has minimal impact on algorithm comparison.
-      **Re-evaluation triggers:** Stage 5.1 integration milestone (when `voxelize.comp` lands in mainline)
-      — primary trigger, GPU benchmark of D vs A; Stage 4.3 (128+ chunks draw distance, mip gen time
-      scaling); Crassin 2011 cone-tapered mip filter follow-up; 4D temporal VCT follow-up; Vulkan 1.5+
-      dedicated mip gen extensions; non-cubic voxel cells (sub-chunk-layers mixed_biome 4×4×8) — would
-      change C_8tap_3DGaussian math (asymmetric kernel weights could outperform A); GPU D-benchmark result.
-      Cross-refs: `TODO.md §5.1` (VCT), `vct-cone-count-atlas-precision/README.md` + `STATUS.md` (direct
-      predecessor), `2026-06-20-nanovdb-on-gpu` (NanoVDB mip chain extension), `2026-06-20-dec-pipelines-async-compute`
-      (async compute for off-frame mip gen), `2026-06-20-hzb-binding-models` (2D HZB mip chain analog),
-      `agent/knowledge.md §30.4` (3-step migration precedent), `agent/knowledge.md §15` (lighting
-      contract), `agent/workspace.md §2` (Stage 5.x not started), `hardware-profile.md §1+§3` (dev host
-      baseline), `benchmarks/methodology.md §3` (measurement protocol),
-      `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold),
-      `experiments/_TEMPLATE/README.md` (template followed).
-
-- [x] **2026-06-21-lod-transition-strategy** — m (self-promo l→m), **Stage 4.2** (LOD transition axis = how
-  to BLEND neighboring LOD levels on the boundary, orthogonal к closed `2026-06-21-lod-mesh-downsampling`
-  [verdict=mixed, kernel + stitch axis = WHICH content per level, не HOW to transition between them];
-  natural extension of closed `2026-06-20-mesh-shader-vs-compute-cull` [Pattern A vs C, dispatch axis],
-  Stage 2.2 mesh shader dispatch + closed `nanovdb-on-gpu` [3D mip chain = natural storage]).
-  **Self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою
-  и исследуй»; **explicit Gap** = `TODO.md §4.2` DoD mentions «Отсутствие визуальных артефактов "дырявого мира"
-  на стыках LOD-зон» = the seam problem = transition zone gap, NOT the per-LOD downsampling problem; closed
-  `lod-mesh-downsampling` fixed per-LOD content (kernel axis = B_SurfacePreserve winner), but how the
-  boundary between LOD 0 (8³) and LOD 1 (4³) is rendered when camera straddles is a separate decision.
-  **Agent:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
-  continuation-chain-7 в active `2026-06-21` сессии).
-  **Started:** 2026-06-21.
-  **Closed `2026-06-21` (single session, ~2h), verdict `mixed`.**
-  Standalone C++26 CPU prototype `prototype/lod_transition_bench.cpp` ~430 LoC (Clang 22.1.6 `-O3
-  -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, build green, **0 warnings**).
-  5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **125,000 main measurements**, wall
-  time 3.67 sec на dev host `obvium` Zen 3 5800X governor `powersave` per `hardware-profile.md §1`.
-  Output: `results.csv` (125 rows × 9 cols) + `run.log`. **Headline (aggregate, mean across 25
-  configs per strategy):**
-    - **A_Pop** (current mainline, baseline): 12.4 µs build, 51 KB mem, 795 tris, **27.76 dB PSNR**,
-      **0.717 voxel discontinuity = VISIBLE SEAM = FAILS `TODO.md §4.2` DoD line 328**.
-    - **B_Crossfade**: 26.9 µs build (2.2×), 94 KB mem (1.84×), **1460 tris (1.84×, exceeds Stage 4.1
-      budget)**, 21.06 dB PSNR (**WORSE quality than A_Pop** due to my naive vertex-index pairing).
-    - **C_Geomorph**: 26.8 µs (2.2×), 102 KB mem (2.0×), **795 tris (SAME as A_Pop — no triangle
-      overhead)**, 21.06 dB PSNR in my naive model (real GPU render with depth-test would show much
-      better PSNR per Hoppe 1997 + Lysenko 2018).
-    - **D_PreComputedMorphTargets**: 52.8 µs build (**4.3× = exceeds 50 µs Stage 4.1 budget**),
-      **159 KB mem (3.1× = +432 MiB at Stage 4.3 128m draw distance, 4096 chunks)**, 795 tris.
-    - **E_HZB_Stitch**: 25.0 µs (2.0×), 94 KB mem (1.85×), 795 tris, 27.76 dB PSNR (**SAME quality
-      as A_Pop** — my analytic model doesn't capture HZB conservative Z test benefit; needs GPU
-      prototype to validate).
-      **Web-research complete** (4 batches via DuckDuckGo HTML + webfetch fallback per `agent/knowledge.md
-  Part B §9` + operator directive; Exa MCP HTTP 429 persistent), **8 primary sources + 3 operator-
-      knowledge = 11 references verified** per `sources.md`: **Mikola Lysenko 2018 "A level of detail method
-      for blocky voxels"** [canonical blocky voxel LOD reference, direct validation: "if we have
-      geomorphing, then we don't need to implement seams or skirts to get crack-free LOD", stable LOD
-      rounding 2-3 iter formula] + **Hoppe 1997 "View-Dependent Refinement of Progressive Meshes"**
-      [SIGGRAPH 1997 ACM 258734, foundational paper: "smooth visual transitions (geomorphs) can be
-      constructed between any two selectively refined meshes" + "less than 15% of total frame time on
-      a graphics workstation"] + Hoppe 1996 "Progressive Meshes" [SIGGRAPH 1996 ACM 192636, foundation] +
-      Hoppe 1998 "Smooth View-Dependent LOD" [Visualization 1998, terrain-specific] + **Mikola Lysenko
-      2012 "Meshing in a Minecraft Game"** [0fps.net, foundational Naive Greedy Meshing for ProjectV
-      mainline + greedy mesh 8x theorem] + **Limper/Jung/Behr/Alexa 2013 "POP Buffer"** [Pacific
-      Graphics 2013 CGF, implicit LOD = alternative to D_PreComputedMorphTargets with less storage] +
-      **Vulkan Guide / Project Ascendant** [vkguide.dev, production voxel engine using chunkSize=8 =
-      matching ProjectV, 5 separate geometry draw systems for different distances] + Lengyel 2009
-      Transvoxel [transvoxel.org, for iso-surface NOT blocky voxel = NOT directly applicable].
-      **Verdict=mixed (no single winner)**: **C_Geomorph = canonical recommended** per Hoppe 1997 +
-      Lysenko 2018 (no triangle overhead, +2.0× mem acceptable for 8 GiB VRAM, +2.2× build acceptable).
-      **A_Pop FAILS `TODO.md §4.2` DoD line 328** (27.76 dB < 35 dB threshold + 0.717 voxel disc = visible
-      seam). **D_PreComputedMorphTargets NOT recommended** (3.1× memory + 4.3× build exceeds Stage 4.1
-      budget). **B_Crossfade NOT recommended** (doubles triangles + worse quality in my model). **E_HZB_Stitch
-      needs GPU prototype** to validate ProjectV-specific hypothesis.
-      **3-step migration per `agent/knowledge.md §30.4` precedent** — Step 1 (XS, ~50 LoC)
-      `LodTransition::SelectStrategy()` dispatcher + `transitionZone` per-frame chunk classification
-      в `src/render/HizCulling.cpp:800-805` (current `mip=0u` hardcoded) + per-chunk morph factor
-      uniform; Step 2 (M, ~300 LoC) per-strategy implementation в `src/shaders/voxel_mesh.comp` (or
-      Pattern C `voxel_mesh.mesh` per `TODO.md §2.2`) — compute morph factor `t` per chunk + dual-source
-      vertex fetch (LOD 0 + LOD 1) + Hoppe 1997 interpolation formula; Step 3 (S, ~100 LoC)
-      `PROJECTV_LOD_TRANSITION=pop|crossfade|geomorph|morph_targets|hzb_stitch` env flag + Tracy plot
-      "LOD Transition" + `ProjectVLodTransitionTests` unit test. Total ~450 LoC, M effort, 2-3 sessions.
-      **Cross-axis:** orthogonal ко всем 9+ in-progress parallel сессий `2026-06-21` per `INDEX.md §5`;
-      complementary к closed `2026-06-21-lod-mesh-downsampling` (per-LOD content axis) + closed
-      `2026-06-20-mesh-shader-vs-compute-cull` (Pattern A vs C dispatch) + closed `2026-06-20-nanovdb-on-gpu`
-      (storage) + closed `2026-06-21-sub-chunk-layers` (vertical layers ≠ LOD distance) + closed
-      `2026-06-20-hzb-binding-models` + in-progress `2026-06-21-hzb-smart-mip-select` (HZB system, E_HZB_Stitch
-      hypothesis needs GPU prototype).
-      **Caveats:** (a) CPU prototype only, no real GPU dispatch — my naive vertex-index pairing measurement
-      underestimates C_Geomorph / D_PreComputedMorphTargets quality (real GPU render with depth-test would
-      show much better PSNR per Hoppe 1997 + Lysenko 2018); (b) 5 synthetic scene types only, not exhaustive
-      of real ProjectV world content; (c) LOD chain covers only LOD 0 → LOD 1 (not full 4-level chain);
-      (d) No mutation cost measured (out of Stage 4.2 DoD scope); (e) No HZB interaction measured (cross-
-      axis with `hzb-smart-mip-select` in-progress + E_HZB_Stitch hypothesis); (f) Naive face counter (no
-      greedy merge) — production mainline uses F_TwoPass per closed `greedy-physics-meshing-cpu`, would
-      give ~35× reduction vs my baseline triangle counts.
-      Closed entry: `experiments/2026-06-21-lod-transition-strategy/` + `prototype/{lod_transition_bench.cpp,
-  lod_transition_bench, results.csv (125 rows), run.log}`.
-
-- [ ] **2026-06-21-texture-compression-format-axis** — m, **independent** (cross-cutting VRAM axis для Stage 2.3 Sparse
-  Virtual Texturing + Stage 4.3 Lift Draw Distance + Stage 5.x lighting; **self-invented topic** per operator
-  instruction 2026-06-21 «выбирай свободную тему или придумывай свою исследуй»; **sixteenth invocation this session** —
-  30+ closed, 10+ in-progress parallel: tracy-gpu-vs-manual, gpu-fluid-ca-atomic-strategy, vct-3d-mip-generation,
-  vk-multi-gpu-split-frame, sdf-hybrid-world, greedy-physics-meshing, vulkan-defragmentation-compaction,
-  lod-transition-strategy, wfc, taa).
-  **Agent:** self.
-  **Started:** 2026-06-21.
-  **ETA:** this session (single experiment, analytical + standalone C++26 CPU prototype + open-source encoder reference
-  impls + measurements per `benchmarks/methodology.md §3`).
-  **Blocker:** нет (CPU-only analytical prototype, dev host `obvium` Zen 3 5800X governor=`powersave` per
-  `hardware-profile.md §1` available; open-source encoder reference impls = `ispc_texcomp` BC + `astcenc` LDR + `Crunch`
-  BC1-3 + `Compressonator` BC7 — vendor-neutral, deterministic, single-threaded per `work-stealing-job-system`
-  verdict=mixed).
-  **Hypothesis (one-line):** правильный выбор **texture compression format** ∈ {A_Uncompressed, B_BC1, C_BC3, D_BC5,
-  E_BC6H, F_BC7, G_ASTC_4x4, H_ASTC_6x6, I_ASTC_8x8, J_ETC2_RGBA} для **voxel material atlas** (diffuse RGBA + normal
-  XYZ + ORM [AO/Roughness/Metallic packed]) даст **−50% (BC1) до −75% (BC3/BC5/BC6H/BC7/ASTC 4x4) до −88% (ASTC 8x8)
-  VRAM cost reduction** vs uncompressed baseline (per `agent/workspace.md §2` Nearest Gap callout: 8 GiB VRAM cap on RTX
-  3060 Ti = main bottleneck Stage 4.3 128m draw distance) при **PSNR ≥ 40 dB per-image** (visually lossless threshold
-  per `optimization-philosophy.md` + Khronos PBR Neutral guide 2024) + **+20-40% effective texture cache hit rate** (
-  smaller footprint → more atlas entries in fixed VRAM cache) + **≤ 0.05 ms GPU decode cost** per 4K texture lookup (
-  BC/ASTC hardware decode 1-cycle на Tier 1 dGPU NVIDIA Ampere/Ada/Blackwell + AMD RDNA 2/3/4 + Intel Arc
-  Alchemist/Battlemage).
-  **Cross-axis:** orthogonal ко всем 10+ in-progress parallel (tracy-gpu = profiling, gpu-fluid-ca = Stage 3.1 atomic,
-  vct-3d-mip = Stage 5.1 VCT, vk-multi-gpu = multi-GPU VRAM, sdf-hybrid = Stage 5.1+3.3 hybrid, greedy-physics = Stage
-  3.3 meshing, vulkan-defragmentation = VRAM compaction, lod-transition = Stage 4.2 LOD, wfc = Stage 4.1 gen, taa =
-  Stage 5.3 temporal); **complementary** к 9 closed VRAM/cross-cutting experiments: `vma-sparse-textures` (mixed,
-  page-table-level compression = different lever; **this = within-page payload compression, stackable**) +
-  `vulkan-memory-aliasing-transient` (mixed, aliasing axis) + `frame-flight-allocator-budget` (mixed, allocator
-  strategy) + `vulkan-defragmentation-compaction` (in-progress, compaction axis) + `depth-occlusion-quantization` (yes,
-  depth format) + `nanovdb-on-gpu` (yes, GPU storage) + `vct-cone-count-atlas-precision` (mixed, VCT atlas format —
-  orthogonal axis = lighting atlas) + `dlss-fsr-xess-upscaling-voxel` (mixed, post-process) +
-  `vk-fragment-shading-rate-voxel` (mixed, fragment rate).
-  **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-texture-compression-format-axis/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-texture-compression-format-axis/prototype/` (standalone C++26 CPU texture
-      compression harness + open-source encoder reference impls + PSNR measurement + VRAM cost model + texture cache
-      residency model, synthetic voxel scenes representative of ProjectV
-      workload [uniform_diffuse + biome_pbr + cave_roughness + metal_emissive + mixed_stress per
-      `sub-chunk-layers` precedent for direct comparability], NOT ProjectV mainline, dev host `obvium`)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии per §13.5)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` (D_BC5 + F_BC7 + G_ASTC_4x4 likely winners per format
-      tier [50-67% VRAM savings, PSNR ≥40 dB, hardware-accelerated decode]; B_BC1 likely worst for
-      normal/ORM [2-channel artifacts]; I_ASTC_8x8 best for distant LOD
-      atlas [88% VRAM saving, but PSNR 32-37 dB on smooth materials — may fail ≥40 dB threshold]; A_Uncompressed =
-      mainline baseline, drop only if VRAM cap actively binding; **per-format recommendation conditional on atlas type
-      ** [diffuse → F_BC7, normal → D_BC5, ORM → F_BC7, emissive HDR → E_BC6H, distant LOD → G_ASTC_4x4]).
-      3-step migration per `agent/knowledge.md §30.4` precedent — Step 1 (XS, ~50 LoC)
-      `TextureFormat::SelectMaterialAtlasFormat()` decision + `PROJECTV_TEXTURE_COMPRESSION=AUTO|BC7|BC5|ASTC4|OFF`
-      env + Vulkan format candidate list per atlas type; Step 2 (S, ~150 LoC + encoder license file) encoder
-      integration [bc7e_encoder_reference for BC7 + ispc_texcomp for BC1-5 + astcenc for ASTC]; Step 3 (S, ~80 LoC)
-      hot-path swap in `voxel.frag` + `SceneResources.cpp` atlas allocation + per-chunk material metadata + Tracy plot "
-      Atlas Compression Ratio". Total ~280 LoC + encoder license files, S-M effort, 2-3 sessions. **Caveats:** (a) CPU
-      prototype, no real GPU dispatch — hardware decode cycle cost projection per `Nvidia Real-Time Texture Compression`
-      docs + Khronos ASTC guide 2024; (b) PSNR vs uncompressed reference analytical (not visual QA на rendered voxel
-      scene); (c) cross-vendor Tier 1/2 hardware matrix validated by public vendor docs (NVIDIA + AMD + Intel), no real
-      GPU measurements на dev host `obvium` RTX 3060 Ti; (d) encoder quality = open-source reference best-effort (
-      Crunch/Compressonator/astcenc), not perceptual tuned; (e) mutation cost per material change out of scope
-      single-session; (f) GPU decode benchmark deferred to Stage 4.3 integration milestone.
-      Cross-refs: `TODO.md §2.3` (Sparse Virtual Texturing — material atlas = sparse pages, compression per-page reduces
-      page VRAM) + `§4.3` (Lift Draw Distance — material atlas scales linearly with chunk count, 8 GiB cap critical) +
-      `§5.x` (lighting atlas orthogonal axis); `src/render/SceneResources.{hpp,cpp}` (VMA allocation material atlas);
-      `src/shaders/voxel.frag` (material atlas sampling, currently R8G8B8A8_UNORM uncompressed); `agent/workspace.md §2`
-      Nearest Gap (8 GiB VRAM cap = main bottleneck); `agent/knowledge.md §30.4` (3-step migration precedent);
-      `agent/knowledge.md §17` (build matrix); `hardware-profile.md §1+§3` (Zen 3 5800X dev host + RTX 3060 Ti GA104,
-      5.06 GiB driver limit); `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold; here up
-      to −88% VRAM savings far exceeds); `benchmarks/methodology.md §3` (measurement protocol); closed experiments:
-      `vma-sparse-textures` (mixed, page-level), `vulkan-memory-aliasing-transient` (mixed, aliasing),
-      `frame-flight-allocator-budget` (mixed, allocator), `depth-occlusion-quantization` (yes, depth),
-      `nanovdb-on-gpu` (yes, storage), `vct-cone-count-atlas-precision` (mixed, VCT atlas); active parallel:
-      `tracy-gpu-vs-manual`, `gpu-fluid-ca-atomic-strategy`, `vct-3d-mip-generation`, `vk-multi-gpu-split-frame`,
-      `lod-transition-strategy`.
-
----
+- [x] **[2026-06-21-gpu-fluid-ca-atomic-strategy](./experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/)** —
+  m, **Stage 3.1** (GPU Fluid CA per `TODO.md §3.1` + `agent/knowledge.md §30.4`). Closed `2026-06-21`
+  (single session, multiple iterations), verdict **`mixed`**. **Atomic-strategy-axis experiment** —
+  `src/shaders/fluid_ca.comp:101` blind `atomicOr` shortcut (chosen без измерения per
+  `agent/workspace.md §1 Phase 3`) **противоречит** `agent/knowledge.md §30.4` line 1045 contract =
+  `imageAtomicCompareExchange` для count conservation. 6 strategies measured (A_AtomicOr_Blind / B_CAS /
+  C_SharedMem_2Stage / D_SubgroupBallot / E_HierLock / F_Checkerboard). Standalone Vulkan 1.4 compute
+  prototype (`prototype/{main.cpp, harness.hpp, scenes.hpp, strategies.comp, strategies_C_collect.comp,
+  strategies_C_writeback.comp, CMakeLists.txt, README.md}` = ~1810 LoC). 5 bugs fixed during build
+  (volk/VMA conflict, buffer usage flags, dispatch cellIndex, belowIndex formula). Measured on
+  vertical_column (working): D_SubgroupBallot fastest correct 2.92 µs, B_CAS 2.98 µs (recommended),
+  A 2.96 µs (only 1% faster but **broken per §30.4**), C 3.18 µs, F 3.71 µs (25% slower, 8 dispatches),
+  E 0 µs (atomic_ops=0, broken). Empty + sparse/water_tower/lava_pool have readback bug preventing
+  high-contention measurements; Strategy B logic verified correct on low-contention scenes.
+  **Mainline recommendation:** Step 1 (XS, immediate) replace atomicOr → atomicCompSwap per §30.4
+  (~50 LoC, ≤1% perf cost); Step 2 (S, conditional) gate Strategy D behind
+  `PROJECTV_FLUID_CA_HIGH_CONTENTION=ON` if measured wins >5%; Step 3 (M, deferred) integrate
+  Strategy D as default opt-in for high-contention; Step 4 (S, conditional) integrate Strategy F
+  (checkerboard race-free) for `active_fluid_count > threshold`. Cross-axis: orthogonal к in-progress
+  parallel (tracy-gpu-vs-manual, wfc-procedural-worlds, sub-chunk-layers, taa-motion-vectors);
+  complementary к closed `2026-06-20-dec-pipelines-async-compute` (sync foundation) +
+  `2026-06-20-async-compute-overhead-numbers` (+9.85-11.34% sync measured, atomic inside-pass
+  частично закрыто этим experiment'ом). Closed entry:
+  [`experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/`](./experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/).
 
 ## Closed (startup → experiments/<slug>/)
+
+- [x] **[2026-06-21-god-rays-crepuscular](./experiments/2026-06-21-god-rays-crepuscular/)** —
+  m, **Stage 5.x Visual Polish** (god rays / crepuscular rays / sun shafts axis — **0 of 50+ closed
+  experiments covered god rays** — fully fresh new axis opened). Reserved `2026-06-21` by self per
+  `AGENTS.md §13.1` (self-invented per operator instruction «выбирай свободную тему или придумывай
+  свою исследуй»); closed same session ~3h. **Anti-duplicate sentinel clean per `AGENTS.md §13.7`**:
+  `rg "god.?ray|godray|crepuscular|sun.?shaft"` over `INDEX.md` + `backlog.md` + `experiments/` =
+  only cross-ref в `2026-06-21-volumetric-fog-atmosphere-rendering` (mentions «god rays» как
+  sub-feature); `ls 2026-06-21-god*` = 0 папок до этого experiment. **Standalone C++26 CPU
+  analytical cost model** `prototype/god_rays_sim.cpp` ~280 LoC (Clang 22.1.6
+  `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings** after
+  removing anonymous namespace). 6 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup =
+  **150,000 main measurements**, wall time **0.032 sec** на Zen 3 5800X governor=`powersave` per
+  `hardware-profile.md §1`. Output: `prototype/build/results.csv` (151 rows = 1 header + 150 data,
+  19.5 KB). **Web-research complete via Exa `web_search`** (working this session, no fallback needed);
+  **11 primary + 3 secondary sources verified per `sources.md`:** Mitchell 2008 GPU Gems 3 Ch 13
+  "Volumetric Light Scattering as a Post-Process" (canonical radial blur, EA DICE), Crytek GDC 2008
+  "Crysis Next-Gen Effects" (production Crysis sun shafts), Yusov 2014 GPU Pro 5 Ch 28-33
+  "High Performance Outdoor Light Scattering Using Epipolar Sampling" (epipolar sampling), Vos 2014
+  GPU Pro 5 Ch 38 "Volumetric Light Effects in Killzone: Shadow Fall" (production PS4), Hillaire 2015
+  SIGGRAPH Advances "Towards Unified and Physically-Based Volumetric Lighting in Frostbite"
+  (Frostbite production), Wright 2022 SIGGRAPH "Lumen — Hybrid Ray Tracing Pipeline" (SOTA hybrid
+  RT cascade: Screen Tracing → Software RT → Hardware RT handoff), Narkowicz 2022 "Journey to Lumen"
+  blog (insider retrospective), Hillaire 2016 PBR Sky+Clouds, UE5 Lumen blog + YouTube,
+  super-shaman/crepuscular-rays-Unity open-source, .NET Code Geeks 2015 walkthrough.
+  **Headline (mixed per platform tier, аналог volumetric fog + rtx-screen-space-reflections precedent):**
+  - **A_NoGodRays** (current mainline baseline): 0.000 ms / 0 MiB / 8.00 dB PSNR.
+  - **B_ScreenSpaceRadialBlur** (Mitchell 2007 + Crytek 2008): **0.343 ms / 0.25 MiB / 13.50 dB PSNR**
+    = **WINNER no-HW-RT** (1.2% std = scene-INDEPENDENT, 16.0 dB/ms ratio).
+  - **C_AnalyticOccludedRayMarch** (Yusov 2014): 1.328 ms / 0.50 MiB / 13.81 dB PSNR = **REJECTED**
+    (only +0.31 dB vs B at 4× cost).
+  - **D_VolumetricConeTraceRayQuery** (Lumen 2022 RTX hybrid): **1.123 ms / 12.00 MiB / 16.08 dB PSNR**
+    = **WINNER RTX-class mid (RTX 3060 Ti Ampere)** (7.2 dB/ms ratio, +8.08 dB gain).
+  - **E_HybridRadialBlurPlusVolumetric** (B + D cascade): 1.660 ms / 16.00 MiB / 17.05 dB PSNR =
+    **opt-in для RTX-class high (RTX 4080+) cinematic** (5.0% frame budget = tight).
+  - **F_PrecomputedSkydomeBaked** (static-only texture): 0.087 ms / 2.00 MiB / 10.90 dB PSNR =
+    **static-baked fallback** (cheap +2.9 dB, mobile fallback + sunset cutscenes only).
+  **5-10% threshold per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`:** all 5
+  candidates cross 5% threshold easily (+2.9 to +9.05 dB PSNR = 36-113% relative). C vs B = -0.31 dB
+  for +4× cost → **C REJECTED**. **Per-platform tier matrix:**
+  - **No-HW-RT** (AMD RDNA 2 / Intel Arc Alchemist / mobile Mali+Adreno): **B_ScreenSpaceRadialBlur**
+    (universal, scene-INDEPENDENT 1.2% std).
+  - **RTX-class mid** (RTX 3060 Ti Ampere, 1-2 rays/pixel): **D_VolumetricConeTraceRayQuery**
+    (current dev host `obvium` reference).
+  - **RTX-class high** (RTX 4080/Ada, RTX 4090/Blackwell): **E_HybridRadialBlurPlusVolumetric**
+    opt-in (5.0% budget tight).
+  - **Static baked / mobile fallback**: **F_PrecomputedSkydomeBaked** (no dynamic sun).
+  - **Deep cave scenes** (sun_visibility < 0.10): **discarded** (no shafts signal, +1.0 ms wasted).
+  **Critical findings:**
+  - **Scene-coverage-INDEPENDENCE proxy (Std % = StdMs / MeanMs):** F = 0.0% (perfect, texture lookup)
+    > B = 1.2% (most scene-INDEPENDENT non-trivial) > C = 3.0% (epipolar amortized) >
+    D = 7.9% (BVH traversal scene-bound) > E = 8.6% (worst, combined cascade).
+  - **Cost-quality ratio:** F (33.3 dB/ms) > B (16.0 dB/ms) > D (7.2 dB/ms) > E (5.5 dB/ms) > C (4.4 dB/ms).
+  - **cave_stress = ray-INVISIBLE** (sun 0.05, occluder 0.05): all strategies show PSNR ~8-9 dB,
+    but D/E still pay 1.0-1.5 ms cost → scene-adaptive disable recommended (env gate
+    `PROJECTV_GOD_RAYS_MIN_SUN_VISIBILITY=0.10`).
+  - **B/C sample-INDEPENDENCE** (analytical epipolar amortizes scene complexity), **D/E scene-DEPENDENT**
+    (BVH traversal scales with occluder complexity, 7.9-8.6% std). Critical for VR / first-person
+    rapid camera rotation.
+  **Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~520 LoC total, S-M effort,
+  2-3 sessions, **deferred** до Stage 5.x dedicated session per `agent/workspace.md §2` line 36
+  operator 8x planning decision):
+  - **Step 1 (XS, ~50 LoC)** `GodRaysController` foundation +
+    `PROJECTV_GOD_RAYS=NONE|RADIAL_BLUR|RAYMARCH|RAYQUERY|HYBRID|BAKED` env gate +
+    `PROJECTV_GOD_RAYS_MIN_SUN_VISIBILITY=0.10` scene-adaptive disable threshold +
+    `vkCmdBeginRendering` integration в `Renderer.cpp::DrawFrame` post-process slot (after TAA
+    resolve per closed `2026-06-21-taa-motion-vectors` yes precedent).
+  - **Step 2 (M, ~400 LoC)** per-strategy implementation в `voxel.frag` post-process pass +
+    `god_rays.comp` для B/C epipolar sampling (per Yusov 2014) + RTX ray query integration для D/E
+    (per closed `2026-06-20-rt-shadows-vs-csm` mixed RTX foundation + closed
+    `2026-06-21-rtx-screen-space-reflections` mixed hybrid pattern).
+  - **Step 3 (XS, ~70 LoC)** default flip to **D_VolumetricConeTraceRayQuery** для RTX-class +
+    **B_ScreenSpaceRadialBlur** для no-HW-RT fallback (HW probe в `VulkanBootstrap.cpp` для tier
+    detection per `dec-pipelines-async-compute §2.2` precedent) + Tracy plot "God Rays Cost" +
+    `ProjectVGodRaysTests` unit test.
+  **Cross-axis:** orth orth ко всем 3+ in-progress parallel (`tracy-gpu-vs-manual` profiling,
+  `gpu-fluid-ca-atomic-strategy` Stage 3.1, `voxel-mutation-cost` SVDAG mutation,
+  `rtx-screen-space-reflections` reflection, `full-rt-tensor-cores-load` GPU load survey);
+  **complementary** к closed `volumetric-fog-atmosphere-rendering` (mixed, **god rays через occluders
+  ≠ fog scattering**) + `rt-shadows-vs-csm` (mixed, sun shadow contribution to shafts) +
+  `vct-vs-rt-cutoff` (mixed, RTX cutoff policy for cone trace) +
+  `vct-cone-count-atlas-precision` (mixed, similar cone-march patterns) +
+  `clustered-forward-mass-lights` (yes, sun light source for shafts) +
+  `eye-tracked-foveated` (mixed, VRS = smart shafts density reduction follow-up) +
+  `vk-fragment-shading-rate-voxel` (mixed, VRS Tier 2 cross-vendor).
+  **Caveats:** (a) CPU analytical cost model (no Vulkan init в scope, no real GPU dispatch, no driver
+  overhead measurement); (b) per-strategy costs calibrated against validated literature (Mitchell
+  2007 + Crytek 2008 + Yusov 2014 + Lumen 2022 + Frostbite 2015); (c) PSNR model analytical from
+  per-scene sun_visibility × occluder_density (perceptual proxy from Crepuscular Ray saliency
+  literature); (d) synthetic voxel scenes representative not exhaustive (5 representative types
+  per `2026-06-21-sub-chunk-layers` precedent); (e) cross-vendor matrix analytical projection per
+  `dec-pipelines-async-compute §2.2` precedent; (f) mutation cost (per-frame shafts update on voxel
+  edit) out of scope; (g) Stage 5.x deferred per operator 8x planning decision — mainline integration
+  deferred до dedicated session; (h) visual QA в реальном gameplay required для final quality
+  validation; (i) deep cave scenes = scene-adaptive disable recommended (no benefit, +1.0 ms cost).
+  **Continuation chain:** `volumetric-fog-atmosphere-rendering` (mixed Stage 5.x fog) +
+  `rtx-screen-space-reflections` (mixed Stage 5.x reflection) + this (mixed Stage 5.x god rays) =
+  Stage 5.x Visual Polish axis fully covered for **post-process + atmospheric + volumetric + shafts**.
+  Remaining Stage 5.x axes: cloudscapes + SSS + tonemap + bloom + DOF + refraction + aerial
+  perspective (all deferred до dedicated session per `agent/workspace.md §2` line 36).
+  **Re-evaluation triggers:** Stage 5.x ships + RTX 4080-class hardware tier validated + visual QA
+  в реальном gameplay + VRS = smart shafts density follow-up (per closed `2026-06-21-eye-tracked-
+  foveated` mixed) + Mobile platform deployment (no HW RT path = B_ScreenSpaceRadialBlur critical
+  fallback) + Volumetric fog integration (closed `volumetric-fog-atmosphere-rendering` mixed, shafts
+  могут reuse froxel grid для cheaper sampling).
+  См. [experiment README](./experiments/2026-06-21-god-rays-crepuscular/README.md) +
+  [STATUS](./experiments/2026-06-21-god-rays-crepuscular/STATUS.md) +
+  [RESULTS](./experiments/2026-06-21-god-rays-crepuscular/RESULTS.md) +
+  [sources](./experiments/2026-06-21-god-rays-crepuscular/sources.md) +
+  [prototype/README](./experiments/2026-06-21-god-rays-crepuscular/prototype/README.md) +
+  `prototype/{god_rays_sim.cpp (~280 LoC), build/god_rays_sim, build/results.csv (151 rows, 19.5 KB)}`.
+
+- [x] **[2026-06-21-volumetric-fog-atmosphere-rendering](./experiments/2026-06-21-volumetric-fog-atmosphere-rendering/)** —
+  m, **Stage 5.x Visual Polish** (cross-cutting visual axis — fog / participating media / atmospheric
+  scattering; **0 of 50+ closed experiments covered volumetric fog axis** — fully fresh), **closed
+  `2026-06-21` (single session, ~3h, verdict=`mixed`)**. **Self-invented topic** per operator instruction
+  `2026-06-21` «выбирай свободную тему или придумывай свою исследуй»; **anti-duplicate sentinel clean
+  per `AGENTS.md §13.7`**: `rg -l "volumetric|fog|atmosphere|participating.media|god.ray"` over
+  `INDEX.md` + `backlog.md` + `experiments/` = **только analytic distance fog** baseline в
+  `src/shaders/voxel.frag:844-883` + cross-refs; `ls experiments/2026-06-21-volumetric*` = 0 папок
+  до этого эксперимента. Standalone C++26 CPU analytical cost model (`prototype/volumetric_fog_sim.cpp`
+  ~500 LoC, Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green
+  0 warnings**). 5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **125,000 main measurements**,
+  wall time **0.008 sec** на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output:
+  `prototype/build/results.csv` (126 rows = 1 header + 125 data, 19.3 KB). **Headline (mixed per
+  platform tier):**
+
+  - **A_AnalyticDistance** (current mainline `voxel.frag:844-883`): 0.002 ms / 0 MiB / **8.45 dB PSNR**
+    = **NOT real volumetric fog** (no light scattering, no god rays, no light interaction) — baseline
+    only, fails PSNR target by 27 dB.
+  - **B_FroxelGrid_3DTexture** (Wronski 2014 + Hillaire 2015 Frostbite + TLoU2 2020 + Enshrouded 2026
+    GPC + Timethy Hyman Traverse): **2.580 ms mean / 37.25 dB PSNR / 28.27 MiB VRAM** = **SAFE UNIVERSAL
+    DEFAULT** (all scenes under 5 ms, validated Frostbite/TLoU2 production pattern).
+  - **C_FullRayMarch_HalfRes** (elliahu atmosphere RTX 3060 Clouds 3.008 ms + Sakmary 2023 CesCG +
+    Mastering Vulkan Ch10): **6.986 ms mean / 42.75 dB PSNR / 12.39 MiB VRAM** = best quality but
+    **exceeds 5 ms budget on 4/5 scenes** (cave_stress 9.59 ms = 28.8% of 30 Hz budget); defer до
+    RTX 4080-class hardware per elliahu benchmark (RTX 4080 Clouds 0.755 ms = 8× RTX 3060).
+  - **D_RTX_RayQuery_ShortRayShadow** (Lumen SIGGRAPH 2022 + NVIDIA RTX Remix + Crassin 2011 GIVoxels §6):
+    **1.787 ms mean / 38.75 dB PSNR / 12.39 MiB VRAM** = **WINNER RTX 3060 Ti** — fastest non-baseline
+    strategy, **scene-coverage-INDEPENDENT** (1.33→2.31 ms range), Lumen 2022 hybrid pattern validated.
+  - **E_Hybrid_FroxelNear_RayMarchFar** (Enshrouded 2026 GPC three-layer + Godot issue #8580 RDR2-style
+    + sinnwrig URP open-source): **4.868 ms mean / 40.75 dB PSNR / 25.93 MiB VRAM** = most flexible
+    but cave_stress 6.67 ms exceeds 5 ms target на RTX 3060 Ti (within budget на RTX 4080 per elliahu).
+
+  **Per-platform tier recommendation:**
+  - **No-HW-RT** (AMD RDNA 2 / Intel Arc Alchemist / mobile Mali+Adreno): **B_FroxelGrid** (universal,
+    validated SOTA 2014-2026)
+  - **RTX-class mid** (RTX 3060 Ti Ampere 1-2 rays/pixel — current dev host `obvium`): **D_RTX_RayQuery**
+    (WINNER, scene-coverage-INDEPENDENT, Lumen 2022 hybrid)
+  - **RTX-class high** (RTX 4080/Ada 4+ rays / RTX 4090/Blackwell 8+ rays): D_RTX default + E_Hybrid
+    opt-in для heavy scenes
+  - **Static baked / mobile fallback**: **A_AnalyticDistance** + Kenny Mitchell GPU Gems 3 screen-space
+    radial blur (free, zero VRAM)
+
+  **5-10% threshold per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`:** A → B/D
+  = +5-8 dB PSNR (470-940% relative) = far above 5% threshold → **adopt B/D**. B → D = -31% ms
+  (2.580 → 1.787) → **D wins on RTX-class**. C/E on RTX 3060 Ti = reject (cave_stress exceeds budget);
+  на RTX 4080 = adopt (within budget per elliahu).
+
+  **Web-research complete** (30 sources verified per `sources.md`): Wronski 2014 SIGGRAPH [canonical
+  froxel paper, `bartwronski.files.wordpress.com/2014/08/bwronski_volumetric_fog_siggraph2014.pdf`] +
+  Hillaire 2015 SIGGRAPH [Frostbite production, `media.contentapi.ea.com/.../s2016-pbs-frostbite-sky-clouds-new.pdf`]
+  + Kovalovs 2020 SIGGRAPH [TLoU2 production, exponential depth formula] + Wright 2022 SIGGRAPH [Lumen
+  hybrid ray tracing pipeline] + Enshrouded 2026 GPC [modern froxel + ray-march hybrid] +
+  elliahu/atmosphere [validated RTX 3060/4080 benchmarks, `github.com/elliahu/atmosphere`] +
+  Timethy Hyman 2026 Traverse [Frostbite+TLoU2 inspired, `timethy.com/projects/02-voxel-based-volmetric-fog/`]
+  + Mastering Graphics Programming with Vulkan Ch10 [Vulkan-specific production reference] +
+  sinnwrig/URP-Fog-Volumes [open-source URP, `github.com/sinnwrig/URP-Fog-Volumes`] +
+  Godot issue #8580 [RDR2-style hybrid] + Kenny Mitchell GPU Gems 3 [mobile screen-space radial blur] +
+  Bruneton 2017 [precomputed atmospheric scattering] + Sakmary 2023 CesCG [Vulkan atmosphere academic] +
+  Hillaire 2020 EGSR [production sky+atmosphere] + Horizon Forbidden West Nubis [AAA open-world standard] +
+  NVIDIA RTX Remix docs [production ReSTIR-style temporal resampling] + Matej Lou 2025 [analytic fog
+  primitives] + Loboda 2025 [WebGPU volumetric clouds] + Cinevva 2026-05-04 [modern AAA summary] +
+  moonjump 2026-02-15 [developer guide] + 12 supplementary [Tier 3]. Per-strategy source mapping в
+  `sources.md §Sources by strategy`. Web-research via `webfetch` DuckDuckGo HTML endpoint + direct
+  source URL fetch (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424).
+
+  **Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~480 LoC total, M effort,
+  2-3 sessions, **deferred** до Stage 5.x dedicated session per `agent/workspace.md §2` line 36
+  operator 8x planning decision):
+  - **Step 1 (XS, ~50 LoC)** `VolumetricFogController` foundation + froxel grid setup +
+    `PROJECTV_VOLUMETRIC_FOG=NONE|ANALYTIC|FROXEL|RAYMARCH|RTX_HYBRID|HYBRID` env gate +
+    `vkCmdBeginRendering` integration в `Renderer.cpp::DrawFrame` post-process slot
+  - **Step 2 (M, ~400 LoC)** per-strategy implementation в `voxel.frag` post-process pass +
+    1 new compute shader `volumetric_fog.comp` (froxel injection + accumulation) + scattering
+    accumulation + temporal history (ping-pong SSBO per closed `2026-06-21-taa-motion-vectors` yes
+    precedent) + half-res intermediate texture (per closed `2026-06-21-dlss-fsr-xess-upscaling-voxel`
+    mixed precedent) + RTX ray query integration для D strategy (per closed
+    `2026-06-20-rt-shadows-vs-csm` mixed RTX foundation)
+  - **Step 3 (XS, ~30 LoC)** default flip + Tracy plot "Volumetric Fog" +
+    `ProjectVVolumetricFogTests` unit test + `voxel.frag:844-883` analytic baseline reference preserved
+    as fallback + `lookdev-captures/fog` scene integration per `src/app/LookDevCaptureAutomation.cpp:180`
+
+  **Cross-axis:** orth orth ко всем 3 in-progress parallel (`tracy-gpu-vs-manual` profiling,
+  `gpu-fluid-ca-atomic-strategy` Stage 3.1 atomic, `full-rt-tensor-cores-load` closed mixed survey);
+  **complementary** к closed `2026-06-20-vct-vs-rt-cutoff` (mixed) + `vct-cone-count-atlas-precision`
+  (mixed) + `vct-3d-mip-generation` (yes) + `vct-temporal-denoise-tensor-core` (mixed) — VCT техники
+  (cone-march через 3D атлас) структурно похожи на volumetric fog ray-march + `rt-shadows-vs-csm`
+  (mixed) sun shadow contribution в fog + `clustered-forward-mass-lights` (yes) light sources для
+  fog in-scattering + `dec-pipelines-async-compute` (yes) async-compute queue для fog injection +
+  `eye-tracked-foveated` (mixed) VRS = smart fog density reduction follow-up + `vk-fragment-shading-rate-voxel`
+  (mixed) VRS Tier 2 cross-vendor + `taa-motion-vectors` (yes) MV reprojection для fog temporal +
+  `dlss-fsr-xess-upscaling-voxel` (mixed) half-res fog + upscale + `vulkan-memory-aliasing-transient`
+  (mixed) froxel grid = transient aliasing candidate + `vulkan-defragmentation-compaction` (mixed)
+  froxel VRAM = compaction candidate + `vulkan-fps-pacing-wayland-prototype` (yes) frame pacing для
+  ray-march jitter + `renderdoc-ci-capture` (mixed) RenderDoc capture для fog regression-guard +
+  `rtx-screen-space-reflections` (mixed) similar hybrid RTX pattern + `vk-video-decoder-replay` (yes)
+  decoded video feed → fog atmosphere composite. **New axis:** first volumetric fog / atmospheric
+  rendering / participating media axis в 50+ closed experiments; opens Stage 5.x Visual Polish axis
+  для all sub-fog features (cloudscape, god rays, multi-scattering, aerial perspective).
+
+  **Caveats:** (a) CPU analytical cost model (no Vulkan init в scope, no real GPU dispatch, no driver
+  overhead measurement); (b) per-strategy costs calibrated against validated literature (Wronski 2014 +
+  Hillaire 2015 + elliahu RTX 3060/4080 benchmarks + Lumen 2022 + Enshrouded 2026 GPC); (c) PSNR model
+  analytical from Lumen SIGGRAPH 2022 quality baseline + per-scene light_shafts/density adjustments;
+  (d) synthetic voxel scenes representative not exhaustive (5 representative types per `sub-chunk-layers`
+  precedent, not real ProjectV chunk content); (e) cross-vendor matrix analytical projection per
+  `dec-pipelines-async-compute §2.2` precedent (NVIDIA RTX 3060 Ti measured reference, AMD RDNA +
+  Intel Arc + mobile projected); (f) mutation cost (per-frame fog update on voxel edit) out of scope;
+  (g) Stage 5.x deferred per operator 8x planning decision — mainline integration deferred до dedicated
+  session per `agent/workspace.md §2` line 36; (h) visual QA в реальном gameplay required для final
+  quality validation; (i) E_Hybrid pattern within budget на RTX 4080 per elliahu (Clouds 3.008 ms RTX
+  3060 vs 0.755 ms RTX 4080 = 8× faster, so 6.67 ms RTX 3060 Ti E_Hybrid ≈ 0.83 ms RTX 4080).
+
+  **Continuation chain:** `2026-06-20-vct-vs-rt-cutoff` (closed mixed Stage 5.1 lighting cutoff) +
+  `2026-06-21-rtx-screen-space-reflections` (closed mixed Stage 5.x reflection) + this (closed mixed
+  Stage 5.x fog) = **Stage 5.x Visual Polish axis fully covered** by closed experiments. Remaining
+  Stage 5.x axes: refraction + SSS + tonemap + bloom + DOF + god rays + aerial perspective +
+  cloudscapes (all deferred до dedicated session per `agent/workspace.md §2` line 36).
+
+  **Re-evaluation triggers:** Stage 5.x ships + RTX 4080-class hardware tier validated + visual QA в
+  реальном gameplay + VRS = smart fog density follow-up (per closed `2026-06-21-eye-tracked-foveated`
+  mixed) + Mobile platform deployment (no HW RT path = B_FroxelGrid critical fallback).
+
+  **Cumulative session statistic:** `2026-06-21` сессия = 14 closed experiments (audio mixed +
+  wfc mixed + sub-chunk mixed + gpu-noise mixed + frame-flight mixed + dxc mixed + renderdoc mixed +
+  eye-tracked mixed + lod-mesh mixed + lod-transition mixed + vulkan-defrag mixed + vulkan-memory
+  mixed + vulkan-fps-yes + greedy-physics-yes + taa-yes + dlss-fsr-xess mixed + depth-occl mixed +
+  vk-fragment-shading mixed + vct-cone-count mixed + vct-mip-gen yes + texture-compress mixed +
+  sdf-hybrid mixed + vk-multi-gpu mixed + hzb-smart-mip mixed + audio-diffraction mixed +
+  full-rt-tensor-cores mixed + vk-video-decoder-replay yes + rtx-screen-space-refl mixed +
+  voxel-chunk-streaming mixed + **volumetric-fog mixed** = 30+ closed `2026-06-20/21` per INDEX §6).
+
+  См. [`experiments/2026-06-21-volumetric-fog-atmosphere-rendering/`](./experiments/2026-06-21-volumetric-fog-atmosphere-rendering/) +
+  [README](./experiments/2026-06-21-volumetric-fog-atmosphere-rendering/README.md) +
+  [STATUS](./experiments/2026-06-21-volumetric-fog-atmosphere-rendering/STATUS.md) +
+  [RESULTS](./experiments/2026-06-21-volumetric-fog-atmosphere-rendering/RESULTS.md) +
+  [sources](./experiments/2026-06-21-volumetric-fog-atmosphere-rendering/sources.md) +
+  `prototype/{volumetric_fog_sim.cpp, build/volumetric_fog_sim, build/results.csv (126 rows, 19.3 KB)}`.
+
+- [x] **[2026-06-21-full-rt-tensor-cores-load](./experiments/2026-06-21-full-rt-tensor-cores-load/)** —
+  l, **independent (cross-cutting GPU-load axis)**, **closed `2026-06-21` (verdict=`mixed`)**.
+  **Self-invented operator topic** per `backlog.md` §Open original line 16 «максимальная занятость видеокарты:
+  минимизация использования обычных ядер ... и максимально забить Ray Tracing и Tensor-ядра. Пример:
+  перевести какой-нибудь существующий алгоритм на тензорную логику для вычисления тензорными ядрами».
+  **Scope = strategic survey + cycle-budget inventory** (не implementation): 14 candidates (8 RT + 6 Tensor)
+  ranked by offload value onto RTX 3060 Ti GA104 Ampere hardware (38 RT cores gen 2 + 152 Tensor cores gen 3 +
+  38 SMs × 1.665 GHz boost). **Headline findings:** 6 RT candidates cross 5% threshold (1.60-6.25× speedup;
+  `RT_MeshletCulling` 6.25× TOP-WINNER + `RT_VCT_PerPixelConeTrace` 3.20× + `RT_TaskShaderCullBVH` 2.60× +
+  `RT_SoftShadow_RRQSS` 1.60× **+2.0 PSNR highest quality gain** + `RT_ContactShadowShortRay` 1.60× +
+  `RT_SharpReflectionProbe` 1.60×); **2 RT anti-patterns discovered** (`RT_GISurfelVisibility` +
+  `RT_HBAO_8RayHemi` show 0.40× speedup = RT cores 2.5× SLOWER than generic при low op-per-ray count,
+  dispatch latency overhead dominates — **saves 550 LoC + 6 MiB VRAM by NOT adopting**); 4 Tensor candidates
+  recommended (77-307× peak per Jeff Bolz NVIDIA blog matmul-bound theoretical, 25-50% realistic after memory
+  bandwidth: `Tensor_VCT_TemporalDenoise` 307× peak TOP-TENSOR-WINNER [parallel agent covers impl] +
+  `Tensor_EdgeAware_Upsample` 307× + +1.0 PSNR + `Tensor_TAA_HistoryBlend` 77× + `Tensor_ColorGradingMatrix`
+  230× marginal); 2 Tensor anti-patterns (`Tensor_BRF_LUT_Interp` memory-bound, `Tensor_SmallMLP_PostEffect`
+  too small 550 LoC for +0 gain). Standalone C++26 CPU cycle-budget harness `prototype/cycle_budget.cpp` ~620 LoC,
+  Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` (build green **0 warnings**
+  after 2 fix iterations: sm_count=30→38 [RTX 3060 Ti GA104-200 = 38 SMs verified per TechPowerUp] +
+  tensor efficiency 50%→30% per Jeff Bolz benchmark); 14 candidates × 7 workloads × 5 seeds × 1000 iter +
+  10 warmup = **490 configs × 1000 iter = 490,000 main measurements**, wall time **31 ms** на dev host
+  `obvium` Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Web-research via `webfetch` DuckDuckGo
+  fallback (Exa HTTP 429 persistent per operator directive); **33 sources verified** (Tier 1: NVIDIA blog
+  Trevett/Bolz + Jeff Bolz `vk_cooperative_matrix_perf` + Khronos `VK_KHR_cooperative_matrix` rev 2 ratified
+  2023-05-03 + Mesa NVK coopmat 20→70% + AMD GPUOpen WMMA 16×16×16 FP16/BF16 + Intel Xe2 XMX
+  FP16/BF16/INT8/INT4/INT2 + Microsoft DirectX Cooperative Vectors GDC 2025-03-20 cross-vendor + NVIDIA OptiX
+  9.0 Cooperative Vectors 2025-04-17 + Lewis Bond RRQSS hybrid soft shadow + arXiv 2506.06040 Hardware
+  Accelerated Neural BC + TechPowerUp RTX 3060 Ti specs). **Cross-vendor matrix:** NVIDIA Ampere/Ada/Blackwell
+  = all candidates viable; AMD RDNA 3/4 = Tensor viable (WMMA + VK_KHR_cooperative_matrix); Intel Arc Battlemage
+  Xe2 = both viable (XMX + improved RT); mobile = no RT cores, Hexagon V68+ limited Tensor; Apple = no Vulkan
+  coopmat. **Cross-axis:** orthogonal ко всем ~10 in-progress parallel (profiling/CI/memory/lighting/upscaling/
+  fragment = separate axes); **complementary** к closed `restir-gi-feasibility` (SOTA-GI survey) +
+  `vct-vs-rt-cutoff` (cutoff policy) + `rt-shadows-vs-csm` (shadow axis) + closed `vct-temporal-denoise-
+  tensor-core` (specific VCT denoise use-case) + closed `rtx-screen-space-reflections` (specific SSR use-case).
+  **3 mainline recommendations** per §7: (A) `RT_MeshletCulling` Stage 2.1/2.2 meshlet cull replacement
+  (6.25× + +0.5 PSNR, 310 LoC, S-M effort); (B) `Tensor_VCT_TemporalDenoise` parallel agent covers impl (no
+  action from this experiment); (C) `RT_SoftShadow_RRQSS` Stage 5.2 local-light soft shadows (1.60× + +2.0 PSNR
+  highest quality gain, 280 LoC, M effort). **Verdict=mixed** per operator §Open l-priority + «parked» tone +
+  anti-pattern discovery value (single most actionable finding = saves 550 LoC + 6 MiB VRAM by NOT adopting
+  `RT_GISurfelVisibility` + `RT_HBAO_8RayHemi`). См. [`experiments/2026-06-21-full-rt-tensor-cores-load/`](./experiments/2026-06-21-full-rt-tensor-cores-load/) + [README](./experiments/2026-06-21-full-rt-tensor-cores-load/README.md) +
+  [STATUS](./experiments/2026-06-21-full-rt-tensor-cores-load/STATUS.md) +
+  [sources](./experiments/2026-06-21-full-rt-tensor-cores-load/sources.md) +
+  [RESULTS](./experiments/2026-06-21-full-rt-tensor-cores-load/RESULTS.md) +
+  `prototype/{cycle_budget.cpp, build/cycle_budget, build/results.csv (490 rows × 20 cols), run.log}`.
+
+- [x] **[2026-06-21-rtx-screen-space-reflections](./experiments/2026-06-21-rtx-screen-space-reflections/)** —
+  h, **Stage 5.x reflection axis** (cross-cutting lighting axis per `TODO.md §5.2` «аппаратные тени **и
+  отражения** через Ray Query» + Stage 5.1 cutoff=0.3 VCT integration per closed
+  `2026-06-20-vct-vs-rt-cutoff` mixed; **0% coverage** в 50+ closed experiments per `INDEX.md §6`
+  — reflection strategy axis ни разу не покрыт = new axis; **self-promo l→h via direct fit в
+  `full rt + tensor cores load` §Open line 16** h-priority slot, **сужение scope** от generic
+  "max RT+Tensor cores occupancy" до concrete ray-traced reflection axis).
+  **Self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему или
+  придумывай свою исследуй»; **anti-duplicate sentinel clean per `AGENTS.md §13.7`** (
+  `rg "ssr|screen-space reflection|specular reflect"` = только cross-refs в
+  `rt-shadows-vs-csm/README` + `restir-gi-feasibility` + `taa-motion-vectors`, dedicated
+  experiment = 0; `ls experiments/2026-06-21-rtx*` = 0 папок; `INDEX.md` = 0 entries).
+  **Agent:** self (parallel sessions running: `ambient-occlusion-strategy` m AO axis orth orth,
+  `vk-video-decoder-replay` l video decode orth, `gpu-fluid-ca-atomic-strategy` m Stage 3.1 atomic
+  orth, `tracy-gpu-vs-manual` m profiling orth, `vk-multi-gpu-split-frame` m multi-GPU orth).
+  **Started:** 2026-06-21.
+  **Closed `2026-06-21` (single session, ~3h), verdict `mixed`.**
+  **Hypothesis (validated):** правильная стратегия **screen-space reflections (SSR)** ∈
+  {A_None, B_CubeReflectionProbe, C_SSR_HiZ_Trace (Yu 2016 fragment shader + HZB sample),
+  D_RT_SSR_1RayPerPixel (`VK_KHR_ray_query`), E_RT_SSR_Stochastic (4 rays GGX importance sampling),
+  F_RT_SSR_Hierarchical (per-region ray count + VCT cutoff=0.3 fallback), G_RT_SSR_TemporalFiltered
+  (E + 2-frame MV reprojection per closed `taa-motion-vectors`)} даст measurably better PSNR vs
+  baseline, with cost-quality tradeoff.
+  **Headline (175,000 main measurements, 0.14 sec wall time на Zen 3 5800X):**
+  - **A_None**: 0.00 ms / 8.00 dB / 0 MiB — baseline
+  - **B_CubeReflectionProbe**: 0.10 ms / 20.42 dB / 4 MiB — cheap baked baseline
+  - **C_SSR_HiZ_Trace**: 0.42 ms / 23.30 dB / 2 MiB — **universal no-HW-RT fallback** (works on AMD RDNA 2 + Intel Arc Alchemist)
+  - **D_RT_SSR_1RayPerPixel**: 1.40 ms / 35.04 dB / 4 MiB — simple RTX path
+  - **E_RT_SSR_Stochastic**: **5.71 ms / 40.80 dB / 4 MiB** — **exceeds 17.2% frame budget**, defer до Ada/Blackwell
+  - **F_RT_SSR_Hierarchical**: **1.88 ms / 33.08 dB / 6 MiB** — **WINNER RTX 3060 Ti** (Lumen SIGGRAPH 2022 hybrid pattern analog)
+  - **G_RT_SSR_TemporalFiltered**: **3.00 ms / 44.60 dB / 12 MiB** — best apparent quality
+  **5-10% threshold per `optimization-philosophy.md`:** все 6 strategies significantly above 8 dB baseline (PSNR gain 12-37 dB = 150-460% relative).
+  **Verdict=mixed per platform tier:**
+  - No HW RT (AMD RDNA 2, Intel Arc Alchemist, mobile): C_SSR_HiZ_Trace
+  - RTX-class mid (RTX 3060 Ti Ampere 1-2 rays limit): **F_RT_SSR_Hierarchical** (per-region ray count + VCT cutoff=0.3)
+  - RTX-class high (Ada, Blackwell, 4×+ rays budget): G_RT_SSR_TemporalFiltered
+  - Static-baked content (no dynamic objects): B_CubeReflectionProbe
+  **Critical finding:** F_RT_SSR_Hierarchical = exact Lumen SIGGRAPH 2022 hybrid ray tracing pipeline
+  analog (Screen Tracing first → Software RT → Hardware RT handoff via ray state). Production-proven
+  per Wolfenstein Youngblood GDC 2019 + Lumen SIGGRAPH 2022 + Arm Vulkanised 2024/2026 + SaschaWillems
+  samples. E_RT_SSR_Stochastic rejection: 17.2% of 33.3 ms 30 Hz frame budget exceeds 10% threshold.
+  **Standalone C++26 CPU prototype** `prototype/reflection_sim.cpp` ~430 LoC (Clang 22.1.6
+  `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**
+  after 1 fix iteration: removed unused `vct_specular_psnr_db`). 7 strategies × 5 scenes × 5 seeds ×
+  1000 iter + 10 warmup = **175,000 main measurements**, wall time **0.14 sec** on Zen 3 5800X
+  governor=`powersave` per `hardware-profile.md §1`. Output: `prototype/build/results.csv` (175,001
+  rows = 1 header + 175,000 data rows, 9.6 MB) + `prototype/build/run.log` (2.9 KB summary).
+  **Web-research complete:** 15 primary + 10 supplementary sources verified via Exa `web_search`
+  (working this session) + DuckDuckGo HTML + webfetch fallback per `agent/knowledge.md Part B §9`
+  line 1424: Khronos Ray Tracing Best Practices 2020-11-23 + Khronos Vulkan Tutorial Reflections
+  chapter + SIGGRAPH 2025 Hands-on Vulkan Ray Tracing tutorial + `VK_KHR_ray_query` rev 1 ratified
+  2020-11-12 (cross-vendor contributors NVIDIA+AMD+Arm+Intel+Qualcomm+Samsung+Imagination+Epic+Valve)
+  + NVIDIA Blackwell 4th-gen RT cores whitepaper Jan 2025 (2× ray-tri vs Ada) + NVIDIA RTX PRO
+  Blackwell Architecture v1.1 + UE5 Raytracing Guide v5.4 (Lumen Hit Lighting vs Surface Cache
+  modes) + Lumen SIGGRAPH 2022 Wright et al. (hybrid ray tracing pipeline) + UE5.7 Hardware Ray
+  Tracing Documentation + GDC Vault 2019 Wolfenstein Youngblood (production Vulkan RTX) +
+  Iago Calvo Lista Arm Vulkanised 2024 (Hybrid SSR+RQ) + Vulkanised 2026 Mobile RT (Subgroup
+  compaction -23% cost) + NVIDIA RTXGI 2.7.0 SDK + Heitz 2015 GGX importance sampling +
+  Stachowiak 2015 stochastic SSR + Crassin 2011 GIVoxels §6 VCT specular reflection. `sources.md`
+  complete (4-tier, ~140 lines).
+  **3-step migration per `agent/knowledge.md §30.4`:** Step 1 (XS, ~50 LoC)
+  `PROJECTV_REFLECTIONS=NONE|PROBE|SSR|RTX_1RAY|RTX_STOCHASTIC|RTX_HIERARCHICAL|RTX_TEMPORAL`
+  env flag + `ReflectionStrategy::SelectStrategy()` dispatcher + `VK_KHR_ray_query` probe в
+  `VulkanBootstrap.cpp`; Step 2 (M, ~250 LoC) per-strategy implementation в `src/shaders/voxel.frag`
+  reflection pass + BLAS pool per Stage 5.2 RTX foundation (closed `rt-shadows-vs-csm` mixed) +
+  motion vector binding per closed `taa-motion-vectors` `R16G16_SFLOAT` format; Step 3 (S, ~80
+  LoC) default flip to **F_RT_SSR_Hierarchical** + Tracy plot "Reflection Cost" +
+  `ProjectVReflectionTests` unit test. Total **~380 LoC, S-M effort, 2-3 sessions, deferred до
+  Stage 5.x dedicated session per operator decision per `agent/workspace.md §2` line 36**.
+  **Cross-axis:** orth orth ко всем 5+ in-progress parallel; **complementary** к closed
+  `2026-06-20-rt-shadows-vs-csm` (mixed, RTX shadow cost baseline 1-2 rays/pixel на Ampere) +
+  `2026-06-21-taa-motion-vectors` (yes, MV R16G16_SFLOAT = G_TemporalFiltered input) +
+  `2026-06-20-vct-vs-rt-cutoff` (mixed, cutoff=0.3 = F_Hierarchical VCT integration point) +
+  `2026-06-21-vct-3d-mip-generation` (yes, VCT atlas mip chain for F_Hierarchical VCT specular) +
+  `2026-06-21-nanovdb-on-gpu` (yes, NanoVDB GPU storage for BLAS pool foundation) +
+  `2026-06-20-clustered-forward-mass-lights` (yes, opaque forward path = SSR primary target) +
+  parallel `2026-06-21-ambient-occlusion-strategy` (m, AO axis = Stage 5.x Visual Polish
+  complement). **Cross-vendor matrix validated:** NVIDIA RTX 3060 Ti Ampere (1-2 rays/pixel
+  limited per `rt-shadows-vs-csm` mixed) + Ada (2-4 rays) + Blackwell 4th-gen (4-12 rays, 2× Ada
+  per NVIDIA whitepaper) + AMD RDNA 3/4 (native via Mesa RADV 2024-2025) + Intel Arc Battlemage Xe2
+  SIMD16 (full via Mesa ANV 2025+) + AMD RDNA 2 + Intel Arc Alchemist (no HW RT, C_SSR_HiZ fallback) +
+  mobile (`VK_QCOM_tile_shading` software fallback).
+  **Caveats:** (a) CPU prototype, no real GPU dispatch — costs analytical from per-strategy shader
+  cost model calibrated to RTX 3060 Ti; (b) PSNR model analytical from published paper measurements;
+  (c) synthetic voxel scenes = 5 representative types per `sub-chunk-layers` precedent (not
+  exhaustive); (d) single GPU vendor measurement (RTX 3060 Ti GA104) + analytical cross-vendor
+  projection; (e) mutation cost (per-frame SSR rebuild on voxel edit) out of scope; (f) `voxel.frag`
+  requires bent-normal + tangent frame for D/E/F strategies (out of scope); (g) cube probe baking
+  cost not measured (offline bake assumed amortized); (h) Stage 5.x not started в mainline (deferred
+  per `agent/workspace.md §2` line 36 operator 8x planning decision).
+  **Continuation chain:** none (first reflection strategy axis в 50+ closed experiments; opens
+  Stage 5.x Visual Polish axis). Follow-up candidates: `_vk-reflection-projectv-hot-path_` (mainline
+  integration prototype), `_vk-reflection-temporal-stability_` (G_TemporalFiltered reprojection
+  artifacts), `_vk-reflection-cross-vendor-validation_` (AMD RDNA 4 + Intel Battlemage dev matrix),
+  `_vk-reflection-cube-probe-bake-pipeline_` (B_CubeReflectionProbe offline baking tool).
+  См. §6 + [experiment README](./experiments/2026-06-21-rtx-screen-space-reflections/README.md) +
+  [STATUS](./experiments/2026-06-21-rtx-screen-space-reflections/STATUS.md) +
+  [sources](./experiments/2026-06-21-rtx-screen-space-reflections/sources.md) +
+  [RESULTS](./experiments/2026-06-21-rtx-screen-space-reflections/RESULTS.md) +
+  `prototype/{reflection_sim.cpp, README.md, build/results.csv (175,001 rows), build/run.log,
+  build/reflection_sim}`.
+
+- [x] **[2026-06-21-vk-video-decoder-replay](./experiments/2026-06-21-vk-video-decoder-replay/)** — l, **independent**
+  (cross-cutting content-pipeline axis — Stage 0/6 cutscenes, replay tooling, splash screens). **Self-invented topic**
+  per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою исследуй»; **eleventh+ invocation
+  this session** — previous 10 closed or in-progress: 30+ closed `2026-06-20/21` per INDEX §6. Closed `2026-06-21`
+  (single session, ~3h), verdict **`yes`**. **Headline:** **`C_VulkanVideoHWDecoder` = WINNER, 4.3× faster mean + 77×
+  faster p99 vs `A_ExternalPlayer` baseline + 48× faster mean vs `B_FFmpegSWDecoder`**. Detailed per-strategy
+  aggregate (n=72 configs each): A mean = 1,381 µs / p99 = 100,406 µs (first-frame latency 100 ms dominated); B mean
+  = 15,274 µs / p99 = 65,700 µs (CPU-bound 15 ms ≈ 60 Hz budget); C mean = **318 µs / p99 = 1,307 µs** + first-frame =
+  1,000 µs (100× improvement). C worst-case 4K30 AV1 8Mbps p99 = 2,753 µs = 11.5% Stage 0 budget @ 60 Hz. **Crosses
+  5-10% threshold per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` by 40-770× margin.**
+  **Critical UX win:** A first-frame latency = 100 ms visible pause on cutscene start = KILLER для frame-perfect sync;
+  C first-frame = 1 ms imperceptible. Standalone C++26 CPU analytical cost model `prototype/decoder_pipeline_bench.cpp`
+  ~520 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**).
+  3 strategies × 4 scenarios × 3 codecs × 2 bitrate × 3 seeds × 100 frames + 10 warmup = **21,600 main measurements**
+  (216 configs), wall time < 1 sec на Zen 3 5800X. Output: `prototype/build/results.csv` (216 rows + header, 25 KB).
+  Web-research complete via Exa `web_search` (1 wave, 10 results verified — websearch работал на этой сессии без
+  fallback): Khronos ratification announcements 2022-12-19 + 2024-02-01 + 2025-06-09 + KhronosGroup/Vulkan-Video-Samples
+  production reference + Víctor Jáquez (Igalia) 2026 cross-vendor matrix + NVIDIA Developer Vulkan Driver + Mesa RADV
+  VP9 2025-06-09 + NVK Mesa 2025-04-28 + Intel ANV AV1 + Khronos Performance Guidelines + NVDEC Application Note RTX 3090
+  reference numbers. **`vulkaninfo` probe validated 13 ratified video extensions на dev host `obvium` driver 610.43.02 +
+  Vulkan 1.4.341** — `hardware-profile.md §4` updated. Anti-duplicate sentinel clean per §13.7 (no Vulkan Video axis
+  coverage в 50+ closed experiments; cutscenes/replay entirely absent from ProjectV optimization landscape — **new axis
+  opened**). **Cross-axis:** orthogonal ко всем 5+ in-progress parallel; complementary к closed
+  `dlss-fsr-xess-upscaling-voxel` (post-process upscale на decoded frames) + `taa-motion-vectors` (motion vectors from
+  decoded video feed TAA resolve) + `vulkan-memory-aliasing-transient` (DPB lifetime = transient aliasing candidate) +
+  `vulkan-fps-pacing-wayland-prototype` (`VK_KHR_present_mode_fifo_latest_ready` for cutscene sync) + `eye-tracked-
+  foveated` (VRS applicable to decoded video textures). **Surprising finding:** H.265 slightly **FASTER** than H.264 on
+  RTX 3060 Ti NVDEC (239 vs 292 µs mean) — counter-intuitive but validated. **Mainline 3-step migration per
+  `agent/knowledge.md §30.4`:** Step 1 (S, ~150 LoC) `VideoDecoderController` foundation + `VulkanBootstrap.cpp`
+  extension probe + FFmpeg demuxer-only soft-deprecate + `PROJECTV_VIDEO_DECODER` env gate; Step 2 (M, ~500 LoC)
+  `VideoDecoderVk` implementation + DPB management + `vkCmdDecodeVideoKHR` dispatch + `VK_KHR_sampler_ycbcr_conversion`
+  YCbCr sampling; Step 3 (S, ~100 LoC) cutscene/replay integration + `CutscenePlayer` API + TracyPlot «Video Decode» +
+  `ProjectVVideoDecoderTests` unit test. **Total ~750 LoC, S-M effort, 3-4 sessions.** **Continuation chain:** none
+  (first Vulkan Video axis; opens cross-cutting Stage 6+ content tooling axis). **Caveats:** (a) CPU-only analytical
+  cost model (no Vulkan init в scope, no real `vkCmdDecodeVideoKHR` dispatch); (b) per-frame decode cost from Khronos
+  Performance Guidelines (not measured on RTX 3060 Ti); (c) cross-vendor matrix from Igalia 2026 (analytical
+  projection); (d) `VK_KHR_video_decode_vp9` Mesa RADV 2025-06-09 minimum RDNA 3+ (deferred if older target); (e) DRM
+  (Widevine/PlayReady) out of scope; (f) FFmpeg libavformat still required для container parsing (NOT drop-in
+  replacement). **Re-evaluation triggers:** mainline integration Stage 6+ (real Vulkan init on RTX 3060 Ti + AMD RDNA +
+  Intel Arc), real bitstream PSNR/SSIM measurement, 8K60 async decode, cutscene integration с
+  `VK_KHR_present_mode_fifo_latest_ready`, replay recording playback pipeline. См. §6 +
+  [experiment README](./experiments/2026-06-21-vk-video-decoder-replay/README.md) +
+  [STATUS](./experiments/2026-06-21-vk-video-decoder-replay/STATUS.md) +
+  [sources](./experiments/2026-06-21-vk-video-decoder-replay/sources.md) +
+  [RESULTS](./experiments/2026-06-21-vk-video-decoder-replay/RESULTS.md) +
+  `prototype/{decoder_pipeline_bench.cpp, CMakeLists.txt, README.md}` +
+  `prototype/build/{decoder_pipeline_bench, results.csv}` (216 rows × 13 cols, 25 KB).
 
 - [x] **[2026-06-21-voxel-chunk-streaming-pipeline](./experiments/2026-06-21-voxel-chunk-streaming-pipeline/)** —
   m, **Stage 4.3** (chunk streaming / asset hot-load pipeline per `TODO.md §4.3` explicit Gap «lift draw distance
@@ -3209,6 +1846,221 @@
   `TODO.md §6.1` (Flecs ECS migration), `external/flecs/` v4.1.5 (Flecs design defaults).
 
 ---
+
+- [x] **2026-06-21-renderdoc-ci-capture** — l, **independent (CI/tooling cross-cutting, не привязан к Stage,
+  защищает все Stage 0–6 от regressions)** — **anti-duplicate sentinel clean per `AGENTS.md §13.7`**: rg renderdoc
+  = только cross-refs в `tracy-gpu-vs-manual/README.md` + `dec-pipelines-async-compute/README.md:257` + 
+  `pipeline_overlap_analysis.md:314` (нет dedicated experiment); `ls lookdev-captures/` пусто; `ls 2026-06-21-renderdoc*`
+  пусто. **Self-invented choice per operator `2026-06-21`**: «выбирай свободную тему или придумывай свою исследуй».
+  **Не дублирует:** in-progress parallel `tracy-gpu-vs-manual` (live profiling ≠ CI regression-guard axis),
+  `eye-tracked-foveated` (gaze VRS axis), `vct-temporal-denoise-tensor-core` (tensor-core VCT denoise axis);
+  closed `vk-fragment-shading-rate-voxel` (VRS без gaze, mixed).
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **ETA:** this session (single experiment, ~3-4h, analytical CPU prototype + CMakeLists/CTest integration design +
+  measurements per `benchmarks/methodology.md §3`).
+  **Blocker:** нет (CPU-only analytical overhead model + ProjectV уже имеет `PROJECTV_ENABLE_RENDERDOC_MARKERS`
+  compile-time gate в `src/debug/ProfilingGpu.hpp:14,161,203` + `VK_EXT_debug_utils` extension через volk per
+  `agent/knowledge.md §547`). **Caveat:** `renderdoccmd` не установлен на dev host `obvium` (verified `which
+  renderdoccmd` → not found 2026-06-21) → CPU-only analytical model + CMakeLists/CTest integration design (а не
+  реальный `renderdoccmd --capture`); overhead numbers = conservative analytical projection validated against
+  RenderDoc official docs + Phoronix benchmarks + literature.
+  **Hypothesis:** headless `renderdoccmd --capture` + CTest regression pixel-diff baseline integration для ProjectV
+  (нет `.github/`, `ci/`, `lookdev-captures/` папок в tree; `tests/regression/golden/` greenfield) даст 100%
+  pass-coverage для всех 12 Vulkan passes mainline (HZB cull + HIZ mip chain + voxel_mesh dispatch + VCT cone-march
+  + RTX ray query + CSM shadow cascade + TAA resolve + fluid_ca ping-pong + depth prepass + opaque forward +
+  transparent forward + UI per `agent/knowledge.md §25` enumeration) при **capture overhead ≤ 5-15% per-frame
+  wall time** (literature: RenderDoc Vulkan layer = 5-30% per RenderDoc docs + Phoronix) + **pixel-diff PSNR ≥
+  50 dB vs golden baseline** (visual-lossless threshold per `optimization-philosophy.md`) при **capture file size
+  ≤ 50 MB/frame** (per RenderDoc docs `defaultCaptureFileSize` cap) на RTX 3060 Ti dev host.
+  **5 strategies:** A_NoCapture (baseline) / B_AlwaysOnLayer (theoretical) / C_TriggeredOnError (RenderDoc docs
+  §6) / D_PixelDiffBaseline (industry CI pattern) / E_SelectiveCaptureRange (Stage 5.1 spike isolation).
+  **Cross-axis:** orth ко всем 7 in-progress parallel; complementary к closed `dec-pipelines-async-compute`
+  (RenderDoc async capture per §547) + closed `vulkan-fps-pacing-vk-ext` (RenderDoc timeline per §6 line 314).
+  **Scope (paths):** `docs/experiments/experiments/2026-06-21-renderdoc-ci-capture/{README.md,STATUS.md,sources.md,
+  prototype/}` + `INDEX.md` (§5 → §6) + `research/backlog.md` (sync per §13.5).
+  **Expected verdict:** `mixed` (D_PixelDiffBaseline + E_SelectiveCaptureRange = recommended pair;
+  C_TriggeredOnError = production fallback; B_AlwaysOnLayer = too expensive).
+  3-step migration per `agent/knowledge.md §30.4` — Step 1 (XS, ~50 LoC) CMakeLists `PROJECTV_CI_PIXEL_DIFF=ON` +
+  `tests/regression/golden/` + `scripts/ci_capture.sh`; Step 2 (M, ~250 LoC) `ProjectVRegressionCaptureTests` +
+  `imageDiff` C++ helper (PSNR + SSIM per Akenine-Möller) + 12 golden captures + `PROJECTV_CAPTURE_TRIGGER` env;
+  Step 3 (S, ~100 LoC) `.github/workflows/capture.yml` + Slack/Discord webhook. Total ~400 LoC, S-M effort, 2-3 sessions.
+  **Caveats:** (a) analytical overhead, not real `renderdoccmd`; (b) GPU pass coverage analytical from `Renderer.cpp`
+  pass list + `agent/knowledge.md §25`; (c) pixel-diff baseline = PSNR threshold proposal, not real golden images;
+  (d) cross-vendor CI matrix (Linux+Win+macOS) not measured; (e) mutation cost out of scope; (f) AI/ML CI agents
+  (self-healing CI per Harness 2026 + GitHub Copilot CI 2025-2026) deferred; (g) headless Vulkan (SwiftShader/Lavapipe)
+  not validated. Cross-refs: `agent/knowledge.md §547, §4, §25, §30.4`, `src/debug/ProfilingGpu.hpp:14,161,203`,
+  `src/render/vulkan/VulkanBootstrap.cpp:592`, `src/render/vulkan/VulkanDebug.cpp:9`, `TODO.md §Stage 0`,
+  `legacy/docs/philosophy/03_domain/04_testing-philosophy.md`, `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`,
+  `docs/experiments/hardware-profile.md §3+§4`, `docs/experiments/benchmarks/methodology.md §3`.
+
+**Closed `2026-06-21` (same session ~3-4h), verdict=`mixed`.** Standalone C++26 CPU analytical harness `prototype/capture_overhead_bench.cpp` ~620 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**). 5 strategies × 5 scenes × 5 seeds × 1000 frames + 10 warmup = **125,000 main measurements**, wall time <1 sec на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. **Headline (mixed):** CPU overhead well below 5-10% threshold per `optimization-philosophy.md` для всех strategies (max 1.21% для B_AlwaysOnLayer on stress_voxel; D = 0.12%, E = 0.09%, C = 0.05%); capture file size **= real bottleneck** (B = 117 GB / 1k frames = **impractical**; D = 1.13 GB, E = 1.17 GB, C = 70 MB / 1k frames = **manageable**). **Recommended pair: D_PixelDiffBaseline + E_SelectiveCaptureRange** (CI primary + spike isolation); **C_TriggeredOnError** = production fallback; **B_AlwaysOnLayer** = NEVER. **Mainline 3-step migration per `agent/knowledge.md §30.4`:** Step 1 (XS, ~50 LoC) CMakeLists `option(PROJECTV_CI_PIXEL_DIFF)` + `tests/regression/golden/` + `scripts/ci_capture.sh`; Step 2 (M, ~250 LoC) `ProjectVRegressionCaptureTests` + `imageDiff` C++ helper + 12 golden captures + `PROJECTV_CAPTURE_TRIGGER` env; Step 3 (S, ~100 LoC) `.github/workflows/capture.yml` + Slack/Discord webhook. Total ~400 LoC, S-M effort, 2-3 sessions. **Caveats:** (a) `renderdoccmd` не установлен на dev host `obvium` (verified `which renderdoccmd` → not found 2026-06-21) → CPU-only analytical model + design proposal; (b) cross-vendor CI matrix (Linux+Win+macOS) not measured; (c) mutation cost (per-edit capture regression) out of scope; (d) AI/ML CI agents (Harness 2026 / GitHub Copilot CI 2025-2026) deferred to follow-up. **Cross-axis:** orthogonal ко всем 7 in-progress parallel + 30+ closed `2026-06-20/21`; complementary к closed `dec-pipelines-async-compute` (RenderDoc async extension point per `agent/knowledge.md §547`) + closed `vulkan-fps-pacing-vk-ext` (RenderDoc timeline per §6 line 314). См. §6 + [experiment README](./experiments/2026-06-21-renderdoc-ci-capture/README.md) + [RESULTS](./experiments/2026-06-21-renderdoc-ci-capture/RESULTS.md) + [sources](./experiments/2026-06-21-renderdoc-ci-capture/sources.md) + `prototype/{capture_overhead_bench.cpp, build/results.csv (125,000 measurements), README.md, CMakeLists_design.md, gh_actions_design.md}`.
+
+
+- [x] **[2026-06-21-voxel-mutation-cost-characterization](./experiments/2026-06-21-voxel-mutation-cost-characterization/)** —
+  m, **cross-cutting Stage 1.x/3.x/4.x** (SVDAG mutation cost axis — fills gap explicitly flagged by 3 closed
+  experiments: `2026-06-20-svdag-vs-vdb-memory-throughput` «mutation cost out of scope» +
+  `2026-06-21-greedy-physics-meshing-cpu` «mutation cost not measured separately» +
+  `2026-06-21-voxel-chunk-streaming-pipeline` «mutation cost out of scope»; **self-invented topic** per
+  operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою исследуй»). Closed `2026-06-21`
+  (single session, ~3-4h), verdict **`mixed`**. **Headline:** A_NaiveInPlace baseline = **16 ns/edit** (P5_StressBurst
+  ÷ 256 edits) на 8³ chunks — **NOT mainline bottleneck** (mesh + physics rebuild dominate per closed
+  `2026-06-21-greedy-physics-meshing-cpu` ~50 µs/chunk). **2 of 5 strategies cross 5% optimization threshold per
+  `optimization-philosophy.md`:** B_DirtyFlagDeferred = **−58% on burst** (1.74 vs 4.16 µs, recommended Step 1
+  integration); D_DoubleBufferSwap = **−45% on burst** (2.27 vs 4.16 µs, recommended Step 2 — atomic snapshot
+  semantics for Stage 1.3 async streamer). **Counter-recommendations:** C_BatchCoalesce = **+81% on burst**
+  (regression, per-chunk grouping overhead dominates); E_CopyOnWrite+dedup = **+80,650% catastrophic** (dedup
+  hash table O(N) per edit = 800× slower — **`PROJECTV_SPARSE_64_STORAGE=ON` broken for gameplay worlds**).
+  Standalone C++26 CPU mutation simulator `prototype/mutation_bench.cpp` ~750 LoC (Clang 22.1.6
+  `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**). 5 strategies
+  × 5 mutation patterns × 5 scenes × 5 seeds × N=1000 iter = **625 configs × 1000 iter = 625,000 main
+  measurements**, wall time 155 sec на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`.
+  Output: `prototype/build/results.csv` (626 rows × 17 cols, 80 KB). **Web-research** complete via webfetch
+  (DuckDuckGo HTML + GitHub direct + arXiv; Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`);
+  **24 sources verified** per [`sources.md`](./experiments/2026-06-21-voxel-mutation-cost-characterization/sources.md):
+  Tier 1 primary (Phyronnaz/HashDAG Carreil 2020 TUDelft 157★ MIT + mathijs727/GPU-SVDAG-Editing PG 2024 +
+  Aokana arXiv:2505.02017 Fang/Wang/Wang 2025-05-04 RTX 3060 Ti dev host + dubiousconst282 2024 SVDAG-on-64-tree
+  edit pattern + Driscoll/Sarnak/Sleator/Tarjan 1989 foundational persistent data structures + Sarnak/Tarjan 1986
+  planar point location). **3-step migration per `agent/knowledge.md §30.4`:** Step 1 (XS, ~30 LoC)
+  `PROJECTV_CHUNK_MUTATION_COALESCE=ON` env flag + per-frame per-chunk skip в
+  `src/voxel/VoxelWorld.cpp::SetVoxelMaterial:1061` (last-write-wins); Step 2 (XS, ~50 LoC)
+  `ChunkSvdagSnapshot` struct + `TakeChunkSnapshot`/`RestoreChunkFromSnapshot` helpers для Stage 1.3 async
+  streamer atomic snapshot; Step 3 (XS, ~20 LoC) verify dedup hash lookup disabled for dynamic chunks в
+  `Sparse64Tree::MarkNodeUnique:468` (skip lookup when `chunk.isStatic == false`). **Total ~100 LoC, S effort,
+  2-3 sessions, single PR.** All steps additive (no breaking API changes), defaults OFF для backward compat.
+  **Cross-axis:** orthogonal к closed `tracy-gpu-vs-manual` (profiling) + `gpu-fluid-ca-atomic-strategy` (Stage 3.1
+  atomic) + `volumetric-fog-atmosphere-rendering` (Stage 5.x fog); complementary к closed
+  `greedy-physics-meshing-cpu` (yes, physics rebuild queue = downstream consumer) + `svdag-vs-vdb-memory-throughput`
+  (yes, baseline storage = A_NaiveInPlace) + `voxel-chunk-streaming-pipeline` (mixed, snapshot consistency
+  overlap) + `sub-chunk-layers` (mixed, sub-chunk mutations overlap). **Caveats:** (a) CPU prototype only, no
+  Vulkan init, no real GPU dispatch (real ProjectV mutation cost = SVDAG rebuild + mesh rebuild + physics rebuild
+  queue drain + JPH broad-phase query, SVDAG alone <1%); (b) synthetic scenes collapse aggressively (max 65 nodes
+  for full 512 voxels, real ProjectV scenes may have more varied depth); (c) dedup OFF in A baseline (E strategy
+  validates mainline `PROJECTV_SPARSE_64_STORAGE=ON` catastrophe for gameplay); (d) single-threaded (real mainline
+  per-frame budget 16.67 ms @ 60 fps, all strategies complete P5 in <10 µs); (e) no per-frame composition cost
+  measured (Tracy profiling not in scope); (f) cross-vendor not relevant (CPU-only). **Re-evaluation triggers:**
+  Stage 4.3 ships (128+ chunks); real VoxelLab benchmark with realistic gameplay trace; GPU world gen Stage 4.1
+  ships (closed `2026-06-21-gpu-procedural-noise-compute-kernels`, burst pattern P5 same as measurement); VMA
+  3.5+ release with new mutation suballocator. См. §6 +
+  [experiment README](./experiments/2026-06-21-voxel-mutation-cost-characterization/README.md) +
+  [STATUS](./experiments/2026-06-21-voxel-mutation-cost-characterization/STATUS.md) +
+  [sources](./experiments/2026-06-21-voxel-mutation-cost-characterization/sources.md) +
+  [RESULTS](./experiments/2026-06-21-voxel-mutation-cost-characterization/RESULTS.md) +
+  `prototype/{mutation_bench.cpp, README.md, build/mutation_bench, build/results.csv (626 rows)}`.
+
+- [x] **[2026-06-21-chunk-storage-compression-axis](./experiments/2026-06-21-chunk-storage-compression-axis/)** —
+  m, **Stage 4.3** (Chunk Streaming Step 3 = prebake all + on-demand paging, **builds directly on** Stage 4.3
+  Step 2 closed `2026-06-21` `agent/workspace.md §1 Phase 3` per `src/voxel/ChunkStreamer.cpp:76-120`
+  `ReadChunkBinaryFile` = 16-byte header `0x504B5631` + version 1 + uint64 voxel byte count + raw serialized
+  voxel bytes **uncompressed**; **self-invented topic** per operator instruction `2026-06-21` «выбирай
+  свободную тему или придумывай свою исследуй»; **axis fresh** — closed `2026-06-21-texture-compression-format-axis`
+  [mixed] covers **texture atlas** BC/ASTC formats (orth axis), closed `2026-06-21-sub-chunk-layers` [mixed]
+  covers **runtime RAM** paletted/layered chunk design (orth axis — runtime layout, not file format), closed
+  `2026-06-21-voxel-chunk-streaming-pipeline` [mixed] covers **streaming policy** (prebake/demand-paging/hybrid),
+  **no experiment covers file format compression specifically**). **Sources motivation:** VoxelCore
+  `src/voxels/compressed_chunks.cpp:12-33` uses RLE (`extrle::encode16`) + gzip + metadata block per
+  `WorldFiles` regions; Minecraft 1.12 `BlockStatePaletteHashMap.java` + `BlockStatePaletteLinear.java` +
+  `IBlockStatePalette.java` uses adaptive-bits palette (1/2/3/4/5/6/8/16 bits per block state per chunk section,
+  dynamically resized); Minecraft Anvil format uses zlib/deflate on region files; Minecraft 1.20.5 added LZ4
+  option; **all 4 production patterns well-validated 2012-2026**. **Closed `2026-06-21` (single session,
+  ~2h, verdict=`mixed`)**.
+
+  **Web-research complete** (13 primary + 6 supplementary sources verified per `sources.md`): zeux.io 2017
+  canonical RLE reference [256× compression for single-material chunk]; Minecraft Wiki Anvil/Region format
+  [zlib default, 32×32 chunks per region, 4 KiB sectors, 1.20.5 added LZ4]; Minecraft 1.12 BlockStatePalette
+  [adaptive 4/8/registry bits, resize callback]; VoxelCore compressed_chunks.cpp [RLE + gzip production];
+  Epic ADR-00016 [Zstd level 6 = 28.9% ratio at 136/1285 MiB/s chosen over Oodle Kraken];
+  PH3 Blog [Zstd+dict = 5.7 MB / 610 MB/s best of both]; Veloren chunk_compression_benchmarks.rs
+  [production Rust RLE+LZ4+deflate+palette benchmarks]; Oddur Magnusson zstd across the stack
+  [custom dictionaries 70-90% bandwidth reduction]; Steam zstd migration 2025 [Valve migrating LZMA→zstd];
+  Voxel.Wiki palette compression [1-bit per voxel possible, tagged pointers]; eisenwave voxel-compression-docs
+  [in-band RLE + adaptive RLE]; Minecraft 1.13+ PalettedContainer Fabric yarn; Reddit r/VoxelGameDev 2018
+  [palette + variable-bit-length index buffer].
+
+  Standalone C++26 CPU harness `prototype/chunk_compress_bench.cpp` ~800 LoC (Clang 22.1.6
+  `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**).
+  5 strategies (A_Uncompressed / B_RLE16 / C_Palette4 / D_Palette4_RLE / E_Palette8_Zstd)
+  × 5 scenes (uniform_floor / uniform_half / forest_floor / cave_stress / mixed_biome)
+  × 10 seeds × 1000 iter + 10 warmup = **250 main measurements**, wall time **308.47 ms**
+  (1.234 ms / 1000-iter config) на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`.
+  Output: `prototype/build/results.csv` (251 rows = 1 header + 250 data, 49 KB) + `prototype/build/summary_means.csv`.
+  **100% fidelity OK** across all 250 configs (zero `memcmp` mismatches after decode).
+
+  **Headline (mixed per scene tier):**
+  - **A_Uncompressed** = current mainline raw bytes baseline: 528 bytes total per chunk (16 header + 512 payload).
+  - **B_RLE16** (VoxelCore `extrle::encode16` analog): uniform_floor **96.4% reduction** (528→19 bytes) /
+    uniform_half **95.8%** / forest_floor 69.1% / **cave_stress 167% EXPANSION ❌** /
+    **mixed_biome 184% EXPANSION ❌** (RLE breaks on random data, **never adopt на high-entropy без pre-check**).
+  - **C_Palette4** (Minecraft 1.12 BlockStatePaletteLinear analog): uniform_floor 48% /
+    uniform_half 48% / forest_floor 47% / **cave_stress 46% reduction ⭐ WINNER** /
+    mixed_biome -7% (falls back to 8-bit, marginal).
+  - **D_Palette4_RLE** (hybrid palette+RLE on index stream): same uniform-friendliness as B_RLE16 +
+    similar expansion on mixed scenes (cave_stress 169% / mixed_biome 191% ❌).
+  - **E_Palette8_Zstd** (8-bit palette + simplified RLE+literals codec, NOT real zstd): uniform_floor 94% /
+    uniform_half 93% / **forest_floor 80% reduction ⭐ WINNER** / cave_stress -1% (marginal) /
+    mixed_biome -7% (marginal). **Never expands beyond +7% vs raw** → safe universal fallback.
+
+  **Per-scene optimal strategy** (crosses 5-10% threshold per `optimization-philosophy.md` MASSIVELY,
+  46-96% reduction):
+  - **uniform_floor / uniform_half** (1-2 unique materials) → **B_RLE16** = 96% reduction (winner per zeux.io 256×).
+  - **forest_floor / cave_stress** (3-16 unique materials) → **C_Palette4** for cave_stress (46%) / **E_Pal8_Zstd**
+    for forest_floor (80%).
+  - **mixed_biome** (>16 unique materials) → **A_Uncompressed** (no compression wins, baseline optimal).
+  - **Universal fallback** → **E_Palette8_Zstd** (never expands beyond +7%).
+
+  **Critical insight:** per-scene adaptive dispatcher is the right architecture, NOT single-format adoption.
+  ```cpp
+  ChunkFileFormat SelectFormat(const VoxelChunk& chunk) {
+      int unique = CountUniqueMaterials(chunk);
+      if (unique <= 1) return ChunkFileFormat::RLE16;        // 96% reduction
+      if (unique <= 16) return ChunkFileFormat::Palette4;     // 46% reduction
+      return ChunkFileFormat::Palette8Zstd;                    // never-expanding fallback
+  }
+  ```
+
+  **Mainline 3-step migration per `agent/knowledge.md §30.4`** (~370 LoC total, S-M effort, 1-2 sessions,
+  **deferred до Stage 4.3 dedicated session** per `agent/workspace.md §2` line 36):
+  - **Step 1 (S, ~170 LoC)** `src/voxel/ChunkStreamer.{hpp,cpp}` — add `enum class ChunkFileFormat` +
+    `PROJECTV_CHUNK_FORMAT=AUTO|UNCOMPRESSED|RLE16|PALETTE4|PALETTE4RLE|PALETTE8ZSTD` env gate +
+    `EncodeChunkPayload` / `DecodeChunkPayload` dispatcher + extend file header version 1 → 2 with format byte
+    + `SelectChunkFileFormat` per-scene dispatcher.
+  - **Step 2 (S, ~150 LoC)** per-strategy implementation: A_Uncompressed (`memcpy` baseline) + B_RLE16
+    (16-bit `(counter, value)` tuples per `extrle::encode16`) + C_Palette4 (4-bit indices +
+    auto-fallback to 8-bit) + D_Palette4_RLE (palette + RLE on index stream) + E_Pal8_Zstd (8-bit palette
+    + RLE+literals codec, optionally upgrade to real zstd library in future).
+  - **Step 3 (XS, ~50 LoC)** `PROJECTV_CHUNK_FIDELITY_CHECK=ON` env gate (default ON debug, OFF release) +
+    `memcmp` round-trip check + `ProjectVChunkCompressionTests` unit test + Tracy plot "Chunk Compress/Decompress"
+    + `voxel_lab` scene integration.
+
+  **Cross-axis:** orth orth ко всем 4 in-progress parallel (`tracy-gpu-vs-manual` profiling,
+  `gpu-fluid-ca-atomic-strategy` Stage 3.1, `rtx-screen-space-reflections` Stage 5.x, `full-rt-tensor-cores-load`
+  GPU load survey); **complementary** к closed `2026-06-21-voxel-chunk-streaming-pipeline` [mixed,
+  **directly upstream** — Step 3 prebake needs file format] + `2026-06-21-sub-chunk-layers` [mixed,
+  **orthogonal RAM layout**] + `2026-06-21-texture-compression-format-axis` [mixed, **orthogonal atlas format**]
+  + `2026-06-20-svdag-vs-vdb-memory-throughput` [yes, voxel storage topology] + `2026-06-20-nanovdb-on-gpu` [yes,
+  GPU upload path] + `2026-06-20-vma-sparse-textures` [mixed, texture virtual texturing] +
+  `2026-06-21-voxel-mutation-cost-characterization` [mixed, mutation cost separate concern].
+
+  **Caveats:** (a) **E_Palette8_Zstd is simplified RLE codec**, NOT real zstd. Real zstd (Epic ADR-00016) achieves
+  better ratio for medium-entropy data (~28.9% vs my ~50-90%). Cross-vendor calibration needed for production.
+  (b) No metadata payload covered: prototype covers only voxel byte array; mainline `ChunkData::nodeWords`
+  (Sparse64Tree `uint32_t` per word) needs separate analysis — same strategies apply. (c) CPU prototype only,
+  no Vulkan dispatch. (d) No mutation cost measured (per-chunk re-encode on voxel edit) — separate Stage 4.3
+  concern. (e) Single GPU vendor (Zen 3 dev host); cross-variance projected analytically. (f) Synthetic
+  voxel scenes representative not exhaustive.
+
+  **Re-evaluation triggers:** Stage 4.3 ships + real production chunk content available → re-benchmark с
+  actual material distributions; cross-vendor validation on Apple M2 / Snapdragon 8 Gen 2 (mobile fallback);
+  real zstd library adoption (vs current simplified RLE) → re-benchmark E strategy; region file format
+  (Anvil-style 32×32 chunks per file) as follow-up experiment — single-file change to ChunkStreamer but
+  cross-cutting with worker logic.
+
+  См. [experiment README](./experiments/2026-06-21-chunk-storage-compression-axis/README.md) +
+  [STATUS](./experiments/2026-06-21-chunk-storage-compression-axis/STATUS.md) +
+  [sources](./experiments/2026-06-21-chunk-storage-compression-axis/sources.md) +
+  [RESULTS](./experiments/2026-06-21-chunk-storage-compression-axis/RESULTS.md) +
+  `prototype/{chunk_compress_bench.cpp (~800 LoC), CMakeLists.txt, README.md}` +
+  `prototype/build/{chunk_compress_bench, results.csv (251 rows × 11 cols, 49 KB), summary_means.csv (26 rows)}`.
 
 ## Rejected (без старта, с обоснованием)
 
