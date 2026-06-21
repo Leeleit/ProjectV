@@ -941,6 +941,8 @@ struct VulkanContextState {
 	VkCommandPool asyncComputeCommandPool = VK_NULL_HANDLE;
 	VkCommandBuffer asyncComputeCommandBuffer = VK_NULL_HANDLE;
 	uint64_t asyncComputeLastTimelineValue = 0;
+	VkSemaphore hzbBuildTimelineSemaphore = VK_NULL_HANDLE;
+	uint64_t hzbBuildLastTimelineValue = 0;
 
 	bool supportsDynamicRenderingUnusedAttachments = false;
 };

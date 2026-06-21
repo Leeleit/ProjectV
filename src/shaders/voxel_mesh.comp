@@ -111,6 +111,25 @@ const uint kSunShadowCascadeCount = 4u;
 
 const uint kMaxChunkExtentForGreedy = 64u;
 
+// EVIL: kLodWordStride = 16 (chunkSize=8, LOD 1 worst case: outExtent=4, 64 bytes = 16 uint32 words).
+// Must match `projectv::render::kLodPayloadWordStride` in LodDownsampleGpuConsume.hpp. Stride is
+// constant per chunk slot so the shader derives base word offset as
+// `chunkIndex * kLodWordStride`. For chunkSize > 8 or future non-power-of-two chunkSize this
+// stride must be recomputed from the worst-case outExtent (CPU and shader side-by-side).
+const uint kLodWordStride = 16u;
+
+const uint kChunkLodMetadataMaskLevel = 0xFFu;
+const uint kChunkLodMetadataShiftExtent = 8u;
+const uint kChunkLodMetadataMaskExtent = 0xFFu;
+
+uint GetChunkLodLevel(const uint chunkIndex) {
+    return chunkLodLevelsBuffer.chunkLodLevels[chunkIndex] & kChunkLodMetadataMaskLevel;
+}
+
+uint GetChunkLodExtent(const uint chunkIndex) {
+    return (chunkLodLevelsBuffer.chunkLodLevels[chunkIndex] >> kChunkLodMetadataShiftExtent) & kChunkLodMetadataMaskExtent;
+}
+
 uint PackLocalVoxelFace(const uvec3 localVoxelCoord, const uint faceIndex) {
     return (localVoxelCoord.x & 0xFFu) |
     ((localVoxelCoord.y & 0xFFu) << 8u) |
@@ -139,6 +158,31 @@ uint DecodeChunkVoxelMaterial(const ChunkDescriptor chunkDescriptor, const uvec3
     const uint wordIndex = chunkDescriptor.voxelDataInfo.x + localIndex / 4u;
     const uint shift = (localIndex & 3u) * 8u;
     return (chunkVoxelWords[wordIndex] >> shift) & 0xFFu;
+}
+
+uint DecodeLodVoxelMaterial(const uint chunkIndex, const uvec3 localCoord, const uint outExtent) {
+    if (outExtent == 0u) {
+        return 0u;
+    }
+    const uint localIndex =
+    localCoord.x +
+    outExtent * (localCoord.y + outExtent * localCoord.z);
+    const uint wordOffset = chunkIndex * kLodWordStride;
+    const uint word = lodDownsampled.lodDownsampledWords[wordOffset + localIndex / 4u];
+    const uint shift = (localIndex & 3u) * 8u;
+    return (word >> shift) & 0xFFu;
+}
+
+uint DecodeVoxelMaterialForLod(
+    const uint chunkIndex,
+    const ChunkDescriptor chunkDescriptor,
+    const uvec3 localCoord,
+    const uint chunkLodLevel,
+    const uint outExtent) {
+    if (chunkLodLevel == 0u) {
+        return DecodeChunkVoxelMaterial(chunkDescriptor, localCoord);
+    }
+    return DecodeLodVoxelMaterial(chunkIndex, localCoord, outExtent);
 }
 
 uint ReadVoxelMaterial(const ivec3 worldPosition) {
@@ -336,14 +380,22 @@ void GreedyFacePass(
     const int signN,
     const ChunkDescriptor chunkDescriptor,
     const uint chunkIndex,
+    const uint chunkLodLevel,
+    const uint outExtent,
     const uint opaqueFirstFace,
     const uint transparentFirstFace,
     const uint maxChunkFaceCount,
     inout uint opaqueFaceCount,
     inout uint transparentFaceCount) {
-    const uint extentN = chunkDescriptor.chunkExtentAndNonAir[axisN];
-    const uint extentU = chunkDescriptor.chunkExtentAndNonAir[axisU];
-    const uint extentV = chunkDescriptor.chunkExtentAndNonAir[axisV];
+    const uint extentN = (chunkLodLevel == 0u)
+        ? chunkDescriptor.chunkExtentAndNonAir[axisN]
+        : outExtent;
+    const uint extentU = (chunkLodLevel == 0u)
+        ? chunkDescriptor.chunkExtentAndNonAir[axisU]
+        : outExtent;
+    const uint extentV = (chunkLodLevel == 0u)
+        ? chunkDescriptor.chunkExtentAndNonAir[axisV]
+        : outExtent;
 
     const bool useGreedy = (extentU <= kMaxChunkExtentForGreedy) &&
     (extentV <= kMaxChunkExtentForGreedy);
@@ -366,7 +418,8 @@ void GreedyFacePass(
                     localVoxelCoord[axisN] = pN;
                     localVoxelCoord[axisU] = pU;
                     localVoxelCoord[axisV] = pV;
-                    const uint cellMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                    const uint cellMaterial = DecodeVoxelMaterialForLod(
+                        chunkIndex, chunkDescriptor, localVoxelCoord, chunkLodLevel, outExtent);
                     if (cellMaterial == 0u) {
                         continue;
                     }
@@ -387,7 +440,8 @@ void GreedyFacePass(
                         }
                         uvec3 testCoord = localVoxelCoord;
                         testCoord[axisU] = pU + W;
-                        const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
+                        const uint testMaterial = DecodeVoxelMaterialForLod(
+                            chunkIndex, chunkDescriptor, testCoord, chunkLodLevel, outExtent);
                         if (testMaterial != cellMaterial) {
                             break;
                         }
@@ -415,7 +469,8 @@ void GreedyFacePass(
                             uvec3 testCoord = localVoxelCoord;
                             testCoord[axisU] = pU + wi;
                             testCoord[axisV] = pV + H;
-                            const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
+                            const uint testMaterial = DecodeVoxelMaterialForLod(
+                                chunkIndex, chunkDescriptor, testCoord, chunkLodLevel, outExtent);
                             if (testMaterial != cellMaterial) {
                                 rowValid = false;
                                 break;
@@ -468,7 +523,8 @@ void GreedyFacePass(
                     localVoxelCoord[axisN] = pN;
                     localVoxelCoord[axisU] = pU;
                     localVoxelCoord[axisV] = pV;
-                    const uint cellMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, localVoxelCoord);
+                    const uint cellMaterial = DecodeVoxelMaterialForLod(
+                        chunkIndex, chunkDescriptor, localVoxelCoord, chunkLodLevel, outExtent);
                     if (cellMaterial == 0u) {
                         continue;
                     }
@@ -514,7 +570,11 @@ void main() {
     ChunkDescriptor chunkDescriptor = chunkDescriptors[chunkIndex];
     const uint opaqueFirstFace = chunkDescriptor.drawRanges.x;
     const uint transparentFirstFace = chunkDescriptor.drawRanges.z;
-    const uint maxChunkFaceCount = chunkDescriptor.voxelDataInfo.y * 6u;
+    const uint chunkLodLevel = GetChunkLodLevel(chunkIndex);
+    const uint chunkLodExtent = GetChunkLodExtent(chunkIndex);
+    const uint maxChunkFaceCount = (chunkLodLevel == 0u)
+        ? chunkDescriptor.voxelDataInfo.y * 6u
+        : chunkLodExtent * chunkLodExtent * chunkLodExtent * 6u;
     const bool chunkVisible = IsChunkVisible(chunkDescriptor);
     if (chunkDescriptor.chunkExtentAndNonAir.w == 0u) {
         chunkDescriptors[chunkIndex].drawRanges.y = 0u;
@@ -533,27 +593,27 @@ void main() {
 
 
     GreedyFacePass(0u, 0u, 1u, 2u, 1,
-    chunkDescriptor, chunkIndex,
+    chunkDescriptor, chunkIndex, chunkLodLevel, chunkLodExtent,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
     opaqueFaceCount, transparentFaceCount);
     GreedyFacePass(1u, 0u, 1u, 2u, -1,
-    chunkDescriptor, chunkIndex,
+    chunkDescriptor, chunkIndex, chunkLodLevel, chunkLodExtent,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
     opaqueFaceCount, transparentFaceCount);
     GreedyFacePass(2u, 1u, 0u, 2u, 1,
-    chunkDescriptor, chunkIndex,
+    chunkDescriptor, chunkIndex, chunkLodLevel, chunkLodExtent,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
     opaqueFaceCount, transparentFaceCount);
     GreedyFacePass(3u, 1u, 0u, 2u, -1,
-    chunkDescriptor, chunkIndex,
+    chunkDescriptor, chunkIndex, chunkLodLevel, chunkLodExtent,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
     opaqueFaceCount, transparentFaceCount);
     GreedyFacePass(4u, 2u, 0u, 1u, 1,
-    chunkDescriptor, chunkIndex,
+    chunkDescriptor, chunkIndex, chunkLodLevel, chunkLodExtent,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
     opaqueFaceCount, transparentFaceCount);
     GreedyFacePass(5u, 2u, 0u, 1u, -1,
-    chunkDescriptor, chunkIndex,
+    chunkDescriptor, chunkIndex, chunkLodLevel, chunkLodExtent,
     opaqueFirstFace, transparentFirstFace, maxChunkFaceCount,
     opaqueFaceCount, transparentFaceCount);
 

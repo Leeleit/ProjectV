@@ -616,3 +616,100 @@ CPU helper computes `texelsAtMip / 4 + frac / 8` bounded by `maxBlendWidth`.
 (2 uint32 per chunk: `[mip, blendWidth, mip, blendWidth, ...]`) used for SSBO
 struct change deferred to follow-up. Reuses the existing 8-corner AABB projection
 from `ComputePerChunkMipLevelsFromAabbs` for visual consistency.
+
+### Smart blend width v2 — full shader consume (8x)
+
+SSBO `hzbPerChunkMipBuffer` enlarged from 1×uint32/chunk to 2×uint32/chunk
+(`kHizMipAndBlendWidthWordsPerChunk = 2`). `hzb_cull.comp::AabbVisibleAgainstMip`
+takes new `blendWidthTexels` parameter; when > 0, expands the screen-space
+sample footprint by `blendWidth / mipSize` before texel fetch, eliminating
+0.02-0.20% false-negatives at lower mips per `2026-06-21-hzb-smart-blend-width`
+verdict. `WritePerChunkMipAndBlendWidthsToBuffer` helper is a pure packer —
+no Vulkan deps, testable in isolation. When `IsHzbSmartBlendWidthEnabled()` is
+OFF, callers still write `blendWidth=0` and the shader falls back to the
+4x default path (no smart blend expansion).
+
+## `src/shaders/voxel_mesh.comp` (8x: LOD mesh emission)
+
+`kLodWordStride = 16` (chunkSize=8, LOD 1 worst case: outExtent=4, 64 bytes =
+16 uint32 words). Must match `projectv::render::kLodPayloadWordStride` in
+`LodDownsampleGpuConsume.hpp`. `GetChunkLodLevel(chunkIndex)` /
+`GetChunkLodExtent(chunkIndex)` decode the packed `chunkLodLevelsBuffer`
+(bits [0:8] = lodLevel, bits [8:16] = outExtent). `DecodeVoxelMaterialForLod`
+dispatches to `DecodeChunkVoxelMaterial` (LOD 0, full-res) or
+`DecodeLodVoxelMaterial` (LOD >0, downsampled payload at `lodDownsampled`
+binding 9). `GreedyFacePass` uses per-chunk extent from metadata instead of
+the original `chunkDescriptor.chunkExtentAndNonAir[axisN]` when
+`chunkLodLevel > 0` — without this, lower-LOD chunks would iterate the
+original 8³ extent and read garbage from the smaller downsampled payload.
+
+## `src/render/vulkan/VulkanAsyncCompute.{hpp,cpp}` (8x: HZB async cross-queue)
+
+Phase 4 partial. New 2nd timeline semaphore
+`VulkanContextState::hzbBuildTimelineSemaphore` (`VkSemaphoreTypeCreateInfo`
+TIMELINE, initialValue=0) + `hzbBuildLastTimelineValue` counter, created in
+`VulkanBootstrap::InitializeVulkanBase` after `renderTimelineSemaphore`,
+destroyed in `Types.cpp::ShutdownVulkan`. `RecordHzbAsyncCullPass` records
+HZB cull into `asyncComputeCommandBuffer` (re-uses existing
+`RecordHzbCullingDispatch` from `HizCulling.cpp`) after a placeholder
+`VkImageMemoryBarrier2` that keeps the HZB image in
+`SHADER_READ_ONLY_OPTIMAL` on the compute queue. `SubmitHzbAsyncCullToComputeQueue`
+submits with cross-queue wait/signal on `hzbBuildTimelineSemaphore`
+(1-frame pipeline depth, matches the existing Fluid CA pattern). `Renderer.cpp`
+adds 2nd `VkSemaphoreSubmitInfo` signal on graphics submit at value
+`hzbBuildLastTimelineValue` when `asyncComputeHzbPathActive` is true (env
+`PROJECTV_ASYNC_COMPUTE=ON` + HZB culling enabled + HZB buffer allocated),
+and skips the HZB cull on graphics CB in that case. **Cross-queue depth
+attachment ownership transfer still deferred** — current code uses
+`VK_QUEUE_FAMILY_IGNORED` which is correct for shared/concurrent sharing
+mode but does not yet release/acquire the depth attachment from graphics
+to compute. Per `docs/experiments/INDEX.md 2026-06-20-rt-shadows-vs-csm`
+and Khronos Synchronization Examples, the proper pattern needs an
+`VkImageMemoryBarrier` with explicit `srcQueueFamilyIndex` (graphics) →
+`dstQueueFamilyIndex` (compute) + an `srcAccessMask = DEPTH_STENCIL_ATTACHMENT_WRITE_BIT`
+at `LATE_FRAGMENT_TESTS_BIT` → `dstAccessMask = SHADER_READ_BIT` at
+`COMPUTE_SHADER_BIT`. Deferred to a follow-up session to keep this phase's
+risk contained.
+
+## `src/voxel/NanoVdb.hpp` (8x: resize capacity math)
+
+`ComputeGrownNanoVdbCapacityForTest(current, required)` is a test-only
+inline mirror of the production `projectv::render::ComputeGrownNanoVdbCapacity`
+in `SceneResources.cpp`. Lives in the public header so
+`ProjectVNanoVdbGpuUploadTests` can exercise the grow strategy (1.5× current
+or required, whichever is larger; zero current → required) without
+needing to link the full SceneResources module (which would pull in modules
+and Vulkan deps). Test verifies: zero current → returns required; smaller
+required → keeps current; larger required → grows by 1.5× AND satisfies
+required. Production implementation in SceneResources.cpp allocates a new
+VMA buffer, frees the old one, and re-uploads the flatten data via the
+same `RefreshNanoVdbFlattenBuffers` path.
+
+## `src/voxel/VoxelWorld.cpp` (8x: physics boundary-neighbor queue)
+
+`SetVoxelMaterial` now calls `QueueChunkRebuildRequest(physics, chunkIndex)`
+for the edited chunk AND all 6 face-sharing boundary neighbors (when the
+edit sits on a chunk face). Previously only the center chunk was queued,
+which meant a voxel on a chunk boundary would leave the neighbor chunk's
+CompoundShape out of sync with the actual voxel data — players could
+fall through the world near chunk edges. Mirrors the existing visual
+rebuild range in `MarkChunksTouchedByVoxelEditDirty` (iterates the same
+neighbor cube `for (z,y,x)` loop). Both rebuild paths use the same
+boundary-detection logic (compare `position[axis]` against
+`chunk.min[axis]` / `chunk.maxExclusive[axis] - 1`).
+
+## `src/render/SceneResources.cpp` (8x: NanoVDB grow-on-exceed)
+
+`ComputeGrownNanoVdbCapacity` + `GrowNanoVdbBuffer` close the
+`UploadSceneFrameResources` NanoVDB `CapacityExceeded` log path. When
+`sceneNanoVdbFlatten` exceeds current Upper/Lower/Leaf/Material buffer
+capacity, each under-sized buffer is freed via `vmaDestroyBuffer` and
+re-allocated with the grown capacity. Capacity grows by 1.5× current or
+required (whichever is larger), zero-current falls back to required. Old
+data is NOT preserved across grow (cold-path; per-frame `sceneNanoVdbFlatten`
+is re-built from the world before each upload, so no copy is needed).
+Tracy plot `"SceneNanoVdbUpperBufferAllocation"` and equivalents
+track the new alloc/free cycle. `UploadSceneFrameResources` now takes a
+`VulkanContextState *context` parameter (caller updated in
+`FramePreparation.cpp`); without the context, the VMA destroy/recreate
+cannot run.

@@ -143,6 +143,17 @@ bool PrepareFrameRenderData(
 		}
 		profiling::PlotValue("Chunk Stream Drained", static_cast<int64_t>(chunksDrained));
 		profiling::PlotValue("Chunk Stream Pending", static_cast<int64_t>(projectv::voxel::DrainChunkStreamQueueSize()));
+
+		if (projectv::voxel::IsChunkStreamerPrebakeReady()) {
+			const uint32_t kPreloadRadiusChunks = 8u;
+			const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(
+				*world->voxelWorld,
+				camera->position.x,
+				camera->position.y,
+				camera->position.z,
+				kPreloadRadiusChunks);
+			profiling::PlotValue("Chunk Streamer Preload Queue Depth", static_cast<int64_t>(enqueued));
+		}
 	}
 
 	if (world->voxelWorld && !render->completedChunkRebuildIndices.empty()) {
@@ -150,7 +161,7 @@ bool PrepareFrameRenderData(
 		render->completedChunkRebuildIndices.clear();
 	}
 
-	if (!UploadSceneFrameResources(*render, frame->currentFrame)) {
+	if (!UploadSceneFrameResources(context, *render, frame->currentFrame)) {
 		runtime::LogRuntimeFailure(
 			"Frame",
 			"PrepareFrameRenderData.UploadSceneFrameResources",

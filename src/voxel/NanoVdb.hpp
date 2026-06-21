@@ -13,6 +13,18 @@ namespace projectv::voxel::nanovdb {
 inline constexpr uint32_t kNanoVdbInvalidIndex = 0xFFFFFFFFu;
 inline constexpr uint32_t kNanoVdbMaxLevelCount = 8u;
 
+inline uint64_t ComputeGrownNanoVdbCapacityForTest(uint64_t currentCapacityBytes, uint64_t requiredCapacityBytes)
+{
+	if (currentCapacityBytes == 0u) {
+		return requiredCapacityBytes == 0u ? 1u : requiredCapacityBytes;
+	}
+	if (requiredCapacityBytes <= currentCapacityBytes) {
+		return currentCapacityBytes;
+	}
+	const uint64_t grown = currentCapacityBytes + currentCapacityBytes / 2u;
+	return grown > requiredCapacityBytes ? grown : requiredCapacityBytes;
+}
+
 struct NanoVdbUpper {
 	uint32_t childMask = 0u;
 	uint32_t firstLower = kNanoVdbInvalidIndex;

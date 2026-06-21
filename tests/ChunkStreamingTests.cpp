@@ -221,6 +221,107 @@ void TestPreloadAroundCameraEmptyWorldReturnsZero(StreamTestContext &test)
 	(void)unsetResult;
 }
 
+void TestPreloadAroundCameraPopulatesWhenChunksExist(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "ON", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	VoxelWorld world{};
+	world.chunkSize = 8;
+	world.min = {0, 0, 0};
+	world.maxExclusive = {16, 8, 16};
+	world.width = 16;
+	world.height = 8;
+	world.depth = 16;
+	world.sparseStorage.Reset(16, 8, 16);
+	world.chunks.resize(2);
+	world.chunks[0].min = {0, 0, 0};
+	world.chunks[0].maxExclusive = {8, 8, 8};
+	world.chunks[0].rebuildQueued = false;
+	world.chunks[0].isStatic = true;
+	world.chunks[1].min = {8, 0, 0};
+	world.chunks[1].maxExclusive = {16, 8, 8};
+	world.chunks[1].rebuildQueued = false;
+	world.chunks[1].isStatic = true;
+	const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(world, 0.0f, 0.0f, 0.0f, 1u);
+	if (enqueued != 2u) {
+		std::fprintf(stderr, "enqueued=%u expected=2 (chunks in [0..1]x[0..0]x[0..1] grid)\n", enqueued);
+		test.Fail(__LINE__, "PreloadChunksAroundCamera with radius=1 must enqueue all chunks in range");
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
+void TestPreloadAroundCameraZeroRadiusEnqueuesSingleChunk(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "ON", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	VoxelWorld world{};
+	world.chunkSize = 8;
+	world.min = {0, 0, 0};
+	world.maxExclusive = {8, 8, 8};
+	world.width = 8;
+	world.height = 8;
+	world.depth = 8;
+	world.sparseStorage.Reset(8, 8, 8);
+	world.chunks.resize(1);
+	world.chunks[0].min = {0, 0, 0};
+	world.chunks[0].maxExclusive = {8, 8, 8};
+	world.chunks[0].rebuildQueued = false;
+	world.chunks[0].isStatic = true;
+	const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(world, 0.0f, 0.0f, 0.0f, 0u);
+	if (enqueued != 1u) {
+		std::fprintf(stderr, "enqueued=%u expected=1 (radius=0 enqueues the camera's chunk)\n", enqueued);
+		test.Fail(__LINE__, "PreloadChunksAroundCamera with radius=0 must enqueue the camera's chunk");
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
+void TestPrebakeVersionIncrementsAfterBake(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "ON", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	const uint64_t before = projectv::voxel::GetChunkStreamerPrebakeVersion();
+	VoxelWorld world{};
+	world.chunkSize = 8;
+	world.min = {0, 0, 0};
+	world.maxExclusive = {8, 8, 8};
+	world.width = 8;
+	world.height = 8;
+	world.depth = 8;
+	world.sparseStorage.Reset(8, 8, 8);
+	world.chunks.resize(1);
+	world.chunks[0].min = {0, 0, 0};
+	world.chunks[0].maxExclusive = {8, 8, 8};
+	world.chunks[0].rebuildQueued = false;
+	world.chunks[0].isStatic = true;
+	projectv::voxel::ChunkPrebakeStats stats{};
+	const bool baked = projectv::voxel::BakeAllChunksToDisk(world, stats);
+	if (!baked) {
+		test.Fail(__LINE__, "BakeAllChunksToDisk on populated world must return true");
+	}
+	const uint64_t after = projectv::voxel::GetChunkStreamerPrebakeVersion();
+	if (after <= before) {
+		std::fprintf(stderr, "prebakeVersion before=%llu after=%llu\n",
+			static_cast<unsigned long long>(before), static_cast<unsigned long long>(after));
+		test.Fail(__LINE__, "BakeAllChunksToDisk must bump prebake version");
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
 }  // namespace
 
 int main()
@@ -239,6 +340,9 @@ int main()
 	TestBakeAllChunksDisabledWhenStreamingOff(test);
 	TestPreloadAroundCameraDisabledWhenStreamingOff(test);
 	TestPreloadAroundCameraEmptyWorldReturnsZero(test);
+	TestPreloadAroundCameraPopulatesWhenChunksExist(test);
+	TestPreloadAroundCameraZeroRadiusEnqueuesSingleChunk(test);
+	TestPrebakeVersionIncrementsAfterBake(test);
 
 	if (test.failures > 0) {
 		std::fprintf(stderr, "ProjectVChunkStreamingTests: %d failure(s)\n", test.failures);

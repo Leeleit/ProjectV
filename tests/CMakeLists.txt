@@ -742,6 +742,7 @@ add_executable(ProjectVLodDownsampleGpuConsumeTests
         ${CMAKE_SOURCE_DIR}/src/render/LodDownsampleGpuConsume.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
 )
 
 target_compile_definitions(ProjectVLodDownsampleGpuConsumeTests PRIVATE
@@ -797,6 +798,7 @@ add_executable(ProjectVAsyncComputeTests
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanAsyncCompute.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanWorldGenPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
@@ -973,6 +975,42 @@ projectv_test_add_modules(ProjectVPhysicsGreedyMergerTests)
 add_executable(ProjectVWorldGenTests
         WorldGenTests.cpp
 )
+
+add_executable(ProjectVPhysicsIncrementalJoltTests
+        PhysicsIncrementalJoltTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+)
+
+target_compile_definitions(ProjectVPhysicsIncrementalJoltTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVPhysicsIncrementalJoltTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
+)
+
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE volk)
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE glm)
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE Jolt::Jolt)
+target_link_libraries(ProjectVPhysicsIncrementalJoltTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVPhysicsIncrementalJoltTests COMMAND ProjectVPhysicsIncrementalJoltTests)
+set_tests_properties(ProjectVPhysicsIncrementalJoltTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVPhysicsIncrementalJoltTests)
 
 target_compile_definitions(ProjectVWorldGenTests PRIVATE
         PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"

@@ -1261,7 +1261,7 @@ bool CreateSceneResources(
 
 		const uint32_t hzbPerChunkMipCount =
 			std::max(static_cast<uint32_t>(world->voxelWorld->chunks.size()), 1u);
-		const VkDeviceSize hzbPerChunkMipBytes = sizeof(uint32_t) * hzbPerChunkMipCount;
+		const VkDeviceSize hzbPerChunkMipBytes = sizeof(uint32_t) * 2u * hzbPerChunkMipCount;
 		VmaAllocationInfo hzbPerChunkMipAllocationInfo{};
 		if (!CreateBuffer(
 				context,
@@ -1746,6 +1746,7 @@ bool UpdateSceneResources(
 }
 
 bool UploadSceneFrameResources(
+	VulkanContextState *context,
 	RenderState &render,
 	const uint32_t frameIndex)
 {
@@ -1854,26 +1855,74 @@ bool UploadSceneFrameResources(
 	}
 
 	if (frameResources.uploadedNanoVdbVersion != render.sceneNanoVdbVersion) {
+		const VkDeviceSize upperRequired =
+			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.uppers.size()) *
+				sizeof(projectv::voxel::nanovdb::NanoVdbUpper);
+		const VkDeviceSize lowerRequired =
+			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.lowers.size()) *
+				sizeof(projectv::voxel::nanovdb::NanoVdbLower);
+		const VkDeviceSize leafRequired =
+			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.leaves.size()) *
+				sizeof(projectv::voxel::nanovdb::NanoVdbLeaf);
+		const VkDeviceSize materialRequired =
+			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.materials.size()) *
+				sizeof(uint8_t);
 		const bool flattenedWithinCapacity =
-			frameResources.nanovdbUpperCapacityBytes >=
-				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.uppers.size()) *
-					sizeof(projectv::voxel::nanovdb::NanoVdbUpper) &&
-			frameResources.nanovdbLowerCapacityBytes >=
-				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.lowers.size()) *
-					sizeof(projectv::voxel::nanovdb::NanoVdbLower) &&
-			frameResources.nanovdbLeafCapacityBytes >=
-				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.leaves.size()) *
-					sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) &&
-			frameResources.nanovdbMaterialCapacityBytes >=
-				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.materials.size()) *
-					sizeof(uint8_t);
+			frameResources.nanovdbUpperCapacityBytes >= upperRequired &&
+			frameResources.nanovdbLowerCapacityBytes >= lowerRequired &&
+			frameResources.nanovdbLeafCapacityBytes >= leafRequired &&
+			frameResources.nanovdbMaterialCapacityBytes >= materialRequired;
 		if (flattenedWithinCapacity) {
 			(void)RefreshNanoVdbFlattenBuffers(render.sceneNanoVdbFlatten, frameResources);
 		} else {
-			runtime::LogRuntimeFailure(
-				"UploadSceneFrameResources",
-				"NanoVdbFlatten",
-				"CapacityExceeded");
+			const bool grewUpper = upperRequired > frameResources.nanovdbUpperCapacityBytes
+				? GrowNanoVdbBuffer(
+					context,
+					frameResources.nanovdbUpperBuffer,
+					frameResources.nanovdbUpperAllocation,
+					frameResources.nanovdbUpperMappedData,
+					frameResources.nanovdbUpperCapacityBytes,
+					ComputeGrownNanoVdbCapacity(frameResources.nanovdbUpperCapacityBytes, upperRequired),
+					"SceneNanoVdbUpperBufferAllocation")
+				: true;
+			const bool grewLower = lowerRequired > frameResources.nanovdbLowerCapacityBytes
+				? GrowNanoVdbBuffer(
+					context,
+					frameResources.nanovdbLowerBuffer,
+					frameResources.nanovdbLowerAllocation,
+					frameResources.nanovdbLowerMappedData,
+					frameResources.nanovdbLowerCapacityBytes,
+					ComputeGrownNanoVdbCapacity(frameResources.nanovdbLowerCapacityBytes, lowerRequired),
+					"SceneNanoVdbLowerBufferAllocation")
+				: true;
+			const bool grewLeaf = leafRequired > frameResources.nanovdbLeafCapacityBytes
+				? GrowNanoVdbBuffer(
+					context,
+					frameResources.nanovdbLeafBuffer,
+					frameResources.nanovdbLeafAllocation,
+					frameResources.nanovdbLeafMappedData,
+					frameResources.nanovdbLeafCapacityBytes,
+					ComputeGrownNanoVdbCapacity(frameResources.nanovdbLeafCapacityBytes, leafRequired),
+					"SceneNanoVdbLeafBufferAllocation")
+				: true;
+			const bool grewMaterial = materialRequired > frameResources.nanovdbMaterialCapacityBytes
+				? GrowNanoVdbBuffer(
+					context,
+					frameResources.nanovdbMaterialBuffer,
+					frameResources.nanovdbMaterialAllocation,
+					frameResources.nanovdbMaterialMappedData,
+					frameResources.nanovdbMaterialCapacityBytes,
+					ComputeGrownNanoVdbCapacity(frameResources.nanovdbMaterialCapacityBytes, materialRequired),
+					"SceneNanoVdbMaterialBufferAllocation")
+				: true;
+			if (grewUpper && grewLower && grewLeaf && grewMaterial) {
+				(void)RefreshNanoVdbFlattenBuffers(render.sceneNanoVdbFlatten, frameResources);
+			} else {
+				runtime::LogRuntimeFailure(
+					"UploadSceneFrameResources",
+					"NanoVdbFlatten",
+					"GrowAndRefreshFailed");
+			}
 		}
 		frameResources.uploadedNanoVdbVersion = render.sceneNanoVdbVersion;
 	}
@@ -1974,5 +2023,67 @@ bool RefreshNanoVdbFlattenBuffers(
 		frameResources.nanovdbLowerMappedData,
 		frameResources.nanovdbLeafMappedData,
 		frameResources.nanovdbMaterialMappedData);
+	return true;
+}
+
+uint64_t ComputeGrownNanoVdbCapacity(const uint64_t currentCapacityBytes, const uint64_t requiredCapacityBytes)
+{
+	if (currentCapacityBytes == 0u) {
+		return std::max<uint64_t>(requiredCapacityBytes, 1u);
+	}
+	if (requiredCapacityBytes <= currentCapacityBytes) {
+		return currentCapacityBytes;
+	}
+	const uint64_t grown = currentCapacityBytes + currentCapacityBytes / 2u;
+	return std::max<uint64_t>(grown, requiredCapacityBytes);
+}
+
+bool GrowNanoVdbBuffer(
+	VulkanContextState *context,
+	VkBuffer &buffer,
+	VmaAllocation &allocation,
+	void *&mappedData,
+	uint64_t &capacityBytes,
+	const uint64_t newCapacityBytes,
+	const char *profilingTag)
+{
+	if (context == nullptr || context->device == VK_NULL_HANDLE || context->allocator == VK_NULL_HANDLE) {
+		return false;
+	}
+	if (newCapacityBytes == 0u) {
+		return false;
+	}
+	if (buffer != VK_NULL_HANDLE && allocation != nullptr) {
+		profiling::RecordFree(allocation, profilingTag);
+		vmaDestroyBuffer(context->allocator, buffer, allocation);
+		buffer = VK_NULL_HANDLE;
+		allocation = nullptr;
+		mappedData = nullptr;
+		capacityBytes = 0u;
+	}
+	VmaAllocationCreateInfo allocationCreateInfo{};
+	VkBufferCreateInfo bufferCreateInfo{};
+	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferCreateInfo.size = newCapacityBytes;
+	bufferCreateInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	const VkResult createResult = vmaCreateBuffer(
+		context->allocator,
+		&bufferCreateInfo,
+		&allocationCreateInfo,
+		&buffer,
+		&allocation,
+		nullptr);
+	if (createResult != VK_SUCCESS) {
+		runtime::LogVkFailure("GrowNanoVdbBuffer.vmaCreateBuffer", createResult);
+		buffer = VK_NULL_HANDLE;
+		allocation = nullptr;
+		return false;
+	}
+	VmaAllocationInfo allocInfo{};
+	vmaGetAllocationInfo(context->allocator, allocation, &allocInfo);
+	mappedData = allocInfo.pMappedData;
+	capacityBytes = allocInfo.size;
+	profiling::RecordAllocation(allocation, allocInfo.size, profilingTag);
 	return true;
 }

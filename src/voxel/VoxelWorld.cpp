@@ -1094,8 +1094,41 @@ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, 
 	MarkChunksTouchedByVoxelEditDirty(world, position);
 
 	if (physics != nullptr) {
-		const uint32_t chunkIndex = GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, position));
-		QueueChunkRebuildRequest(physics, chunkIndex);
+		const Int3 chunkCoord = GetVoxelChunkCoord(world, position);
+		const VoxelChunk &centerChunk = world.chunks[GetVoxelChunkIndex(world, chunkCoord)];
+		int minChunkX = chunkCoord.x;
+		int maxChunkX = chunkCoord.x;
+		int minChunkY = chunkCoord.y;
+		int maxChunkY = chunkCoord.y;
+		int minChunkZ = chunkCoord.z;
+		int maxChunkZ = chunkCoord.z;
+		if (position.x == centerChunk.min.x && chunkCoord.x > 0) {
+			--minChunkX;
+		}
+		if (position.x == centerChunk.maxExclusive.x - 1 && chunkCoord.x + 1 < world.chunkCountX) {
+			++maxChunkX;
+		}
+		if (position.y == centerChunk.min.y && chunkCoord.y > 0) {
+			--minChunkY;
+		}
+		if (position.y == centerChunk.maxExclusive.y - 1 && chunkCoord.y + 1 < world.chunkCountY) {
+			++maxChunkY;
+		}
+		if (position.z == centerChunk.min.z && chunkCoord.z > 0) {
+			--minChunkZ;
+		}
+		if (position.z == centerChunk.maxExclusive.z - 1 && chunkCoord.z + 1 < world.chunkCountZ) {
+			++maxChunkZ;
+		}
+		for (int dirtyChunkZ = minChunkZ; dirtyChunkZ <= maxChunkZ; ++dirtyChunkZ) {
+			for (int dirtyChunkY = minChunkY; dirtyChunkY <= maxChunkY; ++dirtyChunkY) {
+				for (int dirtyChunkX = minChunkX; dirtyChunkX <= maxChunkX; ++dirtyChunkX) {
+					QueueChunkRebuildRequest(
+						physics,
+						GetVoxelChunkIndex(world, {dirtyChunkX, dirtyChunkY, dirtyChunkZ}));
+				}
+			}
+		}
 	}
 }
 

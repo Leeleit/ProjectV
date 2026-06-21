@@ -1,6 +1,7 @@
 #include "voxel/NanoVdb.hpp"
 #include "voxel/Sparse64Tree.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -214,6 +215,37 @@ void TestCapacityBudgetContract(TestContext &context)
 	}
 }
 
+void TestComputeGrownNanoVdbCapacityZeroCurrent(TestContext &context)
+{
+	const uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(0u, 1024u);
+	if (grown != 1024u) {
+		std::fprintf(stderr, "grown=%llu expected=1024\n", static_cast<unsigned long long>(grown));
+		context.Fail(__LINE__, "Zero current capacity must return required capacity (floor 1)");
+	}
+}
+
+void TestComputeGrownNanoVdbCapacitySmallerRequired(TestContext &context)
+{
+	const uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(2048u, 1024u);
+	if (grown != 2048u) {
+		std::fprintf(stderr, "grown=%llu expected=2048\n", static_cast<unsigned long long>(grown));
+		context.Fail(__LINE__, "Smaller required must keep current capacity");
+	}
+}
+
+void TestComputeGrownNanoVdbCapacityLargerRequired(TestContext &context)
+{
+	const uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(1000u, 3000u);
+	if (grown < 3000u) {
+		std::fprintf(stderr, "grown=%llu required=3000\n", static_cast<unsigned long long>(grown));
+		context.Fail(__LINE__, "Grown capacity must satisfy required capacity");
+	}
+	if (grown < 1500u) {
+		std::fprintf(stderr, "grown=%llu expected>=1500 (current*1.5)\n", static_cast<unsigned long long>(grown));
+		context.Fail(__LINE__, "Grown capacity must include 1.5x growth factor");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -224,6 +256,9 @@ int main()
 	TestPackPopulatedFlatten(context);
 	TestVersionedUploadTrigger(context);
 	TestCapacityBudgetContract(context);
+	TestComputeGrownNanoVdbCapacityZeroCurrent(context);
+	TestComputeGrownNanoVdbCapacitySmallerRequired(context);
+	TestComputeGrownNanoVdbCapacityLargerRequired(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVNanoVdbGpuUploadTests: %d failure(s)\n", context.failures);

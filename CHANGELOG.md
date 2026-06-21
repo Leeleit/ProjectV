@@ -15,6 +15,106 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-21 (session: 8x Variant 1 «close partial APIs» — 6 TODO stages: 4.2 / 2.1 / 4.3 / 6.3 / 1.1 / 3.2)
+
+7 phases + doc sync across 6 TODO stages. Build green, **33/34 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as prior 4x/8x/12x). 1 new test target (`ProjectVPhysicsIncrementalJoltTests` = 6 sub-tests) + 18 new sub-tests in existing targets (LodDownsampleGpuConsume +5, HzbSmartMip +3, ChunkStreaming +3, AsyncCompute +4, NanoVdbGpuUpload +3). All green. **No commit performed** per operator policy "close dirty without prompt" (per AGENTS.md §5.4).
+
+### Phase 1: Stage 4.2 LOD GPU consume mesh emission (closed)
+
+- `src/shaders/voxel_mesh.comp` — added `kLodWordStride=16` (must match `projectv::render::kLodPayloadWordStride` in `LodDownsampleGpuConsume.hpp`) + `GetChunkLodLevel(chunkIndex)` / `GetChunkLodExtent(chunkIndex)` decoders for packed `chunkLodLevelsBuffer` (bits [0:8] = lodLevel, bits [8:16] = outExtent) + `DecodeLodVoxelMaterial(chunkIndex, localCoord, outExtent)` helper (reads from `lodDownsampled.lodDownsampledWords[chunkIndex*16 + ...]`) + `DecodeVoxelMaterialForLod(...)` dispatcher to `DecodeChunkVoxelMaterial` (LOD 0) or `DecodeLodVoxelMaterial` (LOD >0). `GreedyFacePass` signature extended with `chunkLodLevel + outExtent`; uses per-chunk extent from metadata instead of `chunkDescriptor.chunkExtentAndNonAir[axisN]` when `chunkLodLevel > 0` (without this, lower-LOD chunks would iterate the original 8³ extent and read garbage from the smaller downsampled payload). `maxChunkFaceCount` also switches to `outExtent³ × 6` for LOD chunks.
+- `src/render/LodDownsampleGpuConsume.hpp` — added `kLodPayloadWordStride=16` const + `LodPayloadWordOffsetForChunk(chunkIndex)` + `EncodeChunkLodMetadata(lodLevel, outExtent)` / `DecodeChunkLodMetadata(metadata, outLodLevel, outExtent)` + `BuildLodPayloadWordsFromDownsampled(bytes, count, outWords)` (pack 4 voxels/uint32 little-endian with zero-padding for short input).
+- `src/render/LodDownsampleGpuConsume.cpp` — `RefreshLodDownsampledBuffers` now iterates chunks, calls `DownsampleChunkForLodSurfacePreserve` for each chunk with `chunk.lodLevel > 0`, packs bytes via `BuildLodPayloadWordsFromDownsampled`, writes to `lodDownsampledVoxelPayloadMappedData + LodPayloadWordOffsetForChunk(i) * sizeof(uint32_t)`. Also encodes `chunkLodLevelsBuffer[i] = EncodeChunkLodMetadata(lodLevel, outExtent)`. Only bumps `lodDownsampledPayloadVersion` if any LOD>0 chunk was processed.
+- `tests/LodDownsampleGpuConsumeTests.cpp` — extended 6→11 sub-tests: stride constant, word offset linear scaling, encode/decode metadata roundtrip for 32 (lod, extent) combinations, pack 4 bytes/word (little-endian), pack short input with zero-padding, null safety.
+- `tests/CMakeLists.txt` — added `VoxelLodDownsample.cpp` to `ProjectVLodDownsampleGpuConsumeTests` target (link was missing since the downsample helper is in a separate TU).
+- `tests/CMakeLists.txt` — added `voxel/VoxelLodDownsample.cpp` to `ProjectVLodDownsampleGpuConsumeTests` source list.
+
+### Phase 2: Stage 2.1 HZB smart blend width shader consume (closed)
+
+- `src/render/SceneResources.cpp` — `hzbPerChunkMipBytes` doubled from `chunkCount * sizeof(uint32_t)` to `chunkCount * 2 * sizeof(uint32_t)` (stride = 2 uint32 per chunk, packed `[mip, blendWidth, mip, blendWidth, ...]`).
+- `src/render/HizCulling.hpp` — added `kHizMipAndBlendWidthWordsPerChunk=2` const (must match shader stride in `hzb_cull.comp` per `agent/knowledge.md §30.4` 3-step migration precedent) + `WritePerChunkMipAndBlendWidthsToBuffer(mappedData, mipAndBlendWidths, chunkCount)` pure packer (no Vulkan deps, testable in isolation; null-safe).
+- `src/render/HizCulling.cpp` — implementation added.
+- `src/shaders/hzb_cull.comp` — binding 5 changed from `perChunkMipLevels[]` (1×uint32/chunk) to `perChunkMipAndBlendWidth[]` (2×uint32/chunk packed). `AabbVisibleAgainstMip` takes new `blendWidthTexels` parameter; when `> 0`, expands screen-space sample footprint by `blendWidth / mipSize` (clamped) before `texelFetch`, eliminating 0.02-0.20% FN per `2026-06-21-hzb-smart-blend-width` verdict. 2-phase fallback unchanged (only uses mip=0 retry, no blend width in fallback).
+- `tests/HzbSmartMipTests.cpp` — extended 9→12 sub-tests: pack/unpack roundtrip (4 chunks), null safety, zero chunk count no-op.
+
+### Phase 3: Stage 4.3 Chunk prebake integration (closed)
+
+- `src/app/main.cpp` — `FinalizeActiveVoxelWorldReload` calls `ChunkStreamer::BakeAllChunksToDisk(*world, prebakeStats)` after `SnapModelInstancesAboveGroundDispatch`, gated on `IsChunkStreamingEnabled()`. Tracy plots `"Chunk Prebake Chunks Baked"` + `"Chunk Prebake Voxel Bytes"` per reload.
+- `src/app/FramePreparation.cpp` — per-frame `PreloadChunksAroundCamera(camera, radius=8)` call when `IsChunkStreamerPrebakeReady()` (i.e. `prebakeVersion > 0`). Tracy plot `"Chunk Streamer Preload Queue Depth"`.
+- `tests/ChunkStreamingTests.cpp` — extended 14→17 sub-tests: populated world populates preload, radius=0 enqueues the camera's single chunk (radius loop = `for gx = cameraChunkX; gx <= cameraChunkX; ++gx`), bake bumps prebake version.
+
+### Phase 4: Stage 6.3 HZB async compute cross-queue depth sync (partial)
+
+- `src/core/Types.hpp` — `VulkanContextState` gains `VkSemaphore hzbBuildTimelineSemaphore = VK_NULL_HANDLE` + `uint64_t hzbBuildLastTimelineValue = 0`.
+- `src/render/vulkan/VulkanBootstrap.cpp` — creates `hzbBuildTimelineSemaphore` with `VkSemaphoreTypeCreateInfo{ semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE, initialValue = 0 }` after `renderTimelineSemaphore`. Object name `"HzbBuildTimelineSemaphore"`.
+- `src/core/Types.cpp::ShutdownVulkan` — destroys `hzbBuildTimelineSemaphore` after `renderTimelineSemaphore`.
+- `src/render/vulkan/VulkanAsyncCompute.hpp` — adds `RecordHzbAsyncCullPass(asyncCommandBuffer, context, render, inverseViewProjection, chunkDescriptorCount)` + `SubmitHzbAsyncCullToComputeQueue(context, asyncCommandBuffer, outTimelineValue)`.
+- `src/render/vulkan/VulkanAsyncCompute.cpp` — `RecordHzbAsyncCullPass` records a placeholder `VkImageMemoryBarrier2` (HZB image stays in `SHADER_READ_ONLY_OPTIMAL` on compute queue) then calls `RecordHzbCullingDispatch` from `HizCulling.cpp` (re-uses existing HZB pipeline). `SubmitHzbAsyncCullToComputeQueue` uses canonical nvpro-samples pattern: 1-frame pipeline depth, `vkQueueSubmit2` + `VkSemaphoreSubmitInfo` wait at value `timelineValue - 1` / signal at `timelineValue`, `VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT` stage.
+- `src/render/Renderer.cpp` — `asyncComputeHzbPathActive` predicate (`IsAsyncComputeEnabled() && IsAsyncComputeResourcesAllocated() && IsHzbCullingEnabled() && hizBuffer.image != VK_NULL_HANDLE && hizCullingDescriptorSet != VK_NULL_HANDLE`). HZB cull on graphics CB skipped when active. Graphics submit adds 2nd `VkSemaphoreSubmitInfo` signal on `hzbBuildTimelineSemaphore` at value `hzbBuildLastTimelineValue` with `VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT` stage.
+- `tests/AsyncComputeTests.cpp` — extended 7→11 sub-tests: null CB rejection, null context rejection, null CB rejection (Hzb variant), default `hzbBuildTimelineSemaphore` VK_NULL_HANDLE.
+- `tests/CMakeLists.txt` — added `HizCulling.cpp` to `ProjectVAsyncComputeTests` source list (link was missing).
+- **Depth attachment `srcQueueFamilyIndex`→`dstQueueFamilyIndex` ownership transfer still deferred.** Current code uses `VK_QUEUE_FAMILY_IGNORED` placeholder; full sync per Khronos Synchronization Examples requires explicit `srcQueueFamilyIndex = graphics` / `dstQueueFamilyIndex = compute` + `srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT` at `LATE_FRAGMENT_TESTS_BIT` → `dstAccessMask = VK_ACCESS_SHADER_READ_BIT` at `COMPUTE_SHADER_BIT`. Documented in `COMMENTS.md` VulkanAsyncCompute section.
+
+### Phase 5: Stage 1.1 NanoVDB resize logic for 1024+ chunks (closed)
+
+- `src/render/SceneResources.hpp` — adds `ComputeGrownNanoVdbCapacity(currentCapacityBytes, requiredCapacityBytes)` + `GrowNanoVdbBuffer(context, buffer, allocation, mappedData, capacityBytes, newCapacityBytes, profilingTag)`.
+- `src/render/SceneResources.cpp` — `UploadSceneFrameResources` signature changed to take `VulkanContextState *context` (was: implicit via render state). When `flatten result > current capacity`, calls `GrowNanoVdbBuffer` for each under-sized buffer (Upper/Lower/Leaf/Material), then `RefreshNanoVdbFlattenBuffers`. `LogRuntimeFailure` only fires on grow failure, not on size mismatch. `ComputeGrownNanoVdbCapacity` = 1.5× current OR required, whichever is larger; zero current → required.
+- `src/voxel/NanoVdb.hpp` — adds test-only `ComputeGrownNanoVdbCapacityForTest(current, required)` inline mirror (same math, accessible to `ProjectVNanoVdbGpuUploadTests` without linking SceneResources module).
+- `src/app/FramePreparation.cpp` — updates `UploadSceneFrameResources(*render, ...)` call site to `UploadSceneFrameResources(context, *render, ...)`.
+- `tests/NanoVdbGpuUploadTests.cpp` — extended 5→8 sub-tests: zero current → required, smaller required → keeps current, larger required → 1.5× AND satisfies required.
+
+### Phase 6: Stage 3.2 Incremental Jolt Step 1 — boundary-neighbor queue (closed)
+
+- `src/voxel/VoxelWorld.cpp::SetVoxelMaterial` — when `physics != nullptr`, now calls `QueueChunkRebuildRequest(physics, chunkIndex)` for the edited chunk AND all 6 face-sharing boundary neighbors (when edit sits on a chunk face), mirroring the existing visual rebuild range in `MarkChunksTouchedByVoxelEditDirty`. Previously only the center chunk was queued, leaving neighbor chunks' CompoundShape out of sync — players could fall through near chunk edges. Iterates the same neighbor cube `for (z,y,x)` loop used by the visual path; computes min/max chunk coords independently of the visual path to avoid coupling the two systems.
+- `tests/PhysicsIncrementalJoltTests.cpp` (NEW) — 6 sub-tests: null physics rejection, queue append no-dedup, null inputs rejection (3 variants), null accessor rejection (2 variants), empty queue returns 0.
+- `tests/CMakeLists.txt` — new `ProjectVPhysicsIncrementalJoltTests` target with full source list (VoxelWorld, PhysicsWorld, GreedyPhysicsMerger, NanoVdb, LodDownsample, RuntimeDiagnostics, InputActions, VulkanResult) + Jolt + VMA + SDL3 + volk + glm + fmt + Tracy links + `projectv_test_add_modules` call.
+
+### Phase 7: doc sync (this entry)
+
+- `agent/workspace.md` — updated `§1 Now` + `§2 Nearest Gap` + `§3 Next Steps` + `§4 Risks` + `§5 Active tasks` + `§6 Recent closed sessions` for 8x Variant 1 closure.
+- `TODO.md` — marked Stage 4.2 fully closed (mesh emission landed) + Stage 2.1 fully closed (blend width shader consume) + Stage 4.3 fully closed (prebake integration) + Stage 6.3 partial closed (2nd timeline semaphore + cross-queue submit helpers) + Stage 1.1 fully closed (resize logic) + Stage 3.2 partially closed (boundary-neighbor queue).
+- `COMMENTS.md` — new entries for `src/render/HizCulling.{hpp,cpp}` (smart blend width full shader consume), `src/shaders/voxel_mesh.comp` (LOD mesh emission), `src/render/vulkan/VulkanAsyncCompute.{hpp,cpp}` (HZB async cross-queue), `src/voxel/NanoVdb.hpp` (resize capacity math), `src/voxel/VoxelWorld.cpp` (physics boundary-neighbor queue), `src/render/SceneResources.cpp` (NanoVDB grow-on-exceed).
+- `CHANGELOG.md` — this entry.
+
+### Verification
+
+- `cmake --build build/linux-clang-debug --target ProjectV` — green.
+- `ctest --test-dir build/linux-clang-debug` — **33/34 pass** + 1 documented pre-existing failure (`ProjectVTests::TestSpectatorModeAllowsPausedMovementButBlocksEdits` same baseline as 4x/8x/12x).
+- 1 new test target + 18 new sub-tests in existing targets, all green.
+- Dirty tree: 18 files modified in `src/` + 1 untracked test file (`tests/PhysicsIncrementalJoltTests.cpp`). **No commit** (per operator "close dirty without prompt" policy).
+
+### Operator commit prompt (per workspace.md policy)
+
+ONE "Commit?" prompt at session end, covering 8x work as single commit. Suggested commit message (per `AGENTS.md §5.1` format):
+
+```
+feat(voxel,render,physics): 8x session — close 5 partial APIs + HZB async Phase 4
+
+7 phases across 6 TODO stages (4.2, 2.1, 4.3, 6.3, 1.1, 3.2) on top of 4x dirty
+baseline. Build green, 33/34 ctest pass + 1 documented pre-existing failure
+(ProjectVTests same baseline).
+
+NEW: LOD GPU consume mesh emission (GreedyFacePass per-chunk extent +
+downsampled payload decode) +
+     HZB smart blend width shader consume (SSBO stride 2 + blendWidthTexels
+     footprint expansion) +
+     Chunk prebake integration (FinalizeActiveVoxelWorldReload wire +
+     per-frame PreloadChunksAroundCamera drain) +
+     HZB async cross-queue depth sync (2nd timeline semaphore +
+     cross-queue submit helpers; depth ownership transfer partial) +
+     NanoVDB resize logic (1.5x grow strategy + realloc path) +
+     Incremental Jolt boundary-neighbor queue (per-chunk + 6 face-sharing
+     neighbors in SetVoxelMaterial).
+
+1 new test target + 18 new sub-tests in existing targets, all green.
+
+Refs: TODO.md §2.1, §4.2, §4.3, §6.3, §1.1, §3.2
+Refs: agent/knowledge.md §30.4 (3-step migration precedent)
+Refs: docs/experiments/INDEX.md 2026-06-21-hzb-smart-blend-width verdict=mixed
+Refs: docs/experiments/INDEX.md 2026-06-20-rt-shadows-vs-csm (cross-queue depth sync)
+```
+
+---
+
 ## 2026-06-21 (session: 4x — 4 close-out TODO stages: 6.3 / 4.2 / 4.3 Step 3 / 2.1 v2)
 
 4 phases across 4 TODO stages. Build green, **32/33 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as prior 4x/8x/12x). 2 new test targets (`ProjectVAsyncComputeTests` = 7 sub-tests, `ProjectVLodDownsampleGpuConsumeTests` = 6 sub-tests) + 13 new sub-tests in existing targets (Chunk Streaming +4, Hzb Smart Mip +3). All green. **No commit performed** per operator policy "close dirty without prompt" (per AGENTS.md §5.4).

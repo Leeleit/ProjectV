@@ -1043,4 +1043,20 @@ uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
 	return static_cast<uint32_t>(count);
 }
 
+void WritePerChunkMipAndBlendWidthsToBuffer(
+	void *mappedData,
+	const uint32_t *mipAndBlendWidths,
+	const uint32_t chunkCount)
+{
+	if (mappedData == nullptr || mipAndBlendWidths == nullptr) {
+		return;
+	}
+	auto *dest = static_cast<uint32_t *>(mappedData);
+	for (uint32_t i = 0u; i < chunkCount; ++i) {
+		const uint32_t baseIndex = i * kHizMipAndBlendWidthWordsPerChunk;
+		dest[baseIndex] = mipAndBlendWidths[baseIndex];
+		dest[baseIndex + 1u] = mipAndBlendWidths[baseIndex + 1u];
+	}
+}
+
 }  // namespace projectv::render

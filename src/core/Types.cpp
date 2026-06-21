@@ -108,6 +108,11 @@ void ShutdownVulkan(AppState *state)
 			vkDestroySemaphore(state->context().device, state->context().renderTimelineSemaphore, nullptr);
 			state->context().renderTimelineSemaphore = VK_NULL_HANDLE;
 		}
+
+		if (state->context().hzbBuildTimelineSemaphore) {
+			vkDestroySemaphore(state->context().device, state->context().hzbBuildTimelineSemaphore, nullptr);
+			state->context().hzbBuildTimelineSemaphore = VK_NULL_HANDLE;
+		}
 	}
 
 	if (state->context().allocator) {

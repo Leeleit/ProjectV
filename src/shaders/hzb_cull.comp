@@ -23,7 +23,11 @@ layout(set = 0, binding = 4, std430) buffer VisibleCount {
 };
 
 layout(set = 0, binding = 5, std430) readonly buffer PerChunkMip {
-    uint perChunkMipLevels[];
+    // Packed per-chunk metadata: stride = 2 uint32 per chunk, layout [mip, blendWidth, mip, blendWidth, ...].
+    // blendWidth = 0 means "no smart blend" (use legacy path). mip = 0 means "use global mip level
+    // from push constant". CPU-side stride matches `projectv::render::kHizMipAndBlendWidthWordsPerChunk`
+    // (= 2).
+    uint perChunkMipAndBlendWidth[];
 };
 
 layout(push_constant) uniform CullPushConstants {
@@ -37,6 +41,7 @@ const uint kBitsPerWord = 32u;
 bool AabbVisibleAgainstMip(
     const ChunkAabb aabb,
     const int mipLevel,
+    const int blendWidthTexels,
     const mat4 inverseViewProjection,
     const sampler2D mipTexture,
     const ivec2 hizBaseExtent)
@@ -70,10 +75,19 @@ bool AabbVisibleAgainstMip(
     const int mipWidth = max(1, hizBaseExtent.x >> mipLevel);
     const int mipHeight = max(1, hizBaseExtent.y >> mipLevel);
 
-    const float uMin = clamp(ndcMin.x * 0.5 + 0.5, 0.0, 1.0);
-    const float uMax = clamp(ndcMax.x * 0.5 + 0.5, 0.0, 1.0);
-    const float vMin = clamp(ndcMin.y * 0.5 + 0.5, 0.0, 1.0);
-    const float vMax = clamp(ndcMax.y * 0.5 + 0.5, 0.0, 1.0);
+    float uMin = clamp(ndcMin.x * 0.5 + 0.5, 0.0, 1.0);
+    float uMax = clamp(ndcMax.x * 0.5 + 0.5, 0.0, 1.0);
+    float vMin = clamp(ndcMin.y * 0.5 + 0.5, 0.0, 1.0);
+    float vMax = clamp(ndcMax.y * 0.5 + 0.5, 0.0, 1.0);
+
+    if (blendWidthTexels > 0) {
+        const float uPad = float(blendWidthTexels) / float(max(mipWidth, 1));
+        const float vPad = float(blendWidthTexels) / float(max(mipHeight, 1));
+        uMin = clamp(uMin - uPad, 0.0, 1.0);
+        uMax = clamp(uMax + uPad, 0.0, 1.0);
+        vMin = clamp(vMin - vPad, 0.0, 1.0);
+        vMax = clamp(vMax + vPad, 0.0, 1.0);
+    }
 
     const int pixMinX = clamp(int(floor(uMin * float(mipWidth))), 0, mipWidth - 1);
     const int pixMinY = clamp(int(floor(vMin * float(mipHeight))), 0, mipHeight - 1);
@@ -106,12 +120,14 @@ void main()
     const int mipLevel = int(pushConstants.hizExtentAndMipCount.w);
     const ivec2 hizBaseExtent = ivec2(pushConstants.hizExtentAndMipCount.x, pushConstants.hizExtentAndMipCount.y);
 
-    const int perChunkMip = int(perChunkMipLevels[chunkIndex]);
+    const int perChunkMip = int(perChunkMipAndBlendWidth[chunkIndex * 2u]);
+    const int perChunkBlendWidth = int(perChunkMipAndBlendWidth[chunkIndex * 2u + 1u]);
     const int useMipLevel = perChunkMip > 0 ? perChunkMip : mipLevel;
 
     bool visible = AabbVisibleAgainstMip(
         chunkAabbs[chunkIndex],
         useMipLevel,
+        perChunkBlendWidth,
         pushConstants.inverseViewProjection,
         hizTexture,
         hizBaseExtent);
@@ -119,6 +135,7 @@ void main()
     if (!visible && perChunkMip > 0) {
         visible = AabbVisibleAgainstMip(
             chunkAabbs[chunkIndex],
+            0,
             0,
             pushConstants.inverseViewProjection,
             hizTexture,

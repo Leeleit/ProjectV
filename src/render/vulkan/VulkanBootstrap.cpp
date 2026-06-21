@@ -841,6 +841,31 @@ bool InitializeVulkanBase(
 		VK_OBJECT_TYPE_SEMAPHORE,
 		"RenderTimelineSemaphore");
 
+	VkSemaphoreTypeCreateInfo hzbTimelineTypeInfo{};
+	hzbTimelineTypeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+	hzbTimelineTypeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+	hzbTimelineTypeInfo.initialValue = 0;
+	VkSemaphoreCreateInfo hzbTimelineInfo{};
+	hzbTimelineInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	hzbTimelineInfo.pNext = &hzbTimelineTypeInfo;
+	const VkResult hzbTimelineResult = vkCreateSemaphore(
+		context->device,
+		&hzbTimelineInfo,
+		nullptr,
+		&context->hzbBuildTimelineSemaphore);
+	if (hzbTimelineResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"InitializeVulkanBase.vkCreateSemaphore.HzbBuild",
+			hzbTimelineResult);
+		return false;
+	}
+	context->hzbBuildLastTimelineValue = 0;
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(context->hzbBuildTimelineSemaphore),
+		VK_OBJECT_TYPE_SEMAPHORE,
+		"HzbBuildTimelineSemaphore");
+
 	VmaAllocatorCreateInfo allocInfo{};
 	allocInfo.physicalDevice = context->physicalDevice;
 	allocInfo.device = context->device;

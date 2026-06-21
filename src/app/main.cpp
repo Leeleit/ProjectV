@@ -128,6 +128,14 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 
 	projectv::asset::SnapModelInstancesAboveGroundDispatch(*world->voxelWorld, &state->render());
 
+	if (projectv::voxel::IsChunkStreamingEnabled()) {
+		projectv::voxel::ChunkPrebakeStats prebakeStats{};
+		if (projectv::voxel::BakeAllChunksToDisk(*world->voxelWorld, prebakeStats)) {
+			profiling::PlotValue("Chunk Prebake Chunks Baked", static_cast<int64_t>(prebakeStats.chunksBaked));
+			profiling::PlotValue("Chunk Prebake Voxel Bytes", static_cast<int64_t>(prebakeStats.totalVoxelBytes));
+		}
+	}
+
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
 		ConsumeInputActionPressed(state->input(), InputAction::MoveUp);
 		if (!SnapWalkCharacterToCamera(state->physics().get(), world->voxelWorld.get(), camera)) {

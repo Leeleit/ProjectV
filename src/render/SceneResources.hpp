@@ -243,6 +243,7 @@ bool UpdateSceneResources(
 	const ChunkCullingParameters &shadowProjectionParameters,
 	VkExtent2D swapchainExtent);
 bool UploadSceneFrameResources(
+	VulkanContextState *context,
 	RenderState &render,
 	uint32_t frameIndex);
 bool UpdateSceneFrameChunkVisibility(
@@ -256,6 +257,15 @@ bool RefreshChunkAabbBuffer(
 bool RefreshNanoVdbFlattenBuffers(
 	const projectv::voxel::nanovdb::NanoVdbFlattenResult &flatten,
 	SceneFrameResources &frameResources);
+uint64_t ComputeGrownNanoVdbCapacity(uint64_t currentCapacityBytes, uint64_t requiredCapacityBytes);
+bool GrowNanoVdbBuffer(
+	VulkanContextState *context,
+	VkBuffer &buffer,
+	VmaAllocation &allocation,
+	void *&mappedData,
+	uint64_t &capacityBytes,
+	uint64_t newCapacityBytes,
+	const char *profilingTag);
 void DestroySceneResources(
 	VulkanContextState *context,
 	RenderState *render);

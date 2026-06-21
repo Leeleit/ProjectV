@@ -256,6 +256,63 @@ void TestBlendWidthIsBoundedByMax(SmartMipTestContext &test)
 	}
 }
 
+void WritePerChunkMipAndBlendWidthsToBuffer(
+	void *mappedData,
+	const uint32_t *mipAndBlendWidths,
+	const uint32_t chunkCount)
+{
+	if (mappedData == nullptr || mipAndBlendWidths == nullptr) {
+		return;
+	}
+	auto *dest = static_cast<uint32_t *>(mappedData);
+	const uint32_t stride = 2u;
+	for (uint32_t i = 0u; i < chunkCount; ++i) {
+		const uint32_t baseIndex = i * stride;
+		dest[baseIndex] = mipAndBlendWidths[baseIndex];
+		dest[baseIndex + 1u] = mipAndBlendWidths[baseIndex + 1u];
+	}
+}
+
+void TestWritePerChunkMipAndBlendWidthsToBufferPackedLayout(SmartMipTestContext &test)
+{
+	const uint32_t chunkCount = 4u;
+	const uint32_t source[chunkCount * 2u] = {
+		0u, 0u,
+		2u, 3u,
+		5u, 8u,
+		1u, 1u,
+	};
+	uint32_t buffer[chunkCount * 2u] = {};
+	WritePerChunkMipAndBlendWidthsToBuffer(buffer, source, chunkCount);
+	for (uint32_t i = 0u; i < chunkCount * 2u; ++i) {
+		if (buffer[i] != source[i]) {
+			std::fprintf(stderr, "buffer[%u]=%u expected=%u\n", i, buffer[i], source[i]);
+			test.Fail(__LINE__, "WritePerChunkMipAndBlendWidthsToBuffer must pack [mip, blendWidth] verbatim");
+			return;
+		}
+	}
+}
+
+void TestWritePerChunkMipAndBlendWidthsToBufferHandlesNull(SmartMipTestContext &test)
+{
+	const uint32_t source[2u] = {1u, 2u};
+	uint32_t buffer[2u] = {0xDEADBEEFu, 0xDEADBEEFu};
+	WritePerChunkMipAndBlendWidthsToBuffer(nullptr, source, 1u);
+	WritePerChunkMipAndBlendWidthsToBuffer(buffer, nullptr, 1u);
+	if (buffer[0] != 0xDEADBEEFu || buffer[1] != 0xDEADBEEFu) {
+		test.Fail(__LINE__, "WritePerChunkMipAndBlendWidthsToBuffer must guard against null inputs");
+	}
+}
+
+void TestWritePerChunkMipAndBlendWidthsToBufferZeroChunkCount(SmartMipTestContext &test)
+{
+	uint32_t buffer[2u] = {0xDEADBEEFu, 0xDEADBEEFu};
+	WritePerChunkMipAndBlendWidthsToBuffer(buffer, nullptr, 0u);
+	if (buffer[0] != 0xDEADBEEFu || buffer[1] != 0xDEADBEEFu) {
+		test.Fail(__LINE__, "Zero chunk count must be a no-op");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -270,6 +327,9 @@ int main()
 	TestBlendWidthZeroMaxBlendWidthReturnsZero(test);
 	TestBlendWidthZeroMipReturnsZero(test);
 	TestBlendWidthIsBoundedByMax(test);
+	TestWritePerChunkMipAndBlendWidthsToBufferPackedLayout(test);
+	TestWritePerChunkMipAndBlendWidthsToBufferHandlesNull(test);
+	TestWritePerChunkMipAndBlendWidthsToBufferZeroChunkCount(test);
 
 	if (test.failures > 0) {
 		std::fprintf(stderr, "ProjectVHzbSmartMipTests: %d failure(s)\n", test.failures);
