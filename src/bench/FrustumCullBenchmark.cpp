@@ -17,7 +17,11 @@ namespace {
 using projectv::c_kernels::ProjectvCAabb;
 using projectv::c_kernels::ProjectvCFrustumCullParameters;
 
+// EVIL: per-iteration batch size for KeepRunningBatch. 300 = enough samples per batch
+// to amortize Google Benchmark setup overhead while keeping iteration count manageable.
 constexpr size_t kBatchSize = 300;
+// EVIL: number of distinct camera orientations (yaws × pitches) per benchmark run.
+// 5 runs = ~50M visibility tests per million-batch iteration (5 runs × 300/8 bits).
 constexpr uint32_t kVisibilityRuns = 5;
 
 struct Xorshift32 {

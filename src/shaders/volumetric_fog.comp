@@ -15,10 +15,12 @@
 // front-to-back per slab. Final fog color (RGB) + alpha (transmittance) is
 // written to the froxel 3D image for later consume in voxel.frag.
 //
-// EVIL: hard-coded exponential depth distribution parameters
-// (kDepthDistributionGamma=0.5, kDepthDistributionBias=0.005) match Wronski
-// 2014 reference. Schlick g=0.8 (broad forward scattering) per Wronski
-// production tuning. Tunable via push constants if needed.
+// EVIL: hard-coded exponential depth distribution parameters shared with
+// voxel.frag via common/common_constants.glsl (Wronski 2014 reference).
+// Schlick g=0.8 (broad forward scattering) per Wronski production tuning.
+// Tunable via push constants if needed.
+
+#include "common/common_constants.glsl"
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
 
@@ -31,8 +33,7 @@ layout(push_constant) uniform VolumetricFogPushConstants {
     vec4 viewParams;
 } pc;
 
-const float kDepthDistributionGamma = 0.5;
-const float kDepthDistributionBias = 0.005;
+const float kDepthDistributionGamma = kFogDepthDistributionExp;
 const int kSlabCount = 12;
 const float kSchlickG = 0.8;
 
@@ -44,12 +45,12 @@ float SchlickPhase(float cosTheta, float g)
 
 float DepthLinearFromNdc(float depthNdc)
 {
-    return pow(clamp(depthNdc, 0.0, 1.0), kDepthDistributionGamma) * (1.0 - kDepthDistributionBias) + kDepthDistributionBias;
+    return pow(clamp(depthNdc, 0.0, 1.0), kDepthDistributionGamma) * (1.0 - kFogDepthDistributionBias) + kFogDepthDistributionBias;
 }
 
 float NdcFromDepthLinear(float depthLinear)
 {
-    return pow(clamp((depthLinear - kDepthDistributionBias) / (1.0 - kDepthDistributionBias), 0.0, 1.0), 1.0 / kDepthDistributionGamma);
+    return pow(clamp((depthLinear - kFogDepthDistributionBias) / (1.0 - kFogDepthDistributionBias), 0.0, 1.0), 1.0 / kDepthDistributionGamma);
 }
 
 void main()

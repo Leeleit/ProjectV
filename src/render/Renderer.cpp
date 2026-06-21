@@ -987,10 +987,10 @@ void RecordGraphicsCommands(
 		if (cloudscapePassActive && activeSceneColorView != VK_NULL_HANDLE) {
 			projectv::render::CloudscapePushConstants cloudPush{};
 			cloudPush.cloudColorAndCoverage = {
-				0.92f,
-				0.94f,
-				0.98f,
-				0.65f,
+				projectv::render::kDefaultCloudColorR,
+				projectv::render::kDefaultCloudColorG,
+				projectv::render::kDefaultCloudColorB,
+				projectv::render::kDefaultCloudCoverage,
 			};
 			cloudPush.sunDirectionAndIntensity = {
 				render.currentSceneLighting.sunDirectionAndWrap[0],
@@ -1001,7 +1001,7 @@ void RecordGraphicsCommands(
 			cloudPush.cloudLayerParams = {
 				0.0f,
 				0.0f,
-				0.5f,
+				projectv::render::kDefaultCloudContrast,
 				0.0f,
 			};
 			const float aspectRatio = static_cast<float>(swapchain.extent.width) /

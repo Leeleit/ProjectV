@@ -73,7 +73,10 @@ VoxelWorld BuildBenchmarkWorld()
 static void BM_BuildSunShadowProjection(benchmark::State &state)
 {
 	const VoxelWorld world = BuildBenchmarkWorld();
+	// EVIL: sun direction for benchmark. ~(0.35, 0.88, 0.22) = high-angle afternoon sun.
 	constexpr std::array sunDirection{0.35f, 0.88f, 0.22f};
+	// EVIL: coverage scale 1.10 = typical morning scene. Wider than 1.0 to exercise
+	// cascade-split clamp logic in ShadowProjection.cpp:14-15 (range 0.5..3.0).
 	constexpr float coverageScale = 1.10f;
 	for ([[maybe_unused]] auto _ : state) {
 		SunShadowProjection result =

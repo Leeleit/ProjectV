@@ -1,5 +1,7 @@
 #version 460
 
+#include "common/common_constants.glsl"
+
 struct MaterialVisual {
     vec4 baseColor;
     vec4 surface;
@@ -969,7 +971,7 @@ void main() {
         const float farPlane = max(pushConstants.cameraForward.w, nearPlane + 0.001);
         const float linearDepth = clamp(viewDistance, nearPlane, farPlane);
         const float normalizedDepth = (linearDepth - nearPlane) / (farPlane - nearPlane);
-        const float depthDistribution = pow(normalizedDepth, 0.5) * (1.0 - 0.005) + 0.005;
+        const float depthDistribution = pow(normalizedDepth, kFogDepthDistributionExp) * kFogDepthDistributionScale + kFogDepthDistributionBias;
         const vec3 froxelUvw = vec3(
             clamp(gl_FragCoord.x / max(froxelImageSize.x, 1.0), 0.0, 1.0),
             clamp(gl_FragCoord.y / max(froxelImageSize.y, 1.0), 0.0, 1.0),

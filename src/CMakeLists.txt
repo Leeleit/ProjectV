@@ -17,10 +17,10 @@ find_program(PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE glslangValidator)
 
 if (PROJECTV_GLSLC_EXECUTABLE)
     set(PROJECTV_SHADER_COMPILER "${PROJECTV_GLSLC_EXECUTABLE}")
-    set(PROJECTV_SHADER_COMPILER_ARGS --target-env=vulkan1.3)
+    set(PROJECTV_SHADER_COMPILER_ARGS --target-env=vulkan1.3 -I${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 elseif (PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE)
     set(PROJECTV_SHADER_COMPILER "${PROJECTV_GLSLANG_VALIDATOR_EXECUTABLE}")
-    set(PROJECTV_SHADER_COMPILER_ARGS -V --target-env vulkan1.3)
+    set(PROJECTV_SHADER_COMPILER_ARGS -V --target-env vulkan1.3 -I${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 else ()
     message(FATAL_ERROR "ProjectV requires either glslc or glslangValidator from the Vulkan SDK in PATH")
 endif ()
@@ -60,7 +60,7 @@ foreach (SHADER ${SHADERS})
     add_custom_command(
             OUTPUT ${SPV}
             COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS} ${SHADER} -o ${SPV}
-            DEPENDS ${SHADER}
+            DEPENDS ${SHADER} ${CMAKE_CURRENT_SOURCE_DIR}/shaders/common/common_constants.glsl
             COMMAND_EXPAND_LISTS
             VERBATIM
     )
