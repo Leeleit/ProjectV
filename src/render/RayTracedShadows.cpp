@@ -175,6 +175,33 @@ bool RayTracedShadows::AllocateBuffers(
 	m_config.blasRebuildCount = 0;
 	m_config.shadowRayDispatchCount = 0;
 	m_config.fallbackCount = 0;
+
+	VkBufferCreateInfo aabbInfo{};
+	aabbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	aabbInfo.size = sizeof(VkAabbPositionsKHR);
+	aabbInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+					 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+					 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	aabbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VmaAllocationCreateInfo aabbAllocInfo{};
+	aabbAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	const VkResult createAabbResult = vmaCreateBuffer(
+		context.allocator,
+		&aabbInfo,
+		&aabbAllocInfo,
+		&m_config.aabbScratchBuffer,
+		&m_config.aabbScratchAllocation,
+		nullptr);
+	if (createAabbResult != VK_SUCCESS) {
+		runtime::LogVkFailure("RayTracedShadows.AllocateBuffers.vmaCreateBuffer.Aabb", createAabbResult);
+		return false;
+	}
+	const VkBufferDeviceAddressInfo aabbAddressInfo{
+		VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		nullptr,
+		m_config.aabbScratchBuffer
+	};
+	m_config.aabbScratchDeviceAddress = vkGetBufferDeviceAddress(context.device, &aabbAddressInfo);
 	return true;
 }
 
@@ -194,24 +221,30 @@ void RayTracedShadows::ReleaseBuffers(const VulkanContextState &context) noexcep
 		m_config.scratchBuffer = VK_NULL_HANDLE;
 		m_config.scratchAllocation = nullptr;
 	}
+	if (m_config.aabbScratchBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
+		vmaDestroyBuffer(context.allocator, m_config.aabbScratchBuffer, m_config.aabbScratchAllocation);
+		m_config.aabbScratchBuffer = VK_NULL_HANDLE;
+		m_config.aabbScratchAllocation = nullptr;
+	}
 	m_config.tlasInstanceMappedData = nullptr;
 	m_config.tlasInstanceDeviceAddress = 0;
 	m_config.tlasInstanceCapacityBytes = 0;
 	m_config.scratchDeviceAddress = 0;
 	m_config.scratchCapacityBytes = 0;
+	m_config.aabbScratchDeviceAddress = 0;
 	m_config.tlasInstanceCount = 0;
 }
 
-void RayTracedShadows::SetBlasDirtyQueue(std::vector<uint32_t> &&dirtyChunkIndices) noexcept
+void RayTracedShadows::SetBlasDirtyQueue(std::vector<DirtyChunkRebuild> &&dirtyChunks) noexcept
 {
 	std::lock_guard<std::mutex> lock(m_dirtyQueueMutex);
-	if (dirtyChunkIndices.empty()) {
+	if (dirtyChunks.empty()) {
 		return;
 	}
 	m_pendingDirtyChunks.insert(
 		m_pendingDirtyChunks.end(),
-		std::make_move_iterator(dirtyChunkIndices.begin()),
-		std::make_move_iterator(dirtyChunkIndices.end()));
+		std::make_move_iterator(dirtyChunks.begin()),
+		std::make_move_iterator(dirtyChunks.end()));
 }
 
 void RayTracedShadows::BuildDirtyBlases(
@@ -250,8 +283,8 @@ void RayTracedShadows::BuildDirtyBlases(
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(cmd, &beginInfo);
 
-	for (const uint32_t chunkIndex : m_pendingDirtyChunks) {
-		BuildChunkBlas(cmd, context, chunkIndex, 0u, VK_NULL_HANDLE, 0u, VK_NULL_HANDLE, 0u, VK_INDEX_TYPE_UINT32, VK_FORMAT_UNDEFINED, 0u);
+	for (const DirtyChunkRebuild &chunk : m_pendingDirtyChunks) {
+		BuildChunkBlas(cmd, context, chunk.chunkIndex, chunk.aabb);
 	}
 
 	vkEndCommandBuffer(cmd);
@@ -278,6 +311,7 @@ VkDeviceSize RayTracedShadows::ComputeBlasBuildScratchSize(
 	// EVIL: scratchSize approximation per Boksansky 2019 / nvpro-samples: 64 B per primitive plus
 	// a 256 B alignment+state constant. Validated to fit minAccelerationStructureScratchOffsetAlignment
 	// (typically 128 on RTX 30/40 series) via m_config.scratchCapacityBytes / maxBlasCount.
+	// AABB BLAS builds use primitiveCount = 1 (one VkAabbPositionsKHR per BLAS).
 	if (primitiveCount == 0u) {
 		return 0u;
 	}
@@ -290,19 +324,12 @@ bool RayTracedShadows::BuildChunkBlas(
 	VkCommandBuffer commandBuffer,
 	const VulkanContextState &context,
 	const uint32_t chunkIndex,
-	const uint32_t primitiveCount,
-	VkBuffer vertexBuffer,
-	VkDeviceSize vertexBufferOffset,
-	VkBuffer indexBuffer,
-	VkDeviceSize indexBufferOffset,
-	VkIndexType indexType,
-	VkFormat vertexFormat,
-	VkDeviceSize vertexStride)
+	VkAabbPositionsKHR aabb)
 {
 	if (!m_config.enabled || commandBuffer == VK_NULL_HANDLE) {
 		return false;
 	}
-	if (vertexBuffer == VK_NULL_HANDLE || indexBuffer == VK_NULL_HANDLE || primitiveCount == 0u) {
+	if (m_config.aabbScratchBuffer == VK_NULL_HANDLE || m_config.aabbScratchDeviceAddress == 0u) {
 		m_config.fallbackCount += 1u;
 		return false;
 	}
@@ -310,34 +337,48 @@ bool RayTracedShadows::BuildChunkBlas(
 		m_config.fallbackCount += 1u;
 		return false;
 	}
-	const VkDeviceSize requiredScratch = ComputeBlasBuildScratchSize(primitiveCount);
+	if (aabb.maxX < aabb.minX || aabb.maxY < aabb.minY || aabb.maxZ < aabb.minZ) {
+		m_config.fallbackCount += 1u;
+		return false;
+	}
+	const VkDeviceSize requiredScratch = ComputeBlasBuildScratchSize(1u);
 	if (requiredScratch > m_config.scratchCapacityBytes) {
 		m_config.fallbackCount += 1u;
 		return false;
 	}
 
-	VkBufferDeviceAddressInfo vertexAddressInfo{};
-	vertexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-	vertexAddressInfo.buffer = vertexBuffer;
-	VkBufferDeviceAddressInfo indexAddressInfo{};
-	indexAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-	indexAddressInfo.buffer = indexBuffer;
+	vkCmdUpdateBuffer(commandBuffer, m_config.aabbScratchBuffer, 0u, sizeof(VkAabbPositionsKHR), &aabb);
 
-	VkAccelerationStructureGeometryTrianglesDataKHR trianglesData{};
-	trianglesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-	trianglesData.vertexFormat = vertexFormat;
-	trianglesData.vertexData.deviceAddress = vkGetBufferDeviceAddress(context.device, &vertexAddressInfo)
-											  + vertexBufferOffset;
-	trianglesData.vertexStride = vertexStride;
-	trianglesData.maxVertex = primitiveCount * 3u;
-	trianglesData.indexType = indexType;
-	trianglesData.indexData.deviceAddress = vkGetBufferDeviceAddress(context.device, &indexAddressInfo)
-												+ indexBufferOffset;
+	VkBufferMemoryBarrier updateBarrier{};
+	updateBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	updateBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	updateBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	updateBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	updateBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	updateBarrier.buffer = m_config.aabbScratchBuffer;
+	updateBarrier.offset = 0u;
+	updateBarrier.size = sizeof(VkAabbPositionsKHR);
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		0u,
+		0u,
+		nullptr,
+		1u,
+		&updateBarrier,
+		0u,
+		nullptr);
+
+	VkAccelerationStructureGeometryAabbsDataKHR aabbData{};
+	aabbData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+	aabbData.data.deviceAddress = m_config.aabbScratchDeviceAddress;
+	aabbData.stride = sizeof(VkAabbPositionsKHR);
 
 	VkAccelerationStructureGeometryKHR geometry{};
 	geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-	geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-	geometry.geometry.triangles = trianglesData;
+	geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+	geometry.geometry.aabbs = aabbData;
 	geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
 	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
@@ -351,7 +392,7 @@ bool RayTracedShadows::BuildChunkBlas(
 	buildInfo.scratchData.deviceAddress = m_config.scratchDeviceAddress;
 
 	VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
-	rangeInfo.primitiveCount = primitiveCount;
+	rangeInfo.primitiveCount = 1u;
 	rangeInfo.primitiveOffset = 0u;
 	rangeInfo.firstVertex = 0u;
 	rangeInfo.transformOffset = 0u;
@@ -363,7 +404,6 @@ bool RayTracedShadows::BuildChunkBlas(
 		&buildInfo,
 		rangeInfos);
 
-	(void)chunkIndex;
 	m_config.blasRebuildCount += 1u;
 	return true;
 }

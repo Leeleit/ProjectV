@@ -71,30 +71,58 @@ void TestComputeBlasBuildScratchSize()
 	PROJECTV_RTX_EXPECT(nonZero > 0u, "scratch size for non-zero primitives must be positive");
 }
 
-void TestBuildChunkBlasGuardsForNullBuffers()
+void TestBuildChunkBlasGuardsForNullCommandBuffer()
 {
 	projectv::render::RayTracedShadows shadows{};
 	VkCommandBuffer cmd = VK_NULL_HANDLE;
 	VulkanContextState context{};
-	PROJECTV_RTX_EXPECT(!shadows.BuildChunkBlas(
-		cmd,
-		context,
-		0u,
-		64u,
-		VK_NULL_HANDLE,
-		0u,
-		VK_NULL_HANDLE,
-		0u,
-		VK_INDEX_TYPE_UINT32,
-		VK_FORMAT_R32G32B32_SFLOAT,
-		sizeof(float) * 3u),
-		"BuildChunkBlas must reject null vertex/index buffer when enabled is false");
+	projectv::render::DirtyChunkRebuild entry{};
+	entry.chunkIndex = 0u;
+	entry.aabb.minX = 0.0f;
+	entry.aabb.minY = 0.0f;
+	entry.aabb.minZ = 0.0f;
+	entry.aabb.maxX = 1.0f;
+	entry.aabb.maxY = 1.0f;
+	entry.aabb.maxZ = 1.0f;
+	PROJECTV_RTX_EXPECT(
+		!shadows.BuildChunkBlas(cmd, context, 0u, entry.aabb),
+		"BuildChunkBlas must reject null command buffer when disabled");
+}
+
+void TestBuildChunkBlasRejectsInvertedAabb()
+{
+	projectv::render::RayTracedShadows shadows{};
+	VkCommandBuffer cmd = VK_NULL_HANDLE;
+	VulkanContextState context{};
+	projectv::render::DirtyChunkRebuild entry{};
+	entry.chunkIndex = 0u;
+	entry.aabb.minX = 1.0f;
+	entry.aabb.minY = 0.0f;
+	entry.aabb.minZ = 0.0f;
+	entry.aabb.maxX = 0.0f;
+	entry.aabb.maxY = 1.0f;
+	entry.aabb.maxZ = 1.0f;
+	PROJECTV_RTX_EXPECT(
+		!shadows.BuildChunkBlas(cmd, context, 0u, entry.aabb),
+		"BuildChunkBlas must reject inverted AABB");
 }
 
 void TestSetBlasDirtyQueueAndConsume()
 {
 	projectv::render::RayTracedShadows shadows{};
-	std::vector<uint32_t> dirty{ 0u, 1u, 2u, 3u };
+	std::vector<projectv::render::DirtyChunkRebuild> dirty{};
+	dirty.reserve(4u);
+	for (uint32_t i = 0u; i < 4u; ++i) {
+		projectv::render::DirtyChunkRebuild entry{};
+		entry.chunkIndex = i;
+		entry.aabb.minX = static_cast<float>(i);
+		entry.aabb.minY = 0.0f;
+		entry.aabb.minZ = 0.0f;
+		entry.aabb.maxX = static_cast<float>(i) + 1.0f;
+		entry.aabb.maxY = 1.0f;
+		entry.aabb.maxZ = 1.0f;
+		dirty.push_back(entry);
+	}
 	shadows.SetBlasDirtyQueue(std::move(dirty));
 	VulkanContextState context{};
 	shadows.BuildDirtyBlases(context, VK_NULL_HANDLE);
@@ -115,6 +143,33 @@ void TestUpdateTlasRespectsCapacity()
 		"VkAccelerationStructureInstanceKHR must remain 64 bytes per Vulkan 1.4 KHR spec");
 }
 
+void TestDirtyChunkRebuildStructLayout()
+{
+	const projectv::render::DirtyChunkRebuild entry{};
+	PROJECTV_RTX_EXPECT(entry.chunkIndex == 0u, "DirtyChunkRebuild default chunkIndex must be 0");
+	PROJECTV_RTX_EXPECT(entry.aabb.minX == 0.0f && entry.aabb.maxX == 0.0f,
+		"DirtyChunkRebuild default AABB must be zero-init");
+	PROJECTV_RTX_EXPECT(sizeof(VkAabbPositionsKHR) == 24u,
+		"VkAabbPositionsKHR must remain 24 bytes (6 floats) per Vulkan 1.4 spec");
+}
+
+void TestBuildChunkBlasAabbBoundsCheck()
+{
+	projectv::render::RayTracedShadows shadows{};
+	VkCommandBuffer cmd = VK_NULL_HANDLE;
+	VulkanContextState context{};
+	VkAabbPositionsKHR negativeOrigin{};
+	negativeOrigin.minX = -10.0f;
+	negativeOrigin.minY = -10.0f;
+	negativeOrigin.minZ = -10.0f;
+	negativeOrigin.maxX = -5.0f;
+	negativeOrigin.maxY = -5.0f;
+	negativeOrigin.maxZ = -5.0f;
+	PROJECTV_RTX_EXPECT(
+		!shadows.BuildChunkBlas(cmd, context, 0u, negativeOrigin),
+		"BuildChunkBlas must accept negative-world-origin AABB (voxels may extend below origin)");
+}
+
 }  // namespace
 
 int main()
@@ -124,7 +179,10 @@ int main()
 	TestConfigDefaultValues();
 	TestConfigZeroSizedAfterShutdown();
 	TestComputeBlasBuildScratchSize();
-	TestBuildChunkBlasGuardsForNullBuffers();
+	TestBuildChunkBlasGuardsForNullCommandBuffer();
+	TestBuildChunkBlasRejectsInvertedAabb();
+	TestBuildChunkBlasAabbBoundsCheck();
+	TestDirtyChunkRebuildStructLayout();
 	TestSetBlasDirtyQueueAndConsume();
 	TestUpdateTlasRespectsCapacity();
 

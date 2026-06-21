@@ -863,7 +863,17 @@ void RecordGraphicsCommands(
 					meshDrawPush,
 					frameRenderData.chunkDescriptorCount);
 			} else {
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline);
+				const bool rtxPathActive = render.rayTracedShadows != nullptr
+					&& render.rayTracedShadows->IsEnabled()
+					&& render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+				VkPipeline opaquePipeline = VK_NULL_HANDLE;
+				if (rtxPathActive) {
+					opaquePipeline = taaOn ? render.graphicsPipelineRtxTaaOn : render.graphicsPipelineRtx;
+				}
+				if (opaquePipeline == VK_NULL_HANDLE) {
+					opaquePipeline = taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline;
+				}
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
 				vkCmdPushConstants(
 					cmd,
 					render.graphicsPipelineLayout,
@@ -1457,7 +1467,27 @@ SDL_AppResult DrawFrame(
 				*state->world().voxelWorld,
 				&dirtyBlasChunks);
 			if (!dirtyBlasChunks.empty()) {
-				render->rayTracedShadows->SetBlasDirtyQueue(std::move(dirtyBlasChunks));
+				std::vector<projectv::render::DirtyChunkRebuild> dirtyRebuilds{};
+				dirtyRebuilds.reserve(dirtyBlasChunks.size());
+				const VoxelWorld &world = *state->world().voxelWorld;
+				for (const uint32_t chunkIndex : dirtyBlasChunks) {
+					if (chunkIndex >= world.chunks.size()) {
+						continue;
+					}
+					const VoxelChunk &chunk = world.chunks[chunkIndex];
+					projectv::render::DirtyChunkRebuild entry{};
+					entry.chunkIndex = chunkIndex;
+					entry.aabb.minX = static_cast<float>(chunk.min.x);
+					entry.aabb.minY = static_cast<float>(chunk.min.y);
+					entry.aabb.minZ = static_cast<float>(chunk.min.z);
+					entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
+					entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
+					entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
+					dirtyRebuilds.push_back(entry);
+				}
+				if (!dirtyRebuilds.empty()) {
+					render->rayTracedShadows->SetBlasDirtyQueue(std::move(dirtyRebuilds));
+				}
 			}
 		}
 		render->rayTracedShadows->BuildDirtyBlases(*context, context->commandPool);

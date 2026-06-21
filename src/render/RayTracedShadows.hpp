@@ -24,6 +24,9 @@ struct RayTracedShadowConfig {
 	VmaAllocation scratchAllocation = nullptr;
 	VkDeviceAddress scratchDeviceAddress = 0;
 	VkDeviceSize scratchCapacityBytes = 0;
+	VkBuffer aabbScratchBuffer = VK_NULL_HANDLE;
+	VmaAllocation aabbScratchAllocation = nullptr;
+	VkDeviceAddress aabbScratchDeviceAddress = 0;
 	uint32_t tlasInstanceCount = 0;
 	uint32_t tlasRebuildCount = 0;
 	uint32_t blasRebuildCount = 0;
@@ -34,6 +37,11 @@ struct RayTracedShadowConfig {
 	uint32_t minScratchAlignment = 1u;
 	bool enabled = false;
 	bool featureDetectionResult = false;
+};
+
+struct DirtyChunkRebuild {
+	uint32_t chunkIndex = 0;
+	VkAabbPositionsKHR aabb{};
 };
 
 class RayTracedShadows {
@@ -60,7 +68,7 @@ public:
 
 	[[nodiscard]] bool IsHostBuildSupported() const noexcept { return m_hostBuildSupported; }
 
-	void SetBlasDirtyQueue(std::vector<uint32_t> &&dirtyChunkIndices) noexcept;
+	void SetBlasDirtyQueue(std::vector<DirtyChunkRebuild> &&dirtyChunks) noexcept;
 
 	void BuildDirtyBlases(
 		const VulkanContextState &context,
@@ -73,14 +81,7 @@ public:
 		VkCommandBuffer commandBuffer,
 		const VulkanContextState &context,
 		uint32_t chunkIndex,
-		uint32_t primitiveCount,
-		VkBuffer vertexBuffer,
-		VkDeviceSize vertexBufferOffset,
-		VkBuffer indexBuffer,
-		VkDeviceSize indexBufferOffset,
-		VkIndexType indexType,
-		VkFormat vertexFormat,
-		VkDeviceSize vertexStride);
+		VkAabbPositionsKHR aabb);
 
 	void UpdateTlas(
 		const VulkanContextState &context,
@@ -108,7 +109,7 @@ private:
 	void ReleaseBuffers(const VulkanContextState &context) noexcept;
 
 	RayTracedShadowConfig m_config{};
-	std::vector<uint32_t> m_pendingDirtyChunks;
+	std::vector<DirtyChunkRebuild> m_pendingDirtyChunks;
 	std::mutex m_dirtyQueueMutex;
 	bool m_hostBuildSupported = false;
 	std::atomic<bool> m_initialized{false};
