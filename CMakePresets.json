@@ -261,6 +261,13 @@
          "ProjectVWorldGenTests",
          "ProjectVChunkStreamingTests",
          "ProjectVHzbSmartMipTests",
+         "ProjectVSkyAtmosphereTests",
+         "ProjectVVolumetricFogTests",
+         "ProjectVCloudscapeTests",
+         "ProjectVRayTracedShadowTests",
+         "ProjectVVoxelizePipelineTests",
+         "ProjectVPhysicsIncrementalJoltTests",
+         "ProjectVPhysicsSyncTests",
          "ProjectVFrustumCullBenchmark",
          "ProjectVShadowProjectionBenchmark"
        ]
@@ -304,16 +311,23 @@
         "ProjectVAppStatePimplTests",
         "ProjectVNanoVdbFlattenTests",
         "ProjectVNanoVdbGpuUploadTests",
-        "ProjectVPhysicsGreedyMergerTests",
-        "ProjectVWorldGenTests",
-        "ProjectVChunkStreamingTests",
-        "ProjectVHzbSmartMipTests",
-        "ProjectVFrustumCullBenchmark",
-        "ProjectVShadowProjectionBenchmark"
-      ]
-    },
-    {
-      "name": "linux-clang-debug-build",
+         "ProjectVPhysicsGreedyMergerTests",
+         "ProjectVWorldGenTests",
+         "ProjectVChunkStreamingTests",
+         "ProjectVHzbSmartMipTests",
+         "ProjectVSkyAtmosphereTests",
+         "ProjectVVolumetricFogTests",
+         "ProjectVCloudscapeTests",
+         "ProjectVRayTracedShadowTests",
+         "ProjectVVoxelizePipelineTests",
+         "ProjectVPhysicsIncrementalJoltTests",
+         "ProjectVPhysicsSyncTests",
+         "ProjectVFrustumCullBenchmark",
+         "ProjectVShadowProjectionBenchmark"
+       ]
+     },
+     {
+       "name": "linux-clang-debug-build",
       "displayName": "Build ProjectV + tests (Dev)",
       "configurePreset": "linux-clang-debug",
       "targets": [
@@ -343,16 +357,23 @@
         "ProjectVAppStatePimplTests",
         "ProjectVNanoVdbFlattenTests",
         "ProjectVNanoVdbGpuUploadTests",
-        "ProjectVPhysicsGreedyMergerTests",
-        "ProjectVWorldGenTests",
-        "ProjectVChunkStreamingTests",
-        "ProjectVHzbSmartMipTests",
-        "ProjectVFrustumCullBenchmark",
-        "ProjectVShadowProjectionBenchmark"
-      ]
-    },
-    {
-      "name": "windows-clang-release-build",
+         "ProjectVPhysicsGreedyMergerTests",
+         "ProjectVWorldGenTests",
+         "ProjectVChunkStreamingTests",
+         "ProjectVHzbSmartMipTests",
+         "ProjectVSkyAtmosphereTests",
+         "ProjectVVolumetricFogTests",
+         "ProjectVCloudscapeTests",
+         "ProjectVRayTracedShadowTests",
+         "ProjectVVoxelizePipelineTests",
+         "ProjectVPhysicsIncrementalJoltTests",
+         "ProjectVPhysicsSyncTests",
+         "ProjectVFrustumCullBenchmark",
+         "ProjectVShadowProjectionBenchmark"
+       ]
+     },
+     {
+       "name": "windows-clang-release-build",
       "displayName": "Build ProjectV + tests (Release)",
       "configurePreset": "windows-clang-release",
       "targets": [
@@ -380,16 +401,23 @@
         "ProjectVAppStatePimplTests",
         "ProjectVNanoVdbFlattenTests",
         "ProjectVNanoVdbGpuUploadTests",
-        "ProjectVPhysicsGreedyMergerTests",
-        "ProjectVWorldGenTests",
-        "ProjectVChunkStreamingTests",
-        "ProjectVHzbSmartMipTests",
-        "ProjectVPresentModeTests",
-        "ProjectVSparse64TreeTests"
-      ]
-    },
-    {
-      "name": "linux-clang-release-build",
+         "ProjectVPhysicsGreedyMergerTests",
+         "ProjectVWorldGenTests",
+         "ProjectVChunkStreamingTests",
+         "ProjectVHzbSmartMipTests",
+         "ProjectVSkyAtmosphereTests",
+         "ProjectVVolumetricFogTests",
+         "ProjectVCloudscapeTests",
+         "ProjectVRayTracedShadowTests",
+         "ProjectVVoxelizePipelineTests",
+         "ProjectVPhysicsIncrementalJoltTests",
+         "ProjectVPhysicsSyncTests",
+         "ProjectVPresentModeTests",
+         "ProjectVSparse64TreeTests"
+       ]
+     },
+     {
+       "name": "linux-clang-release-build",
       "displayName": "Build ProjectV + tests (Release)",
       "configurePreset": "linux-clang-release",
       "targets": [
@@ -417,15 +445,22 @@
         "ProjectVAppStatePimplTests",
         "ProjectVNanoVdbFlattenTests",
         "ProjectVNanoVdbGpuUploadTests",
-        "ProjectVPhysicsGreedyMergerTests",
-        "ProjectVWorldGenTests",
-        "ProjectVChunkStreamingTests",
-        "ProjectVHzbSmartMipTests",
-        "ProjectVPresentModeTests",
-        "ProjectVSparse64TreeTests"
-      ]
-    }
-  ],
+         "ProjectVPhysicsGreedyMergerTests",
+         "ProjectVWorldGenTests",
+         "ProjectVChunkStreamingTests",
+         "ProjectVHzbSmartMipTests",
+         "ProjectVSkyAtmosphereTests",
+         "ProjectVVolumetricFogTests",
+         "ProjectVCloudscapeTests",
+         "ProjectVRayTracedShadowTests",
+         "ProjectVVoxelizePipelineTests",
+         "ProjectVPhysicsIncrementalJoltTests",
+         "ProjectVPhysicsSyncTests",
+         "ProjectVPresentModeTests",
+         "ProjectVSparse64TreeTests"
+       ]
+     }
+   ],
   "testPresets": [
     {
       "name": "windows-clang-debug-tests",

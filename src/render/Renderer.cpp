@@ -13,6 +13,9 @@ import projectv.math;
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanResult.hpp"
+#include "render/SkyAtmosphere.hpp"
+#include "render/Cloudscape.hpp"
+#include "render/RayTracedShadows.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 #include "fmt/format.h"
@@ -685,6 +688,13 @@ void RecordGraphicsCommands(
 											   ? render.taaMotionVectorTarget->imageView
 											   : VK_NULL_HANDLE;
 
+		const VkImageView activeSceneColorView = mainColor0View != VK_NULL_HANDLE ? mainColor0View : mainColor1View;
+		const bool skyPassActive = projectv::render::IsSkyAtmosphereEnabled() &&
+								   render.skyAtmospherePipelineEnabled &&
+								   activeSceneColorView != VK_NULL_HANDLE;
+		const VkAttachmentLoadOp sceneColorLoadOp = skyPassActive ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+		const VkAttachmentLoadOp depthLoadOp = skyPassActive ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -693,7 +703,7 @@ void RecordGraphicsCommands(
 			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.loadOp = sceneColorLoadOp,
 			.storeOp = mainColor0View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
@@ -705,7 +715,7 @@ void RecordGraphicsCommands(
 			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.loadOp = sceneColorLoadOp,
 			.storeOp = mainColor1View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
@@ -742,7 +752,7 @@ void RecordGraphicsCommands(
 			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.loadOp = depthLoadOp,
 			.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearDepthValue,
 		};
@@ -765,6 +775,41 @@ void RecordGraphicsCommands(
 				*render.taaMotionVectorTarget,
 				render.taaMotionVectorCurrentLayout);
 			render.taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		}
+
+		if (skyPassActive) {
+			projectv::render::SkyAtmospherePushConstants skyPush{};
+			skyPush.zenithColorAndIntensity = {
+				render.currentSceneLighting.skyColorAndFogDensity[0],
+				render.currentSceneLighting.skyColorAndFogDensity[1],
+				render.currentSceneLighting.skyColorAndFogDensity[2],
+				1.0f,
+			};
+			skyPush.horizonColorAndSunIntensity = {
+				render.currentSceneLighting.horizonColorAndFogStart[0],
+				render.currentSceneLighting.horizonColorAndFogStart[1],
+				render.currentSceneLighting.horizonColorAndFogStart[2],
+				render.currentSceneLighting.sunColorAndIntensity[3],
+			};
+			skyPush.sunDirectionAndAngularSize = {
+				render.currentSceneLighting.sunDirectionAndWrap[0],
+				render.currentSceneLighting.sunDirectionAndWrap[1],
+				render.currentSceneLighting.sunDirectionAndWrap[2],
+				0.045f,
+			};
+			const float aspectRatio = static_cast<float>(swapchain.extent.width) /
+									  static_cast<float>(std::max(swapchain.extent.height, 1u));
+			const float tanHalfFovY = std::tan(frameRenderData.graphicsPushConstants.viewProjection.data()[5] * 0.5f);
+			skyPush.viewParams = {0.1f, aspectRatio, tanHalfFovY, 0.0f};
+
+			projectv::render::RecordSkyAtmospherePass(
+				cmd,
+				render,
+				skyPush,
+				activeSceneColorView,
+				render.depthImageView,
+				swapchain.extent,
+				imageIndex);
 		}
 
 		vkCmdBeginRendering(cmd, &renderingInfo);
@@ -935,6 +980,57 @@ void RecordGraphicsCommands(
 		if (!taaOn) {
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
 			RecordDebugHudCommands(render, frameRenderData, cmd);
+		}
+
+		const bool cloudscapePassActive = projectv::render::IsCloudscapeEnabled() &&
+										 render.cloudscapePipelineEnabled;
+		if (cloudscapePassActive && activeSceneColorView != VK_NULL_HANDLE) {
+			projectv::render::CloudscapePushConstants cloudPush{};
+			cloudPush.cloudColorAndCoverage = {
+				0.92f,
+				0.94f,
+				0.98f,
+				0.65f,
+			};
+			cloudPush.sunDirectionAndIntensity = {
+				render.currentSceneLighting.sunDirectionAndWrap[0],
+				render.currentSceneLighting.sunDirectionAndWrap[1],
+				render.currentSceneLighting.sunDirectionAndWrap[2],
+				render.currentSceneLighting.sunColorAndIntensity[3],
+			};
+			cloudPush.cloudLayerParams = {
+				0.0f,
+				0.0f,
+				0.5f,
+				0.0f,
+			};
+			const float aspectRatio = static_cast<float>(swapchain.extent.width) /
+									  static_cast<float>(std::max(swapchain.extent.height, 1u));
+			const float tanHalfFovY = std::tan(frameRenderData.graphicsPushConstants.viewProjection.data()[5] * 0.5f);
+			cloudPush.viewParams = {
+				render.currentSceneLighting.sunContactShadowParams[1],
+				aspectRatio,
+				tanHalfFovY,
+				0.0f,
+			};
+
+			projectv::render::RecordCloudscapeRaymarchPass(
+				cmd,
+				render,
+				cloudPush,
+				activeSceneColorView,
+				render.depthImageView,
+				swapchain.extent,
+				imageIndex);
+		}
+
+		if (render.rayTracedShadows != nullptr) {
+			PV_PROFILE_ZONE_N("RecordRayTracedShadowPass");
+			projectv::render::RecordRayTracedShadowPass(
+				cmd,
+				render.rayTracedShadows,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_SHADER_READ_BIT);
 		}
 
 		vkCmdEndRendering(cmd);

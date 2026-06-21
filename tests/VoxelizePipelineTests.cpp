@@ -1,5 +1,7 @@
 #include "render/vulkan/VulkanVoxelizePipeline.hpp"
+#include "voxel/VoxelMaterials.hpp"
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
@@ -113,6 +115,51 @@ void TestBuildVctClipmapMipChainRejectsEmptyClipmap(TestContext &context)
 	}
 }
 
+void TestVctLightingContractSize(TestContext &context)
+{
+	if (sizeof(VoxelSceneLighting) != 656u) {
+		std::fprintf(stderr, "sizeof(VoxelSceneLighting)=%zu expected=656\n", sizeof(VoxelSceneLighting));
+		context.Fail(__LINE__, "VoxelSceneLighting size must remain 656 bytes (lighting contract with voxel.frag)");
+	}
+	if (offsetof(VoxelSceneLighting, vctParams) != 624u) {
+		std::fprintf(stderr, "vctParams offset=%zu expected=624\n", offsetof(VoxelSceneLighting, vctParams));
+		context.Fail(__LINE__, "vctParams offset must remain 624 bytes (shader SceneLightingBuffer contract)");
+	}
+	if (offsetof(VoxelSceneLighting, vctSpecularParams) != 640u) {
+		std::fprintf(stderr, "vctSpecularParams offset=%zu expected=640\n", offsetof(VoxelSceneLighting, vctSpecularParams));
+		context.Fail(__LINE__, "vctSpecularParams offset must remain 640 bytes (shader SceneLightingBuffer contract)");
+	}
+}
+
+void TestVctDebugViewStringMapping(TestContext &context)
+{
+	if (std::string_view(LightingDebugViewToString(LightingDebugView::VctDiffuse)) != "VCT_DIFF") {
+		context.Fail(__LINE__, "VctDiffuse string must be VCT_DIFF");
+	}
+	if (std::string_view(LightingDebugViewToString(LightingDebugView::VctSpecular)) != "VCT_SPEC") {
+		context.Fail(__LINE__, "VctSpecular string must be VCT_SPEC");
+	}
+}
+
+void TestVctDebugViewCycle(TestContext &context)
+{
+	if (GetNextLightingDebugView(LightingDebugView::Taa) != LightingDebugView::VctDiffuse) {
+		context.Fail(__LINE__, "Taa -> VctDiffuse cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::VctDiffuse) != LightingDebugView::VctSpecular) {
+		context.Fail(__LINE__, "VctDiffuse -> VctSpecular cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::VctSpecular) != LightingDebugView::VolumetricFog) {
+		context.Fail(__LINE__, "VctSpecular -> VolumetricFog cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::VolumetricFog) != LightingDebugView::VolumetricTransmittance) {
+		context.Fail(__LINE__, "VolumetricFog -> VolumetricTransmittance cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) != LightingDebugView::Final) {
+		context.Fail(__LINE__, "VolumetricTransmittance -> Final cycle break");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -129,6 +176,9 @@ int main()
 	TestRefreshVoxelizeResourceBindingsRejectsNullContext(context);
 	TestBuildVctClipmapMipChainRejectsNullCommandBuffer(context);
 	TestBuildVctClipmapMipChainRejectsEmptyClipmap(context);
+	TestVctLightingContractSize(context);
+	TestVctDebugViewStringMapping(context);
+	TestVctDebugViewCycle(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVVoxelizePipelineTests: %d failure(s)\n", context.failures);

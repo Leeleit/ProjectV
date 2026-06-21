@@ -31,6 +31,10 @@ enum class LightingDebugView : uint8_t {
 	Occlusion,
 	Fog,
 	Taa,
+	VctDiffuse,
+	VctSpecular,
+	VolumetricFog,
+	VolumetricTransmittance,
 };
 
 enum class ShadowTuningTarget : uint8_t {

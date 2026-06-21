@@ -322,6 +322,30 @@ Stage 4.2 LOD chunk 2 B_SurfacePreserve downsampling kernel + per-chunk `LodDown
 
 Stage 3.3 Greedy Physics Meshing integration per `2026-06-21-greedy-physics-meshing-cpu` verdict=yes (D_3D greedy merge algorithm, 35× shape reduction, 100% volume preservation). `MergedVoxelBox` struct holds min/max-exclusive extents in voxel coordinates. `GreedyMergeSolidVoxelsInBounds` algorithm: for each (x,y,z) in fixed `z,y,x` ascending order, find max X extent (X+), then max Y extent over X-range (Y+), then max Z extent over XY-range (Z+), mark consumed via byte mask, emit one `MergedVoxelBox` per maximal extents. `IsSolidAt` inline helper checks `IsPhysicsSolidMaterial` (Glass + FloorWhite + FloorGray; Air + Fluid return false). `IsGreedyPhysicsMeshEnabled` env gate (`PROJECTV_GREEDY_PHYSICS_MESH=ON` default; `=OFF` falls back to naive per-voxel loop in PhysicsWorld.cpp). Both `BuildStaticVoxelCollisionBody` and `BuildChunkStaticCollisionBody` (per-chunk incremental Jolt) integrate greedy merge. Per-chunk rebuild path uses greedy merge for new compound shape. Tests cover empty world, single voxel unit box, full chunk single box, volume preservation (sum of merged box volumes equals solid voxel count), mixed half-chunk reduction, fluid+air ignored, oversized bounds clamp to world extents.
 
+## `src/physics/PhysicsWorld.cpp` (17x incremental SyncPhysicsWorld)
+
+### L3205-L3241 (design-rationale)
+
+`SyncPhysicsWorld` split into two paths after Stage 3.2 follow-up. World-pointer change (first load or scene switch) does full chunk rebuild via per-chunk `BuildChunkStaticCollisionBody` for every chunk — populates `chunkStaticBodies` + new `chunkMergedBoxes` map. Edit-only path is incremental: `ProcessChunkRebuildQueue` applies dirty chunk rebuilds first, then `RebuildStaticWorldBodyFromChunkShapes` re-emits the monolithic `staticWorldBodyId` as a single `JPH::StaticCompoundShapeSettings` covering all per-chunk merged boxes. Net effect: per-edit physics sync cost drops from O(N_world_cells) full scan (≈250 ms on FlatBench 166 400 cells) to O(N_dirty_chunks + N_total_chunks) compound rebuild (≈30 ms on 400 chunks). Walk-character contact check (`IsWalkJumpLockedSourceSupportSideWallContact`) uses new `IsPhysicsStaticWorldBodyId` helper that recognizes both monolithic and per-chunk body IDs, so the contact normal vs `staticWorldBodyId` API stays compatible.
+
+### L3040-L3110 (design-rationale)
+
+New helpers `DestroyAllChunkStaticBodies(physics)` and `RebuildStaticWorldBodyFromChunkShapes(physics, world)`. The first clears `chunkStaticBodies` + `chunkMergedBoxes` and removes Jolt bodies. The second iterates `chunkMergedBoxes` (one entry per dirty or pre-built chunk) and emits a single `JPH::StaticCompoundShapeSettings` for the whole world, then `compoundSettings.Create()` + `CreateAndAddBody()` + replaces `staticWorldBodyId`. `PhysicsState` now also stores `std::unordered_map<uint32_t, std::vector<projectv::physics::MergedVoxelBox>> chunkMergedBoxes` — populated by `BuildChunkStaticCollisionBody` after the GreedyMerge pass so `RebuildStaticWorldBodyFromChunkShapes` doesn't have to re-merge. Erased in `DestroyChunkStaticBody` and in the empty-chunk early-out of `BuildChunkStaticCollisionBody`.
+
+### L427-L437 (design-rationale)
+
+`IsPhysicsStaticWorldBodyId(physics, bodyId)` — true if `bodyId` matches the monolithic `staticWorldBodyId` OR any body in `chunkStaticBodies.values()`. Replaces the original `bodyId == physics.staticWorldBodyId` check at line 432 (walk jump support side-wall contact) so the contact check keeps working when the static world is represented as multiple per-chunk bodies. Linear scan over `chunkStaticBodies` (~400 entries on FlatBench, sub-microsecond) is acceptable for walk character tick rate (60 Hz × 1 lookup per contact = 24 K lookups/sec).
+
+## `src/voxel/VoxelWorld.cpp` (17x Fluid editVersion suppress)
+
+### L1063-L1148 (design-rationale)
+
+`SetVoxelMaterial` now has a `isFluidAirTransition` early-out: when both `previousMaterial` and `material` are within the {Air, Fluid} set (i.e. one is Air and the other is Fluid), skip `++world.editVersion` and skip the `physics != nullptr` chunk-rebuild queue block. Rationale: Fluid is not a `IsPhysicsSolidMaterial` (PhysicsWorld.cpp:548), so changing Fluid↔Air cannot change static-collision geometry; bumping `editVersion` would trigger a full `SyncPhysicsWorld` rebuild on every fluid tick (20 Hz × 1-8 movements per tick = up to 160 redundant rebuilds per second on FlatBench before the fix). The storage write + `AccumulateMaterialCount` + `MarkChunksTouchedByVoxelEditDirty` (mesh rebuild) still happen — water moving still needs new meshes, just not new physics bodies. `chunk.isStatic = false; chunk.ticksSinceLastEdit = 0;` is preserved for first placement semantics (Air→Fluid on a previously-empty chunk).
+
+### L1085-L1091 (design-rationale)
+
+AABB-bounded Fluid CA support. `VoxelWorld` tracks `fluidCAAabbMin` (initialized to `INT32_MAX` corner — invalid) and `fluidCAAabbMaxExclusive` (initialized to `INT32_MIN` corner). On every `SetVoxelMaterial` that touches Fluid (either old or new material is Fluid), the AABB is expanded to include the cell. The AABB is lazy-shrinking: it only grows; it does not shrink when fluid is removed. When `world.stats.fluidVoxelCount == 0` the `UpdateFluidCA` early-out kicks in and the AABB doesn't matter. AABB reset to invalid happens implicitly on world reload (new `VoxelWorld` struct is zero-initialized via default member initializers). `UpdateFluidCA` uses this AABB to scope all 3 nested loops (read pass, sim pass, commit pass) — read pass uses `[min-1, max+1]` for 1-cell margin so spread/fall neighbor reads land on real data; sim and commit use `[min, max]`. For 1 water block on FlatBench the AABB is 3×3×3 = 27 cells, vs the old full-world iteration of 80×26×80 = 166 400 cells. This is the actual root-cause fix for the 4 FPS-on-FlatBench regression (the `SyncPhysicsWorld` per-edit rebuild was only the secondary symptom).
+
 ## `src/voxel/ChunkStreamer.{hpp,cpp}`
 
 ### L1-L80 (design-rationale)
@@ -801,3 +825,150 @@ view rotation), per WickedEngine VXGI per `turanszkij` cone table.
 reference scene the diff + spec contribution shows cavity darkening
 without HZB-style depth reads (cone tracing does not need depth buffer
 or shadow maps — pure 3D-texture sample).
+
+## `src/render/SkyAtmosphere.hpp` (8x V B)
+
+### L1-L46 (design-rationale)
+
+Stage 5.x Sky Hillaire 2020 EGSR Sky atmosphere pass. Per closed
+`2026-06-21-precomputed-atmospheric-sky` experiment (C_Hillaire2020
+universal default). Env-gate `IsSkyAtmosphereEnabled()` (`PROJECTV_SKY=ON`,
+default OFF per `agent/knowledge.md §30.4` Step 1 additive optional path
+precedent). `SkyAtmospherePushConstants` (64 bytes, 16-byte align for
+push-constant range) packs: zenithColorAndIntensity (vec4) +
+horizonColorAndSunIntensity (vec4) + sunDirectionAndAngularSize (vec4) +
+viewParams (vec4). `kSkyAtmosphereResolution = 256u` reserved for future
+LUT precomputation. Public API: `CreateSkyAtmospherePipelines`,
+`DestroySkyAtmospherePipelines`, `RecordSkyAtmospherePass`. No external
+resource bindings in MVP (analytical in-fragment-shader color); future
+Sky-View LUT (binding 0) + Multi-Scattering LUT (binding 1) follow per
+Hillaire 2020 production reference.
+
+## `src/render/SkyAtmosphere.cpp` (8x V B)
+
+### L1-L180 (design-rationale)
+
+Pipeline creation: `vkCreateGraphicsPipelines` with dynamic-rendering
+`VkPipelineRenderingCreateInfo` (color format R16G16B16A16_SFLOAT + depth
+D32_SFLOAT). No vertex buffers — full-screen triangle via `gl_VertexIndex`
+derivation. `depthTestEnable=VK_TRUE` + `depthCompareOp=VK_COMPARE_OP_ALWAYS`
++ `depthWriteEnable=VK_TRUE` so sky writes depth=0.9999 (and main pass
+`loadOp=LOAD` will see it). `colorWriteMask` excludes alpha (sky is opaque
+over scene). `DestroySkyAtmospherePipelines` mirrors creation in reverse
+order, safe to call when `skyAtmospherePipelineEnabled=false` (no-op).
+
+### L182-L260 (design-rationale)
+
+`RecordSkyAtmospherePass` builds a one-off `VkRenderingInfo` with single
+color attachment + depth attachment, `loadOp=DONT_CARE` (sky overwrites
+both), calls `vkCmdDraw(commandBuffer, 3, 1, 0, 0)` (3 vertices = 1
+triangle). `profiling::PlotValue("Sky Atmosphere Pass", 1.0)` for Tracy
+trace. Caller (`Renderer.cpp::DrawFrame`) is responsible for `loadOp=LOAD`
+on the main rendering pass when sky pass is active so the sky color
+isn't clobbered by `VK_ATTACHMENT_LOAD_OP_CLEAR` of the main pass.
+
+## `src/shaders/sky_atmosphere.frag` (8x V B Phases 2-3)
+
+### L1-L9 (design-rationale)
+
+Per Hillaire 2020 EGSR (publication `cf14050` + `sebh/UnrealEngineSkyAtmosphere`
+reference impl). MVP analytical color: zenith → horizon gradient + sun
+disc approximation. Phase 3 upgrade: full single-scattering Rayleigh
+(per-channel wavelength β_R) + Mie (β_M) + Henyey-Greenstein phase function
++ 16-step exponential depth distribution. No LUT precomputation in
+fragment shader (Phase 3 deferred to follow-up session — add Sky-View
+LUT 256×128 RGBA16F + Multi-Scattering LUT 32×32 RGBA16F per Hillaire
+2020 production reference for ~10× cost reduction at 4K).
+
+### L20-L40 (EVIL)
+
+`kRayleighBeta = vec3(5.8e-6, 13.5e-6, 33.1e-6)`, `kMieBeta = 0.005`,
+`kMieG = 0.8` hard-coded per Hillaire 2020 reference (lambda^-4 scaling
+R=680nm, G=550nm, B=440nm wavelengths; Mie g=0.8 broad forward scattering
+per Wronski 2014 production tuning). Production tunable via push constants
+or per-scene VoxelScenePreset. Cross-vendor same formula; RTX 3060 Ti +
+AMD RDNA + Intel Arc all match the analytical reference.
+
+## `src/render/VolumetricFog.{hpp,cpp}` (8x V B Phases 4-5)
+
+### L1-L35 (design-rationale)
+
+Wronski 2014 SIGGRAPH froxel pattern + Frostbite 2015 unified volumetric
+reference. Env-gate `IsVolumetricFogEnabled()` (`PROJECTV_FOG=ON`,
+default OFF). Wronski 2014 720p reference: 160×90×64 froxel grid. Public
+API: `CreateVolumetricFogResources`, `DestroyVolumetricFogResources`,
+`RecordVolumetricFogAccumulationPass`. `kVolumetricFogFroxelWidth/Height/Depth`
+constants (160/90/64) match Wronski 2014 reference for 720p; for 1080p+
+scale to 240×135×128 per Frostbite 2015 production tuning. 12-slab ray-march
+matches Frostbite 2015 slab count (8-16 slabs production range).
+
+### L40-L100 (design-rationale)
+
+Compute pipeline: 3-binding descriptor set (froxel storage image 0,
+scene color sampled image 1, depth sampled image 2). Linear sampler with
+CLAMP_TO_EDGE address mode on all 3 axes. Descriptor pool: 1 set per
+`MAX_FRAMES_IN_FLIGHT`. 8×8×4 workgroup matches Wronski 2014 reference;
+dispatch = (W/8, H/8, D/4) = (20, 11, 16) workgroups. Bound check via
+`imageSize(fogFroxel)` ignores last 2 height rows (90 % 8 = 2 unused).
+
+## `src/shaders/volumetric_fog.comp` (8x V B Phases 4-5)
+
+### L1-L20 (design-rationale)
+
+Wronski 2014 per-slab ray-march accumulator. Phase 4 MVP: density
+multiplied by `exp(-worldDistance * 0.012)` exponential falloff. Phase 5
+upgrade: 12-slab ray-march with Schlick phase function (g=0.8 broad
+forward scattering) and Beer-Lambert transmittance accumulation
+(`transmittance *= stepTransmittance` per slab). Early-out at
+`transmittance < 0.02` to skip the dark tail of the ray (per
+Frostbite 2015 production pattern). Output: accumulated RGB (linear,
+no tonemap) + alpha (1 - transmittance) for consume in voxel.frag.
+
+### L25-L30 (EVIL)
+
+`kDepthDistributionGamma=0.5`, `kDepthDistributionBias=0.005` per Wronski
+2014 reference (concentrates froxel resolution near camera where aliasing
+artifacts are most visible). `kSchlickG=0.8` broad forward scattering per
+Wronski 2014 production tuning. Tunable via push constants if needed.
+
+## `src/render/Cloudscape.{hpp,cpp}` (8x V B Phases 6-7)
+
+### L1-L35 (design-rationale)
+
+Schneider "Nubis" 2017 single-layer ray-march (B_SingleLayerRayMarch
+universal default per closed `2026-06-21-cloudscape-rendering`).
+Env-gate `IsCloudscapeEnabled()` (`PROJECTV_CLOUDS=ON`, default OFF).
+128×128 R8 noise texture (CPU-generated FBM at startup) + 24-step
+ray-march per pixel. Public API: `CreateCloudscapeResources`,
+`DestroyCloudscapeResources`, `RecordCloudscapeRaymarchPass`.
+`kCloudscapeNoiseTextureSize = 128u` per Schneider 2017 reference.
+`kCloudscapeRaymarchStepCount = 24u` (Schneider 2017 used 64-128 for
+production; 24 is sufficient for MVP visual fidelity at 1080p).
+
+### L40-L100 (design-rationale)
+
+CPU-side noise generation: `ValueNoise2D` + 4-octave FBM low-freq + 3-octave
+high-freq * 0.35 multiplier + 0.18 bias, clamped [0,1] → 0..255 → uint8_t
+texture. 3-binding descriptor set (cloud noise + scene color + depth).
+Linear sampler with REPEAT address mode (cloud noise is tileable).
+Pipeline: alpha-blend `VK_BLEND_FACTOR_SRC_ALPHA` over scene color,
+`depthTestEnable=VK_TRUE` + `depthCompareOp=LESS_OR_EQUAL` + `depthWriteEnable=VK_FALSE`
+(clouds only overdraw sky, don't write depth).
+
+## `src/shaders/cloudscape.frag` (8x V B Phases 6-7)
+
+### L1-L20 (design-rationale)
+
+Schneider "Nubis" 2017 single-layer ray-march. Reconstructs world ray
+from NDC + push-constant camera position. T-intersection with horizontal
+slab at y=kCloudBaseHeight, ray-march 24 steps through slab, sample
+2D FBM noise per step, accumulate Beer-Lambert transmittance, add sun
+contribution (Schlick g=0.5 phase). Output: linear RGB (no tonemap) +
+alpha (1 - transmittance) for alpha-blend over scene color.
+
+### L25-L35 (EVIL)
+
+`kCloudBaseHeight=80.0`, `kCloudThickness=24.0` hard-coded for VoxelLab
+reference scene. `kSchlickG=0.5` per Schneider 2017 cloud-tuning (broader
+than fog because clouds have larger droplets). Production tunable via
+push constants or per-scene VoxelScenePreset.

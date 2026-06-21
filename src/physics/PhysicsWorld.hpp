@@ -54,6 +54,10 @@ void QueueChunkRebuildRequest(PhysicsState *physics, uint32_t chunkIndex);
 uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world);
 uint32_t GetPendingChunkRebuildCount(const PhysicsState *physics);
 uint32_t GetChunkBodyCount(const PhysicsState *physics);
+bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWorld &world);
+void DestroyAllChunkStaticBodies(PhysicsState &physics);
+bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &world, uint32_t chunkIndex);
+uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics);
 PhysicsRaycastHit RaycastPhysicsWorld(
 	const PhysicsState *physics,
 	const std::array<float, 3> &origin,
@@ -92,4 +96,5 @@ void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, bool enabled);
 bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics);
 PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics);
 uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics);
+
 

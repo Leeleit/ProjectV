@@ -17,6 +17,11 @@ import projectv.string_id;
 #include "render/HizCulling.hpp"
 #include "voxel/NanoVdb.hpp"
 #include "voxel/VoxelMaterials.hpp"
+#include "render/vulkan/HardwareRayTracingProbe.hpp"
+
+namespace projectv::render {
+class RayTracedShadows;
+}  // namespace projectv::render
 
 namespace projectv::taa {
 struct OffscreenColorTarget;
@@ -680,6 +685,7 @@ struct RenderState {
 	std::vector<size_t> completedChunkRebuildIndices;
 	projectv::voxel::nanovdb::NanoVdbFlattenResult sceneNanoVdbFlatten;
 	uint64_t sceneNanoVdbVersion = 0;
+	uint64_t lastNanoVdbSyncedEditVersion = 0;
 	uint32_t sceneFaceCapacity = 0;
 	uint32_t sceneTransparentFaceBase = 0;
 	uint32_t sceneOpaqueFaceCount = 0;
@@ -718,6 +724,7 @@ struct RenderState {
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
 
 	ChunkVisibilityCache chunkVisibilityCache{};
+	projectv::render::RayTracedShadows *rayTracedShadows = nullptr;
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
 	VmaAllocation depthAllocation = nullptr;
@@ -762,6 +769,49 @@ struct RenderState {
 	VkImageLayout taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaMotionVectorHistoryCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkPipeline skyAtmospherePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout skyAtmospherePipelineLayout = VK_NULL_HANDLE;
+	VkShaderModule skyAtmosphereVertexShaderModule = VK_NULL_HANDLE;
+	VkShaderModule skyAtmosphereFragmentShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout skyAtmosphereDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool skyAtmosphereDescriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> skyAtmosphereDescriptorSets{};
+	bool skyAtmospherePipelineEnabled = false;
+	VkImage skyViewLutImage = VK_NULL_HANDLE;
+	VkImageView skyViewLutView = VK_NULL_HANDLE;
+	VmaAllocation skyViewLutAllocation = nullptr;
+	VkImage multiScatteringLutImage = VK_NULL_HANDLE;
+	VkImageView multiScatteringLutView = VK_NULL_HANDLE;
+	VmaAllocation multiScatteringLutAllocation = nullptr;
+	VkSampler skyLutLinearSampler = VK_NULL_HANDLE;
+	bool skyLutPrecomputeEnabled = false;
+	VkPipeline volumetricFogPipeline = VK_NULL_HANDLE;
+	VkPipelineLayout volumetricFogPipelineLayout = VK_NULL_HANDLE;
+	VkShaderModule volumetricFogShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout volumetricFogDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool volumetricFogDescriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> volumetricFogDescriptorSets{};
+	VkImage volumetricFogFroxelImage = VK_NULL_HANDLE;
+	VkImageView volumetricFogFroxelView = VK_NULL_HANDLE;
+	VmaAllocation volumetricFogFroxelAllocation = nullptr;
+	VkSampler volumetricFogLinearSampler = VK_NULL_HANDLE;
+	bool volumetricFogPipelineEnabled = false;
+	VkImage volumetricFogFallbackImage = VK_NULL_HANDLE;
+	VkImageView volumetricFogFallbackView = VK_NULL_HANDLE;
+	VmaAllocation volumetricFogFallbackAllocation = nullptr;
+	VkDeviceMemory volumetricFogFallbackMemory = VK_NULL_HANDLE;
+	VkPipeline cloudscapePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout cloudscapePipelineLayout = VK_NULL_HANDLE;
+	VkShaderModule cloudscapeVertexShaderModule = VK_NULL_HANDLE;
+	VkShaderModule cloudscapeFragmentShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout cloudscapeDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool cloudscapeDescriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> cloudscapeDescriptorSets{};
+	VkImage cloudscapeNoiseImage = VK_NULL_HANDLE;
+	VkImageView cloudscapeNoiseView = VK_NULL_HANDLE;
+	VmaAllocation cloudscapeNoiseAllocation = nullptr;
+	VkSampler cloudscapeLinearSampler = VK_NULL_HANDLE;
+	bool cloudscapePipelineEnabled = false;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
@@ -901,7 +951,7 @@ struct SimulationState {
 	float timeScale = 1.0f;
 	bool frameStepRequested = false;
 	bool effectivePaused = false;
-	float fluidTickRateHz = 20.0f;
+	float fluidTickRateHz = 5.0f;
 	float fluidAccumulatorSeconds = 0.0f;
 	uint32_t fluidGpuTicksPending = 0u;
 };
@@ -960,6 +1010,7 @@ struct VulkanContextState {
 	uint64_t hzbBuildLastTimelineValue = 0;
 
 	bool supportsDynamicRenderingUnusedAttachments = false;
+	projectv::render::HardwareRayTracingSupport rayTracing{};
 };
 
 inline constexpr uint64_t kVulkanFenceWaitTimeoutNs = 10'000'000;

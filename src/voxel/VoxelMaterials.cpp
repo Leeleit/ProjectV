@@ -444,6 +444,14 @@ const char *LightingDebugViewToString(const LightingDebugView debugView)
 		return "FOG";
 	case LightingDebugView::Taa:
 		return "TAA";
+	case LightingDebugView::VctDiffuse:
+		return "VCT_DIFF";
+	case LightingDebugView::VctSpecular:
+		return "VCT_SPEC";
+	case LightingDebugView::VolumetricFog:
+		return "VOL_FOG";
+	case LightingDebugView::VolumetricTransmittance:
+		return "VOL_TRN";
 	case LightingDebugView::Final:
 	default:
 		return "FINAL";
@@ -504,6 +512,14 @@ LightingDebugView GetNextLightingDebugView(const LightingDebugView debugView)
 	case LightingDebugView::Fog:
 		return LightingDebugView::Taa;
 	case LightingDebugView::Taa:
+		return LightingDebugView::VctDiffuse;
+	case LightingDebugView::VctDiffuse:
+		return LightingDebugView::VctSpecular;
+	case LightingDebugView::VctSpecular:
+		return LightingDebugView::VolumetricFog;
+	case LightingDebugView::VolumetricFog:
+		return LightingDebugView::VolumetricTransmittance;
+	case LightingDebugView::VolumetricTransmittance:
 	default:
 		return LightingDebugView::Final;
 	}

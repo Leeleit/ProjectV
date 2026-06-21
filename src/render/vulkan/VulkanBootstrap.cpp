@@ -2,6 +2,7 @@
 
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "core/RuntimeDiagnostics.hpp"
+#include "render/vulkan/HardwareRayTracingProbe.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include "SDL3/SDL_vulkan.h"
@@ -75,6 +76,9 @@ constexpr char kOptionalDynamicRenderingUnusedAttachmentsExtension[] =
 	"VK_EXT_dynamic_rendering_unused_attachments";
 
 constexpr char kMeshShaderExtension[] = "VK_EXT_mesh_shader";
+constexpr char kAccelerationStructureExtension[] = "VK_KHR_acceleration_structure";
+constexpr char kRayQueryExtension[] = "VK_KHR_ray_query";
+constexpr char kDeferredHostOperationsExtension[] = "VK_KHR_deferred_host_operations";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 	const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -340,7 +344,9 @@ bool CheckRequiredFeatures(
 	VkPhysicalDeviceVulkan13Features *outFeatures13,
 	VkPhysicalDeviceMeshShaderFeaturesEXT *outMeshShaderFeatures,
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR *outSwapchainMaintenance1Features,
-	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT *outDynamicRenderingUnusedAttachmentsFeatures)
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT *outDynamicRenderingUnusedAttachmentsFeatures,
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR *outAccelerationStructureFeatures,
+	VkPhysicalDeviceRayQueryFeaturesKHR *outRayQueryFeatures)
 {
 	VkPhysicalDeviceVulkan12Features features12{};
 	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -366,6 +372,19 @@ bool CheckRequiredFeatures(
 	meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
 	if (outMeshShaderFeatures != nullptr) {
 		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&meshShaderFeatures);
+	}
+
+	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+	if (outRayQueryFeatures != nullptr) {
+		rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&rayQueryFeatures);
+	}
+
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+	if (outAccelerationStructureFeatures != nullptr) {
+		accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+		accelerationStructureFeatures.pNext = reinterpret_cast<VkBaseOutStructure *>(&rayQueryFeatures);
+		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&accelerationStructureFeatures);
 	}
 	features13.pNext = &features12;
 	VkPhysicalDeviceFeatures2 features2{};
@@ -434,6 +453,12 @@ bool CheckRequiredFeatures(
 	if (outMeshShaderFeatures != nullptr) {
 		*outMeshShaderFeatures = meshShaderFeatures;
 	}
+	if (outAccelerationStructureFeatures != nullptr) {
+		*outAccelerationStructureFeatures = accelerationStructureFeatures;
+	}
+	if (outRayQueryFeatures != nullptr) {
+		*outRayQueryFeatures = rayQueryFeatures;
+	}
 	return true;
 }
 
@@ -447,11 +472,16 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchainMaintenance1Features{};
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+	projectv::render::HardwareRayTracingSupport rayTracingSupport{};
 	bool supportsTracyCalibratedTimestamps = false;
 	bool supportsSwapchainMaintenance1 = false;
 	bool supportsDynamicRenderingUnusedAttachments = false;
 	bool supportsDedicatedComputeQueue = false;
 	bool supportsMeshShader = false;
+	bool supportsAccelerationStructure = false;
+	bool supportsRayQuery = false;
 };
 
 VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
@@ -470,6 +500,12 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	enabled.drawIndirectCount = selected.features12.drawIndirectCount ? VK_TRUE : VK_FALSE;
 	enabled.hostQueryReset = selected.features12.hostQueryReset ? VK_TRUE : VK_FALSE;
 	enabled.timelineSemaphore = selected.features12.timelineSemaphore ? VK_TRUE : VK_FALSE;
+	const bool rtxRequested = std::getenv("PROJECTV_HW_RAY_TRACING") != nullptr;
+	if (rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery
+		&& selected.rayTracingSupport.bufferDeviceAddress) {
+		enabled.bufferDeviceAddress = VK_TRUE;
+		enabled.bufferDeviceAddressCaptureReplay = selected.features12.bufferDeviceAddressCaptureReplay ? VK_TRUE : VK_FALSE;
+	}
 	return enabled;
 }
 
@@ -524,6 +560,16 @@ bool TryPickPhysicalDevice(
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT supportedDynamicRenderingUnusedAttachmentsFeatures{};
 	const bool deviceHasMeshShader = HasDeviceExtension(physicalDevice, kMeshShaderExtension);
 	VkPhysicalDeviceMeshShaderFeaturesEXT supportedMeshShaderFeatures{};
+	projectv::render::HardwareRayTracingSupport rtxSupport{};
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR supportedAccelerationStructureFeatures{};
+	VkPhysicalDeviceRayQueryFeaturesKHR supportedRayQueryFeatures{};
+	const bool deviceHasAccelerationStructure =
+		HasDeviceExtension(physicalDevice, kAccelerationStructureExtension);
+	const bool deviceHasRayQuery = HasDeviceExtension(physicalDevice, kRayQueryExtension);
+	const bool rtxProbeSucceeded =
+		deviceHasAccelerationStructure && deviceHasRayQuery
+			? projectv::render::ProbeHardwareRayTracingSupport(physicalDevice, &rtxSupport)
+			: false;
 	if (!CheckRequiredFeatures(
 			physicalDevice,
 			&supportedFeatures,
@@ -531,7 +577,9 @@ bool TryPickPhysicalDevice(
 			&supportedFeatures13,
 			deviceHasMeshShader ? &supportedMeshShaderFeatures : nullptr,
 			deviceHasSwapchainMaintenance1 ? &supportedSwapchainMaintenance1Features : nullptr,
-			deviceHasDynamicRenderingUnusedAttachments ? &supportedDynamicRenderingUnusedAttachmentsFeatures : nullptr)) {
+			deviceHasDynamicRenderingUnusedAttachments ? &supportedDynamicRenderingUnusedAttachmentsFeatures : nullptr,
+			rtxProbeSucceeded ? &supportedAccelerationStructureFeatures : nullptr,
+			rtxProbeSucceeded ? &supportedRayQueryFeatures : nullptr)) {
 		return false;
 	}
 
@@ -546,6 +594,11 @@ bool TryPickPhysicalDevice(
 	outCandidate->supportsMeshShader = deviceHasMeshShader;
 	outCandidate->swapchainMaintenance1Features = supportedSwapchainMaintenance1Features;
 	outCandidate->dynamicRenderingUnusedAttachmentsFeatures = supportedDynamicRenderingUnusedAttachmentsFeatures;
+	outCandidate->accelerationStructureFeatures = supportedAccelerationStructureFeatures;
+	outCandidate->rayQueryFeatures = supportedRayQueryFeatures;
+	outCandidate->rayTracingSupport = rtxSupport;
+	outCandidate->supportsAccelerationStructure = deviceHasAccelerationStructure && rtxProbeSucceeded;
+	outCandidate->supportsRayQuery = deviceHasRayQuery && rtxProbeSucceeded;
 	outCandidate->supportsTracyCalibratedTimestamps =
 		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
 	outCandidate->supportsSwapchainMaintenance1 = deviceHasSwapchainMaintenance1;
@@ -695,6 +748,7 @@ bool InitializeVulkanBase(
 	context->supportsDynamicRenderingUnusedAttachments = selected.supportsDynamicRenderingUnusedAttachments;
 	context->hasDedicatedComputeQueue = selected.supportsDedicatedComputeQueue;
 	context->dedicatedComputeQueueFamilyIndex = selected.dedicatedComputeQueueFamilyIndex;
+	context->rayTracing = selected.rayTracingSupport;
 
 	// EVIL: queuePriority = 1.0f is Vulkan's max priority; we request max priority for both graphics+compute
 	// queues to keep scheduling decisions predictable. Lower values would be ignored on hosts that round up.
@@ -742,6 +796,14 @@ bool InitializeVulkanBase(
 	if (meshShaderRequested && selected.supportsMeshShader) {
 		deviceExtensions.push_back(kMeshShaderExtension);
 	}
+	const bool rtxRequested = std::getenv("PROJECTV_HW_RAY_TRACING") != nullptr;
+	if (rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery) {
+		deviceExtensions.push_back(kAccelerationStructureExtension);
+		deviceExtensions.push_back(kRayQueryExtension);
+		if (selected.rayTracingSupport.deferredHostOperations) {
+			deviceExtensions.push_back(kDeferredHostOperationsExtension);
+		}
+	}
 
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
@@ -768,6 +830,19 @@ bool InitializeVulkanBase(
 		enabledMeshShaderFeatures.taskShader = VK_TRUE;
 	}
 
+	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{};
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{};
+	const bool rtxEnabled = rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery;
+	if (rtxEnabled) {
+		enabledRayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+		enabledRayQueryFeatures.rayQuery = VK_TRUE;
+		enabledAccelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+		enabledAccelerationStructureFeatures.accelerationStructure = VK_TRUE;
+		if (selected.rayTracingSupport.accelerationStructureHostCommands) {
+			enabledAccelerationStructureFeatures.accelerationStructureHostCommands = VK_TRUE;
+		}
+	}
+
 	enabledFeatures13.pNext = &enabledFeatures12;
 	enabledFeatures12.pNext = selected.supportsSwapchainMaintenance1
 								  ? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
@@ -778,7 +853,13 @@ bool InitializeVulkanBase(
 	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = meshShaderEnabled
 														   ? reinterpret_cast<VkBaseOutStructure *>(&enabledMeshShaderFeatures)
 														   : nullptr;
-	enabledMeshShaderFeatures.pNext = nullptr;
+	enabledMeshShaderFeatures.pNext = rtxEnabled
+										 ? reinterpret_cast<VkBaseOutStructure *>(&enabledAccelerationStructureFeatures)
+										 : nullptr;
+	enabledAccelerationStructureFeatures.pNext = rtxEnabled
+													 ? reinterpret_cast<VkBaseOutStructure *>(&enabledRayQueryFeatures)
+													 : nullptr;
+	enabledRayQueryFeatures.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;
@@ -871,6 +952,10 @@ bool InitializeVulkanBase(
 	allocInfo.device = context->device;
 	allocInfo.instance = context->instance;
 	allocInfo.vulkanApiVersion = GetMinVulkanApiVersion();
+	if (rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery
+		&& selected.rayTracingSupport.bufferDeviceAddress) {
+		allocInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+	}
 
 	VmaVulkanFunctions vulkanFunctions{};
 	const VkResult importFunctionsResult = vmaImportVulkanFunctionsFromVolk(&allocInfo, &vulkanFunctions);

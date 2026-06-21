@@ -58,6 +58,9 @@ layout(set = 0, binding = 5, std430) readonly buffer PackedChunkVoxelPayload {
 layout(set = 0, binding = 6) uniform sampler2D layerHistory;
 
 layout(set = 0, binding = 11) uniform sampler3D vctClipmap;
+// EVIL: binding 12 = volumetricFog sampler3D FRAGMENT. Per TODO §5.4 Wronski 2014 fog
+// consume. Bound to fallback 1x1x1 RGBA16F dummy when PROJECTV_FOG=ON not set.
+layout(set = 0, binding = 12) uniform sampler3D volumetricFog;
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
@@ -949,6 +952,33 @@ void main() {
     sceneLighting.skyColorAndFogDensity.rgb,
     clamp(normal.y * 0.5 + 0.5, 0.0, 1.0));
     const float fog = clamp(max(viewDistance - fogStart, 0.0) * fogDensity, 0.0, fogMax) * material.shading.x;
+
+    // EVIL: Wronski 2014 froxel screen-space sampling. UVW from gl_FragCoord
+    // (normalized to [0, 1] via textureSize) + NDC depth mapped through the
+    // exponential depth distribution matching the compute shader's
+    // kDepthDistributionGamma=0.5 / kDepthDistributionBias=0.005. This
+    // consumes the per-frustum-slab ray-march output written by
+    // volumetric_fog.comp. When PROJECTV_FOG=ON not set, binding 12
+    // points to a 1x1x1 fallback texture that always returns (0,0,0,0)
+    // so the contribute term is a no-op.
+    vec3 volumetricFogAccum = vec3(0.0);
+    float volumetricFogTransmittance = 1.0;
+    {
+        const vec3 froxelImageSize = vec3(textureSize(volumetricFog, 0));
+        const float nearPlane = max(pushConstants.cameraPosition.w, 0.001);
+        const float farPlane = max(pushConstants.cameraForward.w, nearPlane + 0.001);
+        const float linearDepth = clamp(viewDistance, nearPlane, farPlane);
+        const float normalizedDepth = (linearDepth - nearPlane) / (farPlane - nearPlane);
+        const float depthDistribution = pow(normalizedDepth, 0.5) * (1.0 - 0.005) + 0.005;
+        const vec3 froxelUvw = vec3(
+            clamp(gl_FragCoord.x / max(froxelImageSize.x, 1.0), 0.0, 1.0),
+            clamp(gl_FragCoord.y / max(froxelImageSize.y, 1.0), 0.0, 1.0),
+            clamp(depthDistribution, 0.0, 1.0));
+        const vec4 fogSample = texture(volumetricFog, froxelUvw);
+        volumetricFogAccum = fogSample.rgb;
+        volumetricFogTransmittance = 1.0 - fogSample.a;
+    }
+
     const uint lightingDebugView = uint(sceneLighting.postProcess.w + 0.5);
 
     if (lightingDebugView == 1u) {
@@ -977,10 +1007,19 @@ void main() {
         color = vec3(localAmbientOcclusionVisibility);
     } else if (lightingDebugView == 8u) {
         color = vec3(fog);
+    } else if (lightingDebugView == 10u) {
+        color = vctDiffuse;
+    } else if (lightingDebugView == 11u) {
+        color = vctSpecular;
+    } else if (lightingDebugView == 12u) {
+        color = volumetricFogAccum;
+    } else if (lightingDebugView == 13u) {
+        color = vec3(volumetricFogTransmittance);
     }
 
     if (lightingDebugView != 8u) {
         color = mix(color, fogColor, fog);
+        color = color * volumetricFogTransmittance + volumetricFogAccum;
     }
     const vec3 linearColor = color;
     color *= max(sceneLighting.postProcess.x, 0.0);

@@ -121,10 +121,10 @@ constexpr float kCreativeBoostMultiplier = 3.0f;
 constexpr float kCreativeSlowMultiplier = 0.25f;
 constexpr float kCreativeCollisionMaxStepDistance = 0.05f;
 constexpr uint32_t kCreativeCollisionMaxSubsteps = 32;
-constexpr uint32_t kMaxPhysicsBodies = 32;
-constexpr uint32_t kMaxBodyPairs = 64;
-constexpr uint32_t kMaxContactConstraints = 64;
-constexpr size_t kPhysicsTempAllocatorBytes = static_cast<size_t>(4) * 1024 * 1024;
+constexpr uint32_t kMaxPhysicsBodies = 1024;
+constexpr uint32_t kMaxBodyPairs = 4096;
+constexpr uint32_t kMaxContactConstraints = 1024;
+constexpr size_t kPhysicsTempAllocatorBytes = static_cast<size_t>(8) * 1024 * 1024;
 
 namespace PhysicsLayers {
 constexpr JPH::ObjectLayer Static = 0;
@@ -319,6 +319,7 @@ struct PhysicsState {
 	const VoxelWorld *syncedWorld = nullptr;
 	uint64_t syncedWorldEditVersion = 0;
 	std::unordered_map<uint32_t, JPH::BodyID> chunkStaticBodies;
+	std::unordered_map<uint32_t, std::vector<projectv::physics::MergedVoxelBox>> chunkMergedBoxes;
 	std::vector<uint32_t> pendingChunkRebuilds;
 	bool walkCharacterInitialized = false;
 	WalkSupportState walkSupportState = WalkSupportState::Air;
@@ -423,13 +424,26 @@ bool IsWalkJumpLockedSupportTargetInsideRegion(const PhysicsState &physics)
 	return IsWalkFeetInsideSneakSupportRegion(physics.walkJumpLockedSupport.region, constrainedFeetPosition);
 }
 
+bool IsPhysicsStaticWorldBodyId(const PhysicsState &physics, const JPH::BodyID &bodyId)
+{
+	if (bodyId == physics.staticWorldBodyId) {
+		return true;
+	}
+	for (const auto &entry : physics.chunkStaticBodies) {
+		if (entry.second == bodyId) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool IsWalkJumpLockedSourceSupportSideWallContact(
 	const PhysicsState &physics,
 	const JPH::BodyID &bodyId,
 	JPH::RVec3Arg contactPosition,
 	JPH::Vec3Arg contactNormal)
 {
-	if (!physics.walkJumpLockedSupport.valid || bodyId != physics.staticWorldBodyId) {
+	if (!physics.walkJumpLockedSupport.valid || !IsPhysicsStaticWorldBodyId(physics, bodyId)) {
 		return false;
 	}
 
@@ -712,6 +726,7 @@ void DestroyStaticWorldBody(PhysicsState &physics)
 
 bool BuildStaticVoxelCollisionBody(PhysicsState &physics, const VoxelWorld &world)
 {
+	PV_PROFILE_ZONE_N("BuildStaticVoxelCollisionBody");
 	JPH::StaticCompoundShapeSettings compoundSettings;
 
 	std::vector<projectv::physics::MergedVoxelBox> mergedBoxes;
@@ -2892,6 +2907,7 @@ Int3 FloorToVoxel(const std::array<float, 3> &position)
 
 bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &world, uint32_t chunkIndex)
 {
+	PV_PROFILE_ZONE_N("BuildChunkStaticCollisionBody");
 	if (chunkIndex >= world.chunks.size()) {
 		return false;
 	}
@@ -2909,6 +2925,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 		bodyInterface.DestroyBody(it->second);
 		physics.chunkStaticBodies.erase(it);
 	}
+	physics.chunkMergedBoxes.erase(chunkIndex);
 
 	JPH::StaticCompoundShapeSettings compoundSettings;
 
@@ -2923,6 +2940,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 			"Physics Greedy Merge Chunk Box Count",
 			static_cast<int64_t>(mergedBoxes.size()));
 	}
+	physics.chunkMergedBoxes[chunkIndex] = mergedBoxes;
 
 	size_t solidVoxelCount = 0;
 	if (!mergedBoxes.empty()) {
@@ -2971,6 +2989,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 	}
 
 	if (solidVoxelCount == 0u) {
+		physics.chunkMergedBoxes.erase(chunkIndex);
 		return true;
 	}
 
@@ -3015,6 +3034,91 @@ void DestroyChunkStaticBody(PhysicsState &physics, uint32_t chunkIndex)
 	bodyInterface.RemoveBody(it->second);
 	bodyInterface.DestroyBody(it->second);
 	physics.chunkStaticBodies.erase(it);
+	physics.chunkMergedBoxes.erase(chunkIndex);
+}
+
+void DestroyAllChunkStaticBodies(PhysicsState &physics)
+{
+	if (physics.chunkStaticBodies.empty()) {
+		return;
+	}
+	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+	for (const auto &entry : physics.chunkStaticBodies) {
+		bodyInterface.RemoveBody(entry.second);
+		bodyInterface.DestroyBody(entry.second);
+	}
+	physics.chunkStaticBodies.clear();
+	physics.chunkMergedBoxes.clear();
+}
+
+bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWorld &world)
+{
+	PV_PROFILE_ZONE_N("RebuildStaticWorldBodyFromChunkShapes");
+	DestroyStaticWorldBody(physics);
+
+	if (physics.chunkMergedBoxes.empty()) {
+		return true;
+	}
+
+	JPH::StaticCompoundShapeSettings compoundSettings;
+	for (const auto &entry : physics.chunkMergedBoxes) {
+		for (const projectv::physics::MergedVoxelBox &box : entry.second) {
+			const int spanX = box.maxX - box.minX;
+			const int spanY = box.maxY - box.minY;
+			const int spanZ = box.maxZ - box.minZ;
+			if (spanX <= 0 || spanY <= 0 || spanZ <= 0) {
+				continue;
+			}
+			const float halfX = static_cast<float>(spanX) * 0.5f;
+			const float halfY = static_cast<float>(spanY) * 0.5f;
+			const float halfZ = static_cast<float>(spanZ) * 0.5f;
+			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
+			const JPH::Vec3 center(
+				static_cast<float>(box.minX) + halfX,
+				static_cast<float>(box.minY) + halfY,
+				static_cast<float>(box.minZ) + halfZ);
+			const JPH::RefConst<JPH::Shape> boxShape = new JPH::BoxShape(halfExtent);
+			compoundSettings.AddShape(
+				center,
+				JPH::Quat::sIdentity(),
+				boxShape.GetPtr());
+		}
+	}
+
+	if (compoundSettings.mSubShapes.empty()) {
+		return true;
+	}
+
+	const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
+	if (!shapeResult.IsValid()) {
+		runtime::LogRuntimeFailure(
+			"Physics",
+			"RebuildStaticWorldBodyFromChunkShapes.Create",
+			shapeResult.GetError());
+		return false;
+	}
+
+	physics.staticWorldShape = shapeResult.Get();
+	const JPH::BodyCreationSettings worldBodySettings(
+		physics.staticWorldShape,
+		JPH::RVec3::sZero(),
+		JPH::Quat::sIdentity(),
+		JPH::EMotionType::Static,
+		PhysicsLayers::Static);
+
+	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+	const JPH::BodyID bodyId = bodyInterface.CreateAndAddBody(worldBodySettings, JPH::EActivation::DontActivate);
+	if (bodyId.IsInvalid()) {
+		runtime::LogRuntimeFailure(
+			"Physics",
+			"RebuildStaticWorldBodyFromChunkShapes.CreateAndAddBody",
+			"CreateAndAddBody returned an invalid body id");
+		physics.staticWorldShape = nullptr;
+		return false;
+	}
+
+	physics.staticWorldBodyId = bodyId;
+	return true;
 }
 
 void QueueChunkRebuildRequest(PhysicsState *physics, const uint32_t chunkIndex)
@@ -3027,6 +3131,7 @@ void QueueChunkRebuildRequest(PhysicsState *physics, const uint32_t chunkIndex)
 
 uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world)
 {
+	PV_PROFILE_ZONE_N("ProcessChunkRebuildQueue");
 	if (!physics || !world || physics->pendingChunkRebuilds.empty()) {
 		return 0;
 	}
@@ -3099,32 +3204,45 @@ void DestroyPhysicsState(PhysicsState *physics)
 
 bool SyncPhysicsWorld(PhysicsState *physics, const VoxelWorld *world)
 {
+	PV_PROFILE_ZONE_N("SyncPhysicsWorld");
 	if (!physics) {
 		return false;
 	}
 
 	if (physics->syncedWorld == world &&
 		physics->syncedWorldEditVersion == (world != nullptr ? world->editVersion : 0)) {
+		profiling::PlotValue("Physics Sync Skipped", int64_t{1});
 		return true;
 	}
 
-	DestroyStaticWorldBody(*physics);
+	const bool worldPointerChanged = (physics->syncedWorld != world);
+	physics->syncedWorld = world;
+	physics->syncedWorldEditVersion = (world != nullptr ? world->editVersion : 0);
+
 	if (!world) {
-		physics->syncedWorld = nullptr;
-		physics->syncedWorldEditVersion = 0;
+		DestroyStaticWorldBody(*physics);
+		DestroyAllChunkStaticBodies(*physics);
 		ResetWalkCharacter(physics);
 		return true;
 	}
 
-	if (!BuildStaticVoxelCollisionBody(*physics, *world)) {
-		physics->syncedWorld = nullptr;
-		physics->syncedWorldEditVersion = 0;
+	if (worldPointerChanged) {
+		profiling::PlotValue("Physics Sync Full Rebuild", int64_t{1});
+		DestroyStaticWorldBody(*physics);
+		DestroyAllChunkStaticBodies(*physics);
+		for (size_t chunkIndex = 0; chunkIndex < world->chunks.size(); ++chunkIndex) {
+			BuildChunkStaticCollisionBody(*physics, *world, static_cast<uint32_t>(chunkIndex));
+		}
+	} else {
+		profiling::PlotValue("Physics Sync Incremental", int64_t{1});
+		ProcessChunkRebuildQueue(physics, world);
+	}
+
+	if (!RebuildStaticWorldBodyFromChunkShapes(*physics, *world)) {
 		ResetWalkCharacter(physics);
 		return false;
 	}
 
-	physics->syncedWorld = world;
-	physics->syncedWorldEditVersion = world->editVersion;
 	if (physics->walkCharacterInitialized && physics->walkCharacter.GetPtr() != nullptr) {
 		RefreshWalkCharacterContacts(*physics);
 		InvalidateWalkSupportStateForWorldEdit(*physics);

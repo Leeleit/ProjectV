@@ -9,6 +9,7 @@ import projectv.string_id;
 #include "asset/ModelManifestLoader.hpp"
 #include "asset/ModelPass.hpp"
 #include "debug/ProfilingGpu.hpp"
+#include "render/RayTracedShadows.hpp"
 #include "render/SceneResources.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
@@ -17,6 +18,9 @@ import projectv.string_id;
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "render/SkyAtmosphere.hpp"
+#include "render/VolumetricFog.hpp"
+#include "render/Cloudscape.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 void ShutdownVulkan(AppState *state)
@@ -36,6 +40,20 @@ void ShutdownVulkan(AppState *state)
 		projectv::render::DestroyMeshShaderPipelines(&state->context(), &state->render());
 		projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());
 		projectv::render::DestroyWorldGenPipelines(&state->context(), &state->render());
+		projectv::render::DestroySkyAtmospherePipelines(&state->context(), &state->render());
+		projectv::render::DestroyVolumetricFogResources(&state->context(), &state->render());
+		projectv::render::DestroySkyLutResources(&state->context(), &state->render());
+		projectv::render::DestroyRayTracedShadowResources(&state->context(), &state->render());
+		delete state->render().rayTracedShadows;
+		state->render().rayTracedShadows = nullptr;
+		// EVIL: DestroyVoxelizePipelines also destroys vctClipmapSampler (8x V1) but
+		// it's only called when VCT gate is ON. The fallback sampler created in
+		// CreateVctClipmapFallbackSamplerOnly must be destroyed unconditionally
+		// to satisfy VUID-vkDestroyDevice-device-05137.
+		if (state->render().vctClipmapSampler != VK_NULL_HANDLE) {
+			vkDestroySampler(state->context().device, state->render().vctClipmapSampler, nullptr);
+			state->render().vctClipmapSampler = VK_NULL_HANDLE;
+		}
 		DestroyGraphicsPipeline(&state->context(), &state->render());
 		DestroyDepthResources(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());

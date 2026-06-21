@@ -254,6 +254,8 @@ void InitializeSceneChunkDescriptorsAndVoxelPayloadLayout(
 	render.sceneChunkDescriptors.resize(world.chunks.size());
 	render.sceneChunkVoxelPayloadRanges.clear();
 	render.sceneChunkVoxelPayloadRanges.resize(world.chunks.size());
+	render.sceneNanoVdbVersion = 0;
+	render.lastNanoVdbSyncedEditVersion = 0;
 
 	uint32_t voxelWordOffset = 0;
 	uint32_t opaqueFaceOffset = 0;
@@ -1709,7 +1711,9 @@ bool UpdateSceneResources(
 		++render->sceneVoxelPayloadVersion;
 	}
 
-	if (!render->completedChunkRebuildIndices.empty() || render->sceneNanoVdbVersion == 0u) {
+	const bool fluidOnlyChunkRebuilds = world->voxelWorld->editVersion == render->lastNanoVdbSyncedEditVersion;
+	if ((!render->completedChunkRebuildIndices.empty() && !fluidOnlyChunkRebuilds) ||
+		render->sceneNanoVdbVersion == 0u) {
 		const std::array<uint8_t, 256> materialLookup = []() {
 			std::array<uint8_t, 256> lookup{};
 			for (uint32_t i = 0; i < 256; ++i) {
@@ -1722,6 +1726,7 @@ bool UpdateSceneResources(
 			materialLookup.data(),
 			render->sceneNanoVdbFlatten);
 		++render->sceneNanoVdbVersion;
+		render->lastNanoVdbSyncedEditVersion = world->voxelWorld->editVersion;
 		profiling::PlotValue(
 			"NanoVDB Uppers",
 			static_cast<int64_t>(render->sceneNanoVdbFlatten.upperCount));

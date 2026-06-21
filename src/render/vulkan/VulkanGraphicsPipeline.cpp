@@ -19,7 +19,7 @@ constexpr VkDescriptorPoolSize kGraphicsStorageDescriptorPoolSize{
 
 constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = kGraphicsDescriptorSetCount * 2u,
+	.descriptorCount = kGraphicsDescriptorSetCount * 4u,
 };
 constexpr std::array kGraphicsDescriptorPoolSizes{
 	kGraphicsStorageDescriptorPoolSize,
@@ -71,6 +71,29 @@ constexpr std::array kGraphicsDescriptorBindings{
 
 	VkDescriptorSetLayoutBinding{
 		.binding = 6,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 11 = vctClipmap sampler3D FRAGMENT. Per TODO §5.1 (VCT consume in voxel.frag).
+	// Always declared even when VCT gate is OFF (env PROJECTV_VCT_GPU=ON default OFF per
+	// agent/knowledge.md §30.4 Step 1) — fallback 1x1x1 RGBA16F dummy bound instead.
+	// Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` = OpTypeSampledImage (VUID-layout-07990).
+	VkDescriptorSetLayoutBinding{
+		.binding = 11,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 12 = volumetricFog sampler3D FRAGMENT. Per TODO §5.4 (volumetric fog consume
+	// in voxel.frag via Wronski 2014 froxel grid). Always declared even when fog gate is OFF
+	// (env PROJECTV_FOG=ON default OFF per agent/knowledge.md §30.4 Step 1) — fallback
+	// 1x1x1 RGBA16F dummy bound instead.
+	// Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` = OpTypeSampledImage (VUID-layout-07990).
+	VkDescriptorSetLayoutBinding{
+		.binding = 12,
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -1116,6 +1139,22 @@ bool RefreshGraphicsResourceBindings(
 							 : VK_NULL_HANDLE,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		};
+
+		const VkDescriptorImageInfo vctClipmapImageInfo{
+			.sampler = render->vctClipmapSampler,
+			.imageView = render->vctClipmapView != VK_NULL_HANDLE
+							 ? render->vctClipmapView
+							 : render->volumetricFogFallbackView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
+
+		const VkDescriptorImageInfo volumetricFogImageInfo{
+			.sampler = render->volumetricFogLinearSampler,
+			.imageView = render->volumetricFogFroxelView != VK_NULL_HANDLE
+							 ? render->volumetricFogFroxelView
+							 : render->volumetricFogFallbackView,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
 		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1199,6 +1238,30 @@ bool RefreshGraphicsResourceBindings(
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.pImageInfo = &layerHistoryImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 11,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &vctClipmapImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 12,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &volumetricFogImageInfo,
 				.pBufferInfo = nullptr,
 				.pTexelBufferView = nullptr,
 			},
@@ -1879,14 +1942,12 @@ bool CreateGraphicsPipeline(
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelShadowPipeline");
 
-	if (!RefreshGraphicsResourceBindings(context, render)) {
-		LogGraphicsPipelineTextFailure(
-			"CreateGraphicsPipeline.RefreshGraphicsResourceBindings",
-			"graphics descriptor rebinding failed");
-		destroyShaderModules();
-		DestroyGraphicsPipeline(context, render);
-		return false;
-	}
+	// EVIL: RefreshGraphicsResourceBindings deferred to VulkanInit after
+	// CreateVolumetricFogFallbackOnly (8x V C bug: bindings 11/12 fallback image
+	// did not exist when CreateGraphicsPipeline wrote descriptor sets, producing
+	// VK_NULL_HANDLE imageView writes under VUID-VkWriteDescriptorSet-descriptorType-02997).
+	// The descriptor pool + layout are created here; the actual descriptor writes
+	// are deferred to VulkanInit::CreateRayTracedShadowResources-safe stage.
 
 	if (!CreateDebugOverlayPipeline(*context, *swapchain, *render)) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugOverlay", "debug overlay pipeline creation failed");

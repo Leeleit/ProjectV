@@ -104,7 +104,10 @@ struct VoxelWorld {
 	uint64_t editVersion = 0;
 	std::vector<VoxelChunk> chunks;
 	std::vector<size_t> pendingChunkRebuildIndices;
+	std::vector<size_t> pendingBlasRebuildIndices;
 	VoxelWorldStats stats{};
+	Int3 fluidCAAabbMin{INT32_MAX, INT32_MAX, INT32_MAX};
+	Int3 fluidCAAabbMaxExclusive{INT32_MIN, INT32_MIN, INT32_MIN};
 };
 
 VoxelScenePreset GetNextVoxelScenePreset(VoxelScenePreset preset);
@@ -151,6 +154,7 @@ void MarkVoxelChunkDirty(VoxelWorld &world, Int3 position);
 void MarkVoxelRegionDirty(VoxelWorld &world, Int3 min, Int3 maxExclusive);
 void MarkAllVoxelChunksDirty(VoxelWorld *world);
 void CollectDirtyVoxelChunkRebuildRequests(VoxelWorld &world, std::vector<size_t> *outChunkIndices);
+void CollectDirtyVoxelChunkBlasRebuildRequests(VoxelWorld &world, std::vector<uint32_t> *outChunkIndices);
 void CommitDirtyVoxelChunkRebuildRequests(VoxelWorld &world, const std::vector<size_t> &rebuiltChunkIndices);
 uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
 uint32_t CountActiveVoxelChunks(const VoxelWorld &world);

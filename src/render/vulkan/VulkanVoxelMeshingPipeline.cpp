@@ -13,7 +13,7 @@ constexpr uint32_t kVoxelMeshingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kVoxelMeshingShaderFilename[] = "voxel_mesh.comp.spv";
 constexpr VkDescriptorPoolSize kVoxelMeshingDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kVoxelMeshingDescriptorSetCount * 9u,
+	.descriptorCount = kVoxelMeshingDescriptorSetCount * 11u,
 };
 constexpr std::array kVoxelMeshingDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -74,6 +74,26 @@ constexpr std::array kVoxelMeshingDescriptorBindings{
 	},
 	VkDescriptorSetLayoutBinding{
 		.binding = 8,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 9 = lodDownsampled STORAGE_BUFFER FRAGMENT (used in voxel_mesh.comp
+	// via Stage 4.2 LOD downsample GPU consume path). Was missing in 8x V1 layout per
+	// VUID-VkComputePipelineCreateInfo-layout-07988.
+	VkDescriptorSetLayoutBinding{
+		.binding = 9,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 10 = chunkLodLevelsBuffer STORAGE_BUFFER FRAGMENT (companion of
+	// binding 9 in Stage 4.2 LOD downsample path). Was missing in 8x V1 layout per
+	// VUID-VkComputePipelineCreateInfo-layout-07988.
+	VkDescriptorSetLayoutBinding{
+		.binding = 10,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -226,6 +246,16 @@ bool RefreshVoxelMeshingResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
+		const VkDescriptorBufferInfo lodDownsampledVoxelPayloadBufferInfo{
+			.buffer = frameResources.lodDownsampledVoxelPayloadBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
+		const VkDescriptorBufferInfo chunkLodLevelsBufferInfo{
+			.buffer = frameResources.chunkLodLevelsBuffer,
+			.offset = 0,
+			.range = VK_WHOLE_SIZE,
+		};
 
 		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
@@ -334,6 +364,30 @@ bool RefreshVoxelMeshingResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
 				.pBufferInfo = &sceneLightingBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.voxelMeshingDescriptorSet,
+				.dstBinding = 9,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &lodDownsampledVoxelPayloadBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.voxelMeshingDescriptorSet,
+				.dstBinding = 10,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &chunkLodLevelsBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 		};

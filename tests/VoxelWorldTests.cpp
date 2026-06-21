@@ -932,6 +932,10 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Local)) == "LOCL");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Contact)) == "CTSH");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Occlusion)) == "AOCC");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VctDiffuse)) == "VCT_DIFF");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VctSpecular)) == "VCT_SPEC");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VolumetricFog)) == "VOL_FOG");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VolumetricTransmittance)) == "VOL_TRN");
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Local);
@@ -950,6 +954,21 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Occlusion) == LightingDebugView::Fog);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::Taa) == LightingDebugView::VctDiffuse);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::VctDiffuse) == LightingDebugView::VctSpecular);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::VctSpecular) == LightingDebugView::VolumetricFog);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::VolumetricFog) == LightingDebugView::VolumetricTransmittance);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) == LightingDebugView::Final);
 }
 
 void TestShadowTuningTargetCycleAndLabels(TestContext &context)

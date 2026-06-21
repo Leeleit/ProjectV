@@ -1,0 +1,98 @@
+#version 460
+// SPDX-License-Identifier: MIT
+// ProjectV — volumetric fog compute shader (Wronski 2014 froxel grid +
+// per-slab ray-march accumulation).
+//
+// Per Wronski 2014 SIGGRAPH froxel pattern + Frostbite 2015 production
+// reference. 160×90×64 froxel grid in screen-aligned coordinates; exponential
+// depth distribution concentrated near camera. Each workgroup handles one
+// froxel; integrates density + ambient + sun lighting + Schlick phase
+// function approximation across kSlabCount=12 samples from froxel center to
+// back.
+//
+// Schlick phase function (Henyey-Greenstein g=0.8 approximation) is sampled
+// per slab to give sun-god-ray contribution. Transmittance is accumulated
+// front-to-back per slab. Final fog color (RGB) + alpha (transmittance) is
+// written to the froxel 3D image for later consume in voxel.frag.
+//
+// EVIL: hard-coded exponential depth distribution parameters
+// (kDepthDistributionGamma=0.5, kDepthDistributionBias=0.005) match Wronski
+// 2014 reference. Schlick g=0.8 (broad forward scattering) per Wronski
+// production tuning. Tunable via push constants if needed.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+layout(set = 0, binding = 0, rgba16f) writeonly uniform image3D fogFroxel;
+
+layout(push_constant) uniform VolumetricFogPushConstants {
+    vec4 fogColorAndDensity;
+    vec4 sunDirectionAndIntensity;
+    vec4 cameraPositionAndMaxDistance;
+    vec4 viewParams;
+} pc;
+
+const float kDepthDistributionGamma = 0.5;
+const float kDepthDistributionBias = 0.005;
+const int kSlabCount = 12;
+const float kSchlickG = 0.8;
+
+float SchlickPhase(float cosTheta, float g)
+{
+    const float k = 1.55 + g * (-50.0 + g * (230.0 + g * (-490.0 + g * 425.0)));
+    return (1.0 + k * cosTheta) / (1.0 + k);
+}
+
+float DepthLinearFromNdc(float depthNdc)
+{
+    return pow(clamp(depthNdc, 0.0, 1.0), kDepthDistributionGamma) * (1.0 - kDepthDistributionBias) + kDepthDistributionBias;
+}
+
+float NdcFromDepthLinear(float depthLinear)
+{
+    return pow(clamp((depthLinear - kDepthDistributionBias) / (1.0 - kDepthDistributionBias), 0.0, 1.0), 1.0 / kDepthDistributionGamma);
+}
+
+void main()
+{
+    const ivec3 froxelCoord = ivec3(gl_GlobalInvocationID);
+    if (any(greaterThanEqual(froxelCoord, imageSize(fogFroxel)))) {
+        return;
+    }
+
+    const vec3 imageSizeVec = vec3(imageSize(fogFroxel));
+    const vec3 uvwCenter = (vec3(froxelCoord) + 0.5) / imageSizeVec;
+    const float nearDepth = DepthLinearFromNdc(uvwCenter.z);
+    const float maxDistance = pc.cameraPositionAndMaxDistance.w;
+    const float slabWorldLength = (maxDistance - nearDepth * maxDistance) / float(kSlabCount);
+
+    const float densityBase = pc.fogColorAndDensity.w;
+    const vec3 fogColor = pc.fogColorAndDensity.rgb;
+    const vec3 sunDir = normalize(pc.sunDirectionAndIntensity.xyz);
+    const float sunIntensity = pc.sunDirectionAndIntensity.w;
+    const float cosTheta = max(dot(normalize(vec3(uvwCenter.xy, -1.0)), sunDir), 0.0);
+    const float phase = SchlickPhase(cosTheta, kSchlickG);
+
+    vec3 accumulated = vec3(0.0);
+    float transmittance = 1.0;
+
+    for (int i = 0; i < kSlabCount; ++i) {
+        const float t = (float(i) + 0.5) / float(kSlabCount);
+        const float depthAtSample = nearDepth + t * (1.0 - nearDepth);
+        const float worldDistance = depthAtSample * maxDistance;
+
+        const float densitySample = densityBase * exp(-worldDistance * 0.012);
+
+        const float sunContrib = sunIntensity * phase * 0.16;
+        const vec3 scatter = fogColor * (densitySample + sunContrib);
+
+        const float stepTransmittance = exp(-densitySample * slabWorldLength);
+        accumulated += scatter * transmittance * (1.0 - stepTransmittance);
+        transmittance *= stepTransmittance;
+        if (transmittance < 0.02) {
+            break;
+        }
+    }
+
+    accumulated = clamp(accumulated, vec3(0.0), vec3(8.0));
+    imageStore(fogFroxel, froxelCoord, vec4(accumulated, 1.0 - transmittance));
+}

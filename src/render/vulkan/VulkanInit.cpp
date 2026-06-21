@@ -9,10 +9,15 @@
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "render/SceneResources.hpp"
+#include "render/RayTracedShadows.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
+#include "render/vulkan/VulkanVoxelizePipeline.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "render/SkyAtmosphere.hpp"
+#include "render/VolumetricFog.hpp"
+#include "render/Cloudscape.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
@@ -265,6 +270,62 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 				"Async compute resources not created (no dedicated compute queue or device unavailable); continuing with graphics-queue path");
 		}
 	}
+
+	if (projectv::render::IsSkyAtmosphereEnabled()) {
+		if (!projectv::render::CreateSkyAtmospherePipelines(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Sky atmosphere pipeline not created (shader load or device failure); continuing without sky pass");
+		}
+	}
+
+	if (projectv::render::IsSkyLutPrecomputeEnabled()) {
+		if (!projectv::render::CreateSkyLutResources(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Sky LUT precompute not created (shader load or device failure); continuing with analytical sky only");
+		}
+	}
+
+	if (!projectv::render::CreateVolumetricFogFallbackOnly(&state->context(), &state->render())) {
+		SDL_LogInfo(
+			SDL_LOG_CATEGORY_APPLICATION,
+			"Volumetric fog fallback image not created (device failure); voxel.frag binding 12 will sample null (warning)");
+	}
+
+	if (!projectv::render::CreateVctClipmapFallbackSamplerOnly(&state->context(), &state->render())) {
+		SDL_LogInfo(
+			SDL_LOG_CATEGORY_APPLICATION,
+			"VCT clipmap fallback sampler not created (device failure); voxel.frag binding 11 will sample null (warning)");
+	}
+
+	// EVIL: deferred from CreateGraphicsPipeline (8x V C bug: descriptor set writes
+	// happened before fallback image existed). Now fallback is ready, do the writes
+	// so bindings 11/12 get a valid imageView instead of null. Failures here are
+	// non-fatal — subsequent per-frame RefreshGraphicsResourceBindings in swapchain
+	// recreation will retry with current state.
+	RefreshGraphicsResourceBindings(&state->context(), &state->render());
+
+	if (projectv::render::IsVolumetricFogEnabled()) {
+		if (!projectv::render::CreateVolumetricFogResources(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Volumetric fog resources not created (shader load or device failure); continuing with analytic-distance fog only");
+		}
+	}
+
+	if (projectv::render::IsCloudscapeEnabled()) {
+		if (!projectv::render::CreateCloudscapeResources(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Cloudscape resources not created (shader load or device failure); continuing without cloud pass");
+		}
+	}
+
+	if (state->render().rayTracedShadows == nullptr) {
+		state->render().rayTracedShadows = new projectv::render::RayTracedShadows();
+	}
+	projectv::render::CreateRayTracedShadowResources(&state->context(), &state->render());
 
 	if (projectv::render::IsAsyncComputeEnabled()) {
 		if (!projectv::render::EnsureAsyncComputeResources(&state->context())) {

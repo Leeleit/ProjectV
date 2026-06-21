@@ -21,6 +21,10 @@ bool CreateVoxelizePipelines(
 	VulkanContextState *context,
 	RenderState *render);
 
+bool CreateVctClipmapFallbackSamplerOnly(
+	VulkanContextState *context,
+	RenderState *render);
+
 void DestroyVoxelizePipelines(
 	VulkanContextState *context,
 	RenderState *render);

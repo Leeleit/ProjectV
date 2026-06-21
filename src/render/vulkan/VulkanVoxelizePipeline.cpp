@@ -159,6 +159,44 @@ bool CreateVoxelizeClipmapImage(
 	return true;
 }
 
+bool CreateVctClipmapFallbackSamplerOnly(VulkanContextState *context, RenderState *render)
+{
+	PV_CHECK_OR_RETURN(
+		context && render && context->device != VK_NULL_HANDLE,
+		"Render", "CreateVctClipmapFallbackSamplerOnly.Preconditions", "missing context");
+	if (render->vctClipmapSampler != VK_NULL_HANDLE) {
+		return true;
+	}
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 1.0f;
+	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.maxAnisotropy = 1.0f;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	const VkResult createSamplerResult = vkCreateSampler(
+		context->device, &samplerInfo, nullptr, &render->vctClipmapSampler);
+	if (createSamplerResult != VK_SUCCESS) {
+		runtime::LogVkFailure("CreateVctClipmapFallbackSamplerOnly.vkCreateSampler", createSamplerResult);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->vctClipmapSampler),
+		VK_OBJECT_TYPE_SAMPLER,
+		"VctClipmapFallbackSampler");
+	return true;
+}
+}
+
 void DestroyVoxelizeClipmapImage(
 	VulkanContextState *context,
 	RenderState *render)
@@ -181,7 +219,6 @@ void DestroyVoxelizeClipmapImage(
 		render->vctClipmapMemory = VK_NULL_HANDLE;
 	}
 }
-}  // namespace
 
 namespace projectv::render {
 
@@ -191,6 +228,43 @@ bool IsVctGpuPipelineRequested()
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;
+}
+
+bool CreateVctClipmapFallbackSamplerOnly(VulkanContextState *context, RenderState *render)
+{
+	PV_CHECK_OR_RETURN(
+		context && render && context->device != VK_NULL_HANDLE,
+		"Render", "CreateVctClipmapFallbackSamplerOnly.Preconditions", "missing context");
+	if (render->vctClipmapSampler != VK_NULL_HANDLE) {
+		return true;
+	}
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = 1.0f;
+	samplerInfo.anisotropyEnable = VK_FALSE;
+	samplerInfo.maxAnisotropy = 1.0f;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	const VkResult createSamplerResult = vkCreateSampler(
+		context->device, &samplerInfo, nullptr, &render->vctClipmapSampler);
+	if (createSamplerResult != VK_SUCCESS) {
+		runtime::LogVkFailure("CreateVctClipmapFallbackSamplerOnly.vkCreateSampler", createSamplerResult);
+		return false;
+	}
+	SetVulkanObjectName(
+		*context,
+		reinterpret_cast<uint64_t>(render->vctClipmapSampler),
+		VK_OBJECT_TYPE_SAMPLER,
+		"VctClipmapFallbackSampler");
+	return true;
 }
 
 void DestroyVoxelizePipelines(VulkanContextState *context, RenderState *render)
@@ -429,6 +503,8 @@ bool RecordVoxelizeDispatch(
 		return true;
 	}
 
+	profiling::PlotValue("VCT Voxelize Chunks", static_cast<int64_t>(activeChunkCount));
+
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, render.vctVoxelizePipeline);
 	vkCmdBindDescriptorSets(
 		commandBuffer,
@@ -469,6 +545,8 @@ bool BuildVctClipmapMipChain(
 	if (resolution == 0u) {
 		return false;
 	}
+
+	profiling::PlotValue("VCT Mip Chain Mips", static_cast<int64_t>(mipLevels - 1u));
 
 	const VkImageLayout prevLayout = VK_IMAGE_LAYOUT_GENERAL;
 	const VkImageLayout newLayout = VK_IMAGE_LAYOUT_GENERAL;

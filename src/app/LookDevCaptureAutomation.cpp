@@ -181,6 +181,22 @@ bool TryParseDebugViewToken(
 		*outView = LightingDebugView::Fog;
 		return true;
 	}
+	if (normalized == "vctdiff" || normalized == "vctdiffuse" || normalized == "vct_d") {
+		*outView = LightingDebugView::VctDiffuse;
+		return true;
+	}
+	if (normalized == "vctspec" || normalized == "vctspecular" || normalized == "vct_s") {
+		*outView = LightingDebugView::VctSpecular;
+		return true;
+	}
+	if (normalized == "volfog" || normalized == "volumetricfog" || normalized == "vol_f") {
+		*outView = LightingDebugView::VolumetricFog;
+		return true;
+	}
+	if (normalized == "voltrn" || normalized == "volumetrictransmittance" || normalized == "vol_t") {
+		*outView = LightingDebugView::VolumetricTransmittance;
+		return true;
+	}
 	return false;
 }
 

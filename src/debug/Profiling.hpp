@@ -100,6 +100,19 @@ inline void ConfigureDefaultPlots()
 	ConfigurePlot("Walk Sneak Support Grace", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Walk Ledge Release Grace", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Walk Ground Return Anchor", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("VCT Voxelize Chunks", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("VCT Mip Chain Mips", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("VCT Active Mip", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Sky Atmosphere Pass", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Volumetric Fog Pass", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Cloudscape Pass", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Sky LUT Precompute (ms)", ProfilingPlotFormat::Number);
+	ConfigurePlot("Physics Sync Full Rebuild", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Physics Sync Incremental", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Physics Sync Skipped", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Fluid CA Cells Read", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Fluid CA Cells Moved", ProfilingPlotFormat::Number, true);
+	ConfigurePlot("Fluid Edit Version Bumps Suppressed", ProfilingPlotFormat::Number, true);
 #endif
 }
 

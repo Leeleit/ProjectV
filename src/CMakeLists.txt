@@ -46,6 +46,11 @@ set(SHADERS
         ${SHADER_DIR}/debug_hud.frag
         ${SHADER_DIR}/model.vert
         ${SHADER_DIR}/model.frag
+        ${SHADER_DIR}/sky_atmosphere.vert
+        ${SHADER_DIR}/sky_atmosphere.frag
+        ${SHADER_DIR}/volumetric_fog.comp
+        ${SHADER_DIR}/cloudscape.vert
+        ${SHADER_DIR}/cloudscape.frag
 )
 
 foreach (SHADER ${SHADERS})
@@ -129,6 +134,7 @@ target_sources(ProjectV PRIVATE
         render/ShadowProjection.cpp
         render/Taa.cpp
         render/TaaRenderTargets.cpp
+        render/RayTracedShadows.cpp
         render/vulkan/TaaResolvePipeline.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
@@ -144,6 +150,9 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanVoxelizePipeline.cpp
         render/vulkan/VulkanWorldGenPipeline.cpp
         render/vulkan/VulkanAsyncCompute.cpp
+        render/SkyAtmosphere.cpp
+        render/VolumetricFog.cpp
+        render/Cloudscape.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp

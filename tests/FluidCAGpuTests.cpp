@@ -35,7 +35,9 @@ void TestFluidCaPipelineRequestedDefaultOff(TestContext &context)
 {
 	unsetenv("PROJECTV_FLUID_CA_GPU");
 	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
-	ExpectFalse(context, requested, __LINE__, "PROJECTV_FLUID_CA_GPU unset -> false");
+	if (requested) {
+		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU unset -> false");
+	}
 }
 
 void TestFluidCaPipelineRequestedExplicit(TestContext &context)

@@ -7,6 +7,7 @@ import projectv.string_id;
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
+#include "debug/Profiling.hpp"
 #include "fmt/format.h"
 #include "physics/PhysicsWorld.hpp"
 
@@ -214,6 +215,7 @@ void QueueChunkRebuildRequest(VoxelWorld &world, const size_t chunkIndex)
 
 	chunk.rebuildQueued = true;
 	world.pendingChunkRebuildIndices.push_back(chunkIndex);
+	world.pendingBlasRebuildIndices.push_back(chunkIndex);
 	++world.stats.dirtyChunkCount;
 }
 
@@ -1069,10 +1071,26 @@ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, 
 		return;
 	}
 
+	const bool isFluidAirTransition = (previousMaterial == VoxelMaterial::Air && material == VoxelMaterial::Fluid) ||
+									  (previousMaterial == VoxelMaterial::Fluid && material == VoxelMaterial::Air);
+
 	WriteVoxelToSparseStorage(world, position, static_cast<uint8_t>(material));
-	++world.editVersion;
+	if (!isFluidAirTransition) {
+		++world.editVersion;
+	} else {
+		profiling::PlotValue("Fluid Edit Version Bumps Suppressed", int64_t{1});
+	}
 	AccumulateMaterialCount(world.stats, previousMaterial, -1);
 	AccumulateMaterialCount(world.stats, material, 1);
+
+	if (previousMaterial == VoxelMaterial::Fluid || material == VoxelMaterial::Fluid) {
+		world.fluidCAAabbMin.x = std::min(world.fluidCAAabbMin.x, position.x);
+		world.fluidCAAabbMin.y = std::min(world.fluidCAAabbMin.y, position.y);
+		world.fluidCAAabbMin.z = std::min(world.fluidCAAabbMin.z, position.z);
+		world.fluidCAAabbMaxExclusive.x = std::max(world.fluidCAAabbMaxExclusive.x, position.x + 1);
+		world.fluidCAAabbMaxExclusive.y = std::max(world.fluidCAAabbMaxExclusive.y, position.y + 1);
+		world.fluidCAAabbMaxExclusive.z = std::max(world.fluidCAAabbMaxExclusive.z, position.z + 1);
+	}
 
 	VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, position))];
 	chunk.isStatic = false;
@@ -1093,7 +1111,7 @@ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, 
 
 	MarkChunksTouchedByVoxelEditDirty(world, position);
 
-	if (physics != nullptr) {
+	if (physics != nullptr && !isFluidAirTransition) {
 		const Int3 chunkCoord = GetVoxelChunkCoord(world, position);
 		const VoxelChunk &centerChunk = world.chunks[GetVoxelChunkIndex(world, chunkCoord)];
 		int minChunkX = chunkCoord.x;
@@ -1181,7 +1199,7 @@ bool IsFluidCaGpuEnabled()
 	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
-	return gFluidCaGpuEnabledForTesting;
+	return false;
 }
 
 void ToggleFluidCaGpuEnabledForTesting(const bool enabled)
@@ -1402,6 +1420,20 @@ void CollectDirtyVoxelChunkRebuildRequests(VoxelWorld &world, std::vector<size_t
 	world.pendingChunkRebuildIndices.clear();
 }
 
+void CollectDirtyVoxelChunkBlasRebuildRequests(VoxelWorld &world, std::vector<uint32_t> *outChunkIndices)
+{
+	if (!outChunkIndices || world.pendingBlasRebuildIndices.empty()) {
+		return;
+	}
+	outChunkIndices->reserve(outChunkIndices->size() + world.pendingBlasRebuildIndices.size());
+	for (const size_t index : world.pendingBlasRebuildIndices) {
+		if (index <= UINT32_MAX) {
+			outChunkIndices->push_back(static_cast<uint32_t>(index));
+		}
+	}
+	world.pendingBlasRebuildIndices.clear();
+}
+
 void CommitDirtyVoxelChunkRebuildRequests(VoxelWorld &world, const std::vector<size_t> &rebuiltChunkIndices)
 {
 	for (const size_t chunkIndex : rebuiltChunkIndices) {
@@ -1467,6 +1499,7 @@ std::vector<uint8_t> BuildFlatVoxelSnapshot(const VoxelWorld &world)
 
 uint32_t UpdateFluidCA(VoxelWorld &world)
 {
+	PV_PROFILE_ZONE_N("UpdateFluidCA");
 
 	if (world.stats.fluidVoxelCount == 0u) {
 		return 0u;
@@ -1492,10 +1525,39 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 
 	const size_t totalCells = static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth);
 	std::vector<uint8_t> next(totalCells, 0u);
-	for (int z = 0; z < depth; ++z) {
-		for (int y = 0; y < height; ++y) {
-			for (int x = 0; x < width; ++x) {
-				next[index(x, y, z)] = ReadVoxelFromSparseStorage(world, {world.min.x + x, world.min.y + y, world.min.z + z});
+
+	int readMinX = world.fluidCAAabbMin.x - 1;
+	int readMinY = world.fluidCAAabbMin.y - 1;
+	int readMinZ = world.fluidCAAabbMin.z - 1;
+	int readMaxX = world.fluidCAAabbMaxExclusive.x + 1;
+	int readMaxY = world.fluidCAAabbMaxExclusive.y + 1;
+	int readMaxZ = world.fluidCAAabbMaxExclusive.z + 1;
+	if (readMinX < world.min.x) readMinX = world.min.x;
+	if (readMinY < world.min.y) readMinY = world.min.y;
+	if (readMinZ < world.min.z) readMinZ = world.min.z;
+	if (readMaxX > world.maxExclusive.x) readMaxX = world.maxExclusive.x;
+	if (readMaxY > world.maxExclusive.y) readMaxY = world.maxExclusive.y;
+	if (readMaxZ > world.maxExclusive.z) readMaxZ = world.maxExclusive.z;
+
+	const int simMinX = (readMinX < world.min.x) ? world.min.x : readMinX;
+	const int simMinY = (readMinY < world.min.y) ? world.min.y : readMinY;
+	const int simMinZ = (readMinZ < world.min.z) ? world.min.z : readMinZ;
+	const int simMaxX = (readMaxX > world.maxExclusive.x) ? world.maxExclusive.x : readMaxX;
+	const int simMaxY = (readMaxY > world.maxExclusive.y) ? world.maxExclusive.y : readMaxY;
+	const int simMaxZ = (readMaxZ > world.maxExclusive.z) ? world.maxExclusive.z : readMaxZ;
+
+	profiling::PlotValue("Fluid CA Cells Read", static_cast<int64_t>((readMaxX - readMinX) * (readMaxY - readMinY) * (readMaxZ - readMinZ)));
+
+	{
+		PV_PROFILE_ZONE_N("UpdateFluidCA.ReadPass");
+		for (int z = readMinZ; z < readMaxZ; ++z) {
+			for (int y = readMinY; y < readMaxY; ++y) {
+				for (int x = readMinX; x < readMaxX; ++x) {
+					const int lx = x - world.min.x;
+					const int ly = y - world.min.y;
+					const int lz = z - world.min.z;
+					next[index(lx, ly, lz)] = ReadVoxelFromSparseStorage(world, {x, y, z});
+				}
 			}
 		}
 	}
@@ -1504,10 +1566,13 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 
 	uint32_t movedCount = 0u;
 
-	for (int z = 0; z < depth; ++z) {
-		for (int y = 0; y < height; ++y) {
-			for (int x = 0; x < width; ++x) {
-				const size_t idx = index(x, y, z);
+	for (int z = simMinZ; z < simMaxZ; ++z) {
+		for (int y = simMinY; y < simMaxY; ++y) {
+			for (int x = simMinX; x < simMaxX; ++x) {
+				const int lx = x - world.min.x;
+				const int ly = y - world.min.y;
+				const int lz = z - world.min.z;
+				const size_t idx = index(lx, ly, lz);
 				if (next[idx] != static_cast<uint8_t>(VoxelMaterial::Fluid)) {
 					continue;
 				}
@@ -1516,8 +1581,8 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 					continue;
 				}
 
-				if (y > 0) {
-					const size_t belowIdx = index(x, y - 1, z);
+				if (ly > 0) {
+					const size_t belowIdx = index(lx, ly - 1, lz);
 
 					if (next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
 						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
@@ -1531,7 +1596,7 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 				}
 
 				{
-					const uint32_t h = x * 73856093u ^ y * 19349663u ^ z * 83492791u;
+					const uint32_t h = lx * 73856093u ^ ly * 19349663u ^ lz * 83492791u;
 					constexpr int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 					const int startSide = static_cast<int>(h & 0x3u);
 
@@ -1539,12 +1604,12 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 					int spreadDir = -1;
 					for (int d = 0; d < 2; ++d) {
 						const int sideIdx = dirs[d];
-						const int nx = x + sides[sideIdx][0];
-						const int nz = z + sides[sideIdx][1];
-						if (nx < 0 || nx >= width || nz < 0 || nz >= depth) {
+						const int nlx = lx + sides[sideIdx][0];
+						const int nlz = lz + sides[sideIdx][1];
+						if (nlx < 0 || nlx >= width || nlz < 0 || nlz >= depth) {
 							continue;
 						}
-						const size_t neighbourIdx = index(nx, y, nz);
+						const size_t neighbourIdx = index(nlx, ly, nlz);
 						if (next[neighbourIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
 							spreadDir = d;
 							break;
@@ -1552,9 +1617,9 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 					}
 					if (spreadDir >= 0) {
 						const int sideIdx = dirs[spreadDir];
-						const int nx = x + sides[sideIdx][0];
-						const int nz = z + sides[sideIdx][1];
-						const size_t neighbourIdx = index(nx, y, nz);
+						const int nlx = lx + sides[sideIdx][0];
+						const int nlz = lz + sides[sideIdx][1];
+						const size_t neighbourIdx = index(nlx, ly, nlz);
 						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
 						next[neighbourIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
 						claimed[idx] = 1u;
@@ -1570,32 +1635,44 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 		return 0u;
 	}
 
-	const auto [x, y, z] = world.min;
-	for (int zz = 0; zz < depth; ++zz) {
-		for (int yy = 0; yy < height; ++yy) {
-			for (int xx = 0; xx < width; ++xx) {
-				const size_t idx = index(xx, yy, zz);
-				const uint8_t current = next[idx];
-				const VoxelMaterial currentMaterial = static_cast<VoxelMaterial>(current);
-				const VoxelMaterial previousMaterial = GetVoxelMaterial(world, {x + xx, y + yy, z + zz});
-				if (previousMaterial == currentMaterial) {
-					continue;
+	profiling::PlotValue("Fluid CA Cells Moved", static_cast<int64_t>(movedCount));
+	{
+		PV_PROFILE_ZONE_N("UpdateFluidCA.Commit");
+		for (int z = simMinZ; z < simMaxZ; ++z) {
+			for (int y = simMinY; y < simMaxY; ++y) {
+				for (int x = simMinX; x < simMaxX; ++x) {
+					const int lx = x - world.min.x;
+					const int ly = y - world.min.y;
+					const int lz = z - world.min.z;
+					const size_t idx = index(lx, ly, lz);
+					const uint8_t current = next[idx];
+					const VoxelMaterial currentMaterial = static_cast<VoxelMaterial>(current);
+					const VoxelMaterial previousMaterial = GetVoxelMaterial(world, {x, y, z});
+					if (previousMaterial == currentMaterial) {
+						continue;
+					}
+					SetVoxelMaterial(
+						world,
+						{x, y, z},
+						currentMaterial);
 				}
-				SetVoxelMaterial(
-					world,
-					{x + xx, y + yy, z + zz},
-					currentMaterial);
 			}
 		}
 	}
 
 #if !defined(NDEBUG)
 	{
+		const int fluidMinX = world.fluidCAAabbMin.x;
+		const int fluidMinY = world.fluidCAAabbMin.y;
+		const int fluidMinZ = world.fluidCAAabbMin.z;
+		const int fluidMaxX = world.fluidCAAabbMaxExclusive.x;
+		const int fluidMaxY = world.fluidCAAabbMaxExclusive.y;
+		const int fluidMaxZ = world.fluidCAAabbMaxExclusive.z;
 		uint32_t actualFluidCount = 0u;
-		for (int zz = 0; zz < depth; ++zz) {
-			for (int yy = 0; yy < height; ++yy) {
-				for (int xx = 0; xx < width; ++xx) {
-					if (GetVoxelMaterial(world, {x + xx, y + yy, z + zz}) == VoxelMaterial::Fluid) {
+		for (int z = fluidMinZ; z < fluidMaxZ; ++z) {
+			for (int y = fluidMinY; y < fluidMaxY; ++y) {
+				for (int x = fluidMinX; x < fluidMaxX; ++x) {
+					if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
 						++actualFluidCount;
 					}
 				}

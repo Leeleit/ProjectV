@@ -984,6 +984,7 @@ add_executable(ProjectVVoxelizePipelineTests
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         vma_implementation.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelMaterials.cpp
 )
 
 target_compile_definitions(ProjectVVoxelizePipelineTests PRIVATE
@@ -1045,6 +1046,42 @@ add_test(NAME ProjectVPhysicsIncrementalJoltTests COMMAND ProjectVPhysicsIncreme
 set_tests_properties(ProjectVPhysicsIncrementalJoltTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVPhysicsIncrementalJoltTests)
+
+add_executable(ProjectVPhysicsSyncTests
+        PhysicsSyncTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+)
+
+target_compile_definitions(ProjectVPhysicsSyncTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVPhysicsSyncTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
+)
+
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE volk)
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE glm)
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE Jolt::Jolt)
+target_link_libraries(ProjectVPhysicsSyncTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVPhysicsSyncTests COMMAND ProjectVPhysicsSyncTests)
+set_tests_properties(ProjectVPhysicsSyncTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVPhysicsSyncTests)
 
 target_compile_definitions(ProjectVWorldGenTests PRIVATE
         PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
@@ -1111,4 +1148,140 @@ target_link_libraries(ProjectVHzbSmartMipTests PRIVATE glm)
 
 add_test(NAME ProjectVHzbSmartMipTests COMMAND ProjectVHzbSmartMipTests)
 set_tests_properties(ProjectVHzbSmartMipTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVSkyAtmosphereTests
+        SkyAtmosphereTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/SkyAtmosphere.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVSkyAtmosphereTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVSkyAtmosphereTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVSkyAtmosphereTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVSkyAtmosphereTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVSkyAtmosphereTests PRIVATE volk)
+target_link_libraries(ProjectVSkyAtmosphereTests PRIVATE glm)
+target_link_libraries(ProjectVSkyAtmosphereTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVSkyAtmosphereTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVSkyAtmosphereTests COMMAND ProjectVSkyAtmosphereTests)
+set_tests_properties(ProjectVSkyAtmosphereTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVSkyAtmosphereTests)
+
+add_executable(ProjectVVolumetricFogTests
+        VolumetricFogTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/VolumetricFog.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVVolumetricFogTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVVolumetricFogTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVVolumetricFogTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVVolumetricFogTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVVolumetricFogTests PRIVATE volk)
+target_link_libraries(ProjectVVolumetricFogTests PRIVATE glm)
+target_link_libraries(ProjectVVolumetricFogTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVVolumetricFogTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVVolumetricFogTests COMMAND ProjectVVolumetricFogTests)
+set_tests_properties(ProjectVVolumetricFogTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVVolumetricFogTests)
+
+add_executable(ProjectVCloudscapeTests
+        CloudscapeTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/Cloudscape.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVCloudscapeTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVCloudscapeTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVCloudscapeTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVCloudscapeTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVCloudscapeTests PRIVATE volk)
+target_link_libraries(ProjectVCloudscapeTests PRIVATE glm)
+target_link_libraries(ProjectVCloudscapeTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVCloudscapeTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVCloudscapeTests COMMAND ProjectVCloudscapeTests)
+set_tests_properties(ProjectVCloudscapeTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVRayTracedShadowTests
+        RayTracedShadowTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadows.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVRayTracedShadowTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVRayTracedShadowTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVRayTracedShadowTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVRayTracedShadowTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVRayTracedShadowTests PRIVATE volk)
+target_link_libraries(ProjectVRayTracedShadowTests PRIVATE glm)
+target_link_libraries(ProjectVRayTracedShadowTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVRayTracedShadowTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVRayTracedShadowTests COMMAND ProjectVRayTracedShadowTests)
+set_tests_properties(ProjectVRayTracedShadowTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVRayTracedShadowTests)
+
+projectv_test_add_modules(ProjectVCloudscapeTests)
 

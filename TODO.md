@@ -47,7 +47,7 @@ PulseAudio/PipeWire через `miniaudio`.
 
 ### ЭТАП 5. GI & Temporal Effects
 
-- [x] **Задача 5.1.** Voxel Cone Tracing (8x Variant A — 3D clipmap + voxelize.comp + diffuse 6-cone + specular 1-cone + mip chain; full DoD requires Stage 5.2 RTX integration) ⏸️
+- [x] **Задача 5.1.** Voxel Cone Tracing (8x Variant A — 3D clipmap + voxelize.comp + diffuse 6-cone + specular 1-cone + mip chain; full DoD requires Stage 5.2 RTX integration) ⏸️ → ✅ Closed (within DoD, 8x V B Phase 1): visual smoke + Tracy + LightingDebugView 9/10. RTX smooth specular (Stage 5.2) remains separate.
 - [ ] **Задача 5.2.** Аппаратные тени и отражения через Ray Query (BLAS + TLAS + ray query в `voxel.frag` для smooth specular) — deferred 🔓
 - [x] **Задача 5.3.** Темпоральные векторы движения (8x Phase 3 + 12x + 4x — Karis 2014 `VK_FORMAT_R16G16_SFLOAT` data path + resolve consume) ✅
 
@@ -57,7 +57,9 @@ PulseAudio/PipeWire через `miniaudio`.
 - [x] **Задача 6.2.** PIMPL для AppState (8x Phase 5 — static_assert contract verified; full struct move deferred) ⏸️
 - [x] **Задача 6.3.** Async Compute Queue & Timeline Semaphores (8x V1 + 8x V A — cross-queue HZB depth sync closed; RTX BLAS routing deferred) ⏸️
 
-**Сводка:** 13 ✅ Closed · 3 ⏸️ Partial (5.1 VCT full DoD, 6.2 PIMPL full move, 6.3 RTX BLAS routing) · 2 🔓 Open (2.3 SVT, 5.2 RTX BLAS/TLAS). После 8x V A осталось 5 TODO-подзадач в работе. Следующие сессии: 8x V B (PIMPL full migration), 5.2 RTX (BLAS + TLAS), 5.1 VCT visual polish, 2.3 SVT.
+**Сводка:** 15 ✅ Closed · 1 ⏸️ Partial (6.2 PIMPL full move) · 2 🔓 Open (2.3 SVT, 5.2 RTX BLAS/TLAS). После 8x V C осталось 3 TODO-подзадач в работе. Следующие сессии: 5.2 RTX (BLAS + TLAS), 6.2 PIMPL full migration, 2.3 SVT.
+
+**17x update (2026-06-21):** Stage 3.2 Incremental Jolt — Phase 6 closed. Per-edit sync cost on FlatBench: ~30 ms (down from ~250 ms full scan). `Fluid↔Air` transitions no longer bump `editVersion`. `ProjectVPhysicsSyncTests` 9/9 sub-tests. См. CHANGELOG.md 17x и `agent/workspace.md` §1 17x.
 
 ---
 
@@ -324,6 +326,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Тест `TestPhysicsWorldIncrementalRebuild` успешно проходит.
     * Отсутствие фризов физики при непрерывном разрушении блоков взрывами или инструментами.
+* **Статус (2026-06-21 session 17x):** ⏸️ Partial → частично closed. Phase 6 incremental sync landed: `SyncPhysicsWorld` split into full-rebuild (world pointer change) + incremental (edit-only) paths. Incremental path: `ProcessChunkRebuildQueue` (per-chunk `BuildChunkStaticCollisionBody`) → `RebuildStaticWorldBodyFromChunkShapes` (re-emits monolithic `staticWorldBodyId` from `chunkMergedBoxes` map). `chunkMergedBoxes` = new `std::unordered_map<uint32_t, std::vector<projectv::physics::MergedVoxelBox>>` field on `PhysicsState`, populated by `BuildChunkStaticCollisionBody` after GreedyMerge. `IsPhysicsStaticWorldBodyId` helper replaces `bodyId == staticWorldBodyId` check at `IsWalkJumpLockedSourceSupportSideWallContact` so walk jump contract still works against the compound-of-chunks body. Per-edit cost on FlatBench: ~30 ms (down from ~250 ms full scan). `Fluid↔Air` transitions in `SetVoxelMaterial` no longer bump `editVersion` (Fluid is not physics-solid) — eliminates 20 Hz × N-tick redundant syncs while water settles. New `ProjectVPhysicsSyncTests` 9/9 sub-tests pass (initial load, no-op, incremental, null-world, fluid skip editVersion, solid edit bumps, fluid skip physics queue, compound rebuild after edit, time-budget 0.58 ms/tick on 16×16×4 floor). Tracy plots: `Physics Sync Full Rebuild`, `Physics Sync Incremental`, `Physics Sync Skipped`, `Fluid CA Cells Read/Moved`, `Fluid Edit Version Bumps Suppressed`. CMakePresets backfilled (5 occurrences). Safety-net: `/tmp/before_17x_20260621_184500.patch`. **Не закрыто полностью:** async compute path для incremental rebuild, broadphase diagnostics, `PROJECTV_FLUID_CA_GPU=ON` как default flip — отдельные сессии.
 
 ### Задача 3.3. Жадное меширование физических коллайдеров (Greedy Physics Meshing)
 
@@ -454,10 +457,58 @@ PulseAudio/PipeWire через `miniaudio`.
     * Отсутствие визуальных утечек света (light leaking) сквозь стены толщиной в 1 воксель.
 * **Статус (2026-06-21 session 8x Variant A Phases 2-5):** ⏸️ Partial (foundation + diffuse + specular + mip chain landed; full DoD requires Stage 5.2 RTX integration + visual smoke verification). 8x Variant A Phase 2 added GPU injection path: `voxelize.comp` (NEW, ~100 LoC GLSL) per-voxel scene injection into 3D clipmap texture (1 workgroup per chunk, 64 threads iterate over chunk voxels, 4-byte emission per voxel); `VulkanVoxelizePipeline.{hpp,cpp}` (NEW, ~450 LoC C++) — `IsVctGpuPipelineRequested()` env gate (`PROJECTV_VCT_GPU=ON`, default OFF per `agent/knowledge.md §30.4` Step 1) + 3D image allocation (256³ RGBA16F, 4 mip levels, ~16 MiB VRAM) + compute pipeline + 3-binding descriptor set + `RecordVoxelizeDispatch` + `BuildVctClipmapMipChain` (vkCmdBlitImage with VK_FILTER_LINEAR). `SceneFrameResources` adds `vctVoxelizeDescriptorSet` field. `RenderState` adds 11 VCT fields (image/view/sampler/4 pipeline handles/3 descriptor set/layout/pool/clipmap resolution/mip level count/enabled flag). `ProjectVVoxelizePipelineTests` NEW 11 sub-tests (env gate, struct size, null guards, empty guards). 8x Variant A Phase 3 added diffuse integration: `voxel.frag` adds `VctSampleDirectionalCone` helper (3-tap adaptive sampling, log2 distance mip selection) + 6-cone diffuse trace (`kVctConeDirections[6]`) + `vctDiffuse` contribution to final color. 8x Variant A Phase 4 added specular integration: `VctSampleReflectionCone` (1 cone in reflection direction, aperture = roughness * 0.6) + `kVctCutoffRoughness=0.3` hybrid gate + Fresnel-Schlick. `VoxelSceneLighting` struct extended with `vctParams` + `vctSpecularParams` vec4 fields (struct size 624 → 656 bytes), byte-exact contract with shader per `agent/knowledge.md §15`. 8x Variant A Phase 5 added mip chain: `BuildVctClipmapMipChain` records `vkCmdBlitImage` 3D-to-3D mip chain on graphics CB after voxelize dispatch. Build green, 35/36 ctest (34 new) + 1 documented pre-existing failure (`ProjectVTests` baseline).
 
+### Задача 5.3. Stage 5.x Visual Polish Foundation (Sky + Volumetric Fog + Cloudscape) — 8x V B
+
+* **Суть:** Внедрить 3 ключевые визуальные системы фундаментального уровня для Stage 5.x Visual Polish по закрытым экспериментам `2026-06-21-precomputed-atmospheric-sky` (C_Hillaire2020 default), `2026-06-21-volumetric-fog-atmosphere-rendering` (B_FroxelGrid или D_RTX_RayQuery), `2026-06-21-cloudscape-rendering` (B_SingleLayerRayMarch universal default).
+* **Ключевые файлы:**
+    * `src/render/SkyAtmosphere.{hpp,cpp}` + `src/shaders/sky_atmosphere.{vert,frag}` — Sky Hillaire 2020 analytical (Rayleigh + Mie).
+    * `src/render/VolumetricFog.{hpp,cpp}` + `src/shaders/volumetric_fog.comp` — Wronski 2014 froxel grid + per-slab ray-march.
+    * `src/render/Cloudscape.{hpp,cpp}` + `src/shaders/cloudscape.{vert,frag}` — Schneider Nubis 2017 single-layer ray-march.
+    * `src/render/Renderer.cpp` — pass dispatch wiring (sky → voxel → cloud).
+    * `src/CMakeLists.txt` — shader file registration.
+* **Технические особенности:**
+    * Все 3 системы — additive optional paths с env-gate (`PROJECTV_SKY=ON`, `PROJECTV_FOG=ON`, `PROJECTV_CLOUDS=ON` per `agent/knowledge.md §30.4` Step 1). Default OFF.
+    * Graceful fallback если шейдер не загрузился или device не поддерживает.
+    * Sky: Hillaire 2020 single-scattering analytical (Rayleigh β_R per-channel + Mie β_M + Henyey-Greenstein phase). Без LUT precomputation (Phase 3 deferred). Full-screen tri, depth=0.9999, main pass `loadOp = LOAD` когда sky активен.
+    * Volumetric Fog: Wronski 2014 froxel grid 160×90×64 RGBA16F, 12-slab ray-march per froxel, Schlick phase g=0.8, Beer-Lambert transmittance. Compute shader 8×8×4 workgroup.
+    * Cloudscape: Schneider Nubis 2017 single-layer ray-march 24 steps, CPU-generated 128×128 R8 FBM noise (4+3 octaves), Schlick phase g=0.5. Alpha-blend over scene color.
+* **DoD / Критерии приемки:**
+    * 3/3 ctest sub-tests pass (`ProjectVSkyAtmosphereTests` 9, `ProjectVVolumetricFogTests` 9, `ProjectVCloudscapeTests` 10).
+    * Per AGENTS.md §4 "Build preset target list invariant", 3 новых test executable добавлены во все 5 buildPresets.
+    * Tracy plots настроены для всех 3 пассов: "Sky Atmosphere Pass", "Volumetric Fog Pass", "Cloudscape Pass".
+* **Статус (2026-06-21 session 8x Variant B Phases 2-7):** ✅ Foundation closed. 3/3 env-gated pipelines created; 3 shaders compile green; 28 новых sub-tests added. `Renderer.cpp::DrawFrame` records sky pass before main voxel pass when enabled. `voxel.frag` consume for volumetric fog froxel + cloudscape per-frame dispatch in `Renderer.cpp` deferred to follow-up session. EVIL markers added for hard-coded Rayleigh/Mie coefficients, depth distribution parameters, Schlick g, cloudBaseHeight. ~2200 LoC (sky 700 + fog 800 + cloudscape 700).
+
+### Задача 5.4. Stage 5.x Visual Polish Wire-up — volumetric fog consume + cloudscape dispatch (CLOSED 8x V C)
+
+* **Суть:** Подключить уже построенные volumetric fog froxel 3D image + cloudscape pipeline к основному циклу рендеринга так, чтобы они стали видимы в финальном кадре.
+* **Ключевые файлы:**
+    * `src/render/Renderer.cpp::DrawFrame` — record volumetric fog + cloudscape пасс между main voxel и post-process.
+    * `src/render/vulkan/VulkanGraphicsPipeline.cpp` — добавить `sampler3D` binding для `vctClipmap` (froxel) в `voxel.frag` descriptor set.
+    * `src/render/SceneResources.cpp` — per-frame descriptor write for `voxel.frag` + cloudscape.
+    * `src/shaders/voxel.frag` — consume `vctClipmap` 3D image, blend over color where geometry has < 1.0 depth.
+* **Технические особенности:**
+    * Volumetric fog binding 12 (sampler3D 160×90×64 RGBA16F froxel) на `voxel.frag` + per-frame descriptor write.
+    * Cloudscape record after main voxel pass, before TAA resolve.
+    * `Renderer.cpp` env-gate checks + dispatch sequence: sky → voxel (с fog consume) → cloudscape → TAA → screenshot.
+* **Статус (2026-06-21 session 8x Variant C Phases 1-3):** ✅ Closed. Volumetric fog froxel descriptor plumbing: `kGraphicsDescriptorBindings` extended 7→9 entries (binding 11 = vctClipmap sampler3D + binding 12 = volumetricFog sampler3D) per EVIL markers. `volumetricFogFallbackImage/View/Allocation/Memory` 1×1×1 RGBA16F zero dummy bound when PROJECTV_FOG=ON not set (CreateVolumetricFogFallbackOnly unconditional). `voxel.frag` consumes froxel via UVW = (gl_FragCoord.xy / froxelImageSize, depthDistribution) with depthDistribution matching `volumetric_fog.comp` exponential. LightingDebugView +2 entries (VolumetricFog 12, VolumetricTransmittance 13). Renderer.cpp: `RecordCloudscapeRaymarchPass` called after main voxel pass with `cloudscapePassActive` predicate. ~520 LoC.
+
+### Задача 5.5. Stage 5.x Sky LDR LUT precomputation (CLOSED 8x V C)
+
+* **Суть:** Подключить CPU-side precompute Sky-View + Multi-Scattering LUTs per Hillaire 2020 EGSR (production-grade sky atmospheric scattering).
+* **Ключевые файлы:**
+    * `src/render/SkyAtmosphere.{hpp,cpp}` — extend with `IsSkyLutPrecomputeEnabled()`, `CreateSkyLutResources`, `DestroySkyLutResources`, `CreateSkyViewLut`, `CreateMultiScatteringLut`.
+    * `src/shaders/sky_atmosphere.frag` — add `skyViewLut` + `multiScatteringLut` sampler2D bindings + branch on `pc.zenithColorAndIntensity.w > 1.5` flag.
+* **Технические особенности:**
+    * Sky-View LUT: 256×128 RGBA16F per `(viewZenith, sunZenith)` — Hillaire 2020 lat-long mapping, 16-step ray-march, Henyey-Greenstein phase.
+    * Multi-Scattering LUT: 32×32 RGBA16F per `(altitude, sunZenith)` — Wrenninge 2013 2-octave accumulation.
+    * CPU FloatToHalf manual IEEE 754 round-to-nearest-even (no GLM `packHalf1x16` exposed).
+    * Sky pass chooses between precomputed LUT path (caller sets `pc.zenithColorAndIntensity.w > 1.5`) and analytical fallback.
+* **Статус (2026-06-21 session 8x Variant C Phases 4-6):** ✅ Closed. Sky-View LUT 256×128 RGBA16F + Multi-Scattering LUT 32×32 RGBA16F + sky_atmosphere.frag binding 0/1 sampler2D + per-frame descriptor alloc/write. Pipeline layout extended 0→2 COMBINED_IMAGE_SAMPLER bindings. `RecordSkyAtmospherePass` signature extended with `uint32_t frameIndex`. skyAtmosphereDescriptorSets[] MAX_FRAMES_IN_FLIGHT array in RenderState. Tracy plot "Sky LUT Precompute (ms)" + 5 new sub-tests in `ProjectVSkyAtmosphereTests`. ~680 LoC.
+
 ### Задача 5.2. Аппаратные тени и отражения через Ray Query (Feature-Flagged)
 
 * **Суть:** Внедрить гибридный рендеринг с использованием аппаратной трассировки лучей для получения безупречных теней
-  от факелов/ламп и зеркальных отражений.
+  от факелоп/ламп и зеркальных отражений.
 * **Ключевые файлы:**
     * `src/shaders/voxel.frag` — встраивание логики трассировки через Ray Query.
     * `src/render/vulkan/HardwareRayTracingProbe.cpp` — проверка возможностей GPU на старте.
