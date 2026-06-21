@@ -18,26 +18,6 @@ namespace {
 constexpr char kSkyAtmosphereVertexShaderFilename[] = "sky_atmosphere.vert.spv";
 constexpr char kSkyAtmosphereFragmentShaderFilename[] = "sky_atmosphere.frag.spv";
 
-uint16_t FloatToHalf(float value)
-{
-	uint32_t bits;
-	std::memcpy(&bits, &value, sizeof(uint32_t));
-	const uint32_t sign = (bits >> 16) & 0x8000u;
-	int32_t exponent = static_cast<int32_t>((bits >> 23) & 0xffu) - 127 + 15;
-	uint32_t mantissa = bits & 0x7fffffu;
-	if (exponent <= 0) {
-		if (exponent < -10) {
-			return static_cast<uint16_t>(sign);
-		}
-		mantissa = (mantissa | 0x800000u) >> (1 - exponent);
-		return static_cast<uint16_t>(sign | (mantissa >> 13));
-	}
-	if (exponent >= 31) {
-		return static_cast<uint16_t>(sign | 0x7c00u | (mantissa ? 1u : 0u));
-	}
-	return static_cast<uint16_t>(sign | (static_cast<uint32_t>(exponent) << 10) | (mantissa >> 13));
-}
-
 constexpr VkDescriptorSetLayoutCreateInfo kSkyAtmosphereDescriptorSetLayoutInfo{
 	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 	.pNext = nullptr,
@@ -293,10 +273,10 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 
 	std::vector<uint16_t> halfFloats(kSkyViewLutWidth * kSkyViewLutHeight * 4);
 	for (size_t i = 0; i < lutData.size(); ++i) {
-		halfFloats[i * 4 + 0] = FloatToHalf(lutData[i].r);
-		halfFloats[i * 4 + 1] = FloatToHalf(lutData[i].g);
-		halfFloats[i * 4 + 2] = FloatToHalf(lutData[i].b);
-		halfFloats[i * 4 + 3] = FloatToHalf(lutData[i].a);
+		halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
+		halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
+		halfFloats[i * 4 + 2] = glm::packHalf1x16(lutData[i].b);
+		halfFloats[i * 4 + 3] = glm::packHalf1x16(lutData[i].a);
 	}
 	std::memcpy(mapped, halfFloats.data(), halfFloats.size() * sizeof(uint16_t));
 	vmaUnmapMemory(context->allocator, render->skyViewLutAllocation);
@@ -394,10 +374,10 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 
 	std::vector<uint16_t> halfFloats(kMultiScatteringLutWidth * kMultiScatteringLutHeight * 4);
 	for (size_t i = 0; i < lutData.size(); ++i) {
-		halfFloats[i * 4 + 0] = FloatToHalf(lutData[i].r);
-		halfFloats[i * 4 + 1] = FloatToHalf(lutData[i].g);
-		halfFloats[i * 4 + 2] = FloatToHalf(lutData[i].b);
-		halfFloats[i * 4 + 3] = FloatToHalf(lutData[i].a);
+		halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
+		halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
+		halfFloats[i * 4 + 2] = glm::packHalf1x16(lutData[i].b);
+		halfFloats[i * 4 + 3] = glm::packHalf1x16(lutData[i].a);
 	}
 	std::memcpy(mapped, halfFloats.data(), halfFloats.size() * sizeof(uint16_t));
 	vmaUnmapMemory(context->allocator, render->multiScatteringLutAllocation);

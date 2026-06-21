@@ -1051,6 +1051,10 @@ void WritePerChunkMipAndBlendWidthsToBuffer(
 	if (mappedData == nullptr || mipAndBlendWidths == nullptr) {
 		return;
 	}
+	// chunkCount frozen at frame start; consumer (hzb_cull.comp) reads same chunkCount.
+	// Layout invariant: each chunk takes exactly 2 uint32 words (mip, blendWidth).
+	static_assert(kHizMipAndBlendWidthWordsPerChunk == 2u,
+		"kHizMipAndBlendWidthWordsPerChunk must equal 2 (mip + blendWidth packed)");
 	auto *dest = static_cast<uint32_t *>(mappedData);
 	for (uint32_t i = 0u; i < chunkCount; ++i) {
 		const uint32_t baseIndex = i * kHizMipAndBlendWidthWordsPerChunk;

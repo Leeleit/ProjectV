@@ -14,6 +14,7 @@
 
 #include <array>
 #include <cstdlib>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -780,7 +781,7 @@ bool InitializeVulkanBase(
 		context->dedicatedComputeQueueFamilyIndex = UINT32_MAX;
 	}
 
-	std::vector deviceExtensions(
+	std::vector<const char *> deviceExtensions(
 		kRequiredDeviceExtensions.begin(),
 		kRequiredDeviceExtensions.end());
 	if (selected.supportsTracyCalibratedTimestamps) {
@@ -804,6 +805,12 @@ bool InitializeVulkanBase(
 			deviceExtensions.push_back(kDeferredHostOperationsExtension);
 		}
 	}
+
+	// Dedup: same extension may be both in kRequired and conditionally added
+	// (e.g., if a future required list includes VK_KHR_swapchain_maintenance1).
+	// Vulkan spec allows duplicates silently, but cleaner to dedup here.
+	std::set<const char *> uniqueExtensions(deviceExtensions.begin(), deviceExtensions.end());
+	deviceExtensions.assign(uniqueExtensions.begin(), uniqueExtensions.end());
 
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);

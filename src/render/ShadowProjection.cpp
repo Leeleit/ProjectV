@@ -296,8 +296,12 @@ SunShadowProjection BuildSunShadowProjection(
 		sceneMax.y - sceneMin.y,
 		sceneMax.z - sceneMin.z,
 	};
+	const float sceneDiagonalSquared =
+		sceneExtent.x * sceneExtent.x + sceneExtent.y * sceneExtent.y + sceneExtent.z * sceneExtent.z;
+	// Guard: even though sceneExtent components are non-negative (subtraction order), floating-point
+	// could in theory produce negative underflow. Clamp to 0 to avoid NaN from sqrt.
 	const float sceneRadius =
-		std::sqrt(sceneExtent.x * sceneExtent.x + sceneExtent.y * sceneExtent.y + sceneExtent.z * sceneExtent.z) * 0.5f;
+		std::sqrt(std::max(0.0f, sceneDiagonalSquared)) * 0.5f;
 	const Float3 lightPosition{
 		sceneCenter.x - lightForward.x * (sceneRadius + kShadowDepthPadding),
 		sceneCenter.y - lightForward.y * (sceneRadius + kShadowDepthPadding),

@@ -320,7 +320,7 @@ bool RayTracedShadows::BuildChunkBlas(
 }
 
 void RayTracedShadows::UpdateTlas(
-	const VulkanContextState &,
+	const VulkanContextState &context,
 	const std::vector<uint32_t> &visibleChunkIndices,
 	const std::vector<VkTransformMatrixKHR> &visibleChunkTransforms)
 {
@@ -345,6 +345,14 @@ void RayTracedShadows::UpdateTlas(
 		(m_config.tlasInstanceCapacityBytes - clamped * sizeof(VkAccelerationStructureInstanceKHR)));
 	m_config.tlasInstanceCount = static_cast<uint32_t>(clamped);
 	m_config.tlasRebuildCount += 1u;
+
+	if (context.allocator != nullptr && m_config.tlasInstanceAllocation != nullptr) {
+		vmaFlushAllocation(
+			context.allocator,
+			m_config.tlasInstanceAllocation,
+			0u,
+			m_config.tlasInstanceCapacityBytes);
+	}
 }
 
 void RayTracedShadows::RecordTlasBuild(

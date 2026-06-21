@@ -19,6 +19,8 @@ uint32_t ComputeChunkLodLevelsCapacity(uint32_t chunkCount);
 // Stride is constant per chunk slot so the shader can compute base word offset as
 // `chunkIndex * kLodPayloadWordStride` without per-chunk metadata. For chunkSize > 8 or future
 // non-power-of-two chunkSize this stride must be recomputed from the worst-case outExtent.
+// SYNC CHECKLIST (run before commit): `rg "kLodPayloadWordStride|kLodWordStride" src/ src/shaders/`
+// MUST show both files at the same value.
 inline constexpr uint32_t kLodPayloadWordStride = 16u;
 
 uint32_t LodPayloadWordOffsetForChunk(uint32_t chunkIndex);
