@@ -40,6 +40,13 @@ constexpr std::array kTaaResolveDescriptorBindings{
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 4,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
 };
 constexpr VkDescriptorSetLayoutCreateInfo kTaaResolveDescriptorSetLayoutInfo{
 	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -50,7 +57,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kTaaResolveDescriptorSetLayoutInfo{
 };
 constexpr VkDescriptorPoolSize kTaaResolveImageSamplerPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = kTaaResolveDescriptorSetCount * 3u,
+	.descriptorCount = kTaaResolveDescriptorSetCount * 4u,
 };
 constexpr VkDescriptorPoolSize kTaaResolveStorageBufferPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -357,10 +364,10 @@ bool RefreshTaaResolveResourceBindings(
 		"taa linear sampler is null");
 	PV_CHECK_OR_RETURN(
 		render->taaSceneColorTarget != nullptr && render->taaHistoryColorTarget != nullptr &&
-			render->depthImageView != VK_NULL_HANDLE,
+			render->depthImageView != VK_NULL_HANDLE && render->taaMotionVectorTarget != nullptr,
 		"TaaResolve",
 		"RefreshTaaResolveResourceBindings.BoundResources",
-		"offscreen targets / depth view is null");
+		"offscreen targets / depth view / motion vector target is null");
 	for (const SceneFrameResources &frameResources : render->sceneFrameResources) {
 		PV_CHECK_OR_RETURN(
 			frameResources.sceneLightingBuffer != VK_NULL_HANDLE,
@@ -439,6 +446,11 @@ bool RefreshTaaResolveResourceBindings(
 		.imageView = render->depthImageView,
 		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
 	};
+	const VkDescriptorImageInfo motionVectorImageInfo{
+		.sampler = render->taaLinearSampler,
+		.imageView = render->taaMotionVectorTarget->imageView,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
 	for (size_t frameIndex = 0; frameIndex < render->taaResolveDescriptorSets.size(); ++frameIndex) {
 		const VkDescriptorBufferInfo sceneLightingBufferInfo{
 			.buffer = render->sceneFrameResources[frameIndex].sceneLightingBuffer,
@@ -494,6 +506,18 @@ bool RefreshTaaResolveResourceBindings(
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
 				.pBufferInfo = &sceneLightingBufferInfo,
+				.pTexelBufferView = nullptr,
+			},
+			VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = render->taaResolveDescriptorSets[frameIndex],
+				.dstBinding = 4,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &motionVectorImageInfo,
+				.pBufferInfo = nullptr,
 				.pTexelBufferView = nullptr,
 			},
 		};

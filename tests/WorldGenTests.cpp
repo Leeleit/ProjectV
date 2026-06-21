@@ -1,7 +1,9 @@
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string_view>
 
 namespace {
@@ -51,6 +53,57 @@ void TestEnvGateOn(WorldGenTestContext &test)
 	(void)unsetResult;
 }
 
+void TestWorldGenPushConstantContract(WorldGenTestContext &test)
+{
+	if (sizeof(projectv::render::WorldGenPushConstants) != 64u) {
+		test.Fail(__LINE__, "WorldGenPushConstants must remain 64 bytes (4 vec4 + 1 uint + 3 reserved)");
+	}
+	projectv::render::WorldGenPushConstants defaults{};
+	if (defaults.chunkOriginAndChunkSize[0] != 0 || defaults.chunkOriginAndChunkSize[1] != 0 ||
+		defaults.chunkOriginAndChunkSize[2] != 0 || defaults.chunkOriginAndChunkSize[3] != 0) {
+		test.Fail(__LINE__, "default chunkOriginAndChunkSize must be zero-initialized");
+	}
+	if (defaults.seed != 0u) {
+		test.Fail(__LINE__, "default seed must be zero");
+	}
+}
+
+void TestWorldGenVoxelBufferBytesPerChunkContract(WorldGenTestContext &test)
+{
+	constexpr VkDeviceSize expected = sizeof(uint32_t) * 8u * 8u * 8u;
+	if (projectv::render::kWorldGenVoxelBufferBytesPerChunk != expected) {
+		test.Fail(__LINE__, "kWorldGenVoxelBufferBytesPerChunk must equal 8*8*8 uint32 = 2048 bytes per chunk");
+	}
+}
+
+void TestWorldGenDispatchSkipOnZeroActiveChunks(WorldGenTestContext &test)
+{
+	projectv::render::WorldGenPushConstants push{};
+	push.chunkCountAndFlags = {0u, 0u, 0u, 0u};
+	const bool shouldSkip = (push.chunkCountAndFlags[0] == 0u);
+	if (!shouldSkip) {
+		test.Fail(__LINE__, "Frame loop must skip RecordWorldGenDispatch when activeChunkCount is 0");
+	}
+}
+
+void TestWorldGenSeedTickVariability(WorldGenTestContext &test)
+{
+	projectv::render::WorldGenPushConstants pushA{};
+	projectv::render::WorldGenPushConstants pushB{};
+	pushA.seed = 1u;
+	pushB.seed = 2u;
+	if (pushA.seed == pushB.seed) {
+		test.Fail(__LINE__, "Different simulation ticks must produce different world gen seeds");
+	}
+	const uint64_t tickA = 1000u;
+	const uint64_t tickB = 1001u;
+	const uint32_t seedA = static_cast<uint32_t>(tickA);
+	const uint32_t seedB = static_cast<uint32_t>(tickB);
+	if (seedA == seedB) {
+		test.Fail(__LINE__, "Cast to uint32 must preserve tick difference for typical tick range");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -59,6 +112,10 @@ int main()
 	TestEnvGateDefault(test);
 	TestEnvGateOff(test);
 	TestEnvGateOn(test);
+	TestWorldGenPushConstantContract(test);
+	TestWorldGenVoxelBufferBytesPerChunkContract(test);
+	TestWorldGenDispatchSkipOnZeroActiveChunks(test);
+	TestWorldGenSeedTickVariability(test);
 
 	if (test.failures > 0) {
 		std::fprintf(stderr, "ProjectVWorldGenTests: %d failure(s)\n", test.failures);

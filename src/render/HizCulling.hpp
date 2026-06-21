@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 #include <vulkan/vulkan.h>
 
@@ -28,7 +29,17 @@ bool IsHzbCullingEnabled();
 
 bool IsMeshShaderPipelineEnabled();
 
+bool IsHzbSmartMipEnabled();
+
+bool IsHzbSmartBlendWidthEnabled();
+
 uint32_t ComputeHzbMipLevelCount(const uint32_t baseWidth, const uint32_t baseHeight);
+
+uint32_t ComputeBlendWidthForChunkMip(
+	uint32_t projectedExtentXTexels,
+	uint32_t projectedExtentYTexels,
+	uint32_t mipLevel,
+	uint32_t maxBlendWidth);
 
 bool CreateHizBuffer(
 	VulkanContextState *context,
@@ -66,5 +77,29 @@ bool RecordHzbCullingDispatch(
 	SceneFrameResources &frameResources,
 	const float (&inverseViewProjection)[16],
 	uint32_t chunkDescriptorCount);
+
+uint32_t ComputePerChunkMipLevelCpu(
+	float projectedExtentXTexels,
+	float projectedExtentYTexels,
+	uint32_t maxMipLevel);
+
+uint32_t ComputePerChunkMipLevelsFromAabbs(
+	const std::vector<std::array<float, 4>> &chunkCenters,
+	const std::vector<std::array<float, 4>> &chunkHalfExtents,
+	const std::array<float, 16> &viewProjection,
+	uint32_t baseWidth,
+	uint32_t baseHeight,
+	uint32_t maxMipLevel,
+	std::vector<uint32_t> &outMipLevels);
+
+uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
+	const std::vector<std::array<float, 4>> &chunkCenters,
+	const std::vector<std::array<float, 4>> &chunkHalfExtents,
+	const std::array<float, 16> &viewProjection,
+	uint32_t baseWidth,
+	uint32_t baseHeight,
+	uint32_t maxMipLevel,
+	uint32_t maxBlendWidth,
+	std::vector<uint32_t> &outMipAndBlendWidths);
 
 }  // namespace projectv::render

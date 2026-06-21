@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <vector>
 
 #include "SDL3/SDL_log.h"
@@ -14,7 +17,7 @@ namespace {
 constexpr uint32_t kHizCullingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kHizCullingShaderFilename[] = "hzb_cull.comp.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 5> kHizCullingDescriptorBindings{
+constexpr std::array<VkDescriptorSetLayoutBinding, 6> kHizCullingDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -50,6 +53,13 @@ constexpr std::array<VkDescriptorSetLayoutBinding, 5> kHizCullingDescriptorBindi
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.pImmutableSamplers = nullptr,
 	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 5,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
 };
 
 constexpr VkDescriptorSetLayoutCreateInfo kHizCullingDescriptorSetLayoutInfo{
@@ -63,7 +73,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kHizCullingDescriptorSetLayoutInfo{
 constexpr std::array<VkDescriptorPoolSize, 4> kHizCullingDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = kHizCullingDescriptorSetCount * 3u,
+		.descriptorCount = kHizCullingDescriptorSetCount * 4u,
 	},
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -96,6 +106,41 @@ bool IsMeshShaderPipelineEnabled()
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;
+}
+
+bool IsHzbSmartMipEnabled()
+{
+	if (const char *value = std::getenv("PROJECTV_HZB_SMART_MIP")) {
+		return value[0] != '\0' && value[0] != '0';
+	}
+	return false;
+}
+
+bool IsHzbSmartBlendWidthEnabled()
+{
+	if (const char *value = std::getenv("PROJECTV_HZB_SMART_BLEND_WIDTH")) {
+		return value[0] == 'O' && value[1] == 'N';
+	}
+	return false;
+}
+
+uint32_t ComputeBlendWidthForChunkMip(
+	const uint32_t projectedExtentXTexels,
+	const uint32_t projectedExtentYTexels,
+	const uint32_t mipLevel,
+	const uint32_t maxBlendWidth)
+{
+	if (maxBlendWidth == 0u) {
+		return 0u;
+	}
+	const uint32_t maxExtent = std::max(projectedExtentXTexels, projectedExtentYTexels);
+	if (maxExtent == 0u || mipLevel == 0u) {
+		return 0u;
+	}
+	const uint32_t texelsAtMip = std::max<uint32_t>(maxExtent >> mipLevel, 1u);
+	const uint32_t frac = maxExtent > 0u ? (maxExtent % (1u << std::min<uint32_t>(mipLevel, 16u))) : 0u;
+	const uint32_t blendEstimate = std::min<uint32_t>(texelsAtMip / 4u + frac / 8u, maxBlendWidth);
+	return std::min<uint32_t>(blendEstimate, maxBlendWidth);
 }
 
 uint32_t ComputeHzbMipLevelCount(const uint32_t baseWidth, const uint32_t baseHeight)
@@ -672,7 +717,8 @@ bool RecordHzbCullingDispatch(
 	if (frameResources.hizCullingDescriptorSet == VK_NULL_HANDLE ||
 		frameResources.chunkAabbBuffer == VK_NULL_HANDLE ||
 		frameResources.visibilityMaskBuffer == VK_NULL_HANDLE ||
-		frameResources.hzbVisibleCountBuffer == VK_NULL_HANDLE) {
+		frameResources.hzbVisibleCountBuffer == VK_NULL_HANDLE ||
+		frameResources.hzbPerChunkMipBuffer == VK_NULL_HANDLE) {
 		return false;
 	}
 	if (render.hizBuffer.imageView == VK_NULL_HANDLE ||
@@ -745,7 +791,12 @@ bool RecordHzbCullingDispatch(
 	visibleCountInfo.offset = 0;
 	visibleCountInfo.range = sizeof(uint32_t);
 
-	std::array<VkWriteDescriptorSet, 5> writes{};
+	VkDescriptorBufferInfo perChunkMipInfo{};
+	perChunkMipInfo.buffer = frameResources.hzbPerChunkMipBuffer;
+	perChunkMipInfo.offset = 0;
+	perChunkMipInfo.range = VK_WHOLE_SIZE;
+
+	std::array<VkWriteDescriptorSet, 6> writes{};
 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[0].dstSet = frameResources.hizCullingDescriptorSet;
 	writes[0].dstBinding = 0;
@@ -785,6 +836,14 @@ bool RecordHzbCullingDispatch(
 	writes[4].descriptorCount = 1;
 	writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	writes[4].pBufferInfo = &visibleCountInfo;
+
+	writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[5].dstSet = frameResources.hizCullingDescriptorSet;
+	writes[5].dstBinding = 5;
+	writes[5].dstArrayElement = 0;
+	writes[5].descriptorCount = 1;
+	writes[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[5].pBufferInfo = &perChunkMipInfo;
 
 	vkUpdateDescriptorSets(
 		context->device,
@@ -831,6 +890,157 @@ bool RecordHzbCullingDispatch(
 		vkCmdDispatch(commandBuffer, workgroupCount, 1u, 1u);
 	}
 	return true;
+}
+
+uint32_t ComputePerChunkMipLevelCpu(
+	const float projectedExtentXTexels,
+	const float projectedExtentYTexels,
+	const uint32_t maxMipLevel)
+{
+	const float maxExtent = std::max(projectedExtentXTexels, projectedExtentYTexels);
+	if (maxExtent <= 1.0f) {
+		return 0u;
+	}
+	const float logVal = std::log2(maxExtent);
+	const int32_t floored = static_cast<int32_t>(logVal);
+	if (floored < 0) {
+		return 0u;
+	}
+	const uint32_t capped = static_cast<uint32_t>(floored);
+	return std::min(capped, maxMipLevel);
+}
+
+uint32_t ComputePerChunkMipLevelsFromAabbs(
+	const std::vector<std::array<float, 4>> &chunkCenters,
+	const std::vector<std::array<float, 4>> &chunkHalfExtents,
+	const std::array<float, 16> &viewProjection,
+	const uint32_t baseWidth,
+	const uint32_t baseHeight,
+	const uint32_t maxMipLevel,
+	std::vector<uint32_t> &outMipLevels)
+{
+	const size_t count = std::min(chunkCenters.size(), chunkHalfExtents.size());
+	outMipLevels.assign(count, 0u);
+	if (count == 0u) {
+		return 0u;
+	}
+	for (size_t i = 0; i < count; ++i) {
+		const float centerX = chunkCenters[i][0];
+		const float centerY = chunkCenters[i][1];
+		const float centerZ = chunkCenters[i][2];
+		const float halfExtent = chunkHalfExtents[i][0];
+		float minX = std::numeric_limits<float>::infinity();
+		float minY = std::numeric_limits<float>::infinity();
+		float maxX = -std::numeric_limits<float>::infinity();
+		float maxY = -std::numeric_limits<float>::infinity();
+		for (int sx = -1; sx <= 1; sx += 2) {
+			for (int sy = -1; sy <= 1; sy += 2) {
+				for (int sz = -1; sz <= 1; sz += 2) {
+					const float cornerX = centerX + static_cast<float>(sx) * halfExtent;
+					const float cornerY = centerY + static_cast<float>(sy) * halfExtent;
+					const float cornerZ = centerZ + static_cast<float>(sz) * halfExtent;
+					const float clipX = viewProjection[0] * cornerX + viewProjection[4] * cornerY + viewProjection[8] * cornerZ + viewProjection[12];
+					const float clipY = viewProjection[1] * cornerX + viewProjection[5] * cornerY + viewProjection[9] * cornerZ + viewProjection[13];
+					const float clipW = viewProjection[3] * cornerX + viewProjection[7] * cornerY + viewProjection[11] * cornerZ + viewProjection[15];
+					if (clipW <= 0.0001f) {
+						outMipLevels[i] = 0u;
+						goto next_chunk;
+					}
+					const float ndcX = clipX / clipW;
+					const float ndcY = clipY / clipW;
+					const float uvX = ndcX * 0.5f + 0.5f;
+					const float uvY = ndcY * 0.5f + 0.5f;
+					if (uvX < minX) minX = uvX;
+					if (uvY < minY) minY = uvY;
+					if (uvX > maxX) maxX = uvX;
+					if (uvY > maxY) maxY = uvY;
+				}
+			}
+		}
+		{
+			const float projectedXTexels = (maxX - minX) * static_cast<float>(baseWidth);
+			const float projectedYTexels = (maxY - minY) * static_cast<float>(baseHeight);
+			outMipLevels[i] = ComputePerChunkMipLevelCpu(
+				projectedXTexels,
+				projectedYTexels,
+				maxMipLevel);
+		}
+		next_chunk:;
+	}
+	return static_cast<uint32_t>(count);
+}
+
+uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
+	const std::vector<std::array<float, 4>> &chunkCenters,
+	const std::vector<std::array<float, 4>> &chunkHalfExtents,
+	const std::array<float, 16> &viewProjection,
+	const uint32_t baseWidth,
+	const uint32_t baseHeight,
+	const uint32_t maxMipLevel,
+	const uint32_t maxBlendWidth,
+	std::vector<uint32_t> &outMipAndBlendWidths)
+{
+	const size_t count = std::min(chunkCenters.size(), chunkHalfExtents.size());
+	outMipAndBlendWidths.assign(count * 2u, 0u);
+	if (count == 0u) {
+		return 0u;
+	}
+	for (size_t i = 0; i < count; ++i) {
+		const float centerX = chunkCenters[i][0];
+		const float centerY = chunkCenters[i][1];
+		const float centerZ = chunkCenters[i][2];
+		const float halfExtent = chunkHalfExtents[i][0];
+		float minX = std::numeric_limits<float>::infinity();
+		float minY = std::numeric_limits<float>::infinity();
+		float maxX = -std::numeric_limits<float>::infinity();
+		float maxY = -std::numeric_limits<float>::infinity();
+		bool skipBlend = false;
+		for (int sx = -1; sx <= 1; sx += 2) {
+			for (int sy = -1; sy <= 1; sy += 2) {
+				for (int sz = -1; sz <= 1; sz += 2) {
+					const float cornerX = centerX + static_cast<float>(sx) * halfExtent;
+					const float cornerY = centerY + static_cast<float>(sy) * halfExtent;
+					const float cornerZ = centerZ + static_cast<float>(sz) * halfExtent;
+					const float clipX = viewProjection[0] * cornerX + viewProjection[4] * cornerY + viewProjection[8] * cornerZ + viewProjection[12];
+					const float clipY = viewProjection[1] * cornerX + viewProjection[5] * cornerY + viewProjection[9] * cornerZ + viewProjection[13];
+					const float clipW = viewProjection[3] * cornerX + viewProjection[7] * cornerY + viewProjection[11] * cornerZ + viewProjection[15];
+					if (clipW <= 0.0001f) {
+						outMipAndBlendWidths[i * 2u] = 0u;
+						outMipAndBlendWidths[i * 2u + 1u] = 0u;
+						skipBlend = true;
+						goto next_chunk_blend;
+					}
+					const float ndcX = clipX / clipW;
+					const float ndcY = clipY / clipW;
+					const float uvX = ndcX * 0.5f + 0.5f;
+					const float uvY = ndcY * 0.5f + 0.5f;
+					if (uvX < minX) minX = uvX;
+					if (uvY < minY) minY = uvY;
+					if (uvX > maxX) maxX = uvX;
+					if (uvY > maxY) maxY = uvY;
+				}
+			}
+		}
+		{
+			const uint32_t projectedXTexels = static_cast<uint32_t>(std::abs(maxX - minX) * static_cast<float>(baseWidth));
+			const uint32_t projectedYTexels = static_cast<uint32_t>(std::abs(maxY - minY) * static_cast<float>(baseHeight));
+			const uint32_t mip = ComputePerChunkMipLevelCpu(
+				static_cast<float>(projectedXTexels),
+				static_cast<float>(projectedYTexels),
+				maxMipLevel);
+			outMipAndBlendWidths[i * 2u] = mip;
+			outMipAndBlendWidths[i * 2u + 1u] = (mip == 0u)
+				? 0u
+				: ComputeBlendWidthForChunkMip(
+					projectedXTexels,
+					projectedYTexels,
+					mip,
+					maxBlendWidth);
+		}
+		next_chunk_blend:;
+		(void)skipBlend;
+	}
+	return static_cast<uint32_t>(count);
 }
 
 }  // namespace projectv::render

@@ -22,6 +22,10 @@ layout(set = 0, binding = 4, std430) buffer VisibleCount {
     uint visibleCount;
 };
 
+layout(set = 0, binding = 5, std430) readonly buffer PerChunkMip {
+    uint perChunkMipLevels[];
+};
+
 layout(push_constant) uniform CullPushConstants {
     mat4 inverseViewProjection;
     uvec4 hizExtentAndMipCount;
@@ -102,12 +106,25 @@ void main()
     const int mipLevel = int(pushConstants.hizExtentAndMipCount.w);
     const ivec2 hizBaseExtent = ivec2(pushConstants.hizExtentAndMipCount.x, pushConstants.hizExtentAndMipCount.y);
 
-    const bool visible = AabbVisibleAgainstMip(
+    const int perChunkMip = int(perChunkMipLevels[chunkIndex]);
+    const int useMipLevel = perChunkMip > 0 ? perChunkMip : mipLevel;
+
+    bool visible = AabbVisibleAgainstMip(
         chunkAabbs[chunkIndex],
-        mipLevel,
+        useMipLevel,
         pushConstants.inverseViewProjection,
         hizTexture,
         hizBaseExtent);
+
+    if (!visible && perChunkMip > 0) {
+        visible = AabbVisibleAgainstMip(
+            chunkAabbs[chunkIndex],
+            0,
+            pushConstants.inverseViewProjection,
+            hizTexture,
+            hizBaseExtent);
+    }
+
     if (visible) {
         atomicOr(visibilityWords[wordIndex], 1u << bitIndex);
         atomicAdd(visibleCount, 1u);

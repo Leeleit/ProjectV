@@ -11,10 +11,12 @@ import projectv.string_id;
 #include "debug/ProfilingGpu.hpp"
 #include "render/SceneResources.hpp"
 #include "render/TaaRenderTargets.hpp"
+#include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
+#include "render/vulkan/VulkanWorldGenPipeline.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 void ShutdownVulkan(AppState *state)
@@ -33,6 +35,7 @@ void ShutdownVulkan(AppState *state)
 		DestroyVoxelMeshingPipeline(&state->context(), &state->render());
 		projectv::render::DestroyMeshShaderPipelines(&state->context(), &state->render());
 		projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());
+		projectv::render::DestroyWorldGenPipelines(&state->context(), &state->render());
 		DestroyGraphicsPipeline(&state->context(), &state->render());
 		DestroyDepthResources(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());
@@ -98,6 +101,8 @@ void ShutdownVulkan(AppState *state)
 		if (state->context().commandPool) {
 			vkDestroyCommandPool(state->context().device, state->context().commandPool, nullptr);
 		}
+
+		projectv::render::DestroyAsyncComputeResources(&state->context());
 
 		if (state->context().renderTimelineSemaphore) {
 			vkDestroySemaphore(state->context().device, state->context().renderTimelineSemaphore, nullptr);

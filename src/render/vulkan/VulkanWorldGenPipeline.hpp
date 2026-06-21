@@ -29,6 +29,8 @@ inline bool IsWorldGenGpuPipelineRequested()
 	return value[0] == 'O' && value[1] == 'N';
 }
 
+inline constexpr VkDeviceSize kWorldGenVoxelBufferBytesPerChunk = sizeof(uint32_t) * 8u * 8u * 8u;
+
 bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render);
 
 void DestroyWorldGenPipelines(VulkanContextState *context, RenderState *render);

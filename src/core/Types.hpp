@@ -561,6 +561,18 @@ struct SceneFrameResources {
 	void *hzbVisibleCountMappedData = nullptr;
 	VkBuffer hzbVisibleCountBuffer = VK_NULL_HANDLE;
 	VmaAllocation hzbVisibleCountAllocation = nullptr;
+	void *hzbPerChunkMipMappedData = nullptr;
+	VkBuffer hzbPerChunkMipBuffer = VK_NULL_HANDLE;
+	VmaAllocation hzbPerChunkMipAllocation = nullptr;
+	VkDeviceSize hzbPerChunkMipCapacityBytes = 0u;
+	void *lodDownsampledVoxelPayloadMappedData = nullptr;
+	VkBuffer lodDownsampledVoxelPayloadBuffer = VK_NULL_HANDLE;
+	VmaAllocation lodDownsampledVoxelPayloadAllocation = nullptr;
+	VkDeviceSize lodDownsampledVoxelPayloadCapacityBytes = 0u;
+	void *chunkLodLevelsMappedData = nullptr;
+	VkBuffer chunkLodLevelsBuffer = VK_NULL_HANDLE;
+	VmaAllocation chunkLodLevelsAllocation = nullptr;
+	uint32_t chunkLodLevelsCapacity = 0u;
 	void *visibleChunkIdMappedData = nullptr;
 	VkBuffer visibleChunkIdBuffer = VK_NULL_HANDLE;
 	VmaAllocation visibleChunkIdAllocation = nullptr;
@@ -674,6 +686,7 @@ struct RenderState {
 	uint32_t sceneChunkVoxelPayloadWordCount = 0;
 	uint64_t sceneUploadVersion = 0;
 	uint64_t sceneVoxelPayloadVersion = 0;
+	uint64_t lodDownsampledPayloadVersion = 0;
 	uint32_t sceneTriangleCount = 0;
 	uint64_t sceneMemoryBytes = 0;
 	void *tracyGraphicsContext = nullptr;
@@ -732,6 +745,8 @@ struct RenderState {
 
 	VkImageLayout taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImageLayout taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImageLayout taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImageLayout taaMotionVectorHistoryCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
@@ -923,6 +938,9 @@ struct VulkanContextState {
 	uint64_t renderTimelineValue = 0;
 	VmaAllocator allocator = VK_NULL_HANDLE;
 	VkCommandPool commandPool = VK_NULL_HANDLE;
+	VkCommandPool asyncComputeCommandPool = VK_NULL_HANDLE;
+	VkCommandBuffer asyncComputeCommandBuffer = VK_NULL_HANDLE;
+	uint64_t asyncComputeLastTimelineValue = 0;
 
 	bool supportsDynamicRenderingUnusedAttachments = false;
 };

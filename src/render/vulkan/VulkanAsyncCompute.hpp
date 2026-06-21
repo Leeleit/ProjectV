@@ -1,0 +1,29 @@
+#pragma once
+
+#include "core/Types.hpp"
+
+#include <cstdint>
+
+#include <vulkan/vulkan.h>
+
+namespace projectv::render {
+
+bool IsAsyncComputeResourcesAllocated(const VulkanContextState &context);
+
+bool EnsureAsyncComputeResources(VulkanContextState *context);
+
+void DestroyAsyncComputeResources(VulkanContextState *context);
+
+bool RecordAsyncComputePass(
+	VkCommandBuffer asyncCommandBuffer,
+	VulkanContextState &context,
+	RenderState &render,
+	AppState *state,
+	FrameState *frame);
+
+bool SubmitToComputeQueue(
+	VulkanContextState *context,
+	VkCommandBuffer commandBuffer,
+	uint64_t *outTimelineValue);
+
+}  // namespace projectv::render

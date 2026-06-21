@@ -26,6 +26,7 @@ import projectv.string_id;
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
 #include "voxel/SceneConfig.hpp"
+#include "voxel/ChunkStreamer.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -608,6 +609,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 void SDL_AppQuit(void *appstate, SDL_AppResult)
 {
 	auto *state = static_cast<AppState *>(appstate);
+	projectv::voxel::StopChunkStreamerWorker();
 	ShutdownVulkan(state);
 	delete state;
 }

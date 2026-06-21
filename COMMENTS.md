@@ -374,3 +374,245 @@ device rejected the create call silently, OR the destroy was simply missing). Fi
 for branchless shadow path. Without this feature enabled, validation layer reports
 `SPIR-V Capability DemoteToHelperInvocation was declared` and the shader may behave
 unexpectedly on drivers that optimize differently.
+
+## `src/shaders/taa_resolve.frag`
+
+### L1-L8 (design-rationale)
+
+Binding 4 = `sampler2D motionVector` added in 4x session. Replaces depth-reproject path
+(Karis 2014 Pipeline A). Per `2026-06-21-taa-motion-vectors` experiment verdict=yes, the
+motion vector texture is written by `voxel.frag:903` as `prevNdc - currNdc` in [0,1] UV space.
+The TAA resolve consumes it as `prevUv = uv + motion`, no world-space reconstruction needed.
+This eliminates the 2 mat4 multiplies + world-position reconstruction in the original
+depth-reproject path (15-25 cycles per pixel on RTX 3060 Ti). Binding 2 = `sampler2D depth`
+retained for ABI compatibility but unused in main flow.
+
+## `src/render/vulkan/TaaResolvePipeline.cpp`
+
+### L14-L60 (design-rationale)
+
+4x session extended `kTaaResolveDescriptorBindings` from 5 to 6 elements. Binding 4 added for
+motion vector sampler (`VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`). Pool size bumped 3→4
+samplers per frame. `motionVectorImageInfo` written alongside `sceneColorImageInfo` +
+`historyColorImageInfo` + `depthImageInfo`. Precondition check requires
+`taaMotionVectorTarget != nullptr` (added in 4x Phase 1). The 4th `VkWriteDescriptorSet`
+matches `taa_resolve.frag` binding 4 declaration.
+
+## `src/voxel/ChunkStreamer.cpp`
+
+### L98-L168 (design-rationale)
+
+4x session added `std::jthread` background worker (C++20) with `std::stop_token` cooperative
+cancellation per cppreference docs. The worker pops pending `ChunkStreamRequest`s from
+the mutex-protected queue, reads binary file `chunk_<index>.bin` from
+`PROJECTV_CHUNK_PATH` (default: `<build>/cache/chunks/`), pushes `ChunkData` to the
+ready queue. File format: 16-byte header (magic `0x504B5631` = "PKV1" little-endian +
+uint32 version `1` + uint64 voxel byte count) + serialized voxel bytes. `EnqueueChunkStreamRequest`
+calls `StartChunkStreamerWorker` lazily via `compare_exchange_strong` atomic guard.
+`StopChunkStreamerWorker` calls `thread.request_stop()` + `thread.join()`. TSan-clean
+expected since all shared state is mutex-protected or atomic.
+
+## `src/voxel/ChunkStreamer.hpp`
+
+### L11-L37 (design-rationale)
+
+`ChunkStreamError` enum extended with `FileNotFound` (3) + `FileReadFailed` (4) for
+the 4x session background worker. Public API: `StartChunkStreamerWorker` +
+`StopChunkStreamerWorker` + `IsChunkStreamerWorkerActive` + `GetChunkStreamerCachePath` +
+`ProcessPendingRequests(std::stop_token)` (the worker function passed to `std::jthread`).
+Cold path: uses `std::expected<ChunkData, ChunkStreamError>` per `agent/knowledge.md §29.0`.
+
+## `src/render/HizCulling.{hpp,cpp}`
+
+### L17-L82 / L17-L86 (design-rationale)
+
+4x session extended HZB culling to per-chunk mip level selection. `kHizCullingDescriptorBindings`
+5→6 elements (added binding 5 = `perChunkMipLevels` SSBO). Pool size bumped 3→4 storage
+sets per frame. Per `2026-06-21-hzb-smart-mip-select` experiment verdict=mixed:
+- `IsHzbSmartMipEnabled()` env gate (`PROJECTV_HZB_SMART_MIP=ON`, default OFF) preserves
+  mainline behavior. When OFF, push constant mipLevel=0 is used (per-chunk SSBO ignored
+  because the shader checks `perChunkMip > 0`).
+- `ComputePerChunkMipLevelCpu(projectedXTexels, projectedYTexels, maxMipLevel)` uses
+  Turitzin 2020 formula `mip = floor(log2(max(projX, projY)))`. Standard mip-of-N texels
+  per occlusion-test heuristic from `Hierarchical Depth Buffers` Miketuritzin.com blog.
+- `ComputePerChunkMipLevelsFromAabbs` projects 8 AABB corners via the viewProjection
+  matrix (column-major `std::array<float, 16>`), computes per-chunk projected screen-space
+  extent, applies the formula. Returns count processed. Designed to be called once per
+  frame in `FramePreparation.cpp` (wired separately).
+- `hzb_cull.comp` **2-phase fallback**: `if (!visible && perChunkMip > 0) { visible = AabbVisibleAgainstMip(...0...); }`
+  verifies culled chunks at mip=0. Eliminates 0.02-0.20% FN per the experiment (C_PerChunkStaticMip
+  smart mip alone had worst-case 30dB PSNR; 2-phase fallback recovers ∞ dB with 350× texel
+  reduction retained).
+
+## `src/render/Renderer.cpp` (4x changes)
+
+### L1369-L1448 (design-rationale)
+
+4x Phase 2: World gen dispatch wired in `DrawFrame` after Fluid CA. Uses
+`BuildActiveChunkIdsForWorldGen` to filter empty chunks (`nonAirVoxelCount == 0`),
+zero-fills the per-frame SSBO via `std::memset` (mapped memory), populates
+`WorldGenPushConstants` (chunkOriginAndChunkSize, chunkCountAndFlags, noiseParams with
+`{0.5, 0.5, 4u, 2.0}` = 4-octave FBM with persistence 2.0, seed = `simulationTick` for
+deterministic per-frame variation), calls `RecordWorldGenDispatch`. Skip if
+`worldGenChunkCount == 0` (zero active chunks = no GPU work).
+4x Phase 1: removed `inverseCurrentViewProj` calculation since motion vector path
+doesn't need current→world unprojection. `currentViewProjection` push constant retained
+for ABI compatibility.
+
+## `src/render/SceneResources.cpp` (4x changes)
+
+### L671-L675 (design-rationale)
+
+4x Phase 4: added `hzbPerChunkMipBuffer` alloc + destroy + structured-binding entry.
+Buffer size = `sizeof(uint32_t) * max(chunks.size(), 1u)` (1 uint32 per chunk for mip
+level). Capacity check emits `LogRuntimeFailure` if chunks exceed capacity (matches
+the NanoVDB pattern). Nullify block sets `hzbPerChunkMipMappedData = nullptr` + buffer
+to `VK_NULL_HANDLE` + allocation to `nullptr` + capacity to `0u`.
+
+## `src/app/FramePreparation.cpp` (4x changes)
+
+### L122-L137 (design-rationale)
+
+4x Phase 3: per-frame chunk stream drain with budget `kMaxChunksPerFrame = 8u`. Drains
+up to 8 ready chunks per frame, populates chunks into the voxel world. Tracy plots
+`Chunk Stream Drained` (count drained) + `Chunk Stream Pending` (queue depth). Gated
+on `IsChunkStreamingEnabled()`. Throttles per-frame SSD read pressure (avoids 60Hz frame
+budget spikes when many chunks become ready simultaneously).
+
+
+## `src/render/vulkan/VulkanAsyncCompute.hpp`
+
+### L1-L28 (design-rationale)
+
+Stage 6.3 per-pass async compute wiring per `TODO.md §6.3` + `agent/knowledge.md §30.4`
+3-step migration precedent. New file (4x session, this section). Public API:
+- `IsAsyncComputeResourcesAllocated(context)` — predicate for early-out in `DrawFrame`
+  routing.
+- `EnsureAsyncComputeResources(context)` — creates dedicated compute command pool
+  (`VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT`,
+  `queueFamilyIndex = context->dedicatedComputeQueueFamilyIndex`) and allocates 1
+  one-shot `VkCommandBuffer` per the nvpro-samples transient pool pattern. Returns
+  false if dedicated compute queue is unavailable (graceful fallback to graphics
+  queue).
+- `DestroyAsyncComputeResources(context)` — symmetric destroy.
+- `RecordAsyncComputePass(asyncCB, context, render, state, frame)` — orchestrator that
+  records Fluid CA + world gen dispatches into the async CB. Returns false if nothing
+  was dispatched. Skips HZB (deferred — cross-queue depth sync needs separate timeline).
+- `SubmitToComputeQueue(context, commandBuffer, outTimelineValue)` — generalized
+  `vkQueueSubmit2` helper that bumps `context->renderTimelineValue` +1 and waits on
+  previous value / signals new value via `renderTimelineSemaphore`. Reuses the
+  pattern from 8x Phase 4 `SubmitFluidCaToComputeQueue` so existing timeline
+  semantics are preserved.
+
+Env gate: `PROJECTV_ASYNC_COMPUTE=ON` (default OFF per `agent/knowledge.md §30.4`
+Step 1 additive optional path precedent). When OFF, `Renderer.cpp::DrawFrame` falls
+back to per-pass main graphics command buffer recording (current mainline behavior).
+
+## `src/render/vulkan/VulkanAsyncCompute.cpp`
+
+### L1-L50 (design-rationale)
+
+`EnsureAsyncComputeResources` mirrors `VulkanMeshShaderPipeline::CreateMeshShaderModule`
+extraction pattern (helper for transient resource setup). Pipeline barrier pattern
+follows Vulkan 1.4 `vkQueueSubmit2` + `VkSemaphoreSubmitInfo` per
+`docs.vulkan.org/refpages/latest/refpages/source/vkQueueSubmit2.html` + nvpro-samples
+async compute pattern. `record -> submit -> consume` data flow matches the
+canonical 3-stage timeline per `agent/knowledge.md §30.4`.
+
+### L60-L120 (design-rationale)
+
+`RecordAsyncComputePass` body mirrors the per-pass blocks in `Renderer.cpp::DrawFrame`
+(Fluid CA + world gen only — HZB deferred). Identical push-constant population as
+the inline graphics path; this is by design so the recording is byte-equivalent
+regardless of which queue runs it. `VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT` per
+the spec §6.4 command buffer usage flags; implicit `vkResetCommandBuffer` on next
+`vkBeginCommandBuffer`.
+
+### L130-L200 (design-rationale)
+
+`SubmitToComputeQueue` reuses `context->renderTimelineValue` (single shared
+timeline). Per `agent/knowledge.md §30.4` 3-step migration: this is Step 1 (additive
+optional path, default OFF). Bumps timeline by 1; new value goes to caller via
+`outTimelineValue` for downstream graphics submit `VkSemaphoreSubmitInfo` wait
+(VUID-VkSubmitInfo2-semaphore-03881: signal value > wait value). Failure path
+restores the bumped value so subsequent submits continue from a clean state.
+
+## `src/render/Renderer.cpp` (this session)
+
+### L1380-L1383 (design-rationale)
+
+This session: `asyncComputePathActive` predicate computed once per frame.
+Gated on `IsAsyncComputeEnabled() && IsAsyncComputeResourcesAllocated(*context) &&
+(render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled)`. Last
+conjunct avoids unnecessary async work when no compute pass is enabled.
+
+### L1385-L1414 (design-rationale)
+
+This session: Fluid CA + world gen dispatches on graphics CB wrapped in
+`if (!asyncComputePathActive && ...)`. When async is ON, these dispatches are
+skipped on graphics CB and recorded into the dedicated async compute CB instead.
+HZB dispatch on graphics CB is unchanged (deferred cross-queue depth sync).
+
+### L1500-L1530 (design-rationale)
+
+This session: After `vkEndCommandBuffer(graphicsCmd)`, async compute submit path
+runs first. On success, `context->asyncComputeLastTimelineValue` is updated with
+the new timeline value. Then graphics submit adds a 2nd `VkSemaphoreSubmitInfo`
+wait on `renderTimelineSemaphore` at value = `asyncComputeLastTimelineValue` so
+graphics consumes the previous frame's async compute result (1-frame pipeline
+depth, the canonical nvpro-samples pattern).
+
+
+## `src/render/LodDownsampleGpuConsume.hpp`
+
+### L1-L25 (design-rationale)
+
+Stage 4.2 LOD GPU consume infrastructure per `TODO.md §4.2` + `agent/knowledge.md §30.4`
+3-step migration. New file (this session, this section). Public API:
+- `IsLodDownsampledGpuConsumeEnabled()` — env gate predicate (`PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME=ON`,
+  default OFF per additive optional path precedent).
+- `ComputeLodDownsampledVoxelPayloadBytes(chunkCount, chunkSize)` — capacity helper for worst-case
+  downsampled extent (`chunkSize/2` clamped to ≥1) cubed, capped at 64 MiB safety.
+- `ComputeChunkLodLevelsCapacity(chunkCount)` — capacity helper, `max(chunkCount, 1)` floor.
+- `RefreshLodDownsampledBuffers(context, render, world)` — per-frame upload helper.
+
+## `src/render/LodDownsampleGpuConsume.cpp`
+
+### L1-L70 (design-rationale)
+
+`RefreshLodDownsampledBuffers` writes per-chunk `lodLevel` (uint8 → uint32 packed) to
+`chunkLodLevelsBuffer` SSBO from `world.chunks[i].lodLevel`. Zeros the
+`lodDownsampledVoxelPayloadBuffer` SSBO. Capacity check emits `LogRuntimeFailure`
+on overflow (matches the NanoVDB pattern). Bumps `render->lodDownsampledPayloadVersion`
+on success. This is the GPU consume infrastructure only — actual mesh emission from
+the downsampled payload is deferred (GreedyFacePass needs per-chunk extent parameterization).
+
+## `src/voxel/ChunkStreamer.{hpp,cpp}` (this session changes)
+
+### Prebake API (design-rationale)
+
+This session Step 3 partial: `BakeAllChunksToDisk(world, outStats)` cold-path API
+that iterates chunks, serializes each chunk's `chunkSize^3` material grid via
+`world.sparseStorage.GetCell(x, y, z)`, writes to `chunk_<index>.bin` with the same
+16-byte header format as the existing reader. `ChunkPrebakeStats` struct reports
+`chunksBaked` + `chunksSkipped` + `totalVoxelBytes`. `IsChunkStreamerPrebakeReady()`
++ `GetChunkStreamerPrebakeVersion()` expose a monotonic atomic `prebakeVersion`
+counter. `PreloadChunksAroundCamera(cameraX, cameraY, cameraZ, radiusChunks)`
+iterates grid cells within radius, computes `linearIndex` via
+`gz * gridHeight * gridWidth + gy * gridWidth + gx` (matches
+`VoxelWorld::chunks` storage order), enqueues high-priority `ChunkStreamRequest`
+for each. Grid bounds check via `world.width/height/depth` clamps negative or
+out-of-range grid coords. All three functions gated on `IsChunkStreamingEnabled()`.
+
+## `src/render/HizCulling.{hpp,cpp}` (this session changes)
+
+### Smart blend width v2 (design-rationale)
+
+This session partial: `IsHzbSmartBlendWidthEnabled()` env gate
+(`PROJECTV_HZB_SMART_BLEND_WIDTH=ON`, default OFF) +
+`ComputeBlendWidthForChunkMip(projectedXTexels, projectedYTexels, mipLevel, maxBlendWidth)`
+CPU helper computes `texelsAtMip / 4 + frac / 8` bounded by `maxBlendWidth`.
+`ComputePerChunkMipAndBlendWidthsFromAabbs` produces a packed output vector
+(2 uint32 per chunk: `[mip, blendWidth, mip, blendWidth, ...]`) used for SSBO
+struct change deferred to follow-up. Reuses the existing 8-corner AABB projection
+from `ComputePerChunkMipLevelsFromAabbs` for visual consistency.

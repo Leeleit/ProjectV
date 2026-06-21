@@ -2,6 +2,7 @@ import projectv.math;
 
 #include "render/SceneResources.hpp"
 
+#include "render/LodDownsampleGpuConsume.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
 
 #include "core/RuntimeDiagnostics.hpp"
@@ -605,7 +606,7 @@ void DestroySceneResources(
 		}
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, 	visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -665,6 +666,18 @@ void DestroySceneResources(
 		if (hzbVisibleCountBuffer && hzbVisibleCountAllocation) {
 			profiling::RecordFree(hzbVisibleCountAllocation, "SceneHzbVisibleCountBufferAllocation");
 			vmaDestroyBuffer(context->allocator, hzbVisibleCountBuffer, hzbVisibleCountAllocation);
+		}
+		if (hzbPerChunkMipBuffer && hzbPerChunkMipAllocation) {
+			profiling::RecordFree(hzbPerChunkMipAllocation, "SceneHzbPerChunkMipBufferAllocation");
+			vmaDestroyBuffer(context->allocator, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation);
+		}
+		if (lodDownsampledVoxelPayloadBuffer && lodDownsampledVoxelPayloadAllocation) {
+			profiling::RecordFree(lodDownsampledVoxelPayloadAllocation, "SceneLodDownsampledVoxelPayloadBufferAllocation");
+			vmaDestroyBuffer(context->allocator, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation);
+		}
+		if (chunkLodLevelsBuffer && chunkLodLevelsAllocation) {
+			profiling::RecordFree(chunkLodLevelsAllocation, "SceneChunkLodLevelsBufferAllocation");
+			vmaDestroyBuffer(context->allocator, chunkLodLevelsBuffer, chunkLodLevelsAllocation);
 		}
 		if (fluidCaSourceBuffer && fluidCaSourceAllocation) {
 			profiling::RecordFree(fluidCaSourceAllocation, "SceneFluidCaSourceBufferAllocation");
@@ -748,6 +761,18 @@ sceneLightingMappedData = nullptr;
 		hzbVisibleCountMappedData = nullptr;
 		hzbVisibleCountBuffer = VK_NULL_HANDLE;
 		hzbVisibleCountAllocation = nullptr;
+		hzbPerChunkMipMappedData = nullptr;
+		hzbPerChunkMipBuffer = VK_NULL_HANDLE;
+		hzbPerChunkMipAllocation = nullptr;
+		hzbPerChunkMipCapacityBytes = 0u;
+		lodDownsampledVoxelPayloadMappedData = nullptr;
+		lodDownsampledVoxelPayloadBuffer = VK_NULL_HANDLE;
+		lodDownsampledVoxelPayloadAllocation = nullptr;
+		lodDownsampledVoxelPayloadCapacityBytes = 0u;
+		chunkLodLevelsMappedData = nullptr;
+		chunkLodLevelsBuffer = VK_NULL_HANDLE;
+		chunkLodLevelsAllocation = nullptr;
+		chunkLodLevelsCapacity = 0u;
 		fluidCaSourceMappedData = nullptr;
 		fluidCaSourceBuffer = VK_NULL_HANDLE;
 		fluidCaSourceAllocation = nullptr;
@@ -1233,6 +1258,80 @@ bool CreateSceneResources(
 			frameResources.hzbVisibleCountMappedData,
 			&initialHzbVisibleCount,
 			sizeof(uint32_t));
+
+		const uint32_t hzbPerChunkMipCount =
+			std::max(static_cast<uint32_t>(world->voxelWorld->chunks.size()), 1u);
+		const VkDeviceSize hzbPerChunkMipBytes = sizeof(uint32_t) * hzbPerChunkMipCount;
+		VmaAllocationInfo hzbPerChunkMipAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				hzbPerChunkMipBytes,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.hzbPerChunkMipBuffer,
+				&frameResources.hzbPerChunkMipAllocation,
+				&hzbPerChunkMipAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.hzbPerChunkMipMappedData = hzbPerChunkMipAllocationInfo.pMappedData;
+		frameResources.hzbPerChunkMipCapacityBytes = hzbPerChunkMipAllocationInfo.size;
+		profiling::RecordAllocation(
+			frameResources.hzbPerChunkMipAllocation,
+			hzbPerChunkMipAllocationInfo.size,
+			"SceneHzbPerChunkMipBufferAllocation");
+		render->sceneMemoryBytes += hzbPerChunkMipAllocationInfo.size;
+
+		const uint32_t chunkLodLevelsCount =
+			std::max(static_cast<uint32_t>(world->voxelWorld->chunks.size()), 1u);
+		const VkDeviceSize chunkLodLevelsBytes = sizeof(uint32_t) * chunkLodLevelsCount;
+		VmaAllocationInfo chunkLodLevelsAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				chunkLodLevelsBytes,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.chunkLodLevelsBuffer,
+				&frameResources.chunkLodLevelsAllocation,
+				&chunkLodLevelsAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.chunkLodLevelsMappedData = chunkLodLevelsAllocationInfo.pMappedData;
+		frameResources.chunkLodLevelsCapacity = static_cast<uint32_t>(chunkLodLevelsCount);
+		profiling::RecordAllocation(
+			frameResources.chunkLodLevelsAllocation,
+			chunkLodLevelsAllocationInfo.size,
+			"SceneChunkLodLevelsBufferAllocation");
+		render->sceneMemoryBytes += chunkLodLevelsAllocationInfo.size;
+		std::memset(frameResources.chunkLodLevelsMappedData, 0, chunkLodLevelsBytes);
+
+		const uint32_t chunkSizeForLodPayload = static_cast<uint32_t>(world->voxelWorld->chunkSize);
+		const uint32_t lodPayloadBytesNeeded =
+			projectv::render::ComputeLodDownsampledVoxelPayloadBytes(
+				static_cast<uint32_t>(world->voxelWorld->chunks.size()),
+				chunkSizeForLodPayload);
+		const VkDeviceSize lodPayloadBytes = std::max<VkDeviceSize>(lodPayloadBytesNeeded, 1u);
+		VmaAllocationInfo lodPayloadAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				lodPayloadBytes,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				allocationInfo,
+				&frameResources.lodDownsampledVoxelPayloadBuffer,
+				&frameResources.lodDownsampledVoxelPayloadAllocation,
+				&lodPayloadAllocationInfo)) {
+			DestroySceneResources(context, render);
+			return false;
+		}
+		frameResources.lodDownsampledVoxelPayloadMappedData = lodPayloadAllocationInfo.pMappedData;
+		frameResources.lodDownsampledVoxelPayloadCapacityBytes = lodPayloadAllocationInfo.size;
+		profiling::RecordAllocation(
+			frameResources.lodDownsampledVoxelPayloadAllocation,
+			lodPayloadAllocationInfo.size,
+			"SceneLodDownsampledVoxelPayloadBufferAllocation");
+		render->sceneMemoryBytes += lodPayloadAllocationInfo.size;
+		std::memset(frameResources.lodDownsampledVoxelPayloadMappedData, 0, lodPayloadBytes);
 
 		const uint32_t fluidCaMaxActiveChunks = static_cast<uint32_t>(world->voxelWorld->chunks.size());
 		const VkDeviceSize fluidCaActiveChunkIdBytes = sizeof(uint32_t) * std::max(fluidCaMaxActiveChunks, 1u);

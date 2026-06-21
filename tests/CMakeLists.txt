@@ -737,6 +737,37 @@ set_tests_properties(ProjectVLodDownsampleTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVLodDownsampleTests)
 
+add_executable(ProjectVLodDownsampleGpuConsumeTests
+        LodDownsampleGpuConsumeTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/LodDownsampleGpuConsume.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+)
+
+target_compile_definitions(ProjectVLodDownsampleGpuConsumeTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVLodDownsampleGpuConsumeTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVLodDownsampleGpuConsumeTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVLodDownsampleGpuConsumeTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVLodDownsampleGpuConsumeTests PRIVATE volk)
+target_link_libraries(ProjectVLodDownsampleGpuConsumeTests PRIVATE glm)
+target_link_libraries(ProjectVLodDownsampleGpuConsumeTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVLodDownsampleGpuConsumeTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVLodDownsampleGpuConsumeTests COMMAND ProjectVLodDownsampleGpuConsumeTests)
+set_tests_properties(ProjectVLodDownsampleGpuConsumeTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVLodDownsampleGpuConsumeTests)
+
 add_executable(ProjectVTaaMotionVectorTests
         TaaMotionVectorTests.cpp
 )
@@ -764,9 +795,17 @@ projectv_test_add_modules(ProjectVTaaMotionVectorTests)
 add_executable(ProjectVAsyncComputeTests
         AsyncComputeTests.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanAsyncCompute.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanWorldGenPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanSyncPrimitives.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         vma_implementation.cpp
@@ -782,6 +821,7 @@ target_include_directories(ProjectVAsyncComputeTests PRIVATE
         ${CMAKE_SOURCE_DIR}/external/volk
         ${CMAKE_SOURCE_DIR}/external/glm
         ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
 )
 
 target_link_libraries(ProjectVAsyncComputeTests PRIVATE projectv_build_options)
@@ -790,6 +830,7 @@ target_link_libraries(ProjectVAsyncComputeTests PRIVATE glm)
 target_link_libraries(ProjectVAsyncComputeTests PRIVATE fmt::fmt)
 target_link_libraries(ProjectVAsyncComputeTests PRIVATE GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(ProjectVAsyncComputeTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVAsyncComputeTests PRIVATE Jolt::Jolt)
 
 add_test(NAME ProjectVAsyncComputeTests COMMAND ProjectVAsyncComputeTests)
 set_tests_properties(ProjectVAsyncComputeTests PROPERTIES LABELS "unit")
@@ -976,4 +1017,26 @@ target_link_libraries(ProjectVChunkStreamingTests PRIVATE fmt::fmt)
 
 add_test(NAME ProjectVChunkStreamingTests COMMAND ProjectVChunkStreamingTests)
 set_tests_properties(ProjectVChunkStreamingTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVHzbSmartMipTests
+        HzbSmartMipTests.cpp
+)
+
+target_compile_definitions(ProjectVHzbSmartMipTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVHzbSmartMipTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVHzbSmartMipTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVHzbSmartMipTests PRIVATE volk)
+target_link_libraries(ProjectVHzbSmartMipTests PRIVATE glm)
+
+add_test(NAME ProjectVHzbSmartMipTests COMMAND ProjectVHzbSmartMipTests)
+set_tests_properties(ProjectVHzbSmartMipTests PROPERTIES LABELS "unit")
 

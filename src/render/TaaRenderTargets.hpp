@@ -90,6 +90,11 @@ void TransitionTaaMotionVectorForSample(
 	VkCommandBuffer cmd,
 	const OffscreenColorTarget &motionVectorColor);
 
+void TransitionTaaMotionVectorForWrite(
+	VkCommandBuffer cmd,
+	const OffscreenColorTarget &motionVectorColor,
+	VkImageLayout oldLayout);
+
 void RecordTaaHistoryCopy(
 	VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor,

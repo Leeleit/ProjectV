@@ -1589,13 +1589,15 @@ bool CreateGraphicsPipeline(
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
-	VkPipelineColorBlendAttachmentState colorBlendAttachments[3] = {
+	VkPipelineColorBlendAttachmentState colorBlendAttachments[4] = {
+		colorBlendAttachment,
 		colorBlendAttachment,
 		colorBlendAttachment,
 		colorBlendAttachment,
 	};
 	VkPipelineColorBlendAttachmentState transparentColorBlendAttachment = kAlphaBlendAttachmentState;
-	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[3] = {
+	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[4] = {
+		transparentColorBlendAttachment,
 		transparentColorBlendAttachment,
 		transparentColorBlendAttachment,
 		transparentColorBlendAttachment,
@@ -1603,7 +1605,7 @@ bool CreateGraphicsPipeline(
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.attachmentCount = 3;
+	colorBlending.attachmentCount = 4;
 	colorBlending.pAttachments = colorBlendAttachments;
 
 	VkPipelineColorBlendStateCreateInfo transparentColorBlending = colorBlending;

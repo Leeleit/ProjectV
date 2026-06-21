@@ -9,8 +9,10 @@
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "render/SceneResources.hpp"
+#include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
+#include "render/vulkan/VulkanWorldGenPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
@@ -240,6 +242,35 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 				SDL_LOG_CATEGORY_APPLICATION,
 				"Fluid CA GPU descriptor bindings failed; disabling GPU path");
 			projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());
+		}
+	}
+
+	if (projectv::render::IsWorldGenGpuPipelineRequested()) {
+		if (!projectv::render::CreateWorldGenPipelines(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"World gen GPU pipeline not created (feature disabled or unavailable); continuing with CPU fallback");
+		} else if (!projectv::render::RefreshWorldGenResourceBindings(&state->context(), &state->render())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"World gen GPU descriptor bindings failed; disabling GPU path");
+			projectv::render::DestroyWorldGenPipelines(&state->context(), &state->render());
+		}
+	}
+
+	if (projectv::render::IsAsyncComputeEnabled()) {
+		if (!projectv::render::EnsureAsyncComputeResources(&state->context())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Async compute resources not created (no dedicated compute queue or device unavailable); continuing with graphics-queue path");
+		}
+	}
+
+	if (projectv::render::IsAsyncComputeEnabled()) {
+		if (!projectv::render::EnsureAsyncComputeResources(&state->context())) {
+			SDL_LogInfo(
+				SDL_LOG_CATEGORY_APPLICATION,
+				"Async compute resources not allocated (no dedicated compute queue); continuing with inline dispatches");
 		}
 	}
 

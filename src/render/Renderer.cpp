@@ -6,9 +6,12 @@ import projectv.math;
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/ScreenshotCapture.hpp"
+#include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
+#include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
@@ -756,6 +759,14 @@ void RecordGraphicsCommands(
 			.pStencilAttachment = nullptr,
 		};
 
+		if (render.taaMotionVectorTarget != nullptr && render.taaMotionVectorCurrentLayout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+			projectv::taa::TransitionTaaMotionVectorForWrite(
+				cmd,
+				*render.taaMotionVectorTarget,
+				render.taaMotionVectorCurrentLayout);
+			render.taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		}
+
 		vkCmdBeginRendering(cmd, &renderingInfo);
 
 		const VkViewport viewport{
@@ -966,11 +977,14 @@ void RecordGraphicsCommands(
 					? VK_PIPELINE_STAGE_2_NONE
 					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 				render.taaHistoryColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0
-																				 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+																			 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
 				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			render.taaHistoryNeedsInit = false;
+
+			projectv::taa::TransitionTaaMotionVectorForSample(cmd, *render.taaMotionVectorTarget);
+			render.taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 			TransitionImage(
 				cmd,
@@ -1017,9 +1031,8 @@ void RecordGraphicsCommands(
 			const Uint64 taaResolveStartCounter = SDL_GetPerformanceCounter();
 
 			const projectv::math::Mat4 currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
-			const projectv::math::Mat4 inverseCurrentViewProj = projectv::math::inverse(currentViewProj);
 			ResolvePushConstants resolvePushConstants{};
-			resolvePushConstants.inverseCurrentViewProjection = inverseCurrentViewProj;
+			resolvePushConstants.inverseCurrentViewProjection = projectv::math::inverse(currentViewProj);
 			resolvePushConstants.currentViewProjection = currentViewProj;
 			resolvePushConstants.renderExtentInverse = {
 				1.0f / static_cast<float>(swapchain.extent.width),
@@ -1366,7 +1379,12 @@ SDL_AppResult DrawFrame(
 		}
 	}
 
-	if (render->fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
+	const bool asyncComputePathActive =
+		projectv::render::IsAsyncComputeEnabled() &&
+		projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
+		(render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled);
+
+	if (!asyncComputePathActive && render->fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
 		PV_PROFILE_ZONE_N("RecordFluidCaCommands");
 		VoxelWorld *voxelWorld = state->world().voxelWorld.get();
 		if (voxelWorld != nullptr) {
@@ -1400,8 +1418,53 @@ SDL_AppResult DrawFrame(
 					fluidCaPush,
 					static_cast<uint32_t>(activeChunkIds.size()));
 			}
+			state->simulation().fluidGpuTicksPending = 0u;
 		}
-		state->simulation().fluidGpuTicksPending = 0u;
+	}
+
+	if (!asyncComputePathActive && render->worldGenPipelineEnabled && state->world().voxelWorld != nullptr) {
+		PV_PROFILE_ZONE_N("RecordWorldGenCommands");
+		VoxelWorld *voxelWorld = state->world().voxelWorld.get();
+		std::vector<uint32_t> activeWorldGenChunkIds;
+		const uint32_t worldGenChunkCount = projectv::render::BuildActiveChunkIdsForWorldGen(
+			*voxelWorld,
+			activeWorldGenChunkIds);
+		SceneFrameResources &worldGenFrameResources = render->sceneFrameResources[frame->currentFrame];
+		if (worldGenChunkCount > 0u && worldGenFrameResources.worldGenVoxelBuffer != VK_NULL_HANDLE) {
+			if (worldGenFrameResources.worldGenVoxelMappedData != nullptr) {
+				std::memset(
+					worldGenFrameResources.worldGenVoxelMappedData,
+					0,
+					static_cast<size_t>(worldGenChunkCount) *
+						static_cast<size_t>(projectv::render::kWorldGenVoxelBufferBytesPerChunk));
+			}
+			projectv::render::WorldGenPushConstants worldGenPush{};
+			worldGenPush.chunkOriginAndChunkSize = {
+				0,
+				0,
+				0,
+				static_cast<int32_t>(voxelWorld->chunkSize),
+			};
+			worldGenPush.chunkCountAndFlags = {
+				worldGenChunkCount,
+				0u,
+				0u,
+				0u,
+			};
+			worldGenPush.noiseParams = {
+				0.5f,
+				0.5f,
+				4u,
+				2.0f,
+			};
+			worldGenPush.seed = static_cast<uint32_t>(state->simulation().simulationTick);
+			projectv::render::RecordWorldGenDispatch(
+				cmd,
+				*render,
+				worldGenFrameResources,
+				worldGenPush,
+				worldGenChunkCount);
+		}
 	}
 
 	const VkResult endCommandBufferResult = vkEndCommandBuffer(cmd);
@@ -1410,11 +1473,39 @@ SDL_AppResult DrawFrame(
 		return SDL_APP_FAILURE;
 	}
 
+	if (asyncComputePathActive) {
+		PV_PROFILE_ZONE_N("AsyncCompute.Submit");
+		if (projectv::render::RecordAsyncComputePass(
+				context->asyncComputeCommandBuffer,
+				*context,
+				*render,
+				state,
+				frame)) {
+			uint64_t newTimelineValue = 0u;
+			if (projectv::render::SubmitToComputeQueue(context, context->asyncComputeCommandBuffer, &newTimelineValue)) {
+				context->asyncComputeLastTimelineValue = newTimelineValue;
+			}
+		}
+	}
+
 	VkSemaphoreSubmitInfo waitSemaphoreInfo{};
 	waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 
 	waitSemaphoreInfo.semaphore = imageAvailableSemaphore;
 	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+	VkSemaphoreSubmitInfo computeWaitSemaphoreInfo{};
+	std::array<VkSemaphoreSubmitInfo, 2> allWaitSemaphoreInfos{};
+	uint32_t waitSemaphoreInfoCount = 1u;
+	allWaitSemaphoreInfos[0] = waitSemaphoreInfo;
+	if (asyncComputePathActive && context->asyncComputeLastTimelineValue > 0u) {
+		computeWaitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+		computeWaitSemaphoreInfo.semaphore = context->renderTimelineSemaphore;
+		computeWaitSemaphoreInfo.value = context->asyncComputeLastTimelineValue;
+		computeWaitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		allWaitSemaphoreInfos[1] = computeWaitSemaphoreInfo;
+		waitSemaphoreInfoCount = 2u;
+	}
 
 	const VkSemaphore submitSemaphore = swapchain->submitSemaphores[imageIndex];
 	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
@@ -1429,8 +1520,8 @@ SDL_AppResult DrawFrame(
 
 	VkSubmitInfo2 submitInfo2{};
 	submitInfo2.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-	submitInfo2.waitSemaphoreInfoCount = 1;
-	submitInfo2.pWaitSemaphoreInfos = &waitSemaphoreInfo;
+	submitInfo2.waitSemaphoreInfoCount = waitSemaphoreInfoCount;
+	submitInfo2.pWaitSemaphoreInfos = allWaitSemaphoreInfos.data();
 	submitInfo2.commandBufferInfoCount = 1;
 	submitInfo2.pCommandBufferInfos = &cmdBufferInfo;
 	submitInfo2.signalSemaphoreInfoCount = 1;

@@ -5,6 +5,7 @@
 layout(set = 0, binding = 0) uniform sampler2D sceneColor;
 layout(set = 0, binding = 1) uniform sampler2D historyColor;
 layout(set = 0, binding = 2) uniform sampler2D depth;
+layout(set = 0, binding = 4) uniform sampler2D motionVector;
 
 layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 skyColorAndFogDensity;
@@ -164,21 +165,12 @@ void main()
     vec3 historySample = vec3(0.0);
     bool reprojectionOk = false;
     if (historyValid && texelSize.x > 0.0 && texelSize.y > 0.0) {
-        const float rawDepth = texture(depth, uv).r;
-        const float ndcDepth = rawDepth;
-        const vec4 ndcNear = vec4(uv * 2.0 - 1.0, ndcDepth, 1.0);
-        const vec4 worldH = pushConstants.inverseCurrentViewProjection * ndcNear;
-        if (worldH.w > 0.0001) {
-            const vec3 worldPos = worldH.xyz / worldH.w;
-            const vec4 prevClip = sceneLighting.prevViewProjectionMatrix * vec4(worldPos, 1.0);
-            if (prevClip.w > 0.0001) {
-                const vec2 prevUv = prevClip.xy / prevClip.w * 0.5 + 0.5;
-                if (all(greaterThanEqual(prevUv, vec2(0.0))) &&
-                    all(lessThanEqual(prevUv, vec2(1.0)))) {
-                    historySample = texture(historyColor, prevUv).rgb;
-                    reprojectionOk = true;
-                }
-            }
+        const vec2 motion = texture(motionVector, uv).xy;
+        const vec2 prevUv = uv + motion;
+        if (all(greaterThanEqual(prevUv, vec2(0.0))) &&
+            all(lessThanEqual(prevUv, vec2(1.0)))) {
+            historySample = texture(historyColor, prevUv).rgb;
+            reprojectionOk = true;
         }
     }
 

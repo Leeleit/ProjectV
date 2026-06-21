@@ -124,6 +124,7 @@ target_sources(ProjectV PRIVATE
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
         render/HizCulling.cpp
+        render/LodDownsampleGpuConsume.cpp
         render/ShadowProjection.cpp
         render/Taa.cpp
         render/TaaRenderTargets.cpp
@@ -140,6 +141,7 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanMeshShaderPipeline.cpp
         render/vulkan/VulkanFluidCaPipeline.cpp
         render/vulkan/VulkanWorldGenPipeline.cpp
+        render/vulkan/VulkanAsyncCompute.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp

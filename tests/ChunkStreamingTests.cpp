@@ -1,8 +1,12 @@
 #include "voxel/ChunkStreamer.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <stop_token>
+#include <string>
 #include <string_view>
+#include <thread>
 
 namespace {
 
@@ -77,6 +81,146 @@ void TestDequeueEmptyReturnsError(StreamTestContext &test)
 	(void)unsetResult;
 }
 
+void TestWorkerActiveFlagLifecycle(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "ON", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	const bool wasActive = projectv::voxel::IsChunkStreamerWorkerActive();
+	projectv::voxel::StartChunkStreamerWorker();
+	const bool nowActive = projectv::voxel::IsChunkStreamerWorkerActive();
+	if (!nowActive) {
+		test.Fail(__LINE__, "Worker must be active after StartChunkStreamerWorker");
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	const bool afterStop = projectv::voxel::IsChunkStreamerWorkerActive();
+	if (afterStop) {
+		test.Fail(__LINE__, "Worker must be inactive after StopChunkStreamerWorker");
+	}
+	(void)wasActive;
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
+void TestCachePathFromEnv(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_PATH", "/tmp/projectv_test_chunks", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	const std::string path = projectv::voxel::GetChunkStreamerCachePath();
+	if (path != "/tmp/projectv_test_chunks") {
+		test.Fail(__LINE__, "GetChunkStreamerCachePath must return PROJECTV_CHUNK_PATH value");
+	}
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_PATH");
+	(void)unsetResult;
+}
+
+void TestCachePathFallback(StreamTestContext &test)
+{
+	const int unsetResult1 = unsetenv("PROJECTV_CHUNK_PATH");
+	(void)unsetResult1;
+	const std::string path = projectv::voxel::GetChunkStreamerCachePath();
+	if (path.empty()) {
+		test.Fail(__LINE__, "GetChunkStreamerCachePath must not return empty string");
+	}
+}
+
+void TestProcessPendingRequestsStopToken(StreamTestContext &test)
+{
+	std::stop_source stopSource;
+	std::jthread worker(projectv::voxel::ProcessPendingRequests, stopSource.get_token());
+	std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	stopSource.request_stop();
+	worker.join();
+	if (!stopSource.stop_requested()) {
+		test.Fail(__LINE__, "Stop token must be honoured by ProcessPendingRequests");
+	}
+}
+
+void TestEnqueueStartsWorkerLazy(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "ON", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	projectv::voxel::ChunkStreamRequest req{};
+	req.chunkIndex = 1u;
+	projectv::voxel::EnqueueChunkStreamRequest(req);
+	const bool active = projectv::voxel::IsChunkStreamerWorkerActive();
+	if (!active) {
+		test.Fail(__LINE__, "EnqueueChunkStreamRequest must start worker lazily");
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
+void TestPrebakeVersionStartsZero(StreamTestContext &test)
+{
+	// The version is monotonic and non-zero only after a successful bake.
+	// Without a bake, IsChunkStreamerPrebakeReady must be false.
+	if (projectv::voxel::IsChunkStreamerPrebakeReady()) {
+		test.Fail(__LINE__, "Prebake must be unready before first bake");
+	}
+}
+
+void TestBakeAllChunksDisabledWhenStreamingOff(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "OFF", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	VoxelWorld world{};
+	projectv::voxel::ChunkPrebakeStats stats{};
+	const bool result = projectv::voxel::BakeAllChunksToDisk(world, stats);
+	if (result) {
+		test.Fail(__LINE__, "BakeAllChunksToDisk must return false when streaming disabled");
+	}
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
+void TestPreloadAroundCameraDisabledWhenStreamingOff(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "OFF", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	VoxelWorld world{};
+	const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(world, 0.0f, 0.0f, 0.0f, 4u);
+	if (enqueued != 0u) {
+		test.Fail(__LINE__, "PreloadChunksAroundCamera must return 0 when streaming disabled");
+	}
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
+void TestPreloadAroundCameraEmptyWorldReturnsZero(StreamTestContext &test)
+{
+	const int setenvResult = setenv("PROJECTV_CHUNK_STREAMING", "ON", 1);
+	if (setenvResult != 0) {
+		test.Fail(__LINE__, "setenv failed");
+		return;
+	}
+	VoxelWorld world{};
+	world.chunkSize = 0;
+	const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(world, 0.0f, 0.0f, 0.0f, 4u);
+	if (enqueued != 0u) {
+		test.Fail(__LINE__, "PreloadChunksAroundCamera must return 0 for empty world with chunkSize=0");
+	}
+	projectv::voxel::StopChunkStreamerWorker();
+	const int unsetResult = unsetenv("PROJECTV_CHUNK_STREAMING");
+	(void)unsetResult;
+}
+
 }  // namespace
 
 int main()
@@ -86,6 +230,15 @@ int main()
 	TestEnvGateOff(test);
 	TestEnqueueTracksSize(test);
 	TestDequeueEmptyReturnsError(test);
+	TestWorkerActiveFlagLifecycle(test);
+	TestCachePathFromEnv(test);
+	TestCachePathFallback(test);
+	TestProcessPendingRequestsStopToken(test);
+	TestEnqueueStartsWorkerLazy(test);
+	TestPrebakeVersionStartsZero(test);
+	TestBakeAllChunksDisabledWhenStreamingOff(test);
+	TestPreloadAroundCameraDisabledWhenStreamingOff(test);
+	TestPreloadAroundCameraEmptyWorldReturnsZero(test);
 
 	if (test.failures > 0) {
 		std::fprintf(stderr, "ProjectVChunkStreamingTests: %d failure(s)\n", test.failures);

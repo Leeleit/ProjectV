@@ -513,6 +513,8 @@ bool RecreateSwapchain(
 	render->taaSceneColorNeedsInit = true;
 	render->taaHistoryNeedsInit = true;
 	render->taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	render->taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	render->taaMotionVectorHistoryCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	render->taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;

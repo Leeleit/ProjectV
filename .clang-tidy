@@ -49,10 +49,6 @@ Checks: >
   misc-no-recursion,
   misc-non-copyable-objects,
   misc-uniqueptr-reset-release
-CheckOptions:
-  readability-identifier-length.MinimumVariableNameLength: 1
-  readability-identifier-length.IgnoredVariableNames: "^[a-z]{1,2}$"
-  readability-avoid-const-params-in-decls: true
 HeaderFilterRegex: 'src/.*'
 FormatStyle: file
 ...

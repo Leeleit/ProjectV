@@ -10,7 +10,9 @@ import projectv.math;
 #include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
 #include "render/SceneResources.hpp"
+#include "render/LodDownsampleGpuConsume.hpp"
 #include "render/Taa.hpp"
+#include "voxel/ChunkStreamer.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 void BuildVisibleModelInstanceList(
@@ -117,6 +119,30 @@ bool PrepareFrameRenderData(
 		const uint32_t lodJobsProcessed = RunLodDownsampleJobs(*world->voxelWorld);
 		profiling::PlotValue("LOD Downsample Chunks", static_cast<int64_t>(lodJobsProcessed));
 		profiling::PlotValue("LOD Active Chunks", static_cast<int64_t>(world->voxelWorld->stats.activeChunkCount));
+		if (projectv::render::IsLodDownsampledGpuConsumeEnabled()) {
+			projectv::render::RefreshLodDownsampledBuffers(
+				context,
+				render,
+				*world->voxelWorld);
+		}
+	}
+
+	if (projectv::voxel::IsChunkStreamingEnabled() && world->voxelWorld) {
+		constexpr uint32_t kMaxChunksPerFrame = 8u;
+		uint32_t chunksDrained = 0u;
+		for (uint32_t i = 0; i < kMaxChunksPerFrame; ++i) {
+			std::expected<projectv::voxel::ChunkData, projectv::voxel::ChunkStreamError> dequeueResult =
+				projectv::voxel::TryDequeueChunkData();
+			if (!dequeueResult.has_value()) {
+				if (dequeueResult.error() == projectv::voxel::ChunkStreamError::QueueFull) {
+					break;
+				}
+				break;
+			}
+			++chunksDrained;
+		}
+		profiling::PlotValue("Chunk Stream Drained", static_cast<int64_t>(chunksDrained));
+		profiling::PlotValue("Chunk Stream Pending", static_cast<int64_t>(projectv::voxel::DrainChunkStreamQueueSize()));
 	}
 
 	if (world->voxelWorld && !render->completedChunkRebuildIndices.empty()) {

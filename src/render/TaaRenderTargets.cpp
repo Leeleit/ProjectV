@@ -374,6 +374,31 @@ void TransitionTaaMotionVectorForSample(
 		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
+void TransitionTaaMotionVectorForWrite(
+	const VkCommandBuffer cmd,
+	const OffscreenColorTarget &motionVectorColor,
+	const VkImageLayout oldLayout)
+{
+	if (motionVectorColor.image == VK_NULL_HANDLE) {
+		return;
+	}
+	if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+		return;
+	}
+	TransitionImageLayout(
+		cmd,
+		motionVectorColor.image,
+		oldLayout,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		oldLayout == VK_IMAGE_LAYOUT_UNDEFINED
+			? VK_PIPELINE_STAGE_2_NONE
+			: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		oldLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0
+												  : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+}
+
 void RecordTaaHistoryCopy(
 	const VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor,

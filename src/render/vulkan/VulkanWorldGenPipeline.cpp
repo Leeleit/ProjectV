@@ -14,12 +14,6 @@
 
 namespace projectv::render {
 
-namespace {
-
-constexpr VkDeviceSize kWorldGenVoxelBufferBytesPerChunk = sizeof(uint32_t) * 8u * 8u * 8u;
-
-}  // namespace
-
 bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 {
 	if (render->worldGenPipelineEnabled) {
@@ -139,6 +133,13 @@ void DestroyWorldGenPipelines(VulkanContextState *context, RenderState *render)
 {
 	if (!context || !render) {
 		return;
+	}
+	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
+		frameResources.worldGenDescriptorSet = VK_NULL_HANDLE;
+	}
+	if (render->worldGenDescriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(context->device, render->worldGenDescriptorPool, nullptr);
+		render->worldGenDescriptorPool = VK_NULL_HANDLE;
 	}
 	if (render->worldGenPipeline != VK_NULL_HANDLE) {
 		vkDestroyPipeline(context->device, render->worldGenPipeline, nullptr);

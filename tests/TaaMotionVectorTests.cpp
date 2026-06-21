@@ -1,7 +1,12 @@
 #include "render/TaaRenderTargets.hpp"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -67,6 +72,80 @@ void TestMotionVectorNdcRangeContract(TestContext &context)
 	}
 }
 
+void TestMotionVectorResolveContract(TestContext &context)
+{
+	const std::array<float, 2> motionValid{0.1f, -0.1f};
+	const std::array<float, 2> motionOutOfRange{-0.6f, 0.6f};
+	const std::array<float, 2> uvCenter{0.5f, 0.5f};
+	const std::array<float, 2> uvCorner{0.0f, 0.0f};
+
+	const std::array<float, 2> prevUvValid{uvCenter[0] + motionValid[0], uvCenter[1] + motionValid[1]};
+	const bool validInBounds = (prevUvValid[0] >= 0.0f && prevUvValid[0] <= 1.0f &&
+		prevUvValid[1] >= 0.0f && prevUvValid[1] <= 1.0f);
+	if (!validInBounds) {
+		context.Fail(__LINE__, "uv + motion must produce in-bounds prevUv for typical inputs");
+	}
+
+	const std::array<float, 2> prevUvOut{uvCorner[0] + motionOutOfRange[0], uvCorner[1] + motionOutOfRange[1]};
+	const bool outOfBounds = (prevUvOut[0] < 0.0f || prevUvOut[0] > 1.0f ||
+		prevUvOut[1] < 0.0f || prevUvOut[1] > 1.0f);
+	if (!outOfBounds) {
+		context.Fail(__LINE__, "uv + motion must produce out-of-bounds prevUv when motion pushes outside [0,1]");
+	}
+
+	const std::array<float, 2> motionZero{0.0f, 0.0f};
+	const std::array<float, 2> prevUvIdentity{uvCenter[0] + motionZero[0], uvCenter[1] + motionZero[1]};
+	const bool identityValid = (prevUvIdentity[0] == uvCenter[0] && prevUvIdentity[1] == uvCenter[1]);
+	if (!identityValid) {
+		context.Fail(__LINE__, "Zero motion vector must produce prevUv == uv (identity)");
+	}
+}
+
+void TestResolveShaderMotionBinding(TestContext &context)
+{
+	const std::filesystem::path shaderPath =
+		std::filesystem::path(PROJECTV_TESTS_SOURCE_DIR) / ".." / "src" / "shaders" / "taa_resolve.frag";
+	std::ifstream file(shaderPath);
+	if (!file.is_open()) {
+		std::fprintf(
+			stderr,
+			"Test failure at line %d: cannot open %s — shader must contain motion vector binding 4\n",
+			__LINE__,
+			shaderPath.string().c_str());
+		++context.failures;
+		return;
+	}
+	std::ostringstream buffer;
+	buffer << file.rdbuf();
+	const std::string source = buffer.str();
+
+	const std::string bindingMarker = "binding = 4";
+	const std::string motionMarker = "motionVector";
+	const std::string texMarker = "texture(motionVector";
+
+	if (source.find(bindingMarker) == std::string::npos) {
+		std::fprintf(
+			stderr,
+			"Test failure at line %d: taa_resolve.frag must declare binding = 4 (motion vector sampler)\n",
+			__LINE__);
+		++context.failures;
+	}
+	if (source.find(motionMarker) == std::string::npos) {
+		std::fprintf(
+			stderr,
+			"Test failure at line %d: taa_resolve.frag must reference motionVector uniform\n",
+			__LINE__);
+		++context.failures;
+	}
+	if (source.find(texMarker) == std::string::npos) {
+		std::fprintf(
+			stderr,
+			"Test failure at line %d: taa_resolve.frag must call texture(motionVector, uv) for prevUv computation\n",
+			__LINE__);
+		++context.failures;
+	}
+}
+
 }  // namespace
 
 int main()
@@ -77,6 +156,8 @@ int main()
 	TestLayerHistoryFormatPreserved(context);
 	TestMotionVectorSizeContract(context);
 	TestMotionVectorNdcRangeContract(context);
+	TestMotionVectorResolveContract(context);
+	TestResolveShaderMotionBinding(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVTaaMotionVectorTests: %d failure(s)\n", context.failures);

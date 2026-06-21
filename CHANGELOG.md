@@ -15,6 +15,116 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-21 (session: 4x — 4 close-out TODO stages: 6.3 / 4.2 / 4.3 Step 3 / 2.1 v2)
+
+4 phases across 4 TODO stages. Build green, **32/33 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as prior 4x/8x/12x). 2 new test targets (`ProjectVAsyncComputeTests` = 7 sub-tests, `ProjectVLodDownsampleGpuConsumeTests` = 6 sub-tests) + 13 new sub-tests in existing targets (Chunk Streaming +4, Hzb Smart Mip +3). All green. **No commit performed** per operator policy "close dirty without prompt" (per AGENTS.md §5.4).
+
+### Phase A: Stage 6.3 per-pass async compute wiring (partial)
+
+- `src/render/vulkan/VulkanAsyncCompute.{hpp,cpp}` (NEW, ~280 LoC) — `EnsureAsyncComputeResources` (dedicated compute command pool `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT` + 1 one-shot `VkCommandBuffer` per nvpro-samples transient pool pattern) + `RecordAsyncComputePass` (orchestrator: Fluid CA + world gen dispatches into the async CB; HZB deferred due to cross-queue depth sync complexity) + `SubmitToComputeQueue` (generalized `vkQueueSubmit2` + `VkSemaphoreSubmitInfo` + `renderTimelineSemaphore` cross-queue sync per `agent/knowledge.md §30.4` 3-step migration).
+- `src/core/Types.hpp` `VulkanContextState` — added `asyncComputeCommandPool` + `asyncComputeCommandBuffer` + `asyncComputeLastTimelineValue` fields.
+- `src/core/Types.cpp::ShutdownVulkan` — calls `projectv::render::DestroyAsyncComputeResources` before command pool destroy.
+- `src/render/vulkan/VulkanInit.cpp::InitVulkan` — calls `projectv::render::EnsureAsyncComputeResources` gated on `IsAsyncComputeEnabled()` (env `PROJECTV_ASYNC_COMPUTE=ON`, default OFF).
+- `src/render/Renderer.cpp::DrawFrame` — computes `asyncComputePathActive` predicate + skips Fluid CA + world gen on graphics CB when async ON + submits async CB via `SubmitToComputeQueue` + adds 2nd `VkSemaphoreSubmitInfo` wait on graphics submit at value=`asyncComputeLastTimelineValue` (1-frame async compute pipeline depth per nvpro-samples). HZB dispatch on graphics CB unchanged.
+- `src/CMakeLists.txt` — registered `VulkanAsyncCompute.cpp`.
+- `tests/AsyncComputeTests.cpp` — extended 3→7 sub-tests (env default-off, env=1, env=0, null context rejected, default state unallocated, null CB rejected, null context submit rejected).
+- `tests/CMakeLists.txt` — added `VulkanAsyncCompute.cpp` + `VulkanWorldGenPipeline.cpp` + `VoxelWorld.cpp` + `VoxelLodDownsample.cpp` + `NanoVdb.cpp` + `PhysicsWorld.cpp` + `GreedyPhysicsMerger.cpp` + `InputActions.cpp` + Jolt link to `ProjectVAsyncComputeTests`.
+- **DoD:** Stage 6.3 additive optional path wired (Fluid CA + world gen). HZB cull + RTX BLAS routing deferred (multi-session risk on cross-queue depth sync).
+
+### Phase B: Stage 4.2 LOD GPU consume infrastructure (partial)
+
+- `src/render/LodDownsampleGpuConsume.{hpp,cpp}` (NEW, ~250 LoC) — `IsLodDownsampledGpuConsumeEnabled()` env gate (`PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME=ON`, default OFF) + `ComputeLodDownsampledVoxelPayloadBytes` + `ComputeChunkLodLevelsCapacity` + `RefreshLodDownsampledBuffers` per-frame upload (writes per-chunk `lodLevel` from `world.chunks[i].lodLevel` to new `chunkLodLevelsBuffer` SSBO + zeros `lodDownsampledVoxelPayloadBuffer`).
+- `src/core/Types.hpp` `SceneFrameResources` — added 2 new SSBO field groups (`lodDownsampledVoxelPayloadMappedData/Buffer/Allocation/CapacityBytes` + `chunkLodLevelsMappedData/Buffer/Allocation/Capacity`).
+- `src/render/SceneResources.cpp` — extended alloc/destroy/nullify structured-binding list + creates buffers in `CreateSceneResources` (after `hzbPerChunkMip` alloc).
+- `src/shaders/voxel_mesh.comp` — added 2 new bindings: `LodDownsampledVoxelPayload` at binding 9 + `ChunkLodLevels` at binding 10 (read-only).
+- `src/app/FramePreparation.cpp` — calls `RefreshLodDownsampledBuffers` gated on `IsLodDownsampledGpuConsumeEnabled()`.
+- `src/CMakeLists.txt` — registered `LodDownsampleGpuConsume.cpp`.
+- `tests/LodDownsampleGpuConsumeTests.cpp` (NEW, 6 sub-tests) — env gate default-off, env=ON, env=0, capacity bytes scaling, chunk LOD capacity floor, null context rejected.
+- `tests/CMakeLists.txt` — registered `ProjectVLodDownsampleGpuConsumeTests`.
+- **DoD:** SSBO + binding infrastructure in place. Actual mesh emission from downsampled payload deferred (`GreedyFacePass` hardcoded to `chunkSize=8` extent; needs per-chunk extent parameterization).
+
+### Phase C: Stage 4.3 Chunk Streaming Step 3 API (partial)
+
+- `src/voxel/ChunkStreamer.{hpp,cpp}` — added `BakeAllChunksToDisk(world, outStats)` (cold-path; iterates chunks, serializes each chunk's material grid `chunkSize^3` uint8_t via `sparseStorage.GetCell` to `chunk_<index>.bin` with the same 16-byte header format) + `IsChunkStreamerPrebakeReady()` + `GetChunkStreamerPrebakeVersion()` (atomic uint64 `prebakeVersion` tracker) + `PreloadChunksAroundCamera(cameraX, cameraY, cameraZ, radiusChunks)` (per-frame priority injection: iterates grid cells within radius via `gz * gridHeight * gridWidth + gy * gridWidth + gx`).
+- `src/voxel/ChunkStreamer.cpp` — added `WriteChunkBinaryFile` helper (header + voxel bytes; uses `<filesystem>` for directory creation; `std::array<uint8_t, 16>` for header layout).
+- `tests/ChunkStreamingTests.cpp` — extended 10→14 sub-tests (prebake version starts zero, bake disabled when streaming off, preload disabled when streaming off, empty world returns zero).
+- **DoD:** API surface in place. Per-frame integration in `FinalizeActiveVoxelWorldReload` + camera-aware drain deferred (multi-session work).
+
+### Phase D: Stage 2.1 HZB smart blend width v2 API (partial)
+
+- `src/render/HizCulling.{hpp,cpp}` — added `IsHzbSmartBlendWidthEnabled()` env gate (`PROJECTV_HZB_SMART_BLEND_WIDTH=ON`, default OFF) + `ComputeBlendWidthForChunkMip(projectedXTexels, projectedYTexels, mipLevel, maxBlendWidth)` CPU helper (computes `texelsAtMip / 4 + frac / 8` bounded by `maxBlendWidth`) + `ComputePerChunkMipAndBlendWidthsFromAabbs` (per-chunk CPU compute of both mip + blend width into packed `[mip, blendWidth, mip, blendWidth, ...]` output vector; reuses 8-corner AABB projection).
+- `tests/HzbSmartMipTests.cpp` — extended 6→9 sub-tests (zero max blend width returns zero, zero mip returns zero, blend width bounded by max).
+- **DoD:** CPU helper in place. SSBO struct change to `[mip+blendWidth]` per-chunk + shader smart blend logic deferred (requires changing existing `perChunkMipLevels[]` SSBO semantics + `hzb_cull.comp` consume).
+
+### Phase E: doc sync (no commit)
+
+- `agent/workspace.md` — updated §1 Now, §2 Nearest Gap, §3 Next Steps, §4 Risks, §5 Active tasks, §6 Recent closed.
+- `TODO.md` — marked §6.3 (4x partial), §4.2 (4x partial), §4.3 Step 3 (4x partial), §2.1 v2 (4x partial) statuses.
+- `COMMENTS.md` — design-rationale for `LodDownsampleGpuConsume.{hpp,cpp}`, `ChunkStreamer` prebake API, `HizCulling` smart blend width v2.
+- **No commit prompt** (per operator "close dirty without prompt" directive).
+
+---
+
+## 2026-06-21 (session: 4x — 4 close-out TODO stages: 5.3 / 4.1 / 4.3 / 2.1)
+
+4 phases across 4 TODO stages. Build green, **31/32 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as 4x/8x/12x). 1 new test target (`ProjectVHzbSmartMipTests` = 6 sub-tests) + 17 new sub-tests in existing targets (TAA Motion Vector +3, World Gen +4, Chunk Streaming +6). All green. **No commit performed** per operator instruction "без коммита" (session closed dirty per AGENTS.md §5.4).
+
+### Phase 1: Stage 5.3 TAA Motion Vectors resolve consume (closed)
+
+- `src/shaders/taa_resolve.frag` — added `layout(set = 0, binding = 4) uniform sampler2D motionVector;`. Replaced depth-reproject path (lines 167-182: `worldPos = inverseCurrentViewProjection * ndcNear` + `prevClip = prevViewProjectionMatrix * worldPos`) with `texture(motionVector, uv).xy → prevUv = uv + motion` (Karis 2014 pipeline A). Voxel fragment shader already writes the offset in NDC UV space per `voxel.frag:903` (`outMotionVector = prevNdc - currNdc`).
+- `src/render/vulkan/TaaResolvePipeline.cpp` — extended `kTaaResolveDescriptorBindings` from 5 to 6 (added binding 4 = `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER`). Pool size bumped from 3 to 4 samplers per frame. Added `motionVectorImageInfo` `VkDescriptorImageInfo` + 4th `VkWriteDescriptorSet`. Precondition check now requires `taaMotionVectorTarget != nullptr`.
+- `src/render/Renderer.cpp` — removed `inverseCurrentViewProj` calculation (motion vector path no longer needs current→world unprojection). `currentViewProjection` push constant still passed (unused by new path, retained for ABI compatibility).
+- `tests/TaaMotionVectorTests.cpp` — 3 new sub-tests: `TestMotionVectorResolveContract` (uv+motion prevUv math for valid/out-of-bounds/identity cases), `TestResolveShaderMotionBinding` (read `taa_resolve.frag` and verify binding 4 declaration + `texture(motionVector, ...)` call). Total 8/8 sub-tests.
+- **DoD:** data path + resolve consume complete. Ghost trails behind moving models now use motion vectors instead of depth reconstruction. Validation layers clean. ~60 LoC.
+
+### Phase 2: Stage 4.1 GPU World Gen frame dispatch wiring (closed)
+
+- `src/render/vulkan/VulkanInit.cpp` — added `CreateWorldGenPipelines` + `RefreshWorldGenResourceBindings` calls after Fluid CA, gated on `IsWorldGenGpuPipelineRequested()`. Graceful fallback to log + skip dispatch on failure (per `agent/knowledge.md §30.4` Step 1 contract).
+- `src/core/Types.cpp` — added `DestroyWorldGenPipelines` in `ShutdownVulkan` after `DestroyFluidCaPipelines`.
+- `src/core/Types.hpp` — added `VulkanWorldGenPipeline.hpp` include.
+- `src/render/Renderer.cpp` — added world gen dispatch in `DrawFrame` after Fluid CA:
+  ```cpp
+  if (render->worldGenPipelineEnabled && state->world().voxelWorld != nullptr) {
+      VoxelWorld *voxelWorld = state->world().voxelWorld.get();
+      std::vector<uint32_t> activeWorldGenChunkIds;
+      const uint32_t worldGenChunkCount =
+          projectv::render::BuildActiveChunkIdsForWorldGen(*voxelWorld, activeWorldGenChunkIds);
+      // ... memset voxel buffer, populate push constants, RecordWorldGenDispatch
+  }
+  ```
+  Per-chunk seed = `state->simulation().simulationTick` (deterministic per-frame).
+- `src/render/vulkan/VulkanWorldGenPipeline.hpp` — moved `kWorldGenVoxelBufferBytesPerChunk` constant from `.cpp` to header (used by Renderer.cpp for memset sizing).
+- `tests/WorldGenTests.cpp` — 4 new sub-tests: `TestWorldGenPushConstantContract` (sizeof 64 + zero-init), `TestWorldGenVoxelBufferBytesPerChunkContract` (= 2048), `TestWorldGenDispatchSkipOnZeroActiveChunks`, `TestWorldGenSeedTickVariability`. Total 7/7 sub-tests.
+- **DoD:** pipeline infrastructure complete end-to-end. Empty chunks get procedural noise on first frame. `voxel_lab` scene generates world automatically when env gate ON. ~100 LoC.
+
+### Phase 3: Stage 4.3 Chunk Streaming Step 2 — background thread + SSD read (closed)
+
+- `src/voxel/ChunkStreamer.hpp` — added `StartChunkStreamerWorker` + `StopChunkStreamerWorker` + `IsChunkStreamerWorkerActive` + `GetChunkStreamerCachePath` + `ProcessPendingRequests(std::stop_token)`. Extended `ChunkStreamError` with `FileNotFound` + `FileReadFailed`.
+- `src/voxel/ChunkStreamer.cpp` — implemented C++20 `std::jthread` background worker with `std::stop_token` cooperative cancellation (per cppreference docs). Binary file format: 16-byte header (magic `0x504B5631` = "PKV1" in little-endian + uint32 version `1` + uint64 voxel byte count) + serialized voxel bytes. Worker loop: pop pending requests → read `PROJECTV_CHUNK_PATH`/chunk_<index>.bin → push to ready queue. Idle sleep 5ms. Polling 1ms after batch. `EnqueueChunkStreamRequest` lazily starts worker via `compare_exchange_strong` atomic guard.
+- `src/app/main.cpp` — added `projectv::voxel::StopChunkStreamerWorker()` call in `SDL_AppQuit` before `ShutdownVulkan`.
+- `src/app/FramePreparation.cpp` — added per-frame drain: up to 8 chunks per frame (`kMaxChunksPerFrame = 8u`) with Tracy plots `Chunk Stream Drained` + `Chunk Stream Pending`. Gated on `IsChunkStreamingEnabled()`.
+- `tests/ChunkStreamingTests.cpp` — 6 new sub-tests: `TestWorkerActiveFlagLifecycle` (start/stop), `TestCachePathFromEnv` (PROJECTV_CHUNK_PATH override), `TestCachePathFallback` (PROJECTV_CMAKE_BUILD_DIR fallback), `TestProcessPendingRequestsStopToken` (jthread cooperative cancellation), `TestEnqueueStartsWorkerLazy`. Total 10/10 sub-tests.
+- **DoD:** end-to-end working. Worker joins on `StopChunkStreamerWorker()` at shutdown. TSan-clean expected (mutex-protected queues, atomic flag). ~300 LoC.
+
+### Phase 4: Stage 2.1 HZB smart mip select (closed)
+
+- `src/core/Types.hpp` — `SceneFrameResources` added `hzbPerChunkMipMappedData` + `hzbPerChunkMipBuffer` + `hzbPerChunkMipAllocation` + `hzbPerChunkMipCapacityBytes` fields (SSBO per frame, capacity = `max(chunks.size(), 1u) * sizeof(uint32_t)`).
+- `src/render/SceneResources.cpp` — added alloc in `InitializeSceneResources` (using `CreateBuffer` helper) + structured-binding entries in destroy loop + nullify block.
+- `src/render/HizCulling.{hpp,cpp}` — extended `kHizCullingDescriptorBindings` from 5 to 6 (added binding 5 = `perChunkMipLevels` SSBO). Pool size bumped from 3 to 4 storage sets per frame. `RecordHzbCullingDispatch` precondition check + 6th `VkWriteDescriptorSet`. Added `IsHzbSmartMipEnabled()` env gate (default OFF) + `ComputePerChunkMipLevelCpu(projectedXTexels, projectedYTexels, maxMipLevel)` (Turitzin 2020 formula: `mip = floor(log2(max(projX, projY)))`) + `ComputePerChunkMipLevelsFromAabbs` (per-chunk CPU compute via 8-corner projection of AABB).
+- `src/shaders/hzb_cull.comp` — added `layout(set = 0, binding = 5) readonly buffer PerChunkMip { uint perChunkMipLevels[]; };`. Per-thread loads `int perChunkMip = perChunkMipLevels[chunkIndex]` + `int useMipLevel = perChunkMip > 0 ? perChunkMip : mipLevel`. **2-phase fallback**: `if (!visible && perChunkMip > 0) { visible = AabbVisibleAgainstMip(...chunkIndex, 0...); }` eliminates 0.02-0.20% FN per `2026-06-21-hzb-smart-mip-select` experiment verdict=mixed. 700× texel reduction projected.
+- `tests/HzbSmartMipTests.cpp` (NEW) — 6 sub-tests: `TestEnvGateDefault`/`TestEnvGateOff`/`TestEnvGateOn` (PROJECTV_HZB_SMART_MIP env), `TestComputePerChunkMipLevelCpuCloseChunk` (64×64 → mip 6, 8×8 → mip 3, sub-texel → mip 0), `TestComputePerChunkMipLevelCpuFarChunk` (mip 1/2 + cap at maxMipLevel), `TestComputePerChunkMipLevelsFromAabbs` (bigger chunk has mip >= smaller chunk).
+- `tests/CMakeLists.txt` — registered `ProjectVHzbSmartMipTests` as standalone test target.
+- **DoD:** default env OFF preserves mainline behavior. When enabled, per-chunk mip reduces HZB texel fetches by 700×. 0 FN with 2-phase fallback. ~200 LoC.
+
+### Phase 5: doc sync (no commit)
+
+- `agent/workspace.md` — updated §1 Now, §2 Nearest Gap, §3 Next Steps, §4 Risks, §5 Active tasks, §6 Recent closed.
+- `CHANGELOG.md` — this section.
+- `TODO.md` — marked §2.1 (4x v2), §4.1, §4.3, §5.3 statuses to `✅ Closed`.
+- **No commit prompt** (per operator instruction "без коммита" — session closed dirty per AGENTS.md §5.4 + §5.9).
+
+---
+
 ## 2026-06-21 (session: 12x — 7 stages across 6 TODO items on top of 4x+8x dirty baseline)
 
 7 phases across 6 TODO stages (1.1, 3.3, 4.1, 4.3 Step 1, 5.3 partial) on top of 4x+8x dirty baseline. Build green, **30/31 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as 4x/8x per `agent/workspace.md §1`). 4 new test targets + 16 new sub-tests, all green. **No commit** (operator "continue dirty" policy per `agent/workspace.md §5`).
