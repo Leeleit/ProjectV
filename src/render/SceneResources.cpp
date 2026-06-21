@@ -605,7 +605,7 @@ void DestroySceneResources(
 		}
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, shadowIndirectMappedData, shadowIndirectBuffer, shadowIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, shadowDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, shadowIndirectCommandCount, shadowCascadeVisibleChunkCounts, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -682,6 +682,26 @@ void DestroySceneResources(
 			profiling::RecordFree(fluidCaStatsAllocation, "SceneFluidCaStatsBufferAllocation");
 			vmaDestroyBuffer(context->allocator, fluidCaStatsBuffer, fluidCaStatsAllocation);
 		}
+		if (nanovdbUpperBuffer && nanovdbUpperAllocation) {
+			profiling::RecordFree(nanovdbUpperAllocation, "SceneNanoVdbUpperBufferAllocation");
+			vmaDestroyBuffer(context->allocator, nanovdbUpperBuffer, nanovdbUpperAllocation);
+		}
+		if (nanovdbLowerBuffer && nanovdbLowerAllocation) {
+			profiling::RecordFree(nanovdbLowerAllocation, "SceneNanoVdbLowerBufferAllocation");
+			vmaDestroyBuffer(context->allocator, nanovdbLowerBuffer, nanovdbLowerAllocation);
+		}
+		if (nanovdbLeafBuffer && nanovdbLeafAllocation) {
+			profiling::RecordFree(nanovdbLeafAllocation, "SceneNanoVdbLeafBufferAllocation");
+			vmaDestroyBuffer(context->allocator, nanovdbLeafBuffer, nanovdbLeafAllocation);
+		}
+		if (nanovdbMaterialBuffer && nanovdbMaterialAllocation) {
+			profiling::RecordFree(nanovdbMaterialAllocation, "SceneNanoVdbMaterialBufferAllocation");
+			vmaDestroyBuffer(context->allocator, nanovdbMaterialBuffer, nanovdbMaterialAllocation);
+		}
+		if (worldGenVoxelBuffer && worldGenVoxelAllocation) {
+			profiling::RecordFree(worldGenVoxelAllocation, "SceneWorldGenVoxelBufferAllocation");
+			vmaDestroyBuffer(context->allocator, worldGenVoxelBuffer, worldGenVoxelAllocation);
+		}
 
 		packedFaceMappedData = nullptr;
 		packedFaceBuffer = VK_NULL_HANDLE;
@@ -740,6 +760,22 @@ sceneLightingMappedData = nullptr;
 		fluidCaStatsMappedData = nullptr;
 		fluidCaStatsBuffer = VK_NULL_HANDLE;
 		fluidCaStatsAllocation = nullptr;
+		nanovdbUpperMappedData = nullptr;
+		nanovdbUpperBuffer = VK_NULL_HANDLE;
+		nanovdbUpperAllocation = nullptr;
+		nanovdbLowerMappedData = nullptr;
+		nanovdbLowerBuffer = VK_NULL_HANDLE;
+		nanovdbLowerAllocation = nullptr;
+		nanovdbLeafMappedData = nullptr;
+		nanovdbLeafBuffer = VK_NULL_HANDLE;
+		nanovdbLeafAllocation = nullptr;
+		nanovdbMaterialMappedData = nullptr;
+		nanovdbMaterialBuffer = VK_NULL_HANDLE;
+		nanovdbMaterialAllocation = nullptr;
+		worldGenVoxelMappedData = nullptr;
+		worldGenVoxelBuffer = VK_NULL_HANDLE;
+		worldGenVoxelAllocation = nullptr;
+		worldGenDescriptorSet = VK_NULL_HANDLE;
 		graphicsDescriptorSet = VK_NULL_HANDLE;
 		meshShaderDescriptorSet = VK_NULL_HANDLE;
 		shadowDescriptorSet = VK_NULL_HANDLE;
@@ -749,6 +785,7 @@ sceneLightingMappedData = nullptr;
 		uploadedSceneVersion = 0;
 		uploadedVoxelPayloadVersion = 0;
 		meshedSceneVersion = 0;
+		uploadedNanoVdbVersion = 0;
 		chunkDescriptorCount = 0;
 		shadowIndirectCommandCount = 0;
 		shadowCascadeVisibleChunkCounts = {};
@@ -1281,6 +1318,123 @@ bool CreateSceneResources(
 			std::memset(targetMappedData, 0, static_cast<size_t>(fluidCaPingPongBytes));
 		}
 
+		constexpr VkDeviceSize kNanoVdbInitialUpperCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbUpper) * 1u;
+		constexpr VkDeviceSize kNanoVdbInitialLowerCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLower) * 64u;
+		constexpr VkDeviceSize kNanoVdbInitialLeafCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) * 64u;
+		constexpr VkDeviceSize kNanoVdbInitialMaterialCapacityBytes = sizeof(uint8_t) * 64u;
+
+		{
+			VmaAllocationInfo nanovdbUpperAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					kNanoVdbInitialUpperCapacityBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.nanovdbUpperBuffer,
+					&frameResources.nanovdbUpperAllocation,
+					&nanovdbUpperAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.nanovdbUpperMappedData = nanovdbUpperAllocationInfo.pMappedData;
+			frameResources.nanovdbUpperCapacityBytes = nanovdbUpperAllocationInfo.size;
+			profiling::RecordAllocation(
+				frameResources.nanovdbUpperAllocation,
+				nanovdbUpperAllocationInfo.size,
+				"SceneNanoVdbUpperBufferAllocation");
+			render->sceneMemoryBytes += nanovdbUpperAllocationInfo.size;
+		}
+
+		{
+			VmaAllocationInfo nanovdbLowerAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					kNanoVdbInitialLowerCapacityBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.nanovdbLowerBuffer,
+					&frameResources.nanovdbLowerAllocation,
+					&nanovdbLowerAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.nanovdbLowerMappedData = nanovdbLowerAllocationInfo.pMappedData;
+			frameResources.nanovdbLowerCapacityBytes = nanovdbLowerAllocationInfo.size;
+			profiling::RecordAllocation(
+				frameResources.nanovdbLowerAllocation,
+				nanovdbLowerAllocationInfo.size,
+				"SceneNanoVdbLowerBufferAllocation");
+			render->sceneMemoryBytes += nanovdbLowerAllocationInfo.size;
+		}
+
+		{
+			VmaAllocationInfo nanovdbLeafAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					kNanoVdbInitialLeafCapacityBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.nanovdbLeafBuffer,
+					&frameResources.nanovdbLeafAllocation,
+					&nanovdbLeafAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.nanovdbLeafMappedData = nanovdbLeafAllocationInfo.pMappedData;
+			frameResources.nanovdbLeafCapacityBytes = nanovdbLeafAllocationInfo.size;
+			profiling::RecordAllocation(
+				frameResources.nanovdbLeafAllocation,
+				nanovdbLeafAllocationInfo.size,
+				"SceneNanoVdbLeafBufferAllocation");
+			render->sceneMemoryBytes += nanovdbLeafAllocationInfo.size;
+		}
+
+		{
+			VmaAllocationInfo nanovdbMaterialAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					kNanoVdbInitialMaterialCapacityBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.nanovdbMaterialBuffer,
+					&frameResources.nanovdbMaterialAllocation,
+					&nanovdbMaterialAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.nanovdbMaterialMappedData = nanovdbMaterialAllocationInfo.pMappedData;
+			frameResources.nanovdbMaterialCapacityBytes = nanovdbMaterialAllocationInfo.size;
+			profiling::RecordAllocation(
+				frameResources.nanovdbMaterialAllocation,
+				nanovdbMaterialAllocationInfo.size,
+				"SceneNanoVdbMaterialBufferAllocation");
+			render->sceneMemoryBytes += nanovdbMaterialAllocationInfo.size;
+		}
+
+		const VkDeviceSize kWorldGenVoxelBufferBytes = sizeof(uint32_t) * 8u * 8u * 8u *
+			std::max(static_cast<size_t>(world->voxelWorld->chunks.size()), static_cast<size_t>(1u));
+		{
+			VmaAllocationInfo worldGenVoxelAllocationInfo{};
+			if (!CreateBuffer(
+					context,
+					kWorldGenVoxelBufferBytes,
+					VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					allocationInfo,
+					&frameResources.worldGenVoxelBuffer,
+					&frameResources.worldGenVoxelAllocation,
+					&worldGenVoxelAllocationInfo)) {
+				DestroySceneResources(context, render);
+				return false;
+			}
+			frameResources.worldGenVoxelMappedData = worldGenVoxelAllocationInfo.pMappedData;
+			frameResources.worldGenVoxelCapacityBytes = worldGenVoxelAllocationInfo.size;
+			profiling::RecordAllocation(
+				frameResources.worldGenVoxelAllocation,
+				worldGenVoxelAllocationInfo.size,
+				"SceneWorldGenVoxelBufferAllocation");
+			render->sceneMemoryBytes += worldGenVoxelAllocationInfo.size;
+		}
+
 		char bufferName[64]{};
 
 		std::snprintf(bufferName, sizeof(bufferName), "ScenePackedFaceBuffer[%zu]", frameResourceIndex);
@@ -1359,6 +1513,30 @@ bool CreateSceneResources(
 		SetVulkanObjectName(
 			*context,
 			reinterpret_cast<uint64_t>(frameResources.fluidCaDestinationBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneNanoVdbUpperBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.nanovdbUpperBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneNanoVdbLowerBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.nanovdbLowerBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneNanoVdbLeafBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.nanovdbLeafBuffer),
+			VK_OBJECT_TYPE_BUFFER,
+			bufferName);
+		std::snprintf(bufferName, sizeof(bufferName), "SceneNanoVdbMaterialBuffer[%zu]", frameResourceIndex);
+		SetVulkanObjectName(
+			*context,
+			reinterpret_cast<uint64_t>(frameResources.nanovdbMaterialBuffer),
 			VK_OBJECT_TYPE_BUFFER,
 			bufferName);
 		frameResources.debugHudVertexCount = 0;
@@ -1576,6 +1754,31 @@ bool UploadSceneFrameResources(
 		frameResources.uploadedVoxelPayloadVersion = render.sceneVoxelPayloadVersion;
 	}
 
+	if (frameResources.uploadedNanoVdbVersion != render.sceneNanoVdbVersion) {
+		const bool flattenedWithinCapacity =
+			frameResources.nanovdbUpperCapacityBytes >=
+				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.uppers.size()) *
+					sizeof(projectv::voxel::nanovdb::NanoVdbUpper) &&
+			frameResources.nanovdbLowerCapacityBytes >=
+				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.lowers.size()) *
+					sizeof(projectv::voxel::nanovdb::NanoVdbLower) &&
+			frameResources.nanovdbLeafCapacityBytes >=
+				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.leaves.size()) *
+					sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) &&
+			frameResources.nanovdbMaterialCapacityBytes >=
+				static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.materials.size()) *
+					sizeof(uint8_t);
+		if (flattenedWithinCapacity) {
+			(void)RefreshNanoVdbFlattenBuffers(render.sceneNanoVdbFlatten, frameResources);
+		} else {
+			runtime::LogRuntimeFailure(
+				"UploadSceneFrameResources",
+				"NanoVdbFlatten",
+				"CapacityExceeded");
+		}
+		frameResources.uploadedNanoVdbVersion = render.sceneNanoVdbVersion;
+	}
+
 	frameResources.chunkDescriptorCount = static_cast<uint32_t>(render.sceneChunkDescriptors.size());
 	frameResources.shadowIndirectCommandCount = GetShadowIndirectCommandCount(frameResources.chunkDescriptorCount);
 	frameResources.dirtyChunkCount = PrepareDirtyChunkMeshingList(render, frameResources);
@@ -1646,5 +1849,31 @@ bool RefreshChunkAabbBuffer(
 		const uint32_t wordCount = (static_cast<uint32_t>(chunkCount) + 31u) / 32u;
 		std::memset(frameResources.visibilityMaskMappedData, 0, sizeof(uint32_t) * wordCount);
 	}
+	return true;
+}
+
+bool RefreshNanoVdbFlattenBuffers(
+	const projectv::voxel::nanovdb::NanoVdbFlattenResult &flatten,
+	SceneFrameResources &frameResources)
+{
+	if (!flatten.uppers.empty() && !frameResources.nanovdbUpperMappedData) {
+		return false;
+	}
+	if (!flatten.lowers.empty() && !frameResources.nanovdbLowerMappedData) {
+		return false;
+	}
+	if (!flatten.leaves.empty() && !frameResources.nanovdbLeafMappedData) {
+		return false;
+	}
+	if (!flatten.materials.empty() && !frameResources.nanovdbMaterialMappedData) {
+		return false;
+	}
+
+	projectv::voxel::nanovdb::PackNanoVdbFlattenData(
+		flatten,
+		frameResources.nanovdbUpperMappedData,
+		frameResources.nanovdbLowerMappedData,
+		frameResources.nanovdbLeafMappedData,
+		frameResources.nanovdbMaterialMappedData);
 	return true;
 }

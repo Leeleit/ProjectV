@@ -678,6 +678,9 @@ void RecordGraphicsCommands(
 		const VkImageView mainColor2View = render.taaLayerSceneColorTarget != nullptr
 											   ? render.taaLayerSceneColorTarget->imageView
 											   : VK_NULL_HANDLE;
+		const VkImageView mainColor3View = render.taaMotionVectorTarget != nullptr
+											   ? render.taaMotionVectorTarget->imageView
+											   : VK_NULL_HANDLE;
 
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -715,7 +718,19 @@ void RecordGraphicsCommands(
 			.storeOp = mainColor2View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
-		const VkRenderingAttachmentInfo colorAttachments[3] = {colorAttachment0, colorAttachment1, colorAttachment2};
+		const VkRenderingAttachmentInfo colorAttachment3{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.pNext = nullptr,
+			.imageView = mainColor3View,
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_NONE,
+			.resolveImageView = VK_NULL_HANDLE,
+			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = mainColor3View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.clearValue = clearColorValue,
+		};
+		const VkRenderingAttachmentInfo colorAttachments[4] = {colorAttachment0, colorAttachment1, colorAttachment2, colorAttachment3};
 		const VkRenderingAttachmentInfo depthAttachment{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -735,7 +750,7 @@ void RecordGraphicsCommands(
 			.renderArea = {{0, 0}, swapchain.extent},
 			.layerCount = 1,
 			.viewMask = 0,
-			.colorAttachmentCount = 3,
+			.colorAttachmentCount = 4,
 			.pColorAttachments = colorAttachments,
 			.pDepthAttachment = &depthAttachment,
 			.pStencilAttachment = nullptr,

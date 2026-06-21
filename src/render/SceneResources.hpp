@@ -2,6 +2,7 @@
 
 import projectv.math;
 #include "core/Types.hpp"
+#include "voxel/NanoVdb.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -251,6 +252,9 @@ bool UpdateSceneFrameChunkVisibility(
 bool RefreshChunkAabbBuffer(
 	std::span<const VoxelChunk> chunks,
 	std::span<const PackedSceneChunkDescriptor> descriptors,
+	SceneFrameResources &frameResources);
+bool RefreshNanoVdbFlattenBuffers(
+	const projectv::voxel::nanovdb::NanoVdbFlattenResult &flatten,
 	SceneFrameResources &frameResources);
 void DestroySceneResources(
 	VulkanContextState *context,

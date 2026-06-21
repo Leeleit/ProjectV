@@ -79,6 +79,8 @@ layout(location = 0) out vec4 outColor;
 
 layout(location = 2) out vec4 outLayerMask;
 
+layout(location = 3) out vec2 outMotionVector;
+
 const uint kSunShadowCascadeCount = 4u;
 const uint kSunContactShadowMaxSteps = 12u;
 const uint kAmbientOcclusionMaxSteps = 4u;
@@ -886,6 +888,20 @@ void main() {
     color = ApplyColorGrading(color);
 
     outLayerMask = vec4(sunContactVisibility, localAmbientOcclusionVisibility, rawLocalPointLightVisibility, 1.0);
+
+    {
+        const vec4 prevClip = sceneLighting.prevViewProjectionMatrix *
+            vec4(inWorldPosition, 1.0);
+        vec2 motion = vec2(0.0);
+        if (prevClip.w > 0.0001) {
+            const vec2 prevNdc = prevClip.xy / prevClip.w * 0.5 + 0.5;
+            const vec4 currClip = pushConstants.viewProjection *
+                vec4(inWorldPosition, 1.0);
+            const vec2 currNdc = currClip.xy / currClip.w * 0.5 + 0.5;
+            motion = prevNdc - currNdc;
+        }
+        outMotionVector = motion;
+    }
 
 #ifdef TAA_ENABLED
     outSceneColor = vec4(linearColor, material.baseColor.a);

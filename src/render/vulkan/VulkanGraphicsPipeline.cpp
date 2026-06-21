@@ -1726,17 +1726,18 @@ bool CreateGraphicsPipeline(
 			"main voxel pipeline requires it for the dual-format TAA contract");
 		return false;
 	}
-	const VkFormat mainColorAttachmentFormats[3] = {
+	const VkFormat mainColorAttachmentFormats[4] = {
 		swapchain->format,
 		projectv::taa::kTaaSceneColorFormat,
 
 		projectv::taa::kTaaLayerHistoryColorFormat,
+		projectv::taa::kTaaMotionVectorFormat,
 	};
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
-		.colorAttachmentCount = 3,
+		.colorAttachmentCount = 4,
 		.pColorAttachmentFormats = mainColorAttachmentFormats,
 		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,

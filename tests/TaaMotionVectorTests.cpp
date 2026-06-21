@@ -51,6 +51,22 @@ void TestLayerHistoryFormatPreserved(TestContext &context)
 	}
 }
 
+void TestMotionVectorSizeContract(TestContext &context)
+{
+	if (sizeof(uint16_t) * 2u != 4u) {
+		context.Fail(__LINE__, "R16G16_SFLOAT is 4 bytes per pixel");
+	}
+}
+
+void TestMotionVectorNdcRangeContract(TestContext &context)
+{
+	const float minComponent = -1.0f;
+	const float maxComponent = 1.0f;
+	if (!(minComponent < maxComponent)) {
+		context.Fail(__LINE__, "Motion vector NDC range must be [-1, 1]");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -59,6 +75,8 @@ int main()
 	TestMotionVectorFormat(context);
 	TestSceneColorFormatPreserved(context);
 	TestLayerHistoryFormatPreserved(context);
+	TestMotionVectorSizeContract(context);
+	TestMotionVectorNdcRangeContract(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVTaaMotionVectorTests: %d failure(s)\n", context.failures);

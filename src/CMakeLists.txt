@@ -110,6 +110,7 @@ target_sources(ProjectV PRIVATE
         audio/AudioEngine.cpp
         audio/MusicDirectoryPath.cpp
         ecs/EcsWorld.cpp
+        physics/GreedyPhysicsMerger.cpp
         physics/PhysicsWorld.cpp
         core/RuntimeDiagnostics.cpp
         core/RuntimeProbe.cpp
@@ -138,12 +139,14 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanVoxelMeshingPipeline.cpp
         render/vulkan/VulkanMeshShaderPipeline.cpp
         render/vulkan/VulkanFluidCaPipeline.cpp
+        render/vulkan/VulkanWorldGenPipeline.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp
         voxel/VoxelLodDownsample.cpp
         voxel/NanoVdb.cpp
         voxel/VoxelWorld.cpp
+        voxel/ChunkStreamer.cpp
         voxel/SceneConfig.cpp
 )
 

@@ -79,7 +79,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Тест `ProjectVNanoVdbTests` проходит со 100% успехом (проверка идентичности выборок вокселей на CPU и GPU-модели).
     * Отсутствие утечек памяти на циклах перезаписи и редактирования мира.
-* **Статус (2026-06-21 session 8x Phase 7):** ⏸️ Partial. `ProjectVNanoVdbTests` + `ProjectVNanoVdbFlattenTests` 100% pass (1039 assertions + 4 sub-tests, 0 failures per session 2x part 4 + 8x). CPU-side `BuildNanoVdbFlatten` теперь вызывается из `UpdateSceneResources` (8x Phase 7) с `sceneNanoVdbVersion` tracker + Tracy plots (`NanoVDB Uppers/Lowers/Leaves`). GPU SSBO upload + descriptor set + payload version-triggered re-upload deferred to dedicated follow-up. Hybrid strategy (keep SVDAG CPU, flatten to NanoVDB-aligned transient SSBO at GPU upload) unchanged.
+* **Статус (2026-06-21 session 8x Phase 7 + 12x Phase 1):** ✅ Closed (12x). CPU-side `BuildNanoVdbFlatten` wired в `UpdateSceneResources` (8x Phase 7) с `sceneNanoVdbVersion` tracker + Tracy plots. 12x Phase 1 added GPU upload path: `PackNanoVdbFlattenData` inline helper в `voxel/NanoVdb.hpp` + 4 SSBO buffers per frame в `SceneFrameResources` (Upper/Lower/Leaf/Material storage buffers + capacities) + `RefreshNanoVdbFlattenBuffers` helper + `UploadSceneFrameResources` triggers on `sceneNanoVdbVersion` change with capacity check. `ProjectVNanoVdbGpuUploadTests` 5/5 pass (struct alignment 8/16/24 bytes, empty/populated pack roundtrip, version-based re-upload trigger, capacity budget contract 1+64+64+64 entries). Hybrid strategy (keep SVDAG CPU, flatten to NanoVDB-aligned transient SSBO at GPU upload) unchanged. Capacity check emits `LogRuntimeFailure` if flatten exceeds 1+64+64+64 (current VoxelLab-safe baseline; resize logic deferred to dedicated follow-up for Stage 4.3 1024+ chunk worlds).
 
 ### Задача 1.2. Оптимизация дедупликации (Lazy Dedup & Static Promotion)
 
@@ -274,6 +274,7 @@ PulseAudio/PipeWire через `miniaudio`.
   физического процессора.
 * **Ключевые файлы:**
     * `src/physics/PhysicsWorld.cpp` — генератор оптимизированных коллизионных примитивов.
+    * `src/physics/GreedyPhysicsMerger.{hpp,cpp}` — D_3D greedy merge algorithm.
 * **Технические особенности:**
     * Для снижения оверхеда на обработку коллизий Jolt Physics реализовать алгоритм объединения смежных вокселей чанка в
       укрупненные параллелепипеды (Bounding Boxes).
@@ -285,6 +286,7 @@ PulseAudio/PipeWire через `miniaudio`.
     * Количество коллизионных шейпов в CompoundShape снижается минимум в 4 раза на типичном ландшафте.
     * Полное совпадение физического поведения (персонаж не проваливается под текстуры и корректно сталкивается с
       углами).
+* **Статус (2026-06-21 session 12x Phase 2):** ✅ Closed. `GreedyPhysicsMerger.{hpp,cpp}` (NEW) реализует D_3D greedy merge per `2026-06-21-greedy-physics-meshing-cpu` verdict=yes (F_TwoPass 35× shape reduction, 100% volume preservation). Integration в `BuildStaticVoxelCollisionBody` + `BuildChunkStaticCollisionBody` (per-chunk incremental Jolt). Env gate `PROJECTV_GREEDY_PHYSICS_MESH=ON` default; `=OFF` falls back к naive per-voxel loop. Tracy plot "Physics Greedy Merge Box Count" + "Physics Greedy Merge Chunk Box Count". `ProjectVPhysicsGreedyMergerTests` 7/7 pass (empty world, single voxel unit box, full chunk single box, volume preservation sum of box volumes == solid voxel count, mixed half-chunk reduction, fluid+air ignored, bounds clamp).
 
 ---
 
@@ -310,7 +312,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Генерация нового чанка 8x8x8 выполняется менее чем за 0.05 мс на GPU.
     * Бесшовный стык ландшафта на границах чанков.
-* **Статус (2026-06-21 session 8x Phase 6):** ⏸️ Partial. `src/shaders/world_gen.comp` (~180 LoC GLSL) + CC0 OpenSimplex2 3D-S port + FBM wrapper (4 octaves, persistence 0.5) compiles green per glslc --target-env=vulkan1.3 validation. Recommended algorithm per `2026-06-21-gpu-procedural-noise-compute-kernels` verdict=mixed (CC0 + no axis artifacts + analytic derivatives + stable cold-cache; all 5 kernels within 2.9% mean on RTX 3060 Ti, memory-bound 65.6% of 448 GB/s peak). 8× headroom single octave (6.6 µs/chunk vs 50 µs budget). Pipeline integration (SSBO + descriptor + dispatch + Async Compute queue wiring per Задача 6.3) deferred.
+* **Статус (2026-06-21 session 8x Phase 6 + 12x Phase 4):** ⏸️ Partial (12x). Shader compiled (8x) + compute pipeline infrastructure added (12x): `src/render/vulkan/VulkanWorldGenPipeline.{hpp,cpp}` + `WorldGenPushConstants` (64 bytes, static_assert'd) + 1-binding descriptor set + 1 SSBO per frame + env gate `PROJECTV_WORLD_GEN_GPU` + `BuildActiveChunkIdsForWorldGen` helper (filters out non-empty chunks) + `RecordWorldGenDispatch` + 5 new `RenderState` fields. `ProjectVWorldGenTests` 3/3 pass. Renderer.cpp::DrawFrame dispatch wiring (CreateWorldGenPipelines + RefreshWorldGenResourceBindings + per-frame BuildActiveChunkIdsForWorldGen + RecordWorldGenDispatch for empty chunks) deferred to dedicated session.
 
 ### Задача 4.2. Даунсэмплинг геометрии вокселей для LOD уровней
 
@@ -431,7 +433,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Полное исчезновение шлейфов за перемещаемыми гравипушкой моделями.
     * Четкие границы геометрии в динамике при сохранении стабильного сглаживания субпиксельного дрожания (jitter).
-* **Статус (2026-06-21 session 8x Phase 3):** ⏸️ Partial. `kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT` constant added в `TaaRenderTargets.hpp` (8x Phase 3) per Karis 2014 SIGGRAPH "16:16 RG velocity buffer" mandate + `TODO.md §5.3` line 425 explicit format prescription. VRAM cost 8 MiB/frame double-buffered @ 1080p = 0.16% of 5.06 GiB budget per `hardware-profile.md §3`. `ProjectVTaaMotionVectorTests` 3/3 pass (format constant + scene/layer format preservation). Per `2026-06-21-taa-motion-vectors` verdict=yes Pipeline A. Full GPU integration deferred: `voxel.vert` needs `prevViewProjectionMatrix` access in push constants; add MRT attachment in dynamic rendering; modify `voxel.frag` passthrough; consume в `taa_resolve.frag` для replace depth-reproject path (lines 167-182 of `taa_resolve.frag`). ~200-300 LoC dedicated session.
+* **Статус (2026-06-21 session 8x Phase 3 + 12x Phase 3):** ⏸️ Partial (12x data path). Format constant added (8x) per Karis 2014. 12x Phase 3 added data path: `voxel.frag` outputs `outMotionVector` (vec2, location 3) computed from `prevViewProjectionMatrix * worldPos` NDC delta vs current `viewProjection * worldPos` NDC + 4th color attachment format `kTaaMotionVectorFormat` added to pipeline + 2 new `OffscreenColorTarget` (motionVector + history) in `TaaRenderTargets` + new `TransitionTaaMotionVectorForSample` + `RecordTaaMotionVectorHistoryCopy` helpers + 2 new `RenderState` fields. `ProjectVTaaMotionVectorTests` 5/5 pass (format + size + NDC range). TAA resolve consume (`taa_resolve.frag` reading MV texture instead of computing from prevViewProjectionMatrix in-shader) deferred to dedicated session.
 
 ---
 

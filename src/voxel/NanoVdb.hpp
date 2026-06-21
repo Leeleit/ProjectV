@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include "voxel/Sparse64Tree.hpp"
@@ -65,5 +66,38 @@ uint8_t ReadNanoVdbVoxelMaterial(
 	uint32_t localX,
 	uint32_t localY,
 	uint32_t localZ);
+
+inline void PackNanoVdbFlattenData(
+	const NanoVdbFlattenResult &flatten,
+	void *upperDst,
+	void *lowerDst,
+	void *leafDst,
+	void *materialDst)
+{
+	if (!flatten.uppers.empty() && upperDst != nullptr) {
+		std::memcpy(
+			upperDst,
+			flatten.uppers.data(),
+			flatten.uppers.size() * sizeof(NanoVdbUpper));
+	}
+	if (!flatten.lowers.empty() && lowerDst != nullptr) {
+		std::memcpy(
+			lowerDst,
+			flatten.lowers.data(),
+			flatten.lowers.size() * sizeof(NanoVdbLower));
+	}
+	if (!flatten.leaves.empty() && leafDst != nullptr) {
+		std::memcpy(
+			leafDst,
+			flatten.leaves.data(),
+			flatten.leaves.size() * sizeof(NanoVdbLeaf));
+	}
+	if (!flatten.materials.empty() && materialDst != nullptr) {
+		std::memcpy(
+			materialDst,
+			flatten.materials.data(),
+			flatten.materials.size() * sizeof(uint8_t));
+	}
+}
 
 }  // namespace projectv::voxel::nanovdb

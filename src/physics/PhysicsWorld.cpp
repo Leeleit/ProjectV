@@ -3,6 +3,7 @@ import projectv.string_id;
 
 
 #include "physics/PhysicsWorld.hpp"
+#include "physics/GreedyPhysicsMerger.hpp"
 
 #include "app/InputActions.hpp"
 #include "core/RuntimeDiagnostics.hpp"
@@ -712,25 +713,61 @@ void DestroyStaticWorldBody(PhysicsState &physics)
 bool BuildStaticVoxelCollisionBody(PhysicsState &physics, const VoxelWorld &world)
 {
 	JPH::StaticCompoundShapeSettings compoundSettings;
-	const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+
+	std::vector<projectv::physics::MergedVoxelBox> mergedBoxes;
+	if (projectv::physics::IsGreedyPhysicsMeshEnabled()) {
+		projectv::physics::GreedyMergeSolidVoxelsInBounds(
+			world,
+			world.min,
+			world.maxExclusive,
+			mergedBoxes);
+		profiling::PlotValue(
+			"Physics Greedy Merge Box Count",
+			static_cast<int64_t>(mergedBoxes.size()));
+	}
 
 	size_t solidVoxelCount = 0;
-	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
-		for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
-			for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-				const Int3 voxel{x, y, z};
-				if (!IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
-					continue;
-				}
+	if (!mergedBoxes.empty()) {
+		for (const projectv::physics::MergedVoxelBox &box : mergedBoxes) {
+			const int spanX = box.maxX - box.minX;
+			const int spanY = box.maxY - box.minY;
+			const int spanZ = box.maxZ - box.minZ;
+			const float halfX = static_cast<float>(spanX) * 0.5f;
+			const float halfY = static_cast<float>(spanY) * 0.5f;
+			const float halfZ = static_cast<float>(spanZ) * 0.5f;
+			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
+			const JPH::Vec3 center(
+				static_cast<float>(box.minX) + halfX,
+				static_cast<float>(box.minY) + halfY,
+				static_cast<float>(box.minZ) + halfZ);
+			const JPH::RefConst<JPH::Shape> boxShape = new JPH::BoxShape(halfExtent);
+			compoundSettings.AddShape(
+				center,
+				JPH::Quat::sIdentity(),
+				boxShape.GetPtr());
+			solidVoxelCount += static_cast<size_t>(spanX) *
+				static_cast<size_t>(spanY) *
+				static_cast<size_t>(spanZ);
+		}
+	} else {
+		const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+		for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
+			for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
+				for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+					const Int3 voxel{x, y, z};
+					if (!IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+						continue;
+					}
 
-				compoundSettings.AddShape(
-					JPH::Vec3(
-						static_cast<float>(x) + 0.5f,
-						static_cast<float>(y) + 0.5f,
-						static_cast<float>(z) + 0.5f),
-					JPH::Quat::sIdentity(),
-					voxelShape.GetPtr());
-				++solidVoxelCount;
+					compoundSettings.AddShape(
+						JPH::Vec3(
+							static_cast<float>(x) + 0.5f,
+							static_cast<float>(y) + 0.5f,
+							static_cast<float>(z) + 0.5f),
+						JPH::Quat::sIdentity(),
+						voxelShape.GetPtr());
+					++solidVoxelCount;
+				}
 			}
 		}
 	}
@@ -2874,25 +2911,61 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 	}
 
 	JPH::StaticCompoundShapeSettings compoundSettings;
-	const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+
+	std::vector<projectv::physics::MergedVoxelBox> mergedBoxes;
+	if (projectv::physics::IsGreedyPhysicsMeshEnabled()) {
+		projectv::physics::GreedyMergeSolidVoxelsInBounds(
+			world,
+			chunk.min,
+			chunk.maxExclusive,
+			mergedBoxes);
+		profiling::PlotValue(
+			"Physics Greedy Merge Chunk Box Count",
+			static_cast<int64_t>(mergedBoxes.size()));
+	}
 
 	size_t solidVoxelCount = 0;
-	for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
-		for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
-			for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
-				const Int3 voxel{x, y, z};
-				if (!IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
-					continue;
-				}
+	if (!mergedBoxes.empty()) {
+		for (const projectv::physics::MergedVoxelBox &box : mergedBoxes) {
+			const int spanX = box.maxX - box.minX;
+			const int spanY = box.maxY - box.minY;
+			const int spanZ = box.maxZ - box.minZ;
+			const float halfX = static_cast<float>(spanX) * 0.5f;
+			const float halfY = static_cast<float>(spanY) * 0.5f;
+			const float halfZ = static_cast<float>(spanZ) * 0.5f;
+			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
+			const JPH::Vec3 center(
+				static_cast<float>(box.minX) + halfX,
+				static_cast<float>(box.minY) + halfY,
+				static_cast<float>(box.minZ) + halfZ);
+			const JPH::RefConst<JPH::Shape> boxShape = new JPH::BoxShape(halfExtent);
+			compoundSettings.AddShape(
+				center,
+				JPH::Quat::sIdentity(),
+				boxShape.GetPtr());
+			solidVoxelCount += static_cast<size_t>(spanX) *
+				static_cast<size_t>(spanY) *
+				static_cast<size_t>(spanZ);
+		}
+	} else {
+		const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+		for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
+			for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
+				for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
+					const Int3 voxel{x, y, z};
+					if (!IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
+						continue;
+					}
 
-				compoundSettings.AddShape(
-					JPH::Vec3(
-						static_cast<float>(x) + 0.5f,
-						static_cast<float>(y) + 0.5f,
-						static_cast<float>(z) + 0.5f),
-					JPH::Quat::sIdentity(),
-					voxelShape.GetPtr());
-				++solidVoxelCount;
+					compoundSettings.AddShape(
+						JPH::Vec3(
+							static_cast<float>(x) + 0.5f,
+							static_cast<float>(y) + 0.5f,
+							static_cast<float>(z) + 0.5f),
+						JPH::Quat::sIdentity(),
+						voxelShape.GetPtr());
+					++solidVoxelCount;
+				}
 			}
 		}
 	}

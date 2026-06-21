@@ -61,6 +61,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 	OffscreenColorTarget &historyColor,
 	OffscreenColorTarget &layerSceneColor,
 	OffscreenColorTarget &layerHistoryColor,
+	OffscreenColorTarget &motionVectorColor,
+	OffscreenColorTarget &motionVectorHistoryColor,
 	VkSampler &linearSampler);
 
 
@@ -70,6 +72,8 @@ void DestroyTaaRenderTargets(
 	OffscreenColorTarget &historyColor,
 	OffscreenColorTarget &layerSceneColor,
 	OffscreenColorTarget &layerHistoryColor,
+	OffscreenColorTarget &motionVectorColor,
+	OffscreenColorTarget &motionVectorHistoryColor,
 	VkSampler &linearSampler);
 
 
@@ -82,11 +86,19 @@ void TransitionTaaSceneColorForSample(
 void TransitionTaaHistoryForSample(
 	VkCommandBuffer cmd,
 	const OffscreenColorTarget &historyColor);
+void TransitionTaaMotionVectorForSample(
+	VkCommandBuffer cmd,
+	const OffscreenColorTarget &motionVectorColor);
 
 void RecordTaaHistoryCopy(
 	VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor,
 	const OffscreenColorTarget &historyColor,
+	VkExtent2D extent);
+void RecordTaaMotionVectorHistoryCopy(
+	VkCommandBuffer cmd,
+	const OffscreenColorTarget &motionVectorColor,
+	const OffscreenColorTarget &motionVectorHistoryColor,
 	VkExtent2D extent);
 
 } // namespace projectv::taa

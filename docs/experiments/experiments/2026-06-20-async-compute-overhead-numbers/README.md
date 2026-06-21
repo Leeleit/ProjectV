@@ -1,8 +1,9 @@
 # 2026-06-20-async-compute-overhead-numbers — Measured overlap graphics||compute on RTX 3060 Ti for ProjectV compute workloads
 
-**Status:** in-progress
+**Status:** concluded-verdict-yes
 **Date opened:** 2026-06-20
-**Date closed:** N/A
+**Date closed:** 2026-06-20
+**[Sync fix r1 2026-06-21:]** Status field corrected `in-progress → concluded-verdict-yes` and `Date closed N/A → 2026-06-20` per AGENTS.md §13.5 (single-pass sync after original session left folder incomplete sync). `INDEX.md §6` Recent closed table entry + `backlog.md §Open` stale removal also performed same-pass. Original measurements + verdict preserved (см. `RESULTS.md`). Same-session sync agent.
 **Stage link:** TODO.md §2.2 (HZB cull) / §3.1 (GPU Fluid CA per `agent/knowledge.md §30.4`) / §4.1 (GPU world gen) /
 §5.2 (RTX BLAS build per `bindless-descriptor-overhead` Phase E)
 **Estimated effort:** M (standalone Vulkan prototype + dual-queue harness + 3 synthetic compute workloads + measurement)

@@ -486,6 +486,12 @@ bool RecreateSwapchain(
 	if (render->taaLayerHistoryColorTarget == nullptr) {
 		render->taaLayerHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
 	}
+	if (render->taaMotionVectorTarget == nullptr) {
+		render->taaMotionVectorTarget = new projectv::taa::OffscreenColorTarget();
+	}
+	if (render->taaMotionVectorHistoryTarget == nullptr) {
+		render->taaMotionVectorHistoryTarget = new projectv::taa::OffscreenColorTarget();
+	}
 	const auto taaResult = projectv::taa::CreateOrRecreateTaaRenderTargets(
 		context,
 		swapchain->extent,
@@ -493,6 +499,8 @@ bool RecreateSwapchain(
 		*render->taaHistoryColorTarget,
 		*render->taaLayerSceneColorTarget,
 		*render->taaLayerHistoryColorTarget,
+		*render->taaMotionVectorTarget,
+		*render->taaMotionVectorHistoryTarget,
 		render->taaLinearSampler);
 	if (!taaResult.has_value()) {
 		runtime::LogRuntimeFailure(

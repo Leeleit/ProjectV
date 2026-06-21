@@ -316,6 +316,30 @@ Constants block: 5 descriptor bindings (PackedChunkDescriptors / ActiveChunkIds 
 
 Stage 4.2 LOD chunk 2 B_SurfacePreserve downsampling kernel + per-chunk `LodDownsampleJob` orchestrator per `2026-06-21-lod-mesh-downsampling` verdict=mixed. Lives in `projectv::voxel` namespace (separate from `voxel/VoxelWorld.cpp` to minimize transitive include cost for the test target). `LodDownsampleStepForLod` maps LOD 0/1/2/3 → step 1/2/4/8 (per `SelectLodLevelForDistance` distance thresholds <32m/<64m/<128m/≥128m). `LodDownsampledExtentForLod` returns `chunkSize/step` (clamped to ≥1 for safety). `SurfacePreserveVote8` reads step³ source voxels in fixed `sz,sy,sx` order, returns first non-Air material found OR Air if all step³ are Air — 0 T-junction holes across 75 boundary configurations per experiment. `DownsampleChunkForLodSurfacePreserve` allocates `outDownsampled` of size `outExtent³`, populates from `chunk.min` origin. `RunLodDownsampleJobs` iterates all chunks, calls downsample, sets `lodDownsampledNonAirCount` byte. `IsLodDownsampleEnabled` env gate (`PROJECTV_LOD_DOWNSAMPLE=ON`, default OFF).
 
+## `src/physics/GreedyPhysicsMerger.{hpp,cpp}`
+
+### L1-L200 (design-rationale)
+
+Stage 3.3 Greedy Physics Meshing integration per `2026-06-21-greedy-physics-meshing-cpu` verdict=yes (D_3D greedy merge algorithm, 35× shape reduction, 100% volume preservation). `MergedVoxelBox` struct holds min/max-exclusive extents in voxel coordinates. `GreedyMergeSolidVoxelsInBounds` algorithm: for each (x,y,z) in fixed `z,y,x` ascending order, find max X extent (X+), then max Y extent over X-range (Y+), then max Z extent over XY-range (Z+), mark consumed via byte mask, emit one `MergedVoxelBox` per maximal extents. `IsSolidAt` inline helper checks `IsPhysicsSolidMaterial` (Glass + FloorWhite + FloorGray; Air + Fluid return false). `IsGreedyPhysicsMeshEnabled` env gate (`PROJECTV_GREEDY_PHYSICS_MESH=ON` default; `=OFF` falls back to naive per-voxel loop in PhysicsWorld.cpp). Both `BuildStaticVoxelCollisionBody` and `BuildChunkStaticCollisionBody` (per-chunk incremental Jolt) integrate greedy merge. Per-chunk rebuild path uses greedy merge for new compound shape. Tests cover empty world, single voxel unit box, full chunk single box, volume preservation (sum of merged box volumes equals solid voxel count), mixed half-chunk reduction, fluid+air ignored, oversized bounds clamp to world extents.
+
+## `src/voxel/ChunkStreamer.{hpp,cpp}`
+
+### L1-L80 (design-rationale)
+
+Stage 4.3 Chunk Streaming foundation Step 1 per `2026-06-21-voxel-chunk-streaming-pipeline` (in-progress experiment, closed mixed verdict expected). Interface contract: `ChunkStreamRequest` (chunkIndex + priority), `ChunkData` (voxelBytes + nodeWords vectors), `EnqueueChunkStreamRequest` (mutex-guarded enqueue), `DrainChunkStreamQueueSize` (peek queue depth), `TryDequeueChunkData` (returns `std::expected<ChunkData, ChunkStreamError>` for thread-safe dequeue). `ChunkStreamError` enum covers `QueueFull` + `InvalidChunk` + `NotInitialized`. `IsChunkStreamingEnabled` env gate (`PROJECTV_CHUNK_STREAMING=ON` default; `=OFF` returns `NotInitialized` from TryDequeue). Pending and ready deques are mutex-protected via static-local `std::mutex` instances. Cold-path per `agent/knowledge.md §29.0` (`std::expected<T, E>` for I/O). Background thread + SSD read integration deferred to dedicated session — interface is in place, ready for `ChunkStreamer::ProcessPendingRequests()` background worker.
+
+## `src/render/vulkan/VulkanWorldGenPipeline.{hpp,cpp}`
+
+### L1-L300 (design-rationale)
+
+Stage 4.1 GPU World Gen dispatch infrastructure per `2026-06-21-gpu-procedural-noise-compute-kernels` verdict=mixed (CC0 OpenSimplex2 3D-S recommended). `WorldGenPushConstants` (64 bytes, static_assert'd) packs chunkOriginAndChunkSize (ivec4) + chunkCountAndFlags (uvec4) + noiseParams (vec4) + seed (uint) + reserved (3× uint). Compute pipeline from `world_gen.comp.spv` via `ReadShaderFile` + `vkCreateComputePipelines`. 1-binding descriptor set: storage buffer at binding 0 (writeonly voxel buffer). `BuildActiveChunkIdsForWorldGen(world, outChunkIds)` helper filters out non-empty chunks (only generates voxels for chunks with `nonAirVoxelCount == 0`). `RecordWorldGenDispatch(commandBuffer, render, frameResources, pushConstants, activeChunkCount)` does HOST→COMPUTE buffer barrier + bind pipeline + bind descriptor set + push constants + `vkCmdDispatch(activeChunkCount, 1, 1)`. `RefreshWorldGenResourceBindings` allocates 1 descriptor set per frame + 1 storage buffer write. Per-frame SSBO capacity = `sizeof(uint32_t) * 8³ * max(chunks.size(), 1)`. `IsWorldGenGpuPipelineRequested` env gate (`PROJECTV_WORLD_GEN_GPU=ON` default; `=OFF` short-circuits before shader load). `IsWorldGenGpuPipelineRequested` is `inline` in header for testability without linking the .cpp.
+
+## `src/render/TaaRenderTargets.{hpp,cpp}` (12x updates)
+
+### L44-L65 (design-rationale)
+
+12x Phase 3 added motion vector + history render targets per `2026-06-21-taa-motion-vectors` verdict=yes Pipeline A. `kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT` (Karis 2014 "16:16 RG velocity buffer"). VRAM cost 8 MiB/frame double-buffered @ 1080p = 0.16% of 5.06 GiB budget per `hardware-profile.md §3`. `CreateOrRecreateTaaRenderTargets` signature extended with 2 new `OffscreenColorTarget&` params (`motionVectorColor` + `motionVectorHistoryColor`). `TransitionTaaMotionVectorForSample` transitions MOTION_ATTACHMENT_OPTIMAL → SHADER_READ_ONLY_OPTIMAL with COLOR_ATTACHMENT_WRITE → SHADER_SAMPLED_READ access. `RecordTaaMotionVectorHistoryCopy` does scene→history transfer with full barrier chain (matches `RecordTaaHistoryCopy` pattern for scene color). `DestroyTaaRenderTargets` extended with 2 new destroy targets. Note: this data path is complete; `taa_resolve.frag` integration (consume MV texture instead of computing from prevViewProjectionMatrix in-shader) is deferred to dedicated session — `agent/workspace.md §2` Nearest Gap.
+
 ## `src/render/vulkan/VulkanBootstrap.cpp`
 
 ### L447-L454 (intent)

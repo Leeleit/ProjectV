@@ -6,6 +6,16 @@ dev host validation via `vulkaninfo`). README §1-§7 filled with refined hypoth
 cost model. `sources.md` created. §3 prototype deferred (analytical literature sufficient для
 integration recommendation). Single-pass sync per `AGENTS.md §13.5`: `backlog.md §In progress → §Closed`,
 `INDEX.md §5 → §6`, meshing-algo-comparison sync fix (parallel-session close).
+
+**Superseded (2026-06-21):** this experiment's measurement gap
+(«Конкретные p99 frame variance numbers под Wayland compositor не измерены в этом эксперименте
+(prototype deferred)» per old README §6 Verdict) filled by
+**[`2026-06-21-vulkan-fps-pacing-wayland-prototype/`](../2026-06-21-vulkan-fps-pacing-wayland-prototype/)**
+(claimed `2026-06-21` by self per `AGENTS.md §13.1` + §13.7 explicit supersede). New experiment adds
+`VK_KHR_present_mode_fifo_latest_ready` (ratified 2025-03-18, не covered в old experiment) + Mesa 26.2
+benchmark numbers (std-dev 0.9 → 0.3 ms Wayland → direct) + `low_latency_layer` cross-vendor data
+(Phoronix 2026-05-17) + measured Wayland prototype (vs old analytical-only). Old experiment references
+retained — литературная база остаётся валидной.
 **Blocker:** нет.
 **Verdict:** **`mixed`** — analytical literature valid; prototype deferred. Direction validated
 (`VK_EXT_present_timing` = SOTA); dev host полностью supports все relevant extensions +

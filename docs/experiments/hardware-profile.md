@@ -11,7 +11,9 @@
 > - Дата **≥14 дней** или файл отсутствует → запустить refresh-команду ниже, обновить данные, обновить дату.
 > - Любой probe «для проверки» при свежем файле = **ЗАПРЕЩЁННЫЙ ритуал**.
 
-**Captured:** 2026-06-20
+**Captured:** 2026-06-21 (refresh: добавлен `VK_KHR_present_mode_fifo_latest_ready` row в §4 — ratified 2025-03-18,
+поддержка подтверждена на dev host driver 610.43.2.0 per `vulkaninfo 2026-06-21` probe для
+`experiments/2026-06-21-vulkan-fps-pacing-wayland-prototype/`; остальные секции unchanged от 2026-06-20 capture).
 **Hostname:** `obvium`
 **Refresh:** `bash -c "$(cat <<'EOF'
   echo '== CPU =='; lscpu | grep -E "Model name|CPU\(s\)|Core\(s\)|Thread\(s\)|L[1-3] cache|MHz|Microcode"; \
@@ -134,7 +136,8 @@ draw distance (128+ chunks) **может** упереться в VRAM budget.
 | `VK_KHR_create_renderpass2`                        | 1   | ProjectV current                  |
 | `VK_KHR_swapchain` + maintenance1 + mutable_format | —   | ProjectV current                  |
 | `VK_KHR_deferred_host_operations`                  | 4   | Stage 5.2 (BLAS build)            |
-| `VK_KHR_buffer_device_address` (via features)      | —   | ProjectV current                  |
+| `VK_KHR_present_mode_fifo_latest_ready`          | 1   | **Stage 0** frame pacing (added 2026-06-21 per `2026-06-21-vulkan-fps-pacing-wayland-prototype`) |
+| `VK_KHR_buffer_device_address` (via features)      | —   | ProjectV current                |
 | `VK_EXT_conservative_rasterization`                | 1   | future option                     |
 | `VK_EXT_conditional_rendering`                     | 2   | future option                     |
 | `VK_EXT_extended_dynamic_state[2,3]`               | 1-2 | ProjectV current                  |

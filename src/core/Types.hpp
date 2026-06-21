@@ -579,6 +579,27 @@ struct SceneFrameResources {
 	void *fluidCaStatsMappedData = nullptr;
 	VkBuffer fluidCaStatsBuffer = VK_NULL_HANDLE;
 	VmaAllocation fluidCaStatsAllocation = nullptr;
+	void *nanovdbUpperMappedData = nullptr;
+	VkBuffer nanovdbUpperBuffer = VK_NULL_HANDLE;
+	VmaAllocation nanovdbUpperAllocation = nullptr;
+	VkDeviceSize nanovdbUpperCapacityBytes = 0u;
+	void *nanovdbLowerMappedData = nullptr;
+	VkBuffer nanovdbLowerBuffer = VK_NULL_HANDLE;
+	VmaAllocation nanovdbLowerAllocation = nullptr;
+	VkDeviceSize nanovdbLowerCapacityBytes = 0u;
+	void *nanovdbLeafMappedData = nullptr;
+	VkBuffer nanovdbLeafBuffer = VK_NULL_HANDLE;
+	VmaAllocation nanovdbLeafAllocation = nullptr;
+	VkDeviceSize nanovdbLeafCapacityBytes = 0u;
+	void *nanovdbMaterialMappedData = nullptr;
+	VkBuffer nanovdbMaterialBuffer = VK_NULL_HANDLE;
+	VmaAllocation nanovdbMaterialAllocation = nullptr;
+	VkDeviceSize nanovdbMaterialCapacityBytes = 0u;
+	void *worldGenVoxelMappedData = nullptr;
+	VkBuffer worldGenVoxelBuffer = VK_NULL_HANDLE;
+	VmaAllocation worldGenVoxelAllocation = nullptr;
+	VkDeviceSize worldGenVoxelCapacityBytes = 0u;
+	VkDescriptorSet worldGenDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
@@ -588,6 +609,7 @@ struct SceneFrameResources {
 	uint64_t uploadedSceneVersion = 0;
 	uint64_t uploadedVoxelPayloadVersion = 0;
 	uint64_t meshedSceneVersion = 0;
+	uint64_t uploadedNanoVdbVersion = 0;
 	uint32_t chunkDescriptorCount = 0;
 	uint32_t shadowIndirectCommandCount = 0;
 	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
@@ -745,6 +767,13 @@ struct RenderState {
 	VkDescriptorSetLayout fluidCaDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool fluidCaDescriptorPool = VK_NULL_HANDLE;
 
+	bool worldGenPipelineEnabled = false;
+	VkShaderModule worldGenShaderModule = VK_NULL_HANDLE;
+	VkPipelineLayout worldGenPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline worldGenPipeline = VK_NULL_HANDLE;
+	VkDescriptorSetLayout worldGenDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool worldGenDescriptorPool = VK_NULL_HANDLE;
+
 	bool taaEnabled = true;
 	float taaBlend = 0.10f;
 	uint32_t taaFrameCounter = 0u;
@@ -769,6 +798,9 @@ struct RenderState {
 
 	projectv::taa::OffscreenColorTarget *taaLayerSceneColorTarget = nullptr;
 	projectv::taa::OffscreenColorTarget *taaLayerHistoryColorTarget = nullptr;
+
+	projectv::taa::OffscreenColorTarget *taaMotionVectorTarget = nullptr;
+	projectv::taa::OffscreenColorTarget *taaMotionVectorHistoryTarget = nullptr;
 
 	bool taaLayerHistoryValid = false;
 

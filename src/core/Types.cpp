@@ -48,6 +48,8 @@ void ShutdownVulkan(AppState *state)
 				*state->render().taaHistoryColorTarget,
 				*state->render().taaLayerSceneColorTarget,
 				*state->render().taaLayerHistoryColorTarget,
+				*state->render().taaMotionVectorTarget,
+				*state->render().taaMotionVectorHistoryTarget,
 				state->render().taaLinearSampler);
 			delete state->render().taaSceneColorTarget;
 			state->render().taaSceneColorTarget = nullptr;
@@ -58,6 +60,10 @@ void ShutdownVulkan(AppState *state)
 			state->render().taaLayerSceneColorTarget = nullptr;
 			delete state->render().taaLayerHistoryColorTarget;
 			state->render().taaLayerHistoryColorTarget = nullptr;
+			delete state->render().taaMotionVectorTarget;
+			state->render().taaMotionVectorTarget = nullptr;
+			delete state->render().taaMotionVectorHistoryTarget;
+			state->render().taaMotionVectorHistoryTarget = nullptr;
 		}
 	}
 

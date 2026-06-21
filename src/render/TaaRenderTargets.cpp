@@ -66,6 +66,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 	OffscreenColorTarget &historyColor,
 	OffscreenColorTarget &layerSceneColor,
 	OffscreenColorTarget &layerHistoryColor,
+	OffscreenColorTarget &motionVectorColor,
+	OffscreenColorTarget &motionVectorHistoryColor,
 	VkSampler &linearSampler)
 {
 	const auto fail = [](const TaaError e, const std::string_view step, const std::string_view detail) {
@@ -87,12 +89,15 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 		historyColor,
 		layerSceneColor,
 		layerHistoryColor,
+		motionVectorColor,
+		motionVectorHistoryColor,
 		linearSampler);
 
 	const VkExtent3D imageExtent{extent.width, extent.height, 1u};
 
 	constexpr VkFormat sceneColorFormat = kTaaSceneColorFormat;
 	constexpr VkFormat layerColorFormat = kTaaLayerHistoryColorFormat;
+	constexpr VkFormat motionVectorFormat = kTaaMotionVectorFormat;
 
 	const VkImageCreateInfo imageInfoTemplate{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -176,6 +181,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 			historyColor,
 			layerSceneColor,
 			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
 			linearSampler);
 		return std::unexpected(TaaError::ImageCreateFailed);
 	}
@@ -186,6 +193,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 			historyColor,
 			layerSceneColor,
 			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
 			linearSampler);
 		return std::unexpected(TaaError::ImageCreateFailed);
 	}
@@ -196,6 +205,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 			historyColor,
 			layerSceneColor,
 			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
 			linearSampler);
 		return std::unexpected(TaaError::ImageCreateFailed);
 	}
@@ -206,6 +217,32 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 			historyColor,
 			layerSceneColor,
 			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
+			linearSampler);
+		return std::unexpected(TaaError::ImageCreateFailed);
+	}
+	if (!allocateTarget(motionVectorColor, motionVectorFormat, "TaaMotionVectorImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
+			linearSampler);
+		return std::unexpected(TaaError::ImageCreateFailed);
+	}
+	if (!allocateTarget(motionVectorHistoryColor, motionVectorFormat, "TaaMotionVectorHistoryImage", VK_IMAGE_LAYOUT_UNDEFINED).has_value()) {
+		DestroyTaaRenderTargets(
+			context,
+			sceneColor,
+			historyColor,
+			layerSceneColor,
+			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
 			linearSampler);
 		return std::unexpected(TaaError::ImageCreateFailed);
 	}
@@ -229,6 +266,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 			historyColor,
 			layerSceneColor,
 			layerHistoryColor,
+			motionVectorColor,
+			motionVectorHistoryColor,
 			linearSampler);
 		return fail(TaaError::SamplerCreateFailed,
 					"CreateOrRecreateTaaRenderTargets.vkCreateSampler", "TaaLinearSampler");
@@ -244,6 +283,8 @@ void DestroyTaaRenderTargets(
 	OffscreenColorTarget &historyColor,
 	OffscreenColorTarget &layerSceneColor,
 	OffscreenColorTarget &layerHistoryColor,
+	OffscreenColorTarget &motionVectorColor,
+	OffscreenColorTarget &motionVectorHistoryColor,
 	VkSampler &linearSampler)
 {
 	if (!context) {
@@ -257,6 +298,8 @@ void DestroyTaaRenderTargets(
 	DestroyTarget(context, historyColor);
 	DestroyTarget(context, layerSceneColor);
 	DestroyTarget(context, layerHistoryColor);
+	DestroyTarget(context, motionVectorColor);
+	DestroyTarget(context, motionVectorHistoryColor);
 }
 
 void TransitionTaaSceneColorForWrite(
@@ -313,6 +356,24 @@ void TransitionTaaHistoryForSample(
 		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
+void TransitionTaaMotionVectorForSample(
+	const VkCommandBuffer cmd,
+	const OffscreenColorTarget &motionVectorColor)
+{
+	if (motionVectorColor.image == VK_NULL_HANDLE) {
+		return;
+	}
+	TransitionImageLayout(
+		cmd,
+		motionVectorColor.image,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+}
+
 void RecordTaaHistoryCopy(
 	const VkCommandBuffer cmd,
 	const OffscreenColorTarget &sceneColor,
@@ -361,6 +422,62 @@ void RecordTaaHistoryCopy(
 	TransitionImageLayout(
 		cmd,
 		historyColor.image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+}
+
+void RecordTaaMotionVectorHistoryCopy(
+	const VkCommandBuffer cmd,
+	const OffscreenColorTarget &motionVectorColor,
+	const OffscreenColorTarget &motionVectorHistoryColor,
+	const VkExtent2D extent)
+{
+	if (motionVectorColor.image == VK_NULL_HANDLE || motionVectorHistoryColor.image == VK_NULL_HANDLE) {
+		return;
+	}
+
+	TransitionImageLayout(
+		cmd,
+		motionVectorColor.image,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_READ_BIT);
+	TransitionImageLayout(
+		cmd,
+		motionVectorHistoryColor.image,
+		VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		VK_PIPELINE_STAGE_2_NONE,
+		0,
+		VK_PIPELINE_STAGE_2_COPY_BIT,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
+	VkImageCopy region{};
+	region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+	region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+	region.srcOffset = {0, 0, 0};
+	region.dstOffset = {0, 0, 0};
+	region.extent = {extent.width, extent.height, 1u};
+
+	vkCmdCopyImage(
+		cmd,
+		motionVectorColor.image,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		motionVectorHistoryColor.image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1,
+		&region);
+
+	TransitionImageLayout(
+		cmd,
+		motionVectorHistoryColor.image,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_2_COPY_BIT,

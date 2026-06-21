@@ -863,3 +863,117 @@ target_link_libraries(ProjectVNanoVdbFlattenTests PRIVATE GPUOpen::VulkanMemoryA
 add_test(NAME ProjectVNanoVdbFlattenTests COMMAND ProjectVNanoVdbFlattenTests)
 set_tests_properties(ProjectVNanoVdbFlattenTests PROPERTIES LABELS "unit")
 
+add_executable(ProjectVNanoVdbGpuUploadTests
+        NanoVdbGpuUploadTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
+)
+
+target_compile_definitions(ProjectVNanoVdbGpuUploadTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVNanoVdbGpuUploadTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+        ${CMAKE_SOURCE_DIR}/external/fmt/include
+)
+
+target_link_libraries(ProjectVNanoVdbGpuUploadTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVNanoVdbGpuUploadTests PRIVATE volk)
+target_link_libraries(ProjectVNanoVdbGpuUploadTests PRIVATE glm)
+target_link_libraries(ProjectVNanoVdbGpuUploadTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVNanoVdbGpuUploadTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVNanoVdbGpuUploadTests COMMAND ProjectVNanoVdbGpuUploadTests)
+set_tests_properties(ProjectVNanoVdbGpuUploadTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVPhysicsGreedyMergerTests
+        PhysicsGreedyMergerTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+)
+
+target_compile_definitions(ProjectVPhysicsGreedyMergerTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVPhysicsGreedyMergerTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
+)
+
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE volk)
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE glm)
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE Jolt::Jolt)
+target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVPhysicsGreedyMergerTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVPhysicsGreedyMergerTests COMMAND ProjectVPhysicsGreedyMergerTests)
+set_tests_properties(ProjectVPhysicsGreedyMergerTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVPhysicsGreedyMergerTests)
+
+add_executable(ProjectVWorldGenTests
+        WorldGenTests.cpp
+)
+
+target_compile_definitions(ProjectVWorldGenTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVWorldGenTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+        ${CMAKE_SOURCE_DIR}/external/fmt/include
+)
+
+target_link_libraries(ProjectVWorldGenTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVWorldGenTests PRIVATE volk)
+target_link_libraries(ProjectVWorldGenTests PRIVATE glm)
+target_link_libraries(ProjectVWorldGenTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVWorldGenTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVWorldGenTests COMMAND ProjectVWorldGenTests)
+set_tests_properties(ProjectVWorldGenTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVWorldGenTests)
+
+add_executable(ProjectVChunkStreamingTests
+        ChunkStreamingTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/ChunkStreamer.cpp
+)
+
+target_compile_definitions(ProjectVChunkStreamingTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVChunkStreamingTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVChunkStreamingTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVChunkStreamingTests PRIVATE volk)
+target_link_libraries(ProjectVChunkStreamingTests PRIVATE glm)
+target_link_libraries(ProjectVChunkStreamingTests PRIVATE fmt::fmt)
+
+add_test(NAME ProjectVChunkStreamingTests COMMAND ProjectVChunkStreamingTests)
+set_tests_properties(ProjectVChunkStreamingTests PROPERTIES LABELS "unit")
+
