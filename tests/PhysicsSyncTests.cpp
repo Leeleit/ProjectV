@@ -392,6 +392,46 @@ void TestFluidCABumpOnSmallFlatWorldStaysFast(TestContext &context)
 	context.Pass();
 }
 
+void TestGetPhysicsBroadphaseStatsNullReturnsZeroed(TestContext &context)
+{
+	const PhysicsBroadphaseStats stats = GetPhysicsBroadphaseStats(nullptr);
+	if (stats.totalBodies != 0u || stats.maxBodies != 0u || stats.staticBodies != 0u ||
+		stats.dynamicBodies != 0u || stats.activeDynamicBodies != 0u ||
+		stats.kinematicBodies != 0u || stats.activeKinematicBodies != 0u ||
+		stats.pendingChunkRebuilds != 0u || stats.chunkStaticBodies != 0u ||
+		stats.chunkMergedBoxesEntries != 0u) {
+		context.Fail(
+			__LINE__,
+			"GetPhysicsBroadphaseStats(nullptr) must return all-zero struct");
+	}
+}
+
+void TestGetPhysicsBroadphaseStatsAfterSync(TestContext &context)
+{
+	PhysicsState *physicsState = CreatePhysicsState();
+	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	if (!SyncPhysicsWorld(physicsState, world.get())) {
+		context.Fail(__LINE__, "Sync must succeed for broadphase stats test");
+		DestroyPhysicsState(physicsState);
+		return;
+	}
+	const PhysicsBroadphaseStats stats = GetPhysicsBroadphaseStats(physicsState);
+	if (stats.totalBodies == 0u) {
+		context.Fail(__LINE__, "After initial sync, totalBodies must be > 0");
+	}
+	if (stats.staticBodies == 0u) {
+		context.Fail(__LINE__, "After initial sync, staticBodies must be > 0");
+	}
+	if (stats.maxBodies == 0u) {
+		context.Fail(__LINE__, "maxBodies must be > 0 (Jolt Init capacity)");
+	}
+	if (stats.chunkStaticBodies == 0u) {
+		context.Fail(__LINE__, "After initial sync, chunkStaticBodies must be > 0");
+	}
+	DestroyPhysicsState(physicsState);
+	context.Pass();
+}
+
 void TestFluidCAPerTickCostOnFlatBenchSizedWorld(TestContext &context)
 {
 	std::unique_ptr<VoxelWorld> world = MakeFlatBenchSizedWorld();
@@ -433,6 +473,8 @@ int main()
 	TestPhysicsSyncBoundaryEditTriggersMultiChunkRebuild(context);
 	TestFluidCABumpOnSmallFlatWorldStaysFast(context);
 	TestFluidCAPerTickCostOnFlatBenchSizedWorld(context);
+	TestGetPhysicsBroadphaseStatsNullReturnsZeroed(context);
+	TestGetPhysicsBroadphaseStatsAfterSync(context);
 
 	std::printf("ProjectVPhysicsSyncTests: %d passed, %d failed\n", context.passes, context.failures);
 	if (context.failures > 0) {

@@ -712,6 +712,34 @@ void PlotWalkProfilingState(
 		physics.walkGroundReturnAnchorValid ? int64_t{1} : int64_t{0});
 }
 
+void PlotBroadphaseDiagnostics(const PhysicsState &physics)
+{
+	PV_PROFILE_ZONE_N("PlotBroadphaseDiagnostics");
+	const JPH::BodyManager::BodyStats stats = physics.physicsSystem.GetBodyStats();
+	profiling::PlotValue("Physics Total Bodies", static_cast<int64_t>(stats.mNumBodies));
+	profiling::PlotValue("Physics Max Bodies", static_cast<int64_t>(stats.mMaxBodies));
+	profiling::PlotValue("Physics Static Bodies", static_cast<int64_t>(stats.mNumBodiesStatic));
+	profiling::PlotValue("Physics Dynamic Bodies", static_cast<int64_t>(stats.mNumBodiesDynamic));
+	profiling::PlotValue(
+		"Physics Active Dynamic Bodies",
+		static_cast<int64_t>(stats.mNumActiveBodiesDynamic));
+	profiling::PlotValue(
+		"Physics Kinematic Bodies",
+		static_cast<int64_t>(stats.mNumBodiesKinematic));
+	profiling::PlotValue(
+		"Physics Active Kinematic Bodies",
+		static_cast<int64_t>(stats.mNumActiveBodiesKinematic));
+	profiling::PlotValue(
+		"Physics Pending Chunk Rebuilds",
+		static_cast<int64_t>(physics.pendingChunkRebuilds.size()));
+	profiling::PlotValue(
+		"Physics Chunk Static Bodies",
+		static_cast<int64_t>(physics.chunkStaticBodies.size()));
+	profiling::PlotValue(
+		"Physics Chunk Merged Boxes Total",
+		static_cast<int64_t>(physics.chunkMergedBoxes.size()));
+}
+
 void DestroyStaticWorldBody(PhysicsState &physics)
 {
 	if (!physics.staticWorldBodyId.IsInvalid()) {
@@ -3172,6 +3200,26 @@ uint32_t GetChunkBodyCount(const PhysicsState *physics)
 	return static_cast<uint32_t>(physics->chunkStaticBodies.size());
 }
 
+PhysicsBroadphaseStats GetPhysicsBroadphaseStats(const PhysicsState *physics)
+{
+	PhysicsBroadphaseStats out{};
+	if (!physics) {
+		return out;
+	}
+	const JPH::BodyManager::BodyStats bodyStats = physics->physicsSystem.GetBodyStats();
+	out.totalBodies = bodyStats.mNumBodies;
+	out.maxBodies = bodyStats.mMaxBodies;
+	out.staticBodies = bodyStats.mNumBodiesStatic;
+	out.dynamicBodies = bodyStats.mNumBodiesDynamic;
+	out.activeDynamicBodies = bodyStats.mNumActiveBodiesDynamic;
+	out.kinematicBodies = bodyStats.mNumBodiesKinematic;
+	out.activeKinematicBodies = bodyStats.mNumActiveBodiesKinematic;
+	out.pendingChunkRebuilds = static_cast<uint32_t>(physics->pendingChunkRebuilds.size());
+	out.chunkStaticBodies = static_cast<uint32_t>(physics->chunkStaticBodies.size());
+	out.chunkMergedBoxesEntries = static_cast<uint32_t>(physics->chunkMergedBoxes.size());
+	return out;
+}
+
 void InvalidateWalkSupportStateForWorldEdit(PhysicsState &physics);
 
 PhysicsState *CreatePhysicsState()
@@ -3858,6 +3906,7 @@ bool TickWalkCharacter(
 		ClearWalkJumpBallisticHorizontalVelocity(*physics);
 	}
 	PlotWalkProfilingState(*physics, feetPosition, velocity);
+	PlotBroadphaseDiagnostics(*physics);
 	if (physics->walkGroundReturnAnchorValid) {
 		const float anchorDriftX = feetPosition[0] - physics->walkGroundReturnAnchorFeetPosition[0];
 		const float anchorDriftZ = feetPosition[2] - physics->walkGroundReturnAnchorFeetPosition[2];

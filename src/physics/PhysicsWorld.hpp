@@ -47,6 +47,21 @@ struct PhysicsRaycastHit {
 	float distance = 0.0f;
 };
 
+struct PhysicsBroadphaseStats {
+	uint32_t totalBodies = 0;
+	uint32_t maxBodies = 0;
+	uint32_t staticBodies = 0;
+	uint32_t dynamicBodies = 0;
+	uint32_t activeDynamicBodies = 0;
+	uint32_t kinematicBodies = 0;
+	uint32_t activeKinematicBodies = 0;
+	uint32_t pendingChunkRebuilds = 0;
+	uint32_t chunkStaticBodies = 0;
+	uint32_t chunkMergedBoxesEntries = 0;
+};
+
+PhysicsBroadphaseStats GetPhysicsBroadphaseStats(const PhysicsState *physics);
+
 PhysicsState *CreatePhysicsState();
 void DestroyPhysicsState(PhysicsState *physics);
 bool SyncPhysicsWorld(PhysicsState *physics, const VoxelWorld *world);

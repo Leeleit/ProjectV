@@ -103,7 +103,10 @@ bool IsFluidCaGpuPipelineRequested()
 	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
-	return false;
+	// EVIL: per TODO.md Stage 3.1 Step 2 (default flip), default ON now that
+	// async compute path is wired and `ProjectVFluidCAGpuTests` covers the
+	// pipeline. Set `PROJECTV_FLUID_CA_GPU=0` to opt-out for CPU fallback.
+	return true;
 }
 
 bool IsAsyncComputeEnabled()
@@ -111,7 +114,10 @@ bool IsAsyncComputeEnabled()
 	if (const char *value = std::getenv("PROJECTV_ASYNC_COMPUTE")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
-	return false;
+	// EVIL: per TODO.md Stage 6.3 close-out, default ON now that
+	// `VulkanAsyncCompute` cross-queue HZB depth sync landed (16x session).
+	// Set `PROJECTV_ASYNC_COMPUTE=0` to opt-out (single-queue fallback).
+	return true;
 }
 
 void DestroyFluidCaPipelines(VulkanContextState *context, RenderState *render)

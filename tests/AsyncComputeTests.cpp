@@ -17,11 +17,11 @@ struct TestContext {
 	}
 };
 
-void TestAsyncComputeEnvDefaultOff(TestContext &context)
+void TestAsyncComputeEnvDefaultOn(TestContext &context)
 {
 	unsetenv("PROJECTV_ASYNC_COMPUTE");
-	if (projectv::render::IsAsyncComputeEnabled()) {
-		context.Fail(__LINE__, "PROJECTV_ASYNC_COMPUTE unset -> false");
+	if (!projectv::render::IsAsyncComputeEnabled()) {
+		context.Fail(__LINE__, "PROJECTV_ASYNC_COMPUTE unset -> true (per TODO Stage 6.3 close-out)");
 	}
 }
 
@@ -148,7 +148,7 @@ void TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(TestContext &cont
 int main()
 {
 	TestContext context{};
-	TestAsyncComputeEnvDefaultOff(context);
+	TestAsyncComputeEnvDefaultOn(context);
 	TestAsyncComputeEnvExplicitOn(context);
 	TestAsyncComputeEnvZeroIsOff(context);
 	TestEnsureAsyncComputeResourcesRejectsNullContext(context);

@@ -31,12 +31,22 @@ void ExpectEqualUInt(TestContext &context, uint32_t expected, uint32_t actual, i
 	}
 }
 
-void TestFluidCaPipelineRequestedDefaultOff(TestContext &context)
+void TestFluidCaPipelineRequestedDefaultOn(TestContext &context)
 {
 	unsetenv("PROJECTV_FLUID_CA_GPU");
 	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
+	if (!requested) {
+		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU unset -> true (per TODO Stage 3.1 Step 2 default flip)");
+	}
+}
+
+void TestFluidCaPipelineRequestedOptOut(TestContext &context)
+{
+	setenv("PROJECTV_FLUID_CA_GPU", "0", 1);
+	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
+	unsetenv("PROJECTV_FLUID_CA_GPU");
 	if (requested) {
-		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU unset -> false");
+		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU=0 -> false (opt-out)");
 	}
 }
 
@@ -89,7 +99,8 @@ void TestFluidCaPushConstantsPropagation(TestContext &context)
 int main()
 {
 	TestContext context{};
-	TestFluidCaPipelineRequestedDefaultOff(context);
+	TestFluidCaPipelineRequestedDefaultOn(context);
+	TestFluidCaPipelineRequestedOptOut(context);
 	TestFluidCaPipelineRequestedExplicit(context);
 	TestFluidCaPushConstantsSize(context);
 	TestFluidCaGpuFrameStatsSize(context);
