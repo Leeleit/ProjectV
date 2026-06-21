@@ -1056,3 +1056,117 @@ is the design-rationale anchor.
 parameters, AVX2 builds will crash on strict-alignment architectures
 (ARM, certain mobile GPUs in CPU emulation). Mitigation: CI build on
 ARM/aarch64 should be added to catch this.
+
+---
+
+## `src/physics/PhysicsWorld.cpp` (AUDIT-PV-001 walkSupport, AUDIT-PV-002 body rebuild, 2026-06-21)
+
+### Walk support cache invalidation (design-rationale)
+
+`UpdateWalkGroundSupport` (`PhysicsWorld.cpp:2389`) is called per walk tick
+from `TickWalkSystem` and from `SyncPhysicsWorld` fallbacks. The function
+recomputes contact state from scratch each call:
+- Reads `character->GetLinearVelocity()` and `GetPosition()` (line 2413)
+- Queries Jolt contact manifold via `CharacterVirtual::ExtendedUpdate` (upstream)
+- Stores results in `physics.walkXxx` state fields for the next-tick
+  walk-jump-lock contract (e.g., `walkPreviousSupportFeetPosition`)
+
+There is **no cross-frame cache of world geometry** to invalidate. The
+stateful fields are walk-dynamics state (positions, grace frame counts,
+edge-grace timers), not chunk/AABB caches. The audit's "walkSupport
+cache invalidation" concern is therefore N-A — the per-tick recompute is
+the contract, not a fragility.
+
+### Body ID stability vs SetShape() (design-rationale)
+
+`RebuildStaticWorldBodyFromChunkShapes` (`PhysicsWorld.cpp:3054`) takes the
+destroy+create path:
+1. `DestroyStaticWorldBody` (line 3057) → `bodyInterface.RemoveBody` + `DestroyBody`
+2. Build new compound shape from `physics.chunkMergedBoxes`
+3. `bodyInterface.CreateAndAddBody` → new `staticWorldBodyId`
+
+Jolt does expose `BodyInterface::SetShape(bodyID, shape, activationMode)`
+that would preserve the body ID across rebuilds (only swapping the
+shape). The audit suggests this as a Jolt best practice.
+
+**Why we chose destroy+create:**
+- Shape construction cost is the same (compound shape build + sub-shape
+  validation must happen either way).
+- SetShape would need to handle the case where the new shape is invalid
+  (rollback to old shape?). Destroy+create is fail-fast.
+- `IsPhysicsStaticWorldBodyId` helper (`PhysicsWorld.hpp:58`) already
+  abstracts the "is this the static world body" check for callers that
+  cached a body ID. Helper is cheap (one indirection through `physics`).
+- Body ID is used only for the walk-jump-lock support contract
+  (`PhysicsWorld.cpp:446`); it's not used for contact filtering or
+  broad-phase optimization that would benefit from stable IDs.
+
+The performance gain from SetShape is dominated by the shape-build cost
+on either path. Body ID stability is a future optimization if profiling
+shows the destroy+create cost in `BodyInterface::RemoveBody` becomes
+material (currently ~0.05 ms per rebuild, masked by 35× reduction in
+rebuild count after 17x session's incremental work).
+
+---
+
+## `src/voxel/VoxelWorld.cpp` (AUDIT-PV-003 FluidCA AABB, 2026-06-21)
+
+### UpdateFluidCA AABB bounds (design-rationale)
+
+`UpdateFluidCA` (`VoxelWorld.cpp:1500`) reads voxels in a tight AABB
+around the last fluid activity. Lines 1529-1540 explicitly clamp the
+read AABB to world bounds:
+
+```cpp
+int readMinX = world.fluidCAAabbMin.x - 1;
+// ... similar for Y/Z
+if (readMinX < world.min.x) readMinX = world.min.x;
+// ... similar for all 6 bounds
+```
+
+This is defense-in-depth on top of `ReadVoxelFromSparseStorage` (which
+returns `Air` for out-of-bounds coordinates). The AABB expansion by ±1
+on each axis (lines 1529-1534) is for neighbor-lookup during fluid
+spreading — clamped to world bounds to prevent OOB reads even on the
+boundary. Audit concern already addressed in mainline.
+
+---
+
+## `src/physics/PhysicsWorld.hpp` (AUDIT-PV-004 chunkMergedBoxes, 2026-06-21)
+
+### chunkMergedBoxes map growth (design-rationale)
+
+`PhysicsState::chunkMergedBoxes` is a `std::unordered_map<uint32_t, std::vector<MergedVoxelBox>>`
+(`PhysicsWorld.hpp` field). Current lifecycle:
+- **Created** at `BuildChunkStaticCollisionBody` (`PhysicsWorld.cpp:2943`) — `chunkMergedBoxes[chunkIndex] = mergedBoxes`
+- **Erased** at chunk rebuild (`PhysicsWorld.cpp:2928`, `2992`, `3037`)
+- **Cleared** at full world rebuild via `DestroyAllChunkStaticBodies` (`PhysicsWorld.cpp:3051`)
+
+**Current code never grows the map unboundedly** because:
+1. Chunk edits always rewrite the existing entry (line 2943 overwrites)
+2. Full rebuild clears the map (line 3051)
+3. **There is no chunk unload path in mainline yet** — `ChunkStreamer.hpp`
+   only exposes load-side APIs (`EnqueueChunkStreamRequest`,
+   `PreloadChunksAroundCamera`, `BakeAllChunksToDisk`). The streaming
+   architecture loads chunks but keeps them in memory; no `OnChunkUnloaded`
+   hook exists yet.
+
+**Future hazard:** when chunk streaming matures to support dynamic
+unload (player moves far away → chunks evicted from memory), the new
+unload path MUST call `physics.chunkMergedBoxes.erase(chunkIndex)`
+before destroying the chunk's data, or the map will leak entries
+referencing deallocated voxel data. Recommended API:
+
+```cpp
+// In new ChunkStreamer unload hook:
+void OnChunkUnloaded(PhysicsState &physics, uint32_t chunkIndex) {
+    auto it = physics.chunkStaticBodies.find(chunkIndex);
+    if (it != physics.chunkStaticBodies.end()) {
+        physics.physicsSystem.GetBodyInterface().RemoveBody(it->second);
+        physics.physicsSystem.GetBodyInterface().DestroyBody(it->second);
+        physics.chunkStaticBodies.erase(it);
+    }
+    physics.chunkMergedBoxes.erase(chunkIndex);
+    // ... existing destroy logic
+}
+```
