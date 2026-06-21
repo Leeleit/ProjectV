@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.28)
+project(translucent_sort_bench LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic")
+add_executable(translucent_sort_bench translucent_sort_bench.cpp)
+target_compile_features(translucent_sort_bench PUBLIC cxx_std_26)

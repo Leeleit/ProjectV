@@ -23,43 +23,599 @@
 - [x] **[2026-06-21-programmable-voxels](./experiments/2026-06-21-programmable-voxels/)** — TinyCC / LuaJIT / WASM внутри чанка: цена, безопасность, UX. Priority: l. **Closed `2026-06-21` verdict=`mixed`.** Web-research (30 sources). 3 runtimes × 5 workloads × analytical. Multi-runtime architecture recommended. WASM for untrusted mods, LuaJIT for first-party scripts, TinyCC dev-only. Deferred до Stage 6+. См. [README](./experiments/2026-06-21-programmable-voxels/README.md).
 - [ ] **dynamic-weather-svo-meta** — погода как SVO-метаполе (влажность/температура/ветер) в той же структуре. Priority:
   l.
-- [ ] **ik-first-person-hand** — CCD/FABRIK для voxel-tool interaction (рука игрока манипулирует блоками); gameplay
+- [x] **[2026-06-21-precomputed-atmospheric-sky](./experiments/2026-06-21-precomputed-atmospheric-sky/)** — m, **Stage 5.x Visual Polish** (precomputed atmospheric sky rendering — Bruneton 2017 / Hillaire 2020 LUT-based; **0 of 70+ closed experiments covered dedicated sky rendering axis** — fully fresh axis). **Closed `2026-06-21` (single session), verdict=`yes`.** Web-research complete (10+ primary sources: Bruneton 2017, Hillaire 2020 EGSR, elliahu/atmosphere RTX 3060 benchmarks, Sakmary 2023 CesCG, Hosek Wilkie 2012, O'Neil GPU Gems 2, JolifantoBambla/webgpu-sky-atmosphere, RACECAR). Standalone C++26 CPU analytical cost model ~200 LoC (Clang 22.1.6 `-O3 -march=native`, build green 0 warnings). 6 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **150 main measurements**, wall time < 0.1 sec. **Headline:** C_Hillaire2020 = universal default (0.080 ms = 0.24% of 30 Hz, 32.7 dB, 8 MiB VRAM, single-frame dynamic recompute); B_Bruneton2017 = quality opt-in (0.092 ms, 33.7 dB); E_HosekWilkie2012 = mobile fallback (0.006 ms, 24.7 dB, 0 VRAM). **All non-baseline strategies cross 5-10% threshold** (+209-349% PSNR relative). **Integration:** 3-step migration ~490 LoC, M effort, 2-3 sessions. Default `PROJECTV_SKY=HILLAIRE`. Deferred до Stage 5.x dedicated session. **Cross-axis:** orth to all closed fog/god rays/clouds experiments (sky = background layer). Complementary to tonemap, bloom, aerial-perspective. См. [README](./experiments/2026-06-21-precomputed-atmospheric-sky/README.md) + [STATUS](./experiments/2026-06-21-precomputed-atmospheric-sky/STATUS.md) + [RESULTS](./experiments/2026-06-21-precomputed-atmospheric-sky/RESULTS.md) + `prototype/{sky_sim.cpp, build/results.csv}`.
+- [x] **ik-first-person-hand** — CCD/FABRIK для voxel-tool interaction (рука игрока манипулирует блоками); gameplay
   polish для Stage 3.x interaction. Hint: TODO.md §3 (Physics & Simulation). Priority: l.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
 - [ ] **lockstep-deterministic-multiplayer** — fixed-tick + rollback для build/break; детерминизм для Stage 6+
   multiplayer. Hint: independent (multiplayer вне текущего TODO roadmap). Priority: l.
 - [ ] **sdf-subtractive-modeling-ui** — CAD-подобный voxel/SDF editor с boolean operations (union/subtract/intersect);
   уровень абстракции выше вокселей. Hint: independent (editor tooling). Priority: l.
-- [ ] **voxel-gpu-shader-editor** — **отличается от `programmable-voxels` (Lua/WASM):** пользователь пишет inline
-  WGSL/Slang для визуала материала блока (не игровая логика). Hint: independent (modding). Priority: l.
+- [x] **[2026-06-21-voxel-gpu-shader-editor](./experiments/2026-06-21-voxel-gpu-shader-editor/)** — **отличается от
+  `programmable-voxels` (Lua/WASM):** пользователь пишет inline WGSL/Slang для визуала материала блока (не игровая
+  логика). Priority: l.
+  **Closed `2026-06-21` (single session), verdict=`yes`.** См. §In progress entry below.
 - [ ] **cxl-storage-class-tier** — CXL memory как tier между RAM и NVMe; persistent voxel data без full load; очень
   ранняя стадия SOTA (2025-2026). Hint: independent (horizon scan). Priority: l.
 - [ ] **neuromorphic-photonic-rendering** — completely speculative: нейроморфные/фотонные акселераторы для voxel ray
   casting; чистый horizon scan. Hint: independent (horizon scan). Priority: l.
-- [ ] **[2026-06-21-adaptive-palette-bitarray](./experiments/2026-06-21-adaptive-palette-bitarray/)** —
-  adaptive bit-width palette per 16³ section (4→5→6→...→global bits) для runtime RAM savings. Отличается от
-  closed `chunk-storage-compression-axis` (file-format compression vs runtime RAM). Derived from Minecraft 1.12
-  `BlockStateContainer.java` adaptive palette. Priority: m (Stage 4.x chunk storage).
-- [ ] **[2026-06-21-incremental-light-propagation](./experiments/2026-06-21-incremental-light-propagation/)** —
+- [x] **chunk-damage-fracture-model** — Stage 3.x interaction/gameplay.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+- [x] **[2026-06-21-redstone-power-propagation-bfs](./experiments/2026-06-21-redstone-power-propagation-bfs/)** — m, **Stage 6.x** (signalling).
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+- [x] **[2026-06-21-extended-block-multivoxel-mesh](./experiments/2026-06-21-extended-block-multivoxel-mesh/)** — m, **Stage 4.2** (block meshing). **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+- [x] **[2026-06-21-luajit-scripting-hotpath-cost](./experiments/2026-06-21-luajit-scripting-hotpath-cost/)** — замер производительности LuaJIT в VoxelCore
+  `src/logic/scripting/` (45+ C++ библиотек зарегистрировано: libgui 1235L, libnetwork 578L,
+  libentity 283L, libplayer 420L, libworld 260L, и др.; GeneratorScript в Lua для кастомной
+  worldgen; per-entity/per-block колбэки через scripting.hpp dispatch).
+  Hypothesis: стоимость LuaJIT вызова из C++ на hot path (per-block random tick, per-entity AI)
+  доминируется GC pressure и JIT warmup'ом, не FFI boundary; JIT-скомпилированные hot path'ы
+  достигают 2× от нативного C++. Углубление закрытого `programmable-voxels` (mixed: broad
+  3-runtime survey → теперь фокус на LuaJIT deep-dive с измерениями).
+  Priority: m (Stage 6.x modding). Source: VoxelCore scripting/, lua_engine.cpp, lua_util.hpp
+  (825L типовых конверсий).
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+- [x] **2026-06-21-dynamic-entity-lighting** — dynamic entity lighting from OptiFine
+  `DynamicLights.java` (entity-as-light-source: player with torch/glowstone emits light
+  dynamically, lightmap injection per tick). + MC `Block.java` lightValue (0-15 per block type)
+  + `EntityDataManager` (sync of dynamic sources).
+  Hypothesis: CPU-cost scales O(N); on RTX 3060 Ti <5 dynamic sources within 1% frame budget;
+  smooth interpolation on entity movement costs ~0.01 ms/light.
+  Cross: `incremental-light-propagation` (closed yes, shared BFS methodology).
+  Priority: m (Stage 5.x visual polish). Source: OptiFine DynamicLights, MC Block.lightValue,
+  MC EntityDataManager.
+  **Claimed `2026-06-21` (this session), moved to §In progress.** Per §13.1.
+- [x] **[2026-06-21-random-tick-section-skip](./experiments/2026-06-21-random-tick-section-skip/)** — per-section оптимизация random ticking из Minecraft 1.12
+  `ExtendedBlockStorage.java:125-128` (tickRefCount: количество блоков, нуждающихся в random tick
+  per 16×16×16 section; при zero → секция пропускается) + `Chunk.java` random tick loop
+  (3 random ticks per section per world tick).
+  Hypothesis: в реальном мире > 80% секций — однородный air/stone без растений/crops;
+  total world tick CPU time сокращается на 30-60%. Имплементация < 50 LoC.
+  Priority: m (Stage 3.x world ticking). Source: MC ExtendedBlockStorage + Chunk randomTick.
+  **Closed `2026-06-21` (single session, verdict=`yes`).** Standalone C++26 CPU prototype ~250 LoC (GCC 16.1.1, build green 0 warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter = **125,000 main measurements**. **Headline:** B_CounterCheck saves 93-95% on uniform scenes (70%+ of world); C_PreCollect saves 55% on dense scenes; weighted real-world estimate 60-85% total saving. **Step 1 (~10 LoC) tickRefCount field in VoxelChunk + check; Step 2 (~20 LoC) counter update on mutation. XS effort, 1 session.** См. [README](./experiments/2026-06-21-random-tick-section-skip/README.md) + [STATUS](./experiments/2026-06-21-random-tick-section-skip/STATUS.md) + `prototype/{random_tick_bench.cpp, build/results.csv}`.
+- [x] **[2026-06-21-genlayer-functional-biome-pipeline](./experiments/2026-06-21-genlayer-functional-biome-pipeline/)** — конвейер биомов из Minecraft 1.12
+  `GenLayer.java:25-94` (20+ цепочечных функциональных трансформаций 2D int-массивов:
+  GenLayerIsland → GenLayerFuzzyZoom → GenLayerAddIsland → GenLayerZoom×N → GenLayerBiome →
+  GenLayerHills → GenLayerShore → GenLayerRiverMix → GenLayerVoronoiZoom).
+  Hypothesis: pipeline embarrassingly parallel — compute-shader реализация каждой трансформации
+  как отдельного прохода достигает 10-50× speedup над CPU single-thread MC baseline;
+  композиция слоёв позволяет hot-swappable модули биомов без touching ядра генерации.
+  Cross: `wfc-procedural-worlds` (closed mixed) — альтернативный подход к генерации.
+  Priority: l (Stage 4.1 world gen). Source: MC GenLayer/ chain + ChunkGeneratorOverworld
+  noise→terrain pipeline.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`.**
+  **Closed `2026-06-21` (single session), verdict=`mixed`.** Web-research complete (10+ sources: MC GenLayer.java, Cubiomes, mega-minecraft CUDA, HLS_WebGPUPlugins, AMD WorkGraphs, Minerust, VoxelWorlds). Standalone C++26 CPU prototype `prototype/genlayer_bench.cpp` ~590 LoC (Clang 22.1.6, build green 0 warnings). 4 strategies (A_Serial / B_Parallel / C_Fused / E_GPUModel) × 3 pipelines (5/10/20 layers) × 5 sizes × 5 seeds = **240 measurements** (with adaptive iterations for long configs). **Headline:** GPU compute shader achieves only 2.5× speedup at 20-layer pipeline (hypothesis REJECTED at 10-50× level); CPU parallel achieves 1.0-2.2× speedup; per-layer LCG overhead dominates for small chunk groups; sequential chain limits Amdahl speedup. **Verdict=mixed:** GPU does help at full-pipeline scale, but not enough to justify 500-1500 LoC mainline implementation. **Recommendation:** Defer GenLayer. Use simpler per-column noise-to-biome for Stage 4.1 (matches closed `biome-transition-blending` precedent). Cross-axis: orth to all in-progress parallel; complementary to closed `biome-transition-blending` + `trilinear-noise-interpolation` + `wfc-procedural-worlds`. См. [README](./experiments/2026-06-21-genlayer-functional-biome-pipeline/README.md) + [STATUS](./experiments/2026-06-21-genlayer-functional-biome-pipeline/STATUS.md) + [sources](./experiments/2026-06-21-genlayer-functional-biome-pipeline/sources.md) + `prototype/{genlayer_bench.cpp (590 LoC), build/results.csv (240 rows)}`.
+- [x] **cloudscape-rendering** — volumetric cloud rendering для Stage 5.x Visual Polish (ray-marched procedural clouds with weather system integration). Priority: m (Stage 5.x).
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+- [x] **[2026-06-21-adaptive-palette-bitarray](./experiments/2026-06-21-adaptive-palette-bitarray/)** — m, Stage 4.x (chunk storage).
+  **Claimed `2026-06-21` (this session), moved to §In progress.** Per §13.1.
+- [x] **[2026-06-21-incremental-light-propagation](./experiments/2026-06-21-incremental-light-propagation/)** —
   budget-limited incremental BFS light propagation (max N queue entries per frame). Derived from Minecraft 1.12
   `Chunk.java:1470-1510` (8 cols/tick) + VoxelCore `LightSolver.cpp` (two-phase BFS). Priority: m (Stage 3.x lighting).
-- [ ] **[2026-06-21-flood-fill-visgraph-culling](./experiments/2026-06-21-flood-fill-visgraph-culling/)** —
-  flood-fill VisGraph face-to-face visibility for chunk occlusion culling. Derived from Minecraft 1.12
-  `VisGraph.java:36-128` (BFS through non-opaque voxels → 6×6 visibility matrix). Priority: m (Stage 2.x culling).
-- [ ] **[2026-06-21-trilinear-noise-interpolation](./experiments/2026-06-21-trilinear-noise-interpolation/)** —
+  **Reserved `2026-06-21` by self per `AGENTS.md §13.1`.**
+- [x] **[2026-06-21-flood-fill-visgraph-culling](./experiments/2026-06-21-flood-fill-visgraph-culling/)** — m, Stage 2.x (culling).
+  **Claimed `2026-06-21` (this session), moved to §In progress.** Per §13.1.
+- [x] **[2026-06-21-trilinear-noise-interpolation](./experiments/2026-06-21-trilinear-noise-interpolation/)** —
   trilinear interpolation from coarse noise grid (2×2×2 → 8×8×8) для terrain gen. Derived from Minecraft 1.12
   `ChunkGeneratorOverworld.java:95-162` (5×33×5 → 16×256×16 = 79× reduction). Priority: m (Stage 4.1 world gen).
-- [ ] **[2026-06-21-conc-ring-generation-scheduling](./experiments/2026-06-21-conc-ring-generation-scheduling/)** —
-  concentric-ring generation scheduling для cross-chunk dependency resolution. Derived from VoxelCore
-  `SurroundMap.cpp` (multi-level concentric squares). Priority: m (Stage 4.1 world gen scheduling).
-- [ ] **[2026-06-21-deferred-translucent-sorting](./experiments/2026-06-21-deferred-translucent-sorting/)** —
-  deferred translucent geometry sorting every N frames (vs per-frame). Derived from VoxelCore
-  `ChunksRenderer.cpp:349-421` (8-frame interval + AABB collapse merge). Priority: m (Stage 5.x rendering).
+- [x] **[2026-06-21-conc-ring-generation-scheduling](./experiments/2026-06-21-conc-ring-generation-scheduling/)** —
+  m, Stage 4.1. **Closed `2026-06-21` verdict=`mixed`.** Concentric-ring scheduler for cross-chunk
+  dependency resolution. Hypothesis rejected for stall reduction (0% improvement). Sequential ring
+  phases guarantee ordering but add 3.2% throughput penalty. Deferred until cross-chunk deps emerge.
+  См. [README](./experiments/2026-06-21-conc-ring-generation-scheduling/README.md).
+- [x] **[2026-06-21-conc-ring-generation-scheduling](./experiments/2026-06-21-conc-ring-generation-scheduling/)** —
+  m, Stage 4.1. **Closed `2026-06-21` verdict=`mixed`.** Concentric-ring scheduler for cross-chunk
+  dependency resolution. Hypothesis rejected for stall reduction (0% improvement vs distance-sorted).
+  Sequential ring phases guarantee ordering but add 3.2% throughput penalty. Deferred until cross-chunk
+  deps emerge in Stage 4.1. См. [README](./experiments/2026-06-21-conc-ring-generation-scheduling/README.md).
+
+- [x] **[2026-06-21-deferred-translucent-sorting](./experiments/2026-06-21-deferred-translucent-sorting/)** —
+  m, Stage 5.x (rendering). Closed `2026-06-21` (single session), verdict=`mixed`. **Self-invented
+  topic** per operator instruction `2026-06-21`. Standalone C++26 CPU prototype ~510 LoC (Clang 22.1.6,
+  build green 0 errors); 6 strategies × 5 scenes × 5 seeds × 5 rotation profiles = ~575 configs ×
+  1000 frames = ~575,000 frame measurements. **Headline:** sort time negligible (~0.6 µs mean, all
+  strategies); deferred strategies degrade PSNR (Every8 → 35.13 dB vs 45.00 dB baseline); real savings
+  in GPU draw call amortization (not CPU sort time). **Verdict=mixed:** yes for principle (VoxelCore
+  production pattern), no for CPU time savings (negligible), DistanceAdaptive not justified.
+  **Integration:** 3-step migration ~200 LoC, S effort, 1-2 sessions. Перенесён из §Open в §Closed
+   per sync. См. [README](./experiments/2026-06-21-deferred-translucent-sorting/README.md).
+
+### New 2026-06-21 — Military Sandbox / War Simulation axis (sorted & reprioritized)
+
+> **Prioritization principle (per operator request 2026-06-21):** от общего к узкому. Приоритет: низкоуровневые системы (оптимизация → алгоритмы → графика → физика → инфраструктура) → AI/тактика → геймплей/контент → UI/аудио/полировка. Original 90 topics из batch 1 + batch 2, пересортированы. Hardware baseline: `hardware-profile.md` §1-4 (RTX 3060 Ti, Zen 3 5800X).
+
+#### Tier 0 — Foundation & Optimization (h)
+
+> **Фундаментальные алгоритмы и оптимизация.** Всё остальное опирается на эти системы.
+
+- [x] **[2026-06-21-multi-resolution-collision-broadphase](./experiments/2026-06-21-multi-resolution-collision-broadphase/)** — h, independent (military sandbox axis — Tier 0 Foundation & Optimization).
+
+- [x] **[2026-06-21-mesh-shader-mega-instancing](./experiments/2026-06-21-mesh-shader-mega-instancing/)** — h, independent (military sandbox axis — Tier 0 Foundation & Optimization). **Closed `2026-06-21` (single session, ~1.5h), verdict=`mixed`.** Standalone C++26 CPU analytical prototype `prototype/mesh_shader_sim.cpp` (5 strategies × 5 scenes × 5 seeds × 1000 iter = **125,000 main measurements**), Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` (build green **0 warnings**), wall time 0.107 sec на dev host `obvium` Zen 3 5800X. **Headline:** **C_AmplificationShaderOnly = universal winner** (62-544× speedup vs A_TraditionalDrawIndexed across 1k-1M instances, well above 5-10% threshold per `optimization-philosophy.md`). B_ComputeCull_PlusDrawMesh = strong 2nd (40-95× speedup but 5-8× more cull cost than C). D_IndirectDrawMeshTasks_Generic = 7-10× speedup only (CPU AABB pre-test 5us/instance still O(N)). E_StaticBatch_Legacy = fast CPU but **2 GiB VRAM at 1M + animation-broken** (PSNR -0.5 dB). C at 200k instances = 16 ms = safe within 30 Hz budget. **Integration:** 3-step migration ~550 LoC, M effort, **deferred до Stage 6+ military sandbox activation per operator 8x planning decision**. Cross-vendor matrix portable per Vulkanised 2023 compile-time loop + AMD GDC 2024 `WavePrefixCountBits`. Web-research complete via Exa `web_search` (15+ primary + 7 supplementary sources). См. [README](./experiments/2026-06-21-mesh-shader-mega-instancing/README.md) + [STATUS](./experiments/2026-06-21-mesh-shader-mega-instancing/STATUS.md) + [RESULTS](./experiments/2026-06-21-mesh-shader-mega-instancing/RESULTS.md) + [sources](./experiments/2026-06-21-mesh-shader-mega-instancing/sources.md) + `prototype/{mesh_shader_sim.cpp, stats.hpp, scenes.hpp, strategies.hpp, build/mesh_shader_sim, build/results.csv (125,001 rows, 4.8 MB)}`.
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **ETA:** this session.
+  **Blocker:** нет.
+  **Hypothesis (one-line):** Multi-resolution SAP broad-phase with entity-type filtering (static × dynamic × debris) + island sleeping handles 10k active bodies at <1 ms/frame; sleeping bodies reduce active count by 70%+; outperforms single-resolution sweep-and-prune by 3-10×.
+  **Scope (paths):**
+    - `docs/experiments/experiments/2026-06-21-multi-resolution-collision-broadphase/{README.md,STATUS.md,sources.md,RESULTS.md}`
+    - `docs/experiments/experiments/2026-06-21-multi-resolution-collision-broadphase/prototype/` (standalone C++26 CPU prototype)
+    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
+    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
+
+- [x] **[2026-06-21-flow-field-pathfinding-10k-units](./experiments/2026-06-21-flow-field-pathfinding-10k-units/)** — h, independent. GPU-driven flow field (integration map + vector field) for 1000+ unit simultaneous movement (Supreme Commander-like). Hypothesis: GPU compute-shader flow field generation costs <0.1 ms for 512×512 grid at 60 Hz; per-unit steering adds <0.001 ms/unit via indirect draw dispatch. Outperforms A* per-unit by 1000× at 10k units. Cross-ref: andrewtc thesis (formation + flowfield), Vlad-Luca Matei formation system (2026), Unity Job System 4096-agent formation (Kinetik 2026).
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+
+- [ ] **mesh-shader-mega-instancing** — h, independent. GPU-driven rendering of 10k+ animated military units via mesh shaders + indirect draw. Hypothesis: mesh shader with per-instance culling (frustum + occlusion via HZB) reduces CPU draw call overhead from 0.3-0.5ms to 0.02-0.03ms (per Granite blog 2024); 1M-instance swarm at 14% GPU utilization via compute stream compaction (XRReady multi-mesh 2026). Cross-ref: mesh shader draw call reduction 1/10 execution time (GameDev.net 2024), XRReady 1M-instance indirect drawing. Priority: h.
+
+- [x] **dynamic-battlefield-decal-system** — h, independent. Persistent bullet holes, scorch marks, crater decals on voxel surface. Hypothesis: GPU decal atlas (precomputed 2D array of 64×64 decal sprites) with indirect draw per decal costs <0.1 ms/1000 decals; decal lifetime management via LRU + decay for unbounded accumulation. Priority: h.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+
+- [x] **[2026-06-21-component-vehicle-damage-model](./experiments/2026-06-21-component-vehicle-damage-model/)** — h, independent. Per-module vehicle damage: engine, tracks, crew, optics, fuel (War Thunder-like). Hypothesis: component hit-table (precomputed 3D mask per vehicle type) + per-module health pool costs <1 µs/projectile; module destruction degrades performance (engine → speed -50%, track → mobility lock) via modifier component. Priority: h.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+
+- [x] **[2026-06-21-interest-management-aoi-battle](./experiments/2026-06-21-interest-management-aoi-battle/)** — h, independent (military sandbox axis — Tier 0 Foundation & Optimization). **First dedicated network-AOI axis** в 50+ closed experiments. Self-invented per operator instruction `2026-06-21` after race-condition recovery on `explosion-crater-terrain-deformation` (parallel agent overwrote my work; operator chose "adjacent orthogonal h-slug"). Anti-duplicate sentinel §13.7 confirmed clean.
+  **Closed `2026-06-21` (single session, ~1h), verdict=`mixed`.** Web-research complete (7 primary sources
+  via Exa `web_search`: ESEngine AOI + wirepair.org 2025-12-20 + Photon Fusion 2 + UCL 2011 + esengine
+  AOI fix 2026-04 + aceld 2023-08 + AFLL arXiv 2601.10998). Standalone C++26 CPU prototype
+  `prototype/aoi_bench.cpp` ~720 LoC (Clang 22.1.6, build green 0 warnings after 3 fix iterations).
+  6 strategies × 5 scenes × 5 seeds = **150 main measurements** (deterministic analytical, no warmup).
+  Output: `prototype/build/aoi_bench_results.csv` (151 rows = 1 header + 150 data, 6 KB).
+  Wall time < 0.1 sec на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`.
+  **Headline (mixed):**
+  - **E_KNN_BackCull = universal winner** (1.5-1.8 Mbps per player, 10-86× reduction vs A_FullBroadcast)
+  - **D_Priority = strong secondary** (2.7-3.3 Mbps, 5-46× reduction; top-K cap of 200/100/20 ents)
+  - B_NoTiering: 2.4-50 Mbps, 3-6× reduction (insufficient for 100p)
+  - C_3Tier: 3.6-58 Mbps, 2.5-4× reduction (REJECTED for target — peripheral tier dominates)
+  - F_Batched: same bytes as C, /4 packets (bandwidth-neutral, packet count reduction only)
+  - A_FullBroadcast baseline: 15-150 Mbps (10kE × 64B × 30Hz × 100p / 1024)
+  **Critical finding:** 3-tier alone (Strategy C) insufficient for 100-player scale because peripheral
+  tier (5 Hz) covers 7× critical area and contains 4-5× more entities — /6 reduction doesn't compensate.
+  **Need top-K cap (D) or KNN+back cull (E) to hit target.** CPU cost: B = 24 µs/tick (analytical),
+  C-F = 2-3 ms/tick (real cost 2-5× higher). **Verdict=mixed:** hypothesis "<1 Mbps" REJECTED
+  (best E = 1.5 Mbps), hypothesis ">5× reduction" CONFIRMED (D, E).
+  **Integration:** 3-step migration per `agent/knowledge.md §30.4` (~700 LoC, M-L effort, deferred
+  до Stage 6+ military sandbox activation per operator 8x planning). Default: E_KNN_BackCull;
+  Fallback: D_Priority; B insufficient for 100p.
+  Cross-axis: orthogonal ко всем in-progress parallel; complementary к closed
+  `ecs-1m-entities-bottleneck` + `multi-resolution-collision-broadphase` + `flow-field-pathfinding-10k-units`;
+  prerequisite для open `lockstep-state-sync-hybrid-netcode` (h, Tier 1) +
+  `persistent-war-server-architecture` (h, Tier 1).
+  См. [README](./experiments/2026-06-21-interest-management-aoi-battle/README.md) +
+  [STATUS](./experiments/2026-06-21-interest-management-aoi-battle/STATUS.md) +
+  [RESULTS](./experiments/2026-06-21-interest-management-aoi-battle/RESULTS.md) +
+  [sources](./experiments/2026-06-21-interest-management-aoi-battle/sources.md) +
+  `prototype/{aoi_bench.cpp (~720 LoC), build/aoi_bench, build/aoi_bench_results.csv (151 rows)}`.
+
+- [ ] **lua-game-rules-scripting** — h, independent. Lua scripting for custom game rules, victory conditions, event handlers. Hypothesis: Lua embedded via LuaJIT (per closed `luajit-scripting-hotpath-cost` mixed) for non-hotpath game logic; hook system similar to Garry's Mod hooks (hook.Add → hook.Run pattern). Script execution <0.5 ms per tick for typical event handler set. Cross-ref: Garry's Mod Lua system, World of Warcraft addon API, From the Depths Lua. Priority: h.
+
+- [ ] **data-driven-vehicle-weapon-definitions** — h, independent. JSON/TOML-defined vehicle stats, weapon specs, armor profiles (modding-friendly). Hypothesis: compile-time TOML → constexpr C++ struct via codegen handles 100+ vehicle variants at zero runtime overhead; runtime reload for modding via LuaJIT (per closed `programmable-voxels` mixed verdict). Priority: h.
+
+- [x] **[2026-06-21-after-action-replay-system](./experiments/2026-06-21-after-action-replay-system/)** — h, independent. Deterministic replay from recorded input stream (HoI4/Warno replay-like). Hypothesis: recording only player inputs + RNG seeds + periodic state checkpoints (every 60 ticks) achieves <1 KB/second recording rate; replay seeks to any tick via nearest checkpoint + resimulation. Deterministic simulation prerequisite per closed `lockstep-deterministic-multiplayer`. Cross-ref: HoI4 replay, C&C FRAMESYNC events with CRC, Klotho verified chain snapshots. Priority: h.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`.**
+  **Closed `2026-06-21` (single session, ~2h), verdict=`mixed`.** Web-research complete via direct `webfetch`
+  to canonical URLs (Glenn Fiedler Gaffer On Games x3 + Wikipedia C&C Remastered). 17 sources verified в
+  `sources.md`. Standalone C++26 CPU prototype `prototype/replay_bench.cpp` ~700 LoC (Clang 22.1.6 `-O3
+  -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, build green 2 cosmetic warnings).
+  4 strategies × 5 scenes × 3 seeds + 5 K-sweep × 3 seeds = **75 main measurements**, wall time 36.8 sec
+  на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output: `prototype/build/results.csv`
+  (76 rows). **Headline (mixed per scene tier):** **C_InputPlusCheckpoint K=60 (2 s @ 30 Hz) = universal
+  recommended default** для 1k+ entities (−81% bandwidth vs A, 7004 B/tick vs 36012 B/tick, ~100 ms
+  cold-seek, bit-exact, low record overhead 18 µs/tick); **A_FullState wins for ≤100 entities** (3612 B/tick
+  < 6404 B/tick — fixed input cost > state cost); **B_InputOnly = long-term archival** (6404 B/tick
+  constant, slow resim 200 ms for 9k ticks); **D_DeltaEncoded = non-deterministic в prototype** (22150 B/tick,
+  0% det — rng state not in delta record; fix trivial 8 B/tick). All 3 non-baseline strategies cross
+  5-10% threshold per `optimization-philosophy.md` massively (−81% / −82% / −38% bytes vs A at 1k+ entities).
+  **Caveat — small scenes:** at 100 units/100 chunks, A=3612 < B=6404 B/tick (input overhead dominates
+  when state is small). **3-step migration per `agent/knowledge.md §30.4` precedent** (~400 LoC, S effort,
+  1-2 sessions, deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator
+  8x planning decision). Cross-axis: orth orth ко всем 2 in-progress parallel (`water-surface-rendering`
+  Stage 5.x, `voxel-grass-foliage-rendering-pipeline` Stage 4.1+5.x); complementary к closed
+  `multi-resolution-collision-broadphase` [yes, JPH foundation, must be deterministic] +
+  `flow-field-pathfinding-10k-units` [yes, must be deterministic] + `interest-management-aoi-battle`
+  [mixed, AOI = state subset] + `ballistic-projectile-simulation` [yes, projectile sim must be deterministic]
+  + `recon-intel-fog-of-war` [yes, intel state snapshot-able] + `tank-terrain-interaction-physics` [yes,
+  suspension must be deterministic] + `ecs-1m-entities-bottleneck` [yes, 1M+ entity registry state] +
+  `cover-system-terrain-adaptive` [mixed, cover point state]. **Prerequisite** для open
+  `lockstep-state-sync-hybrid-netcode` h Tier 1 + `lockstep-deterministic-multiplayer` l + `after-action-report`
+  m Tier 4 + `observer-spectator-free-camera` m Tier 4 + `spectator-esports-camera` m Tier 4. **New axis:**
+  first dedicated **replay system** axis в 100+ closed experiments; opens Tier 4 spectator/esports /
+  persistence layer. Cross-platform determinism achievable per Glenn Fiedler "Floating Point Determinism"
+  (Gaffer On Games 2010) — fenv.h + IEEE 754 strict mode (per SupCom / Demigod / C&C95 precedent).
+  **Caveats:** CPU-only prototype, synthetic battlefield, D non-deterministic в prototype, single-machine
+  dev host (cross-platform = future work), visual UX validation deferred.
+  См. [README](./experiments/2026-06-21-after-action-replay-system/README.md) +
+  [STATUS](./experiments/2026-06-21-after-action-replay-system/STATUS.md) +
+  [RESULTS](./experiments/2026-06-21-after-action-replay-system/RESULTS.md) +
+  [sources](./experiments/2026-06-21-after-action-replay-system/sources.md) +
+  `prototype/{replay_bench.cpp (~700 LoC), build/{replay_bench, results.csv (76 rows × 13 cols)}}`.
+
+#### Tier 1 — Core Engine Systems: Physics, Rendering, Netcode (h)
+
+> **Основные системы движка.** Строятся на Tier 0, обеспечивают физику, рендеринг и сетевую архитектуру.
+
+- [x] **[tank-terrain-interaction-physics](./experiments/2026-06-21-tank-terrain-interaction-physics/)** — h, independent. **Closed `2026-06-21` (single session), verdict=`yes`.** Hypothesis validated: 0.005 ms/vehicle (40× under <0.2 ms budget). Ray-cast suspension (12 wheels) + XPBD articulated track (2×24 links) on voxel terrain. Cross-ref: ALICE-Physics (Rust, 2,669 LoC), OxiPhysics vehicle (Pacejka tires), PhysX 5.6 Vehicle SDK, BeamNG.drive soft-body, AGX Vehicle tracked model. Integration: new `src/physics/tank_vehicle.{hpp,cpp}` module. См. §6.
+
+- [ ] **ballistic-projectile-simulation** — h, independent. Realistic shell ballistics: drag, gravity, wind, penetration modeling (War Thunder-like). Hypothesis: CPU precomputed ballistic table + GPU particle system for 1000+ simultaneous projectiles costs <0.3 ms/frame; AP/HEAT/HE penetration modeled via reduced-order analytic formula (DeMarre, Krüpp) at <1 µs/projectile. Alternative: full FEM simulation (libuipc) = 1000× slower. Priority: h.
+
+- [x] **[2026-06-21-destructible-building-system](./experiments/2026-06-21-destructible-building-system/)** — h, independent. Multi-material voxel buildings with structural integrity: load-bearing walls, floor collapse, progressive destruction. Hypothesis: per-chunk connectivity graph (CCL per closed `voxel-topology-analysis` yes at 2.73 µs) enables real-time stability check — unsupported voxels become debris at <5 µs/chunk; building authored as voxel template (2× LOD: voxel + reduced physics proxy). Cross-ref: Teardown structural simulation, Donkey Kong Bananza voxel physics (Nintendo 2026). Priority: h. **Closed `2026-06-21` (single session), verdict=`mixed`.** Standalone C++26 CPU prototype (5 strategies × 5 scenes × 5 seeds × 50 mutations = 125,000 measurements). Hierarchical DSU is perfectly correct (100% accuracy) and scales at O(1) per-chunk. Stress propagation resolves weight limits. Hybrid model recommended (DSU for geometric cuts, Stress for load at 2 Hz). Deferred to Stage 3.2. См. [README](./experiments/2026-06-21-destructible-building-system/README.md) + [RESULTS](./experiments/2026-06-21-destructible-building-system/RESULTS.md) + `prototype/{destructible_building_bench.cpp, results.csv}`.
+
+- [ ] **structural-collapse-cascade** — h, independent. Progressive building collapse: load-bearing wall failure → floor collapse → chain destruction. Hypothesis: per-chunk connectivity graph (CCL per `voxel-topology-analysis` yes at 2.73 µs) enables real-time stability: mark voxels as "structural" (load-bearing), unsupported structural → scheduled collapse; collapse wave propagates upward and outward at <10 µs/building per tick. Cross-ref: Teardown structural simulation, Red Faction Guerrilla GeoMod. Priority: h.
+
+- [ ] **vegetation-destruction-interaction** — h, independent. Trees, bushes as voxel structures with destruction physics. Hypothesis: tree = cylindrical voxel cluster (128-256 voxels) with connectivity-based fall physics (cut base → top falls as rigid body via connected components); single tree destruction <0.01 ms via ChunkDamageFracture reuse. Priority: h.
+
+- [x] **[2026-06-21-fixed-wing-flight-model-simulation](./experiments/2026-06-21-fixed-wing-flight-model-simulation/)** — h, independent. Realistic fixed-wing aerodynamics: lift, drag, stall, G-limits, afterburner. Hypothesis: reduced-order flight model (6-DOF rigid body + blade-element strip theory for lift at <5 wing sections) costs <0.05 ms/aircraft per tick; control surfaces as torque inputs, compressibility effects at Mach >0.7 via wave drag correction. Cross-ref: War Thunder flight model (Dagor Engine), DCS World flight model. Priority: h. **Closed `2026-06-21` (single session), verdict=`yes`.** См. §In progress.
+
+- [x] **[2026-06-21-helicopter-rotor-physics](./experiments/2026-06-21-helicopter-rotor-physics/)** — h, independent. Helicopter flight: blade flapping, autorotation, translational lift, vortex ring state. Hypothesis: GPU compute shader per-rotor-blade physics (4-8 blades, rigid-body + aerodynamic forces) at <0.1 ms/helicopter; simplified momentum theory for collective/cyclic response at <0.02 ms for LOD2+. Cross-ref: War Thunder helicopter model, DCS UH-1H flight model. Priority: h. **Closed `2026-06-21` (single session), verdict=`yes`.** Standalone C++26 CPU prototype `prototype/helicopter_bench.cpp` ~1100 LoC. 5 strategies × 5 scenarios × 5 seeds × 2 tick rates = 250 main measurements. Headline: Strategy D (4-Blade BET + Flapping + RK4) = 1.34 µs per step @ 60 Hz (96% stable). Strategy A (Momentum Theory LOD) = 80.4 ns. Minimum tick rate of 50 Hz required for flapping stability. Autopilot gains must be reduced to handle rotor delay. См. [README](./experiments/2026-06-21-helicopter-rotor-physics/README.md) + [RESULTS](./experiments/2026-06-21-helicopter-rotor-physics/RESULTS.md) + [STATUS](./experiments/2026-06-21-helicopter-rotor-physics/STATUS.md).
+
+
+
+- [ ] **naval-vessel-buoyancy-steering** — h, independent. Ship physics: buoyancy, stability, steering, propeller/thruster response. Hypothesis: buoyancy computed from submerged voxel volume per chunk at <0.01 ms/scan column; ship response model (6-DOF with hydrodynamic added mass terms) costs <0.05 ms/ship. Cross-ref: War Thunder naval physics (Ninth Wave update steam boilers, buoyancy), From the Depths buoyancy model. Priority: h.
+
+- [ ] **terrain-traction-variation** — h, independent. Traction variation by terrain type: mud, sand, ice, asphalt, grass. Hypothesis: traction coefficient per surface material (0.1 ice → 1.0 asphalt) modifies vehicle max acceleration and turning rate; wheel slip model (difference between wheel rpm and ground speed) applies torque reduction. Cost <0.01 µs/wheel per tick. Cross-ref: War Thunder traction model (ground pressure, surface type), Spintires/MudRunner terrain physics. Priority: h.
+
+- [x] **wind-simulation-ballistics** — h, independent. Crosswind affecting ballistics, smoke dispersion, aircraft handling. Hypothesis: wind = 3D vector field (GPU compute per chunk, cellular automaton + terrain interaction) at <0.2 ms for 512² field; ballistic correction for crosswind = perpendicular_wind_speed × flight_time × correction_factor at <0.01 µs/projectile. Priority: h.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+
+- [ ] **soft-body-physics-debris** — h, independent. Soft bodies for canvas/fabric/net debris: canvas covers on vehicles, netting. Hypothesis: soft body = cloth constraint system (XPBD) with 32-128 vertices per panel at <0.05 ms/panel; wind interaction via vertex force + damping. Cross-ref: War Thunder canvas/fabric component deformation, Teardown soft debris. Priority: h.
+
+- [ ] **cable-winch-towing** — m, independent. Cable physics for tow cables, power lines, winching. Hypothesis: cable = chain of rigid bodies (0.5 m segments) with spring constraints (XPBD) at <0.01 ms/meter; tow truck winching mechanics (cable extension, tension, drum rotation). Cross-ref: BeamNG.dive cable physics, MudRunner winch system. Priority: m.
+
+- [x] **[2026-06-21-procedural-military-terrain-gen](./experiments/2026-06-21-procedural-military-terrain-gen/)** — h, **Tier 1 Core Engine Systems** (military sandbox axis — procedural terrain generation for tactically meaningful battlefields: ridgelines, defilade, hull-down positions, kill zones, chokepoints, firing positions). **Self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою и исследуй»; **first dedicated military-feature terrain axis** в 70+ closed experiments. Closed `wfc-procedural-worlds` [mixed] + closed `genlayer-functional-biome-pipeline` [mixed] + closed `biome-transition-blending` [mixed] + closed `trilinear-noise-interpolation` [in-progress] + closed `gpu-procedural-noise-compute-kernels` [Stage 4.1 noise basis] — все generic/general; **military-specific features (defilade / kill zones / hull-down / chokepoints) NOT covered**.
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **ETA:** this session.
+  **Blocker:** нет.
+  **Hypothesis (one-line):** Multi-strategy approach ∈ {A_PureNoise_OpenSimplex2, B_CellularAutomata_Ridges [Ziegler 2020], C_StampLibrary_Military, D_TacticalWFC, E_Hybrid_CA_Stamps} достигает 100+ military features per km² при <10 ms gen time per km²; **C_StampLibrary и E_Hybrid достигают 3-10× higher feature count** vs A baseline без превышения budget.
+  **Web-research complete** (20+ primary sources verified this session): Fraunhofer IOSB SWA Position Selection Assistant [Fraunhofer 2024, field of fire + cover + passability] + Rheinmetall SWA [60→10 min plan prep time, Army Technology 2024] + Terrain-Aware Military Planning Agents [Kewley et al. FLAIRS 2024, observation/fires/mobility multi-objective] + Ziegler 2020 RTS Heightmap Cellular Automata [Supreme Commander, 6-component pipeline] + Piepenbrink 2025 nutWFC [IEEE CoG 2025, non-uniform tile WFC] + Scholz 2017 TU Wien WFC thesis [infinite deterministic run-time] + Carver & Washtell 2012 voxel viewshed [real-time viewshed] + Brian GPU-CPU LOS [17× faster heightmap vs R3-Tree] + Carmenta GVSETS 2025 artillery firing position [shoot-and-scoot graph theory] + ArcGIS ModelBuilder OAKOC [military terrain analysis 15 min/run] + Optimization Route Passability 2024 [DEM generalization 3× speedup] + arXiv 2412.04688 WFC terrain SRTM [slope-based] + Foxhole Devblog #73 Voronoi region zones [Fortune algorithm] + Foxhole Devblog #70 map configuration [localized resources] + Kowalski 2018 Strategic Features [graph grammar Logic Map Layout] + JohnLudlow WFC MonoGame [AC-3, Shannon entropy, chunks] + EliasVahlberg terrain-forge Rust [15 algorithms BSP/CA/WFC/Delaunay] + Kacper Szwajka 2024 GPU placement [HZD-inspired, 512 pointers/chunk] + nubDotDev faster-poisson [Rust+wgpu GPU Poisson] + UE 5.7 PCG Editor Mode [4-8× GPU overrides, Poisson Disk 30-400K points].
+  **Scope (paths):**
+    - `docs/experiments/experiments/2026-06-21-procedural-military-terrain-gen/{README.md,STATUS.md,sources.md,RESULTS.md}`
+    - `docs/experiments/experiments/2026-06-21-procedural-military-terrain-gen/prototype/` (standalone C++26 CPU prototype + bench)
+    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
+    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
+  **Cross-axis:** orthogonal ко 1 in-progress + 2 closed parallel (`cover-system-terrain-adaptive` Tier 2 AI [closed mixed] + `explosion-crater-terrain-deformation` Tier 1 deformation [closed yes, E_RasterizedSphereMarch 0.128 µs] + ...); complementary к closed `wfc-procedural-worlds` [mixed, generic WFC, no military features] + `genlayer-functional-biome-pipeline` [mixed, biome chain] + `biome-transition-blending` [mixed, biome edges] + `trilinear-noise-interpolation` [in-progress, noise interpolation] + `gpu-procedural-noise-compute-kernels` [Stage 4.1 noise basis] + Stage 4.1 GPU world gen mainline [TODO.md §4.1].
+  **Closed `2026-06-21` (single session, ~3h), verdict=`mixed`.** Standalone C++26 CPU prototype `prototype/military_terrain_bench.cpp` ~700 LoC (Clang 22.1.6, build green 2 cosmetic warnings on unused constants). 5 strategies × 5 scenes × 5 seeds × 50 iter + 10 warmup = **6,250 main measurements**, wall time **17 sec** (xargs -P 8 parallel) на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output `prototype/build/results.csv` (126 rows = 1 header + 125 data). **Headline (mixed per scene):**
+  - **A_PureNoise_OpenSimplex2** (baseline) = 16,384 µs/kilometre² / 1,471 features/km² mean (range 69-4,176)
+  - **B_CellularAutomata_Ridges** = 17,390 µs (+6.3%) / 636 features (-57%) — **NOT recommended** for rich terrain (CA destroys natural noise features: mountainous -77%, river_valley -72%)
+  - **C_StampLibrary_Military** = 16,875 µs (+3.0%) / 1,544 features (+5%) — **Universal safe default**; +28% on rolling_hills, +148% on urban_periphery; never dramatically worse than A
+  - **D_TacticalWFC** (placeholder) = 16,724 µs (+2.1%) / 1,478 features (≈0%) — real WFC deferred to follow-up
+  - **E_Hybrid_CA_Stamps** = 17,996 µs (+10.1%) / 772 features (-48%) — **Best for poor terrain**: flat_grasslands +205% (209→637), urban_periphery +819% (69→634)
+  - All <25 ms/kilometre² (within 50 ms = 0.15% of 30 Hz frame budget per `TODO.md §4.1` 0.05 ms / chunk × 1 km² / chunk).
+  **Per-scene adaptive dispatcher** recommended (per `agent/knowledge.md §30.4` Step 1, ~600 LoC, S-M effort, 2-3 sessions, deferred до Stage 4.1 dedicated session): mountainous/river → A; flat/urban → E; rolling_hills → C; universal safe default → C. 3-step migration: Step 1 (XS, ~80 LoC) `src/voxel/MilitaryFeatureOverlay.{hpp,cpp}` + `IsMilitaryFeaturesEnabled()` env gate + 5 stamp types + 7-feature detector + per-scene dispatcher + 8 unit tests; Step 2 (M, ~400 LoC) `world_gen.comp` integration + per-chunk `militaryFeatures` metadata + cross-chunk stamp boundary handling; Step 3 (S, ~120 LoC) `MilitaryFeatureQuery` downstream API + `PROJECTV_MILITARY_FEATURES=ON|OFF|AUTO` env flag + Tracy plot + integration test. Cross-axis: orth to all 2 in-progress parallel (`cover-system-terrain-adaptive` Tier 2 AI + `explosion-crater-terrain-deformation` Tier 1 deformation); complementary to closed `wfc-procedural-worlds` [mixed, generic WFC] + `genlayer-functional-biome-pipeline` [mixed, biome chain] + `biome-transition-blending` [mixed, biome edges] + `trilinear-noise-interpolation` [in-progress, noise interpolation] + `gpu-procedural-noise-compute-kernels` [Stage 4.1 noise basis]. Caveats: CPU-only prototype (GPU port deferred to mainline integration); D is placeholder; detector divisors (60, 30, 200, 4, 50, 100, 50 cells/feature) are prototype estimates; mutation cost not measured; no real GPU viewshed (uses local max + elevation proxy). См. [README](./experiments/2026-06-21-procedural-military-terrain-gen/README.md) + [STATUS](./experiments/2026-06-21-procedural-military-terrain-gen/STATUS.md) + [RESULTS](./experiments/2026-06-21-procedural-military-terrain-gen/RESULTS.md) + [sources](./experiments/2026-06-21-procedural-military-terrain-gen/sources.md) + `prototype/{military_terrain_bench.cpp (~700 LoC), CMakeLists.txt, build/{results.csv (126 rows), military_terrain_bench}}` + `scripts/run_all.sh`.
+
+- [x] **[2026-06-21-lockstep-state-sync-hybrid-netcode](./experiments/2026-06-21-lockstep-state-sync-hybrid-netcode/)** — h, independent (military sandbox axis — Tier 1 Core Engine Systems: Netcode). **Self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою исследуй»; **first dedicated netcode architecture axis** в 100+ closed experiments. **Closed `2026-06-21` (single session, ~1h), verdict=`mixed`.** Web-research complete via direct `webfetch` to canonical sources (Exa 429 persistent + DuckDuckGo CAPTCHA blocked this session per `agent/knowledge.md Part B §9` line 1424 fallback list); **5 primary + 3 supplementary sources verified** in `sources.md` per Tier 1+2: Glenn Fiedler "Deterministic Lockstep" [Gaffer On Games Nov 2014, canonical RTS netcode, 2-4 player limit] + Glenn Fiedler "Snapshot Interpolation" [Gaffer On Games Nov 2014, 25 KB/snapshot @ 10pps, 300ms interpolation buffer for 5% loss] + Glenn Fiedler "Floating Point Determinism" [Gaffer On Games Feb 2010, **Elijah SupCom precedent: `_controlfp(_PC_24, _MCW_PC) + _RC_NEAR` @ 1M+ customers**] + Wikipedia Netcode [delay-based vs rollback taxonomy] + Wikipedia Lag [Valve Yahn Bernier server-side rewind + BF3 hybrid hit detection] + C&C FRAMESYNC + Klotho two-chain + GGPO library. Standalone C++26 CPU prototype `prototype/netcode_bench.cpp` ~744 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings** after 1 fix iteration: static_assert 40→48 bytes for 8-byte alignment padding). 5 strategies (A_PureLockstep / B_PureStateSync / C_Hybrid_10Hz / D_Hybrid_5Hz / E_RollbackCRC) × 5 scenes (100p_10k_ent_typical / 100p_1k_ent_reduced / 50p_5k_ent_mid / 10p_500_ent_small / 4p_100_ent_lockstep) × 5 seeds (1, 7, 42, 1234, 31337) × 1000 iter + 10 warmup = **125,000 main measurements**, wall time **19.5 sec** на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output `prototype/build/results.csv` (126 rows = 1 header + 125 data, 12 KB). **Headline (mixed per strategy):**
+  - **A_PureLockstep ⭐ = DEFAULT for ProjectV** — 48.7 KB/s/player mean (92.3 at 100p_10k), hypothesis ≤50 KB/s/player **CONFIRMED for A only**; 43 µs/tick CPU; 0% recovery (de-sync accumulates silently).
+  - **B_PureStateSync = NEVER** — 4574 KB/s/player mean (13810 at 100p_10k), 94-150× worse than A; 158 µs/tick CPU; full recovery per frame.
+  - **C_Hybrid_10Hz** — 1576 KB/s/player mean (4733 at 100p_10k), 32× A; 88 µs/tick CPU; recovery within 100ms.
+  - **D_Hybrid_5Hz** — 812 KB/s/player mean (2413 at 100p_10k), 17× A; 58 µs/tick CPU; recovery within 200ms.
+  - **E_RollbackCRC** — 1576 KB/s/player + **2054 µs/tick CPU** ❌ (30× C); CRC32 per-frame over 10000 entities kills CPU; would need SIMD CRC32 + sampling to be feasible at 100k+ entities.
+  - All 5 strategies handle 2% packet loss + 50ms latency + 10ms jitter at 1.83% measured loss.
+  - E_RollbackCRC divergence detection 100% in synthetic worst-case (peer intentionally desynced); expected 0.1-1% in production per SupCom precedent.
+  **5-10% threshold per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`:** A vs B = 94-150× improvement = **far above threshold** for state-sync to lockstep migration. Hybrid vs A = 17-32× worse = **rejected** for 100-player scale without snapshot compression.
+  **Verdict=mixed:** hypothesis ≤50 KB/s/player target CONFIRMED for A only, REJECTED for all hybrid strategies. Architectural choice (lockstep-for-input) is correct for RTS-style 100-player scale; snapshot payload dominates bandwidth math in hybrid.
+  **Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~1650 LoC, L effort, 3-5 sessions, **Steps 1+2 immediate prerequisite for 100-player scale**, Step 3 deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision):
+  - Step 1 (S, ~150 LoC) `src/net/NetcodeController.{hpp,cpp}` + `NetcodeMode` enum + `PROJECTV_NETCODE_MODE` env gate + per-tick input aggregation + FPU mode enforcement at startup (`_FPU_RC_NEAR` + `_FPU_PC_24` per SupCom precedent).
+  - Step 2 (M, ~500 LoC) determinism hardening: per-tick FPU mode assertion в `PhysicsSystem::Update` + force SSE2-only compile flag для `src/physics/` + `src/voxel/` + disable `-ffast-math` + implement input ordering (drop out-of-order, wait-for-slowest max 1 frame).
+  - Step 3 (L, ~1000 LoC, deferred до Stage 6+) periodic 0.2 Hz snapshot (D_Hybrid_5Hz pattern at 0.2 Hz) для late-joiner + CRC32 validation с SSE4.2 `_mm_crc32_*` intrinsics + recovery на CRC mismatch + game server hosting authoritative state.
+  **Cross-axis:** orthogonal ко всем 5+ in-progress parallel (no render/physics/storage overlap); complementary к closed `after-action-replay-system` (mixed, **deterministic replay = lockstep prerequisite** ✅) + `interest-management-aoi-battle` (mixed, network AOI = bandwidth-sibling) + `ecs-1m-entities-bottleneck` (yes, Flecs = entity registry, direct cost of state serialization) + `multi-resolution-collision-broadphase` (mixed, **Jolt determinism = lockstep enabler** ✅); **prerequisite for** `lockstep-deterministic-multiplayer` (open) + `persistent-war-server-architecture` (open) + `grand-campaign-conquest` (open) + all military-sandbox Tier 1+ multiplayer scenarios. **New axis:** first dedicated **netcode architecture** axis в 100+ closed experiments. Caveats: CPU-only synthetic (no real network/physics/entity distribution); assumes FPU determinism achievable (per SupCom precedent + Glenn Fiedler "Floating Point Determinism" S3); snapshot payload uncompressed (production would use delta encoding 5-10× compression); E worst-case divergence test (100% intentional); no real cross-platform validation. Cross-refs: `TODO.md` (independent), `hardware-profile.md §1` (Zen 3 5800X dev host), `agent/knowledge.md §30.4` (3-step migration precedent), `agent/workspace.md §2` (operator 8x planning decision Stage 6+ military sandbox), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold). См. [README](./experiments/2026-06-21-lockstep-state-sync-hybrid-netcode/README.md) + [STATUS](./experiments/2026-06-21-lockstep-state-sync-hybrid-netcode/STATUS.md) + [RESULTS](./experiments/2026-06-21-lockstep-state-sync-hybrid-netcode/RESULTS.md) + [sources](./experiments/2026-06-21-lockstep-state-sync-hybrid-netcode/sources.md) + `prototype/{netcode_bench.cpp (744 LoC), build/{netcode_bench, results.csv (126 rows, 12 KB)}}`.
+
+- [ ] **persistent-war-server-architecture** — h, independent. Realm-based backend for persistent military campaign (Foxhole-like). Hypothesis: event-sourced world state (Kafka/NATS event bus) + authoritative realm core per Echoes of Order architecture handles 1000+ simultaneous players; deterministic tick at 10 Hz with gRPC simulation workers. Cross-ref: Echoes of Order realm model (event bus, simulation services), ROWS (Rust game backend + Agones + zone seeds), Apex Global Defense microservice architecture. Priority: h.
+
+- [ ] **infantry-soldier-sim** — h, independent. Individual soldier simulation with gear loadout, stamina, injury, medical state. Hypothesis: per-soldier state machine (idle/move/sprint/crouch/prone/climb/swim) with stamina drain/regen costs <0.5 µs/soldier via Flecs ECS component; injury model (hit→bleed→bandage→evacuate) at <1 µs/soldier. Cross-ref: Armed Assault soldier simulation, Escape from Tarkov health system. Priority: h.
+
+- [ ] **supply-logistics-simulation** — h, independent. Resource nodes, transport chains, consumption, stockpile (Foxhole-like logistics). Hypothesis: graph-based supply network (nodes = depots, edges = roads/rail) with per-edge throughput capacity simulates 1000+ nodes in <0.1 ms/tick; resource consumption spreads via BFS from supply source with distance-based decay. Cross-ref: Apex Global Defense sim-engine (Rust gRPC, logistics graph with supply drain + readiness degradation). Priority: h.
+
+- [ ] **group-formation-maneuver** — m, independent. Formation movement with tactical obstacle negotiation: column, line, wedge, echelon (Warno/Supreme Commander). Hypothesis: virtual anchor + fluid-based slot allocation (Kinetik 2026) handles 256+ units at <0.2 ms/frame CPU; Map Marker algorithm (SBGames 2021) reduces combat casualties by 30% vs naive A* per-unit. Priority: m.
+
+#### Tier 2 — AI, Tactical & Warfare Mechanics (h/m)
+
+> **Тактические и поведенческие системы.** Строятся на Tier 0+Tier 1, реализуют военную механику.
+
+- [ ] **hierarchical-tactical-ai-btree** — h, independent. Hierarchical behavior tree for platoon/company tactics: fire teams, bounding overwatch, suppression, flanking (Warno-like). Hypothesis: 3-tier BT (strategic → tactical → unit) with dynamic task allocation handles 100+ units at <0.5 ms/frame CPU cost; LLM only for strategic layer (1 call/10s), BT for tactical execution. Alternative: pure LLM-per-unit costs ~50× more tokens. Cross-ref: IFPV MPHA 4-agent hierarchy, Mutlaq124 wargame multi-agent (2026). Priority: h.
+
+- [ ] **flanking-maneuver-ai** — h, independent. Tactical AI that identifies and executes flanking routes using cover and terrain. Hypothesis: cover-aware pathfinding (cost map weighted by exposure to known enemy positions) generates flank route in <0.5 ms via GPU flow field with cover-modifier; formation split (suppress + maneuver) as BT composite node costs <2 µs/unit. Cross-ref: WARNO AI flanking behavior, Supreme Commander tactical AI (flanking + pincer). Priority: h.
+
+- [ ] **combined-arms-coordination-ai** — h, independent. AI that coordinates infantry + armor + artillery + air for joint operations. Hypothesis: 2-tier coordination (strategic: which arms to commit where; tactical: per-arm movement + engagement) using blackboard architecture costs <5 ms/frame for 100 units; LLM only for strategic arm commitment decisions (1 call/30s), BTs for tactical execution. Priority: h.
+
+- [ ] **suppression-mechanics** — m, independent. Psychological suppression effect: near-miss fire degrades accuracy, limits movement, causes panic. Hypothesis: suppression = scalar accumulator (0-100) per soldier, decay at 5/s, increment via near-miss distance function; at >50 → accuracy -50%, at >80 → forced crouch/prone. Cost <0.1 µs/soldier per tick. Cross-ref: ARMA 3 suppression (inaccuracy system), WARNO suppression mechanic (unit stun + retreat). Priority: m.
+
+- [ ] **retreat-rout-morale** — m, independent. Unit morale system: casualties, suppression, isolation cause morale decay → retreat → rout. Hypothesis: morale = per-unit float (0-100), decay function of casualties/suppression/isolation; at <20 → tactical retreat (ordered, maintains formation), at <5 → rout (disordered flee, abandon equipment). Cost <0.3 µs/unit per tick. Cross-ref: WARNO morale system, Total War rout mechanics, HoI4 organization. Priority: m.
+
+- [ ] **squad-fire-team-command** — m, independent. Fire-team level command (4-8 soldiers): move, suppress, assault, cover. Hypothesis: squad as Flecs prefab with slot-based member assignment (team leader, AR, rifleman, grenadier) costs <2 µs/squad to update tactical state; templated orders (fire-and-maneuver, bounding overwatch) as chained behavior tree nodes. Cross-ref: Arma 3 AI squad commands, Ready or Not fire-team system. Priority: m.
+
+- [x] **[2026-06-21-cover-system-terrain-adaptive](./experiments/2026-06-21-cover-system-terrain-adaptive/)** — m, independent. Intelligent cover-seeking: units automatically identify and use terrain features (voxel overhangs, reverse slopes, building corners) as cover. Hypothesis: cover points extracted from voxel chunk geometry (per closed `voxel-topology-analysis` overhang detection = 0.19 µs) + cached cover-score grid at 1 m² resolution; unit auto-selects nearest cover with LOS to threat at <0.2 µs/unit. Cross-ref: WARNO cover logic (hard/soft cover), Arma 3 cover system. Priority: m.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+
+- [ ] **urban-combat-tactics-ai** — m, independent. Room-clearing, street-fighting, building-occupation AI for dense voxel urban terrain. Hypothesis: building interior graph (doors, windows, stairs, rooms extracted from voxel layout per closed `voxel-topology-analysis` yes) enables floor-plan-aware navigation; room-clearing as BT sequence (stack-up → breach → clear → secure) at <1 µs/room. Cross-ref: Ready or Not AI, Ground Branch AI. Priority: m.
+
+- [ ] **fire-coordination-multiple-units** — m, independent. Multiple units automatically coordinate fire on common target (focus fire, fire distribution). Hypothesis: target priority = weighted score (distance, threat level, engagement time, number of friendlies already engaging); focus fire emerges from shared threat assessment at <0.05 µs/target per tick. Cross-ref: WARNO fire distribution logic, Supreme Commander target-prioritization. Priority: m.
+
+- [ ] **ambush-detection-reaction** — m, independent. AI ambush detection from anomalous enemy behavior (silent movement, missing patrols). Hypothesis: Bayesian surprise metric on sector activity level triggers ambush alert at <0.1 ms/sector; reaction behavior (take cover, recon by fire, call for support) as priority interrupt in BT costs <1 µs/unit. Priority: m.
+
+- [ ] **medical-evacuation-chain** — m, independent. Casualty evacuation chain: buddy aid → medic → field hospital. Hypothesis: graph-based evacuation network (battlefield nodes → aid post → field hosp) with bandwidth capacity and transport time computes optimal evac route in <0.05 ms per casualty; soldier bleed-out timer creates urgency pressure. Cross-ref: Foxhole medical system (plasma, trauma kits, hospital respawn), Project Reality medical system. Priority: m.
+
+- [ ] **soldier-role-specialization** — m, independent. Class-based soldier roles (rifleman, medic, engineer, AT, MG, sniper, commander). Hypothesis: role = component bundle on Flecs entity (weapon loadout, skills, equipment slots) adds <0.1 µs overhead per entity; skill checks (repair speed, medical efficiency) via cached skill table at <0.01 µs/skill check. Cross-ref: Battlefield class system, Squad role system. Priority: m.
+
+- [x] **[2026-06-21-radar-detection-system-simulation](./experiments/2026-06-21-radar-detection-system-simulation/)** — h, independent. Radar simulation: detection probability, range gating, Doppler filtering, RCS (radar cross section). Hypothesis: radar equation per sweep (transmit power × antenna gain / range⁴ × RCS) costs <1 µs/detection check; IFF interrogation + friend/foe identification adds <0.5 µs/target. Cross-ref: DCS radar simulation, War Thunder radar/IRST systems. Priority: h. **Claimed `2026-06-21` (this session), moved to §In progress.** Per §13.1.
+
+- [ ] **electronic-warfare-jamming** — m, independent. EW systems: radar jamming, communications intercept, deception. Hypothesis: jammer reduces detection probability of affected radars via SNR degradation (jammer_power × bandwidth_match / range²) at <0.5 µs/jammer per affected radar; comms jamming cuts C² links within radius → units lose shared intel. Priority: m.
+
+- [ ] **stealth-signature-reduction** — m, independent. Stealth mechanics: radar cross section reduction, IR signature masking, acoustic quieting. Hypothesis: RCS aspect-angle-dependent per precomputed table (5° resolution, <1 KiB per vehicle); IR signature = engine power × exhaust cooling factor; detection range reduction from stealth = sqrt(RCS_reduction). Cross-ref: War Thunder stealth mechanics, DCS F-117 stealth modeling. Priority: m.
+
+- [ ] **countermeasure-dispenser** — m, independent. Flare/chaff decoys, IRCM, DIRCM. Hypothesis: flare decoy effectiveness = function of aircraft IR signature vs flare IR output × angular separation; chaff creates false radar return with RCS ~10 m² for 2-5 seconds. Cost <1 µs/countermeasure per tick. Priority: m.
+
+- [x] **[2026-06-21-recon-intel-fog-of-war](./experiments/2026-06-21-recon-intel-fog-of-war/)** — h, independent (military sandbox axis — Tier 2 AI, Tactical & Warfare). Dynamic fog of war: only units within detection range of friendly sensors are visible on tactical map. Hypothesis: each unit has detectability signature (visual/IR/radar/acoustic) × sensor fusion (visual LOS per closed `flood-fill-visgraph-culling` yes + radar wave propagation) costs <0.5 ms total per tick for 1000 entities; intel aging (known position decays to last-known then unknown). Cross-ref: WARNO fog of war, HoI4 intel system, Foxhole map intel. Priority: h.
+  **Claimed `2026-06-21` by self per `AGENTS.md §13.1`. Moved to §In progress.**
+
+- [ ] **trench-fortification-construction** — m, independent. Player/bot-built trench systems, bunkers, walls in voxel terrain (Foxhole-like). Hypothesis: template-based construction (pre-authored trench/bunker voxel patterns) placed via AABB-voxel boolean union costs <0.5 ms per structure; line-of-sight occlusion from built structures computed incrementally per closed `incremental-light-propagation` (yes, budget BFS). Alternative: free-form voxel sculpting (slower but flexible). Priority: m.
+
+- [ ] **field-fortifications-system** — m, independent. Sandbags, barbed wire, hedgehogs, tank ditches, dragon's teeth. Hypothesis: field fortification = voxel pattern stamp (256-4096 voxels per structure) placed by player/bot with physics collision box; destructibility per per-voxel damage; anti-tank obstacles damage vehicles on collision. Cost <0.2 ms per structure placement. Cross-ref: Foxhole field fortifications, Squad building system. Priority: m.
+
+- [ ] **bridge-building-repair** — m, independent. Bridging: tactical bridge construction (assault bridge, Bailey bridge, pontoon) over gaps/water. Hypothesis: bridge = voxel template (pre-authored pattern, 8×N×2 voxels) placed via AABB-voxel boolean union at <0.5 ms per bridge; structural integrity crossing weight limit computed from voxel connectivity per closed `voxel-topology-analysis` yes. Cross-ref: Foxhole bridge building, WARNO bridge mechanics. Priority: m.
+
+- [ ] **minefield-laying-clearing** — m, independent. Mine deployment: anti-tank, anti-personnel, command-detonated. Hypothesis: mine = single voxel entity with proximity trigger radius (1-3 m for AP, 3-5 m for AT) and blast damage; detection via mine detector (range 2 m, probability 80%) or visual spotting; clearing via explosive line charge or manual. Cost per-mine-check <0.01 µs per voxel. Priority: m.
+
+- [ ] **obstacle-construction** — m, independent. Man-made obstacles: concrete barriers, anti-tank ditches, abatis (fallen trees), berms. Hypothesis: obstacle = voxel pattern with physics hull, costs same as trench system per closed `trench-fortification-construction` yes (<0.5 ms); layered defense logic (wire → mines → trench → bunker) as strategic template. Priority: m.
+
+- [ ] **engineer-capabilities-system** — m, independent. Engineer role: demolition, construction, repair, breaching. Hypothesis: engineer class has construction speed multiplier (2×), repair speed (3×), demolition charge placement; each operation as timed action (5-30 seconds) with progress bar. Cost <1 µs/tick per active engineer. Cross-ref: Foxhole engineer (hammer, blueprint, upgrade). Priority: m.
+
+- [ ] **strategic-llm-commander-agent** — m, independent. LLM-powered strategic commander for theater-level decisions: front-line assessment, division allocation, production prioritization (HoI4-like). Hypothesis: hierarchical LLM agent (1 strategic call + N tactical calls per turn) produces tactically meaningful plans at 2-3s/turn latency, with 19%+ mission success improvement per IFPV arXiv 2605.14851 (2026). Cross-ref: Geo-Commander (Sci Rep 2026) + Command-Agent (DeepSeek-R1 + MCTool, 41.8% score improvement). Priority: m.
+
+#### Tier 3 — Economy, Sandbox, Content & Game Modes (m)
+
+> **Производство, моддинг, контент и режимы игры.** Надстройка над Tier 0+Tier 1+Tier 2.
+
+- [ ] **factory-production-system** — m, independent. Vehicle/equipment production from resources: build queue, resource consumption, production speed modifiers. Hypothesis: factory = entity with production queue (item × count × progress), consumes resources per tick from stockpile, produces finished item to output stockpile; production speed = base_rate × efficiency_modifier (power, worker count, upgrades). Cost <0.01 ms/factory per tick for 1000 factories. Cross-ref: Supreme Commander factory system (mass + energy → units), HoI4 production lines. Priority: m.
+
+- [ ] **resource-refinery-processing** — m, independent. Raw resource → refined material: ore → ingots, crude → fuel. Hypothesis: refinery = factory variant with input/output material conversion table; conversion ratio determines efficiency; byproduct generation (slag, pollution) as secondary output. Cost <0.005 ms/refinery. Priority: m.
+
+- [ ] **convoy-transport-protection** — m, independent. Automated supply convoys between logistics nodes: vulnerable to ambush, requires escort. Hypothesis: convoy = entity group (trucks + escorts) following waypoint path; ambush trigger when hostile units within detection range of convoy route; escort AI automatically responds to threats. Convoy path cost <0.05 ms via flow field with road preference weight. Cross-ref: Foxhole logistics (shipping containers, freighters, logi trucks), HoI4 supply convoy system. Priority: m.
+
+- [ ] **salvage-recycling-system** — m, independent. Recover resources from destroyed vehicles, equipment, buildings. Hypothesis: destroyed entity drops lootable scrap pile (percentage of build cost, modified by destruction method); salvage time = f(scrap_value, unit_count). Cost <0.01 ms per tick for active salvage operations. Cross-ref: Foxhole salvage (scrap fields, component mines), WARNO capture mechanics. Priority: m.
+
+- [ ] **capture-repair-enemy-equipment** — m, independent. Capture and repair enemy vehicles/weapons for own use. Hypothesis: capture = proximity + timer (10-30 seconds based on crew skill/remaining crew); repair to operational status requires generic parts + faction-adaptation penalty (50% effectiveness until re-engineered). Priority: m.
+
+- [ ] **resource-harvesting-economy** — m, independent. Resource nodes (fuel, metal, rare materials) harvested by players or automated extractors. Hypothesis: resource node = voxel cluster with richness value; extraction rate = extractor_efficiency × node_richness × proximity_bonus; nodes deplete over time (slow: 100 hours) → logistics required to secure fresh nodes. Cross-ref: Foxhole resource nodes (scrap fields, sulfur, component mines), Supreme Commander mass extractors. Priority: m.
+
+- [ ] **custom-vehicle-designer** — m, independent. Voxel-based vehicle assembly: armor blocks, engines, tracks, weapons placed on a voxel grid to create functional vehicles. Hypothesis: vehicle = voxel assembly (max 16×8×8 for small, 32×16×32 for large) where each voxel type has physical properties (armor_thickness, buoyancy, hp); chassis synthesized from voxel layout via greedy physics meshing per closed `greedy-physics-meshing-cpu` yes (35× shape reduction). Assembly cost <5 ms per vehicle. Cross-ref: From the Depths vehicle designer, Stormworks build system, Foxel voxel car sculpting. Priority: m.
+
+- [ ] **custom-weapon-modding** — m, independent. Weapon modding: barrel, scope, magazine, stock attachments with stat modifiers. Hypothesis: weapon = component tree (base → attachments) with composited stats (accuracy, damage, rate of fire, recoil); mods as JSON-defined data tables loaded at runtime; stat composition is constexpr compile-time evaluable for 100+ weapons at 0 runtime cost. Cross-ref: Escape from Tarkov weapon modding, Garry's Mod SWEP weapon system. Priority: m.
+
+- [ ] **scenario-mission-editor** — m, independent. Visual editor for creating custom battles/scenarios: spawn units, set objectives, trigger conditions. Hypothesis: mission → JSON file with entity spawns + waypoints + triggers + victory conditions; trigger system (on_event → condition_check → action) as node graph at <0.1 ms evaluation per trigger. Cross-ref: Arma 3 editor, WARNO scenario editor, HoI4 scenario editor. Priority: m.
+
+- [ ] **workshop-mod-integration** — m, independent. Steam Workshop / mod.io integration for user content: vehicles, maps, weapons, missions. Hypothesis: mod = directory with defined structure (lua/, voxel_templates/, vehicles/, missions/); content manager enumerates mods, checks dependencies, resolves conflicts via priority ordering. Mount/unmount at session boundaries, not runtime. Cross-ref: Garry's Mod Workshop addon structure, Space Engineers modding. Priority: m.
+
+- [ ] **custom-terrain-editor** — m, independent. In-game terrain editor with military features: raise/lower, flatten, crater, trench tool, road tool. Hypothesis: editor = voxel boolean operations on chunk grid with undo/redo stack (per-chunk snapshots); military brushes: trench (linear depression 1×2 m profile), berm (linear raise), road (compacted surface). Cost per brush stroke <1 ms. Cross-ref: TerraDyne UE5 runtime terrain sculpting. Priority: m.
+
+- [ ] **custom-faction-definition** — m, independent. JSON/TOML-defined factions with unique vehicles, weapons, aesthetics, stats. Hypothesis: faction = data bundle (vehicle_definitions.toml + weapon_definitions.toml + visual_theme.json); compile-time codegen → constexpr C++ structs per closed `data-driven-vehicle-weapon-definitions` mixed; runtime faction selection <0.01 ms. Priority: m.
+
+- [ ] **sector-strategic-map-system** — m, independent. HoI4-like province/sector map for grand strategy layer. Hypothesis: 2D strategic map (hex grid overlay on voxel world) with per-sector control, supply, fortification state simulates at <0.05 ms/tick for 10k sectors; sector control computed from unit presence + supply in underlying 3D voxel space. Priority: m.
+
+- [ ] **grand-campaign-conquest** — m, independent. Persistent campaign mode: capture territory, manage economy, research tech, control front lines. Hypothesis: campaign = tick-based (10 Hz) strategic simulation on sector hex grid with unit stacks, supply, production, morale; resolved at server level with deterministic lockstep. Sector AI commits forces based on strategic importance. Cross-ref: HoI4 grand campaign, Foxhole World Conquest (single-shard, persistent war), Warno Army General campaign. Priority: m.
+
+- [ ] **dynamic-front-line-system** — m, independent. Real-time front line computed from unit presence: visual representation on tactical map + AI planning input. Hypothesis: front line = alpha shape of unit position hulls between factions, updated at 1 Hz from sector control data at <0.1 ms; sectors behind front are "safe" (no combat), sectors at front are "contested", sectors behind enemy are "occupied". Cross-ref: HoI4 front line system, WARNO sector control. Priority: m.
+
+- [ ] **sector-territory-capture** — m, independent. Capture mechanics: control zones, capture progress, contested status, supply influence. Hypothesis: sector = hex grid cell (per `sector-strategic-map-system` m) with capture points (0-100); friendly units within sector increase at rate = sum(unit_capture_power) / sector_size; contested when both factions present → capture speed reduced; supply shortage blocks capture. Priority: m.
+
+- [ ] **tech-tree-research-system** — m, independent. Technology progression: unlock vehicles, weapons, equipment upgrades. Hypothesis: tech tree = DAG of nodes with cost (research points) and prerequisites; parallel research tracks (armor, aviation, infantry, engineering) at up to 3 concurrent projects. Research time formula = base_cost / research_speed (from intel buildings + scientists). <0.01 ms/tick per active research. Cross-ref: HoI4 tech tree, Warno division leveling, Supreme Commander tech progression. Priority: m.
+
+#### Tier 4 — UI, Audio, Social & Polish (m/l)
+
+> **Презентационный слой и мета-системы.** Наименьший приоритет на текущем этапе.
+
+- [ ] **tactical-map-minimap** — m, independent. Zoomable tactical map overlay: unit positions, terrain, markers, control zones. Hypothesis: minimap = downscaled render of voxel world (64×64 to 512×512) with entity icons rendered via compute shader; different zoom levels (strategic: 1:50000, tactical: 1:10000, street: 1:2000) at <0.3 ms/frame. Cross-ref: WARNO minimap, Supreme Commander strategic zoom, Foxhole map. Priority: m.
+
+- [ ] **strategic-command-map** — m, independent. HoI4-level strategic map: sectors, front lines, supply, production, intelligence. Hypothesis: strategic map = 2D hex overlay on 3D voxel world (per closed `sector-strategic-map-system` m); front line computed from unit presence per sector as piecewise linear spline at <0.1 ms/tick; supply network + production queues shown as overlay icons. Priority: m.
+
+- [ ] **command-radial-menu** — m, independent. Radial context-menu for issuing orders: sector attack, defend, move, support. Hypothesis: menu = texture overlay (512×512 atlased radial segments) rendered as ImGui overlay; order translated to tactical command for selected units at <0.02 ms/order. Priority: m.
+
+- [ ] **unit-status-hud** — m, independent. Unit selection panel: health, ammo, fuel, morale, special abilities. Hypothesis: HUD = ImGui panel bound to selected entity; reads component data (HealthComponent, AmmoComponent, FuelComponent) via Flecs query at <1 µs; data-driven layout from entity type definition. Priority: m.
+
+- [ ] **damage-control-ui** — m, independent. Vehicle damage schematic: highlighted damaged components, repair priority, current crew actions. Hypothesis: damage overlay = 2D schematic of vehicle with component health color-coded; repair assignment via drag-select component → assign engineer. Cost <0.05 ms/frame for rendering schematic. Cross-ref: War Thunder damage model (crew, modules, repair), World of Tanks damage panel. Priority: m.
+
+- [ ] **squad-management-panel** — m, independent. Squad composition, health status, role assignment, order queue. Hypothesis: side-panel showing all squad members with health bar, role icon, current order, distance to squad leader; drag-and-drop role reassignment at <0.03 ms. Priority: m.
+
+- [ ] **observer-spectator-free-camera** — m, independent. Free-flying cinematic camera for battle observation with minimal world state (Supreme Commander observer). Hypothesis: spectator client connects in read-only mode (no input sync) with interest-managed snapshot at 5 Hz update; free camera with orbit/dolly/pan controls and bookmarkable positions. Priority: m.
+
+- [ ] **spectator-esports-camera** — m, independent. Dedicated observer camera for spectating battles: auto-director, bookmarkable viewpoints, replay controls. Hypothesis: spectator mode subscribes to entity state at 10 Hz snapshot; auto-director selects camera position based on action heatmap (most entities in combat within view frustum). Cost <0.1 ms spectator processing per frame. Cross-ref: Supreme Commander observer mode, Dota 2 spectator. Priority: m.
+
+- [ ] **in-game-commo-ping** — m, independent. Ping/communication wheel: context-sensitive pings, fast communication without voice. Hypothesis: ping ray-cast (Amanatides-Woo DDA) from camera through voxel world to determine target context (enemy/terrain/building/vehicle) at <0.01 ms/ping; ping types: move, attack, defend, observe, need_help, supply. Priority: m.
+
+- [ ] **after-action-report** — m, independent. Detailed post-battle statistics: kills, damage, captures, efficiency, medals. Hypothesis: per-event logging (damage dealt/taken, kills, captures) into ring buffer during session; AAR aggregated from log at session end; data <1 MB per 30 min battle. Cross-ref: War Thunder AAR, Foxhole war API, HoI4 statistics. Priority: m.
+
+- [ ] **clan-squad-social-system** — m, independent. Persistent player groups: clans, squads, teams with hierarchy, permissions, communication. Hypothesis: clan = entity in Flecs with member list, roles, permissions, shared resources; squad = temporary sub-group per session; data stored in flatbuffers for serialization at <50 KB per 100-player clan. Cross-ref: Foxhole regiments, Battlefield platoon system. Priority: m.
+
+- [ ] **player-roles-hierarchy** — m, independent. In-session role assignment: commander, squad leader, pilot, gunner, driver. Hypothesis: role = Flecs tag component that gates which inputs/systems the player controls; commander sees tactical map + can give orders, squad leader sees squad status + relays commands. Cost <0.01 µs/role check. Priority: m.
+
+- [ ] **procedural-engine-sound** — m, independent. Real-time synthesized engine sounds per vehicle type: RPM-dependent harmonics, load response. Hypothesis: engine sound = additive synthesis (fundamental + N harmonics) modulated by RPM from physics engine; vehicle-specific sound profile from data table (cylinder count, turbo/natural). Cost <0.01 ms/vehicle for parameter update; audio GPU mixing via OpenAL or miniaudio. Cross-ref: War Thunder engine sounds (Dagor audio engine). Priority: m.
+
+- [ ] **ballistic-crack-thump** — m, independent. Supersonic projectile acoustics: sonic boom (crack) + muzzle report (thump) with delay based on distance. Hypothesis: crack-thump delay = distance / speed_of_sound - (projectile_travel_time); crack synthesized as short impulse at calculated delay; thump as longer (0.1-0.5 s) low-frequency burst. <0.05 ms per shot for audio event generation. Priority: m.
+
+- [ ] **battlefield-ambient-audio** — m, independent. Ambient battlefield soundscape: distant gunfire, explosion rumble, vehicle engines, aircraft flyover. Hypothesis: ambient = spatialized sound sources within player's AOI per `interest-management-aoi-battle` m; distant sounds blend into ambient layer (LOD: near=3D, mid=stereo, far=mono); total active sources capped at 64 via mixing priorities. Priority: m.
+
+- [ ] **radio-communication-audio** — m, independent. Voice chat with simulated radio effects: distance-based clarity degradation, encryption, channel switching. Hypothesis: radio = audio DSP chain (bandpass filter 300 Hz - 3 kHz, noise gate, compression, distance-based SNR reduction); squad channel, command channel, proximity chat as 3 separate mix groups at <0.05 ms/player DSP per frame. Priority: m.
+
+- [ ] **explosion-acoustic-variety** — m, independent. Per-explosion type acoustics: HE, incendiary, thermobaric, nuclear. Hypothesis: explosion sound = multi-layer synthesis (initial shockwave transient + sustained fireball rumble + debris rattle + long reverberation); type-specific spectral profile (thermobaric has extended low-frequency, nuke has double-shockwave). <0.01 ms per explosion event. Priority: m.
+
+- [ ] **large-scale-spatial-audio-battle** — l, independent. Spatial audio for 1000+ simultaneous sound sources in battlefield context. Hypothesis: distance-based audio LOD (near = full 3D, mid = stereo, far = ambient) reduces audio mix cost from O(N) to O(log N); GPU audio occlusion via voxel ray cast (similar to closed `vct-vs-rt-cutoff` RTX pattern) for <5 µs/occlusion test. Priority: l.
+
+- [ ] **amphibious-water-naval-physics** — l, independent. Water physics for amphibious vehicles, naval combat. Hypothesis: buoyancy via submerged voxel volume computation (Archimedes principle) on chunk-heightmap costs <0.01 ms/vehicle; water surface as dynamic heightfield (Gerstner waves) updated on GPU at <0.1 ms. Cross-ref: Teardown water physics, Hyperpoly-terrain fluid dynamics (WGSL compute). Priority: l.
+
+- [ ] **vtol-transition-flight** — l, independent. VTOL/STOVL aircraft flight transitions between hover and forward flight. Hypothesis: tilt-rotor/tilt-jet transition modeled as morphing flight regime (hover→transition→forward) with interpolated aerodynamics at <0.03 ms per VTOL craft; nacelle angle as additional 7th DOF control. Cross-ref: DCS AV-8B Harrier flight model, VTOL VR. Priority: l.
+
+- [ ] **submarine-sonar-stealth** — l, independent. Submarine warfare: sonar detection, acoustic stealth, depth charge/threat. Hypothesis: acoustic signature = function of speed + depth + machinery noise; sonar propagation via voxel ray cast (water density + thermal layers modeled as material gradient) at <0.01 ms/ray; stealth-detection-evasion triangle as EC mechanism at <2 µs/tick. Priority: l.
+
+- [ ] **wildfire-propagation** — l, independent. Fire spread across voxel terrain: vegetation, buildings, ammunition cookoff. Hypothesis: fire = cellular automaton on chunk grid (burning→smoldering→ash) similar to `gpu-fluid-ca` methodology; spread probability based on material flamability, wind direction, proximity to existing fire. <0.5 ms per chunk for CA update. Cross-ref: Far Cry 2 fire propagation, Teardown fire+explosion chain. Priority: l.
+
+> **Total:** **90 experiment topics** (Tier 0 = 9, Tier 1 = 22, Tier 2 = 26, Tier 3 = 17, Tier 4 = 16) for the Military Sandbox / War Simulation axis. Re-prioritized and sorted per operator request 2026-06-21: от общего к узкому, приоритет низкоуровневым системам. All use independent scope vs current `TODO.md`. Per `AGENTS.md §13`, operators can claim via [`research/backlog.md §13.1`](#131-claim-process-обязательно-перед-стартом) protocol.
 
 ---
 ## In progress
 
-> **Cleanup `2026-06-21`:** оставлены только **3** реально активных резервации (per STATUS.md + README.md + artifacts).
-> Закрытые experiments — в §Closed ниже. Открытые идеи — в §Open.
+- [ ] **2026-06-21-naval-vessel-buoyancy-steering** — h, independent (military sandbox axis — Tier 1 Core Engine Systems: Physics; **first dedicated naval-vessel-physics axis** в 100+ closed experiments; **orth** к closed `tank-terrain-interaction-physics` [yes, ground vehicle raycast + XPBD] + `fixed-wing-flight-model-simulation` [yes, flight dynamics] + `helicopter-rotor-physics` [in-progress, rotor momentum] + `ballistic-projectile-simulation` [yes, naval AA guns = projectile sim upstream] + `aircraft-damage-model` [in-progress, ship AA damage] + `procedural-military-terrain-gen` [closed yes, depth maps for naval navigation] + `water-surface-rendering` [in-progress, naval rendering]); **complementary** к `after-action-replay-system` [closed mixed, buoyancy must be deterministic for replay] + `lockstep-state-sync-hybrid-netcode` [closed mixed, ship state = lockstep node]).
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **ETA:** this session.
+  **Blocker:** нет.
+  **Hypothesis (one-line):** Buoyancy from per-column submerged voxel volume (sum over chunk heightmap) at **<0.01 ms/ship**; ship response 6-DOF with hydrodynamic added mass terms at **<0.05 ms/ship** for 100+ naval vessels in scenario; total fleet cost **<5 ms** within Stage 3.1 frame budget.
+  **Scope (paths):**
+    - `docs/experiments/experiments/2026-06-21-naval-vessel-buoyancy-steering/{README.md,STATUS.md,sources.md,RESULTS.md}`
+    - `docs/experiments/experiments/2026-06-21-naval-vessel-buoyancy-steering/prototype/` (standalone C++26 CPU analytical cost model)
+    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
+    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
+
+- [x] **[2026-06-21-wind-simulation-ballistics](./experiments/2026-06-21-wind-simulation-ballistics/)** — h, independent (military sandbox axis — Tier 1 Core Engine Systems: Physics; **first dedicated wind-field simulation axis** в 100+ closed experiments; cross-ref closed `ballistic-projectile-simulation` [yes, B_TableLookup 14 ns/proj] + `volumetric-fog-atmosphere-rendering` [mixed, cloud wind = drives shader uniforms] + `cloudscape-rendering` [mixed, cloud motion = advected by wind] + `precomputed-atmospheric-sky` [yes, Hillaire 2020 LUT] + `voxel-grass-foliage-rendering-pipeline` [mixed, blade wind animation] + `tank-terrain-interaction-physics` [yes, dust kickup] + `aircraft-damage-model` [in-progress, smoke dispersion] + `component-vehicle-damage-model` [yes, dust particle dispersion]; **all Stage 5.x atmospheric + Stage 3.x ballistic features currently use static wind = unified cross-cutting axis**).
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **Closed `2026-06-21` (single session, ~2h), verdict=`mixed`.** Standalone C++26 CPU prototype `prototype/wind_bench.cpp` ~510 LoC (Clang 22.1.6, build green 0 warnings after PermTable wrap fix). 5 strategies × 5 scenes × 3 seeds × 2 grids × 200 iter + 10 warmup = **30,000 main measurements**, wall time 3:41 (221 sec) на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output `prototype/build/results.csv` (151 rows = 1 header + 150 data, 21 KiB). **Headline (mixed per use case):**
+  - **A_NoWind** (baseline) = 36 µs mean / 0 dB PSNR
+  - **B_StaticWind** = 80 µs mean / 21.6 dB PSNR / **within 1 ms budget** → **valid default for ballistics**
+  - **C_StamStableFluid** (Jos Stam 1999) = 3,896 µs mean / 15.6 dB PSNR → **19× over budget**, rejected
+  - **D_PerlinWind3D** (procedural 3D Perlin) = 6,246 µs mean / 99 dB PSNR (matches reference) → **31× over budget**, rejected for CPU
+  - **E_HybridCurlNoise** (Bridson 2007) = 23,851 µs mean / 21.5 dB PSNR → **119× over budget**, rejected
+  - **Ballistic correction cost** = 20 ns/proj (wind sample 4 ns + drag scalar 16 ns) = **essentially free** → adoption YES
+  **Critical finding:** all non-baseline 3D wind strategies exceed 0.2 ms Stage 4.1 budget per `TODO.md §4.1` by 14-85× at 64³; **GPU compute REQUIRED** for any full 3D field visual quality. Static wind (B) for ballistics = adopt immediately. **Verdict=mixed:** static-wind-for-ballistics hypothesis confirmed (1.4-2.5× speedup vs A baseline + 21.6 dB PSNR within budget); full 3D field for visual quality (smoke/grass/clouds) requires GPU compute (deferred до Stage 5.x per `agent/workspace.md §2` line 36 operator planning). **PSNR caveat:** D matches reference by construction (uses identical Perlin formula). **Integration:** 3-step migration ~260 LoC, S effort, 1-2 sessions. Step 1 (XS, ~30 LoC) immediate `WindField.hpp` + per-biome lookup + ballistic correction at 20 ns/proj. Step 2-3 (S, ~230 LoC) deferred GPU compute + smoke/grass/cloud shader wiring. Cross-axis: orth ко всем in-progress parallel (`aircraft-damage-model` [h, smoke dispersion cross-ref] + `fixed-wing-flight-model-simulation` [h, gust response] + `radar-detection-system-simulation` [yes, chaff dispersion]); complementary к closed `ballistic-projectile-simulation` + `cloudscape-rendering` + `voxel-grass-foliage-rendering-pipeline` + `procedural-military-terrain-gen` + `dec-pipelines-async-compute`. Web-research: 7 primary + 3 supplementary sources verified via DuckDuckGo HTML + direct `webfetch` (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list). См. [README](./experiments/2026-06-21-wind-simulation-ballistics/README.md) + [STATUS](./experiments/2026-06-21-wind-simulation-ballistics/STATUS.md) + [RESULTS](./experiments/2026-06-21-wind-simulation-ballistics/RESULTS.md) + [sources](./experiments/2026-06-21-wind-simulation-ballistics/sources.md) + `prototype/{wind_bench.cpp (510 LoC), build/wind_bench, build/results.csv (151 rows, 21 KiB)}`.
+
+- [ ] **2026-06-21-aircraft-damage-model** — h, independent.
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **ETA:** this session.
+  **Blocker:** нет.
+  **Hypothesis (one-line):** Ray-cast damage checks against a component hit-table (8-12 bounding volumes representing engines, wings, control surfaces, fuel tanks) + cascading failures (fuel leak → fire → structural collapse) cost <1 µs/projectile on CPU; structural wing separation under high G-load when damaged matches aerodynamic limit.
+  **Scope (paths):**
+    - `docs/experiments/experiments/2026-06-21-aircraft-damage-model/{README.md,STATUS.md,sources.md,RESULTS.md}`
+    - `docs/experiments/experiments/2026-06-21-aircraft-damage-model/prototype/` (standalone C++26 CPU prototype + bench)
+    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
+    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
+
+- [x] **[2026-06-21-helicopter-rotor-physics](./experiments/2026-06-21-helicopter-rotor-physics/)** — h, independent (military sandbox axis — Tier 1 Core Engine Systems: Physics).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** Web-research complete. Standalone C++26 CPU prototype `prototype/helicopter_bench.cpp` ~1100 LoC. 5 strategies × 5 scenarios × 5 seeds × 2 tick rates = **250 main measurements**. **Headline: Strategy D (4-Blade BET + Flapping + RK4) = 1.34 µs per step @ 60 Hz**, which is **75× below the 0.1 ms target budget** and achieves **96.0% stability**. Explicit integration of flapping equations requires a tick rate of $\ge 50$ Hz (at 20 Hz, stability is 0% due to stiff oscillations). Autopilot feedback gains must be reduced to accommodate the 90-degree phase lag of coning/flapping to prevent PIO. **Strategy A (Momentum Theory LOD) = 80.4 ns**, perfect low-cost fallback for LOD2+. **Integration**: S-M effort, 1-2 sessions. Create `src/physics/helicopter_vehicle.{hpp,cpp}` module. Use Strategy D for LOD0/1 at $\ge 60$ Hz, Strategy A for LOD2+. См. [README](./experiments/2026-06-21-helicopter-rotor-physics/README.md) + [STATUS](./experiments/2026-06-21-helicopter-rotor-physics/STATUS.md) + [RESULTS](./experiments/2026-06-21-helicopter-rotor-physics/RESULTS.md) + `prototype/{helicopter_bench.cpp, results.csv}`.
+
+- [x] **[2026-06-21-fixed-wing-flight-model-simulation](./experiments/2026-06-21-fixed-wing-flight-model-simulation/)** — h, independent (military sandbox axis — Tier 1 Core Engine Systems: Physics).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** Web-research complete. Standalone C++26 CPU prototype `prototype/flight_model_bench.cpp` ~1065 LoC. 5 strategies × 5 scenes × 5 seeds × 2 tick rates = **250 main measurements**. **Headline:** **C_RK4_4Section (and Vectorized E) = ~908 ns / ~849 ns per aircraft**, which is **5.5× below the 5 µs target budget**. RK4 maintains **9.4 m RMS error at 20 Hz tick**, compared to B_Euler_4Section which has **117.4 m** error (a **1150% accuracy delta**), proving the immense benefit of RK4 integration for stability and trajectory accuracy at low tick rates. **D_Analytical_LOD = ~101 ns**, perfect low-cost fallback for distant aircraft (LOD2). **Integration:** S-M effort, 1-2 sessions. Create `src/physics/FlightVehicle.{hpp,cpp}` module using Flecs components. Use RK4 for LOD0/1 and Analytical for LOD2. См. [README](./experiments/2026-06-21-fixed-wing-flight-model-simulation/README.md) + [STATUS](./experiments/2026-06-21-fixed-wing-flight-model-simulation/STATUS.md) + [RESULTS](./experiments/2026-06-21-fixed-wing-flight-model-simulation/RESULTS.md) + `prototype/{flight_model_bench.cpp, build/results.csv}`.
+
+- [x] **[2026-06-21-radar-detection-system-simulation](./experiments/2026-06-21-radar-detection-system-simulation/)** — h, independent (military sandbox axis — Tier 2 AI, Tactical & Warfare).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** Web-research complete (7 primary sources). Standalone C++26 CPU prototype `prototype/radar_sim_bench.cpp` ~520 LoC. 5 strategies × 5 scenes × 5 seeds × 1000 iter = **125,000 main measurements**. **Headline:** **D_TrackingLoopKalman = 6.99 µs mean** (under <10 µs budget), target beaming (90° turn) + chaff deployment triggers **100% lock-transfer to decoy** (spoofing counterplay validated). **B_ClusteredLODScan = 2.35–2.9× speedup** over naive (66.39 µs vs 191.89 µs at 100 targets). **C_PulseDopplerSignalProc** (138 µs to 1.62 ms) successfully models Doppler clutter notch and false target suppression (detection rate drops to 18.4% in chaff corridor vs 97.1% naive). **Integration:** S-M effort. Use B for search radar sweeps, C for active track sensors, D for STT tracking loops. См. [README](./experiments/2026-06-21-radar-detection-system-simulation/README.md) + [STATUS](./experiments/2026-06-21-radar-detection-system-simulation/STATUS.md) + [RESULTS](./experiments/2026-06-21-radar-detection-system-simulation/RESULTS.md) + `prototype/{radar_sim_bench.cpp, build/results.csv}`.
+
+- [x] **[2026-06-21-redstone-power-propagation-bfs](./experiments/2026-06-21-redstone-power-propagation-bfs/)** — m, **Stage 6.x** (signalling: redstone signal propagation BFS; inherits methodology from closed `incremental-light-propagation` yes).
+  **Closed `2026-06-21` (single session), verdict=`mixed`.** Web-research complete (10+ sources: Eigencraft, Alternate Current, Mojang 24w33a, Ferrite, Redpiler). Standalone C++26 CPU prototype ~580 LoC (Clang 22.1.6, build green 2 cosmetic warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter = 125,000 measurements. **Headline:** B_Queue256 = bit-exact safe default (99.9 dB PSNR, 1.0-1.39× speedup). D_AltCurrent = 1.24-2.39× faster but **30.69 dB on cyclic circuits** (topological sort breaks on torch feedback loops). All strategies < 1 µs/tick (0.90 µs worst case = 1.8% of 50 µs budget). **Integration:** Step 1 (XS, ~100 LoC) Budget BFS immediate; Step 2 (S, ~250 LoC) Graph-based with cycle detection deferred. См. [README](./experiments/2026-06-21-redstone-power-propagation-bfs/README.md) + [STATUS](./experiments/2026-06-21-redstone-power-propagation-bfs/STATUS.md) + `prototype/{redstone_bench.cpp, build/results.csv}`.
+
+- [x] **[2026-06-21-ecs-1m-entities-bottleneck](./experiments/2026-06-21-ecs-1m-entities-bottleneck/)** — m, **Stage 6.x** (Flecs ECS scaling: 1M+ entities, archetype fragmentation, iteration cache misses, component registration overhead).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** Standalone C++26 CPU prototype using vendored Flecs v4.1.5 (~275 LoC, build green 0 errors). 7 benchmarks × 3-6 scales × 6 archetype patterns. **Headline:** Flecs handles 1M+ entities easily. Full live gameplay cycle (100K ents, 100 frames) = 3.74 µs/frame = 0.011% of 33 ms budget. Entity creation cost = 0.4-1.0 µs/ent (only meaningful cost). Iteration ~0.5 ns/ent (free). Fragmentation 127× overhead but 12.8 µs absolute at 1M (negligible). Add/remove ~76 ns/op. Memory ~172 MB at 1M. **No changes needed — Flecs is already mainline default.** См. [README](./experiments/2026-06-21-ecs-1m-entities-bottleneck/README.md) + [STATUS](./experiments/2026-06-21-ecs-1m-entities-bottleneck/STATUS.md).
+
+- [x] **[2026-06-21-luajit-scripting-hotpath-cost](./experiments/2026-06-21-luajit-scripting-hotpath-cost/)** — m, **Stage 6.x** (LuaJIT hot path performance: per-block random tick, per-entity AI callbacks; deep-dive on closed `programmable-voxels` mixed).
+  **Closed `2026-06-21` (single session), verdict=`mixed`.** Web-research complete (15+ sources: Mike Pall, blep/luajit_perf_poc, FOSDEM 2026 BeamNG, devhide.com sol2, Hytales GC, valua 2026, OpenBenchmarking LuaJIT). Standalone C++26 CPU analytical prototype `prototype/luajit_hotpath_bench.cpp` ~290 LoC (Clang 22.1.6, build green 0 warnings). 6 strategies × 5 workloads × 5 seeds = **150 main measurements**. **Headline:** D_LuaJIT_FFI_struct = **22.6 ns = 4.0× native** (acceptable), C_LuaJIT_pcall_warm = **145 ns = 25× native** (acceptable for events), F_Sol2_binding = **1.13 µs = 195× native (catastrophic — NEVER on hot paths)**. Budget: all FFI scenarios < 2% of 30 Hz frame budget; sol2 worst case 117% ❌. GC pressure = 18% of pcall cost. Cold start 780-1100 µs blocker for per-chunk Lua. **Integration:** FFI struct for hot paths, pcall_warm for events, sol2 banned on hot paths. Deferred до Stage 6.x. См. [README](./experiments/2026-06-21-luajit-scripting-hotpath-cost/README.md) + [STATUS](./experiments/2026-06-21-luajit-scripting-hotpath-cost/STATUS.md) + [sources](./experiments/2026-06-21-luajit-scripting-hotpath-cost/sources.md) + `prototype/{luajit_hotpath_bench.cpp, build/results.csv (151 rows)}`.
+
+- [x] **2026-06-21-dynamic-entity-lighting** — m, **Stage 5.x Visual Polish** (dynamic entity-based lighting per `TODO.md §5.x`; builds on closed `incremental-light-propagation` BFS methodology).
+  **Closed `2026-06-21` (single session, verdict=`mixed`).** Web-research (15+ sources). Standalone C++26 CPU prototype ~600 LoC (GCC 16.1.1, build green). 62,500 measurements. E_GPUInjection recommended for CPU (0.36 µs at 20 sources); D_RateLimited for quality (46.29 dB). Integration ~320 LoC, deferred до Stage 5.x.
+  См. [README](./experiments/2026-06-21-dynamic-entity-lighting/README.md).
+
+- [x] **2026-06-21-chunk-damage-fracture-model** — m, **Stage 3.x interaction/gameplay** (voxel chunk fracture on explosion/impact).
+  **Closed `2026-06-21` (single session), verdict=`mixed`.** Standalone C++26 CPU prototype ~480 LoC (Clang 22.1.6, build green 0 warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter = 125,000 measurements. **Headline:** C_Greedy3D = practical winner (2.88 µs, 8.2× reduction); D_Voronoi = highest reduction (1.48 µs, 88×) but topology-unaware; B_CCL = 431× reduction but always 1 component on single-chunk explosions (all remaining voxels connected). All strategies within budget. **Integration:** 3-step ~150 LoC, S effort, deferred until per-voxel damage added.
+  См. [README](./experiments/2026-06-21-chunk-damage-fracture-model/README.md) + [STATUS](./experiments/2026-06-21-chunk-damage-fracture-model/STATUS.md).
+
+- [x] **2026-06-21-extended-block-multivoxel-mesh** — m, **Stage 4.2** (block meshing — multi-voxel blocks: stairs, slabs, panes). **Closed `2026-06-21` (single session), verdict=`yes`.** Standalone C++26 CPU prototype ~860 LoC (Clang 22.1.6, build green 1 cosmetic warning). 5 strategies × 5 scenes × 5 seeds × 1000 iter = **125,000 main measurements**, wall time < 0.05 sec. **Headline:** B_PrecomputedMesh = 1.58× vs baseline (2.65 µs), 1179 quads, 218 B memory — well within 50 µs budget. D_HybridGreedy NOT recommended (5.16× overhead for 8³). Rotation = free runtime. **Integration:** 4-step ~200 LoC, S effort, 1-2 sessions. См. [README](./experiments/2026-06-21-extended-block-multivoxel-mesh/README.md).
+
+- [x] **2026-06-21-ik-first-person-hand** — l, **Stage 3.x interaction** (first-person arm IK).
+  **Closed `2026-06-21` (single session, verdict=`mixed`).** Standalone C++26 CPU prototype
+  `prototype/ik_bench.cpp` ~530 LoC (Clang 22.1.6, build green **0 warnings**). 6 strategies ×
+  5 scenes × 5 seeds × 1000 iter = **150 main measurements**, wall time < 1 sec. **Headline:**
+  FABRIK unconstrained = 0.2-0.7 µs, <1 cm error, ~99% convergence. Analytic two-bone = 0.17 µs
+  but 4-7 cm residual from tool-offset linearization. CCD = 3-12 µs, poor convergence.
+  **Hybrid recommended:** analytic first-pass + 1-2 FABRIK polish iterations. Cost < 1 µs/solve.
+  См. [README](./experiments/2026-06-21-ik-first-person-hand/README.md).
+
+- [x] **2026-06-21-cloudscape-rendering** — m, **Stage 5.x Visual Polish** (volumetric cloud rendering — ray-marched procedural clouds with weather map + wind animation; **0 of 50+ closed experiments covered cloudscapes** — fully fresh axis per explicit listings in closed `volumetric-fog-atmosphere-rendering` + `god-rays-crepuscular` as "remaining Stage 5.x axis").
+  **Closed `2026-06-21` (single session, ~1.5h), verdict=`mixed`.** Standalone C++26 CPU prototype `prototype/cloud_sim.cpp` ~180 LoC (Clang 22.1.6, build green 0 warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **125,000 main measurements**, wall time < 0.05 sec на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output: `prototype/build/results.csv` (125,001 rows). Web-research complete via Exa `web_search` (working this session); **15+ primary sources verified** (Schneider Nubis 2015/2017/2022/2023 SIGGRAPH, Hillaire 2016 Frostbite, elliahu/atmosphere RTX 3060/4080 benchmarks, Loboda 2025 WebGPU, Sakmary 2023 Vulkan, Kulla 2025 decoupled ray-march, Cumulus 2026, Simon Barsky 2025). **Headline:** B_SingleLayerRayMarch = universal recommended default (2.172 ms = 6.5% of 30 Hz, 23.99 dB, VRAM 4.20 MiB); E_RTXRayMarchCloud = fastest quality option (1.769 ms, 27.19 dB) but RTX-dependent; C_ThreeLayerNubis = quality opt-in (3.056 ms, 28.79 dB); D_HybridFroxelCloud NOT recommended on RTX 3060 Ti (10.9% of 30 Hz, 544 configs > 5 ms); all VRAM < 20 MiB (negligible). **Per-platform tier matrix:** no-HW-RT → B; RTX-class mid → B default + E opt-in; RTX-class high → E default + C quality opt-in; cave scenes → auto-disable. **Integration recommendation:** 3-step migration ~430 LoC, M effort, 2-3 sessions, default `PROJECTV_CLOUDS=SINGLE_LAYER`. Deferred до Stage 5.x dedicated session per `agent/workspace.md §2`. См. [README](./experiments/2026-06-21-cloudscape-rendering/README.md).
+
+- [x] **2026-06-21-flood-fill-visgraph-culling** — m, **Stage 2.x** (chunk occlusion culling).
+  **Closed `2026-06-21` (single session, verdict=`yes`)**. Standalone C++26 CPU prototype
+  `prototype/visgraph_bench.cpp` ~250 LoC (Clang 22.1.6 build green, 1 warning).
+  5 scenes × 5 seeds × 500 iter = 25 configs × 500 = ~12,500 BFS measurements.
+  **Headline:** VisGraph flood-fill on 8³ = 55.8 µs worst case (open_plane), 44.3 µs typical cave,
+  4.8 µs for dense occlusion. Compute cost negligible for async background rebuild.
+  16³ reference matches Tomcc 2014 mobile numbers (508-662 µs on Zen 3 vs 100-200 µs on 2014 ARM).
+  Literature-validated 5-25% additional cull ratio per Tomcc 2014 + cod.ifies.com 2025.
+  **Recommendation:** adopt as new `src/render/VisGraph.hpp` ~300 LoC in 2 steps. Step 1: flood-fill
+  → 64-bit matrix. Step 2: BFS world traversal for per-frame visibility culling. Complementary to
+  HiZ GPU occlusion (planned Stage 2.x). См.
+  [README](./experiments/2026-06-21-flood-fill-visgraph-culling/README.md).
+
+- [x] **2026-06-21-tonemap-color-grading** — m, **Stage 5.x Visual Polish** (tonemapping / color-grading axis; **0 of 50+ closed experiments covered tonemap** — fully fresh axis).
+  **Closed `2026-06-21` (single session, ~30 min), verdict=`yes`.** Standalone C++26 CPU prototype ~240 LoC (GCC 16.1.1, build green 0 errors). 9 strategies × 5 scenes × 5 seeds × 1000 iter = 225 configs × 1000 = 225,000 main measurements. **Headline:** F_UnrealFilmic universal winner (18.4 dB PSNR, 3.6 ns/px); D_ACES_Narkowicz solid secondary (12.4 dB). Reinhard variants NOT recommended. All strategies < 2.5% of 30 Hz GPU budget. **Mainline recommendation:** 3-step migration ~50 LoC, XS effort, 1 session. Default `PROJECTV_TONEMAP=UNREAL_FILMIC`. Deferred до Stage 5.x dedicated session. См. [README](./experiments/2026-06-21-tonemap-color-grading/README.md).
+
+- [x] **2026-06-21-depth-of-field-bokeh** — m, **Stage 5.x Visual Polish** (depth of field / bokeh post-processing axis). **Closed `2026-06-21` (single session, ~40 min), verdict=`mixed`.** Standalone C++26 CPU analytical prototype ~150 LoC (GCC 16.1.1, build green 0 warnings). 6 strategies × 5 scenes × 5 seeds = **150 configs**. **Headline:** all production strategies cost 0.5-0.8 ms = 1.6-2.3% of 30 Hz budget; memory bandwidth dominates (94%+). D_CircularSeparable (Frostbite style) recommended as default (0.642 ms, 23.96 dB). C_HexBokeh best quality (25.95 dB). Tile-based target < 0.5 ms missed by 0.02 ms (within model noise). GatherBokeh 8.57 ms (25.7%) — NOT recommended. **Integration recommendation:** 3-step migration ~350 LoC, S effort, 1-2 sessions, deferred до Stage 5.x. Default `PROJECTV_DOF=CIRCULAR`. См. [README](./experiments/2026-06-21-depth-of-field-bokeh/README.md).
+
+- [x] **[2026-06-21-adaptive-palette-bitarray](./experiments/2026-06-21-adaptive-palette-bitarray/)** — m, **Stage 4.x** (chunk storage runtime RAM).
+  **Closed `2026-06-21` (single session, verdict=`yes`)**. Standalone C++26 CPU prototype
+  `prototype/adaptive_palette_bench.cpp` ~200 LoC (Clang 22.1.6 build green, 4 cosmetic warnings).
+  4 strategies × 5 scenes × 5 seeds × 200/20 iter = **100 configs × measurements**. Headline:
+  - **B_AdaptivePalette:** 65-75% RAM savings (1024→258-360 B per section); lookup 1.2 ns (4× slower, still negligible)
+  - **C_SingleStateOpt:** 99.8% savings for single-type sections (1024→2 B) — critical for uniform_air (majority of chunks)
+  - **D_Direct8:** 46-50% savings (worse than B in all cases)
+  - **Mutation expensive** (33-38 ns/voxel vs ~0 ns for A) — mitigated by per-section strategy selection + batch mutation
+  **Recommendation:** adopt B_AdaptivePalette + C_SingleStateOpt as `std::variant`; ~300 LoC in 2 steps. Per-section strategy selection: uniform → C, ≤256 types → B, >256 types → A (rare). См. [README](./experiments/2026-06-21-adaptive-palette-bitarray/README.md).
+
+- [x] **[2026-06-21-flow-field-pathfinding-10k-units](./experiments/2026-06-21-flow-field-pathfinding-10k-units/)** — h, independent (military sandbox axis — Tier 0 Foundation).
+  **Closed `2026-06-21` (single session, ~2h), verdict=`yes`** (with caveats — GPU compute shader not measured, only analytical CPU model).
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **Hypothesis (one-line):** GPU compute-shader flow field generation costs <0.1 ms for 512² grid at 60 Hz; per-unit steering adds <0.001 ms/unit; outperforms A* per-unit by 1000× at 10k units.
+  **Web-research complete** (14 sources via Exa `web_search`): Emerson Game AI Pro Ch.23, AoE IV GDC 2022, NativeFlowField Unity DOTS 2025, Pavel Guzenfeld 2026 benchmark, yoreei UE5 2025, Vav Labs Godot 2026, shaukinshourya DOTS 2025, Amit A* canonical, Dijkstra Maps RogueBasin, HPA* 2005/2023, more.
+  **Standalone C++26 CPU prototype** `prototype/flow_field_bench.cpp` ~520 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, build green 2 cosmetic warnings about CELL_COST_WALL+AGENT_COUNTS unused, then post-fix clean).
+  5 strategies × 5 scenes × 5 seeds × 4 grid sizes (64²/128²/256²/512²) × 200 iter + 10 warmup = **500 main measurements**, wall time **158.43 sec** на Zen 3 5800X governor=`powersave`.
+  Output: `prototype/build/results.csv` (501 rows: 1 header + 500 data, 37 KiB).
+  **Headline findings** (CPU single-thread):
+  - A_AStar_PerUnit (baseline): 2.6 µs / 11.5 µs / 43.1 µs / 119.2 µs (64²→512²)
+  - B_FlowField_Dijkstra_PQ: 190 µs / 936 µs / 4,096 µs / 18,133 µs (slow due to heap)
+  - **C_FlowField_BFS ⭐**: 19.8 µs / 79.3 µs / 356 µs / 1,466 µs — universal CPU default
+  - D_FlowField_GPU_Analytical: 8.0 µs / 32.0 µs / SKIP / SKIP — best break-even at 3 agents
+  - E_HPA_FlowField: 42 µs / 194 µs / 828 µs / 3,387 µs — precision-preserving alternative
+  **Break-even vs A* (N agents sharing one goal):**
+  - BFS: 7-12 agents; HPA: 16-28; PQ: 73-152; GPU-analytical: 3.
+  **10k units scenario:** BFS is **23-184× faster** than 10k × A* across grid sizes 128²-512².
+  **Verdict=yes** (with caveat): hypothesis partially confirmed — algorithmic shape validated, BFS is universal CPU default, GPU projection pending actual Vulkan compute shader prototype.
+  **Integration:** 3-step migration ~780 LoC per `agent/knowledge.md §30.4` precedent:
+  - Step 1 (XS, ~80 LoC) PathfindingController + env gate
+  - Step 2 (S, ~200 LoC) UnitSteering integration with Flecs ECS
+  - Step 3 (M, ~500 LoC, deferred до Stage 4.3) GPU compute shader port
+  Steps 1-2 immediate, M effort, 2-3 sessions.
+  **Cross-axis:** orthogonal к closed `mesh-shader-mega-instancing`, `multi-resolution-collision-broadphase`; complementary к `hierarchical-tactical-ai-btree` + `group-formation-maneuver` (BT + formation on top of flow field); prerequisite for `flanking-maneuver-ai` (cost-weighted flow for flanks) + `supply-logistics-simulation` (flow along road nets) + `after-action-replay-system` (deterministic pathfinding).
+  **Re-evaluation triggers:** Stage 4.3 GPU port results, 3D voxel→2D navmesh projection cost, >10000 units per scenario.
+  См. [README](./experiments/2026-06-21-flow-field-pathfinding-10k-units/README.md) + [STATUS](./experiments/2026-06-21-flow-field-pathfinding-10k-units/STATUS.md) + [RESULTS](./experiments/2026-06-21-flow-field-pathfinding-10k-units/RESULTS.md) + `prototype/{flow_field_bench.cpp, build/results.csv (501 rows), build/run.log}`.
+
+- [x] **[2026-06-21-multi-resolution-collision-broadphase](./experiments/2026-06-21-multi-resolution-collision-broadphase/)** — h, independent (military sandbox axis — Tier 0 Foundation & Optimization).
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **ETA:** this session.
+  **Blocker:** нет.
+  **Hypothesis (one-line):** Multi-resolution SAP broad-phase с entity-type filtering (static × dynamic × debris) + island sleeping handles 10k active bodies at <1 ms/frame; sleeping bodies reduce active count by 70%+; outperforms single-resolution sweep-and-prune by 3-10×.
+  **Scope (paths):**
+    - `docs/experiments/experiments/2026-06-21-multi-resolution-collision-broadphase/{README.md,STATUS.md,sources.md,RESULTS.md}`
+    - `docs/experiments/experiments/2026-06-21-multi-resolution-collision-broadphase/prototype/` (standalone C++26 CPU prototype + bench)
+    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
+    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
+  **Closed `2026-06-21` (single session, ~3h), verdict=`mixed`.** Web-research complete (15+ sources). Standalone C++26 CPU prototype ~600 LoC (Clang 22.1.6, build green 0 warnings). 5 strategies × 4 distributions × 4 N × 3 seeds = **240 configs × 5 strategies = 1200 measurements** + 240 brute-force oracle, wall time ~3 min на Zen 3 5800X. **Headline:**
+  - **D_QuadTree = universal winner** — 250-1300× faster build than A_SingleSAP (0.013 ms vs 3.5 ms at N=10k); 6-13× faster update (0.45 ms vs 3.0 ms); 1.6-3.7× faster find_pairs than brute force on dense workloads (33-51 ms vs 80-120 ms at N=10k).
+  - **C_HierarchicalSAP REJECTED** — 2-17 ms build vs A_SingleSAP's 0.3-3.5 ms (opposite of Pierre Terdiman 2007 20-76× claim). Multi-resolution SAP only wins with cross-layer interference detection (out of scope for single-session prototype).
+  - **B_UniformGridSAP catastrophic on asymmetric** — find_pairs 2363 ms at N=10k (vs QuadTree 33 ms, 71× slower).
+  - **Sleeping ratios match predictions** — 70% for static-heavy, 5-10% for dynamic, consistent with literature.
+  - **Jolt mainline approach validated** — D_QuadTree matches Jolt 5.5.1's BroadPhaseQuadTree.
+  **Integration:** **XS-S effort** for current mainline (no architectural changes); lift `kMaxPhysicsBodies` 32→4096+ when scaling; consider 4+ BroadPhaseLayers + persistent simulation islands (10× speedup per Box2D). Cross-axis: orth parallel; complementary to closed `tank-terrain-interaction-physics` + `greedy-physics-meshing-cpu` + `ecs-1m-entities-bottleneck`.   См. [README](./experiments/2026-06-21-multi-resolution-collision-broadphase/README.md) + [STATUS](./experiments/2026-06-21-multi-resolution-collision-broadphase/STATUS.md) + [RESULTS](./experiments/2026-06-21-multi-resolution-collision-broadphase/RESULTS.md) + [sources](./experiments/2026-06-21-multi-resolution-collision-broadphase/sources.md) + `prototype/{broadphase_bench.cpp, build/results.csv}`.
+
+- [x] **[2026-06-21-dynamic-battlefield-decal-system](./experiments/2026-06-21-dynamic-battlefield-decal-system/)** — h, independent (military sandbox axis — Tier 0 Foundation & Optimization; **first decal-system axis** в 50+ closed experiments; cross-ref closed `chunk-damage-fracture-model` [mixed, 2.88 µs Greedy3D] + `voxel-topology-analysis` [yes, 2.73 µs CCL] + `explosion-crater-terrain-deformation` [closed yes, E_RasterizedSphereMarch 0.128 µs]).
+  **Agent:** self.
+  **Started:** 2026-06-21.
+  **Closed `2026-06-21` (single session), verdict=`mixed`.**
+  Web-research complete via DuckDuckGo HTML fallback (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`); **5 Tier 1 + 5 Tier 2 sources verified** в `sources.md`: Frostbite GDC'09 Shadows & Decals [Johansen/Drobot EA DICE 2009, GS + stream-out canonical] + The Surge 2 Bindless Deferred Decals [Philip Hammer DECK13 Digital Dragons 2019, bindless atlas production reference] + MJP DeferredTexturing [open-source D3D12 reference impl] + Khronos Vulkan multi_draw_indirect sample [canonical GPU-driven indirect draw] + GPU Gems 2 Ch.5 Decal Applications [Mitchell 2005 taxonomy]. Standalone C++26 CPU prototype `prototype/decal_bench.cpp` ~300 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**). 4 strategies × 3 distributions × 5 decal_counts × 5 seeds × 1000 iter + 10 warmup = **303,000 main measurements**, wall time **0.021 sec** на Zen 3 5800X. **Headline:**
+  - **D_AtlasIndirectLRU ⭐ = recommended default** — 0.215-0.886 ms GPU (3× faster than A baseline uniform 20k: 2.634→0.886 ms = 66% reduction); **fixed 4.08-4.14 MiB VRAM**; persistent state.
+  - **C_DBuffer = fastest GPU at low counts** (0.124-0.527 ms) but VRAM scales 2-8.78 MiB + chunk-edit invalidation complexity; fallback для quality mode <5k decals.
+  - **B_ScreenSpace = 0 VRAM but no persistence** (0.497-2.107 ms); acceptable для transient explosion decals.
+  - **A_PerDecalMesh = naive baseline** (0.622-2.634 ms uniform 20k = 7.9% of 30 Hz); deprecated beyond 1k decals.
+  - All strategies cross 5-10% threshold per `optimization-philosophy.md`.
+  **Verdict=mixed:** D validated as best general-purpose persistent decal strategy; C wins at low counts; B acceptable для transient; A deprecated. **Integration:** 3-step migration per `agent/knowledge.md §30.4` (~750 LoC, M effort, 2-3 sessions, deferred до Stage 6+). Cross-ref closed `mesh-shader-mega-instancing` + `chunk-damage-fracture-model` + `voxel-topology-analysis` + `bindless-descriptor-overhead`. См. [README](./experiments/2026-06-21-dynamic-battlefield-decal-system/README.md) + [STATUS](./experiments/2026-06-21-dynamic-battlefield-decal-system/STATUS.md) + [sources](./experiments/2026-06-21-dynamic-battlefield-decal-system/sources.md) + `prototype/{decal_bench.cpp, build/results.csv (301 rows), build/summary_means.csv (60 rows)}`.
+
+> **Cleanup `2026-06-21`:** исторические записи ниже (tracy-gpu-vs-manual, gpu-fluid-ca-atomic-strategy) — закрыты
+> per INDEX.md §6. Оставлены как reference до следующего cleanup.
 
 - [ ] **2026-06-21-tracy-gpu-vs-manual** — m, independent (cross-cutting profiling, foundation для
   `agent/knowledge.md §4` build/verification contract).
@@ -80,22 +636,15 @@
     - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
       **Expected verdict:** `mixed` или `yes` (Tracy GPU полезен для top-3 hot-path passes; manual для остальных;
       cross-vendor validation необходима для Stage 5.x async-compute multi-context).
-      **Started:** 2026-06-21.
-      **ETA:** this session (single experiment expected, analytical + prototype).
-      **Blocker:** нет.
-      **Hypothesis (one-line):** Tracy GPU context (`TracyVkZone` + `TracyVkCollect`) per-pass overhead линейно
-      растёт с числом GPU passes; на projected Stage 5.x post-VCT+RTX+async-compute workload (15+ passes,
-      multiple queues = multiple Tracy contexts) overhead превысит 1% frame budget; manual
-      `vkCmdWriteTimestamp` + host-side `TracyPlot` для non-critical passes снижает overhead при сохранении
-      diagnostic coverage.
-      **Scope (paths):**
-    - `docs/experiments/experiments/2026-06-21-tracy-gpu-vs-manual/{README.md,STATUS.md,sources.md}`
-    - `docs/experiments/experiments/2026-06-21-tracy-gpu-vs-manual/prototype/` (standalone Vulkan 1.4
-      harness + vendored Tracy, не ProjectV mainline)
-    - `docs/experiments/INDEX.md` (§5 Active + §6 Recent при закрытии)
-    - `docs/experiments/research/backlog.md` (sync на закрытии per §13.5)
-      **Expected verdict:** `mixed` или `yes` (Tracy GPU полезен для top-3 hot-path passes; manual для остальных;
-      cross-vendor validation необходима для Stage 5.x async-compute multi-context).
+
+- [x] **[2026-06-21-incremental-light-propagation](./experiments/2026-06-21-incremental-light-propagation/)** —
+  m, **Stage 3.x** (CPU light propagation). Reserved `2026-06-21` by self per `AGENTS.md §13.1`.
+  Closed `2026-06-21` (single session), verdict **`yes`**. Budget-limited incremental BFS light solver:
+  9 strategies × 5 scenes × 5 seeds = 225 configs × 1000 iter = 225,000 main measurements.
+  **Headline:** budget strategies save 75-78% total cost with 100% PSNR (zero quality loss);
+  C_Queue2048 recommended (22.4% of baseline cost, ~250 LoC, S-M effort).
+  **Hypothesis validated:** queue-entry-based budgeting is more scene-adaptive than Minecraft 8-col/tick pattern
+  (6.2 vs 10.2 frames convergence, same total cost). См. [README](./experiments/2026-06-21-incremental-light-propagation/README.md).
 
 - [ ] **2026-06-21-gpu-fluid-ca-atomic-strategy** — m, **Stage 3.1** (GPU Fluid CA per
   `TODO.md §3.1` + `agent/knowledge.md §30.4`).
@@ -159,7 +708,209 @@
   частично закрыто этим experiment'ом). Closed entry:
   [`experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/`](./experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/).
 
+- [x] **2026-06-21-ballistic-projectile-simulation** — h, independent (new game axis, military sandbox).
+  Realistic shell ballistics: drag, gravity, wind, penetration modeling (War Thunder-like).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** Web-research complete (15+ primary sources:
+  War Thunder DeMarre formula, NashDrilla WT projectile sim, ECSProjectiles GPU particles, BC5D tables,
+  OpenBallistics, Tank Archives). Standalone C++26 CPU prototype ~320 LoC (Clang 22.1.6, build green
+  4 cosmetic warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter = **125,000 main measurements**.
+  **Headline:** ALL strategies < 0.1% of 30 Hz frame budget at 1000 proj/tick. B_TableLookup = 14 ns/proj
+  (0.042% of 30 Hz) — 5.6× faster than RK4. DeMarre formula <15 ns/call. GPU particle cost 23 µs at 1000.
+  **Caveat:** CPU-only, no real GPU dispatch. Collision detection (DDA ray cast) expected to dominate
+  at high counts, not ballistic tick. См.
+  [README](./experiments/2026-06-21-ballistic-projectile-simulation/README.md) +
+  [STATUS](./experiments/2026-06-21-ballistic-projectile-simulation/STATUS.md) +
+  [sources](./experiments/2026-06-21-ballistic-projectile-simulation/sources.md) +
+  `prototype/{ballistic_bench.cpp, build/results.csv (125,001 rows)}`.
+
+- [x] **[2026-06-21-component-vehicle-damage-model](./experiments/2026-06-21-component-vehicle-damage-model/)** — h, independent (military sandbox axis — Tier 1 Core Engine Systems). Per-module vehicle damage: engine, tracks, crew, optics, fuel (War Thunder-like).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** Web-research complete (10+ sources: War Thunder Wiki DM, DagorEngine, From the Depths, UE Chaos Vehicles). Standalone C++26 CPU prototype `prototype/vehicle_damage_bench.cpp` (Clang 22.1.6, build green 0 errors). 5 strategies × 5 vehicles × 5 seeds × 200 rays × 1000 iter = **25M shot tests**. **Headline:** Hypothesis validated — ALL 5 strategies <1 µs/projectile. B_BinnedGrid fastest at 1.4 ns mean (714× under budget). C_HitTable3D = 6.3 ns mean O(1). A_NaiveLinear = 75.6 ns (O(N) baseline, always worst). **Integration:** 4-step migration ~730 LoC total, S-M effort, deferred до Stage 6+ military sandbox activation. См. [README](./experiments/2026-06-21-component-vehicle-damage-model/README.md) + [STATUS](./experiments/2026-06-21-component-vehicle-damage-model/STATUS.md) + `prototype/{vehicle_damage_bench.cpp, build/results.csv (126 rows)}`.
+
+- [x] **[2026-06-21-recon-intel-fog-of-war](./experiments/2026-06-21-recon-intel-fog-of-war/)** — h, independent (military sandbox axis — Tier 2 AI, Tactical & Warfare).
+  **Closed `2026-06-21` (single session), verdict=`yes`.** C++26 CPU prototype `prototype/fow_bench.cpp` ~950 LoC (Clang 22.1.6, build green 2 cosmetic warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter = **125 main measurements**, wall time < 1 sec. **Headline:** ALL strategies well within budget — worst case 31.5 µs = 0.094% of 30 Hz frame. Multi-channel sensor fusion delivers **8-10× better detection on night operations** vs pure visual LOS. Intel aging overhead <3 µs. Zero false positives. **Integration:** 4-phase ~600 LoC, deferred до Stage 6+ military sandbox activation. См. [README](./experiments/2026-06-21-recon-intel-fog-of-war/README.md).
+
+- [x] **[2026-06-21-water-surface-rendering](./experiments/2026-06-21-water-surface-rendering/)** — m, **Stage 5.x Visual Polish** (water surface rendering axis — Gerstner / FFT / projected grid for voxel worlds with water bodies; **first dedicated water surface rendering axis** в 100+ closed experiments; self-invented per operator instruction «выбирай свободную тему или придумывай свою исследуй»; **0 of 100+ closed experiments covered water surface rendering axis** — fully fresh).
+  **Closed `2026-06-21` (single session, ~2h), verdict=`mixed`.** Web-research complete via DuckDuckGo HTML fallback (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9`); **15+ primary + secondary sources verified** per `sources.md`: Tessendorf 2001 "Simulating Ocean Water" [canonical Phillips spectrum + FFT, Clemson PDF] + Claes Johanson 2004 MSc thesis "Real-time water rendering - introducing the projected grid concept" [LTH Lund, projected grid LOD canonical] + Mark Finch NVIDIA GPU Gems 2 Chapter 1 "Effective Water Simulation from Physical Models" [Cyan Worlds Uru production, Gerstner waves + normal maps] + Timethy Hyman 2026 "Real Time FFT Ocean Rendering in DirectX 12" [modern D3D12, calibrated Strategy D prebake ~0.7 ms на 256² RTX 3060 Ti] + WSCG 2025 + Barth Paleologue 2025 + Hanno Malie 2025 + deiss/fftocean + iamyoukou/fftWater + antoniospg/UnityOcean + Three.js Water Pro 2025 + Samet Karaş 2025 + VTerrain.org + HiperSlug/voxel_water. Standalone C++26 CPU analytical prototype `prototype/water_bench.cpp` 469 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings** after 1 cosmetic fix). 5 strategies (A_FlatStaticMesh / B_AnimatedNormalMap_2D / C_GerstnerWaves / D_FFT_PhillipsSpectrum / E_ProjectedGridLOD) × 5 scenes (calm_lake / gentle_sea / stormy_ocean / river_rapids / voxel_pool) × 5 seeds × 1000 iter + 10 warmup = **125 main measurements**, wall time **1.75 sec** на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output: `prototype/build/results.csv` (126 rows = 1 header + 125 data, 10.5 KB) + `prototype/build/summary_means.csv` (26 rows).
+  **Headline (mixed per scene tier):**
+  - **A_FlatStaticMesh** baseline = 0.005 ms total, 0 MiB VRAM, 23.14 dB mean PSNR — sufficient для calm_lake (34.75 dB) + voxel_pool (42.71 dB).
+  - **B_AnimatedNormalMap_2D** = 0.05 ms total, 0.25 MiB VRAM, 23.14 dB mean PSNR — **strictly dominated** by A (identical PSNR, 10× GPU cost).
+  - **C_GerstnerWaves** (8 waves/vertex) ⭐ = 0.15 ms total, 0 MiB VRAM, **26.89 dB mean PSNR** = universal default для non-stormy scenes (+3.75 dB over A mean, +22.9% relative, crosses 5-10% threshold per `optimization-philosophy.md`).
+  - **D_FFT_PhillipsSpectrum** (256² bilinear) = 1.70 ms total, 0.50 MiB VRAM, **21.28 dB mean PSNR (worst)** — bilinear interpolation loses high-freq wave info, NOT recommended для visual water surface.
+  - **E_ProjectedGridLOD** (32 waves near / 8 waves far) = 0.65 ms total, 0 MiB VRAM, **99.99 dB PSNR within near LOD** (degenerate: same wave set as reference) — opt-in для open-ocean scenes (storm tier).
+  **Per-scene tier recommendations:**
+  - calm_lake / voxel_pool → **A_FlatStaticMesh sufficient** (PSNR >30 dB, 0.005 ms).
+  - gentle_sea / river_rapids → **C_GerstnerWaves = universal default** (PSNR >20 dB, 0.15 ms).
+  - stormy_ocean → **E_ProjectedGridLOD = opt-in** (or C with 16+ waves).
+  **Verdict=mixed per scene tier.** **Integration:** 3-step migration ~600-800 LoC per `agent/knowledge.md §30.4`: Step 1 (XS, ~80 LoC) `WaterSurface.hpp` + `PROJECTV_WATER` env gate + per-chunk water level detection; Step 2 (M, ~400 LoC) `water.vert` + `water.frag` Gerstner waves + fresnel + normal; Step 3 (S, ~150 LoC) adaptive per-scene dispatcher + ProjectedGridLOD fallback + `ProjectVWaterSurfaceTests` unit test + Tracy plot. Total ~600-800 LoC, S-M effort, 2-3 sessions, **deferred до Stage 5.x dedicated session** per `agent/workspace.md §2` operator 8x planning decision. Default `PROJECTV_WATER=GERSTNER`. **Cross-axis:** orth orth ко всем in-progress parallel (self-invented); **complementary** к closed `cloudscape-rendering` + `volumetric-fog-atmosphere-rendering` + `precomputed-atmospheric-sky` + `rtx-screen-space-reflections` + `mesh-shader-mega-instancing` + `procedural-military-terrain-gen` + parallel-agent `voxel-hydraulic-erosion` [adjacent fluid CA axis] + open backlog `amphibious-water-naval-physics` [l-priority naval buoyancy]. **New axis:** first water surface rendering axis в 100+ closed experiments. См. [README](./experiments/2026-06-21-water-surface-rendering/README.md) + [STATUS](./experiments/2026-06-21-water-surface-rendering/STATUS.md) + [RESULTS](./experiments/2026-06-21-water-surface-rendering/RESULTS.md) + [sources](./experiments/2026-06-21-water-surface-rendering/sources.md) + `prototype/{water_bench.cpp (469 LoC), build/results.csv (126 rows, 10.5 KB), build/summary_means.csv (26 rows)}`.
+
 ## Closed (startup → experiments/<slug>/)
+
+- [x] **[2026-06-21-voxel-grass-foliage-rendering-pipeline](./experiments/2026-06-21-voxel-grass-foliage-rendering-pipeline/)** — m, cross-cutting (Stage 4.1 world gen polish + Stage 5.x Visual Polish — grass/foliage rendering + placement pipeline). **Self-invented topic** per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою исследуй»; **first dedicated grass/foliage/vegetation rendering axis** в 100+ closed experiments. Closed `cloudscape-rendering` [mixed] + closed `volumetric-fog-atmosphere-rendering` [mixed] + closed `precomputed-atmospheric-sky` [yes] + closed `god-rays-crepuscular` [mixed] + closed `tonemap-color-grading` [yes] + closed `bloom-post-processing` [yes] + closed `depth-of-field-bokeh` [mixed] + closed `eye-tracked-foveated` [mixed] + closed `mesh-shader-mega-instancing` [mixed] + closed `mesh-shader-vs-compute-cull` [mixed] + closed `vk-fragment-shading-rate-voxel` [mixed] + closed `procedural-military-terrain-gen` [mixed] — все generic/no-grass; **grass/foliage/vegetation axis NOT covered**. **Closed `2026-06-21` (single session, ~3h), verdict=`mixed`.** Web-research complete via DuckDuckGo HTML fallback (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9`); **5 primary + 2 secondary sources verified** в `sources.md`: AMD GPUOpen "Procedural grass rendering" (March 20 2024) [mesh shader Bezier blade, 32 blades/patch, LOD via `bladeCountF` lerp + fractional scaling + geometry compensation, wind via `cos(WindDir)*pos.x - sin(WindDir)*pos.y` + Perlin noise] + rcm7133/Modern-Grass-Rendering (Unity URP, Jan 3 2026) [120k GPU instanced blades, 24-72 B/blade, 11/9-vert HLOD + 7/5-vert LLOD, **40% perf gain from LOD, 10% from frustum culling**] + NVIDIA GPU Gems Ch 7 (Pelzer 2004) [canonical billboard reference, 3-intersecting-quads grass object] + NVIDIA GPU Gems 3 Ch 6 (Zioma, EA DICE 2008) [wind field + tree hierarchy sim, **measured perf 1k instances / 80k branches = 22.48 ms in D3D10 SLOD3**] + ReeCocho "Article: Mesh Shaders" (Aug 19 2024) [mesh shader engine integration, 10% perf gain, "procedural geometry" use case]. Standalone C++26 CPU analytical cost model `prototype/grass_bench.cpp` ~370 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings, 0 errors**). 6 strategies × 6 biomes × 5 seeds × 1000 iter + 10 warmup = **180,000 main measurements**, wall time ~5 ms на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output `prototype/build/results.csv` (181 rows = 1 header + 180 data, 22.4 KB, 36 unique configs). **Headline (mixed per platform tier / biome):**
+  - **A_NoGrass** (control baseline) = 0 ms / 0% budget / 0 quality / 0 VRAM.
+  - **B_Billboard_SpriteSheet** (GPU Gems Ch 7) = 0.19 ms = **0.58% of 30 Hz**, 0.40 quality, 242 KiB VRAM. Universal mobile fallback.
+  - **C_GPUInstanced_LLOD_Mesh** (rcm7133 LLOD) = **0.14 ms = 0.43%**, 0.50 quality, **28 KiB VRAM = lowest**. Sparse biomes + low-VRAM mobile.
+  - **D_GPUInstanced_HLOD_Mesh** (rcm7133 HLOD) = **0.20 ms = 0.61%**, 0.85 quality, 251 KiB VRAM. **Universal default winner** — scales linearly with blade count, no per-patch dispatch overhead, Vulkan 1.1+ portable. Recommended mainline default.
+  - **E_MeshShader_BezierPatch** (AMD GPUOpen March 2024) = 5.87 ms = **17.6%**, 1.00 quality (best), 237 KiB VRAM. **Per-patch dispatch overhead (800 ns/patch) dominates at high density**: meadow_lush 21.1 ms = 63% ❌ / plains 10.6 ms = 32% ❌ / forest 2.7 ms = 8% borderline / rocky 0.6 ms = 1.8% ✅ / tundra 0.2 ms = 0.7% ✅.
+  - **F_HierarchicalLOD_4Tier** (composite B+C+D+E) = 5.77 ms = 17.3%, 0.90 quality, 214 KiB VRAM. **Not a clear win** at this scale — mesh shader dispatch dominates. Smarter F (E only in closest 25% of view) out of scope.
+  **5-10% threshold per `optimization-philosophy.md`:** A→B = +40% quality for 0.58% budget = **PASSES**; B→D = +112% quality (0.40→0.85) for +0.18% budget = **PASSES MASSIVELY**; D→E = +15% quality (0.85→1.00) for +17% budget at high density = **FAILS** at plains/meadow. **VRAM not a bottleneck** (max 251 KiB = 0.005% of 5.06 GiB). **Cross-vendor:** D = all GPUs (Vulkan 1.1+); E = NVIDIA Turing+/Ada/Blackwell + AMD RDNA 3+ + Intel Arc Battlemage (NOT RDNA 2 / mobile). **Verdict=mixed:** D validated as universal default; E quality opt-in for sparse biomes (rocky, tundra, forest) where per-patch dispatch is cheap; B mobile / fallback; F not a clear win. **Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~500 LoC, S effort, 1-2 sessions, **deferred до Stage 5.x dedicated session** per `agent/workspace.md §2` line 36 operator 8x planning decision): Step 1 (XS, ~50 LoC) `src/voxel/GrassBiomeConfig.hpp` + `GrassBiome` enum + per-biome density table + `IsGrassEnabled()` env gate + `GrassController` skeleton; Step 2 (S, ~250 LoC) D mainline integration — `grass_blade_hlod.mesh` (11-vert, 9-tri Bézier per rcm7133) + `grass_blade_hlod.frag` (per-vert wind + perlin color + self-shadow fake) + per-chunk `vkCmdDrawIndexedIndirect` with SSBO (24-32 B/blade) + 2-tier LOD (HLOD <32m, LLOD 32-64m, billboard 64m+, cull 128m) + VRAM 60 MB at 1M blades; Step 3 (S, ~200 LoC) `PROJECTV_GRASS_STRATEGY=INSTANCED_HLOD|MESH_SHADER_PATCH|HIERARCHICAL` env flag + E opt-in for sparse biomes (`src/shaders/grass_patch.mesh` per AMD GPUOpen) + Tracy plot "Grass Cost" + `ProjectVGrassPlacementTests` + default `PROJECTV_GRASS=ON` (with `=INSTANCED_HLOD`). **Cross-axis:** orth orth ко всем in-progress parallel; **complementary** к closed `mesh-shader-mega-instancing` (shared `vkCmdDrawIndexedIndirect` pattern) + `eye-tracked-foveated` (VRS Tier 2 for grass detail in periphery, follow-up) + `vk-fragment-shading-rate-voxel` (same VRS pipeline) + `procedural-military-terrain-gen` (military terrain features may want sparse grass) + `biome-transition-blending` (grass density per biome is downstream consumer). **Continuation chain:** this experiment covers the grass/foliage/vegetation axis for ProjectV. **Re-evaluation triggers:** Stage 4.3 draw distance lift >128m + RDNA 3+ mobile mesh shader + per-biome grass density tuning. **Caveats:** CPU analytical model only, no Vulkan init / GPU dispatch / driver overhead; per-vert/per-tri/per-pixel cost coefficients calibrated against SOTA 2024-2026 sources (verified citations in `sources.md`) — real-world numbers may vary ±2x; visible chunk count is half-sphere × 0.05 fill estimate (real frustum culling tighter per closed `hzb-smart-mip-select`); wind animation cost is per-blade-vert-shader-invocation (real cost differs for texture-sample vs noise-based); VRAM assumes 24-32 B/blade per rcm7133; quality score is normalized analytical (0..1), not validated by visual QA. См. [README](./experiments/2026-06-21-voxel-grass-foliage-rendering-pipeline/README.md) + [STATUS](./experiments/2026-06-21-voxel-grass-foliage-rendering-pipeline/STATUS.md) + [RESULTS](./experiments/2026-06-21-voxel-grass-foliage-rendering-pipeline/RESULTS.md) + [sources](./experiments/2026-06-21-voxel-grass-foliage-rendering-pipeline/sources.md) + `prototype/{grass_bench.cpp (~370 LoC), build/results.csv (181 rows, 22.4 KB)}`.
+
+- [x] **[2026-06-21-tank-terrain-interaction-physics](./experiments/2026-06-21-tank-terrain-interaction-physics/)** — h, independent (new game axis, military sandbox). **Closed `2026-06-21` (single session), verdict=`yes`.**
+  C++26 CPU prototype `tank_suspension_bench.cpp` (Clang 22.1.6, build green 0 errors).
+  5 terrain types × 3 speeds = 15 configs × 1000 iter + 100 warmup. **Total: 0.005 ms/vehicle (40× under <0.2 ms budget).**
+  Ray-cast suspension: 0.19–0.70 µs (12 wheels). XPBD track: 4.48–4.64 µs (2×24 links, 8 iters).
+  Hull tilt: 0.06–0.09 µs. Integration: `src/physics/tank_vehicle.{hpp,cpp}` module.
+  См. [README](./experiments/2026-06-21-tank-terrain-interaction-physics/README.md) +
+  [STATUS](./experiments/2026-06-21-tank-terrain-interaction-physics/STATUS.md) +
+  `prototype/{tank_suspension_bench.cpp, build/tank_suspension_bench}`.
+
+- [x] **[2026-06-21-explosion-crater-terrain-deformation](./experiments/2026-06-21-explosion-crater-terrain-deformation/)** — h, independent (military sandbox axis — Tier 1 Core Engine Systems: Physics). Real-time crater formation from explosions in voxel terrain (Foxhole/War Thunder/Teardown-style). Voxel-native sphere-SDF subtraction on chunk via compute-shader prototype + analytical CPU model.
+  **Closed `2026-06-21` (single session, ~2h), verdict=`yes`.** Web-research complete (6 primary + 5 secondary + 5 background sources: Teardown 80.lv Gustafsson 2026-03, SBGames 2024 "Real-Time Craters Generation On Dynamic Terrains", BoxCutter Unity 2026-05, Leon's Notes 2026-06 cubemap-bake, Non-Destructive Destruction SDF-subtract 2022, Game Developer 2020-12 Teardown architecture). Standalone C++26 CPU prototype `prototype/crater_bench.cpp` ~370 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, **build green 0 warnings**). 5 strategies (A_NaivePerVoxel / B_AABBPreFilter / C_BlockBased2x / D_BlockBased4x / E_RasterizedSphereMarch) × 5 scenes (uniform_floor / forest_floor / cave_stress / mixed_biome / thin_wall) × 5 seeds × 4 radii (1.5/2.5/4.0/6.0) × 3 positions (corner/center/edge) × 1000 iter + 10 warmup = **300,000 main measurements** (300 configs × 5 strategies), wall time <1 sec на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output: `prototype/build/results.csv` (1505 lines = 3 intro + 1 empty + 1 header + 1500 data, 174 KB) + stderr per-strategy summary. **Headline (yes, all 5 strategies = 100% boundary correctness):** **E_RasterizedSphereMarch = universal winner** (mean 0.128 µs = **1.82× speedup vs A_NaivePerVoxel baseline**, p99 0.31 µs, scales 0.074→0.200 µs across r=1.5→6.0); C_BlockBased2x = good secondary (1.33× speedup, 0.18 µs mean); A_NaivePerVoxel baseline (0.23 µs mean, constant time); **B_AABBPreFilter and D_BlockBased4x do NOT help** at 8³ scale (overhead > savings, 0.96-0.98× speedup). **All 5 strategies = 0 mismatches / 153,600 voxel-checks (100% boundary_ok across 300 configs).** **Crosses 5-10% threshold per `optimization-philosophy.md` MASSIVELY** (1.82× speedup = 82% relative perf gain, far above 1.10×). Max cost (0.33 µs p99 r=6.0) = **0.001% of 30 Hz frame budget** = negligible. 10 simultaneous explosions = 0.004% of frame budget. **Crater carve is the fastest voxel operation measured in ProjectV experiments** (14× faster than `voxel-mutation-cost-char` B_DirtyFlagDeferred 1.74 µs, 21× faster than `voxel-topology-analysis` CCL 2.73 µs, 23× faster than `chunk-damage-fracture-model` C_Greedy3D 2.88 µs). **Why E wins:** column-level pre-skip (`xzd² > r² → continue` early-reject for entire (x,z) column), pre-computed dx²/dz² hoisted out of inner loop, L1-cache-friendly 8-iter inner loop. **3-step mainline migration per `agent/knowledge.md §30.4` precedent** (~150 LoC mainline, M effort, 1-2 sessions, deferred до Stage 3.x chunk damage activation): Step 1 (XS, ~30 LoC) `src/voxel/CraterController.{hpp,cpp}` `CarveSphereFromChunk` + `PROJECTV_CRATER_CARVE=ON` env gate + per-chunk dirty flag propagation (per closed `voxel-mutation-cost-char` Step 1 B_DirtyFlagDeferred); Step 2 (S, ~80 LoC) GPU compute shader port `src/shaders/crater_carve.comp` (1 workgroup per chunk, 8×8×8 = 512 threads, same E algorithm with column-level pre-skip + dirty-chunks SSBO); Step 3 (XS, ~40 LoC) cross-chunk AABB dispatch (per `sphere_intersects_aabb` already in B strategy) + Tracy plot "Crater Carve Cost" + `ProjectVCraterCarveTests` unit test (3 sub-tests: 8³ uniform carve, cross-chunk AABB list, dirty-chunk propagation). **Cross-axis:** orthogonal к in-progress parallel (`tracy-gpu-vs-manual` profiling, `dynamic-battlefield-decal-system` Tier 0); **complementary** к closed `chunk-damage-fracture-model` [mixed, 2.88 µs C_Greedy3D = что остаётся после разрушения] + `voxel-topology-analysis` [yes, 2.73 µs CCL = post-carve connectivity check] + `dynamic-battlefield-decal-system` [mixed, 0.886 ms D_AtlasIndirectLRU = crater rim scorch decal spawn] + `ballistic-projectile-simulation` [yes, 14 ns B_TableLookup = bullet impact events → small craters] + `mesh-shader-mega-instancing` [mixed, 62-544× C_AmplificationShader = ejecta particles] + `voxel-mutation-cost-char` [mixed, 1.74 µs B_DirtyFlagDeferred = chunk dirty propagation]. **Inheritance от chunk-damage-fracture-model:** 8³ chunk scope: explosion leaves all voxels connected (CCL 1 component always), so для **structural separation** requires cross-chunk damage — этот experiment фокус на **carve void** (что убирается), не на debris generation. **Caveats:** (a) CPU-only prototype, GPU compute shader dispatch не измерен; (b) single-chunk scope (cross-chunk crater out of scope single-session); (c) no occlusion-correctness (sphere carves through obstacles — Leon 2026 cubemap-bake fix deferred to follow-up); (d) no power-decay material resistance (uniform material, Minecraft-style hardness deferred); (e) no ejecta particles / decals (cross-axis: separate experiments); (f) no mesh rebuild cost (Stage 2.x); (g) single-thread (parallelizable per `work-stealing-job-system` [closed yes]). См. [README](./experiments/2026-06-21-explosion-crater-terrain-deformation/README.md) + [STATUS](./experiments/2026-06-21-explosion-crater-terrain-deformation/STATUS.md) + [RESULTS](./experiments/2026-06-21-explosion-crater-terrain-deformation/RESULTS.md) + [sources](./experiments/2026-06-21-explosion-crater-terrain-deformation/sources.md) + `prototype/{crater_bench.cpp (370 LoC), build/crater_bench, build/results.csv (1505 lines, 174 KB)}`.
+
+- [x] **[2026-06-21-cover-system-terrain-adaptive](./experiments/2026-06-21-cover-system-terrain-adaptive/)** —
+  m, **Tier 2 AI, Tactical & Warfare Mechanics** (voxel terrain cover extraction + scoring).
+  **Closed `2026-06-21` (single session), verdict=`mixed`.** Web-research complete (15+ sources:
+  GlassBeaver CoverSystem [UE4, 184★, MIT], Arma Reforger SCR_AIFindCover, HatLink VoxelNavigation,
+  darbycostello Nav3D SVO, closed `voxel-topology-analysis` [0.19 µs overhang]).
+  Standalone C++26 CPU prototype `prototype/cover_bench.cpp` ~560 LoC (Clang 22.1.6, build green 0 errors,
+  2 cosmetic warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup =
+  **125,000 measurements**, wall time < 0.1 sec. Headline: A_NaiveBoundary recommended default
+  (0.79-2.03 µs, 64-256 cover points, 0 false negatives on FULL). C_OverhangDetect fastest
+  (0.55-1.20 µs). D_CornerDetect adds LEAN at +20-50% cost. E_HybridCover too expensive for per-chunk
+  (7.7-42.5 µs). Per-unit cached query = 0.01-0.1 µs (well under <0.5 µs hypothesis). 5 cover types
+  (FULL/PARTIAL/LEAN/OVERHEAD/SLOPE) classifiable. Integration: new `src/ai/CoverSystem.{hpp,cpp}`
+  module, A_NaiveBoundary default, 3-step migration ~500 LoC.
+  См. [README](./experiments/2026-06-21-cover-system-terrain-adaptive/README.md) +
+  [STATUS](./experiments/2026-06-21-cover-system-terrain-adaptive/STATUS.md) +
+  [sources](./experiments/2026-06-21-cover-system-terrain-adaptive/sources.md) +
+  `prototype/{cover_bench.cpp, build/results.csv (126 rows)}`.
+
+- [x] **[2026-06-21-dynamic-entity-lighting](./experiments/2026-06-21-dynamic-entity-lighting/)** —
+  m, **Stage 5.x Visual Polish** (dynamic entity-based lighting). **Closed `2026-06-21` (single session),
+  verdict=`mixed`.** Web research (15+ sources: OptiFine DynamicLights, LambDynamicLights, Starlight,
+  MC LightEngine). Standalone C++26 CPU prototype `prototype/dynamic_light_bench.cpp` ~600 LoC (GCC 16.1.1,
+  build green, 4 cosmetic warnings). 5 strategies × 5 scenes × 5 seeds × 5 entity_counts × 100 iter =
+  **62,500 main measurements**. **Headline:** E_GPUInjection (shader-based) = 0.05-0.36 µs CPU cost,
+  834× faster than B_FullBFS, PSNR 38.52-24.63 dB; D_RateLimited = 6-104 µs, PSNR 55.87-46.29 dB;
+  C_BudgetBFS = 16-47 µs, PSNR 92.68-28.65 dB. All strategies < 0.9% of 30 Hz frame budget.
+  **Integration:** 3-step implementation ~320 LoC, S effort, 1-2 sessions. Shader-based default + BFS fallback.
+  См. [README](./experiments/2026-06-21-dynamic-entity-lighting/README.md).
+
+- [x] **[2026-06-21-biome-transition-blending](./experiments/2026-06-21-biome-transition-blending/)** —
+  m, **Stage 4.1** (biome blending for GPU world gen). **Self-invented topic** per operator instruction
+  «выбирай свободную тему или придумывай свою и исследуй». **Closed `2026-06-21` (single session),
+  verdict=`mixed`.** Web research: 3 searches + 2 source fetches (Minecraft MultiNoise, Tantan 2025
+  Voronoi, NoisePosti.ng sparse conv, Cubiomes API, Aokana arXiv 2505.02017). Standalone C++26 CPU
+  analytical prototype `prototype/biome_blend_bench.cpp` ~250 LoC (Clang 22.1.6 `-O3 -march=native
+  -std=c++26`, build green, 2 warnings). 5 strategies × 4 scenes × 5 seeds × 1000 iter = 100 main
+  measurements. **Headline:** **C_DistanceBlend_BiL = Pareto-optimal** (smooth transitions, 0.640 µs/chunk,
+  4 B/chunk storage, GPU-friendly bilinear interpolation); **B_Noise2D_Hard** = cheapest noise-driven
+  (0.512 µs, 0 storage, hard edges); **A_HardThreshold** = cheapest (0.128 µs) but stair-step artifacts;
+  **E_MultiNoiseNearest** = most natural (0% material match by design = blended fractions) at 1.60 µs;
+  **D_VoronoiEdge** = most expensive (1.92 µs) with marginal quality gain over C. **Verdict=mixed:**
+  hypothesis confirmed for cost (C adds +25% vs sensible baseline B, well under 5% of total world gen
+  budget), but PSNR claim unverifiable without visual output. **Integration:** replace nearest-sample
+  in world_gen.comp with bilinear texture lookup + material interpolation. S effort, ~50 LoC.
+  См. [README](./experiments/2026-06-21-biome-transition-blending/README.md) +
+  [STATUS](./experiments/2026-06-21-biome-transition-blending/STATUS.md).
+
+- [x] **[2026-06-21-voxel-topology-analysis](./experiments/2026-06-21-voxel-topology-analysis/)** —
+  m, **Stage 3.x/4.x** (voxel topology analysis: CCL, overhangs, exposed surface). **Self-invented topic**
+  per operator instruction. **Closed `2026-06-21` (single session, verdict=`yes`).** Web-research complete
+  (11+ sources: Rosenfeld-Pflatz 1968, Wu-Otoo-Suzuki 2009 SAUF, LSL3D 2022, BUF GPU 2019, cc3d, Minecraft
+  structure locator, Tomcc cave culling). Standalone C++26 CPU prototype `prototype/topology_bench.cpp`
+  ~580 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, build green
+  2 cosmetic warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **125,000 main
+  measurements**, wall time < 0.5 sec на Zen 3 5800X governor=`powersave` per
+  `hardware-profile.md §1`. **Headline:** Union-Find CCL 26-conn = 2.73 µs mean (worst 6.81 µs);
+  Overhang detection = 0.19 µs mean; Exposed classify = 0.55 µs mean; Flood-fill = 2.32 µs mean.
+  All strategies **100-2500× within 50 µs Stage 4.1 budget**. **Critical finding:** Air CCL on 8³ alone
+  cannot detect disconnected cave systems (air always 1 component) — cross-chunk merging essential.
+  Solid CCL, overhang detection, exposed classification work immediately on 8³. Cross-axis: complementary
+  to closed `2026-06-21-flood-fill-visgraph-culling` (occlusion BFS — different output: face-visibility
+  vs component labels). **Integration:** 4-step migration ~600 LoC, M effort, 3-4 sessions.
+  См. [README](./experiments/2026-06-21-voxel-topology-analysis/README.md) +
+  [STATUS](./experiments/2026-06-21-voxel-topology-analysis/STATUS.md) +
+  `prototype/{topology_bench.cpp, build/results.csv (126 rows)}`.
+
+- [x] **[2026-06-21-cloudscape-rendering](./experiments/2026-06-21-cloudscape-rendering/)** —
+  m, **Stage 5.x Visual Polish** — volumetric cloud rendering axis (ray-marched procedural clouds). **Self-invented
+  topic** per operator instruction `2026-06-21` «выбирай свободную тему или придумывай свою исследуй»;
+  **0 of 50+ closed experiments covered cloudscapes** — fully fresh axis explicitly listed as "remaining Stage 5.x
+  axis" in closed `volumetric-fog-atmosphere-rendering` + `god-rays-crepuscular`. **Closed `2026-06-21` (single session,
+  ~1.5h), verdict=`mixed`.** Standalone C++26 CPU prototype ~180 LoC (Clang 22.1.6, build green 0 warnings).
+  5 strategies × 5 scenes × 5 seeds × 1000 iter = **125,000 main measurements**, wall time < 0.05 sec на Zen 3 5800X.
+  **Headline:** B_SingleLayerRayMarch = universal default (2.172 ms, 23.99 dB, VRAM 4.20 MiB); E_RTXRayMarchCloud =
+  fastest RTX option (1.769 ms, 27.19 dB); C_ThreeLayerNubis = quality opt-in (3.056 ms, 28.79 dB);
+  D_HybridFroxelCloud NOT recommended (10.9% of 30 Hz). **Per-platform tier matrix.** **3-step migration ~430 LoC,
+  M effort, 2-3 sessions. Default `PROJECTV_CLOUDS=SINGLE_LAYER`.** Deferred до Stage 5.x.
+  См. [README](./experiments/2026-06-21-cloudscape-rendering/README.md) +
+  [STATUS](./experiments/2026-06-21-cloudscape-rendering/STATUS.md).
+
+- [x] **[2026-06-21-depth-of-field-bokeh](./experiments/2026-06-21-depth-of-field-bokeh/)** —
+  m, **Stage 5.x Visual Polish** — depth of field / bokeh post-processing axis (self-invented per operator instruction;
+  **0 of 50+ closed experiments covered DOF** — fully fresh axis). **Closed `2026-06-21` (single session, ~40 min),
+  verdict=`mixed`.** Standalone C++26 CPU analytical prototype ~150 LoC (GCC 16.1.1, build green 0 warnings).
+  6 strategies × 5 scenes × 5 seeds = 150 configs. **Headline:** all production strategies cost 0.5-0.8 ms
+  = 1.6-2.3% of 30 Hz budget; BW-dominated (94%+). D_CircularSeparable recommended default (0.642 ms, 23.96 dB).
+  C_HexBokeh best quality (25.95 dB, +6.49 dB vs Gaussian). Sub-0.5 ms target missed by 0.02 ms (model noise).
+  Default `PROJECTV_DOF=CIRCULAR`, 3-step migration ~350 LoC, deferred до Stage 5.x.
+  См. [README](./experiments/2026-06-21-depth-of-field-bokeh/README.md) +
+  [STATUS](./experiments/2026-06-21-depth-of-field-bokeh/STATUS.md).
+
+- [x] **[2026-06-21-flood-fill-visgraph-culling](./experiments/2026-06-21-flood-fill-visgraph-culling/)** —
+  m, **Stage 2.x** (chunk occlusion culling). Closed `2026-06-21` verdict=`yes`. См. §In progress entry above.
+
+- [x] **[2026-06-21-voxel-gpu-shader-editor](./experiments/2026-06-21-voxel-gpu-shader-editor/)** —
+  l, **independent (modding)** — inline WGSL/Slang material shader editor for block visuals. **Closed `2026-06-21`
+  (single session, verdict=`yes`)**. Standalone C++26 CPU prototype `prototype/shader_editor_bench.cpp` ~500 LoC
+  (Clang 22.1.6, build green 0 warnings). 4 strategies × 5 scenes × 5 seeds × 1000 iter = 100,000 measurements.
+  **Headline:** Uber-shader approach adds negligible cost (~38 µs worst case at 1080p = 0.11% of 33 ms frame budget).
+  Runtime GLSL→SPIR-V compilation via libshaderc adds < 10 ms per shader. **B_UberShader recommended** (single pipeline,
+  10.3 KiB VRAM, 7 ms compile). C_CustomPipeline and D_Hybrid NOT recommended. **Mainline recommendation:** 3-step
+  migration ~600 LoC, S-M effort, deferred до Stage 6+. Cross-axis: orthogonal to closed programmable-voxels (gameplay
+  Lua/WASM axis). См. [README](./experiments/2026-06-21-voxel-gpu-shader-editor/README.md).
+
+- [x] **[2026-06-21-adaptive-palette-bitarray](./experiments/2026-06-21-adaptive-palette-bitarray/)** —
+  m, **Stage 4.x** (chunk storage runtime RAM). Closed `2026-06-21` verdict=`yes`. См. §In progress entry above.
+
+- [x] **[2026-06-21-trilinear-noise-interpolation](./experiments/2026-06-21-trilinear-noise-interpolation/)** —
+  m, **Stage 4.1** (world gen noise interpolation per `TODO.md §4.1`). Closed `2026-06-21` (single session),
+  verdict=`mixed`. **Coarse-grid noise interpolation experiment** — 5 strategies × 5 scenes × 5 seeds ×
+  100 iter = 12,500 measurements, wall time <1 sec на Zen 3 5800X governor=`powersave` per
+  `hardware-profile.md §1`. **Hypothesis (<1 dB PSNR for 2×2×2 trilerp) REJECTED** — actual PSNR 4.97 dB mean,
+  match rate 56%. **C_Trilerp_3** (3×3×3, 19× reduction) recommended = PSNR 30.22 dB, 12.6× speedup.
+  **D_Trilerp_4** (4×4×4, 8× reduction) = quality mode (36.23 dB, 6.7×). **E_Spline_2** (Catmull-Rom
+  undersampled) REJECTED. Web-research validated KdotJPG's trilerp critique. **Mainline recommendation:**
+  use 3×3×3 coarse grid for Stage 4.1 GPU world gen (~150 LoC, S effort, 1 session). Complementary к
+  closed `gpu-procedural-noise-compute-kernels` (OpenSimplex2 choice). Cross-axis: orthogonal to parallel
+  `adaptive-palette-bitarray` (Stage 4.x storage). См.
+  [README](./experiments/2026-06-21-trilinear-noise-interpolation/README.md) +
+  [STATUS](./experiments/2026-06-21-trilinear-noise-interpolation/STATUS.md) +
+  [RESULTS](./experiments/2026-06-21-trilinear-noise-interpolation/RESULTS.md) +
+  `prototype/{trilinear_noise_bench.cpp (~390 LoC), build/trilinear_noise_bench, build/results.csv (126 rows)}`.
+
+- [x] **[2026-06-21-bloom-post-processing](./experiments/2026-06-21-bloom-post-processing/)** —
+  m, **Stage 5.x Visual Polish** — bloom post-processing axis (self-invented per operator instruction;
+  **0 of 50+ closed experiments covered bloom** — fully fresh axis). **Closed `2026-06-21` (single session,
+  ~45 min), verdict=`yes`.** 6 strategies ∈ {A_NoBloom, B_GaussianPyramid, C_KawaseDual,
+  D_SeparableLattice, E_LensDirtComposite, F_AdaptiveThreshold}. Standalone C++26 CPU prototype
+  `prototype/bloom_bench.cpp` ~230 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra
+  -Wpedantic`, **build green 0 warnings**). 6 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup =
+  **150 configs × 1000 = 150,000 main measurements**, wall time < 1 sec на Zen 3 5800X governor=`powersave`
+  per `hardware-profile.md §1`. Output: `prototype/build/results.csv` (151 rows = 1 header + 150 data).
+  **Headline:** all strategies well under 0.5 ms hypothesis (max C_KawaseDual = 0.231 ms = 0.69% of 33.3 ms
+  30 Hz budget). **D_SeparableLattice** = universal default (0.170 ms, 80.6 dB/ms, 6 MiB VRAM);
+  **E_LensDirtComposite** = best quality (15.25 dB, 0.206 ms); **F_AdaptiveThreshold** = scene-adaptive skip.
+  **Crosses 5-10% threshold massively** (A→B = +6.22 dB = 77.8% relative gain). VRAM negligible (4-16 MiB =
+  0.08-0.32% of 5.06 GiB). **Mainline recommendation:** 3-step migration ~310 LoC, S effort, 1-2 sessions.
+  Default `PROJECTV_BLOOM=LATTICE`. Deferred до Stage 5.x dedicated session per `agent/workspace.md §2`.
+  **Cross-axis:** orthogonal to closed `volumetric-fog-atmosphere-rendering` (mixed, Stage 5.x fog) +
+  `god-rays-crepuscular` (mixed, Stage 5.x shafts) + `rtx-screen-space-reflections` (mixed, Stage 5.x
+  reflection) — all 3 visual polish axes now complemented by bloom (fourth Stage 5.x axis);
+  complementary to closed `taa-motion-vectors` (yes, TAA resolve precedes bloom in post-process slot).
+  См. [README](./experiments/2026-06-21-bloom-post-processing/README.md) +
+  [STATUS](./experiments/2026-06-21-bloom-post-processing/STATUS.md) +
+  `prototype/{bloom_bench.cpp, CMakeLists.txt, README.md, build/bloom_bench, build/results.csv (151 rows)}`.
 
 - [x] **[2026-06-21-god-rays-crepuscular](./experiments/2026-06-21-god-rays-crepuscular/)** —
   m, **Stage 5.x Visual Polish** (god rays / crepuscular rays / sun shafts axis — **0 of 50+ closed
@@ -2062,6 +2813,28 @@
   `prototype/{chunk_compress_bench.cpp (~800 LoC), CMakeLists.txt, README.md}` +
   `prototype/build/{chunk_compress_bench, results.csv (251 rows × 11 cols, 49 KB), summary_means.csv (26 rows)}`.
 
+- [x] **[2026-06-21-aerial-perspective](./experiments/2026-06-21-aerial-perspective/)** —
+  m, **Stage 5.x Visual Polish** — aerial perspective rendering axis. **Self-invented topic** per operator
+  instruction; **remaining Stage 5.x axis** per closed `volumetric-fog-atmosphere-rendering` listing.
+  **Closed `2026-06-21` (single session, verdict=`yes`).** Standalone C++26 CPU prototype ~280 LoC
+  (Clang 22.1.6, build green 0 warnings). 5 strategies × 5 scenes × 5 seeds × 4000 samples = 125 configs.
+  **Headline:** D_ExponentialHeightFog recommended default (8.53 dB PSNR, 0.004 ms, zero VRAM); all strategies
+  < 0.02 ms = < 0.05% of 30 Hz. **3-step migration ~50 LoC, XS effort, 1 session.** Default
+  `PROJECTV_AERIAL_PERSPECTIVE=EXP_HEIGHT`. Deferred до Stage 5.x.
+   См. [README](./experiments/2026-06-21-aerial-perspective/README.md).
+
+- [x] **2026-06-21-chunk-damage-fracture-model** — m, **Stage 3.x** (voxel chunk fracture on explosion/impact).
+  **Closed `2026-06-21` (single session, verdict=`mixed`).** Standalone C++26 CPU prototype `prototype/fracture_bench.cpp`
+  ~480 LoC (Clang 22.1.6, build green 0 warnings). 5 strategies × 5 scenes × 5 seeds × 1000 iter = 125,000 measurements.
+  **Headline:** C_Greedy3D = practical winner (2.88 µs, 8.2× reduction); D_Voronoi = highest reduction (1.48 µs, 88×) but
+  topology-unaware; B_CCL = 431× reduction but always 1 component (single-chunk explosions leave all remaining voxels
+  connected). All strategies well within budget. **Integration:** 3-step ~150 LoC, S effort, deferred until per-voxel damage
+   added. См. [README](./experiments/2026-06-21-chunk-damage-fracture-model/README.md).
+
+- [x] **[2026-06-21-luajit-scripting-hotpath-cost](./experiments/2026-06-21-luajit-scripting-hotpath-cost/)** — m, **Stage 6.x** (LuaJIT hot path performance). **Closed `2026-06-21` (single session), verdict=`mixed`.** Web-research complete (15+ sources). C++26 CPU analytical prototype ~290 LoC, build green 0 warnings. 150 measurements. FFI_struct = 22.6 ns (4× native), pcall_warm = 145 ns (25×), sol2 = 1.13 µs (195× — catastrophic). FFI < 2% of 30 Hz budget; sol2 worst 117% ❌. GC = 18% of pcall cost. **Integration:** FFI for hot paths, pcall for events, sol2 banned on hot paths. Deferred до Stage 6.x. См. [README](./experiments/2026-06-21-luajit-scripting-hotpath-cost/README.md).
+
+- [x] **[2026-06-21-voxel-hydraulic-erosion](./experiments/2026-06-21-voxel-hydraulic-erosion/)** — m, **Stage 4.1 World Gen polish** (voxel terrain hydraulic erosion: GPU pipe model, CPU particle droplet, CPU pipe model, slope method). Self-invented per operator instruction. **Closed `2026-06-21` (single session), verdict=`mixed`.** GPU pipe model validated at 11.7 µs/iter (40× faster than CPU, not <1 µs but viable). CPU particle at 3.5 µs/iter = faster than pipe model (hypothesis inverted). Slope method NOT applicable at default threshold for procedural terrain. All CPU methods < 0.5 ms/iter for 128×128 grid. **Integration:** erosion.comp compute shaper ~300 LoC, default OFF until Stage 4.1, S-M effort, 1-2 sessions. См. [README](./experiments/2026-06-21-voxel-hydraulic-erosion/README.md) + [STATUS](./experiments/2026-06-21-voxel-hydraulic-erosion/STATUS.md).
+
 ## Rejected (без старта, с обоснованием)
 
-- _нет_
+- _нет_                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
