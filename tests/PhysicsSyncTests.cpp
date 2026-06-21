@@ -317,6 +317,36 @@ void TestRebuildStaticWorldBodyFromChunkShapesAfterEdit(TestContext &context)
 	context.Pass();
 }
 
+void TestPhysicsSyncBoundaryEditTriggersMultiChunkRebuild(TestContext &context)
+{
+	PhysicsState *physics = CreatePhysicsState();
+	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	if (!SyncPhysicsWorld(physics, world.get())) {
+		context.Fail(__LINE__, "Initial sync must succeed");
+		DestroyPhysicsState(physics);
+		return;
+	}
+
+	const Int3 boundaryEdit = {world->min.x + 8, 1, 0};
+	SetVoxelMaterial(*world, boundaryEdit, VoxelMaterial::Glass, physics);
+
+	if (!SyncPhysicsWorld(physics, world.get())) {
+		context.Fail(__LINE__, "Boundary edit sync must succeed");
+		DestroyPhysicsState(physics);
+		return;
+	}
+
+	if (GetChunkBodyCount(physics) < 2u) {
+		context.Fail(__LINE__, "Boundary edit must populate at least 2 chunk bodies");
+	}
+	if (!RebuildStaticWorldBodyFromChunkShapes(*physics, *world)) {
+		context.Fail(__LINE__, "RebuildStaticWorldBodyFromChunkShapes must succeed after multi-chunk edit");
+	}
+
+	DestroyPhysicsState(physics);
+	context.Pass();
+}
+
 void TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
@@ -400,6 +430,7 @@ int main()
 	TestFluidAirTransitionDoesNotQueuePhysicsRebuild(context);
 	TestRebuildStaticWorldBodyFromChunkShapesAfterEdit(context);
 	TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity(context);
+	TestPhysicsSyncBoundaryEditTriggersMultiChunkRebuild(context);
 	TestFluidCABumpOnSmallFlatWorldStaysFast(context);
 	TestFluidCAPerTickCostOnFlatBenchSizedWorld(context);
 

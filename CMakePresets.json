@@ -269,10 +269,14 @@
          "ProjectVPhysicsIncrementalJoltTests",
          "ProjectVPhysicsSyncTests",
          "ProjectVFrustumCullBenchmark",
-         "ProjectVShadowProjectionBenchmark"
-       ]
-     },
-     {
+         "ProjectVShadowProjectionBenchmark",
+         "ProjectVGraphicsPushConstantsTests",
+         "ProjectVLodDownsampleGpuConsumeTests",
+         "ProjectVNanoVdbTests",
+         "ProjectVVisibilityCacheHashTests"
+        ]
+      },
+      {
       "name": "windows-clang-debug-smoke",
       "displayName": "Build and run runtime smoke (Dev)",
       "configurePreset": "windows-clang-debug",
@@ -323,10 +327,14 @@
          "ProjectVPhysicsIncrementalJoltTests",
          "ProjectVPhysicsSyncTests",
          "ProjectVFrustumCullBenchmark",
-         "ProjectVShadowProjectionBenchmark"
-       ]
-     },
-     {
+         "ProjectVShadowProjectionBenchmark",
+         "ProjectVGraphicsPushConstantsTests",
+         "ProjectVLodDownsampleGpuConsumeTests",
+         "ProjectVNanoVdbTests",
+         "ProjectVVisibilityCacheHashTests"
+        ]
+      },
+      {
        "name": "linux-clang-debug-build",
       "displayName": "Build ProjectV + tests (Dev)",
       "configurePreset": "linux-clang-debug",
@@ -369,11 +377,15 @@
          "ProjectVPhysicsIncrementalJoltTests",
          "ProjectVPhysicsSyncTests",
          "ProjectVFrustumCullBenchmark",
-         "ProjectVShadowProjectionBenchmark"
-       ]
-     },
-     {
-       "name": "windows-clang-release-build",
+         "ProjectVShadowProjectionBenchmark",
+         "ProjectVGraphicsPushConstantsTests",
+         "ProjectVLodDownsampleGpuConsumeTests",
+         "ProjectVNanoVdbTests",
+         "ProjectVVisibilityCacheHashTests"
+        ]
+      },
+      {
+      "name": "windows-clang-release-build",
       "displayName": "Build ProjectV + tests (Release)",
       "configurePreset": "windows-clang-release",
       "targets": [
