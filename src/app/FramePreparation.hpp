@@ -2,7 +2,7 @@
 
 #include "core/Types.hpp"
 
-bool PrepareFrameRenderData(
+[[nodiscard]] bool PrepareFrameRenderData(
 	VulkanContextState *context,
 	const SwapchainState *swapchain,
 	const CameraState *camera,

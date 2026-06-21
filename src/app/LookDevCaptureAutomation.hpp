@@ -4,7 +4,7 @@
 
 void ApplyStartupCameraOverrideFromEnvironment(CameraState *camera);
 void ConfigureLookDevCaptureAutomationFromEnvironment(LookDevCaptureAutomationState *automation);
-bool UpdateLookDevCaptureAutomation(
+[[nodiscard]] bool UpdateLookDevCaptureAutomation(
 	LookDevCaptureAutomationState *automation,
 	RenderState *render);
 

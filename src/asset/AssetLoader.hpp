@@ -32,11 +32,11 @@ struct LoadAssetError {
 	std::string message;
 };
 
-std::unique_ptr<LoadedAsset> LoadGlb(
+[[nodiscard]] std::unique_ptr<LoadedAsset> LoadGlb(
 	const std::string &path,
 	LoadAssetError *outError = nullptr);
 
-std::string_view GetAssetLoaderLastErrorMessage();
+[[nodiscard]] std::string_view GetAssetLoaderLastErrorMessage();
 
 
 struct GlbDimensions {
@@ -45,7 +45,7 @@ struct GlbDimensions {
 	glm::vec3 size{0.0f};
 };
 
-std::optional<GlbDimensions> ComputeGlbDimensions(
+[[nodiscard]] std::optional<GlbDimensions> ComputeGlbDimensions(
 	const std::string &path,
 	LoadAssetError *outError = nullptr);
 

@@ -6,7 +6,7 @@ namespace projectv::audio {
 class AudioEngine;
 } // namespace projectv::audio
 
-bool UpdateApp(
+[[nodiscard]] bool UpdateApp(
 	PlatformState *platform,
 	SimulationState *simulation,
 	CameraState *camera,

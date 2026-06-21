@@ -33,7 +33,7 @@ class AssetRegistry {
 	AssetRegistry &operator=(const AssetRegistry &) = delete;
 
 
-	std::expected<const LoadedAsset *, AssetLoadError> Load(const std::string &id, const std::string &path);
+	[[nodiscard]] std::expected<const LoadedAsset *, AssetLoadError> Load(const std::string &id, const std::string &path);
 
 
 	const LoadedAsset *Get(const std::string &id) const;

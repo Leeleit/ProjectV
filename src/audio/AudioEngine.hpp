@@ -53,7 +53,7 @@ class AudioEngine {
 	AudioEngine(const AudioEngine &) = delete;
 	AudioEngine &operator=(const AudioEngine &) = delete;
 
-	bool init();
+	[[nodiscard]] bool init();
 
 	void shutdown();
 
