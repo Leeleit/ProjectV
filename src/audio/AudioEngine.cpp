@@ -5,6 +5,8 @@
 #include "fmt/format.h"
 
 #include <algorithm>
+#include <functional>
+#include <stop_token>
 
 void DestroyAudioEngine(projectv::audio::AudioEngine *engine)
 {
@@ -102,6 +104,12 @@ bool AudioEngine::init()
 
 void AudioEngine::shutdown()
 {
+	if (m_scanThread.joinable()) {
+		m_scanThread.request_stop();
+		m_scanThread.join();
+	}
+	m_scanInProgress.store(false);
+
 	unloadCurrentTrack();
 
 	if (m_musicGroupInitialized) {
@@ -426,11 +434,21 @@ void AudioEngine::RefreshPlaylistAsync()
 		return;
 	}
 	if (m_scanThread.joinable()) {
+		m_scanThread.request_stop();
 		m_scanThread.join();
 	}
 	m_scanInProgress.store(true);
-	m_scanThread = std::thread([this]() {
+	m_scanThread = std::jthread([this](std::stop_token stopToken) {
+		const std::stop_callback<std::function<void()>> onStop(stopToken, [this]() {
+			m_scanInProgress.store(false);
+		});
+		if (stopToken.stop_requested()) {
+			return;
+		}
 		const std::lock_guard<std::mutex> lock(m_playlistMutex);
+		if (stopToken.stop_requested()) {
+			return;
+		}
 		scanPlaylist();
 		m_scanInProgress.store(false);
 	});

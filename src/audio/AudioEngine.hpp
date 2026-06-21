@@ -119,7 +119,7 @@ class AudioEngine {
 
 	std::mutex m_playlistMutex;
 	std::atomic<bool> m_scanInProgress{false};
-	std::thread m_scanThread;
+	std::jthread m_scanThread;
 
 	std::string m_currentTrackName;
 	std::string m_currentArtist;
