@@ -95,10 +95,12 @@ struct VoxelSceneLighting {
 	std::array<float, 4> taaHistoryParams{};
 
 	std::array<float, 4> taaLayerHistoryParams{};
+	std::array<float, 4> vctParams{};
+	std::array<float, 4> vctSpecularParams{};
 };
 static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
 static_assert(std::is_trivially_copyable_v<VoxelSceneLighting>);
-static_assert(sizeof(VoxelSceneLighting) == 624);
+static_assert(sizeof(VoxelSceneLighting) == 656);
 static_assert(offsetof(VoxelSceneLighting, skyColorAndFogDensity) == 0);
 static_assert(offsetof(VoxelSceneLighting, horizonColorAndFogStart) == 16);
 static_assert(offsetof(VoxelSceneLighting, groundColorAndFogMax) == 32);
@@ -120,6 +122,8 @@ static_assert(offsetof(VoxelSceneLighting, taaParams) == 512);
 static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 528);
 static_assert(offsetof(VoxelSceneLighting, taaHistoryParams) == 592);
 static_assert(offsetof(VoxelSceneLighting, taaLayerHistoryParams) == 608);
+static_assert(offsetof(VoxelSceneLighting, vctParams) == 624);
+static_assert(offsetof(VoxelSceneLighting, vctSpecularParams) == 640);
 
 constexpr size_t kVoxelMaterialCount = 5;
 

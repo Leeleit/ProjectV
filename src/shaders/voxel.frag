@@ -44,6 +44,8 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
     vec4 taaLayerHistoryParams;
+    vec4 vctParams;
+    vec4 vctSpecularParams;
 } sceneLighting;
 
 layout(set = 0, binding = 4) uniform sampler2DArrayShadow sunShadowMap;
@@ -54,6 +56,8 @@ layout(set = 0, binding = 5, std430) readonly buffer PackedChunkVoxelPayload {
 
 
 layout(set = 0, binding = 6) uniform sampler2D layerHistory;
+
+layout(set = 0, binding = 11) uniform sampler3D vctClipmap;
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
@@ -86,6 +90,66 @@ const uint kSunContactShadowMaxSteps = 12u;
 const uint kAmbientOcclusionMaxSteps = 4u;
 const uint kLocalPointLightShadowMaxSteps = 12u;
 const float kHugeRayT = 1e20;
+const float kVctCutoffRoughness = 0.3f;
+const float kVctMaxDistanceMeters = 64.0f;
+const uint kVctMaxMipLevel = 4u;
+
+// EVIL: kVctConeDirectionCount=6. Matches TODO.md §5.1 explicit "6 широких конусов"
+// diffuse cone tracing. Cones are aligned to the world axes with small upward bias to
+// avoid singularity at the floor (Y=0); for full 16/32-cone production quality upgrade
+// see WickedEngine VXGI (turanszkij) cone tables.
+const uint kVctConeDirectionCount = 6u;
+const vec3 kVctConeDirections[6] = vec3[6](
+    vec3(1.0, 0.1, 0.0),
+    vec3(-1.0, 0.1, 0.0),
+    vec3(0.0, 0.1, 1.0),
+    vec3(0.0, 0.1, -1.0),
+    vec3(0.0, 1.0, 0.0),
+    vec3(0.0, -0.2, 0.0));
+
+vec3 VctSampleDirectionalCone(
+    const vec3 worldOrigin,
+    const vec3 coneDir,
+    const float coneHalfApertureTan,
+    const float maxDistance,
+    const uint maxMipLevel) {
+    const float maxT = min(maxDistance, kVctMaxDistanceMeters);
+    const float mipLevel = clamp(log2(maxT) * 0.5, 0.0, float(maxMipLevel));
+    const float blendFalloff = clamp(coneHalfApertureTan, 0.05, 0.6);
+    const vec3 nDir = normalize(coneDir);
+
+    vec3 accum = vec3(0.0);
+    float weight = 0.0;
+    for (int i = 0; i < 3; ++i) {
+        const float t = maxT * (float(i) + 0.5) / 3.0;
+        const vec3 samplePos = worldOrigin + nDir * t;
+        const vec3 clipUvw = samplePos / float(kVctMaxDistanceMeters * 2) + 0.5;
+        if (any(lessThan(clipUvw, vec3(0.0))) || any(greaterThan(clipUvw, vec3(1.0)))) {
+            continue;
+        }
+        const float w = 1.0 / (1.0 + blendFalloff * float(i));
+        accum += textureLod(vctClipmap, clipUvw, mipLevel).rgb * w;
+        weight += w;
+    }
+    return weight > 0.0 ? accum / weight : vec3(0.0);
+}
+
+vec3 VctSampleReflectionCone(
+    const vec3 worldOrigin,
+    const vec3 viewDirection,
+    const vec3 normal,
+    const float roughness,
+    const float maxDistance,
+    const uint maxMipLevel) {
+    const vec3 reflectionDir = reflect(-viewDirection, normal);
+    const float coneAperture = clamp(roughness * 0.6, 0.05, 0.6);
+    return VctSampleDirectionalCone(
+        worldOrigin,
+        reflectionDir,
+        coneAperture,
+        maxDistance,
+        maxMipLevel);
+}
 
 #define DDA_BODY(MAX_STEPS, TRAVELED_OP, PRED, RETURN_EXPR, DEFAULT_RETURN) \
     for (uint stepIndex = 0u; stepIndex < (MAX_STEPS); ++stepIndex) { \
@@ -800,6 +864,42 @@ void main() {
     ambientStrength *
     ambientOcclusion *
     ambientVisibility;
+
+    const bool vctEnabled = sceneLighting.vctParams.w > 0.5;
+    const float vctConeApertureTan = clamp(sceneLighting.vctParams.x, 0.05, 0.6);
+    const float vctMaxDistance = max(sceneLighting.vctParams.y, 0.0);
+    vec3 vctDiffuseIrradiance = vec3(0.0);
+    if (vctEnabled) {
+        for (uint coneIndex = 0u; coneIndex < kVctConeDirectionCount; ++coneIndex) {
+            const vec3 rotated = normalize(
+                mat3(pushConstants.viewProjection) * kVctConeDirections[coneIndex]);
+            vctDiffuseIrradiance += VctSampleDirectionalCone(
+                inWorldPosition,
+                rotated,
+                vctConeApertureTan,
+                vctMaxDistance,
+                kVctMaxMipLevel);
+        }
+        vctDiffuseIrradiance /= float(kVctConeDirectionCount);
+    }
+
+    const vec3 vctDiffuse = vctEnabled
+        ? vctDiffuseIrradiance * albedo * (1.0 / 3.14159265) * ambientVisibility
+        : vec3(0.0);
+
+    vec3 vctSpecular = vec3(0.0);
+    if (vctEnabled && roughness > kVctCutoffRoughness) {
+        const vec3 reflectionIrradiance = VctSampleReflectionCone(
+            inWorldPosition,
+            viewDirection,
+            normal,
+            roughness,
+            vctMaxDistance,
+            kVctMaxMipLevel);
+        const float fresnel = pow(1.0 - nDotV, 5.0);
+        vctSpecular = reflectionIrradiance * (0.04 + 0.96 * fresnel) * (1.0 - metallic);
+    }
+
     const vec3 directSun = EvaluateDirectLighting(
     sunDirection,
     shadowedSunColor,
@@ -824,7 +924,7 @@ void main() {
     const float grazing = pow(1.0 - nDotV, 5.0);
     const vec3 mediumTint = material.medium.rgb;
     const vec3 grazingTint = mediumTint * material.medium.w * grazing * (1.0 - metallic) * 0.12;
-    vec3 color = ambient + directSun + localDirect + grazingTint;
+    vec3 color = ambient + directSun + localDirect + grazingTint + vctDiffuse + vctSpecular;
 
     if (material.medium.w > 0.0) {
         float transmission = material.medium.w * mix(0.35, 1.0, wrappedDiffuse);

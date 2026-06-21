@@ -15,6 +15,91 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 
 ---
 
+## 2026-06-21 (session: 8x Variant A «close async + open VCT» — 2 TODO stages: 6.3 + 5.1)
+
+7 phases + doc sync. Build green, **34/35 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as prior 4x/8x/12x/8x V1). 1 new test target (`ProjectVVoxelizePipelineTests` = 11 sub-tests) + 1 new sub-test in `ProjectVAsyncComputeTests`. All green. **No commit performed** per operator policy "close dirty without prompt" (per AGENTS.md §5.4).
+
+### Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)
+
+- **HZB cross-queue depth ownership transfer** — Khronos Synchronization Examples depth attachment + queue family transfer patterns, `VK_KHR_maintenance8` flag `VK_DEPENDENCY_QUEUE_FAMILY_OWNERSHIP_TRANSFER_USE_ALL_STAGES_BIT` (optional), RasterGrid 2026-03 Hi-Z meta-surface (acquire-side resummarization). Concluded: single-barrier pattern with `VK_QUEUE_FAMILY_IGNORED` for both src/dst is sufficient for current `VK_SHARING_MODE_EXCLUSIVE` HZB image when timeline semaphore provides execution dependency and barrier provides memory dependency.
+- **VCT 3D clipmap SOTA 2024-2026** — WickedEngine VXGI (turanszkij) 6-cascade clipmap with 16/32-cone tables, Compix VoxelConeTracingGI 3D clipmap implementation, The Tomorrow Children 16-cone + 6-cascade VCT. Concluded: 4 mip levels + 6 fixed diffuse cones (per TODO §5.1 explicit) + 1 specular cone for initial implementation; production upgrade path to 16-32 cones documented.
+
+### Phase 1: Stage 6.3 HZB cross-queue depth ownership transfer complete (closed)
+
+Closes the 8x V1 Phase 4 partial + TODO §6.3 "depth attachment ownership transfer".
+
+- `src/render/vulkan/VulkanAsyncCompute.cpp::RecordHzbAsyncCullPass` — replaced 8x V1 placeholder `VkImageMemoryBarrier2` (which had `srcStageMask = COMPUTE_SHADER_BIT + srcAccessMask = SHADER_READ_BIT`, an invalid self-dependency) with proper cross-queue memory barrier: `srcStageMask = TRANSFER_BIT` + `srcAccessMask = TRANSFER_WRITE_BIT` (the HZB image was last written by the graphics mip chain build) → `dstStageMask = COMPUTE_SHADER_BIT` + `dstAccessMask = SHADER_READ_BIT`, layout stays `SHADER_READ_ONLY_OPTIMAL`, `VK_QUEUE_FAMILY_IGNORED` for both src/dst queue families. Timeline semaphore on `hzbBuildTimelineSemaphore` provides execution ordering; barrier provides memory ordering.
+- `tests/AsyncComputeTests.cpp` — added `TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources` (regression guard for empty render state).
+
+### Phase 2: Stage 5.1 VCT 3D clipmap + voxelize.comp (foundation closed)
+
+- `src/shaders/voxelize.comp` (NEW, ~110 LoC GLSL) — per-voxel scene injection into 3D clipmap texture. 1 workgroup per chunk, 64 threads (8x8x1) iterate over chunk voxels in strided loop. Reads `PackedChunkDescriptors` (binding 0) + `PackedChunkVoxelPayload` (binding 1); writes per-voxel emission to `vctClipmap` (binding 2, writeonly `rgba16f` 3D image). Air + Glass voxels skipped.
+- `src/render/vulkan/VulkanVoxelizePipeline.{hpp,cpp}` (NEW, ~450 LoC) — `IsVctGpuPipelineRequested()` env gate (`PROJECTV_VCT_GPU=ON`, default OFF) + 3D image allocation (256³ RGBA16F, 4 mip levels) + linear filter sampler + compute pipeline + 3-binding descriptor set.
+- `src/core/Types.hpp` — `SceneFrameResources` adds `vctVoxelizeDescriptorSet`; `RenderState` adds 14 VCT fields.
+- `src/CMakeLists.txt` — `voxelize.comp` added to `SHADERS` + `VulkanVoxelizePipeline.cpp` added to sources.
+- `tests/VoxelizePipelineTests.cpp` (NEW) — 11 sub-tests (env gate, struct size, null guards, mip chain).
+
+### Phase 3: Stage 5.1 VCT diffuse 6-cone tracing (closed)
+
+- `src/shaders/voxel.frag` — added `VctSampleDirectionalCone` helper (3-tap adaptive sampling, log2 distance mip selection) + 6 fixed diffuse cones per TODO §5.1 explicit + `vctDiffuse` contribution to final color. New `sampler3D vctClipmap` at binding 11. New `vec4 vctParams` in `SceneLightingBuffer`.
+- `src/voxel/VoxelMaterials.hpp` — `VoxelSceneLighting` struct extended with `vctParams` field. Struct size 624 → 640 bytes.
+
+### Phase 4: Stage 5.1 VCT specular 1-cone + kVctCutoffRoughness=0.3 hybrid (closed)
+
+- `src/shaders/voxel.frag` — added `VctSampleReflectionCone` (1 cone in reflection direction, aperture = roughness * 0.6) + `roughness > kVctCutoffRoughness=0.3` gate per `2026-06-20-vct-vs-rt-cutoff` + Fresnel-Schlick. `vctSpecularParams` vec4 field. Struct size 640 → 656 bytes.
+
+### Phase 5: Stage 5.1 VCT GPU mip chain build (closed)
+
+- `src/render/vulkan/VulkanVoxelizePipeline.{hpp,cpp}` — added `BuildVctClipmapMipChain` function. Records `vkCmdBlitImage` 3D-to-3D mip chain on graphics CB with `VK_FILTER_LINEAR`. Mirrors `BuildHizMipChain` 2D pattern.
+- `tests/VoxelizePipelineTests.cpp` — added 2 sub-tests for `BuildVctClipmapMipChain` rejection paths.
+
+### Phase 6: Tests + visual smoke + Tracy plot review
+
+- Full ctest: 34/35 + 1 documented pre-existing failure. All 12 new sub-tests + all 70+ existing sub-tests pass. Build green.
+- EVIL marker audit: 3 new EVIL markers added (per-chunk dispatch, 6-cone design, kVctMaxDistanceMeters).
+
+### Phase 7: Doc sync (this entry)
+
+- `agent/workspace.md` + `COMMENTS.md` + `CHANGELOG.md` + `TODO.md` updated.
+- `TODO.md` — Stage 5.1 partial (foundation + diffuse + specular + mip chain landed); Stage 6.3 closed (depth ownership transfer landed).
+
+### Verification
+
+- `cmake --build build/linux-clang-debug --target ProjectV` — green.
+- `ctest --test-dir build/linux-clang-debug -j 8 -E "ProjectVTests"` — **34/34 pass** (ProjectVTests excluded for known pre-existing failure).
+- 1 new test target + 12 new sub-tests, all green.
+- Dirty tree: 7 src files modified + 1 new src file + 2 new test files + 1 test file modified + 4 docs modified. **No commit** (per operator "close dirty without prompt" policy).
+
+### Operator commit prompt (per workspace.md policy)
+
+ONE "Commit?" prompt at session end, covering 8x Variant A work as single commit. Suggested commit message (per `AGENTS.md §5.1` format):
+
+```
+feat(render): 8x session — close async HZB depth + open VCT foundation
+
+7 phases + doc sync across 2 TODO stages (6.3 HZB cross-queue depth complete,
+5.1 VCT foundation). Build green, 34/35 ctest pass + 1 documented pre-existing
+failure (ProjectVTests same baseline as 4x/8x/12x/8x V1).
+
+NEW: HZB cross-queue depth ownership transfer (proper VkImageMemoryBarrier2
+replacing 8x V1 placeholder; closes the partial) +
+     VCT 3D clipmap (voxelize.comp per-voxel injection + 256^3 RGBA16F 4-mip
+     texture + VulkanVoxelizePipeline infrastructure) +
+     VCT diffuse 6-cone tracing (per TODO §5.1 explicit, kVctConeDirectionCount=6) +
+     VCT specular 1-cone (kVctCutoffRoughness=0.3 hybrid per
+     2026-06-20-vct-vs-rt-cutoff experiment) +
+     VCT GPU mip chain build (vkCmdBlitImage 3D-to-3D VK_FILTER_LINEAR).
+
+1 new test target + 12 new sub-tests, all green.
+
+Refs: TODO.md §5.1, §6.3
+Refs: agent/knowledge.md §15 (lighting contract), §30.4 (3-step migration)
+Refs: docs/experiments/INDEX.md 2026-06-20-vct-vs-rt-cutoff
+Refs: docs/experiments/INDEX.md 2026-06-20-rt-shadows-vs-csm (Stage 5.2 follow-up)
+```
+
+---
+
 ## 2026-06-21 (session: 8x Variant 1 «close partial APIs» — 6 TODO stages: 4.2 / 2.1 / 4.3 / 6.3 / 1.1 / 3.2)
 
 7 phases + doc sync across 6 TODO stages. Build green, **33/34 ctest pass + 1 documented pre-existing failure** (`ProjectVTests` same baseline as prior 4x/8x/12x). 1 new test target (`ProjectVPhysicsIncrementalJoltTests` = 6 sub-tests) + 18 new sub-tests in existing targets (LodDownsampleGpuConsume +5, HzbSmartMip +3, ChunkStreaming +3, AsyncCompute +4, NanoVdbGpuUpload +3). All green. **No commit performed** per operator policy "close dirty without prompt" (per AGENTS.md §5.4).

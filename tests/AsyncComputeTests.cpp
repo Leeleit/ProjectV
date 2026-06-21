@@ -123,6 +123,26 @@ void TestHzbBuildTimelineSemaphoreDefaultsNull(TestContext &context)
 	}
 }
 
+void TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(TestContext &context)
+{
+	VulkanContextState contextState{};
+	RenderState render{};
+	std::array<float, 16> identityMatrix{};
+	identityMatrix.fill(0.0f);
+	identityMatrix[0] = 1.0f;
+	identityMatrix[5] = 1.0f;
+	identityMatrix[10] = 1.0f;
+	identityMatrix[15] = 1.0f;
+	if (projectv::render::RecordHzbAsyncCullPass(
+			VK_NULL_HANDLE,
+			contextState,
+			render,
+			*reinterpret_cast<const float (*)[16]>(identityMatrix.data()),
+			0u)) {
+		context.Fail(__LINE__, "RecordHzbAsyncCullPass(empty render) must return false");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -136,6 +156,7 @@ int main()
 	TestSubmitToComputeQueueRejectsNullContext(context);
 	TestSubmitToComputeQueueRejectsNullCommandBuffer(context);
 	TestRecordHzbAsyncCullPassRejectsNullCommandBuffer(context);
+	TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(context);
 	TestSubmitHzbAsyncCullToComputeQueueRejectsNullContext(context);
 	TestSubmitHzbAsyncCullToComputeQueueRejectsNullCommandBuffer(context);
 	TestHzbBuildTimelineSemaphoreDefaultsNull(context);

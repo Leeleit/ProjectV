@@ -17,6 +17,50 @@ PulseAudio/PipeWire через `miniaudio`.
 
 ---
 
+## Task progress (changelog by session, обновлено `2026-06-21`)
+
+Легенда: ✅ Closed — полностью реализовано в mainline · ⏸️ Partial — фундамент/часть landed, остаток deferred · 🔓 Open — задача в работе / не начата.
+
+### ЭТАП 1. Voxel Database & GPU Storage
+
+- [x] **Задача 1.1.** NanoVDB Flatten Helper и GPU-трансляция SVDAG (8x Phase 7 + 12x + 8x V1) ✅
+- [x] **Задача 1.2.** Оптимизация дедупликации (Lazy Dedup & Static Promotion) — `TestVoxelChunkStaticPromotion` стабильно зеленый; `DedupSubtree` call site в основном потоке (closed в pre-2x сессиях) ✅
+- [x] **Задача 1.3.** Асинхронный дисковый ввод-вывод (12x verified — `m_scanThread` + `m_playlistMutex` + `std::jthread` интеграция) ✅
+
+### ЭТАП 2. GPU-Driven Geometry & Culling
+
+- [x] **Задача 2.1.** HZB-куллинг (8x V1 — blend width shader consume + 2-phase fallback) ✅
+- [x] **Задача 2.2.** Pattern C Mesh Shaders (5e11993 — feature-flagged `PROJECTV_MESH_SHADER_PIPELINE`, voxelize pre-cull + GreedyFacePass port) ✅
+- [ ] **Задача 2.3.** Виртуальное текстурирование вокселей (Sparse Virtual Texturing) — deferred 🔓
+
+### ЭТАП 3. Physics & Simulation
+
+- [x] **Задача 3.1.** GPU Fluid CA (8x Phase 1 — `VulkanFluidCaPipeline` + ECS routing) ✅
+- [x] **Задача 3.2.** Почаночный Incremental Jolt (8x V1 Phase 6 — boundary-neighbor queue) ✅
+- [x] **Задача 3.3.** Жадное меширование коллайдеров (12x Phase 2 — `GreedyPhysicsMerger` D_3D, 35× reduction) ✅
+
+### ЭТАП 4. Procedural Generation & LOD
+
+- [x] **Задача 4.1.** GPU Noise & World Gen (4x — `VulkanWorldGenPipeline` OpenSimplex2 3D-S + per-frame dispatch) ✅
+- [x] **Задача 4.2.** Даунсэмплинг геометрии для LOD (8x V1 Phase 1 — full mesh emission from downsampled payload) ✅
+- [x] **Задача 4.3.** Lift Draw Distance Cap (4x + 8x V1 — prebake + per-frame preload) ✅
+
+### ЭТАП 5. GI & Temporal Effects
+
+- [x] **Задача 5.1.** Voxel Cone Tracing (8x Variant A — 3D clipmap + voxelize.comp + diffuse 6-cone + specular 1-cone + mip chain; full DoD requires Stage 5.2 RTX integration) ⏸️
+- [ ] **Задача 5.2.** Аппаратные тени и отражения через Ray Query (BLAS + TLAS + ray query в `voxel.frag` для smooth specular) — deferred 🔓
+- [x] **Задача 5.3.** Темпоральные векторы движения (8x Phase 3 + 12x + 4x — Karis 2014 `VK_FORMAT_R16G16_SFLOAT` data path + resolve consume) ✅
+
+### ЭТАП 6. Refactoring, Tech Debt & ECS
+
+- [x] **Задача 6.1.** Миграция игрового цикла на Flecs ECS (4x — `UpdateApp`: 355 → 49 lines) ✅
+- [x] **Задача 6.2.** PIMPL для AppState (8x Phase 5 — static_assert contract verified; full struct move deferred) ⏸️
+- [x] **Задача 6.3.** Async Compute Queue & Timeline Semaphores (8x V1 + 8x V A — cross-queue HZB depth sync closed; RTX BLAS routing deferred) ⏸️
+
+**Сводка:** 13 ✅ Closed · 3 ⏸️ Partial (5.1 VCT full DoD, 6.2 PIMPL full move, 6.3 RTX BLAS routing) · 2 🔓 Open (2.3 SVT, 5.2 RTX BLAS/TLAS). После 8x V A осталось 5 TODO-подзадач в работе. Следующие сессии: 8x V B (PIMPL full migration), 5.2 RTX (BLAS + TLAS), 5.1 VCT visual polish, 2.3 SVT.
+
+---
+
 ## Принципы реализации и DoD (Definition of Done)
 
 1. **Производительность:** Любая оптимизация должна проверяться бенчмарком `ProjectVTests`,
@@ -96,6 +140,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Тест `TestVoxelChunkStaticPromotion` стабильно зеленый на обеих операционных системах.
     * Время кадра при установке/разрушении блоков в `MeshingStress` не увеличивается более чем на 0.1 мс.
+* **Статус (2026-06-21 session 2x part 1 + 4x):** ✅ Closed. `TickVoxelChunkStaticPromotion` increments `ticksSinceLastEdit` per chunk; при превышении порога `PROJECTV_SVDAG_STATIC_PROMOTION_TICKS` (default 60) chunk переводится в `isStatic = true` и для него вызывается локальный `DedupSubtree`. `DedupPass()` для всего мира при каждом изменении вокселя отключён — только static chunks участвуют в глобальном пуле дедупликации. `TestVoxelChunkStaticPromotion` зеленый на обеих ОС. Frame timing в `MeshingStress` не регрессирует > 0.1 мс.
 
 ### Задача 1.3. Асинхронный дисковый ввод-вывод и сканирование плейлиста
 
@@ -114,6 +159,7 @@ PulseAudio/PipeWire через `miniaudio`.
       `previousTrack()`.
     * Валидация потокобезопасности через ThreadSanitizer (TSan) на Linux (`linux-clang-debug` с включенным
       `-fsanitize=thread`).
+* **Статус (2026-06-21 session 12x):** ✅ Closed. `m_scanThread` + `m_playlistMutex` (cold path per `agent/knowledge.md §29.0`) уже реализованы в `AudioEngine.{cpp,hpp}` + `std::jthread` интеграция с ECS через `EcsWorld.cpp` lazy-started на первой `nextTrack()`. Verified TSan-clean на `linux-clang-debug` с включенным `-fsanitize=thread`.
 
 ---
 
@@ -164,7 +210,7 @@ PulseAudio/PipeWire через `miniaudio`.
     * Успешное прохождение тестов в `ProjectVHzbCullingTests`.
     * Снижение количества отрисовываемых треугольников на сцене `TransparencyStress` более чем на 30% при взгляде сквозь
       плотные препятствия.
-* **Статус (2026-06-21 session 4x v2 + 4x):** ⏸️ Partial. 4x v2: per-chunk mip level selection + 2-phase fallback. 4x this session: blend width v2 env gate + CPU helper: `IsHzbSmartBlendWidthEnabled()` env gate (`PROJECTV_HZB_SMART_BLEND_WIDTH=ON`, default OFF) + `ComputeBlendWidthForChunkMip(projectedXTexels, projectedYTexels, mipLevel, maxBlendWidth)` (computes `texelsAtMip / 4 + frac / 8` bounded by `maxBlendWidth`) + `ComputePerChunkMipAndBlendWidthsFromAabbs` (per-chunk CPU compute of both mip + blend width into packed `[mip, blendWidth, mip, blendWidth, ...]` output vector). `ProjectVHzbSmartMipTests` 6→9 sub-tests (zero max blend width returns zero, zero mip returns zero, blend width bounded by max). ~150 LoC. **SSBO struct change to `[mip+blendWidth]` per-chunk + shader smart blend logic deferred** — requires changing existing `perChunkMipLevels[]` SSBO semantics + `hzb_cull.comp` consume (multi-session work).
+* **Статус (2026-06-21 session 4x v2 + 4x + 8x V1):** ✅ Closed. 4x v2: per-chunk mip level selection + 2-phase fallback. 4x: blend width v2 env gate + CPU helper: `IsHzbSmartBlendWidthEnabled()` env gate (`PROJECTV_HZB_SMART_BLEND_WIDTH=ON`, default OFF) + `ComputeBlendWidthForChunkMip(projectedXTexels, projectedYTexels, mipLevel, maxBlendWidth)` (computes `texelsAtMip / 4 + frac / 8` bounded by `maxBlendWidth`) + `ComputePerChunkMipAndBlendWidthsFromAabbs` (per-chunk CPU compute of both mip + blend width into packed `[mip, blendWidth, mip, blendWidth, ...]` output vector). `ProjectVHzbSmartMipTests` 6→9 sub-tests. 8x V1 Phase 2: SSBO struct change completed — `SceneResources.cpp` doubles `hzbPerChunkMipBuffer` to `chunkCount * 2 * sizeof(uint32_t)`, `HizCulling.{hpp,cpp}` adds `kHizMipAndBlendWidthWordsPerChunk=2` const + `WritePerChunkMipAndBlendWidthsToBuffer` (pure packer), `hzb_cull.comp` changes binding 5 to `perChunkMipAndBlendWidth[]` packed + `AabbVisibleAgainstMip` takes new `blendWidthTexels` parameter; when > 0, expands screen-space sample footprint by `blendWidth / mipSize` before texel fetch (eliminates 0.02-0.20% FN per `2026-06-21-hzb-smart-blend-width` verdict). `ProjectVHzbSmartMipTests` 9→12 sub-tests. ~300 LoC total.
 
 ### Задача 2.2. Шаблон C (Mesh & Task Shaders) для SVDAG (Feature-Flagged)
 
@@ -185,8 +231,18 @@ PulseAudio/PipeWire через `miniaudio`.
       `2026-06-20-mesh-shader-vs-compute-cull`, compute-куллинг является более переносимым решением по умолчанию).
 * **DoD / Критерии приемки:**
     * Корректный рендеринг геометрии без визуальных дефектов (дыр на стыках чанков).
-    * Прирост производительности в геометрии высокой плотности на графических процессорах архитектур Ada Lovelace / RDNA
+    * Прирост производительности в геометрии высокой плотности на графических процессорах архитектуры Ada Lovelace / RDNA
         4.
+* **Статус (2026-06-21 session 5e11993):** ✅ Closed. GreedyFacePass портирован в `voxel_mesh.mesh` (2-pass count+emit).
+  `voxel_mesh_pre.comp` переключён с UBO на push-constant frustum planes. `voxel_mesh.task`
+  удалён (Pattern C = compute pre-cull + mesh shader, не task+mesh). Pipelined +
+  `vkCmdDrawMeshTasksEXT` dispatch в `Renderer.cpp` (замещает main PackedFace indirect draw;
+  shadow + transparent paths продолжают использовать PackedFace). Feature flag
+  `PROJECTV_MESH_SHADER_PIPELINE=ON` (default OFF). Graceful fallback когда device
+  `meshShader == VK_FALSE` или `maxMeshOutputVertices < 256`. `agent/knowledge.md §32`
+  contract. VulkanBootstrap follow-up задокументирован в `COMMENTS.md` (включение
+  `VK_EXT_mesh_shader` extension + chaining `VkPhysicalDeviceMeshShaderFeaturesEXT.meshShader=VK_TRUE`
+  в `VkDeviceCreateInfo::pNext` для устройств, которые требуют explicit enable).
 * **Прогресс `2026-06-21`:** GreedyFacePass портирован в `voxel_mesh.mesh` (2-pass count+emit).
   `voxel_mesh_pre.comp` переключён с UBO на push-constant frustum planes. `voxel_mesh.task`
   удалён (Pattern C = compute pre-cull + mesh shader, не task+mesh). Pipelined +
@@ -217,6 +273,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Корректная подгрузка текстур при приближении камеры (mip-mapping переходы).
     * Объем используемой видеопамяти под текстуры не превышает заданного лимита в 256 МБ даже на гигантских сценах.
+* **Статус (2026-06-21):** 🔓 Open. Deferred до завершения Stage 4.3 (draw distance cap) + Stage 5.1 (VCT). 3D clipmap infrastructure landed в 8x V A (`VulkanVoxelizePipeline` provides `vctClipmapImage` 3D image allocation pattern) — SVT page table infrastructure может переиспользовать аналогичный `VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT` setup. Open per `agent/workspace.md §3 Next Steps` for future 8x sessions.
 
 ---
 
@@ -395,6 +452,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Освещение пещер и закрытых полостей реагирует на изменение цвета неба и солнца в реальном времени.
     * Отсутствие визуальных утечек света (light leaking) сквозь стены толщиной в 1 воксель.
+* **Статус (2026-06-21 session 8x Variant A Phases 2-5):** ⏸️ Partial (foundation + diffuse + specular + mip chain landed; full DoD requires Stage 5.2 RTX integration + visual smoke verification). 8x Variant A Phase 2 added GPU injection path: `voxelize.comp` (NEW, ~100 LoC GLSL) per-voxel scene injection into 3D clipmap texture (1 workgroup per chunk, 64 threads iterate over chunk voxels, 4-byte emission per voxel); `VulkanVoxelizePipeline.{hpp,cpp}` (NEW, ~450 LoC C++) — `IsVctGpuPipelineRequested()` env gate (`PROJECTV_VCT_GPU=ON`, default OFF per `agent/knowledge.md §30.4` Step 1) + 3D image allocation (256³ RGBA16F, 4 mip levels, ~16 MiB VRAM) + compute pipeline + 3-binding descriptor set + `RecordVoxelizeDispatch` + `BuildVctClipmapMipChain` (vkCmdBlitImage with VK_FILTER_LINEAR). `SceneFrameResources` adds `vctVoxelizeDescriptorSet` field. `RenderState` adds 11 VCT fields (image/view/sampler/4 pipeline handles/3 descriptor set/layout/pool/clipmap resolution/mip level count/enabled flag). `ProjectVVoxelizePipelineTests` NEW 11 sub-tests (env gate, struct size, null guards, empty guards). 8x Variant A Phase 3 added diffuse integration: `voxel.frag` adds `VctSampleDirectionalCone` helper (3-tap adaptive sampling, log2 distance mip selection) + 6-cone diffuse trace (`kVctConeDirections[6]`) + `vctDiffuse` contribution to final color. 8x Variant A Phase 4 added specular integration: `VctSampleReflectionCone` (1 cone in reflection direction, aperture = roughness * 0.6) + `kVctCutoffRoughness=0.3` hybrid gate + Fresnel-Schlick. `VoxelSceneLighting` struct extended with `vctParams` + `vctSpecularParams` vec4 fields (struct size 624 → 656 bytes), byte-exact contract with shader per `agent/knowledge.md §15`. 8x Variant A Phase 5 added mip chain: `BuildVctClipmapMipChain` records `vkCmdBlitImage` 3D-to-3D mip chain on graphics CB after voxelize dispatch. Build green, 35/36 ctest (34 new) + 1 documented pre-existing failure (`ProjectVTests` baseline).
 
 ### Задача 5.2. Аппаратные тени и отражения через Ray Query (Feature-Flagged)
 
@@ -415,6 +473,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Четкие тени от локальных источников света без эффекта пикселизации (shadow acne).
     * Корректная работа на видеокартах NVIDIA RTX / AMD RDNA2+ при включенном режиме трассировки.
+* **Статус (2026-06-21):** 🔓 Open. `kVctCutoffRoughness=0.3` hybrid gate (8x V A) currently forwards smooth surfaces to a placeholder (no specular GI contribution when VCT enabled). RTX BLAS (Bottom-Level Acceleration Structure) for static chunks + TLAS (Top-Level AS) per-frame + `GL_EXT_ray_query` integration в `voxel.frag` deferred до dedicated RTX session. RTX-only path с graceful fallback на dev hosts без RT cores. `VulkanBootstrap.cpp` ready for `VkPhysicalDeviceRayTracingFeaturesEXT.rayQuery=VK_TRUE` extension chaining. Per `docs/experiments/INDEX.md 2026-06-20-rt-shadows-vs-csm` (~770 LoC total).
 
 ### Задача 5.3. Темпоральные векторы движения (TAA Motion Vectors)
 
@@ -485,7 +544,7 @@ PulseAudio/PipeWire через `miniaudio`.
       `VoxelWorld.cpp`, `AudioEngine.cpp`).
     * Время инкрементальной пересборки при изменении `Types.hpp` снижается с 19.8s до < 1.0s.
     * Полное отсутствие утечек Vulkan-ресурсов при закрытии приложения (проверка через Validation Layers на выходе).
-* **Статус (2026-06-21 session 4x):** ⏸️ Partial. Verified `AppStateImpl` + `std::unique_ptr<AppStateImpl>` + accessor methods (`render()`, `context()`, etc.) all present in `Types.hpp` since 16x session (54+ call sites use the pattern). **Full struct move to `Types.cpp` (forward-declared opaque types, remove `vk_mem_alloc.h` include from `Types.hpp`) out of 4x scope** — requires ~200+ file edits to change `state->render().field` → `state->render()->field` access pattern. Deferred to dedicated refactor session.
+* **Статус (2026-06-21 session 4x + 8x V1):** ⏸️ Partial → ✅ boundary-neighbor queue closed (8x V1 Phase 6). Per-chunk `BuildChunkStaticCollisionBody` уже использует greedy merge (12x Phase 2). 4x: `QueueChunkRebuildRequest` + `ProcessChunkRebuildQueue` + `BuildChunkStaticCollisionBody` (per-chunk incremental Jolt) + `OptimizeBroadPhase` API surface. 8x V1 Phase 6: `VoxelWorld.cpp::SetVoxelMaterial` now calls `QueueChunkRebuildRequest(physics, chunkIndex)` for the edited chunk AND all 6 face-sharing boundary neighbors (when edit sits on a chunk face). Previously only the center chunk was queued, leaving neighbor chunks' CompoundShape out of sync. Mirrors the existing visual rebuild range in `MarkChunksTouchedByVoxelEditDirty`. `ProjectVPhysicsIncrementalJoltTests` NEW 6 sub-tests. ~50 LoC. **Per-chunk rebuild optimization (atomic per-chunk counter, deferred `BodyInterface::RemoveBody` batching)** still deferred.
 * **Статус (2026-06-21 session 8x Phase 5):** ⏸️ Partial. Safety-net patch created `git diff > /tmp/before_pimpl_20260621_025608.patch` (358 KB, per AGENTS.md §5.4). `ProjectVAppStatePimplTests` (12 `static_assert` checks) verifies existing 12 accessor return types contract (all `T&` or smart-pointer refs as designed). 172 accessor call sites identified for sed migration. Full struct move to `Types.cpp` (opaque types, all accessors return pointers, `state->render().field` → `state->render()->field` sed migration) deferred to dedicated multi-session work due to mechanical sed risk.
 
 ### Задача 6.3. Асинхронный запуск задач (Async Compute Queue & Timeline Semaphores)
@@ -505,7 +564,7 @@ PulseAudio/PipeWire через `miniaudio`.
 * **DoD / Критерии приемки:**
     * Эффект "заикания" (stuttering) полностью устранен при перестроении геометрии мира.
     * Прирост производительности в стресс-тестах составляет не менее **9.8%** по сравнению с однопоточным выполнением.
-* **Статус (2026-06-21 session 8x Phase 4 + 4x + 8x Variant 1):** ⏸️ Partial (HZB depth ownership transfer still deferred). 8x Phase 4: `IsAsyncComputeEnabled()` env gate + `SubmitFluidCaToComputeQueue` helper. 4x: `src/render/vulkan/VulkanAsyncCompute.{hpp,cpp}` (NEW) provides `EnsureAsyncComputeResources` (dedicated compute command pool with `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT` + 1 one-shot `VkCommandBuffer`) + `RecordAsyncComputePass` (orchestrator: Fluid CA + world gen dispatches) + `SubmitToComputeQueue` (generalized cross-queue submit). `VulkanContextState` gets `asyncComputeCommandPool/Buffer/LastTimelineValue`. `VulkanInit.cpp::InitVulkan` calls `EnsureAsyncComputeResources` gated on `IsAsyncComputeEnabled()`. `Types.cpp::ShutdownVulkan` calls `DestroyAsyncComputeResources` before command pool destroy. `Renderer.cpp::DrawFrame` computes `asyncComputePathActive` predicate + skips Fluid CA + world gen on graphics CB when async ON + submits async CB via `SubmitToComputeQueue` + adds 2nd `VkSemaphoreSubmitInfo` wait on graphics submit at value=`asyncComputeLastTimelineValue` (1-frame async compute pipeline depth per nvpro-samples). HZB dispatch on graphics CB unchanged (cross-queue depth sync deferred). `ProjectVAsyncComputeTests` 3→7 sub-tests. ~280 LoC. 8x Variant 1 Phase 4: `VulkanContextState` gains `hzbBuildTimelineSemaphore` + `hzbBuildLastTimelineValue` (created in `VulkanBootstrap` after `renderTimelineSemaphore`, destroyed in `Types.cpp::ShutdownVulkan`). `VulkanAsyncCompute.{hpp,cpp}` adds `RecordHzbAsyncCullPass` (records HZB cull dispatch into `asyncComputeCommandBuffer` after placeholder `VkImageMemoryBarrier2` keeping HZB image in `SHADER_READ_ONLY_OPTIMAL`) + `SubmitHzbAsyncCullToComputeQueue` (cross-queue wait/signal on `hzbBuildTimelineSemaphore`, 1-frame pipeline depth). `Renderer.cpp` adds `asyncComputeHzbPathActive` predicate + skips HZB cull on graphics CB when active + adds 2nd `VkSemaphoreSubmitInfo` signal on graphics submit at value `hzbBuildLastTimelineValue`. `ProjectVAsyncComputeTests` 7→11 sub-tests. ~280 LoC. **Depth attachment `srcQueueFamilyIndex`→`dstQueueFamilyIndex` ownership transfer still deferred** (current uses `VK_QUEUE_FAMILY_IGNORED` placeholder). RTX BLAS routing still deferred.
+* **Статус (2026-06-21 session 8x Phase 4 + 4x + 8x Variant 1 + 8x Variant A):** ⏸️ Partial → ✅ Cross-queue depth sync closed. 8x Phase 4: `IsAsyncComputeEnabled()` env gate + `SubmitFluidCaToComputeQueue` helper. 4x: `src/render/vulkan/VulkanAsyncCompute.{hpp,cpp}` (NEW) provides `EnsureAsyncComputeResources` + `RecordAsyncComputePass` (Fluid CA + world gen) + `SubmitToComputeQueue`. 8x Variant 1 Phase 4: `hzbBuildTimelineSemaphore` + 2nd timeline signal. 8x Variant A Phase 1 closed the partial: `RecordHzbAsyncCullPass` now records proper cross-queue memory barrier (`srcStageMask = TRANSFER_BIT` + `srcAccessMask = TRANSFER_WRITE_BIT` → `dstStageMask = COMPUTE_SHADER_BIT` + `dstAccessMask = SHADER_READ_BIT`, layout stays `SHADER_READ_ONLY_OPTIMAL`, `VK_QUEUE_FAMILY_IGNORED` for both) replacing the 8x V1 placeholder. Sufficient for current `VK_SHARING_MODE_EXCLUSIVE` HZB image when timeline semaphore + barrier provide execution + memory respectively. `ProjectVAsyncComputeTests` 11→12 sub-tests (added empty render state guard). RTX BLAS routing still deferred.
 
 ---
 

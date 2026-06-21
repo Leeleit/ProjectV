@@ -318,9 +318,9 @@ bool RecordHzbAsyncCullPass(
 	VkImageMemoryBarrier2 hizBarrier{};
 	hizBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
 	hizBarrier.pNext = nullptr;
-	hizBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	hizBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+	hizBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
 	hizBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-	hizBarrier.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 	hizBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 	hizBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	hizBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

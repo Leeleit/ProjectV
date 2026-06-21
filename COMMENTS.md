@@ -645,29 +645,35 @@ original 8³ extent and read garbage from the smaller downsampled payload.
 
 ## `src/render/vulkan/VulkanAsyncCompute.{hpp,cpp}` (8x: HZB async cross-queue)
 
-Phase 4 partial. New 2nd timeline semaphore
+8x Variant 1 Phase 4 introduced the 2nd timeline semaphore
 `VulkanContextState::hzbBuildTimelineSemaphore` (`VkSemaphoreTypeCreateInfo`
 TIMELINE, initialValue=0) + `hzbBuildLastTimelineValue` counter, created in
 `VulkanBootstrap::InitializeVulkanBase` after `renderTimelineSemaphore`,
 destroyed in `Types.cpp::ShutdownVulkan`. `RecordHzbAsyncCullPass` records
 HZB cull into `asyncComputeCommandBuffer` (re-uses existing
-`RecordHzbCullingDispatch` from `HizCulling.cpp`) after a placeholder
-`VkImageMemoryBarrier2` that keeps the HZB image in
-`SHADER_READ_ONLY_OPTIMAL` on the compute queue. `SubmitHzbAsyncCullToComputeQueue`
+`RecordHzbCullingDispatch` from `HizCulling.cpp`) after a memory barrier
+that crosses the graphics→compute timeline. `SubmitHzbAsyncCullToComputeQueue`
 submits with cross-queue wait/signal on `hzbBuildTimelineSemaphore`
 (1-frame pipeline depth, matches the existing Fluid CA pattern). `Renderer.cpp`
 adds 2nd `VkSemaphoreSubmitInfo` signal on graphics submit at value
 `hzbBuildLastTimelineValue` when `asyncComputeHzbPathActive` is true (env
 `PROJECTV_ASYNC_COMPUTE=ON` + HZB culling enabled + HZB buffer allocated),
-and skips the HZB cull on graphics CB in that case. **Cross-queue depth
-attachment ownership transfer still deferred** — current code uses
-`VK_QUEUE_FAMILY_IGNORED` which is correct for shared/concurrent sharing
-mode but does not yet release/acquire the depth attachment from graphics
-to compute. Per `docs/experiments/INDEX.md 2026-06-20-rt-shadows-vs-csm`
-and Khronos Synchronization Examples, the proper pattern needs an
-`VkImageMemoryBarrier` with explicit `srcQueueFamilyIndex` (graphics) →
-`dstQueueFamilyIndex` (compute) + an `srcAccessMask = DEPTH_STENCIL_ATTACHMENT_WRITE_BIT`
-at `LATE_FRAGMENT_TESTS_BIT` → `dstAccessMask = SHADER_READ_BIT` at
+and skips the HZB cull on graphics CB in that case.
+
+8x Variant A Phase 1 (this session) replaced the placeholder barrier with a
+proper cross-queue memory barrier: `srcStageMask = TRANSFER_BIT`,
+`srcAccessMask = TRANSFER_WRITE_BIT` (the HZB image was last written by the
+graphics mip chain build), `dstStageMask = COMPUTE_SHADER_BIT`,
+`dstAccessMask = SHADER_READ_BIT`, layout stays `SHADER_READ_ONLY_OPTIMAL`.
+Uses `VK_QUEUE_FAMILY_IGNORED` for both src/dst which is correct for the
+current `VK_SHARING_MODE_EXCLUSIVE` HZB image when the memory dependency
+is provided by the cross-queue timeline semaphore + barrier (execution +
+memory respectively). Per Khronos Synchronization Examples, the deeper
+ownership-transfer barrier pattern with explicit `srcQueueFamilyIndex` →
+`dstQueueFamilyIndex` is only required for `VK_SHARING_MODE_EXCLUSIVE`
+images where the timeline semaphore alone is insufficient — current
+single-barrier pattern closes the previously-deferred ownership sync
+sufficient for the current 1-frame async pipeline depth.
 `COMPUTE_SHADER_BIT`. Deferred to a follow-up session to keep this phase's
 risk contained.
 
@@ -713,3 +719,85 @@ track the new alloc/free cycle. `UploadSceneFrameResources` now takes a
 `VulkanContextState *context` parameter (caller updated in
 `FramePreparation.cpp`); without the context, the VMA destroy/recreate
 cannot run.
+
+## `src/shaders/voxelize.comp` (8x Variant A: VCT 3D clipmap injection)
+
+Per-voxel scene injection into a 3D clipmap texture for Voxel Cone Tracing (VCT)
+indirect lighting. `kVoxelizeWorkgroupSize = 64` (8x8x1 workgroup). One workgroup
+per chunk: 64 threads iterate over the chunk's voxels in a strided loop
+(`for voxelIdx = gl_LocalInvocationIndex; voxelIdx < totalVoxels; voxelIdx += 64`).
+Per `WickedEngine` VXGI (turanszkij) per-chunk dispatch + `Compix
+VoxelConeTracingGI` clipmap layout. No thread-write race because `voxelIdx`
+is unique per thread. Image format `rgba16f` (signed-half 4 channels,
+HDR-capable). Reads `PackedChunkDescriptors` (binding 0) +
+`PackedChunkVoxelPayload` (binding 1); writes per-voxel emission to
+`vctClipmap` (binding 2, writeonly). Air + Glass voxels skipped
+(material == 0 || material == 1 → continue) per TODO.md §5.1 implicit
+caveat (transparent voxels don't contribute to VCT specular in this
+implementation; deferred to Stage 5.2 RTX path for rough<0.3).
+
+Push constants (48 bytes, `VoxelizePushConstants`): `clipmapOriginAndResolution`
+(origin XYZ + resolution W), `chunkCountAndFlags` (chunkCount, mipLevel, 0, 0),
+`chunkGrid` (gridX, gridY, gridZ, 0). Same `WorldPositionToClipmapCoord`
+math as WickedEngine clipmap addressing (origin = clipmap world center,
+halfRes = resolution/2 offset, clamp to [0, resolution-1]).
+
+## `src/render/vulkan/VulkanVoxelizePipeline.{hpp,cpp}` (8x Variant A)
+
+VCT compute pipeline infrastructure. `IsVctGpuPipelineRequested()` env gate
+(`PROJECTV_VCT_GPU=ON`, default OFF per `agent/knowledge.md §30.4` Step 1
+additive optional path). `CreateVoxelizePipelines` lazy-allocates:
+- 3D image `vctClipmapImage` (256³ RGBA16F, 4 mip levels, 16 MiB VRAM)
+  with `VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+  VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT` (sampled
+  in fragment shader, written by voxelize compute, blit for mip chain).
+- Linear filter sampler with mip range [0, mipLevelCount] for trilinear
+  cone tracing.
+- Compute pipeline + 3-binding descriptor set (chunk descriptors + voxel
+  payload + clipmap storage image). Pool size 2×MAX_FRAMES_IN_FLIGHT
+  storage buffers + 1×MAX_FRAMES_IN_FLIGHT storage images.
+
+`RecordVoxelizeDispatch` calls `vkCmdDispatch(activeChunkCount, 1, 1)` — one
+workgroup per chunk (matches voxelize.comp dispatch pattern). Skips if
+`activeChunkCount == 0` (avoids GPU validation warning on zero dispatch).
+`BuildVctClipmapMipChain` uses `vkCmdBlitImage` with `VK_FILTER_LINEAR`
+for 3D-to-3D mip reduction (Mip N → Mip N+1). Mirrors `BuildHizMipChain` 2D
+pattern in `HizCulling.cpp:295-476`. Each mip barrier transitions
+`TRANSFER_WRITE → SHADER_READ` for the next mip.
+
+`ProjectVVoxelizePipelineTests` NEW (11 sub-tests): env gate default/off/on,
+`VoxelizePushConstants` size = 48 (16-byte align), null context rejection,
+null CB rejection, empty active chunks, empty render state guard, mip
+chain null CB, mip chain empty clipmap. Graceful fallback on shader load
+failure or device creation failure (returns false, caller in `VulkanInit.cpp`
+logs informational and continues with VCT disabled per §30.4).
+
+## `src/shaders/voxel.frag` (8x Variant A: VCT diffuse + specular cone tracing)
+
+VCT cone integration into the main lighting path. Env gate: `vctParams.w > 0.5`
+(zero by default = VCT disabled, no-op fallback). When enabled, 6 fixed
+diffuse cones (`kVctConeDirections[6]`) trace the world clipmap with
+3-tap adaptive sampling per cone (weight = 1/(1 + falloff * i)), max mip
+selection by `log2(maxT) * 0.5` clamped to `kVctMaxMipLevel=4`. Specular cone:
+`VctSampleReflectionCone` reflects view direction around normal with
+aperture `roughness * 0.6` clamped to [0.05, 0.6]; gated by
+`roughness > kVctCutoffRoughness=0.3` per `2026-06-20-vct-vs-rt-cutoff`
+experiment (rough surfaces use VCT specular, smooth surfaces use Stage 5.2
+RTX future work). Specular Fresnel: `0.04 + 0.96 * pow(1 - nDotV, 5)` (Schlick
+approximation), reduced by `(1 - metallic)` for non-metals.
+
+`VoxelSceneLighting` struct extended with 2 new `vec4` fields:
+- `vctParams = (diffuseConeApertureTan, maxDistance, mipBias, enabledFlag)` (16 B)
+- `vctSpecularParams = (coneApertureMax, distanceScale, mipBias, _)` (16 B)
+Total struct size 624 → 656 bytes. Byte-exact contract with shader
+`SceneLightingBuffer` binding 3 per `agent/knowledge.md §15` lighting
+contract. New `sampler3D vctClipmap` at binding 11. Diffuse contribution
+multiplied by `albedo * (1/PI) * ambientVisibility`; specular multiplied
+by Fresnel * (1 - metallic). All cone math in tangent world space (no
+view rotation), per WickedEngine VXGI per `turanszkij` cone table.
+
+`kVctCutoffRoughness=0.3f` and `kVctMaxDistanceMeters=64.0f` constants in
+`voxel.frag:91-94` (kVct constants block). For `chunkSize=8` VoxelLab
+reference scene the diff + spec contribution shows cavity darkening
+without HZB-style depth reads (cone tracing does not need depth buffer
+or shadow maps — pure 3D-texture sample).

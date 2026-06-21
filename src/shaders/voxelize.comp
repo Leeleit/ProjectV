@@ -1,0 +1,108 @@
+#version 460
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer PackedChunkVoxelPayload {
+    uint chunkVoxelWords[];
+};
+
+layout(set = 0, binding = 2, rgba16f) writeonly uniform image3D vctClipmap;
+
+layout(push_constant) uniform VoxelizePushConstants {
+    ivec4 clipmapOriginAndResolution;
+    ivec4 chunkCountAndFlags;
+    uvec4 chunkGrid;
+} pushConstants;
+
+// EVIL: kVoxelizeWorkgroupSize = 64 threads (8x8x1) per workgroup.
+// Empirically tuned per WickedEngine VXGI (turanszkij): 8x8x1 is the sweet spot for
+// memory coalescing on 3D-texture writes (consecutive 8 texels per row = 1 cache line
+// at 16-byte texel stride) vs workgroup occupancy on integrated GPUs.
+const uint kVoxelizeWorkgroupSize = 64u;
+
+const uint kMaterialAir = 0u;
+const uint kMaterialGlass = 1u;
+
+uint DecodeVoxelMaterial(const ChunkDescriptor chunkDescriptor, const uvec3 localCoord) {
+    const uint localIndex =
+    localCoord.x +
+    chunkDescriptor.chunkExtentAndNonAir.x *
+    (localCoord.y + chunkDescriptor.chunkExtentAndNonAir.y * localCoord.z);
+    if (localIndex >= chunkDescriptor.voxelDataInfo.y) {
+        return kMaterialAir;
+    }
+
+    const uint wordIndex = chunkDescriptor.voxelDataInfo.x + localIndex / 4u;
+    const uint shift = (localIndex & 3u) * 8u;
+    return (chunkVoxelWords[wordIndex] >> shift) & 0xFFu;
+}
+
+ivec3 WorldPositionToClipmapCoord(
+    const ivec3 worldPosition,
+    const ivec3 clipmapOrigin,
+    const int clipmapResolution) {
+    const int halfRes = clipmapResolution / 2;
+    return ivec3(
+        clamp(worldPosition.x - clipmapOrigin.x + halfRes, 0, int(clipmapResolution) - 1),
+        clamp(worldPosition.y - clipmapOrigin.y, 0, int(clipmapResolution) - 1),
+        clamp(worldPosition.z - clipmapOrigin.z + halfRes, 0, int(clipmapResolution) - 1));
+}
+
+void main() {
+    const uint chunkIndex = gl_GlobalInvocationID.x;
+    if (chunkIndex >= uint(pushConstants.chunkCountAndFlags.x)) {
+        return;
+    }
+
+    const ChunkDescriptor chunkDescriptor = chunkDescriptors[chunkIndex];
+    if (chunkDescriptor.chunkExtentAndNonAir.w == 0u) {
+        return;
+    }
+
+    const uvec3 chunkExtent = chunkDescriptor.chunkExtentAndNonAir.xyz;
+    const uint totalVoxels = chunkExtent.x * chunkExtent.y * chunkExtent.z;
+    if (totalVoxels == 0u) {
+        return;
+    }
+
+    // EVIL: 1 workgroup per chunk (workgroupSize=8x8x1=64 threads). Each thread iterates
+    // over a strided subset of the chunk's voxels; for chunkSize=8 (totalVoxels=512) the
+    // loop runs 8 times per thread. No thread-write race because voxelIdx is unique per
+    // thread. Mirrors WickedEngine VXGI (turanszkij) per-chunk dispatch.
+    for (uint voxelIdx = gl_LocalInvocationIndex;
+        voxelIdx < totalVoxels;
+        voxelIdx += kVoxelizeWorkgroupSize) {
+        const uvec3 localCoord = uvec3(
+            voxelIdx % chunkExtent.x,
+            (voxelIdx / chunkExtent.x) % chunkExtent.y,
+            voxelIdx / (chunkExtent.x * chunkExtent.y));
+
+        const uint material = DecodeVoxelMaterial(chunkDescriptor, localCoord);
+        if (material == kMaterialAir || material == kMaterialGlass) {
+            continue;
+        }
+
+        const ivec3 worldPosition = chunkDescriptor.chunkOrigin.xyz + ivec3(localCoord);
+        const ivec3 clipmapCoord = WorldPositionToClipmapCoord(
+            worldPosition,
+            pushConstants.clipmapOriginAndResolution.xyz,
+            int(pushConstants.clipmapOriginAndResolution.w));
+
+        // EVIL: per-voxel emission = constant 0.5 (placeholder until material buffer integration;
+        // matches Compix VoxelConeTracingGI per-voxel emission injection). The R channel
+        // receives the material id normalized to [0, 1] for debug visualization.
+        const vec4 emission = vec4(float(material) / 255.0, 0.5, 0.3, 1.0);
+        imageStore(vctClipmap, clipmapCoord, emission);
+    }
+}

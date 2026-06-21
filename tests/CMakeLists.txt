@@ -976,6 +976,40 @@ add_executable(ProjectVWorldGenTests
         WorldGenTests.cpp
 )
 
+add_executable(ProjectVVoxelizePipelineTests
+        VoxelizePipelineTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanVoxelizePipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
+        vma_implementation.cpp
+)
+
+target_compile_definitions(ProjectVVoxelizePipelineTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVVoxelizePipelineTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/glm
+        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
+)
+
+target_link_libraries(ProjectVVoxelizePipelineTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVVoxelizePipelineTests PRIVATE SDL3::SDL3)
+target_link_libraries(ProjectVVoxelizePipelineTests PRIVATE volk)
+target_link_libraries(ProjectVVoxelizePipelineTests PRIVATE glm)
+target_link_libraries(ProjectVVoxelizePipelineTests PRIVATE fmt::fmt)
+target_link_libraries(ProjectVVoxelizePipelineTests PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+add_test(NAME ProjectVVoxelizePipelineTests COMMAND ProjectVVoxelizePipelineTests)
+set_tests_properties(ProjectVVoxelizePipelineTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVVoxelizePipelineTests)
+
 add_executable(ProjectVPhysicsIncrementalJoltTests
         PhysicsIncrementalJoltTests.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp

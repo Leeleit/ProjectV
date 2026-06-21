@@ -618,6 +618,7 @@ struct SceneFrameResources {
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet fluidCaDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSet vctVoxelizeDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;
 	uint64_t uploadedVoxelPayloadVersion = 0;
 	uint64_t meshedSceneVersion = 0;
@@ -720,6 +721,20 @@ struct RenderState {
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
 	VmaAllocation depthAllocation = nullptr;
+	VkImage vctClipmapImage = VK_NULL_HANDLE;
+	VkImageView vctClipmapView = VK_NULL_HANDLE;
+	VmaAllocation vctClipmapAllocation = nullptr;
+	VkDeviceMemory vctClipmapMemory = VK_NULL_HANDLE;
+	uint32_t vctClipmapResolution = 256u;
+	uint32_t vctClipmapMipLevelCount = 4u;
+	bool vctClipmapEnabled = false;
+	VkSampler vctClipmapSampler = VK_NULL_HANDLE;
+	VkDescriptorSetLayout vctVoxelizeDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool vctVoxelizeDescriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> vctVoxelizeDescriptorSets{};
+	VkShaderModule vctVoxelizeShaderModule = VK_NULL_HANDLE;
+	VkPipelineLayout vctVoxelizePipelineLayout = VK_NULL_HANDLE;
+	VkPipeline vctVoxelizePipeline = VK_NULL_HANDLE;
 	VkFormat shadowDepthFormat = VK_FORMAT_UNDEFINED;
 	VkExtent2D shadowMapExtent{2048u, 2048u};
 	VkImage shadowImage = VK_NULL_HANDLE;
