@@ -1449,6 +1449,20 @@ SDL_AppResult DrawFrame(
 			cullPush);
 	}
 
+	if (render->rayTracedShadows != nullptr) {
+		PV_PROFILE_ZONE_N("CollectDirtyBlasChunks");
+		if (state->world().voxelWorld != nullptr) {
+			std::vector<uint32_t> dirtyBlasChunks{};
+			CollectDirtyVoxelChunkBlasRebuildRequests(
+				*state->world().voxelWorld,
+				&dirtyBlasChunks);
+			if (!dirtyBlasChunks.empty()) {
+				render->rayTracedShadows->SetBlasDirtyQueue(std::move(dirtyBlasChunks));
+			}
+		}
+		render->rayTracedShadows->BuildDirtyBlases(*context, context->commandPool);
+	}
+
 	RecordGraphicsCommands(*render, *swapchain, frame->renderData, cmd, imageIndex);
 
 	const bool asyncComputeHzbPathActive =

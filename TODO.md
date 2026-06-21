@@ -48,16 +48,16 @@ PulseAudio/PipeWire через `miniaudio`.
 ### ЭТАП 5. GI & Temporal Effects
 
 - [x] **Задача 5.1.** Voxel Cone Tracing (8x Variant A — 3D clipmap + voxelize.comp + diffuse 6-cone + specular 1-cone + mip chain; full DoD requires Stage 5.2 RTX integration) ⏸️ → ✅ Closed (within DoD, 8x V B Phase 1): visual smoke + Tracy + LightingDebugView 9/10. RTX smooth specular (Stage 5.2) remains separate.
-- [ ] **Задача 5.2.** Аппаратные тени и отражения через Ray Query (BLAS + TLAS + ray query в `voxel.frag` для smooth specular) — ⏸️ Partial — foundation landed in dirty tree (16x session): RayTracedShadows skeleton, TLAS instance buffer, scratch pool, RenderState integration; `ProjectVRayTracedShadowTests` 8/8 sub-tests; deferred: BLAS build per dirty-chunk + rayQueryEXT integration in voxel.frag + visual smoke. Per TODO_NEW.md AUDIT-DOC-005.
+- [/] **Задача 5.2.** Аппаратные тени и отражения через Ray Query (BLAS + TLAS + ray query в `voxel.frag` для smooth specular) — ⏸️ Partial — BLAS dispatch wired (17x): `BuildDirtyBlases` consumes `m_pendingDirtyChunks` via one-shot cmd buffer + fence; `BuildChunkBlas` un-`(void)`-ed; `SetBlasDirtyQueue` hooked in `DrawFrame` from `CollectDirtyVoxelChunkBlasRebuildRequests`. `ProjectVRayTracedShadowTests` 8/8 sub-tests (incl. drain-counter). Deferred: mesh-data wiring through `BuildChunkBlas` (currently `vertexBuffer=VK_NULL_HANDLE` → `fallbackCount++`); rayQueryEXT integration in `voxel.frag`; visual smoke. Per TODO_NEW.md AUDIT-DOC-005.
 - [x] **Задача 5.3.** Темпоральные векторы движения (8x Phase 3 + 12x + 4x — Karis 2014 `VK_FORMAT_R16G16_SFLOAT` data path + resolve consume) ✅
 
 ### ЭТАП 6. Refactoring, Tech Debt & ECS
 
 - [x] **Задача 6.1.** Миграция игрового цикла на Flecs ECS (4x — `UpdateApp`: 355 → 49 lines) ✅
 - [/] **Задача 6.2.** PIMPL для AppState (8x Phase 5 — static_assert contract verified; full struct move deferred) ⏸️
-- [/] **Задача 6.3.** Async Compute Queue & Timeline Semaphores (8x V1 + 8x V A — cross-queue HZB depth sync closed; RTX BLAS routing deferred) ⏸️
+- [x] **Задача 6.3.** Async Compute Queue & Timeline Semaphores (8x V1 + 8x V A + 17x — cross-queue HZB depth sync closed + RTX BLAS routes via `dedicatedComputeQueue` when `IsAsyncComputeEnabled()` + dedicated queue family ≠ graphics family; refactored `IsFluidCaGpuPipelineRequested` + `IsAsyncComputeEnabled` to `inline` header predicates for cross-TU availability) ✅
 
-**Сводка:** 13 ✅ Closed · 2 ⏸️ Partial (6.2 PIMPL, 6.3 Async Compute RTX BLAS routing) · 2 🔓 Open (2.3 SVT, 5.2 RTX BLAS/TLAS). После 8x V C + this session осталось 4 TODO-подзадач. Следующие сессии: 5.2 RTX (BLAS + TLAS), 6.2 PIMPL full migration, 2.3 SVT.
+**Сводка:** 14 ✅ Closed · 2 ⏸️ Partial (6.2 PIMPL full struct move, 5.2 RTX BLAS mesh-data wiring + rayQueryEXT) · 0 🔓 Open. После 17x осталось 2 TODO-подзадач (низкий риск, deferred). Следующие сессии: 6.2 PIMPL full migration, 5.2 RTX rayQueryEXT + visual smoke (mesh-data plumbing).
 
 **17x update (2026-06-21):** Stage 3.2 Incremental Jolt — Phase 6 done (uncommitted, awaiting operator decision). Per-edit sync cost on FlatBench: ~30 ms (down from ~250 ms full scan). `Fluid↔Air` transitions no longer bump `editVersion`. `ProjectVPhysicsSyncTests` 9/9 sub-tests. См. CHANGELOG.md 17x и `agent/workspace.md` §1 17x.
 

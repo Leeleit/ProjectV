@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 
 #include <vulkan/vulkan.h>
 
@@ -26,9 +27,21 @@ struct FluidCaGpuFrameStats {
 };
 static_assert(sizeof(FluidCaGpuFrameStats) == 16);
 
-bool IsFluidCaGpuPipelineRequested();
+inline bool IsFluidCaGpuPipelineRequested()
+{
+	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
+		return value[0] != '\0' && value[0] != '0';
+	}
+	return true;
+}
 
-bool IsAsyncComputeEnabled();
+inline bool IsAsyncComputeEnabled()
+{
+	if (const char *value = std::getenv("PROJECTV_ASYNC_COMPUTE")) {
+		return value[0] != '\0' && value[0] != '0';
+	}
+	return true;
+}
 
 bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render);
 

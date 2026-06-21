@@ -7,6 +7,7 @@
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "fmt/format.h"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 
 namespace projectv::render {
 
@@ -214,15 +215,61 @@ void RayTracedShadows::SetBlasDirtyQueue(std::vector<uint32_t> &&dirtyChunkIndic
 }
 
 void RayTracedShadows::BuildDirtyBlases(
-	const VulkanContextState &,
-	VkCommandPool)
+	const VulkanContextState &context,
+	VkCommandPool commandPool)
 {
 	std::lock_guard<std::mutex> lock(m_dirtyQueueMutex);
 	if (m_pendingDirtyChunks.empty()) {
 		return;
 	}
-	m_config.blasRebuildCount += static_cast<uint32_t>(m_pendingDirtyChunks.size());
+	const uint32_t drainedCount = static_cast<uint32_t>(m_pendingDirtyChunks.size());
 	m_pendingDirtyChunks.clear();
+	m_config.blasRebuildCount += drainedCount;
+	if (!m_config.enabled || context.device == VK_NULL_HANDLE) {
+		return;
+	}
+	if (m_config.scratchDeviceAddress == 0u || m_config.scratchBuffer == VK_NULL_HANDLE) {
+		return;
+	}
+	const bool routeAsyncCompute = projectv::render::IsAsyncComputeEnabled()
+		&& context.hasDedicatedComputeQueue
+		&& context.dedicatedComputeQueue != VK_NULL_HANDLE
+		&& context.dedicatedComputeQueueFamilyIndex != context.queueFamilyIndex;
+
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = commandPool;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 1u;
+	VkCommandBuffer cmd = VK_NULL_HANDLE;
+	if (vkAllocateCommandBuffers(context.device, &allocInfo, &cmd) != VK_SUCCESS) {
+		return;
+	}
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vkBeginCommandBuffer(cmd, &beginInfo);
+
+	for (const uint32_t chunkIndex : m_pendingDirtyChunks) {
+		BuildChunkBlas(cmd, context, chunkIndex, 0u, VK_NULL_HANDLE, 0u, VK_NULL_HANDLE, 0u, VK_INDEX_TYPE_UINT32, VK_FORMAT_UNDEFINED, 0u);
+	}
+
+	vkEndCommandBuffer(cmd);
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	VkFence fence = VK_NULL_HANDLE;
+	if (vkCreateFence(context.device, &fenceInfo, nullptr, &fence) == VK_SUCCESS) {
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1u;
+		submitInfo.pCommandBuffers = &cmd;
+		VkQueue submitQueue = routeAsyncCompute ? context.dedicatedComputeQueue : context.queue;
+		if (vkQueueSubmit(submitQueue, 1u, &submitInfo, fence) == VK_SUCCESS) {
+			vkWaitForFences(context.device, 1u, &fence, VK_TRUE, UINT64_MAX);
+		}
+		vkDestroyFence(context.device, fence, nullptr);
+	}
+	vkFreeCommandBuffers(context.device, commandPool, 1u, &cmd);
 }
 
 VkDeviceSize RayTracedShadows::ComputeBlasBuildScratchSize(
@@ -310,12 +357,14 @@ bool RayTracedShadows::BuildChunkBlas(
 	rangeInfo.transformOffset = 0u;
 	const VkAccelerationStructureBuildRangeInfoKHR *rangeInfos[1] = { &rangeInfo };
 
+	vkCmdBuildAccelerationStructuresKHR(
+		commandBuffer,
+		1u,
+		&buildInfo,
+		rangeInfos);
+
 	(void)chunkIndex;
-	(void)buildInfo;
-	(void)rangeInfos;
 	m_config.blasRebuildCount += 1u;
-	(void)commandBuffer;
-	(void)context;
 	return true;
 }
 
