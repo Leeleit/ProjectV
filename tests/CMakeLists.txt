@@ -21,6 +21,7 @@ add_executable(ProjectVTests
         ../src/app/LookDevCaptureAutomation.cpp
         ../src/audio/AudioEngine.cpp
         ../src/ecs/EcsWorld.cpp
+        ../src/physics/GreedyPhysicsMerger.cpp
         ../src/physics/PhysicsWorld.cpp
         ../src/debug/DebugHud.cpp
         ../src/debug/DebugOverlays.cpp
@@ -31,6 +32,7 @@ add_executable(ProjectVTests
         ../src/render/ShadowProjection.cpp
         ../src/render/vulkan/VulkanResult.cpp
         ../src/voxel/VoxelInteraction.cpp
+        ../src/voxel/VoxelLodDownsample.cpp
         ../src/voxel/VoxelMaterials.cpp
         ../src/voxel/VoxelRaycast.cpp
         ../src/voxel/VoxelWorld.cpp
@@ -426,7 +428,9 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     add_executable(ProjectVShadowProjectionBenchmark
             ${CMAKE_SOURCE_DIR}/src/bench/ShadowProjectionBenchmark.cpp
             ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
+            ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
             ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+            ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
             ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
             ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
             ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
@@ -457,7 +461,9 @@ endif ()
 
 add_executable(ProjectVFluidCATests
         FluidCATests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp

@@ -1381,6 +1381,8 @@ SDL_AppResult DrawFrame(
 		return SDL_APP_FAILURE;
 	}
 
+	DrainDeferredNanoVdbDestroysForFrame(context, *render, currentFrameIndex);
+
 	const VkCommandBuffer cmd = frame->commandBuffers[currentFrameIndex];
 	const VkFence inFlightFence = frame->inFlightFences[currentFrameIndex];
 	const VkSemaphore imageAvailableSemaphore = frame->imageAvailableSemaphores[currentFrameIndex];

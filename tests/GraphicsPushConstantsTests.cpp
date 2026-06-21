@@ -141,6 +141,24 @@ int main()
 	std::printf("[OK] jitter: scales correctly with tiny extent\n");
 
 
-	std::printf("ProjectVGraphicsPushConstantsTests: 5/5 passed\n");
+	{
+		const CameraState camera = MakeIdentityCamera();
+		const VkExtent2D extent{1920u, 0u};
+		const GraphicsPushConstants pc =
+			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
+		Expect(std::isfinite(pc.viewProjection.c[0][0]),
+			"zero-height: VP m00 is finite (no inf)");
+		ExpectNear(
+			pc.viewProjection.c[0][0],
+			1.0f / (1.0f * std::tan(camera.verticalFovRadians * 0.5f)),
+			kEpsilon,
+			"zero-height: aspect falls back to 1.0 (square ratio)");
+		ExpectNear(pc.viewProjection.c[2][1], 0.0f, kEpsilon,
+			"zero-height: VP m21 jitter is 0 (height==0 branch)");
+	}
+	std::printf("[OK] zero-height: aspect guard prevents inf propagation\n");
+
+
+	std::printf("ProjectVGraphicsPushConstantsTests: 6/6 passed\n");
 	return EXIT_SUCCESS;
 }

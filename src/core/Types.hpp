@@ -723,6 +723,13 @@ struct RenderState {
 	VkDescriptorPool voxelMeshingDescriptorPool = VK_NULL_HANDLE;
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
 
+	struct DeferredNanoVdbDestroyEntry {
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VmaAllocation allocation = nullptr;
+	};
+	std::array<std::vector<DeferredNanoVdbDestroyEntry>, MAX_FRAMES_IN_FLIGHT>
+		deferredNanoVdbDestroys{};
+
 	ChunkVisibilityCache chunkVisibilityCache{};
 	projectv::render::RayTracedShadows *rayTracedShadows = nullptr;
 	VkImage depthImage = VK_NULL_HANDLE;

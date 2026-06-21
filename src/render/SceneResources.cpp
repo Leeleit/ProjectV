@@ -599,6 +599,8 @@ void DestroySceneResources(
 		return;
 	}
 
+	DrainAllDeferredNanoVdbDestroys(context, *render);
+
 	if (context->device != VK_NULL_HANDLE) {
 		const VkResult idleResult = vkDeviceWaitIdle(context->device);
 		if (idleResult != VK_SUCCESS) {
@@ -1883,6 +1885,8 @@ bool UploadSceneFrameResources(
 			const bool grewUpper = upperRequired > frameResources.nanovdbUpperCapacityBytes
 				? GrowNanoVdbBuffer(
 					context,
+					render,
+					frameIndex,
 					frameResources.nanovdbUpperBuffer,
 					frameResources.nanovdbUpperAllocation,
 					frameResources.nanovdbUpperMappedData,
@@ -1893,6 +1897,8 @@ bool UploadSceneFrameResources(
 			const bool grewLower = lowerRequired > frameResources.nanovdbLowerCapacityBytes
 				? GrowNanoVdbBuffer(
 					context,
+					render,
+					frameIndex,
 					frameResources.nanovdbLowerBuffer,
 					frameResources.nanovdbLowerAllocation,
 					frameResources.nanovdbLowerMappedData,
@@ -1903,6 +1909,8 @@ bool UploadSceneFrameResources(
 			const bool grewLeaf = leafRequired > frameResources.nanovdbLeafCapacityBytes
 				? GrowNanoVdbBuffer(
 					context,
+					render,
+					frameIndex,
 					frameResources.nanovdbLeafBuffer,
 					frameResources.nanovdbLeafAllocation,
 					frameResources.nanovdbLeafMappedData,
@@ -1913,6 +1921,8 @@ bool UploadSceneFrameResources(
 			const bool grewMaterial = materialRequired > frameResources.nanovdbMaterialCapacityBytes
 				? GrowNanoVdbBuffer(
 					context,
+					render,
+					frameIndex,
 					frameResources.nanovdbMaterialBuffer,
 					frameResources.nanovdbMaterialAllocation,
 					frameResources.nanovdbMaterialMappedData,
@@ -2045,6 +2055,8 @@ uint64_t ComputeGrownNanoVdbCapacity(const uint64_t currentCapacityBytes, const 
 
 bool GrowNanoVdbBuffer(
 	VulkanContextState *context,
+	RenderState &render,
+	uint32_t currentFrameIndex,
 	VkBuffer &buffer,
 	VmaAllocation &allocation,
 	void *&mappedData,
@@ -2060,7 +2072,7 @@ bool GrowNanoVdbBuffer(
 	}
 	if (buffer != VK_NULL_HANDLE && allocation != nullptr) {
 		profiling::RecordFree(allocation, profilingTag);
-		vmaDestroyBuffer(context->allocator, buffer, allocation);
+		EnqueueDeferredNanoVdbDestroy(render, currentFrameIndex, buffer, allocation);
 		buffer = VK_NULL_HANDLE;
 		allocation = nullptr;
 		mappedData = nullptr;
@@ -2091,4 +2103,48 @@ bool GrowNanoVdbBuffer(
 	capacityBytes = allocInfo.size;
 	profiling::RecordAllocation(allocation, allocInfo.size, profilingTag);
 	return true;
+}
+
+void EnqueueDeferredNanoVdbDestroy(
+	RenderState &render,
+	uint32_t frameIndex,
+	VkBuffer buffer,
+	VmaAllocation allocation)
+{
+	if (frameIndex >= MAX_FRAMES_IN_FLIGHT) {
+		return;
+	}
+	render.deferredNanoVdbDestroys[frameIndex].push_back({buffer, allocation});
+}
+
+void DrainDeferredNanoVdbDestroysForFrame(
+	VulkanContextState *context,
+	RenderState &render,
+	uint32_t frameIndex)
+{
+	if (frameIndex >= MAX_FRAMES_IN_FLIGHT || context == nullptr) {
+		return;
+	}
+	auto &queue = render.deferredNanoVdbDestroys[frameIndex];
+	if (queue.empty()) {
+		return;
+	}
+	for (auto &entry : queue) {
+		if (entry.buffer != VK_NULL_HANDLE && entry.allocation != nullptr) {
+			vmaDestroyBuffer(context->allocator, entry.buffer, entry.allocation);
+		}
+	}
+	queue.clear();
+}
+
+void DrainAllDeferredNanoVdbDestroys(
+	VulkanContextState *context,
+	RenderState &render)
+{
+	if (context == nullptr) {
+		return;
+	}
+	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		DrainDeferredNanoVdbDestroysForFrame(context, render, i);
+	}
 }

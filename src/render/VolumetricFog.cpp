@@ -583,6 +583,24 @@ bool RecordVolumetricFogAccumulationPass(
 		kVolumetricFogFroxelHeight / 8u,
 		kVolumetricFogFroxelDepth / 4u);
 
+	VkImageMemoryBarrier2 postBarrier{};
+	postBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	postBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	postBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	postBarrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	postBarrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+	postBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+	postBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	postBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	postBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	postBarrier.image = render.volumetricFogFroxelImage;
+	postBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+	VkDependencyInfo postDepInfo{};
+	postDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	postDepInfo.imageMemoryBarrierCount = 1u;
+	postDepInfo.pImageMemoryBarriers = &postBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &postDepInfo);
+
 	profiling::PlotValue("Volumetric Fog Pass", 1.0);
 	return true;
 }

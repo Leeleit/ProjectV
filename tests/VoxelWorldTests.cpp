@@ -32,44 +32,12 @@
 
 // ReSharper disable CppDFAUnreachableFunctionCall
 
+#include "projectv_test_utils.hpp"
+
 namespace {
 #ifndef PROJECTV_TESTS_SOURCE_DIR
 #define PROJECTV_TESTS_SOURCE_DIR "."
 #endif
-
-struct TestContext {
-	int failures = 0;
-
-	void Fail(const int line, const std::string_view message)
-	{
-		std::fprintf(stderr, "Test failure at line %d: %.*s\n", line, static_cast<int>(message.size()), message.data());
-		++failures;
-	}
-};
-
-template <typename T>
-void ExpectEqual(TestContext &context, const T &expected, const T &actual, const int line, const std::string_view expr)
-{
-	if (!(expected == actual)) {
-		char buffer[256]{};
-		std::snprintf(
-			buffer,
-			sizeof(buffer),
-			"%.*s (expected %lld, got %lld)",
-			static_cast<int>(expr.size()),
-			expr.data(),
-			static_cast<long long>(expected),
-			static_cast<long long>(actual));
-		context.Fail(line, buffer);
-	}
-}
-
-void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
-{
-	if (!condition) {
-		context.Fail(line, expr);
-	}
-}
 
 bool ColorsMatch(
 	const std::array<float, 4> &expected,
@@ -125,9 +93,6 @@ uint32_t ReadLe32(const std::vector<uint8_t> &bytes, const size_t offset)
 	const uint32_t byte3 = bytes[offset + 3];
 	return byte0 | byte1 << 8u | byte2 << 16u | byte3 << 24u;
 }
-
-#define EXPECT_TRUE(context, expr) ExpectTrue(context, (expr), __LINE__, #expr)
-#define EXPECT_EQ(context, expected, actual) ExpectEqual(context, (expected), (actual), __LINE__, #actual)
 
 VoxelWorld MakeTestWorld(const Int3 min, const Int3 maxExclusive, const int chunkSize)
 {
@@ -1327,8 +1292,6 @@ void ExpectInt3Equal(
 	context.Fail(line, buffer);
 }
 
-#undef EXPECT_EQ
-#define EXPECT_EQ(context, expected, actual) ExpectEqual(context, (expected), (actual), __LINE__, #actual)
 #define EXPECT_INT3_EQ(context, expected, actual) ExpectInt3Equal(context, (expected), (actual), __LINE__, #actual)
 
 void ExpectNear(
