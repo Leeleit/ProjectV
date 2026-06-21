@@ -676,6 +676,9 @@ struct RenderPassTimings {
 	uint32_t dirtyChunkRebuiltCount = 0;
 };
 
+// see COMMENTS.md "src/core/Types.hpp" for full ownership mapping
+// (CreateXxx / DestroyXxx pairs for each VkBuffer+VmaAllocation, VkImage,
+// VkPipeline, VkShaderModule, VkDescriptorSetLayout field).
 struct RenderState {
 	std::vector<PackedSceneChunkDescriptor> sceneChunkDescriptors;
 	std::vector<SceneChunkVoxelPayloadRange> sceneChunkVoxelPayloadRanges;

@@ -230,6 +230,13 @@
 ### AUDIT-CORE-007 — `Input.cpp`: SDL key state transitions без double-keydown guard
 
 * **Файл / строки:** `src/app/Input.cpp:120-200` (key state transition logic).
+* **Resolution:** Файл `src/app/Input.cpp` **не существует**. Actual key event handling — в
+  `src/app/InputActions.cpp` и использует **`down`/`pressed` bools per action** (line 56, 222-224),
+  не explicit "Pressed/Released" state machine.   SDL event loop в `UpdateApp` корректно обрабатывает
+  SDL_KEYDOWN / SDL_KEYUP пары через SDL's built-in keyboard repeat (line 199: `event.key.repeat` check).
+  Bug не существует.
+* **Статус:** ✅ Closed (false alarm, code uses action-pressed pattern + SDL repeat filter).
+* **Resolution date:** 2026-06-21 (batch 5 fix pass)
 * **Описание:** переходы key-up → key-down не валидируют, что key-up действительно следовал за key-down. Двойные
   key-down события (SDL может генерировать в edge cases) могут оставить input system в inconsistent state.
 * **Severity rationale:** Low — unlikely в practice, SDL обрабатывает это корректно.

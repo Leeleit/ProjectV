@@ -972,3 +972,87 @@ alpha (1 - transmittance) for alpha-blend over scene color.
 reference scene. `kSchlickG=0.5` per Schneider 2017 cloud-tuning (broader
 than fog because clouds have larger droplets). Production tunable via
 push constants or per-scene VoxelScenePreset.
+
+---
+
+## `src/core/Types.hpp` (AUDIT-CORE-003 ownership mapping, 2026-06-21)
+
+### RenderState field → Create/Destroy pair (design-rationale)
+
+`RenderState` aggregates ~50 raw Vulkan handles / VMA allocations across
+~15 sub-resources. Each is owned by a specific Create/Destroy pair called
+from `src/app/main.cpp:InitializeVulkanBase` (init) and `src/core/Types.cpp:42-123`
+(DestroyRenderState shutdown). **All pointer/handle fields are non-owning
+by default — the owning function is the only place allowed to vmaDestroy*
+or vkDestroy*.** Do NOT free these fields directly outside of their
+owner.
+
+| Field group | Owner (Create) | Owner (Destroy) |
+|---|---|---|
+| `graphicsDescriptorSetLayout/Pool`, `shadowDescriptorSetLayout/Pool`, `voxelMeshingDescriptorSetLayout/Pool` | `CreateGraphicsPipeline` | `DestroyGraphicsPipeline` |
+| `sceneFrameResources[]` (32+ SSBO triads: `*Buffer`+`*Allocation`+`*MappedData`+`*CapacityBytes`) | `CreateSceneResources` (`RefreshSceneFrameResources`) | `DestroySceneResources` (`DrainAllDeferredNanoVdbDestroys` first) |
+| `deferredNanoVdbDestroys[]` (per-frame-in-flight queue) | `GrowNanoVdbBuffer` (enqueue) | `DestroySceneResources` (drain) |
+| `rayTracedShadows *` | `CreateRayTracedShadowResources` | `DestroyRayTracedShadowResources` |
+| `depthImage/View/Allocation` | `CreateDepthResources` | `DestroyDepthResources` |
+| `vctClipmapImage/View/Allocation/Memory/Sampler` | `CreateVctClipmapFallbackSamplerOnly` (fallback) / `CreateVctClipmapResources` (env-gated) | `DestroyVctClipmapResources` |
+| `vctVoxelize*` (pipeline/layout/shader/descriptor set) | `CreateVoxelizePipelines` | `DestroyVoxelizePipelines` |
+| `shadowImage/View/CascadeViews/Allocation/Sampler` | `CreateShadowResources` | `DestroyShadowResources` |
+| `hizBuffer`, `hizCulling*` | `CreateHizCullingPipeline` (lazily created on first dispatch) | `DestroyHizCullingPipeline` |
+| `screenshotReadbackBuffer/Allocation/MappedData` | `CreateScreenshotReadbackResources` | `DestroyScreenshotReadbackResources` |
+| `materialVisualBuffer/Allocation/MappedData` | `CreateMaterialVisualResources` (env-gated) | `DestroyMaterialVisualResources` |
+| `skyAtmospherePipeline/Layout/Modules/DescriptorSetLayout/Pool/Sets[]/Lut images` | `CreateSkyAtmosphereResources` / `CreateSkyLutResources` | `DestroySkyAtmosphereResources` / `DestroySkyLutResources` |
+| `volumetricFogFroxelImage/View/Sampler/Pipeline/Layout/Descriptor*`, `volumetricFogFallbackImage/View` | `CreateVolumetricFogFallbackOnly` (fallback) / `CreateVolumetricFogResources` (env-gated) | `DestroyVolumetricFogResources` |
+| `cloudscapePipeline/Layout/Descriptor*` | `CreateCloudscapeResources` (env-gated) | `DestroyCloudscapeResources` |
+
+**Why raw pointers and not `std::unique_ptr` / RAII wrappers?** Most of
+these types are opaque Vulkan handles (VkBuffer, VkImage, etc.) whose
+destruction requires VMA allocator + logical device context, which
+`std::unique_ptr<>` cannot express without a heavy custom deleter +
+singleton-pattern lifetime violation. The pattern chosen (Create/Destroy
+pair + bool-initialized fields + exhaustive central shutdown) is
+preferred over per-field RAII for two reasons:
+
+1. **Initialization order matters.** Vulkan requires device → allocator
+   → swapchain → pipelines → descriptor sets. RAII destroys in reverse
+   declaration order, but our field order in `RenderState` is data-flow
+   oriented (descriptors, then buffers, then images), not lifecycle.
+2. **Error recovery.** `Create*` functions do partial cleanup on failure
+   (calls `Destroy*` mid-init). RAII makes this hard to express.
+
+**Refactor hazard:** if a new pointer field is added to `RenderState`:
+1. Add to the matching `CreateXxxResources` function (and `DestroyXxxResources`).
+2. Add to the table above.
+3. Verify DestroyRenderState calls the right destroyer.
+
+---
+
+## `src/c_kernels/` (AUDIT-CORE-010 alignment contract, 2026-06-21)
+
+### Common alignment policy (design-rationale)
+
+All C kernel entry points operate on raw voxel/parameter buffers that
+**must be 16-byte aligned** for AVX2 SIMD correctness. The platform's
+allocator (VMA for GPU buffers, `std::aligned_alloc` for CPU staging)
+guarantees this for top-level allocations. Nested structs
+(`ProjectvCFrustumCullParameters`, `ProjectvCAabb`) are declared with
+`alignas(16)` at their definitions in
+`src/c_kernels/frustum_cull.hpp:8-26` so even in-place construction
+preserves alignment.
+
+### Per-kernel contract
+
+| Function | Caller | Alignment requirement | Asserted at runtime |
+|---|---|---|---|
+| `projectv_cull_frustum_scalar` (C, CPU) | `tests/FrustumCullBenchmark`, `RunCScalar` | `aabbs` and `masks` arrays: 16-byte aligned | No runtime assert (release benchmark, contract per declaration) |
+| `projectv_cull_frustum_avx2` (C, AVX2 CPU) | `tests/FrustumCullBenchmark`, `RunCAvx2` | Same | Yes — `static_assert(alignof(ProjectvCFrustumCullParameters) >= 16)` at call site, vector base addr checked at vector prologue |
+| `FrustumCulling::TestXxx` (C++ thin wrappers) | CPU code | Inherits via `alignas` on POD structs | Compile-time `static_assert` on consumer side |
+
+**EVIL markers** would normally be added per declaration, but
+`alignas(16)` is the C++ standard mechanism — adding `// EVIL: aligned for AVX2`
+would be redundant. The compile-time guarantee from `alignas` + `static_assert`
+is the design-rationale anchor.
+
+**Future hazard:** if a new C kernel is added without `alignas(16)` on its
+parameters, AVX2 builds will crash on strict-alignment architectures
+(ARM, certain mobile GPUs in CPU emulation). Mitigation: CI build on
+ARM/aarch64 should be added to catch this.
