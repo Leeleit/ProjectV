@@ -1,0 +1,29 @@
+=== surface micro-detail benchmark ===
+5 strategies × 45 scene configs × 1000 iter + 10 warmup
+Scenes built: 5
+A_None / stone_45deg_rough0.5 : mean = 23.7982 ns/frag | psnr = 100 dB | 0.657972% of 30 Hz
+A_None / wood_45deg_rough0.5 : mean = 21.4236 ns/frag | psnr = 100 dB | 0.59232% of 30 Hz
+A_None / sand_45deg_rough0.5 : mean = 21.7491 ns/frag | psnr = 100 dB | 0.601319% of 30 Hz
+A_None / metal_45deg_rough0.5 : mean = 22.6323 ns/frag | psnr = 100 dB | 0.625739% of 30 Hz
+A_None / glass_45deg_rough0.5 : mean = 19.2367 ns/frag | psnr = 100 dB | 0.531858% of 30 Hz
+B_WorldHash / stone_45deg_rough0.5 : mean = 36.7419 ns/frag | psnr = 60.5875 dB | 1.01584% of 30 Hz
+B_WorldHash / wood_45deg_rough0.5 : mean = 32.3087 ns/frag | psnr = 63.145 dB | 0.89327% of 30 Hz
+B_WorldHash / sand_45deg_rough0.5 : mean = 32.1929 ns/frag | psnr = 57.7055 dB | 0.89007% of 30 Hz
+B_WorldHash / metal_45deg_rough0.5 : mean = 32.448 ns/frag | psnr = 57.4745 dB | 0.897123% of 30 Hz
+B_WorldHash / glass_45deg_rough0.5 : mean = 32.1595 ns/frag | psnr = 55.0335 dB | 0.889146% of 30 Hz
+C_TangentFBM2D / stone_45deg_rough0.5 : mean = 106.298 ns/frag | psnr = 28.9437 dB | 2.93892% of 30 Hz
+C_TangentFBM2D / wood_45deg_rough0.5 : mean = 105.197 ns/frag | psnr = 31.5235 dB | 2.90849% of 30 Hz
+C_TangentFBM2D / sand_45deg_rough0.5 : mean = 105.888 ns/frag | psnr = 26.0035 dB | 2.9276% of 30 Hz
+C_TangentFBM2D / metal_45deg_rough0.5 : mean = 105.687 ns/frag | psnr = 25.7738 dB | 2.92203% of 30 Hz
+C_TangentFBM2D / glass_45deg_rough0.5 : mean = 105.385 ns/frag | psnr = 23.303 dB | 2.91369% of 30 Hz
+D_Worley2D / stone_45deg_rough0.5 : mean = 64.5615 ns/frag | psnr = 58.3794 dB | 1.785% of 30 Hz
+D_Worley2D / wood_45deg_rough0.5 : mean = 64.1963 ns/frag | psnr = 60.9024 dB | 1.7749% of 30 Hz
+D_Worley2D / sand_45deg_rough0.5 : mean = 64.2253 ns/frag | psnr = 55.524 dB | 1.7757% of 30 Hz
+D_Worley2D / metal_45deg_rough0.5 : mean = 64.7467 ns/frag | psnr = 55.2949 dB | 1.79012% of 30 Hz
+D_Worley2D / glass_45deg_rough0.5 : mean = 64.9698 ns/frag | psnr = 52.8713 dB | 1.79629% of 30 Hz
+E_DerivativeNormal / stone_45deg_rough0.5 : mean = 51.3927 ns/frag | psnr = 29.248 dB | 1.4209% of 30 Hz
+E_DerivativeNormal / wood_45deg_rough0.5 : mean = 50.5767 ns/frag | psnr = 31.828 dB | 1.39835% of 30 Hz
+E_DerivativeNormal / sand_45deg_rough0.5 : mean = 50.3122 ns/frag | psnr = 26.3158 dB | 1.39103% of 30 Hz
+E_DerivativeNormal / metal_45deg_rough0.5 : mean = 50.6176 ns/frag | psnr = 26.0866 dB | 1.39947% of 30 Hz
+E_DerivativeNormal / glass_45deg_rough0.5 : mean = 50.5483 ns/frag | psnr = 23.6184 dB | 1.39756% of 30 Hz
+Results written to build/results.csv

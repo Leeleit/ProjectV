@@ -120,7 +120,8 @@ docs/experiments/
 ├── INDEX.md                        # снимок состояния + реестр
 ├── README.md                       # короткий human-orientation
 ├── research/
-│   └── backlog.md                  # канбан гипотез (open / in-progress / closed)
+│   └── backlog.md                  # канбан гипотез (open / in-progress)
+|   --- backlog_closed.md           # closed исследования
 ├── benchmarks/
 │   └── methodology.md              # стандарт измерений
 └── experiments/
@@ -291,13 +292,13 @@ Per корневой `AGENTS.md §5.8` — subagents read-only. Subagent **не 
 
 ### 13.5 Reservation lifecycle (sync с §6)
 
-| Reservation state             | STATUS.md status         | INDEX.md section       |
-|:------------------------------|:-------------------------|:-----------------------|
-| `§Open` в `backlog.md`        | (none, нет папки)        | (none)                 |
-| `§In progress` в `backlog.md` | `open` или `in-progress` | §5 Active              |
-| `§Closed` в `backlog.md`      | `concluded-verdict-*`    | §6 Recent closed       |
-| `§Rejected` в `backlog.md`    | `abandoned`              | (none)                 |
-| `§In progress` + blocked      | `blocked`                | §5 Active (с пометкой) |
+| Reservation state               | STATUS.md status         | INDEX.md section       |
+|:--------------------------------|:-------------------------|:-----------------------|
+| `§Open` в `backlog.md`          | (none, нет папки)        | (none)                 |
+| `§In progress` в `backlog.md`   | `open` или `in-progress` | §5 Active              |
+| `§Closed` в `backlog_closed.md` | `concluded-verdict-*`    | §6 Recent closed       |
+| `§Rejected` в `backlog.md`      | `abandoned`              | (none)                 |
+| `§In progress` + blocked        | `blocked`                | §5 Active (с пометкой) |
 
 **Sync-обязательство:** при смене статуса обновлять **все три места** за одну операцию (single-pass), не
 растягивать sync на несколько тиков.

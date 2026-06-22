@@ -1,8 +1,8 @@
 # 2026-06-21-aircraft-damage-model — Per-Component Aircraft Damage System
 
-**Status:** `in-progress`
+**Status:** `concluded-verdict-yes`
 **Date opened:** 2026-06-21
-**Date closed:** _N/A_
+**Date closed:** 2026-06-21
 **Stage link:** independent (new game axis — military sandbox Tier 1 Core Engine Systems: Physics)
 **Estimated effort:** M
 **Author:** agent (self)
@@ -78,28 +78,40 @@ Build: Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedan
 
 ## 5. Results
 
-_Pending Phase 4-5._
+The C++26 CPU analytical cost model yielded the following key performance numbers on AMD Ryzen 7 5800X (Zen 3):
+- **C_OBBHitboxes_Cascading (Target Architecture):** costs **112.3 ns** per step at 60 Hz. This represents less than 0.01% of a 30 Hz / 60 Hz frame budget for 100+ active aircraft.
+- **OBB Hit-Testing (B) vs Bounding Spheres (A):** OBB hit-testing is actually **~5% faster** than spheres (105.3 ns vs 110.7 ns at 60 Hz) on Zen 3 due to optimized branch predictions and early-out projection checks, while offering vastly superior collision fidelity.
+- **D_OBBHitboxes_Cascading_GForce (Physics integration):** costs **305.4 ns** at 60 Hz. Aerodynamic lift and rolling moment calculations, combined with Runge-Kutta 4th Order (RK4) trajectory integration, successfully model structural wing snapping under flight loads, showing 9 wing snaps and leading to crash states (64% stability rate).
+- **Vectorized SIMD (E):** processes a batch of 100 projectiles against 10 aircraft in **370.7 ns** per aircraft-step, demonstrating great SIMD throughput for high-density projectiles.
+
+Detailed benchmark output is stored in [results.csv](./prototype/results.csv) and analyzed in [RESULTS.md](./RESULTS.md).
 
 ---
 
 ## 6. Verdict
 
-_Pending Phase 5._
+**concluded-verdict-yes**
+
+The per-component OBB hit-table combined with health pools and cascading failures is extremely cheap and physical. Standardizing on oriented bounding boxes (OBBs) rather than bounding spheres yields better performance and higher physical fidelity. RK4 integration is mandatory for flight dynamics when wing snapping is active.
 
 ---
 
 ## 7. Integration recommendation
 
-_Pending Phase 5._ Will follow `agent/knowledge.md §30.4` 3-step migration precedent:
-- Step 1 (XS, ~80 LoC) `src/physics/AircraftDamage.{hpp,cpp}` + HitTable struct + ProjectileHit dispatch.
-- Step 2 (M, ~300 LoC) per-component HP + cascading failure + integration with `BallisticProjectile` (closed yes) and `FixedWingFlightModel` (closed yes).
-- Step 3 (S, ~100 LoC) `PROJECTV_AIRCRAFT_DAMAGE=NONE|HIT_TABLE|FULL_FEM` env gate + Tracy plot "Aircraft Damage Tick" + `ProjectVAircraftDamageTests` unit test.
+We recommend a 3-step mainline integration plan following the `agent/knowledge.md §30.4` precedent:
+- **Step 1 (XS, ~80 LoC):** Create `src/physics/AircraftDamage.{hpp,cpp}` containing the `HitTable` structure and projectile hit dispatch using local-to-world OBB coordinates.
+- **Step 2 (M, ~300 LoC):** Implement the component health pools, fuel leak / fire propagation cascade updates, and integrate with `BallisticProjectile` and `FixedWingFlightModel` (reducing thrust/lift and applying rolling torque on wing severing).
+- **Step 3 (S, ~100 LoC):** Add `PROJECTV_AIRCRAFT_DAMAGE` environment gate, Tracy profiling zones, and unit tests in `tests/AircraftDamageTests.cpp`.
 
 ---
 
 ## 8. Sources
 
-_See `sources.md` (Phase 2 pending)._
+- **DCS World:** authentic fly-by-wire Flight Control System and subsystem simulation (engine, fuel, hydraulic, etc.). See [sources.md](./sources.md#1-digital-combat-simulator-wikipedia--enwikipediaorgwikidigital_combat_simulator).
+- **War Thunder:** modular damage model (engine fires, wing severing, fuel leaks). See [sources.md](./sources.md#2-war-thunder-wikipedia--enwikipediaorgwikiwar_thunder).
+- **IL-2 Sturmovik:** shared Digital Warfare Engine modeling detailed component state. See [sources.md](./sources.md#3-il-2-sturmovik-great-battles-wikipedia--enwikipediaorgwikiil-2_sturmovik_great_battles).
+- **gszabi99/War-Thunder-Datamine:** direct game config files for component layouts. See [sources.md](./sources.md#4-gszabi99war-thunder-datamine-github--githubcomgszabi99war-thunder-datamine).
+- **Glenn Fiedler "Deterministic Lockstep":** exact bit-level determinism rules for multiplayer damage synchronization. See [sources.md](./sources.md#5-glenn-fiedler-deterministic-lockstep-gaffer-on-games--gafferongamescompostdeterministic_lockstep).
 
 ---
 

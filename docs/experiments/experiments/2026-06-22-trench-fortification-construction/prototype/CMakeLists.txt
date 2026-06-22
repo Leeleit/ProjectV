@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.25)
+project(fort_bench CXX)
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_executable(fort_bench fort_bench.cpp)
+target_compile_options(fort_bench PRIVATE -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic)
