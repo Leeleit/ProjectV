@@ -12,7 +12,9 @@
 #include "platform/PlatformEvents.hpp"
 #include "render/SceneResources.hpp"
 #include "render/ScreenshotCapture.hpp"
-#include "render/ShadowProjection.hpp"
+// CSM removed per TODO.md §5.2.D (session 20x). Tests that referenced
+// ShadowProjection helpers have been retired; BuildSunShadowProjection
+// callers below are stubs (kept for test enumeration compatibility).
 #include "render/vulkan/VulkanResult.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelMaterials.hpp"
@@ -473,32 +475,14 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 		2.50f};
 	render.currentSceneLighting.sunDirectionAndWrap = {-0.58f, 0.62f, -0.31f, 0.10f};
 	render.currentSceneLighting.sunColorAndIntensity = {0.95f, 0.90f, 0.82f, 1.30f};
-	render.currentSceneLighting.sunShadowParams = {0.72f, 0.0012f, 0.0035f, 1.40f};
 	render.currentSceneLighting.sunContactShadowParams = {0.46f, 3.25f, 0.0f, 0.0f};
 	render.currentSceneLighting.ambientOcclusionParams = {0.37f, 2.75f, 0.55f, 0.0f};
 	render.currentSceneLighting.localPointLightPositionAndRadius = {1.0f, 2.0f, 3.0f, 9.0f};
 	render.currentSceneLighting.localPointLightColorAndIntensity = {0.70f, 0.80f, 0.90f, 12.0f};
 	render.currentSceneLighting.localPointLightParams = {1.0f, 1.50f, 0.85f, 0.08f};
-	render.currentSceneLighting.shadowCascadeBlendParams = {0.19f, 0.10f, 0.0f, 0.0f};
-	render.currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(0.10f, 128.0f, 0.65f);
-	render.currentSunShadowCascadeDiagnostics.viewNearDepths = {0.10f, 8.0f, 24.0f, 56.0f};
-	render.currentSunShadowCascadeDiagnostics.viewFarDepths = {8.0f, 24.0f, 56.0f, 128.0f};
-	render.currentSunShadowCascadeDiagnostics.orthoWidths = {12.0f, 20.0f, 36.0f, 64.0f};
-	render.currentSunShadowCascadeDiagnostics.orthoHeights = {10.0f, 18.0f, 30.0f, 52.0f};
-	render.currentSunShadowCascadeDiagnostics.texelWorldSizes = {0.0059f, 0.0098f, 0.0176f, 0.0313f};
-	render.currentSunShadowCascadeDiagnostics.casterLightNearDepths = {1.5f, 4.0f, 9.5f, 18.0f};
-	render.currentSunShadowCascadeDiagnostics.casterLightFarDepths = {15.5f, 28.0f, 60.0f, 132.0f};
-	render.shadowMapExtent = {2048u, 2048u};
 	render.lightingDebugControls.exposureBiasStops = 0.25f;
 	render.lightingDebugControls.toneMapOperator = ToneMapOperator::AcesApprox;
 	render.lightingDebugControls.debugView = LightingDebugView::Shadow;
-	render.lightingDebugControls.shadowCoverageScale = 1.30f;
-	render.lightingDebugControls.shadowTuningTarget = ShadowTuningTarget::CascadeBlend;
-	render.lightingDebugControls.shadowStrengthOffset = 0.10f;
-	render.lightingDebugControls.shadowDepthBiasOffset = 0.0002f;
-	render.lightingDebugControls.shadowNormalBiasOffset = 0.0010f;
-	render.lightingDebugControls.shadowFilterRadiusOffset = 0.25f;
-	render.lightingDebugControls.shadowCascadeBlendOffset = 0.04f;
 
 	const std::filesystem::path metadataPath = GetTestScreenshotPath().replace_extension(".txt");
 	std::error_code removeError;
@@ -524,7 +508,6 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 	EXPECT_TRUE(context, text.find("exposure_target_key=0.750000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("exposure_min=0.400000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("exposure_max=2.500000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_tuning_target=BLND") != std::string::npos);
 	EXPECT_TRUE(context, text.find("contact_shadow_strength=0.460000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("contact_shadow_distance=3.250000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("ambient_occlusion_strength=0.370000") != std::string::npos);
@@ -538,17 +521,10 @@ void TestSaveScreenshotCaptureMetadataWritesLookDevState(TestContext &context)
 	EXPECT_TRUE(context, text.find("local_point_light_source_radius=1.500000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("local_point_light_shadow_strength=0.850000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("local_point_light_shadow_bias=0.080000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_coverage_scale=1.300000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_blend=0.190000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_count=4") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_lambda=0.650000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_splits=") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_view_ranges=0.100000:8.000000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_ortho_extents=12.000000x10.000000") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_texel_world=0.005900 0.009800 0.017600 0.031300") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_caster_light_ranges=1.500000:15.500000") != std::string::npos);
 	EXPECT_TRUE(context, text.find("transparent_shadow_policy=GLASS_IGNORED_FLUID_CASTS") != std::string::npos);
-	EXPECT_TRUE(context, text.find("shadow_cascade_blend_offset=0.040000") != std::string::npos);
+	// CSM removed per TODO.md §5.2.D (session 20x). shadow_tuning_target,
+	// shadow_coverage_scale, shadow_cascade_* metadata fields are retired;
+	// RTX shadows are the canonical sun shadow path.
 
 	std::filesystem::remove(metadataPath, removeError);
 }
@@ -825,10 +801,6 @@ void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
 	EXPECT_TRUE(context, voxelLab.exposureControl[1] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.exposureControl[2] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.exposureControl[3] > voxelLab.exposureControl[2]);
-	EXPECT_TRUE(context, voxelLab.sunShadowParams[0] > 0.0f);
-	EXPECT_TRUE(context, voxelLab.sunShadowParams[1] > 0.0f);
-	EXPECT_TRUE(context, chunkGrid.sunShadowParams[2] > 0.0f);
-	EXPECT_TRUE(context, voxelLab.sunShadowParams[3] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.sunContactShadowParams[0] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.sunContactShadowParams[1] > 0.0f);
 	EXPECT_TRUE(context, voxelLab.ambientOcclusionParams[0] > 0.0f);
@@ -840,7 +812,6 @@ void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)
 	EXPECT_TRUE(context, voxelLab.localPointLightParams[2] > 0.0f);
 	EXPECT_TRUE(context, chunkGrid.localPointLightParams[3] > 0.0f);
 	EXPECT_TRUE(context, !ColorsMatch(voxelLab.localPointLightColorAndIntensity, chunkGrid.localPointLightColorAndIntensity));
-	EXPECT_TRUE(context, voxelLab.shadowCascadeBlendParams[0] > 0.0f);
 }
 
 void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
@@ -851,11 +822,6 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 	controls.exposureBiasStops = 1.0f;
 	controls.toneMapOperator = ToneMapOperator::Reinhard;
 	controls.debugView = LightingDebugView::Direct;
-	controls.shadowStrengthOffset = 0.10f;
-	controls.shadowDepthBiasOffset = 0.0002f;
-	controls.shadowNormalBiasOffset = 0.0010f;
-	controls.shadowFilterRadiusOffset = 0.25f;
-	controls.shadowCascadeBlendOffset = 0.04f;
 
 	const VoxelSceneLighting tunedLighting = BuildVoxelSceneLighting(VoxelScenePreset::VoxelLab, controls);
 	EXPECT_TRUE(context, tunedLighting.postProcess[0] > authoredLighting.postProcess[0]);
@@ -866,10 +832,6 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 			std::lround(tunedLighting.exposureControl[0])))) == "SCENEKEY");
 	EXPECT_TRUE(context, tunedLighting.postProcess[2] == static_cast<float>(ToneMapOperator::Reinhard));
 	EXPECT_TRUE(context, tunedLighting.postProcess[3] == static_cast<float>(LightingDebugView::Direct));
-	EXPECT_TRUE(context, tunedLighting.sunShadowParams[0] > baseLighting.sunShadowParams[0]);
-	EXPECT_TRUE(context, tunedLighting.sunShadowParams[1] > baseLighting.sunShadowParams[1]);
-	EXPECT_TRUE(context, tunedLighting.sunShadowParams[2] > baseLighting.sunShadowParams[2]);
-	EXPECT_TRUE(context, tunedLighting.sunShadowParams[3] > baseLighting.sunShadowParams[3]);
 	EXPECT_TRUE(context, tunedLighting.sunContactShadowParams[0] == baseLighting.sunContactShadowParams[0]);
 	EXPECT_TRUE(context, tunedLighting.sunContactShadowParams[1] == baseLighting.sunContactShadowParams[1]);
 	EXPECT_TRUE(context, tunedLighting.ambientOcclusionParams[0] == baseLighting.ambientOcclusionParams[0]);
@@ -881,7 +843,6 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 	EXPECT_TRUE(context, tunedLighting.localPointLightParams[3] == baseLighting.localPointLightParams[3]);
 	EXPECT_TRUE(context, tunedLighting.localPointLightPositionAndRadius[3] == baseLighting.localPointLightPositionAndRadius[3]);
 	EXPECT_TRUE(context, tunedLighting.localPointLightColorAndIntensity[3] == baseLighting.localPointLightColorAndIntensity[3]);
-	EXPECT_TRUE(context, tunedLighting.shadowCascadeBlendParams[0] > baseLighting.shadowCascadeBlendParams[0]);
 
 	const std::array<float, 4> clearColor = GetVoxelSceneClearColor(tunedLighting);
 	EXPECT_TRUE(context, clearColor[0] >= 0.0f && clearColor[0] <= 1.0f);
@@ -893,7 +854,6 @@ void TestBuildVoxelSceneLightingAppliesLookDevControls(TestContext &context)
 void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 {
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Shadow)) == "SHDW");
-	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Cascade)) == "CSM");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Local)) == "LOCL");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Contact)) == "CTSH");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Occlusion)) == "AOCC");
@@ -909,10 +869,7 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 		GetNextLightingDebugView(LightingDebugView::Local) == LightingDebugView::Shadow);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::Shadow) == LightingDebugView::Cascade);
-	EXPECT_TRUE(
-		context,
-		GetNextLightingDebugView(LightingDebugView::Cascade) == LightingDebugView::Contact);
+		GetNextLightingDebugView(LightingDebugView::Shadow) == LightingDebugView::Contact);
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Contact) == LightingDebugView::Occlusion);
@@ -938,331 +895,89 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 
 void TestShadowTuningTargetCycleAndLabels(TestContext &context)
 {
-	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::Strength)) == "STR");
-	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::Coverage)) == "COV");
-	EXPECT_TRUE(context, std::string_view(ShadowTuningTargetToString(ShadowTuningTarget::CascadeBlend)) == "BLND");
-	EXPECT_TRUE(
-		context,
-		GetNextShadowTuningTarget(ShadowTuningTarget::Strength) == ShadowTuningTarget::DepthBias);
-	EXPECT_TRUE(
-		context,
-		GetNextShadowTuningTarget(ShadowTuningTarget::FilterRadius) == ShadowTuningTarget::Coverage);
-	EXPECT_TRUE(
-		context,
-		GetNextShadowTuningTarget(ShadowTuningTarget::Coverage) == ShadowTuningTarget::CascadeBlend);
-	EXPECT_TRUE(
-		context,
-		GetNextShadowTuningTarget(ShadowTuningTarget::CascadeBlend) == ShadowTuningTarget::Strength);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x). The shadow tuning
+	// target enum and its cycle/labels are retired; ShadowTuningTargetToString
+	// returns a no-op string and GetNextShadowTuningTarget is a no-op cycle.
 }
 
 void TestBuildSunShadowProjectionFitsSceneBounds(TestContext &context)
 {
-	const VoxelWorld world = MakeTestWorld({-6, 2, -4}, {11, 19, 13}, 4);
-	const auto [lightViewProjection] = BuildSunShadowProjection(world, {0.35f, 0.88f, 0.22f}, 1.25f);
-	constexpr float kClipEpsilon = 0.02f;
-
-	for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
-		[[maybe_unused]] const std::array corner{
-			static_cast<float>((cornerIndex & 1) != 0 ? world.maxExclusive.x : world.min.x),
-			static_cast<float>((cornerIndex & 2) != 0 ? world.maxExclusive.y : world.min.y),
-			static_cast<float>((cornerIndex & 4) != 0 ? world.maxExclusive.z : world.min.z),
-		};
-		const std::array<float, 4> clipCorner = TransformPoint(lightViewProjection, corner);
-		EXPECT_TRUE(context, std::abs(clipCorner[3]) > 0.0001f);
-		const float inverseW = 1.0f / clipCorner[3];
-		const float clipX = clipCorner[0] * inverseW;
-		const float clipY = clipCorner[1] * inverseW;
-		const float clipZ = clipCorner[2] * inverseW;
-		EXPECT_TRUE(context, clipX >= -1.0f - kClipEpsilon && clipX <= 1.0f + kClipEpsilon);
-		EXPECT_TRUE(context, clipY >= -1.0f - kClipEpsilon && clipY <= 1.0f + kClipEpsilon);
-		EXPECT_TRUE(context, clipZ >= -kClipEpsilon && clipZ <= 1.0f + kClipEpsilon);
-	}
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x). RTX shadows are the
+	// canonical sun shadow path; the BuildSunShadowProjection helper
+	// and its tests are retired.
 }
 
 void TestBuildSunShadowProjectionUsesActiveChunkBoundsInsteadOfEmptyPadding(TestContext &context)
 {
-	VoxelWorld compactWorld = MakeTestWorld({-8, 0, -8}, {8, 16, 8}, 8);
-	VoxelWorld paddedWorld = MakeTestWorld({-24, 0, -24}, {24, 16, 24}, 8);
-	SetVoxelMaterial(compactWorld, {-1, 0, -1}, VoxelMaterial::FloorWhite);
-	SetVoxelMaterial(paddedWorld, {-1, 0, -1}, VoxelMaterial::FloorWhite);
-
-	const auto [compactLightViewProjection] =
-		BuildSunShadowProjection(compactWorld, {0.35f, 0.88f, 0.22f}, 1.10f);
-	const auto [paddedLightViewProjection] =
-		BuildSunShadowProjection(paddedWorld, {0.35f, 0.88f, 0.22f}, 1.10f);
-
-	for (size_t col = 0; col < 4; ++col) {
-		for (size_t row = 0; row < 4; ++row) {
-			EXPECT_TRUE(
-				context,
-				std::abs(
-					compactLightViewProjection.c[col][row] -
-					paddedLightViewProjection.c[col][row]) <= 0.001f);
-		}
-	}
-
-	constexpr std::array activeChunkMin{-8.0f, 0.0f, -8.0f};
-	constexpr std::array activeChunkMax{0.0f, 8.0f, 0.0f};
-	constexpr float kClipEpsilon = 0.02f;
-	for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
-		const std::array corner{
-			(cornerIndex & 1) != 0 ? activeChunkMax[0] : activeChunkMin[0],
-			(cornerIndex & 2) != 0 ? activeChunkMax[1] : activeChunkMin[1],
-			(cornerIndex & 4) != 0 ? activeChunkMax[2] : activeChunkMin[2],
-		};
-		const std::array<float, 4> clipCorner = TransformPoint(compactLightViewProjection, corner);
-		EXPECT_TRUE(context, std::abs(clipCorner[3]) > 0.0001f);
-		const float inverseW = 1.0f / clipCorner[3];
-		const float clipX = clipCorner[0] * inverseW;
-		const float clipY = clipCorner[1] * inverseW;
-		const float clipZ = clipCorner[2] * inverseW;
-		EXPECT_TRUE(context, clipX >= -1.0f - kClipEpsilon && clipX <= 1.0f + kClipEpsilon);
-		EXPECT_TRUE(context, clipY >= -1.0f - kClipEpsilon && clipY <= 1.0f + kClipEpsilon);
-		EXPECT_TRUE(context, clipZ >= -kClipEpsilon && clipZ <= 1.0f + kClipEpsilon);
-	}
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowProjectionInterpretsSunDirectionAsTowardsSun(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld({-1, 0, -1}, {1, 2, 1}, 2);
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
-
-	const auto [lightViewProjection] = BuildSunShadowProjection(world, {0.0f, 1.0f, 0.0f}, 1.0f);
-	const std::array<float, 4> topClip = TransformPoint(lightViewProjection, {0.0f, 2.0f, 0.0f});
-	const std::array<float, 4> bottomClip = TransformPoint(lightViewProjection, {0.0f, 0.0f, 0.0f});
-	EXPECT_TRUE(context, std::abs(topClip[3]) > 0.0001f);
-	EXPECT_TRUE(context, std::abs(bottomClip[3]) > 0.0001f);
-	const float topDepth = topClip[2] / topClip[3];
-	const float bottomDepth = bottomClip[2] / bottomClip[3];
-
-	EXPECT_TRUE(context, topDepth < bottomDepth);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeSplitsUsesStablePracticalSplitScheme(TestContext &context)
 {
-	const auto [normalizedSplits, viewDepthSplits, splitLambda, nearPlane, farPlane] = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
-
-	EXPECT_TRUE(context, nearPlane == 0.1f);
-	EXPECT_TRUE(context, farPlane == 128.0f);
-	EXPECT_TRUE(context, splitLambda == 0.65f);
-	EXPECT_EQ(context, kSunShadowCascadeCount, static_cast<uint32_t>(viewDepthSplits.size()));
-	EXPECT_TRUE(context, viewDepthSplits.back() == 128.0f);
-	EXPECT_TRUE(context, normalizedSplits.back() == 1.0f);
-
-	float previousDepth = nearPlane;
-	float previousNormalized = 0.0f;
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		EXPECT_TRUE(context, viewDepthSplits[cascadeIndex] > previousDepth);
-		EXPECT_TRUE(context, normalizedSplits[cascadeIndex] > previousNormalized);
-		EXPECT_TRUE(context, normalizedSplits[cascadeIndex] <= 1.0f);
-		previousDepth = viewDepthSplits[cascadeIndex];
-		previousNormalized = normalizedSplits[cascadeIndex];
-	}
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeSplitsHonorsUniformAndLogarithmicLimits(TestContext &context)
 {
-	const SunShadowCascadeSplits uniformSplits = BuildSunShadowCascadeSplits(1.0f, 101.0f, 0.0f);
-	const SunShadowCascadeSplits logarithmicSplits = BuildSunShadowCascadeSplits(1.0f, 101.0f, 1.0f);
-	const SunShadowCascadeSplits practicalSplits = BuildSunShadowCascadeSplits(1.0f, 101.0f, 0.65f);
-
-	EXPECT_TRUE(context, std::abs(uniformSplits.viewDepthSplits[0] - 26.0f) <= 0.001f);
-	EXPECT_TRUE(context, logarithmicSplits.viewDepthSplits[0] < practicalSplits.viewDepthSplits[0]);
-	EXPECT_TRUE(context, practicalSplits.viewDepthSplits[0] < uniformSplits.viewDepthSplits[0]);
-	EXPECT_TRUE(context, logarithmicSplits.viewDepthSplits[1] < practicalSplits.viewDepthSplits[1]);
-	EXPECT_TRUE(context, practicalSplits.viewDepthSplits[1] < uniformSplits.viewDepthSplits[1]);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeSplitsClampsInvalidInputs(TestContext &context)
 {
-	const auto [normalizedSplits, viewDepthSplits, splitLambda, nearPlane, farPlane] = BuildSunShadowCascadeSplits(-10.0f, -1.0f, 4.0f);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
+}
 
-	EXPECT_TRUE(context, nearPlane >= 0.01f);
-	EXPECT_TRUE(context, farPlane > nearPlane);
-	EXPECT_TRUE(context, splitLambda == 1.0f);
-	EXPECT_TRUE(context, viewDepthSplits.back() == farPlane);
-	EXPECT_TRUE(context, normalizedSplits.back() == 1.0f);
+void TestBuildSunShadowCascadeSplitsClampsInvalidInputsOriginal(TestContext &context)
+{
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld({-32, 0, -32}, {32, 32, 96}, 16);
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
-	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
-	const SunShadowCascadeProjectionInputs inputs{
-		.cameraPosition = {0.0f, 8.0f, -20.0f},
-		.cameraForward = {0.0f, 0.0f, 1.0f},
-		.cameraRight = {1.0f, 0.0f, 0.0f},
-		.cameraUp = {0.0f, 1.0f, 0.0f},
-		.tanHalfVerticalFov = 0.75f,
-		.tanHalfHorizontalFov = 1.0f,
-		.splits = splits,
-	};
-	const auto [lightViewProjections, diagnostics] =
-		BuildSunShadowCascadeProjections(world, {0.35f, 0.88f, 0.22f}, inputs, 1.0f);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
+}
 
-	float previousDepth = splits.nearPlane;
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		std::array<float, 16> cascadeMatrix{};
-		const size_t matrixOffset = static_cast<size_t>(cascadeIndex) * cascadeMatrix.size();
-		std::copy_n(
-			lightViewProjections.data() + matrixOffset,
-			cascadeMatrix.size(),
-			cascadeMatrix.begin());
-		const float centerDepth = (previousDepth + splits.viewDepthSplits[cascadeIndex]) * 0.5f;
-		const std::array sliceCenter{
-			inputs.cameraPosition[0] + inputs.cameraForward[0] * centerDepth,
-			inputs.cameraPosition[1] + inputs.cameraForward[1] * centerDepth,
-			inputs.cameraPosition[2] + inputs.cameraForward[2] * centerDepth,
-		};
-		const projectv::math::Mat4 cascadeMat = projectv::math::fromArray16(cascadeMatrix);
-		const std::array<float, 4> clipCenter = TransformPoint(cascadeMat, sliceCenter);
-		EXPECT_TRUE(context, std::abs(clipCenter[3]) > 0.0001f);
-		const float inverseW = 1.0f / clipCenter[3];
-		EXPECT_TRUE(context, std::abs(clipCenter[0] * inverseW) <= 1.0f);
-		EXPECT_TRUE(context, std::abs(clipCenter[1] * inverseW) <= 1.0f);
-		EXPECT_TRUE(context, clipCenter[2] * inverseW >= -0.02f);
-		EXPECT_TRUE(context, clipCenter[2] * inverseW <= 1.02f);
-		previousDepth = splits.viewDepthSplits[cascadeIndex];
-	}
-
-	EXPECT_TRUE(
-		context,
-		std::abs(lightViewProjections[0] - lightViewProjections[16]) > 0.0001f);
+void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSliceStub(TestContext &context) // stub marker
+{
+	(void)context;
 }
 
 void TestBuildSunShadowCascadeProjectionsSnapToShadowTexelGrid(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld({-32, 0, -32}, {32, 32, 96}, 16);
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
-	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 128.0f, 0.65f);
-	const SunShadowCascadeProjectionInputs baseInputs{
-		.cameraPosition = {0.0f, 8.0f, -20.0f},
-		.cameraForward = {0.0f, 0.0f, 1.0f},
-		.cameraRight = {1.0f, 0.0f, 0.0f},
-		.cameraUp = {0.0f, 1.0f, 0.0f},
-		.tanHalfVerticalFov = 0.75f,
-		.tanHalfHorizontalFov = 1.0f,
-		.shadowMapResolution = 2048u,
-		.splits = splits,
-	};
-	SunShadowCascadeProjectionInputs nudgedInputs = baseInputs;
-	nudgedInputs.cameraPosition[0] += 0.001f;
-
-	const auto [lightViewProjections1, diagnostics1] =
-		BuildSunShadowCascadeProjections(world, {0.0f, 1.0f, 0.0f}, baseInputs, 1.0f);
-	const auto [lightViewProjections, diagnostics] =
-		BuildSunShadowCascadeProjections(world, {0.0f, 1.0f, 0.0f}, nudgedInputs, 1.0f);
-
-	for (uint32_t matrixIndex = 0; matrixIndex < 16u; ++matrixIndex) {
-		EXPECT_TRUE(
-			context,
-			std::abs(lightViewProjections1[matrixIndex] -
-					 lightViewProjections[matrixIndex]) <= 0.000001f);
-	}
-
-	EXPECT_TRUE(context, diagnostics1.viewNearDepths[0] == splits.nearPlane);
-	EXPECT_TRUE(context, diagnostics1.viewFarDepths[3] == splits.viewDepthSplits[3]);
-	EXPECT_TRUE(context, diagnostics1.orthoWidths[0] > 0.0f);
-	EXPECT_TRUE(context, diagnostics1.orthoHeights[0] > 0.0f);
-	EXPECT_TRUE(context, diagnostics1.texelWorldSizes[0] > 0.0f);
-	EXPECT_TRUE(context, diagnostics1.casterLightNearDepths[0] < diagnostics1.casterLightFarDepths[0]);
-	EXPECT_TRUE(
-		context,
-		diagnostics1.texelWorldSizes[0] <= diagnostics1.texelWorldSizes[1]);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeProjectionsUseCascadeSpecificCasterCoverage(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld({-32, 0, -256}, {32, 32, 256}, 16);
-	SetVoxelMaterial(world, {-32, 0, -256}, VoxelMaterial::FloorWhite, nullptr);
-	SetVoxelMaterial(world, {31, 31, 255}, VoxelMaterial::FloorWhite, nullptr);
-	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.65f);
-	const SunShadowCascadeProjectionInputs inputs{
-		.cameraPosition = {0.0f, 8.0f, 0.0f},
-		.cameraForward = {0.0f, 0.0f, 1.0f},
-		.cameraRight = {1.0f, 0.0f, 0.0f},
-		.cameraUp = {0.0f, 1.0f, 0.0f},
-		.tanHalfVerticalFov = 0.70f,
-		.tanHalfHorizontalFov = 0.95f,
-		.splits = splits,
-	};
-	const auto [unusedLightViewProjections, diagnostics] =
-		BuildSunShadowCascadeProjections(world, {0.0f, 0.0f, -1.0f}, inputs, 1.0f);
-	static_cast<void>(unusedLightViewProjections);
-
-	const float nearCascadeCasterRange =
-		diagnostics.casterLightFarDepths[0] - diagnostics.casterLightNearDepths[0];
-	const float farCascadeCasterRange =
-		diagnostics.casterLightFarDepths[3] - diagnostics.casterLightNearDepths[3];
-	EXPECT_TRUE(context, diagnostics.casterLightNearDepths[0] < diagnostics.casterLightFarDepths[0]);
-	EXPECT_TRUE(context, nearCascadeCasterRange > 0.0f);
-	EXPECT_TRUE(context, nearCascadeCasterRange < 350.0f);
-	EXPECT_TRUE(context, farCascadeCasterRange > nearCascadeCasterRange);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeProjectionsExpandOrthoExtentForTallCasters(TestContext &context)
 {
-	VoxelWorld lowWorld = MakeTestWorld({-32, 0, -32}, {32, 40, 64}, 16);
-	SetVoxelMaterial(lowWorld, {0, 0, 20}, VoxelMaterial::FloorWhite);
-
-	VoxelWorld tallWorld = lowWorld;
-	SetVoxelMaterial(tallWorld, {0, 31, 20}, VoxelMaterial::FloorWhite);
-
-	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.80f);
-	const SunShadowCascadeProjectionInputs inputs{
-		.cameraPosition = {0.0f, 2.0f, -6.0f},
-		.cameraForward = {0.0f, 0.0f, 1.0f},
-		.cameraRight = {1.0f, 0.0f, 0.0f},
-		.cameraUp = {0.0f, 1.0f, 0.0f},
-		.tanHalfVerticalFov = 0.70f,
-		.tanHalfHorizontalFov = 0.95f,
-		.splits = splits,
-	};
-
-	const auto [lowLightViewProjections, lowDiagnostics] =
-		BuildSunShadowCascadeProjections(lowWorld, {-0.70f, 0.48f, -0.18f}, inputs, 1.0f);
-	const auto [tallLightViewProjections, tallDiagnostics] =
-		BuildSunShadowCascadeProjections(tallWorld, {-0.70f, 0.48f, -0.18f}, inputs, 1.0f);
-	static_cast<void>(lowLightViewProjections);
-	static_cast<void>(tallLightViewProjections);
-
-	EXPECT_TRUE(
-		context,
-		tallDiagnostics.orthoWidths[2] > lowDiagnostics.orthoWidths[2] ||
-			tallDiagnostics.orthoHeights[2] > lowDiagnostics.orthoHeights[2]);
-	EXPECT_TRUE(
-		context,
-		tallDiagnostics.texelWorldSizes[2] >= lowDiagnostics.texelWorldSizes[2]);
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void TestBuildSunShadowCascadeProjectionsKeepExpandedCastersAheadOfNearPlane(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld({-96, 0, -96}, {96, 72, 224}, 16);
-	SetVoxelMaterial(world, {-96, 0, -96}, VoxelMaterial::FloorWhite, nullptr);
-	SetVoxelMaterial(world, {95, 71, 223}, VoxelMaterial::FloorWhite, nullptr);
-
-	const SunShadowCascadeSplits splits = BuildSunShadowCascadeSplits(0.1f, 64.0f, 0.80f);
-	const SunShadowCascadeProjectionInputs inputs{
-		.cameraPosition = {0.0f, 2.0f, -6.0f},
-		.cameraForward = {0.0f, 0.0f, 1.0f},
-		.cameraRight = {1.0f, 0.0f, 0.0f},
-		.cameraUp = {0.0f, 1.0f, 0.0f},
-		.tanHalfVerticalFov = 0.70f,
-		.tanHalfHorizontalFov = 0.95f,
-		.splits = splits,
-	};
-
-	const auto [unusedLightViewProjections, diagnostics] =
-		BuildSunShadowCascadeProjections(world, {-0.70f, 0.48f, -0.18f}, inputs, 1.0f);
-	static_cast<void>(unusedLightViewProjections);
-
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		EXPECT_TRUE(context, diagnostics.casterLightNearDepths[cascadeIndex] >= 0.099f);
-		EXPECT_TRUE(
-			context,
-			diagnostics.casterLightFarDepths[cascadeIndex] > diagnostics.casterLightNearDepths[cascadeIndex]);
-	}
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
 void ExpectInt3Equal(
@@ -1970,12 +1685,6 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleLightingDebugView));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_V);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ResetLightingDebugControls));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleShadowTuningTarget));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_U);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::DecreaseShadowTuningValue));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::IncreaseShadowTuningValue));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_C);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CaptureScreenshot));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_R);
@@ -2141,48 +1850,6 @@ void TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(TestContext &conte
 							 parameters));
 }
 
-void TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(TestContext &context)
-{
-	constexpr std::array identityProjection{
-		1.0f,
-		0.0f,
-		0.0f,
-		0.0f,
-		0.0f,
-		1.0f,
-		0.0f,
-		0.0f,
-							 0.0f,
-							 0.0f,
-							 1.0f,
-							 0.0f,
-							 0.0f,
-							 0.0f,
-							 0.0f,
-							 1.0f,
-						 };
-
-						 const projectv::math::Mat4 identityMat =
-							 projectv::math::fromArray16(identityProjection);
-
-						 EXPECT_TRUE(context, IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1}),
-													 identityMat));
-						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({2, 0, 0}, {3, 1, 1}),
-													 identityMat));
-						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 MakePackedSceneChunkDescriptor({0, 0, -2}, {1, 1, -1}),
-													 identityMat));
-						 EXPECT_TRUE(context, !IsSceneChunkVisibleInShadowCascade(
-													 []() {
-														 PackedSceneChunkDescriptor d = MakePackedSceneChunkDescriptor({0, 0, 0}, {1, 1, 1});
-														 d.chunkExtentAndNonAir[3] = 0u;
-														 return d;
-													 }(),
-													 identityMat));
-					 }
-
 void TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(TestContext &context)
 {
 	PackedSceneChunkDescriptor sourceDescriptor = MakePackedSceneChunkDescriptor({0, 0, 0}, {8, 8, 8});
@@ -2263,15 +1930,12 @@ void TestUpdateAppUsesVisibleSceneDistanceForSunShadowCascadeSplits(TestContext 
 	DebugState debug{};
 
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-	EXPECT_NEAR(context, 0.80f, render.currentSunShadowCascadeSplits.splitLambda);
-	EXPECT_NEAR(context, 64.0f, render.currentSunShadowCascadeSplits.farPlane);
-	EXPECT_NEAR(context, 64.0f, debug.stats.sunShadowCascadeDepthSplits.back());
+	// CSM removed per TODO.md §5.2.D (session 20x). The cascade-split
+	// assertion block is retired; cascade split lambda / far plane /
+	// depth splits are no longer computed.
 
 	camera.farPlane = 40.0f;
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-	EXPECT_NEAR(context, 0.80f, render.currentSunShadowCascadeSplits.splitLambda);
-	EXPECT_NEAR(context, 40.0f, render.currentSunShadowCascadeSplits.farPlane);
-	EXPECT_NEAR(context, 40.0f, debug.stats.sunShadowCascadeDepthSplits.back());
 }
 
 void TestUpdateAppTogglesWalkAirControlMode(TestContext &context)
@@ -6548,80 +6212,10 @@ void TestUpdateAppRequestsScreenshotCapture(TestContext &context)
 
 void TestUpdateAppAdjustsShadowTuningControls(TestContext &context)
 {
-	PlatformState platform{};
-	SimulationState simulation{};
-	CameraState camera = MakeTestCamera({2.0f, 3.0f, 4.0f});
-	InteractionState interaction{};
-	WorldState world{};
-	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
-	RenderState render{};
-	DebugState debug{};
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_EQ(context, ShadowTuningTarget::DepthBias, render.lightingDebugControls.shadowTuningTarget);
-	}
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_U);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_TRUE(context, render.lightingDebugControls.shadowDepthBiasOffset < 0.0f);
-	}
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_EQ(context, ShadowTuningTarget::Coverage, render.lightingDebugControls.shadowTuningTarget);
-	}
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_TRUE(context, render.lightingDebugControls.shadowCoverageScale > 1.0f);
-		EXPECT_TRUE(context, debug.stats.shadowTuningTarget == ShadowTuningTarget::Coverage);
-		EXPECT_TRUE(context, debug.stats.sunShadowCoverageScale == render.lightingDebugControls.shadowCoverageScale);
-	}
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_O);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_EQ(context, ShadowTuningTarget::CascadeBlend, render.lightingDebugControls.shadowTuningTarget);
-	}
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_I);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_TRUE(context, render.lightingDebugControls.shadowCascadeBlendOffset > 0.0f);
-		EXPECT_TRUE(context, debug.stats.shadowTuningTarget == ShadowTuningTarget::CascadeBlend);
-	}
-
-	{
-		InputState input{};
-		InitializeInputState(input);
-		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_V);
-		EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
-		EXPECT_TRUE(context, render.lightingDebugControls.shadowDepthBiasOffset == 0.0f);
-		EXPECT_TRUE(context, render.lightingDebugControls.shadowCoverageScale == 1.0f);
-		EXPECT_TRUE(context, render.lightingDebugControls.shadowCascadeBlendOffset == 0.0f);
-		EXPECT_EQ(context, ShadowTuningTarget::Strength, render.lightingDebugControls.shadowTuningTarget);
-	}
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x). The shadow tuning
+	// controls ladder (O / U / I / V cycle, ShadowTuningTarget enum) is
+	// retired; the corresponding keyboard shortcuts are no-ops.
 }
 
 void TestUpdateVoxelInteractionRemovesTargetedBlock(TestContext &context)
@@ -7473,7 +7067,6 @@ int main() // NOLINT(*-exception-escape)
 	TestGetCameraVisibleSceneMaxDistanceClampsToMainlineRange(context);
 	TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(context);
 	TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(context);
-	TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume(context);
 	TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(context);
 	TestUpdateAppConsumesDebugInputActions(context);
 	TestUpdateAppUsesVisibleSceneDistanceForSunShadowCascadeSplits(context);

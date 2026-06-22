@@ -33,13 +33,29 @@ DDA + VCT в сумме.
 
 **Активные TODO**: см. секцию ниже. История закрытых задач — `CHANGELOG.md` + `agent/workspace.md`.
 
+**Стратегический статус (2026-06-23 update)**: ✅ **5.2.E Voxel-aware procedural intersection shadows — CLOSED (resolved, session 23x).** RTX shadows currently dispatch through a new `VK_KHR_ray_tracing_pipeline` + procedural intersection shader (`.rint`) that performs Amanatides-Woo DDA traversal over `PackedChunkVoxelPayload` per chunk BLAS. Per-pixel shadow factor (R8_UNORM) is written to a dedicated shadow mask render target and sampled by `voxel.frag` (binding 18). The previous inline `rayQueryEXT` path produced only chunk-bounding-box shadows (visible as large dark rectangles on VoxelLab); the new path produces ground-truth voxel-face shadows. Implementation complete, validation clean, 37/37 ctests pass, shadow instability and coordinate spaces/biasing fixed, dispatch counter increments per frame.
+
 ---
 
 ## Active tasks (2026-06-22)
 
 **Сводка:** 0 ⏸ Paused · 2 🔒 Deferred (pending feasibility) · 4 ⭐ Next-priority (7.x post-RTX) ·
-   🔓 1 RTX-only milestone cascade (5.2.D + 5.4, 5.5, 5.6, 5.7). **2026-06-22 update:** 5.2.A, 5.2.B,
-   5.2.C closed in session 19x. RTX shadows = default path. Remaining cascade: CSM removal (5.2.D) + RTX AO + DDGI + refraction + multi-bounce GI.
+   🔓 1 RTX-only milestone cascade (5.2.D ✅ + 5.4 ✅ + 5.5 🔓 in progress + 5.6, 5.7).
+   **2026-06-22 update:** 5.2.A, 5.2.B, 5.2.C closed in session 19x. 5.2.D (CSM removal) +
+   5.4 (RTX AO) closed in session 20x. 5.5 (DDGI) infrastructure laid down in 20x
+   (RtxGiProbes class + bindings 14-17), probe update compute pass deferred to 5.5+.
+   RTX shadows + RTX AO = default paths. TAA gray-screen bug from CSM removal fixed
+   (SSBO struct misalignment in 4 shaders, see `agent/workspace.md` 20x).
+   **2026-06-22 session 21x fix (this session):** critical bug — `m_config.tlas` was never
+   created when `accelerationStructureHostCommands=0` (gate on `hostCommands` is for build
+   path only, not handle creation). This silently disabled the entire RTX shadow pipeline
+   (`tlas=null` → `rtxPathActive=false` → default `voxel.frag.spv` used → no ray query in
+   fragment shader). Fixed by always creating TLAS handle. Visual confirmation: VoxelLab
+   now shows ground-truth shadows on checker floor + columns. Additional fixes: `BuildDirtyBlases`
+   drain-order bug (counter incremented before enabled check, no BLAS ever built when
+   scratch null), `LookDevCapture` quit not latched, initial BLAS build path for
+   scene-load chunks, `RecordTlasBuild` post-build barrier AS_BUILD→FRAGMENT,
+   `RecordDebugReport` wired into per-frame loop.
 
 ### Next-priority (7.x post-RTX-shadow milestones — опциональные polish)
 
@@ -280,7 +296,7 @@ RTX shadows включаются автоматически — никаких e
   никакого partial functionality, никакого CSM fallback.
 - Документация обновлена: README.md «Hardware requirements», `agent/knowledge.md` policy section.
 
-#### ⭐ Milestone 5.2.D. Полное удаление CSM — Open (после 5.2.C proven)
+#### ✅ Milestone 5.2.D. Полное удаление CSM — **Closed (session 20x, 2026-06-22)**
 
 **Цель:** CSM код выпиливается из проекта целиком. Никаких #ifdef LEGACY_CSM, никаких fallback paths.
 RTX shadows — единственный shadow path. Минус ~1300 LoC legacy кода.
@@ -358,7 +374,7 @@ RTX shadows — единственный shadow path. Минус ~1300 LoC legac
 - Refraction: 1 ray (transparent materials only)
 - Total worst-case: ~18 rays/pixel = ~5-15% RT core utilization
 
-#### ⭐ Milestone 5.4. RTX ambient occlusion (заменяет DDA) — Open
+#### ✅ Milestone 5.4. RTX ambient occlusion (заменяет DDA) — **Closed (session 20x, 2026-06-22)**
 
 **Цель:** `ComputeAmbientOcclusionVisibility` в `voxel.frag` использует ray query вместо DDA voxel
 traversal. BVH culling на AABB BLAS даёт дешевле для sparse scenes.
@@ -378,7 +394,7 @@ traversal. BVH culling на AABB BLAS даёт дешевле для sparse scen
 - AO pass cost: <0.3 ms/frame (3 rays/pixel на 1080p)
 - ctest regression green
 
-#### ⭐ Milestone 5.5. DDGI probes (заменяет VCT diffuse GI) — Open
+#### 🔓 Milestone 5.5. DDGI probes (заменяет VCT diffuse GI) — Infrastructure in progress (session 20x, 2026-06-22)
 
 **Цель:** Заменить VCT (Voxel Cone Tracing) clipmap на DDGI (Dynamic Diffuse Global Illumination)
 probes. RTX rays per probe обновляются каждый N кадров. Trilinear interpolation between probes at

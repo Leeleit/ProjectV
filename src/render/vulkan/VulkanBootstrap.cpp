@@ -79,6 +79,7 @@ constexpr char kOptionalDynamicRenderingUnusedAttachmentsExtension[] =
 constexpr char kMeshShaderExtension[] = "VK_EXT_mesh_shader";
 constexpr char kAccelerationStructureExtension[] = "VK_KHR_acceleration_structure";
 constexpr char kRayQueryExtension[] = "VK_KHR_ray_query";
+constexpr char kRayTracingPipelineExtension[] = "VK_KHR_ray_tracing_pipeline";
 constexpr char kDeferredHostOperationsExtension[] = "VK_KHR_deferred_host_operations";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -347,7 +348,8 @@ bool CheckRequiredFeatures(
 	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR *outSwapchainMaintenance1Features,
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT *outDynamicRenderingUnusedAttachmentsFeatures,
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR *outAccelerationStructureFeatures,
-	VkPhysicalDeviceRayQueryFeaturesKHR *outRayQueryFeatures)
+	VkPhysicalDeviceRayQueryFeaturesKHR *outRayQueryFeatures,
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR *outRayTracingPipelineFeatures = nullptr)
 {
 	VkPhysicalDeviceVulkan12Features features12{};
 	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -386,6 +388,12 @@ bool CheckRequiredFeatures(
 		accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
 		accelerationStructureFeatures.pNext = reinterpret_cast<VkBaseOutStructure *>(&rayQueryFeatures);
 		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&accelerationStructureFeatures);
+	}
+
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+	if (outRayTracingPipelineFeatures != nullptr) {
+		rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+		lastChainTarget->pNext = reinterpret_cast<VkBaseOutStructure *>(&rayTracingPipelineFeatures);
 	}
 	features13.pNext = &features12;
 	VkPhysicalDeviceFeatures2 features2{};
@@ -460,6 +468,9 @@ bool CheckRequiredFeatures(
 	if (outRayQueryFeatures != nullptr) {
 		*outRayQueryFeatures = rayQueryFeatures;
 	}
+	if (outRayTracingPipelineFeatures != nullptr) {
+		*outRayTracingPipelineFeatures = rayTracingPipelineFeatures;
+	}
 	return true;
 }
 
@@ -475,6 +486,7 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
 	projectv::render::HardwareRayTracingSupport rayTracingSupport{};
 	bool supportsTracyCalibratedTimestamps = false;
 	bool supportsSwapchainMaintenance1 = false;
@@ -483,6 +495,7 @@ struct PhysicalDeviceCandidate {
 	bool supportsMeshShader = false;
 	bool supportsAccelerationStructure = false;
 	bool supportsRayQuery = false;
+	bool supportsRayTracingPipeline = false;
 };
 
 VkPhysicalDeviceFeatures BuildEnabledFeatures(const PhysicalDeviceCandidate &selected)
@@ -563,6 +576,7 @@ bool TryPickPhysicalDevice(
 	projectv::render::HardwareRayTracingSupport rtxSupport{};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR supportedAccelerationStructureFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR supportedRayQueryFeatures{};
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR supportedRayTracingPipelineFeatures{};
 	const bool deviceHasAccelerationStructure =
 		HasDeviceExtension(physicalDevice, kAccelerationStructureExtension);
 	const bool deviceHasRayQuery = HasDeviceExtension(physicalDevice, kRayQueryExtension);
@@ -579,7 +593,8 @@ bool TryPickPhysicalDevice(
 			deviceHasSwapchainMaintenance1 ? &supportedSwapchainMaintenance1Features : nullptr,
 			deviceHasDynamicRenderingUnusedAttachments ? &supportedDynamicRenderingUnusedAttachmentsFeatures : nullptr,
 			rtxProbeSucceeded ? &supportedAccelerationStructureFeatures : nullptr,
-			rtxProbeSucceeded ? &supportedRayQueryFeatures : nullptr)) {
+			rtxProbeSucceeded ? &supportedRayQueryFeatures : nullptr,
+			rtxProbeSucceeded && rtxSupport.rayTracingPipeline ? &supportedRayTracingPipelineFeatures : nullptr)) {
 		return false;
 	}
 
@@ -596,9 +611,12 @@ bool TryPickPhysicalDevice(
 	outCandidate->dynamicRenderingUnusedAttachmentsFeatures = supportedDynamicRenderingUnusedAttachmentsFeatures;
 	outCandidate->accelerationStructureFeatures = supportedAccelerationStructureFeatures;
 	outCandidate->rayQueryFeatures = supportedRayQueryFeatures;
+	outCandidate->rayTracingPipelineFeatures = supportedRayTracingPipelineFeatures;
 	outCandidate->rayTracingSupport = rtxSupport;
 	outCandidate->supportsAccelerationStructure = deviceHasAccelerationStructure && rtxProbeSucceeded;
 	outCandidate->supportsRayQuery = deviceHasRayQuery && rtxProbeSucceeded;
+	outCandidate->supportsRayTracingPipeline =
+		rtxProbeSucceeded && rtxSupport.rayTracingPipeline && supportedRayTracingPipelineFeatures.rayTracingPipeline == VK_TRUE;
 	outCandidate->supportsTracyCalibratedTimestamps =
 		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
 	outCandidate->supportsSwapchainMaintenance1 = deviceHasSwapchainMaintenance1;
@@ -800,6 +818,9 @@ bool InitializeVulkanBase(
 	if (rtxSupported) {
 		deviceExtensions.push_back(kAccelerationStructureExtension);
 		deviceExtensions.push_back(kRayQueryExtension);
+		if (selected.supportsRayTracingPipeline) {
+			deviceExtensions.push_back(kRayTracingPipelineExtension);
+		}
 		if (selected.rayTracingSupport.deferredHostOperations) {
 			deviceExtensions.push_back(kDeferredHostOperationsExtension);
 		}
@@ -839,12 +860,17 @@ bool InitializeVulkanBase(
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, nullptr};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR, nullptr};
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR enabledRayTracingPipelineFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR, nullptr};
 	const bool rtxEnabled = selected.supportsAccelerationStructure && selected.supportsRayQuery;
 	if (rtxEnabled) {
 		enabledRayQueryFeatures.rayQuery = VK_TRUE;
 		enabledAccelerationStructureFeatures.accelerationStructure = VK_TRUE;
 		if (selected.rayTracingSupport.accelerationStructureHostCommands) {
 			enabledAccelerationStructureFeatures.accelerationStructureHostCommands = VK_TRUE;
+		}
+		if (selected.supportsRayTracingPipeline) {
+			enabledRayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
 		}
 	}
 
@@ -853,7 +879,12 @@ bool InitializeVulkanBase(
 	enabledSwapchainMaintenance1Features.pNext = &enabledDynamicRenderingUnusedAttachmentsFeatures;
 	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = &enabledMeshShaderFeatures;
 	enabledMeshShaderFeatures.pNext = &enabledAccelerationStructureFeatures;
-	enabledAccelerationStructureFeatures.pNext = &enabledRayQueryFeatures;
+	if (selected.supportsRayTracingPipeline) {
+		enabledAccelerationStructureFeatures.pNext = &enabledRayTracingPipelineFeatures;
+		enabledRayTracingPipelineFeatures.pNext = &enabledRayQueryFeatures;
+	} else {
+		enabledAccelerationStructureFeatures.pNext = &enabledRayQueryFeatures;
+	}
 	enabledRayQueryFeatures.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

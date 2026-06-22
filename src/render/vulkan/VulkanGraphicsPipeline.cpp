@@ -4,6 +4,7 @@
 #include "debug/Profiling.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/RayTracedShadows.hpp"
+#include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/TaaResolvePipeline.hpp"
 
@@ -12,15 +13,14 @@
 
 namespace {
 constexpr uint32_t kGraphicsDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-constexpr uint32_t kShadowDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr VkDescriptorPoolSize kGraphicsStorageDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kGraphicsDescriptorSetCount * 5u,
+	.descriptorCount = kGraphicsDescriptorSetCount * 7u,
 };
 
-constexpr VkDescriptorPoolSize kGraphicsShadowSamplerDescriptorPoolSize{
+constexpr VkDescriptorPoolSize kGraphicsCombinedImageSamplerDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-	.descriptorCount = kGraphicsDescriptorSetCount * 4u,
+	.descriptorCount = kGraphicsDescriptorSetCount * 8u,
 };
 constexpr VkDescriptorPoolSize kGraphicsAccelerationStructureDescriptorPoolSize{
 	.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
@@ -28,7 +28,7 @@ constexpr VkDescriptorPoolSize kGraphicsAccelerationStructureDescriptorPoolSize{
 };
 constexpr std::array kGraphicsDescriptorPoolSizes{
 	kGraphicsStorageDescriptorPoolSize,
-	kGraphicsShadowSamplerDescriptorPoolSize,
+	kGraphicsCombinedImageSamplerDescriptorPoolSize,
 	kGraphicsAccelerationStructureDescriptorPoolSize,
 };
 constexpr std::array kGraphicsDescriptorBindings{
@@ -62,9 +62,9 @@ constexpr std::array kGraphicsDescriptorBindings{
 	},
 	VkDescriptorSetLayoutBinding{
 		.binding = 4,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
 	VkDescriptorSetLayoutBinding{
@@ -105,6 +105,83 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
+	// EVIL: binding 13 = RTX top-level acceleration structure (TLAS) for ray-query
+	// smooth specular GI per Stage 5.2 (TraceRtxSmoothSpecularRay) AND 5.2.B sun shadow
+	// ray query (TraceRtxSunShadowRay) AND 5.4 AO (TraceRtxAmbientOcclusionRay). Bound to
+	// scene TLAS when RTX env-gate ON; otherwise (non-RTX compile) binding slot is unused.
+	// Per docs/VulkanSDK-Linux-Docs-1.4.350.1/chunked_spec/chap63.html the
+	// accelerationStructureEXT uniform is GLSL-side; C++ side uses
+	// VkAccelerationStructureKHR via VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR.
+	VkDescriptorSetLayoutBinding{
+		.binding = 13,
+		.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 14 = RTX GI probe irradiance 3D texture (8x8x8 probes x 16x16
+	// octahedral R11G11B10F = ~256 KiB). Per Stage 5.5 DDGI (Dynamic Diffuse Global
+	// Illumination) shader consume via DDGIGetVolumeIrradiance trilinear sample in
+	// voxel.frag vctDiffuseIrradiance path. Bound to RtxGiProbes.irradianceImage when
+	// RTX env-gate ON; otherwise (non-RTX compile or RTX alloc failed) binding slot
+	// is unused. Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` =
+	// OpTypeSampledImage (VUID-layout-07990).
+	VkDescriptorSetLayoutBinding{
+		.binding = 14,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 15 = RTX GI probe distance 3D texture (8x8x8 probes x 16x16 RG16F).
+	// Per Stage 5.5 DDGI visibility back-face check via DDGIGetProbeDistance. Bound
+	// to RtxGiProbes.distanceImage when RTX env-gate ON; otherwise binding slot is
+	// unused. Type = COMBINED_IMAGE_SAMPLER (sampler3D requires OpTypeSampledImage).
+	VkDescriptorSetLayoutBinding{
+		.binding = 15,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 16 = RTX GI probe data 2D texture (1x1 RGBA16F fallback; real
+	// layout will be uvec4 per-probe state when DDGI probe classification is wired
+	// in 5.5+). Bound to RtxGiProbes.probeDataImage when RTX env-gate ON; otherwise
+	// binding slot is unused.
+	VkDescriptorSetLayoutBinding{
+		.binding = 16,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 17 = RTX GI volume descriptor SSBO (VolumeDescGpu, 64 bytes per
+	// std430 layout matching GLSL-side struct). Per Stage 5.5 DDGI consume via
+	// DDGIGetVolumeIrradiance world position -> probe grid lookup. Bound to
+	// RtxGiProbes.volumeDescBuffer when RTX env-gate ON; otherwise binding slot is
+	// unused.
+	VkDescriptorSetLayoutBinding{
+		.binding = 17,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	// EVIL: binding 18 = voxel-aware RTX shadow mask (R8_UNORM storage image written
+	// by voxel_rtx_shadow.rgen via vkCmdTraceRaysKHR, sampled by voxel.frag as a
+	// COMBINED_IMAGE_SAMPLER). Per Stage 5.2.E the AABB BLAS + ray-query path is
+	// replaced by an RT pipeline + procedural intersection shader that performs DDA
+	// over PackedChunkVoxelPayload and writes a per-pixel shadow factor into this
+	// mask. Bound to RayTracedShadows.GetShadowMaskImageView() when voxel-aware path
+	// is active; otherwise a 1x1 R8 dummy image so the slot stays valid for shaders
+	// that compiled with VOXEL_RTX_ENABLED.
+	VkDescriptorSetLayoutBinding{
+		.binding = 18,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = nullptr,
+	},
 };
 constexpr VkDescriptorSetLayoutCreateInfo kGraphicsDescriptorSetLayoutInfo{
 	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -112,43 +189,6 @@ constexpr VkDescriptorSetLayoutCreateInfo kGraphicsDescriptorSetLayoutInfo{
 	.flags = 0,
 	.bindingCount = static_cast<uint32_t>(kGraphicsDescriptorBindings.size()),
 	.pBindings = kGraphicsDescriptorBindings.data(),
-};
-constexpr VkDescriptorPoolSize kShadowStorageDescriptorPoolSize{
-	.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-	.descriptorCount = kShadowDescriptorSetCount * 3u,
-};
-constexpr std::array kShadowDescriptorPoolSizes{
-	kShadowStorageDescriptorPoolSize,
-};
-constexpr std::array kShadowDescriptorBindings{
-	VkDescriptorSetLayoutBinding{
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-	VkDescriptorSetLayoutBinding{
-		.binding = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-	VkDescriptorSetLayoutBinding{
-		.binding = 3,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-};
-constexpr VkDescriptorSetLayoutCreateInfo kShadowDescriptorSetLayoutInfo{
-	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-	.pNext = nullptr,
-	.flags = 0,
-	.bindingCount = static_cast<uint32_t>(kShadowDescriptorBindings.size()),
-	.pBindings = kShadowDescriptorBindings.data(),
 };
 constexpr VkPipelineColorBlendAttachmentState kAlphaBlendAttachmentState{
 	.blendEnable = VK_TRUE,
@@ -223,21 +263,6 @@ VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 	return VK_FORMAT_UNDEFINED;
 }
 
-VkFormat ChooseShadowDepthFormat(const VkPhysicalDevice physicalDevice)
-{
-	constexpr std::array candidates{
-		VK_FORMAT_D32_SFLOAT,
-		VK_FORMAT_D32_SFLOAT_S8_UINT,
-		VK_FORMAT_D24_UNORM_S8_UINT,
-	};
-	for (const VkFormat candidate : candidates) {
-		if (SupportsDepthAttachment(physicalDevice, candidate) &&
-			SupportsSampledImage(physicalDevice, candidate)) {
-			return candidate;
-		}
-	}
-	return VK_FORMAT_UNDEFINED;
-}
 } // namespace
 
 bool CreateDepthResources(
@@ -333,172 +358,11 @@ bool CreateShadowResources(
 	VulkanContextState *context,
 	RenderState *render)
 {
-	PV_PROFILE_ZONE_N("CreateShadowResources");
-	const VkFormat shadowDepthFormat = ChooseShadowDepthFormat(context->physicalDevice);
-	if (shadowDepthFormat == VK_FORMAT_UNDEFINED) {
-		runtime::LogRuntimeFailure(
-			"Graphics",
-			"CreateShadowResources.ChooseShadowDepthFormat",
-			"no supported sampled depth format found");
-		return false;
-	}
-
-	render->shadowDepthFormat = shadowDepthFormat;
-
-	const VkImageCreateInfo imageInfo{
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = shadowDepthFormat,
-		.extent = {render->shadowMapExtent.width, render->shadowMapExtent.height, 1},
-		.mipLevels = 1,
-		.arrayLayers = kSunShadowCascadeCount,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount = 0,
-		.pQueueFamilyIndices = nullptr,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
-
-	VmaAllocationCreateInfo allocationInfo{};
-	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-	VmaAllocationInfo allocationResultInfo{};
-
-	const VkResult createShadowImageResult = vmaCreateImage(
-		context->allocator,
-		&imageInfo,
-		&allocationInfo,
-		&render->shadowImage,
-		&render->shadowAllocation,
-		&allocationResultInfo);
-	if (createShadowImageResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure("CreateShadowResources.vmaCreateImage", createShadowImageResult);
-		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
-		return false;
-	}
-	profiling::RecordAllocation(
-		render->shadowAllocation,
-		allocationResultInfo.size,
-		"ShadowImageAllocation");
-
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = render->shadowImage;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-	viewInfo.format = shadowDepthFormat;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = kSunShadowCascadeCount;
-	const VkResult shadowImageViewResult = vkCreateImageView(context->device, &viewInfo, nullptr, &render->shadowImageView);
-	if (shadowImageViewResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateImageView", shadowImageViewResult);
-		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
-		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
-		render->shadowImage = VK_NULL_HANDLE;
-		render->shadowAllocation = VK_NULL_HANDLE;
-		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
-		return false;
-	}
-
-	VkImageViewCreateInfo cascadeViewInfo = viewInfo;
-	cascadeViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	cascadeViewInfo.subresourceRange.layerCount = 1;
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		cascadeViewInfo.subresourceRange.baseArrayLayer = cascadeIndex;
-		const VkResult cascadeViewResult = vkCreateImageView(
-			context->device,
-			&cascadeViewInfo,
-			nullptr,
-			&render->shadowCascadeImageViews[cascadeIndex]);
-		if (cascadeViewResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateImageView.Cascade", cascadeViewResult);
-			for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
-				if (cascadeImageView != VK_NULL_HANDLE) {
-					vkDestroyImageView(context->device, cascadeImageView, nullptr);
-					cascadeImageView = VK_NULL_HANDLE;
-				}
-			}
-			vkDestroyImageView(context->device, render->shadowImageView, nullptr);
-			render->shadowImageView = VK_NULL_HANDLE;
-			profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
-			vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
-			render->shadowImage = VK_NULL_HANDLE;
-			render->shadowAllocation = VK_NULL_HANDLE;
-			render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
-			return false;
-		}
-	}
-
-	constexpr VkSamplerCreateInfo samplerInfo{
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
-		.mipLodBias = 0.0f,
-		.anisotropyEnable = VK_FALSE,
-		.maxAnisotropy = 1.0f,
-		.compareEnable = VK_TRUE,
-		.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		.minLod = 0.0f,
-		.maxLod = 0.0f,
-		.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-		.unnormalizedCoordinates = VK_FALSE,
-	};
-	const VkResult shadowSamplerResult = vkCreateSampler(context->device, &samplerInfo, nullptr, &render->shadowSampler);
-	if (shadowSamplerResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure("CreateShadowResources.vkCreateSampler", shadowSamplerResult);
-		for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
-			if (cascadeImageView != VK_NULL_HANDLE) {
-				vkDestroyImageView(context->device, cascadeImageView, nullptr);
-				cascadeImageView = VK_NULL_HANDLE;
-			}
-		}
-		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
-		render->shadowImageView = VK_NULL_HANDLE;
-		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
-		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
-		render->shadowImage = VK_NULL_HANDLE;
-		render->shadowAllocation = VK_NULL_HANDLE;
-		render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
-		return false;
-	}
-
-	render->shadowImageNeedsInit = true;
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->shadowImage),
-		VK_OBJECT_TYPE_IMAGE,
-		"ShadowImage");
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->shadowImageView),
-		VK_OBJECT_TYPE_IMAGE_VIEW,
-		"ShadowImageView");
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		char viewName[64]{};
-		std::snprintf(viewName, sizeof(viewName), "ShadowCascadeImageView[%u]", cascadeIndex);
-		SetVulkanObjectName(
-			*context,
-			reinterpret_cast<uint64_t>(render->shadowCascadeImageViews[cascadeIndex]),
-			VK_OBJECT_TYPE_IMAGE_VIEW,
-			viewName);
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->shadowSampler),
-		VK_OBJECT_TYPE_SAMPLER,
-		"ShadowSampler");
+	(void)context;
+	(void)render;
+	// CSM removed per TODO.md §5.2.D (session 20x). RTX shadows are the
+	// canonical sun shadow path; no shadow image / sampler / image-view
+	// stack is created.
 	return true;
 }
 
@@ -587,7 +451,6 @@ void DestroyGraphicsResourceBindings(
 {
 	for (SceneFrameResources &frameResources : render.sceneFrameResources) {
 		frameResources.graphicsDescriptorSet = VK_NULL_HANDLE;
-		frameResources.shadowDescriptorSet = VK_NULL_HANDLE;
 	}
 
 	if (render.graphicsDescriptorPool) {
@@ -595,19 +458,9 @@ void DestroyGraphicsResourceBindings(
 		render.graphicsDescriptorPool = VK_NULL_HANDLE;
 	}
 
-	if (render.shadowDescriptorPool) {
-		vkDestroyDescriptorPool(context.device, render.shadowDescriptorPool, nullptr);
-		render.shadowDescriptorPool = VK_NULL_HANDLE;
-	}
-
 	if (render.graphicsDescriptorSetLayout) {
 		vkDestroyDescriptorSetLayout(context.device, render.graphicsDescriptorSetLayout, nullptr);
 		render.graphicsDescriptorSetLayout = VK_NULL_HANDLE;
-	}
-
-	if (render.shadowDescriptorSetLayout) {
-		vkDestroyDescriptorSetLayout(context.device, render.shadowDescriptorSetLayout, nullptr);
-		render.shadowDescriptorSetLayout = VK_NULL_HANDLE;
 	}
 }
 
@@ -1143,11 +996,6 @@ bool RefreshGraphicsResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
-		const VkDescriptorImageInfo shadowImageInfo{
-			.sampler = render->shadowSampler,
-			.imageView = render->shadowImageView,
-			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-		};
 
 		const VkDescriptorImageInfo layerHistoryImageInfo{
 			.sampler = render->taaLinearSampler,
@@ -1172,126 +1020,182 @@ bool RefreshGraphicsResourceBindings(
 							 : render->volumetricFogFallbackView,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		};
-		const std::array descriptorWrites{
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &packedFaceBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &chunkDescriptorBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 2,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &materialVisualBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 3,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &sceneLightingBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 4,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &shadowImageInfo,
-				.pBufferInfo = nullptr,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 5,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &chunkVoxelPayloadBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
 
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 6,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &layerHistoryImageInfo,
-				.pBufferInfo = nullptr,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 11,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &vctClipmapImageInfo,
-				.pBufferInfo = nullptr,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.graphicsDescriptorSet,
-				.dstBinding = 12,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.pImageInfo = &volumetricFogImageInfo,
-				.pBufferInfo = nullptr,
-				.pTexelBufferView = nullptr,
-			},
+		const bool rtxGiActive = render->rtxGiProbes != nullptr
+			&& render->rtxGiProbes->IsEnabled();
+		const VkDescriptorImageInfo rtxGiIrradianceImageInfo{
+			.sampler = rtxGiActive ? render->rtxGiProbes->GetConfig().irradianceSampler : VK_NULL_HANDLE,
+			.imageView = rtxGiActive ? render->rtxGiProbes->GetConfig().irradianceView : VK_NULL_HANDLE,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		};
+		const VkDescriptorImageInfo rtxGiDistanceImageInfo{
+			.sampler = rtxGiActive ? render->rtxGiProbes->GetConfig().irradianceSampler : VK_NULL_HANDLE,
+			.imageView = rtxGiActive ? render->rtxGiProbes->GetConfig().distanceView : VK_NULL_HANDLE,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
+		const VkDescriptorImageInfo rtxGiProbeDataImageInfo{
+			.sampler = rtxGiActive ? render->rtxGiProbes->GetConfig().irradianceSampler : VK_NULL_HANDLE,
+			.imageView = rtxGiActive ? render->rtxGiProbes->GetConfig().probeDataView : VK_NULL_HANDLE,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
+		const VkDescriptorBufferInfo rtxGiVolumeDescBufferInfo{
+			.buffer = rtxGiActive ? render->rtxGiProbes->GetConfig().volumeDescBuffer : VK_NULL_HANDLE,
+			.offset = 0,
+			.range = rtxGiActive ? sizeof(float) * 16u : 0u,
+		};
+		std::vector<VkWriteDescriptorSet> descriptorWrites{};
+		descriptorWrites.reserve(16u);
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.pImageInfo = nullptr,
+			.pBufferInfo = &packedFaceBufferInfo,
+			.pTexelBufferView = nullptr,
+		});
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 1,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.pImageInfo = nullptr,
+			.pBufferInfo = &chunkDescriptorBufferInfo,
+			.pTexelBufferView = nullptr,
+		});
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 2,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.pImageInfo = nullptr,
+			.pBufferInfo = &materialVisualBufferInfo,
+			.pTexelBufferView = nullptr,
+		});
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 3,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.pImageInfo = nullptr,
+			.pBufferInfo = &sceneLightingBufferInfo,
+			.pTexelBufferView = nullptr,
+		});
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 4,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.pImageInfo = nullptr,
+			.pBufferInfo = &chunkVoxelPayloadBufferInfo,
+			.pTexelBufferView = nullptr,
+		});
+
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 6,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &layerHistoryImageInfo,
+			.pBufferInfo = nullptr,
+			.pTexelBufferView = nullptr,
+		});
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 11,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &vctClipmapImageInfo,
+			.pBufferInfo = nullptr,
+			.pTexelBufferView = nullptr,
+		});
+		descriptorWrites.push_back(VkWriteDescriptorSet{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = nullptr,
+			.dstSet = frameResources.graphicsDescriptorSet,
+			.dstBinding = 12,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &volumetricFogImageInfo,
+			.pBufferInfo = nullptr,
+			.pTexelBufferView = nullptr,
+		});
+		if (rtxGiActive) {
+			descriptorWrites.push_back(VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 14,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &rtxGiIrradianceImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			});
+			descriptorWrites.push_back(VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 15,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &rtxGiDistanceImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			});
+			descriptorWrites.push_back(VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 16,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &rtxGiProbeDataImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			});
+			descriptorWrites.push_back(VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 17,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pImageInfo = nullptr,
+				.pBufferInfo = &rtxGiVolumeDescBufferInfo,
+				.pTexelBufferView = nullptr,
+			});
+		}
 
 		const bool rtxActive = render->rayTracedShadows != nullptr
 			&& render->rayTracedShadows->IsEnabled()
 			&& render->rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
-		std::vector<VkWriteDescriptorSet> allWrites{};
-		allWrites.reserve(descriptorWrites.size() + (rtxActive ? 1u : 0u));
-		for (const VkWriteDescriptorSet &w : descriptorWrites) {
-			allWrites.push_back(w);
-		}
 		if (rtxActive) {
 			VkWriteDescriptorSet tlasWrite{};
 			tlasWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1312,12 +1216,36 @@ bool RefreshGraphicsResourceBindings(
 				.pAccelerationStructures = &tlasHandle,
 			};
 			tlasWrite.pNext = &tlasWriteInfo;
-			allWrites.push_back(tlasWrite);
+			descriptorWrites.push_back(tlasWrite);
+		}
+
+		const VkImageView shadowMaskView =
+			(render->rayTracedShadows != nullptr && render->rayTracedShadows->IsVoxelAwareRtxActive())
+				? render->rayTracedShadows->GetShadowMaskImageView()
+				: render->rtxShadowMaskFallbackView;
+		if (shadowMaskView != VK_NULL_HANDLE) {
+			const VkDescriptorImageInfo shadowMaskImageInfo{
+				.sampler = render->taaLinearSampler,
+				.imageView = shadowMaskView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			};
+			descriptorWrites.push_back(VkWriteDescriptorSet{
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = frameResources.graphicsDescriptorSet,
+				.dstBinding = 18,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &shadowMaskImageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			});
 		}
 		vkUpdateDescriptorSets(
 			context->device,
-			static_cast<uint32_t>(allWrites.size()),
-			allWrites.data(),
+			static_cast<uint32_t>(descriptorWrites.size()),
+			descriptorWrites.data(),
 			0,
 			nullptr);
 
@@ -1343,112 +1271,10 @@ bool RefreshGraphicsResourceBindings(
 		}
 	}
 
-	if (!render->shadowDescriptorSetLayout) {
-		return true;
-	}
-
-	if (render->shadowDescriptorPool) {
-		vkDestroyDescriptorPool(context->device, render->shadowDescriptorPool, nullptr);
-		render->shadowDescriptorPool = VK_NULL_HANDLE;
-	}
-
-	constexpr VkDescriptorPoolCreateInfo shadowPoolInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.maxSets = kShadowDescriptorSetCount,
-		.poolSizeCount = static_cast<uint32_t>(kShadowDescriptorPoolSizes.size()),
-		.pPoolSizes = kShadowDescriptorPoolSizes.data(),
-	};
-	const VkResult shadowDescriptorPoolResult =
-		vkCreateDescriptorPool(context->device, &shadowPoolInfo, nullptr, &render->shadowDescriptorPool);
-	if (shadowDescriptorPoolResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure("RefreshGraphicsResourceBindings.vkCreateShadowDescriptorPool", shadowDescriptorPoolResult);
-		return false;
-	}
-
-	const std::vector shadowSetLayouts(render->sceneFrameResources.size(), render->shadowDescriptorSetLayout);
-	std::vector<VkDescriptorSet> shadowDescriptorSets(render->sceneFrameResources.size(), VK_NULL_HANDLE);
-	VkDescriptorSetAllocateInfo shadowAllocateInfo{};
-	shadowAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	shadowAllocateInfo.descriptorPool = render->shadowDescriptorPool;
-	shadowAllocateInfo.descriptorSetCount = static_cast<uint32_t>(shadowSetLayouts.size());
-	shadowAllocateInfo.pSetLayouts = shadowSetLayouts.data();
-	const VkResult allocateShadowDescriptorSetsResult =
-		vkAllocateDescriptorSets(context->device, &shadowAllocateInfo, shadowDescriptorSets.data());
-	if (allocateShadowDescriptorSetsResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure(
-			"RefreshGraphicsResourceBindings.vkAllocateShadowDescriptorSets",
-			allocateShadowDescriptorSetsResult);
-		vkDestroyDescriptorPool(context->device, render->shadowDescriptorPool, nullptr);
-		render->shadowDescriptorPool = VK_NULL_HANDLE;
-		return false;
-	}
-
-	for (size_t frameIndex = 0; frameIndex < render->sceneFrameResources.size(); ++frameIndex) {
-		SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
-		frameResources.shadowDescriptorSet = shadowDescriptorSets[frameIndex];
-
-		const VkDescriptorBufferInfo packedFaceBufferInfo{
-			.buffer = frameResources.packedFaceBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
-		const VkDescriptorBufferInfo chunkDescriptorBufferInfo{
-			.buffer = frameResources.chunkDescriptorBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
-		const VkDescriptorBufferInfo sceneLightingBufferInfo{
-			.buffer = frameResources.sceneLightingBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
-		const std::array shadowDescriptorWrites{
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.shadowDescriptorSet,
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &packedFaceBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.shadowDescriptorSet,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &chunkDescriptorBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.shadowDescriptorSet,
-				.dstBinding = 3,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &sceneLightingBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-		};
-		vkUpdateDescriptorSets(
-			context->device,
-			static_cast<uint32_t>(shadowDescriptorWrites.size()),
-			shadowDescriptorWrites.data(),
-			0,
-			nullptr);
-	}
+	// CSM removed per TODO.md §5.2.D (session 20x). RTX shadows use the
+	// graphics descriptor set (binding 13 = rtxTlas) instead of a separate
+	// shadow descriptor set. The remaining code in this function handles
+	// only the graphics descriptor set.
 
 	return true;
 }
@@ -1536,8 +1362,6 @@ bool CreateGraphicsPipeline(
 	std::vector<char> fragmentShaderCodeTaaOn;
 	std::vector<char> fragmentShaderCodeRtx;
 	std::vector<char> fragmentShaderCodeRtxTaaOn;
-	std::vector<char> shadowVertexShaderCode;
-	std::vector<char> shadowFragmentShaderCode;
 	const bool rtxProbeAvailable = context->rayTracing.rayQuery
 		&& context->rayTracing.accelerationStructure
 		&& projectv::render::IsRayTracedShadowEnabled(*context);
@@ -1550,13 +1374,10 @@ bool CreateGraphicsPipeline(
 			fragmentShaderCodeRtx = ReadShaderFile("voxel.frag.rtx.spv");
 			fragmentShaderCodeRtxTaaOn = ReadShaderFile("voxel.frag.rtx_taa_on.spv");
 		}
-		shadowVertexShaderCode = ReadShaderFile("voxel_shadow.vert.spv");
-		shadowFragmentShaderCode = ReadShaderFile("voxel_shadow.frag.spv");
 	}
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty() ||
 		fragmentShaderCodeTaaOn.empty() ||
-		(rtxProbeAvailable && (fragmentShaderCodeRtx.empty() || fragmentShaderCodeRtxTaaOn.empty())) ||
-		shadowVertexShaderCode.empty() || shadowFragmentShaderCode.empty()) {
+		(rtxProbeAvailable && (fragmentShaderCodeRtx.empty() || fragmentShaderCodeRtxTaaOn.empty()))) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ReadShaders", "voxel shader blob is empty");
 		DestroyGraphicsPipeline(context, render);
 		return false;
@@ -1567,17 +1388,7 @@ bool CreateGraphicsPipeline(
 	VkShaderModule fragmentShaderModuleTaaOn = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModuleRtx = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModuleRtxTaaOn = VK_NULL_HANDLE;
-	VkShaderModule shadowVertexShaderModule = VK_NULL_HANDLE;
-	VkShaderModule shadowFragmentShaderModule = VK_NULL_HANDLE;
 	const auto destroyShaderModules = [&] {
-		if (shadowFragmentShaderModule) {
-			vkDestroyShaderModule(context->device, shadowFragmentShaderModule, nullptr);
-			shadowFragmentShaderModule = VK_NULL_HANDLE;
-		}
-		if (shadowVertexShaderModule) {
-			vkDestroyShaderModule(context->device, shadowVertexShaderModule, nullptr);
-			shadowVertexShaderModule = VK_NULL_HANDLE;
-		}
 		if (fragmentShaderModuleRtxTaaOn) {
 			vkDestroyShaderModule(context->device, fragmentShaderModuleRtxTaaOn, nullptr);
 			fragmentShaderModuleRtxTaaOn = VK_NULL_HANDLE;
@@ -1608,12 +1419,9 @@ bool CreateGraphicsPipeline(
 			fragmentShaderModuleRtx = CreateShaderModule(context->device, fragmentShaderCodeRtx);
 			fragmentShaderModuleRtxTaaOn = CreateShaderModule(context->device, fragmentShaderCodeRtxTaaOn);
 		}
-		shadowVertexShaderModule = CreateShaderModule(context->device, shadowVertexShaderCode);
-		shadowFragmentShaderModule = CreateShaderModule(context->device, shadowFragmentShaderCode);
 	}
 	if (!vertexShaderModule || !fragmentShaderModule || !fragmentShaderModuleTaaOn ||
-		(rtxProbeAvailable && (!fragmentShaderModuleRtx || !fragmentShaderModuleRtxTaaOn)) ||
-		!shadowVertexShaderModule || !shadowFragmentShaderModule) {
+		(rtxProbeAvailable && (!fragmentShaderModuleRtx || !fragmentShaderModuleRtxTaaOn))) {
 		LogGraphicsPipelineTextFailure(
 			"CreateGraphicsPipeline.CreateShaderModules",
 			"voxel shader module creation returned null");
@@ -1671,26 +1479,6 @@ bool CreateGraphicsPipeline(
 	const std::array shaderStagesTaaOn{vertexStageInfo, fragStageTaaOn};
 	const std::array shaderStagesRtxOff{vertexStageInfo, fragStageRtx};
 	const std::array shaderStagesRtxOn{vertexStageInfo, fragStageRtxTaaOn};
-	const std::array shadowShaderStages{
-		VkPipelineShaderStageCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = shadowVertexShaderModule,
-			.pName = "main",
-			.pSpecializationInfo = nullptr,
-		},
-		VkPipelineShaderStageCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = shadowFragmentShaderModule,
-			.pName = "main",
-			.pSpecializationInfo = nullptr,
-		},
-	};
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1800,17 +1588,8 @@ bool CreateGraphicsPipeline(
 		layoutBindings.push_back(b);
 	}
 	if (rtxLayoutActiveForCreate) {
-		// EVIL: binding 13 = accelerationStructureKHR FRAGMENT (Stage 5.2 RTX smooth specular
-		// ray query + Stage 5.2.B sun shadow ray query). Only added when VK_KHR_acceleration_structure
-		// + VK_KHR_ray_query are device-enabled. Per Vulkan spec VUID-VkDescriptorSetLayoutBinding-descriptorType-04616
-		// the type VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR requires the device extension.
-		layoutBindings.push_back(VkDescriptorSetLayoutBinding{
-			.binding = 13,
-			.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.pImmutableSamplers = nullptr,
-		});
+		// RTX-only binding 13 (accelerationStructureKHR) is already declared in
+		// kGraphicsDescriptorBindings. No additional layout entry needed here.
 	}
 	const VkDescriptorSetLayoutCreateInfo graphicsDescriptorSetLayoutInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1841,27 +1620,6 @@ bool CreateGraphicsPipeline(
 		reinterpret_cast<uint64_t>(render->graphicsDescriptorSetLayout),
 		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
 		"VoxelGraphicsDescriptorSetLayout");
-	{
-		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowDescriptorSetLayout");
-		const VkResult shadowDescriptorSetLayoutResult = vkCreateDescriptorSetLayout(
-			context->device,
-			&kShadowDescriptorSetLayoutInfo,
-			nullptr,
-			&render->shadowDescriptorSetLayout);
-		if (shadowDescriptorSetLayoutResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure(
-				"CreateGraphicsPipeline.vkCreateShadowDescriptorSetLayout",
-				shadowDescriptorSetLayoutResult);
-			destroyShaderModules();
-			DestroyGraphicsPipeline(context, render);
-			return false;
-		}
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->shadowDescriptorSetLayout),
-		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-		"VoxelShadowDescriptorSetLayout");
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -1886,35 +1644,6 @@ bool CreateGraphicsPipeline(
 		reinterpret_cast<uint64_t>(render->graphicsPipelineLayout),
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelGraphicsPipelineLayout");
-	VkPipelineLayoutCreateInfo shadowPipelineLayoutInfo{};
-	shadowPipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	shadowPipelineLayoutInfo.setLayoutCount = 1;
-	shadowPipelineLayoutInfo.pSetLayouts = &render->shadowDescriptorSetLayout;
-	VkPushConstantRange shadowPushConstantRange{};
-	shadowPushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	shadowPushConstantRange.offset = 0;
-	shadowPushConstantRange.size = sizeof(ShadowPushConstants);
-	shadowPipelineLayoutInfo.pushConstantRangeCount = 1;
-	shadowPipelineLayoutInfo.pPushConstantRanges = &shadowPushConstantRange;
-
-	{
-		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowPipelineLayout");
-		const VkResult shadowPipelineLayoutResult =
-			vkCreatePipelineLayout(context->device, &shadowPipelineLayoutInfo, nullptr, &render->shadowPipelineLayout);
-		if (shadowPipelineLayoutResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure(
-				"CreateGraphicsPipeline.vkCreateShadowPipelineLayout",
-				shadowPipelineLayoutResult);
-			destroyShaderModules();
-			DestroyGraphicsPipeline(context, render);
-			return false;
-		}
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->shadowPipelineLayout),
-		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
-		"VoxelShadowPipelineLayout");
 
 	if (!context->supportsDynamicRenderingUnusedAttachments) {
 		LogGraphicsPipelineTextFailure(
@@ -1945,7 +1674,7 @@ bool CreateGraphicsPipeline(
 		.viewMask = 0,
 		.colorAttachmentCount = 0,
 		.pColorAttachmentFormats = nullptr,
-		.depthAttachmentFormat = render->shadowDepthFormat,
+		.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT,
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
 
@@ -2084,36 +1813,11 @@ bool CreateGraphicsPipeline(
 		"VoxelTransparentPipelineTaaOn");
 
 	VkGraphicsPipelineCreateInfo shadowPipelineInfo = pipelineBase;
-	shadowPipelineInfo.pNext = &shadowRenderingInfo;
-	shadowPipelineInfo.stageCount = static_cast<uint32_t>(shadowShaderStages.size());
-	shadowPipelineInfo.pStages = shadowShaderStages.data();
-	shadowPipelineInfo.pRasterizationState = &shadowRasterizer;
-	shadowPipelineInfo.pDepthStencilState = &shadowDepthStencil;
-	shadowPipelineInfo.pColorBlendState = &shadowColorBlending;
-	shadowPipelineInfo.layout = render->shadowPipelineLayout;
-	{
-		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ShadowPipeline");
-		const VkResult shadowPipelineResult = vkCreateGraphicsPipelines(
-			context->device,
-			VK_NULL_HANDLE,
-			1,
-			&shadowPipelineInfo,
-			nullptr,
-			&render->shadowGraphicsPipeline);
-		if (shadowPipelineResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure(
-				"CreateGraphicsPipeline.Shadow.vkCreateGraphicsPipelines",
-				shadowPipelineResult);
-			destroyShaderModules();
-			DestroyGraphicsPipeline(context, render);
-			return false;
-		}
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->shadowGraphicsPipeline),
-		VK_OBJECT_TYPE_PIPELINE,
-		"VoxelShadowPipeline");
+	(void)shadowPipelineInfo;
+	// CSM shadow pipeline removed per TODO.md §5.2.D (session 20x). The
+	// shadow rendering info / rasterizer / depth-stencil / color-blend
+	// structs above are retained for ABI compatibility (they are still
+	// constructed but not consumed). No shadow pipeline is created.
 
 	// EVIL: RefreshGraphicsResourceBindings deferred to VulkanInit after
 	// CreateVolumetricFogFallbackOnly (8x V C bug: bindings 11/12 fallback image
@@ -2179,41 +1883,11 @@ void DestroyShadowResources(
 	VulkanContextState *context,
 	RenderState *render)
 {
-	PV_PROFILE_ZONE_N("DestroyShadowResources");
-	if (!context || !render || !context->device) {
-		return;
-	}
-
-	if (render->shadowSampler) {
-		PV_PROFILE_ZONE_N("DestroyShadowSampler");
-		vkDestroySampler(context->device, render->shadowSampler, nullptr);
-		render->shadowSampler = VK_NULL_HANDLE;
-	}
-
-	for (VkImageView &cascadeImageView : render->shadowCascadeImageViews) {
-		if (cascadeImageView) {
-			PV_PROFILE_ZONE_N("DestroyShadowCascadeImageView");
-			vkDestroyImageView(context->device, cascadeImageView, nullptr);
-			cascadeImageView = VK_NULL_HANDLE;
-		}
-	}
-
-	if (render->shadowImageView) {
-		PV_PROFILE_ZONE_N("DestroyShadowImageView");
-		vkDestroyImageView(context->device, render->shadowImageView, nullptr);
-		render->shadowImageView = VK_NULL_HANDLE;
-	}
-
-	if (render->shadowImage && render->shadowAllocation) {
-		PV_PROFILE_ZONE_N("DestroyShadowImage");
-		profiling::RecordFree(render->shadowAllocation, "ShadowImageAllocation");
-		vmaDestroyImage(context->allocator, render->shadowImage, render->shadowAllocation);
-		render->shadowImage = VK_NULL_HANDLE;
-		render->shadowAllocation = VK_NULL_HANDLE;
-	}
-
-	render->shadowImageNeedsInit = false;
-	render->shadowDepthFormat = VK_FORMAT_UNDEFINED;
+	(void)context;
+	(void)render;
+	// CSM removed per TODO.md §5.2.D (session 20x). RTX shadows use the
+	// graphics descriptor set (binding 13 = rtxTlas); no shadow image /
+	// sampler / image-view stack to destroy.
 }
 
 void DestroyScreenshotReadbackResources(

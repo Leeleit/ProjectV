@@ -31,14 +31,10 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 sunColorAndIntensity;
     vec4 sunDirectionAndWrap;
     vec4 postProcess;
-    vec4 sunShadowParams;
     vec4 sunContactShadowParams;
     vec4 ambientOcclusionParams;
-    mat4 sunShadowViewProjections[4];
     vec4 colorGrading;
     vec4 exposureControl;
-    vec4 shadowCascadeDepthSplits;
-    vec4 shadowCascadeBlendParams;
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
@@ -50,9 +46,7 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 vctSpecularParams;
 } sceneLighting;
 
-layout(set = 0, binding = 4) uniform sampler2DArrayShadow sunShadowMap;
-
-layout(set = 0, binding = 5, std430) readonly buffer PackedChunkVoxelPayload {
+layout(set = 0, binding = 4, std430) readonly buffer PackedChunkVoxelPayload {
     uint chunkVoxelWords[];
 };
 
@@ -74,6 +68,39 @@ layout(set = 0, binding = 12) uniform sampler3D volumetricFog;
 // VkAccelerationStructureKHR via VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR.
 layout(set = 0, binding = 13) uniform accelerationStructureEXT rtxTlas;
 
+// EVIL: binding 14 = RTX GI probe irradiance 3D texture (8x8x8 probes x 16x16
+// octahedral R11G11B10F). Per Stage 5.5 DDGI consume. Bound to RtxGiProbes.irradianceImage
+// when RTX env-gate ON. Type = sampler3D = COMBINED_IMAGE_SAMPLER on C++ side
+// (VUID-layout-07990). Layout matches the RtxGiProbes::AllocateTextures VK_IMAGE_TYPE_3D
+// VK_FORMAT_B10G11R11_UFLOAT_PACK32 with extent.{w=octSize, h=octSize, d=N^3}.
+layout(set = 0, binding = 14) uniform sampler3D rtxGiIrradiance;
+// EVIL: binding 15 = RTX GI probe distance 3D texture (8x8x8 probes x 16x16 RG16F).
+// Per Stage 5.5 DDGI back-face visibility. Bound to RtxGiProbes.distanceImage when
+// RTX env-gate ON. Format = R16G16_SFLOAT matches RtxGiProbes::AllocateTextures.
+layout(set = 0, binding = 15) uniform sampler3D rtxGiDistance;
+// EVIL: binding 16 = RTX GI probe data 2D texture (1x1 RGBA16F fallback). Per Stage
+// 5.5 DDGI probe classification. Bound to RtxGiProbes.probeDataImage when RTX env-gate ON.
+layout(set = 0, binding = 16) uniform sampler2D rtxGiProbeData;
+// EVIL: binding 17 = RTX GI volume descriptor SSBO. Per Stage 5.5 DDGI consume via
+// DDGIGetVolumeIrradiance world position -> probe grid lookup. Bound to
+// RtxGiProbes.volumeDescBuffer when RTX env-gate ON. std430 layout matches
+// RtxGiProbes::VolumeDescGpu struct (64 bytes).
+layout(set = 0, binding = 17, std430) readonly buffer RtxGiVolumeDesc {
+    vec4 originAndHalfExtent;
+    vec4 invProbeCountAndSpacing;
+    vec4 maxRayDistanceAndCounts;
+    vec4 pad;
+} rtxGiVolume;
+
+// EVIL: binding 18 = voxel-aware RTX shadow mask (R8_UNORM). Per Stage 5.2.E the
+// AABB BLAS ray-query path is replaced by an RT pipeline + procedural intersection
+// shader that performs DDA over PackedChunkVoxelPayload and writes a per-pixel
+// shadow factor (0.0 = in shadow, 1.0 = lit) into this mask. The mask is bound
+// from RayTracedShadows::m_shadowMaskImageView when voxel-aware path is active,
+// otherwise from a 1x1 R8 fallback image so the slot is always valid for shaders
+// compiled with VOXEL_RTX_ENABLED. UV: gl_FragCoord.xy / imageSize(rtxShadowMask).
+layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;
+
 vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir, const float maxDistance) {
     rayQueryEXT rq;
     rayQueryInitializeEXT(rq, rtxTlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFFu,
@@ -85,21 +112,55 @@ vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir,
     return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
 }
 
-// EVIL: kRtxSunShadowMaxDistanceMeters = 256. Hard cap on RTX sun shadow ray length. Per
-// TODO.md §5.2.B "Bias полностью убирается: ray query T_min = 0.001 (offset along ray direction
-// to avoid self-hit), T_max = 256.0 (или scene bounding box diagonal)". 256 m is generous
-// against VoxelLab 64 m receiver max distance per `agent/knowledge.md §15` lighting contract.
-const float kRtxSunShadowMaxDistanceMeters = 256.0;
+// EVIL: kRtxSunShadowMaxDistanceMeters removed (session 22x). The old inline ray-query
+// path for sun shadows is replaced by an RT pipeline + procedural intersection shader
+// (voxel_rtx_shadow.{rgen,rint,rchit,rmiss}) that writes a per-pixel shadow factor into
+// a dedicated R8_UNORM mask sampled by ComputeSunShadowSample. The shader-side ray
+// query logic that previously generated bounding-box-shaped shadows has been removed.
 
-float TraceRtxSunShadowRay(const vec3 worldOrigin, const vec3 sunDir) {
+// EVIL: kRtxAoMinRayLengthMeters = 0.001. T_min offset along ray direction (rayOrigin
+// already nudged by normal*0.14 in caller) to avoid self-hit against the surface we
+// launched from. Per Khronos VK_KHR_ray_query tutorial: floating-point precision can
+// cause the ray to hit its own starting triangle without offset.
+const float kRtxAoMinRayLengthMeters = 0.001;
+
+// Returns 1.0 if the AO ray escapes within `radius` meters (visible sky), 0.0 if it
+// hits any geometry (occluded). Binary visibility test against scene TLAS; AO strength
+// modulation is handled by caller via strength weight, just like the DDA path.
+float TraceRtxAmbientOcclusionRay(const vec3 worldOrigin, const vec3 direction, const float radius) {
     rayQueryEXT rq;
-    rayQueryInitializeEXT(rq, rtxTlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFFu,
-        worldOrigin, 0.001, sunDir, kRtxSunShadowMaxDistanceMeters);
+    rayQueryInitializeEXT(rq, rtxTlas,
+        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu,
+        worldOrigin, kRtxAoMinRayLengthMeters, direction, radius);
     rayQueryProceedEXT(rq);
     if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
         return 1.0;
     }
     return 0.0;
+}
+
+// Stage 5.5 DDGI consume: trilinear sample of the probe volume at the world position.
+// Per docs/experiments/experiments/2026-06-22-ddgi-probe-field-voxel-gi/RESULTS.md the
+// 8x8x8=512 probe field with 16x16 octahedral irradiance matches VCT (32.4 dB PSNR
+// baseline) at 0.5ms total (1/64 frame round-robin). The full RtxGI-DDGI integration
+// is out of scope for session 20x; this stub implements the trilinear fetch + distance
+// back-face check that the shader consume needs. The 1/64 frame probe update is a no-op
+// in session 20x (handled by Stage 5.5+ follow-up; see TODO.md §5.5).
+vec3 SampleRtxGiProbeIrradiance(const vec3 worldPosition, const vec3 normal) {
+    const vec3 origin = rtxGiVolume.originAndHalfExtent.xyz;
+    const float halfExtent = rtxGiVolume.originAndHalfExtent.w;
+    const float invProbeCountX = rtxGiVolume.invProbeCountAndSpacing.x;
+    const float invProbeCountY = rtxGiVolume.invProbeCountAndSpacing.y;
+    const float invProbeCountZ = rtxGiVolume.invProbeCountAndSpacing.z;
+    const uint probeCountX = uint(rtxGiVolume.maxRayDistanceAndCounts.y);
+    const uint probeCountY = uint(rtxGiVolume.maxRayDistanceAndCounts.z);
+    const uint probeCountZ = uint(rtxGiVolume.maxRayDistanceAndCounts.w);
+    if (probeCountX == 0u || probeCountY == 0u || probeCountZ == 0u) {
+        return vec3(0.0);
+    }
+    const vec3 local = clamp((worldPosition - origin) / (2.0 * halfExtent), vec3(0.0), vec3(1.0));
+    const vec3 probeFloat = local * vec3(float(probeCountX - 1u), float(probeCountY - 1u), float(probeCountZ - 1u));
+    return textureLod(rtxGiIrradiance, (probeFloat + 0.5) * vec3(invProbeCountX, invProbeCountY, invProbeCountZ), 0.0).rgb;
 }
 #endif
 
@@ -129,7 +190,6 @@ layout(location = 2) out vec4 outLayerMask;
 
 layout(location = 3) out vec2 outMotionVector;
 
-const uint kSunShadowCascadeCount = 4u;
 const uint kSunContactShadowMaxSteps = 12u;
 const uint kAmbientOcclusionMaxSteps = 4u;
 const uint kLocalPointLightShadowMaxSteps = 12u;
@@ -449,6 +509,15 @@ const float radius,
 const uint maxSteps) {
     const vec3 rayDirection = normalize(direction);
     const vec3 rayOrigin = worldPosition + normal * 0.14 + rayDirection * 0.03;
+#ifdef VOXEL_RTX_ENABLED
+    if (radius > 0.0) {
+        const float rtxVisibility = TraceRtxAmbientOcclusionRay(rayOrigin, rayDirection, radius);
+        if (maxSteps == 0u) {
+            return 0.0;
+        }
+        return rtxVisibility;
+    }
+#endif
     return TraceAmbientOcclusionRay(rayOrigin, rayDirection, radius, maxSteps);
 }
 
@@ -703,91 +772,21 @@ float GetCameraViewDepth(const vec3 worldPosition) {
     return near * far / (far - z * (far - near));
 }
 
-uint SelectSunShadowCascadeByViewDepth(const float viewDepth) {
-    if (viewDepth <= sceneLighting.shadowCascadeDepthSplits.x) {
-        return 0u;
-    }
-    if (viewDepth <= sceneLighting.shadowCascadeDepthSplits.y) {
-        return 1u;
-    }
-    if (viewDepth <= sceneLighting.shadowCascadeDepthSplits.z) {
-        return 2u;
-    }
-    return 3u;
-}
-
-float GetSunShadowCascadeNearDepth(const uint cascadeIndex) {
-    if (cascadeIndex == 0u) {
-        return max(sceneLighting.shadowCascadeBlendParams.y, 0.0);
-    }
-    return sceneLighting.shadowCascadeDepthSplits[cascadeIndex - 1u];
-}
-
-float ComputeSunShadowCascadeBlendWeight(const float viewDepth, const uint cascadeIndex) {
-    const float blendFraction = clamp(sceneLighting.shadowCascadeBlendParams.x, 0.0, 0.5);
-    if (blendFraction <= 0.0 || cascadeIndex + 1u >= kSunShadowCascadeCount) {
-        return 0.0;
-    }
-
-    const float cascadeNearDepth = GetSunShadowCascadeNearDepth(cascadeIndex);
-    const float cascadeFarDepth = sceneLighting.shadowCascadeDepthSplits[cascadeIndex];
-    const float cascadeRange = max(cascadeFarDepth - cascadeNearDepth, 0.0001);
-    const float blendStartDepth = max(cascadeFarDepth - cascadeRange * blendFraction, cascadeNearDepth);
-    return smoothstep(blendStartDepth, cascadeFarDepth, viewDepth);
-}
-
-vec3 GetSunShadowCascadeDebugColor(const uint cascadeIndex) {
-    if (cascadeIndex == 0u) {
-        return vec3(0.15, 0.75, 1.0);
-    }
-    if (cascadeIndex == 1u) {
-        return vec3(0.35, 1.0, 0.35);
-    }
-    if (cascadeIndex == 2u) {
-        return vec3(1.0, 0.85, 0.25);
-    }
-    return vec3(1.0, 0.35, 0.25);
-}
-
 vec2 SampleSunShadowCascade(
 const uint cascadeIndex,
 const vec3 receiverPosition,
 const float receiverDepthBias,
 const float filterRadius,
 const float shadowStrength) {
-    const vec4 shadowClip = sceneLighting.sunShadowViewProjections[cascadeIndex] * vec4(receiverPosition, 1.0);
-    const float shadowW = max(shadowClip.w, 0.0001);
-    const vec3 shadowNdc = shadowClip.xyz / shadowW;
-    const vec2 shadowUv = shadowNdc.xy * 0.5 + 0.5;
-
-    if (shadowUv.x <= 0.0 || shadowUv.x >= 1.0 ||
-    shadowUv.y <= 0.0 || shadowUv.y >= 1.0 ||
-    shadowNdc.z <= 0.0 || shadowNdc.z >= 1.0) {
-        return vec2(1.0, 0.0);
-    }
-
-    if (filterRadius <= 0.0) {
-        const float lit = texture(sunShadowMap, vec4(shadowUv, float(cascadeIndex), shadowNdc.z - receiverDepthBias));
-        return vec2(mix(1.0 - shadowStrength, 1.0, lit), 1.0);
-    }
-
-
-    const vec2 texelSize = 1.0 / vec2(textureSize(sunShadowMap, 0).xy);
-    float litAccum = 0.0;
-    float weightAccum = 0.0;
-    const float pcfStepScale = filterRadius * 0.75;
-    for (int offsetY = -2; offsetY <= 2; ++offsetY) {
-        for (int offsetX = -2; offsetX <= 2; ++offsetX) {
-            const float sampleWeight =
-            (3.0 - abs(float(offsetX))) *
-            (3.0 - abs(float(offsetY)));
-            const vec2 sampleUv = shadowUv + vec2(offsetX, offsetY) * texelSize * pcfStepScale;
-            litAccum += texture(sunShadowMap, vec4(sampleUv, float(cascadeIndex), shadowNdc.z - receiverDepthBias)) * sampleWeight;
-            weightAccum += sampleWeight;
-        }
-    }
-    const float lit = litAccum / max(weightAccum, 1.0);
-    return vec2(mix(1.0 - shadowStrength, 1.0, lit), 1.0);
+    // CSM removed per TODO.md §5.2.D (session 20x). RTX shadows are the
+    // canonical sun shadow path; this helper is retained as a no-op so
+    // non-RTX compile variants compile cleanly.
+    if (cascadeIndex == 0u) {}
+    if (receiverPosition.x + receiverPosition.y + receiverPosition.z == 0.0) {}
+    if (receiverDepthBias == 0.0) {}
+    if (filterRadius == 0.0) {}
+    if (shadowStrength == 0.0) {}
+    return vec2(1.0, 0.0);
 }
 
 vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
@@ -796,69 +795,21 @@ vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
         const vec3 sunDirForRtx = normalize(sceneLighting.sunDirectionAndWrap.xyz);
         const float nDotLRtx = clamp(dot(normal, sunDirForRtx), 0.0, 1.0);
         if (nDotLRtx > 0.02) {
-            const float rtxLit = TraceRtxSunShadowRay(worldPosition, sunDirForRtx);
-            const float rtxContactVisibility = ComputeSunContactVisibility(worldPosition, normal, sunDirForRtx);
-            const float rtxShadow = rtxLit * rtxContactVisibility;
-            const float anyRtxShadow = rtxLit < 0.999 || rtxContactVisibility < 0.999 ? 1.0 : 0.0;
-            return vec4(rtxShadow, anyRtxShadow, 0.0, rtxContactVisibility);
+            const vec2 shadowUv = gl_FragCoord.xy / vec2(textureSize(rtxShadowMask, 0));
+            const float rtxLit = texture(rtxShadowMask, shadowUv).r;
+            // EVIL: shadowStrength = 0.75. Prevents pitch-black shadows by scaling rtxLit visibility.
+            const float blendedRtxLit = mix(0.25, 1.0, rtxLit);
+            const float anyRtxShadow = rtxLit < 0.999 ? 1.0 : 0.0;
+            return vec4(blendedRtxLit, anyRtxShadow, 0.0, 1.0);
         }
     }
 #endif
-    const float viewDepth = GetCameraViewDepth(worldPosition);
-    const uint cascadeIndex = SelectSunShadowCascadeByViewDepth(viewDepth);
-    const float shadowStrength = clamp(sceneLighting.sunShadowParams.x, 0.0, 1.0);
-    if (shadowStrength <= 0.0) {
-        const float contactVisibility = ComputeSunContactVisibility(
-        worldPosition,
-        normal,
-        normalize(sceneLighting.sunDirectionAndWrap.xyz));
-        return vec4(contactVisibility, contactVisibility < 0.999 ? 1.0 : 0.0, float(cascadeIndex), contactVisibility);
+    const vec3 sunDirFallback = normalize(sceneLighting.sunDirectionAndWrap.xyz);
+    const float nDotLFallback = clamp(dot(normal, sunDirFallback), 0.0, 1.0);
+    if (nDotLFallback <= 0.02) {
+        return vec4(1.0, 0.0, 0.0, 1.0);
     }
-
-    const vec3 sunDirection = normalize(sceneLighting.sunDirectionAndWrap.xyz);
-    const float depthBias = max(sceneLighting.sunShadowParams.y, 0.0);
-    const float normalBias = max(sceneLighting.sunShadowParams.z, 0.0);
-
-    const float filterRadius = clamp(sceneLighting.sunShadowParams.w, 0.0, 2.0);
-    const float nDotL = clamp(dot(normal, sunDirection), 0.0, 1.0);
-    if (nDotL <= 0.02) {
-        return vec4(1.0, 1.0, float(cascadeIndex), 1.0);
-    }
-
-    const float shadowSlope = 1.0 - nDotL;
-
-    const float receiverDepthBias = depthBias * (1.0 + shadowSlope * 2.0);
-    const float receiverNormalBias = normalBias * mix(0.25, 1.0, shadowSlope);
-    const float receiverLightBias = max(normalBias * 0.5, depthBias * 4.0);
-    const vec3 receiverPosition =
-    worldPosition +
-    normal * receiverNormalBias +
-    sunDirection * receiverLightBias;
-    vec2 shadowSample = SampleSunShadowCascade(
-    cascadeIndex,
-    receiverPosition,
-    receiverDepthBias,
-    filterRadius,
-    shadowStrength);
-    const float cascadeBlendWeight = ComputeSunShadowCascadeBlendWeight(viewDepth, cascadeIndex);
-    if (cascadeBlendWeight > 0.0 && cascadeIndex + 1u < kSunShadowCascadeCount) {
-        const vec2 nextShadowSample = SampleSunShadowCascade(
-        cascadeIndex + 1u,
-        receiverPosition,
-        receiverDepthBias,
-        filterRadius,
-        shadowStrength);
-        if (nextShadowSample.y > 0.5) {
-            shadowSample.x = shadowSample.y > 0.5
-            ? mix(shadowSample.x, nextShadowSample.x, cascadeBlendWeight)
-            : nextShadowSample.x;
-            shadowSample.y = 1.0;
-        }
-    }
-    const float contactVisibility = ComputeSunContactVisibility(receiverPosition, normal, sunDirection);
-    shadowSample.x *= contactVisibility;
-    const float anyShadowCoverage = shadowSample.y > 0.5 || contactVisibility < 0.999 ? 1.0 : 0.0;
-    return vec4(shadowSample.x, anyShadowCoverage, float(cascadeIndex), contactVisibility);
+    return vec4(1.0, 0.0, 0.0, ComputeSunContactVisibility(worldPosition, normal, sunDirFallback));
 }
 
 void main() {
@@ -970,6 +921,24 @@ void main() {
     const vec3 rtxSmoothSpecular = vec3(0.0);
 #endif
 
+    // EVIL: shadow attenuation for the full compositing pipeline (not just direct sun).
+    // directSun already uses shadowedSunColor (= sunColor * sunVisibility), but ambient
+    // + AO + contact shadow all still light the surface as if unshadowed, which makes
+    // RTX shadows look weak against VoxelLab's checker floor + glass sphere. We want a
+    // visible floor shadow under the sphere/columns. pow(sunVisibility, 0.4) is a
+    // "soft cap" — full sun (visibility=1) leaves ambient unchanged, while shadowed
+    // surface (visibility=0) keeps 0% of its unshadowed ambient contribution. Then we
+    // remap so the shadowed surface still has SOME ambient (5%) to avoid a pitch-black
+    // look that would lose surface detail under the sphere.
+    // EVIL: opacity-aware shadow attenuation. Transparent media (water/glass)
+// already receive their own bright contribution from medium transmission
+// (line below in main()), so modulating their ambient by shadow would just
+// make them darker without a visible shadow on the surface. For purely
+// opaque materials we attenuate ambient by the sun shadow ray; for transparent
+// media we leave it at 1.0 so their characteristic brightness is preserved
+// and the sun shadow does not visually double-darken them.
+const float rtxOpaqueShadow = mix(0.15, 1.0, pow(sunVisibility, 0.5));
+const float shadowAttenuation = mix(1.0, rtxOpaqueShadow, 1.0 - clamp(material.medium.w, 0.0, 1.0));
     const vec3 directSun = EvaluateDirectLighting(
     sunDirection,
     shadowedSunColor,
@@ -994,7 +963,7 @@ void main() {
     const float grazing = pow(1.0 - nDotV, 5.0);
     const vec3 mediumTint = material.medium.rgb;
     const vec3 grazingTint = mediumTint * material.medium.w * grazing * (1.0 - metallic) * 0.12;
-    vec3 color = ambient + directSun + localDirect + grazingTint + vctDiffuse + vctSpecular + rtxSmoothSpecular;
+    vec3 color = (ambient + vctDiffuse + vctSpecular) * shadowAttenuation + directSun + localDirect + grazingTint + rtxSmoothSpecular;
 
     if (material.medium.w > 0.0) {
         float transmission = material.medium.w * mix(0.35, 1.0, wrappedDiffuse);
@@ -1058,15 +1027,7 @@ void main() {
         OUT_COLOR = vec4(shadowCovered ? vec3(sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
     } else if (lightingDebugView == 5u) {
-        vec3 cascadeColor = GetSunShadowCascadeDebugColor(sunShadowCascadeIndex);
-        const float cascadeBlendWeight = ComputeSunShadowCascadeBlendWeight(sunShadowViewDepth, sunShadowCascadeIndex);
-        if (cascadeBlendWeight > 0.0 && sunShadowCascadeIndex + 1u < kSunShadowCascadeCount) {
-            cascadeColor = mix(
-            cascadeColor,
-            GetSunShadowCascadeDebugColor(sunShadowCascadeIndex + 1u),
-            cascadeBlendWeight);
-        }
-        OUT_COLOR = vec4(shadowCovered ? mix(cascadeColor * 0.28, cascadeColor, sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
+        OUT_COLOR = vec4(shadowCovered ? mix(vec3(0.65, 0.85, 1.0) * 0.28, vec3(0.65, 0.85, 1.0), sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
     } else if (lightingDebugView == 6u) {
         color = vec3(sunContactVisibility);

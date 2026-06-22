@@ -10,6 +10,7 @@ import projectv.string_id;
 #include "asset/ModelPass.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/RayTracedShadows.hpp"
+#include "render/RtxGiProbes.hpp"
 #include "render/SceneResources.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
@@ -46,6 +47,10 @@ void ShutdownVulkan(AppState *state)
 		projectv::render::DestroyRayTracedShadowResources(&state->context(), &state->render());
 		delete state->render().rayTracedShadows;
 		state->render().rayTracedShadows = nullptr;
+		projectv::render::DestroyRtxShadowMaskFallbackOnly(&state->context(), &state->render());
+		projectv::render::DestroyRtxGiProbeResources(&state->context(), &state->render());
+		delete state->render().rtxGiProbes;
+		state->render().rtxGiProbes = nullptr;
 		// EVIL: DestroyVoxelizePipelines also destroys vctClipmapSampler (8x V1) but
 		// it's only called when VCT gate is ON. The fallback sampler created in
 		// CreateVctClipmapFallbackSamplerOnly must be destroyed unconditionally

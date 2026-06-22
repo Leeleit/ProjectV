@@ -47,47 +47,38 @@ layout(set = 0, binding = 5, std430) buffer TransparentIndirectCommands {
     DrawCommand transparentCommands[];
 };
 
-layout(set = 0, binding = 6, std430) buffer ShadowIndirectCommands {
-    DrawCommand shadowCommands[];
-};
-
-layout(set = 0, binding = 7, std430) readonly buffer ChunkCullingParameters {
+layout(set = 0, binding = 6, std430) readonly buffer ChunkCullingParameters {
     vec4 cameraPositionAndMaxDistance;
     vec4 cameraForwardAndTanHalfVerticalFov;
     vec4 cameraRightAndTanHalfHorizontalFov;
     vec4 cameraUpAndNearPlane;
 } chunkCulling;
 
-layout(set = 0, binding = 8, std430) readonly buffer SceneLightingBuffer {
+layout(set = 0, binding = 7, std430) readonly buffer SceneLightingBuffer {
     vec4 skyColorAndFogDensity;
     vec4 horizonColorAndFogStart;
     vec4 groundColorAndFogMax;
     vec4 sunColorAndIntensity;
     vec4 sunDirectionAndWrap;
     vec4 postProcess;
-    vec4 sunShadowParams;
     vec4 sunContactShadowParams;
     vec4 ambientOcclusionParams;
-    mat4 sunShadowViewProjections[4];
     vec4 colorGrading;
     vec4 exposureControl;
-    vec4 shadowCascadeDepthSplits;
-    vec4 shadowCascadeBlendParams;
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
     vec4 taaParams;
     mat4 prevViewProjectionMatrix;
     vec4 taaHistoryParams;
-
     vec4 taaLayerHistoryParams;
 } sceneLighting;
 
-layout(set = 0, binding = 9, std430) readonly buffer LodDownsampledVoxelPayload {
+layout(set = 0, binding = 8, std430) readonly buffer LodDownsampledVoxelPayload {
     uint lodDownsampledWords[];
 } lodDownsampled;
 
-layout(set = 0, binding = 10, std430) readonly buffer ChunkLodLevels {
+layout(set = 0, binding = 9, std430) readonly buffer ChunkLodLevels {
     uint chunkLodLevels[];
 } chunkLodLevelsBuffer;
 
@@ -106,7 +97,6 @@ ivec3(0, -1, 0),
 ivec3(0, 0, 1),
 ivec3(0, 0, -1)
 );
-const uint kSunShadowCascadeCount = 4u;
 
 
 const uint kMaxChunkExtentForGreedy = 64u;
@@ -338,38 +328,12 @@ bool IsChunkVisible(const ChunkDescriptor chunkDescriptor) {
 }
 
 bool IsChunkInsideShadowCascade(const ChunkDescriptor chunkDescriptor, const uint cascadeIndex) {
-    bool outsideLeft = true;
-    bool outsideRight = true;
-    bool outsideBottom = true;
-    bool outsideTop = true;
-    bool outsideNear = true;
-    bool outsideFar = true;
-
-    const vec3 chunkMin = vec3(chunkDescriptor.chunkOrigin.xyz);
-    const vec3 chunkMax = chunkMin + vec3(chunkDescriptor.chunkExtentAndNonAir.xyz);
-    for (uint cornerIndex = 0u; cornerIndex < 8u; ++cornerIndex) {
-        const vec3 corner = vec3(
-        (cornerIndex & 1u) != 0u ? chunkMax.x : chunkMin.x,
-        (cornerIndex & 2u) != 0u ? chunkMax.y : chunkMin.y,
-        (cornerIndex & 4u) != 0u ? chunkMax.z : chunkMin.z);
-        const vec4 clipCorner = sceneLighting.sunShadowViewProjections[cascadeIndex] * vec4(corner, 1.0);
-        outsideLeft = outsideLeft && clipCorner.x < -clipCorner.w;
-        outsideRight = outsideRight && clipCorner.x > clipCorner.w;
-        outsideBottom = outsideBottom && clipCorner.y < -clipCorner.w;
-        outsideTop = outsideTop && clipCorner.y > clipCorner.w;
-        outsideNear = outsideNear && clipCorner.z < 0.0;
-        outsideFar = outsideFar && clipCorner.z > clipCorner.w;
-        if (!outsideLeft &&
-        !outsideRight &&
-        !outsideBottom &&
-        !outsideTop &&
-        !outsideNear &&
-        !outsideFar) {
-            return true;
-        }
-    }
-
-    return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
+    if (chunkDescriptor.chunkOrigin.x + chunkDescriptor.chunkOrigin.y + chunkDescriptor.chunkOrigin.z == 0) {}
+    if (cascadeIndex == 0u) {}
+    // CSM removed per TODO.md §5.2.D (session 20x). RTX shadows are
+    // the canonical sun shadow path; no chunk-vs-cascade visibility
+    // culling is performed.
+    return true;
 }
 
 void GreedyFacePass(
@@ -581,10 +545,6 @@ void main() {
         chunkDescriptors[chunkIndex].drawRanges.w = 0u;
         opaqueCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
         transparentCommands[chunkIndex] = DrawCommand(6u, 0u, 0u, transparentFirstFace);
-        const uint chunkCount = uint(pushConstants.worldMaxExclusiveAndChunkCount.w);
-        for (uint cascadeIndex = 0u; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-            shadowCommands[cascadeIndex * chunkCount + chunkIndex] = DrawCommand(6u, 0u, 0u, opaqueFirstFace);
-        }
         return;
     }
 
@@ -621,10 +581,4 @@ void main() {
     chunkDescriptors[chunkIndex].drawRanges.w = transparentFaceCount;
     opaqueCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? opaqueFaceCount : 0u, 0u, opaqueFirstFace);
     transparentCommands[chunkIndex] = DrawCommand(6u, chunkVisible ? transparentFaceCount : 0u, 0u, transparentFirstFace);
-    const uint chunkCount = uint(pushConstants.worldMaxExclusiveAndChunkCount.w);
-    for (uint cascadeIndex = 0u; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-        const bool shadowVisible = IsChunkInsideShadowCascade(chunkDescriptor, cascadeIndex);
-        shadowCommands[cascadeIndex * chunkCount + chunkIndex] =
-        DrawCommand(6u, shadowVisible ? opaqueFaceCount : 0u, 0u, opaqueFirstFace);
-    }
 }

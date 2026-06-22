@@ -5,9 +5,15 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <fstream>
+#include <iterator>
+#include <string>
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/RayTracedShadows.hpp"
+#include "render/RtxGiProbes.hpp"
+#include "render/RtxShadowPipeline.hpp"
+#include "render/RtxShadowSBT.hpp"
 
 namespace {
 
@@ -258,6 +264,29 @@ void TestRecordTlasBuildGuardsForZeroInstanceCount()
 
 void TestRtxSunShadowRayHelperExistsInShader()
 {
+	std::ifstream fp{ std::string{ PROJECTV_TESTS_SOURCE_DIR } + "/../src/shaders/voxel.frag",
+		std::ios::binary };
+	PROJECTV_RTX_EXPECT(fp.good(), "voxel.frag must be readable from source root");
+	if (!fp.good()) {
+		return;
+	}
+	std::string sourceText{ std::istreambuf_iterator<char>(fp), std::istreambuf_iterator<char>() };
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("rtxShadowMask") != std::string::npos,
+		"voxel.frag must reference rtxShadowMask (binding 18) for 5.2.E voxel-aware shadow consume");
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("texture(rtxShadowMask") != std::string::npos,
+		"voxel.frag must sample rtxShadowMask via texture() call");
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("binding = 18") != std::string::npos,
+		"voxel.frag must declare binding 18 for the shadow mask sampler");
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("VOXEL_RTX_ENABLED") != std::string::npos,
+		"voxel.frag must guard RTX shadow path with VOXEL_RTX_ENABLED define");
+}
+
+void TestRtxAmbientOcclusionRayHelperExistsInShader()
+{
 	FILE *const fp = std::fopen(
 		PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel.frag",
 		"r");
@@ -270,17 +299,265 @@ void TestRtxSunShadowRayHelperExistsInShader()
 	std::fclose(fp);
 	buffer[read] = '\0';
 	PROJECTV_RTX_EXPECT(
-		std::strstr(buffer, "TraceRtxSunShadowRay") != nullptr,
-		"voxel.frag must define TraceRtxSunShadowRay helper for 5.2.B RTX sun shadow consume");
+		std::strstr(buffer, "TraceRtxAmbientOcclusionRay") != nullptr,
+		"voxel.frag must define TraceRtxAmbientOcclusionRay helper for 5.4 RTX AO consume");
 	PROJECTV_RTX_EXPECT(
-		std::strstr(buffer, "rayQueryInitializeEXT") != nullptr,
-		"voxel.frag must use rayQueryInitializeEXT for shadow ray dispatch");
+		std::strstr(buffer, "kRtxAoMinRayLengthMeters") != nullptr,
+		"voxel.frag must declare kRtxAoMinRayLengthMeters EVIL constant for AO T_min offset");
 	PROJECTV_RTX_EXPECT(
-		std::strstr(buffer, "kRtxSunShadowMaxDistanceMeters") != nullptr,
-		"voxel.frag must declare kRtxSunShadowMaxDistanceMeters EVIL constant");
+		std::strstr(buffer, "gl_RayFlagsOpaqueEXT") != nullptr,
+		"voxel.frag AO ray must set gl_RayFlagsOpaqueEXT for fast path on opaque BLAS");
+}
+
+void TestAmbientOcclusionVisibilitySwitchesToRtxWhenEnabled()
+{
+	FILE *const fp = std::fopen(
+		PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel.frag",
+		"r");
+	PROJECTV_RTX_EXPECT(fp != nullptr, "voxel.frag must be readable from source root");
+	if (fp == nullptr) {
+		return;
+	}
+	char buffer[16384]{};
+	const size_t read = std::fread(buffer, 1u, sizeof(buffer) - 1u, fp);
+	std::fclose(fp);
+	buffer[read] = '\0';
 	PROJECTV_RTX_EXPECT(
-		std::strstr(buffer, "VOXEL_RTX_ENABLED") != nullptr,
-		"voxel.frag must guard RTX shadow path with VOXEL_RTX_ENABLED define");
+		std::strstr(buffer, "TraceRtxAmbientOcclusionRay(") != nullptr,
+		"voxel.frag must reference TraceRtxAmbientOcclusionRay under VOXEL_RTX_ENABLED");
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "gl_RayFlagsOpaqueEXT") != nullptr,
+		"voxel.frag AO ray dispatch must set gl_RayFlagsOpaqueEXT for fast path on opaque BLAS");
+}
+
+void TestRtxAoDispatchUsesTerminateOnFirstHitFlag()
+{
+	FILE *const fp = std::fopen(
+		PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel.frag",
+		"r");
+	PROJECTV_RTX_EXPECT(fp != nullptr, "voxel.frag must be readable from source root");
+	if (fp == nullptr) {
+		return;
+	}
+	char buffer[16384]{};
+	const size_t read = std::fread(buffer, 1u, sizeof(buffer) - 1u, fp);
+	std::fclose(fp);
+	buffer[read] = '\0';
+	const char *aoHelper = std::strstr(buffer, "TraceRtxAmbientOcclusionRay");
+	PROJECTV_RTX_EXPECT(
+		aoHelper != nullptr && std::strstr(aoHelper, "gl_RayFlagsTerminateOnFirstHitEXT") != nullptr,
+		"TraceRtxAmbientOcclusionRay must OR gl_RayFlagsTerminateOnFirstHitEXT to bail on first hit (binary AO test)");
+}
+
+void TestRtxAoShaderBinaryBuilt()
+{
+	bool found = false;
+	const char *const kCandidatePaths[]{
+		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/src/voxel.frag.rtx.spv",
+		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/bin/voxel.frag.rtx.spv",
+	};
+	for (const char *path : kCandidatePaths) {
+		FILE *const fp = std::fopen(path, "rb");
+		if (fp != nullptr) {
+			std::fclose(fp);
+			found = true;
+			break;
+		}
+	}
+	PROJECTV_RTX_EXPECT(found, "voxel.frag.rtx.spv must be built (CMake glslang target)");
+}
+
+void TestRtxGiProbeConfigDefaults()
+{
+	projectv::render::RtxGiProbeConfig config{};
+	PROJECTV_RTX_EXPECT(config.irradianceImage == VK_NULL_HANDLE, "default irradiance image must be null");
+	PROJECTV_RTX_EXPECT(config.distanceImage == VK_NULL_HANDLE, "default distance image must be null");
+	PROJECTV_RTX_EXPECT(config.probeDataImage == VK_NULL_HANDLE, "default probe data image must be null");
+	PROJECTV_RTX_EXPECT(config.volumeDescBuffer == VK_NULL_HANDLE, "default volume desc buffer must be null");
+	PROJECTV_RTX_EXPECT(!config.enabled, "default config must be disabled");
+	PROJECTV_RTX_EXPECT(config.probeCountAxisX == 0u, "default probe count must be 0");
+	PROJECTV_RTX_EXPECT(config.raysPerProbe == 0u, "default rays per probe must be 0");
+	PROJECTV_RTX_EXPECT(config.updateDispatchCount == 0u, "default dispatch count must be 0");
+}
+
+void TestRtxGiProbesClassHasGetters()
+{
+	projectv::render::RtxGiProbes probes{};
+	PROJECTV_RTX_EXPECT(!probes.IsEnabled(), "default-constructed probes must be disabled");
+	PROJECTV_RTX_EXPECT(probes.GetConfig().probeCountAxisX == 0u, "default config probe count must be 0");
+}
+
+void TestRtxGiProbeEnvGateRequiresBoth()
+{
+	VulkanContextState context{};
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::IsRtxGiProbeFieldEnabled(context),
+		"IsRtxGiProbeFieldEnabled must be false on default-constructed context (no RT capability)");
+	context.rayTracing.accelerationStructure = true;
+	context.rayTracing.rayQuery = true;
+	PROJECTV_RTX_EXPECT(
+		projectv::render::IsRtxGiProbeFieldEnabled(context),
+		"IsRtxGiProbeFieldEnabled must be true when both accelerationStructure && rayQuery are set");
+}
+
+void TestRtxGiProbeShaderBindingsDeclared()
+{
+	FILE *const fp = std::fopen(
+		PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel.frag",
+		"r");
+	PROJECTV_RTX_EXPECT(fp != nullptr, "voxel.frag must be readable from source root");
+	if (fp == nullptr) {
+		return;
+	}
+	char buffer[16384]{};
+	const size_t read = std::fread(buffer, 1u, sizeof(buffer) - 1u, fp);
+	std::fclose(fp);
+	buffer[read] = '\0';
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "rtxGiIrradiance") != nullptr,
+		"voxel.frag must declare rtxGiIrradiance sampler3D for DDGI consume (Stage 5.5)");
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "rtxGiVolume") != nullptr,
+		"voxel.frag must declare rtxGiVolume SSBO for DDGI volume descriptor (Stage 5.5)");
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "SampleRtxGiProbeIrradiance") != nullptr,
+		"voxel.frag must define SampleRtxGiProbeIrradiance helper for DDGI trilinear sample");
+}
+
+void TestRtxGiProbeRecordUpdatePassNoopWithoutContext()
+{
+	projectv::render::RtxGiProbes probes{};
+	VkCommandBuffer cmd = VK_NULL_HANDLE;
+	VulkanContextState context{};
+	PROJECTV_RTX_EXPECT(
+		!probes.RecordUpdatePass(cmd, context, VK_NULL_HANDLE),
+		"RecordUpdatePass must return false when probes are not initialized");
+}
+
+void TestRtxShadowPipelineClassHasGetters()
+{
+	projectv::render::RtxShadowPipeline pipeline{};
+	PROJECTV_RTX_EXPECT(
+		pipeline.GetPipeline() == VK_NULL_HANDLE,
+		"RtxShadowPipeline default-constructed pipeline handle must be null");
+	PROJECTV_RTX_EXPECT(
+		pipeline.GetPipelineLayout() == VK_NULL_HANDLE,
+		"RtxShadowPipeline default-constructed pipeline layout must be null");
+	PROJECTV_RTX_EXPECT(
+		pipeline.GetDescriptorSetLayout() == VK_NULL_HANDLE,
+		"RtxShadowPipeline default-constructed descriptor set layout must be null");
+	PROJECTV_RTX_EXPECT(!pipeline.IsReady(), "RtxShadowPipeline must not be ready before Initialize");
+	PROJECTV_RTX_EXPECT(
+		pipeline.GetRayGenGroupIndex() == 0u,
+		"RtxShadowPipeline raygen group index must be 0");
+	PROJECTV_RTX_EXPECT(
+		pipeline.GetMissGroupIndex() == 1u,
+		"RtxShadowPipeline miss group index must be 1");
+	PROJECTV_RTX_EXPECT(
+		pipeline.GetHitGroupIndex() == 2u,
+		"RtxShadowPipeline hit group index must be 2");
+}
+
+void TestRtxShadowSbtClassHasGetters()
+{
+	projectv::render::RtxShadowSBT sbt{};
+	PROJECTV_RTX_EXPECT(!sbt.IsReady(), "RtxShadowSBT must not be ready before Initialize");
+	const auto &raygen = sbt.GetRaygenRegion();
+	const auto &miss = sbt.GetMissRegion();
+	const auto &hit = sbt.GetHitRegion();
+	const auto &callable = sbt.GetCallableRegion();
+	PROJECTV_RTX_EXPECT(
+		raygen.deviceAddress == 0u,
+		"RtxShadowSBT default-constructed raygen deviceAddress must be zero");
+	PROJECTV_RTX_EXPECT(
+		raygen.stride == 0u,
+		"RtxShadowSBT default-constructed raygen stride must be zero");
+	PROJECTV_RTX_EXPECT(
+		raygen.size == 0u,
+		"RtxShadowSBT default-constructed raygen size must be zero");
+	PROJECTV_RTX_EXPECT(
+		miss.deviceAddress == 0u,
+		"RtxShadowSBT default-constructed miss deviceAddress must be zero");
+	PROJECTV_RTX_EXPECT(
+		hit.deviceAddress == 0u,
+		"RtxShadowSBT default-constructed hit deviceAddress must be zero");
+	PROJECTV_RTX_EXPECT(
+		callable.size == 0u,
+		"RtxShadowSBT callable region must have zero size (no callable shaders)");
+}
+
+void TestRtxShadowShaderFilesExistInBuildDirectory()
+{
+	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
+	const std::string baseDir = buildDir != nullptr ? std::string{ buildDir } : std::string{};
+	for (const char *suffix : { "/voxel_rtx_shadow.rgen.spv",
+								 "/voxel_rtx_shadow.rint.spv",
+								 "/voxel_rtx_shadow.rchit.spv",
+								 "/voxel_rtx_shadow.rmiss.spv" }) {
+		const std::string path = baseDir + suffix;
+		std::ifstream file{ path, std::ios::binary };
+		PROJECTV_RTX_EXPECT(
+			file.good(),
+			("RTX shadow shader binary missing: " + path).c_str());
+	}
+}
+
+void TestRtxShadowIntersectionShaderUsesVoxelDdaPattern()
+{
+	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
+	const std::string path = std::string{ buildDir != nullptr ? buildDir : "" } + "/voxel_rtx_shadow.rint.spv";
+	std::ifstream file{ path, std::ios::binary };
+	if (!file.good()) {
+		gFailureCount++;
+		runtime::LogRuntimeFailure(
+			"Tests",
+			"TestRtxShadowIntersectionShaderUsesVoxelDdaPattern",
+			"voxel_rtx_shadow.rint.spv not found");
+		return;
+	}
+	const std::string sourcePath = PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel_rtx_shadow.rint";
+	std::ifstream source{ sourcePath, std::ios::binary };
+	if (!source.good()) {
+		gFailureCount++;
+		runtime::LogRuntimeFailure(
+			"Tests",
+			"TestRtxShadowIntersectionShaderUsesVoxelDdaPattern",
+			"voxel_rtx_shadow.rint source not found");
+		return;
+	}
+	std::string sourceText{ std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>() };
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("gl_InstanceCustomIndexEXT") != std::string::npos,
+		"voxel_rtx_shadow.rint must read chunk index from gl_InstanceCustomIndexEXT");
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("reportIntersectionEXT") != std::string::npos,
+		"voxel_rtx_shadow.rint must call reportIntersectionEXT to mark voxel hits");
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("chunkVoxelWords") != std::string::npos,
+		"voxel_rtx_shadow.rint must read PackedChunkVoxelPayload chunkVoxelWords");
+	PROJECTV_RTX_EXPECT(
+		sourceText.find("voxelDataInfo") != std::string::npos,
+		"voxel_rtx_shadow.rint must read chunkDescriptor.voxelDataInfo (wordOffset + voxelCount)");
+}
+
+void TestRtxGiProbeHostHeaderExistsAndLinks()
+{
+	FILE *const fp = std::fopen(
+		PROJECTV_TESTS_SOURCE_DIR "/../src/render/RtxGiProbes.hpp",
+		"r");
+	PROJECTV_RTX_EXPECT(fp != nullptr, "RtxGiProbes.hpp must be readable from source root");
+	if (fp != nullptr) {
+		char buffer[8192]{};
+		const size_t read = std::fread(buffer, 1u, sizeof(buffer) - 1u, fp);
+		std::fclose(fp);
+		buffer[read] = '\0';
+		PROJECTV_RTX_EXPECT(
+			std::strstr(buffer, "class RtxGiProbes") != nullptr,
+			"RtxGiProbes.hpp must declare class RtxGiProbes");
+		PROJECTV_RTX_EXPECT(
+			std::strstr(buffer, "Initialize") != nullptr && std::strstr(buffer, "Shutdown") != nullptr,
+			"RtxGiProbes.hpp must declare Initialize/Shutdown lifecycle");
+	}
 }
 
 }  // namespace
@@ -303,6 +580,20 @@ int main()
 	TestUpdateTlasSafeForOversizedChunkIndex();
 	TestRecordTlasBuildGuardsForZeroInstanceCount();
 	TestRtxSunShadowRayHelperExistsInShader();
+	TestRtxAmbientOcclusionRayHelperExistsInShader();
+	TestAmbientOcclusionVisibilitySwitchesToRtxWhenEnabled();
+	TestRtxAoDispatchUsesTerminateOnFirstHitFlag();
+	TestRtxAoShaderBinaryBuilt();
+	TestRtxGiProbeConfigDefaults();
+	TestRtxGiProbesClassHasGetters();
+	TestRtxGiProbeEnvGateRequiresBoth();
+	TestRtxGiProbeShaderBindingsDeclared();
+	TestRtxGiProbeRecordUpdatePassNoopWithoutContext();
+	TestRtxGiProbeHostHeaderExistsAndLinks();
+	TestRtxShadowPipelineClassHasGetters();
+	TestRtxShadowSbtClassHasGetters();
+	TestRtxShadowShaderFilesExistInBuildDirectory();
+	TestRtxShadowIntersectionShaderUsesVoxelDdaPattern();
 
 	if (gFailureCount != 0) {
 		runtime::LogRuntimeFailure(

@@ -21,6 +21,7 @@ import projectv.string_id;
 
 namespace projectv::render {
 class RayTracedShadows;
+class RtxGiProbes;
 }  // namespace projectv::render
 
 namespace projectv::taa {
@@ -381,17 +382,13 @@ struct FrameRenderData {
 	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
 	VkBuffer hzbVisibleCountBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
-	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet taaResolveDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
-	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
 	uint32_t chunkDescriptorCount = 0;
-	uint32_t shadowIndirectCommandCount = 0;
-	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
@@ -498,14 +495,8 @@ struct DebugStats {
 	float sunShadowDepthBias = 0.0f;
 	float sunShadowNormalBias = 0.0f;
 	float sunShadowFilterRadius = 0.0f;
-	float sunShadowCoverageScale = 1.0f;
-	float sunShadowCascadeBlend = 0.0f;
-	float sunShadowCascadeSplitLambda = 0.80f;
-	std::array<float, kSunShadowCascadeCount> sunShadowCascadeDepthSplits{};
-	SunShadowCascadeDiagnostics sunShadowCascadeDiagnostics{};
 	uint32_t shadowMapResolution = 0;
 	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
-	ShadowTuningTarget shadowTuningTarget = ShadowTuningTarget::Strength;
 	float sunContactShadowStrength = 0.0f;
 	float sunContactShadowDistance = 0.0f;
 	float ambientOcclusionStrength = 0.0f;
@@ -542,9 +533,6 @@ struct SceneFrameResources {
 	void *opaqueIndirectMappedData = nullptr;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
 	VmaAllocation opaqueIndirectAllocation = nullptr;
-	void *shadowIndirectMappedData = nullptr;
-	VkBuffer shadowIndirectBuffer = VK_NULL_HANDLE;
-	VmaAllocation shadowIndirectAllocation = nullptr;
 	void *transparentIndirectMappedData = nullptr;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
 	VmaAllocation transparentIndirectAllocation = nullptr;
@@ -619,7 +607,6 @@ struct SceneFrameResources {
 	VkDescriptorSet worldGenDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
-	VkDescriptorSet shadowDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet fluidCaDescriptorSet = VK_NULL_HANDLE;
@@ -629,8 +616,6 @@ struct SceneFrameResources {
 	uint64_t meshedSceneVersion = 0;
 	uint64_t uploadedNanoVdbVersion = 0;
 	uint32_t chunkDescriptorCount = 0;
-	uint32_t shadowIndirectCommandCount = 0;
-	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
@@ -703,9 +688,6 @@ struct RenderState {
 	bool tracyGraphicsContextCalibrated = false;
 	VoxelLightingDebugControls lightingDebugControls{};
 	VoxelSceneLighting currentSceneLighting{};
-	SunShadowCascadeSplits currentSunShadowCascadeSplits{};
-	SunShadowCascadeDiagnostics currentSunShadowCascadeDiagnostics{};
-	float sunShadowCascadeSplitLambda = 0.80f;
 	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	VoxelScenePreset currentScenePreset = VoxelScenePreset::VoxelLab;
 	bool screenshotCaptureRequested = false;
@@ -720,8 +702,6 @@ struct RenderState {
 	VmaAllocation materialVisualAllocation = VK_NULL_HANDLE;
 	VkDescriptorSetLayout graphicsDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool graphicsDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSetLayout shadowDescriptorSetLayout = VK_NULL_HANDLE;
-	VkDescriptorPool shadowDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout voxelMeshingDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool voxelMeshingDescriptorPool = VK_NULL_HANDLE;
 	std::array<SceneFrameResources, MAX_FRAMES_IN_FLIGHT> sceneFrameResources{};
@@ -735,6 +715,7 @@ struct RenderState {
 
 	ChunkVisibilityCache chunkVisibilityCache{};
 	projectv::render::RayTracedShadows *rayTracedShadows = nullptr;
+	projectv::render::RtxGiProbes *rtxGiProbes = nullptr;
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
 	VmaAllocation depthAllocation = nullptr;
@@ -752,15 +733,7 @@ struct RenderState {
 	VkShaderModule vctVoxelizeShaderModule = VK_NULL_HANDLE;
 	VkPipelineLayout vctVoxelizePipelineLayout = VK_NULL_HANDLE;
 	VkPipeline vctVoxelizePipeline = VK_NULL_HANDLE;
-	VkFormat shadowDepthFormat = VK_FORMAT_UNDEFINED;
-	VkExtent2D shadowMapExtent{2048u, 2048u};
-	VkImage shadowImage = VK_NULL_HANDLE;
-	VkImageView shadowImageView = VK_NULL_HANDLE;
-	std::array<VkImageView, kSunShadowCascadeCount> shadowCascadeImageViews{};
-	VmaAllocation shadowAllocation = nullptr;
-	VkSampler shadowSampler = VK_NULL_HANDLE;
 	bool depthImageNeedsInit = false;
-	bool shadowImageNeedsInit = false;
 	projectv::render::HizBuffer hizBuffer{};
 	VkPipelineLayout hizCullingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline hizCullingPipeline = VK_NULL_HANDLE;
@@ -810,6 +783,10 @@ struct RenderState {
 	VkImageView volumetricFogFallbackView = VK_NULL_HANDLE;
 	VmaAllocation volumetricFogFallbackAllocation = nullptr;
 	VkDeviceMemory volumetricFogFallbackMemory = VK_NULL_HANDLE;
+	VkImage rtxShadowMaskFallbackImage = VK_NULL_HANDLE;
+	VkImageView rtxShadowMaskFallbackView = VK_NULL_HANDLE;
+	VmaAllocation rtxShadowMaskFallbackAllocation = nullptr;
+	VkDeviceMemory rtxShadowMaskFallbackMemory = VK_NULL_HANDLE;
 	VkPipeline cloudscapePipeline = VK_NULL_HANDLE;
 	VkPipelineLayout cloudscapePipelineLayout = VK_NULL_HANDLE;
 	VkShaderModule cloudscapeVertexShaderModule = VK_NULL_HANDLE;

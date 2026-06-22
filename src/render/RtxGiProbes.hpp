@@ -1,0 +1,123 @@
+#pragma once
+
+#include <atomic>
+#include <cstdint>
+
+#include "core/Types.hpp"
+
+#include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
+
+namespace projectv::render {
+
+struct RtxGiProbeConfig {
+	VkImage irradianceImage = VK_NULL_HANDLE;
+	VmaAllocation irradianceAllocation = nullptr;
+	VkImageView irradianceView = VK_NULL_HANDLE;
+	VkSampler irradianceSampler = VK_NULL_HANDLE;
+	VkImage distanceImage = VK_NULL_HANDLE;
+	VmaAllocation distanceAllocation = nullptr;
+	VkImageView distanceView = VK_NULL_HANDLE;
+	VkImage probeDataImage = VK_NULL_HANDLE;
+	VmaAllocation probeDataAllocation = nullptr;
+	VkImageView probeDataView = VK_NULL_HANDLE;
+	VkBuffer volumeDescBuffer = VK_NULL_HANDLE;
+	VmaAllocation volumeDescAllocation = nullptr;
+	void *volumeDescMappedData = nullptr;
+	VkDescriptorImageInfo irradianceInfo{};
+	VkDescriptorImageInfo distanceInfo{};
+	VkDescriptorImageInfo probeDataInfo{};
+	VkDescriptorBufferInfo volumeDescBufferInfo{};
+	uint32_t probeCountAxisX = 0u;
+	uint32_t probeCountAxisY = 0u;
+	uint32_t probeCountAxisZ = 0u;
+	uint32_t probeOctahedralSize = 0u;
+	uint32_t raysPerProbe = 0u;
+	uint32_t totalRaysDispatched = 0u;
+	uint32_t updateDispatchCount = 0u;
+	float originX = 0.0f;
+	float originY = 0.0f;
+	float originZ = 0.0f;
+	float spacingX = 0.0f;
+	float spacingY = 0.0f;
+	float spacingZ = 0.0f;
+	float maxRayDistance = 0.0f;
+	bool enabled = false;
+};
+
+class RtxGiProbes {
+public:
+	RtxGiProbes() = default;
+	~RtxGiProbes();
+
+	RtxGiProbes(const RtxGiProbes &) = delete;
+	RtxGiProbes &operator=(const RtxGiProbes &) = delete;
+
+	friend struct RtxGiProbesTestAccess;
+
+	bool Initialize(
+		const VulkanContextState &context,
+		VkCommandPool commandPool,
+		float originX,
+		float originY,
+		float originZ,
+		float halfExtentMeters,
+		uint32_t probeCountPerAxis,
+		uint32_t probeOctahedralSize,
+		uint32_t raysPerProbe,
+		float maxRayDistance);
+
+	void Shutdown(const VulkanContextState &context);
+
+	bool IsEnabled() const noexcept { return m_config.enabled; }
+
+	const RtxGiProbeConfig &GetConfig() const noexcept { return m_config; }
+
+	void SetVolumeOrigin(
+		float originX,
+		float originY,
+		float originZ) noexcept;
+
+	void SetVolumeHalfExtent(float halfExtentMeters) noexcept;
+
+	[[nodiscard]] bool RecordUpdatePass(
+		VkCommandBuffer commandBuffer,
+		const VulkanContextState &context,
+		VkAccelerationStructureKHR tlas);
+
+	[[nodiscard]] float SampleIrradianceTestValue(uint32_t probeIndex) const noexcept;
+
+private:
+	bool AllocateTextures(
+		const VulkanContextState &context,
+		uint32_t probeCountPerAxis,
+		uint32_t probeOctahedralSize);
+
+	bool AllocateBuffer(
+		const VulkanContextState &context);
+
+	void ReleaseResources(const VulkanContextState &context) noexcept;
+
+	RtxGiProbeConfig m_config{};
+	std::atomic<bool> m_initialized{false};
+};
+
+struct RtxGiProbesTestAccess {
+	static RtxGiProbeConfig &Config(RtxGiProbes &probes) noexcept
+	{
+		return probes.m_config;
+	}
+};
+
+bool IsRtxGiProbeFieldEnabled(const VulkanContextState &context) noexcept;
+
+bool CreateRtxGiProbeResources(VulkanContextState *context, RenderState *render);
+void DestroyRtxGiProbeResources(VulkanContextState *context, RenderState *render);
+
+bool RecordRtxGiProbeUpdatePass(
+	VkCommandBuffer commandBuffer,
+	RtxGiProbes *probes,
+	const VulkanContextState &context,
+	VkAccelerationStructureKHR tlas);
+
+}  // namespace projectv::render

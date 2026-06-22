@@ -1,0 +1,51 @@
+#pragma once
+
+#include <vulkan/vulkan.h>
+
+#include <array>
+#include <cstdint>
+
+#include "core/Types.hpp"
+
+namespace projectv::render {
+
+struct RtxShadowPipelineConfig {
+	uint32_t shaderGroupHandleSize = 32u;
+	uint32_t shaderGroupBaseAlignment = 64u;
+	uint32_t shaderGroupHandleAlignment = 16u;
+};
+
+class RtxShadowPipeline {
+public:
+	RtxShadowPipeline() = default;
+	~RtxShadowPipeline();
+
+	RtxShadowPipeline(const RtxShadowPipeline &) = delete;
+	RtxShadowPipeline &operator=(const RtxShadowPipeline &) = delete;
+
+	bool Initialize(
+		const VulkanContextState &context,
+		const RtxShadowPipelineConfig &config);
+
+	void Shutdown(const VulkanContextState &context) noexcept;
+
+	[[nodiscard]] bool IsReady() const noexcept { return m_pipeline != VK_NULL_HANDLE; }
+
+	[[nodiscard]] VkPipeline GetPipeline() const noexcept { return m_pipeline; }
+	[[nodiscard]] VkPipelineLayout GetPipelineLayout() const noexcept { return m_pipelineLayout; }
+	[[nodiscard]] const VkDescriptorSetLayout &GetDescriptorSetLayout() const noexcept { return m_descriptorSetLayout; }
+	[[nodiscard]] uint32_t GetRayGenGroupIndex() const noexcept { return 0u; }
+	[[nodiscard]] uint32_t GetMissGroupIndex() const noexcept { return 1u; }
+	[[nodiscard]] uint32_t GetHitGroupIndex() const noexcept { return 2u; }
+
+private:
+	VkShaderModule m_rayGenModule = VK_NULL_HANDLE;
+	VkShaderModule m_intersectionModule = VK_NULL_HANDLE;
+	VkShaderModule m_closestHitModule = VK_NULL_HANDLE;
+	VkShaderModule m_missModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
+	VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+	VkPipeline m_pipeline = VK_NULL_HANDLE;
+};
+
+}  // namespace projectv::render

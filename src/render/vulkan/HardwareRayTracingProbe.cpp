@@ -65,6 +65,13 @@ bool ProbeHardwareRayTracingSupport(
 
 	VkPhysicalDeviceAccelerationStructurePropertiesKHR asProperties{};
 	asProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtpProperties{};
+	VkBaseOutStructure *propertiesChainTail = reinterpret_cast<VkBaseOutStructure *>(&asProperties);
+	if (outSupport->rayTracingPipeline) {
+		rtpProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+		propertiesChainTail->pNext = reinterpret_cast<VkBaseOutStructure *>(&rtpProperties);
+		propertiesChainTail = reinterpret_cast<VkBaseOutStructure *>(&rtpProperties);
+	}
 	VkPhysicalDeviceProperties2 deviceProperties2{};
 	deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 	deviceProperties2.pNext = &asProperties;
@@ -76,6 +83,20 @@ bool ProbeHardwareRayTracingSupport(
 		asProperties.minAccelerationStructureScratchOffsetAlignment != 0u
 			? asProperties.minAccelerationStructureScratchOffsetAlignment
 			: 1u;
+	if (outSupport->rayTracingPipeline) {
+		outSupport->shaderGroupHandleSize =
+			rtpProperties.shaderGroupHandleSize != 0u ? rtpProperties.shaderGroupHandleSize : 32u;
+		outSupport->shaderGroupBaseAlignment =
+			rtpProperties.shaderGroupBaseAlignment != 0u ? rtpProperties.shaderGroupBaseAlignment : 64u;
+		outSupport->shaderGroupHandleAlignment =
+			rtpProperties.shaderGroupHandleAlignment != 0u ? rtpProperties.shaderGroupHandleAlignment : 16u;
+		outSupport->maxRayRecursionDepth =
+			rtpProperties.maxRayRecursionDepth != 0u ? rtpProperties.maxRayRecursionDepth : 1u;
+		outSupport->maxShaderGroupStride =
+			rtpProperties.maxShaderGroupStride != 0u ? rtpProperties.maxShaderGroupStride : 4096u;
+		outSupport->maxRayHitAttributeSize =
+			rtpProperties.maxRayHitAttributeSize != 0u ? rtpProperties.maxRayHitAttributeSize : 32u;
+	}
 
 	VkPhysicalDeviceRayQueryFeaturesKHR rqFeatures{};
 	rqFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
@@ -85,9 +106,16 @@ bool ProbeHardwareRayTracingSupport(
 	VkPhysicalDeviceBufferDeviceAddressFeatures bdaFeatures{};
 	bdaFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	bdaFeatures.pNext = &asFeatures;
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtpFeaturesStruct{};
+	if (outSupport->rayTracingPipeline) {
+		rtpFeaturesStruct.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+		rtpFeaturesStruct.pNext = &bdaFeatures;
+	}
 	VkPhysicalDeviceFeatures2 features2{};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	features2.pNext = &bdaFeatures;
+	features2.pNext = outSupport->rayTracingPipeline
+		? reinterpret_cast<void *>(&rtpFeaturesStruct)
+		: reinterpret_cast<void *>(&bdaFeatures);
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
 	outSupport->accelerationStructureHostCommands = asFeatures.accelerationStructureHostCommands == VK_TRUE;
 	outSupport->bufferDeviceAddress =
@@ -95,14 +123,19 @@ bool ProbeHardwareRayTracingSupport(
 
 	SDL_Log(
 		"Render: ProbeHardwareRayTracingSupport: RTX path available (accelerationStructure=%d rayQuery=%d "
-		"deferredHostOps=%d hostCommands=%d bufferDeviceAddress=%d maxPrimitives=%llu minScratchAlign=%u)",
+		"rayTracingPipeline=%d deferredHostOps=%d hostCommands=%d bufferDeviceAddress=%d "
+		"maxPrimitives=%llu minScratchAlign=%u sbtHandle=%u sbtBaseAlign=%u sbtHandleAlign=%u)",
 		outSupport->accelerationStructure ? 1 : 0,
 		outSupport->rayQuery ? 1 : 0,
+		outSupport->rayTracingPipeline ? 1 : 0,
 		outSupport->deferredHostOperations ? 1 : 0,
 		outSupport->accelerationStructureHostCommands ? 1 : 0,
 		outSupport->bufferDeviceAddress ? 1 : 0,
 		static_cast<unsigned long long>(outSupport->maxPrimitiveCount),
-		outSupport->minAccelerationStructureScratchOffsetAlignment);
+		outSupport->minAccelerationStructureScratchOffsetAlignment,
+		outSupport->shaderGroupHandleSize,
+		outSupport->shaderGroupBaseAlignment,
+		outSupport->shaderGroupHandleAlignment);
 	return true;
 }
 

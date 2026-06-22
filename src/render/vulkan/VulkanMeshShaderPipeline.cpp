@@ -15,8 +15,14 @@ namespace {
 constexpr uint32_t kMeshShaderDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kMeshCullShaderFilename[] = "voxel_mesh_pre.comp.spv";
 constexpr char kMeshShaderFilename[] = "voxel_mesh.mesh.spv";
-constexpr char kVoxelFragmentShaderFilename[] = "voxel.frag.spv";
-constexpr char kMeshFragmentTaaOnShaderFilename[] = "voxel.frag.taa_on.spv";
+// EVIL: mesh shader pipeline previously used `voxel.frag.spv` (default, no
+// VOXEL_RTX_ENABLED define), which silently disabled RTX shadows when
+// `meshShaderEnabled=true`. Switch to `voxel.frag.rtx.spv` (and its TAA variant)
+// so the ray query dispatch path runs in both mesh and graphics pipelines.
+// Per TODO.md §5.2.B the shadow visibility lives in `voxel.frag`; the mesh
+// path inherits it automatically once the right .spv is bound.
+constexpr char kVoxelFragmentShaderFilename[] = "voxel.frag.rtx.spv";
+constexpr char kMeshFragmentTaaOnShaderFilename[] = "voxel.frag.rtx_taa_on.spv";
 
 // EVIL: kMeshMaxOutputVertices/Primitives=256 = Vulkan 1.3 spec minimum for VkPhysicalDeviceMeshShaderPropertiesEXT. Real hardware (RTX 3060 Ti GA104, RDNA 4, Battlemage) reports 1024/256+. Clamped to 256 here for cross-vendor safety; bump to maxMeshOutputVertices from device if any 8³ chunk exceeds the limit.
 constexpr uint32_t kMeshMaxOutputVertices = 256u;

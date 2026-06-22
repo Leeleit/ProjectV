@@ -1,0 +1,134 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+// Stage 5.2.E voxel-aware procedural intersection shader.
+// Called by RT cores when a shadow ray candidate intersects the AABB of a chunk
+// BLAS. Performs Amanatides-Woo DDA traversal over the chunk's PackedChunkVoxelPayload
+// to determine whether any occupied voxel actually blocks the ray. Reports the
+// nearest hit (if any) via reportIntersectionEXT.
+//
+// Input geometry: AABB per chunk, identity transform, BLAS built in world units.
+// chunkDescriptors[].chunkOrigin.xyz + chunkExtentAndNonAir.xyz are in voxel units
+// (one voxel = 1 meter in current mainline per pushConstants.worldMinAndChunkSize.w).
+
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
+layout(set = 0, binding = 4, std430) readonly buffer PackedChunkVoxelPayload {
+    uint chunkVoxelWords[];
+};
+
+void main() {
+    const uint chunkIndex = gl_InstanceCustomIndexEXT;
+    const uint chunkExtentX = chunkDescriptors[chunkIndex].chunkExtentAndNonAir.x;
+    const uint chunkExtentY = chunkDescriptors[chunkIndex].chunkExtentAndNonAir.y;
+    const uint chunkExtentZ = chunkDescriptors[chunkIndex].chunkExtentAndNonAir.z;
+    const uint voxelCount = chunkDescriptors[chunkIndex].voxelDataInfo.y;
+    const uint wordOffset = chunkDescriptors[chunkIndex].voxelDataInfo.x;
+    if (chunkExtentX == 0u || chunkExtentY == 0u || chunkExtentZ == 0u || voxelCount == 0u) {
+        return;
+    }
+
+    const vec3 rayOriginWorld = gl_WorldRayOriginEXT;
+    const vec3 rayDirWorld = gl_WorldRayDirectionEXT;
+    const float rayTmin = gl_RayTminEXT;
+    const float rayTmax = gl_RayTmaxEXT;
+    if (rayTmax <= rayTmin) {
+        return;
+    }
+
+    const ivec3 chunkOriginVoxel = chunkDescriptors[chunkIndex].chunkOrigin.xyz;
+    const vec3 chunkMinWorld = vec3(chunkOriginVoxel);
+    const vec3 chunkMaxWorld = chunkMinWorld
+        + vec3(float(chunkExtentX), float(chunkExtentY), float(chunkExtentZ));
+
+    const vec3 tAtChunkMin = (chunkMinWorld - rayOriginWorld) / rayDirWorld;
+    const vec3 tAtChunkMax = (chunkMaxWorld - rayOriginWorld) / rayDirWorld;
+    const vec3 tEnter = min(tAtChunkMin, tAtChunkMax);
+    const vec3 tExit = max(tAtChunkMin, tAtChunkMax);
+    const float tEntry = max(max(tEnter.x, tEnter.y), tEnter.z);
+    const float tExitWorld = min(min(tExit.x, tExit.y), tExit.z);
+    if (tExitWorld <= tEntry || tExitWorld <= rayTmin || tEntry >= rayTmax) {
+        return;
+    }
+
+    const float tStart = max(tEntry, rayTmin) + 1e-4;
+    const float tEnd = min(tExitWorld, rayTmax);
+
+    vec3 pos = rayOriginWorld + rayDirWorld * tStart;
+    ivec3 cell = ivec3(floor(pos - vec3(chunkMinWorld)));
+    cell = clamp(
+        cell,
+        ivec3(0),
+        ivec3(int(chunkExtentX) - 1, int(chunkExtentY) - 1, int(chunkExtentZ) - 1));
+
+    const ivec3 stepDir = ivec3(
+        rayDirWorld.x > 0.0 ? 1 : -1,
+        rayDirWorld.y > 0.0 ? 1 : -1,
+        rayDirWorld.z > 0.0 ? 1 : -1);
+
+    const vec3 invDir = 1.0 / rayDirWorld;
+    vec3 tMaxAxis = (vec3(cell) + vec3(greaterThan(stepDir, ivec3(0))) - (rayOriginWorld - chunkMinWorld)) * invDir;
+    const vec3 tDelta = abs(invDir);
+    float tCurrent = max(tEntry, rayTmin);
+
+    const uint maxSteps = chunkExtentX * chunkExtentY * chunkExtentZ;
+    for (uint stepIdx = 0u; stepIdx < maxSteps; ++stepIdx) {
+        if (tCurrent > tEnd) {
+            return;
+        }
+        const uint localIndex = uint(cell.x)
+            + uint(chunkExtentX) * (uint(cell.y) + uint(chunkExtentY) * uint(cell.z));
+        if (localIndex < voxelCount) {
+            const uint wordIndex = wordOffset + localIndex / 4u;
+            const uint shift = (localIndex & 3u) * 8u;
+            const uint voxelId = (chunkVoxelWords[wordIndex] >> shift) & 0xFFu;
+            if (voxelId != 0u && voxelId != 1u) {
+                reportIntersectionEXT(tCurrent, 0u);
+                return;
+            }
+        }
+
+        if (tMaxAxis.x < tMaxAxis.y) {
+            if (tMaxAxis.x < tMaxAxis.z) {
+                tCurrent = tMaxAxis.x;
+                cell.x += stepDir.x;
+                if (cell.x < 0 || int(cell.x) >= int(chunkExtentX)) {
+                    return;
+                }
+                tMaxAxis.x += tDelta.x;
+            } else {
+                tCurrent = tMaxAxis.z;
+                cell.z += stepDir.z;
+                if (cell.z < 0 || int(cell.z) >= int(chunkExtentZ)) {
+                    return;
+                }
+                tMaxAxis.z += tDelta.z;
+            }
+        } else {
+            if (tMaxAxis.y < tMaxAxis.z) {
+                tCurrent = tMaxAxis.y;
+                cell.y += stepDir.y;
+                if (cell.y < 0 || int(cell.y) >= int(chunkExtentY)) {
+                    return;
+                }
+                tMaxAxis.y += tDelta.y;
+            } else {
+                tCurrent = tMaxAxis.z;
+                cell.z += stepDir.z;
+                if (cell.z < 0 || int(cell.z) >= int(chunkExtentZ)) {
+                    return;
+                }
+                tMaxAxis.z += tDelta.z;
+            }
+        }
+    }
+}

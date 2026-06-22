@@ -15,16 +15,7 @@ constexpr projectv::math::Vec4 kMutationPreviewOverlayColor{0.42f, 0.92f, 0.72f,
 constexpr projectv::math::Vec4 kInspectChunkOverlayColor{0.27f, 0.87f, 1.0f, 0.90f};
 constexpr projectv::math::Vec4 kChunkBoundsOverlayColor{0.16f, 0.52f, 0.95f, 0.32f};
 constexpr projectv::math::Vec4 kDirtyChunkOverlayColor{1.0f, 0.33f, 0.16f, 0.78f};
-
-constexpr std::array<projectv::math::Vec4, kSunShadowCascadeCount> kCascadeSplitPlaneColors = {{
-	projectv::math::Vec4{0.95f, 0.20f, 0.20f, 0.55f},
-	projectv::math::Vec4{0.96f, 0.62f, 0.18f, 0.55f},
-	projectv::math::Vec4{0.30f, 0.85f, 0.95f, 0.55f},
-	projectv::math::Vec4{0.85f, 0.40f, 0.95f, 0.55f},
-}};
 constexpr projectv::math::Vec4 kCursorHitNormalOverlayColor{0.92f, 0.92f, 0.92f, 0.70f};
-constexpr float kCascadeSplitPlaneThinVoxels = 0.10f;
-constexpr float kCascadeSplitPlaneSizePadding = 4.0f;
 constexpr int32_t kCursorHitNormalShaftLength = 2;
 
 void AppendOverlayBox(
@@ -104,47 +95,6 @@ void AppendMutationPreviewOverlayBox(
 	AppendOverlayBox(outBoxes, min, maxExclusive, kMutationPreviewOverlayColor);
 }
 
-void AppendCascadeSplitPlaneOverlayBoxes(
-	std::vector<DebugOverlayBox> &outBoxes,
-	const CameraState &camera,
-	const RenderState &render)
-{
-	const std::array<float, 3> forward = GetCameraForwardVector(camera);
-	const auto &splits = render.currentSunShadowCascadeSplits.viewDepthSplits;
-	const auto &orthoWidths = render.currentSunShadowCascadeDiagnostics.orthoWidths;
-	const auto &orthoHeights = render.currentSunShadowCascadeDiagnostics.orthoHeights;
-
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		const float splitDepth = splits[cascadeIndex];
-		if (splitDepth <= 0.0f) {
-			continue;
-		}
-
-		const float worldX = camera.position[0] + forward[0] * splitDepth;
-		const float worldY = camera.position[1] + forward[1] * splitDepth;
-		const float worldZ = camera.position[2] + forward[2] * splitDepth;
-
-		const float halfWidth = std::max(orthoWidths[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
-		const float halfHeight = std::max(orthoHeights[cascadeIndex] * 0.5f, 1.0f) + kCascadeSplitPlaneSizePadding;
-
-		const Int3 min{
-			static_cast<int32_t>(std::floor(worldX - halfWidth)),
-			static_cast<int32_t>(std::floor(worldY - kCascadeSplitPlaneThinVoxels)),
-			static_cast<int32_t>(std::floor(worldZ - halfHeight)),
-		};
-		const Int3 maxExclusive{
-			static_cast<int32_t>(std::ceil(worldX + halfWidth)) + 1,
-			static_cast<int32_t>(std::ceil(worldY + kCascadeSplitPlaneThinVoxels)) + 1,
-			static_cast<int32_t>(std::ceil(worldZ + halfHeight)) + 1,
-		};
-		AppendOverlayBox(
-			outBoxes,
-			min,
-			maxExclusive,
-			kCascadeSplitPlaneColors[cascadeIndex]);
-	}
-}
-
 void AppendCursorHitNormalOverlayBox(
 	std::vector<DebugOverlayBox> &outBoxes,
 	const Int3 targetVoxel,
@@ -217,9 +167,6 @@ void BuildDebugOverlayBoxes(
 		requiredBoxCount += CountDirtyChunkOverlays(*world);
 	}
 
-	if (debug.showCascadeSplitPlanes) {
-		requiredBoxCount += kSunShadowCascadeCount;
-	}
 	if (debug.showCursorHitNormal && interaction.selection.hasHit) {
 		requiredBoxCount += kCursorHitNormalShaftLength;
 	}
@@ -249,10 +196,6 @@ void BuildDebugOverlayBoxes(
 				chunk.maxExclusive,
 				kDirtyChunkOverlayColor);
 		}
-	}
-
-	if (debug.showCascadeSplitPlanes) {
-		AppendCascadeSplitPlaneOverlayBoxes(*outBoxes, camera, render);
 	}
 
 	if (interaction.selection.hasHit) {

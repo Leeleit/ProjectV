@@ -166,7 +166,7 @@ bool TryParseDebugViewToken(
 		return true;
 	}
 	if (normalized == "csm" || normalized == "cascade" || normalized == "cascades") {
-		*outView = LightingDebugView::Cascade;
+		*outView = LightingDebugView::Shadow;
 		return true;
 	}
 	if (normalized == "ctsh" || normalized == "contact" || normalized == "contactshadow") {
@@ -321,8 +321,12 @@ bool UpdateLookDevCaptureAutomation(
 	LookDevCaptureAutomationState *automation,
 	RenderState *render)
 {
-	if (!automation || !render || !automation->active || automation->completed) {
+	if (!automation || !render || !automation->active) {
 		return false;
+	}
+
+	if (automation->completed) {
+		return automation->quitWhenDone;
 	}
 
 	if (automation->warmupFramesRemaining > 0) {
@@ -335,7 +339,7 @@ bool UpdateLookDevCaptureAutomation(
 	}
 	if (automation->nextViewIndex >= automation->viewCount) {
 		automation->completed = true;
-		return false;
+		return automation->quitWhenDone;
 	}
 
 	const LightingDebugView view = automation->views[automation->nextViewIndex++];
@@ -344,10 +348,11 @@ bool UpdateLookDevCaptureAutomation(
 	automation->intervalFramesRemaining = automation->intervalFrames;
 
 	SDL_Log(
-		"[ProjectV][LookDevCapture] capture requested view=%s index=%u/%u",
+		"[ProjectV][LookDevCapture] capture requested view=%s index=%u/%u quitWhenDone=%s",
 		LightingDebugViewToString(view),
 		automation->nextViewIndex,
-		automation->viewCount);
+		automation->viewCount,
+		automation->quitWhenDone ? "true" : "false");
 
 	if (automation->nextViewIndex >= automation->viewCount) {
 		automation->completed = true;

@@ -18,6 +18,12 @@ struct HardwareRayTracingSupport {
 	uint64_t maxInstanceCount = 0u;
 	uint32_t maxPerStageDescriptorAccelerationStructures = 0u;
 	uint32_t minAccelerationStructureScratchOffsetAlignment = 1u;
+	uint32_t shaderGroupHandleSize = 32u;
+	uint32_t shaderGroupBaseAlignment = 64u;
+	uint32_t shaderGroupHandleAlignment = 16u;
+	uint32_t maxRayRecursionDepth = 1u;
+	uint32_t maxShaderGroupStride = 4096u;
+	uint32_t maxRayHitAttributeSize = 32u;
 };
 
 bool ProbeHardwareRayTracingSupport(

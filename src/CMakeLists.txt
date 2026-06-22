@@ -29,8 +29,6 @@ set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADERS
         ${SHADER_DIR}/voxel.vert
         ${SHADER_DIR}/voxel.frag
-        ${SHADER_DIR}/voxel_shadow.vert
-        ${SHADER_DIR}/voxel_shadow.frag
         ${SHADER_DIR}/voxel_mesh.comp
         ${SHADER_DIR}/voxel_mesh_pre.comp
         ${SHADER_DIR}/voxel_mesh.mesh
@@ -51,6 +49,10 @@ set(SHADERS
         ${SHADER_DIR}/volumetric_fog.comp
         ${SHADER_DIR}/cloudscape.vert
         ${SHADER_DIR}/cloudscape.frag
+        ${SHADER_DIR}/voxel_rtx_shadow.rgen
+        ${SHADER_DIR}/voxel_rtx_shadow.rint
+        ${SHADER_DIR}/voxel_rtx_shadow.rchit
+        ${SHADER_DIR}/voxel_rtx_shadow.rmiss
 )
 
 foreach (SHADER ${SHADERS})
@@ -112,7 +114,6 @@ add_custom_command(
 list(APPEND SPV_SHADERS ${MODEL_FRAG_TAA_SPV})
 
 add_custom_target(Shaders ALL DEPENDS ${SPV_SHADERS})
-add_dependencies(ProjectV Shaders)
 
 target_sources(ProjectV PRIVATE
         app/AppUpdate.cpp
@@ -153,10 +154,12 @@ target_sources(ProjectV PRIVATE
         render/SceneResources.cpp
         render/HizCulling.cpp
         render/LodDownsampleGpuConsume.cpp
-        render/ShadowProjection.cpp
         render/Taa.cpp
         render/TaaRenderTargets.cpp
         render/RayTracedShadows.cpp
+        render/RtxShadowPipeline.cpp
+        render/RtxShadowSBT.cpp
+        render/RtxGiProbes.cpp
         render/vulkan/TaaResolvePipeline.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
@@ -221,11 +224,13 @@ if (PROJECTV_ENABLE_TRACY)
     target_link_libraries(ProjectV PRIVATE Tracy::TracyClient)
 endif ()
 
-add_custom_command(TARGET ProjectV POST_BUILD
+add_custom_target(CopyShaders ALL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${SPV_SHADERS}
         $<TARGET_FILE_DIR:ProjectV>
 )
+add_dependencies(CopyShaders Shaders)
+add_dependencies(ProjectV CopyShaders)
 
 add_library(projectv_c_kernels STATIC
         c_kernels/frustum_cull.cpp

@@ -244,11 +244,6 @@ bool SaveScreenshotCaptureMetadata(
 		"exposure_bias_stops={:.6f}\n"
 		"sun_direction={:.6f} {:.6f} {:.6f}\n"
 		"sun_intensity={:.6f}\n"
-		"shadow_map_resolution={}\n"
-		"shadow_strength={:.6f}\n"
-		"shadow_depth_bias={:.6f}\n"
-		"shadow_normal_bias={:.6f}\n"
-		"shadow_filter_radius={:.6f}\n"
 		"contact_shadow_strength={:.6f}\n"
 		"contact_shadow_distance={:.6f}\n"
 		"ambient_occlusion_strength={:.6f}\n"
@@ -262,8 +257,6 @@ bool SaveScreenshotCaptureMetadata(
 		"local_point_light_source_radius={:.6f}\n"
 		"local_point_light_shadow_strength={:.6f}\n"
 		"local_point_light_shadow_bias={:.6f}\n"
-		"shadow_coverage_scale={:.6f}\n"
-		"shadow_cascade_blend={:.6f}\n"
 		"taa_enabled={:d}\n"
 		"taa_jitter_x={:.6f}\n"
 		"taa_jitter_y={:.6f}\n"
@@ -278,20 +271,7 @@ bool SaveScreenshotCaptureMetadata(
 		"taa_layer_history_valid={:d}\n"
 		"taa_layer_blend_factor={:.6f}\n"
 		"taa_scene_color_format={}\n"
-		"shadow_cascade_count={}\n"
-		"shadow_cascade_lambda={:.6f}\n"
-		"shadow_cascade_splits={:.6f} {:.6f} {:.6f} {:.6f}\n"
-		"shadow_cascade_view_ranges={:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f}\n"
-		"shadow_cascade_ortho_extents={:.6f}x{:.6f} {:.6f}x{:.6f} {:.6f}x{:.6f} {:.6f}x{:.6f}\n"
-		"shadow_cascade_texel_world={:.6f} {:.6f} {:.6f} {:.6f}\n"
-		"shadow_cascade_caster_light_ranges={:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f} {:.6f}:{:.6f}\n"
-		"transparent_shadow_policy={}\n"
-		"shadow_tuning_target={}\n"
-		"shadow_strength_offset={:.6f}\n"
-		"shadow_depth_bias_offset={:.6f}\n"
-		"shadow_normal_bias_offset={:.6f}\n"
-		"shadow_filter_radius_offset={:.6f}\n"
-		"shadow_cascade_blend_offset={:.6f}\n",
+		"transparent_shadow_policy={}\n",
 		screenshotPath,
 		VoxelScenePresetToString(scenePreset),
 		ToneMapOperatorToString(render.lightingDebugControls.toneMapOperator),
@@ -313,11 +293,6 @@ bool SaveScreenshotCaptureMetadata(
 		render.currentSceneLighting.sunDirectionAndWrap[1],
 		render.currentSceneLighting.sunDirectionAndWrap[2],
 		render.currentSceneLighting.sunColorAndIntensity[3],
-		render.shadowMapExtent.width,
-		render.currentSceneLighting.sunShadowParams[0],
-		render.currentSceneLighting.sunShadowParams[1],
-		render.currentSceneLighting.sunShadowParams[2],
-		render.currentSceneLighting.sunShadowParams[3],
 		render.currentSceneLighting.sunContactShadowParams[0],
 		render.currentSceneLighting.sunContactShadowParams[1],
 		render.currentSceneLighting.ambientOcclusionParams[0],
@@ -335,8 +310,6 @@ bool SaveScreenshotCaptureMetadata(
 		render.currentSceneLighting.localPointLightParams[1],
 		render.currentSceneLighting.localPointLightParams[2],
 		render.currentSceneLighting.localPointLightParams[3],
-		render.lightingDebugControls.shadowCoverageScale,
-		render.currentSceneLighting.shadowCascadeBlendParams[0],
 		render.taaEnabled,
 		render.taaJitterX,
 		render.taaJitterY,
@@ -351,47 +324,7 @@ bool SaveScreenshotCaptureMetadata(
 		render.taaLayerHistoryValid,
 		render.taaLayerBlendFactor,
 		"B10G11R11_UFLOAT",
-		kSunShadowCascadeCount,
-		render.currentSunShadowCascadeSplits.splitLambda,
-		render.currentSunShadowCascadeSplits.viewDepthSplits[0],
-		render.currentSunShadowCascadeSplits.viewDepthSplits[1],
-		render.currentSunShadowCascadeSplits.viewDepthSplits[2],
-		render.currentSunShadowCascadeSplits.viewDepthSplits[3],
-		render.currentSunShadowCascadeDiagnostics.viewNearDepths[0],
-		render.currentSunShadowCascadeDiagnostics.viewFarDepths[0],
-		render.currentSunShadowCascadeDiagnostics.viewNearDepths[1],
-		render.currentSunShadowCascadeDiagnostics.viewFarDepths[1],
-		render.currentSunShadowCascadeDiagnostics.viewNearDepths[2],
-		render.currentSunShadowCascadeDiagnostics.viewFarDepths[2],
-		render.currentSunShadowCascadeDiagnostics.viewNearDepths[3],
-		render.currentSunShadowCascadeDiagnostics.viewFarDepths[3],
-		render.currentSunShadowCascadeDiagnostics.orthoWidths[0],
-		render.currentSunShadowCascadeDiagnostics.orthoHeights[0],
-		render.currentSunShadowCascadeDiagnostics.orthoWidths[1],
-		render.currentSunShadowCascadeDiagnostics.orthoHeights[1],
-		render.currentSunShadowCascadeDiagnostics.orthoWidths[2],
-		render.currentSunShadowCascadeDiagnostics.orthoHeights[2],
-		render.currentSunShadowCascadeDiagnostics.orthoWidths[3],
-		render.currentSunShadowCascadeDiagnostics.orthoHeights[3],
-		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[0],
-		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[1],
-		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[2],
-		render.currentSunShadowCascadeDiagnostics.texelWorldSizes[3],
-		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[0],
-		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[0],
-		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[1],
-		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[1],
-		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[2],
-		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[2],
-		render.currentSunShadowCascadeDiagnostics.casterLightNearDepths[3],
-		render.currentSunShadowCascadeDiagnostics.casterLightFarDepths[3],
-		TransparentShadowPolicyToString(render.transparentShadowPolicy),
-		ShadowTuningTargetToString(render.lightingDebugControls.shadowTuningTarget),
-		render.lightingDebugControls.shadowStrengthOffset,
-		render.lightingDebugControls.shadowDepthBiasOffset,
-		render.lightingDebugControls.shadowNormalBiasOffset,
-		render.lightingDebugControls.shadowFilterRadiusOffset,
-		render.lightingDebugControls.shadowCascadeBlendOffset);
+		TransparentShadowPolicyToString(render.transparentShadowPolicy));
 
 	stream << fmt::format(
 		"render_pass_shadow_ms={:.6f}\n"

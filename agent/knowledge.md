@@ -2122,3 +2122,49 @@ detail для случая, когда он действительно нуже�
 - **Recompute runs once per `LoadVoxelWorldSnapshot`, never in the hot path.** The
   cost is dominated by the `O(world_volume)` iteration that already exists for
   `world.stats` rebuild — adding 6 integer comparisons per fluid cell is noise.
+
+## 36. SSBO struct layout must match C++ across ALL shaders (added 2026-06-22, 20x fix)
+
+### Решение:
+
+- **`SceneLightingBuffer` SSBO struct must be byte-exact across all shaders that
+  bind it.** C++ struct `VoxelSceneLighting` (`src/voxel/VoxelMaterials.hpp:61-105`)
+  is the source of truth. Any shader that uses a different field order or has
+  stale fields will silently read garbage at out-of-bounds offsets.
+
+- **Audit checklist for SSBO struct changes:**
+  1. `git grep "SceneLightingBuffer {" -- "src/shaders/"` — list all shaders with
+     the SSBO struct.
+  2. For each, count `vec4` / `mat4` fields in order; compare to C++ struct
+     `VoxelSceneLighting`.
+  3. If a struct field is removed in C++, grep for that field name in every
+     shader SSBO struct and remove it. Compile + visual smoke to verify.
+
+### Why it matters (TAA gray screen incident 2026-06-22, 20x):
+
+- **5.2.D removed CSM fields from C++ `VoxelSceneLighting`** (sunShadowParams,
+  sunShadowViewProjections[4], shadowCascadeDepthSplits,
+  shadowCascadeBlendParams). Total: -256 bytes (was 608, now 352).
+
+- **4 shaders kept stale SSBO struct** with the removed fields: `taa_resolve.frag`,
+  `model.frag`, `model.vert`, `voxel_mesh.comp`. `colorGrading` was at offset
+  400 instead of 128. Reading 0 → `clamp(0, 0.25, 4.0) = 0.25` (whitePoint) +
+  `clamp(0, 0, 2.0) = 0` (contrast) + `clamp(0, 0, 2.0) = 0` (saturation) →
+  `mix(vec3(luma), normalizedColor, 0) = vec3(0.5)` → **серый экран при TAA**.
+
+- **Without TAA: invisible.** `voxel.frag` used the correct SSBO struct and wrote
+  the final sRGB-ready color directly to the swapchain. The bug only manifested
+  in the TAA resolve pass.
+
+- **5.2.A→B→C passed ctest because the unit tests don't run the full
+  visual pipeline** — the SSBO struct mismatch is a runtime issue caught only
+  by human visual smoke. Lesson: SSBO struct changes require a visual smoke
+  test in BOTH TAA and non-TAA paths, not just ctest pass.
+
+### Future-proofing:
+
+- **When adding/removing `VoxelSceneLighting` fields, do a project-wide grep
+  for all `SceneLightingBuffer` SSBO structs** and update them in the same
+  commit. Add a unit test that verifies the C++ struct size matches the GLSL
+  std430 layout (e.g. via static_assert in a test executable).
+

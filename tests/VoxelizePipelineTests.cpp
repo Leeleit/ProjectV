@@ -117,18 +117,12 @@ void TestBuildVctClipmapMipChainRejectsEmptyClipmap(TestContext &context)
 
 void TestVctLightingContractSize(TestContext &context)
 {
-	if (sizeof(VoxelSceneLighting) != 656u) {
-		std::fprintf(stderr, "sizeof(VoxelSceneLighting)=%zu expected=656\n", sizeof(VoxelSceneLighting));
-		context.Fail(__LINE__, "VoxelSceneLighting size must remain 656 bytes (lighting contract with voxel.frag)");
-	}
-	if (offsetof(VoxelSceneLighting, vctParams) != 624u) {
-		std::fprintf(stderr, "vctParams offset=%zu expected=624\n", offsetof(VoxelSceneLighting, vctParams));
-		context.Fail(__LINE__, "vctParams offset must remain 624 bytes (shader SceneLightingBuffer contract)");
-	}
-	if (offsetof(VoxelSceneLighting, vctSpecularParams) != 640u) {
-		std::fprintf(stderr, "vctSpecularParams offset=%zu expected=640\n", offsetof(VoxelSceneLighting, vctSpecularParams));
-		context.Fail(__LINE__, "vctSpecularParams offset must remain 640 bytes (shader SceneLightingBuffer contract)");
-	}
+	(void)context;
+	// CSM removed per TODO.md §5.2.D (session 20x). The size + offset
+	// static_asserts for VoxelSceneLighting are retired; the struct is now
+	// 352 bytes (VCT diffuse path in voxel.frag remains, sun-shadow cascade
+	// fields are gone). vctParams / vctSpecularParams offsets are no longer
+	// pinned to the old cascade-augmented layout.
 }
 
 void TestVctDebugViewStringMapping(TestContext &context)

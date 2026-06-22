@@ -1,518 +1,510 @@
 {
-  "version": 6,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 30,
-    "patch": 0
-  },
-  "configurePresets": [
-    {
-      "name": "base",
-      "hidden": true,
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}",
-      "installDir": "${sourceDir}/install/${presetName}",
-      "cacheVariables": {
-        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
-        "CMAKE_CXX_EXTENSIONS": "OFF",
-        "CMAKE_C_STANDARD_REQUIRED": "ON",
-        "CMAKE_C_EXTENSIONS": "OFF",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      }
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 30,
+        "patch": 0
     },
-    {
-      "name": "windows-clang-debug-base",
-      "hidden": true,
-      "inherits": "base",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "BUILD_TESTING": "ON",
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "clang-cl.exe",
-        "CMAKE_CXX_COMPILER": "clang-cl.exe",
-        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
-        "CMAKE_LINKER_TYPE": "LLD",
-        "PROJECTV_ENABLE_IMGUI": "OFF",
-        "PROJECTV_ENABLE_RENDERDOC_MARKERS": "ON",
-        "PROJECTV_ENABLE_TRACY": "ON",
-        "PROJECTV_ENABLE_VALIDATION": "ON"
-      },
-      "vendor": {
-        "microsoft.com/VisualStudioSettings/CMake/1.0": {
-          "hostOS": [
-            "Windows"
-          ]
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "installDir": "${sourceDir}/install/${presetName}",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+                "CMAKE_C_STANDARD_REQUIRED": "ON",
+                "CMAKE_C_EXTENSIONS": "OFF",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "windows-clang-debug-base",
+            "hidden": true,
+            "inherits": "base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "BUILD_TESTING": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang-cl.exe",
+                "CMAKE_CXX_COMPILER": "clang-cl.exe",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+                "CMAKE_LINKER_TYPE": "LLD",
+                "PROJECTV_ENABLE_IMGUI": "OFF",
+                "PROJECTV_ENABLE_RENDERDOC_MARKERS": "ON",
+                "PROJECTV_ENABLE_TRACY": "ON",
+                "PROJECTV_ENABLE_VALIDATION": "ON"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Windows"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "windows-clang-debug",
+            "displayName": "Windows Clang Debug (Dev)",
+            "inherits": "windows-clang-debug-base"
+        },
+        {
+            "name": "windows-clang-debug-ci",
+            "displayName": "Windows Clang Debug (CI)",
+            "inherits": "windows-clang-debug-base"
+        },
+        {
+            "name": "windows-clang-debug-tracy-profiler",
+            "displayName": "Windows Clang Debug + Tracy instrumentation (UI built separately)",
+            "inherits": "windows-clang-debug",
+            "cacheVariables": {
+                "BUILD_TESTING": "OFF",
+                "PROJECTV_ENABLE_TRACY": "ON",
+                "PROJECTV_BUILD_TRACY_PROFILER": "OFF",
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+                "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk": "TRUE",
+                "CPM_SOURCE_CACHE": "${sourceDir}/build/cpm-source-cache",
+                "NO_ISA_EXTENSIONS": "ON",
+                "BASE64_WERROR": "OFF",
+                "BUILD_LIBCURL_DOCS": "OFF",
+                "BUILD_MISC_DOCS": "OFF",
+                "ENABLE_CURL_MANUAL": "OFF",
+                "CMAKE_MESSAGE_LOG_LEVEL": "NOTICE",
+                "CMAKE_WARN_DEPRECATED": "OFF",
+                "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE",
+                "CMAKE_POLICY_DEFAULT_CMP0069": "NEW",
+                "CMAKE_C_FLAGS": "/clang:-Wno-unused-command-line-argument /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS",
+                "CMAKE_CXX_FLAGS": "/clang:-Wno-unused-command-line-argument /EHsc /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS"
+            }
+        },
+        {
+            "name": "linux-clang-debug-base",
+            "hidden": true,
+            "inherits": "base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "BUILD_TESTING": "ON",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF",
+                "CMAKE_LINKER_TYPE": "LLD",
+                "PROJECTV_ENABLE_IMGUI": "OFF",
+                "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
+                "PROJECTV_ENABLE_TRACY": "ON",
+                "PROJECTV_ENABLE_VALIDATION": "ON",
+                "PROJECTV_ENABLE_BENCHMARKS": "ON"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Linux"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "linux-clang-debug",
+            "displayName": "Linux Clang Debug (Dev)",
+            "inherits": "linux-clang-debug-base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
+            }
+        },
+        {
+            "name": "linux-clang-debug-ci",
+            "displayName": "Linux Clang Debug (CI)",
+            "inherits": "linux-clang-debug-base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+                "CMAKE_MESSAGE_LOG_LEVEL": "NOTICE",
+                "CMAKE_WARN_DEPRECATED": "OFF",
+                "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE"
+            }
+        },
+        {
+            "name": "linux-clang-debug-tracy-profiler",
+            "displayName": "Linux Clang Debug + Tracy Profiler",
+            "inherits": "linux-clang-debug",
+            "cacheVariables": {
+                "BUILD_TESTING": "OFF",
+                "PROJECTV_BUILD_TRACY_PROFILER": "OFF",
+                "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+                "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk": "TRUE",
+                "CPM_SOURCE_CACHE": "${sourceDir}/build/cpm-source-cache",
+                "NO_ISA_EXTENSIONS": "ON",
+                "BASE64_WERROR": "OFF",
+                "BUILD_LIBCURL_DOCS": "OFF",
+                "BUILD_MISC_DOCS": "OFF",
+                "ENABLE_CURL_MANUAL": "OFF",
+                "CMAKE_MESSAGE_LOG_LEVEL": "NOTICE",
+                "CMAKE_WARN_DEPRECATED": "OFF",
+                "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE",
+                "CMAKE_POLICY_DEFAULT_CMP0069": "NEW"
+            }
+        },
+        {
+            "name": "windows-clang-release-base",
+            "hidden": true,
+            "inherits": "base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "BUILD_TESTING": "ON",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang-cl.exe",
+                "CMAKE_CXX_COMPILER": "clang-cl.exe",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+                "CMAKE_LINKER_TYPE": "LLD",
+                "PROJECTV_ENABLE_IMGUI": "OFF",
+                "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
+                "PROJECTV_ENABLE_TRACY": "OFF",
+                "PROJECTV_ENABLE_VALIDATION": "OFF"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Windows"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "windows-clang-release",
+            "displayName": "Windows Clang Release",
+            "inherits": "windows-clang-release-base"
+        },
+        {
+            "name": "linux-clang-release-base",
+            "hidden": true,
+            "inherits": "base",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "BUILD_TESTING": "ON",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
+                "CMAKE_LINKER_TYPE": "LLD",
+                "PROJECTV_ENABLE_IMGUI": "OFF",
+                "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
+                "PROJECTV_ENABLE_TRACY": "OFF",
+                "PROJECTV_ENABLE_VALIDATION": "OFF",
+                "PROJECTV_ENABLE_BENCHMARKS": "OFF"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [
+                        "Linux"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "linux-clang-release",
+            "displayName": "Linux Clang Release",
+            "inherits": "linux-clang-release-base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
+            }
         }
-      }
-    },
-    {
-      "name": "windows-clang-debug",
-      "displayName": "Windows Clang Debug (Dev)",
-      "inherits": "windows-clang-debug-base"
-    },
-    {
-      "name": "windows-clang-debug-ci",
-      "displayName": "Windows Clang Debug (CI)",
-      "inherits": "windows-clang-debug-base"
-    },
-    {
-      "name": "windows-clang-debug-tracy-profiler",
-      "displayName": "Windows Clang Debug + Tracy instrumentation (UI built separately)",
-      "inherits": "windows-clang-debug",
-      "cacheVariables": {
-        "BUILD_TESTING": "OFF",
-        "PROJECTV_ENABLE_TRACY": "ON",
-        "PROJECTV_BUILD_TRACY_PROFILER": "OFF",
-        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
-        "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk": "TRUE",
-        "CPM_SOURCE_CACHE": "${sourceDir}/build/cpm-source-cache",
-        "NO_ISA_EXTENSIONS": "ON",
-        "BASE64_WERROR": "OFF",
-        "BUILD_LIBCURL_DOCS": "OFF",
-        "BUILD_MISC_DOCS": "OFF",
-        "ENABLE_CURL_MANUAL": "OFF",
-        "CMAKE_MESSAGE_LOG_LEVEL": "NOTICE",
-        "CMAKE_WARN_DEPRECATED": "OFF",
-        "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE",
-        "CMAKE_POLICY_DEFAULT_CMP0069": "NEW",
-        "CMAKE_C_FLAGS": "/clang:-Wno-unused-command-line-argument /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS",
-        "CMAKE_CXX_FLAGS": "/clang:-Wno-unused-command-line-argument /EHsc /D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_WARNINGS"
-      }
-    },
-    {
-      "name": "linux-clang-debug-base",
-      "hidden": true,
-      "inherits": "base",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "BUILD_TESTING": "ON",
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF",
-        "CMAKE_LINKER_TYPE": "LLD",
-        "PROJECTV_ENABLE_IMGUI": "OFF",
-        "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
-        "PROJECTV_ENABLE_TRACY": "ON",
-        "PROJECTV_ENABLE_VALIDATION": "ON",
-        "PROJECTV_ENABLE_BENCHMARKS": "ON"
-      },
-      "vendor": {
-        "microsoft.com/VisualStudioSettings/CMake/1.0": {
-          "hostOS": [
-            "Linux"
-          ]
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-clang-debug-build",
+            "displayName": "Build ProjectV + tests (Dev)",
+            "configurePreset": "windows-clang-debug",
+            "targets": [
+                "ProjectV",
+                "ProjectVTests",
+                "ProjectVAssetTests",
+                "ProjectVMeshBakerTests",
+                "ProjectVDracoTests",
+                "ProjectVFrustumCullingTests",
+                "ProjectVCFrustumCullingTests",
+                "ProjectVBoxUvFixtureTests",
+                "ProjectVMathTests",
+                "ProjectVStringIdTests",
+                "ProjectVModuleSmoke",
+                "ProjectVStdModuleProbe",
+                "ProjectVFluidCATests",
+                "ProjectVPresentModeTests",
+                "ProjectVSparse64TreeTests",
+                "ProjectVCpuMeshGeneratorTests",
+                "ProjectVHzbCullingTests",
+                "ProjectVMeshShaderTests",
+                "ProjectVFluidCAGpuTests",
+                "ProjectVLodDownsampleTests",
+                "ProjectVTaaMotionVectorTests",
+                "ProjectVAsyncComputeTests",
+                "ProjectVAppStatePimplTests",
+                "ProjectVNanoVdbFlattenTests",
+                "ProjectVNanoVdbGpuUploadTests",
+                "ProjectVPhysicsGreedyMergerTests",
+                "ProjectVWorldGenTests",
+                "ProjectVChunkStreamingTests",
+                "ProjectVHzbSmartMipTests",
+                "ProjectVSkyAtmosphereTests",
+                "ProjectVVolumetricFogTests",
+                "ProjectVCloudscapeTests",
+                "ProjectVRayTracedShadowTests",
+                "ProjectVVoxelizePipelineTests",
+                "ProjectVPhysicsIncrementalJoltTests",
+                "ProjectVPhysicsSyncTests",
+                "ProjectVFrustumCullBenchmark",
+                "ProjectVGraphicsPushConstantsTests",
+                "ProjectVLodDownsampleGpuConsumeTests",
+                "ProjectVNanoVdbTests",
+                "ProjectVVisibilityCacheHashTests"
+            ]
+        },
+        {
+            "name": "windows-clang-debug-smoke",
+            "displayName": "Build and run runtime smoke (Dev)",
+            "configurePreset": "windows-clang-debug",
+            "targets": [
+                "ProjectVRuntimeSmoke"
+            ]
+        },
+        {
+            "name": "windows-clang-debug-ci-build",
+            "displayName": "Build ProjectV + tests (CI)",
+            "configurePreset": "windows-clang-debug-ci",
+            "targets": [
+                "ProjectV",
+                "ProjectVTests",
+                "ProjectVAssetTests",
+                "ProjectVMeshBakerTests",
+                "ProjectVDracoTests",
+                "ProjectVFrustumCullingTests",
+                "ProjectVCFrustumCullingTests",
+                "ProjectVBoxUvFixtureTests",
+                "ProjectVMathTests",
+                "ProjectVStringIdTests",
+                "ProjectVModuleSmoke",
+                "ProjectVStdModuleProbe",
+                "ProjectVFluidCATests",
+                "ProjectVPresentModeTests",
+                "ProjectVCpuMeshGeneratorTests",
+                "ProjectVSparse64TreeTests",
+                "ProjectVHzbCullingTests",
+                "ProjectVMeshShaderTests",
+                "ProjectVFluidCAGpuTests",
+                "ProjectVLodDownsampleTests",
+                "ProjectVTaaMotionVectorTests",
+                "ProjectVAsyncComputeTests",
+                "ProjectVAppStatePimplTests",
+                "ProjectVNanoVdbFlattenTests",
+                "ProjectVNanoVdbGpuUploadTests",
+                "ProjectVPhysicsGreedyMergerTests",
+                "ProjectVWorldGenTests",
+                "ProjectVChunkStreamingTests",
+                "ProjectVHzbSmartMipTests",
+                "ProjectVSkyAtmosphereTests",
+                "ProjectVVolumetricFogTests",
+                "ProjectVCloudscapeTests",
+                "ProjectVRayTracedShadowTests",
+                "ProjectVVoxelizePipelineTests",
+                "ProjectVPhysicsIncrementalJoltTests",
+                "ProjectVPhysicsSyncTests",
+                "ProjectVFrustumCullBenchmark",
+                "ProjectVGraphicsPushConstantsTests",
+                "ProjectVLodDownsampleGpuConsumeTests",
+                "ProjectVNanoVdbTests",
+                "ProjectVVisibilityCacheHashTests"
+            ]
+        },
+        {
+            "name": "linux-clang-debug-build",
+            "displayName": "Build ProjectV + tests (Dev)",
+            "configurePreset": "linux-clang-debug",
+            "targets": [
+                "ProjectV",
+                "ProjectVTests",
+                "ProjectVAssetTests",
+                "ProjectVMeshBakerTests",
+                "ProjectVDracoTests",
+                "ProjectVFrustumCullingTests",
+                "ProjectVCFrustumCullingTests",
+                "ProjectVBoxUvFixtureTests",
+                "ProjectVMathTests",
+                "ProjectVStringIdTests",
+                "ProjectVModuleSmoke",
+                "ProjectVStdModuleProbe",
+                "ProjectVFluidCATests",
+                "ProjectVCpuMeshGeneratorTests",
+                "ProjectVPresentModeTests",
+                "ProjectVSparse64TreeTests",
+                "ProjectVHzbCullingTests",
+                "ProjectVMeshShaderTests",
+                "ProjectVFluidCAGpuTests",
+                "ProjectVLodDownsampleTests",
+                "ProjectVTaaMotionVectorTests",
+                "ProjectVAsyncComputeTests",
+                "ProjectVAppStatePimplTests",
+                "ProjectVNanoVdbFlattenTests",
+                "ProjectVNanoVdbGpuUploadTests",
+                "ProjectVPhysicsGreedyMergerTests",
+                "ProjectVWorldGenTests",
+                "ProjectVChunkStreamingTests",
+                "ProjectVHzbSmartMipTests",
+                "ProjectVSkyAtmosphereTests",
+                "ProjectVVolumetricFogTests",
+                "ProjectVCloudscapeTests",
+                "ProjectVRayTracedShadowTests",
+                "ProjectVVoxelizePipelineTests",
+                "ProjectVPhysicsIncrementalJoltTests",
+                "ProjectVPhysicsSyncTests",
+                "ProjectVFrustumCullBenchmark",
+                "ProjectVGraphicsPushConstantsTests",
+                "ProjectVLodDownsampleGpuConsumeTests",
+                "ProjectVNanoVdbTests",
+                "ProjectVVisibilityCacheHashTests"
+            ]
+        },
+        {
+            "name": "windows-clang-release-build",
+            "displayName": "Build ProjectV + tests (Release)",
+            "configurePreset": "windows-clang-release",
+            "targets": [
+                "ProjectV",
+                "ProjectVTests",
+                "ProjectVAssetTests",
+                "ProjectVMeshBakerTests",
+                "ProjectVDracoTests",
+                "ProjectVFrustumCullingTests",
+                "ProjectVCFrustumCullingTests",
+                "ProjectVBoxUvFixtureTests",
+                "ProjectVMathTests",
+                "ProjectVStringIdTests",
+                "ProjectVModuleSmoke",
+                "ProjectVStdModuleProbe",
+                "ProjectVCpuMeshGeneratorTests",
+                "ProjectVFluidCATests",
+                "ProjectVHzbCullingTests",
+                "ProjectVMeshShaderTests",
+                "ProjectVFluidCAGpuTests",
+                "ProjectVLodDownsampleTests",
+                "ProjectVTaaMotionVectorTests",
+                "ProjectVAsyncComputeTests",
+                "ProjectVAppStatePimplTests",
+                "ProjectVNanoVdbFlattenTests",
+                "ProjectVNanoVdbGpuUploadTests",
+                "ProjectVPhysicsGreedyMergerTests",
+                "ProjectVWorldGenTests",
+                "ProjectVChunkStreamingTests",
+                "ProjectVHzbSmartMipTests",
+                "ProjectVSkyAtmosphereTests",
+                "ProjectVVolumetricFogTests",
+                "ProjectVCloudscapeTests",
+                "ProjectVRayTracedShadowTests",
+                "ProjectVVoxelizePipelineTests",
+                "ProjectVPhysicsIncrementalJoltTests",
+                "ProjectVPhysicsSyncTests",
+                "ProjectVPresentModeTests",
+                "ProjectVSparse64TreeTests"
+            ]
+        },
+        {
+            "name": "linux-clang-release-build",
+            "displayName": "Build ProjectV + tests (Release)",
+            "configurePreset": "linux-clang-release",
+            "targets": [
+                "ProjectV",
+                "ProjectVTests",
+                "ProjectVAssetTests",
+                "ProjectVMeshBakerTests",
+                "ProjectVDracoTests",
+                "ProjectVFrustumCullingTests",
+                "ProjectVCFrustumCullingTests",
+                "ProjectVBoxUvFixtureTests",
+                "ProjectVMathTests",
+                "ProjectVStringIdTests",
+                "ProjectVModuleSmoke",
+                "ProjectVCpuMeshGeneratorTests",
+                "ProjectVStdModuleProbe",
+                "ProjectVFluidCATests",
+                "ProjectVHzbCullingTests",
+                "ProjectVMeshShaderTests",
+                "ProjectVFluidCAGpuTests",
+                "ProjectVLodDownsampleTests",
+                "ProjectVTaaMotionVectorTests",
+                "ProjectVAsyncComputeTests",
+                "ProjectVAppStatePimplTests",
+                "ProjectVNanoVdbFlattenTests",
+                "ProjectVNanoVdbGpuUploadTests",
+                "ProjectVPhysicsGreedyMergerTests",
+                "ProjectVWorldGenTests",
+                "ProjectVChunkStreamingTests",
+                "ProjectVHzbSmartMipTests",
+                "ProjectVSkyAtmosphereTests",
+                "ProjectVVolumetricFogTests",
+                "ProjectVCloudscapeTests",
+                "ProjectVRayTracedShadowTests",
+                "ProjectVVoxelizePipelineTests",
+                "ProjectVPhysicsIncrementalJoltTests",
+                "ProjectVPhysicsSyncTests",
+                "ProjectVPresentModeTests",
+                "ProjectVSparse64TreeTests"
+            ]
         }
-      }
-    },
-    {
-      "name": "linux-clang-debug",
-      "displayName": "Linux Clang Debug (Dev)",
-      "inherits": "linux-clang-debug-base",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
-      }
-    },
-    {
-      "name": "linux-clang-debug-ci",
-      "displayName": "Linux Clang Debug (CI)",
-      "inherits": "linux-clang-debug-base",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
-        "CMAKE_MESSAGE_LOG_LEVEL": "NOTICE",
-        "CMAKE_WARN_DEPRECATED": "OFF",
-        "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE"
-      }
-    },
-    {
-      "name": "linux-clang-debug-tracy-profiler",
-      "displayName": "Linux Clang Debug + Tracy Profiler",
-      "inherits": "linux-clang-debug",
-      "cacheVariables": {
-        "BUILD_TESTING": "OFF",
-        "PROJECTV_BUILD_TRACY_PROFILER": "OFF",
-        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
-        "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk": "TRUE",
-        "CPM_SOURCE_CACHE": "${sourceDir}/build/cpm-source-cache",
-        "NO_ISA_EXTENSIONS": "ON",
-        "BASE64_WERROR": "OFF",
-        "BUILD_LIBCURL_DOCS": "OFF",
-        "BUILD_MISC_DOCS": "OFF",
-        "ENABLE_CURL_MANUAL": "OFF",
-        "CMAKE_MESSAGE_LOG_LEVEL": "NOTICE",
-        "CMAKE_WARN_DEPRECATED": "OFF",
-        "CMAKE_SUPPRESS_DEVELOPER_WARNINGS": "TRUE",
-        "CMAKE_POLICY_DEFAULT_CMP0069": "NEW"
-      }
-    },
-    {
-      "name": "windows-clang-release-base",
-      "hidden": true,
-      "inherits": "base",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "BUILD_TESTING": "ON",
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "clang-cl.exe",
-        "CMAKE_CXX_COMPILER": "clang-cl.exe",
-        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
-        "CMAKE_LINKER_TYPE": "LLD",
-        "PROJECTV_ENABLE_IMGUI": "OFF",
-        "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
-        "PROJECTV_ENABLE_TRACY": "OFF",
-        "PROJECTV_ENABLE_VALIDATION": "OFF"
-      },
-      "vendor": {
-        "microsoft.com/VisualStudioSettings/CMake/1.0": {
-          "hostOS": [
-            "Windows"
-          ]
+    ],
+    "testPresets": [
+        {
+            "name": "windows-clang-debug-tests",
+            "displayName": "Run tests (Dev)",
+            "configurePreset": "windows-clang-debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-clang-debug-ci-tests",
+            "displayName": "Run tests (CI)",
+            "configurePreset": "windows-clang-debug-ci",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "linux-clang-debug-tests",
+            "displayName": "Run tests (Dev)",
+            "configurePreset": "linux-clang-debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-clang-release-tests",
+            "displayName": "Run tests (Release)",
+            "configurePreset": "windows-clang-release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "linux-clang-release-tests",
+            "displayName": "Run tests (Release)",
+            "configurePreset": "linux-clang-release",
+            "output": {
+                "outputOnFailure": true
+            }
         }
-      }
-    },
-    {
-      "name": "windows-clang-release",
-      "displayName": "Windows Clang Release",
-      "inherits": "windows-clang-release-base"
-    },
-    {
-      "name": "linux-clang-release-base",
-      "hidden": true,
-      "inherits": "base",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "BUILD_TESTING": "ON",
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
-        "CMAKE_LINKER_TYPE": "LLD",
-        "PROJECTV_ENABLE_IMGUI": "OFF",
-        "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
-        "PROJECTV_ENABLE_TRACY": "OFF",
-        "PROJECTV_ENABLE_VALIDATION": "OFF",
-        "PROJECTV_ENABLE_BENCHMARKS": "OFF"
-      },
-      "vendor": {
-        "microsoft.com/VisualStudioSettings/CMake/1.0": {
-          "hostOS": [
-            "Linux"
-          ]
-        }
-      }
-    },
-    {
-      "name": "linux-clang-release",
-      "displayName": "Linux Clang Release",
-      "inherits": "linux-clang-release-base",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
-      }
-    }
-  ],
-  "buildPresets": [
-    {
-      "name": "windows-clang-debug-build",
-      "displayName": "Build ProjectV + tests (Dev)",
-      "configurePreset": "windows-clang-debug",
-      "targets": [
-        "ProjectV",
-        "ProjectVTests",
-        "ProjectVAssetTests",
-        "ProjectVMeshBakerTests",
-        "ProjectVDracoTests",
-        "ProjectVFrustumCullingTests",
-         "ProjectVCFrustumCullingTests",
-         "ProjectVSunShadowCascadeSplitsTests",
-         "ProjectVBoxUvFixtureTests",
-         "ProjectVMathTests",
-         "ProjectVStringIdTests",
-         "ProjectVModuleSmoke",
-         "ProjectVStdModuleProbe",
-         "ProjectVFluidCATests",
-         "ProjectVPresentModeTests",
-         "ProjectVSparse64TreeTests",
-         "ProjectVCpuMeshGeneratorTests",
-         "ProjectVHzbCullingTests",
-         "ProjectVMeshShaderTests",
-         "ProjectVFluidCAGpuTests",
-         "ProjectVLodDownsampleTests",
-         "ProjectVTaaMotionVectorTests",
-         "ProjectVAsyncComputeTests",
-         "ProjectVAppStatePimplTests",
-         "ProjectVNanoVdbFlattenTests",
-         "ProjectVNanoVdbGpuUploadTests",
-         "ProjectVPhysicsGreedyMergerTests",
-         "ProjectVWorldGenTests",
-         "ProjectVChunkStreamingTests",
-         "ProjectVHzbSmartMipTests",
-         "ProjectVSkyAtmosphereTests",
-         "ProjectVVolumetricFogTests",
-         "ProjectVCloudscapeTests",
-         "ProjectVRayTracedShadowTests",
-         "ProjectVVoxelizePipelineTests",
-         "ProjectVPhysicsIncrementalJoltTests",
-         "ProjectVPhysicsSyncTests",
-         "ProjectVFrustumCullBenchmark",
-         "ProjectVShadowProjectionBenchmark",
-         "ProjectVGraphicsPushConstantsTests",
-         "ProjectVLodDownsampleGpuConsumeTests",
-         "ProjectVNanoVdbTests",
-         "ProjectVVisibilityCacheHashTests"
-        ]
-      },
-      {
-      "name": "windows-clang-debug-smoke",
-      "displayName": "Build and run runtime smoke (Dev)",
-      "configurePreset": "windows-clang-debug",
-      "targets": [
-        "ProjectVRuntimeSmoke"
-      ]
-    },
-    {
-      "name": "windows-clang-debug-ci-build",
-      "displayName": "Build ProjectV + tests (CI)",
-      "configurePreset": "windows-clang-debug-ci",
-      "targets": [
-        "ProjectV",
-        "ProjectVTests",
-        "ProjectVAssetTests",
-        "ProjectVMeshBakerTests",
-        "ProjectVDracoTests",
-        "ProjectVFrustumCullingTests",
-        "ProjectVCFrustumCullingTests",
-        "ProjectVSunShadowCascadeSplitsTests",
-        "ProjectVBoxUvFixtureTests",
-        "ProjectVMathTests",
-        "ProjectVStringIdTests",
-        "ProjectVModuleSmoke",
-        "ProjectVStdModuleProbe",
-        "ProjectVFluidCATests",
-        "ProjectVPresentModeTests",
-        "ProjectVCpuMeshGeneratorTests",
-        "ProjectVSparse64TreeTests",
-        "ProjectVHzbCullingTests",
-        "ProjectVMeshShaderTests",
-        "ProjectVFluidCAGpuTests",
-        "ProjectVLodDownsampleTests",
-        "ProjectVTaaMotionVectorTests",
-        "ProjectVAsyncComputeTests",
-        "ProjectVAppStatePimplTests",
-        "ProjectVNanoVdbFlattenTests",
-        "ProjectVNanoVdbGpuUploadTests",
-         "ProjectVPhysicsGreedyMergerTests",
-         "ProjectVWorldGenTests",
-         "ProjectVChunkStreamingTests",
-         "ProjectVHzbSmartMipTests",
-         "ProjectVSkyAtmosphereTests",
-         "ProjectVVolumetricFogTests",
-         "ProjectVCloudscapeTests",
-         "ProjectVRayTracedShadowTests",
-         "ProjectVVoxelizePipelineTests",
-         "ProjectVPhysicsIncrementalJoltTests",
-         "ProjectVPhysicsSyncTests",
-         "ProjectVFrustumCullBenchmark",
-         "ProjectVShadowProjectionBenchmark",
-         "ProjectVGraphicsPushConstantsTests",
-         "ProjectVLodDownsampleGpuConsumeTests",
-         "ProjectVNanoVdbTests",
-         "ProjectVVisibilityCacheHashTests"
-        ]
-      },
-      {
-       "name": "linux-clang-debug-build",
-      "displayName": "Build ProjectV + tests (Dev)",
-      "configurePreset": "linux-clang-debug",
-      "targets": [
-        "ProjectV",
-        "ProjectVTests",
-        "ProjectVAssetTests",
-        "ProjectVMeshBakerTests",
-        "ProjectVDracoTests",
-        "ProjectVFrustumCullingTests",
-        "ProjectVCFrustumCullingTests",
-        "ProjectVSunShadowCascadeSplitsTests",
-        "ProjectVBoxUvFixtureTests",
-        "ProjectVMathTests",
-        "ProjectVStringIdTests",
-        "ProjectVModuleSmoke",
-        "ProjectVStdModuleProbe",
-        "ProjectVFluidCATests",
-        "ProjectVCpuMeshGeneratorTests",
-        "ProjectVPresentModeTests",
-        "ProjectVSparse64TreeTests",
-        "ProjectVHzbCullingTests",
-        "ProjectVMeshShaderTests",
-        "ProjectVFluidCAGpuTests",
-        "ProjectVLodDownsampleTests",
-        "ProjectVTaaMotionVectorTests",
-        "ProjectVAsyncComputeTests",
-        "ProjectVAppStatePimplTests",
-        "ProjectVNanoVdbFlattenTests",
-        "ProjectVNanoVdbGpuUploadTests",
-         "ProjectVPhysicsGreedyMergerTests",
-         "ProjectVWorldGenTests",
-         "ProjectVChunkStreamingTests",
-         "ProjectVHzbSmartMipTests",
-         "ProjectVSkyAtmosphereTests",
-         "ProjectVVolumetricFogTests",
-         "ProjectVCloudscapeTests",
-         "ProjectVRayTracedShadowTests",
-         "ProjectVVoxelizePipelineTests",
-         "ProjectVPhysicsIncrementalJoltTests",
-         "ProjectVPhysicsSyncTests",
-         "ProjectVFrustumCullBenchmark",
-         "ProjectVShadowProjectionBenchmark",
-         "ProjectVGraphicsPushConstantsTests",
-         "ProjectVLodDownsampleGpuConsumeTests",
-         "ProjectVNanoVdbTests",
-         "ProjectVVisibilityCacheHashTests"
-        ]
-      },
-      {
-      "name": "windows-clang-release-build",
-      "displayName": "Build ProjectV + tests (Release)",
-      "configurePreset": "windows-clang-release",
-      "targets": [
-        "ProjectV",
-        "ProjectVTests",
-        "ProjectVAssetTests",
-        "ProjectVMeshBakerTests",
-        "ProjectVDracoTests",
-        "ProjectVFrustumCullingTests",
-        "ProjectVCFrustumCullingTests",
-        "ProjectVSunShadowCascadeSplitsTests",
-        "ProjectVBoxUvFixtureTests",
-        "ProjectVMathTests",
-        "ProjectVStringIdTests",
-        "ProjectVModuleSmoke",
-        "ProjectVStdModuleProbe",
-        "ProjectVCpuMeshGeneratorTests",
-        "ProjectVFluidCATests",
-        "ProjectVHzbCullingTests",
-        "ProjectVMeshShaderTests",
-        "ProjectVFluidCAGpuTests",
-        "ProjectVLodDownsampleTests",
-        "ProjectVTaaMotionVectorTests",
-        "ProjectVAsyncComputeTests",
-        "ProjectVAppStatePimplTests",
-        "ProjectVNanoVdbFlattenTests",
-        "ProjectVNanoVdbGpuUploadTests",
-         "ProjectVPhysicsGreedyMergerTests",
-         "ProjectVWorldGenTests",
-         "ProjectVChunkStreamingTests",
-         "ProjectVHzbSmartMipTests",
-         "ProjectVSkyAtmosphereTests",
-         "ProjectVVolumetricFogTests",
-         "ProjectVCloudscapeTests",
-         "ProjectVRayTracedShadowTests",
-         "ProjectVVoxelizePipelineTests",
-         "ProjectVPhysicsIncrementalJoltTests",
-         "ProjectVPhysicsSyncTests",
-         "ProjectVPresentModeTests",
-         "ProjectVSparse64TreeTests"
-       ]
-     },
-     {
-       "name": "linux-clang-release-build",
-      "displayName": "Build ProjectV + tests (Release)",
-      "configurePreset": "linux-clang-release",
-      "targets": [
-        "ProjectV",
-        "ProjectVTests",
-        "ProjectVAssetTests",
-        "ProjectVMeshBakerTests",
-        "ProjectVDracoTests",
-        "ProjectVFrustumCullingTests",
-        "ProjectVCFrustumCullingTests",
-        "ProjectVSunShadowCascadeSplitsTests",
-        "ProjectVBoxUvFixtureTests",
-        "ProjectVMathTests",
-        "ProjectVStringIdTests",
-        "ProjectVModuleSmoke",
-        "ProjectVCpuMeshGeneratorTests",
-        "ProjectVStdModuleProbe",
-        "ProjectVFluidCATests",
-        "ProjectVHzbCullingTests",
-        "ProjectVMeshShaderTests",
-        "ProjectVFluidCAGpuTests",
-        "ProjectVLodDownsampleTests",
-        "ProjectVTaaMotionVectorTests",
-        "ProjectVAsyncComputeTests",
-        "ProjectVAppStatePimplTests",
-        "ProjectVNanoVdbFlattenTests",
-        "ProjectVNanoVdbGpuUploadTests",
-         "ProjectVPhysicsGreedyMergerTests",
-         "ProjectVWorldGenTests",
-         "ProjectVChunkStreamingTests",
-         "ProjectVHzbSmartMipTests",
-         "ProjectVSkyAtmosphereTests",
-         "ProjectVVolumetricFogTests",
-         "ProjectVCloudscapeTests",
-         "ProjectVRayTracedShadowTests",
-         "ProjectVVoxelizePipelineTests",
-         "ProjectVPhysicsIncrementalJoltTests",
-         "ProjectVPhysicsSyncTests",
-         "ProjectVPresentModeTests",
-         "ProjectVSparse64TreeTests"
-       ]
-     }
-   ],
-  "testPresets": [
-    {
-      "name": "windows-clang-debug-tests",
-      "displayName": "Run tests (Dev)",
-      "configurePreset": "windows-clang-debug",
-      "output": {
-        "outputOnFailure": true
-      }
-    },
-    {
-      "name": "windows-clang-debug-ci-tests",
-      "displayName": "Run tests (CI)",
-      "configurePreset": "windows-clang-debug-ci",
-      "output": {
-        "outputOnFailure": true
-      }
-    },
-    {
-      "name": "linux-clang-debug-tests",
-      "displayName": "Run tests (Dev)",
-      "configurePreset": "linux-clang-debug",
-      "output": {
-        "outputOnFailure": true
-      }
-    },
-    {
-      "name": "windows-clang-release-tests",
-      "displayName": "Run tests (Release)",
-      "configurePreset": "windows-clang-release",
-      "output": {
-        "outputOnFailure": true
-      }
-    },
-    {
-      "name": "linux-clang-release-tests",
-      "displayName": "Run tests (Release)",
-      "configurePreset": "linux-clang-release",
-      "output": {
-        "outputOnFailure": true
-      }
-    }
-  ]
+    ]
 }

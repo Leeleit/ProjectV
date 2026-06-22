@@ -1,7 +1,5 @@
 #pragma once
 
-#include "render/ShadowTypes.hpp"
-
 #include <array>
 #include <cstddef>
 
@@ -27,12 +25,9 @@ struct ChunkVisibilityCache {
 	int32_t quantizedForwardZ1000 = 0;
 	uint64_t hash = 0;
 	uint32_t visibleChunkCount = 0;
-	std::array<uint32_t, kSunShadowCascadeCount> shadowCascadeVisibleChunkCounts{};
 	static constexpr std::size_t kChunkVisibilityCacheMaxChunks = 1024;
 	std::array<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> opaqueCommands{};
 	std::size_t opaqueCommandsSize = 0;
-	std::array<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks * kSunShadowCascadeCount> shadowCommands{};
-	std::size_t shadowCommandsSize = 0;
 	std::array<VkDrawIndirectCommand, kChunkVisibilityCacheMaxChunks> transparentCommands{};
 	std::size_t transparentCommandsSize = 0;
 

@@ -2,6 +2,7 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
+#include "render/RayTracedShadows.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/TaaResolvePipeline.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
@@ -530,13 +531,31 @@ bool RecreateSwapchain(
 	render->taaLayerHistoryValid = false;
 
 	if (render->graphicsPipeline != VK_NULL_HANDLE) {
-		PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
+PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
 		if (!RefreshGraphicsResourceBindings(context, render)) {
 			runtime::LogRuntimeFailure(
-				"Swapchain",
+				"Graphics",
 				"RecreateSwapchain.RefreshGraphicsResourceBindings",
 				"RefreshGraphicsResourceBindings returned false after swapchain recreation");
-			return false;
+		}
+
+		if (render->rayTracedShadows != nullptr
+				&& render->rayTracedShadows->IsVoxelAwareRtxActive()) {
+			if (!render->rayTracedShadows->RecreateShadowMaskForExtent(
+					*context,
+					swapchain->extent.width,
+					swapchain->extent.height)) {
+				runtime::LogRuntimeFailure(
+					"Graphics",
+					"RecreateSwapchain.RecreateShadowMaskForExtent",
+					"RecreateShadowMaskForExtent returned false after swapchain recreation");
+			}
+			if (!RefreshGraphicsResourceBindings(context, render)) {
+				runtime::LogRuntimeFailure(
+					"Graphics",
+					"RecreateSwapchain.RefreshGraphicsResourceBindingsAfterShadowMaskResize",
+					"RefreshGraphicsResourceBindings returned false after shadow mask resize");
+			}
 		}
 		if (!RefreshTaaResolveResourceBindings(context, render)) {
 			runtime::LogRuntimeFailure(

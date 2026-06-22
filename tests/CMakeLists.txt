@@ -29,7 +29,6 @@ add_executable(ProjectVTests
         ../src/core/RuntimeDiagnostics.cpp
         ../src/core/RuntimeProbe.cpp
         ../src/render/ScreenshotCapture.cpp
-        ../src/render/ShadowProjection.cpp
         ../src/render/vulkan/VulkanResult.cpp
         ../src/voxel/VoxelInteraction.cpp
         ../src/voxel/VoxelLodDownsample.cpp
@@ -196,31 +195,6 @@ add_test(NAME ProjectVCFrustumCullingTests COMMAND ProjectVCFrustumCullingTests)
 set_tests_properties(ProjectVCFrustumCullingTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVCFrustumCullingTests)
-
-add_executable(ProjectVSunShadowCascadeSplitsTests
-        SunShadowCascadeSplitsTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
-)
-
-target_compile_definitions(ProjectVSunShadowCascadeSplitsTests PRIVATE
-        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
-)
-
-target_include_directories(ProjectVSunShadowCascadeSplitsTests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-)
-
-target_link_libraries(ProjectVSunShadowCascadeSplitsTests PRIVATE
-        projectv_build_options
-        volk
-        glm
-        GPUOpen::VulkanMemoryAllocator
-)
-
-add_test(NAME ProjectVSunShadowCascadeSplitsTests COMMAND ProjectVSunShadowCascadeSplitsTests)
-set_tests_properties(ProjectVSunShadowCascadeSplitsTests PROPERTIES LABELS "unit")
-
-projectv_test_add_modules(ProjectVSunShadowCascadeSplitsTests)
 
 add_executable(ProjectVGraphicsPushConstantsTests
         GraphicsPushConstantsTests.cpp
@@ -424,38 +398,6 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     target_compile_options(ProjectVFrustumCullBenchmark PRIVATE
             -mavx2
     )
-
-    add_executable(ProjectVShadowProjectionBenchmark
-            ${CMAKE_SOURCE_DIR}/src/bench/ShadowProjectionBenchmark.cpp
-            ${CMAKE_SOURCE_DIR}/src/render/ShadowProjection.cpp
-            ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
-            ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
-            ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
-            ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
-            ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
-            ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
-            ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
-    )
-
-    target_include_directories(ProjectVShadowProjectionBenchmark PRIVATE
-            ${CMAKE_SOURCE_DIR}/src
-            ${CMAKE_SOURCE_DIR}/external/JoltPhysics
-            ${CMAKE_SOURCE_DIR}/external/tracy/public
-            ${CMAKE_SOURCE_DIR}/external/volk
-    )
-
-    target_link_libraries(ProjectVShadowProjectionBenchmark PRIVATE
-            projectv_build_options
-            benchmark::benchmark
-            volk
-            glm
-            GPUOpen::VulkanMemoryAllocator
-            fmt::fmt
-            SDL3::SDL3
-            Jolt::Jolt
-    )
-
-    projectv_test_add_modules(ProjectVShadowProjectionBenchmark)
 
 endif ()
 
@@ -1258,6 +1200,9 @@ set_tests_properties(ProjectVCloudscapeTests PROPERTIES LABELS "unit")
 add_executable(ProjectVRayTracedShadowTests
         RayTracedShadowTests.cpp
         ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadows.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RtxShadowPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RtxShadowSBT.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RtxGiProbes.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
@@ -1286,6 +1231,8 @@ target_link_libraries(ProjectVRayTracedShadowTests PRIVATE GPUOpen::VulkanMemory
 
 add_test(NAME ProjectVRayTracedShadowTests COMMAND ProjectVRayTracedShadowTests)
 set_tests_properties(ProjectVRayTracedShadowTests PROPERTIES LABELS "unit")
+set_tests_properties(ProjectVRayTracedShadowTests PROPERTIES
+	ENVIRONMENT "PROJECTV_BUILD_DIR=$<TARGET_FILE_DIR:ProjectVRayTracedShadowTests>/../src")
 
 projectv_test_add_modules(ProjectVRayTracedShadowTests)
 

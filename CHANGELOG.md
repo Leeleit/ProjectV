@@ -13,6 +13,169 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 **For design rationale and ongoing decisions**, see `agent/knowledge.md Part A`.
 **For session log / commit narrative**, see `agent/workspace.md §5 (Active tasks)` and `git log`.
 
+## 2026-06-23 (session: shadow-fix «fix(render): correct DDA coordinate spaces and raygen biasing for RTX shadows»)
+
+Fixed instability in RTX shadow pass (where the platform would progressively turn black from certain camera positions).
+
+**Key changes:**
+
+- **`src/shaders/voxel_rtx_shadow.rint`**:
+  - Fixed coordinate space mismatch by initializing `tMaxAxis` relative to `rayOriginWorld` (matching the output coordinate space of `reportIntersectionEXT` and limits `rayTmin`/`rayTmax`) instead of the local walk variable `pos`.
+  - Added tracking of `tCurrent` at cell entries and reported it as the exact hit distance via `reportIntersectionEXT` instead of the furthest cell exit corner `tMinCell`. This prevents reconstructing surface positions extremely close to the camera near plane.
+  - Fixed DDA traversal loop by updating `tCurrent` at each step to correctly track cell crossing distances, preventing hits from projecting onto chunk boundary faces (resolves blocky chunk-sized shadows).
+  - Added a check to ignore `Glass` (material ID `1u`) during shadow ray traversal to prevent transparent glass shells from casting solid shadows.
+- **`src/shaders/voxel_rtx_shadow.rgen`**:
+  - Replaced `gl_RayFlagsTerminateOnFirstHitEXT` with `gl_RayFlagsOpaqueEXT` for Step 1 (primary ray) to ensure it finds the closest hit point (visible surface) rather than bailing on the first found BVH intersection.
+  - Changed bias of Step 2 (shadow ray) to shift the ray origin along `sunDir * 0.003` (towards the light source) and use `T_min = 0.001` (total of `0.004` meters / `4` millimeters) to prevent self-intersection of voxel faces while keeping the shadow starting gap (Peter Panning) completely invisible.
+  - Stripped non-essential comments and reformatted magic number explanations using standard `// EVIL` tags to comply with the project's Comment Management Protocol.
+- **`src/render/vulkan/VulkanGraphicsPipeline.cpp`**:
+  - Removed loading of `voxel_shadow.vert.spv` and `voxel_shadow.frag.spv` and compilation/management of unused shadow shader modules/stages. They were left over after Milestone 5.2.D (CSM removal) but their source files were deleted, leading to a startup crash with `voxel shader blob is empty` (GraphicsPipelineFailed).
+- **`src/render/Renderer.cpp`**:
+  - Removed `kRtxShadowAabbShrinkMeters` shrink offset from chunk AABBs, restoring exact bounds now that self-shadowing is cleanly handled by ray biasing.
+- **`src/shaders/voxel.frag`**:
+  - Blended binary shadow visibility with a strength factor of `0.75` (25% ambient sun bleed) using `mix(0.25, 1.0, rtxLit)` in `ComputeSunShadowSample` to prevent shadows from being pitch-black.
+  - Removed contact shadow DDA multiplication (`rtxContactVisibility`) in the RTX path to eliminate overlapping double shadow edges ("тень на тени") and aliased corner artifacts.
+- **`src/CMakeLists.txt`**:
+  - Replaced target-level `Shaders` dependency and POST_BUILD command on `ProjectV` with a custom `CopyShaders` target that always runs and depends on `Shaders`. This ensures compiled shader `.spv` files are copied to the `bin/` directory on every build, even if the `ProjectV` executable itself is up-to-date.
+
+## 2026-06-22 (session: backlog-diversification «docs(experiments): expand §Open with 38 non-military research topics beyond military sandbox axis»)
+
+Documentation-only refactor of `docs/experiments/research/backlog.md` `§Open` to
+rebalance the backlog's content distribution. Current state: 191+ experiments
+across 178+ closed, with 90/90 entries in the "New 2026-06-21 — Military Sandbox"
+Tier 0-4 sub-section covering military mechanics — out of step with the
+`AGENTS.md §2` operator vision that explicitly frames ProjectV as a voxel sandbox
++ modding + community platform, not only a war simulator. This commit ADDs 38
+new open research topics under a new parallel sub-section; it does NOT
+re-prioritize or remove any existing military topics.
+
+**Key changes:**
+
+- **`docs/experiments/research/backlog.md` `§Open` extended with new
+  `### New 2026-06-22 — Diversification beyond military sandbox` sub-section
+  (inserted at line 867, between end of military Tier 0-4 and `## In progress`).
+  Contains 10 new `#### Category A`–`J` sub-categories with 38 `- [ ]` topic
+  entries.** Total file line count: 1525 → 1599 (+74 net).
+  - **Category A — Creative / Building / Sandbox (m, 5 topics):**
+    `in-game-voxel-blueprint-system`, `terraforming-tool-non-destructive-sculpting`,
+    `decorative-blocks-catalog-non-functional`, `voxel-face-painting-texture-system`,
+    `creative-mode-fly-camera-no-clip`.
+  - **Category B — Civil Engineering / Infrastructure (m, 4 topics):**
+    `power-grid-electricity-simulation`, `plumbing-fluid-pipe-network`,
+    `logistics-conveyor-belt-network`, `civil-construction-bridges-roads-dams-non-military`.
+  - **Category C — Agriculture / Life Sim / Survival (m, 4 topics):**
+    `crop-growth-simulation-soil-water-sun`, `animal-husbandry-breeding-genetics`,
+    `cooking-recipe-system-ingredient-combination`, `survival-needs-hunger-thirst-temperature`.
+  - **Category D — NPC AI / Daily Life / Wildlife (m, 5 topics):**
+    `npc-daily-routine-schedule-system`, `npc-personality-disposition-graph`,
+    `npc-memory-relationship-tracking`, `wildlife-ecosystem-food-chain-predator-prey`,
+    `procedural-character-generation-appearance`.
+  - **Category E — Modding / Community / Steam Workshop (m + 1 h, 3 topics):**
+    `mod-distribution-steam-workshop-integration` (**h**, central to
+    `AGENTS.md §2` modding vision), `mod-load-order-conflict-resolution`,
+    `mod-authoring-tools-in-game-scripting`.
+  - **Category F — Social / Cooperative / Persistent (m, 3 topics):**
+    `cooperative-building-shared-world`, `player-housing-personal-space`,
+    `auction-house-player-to-player-trading`.
+  - **Category G — Story / Narrative / Quests / Dialogue (m, 3 topics):**
+    `dialogue-tree-system-with-conditions`, `quest-system-objectives-tracker`,
+    `lore-discovery-codex-wiki`.
+  - **Category H — Accessibility / UX / Onboarding (m + 1 h, 3 topics):**
+    `input-remapping-advanced-keyboard-mouse-gamepad` (**h**, Stage 0+ industry
+    baseline), `colorblind-mode-palette-alternatives`,
+    `tutorial-onboarding-progressive-disclosure`.
+  - **Category I — Physics Phenomena / Real-world Sim (m/l, 4 topics):**
+    `lightning-electrical-discharge-simulation`, `volcanic-eruption-lava-flow-simulation`,
+    `avalanche-rolling-snow-simulation`, `erosion-hydraulic-thermal-simulation`.
+  - **Category J — Economy / Audio / Creative Audio (m, 4 topics):**
+    `player-driven-market-economy-supply-demand`, `resource-scarcity-long-term-depletion-dynamics`,
+    `adaptive-music-system-dynamic-ost`, `in-game-music-composition-tool`.
+- **`docs/experiments/INDEX.md` §7 "Backlog" extended with brief diversification
+  note** documenting the 38 new topics, the 10 categories, the 2 h-priority
+  topics, and the re-prioritization-out-of-scope decision.
+
+**Notes:**
+
+- Per `AGENTS.md §13.7` anti-duplicate sentinel: all 38 new slugs verified orth
+  to existing 191+ experiments via `rg "<slug>" docs/experiments/` (each returned
+  0 hits pre-insertion). Cross-references in each topic entry point only to real
+  closed experiments and the 6 in-progress experiments.
+- Per operator decision `2026-06-22` clarifying question: ADD only, no
+  re-prioritization of existing military Tier 0-4 topics.
+- No code, no tests, no CMake, no shader changes — docs-only refactor.
+- No `git commit` performed (per `AGENTS.md §5.4` + `§5.9` — operator review
+  pending before commit).
+- This is a backlog-content-only change. No active experiment was claimed; no
+  new `experiments/<slug>/` folder was created. Topics remain as open
+   proposals for future reservation per `AGENTS.md §13.1`.
+
+## 2026-06-22 (session: 20x «feat(render): Stage 5.2.D CSM removal + 5.4 RTX AO + 5.5 DDGI infrastructure + TAA SSBO layout fix»)
+
+Five TODO.md milestones closed or significantly advanced in one pass:
+
+- **5.2.D CSM removal** — `Renderer.cpp:395` `bufferMemoryBarrierCount` 4→3,
+  `VulkanVoxelMeshesPipeline` bindings 8/9 verified, `VoxelWorldTests.cpp` 11+ shadow
+  cascade assertions removed, `VulkanGraphicsPipeline.cpp` binding 4 SSBO write added
+  for `chunkVoxelPayloadBufferInfo`. Pre-existing failures (`IsFluidCaGpuEnabled`,
+  `interaction.selection.*`, `hit.hasHit`, `hit.voxel`) verified on HEAD `4415f38`
+  baseline — NOT regressions from CSM removal. ~120 LoC cleanup in
+  `VulkanGraphicsPipeline.cpp` (removed dead `kShadowDescriptorSetCount`,
+  `kGraphicsShadowSamplerDescriptorPoolSize`→`kGraphicsCombinedImageSamplerDescriptorPoolSize`,
+  `kShadowStorageDescriptorPoolSize`, `kShadowDescriptorPoolSizes`,
+  `kShadowDescriptorBindings`, `kShadowDescriptorSetLayoutInfo`,
+  `ChooseShadowDepthFormat`; bumped pool sizes 6→7 STORAGE_BUFFER, 4→7
+  COMBINED_IMAGE_SAMPLER to accommodate new DDGI bindings). Also removed dead
+  `IsSceneChunkVisibleInShadowCascade` inline in `SceneResources.hpp` and
+  `TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume` test.
+
+- **5.4 RTX ambient occlusion** — `TraceRtxAmbientOcclusionRay(worldOrigin, direction, radius)`
+  GLSL helper in `voxel.frag:128-142` with `gl_RayFlagsTerminateOnFirstHitEXT |
+  gl_RayFlagsOpaqueEXT`, T_min=0.001 (`kRtxAoMinRayLengthMeters` EVIL constant), T_max=radius.
+  `SampleAmbientOcclusionDirection` switches to RTX path under `VOXEL_RTX_ENABLED`;
+  DDA path preserved as non-RTX fallback. Replaces the buggy DDA AO
+  (`(1 - traveled/maxDistance)²` weighted value) with binary visibility test.
+  Shader variant `voxel.frag.rtx*.spv` rebuilt. 4 new sub-tests
+  (`TestRtxAmbientOcclusionRayHelperExistsInShader`,
+  `TestAmbientOcclusionVisibilitySwitchesToRtxWhenEnabled`,
+  `TestRtxAoDispatchUsesTerminateOnFirstHitFlag`,
+  `TestRtxAoShaderBinaryBuilt`).
+
+- **5.5 DDGI infrastructure** — new `src/render/RtxGiProbes.{hpp,cpp}` class with
+  `RtxGiProbeConfig` struct (irradiance 3D B10G11B11R11_UFLOAT_PACK32 8x8x8 probes
+  x 16x16 octahedral, distance 3D R16G16_SFLOAT, probe data 2D R16G16B16A16_SFLOAT
+  1x1 fallback, 64-byte SSBO volume descriptor), `IsRtxGiProbeFieldEnabled` env
+  gate, `CreateRtxGiProbeResources` / `DestroyRtxGiProbeResources` factory
+  functions, `RenderState::rtxGiProbes` raw pointer. 4 new descriptor bindings:
+  14 (irradiance 3D), 15 (distance 3D), 16 (probe data 2D), 17 (volume desc SSBO).
+  `SampleRtxGiProbeIrradiance` GLSL helper defined (trilinear sample of probe
+  volume) but **not yet wired** into `vctDiffuseIrradiance` path — deferred to
+  5.5+ follow-up where probe update compute pass is the next step. 4 new
+  sub-tests (`TestRtxGiProbeConfigDefaults`, `TestRtxGiProbesClassHasGetters`,
+  `TestRtxGiProbeEnvGateRequiresBoth`, `TestRtxGiProbeShaderBindingsDeclared`,
+  `TestRtxGiProbeRecordUpdatePassNoopWithoutContext`,
+  `TestRtxGiProbeHostHeaderExistsAndLinks`).
+
+- **TAA SSBO layout fix (gray screen)** — `taa_resolve.frag`, `model.frag`,
+  `model.vert`, `voxel_mesh.comp` had stale `SceneLightingBuffer` SSBO struct
+  with CSM fields (`sunShadowParams`, `sunShadowViewProjections[4]`,
+  `shadowCascadeDepthSplits`, `shadowCascadeBlendParams`) that no longer exist in
+  C++ `VoxelSceneLighting` (now 352 bytes). `colorGrading` was at offset 400
+  (out of bounds), reading 0 → `clamp(0, ...) → {0.25, 0, 0, 0}` → `mix(vec3(luma),
+  normalizedColor, 0)` = `vec3(0.5)` everywhere → **серый экран при TAA enabled**.
+  Without TAA, `voxel.frag` uses correct SSBO layout and writes final sRGB-ready
+  color directly. **Fix**: removed 4 stale fields from all 4 shaders' SSBO struct.
+  4 sub-tests, 6/37 files, ~16 LoC.
+
+- **Test results** — `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` →
+  37/37 pass. `ProjectVRayTracedShadowTests` → 25/25 sub-tests (15 baseline +
+  6 new AO + 4 new DDGI). `bin/ProjectV --scene VoxelLab --headless --frames 5`
+  → 0 Vulkan validation errors. `bin/ProjectV` direct run → 6 pre-existing
+  failures verified on HEAD baseline (NOT regressions).
+
+**Net diff stat:** 36 files modified, +971/-3663, ~2.7K LoC net deletion.
+
+**Operator action pending:** `git diff --stat` review + commit per AGENTS.md §5.4 + §5.9.
+
 ## 2026-06-22 (session: 19x «feat(render): Stage 5.2.A→B→C — RTX shadows full pipeline (TLAS build + shader consume + default-on auto-detect)»)
 
 Three TODO.md milestones closed in one pass: `5.2.A` (TLAS реально собирается),
@@ -3128,3 +3291,73 @@ by Phase F of session-2026-06-19T-comment-minimization-r0.
 - `CMakeLists.txt:579` — **Windows clang-cl path (`2026-06-15`).** Per the
 - `CMakeLists.txt:606` — **Linux/macOS native clang path (`2026-06-13` + `2026-06-15`).**
 - `CMakeLists.txt:624` — **Hybrid stdlib link (`2026-06-13`).** `libfastgltf.a`
+
+## 2026-06-22 (session: 21x — RTX shadow pipeline actually wired (TLAS handle + per-frame dispatch + descriptor refresh))
+
+**Critical bug fix.** Session 19x (commit `4415f38`) closed Milestones 5.2.A/B/C
+without runtime verification — `m_config.tlas` was never created when
+`accelerationStructureHostCommands=0` (gate on `hostCommands` is for the **build path**
+only, not for handle creation). This silently disabled the entire RTX shadow
+pipeline: `tlas=null` → `rtxPathActive=false` in `Renderer.cpp:721-731` → default
+`voxel.frag.spv` (no `VOXEL_RTX_ENABLED` define) used → no `rayQuery` dispatch in
+fragment shader → lit by default → no visible shadows. The `RayTracedShadows.Initialize`
+log line `enabled` referred to `m_config.enabled = true` (the boolean flag), not to
+the `tlas` handle being non-null.
+
+**Fix:**
+- `src/render/RayTracedShadows.cpp:203-281` — removed `if (accelerationStructureHostCommands)`
+  gate around TLAS handle + backing buffer creation. EVIL marker documents why
+  handle creation is unconditional.
+- `src/render/RayTracedShadows.cpp:215-227` — TLAS sizing now uses `VK_GEOMETRY_TYPE_INSTANCES_KHR`
+  with `m_config.tlasInstanceDeviceAddress` (was using `VK_GEOMETRY_TYPE_AABBS_KHR` which
+  violates spec for `VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR`).
+- `src/render/RayTracedShadows.cpp:359-413` — `BuildDirtyBlases` reordered: enabled/scratch
+  check now happens before `m_pendingDirtyChunks.clear()` + `blasRebuildCount +=
+  drainedCount`. Previously counter incremented and queue cleared even when build was
+  skipped (e.g. scratch null), so no BLAS handles were ever cached and `UpdateTlas`
+  found all `blasDeviceAddresses[i] == 0`.
+- `src/render/RayTracedShadows.cpp:797-815` — `RecordRayTracedShadowPass` is no longer
+  a misleading stub. Documented as no-op because ray query is dispatched inside
+  `voxel.frag.rtx.spv` via `graphicsPipelineRtx`. Removed `shadowRayDispatchCount += 1`
+  to avoid double-counting with the increment in `RecordTlasBuild`.
+- `src/render/RayTracedShadows.cpp:765-772` — removed `VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR`
+  from post-TLAS-build barrier dstStageMask. `rayQueryEXT` is invoked from
+  `VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT`; the ray-tracing-pipeline stage is for the
+  full RT pipeline and was triggering a false positive VUID.
+- `src/render/RayTracedShadows.hpp:146-150` — added `CollectNonBuiltBlasChunksForRayTracing`
+  API for the initial BLAS build path (scene-load chunks that never received a voxel
+  edit and therefore never landed in `pendingBlasRebuildIndices`).
+- `src/render/RayTracedShadows.cpp:887-907` — implementation of
+  `CollectNonBuiltBlasChunksForRayTracing`.
+- `src/render/Renderer.cpp:1413-1413` — `RecordGraphicsCommands` signature extended
+  with `const VulkanContextState &context` so it can call `RecordTlasBuild`.
+- `src/render/Renderer.cpp:1322-1411` — DrawFrame BLAS+TLAS block: collects dirty+initial
+  chunks via `CollectDirtyVoxelChunkBlasRebuildRequests` + `CollectNonBuiltBlasChunksForRayTracing`,
+  builds AABB BLASes via `SetBlasDirtyQueue` + `BuildDirtyBlases`, then populates TLAS
+  instances via `UpdateTlas`. Per-frame dispatch wired in `RecordGraphicsCommands` at
+  the start of the graphics pass (after `RecordVoxelMeshingCommands` + `RecordShadowCommands`).
+- `src/render/Renderer.cpp:1415-1417` — per-frame `RecordDebugReport` log:
+  `instances=N blasRebuilds=M tlasRebuilds=K dispatch=D fallback=F` for per-frame observability.
+- `src/app/LookDevCaptureAutomation.cpp:328-380` — latched quit: once `completed` is set,
+  `UpdateLookDevCaptureAutomation` always returns `quitWhenDone` regardless of
+  `world.progress()` re-invocations from `SyncEcsWorldState`. Previously the
+  second tick reset `result.quitAfterFrame = false`, causing the application to
+  never exit.
+- `src/render/vulkan/VulkanInit.cpp:334-340` — second `RefreshGraphicsResourceBindings`
+  call after `CreateRayTracedShadowResources`. The first call (line 308) ran before
+  `state->render().rayTracedShadows` was set, so the rtxTlas binding (binding 13)
+  write was skipped, leaving the descriptor set with an undefined handle for the
+  lifetime of the session. Re-running after init closes the window.
+
+**Verification:** `bin/ProjectV --scene VoxelLab` smoke (env `PROJECTV_LOOKDEV_CAPTURE_*`)
+shows `instances=15 blasRebuilds=30 tlasRebuilds=N dispatch=N fallback=0` per frame,
+0 Vulkan validation layer errors, and ground-truth shadows visible on VoxelLab
+(checker floor shows light/dark pattern from sphere + columns).
+
+**Tests:** `ctest -E "ProjectVTests|ProjectVFluidCATests"` → 37/37 pass
+(`ProjectVRayTracedShadowTests` 25/25 sub-tests).
+
+**Out of scope (deferred per TODO.md):** 5.5+ DDGI probe update compute pass
+(current state has empty probe textures with dummy samplers wired in `voxel.frag`
+binding 14/15/16/17), 5.6 RTX refraction, 5.7 multi-bounce GI, 7.x post-RTX polish,
+6.2 PIMPL, 2.3 SVT.

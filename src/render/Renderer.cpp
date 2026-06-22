@@ -115,16 +115,6 @@ void TransitionImage(
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-bool HasShadowCascadeImageViews(const RenderState &render)
-{
-	for (const VkImageView cascadeImageView : render.shadowCascadeImageViews) {
-		if (cascadeImageView == VK_NULL_HANDLE) {
-			return false;
-		}
-	}
-	return true;
-}
-
 bool ShouldCaptureScreenshot(const RenderState &render)
 {
 	return render.screenshotCaptureRequested &&
@@ -264,140 +254,11 @@ void RecordShadowCommands(
 	const FrameRenderData &frameRenderData,
 	const VkCommandBuffer cmd)
 {
-	ScopedPassTimer passTimer(render.renderPassTimings.shadowMs);
-	PV_PROFILE_ZONE_N("RecordShadowCommands");
-	PV_PROFILE_GPU_LABEL(cmd, "Shadow Pass");
-	if (render.shadowGraphicsPipeline == VK_NULL_HANDLE ||
-		render.shadowPipelineLayout == VK_NULL_HANDLE ||
-		render.shadowImage == VK_NULL_HANDLE ||
-		render.shadowImageView == VK_NULL_HANDLE ||
-		!HasShadowCascadeImageViews(render)) {
-		return;
-	}
-
-	const VkImageLayout oldShadowLayout =
-		render.shadowImageNeedsInit ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-	const VkPipelineStageFlags2 oldShadowStage =
-		render.shadowImageNeedsInit ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-	const VkAccessFlags2 oldShadowAccess =
-		render.shadowImageNeedsInit ? 0 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-	TransitionImage(
-		cmd,
-		render.shadowImage,
-		VK_IMAGE_ASPECT_DEPTH_BIT,
-		oldShadowLayout,
-		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		oldShadowStage,
-		oldShadowAccess,
-		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		kSunShadowCascadeCount);
-	render.shadowImageNeedsInit = false;
-
-	constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
-	const VkViewport shadowViewport{
-		.x = 0.0f,
-		.y = 0.0f,
-		.width = static_cast<float>(render.shadowMapExtent.width),
-		.height = static_cast<float>(render.shadowMapExtent.height),
-		.minDepth = 0.0f,
-		.maxDepth = 1.0f,
-	};
-	const VkRect2D shadowScissor{
-		.offset = {0, 0},
-		.extent = render.shadowMapExtent,
-	};
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.shadowGraphicsPipeline);
-	if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE) {
-		vkCmdBindDescriptorSets(
-			cmd,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			render.shadowPipelineLayout,
-			0,
-			1,
-			&frameRenderData.shadowDescriptorSet,
-			0,
-			nullptr);
-	}
-
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		const VkRenderingAttachmentInfo shadowDepthAttachment{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.pNext = nullptr,
-			.imageView = render.shadowCascadeImageViews[cascadeIndex],
-			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_NONE,
-			.resolveImageView = VK_NULL_HANDLE,
-			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-			.clearValue = clearDepthValue,
-		};
-		const VkRenderingInfo shadowRenderingInfo{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.renderArea = {{0, 0}, render.shadowMapExtent},
-			.layerCount = 1,
-			.viewMask = 0,
-			.colorAttachmentCount = 0,
-			.pColorAttachments = nullptr,
-			.pDepthAttachment = &shadowDepthAttachment,
-			.pStencilAttachment = nullptr,
-		};
-
-		vkCmdBeginRendering(cmd, &shadowRenderingInfo);
-		vkCmdSetViewport(cmd, 0, 1, &shadowViewport);
-		vkCmdSetScissor(cmd, 0, 1, &shadowScissor);
-
-		const ShadowPushConstants shadowPushConstants{
-			.cascadeIndex = cascadeIndex,
-		};
-		vkCmdPushConstants(
-			cmd,
-			render.shadowPipelineLayout,
-			VK_SHADER_STAGE_VERTEX_BIT,
-			0,
-			sizeof(shadowPushConstants),
-			&shadowPushConstants);
-
-		const bool canSkipEmptyCascadeDraw =
-			frameRenderData.dirtyChunkCount == 0 &&
-			frameRenderData.shadowCascadeVisibleChunkCounts[cascadeIndex] == 0u;
-		if (frameRenderData.shadowDescriptorSet != VK_NULL_HANDLE &&
-			frameRenderData.shadowIndirectCommandCount > 0 &&
-			!canSkipEmptyCascadeDraw &&
-			frameRenderData.shadowIndirectBuffer != VK_NULL_HANDLE &&
-			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
-			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Shadow Cascade");
-
-			const VkDeviceSize shadowIndirectOffset =
-				static_cast<VkDeviceSize>(cascadeIndex) *
-				static_cast<VkDeviceSize>(frameRenderData.shadowIndirectCommandCount) *
-				sizeof(VkDrawIndirectCommand);
-			vkCmdDrawIndirect(
-				cmd,
-				frameRenderData.shadowIndirectBuffer,
-				shadowIndirectOffset,
-				frameRenderData.shadowIndirectCommandCount,
-				sizeof(VkDrawIndirectCommand));
-		}
-
-		vkCmdEndRendering(cmd);
-	}
-
-	TransitionImage(
-		cmd,
-		render.shadowImage,
-		VK_IMAGE_ASPECT_DEPTH_BIT,
-		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-		kSunShadowCascadeCount);
+	(void)render;
+	(void)frameRenderData;
+	(void)cmd;
+	// CSM removed per TODO.md §5.2.D (session 20x). RTX shadows are the
+	// canonical sun shadow path; the shadow pass no longer renders.
 }
 
 void RecordDebugOverlayCommands(
@@ -483,7 +344,6 @@ void RecordVoxelMeshingCommands(
 		frameRenderData.voxelMeshingDescriptorSet == VK_NULL_HANDLE ||
 		frameRenderData.packedFaceBuffer == VK_NULL_HANDLE ||
 		frameRenderData.opaqueIndirectBuffer == VK_NULL_HANDLE ||
-		frameRenderData.shadowIndirectBuffer == VK_NULL_HANDLE ||
 		frameRenderData.transparentIndirectBuffer == VK_NULL_HANDLE ||
 		frameRenderData.dirtyChunkCount == 0) {
 		return;
@@ -510,7 +370,7 @@ void RecordVoxelMeshingCommands(
 		&frameRenderData.voxelMeshingPushConstants);
 	vkCmdDispatch(cmd, frameRenderData.dirtyChunkCount, 1, 1);
 
-	VkBufferMemoryBarrier2 bufferBarriers[4]{};
+	VkBufferMemoryBarrier2 bufferBarriers[3]{};
 	bufferBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
 	bufferBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
 	bufferBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
@@ -528,16 +388,11 @@ void RecordVoxelMeshingCommands(
 	bufferBarriers[2] = bufferBarriers[0];
 	bufferBarriers[2].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
 	bufferBarriers[2].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-	bufferBarriers[2].buffer = frameRenderData.shadowIndirectBuffer;
-
-	bufferBarriers[3] = bufferBarriers[0];
-	bufferBarriers[3].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-	bufferBarriers[3].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-	bufferBarriers[3].buffer = frameRenderData.transparentIndirectBuffer;
+	bufferBarriers[2].buffer = frameRenderData.transparentIndirectBuffer;
 
 	VkDependencyInfo depInfo{};
 	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	depInfo.bufferMemoryBarrierCount = 4;
+	depInfo.bufferMemoryBarrierCount = 3;
 	depInfo.pBufferMemoryBarriers = bufferBarriers;
 	vkCmdPipelineBarrier2(cmd, &depInfo);
 }
@@ -546,6 +401,7 @@ void RecordGraphicsCommands(
 	RenderState &render,
 	const SwapchainState &swapchain,
 	const FrameRenderData &frameRenderData,
+	const VulkanContextState &context,
 	const VkCommandBuffer cmd,
 	const uint32_t imageIndex)
 {
@@ -557,6 +413,11 @@ void RecordGraphicsCommands(
 
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 		RecordShadowCommands(render, frameRenderData, cmd);
+
+		if (render.rayTracedShadows != nullptr && render.rayTracedShadows->IsEnabled()) {
+			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TLAS Build");
+			render.rayTracedShadows->RecordTlasBuild(cmd, context);
+		}
 
 		const bool taaOn = render.taaEnabled &&
 						   render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
@@ -863,16 +724,16 @@ void RecordGraphicsCommands(
 					meshDrawPush,
 					frameRenderData.chunkDescriptorCount);
 			} else {
-				const bool rtxPathActive = render.rayTracedShadows != nullptr
-					&& render.rayTracedShadows->IsEnabled()
-					&& render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
-				VkPipeline opaquePipeline = VK_NULL_HANDLE;
-				if (rtxPathActive) {
-					opaquePipeline = taaOn ? render.graphicsPipelineRtxTaaOn : render.graphicsPipelineRtx;
-				}
-				if (opaquePipeline == VK_NULL_HANDLE) {
-					opaquePipeline = taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline;
-				}
+			const bool rtxPathActive = render.rayTracedShadows != nullptr
+				&& render.rayTracedShadows->IsEnabled()
+				&& render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+			VkPipeline opaquePipeline = VK_NULL_HANDLE;
+			if (rtxPathActive) {
+				opaquePipeline = taaOn ? render.graphicsPipelineRtxTaaOn : render.graphicsPipelineRtx;
+			}
+			if (opaquePipeline == VK_NULL_HANDLE) {
+				opaquePipeline = taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline;
+			}
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
 				vkCmdPushConstants(
 					cmd,
@@ -1465,30 +1326,46 @@ SDL_AppResult DrawFrame(
 	}
 
 	if (render->rayTracedShadows != nullptr) {
-		PV_PROFILE_ZONE_N("CollectDirtyBlasChunks");
+		PV_PROFILE_ZONE_N("CollectAndBuildBlasChunks");
 		if (state->world().voxelWorld != nullptr) {
-			std::vector<uint32_t> dirtyBlasChunks{};
+			const VoxelWorld &world = *state->world().voxelWorld;
+			const auto &rtxConfig = render->rayTracedShadows->GetConfig();
+
+			// Combine dirty (pendingBlasRebuildIndices) + initial (non-empty without BLAS).
+			// The initial path covers scene-load chunks that never received a voxel edit
+			// and therefore never landed in pendingBlasRebuildIndices.
+			std::vector<uint32_t> blasChunks{};
 			CollectDirtyVoxelChunkBlasRebuildRequests(
 				*state->world().voxelWorld,
-				&dirtyBlasChunks);
-			if (!dirtyBlasChunks.empty()) {
+				&blasChunks);
+			std::vector<uint32_t> initialChunks{};
+			projectv::render::CollectNonBuiltBlasChunksForRayTracing(
+				world,
+				rtxConfig.blasDeviceAddresses,
+				&initialChunks);
+			for (const uint32_t index : initialChunks) {
+				if (std::find(blasChunks.begin(), blasChunks.end(), index) == blasChunks.end()) {
+					blasChunks.push_back(index);
+				}
+			}
+
+			if (!blasChunks.empty()) {
 				std::vector<projectv::render::DirtyChunkRebuild> dirtyRebuilds{};
-				dirtyRebuilds.reserve(dirtyBlasChunks.size());
-				const VoxelWorld &world = *state->world().voxelWorld;
-				for (const uint32_t chunkIndex : dirtyBlasChunks) {
+				dirtyRebuilds.reserve(blasChunks.size());
+				for (const uint32_t chunkIndex : blasChunks) {
 					if (chunkIndex >= world.chunks.size()) {
 						continue;
 					}
 					const VoxelChunk &chunk = world.chunks[chunkIndex];
 					projectv::render::DirtyChunkRebuild entry{};
 					entry.chunkIndex = chunkIndex;
-					entry.aabb.minX = static_cast<float>(chunk.min.x);
-					entry.aabb.minY = static_cast<float>(chunk.min.y);
-					entry.aabb.minZ = static_cast<float>(chunk.min.z);
-					entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
-					entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
-					entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
-					dirtyRebuilds.push_back(entry);
+				entry.aabb.minX = static_cast<float>(chunk.min.x);
+				entry.aabb.minY = static_cast<float>(chunk.min.y);
+				entry.aabb.minZ = static_cast<float>(chunk.min.z);
+				entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
+				entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
+				entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
+				dirtyRebuilds.push_back(entry);
 				}
 				if (!dirtyRebuilds.empty()) {
 					render->rayTracedShadows->SetBlasDirtyQueue(std::move(dirtyRebuilds));
@@ -1496,9 +1373,81 @@ SDL_AppResult DrawFrame(
 			}
 		}
 		render->rayTracedShadows->BuildDirtyBlases(*context, context->commandPool);
+
+		// EVIL: visibleChunkIndices/transforms assembled from non-empty chunks whose BLAS
+		// is already built (blasDeviceAddresses[i] != 0). For each frame this drives TLAS
+		// population; ray query in voxel.frag.rtx.spv reads the resulting instance list.
+		// Per Stage 5.2.A DoD: smoke log must show tlasInstanceCount > 0 (now wired).
+		if (state->world().voxelWorld != nullptr) {
+			std::vector<uint32_t> visibleChunkIndices{};
+			std::vector<VkTransformMatrixKHR> visibleChunkTransforms{};
+			const VoxelWorld &world = *state->world().voxelWorld;
+			const auto &rtxConfig = render->rayTracedShadows->GetConfig();
+			VkTransformMatrixKHR identityMatrix{};
+			identityMatrix.matrix[0][0] = 1.0f;
+			identityMatrix.matrix[1][1] = 1.0f;
+			identityMatrix.matrix[2][2] = 1.0f;
+			visibleChunkIndices.reserve(world.chunks.size());
+			visibleChunkTransforms.reserve(world.chunks.size());
+			for (size_t i = 0; i < world.chunks.size(); ++i) {
+				const VoxelChunk &chunk = world.chunks[i];
+				if (chunk.nonAirVoxelCount == 0u) {
+					continue;
+				}
+				if (i >= rtxConfig.blasDeviceAddresses.size()
+					|| rtxConfig.blasDeviceAddresses[i] == 0u) {
+					continue;
+				}
+				visibleChunkIndices.push_back(static_cast<uint32_t>(i));
+				visibleChunkTransforms.push_back(identityMatrix);
+			}
+			if (!visibleChunkIndices.empty()) {
+				render->rayTracedShadows->UpdateTlas(
+					*context,
+					visibleChunkIndices,
+					visibleChunkTransforms);
+			}
+		}
 	}
 
-	RecordGraphicsCommands(*render, *swapchain, frame->renderData, cmd, imageIndex);
+	if (render->rayTracedShadows != nullptr) {
+		PV_PROFILE_ZONE_N("RecordVoxelAwareRtxShadowPass");
+		const SceneFrameResources &shadowFrameResources = render->sceneFrameResources[frame->currentFrame];
+		projectv::math::Mat4 inverseViewProjection =
+			projectv::math::inverse(frame->renderData.graphicsPushConstants.viewProjection);
+		std::array<float, 16> inverseViewProjectionFlat{};
+		for (uint32_t i = 0; i < 16u; ++i) {
+			inverseViewProjectionFlat[i] = inverseViewProjection.data()[i];
+		}
+		const float cameraPosition[3] = {
+			frame->renderData.graphicsPushConstants.cameraPosition.x,
+			frame->renderData.graphicsPushConstants.cameraPosition.y,
+			frame->renderData.graphicsPushConstants.cameraPosition.z
+		};
+		const float cameraForward[3] = {
+			frame->renderData.graphicsPushConstants.cameraForward.x,
+			frame->renderData.graphicsPushConstants.cameraForward.y,
+			frame->renderData.graphicsPushConstants.cameraForward.z
+		};
+		render->rayTracedShadows->RecordVoxelAwareRtxShadowPass(
+			cmd,
+			*context,
+			frame->currentFrame,
+			frame->renderData.chunkDescriptorBuffer,
+			shadowFrameResources.sceneLightingBuffer,
+			frame->renderData.chunkVoxelPayloadBuffer,
+			inverseViewProjectionFlat.data(),
+			cameraPosition,
+			cameraForward,
+			swapchain->extent.width,
+			swapchain->extent.height);
+	}
+
+	RecordGraphicsCommands(*render, *swapchain, frame->renderData, *context, cmd, imageIndex);
+
+	if (render->rayTracedShadows != nullptr) {
+		render->rayTracedShadows->RecordDebugReport();
+	}
 
 	const bool asyncComputeHzbPathActive =
 		projectv::render::IsAsyncComputeEnabled() &&

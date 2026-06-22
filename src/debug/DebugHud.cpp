@@ -713,37 +713,6 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"COV %.2f BLD %.2f TUNE %s",
-		stats.sunShadowCoverageScale,
-		stats.sunShadowCascadeBlend,
-		ShadowTuningTargetToString(stats.shadowTuningTarget));
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
-		"CSM %u L %.2f %.1f %.1f %.1f %.1f",
-		kSunShadowCascadeCount,
-		stats.sunShadowCascadeSplitLambda,
-		stats.sunShadowCascadeDepthSplits[0],
-		stats.sunShadowCascadeDepthSplits[1],
-		stats.sunShadowCascadeDepthSplits[2],
-		stats.sunShadowCascadeDepthSplits[3]);
-	for (uint32_t cascadeIndex = 0; cascadeIndex < kSunShadowCascadeCount; ++cascadeIndex) {
-		PV_APPEND_HUD_LINE(
-			outLines,
-			lineCount,
-			"C%u VD %.1f %.1f EXT %.1f %.1f TX %.4f CD %.1f %.1f",
-			cascadeIndex,
-			stats.sunShadowCascadeDiagnostics.viewNearDepths[cascadeIndex],
-			stats.sunShadowCascadeDiagnostics.viewFarDepths[cascadeIndex],
-			stats.sunShadowCascadeDiagnostics.orthoWidths[cascadeIndex],
-			stats.sunShadowCascadeDiagnostics.orthoHeights[cascadeIndex],
-			stats.sunShadowCascadeDiagnostics.texelWorldSizes[cascadeIndex],
-			stats.sunShadowCascadeDiagnostics.casterLightNearDepths[cascadeIndex],
-			stats.sunShadowCascadeDiagnostics.casterLightFarDepths[cascadeIndex]);
-	}
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
 		"TSHD %s",
 		TransparentShadowPolicyToString(stats.transparentShadowPolicy));
 	PV_APPEND_HUD_LINE(

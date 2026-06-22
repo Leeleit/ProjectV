@@ -178,61 +178,6 @@ inline bool IsSceneChunkVisible(
 		});
 }
 
-inline bool IsSceneChunkVisibleInShadowCascade(
-	const PackedSceneChunkDescriptor &chunkDescriptor,
-	const projectv::math::Mat4 &lightViewProjection)
-{
-	if (chunkDescriptor.chunkExtentAndNonAir[3] == 0u) {
-		return false;
-	}
-
-	const projectv::math::Vec3 chunkMin{
-		static_cast<float>(chunkDescriptor.chunkOrigin[0]),
-		static_cast<float>(chunkDescriptor.chunkOrigin[1]),
-		static_cast<float>(chunkDescriptor.chunkOrigin[2]),
-		0.0f,
-	};
-	const projectv::math::Vec3 chunkMax{
-		chunkMin.x + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]),
-		chunkMin.y + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[1]),
-		chunkMin.z + static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[2]),
-		0.0f,
-	};
-
-	bool outsideLeft = true;
-	bool outsideRight = true;
-	bool outsideBottom = true;
-	bool outsideTop = true;
-	bool outsideNear = true;
-	bool outsideFar = true;
-	for (uint32_t cornerIndex = 0; cornerIndex < 8u; ++cornerIndex) {
-		const projectv::math::Vec3 corner{
-			(cornerIndex & 1u) != 0u ? chunkMax.x : chunkMin.x,
-			(cornerIndex & 2u) != 0u ? chunkMax.y : chunkMin.y,
-			(cornerIndex & 4u) != 0u ? chunkMax.z : chunkMin.z,
-			0.0f,
-		};
-
-		const projectv::math::Vec4 clipCorner = lightViewProjection * projectv::math::Vec4{corner.x, corner.y, corner.z, 1.0f};
-		outsideLeft = outsideLeft && clipCorner[0] < -clipCorner[3];
-		outsideRight = outsideRight && clipCorner[0] > clipCorner[3];
-		outsideBottom = outsideBottom && clipCorner[1] < -clipCorner[3];
-		outsideTop = outsideTop && clipCorner[1] > clipCorner[3];
-		outsideNear = outsideNear && clipCorner[2] < 0.0f;
-		outsideFar = outsideFar && clipCorner[2] > clipCorner[3];
-		if (!outsideLeft &&
-			!outsideRight &&
-			!outsideBottom &&
-			!outsideTop &&
-			!outsideNear &&
-			!outsideFar) {
-			return true;
-		}
-	}
-
-	return !(outsideLeft || outsideRight || outsideBottom || outsideTop || outsideNear || outsideFar);
-}
-
 bool CreateSceneResources(
 	VulkanContextState *context,
 	WorldState *world,
@@ -240,7 +185,7 @@ bool CreateSceneResources(
 bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render,
-	const ChunkCullingParameters &shadowProjectionParameters,
+	const ChunkCullingParameters &chunkCullingParameters,
 	VkExtent2D swapchainExtent);
 bool UploadSceneFrameResources(
 	VulkanContextState *context,

@@ -1,11 +1,14 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <vector>
 
 #include "core/Types.hpp"
+#include "render/RtxShadowPipeline.hpp"
+#include "render/RtxShadowSBT.hpp"
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -109,7 +112,28 @@ public:
 		VkPipelineStageFlags waitStage,
 		VkAccessFlags waitAccess);
 
+	bool RecordVoxelAwareRtxShadowPass(
+		VkCommandBuffer commandBuffer,
+		const VulkanContextState &context,
+		uint32_t frameIndex,
+		VkBuffer chunkDescriptorBuffer,
+		VkBuffer sceneLightingBuffer,
+		VkBuffer chunkVoxelPayloadBuffer,
+		const float *inverseViewProjection,
+		const float *cameraPosition,
+		const float *cameraForward,
+		uint32_t screenWidth,
+		uint32_t screenHeight);
+
 	void RecordDebugReport() const noexcept;
+
+	[[nodiscard]] VkImageView GetShadowMaskImageView() const noexcept { return m_shadowMaskImageView; }
+	[[nodiscard]] bool IsVoxelAwareRtxActive() const noexcept { return m_voxelAwareRtxActive; }
+
+	bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render);
+	void ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept;
+
+	bool RecreateShadowMaskForExtent(const VulkanContextState &context, uint32_t width, uint32_t height);
 
 private:
 	bool AllocateBuffers(
@@ -124,11 +148,35 @@ private:
 		uint32_t chunkIndex,
 		VkAabbPositionsKHR aabb);
 
+	bool CreateVoxelAwareRtxResources(const VulkanContextState &context);
+	void ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept;
+
+	bool InitializeShadowMaskClear(const VulkanContextState &context);
+
+	struct RtxFrameResources {
+		VkBuffer cameraUboBuffer = VK_NULL_HANDLE;
+		VmaAllocation cameraUboAllocation = nullptr;
+		void *cameraUboMappedData = nullptr;
+		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+	};
+
 	RayTracedShadowConfig m_config{};
 	std::vector<DirtyChunkRebuild> m_pendingDirtyChunks;
 	std::mutex m_dirtyQueueMutex;
 	bool m_hostBuildSupported = false;
 	std::atomic<bool> m_initialized{false};
+
+	RtxShadowPipeline m_rtxPipeline{};
+	RtxShadowSBT m_rtxSbt{};
+	VkDescriptorPool m_rtxDescriptorPool = VK_NULL_HANDLE;
+	VkImage m_shadowMaskImage = VK_NULL_HANDLE;
+	VkImageView m_shadowMaskImageView = VK_NULL_HANDLE;
+	VmaAllocation m_shadowMaskAllocation = nullptr;
+	uint32_t m_shadowMaskWidth = 0u;
+	uint32_t m_shadowMaskHeight = 0u;
+	VkFormat m_shadowMaskFormat = VK_FORMAT_R8_UNORM;
+	std::array<RtxFrameResources, MAX_FRAMES_IN_FLIGHT> m_rtxFrames{};
+	bool m_voxelAwareRtxActive = false;
 };
 
 struct RayTracedShadowTestAccess {
@@ -142,6 +190,14 @@ bool IsRayTracedShadowEnabled(const VulkanContextState &context) noexcept;
 
 bool CreateRayTracedShadowResources(VulkanContextState *context, RenderState *render);
 void DestroyRayTracedShadowResources(VulkanContextState *context, RenderState *render);
+
+bool CreateRtxShadowMaskFallbackOnly(VulkanContextState *context, RenderState *render);
+void DestroyRtxShadowMaskFallbackOnly(VulkanContextState *context, RenderState *render) noexcept;
+
+void CollectNonBuiltBlasChunksForRayTracing(
+	const struct VoxelWorld &world,
+	const std::vector<VkDeviceAddress> &blasDeviceAddresses,
+	std::vector<uint32_t> *outChunkIndices);
 
 bool RecordRayTracedShadowPass(
 	VkCommandBuffer commandBuffer,

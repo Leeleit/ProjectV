@@ -10,6 +10,7 @@
 #include "physics/PhysicsWorld.hpp"
 #include "render/SceneResources.hpp"
 #include "render/RayTracedShadows.hpp"
+#include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanVoxelizePipeline.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
@@ -299,6 +300,12 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 			"VCT clipmap fallback sampler not created (device failure); voxel.frag binding 11 will sample null (warning)");
 	}
 
+	if (!projectv::render::CreateRtxShadowMaskFallbackOnly(&state->context(), &state->render())) {
+		return fail(projectv::vulkan_init::VulkanInitError::ShadowResourcesFailed,
+			"InitVulkan.CreateRtxShadowMaskFallbackOnly",
+			"failed to allocate RTX shadow mask fallback image");
+	}
+
 	// EVIL: deferred from CreateGraphicsPipeline (8x V C bug: descriptor set writes
 	// happened before fallback image existed). Now fallback is ready, do the writes
 	// so bindings 11/12 get a valid imageView instead of null. Failures here are
@@ -329,6 +336,18 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 		return fail(projectv::vulkan_init::VulkanInitError::ShadowResourcesFailed,
 			"InitVulkan.CreateRayTracedShadowResources",
 			"RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores)");
+	}
+
+	// EVIL: re-run RefreshGraphicsResourceBindings now that rayTracedShadows is
+	// allocated. The earlier call (line 308) ran before rayTracedShadows was set
+	// on RenderState, so the rtxTlas binding (binding 13) was skipped. Without
+	// this second pass, the rtxTlas descriptor is never updated and ray query
+	// dispatch in voxel.frag.rtx.spv reads an undefined handle.
+	RefreshGraphicsResourceBindings(&state->context(), &state->render());
+
+	if (!projectv::render::CreateRtxGiProbeResources(&state->context(), &state->render())) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+			"InitVulkan.CreateRtxGiProbeResources: probe field init failed; shader will fall back to VCT diffuse");
 	}
 
 	if (projectv::render::IsAsyncComputeEnabled()) {

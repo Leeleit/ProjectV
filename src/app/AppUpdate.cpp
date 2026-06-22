@@ -10,7 +10,6 @@ import projectv.math;
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
-#include "render/ShadowProjection.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -223,51 +222,6 @@ void ResetLightingDebugControls(RenderState &render)
 	render.lightingDebugControls = {};
 }
 
-void AdjustShadowTuning(
-	RenderState &render,
-	const float delta)
-{
-	VoxelLightingDebugControls &controls = render.lightingDebugControls;
-	switch (controls.shadowTuningTarget) {
-	case ShadowTuningTarget::Strength:
-		controls.shadowStrengthOffset = std::clamp(
-			controls.shadowStrengthOffset + delta * kShadowStrengthStep,
-			kMinShadowStrengthOffset,
-			kMaxShadowStrengthOffset);
-		break;
-	case ShadowTuningTarget::DepthBias:
-		controls.shadowDepthBiasOffset = std::clamp(
-			controls.shadowDepthBiasOffset + delta * kShadowDepthBiasStep,
-			kMinShadowDepthBiasOffset,
-			kMaxShadowDepthBiasOffset);
-		break;
-	case ShadowTuningTarget::NormalBias:
-		controls.shadowNormalBiasOffset = std::clamp(
-			controls.shadowNormalBiasOffset + delta * kShadowNormalBiasStep,
-			kMinShadowNormalBiasOffset,
-			kMaxShadowNormalBiasOffset);
-		break;
-	case ShadowTuningTarget::FilterRadius:
-		controls.shadowFilterRadiusOffset = std::clamp(
-			controls.shadowFilterRadiusOffset + delta * kShadowFilterRadiusStep,
-			kMinShadowFilterRadiusOffset,
-			kMaxShadowFilterRadiusOffset);
-		break;
-	case ShadowTuningTarget::Coverage:
-		controls.shadowCoverageScale = std::clamp(
-			controls.shadowCoverageScale + delta * kShadowCoverageScaleStep,
-			kMinShadowCoverageScale,
-			kMaxShadowCoverageScale);
-		break;
-	case ShadowTuningTarget::CascadeBlend:
-		controls.shadowCascadeBlendOffset = std::clamp(
-			controls.shadowCascadeBlendOffset + delta * kShadowCascadeBlendStep,
-			kMinShadowCascadeBlendOffset,
-			kMaxShadowCascadeBlendOffset);
-		break;
-	}
-}
-
 void MirrorVoxelStatsToDebugStats(
 	const VoxelWorld &world,
 	const RenderState &render,
@@ -371,10 +325,6 @@ void MirrorRenderLightingToDebugStats(
 		render.currentSceneLighting.sunDirectionAndWrap[2],
 	};
 	stats.sunIntensity = render.currentSceneLighting.sunColorAndIntensity[3];
-	stats.sunShadowStrength = render.currentSceneLighting.sunShadowParams[0];
-	stats.sunShadowDepthBias = render.currentSceneLighting.sunShadowParams[1];
-	stats.sunShadowNormalBias = render.currentSceneLighting.sunShadowParams[2];
-	stats.sunShadowFilterRadius = render.currentSceneLighting.sunShadowParams[3];
 	stats.sunContactShadowStrength = render.currentSceneLighting.sunContactShadowParams[0];
 	stats.sunContactShadowDistance = render.currentSceneLighting.sunContactShadowParams[1];
 	stats.ambientOcclusionStrength = render.currentSceneLighting.ambientOcclusionParams[0];
@@ -396,19 +346,8 @@ void MirrorRenderLightingToDebugStats(
 	stats.localPointLightSourceRadius = render.currentSceneLighting.localPointLightParams[1];
 	stats.localPointLightShadowStrength = render.currentSceneLighting.localPointLightParams[2];
 	stats.localPointLightShadowBias = render.currentSceneLighting.localPointLightParams[3];
-	stats.sunShadowCoverageScale = render.lightingDebugControls.shadowCoverageScale;
-	stats.sunShadowCascadeBlend = render.currentSceneLighting.shadowCascadeBlendParams[0];
-	const float sunShadowReceiverMaxDistance = GetCameraVisibleSceneMaxDistance(camera);
-	render.currentSunShadowCascadeSplits = BuildSunShadowCascadeSplits(
-		camera.nearPlane,
-		sunShadowReceiverMaxDistance,
-		render.sunShadowCascadeSplitLambda);
-	stats.sunShadowCascadeSplitLambda = render.currentSunShadowCascadeSplits.splitLambda;
-	stats.sunShadowCascadeDepthSplits = render.currentSunShadowCascadeSplits.viewDepthSplits;
-	stats.sunShadowCascadeDiagnostics = render.currentSunShadowCascadeDiagnostics;
-	stats.shadowMapResolution = render.shadowMapExtent.width;
-	stats.transparentShadowPolicy = render.transparentShadowPolicy;
-	stats.shadowTuningTarget = render.lightingDebugControls.shadowTuningTarget;
+	stats.shadowMapResolution = 2048u;
+	stats.transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	stats.taaEnabled = render.taaEnabled;
 	stats.taaBlend = render.taaBlend;
 	stats.taaFrameCounter = render.taaFrameCounter;
@@ -652,16 +591,6 @@ bool ProcessInputActions(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ResetLightingDebugControls)) {
 		ResetLightingDebugControls(*render);
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::CycleShadowTuningTarget)) {
-		render->lightingDebugControls.shadowTuningTarget =
-			GetNextShadowTuningTarget(render->lightingDebugControls.shadowTuningTarget);
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::DecreaseShadowTuningValue)) {
-		AdjustShadowTuning(*render, -1.0f);
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::IncreaseShadowTuningValue)) {
-		AdjustShadowTuning(*render, 1.0f);
 	}
 	if (audio) {
 		constexpr float kMusicVolumeStep = 0.05f;

@@ -231,11 +231,6 @@ bool RefreshVoxelMeshingResourceBindings(
 			.offset = 0,
 			.range = VK_WHOLE_SIZE,
 		};
-		const VkDescriptorBufferInfo shadowIndirectBufferInfo{
-			.buffer = frameResources.shadowIndirectBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
 		const VkDescriptorBufferInfo chunkCullingBufferInfo{
 			.buffer = frameResources.chunkCullingBuffer,
 			.offset = 0,
@@ -339,7 +334,7 @@ bool RefreshVoxelMeshingResourceBindings(
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
-				.pBufferInfo = &shadowIndirectBufferInfo,
+				.pBufferInfo = &chunkCullingBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 			VkWriteDescriptorSet{
@@ -351,7 +346,7 @@ bool RefreshVoxelMeshingResourceBindings(
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
-				.pBufferInfo = &chunkCullingBufferInfo,
+				.pBufferInfo = &sceneLightingBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
 			VkWriteDescriptorSet{
@@ -363,18 +358,6 @@ bool RefreshVoxelMeshingResourceBindings(
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 				.pImageInfo = nullptr,
-				.pBufferInfo = &sceneLightingBufferInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.voxelMeshingDescriptorSet,
-				.dstBinding = 9,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
 				.pBufferInfo = &lodDownsampledVoxelPayloadBufferInfo,
 				.pTexelBufferView = nullptr,
 			},
@@ -382,7 +365,7 @@ bool RefreshVoxelMeshingResourceBindings(
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
 				.dstSet = frameResources.voxelMeshingDescriptorSet,
-				.dstBinding = 10,
+				.dstBinding = 9,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,

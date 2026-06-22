@@ -1409,3 +1409,215 @@ vec4(rtxLit*contact, anyRtxShadow, 0.0, contact)`. CSM cascade blend + `receiver
 Peter-panning fix chain (P0.4) в `agent/knowledge.md §15` lines 1318-1320 теперь MOOT
 — RTX делает их irrelevant. Закрытие CSM в 5.2.D = полное удаление legacy shadow code.
 
+## `src/shaders/voxel.frag` (session 20x, Stage 5.4 RTX ambient occlusion)
+
+### L128-L142 (design-rationale)
+
+`TraceRtxAmbientOcclusionRay(worldOrigin, direction, radius)` GLSL helper. Заменяет
+DDA voxel traversal в `TraceAmbientOcclusionRay` (5.4 milestone) когда
+`VOXEL_RTX_ENABLED` определён. Использует `gl_RayFlagsTerminateOnFirstHitEXT |
+gl_RayFlagsOpaqueEXT` для binary visibility test, T_min=`kRtxAoMinRayLengthMeters`
+(0.001m) для anti-self-hit offset, T_max=`radius` для AO radius cap. Binary
+visibility (1.0=visible, 0.0=occluded) — отличается от DDA который возвращал
+weighted `(1 - traveled/maxDistance)²`. Caller (cone-weighted sum) handles
+strength modulation через `ambientOcclusionParams.x`. T_min offset критичен
+иначе ray hits own starting triangle (Khronos VK_KHR_ray_query tutorial предупреждает).
+Флаг `Opaque` даёт fast path на opaque BLAS (ray skips anyhit shader; наш chunks
+BLAS — opaque AABBs per `RayTracedShadows.cpp:496` `VK_GEOMETRY_OPAQUE_BIT_KHR`).
+
+## `src/render/RtxGiProbes.{hpp,cpp}` (session 20x, Stage 5.5 DDGI infrastructure)
+
+### L17-L25 (design-rationale, struct layout)
+
+`RtxGiProbeConfig` — DDGI probe field state. Хранит handles для 3D probe
+volume textures (irradiance B10G11R11_UFLOAT_PACK32 8³×16² octahedral, distance
+R16G16_SFLOAT 8³×16², probe data R16G16B16A16_SFLOAT 1×1 fallback) + volume
+descriptor SSBO (64 bytes, std430 layout matching `VolumeDescGpu` in
+`RtxGiProbes.cpp:25-44`). Probe counts stored as `uint32_t` (per-axis) +
+`raysPerProbe` для compute pass. `enabled` flag gated on
+`IsRtxGiProbeFieldEnabled` (accelerationStructure + rayQuery both required).
+Descriptor writes в `VulkanGraphicsPipeline.cpp` (bindings 14-17) skipped when
+disabled (avoids VUID-VkWriteDescriptorSet-descriptorType-02997 null imageView).
+
+### L116-L156 (design-rationale, default values)
+
+`Initialize` defaults: 8 probes per axis (512 total), 16×16 octahedral,
+64 rays/probe, 32m half-extent, 16m max ray distance. Per
+`docs/experiments/experiments/2026-06-22-ddgi-probe-field-voxel-gi/RESULTS.md`
+8³=512 probes match VCT (32.4 dB PSNR baseline) at 0.5ms total (1/64 frame
+round-robin). Probe update compute pass (Stage 5.5+ follow-up) is the next
+step; current scope lays infrastructure only. `VolumeDescGpu` 64-byte
+size asserted via `static_assert` (matches GLSL std430 layout).
+
+## `src/render/vulkan/VulkanGraphicsPipeline.cpp` (session 20x, Stage 5.2.D cleanup + 5.5 DDGI bindings)
+
+### L19-L33 (design-rationale, descriptor pool sizes)
+
+`kGraphicsStorageDescriptorPoolSize` 6→7 (added binding 17 = volume desc SSBO).
+`kGraphicsCombinedImageSamplerDescriptorPoolSize` 4→7 (added bindings 14/15/16
+for DDGI probe textures, 6/11/12/14/15/16 = 6 total samplers, +1 headroom).
+Pool size 6 was binding 0/1/2/3/4/13 → 5 used; +1 for binding 17 = 6. Pool
+size 4 was binding 6/11/12 → 3 used; +3 for binding 14/15/16 = 6. Vulkan
+spec requires `descriptorCount >= max(descriptorCount across all sets)`.
+`kGraphicsShadowSamplerDescriptorPoolSize` renamed to
+`kGraphicsCombinedImageSamplerDescriptorPoolSize` (имя отражало shadow usage
+которого больше нет; sampler всё ещё нужен для binding 6 layer history).
+
+## `src/shaders/{taa_resolve,model}.{frag,vert}` + `voxel_mesh.comp` (session 20x, TAA SSBO layout fix)
+
+### L10-L26 (design-rationale, gray screen root cause)
+
+4 шейдера имели stale `SceneLightingBuffer` SSBO struct с CSM-полями
+(`sunShadowParams`, `sunShadowViewProjections[4]`, `shadowCascadeDepthSplits`,
+`shadowCascadeBlendParams`) которые были удалены в 5.2.D. C++ struct
+`VoxelSceneLighting` (`src/voxel/VoxelMaterials.hpp:61-105`) = 352 bytes. Stale
+SSBO struct с extra fields = `colorGrading` at offset 400 (out of bounds).
+Reading 0 → `clamp(0, 0.25, 4.0) = 0.25` (whitePoint) +
+`clamp(0, 0, 2.0) = 0` (contrast) + `clamp(0, 0, 2.0) = 0` (saturation) →
+`mix(vec3(luma), normalizedColor, 0) = vec3(0.5)` → **серый экран при TAA**.
+Без TAA: `voxel.frag` использует correct SSBO struct (L27-47) и пишет final
+sRGB-ready color в swapchain. Fix = удалить 4 stale fields из всех 4 шейдеров.
+Pre-existing в session 19x baseline (не регрессия 5.2.D, но обнаружена и
+исправлена в 20x при поиске root cause серого экрана).
+
+
+## src/render/RayTracedShadows.cpp
+
+### L203-L281 (design-rationale)
+
+TLAS handle + backing buffer must be created **regardless** of
+`accelerationStructureHostCommands` support. `hostCommands` only affects the
+build path (`vkBuildAccelerationStructuresKHR` vs `vkCmdBuildAccelerationStructuresKHR`);
+the handle itself is needed for ray query dispatch via `rtxTlas` binding. The
+previous gate (`if (hostCommands) { vkCreateAccelerationStructureKHR(tlas); }`)
+skipped TLAS creation when `hostCommands=0` (most non-Quadro NVIDIA drivers),
+leaving `m_config.tlas` as `VK_NULL_HANDLE` and disabling the entire RTX shadow
+path (`rtxPathActive` in `Renderer.cpp:721-731` checks `tlas != null` before
+selecting `graphicsPipelineRtx`). Fix landed 2026-06-22 in session 21x. See
+`CHANGELOG.md` for the bug narrative.
+
+### L215-L227 (design-rationale)
+
+TLAS sizing uses `VK_GEOMETRY_TYPE_INSTANCES_KHR` with
+`m_config.tlasInstanceDeviceAddress` (NOT `VK_GEOMETRY_TYPE_AABBS_KHR` which would
+violate `VUID-vkGetAccelerationStructureBuildSizesKHR-pBuildInfo` for
+`VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR` — the spec requires instance
+descriptions for top-level AS). The actual per-frame TLAS build in
+`RecordTlasBuild` also uses `INSTANCES` geometry; the sizing path was a spec
+violation prior to 21x even though it produced a workable build size (Vulkan
+validation layer caught it).
+
+### L797-L815 (design-rationale)
+
+`RecordRayTracedShadowPass` is a no-op marker. The actual ray query dispatch
+happens inside `voxel.frag.rtx.spv` via the `graphicsPipelineRtx` pipeline
+selected in `Renderer.cpp:725-727`. The pass exists as a hook for future
+fullscreen RTX post-passes (refraction, multi-bounce GI) and for backward-compat
+callers; returning `false` signals "no separate work recorded this frame" — the
+real per-frame RTX work is the TLAS build (`RecordTlasBuild`), which
+independently increments `shadowRayDispatchCount`.
+
+## src/render/Renderer.cpp
+
+### L1322-L1411 (intent)
+
+DrawFrame BLAS+TLAS block runs in three phases per frame:
+
+1. **Collect + build BLASes.** `CollectDirtyVoxelChunkBlasRebuildRequests` drains
+   `world.pendingBlasRebuildIndices` (chunks touched by voxel edits). Then
+   `CollectNonBuiltBlasChunksForRayTracing` extends with scene-load chunks whose
+   `nonAirVoxelCount > 0` and which lack a `blasDeviceAddress` (i.e. the initial
+   BLAS build path — pending chunks queue is empty until the user actually edits
+   voxels). Combined list → `SetBlasDirtyQueue` → `BuildDirtyBlases` (synchronous:
+   allocates one-shot cmd buffer, dispatches, waits on fence).
+2. **Populate TLAS.** `UpdateTlas` writes the instance array to the mapped
+   `tlasInstanceBuffer` with `transform = identity`, `mask = 0xFF`,
+   `accelerationStructureReference = blasDeviceAddresses[chunkIndex]`. Skips chunks
+   without a built BLAS.
+3. **Dispatch TLAS build** in `RecordGraphicsCommands` (in `L1413`) via
+   `RecordTlasBuild(cmd, context)` — pre-build barrier (HOST write → AS read on
+   instance buffer), `vkCmdBuildAccelerationStructuresKHR` for TLAS, post-build
+   barrier (AS write → FRAGMENT read on TLAS handle).
+
+This block is the primary wire-up of session 21x. The previous code (5.2.A)
+defined `UpdateTlas` and `RecordTlasBuild` but never invoked them from the
+frame loop — TLAS was permanently empty, ray queries always missed, no shadows
+visible.
+
+## src/render/vulkan/VulkanInit.cpp
+
+### L334-L340 (design-rationale)
+
+Second `RefreshGraphicsResourceBindings` call after
+`CreateRayTracedShadowResources` to write the `rtxTlas` descriptor (binding 13)
+into the graphics descriptor set. The first call (line 308) runs before
+`state->render().rayTracedShadows` is set (the assignment happens at line 327),
+so the write is skipped (`rtxActive = false` because `rayTracedShadows == nullptr`).
+Without the second pass the rtxTlas descriptor set is never updated, and ray
+query dispatch in `voxel.frag.rtx.spv` reads an undefined handle. Re-running after
+`CreateRayTracedShadowResources` closes the window. Per
+`https://docs.vulkan.org/spec/latest/chapters/descriptors.html`, descriptor sets
+must be updated before they are bound to a command buffer; the layer's
+`VUID-vkCmdDrawIndirect-None-08114` catches the violation but the visual symptom
+is a "valid but uninitialized" descriptor that may or may not affect rendering
+depending on driver behavior.
+
+## src/app/LookDevCaptureAutomation.cpp
+
+### L328-L380 (design-rationale)
+
+Latched quit pattern. Once `automation->completed = true`, every subsequent
+`UpdateLookDevCaptureAutomation` invocation returns `automation->quitWhenDone`
+without touching the early-exit branches. This handles the dual-tick
+characteristic of the per-frame loop: `main.cpp:556` calls
+`TickLookDevCaptureSystem` (which calls `UpdateLookDevCaptureAutomation` via
+flecs OnUpdate) **AND** `main.cpp:577` calls `SyncEcsWorldState` (which
+re-progresses the flecs world, re-invoking the same system). Without the latch,
+the second tick on the capture frame would observe `completed=true` and return
+`false`, resetting `result.quitAfterFrame = false` and preventing the
+`IsLookDevCaptureQuitRequested` check at `main.cpp:601` from triggering
+`SDL_APP_SUCCESS`. Result: the app never exits the lookdev capture mode and
+operator must kill it.
+
+## `src/shaders/voxel_rtx_shadow.rint` (session 22x, Stage 5.2.E DDA intersection fix)
+
+### L79-L97 (design-rationale)
+
+Correct DDA intersection distance calculation. Initializes `tMaxAxis` relative to `rayOriginWorld` (using the same coordinate space as `reportIntersectionEXT` and `gl_RayTminEXT`/`gl_RayTmaxEXT`) instead of `pos` (which was relative to `pos = rayOriginWorld + rayDirWorld * tStart`). Tracks `tCurrent` as the exact crossing distance at cell entries, reporting `tCurrent` on hits. Prevents mixing coordinate spaces (`tMinCell` relative to `pos` vs `tEnd` relative to `rayOriginWorld`), avoiding invalid hit distances that were reconstructed close to the camera near plane and caused floor self-shadowing (black platform) as the camera moved.
+
+## `src/shaders/voxel_rtx_shadow.rgen` (session 23x, Stage 5.2.E raygen biasing and bias reduction fixes)
+
+### L90-L127 (design-rationale)
+
+Correct ray flags and biasing logic. Uses `gl_RayFlagsOpaqueEXT` for Step 1 (primary ray) to find the closest hit point (visible surface) instead of `gl_RayFlagsTerminateOnFirstHitEXT` (which terminated on arbitrary BVH intersections, resulting in non-closest hits). Biases Step 2 (shadow ray) along `sunDir * 0.003` (towards the light source) and uses `T_min = 0.001` (total of `0.004` meters / `4` millimeters) to prevent self-intersection of voxel faces while keeping the shadow starting gap (Peter Panning) completely invisible.
+
+## `src/render/vulkan/VulkanGraphicsPipeline.cpp` (session 23x, Stage 5.2.D CSM shader loading cleanup)
+
+### L1379-L1380 (design-rationale)
+
+Removed loading of `voxel_shadow.vert.spv` and `voxel_shadow.frag.spv` and compilation/management of unused shadow shader modules/stages. Following the removal of CSM in Milestone 5.2.D, the shader files were deleted, but the pipeline initialization code still unconditionally tried to load them, causing application startup to crash with `voxel shader blob is empty` (GraphicsPipelineFailed). Removing the unused loading checks and module creation closes the loop.
+
+## `src/shaders/voxel_rtx_shadow.rint` (session 23x, Stage 5.2.E DDA and Glass shadow ignore fixes)
+
+### L95-L129 (design-rationale)
+
+DDA voxel-level traversal fixes. Added `tCurrent` updates to `tMaxAxis` when stepping along axes, restoring correct intersection distance propagation. Previously, `tCurrent` was never updated in the DDA loop and remained equal to `max(tEntry, rayTmin)` (the entry point of the ray into the chunk's AABB). This caused the raygen primary trace to register hits at the chunk's front bounds rather than the actual voxel face, producing chunk-aligned black boxes. Additionally, added a check to ignore `Glass` (material ID `1u`) during shadow ray traversal to prevent transparent glass spheres/shells from casting solid shadows.
+
+## `src/render/Renderer.cpp` (session 23x, Stage 5.2.E exact chunk AABB restore)
+
+### L1360-L1380 (design-rationale)
+
+Restored exact, unshrunk chunk AABBs for BLAS geometry. The previous workaround shrunk AABBs by `1.5f` meters to avoid self-shadowing, but this caused rays traversing the outer layers of chunks to miss the AABB entirely, bypassing the intersection shader and producing empty shadow segments near chunk boundaries. Since the intersection shader correctly handles self-shadowing through ray biasing (`sunDir * 0.02`) and DDA step offsets, the shrink offset was safely removed to restore precise shadow coverage for all voxels.
+
+## `src/shaders/voxel.frag` (session 23x, Stage 5.2.E shadow intensity scale and contact shadow removal)
+
+### L798-L803 (design-rationale)
+
+Blended ray-traced shadow visibility and contact shadow removal. Removed screen-space/voxel-DDA contact shadow multiplication (`rtxContactVisibility`) from the RTX shadow path to prevent overlapping double-shadow edges and DDA-aliasing artifacts on voxel corners. Additionally, introduced a shadow strength scaling constant (`0.75`) via GLSL `mix(0.25, 1.0, rtxLit)` in `ComputeSunShadowSample` to prevent ray-traced shadows from being pitch-black, leaving a `25%` baseline sun light factor in shadowed areas to simulate ambient bounce before real-time indirect GI probes are fully wired.
+
+## `src/CMakeLists.txt` (session 23x, fix for automatic shader update tracking)
+
+### L228-L232 (design-rationale)
+
+Changed POST_BUILD copy command of generated shader `.spv` files to a target-level dependency pipeline. By declaring a `CopyShaders` custom target that runs unconditionally and depends on the `Shaders` target, we ensure that shader `.spv` copies are executed on every build invocation of `ProjectV`. This resolves the dependency tracking issue in IDEs like CLion, where editing a GLSL shader without modifying C++ sources would rebuild the `.spv` files in `build/` but skip the copy step to `bin/` because the `ProjectV` executable itself was considered up-to-date.
+
