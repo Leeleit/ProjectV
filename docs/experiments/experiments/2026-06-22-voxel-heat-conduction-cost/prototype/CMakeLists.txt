@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(heat_bench LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+add_executable(heat_bench heat_bench.cpp)
+target_compile_options(heat_bench PRIVATE -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic)
