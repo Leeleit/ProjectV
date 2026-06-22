@@ -267,11 +267,15 @@ void RayTracedShadows::BuildDirtyBlases(
 	const bool routeAsyncCompute = projectv::render::IsAsyncComputeEnabled()
 		&& context.hasDedicatedComputeQueue
 		&& context.dedicatedComputeQueue != VK_NULL_HANDLE
-		&& context.dedicatedComputeQueueFamilyIndex != context.queueFamilyIndex;
+		&& context.dedicatedComputeQueueFamilyIndex != context.queueFamilyIndex
+		&& context.asyncComputeCommandPool != VK_NULL_HANDLE;
+	VkCommandPool submitPool = routeAsyncCompute
+		? context.asyncComputeCommandPool
+		: commandPool;
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = commandPool;
+	allocInfo.commandPool = submitPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1u;
 	VkCommandBuffer cmd = VK_NULL_HANDLE;
@@ -302,7 +306,7 @@ void RayTracedShadows::BuildDirtyBlases(
 		}
 		vkDestroyFence(context.device, fence, nullptr);
 	}
-	vkFreeCommandBuffers(context.device, commandPool, 1u, &cmd);
+	vkFreeCommandBuffers(context.device, submitPool, 1u, &cmd);
 }
 
 VkDeviceSize RayTracedShadows::ComputeBlasBuildScratchSize(
