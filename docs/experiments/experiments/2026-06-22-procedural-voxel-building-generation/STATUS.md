@@ -2,18 +2,18 @@
 
 ## Current phase
 
-**In progress — Phase 0/1 (folder init + reservation + web research next)**
+**Closed — concluded-verdict-mixed (per first-write-wins canonical entry by parallel agent)**
 
 ## Phases
 
 | Phase | Description | Status |
 |:------|:------------|:-------|
-| 0 | Folder + README + STATUS + backlog reservation + INDEX sync | ✅ done |
-| 1 | Web research (CGA shape grammar, procedural cities, Minecraft structure blocks) | ⏳ next |
-| 2 | Prototype (C++26 harness + 5 strategies) | ⏸ pending |
-| 3 | Build & benchmark | ⏸ pending |
-| 4 | Analysis & verdict | ⏸ pending |
-| 5 | Close (STATUS, INDEX §6, backlog sync, results) | ⏸ pending |
+| 0 | Folder + README + STATUS + backlog reservation + INDEX sync | ✅ done (race conflict — see §Chronology) |
+| 1 | Web research (CGA, Parish/Müller, Wonka, Minecraft Jigsaw, Teardown, Luanti) | ✅ done |
+| 2 | Prototype (C++26 harness + 5 strategies) | ✅ done (canonical: parallel agent; alt: self) |
+| 3 | Build & benchmark | ✅ done (canonical: wall time 12.78 sec, alt: 0.571 sec — diff due to CCL eval placement) |
+| 4 | Analysis & verdict | ✅ done (canonical verdict=`mixed`, B ⭐) |
+| 5 | Close (STATUS, INDEX §6, backlog sync, results) | ✅ done |
 
 ## Blocker
 
@@ -21,5 +21,12 @@
 
 ## Chronology
 
-- 2026-06-22 — Opened, Phase 0 complete (folder + README + STATUS + reservation). Sentinel §13.7 clean (`rg "procedural.*building.*gen|building.*generation.*voxel|grammar.*building|settlement.*gen|city.*gen|village.*gen"` over INDEX.md + experiments/ + backlog.md → only cross-references, no dedicated experiment). Self-invented per operator instruction «выбирай свободную тему или придумывай свою исследуй».
-- 2026-06-22 — Phase 1 (web research) next.
+- 2026-06-22 — **Race conflict** with parallel agent on same slug `2026-06-22-procedural-voxel-generation`. Per `AGENTS.md §13.3` first-write-wins:
+  - Parallel agent (`sources.md` 20:28, `prototype/building_bench.cpp` 20:57, `RESULTS.md` 20:50) — first-write, canonical.
+  - Self agent (`README.md` 21:00, `STATUS.md` 21:00, `prototype_alt/` 21:01) — second-write, supplementary.
+- 2026-06-22 — Self agent applied §13.3 protocol: ceased overwriting, saved alt prototype to `prototype_alt/`, restored README.md/STATUS.md to reference canonical entry by parallel agent.
+- 2026-06-22 — Canonical verdict: **`concluded-verdict-mixed` per strategy; `yes` for B_TemplateComposition ⭐** as universal recommended default. See [README.md](./README.md) + [RESULTS.md](./RESULTS.md) + [sources.md](./sources.md).
+
+## Alt variant (self agent)
+
+See [`prototype_alt/`](./prototype_alt/) for the supplementary C++26 prototype (`building_bench_v2.cpp`). This variant excludes CCL plausibility evaluation from the timed loop → measures pure generation cost. Useful for cross-validation but NOT canonical.

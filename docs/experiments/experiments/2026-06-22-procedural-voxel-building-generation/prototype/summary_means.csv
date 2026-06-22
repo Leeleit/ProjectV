@@ -1,0 +1,6 @@
+Strategy,Mean_ns
+A_StaticPrefab,88246.1
+B_TemplateComposition,94632.1
+C_GrammarRuleBased,106771
+D_NoiseGuided_FloorPlan,101771
+E_Hybrid_GrammarPlusNoise,118424

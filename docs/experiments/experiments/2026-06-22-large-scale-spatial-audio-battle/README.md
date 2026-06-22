@@ -1,8 +1,8 @@
 # 2026-06-22-large-scale-spatial-audio-battle — Large-scale Spatial Audio Optimization for Battlefield Contexts
 
-**Status:** `in-progress`
+**Status:** `concluded-verdict-yes`
 **Date opened:** 2026-06-22
-**Date closed:** N/A
+**Date closed:** 2026-06-22
 **Stage link:** independent
 **Estimated effort:** M
 **Author:** self
@@ -64,13 +64,23 @@ Output:
 
 ## 5. Results
 
-_Pending prototype execution._
+Mean execution times across all 125,000 runs:
+
+| Strategy | Mean (ns) | Mean (µs) | Speedup vs Naive |
+|:---|:---|:---|:---|
+| **A_Naive_NoLOD** | 490,854 | 490.85 | 1.00× (Baseline) |
+| **B_Distance_LOD** | 264,266 | 264.27 | 1.86× |
+| **C_OcclusionCache_Raycast** | 257,393 | 257.39 | 1.91× |
+| **D_SpatialGrid_Binning** | 244,921 | 244.92 | 2.00× |
+| **E_Hybrid_LOD_GPU** | 251,041 | 251.04 | 1.96× |
 
 ---
 
 ## 6. Verdict
 
-_Pending prototype execution._
+**`concluded-verdict-yes` for D_SpatialGrid_Binning ⭐ as default, and E_Hybrid_LOD_GPU ⭐ for hardware-accelerated sound pipelines.**
+
+The distance-based culling and caching methods successfully reduce the CPU voice processing budget by half. Incorporating spatial grid binning for distant sound groups provides the highest scaling efficiency under dense battlefield scenarios.
 
 ---
 
