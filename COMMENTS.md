@@ -346,6 +346,32 @@ New helpers `DestroyAllChunkStaticBodies(physics)` and `RebuildStaticWorldBodyFr
 
 AABB-bounded Fluid CA support. `VoxelWorld` tracks `fluidCAAabbMin` (initialized to `INT32_MAX` corner — invalid) and `fluidCAAabbMaxExclusive` (initialized to `INT32_MIN` corner). On every `SetVoxelMaterial` that touches Fluid (either old or new material is Fluid), the AABB is expanded to include the cell. The AABB is lazy-shrinking: it only grows; it does not shrink when fluid is removed. When `world.stats.fluidVoxelCount == 0` the `UpdateFluidCA` early-out kicks in and the AABB doesn't matter. AABB reset to invalid happens implicitly on world reload (new `VoxelWorld` struct is zero-initialized via default member initializers). `UpdateFluidCA` uses this AABB to scope all 3 nested loops (read pass, sim pass, commit pass) — read pass uses `[min-1, max+1]` for 1-cell margin so spread/fall neighbor reads land on real data; sim and commit use `[min, max]`. For 1 water block on FlatBench the AABB is 3×3×3 = 27 cells, vs the old full-world iteration of 80×26×80 = 166 400 cells. This is the actual root-cause fix for the 4 FPS-on-FlatBench regression (the `SyncPhysicsWorld` per-edit rebuild was only the secondary symptom).
 
+### L1663-L1686 (design-rationale) — 18x debug-assertion fix
+
+`UpdateFluidCA` debug-only invariant assertion was scoped to `[fluidCAAabbMin, fluidCAAabbMaxExclusive]`. That scope is the **monotonic-grow AABB** of where fluid has *ever* been touched (see L1085 above), not where fluid currently is. After enough CA ticks, fluid can move outside the original AABB (e.g. a column placed at Y=5..9 settles at Y=0..4 on the floor) and the assertion would count fluid only inside the stale AABB while `stats.fluidVoxelCount` is the world-wide count — they diverge, `PV_ASSERT` fires. Fix: count over `[world.min, world.maxExclusive]` (the full world bounds). Cost is `O(world.volume)` per CA tick in debug only, which is negligible. The AABB stays as a fast-path scan range for the **sim and commit loops** (the production hot path); only the debug invariant expands to world bounds. New regression test `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` + `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` (loads the user's actual `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` if present and runs 300 ticks) lock the contract.
+
+### L653-L686 (design-rationale) — 18x+ AABB recompute on derived state rebuild
+
+`RebuildVoxelWorldDerivedState` iterates all `[min, maxExclusive)` cells once
+and rebuilds `world.stats` from scratch. Added: when a cell is `Fluid`, also
+expand `world.fluidCAAabbMin` / `world.fluidCAAabbMaxExclusive` to include it
+(resetting to invalid sentinels first). Without this, `LoadVoxelWorldSnapshot`
+left `fluidCAAabbMin = (INT32_MAX, INT32_MAX, INT32_MAX)` and
+`fluidCAAabbMaxExclusive = (INT32_MIN, INT32_MIN, INT32_MIN)` — the default
+sentinel values from the `VoxelWorld` struct. After load, `UpdateFluidCA`
+early-out check `if (world.stats.fluidVoxelCount == 0u) return 0u;` did not
+fire (count = 436), but the sim range `[fluidCAAabbMin, fluidCAAabbMaxExclusive]`
+became `[INT32_MAX-1, INT32_MIN+1]` = empty range, so the CA loop ran over
+zero cells and produced `movedCount = 0` every tick. **Water in a loaded
+snapshot would never fall even after the player broke the glass**, because
+the CA saw no work to do. The fix: piggy-back on the existing O(world_volume)
+iteration that already runs once per snapshot load — no extra cost — to keep
+the AABB consistent with the actual fluid voxel positions. The same helper
+also runs on every `CreateVoxelSceneWorld` path that calls
+`RebuildVoxelWorldDerivedState`, but those paths already had the AABB
+initialized via `SetVoxelMaterial` during construction, so the recompute is
+a no-op redundant safety net there.
+
 ## `src/voxel/ChunkStreamer.{hpp,cpp}`
 
 ### L1-L80 (design-rationale)
@@ -534,6 +560,32 @@ back to per-pass main graphics command buffer recording (current mainline behavi
 
 ## `src/render/vulkan/VulkanAsyncCompute.cpp`
 
+(as recorded in earlier sessions — see entries below for the 18x async wait-semaphore fix)
+
+## `src/render/vulkan/VulkanBootstrap.cpp` (18x+ device creation chain fix)
+
+### L819-L867 (design-rationale)
+
+`VkDeviceCreateInfo::pNext` chain must ALWAYS include all feature structs
+regardless of `selected.supports*`. The previous code used ternary
+`supportsSwapchainMaintenance1 ? &struct : nullptr` which broke the chain
+mid-way when an intermediate optional feature was unsupported on the device.
+On hardware without `swapchainMaintenance1` (the user's RTX 3060 Ti etc.),
+`enabledFeatures12.pNext = nullptr` and **no subsequent feature struct
+(`meshShader`, `accelerationStructure`, `rayQuery`) ever reached
+`vkCreateDevice`**. The probe at startup correctly reported `rayQuery=1`
+(because it queries via `vkGetPhysicalDeviceFeatures2`), but the device was
+actually created **without** `rayQuery` feature enabled. Validation layer
+flagged `VUID-VkShaderModuleCreateInfo-pCode-08740` on every
+`vkCreateShaderModule` for shader code that declared `RayQueryKHR`
+capability in SPIR-V (the `voxel.frag.rtx` / `voxel.frag.rtx_taa_on` SPIR-V
+variants). Per Vulkan spec, an unsupported-or-disabled `sType` in a chain
+node would itself error out, so the fix is to always set `sType` and always
+link. Each struct stays in the chain with `VK_FALSE` feature fields when not
+supported — that's valid per spec. Refactored to always-set-sType aggregate
+initialization + always-link chain; only the feature field assignments stay
+conditional.
+
 ### L1-L50 (design-rationale)
 
 `EnsureAsyncComputeResources` mirrors `VulkanMeshShaderPipeline::CreateMeshShaderModule`
@@ -560,6 +612,31 @@ optional path, default OFF). Bumps timeline by 1; new value goes to caller via
 `outTimelineValue` for downstream graphics submit `VkSemaphoreSubmitInfo` wait
 (VUID-VkSubmitInfo2-semaphore-03881: signal value > wait value). Failure path
 restores the bumped value so subsequent submits continue from a clean state.
+
+### L114-L134 (design-rationale) — 18x async wait-semaphore fix
+
+`RecordAsyncComputePass` must wait on `context->renderTimelineSemaphore` at
+`context->renderTimelineValue` before re-recording the persistent
+`asyncComputeCommandBuffer`. The buffer is submitted by `SubmitToComputeQueue`
+via `vkQueueSubmit2` with `renderTimelineSemaphore` as the signal semaphore
+(L277, L283); it therefore completes when the GPU reaches `renderTimelineValue`.
+Per Vulkan spec `VUID-vkBeginCommandBuffer-commandBuffer-00049` the cmd buffer
+must not be in Pending state when `vkBeginCommandBuffer` is called. The previous
+fix in `cee5db6` waited on `hzbBuildTimelineSemaphore` at
+`hzbBuildLastTimelineValue` — but that semaphore is signalled by
+`SubmitHzbAsyncCullToComputeQueue` (L441), **not** by `SubmitToComputeQueue`.
+When `RecordHzbAsyncCullPass` was not active (or hadn't yet signalled),
+`hzbBuildLastTimelineValue` stayed 0, the wait was skipped, the cmd buffer
+stayed Pending from the previous frame's `SubmitToComputeQueue`, and
+`vkBeginCommandBuffer` (L141) tripped the validation layer with
+`vkBeginCommandBuffer-commandBuffer-00049` + the symmetric
+`vkQueueSubmit2-commandBuffer-03875` on the next submit. The fix is
+mechanical: wait on the same semaphore that signalled the previous submission.
+Note: `RecordHzbAsyncCullPass` (L308) does correctly wait on
+`hzbBuildTimelineSemaphore` because `SubmitHzbAsyncCullToComputeQueue` does
+signal that one (L441). The two record functions use the SAME persistent
+`asyncComputeCommandBuffer` but DIFFERENT signal semaphores — the wait must
+match the submit per-function.
 
 ## `src/render/Renderer.cpp` (this session)
 

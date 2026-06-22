@@ -655,6 +655,8 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
 	const uint32_t dirtyChunkCount = static_cast<uint32_t>(world.pendingChunkRebuildIndices.size());
 	world.stats = {};
 	world.stats.dirtyChunkCount = dirtyChunkCount;
+	world.fluidCAAabbMin = {INT32_MAX, INT32_MAX, INT32_MAX};
+	world.fluidCAAabbMaxExclusive = {INT32_MIN, INT32_MIN, INT32_MIN};
 
 	for (VoxelChunk &chunk : world.chunks) {
 		chunk.nonAirVoxelCount = 0;
@@ -673,6 +675,14 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
 				AccumulateMaterialCount(world.stats, material, 1);
 				VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, {x, y, z}))];
 				++chunk.nonAirVoxelCount;
+				if (material == VoxelMaterial::Fluid) {
+					world.fluidCAAabbMin.x = std::min(world.fluidCAAabbMin.x, x);
+					world.fluidCAAabbMin.y = std::min(world.fluidCAAabbMin.y, y);
+					world.fluidCAAabbMin.z = std::min(world.fluidCAAabbMin.z, z);
+					world.fluidCAAabbMaxExclusive.x = std::max(world.fluidCAAabbMaxExclusive.x, x + 1);
+					world.fluidCAAabbMaxExclusive.y = std::max(world.fluidCAAabbMaxExclusive.y, y + 1);
+					world.fluidCAAabbMaxExclusive.z = std::max(world.fluidCAAabbMaxExclusive.z, z + 1);
+				}
 				++voxelIndex;
 			}
 		}
@@ -1662,16 +1672,16 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 
 #if !defined(NDEBUG)
 	{
-		const int fluidMinX = world.fluidCAAabbMin.x;
-		const int fluidMinY = world.fluidCAAabbMin.y;
-		const int fluidMinZ = world.fluidCAAabbMin.z;
-		const int fluidMaxX = world.fluidCAAabbMaxExclusive.x;
-		const int fluidMaxY = world.fluidCAAabbMaxExclusive.y;
-		const int fluidMaxZ = world.fluidCAAabbMaxExclusive.z;
+		const int worldMinX = world.min.x;
+		const int worldMinY = world.min.y;
+		const int worldMinZ = world.min.z;
+		const int worldMaxX = world.maxExclusive.x;
+		const int worldMaxY = world.maxExclusive.y;
+		const int worldMaxZ = world.maxExclusive.z;
 		uint32_t actualFluidCount = 0u;
-		for (int z = fluidMinZ; z < fluidMaxZ; ++z) {
-			for (int y = fluidMinY; y < fluidMaxY; ++y) {
-				for (int x = fluidMinX; x < fluidMaxX; ++x) {
+		for (int z = worldMinZ; z < worldMaxZ; ++z) {
+			for (int y = worldMinY; y < worldMaxY; ++y) {
+				for (int x = worldMinX; x < worldMaxX; ++x) {
 					if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
 						++actualFluidCount;
 					}

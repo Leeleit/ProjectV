@@ -6,26 +6,53 @@
 
 ## 1. Now
 
-**2026-06-22 session 17x+ (Stage 5.2 RTX + 6.3 async compute, 3 batches committed).** 18 commits ahead of origin. Build green, ctest 39/40 pass (only `ProjectVTests` pre-existing 6 assertion failures remain — voxel picking + old `IsFluidCaGpuEnabled` name). `ProjectVRayTracedShadowTests` 11/11 sub-tests.
+**2026-06-22 session 18x (Fluid CA debug-assert + async compute wait-semaphore + regression tests, this session).** Bug-fix сессия на основе лога воспроизведения оператора. Safety-net: `/tmp/before_18x_20260622_144002.patch`. Build green, ctest 38/38 pass (excluding pre-existing `ProjectVTests` link errors per workspace.md convention). User's actual replay snapshot `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` (24×17×24, fluid=436) loads + runs 300 ticks без assertion. No new commits — operator review pending.
 
-- **Batch 12 (committed `bf443ec`)**: Stage 3.2 — `IsFluidCaGpuPipelineRequested` + `IsAsyncComputeEnabled` default ON; `PhysicsBroadphaseStats` + `PlotBroadphaseDiagnostics`; `ProjectVPhysicsSyncTests` 11→13 sub-tests.
-- **Batch 13 (committed `6018c27`)**: Stage 5.2+6.3 — RTX BLAS dispatch wired in `DrawFrame` from `CollectDirtyVoxelChunkBlasRebuildRequests`; `BuildDirtyBlases` consumes queue + bumps counter on every drain; async-compute queue routing; `IsFluidCaGpuPipelineRequested` + `IsAsyncComputeEnabled` refactored to `inline` header predicates.
-- **Batch 14 (committed `47ce703`)**: Stage 5.2 AABB BLAS — `BuildChunkBlas` switched to `VK_GEOMETRY_TYPE_AABBS_KHR` with per-chunk `VkAabbPositionsKHR`; 24 B AABB scratch buffer + vkCmdUpdateBuffer + TRANSFER→AS_BUILD barrier; `DirtyChunkRebuild { chunkIndex, aabb }` struct; Renderer looks up `world.chunks[i].min/maxExclusive`; `ProjectVRayTracedShadowTests` 9→11 sub-tests.
-- **Batch 15 (committed `285ce79`)**: Stage 5.2 rayQueryEXT — `voxel.frag.rtx.spv` + `voxel.frag.rtx_taa_on.spv` SPIR-V variants with `accelerationStructureEXT rtxTlas` (binding 13) + `TraceRtxSmoothSpecularRay` for `roughness <= 0.3` smooth specular GI; `graphicsPipelineRtx` + `graphicsPipelineRtxTaaOn` graphics pipelines; descriptor pool + layout binding 13 added only when `PROJECTV_HW_RAY_TRACING=ON`; lighting debug view 14. Smoke verified: app launches + RTX pipeline creates + binding 13 valid.
-
-Stage 5.2 still ⏸️ Partial — TLAS instance population (UpdateTlas writes instances but `vkCmdBuildAccelerationStructuresKHR` TLAS build not yet dispatched from `BuildDirtyBlases`); working visual smoke deferred. Stage 6.2 PIMPL full struct move SKIP per operator preference. 14 ✅ Closed · 2 ⏸️ Partial · 0 🔓 Open in TODO.md Сводка.
-
-- **Phase 0: Safety-net** — `git diff > /tmp/before_17x_20260621_184500.patch`.
-- **Phase 1: Tracy diagnostics** — `PV_PROFILE_ZONE_N` added to `SyncPhysicsWorld`, `BuildStaticVoxelCollisionBody`, `BuildChunkStaticCollisionBody`, `ProcessChunkRebuildQueue`, `UpdateFluidCA` (+ sub-zones `UpdateFluidCA.ReadPass` + `UpdateFluidCA.Commit`). `PlotValue` for `Fluid CA Cells Read`, `Fluid CA Cells Moved`, `Fluid Edit Version Bumps Suppressed`, `Physics Sync Full Rebuild/Incremental/Skipped`. Profiling.hpp include added to VoxelWorld.cpp.
-- **Phase 2: Suppress `editVersion` for Fluid↔Air** — `SetVoxelMaterial` new `isFluidAirTransition` early-out: skip `++world.editVersion` and skip `physics != nullptr` rebuild queue. Storage write + stats + mesh-dirty markers preserved (water still needs new meshes). Fluid is not physics-solid per `IsPhysicsSolidMaterial` (PhysicsWorld.cpp:548). ~15 LoC in VoxelWorld.cpp.
-- **Phase 3: Incremental `SyncPhysicsWorld`** — split into full-rebuild (world pointer change: iterate all chunks via `BuildChunkStaticCollisionBody`) + incremental (edit-only: `ProcessChunkRebuildQueue` + `RebuildStaticWorldBodyFromChunkShapes`). New `chunkMergedBoxes` field on `PhysicsState` (per-chunk `std::vector<projectv::physics::MergedVoxelBox>`). `BuildChunkStaticCollisionBody` populates it after GreedyMerge. New `DestroyAllChunkStaticBodies` helper. New `IsPhysicsStaticWorldBodyId` helper replaces `bodyId == staticWorldBodyId` check at `IsWalkJumpLockedSourceSupportSideWallContact` (line 432) so walk jump contract still recognizes compound-of-chunks body. ~80 LoC in PhysicsWorld.cpp + 4 LoC in PhysicsWorld.hpp.
-- **Phase 4: Regression tests** — new `ProjectVPhysicsSyncTests` 9/9 sub-tests (initial load, no-op, incremental, null-world, fluid skip editVersion, solid edit bumps, fluid skip physics queue, compound rebuild, time-budget 0.58 ms/tick on 16×16×4 floor). `CMakePresets.json` backfilled 5 occurrences per AGENTS.md §4. ~190 LoC tests + 50 LoC CMakeLists.
-- **Phase 5: Doc-sync (in progress)** — CHANGELOG.md 17x entry + COMMENTS.md 3 new design-rationale entries (PhysicsWorld.cpp + VoxelWorld.cpp) + TODO.md §3.2 status ⏸️ Partial → partially closed + workspace.md this entry.
-- **Phase 6: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
-
-**Verification:** `cmake --build build/linux-clang-debug --target ProjectV ProjectVPhysicsSyncTests --parallel 8` → green. `ctest --test-dir build/linux-clang-debug -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38 pass. Time-budget test: `TestFluidCABumpOnSmallFlatWorldStaysFast: 10 ticks in 5.80 ms (0.580 ms/tick)` на 16×16×4 floor. Per-edit cost on FlatBench (80×26×80) expected ~30 ms (down from ~250 ms full scan), tracking via Tracy plot `Physics Sync Incremental`.
+- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec `VUID-vkBeginCommandBuffer-commandBuffer-00049` + `VUID-vkQueueSubmit2-commandBuffer-03875` + `VUID-vkBeginCommandBuffer-commandBuffer-02840` (ONE_TIME_SUBMIT vs SIMULTANEOUS_USE mutual exclusion); `docs.vulkan.org/spec/latest/chapters/cmdbuffers.html` Command Buffer Recording section; KhronosGroup `samples/extensions/timeline_semaphore/README.adoc` single-barrier pattern; Vulkanised 2026 timeline seminar.
+- **Phase 1: Safety-net** — `git diff > /tmp/before_18x_20260622_144002.patch` (1.1 MB, dirty tree at commit `cee5db6`).
+- **Phase 2: Fix `VoxelWorld::UpdateFluidCA` debug `PV_ASSERT`** — assertion считала fluid в `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` (монотонно-растущий AABB всех когда-либо тронутых fluid'ом позиций), а сравнивала с world-wide `stats.fluidVoxelCount`. Когда fluid уезжал за пределы исходного AABB (столбик Y=5..9 → Y=0..4 на полу), локальный count расходился с world-wide. **Fix**: iterate over `[world.min, world.maxExclusive]` — full world bounds. AABB остаётся fast-path для sim/commit loops (production hot path); только debug invariant расширен. Стоимость: O(world_volume) только в debug (NDEBUG вырезает блок). ~6 LoC в VoxelWorld.cpp.
+- **Phase 3: Fix `RecordAsyncComputePass` CPU-side wait semaphore** — bug в `cee5db6`: wait на `hzbBuildTimelineSemaphore`, но `SubmitToComputeQueue` (L246) сигналит `renderTimelineSemaphore`. Когда HZB-путь не активен (`PROJECTV_HW_RAY_TRACING=OFF` → `IsRayTracedShadowEnabled()=false` → HZB async cull skipped), `hzbBuildLastTimelineValue` остаётся 0, wait skipped, cmd buffer остаётся Pending, `vkBeginCommandBuffer` триггерит `VUID-vkBeginCommandBuffer-commandBuffer-00049` + symmetric `vkQueueSubmit2-commandBuffer-03875` на каждом кадре. **Fix**: wait on `renderTimelineSemaphore` at `renderTimelineValue` (тот же, что signal в `SubmitToComputeQueue`). `RecordHzbAsyncCullPass` остаётся на `hzbBuildTimelineSemaphore` (там submitter signals этот же). ~10 LoC в VulkanAsyncCompute.cpp + EVIL-комментарий с cross-ref на `agent/knowledge.md §33`.
+- **Phase 4: Verify HZB wait is correct** — `RecordHzbAsyncCullPass` (L308) waits on `hzbBuildTimelineSemaphore` at `hzbBuildLastTimelineValue`; `SubmitHzbAsyncCullToComputeQueue` (L404) signals `hzbBuildTimelineSemaphore` at incremented `hzbBuildLastTimelineValue`. **Пара согласована**, fix не нужен. Both record functions share the same persistent `asyncComputeCommandBuffer` but use DIFFERENT signal semaphores — wait MUST match submit per function.
+- **Phase 5: Regression tests** — 2 новых sub-tests в `ProjectVFluidCATests`:
+  - `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` — column of fluid at Y=5..9 falls to floor, проверяет что stats.fluidVoxelCount matches world-wide count и что fluid moved below initial AABB.
+  - `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` — loads `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` если есть, прогоняет 300 Fluid CA тиков, asserts no divergence. Skip-with-warning если snapshot отсутствует (для чистых clone'ов).
+- **Phase 6: Rebuild + verify** — `cmake --build build/linux-clang-debug --target ProjectVFluidCATests ProjectV --parallel 8` → green. `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38. `ProjectVFluidCATests` отдельно — PASS включая 2 новых sub-tests. `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` логирует: `[FluidCA] replay snapshot loaded: 24x17x24 fluid=436` → 300 тиков без divergence.
+- **Phase 7: Doc-sync** — `COMMENTS.md` 2 новых design-rationale entries (VoxelWorld.cpp L1663-L1686, VulkanAsyncCompute.cpp L114-L134), `CHANGELOG.md` 18x session entry, `agent/knowledge.md` §30 updated (debug-assert range fix) + §33 NEW (persistent cmd buffer + timeline semaphore wait contract), `agent/workspace.md` this entry.
+- **Phase 8: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
 
 **Operator action:** inspect `git diff --stat`, then `git add` + `git commit` if approved.
+
+**Files modified (scope of this session):**
+- `src/voxel/VoxelWorld.cpp` — 6 LoC (debug assert iteration range fix)
+- `src/render/vulkan/VulkanAsyncCompute.cpp` — ~10 LoC + comment refresh (wait semaphore fix)
+- `tests/FluidCATests.cpp` — 2 new sub-tests (~50 LoC)
+- `COMMENTS.md` — 2 new `### L<N>-L<N> (design-rationale)` blocks
+- `CHANGELOG.md` — new `## 2026-06-22 (session: 18x …)` section
+- `agent/knowledge.md` — §30 update + new §33
+- `agent/workspace.md` — this update
+
+**Out of scope:** Stage 5.2 TLAS instance population + working RTX visual smoke (still ⏸️ Partial), Stage 6.2 PIMPL full struct move (still ⏸️ Partial), both deferred per TODO.md Сводка.
+
+---
+
+**2026-06-22 session 18x+ (this session — chain + AABB fixes after RTX re-test).** Build green, ctest 38/38 pass + `ProjectVFluidCATests` PASS (24 sub-tests). User's RTX replay runs clean (no VUID-08740). Safety-net: `/tmp/before_18xplus_152237.patch`. No new commits — operator review pending.
+
+- **Phase A: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec chain requirements + `VUID-VkShaderModuleCreateInfo-pCode-08740` requirement semantics. Same `docs.vulkan.org/spec/latest/chapters/shaders.html` chapter as 18x.
+- **Phase B: Fix `VulkanBootstrap.cpp` `VkDeviceCreateInfo::pNext` chain** — refactored 6 ternary `?: nullptr` short-circuits into unconditional links. Each feature struct always has `sType` initialized at declaration. Only the feature *fields* stay gated on `selected.supports*` / `meshShaderEnabled` / `rtxEnabled`. Real bug: on hardware without `swapchainMaintenance1`, the chain broke mid-way and `meshShader`/`accelerationStructure`/`rayQuery` feature structs NEVER reached `vkCreateDevice`. Validation layer caught this via `VUID-VkShaderModuleCreateInfo-pCode-08740` on every RTX shader load.
+- **Phase C: Verify** — `PROJECTV_HW_RAY_TRACING=1 bin/ProjectV` → no `VUID-...-08740` errors. `Render: RayTracedShadows.Initialize: enabled` preserved. User's replay runs end-to-end.
+- **Phase D: Investigate "вода не течёт" report** — extended `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` to dump voxel grid around fluid AABB + log `totalMoved`. Result: AABB was `(INT32_MAX, INT32_MAX, INT32_MAX)..(INT32_MIN, INT32_MIN, INT32_MIN)` (invalid sentinel), so `UpdateFluidCA` sim range was empty → `movedCount=0` every tick → water never falls. Grid dump shows fluid (436 cells) inside VoxelLab glass sphere — `~~~~~` enclosed by `GGGGG` rings, sitting on a `GGGGGGG` glass floor at Y=3. By design water is stable inside the glass; if user breaks the shell, fluid would fall — but the empty-AABB bug prevents CA from doing anything even then.
+- **Phase E: Fix `RebuildVoxelWorldDerivedState` to recompute AABB** — piggy-back on existing `O(world_volume)` iteration that already runs once per snapshot load to rebuild `world.stats`. Reset AABB to sentinels first, expand on each `Fluid` cell found. Zero extra cost.
+- **Phase F: Re-verify** — replay test now logs `[FluidCA] replay: 300 ticks, ... AABB grew: y[3..11) -> y[3..11)` (correct AABB after recompute), `fluid preserved=436/436` (no divergence). Fluid in this particular snapshot is stable inside the glass sphere by design, so `totalMoved=0` is expected — test no longer asserts movement, just AABB validity.
+- **Phase G: Doc-sync** — `COMMENTS.md` 2 new design-rationale blocks (VulkanBootstrap.cpp chain fix L819-L867, VoxelWorld.cpp RebuildVoxelWorldDerivedState fix L653-L686), `CHANGELOG.md` 18x+ section, `agent/knowledge.md` §34 (chain rules) + §35 (snapshot round-trip invariants), `agent/workspace.md` this entry.
+- **Phase H: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
+
+**Files modified (scope of this session 18x+):**
+- `src/render/vulkan/VulkanBootstrap.cpp` — chain refactor, ~20 LoC + sType always-init
+- `src/voxel/VoxelWorld.cpp` — AABB reset + expand inside existing `RebuildVoxelWorldDerivedState` loop, ~12 LoC
+- `tests/FluidCATests.cpp` — extended `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` with AABB validity assertions + voxel grid dump (~30 LoC)
+- `COMMENTS.md`, `CHANGELOG.md`, `agent/knowledge.md`, `agent/workspace.md`
+
+**Out of scope:** Stage 5.2 TLAS instance population + working RTX visual smoke (still ⏸️ Partial), Stage 6.2 PIMPL full struct move (still ⏸️ Partial), both deferred per TODO.md Сводка. The user's claim that water doesn't flow is fully addressed: AABB is now properly restored from snapshot, Fluid CA sim range is correct, water in stable configurations remains stable (by design).
 
 ---
 

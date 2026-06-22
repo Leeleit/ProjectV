@@ -260,6 +260,28 @@ void TestFluidCAStatsCountStaysConsistent(TestContext &context)
 	}
 }
 
+void TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb(TestContext &context)
+{
+	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
+	for (int y = 5; y < 10; ++y) {
+		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
+	}
+
+	const Int3 initialAabbMin = world.fluidCAAabbMin;
+	const Int3 initialAabbMaxExclusive = world.fluidCAAabbMaxExclusive;
+
+	for (int tick = 0; tick < 30; ++tick) {
+		UpdateFluidCA(world);
+		const size_t actual = CountFluid(world);
+		EXPECT_EQ(context, static_cast<uint32_t>(actual), world.stats.fluidVoxelCount);
+	}
+
+	EXPECT_TRUE(context, world.stats.fluidVoxelCount > 0u);
+	const bool fluidMovedBelowInitialAabb = world.fluidCAAabbMin.y < initialAabbMin.y;
+	EXPECT_TRUE(context, fluidMovedBelowInitialAabb);
+	(void)initialAabbMaxExclusive;
+}
+
 
 void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
 {
@@ -685,6 +707,86 @@ void TestFluidCAFluidRateConfigurable(TestContext &context)
 	EXPECT_TRUE(context, at60Hz >= 58 && at60Hz <= 62);
 }
 
+void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &context)
+{
+	const std::filesystem::path replaySnapshot = std::filesystem::path("/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin");
+	std::error_code existsError;
+	if (!std::filesystem::exists(replaySnapshot, existsError)) {
+		std::fprintf(
+			stderr,
+			"[FluidCA] skipping InputReplay snapshot test: %s not present\n",
+			replaySnapshot.string().c_str());
+		return;
+	}
+
+	auto loadResult = LoadVoxelWorldSnapshot(replaySnapshot.string());
+	EXPECT_TRUE(context, loadResult.has_value());
+	if (!loadResult.has_value()) {
+		return;
+	}
+	std::unique_ptr<VoxelWorld> world = std::move(loadResult).value();
+
+	std::fprintf(
+		stderr,
+		"[FluidCA] replay snapshot loaded: %dx%dx%d fluid=%u\n",
+		world->width,
+		world->height,
+		world->depth,
+		world->stats.fluidVoxelCount);
+
+	const size_t initialFluid = static_cast<size_t>(std::ranges::count(
+		BuildFlatVoxelSnapshot(*world),
+		static_cast<uint8_t>(VoxelMaterial::Fluid)));
+	const Int3 initialFluidAabbMin = world->fluidCAAabbMin;
+	const Int3 initialFluidAabbMax = world->fluidCAAabbMaxExclusive;
+
+	uint32_t totalMoved = 0u;
+	for (int tick = 0; tick < 300; ++tick) {
+		totalMoved += UpdateFluidCA(*world);
+		const size_t actual = CountFluid(*world);
+		EXPECT_EQ(context, static_cast<uint32_t>(actual), world->stats.fluidVoxelCount);
+	}
+
+	std::fprintf(
+		stderr,
+		"[FluidCA] replay: 300 ticks, totalMoved=%u, fluid preserved=%zu/%zu, AABB grew: y[%d..%d) -> y[%d..%d)\n",
+		totalMoved,
+		initialFluid,
+		static_cast<size_t>(std::ranges::count(
+			BuildFlatVoxelSnapshot(*world),
+			static_cast<uint8_t>(VoxelMaterial::Fluid))),
+		initialFluidAabbMin.y,
+		initialFluidAabbMax.y,
+		world->fluidCAAabbMin.y,
+		world->fluidCAAabbMaxExclusive.y);
+
+	std::fprintf(stderr, "[FluidCA] snapshot voxel grid around fluid AABB:\n");
+	const int dumpMinY = std::max(world->min.y, initialFluidAabbMin.y - 2);
+	const int dumpMaxY = std::min(world->maxExclusive.y, initialFluidAabbMax.y + 2);
+	for (int y = dumpMaxY - 1; y >= dumpMinY; --y) {
+		std::fprintf(stderr, "[FluidCA] y=%2d: ", y);
+		for (int z = world->min.z; z < world->maxExclusive.z; ++z) {
+			for (int x = world->min.x; x < world->maxExclusive.x; ++x) {
+				const VoxelMaterial m = GetVoxelMaterial(*world, {x, y, z});
+				char c = '.';
+				switch (m) {
+				case VoxelMaterial::Air: c = '.'; break;
+				case VoxelMaterial::Glass: c = 'G'; break;
+				case VoxelMaterial::Fluid: c = '~'; break;
+				case VoxelMaterial::FloorWhite: c = '#'; break;
+				case VoxelMaterial::FloorGray: c = '%'; break;
+				}
+				std::fputc(c, stderr);
+			}
+		}
+		std::fputc('\n', stderr);
+	}
+	EXPECT_TRUE(context, world->fluidCAAabbMin.y != INT32_MAX);
+	EXPECT_TRUE(context, world->fluidCAAabbMaxExclusive.y != INT32_MIN);
+	EXPECT_TRUE(context, world->fluidCAAabbMin.y >= world->min.y);
+	EXPECT_TRUE(context, world->fluidCAAabbMaxExclusive.y <= world->maxExclusive.y);
+}
+
 int main()
 {
 	TestContext context{};
@@ -700,6 +802,7 @@ int main()
 	TestFluidCAEmptyWorldShortCircuits(context);
 	TestFluidCADeterministicAcrossRuns(context);
 	TestFluidCAStatsCountStaysConsistent(context);
+	TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb(context);
 	TestFluidCALongColumnAtWorldFloorSpreadsOut(context);
 	TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(context);
 	TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(context);
@@ -713,6 +816,8 @@ int main()
 	TestFluidCAFluidTimeScaleZeroStops(context);
 	TestFluidCAFluidFrameStepWithTimeScaleZero(context);
 	TestFluidCAFluidRateConfigurable(context);
+
+	TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(context);
 
 	if (context.failures != 0) {
 		return EXIT_FAILURE;

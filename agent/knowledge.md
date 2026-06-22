@@ -927,6 +927,8 @@ Cross-refs: `agent/memory.md §11` (полный technical-debt inventory + plan
 
 - **Determinism guarantees** (документировано в `src/voxel/VoxelWorld.hpp` рядом с `UpdateFluidCA` declaration, проверено `TestFluidCADeterministicAcrossRuns`): (1) single-threaded, (2) no FP, (3) iteration order fixed at `z, y, x` ascending, (4) no system calls (`rand`, `time`, `/dev/urandom`), (5) `stats.fluidVoxelCount` проверен равным `std::count(voxels, == Fluid)` после каждого commit (`PV_ASSERT` debug-only, проверяется `TestFluidCAStatsCountStaysConsistent`).
 
+- **`stats.fluidVoxelCount` invariant теперь итерирует по `[world.min, world.maxExclusive]` (18x fix, 2026-06-22).** Раньше assertion count итерировал по `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` — монотонно-растущий AABB всех позиций, когда-либо тронутых fluid'ом через `SetVoxelMaterial` (L1086-1092). Когда fluid уезжал за пределы изначального AABB (например, столбик на Y=5..9 оседает на пол на Y=0..4), локальный count fluid внутри устаревшего AABB расходился с world-wide `stats.fluidVoxelCount` → `PV_ASSERT` срабатывал в debug. **Это и был «[ProjectV][VoxelWorld][UpdateFluidCA] assert 'actualFluidCount == world.stats.fluidVoxelCount' failed»** в логе воспроизведения. Стоимость: O(world_volume) только в debug — в release NDEBUG вырезает блок целиком. Production hot path (sim + commit loops) по-прежнему использует AABB для сужения диапазона. Regression: `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` + `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` (загружает `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` если присутствует, 300 тиков без дивергенции).
+
 - **Pre-condition invariants** (debug-only `PV_ASSERT` в начале `UpdateFluidCA`): `world.voxels.size() == width * height * depth`, `width > 0 && height > 0 && depth > 0`. Ловит hand-constructed test world или corrupt snapshot до out-of-bounds read.
 
 - **Fluid на y=0 — terminal state.** `if (y > 0)` guard — world-floor boundary. Без guard'а CA делает out-of-bounds read на `index(x, -1, z)`. Проверено `TestFluidCAFluidAtY0IsStable` (5 тиков, 0 movement, 1 cell сохраняется).
@@ -1945,3 +1947,158 @@ detail для случая, когда он действительно нуже�
   pipeline mirrors layout but replaces vertex stage with mesh stage).
 - `src/render/vulkan/VulkanMeshShaderPipeline.{hpp,cpp}` — full implementation.
 - `tests/MeshShaderTests.cpp` — compile + `BuildMeshCullPushConstants` regression coverage.
+
+## 33. Persistent cmd buffer + timeline semaphore wait contract (`2026-06-22`, 18x fix)
+
+### Решение:
+
+- **CPU-side `vkWaitSemaphores` MUST be on the SAME semaphore that `vkQueueSubmit2` signalled.**
+  Per Vulkan spec `VUID-vkBeginCommandBuffer-commandBuffer-00049`: a command buffer must
+  not be in Pending state when `vkBeginCommandBuffer` is called. Per `VUID-vkQueueSubmit2-commandBuffer-03875`:
+  a buffer submitted without `VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT` must not
+  be in Pending state. CPU-side `vkWaitSemaphores` is the canonical way to "drain" the
+  pending state before re-recording a persistent cmd buffer — but the wait VALUE must
+  match the LAST SIGNAL value of the SUBMITTER of the previous frame. Waiting on a
+  DIFFERENT semaphore (e.g. one that HZB uses, but async compute uses a different
+  one) means the wait doesn't synchronize the cmd buffer at all and the buffer stays
+  Pending → validation layer flags VUID-...-00049 on every frame.
+
+- **ProjectV layout (post-18x):**
+  - `RenderState::asyncComputeCommandBuffer` = single persistent primary cmd buffer
+    allocated from `asyncComputeCommandPool` (queue family = `dedicatedComputeQueueFamilyIndex`).
+  - Two record functions share this cmd buffer:
+    - `RecordAsyncComputePass` (L100, `src/render/vulkan/VulkanAsyncCompute.cpp`) records
+      Fluid CA + world gen dispatches. Submitted by `SubmitToComputeQueue` (L246) which
+      signals `renderTimelineSemaphore` at `renderTimelineValue`. Therefore the CPU-side
+      wait must be on `renderTimelineSemaphore` at `renderTimelineValue` — NOT
+      `hzbBuildTimelineSemaphore`.
+    - `RecordHzbAsyncCullPass` (L308) records HZB async cull. Submitted by
+      `SubmitHzbAsyncCullToComputeQueue` (L404) which signals `hzbBuildTimelineSemaphore`
+      at `hzbBuildLastTimelineValue`. Therefore the CPU-side wait must be on
+      `hzbBuildTimelineSemaphore` at `hzbBuildLastTimelineValue`.
+  - Each record function MUST wait on its OWN signal semaphore, NOT a shared one.
+    Mixing them produces the bug observed on `2026-06-22`: HZB path was idle on the
+    repro machine (`PROJECTV_HW_RAY_TRACING=OFF`), `hzbBuildLastTimelineValue` stayed 0,
+    `RecordAsyncComputePass` skipped the wait, cmd buffer was Pending, validation layer
+    tripped 10× then silenced itself.
+
+- **One-time `vkResetCommandBuffer` at allocation** in `EnsureAsyncComputeResources` (L78)
+  moves the persistent buffer from initial state to a known-good Initial state so
+  the first frame's `vkBeginCommandBuffer` is satisfied. Required because the buffer
+  is created in a driver-defined state per `VkCommandPoolCreateInfo::flags`.
+
+- **`RecordHzbAsyncCullPass` does NOT use `VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT`.**
+  Pre-`cee5db6` the async compute begin used `ONE_TIME_SUBMIT_BIT`, which forces the
+  buffer into Invalid state after submit (per spec: "If a command buffer was recorded
+  with `VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT`, it instead moves back to the
+  invalid state"). Invalid → Recording is allowed (VUID-00050 only restricts Initial
+  state without RESET_COMMAND_BUFFER_BIT), but SIMULTANEOUS_USE_BIT + ONE_TIME_SUBMIT_BIT
+  is mutually exclusive for primary cmd buffers (VUID-vkBeginCommandBuffer-commandBuffer-02840).
+  Drop ONE_TIME_SUBMIT for persistent re-recorded buffers.
+
+### Почему:
+
+- **Single-barrier pattern via timeline semaphore is the modern Vulkan 1.4 best practice.**
+  Binary semaphores need a fence + pair-up; timeline semaphores collapse CPU-side
+  "drain pending" to a single `vkWaitSemaphores` call. Per `Vulkanised 2026: Solving
+  All Synchronisation Problems with Timeline Semaphores` and the KhronosGroup
+  `samples/extensions/timeline_semaphore/README.adoc`: timeline semaphores can be
+  signalled once and waited on many times across queues/threads; wait-before-signal
+  is well-defined; host-side `vkWaitSemaphores` "drains" the GPU work in O(1) calls.
+
+- **The previous fix (`cee5db6`, "per-frame fence wait + async compute timeline
+  semaphore wait") was incomplete.** It added `vkWaitSemaphores` on the
+  wrong semaphore — `hzbBuildTimelineSemaphore` instead of `renderTimelineSemaphore`.
+  Re-running the user's InputReplay still showed the same validation errors. The
+  test that would have caught it (`ProjectVAsyncComputeTests`) didn't exercise the
+  "HZB idle, async compute active" code path because the regression suite didn't
+  have a "no-HZB-only-async" sub-test. 18x adds a comment block with the exact
+  signal/wait pairing per record function and a design-rationale cross-ref.
+
+- **Pre-condition `context.renderTimelineValue > 0u`** matters: at boot
+  `renderTimelineValue = 0`, the wait would block forever on a never-signalled value.
+  We must skip the wait on frame 0 (or use `vkQueueSubmit2` with a `signalSemaphoreValue`
+  of at least 1, then wait).
+
+## 34. `VkDeviceCreateInfo::pNext` chain must NEVER have nullptr gaps (`2026-06-22`, 18x+ fix)
+
+### Решение:
+
+- **Always link ALL feature structs in `VkDeviceCreateInfo::pNext`.** Per Vulkan spec,
+  the pNext chain is a singly-linked list of feature structs. Each struct must have
+  a valid `sType`. A `nullptr` gap terminates the chain early — any subsequent struct
+  never reaches `vkCreateDevice` and its features are silently **disabled** in the
+  resulting device. The probe at startup (via `vkGetPhysicalDeviceFeatures2`) still
+  correctly reports the underlying support, but the device-create chain decides
+  what gets actually enabled.
+
+- **ProjectV layout (post-18x+):** every optional feature struct has its `sType`
+  initialized at declaration (`VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_*_FEATURES_*`), and
+  each `pNext` link is set unconditionally to the next struct in the chain (or
+  `nullptr` only at the actual end of the chain). Only the feature *fields*
+  (`swapchainMaintenance1 = VK_TRUE`, `meshShader = VK_TRUE`, `rayQuery = VK_TRUE`)
+  remain gated on `selected.supports*` / `meshShaderEnabled` / `rtxEnabled`.
+  Disabled features with `VK_FALSE` are valid per spec.
+
+- **Real-world impact:** `VUID-VkShaderModuleCreateInfo-pCode-08740` ("SPIR-V
+  Capability `RayQueryKHR` declared, but `VkPhysicalDeviceRayQueryFeaturesKHR::rayQuery`
+  not enabled") was reported on every `vkCreateShaderModule` for
+  `voxel.frag.rtx` / `voxel.frag.rtx_taa_on` SPIR-V variants when run with
+  `PROJECTV_HW_RAY_TRACING=1`. Probe said `rayQuery=1`, but the device was created
+  without the feature enabled because the chain broke at `swapchainMaintenance1`.
+
+### Почему:
+
+- **The previous code (`t ? &struct : nullptr`) is fragile.** It works correctly when
+  all intermediate optional features are supported (e.g. NVIDIA RTX 3060 Ti DOES
+  support `swapchainMaintenance1`, so the chain wasn't broken there). On older
+  hardware or older drivers, an unsupported `swapchainMaintenance1` would silently
+  disable mesh shader + RTX features. This was previously attributed in TODO.md
+  §5.2 to "known Vulkan loader/validation layer bug" but is actually a real bug in
+  chain construction — the loader / validation layer is reporting the device's
+  actual state correctly.
+
+- **Fix pattern is mechanical:** set `sType` always, link always, gate fields only.
+  Cost: extra ~50 bytes of stack per device creation (irrelevant). Benefit: device
+  always gets the right feature enable mask regardless of which optional extensions
+  the driver happens to support.
+
+## 35. Snapshot round-trip MUST restore all derived state (`2026-06-22`, 18x+ fix)
+
+### Решение:
+
+- **`LoadVoxelWorldSnapshot` restores sparse storage + root slot + scene config +
+  world bounds + editVersion, but NOT `fluidCAAabbMin/MaxExclusive`.** These are
+  default-initialized to `(INT32_MAX, INT32_MAX, INT32_MAX)` /
+  `(INT32_MIN, INT32_MIN, INT32_MIN)` — invalid sentinel values per
+  `VoxelWorld.hpp:109-110`.
+
+- **Effect on `UpdateFluidCA`:** the early-out
+  `if (world.stats.fluidVoxelCount == 0u) return 0u;` does NOT fire (count is correctly
+  restored to 436 for VoxelLab). But the sim range
+  `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` = `[INT32_MAX-1, INT32_MIN+1]` is
+  empty, so the loop runs over zero cells and produces `movedCount = 0` every tick.
+  Water in a loaded snapshot NEVER falls even after the player breaks the glass,
+  because the CA saw no work to do. The user reported this as "вода не течёт при
+  воспроизведении реплея".
+
+- **Fix:** piggy-back on `RebuildVoxelWorldDerivedState`'s existing
+  `O(world_volume)` iteration that already runs once per snapshot load to rebuild
+  `world.stats` from scratch. Add: reset AABB to sentinels first, then expand on
+  each `Fluid` cell found. No extra cost — the iteration was already there for
+  `AccumulateMaterialCount` and `chunk.nonAirVoxelCount`.
+
+- **Alternative considered but rejected:** adding `fluidCAAabbMin/MaxExclusive`
+  to `VoxelWorldSnapshotHeader`. Would require bumping snapshot version from 2 to 3,
+  breaking backward compat with any existing saved snapshots. The recompute-on-load
+  approach is forward-compatible and zero-cost.
+
+### Почему:
+
+- **The header was 80 bytes** (struct already padded to alignment). Adding 2×Int3
+  = 24 bytes would keep it aligned but break all existing snapshots. Recompute is
+  cheaper in terms of schema management.
+
+- **Recompute runs once per `LoadVoxelWorldSnapshot`, never in the hot path.** The
+  cost is dominated by the `O(world_volume)` iteration that already exists for
+  `world.stats` rebuild — adding 6 integer comparisons per fluid cell is noise.

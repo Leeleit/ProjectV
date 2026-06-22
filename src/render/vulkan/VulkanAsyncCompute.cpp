@@ -112,19 +112,22 @@ bool RecordAsyncComputePass(
 		return false;
 	}
 
-	// EVIL: wait on the timeline semaphore so the persistent asyncComputeCommandBuffer
+	// EVIL: wait on renderTimelineSemaphore so the persistent asyncComputeCommandBuffer
 	// is in executable/reset state before vkBeginCommandBuffer. Per Vulkan spec
 	// VUID-vkBeginCommandBuffer-commandBuffer-00049 the cmd buffer must not be in
-	// pending/recording state when recording begins. The persistent buffer is
-	// submitted with hzbBuildTimelineSemaphore as the signal; wait on it.
-	if (context.hzbBuildTimelineSemaphore != VK_NULL_HANDLE && context.hzbBuildLastTimelineValue > 0u) {
+	// pending/recording state when recording begins. SubmitToComputeQueue signals
+	// renderTimelineSemaphore (NOT hzbBuildTimelineSemaphore, which is for HZB
+	// async cull); we must wait on the same semaphore that was used to signal
+	// the previous submission. Waiting on hzbBuildTimelineSemaphore is wrong
+	// because it does not synchronize this cmd buffer's previous submission.
+	if (context.renderTimelineSemaphore != VK_NULL_HANDLE && context.renderTimelineValue > 0u) {
 		const VkSemaphoreWaitInfo waitInfo{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 			.pNext = nullptr,
 			.flags = 0,
 			.semaphoreCount = 1u,
-			.pSemaphores = &context.hzbBuildTimelineSemaphore,
-			.pValues = &context.hzbBuildLastTimelineValue,
+			.pSemaphores = &context.renderTimelineSemaphore,
+			.pValues = &context.renderTimelineValue,
 		};
 		const VkResult waitResult = vkWaitSemaphores(context.device, &waitInfo, UINT64_MAX);
 		if (waitResult != VK_SUCCESS) {

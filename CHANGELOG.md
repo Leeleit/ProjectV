@@ -13,6 +13,94 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 **For design rationale and ongoing decisions**, see `agent/knowledge.md Part A`.
 **For session log / commit narrative**, see `agent/workspace.md §5 (Active tasks)` and `git log`.
 
+## 2026-06-22 (session: 18x «fix(voxel,render): Fluid CA debug-assert + async compute wait-semaphore + regression tests»)
+
+Two real bugs that survived the `cee5db6` "fix" of the same validation errors (which
+never ran the tests):
+
+- **`VoxelWorld::UpdateFluidCA` debug-only `PV_ASSERT` counted fluid over the wrong range.**
+  Old code iterated `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` — the monotonic-grow
+  AABB of where fluid has *ever* been touched. After enough CA ticks fluid can fall
+  outside that AABB (column at Y=5..9 settles at Y=0..4 on the floor), so the local
+  count diverges from the world-wide `stats.fluidVoxelCount` and `PV_ASSERT` fires.
+  Fixed by counting over `[world.min, world.maxExclusive]` — full world bounds. AABB
+  still scopes the production sim/commit hot path; only the debug invariant expands.
+- **`RecordAsyncComputePass` waited on the wrong timeline semaphore.**
+  The previous `cee5db6` fix added a CPU-side `vkWaitSemaphores` on
+  `hzbBuildTimelineSemaphore` at `hzbBuildLastTimelineValue`. But the persistent
+  `asyncComputeCommandBuffer` is submitted by `SubmitToComputeQueue` with
+  `renderTimelineSemaphore` as the signal — not `hzbBuildTimelineSemaphore` (that one
+  is signalled by `SubmitHzbAsyncCullToComputeQueue`). When HZB was idle,
+  `hzbBuildLastTimelineValue == 0`, the wait was skipped, the cmd buffer stayed
+  Pending, and the next `vkBeginCommandBuffer` tripped
+  `VUID-vkBeginCommandBuffer-commandBuffer-00049` + the symmetric
+  `VUID-vkQueueSubmit2-commandBuffer-03875`. Fixed by waiting on the same semaphore
+  that signalled the previous submission (`renderTimelineSemaphore` /
+  `renderTimelineValue`). The HZB path is unaffected — `RecordHzbAsyncCullPass` does
+  correctly wait on `hzbBuildTimelineSemaphore` because its submitter signals that
+  one. Both `RecordAsyncComputePass` and `RecordHzbAsyncCullPass` reuse the same
+  persistent cmd buffer but use **different** signal semaphores — the wait must
+  match the submit per function.
+
+Regression coverage:
+
+- `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` —
+  column of fluid at Y=5..9 falls to floor in a 4×16×4 world; checks that
+  `stats.fluidVoxelCount` matches the world-wide count after 30 ticks and that
+  fluid has moved below the original AABB.
+- `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` — loads the user's
+  actual `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` (24×17×24,
+  fluid=436) if present, runs 300 ticks, asserts no divergence. Verifies the fix on
+  the exact bug-repro snapshot.
+
+Verification: ctest 38/38 (excluding pre-existing `ProjectVTests` link errors and
+`ProjectVFluidCATests` which now also passes including the new sub-tests). The
+user's actual InputReplay snapshot plays 300 ticks without assertion.
+
+## 2026-06-22 (session: 18x+ «fix(vulkan): device-creation pNext chain + AABB recompute on snapshot load»)
+
+Two follow-up bugs found after re-running with `PROJECTV_HW_RAY_TRACING=1`:
+
+- **`VkDeviceCreateInfo::pNext` chain was broken by ternary `?: nullptr` short-circuits.**
+  `VulkanBootstrap.cpp:853-869` used
+  `selected.supportsSwapchainMaintenance1 ? &struct : nullptr` which broke the chain
+  when an intermediate optional feature was unsupported on the device. On hardware
+  without `swapchainMaintenance1` (most pre-Vulkan-1.4 devices), the chain broke
+  mid-way and **no subsequent feature struct (`meshShader`, `accelerationStructure`,
+  `rayQuery`) ever reached `vkCreateDevice`**. The probe at startup correctly reported
+  `rayQuery=1` (it queries via `vkGetPhysicalDeviceFeatures2`), but the device was
+  actually created **without** `rayQuery` feature enabled. Validation layer flagged
+  `VUID-VkShaderModuleCreateInfo-pCode-08740` ("RayQueryKHR capability declared but
+  `VkPhysicalDeviceRayQueryFeaturesKHR::rayQuery` not enabled") on every
+  `vkCreateShaderModule` for `voxel.frag.rtx` / `voxel.frag.rtx_taa_on` SPIR-V
+  variants. Per Vulkan spec, an unsupported `sType` in a chain node errors out, so
+  the fix is to always set `sType` and always link. Each struct stays in the chain
+  with `VK_FALSE` feature fields when not supported — that's valid per spec.
+  Refactored to always-set-sType aggregate initialization + always-link chain;
+  only the feature field assignments stay conditional. TODO.md §5.2 attributed this
+  to a "known Vulkan loader/validation layer bug" — but it's actually a real chain
+  bug, not a loader issue.
+- **`LoadVoxelWorldSnapshot` did not restore `fluidCAAabbMin` / `fluidCAAabbMaxExclusive`.**
+  The 80-byte `VoxelWorldSnapshotHeader` doesn't include the AABB; after load the
+  sentinel defaults `(INT32_MAX, INT32_MAX, INT32_MAX)` /
+  `(INT32_MIN, INT32_MIN, INT32_MIN)` were left in place. `UpdateFluidCA`'s early-out
+  `if (world.stats.fluidVoxelCount == 0u) return 0u;` did not fire (count = 436), but
+  the sim range `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` became
+  `[INT32_MAX-1, INT32_MIN+1]` = empty range, so the CA loop ran over zero cells and
+  produced `movedCount = 0` every tick. **Water in a loaded snapshot would never
+  fall even after the player broke the glass**, because the CA saw no work to do.
+  Fixed by piggy-backing on `RebuildVoxelWorldDerivedState`'s existing
+  O(world_volume) iteration (which already runs once per snapshot load to rebuild
+  `world.stats`): reset AABB to sentinels, then expand on each `Fluid` cell found.
+  No extra cost.
+
+Verification: ctest 38/38 pass. `PROJECTV_HW_RAY_TRACING=1 bin/ProjectV` launches
+cleanly with no VUID-08740 validation errors. `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot`
+now logs `[FluidCA] replay: 300 ticks, ... AABB grew: y[3..11) -> y[3..11)` proving
+the AABB is correctly recomputed from the loaded sparse storage. Fluid remains in
+a stable configuration inside the VoxelLab glass sphere (by design — water only flows
+when the player breaks the shell).
+
 ---
 
 ## 2026-06-21 (session: 17x «perf(physics,voxel): incremental SyncPhysicsWorld + Fluid editVersion suppress + AABB-bounded Fluid CA»)
