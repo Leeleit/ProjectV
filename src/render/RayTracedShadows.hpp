@@ -20,6 +20,10 @@ struct RayTracedShadowConfig {
 	void *tlasInstanceMappedData = nullptr;
 	VkDeviceAddress tlasInstanceDeviceAddress = 0;
 	VkDeviceSize tlasInstanceCapacityBytes = 0;
+	VkBuffer tlasBackingBuffer = VK_NULL_HANDLE;
+	VmaAllocation tlasBackingAllocation = nullptr;
+	VkDeviceAddress tlasBackingDeviceAddress = 0;
+	VkDeviceSize tlasBackingCapacityBytes = 0;
 	VkBuffer scratchBuffer = VK_NULL_HANDLE;
 	VmaAllocation scratchAllocation = nullptr;
 	VkDeviceAddress scratchDeviceAddress = 0;
@@ -27,6 +31,11 @@ struct RayTracedShadowConfig {
 	VkBuffer aabbScratchBuffer = VK_NULL_HANDLE;
 	VmaAllocation aabbScratchAllocation = nullptr;
 	VkDeviceAddress aabbScratchDeviceAddress = 0;
+	std::vector<VkAccelerationStructureKHR> blasHandles;
+	std::vector<VkBuffer> blasStorageBuffers;
+	std::vector<VmaAllocation> blasStorageAllocations;
+	std::vector<VkDeviceAddress> blasDeviceAddresses;
+	std::vector<VkDeviceSize> blasStorageCapacityBytes;
 	uint32_t tlasInstanceCount = 0;
 	uint32_t tlasRebuildCount = 0;
 	uint32_t blasRebuildCount = 0;
@@ -51,6 +60,8 @@ public:
 
 	RayTracedShadows(const RayTracedShadows &) = delete;
 	RayTracedShadows &operator=(const RayTracedShadows &) = delete;
+
+	friend struct RayTracedShadowTestAccess;
 
 	bool Initialize(
 		const VulkanContextState &context,
@@ -108,6 +119,11 @@ private:
 
 	void ReleaseBuffers(const VulkanContextState &context) noexcept;
 
+	bool EnsureBlasHandle(
+		const VulkanContextState &context,
+		uint32_t chunkIndex,
+		VkAabbPositionsKHR aabb);
+
 	RayTracedShadowConfig m_config{};
 	std::vector<DirtyChunkRebuild> m_pendingDirtyChunks;
 	std::mutex m_dirtyQueueMutex;
@@ -115,7 +131,14 @@ private:
 	std::atomic<bool> m_initialized{false};
 };
 
-bool IsRayTracedShadowEnabled() noexcept;
+struct RayTracedShadowTestAccess {
+	static RayTracedShadowConfig &Config(RayTracedShadows &shadows) noexcept
+	{
+		return shadows.m_config;
+	}
+};
+
+bool IsRayTracedShadowEnabled(const VulkanContextState &context) noexcept;
 
 bool CreateRayTracedShadowResources(VulkanContextState *context, RenderState *render);
 void DestroyRayTracedShadowResources(VulkanContextState *context, RenderState *render);

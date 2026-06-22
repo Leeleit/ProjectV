@@ -1329,3 +1329,83 @@ current architecture. If streaming chunk loading introduces a
 `ChunkLoadingState` (per `AUDIT-PV-004` future-work), the assert would
 become meaningful and should be added at the iteration entry point.
 False alarm for current mainline.
+
+## `src/render/RayTracedShadows.{hpp,cpp}` (session 19x, Stage 5.2.A→B→C RTX shadows full pipeline)
+
+### L100-L140 (design-rationale)
+
+`RayTracedShadowConfig` расширен 9 новыми полями для per-chunk BLAS storage и TLAS backing buffer.
+До этого сетапа TLAS был stub'ом — `RecordTlasBuild` инкрементировал счётчик и всё,
+`UpdateTlas` хардкодил `accelerationStructureReference = 0u` (баг VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281).
+Теперь каждый chunk имеет свой VkAccelerationStructureKHR + backing buffer + кэшированный device address
+(через `EnsureBlasHandle` — lazy allocate при первом `BuildChunkBlas` для chunkIndex).
+TLAS handle создаётся один раз в `AllocateBuffers` с capacity для `maxBlasCount = 4096` instances
+через `vkGetAccelerationStructureBuildSizesKHR(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR)` →
+dedicated backing buffer → `vkCreateAccelerationStructureKHR(VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)`.
+Per-chunk BLAS handles живут в `blasHandles[chunkIndex]` — O(1) lookup при `UpdateTlas`.
+`RayTracedShadowTestAccess` friend struct — white-box test access без публичного API
+leak в production path.
+
+### L240-L420 (design-rationale)
+
+`AllocateBuffers` делает реальный TLAS allocation: query sizes → allocate backing
+buffer → `vkCreateAccelerationStructureKHR` → cache handle. Все previous stubs удалены.
+Per-chunk BLAS handles lazy-created в `EnsureBlasHandle` (вызывается из `BuildChunkBlas`)
+— экономит VRAM для chunks, которые не были touched (chunks без voxel edits не получают
+BLAS handle, экономя ~256-1024 bytes per chunk).
+
+`BuildChunkBlas` (L327-L413) делает настоящий `vkCmdBuildAccelerationStructuresKHR`
+для bottom-level + AS_BUILD → AS_READ barrier на BLAS backing buffer
+(VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12258 alignment). dstAccelerationStructure
+binding обязателен — без него driver не знает, куда писать результат. Per-BLAS storage
+buffer помечен `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR` (VUID-03709 compliance).
+
+`UpdateTlas` (L644+) пишет `instances[i].accelerationStructureReference = blasDeviceAddresses[chunkIndex]`
+вместо hardcoded 0. Out-of-range chunkIndex безопасно записывает 0 (no crash).
+VmaFlushAllocation вызывается на host-mapped instance buffer для CPU→device visibility.
+
+`RecordTlasBuild` (L697+) делает реальный `vkCmdBuildAccelerationStructuresKHR` для TLAS:
+HOST → AS_BUILD barrier на instance buffer (host writes), `VK_GEOMETRY_TYPE_INSTANCES_KHR`
+geometry с `arrayOfPointers = VK_FALSE`, dstAccelerationStructure = pre-created TLAS,
+scratch from shared scratch buffer, `primitiveCount = tlasInstanceCount`. Emits
+AS_BUILD → FRAGMENT|RAY_TRACING barrier (memory + execution dependency) — fragment
+shader `rayQueryEXT` reads TLAS сразу после этой команды.
+
+### L24-L31 (design-rationale)
+
+`IsRayTracedShadowEnabled(const VulkanContextState &context)` заменил env-gate версию.
+Возвращает `context.rayTracing.accelerationStructure && context.rayTracing.rayQuery`
+(auto-detect). `PROJECTV_HW_RAY_TRACING=ON/OFF` env var полностью удалён из всех
+callers (`VulkanBootstrap.cpp` 3 sites, `VulkanGraphicsPipeline.cpp` 3 callers updated
+to pass `*context`). Hardware target policy — см. `agent/knowledge.md §15`
+"Hardware target policy for RTX-driven path (5.2.C)" — minimum NVIDIA RTX 2060 (Turing).
+
+### L519-L537 (design-rationale)
+
+`CreateRayTracedShadowResources` теперь hard-fail на non-RTX GPU: SDL_LogCritical
++ return false. Caller (`VulkanInit::InitVulkan`) propagates as
+`std::unexpected(VulkanInitError::ShadowResourcesFailed)`. Engine refuses to start
+on non-RTX hardware — no partial functionality, no CSM fallback. Это pet-project,
+никаких уступок legacy hardware.
+
+## `src/shaders/voxel.frag` (session 19x, Stage 5.2.B RTX shadow consume)
+
+### L88-L99 (design-rationale)
+
+`TraceRtxSunShadowRay(worldOrigin, sunDir) → float` — single-hit ray query против
+`rtxTlas` (binding 13, уже используется для specular GI). `gl_RayFlagsTerminateOnFirstHitEXT`
+(early-out на первом hit), `tMin = 0.001` (offset чтобы не hit own surface),
+`tMax = 256 m` (EVIL constant `kRtxSunShadowMaxDistanceMeters`, generous vs VoxelLab
+64 m receiver max per `agent/knowledge.md §15`). Returns 1.0 if no hit (lit),
+0.0 if hit (in shadow). Cost: ~0.5-1ms per frame на RTX 3060 Ti per TODO.md §5.2.B estimate.
+
+### L777-L794 (design-rationale)
+
+`ComputeSunShadowSample` early return для RTX path: `if (nDotLRtx > 0.02) return
+vec4(rtxLit*contact, anyRtxShadow, 0.0, contact)`. CSM cascade blend + `receiverDepthBias` /
+`receiverNormalBias` / `receiverLightBias` ladder полностью skipped для RTX path.
+Никаких `receiverDepthBias` (анти-Peter-Panning hack), никаких cascade transitions,
+никаких `0.5x normalBias + 4x depthBias` hacks. RTX даёт ground-truth visibility.
+Peter-panning fix chain (P0.4) в `agent/knowledge.md §15` lines 1318-1320 теперь MOOT
+— RTX делает их irrelevant. Закрытие CSM в 5.2.D = полное удаление legacy shadow code.
+

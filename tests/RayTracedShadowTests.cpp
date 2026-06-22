@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/RayTracedShadows.hpp"
@@ -22,25 +23,31 @@ int gFailureCount = 0;
 
 void TestEnvGateDefaultsOff()
 {
-	const char *previous = std::getenv("PROJECTV_HW_RAY_TRACING");
-	unsetenv("PROJECTV_HW_RAY_TRACING");
-	PROJECTV_RTX_EXPECT(!projectv::render::IsRayTracedShadowEnabled(), "env gate must be false by default");
-	if (previous != nullptr) {
-		setenv("PROJECTV_HW_RAY_TRACING", previous, 1);
-	}
+	VulkanContextState context{};
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::IsRayTracedShadowEnabled(context),
+		"IsRayTracedShadowEnabled must be false on default-constructed context (no RT capability)");
 }
 
 void TestEnvGateOnRespected()
 {
-	setenv("PROJECTV_HW_RAY_TRACING", "ON", 1);
-	PROJECTV_RTX_EXPECT(projectv::render::IsRayTracedShadowEnabled(), "env gate must be true when PROJECTV_HW_RAY_TRACING=ON");
-	setenv("PROJECTV_HW_RAY_TRACING", "1", 1);
-	PROJECTV_RTX_EXPECT(projectv::render::IsRayTracedShadowEnabled(), "env gate must be true when PROJECTV_HW_RAY_TRACING=1");
-	setenv("PROJECTV_HW_RAY_TRACING", "0", 1);
-	PROJECTV_RTX_EXPECT(!projectv::render::IsRayTracedShadowEnabled(), "env gate must be false when PROJECTV_HW_RAY_TRACING=0");
-	setenv("PROJECTV_HW_RAY_TRACING", "garbage", 1);
-	PROJECTV_RTX_EXPECT(!projectv::render::IsRayTracedShadowEnabled(), "env gate must be false for any unrecognised value");
-	unsetenv("PROJECTV_HW_RAY_TRACING");
+	VulkanContextState context{};
+	context.rayTracing.accelerationStructure = true;
+	context.rayTracing.rayQuery = true;
+	PROJECTV_RTX_EXPECT(
+		projectv::render::IsRayTracedShadowEnabled(context),
+		"IsRayTracedShadowEnabled must be true when context.rayTracing.accelerationStructure && rayQuery");
+	context.rayTracing.accelerationStructure = false;
+	context.rayTracing.rayQuery = true;
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::IsRayTracedShadowEnabled(context),
+		"IsRayTracedShadowEnabled must be false when only rayQuery available (need both)");
+	context.rayTracing.accelerationStructure = true;
+	context.rayTracing.rayQuery = false;
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::IsRayTracedShadowEnabled(context),
+		"IsRayTracedShadowEnabled must be false when only accelerationStructure available (need both)");
+	context = VulkanContextState{};
 }
 
 void TestConfigDefaultValues()
@@ -170,6 +177,112 @@ void TestBuildChunkBlasAabbBoundsCheck()
 		"BuildChunkBlas must accept negative-world-origin AABB (voxels may extend below origin)");
 }
 
+void TestConfigHasBlasCacheFields()
+{
+	projectv::render::RayTracedShadowConfig config{};
+	PROJECTV_RTX_EXPECT(config.blasHandles.empty(), "blasHandles must default to empty");
+	PROJECTV_RTX_EXPECT(config.blasStorageBuffers.empty(), "blasStorageBuffers must default to empty");
+	PROJECTV_RTX_EXPECT(config.blasStorageAllocations.empty(), "blasStorageAllocations must default to empty");
+	PROJECTV_RTX_EXPECT(config.blasDeviceAddresses.empty(), "blasDeviceAddresses must default to empty");
+	PROJECTV_RTX_EXPECT(config.blasStorageCapacityBytes.empty(), "blasStorageCapacityBytes must default to empty");
+	PROJECTV_RTX_EXPECT(config.tlasBackingBuffer == VK_NULL_HANDLE, "tlasBackingBuffer must default to null");
+	PROJECTV_RTX_EXPECT(config.tlasBackingAllocation == nullptr, "tlasBackingAllocation must default to null");
+	PROJECTV_RTX_EXPECT(config.tlasBackingDeviceAddress == 0u, "tlasBackingDeviceAddress must default to 0");
+	PROJECTV_RTX_EXPECT(config.tlasBackingCapacityBytes == 0u, "tlasBackingCapacityBytes must default to 0");
+}
+
+void TestUpdateTlasSafeWithoutBlasCache()
+{
+	projectv::render::RayTracedShadows shadows{};
+	constexpr VkDeviceSize kCapacity = sizeof(VkAccelerationStructureInstanceKHR) * 4u;
+	alignas(16) unsigned char storage[kCapacity]{};
+	auto &config = projectv::render::RayTracedShadowTestAccess::Config(shadows);
+	config.tlasInstanceMappedData = storage;
+	config.tlasInstanceCapacityBytes = kCapacity;
+	config.blasDeviceAddresses.assign(2u, 0u);
+
+	std::vector<uint32_t> chunks{0u, 1u};
+	std::vector<VkTransformMatrixKHR> transforms(chunks.size(), VkTransformMatrixKHR{});
+	VulkanContextState context{};
+	shadows.UpdateTlas(context, chunks, transforms);
+	PROJECTV_RTX_EXPECT(
+		shadows.GetConfig().tlasInstanceCount == 2u,
+		"UpdateTlas must populate instance count from input");
+	PROJECTV_RTX_EXPECT(
+		shadows.GetConfig().tlasRebuildCount == 1u,
+		"UpdateTlas must bump tlasRebuildCount counter");
+	const auto *instances = reinterpret_cast<const VkAccelerationStructureInstanceKHR *>(storage);
+	PROJECTV_RTX_EXPECT(
+		instances[0].accelerationStructureReference == 0u,
+		"accelerationStructureReference must be 0 when BLAS cache device address is 0 (no crash, no garbage)");
+	PROJECTV_RTX_EXPECT(
+		instances[0].instanceCustomIndex == 0u,
+		"instanceCustomIndex must encode chunkIndex from input");
+	PROJECTV_RTX_EXPECT(
+		instances[1].instanceCustomIndex == 1u,
+		"instanceCustomIndex must encode chunkIndex for slot 1");
+	PROJECTV_RTX_EXPECT(
+		instances[0].mask == 0xFFu,
+		"instance mask must be 0xFF (visible to all rays)");
+}
+
+void TestUpdateTlasSafeForOversizedChunkIndex()
+{
+	projectv::render::RayTracedShadows shadows{};
+	constexpr VkDeviceSize kCapacity = sizeof(VkAccelerationStructureInstanceKHR) * 4u;
+	alignas(16) unsigned char storage[kCapacity]{};
+	auto &config = projectv::render::RayTracedShadowTestAccess::Config(shadows);
+	config.tlasInstanceMappedData = storage;
+	config.tlasInstanceCapacityBytes = kCapacity;
+
+	std::vector<uint32_t> chunks{9999u};
+	std::vector<VkTransformMatrixKHR> transforms(1u, VkTransformMatrixKHR{});
+	VulkanContextState context{};
+	shadows.UpdateTlas(context, chunks, transforms);
+	const auto *instances = reinterpret_cast<const VkAccelerationStructureInstanceKHR *>(storage);
+	PROJECTV_RTX_EXPECT(
+		instances[0].accelerationStructureReference == 0u,
+		"UpdateTlas must safely write 0 accelerationStructureReference for out-of-range chunkIndex");
+}
+
+void TestRecordTlasBuildGuardsForZeroInstanceCount()
+{
+	projectv::render::RayTracedShadows shadows{};
+	VkCommandBuffer cmd = VK_NULL_HANDLE;
+	VulkanContextState context{};
+	shadows.RecordTlasBuild(cmd, context);
+	PROJECTV_RTX_EXPECT(
+		shadows.GetConfig().shadowRayDispatchCount == 0u,
+		"RecordTlasBuild must not increment dispatch counter when instance count is zero");
+}
+
+void TestRtxSunShadowRayHelperExistsInShader()
+{
+	FILE *const fp = std::fopen(
+		PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel.frag",
+		"r");
+	PROJECTV_RTX_EXPECT(fp != nullptr, "voxel.frag must be readable from source root");
+	if (fp == nullptr) {
+		return;
+	}
+	char buffer[16384]{};
+	const size_t read = std::fread(buffer, 1u, sizeof(buffer) - 1u, fp);
+	std::fclose(fp);
+	buffer[read] = '\0';
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "TraceRtxSunShadowRay") != nullptr,
+		"voxel.frag must define TraceRtxSunShadowRay helper for 5.2.B RTX sun shadow consume");
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "rayQueryInitializeEXT") != nullptr,
+		"voxel.frag must use rayQueryInitializeEXT for shadow ray dispatch");
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "kRtxSunShadowMaxDistanceMeters") != nullptr,
+		"voxel.frag must declare kRtxSunShadowMaxDistanceMeters EVIL constant");
+	PROJECTV_RTX_EXPECT(
+		std::strstr(buffer, "VOXEL_RTX_ENABLED") != nullptr,
+		"voxel.frag must guard RTX shadow path with VOXEL_RTX_ENABLED define");
+}
+
 }  // namespace
 
 int main()
@@ -185,6 +298,11 @@ int main()
 	TestDirtyChunkRebuildStructLayout();
 	TestSetBlasDirtyQueueAndConsume();
 	TestUpdateTlasRespectsCapacity();
+	TestConfigHasBlasCacheFields();
+	TestUpdateTlasSafeWithoutBlasCache();
+	TestUpdateTlasSafeForOversizedChunkIndex();
+	TestRecordTlasBuildGuardsForZeroInstanceCount();
+	TestRtxSunShadowRayHelperExistsInShader();
 
 	if (gFailureCount != 0) {
 		runtime::LogRuntimeFailure(

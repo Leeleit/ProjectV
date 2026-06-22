@@ -1072,7 +1072,7 @@ bool RefreshGraphicsResourceBindings(
 
 	const bool rtxLayoutActive = context->rayTracing.rayQuery
 		&& context->rayTracing.accelerationStructure
-		&& projectv::render::IsRayTracedShadowEnabled();
+		&& projectv::render::IsRayTracedShadowEnabled(*context);
 	std::vector<VkDescriptorPoolSize> poolSizes{};
 	poolSizes.reserve(kGraphicsDescriptorPoolSizes.size());
 	for (const VkDescriptorPoolSize &size : kGraphicsDescriptorPoolSizes) {
@@ -1540,7 +1540,7 @@ bool CreateGraphicsPipeline(
 	std::vector<char> shadowFragmentShaderCode;
 	const bool rtxProbeAvailable = context->rayTracing.rayQuery
 		&& context->rayTracing.accelerationStructure
-		&& projectv::render::IsRayTracedShadowEnabled();
+		&& projectv::render::IsRayTracedShadowEnabled(*context);
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ReadShaders");
 		vertexShaderCode = ReadShaderFile("voxel.vert.spv");
@@ -1793,7 +1793,7 @@ bool CreateGraphicsPipeline(
 
 	const bool rtxLayoutActiveForCreate = context->rayTracing.rayQuery
 		&& context->rayTracing.accelerationStructure
-		&& projectv::render::IsRayTracedShadowEnabled();
+		&& projectv::render::IsRayTracedShadowEnabled(*context);
 	std::vector<VkDescriptorSetLayoutBinding> layoutBindings{};
 	layoutBindings.reserve(kGraphicsDescriptorBindings.size() + (rtxLayoutActiveForCreate ? 1u : 0u));
 	for (const VkDescriptorSetLayoutBinding &b : kGraphicsDescriptorBindings) {
@@ -1801,8 +1801,8 @@ bool CreateGraphicsPipeline(
 	}
 	if (rtxLayoutActiveForCreate) {
 		// EVIL: binding 13 = accelerationStructureKHR FRAGMENT (Stage 5.2 RTX smooth specular
-		// ray query). Only added when VK_KHR_acceleration_structure + VK_KHR_ray_query are
-		// device-enabled via PROJECTV_HW_RAY_TRACING=ON. Per Vulkan spec VUID-VkDescriptorSetLayoutBinding-descriptorType-04616
+		// ray query + Stage 5.2.B sun shadow ray query). Only added when VK_KHR_acceleration_structure
+		// + VK_KHR_ray_query are device-enabled. Per Vulkan spec VUID-VkDescriptorSetLayoutBinding-descriptorType-04616
 		// the type VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR requires the device extension.
 		layoutBindings.push_back(VkDescriptorSetLayoutBinding{
 			.binding = 13,

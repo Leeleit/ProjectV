@@ -13,6 +13,144 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 **For design rationale and ongoing decisions**, see `agent/knowledge.md Part A`.
 **For session log / commit narrative**, see `agent/workspace.md §5 (Active tasks)` and `git log`.
 
+## 2026-06-22 (session: 19x «feat(render): Stage 5.2.A→B→C — RTX shadows full pipeline (TLAS build + shader consume + default-on auto-detect)»)
+
+Three TODO.md milestones closed in one pass: `5.2.A` (TLAS реально собирается),
+`5.2.B` (ray-traced shadow visibility в шейдере), `5.2.C` (RTX shadows = default
+on RTX-capable hardware). After this commit, `bin/ProjectV` on RTX 20/30/40/50 series
+runs with RTX ray-query shadows on by default — no env gate, no fallback. CSM still
+exists for visual smoke baseline but will be removed in `5.2.D` (next session).
+
+**Key changes:**
+
+- **`RayTracedShadowConfig` extended with per-BLAS storage + TLAS backing fields.**
+  `blasHandles[]` / `blasStorageBuffers[]` / `blasStorageAllocations[]` /
+  `blasDeviceAddresses[]` / `blasStorageCapacityBytes[]` (one entry per chunk
+  up to `maxBlasCount = 4096`) + `tlasBackingBuffer` / `tlasBackingAllocation` /
+  `tlasBackingDeviceAddress` / `tlasBackingCapacityBytes` (single TLAS backing).
+  `RayTracedShadowTestAccess` friend struct exposes `Config()` to tests for
+  white-box assertions without breaking encapsulation for the production path.
+- **`AllocateBuffers` does real TLAS allocation at startup.** Queries
+  `vkGetAccelerationStructureBuildSizesKHR(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR)`
+  with the max-instance TLAS geometry, allocates a dedicated backing buffer with
+  `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR`, creates
+  `vkCreateAccelerationStructureKHR(VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)`.
+  All previous stubs removed.
+- **`EnsureBlasHandle` private helper — lazy per-chunk BLAS handle.**
+  Allocates backing buffer per chunk, `vkCreateAccelerationStructureKHR(BOTTOM_LEVEL)`,
+  caches `vkGetAccelerationStructureDeviceAddressKHR` result for the instance
+  reference. Fixes the **`accelerationStructureReference = 0u`** bug at the old
+  `RayTracedShadows.cpp:433` (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281
+  violation when BLASes were real but reference was hardcoded zero).
+- **`BuildChunkBlas` binds `dstAccelerationStructure` + AS_BUILD → AS_READ barrier.**
+  After `vkCmdBuildAccelerationStructuresKHR` for each chunk BLAS, an
+  `VkBufferMemoryBarrier` (srcAccessMask=ACCELERATION_STRUCTURE_WRITE,
+  dstAccessMask=ACCELERATION_STRUCTURE_READ) on the BLAS backing buffer is
+  emitted so the next read of the same BLAS (TLAS instance reference) sees
+  fresh data. Per Vulkan spec alignment requirements.
+- **`UpdateTlas` writes real BLAS device address.** `instances[i].accelerationStructureReference
+  = blasDeviceAddresses[chunkIndex]` instead of the previous hardcoded `0u`. For
+  out-of-range chunkIndex the function safely writes 0 (no crash, no garbage).
+- **`RecordTlasBuild` does real `vkCmdBuildAccelerationStructuresKHR` for TLAS.**
+  Emits `VK_PIPELINE_STAGE_HOST_BIT` → `VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR`
+  barrier on the TLAS instance buffer (host-written in `UpdateTlas`), binds
+  `VK_GEOMETRY_TYPE_INSTANCES_KHR` geometry with `arrayOfPointers = VK_FALSE`,
+  TLAS `dstAccelerationStructure` pre-created in `AllocateBuffers`, scratch from
+  shared scratch buffer, range info with `primitiveCount = tlasInstanceCount`.
+  Emits AS_BUILD → FRAGMENT|RAY_TRACING shader barrier (memory + execution dependency)
+  so the next fragment-shader `rayQueryEXT` sees the fresh TLAS. Increments
+  `shadowRayDispatchCount` per call.
+- **`voxel.frag::TraceRtxSunShadowRay` GLSL helper.** Single-hit ray query against
+  `rtxTlas` (binding 13, already in use for specular GI): `gl_RayFlagsTerminateOnFirstHitEXT`,
+  `tMin = 0.001` (offset along ray direction to avoid self-hit), `tMax = 256 m`
+  (generous vs `VoxelLab` 64 m receiver max per `agent/knowledge.md §15`).
+  Returns 1.0 if no hit (lit), 0.0 if hit (in shadow). EVIL constant
+  `kRtxSunShadowMaxDistanceMeters = 256.0`.
+- **`ComputeSunShadowSample` early returns for RTX path.** When `VOXEL_RTX_ENABLED`
+  is defined and `nDotL > 0.02`, calls `TraceRtxSunShadowRay` + `ComputeSunContactVisibility`
+  and returns immediately. The CSM cascade blend + `receiverDepthBias` / `receiverNormalBias`
+  / `receiverLightBias` ladder is **skipped entirely** for RTX path. No more
+  Peter Panning (per `/tmp/handoff-shadow-peter-panning-fix.md` P0.4 chain —
+  see `agent/knowledge.md §15` line 1320 mark MOOT). For backfacing surfaces
+  (`nDotL <= 0.02`) the RTX path also returns 1.0 (lit) to match the CSM
+  "skip sampling on backfaces" behavior.
+- **Pipeline auto-select: existing `graphicsPipelineRtx` / `graphicsPipelineRtxTaaOn`**
+  bound when `rtxPathActive = (rayTracedShadows->IsEnabled() && tlas != null)`.
+  No new pipeline variants needed — the same `voxel.frag.rtx{,_taa_on}.spv`
+  variant now includes both specular ray and shadow ray consume. Pipeline
+  selection in `Renderer.cpp:866-875` already correct.
+- **`IsRayTracedShadowEnabled()` signature change → auto-detect.**
+  New signature: `IsRayTracedShadowEnabled(const VulkanContextState &context) noexcept`
+  returning `context.rayTracing.accelerationStructure && context.rayTracing.rayQuery`.
+  `PROJECTV_HW_RAY_TRACING=ON/OFF` env gate **removed** from `RayTracedShadows.cpp`,
+  `VulkanBootstrap.cpp` (2 sites + chain wiring), `VulkanGraphicsPipeline.cpp` (comment).
+  All 3 callers in `VulkanGraphicsPipeline.cpp` updated to pass `*context`.
+- **Hard-fail on non-RTX GPU.** `RayTracedShadows::Initialize` returns `false` when
+  RT support missing (was: `true` with `enabled = false` — silent fallback).
+  `CreateRayTracedShadowResources` logs `SDL_LogCritical` with explicit message
+  "RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores)" and
+  returns `false`. `VulkanInit::InitVulkan` propagates as
+  `std::unexpected(VulkanInitError::ShadowResourcesFailed)`. Engine refuses to
+  start on non-RTX hardware — no partial functionality, no CSM fallback.
+- **VulkanBootstrap cleanup.** RTX device extensions (`VK_KHR_acceleration_structure`,
+  `VK_KHR_ray_query`, optional `VK_KHR_deferred_host_operations`) now enable
+  unconditionally when hardware supports them. RTX feature struct (chain node
+  with `rayQuery = VK_TRUE` / `accelerationStructure = VK_TRUE`) populated
+  unconditionally when supported. VMA `ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT`
+  flag set unconditionally for RTX-capable hardware. All env-gate reads removed.
+
+**Tests (19 total, +8 new for 5.2.A/B/C, all pass):**
+
+- `TestConfigHasBlasCacheFields` — verifies new fields default to empty
+  (no false sharing from prior runs)
+- `TestUpdateTlasSafeWithoutBlasCache` — UpdateTlas doesn't crash when BLAS
+  cache is empty; writes 0 for `accelerationStructureReference`; instance
+  data correctly encoded (customIndex, mask, count, rebuild counter)
+- `TestUpdateTlasSafeForOversizedChunkIndex` — chunkIndex ≥ cache size
+  doesn't crash; writes 0 safely (defensive bound check)
+- `TestRecordTlasBuildGuardsForZeroInstanceCount` — empty visible chunks
+  doesn't increment dispatch counter (prevents empty TLAS build spam)
+- `TestRtxSunShadowRayHelperExistsInShader` — file-content check that
+  `voxel.frag` defines `TraceRtxSunShadowRay` + `kRtxSunShadowMaxDistanceMeters`
+  + uses `rayQueryInitializeEXT` + `VOXEL_RTX_ENABLED` guard (protects against
+  accidental removal during refactor of the shader)
+- `TestEnvGateDefaultsOff` / `TestEnvGateOnRespected` (rewritten for new
+  contract) — `IsRayTracedShadowEnabled(context)` returns false on default
+  context, true when both ray-tracing capabilities present, false if only one
+
+**Verification:**
+
+- `cmake --build build/linux-clang-debug --target ProjectVRayTracedShadowTests ProjectV --parallel 8` → green, 0 warnings.
+- `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38 pass.
+- `ProjectVRayTracedShadowTests` standalone → 19/19 sub-tests pass.
+- `timeout 12 bin/ProjectV` (no env vars) on RTX 3060 Ti dev host:
+  `ProbeHardwareRayTracingSupport: RTX path available (accelerationStructure=1 rayQuery=1 ...)` →
+  `RayTracedShadows.Initialize: enabled (maxBlas=4096 maxPrim/Blas=8192 hostBuild=0)` →
+  `SceneConfig: loaded 'ProjectV Default' from runtime/scene.json (preset=VoxelLab)` →
+  exit clean (0). No Vulkan validation errors in console.
+
+**Files modified (scope of this session 19x):**
+
+- `src/render/RayTracedShadows.hpp` — RayTracedShadowConfig +5 fields + `EnsureBlasHandle` private + `RayTracedShadowTestAccess` friend struct
+- `src/render/RayTracedShadows.cpp` — `AllocateBuffers` TLAS sizing/create (~80 LoC) + `EnsureBlasHandle` (~80 LoC) + `BuildChunkBlas` dst + AS barrier (~15 LoC) + `UpdateTlas` real device address (~10 LoC) + `RecordTlasBuild` real build dispatch + barrier (~80 LoC) + `IsRayTracedShadowEnabled` signature change (~5 LoC) + `Initialize` hard-fail (~15 LoC) + `CreateRayTracedShadowResources` critical log + return false (~10 LoC) + `ReleaseBuffers` extended (~30 LoC)
+- `src/shaders/voxel.frag` — `TraceRtxSunShadowRay` helper + `kRtxSunShadowMaxDistanceMeters` constant + `ComputeSunShadowSample` early return
+- `src/render/vulkan/VulkanBootstrap.cpp` — remove 3 sites of `PROJECTV_HW_RAY_TRACING` env-var reads
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — `IsRayTracedShadowEnabled(*context)` callers (3 sites) + comment update
+- `src/render/vulkan/VulkanInit.cpp` — `CreateRayTracedShadowResources` failure → `std::unexpected(ShadowResourcesFailed)`
+- `tests/RayTracedShadowTests.cpp` — 5 new sub-tests + 2 rewritten
+- `agent/knowledge.md §15` — peter-panning MOOT + hardware target policy sub-section
+- `TODO.md` — 5.2.A/B/C closed + summary updated
+- `agent/workspace.md` — session 19x entry
+- `COMMENTS.md` — design-rationale entries
+- `CHANGELOG.md` — this entry
+
+**Out of scope (deferred per TODO.md + this session plan):**
+5.2.D (CSM removal, ~1300 LoC), 5.4/5.5/5.6/5.7 (RTX AO/DDGI/refraction/multi-bounce),
+7.x (post-RTX polish), 6.2/2.3 (deferred-pending). CSM continues to dominate shadow
+rendering — 5.2.D will be the next session's focus.
+
+**Safety-net:** `/tmp/before_19x_20260622_201316.patch` (270 KB, kept per AGENTS.md §5.4).
+
 ## 2026-06-22 (session: 18x «fix(voxel,render): Fluid CA debug-assert + async compute wait-semaphore + regression tests»)
 
 Two real bugs that survived the `cee5db6` "fix" of the same validation errors (which

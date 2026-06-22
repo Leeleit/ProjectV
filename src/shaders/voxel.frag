@@ -84,6 +84,23 @@ vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir,
     }
     return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
 }
+
+// EVIL: kRtxSunShadowMaxDistanceMeters = 256. Hard cap on RTX sun shadow ray length. Per
+// TODO.md §5.2.B "Bias полностью убирается: ray query T_min = 0.001 (offset along ray direction
+// to avoid self-hit), T_max = 256.0 (или scene bounding box diagonal)". 256 m is generous
+// against VoxelLab 64 m receiver max distance per `agent/knowledge.md §15` lighting contract.
+const float kRtxSunShadowMaxDistanceMeters = 256.0;
+
+float TraceRtxSunShadowRay(const vec3 worldOrigin, const vec3 sunDir) {
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, rtxTlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFFu,
+        worldOrigin, 0.001, sunDir, kRtxSunShadowMaxDistanceMeters);
+    rayQueryProceedEXT(rq);
+    if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
+        return 1.0;
+    }
+    return 0.0;
+}
 #endif
 
 layout(push_constant) uniform PushConstants {
@@ -774,6 +791,19 @@ const float shadowStrength) {
 }
 
 vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
+#ifdef VOXEL_RTX_ENABLED
+    {
+        const vec3 sunDirForRtx = normalize(sceneLighting.sunDirectionAndWrap.xyz);
+        const float nDotLRtx = clamp(dot(normal, sunDirForRtx), 0.0, 1.0);
+        if (nDotLRtx > 0.02) {
+            const float rtxLit = TraceRtxSunShadowRay(worldPosition, sunDirForRtx);
+            const float rtxContactVisibility = ComputeSunContactVisibility(worldPosition, normal, sunDirForRtx);
+            const float rtxShadow = rtxLit * rtxContactVisibility;
+            const float anyRtxShadow = rtxLit < 0.999 || rtxContactVisibility < 0.999 ? 1.0 : 0.0;
+            return vec4(rtxShadow, anyRtxShadow, 0.0, rtxContactVisibility);
+        }
+    }
+#endif
     const float viewDepth = GetCameraViewDepth(worldPosition);
     const uint cascadeIndex = SelectSunShadowCascadeByViewDepth(viewDepth);
     const float shadowStrength = clamp(sceneLighting.sunShadowParams.x, 0.0, 1.0);

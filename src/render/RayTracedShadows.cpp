@@ -13,7 +13,6 @@ namespace projectv::render {
 
 namespace {
 
-constexpr const char *kEnvRtxEnabled = "PROJECTV_HW_RAY_TRACING";
 constexpr uint32_t kRtxMaxInitialBlasCount = 4096u;
 constexpr uint32_t kRtxMaxPrimitivesPerBlas = 8192u;
 constexpr VkDeviceSize kRtxTlasInstanceBufferBytes = sizeof(VkAccelerationStructureInstanceKHR) * kRtxMaxInitialBlasCount;
@@ -21,13 +20,9 @@ constexpr VkDeviceSize kRtxScratchBufferBytes = 32ull * 1024ull * 1024ull;
 
 }  // namespace
 
-bool IsRayTracedShadowEnabled() noexcept
+bool IsRayTracedShadowEnabled(const VulkanContextState &context) noexcept
 {
-	const char *const envValue = std::getenv(kEnvRtxEnabled);
-	if (envValue == nullptr) {
-		return false;
-	}
-	return std::strcmp(envValue, "ON") == 0 || std::strcmp(envValue, "1") == 0;
+	return context.rayTracing.accelerationStructure && context.rayTracing.rayQuery;
 }
 
 RayTracedShadows::~RayTracedShadows()
@@ -51,17 +46,13 @@ bool RayTracedShadows::Initialize(
 			"vulkan context not initialised");
 		return false;
 	}
-	if (!context.rayTracing.accelerationStructure || !context.rayTracing.rayQuery) {
-		SDL_Log("Render: RayTracedShadows.Initialize: HW RT not available; staying disabled");
-		m_config.enabled = false;
+	if (!IsRayTracedShadowEnabled(context)) {
+		SDL_LogCritical(
+			SDL_LOG_CATEGORY_APPLICATION,
+			"RayTracedShadows.Initialize: RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores). "
+			"PROJECTV_HW_RAY_TRACING=ON/OFF env gate removed; non-RTX hardware is no longer supported.");
 		m_config.featureDetectionResult = false;
-		return true;
-	}
-	if (!IsRayTracedShadowEnabled()) {
-		SDL_Log("Render: RayTracedShadows.Initialize: PROJECTV_HW_RAY_TRACING not ON; path stays dormant");
-		m_config.enabled = false;
-		m_config.featureDetectionResult = true;
-		return true;
+		return false;
 	}
 
 	m_config.maxBlasCount = std::max(maxBlasCount, 1u);
@@ -176,6 +167,12 @@ bool RayTracedShadows::AllocateBuffers(
 	m_config.shadowRayDispatchCount = 0;
 	m_config.fallbackCount = 0;
 
+	m_config.blasHandles.assign(maxBlasCount, VK_NULL_HANDLE);
+	m_config.blasStorageBuffers.assign(maxBlasCount, VK_NULL_HANDLE);
+	m_config.blasStorageAllocations.assign(maxBlasCount, nullptr);
+	m_config.blasDeviceAddresses.assign(maxBlasCount, 0u);
+	m_config.blasStorageCapacityBytes.assign(maxBlasCount, 0u);
+
 	VkBufferCreateInfo aabbInfo{};
 	aabbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	aabbInfo.size = sizeof(VkAabbPositionsKHR);
@@ -202,14 +199,120 @@ bool RayTracedShadows::AllocateBuffers(
 		m_config.aabbScratchBuffer
 	};
 	m_config.aabbScratchDeviceAddress = vkGetBufferDeviceAddress(context.device, &aabbAddressInfo);
+
+	if (context.rayTracing.accelerationStructureHostCommands) {
+		VkAccelerationStructureGeometryAabbsDataKHR aabbGeometryData{};
+		aabbGeometryData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+		aabbGeometryData.data.deviceAddress = m_config.aabbScratchDeviceAddress;
+		aabbGeometryData.stride = sizeof(VkAabbPositionsKHR);
+
+		VkAccelerationStructureGeometryKHR aabbGeometry{};
+		aabbGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+		aabbGeometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+		aabbGeometry.geometry.aabbs = aabbGeometryData;
+		aabbGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+		VkAccelerationStructureBuildGeometryInfoKHR tlasSizingInfo{};
+		tlasSizingInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+		tlasSizingInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+		tlasSizingInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+		tlasSizingInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+		tlasSizingInfo.geometryCount = 1u;
+		tlasSizingInfo.pGeometries = &aabbGeometry;
+
+		uint32_t tlasSizingInstanceCount = maxBlasCount;
+		VkAccelerationStructureBuildSizesInfoKHR tlasSizeInfo{};
+		tlasSizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+		vkGetAccelerationStructureBuildSizesKHR(
+			context.device,
+			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+			&tlasSizingInfo,
+			&tlasSizingInstanceCount,
+			&tlasSizeInfo);
+		const VkDeviceSize tlasBackingSize = tlasSizeInfo.accelerationStructureSize > 0u
+			? tlasSizeInfo.accelerationStructureSize
+			: static_cast<VkDeviceSize>(1024u * 1024u);
+
+		VkBufferCreateInfo tlasBackingInfo{};
+		tlasBackingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		tlasBackingInfo.size = tlasBackingSize;
+		tlasBackingInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+							 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		tlasBackingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		VmaAllocationCreateInfo tlasBackingAllocInfo{};
+		tlasBackingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		tlasBackingAllocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+		const VkResult createTlasBackingResult = vmaCreateBuffer(
+			context.allocator,
+			&tlasBackingInfo,
+			&tlasBackingAllocInfo,
+			&m_config.tlasBackingBuffer,
+			&m_config.tlasBackingAllocation,
+			nullptr);
+		if (createTlasBackingResult != VK_SUCCESS) {
+			runtime::LogVkFailure("RayTracedShadows.AllocateBuffers.vmaCreateBuffer.TlasBacking", createTlasBackingResult);
+			return false;
+		}
+		const VkBufferDeviceAddressInfo tlasBackingAddressInfo{
+			VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			nullptr,
+			m_config.tlasBackingBuffer
+		};
+		m_config.tlasBackingDeviceAddress = vkGetBufferDeviceAddress(context.device, &tlasBackingAddressInfo);
+		m_config.tlasBackingCapacityBytes = tlasBackingSize;
+
+		VkAccelerationStructureCreateInfoKHR tlasCreateInfo{};
+		tlasCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+		tlasCreateInfo.buffer = m_config.tlasBackingBuffer;
+		tlasCreateInfo.offset = 0u;
+		tlasCreateInfo.size = tlasBackingSize;
+		tlasCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+		const VkResult createTlasResult = vkCreateAccelerationStructureKHR(
+			context.device,
+			&tlasCreateInfo,
+			nullptr,
+			&m_config.tlas);
+		if (createTlasResult != VK_SUCCESS) {
+			runtime::LogVkFailure("RayTracedShadows.AllocateBuffers.vkCreateAccelerationStructureKHR.Tlas", createTlasResult);
+			return false;
+		}
+	}
+
 	return true;
 }
 
 void RayTracedShadows::ReleaseBuffers(const VulkanContextState &context) noexcept
 {
+	for (size_t i = 0; i < m_config.blasHandles.size(); ++i) {
+		if (m_config.blasHandles[i] != VK_NULL_HANDLE) {
+			vkDestroyAccelerationStructureKHR(context.device, m_config.blasHandles[i], nullptr);
+			m_config.blasHandles[i] = VK_NULL_HANDLE;
+		}
+	}
+	m_config.blasDeviceAddresses.assign(m_config.blasHandles.size(), 0u);
+	if (!m_config.blasStorageBuffers.empty() && context.allocator != nullptr) {
+		for (size_t i = 0; i < m_config.blasStorageBuffers.size(); ++i) {
+			if (m_config.blasStorageBuffers[i] != VK_NULL_HANDLE && m_config.blasStorageAllocations[i] != nullptr) {
+				vmaDestroyBuffer(
+					context.allocator,
+					m_config.blasStorageBuffers[i],
+					m_config.blasStorageAllocations[i]);
+			}
+		}
+	}
+	m_config.blasStorageBuffers.clear();
+	m_config.blasStorageAllocations.clear();
+	m_config.blasStorageCapacityBytes.clear();
+	m_config.blasHandles.clear();
+
 	if (m_config.tlas != VK_NULL_HANDLE) {
 		vkDestroyAccelerationStructureKHR(context.device, m_config.tlas, nullptr);
 		m_config.tlas = VK_NULL_HANDLE;
+	}
+	if (m_config.tlasBackingBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
+		vmaDestroyBuffer(context.allocator, m_config.tlasBackingBuffer, m_config.tlasBackingAllocation);
+		m_config.tlasBackingBuffer = VK_NULL_HANDLE;
+		m_config.tlasBackingAllocation = nullptr;
 	}
 	if (m_config.tlasInstanceBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
 		vmaDestroyBuffer(context.allocator, m_config.tlasInstanceBuffer, m_config.tlasInstanceAllocation);
@@ -229,6 +332,8 @@ void RayTracedShadows::ReleaseBuffers(const VulkanContextState &context) noexcep
 	m_config.tlasInstanceMappedData = nullptr;
 	m_config.tlasInstanceDeviceAddress = 0;
 	m_config.tlasInstanceCapacityBytes = 0;
+	m_config.tlasBackingDeviceAddress = 0;
+	m_config.tlasBackingCapacityBytes = 0;
 	m_config.scratchDeviceAddress = 0;
 	m_config.scratchCapacityBytes = 0;
 	m_config.aabbScratchDeviceAddress = 0;
@@ -351,6 +456,11 @@ bool RayTracedShadows::BuildChunkBlas(
 		return false;
 	}
 
+	if (!EnsureBlasHandle(context, chunkIndex, aabb)) {
+		m_config.fallbackCount += 1u;
+		return false;
+	}
+
 	vkCmdUpdateBuffer(commandBuffer, m_config.aabbScratchBuffer, 0u, sizeof(VkAabbPositionsKHR), &aabb);
 
 	VkBufferMemoryBarrier updateBarrier{};
@@ -394,6 +504,7 @@ bool RayTracedShadows::BuildChunkBlas(
 	buildInfo.geometryCount = 1u;
 	buildInfo.pGeometries = &geometry;
 	buildInfo.scratchData.deviceAddress = m_config.scratchDeviceAddress;
+	buildInfo.dstAccelerationStructure = m_config.blasHandles[chunkIndex];
 
 	VkAccelerationStructureBuildRangeInfoKHR rangeInfo{};
 	rangeInfo.primitiveCount = 1u;
@@ -408,8 +519,126 @@ bool RayTracedShadows::BuildChunkBlas(
 		&buildInfo,
 		rangeInfos);
 
+	VkBufferMemoryBarrier blasWriteBarrier{};
+	blasWriteBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	blasWriteBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+	blasWriteBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	blasWriteBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	blasWriteBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	blasWriteBarrier.buffer = m_config.blasStorageBuffers[chunkIndex];
+	blasWriteBarrier.offset = 0u;
+	blasWriteBarrier.size = m_config.blasStorageCapacityBytes[chunkIndex];
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		0u,
+		0u,
+		nullptr,
+		1u,
+		&blasWriteBarrier,
+		0u,
+		nullptr);
+
 	m_config.blasRebuildCount += 1u;
 	return true;
+}
+
+bool RayTracedShadows::EnsureBlasHandle(
+	const VulkanContextState &context,
+	const uint32_t chunkIndex,
+	VkAabbPositionsKHR aabb)
+{
+	if (context.device == VK_NULL_HANDLE || context.allocator == nullptr) {
+		return false;
+	}
+	if (chunkIndex >= m_config.blasHandles.size()) {
+		return false;
+	}
+	if (m_config.blasHandles[chunkIndex] != VK_NULL_HANDLE) {
+		return true;
+	}
+	VkAccelerationStructureGeometryAabbsDataKHR aabbGeometryData{};
+	aabbGeometryData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
+	aabbGeometryData.data.deviceAddress = m_config.aabbScratchDeviceAddress;
+	aabbGeometryData.stride = sizeof(VkAabbPositionsKHR);
+
+	VkAccelerationStructureGeometryKHR aabbGeometry{};
+	aabbGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	aabbGeometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
+	aabbGeometry.geometry.aabbs = aabbGeometryData;
+	aabbGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+	VkAccelerationStructureBuildGeometryInfoKHR blasSizingInfo{};
+	blasSizingInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+	blasSizingInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+	blasSizingInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+	blasSizingInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+	blasSizingInfo.geometryCount = 1u;
+	blasSizingInfo.pGeometries = &aabbGeometry;
+
+	uint32_t blasSizingPrimitiveCount = 1u;
+	VkAccelerationStructureBuildSizesInfoKHR blasSizeInfo{};
+	blasSizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+	vkGetAccelerationStructureBuildSizesKHR(
+		context.device,
+		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+		&blasSizingInfo,
+		&blasSizingPrimitiveCount,
+		&blasSizeInfo);
+	const VkDeviceSize blasBackingSize = blasSizeInfo.accelerationStructureSize > 0u
+		? blasSizeInfo.accelerationStructureSize
+		: static_cast<VkDeviceSize>(1024u);
+
+	VkBufferCreateInfo blasBackingInfo{};
+	blasBackingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	blasBackingInfo.size = blasBackingSize;
+	blasBackingInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+						  | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	blasBackingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	VmaAllocationCreateInfo blasBackingAllocInfo{};
+	blasBackingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	const VkResult createBlasBackingResult = vmaCreateBuffer(
+		context.allocator,
+		&blasBackingInfo,
+		&blasBackingAllocInfo,
+		&m_config.blasStorageBuffers[chunkIndex],
+		&m_config.blasStorageAllocations[chunkIndex],
+		nullptr);
+	if (createBlasBackingResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"RayTracedShadows.EnsureBlasHandle.vmaCreateBuffer.BlasBacking",
+			createBlasBackingResult);
+		return false;
+	}
+	m_config.blasStorageCapacityBytes[chunkIndex] = blasBackingSize;
+
+	VkAccelerationStructureCreateInfoKHR blasCreateInfo{};
+	blasCreateInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+	blasCreateInfo.buffer = m_config.blasStorageBuffers[chunkIndex];
+	blasCreateInfo.offset = 0u;
+	blasCreateInfo.size = blasBackingSize;
+	blasCreateInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+	const VkResult createBlasResult = vkCreateAccelerationStructureKHR(
+		context.device,
+		&blasCreateInfo,
+		nullptr,
+		&m_config.blasHandles[chunkIndex]);
+	if (createBlasResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"RayTracedShadows.EnsureBlasHandle.vkCreateAccelerationStructureKHR",
+			createBlasResult);
+		return false;
+	}
+	const VkAccelerationStructureDeviceAddressInfoKHR blasAddressInfo{
+		VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+		nullptr,
+		m_config.blasHandles[chunkIndex]
+	};
+	m_config.blasDeviceAddresses[chunkIndex] = vkGetAccelerationStructureDeviceAddressKHR(
+		context.device,
+		&blasAddressInfo);
+	return m_config.blasDeviceAddresses[chunkIndex] != 0u;
 }
 
 void RayTracedShadows::UpdateTlas(
@@ -425,12 +654,17 @@ void RayTracedShadows::UpdateTlas(
 	const size_t clamped = std::min(count, capacity);
 	auto *const instances = static_cast<VkAccelerationStructureInstanceKHR *>(m_config.tlasInstanceMappedData);
 	for (size_t i = 0; i < clamped; ++i) {
+		const uint32_t chunkIndex = visibleChunkIndices[i];
 		instances[i].transform = visibleChunkTransforms[i];
-		instances[i].instanceCustomIndex = visibleChunkIndices[i] & 0xFFFFFFu;
+		instances[i].instanceCustomIndex = chunkIndex & 0xFFFFFFu;
 		instances[i].mask = 0xFFu;
 		instances[i].instanceShaderBindingTableRecordOffset = 0u;
 		instances[i].flags = 0u;
-		instances[i].accelerationStructureReference = 0u;
+		if (chunkIndex < m_config.blasDeviceAddresses.size()) {
+			instances[i].accelerationStructureReference = m_config.blasDeviceAddresses[chunkIndex];
+		} else {
+			instances[i].accelerationStructureReference = 0u;
+		}
 	}
 	std::memset(
 		instances + clamped,
@@ -458,7 +692,86 @@ void RayTracedShadows::RecordTlasBuild(
 	if (m_config.tlas == VK_NULL_HANDLE || m_config.tlasInstanceBuffer == VK_NULL_HANDLE) {
 		return;
 	}
-	(void)context;
+	if (m_config.tlasInstanceCount == 0u) {
+		return;
+	}
+	if (m_config.tlasInstanceDeviceAddress == 0u || m_config.scratchDeviceAddress == 0u) {
+		m_config.fallbackCount += 1u;
+		return;
+	}
+
+	VkBufferMemoryBarrier instanceBarrier{};
+	instanceBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	instanceBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+	instanceBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	instanceBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	instanceBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	instanceBarrier.buffer = m_config.tlasInstanceBuffer;
+	instanceBarrier.offset = 0u;
+	instanceBarrier.size = static_cast<VkDeviceSize>(m_config.tlasInstanceCount) * sizeof(VkAccelerationStructureInstanceKHR);
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		VK_PIPELINE_STAGE_HOST_BIT,
+		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		0u,
+		0u,
+		nullptr,
+		1u,
+		&instanceBarrier,
+		0u,
+		nullptr);
+
+	VkAccelerationStructureGeometryInstancesDataKHR instancesData{};
+	instancesData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+	instancesData.arrayOfPointers = VK_FALSE;
+	instancesData.data.deviceAddress = m_config.tlasInstanceDeviceAddress;
+
+	VkAccelerationStructureGeometryKHR instancesGeometry{};
+	instancesGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+	instancesGeometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+	instancesGeometry.geometry.instances = instancesData;
+	instancesGeometry.flags = 0u;
+
+	VkAccelerationStructureBuildGeometryInfoKHR tlasBuildInfo{};
+	tlasBuildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+	tlasBuildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+	tlasBuildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+	tlasBuildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+	tlasBuildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+	tlasBuildInfo.dstAccelerationStructure = m_config.tlas;
+	tlasBuildInfo.geometryCount = 1u;
+	tlasBuildInfo.pGeometries = &instancesGeometry;
+	tlasBuildInfo.scratchData.deviceAddress = m_config.scratchDeviceAddress;
+
+	VkAccelerationStructureBuildRangeInfoKHR tlasRangeInfo{};
+	tlasRangeInfo.primitiveCount = m_config.tlasInstanceCount;
+	tlasRangeInfo.primitiveOffset = 0u;
+	tlasRangeInfo.firstVertex = 0u;
+	tlasRangeInfo.transformOffset = 0u;
+	const VkAccelerationStructureBuildRangeInfoKHR *tlasRangeInfos[1] = { &tlasRangeInfo };
+
+	vkCmdBuildAccelerationStructuresKHR(
+		commandBuffer,
+		1u,
+		&tlasBuildInfo,
+		tlasRangeInfos);
+
+	VkMemoryBarrier tlasToFragmentBarrier{};
+	tlasToFragmentBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	tlasToFragmentBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+	tlasToFragmentBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+		0u,
+		1u,
+		&tlasToFragmentBarrier,
+		0u,
+		nullptr,
+		0u,
+		nullptr);
+
 	m_config.shadowRayDispatchCount += 1u;
 }
 
@@ -509,9 +822,11 @@ bool CreateRayTracedShadowResources(VulkanContextState *context, RenderState *re
 			kRtxMaxInitialBlasCount,
 			kRtxMaxPrimitivesPerBlas,
 			context->rayTracing.minAccelerationStructureScratchOffsetAlignment)) {
-		SDL_LogInfo(
+		SDL_LogCritical(
 			SDL_LOG_CATEGORY_APPLICATION,
-			"Ray traced shadow resources not initialised (HW not available or env gate off); CSM continues to dominate");
+			"ProjectV requires RTX-capable GPU (NVIDIA RTX 20 series or newer with RT cores). "
+			"Non-RTX hardware is no longer supported per TODO.md §5.2.C strategic pivot (2026-06-22).");
+		return false;
 	}
 	return true;
 }

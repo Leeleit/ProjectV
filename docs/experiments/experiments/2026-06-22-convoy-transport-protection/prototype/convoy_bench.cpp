@@ -21,6 +21,9 @@
 // ---------------------------------------------------------------------------
 static constexpr int kMapSize    = 64;
 static constexpr int kMaxUnits   = 16;
+static constexpr int kTruckHP    = 4;
+static constexpr int kEscortHP   = 3;
+static constexpr int kMaxTicks   = 300;
 static constexpr int kWarmup     = 20;
 static constexpr int kIterations = 200;
 
@@ -242,41 +245,41 @@ static std::vector<Scene> make_scenes() {
   scenes.push_back(Scene{
     "s1_simple_supply_run", "Short route, open terrain, 2 threats",
     {2, 8}, {30, 8}, 1,
-    { {{15, 6}, 4, 0.3f, 10, 1}, {{12, 12}, 3, 0.4f, 8, 1} },
+    { {{15, 6}, 4, 0.5f, 8, 2}, {{12, 12}, 3, 0.6f, 6, 2} },
     std::move(m1)
   });
   scenes.push_back(Scene{
     "s2_highway_ambush", "Long highway through mountain chokepoint, 4 threats clustered",
     {2, 16}, {62, 16}, 2,
-    { {{30, 12}, 3, 0.6f, 6, 2}, {{30, 20}, 3, 0.5f, 6, 2},
-      {{10, 14}, 4, 0.2f, 12, 1}, {{50, 18}, 4, 0.3f, 10, 1} },
+    { {{30, 12}, 3, 0.7f, 5, 3}, {{30, 20}, 3, 0.6f, 5, 3},
+      {{10, 14}, 4, 0.4f, 8, 2}, {{50, 18}, 4, 0.5f, 8, 2} },
     std::move(m2)
   });
   scenes.push_back(Scene{
     "s3_mountain_pass", "Three chokepoints, high threat density, narrow passages",
     {2, 20}, {62, 20}, 3,
-    { {{32, 16}, 2, 0.7f, 4, 3}, {{32, 24}, 2, 0.6f, 4, 3},
-      {{16, 16}, 2, 0.5f, 6, 2}, {{16, 24}, 2, 0.5f, 6, 2},
-      {{48, 16}, 2, 0.5f, 6, 2}, {{48, 24}, 2, 0.5f, 6, 2} },
+    { {{32, 17}, 4, 0.8f, 4, 3}, {{32, 23}, 4, 0.7f, 4, 3},
+      {{16, 17}, 4, 0.6f, 5, 2}, {{16, 23}, 4, 0.6f, 5, 2},
+      {{48, 17}, 4, 0.6f, 5, 2}, {{48, 23}, 4, 0.6f, 5, 2} },
     std::move(m3)
   });
   scenes.push_back(Scene{
     "s4_urban_logistics", "City grid with scattered threats, multiple route options",
     {2, 32}, {62, 32}, 2,
-    { {{10, 10}, 5, 0.3f, 8, 1}, {{32, 20}, 3, 0.4f, 6, 1},
-      {{54, 10}, 4, 0.3f, 10, 1}, {{20, 32}, 3, 0.5f, 5, 2},
-      {{44, 32}, 3, 0.5f, 5, 2}, {{10, 54}, 4, 0.2f, 8, 1},
-      {{54, 54}, 4, 0.2f, 8, 1}, {{32, 48}, 3, 0.4f, 6, 1} },
+    { {{10, 10}, 5, 0.5f, 6, 2}, {{32, 20}, 3, 0.6f, 5, 2},
+      {{54, 10}, 4, 0.5f, 8, 2}, {{20, 32}, 3, 0.7f, 4, 3},
+      {{44, 32}, 3, 0.7f, 4, 3}, {{10, 54}, 4, 0.4f, 8, 2},
+      {{54, 54}, 4, 0.4f, 8, 2}, {{32, 48}, 3, 0.6f, 5, 2} },
     std::move(m4)
   });
   scenes.push_back(Scene{
     "s5_long_haul_supply", "Cross-zone route with chokepoints, mountains, urban",
     {0, 8}, {63, 56}, 3,
-    { {{16, 4}, 3, 0.4f, 6, 2}, {{48, 4}, 3, 0.4f, 6, 1},
-      {{8, 24}, 4, 0.3f, 8, 1}, {{48, 24}, 3, 0.4f, 6, 2},
-      {{16, 40}, 3, 0.5f, 5, 2}, {{32, 40}, 4, 0.3f, 8, 1},
-      {{8, 56}, 2, 0.6f, 4, 3}, {{32, 60}, 3, 0.3f, 10, 1},
-      {{56, 40}, 4, 0.3f, 8, 1}, {{56, 24}, 3, 0.4f, 6, 2} },
+    { {{16, 4}, 3, 0.6f, 5, 2}, {{48, 4}, 3, 0.5f, 6, 2},
+      {{8, 24}, 4, 0.5f, 6, 2}, {{48, 24}, 3, 0.6f, 5, 2},
+      {{16, 40}, 3, 0.7f, 4, 3}, {{32, 40}, 4, 0.5f, 6, 2},
+      {{8, 56}, 3, 0.8f, 3, 3}, {{32, 60}, 3, 0.5f, 6, 2},
+      {{56, 40}, 4, 0.5f, 6, 2}, {{56, 24}, 3, 0.6f, 5, 2} },
     std::move(m5)
   });
   return scenes;
@@ -731,22 +734,20 @@ struct BenchmarkHarness {
     // Build terrain
     scene.build(s.map);
     // Spawn units
-    s.units.push_back({UnitType::SupplyTruck, scene.start, 10, true, false});
+    s.units.push_back({UnitType::SupplyTruck, scene.start, kTruckHP, true, false});
     for (int i = 0; i < scene.escort_count; ++i)
-      s.units.push_back({UnitType::Escort, scene.start, 8, true, false});
+      s.units.push_back({UnitType::Escort, scene.start, kEscortHP, true, false});
     return s;
   }
 
   Metrics run(Strategy& strat, const Scene& scene) {
     Metrics total;
-    strat.reset();
 
     for (int iter = 0; iter < kIterations; ++iter) {
+      strat.reset();
       auto state = make_state(scene);
-      // Re-seed for variety
-      state.rng = Rng{};
 
-      while (!state.delivered && state.tick < 500) {
+      while (!state.delivered && state.tick < kMaxTicks) {
         strat.tick(state);
         state.tick++;
       }

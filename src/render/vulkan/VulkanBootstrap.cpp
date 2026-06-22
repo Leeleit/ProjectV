@@ -501,8 +501,7 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	enabled.drawIndirectCount = selected.features12.drawIndirectCount ? VK_TRUE : VK_FALSE;
 	enabled.hostQueryReset = selected.features12.hostQueryReset ? VK_TRUE : VK_FALSE;
 	enabled.timelineSemaphore = selected.features12.timelineSemaphore ? VK_TRUE : VK_FALSE;
-	const bool rtxRequested = std::getenv("PROJECTV_HW_RAY_TRACING") != nullptr;
-	if (rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery
+	if (selected.supportsAccelerationStructure && selected.supportsRayQuery
 		&& selected.rayTracingSupport.bufferDeviceAddress) {
 		enabled.bufferDeviceAddress = VK_TRUE;
 		enabled.bufferDeviceAddressCaptureReplay = selected.features12.bufferDeviceAddressCaptureReplay ? VK_TRUE : VK_FALSE;
@@ -797,8 +796,8 @@ bool InitializeVulkanBase(
 	if (meshShaderRequested && selected.supportsMeshShader) {
 		deviceExtensions.push_back(kMeshShaderExtension);
 	}
-	const bool rtxRequested = std::getenv("PROJECTV_HW_RAY_TRACING") != nullptr;
-	if (rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery) {
+	const bool rtxSupported = selected.supportsAccelerationStructure && selected.supportsRayQuery;
+	if (rtxSupported) {
 		deviceExtensions.push_back(kAccelerationStructureExtension);
 		deviceExtensions.push_back(kRayQueryExtension);
 		if (selected.rayTracingSupport.deferredHostOperations) {
@@ -840,7 +839,7 @@ bool InitializeVulkanBase(
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, nullptr};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR, nullptr};
-	const bool rtxEnabled = rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery;
+	const bool rtxEnabled = selected.supportsAccelerationStructure && selected.supportsRayQuery;
 	if (rtxEnabled) {
 		enabledRayQueryFeatures.rayQuery = VK_TRUE;
 		enabledAccelerationStructureFeatures.accelerationStructure = VK_TRUE;
@@ -948,7 +947,7 @@ bool InitializeVulkanBase(
 	allocInfo.device = context->device;
 	allocInfo.instance = context->instance;
 	allocInfo.vulkanApiVersion = GetMinVulkanApiVersion();
-	if (rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery
+	if (selected.supportsAccelerationStructure && selected.supportsRayQuery
 		&& selected.rayTracingSupport.bufferDeviceAddress) {
 		allocInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 	}

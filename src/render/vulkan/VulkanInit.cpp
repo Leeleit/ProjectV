@@ -325,7 +325,11 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 	if (state->render().rayTracedShadows == nullptr) {
 		state->render().rayTracedShadows = new projectv::render::RayTracedShadows();
 	}
-	projectv::render::CreateRayTracedShadowResources(&state->context(), &state->render());
+	if (!projectv::render::CreateRayTracedShadowResources(&state->context(), &state->render())) {
+		return fail(projectv::vulkan_init::VulkanInitError::ShadowResourcesFailed,
+			"InitVulkan.CreateRayTracedShadowResources",
+			"RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores)");
+	}
 
 	if (projectv::render::IsAsyncComputeEnabled()) {
 		if (!projectv::render::EnsureAsyncComputeResources(&state->context())) {

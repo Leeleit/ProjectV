@@ -483,6 +483,23 @@ Update `2026-04-22`:
 - Так shadow slice остаётся совместимым с нынешним explicit CPU scene contract и dynamic-rendering path, а следующий шаг — тюнинг bias/stability/debug, а не новый lighting framework.
 - Так текущий shadow slice становится достаточно читаемым и настраиваемым для mainline look-dev без раннего перехода к cascades, render graph или отдельному tooling stack.
 
+### Hardware target policy for RTX-driven path (2026-06-22, 5.2.C)
+
+Решение:
+
+- **Minimum:** NVIDIA RTX 2060 (Turing, generation 1 RT cores, 2019). ProjectV runtime отказывается стартовать без `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` в `ProbeHardwareRayTracingSupport`.
+- **Recommended dev host:** NVIDIA RTX 3060 Ti / 3070 / 3080 / 4070+ (Ampere/Ada, 2nd/3rd gen RT cores). Текущий dev-host RTX 3060 Ti работает на ray query = ~50-200M rays/sec projected per `docs/experiments/experiments/2026-06-20-rt-shadows-vs-csm/§5.2`.
+- **Unsupported (hard fail):** anything без dedicated RT cores — GTX 10xx/16xx (Turing pre-RT), AMD pre-RDNA3 (Navi 1x/2x без 3rd gen RT accelerators), Intel Arc A-series (Alchemist, 1st gen RTU), Apple Silicon (MoltenVK не поддерживает `VK_KHR_deferred_host_operations` per MoltenVK issue #1953).
+- **Env gate removed:** `PROJECTV_HW_RAY_TRACING=ON/OFF` убран per TODO.md §5.2.C. RTX path — единственный shadow path (после 5.2.D). `IsRayTracedShadowEnabled(const VulkanContextState &)` = `context.rayTracing.accelerationStructure && context.rayTracing.rayQuery` (auto-detect).
+- **Hard-fail path:** `RayTracedShadows::Initialize` возвращает `false` при отсутствии RT support → `CreateRayTracedShadowResources` логирует `SDL_LogCritical` + возвращает `false` → `VulkanInit::InitVulkan` возвращает `std::unexpected(VulkanInitError::ShadowResourcesFailed)` → main loop отказывается стартовать с понятным error message.
+- **VulkanBootstrap wiring:** RTX extensions (`VK_KHR_acceleration_structure`, `VK_KHR_ray_query`, optional `VK_KHR_deferred_host_operations`) теперь enable'ятся **всегда** при поддержке hardware — без `PROJECTV_HW_RAY_TRACING` env gate. См. `VulkanBootstrap.cpp:800-807` + `:838-851` (RTX feature struct) + `:950-953` (VMA `BUFFER_DEVICE_ADDRESS_BIT`).
+- **Peter-panning history:** Записи 1318-1320 (P0.4 fix attempt chain + strategic pivot 2026-06-22) исторические — RTX ray query (`TraceRtxSunShadowRay` в `voxel.frag:88-99`) делает их moot. Закрытие CSM в 5.2.D = полное удаление кода.
+
+Почему:
+
+- Pet-проект = pet-проект. RTX-only path = максимальная простота (нет fallback branches, нет conditional shadow paths, нет `if (rtxEnabled)` в hot path). Non-RTX hardware users получают четкое error message вместо broken experience.
+- CSM bias tuning зашёл в тупик (Peter Panning не решается через bias coefficients per `/tmp/handoff-shadow-peter-panning-fix.md` + session 18x+ investigation); RTX даёт ground-truth visibility с 0 cost (RT cores скучают на shadow-only workload ~0.65% utilization per TODO.md §5.2).
+
 ## 16. Legacy docs structure
 
 Решение:
@@ -1316,6 +1333,9 @@ Shadow-path update `2026-04-22`:
   transparent-shadow policy.
 - The default `MeshingStress` camera is a weak discriminating case for bias tuning. Use the reference shot `cam -25 19 25`, `look 0.62 -0.48 -0.62` instead: it produces meaningful `SHDW` / `FINAL` diffs for moderate bias candidates, but the tested variants around the current code baseline still did not beat `{0.80f, 0.0010f, 0.0070f, 1.50f}` clearly enough to justify a preset change yet.
 - `VoxelLab` peter-panning source (closed 2026-06-10, P0.4): the shader-side receiver offset `receiverLightBias = max(normalBias * 0.5, depthBias * 4.0)` in `voxel.frag::ComputeSunShadowSample` was tuned when baked `normalBias` lived in a narrower range, and the floor at `0.5 * normalBias = 0.003` plus the `sunDirection * 0.003` world-space shift on top of the normal-axis offset ended up at `~0.008` units up the light direction in `VoxelLab` (`sunDirection = (-0.35, 0.80, -0.45)`). On `cascade 0` (`extent ~10-20 units`, `2048x2048`) that lands at `~0.8` light-space texel, visually detaching the visible shadow from the caster. Halving the floor (`max(normalBias * 0.2, depthBias * 2.0)`) keeps the `N.L`-scaled normal bias and the slope-aware response intact but moves the sun-direction floor to `~0.003` units, which is below the cascade texel size for the current `VoxelLab`/`MeshingStress` ortho extents. Baked preset values and the `kMaxShadowDepthBias = 0.02f` / `kMaxShadowNormalBias = 0.05f` ceiling values were not touched, so the runtime clamp pipeline in `BuildVoxelSceneLighting` still bounds the user-facing debug ladder the same way.
+  **Status 2026-06-22 (superseded):** halving fix attempted in `voxel.frag:802` и НЕ дал визуального улучшения — `receiverNormalBias` доминирует над `receiverLightBias` (см. `/tmp/handoff-shadow-peter-panning-fix.md`), плюс `receiverDepthBias` сам по себе вызывает Peter Panning через `shadowNdc.z - receiverDepthBias` formula direction. **Стратегическое решение (operator 2026-06-22):** не улучшать CSM bias coefficients, а полностью удалить CSM в Milestone 5.2.D и перейти на RTX shadows как единственный shadow path (см. `TODO.md` §5.2 + milestones). Текущая правка `voxel.frag:802` будет откачена в 5.2.D.
+
+  **Status 2026-06-22 (MOOT after 5.2.B):** `TraceRtxSunShadowRay` ray query в `voxel.frag::ComputeSunShadowSample` теперь early-returns для RTX path (`if (nDotLRtx > 0.02) TraceRtxSunShadowRay(...)`). Ground-truth visibility (T_min=0.001 offset, T_max=256 m) eliminates Peter Panning, acne, и cascade transitions. CSM path остаётся для non-RTX GPU fallback (закрывается в 5.2.D). Записи 1318-1320 остаются в knowledge для исторической трассировки P0.4 fix attempt chain.
 - Receiver bias is a **two-axis** thing, not just one number: `receiverNormalBias` (along the surface normal, `N.L`-scaled) handles the close-range acne path and `receiverLightBias` (along the sun direction, scaled by `max(normalBias, depthBias*8)` ratio) handles the floor. When tuning, always check the sum of both on the most-sensitive surface (typically the floor of the demo scene with `N = (0,1,0)` and a near-zenith sun) and compare to the active cascade's world-space texel size before touching either term.
 - HUD остаётся лёгким CPU-built overlay path без `imgui`; `G` now switches between a normal HUD and a detailed HUD, and the noisy selection/mutation/replay counters plus the green placement preview stay detailed-only.
 - Current lighting look-dev ladder is keyboard-driven inside the live sandbox: `B` cycles lighting debug views including dedicated `Shadow`, `N` cycles tone-map, `H/K` adjust exposure, and `V` resets lighting tuning to the preset baseline.

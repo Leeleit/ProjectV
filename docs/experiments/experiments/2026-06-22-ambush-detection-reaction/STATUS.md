@@ -1,37 +1,62 @@
 # STATUS — 2026-06-22-ambush-detection-reaction
 
-**Phase:** closed (Phase 4 of 4 — wrap-up complete)
-**Last action:** 2026-06-22 — Phase 4 wrap-up done (RESULTS.md + STATUS + README + sources + prototype + build all green; backlog + INDEX sync per §13.5).
-**Next tick:** none — **closed `2026-06-22` (single session, ~2h, claim + web-research + prototype + bench + close).**
-**Blocker:** нет.
+## Phase
 
----
+**Phase 0 (init) — DONE 2026-06-22 03:01**
+**Phase 1 (web-research) — DONE 2026-06-22 (Exa working this session)**
+**Phase 2 (prototype + benchmark) — DONE 2026-06-22 03:03**
+**Phase 3 (analysis + close) — DONE 2026-06-22**
 
-## Progress log
+**Status:** `concluded-verdict-mixed` per strategy; **`yes` for D_BayesianSurprise ⭐
+as universal recommended default + E_BayesianPlusBTPriorityInterrupt ⭐ as reaction
+opt-in + B_SimpleThreshold as cheap fallback**; `no` for A_NoDetection (baseline)
+and C_MovingAverageDeviation (80% FP on baseline patrol).
 
-- 2026-06-22 — opened. Self-invented per operator instruction `2026-06-22` «выбирай свободную тему или придумывай свою исследуй»; sentinel §13.7 clean (sector activity + Bayesian surprise + BT priority interrupt = first dedicated AI ambush detection axis в 140+ closed experiments; orth ко всем 18 in-progress parallel на 2026-06-22).
-- 2026-06-22 — Phase 0 scaffold: folder + README + STATUS + backlog.md claim + INDEX.md §5 Active entry done.
-- 2026-06-22 — Phase 1 web-research: 4 Tier 1 Wikipedia + 3 Tier 2 cross-refs (Champandard 2012 + Isla 2005 + Colledanchise 2018) = 7 sources verified per `sources.md`. Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list.
-- 2026-06-22 — Phase 2 prototype: `prototype/ambush_bench.cpp` ~430 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic -fconstexpr-steps=1000000000`, **build green 0 warnings**). 5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **125,000 main measurements**, wall time **11.27 sec** на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`. Output `prototype/build/results.csv` (26 rows = 1 header + 25 data) + `prototype/build/run.log` (32 lines).
-- 2026-06-22 — Phase 3 benchmark: completed. Headline per `RESULTS.md`:
-  - **A_NoDetection** = 0% TPR, 100% casualties (baseline).
-  - **B_SimpleThreshold** = 100% TPR, 100% FPR (noisy threshold).
-  - **C_MovingAverageDeviation** = 100% TPR, 80% FPR (MA+3σ ловит шумовые spikes).
-  - **D_BayesianSurprise ⭐** = 100% TPR, **0% FPR**, latency 1-2 ticks (realistic ramp).
-  - **E_BayesianPlusBTPriorityInterrupt ⭐** = same as D + **10-18% casualties reduction** (reaction behavior).
-- 2026-06-22 — Phase 4 wrap-up: `RESULTS.md` written + STATUS.md updated + README.md sections 5, 6, 7 finalized. Sync per §13.5 (backlog.md §Closed + INDEX.md §6 Recent closed) **DONE**.
+## Final outputs
 
----
+- ✅ [`README.md`](./README.md) — 8-section template complete
+  (Hypothesis, Prior art, Method, Prototype, Results, Verdict, Integration recommendation, Sources)
+- ✅ [`RESULTS.md`](./RESULTS.md) — headline summary + per-strategy
+  analysis + 5-10% threshold validation + caveats + mapping to hot-path
+- ✅ [`sources.md`](./sources.md) — 10 Tier 1 Wikipedia + 4 academic
+  Tier 2 + 1 Tier 3 cross-references = 15 verified sources
+- ✅ `prototype/ambush_bench.cpp` ~363 LoC (Clang 22.1.6
+  `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`,
+  **build green 0 warnings**)
+- ✅ `prototype/build/{ambush_bench (36 KB), results.csv (1.8 KB,
+  26 rows), run.log (26 lines)}` — 125,000 main measurements (5 strats ×
+  5 scenes × 5 seeds × 1000 iter + 10 warmup)
+- ✅ `research/backlog.md` sync: §Open → §Closed per §13.5
+- ✅ `INDEX.md` §5 Active → §6 Recent closed per §13.5
 
-## Notes
+## Sync checklist (per §13.5 + §6 §10 DoD)
 
-**Verdict: mixed per strategy; yes for E_BayesianPlusBTPriorityInterrupt ⭐ as universal recommended default + D_BayesianSurprise as detection-only alternative.**
+- [x] All 8 sections of `README.md` filled in (Hypothesis, Prior art,
+      Method, Prototype, Results, Verdict, Integration recommendation, Sources).
+- [x] `STATUS.md` reflects closed state.
+- [x] `INDEX.md` updated: §5 Active entry removed, §6 Recent closed entry
+      added (see `INDEX.md` diff at close).
+- [x] `research/backlog.md` updated: entry moved from `§Open` to `§Closed`
+      with full reservation block.
+- [x] Prototype reproducible (commands in `README.md §4 Prototype`).
+- [x] Integration recommendation written for mainline agent (3-step
+      migration per `agent/knowledge.md §30.4` precedent, ~500 LoC,
+      M effort, deferred до Stage 6+ military sandbox activation).
 
-**5-10% threshold per `optimization-philosophy.md`:** E vs A casualties = -15.2% (60 saved of 393) ✅; D vs B FPR = -100% (0% vs 100%) ✅; D vs A TPR = +∞ (0% → 100%) ✅. **Mainline 3-step migration ~520 LoC, M effort, deferred до Stage 6+ per `agent/workspace.md §2` line 36 operator 8x planning decision.**
+## Headline
 
-**Cross-axis:** orth ко всем 18 in-progress parallel на 2026-06-22; complementary к closed `hierarchical-tactical-ai-btree` [mixed, BT reaction consumer] + `recon-intel-fog-of-war` [yes, sector activity] + `cover-system-terrain-adaptive` [mixed, take-cover reaction] + `flanking-maneuver-ai` [mixed, ambushers = inverse of flankers] + `combined-arms-coordination-ai` [mixed, ambush doctrine] + `suppression-mechanics` [mixed, ambush trigger] + `fire-coordination-multiple-units` [closed, focus fire on ambusher] + `indirect-fire-artillery-fdc` [closed, call-for-fire reaction] + `radar-detection-system-simulation` [yes, sensor activity] + `irst-thermal-imaging-detection` [closed, sensor activity] + `acoustic-detection-system` [closed, sensor activity] + `lockstep-state-sync-hybrid-netcode` [closed, surprise events as lockstep nodes] + `after-action-replay-system` [closed, surprise triggers as replay highlights] + `ecs-1m-entities-bottleneck` [yes, Flecs registry] + `data-driven-vehicle-weapon-definitions` [closed, enemy noise profile]; prerequisite для open `ambush-design-ai` [m Tier 2].
+- **D_BayesianSurprise ⭐** = universal recommended default (100% detection,
+  **0% FP**, 1-2 tick latency, 0.08-1.23% of 30 Hz budget).
+- **E_BayesianPlusBTPriorityInterrupt ⭐** = D + instantaneous BT interrupt
+  (same detection, **-15.3% casualties on first-contact ambush** = 60
+  fewer per 25,000 runs).
+- **A/B/C rejected** — A has no detection, B has 100% FP, C has 80% FP
+  on the baseline patrol scene.
 
-**New axis:** first dedicated AI ambush detection / Bayesian surprise / sector activity level axis в 140+ closed experiments; opens Stage 6+ Tier 2 AI for anti-ambush tactics.
+## Last action
 
-См. [README.md](./README.md) + [RESULTS.md](./RESULTS.md) + [sources.md](./sources.md) + `prototype/{ambush_bench.cpp (~430 LoC), build/{ambush_bench (32 KB), results.csv (26 rows), run.log (32 lines)}}`.
+Experiment closed `2026-06-22`. All sync (§13.5) complete.
 
+## Next tick
+
+_None — experiment closed._

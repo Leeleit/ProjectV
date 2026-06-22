@@ -285,7 +285,7 @@ static Tree gen_space_colonization(const TreeConfig& cfg, uint64_t seed) {
 
     // Attraction points in ellipsoid
     std::vector<AttrPoint> points;
-    int n_points = 50 + cfg.trunk_h * 20;
+    int n_points = 20 + cfg.trunk_h * 8;
     float rx = 2.0f + cfg.leaf_r * 0.8f;
     float ry = 1.5f + cfg.trunk_h * 0.3f;
     float rz = 2.0f + cfg.leaf_r * 0.8f;
@@ -296,7 +296,7 @@ static Tree gen_space_colonization(const TreeConfig& cfg, uint64_t seed) {
         do {
             px = rng.range(-rx, rx);
             py = rng.range(-ry, ry);
-            pz = -rng.range(-rz, rz);
+            pz = rng.range(-rz, rz);
         } while ((px*px)/(rx*rx) + (py*py)/(ry*ry) + (pz*pz)/(rz*rz) > 1.0f);
         points.push_back({cx + px, ceny + py, cz + pz, true});
     }
@@ -309,40 +309,61 @@ static Tree gen_space_colonization(const TreeConfig& cfg, uint64_t seed) {
     float seg_len = 0.6f + cfg.trunk_h * 0.1f;
     float infl_rad = 3.0f;
     float kill_rad = 1.0f;
-    int max_iter = 200;
+    int max_iter = 80;
+
+    // Simple spatial grid: CHUNK cells per dim (cell = 1 voxel)
+    struct Cell { std::vector<int> node_indices; };
+    auto cell_idx = [](float v) -> int { return int(std::floor(v)); };
+    std::map<int, Cell> grid;
+
+    auto add_to_grid = [&](int ni, float x, float y, float z) {
+        int gx = cell_idx(x), gy = cell_idx(y), gz = cell_idx(z);
+        int key = (gx & 7) | ((gy & 7) << 3) | ((gz & 7) << 6);
+        grid[key].node_indices.push_back(ni);
+    };
+    add_to_grid(0, float(cx), 0, float(cz));
 
     for (int iter = 0; iter < max_iter && !points.empty(); ++iter) {
-        // For each node, find nearby attraction points
         std::vector<std::vector<int>> node_points(nodes.size());
         for (int pi = 0; pi < int(points.size()); ++pi) {
             if (!points[pi].active) continue;
+            // Search in 3x3x3 cell neighborhood
+            int gx = cell_idx(points[pi].x), gy = cell_idx(points[pi].y), gz = cell_idx(points[pi].z);
             float best_d = infl_rad * infl_rad;
             int best_ni = -1;
-            for (int ni = 0; ni < int(nodes.size()); ++ni) {
-                auto& n = nodes[ni];
-                float dx = n.x - points[pi].x, dy = n.y - points[pi].y, dz = n.z - points[pi].z;
-                float d = dx*dx + dy*dy + dz*dz;
-                if (d < best_d) { best_d = d; best_ni = ni; }
-            }
+            for (int dx = -1; dx <= 1; ++dx)
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dz = -1; dz <= 1; ++dz) {
+                        int key = ((gx+dx) & 7) | (((gy+dy) & 7) << 3) | (((gz+dz) & 7) << 6);
+                        auto it = grid.find(key);
+                        if (it == grid.end()) continue;
+                        for (int ni : it->second.node_indices) {
+                            if (ni >= int(nodes.size())) continue;
+                            auto& n = nodes[ni];
+                            float ddx = n.x - points[pi].x, ddy = n.y - points[pi].y, ddz = n.z - points[pi].z;
+                            float d = ddx*ddx + ddy*ddy + ddz*ddz;
+                            if (d < best_d) { best_d = d; best_ni = ni; }
+                        }
+                    }
             if (best_ni >= 0 && best_d > kill_rad * kill_rad)
                 node_points[best_ni].push_back(pi);
         }
 
         bool grew = false;
-        for (int ni = 0; ni < int(nodes.size()); ++ni) {
+        int pre_grow_count = int(nodes.size());
+        for (int ni = 0; ni < pre_grow_count; ++ni) {
             auto& pts = node_points[ni];
             if (pts.empty()) continue;
             auto& n = nodes[ni];
             float dir_x = 0, dir_y = 0, dir_z = 0;
             for (int pi : pts) {
                 auto& p = points[pi];
-                float dx = p.x - n.x, dy = p.y - n.y, dz = p.z - n.z;
-                float d = std::sqrt(dx*dx + dy*dy + dz*dz);
-                if (d > 0) { dir_x += dx/d; dir_y += dy/d; dir_z += dz/d; }
+                float ddx = p.x - n.x, ddy = p.y - n.y, ddz = p.z - n.z;
+                float d = std::sqrt(ddx*ddx + ddy*ddy + ddz*ddz);
+                if (d > 0) { dir_x += ddx/d; dir_y += ddy/d; dir_z += ddz/d; }
                 if (d < kill_rad) p.active = false;
             }
 
-            // Grow branch
             float len = std::sqrt(dir_x*dir_x + dir_y*dir_y + dir_z*dir_z);
             if (len > 0) {
                 apply_tropism(dir_x, dir_y, dir_z, 0.2f);
@@ -350,12 +371,13 @@ static Tree gen_space_colonization(const TreeConfig& cfg, uint64_t seed) {
                 float new_x = n.x + dir_x * seg_len;
                 float new_y = n.y + dir_y * seg_len;
                 float new_z = n.z + dir_z * seg_len;
+                int new_ni = int(nodes.size());
                 nodes.push_back({new_x, new_y, new_z, ni});
+                add_to_grid(new_ni, new_x, new_y, new_z);
                 grew = true;
             }
         }
 
-        // Remove consumed points
         points.erase(std::remove_if(points.begin(), points.end(),
             [](auto& p) { return !p.active; }), points.end());
 
@@ -368,8 +390,6 @@ static Tree gen_space_colonization(const TreeConfig& cfg, uint64_t seed) {
         if (parent < 0) continue;
         auto& p = nodes[parent];
         auto& c = nodes[i];
-        float w = 1.0f - float(i) / nodes.size() * 0.5f;
-        (void)w;
         int steps = std::max(2, int(std::sqrt(
             (c.x-p.x)*(c.x-p.x) + (c.y-p.y)*(c.y-p.y) + (c.z-p.z)*(c.z-p.z)) * 2));
         for (int s = 0; s <= steps; ++s) {
