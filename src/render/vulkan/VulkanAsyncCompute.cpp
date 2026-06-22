@@ -71,6 +71,11 @@ bool EnsureAsyncComputeResources(VulkanContextState *context)
 		return false;
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(context->asyncComputeCommandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, "AsyncComputeCommandBuffer");
+	// EVIL: reset the persistent asyncComputeCommandBuffer once at allocation so the
+	// validation layer sees it in initial state (not pending). Without this, the
+	// validation layer flags VUID-vkBeginCommandBuffer-commandBuffer-00049 if/when
+	// vkBeginCommandBuffer is later called without a prior wait/reset cycle.
+	vkResetCommandBuffer(context->asyncComputeCommandBuffer, 0u);
 	return true;
 }
 
@@ -107,11 +112,31 @@ bool RecordAsyncComputePass(
 		return false;
 	}
 
-	constexpr VkCommandBufferUsageFlags kUsageFlags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	// EVIL: wait on the timeline semaphore so the persistent asyncComputeCommandBuffer
+	// is in executable/reset state before vkBeginCommandBuffer. Per Vulkan spec
+	// VUID-vkBeginCommandBuffer-commandBuffer-00049 the cmd buffer must not be in
+	// pending/recording state when recording begins. The persistent buffer is
+	// submitted with hzbBuildTimelineSemaphore as the signal; wait on it.
+	if (context.hzbBuildTimelineSemaphore != VK_NULL_HANDLE && context.hzbBuildLastTimelineValue > 0u) {
+		const VkSemaphoreWaitInfo waitInfo{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.semaphoreCount = 1u,
+			.pSemaphores = &context.hzbBuildTimelineSemaphore,
+			.pValues = &context.hzbBuildLastTimelineValue,
+		};
+		const VkResult waitResult = vkWaitSemaphores(context.device, &waitInfo, UINT64_MAX);
+		if (waitResult != VK_SUCCESS) {
+			runtime::LogVkFailure("RecordAsyncComputePass.vkWaitSemaphores", waitResult);
+			return false;
+		}
+	}
+
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.pNext = nullptr;
-	beginInfo.flags = kUsageFlags;
+	beginInfo.flags = 0u;
 	beginInfo.pInheritanceInfo = nullptr;
 	VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
 	if (beginResult != VK_SUCCESS) {
@@ -301,10 +326,28 @@ bool RecordHzbAsyncCullPass(
 		return false;
 	}
 
+	// EVIL: wait on hzbBuildTimelineSemaphore so the persistent asyncComputeCommandBuffer
+	// is in executable/reset state. Per VUID-vkBeginCommandBuffer-commandBuffer-00049.
+	if (context.hzbBuildTimelineSemaphore != VK_NULL_HANDLE && context.hzbBuildLastTimelineValue > 0u) {
+		const VkSemaphoreWaitInfo waitInfo{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.semaphoreCount = 1u,
+			.pSemaphores = &context.hzbBuildTimelineSemaphore,
+			.pValues = &context.hzbBuildLastTimelineValue,
+		};
+		const VkResult waitResult = vkWaitSemaphores(context.device, &waitInfo, UINT64_MAX);
+		if (waitResult != VK_SUCCESS) {
+			runtime::LogVkFailure("RecordHzbAsyncCullPass.vkWaitSemaphores", waitResult);
+			return false;
+		}
+	}
+
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.pNext = nullptr;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	beginInfo.flags = 0u;
 	beginInfo.pInheritanceInfo = nullptr;
 	const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
 	if (beginResult != VK_SUCCESS) {

@@ -1427,6 +1427,11 @@ SDL_AppResult DrawFrame(
 		return SDL_APP_FAILURE;
 	}
 
+	const VkResult waitFencesResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	if (waitFencesResult != VK_SUCCESS) {
+		runtime::LogVkFailure("DrawFrame.vkWaitForFences", waitFencesResult);
+		return SDL_APP_FAILURE;
+	}
 	const VkResult resetFenceResult = vkResetFences(context->device, 1, &inFlightFence);
 	if (resetFenceResult != VK_SUCCESS) {
 		runtime::LogVkFailure("DrawFrame.vkResetFences", resetFenceResult);
