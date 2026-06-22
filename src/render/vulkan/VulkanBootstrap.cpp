@@ -816,34 +816,33 @@ bool InitializeVulkanBase(
 	VkPhysicalDeviceVulkan12Features enabledFeatures12 = BuildEnabledFeatures12(selected);
 	VkPhysicalDeviceVulkan13Features enabledFeatures13 = BuildEnabledFeatures13(selected);
 
-	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR enabledSwapchainMaintenance1Features{};
+	VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR enabledSwapchainMaintenance1Features{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR, nullptr};
 	if (selected.supportsSwapchainMaintenance1) {
-		enabledSwapchainMaintenance1Features.sType =
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+		enabledSwapchainMaintenance1Features.swapchainMaintenance1 = VK_TRUE;
 	}
 
-	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT enabledDynamicRenderingUnusedAttachmentsFeatures{};
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT enabledDynamicRenderingUnusedAttachmentsFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT, nullptr};
 	if (selected.supportsDynamicRenderingUnusedAttachments) {
-		enabledDynamicRenderingUnusedAttachmentsFeatures.sType =
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT;
 		enabledDynamicRenderingUnusedAttachmentsFeatures.dynamicRenderingUnusedAttachments = VK_TRUE;
 	}
 
-	VkPhysicalDeviceMeshShaderFeaturesEXT enabledMeshShaderFeatures{};
+	VkPhysicalDeviceMeshShaderFeaturesEXT enabledMeshShaderFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT, nullptr};
 	const bool meshShaderEnabled = meshShaderRequested && selected.supportsMeshShader;
 	if (meshShaderEnabled) {
-		enabledMeshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
 		enabledMeshShaderFeatures.meshShader = VK_TRUE;
 		enabledMeshShaderFeatures.taskShader = VK_TRUE;
 	}
 
-	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{};
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{};
+	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, nullptr};
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR, nullptr};
 	const bool rtxEnabled = rtxRequested && selected.supportsAccelerationStructure && selected.supportsRayQuery;
 	if (rtxEnabled) {
-		enabledRayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
 		enabledRayQueryFeatures.rayQuery = VK_TRUE;
-		enabledAccelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
 		enabledAccelerationStructureFeatures.accelerationStructure = VK_TRUE;
 		if (selected.rayTracingSupport.accelerationStructureHostCommands) {
 			enabledAccelerationStructureFeatures.accelerationStructureHostCommands = VK_TRUE;
@@ -851,21 +850,11 @@ bool InitializeVulkanBase(
 	}
 
 	enabledFeatures13.pNext = &enabledFeatures12;
-	enabledFeatures12.pNext = selected.supportsSwapchainMaintenance1
-								  ? reinterpret_cast<VkBaseOutStructure *>(&enabledSwapchainMaintenance1Features)
-								  : nullptr;
-	enabledSwapchainMaintenance1Features.pNext = selected.supportsDynamicRenderingUnusedAttachments
-													 ? reinterpret_cast<VkBaseOutStructure *>(&enabledDynamicRenderingUnusedAttachmentsFeatures)
-													 : nullptr;
-	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = meshShaderEnabled
-														   ? reinterpret_cast<VkBaseOutStructure *>(&enabledMeshShaderFeatures)
-														   : nullptr;
-	enabledMeshShaderFeatures.pNext = rtxEnabled
-										 ? reinterpret_cast<VkBaseOutStructure *>(&enabledAccelerationStructureFeatures)
-										 : nullptr;
-	enabledAccelerationStructureFeatures.pNext = rtxEnabled
-													 ? reinterpret_cast<VkBaseOutStructure *>(&enabledRayQueryFeatures)
-													 : nullptr;
+	enabledFeatures12.pNext = &enabledSwapchainMaintenance1Features;
+	enabledSwapchainMaintenance1Features.pNext = &enabledDynamicRenderingUnusedAttachmentsFeatures;
+	enabledDynamicRenderingUnusedAttachmentsFeatures.pNext = &enabledMeshShaderFeatures;
+	enabledMeshShaderFeatures.pNext = &enabledAccelerationStructureFeatures;
+	enabledAccelerationStructureFeatures.pNext = &enabledRayQueryFeatures;
 	enabledRayQueryFeatures.pNext = nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
