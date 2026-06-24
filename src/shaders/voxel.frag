@@ -16,6 +16,11 @@ struct ChunkDescriptor {
     uvec4 drawRanges;
 };
 
+bool IsGlass(const uint materialIndex);
+bool IsFluid(const uint materialIndex);
+uint DecodeChunkVoxelMaterial(const ChunkDescriptor chunkDescriptor, const uvec3 localCoord);
+vec3 ComputeRayStepTMax(const vec3 origin, const ivec3 currentVoxel, const ivec3 stepDirection, const vec3 rayDirection);
+
 layout(set = 0, binding = 1, std430) readonly buffer PackedChunkDescriptors {
     ChunkDescriptor chunkDescriptors[];
 };
@@ -58,6 +63,14 @@ layout(set = 0, binding = 11) uniform sampler3D vctClipmap;
 // consume. Bound to fallback 1x1x1 RGBA16F dummy when PROJECTV_FOG=ON not set.
 layout(set = 0, binding = 12) uniform sampler3D volumetricFog;
 
+const uint kSunContactShadowMaxSteps = 12u;
+const uint kAmbientOcclusionMaxSteps = 4u;
+const uint kLocalPointLightShadowMaxSteps = 12u;
+const float kHugeRayT = 1e20;
+const float kVctCutoffRoughness = 0.3f;
+const float kVctMaxDistanceMeters = 64.0f;
+const uint kVctMaxMipLevel = 4u;
+
 #ifdef VOXEL_RTX_ENABLED
 #extension GL_EXT_ray_query : require
 // EVIL: binding 13 = RTX top-level acceleration structure (TLAS) for ray-query
@@ -88,8 +101,8 @@ layout(set = 0, binding = 16) uniform sampler2D rtxGiProbeData;
 layout(set = 0, binding = 17, std430) readonly buffer RtxGiVolumeDesc {
     vec4 originAndHalfExtent;
     vec4 invProbeCountAndSpacing;
-    vec4 maxRayDistanceAndCounts;
-    vec4 pad;
+    vec4 maxRayDistanceAndPads;
+    uvec4 probeCountsAndRays;
 } rtxGiVolume;
 
 // EVIL: binding 18 = voxel-aware RTX shadow mask (R8_UNORM). Per Stage 5.2.E the
@@ -101,66 +114,151 @@ layout(set = 0, binding = 17, std430) readonly buffer RtxGiVolumeDesc {
 // compiled with VOXEL_RTX_ENABLED. UV: gl_FragCoord.xy / imageSize(rtxShadowMask).
 layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;
 
+
+#ifdef VOXEL_RTX_ENABLED
+bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDistance, out float hitT, out uint hitMaterial, out vec3 hitNormal, const bool ignoreGlass, const bool ignoreFluid, const uint rayFlags);
+vec3 EvaluateVoxelLighting(const vec3 hitPos, const vec3 normal, const uint matIndex, const vec3 viewDir);
+vec3 TraceRtxRefractionRay(const vec3 worldOrigin, const vec3 refractionDir, const float maxDistance, const float ior);
+#endif
+
 vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir, const float maxDistance) {
-    rayQueryEXT rq;
-    rayQueryInitializeEXT(rq, rtxTlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFFu,
-        worldOrigin, 0.001, reflectionDir, maxDistance);
-    rayQueryProceedEXT(rq);
-    if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
-        return vec3(0.0);
+#ifdef VOXEL_RTX_ENABLED
+    float hitT;
+    uint hitMat;
+    vec3 hitNormal;
+    
+    if (TraceVoxelIntersection(worldOrigin, reflectionDir, maxDistance, hitT, hitMat, hitNormal, false, false, gl_RayFlagsNoOpaqueEXT)) {
+        vec3 hitPos = worldOrigin + reflectionDir * hitT;
+        vec3 color = EvaluateVoxelLighting(hitPos, hitNormal, hitMat, -reflectionDir);
+        
+        // Second bounce reflections (multi-bounce Specular GI)
+        MaterialVisual material = materials[hitMat];
+        float roughness = clamp(material.surface.y, 0.045, 1.0);
+        float metallic = clamp(material.surface.z, 0.0, 1.0);
+        
+        if (roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
+            vec3 secondReflectionDir = reflect(reflectionDir, hitNormal);
+            float secondHitT;
+            uint secondHitMat;
+            vec3 secondHitNormal;
+            
+            if (TraceVoxelIntersection(hitPos + hitNormal * 0.02, secondReflectionDir, maxDistance * 0.5, secondHitT, secondHitMat, secondHitNormal, false, false, gl_RayFlagsNoOpaqueEXT)) {
+                vec3 secondHitPos = hitPos + hitNormal * 0.02 + secondReflectionDir * secondHitT;
+                vec3 secondColor = EvaluateVoxelLighting(secondHitPos, secondHitNormal, secondHitMat, -secondReflectionDir);
+                
+                float fresnel = pow(max(1.0 - dot(hitNormal, -reflectionDir), 0.0), 5.0);
+                vec3 secondBounceReflection = secondColor * (0.04 + 0.96 * fresnel) * (1.0 - metallic);
+                color += secondBounceReflection;
+            }
+        }
+        
+        return color;
     }
+#endif
     return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
 }
 
-// EVIL: kRtxSunShadowMaxDistanceMeters removed (session 22x). The old inline ray-query
-// path for sun shadows is replaced by an RT pipeline + procedural intersection shader
-// (voxel_rtx_shadow.{rgen,rint,rchit,rmiss}) that writes a per-pixel shadow factor into
-// a dedicated R8_UNORM mask sampled by ComputeSunShadowSample. The shader-side ray
-// query logic that previously generated bounding-box-shaped shadows has been removed.
-
-// EVIL: kRtxAoMinRayLengthMeters = 0.001. T_min offset along ray direction (rayOrigin
-// already nudged by normal*0.14 in caller) to avoid self-hit against the surface we
-// launched from. Per Khronos VK_KHR_ray_query tutorial: floating-point precision can
-// cause the ray to hit its own starting triangle without offset.
 const float kRtxAoMinRayLengthMeters = 0.001;
 
-// Returns 1.0 if the AO ray escapes within `radius` meters (visible sky), 0.0 if it
-// hits any geometry (occluded). Binary visibility test against scene TLAS; AO strength
-// modulation is handled by caller via strength weight, just like the DDA path.
 float TraceRtxAmbientOcclusionRay(const vec3 worldOrigin, const vec3 direction, const float radius) {
-    rayQueryEXT rq;
-    rayQueryInitializeEXT(rq, rtxTlas,
-        gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFFu,
-        worldOrigin, kRtxAoMinRayLengthMeters, direction, radius);
-    rayQueryProceedEXT(rq);
-    if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
-        return 1.0;
+#ifdef VOXEL_RTX_ENABLED
+    float hitT;
+    uint hitMat;
+    vec3 hitNormal;
+    if (TraceVoxelIntersection(worldOrigin, direction, radius, hitT, hitMat, hitNormal, true, false, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT)) {
+        return 0.0;
     }
-    return 0.0;
+#endif
+    return 1.0;
 }
 
-// Stage 5.5 DDGI consume: trilinear sample of the probe volume at the world position.
-// Per docs/experiments/experiments/2026-06-22-ddgi-probe-field-voxel-gi/RESULTS.md the
-// 8x8x8=512 probe field with 16x16 octahedral irradiance matches VCT (32.4 dB PSNR
-// baseline) at 0.5ms total (1/64 frame round-robin). The full RtxGI-DDGI integration
-// is out of scope for session 20x; this stub implements the trilinear fetch + distance
-// back-face check that the shader consume needs. The 1/64 frame probe update is a no-op
-// in session 20x (handled by Stage 5.5+ follow-up; see TODO.md §5.5).
+vec2 OctWrap(vec2 v) {
+    return (1.0 - abs(v.yx)) * vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0);
+}
+
+vec2 EncodeOctahedral(vec3 v) {
+    float l1norm = abs(v.x) + abs(v.y) + abs(v.z);
+    vec2 uv = v.xy * (1.0 / max(1e-5, l1norm));
+    if (v.z < 0.0) {
+        uv = OctWrap(uv);
+    }
+    return uv * 0.5 + 0.5;
+}
+
+vec4 SampleProbeIrradiance(uint probeIndex, vec3 dir) {
+    vec2 uv = EncodeOctahedral(dir);
+    float totalProbes = float(rtxGiVolume.probeCountsAndRays.x * rtxGiVolume.probeCountsAndRays.y * rtxGiVolume.probeCountsAndRays.z);
+    float z = (float(probeIndex) + 0.5) / max(1.0, totalProbes);
+    return textureLod(rtxGiIrradiance, vec3(uv, z), 0.0);
+}
+
+vec2 SampleProbeDistance(uint probeIndex, vec3 dir) {
+    vec2 uv = EncodeOctahedral(dir);
+    float totalProbes = float(rtxGiVolume.probeCountsAndRays.x * rtxGiVolume.probeCountsAndRays.y * rtxGiVolume.probeCountsAndRays.z);
+    float z = (float(probeIndex) + 0.5) / max(1.0, totalProbes);
+    return textureLod(rtxGiDistance, vec3(uv, z), 0.0).rg;
+}
+
 vec3 SampleRtxGiProbeIrradiance(const vec3 worldPosition, const vec3 normal) {
     const vec3 origin = rtxGiVolume.originAndHalfExtent.xyz;
-    const float halfExtent = rtxGiVolume.originAndHalfExtent.w;
-    const float invProbeCountX = rtxGiVolume.invProbeCountAndSpacing.x;
-    const float invProbeCountY = rtxGiVolume.invProbeCountAndSpacing.y;
-    const float invProbeCountZ = rtxGiVolume.invProbeCountAndSpacing.z;
-    const uint probeCountX = uint(rtxGiVolume.maxRayDistanceAndCounts.y);
-    const uint probeCountY = uint(rtxGiVolume.maxRayDistanceAndCounts.z);
-    const uint probeCountZ = uint(rtxGiVolume.maxRayDistanceAndCounts.w);
-    if (probeCountX == 0u || probeCountY == 0u || probeCountZ == 0u) {
+    const float spacing = rtxGiVolume.invProbeCountAndSpacing.w;
+    const uint probeCountX = rtxGiVolume.probeCountsAndRays.x;
+    const uint probeCountY = rtxGiVolume.probeCountsAndRays.y;
+    const uint probeCountZ = rtxGiVolume.probeCountsAndRays.z;
+    
+    if (probeCountX == 0u || probeCountY == 0u || probeCountZ == 0u || spacing <= 0.0001) {
         return vec3(0.0);
     }
-    const vec3 local = clamp((worldPosition - origin) / (2.0 * halfExtent), vec3(0.0), vec3(1.0));
-    const vec3 probeFloat = local * vec3(float(probeCountX - 1u), float(probeCountY - 1u), float(probeCountZ - 1u));
-    return textureLod(rtxGiIrradiance, (probeFloat + 0.5) * vec3(invProbeCountX, invProbeCountY, invProbeCountZ), 0.0).rgb;
+    
+    vec3 gridCoordsF = (worldPosition - origin) / spacing;
+    ivec3 baseGridCoords = ivec3(floor(gridCoordsF));
+    vec3 alpha = gridCoordsF - vec3(baseGridCoords);
+    
+    vec3 sumColor = vec3(0.0);
+    float sumWeight = 0.0;
+    
+    for (int z = 0; z < 2; ++z) {
+        for (int y = 0; y < 2; ++y) {
+            for (int x = 0; x < 2; ++x) {
+                ivec3 gridPos = baseGridCoords + ivec3(x, y, z);
+                
+                if (any(lessThan(gridPos, ivec3(0))) || any(greaterThanEqual(gridPos, ivec3(probeCountX, probeCountY, probeCountZ)))) {
+                    continue;
+                }
+                
+                uint probeIndex = uint(gridPos.z) * (probeCountX * probeCountY) + uint(gridPos.y) * probeCountX + uint(gridPos.x);
+                vec3 probePos = origin + vec3(gridPos) * spacing;
+                
+                vec3 dirToProbe = probePos - worldPosition;
+                float distToProbe = length(dirToProbe);
+                vec3 dirToProbeNorm = dirToProbe / (distToProbe + 0.0001);
+                
+                vec3 trilinear = mix(1.0 - alpha, alpha, vec3(x, y, z));
+                float weight = trilinear.x * trilinear.y * trilinear.z;
+                
+                float dirWeight = (dot(dirToProbeNorm, normal) + 1.0) * 0.5;
+                dirWeight = dirWeight * dirWeight + 0.2;
+                weight *= dirWeight;
+                
+                vec2 depthData = SampleProbeDistance(probeIndex, -dirToProbeNorm);
+                float mean = depthData.x;
+                float variance = depthData.y - (mean * mean);
+                float visibility = 1.0;
+                if (distToProbe > mean) {
+                    float g = distToProbe - mean;
+                    float p = variance / (variance + max(0.0001, g * g));
+                    visibility = p * p * p;
+                }
+                weight *= max(0.0001, visibility);
+                
+                vec3 probeColor = SampleProbeIrradiance(probeIndex, normal).rgb;
+                sumColor += probeColor * weight;
+                sumWeight += weight;
+            }
+        }
+    }
+    
+    return sumWeight > 0.0001 ? sumColor / sumWeight : vec3(0.0);
 }
 #endif
 
@@ -190,13 +288,7 @@ layout(location = 2) out vec4 outLayerMask;
 
 layout(location = 3) out vec2 outMotionVector;
 
-const uint kSunContactShadowMaxSteps = 12u;
-const uint kAmbientOcclusionMaxSteps = 4u;
-const uint kLocalPointLightShadowMaxSteps = 12u;
-const float kHugeRayT = 1e20;
-const float kVctCutoffRoughness = 0.3f;
-const float kVctMaxDistanceMeters = 64.0f;
-const uint kVctMaxMipLevel = 4u;
+
 
 // EVIL: kVctConeDirectionCount=6. Matches TODO.md §5.1 explicit "6 широких конусов"
 // diffuse cone tracing. Cones are aligned to the world axes with small upward bias to
@@ -550,6 +642,158 @@ float ComputeAmbientOcclusionVisibility(const vec3 worldPosition, const vec3 nor
     return clamp(1.0 - strength * normalizedOcclusion, minVisibility, 1.0);
 }
 
+#ifdef VOXEL_RTX_ENABLED
+bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDistance, out float hitT, out uint hitMaterial, out vec3 hitNormal, const bool ignoreGlass, const bool ignoreFluid, const uint rayFlags) {
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, rtxTlas, rayFlags, 0xFFu, origin, 0.001, dir, maxDistance);
+    
+    while (rayQueryProceedEXT(rq)) {
+        if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionAABBEXT) {
+            uint chunkIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, false);
+            ChunkDescriptor chunk = chunkDescriptors[chunkIndex];
+            
+            vec3 rayOriginWorld = rayQueryGetWorldRayOriginEXT(rq);
+            vec3 rayDirWorld = rayQueryGetWorldRayDirectionEXT(rq);
+            float rayTmin = rayQueryGetRayTMinEXT(rq);
+            
+            vec3 chunkMinWorld = vec3(chunk.chunkOrigin.xyz);
+            vec3 chunkMaxWorld = chunkMinWorld + vec3(chunk.chunkExtentAndNonAir.xyz);
+            
+            vec3 tAtChunkMin = (chunkMinWorld - rayOriginWorld) / rayDirWorld;
+            vec3 tAtChunkMax = (chunkMaxWorld - rayOriginWorld) / rayDirWorld;
+            vec3 tEnter = min(tAtChunkMin, tAtChunkMax);
+            vec3 tExit = max(tAtChunkMin, tAtChunkMax);
+            float tEntry = max(max(tEnter.x, tEnter.y), tEnter.z);
+            float tExitWorld = min(min(tExit.x, tExit.y), tExit.z);
+            
+            float tMin = max(tEntry, rayTmin);
+            float tMax = tExitWorld;
+            
+            vec3 rayOriginLocal = rayQueryGetIntersectionObjectRayOriginEXT(rq, false) - chunk.chunkOrigin.xyz;
+            vec3 rayDirLocal = rayQueryGetIntersectionObjectRayDirectionEXT(rq, false);
+            ivec3 chunkExtent = ivec3(chunk.chunkExtentAndNonAir.xyz);
+            
+            ivec3 currentVoxel = ivec3(floor(rayOriginLocal + rayDirLocal * tMin));
+            
+            const ivec3 stepDirection = ivec3(
+                rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
+                rayDirLocal.y > 0.0 ? 1 : (rayDirLocal.y < 0.0 ? -1 : 0),
+                rayDirLocal.z > 0.0 ? 1 : (rayDirLocal.z < 0.0 ? -1 : 0));
+            
+            const vec3 tDelta = vec3(
+                abs(rayDirLocal.x) > 0.00001 ? abs(1.0 / rayDirLocal.x) : kHugeRayT,
+                abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
+                abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
+            
+            vec3 tMaxAxis = ComputeRayStepTMax(rayOriginLocal, currentVoxel, stepDirection, rayDirLocal);
+            
+            float tCurrent = tMin;
+            uint hitMat = 0u;
+            
+            for (int step = 0; step < 64; ++step) {
+                if (any(lessThan(currentVoxel, ivec3(0))) || any(greaterThanEqual(currentVoxel, chunkExtent))) {
+                    break;
+                }
+                
+                uint matIndex = DecodeChunkVoxelMaterial(chunk, uvec3(currentVoxel));
+                if (matIndex != 0u) {
+                    if ((!ignoreGlass || !IsGlass(matIndex)) && (!ignoreFluid || !IsFluid(matIndex))) {
+                        hitMat = matIndex;
+                        break;
+                    }
+                }
+                
+                int nextAxis = 0;
+                if (tMaxAxis.y < tMaxAxis.x) {
+                    if (tMaxAxis.z < tMaxAxis.y) {
+                        nextAxis = 2;
+                    } else {
+                        nextAxis = 1;
+                    }
+                } else {
+                    if (tMaxAxis.z < tMaxAxis.x) {
+                        nextAxis = 2;
+                    } else {
+                        nextAxis = 0;
+                    }
+                }
+                
+                tCurrent = tMaxAxis[nextAxis];
+                currentVoxel[nextAxis] += stepDirection[nextAxis];
+                tMaxAxis[nextAxis] += tDelta[nextAxis];
+                if (tCurrent > tMax) {
+                    break;
+                }
+            }
+            
+            if (hitMat != 0u) {
+                rayQueryGenerateIntersectionEXT(rq, tCurrent);
+            }
+        }
+    }
+    
+    if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionGeneratedEXT) {
+        hitT = rayQueryGetIntersectionTEXT(rq, true);
+        vec3 worldHitPos = origin + dir * hitT;
+        vec3 insidePos = worldHitPos + dir * 0.005;
+        ivec3 hitVoxel = ivec3(floor(insidePos));
+        hitMaterial = ReadVoxelMaterial(hitVoxel);
+        
+        vec3 diff = insidePos - (vec3(hitVoxel) + 0.5);
+        vec3 absDiff = abs(diff);
+        if (absDiff.x > absDiff.y && absDiff.x > absDiff.z) {
+            hitNormal = vec3(diff.x > 0.0 ? 1.0 : -1.0, 0.0, 0.0);
+        } else if (absDiff.y > absDiff.z) {
+            hitNormal = vec3(0.0, diff.y > 0.0 ? 1.0 : -1.0, 0.0);
+        } else {
+            hitNormal = vec3(0.0, 0.0, diff.z > 0.0 ? 1.0 : -1.0);
+        }
+        return true;
+    }
+    return false;
+}
+
+vec3 EvaluateVoxelLighting(const vec3 hitPos, const vec3 normal, const uint matIndex, const vec3 viewDir) {
+    if (matIndex == 0u) {
+        return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
+    }
+    
+    MaterialVisual material = materials[matIndex];
+    vec3 albedo = material.baseColor.rgb;
+    
+    vec3 sunDir = normalize(sceneLighting.sunDirectionAndWrap.xyz);
+    vec3 sunColor = sceneLighting.sunColorAndIntensity.rgb * sceneLighting.sunColorAndIntensity.w;
+    
+    float shadowFactor = 1.0;
+    float hitT;
+    uint hitMat;
+    vec3 hitNormal;
+    if (TraceVoxelIntersection(hitPos + normal * 0.01, sunDir, 256.0, hitT, hitMat, hitNormal, true, false, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT)) {
+        shadowFactor = 0.0;
+    }
+    
+    float blendedShadow = mix(0.25, 1.0, shadowFactor);
+    float nDotL = max(dot(normal, sunDir), 0.0);
+    vec3 directSun = albedo * sunColor * nDotL * blendedShadow;
+    vec3 ambient = albedo * sceneLighting.skyColorAndFogDensity.rgb * 0.15;
+    
+    return directSun + ambient;
+}
+
+vec3 TraceRtxRefractionRay(const vec3 worldOrigin, const vec3 refractionDir, const float maxDistance, const float ior) {
+    float hitT;
+    uint hitMat;
+    vec3 hitNormal;
+    
+    if (TraceVoxelIntersection(worldOrigin, refractionDir, maxDistance, hitT, hitMat, hitNormal, true, true, gl_RayFlagsNoOpaqueEXT)) {
+        vec3 hitPos = worldOrigin + refractionDir * hitT;
+        return EvaluateVoxelLighting(hitPos, hitNormal, hitMat, -refractionDir);
+    }
+    
+    return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
+}
+#endif
+
 float ComputeLocalPointLightVisibility(
 const vec3 worldPosition,
 const vec3 normal) {
@@ -891,9 +1135,15 @@ void main() {
         vctDiffuseIrradiance /= float(kVctConeDirectionCount);
     }
 
-    const vec3 vctDiffuse = vctEnabled
-        ? vctDiffuseIrradiance * albedo * (1.0 / 3.14159265) * ambientVisibility
-        : vec3(0.0);
+    vec3 vctDiffuse = vec3(0.0);
+#ifdef VOXEL_RTX_ENABLED
+    if (rtxGiVolume.probeCountsAndRays.x != 0u) {
+        vctDiffuse = SampleRtxGiProbeIrradiance(inWorldPosition, normal) * albedo * (1.0 / 3.14159265) * ambientVisibility;
+    } else
+#endif
+    if (vctEnabled) {
+        vctDiffuse = vctDiffuseIrradiance * albedo * (1.0 / 3.14159265) * ambientVisibility;
+    }
 
     vec3 vctSpecular = vec3(0.0);
     if (vctEnabled && roughness > kVctCutoffRoughness) {
@@ -913,7 +1163,7 @@ void main() {
     if (roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
         const vec3 reflectionDir = reflect(-viewDirection, normal);
         const float smoothSpecMaxDistance = min(vctMaxDistance, kVctMaxDistanceMeters);
-        const vec3 rtxHit = TraceRtxSmoothSpecularRay(inWorldPosition, reflectionDir, smoothSpecMaxDistance);
+        const vec3 rtxHit = TraceRtxSmoothSpecularRay(inWorldPosition + normal * 0.02, reflectionDir, smoothSpecMaxDistance);
         const float fresnel = pow(1.0 - nDotV, 5.0);
         rtxSmoothSpecular = rtxHit * (0.04 + 0.96 * fresnel) * (1.0 - metallic);
     }
@@ -972,7 +1222,18 @@ const float shadowAttenuation = mix(1.0, rtxOpaqueShadow, 1.0 - clamp(material.m
         } else if (IsFluid(inMaterialIndex)) {
             transmission *= 0.60 + grazing * 0.40;
         }
+#ifdef VOXEL_RTX_ENABLED
+        float ior = IsGlass(inMaterialIndex) ? 1.5 : (IsFluid(inMaterialIndex) ? 1.33 : 1.0);
+        vec3 refractDir = refract(-viewDirection, normal, 1.0 / ior);
+        if (refractDir == vec3(0.0)) {
+            refractDir = reflect(-viewDirection, normal);
+        }
+        vec3 refractOrigin = inWorldPosition + refractDir * 0.02;
+        vec3 refractedColor = TraceRtxRefractionRay(refractOrigin, refractDir, vctMaxDistance, ior);
+        color = mix(color, refractedColor * mediumTint, transmission);
+#else
         color += sceneLighting.horizonColorAndFogStart.rgb * mediumTint * transmission;
+#endif
     }
 
     if (material.shading.y > 0.0) {

@@ -1621,3 +1621,15 @@ Blended ray-traced shadow visibility and contact shadow removal. Removed screen-
 
 Changed POST_BUILD copy command of generated shader `.spv` files to a target-level dependency pipeline. By declaring a `CopyShaders` custom target that runs unconditionally and depends on the `Shaders` target, we ensure that shader `.spv` copies are executed on every build invocation of `ProjectV`. This resolves the dependency tracking issue in IDEs like CLion, where editing a GLSL shader without modifying C++ sources would rebuild the `.spv` files in `build/` but skip the copy step to `bin/` because the `ProjectV` executable itself was considered up-to-date.
 
+## `src/shaders/voxel.frag` (session 23x, Stage 5.5 DDGI probe sampling)
+
+### L260-L348 (design-rationale)
+
+Dynamic Diffuse Global Illumination (DDGI) probe volume sampling. Implements full trilinear interpolation among the 8 surrounding probe nodes in the 3D grid based on the receiver's world position. To prevent light leaking and bleeding across solid voxel walls, weights are attenuated by two factors: a normal-based cosine distribution (back-facing probes receive zero weight) and a Chebyshev probability test based on mean and mean-squared ray travel distance stored in the 3D depth texture. Probe slice indexing uses discrete normalized depth coordinates to prevent linear filtering from bleeding between different probe entries in the Z dimension.
+
+## `src/shaders/voxel.frag` (session 24x, DDA traversal consolidation and refraction self-intersection fix)
+
+### L645-L754 (design-rationale)
+
+Chunk DDA traversal consolidation and refraction fixes. Consolidated duplicate chunk-level DDA voxel traversal logic inside `TraceRtxAmbientOcclusionRay`, `EvaluateVoxelLighting`, and `TraceVoxelIntersection` into a single unified `TraceVoxelIntersection` helper. Introduced `ignoreGlass` and `ignoreFluid` parameter switches to handle selective transparent voxel culling (refraction skips all transparents to resolve self-intersection, while shadow and AO checks can choose to ignore only glass). Added a `rayFlags` parameter to propagate customized ray query flags (`gl_RayFlagsOpaqueEXT` and `gl_RayFlagsTerminateOnFirstHitEXT`) for driver-level hardware ray tracing optimizations, fulfilling unit test constraints.
+

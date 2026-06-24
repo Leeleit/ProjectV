@@ -13,6 +13,34 @@ Doxygen convention (`/// \brief` + `/// \details`) and are generated into HTML b
 **For design rationale and ongoing decisions**, see `agent/knowledge.md Part A`.
 **For session log / commit narrative**, see `agent/workspace.md §5 (Active tasks)` and `git log`.
 
+## 2026-06-24 (session: rtx-dda-consolidate «fix(render): consolidate copy-pasted DDA loops and fix refraction self-intersection»)
+
+Fixed refraction self-intersection and consolidated duplicate chunk DDA traversal loops inside voxel.frag.
+
+**Key changes:**
+- **`src/shaders/voxel.frag`**:
+  - Consolidated three duplicated copy-pasted chunk DDA loops (`TraceRtxAmbientOcclusionRay`, `EvaluateVoxelLighting`, and `TraceVoxelIntersection`) into a single parameterized `TraceVoxelIntersection` function.
+  - Added boolean switches `ignoreGlass`, `ignoreFluid`, and a `rayFlags` parameter to `TraceVoxelIntersection` to allow specifying customized ray query flags and skipping transparent materials (like glass and fluids) during ray traversal.
+  - Set `ignoreGlass=true, ignoreFluid=true` for refraction rays to fix the refraction self-intersection bug (glass/fluid voxels now distort the background properly instead of rendering a flat color).
+  - Wired `rayFlags` (`gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT`) to shadow and AO checks to preserve driver-level ray tracing optimizations and satisfy unit test expectations.
+- **`src/render/RtxGiProbes.cpp`**:
+  - Verified storage image allocation usage flags and verified that `RtxGiVolume` textures are correctly allocated with `VK_IMAGE_USAGE_STORAGE_BIT`.
+  - Confirmed alignment of `GraphicsPushConstants` matches the shader layout exactly.
+
+## 2026-06-23 (session: rtx-milestones «feat(render): Stage 5.5/5.6/5.7 — RTX DDGI probe sampling, refraction, and multi-bounce specular»)
+
+Implemented full DDGI probe sampling, RTX refraction, and verified multi-bounce specular GI/reflections.
+
+**Key changes:**
+- **`src/shaders/voxel.frag`**:
+  - Replaced the stub of `SampleRtxGiProbeIrradiance` with a full, proper DDGI probe volume sampling. It uses trilinear interpolation between the 8 nearest probe nodes in the 3D grid based on the receiver's world position.
+  - Implemented normal-based cosine weighting (to prevent light bleeding from back-facing probes) and Chebyshev depth visibility test (to prevent light leaking through solid walls) using mean and mean-squared ray travel distance from the 3D depth texture.
+  - Used discrete normalized depth coordinates to prevent linear filtering from bleeding between different probe entries in the Z dimension.
+  - Implemented analytical/DDA refracted ray trace (`TraceRtxRefractionRay`) and integrated refractive lookup in the glass/fluid shaders path using the real index of refraction (1.5 for glass, 1.33 for fluid) to replace the fake transmission approximation.
+  - Verified and documented `TraceRtxSmoothSpecularRay` which implements a second-bounce ray trace for multi-bounce specular reflections and glossy GI.
+- **`COMMENTS.md`**:
+  - Added detailed design rationale documentation for the DDGI probe volume sampling and helper functions (`OctWrap`, `EncodeOctahedral`, `SampleProbeIrradiance`, `SampleProbeDistance`).
+
 ## 2026-06-23 (session: shadow-fix «fix(render): correct DDA coordinate spaces and raygen biasing for RTX shadows»)
 
 Fixed instability in RTX shadow pass (where the platform would progressively turn black from certain camera positions).

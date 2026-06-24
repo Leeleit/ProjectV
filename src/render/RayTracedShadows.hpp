@@ -129,6 +129,7 @@ public:
 
 	[[nodiscard]] VkImageView GetShadowMaskImageView() const noexcept { return m_shadowMaskImageView; }
 	[[nodiscard]] bool IsVoxelAwareRtxActive() const noexcept { return m_voxelAwareRtxActive; }
+	[[nodiscard]] VkAccelerationStructureKHR GetTlas() const noexcept { return m_config.tlas; }
 
 	bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render);
 	void ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept;

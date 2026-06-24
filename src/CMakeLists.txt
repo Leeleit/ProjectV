@@ -53,6 +53,7 @@ set(SHADERS
         ${SHADER_DIR}/voxel_rtx_shadow.rint
         ${SHADER_DIR}/voxel_rtx_shadow.rchit
         ${SHADER_DIR}/voxel_rtx_shadow.rmiss
+        ${SHADER_DIR}/probe_update.comp
 )
 
 foreach (SHADER ${SHADERS})

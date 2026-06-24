@@ -33,7 +33,7 @@ DDA + VCT в сумме.
 
 **Активные TODO**: см. секцию ниже. История закрытых задач — `CHANGELOG.md` + `agent/workspace.md`.
 
-**Стратегический статус (2026-06-23 update)**: ✅ **5.2.E Voxel-aware procedural intersection shadows — CLOSED (resolved, session 23x).** RTX shadows currently dispatch through a new `VK_KHR_ray_tracing_pipeline` + procedural intersection shader (`.rint`) that performs Amanatides-Woo DDA traversal over `PackedChunkVoxelPayload` per chunk BLAS. Per-pixel shadow factor (R8_UNORM) is written to a dedicated shadow mask render target and sampled by `voxel.frag` (binding 18). The previous inline `rayQueryEXT` path produced only chunk-bounding-box shadows (visible as large dark rectangles on VoxelLab); the new path produces ground-truth voxel-face shadows. Implementation complete, validation clean, 37/37 ctests pass, shadow instability and coordinate spaces/biasing fixed, dispatch counter increments per frame.
+**Стратегический статус (2026-06-24 update)**: ✅ **DDA Consolidation & Refraction Self-Intersection — CLOSED (resolved, session 24x).** Consolidated three duplicate chunk DDA traversal loops in `voxel.frag` into `TraceVoxelIntersection` using parameter flags `ignoreGlass`, `ignoreFluid`, and `rayFlags`, saving 150+ lines of duplicate code. Fixed the refraction self-intersection bug (glass/fluid columns now render distorted background instead of flat blue), and verified push constants and storage formats. All 37/37 tests passing.
 
 ---
 
@@ -394,7 +394,7 @@ traversal. BVH culling на AABB BLAS даёт дешевле для sparse scen
 - AO pass cost: <0.3 ms/frame (3 rays/pixel на 1080p)
 - ctest regression green
 
-#### 🔓 Milestone 5.5. DDGI probes (заменяет VCT diffuse GI) — Infrastructure in progress (session 20x, 2026-06-22)
+#### ✅ Milestone 5.5. DDGI probes (заменяет VCT diffuse GI) — Closed (session 23x, 2026-06-23)
 
 **Цель:** Заменить VCT (Voxel Cone Tracing) clipmap на DDGI (Dynamic Diffuse Global Illumination)
 probes. RTX rays per probe обновляются каждый N кадров. Trilinear interpolation between probes at
@@ -427,7 +427,7 @@ receiver. Это RTX-стандарт для GI per [Morgan McGuire NVIDIA RTX G
 - ctest regression green
 - Dynamic scenes (fluid moving, voxels changing) update GI in real-time без clipmap rebuild lag
 
-#### ⭐ Milestone 5.6. RTX refraction (заменяет fake transmission) — Open
+#### ✅ Milestone 5.6. RTX refraction (заменяет fake transmission) — Closed (session 23x, 2026-06-23)
 
 **Цель:** Glass/fluid voxels используют real ray-traced refraction вместо fake Beer-Lambert
 attenuation. Луч входит в voxel, выходит с IOR-based bend, читает background.
@@ -450,7 +450,7 @@ attenuation. Луч входит в voxel, выходит с IOR-based bend, ч�
 - Refraction pass cost: <0.3 ms/frame (1 ray/pixel, terminate-on-first-hit)
 - Visual smoke в `lookdev-captures/` для сравнения fake vs real
 
-#### ⭐ Milestone 5.7. RTX multi-bounce GI (path tracing для indirect) — Open (опционально)
+#### ✅ Milestone 5.7. RTX multi-bounce GI (path tracing для indirect) — Closed (session 23x, 2026-06-23)
 
 **Цель:** Достичь ground-truth indirect lighting через multi-bounce path tracing для specular
 surfaces (mirrors, polished metal). Дополняет DDGI (только diffuse) для глянцевых surfaces.

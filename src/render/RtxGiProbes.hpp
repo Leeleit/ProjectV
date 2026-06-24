@@ -83,7 +83,31 @@ public:
 	[[nodiscard]] bool RecordUpdatePass(
 		VkCommandBuffer commandBuffer,
 		const VulkanContextState &context,
-		VkAccelerationStructureKHR tlas);
+		uint32_t frameIndex,
+		VkBuffer chunkDescriptorBuffer,
+		VkBuffer sceneLightingBuffer,
+		VkBuffer chunkVoxelPayloadBuffer,
+		VkBuffer materialVisualBuffer,
+		VkAccelerationStructureKHR tlas,
+		const FrameRenderData &renderData);
+
+	[[nodiscard]] bool RecordUpdatePass(
+		VkCommandBuffer commandBuffer,
+		const VulkanContextState &context,
+		VkAccelerationStructureKHR tlas)
+	{
+		FrameRenderData dummy{};
+		return RecordUpdatePass(
+			commandBuffer,
+			context,
+			0u,
+			VK_NULL_HANDLE,
+			VK_NULL_HANDLE,
+			VK_NULL_HANDLE,
+			VK_NULL_HANDLE,
+			tlas,
+			dummy);
+	}
 
 	[[nodiscard]] float SampleIrradianceTestValue(uint32_t probeIndex) const noexcept;
 
@@ -98,8 +122,17 @@ private:
 
 	void ReleaseResources(const VulkanContextState &context) noexcept;
 
+	bool CreateComputePipeline(const VulkanContextState &context);
+	void DestroyComputePipeline(const VulkanContextState &context) noexcept;
+
 	RtxGiProbeConfig m_config{};
 	std::atomic<bool> m_initialized{false};
+
+	VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
+	VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+	VkPipeline m_pipeline = VK_NULL_HANDLE;
+	VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> m_descriptorSets{};
 };
 
 struct RtxGiProbesTestAccess {
@@ -118,6 +151,32 @@ bool RecordRtxGiProbeUpdatePass(
 	VkCommandBuffer commandBuffer,
 	RtxGiProbes *probes,
 	const VulkanContextState &context,
-	VkAccelerationStructureKHR tlas);
+	uint32_t frameIndex,
+	VkBuffer chunkDescriptorBuffer,
+	VkBuffer sceneLightingBuffer,
+	VkBuffer chunkVoxelPayloadBuffer,
+	VkBuffer materialVisualBuffer,
+	VkAccelerationStructureKHR tlas,
+	const FrameRenderData &renderData);
+
+inline bool RecordRtxGiProbeUpdatePass(
+	VkCommandBuffer commandBuffer,
+	RtxGiProbes *probes,
+	const VulkanContextState &context,
+	VkAccelerationStructureKHR tlas)
+{
+	FrameRenderData dummy{};
+	return RecordRtxGiProbeUpdatePass(
+		commandBuffer,
+		probes,
+		context,
+		0u,
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		VK_NULL_HANDLE,
+		tlas,
+		dummy);
+}
 
 }  // namespace projectv::render

@@ -16,6 +16,7 @@ import projectv.math;
 #include "render/SkyAtmosphere.hpp"
 #include "render/Cloudscape.hpp"
 #include "render/RayTracedShadows.hpp"
+#include "render/RtxGiProbes.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 #include "fmt/format.h"
@@ -1441,6 +1442,25 @@ SDL_AppResult DrawFrame(
 			cameraForward,
 			swapchain->extent.width,
 			swapchain->extent.height);
+	}
+
+	if (render->rtxGiProbes != nullptr && render->rtxGiProbes->IsEnabled()) {
+		VkAccelerationStructureKHR tlas = render->rayTracedShadows != nullptr ? render->rayTracedShadows->GetTlas() : VK_NULL_HANDLE;
+		if (tlas != VK_NULL_HANDLE) {
+			PV_PROFILE_ZONE_N("RecordRtxGiProbeUpdatePass");
+			const SceneFrameResources &frameResources = render->sceneFrameResources[frame->currentFrame];
+			projectv::render::RecordRtxGiProbeUpdatePass(
+				cmd,
+				render->rtxGiProbes,
+				*context,
+				frame->currentFrame,
+				frame->renderData.chunkDescriptorBuffer,
+				frameResources.sceneLightingBuffer,
+				frame->renderData.chunkVoxelPayloadBuffer,
+				render->materialVisualBuffer,
+				tlas,
+				frame->renderData);
+		}
 	}
 
 	RecordGraphicsCommands(*render, *swapchain, frame->renderData, *context, cmd, imageIndex);
