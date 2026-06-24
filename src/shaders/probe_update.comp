@@ -185,7 +185,8 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             vec3 rayDirLocal = rayQueryGetIntersectionObjectRayDirectionEXT(rq, false);
             ivec3 chunkExtent = ivec3(chunk.chunkExtentAndNonAir.xyz);
             
-            ivec3 currentVoxel = ivec3(floor(rayOriginLocal + rayDirLocal * tMin));
+            vec3 localStartPos = rayOriginLocal + rayDirLocal * tMin;
+            ivec3 currentVoxel = ivec3(floor(localStartPos));
             
             const ivec3 stepDirection = ivec3(
                 rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
@@ -197,12 +198,12 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
                 abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
                 abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
             
-            vec3 tMaxAxis = ComputeRayStepTMax(rayOriginLocal, currentVoxel, stepDirection, rayDirLocal);
+            vec3 tMaxAxis = tMin + ComputeRayStepTMax(localStartPos, currentVoxel, stepDirection, rayDirLocal);
             
             float tCurrent = tMin;
             uint hitMat = 0u;
             
-            for (int step = 0; step < 64; ++step) {
+            for (int step = 0; step < 32; ++step) {
                 if (any(lessThan(currentVoxel, ivec3(0))) || any(greaterThanEqual(currentVoxel, chunkExtent))) {
                     break;
                 }
@@ -305,7 +306,8 @@ vec3 EvaluateVoxelLighting(const vec3 hitPos, const vec3 normal, const uint matI
             vec3 rayDirLocal = rayQueryGetIntersectionObjectRayDirectionEXT(sq, false);
             ivec3 chunkExtent = ivec3(chunk.chunkExtentAndNonAir.xyz);
             
-            ivec3 currentVoxel = ivec3(floor(rayOriginLocal + rayDirLocal * tMin));
+            vec3 localStartPos = rayOriginLocal + rayDirLocal * tMin;
+            ivec3 currentVoxel = ivec3(floor(localStartPos));
             
             const ivec3 stepDirection = ivec3(
                 rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
@@ -317,12 +319,12 @@ vec3 EvaluateVoxelLighting(const vec3 hitPos, const vec3 normal, const uint matI
                 abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
                 abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
             
-            vec3 tMaxAxis = ComputeRayStepTMax(rayOriginLocal, currentVoxel, stepDirection, rayDirLocal);
+            vec3 tMaxAxis = tMin + ComputeRayStepTMax(localStartPos, currentVoxel, stepDirection, rayDirLocal);
             
             float tCurrent = tMin;
             uint hitMat = 0u;
             
-            for (int step = 0; step < 64; ++step) {
+            for (int step = 0; step < 32; ++step) {
                 if (any(lessThan(currentVoxel, ivec3(0))) || any(greaterThanEqual(currentVoxel, chunkExtent))) {
                     break;
                 }

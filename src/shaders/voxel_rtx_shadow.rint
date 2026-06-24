@@ -64,7 +64,8 @@ void main() {
     const float tEnd = min(tExitWorld, rayTmax);
 
     vec3 pos = rayOriginWorld + rayDirWorld * tStart;
-    ivec3 cell = ivec3(floor(pos - vec3(chunkMinWorld)));
+    vec3 localOrigin = pos - chunkMinWorld;
+    ivec3 cell = ivec3(floor(localOrigin));
     cell = clamp(
         cell,
         ivec3(0),
@@ -75,12 +76,28 @@ void main() {
         rayDirWorld.y > 0.0 ? 1 : -1,
         rayDirWorld.z > 0.0 ? 1 : -1);
 
-    const vec3 invDir = 1.0 / rayDirWorld;
-    vec3 tMaxAxis = (vec3(cell) + vec3(greaterThan(stepDir, ivec3(0))) - (rayOriginWorld - chunkMinWorld)) * invDir;
-    const vec3 tDelta = abs(invDir);
+    const float kHugeRayT = 1e20;
+    vec3 tMaxAxis = vec3(kHugeRayT);
+    if (abs(rayDirWorld.x) > 0.00001) {
+        float nextBoundaryX = stepDir.x > 0 ? float(cell.x + 1) : float(cell.x);
+        tMaxAxis.x = tStart + (nextBoundaryX - localOrigin.x) / rayDirWorld.x;
+    }
+    if (abs(rayDirWorld.y) > 0.00001) {
+        float nextBoundaryY = stepDir.y > 0 ? float(cell.y + 1) : float(cell.y);
+        tMaxAxis.y = tStart + (nextBoundaryY - localOrigin.y) / rayDirWorld.y;
+    }
+    if (abs(rayDirWorld.z) > 0.00001) {
+        float nextBoundaryZ = stepDir.z > 0 ? float(cell.z + 1) : float(cell.z);
+        tMaxAxis.z = tStart + (nextBoundaryZ - localOrigin.z) / rayDirWorld.z;
+    }
+
+    const vec3 tDelta = vec3(
+        abs(rayDirWorld.x) > 0.00001 ? abs(1.0 / rayDirWorld.x) : kHugeRayT,
+        abs(rayDirWorld.y) > 0.00001 ? abs(1.0 / rayDirWorld.y) : kHugeRayT,
+        abs(rayDirWorld.z) > 0.00001 ? abs(1.0 / rayDirWorld.z) : kHugeRayT);
     float tCurrent = max(tEntry, rayTmin);
 
-    const uint maxSteps = chunkExtentX * chunkExtentY * chunkExtentZ;
+    const uint maxSteps = chunkExtentX + chunkExtentY + chunkExtentZ;
     for (uint stepIdx = 0u; stepIdx < maxSteps; ++stepIdx) {
         if (tCurrent > tEnd) {
             return;

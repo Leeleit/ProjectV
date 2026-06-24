@@ -121,7 +121,7 @@ vec3 EvaluateVoxelLighting(const vec3 hitPos, const vec3 normal, const uint matI
 vec3 TraceRtxRefractionRay(const vec3 worldOrigin, const vec3 refractionDir, const float maxDistance, const float ior);
 #endif
 
-vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir, const float maxDistance) {
+vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir, const float maxDistance, const bool allowSecondBounce) {
 #ifdef VOXEL_RTX_ENABLED
     float hitT;
     uint hitMat;
@@ -136,7 +136,7 @@ vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir,
         float roughness = clamp(material.surface.y, 0.045, 1.0);
         float metallic = clamp(material.surface.z, 0.0, 1.0);
         
-        if (roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
+        if (allowSecondBounce && !IsGlass(hitMat) && !IsFluid(hitMat) && roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
             vec3 secondReflectionDir = reflect(reflectionDir, hitNormal);
             float secondHitT;
             uint secondHitMat;
@@ -673,7 +673,8 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             vec3 rayDirLocal = rayQueryGetIntersectionObjectRayDirectionEXT(rq, false);
             ivec3 chunkExtent = ivec3(chunk.chunkExtentAndNonAir.xyz);
             
-            ivec3 currentVoxel = ivec3(floor(rayOriginLocal + rayDirLocal * tMin));
+            vec3 localStartPos = rayOriginLocal + rayDirLocal * tMin;
+            ivec3 currentVoxel = ivec3(floor(localStartPos));
             
             const ivec3 stepDirection = ivec3(
                 rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
@@ -685,12 +686,12 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
                 abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
                 abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
             
-            vec3 tMaxAxis = ComputeRayStepTMax(rayOriginLocal, currentVoxel, stepDirection, rayDirLocal);
+            vec3 tMaxAxis = tMin + ComputeRayStepTMax(localStartPos, currentVoxel, stepDirection, rayDirLocal);
             
             float tCurrent = tMin;
             uint hitMat = 0u;
             
-            for (int step = 0; step < 64; ++step) {
+            for (int step = 0; step < 32; ++step) {
                 if (any(lessThan(currentVoxel, ivec3(0))) || any(greaterThanEqual(currentVoxel, chunkExtent))) {
                     break;
                 }
@@ -1081,7 +1082,10 @@ void main() {
     const vec3 albedo = material.baseColor.rgb;
     const float ambientOcclusion = mix(0.35, 1.0, ao);
     const float geometryAmbientVisibility = clamp(inAmbientVisibility, 0.0, 1.0);
-    const float localAmbientOcclusionVisibility = ComputeAmbientOcclusionVisibility(inWorldPosition, normal);
+    float localAmbientOcclusionVisibility = 1.0;
+    if (!IsGlass(inMaterialIndex) && !IsFluid(inMaterialIndex)) {
+        localAmbientOcclusionVisibility = ComputeAmbientOcclusionVisibility(inWorldPosition, normal);
+    }
     const bool layerHistoryValid = sceneLighting.taaLayerHistoryParams.z > 0.5;
     const vec2 layerTexelSize = sceneLighting.taaLayerHistoryParams.xy;
     const float layerBlend = clamp(sceneLighting.taaLayerHistoryParams.w, 0.0, 1.0);
@@ -1163,7 +1167,8 @@ void main() {
     if (roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
         const vec3 reflectionDir = reflect(-viewDirection, normal);
         const float smoothSpecMaxDistance = min(vctMaxDistance, kVctMaxDistanceMeters);
-        const vec3 rtxHit = TraceRtxSmoothSpecularRay(inWorldPosition + normal * 0.02, reflectionDir, smoothSpecMaxDistance);
+        const bool allowSecondBounce = !IsGlass(inMaterialIndex) && !IsFluid(inMaterialIndex);
+        const vec3 rtxHit = TraceRtxSmoothSpecularRay(inWorldPosition + normal * 0.02, reflectionDir, smoothSpecMaxDistance, allowSecondBounce);
         const float fresnel = pow(1.0 - nDotV, 5.0);
         rtxSmoothSpecular = rtxHit * (0.04 + 0.96 * fresnel) * (1.0 - metallic);
     }
