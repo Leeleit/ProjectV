@@ -43,7 +43,7 @@ Web-research via Exa `web_search` (working this session). **15+ sources verified
 
 ### Adjacent ProjectV references
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `2026-06-21-programmable-voxels` — closed `mixed`, broad 3-runtime survey (WASM/LuaJIT/TinyCC)
 - `hardware-profile.md §1` — Zen 3 5800X dev host
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% perf threshold

@@ -20,7 +20,7 @@
 - 10 jammers (ground_force_defense): 651-910 ns mean = 0.0019-0.0027% of 30 Hz frame
 - 2 jammers (ew_duel): 152-227 ns mean = 0.0005-0.0007% of 30 Hz frame
 
-**All strategies << 0.5 ms/tick budget** for typical ProjectV battlefield (≤64 jammers) per `agent/knowledge.md §30.4` precedent.
+**All strategies << 0.5 ms/tick budget** for typical ProjectV battlefield (≤64 jammers) per `agent/knowledge.md` precedent.
 
 ## 2. Per-(strategy, scene) means
 
@@ -97,7 +97,7 @@ For typical jammer-to-radar ranges of 5-30 km in the scenes, burn-through of 63-
 
 ## 4. Caveats
 
-- **CPU-only analytical model** (per `agent/knowledge.md §30.4` precedent). Real RF physics simplified to canonical J/S equation.
+- **CPU-only analytical model** (per `agent/knowledge.md` precedent). Real RF physics simplified to canonical J/S equation.
 - **Detection rate saturates to 15% floor** — model does not differentiate B/C/D/E on detection once jamming is effective. Real radars (especially AESA + LPI + MTI) may have different saturation behavior.
 - **False target count is unbounded** — the 1 + J/S/5 formula generates millions of false targets per tick for high J/S. Real DRFM systems would saturate at the radar's tracking capacity (typically 16-64 simultaneous tracks).
 - **Frequency-agile + AESA penalty is a step function** in my model (0.05× or 0.3×). Real AESA + LPI radars have gradual degradation curves per IEEE 2024-2026 work.

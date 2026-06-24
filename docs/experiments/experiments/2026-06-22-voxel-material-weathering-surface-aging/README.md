@@ -166,7 +166,7 @@ prototype/
 
 ## 7. Integration recommendation
 
-**3-step migration** per `agent/knowledge.md §30.4` precedent (~580 LoC, M effort, 2-3 sessions):
+**3-step migration** per `agent/knowledge.md` precedent (~580 LoC, M effort, 2-3 sessions):
 
 - **Step 1 (XS, ~80 LoC):** `src/voxel/material/Aging.{hpp,cpp}` — `AgingProfile` per-block-type LUT (15+ block classes), `AgingComponent` Flecs component (default strategy E, optional D/B fallback), `PROJECTV_AGING=OFF|DENSITY|FULL|HIERARCHICAL|SPARSE` env gate (default `SPARSE`).
 - **Step 2 (M, ~300 LoC):** `src/voxel/material/AgingSystem.{hpp,cpp}` — per-tick sparse update: for each chunk with `age_delta > 0`, iterate `touched_queue` (player proximity, weather, physics contact) → `blend_aged()` → mark chunk mesh dirty. Tick rate: 5 Hz for far chunks, 10 Hz for near. Integrate with `biome-transition-blending` [closed mixed] for biome-dependent rate multipliers + `wildfire-propagation` [closed yes] for soot events + `water-surface-rendering` [closed yes] for moisture map.

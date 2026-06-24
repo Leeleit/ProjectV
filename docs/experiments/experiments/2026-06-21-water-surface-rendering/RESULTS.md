@@ -132,4 +132,4 @@ Complementary to:
 - `mesh-shader-mega-instancing` Stage 6+ integration: water grid as 65K-vertex mesh fits mesh shader culling pipeline.
 - Mobile platform deployment: C with 8 waves exceeds mobile GPU budget → B / A fallbacks needed (or C reduced to 4 waves).
 
-Cross-refs: `TODO.md §5.x Visual Polish`, `src/render/SceneResources.cpp:805-1100` (placeholder for water integration), `agent/knowledge.md §30.4` (3-step migration precedent), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold), `hardware-profile.md §1+§3` (Zen 3 5800X + RTX 3060 Ti dev host), `benchmarks/methodology.md §3` (measurement protocol).
+Cross-refs: `TODO.md §5.x Visual Polish`, `src/render/SceneResources.cpp:805-1100` (placeholder for water integration), `agent/knowledge.md` (3-step migration precedent), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold), `hardware-profile.md §1+§3` (Zen 3 5800X + RTX 3060 Ti dev host), `benchmarks/methodology.md §3` (measurement protocol).

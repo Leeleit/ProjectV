@@ -109,7 +109,7 @@ finding = saves 550 LoC + 6 MiB VRAM by NOT adopting `RT_GISurfelVisibility` + `
 
 ## 7. Integration recommendation (3 mainline picks)
 
-Per `agent/knowledge.md §30.4` precedent, top-3 candidates for mainline:
+Per `agent/knowledge.md` precedent, top-3 candidates for mainline:
 
 1. **`RT_MeshletCulling`** — 6.25× speedup + +0.5 PSNR, 310 LoC, **Stage 2.1/2.2 meshlet cull replacement**.
 2. **`Tensor_VCT_TemporalDenoise`** — 307× peak (~100-150× realistic) + +2.5 PSNR, **parallel agent covers impl**
@@ -151,12 +151,12 @@ closed `rtx-screen-space-reflections` (specific SSR use-case) — мои recomme
 ## Cross-refs
 
 - `TODO.md §2.2` (HZB cull), `§4.3` (lift draw distance), `§5.1` (VCT), `§5.2` (RTX shadows), `§5.3` (TAA).
-- `agent/knowledge.md §30.4` (3-step migration precedent).
+- `agent/knowledge.md` (3-step migration precedent).
 - `agent/workspace.md §2` (Nearest Gap callout).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
 - `hardware-profile.md §1/§3/§4` (Zen 3 5800X + RTX 3060 Ti GA104 Ampere + Vulkan 1.4.341 + RT/tensor extension support).
 - `benchmarks/methodology.md §3` (measurement protocol).
-- `agent/knowledge.md Part B §9` line 1424 (web fallbacks: webfetch DuckDuckGo HTML endpoint + searx.be + brave + bing +
+- the web_search fallback chain (web fallbacks: webfetch DuckDuckGo HTML endpoint + searx.be + brave + bing +
   google + startpage — Exa MCP HTTP 429 persistent per operator directive).
 
 ## Caveats
@@ -164,7 +164,7 @@ closed `rtx-screen-space-reflections` (specific SSR use-case) — мои recomme
 (a) CPU-only synthetic, no Vulkan init в scope; (b) cycle-budget model analytical per vendor whitepapers, не measured
 реальный GPU dispatch; (c) cross-vendor matrix analytical projection per `dec-pipelines-async-compute` §2.2
 precedent (NVIDIA RTX 3060 Ti measured reference, AMD RDNA + Intel Arc + mobile projected); (d) implementation
-effort не measured (LoC estimates per `agent/knowledge.md §30.4` precedent); (e) **single most important caveat:**
+effort не measured (LoC estimates per `agent/knowledge.md` precedent); (e) **single most important caveat:**
 this = survey/inventory, не implementation. Реальная ценность = ranked recommendation list + cycle-budget spreadsheet
 для mainline-agent'а на будущее; конкретные алгоритмы будут implementation candidates, не deliverables этого эксперимента;
 (f) operator §Open line 16 = l priority + «parked» tone — verdict ожидаемо `mixed` или `parked`, не `yes`.

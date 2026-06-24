@@ -47,7 +47,7 @@ Minecraft × Garry's Mod × SupCom / Foxhole) **критичен для имме
 ## 2. Prior art (verified per `sources.md`)
 
 Web-research complete via DuckDuckGo HTML endpoint (Exa `web_search` HTTP 429 persistent
-per `agent/knowledge.md Part B §9`); **5 primary sources + 2 secondary references verified** with
+per the web_search fallback chain); **5 primary sources + 2 secondary references verified** with
 full content read at `sources.md`. **Self-invented topic** — first dedicated grass/foliage
 rendering + placement axis в 100+ closed experiments (anti-duplicate sentinel §13.7
 confirmed clean).
@@ -289,7 +289,7 @@ shader Bezier) at high density due to per-patch dispatch overhead.
 operator 8x planning decision). **Also relevant for Stage 4.1 world gen polish** (grass
 placement density per biome, downstream consumer).
 
-**Recommended approach (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Recommended approach (3-step migration per `agent/knowledge.md` precedent):**
 
 ### Step 1 (XS, ~50 LoC) — `src/voxel/GrassBiomeConfig.hpp` foundation
 - Define `GrassBiome` enum: `None / Plains / Forest / Rocky / Desert / Tundra / Meadow`.

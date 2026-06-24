@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-voxel-asset-template-catalog
 
 > Web-research verified `2026-06-21` via Brave Search (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per
-> `agent/knowledge.md Part B §9` line 1424 fallback list).
+> the web_search fallback chain).
 
 ## Tier 1 — Production voxel catalog systems (primary sources)
 

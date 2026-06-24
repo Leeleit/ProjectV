@@ -62,7 +62,7 @@ For 64 fluid cells in 4096 cells (1.6% density, low contention column):
 
 **Step 1 (XS, immediate, RECOMMENDED regardless of perf verdict):**
 - Replace `src/shaders/fluid_ca.comp:101` `atomicOr` with `atomicCompSwap` (Strategy B code).
-- Fixes conservation violation per `agent/knowledge.md §30.4` line 1045 contract.
+- Fixes conservation violation per `agent/knowledge.md` contract.
 - Expected perf impact: ≤ 2% on low-contention, ≤ 5% on high-contention (per mainline analysis).
 
 **Step 2 (S, conditional on measurement):**
@@ -114,8 +114,8 @@ For 64 fluid cells in 4096 cells (1.6% density, low contention column):
 - `experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/sources.md` — 25 verified web sources
 - `experiments/2026-06-21-gpu-fluid-ca-atomic-strategy/prototype/` — buildable Vulkan 1.4 harness (6 strategies)
 - `src/shaders/fluid_ca.comp:101` — current mainline `atomicOr` (the bug)
-- `agent/knowledge.md §30.4` — 3-step migration precedent + count conservation contract
-- `agent/knowledge.md §30.1` — 20 Hz tick rate + pause + timeScale
+- `agent/knowledge.md` — 3-step migration precedent + count conservation contract
+- `agent/knowledge.md` — 20 Hz tick rate + pause + timeScale
 - `TODO.md §3.1` — Stage 3.1 DoD (500K voxels / 0.5 ms)
 - `2026-06-20-dec-pipelines-async-compute` (closed verdict=yes) — async-compute sync foundation
 - `2026-06-20-async-compute-overhead-numbers` (closed verdict=yes, +9.85-11.34%) — sync measured, atomic strategy inside-pass not measured (now partially addressed)

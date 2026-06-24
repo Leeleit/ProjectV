@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-naval-vessel-buoyancy-steering
 
-> **Web-research complete `2026-06-21`** via direct `webfetch` to canonical sources (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked this session per `agent/knowledge.md Part B §9` line 1424 fallback list).
+> **Web-research complete `2026-06-21`** via direct `webfetch` to canonical sources (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked this session per the web_search fallback chain).
 > **4 primary + 6 cross-references verified** in this prototype phase.
 
 ---
@@ -109,4 +109,4 @@ Note: this slug was selected after §13.3 anti-duplicate recovery on `2026-06-21
 - **Submarine depth-pressure modeling** (closed `helicopter-rotor-physics` precedent for atmospheric, but submarine = water pressure = separate axis).
 - **Network serialization of ship state** for multiplayer (deferred до Stage 6+ military sandbox).
 
-Cross-refs: `agent/knowledge.md Part B §9` (web fallbacks) + `agent/knowledge.md §30.4` (3-step migration precedent) + `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
+Cross-refs: the web_search fallback chain (web fallbacks) + `agent/knowledge.md` (3-step migration precedent) + `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).

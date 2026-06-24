@@ -18,7 +18,7 @@ ProjectV (нет `.github/`, `ci/`, `lookdev-captures/` папок в tree; `tes
 `docs/experiments/AGENTS.md §14` STOP-block note + my `ls`/`find` verification `2026-06-21`) даст **100%
 pass-coverage для всех 12 Vulkan passes mainline** (HZB cull + HIZ mip chain + voxel_mesh dispatch + VCT
 cone-march + RTX ray query + CSM shadow cascade + TAA resolve + fluid_ca ping-pong + depth prepass + opaque
-forward + transparent forward + UI per `agent/knowledge.md §810` + `TODO.md §Stage 0-6` + Stage 5.x planned
+forward + transparent forward + UI per `agent/knowledge.md` + `TODO.md §Stage 0-6` + Stage 5.x planned
 passes) при **capture overhead ≤ 5-15% per-frame wall time** (literature: RenderDoc Vulkan layer = 5-30% per
 RenderDoc official docs + Phoronix benchmarks 2024-2026) + **pixel-diff PSNR ≥ 50 dB vs golden baseline**
 (visual-lossless threshold per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` +
@@ -26,7 +26,7 @@ industry CI pattern) при **capture file size ≤ 50 MB/frame** (per RenderDoc
 cap) на RTX 3060 Ti dev host per `hardware-profile.md §3`.
 
 **Преимущество:** ProjectV сейчас имеет **только** `PROJECTV_ENABLE_RENDERDOC_MARKERS` compile-time gate в
-`src/debug/ProfilingGpu.hpp:14,161,203` (debug labels per `agent/knowledge.md §547`) — это помогает с navigation
+`src/debug/ProfilingGpu.hpp:14,161,203` (debug labels per `agent/knowledge.md`) — это помогает с navigation
 в RenderDoc GUI, но **не даёт regression guard**: при изменении шейдера / pipeline state / descriptor layout
 нет автоматического теста, который бы поймал визуальный regression до merge в mainline. CI integration
 закрывает этот gap.
@@ -41,7 +41,7 @@ cap) на RTX 3060 Ti dev host per `hardware-profile.md §3`.
 ## 2. Prior art
 
 Web research via `webfetch` + DuckDuckGo HTML fallback (Exa HTTP 429 persistent per
-`agent/knowledge.md Part B §9`). **26 sources verified**, see [`sources.md`](./sources.md) for full list.
+the web_search fallback chain). **26 sources verified**, see [`sources.md`](./sources.md) for full list.
 
 **Top references:**
 1. **RenderDoc 1.44 official docs** (Baldur Karlsson, MIT, 2026-06-21 fetched): Vulkan 1.4 support,
@@ -68,12 +68,12 @@ CI axis).
 
 - **Тип эксперимента:** analytical + prototype + design proposal.
 - **Сцена:** synthetic Vulkan command buffer stream mimicking ProjectV's 12 passes (per `sources.md §ProjectV pipeline`
-  + `agent/knowledge.md §810` 5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned).
+  + `agent/knowledge.md` 5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned).
   NOT ProjectV mainline (dev host без `renderdoccmd` install → analytical overhead model + design proposal).
 - **Метрики:**
   - Capture overhead % per frame (mean/median/p95/p99/std/min/max per `benchmarks/methodology.md §3`).
   - Capture file size MB per frame (per RenderDoc docs "save one or more copies of memory allocations").
-  - Pass coverage (analytical from `Renderer.cpp` pass list + `agent/knowledge.md §810`).
+  - Pass coverage (analytical from `Renderer.cpp` pass list + `agent/knowledge.md`).
   - Capture rate % (Poisson model для trigger-based strategies).
   - Total capture disk cost (MB per 1000 frames).
 - **Контроль:** `A_NoCapture` (baseline, current mainline `PROJECTV_ENABLE_RENDERDOC_MARKERS=OFF`) vs 4 alternative
@@ -150,7 +150,7 @@ recommended as production fallback; B_AlwaysOnLayer never рекомендует
 - (2) **Capture file size** — practical concern только для B (impractical 117 GB/1k). D/E/C все в пределах
   reasonable disk budget (70 MB — 1.17 GB per 1000 frames).
 - (3) **100% pass coverage achievable** per analytical pass enumeration (`Renderer.cpp` pass list +
-  `agent/knowledge.md §810` 5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned = 12 passes).
+  `agent/knowledge.md` 5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned = 12 passes).
 - (4) **PSNR ≥ 50 dB achievable** per `sources.md` Glint3D CI threshold (SSIM ≥ 0.995) — mainline integration
   deferred до actual `renderdoccmd` install + golden image capture (cannot be measured без production binary).
 
@@ -238,7 +238,7 @@ GitHub Actions workflow + Slack/Discord webhook.
   - Per-pass CPU cost model conservative lower-bound estimate; real numbers may differ ±50% per Phoronix.
 - **Что осталось неизмеренным:**
   - Real `renderdoccmd --capture` execution overhead (binary не на dev host; production validation = mainline scope).
-  - GPU pass coverage = analytical from ProjectV source code (`Renderer.cpp` pass list + `agent/knowledge.md §810`
+  - GPU pass coverage = analytical from ProjectV source code (`Renderer.cpp` pass list + `agent/knowledge.md`
     5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned), not runtime capture.
   - Pixel-diff baseline = PSNR/SSIM threshold proposal, not real golden images (greenfield — `tests/regression/golden/`
     ещё не существует).

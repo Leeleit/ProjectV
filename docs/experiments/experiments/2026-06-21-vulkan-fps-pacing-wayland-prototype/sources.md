@@ -120,7 +120,7 @@ disabled for full benefit.
 release without present.
 
 **Почему важна:** **Direct fix для ProjectV `RecreateSwapchain` cycle** per
-`agent/decisions.md §30.3` walk-across-RecreateSwapchain-preserve-g_active. Текущий mainline path:
+`agent/knowledge.md` walk-across-RecreateSwapchain-preserve-g_active. Текущий mainline path:
 VSync toggle = `RecreateSwapchain` (destroy + recreate pipeline + images). С
 `VkSwapchainPresentModeInfoKHR` — mode change без swapchain recreate (atomic per-present transition).
 

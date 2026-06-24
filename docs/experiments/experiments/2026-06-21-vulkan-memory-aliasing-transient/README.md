@@ -73,7 +73,7 @@ operator directive `2026-06-21`). 9 primary + 7 secondary sources verified:
   Vulkan Memory Aliasing spec (§11.8).
 
 Cross-refs (no duplicates):
-- `agent/knowledge.md §17` build matrix (no render graph entry → gap).
+- `agent/knowledge.md` build matrix (no render graph entry → gap).
 - `TODO.md §Stage 2.x-5.x` (multi-pass growth makes this axis increasingly critical).
 - `agent/workspace.md §2` Nearest Gap (no render-pipeline-architecture callout → gap).
 - closed `2026-06-21-frame-flight-allocator-budget` — allocator strategy, **NOT aliasing** (different lever).
@@ -186,7 +186,7 @@ image pair (~16 MiB) are aliasable, leaving ~30% of total VRAM as potential targ
   `TransitionImage` (currently manual at lines 81-110, 142-183, 272-394, 559-661).
 - New `src/render/RenderGraph.{hpp,cpp}` — DAG builder + aliasing pool implementation.
 
-**Подход (phased migration per `agent/knowledge.md §30.4` precedent):**
+**Подход (phased migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (S, ~150 LoC) immediate recommendation:** VMA pool setup grouped by `ResourceType`
   + `HOST_VISIBLE`/`DEVICE_LOCAL` heap type, with sub-allocation. No lifetime analysis yet.

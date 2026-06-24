@@ -1,4 +1,4 @@
-import projectv.math;
+import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "render/SceneResources.hpp"
 
@@ -1644,6 +1644,16 @@ bool UploadSceneFrameResources(
 			}
 
 			uploadedVoxelChunkCount = static_cast<uint32_t>(render.sceneChunkVoxelPayloadRanges.size());
+		}
+
+		// EVIL: missing vmaFlushAllocation caused GPU to read stale chunkVoxelPayload / chunkDescriptor data on non-coherent drivers → DDA in rint saw old voxel occupancy → sliced shadows / leaks through visible blocks, intermittent on edits (P1A-4). Flush both allocations after every payload upload.
+		if (context != nullptr && context->allocator != nullptr) {
+			if (frameResources.chunkVoxelPayloadAllocation != nullptr && uploadedChunkVoxelWordCount > 0u) {
+				vmaFlushAllocation(context->allocator, frameResources.chunkVoxelPayloadAllocation, 0u, VK_WHOLE_SIZE);
+			}
+			if (frameResources.chunkDescriptorAllocation != nullptr) {
+				vmaFlushAllocation(context->allocator, frameResources.chunkDescriptorAllocation, 0u, VK_WHOLE_SIZE);
+			}
 		}
 
 		frameResources.uploadedVoxelPayloadVersion = render.sceneVoxelPayloadVersion;

@@ -17,7 +17,7 @@
 // Build: clang++ 22.1.6 -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic
 // Usage: ./netcode_bench [iterations] [warmup] [out_csv]
 //
-// Per `agent/knowledge.md §30.4` migration precedent; C++26 CPU simulation per
+// Per `agent/knowledge.md` migration precedent; C++26 CPU simulation per
 // `docs/experiments/benchmarks/methodology.md` standard.
 
 #include <algorithm>

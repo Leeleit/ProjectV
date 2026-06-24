@@ -1,8 +1,8 @@
 # Sources — `2026-06-21-sdf-subtractive-modeling-ui`
 
-**Captured:** `2026-06-21` per `agent/knowledge.md Part B §9` fallback chain (Exa `web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked + Brave Search 429 partial + direct `webfetch` to canonical URLs).
+**Captured:** `2026-06-21` per the web_search fallback chain (Exa `web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked + Brave Search 429 partial + direct `webfetch` to canonical URLs).
 
-**Per `agent/knowledge.md Part B §9` line 1424 fallback list:**
+**Per the web_search fallback chain:**
 - Exa `web_search` → HTTP 429 (persistent, not 5xx/timeout)
 - DuckDuckGo HTML → CAPTCHA blocked (consistent with backlog.md §In progress)
 - Startpage → working (used for `Frisken 2000` + `Marschner 2023` + `MERL 2006` queries)
@@ -10,7 +10,7 @@
 - Bing → not used (often CAPTCHA)
 - Direct `webfetch` to canonical sources → working (used for verification)
 
-> **Web search discipline reminder:** `agent/knowledge.md §5.3` (root) + `AGENTS.md §4` mandate web search для сложных тем **до** coding. Topics covered: SDF canonical (Frisken 2000 ADF + 2026 local-opt), SurfaceNets (Gibson 1998 + Mikola Lysenko JS port + DreamCat 2020 deep-dive), Dual Contouring (Ju 2002 + Schaefer Manifold 2007 + Carrera 2026), Marching Cubes (Lorensen Cline 1987 + Lewiner 2003 topological), OpenVDB (Museth 2013 + 2021 NanoVDB + 2023 NeuralVDB), Sparse Voxel Octree (Laine Karras 2010), Voxblox (Oleynikova 2017), Teardown (Gustafsson 2022 + 80.lv 2026 + Software Engineering Daily 2025), Voxel Farm, MagicaCSG, MeshLib, Avoyd, Blender 5.0/5.1 SDF, MagicaVoxel, NVIDIA GPU Gems 3 Ch 34, WSCG 2022 voxel SDF editing.
+> **Web search discipline reminder:** `agent/knowledge.md` (root) + `AGENTS.md §4` mandate web search для сложных тем **до** coding. Topics covered: SDF canonical (Frisken 2000 ADF + 2026 local-opt), SurfaceNets (Gibson 1998 + Mikola Lysenko JS port + DreamCat 2020 deep-dive), Dual Contouring (Ju 2002 + Schaefer Manifold 2007 + Carrera 2026), Marching Cubes (Lorensen Cline 1987 + Lewiner 2003 topological), OpenVDB (Museth 2013 + 2021 NanoVDB + 2023 NeuralVDB), Sparse Voxel Octree (Laine Karras 2010), Voxblox (Oleynikova 2017), Teardown (Gustafsson 2022 + 80.lv 2026 + Software Engineering Daily 2025), Voxel Farm, MagicaCSG, MeshLib, Avoyd, Blender 5.0/5.1 SDF, MagicaVoxel, NVIDIA GPU Gems 3 Ch 34, WSCG 2022 voxel SDF editing.
 
 ---
 
@@ -263,13 +263,13 @@ This is **exactly the architecture** strategy B (NaiveSurfaceNets_SDF) implement
 - `src/physics/PhysicsWorld.cpp:712-773` — mainline baseline per-voxel collision (replacement target for greedy physics meshing)
 - `src/shaders/voxel_mesh.comp:146` — mainline meshing dispatch (SurfaceNets-adjacent pattern, per `meshing-algo-comparison` closed mixed)
 - `agent/workspace.md §1 Phase 4` + `§1 Phase 9` — incremental Jolt per-chunk wiring closed
-- `agent/knowledge.md §30.4` — 3-step migration precedent (foundation + per-strategy integration + env gate)
+- `agent/knowledge.md` — 3-step migration precedent (foundation + per-strategy integration + env gate)
 
 ---
 
 ## Web search protocol record
 
-**Fallback chain used this session** (per `agent/knowledge.md Part B §9` line 1424):
+**Fallback chain used this session** (per the web_search fallback chain):
 
 ```
 Exa web_search → 429

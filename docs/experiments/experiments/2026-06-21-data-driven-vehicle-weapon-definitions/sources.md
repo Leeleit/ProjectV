@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-data-driven-vehicle-weapon-definitions
 
-> Web research via direct `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list; used Brave Search as primary fallback).
+> Web research via direct `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain; used Brave Search as primary fallback).
 
 Verified: 2026-06-21.
 
@@ -144,4 +144,4 @@ Verified: 2026-06-21.
 
 ## Citation methodology
 
-All Tier 1 URLs verified `2026-06-21` via Brave Search (`webfetch` direct, since DuckDuckGo HTML endpoint returned CAPTCHA and Exa MCP returned HTTP 429 per `agent/knowledge.md Part B §9` line 1424 fallback list). Tier 2/3 references cross-checked against canonical GitHub repos and primary blog sources. Tier 4 references are ProjectV local cross-refs only.
+All Tier 1 URLs verified `2026-06-21` via Brave Search (`webfetch` direct, since DuckDuckGo HTML endpoint returned CAPTCHA and Exa MCP returned HTTP 429 per the web_search fallback chain). Tier 2/3 references cross-checked against canonical GitHub repos and primary blog sources. Tier 4 references are ProjectV local cross-refs only.

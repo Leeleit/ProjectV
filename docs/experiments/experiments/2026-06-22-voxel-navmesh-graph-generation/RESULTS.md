@@ -104,7 +104,7 @@
 
 ## Integration recommendation
 
-> **Verdict: B (WalkableHeightfield_2D) ⭐ is the universal recommended default** for Stage 2.x/3.x/4.x/5.x/6+ ProjectV navmesh generation. Per `agent/knowledge.md §30.4` precedent:
+> **Verdict: B (WalkableHeightfield_2D) ⭐ is the universal recommended default** for Stage 2.x/3.x/4.x/5.x/6+ ProjectV navmesh generation. Per `agent/knowledge.md` precedent:
 
 **3-step mainline migration:**
 
@@ -144,4 +144,4 @@
 - 94× worse pathfind quality than B at 2.6× slower cost.
 - Only useful as a debug visualization (showing all walkable cells) or for very-simple games.
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4`** (~750 LoC, S-M effort, 2-3 sessions, **deferred** до Stage 4.1/6+ per `agent/workspace.md §2` line 36).
+**Mainline 3-step migration per `agent/knowledge.md`** (~750 LoC, S-M effort, 2-3 sessions, **deferred** до Stage 4.1/6+ per `agent/workspace.md §2` line 36).

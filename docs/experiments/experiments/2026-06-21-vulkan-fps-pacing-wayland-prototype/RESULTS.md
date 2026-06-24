@@ -268,7 +268,7 @@ GPU Fluid CA cross-frame latency contract (per `agent/workspace.md §2`).
   (e.g., frame budget enforcement, deterministic audio-video sync).
   **10-11 ms frame interval with 47-77 us std-dev** (current FIFO = 427-902 us std-dev).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (S, ~100 LoC):** `PROJECTV_PRESENT_MODE_FIFO_LATEST_READY=ON` + `PROJECTV_USE_PRESENT_TIMING=ON|OFF`
   env gates + feature detection в `VulkanBootstrap.cpp` + `PresentState` struct в `Types.hpp`.

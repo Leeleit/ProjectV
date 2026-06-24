@@ -1,6 +1,6 @@
 #pragma once
 
-#include <expected>
+#include <expected> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <string_view>
 
 #include "render/vulkan/VulkanSwapchain.hpp"

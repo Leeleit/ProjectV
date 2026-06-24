@@ -11,7 +11,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 ```
 
 Build verification (per `AGENTS.md §1` research workflow — agent not building, operator can verify):
-- Toolchain: Clang 22.1.6 per `agent/knowledge.md §17` + `hardware-profile.md §6`.
+- Toolchain: Clang 22.1.6 per `agent/knowledge.md` + `hardware-profile.md §6`.
 - Build green with **0 warnings** (per `2026-06-21-texture-compression-format-axis/STATUS.md`).
 - Output binary: `build/bench` (107 KB on dev host `obvium` Zen 3 5800X per `hardware-profile.md §1`).
 

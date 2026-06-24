@@ -1,4 +1,4 @@
-import projectv.math;
+import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 import projectv.string_id;
 
 #include "voxel/VoxelWorld.hpp"
@@ -401,8 +401,10 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
 		}
 	}
 	world->pendingChunkRebuildIndices.reserve(world->chunks.size());
+	world->pendingBlasRebuildIndices.reserve(world->chunks.size()); // Reserve space for initial BLAS rebuilds
 	for (size_t chunkIndex = 0; chunkIndex < world->chunks.size(); ++chunkIndex) {
 		world->pendingChunkRebuildIndices.push_back(chunkIndex);
+		world->pendingBlasRebuildIndices.push_back(chunkIndex); // Mark chunk for BLAS rebuild initially
 	}
 	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->pendingChunkRebuildIndices.size());
 
@@ -995,6 +997,7 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError> 
 	world->editVersion = header.editVersion;
 
 	RebuildVoxelWorldDerivedState(*world);
+	MarkAllVoxelChunksDirty(world.get()); // Mark all chunks dirty to force payload and BLAS rebuild
 	SDL_Log("Loaded voxel world snapshot: %s", resolvedPath.string().c_str());
 	return world;
 }
@@ -1206,6 +1209,9 @@ bool gFluidCaGpuEnabledForTesting = false;
 
 bool IsFluidCaGpuEnabled()
 {
+	if (gFluidCaGpuEnabledForTesting) {
+		return true;
+	}
 	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
@@ -1411,8 +1417,11 @@ void MarkAllVoxelChunksDirty(VoxelWorld *world)
 	}
 	world->pendingChunkRebuildIndices.clear();
 	world->pendingChunkRebuildIndices.reserve(world->chunks.size());
+	world->pendingBlasRebuildIndices.clear();						// Clear pending BLAS rebuild queue
+	world->pendingBlasRebuildIndices.reserve(world->chunks.size()); // Reserve space for BLAS rebuilds
 	for (size_t chunkIndex = 0; chunkIndex < world->chunks.size(); ++chunkIndex) {
 		world->pendingChunkRebuildIndices.push_back(chunkIndex);
+		world->pendingBlasRebuildIndices.push_back(chunkIndex); // Mark chunk for BLAS rebuild
 	}
 	world->stats.dirtyChunkCount = static_cast<uint32_t>(world->pendingChunkRebuildIndices.size());
 }

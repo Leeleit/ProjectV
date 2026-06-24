@@ -172,7 +172,7 @@ TAA pattern per closed `taa-motion-vectors`).
 
 ## 8. Integration recommendation (preliminary, requires GPU validation)
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~50 LoC, immediate):** `PROJECTV_VCT_TEMPORAL_DENOISE=OFF|SPATIAL|SVGF`
   env flag + `VctTemporalDenoise::SelectStrategy()` dispatcher + cooperative matrix probe

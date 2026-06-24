@@ -15,8 +15,7 @@
   (signature reduction = defender side, NOT detection);
   `ls experiments/2026-06-22-acoustic*` = ENOENT pre-claim.
 - 2026-06-22 — web-research complete via direct `webfetch` to canonical Wikipedia URLs
-  (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424
-  fallback list); 8 Tier 1 + 2 Tier 2 = 10 sources verified в [`sources.md`](./sources.md).
+  (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain); 8 Tier 1 + 2 Tier 2 = 10 sources verified в [`sources.md`](./sources.md).
 - 2026-06-22 — standalone C++26 CPU prototype `prototype/acoustic_bench.cpp` ~440 LoC
   (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`,
   build green 0 warnings after 1 cosmetic fix iteration: removed unused `ComputeStats` helper).

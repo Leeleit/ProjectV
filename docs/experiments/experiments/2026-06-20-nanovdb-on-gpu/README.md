@@ -168,7 +168,7 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
   verdict=mixed.
 - `TODO.md §5.1` (VCT spec) — primary target stage.
 - `TODO.md §6.2.2` (DDA shader macro) — secondary use case (3 copies of DDA trace in `voxel.frag`).
-- `agent/knowledge.md §30.4` (GPU Fluid CA contract) — different access pattern, NOT directly relevant.
+- `agent/knowledge.md` (GPU Fluid CA contract) — different access pattern, NOT directly relevant.
 - `experiments/2026-06-20-svdag-vs-vdb-memory-throughput/` — closes measurement gap (CPU-side closed; GPU side = this
   experiment).
 - `experiments/2026-06-20-sparse-64-tree-alternatives/` — analysis-only prior, structural comparison.
@@ -472,14 +472,14 @@ to per-voxel level, if pursued) and `§6.2.2` (DDA shader macro: 3 copies of DDA
 **Подход:**
 
 1. Land Stage 5.1 with NanoVDB-aligned transient SSBO from start. **3-step migration** per
-   `agent/knowledge.md §30.4` precedent:
+   `agent/knowledge.md` precedent:
     - Step 1 (foundation): add `struct NanoVdbLayout { upperSSBO, lowerSSBO, leafSSBO }` +
       CPU-to-GPU flatten helper (~S effort).
     - Step 2 (kernel swap): replace current VCT cone-march with NanoVDB walker (~M effort,
       includes shader rewrite for HDDA optimization).
     - Step 3 (default flip): `PROJECTV_USE_NANOVDB_TRANSIENT_VCT=ON` default in dev.
 2. Cross-vendor validation in mainline CI (AMD RDNA2/3, Intel Arc Gfx12.5+ per
-   `agent/knowledge.md §17`).
+   `agent/knowledge.md`).
 
 **Риски:**
 

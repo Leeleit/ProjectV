@@ -182,6 +182,6 @@ wc -l build/results.csv
 - `TODO.md §2.3` (Sparse Virtual Texturing — page-level compression complementary), `§4.3` (Lift Draw Distance — material atlas scales linearly with chunk count), `§5.x` (lighting atlas orthogonal axis).
 - `agent/workspace.md §2` Nearest Gap (8 GiB VRAM cap = main bottleneck).
 - `hardware-profile.md §1+§3` (Zen 3 5800X dev host + RTX 3060 Ti GA104, 5.06 GiB driver limit).
-- `agent/knowledge.md §30.4` (3-step migration precedent).
+- `agent/knowledge.md` (3-step migration precedent).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold; here up to −93.8% VRAM savings far exceeds).
 - `benchmarks/methodology.md §3` (measurement protocol).

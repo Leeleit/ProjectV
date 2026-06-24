@@ -27,7 +27,7 @@
 > - **Full NWP on per-voxel grid**: 64³ × 8³ = 32M cells × 16 B = 512 MiB, 1000× memory, overkill for 1-Hz atmospheric updates.
 
 **Why meta-field (SVO-attached) and not separate grid:**
-- Chunk already has dedup + static promotion per `agent/knowledge.md §16` — weather field is naturally per-chunk
+- Chunk already has dedup + static promotion per `agent/knowledge.md` — weather field is naturally per-chunk
 - Per-chunk lookup is O(1) (no separate query system)
 - 4-float per chunk = 16 B fits in chunk metadata (current chunk header ~64 B, plenty of headroom)
 - Weather is naturally slow-changing (1 Hz tick rate) — does not need per-frame update
@@ -37,7 +37,7 @@
 
 ## 2. Prior art
 
-Web-research via direct `webfetch` to canonical Wikipedia URLs (Exa 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). Sources verified inline during research (see `sources.md` after web-research phase).
+Web-research via direct `webfetch` to canonical Wikipedia URLs (Exa 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). Sources verified inline during research (see `sources.md` after web-research phase).
 
 **Ключевые направления (TBD during web-research):**
 
@@ -251,7 +251,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 - `src/wildfire/`: humidity suppression consumer (cross-ref `wildfire-propagation` [yes]).
 - `src/fluid_ca/`: precipitation input (cross-ref `fluid-ca` [yes, GPU Stage 3.1]).
 
-**Подход (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Подход (3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (XS, ~80 LoC)** `WeatherField` foundation + 5 strategy implementations + `PROJECTV_WEATHER=DISABLED|RANDOM|SIMPLEX|CA|NWP_LITE` env gate (default `CA` if validated):
   - `D_CA_Advection_3Var` ⭐ = universal default (1.86 ns/chunk = 7.6 µs/16³-world)
@@ -293,7 +293,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 
 ## 8. Sources
 
-Verified 11 primary sources via direct `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list) — see [`sources.md`](./sources.md) for full list + cross-refs to closed ProjectV experiments that consume the field.
+Verified 11 primary sources via direct `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain) — see [`sources.md`](./sources.md) for full list + cross-refs to closed ProjectV experiments that consume the field.
 
 ---
 
@@ -307,7 +307,7 @@ TBD (after web-research). Will move to `sources.md` if >10 sources.
 
 **Hot-path mapping:**
 
-- **Per-chunk weather storage:** `src/voxel/VoxelChunk.hpp` chunk header — 16 B addition (4 floats packed). Static promotion per `agent/knowledge.md §16` allows weather to be inherited from canonical chunk.
+- **Per-chunk weather storage:** `src/voxel/VoxelChunk.hpp` chunk header — 16 B addition (4 floats packed). Static promotion per `agent/knowledge.md` allows weather to be inherited from canonical chunk.
 - **Per-tick weather update:** `src/ecs/EcsWorld.cpp` global tick at 1 Hz sub-rate (not per frame). Dispatch `WeatherSystem::Update(world, dt)` with `dt=1.0/1.0 = 1.0 s` for full advection, or `dt=frame_dt/360` for sub-step interpolation.
 - **Per-consumer lookup:** `WeatherField::Query(chunkX, chunkY, chunkZ) -> WeatherCell` — O(1) array index. Consumer hot-paths (ballistic, fire, fluid) add this to their per-step work.
 
@@ -329,7 +329,7 @@ TBD (after web-research). Will move to `sources.md` if >10 sources.
 
 **Что осталось неизмеренным (для mainline интеграции):**
 
-- GPU dispatch (CPU prototype only; mainline could GPU-compute on Async Compute queue per `agent/knowledge.md §547`)
+- GPU dispatch (CPU prototype only; mainline could GPU-compute on Async Compute queue per `agent/knowledge.md`)
 - Multi-shard weather (this experiment assumes single world; multi-shard = sum across shards)
 - Save/load (4 floats per chunk, trivial serialization, deferred to mainline)
 - Network sync (4 floats per chunk per 1-Hz tick = 16 KB/s/world — bandwidth-trivial; can be optimized via delta encoding)

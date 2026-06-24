@@ -44,7 +44,7 @@ Web-research via DuckDuckGo HTML + webfetch (Exa HTTP 429 per operator directive
 
 ### Adjacent ProjectV references
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `src/voxel/VoxelWorld.hpp:78` — chunkSize=8, block data layout
 - `src/shaders/voxel_mesh.comp:146` — compute shader dispatch pattern
 - `hardware-profile.md §1` — Zen 3 5800X dev host

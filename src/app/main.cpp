@@ -1,4 +1,4 @@
-import projectv.math;
+import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 import projectv.string_id;
 
 #define SDL_MAIN_USE_CALLBACKS 1
@@ -552,7 +552,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	} else {
 		TickAudioRefreshPlaylistSystem(state->ecs().get());
 		TickFluidCASystem(state->ecs().get());
-		TickVoxelInteractionSystem(state->ecs().get());
 		TickLookDevCaptureSystem(state->ecs().get());
 		TickBenchmarkAutomationSystem(state->ecs().get());
 	}

@@ -63,7 +63,7 @@ Prototype, Results, Verdict, Integration recommendation, Sources, Mapping to Pro
   должны учитывать mobile-specific bindless behavior.
 - **Validation strategy:** bindless + `PARTIALLY_BOUND` + `UPDATE_AFTER_BIND` требует GPU-AV
   (validation layers can't CPU-check). Debug builds = opt-in `VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT`;
-  release preset per `agent/knowledge.md §4` = `PROJECTV_ENABLE_VALIDATION=OFF`. Practical impact:
+  release preset per `agent/knowledge.md` = `PROJECTV_ENABLE_VALIDATION=OFF`. Practical impact:
   bindless migration is debug-slowdown-safe, release-no-impact.
 - **3-step migration precedent** per `decisions.md §30.4` (`fluid-ca-reversal` contract) applicable
   here: (a) additive `PROJECTV_BINDLESS_DESCRIPTOR_STRATEGY=phase-a` env, both paths run in

@@ -44,7 +44,7 @@ budget** (per `hardware-profile.md §3`) при:
 ## 2. Prior art (Phase A — web research)
 
 Web-research complete via DuckDuckGo HTML endpoint + `webfetch` (Exa HTTP 429 persistent per
-`agent/knowledge.md Part B §9`).
+the web_search fallback chain).
 
 **Ключевые источники (8 primary + 6 secondary):**
 
@@ -222,7 +222,7 @@ this strategy. Add `PROJECTV_CHUNK_STREAMING=prebake` env var (default ON) + Tra
 
 **Step 2 (M, ~300 LoC) DEFERRED to Stage 5+:** implement `E_HybridDemandPredictive` for memory-tight
 scenarios (VCT atlas + RTX BLAS + NanoVDB GPU upload together exceed 8 GiB):
-- `ChunkStreamer::Enqueue(chunkPos, priority)` interface per `agent/knowledge.md §29.0` cold-path
+- `ChunkStreamer::Enqueue(chunkPos, priority)` interface per `agent/knowledge.md` cold-path
   `std::expected<ChunkData, LoadError>` rule.
 - Background thread + priority queue (visible-chunks-first + velocity-weighted prefetch).
 - Per-frame budget enforcement (4 MiB / 33 ms @ 30 Hz).
@@ -285,8 +285,8 @@ by current mainline behavior); VRAM reduction to < 2 MiB active + < 16 MiB trans
 
 - `TODO.md §4.3` — Stage 4.3 lift draw distance goal.
 - `agent/workspace.md §2` — Nearest Gap: «Stage 4.3 lift draw distance 128+ chunks».
-- `agent/knowledge.md §29.0` — cold-path `std::expected<T, E>` rule (streaming load = cold path).
-- `agent/knowledge.md §30.4` — 3-step migration precedent (foundation → adoption → default flip).
+- `agent/knowledge.md` — cold-path `std::expected<T, E>` rule (streaming load = cold path).
+- `agent/knowledge.md` — 3-step migration precedent (foundation → adoption → default flip).
 - `hardware-profile.md §1/§3/§5` — dev host + VRAM + storage tier.
 - `benchmarks/methodology.md §3` — measurement protocol.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.

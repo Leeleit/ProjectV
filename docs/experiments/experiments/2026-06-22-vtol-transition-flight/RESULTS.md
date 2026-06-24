@@ -121,4 +121,4 @@
 - [x] mean/median/p95/p99/std/min/max + plausible_frac + max_overshoot
 - [x] Hardware baseline: `hardware-profile.md §1` (Zen 3 5800X, governor=`powersave`)
 - [x] 5-10% threshold per `optimization-philosophy.md` evaluated
-- [x] Per-strategy verdict + integration recommendation per `agent/knowledge.md §30.4`
+- [x] Per-strategy verdict + integration recommendation per `agent/knowledge.md`

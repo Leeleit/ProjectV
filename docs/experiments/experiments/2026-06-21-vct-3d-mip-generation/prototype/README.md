@@ -32,7 +32,7 @@ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
 ninja
 ```
 
-**Требования:** Clang 22.x (per `agent/knowledge.md §17`), CMake 3.20+, Ninja.
+**Требования:** Clang 22.x (per `agent/knowledge.md`), CMake 3.20+, Ninja.
 
 ## Запуск
 

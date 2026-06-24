@@ -24,7 +24,7 @@ Per-scene expected behavior:
 
 ## 2. Prior art
 
-Web research (Wikipedia direct `webfetch` per `agent/knowledge.md Part B §9` fallback list; Exa MCP HTTP 429 persistent; DuckDuckGo HTML endpoint CAPTCHA blocked):
+Web research (Wikipedia direct `webfetch` per the web_search fallback chain; Exa MCP HTTP 429 persistent; DuckDuckGo HTML endpoint CAPTCHA blocked):
 
 - **Wikipedia: Wildfire modeling** [wildfire_modeling]: comprehensive survey of empirical (Rothermel 1972 USDA Forest Service Research Paper INT-115, FARSITE Finney 1998 Rocky Mountain Research Station, PROMETHEUS Canadian Forest Service 2009 Inf. Rep. NOR-X-417), semi-empirical (Noble 1980 Austral Ecology 5:201-203 McArthur fire-danger meters, Cheney 1993 IJWFR 3:31-44 grasslands), and physically based (Asensio 2002 radiation-convection, Mandel 2008 data assimilation, CAWFE Coen 2005 coupled atmosphere-fire, WRF-Fire level-set method, FIRETEC LANL, WFDS 2007 Mell). **Rothermel 1972** = canonical surface fire spread rate R = R0(1 + φ_w + φ_s); Richards 1990 elliptical growth model + Huygens' Principle for firefront wave propagation.
 - **Wikipedia: Forest-fire model** [forest-fire_model]: **Drossel-Schwabl 1992** canonical self-organized criticality CA on grid (DOI 10.1103/physrevlett.69.1629): 4 rules — (1) burning cell → empty; (2) tree burns if ≥1 burning neighbor; (3) tree ignites with probability f; (4) empty cell → tree with probability p. Controlling parameter p/f ratio determines criticality.
@@ -154,11 +154,11 @@ Hypothesis: **partially validated.** Per-tick cost target <500 µs **CONFIRMED**
 
 **Target stage:** Stage 6+ military sandbox activation (per `agent/workspace.md §2` operator planning) AND Stage 3.2 destruction follow-up (per closed `chunk-damage-fracture-model` [mixed]).
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~450 LoC, M effort, 2-3 sessions):
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~450 LoC, M effort, 2-3 sessions):
 
 - **Step 1 (XS, ~80 LoC)** `src/voxel/Wildfire.{hpp,cpp}` — VoxelWildfireState struct (per-chunk fire_state overlay, 1 byte per voxel) + Flecs `WildfireComponent` (FuelTableHandle, ambient conditions, wind vector) + per-material fuel_props table (10 materials, ~12 LoC) + `PROJECTV_WILDFIRE=OFF|C_DROSSEL|C_ROTHERMEL|D_WINDADVECTED|E_LAZY` env gate (default `C_ROTHERMEL`).
 - **Step 2 (M, ~250 LoC)** `src/voxel/WildfireSystem.{hpp,cpp}` — Flecs system that runs wildfire CA per active chunk on `OnTick` event. Hot path uses StrategyC default (single-pass with deferred ignitions). Reads voxel material from Sparse64Tree, writes back fire_state to chunk overlay. Per-chunk dirty tracking via `chunkRebuildIndex` (already exists in ProjectV mainline per `agent/workspace.md §1` Phase 9).
-- **Step 3 (S, ~120 LoC)** `tests/WildfireTests.cpp` — 5 unit tests (one per scene) + Tracy plot "Wildfire CA Tick" + `ProjectVWildfireTests` registered in `CMakePresets.json` (5 buildPresets × 1 test = 5 occurrences per `agent/knowledge.md §4` invariant) + ignition API (e.g. `wildfire::ignite(chunk, voxel, intensity)` for incendiary ammo, demolition, lightning).
+- **Step 3 (S, ~120 LoC)** `tests/WildfireTests.cpp` — 5 unit tests (one per scene) + Tracy plot "Wildfire CA Tick" + `ProjectVWildfireTests` registered in `CMakePresets.json` (5 buildPresets × 1 test = 5 occurrences per `agent/knowledge.md` invariant) + ignition API (e.g. `wildfire::ignite(chunk, voxel, intensity)` for incendiary ammo, demolition, lightning).
 
 **Key risks:**
 - **Cost at scale:** at 100 active chunks/frame, C costs 99 µs × 100 = 9.9 ms/frame = **30% of 30 Hz budget**. **Mitigation:** rate-limit wildfire ticks to 5-10 Hz (fire doesn't need to update at 30 Hz for visual purposes; physics tick is independent). Document the rate limit in `WildfireSystem.hpp` header comment.
@@ -177,7 +177,7 @@ See [`sources.md`](./sources.md) for full list with verification dates.
 ## 9. Mapping to ProjectV hot-path
 
 - **Mainline target:** wildfire simulation on 64³ voxel regions (8 chunks per axis), per-chunk tick rate 5-10 Hz (downsample from 30 Hz render rate for cost reasons).
-- **Cost per chunk per tick:** C strategy = ~99 µs total / 512 chunks = **0.19 µs per chunk** (negligible, well within 50 µs Stage 4.1 budget per `agent/knowledge.md §30.4` precedent).
+- **Cost per chunk per tick:** C strategy = ~99 µs total / 512 chunks = **0.19 µs per chunk** (negligible, well within 50 µs Stage 4.1 budget per `agent/knowledge.md` precedent).
 - **Active fire region:** typically 5-20 chunks in a real scenario (campfire, ammo depot, vehicle fire). At 20 chunks × 99 µs = 2 ms per wildfire tick (10 Hz). Total wildfire budget: 2 ms / 100 ms = **2% of frame budget** at 30 Hz.
 - **Visual representation:** per closed `dynamic-entity-lighting` [mixed] precedent, fire emits dynamic light. Per closed `volumetric-fog-atmosphere-rendering` [mixed], fire emits smoke. Per closed `cloudscape-rendering` [mixed], smoke column rises into clouds. Per closed `voxel-grass-foliage-rendering-pipeline` [mixed], foliage can burn. All these are downstream consumers of the fire_state overlay.
 - **Assumptions:** single-threaded CPU CA. In production, would parallelize across chunks via Flecs `worker_count` (per closed `ecs-1m-entities-bottleneck` [yes] precedent for per-chunk Flecs entities). Linear scaling expected on RTX 3060 Ti + Zen 3 5800X (8 cores).

@@ -1,7 +1,7 @@
 # Sources — 2026-06-22-surface-micro-detail
 
 **Web-research via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent this session per
-`agent/knowledge.md Part B §9` line 1424 fallback list).** Sentinel §13.7 verified clean — 0 dedicated
+the web_search fallback chain).** Sentinel §13.7 verified clean — 0 dedicated
 surface-micro-detail experiment in 138+ closed experiments pre-claim.
 
 ---
@@ -125,7 +125,7 @@ surface-micro-detail experiment in 138+ closed experiments pre-claim.
 - `src/shaders/voxel.frag` — main fragment shader; current implementation applies GGX/lambertian
   directly to the interpolated per-vertex normal. **No existing normal-perturbation layer in
   mainline** (per `rg -n "perturb|detail|crinkle|micro" src/shaders/`).
-- `agent/knowledge.md §30.4` — 3-step migration precedent (foundation → integration → env-gate +
+- `agent/knowledge.md` — 3-step migration precedent (foundation → integration → env-gate +
   test) used by all closed experiments this session. Direct template for our Integration
   recommendation.
 - `agent/workspace.md §2 line 69` — "Stage 5.x Visual Polish additional axes" includes bloom +

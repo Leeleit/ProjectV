@@ -141,7 +141,7 @@ Key technical claims (verified by reading spec):
 - Pipeline creation uses **`VkPipelineRenderingCreateInfoKHR`** pNext with `colorAttachmentCount` +
   `pColorAttachmentFormats` + `depthAttachmentFormat`.
 - **Multiple color attachments supported** for MRT (e.g., color + motion vector).
-- Already ProjectV mainline per `agent/knowledge.md §15` + `hardware-profile.md §4`.
+- Already ProjectV mainline per `agent/knowledge.md` + `hardware-profile.md §4`.
 
 **Takeaway:** enables Pipeline A's MRT pattern. Vulkan 1.3 core (no extension needed on dev host).
 
@@ -169,7 +169,7 @@ pattern (modern C++ wrapper or raw Vulkan 1.4 API).
   tuning.
 - **[Khronos Vulkan-Samples dynamic_rendering sample](https://github.com/KhronosGroup/Vulkan-Samples/blob/main/samples/extensions/dynamic_rendering/README.adoc)**
   — full code reference for dynamic rendering pattern.
-- **`agent/knowledge.md §15`** — ProjectV mainline = Vulkan 1.3/1.4 with VK_KHR_dynamic_rendering (per existing
+- **`agent/knowledge.md`** — ProjectV mainline = Vulkan 1.3/1.4 with VK_KHR_dynamic_rendering (per existing
   knowledge).
 - **`hardware-profile.md §4`** — dev host `obvium` supports all required extensions (VK_KHR_dynamic_rendering core 1.3,
   R16G16_SFLOAT format standard, VK_KHR_dynamic_rendering_local_read Vulkan 1.4 feature).
@@ -188,7 +188,7 @@ pattern (modern C++ wrapper or raw Vulkan 1.4 API).
 - `2026-06-20-rt-shadows-vs-csm` (closed verdict=mixed) — Stage 5.2 RTX shadows (foundation for Marrs 2018 adaptive
   TAA future work).
 - `2026-06-20-restir-gi-feasibility` (closed verdict=mixed) — SOTA GI deferred to Stage 6+ post-MVP.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `docs/experiments/hardware-profile.md §3` (RTX 3060 Ti, 8 GiB VRAM) + §4 (dynamic rendering core 1.3).
 - `docs/experiments/benchmarks/methodology.md` — measurement protocol.

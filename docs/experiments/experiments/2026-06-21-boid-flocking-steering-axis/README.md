@@ -70,8 +70,7 @@ strategies должны дать >5× speedup для прохождения.
 
 ## 2. Prior art
 
-Web-research. **Exa `web_search` HTTP 429 persistent** per `agent/knowledge.md Part B §9` line 1424 fallback
-list; **DuckDuckGo HTML endpoint CAPTCHA blocked**; **Startpage 0 results**; **Brave 429**; **Searx 403**.
+Web-research. **Exa `web_search` HTTP 429 persistent** per the web_search fallback chain; **DuckDuckGo HTML endpoint CAPTCHA blocked**; **Startpage 0 results**; **Brave 429**; **Searx 403**.
 **Working this session: direct `webfetch` to canonical URLs** (Wikipedia + Craig Reynolds + arXiv).
 
 ### Tier 1 — Canonical primary sources verified
@@ -138,7 +137,7 @@ list; **DuckDuckGo HTML endpoint CAPTCHA blocked**; **Startpage 0 results**; **B
 
 ### Cross-references (ProjectV mainline)
 
-- **agent/knowledge.md §30.4** — 3-step migration precedent.
+- **`agent/knowledge.md`** — 3-step migration precedent.
 - **agent/workspace.md §2** — operator 8x planning decision Stage 6+ military sandbox.
 - **hardware-profile.md §1** — Zen 3 5800X dev host with AVX2 + FMA + BMI2 (no AVX-512).
 - **legacy/docs/philosophy/03_domain/01_optimization-philosophy.md** — 5-10% threshold.
@@ -266,7 +265,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 
 **Compilation flags rationale:**
 
-- `-std=c++26` — mainline ProjectV baseline per `agent/knowledge.md §17` Linux baseline.
+- `-std=c++26` — mainline ProjectV baseline per `agent/knowledge.md` Linux baseline.
 - `-O3 -march=native` — Zen 3 (AVX2 + FMA + BMI2); mainline ProjectV flags.
 - `-DNDEBUG` — disable `assert()` (this is a hot-path benchmark).
 - `-Wall -Wextra -Wpedantic` — strict warnings per mainline standard.

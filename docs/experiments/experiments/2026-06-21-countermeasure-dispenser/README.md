@@ -272,7 +272,7 @@ patrol). The hypothesis that "dual-mode beats single-mode under ambiguity" is
   (default `CONTINUOUS`).
 - Tracy plot "CM Dispense" zones.
 
-**Approach (3-step migration per `agent/knowledge.md §30.4`):**
+**Approach (3-step migration per `agent/knowledge.md`):**
 
 - **Step 1 (XS, ~80 LoC)** `src/flight/ecs/components/CountermeasureDispenser.hpp` with
   the Flecs component + `Inventory` struct + `Decision` + 5 strategy function pointers

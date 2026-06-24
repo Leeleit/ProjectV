@@ -46,7 +46,7 @@ zero-cost-baseline → threshold-based → temporal → replay-deterministic →
 
 ## 2. Prior art
 
-Web-research complete via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list); **9 primary sources verified** в [`sources.md`](./sources.md):
+Web-research complete via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain); **9 primary sources verified** в [`sources.md`](./sources.md):
 
 **Tier 1 — Academic + Foundational (5 sources):**
 - **Wikipedia "Cheating in online games"** (revised 2026-06): Canonical taxonomy of cheats (aimbots, triggerbots, world-hacking, look-ahead, scripting, DMA hacking) + canonical taxonomy of defenses (Authoritative and mirrored server design, Software obfuscation, **Anomaly detection**, **Pattern detection**, Sandboxing). Validates B + D strategies.

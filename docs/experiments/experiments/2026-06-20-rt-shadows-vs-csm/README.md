@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Date opened:** 2026-06-20
 **Date closed:** N/A
-**Stage link:** `TODO.md §5.2` (RTX shadows feature-flagged) + cross-ref `agent/decisions.md §15`
+**Stage link:** `TODO.md §5.2` (RTX shadows feature-flagged) + cross-ref `agent/knowledge.md`
 (CSM baseline — "do NOT replace with RTX blindly; RTX = additive feature-flag")
 **Estimated effort:** M (one session: web-research + analytical cost model + cross-vendor matrix;
 GPU prototype deferred — measured data unnecessary, literature + analytical sufficient per
@@ -14,7 +14,7 @@ GPU prototype deferred — measured data unnecessary, literature + analytical su
 
 ## 1. Hypothesis
 
-**Гипотеза:** Hybrid CSM (sun, current 4-cascade path per `agent/decisions.md §15`) +
+**Гипотеза:** Hybrid CSM (sun, current 4-cascade path per `agent/knowledge.md`) +
 RTX shadow rays (`VK_KHR_ray_query`, feature-flagged additive per `TODO.md §5.2`)
 для **local lights** и **per-fragment contact shadow detail** даст:
 
@@ -240,7 +240,7 @@ Web-research выполнен: 4 batch queries (~30 результатов), 8 �
 
 ### 2.8 ProjectV mainline CSM baseline (cross-ref)
 
-- `agent/knowledge.md §15` «First sun-shadow path» — текущая стабильная baseline:
+- `agent/knowledge.md` «First sun-shadow path» — текущая стабильная baseline:
     - **4 cascades**, practical split lambda **0.80**, 4-layer Vulkan depth array.
     - `shadowMapResolution = 2048` per cascade (per `ShadowProjection.hpp:20`).
     - Cascade projection centers snap to shadow texel grid; rotation-stable sphere extent per view
@@ -297,7 +297,7 @@ synthetic scenes. Без GPU prototype — analytical extrapolation от literat
   per-light source support count.
 - **Cross-vendor RT throughput:** rays/s, triangles/cycle, RT core count.
 
-**Baseline:** `agent/decisions.md §15` current 4-cascade CSM (`BuildSunShadowCascadeSplits`).
+**Baseline:** `agent/knowledge.md` current 4-cascade CSM (`BuildSunShadowCascadeSplits`).
 
 **Контроль:** current mainline CSM (no RTX).
 
@@ -367,7 +367,7 @@ precedent — literature + analytical sufficient для integration recommendati
 | Per-cascade CPU culling       | 0.05–0.2    | —          | 300 chunks × 4 cascades = 1200 tests                                                |
 | **Total CSM**                 | **0.9–2.6** | **64 MiB** | Dominant for outdoor sun shadow                                                     |
 
-**Notes:** Per `agent/knowledge.md §15` — `BuildSunShadowCascadeSplits` lambda 0.80,
+**Notes:** Per `agent/knowledge.md` — `BuildSunShadowCascadeSplits` lambda 0.80,
 cascade XY = rotation-stable sphere extent per view slice. CSM **does not** cover local lights
 (only sun). Per `decisions.md §15` line 387-399: local lights only have `localPointLightParams`
 with `shadowStrength` (no real shadow map).
@@ -579,7 +579,7 @@ _(pending)_
 
 **Target stage:** `TODO.md §5.2` (RTX shadows feature-flagged).
 
-### 7.1 Approach: 3-step migration per `agent/knowledge.md §30.4` precedent
+### 7.1 Approach: 3-step migration per `agent/knowledge.md` precedent
 
 **Step 1 (foundation, ~150 LoC, S effort, single session):**
 
@@ -651,9 +651,9 @@ _(pending)_
 
 ### 7.3 Cross-references к mainline work
 
-- `agent/knowledge.md §15` First sun-shadow path — CSM baseline stable, do NOT touch.
-- `agent/decisions.md §15` (consolidated into knowledge.md): CSM explicit policy + RTX additive.
-- `agent/knowledge.md §30.4` GPU Fluid CA reversal — 3-step migration precedent (foundation +
+- `agent/knowledge.md` First sun-shadow path — CSM baseline stable, do NOT touch.
+- `agent/knowledge.md` (consolidated into knowledge.md): CSM explicit policy + RTX additive.
+- `agent/knowledge.md` GPU Fluid CA reversal — 3-step migration precedent (foundation +
   adoption + default flip).
 - `dec-pipelines-async-compute` (closed verdict=yes 2026-06-20): async foundation prerequisite
   для BLAS async build + TLAS per-frame update.
@@ -787,8 +787,8 @@ host.
 ### 8.2 ProjectV cross-refs
 
 - `TODO.md §5.2` RTX shadows feature-flagged additive path.
-- `agent/knowledge.md §15` First sun-shadow path (CSM baseline, do NOT replace).
-- `agent/knowledge.md §30.4` 3-step migration precedent.
+- `agent/knowledge.md` First sun-shadow path (CSM baseline, do NOT replace).
+- `agent/knowledge.md` 3-step migration precedent.
 - `dec-pipelines-async-compute` (closed verdict=yes 2026-06-20).
 - `bindless-descriptor-overhead` (closed verdict=mixed 2026-06-20).
 - `clustered-forward-mass-lights` (closed verdict=yes 2026-06-20).

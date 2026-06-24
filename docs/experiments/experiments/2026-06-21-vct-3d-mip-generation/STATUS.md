@@ -30,7 +30,7 @@ follow-up; Vulkan 1.5+ dedicated mip gen extensions; GPU `vkCmdBlitImage` 3D HW 
 - ✅ 6 secondary sources (NVIDIA HZB practice, SaschaWillems Vulkan samples, Snowapril/HanetakaChou VCT implementations, OGRE-Next CIVCT, Panteleev 2014 thesis reference)
 - ✅ Failed URLs documented (6 sources returned 404, future re-verification deferred)
 - ✅ sources.md finalized (10 primary + 6 secondary sources)
-- ⚠️ Exa MCP HTTP 429 rate-limited this session (initial + 30s/60s/90s/120s/180s backoff retries); fallbacks via direct `webfetch` per `agent/knowledge.md` line 1424
+- ⚠️ Exa MCP HTTP 429 rate-limited this session (initial + 30s/60s/90s/120s/180s backoff retries); fallbacks via direct `webfetch` per `agent/knowledge.md`
 
 ### Phase C — Prototype (~2h, wall time 192 sec on Zen 3 5800X) ✅
 - ✅ Standalone C++26 CPU harness (`prototype/mip_bench.cpp` ~580 LoC, Clang 22.1.6
@@ -100,7 +100,7 @@ follow-up; Vulkan 1.5+ dedicated mip gen extensions; GPU `vkCmdBlitImage` 3D HW 
   mip 5), validating that fancy algorithms don't help at outer mips either.
 - **Verdict=`yes`:** A_2x2x2_Box is the recommended Stage 5.1 VCT atlas mip chain generation default.
   No need for fancy alternatives.
-- **Integration:** 3-step migration per `agent/knowledge.md §30.4` precedent, **simplified from
+- **Integration:** 3-step migration per `agent/knowledge.md` precedent, **simplified from
   initial 260 LoC to ~120 LoC** (no dispatch enum, no per-scene selection, no per-axis blit fallback
   at this time). S effort, 1-2 sessions.
 

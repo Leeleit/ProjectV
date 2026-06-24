@@ -10,7 +10,7 @@
 **Final results (executed by research agent directly, after operator corrected interpretation of `AGENTS.md §2`):**
 
 - ✅ Phase 1 (context read) complete: identified `atomicOr` shortcut in `src/shaders/fluid_ca.comp:101`
-  violating `agent/knowledge.md §30.4` line 1045 contract.
+  violating `agent/knowledge.md` contract.
 - ✅ Phase 1 (reservation + files) complete.
 - ✅ Phase 2 (web research) complete: 25 sources в `sources.md`.
 - ✅ Phase 3 v1 → v2 → v3 → v4 → v5 (prototype iterations + build + debug) complete:
@@ -42,7 +42,7 @@
   prevents meaningful measurements. Strategy B logic verified correct on low-contention scenes.
 
 **Verdict:** `mixed`.
-- A rejected (correctness violation per `agent/knowledge.md §30.4`).
+- A rejected (correctness violation per `agent/knowledge.md`).
 - B recommended (correct, simple, only 1% slower than broken A).
 - C/D/F conditional on high-contention measurement (pending readback fix).
 - E rejected (implementation bug, requires rewrite).

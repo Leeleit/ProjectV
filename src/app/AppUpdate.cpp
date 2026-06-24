@@ -1,4 +1,4 @@
-import projectv.math;
+import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "app/AppUpdate.hpp"
 
@@ -784,6 +784,8 @@ bool UpdateApp(
 	if (!RunFrameSimulation(camera, input, world, physics, simulation, cameraCanUpdate)) {
 		return false;
 	}
+
+	UpdateVoxelInteraction(*camera, input, world->voxelWorld.get(), interaction, world->allowWorldEditing, physics); // update voxel interaction based on camera raycast and player input
 
 	MirrorAllFrameStats(camera, world, render, debug, physics, *input, audio, *simulation);
 

@@ -30,7 +30,7 @@
 **Преимущество, если гипотеза подтвердится:**
 - Mainline может ввести per-chunk mutation coalescing через env flag `PROJECTV_CHUNK_MUTATION_COALESCE=ON` + flush-at-frame-end → −20-60% cost на burst gameplay без поломки single-edit latency.
 - Stage 3.3 physics rebuild queue (closed `2026-06-21-greedy-physics-meshing-cpu` yes — 35× shape reduction) уже работает per-chunk; mutation coalescing = natural extension для уменьшения queue thrashing.
-- Stage 1.3 async streamer (per `agent/knowledge.md §17`) может использовать double-buffered commit для snapshot consistency при streaming.
+- Stage 1.3 async streamer (per `agent/knowledge.md`) может использовать double-buffered commit для snapshot consistency при streaming.
 - Stage 4.1 GPU world gen burst mutation (per closed `2026-06-21-gpu-procedural-noise-compute-kernels`) — burst паттерн из 64³ SetCell в одном chunk = critical для batch world gen.
 
 **Альтернативы (стратегии для prototype):**
@@ -53,7 +53,7 @@
 
 ## 2. Prior art
 
-Web-research выполнен `2026-06-21` via webfetch (DuckDuckGo HTML + GitHub direct + arXiv; Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`). Полный список из 24 источников в [`sources.md`](./sources.md). Ключевые (5):
+Web-research выполнен `2026-06-21` via webfetch (DuckDuckGo HTML + GitHub direct + arXiv; Exa HTTP 429 persistent per the web_search fallback chain). Полный список из 24 источников в [`sources.md`](./sources.md). Ключевые (5):
 
 1. **Phyronnaz/HashDAG** — Carreil, Billeter, Eisemann 2020, *Interactively Modifying Compressed Sparse Voxel Representations*, TUDelft — [github.com/Phyronnaz/HashDAG](https://github.com/Phyronnaz/HashDAG) (157 stars, MIT). Канонический persistent SVDAG: SlabHash + DyCuckoo hash tables + RCU semantics. Epic Citadel 2^17 demo, 50+ FPS editing.
 2. **mathijs727/GPU-SVDAG-Editing** — Pacific Graphics 2024 — [github.com/mathijs727/GPU-SVDAG-Editing](https://github.com/mathijs727/GPU-SVDAG-Editing) (MIT). Extends HashDAG with GPU editing back-end: Phase 1 temp SVO construction (CPU) + Phase 2 merge into SVDAG (GPU, HashTable + SlabAlloc). **Direct match** к моим strategies C и D.
@@ -168,7 +168,7 @@ Output: `build/results.csv` (626 rows, 80 KB) + stdout summary (~155 sec wall ti
 
 ## 7. Integration recommendation
 
-Mainline should adopt **2 of 5 strategies** as add-ons. Phased migration per `agent/knowledge.md §30.4` precedent:
+Mainline should adopt **2 of 5 strategies** as add-ons. Phased migration per `agent/knowledge.md` precedent:
 
 **Step 1 (XS, ~30 LoC, single session)** — Per-chunk mutation coalescing (B_DirtyFlagDeferred):
 - Add `PROJECTV_CHUNK_MUTATION_COALESCE=ON|OFF` env flag (default OFF для backward compat).
@@ -181,7 +181,7 @@ Mainline should adopt **2 of 5 strategies** as add-ons. Phased migration per `ag
 - Provide `TakeChunkSnapshot()` + `RestoreChunkFromSnapshot()` helpers.
 - Use for Stage 1.3 async streamer + save/load atomic semantics.
 - Expected gain: **−45% on burst** + atomic snapshot guarantee (readers see consistent state).
-- Caveat: only useful if Stage 1.3 async streamer ships (per `agent/knowledge.md §17`).
+- Caveat: only useful if Stage 1.3 async streamer ships (per `agent/knowledge.md`).
 
 **Step 3 (XS, ~20 LoC, single session)** — Verify dedup hash lookup disable for dynamic chunks:
 - Modify `src/voxel/Sparse64Tree.hpp::MarkNodeUnique:468` to skip dedup lookup when `chunk.isStatic == false`.

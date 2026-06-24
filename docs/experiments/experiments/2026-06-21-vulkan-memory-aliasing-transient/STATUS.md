@@ -45,7 +45,7 @@
   (page-table aliasing, NOT within-frame transient).
 - **New axis:** Vulkan transient resource aliasing + render graph DAG для ProjectV-style multi-pass
   renderer not covered by any of 30+ closed experiments.
-- **Phased integration recommended** per `agent/knowledge.md §30.4` precedent — Step 1 pool only
+- **Phased integration recommended** per `agent/knowledge.md` precedent — Step 1 pool only
   (S, ~150 LoC) immediate; Step 2 aliasing (M, ~500 LoC) for Stage 4.3; Step 3 DAG (L, ~1500 LoC)
   for Stage 5.x post-VCT+RTX.
 - **Caveats:** CPU simulation only (no real GPU dispatch / driver overhead), synthetic workloads

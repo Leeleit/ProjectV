@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-weather-svo-metafield
 
-> 11 primary sources verified via direct `webfetch` to canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). Tier 1 = Wikipedia canonical reference, Tier 2 = ProjectV cross-references.
+> 11 primary sources verified via direct `webfetch` to canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). Tier 1 = Wikipedia canonical reference, Tier 2 = ProjectV cross-references.
 >
 > Captured `2026-06-22`. All Wikipedia articles accessed via `https://en.wikipedia.org/wiki/{article}`.
 

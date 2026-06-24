@@ -19,7 +19,7 @@
   - Updated `INDEX.md` §5 Active experiments.
 
 - **`2026-06-22` (Phase 1 web-research, this session):**
-  - Verified 11 primary sources via direct `webfetch` to canonical Wikipedia URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list).
+  - Verified 11 primary sources via direct `webfetch` to canonical Wikipedia URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
   - Tier 1: NWP, Atmospheric model, Advection, Coriolis force, Humidity, Wind, Cellular automaton, Atmospheric pressure, Precipitation, Ideal gas law, Planetary boundary layer.
   - Tier 2: ProjectV cross-references (14 closed experiments that consume this field).
   - Tier 3: Books / canonical references (deferred — paywall).

@@ -9,7 +9,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG bench.cpp -o /tmp/bench_simd_noise
 
 **Требования к host:**
 
-- Clang 22.1.x (текущий ProjectV baseline per `agent/knowledge.md §17`).
+- Clang 22.1.x (текущий ProjectV baseline per `agent/knowledge.md`).
 - CPU с AVX2 + FMA (Haswell+ Intel / Ryzen+ AMD). Dev host = Ryzen 5800X (Zen 3) — ✅.
 
 ## Run
@@ -88,7 +88,7 @@ auto-vec to 4 lanes. To reach literature 5-7×, need ISPC toolchain or AVX-512 h
 
 ## Cross-vendor portability
 
-Per `agent/knowledge.md §10` + `§17` — ProjectV baseline = x86-64 Linux + clang. Текущий прототип:
+Per `agent/knowledge.md` + `§17` — ProjectV baseline = x86-64 Linux + clang. Текущий прототип:
 
 - ✅ AVX2/FMA path tested на Zen 3 (Ryzen 5800X).
 - ⚠️ Не тестировалось на Intel Haswell/Skylake/Alder Lake — но тот же baseline AVX2 ISA (must work).

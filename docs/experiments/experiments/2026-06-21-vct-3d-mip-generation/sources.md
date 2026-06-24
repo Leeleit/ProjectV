@@ -4,7 +4,7 @@
 **Captured:** 2026-06-21
 **Web-research status:** Exa MCP returned HTTP 429 (rate-limited) this session (initial + 30s/60s/90s/120s/180s
 backoff retries), same as `2026-06-21-greedy-physics-meshing-cpu` closure note. **Fallback:** direct
-`webfetch` к validated source list per `agent/knowledge.md` line 1424 (github.com, vulkan.org,
+`webfetch` к validated source list per `agent/knowledge.md` (github.com, vulkan.org,
 khronos.org, registry.khronos.org, GPUOpen, nvpro-samples, NVIDIA developer sites etc.).
 
 ---
@@ -48,7 +48,7 @@ khronos.org, registry.khronos.org, GPUOpen, nvpro-samples, NVIDIA developer site
 9. **`2026-06-21-lod-mesh-downsampling` (closed mixed)** — local cross-ref
    - LOD = distance-based (uniform downsampling), 3D mip chain = storage-based. Orthogonal but
      complementary (mip chain = natural storage for LOD pipeline per `nanovdb-on-gpu` follow-up).
-10. **`agent/knowledge.md §30.4` 3-step migration precedent** — local cross-ref
+10. **`agent/knowledge.md` 3-step migration precedent** — local cross-ref
     - Standard pattern: Step 1 (XS foundation) → Step 2 (M main integration) → Step 3 (S default flip).
     - Applied to mip chain gen integration in `voxelize_mipgen.comp` + `SceneResources`.
 
@@ -96,8 +96,8 @@ khronos.org, registry.khronos.org, GPUOpen, nvpro-samples, NVIDIA developer site
 
 ## Cross-references
 
-- `agent/knowledge.md §30.4` (3-step migration precedent)
-- `agent/knowledge.md §15` (lighting contract)
+- `agent/knowledge.md` (3-step migration precedent)
+- `agent/knowledge.md` (lighting contract)
 - `agent/workspace.md §2` (Stage 5.x not started)
 - `TODO.md §5.1` (VCT — explicit DoD: «Реализовать построение мип-уровней 3D-атласа на GPU для мягкой
   фильтрации конусов»)

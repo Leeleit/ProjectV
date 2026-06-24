@@ -28,7 +28,7 @@
 
 ## 2. Prior art
 
-Web-research проведён 2026-06-22 (см. [`sources.md`](./sources.md) — 7 Tier 1 + 1 Tier 2 canonical URLs verified). **Exa HTTP 429 + DuckDuckGo CAPTCHA blocked** per `agent/knowledge.md Part B §9`; **direct webfetch к Wikipedia** = working fallback.
+Web-research проведён 2026-06-22 (см. [`sources.md`](./sources.md) — 7 Tier 1 + 1 Tier 2 canonical URLs verified). **Exa HTTP 429 + DuckDuckGo CAPTCHA blocked** per the web_search fallback chain; **direct webfetch к Wikipedia** = working fallback.
 
 **Ключевые Tier 1 источники:**
 - **Wikipedia "Utility system"** — canonical utility AI (B_PriorityScoreWeighted = utility-based engagement scoring, per The Sims precedent, Dave Mark IAUS).
@@ -178,7 +178,7 @@ Wall time: ~5-7 min total на dev host `obvium` Zen 3 5800X governor=`powersave
 
 **Target stage:** Stage 6+ military sandbox (deferred per `agent/workspace.md §2` line 36 operator 8x planning).
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4`:**
+**Mainline 3-step migration per `agent/knowledge.md`:**
 
 - **Step 1 (XS, ~80 LoC) `src/ai/EngagementSystem.{hpp,cpp}` foundation + `EngagementStrategy` enum + `PROJECTV_FIRE_COORD=NAIVE|PRIORITY|THREAT_BLACKBOARD|SUPPRESSION_FOCUS|ADAPTIVE` env gate (default `PRIORITY` for balanced forces, `NAIVE` for fast-scaling).**
 - **Step 2 (M, ~300 LoC)** per-strategy implementation в Flecs ECS (5 strategies, port from prototype) + integration with `hierarchical-tactical-ai-btree` [mixed] as `EngagementDecision` action node + `combined-arms-coordination-ai` [mixed] doctrine assignment + `suppression-mechanics` [mixed] suppression data + `radar-detection-system-simulation` [yes] radar-locked target bonus + `recon-intel-fog-of-war` [yes] intel visibility gate.
@@ -231,7 +231,7 @@ Wall time: ~5-7 min total на dev host `obvium` Zen 3 5800X governor=`powersave
 - `docs/experiments/research/backlog.md` §Closed (sync per §13.5 after this closure).
 - `docs/experiments/INDEX.md` §6 Recent closed (after this closure).
 - `docs/experiments/benchmarks/methodology.md` §3 (measurement protocol).
-- `agent/knowledge.md §30.4` (3-step migration precedent).
+- `agent/knowledge.md` (3-step migration precedent).
 - `agent/workspace.md §2` (Stage 6+ military sandbox deferral operator decision).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
 - `hardware-profile.md §1` (Zen 3 5800X dev host).

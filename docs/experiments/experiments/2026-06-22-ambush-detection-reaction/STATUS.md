@@ -40,7 +40,7 @@ and C_MovingAverageDeviation (80% FP on baseline patrol).
       with full reservation block.
 - [x] Prototype reproducible (commands in `README.md §4 Prototype`).
 - [x] Integration recommendation written for mainline agent (3-step
-      migration per `agent/knowledge.md §30.4` precedent, ~500 LoC,
+      migration per `agent/knowledge.md` precedent, ~500 LoC,
       M effort, deferred до Stage 6+ military sandbox activation).
 
 ## Headline

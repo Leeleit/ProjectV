@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-vk-video-decoder-replay
 
 Web-research via Exa `web_search` (1 wave, 10 results verified) + DuckDuckGo HTML fallback available per
-`agent/knowledge.md Part B §9` line 1424. WebSearch работал на этой сессии без fallback.
+the web_search fallback chain. WebSearch работал на этой сессии без fallback.
 
 ---
 
@@ -159,10 +159,10 @@ Web-research via Exa `web_search` (1 wave, 10 results verified) + DuckDuckGo HTM
   per closed `2026-06-21-vulkan-memory-aliasing-transient` (mixed)
 - `src/render/vulkan/VulkanBootstrap.cpp:592` — extension probe pattern (`vkEnumerateDeviceExtensionProperties`)
 - `src/render/vulkan/VulkanDebug.cpp:9` — debug marker integration
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `agent/workspace.md §2` — Nearest Gap: Stage 4.3 + content tooling
-- `agent/knowledge.md §4` — build/verification contract
-- `agent/knowledge.md Part B §9` line 1424 — web fallbacks (websearch worked this session)
+- `agent/knowledge.md` — build/verification contract
+- the web_search fallback chain — web fallbacks (websearch worked this session)
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold
 - `docs/experiments/hardware-profile.md §1+§3+§4+§6` — Zen 3 5800X + RTX 3060 Ti GA104 + Vulkan 1.4.341 + Mesa 26.2 + SDL3
 - `docs/experiments/benchmarks/methodology.md §3` — measurement protocol

@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-voxel-mutation-cost-characterization`
 
-Web-research via DuckDuckGo HTML + GitHub direct + arXiv (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`). Verification per `docs/experiments/AGENTS.md §4`.
+Web-research via DuckDuckGo HTML + GitHub direct + arXiv (Exa HTTP 429 persistent per the web_search fallback chain). Verification per `docs/experiments/AGENTS.md §4`.
 
 ---
 

@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-electronic-warfare-jamming
 
 **Retrieval date:** 2026-06-21 (same session)
-**Search infrastructure state:** Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list; DuckDuckGo HTML endpoint CAPTCHA-blocked; `webfetch` direct to canonical URLs **WORKING** (Wikipedia + canonical).
+**Search infrastructure state:** Exa `web_search` HTTP 429 persistent per the web_search fallback chain; DuckDuckGo HTML endpoint CAPTCHA-blocked; `webfetch` direct to canonical URLs **WORKING** (Wikipedia + canonical).
 **Total sources verified:** 6 Tier-1 primary (all Wikipedia, all retrieved 2026-06-21 with edit-date metadata for currency).
 **Tier 2-3 supplementary:** 0 (Tier-1 already sufficient for the canonical equations, mechanics, and modern SOTA; supplementary papers would be nice but blocked by search infrastructure).
 
@@ -99,7 +99,7 @@
 
 What would normally go in Tier 2-3 (IEEE papers, USAF/AFRL technical reports, AD-A520026 USAF EW primer, Schleher 1999 "Electronic Warfare in the Information Age", Adamy "EW 101" series, CSIS/RUSI/RAND reports on Russian EW in Ukraine 2022-2026, Krasukha-4 Russian-language sources) — **NOT fetched this session** because:
 
-1. **Exa `web_search` HTTP 429 persistent** (per `agent/knowledge.md Part B §9` line 1424 fallback list).
+1. **Exa `web_search` HTTP 429 persistent** (per the web_search fallback chain).
 2. **DuckDuckGo HTML endpoint CAPTCHA-blocked** (verified 2026-06-21, same session, 3 attempts).
 3. **Direct `webfetch` to non-Wikipedia URLs** not attempted because:
    - IEEE Xplore requires institutional access.

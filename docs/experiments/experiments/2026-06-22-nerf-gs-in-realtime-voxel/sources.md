@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-nerf-gs-in-realtime-voxel
 
-Web-research complete via direct `webfetch` to canonical arXiv + project pages (Exa HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424 fallback list). **6 primary sources verified** + 1 Wikipedia overview = 7 total.
+Web-research complete via direct `webfetch` to canonical arXiv + project pages (Exa HTTP 429 persistent this session per the web_search fallback chain). **6 primary sources verified** + 1 Wikipedia overview = 7 total.
 
 ---
 

@@ -152,7 +152,7 @@ B (45.5 ns) is competitive with A (45.5 ns) because the BT sequence `stack → b
 
 7. **No memory pressure tested:** with 1000+ buildings per frame, voxel chunks × interior graphs = O(100k rooms) = ~10 MB working set. At 30 Hz that fits in L3 cache (32 MiB on Zen 3 5800X per `hardware-profile.md §1`).
 
-8. **Web-research fallback limitations:** Exa `web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list. Direct `webfetch` to canonical Wikipedia + closed-experiment cross-refs used as primary (8 sources verified in `sources.md`).
+8. **Web-research fallback limitations:** Exa `web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked per the web_search fallback chain. Direct `webfetch` to canonical Wikipedia + closed-experiment cross-refs used as primary (8 sources verified in `sources.md`).
 
 ---
 

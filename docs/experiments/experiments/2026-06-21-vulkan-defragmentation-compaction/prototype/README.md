@@ -17,7 +17,7 @@ cmake --build build --parallel
 ```
 
 Compiler: Clang 22.1.6 per `hardware-profile.md §6` and
-`agent/knowledge.md §17`.
+`agent/knowledge.md`.
 
 ## Run
 

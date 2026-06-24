@@ -29,7 +29,7 @@
 
 ## 2. Prior art
 
-Web-research completed via DuckDuckGo HTML endpoint + `webfetch` fallback per `agent/knowledge.md Part B §9` (Exa HTTP 429 persistent). **5 primary sources verified** this session:
+Web-research completed via DuckDuckGo HTML endpoint + `webfetch` fallback per the web_search fallback chain (Exa HTTP 429 persistent). **5 primary sources verified** this session:
 
 - **Greene, N., Kass, M., Miller, G. 1993 «Hierarchical Z-Buffer Visibility»** — SIGGRAPH 1993 Proceedings, ACM 166147, pp. 231-238. Canonical HZB cull paper. Octree spatial subdivision + Z pyramid + temporal coherence. PDF: `https://www.cs.princeton.edu/courses/archive/spr01/cs598b/papers/greene93.pdf`. **Per-pixel mip chain (max) + conservative cull guarantee** — foundational для всех последующих работ, включая ProjectV HZB cull.
 - **Mike Turitzin 2020 «Hierarchical Depth Buffers»** (Mar 25, 2020) — `https://miketuritzin.com/post/hierarchical-depth-buffers/`. **Canonical pattern statement (direct match для нашей гипотезы):** «Hi-Z occlusion culling, for instance, works by **projecting a bounding volume into screen-space and using the projected size to choose the appropriate mip level** (so that a fixed number of texels are accessed per occlusion test)». 35% particle rendering speedup measured; full mip chain = 0.25ms NVIDIA GTX 980, 0.30ms AMD R9 290 для 1648×1776 stereo VR. **Direct implementation reference для mip-downsample algorithm** (handles non-power-of-2 dimensions correctly).
@@ -225,7 +225,7 @@ Per-chunk smart mip selection (C_PerChunkStaticMip) provides **700-1500× texel 
 
 **Verdict: `mixed`** — per-chunk smart mip selection (C_PerChunkStaticMip) provides **700-1500× texel reduction** AND **+3-5% additional draw reduction** vs baseline (A_UniformMip0) при **0.02-0.20% false-negative artifact rate** (1-8 chunks culled incorrectly per 5 seeds × ~1024 chunks). PSNR 27-30 dB = «noticeable but acceptable».
 
-**Recommended adoption path: 3-step migration per `agent/knowledge.md §30.4` precedent** with conservative mitigations to eliminate false-negatives:
+**Recommended adoption path: 3-step migration per `agent/knowledge.md` precedent** with conservative mitigations to eliminate false-negatives:
 
 ### Step 1 (XS, ~50 LoC, 1 session) — Foundation + per-chunk mip compute
 
@@ -352,7 +352,7 @@ Default flip: `PROJECTV_HZB_SMART_MIP=ON` (default ON), `PROJECTV_HZB_SMART_MIP_
 - `src/render/Renderer.cpp:1344-1350` — `RecordHzbCullingDispatch` call site (will need mip compute injection)
 - `src/voxel/VoxelWorld.hpp:78` — `chunkSize=8`
 - `src/app/Camera.cpp` — `kMainlineVisibleSceneMaxDistance=64m` (current Stage 2.1 cap; Stage 4.3 target = 128m)
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `2026-06-20-hzb-binding-models/` (closed mixed) — `texelFetch` pattern (already adopted in `hzb_cull.comp:85`)
 - `2026-06-20-dec-pipelines-async-compute/` (closed yes) — async compute foundation
 - `2026-06-21-greedy-physics-meshing-cpu/` (closed yes) — CPU prototype precedent (single-session analytical model + scenes + seeds)

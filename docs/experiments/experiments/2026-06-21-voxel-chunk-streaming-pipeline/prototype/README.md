@@ -19,7 +19,7 @@ Or with the helper script:
 bash build.sh
 ```
 
-Compiler: `clang++ 22.1.6` per `hardware-profile.md §1` / `agent/knowledge.md §5` Linux baseline.
+Compiler: `clang++ 22.1.6` per `hardware-profile.md §1` / `agent/knowledge.md` Linux baseline.
 
 ---
 

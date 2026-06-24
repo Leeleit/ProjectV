@@ -119,7 +119,7 @@ Cross-vendor: all strategies use standard compute shaders with no vendor-specifi
 
 ## 7. Integration recommendation
 
-**3-step migration per `agent/knowledge.md §30.4` precedent** (~310 LoC total, S effort, 1-2 sessions, **deferred** до Stage 5.x dedicated session per `agent/workspace.md §2` line 36 operator 8x planning decision):
+**3-step migration per `agent/knowledge.md` precedent** (~310 LoC total, S effort, 1-2 sessions, **deferred** до Stage 5.x dedicated session per `agent/workspace.md §2` line 36 operator 8x planning decision):
 
 ### Step 1 (XS, ~30 LoC) — Foundation
 - `BloomController.{hpp,cpp}` with `PROJECTV_BLOOM=NONE|GAUSSIAN|KAWASE|LATTICE|LENSDIRT|ADAPTIVE` env gate.

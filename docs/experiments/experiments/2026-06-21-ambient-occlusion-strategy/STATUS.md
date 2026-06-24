@@ -16,7 +16,7 @@ INDEX.md §6 + backlog.md §Closed synced per `AGENTS.md §13.5`.
   - Reservation зафиксирована в `research/backlog.md §In progress` per `AGENTS.md §13.2`
 
 - **Phase B (web-research):**
-  - `web_search` Exa HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 → DuckDuckGo HTML fallback used
+  - `web_search` Exa HTTP 429 persistent per the web_search fallback chain → DuckDuckGo HTML fallback used
   - **9 primary sources verified** per `sources.md`: Crassin 2011 GIVoxels §6 (canonical VXAO pattern), Jimenez 2016 GTAO
     (ground-truth AO formula + bent-normal), Aaltonen 2021 GTAO MB (multi-bounce extension), Bavoil 2008 HBAO
     (horizon-based multi-slice), Crytek 2007 SSAO (Mittring radial blur), MircoWerner 2023 VDCAO thesis

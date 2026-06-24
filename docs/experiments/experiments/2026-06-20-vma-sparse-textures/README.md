@@ -117,7 +117,7 @@ Web-research: 4 batch queries, 10 sources верифицированы по го
 
 - **`TODO.md` §2.3** — "Виртуальное текстурирование вокселей (Sparse Virtual Texturing)".
   Target: "256 МБ лимит текстур" DoD.
-- **`agent/knowledge.md §25`** — current material = small fixed SSBO
+- **`agent/knowledge.md`** — current material = small fixed SSBO
   (`VoxelMaterialVisual` × `kVoxelMaterialCount`), `set=0, binding=2` в `voxel.frag`.
 - **`bindless-descriptor-overhead` (closed 2026-06-20 verdict=mixed)** — Phase D (Stage 2.3) **deferred**
   до landing: "Virtual texture page table bindless perf (planned for Phase D acceptance, with
@@ -424,7 +424,7 @@ non-pinned page. Pin mip tail (always resident).
 - `TODO.md` §2.3** — primary Stage 2.3 implementation.
 - `TODO.md` §4.3** — Stage 4.3 lift draw distance enables virtual texturing benefit (128+ chunks).
 - `bindless-descriptor-overhead` Phase D** — Phase D binds VT page table as bindless image array.
-- `agent/knowledge.md` §25** — current `VoxelMaterialVisual` SSBO replaced/augmented by VT.
+- `agent/knowledge.md`** — current `VoxelMaterialVisual` SSBO replaced/augmented by VT.
 
 **Допущения / упрощения прототипа:**
 

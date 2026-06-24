@@ -177,7 +177,7 @@ All stddev < 0.01% of mean = highly stable measurements.
 - `docs/experiments/INDEX.md §5 Active` (this row)
 - `docs/experiments/hardware-profile.md` (Zen 3 5800X + dev host)
 - `docs/experiments/benchmarks/methodology.md` (measurement protocol + Stats harness)
-- `agent/knowledge.md §30.4` (3-step migration precedent)
+- `agent/knowledge.md` (3-step migration precedent)
 - `agent/workspace.md §2` (Stage 6+ deferral)
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold)
 - Closed ProjectV experiments: `hierarchical-tactical-ai-btree`, `cover-system-terrain-adaptive`, `suppression-mechanics`, `flanking-maneuver-ai`, `combined-arms-coordination-ai`, `recon-intel-fog-of-war`, `ballistic-projectile-simulation`, `infantry-soldier-sim`, `ecs-1m-entities-bottleneck`, `lockstep-state-sync-hybrid-netcode`, `after-action-replay-system`, `urban-combat-tactics-ai`, `fire-coordination-multiple-units`, `stealth-signature-reduction`.

@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-full-rt-tensor-cores-load
 
 Web-research via `webfetch` DuckDuckGo HTML endpoint (Exa MCP HTTP 429 persistent per operator directive; primary fallback
-per `agent/knowledge.md Part B §9` line 1424). All sources verified via direct fetch 2026-06-21.
+per the web_search fallback chain). All sources verified via direct fetch 2026-06-21.
 
 ---
 
@@ -173,7 +173,7 @@ per `agent/knowledge.md Part B §9` line 1424). All sources verified via direct 
 ## Tier 3 — Architecture / theory
 
 - `legacy/docs/VulkanSDK-Linux-Docs-1.4.350.1/` (vendored per `AGENTS.md §3`) — local authoritative Vulkan 1.4 SDK reference.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `docs/experiments/hardware-profile.md §1+§3+§4` — Zen 3 5800X + RTX 3060 Ti GA104 + Vulkan 1.4.341 + RT/tensor ext support.
 

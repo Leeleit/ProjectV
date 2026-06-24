@@ -119,7 +119,7 @@ Hypothesis (4 clauses) **fully CONFIRMED**:
 
 **Default for ProjectV:** `PROJECTV_SERVER_ARCH=HYBRID` (E_Hybrid_ShardedReactive).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent** (~1200 LoC total, M-L effort, 3-5 sessions):
+**3-step migration per `agent/knowledge.md` precedent** (~1200 LoC total, M-L effort, 3-5 sessions):
 
 - **Step 1 (S, ~300 LoC)** `src/server/RealmCore.{hpp,cpp}` — NATS JetStream integration with KV/Object store, RAFT R=3 config, sync_interval=always, realm sharding logic (1 realm per 200-300 players by hex grid per closed `cover-system-terrain-adaptive` precedent).
 - **Step 2 (M, ~600 LoC)** `src/server/RealmOrchestrator.{hpp,cpp}` — Agones FleetAutoscaler integration, per-realm pod lifecycle, cross-realm event routing via JetStream subject mapping, player migration handler.

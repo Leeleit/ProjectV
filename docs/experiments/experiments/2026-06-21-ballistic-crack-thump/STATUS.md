@@ -12,7 +12,7 @@
 - [x] **Phase 0: Claim** — `research/backlog.md` updated (§Open → §In progress), sentinel §13.7 clean,
   `INDEX.md §5` updated.
 - [x] **Phase 1: Web-research** — 6 Tier 1 sources verified via direct `webfetch` (Exa HTTP 429 + DuckDuckGo
-  CAPTCHA blocked per `agent/knowledge.md Part B §9`). Wikipedia "Sonic boom" + "Muzzle blast" + "Doppler
+  CAPTCHA blocked per the web_search fallback chain). Wikipedia "Sonic boom" + "Muzzle blast" + "Doppler
   effect" + "Gunshot" + "Speed of sound" + miniaudio manual. См. `sources.md`.
 - [x] **Phase 2: Prototype skeleton** — `prototype/{ballistic_audio_bench.cpp, audio_strategies.hpp,
   scenes.hpp, stats.hpp, CMakeLists.txt}`. ~430 LoC C++26.
@@ -39,8 +39,8 @@
 
 - CPU-only analytical prototype (audio = mostly CPU per ProjectV mainline per `agent/workspace.md §1`).
 - No Vulkan dispatch (audio = miniaudio backend, not GPU).
-- Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9`; primary = direct `webfetch`.
-- DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9`; primary = direct `webfetch`
+- Exa `web_search` HTTP 429 persistent per the web_search fallback chain; primary = direct `webfetch`.
+- DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain; primary = direct `webfetch`
   to canonical sources.
 - Dev host: Zen 3 5800X + 8C/16T + governor=`powersave` per `hardware-profile.md §1`.
 - Wall-clock budget: <1 sec for 125K measurements (analytical only).

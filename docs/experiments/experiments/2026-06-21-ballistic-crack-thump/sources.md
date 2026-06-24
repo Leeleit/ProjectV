@@ -1,7 +1,6 @@
 # Sources — 2026-06-21-ballistic-crack-thump
 
-**Web-research status:** Phase 1 complete (Tier 1 verified via direct `webfetch` per `agent/knowledge.md
-Part B §9` line 1424 fallback chain — Exa HTTP 429 + DuckDuckGo CAPTCHA blocked).
+**Web-research status:** Phase 1 complete (Tier 1 verified via direct `webfetch` per the web_search fallback chain — Exa HTTP 429 + DuckDuckGo CAPTCHA blocked).
 
 ---
 
@@ -75,7 +74,7 @@ TBD — Phase 1 priority done. Can be added if more specific crack-thump psychoa
 ## ProjectV local cross-refs (verified via `rg`)
 
 - [x] `src/audio/` — mainline audio module (verify via future prototype cross-ref)
-- [x] `agent/knowledge.md §17` — toolchain (miniaudio vendored)
+- [x] `agent/knowledge.md` — toolchain (miniaudio vendored)
 - [x] `agent/workspace.md §1` — PulseAudio/PipeWire + miniaudio backend
 - [x] `TODO.md` — audio task status (no explicit audio task in current scope; Stage 4.1 async audio = I/O)
 - [x] closed `ballistic-projectile-simulation/README.md` §cross-axis (audio upstream)

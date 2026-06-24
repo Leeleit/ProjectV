@@ -31,7 +31,7 @@
 
 ## 2. Prior art
 
-**Web-research complete 2026-06-22** — 6 Tier-1 primary + 3 Tier-2 supplementary + 16 cross-references verified via direct `webfetch` to Wikipedia canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` fallback list). Full source list: [`sources.md`](./sources.md).
+**Web-research complete 2026-06-22** — 6 Tier-1 primary + 3 Tier-2 supplementary + 16 cross-references verified via direct `webfetch` to Wikipedia canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). Full source list: [`sources.md`](./sources.md).
 
 **Key Tier 1 sources (all verified 2026-06-22):**
 
@@ -206,7 +206,7 @@ Per strategy:
 
 - **Target stage:** Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision.
 - **Concrete changes:** new `src/weapons/FdcSystem.{hpp,cpp}` + `src/weapons/CallForFire.{hpp,cpp}` modules. Flecs `FdcComponent` (gun position + ammo inventory + charge table) + `CallForFire` event subscriber + `FireMission` event publisher + `FireMissionRefused` event for danger-close.
-- **Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent (~720 LoC total, M effort, 2-3 sessions, **deferred до Stage 6+**):
+- **Подход:** 3-step migration per `agent/knowledge.md` precedent (~720 LoC total, M effort, 2-3 sessions, **deferred до Stage 6+**):
   - **Step 1 (XS, ~80 LoC)** `src/weapons/FdcSystem.hpp/cpp` foundation + `FDcStrategy` enum + `PROJECTV_FDC=LUT|NEWTON|POINT_MASS|ADAPTIVE|HYBRID` env gate (default `HYBRID` = E) + LUT precompute at game-load per ammo × gun profile (~5 sec one-time cost, out of hot-path).
   - **Step 2 (M, ~500 LoC)** per-strategy implementation в Flecs ECS + event chain (FO `CallForFire` → FDC `FireMission` → `FireOrder` → ballistic-projectile-simulation [yes] `ShellFlight` → `ImpactEvent`) + `wind-simulation-ballistics` [mixed] B_StaticWind atmospheric correction + `recon-intel-fog-of-war` [yes] target grid + friendly positions query + danger-close check + `lockstep-state-sync-hybrid-netcode` [mixed, A_PureLockstep] FPU mode enforcement (`_FPU_RC_NEAR + _FPU_PC_24` SupCom precedent).
   - **Step 3 (S, ~140 LoC)** `ProjectVFdcTests.cpp` (5 scene tests + 5 spot-mission correction round-trip tests) + Tracy plot "FDC Solve" + Tracy plot "Danger Close" + `ProjectVFdcUnitTests` (bit-exact comparison vs C_PointMass) + default `PROJECTV_FDC=HYBRID`.

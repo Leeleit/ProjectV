@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-save-game-persistence-architecture
 
-> **Sources verified via direct `webfetch`** (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list; DuckDuckGo HTML endpoint CAPTCHA blocked this session per parallel-agent reports).
+> **Sources verified via direct `webfetch`** (Exa `web_search` HTTP 429 persistent per the web_search fallback chain; DuckDuckGo HTML endpoint CAPTCHA blocked this session per parallel-agent reports).
 
 ---
 

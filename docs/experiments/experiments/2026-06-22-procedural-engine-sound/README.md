@@ -52,7 +52,7 @@ public talks 2014-2026).
 ## 2. Prior art
 
 Web-research via `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent per
-`agent/knowledge.md Part B §9` line 1424 fallback list). См. [`sources.md`](./sources.md) для
+the web_search fallback chain). См. [`sources.md`](./sources.md) для
 полного Tier 1+2 source list:
 
 **Tier 1 (foundational — physics of engine sound):**
@@ -129,7 +129,7 @@ Web-research via `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persist
   10 warmup, CPU governor=`powersave` (per `hardware-profile.md §1`).
 - **Output:** `prototype/build/results.csv` (151 rows = 1 header + 150 data) + `summary_means.csv` + `run.log`.
 - **Изоляция:** single-thread (per `benchmarks/methodology.md` §4); parallel-scale projection analytical
-  per `agent/knowledge.md §30.4` precedent.
+  per `agent/knowledge.md` precedent.
 
 ---
 
@@ -233,7 +233,7 @@ physical-modeling authenticity**; **B_Phoneme_SamplePlayback as legacy fallback*
 **Target stage:** Stage 6+ military sandbox per [`agent/workspace.md §2`](../../../agent/workspace.md) operator
 8x planning decision.
 
-**3-step mainline migration per [`agent/knowledge.md §30.4`](../../../agent/knowledge.md) precedent**
+**3-step mainline migration per [`agent/knowledge.md`](../../../agent/knowledge.md) precedent**
 (~500 LoC, M effort, 2-3 sessions, **deferred до Stage 6+ military sandbox activation**):
 
 - **Step 1 (XS, ~80 LoC)** `src/audio/EngineSoundProfile.{hpp,cpp}` data-driven definition:
@@ -293,7 +293,7 @@ Tier 2 Wikipedia audio synthesis + Tier 3 ProjectV cross-refs)._
   GPU audio dispatch); synthetic engine cycle model (no real combustion PDE); cylinder harmonics
   approximated by canonical sine sum (no real exhaust pressure waveform); turbo whistle = simple
   harmonic overlay (no real radial-turbine blade-rate model); single-thread (parallel-scale projection
-  analytical per `agent/knowledge.md §30.4` precedent).
+  analytical per `agent/knowledge.md` precedent).
 - **Не измерено в прототипе:** GPU audio DSP (CPU sufficient для 100-vehicle scale); real microphone
   capture validation (deferred до audio capture integration); per-listener HRTF/binaural rendering
   (deferred до Stage 5.x dedicated session); Doppler shift from vehicle motion (out of scope —

@@ -156,7 +156,7 @@ additive composition. A mainline integration smoke test would confirm.**
   over 2% single-pass budget).
 - E vs A cost = 2.33× → REJECTED at 5% level but 1.40% frame budget (acceptable).
 
-**Within the 5% per-pass frame budget (per `agent/knowledge.md §30.4` micro-budget):** B, D, E pass.
+**Within the 5% per-pass frame budget (per `agent/knowledge.md` micro-budget):** B, D, E pass.
 C is borderline. **The 5-10% philosophy rule** (perf gain must be > 5-10% to justify change) is
 *inverted* here: B and D *trade* frame budget for visual quality. The visual quality uplift is
 > +50 dB PSNR which is *enormous* — the trade is well worth it.
@@ -184,7 +184,7 @@ inverse to clock × IPC, with FMA coalescing on Ampere/RDNA giving 1.5-2× bonus
   `dec-pipelines-async-compute` cross-vendor matrix). Mainline integration requires real GPU
   fragment shader benchmarking on RTX 3060 Ti to confirm.
 - **Single fragment buffer size (128×72):** small enough to fit CPU bench budget; large enough
-  that cache effects are representative (per `agent/knowledge.md §30.4` micro-budget). 1080p
+  that cache effects are representative (per `agent/knowledge.md` micro-budget). 1080p
   extrapolation is straightforward (constant cost per fragment × 2.07M fragments).
 - **Single strength value (0.08) for all strategies:** in practice, each strategy needs its own
   strength tuning (C and E are 4× noisier than B at the same strength, so they need 0.02 to

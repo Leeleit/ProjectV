@@ -46,7 +46,7 @@ reverse slopes). Это **убирает основной источник "AI-�
 ## 2. Prior art
 
 Web-research completed `2026-06-21` via `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blockers
-per `agent/knowledge.md Part B §9`). **5 primary + 3 supplementary + 4 cross-axis closed ProjectV experiments** verified.
+per the web_search fallback chain). **5 primary + 3 supplementary + 4 cross-axis closed ProjectV experiments** verified.
 
 **Tier 1 — Primary sources** (см. [`sources.md`](./sources.md) для деталей):
 
@@ -220,7 +220,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 
 **Target stage:** independent (cross-cutting, applied to Stage 6+ military sandbox tactical AI).
 
-**Concrete changes в mainline (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Concrete changes в mainline (3-step migration per `agent/knowledge.md` precedent):**
 
 1. **`src/ai/TacticalPlanner.{hpp,cpp}`** (XS, ~100 LoC):
    - `CoverWeightedFlow` strategy (Dijkstra + threat cost = `1.0 + threat[c] * 5.0`)

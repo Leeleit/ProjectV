@@ -51,7 +51,7 @@ prototype/
 
 ## Toolchain
 
-- Clang 22.1.6 (per `hardware-profile.md §6`, `agent/knowledge.md §17`).
+- Clang 22.1.6 (per `hardware-profile.md §6`, `agent/knowledge.md`).
 - `-O3 -march=native -DNDEBUG` — release-mode flags.
 - No external deps (libc++ + libstdc++ only).
 - No Vulkan / no miniaudio / no ProjectV mainline.

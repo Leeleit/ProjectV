@@ -32,7 +32,7 @@ Web-research via `web_search` (Exa, 3 waves, working this session). **16 sources
 - **Bevy PR #16314 (2025)** — Hillaire 2020 merged into Bevy engine. Production open-source reference.
 - **Unity HDRP** — Linear/Exponential/Volumetric fog types with sun inscattering.
 
-**Cross-refs:** `agent/knowledge.md` §30.4 (3-step migration precedent); `TODO.md` §5.x (Stage 5.x Visual Polish); closed `2026-06-21-volumetric-fog-atmosphere-rendering` (mixed — volumetric fog axis, orth to cheap analytic aerial perspective);
+**Cross-refs:** `agent/knowledge.md` (3-step migration precedent); `TODO.md` §5.x (Stage 5.x Visual Polish); closed `2026-06-21-volumetric-fog-atmosphere-rendering` (mixed — volumetric fog axis, orth to cheap analytic aerial perspective);
 closed `2026-06-21-god-rays-crepuscular` (mixed — god rays post-process, aerial perspective = cheap distance fog foundation);
 `hardware-profile.md` §1 (Zen 3 5800X) + §3 (RTX 3060 Ti GA104 Ampere) + §4 (Vulkan 1.4.341).
 
@@ -121,7 +121,7 @@ E_AnalyticPreetham is recommended as a quality opt-in for scenes where the direc
 
 **Target stage:** `TODO.md §5.x` — Stage 5.x Visual Polish, deferred до dedicated session per `agent/workspace.md §2`.
 
-**Concrete changes** (3-step migration per `agent/knowledge.md §30.4`):
+**Concrete changes** (3-step migration per `agent/knowledge.md`):
 
 **Step 1 (XS, ~20 LoC):** Replace current analytic distance fog in `voxel.frag:844-883` with D_ExponentialHeightFog:
 

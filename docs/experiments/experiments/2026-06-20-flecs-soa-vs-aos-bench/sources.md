@@ -108,7 +108,7 @@ Web-research выполнен `2026-06-20` через Exa per `docs/experiments/
 
 ## ProjectV internal cross-refs (not duplicated, only referenced)
 
-- `agent/knowledge.md §1605` A9 — Voxel storage `std::vector<uint8_t>` (AoS byte-per-voxel) without SoA material
+- `agent/knowledge.md` A9 — Voxel storage `std::vector<uint8_t>` (AoS byte-per-voxel) without SoA material
   distribution.
 - `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` — SoA vs AoS philosophy, mermaid diagram showing 3-5×
   speedup analytical claim.

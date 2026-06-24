@@ -116,8 +116,8 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
 
 **Локальные cross-refs** (per `AGENTS.md §3` — не дублировать):
 
-- `agent/knowledge.md` §15 — sun-shadow path, не касается storage, но Stage 2.2 HZB cull читает SVDAG-derived AABBs.
-- `agent/knowledge.md` §30.4 — GPU Fluid CA reversal: contract говорит «shader оперирует на SVDAG node pool, не на
+- `agent/knowledge.md` — sun-shadow path, не касается storage, но Stage 2.2 HZB cull читает SVDAG-derived AABBs.
+- `agent/knowledge.md` — GPU Fluid CA reversal: contract говорит «shader оперирует на SVDAG node pool, не на
   flat array» — то есть наш storage-выбор критичен для Stage 3.1.
 - `legacy/docs/architecture/adr/0002-svo-storage.md` — предыдущая (legacy) архитектура SVO с 8-ary 64-bit
   packed nodes. **Historical**, до перехода на 64-ary (2026-06-20).
@@ -495,7 +495,7 @@ acceptance — re-measure with real SVDAG infrastructure.
 - `legacy/docs/architecture/adr/0002-svo-storage.md` — historical (8-ary SVO) predecessor.
 - `legacy/docs/philosophy/03_domain/03_voxel-data-philosophy.md` — philosophical foundation.
 - `legacy/docs/architecture/practice/00_svo-architecture.md` — alternative (octree) implementation proposal.
-- `agent/knowledge.md` §15, §30.4 — relevant engineering contracts.
+- `agent/knowledge.md`, §30.4 — relevant engineering contracts.
 - `TODO.md` §1.1, §1.2, §2.1, §2.2, §3.1, §4.1, §4.2, §5.1, §5.2 — all designed for SVDAG/64-tree read.
 
 ---
@@ -507,7 +507,7 @@ acceptance — re-measure with real SVDAG infrastructure.
 - `src/voxel/Sparse64Tree.hpp` → Stage 1.1 mainline storage.
 - `src/voxel/VoxelWorld::sparseStorage` (line 87 of `VoxelWorld.hpp`) → parallel-path access.
 - Hot-path reads: `GetVoxelMaterial` (`VoxelWorld.cpp:111-117`) — called from meshing (per
-  `agent/knowledge.md §25` greedy meshing), physics (`PhysicsWorld::SyncPhysicsWorld` per
+  `agent/knowledge.md` greedy meshing), physics (`PhysicsWorld::SyncPhysicsWorld` per
   `decisions.md §30.4`), fluid CA (per `decisions.md §30.4`).
 - Hot-path writes: `SetVoxelMaterial` (`VoxelWorld.cpp:103-109`) — called from `VoxelInteraction.cpp` (user
   build/break), `FillVoxelBox` / `FillVoxelMaterial` (procedural gen).

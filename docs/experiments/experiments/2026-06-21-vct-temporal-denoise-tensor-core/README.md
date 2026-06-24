@@ -7,7 +7,7 @@
 `2026-06-21-vct-cone-count-atlas-precision/STATUS.md:13` («4D temporal VCT follow-up (close to
 closed `2026-06-21-taa-motion-vectors`)»)
 **Estimated effort:** M (3-step migration в mainline = ~380 LoC, S-M effort per
-`agent/knowledge.md §30.4` precedent)
+`agent/knowledge.md` precedent)
 **Author:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою
 и исследуй»; h-priority `full rt + tensor cores load` в `backlog.md §Open` сужен до конкретной
 tensor-cores axis = cooperative_matrix temporal denoise для VCT; **RT-cores axis covered** by
@@ -319,7 +319,7 @@ Standalone C++26 CPU temporal denoise simulator. **NOT ProjectV mainline** (per
 - `prototype/cone_march.hpp` — 6-diffuse + 1-specular cone-march (CPU reference, mirrors
   ProjectV mainline GLSL structure for fidelity).
 - `prototype/motion_vectors.hpp` — synthetic camera trajectory + motion vector reprojection.
-- `prototype/CMakeLists.txt` — Ninja build per `agent/knowledge.md §17` build matrix.
+- `prototype/CMakeLists.txt` — Ninja build per `agent/knowledge.md` build matrix.
 - `prototype/README.md` — build + run instructions.
 - `prototype/build/results.csv` — 125,000 measurements (1 header + 125,000 data rows).
 - `prototype/RESULTS.md` — full analysis + tables.
@@ -406,7 +406,7 @@ adds per-frame instability; real Karis 2014 TAA requires MV texture + history re
 
 **Target stage:** `TODO.md §5.1` (Voxel Cone Tracing).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~50 LoC, immediate, spike on dev host):**
   `PROJECTV_VCT_TEMPORAL_DENOISE=OFF|SPATIAL|SVGF` env flag +

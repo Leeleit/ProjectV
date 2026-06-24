@@ -36,7 +36,7 @@
 
 ## 2. Prior art
 
-Web-research complete. **18+ primary + supplementary sources verified** (Exa `web_search` HTTP 429 persistent → `webfetch` DuckDuckGo HTML endpoint + direct canonical URLs per `agent/knowledge.md Part B §9` fallback list). Detail в [`sources.md`](./sources.md).
+Web-research complete. **18+ primary + supplementary sources verified** (Exa `web_search` HTTP 429 persistent → `webfetch` DuckDuckGo HTML endpoint + direct canonical URLs per the web_search fallback chain). Detail в [`sources.md`](./sources.md).
 
 **Tier 1 — primary, directly applicable:**
 
@@ -168,7 +168,7 @@ cmake --build . --parallel 8
 
 **Target stage:** Stage 6+ military sandbox (per `agent/workspace.md §2` operator 8x planning decision).
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent, ~280 LoC, S effort, 1-2 sessions):**
+**Concrete changes (3-step migration per `agent/knowledge.md` precedent, ~280 LoC, S effort, 1-2 sessions):**
 
 - **Step 1 (XS, ~50 LoC):** `src/logistics/LogisticsGraph.{hpp,cpp}` — `Graph` struct (nodes + edges + per-edge capacity), `Node` struct (production/consumption/stockpile), `Edge` struct (to, capacity_per_tick), basic load/save + Flecs component registration (`SupplyNode`, `SupplyEdge`). `LogisticsConfig` with `IsLogisticsEnabled()` env gate. New `src/logistics/` directory.
 - **Step 2 (S, ~180 LoC):** `LogisticsSim.{hpp,cpp}` — persistent supply state (vector of `double` stock per node), per-tick `Tick(dt)` function implementing E_PersistentCache algorithm (10% dirty edges per tick, integer arithmetic only per Glenn Fiedler "Floating Point Determinism" 2010). Deterministic dirty-edge selection via Flecs `on_change` filter (no `std::mt19937` non-determinism). Multi-material support: `LogisticsGraph<ResourceType>` template specialization.

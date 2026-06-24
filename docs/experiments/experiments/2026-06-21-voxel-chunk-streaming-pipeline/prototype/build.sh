@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build script for `2026-06-21-voxel-chunk-streaming-pipeline` prototype.
-# Per `agent/knowledge.md §5` Linux baseline = clang++ 22.1.6.
+# Per `agent/knowledge.md` Linux baseline = clang++ 22.1.6.
 set -euo pipefail
 
 PROTO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,7 +1,7 @@
 # Sources — 2026-06-22-procedural-engine-sound
 
 > Web-research via direct `webfetch` (Exa `web_search` HTTP 429 persistent per
-> `agent/knowledge.md Part B §9` line 1424 fallback list). **9 sources verified directly** by full
+> the web_search fallback chain). **9 sources verified directly** by full
 > content fetch on 2026-06-22. All canonical primary sources (Wikipedia engine physics + Wikipedia audio
 > synthesis + ProjectV Tier 3 cross-refs).
 

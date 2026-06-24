@@ -173,7 +173,7 @@ clang++ -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic -Wno-unsa
 
 **Рекомендация:** использовать **C (K=60)** как default для production, **A** для последних N секунд
 (scratch buffer для UI scrubber), **B** для long-term archival. Per-scene adaptive dispatcher (per
-`agent/knowledge.md §30.4` precedent).
+`agent/knowledge.md` precedent).
 
 ---
 
@@ -188,7 +188,7 @@ clang++ -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic -Wno-unsa
   - Default `PROJECTV_REPLAY=C_INPUT_CHECKPOINT_K60` (env gate)
   - `PROJECTV_REPLAY_K=60` parameter (configurable)
   - Optional: `PROJECTV_REPLAY_FALLBACK=A` для last-10-sec scratch buffer
-- **3-step migration** per `agent/knowledge.md §30.4` precedent (~400 LoC, S effort, 1-2 sessions):
+- **3-step migration** per `agent/knowledge.md` precedent (~400 LoC, S effort, 1-2 sessions):
   - **Step 1 (XS, ~50 LoC):** `ReplaySystem.hpp` foundation + `RecordingFormat` enum + env gate +
     `InitialState` snapshot API
   - **Step 2 (M, ~300 LoC):** per-strategy implementation in `Sim.cpp::Tick` (record on tick advance, replay
@@ -246,7 +246,7 @@ clang++ -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic -Wno-unsa
 - Сompute cost: per-tick simulation = ~5 µs/tick for 1k units (CPU), mainline has GPU compute
   + voxel meshing + physics + AOI + pathfinding — все должны быть deterministic для replay.
 - Cross-platform determinism: prototype assumes single machine; mainline requires fenv.h + IEEE 754
-  strict mode (per `agent/knowledge.md §30.4`).
+  strict mode (per `agent/knowledge.md`).
 
 **Что НЕ измерено:**
 - GPU-side recording overhead (Vulkan buffer write cost).

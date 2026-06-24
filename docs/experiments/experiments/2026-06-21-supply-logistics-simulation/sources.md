@@ -1,7 +1,7 @@
 # Sources — `2026-06-21-supply-logistics-simulation`
 
 **Web-research captured:** 2026-06-21 (single session).
-**Exa `web_search` HTTP 429** (persistent per `agent/knowledge.md Part B §9` line 1424 fallback list) → `webfetch` DuckDuckGo HTML endpoint + direct canonical URLs.
+**Exa `web_search` HTTP 429** (persistent per the web_search fallback chain) → `webfetch` DuckDuckGo HTML endpoint + direct canonical URLs.
 
 ---
 

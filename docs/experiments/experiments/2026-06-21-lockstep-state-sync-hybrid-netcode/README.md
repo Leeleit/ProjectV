@@ -161,7 +161,7 @@ bandwidth and 5-30× worse on CPU.
 operator 8x planning decision. **Critical prerequisite** for `lockstep-deterministic-multiplayer`
 (open) + `persistent-war-server-architecture` (open) + `grand-campaign-conquest` (open).
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Concrete changes (3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (S, ~150 LoC)** — NetcodeController foundation. `src/net/NetcodeController.{hpp,cpp}`:
   - `enum class NetcodeMode { PureLockstep, HybridRecovery }` + `PROJECTV_NETCODE_MODE` env gate

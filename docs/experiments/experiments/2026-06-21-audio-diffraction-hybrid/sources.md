@@ -120,7 +120,7 @@
 
 Per `AGENTS.md §3` — не дублировать, только cross-refs:
 
-- `agent/knowledge.md §28` — `AudioEngine` contract (miniaudio PCM playback + future spatial extensions).
+- `agent/knowledge.md` — `AudioEngine` contract (miniaudio PCM playback + future spatial extensions).
 - `experiments/2026-06-21-audio-raytracing-voxel-sdf/README.md` — Phase 1 (occlusion) + Phase 2 (Eyring reverb) recommended. Phase 3 falsified. Line 459-460 = **explicit Phase 1.5 follow-up = this experiment**.
 - `experiments/2026-06-20-hzb-binding-models/README.md` — `texelFetch` pattern (closed mixed, recommended). This experiment reuses same pattern для depth-mip probe.
 - `experiments/2026-06-20-nanovdb-on-gpu/README.md` — SVO walker foundation (closed yes, hybrid SVDAG + NanoVDB). Future: hierarchical skip для Pattern B.

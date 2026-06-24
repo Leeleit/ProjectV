@@ -156,7 +156,7 @@ struct RtCandidate {
     double rt_chunk_ops = 0;
     // VRAM cost above current mainline (bytes, для acceleration structure / BLAS / TLAS).
     int vram_bytes_per_frame = 0;
-    // Implementation effort estimate (LoC, per `agent/knowledge.md §30.4` precedent).
+    // Implementation effort estimate (LoC, per `agent/knowledge.md` precedent).
     int loc_step1 = 0;
     int loc_step2 = 0;
     int loc_step3 = 0;

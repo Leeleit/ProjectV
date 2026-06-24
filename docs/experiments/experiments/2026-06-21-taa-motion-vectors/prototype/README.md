@@ -21,13 +21,13 @@ make            # clang++ -std=c++26 -O3 -march=native -DNDEBUG, glslc for SPIR-
 ```
 
 **Prerequisites:**
-- `clang++` ≥ 19 (ProjectV mainline per `agent/knowledge.md §17` uses Clang 22.1.6)
+- `clang++` ≥ 19 (ProjectV mainline per `agent/knowledge.md` uses Clang 22.1.6)
 - Vulkan 1.4 driver (dev host = NVIDIA 610.43.02 per `hardware-profile.md §3` validated)
 - `glslc` (Vulkan SDK glslc 2026.2 per `hardware-profile.md §6`)
 - `xxd` (standard util-linux)
 - Vulkan headers (`<vulkan/vulkan.h>`, version 1.4+)
 
-**Validation layer:** not enabled in this skeleton harness (ProjectV mainline enables per `agent/knowledge.md §4`).
+**Validation layer:** not enabled in this skeleton harness (ProjectV mainline enables per `agent/knowledge.md`).
 For real measurement integration, enable `VK_LAYER_KHRONOS_validation` and verify zero errors per
 `AGENTS.md §6` (no Vulkan Validation Layer errors).
 

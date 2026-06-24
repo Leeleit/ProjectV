@@ -52,8 +52,8 @@ A_NoCapture = baseline.
 - ✅ CI/CD patterns: `vision-regression-kit`, Glint3D CI issue #6 (SSIM ≥ 0.995 threshold).
 - ✅ PSNR/SSIM formulas per Akenine-Möller / Wang 2004 (canonical references).
 - ✅ ProjectV cross-refs verified: `src/debug/ProfilingGpu.hpp:14,161,203` + `VulkanBootstrap.cpp:592` +
-  `VulkanDebug.cpp:9` + `agent/knowledge.md §547`.
-- ✅ 12 Vulkan passes enumerated per `agent/knowledge.md §810` + `TODO.md §Stage 0-6` + Stage 5.x planned.
+  `VulkanDebug.cpp:9` + `agent/knowledge.md`.
+- ✅ 12 Vulkan passes enumerated per `agent/knowledge.md` + `TODO.md §Stage 0-6` + Stage 5.x planned.
 - ✅ 26 primary + secondary references в `sources.md`.
 
 ### Phase C — Prototype + measurements ✅
@@ -70,7 +70,7 @@ A_NoCapture = baseline.
 ### Phase D — Analysis + close ✅
 - ✅ Results aggregated by strategy + per-scene (Python csv analysis).
 - ✅ Verdict write-up: `mixed` (D + E recommended pair, C production fallback, B never, A baseline).
-- ✅ Integration recommendation: 3-step migration per `agent/knowledge.md §30.4` precedent
+- ✅ Integration recommendation: 3-step migration per `agent/knowledge.md` precedent
   (~400 LoC, S-M effort, 2-3 sessions).
 - ✅ `README.md` fully populated (8 sections + §9 mapping + §10 continuation).
 - ✅ `STATUS.md` → status `concluded-verdict-mixed`.
@@ -84,7 +84,7 @@ A_NoCapture = baseline.
 - (a) **Analytical overhead model, not real `renderdoccmd` execution.** Binary not installed on dev host
   (`which renderdoccmd` → not found 2026-06-21). Production validation = mainline scope, не this experiment.
 - (b) **GPU pass coverage = analytical from ProjectV source code** (`Renderer.cpp` pass list +
-  `agent/knowledge.md §810` 5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned passes = 12 passes),
+  `agent/knowledge.md` 5 sub-passes + `TODO.md §Stage 0-6` + Stage 5.x planned passes = 12 passes),
   not runtime capture.
 - (c) **Per-pass CPU overhead model** — conservative analytical estimate based on RenderDoc Vulkan docs
   "low overhead while not capturing" + per-pass state model. Real numbers may differ ±50% per Phoronix.
@@ -103,10 +103,10 @@ A_NoCapture = baseline.
 ## Cross-references
 
 - **ProjectV mainline:**
-  - `agent/knowledge.md §547` — `PROJECTV_ENABLE_RENDERDOC_MARKERS` (existing integration)
-  - `agent/knowledge.md §810` — `RecordGraphicsCommands` 5 sub-passes
-  - `agent/knowledge.md §4` — build/verification contract
-  - `agent/knowledge.md §30.4` — 3-step migration precedent
+  - `agent/knowledge.md` — `PROJECTV_ENABLE_RENDERDOC_MARKERS` (existing integration)
+  - `agent/knowledge.md` — `RecordGraphicsCommands` 5 sub-passes
+  - `agent/knowledge.md` — build/verification contract
+  - `agent/knowledge.md` — 3-step migration precedent
   - `src/debug/ProfilingGpu.hpp:14,161,203` — RenderDoc marker integration
   - `src/render/vulkan/VulkanBootstrap.cpp:592` — `VK_EXT_debug_utils` extension load
   - `src/render/vulkan/VulkanDebug.cpp:9` — debug utils integration
@@ -127,5 +127,5 @@ A_NoCapture = baseline.
 
 - **Closed experiments (complementary):**
   - `2026-06-20-dec-pipelines-async-compute` (RenderDoc async capture extension point per
-    `agent/knowledge.md §547`)
+    `agent/knowledge.md`)
   - `2026-06-20-vulkan-fps-pacing-vk-ext` (RenderDoc timeline alternative per §6 line 314)

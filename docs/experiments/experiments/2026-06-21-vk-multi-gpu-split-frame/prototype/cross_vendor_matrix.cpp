@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
     f << "`vct-cone-count-atlas-precision` + `sub-chunk-layers` + `lod-mesh-downsampling` + `dlss-fsr-xess-upscaling-voxel`\n";
     f << "+ `vk-fragment-shading-rate-voxel` — все closed experiments).\n\n";
 
-    f << "## 5. Mainline Integration Recommendation (per `agent/knowledge.md §30.4` 3-step migration)\n\n";
+    f << "## 5. Mainline Integration Recommendation (per `agent/knowledge.md` 3-step migration)\n\n";
     f << "**Step 1 (XS, ~30 LoC, immediate):** API discovery probe в `src/render/vulkan/VulkanBootstrap.cpp`:\n";
     f << "- `vkEnumeratePhysicalDeviceGroupsKHR` → log `deviceGroupCount` + `physicalDeviceCount` per group + `subsetAllocation`\n";
     f << "- `vkGetDeviceGroupPresentCapabilitiesKHR` → log present modes (LOCAL/REMOTE/SUM/LOCAL_MULTI_DEVICE)\n";
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
     f << "- Per-vendor preset (`PROJECTV_MULTI_GPU_PROFILE=DATACENTER|ENTERPRISE|CONSUMER`)\n";
     f << "- Default flip когда multi-GPU dev host available: AFR for compute-bound, LOCAL for VRAM-aggregation-only\n\n";
 
-    f << "## 6. Risk Matrix (per `agent/knowledge.md Part A §2` mainline = MVP scope)\n\n";
+    f << "## 6. Risk Matrix (per `agent/knowledge.md` mainline = MVP scope)\n\n";
     f << "| Risk | Severity | Mitigation |\n";
     f << "|---|---|---|\n";
     f << "| Multi-GPU API not used → complexity for nothing | Med | Step 1 only (probe) = ~30 LoC, additive, no behavior change |\n";
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
 
     f << "## 8. Sources\n\n";
     f << "- `sources.md` §1.1-1.3: Vulkan 1.4 core spec (VK_KHR_device_group + device_group_creation + VkDeviceGroupPresentInfoKHR), retrieved 2026-06-21 via `webfetch`\n";
-    f << "- `sources.md` §2.1-2.4: Cross-vendor SOTA 2024-2026 (NVLink 4.0/4.1, xGMI/IF, PCIe 4.0/5.0, driver AFR), operator's pre-2026 knowledge per `agent/knowledge.md Part B §9` fallback policy\n";
+    f << "- `sources.md` §2.1-2.4: Cross-vendor SOTA 2024-2026 (NVLink 4.0/4.1, xGMI/IF, PCIe 4.0/5.0, driver AFR), operator's pre-2026 knowledge per the web_search fallback chain\n";
     f << "- `sources.md` §3.1-3.5: Local ProjectV cross-refs (hardware-profile.md, agent/knowledge.md, TODO.md §4.3, agent/workspace.md §2)\n\n";
 
     f.close();

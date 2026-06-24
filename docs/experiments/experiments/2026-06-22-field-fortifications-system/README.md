@@ -27,7 +27,7 @@
 
 ## 2. Prior art
 
-Web-research via `webfetch` to canonical URLs (Exa HTTP 429 per `agent/knowledge.md Part B §9` fallback list):
+Web-research via `webfetch` to canonical URLs (Exa HTTP 429 per the web_search fallback chain):
 - **Wikipedia "Czech hedgehog"** — canonical anti-tank obstacle, 1.5-2m steel angles, used by 4 armies (Czechoslovak 1938, German 1939-45, Soviet 1941-45, German Atlantic Wall 1944), 3-4 rows for effectiveness
 - **Wikipedia "Dragon's teeth"** — reinforced concrete tetrahedra, 0.5-1.2m height, 4 rows staggered in concrete mat, 6 lines × 10 rows = 700 per km (Siegfried Line 1938-40), replaced by mines in 1944
 - **Wikipedia "Anti-tank ditch"** — 4.5m top × 3m bottom × 2-2.5m deep, 2 men operating excavator for 2 passes (1 rough, 1 flat), deployed in staggered lines with 70-90m gaps between trench sections for defilade fire
@@ -164,7 +164,7 @@ All non-baseline strategies cross the threshold massively (+219-298%). B vs C: +
 
 **Target stage:** `Stage 3.2 destruction` (per voxel mutation) + `Stage 6+ military sandbox Tier 1 Physics + Tier 2 AI` (per `agent/workspace.md §2` operator 8x planning decision).
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~600 LoC total, M effort, 2-3 sessions, **deferred** до Stage 3.2 / Stage 6+ dedicated session):
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~600 LoC total, M effort, 2-3 sessions, **deferred** до Stage 3.2 / Stage 6+ dedicated session):
 
 ### Step 1 (XS, ~80 LoC) — Foundation + default B
 

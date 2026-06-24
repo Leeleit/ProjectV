@@ -83,7 +83,7 @@ Per-iter @ massive_battle_1000: A=905 ns, B=3364 ns, C=836 ns, **D=1701 ns**, E=
 
 **Конкретные изменения:** per-vehicle `FuelState` + `AmmoState` + `MaintenanceState` components в `src/voxel/Vehicle.{hpp,cpp}` or new `src/flight/ecs/components/FuelAmmoMaintenance.{hpp,cpp}`.
 
-**Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent:
+**Подход:** 3-step migration per `agent/knowledge.md` precedent:
 
 - **Step 1 (XS, ~80 LoC)**: `FuelAmmoMaintenance` Flecs components (SoA-aligned, 64-byte cache line) + `PROJECTV_FUEL_AMMO_STRATEGY=NAIVE|LOAD_EXP|EVENT|LOD|PHYSICS` env gate (default `LOD`) + 5 strategy function pointers in `FuelAmmoMaintenanceSystem::Update(ecs, dt)`.
 - **Step 2 (S, ~250 LoC)**: per-strategy implementation in `src/flight/ecs/systems/FuelAmmoMaintenanceSystem.{hpp,cpp}` + integration with upstream `fixed-wing-flight-model-simulation` [yes] (RPM → fuel burn), `helicopter-rotor-physics` [yes] (rotor RPM → fuel burn), `ballistic-projectile-simulation` [yes] (shot count → ammo), `aircraft-damage-model` [yes] (event damage → state), `component-vehicle-damage-model` [yes] (per-module HP), `interest-management-aoi-battle` [yes] (AOI → is_active), `ecs-1m-entities-bottleneck` [yes] (Flecs host), `data-driven-vehicle-weapon-definitions` [mixed] (vehicle stat defs), `supply-logistics-simulation` [mixed] (per-node flow consumer).

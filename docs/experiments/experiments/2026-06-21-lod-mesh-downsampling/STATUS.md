@@ -36,7 +36,7 @@ in progress.
   face emissions, 0 mismatches). Verdict: **mixed** (no single (kernel, stitch) pair
   wins for all scenes, but B is the only DoD-satisfying kernel). Mainline
   recommendation: use `B_SurfacePreserve` as default, 3-step migration per
-  `agent/knowledge.md §30.4` precedent.
+  `agent/knowledge.md` precedent.
 
 ---
 

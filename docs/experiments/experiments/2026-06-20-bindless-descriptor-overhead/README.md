@@ -187,13 +187,13 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
 
 **Локальные cross-refs** (per `AGENTS.md §3` — не дублировать):
 
-- `agent/knowledge.md §4` — release-preset policy: `PROJECTV_ENABLE_VALIDATION=OFF` для release, debug-preset =
+- `agent/knowledge.md` — release-preset policy: `PROJECTV_ENABLE_VALIDATION=OFF` для release, debug-preset =
   `PROJECTV_DEFAULT_ENABLE_VALIDATION` (default ON). Bindless + GPU-AV = debug slowdown acceptable, release = no impact.
-- `agent/knowledge.md §15` — sun-shadow path uses dedicated `shadowIndirectBuffer` (per-cascade). Already a
+- `agent/knowledge.md` — sun-shadow path uses dedicated `shadowIndirectBuffer` (per-cascade). Already a
   bindless-like pattern.
-- `agent/knowledge.md §25` — greedy meshing contract (`PackedFace` 16 bytes, 6 axis-passes). Uses SSBO + compute
+- `agent/knowledge.md` — greedy meshing contract (`PackedFace` 16 bytes, 6 axis-passes). Uses SSBO + compute
   shader → data-oriented, naturally bindless-friendly when SVDAG becomes Stage 1.2.
-- `agent/knowledge.md §30.4` — GPU Fluid CA reversal contract: ping-pong SSBOs + `activeChunks` list. Direct precedent
+- `agent/knowledge.md` — GPU Fluid CA reversal contract: ping-pong SSBOs + `activeChunks` list. Direct precedent
   for `UPDATE_AFTER_BIND`-style descriptor management.
 - `TODO.md` §1.1 (Sparse 64-trees), §1.2 (SVDAG) — Stage 1.1/1.2 must land BEFORE Stage 2.x bindless adoption.
 - `TODO.md` §2.1 — mesh shader (optional per `mesh-shader-vs-compute-cull` verdict=mixed).
@@ -269,7 +269,7 @@ Total current state: **23 bindings across 4 pipelines**, ~10-14 `vkCmdBindDescri
 4. Survey `src/render/SceneResources.hpp` (per-frame descriptor management).
 5. Web-research 16 ключевых источников (см. §2), все 2018-2026, с верификацией цитат.
 6. Build analytical model в `prototype/bindless_layout_sketch.cpp` (standalone C++26, no Vulkan).
-7. Cross-reference с `TODO.md` Stage 2.x, `agent/knowledge.md §4/§15/§25/§30.4`.
+7. Cross-reference с `TODO.md` Stage 2.x, `agent/knowledge.md`/§15/§25/§30.4`.
 8. Compile analytical model (sanity check), no execution-time benchmark.
 
 **Сознательно не делал:**
@@ -447,11 +447,11 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 
 **Bindless candidates (stable, low-frequency-update, indexed in shader):**
 
-1. **Material table SSBO** — `agent/knowledge.md §25` — per-material, mostly stable, low-frequency update. Indexed in
+1. **Material table SSBO** — `agent/knowledge.md` — per-material, mostly stable, low-frequency update. Indexed in
    shader via `materialIndex`. **Natural bindless target.**
 2. **Sparse64Node pool** — Stage 1.1/1.2 — per-chunk, lazy dedup, indexed in shader for Stage 2.1 mesh shader / Stage
    3.1 GPU Fluid CA / Stage 5.1 VCT. **Natural bindless target** (after Stage 1 lands).
-3. **Shadow cascade views** — `agent/knowledge.md §15` — per-frame but stable identity (4 cascades). Already mostly
+3. **Shadow cascade views** — `agent/knowledge.md` — per-frame but stable identity (4 cascades). Already mostly
    bindless-like (pre-baked indirect draw commands per cascade).
 
 **Traditional + dynamic offset (transient per-frame):**
@@ -473,7 +473,7 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 - **Реальный CPU/GPU time на ProjectV hardware matrix** — это Stage 2.x acceptance criterion. Требует implementation в
   mainline (real descriptor rewrite), не в scope моего research.
 - **Tracy instrumentation** — current ProjectV имеет `PROJECTV_ENABLE_TRACY=ON` в debug-preset (per
-  `agent/knowledge.md §4`). Можно добавить `vkUpdateDescriptorSets` time tracking после миграции, но это implementation
+  `agent/knowledge.md`). Можно добавить `vkUpdateDescriptorSets` time tracking после миграции, но это implementation
   work.
 - **Vendor-specific performance on RTX 3060 Ti** — single-vendor measurement = insufficient для cross-vendor verdict.
 - **Doom Eternal style 1M descriptor bindless** — ProjectV workload не достигает этого масштаба (chunk count ≤ 4096 at
@@ -558,7 +558,7 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 3. **Validation strategy:**
     - For Phase A (push): no GPU-AV needed, validation layer works as-is.
     - For Phase B/C/D/E (bindless): opt-in GPU-AV (`VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT`) for debug builds
-      only. Release preset per `agent/knowledge.md §4` keeps validation off.
+      only. Release preset per `agent/knowledge.md` keeps validation off.
     - Add `PROJECTV_BINDLESS_DESCRIPTOR_STRATEGY` env var (`off` | `phase-a` | `phase-b` | `phase-c` | `hybrid` |
       `full-bindless`) for incremental rollout testing.
 
@@ -586,7 +586,7 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 - **Bindless для stable resources only** (Phases B-D): material table, Sparse64Node, HZB mip = natural candidates.
 - **Traditional остаётся** для transient per-frame SSBOs — current pattern works, <0.2% frame budget, no need to
   optimize.
-- **GPU-AV opt-in** для debug builds; release = `PROJECTV_ENABLE_VALIDATION=OFF` per `agent/knowledge.md §4`.
+- **GPU-AV opt-in** для debug builds; release = `PROJECTV_ENABLE_VALIDATION=OFF` per `agent/knowledge.md`.
 
 **Риски:**
 
@@ -595,7 +595,7 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 - **R2 (low):** Bindless material table requires shader rewrite (`nonuniformEXT` qualifier for material index).
   Mitigation: keep both paths initially (traditional + bindless), runtime switch via env var.
 - **R3 (med):** `UPDATE_AFTER_BIND` + bindless = GPU-AV mandatory in debug builds. Validation layers can't CPU-validate.
-  Per `agent/knowledge.md §4`: debug = ON, release = OFF. Mitigation: ensure GPU-AV is opt-in (
+  Per `agent/knowledge.md`: debug = ON, release = OFF. Mitigation: ensure GPU-AV is opt-in (
   `VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT` only when explicitly enabled).
 - **R4 (low):** NVIDIA bindless descriptor buffer emulation overhead (5 indirections per XDC 2025). Mitigation: defer
   `VK_EXT_descriptor_buffer` adoption до cross-vendor maturity.
@@ -703,7 +703,7 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 - `src/render/SceneResources.{hpp,cpp}` (1572 lines) — per-frame descriptor management.
 - `src/render/Renderer.cpp` — record commands (descriptor set binding sites).
 - `src/app/FramePreparation.cpp` — per-frame descriptor update sites.
-- `agent/knowledge.md §4, §15, §25, §30.4` — relevant engineering contracts.
+- `agent/knowledge.md`, §15, §25, §30.4` — relevant engineering contracts.
 - `TODO.md §1.1, §1.2, §2.1, §2.2, §2.3, §3.1, §5.2, §5.3` — Stage dependencies.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `docs/experiments/experiments/2026-06-20-sparse-64-tree-alternatives/` — Stage 1.1/1.2 design validation.
@@ -755,7 +755,7 @@ budget. Far below 5% threshold per `legacy/docs/philosophy/03_domain/01_optimiza
 - Sparse64Node bindless traversal throughput (planned for Phase C acceptance, after Stage 1.2).
 - Virtual texture page table bindless perf (planned for Phase D acceptance, with Stage 2.3).
 - RTX TLAS bindless performance on supported hardware (planned for Phase E acceptance, with Stage 5.2).
-- Validation layer slowdown on bindless material table (planned for debug build profiling per `agent/knowledge.md §4`
+- Validation layer slowdown on bindless material table (planned for debug build profiling per `agent/knowledge.md`
   Tracy setup).
 
 **Mapping to next experiment:**

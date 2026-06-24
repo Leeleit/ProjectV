@@ -165,7 +165,7 @@ E uses simplified leader lookup (highest ID alive), not full Bully consensus. Pr
 
 ## 7. Integration recommendation
 
-Per `agent/knowledge.md §30.4` (3-step migration):
+Per `agent/knowledge.md` (3-step migration):
 
 ### Step 1 — Stage 6+ (default): D ⭐ (6,080 ns/tick)
 

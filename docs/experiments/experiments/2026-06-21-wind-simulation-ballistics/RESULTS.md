@@ -79,7 +79,7 @@ of ballistic correction at <0.01 µs/projectile threshold** (hypothesis target).
 
 **Perlin eval = 270 ns:** 6 lookups in p[512] table (L1 hit, ~5 ns each = 30 ns) + fade/lerp computation (8 ops,
 ~10 ns) + 3 grad() calls (12 multiplies each, ~50 ns) = ~270 ns total. **GPU compute would be 5-10× faster** per
-`agent/knowledge.md §17` (memory bandwidth + SIMD).
+`agent/knowledge.md` (memory bandwidth + SIMD).
 
 ---
 
@@ -130,8 +130,8 @@ universally within 1 dB of best, at 8-300× lower cost.
 1. **PSNR reference bias:** D matches reference by construction (same formula). Real GPU-computed reference would
    yield different ranking.
 2. **CPU-only prototype:** no Vulkan compute shader. Real GPU dispatch expected 5-10× speedup per
-   `agent/knowledge.md §17`.
-3. **No real GPU dispatch validation:** cost extrapolated from `agent/knowledge.md §17` baseline.
+   `agent/knowledge.md`.
+3. **No real GPU dispatch validation:** cost extrapolated from `agent/knowledge.md` baseline.
 4. **Synthetic scenes:** real ProjectV biomes (calm_clear, moderate_breeze, storm_front, urban_canyon, open_plains)
    are representative not exhaustive.
 5. **No smoke/cloud/grass integration measured:** shader wiring cost is analytical estimate, not measured.

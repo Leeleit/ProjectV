@@ -25,7 +25,7 @@ normal perturbation; smooth metallic surfaces (steel, glass) gain little.
 **Three concrete sub-hypotheses:**
 
 1. **H1 (cost):** 5 micro-detail strategies ∈ {A_None baseline, B_WorldHash, C_TangentFBM2D, D_Worley2D, E_DerivativeNormal} all
-   run at <2 ns / fragment (10% of a budget 20 ns/fragment ALU) per `agent/knowledge.md §30.4` micro-budget contract.
+   run at <2 ns / fragment (10% of a budget 20 ns/fragment ALU) per `agent/knowledge.md` micro-budget contract.
 2. **H2 (quality):** For near-uniform scenes (single material, single light, near-orthogonal view), strategies B/C/D/E
    achieve **PSNR +6 to +12 dB** over A; for high-frequency scenes (multi-material) the gain is smaller (+2 to +4 dB) but
    never negative (no self-induced aliasing).
@@ -50,7 +50,7 @@ normal perturbation; smooth metallic surfaces (steel, glass) gain little.
 
 ## 2. Prior art
 
-Web-research started `2026-06-22`. Exa `web_search` HTTP 429 persistent this session (per `agent/knowledge.md Part B §9`
+Web-research started `2026-06-22`. Exa `web_search` HTTP 429 persistent this session (per the web_search fallback chain
 line 1424 fallback list); primary research via direct `webfetch` to canonical Wikipedia / academic / project pages.
 **Sentinel §13.7 clean** (`rg "surface.micro.detail|procedural.crinkles|micro.displacement|surface.displacement|derivative.noise"`
 = 0 dedicated experiments; cross-refs in `sub-chunk-layers` + `sdf-subtractive-modeling-ui` are orth axes).
@@ -219,7 +219,7 @@ quality/cost variation.
 Polish additional axes" — bloom + aerial perspective + tonemap already integrated; this is the
 fourth axis).
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~400 LoC, S-M effort, 1-2
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~400 LoC, S-M effort, 1-2
 sessions, **deferred до Stage 5.x dedicated session per `agent/workspace.md §2` operator 8x planning
 decision**):
 

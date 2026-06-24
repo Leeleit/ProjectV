@@ -136,7 +136,7 @@ cd prototype/ && mkdir -p build && cmake -S . -B build && cmake --build build
 
 **NOT recommended:** `F_GatherBokeh` — 8.57 ms (25.7% of frame). Only for cutscene-only paths.
 
-**3-step migration** (per `agent/knowledge.md §30.4` precedent):
+**3-step migration** (per `agent/knowledge.md` precedent):
 
 1. **Step 1 (XS, ~30 LoC):** `DoFUtils.hpp` — CoC computation function + bilinear downsample pass. Env var `PROJECTV_DOF=OFF|CIRCULAR|HEX|GAUSSIAN`.
 2. **Step 2 (S, ~120 LoC):** `DoFBlur.hpp` — separable blur passes for the chosen strategy. Use `std::variant` for strategy dispatch.

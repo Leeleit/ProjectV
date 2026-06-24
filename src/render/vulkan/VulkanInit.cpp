@@ -1,4 +1,4 @@
-#include "app/Camera.hpp"
+#include "app/Camera.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include "app/LookDevCaptureAutomation.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "asset/ModelManifestLoader.hpp"

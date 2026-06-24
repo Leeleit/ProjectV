@@ -147,7 +147,7 @@ _PLACEHOLDER — `yes` / `no` / `mixed` / `parked` / `abandoned` — после 
 
 **Target stage:** Stage 6+ military sandbox Tier 3 Economy. **Deferred** до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
-**3-step migration per `agent/knowledge.md §30.4` precedent (~580 LoC, S-M effort, 1-2 sessions):**
+**3-step migration per `agent/knowledge.md` precedent (~580 LoC, S-M effort, 1-2 sessions):**
 
 - **Step 1 (XS, ~80 LoC)** `src/economy/FactoryProduction.hpp` — define `FactoryProductionState` + `FactoryProductionComponent` (Flecs SoA, 16-24 B/factory) + `FactoryProductionItemDef` (16 item types) + `FactoryProductionSystem` skeleton + `RunPipeline(World&, int)` function.
 - **Step 2 (M, ~400 LoC)** `src/economy/FactoryProduction.cpp` — port 5 schedulers (A + E mainline-supported; B + D opt-in; C debug-only "scenario editor") + per-tick `FactoryProductionSystem::Update` Flecs integration + mass/energy draw integration with `supply-logistics-simulation` closed system.
@@ -179,7 +179,7 @@ _PLACEHOLDER — `yes` / `no` / `mixed` / `parked` / `abandoned` — после 
 
 ## 8. Sources
 
-**6 primary + 3 secondary + 13 ProjectV cross-refs verified via direct `webfetch` (Exa HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424 fallback list):**
+**6 primary + 3 secondary + 13 ProjectV cross-refs verified via direct `webfetch` (Exa HTTP 429 persistent this session per the web_search fallback chain):**
 
 **Tier 1 — Production simulation in strategy games (canonical game-specific precedents):**
 1. **Wikipedia: "Supreme Commander (video game)"** — Mass+Energy 2-resource factory system, adjacency bonuses, multi-worker "assist", 4 tech tiers, multi-core scheduling. "If the storages are depleted and the demand of one of the resources exceeds the production, then all the productions speed is reduced" → relevant for overflow/waste handling.

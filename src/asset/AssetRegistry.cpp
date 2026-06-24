@@ -1,4 +1,4 @@
-#include "asset/AssetRegistry.hpp"
+#include "asset/AssetRegistry.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <algorithm>
 #include <utility>

@@ -50,7 +50,7 @@ Web-research будет проведён в Phase 1 этой сессии. Пл�
 
 - `src/physics/PhysicsWorld.cpp:712-773::BuildStaticVoxelCollisionBody` (rigid voxel precedent)
 - `src/physics/PhysicsWorld.cpp:547-560::IsPhysicsSolidMaterial`
-- `agent/knowledge.md §30.4` (3-step migration precedent)
+- `agent/knowledge.md` (3-step migration precedent)
 - `agent/workspace.md §2` line 36 (operator 8x planning decision Stage 6+)
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold)
 - `hardware-profile.md §1` (Zen 3 5800X dev host, AVX2 + FMA)
@@ -156,7 +156,7 @@ cd prototype && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && \
 - **CPU cost в mainline может быть 2-5× выше** analytical prototype (Flecs ECS overhead, VMA memory barriers, no SIMD intrinsics). Budget 5-10% of 30 Hz (1.65-3.3 ms) для soft body budget в Tier 1 Physics.
 - **Self-collision** (closed `destructible-building-system` [mixed] precedent for spatial hash BVH) deferred — real-world cloth WILL self-intersect on complex folds.
 - **Aerodynamic drag coupling** (closed `wind-simulation-ballistics` [mixed] provides static wind; coupling deferred) — static wind для ballistics already cheap (20 ns/proj) per `ballistic-projectile-simulation` [yes].
-- **GPU compute port** deferred — closed `dec-pipelines-async-compute` [yes] provides async foundation; expected 5-10× speedup на RTX 3060 Ti per `agent/knowledge.md §17`.
+- **GPU compute port** deferred — closed `dec-pipelines-async-compute` [yes] provides async foundation; expected 5-10× speedup на RTX 3060 Ti per `agent/knowledge.md`.
 
 **Критерии приёмки:**
 

@@ -73,7 +73,7 @@ Mesa 26.1 RADV/ANV реализация `VK_EXT_present_timing` landed Jan 2026 
 ## 2. Prior art
 
 Web-research this session (5 batch queries via DuckDuckGo HTML + webfetch, Exa MCP HTTP 429
-persistent per `agent/knowledge.md Part B §9`). **9 primary + 4 supplementary sources verified:**
+persistent per the web_search fallback chain). **9 primary + 4 supplementary sources verified:**
 
 ### 2.1 [Khronos Blog — VK_EXT_present_timing: the Journey to State-of-the-Art Frame Pacing in Vulkan](https://www.khronos.org/blog/vk-ext-present-timing-the-journey-to-state-of-the-art-frame-pacing-in-vulkan) (2025-12-04, Lionel Duc / NVIDIA)
 
@@ -105,7 +105,7 @@ refreshDuration` для IPD calculation.
 
 5 features (per-present mode change + present fence info + scaling + deferred alloc + release-without-present).
 Authors: NVIDIA + Google + Valve + Arm + Collabora + Huawei + Samsung. Multi-vendor ratification.
-Direct fix для `VulkanSwapchain.cpp::RecreateSwapchain` per `agent/decisions.md §30.3` —
+Direct fix для `VulkanSwapchain.cpp::RecreateSwapchain` per `agent/knowledge.md` —
 `VkSwapchainPresentModeInfoKHR` per-present mode change без swap-flop.
 
 ### 2.6 [NVIDIA Developer Forums — Wayland Vulkan WSI busy-spins в `vkWaitForPresentKHR`](https://forums.developer.nvidia.com/t/nvidia-wayland-vulkan-wsi-busy-spins-in-vkwaitforpresentkhr-with-vk-khr-present-wait/367887) (2026-04-25, user report + NVIDIA fix confirmation)
@@ -184,7 +184,7 @@ disabled for full benefit. DXVK low-latency alternative для VRR scenarios.
   Mesa 26.2 + Vulkan 1.4.341).
 - **Frame pacing modes (5):**
     1. **A (baseline busy-wait FIFO):** `vkQueuePresentKHR(VK_PRESENT_MODE_FIFO_KHR)` + `vkWaitForFences`
-       polling (10 ms timeout per `agent/knowledge.md §6.2.6`). Current mainline path.
+       polling (10 ms timeout per `agent/knowledge.md`). Current mainline path.
     2. **B (FIFO_LATEST_READY):** `vkQueuePresentKHR(VK_PRESENT_MODE_FIFO_LATEST_READY_KHR)`. New
        mode (ratified 2025-03-18). Tear-free vblank dequeuing.
     3. **C (present_wait2):** `VK_KHR_present_wait2` + `vkWaitForPresent2KHR`. Event/futex-based wait
@@ -214,7 +214,7 @@ disabled for full benefit. DXVK low-latency alternative для VRR scenarios.
   cpu_render_us, cpu_present_us, gpu_frame_us, frame_interval_us, drift_us, present_overhead_pct) +
   `prototype/results.json` (machine-readable per-frame timings) + TracyPlot-compatible CSV.
 - **Контроль:** baseline = Mode A (matches `src/render/Renderer.cpp::PresentFrame` per
-  `agent/knowledge.md §30.2` VSync cycle lineage).
+  `agent/knowledge.md` VSync cycle lineage).
 - **Протокол:** per `docs/experiments/benchmarks/methodology.md`: warmup 10 frames, 1000 measured
   frames per (mode, scenario, seed), 5 seeds for statistical significance, governor fixed
   (`performance` set via `cpupower frequency-set -g performance`), CPU affinity pinned
@@ -319,11 +319,11 @@ show < 10% reduction vs Mode A — which they don't.
 **Target stage:** TODO.md §Stage 0 (architectural foundation, cross-cutting). Foundation для
 Stage 3.1 GPU Fluid CA cross-frame latency contract (per `agent/workspace.md §2`).
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4`):**
+**Concrete changes (3-step migration per `agent/knowledge.md`):**
 
 - **Step 1 (Foundation, S effort, ~100 LoC):** `PROJECTV_PRESENT_MODE_FIFO_LATEST_READY=ON` +
   `PROJECTV_USE_PRESENT_TIMING=ON|OFF` env gates + feature detection в `VulkanBootstrap.cpp` +
-  `PresentState` struct в `Types.hpp` (per `agent/knowledge.md §30.2` VSync cycle lineage).
+  `PresentState` struct в `Types.hpp` (per `agent/knowledge.md` VSync cycle lineage).
 
 - **Step 2 (Adoption, S per pass, ~250 LoC):** `Renderer.cpp::PresentFrame` — switch present mode
   based on env flags + implement Mode D path с `desiredPresentTime` calculation (target =
@@ -381,7 +381,7 @@ Phoronix + Android Developers + community forums + cross-vendor low_latency_laye
 ## 9. Mapping to ProjectV hot-path
 
 - **Mainline consumer (primary):** `src/render/Renderer.cpp::PresentFrame` — current busy-wait
-  FIFO loop. Per `agent/knowledge.md §30.2-§30.3` VSync cycle lineage.
+  FIFO loop. Per `agent/knowledge.md`-§30.3` VSync cycle lineage.
 - **Mainline consumer (secondary):** `src/render/vulkan/VulkanSwapchain.cpp::RecreateSwapchain`
   — VSync-toggle handler, currently destroys + recreates swapchain (per `decisions.md §30.3`).
 - **Mainline consumer (tertiary):** `src/render/vulkan/VulkanSwapchain.cpp::DestroySwapchainResources`

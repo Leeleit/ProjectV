@@ -12,7 +12,7 @@ volume preservation, 0.78-0.81 µs/chunk (62-64× headroom vs 50 µs Stage 4.1 b
 
 **Verdict:** `yes` (with caveat: E_Octree implementation bug on coplanar 2D layers, fixable out of scope).
 
-**Mainline integration:** 3-step migration per `agent/knowledge.md §30.4` precedent, total ~160 LoC,
+**Mainline integration:** 3-step migration per `agent/knowledge.md` precedent, total ~160 LoC,
 S effort, 1-2 sessions. Recommended default: F_TwoPass (same reduction as D_3D, simpler code, matches
 per-Y-layer chunk semantic per closed `2026-06-21-sub-chunk-layers`).
 

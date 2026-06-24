@@ -25,7 +25,7 @@
 ## Final outcome
 
 - **Verdict:** `mixed` — perf axis marginal на boost / over-budget на powersave; quality axis wins для discrete structure; scalability catastrophic выше 8³ sub-region.
-- **Mainline recommendation:** 3-step migration per `agent/knowledge.md §30.4` precedent — Step 1+2 immediate (XS+S, ~180 LoC) для 8³ sub-region + OpenSimplex2 hybrid; Step 3 deferred (M, ~300 LoC) — N-WFC nested pattern per arXiv 2308.07307 для Stage 4.3+ chunks > 8³.
+- **Mainline recommendation:** 3-step migration per `agent/knowledge.md` precedent — Step 1+2 immediate (XS+S, ~180 LoC) для 8³ sub-region + OpenSimplex2 hybrid; Step 3 deferred (M, ~300 LoC) — N-WFC nested pattern per arXiv 2308.07307 для Stage 4.3+ chunks > 8³.
 - **Critical caveat:** governor MUST be `performance` для budget; 50% success rate must be raised через better MRV heuristics.
 
 ---

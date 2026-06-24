@@ -52,4 +52,4 @@ Per `benchmarks/methodology.md §3`:
 
 ## Status
 
-Prototype **complete and validated**. Results in `RESULTS.md`. Per `agent/knowledge.md §30.4` 3-step migration precedent, integration recommendation in main `README.md §7`.
+Prototype **complete and validated**. Results in `RESULTS.md`. Per `agent/knowledge.md` 3-step migration precedent, integration recommendation in main `README.md §7`.

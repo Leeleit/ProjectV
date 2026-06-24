@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-texture-compression-format-axis`
 
-Phase A web research per `AGENTS.md §4` обязательство + `agent/knowledge.md Part B §9` fallback policy (Exa HTTP 429 persistent → DuckDuckGo HTML endpoint + webfetch direct URLs). 4 primary + 6 secondary sources verified 2026-06-21.
+Phase A web research per `AGENTS.md §4` обязательство + the web_search fallback chain (Exa HTTP 429 persistent → DuckDuckGo HTML endpoint + webfetch direct URLs). 4 primary + 6 secondary sources verified 2026-06-21.
 
 ---
 

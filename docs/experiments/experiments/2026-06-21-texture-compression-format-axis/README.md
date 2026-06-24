@@ -35,7 +35,7 @@
 
 ## 2. Prior art (Phase A — web-research pending; см. §Sources + sources.md)
 
-Web-research will follow §2 layout per `AGENTS.md §4` (Phase A — web-search обязателен для свежих SOTA citation). Per `agent/knowledge.md Part B §9` fallback policy: `web_search` (Exa) returns HTTP 429 persistent → DuckDuckGo HTML endpoint + `webfetch` direct URLs.
+Web-research will follow §2 layout per `AGENTS.md §4` (Phase A — web-search обязателен для свежих SOTA citation). Per the web_search fallback chain: `web_search` (Exa) returns HTTP 429 persistent → DuckDuckGo HTML endpoint + `webfetch` direct URLs.
 
 **Key references planned for verification:**
 
@@ -171,7 +171,7 @@ Detailed results: см. [RESULTS.md](./RESULTS.md). Sources: см. [sources.md](
 
 **Target stage:** Stage 4.3 Lift Draw Distance (128m draw distance per `TODO.md §4.3` + `agent/workspace.md §2` Nearest Gap callout 8 GiB VRAM cap = main bottleneck) + Stage 5.x lighting atlas (orthogonal axis, different format tier).
 
-**Конкретные изменения** per `agent/knowledge.md §30.4` 3-step migration precedent:
+**Конкретные изменения** per `agent/knowledge.md` 3-step migration precedent:
 
 - **Step 1 (XS, ~50 LoC) — `TextureFormat::SelectMaterialAtlasFormat()` decision + Vulkan format candidate list**:
   - Файл: `src/render/MaterialAtlas.{hpp,cpp}` (если exists) или `src/render/SceneResources.{hpp,cpp}`.
@@ -183,7 +183,7 @@ Detailed results: см. [RESULTS.md](./RESULTS.md). Sources: см. [sources.md](
 
 - **Step 2 (M, ~250 LoC + encoder license file) — encoder integration**:
   - Внешние зависимости: `bc7e.ispc` (Binomial, Apache 2.0 OR commercial per `https://github.com/BinomialLLC/basis_universal`) для BC7 + BC6H; `astcenc` (ARM, Apache 2.0) для ASTC 4x4/6x6; `ISPCTextureCompressor` (Intel, Apache 2.0) для BC5.
-  - Per `agent/knowledge.md §17` build matrix: encoder libraries = vendored under `external/texture_encoders/` with LICENSE files preserved.
+  - Per `agent/knowledge.md` build matrix: encoder libraries = vendored under `external/texture_encoders/` with LICENSE files preserved.
   - `TextureEncoder::EncodeBC7(atlas, ...) → bytes` API surface.
   - Hot-path: encode triggered by `WorldStats::OnMaterialAtlasChanged` event (NOT per-frame).
   - Encoder selection per format + atlas type from Step 1 decision.

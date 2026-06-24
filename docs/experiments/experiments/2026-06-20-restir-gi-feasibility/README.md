@@ -368,7 +368,7 @@ Optional awareness items (не blockers):
 
 - **`TODO.md` §5.1 VCT** — добавить `// EVIL:` note про known VCT leakage (per Lumen SIGGRAPH 2022). Если визуальные
   артефакты (leaking) появятся в production — trigger для DDGI evaluation per §7.2 Step 2.
-- **`agent/knowledge.md` §15** (CSM baseline) — добавить cross-ref на этот experiment для SOTA GI upgrade path
+- **`agent/knowledge.md`** (CSM baseline) — добавить cross-ref на этот experiment для SOTA GI upgrade path
   (post-Stage 5 / Stage 6+ planning).
 
 ### 7.4 Acceptance criteria (deferred до Stage 6+)
@@ -379,7 +379,7 @@ Optional awareness items (не blockers):
 - **SHaRC integration** — `NVIDIA-RTX/SHARC` HLSL → SPIR-V via DXC, 4-pass dispatch (Update/Resolve/Compaction/Query).
   VRAM budget < 250 MB. Performance overhead < 10%.
 - **Cross-vendor validation** — RTXGI 2.x SDK Vulkan path on AMD RDNA 4 + Intel Battlemage. NRC = skip.
-- **Acceptance:** Visual quality per `agent/decisions.md §15` close-out rule (FINAL + GI debug views, framebuffer
+- **Acceptance:** Visual quality per `agent/knowledge.md` close-out rule (FINAL + GI debug views, framebuffer
   hash compare для voxel scenes, smoke tests с VoxelLab).
 
 ### 7.5 Estimated effort (deferred)
@@ -416,7 +416,7 @@ Optional awareness items (не blockers):
 - `bindless-descriptor-overhead` (closed 2026-06-20, verdict=mixed) Phase E — RTX TLAS bindless = prerequisite
   для DDGI BLAS.
 - `dxc-vs-glslc-toolchain` (open, m, Stage 0) — DXC adoption required для RTXGI SDK HLSL→SPIR-V.
-- `agent/knowledge.md §15` (CSM baseline) + `agent/knowledge.md §30.4` (3-step migration precedent).
+- `agent/knowledge.md` (CSM baseline) + `agent/knowledge.md` (3-step migration precedent).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold + «simple wins over
   complex with marginal gain»).
 

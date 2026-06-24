@@ -1,4 +1,4 @@
-#include "app/InputReplay.hpp"
+#include "app/InputReplay.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "app/InputActions.hpp"
 #include "core/RuntimeDiagnostics.hpp"

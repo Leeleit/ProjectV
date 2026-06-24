@@ -77,4 +77,4 @@ Web-research via direct `webfetch` to canonical game developer + Wikipedia URLs.
 
 ## Web-research note
 
-Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per `agent/knowledge.md Part B §9` fallback list. Direct `webfetch` to canonical game developer + Wikipedia URLs confirmed content.
+Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per the web_search fallback chain. Direct `webfetch` to canonical game developer + Wikipedia URLs confirmed content.

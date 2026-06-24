@@ -36,7 +36,7 @@
 
 ## 2. Prior art
 
-Web-research Phase A complete via `web_search` (Exa) + DuckDuckGo HTML + `webfetch` fallback per `agent/knowledge.md Part B §9` (Exa HTTP 429 persistent, DuckDuckGo primary). **9 primary sources verified:**
+Web-research Phase A complete via `web_search` (Exa) + DuckDuckGo HTML + `webfetch` fallback per the web_search fallback chain (Exa HTTP 429 persistent, DuckDuckGo primary). **9 primary sources verified:**
 
 - **Crassin et al. 2011 «Interactive Indirect Illumination Using Voxel Cone Tracing»** (NVIDIA Research, GIVoxels — canonical voxel cone tracing paper, includes §6 «Ambient Occlusion» describing VCTAO = AO через voxel cone tracing accessibility integral, exact match для гипотезы)
 - **Jimenez 2016 «Practical Realtime Strategies for Accurate Indirect Occlusion»** (Activision GDC 2016 SIGGRAPH, GTAO paper — `Practical_Real_Time_Strategies_for_Accurate_Indirect_Occlusion_NEW%20VERSION_COLOR.pdf`, GTAO = ground-truth AO formula reformulated with respect to view vector, binary visibility, Monte Carlo horizon integration, bent-normal support)
@@ -159,7 +159,7 @@ Stage 5.x Visual Polish cumulative budget (combined with closed Stage 5.1 VCT @ 
   - `src/shaders/ao_gtao.comp` (new file) — D_GTAO compute shader (Jimenez 2016 implementation, адаптация GameTechDev/XeGTAO для GLSL)
   - `src/shaders/voxel.frag` — integrate AO term into lighting compose (`outAmbient += aoTerm * materialAlbedo`)
   - `src/render/SceneResources.{hpp,cpp}` — half-res AO render target + bent-normal R8G8B8A8
-- **Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent:
+- **Подход:** 3-step migration per `agent/knowledge.md` precedent:
   - **Step 1 (XS, ~30 LoC):** `PROJECTV_AO_STRATEGY=off|ssao|hbao|gtao|rtao|vctao|vdcao` env flag + `SelectAoStrategy()` dispatcher в `Renderer.cpp` + cross-vendor graceful fallback chain
   - **Step 2 (M, ~250 LoC):** per-strategy compute shader implementations — D_GTAO (Jimenez 2016 port, GameTechDev/XeGTAO reference pattern), F_VCTAO (Stage 5.1 VCT cone-march reuse), G_VDCAO (closed `sdf-hybrid-world` SDF overlay integration), E_RTAO (`VK_KHR_ray_query` + mainline BLAS pool per Stage 5.2 RTX scaffolding), B_SSAO + C_HBAO+ (cheap legacy fallback)
   - **Step 3 (XS, ~30 LoC):** default flip to D_GTAO + Tracy plot "AO Cost" + `ProjectVAoStrategyTests` unit test

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <array>
+#include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <atomic>
 #include <cstdint>
 #include <mutex>

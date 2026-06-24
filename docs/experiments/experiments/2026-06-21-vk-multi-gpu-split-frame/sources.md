@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-vk-multi-gpu-split-frame
 
-> **⚠️ Web search availability caveat (per `agent/knowledge.md Part B §9` self-audit fallback policy):**
+> **⚠️ Web search availability caveat (per the web_search fallback chain self-audit fallback policy):**
 > `web_search` (Exa) returned HTTP 429 «Too Many Requests» on `2026-06-21` during initial research per
 > `AGENTS.md §4` obligation. **Fallback per §9 = `webfetch` + operator's pre-2026 cross-vendor knowledge +
 > Vulkan 1.4 spec retrieved via `docs.vulkan.org/refpages/...` 2026-06-21.** All Vulkan 1.4 API claims are
@@ -62,7 +62,7 @@ lines 38-43 «Deprecation State — Promoted to Vulkan 1.1». **ProjectV uses Vu
 > «Deprecation State:
 > Promoted to Vulkan 1.1»
 
-**Cross-refs:** `agent/knowledge.md Part B §9` (network validation: `docs.vulkan.org/refpages/...` reachable
+**Cross-refs:** the web_search fallback chain (network validation: `docs.vulkan.org/refpages/...` reachable
 200 OK), `hardware-profile.md §3` (Vulkan 1.4.341 instance, 1.4.350 conformance), `TODO.md §4.3` (lift draw
 distance — direct VRAM beneficiary).
 
@@ -234,13 +234,13 @@ VCT/BLAS).
 
 ### 3.2 `agent/knowledge.md` (cross-refs, not duplicated per `AGENTS.md §15`)
 
-- `Part A §2` — Mainline = reproducible interactive voxel MVP; **multi-GPU = forward-looking scaling, not
+- `agent/knowledge.md` — Mainline = reproducible interactive voxel MVP; **multi-GPU = forward-looking scaling, not
   gating current MVP slice**
-- `Part A §4` — Build / verification contract (Tracy instrumentation, debug/release presets)
-- `Part A §15` — CSM shadow baseline (orthogonal to multi-GPU)
-- `Part A §30.4` — **3-step migration precedent** (foundation → adoption → default flip, additive не
+- `agent/knowledge.md` — Build / verification contract (Tracy instrumentation, debug/release presets)
+- `agent/knowledge.md` — CSM shadow baseline (orthogonal to multi-GPU)
+- `agent/knowledge.md` — **3-step migration precedent** (foundation → adoption → default flip, additive не
   breaking) — applied to multi-GPU recommendation
-- `Part B §9` — Self-audit / tool availability; `webfetch` validated against `docs.vulkan.org/refpages/...`
+- `agent/knowledge.md` — Self-audit / tool availability; `webfetch` validated against `docs.vulkan.org/refpages/...`
 
 ### 3.3 `TODO.md` (Stage 4.3 explicit cross-ref)
 

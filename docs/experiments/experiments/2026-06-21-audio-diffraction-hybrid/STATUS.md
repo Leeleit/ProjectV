@@ -50,7 +50,7 @@
 
 ## Mainline recommendation (one-line)
 
-Integrate **C_Tsingos (Phase 1.5)** immediately as drop-in addition поверх closed `audio-raytracing-voxel-sdf` Phase 1+2. **XS effort** (~150 LoC per `agent/knowledge.md §30.4` 3-step migration). Defer **B_Schissler (Phase 1.6)** до second-order UTD implementation (Chandak 2008 / Cao 2021) или Zen 5+ AVX-512 hardware availability.
+Integrate **C_Tsingos (Phase 1.5)** immediately as drop-in addition поверх closed `audio-raytracing-voxel-sdf` Phase 1+2. **XS effort** (~150 LoC per `agent/knowledge.md` 3-step migration). Defer **B_Schissler (Phase 1.6)** до second-order UTD implementation (Chandak 2008 / Cao 2021) или Zen 5+ AVX-512 hardware availability.
 
 ---
 

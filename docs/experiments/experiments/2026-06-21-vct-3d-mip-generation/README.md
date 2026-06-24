@@ -5,7 +5,7 @@
 **Date closed:** 2026-06-21
 **Stage link:** `TODO.md §5.1` (Voxel Cone Tracing — explicit DoD: «Реализовать построение мип-уровней
 3D-атласа на GPU для мягкой фильтрации конусов»)
-**Estimated effort:** M (3-step migration в mainline = ~80 LoC, **S effort per `agent/knowledge.md §30.4` precedent** — A_2x2x2_Box is simplest, no need for fancy alternatives per Results §1 + §4)
+**Estimated effort:** M (3-step migration в mainline = ~80 LoC, **S effort per `agent/knowledge.md` precedent** — A_2x2x2_Box is simplest, no need for fancy alternatives per Results §1 + §4)
 **Author:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»;
 sixth invocation this session after sdf-hybrid-world)
 
@@ -275,7 +275,7 @@ performance axis decisively does.
 `src/render/SceneResources.{hpp,cpp}` (3D atlas mip chain lifecycle) + `src/render/Renderer.cpp`
 (mip gen dispatch integration).
 
-**Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent, **simplified based on
+**Подход:** 3-step migration per `agent/knowledge.md` precedent, **simplified based on
 results** (no need for fancy alternatives):
 
 - **Step 1 (XS, ~30 LoC):** `voxelize_mipgen.comp` skeleton with A_2x2x2_Box (8-sample box
@@ -324,7 +324,7 @@ path** if Stage 5.1 GPU benchmark shows vkCmdBlitImage HW path beats compute on 
   optimization)
 - Stage 5.1 `voxelize.comp` (NOT YET IMPLEMENTED) — must be present for integration
 
-**Estimated effort:** **S** (per `agent/knowledge.md §30.4` precedent, simplified from initial
+**Estimated effort:** **S** (per `agent/knowledge.md` precedent, simplified from initial
 S-M estimate; ~120 LoC across 4-6 files, 1-2 sessions).
 
 ---
@@ -341,10 +341,10 @@ Full list в [sources.md](./sources.md) — 10 primary + 6 secondary вериф�
 - **`2026-06-20-nanovdb-on-gpu`** (closed yes, NanoVDB mip chain extension)
 - **`2026-06-20-dec-pipelines-async-compute`** (closed yes, async compute for off-frame mip gen)
 - **`2026-06-20-hzb-binding-models`** (closed mixed, 2D HZB mip chain sampling pattern)
-- **`agent/knowledge.md §30.4`** (3-step migration precedent)
+- **`agent/knowledge.md`** (3-step migration precedent)
 
 Exa MCP returned HTTP 429 (rate-limited) this session; fallbacks via direct `webfetch` per
-`agent/knowledge.md` line 1424 validated source list.
+`agent/knowledge.md` validated source list.
 
 ---
 
@@ -409,7 +409,7 @@ dev GPU, 8 GiB VRAM, 5.06 GiB budget) + §4 (Vulkan 1.4.341 + `VK_KHR_accelerati
 **Cross-references:** `TODO.md §5.1` (VCT), `vct-cone-count-atlas-precision/README.md` + `STATUS.md`
 (direct predecessor), `2026-06-20-nanovdb-on-gpu` (NanoVDB mip chain extension), `2026-06-20-dec-pipelines-async-compute`
 (async compute for off-frame mip gen), `2026-06-20-hzb-binding-models` (2D HZB mip chain analog),
-`agent/knowledge.md §30.4` (3-step migration precedent), `agent/knowledge.md §15` (lighting contract),
+`agent/knowledge.md` (3-step migration precedent), `agent/knowledge.md` (lighting contract),
 `agent/workspace.md §2` (Stage 5.x not started), `hardware-profile.md §1+§3` (dev host baseline),
 `benchmarks/methodology.md §3` (measurement protocol), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`
 (5-10% threshold), `experiments/_TEMPLATE/README.md` (template followed).

@@ -2,7 +2,7 @@
 
 Verified references per `AGENTS.md §2` + `legacy/docs/philosophy/03_domain/05_math-and-space.md`
 research standard. Web-research via `webfetch` DuckDuckGo HTML endpoint + direct source URL fetch
-(Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9`).
+(Exa MCP HTTP 429 persistent per the web_search fallback chain).
 
 ---
 
@@ -252,7 +252,7 @@ research standard. Web-research via `webfetch` DuckDuckGo HTML endpoint + direct
 - **Phase B (citation verification):** direct URL fetch via `webfetch` for Tier 1 + Tier 2 sources (Wronski 2014 PDF
   too large >5MB, cited via secondary references; Timethy Hyman + elliahu + sinnwrig + Mastering Vulkan +
   Godot issue + Cinevva + moonjump + Matej Lou + Loboda + Sakmary verified via webfetch full content).
-- **Exa MCP fallback:** HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424; all sources verified via
+- **Exa MCP fallback:** HTTP 429 persistent per the web_search fallback chain; all sources verified via
   `webfetch` DuckDuckGo HTML endpoint.
 - **Local ProjectV context:** verified via `rg` for `fogDensity` (8 hits in mainline), `voxel.frag` analytic fog
   baseline (lines 844-883), `LookDevCaptureAutomation.cpp:180` fog scene preset.

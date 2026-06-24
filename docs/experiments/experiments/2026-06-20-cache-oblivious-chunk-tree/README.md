@@ -116,8 +116,8 @@ Web-research выполнен `2026-06-20` (Exa) per `AGENTS.md §5.3` / `docs/e
 - `svdag-vs-vdb-memory-throughput` (parallel session, in-progress) — измеряет memory + mutation throughput двух
   storage **designs**. Наш experiment измеряет traversal latency двух storage **layouts** поверх того же design.
   Non-overlapping scope.
-- `agent/knowledge.md §15` — sun-shadow path, не касается storage layout.
-- `agent/knowledge.md §30.4` — GPU Fluid CA reversal, контракт «shader оперирует на SVDAG node pool, не на flat
+- `agent/knowledge.md` — sun-shadow path, не касается storage layout.
+- `agent/knowledge.md` — GPU Fluid CA reversal, контракт «shader оперирует на SVDAG node pool, не на flat
   array». Layout reorder не нарушает этот контракт (Node ID indirection preserved).
 - `TODO.md §1.1` (Sparse 64-trees) — mainline storage, `nodes_[]` в `Sparse64Tree.hpp:268` — primary site для
   potential layout change.
@@ -343,7 +343,7 @@ access patterns (player movement) will exercise Morton locality better than rand
 **Критерии приёмки (если mainline решит реализовать после re-evaluation):**
 
 - [ ] `PROJECTV_SPARSE_64_LAYOUT=morton` byte-equal output vs `=baseline` на VoxelLab, MeshingStress, FlatBenchmark.
-- [ ] ctest baseline (16/16 per `agent/knowledge.md §4`) preserved.
+- [ ] ctest baseline (16/16 per `agent/knowledge.md`) preserved.
 - [ ] New `ProjectVSparse64TreeTests::MortonReorderByteEqual` test passes on all existing fixtures.
 - [ ] TracyPlot `VoxelAccess (ms)` drop ≥ 5% on MeshingStress with `=morton` (per `TODO.md §1.1` acceptance).
 - [ ] Per-chunk SVDAG dedup invariant preserved (`SetDeduplicationEnabled` toggle + reorder rebuild works).
@@ -399,7 +399,7 @@ Stage 4.3 trigger. No mainline action now.
 - `src/voxel/VoxelWorld.hpp` (line 87: sparseStorage field; lines 45-50: VoxelChunk) — chunk container.
 - `sparse-64-tree-alternatives` (closed 2026-06-20, verdict=yes) — validates 64-tree design.
 - `svdag-vs-vdb-memory-throughput` (parallel session, in-progress) — non-overlapping scope.
-- `agent/knowledge.md §15, §30.4` — relevant engineering contracts.
+- `agent/knowledge.md`, §30.4` — relevant engineering contracts.
 - `TODO.md §1.1, §1.2, §2.1, §2.2, §4.3` — all designed for SVDAG/64-tree read; layout reorder compatible.
 
 ---

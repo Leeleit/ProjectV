@@ -11,7 +11,7 @@ cmake .. -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
 cmake --build . --config Release -j$(nproc)
 ```
 
-Compiler flags (per `agent/knowledge.md §17`):
+Compiler flags (per `agent/knowledge.md`):
 - Clang 22.1.6
 - `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`
 

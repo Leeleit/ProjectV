@@ -1,6 +1,6 @@
 # 2026-06-21-group-formation-maneuver-axis — Web-research sources (verified)
 
-> Web-search (Exa) HTTP 429 → **Startpage + direct webfetch** per `agent/knowledge.md Part B §9` line 1424
+> Web-search (Exa) HTTP 429 → **Startpage + direct webfetch** per the web_search fallback chain
 > fallback list. Verified через direct `webfetch` и `researchgate` canonical URLs. Цитаты подтверждены
 > через reading primary URL.
 

@@ -173,7 +173,7 @@ clang++ -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic \
 
 **Target stage:** TODO.md §5.x (Stage 5 Visual Polish) — **deferred** до dedicated Stage 5.x session per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~50 LoC):** `CloudController` foundation + `PROJECTV_CLOUDS=NONE|SINGLE_LAYER|THREE_LAYER|FROXEL|RTX_RAYMARCH` env gate + `PROJECTV_CLOUDS_MIN_SKY_VISIBILITY=0.15` scene-adaptive disable threshold + `vkCmdBeginRendering` integration в `Renderer.cpp::DrawFrame` post-process slot (after TAA resolve per closed `2026-06-21-taa-motion-vectors` yes precedent).
 - **Step 2 (M, ~350 LoC):** per-strategy implementation:

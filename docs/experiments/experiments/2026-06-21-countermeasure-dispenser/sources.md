@@ -1,8 +1,7 @@
 # Sources — 2026-06-21-countermeasure-dispenser
 
 All URLs verified accessible `2026-06-21` via `webfetch` DuckDuckGo HTML endpoint + direct
-URLs (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424
-fallback list).
+URLs (Exa `web_search` HTTP 429 persistent per the web_search fallback chain).
 
 ## Tier 1 — Production reference & canonical
 

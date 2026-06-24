@@ -45,7 +45,7 @@
 
 ## 2. Prior art
 
-Web-research via direct `webfetch` (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list; DuckDuckGo HTML endpoint working this session).
+Web-research via direct `webfetch` (Exa HTTP 429 persistent per the web_search fallback chain; DuckDuckGo HTML endpoint working this session).
 
 **Primary sources verified:**
 
@@ -200,7 +200,7 @@ Full analysis: see [`RESULTS.md`](./RESULTS.md).
 
 **Target stage:** Stage 3.2 (voxel destruction / demolition) — independent of military sandbox activation per `agent/workspace.md §2` operator 8x planning decision.
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~520 LoC, M effort, 2-3 sessions):
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~520 LoC, M effort, 2-3 sessions):
 
 - **Step 1 (XS, ~100 LoC):** `src/voxel/StructuralCollapse.{hpp,cpp}` foundation + `PropagationStrategy` enum (NAIVE | BFS | STRESS | JPH_REFERENCE) + `PROJECTV_COLLAPSE_STRATEGY` env gate (default `NAIVE`) + per-building collapse state container.
 - **Step 2 (M, ~300 LoC):** integrate with closed `destructible-building-system` [mixed verdict, stability check] — when stability check fires `StructuralCollapse::OnInitialDamage(chunk_id)` → run `propagate()` with chosen strategy → emit Flecs events `ChunkCollapsed { chunk_id, tick, total_load_redistributed }` for downstream consumers (visual mesh re-gen, dust particles, audio cues per closed `ballistic-crack-thump` [mixed]).

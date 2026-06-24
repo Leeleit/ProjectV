@@ -8,37 +8,141 @@ Roadmap — `TODO.md`.
 archived at `legacy/docs/archive/2026-06-24-pre-reset-snapshot/workspace.md`. Treat
 as historical artifact — see WARNING header in that file. **DO NOT cite as authoritative.**
 
+`COMMENTS.md` was DELETED this session (25x) per operator directive: every file
+with a `## \`path\` section got a 1-line trailing comment pointer to the archive
+at `legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md`. Archive is
+read-only historical reference; per §4 sources-of-truth, the active documentation
+lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md`.
+
 ---
 
 ## 1. Now
 
-**2026-06-24 post-reset baseline.** Initial baseline создан через squash 274
-pre-reset коммитов. Build state, smoke results, активные TODO и session log
-добавляются по мере работы.
+**2026-06-25 session 25x (post-reset documentation refresh, this session).**
 
-**Текущий статус:** baseline готов, build green (verifying), ctest pending verify.
-Полный pre-reset session narrative (16x-24x, 18x+, 19x-21x RTX stages, 22x voxel-aware
-RTX, 23x DDA consolidate, 24x TDR fix) — в архивной копии.
+Свежий baseline после operator-инициированного reset `2026-06-24`:
+- 274 pre-reset коммитов squashed в один `chore(reset): pre-fresh-start baseline`
+  (`ec6ce4d`). Только master branch; `forge/rtx-feature-lab`,
+  `forge/backlog-diversification` удалены.
+- `legacy/docs/archive/2026-06-24-pre-reset-snapshot/` — полный pre-reset git history
+  bundle + 4 service files (`CHANGELOG.md`, `COMMENTS.md`, `knowledge.md`,
+  `workspace.md`) с WARNING headers.
+- `CHANGELOG.md` / `COMMENTS.md` / `agent/knowledge.md` / `agent/workspace.md`
+  пересозданы как minimal baseline. Содержимое intentional empty до первой
+  post-reset сессии.
 
+**Что сделано в этой сессии (25x):**
+- Глубокое изучение code base (159 cpp/hpp/ixx + 27 shader files = 48 229 LoC).
+- Глубокое изучение pre-reset archive (`legacy/docs/archive/.../knowledge.md`,
+  2199 строк / 36 contracts; `workspace.md`, 331 строк narrative 16x-24x).
+- Cross-validation: какие pre-reset contracts ещё binding, какие superseded
+  (CSM удалён per TODO §5.2.D), какие removed.
+- `agent/knowledge.md` — полностью переписан: 36 engineering contracts
+  (Part A) + 5 runtime facts (Part B) + cross-refs.
+- `agent/workspace.md` (этот файл) — текущий snapshot + active tasks + recent
+  milestones.
+- `COMMENTS.md` → DELETED (per operator directive): 1-line trailing pointer
+  добавлен в 114 source/shader/CMake файлов, ссылается на
+  `legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md` (archive).
+- Восстановлен вызов `UpdateVoxelInteraction` внутри `UpdateApp` для корректного выполнения юнит-тестов, удалена избыточная Flecs-система `VoxelInteractionTickSystem` из `EcsWorld.cpp` и `main.cpp`.
+- Исправлен тест `TestPhysicsWorldSyncTracksVoxelEdits` (теперь передается указатель `physics.get()` вместо `nullptr` для корректной инкрементальной синхронизации Jolt).
+
+**Build state:** green (успешно собирается ProjectV и ProjectVTests).
+**Tests:** 39/39 тестов успешно пройдено (100% green).
 **Operator policy:** не восстанавливать pre-reset контент без явной команды.
 
 ---
 
 ## 2. Active tasks
 
-(пусто — добавляется при первой post-reset сессии)
+(пусто — post-reset старт. См. `TODO.md` §5.5+ post-RTX-shadow milestones
+[7.1 VCT cones, 7.2 TAA, 7.3 tonemap, 7.4 post-FX] как natural next-priority.)
+
+Per TODO.md active section (2026-06-22):
+- ⭐ 7.1 VCT cone density upgrade (12-cone diffuse + 4-cone specular).
+- ⭐ 7.2 TAA jitter + neighborhood quality (per TODO, but §7.2 CSM quality
+  pass was REMOVED 2026-06-22 — different "7.2" kept; agent must disambiguate
+  in future planning).
+- ⭐ 7.3 Lighting exposure + tone mapping (Reinhard → ACES).
+- ⭐ 7.4 Post-processing chain polish (bloom + aerial perspective).
+- 🔒 6.2 PIMPL for AppState — DEFERRED PENDING FEASIBILITY.
+- 🔒 2.3 Sparse Virtual Texturing — DEFERRED PENDING FEASIBILITY.
 
 ---
 
 ## 3. Recent milestones
 
-(пусто — добавляется при первой post-reset сессии)
+**Snapshot at `2026-06-24` (post-reset baseline) — все pre-reset milestones в
+`legacy/docs/archive/2026-06-24-pre-reset-snapshot/CHANGELOG.md` (3420 строк)
+и `workspace.md` (331 строк session narrative).** Краткая сводка:
+
+| Milestone | Session | Status |
+|---|---|---|
+| **Phase 1** SVO + GPU storage | 1.1-1.3 | ✅ closed |
+| **Phase 2** GPU-driven geometry | 2.1 HZB, 2.2 Mesh Shaders | ✅ · 2.3 SVT 🔒 deferred-pending |
+| **Phase 3** Physics & simulation | 3.1 GPU Fluid CA, 3.2 Incremental Jolt, 3.3 Greedy merger | ✅ all closed |
+| **Phase 4** Procedural generation & LOD | 4.1 World Gen, 4.2 LOD, 4.3 Draw distance | ✅ all closed |
+| **Phase 5.2** RTX shadows | A (TLAS) / B (ray query) / C (default-on, hard-fail non-RTX) / D (CSM removal) / E (voxel-aware procedural intersection) | ✅ all closed (16x-22x) |
+| **Phase 5.3** TAA | motion vectors, YCoCg, CAS, jitter, neighborhood | ✅ closed (post-5.2) |
+| **Phase 5.4** RTX AO | replace DDA | ✅ closed (20x) |
+| **Phase 5.5** DDGI probes | replace VCT diffuse | ✅ closed (23x) |
+| **Phase 5.6** RTX refraction | replace fake transmission | ✅ closed (23x) |
+| **Phase 5.7** RTX multi-bounce GI | for specular | ✅ closed (23x) |
+| **Phase 5.2.D refactor** | DDA consolidation, refraction self-intersection fix | ✅ closed (24x) |
+| **Phase 6** Refactoring | 6.1 ECS migration (UpdateApp 355→49 LoC), 6.3 Async Compute | ✅ · 6.2 PIMPL 🔒 deferred-pending |
+| **Phase 7** Rendering polish | 7.1 VCT cones, 7.2 TAA, 7.3 tonemap, 7.4 post-FX | 🔓 all open (post-RTX-shadow) |
+
+Strategic pivots 2026-06-22 (per TODO.md §2 / §26-32):
+- **CSM bias tuning → RTX-only path forward** (operator decision).
+- **Hardware target = NVIDIA RTX 20/30/40/50** (Turing RT cores или новее).
+- **No non-RTX fallback, no legacy уступки** (pet-project scope).
+
+Key per-session snapshots (from `workspace.md` archive):
+
+- **22x (2026-06-22)**: 5.2.E Voxel-aware procedural intersection shadows. 4 new
+  shader files (rgen/rint/rchit/rmiss) + RtxShadowPipeline + RtxShadowSBT classes
+  + shadow mask image + camera UBO + per-frame descriptor sets. 4 new sub-tests.
+  RTX 3060 Ti smoke log clean: `rayTracingPipeline=1`, `tlasInstanceCount > 0`,
+  0 validation errors, 0 VMA assertions on exit.
+- **23x (2026-06-23)**: RTX shadow instability fixes (blocky shadows, glass
+  shadow casting, pitch-black occlusion) + DDGI probe update + RTX refraction
+  + RTX multi-bounce GI. 4 closed milestones (5.5, 5.6, 5.7 + refactor).
+- **24x (2026-06-24)**: DDA consolidation in `voxel.frag` (`TraceVoxelIntersection`
+  helper with `ignoreGlass`/`ignoreFluid`/`rayFlags` parameters) + refraction
+  self-intersection fix (glass/fluid columns now render distorted background).
+  37/37 tests passing.
+- **25x (2026-06-25, this session)**: Post-reset documentation refresh. Knowledge
+  + workspace + comments rebuilt from current code. No code changes.
 
 ---
 
 ## 4. Risks / blockers
 
-(пусто)
+**Post-reset baseline risks:**
+
+1. **No Windows host verification** — `CMakePresets.json` Windows paths defined
+   (clang-cl + LLD) но не post-reset verified. Per AGENTS.md §3: основной dev tree
+   = `linux-clang-debug`; Windows = secondary.
+2. **Benchmark gated on Linux debug** — `ProjectVFrustumCullBenchmark` only
+   builds in `linux-clang-debug*` presets (gated by
+   `PROJECTV_ENABLE_BENCHMARKS=ON`).
+3. **RTX-only hardware requirement** — non-RTX GPU refuses to start. Это
+   сознательное решение (pet-project), но может исключать некоторых контрибьюторов.
+4. **CSM fully removed** — нет fallback если RTX не работает. Любая RTX regression
+   = complete shadow outage. Mitigation: aggressive ctest coverage на
+   `ProjectVRayTracedShadowTests` (29 sub-tests per session 22x).
+5. **Stale HUD fields** — `DebugStats::sunShadow*` (strength, depthBias,
+   normalBias, filterRadius) никогда не записываются current code; только
+   `currentSceneLighting` записывается. Display-строки могут показывать 0.0
+   permanently. Future cleanup: remove display-строки or repurpose fields.
+6. **Dead hotkeys** — `O`/`U`/`I` (CycleShadowTuningTarget / Decrease-Value /
+   Increase-Value) и `L` (ToggleCascadeSplitPlanes) не имеют producer после CSM
+   removal. Keys остаются в `InputActions` enum, флаг `showCascadeSplitPlanes`
+   сохраняется в `DebugState`. Cleanup candidate.
+7. **Many pre-reset invariants** (release flags, Tracy UI split, sccache setup,
+   build-preset target list) — re-validated against current code, но отдельные
+   cmake-флаги были перемещены с preset-level на CMake-level (release compile
+   flags теперь в `CMakeLists.txt:58-71`, не в preset override).
 
 ---
 
@@ -50,7 +154,14 @@ RTX, 23x DDA consolidate, 24x TDR fix) — в архивной копии.
 
 ## Cross-refs
 
-- `agent/knowledge.md` — инженерные контракты и runtime facts (post-reset, пуст)
-- `AGENTS.md` §7 — рабочий чеклист, §4 — sources of truth, §5 — протокол коммитов
-- `TODO.md` — roadmap
-- `legacy/docs/archive/2026-06-24-pre-reset-snapshot/` — pre-reset история (архивный артефакт)
+- `agent/knowledge.md` — 36 действующих engineering contracts + 5 runtime facts
+  (post-reset, rebuilt from code 2026-06-25).
+- `AGENTS.md §7` — рабочий чеклист, §4 — sources of truth, §5 — протокол коммитов.
+- `TODO.md` — roadmap + 5.2-5.7 RTX milestones (closed) + 7.x post-RTX polish
+  (open).
+- `legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md` — pre-reset
+  design-rationale archive (read-only; pointer in each source file).
+- `docs/VulkanSDK-Linux-Docs-1.4.350.1/` — вендорная документация Vulkan 1.4.
+- `runtime/scene.json` — default scene config (VoxelLab preset).
+- `runtime/captures/` — lookdev capture outputs.
+- `CHANGELOG.md` — minimal post-reset [Unreleased] entry.

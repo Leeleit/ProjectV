@@ -19,7 +19,7 @@ at a time → occupancy mask 64² array per face → greedy merge per plane.
 (per-axis dispatch, 1 thread/chunk, ~6×`extentU*extentV` cell reads) даёт основу для
 benchmark baseline.
 
-**Cross-ref:** `agent/knowledge.md §25` (per-axis dispatch rationale), `TODO.md §2.1` (mesh
+**Cross-ref:** `agent/knowledge.md` (per-axis dispatch rationale), `TODO.md §2.1` (mesh
 shader port target).
 
 ---

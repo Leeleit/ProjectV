@@ -34,7 +34,7 @@ E_PhysicallyModeledSynthesis} для event-generation. Правильная ст
 
 ## 2. Prior art (verified via direct `webfetch`)
 
-Per `agent/knowledge.md Part B §9` fallback chain (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked), primary =
+Per the web_search fallback chain (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked), primary =
 direct `webfetch` to canonical sources. **6 sources verified** in `sources.md`:
 
 **Tier 1 (canonical):**

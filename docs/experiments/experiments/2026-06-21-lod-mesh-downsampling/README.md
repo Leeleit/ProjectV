@@ -262,7 +262,7 @@ no regression on others. Defer to a future experiment.
 
 **Target stage:** `TODO.md` §4.2 chunk 2 (uniform downsampling implementation).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (S, ~150 LoC, 1 session):** add `B_SurfacePreserve` downsample kernel + per-chunk
   `LodDownsampleJob` struct to `src/voxel/VoxelWorld.{hpp,cpp}`. Inputs: source 8³ chunk,

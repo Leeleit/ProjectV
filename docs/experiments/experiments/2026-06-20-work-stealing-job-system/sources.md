@@ -107,7 +107,7 @@ Web-research cross-refs. Каждый источник: URL + дата + авт�
 
 ## 6. ProjectV context
 
-- **`agent/knowledge.md` §29.0 Tier 4 R&D** (line 887) — «`std::execution` (P2300, Senders/Receivers) — нужна Job
+- **`agent/knowledge.md` Tier 4 R&D** (line 887) — «`std::execution` (P2300, Senders/Receivers) — нужна Job
   System, отдельный slice».
   Direct prior art, identifies this experiment as Tier 4 R&D, not mainline blocker.
   https://github.com/.../agent/knowledge.md (per repo)

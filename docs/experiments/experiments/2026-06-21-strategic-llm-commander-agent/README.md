@@ -126,7 +126,7 @@ Output: [`prototype/build/results.csv`](./prototype/build/results.csv) (126 rows
 
 **Target stage:** **Stage 6+ military sandbox activation** per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent, ~750 LoC, M-L effort, 2-3 sessions):**
+**Concrete changes (3-step migration per `agent/knowledge.md` precedent, ~750 LoC, M-L effort, 2-3 sessions):**
 
 - **Step 1 (S, ~200 LoC) `src/ai/strategic_commander/StrategicCommander.{hpp,cpp}`** — LLM client interface (provider-agnostic), RAG doctrine corpus loader, mock-LLM for offline mode (development + benchmark), plan validity checker (per `prototype/strategic_llm_bench.cpp::check_coherence` logic), 5 strategy implementations. Flecs `StrategicCommanderComponent` (per-faction state hash + doctrine corpus ID).
 - **Step 2 (M, ~400 LoC) integration** — `StrategicCommanderSystem` runs at 1 Hz (or on-demand) per faction. Connects to existing `CombinedArmsCoordinator` (closed `combined-arms-coordination-ai` [mixed]) via interface `IStrategicPlanConsumer` → coordinator → per-unit BT (closed `hierarchical-tactical-ai-btree` [mixed]). LLM output → coordinator input → BT output. RAG over doctrine corpus: `assets/doctrine/<faction>.json` (per-faction doctrine docs, modder-editable per `lua-game-rules-scripting` [mixed]).

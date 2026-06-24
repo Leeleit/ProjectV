@@ -39,7 +39,7 @@ covers BTs).
 ## 2. Prior art
 
 Web-research via direct `webfetch` to canonical sources (Exa HTTP 429 persistent this
-session per `agent/knowledge.md Part B §9` line 1424 fallback list):
+session per the web_search fallback chain):
 
 **Primary sources:**
 
@@ -273,7 +273,7 @@ will be in the 10-20% range — still worth adopting D as the default architectu
 **Target stage:** Stage 6+ military sandbox activation (per `agent/workspace.md §2` line 36
 operator 8x planning decision). **Defer до Stage 6+ dedicated session.**
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent, ~830 LoC, M effort, 2-3 sessions):**
+**Concrete changes (3-step migration per `agent/knowledge.md` precedent, ~830 LoC, M effort, 2-3 sessions):**
 
 **Step 1 (XS, ~80 LoC) — `src/ai/BehaviorTree.hpp`**
 ```cpp

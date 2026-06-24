@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-hzb-smart-mip-select
 
-Web-research completed 2026-06-21 via DuckDuckGo HTML endpoint + `webfetch` (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`).
+Web-research completed 2026-06-21 via DuckDuckGo HTML endpoint + `webfetch` (Exa HTTP 429 persistent per the web_search fallback chain).
 
 ## Primary sources (verified this session)
 
@@ -85,7 +85,7 @@ Web-research completed 2026-06-21 via DuckDuckGo HTML endpoint + `webfetch` (Exa
 - `src/render/Renderer.cpp:1344-1350` — `RecordHzbCullingDispatch` call site (will need mip compute injection)
 - `src/voxel/VoxelWorld.hpp:78` — `chunkSize=8`
 - `src/app/Camera.cpp` — `kMainlineVisibleSceneMaxDistance=64m` (current Stage 2.1 cap; Stage 4.3 target = 128m)
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 
 ## Cross-refs (closed experiments in same session)
 

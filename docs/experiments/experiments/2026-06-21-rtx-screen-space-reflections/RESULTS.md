@@ -204,7 +204,7 @@ VCT fallback для rough surfaces (cave_stress = 70% VCT ratio → 1.23 ms cost
 
 ## 5. Mainline 3-step migration recommendation
 
-Per `agent/knowledge.md §30.4` precedent.
+Per `agent/knowledge.md` precedent.
 
 **Step 1 (XS, ~50 LoC):** `PROJECTV_REFLECTIONS=NONE|PROBE|SSR|RTX_1RAY|RTX_STOCHASTIC|RTX_HIERARCHICAL|RTX_TEMPORAL`
 env flag + `ReflectionStrategy::SelectStrategy()` dispatcher + `VK_KHR_ray_query` probe via

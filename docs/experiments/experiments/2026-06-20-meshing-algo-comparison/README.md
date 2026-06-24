@@ -12,7 +12,7 @@
 ## 1. Hypothesis
 
 **Гипотеза:** Для ProjectV voxel-входа (axis-aligned solid voxels, sparse, SVDAG-deduped per Stage 1.2) **Naive Greedy
-** (current mainline, per `agent/knowledge.md §25`, per-axis dispatch в `voxel_mesh.comp::GreedyFacePass`) остаётся
+** (current mainline, per `agent/knowledge.md`, per-axis dispatch в `voxel_mesh.comp::GreedyFacePass`) остаётся
 optimal vs Surface Nets / Marching Cubes / Dual Contouring — по poly count, build time, и GPU mesh-shader portability —
 потому что:
 
@@ -66,7 +66,7 @@ Web-research выполнен в `sources.md`. Ключевые источник
     - output poly count (triangles per chunk; quad = 2 triangles для greedy)
     - output memory (bytes per chunk)
     - mesh quality proxy: per-triangle area distribution (uniform = good; degenerate triangles = bad)
-- **Контроль:** Naive Greedy = baseline (current mainline per `agent/knowledge.md §25`).
+- **Контроль:** Naive Greedy = baseline (current mainline per `agent/knowledge.md`).
 - **Протокол:** per `benchmarks/methodology.md`: warmup 30 iter, 1000 iter per config, JSON/CSV output, governor fixed,
   isolated core.
 
@@ -204,7 +204,7 @@ item).
 ## 9. Mapping to ProjectV hot-path
 
 - **Mainline consumer:** `src/shaders/voxel_mesh.comp::GreedyFacePass` (per-axis dispatch, per
-  `agent/knowledge.md §25`). Current = Naive Greedy (это и есть baseline эксперимента).
+  `agent/knowledge.md`). Current = Naive Greedy (это и есть baseline эксперимента).
 - **Stage 2.1:** mesh shader spike (`src/shaders/voxel_mesh.task` + `voxel_mesh.mesh`) emits stub triangle — full port =
   replace stub с алгоритмом-кандидатом из эксперимента.
 - **Stage 3.3:** `voxel_physics_mesh.comp` (TODO, не существует) — mirror of Stage 2.1 для Jolt `MeshShape`.

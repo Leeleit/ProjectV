@@ -60,7 +60,7 @@
 - **Throughput:** time-to-unlock-all (per session, per 5 strategy × 5 scene × 5 seed = 125 runs).
 - **Correctness:** total unlocks vs reference (must equal DAG-reachable set); cycle detection rate (synthetic cycle-injected scenes).
 
-**Build:** Clang 22.1.6, `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` per `agent/knowledge.md §17`.
+**Build:** Clang 22.1.6, `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` per `agent/knowledge.md`.
 
 **CPU host:** Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`.
 
@@ -126,7 +126,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 
 ## 7. Integration recommendation
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~630 LoC, S effort, 1-2 sessions, **deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision**):
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~630 LoC, S effort, 1-2 sessions, **deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision**):
 
 - **Step 1 (XS, ~80 LoC)** `src/economy/TechTree.{hpp,cpp}` foundation + `TechNode` + `TechTrack` + `DAG` + `PROJECTV_TECH_TREE=NAIVE|PRIORITY_QUEUE|CRITICAL_PATH|LAZY_EXPAND|HYBRID` env gate (default `HYBRID`) + 5 strategy impls + Flecs `TechTreeComponent` per-track slot count.
 - **Step 2 (M, ~400 LoC)** integration с `FactoryProductionSystem` (closed mixed) for unlock-gated recipe building + integration с `DataDrivenVehicleWeaponDefinitions` (closed mixed) for unlock-gated content + per-tick Flecs `TechTreeSystem::Update(ecs, dt)` at 1 Hz (research progress is slow, not 30 Hz).
@@ -169,7 +169,7 @@ _See `sources.md` (Phase 1)._
 
 ## 10. Cross-refs
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `agent/workspace.md §2` — Stage 6+ military sandbox deferral.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `benchmarks/methodology.md §3` — measurement protocol (N=1000 + 10 warmup).

@@ -46,7 +46,7 @@ C_SSR_HiZ_Trace (0.42 ms / 23.30 dB) = universal fallback для no-HW-RT.
 - 2026-06-21 — Phase D analysis complete: per-strategy aggregate ranking + per-strategy per-scene
   detailed (35 configs × 6 metrics = 210 cells) + per-platform recommended defaults + quality/cost
   efficiency table (PSNR/cost_ms) + cross-axis findings (F_RT_SSR_Hierarchical = Lumen hybrid pattern
-  analog) + mainline 3-step migration recommendation per `agent/knowledge.md §30.4` precedent. `RESULTS.md`
+  analog) + mainline 3-step migration recommendation per `agent/knowledge.md` precedent. `RESULTS.md`
   written (~280 lines, 7 sections). README.md §5/§6/§7 updated with full results + verdict +
   integration recommendation.
 
@@ -73,7 +73,7 @@ C_SSR_HiZ_Trace (0.42 ms / 23.30 dB) = universal fallback для no-HW-RT.
 - RTX-class high (Ada/Blackwell): G_RT_SSR_TemporalFiltered
 - Static-baked: B_CubeReflectionProbe
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4`:** ~380 LoC, S-M effort, 2-3 sessions,
+**Mainline 3-step migration per `agent/knowledge.md`:** ~380 LoC, S-M effort, 2-3 sessions,
 deferred до Stage 5.x dedicated session per operator decision per `agent/workspace.md §2` line 36.
 
 ---

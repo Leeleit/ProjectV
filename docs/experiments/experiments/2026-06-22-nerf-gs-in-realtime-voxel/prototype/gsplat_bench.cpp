@@ -5,7 +5,7 @@
 // (validated SOTA per Kerbl 2023); voxel mutation cost dominates; H3c_DropAffectedSplats
 // is the recommended mutation strategy for gameplay.
 //
-// Per `agent/knowledge.md §17`: Clang 22.1.6, -O3 -march=native -std=c++26 -DNDEBUG.
+// Per `agent/knowledge.md`: Clang 22.1.6, -O3 -march=native -std=c++26 -DNDEBUG.
 // Per `benchmarks/methodology.md §3`: warmup + N iter, mean/median/p95/p99/std.
 // Per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`: 5-10% threshold.
 

@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-vct-temporal-denoise-tensor-core
 
 **Date verified:** 2026-06-21
-**Method:** Exa MCP `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` fallback policy +
+**Method:** Exa MCP `web_search` HTTP 429 persistent per the web_search fallback chain +
 direct `webfetch` on `docs.vulkan.org/refpages/...` + DuckDuckGo HTML fallback per operator directive
 (`AGENTS.md §5.3` web search obligation satisfied via documented fallbacks).
 **Sources verified:** 14 primary + 8 secondary = 22 total references.

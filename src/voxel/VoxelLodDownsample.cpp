@@ -1,4 +1,4 @@
-#include "voxel/VoxelLodDownsample.hpp"
+#include "voxel/VoxelLodDownsample.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <algorithm>
 #include <cstdlib>
@@ -42,7 +42,7 @@ uint8_t ReadSourceVoxel(const VoxelWorld &world, const Int3 &position)
 // Property: 0 T-junction holes across 75 boundary configurations (per the experiment).
 // Cost: < 1.5 us/chunk at any LOD on Zen 3 5800X (well under 50 us Stage 4.1 budget).
 // Other kernels (A_Majority3D, C_SolidOnly, D_MaxPool) fail 10-32% on cave_stress + collapse in LOD 1.
-// See `agent/knowledge.md §30.4` 3-step migration precedent and the experiment README.
+// See `agent/knowledge.md` 3-step migration precedent and the experiment README.
 uint8_t SurfacePreserveVote8(
 	const VoxelWorld &world,
 	const Int3 &chunkOrigin,

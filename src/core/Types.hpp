@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(__clang__) && defined(_MSC_VER)
+#if defined(__clang__) && defined(_MSC_VER) // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #else
 import projectv.math;
@@ -661,10 +661,7 @@ struct RenderPassTimings {
 	uint32_t dirtyChunkRebuiltCount = 0;
 };
 
-// see COMMENTS.md "src/core/Types.hpp" for full ownership mapping
-// (CreateXxx / DestroyXxx pairs for each VkBuffer+VmaAllocation, VkImage,
-// VkPipeline, VkShaderModule, VkDescriptorSetLayout field).
-struct RenderState {
+struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocation, VkImage, VkPipeline, VkShaderModule, VkDescriptorSetLayout field
 	std::vector<PackedSceneChunkDescriptor> sceneChunkDescriptors;
 	std::vector<SceneChunkVoxelPayloadRange> sceneChunkVoxelPayloadRanges;
 	std::vector<uint32_t> sceneChunkVoxelPayloadWords;

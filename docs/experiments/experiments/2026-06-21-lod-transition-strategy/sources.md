@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-lod-transition-strategy`
 
-Web-research completed this session (2026-06-21) via DuckDuckGo HTML endpoint + webfetch fallback (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` + operator directive). 8 primary sources verified.
+Web-research completed this session (2026-06-21) via DuckDuckGo HTML endpoint + webfetch fallback (Exa MCP HTTP 429 persistent per the web_search fallback chain + operator directive). 8 primary sources verified.
 
 ## Primary sources (verified via direct URL fetch 2026-06-21)
 

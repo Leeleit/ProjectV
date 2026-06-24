@@ -139,7 +139,7 @@ Output: `prototype/build/results.csv` (126 rows = 5×5×5 + header) + `prototype
 
 **Target stage:** independent (Tier 2 AI, military sandbox axis), Stage 6+ activation per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~600 LoC total, M effort, 2-3 sessions, **deferred до Stage 6+ military sandbox activation**):
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~600 LoC total, M effort, 2-3 sessions, **deferred до Stage 6+ military sandbox activation**):
 
 - **Step 1 (XS, ~80 LoC)** `src/ai/UrbanCombat.{hpp,cpp}` foundation:
   - `UrbanCombatStrategy` enum: `NAIVE | BT_SEQUENCE | GRAPH_BFS | HIERARCHICAL_FLOW | COVER_PEEK`

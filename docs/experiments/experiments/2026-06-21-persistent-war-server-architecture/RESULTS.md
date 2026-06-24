@@ -163,7 +163,7 @@ C/D/E all achieve **horizontal scale-invariant cost per player** — the key pro
 - **Dev/internal test:** `B_Centralized_Postgres` for <100 player scenes; **avoid at production scale** (lock contention O(N²) kills at 500+).
 - **NEVER use:** `A_P2P_ListenServer` for >16 players.
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~1200 LoC, M-L effort, 3-5 sessions, deferred до Stage 6+ military sandbox activation):
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~1200 LoC, M-L effort, 3-5 sessions, deferred до Stage 6+ military sandbox activation):
 
 - **Step 1 (S, ~300 LoC)** `src/server/RealmCore.{hpp,cpp}` — NATS JetStream integration with KV/Object store, RAFT R=3 config, sync_interval=always, realm sharding logic (1 realm per 200-300 players by hex grid).
 - **Step 2 (M, ~600 LoC)** `src/server/RealmOrchestrator.{hpp,cpp}` — Agones FleetAutoscaler integration, per-realm pod lifecycle, cross-realm event routing via JetStream subject mapping, player migration handler.

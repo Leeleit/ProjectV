@@ -23,7 +23,7 @@ Cross-axis to closed:
 
 ## 2. Prior art
 
-See [`sources.md`](./sources.md) for the full list (12+ sources verified via Brave Search fallback after Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424).
+See [`sources.md`](./sources.md) for the full list (12+ sources verified via Brave Search fallback after Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 
 **Key references:**
 1. **Godot Voxel Tools (Zylann)** — `VoxelInstanceLibrary` resource, multimesh vs scene instances, persistent + transient, Mesh LOD. Production reference for runtime asset instancing.
@@ -106,7 +106,7 @@ See [`RESULTS.md`](./RESULTS.md) for full data. Headline:
 
 **Target stage:** Stage 4.x (asset pipeline) + Stage 6+ military sandbox.
 
-**3-step migration per `agent/knowledge.md §30.4` precedent** (~600 LoC, M effort, 2-3 sessions):
+**3-step migration per `agent/knowledge.md` precedent** (~600 LoC, M effort, 2-3 sessions):
 
 1. **Step 1 (XS, ~100 LoC)** `src/asset/AssetCatalog.{hpp,cpp}` + env gate.
 2. **Step 2 (M, ~300 LoC)** per-strategy implementation in `src/asset/` (A primary, B/C/E optional).

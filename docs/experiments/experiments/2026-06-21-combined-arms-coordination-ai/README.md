@@ -47,7 +47,7 @@
 
 ## 2. Prior art
 
-Web-research complete via direct `webfetch` to canonical sources (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list, **DuckDuckGo HTML endpoint CAPTCHA blocked**, **Brave 429**, **Startpage primary working this session**). **15 primary + 8 cross-references verified** в `sources.md`:
+Web-research complete via direct `webfetch` to canonical sources (Exa MCP HTTP 429 persistent per the web_search fallback chain, **DuckDuckGo HTML endpoint CAPTCHA blocked**, **Brave 429**, **Startpage primary working this session**). **15 primary + 8 cross-references verified** в `sources.md`:
 
 **Canonical academic / industry references:**
 
@@ -163,7 +163,7 @@ See [`RESULTS.md`](./RESULTS.md) for full per-strategy × per-scene CPU cost + m
 
 **Target stage:** Stage 6+ military sandbox activation (deferred per `agent/workspace.md §2` line 36 operator 8x planning decision).
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent, ~450 LoC, M effort, 2-3 sessions):**
+**Concrete changes (3-step migration per `agent/knowledge.md` precedent, ~450 LoC, M effort, 2-3 sessions):**
 
 - **Step 1 (XS, ~80 LoC):** `src/ai/CombinedArmsCoordinator.{hpp,cpp}` foundation.
   - `enum class CoordStrategy { NAIVE, CENTRAL, HIERARCHICAL, BLACKBOARD, HTN };`
@@ -195,7 +195,7 @@ See [`RESULTS.md`](./RESULTS.md) for full per-strategy × per-scene CPU cost + m
 - Lockstep-deterministic: same seed → same strategic commits (verified via re-run test).
 - Mission success ≥ 0.95 for balanced forces (target met: 1.0 in all measured scenes).
 
-**Dependencies:** requires Stage 5.x ECS Flecs (`agent/knowledge.md §30`), Flecs-registered unit/sector components, deterministic simulation foundation (`lockstep-state-sync-hybrid-netcode` Steps 1+2).
+**Dependencies:** requires Stage 5.x ECS Flecs (`agent/knowledge.md`), Flecs-registered unit/sector components, deterministic simulation foundation (`lockstep-state-sync-hybrid-netcode` Steps 1+2).
 
 ---
 
@@ -207,7 +207,7 @@ See [`sources.md`](./sources.md) for 15 primary + 8 cross-references with verifi
 
 ## 9. Mapping to ProjectV hot-path
 
-- **Engine area:** `src/ai/CombinedArmsCoordinator.{hpp,cpp}` (new module) + integration with existing `src/ai/BehaviorTree.{hpp,cpp}` (per closed `2026-06-21-hierarchical-tactical-ai-btree`) + Flecs ECS per `agent/knowledge.md` §30.
+- **Engine area:** `src/ai/CombinedArmsCoordinator.{hpp,cpp}` (new module) + integration with existing `src/ai/BehaviorTree.{hpp,cpp}` (per closed `2026-06-21-hierarchical-tactical-ai-btree`) + Flecs ECS per `agent/knowledge.md`.
 - **Caveats:**
   - CPU-only analytical model; no real Vulkan dispatch, no real Flecs overhead.
   - Synthetic enemy contacts (Poisson) — production would use closed `recon-intel-fog-of-war` [yes] for real contact distribution.

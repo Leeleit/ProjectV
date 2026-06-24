@@ -105,7 +105,7 @@ Output: `build/results.csv` (126 rows = 1 header + 125 data).
 **Что делать mainline:**
 
 1. **Implement B_SimpleProximity** as the default mine detection path:
-   - `agent/knowledge.md §X` (new section): mine detection = O(N) loop with distance² check, target <1 ns/mine.
+   - `agent/knowledge.md` (новая секция): mine detection = O(N) loop with distance² check, target <1 ns/mine.
    - SoA layout: `Mine { px, pz, trigger_radius }` for detection hot path, expanded struct for game state.
    - Consider `min_distance²` early-out using spatial partitioning (grid/octree) for large fields.
 

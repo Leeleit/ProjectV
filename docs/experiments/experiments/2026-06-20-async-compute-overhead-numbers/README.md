@@ -4,7 +4,7 @@
 **Date opened:** 2026-06-20
 **Date closed:** 2026-06-20
 **[Sync fix r1 2026-06-21:]** Status field corrected `in-progress → concluded-verdict-yes` and `Date closed N/A → 2026-06-20` per AGENTS.md §13.5 (single-pass sync after original session left folder incomplete sync). `INDEX.md §6` Recent closed table entry + `backlog.md §Open` stale removal also performed same-pass. Original measurements + verdict preserved (см. `RESULTS.md`). Same-session sync agent.
-**Stage link:** TODO.md §2.2 (HZB cull) / §3.1 (GPU Fluid CA per `agent/knowledge.md §30.4`) / §4.1 (GPU world gen) /
+**Stage link:** TODO.md §2.2 (HZB cull) / §3.1 (GPU Fluid CA per `agent/knowledge.md`) / §4.1 (GPU world gen) /
 §5.2 (RTX BLAS build per `bindless-descriptor-overhead` Phase E)
 **Estimated effort:** M (standalone Vulkan prototype + dual-queue harness + 3 synthetic compute workloads + measurement)
 **Author:** research agent (`docs/experiments/AGENTS.md`)
@@ -43,7 +43,7 @@ build), с конкретными числами, **подтверждающим
 
 **Преимущество, если гипотеза подтвердится:**
 
-- Stage 3.1 Fluid CA (compute, 20 Hz per `agent/knowledge.md §30.1`) — overlap с main render pass = скрытые
+- Stage 3.1 Fluid CA (compute, 20 Hz per `agent/knowledge.md`) — overlap с main render pass = скрытые
   compute cost в graphics bubbles. На VoxelLab reference (24×17×24 chunks) — likely small benefit; на Stage
   4.3 draw distance (128+ chunks, large fluid world) — substantial.
 - Stage 2.2 HZB cull (compute, per-frame, ~1 ms) — natural async candidate; HZB тест по prev-frame depth +
@@ -92,7 +92,7 @@ Web-research in `sources.md`. Key sources:
     - **Workload B (medium, ~1-2 ms GPU):** HZB-cull-like gather (1024 chunk AABBs vs 256×256 HZB texture,
       output visible mask).
     - **Workload C (heavy, ~3-5 ms GPU):** Fluid CA-like ping-pong (256³ grid, atomicOr per
-      `agent/knowledge.md §30.4`, 4 substeps/frame).
+      `agent/knowledge.md`, 4 substeps/frame).
 - **Графика (dummy):** full-screen quad pass with dummy fragment shader (~0.3 ms GPU). Имитирует
   ProjectV render pass.
 - **Метрики:**
@@ -173,7 +173,7 @@ compute workloads будут тяжелее синтетики.
 
 ## 7. Integration recommendation
 
-**Target stages:** `TODO.md §2.2` (HZB cull) + `§3.1` (GPU Fluid CA per `agent/knowledge.md §30.4`) + `§4.1`
+**Target stages:** `TODO.md §2.2` (HZB cull) + `§3.1` (GPU Fluid CA per `agent/knowledge.md`) + `§4.1`
 (GPU world gen) + `§5.2` (RTX BLAS build).
 
 **Конкретные изменения:**
@@ -190,7 +190,7 @@ compute workloads будут тяжелее синтетики.
   Effort: **S** per pass.
 - **Default flip** (Step 3): `PROJECTV_ASYNC_COMPUTE=ON` default в `linux-clang-debug` + release presets.
 
-**Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent:
+**Подход:** 3-step migration per `agent/knowledge.md` precedent:
 
 1. **Foundation** (sync2 + timeline semaphores) — non-breaking, syncs всё ещё работает.
 2. **Per-pass adoption** — each pass moves to async queue incrementally, gated by env flag.
@@ -238,7 +238,7 @@ for default flip). Foundation шаг = prerequisite для Stage 3.1 GPU Fluid C
 ## 9. Mapping to ProjectV hot-path
 
 - **Mainline consumers (target stages):**
-    - `TODO.md §3.1` GPU Fluid CA — compute, ping-pong + atomicOr, 20 Hz. Per `agent/knowledge.md §30.4`.
+    - `TODO.md §3.1` GPU Fluid CA — compute, ping-pong + atomicOr, 20 Hz. Per `agent/knowledge.md`.
     - `TODO.md §2.2` HZB cull — compute, per-frame, AABB vs HZB. Per `dec-pipelines-async-compute` §2.5.
     - `TODO.md §4.1` GPU world gen — compute, batch, on chunk-creation. Per `dec-pipelines-async-compute` §2.3.
     - `TODO.md §5.2` RTX BLAS build — compute, per-chunk, deferred host ops. Per `dec-pipelines-async-compute` §2.4.
@@ -246,8 +246,8 @@ for default flip). Foundation шаг = prerequisite для Stage 3.1 GPU Fluid C
     - Current mainline = binary semaphores + `vkWaitForFences` per `agent/workspace.md §1`. Migration path =
       sync2 + timeline semaphores per `dec-pipelines-async-compute` §1 (3-step migration per `§30.4` precedent).
 - **Specific cross-refs:**
-    - `agent/knowledge.md §30.4` — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list).
-    - `agent/knowledge.md §4` — Build / verification contract (build presets, Tracy).
+    - `agent/knowledge.md` — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list).
+    - `agent/knowledge.md` — Build / verification contract (build presets, Tracy).
     - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 
 **Допущения прототипа:**

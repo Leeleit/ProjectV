@@ -36,7 +36,7 @@ for voxel vehicle assembly from 8³–32³ (512–8192 voxels) grid:
 
 ## 2. Prior art
 
-Web-research via DuckDuckGo HTML fallback (Exa HTTP 429 per `agent/knowledge.md Part B §9`). Full source list: [`sources.md`](./sources.md).
+Web-research via DuckDuckGo HTML fallback (Exa HTTP 429 per the web_search fallback chain). Full source list: [`sources.md`](./sources.md).
 
 **Games (production voxel vehicle assembly):**
 - From the Depths (2014–2026) — voxel-by-voxel, per-block material, buoyancy, custom physics solver.

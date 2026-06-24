@@ -61,7 +61,7 @@ the bottleneck is the same IIR biquad in all 4 strategies.
 form II), which cannot be trivially vectorized. To achieve actual 4-8× block speedup, the
 mainline integration requires **SoA-transposed biquad state** (per-filter SoA, process 4-8
 samples per biquad update via AVX2 packed multiply). This is a **mainline integration
-optimization** (per [`agent/knowledge.md §30.4` Step 2] 3-step migration precedent), not a
+optimization** (per [`agent/knowledge.md` Step 2] 3-step migration precedent), not a
 prototype limitation.
 
 **Per-listener LOD (E) — why not faster in this prototype:** the prototype assumes a **single
@@ -151,7 +151,7 @@ sandbox.
 - **CPU-only synthetic prototype** (no Vulkan, no miniaudio backend, no real microphone capture,
   no real network).
 - **Block SIMD optimization deferred** — mainline integration requires SoA-transposed biquad
-  state for actual 4-8× block speedup (per [`agent/knowledge.md §30.4` Step 2] 3-step
+  state for actual 4-8× block speedup (per [`agent/knowledge.md` Step 2] 3-step
   migration precedent).
 - **Per-listener LOD is single-listener** in prototype (12 m fixed). Multi-listener with
   per-listener distance is straightforward extension; cost projection above (§3) shows expected

@@ -26,7 +26,7 @@
 
 ## 2. Prior art
 
-Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list); **8 primary + 3 supplementary sources verified** в [`sources.md`](./sources.md):
+Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain); **8 primary + 3 supplementary sources verified** в [`sources.md`](./sources.md):
 
 - **Wikipedia "Bell Boeing V-22 Osprey"** [https://en.wikipedia.org/wiki/Bell_Boeing_V-22_Osprey] — V-22 production tiltrotor, **90° nacelle rotation, 12 sec minimum full conversion**, 100-kt wide conversion corridor, **"80 Jump" takeoff at 80° nacelle**, 97.5° max for rearward flight, **triple-redundant fly-by-wire**, 10% vertical lift loss over tiltwing due to wings' airflow resistance, 25 ft vertical separation in formation to avoid wake.
 - **GlobalSecurity.org "V-22 Osprey Conversion"** [https://www.globalsecurity.org/military/systems/aircraft/v-22-conversion.htm] — canonical conversion corridor description: **"at 40-80 kt wing begins to produce lift, ailerons/elevators/rudders become effective; at 100-120 kt wing fully effective, cyclic pitch control of proprotors is locked out"**, "the conversion corridor... is very wide (about 100 knots)".

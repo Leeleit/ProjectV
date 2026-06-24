@@ -311,7 +311,7 @@ future alternative option для пересмотра.**
 
 ### Почему НЕ migrate сейчас:
 
-1. **glslc = Vulkan SDK 1.4.350 default**, per `agent/knowledge.md §17` Linux baseline.
+1. **glslc = Vulkan SDK 1.4.350 default**, per `agent/knowledge.md` Linux baseline.
 2. **ProjectV's GLSL pipeline already works** — mesh shader (`voxel_mesh.mesh`),
    compute shaders, fragment shaders все валидируются 100% через glslc.
 3. **Stage 2.1 (mesh shader)** closed per `2026-06-20-mesh-shader-vs-compute-cull` — feature
@@ -349,9 +349,9 @@ future alternative option для пересмотра.**
 
 - Convert remaining 16 шейдеров (vertex/fragment/compute).
 - Flip `PROJECTV_SHADER_COMPILER` default: glslc → DXC, keeping glslc as fallback.
-- Update `agent/knowledge.md §17` Linux baseline reference.
+- Update `agent/knowledge.md` Linux baseline reference.
 - Update `agent/decisions.md` (create new entry `DXC adoption 2026-XX-XX` per
-  `agent/knowledge.md §4` Build/verification contract).
+  `agent/knowledge.md` Build/verification contract).
 
 ### Re-evaluation triggers (когда DEFER → reconsider):
 
@@ -369,9 +369,9 @@ future alternative option для пересмотра.**
 
 ### Cross-references:
 
-- `agent/knowledge.md §17` — Vulkan SDK 1.4.350 Linux baseline (glslc default)
-- `agent/knowledge.md §4` — Build / verification contract
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — Vulkan SDK 1.4.350 Linux baseline (glslc default)
+- `agent/knowledge.md` — Build / verification contract
+- `agent/knowledge.md` — 3-step migration precedent
 - `src/CMakeLists.txt:15-26` — current shader toolchain selection
 - `src/shaders/voxel_mesh.mesh` — mainline mesh shader using glslc pattern
   (validated by `2026-06-20-mesh-shader-vs-compute-cull` verdict=mixed)

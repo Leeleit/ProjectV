@@ -1,6 +1,6 @@
 # Sources — Wildfire Propagation
 
-**Captured:** 2026-06-21 (single session, web research via direct `webfetch` per `agent/knowledge.md Part B §9` fallback list)
+**Captured:** 2026-06-21 (single session, web research via direct `webfetch` per the web_search fallback chain)
 **Access path:** Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked + Startpage/Brave/Searx returned 0/429/403 → **working: direct `webfetch` to canonical Wikipedia URLs only**
 
 ---

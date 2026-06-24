@@ -57,7 +57,7 @@ oneTBB), ~25 sources. Полный список: `sources.md`.
 6. **ptsouchlos/thread-pool benchmarks на Zen 3 5800X** — `task_thread_pool` (no WS) +9.7% vs `dp::thread_pool`,
    `BS::thread_pool` -9.8% vs baseline — **work-stealing НЕ всегда побеждает** для small tasks.
 
-**Tier 4 R&D marker per `agent/knowledge.md` §29.0** line 887: «`std::execution` (P2300, Senders/Receivers) — нужна Job
+**Tier 4 R&D marker per `agent/knowledge.md`** line 887: «`std::execution` (P2300, Senders/Receivers) — нужна Job
 System, отдельный slice» — direct prior art, identifies this experiment as Tier 4 R&D, not mainline blocker.
 
 **Cross-axis continuity:**
@@ -76,7 +76,7 @@ System, отдельный slice» — direct prior art, identifies this experim
 **Тип эксперимента:** prototype + benchmark (per `benchmarks/methodology.md`).
 
 **Сцена:** synthetic ProjectV chunk generation workload — 512 voxels/chunk (8³ = ProjectV chunkSize per
-`agent/knowledge.md §29.0` per `src/voxel/VoxelWorld.hpp:78`), per-chunk splitmix32 hash (имитирует material ID
+`agent/knowledge.md` per `src/voxel/VoxelWorld.hpp:78`), per-chunk splitmix32 hash (имитирует material ID
 assignment) + 64-block fill-mask (имитирует SVDAG 64-ary tree top-level structure). Per-chunk output = 8 bytes (one
 cache line). Total per-chunk compute ≈ 0.4 µs на 5 GHz Zen 3.
 
@@ -186,7 +186,7 @@ latency = serial, all workloads.
 1. **`std::execution` (P2300) — НЕ mainline default** для CPU-side batch dispatch. P2300 = framework, не pool. Real
    pool = `stdexec::static_thread_pool` или external. Sender-chain overhead (lazy eval, type erasure) **предположительно
    хуже** чем `BS::thread_pool` для hot-path batch dispatch (per my finding, не измерено — callout as follow-up).
-2. **Work-stealing — НЕ auto-win** для small tasks. Per `agent/knowledge.md` line 879 SIMD-frustum-cull priority (1500+
+2. **Work-stealing — НЕ auto-win** для small tasks. Per `agent/knowledge.md` SIMD-frustum-cull priority (1500+
    dot products per frame) — аналогично: per-entity ECS bookkeeping = small task. **«Use work-stealing = best default» —
    common wisdom, NOT measured in this workload.**
 3. **Sweet spot для ProjectV mainline = serial dispatcher** для большинства CPU-side workloads. SMT + thread pool =
@@ -225,8 +225,7 @@ parallel GPU = правильное распределение.
 **Рекомендация 3 (DEFER, Stage 6.1):** **Flecs `ecs_progress` multi-threading — отдельный experiment.** Per
 `TODO.md §6.1` Step 6 «NUMA-aware allocation may shift tradeoff» — нужно измерить конкретные ECS systems (HZB cull /
 Fluid CA bookkeeping / Incremental Jolt / VCT voxelize) на их actual per-system working set. Если working set > L3, pool
-helps; if < L3, serial is best. **Open question, defer до Stage 6.1 implementation.** Per `agent/knowledge.md §29.0`
-line 887 — «`std::execution` (P2300) — нужна Job System, отдельный slice» — это Tier 4 R&D, не mainline blocker.
+helps; if < L3, serial is best. **Open question, defer до Stage 6.1 implementation.** Per `agent/knowledge.md` — «`std::execution` (P2300) — нужна Job System, отдельный slice» — это Tier 4 R&D, не mainline blocker.
 
 **Рекомендация 4 (PARKED, future):** **Stage 4.3 lift draw distance (128+ chunks) может shift tradeoff.** При 128
 chunks × 4 KiB = 512 KiB (still < L3 32 MiB), so serial still wins. При active streaming или async gen across 1000+

@@ -5,7 +5,7 @@
 
 ## ProjectV mainline CMakeLists.txt integration
 
-Per `agent/knowledge.md §30.4` 3-step migration precedent + `agent/knowledge.md §4` build/verification
+Per `agent/knowledge.md` 3-step migration precedent + `agent/knowledge.md` build/verification
 contract, добавить:
 
 ```cmake
@@ -298,8 +298,8 @@ endif()
 
 ## Cross-references
 
-- `agent/knowledge.md §547` — `PROJECTV_ENABLE_RENDERDOC_MARKERS` (existing integration)
-- `agent/knowledge.md §4` — build/verification contract
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — `PROJECTV_ENABLE_RENDERDOC_MARKERS` (existing integration)
+- `agent/knowledge.md` — build/verification contract
+- `agent/knowledge.md` — 3-step migration precedent
 - `docs/experiments/2026-06-21-renderdoc-ci-capture/sources.md` — primary references
 - `docs/experiments/2026-06-21-renderdoc-ci-capture/RESULTS.md` — measured results

@@ -1,4 +1,4 @@
-macro(projectv_test_add_modules TARGET)
+macro(projectv_test_add_modules TARGET) # pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
     if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
         target_sources(${TARGET} PRIVATE
             FILE_SET CXX_MODULES FILES

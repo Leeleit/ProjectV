@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-flanking-maneuver-ai`
 
-Web-research completed `2026-06-21` via `webfetch` (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9`; DuckDuckGo HTML CAPTCHA blocked; fallback = direct canonical URLs).
+Web-research completed `2026-06-21` via `webfetch` (Exa `web_search` HTTP 429 persistent per the web_search fallback chain; DuckDuckGo HTML CAPTCHA blocked; fallback = direct canonical URLs).
 
 **Tier 1 — Primary sources (directly cited in experiment):**
 
@@ -63,6 +63,6 @@ Web-research completed `2026-06-21` via `webfetch` (Exa `web_search` HTTP 429 pe
 
 **Note on game-specific references (WARNO, Supreme Commander, Killzone 2 FLASK, Halo 2 BTS, Raven Q3A bot AI):**
 
-These game-specific AI architectures were referenced in the hypothesis but could not be verified to primary sources in this session due to Exa 429 + DuckDuckGo CAPTCHA blockers per `agent/knowledge.md Part B §9`. They are documented as canonical precedent but the experiment does not depend on them — the prototype uses production-validated generic algorithms (Dijkstra flow field + behavior tree composition) backed by Reynolds 1987/1999 + Colledanchise 2014/2018 + Isla 2005.
+These game-specific AI architectures were referenced in the hypothesis but could not be verified to primary sources in this session due to Exa 429 + DuckDuckGo CAPTCHA blockers per the web_search fallback chain. They are documented as canonical precedent but the experiment does not depend on them — the prototype uses production-validated generic algorithms (Dijkstra flow field + behavior tree composition) backed by Reynolds 1987/1999 + Colledanchise 2014/2018 + Isla 2005.
 
 The cross-axis orthogonality to closed `cover-system-terrain-adaptive` + `flow-field-pathfinding-10k-units` + `hierarchical-tactical-ai-btree` + `suppression-mechanics` provides sufficient SOTA validation for the experimental methodology.

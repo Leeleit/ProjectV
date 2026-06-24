@@ -131,7 +131,7 @@
 
 ## Search log
 
-- Exa `web_search` — HTTP 429 persistent (per `agent/knowledge.md Part B §9` line 1424 fallback list)
+- Exa `web_search` — HTTP 429 persistent (per the web_search fallback chain)
 - DuckDuckGo HTML (`html.duckduckgo.com/html/?q=...`) — CAPTCHA blocked (botnet detection)
 - **Direct `webfetch` to canonical URLs** — 5/5 successful (S1-S5)
 

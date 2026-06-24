@@ -144,7 +144,7 @@ void main() {
 }
 
 // =============================================================================
-// STRATEGY B: AtomicCompareExchange_CAS (per agent/knowledge.md §30.4 contract)
+// STRATEGY B: AtomicCompareExchange_CAS (per `agent/knowledge.md` contract)
 // =============================================================================
 #elif STRATEGY_ID == 1
 void main() {

@@ -46,7 +46,7 @@
 
 ## 2. Prior art
 
-Web-research (Exa HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424 fallback list) — use direct `webfetch` to canonical URLs (arXiv, project pages, official docs). Sources verified в [`sources.md`](./sources.md) Tier 1-3:
+Web-research (Exa HTTP 429 persistent this session per the web_search fallback chain) — use direct `webfetch` to canonical URLs (arXiv, project pages, official docs). Sources verified в [`sources.md`](./sources.md) Tier 1-3:
 
 **Tier 1 — foundational papers:**
 
@@ -81,7 +81,7 @@ Web-research (Exa HTTP 429 persistent this session per `agent/knowledge.md Part 
 
 Cross-refs в ProjectV:
 - `TODO.md §5.x` (Visual Polish) + `§4.3` (lift draw distance) — где 3DGS мог бы помочь для дальных декоративных LOD.
-- `agent/knowledge.md §30.4` (3-step migration precedent).
+- `agent/knowledge.md` (3-step migration precedent).
 - `hardware-profile.md §1/§3` (Zen 3 5800X + RTX 3060 Ti = 38 RT cores GA104 Ampere).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
 
@@ -202,7 +202,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 
 **Target stage:** Stage 5.x (Visual Polish) opt-in + Stage 6+ (Content Tooling) opt-in.
 
-**Конкретные изменения (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Конкретные изменения (3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (XS, ~80 LoC)** `src/render/gsplat/GsplatAsset.{hpp,cpp}`:
   - PLY / `.splat` loader (per `huggingface/gsplat.js` MIT reference, license-compatible)

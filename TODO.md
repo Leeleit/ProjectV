@@ -75,7 +75,7 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 - `kVctConeDirectionCount` constant в `voxel.frag` (сейчас 6, hard-coded)
 
 **Ключевые файлы:** `src/shaders/voxel.frag` (`kVctConeDirectionCount`, cone generation),
-`agent/knowledge.md §15` (VCT contract).
+`agent/knowledge.md` (VCT contract).
 
 **DoD:**
 - Reference scene `VoxelLab` lighting parity c профессиональным reference render
@@ -99,7 +99,7 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 **Конкретно:**
 - Halton sequence (2,3) jitter уже есть, проверить distribution
 - YCoCg clamping уже есть, добавить history clamping по per-pixel variance threshold
-- Neighborhood radius per `agent/knowledge.md §15` — current default 1, попробовать 1.5/2
+- Neighborhood radius per `agent/knowledge.md` — current default 1, попробовать 1.5/2
 - Catmull-Rom 9-tap filter на history sample (vs текущий bilinear)
 
 **Ключевые файлы:** `src/render/TaaResolvePipeline.{hpp,cpp}`, `src/shaders/taa_resolve.frag`,
@@ -160,7 +160,7 @@ A/B/C/D ниже.
   depthBias*4.0)` → `max(normalBias*0.2, depthBias*2.0)`) — слишком маленькая компонента
   относительно доминирующего `receiverDepthBias`.
 - Доминирующий источник Peter Panning — `receiverDepthBias` formula direction (anti-shadow), см.
-  `agent/knowledge.md §15` lines 1318-1319 + handoff `/tmp/handoff-shadow-peter-panning-fix.md`.
+  `agent/knowledge.md` + handoff `/tmp/handoff-shadow-peter-panning-fix.md`.
 - Несколько предыдущих агентов пытались чинить — не получилось. Стратегический разворот на RTX —
   более чистое решение, чем продолжать крутить bias coefficients. Плюс полное удаление CSM
   экономит ~1300 LoC и убирает целый класс артефактов.
@@ -279,7 +279,7 @@ RTX shadows включаются автоматически — никаких e
 - `src/render/RayTracedShadows.cpp:Initialize` — отказ при non-RTX GPU вместо silent fallback
 - `src/render/Renderer.cpp` — wire auto-detected RTX path
 - `src/app/main.cpp` или где проверяется GPU support — добавить hard fail для non-RTX
-- `agent/knowledge.md §15` — обновить запись 1318 (peter-panning fix → неактуальна, RTX shadows
+- `agent/knowledge.md` — обновить запись 1318 (peter-panning fix → неактуальна, RTX shadows
   делают её moot)
 
 **Hardware target policy (новый):**
@@ -342,14 +342,14 @@ RTX shadows — единственный shadow path. Минус ~1300 LoC legac
 
 **DoD:**
 - `grep -r "BuildSunShadow\|SampleSunShadow\|sunShadowParams\|shadowCascadeDepthSplits" src/`
-  → пусто (или только в COMMENTS.md / agent/knowledge.md исторические ссылки)
+  → пусто (или только исторические ссылки в agent/knowledge.md)
 - `git grep "CSM" src/ tests/ CMakePresets.json` → пусто
 - `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` → green, 0 warnings
 - `ctest` → 38/38 pass (без `ProjectVSunShadowCascadeSplitsTests`), `ProjectVRayTracedShadowTests`
   11/11 pass
 - `PROJECTV_HW_RAY_TRACING=ON bin/ProjectV` → VoxelLab работает на RTX shadows, без CSM fallback,
   никаких `#ifdef` в коде
-- Документация (CHANGELOG, COMMENTS, agent/knowledge.md §15, agent/workspace.md) описывает
+- Документация (CHANGELOG, `agent/knowledge.md`, agent/workspace.md) описывает
   полное удаление CSM и почему это правильное решение
 - Сравнительный smoke `PROJECTV_HW_RAY_TRACING=ON` vs pre-5.2.D — визуально идентично
   (RTX shadows заменили CSM полностью)
@@ -521,7 +521,8 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
 - Texture VRAM cap: не достигнут (нет текстур вообще)
 
 **Что сделано** (не теряется):
-- 3D clipmap infrastructure landed в `VulkanVoxelizePipeline` (per `agent/knowledge.md §15` lighting
+
+- 3D clipmap infrastructure landed в `VulkanVoxelizePipeline` (per `agent/knowledge.md` lighting
   contract) — pattern переиспользуема для SVT page table когда понадобится
 - `feedback buffer` архитектура отработана в VCT (volume occupancy feedback) — готова как
   template для SVT page miss feedback
@@ -536,7 +537,7 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
 
 1. **Производительность:** Оптимизации проверяются бенчмарками (`ProjectVTests`,
    `ProjectVFrustumCullBenchmark`, `ProjectVShadowProjectionBenchmark`). Критерий принятия —
-   ускорение hot path на **5–10%** (per `agent/knowledge.md Part A §2`).
+   ускорение hot path на **5–10%** (per engineering contracts в `agent/knowledge.md`).
 
 2. **Детерминизм Fluid CA:** Никаких FP в simulation. Итерация строго детерминирована
    (z, y, x ascending).
@@ -550,7 +551,8 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
    - `bool` return + `PV_ASSERT` на инвариантах для hot path (render, cull, simulation)
    - Jolt includes: `<Jolt/Jolt.h>` обязан быть ПЕРВЫМ во всех TU, использующих физику
 
-5. **Комментарии:** Код должен быть чистым. Документация извлекается в `COMMENTS.md`.
+5. **Комментарии:** поясняющие комментарии остаются в коде одной строкой после комментируемой строки (см. AGENTS.md
+   §5.7).
    `// EVIL:` только для неочевидных хаков или захардкоженных математических констант.
 
 6. **Стратегический порядок:** RTX shadows primary (5.2.A→B→C, multi-session) → CSM removal (5.2.D)
@@ -565,7 +567,7 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
 ## История (closed roadmap)
 
 Полная история выполненных задач — `CHANGELOG.md` (Keep a Changelog формат). Per-task design
-rationale — `COMMENTS.md`. Долговечные технические факты — `agent/knowledge.md`. Per-session
+rationale — в комментариях кода (AGENTS.md §5.7). Долговечные технические факты — `agent/knowledge.md`. Per-session
 narrative — `agent/workspace.md`.
 
 Краткая сводка по фазам:

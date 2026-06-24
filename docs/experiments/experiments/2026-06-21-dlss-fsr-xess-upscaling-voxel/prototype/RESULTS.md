@@ -174,7 +174,7 @@ For ProjectV mainline integration decision, applying `optimization-philosophy.md
 6. **Frame Generation [DLSS MFG 3x/6x, FSR 3 AFMF, XeSS 2 XeSS-FG] = OUT OF SCOPE** (requires latency budget + Reflex/XeLL integration; separate experiment).
 7. **Real GPU measurements required** for DLSS 4.5 + XeSS 2 XMX paths (analytical model is conservative for Tensor Core / XMX hardware).
 
-**Recommended mainline integration: 3-step migration per `agent/knowledge.md §30.4` precedent.**
+**Recommended mainline integration: 3-step migration per `agent/knowledge.md` precedent.**
 
 ---
 
@@ -182,7 +182,7 @@ For ProjectV mainline integration decision, applying `optimization-philosophy.md
 
 **Target stage:** `TODO.md §4.3` (Stage 4.3 Lift Draw Distance Cap) + `TODO.md §5` (Stage 5.x GI & Temporal post-process).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~30 LoC, 1 session):** Foundation
   - Add `enum class UpscalerBackend { None, FSR31, XeSS2, DLSS45, DirectSR }` в `src/render/RenderTypes.hpp`.

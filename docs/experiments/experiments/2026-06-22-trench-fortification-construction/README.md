@@ -52,7 +52,7 @@ match infantry engineering doctrine.
 ## 2. Prior art
 
 Web-research done via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo CAPTCHA
-blocked per `agent/knowledge.md Part B §9` line 1424 fallback list, 2026-06-22 session). **10 Tier 1 primary
+blocked per the web_search fallback chain, 2026-06-22 session). **10 Tier 1 primary
 + 4 Tier 2 supplementary = 14 sources verified** в [`sources.md`](./sources.md):
 
 - **Wikipedia "Trench warfare"** — 3 parallel lines (front/support/reserve) at 65-90m / 90-270m spacing,
@@ -248,7 +248,7 @@ D @ defensive_complex_20). **Mainline integration is feasible** (~600 LoC, 3-ste
 **Target stage:** `Stage 3.2 destruction` (per voxel mutation) + `Stage 6+ military sandbox Tier 1
 Physics + Tier 2 AI` (per `agent/workspace.md §2` operator 8x planning decision).
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~600 LoC total, M effort, 2-3
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~600 LoC total, M effort, 2-3
 sessions, **deferred до Stage 3.2 / Stage 6+ dedicated session per `agent/workspace.md §2` line 36
 operator 8x planning decision**):
 
@@ -341,8 +341,7 @@ constexpr f64 kAABBTestNs = 30.0;
 - **Stage 6+ military sandbox activation** (per `agent/workspace.md §2` line 36) — when squad-level
   construction becomes a real gameplay activity.
 
-**Estimated effort:** M (2-3 sessions, ~600 LoC, follows 3-step migration pattern from `agent/knowledge.md
-§30.4`).
+**Estimated effort:** M (2-3 sessions, ~600 LoC, follows 3-step migration pattern from `agent/knowledge.md`).
 
 ---
 
@@ -397,7 +396,7 @@ Closed ProjectV experiments (cross-references per `AGENTS.md §13.7`):
 **Что осталось неизмеренным:**
 
 - **Driver overhead** — Vulkan staging buffer copy + vkQueueSubmit for voxel mutation (not in CPU model).
-- **Flecs ECS component write overhead** — ~50 ns/voxel for SoA store (per `agent/knowledge.md §30.4`
+- **Flecs ECS component write overhead** — ~50 ns/voxel for SoA store (per `agent/knowledge.md`
   precedent).
 - **Chunk mesh re-generation trigger** — 1 mesh rebuild per chunk on dirty signal (per closed
   `extended-block-multivoxel-mesh` yes). For defensive_complex_20 = 20+ chunks, that's 20 mesh rebuilds

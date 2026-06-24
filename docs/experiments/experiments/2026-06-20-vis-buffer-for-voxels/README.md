@@ -119,7 +119,7 @@ Web-research (5 batch queries, 15+ sources, все верифицированы)
 
 - Same camera + sun + materials для обоих paths.
 - **Same framebuffer hash** = visual equivalence.
-- Vulkan 1.4 dynamic rendering (per `agent/knowledge.md §17` Linux baseline).
+- Vulkan 1.4 dynamic rendering (per `agent/knowledge.md` Linux baseline).
 
 **Аппаратура:** RTX 3060 Ti (GA104 Ampere, Vulkan 1.4.341, driver NVIDIA 610.43.02).
 
@@ -341,8 +341,8 @@ pipeline (Naive Greedy main path, 1920×1080 typical, RTX 3060 Ti dev host). **H
 - `src/render/Renderer.cpp:540-863` — `RecordGraphicsCommands` orchestration.
   `RecordShadowCommands` (line 552) + opaque pass (line 776) + transparent pass (line 836).
 - `TODO.md §5.2` — RTX shadows feature-flag (where vis-buffer integration would land).
-- `agent/knowledge.md §25` — greedy meshing per-axis dispatch rationale.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — greedy meshing per-axis dispatch rationale.
+- `agent/knowledge.md` — 3-step migration precedent.
 
 ---
 

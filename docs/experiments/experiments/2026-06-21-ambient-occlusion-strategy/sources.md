@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-ambient-occlusion-strategy`
 
-Web-research Phase B complete via `web_search` (Exa) + DuckDuckGo HTML fallback per `agent/knowledge.md Part B §9`
+Web-research Phase B complete via `web_search` (Exa) + DuckDuckGo HTML fallback per the web_search fallback chain
 line 1424 (Exa HTTP 429 persistent). **9 primary sources verified** + supplementary production references.
 
 ---

@@ -173,7 +173,7 @@ the same machine + same compiler + same instruction set. Cross-platform requires
 - `_controlfp(_PC_24, _MCW_PC)` (MSVC) or `fesetenv(FE_TONEAREST)` (POSIX) at startup
 - IEEE 754 strict mode (Clang `-fno-fast-math`, MSVC `/fp:strict`)
 - Avoid transcendental functions (sin/cos/exp/log) or wrap in non-optimized versions
-- Document per `agent/knowledge.md §30.4` precedent.
+- Document per `agent/knowledge.md` precedent.
 
 ProjectV mainline should:
 - Use `fenv.h` to set rounding mode at startup

@@ -34,7 +34,7 @@ cache-line waste (полезные 8-12 байт из 32-48 байт entity-stru
 
 | Layout                            | Source                                                                         | Почему рассматривается                                                                                                                               |
 |:----------------------------------|:-------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| **AoS** (baseline, current)       | `src/voxel/VoxelWorld.hpp:88` (`std::vector<uint8_t>`)                         | Per `agent/knowledge.md §1605` A9 — текущее voxel storage = 1 B/voxel AoS (byte-per-voxel). ECS components = per-entity struct в legacy Flecs idiom. |
+| **AoS** (baseline, current)       | `src/voxel/VoxelWorld.hpp:88` (`std::vector<uint8_t>`)                         | Per `agent/knowledge.md` A9 — текущее voxel storage = 1 B/voxel AoS (byte-per-voxel). ECS components = per-entity struct в legacy Flecs idiom. |
 | **SoA** (Flecs chunk layout)      | Flecs docs, `external/flecs/`                                                  | Flecs default chunk-component storage = SoA within chunk, AoS across chunks (32-64 entities per chunk).                                              |
 | **Hot-only SoA** (split hot/cold) | `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` §Hot/Cold Splitting | Только 2-3 hot поля в SoA, остальные в AoS. Trade-off: less code complexity vs full SoA.                                                             |
 | **Hybrid (per-system override)**  | Flecs `ECS_DECLARE` + custom `on_set` hooks                                    | Разные системы — разные layouts. More code complexity but optimal for each pattern.                                                                  |
@@ -143,7 +143,7 @@ Web-research выполнен `2026-06-20` (Exa per `docs/experiments/AGENTS.md 
 
 **ProjectV internal cross-refs:**
 
-- `agent/knowledge.md §1605` A9: «Voxel storage `std::vector<uint8_t>` (AoS byte-per-voxel) — 1 byte/voxel без
+- `agent/knowledge.md` A9: «Voxel storage `std::vector<uint8_t>` (AoS byte-per-voxel) — 1 byte/voxel без
   derivative histograms, без SoA material distribution, без SIMD». Прямая связь — current mainline voxel storage =
   AoS, неизвестно, когда SoA выигрывает.
 - `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` §SoA vs AoS: книжная полка metaphor, mermaid diagram
@@ -154,7 +154,7 @@ Web-research выполнен `2026-06-20` (Exa per `docs/experiments/AGENTS.md 
   `BenchmarkAutomationTickSystem`, `LookDevCaptureTickSystem`) — есть downstream потребитель результатов.
 - `TODO.md §6.1`: Flecs ECS migration (incremental). Stage 2.2 / 3.1 / 3.2 / 5.1 все planned как Flecs systems per
   §6.1 Step (2)-(4).
-- `external/flecs/` v4.1.5 в проекте (per `agent/knowledge.md §513`). Поддерживает chunk-component storage (SoA
+- `external/flecs/` v4.1.5 в проекте (per `agent/knowledge.md`). Поддерживает chunk-component storage (SoA
   within chunk per Flecs design).
 
 ---
@@ -366,7 +366,7 @@ Stage 3.1 (Fluid CA bookkeeping) / Stage 3.2 (Incremental Jolt) / Stage 5.1 (VCT
       per-chunk lifecycle, Stage 5.1 VCT voxelize bookkeeping) должен использовать Flecs default
       chunk-component SoA storage. **Не возвращаться на AoS POD-struct per entity** (legacy Flecs idiom).
     - **Почему**: Измерения показали 1.44-3.86× throughput gain (crosses 5% threshold by 40-280%).
-      Flecs archetype storage default уже SoA per `agent/knowledge.md §1605` A9 alternative + Mertens 2024
+      Flecs archetype storage default уже SoA per `agent/knowledge.md` A9 alternative + Mertens 2024
       `external/flecs/` v4.1.5 design.
     - **Файлы**: новые файлы per Stage 2-5 implementation; правки не требуются в существующих — Flecs
       automatically uses SoA при `ECS_DECLARE` компонентов.
@@ -433,7 +433,7 @@ Stage 3.1 (Fluid CA bookkeeping) / Stage 3.2 (Incremental Jolt) / Stage 5.1 (VCT
 **Критерии приёмки (для mainline после моих рекомендаций):**
 
 - [ ] Все **новые** Flecs systems в Stage 1.3+ используют Flecs chunk-component SoA (не AoS POD-struct).
-- [ ] ctest baseline (16/16 per `agent/knowledge.md §4`) preserved + new `EcsLayoutTests` test suite
+- [ ] ctest baseline (16/16 per `agent/knowledge.md`) preserved + new `EcsLayoutTests` test suite
   validates SoA layout (Flecs API query returns archetype chunk columns).
 - [ ] TracyPlot для ECS hot systems (raycast, physics step, render cull) показывает ≥ 5% improvement
   vs hypothetical AoS baseline на VoxelLab scene (per `TODO.md §6.1` acceptance).
@@ -445,7 +445,7 @@ Stage 3.1 (Fluid CA bookkeeping) / Stage 3.2 (Incremental Jolt) / Stage 5.1 (VCT
 
 **Зависимости:**
 
-- **Pre-required:** Flecs v4.1.5 уже в проекте (`external/flecs/` per `agent/knowledge.md §513`).
+- **Pre-required:** Flecs v4.1.5 уже в проекте (`external/flecs/` per `agent/knowledge.md`).
 - **Pre-required:** Stage 6.1 incremental migration уже в работе (per `agent/workspace.md §1`
   Phase 5: VoxelInteractionTickSystem, BenchmarkAutomationTickSystem, LookDevCaptureTickSystem).
 - **Unblocks:** все Stage 2.2 / 3.1 / 3.2 / 5.1 ECS systems могут proceed с уверенностью
@@ -505,7 +505,7 @@ arXiv 2512.07841, Soren Saket, Bevy Archetypes): см. `sources.md`.
 - `src/voxel/VoxelWorld.hpp:88` (current AoS `std::vector<uint8_t>` byte-per-voxel) — **not** directly
   modeled (single-field AoS, not multi-field ECS struct), but принцип измерения транслируется: any
   `std::vector<Entity>` pattern loses 1.44-3.86× vs parallel SoA arrays.
-- `src/ecs/EcsWorld.ixx` (per `agent/knowledge.md §883` Tier 2 modules, Flecs 4.1.5 integration) —
+- `src/ecs/EcsWorld.ixx` (per `agent/knowledge.md` Tier 2 modules, Flecs 4.1.5 integration) —
   primary artifact. Flecs chunk-component storage already SoA per Flecs v4.1.5 design.
 - `src/physics/PhysicsWorld.cpp::SyncPhysicsWorld` — Stage 3.2 will convert per-chunk body lifecycle
   к Flecs system per `TODO.md §6.1` Step (3). Current Stage 3.2 partial implementation: per-chunk
@@ -550,7 +550,7 @@ arXiv 2512.07841, Soren Saket, Bevy Archetypes): см. `sources.md`.
 
 - `src/voxel/VoxelWorld.hpp:88` (current AoS `std::vector<uint8_t>` storage) — Stage 1.0 baseline; это byte-level AoS (1
   field only), не multi-field ECS struct, но **принцип измерения** транслируется.
-- `src/ecs/EcsWorld.ixx` (per `agent/knowledge.md §883` Tier 2 modules) — Flecs ECS integration site.
+- `src/ecs/EcsWorld.ixx` (per `agent/knowledge.md` Tier 2 modules) — Flecs ECS integration site.
 - `src/physics/PhysicsWorld.cpp::SyncPhysicsWorld` — typical physics-step ECS loop (Stage 3.2 will make this a Flecs
   system per `TODO.md §6.1` Step 3).
 - `src/voxel/VoxelRaycast.{hpp,cpp}` — typical raycast-per-entity ECS loop (Stage 5.1 VCT voxelize will be Flecs

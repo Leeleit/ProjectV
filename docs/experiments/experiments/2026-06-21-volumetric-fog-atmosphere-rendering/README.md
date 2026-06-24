@@ -71,7 +71,7 @@ Web-research Phase A complete (2 batches, ~20 results). 30 sources verified per
   in mainline, integration can leverage existing capture pipeline).
 - `hardware-profile.md §4` — `VK_KHR_acceleration_structure` rev 13 + `VK_KHR_ray_query` rev 1 + RT cores
   RTX 3060 Ti = GA104, 38 RT cores gen 2 per NVIDIA whitepaper 2020.
-- `agent/knowledge.md §30.4` — 3-step migration precedent (used by 25+ closed experiments).
+- `agent/knowledge.md` — 3-step migration precedent (used by 25+ closed experiments).
 
 ---
 
@@ -176,7 +176,7 @@ validated Frostbite/TLoU2/Enshrouded production pattern).
 **Подход:** Per-platform tier dispatcher via `PROJECTV_VOLUMETRIC_FOG=NONE|ANALYTIC|FROXEL|RAYMARCH|RTX_HYBRID|HYBRID`
 env flag + automatic fallback chain (RTX_HYBRID → FROXEL → ANALYTIC if HW RT unavailable).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 - **Step 1 (XS, ~50 LoC)** `VolumetricFogController` foundation + froxel grid setup + env gate +
   `vkCmdBeginRendering` integration в `Renderer.cpp::DrawFrame` post-process slot.
 - **Step 2 (M, ~400 LoC)** per-strategy implementation: A (free, preserve current), B (compute injection +
@@ -219,7 +219,7 @@ planning decision per `agent/workspace.md §2` line 36.
 
 30 sources verified per [`sources.md`](./sources.md) Tier 1 (canonical/production) + Tier 2 (open-source)
 + Tier 3 (supplementary). Web-research via `webfetch` DuckDuckGo HTML endpoint (Exa MCP HTTP 429
-persistent per `agent/knowledge.md Part B §9`).
+persistent per the web_search fallback chain).
 
 ---
 

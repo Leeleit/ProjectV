@@ -191,7 +191,7 @@ screens, intro cinematics).
 - **New file:** `src/video/cutscene_player.{hpp,cpp}` (~150 LoC) — high-level cutscene/replay API.
 - **New file:** `src/shaders/video_sampler.frag` (~30 LoC) — YCbCr → RGB sampling via `VK_KHR_sampler_ycbcr_conversion`.
 
-**Подход (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Подход (3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (S, ~150 LoC)** — Foundation `VideoDecoderController` + `VulkanBootstrap.cpp` extension probe
   (`vkEnumerateDeviceExtensionProperties` + `vkGetPhysicalDeviceQueueFamilyProperties2` for `VK_QUEUE_VIDEO_DECODE_BIT_KHR`)

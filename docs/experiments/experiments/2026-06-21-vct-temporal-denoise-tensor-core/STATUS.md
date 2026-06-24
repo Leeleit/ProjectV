@@ -2,7 +2,7 @@
 
 **Status:** closed (`concluded-verdict-mixed`)
 **Phase:** A (scaffold) → B (web-research, ~15 primary sources verified via webfetch +
-DuckDuckGo HTML fallback per `agent/knowledge.md Part B §9` + operator directive; Exa MCP
+DuckDuckGo HTML fallback per the web_search fallback chain + operator directive; Exa MCP
 HTTP 429 persistent) → C (prototype, standalone C++26 CPU temporal denoise simulator, 75
 measurements, 78 sec wall time) → D (close, RESULTS.md + INDEX §6 + backlog §Closed synced).
 **Last action:** `2026-06-21` — Phase D close complete.

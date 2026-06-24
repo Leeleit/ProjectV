@@ -35,7 +35,7 @@ because per-event linear scan is O(hooks_per_event) not O(total_hooks). Priority
 ## 2. Prior art
 
 Web research 2026-06-21 via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429
-persistent; DuckDuckGo CAPTCHA-blocked per `agent/knowledge.md Part B §9` fallback list).
+persistent; DuckDuckGo CAPTCHA-blocked per the web_search fallback chain).
 **5 primary sources** verified (full citations in [`sources.md`](./sources.md)):
 
 - **Garry's Mod Wiki — `hook.Add`** ([facepunch.com/gmod/hook.Add](https://wiki.facepunch.com/gmod/hook.Add))
@@ -260,7 +260,7 @@ Full citations in [`sources.md`](./sources.md) (10 sources verified via direct `
 6. [Lua 5.1 Reference Manual](https://www.lua.org/manual/5.1/manual.html)
 
 **Tier 3 (ProjectV context):**
-7-10. Local files: `agent/knowledge.md Part B §9`, `hardware-profile.md`, `benchmarks/methodology.md`, `_TEMPLATE/README.md`.
+7-10. Local files: the web_search fallback chain, `hardware-profile.md`, `benchmarks/methodology.md`, `_TEMPLATE/README.md`.
 
 ---
 

@@ -256,9 +256,9 @@ in current Stage 0-5 priority).
      uses `WavePrefixCountBits` + `WaveActiveCountBits` per AMD GDC 2024 pattern
    - `MeshShaderMesh.comp` — mesh shader, exports meshlets to rasterizer
    - `MeshShaderPipeline.{hpp,cpp}` — feature flag `PROJECTV_MESH_SHADER_INSTANCING=ON` (default
-     OFF, gated per `agent/knowledge.md §30.4` precedent)
+     OFF, gated per `agent/knowledge.md` precedent)
 
-2. **Adoption path** (3-step migration per `agent/knowledge.md §30.4` precedent):
+2. **Adoption path** (3-step migration per `agent/knowledge.md` precedent):
    - **Step 1 (XS, ~50 LoC)**: `MeshShaderInstanceData` foundation + descriptor set + per-frame
      SSBO upload (similar to existing `OpaqueIndirectCommands` pattern в `voxel_mesh.comp:42-44`)
    - **Step 2 (M, ~400 LoC)**: amplification + mesh shader implementation, frustum cull в AS

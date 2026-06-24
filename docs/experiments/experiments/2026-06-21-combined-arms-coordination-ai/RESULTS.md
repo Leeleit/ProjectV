@@ -81,7 +81,7 @@ This experiment sits **one level above** the per-arm / per-unit AI: it composes 
 - `src/ai/BehaviorTree.hpp` (per-unit BT per closed `hierarchical-tactical-ai-btree`)
 - `src/ai/CoverSystem.{hpp,cpp}` (per closed `cover-system-terrain-adaptive`)
 - `src/ai/SuppressionComponent` (per closed `suppression-mechanics`)
-- Flecs ECS per `agent/knowledge.md` §30.
+- Flecs ECS per `agent/knowledge.md`.
 
 **Caveats:**
 - CPU-only analytical model; no real Vulkan dispatch, no real Flecs overhead measured (real Flecs query overhead adds ~5-10 ns/entity per closed `ecs-1m-entities-bottleneck` [yes]).

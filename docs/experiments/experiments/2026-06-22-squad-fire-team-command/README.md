@@ -4,7 +4,7 @@
 **Date opened:** 2026-06-22
 **Date closed:** 2026-06-22 (single session, ~2h)
 **Stage link:** independent (new game axis — military sandbox Tier 2 AI)
-**Estimated effort:** M (~450 LoC mainline migration, 1-2 sessions per `agent/knowledge.md §30.4` precedent)
+**Estimated effort:** M (~450 LoC mainline migration, 1-2 sessions per `agent/knowledge.md` precedent)
 **Author:** agent (self)
 
 ---
@@ -25,7 +25,7 @@
 ## 2. Prior art
 
 Web-research via direct `webfetch` to canonical Wikipedia URLs (Exa `web_search` HTTP 429 persistent +
-DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list);
+DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain);
 **8 primary sources verified** в [`sources.md`](./sources.md):
 
 **Tier 1 — Doctrine:**
@@ -157,7 +157,7 @@ Full per-config table in `RESULTS.md` + `build/results.csv`.
 
 **Target stage:** Stage 6+ military sandbox activation (per `agent/workspace.md §2` operator 8x planning decision).
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent (~450 LoC, M effort, 1-2 sessions):**
+**Mainline 3-step migration per `agent/knowledge.md` precedent (~450 LoC, M effort, 1-2 sessions):**
 
 - **Step 1 (XS, ~80 LoC)** `src/ai/Squad.{hpp,cpp}` foundation:
   - `SquadComponent` (Flecs SoA): `members[9]`, `member_count`, `order`, `order_target`, `order_priority`, `cohesion`, `order_progress`, `tick_counter`.
@@ -215,7 +215,7 @@ Full per-config table in `RESULTS.md` + `build/results.csv`.
 - **`sources.md`** — 8 primary Wikipedia references (Fireteam / Squad leader / Bounding overwatch / Close-quarters battle / Behavior tree / F.E.A.R. / Squad video game / Arma 3) + 14 closed ProjectV cross-references.
 - **`docs/experiments/hardware-profile.md`** — Zen 3 5800X dev host, governor=`powersave`.
 - **`docs/experiments/benchmarks/methodology.md`** — measurement protocol + Stats harness.
-- **`agent/knowledge.md §30.4`** — 3-step migration precedent.
+- **`agent/knowledge.md`** — 3-step migration precedent.
 - **`agent/workspace.md §2`** — operator 8x planning decision (Stage 6+ military sandbox activation).
 - **`legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`** — 5-10% threshold.
 
@@ -262,6 +262,6 @@ Full per-config table in `RESULTS.md` + `build/results.csv`.
 
 ---
 
-**Cross-refs:** `docs/experiments/AGENTS.md` (protocol), `docs/experiments/research/backlog.md §In progress` (this experiment entry), `docs/experiments/INDEX.md §5 Active` (this row), `agent/knowledge.md §30.4` (3-step migration precedent), `agent/workspace.md §2` (Stage 6+ deferral), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold), `hardware-profile.md §1` (Zen 3 5800X dev host), `benchmarks/methodology.md §3` (measurement protocol).
+**Cross-refs:** `docs/experiments/AGENTS.md` (protocol), `docs/experiments/research/backlog.md §In progress` (this experiment entry), `docs/experiments/INDEX.md §5 Active` (this row), `agent/knowledge.md` (3-step migration precedent), `agent/workspace.md §2` (Stage 6+ deferral), `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold), `hardware-profile.md §1` (Zen 3 5800X dev host), `benchmarks/methodology.md §3` (measurement protocol).
 
 См. [`sources.md`](./sources.md) + [`STATUS.md`](./STATUS.md) + [`RESULTS.md`](./RESULTS.md) + `prototype/{squad_fire_team_bench.cpp (~480 LoC), build/{squad_fire_team_bench (35 KB), results.csv (126 rows), summary_means.csv (26 rows), results.txt}}`.

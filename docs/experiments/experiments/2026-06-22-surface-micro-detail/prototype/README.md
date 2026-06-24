@@ -58,8 +58,7 @@ prototype/
 test surface; 1080p projection is in `cost_pct_of_30hz_1080p` column), divided by fragment count.
 This is the *CPU* cost on Zen 3 5800X; GPU cost on RTX 3060 Ti is analytically
 projected by multiplying by the `alu_inst_approx` column and a per-architecture IPC factor
-(GA104 Ampere ~1.0 IPC for scalar ALU, ~2.0 for FMA, ~0.5 for transcendentals per `agent/knowledge.md
-§30.4` cross-vendor matrix precedent).
+(GA104 Ampere ~1.0 IPC for scalar ALU, ~2.0 for FMA, ~0.5 for transcendentals per `agent/knowledge.md` cross-vendor matrix precedent).
 
 **PSNR vs A_None** is the analytical quality metric: for each scene, we render once with the strategy
 applied, render once with A_None (no perturbation), and compute per-fragment PSNR. Higher = more
@@ -71,4 +70,4 @@ per-fragment linear RGB. **A real GPU visual smoke test is reserved for mainline
 This is a CPU-only prototype (per `2026-06-20-gpu-procedural-noise-compute-kernels` precedent:
 CPU is sufficient to establish the per-call ALU cost of the algorithm itself, and the GPU
 projection is straightforward). The full visual smoke test (per-fragment shader on a real
-voxel face) is the **mainline integration step** (per `agent/knowledge.md §30.4` Step 2).
+voxel face) is the **mainline integration step** (per `agent/knowledge.md` Step 2).

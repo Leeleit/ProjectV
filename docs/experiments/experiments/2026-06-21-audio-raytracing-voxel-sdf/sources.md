@@ -97,7 +97,7 @@ Web-research conducted `2026-06-21`, 3 batch queries (per `docs/experiments/AGEN
 
 ## Cited by ProjectV docs (cross-refs)
 
-- `agent/knowledge.md §28` — AudioEngine contract (miniaudio, 16/44100, no geometric processing).
+- `agent/knowledge.md` — AudioEngine contract (miniaudio, 16/44100, no geometric processing).
 - `2026-06-20-nanovdb-on-gpu` — SVO walker foundation.
 - `2026-06-20-flecs-soa-vs-aos-bench` — SoA storage for AudioSource / AudioListener components.
 - `2026-06-20-work-stealing-job-system` — serial dispatcher baseline.

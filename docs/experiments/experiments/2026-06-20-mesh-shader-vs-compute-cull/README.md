@@ -231,12 +231,12 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
 
 **Локальные cross-refs** (per `AGENTS.md §3` — не дублировать):
 
-- `agent/knowledge.md` §15 — sun-shadow path baseline, RTX = additive feature-flag (per Stage 5.2).
-- `agent/knowledge.md` §25 — greedy meshing contract (per-axis dispatch, `PackedFace` 16 bytes,
+- `agent/knowledge.md` — sun-shadow path baseline, RTX = additive feature-flag (per Stage 5.2).
+- `agent/knowledge.md` — greedy meshing contract (per-axis dispatch, `PackedFace` 16 bytes,
   `kMaxChunkExtentForGreedy=64`).
-- `agent/knowledge.md` §30.4 — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list) — establishes pattern
+- `agent/knowledge.md` — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list) — establishes pattern
   для additive `PROJECTV_*_ON` env-flag migration.
-- `agent/knowledge.md` §29 — Hardcore perf r0, Tier 4 R&D: «Mesh shaders (VK_EXT_mesh_shader) — mainline MVP не
+- `agent/knowledge.md` — Hardcore perf r0, Tier 4 R&D: «Mesh shaders (VK_EXT_mesh_shader) — mainline MVP не
   требует» (было до 2026-06-20 dependency reordering).
 - `TODO.md` §1.1, §1.2 — Sparse 64-tree + SVDAG, основа для Stage 2.x mesh shader reads.
 - `TODO.md` §2.1 — design plan для mesh shader migration (subject to this experiment's verdict).
@@ -317,7 +317,7 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
 2. Прочитать `src/render/Renderer.cpp` lines 460-560 — record commands pattern.
 3. Прочитать `src/voxel/Sparse64Tree.hpp` — SVDAG node layout (272 B per internal node).
 4. Web-research 16 ключевых источников (см. §2), все 2024-2026, с верификацией цитат.
-5. Cross-reference с `TODO.md` Stage 2.1, `agent/knowledge.md` §25/§29/§30.4.
+5. Cross-reference с `TODO.md` Stage 2.1, `agent/knowledge.md`/§29/§30.4.
 6. Build analytical cost model (§3.4).
 7. Optional: build CPU-side analytical model в `prototype/` для иллюстрации cache-pattern + dispatch overhead.
 
@@ -459,7 +459,7 @@ numbers. `benchmarks/methodology.md §3`: «Замеры: N = 1000 ... mean, med
 запускает N итераций, выдаёт deterministic estimates.
 
 **Альтернатива для future iteration:** если mainline хочет validate этот analytical model, может запустить
-`ProjectVFrustumCullBenchmark` (`src/bench/FrustumCullBenchmark.cpp` per `agent/knowledge.md §4`) с обоими pattern и
+`ProjectVFrustumCullBenchmark` (`src/bench/FrustumCullBenchmark.cpp` per `agent/knowledge.md`) с обоими pattern и
 реально измерить. **Out of scope для моего research.**
 
 ### 4.5 Команды (для analytical model)
@@ -573,7 +573,7 @@ A = universal, safest.
 
 ### 5.3 ProjectV workload fit analysis
 
-**Per-chunk SVDAG structure (per `agent/knowledge.md §25`, `src/voxel/Sparse64Tree.hpp`):**
+**Per-chunk SVDAG structure (per `agent/knowledge.md`, `src/voxel/Sparse64Tree.hpp`):**
 
 - Chunk size: 32³ = 32768 voxels.
 - Leaves: 4×4×4 = 64 voxels each.
@@ -750,7 +750,7 @@ Stage 1.1: Sparse 64-tree flip default. [CURRENT mainline work]
 Stage 1.2: SVDAG dedup. [CURRENT mainline work]
 Stage 2.2: HZB cull (depends on Stage 1.2 SVDAG-derived AABBs). [Add before 2.1]
 Stage 2.1: Mesh shader pipeline (feature-flagged, optional). [REVISE: defer + feature-flag]
-Stage 3.1: GPU Fluid CA (per `agent/knowledge.md §30.4`).
+Stage 3.1: GPU Fluid CA (per `agent/knowledge.md`).
 Stage 4.x: Procedural generation, LOD.
 Stage 5.x: VCT, RTX, TAA.
 ```
@@ -787,7 +787,7 @@ mesh shader complexity. Mesh shader = additional optimization на top of HZB, �
     - Update `TODO.md §2.1` Approach to reflect Pattern C choice + feature-flag pattern.
     - Cross-reference `docs/experiments/experiments/2026-06-20-mesh-shader-vs-compute-cull/` (this experiment) in
       `TODO.md §2.1` rationale.
-    - Add note в `agent/knowledge.md §25` (greedy meshing contract) о future interaction с mesh shader pattern (mesh
+    - Add note в `agent/knowledge.md` (greedy meshing contract) о future interaction с mesh shader pattern (mesh
       shader reads SVDAG node pool, not flat array).
 
 5. **Defer to Stage 3.x (after Stage 1.1/1.2/2.2 settled):**
@@ -846,7 +846,7 @@ mesh shader complexity. Mesh shader = additional optimization на top of HZB, �
 - [ ] No Intel Arc driver crash (test on Arc A380/Alchemist).
 - [ ] Fallback path (compute cull) produces identical output to current mainline.
 - [ ] Shader code complexity growth ≤ 400 LOC (vs Pattern A baseline 562 LOC).
-- [ ] No new `// EVIL:` markers required (per `agent/knowledge.md §25` contract).
+- [ ] No new `// EVIL:` markers required (per `agent/knowledge.md` contract).
 
 ### 7.6 Dependencies
 
@@ -967,7 +967,7 @@ shader bandwidth savings (~2-4 MB/frame) becomes proportionally larger (4-8 MB a
 - `src/voxel/Sparse64Tree.hpp` (393 lines) — SVDAG node struct (272 B per internal node), GPU SSBO upload path.
 - `src/voxel/VoxelWorld.{hpp,cpp}` — parallel-path (`PROJECTV_SPARSE_64_STORAGE` env) per Stage 1.1 migration pattern.
 - `tests/Sparse64TreeTests.cpp` (462 lines, 14 sub-tests) — coverage baseline.
-- `tests/FluidCATests.cpp` (24 sub-tests) — CPU reference, GPU path per `agent/knowledge.md §30.4`.
+- `tests/FluidCATests.cpp` (24 sub-tests) — CPU reference, GPU path per `agent/knowledge.md`.
 - `legacy/docs/VulkanSDK-Linux-Docs-1.4.350.1/` — vendored Vulkan 1.4 SDK docs (read before rg/grep headers).
 - `legacy/docs/philosophy/01_foundation/05_decision-making.md` — design heuristics (data → algo → code, low latency >
   throughput).
@@ -978,10 +978,10 @@ shader bandwidth savings (~2-4 MB/frame) becomes proportionally larger (4-8 MB a
 - `legacy/docs/architecture/adr/0002-svo-storage.md` — historical 8-ary SVO (superseded by Sparse 64-tree per Stage
   1.1).
 - `legacy/docs/architecture/practice/00_svo-architecture.md` — SVO DDA pattern reference.
-- `agent/knowledge.md` §15, §25, §29, §30.4 — engineering contracts (sun-shadow, greedy meshing, hardcore perf r0, GPU
+- `agent/knowledge.md`, §25, §29, §30.4 — engineering contracts (sun-shadow, greedy meshing, hardcore perf r0, GPU
   Fluid CA).
-- `agent/knowledge.md §1` (Part B runtime facts) — current mainline state.
-- `agent/knowledge.md §9` (Part B self-audit) — tool availability.
+- `agent/knowledge.md` (Part B runtime facts) — current mainline state.
+- `agent/knowledge.md` (Part B self-audit) — tool availability.
 - `agent/workspace.md §7` — archive references для agent-sessions.
 - `TODO.md §1.1, §1.2, §2.1, §2.2, §3.1, §4.3, §5.2` — all designed для SVDAG/64-tree read + GPU-driven pipeline.
 - `TODO.md §4` build/verification contract — ctest baseline 16/16.
@@ -1008,14 +1008,14 @@ shader bandwidth savings (~2-4 MB/frame) becomes proportionally larger (4-8 MB a
   structuralHash).
 - `src/voxel/VoxelWorld.hpp::sparseStorage` (line 87) — parallel-path access per Stage 1.1.
 - `src/shaders/voxel.vert` + `src/shaders/voxel_shadow.vert` — reads `packedFaces`, expands to vertices via
-  `ApplyGreedyScale` (per `agent/knowledge.md §25` greedy meshing contract).
+  `ApplyGreedyScale` (per `agent/knowledge.md` greedy meshing contract).
 
 **Hot-path reads в рамках эксперимента:**
 
 - `GetVoxelMaterial` (`VoxelWorld.cpp:111-117`) — called from `voxel_mesh.comp::ReadVoxelMaterial` (lines 136-156).
 - `SetVoxelMaterial` (`VoxelWorld.cpp:103-109`) — called from `VoxelInteraction.cpp` (user build/break),
   `FillVoxelBox` (procedural gen).
-- Per `agent/knowledge.md §30.4`: Stage 3.1 GPU Fluid CA shader operates on SVDAG node pool, не flat array — shader
+- Per `agent/knowledge.md`: Stage 3.1 GPU Fluid CA shader operates on SVDAG node pool, не flat array — shader
   reading pattern established for future mesh shader integration.
 
 **Какие допущения/упрощения:**
@@ -1028,7 +1028,7 @@ shader bandwidth savings (~2-4 MB/frame) becomes proportionally larger (4-8 MB a
   measurement required для exact ProjectV numbers.
 - **No actual GPU prototype code.** Прототип = CPU-side analytical model (`prototype/cache_dispatch_model.cpp` planned),
   not full Vulkan mesh shader pipeline. Would require mainline modification.
-- **Stage ordering assumes dependency-aware plan.** Per `agent/knowledge.md §30.4` precedent (GPU Fluid CA reversal):
+- **Stage ordering assumes dependency-aware plan.** Per `agent/knowledge.md` precedent (GPU Fluid CA reversal):
   compute cull baseline → additive optional path → default flip → deprecate baseline. Same pattern для mesh shader.
 
 **Что осталось неизмеренным:**

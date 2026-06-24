@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-strategic-llm-commander-agent`
 
-> **10 Tier-1 sources verified** (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list — direct `webfetch` to canonical URLs only).
+> **10 Tier-1 sources verified** (Exa MCP HTTP 429 persistent per the web_search fallback chain — direct `webfetch` to canonical URLs only).
 > Direct verification date: 2026-06-21.
 > Hardware baseline: см. [`docs/experiments/hardware-profile.md`](../hardware-profile.md) (Zen 3 5800X, dev host `obvium`).
 
@@ -167,7 +167,7 @@ URL: https://arxiv.org/abs/2302.04761
 
 ## Sources verification protocol
 
-- **Per `agent/knowledge.md Part B §9` line 1424 fallback list:** Exa MCP `web_search` returned HTTP 429 (rate-limited) this session. Used **direct `webfetch`** to canonical URLs (arXiv abstract pages, Wikipedia, Meta AI project page via Brave Search snippet).
+- **Per the web_search fallback chain:** Exa MCP `web_search` returned HTTP 429 (rate-limited) this session. Used **direct `webfetch`** to canonical URLs (arXiv abstract pages, Wikipedia, Meta AI project page via Brave Search snippet).
 - **No hallucinated citations:** every reference above has been verified by retrieving its abstract/quote. The few "ID was wrong" cases (arXiv 2211.00826 was anchor detection not CICERO; 1902.07638 was NAS not AlphaStar; 2303.11381 was MM-REACT not Reflexion; 1907.01428 was symplectic geometry not Pluribus; 2103.03876 was astrophysics not Hanabi; 1902.04049 was biomedical UNet not AlphaStar; 1908.07679 was Android security not Pluribus; 1911.04055 was graph theory not Hanabi; 2208.07927 was statistics not relevant; 2303.11381 is verified MM-REACT) have been excluded from sources.
 - **IFPV (S1) exists and is a real 2026 paper** — this is the primary hypothesis source. The 19.4% / 41.7% numbers cited in the backlog are accurate.
 
@@ -175,7 +175,7 @@ URL: https://arxiv.org/abs/2302.04761
 
 ## Cross-references (existing ProjectV context)
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `agent/workspace.md §2` — Stage 6+ military sandbox deferral per operator 8x planning.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `docs/experiments/hardware-profile.md §1+§2+§3` — Zen 3 5800X + RTX 3060 Ti dev host.

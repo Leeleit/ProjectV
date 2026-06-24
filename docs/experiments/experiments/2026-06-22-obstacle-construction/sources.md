@@ -89,4 +89,4 @@ Per `backlog.md §In progress` reservation block:
 
 ## Web-research note
 
-Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per `agent/knowledge.md Part B §9` fallback list. Direct `webfetch` to canonical Wikipedia URLs confirmed content.
+Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per the web_search fallback chain. Direct `webfetch` to canonical Wikipedia URLs confirmed content.

@@ -8,7 +8,7 @@
 //   - 5 seeds × 1000 iter + 10 warmup per (strategy, scene) = 125,000 main measurements
 //   - Wall time expected < 10 sec на dev host `obvium` Zen 3 5800X governor=`powersave`
 //
-// Per `agent/knowledge.md §17` build matrix:
+// Per `agent/knowledge.md` build matrix:
 //   Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`
 //
 // Per `benchmarks/methodology.md §3` protocol:

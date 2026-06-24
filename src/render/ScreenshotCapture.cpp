@@ -1,4 +1,4 @@
-#include "render/ScreenshotCapture.hpp"
+#include "render/ScreenshotCapture.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "voxel/VoxelWorld.hpp"

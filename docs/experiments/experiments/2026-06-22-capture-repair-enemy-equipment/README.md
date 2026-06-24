@@ -186,7 +186,7 @@ Per-strategy recommendations:
 
 ## 8. Sources
 
-Verified web-research via direct `webfetch` to canonical Wikipedia URLs (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). **3 primary sources + 12 cross-references to closed ProjectV experiments** verified в [`sources.md`](./sources.md):
+Verified web-research via direct `webfetch` to canonical Wikipedia URLs (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). **3 primary sources + 12 cross-references to closed ProjectV experiments** verified в [`sources.md`](./sources.md):
 
 - **Wikipedia "War Thunder"** (canonical capture-strategic-positions + combined-arms + 70M+ player production precedent).
 - **Wikipedia "Foxhole"** (canonical salvage mechanic + Bmats/Rmats material flow + victory-points capture + front-line supply + persistent war production precedent).

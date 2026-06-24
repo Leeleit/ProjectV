@@ -8,7 +8,7 @@ VRAM-capacity axis (also relevant to `TODO.md §5.1` VCT 3D atlas + `TODO.md §5
 virtual texturing 256 MiB cap)
 **Estimated effort:** M
 **Author:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и
-исследуй»; self-promo l→m per `optimization-philosophy.md` 5-10% threshold + `agent/knowledge.md Part A §2`
+исследуй»; self-promo l→m per `optimization-philosophy.md` 5-10% threshold + `agent/knowledge.md`
 mainline MVP scope)
 
 ---
@@ -61,7 +61,7 @@ Nearest Gap callout + 1.2 SVDAG dedup + 1.1 NanoVDB flatten + 4.1 GPU world gen 
 (single-GPU optimizations + multi-GPU scaling = superlinear on bottleneck-shifted workloads).
 
 **Cross-vendor scaling matrix** (analytical, not measured — per `STATUS.md` blocker + `sources.md §2`
-caveat per `agent/knowledge.md Part B §9` fallback policy):
+caveat per the web_search fallback chain):
 - **NVIDIA NVLink 4.0 (Hopper H100, 900 GB/s pair):** 70-90% scaling on 2 GPU для compute-bound
   (peer memory ~10-20% overhead, present overhead ~5-10%)
 - **NVIDIA NVLink 4.1 (Blackwell B200, 1.8 TB/s pair):** 75-95% scaling on 2 GPU для compute-bound
@@ -81,7 +81,7 @@ caveat per `agent/knowledge.md Part B §9` fallback policy):
 ## 2. Prior art
 
 Web research complete per `sources.md` (Vulkan 1.4 spec retrieved via `webfetch` 2026-06-21, cross-vendor
-SOTA cited from operator's pre-2026 knowledge per `agent/knowledge.md Part B §9` fallback policy — `web_search`
+SOTA cited from operator's pre-2026 knowledge per the web_search fallback chain — `web_search`
 Exa 429 retries × 4).
 
 **Key sources (5 primary, 5 secondary):**
@@ -109,10 +109,10 @@ Exa 429 retries × 4).
   `obvium` = main bottleneck for Stage 4.3
 - **[`hardware-profile.md §3`](https://github.com/)** (local) — RTX 3060 Ti GA104, Vulkan 1.4.341, 8 GiB
   VRAM heap 0, 5.06 GiB driver budget, Captured 2026-06-20 <14 days → file used per §14 STOP-блок
-- **[`agent/knowledge.md Part A §30.4`](https://github.com/)** (local) — **3-step migration precedent**
+- **[`agent/knowledge.md`](https://github.com/)** (local) — **3-step migration precedent**
   (foundation → adoption → default flip, additive не breaking) — applied to multi-GPU integration
   recommendation per §7
-- **[`agent/knowledge.md Part B §9`](https://github.com/)** (local) — `webfetch` validated against
+- **[the web_search fallback chain](https://github.com/)** (local) — `webfetch` validated against
   `docs.vulkan.org/refpages/...` + Khronos spec availability, `web_search` Exa as primary search
 
 **Closed experiments (cross-axis, complementary, not duplicated per `AGENTS.md §15`):**
@@ -259,7 +259,7 @@ cmake --build build --parallel
 - `sim_results.csv` — ~50 KiB (2000 rows × 8 cols)
 - `cross_vendor_matrix.md` — ~5 KiB (table + recommendation text)
 
-**Caveat per `agent/knowledge.md Part B §9` self-audit:** `web_search` Exa 429 on 2026-06-21, prototype
+**Caveat per the web_search fallback chain self-audit:** `web_search` Exa 429 on 2026-06-21, prototype
 validated via local Vulkan 1.4 headers (`external/volk/`) + Vulkan 1.4 spec retrieved via `webfetch`. No
 real multi-GPU benchmark (dev host single-GPU). All cross-vendor numbers = analytical from operator's
 pre-2026 knowledge (flagged per-source in `sources.md §2`).
@@ -292,7 +292,7 @@ pre-2026 knowledge (flagged per-source in `sources.md §2`).
 **`mixed`** — multi-GPU Vulkan 1.4 device-group API = **real scaling lever** for Stage 4.3 128m draw
 distance (VRAM aggregation alone sufficient) + future Stage 5.x VCT/RTX scaling (4-GPU AFR super-linear
 ~4× across all interconnects). **Recommended action: Step 1 API discovery probe (~30 LoC, immediate,
-additive) + Step 2 AFR dispatcher opt-in (~300 LoC, Stage 4.3 ship) per `agent/knowledge.md §30.4`
+additive) + Step 2 AFR dispatcher opt-in (~300 LoC, Stage 4.3 ship) per `agent/knowledge.md`
 3-step migration precedent.**
 
 **Why not `yes`:** single-GPU dev host `obvium` can't validate end-to-end (API discovery only). Web
@@ -319,7 +319,7 @@ closed experiment.**
 cross-cutting VRAM axis (also relevant to `§5.1` VCT 3D atlas + `§5.2` RTX BLAS pool + `§2.3` virtual
 texturing 256 MiB cap).
 
-**Конкретные изменения** (3-step migration per `agent/knowledge.md §30.4` precedent, additive не breaking):
+**Конкретные изменения** (3-step migration per `agent/knowledge.md` precedent, additive не breaking):
 
 ### Step 1 (XS, ~30 LoC, immediate, additive)
 
@@ -375,7 +375,7 @@ texturing 256 MiB cap).
 - `VK_KHR_synchronization2` (per `dec-pipelines-async-compute` closed yes) — for cross-queue semaphores
 - `VK_KHR_dynamic_rendering` (per `hardware-profile.md §4`, ProjectV current) — for per-device dynamic rendering pass
 
-**Estimated effort:** M (3 steps combined = ~380 LoC across 4-6 files, 2-3 sessions per `agent/knowledge.md §30.4` precedent).
+**Estimated effort:** M (3 steps combined = ~380 LoC across 4-6 files, 2-3 sessions per `agent/knowledge.md` precedent).
 
 **Re-evaluation triggers (if verdict becomes `mixed` or `no`):**
 - Multi-GPU dev host availability (operator upgrade) — enables real benchmark
@@ -393,8 +393,8 @@ texturing 256 MiB cap).
   `VK_KHR_device_group_creation` (core 1.1+) + `VkDeviceGroupPresentInfoKHR` (core 1.1+)
 - **Tier 2 (cross-vendor SOTA 2024-2026, operator pre-2026 knowledge per §9 fallback policy caveat):**
   NVLink 4.0/4.1, xGMI/IF, PCIe 4.0/5.0, driver AFR modes
-- **Tier 3 (local ProjectV cross-refs):** `hardware-profile.md §3`, `agent/knowledge.md Part A §30.4` +
-  `Part A §2` + `Part B §9`, `TODO.md §4.3`, `agent/workspace.md §2`
+- **Tier 3 (local ProjectV cross-refs):** `hardware-profile.md §3`, `agent/knowledge.md` +
+  `agent/knowledge.md` + `agent/knowledge.md`, `TODO.md §4.3`, `agent/workspace.md §2`
 - **Tier 4 (web research gaps, re-verify when `web_search` available):** Vulkanised 2025/2026 multi-GPU,
   NVIDIA GTC, AMD RDNA 4 whitepapers, HPG 2024/2025, Sascha Willems sample code, Intel Arc Battlemage
   2024+ production status
@@ -423,7 +423,7 @@ texturing 256 MiB cap).
   command buffer recording overhead (~0.1-0.5 ms) + swapchain acquisition wait (~0.05-0.2 ms) + present
   serialization not modeled.
 - (b) **No real cross-vendor validation** — scaling numbers (NVLink 4.0/4.1, xGMI/IF, PCIe 4.0/5.0)
-  cited from operator's pre-2026 knowledge per `agent/knowledge.md Part B §9` fallback policy caveat.
+  cited from operator's pre-2026 knowledge per the web_search fallback chain caveat.
 - (c) **No visual quality check** — frame rate scaling measured, but no visual diff for cross-vendor
   visual artifacts (e.g., AFR frame parity flicker, SFR seam visibility).
 - (d) **VRAM aggregation math not measured** — analytical model gives the math, but no real test of

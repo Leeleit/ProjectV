@@ -177,8 +177,8 @@
     - Opaque pass (line 776) — single `vkCmdDrawIndirect`, full inline lighting
     - Transparent pass (line 836)
     - Model pass (line 793) — for non-voxel models
-26. **`agent/knowledge.md §25`** — greedy meshing per-axis dispatch rationale.
-27. **`agent/knowledge.md §30.4`** — 3-step migration precedent (`vkQueueSubmit2` + timeline semaphores).
-28. **`agent/knowledge.md §17`** — Linux baseline (Clang 22.1.6, LLD, libstdc++ 16, Vulkan 1.4.350 SDK).
+26. **`agent/knowledge.md`** — greedy meshing per-axis dispatch rationale.
+27. **`agent/knowledge.md`** — 3-step migration precedent (`vkQueueSubmit2` + timeline semaphores).
+28. **`agent/knowledge.md`** — Linux baseline (Clang 22.1.6, LLD, libstdc++ 16, Vulkan 1.4.350 SDK).
 29. **`TODO.md §5.2`** — RTX shadows feature-flag (where vis-buffer integration would land if re-evaluated).
 30. **`docs/experiments/hardware-profile.md §3`** — dev host GPU (RTX 3060 Ti, 8 GiB VRAM, Vulkan 1.4.341).

@@ -9,7 +9,7 @@ as scene names), **NO dedicated grass/foliage/vegetation folder pre-existed** th
 в 100+ closed experiments.
 
 Web-research complete via DuckDuckGo HTML endpoint (Exa `web_search` HTTP 429 persistent
-per `agent/knowledge.md Part B §9`). **5 primary + 2 secondary sources verified** with full content
+per the web_search fallback chain). **5 primary + 2 secondary sources verified** with full content
 read.
 
 ---

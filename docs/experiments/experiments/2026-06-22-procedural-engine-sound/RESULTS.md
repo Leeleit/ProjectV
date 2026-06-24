@@ -206,7 +206,7 @@ All strategies cross-checked against production references:
 2. **Synthetic engine model:** analytical reference (C with N=64 harmonics) doesn't include real
    combustion PDE; per-cylinder harmonic weights approximated from canonical engine sound signatures,
    not measured recordings.
-3. **Single-thread benchmark:** parallel-scale projection is analytical per `agent/knowledge.md §30.4`
+3. **Single-thread benchmark:** parallel-scale projection is analytical per `agent/knowledge.md`
    precedent. Real multi-thread engine synthesis would have cache-line contention at N>16 vehicles.
 4. **No Doppler shift from vehicle motion:** `ballistic-crack-thump` precedent has Doppler for
    projectile; engine Doppler from accelerating vehicle not modeled (out of scope).
@@ -266,7 +266,7 @@ All strategies cross-checked against production references:
 
 **Target stage:** Stage 6+ military sandbox per `agent/workspace.md §2` operator 8x planning decision.
 
-**3-step mainline migration per `agent/knowledge.md §30.4` precedent** (~500 LoC, M effort, 2-3 sessions,
+**3-step mainline migration per `agent/knowledge.md` precedent** (~500 LoC, M effort, 2-3 sessions,
 **deferred до Stage 6+ military sandbox activation**):
 
 - **Step 1 (XS, ~80 LoC)** `src/audio/EngineSoundProfile.{hpp,cpp}` data-driven definition:

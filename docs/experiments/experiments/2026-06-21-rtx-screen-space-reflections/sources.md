@@ -1,7 +1,6 @@
 # Sources — 2026-06-21-rtx-screen-space-reflections
 
-Web-research complete via `web_search` (Exa) + DuckDuckGo HTML + `webfetch` fallback per `agent/knowledge.md
-Part B §9` (Exa MCP HTTP 429 persistent). All citations verified via direct URL fetch this session
+Web-research complete via `web_search` (Exa) + DuckDuckGo HTML + `webfetch` fallback per the web_search fallback chain (Exa MCP HTTP 429 persistent). All citations verified via direct URL fetch this session
 (`2026-06-21`). Phase A complete: **15 primary sources + 10 supplementary** verified below.
 
 ---

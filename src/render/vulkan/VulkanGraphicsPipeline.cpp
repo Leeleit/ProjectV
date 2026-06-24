@@ -1,4 +1,4 @@
-#include "render/vulkan/VulkanGraphicsPipeline.hpp"
+#include "render/vulkan/VulkanGraphicsPipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
@@ -84,7 +84,7 @@ constexpr std::array kGraphicsDescriptorBindings{
 	},
 	// EVIL: binding 11 = vctClipmap sampler3D FRAGMENT. Per TODO §5.1 (VCT consume in voxel.frag).
 	// Always declared even when VCT gate is OFF (env PROJECTV_VCT_GPU=ON default OFF per
-	// agent/knowledge.md §30.4 Step 1) — fallback 1x1x1 RGBA16F dummy bound instead.
+	// `agent/knowledge.md` Step 1) — fallback 1x1x1 RGBA16F dummy bound instead.
 	// Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` = OpTypeSampledImage (VUID-layout-07990).
 	VkDescriptorSetLayoutBinding{
 		.binding = 11,
@@ -95,7 +95,7 @@ constexpr std::array kGraphicsDescriptorBindings{
 	},
 	// EVIL: binding 12 = volumetricFog sampler3D FRAGMENT. Per TODO §5.4 (volumetric fog consume
 	// in voxel.frag via Wronski 2014 froxel grid). Always declared even when fog gate is OFF
-	// (env PROJECTV_FOG=ON default OFF per agent/knowledge.md §30.4 Step 1) — fallback
+	// (env PROJECTV_FOG=ON default OFF per `agent/knowledge.md` Step 1) — fallback
 	// 1x1x1 RGBA16F dummy bound instead.
 	// Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` = OpTypeSampledImage (VUID-layout-07990).
 	VkDescriptorSetLayoutBinding{

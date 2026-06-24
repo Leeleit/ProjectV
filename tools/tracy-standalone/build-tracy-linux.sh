@@ -6,7 +6,7 @@
 # (CPMAddPackage tidy-html5 5.8.0) uses removed `uint` / `ulong` types
 # that broke glibc 2.36+, so this build may fail at the tidy-static
 # compilation step on modern Linux. This is a known upstream
-# wolfpld/tracy bug (see agent/memory.md §9). On Windows the same
+# wolfpld/tracy bug (see `agent/knowledge.md`). On Windows the same
 # upstream code compiles fine.
 #
 # Usage:
@@ -60,7 +60,7 @@ echo "[tracy-standalone] Build dir             : $BUILD_DIR_FULL"
 echo "[tracy-standalone] CPM source cache      : $CPM_SOURCE_CACHE"
 echo "[tracy-standalone] Compiler              : $COMPILER"
 echo "[tracy-standalone] Note                  : Tracy UI build on Linux may fail at tidy-html5 step"
-echo "                                              (upstream wolfpld/tracy bug — see agent/memory.md §9)."
+echo "                                              (upstream wolfpld/tracy bug — see `agent/knowledge.md`)."
 
 # Configure. Tracy profiler's CMakeLists.txt has its own project()
 # call (project(tracy-profiler)), so we can't add_subdirectory it

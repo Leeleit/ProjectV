@@ -30,7 +30,7 @@
 
 ## 2. Prior art
 
-Сначала `webfetch` (Exa + DuckDuckGo fallback per `agent/knowledge.md Part B §9`), затем верификация цитат.
+Сначала `webfetch` (Exa + DuckDuckGo fallback per the web_search fallback chain), затем верификация цитат.
 
 **Tier 1 — academic + canonical military doctrine:**
 
@@ -144,7 +144,7 @@ to justify a mainline integration recommendation. Reservations are minor: retrea
 - **Replace the adjacency precomputation** with an incremental uniform-grid spatial index when
   unit positions become dynamic.
 
-Integration pattern: per `agent/knowledge.md §30.4` — Flecs `MoraleComponent` (SoA) +
+Integration pattern: per `agent/knowledge.md` — Flecs `MoraleComponent` (SoA) +
 `MoraleUpdateSystem` (per-tick, applied to all units with the component) + integration with
 existing `SuppressionSystem` (input) + `HierarchicalTacticalBT` (consumer of state).
 

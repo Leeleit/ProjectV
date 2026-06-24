@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-combined-arms-coordination-ai`
 
-Web-research completed 2026-06-21 via direct `webfetch` to canonical URLs (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list, **DuckDuckGo HTML endpoint CAPTCHA blocked**, **Brave Search 429**, **Startpage primary working this session**, **arXiv direct OK**, **Wikipedia OK**, **Semantic Scholar OK**, **gameaipro.com OK**, **ResearchGate OK**).
+Web-research completed 2026-06-21 via direct `webfetch` to canonical URLs (Exa MCP HTTP 429 persistent per the web_search fallback chain, **DuckDuckGo HTML endpoint CAPTCHA blocked**, **Brave Search 429**, **Startpage primary working this session**, **arXiv direct OK**, **Wikipedia OK**, **Semantic Scholar OK**, **gameaipro.com OK**, **ResearchGate OK**).
 
 ## Primary sources (15 verified, ranked by relevance)
 
@@ -90,7 +90,7 @@ Web-research completed 2026-06-21 via direct `webfetch` to canonical URLs (Exa M
 
 ## Fallback / negative results (not used)
 
-- Exa MCP HTTP 429 — all 4 initial `web_search` calls failed. Worked around per `agent/knowledge.md Part B §9`.
+- Exa MCP HTTP 429 — all 4 initial `web_search` calls failed. Worked around per the web_search fallback chain.
 - DuckDuckGo HTML endpoint — CAPTCHA blocked all 4 queries.
 - Brave Search — HTTP 429.
 - Bing, Google, Startpage — Startpage primary, others untested (Startpage provided adequate results).

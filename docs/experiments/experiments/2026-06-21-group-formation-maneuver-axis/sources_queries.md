@@ -1,7 +1,7 @@
 # Web-search query batch — `2026-06-21-group-formation-maneuver-axis`
 
 > Web-search (Exa) HTTP 429 persistent → запрошен operator batch fallback per
-> `agent/knowledge.md Part B §9` line 1424 fallback list.
+> the web_search fallback chain.
 > См. также backlog.md §In progress reservation запись.
 
 **Slug:** `2026-06-21-group-formation-maneuver-axis`

@@ -197,8 +197,8 @@ effect is real but small relative to scene difficulty.
 - `2026-06-20-nanovdb-on-gpu/README.md` — NanoVDB mip chain extension
 - `2026-06-20-dec-pipelines-async-compute/README.md` — async compute for off-frame mip gen
 - `2026-06-20-hzb-binding-models/README.md` — 2D HZB mip chain sampling pattern analog
-- `agent/knowledge.md §30.4` — 3-step migration precedent (for Stage 5.1 mainline integration)
-- `agent/knowledge.md §15` — lighting contract
+- `agent/knowledge.md` — 3-step migration precedent (for Stage 5.1 mainline integration)
+- `agent/knowledge.md` — lighting contract
 - `agent/workspace.md §2` — Stage 5.x not started
 - `hardware-profile.md §1+§3` — Zen 3 5800X + RTX 3060 Ti dev host
 - `benchmarks/methodology.md §3` — measurement protocol

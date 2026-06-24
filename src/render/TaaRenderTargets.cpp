@@ -1,4 +1,4 @@
-#include "render/TaaRenderTargets.hpp"
+#include "render/TaaRenderTargets.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "render/vulkan/VulkanDebug.hpp"

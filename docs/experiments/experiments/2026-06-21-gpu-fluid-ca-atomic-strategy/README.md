@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Date opened:** 2026-06-21
 **Date closed:** N/A
-**Stage link:** `TODO.md §3.1` (GPU Fluid CA) + `agent/knowledge.md §30.4` (3-step migration precedent)
+**Stage link:** `TODO.md §3.1` (GPU Fluid CA) + `agent/knowledge.md` (3-step migration precedent)
 **Estimated effort:** M (standalone Vulkan 1.4 compute prototype + 5 atomic strategies × 5 scene configs × 3 seeds × N=1000 iter)
 **Author:** research agent (`docs/experiments/AGENTS.md`)
 
@@ -12,7 +12,7 @@
 ## 1. Hypothesis
 
 **Утверждение:** правильная стратегия атомарной записи в `fluid_ca.comp` ping-pong buffer (per
-`TODO.md §3.1` + `agent/knowledge.md §30.4` contract) даст **-10-30% reduction в total fluid tick
+`TODO.md §3.1` + `agent/knowledge.md` contract) даст **-10-30% reduction в total fluid tick
 latency** + **100% conservation guarantee** на 500K voxels @ 0.5 ms Stage 3.1 DoD (per `TODO.md §3.1`)
 на RTX 3060 Ti Ampere, vs current mainline blind `atomicOr` shortcut per
 `src/shaders/fluid_ca.comp:101` (chosen без измерения per `agent/workspace.md §1 Phase 3`).
@@ -22,10 +22,10 @@ latency** + **100% conservation guarantee** на 500K voxels @ 0.5 ms Stage 3.1 
 - **Correctness:** `imageAtomicCompareExchange` обеспечивает count conservation (no double-claim,
   no double-write). `atomicOr` shortcut не гарантирует — два adjacent source cells competing for
   same destination могут оба «успешно» OR (last-write-wins), один fluid voxel теряется per tick.
-  Per `agent/knowledge.md §30.4` line 1045 contract + `decisions.md §30.4` per-tick invariant
+  Per `agent/knowledge.md` contract + `decisions.md §30.4` per-tick invariant
   («`stats.fluidVoxelCount` проверен равным `std::count(voxels, == Fluid)` после каждого commit»
   per `§30` line 928).
-- **Performance:** shared-memory tile compaction (per `agent/knowledge.md §30.4` workgroup 8×8×4)
+- **Performance:** shared-memory tile compaction (per `agent/knowledge.md` workgroup 8×8×4)
   + subgroup ballot reduction устраняют cache-line ping-pong на global memory, дают -10-30% на
   high-contention сценах (плотные водяные столбы, лава под давлением).
 - **Cross-vendor:** validation matrix для NVIDIA Ampere (dev host) + литература по AMD RDNA 4 +
@@ -43,7 +43,7 @@ latency** + **100% conservation guarantee** на 500K voxels @ 0.5 ms Stage 3.1 
 | **F_Checkerboard_RaceFree** (8 dispatches) | Spatial `(x+y+z)&7` mask = race-free partition, no atomics within dispatch. 8 dispatches per tick, one per mask. | **No atomics at all** (9200 fps on RTX 3090 per `jamesthomaskiernan 2024` baseline) | 8× more dispatches per tick (overhead 1-2 ms/sec @ 20 Hz = 0.001-0.002 ms/frame, negligible) |
 
 **Контроль:** CPU reference (`src/voxel/VoxelWorld.cpp::UpdateFluidCA` line 1405, per
-`agent/knowledge.md §30` deterministic CPU implementation) как ground truth для correctness
+`agent/knowledge.md` deterministic CPU implementation) как ground truth для correctness
 validation; sequential GPU baseline (`atomicOr` current mainline) как perf baseline.
 
 ---
@@ -52,13 +52,13 @@ validation; sequential GPU baseline (`atomicOr` current mainline) как perf ba
 
 Web-research in progress. Preliminary sources (дополняется в `sources.md`):
 
-- `agent/knowledge.md §30.4` (lines 1037-1083) — 3-step migration precedent для GPU Fluid CA,
+- `agent/knowledge.md` (lines 1037-1083) — 3-step migration precedent для GPU Fluid CA,
   explicit `imageAtomicCompareExchange` contract (line 1045).
 - `TODO.md §3.1` — Stage 3.1 DoD: 500K voxels в <0.5 ms, ping-pong buffers, atomic strategy decision.
 - `src/shaders/fluid_ca.comp:101` — current mainline `atomicOr` (blind OR, без CAS check).
 - `src/voxel/VoxelWorld.cpp:1405 UpdateFluidCA` — CPU reference implementation (ground truth).
 - `src/ecs/EcsWorld.cpp:200 FluidCATickSystem` — Flecs tick dispatcher.
-- `tests/FluidCATests.cpp` (24 sub-tests, 100% pass per `agent/knowledge.md §30` line 938) — CPU
+- `tests/FluidCATests.cpp` (24 sub-tests, 100% pass per `agent/knowledge.md`) — CPU
   reference test fixtures.
 - Khronos `VK_KHR_shader_atomic_float` (per `hardware-profile.md §4`) — required для future
   float atomics (fluid velocity/temperature), не для uint material IDs.
@@ -222,7 +222,7 @@ cmake --build .
 
 **Findings:**
 
-1. **Strategy A atomicOr is BROKEN per `agent/knowledge.md §30.4` line 1045 contract** — independent of perf.
+1. **Strategy A atomicOr is BROKEN per `agent/knowledge.md` contract** — independent of perf.
 2. **Strategy E HierLock has implementation bug** — chunk lock atomic ops = 0, all fluid lost. Code-level fix required.
 3. **Per-scene perf** (vertical_column + empty only, others have readback issue):
    - Strategies B/C/D/F within 27% of each other.
@@ -235,7 +235,7 @@ cmake --build .
 5. **Per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` 5-10% threshold**: not crossed on low-contention scenes. High-contention validation pending readback fix.
 
 **Verdict logic (per `docs/experiments/AGENTS.md §6`):**
-- **A**: rejected (correctness violation per `agent/knowledge.md §30.4`).
+- **A**: rejected (correctness violation per `agent/knowledge.md`).
 - **B**: RECOMMENDED (correct, simple, 1% slower than A which is broken).
 - **C/D/F**: conditional on measurement after readback fix.
 - **E**: rejected (implementation bug, requires rewrite).
@@ -244,9 +244,9 @@ cmake --build .
 
 ## 7. Integration recommendation
 
-**Target stage:** `TODO.md §3.1` (GPU Fluid CA) + `agent/knowledge.md §30.4` (3-step migration precedent).
+**Target stage:** `TODO.md §3.1` (GPU Fluid CA) + `agent/knowledge.md` (3-step migration precedent).
 
-**3-step migration per `agent/knowledge.md §30.4`:**
+**3-step migration per `agent/knowledge.md`:**
 
 ### Step 1 (XS, ~50 LoC, immediate, RECOMMENDED regardless of measurement gaps)
 
@@ -261,9 +261,9 @@ cmake --build .
   uint original = atomicCompSwap(destinationCells[belowIndex].material, expected, kFluidMaterial);
   if (original == expected) { ... return; }
   ```
-- **Rationale:** fixes conservation violation per `agent/knowledge.md §30.4` line 1045 contract.
+- **Rationale:** fixes conservation violation per `agent/knowledge.md` contract.
   Per mainline analysis + measured 1% perf cost.
-- **Acceptance:** `ProjectVFluidCAGpuTests` validates per `agent/knowledge.md §30.4` line 1062.
+- **Acceptance:** `ProjectVFluidCAGpuTests` validates per `agent/knowledge.md`.
 
 ### Step 2 (S, ~150 LoC, conditional on measurement)
 
@@ -292,7 +292,7 @@ cmake --build .
 - AMD RDNA 4 + Intel Battlemage cross-vendor validation (per `dec-pipelines-async-compute §2.2`).
 - Stage 4.3 128+ chunk world (scale-up, more contention expected).
 - 20 Hz tick rate multi-tick stability.
-- `agent/knowledge.md §30.1` timeScale + pause interaction.
+- `agent/knowledge.md` timeScale + pause interaction.
 
 **Estimated effort:**
 
@@ -305,7 +305,7 @@ cmake --build .
 
 - `2026-06-20-dec-pipelines-async-compute` (closed verdict=yes) — async-compute sync foundation.
 - `2026-06-20-async-compute-overhead-numbers` (closed verdict=yes, +9.85-11.34%) — sync measured.
-- `agent/knowledge.md §30.4` (lines 1037-1083) — 3-step migration precedent.
+- `agent/knowledge.md` (lines 1037-1083) — 3-step migration precedent.
 
 ---
 
@@ -317,8 +317,8 @@ prototype measurements on dev host**.
 **Findings (literature + mainline analysis, pre-measurement):**
 
 1. **Current mainline `atomicOr` (Strategy A, `src/shaders/fluid_ca.comp:101`) is INCORRECT
-   per `agent/knowledge.md §30.4` contract line 1045.** Blind `atomicOr` без CAS check
-   potentially allows double-claim → drop. Per `agent/knowledge.md §30` line 928 invariant
+   per `agent/knowledge.md` contract line 1045.** Blind `atomicOr` без CAS check
+   potentially allows double-claim → drop. Per `agent/knowledge.md` invariant
    (`stats.fluidVoxelCount` = `std::count(voxels, == Fluid)`), this can break per-tick
    conservation. **Correctness fix required** (independent of perf).
 2. **Per literature (`sources.md` Tier 1-2),** correct strategies (B, C, D, E) likely give
@@ -353,22 +353,21 @@ prototype measurements on dev host**.
 
 ## 7. Integration recommendation
 
-**Target stage:** `TODO.md §3.1` (GPU Fluid CA) + `agent/knowledge.md §30.4` (3-step migration
+**Target stage:** `TODO.md §3.1` (GPU Fluid CA) + `agent/knowledge.md` (3-step migration
 precedent).
 
-**3-step migration per `agent/knowledge.md §30.4`:**
+**3-step migration per `agent/knowledge.md`:**
 
 ### Step 1 (XS, ~50 LoC, immediate correctness fix) — RECOMMENDED regardless of perf verdict
 
 - **Change:** `src/shaders/fluid_ca.comp:101` blind `atomicOr` → `imageAtomicCompareExchange` /
   `atomicCompSwap` loop (Strategy B). Add CAS check: `expected = kAirMaterial` → `desired = kFluidMaterial`
   → `original = atomicCompSwap(...)` → if `original == expected`, claim succeeded.
-- **Rationale:** **fixes correctness violation per `agent/knowledge.md §30.4` line 1045 contract**.
-  `atomicOr` shortcut potentially allows double-claim → drop per `agent/knowledge.md §30` line 928
+- **Rationale:** **fixes correctness violation per `agent/knowledge.md` contract**.
+  `atomicOr` shortcut potentially allows double-claim → drop per `agent/knowledge.md`
   invariant. No perf regression expected on low-contention scenes (sparse, empty) per literature.
 - **Acceptance:** conservation invariant holds (`stats.fluidVoxelCount` = `std::count(voxels, == Fluid)`
-  после каждого commit) — `ProjectVFluidCAGpuTests` validates per `agent/knowledge.md §30.4`
-  line 1062.
+  после каждого commit) — `ProjectVFluidCAGpuTests` validates per `agent/knowledge.md`.
 
 ### Step 2 (S, ~150 LoC, perf optimization — gated by measurement) — CONDITIONAL
 
@@ -443,7 +442,7 @@ precedent).
   required for Stage 3.1 async dispatch (per `agent/workspace.md §1` Phase 3).
 - `2026-06-20-async-compute-overhead-numbers` (closed verdict=yes, +9.85-11.34%) — confirms
   async-compute benefit, atomic strategy inside-pass = next axis.
-- `agent/knowledge.md §30.4` (lines 1037-1083) — 3-step migration precedent для Stage 3.1.
+- `agent/knowledge.md` (lines 1037-1083) — 3-step migration precedent для Stage 3.1.
 
 ---
 
@@ -511,8 +510,8 @@ per axis). TBDR mobile + tensor core = OUT OF SCOPE для текущего Proj
 - `src/ecs/EcsWorld.cpp:200 FluidCATickSystem` — Flecs tick dispatcher.
 - `src/CMakeLists.txt:38 ${SHADER_DIR}/fluid_ca.comp` — shader compile.
 - `tests/FluidCATests.cpp` — CPU reference tests (24 sub-tests, 100% pass, ground truth для
-  correctness validation per `agent/knowledge.md §30` line 938).
-- `agent/knowledge.md §30.4` — 3-step migration precedent (lines 1037-1083), contract для Stage 3.1.
+  correctness validation per `agent/knowledge.md`).
+- `agent/knowledge.md` — 3-step migration precedent (lines 1037-1083), contract для Stage 3.1.
 
 **Допущения/упрощения:**
 
@@ -539,8 +538,8 @@ per axis). TBDR mobile + tensor core = OUT OF SCOPE для текущего Proj
 
 **Cross-refs:**
 
-- `agent/knowledge.md §30.4` (lines 1037-1083) — 3-step migration precedent + count conservation contract.
-- `agent/knowledge.md §30.1` (line 957) — 20 Hz tick rate default.
+- `agent/knowledge.md` (lines 1037-1083) — 3-step migration precedent + count conservation contract.
+- `agent/knowledge.md` (line 957) — 20 Hz tick rate default.
 - `TODO.md §3.1` — Stage 3.1 DoD (0.5 ms / 500K voxels).
 - `2026-06-20-dec-pipelines-async-compute` (closed verdict=yes) — async-compute sync foundation (orthogonal axis).
 - `2026-06-20-async-compute-overhead-numbers` (closed verdict=yes, +9.85-11.34%) — sync measured, atomic

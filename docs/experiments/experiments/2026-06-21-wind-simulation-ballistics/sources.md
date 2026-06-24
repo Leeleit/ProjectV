@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-wind-simulation-ballistics
 
 Web-research complete this session via DuckDuckGo HTML endpoint + direct `webfetch` (Exa HTTP 429 persistent per
-`agent/knowledge.md Part B §9` line 1424 fallback list). **7 primary sources verified** (Tier 1) + 3 supplementary
+the web_search fallback chain). **7 primary sources verified** (Tier 1) + 3 supplementary
 (Tier 2):
 
 ## Tier 1 — primary
@@ -52,7 +52,7 @@ Web-research complete this session via DuckDuckGo HTML endpoint + direct `webfet
 
 ## Cross-references in ProjectV
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `agent/workspace.md §1` Phase 4 + Phase 9 — physics integration.
 - `agent/workspace.md §2` line 36 — operator 8x planning decision (deferred to dedicated session).
 - `TODO.md §4.1` — Stage 4.1 GPU world gen budget.
@@ -61,7 +61,7 @@ Web-research complete this session via DuckDuckGo HTML endpoint + direct `webfet
 
 ## Notes on search
 
-- **Exa `web_search`** HTTP 429 persistent this session (per `agent/knowledge.md Part B §9` line 1424).
+- **Exa `web_search`** HTTP 429 persistent this session (per the web_search fallback chain).
 - **Searx.be** HTTP 403.
 - **DuckDuckGo HTML** requires CAPTCHA (returned "select all ducks" challenge).
 - **Bing** returns unrelated OCR biology results for query "Stam stable fluids".

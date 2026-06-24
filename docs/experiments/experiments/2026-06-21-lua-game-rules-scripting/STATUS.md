@@ -41,7 +41,7 @@ None.
 - `sources.md` — 10 verified web sources (Exa 429 → direct canonical URLs fallback)
 - `prototype/hook_bench.cpp` (~870 LoC) + `prototype/build/hook_bench` binary +
   `prototype/build/results.csv` (376 rows)
-- `agent/knowledge.md Part B §9` — web fallbacks used
+- the web_search fallback chain — web fallbacks used
 - `hardware-profile.md §1` — Zen 3 5800X dev host `obvium`
 - `benchmarks/methodology.md §3` — measurement protocol applied
 - `_TEMPLATE/README.md` — 8-section format

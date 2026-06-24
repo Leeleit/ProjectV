@@ -5,7 +5,7 @@
 **Date closed:** 2026-06-21
 **Stage link:** `TODO.md §5.1` (Voxel Cone Tracing) + direct follow-up к закрытому
 `2026-06-20-vct-vs-rt-cutoff` (verdict=`mixed`, cutoff=0.3 established)
-**Estimated effort:** M (3-step migration в mainline = ~180 LoC, S effort per `agent/knowledge.md §30.4`
+**Estimated effort:** M (3-step migration в mainline = ~180 LoC, S effort per `agent/knowledge.md`
 precedent)
 **Author:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою
 и исследуй»; sixth invocation this session)
@@ -20,7 +20,7 @@ precedent)
 Stage 5.1 voxel cone-march workload per `TODO.md §5.1`.
 
 **Преимущество:** заменяет arbitrary default «6 diffuse + 1 specular + R8 atlas» (current mainline per
-`TODO.md §5.1` + `agent/knowledge.md §15`) на data-backed рекомендацию, которая:
+`TODO.md §5.1` + `agent/knowledge.md`) на data-backed рекомендацию, которая:
 - Соответствует литературному baseline (Crassin 2011 GIVoxels §5: 12 cones = production diffuse GI sweet
   spot)
 - Избегает 8-bit banding на high-mip (OGRE 2019 VCT sample: R8 = 8-bit precision risk at mip ≥3)
@@ -191,7 +191,7 @@ not 12 as originally hypothesized). Performance is NOT a discriminator; pick bas
 ## 7. Integration recommendation
 
 - **Target stage:** `TODO.md §5.1` (Voxel Cone Tracing).
-- **Конкретные изменения (3-step migration per `agent/knowledge.md §30.4` precedent):**
+- **Конкретные изменения (3-step migration per `agent/knowledge.md` precedent):**
     - **Step 1 (XS, ~10 LoC, 1 commit):** Atlas format change in `voxelize.comp` (new per TODO §5.1)
       from `R8G8B8A8_UNORM` to `R16G16B16A16_SFLOAT`. Add `PROJECTV_VCT_ATLAS_FORMAT=R8|R16F` env var
       for fallback to R8 if VRAM pressure on lower-end GPUs.
@@ -199,7 +199,7 @@ not 12 as originally hypothesized). Performance is NOT a discriminator; pick bas
       `N_CONES` define = 6 (literature baseline, not 12 as originally hypothesized). Specular cone
       = 1 (per TODO §5.1) fixed across all configs.
     - **Step 3 (XS, ~20 LoC, 1 commit):** Tracy plot `VCT_ConeMarchMs` + default flip +
-      `agent/knowledge.md §30.x` record VCT sweet spot decision.
+      `agent/knowledge.md`.x` record VCT sweet spot decision.
 - **Total effort:** S (~80 LoC, 1-2 sessions, 1 PR).
 - **Риски:**
     - VRAM +128 MiB (256³ atlas: R8 = 64 MiB → R16F = 128 MiB, +64 MiB = 1.3% of 5.06 GiB
@@ -255,7 +255,7 @@ not 12 as originally hypothesized). Performance is NOT a discriminator; pick bas
 - `2026-06-20-vct-vs-rt-cutoff` (closed mixed) — direct predecessor
 - `2026-06-20-nanovdb-on-gpu` (closed yes) — storage foundation
 - `2026-06-21-taa-motion-vectors` (closed yes) — temporal axis (follow-up candidate для 4D VCT)
-- `agent/knowledge.md §15` — lighting look-dev contract
+- `agent/knowledge.md` — lighting look-dev contract
 - `TODO.md §5.1` — VCT mandate
 - `hardware-profile.md §3` — VRAM budget
 

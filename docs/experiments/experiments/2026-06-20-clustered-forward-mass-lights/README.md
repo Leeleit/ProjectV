@@ -144,7 +144,7 @@ traces** (1 center + 4 area-light samples) = max 60 DDA steps + `ComputeLocalPoi
 - **[Khronos Vulkan Subgroup Tutorial](https://www.khronos.org/blog/vulkan-subgroup-tutorial)** —
   `subgroupBallot` / `subgroupBallotBitCount` / `subgroupBallotExclusiveBitCount`
   для efficient cluster culling. **NVIDIA subgroup=32, AMD=64**, Intel varies
-  (per `agent/knowledge.md §17` + `hardware-profile.md §3`).
+  (per `agent/knowledge.md` + `hardware-profile.md §3`).
 - *
   *[NVIDIA Vulkan Update GTC 2019](https://developer.download.nvidia.com/video/gputechconf/gtc/2019/presentation/s9909-nvidia-vulkan-features-update.pdf)
   **
@@ -175,7 +175,7 @@ traces** (1 center + 4 area-light samples) = max 60 DDA steps + `ComputeLocalPoi
 - `TODO.md §4.x` procedural — lava, biomes = dynamic lights.
 - `src/shaders/voxel.frag:374-587` — current per-light cost (5 DDA + PBR).
 - `src/shaders/voxel.frag:88-117` — DDA_BODY macro (template for per-light shadow ray).
-- `agent/knowledge.md §4` — build/verification contract (Tracy metric, ≥5% threshold).
+- `agent/knowledge.md` — build/verification contract (Tracy metric, ≥5% threshold).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — "if perf gain
   < 5-10%, choose simple" — Forward+ рекомендация должна пересечь этот threshold.
 
@@ -434,7 +434,7 @@ mainline target: **0.1-0.3 ms per frame cluster build at 1000 lights**.
 5. **Subgroup size dependency** (32 NVIDIA / 64 AMD) — use `gl_SubgroupSize` runtime
    check, don't hardcode.
 
-### 7.4 Acceptance criteria (per `agent/knowledge.md §4` build/verification contract)
+### 7.4 Acceptance criteria (per `agent/knowledge.md` build/verification contract)
 
 - [ ] **Performance:** 1000 dynamic lights at 16×9×24 grid: cluster build < 1 ms GPU
   (measured via TracyPlot `ClusterBuild (ms)`).

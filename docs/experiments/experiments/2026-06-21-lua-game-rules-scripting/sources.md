@@ -1,7 +1,7 @@
 # Sources — `lua-game-rules-scripting`
 
 Web research 2026-06-21 via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429
-persistent; DuckDuckGo HTML endpoint CAPTCHA-blocked per `agent/knowledge.md Part B §9` line
+persistent; DuckDuckGo HTML endpoint CAPTCHA-blocked per the web_search fallback chain line
 1424 fallback list). All sources **verified** by reading the actual page content; not relying
 on cached snippets.
 
@@ -123,7 +123,7 @@ Relevant facts:
 
 ## Tier 3 — Cross-cutting references (ProjectV context)
 
-### 8. ProjectV — `agent/knowledge.md Part B §9` — Web fallbacks
+### 8. ProjectV — the web_search fallback chain — Web fallbacks
 **URL:** local file `/home/le1t/Projects/ProjectV/agent/knowledge.md`
 **Captured:** 2026-06-21 (read this session)
 
@@ -138,7 +138,7 @@ Brave → Bing → Google → Startpage → direct canonical URLs. This experime
 Key facts for prototype measurement:
 - Dev host `obvium` AMD Ryzen 7 5800X (Zen 3), 8C/16T, governor `powersave`.
 - 62.7 GiB RAM; AVX2/FMA yes, AVX-512 no.
-- Clang 22.1.6 (per `agent/knowledge.md §17`).
+- Clang 22.1.6 (per `agent/knowledge.md`).
 - Benchmark flags per `benchmarks/methodology.md`: `-O3 -march=native -std=c++26 -DNDEBUG`.
 
 ### 10. ProjectV — `benchmarks/methodology.md` — Standard harness
@@ -171,7 +171,7 @@ win, marginal = reject).
 
 ## Sources NOT used (with rationale)
 
-- **DuckDuckGo HTML** — CAPTCHA-blocked this session per `agent/knowledge.md Part B §9`.
+- **DuckDuckGo HTML** — CAPTCHA-blocked this session per the web_search fallback chain.
   Fallback path: direct canonical URLs (above).
 - **Brave / Bing / Google / Startpage** — not needed; direct canonical URLs sufficed.
 - **Facepunch/garrysmod `hook.lua` source** — fetch timed out; wiki pages provide
@@ -193,6 +193,6 @@ win, marginal = reject).
 | 4 | `github.com/Facepunch/garrysmod/.../hook.lua`    | yes     | timeout | implemented in C++ binary module     |
 | 5 | `warcraft.wiki.gg/wiki/Event_API`                | yes     | OK      | full content extracted               |
 | 6 | `lua.org/manual/5.1/manual.html`                 | yes     | OK      | full reference extracted (truncated) |
-| 8 | local: `agent/knowledge.md Part B §9`           | yes     | OK      |                                      |
+| 8 | local: the web_search fallback chain           | yes     | OK      |                                      |
 | 9 | local: `hardware-profile.md`                     | yes     | OK      |                                      |
 | 10| local: `benchmarks/methodology.md`              | yes     | OK      |                                      |

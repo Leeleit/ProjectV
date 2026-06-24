@@ -247,7 +247,7 @@
       для efficient cluster culling.
     - **NVIDIA subgroup=32, AMD=64** (1 warp = 32 invocations на Ampere).
     - На NVIDIA с 32-wide subgroup — 1/32 atomics cost vs naive.
-- **Cross-ref:** `README.md §2.3` + `agent/knowledge.md §17` + `hardware-profile.md §3`.
+- **Cross-ref:** `README.md §2.3` + `agent/knowledge.md` + `hardware-profile.md §3`.
 
 ### S4.2 NVIDIA — Vulkan Update GTC 2019
 
@@ -363,8 +363,8 @@
 - `src/shaders/voxel.frag:88-117` — `DDA_BODY` macro (template).
 - `src/render/SceneResources.{hpp,cpp}` — new SSBO + new compute pipeline.
 - `src/render/Renderer.cpp` — new dispatch before voxel.frag.
-- `agent/knowledge.md §4` — build/verification contract (Tracy metric, ≥5% threshold).
-- `agent/knowledge.md §17` — Linux baseline (Clang 22.1.6, libstdc++ 16).
+- `agent/knowledge.md` — build/verification contract (Tracy metric, ≥5% threshold).
+- `agent/knowledge.md` — Linux baseline (Clang 22.1.6, libstdc++ 16).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `docs/experiments/hardware-profile.md §1` + §3 — Zen 3 5800X + RTX 3060 Ti.
 - `docs/experiments/2026-06-20-async-compute-overhead-numbers/` — sync foundation

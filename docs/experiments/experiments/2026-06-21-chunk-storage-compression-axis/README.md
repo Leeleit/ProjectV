@@ -15,7 +15,7 @@
 
 - **File size reduction:** ≥30% mean (and ≥70% для uniform scenes) vs raw uncompressed baseline per `agent/workspace.md §1 Phase 3` + `docs/VoxelWorld.md` Stage 4.3 chunk budget (4096+ chunks at 128m draw distance = critical для prebake Step 3).
 - **Decompress speed:** ≤ 50 µs per chunk на Zen 3 5800X dev host `obvium` per `hardware-profile.md §1` (well under 8 ms Stage 4.3 8-chunks-per-frame budget = 1000 µs/chunk headroom per closed `2026-06-21-voxel-chunk-streaming-pipeline`).
-- **100% lossless fidelity** round-trip (encode → decode → byte-exact match required для chunk streaming payload integrity per `agent/knowledge.md §4` build/verification contract).
+- **100% lossless fidelity** round-trip (encode → decode → byte-exact match required для chunk streaming payload integrity per `agent/knowledge.md` build/verification contract).
 - **Cross-vendor scene-coverage stability** — no single strategy wins all 5 representative scenes (uniform_floor / uniform_half / forest_floor / cave_stress / mixed_biome).
 
 **Альтернативы:**
@@ -38,7 +38,7 @@
 
 ## 2. Prior art
 
-Web-research via `webfetch` DuckDuckGo HTML endpoint + direct source URL fetch (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424). **13 primary sources verified:**
+Web-research via `webfetch` DuckDuckGo HTML endpoint + direct source URL fetch (Exa MCP HTTP 429 persistent per the web_search fallback chain). **13 primary sources verified:**
 
 - **[Aras Pranckevičius (zeux) 2017 "Voxel terrain: storage"](https://zeux.io/2017/03/27/voxel-terrain-storage/)** — **canonical voxel chunk compression reference**. RLE-only disk = 73 MB / 0.07 bytes-per-voxel; RLE+LZ4 = 50 MB / 0.05; RLE+zstd = 38 MB / 0.04 (best ratio). 2-byte `(counter, value)` run format → 256 bytes for single-material chunk vs 64 KB raw = **256× compression** at extreme. "Running RLE before LZ may seem counter-intuitive, but it significantly reduces the size of data making LZ faster, and in some cases means you don't even need to do LZ compression because RLE on its own is enough — voxel data is frequently very regular."
 - **[Minecraft Wiki — Region file format](https://minecraft.fandom.com/wiki/Region_file_format)** — Anvil format since 1.2.1 (12w07a), **32×32 chunks per region file**, 4 KiB sector alignment, compression scheme 2 (zlib / RFC1950) standard, scheme 1 (gzip / RFC1952) unused in practice, scheme 3 (uncompressed) optional. Minecraft 1.20.5 (24w04a) added **LZ4 compression option** для server.properties.
@@ -84,7 +84,7 @@ Web-research via `webfetch` DuckDuckGo HTML endpoint + direct source URL fetch (
 - **Протокол:**
     - 5 strategies × 5 scenes × 5 seeds (1, 7, 42, 1234, 31337 — per `sub-chunk-layers` precedent для direct comparability) × 1000 iter + 10 warmup = **125 configs × 1000 = 125,000 main measurements**, target wall time < 5 sec на Zen 3 5800X per `hardware-profile.md §1`.
     - Output: `prototype/build/results.csv` (126 rows = 1 header + 125 data).
-    - Use clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` per `agent/knowledge.md §17` build matrix.
+    - Use clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` per `agent/knowledge.md` build matrix.
 
 ---
 
@@ -212,7 +212,7 @@ Full numbers + per-strategy timing breakdown at `RESULTS.md` §1-§2.
 - Stage 4.3 Step 2 (Chunk Streaming background worker) — **closed `2026-06-21`** per `agent/workspace.md §1 Phase 3`.
 - No new external libraries required — uses stdlib + inline implementations.
 
-**Estimated effort:** S-M (single-file change ~170 LoC + 1 new test target ~200 LoC, 1-2 sessions per `agent/knowledge.md §30.4` precedent).
+**Estimated effort:** S-M (single-file change ~170 LoC + 1 new test target ~200 LoC, 1-2 sessions per `agent/knowledge.md` precedent).
 
 **Ре-evaluation triggers:**
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22 (single session, ~3h: claim + web-research + prototype + bench + close).
 **Hardware:** Zen 3 5800X governor=`powersave` per [`docs/experiments/hardware-profile.md §1`](../../hardware-profile.md).
-**Build:** `clang++ 22.1.6 -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic` per [`agent/knowledge.md §17`](../../../agent/knowledge.md) Linux baseline. **0 warnings, 0 errors**.
+**Build:** `clang++ 22.1.6 -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic` per [`agent/knowledge.md`](../../../agent/knowledge.md) Linux baseline. **0 warnings, 0 errors**.
 **Wall time:** 0.126 sec total for 125,000 main measurements + 1,250 warmup (10 per config).
 **Output:** `prototype/build/results.csv` (125,001 rows = 1 header + 125,000 data) + `prototype/build/summary_means.csv` (26 rows = 25 configs + header) + `prototype/build/run.log`.
 

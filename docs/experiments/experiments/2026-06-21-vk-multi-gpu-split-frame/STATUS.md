@@ -3,8 +3,8 @@
 **Phase:** concluded-verdict-mixed
 **Last action:** 2026-06-21 — closed single session, sync-pass per `AGENTS.md §13.5`.
 **Next tick:** по запросу оператора (multi-GPU dev host availability re-evaluation trigger).
-**Blocker:** **closed** (was partial — `web_search` Exa 429 during initial research; resolved via `webfetch` fallback per `agent/knowledge.md Part B §9`).
-`AGENTS.md §4` obligation; fallback per `agent/knowledge.md Part B §9` self-audit = `webfetch` (validated against
+**Blocker:** **closed** (was partial — `web_search` Exa 429 during initial research; resolved via `webfetch` fallback per the web_search fallback chain).
+`AGENTS.md §4` obligation; fallback per the web_search fallback chain self-audit = `webfetch` (validated against
 `docs.vulkan.org/refpages/...` + `khronos.org/...`, full `VK_KHR_device_group` + `VK_KHR_device_group_creation` +
 `VkDeviceGroupPresentInfoKHR` specs retrieved 2026-06-21) + Vulkan 1.4 core spec (VK_VERSION_1_1 promotion of
 `VK_KHR_device_group` per `docs.vulkan.org/refpages/latest/refpages/source/VK_KHR_device_group.html` lines 38-43
@@ -21,7 +21,7 @@ NVLink 4.0/4.1 production numbers, AMD mGPU production numbers, Intel Arc mGPU 2
 - **2026-06-21 (operator instruction: «выбирай свободную тему или придумывай свою и исследуй»)** —
   agent read `AGENTS.md` §1-§15, `INDEX.md`, `backlog.md`, `hardware-profile.md` (Captured 2026-06-20,
   <14 days → file used, no probe per STOP-блок), `benchmarks/methodology.md`, `_TEMPLATE/{README,STATUS}.md`,
-  `agent/knowledge.md` Part A §30.4 (3-step migration precedent) + Part B §9 (fallback policy),
+  `agent/knowledge.md` (3-step migration precedent) +  (fallback policy),
   `agent/workspace.md` (Stage 4.3 128m draw distance = Nearest Gap callout, VRAM cap = main bottleneck),
   `TODO.md` (Stage 4.3 explicit "Lift Draw Distance Cap" task). Anti-duplicate sentinel clean per §13.7:
   no `vk-multi-gpu-split-frame` / `multi-gpu-split-frame` folder, no in-progress multi-GPU experiment.
@@ -76,9 +76,9 @@ NVLink 4.0/4.1 production numbers, AMD mGPU production numbers, Intel Arc mGPU 2
   Vulkan 1.1 (verified 2026-06-21 per `docs.vulkan.org/refpages/.../VK_KHR_device_group.html` line 38-43
   «Deprecation State — Promoted to Vulkan 1.1»). **No extension dependency for ProjectV** (uses Vulkan 1.4
   per `hardware-profile.md §3`).
-- **Per `agent/knowledge.md Part A §2`:** Mainline = reproducible interactive voxel MVP. Multi-GPU =
+- **Per `agent/knowledge.md`:** Mainline = reproducible interactive voxel MVP. Multi-GPU =
   forward-looking scaling, **NOT** gating current Stage 4.3 ship. Recommended action: API discovery probe
-  + cross-vendor matrix в mainline (low cost, ~200 LoC per `agent/knowledge.md §30.4` 3-step migration
+  + cross-vendor matrix в mainline (low cost, ~200 LoC per `agent/knowledge.md` 3-step migration
   precedent) = **future-proof integration** ready when multi-GPU dev host arrives.
 - **Cross-vendor scaling estimates** (analytical, not measured): NVLink 4.0 pair (Hopper/Blackwell) = 70-90%
   on 2 GPU; AMD xGMI / IF (RDNA 3/4) = 60-80%; Intel Arc + PCIe 4.0 = 30-50% (no native peer interconnect);

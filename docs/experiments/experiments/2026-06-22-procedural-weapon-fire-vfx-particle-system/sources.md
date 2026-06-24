@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-procedural-weapon-fire-vfx-particle-system
 
-> **Captured:** 2026-06-22 02:00 (per `AGENTS.md §5.3` web-search obligation; Exa MCP HTTP 429 persistent + DuckDuckGo HTML CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list; **working**: direct `webfetch` to canonical URLs).
+> **Captured:** 2026-06-22 02:00 (per `AGENTS.md §5.3` web-search obligation; Exa MCP HTTP 429 persistent + DuckDuckGo HTML CAPTCHA blocked per the web_search fallback chain; **working**: direct `webfetch` to canonical URLs).
 > **Cross-vendor matrix analytical projection per `2026-06-21-dec-pipelines-async-compute §2.2` precedent.**
 > **8 Tier 1 + 5 Tier 2 = 13 primary + 4 supplementary sources verified.**
 
@@ -140,7 +140,7 @@ These limitations are accepted for this session per `AGENTS.md §4`: "Когда
 
 ---
 
-## Web-search fallback chain (per `agent/knowledge.md Part B §9`)
+## Web-search fallback chain (per the web_search fallback chain)
 
 | Source | Status this session | Notes |
 |:-------|:-------------------|:------|

@@ -46,7 +46,7 @@ Stage 4.3 / 5.2 re-evaluation trigger.
 
 ## Cross-refs
 - `agent/workspace.md` — mainline session running parallel (mesh shader 2x part 6); no scope conflict.
-- `agent/knowledge.md §30.4` — 3-step migration precedent (Step 1 budget + Step 2 hard cap + Step 3 pre-created ring buffer).
+- `agent/knowledge.md` — 3-step migration precedent (Step 1 budget + Step 2 hard cap + Step 3 pre-created ring buffer).
 - `hardware-profile.md §3` — RTX 3060 Ti 8 GiB / 5.06 GiB driver budget; dev host validation baseline.
 - 6 prior experiments — `bindless-descriptor-overhead`, `dec-pipelines-async-compute`,
   `nanovdb-on-gpu`, `clustered-forward-mass-lights`, `vct-vs-rt-cutoff`, `rt-shadows-vs-csm`

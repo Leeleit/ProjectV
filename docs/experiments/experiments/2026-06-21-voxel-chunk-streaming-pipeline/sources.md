@@ -1,7 +1,7 @@
 # Sources — `2026-06-21-voxel-chunk-streaming-pipeline`
 
 Web-research complete via DuckDuckGo HTML endpoint + direct `webfetch` on arXiv / GitHub / engine docs
-(Exa HTTP 429 persistent per `agent/knowledge.md Part B §9` fallback policy). DuckDuckGo CAPTCHA
+(Exa HTTP 429 persistent per the web_search fallback chain). DuckDuckGo CAPTCHA
 triggered after 2 successful searches → switched to direct domain fetch.
 
 **Total: 5 primary + 3 secondary verified sources.**
@@ -137,8 +137,8 @@ triggered after 2 successful searches → switched to direct domain fetch.
 
 - `TODO.md §4.3` — explicit Stage 4.3 goal: «lift draw distance cap 64→128m»
 - `agent/workspace.md §2` — Nearest Gap: «Stage 4.3 lift draw distance 128+ chunks»
-- `agent/knowledge.md §29.0` — `std::expected<T,E>` cold-path rule (streaming load = cold path)
-- `agent/knowledge.md §30.4` — 3-step migration precedent (foundation → adoption → default flip)
+- `agent/knowledge.md` — `std::expected<T,E>` cold-path rule (streaming load = cold path)
+- `agent/knowledge.md` — 3-step migration precedent (foundation → adoption → default flip)
 - `hardware-profile.md §1/§3/§5` — Zen 3 5800X + RTX 3060 Ti 8 GiB + NVMe storage
 - `benchmarks/methodology.md §3` — measurement protocol
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold
@@ -162,7 +162,7 @@ triggered after 2 successful searches → switched to direct domain fetch.
 
 - ✅ All 5 primary sources fetched directly (arXiv, GitHub, Epic docs, Voxceleron2 blog).
 - ⚠️ DuckDuckGo CAPTCHA triggered after 2 successful searches → switched to direct domain fetch for rest.
-- ⚠️ Exa MCP HTTP 429 persistent per session (per `agent/knowledge.md Part B §9` fallback policy).
+- ⚠️ Exa MCP HTTP 429 persistent per session (per the web_search fallback chain).
 - ⚠️ Web search unavailable for fresh SOTA citations beyond what was retrieved — no claim of full coverage
   for 2024-2026 streaming literature; recommend re-verification after web search restored.
-- ✅ All sources within last 18 months (May 2025 — Jun 2026) per `agent/knowledge.md Part A §4` freshness rule.
+- ✅ All sources within last 18 months (May 2025 — Jun 2026) per `agent/knowledge.md` freshness rule.

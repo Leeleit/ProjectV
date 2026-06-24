@@ -54,7 +54,7 @@
 
 ## Tier 3 (ProjectV internal)
 
-17. `agent/knowledge.md §30.4` — 3-step migration precedent
+17. `agent/knowledge.md` — 3-step migration precedent
 18. `docs/experiments/hardware-profile.md §1` — Zen 3 5800X dev host
 19. `benchmarks/methodology.md §3` — measurement protocol
 20. `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% perf threshold

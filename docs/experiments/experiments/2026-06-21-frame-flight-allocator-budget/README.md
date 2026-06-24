@@ -19,7 +19,7 @@ VRAM, **5.06 GiB driver budget**) + §4 (`VK_KHR_maintenance4` `maintenance4` + 
 
 - Один глобальный `VmaAllocator` создаётся в `src/render/vulkan/VulkanBootstrap.cpp:807-823`
   (`VmaAllocatorCreateInfo` — дефолт, без `VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT` / `VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT` /
-  priority hints; `vulkanApiVersion = GetMinVulkanApiVersion()` per `agent/knowledge.md §17` = 1.3).
+  priority hints; `vulkanApiVersion = GetMinVulkanApiVersion()` per `agent/knowledge.md` = 1.3).
 - `VmaPool` нигде не используется (по `rg VmaPool` = 0 совпадений).
 - Все транзиентные и статические ресурсы идут через `vmaCreateImage` / `vmaCreateBuffer` без pool'ов:
   `HizCulling.cpp:134-146` (HZB image), `TaaRenderTargets.cpp:119-141` (TAA motion vectors), `MeshGpuResources.cpp` (mesh SSBOs),
@@ -449,7 +449,7 @@ chunks draw distance) или Stage 5.2 RTX BLAS pool overflow — re-evaluation 
 
 **Stage 6.2 (tech-debt)** — cross-cutting foundation для Stage 2.x/3.x/5.x/4.x.
 
-### 7.2 Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent)
+### 7.2 Concrete changes (3-step migration per `agent/knowledge.md` precedent)
 
 #### Step 1 (XS, ~20 LoC) — Add EXT_MEMORY_BUDGET_BIT + Tracy plot
 
@@ -649,8 +649,8 @@ OOM crashes on transient overflow.
 ### 8.6 ProjectV cross-refs (used sources)
 
 - `docs/experiments/hardware-profile.md` §1-3, §6-7 (CPU/RAM/GPU/VRAM/toolchain).
-- `agent/knowledge.md` §17 (multiplatform baseline: Arch Linux + clang + lld + libstdc++).
-- `agent/knowledge.md` §30.4 (3-step migration precedent).
+- `agent/knowledge.md` (multiplatform baseline: Arch Linux + clang + lld + libstdc++).
+- `agent/knowledge.md` (3-step migration precedent).
 - `TODO.md` §6.2 (PIMPL target — VMA budget cap sits within this scope).
 - `agent/workspace.md §2` (current Stage 3.1 GPU Fluid CA cross-frame latency contract).
 

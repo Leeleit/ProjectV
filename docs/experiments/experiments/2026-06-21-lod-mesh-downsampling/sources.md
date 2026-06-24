@@ -7,7 +7,7 @@
 ## Project-internal sources (cross-refs only, не дублировать)
 
 - `agent/workspace.md §2` — Nearest Gap explicit callout for Stage 4.2 chunk 2.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `src/voxel/VoxelWorld.hpp:78` — `chunkSize = 8`.
 - `src/voxel/VoxelWorld.cpp:1175-1208` — `SelectLodLevelForDistance` + `AssignLodLevels`.
 - `src/voxel/VoxelWorld.hpp:54` — `VoxelChunk::lodLevel` byte field.

@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-engineer-capabilities-system
 
-**Web-research complete via direct `webfetch` to canonical Wikipedia URLs** (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list).
+**Web-research complete via direct `webfetch` to canonical Wikipedia URLs** (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 
 ## Primary sources (Tier 1 verified)
 
@@ -57,4 +57,4 @@
 - `rg "engineer.capabilities|engineer.class|engineer.role|engineer.kit|foxhole.engineer|sapper"` over `INDEX.md` + `experiments/` = only orth cross-ref в `2026-06-22-bridge-building-repair/README.md` mentioning "engineer" as downstream prerequisite.
 - `ls experiments/*engineer*` = ENOENT pre-claim.
 - All 3 web sources verified via direct `webfetch` to canonical Wikipedia URLs (canonical production-grade references for combat engineer role definition).
-- Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per `agent/knowledge.md Part B §9` line 1424 fallback list → direct webfetch to Wikipedia primary sources.
+- Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per the web_search fallback chain → direct webfetch to Wikipedia primary sources.

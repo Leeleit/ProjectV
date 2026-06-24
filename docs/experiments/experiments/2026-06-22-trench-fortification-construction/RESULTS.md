@@ -169,7 +169,7 @@ library in L2/L3 (fits in 32 MiB L3 of Zen 3 5800X dev host per `hardware-profil
   Real fortification takes minutes-to-hours (per Wikipedia "Trench warfare": 450 men × 6 hours for 250m).
   Mainline should implement **incremental construction** (BFS on dirty chunk voxels per tick) rather than
   single-tick completion. **See Integration recommendation §3.**
-- **No per-voxel-Flecs overhead:** Flecs component writes (per `agent/knowledge.md §30.4` precedent) add ~50 ns
+- **No per-voxel-Flecs overhead:** Flecs component writes (per `agent/knowledge.md` precedent) add ~50 ns
   per voxel mutation for ECS book-keeping. Real mainline would be ~10-15% slower than prototype.
 - **No real I/O for template library:** templates are in-memory. Real mainline may load from disk (per
   `data-driven-vehicle-weapon-definitions` B_Codegen_TOML2CXX = 222 ns/load — negligible).

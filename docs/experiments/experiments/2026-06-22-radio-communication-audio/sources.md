@@ -1,7 +1,7 @@
 # Sources — 2026-06-22-radio-communication-audio
 
 > Web-research via direct `webfetch` (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint
-> CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). **10 sources verified
+> CAPTCHA blocked per the web_search fallback chain). **10 sources verified
 > directly** by full content fetch on 2026-06-22. All canonical primary sources (Wikipedia + cross-refs).
 
 ---

@@ -206,7 +206,7 @@ This is **slower per-op** for incremental changes (cache invalidation, hash tabl
 - [x] Mean / median / p95 / stddev / min / max reported in CSV
 - [x] DCE-sink via volatile result (prevents compiler from dropping unused outputs)
 - [x] CPU governor = `powersave` per `hardware-profile.md §1` (consistent with other experiments)
-- [x] Same toolchain (Clang 22.1.6) per `agent/knowledge.md §17` baseline
+- [x] Same toolchain (Clang 22.1.6) per `agent/knowledge.md` baseline
 - [x] Build green (0 warnings, 0 errors) per §4.1 build contract
 
 ---

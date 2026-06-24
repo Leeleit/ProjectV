@@ -154,7 +154,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
   volumetric_fog_sim.cpp -o build/volumetric_fog_sim
 ```
 
-Build flags match ProjectV mainline per `agent/knowledge.md §17` (Clang 22.1.6 + LLD + libstdc++).
+Build flags match ProjectV mainline per `agent/knowledge.md` (Clang 22.1.6 + LLD + libstdc++).
 Expected output: **0 warnings, 0 errors** (validated `2026-06-21`).
 
 ### 5.2 Run (single command)

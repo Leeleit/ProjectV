@@ -11,7 +11,7 @@ param(
     # landed in `$CaptureDir` after the process exits. Mirrors
     # the `windows-clang-debug/lookdev-captures/2026-...-*/`
     # artifacts that previously had to be regenerated manually
-    # (per `agent/memory.md §1`).
+    # (per `agent/knowledge.md`).
     [string]$CaptureDir = "",
     [string]$Views = "FINAL SHDW CSM CTSH AOCC LOCL",
     [string]$CameraPosition = "",

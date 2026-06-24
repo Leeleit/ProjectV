@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-eye-tracked-foveated
 
-Web research performed `2026-06-21`. 3 wave queries via `web_search` Exa (working this session per `agent/knowledge.md Part B §9` line 1424 fallback list — fallback не понадобился). All sources verified by direct page fetch via `webfetch`. 14 primary sources + 7 supplementary.
+Web research performed `2026-06-21`. 3 wave queries via `web_search` Exa (working this session per the web_search fallback chain — fallback не понадобился). All sources verified by direct page fetch via `webfetch`. 14 primary sources + 7 supplementary.
 
 ---
 
@@ -151,7 +151,7 @@ Web research performed `2026-06-21`. 3 wave queries via `web_search` Exa (workin
 - `src/render/Renderer.cpp` (dynamic rendering path, `vkCmdBeginRendering` verified)
 - `src/shaders/voxel.frag` (VCT + main fragment pipeline — foveation integration point)
 - `src/shaders/voxel_mesh.comp:146` (mesh shader dispatch — foveation preserves vertex density)
-- `agent/knowledge.md §30.4` (3-step migration precedent)
+- `agent/knowledge.md` (3-step migration precedent)
 - `agent/workspace.md §2` (Nearest Gap callout)
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold)
 - Closed experiment cross-refs: `2026-06-21-vk-fragment-shading-rate-voxel/` (verdict=mixed, uniform global VRS), `2026-06-21-vulkan-memory-aliasing-transient/` (VRAM aliasing), `2026-06-21-dlss-fsr-xess-upscaling-voxel/` (post-process upscaling), `2026-06-21-texture-compression-format-axis/` (texture compression)

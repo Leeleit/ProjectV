@@ -135,7 +135,7 @@ Per-strategy:
 
 - **Target stage:** `TODO.md` §5.5 (DDGI probes — replaces VCT diffuse in RTX-only path).
 - **Default strategy:** `PROJECTV_DDGI=UNIFORM_6` (C). Expose env gate for `4x4x4`, `ADAPTIVE`, `PER_CHUNK`.
-- **Implementation:** 3-step migration per `agent/knowledge.md §30.4` precedent:
+- **Implementation:** 3-step migration per `agent/knowledge.md` precedent:
   1. **(XS, ~80 LoC)** `src/render/DdgiVolume.{hpp,cpp}` — probe grid definition, octahedral atlas allocation. Per NVIDIA RTXGI SDK integration docs.
   2. **(M, ~500 LoC)** `src/shaders/probe_ray_gen.comp` + `src/shaders/probe_update.comp` + `src/shaders/probe_lighting.frag` — probe ray tracing via `rayQueryEXT` against existing TLAS (per Milestone 5.2.A), probe update with hysteresis (0.9 default), full-screen irradiance gather with visibility-aware trilinear blend.
   3. **(S, ~100 LoC)** Remove VCT diffuse cone path from `voxel.frag` (6 cones → 1 DDGI gather). Wire `PROJECTV_DDGI` env gate. Tracy plot "DDGI Probe RT", "DDGI Update", "DDGI Lighting".

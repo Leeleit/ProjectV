@@ -150,7 +150,7 @@ The hypothesis was wrong on CPU cost (10–50× underestimate) but correct on th
    - Batch 64–128 chunks per dispatch to amortize overhead.
    - **Estimated cost at 64 chunks/dispatch:** ~8 µs per tick (0.13 µs/chunk) — 200× faster than CPU B.
 
-3. **Border exchange** (cross-chunk T flow): use GPU shared memory for border voxels (6 faces × 64 voxels = 384 bytes) or render-to-buffer between dispatches per `agent/knowledge.md §10.x` chunk border pattern.
+3. **Border exchange** (cross-chunk T flow): use GPU shared memory for border voxels (6 faces × 64 voxels = 384 bytes) or render-to-buffer between dispatches per `agent/knowledge.md`.x` chunk border pattern.
 
 4. **Skip AIR voxels** in the stencil (already in prototype; unconditionally set T = T_AMB). Only ~20–50% of voxels in a typical chunk are solid — substantial savings.
 

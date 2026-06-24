@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-urban-combat-tactics-ai
 
-All sources retrieved `2026-06-22` via direct `webfetch` (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). 8 primary + 4 supplementary = **12 verified sources**.
+All sources retrieved `2026-06-22` via direct `webfetch` (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain). 8 primary + 4 supplementary = **12 verified sources**.
 
 ---
 
@@ -93,4 +93,4 @@ All sources retrieved `2026-06-22` via direct `webfetch` (Exa `web_search` HTTP 
 - **Game AI Pro (Rabin 2014)** — referenced as canonical industry BT book, **NOT independently fetched** (relies on Wikipedia + closed experiment cross-ref).
 - **IEEE Transactions on Robotics 2017** Colledanchise/Ögren "How Behavior Trees Modularize Hybrid Control Systems" (DOI:10.1109/TRO.2016.2633567) — formal BT theoretical foundation, **NOT independently fetched** (relies on Wikipedia + arXiv:1709.00084 cross-ref).
 
-These limitations are **standard** for the docs/experiments/ scope: we cite Wikipedia + closed experiment cross-refs as authoritative, treat non-Wikipedia primary sources as supplementary per `agent/knowledge.md Part B §9` verification protocol.
+These limitations are **standard** for the docs/experiments/ scope: we cite Wikipedia + closed experiment cross-refs as authoritative, treat non-Wikipedia primary sources as supplementary per the web_search fallback chain verification protocol.

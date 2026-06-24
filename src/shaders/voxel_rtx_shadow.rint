@@ -1,5 +1,5 @@
 #version 460
-#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_tracing : require // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 // Stage 5.2.E voxel-aware procedural intersection shader.
 // Called by RT cores when a shadow ray candidate intersects the AABB of a chunk
@@ -95,7 +95,7 @@ void main() {
         abs(rayDirWorld.x) > 0.00001 ? abs(1.0 / rayDirWorld.x) : kHugeRayT,
         abs(rayDirWorld.y) > 0.00001 ? abs(1.0 / rayDirWorld.y) : kHugeRayT,
         abs(rayDirWorld.z) > 0.00001 ? abs(1.0 / rayDirWorld.z) : kHugeRayT);
-    float tCurrent = max(tEntry, rayTmin);
+    float tCurrent = tStart; // EVIL: align tCurrent with cell/tMaxAxis anchor (all at tStart). Old code used max(tEntry,rayTmin) without epsilon → desync between cell-under-test (at tStart) and reportIntersectionEXT value (at tEntry), causing misses at chunk AABB boundaries in thin structures (P1A-5).
 
     const uint maxSteps = chunkExtentX + chunkExtentY + chunkExtentZ;
     for (uint stepIdx = 0u; stepIdx < maxSteps; ++stepIdx) {

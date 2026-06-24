@@ -1,4 +1,4 @@
-#include "render/vulkan/VulkanSwapchain.hpp"
+#include "render/vulkan/VulkanSwapchain.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"

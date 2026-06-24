@@ -130,7 +130,7 @@ follow-up; 4D temporal VCT follow-up (close to closed `2026-06-21-taa-motion-vec
 
 - [ ] Results interpretation (sweet spot identification)
 - [ ] Verdict write-up (`mixed` or `yes` expected)
-- [ ] Integration recommendation finalize (3-step migration per `agent/knowledge.md §30.4`)
+- [ ] Integration recommendation finalize (3-step migration per `agent/knowledge.md`)
 - [ ] INDEX.md §6 Recent closed update
 - [ ] `research/backlog.md §Closed` entry
 - [ ] STATUS.md → status `concluded-verdict-*`

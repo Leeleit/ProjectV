@@ -75,7 +75,7 @@ queue waits for `kHzbSignal` before indirect draw. Cross-vendor: works on all 4 
 
 ### 2.2 Stage 3.1 Fluid CA (compute, 20 Hz)
 
-Per `agent/knowledge.md §30.4`:
+Per `agent/knowledge.md`:
 
 | Aspect                          | Value                                                                                                                         |
 |:--------------------------------|:------------------------------------------------------------------------------------------------------------------------------|
@@ -230,7 +230,7 @@ This experiment: 5-8% steady-state **AND** simpler sync model (`vkQueueSubmit2` 
 - Per Imagination blog 2020-07-21: create 2 identical queues, alternate per frame for barrier
   multiplication (serializing pattern), but for true parallelism need 2+ actual hardware queues.
 
-**RDNA-specific note:** Per `agent/knowledge.md §9`, dev host = NVIDIA. AMD-specific behavior (RDNA
+**RDNA-specific note:** Per `agent/knowledge.md`, dev host = NVIDIA. AMD-specific behavior (RDNA
 "export bound shaders", RDNA1/2 maintenance branch) deferred to when AMD hardware available.
 
 ---

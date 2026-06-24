@@ -1,7 +1,7 @@
 # Sources — `2026-06-21-structural-collapse-cascade`
 
 **Verification date:** 2026-06-21
-**Verification method:** direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list). DuckDuckGo HTML endpoint + direct `webfetch` to canonical sources.
+**Verification method:** direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent per the web_search fallback chain). DuckDuckGo HTML endpoint + direct `webfetch` to canonical sources.
 
 **Scope:** progressive building collapse wave propagation через voxel structure. Cross-cutting Tier 1 Core Engine Systems: Physics + Stage 3.2 voxel destruction + Stage 6+ military sandbox (building demolitions, bunker breaching, siege warfare).
 

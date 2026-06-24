@@ -93,7 +93,7 @@ Khronos official sample. Quantitative:
 AMD official guidance:
 
 - "**Compute shaders which make heavy use of LDS and ALU are usually good candidates for the asynchronous compute queue.
-  **" → ProjectV Stage 3.1 Fluid CA (heavy ALU, LDS shared mem for active chunk list per `agent/knowledge.md §30.4`) =
+  **" → ProjectV Stage 3.1 Fluid CA (heavy ALU, LDS shared mem for active chunk list per `agent/knowledge.md`) =
   textbook async candidate.
 - "**Depth only rendering passes are usually good candidates to have some compute tasks run next to it.**" → Stage 2.2
   HZB cull (depth→HZB blit + compute cull) = good overlap pair.
@@ -155,7 +155,7 @@ chunks) async becomes useful.
     - §2.3 production engine usage (Nanite, Lumen, Timberdoodle).
     - §2.4 DEC / persistent compute (AMDX deferred).
     - §2.5 queue priority / queue count.
-- `agent/knowledge.md §30.4` — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list).
+- `agent/knowledge.md` — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list).
 - `TODO.md §2.2 / §3.1 / §4.1 / §5.2` — ProjectV compute pass stages.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - `docs/experiments/hardware-profile.md` §3 (RTX 3060 Ti queue family 2) + §4 (sync2/timeline/global_priority all core).

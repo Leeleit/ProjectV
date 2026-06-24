@@ -17,7 +17,7 @@ cmake --build .
 
 **Требования:**
 
-- Clang 22.1.6+ (per `agent/knowledge.md §17` Linux baseline)
+- Clang 22.1.6+ (per `agent/knowledge.md` Linux baseline)
 - Vulkan SDK 1.4.350+ (system, per `hardware-profile.md §6`)
 - `glslc` 2026.2+ (system, per `hardware-profile.md §6`)
 - VMA 3.4.0 + volk (vendored in ProjectV `external/`)
@@ -61,7 +61,7 @@ CMake автоматически подхватывает vendored VMA + volk и
 | # | Name | Description | Reference |
 |---|------|-------------|-----------|
 | 0 | `A_AtomicOr_Blind` | blind `atomicOr` без CAS check | `src/shaders/fluid_ca.comp:101` (current mainline) |
-| 1 | `B_CAS` | `atomicCompSwap` loop (Air→Fluid) | `agent/knowledge.md §30.4` line 1045 contract |
+| 1 | `B_CAS` | `atomicCompSwap` loop (Air→Fluid) | `agent/knowledge.md` contract |
 | 2 | `C_SharedMem` | per-workgroup shared mem, sequential compaction | per `WebGPU Atomic Contention 2026` + `FLIP MDPI 2026` |
 | 3 | `D_SubgroupBallot` | `subgroupBallot` + `subgroupExclusiveAdd` prefix sum | per `Vulkan Subgroup Tutorial` Khronos + `Prefix Sum WebGPU` Yamasaki |
 | 4 | `E_HierLock` | coarse-grained per-chunk atomic lock, sequential within chunk | per `AMD RDNA Performance Guide 2023` + fallback pattern |

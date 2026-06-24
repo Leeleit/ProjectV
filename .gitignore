@@ -10,9 +10,7 @@ Problems/
 /.cache/
 .venv/
 /docs/VulkanSDK-Windows-Docs-1.4.350.0/
-# Doxygen HTML (no longer used; per Phase F of
-# session-2026-06-19T-comment-minimization-r0, Doxyfile was deleted and
-# all docs now live in COMMENTS.md at the repo root).
+# Doxygen HTML (no longer used; Doxyfile was deleted; code documented inline).
 docs/api/html/
 docs/api/doxygen-warnings.log
 docs/experiments/sources

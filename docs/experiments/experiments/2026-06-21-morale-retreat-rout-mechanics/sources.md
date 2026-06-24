@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-morale-retreat-rout-mechanics
 
-> **Web-research protocol per `AGENTS.md §5.3`:** Exa MCP HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424 fallback list; DuckDuckGo HTML endpoint CAPTCHA-blocked. Used direct `webfetch` to canonical URLs (Wikipedia, academic PDFs, game dev wikis) per the operator's "если websearch не работает, используй webfetch duckduckgo" + canonical-URL fallback.
+> **Web-research protocol per `AGENTS.md §5.3`:** Exa MCP HTTP 429 persistent this session per the web_search fallback chain; DuckDuckGo HTML endpoint CAPTCHA-blocked. Used direct `webfetch` to canonical URLs (Wikipedia, academic PDFs, game dev wikis) per the operator's "если websearch не работает, используй webfetch duckduckgo" + canonical-URL fallback.
 
 > **Verification date:** 2026-06-21. All 8 Tier 1 + 3 Tier 2 + 4 Tier 3 sources verified via direct `webfetch` URL fetch with extracted quotes.
 

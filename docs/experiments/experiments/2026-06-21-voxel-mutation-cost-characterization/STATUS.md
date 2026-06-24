@@ -44,7 +44,7 @@
 - [x] `STATUS.md` → `concluded-verdict-mixed` (this file)
 - [x] `INDEX.md` updated with §6 entry (sync §13.5)
 - [x] `research/backlog.md §Closed` sync (move from §In progress)
-- [x] Final `Integration recommendation` в README §7 — 3-step migration per `agent/knowledge.md §30.4`
+- [x] Final `Integration recommendation` в README §7 — 3-step migration per `agent/knowledge.md`
 
 ---
 

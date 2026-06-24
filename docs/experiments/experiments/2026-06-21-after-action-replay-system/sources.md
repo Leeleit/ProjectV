@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-after-action-replay-system`
 
-Web-research complete `2026-06-21`. Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9`
+Web-research complete `2026-06-21`. Exa `web_search` HTTP 429 persistent per the web_search fallback chain
 + DuckDuckGo HTML bot challenge + Google bot challenge + Wayback 404 → fallback chain:
 **direct `webfetch` to canonical known URLs** (Glenn Fiedler `gafferongames.com` + `en.wikipedia.org`).
 
@@ -134,7 +134,7 @@ Web-research complete `2026-06-21`. Exa `web_search` HTTP 429 persistent per `ag
 
 ## Methodology notes
 
-- **Web search primary:** Exa `web_search` (persistent HTTP 429 rate-limited per `agent/knowledge.md Part B §9`).
+- **Web search primary:** Exa `web_search` (persistent HTTP 429 rate-limited per the web_search fallback chain).
 - **Fallback chain used:**
   1. Direct `webfetch` to known canonical URLs (Gaffer On Games + Wikipedia)
   2. Wayback Machine (`web.archive.org`) — 404 for original `gamasutra.com` URL (defunct since 2023)

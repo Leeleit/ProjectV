@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-water-surface-rendering
 
-Web-research via `webfetch` DuckDuckGo HTML endpoint (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback, per operator directive `2026-06-21`). 15+ primary + secondary sources verified this session, organized by strategy tier.
+Web-research via `webfetch` DuckDuckGo HTML endpoint (Exa `web_search` HTTP 429 persistent per the web_search fallback chain, per operator directive `2026-06-21`). 15+ primary + secondary sources verified this session, organized by strategy tier.
 
 ---
 

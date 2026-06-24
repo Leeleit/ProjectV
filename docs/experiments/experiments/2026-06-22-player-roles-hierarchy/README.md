@@ -184,7 +184,7 @@ Per-strategy recommendations:
 
 ## 8. Sources
 
-Verified web-research via direct `webfetch` to canonical Wikipedia URLs (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). **2 primary sources + 14 cross-references to closed ProjectV experiments** verified в [`sources.md`](./sources.md):
+Verified web-research via direct `webfetch` to canonical Wikipedia URLs (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). **2 primary sources + 14 cross-references to closed ProjectV experiments** verified в [`sources.md`](./sources.md):
 
 - **Wikipedia "Squad (video game)"** (canonical role taxonomy: Commander / SquadLeader / Rifleman / LAT / Medic / Crewman / Pilot with bitmask-style permission gating per kit).
 - **Wikipedia "Arma 3"** (canonical per-input system gating by item/role presence: radios → comms, medkit → healing; per-player role + hierarchy model).

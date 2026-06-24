@@ -47,7 +47,7 @@ chain) + ARM м military radio precedent (AN/PRC-77, AN/PRC-152A, AN/PRC-163).
 ## 2. Prior art
 
 Web-research via `webfetch` DuckDuckGo HTML endpoint fallback (Exa `web_search` HTTP 429 persistent per
-`agent/knowledge.md Part B §9` line 1424 fallback list). См. [`sources.md`](./sources.md) для
+the web_search fallback chain). См. [`sources.md`](./sources.md) для
 полного Tier 1+2 source list:
 
 **Tier 1 (foundational):**
@@ -188,7 +188,7 @@ single-tier** (future SoA SIMD speedup at mainline).
 **Target stage:** Stage 6+ military sandbox per [`agent/workspace.md §2`](../../../agent/workspace.md) operator
 8x planning decision.
 
-**3-step mainline migration per [`agent/knowledge.md §30.4`](../../../agent/knowledge.md) precedent**
+**3-step mainline migration per [`agent/knowledge.md`](../../../agent/knowledge.md) precedent**
 (~500 LoC, M effort, 2-3 sessions, **deferred до Stage 6+ military sandbox activation**):
 
 - **Step 1 (XS, ~80 LoC)** `src/audio/RadioDsp.{hpp,cpp}` foundation: `RadioStrategy` enum +
@@ -243,7 +243,7 @@ Tier 3 cross-refs)._
 - **Допущения/упрощения:** CPU-only analytical prototype (no Vulkan, no miniaudio backend, no real
   voice input); synthetic white-noise input (real input = microphone capture, deferred до mainline);
   encryption = 4-bit noise XOR (real encryption = AES-256 or KYBER, deferred); single-thread
-  (parallel-scale projection analytical per `agent/knowledge.md §30.4` precedent).
+  (parallel-scale projection analytical per `agent/knowledge.md` precedent).
 - **Не измерено в прототипе:** GPU audio DSP (CPU sufficient для 100-player scale); real network jitter
   on radio stream (lockstep precedent = deterministic); 3D HRTF per-listener rendering (deferred до
   Stage 5.x dedicated session); microphone capture latency (deferred до audio capture integration).

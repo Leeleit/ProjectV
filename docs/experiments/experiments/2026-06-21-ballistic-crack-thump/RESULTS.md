@@ -154,7 +154,7 @@ Measured: 0.02–0.39 µs (mean). **100× headroom** vs hypothesis.
 
 - **Local ProjectV cross-refs (to be verified by mainline):**
   - `src/audio/` — mainline audio module (per `agent/workspace.md §1` miniaudio backend)
-  - `agent/knowledge.md §17` — miniaudio vendored
+  - `agent/knowledge.md` — miniaudio vendored
   - `TODO.md` — no explicit audio task in current scope
   - `agent/workspace.md §2` — Stage 4 Tier 4 audio vertical not yet in operator planning
 

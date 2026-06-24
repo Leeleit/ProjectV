@@ -28,7 +28,7 @@
 - **closed `2026-06-21-gpu-procedural-noise-compute-kernels`** — OpenSimplex2 3D-S chosen for noise kernel.
 - **closed `2026-06-21-sub-chunk-layers`** — per-Y-layer chunk structure.
 - **`TODO.md §4.1`** — Stage 4.1 world gen specification.
-- **`agent/knowledge.md §30.4`** — 3-step migration pattern.
+- **`agent/knowledge.md`** — 3-step migration pattern.
 - **`hardware-profile.md`** — Zen 3 5800X CPU + RTX 3060 Ti GPU + Vulkan 1.4.341.
 
 ## Cross-axis analysis

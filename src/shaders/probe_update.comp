@@ -1,5 +1,5 @@
 #version 460
-#extension GL_EXT_ray_query : require
+#extension GL_EXT_ray_query : require // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 // Voxel-aware RTX DDGI Probe update compute shader.
 // Traces spherical rays per probe using ray queries, evaluates voxel lighting,

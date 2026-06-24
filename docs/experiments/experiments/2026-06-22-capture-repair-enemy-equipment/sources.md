@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-capture-repair-enemy-equipment
 
-**Web-research complete via direct `webfetch` to canonical Wikipedia URLs** (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list).
+**Web-research complete via direct `webfetch` to canonical Wikipedia URLs** (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 
 ## Primary sources (Tier 1 verified)
 
@@ -48,4 +48,4 @@
 - `rg "capture.*repair|capture.*enemy|repair.*capture|recovered.equipment|enemy.equipment|war.thunder.capture|foxhole.capture"` over `INDEX.md` + `experiments/` = only orth cross-refs в `2026-06-21-group-formation-maneuver-axis/sources.md`.
 - `ls experiments/*capture*` = only `2026-06-21-renderdoc-ci-capture` (RenderDoc CI capture, different axis: CI testing infrastructure).
 - All 3 web sources verified via direct `webfetch` to canonical Wikipedia URLs.
-- Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per `agent/knowledge.md Part B §9` line 1424 fallback list → direct webfetch to Wikipedia primary sources.
+- Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per the web_search fallback chain → direct webfetch to Wikipedia primary sources.

@@ -37,7 +37,7 @@
 
 ## 2. Prior art
 
-Web-research complete via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list). **7 primary sources verified** в [`sources.md`](./sources.md):
+Web-research complete via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent per the web_search fallback chain). **7 primary sources verified** в [`sources.md`](./sources.md):
 
 1. **[Wikipedia "Catenary"](https://en.wikipedia.org/wiki/Catenary)** — full mathematical derivation: y = a cosh(x/a) (Leibniz/Huygens/Bernoulli 1691). Force diagram: T·cos(φ) = T₀ (constant horizontal tension), T·sin(φ) = w·s (vertical proportional to arc length). Suspension bridges follow catenary, anchor chains use catenary for low-angle pull.
 
@@ -135,7 +135,7 @@ Web-research complete via direct `webfetch` to canonical URLs (Exa `web_search` 
 
 ## 7. Integration recommendation
 
-Per `agent/knowledge.md §30.4` precedent, **3-step migration** (deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision):
+Per `agent/knowledge.md` precedent, **3-step migration** (deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision):
 
 **Step 1 (XS, ~80 LoC, immediate):** `src/physics/Cable.{hpp,cpp}` foundation.
 - Flecs component `CableLink` connecting two entities (anchor + load).

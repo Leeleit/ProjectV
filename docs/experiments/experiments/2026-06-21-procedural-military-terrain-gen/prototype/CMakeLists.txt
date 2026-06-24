@@ -1,6 +1,6 @@
 # CMakeLists.txt for 2026-06-21-procedural-military-terrain-gen prototype.
 #
-# Per agent/knowledge.md §17 Linux baseline: clang++ 22.1.6, Ninja, Release.
+# Per `agent/knowledge.md` Linux baseline: clang++ 22.1.6, Ninja, Release.
 
 cmake_minimum_required(VERSION 3.20)
 project(military_terrain_bench CXX)

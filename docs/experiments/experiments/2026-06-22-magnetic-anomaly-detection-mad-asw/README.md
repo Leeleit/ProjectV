@@ -35,7 +35,7 @@
 
 ## 2. Prior art
 
-Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). **6 Tier 1 + 4 Tier 2 = 10 sources verified** в [`sources.md`](./sources.md):
+Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). **6 Tier 1 + 4 Tier 2 = 10 sources verified** в [`sources.md`](./sources.md):
 
 **Tier 1 (canonical, primary):**
 
@@ -60,7 +60,7 @@ Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 pers
 
 **Local cross-refs:**
 
-- `agent/knowledge.md §10.11` — Per-corner AO (landed 2026-06-10): orthogonal axis (visual lighting vs magnetic).
+- `agent/knowledge.md` — Per-corner AO (landed 2026-06-10): orthogonal axis (visual lighting vs magnetic).
 - Closed `2026-06-22-acoustic-detection-system` [mixed, acoustic sibling] — sensor-fusion pattern per Wikipedia ASW.
 - Closed `2026-06-22-irst-thermal-imaging-detection` [mixed, IR sibling] — sensor-fusion pattern.
 - Closed `2026-06-21-radar-detection-system-simulation` [yes, radio sibling] — sensor-fusion pattern.
@@ -103,7 +103,7 @@ Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 pers
 
 1. **Warm-up:** 10 iterations per config (не учитываются).
 2. **Замеры:** N=1000 per config (5 strategies × 5 scenes × 5 seeds = 125 configs × 1000 iter = **125,000 main measurements**).
-3. **Hardware baseline:** Zen 3 5800X governor=`powersave` per `hardware-profile.md §1` + Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` per `agent/knowledge.md §17` Linux baseline.
+3. **Hardware baseline:** Zen 3 5800X governor=`powersave` per `hardware-profile.md §1` + Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` per `agent/knowledge.md` Linux baseline.
 4. **Формат вывода:** machine-readable `prototype/build/results.csv` (126 rows: 1 header + 125 data) + `summary_means.csv` (26 rows = 5 strategies × 5 scenes + header) + `run.log` (10-15 lines).
 5. **Statistical:** mean/median/p95/p99/std/min/max per `benchmarks/methodology.md §3` Stats struct (built into prototype).
 
@@ -253,7 +253,7 @@ See [`sources.md`](./sources.md) for full list (6 Tier 1 + 4 Tier 2 = 10 verifie
 
 **Где НЕ в mainline (вне scope, но возможно future):**
 
-- Vulkan GPU MAD compute (per `agent/knowledge.md §30.4` Step 2 GPU migration, deferred до dedicated session).
+- Vulkan GPU MAD compute (per `agent/knowledge.md` Step 2 GPU migration, deferred до dedicated session).
 - Real IGRF-14 coefficient table (`data/geomagnetic/igrf14.coef` asset, ~256 KiB).
 - Real submarine magnetic signature database (per-class magnetization vectors, modder-editable).
 

@@ -3,7 +3,7 @@
 Verified web-research sources per `AGENTS.md §2` prior art + sources.md format.
 
 Web-research via `webfetch` DuckDuckGo HTML endpoint + direct source URL fetch
-(Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424).
+(Exa MCP HTTP 429 persistent per the web_search fallback chain).
 
 ## Tier 1: Primary (13 sources verified)
 

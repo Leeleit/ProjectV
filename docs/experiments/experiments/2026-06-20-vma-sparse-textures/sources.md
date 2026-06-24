@@ -207,7 +207,7 @@
 - **Key files per TODO:** `src/render/SceneResources.{hpp,cpp}`, `src/shaders/voxel.frag`.
 - **Применимость:** Source of truth для integration target.
 
-### S3.2 `agent/knowledge.md` §25 (VoxelMaterialVisual SSBO)
+### S3.2 `agent/knowledge.md` (VoxelMaterialVisual SSBO)
 
 - **Файл:** `/home/le1t/Projects/ProjectV/agent/knowledge.md`.
 - **Контекст:** Current mainline material = small fixed SSBO

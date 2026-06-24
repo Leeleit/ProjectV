@@ -23,7 +23,7 @@ features enabled (`vulkaninfo 2026-06-20` confirms). **Mixed потому что
 p99 frame variance numbers отсутствуют** (Mesa 26.2 benchmark на KHR_display direct-display,
 другие условия). Mainline prototype = expected follow-up.
 **Next tick:** нет (concluded). Re-evaluation trigger: Stage 3.1 GPU Fluid CA pipeline integration
-(cross-frame latency contract per `agent/workspace.md §2` + `agent/decisions.md §30.4`) → mainline
+(cross-frame latency contract per `agent/workspace.md §2` + `agent/knowledge.md`) → mainline
 prototype + measured Wayland p99 variance numbers.
 
 **Operator override (per `docs/experiments/AGENTS.md §13.6`):** 2026-06-20, пользователь дал

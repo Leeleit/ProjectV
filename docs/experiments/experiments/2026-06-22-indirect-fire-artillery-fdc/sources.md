@@ -1,6 +1,6 @@
 # Sources — `2026-06-22-indirect-fire-artillery-fdc`
 
-**Web-search status (2026-06-22):** Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list. All 6 primary + 3 supplementary Tier-1 sources verified via direct `webfetch` to canonical URLs.
+**Web-search status (2026-06-22):** Exa MCP HTTP 429 persistent per the web_search fallback chain. All 6 primary + 3 supplementary Tier-1 sources verified via direct `webfetch` to canonical URLs.
 
 **Sentinel §13.7 clean (per `AGENTS.md`):** `rg "indirect.fire|artillery|fdc|forward.observer|fire.direction"` → only `tech-tree-research-system` cross-ref mention of "artillery" tree + `combined-arms-coordination-ai` cross-ref + `backlog.md` mention; `ls experiments/2026-06-22-indirect-fire*` = ENOENT pre-claim.
 
@@ -139,14 +139,14 @@
 
 ---
 
-## Sources NOT verified (limitation per `agent/knowledge.md Part B §9`)
+## Sources NOT verified (limitation per the web_search fallback chain)
 
 - **FM 6-30** primary US Army field manual: not directly accessible (Army pubs on Benning.mil or Marines.mil). Cross-validated through Wikipedia S3 references.
 - **arXiv 2501.04307** "AAAD 2024 ballistic optimizer": not directly fetched. Mentioned in §13 reservation as future cross-ref.
 - **Eugen Systems WARNO devblog 73** (fire support): not fetched (gated site).
 - **DCS AH-64D / DCS World fire-control docs**: not fetched (DCS wiki gated).
 
-Per `agent/knowledge.md Part B §9`: Exa MCP HTTP 429 persistent + DuckDuckGo HTML CAPTCHA blocked + Startpage 0 results + Brave 429 + Searx 403. **6 primary sources verified via direct `webfetch` to Wikipedia canonical URLs is acceptable per fallback list.**
+Per the web_search fallback chain: Exa MCP HTTP 429 persistent + DuckDuckGo HTML CAPTCHA blocked + Startpage 0 results + Brave 429 + Searx 403. **6 primary sources verified via direct `webfetch` to Wikipedia canonical URLs is acceptable per fallback list.**
 
 ---
 

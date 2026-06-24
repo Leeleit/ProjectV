@@ -19,7 +19,7 @@
 | `mixed_biome`   | 6.00       | 124,416 px       | 221,184 px       | 497,664 px    |
 
 **Observation:** все 4 scenes имеют **sparse coverage profile** (4-6% viewport coverage per frame). Это
-соответствует ProjectV chunkSize=8 typical scene profile per `agent/knowledge.md §1` (64³ chunks, chunkSize=8
+соответствует ProjectV chunkSize=8 typical scene profile per `agent/knowledge.md` (64³ chunks, chunkSize=8
 sub-region). **Это означает: VRS hybrid classifier имеет мало uniform tiles для работы.**
 
 ---

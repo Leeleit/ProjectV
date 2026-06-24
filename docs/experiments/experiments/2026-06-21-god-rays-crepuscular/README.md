@@ -143,7 +143,7 @@ doesn't win for all hardware; cross-platform tier table required.
 8x planning decision — mainline integration **NOT for current session**, deferred до Stage 5.x
 dedicated session).
 
-**Конкретные изменения** (per `agent/knowledge.md §30.4` 3-step migration precedent, ~520 LoC total,
+**Конкретные изменения** (per `agent/knowledge.md` 3-step migration precedent, ~520 LoC total,
 S-M effort, 2-3 sessions):
 
 - **Step 1 (XS, ~50 LoC):** `GodRaysController` foundation + env gate

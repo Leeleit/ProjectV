@@ -10,7 +10,7 @@
 # Per `hardware-profile.md §1`: Zen 3 5800X. No AVX-512 (Zen 3 limit). -march=native
 #   generates AVX2 + FMA + BMI1/2 — appropriate for dev host.
 # Governor: `powersave` (per `hardware-profile.md §1`). ProjectV release preset would use
-#   `-march=x86-64-v3` for cross-host portability (per `agent/knowledge.md §17`), but research
+#   `-march=x86-64-v3` for cross-host portability (per `agent/knowledge.md`), but research
 #   prototype uses `-march=native` for max measurement precision on dev host.
 #
 

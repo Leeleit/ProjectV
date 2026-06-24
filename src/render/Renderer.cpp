@@ -1,4 +1,4 @@
-import projectv.math;
+import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "render/Renderer.hpp"
 
@@ -415,10 +415,7 @@ void RecordGraphicsCommands(
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 		RecordShadowCommands(render, frameRenderData, cmd);
 
-		if (render.rayTracedShadows != nullptr && render.rayTracedShadows->IsEnabled()) {
-			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TLAS Build");
-			render.rayTracedShadows->RecordTlasBuild(cmd, context);
-		}
+		// EVIL: RecordTlasBuild moved to frame-record before RecordVoxelAwareRtxShadowPass to eliminate 1-frame TLAS latency / shimmer (P1A-3b).
 
 		const bool taaOn = render.taaEnabled &&
 						   render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
@@ -1412,6 +1409,10 @@ SDL_AppResult DrawFrame(
 	}
 
 	if (render->rayTracedShadows != nullptr) {
+		if (render->rayTracedShadows->IsEnabled()) {
+			PV_PROFILE_GPU_ZONE(render->tracyGraphicsContext, cmd, "TLAS Build");
+			render->rayTracedShadows->RecordTlasBuild(cmd, *context); // EVIL: build TLAS on current frame before RT shadow trace — kills 1-frame latency / shimmer (P1A-3b).
+		}
 		PV_PROFILE_ZONE_N("RecordVoxelAwareRtxShadowPass");
 		const SceneFrameResources &shadowFrameResources = render->sceneFrameResources[frame->currentFrame];
 		projectv::math::Mat4 inverseViewProjection =

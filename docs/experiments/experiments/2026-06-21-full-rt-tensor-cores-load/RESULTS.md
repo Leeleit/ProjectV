@@ -133,7 +133,7 @@ distance) bandwidth pressure.
 **Recommendation A (highest value, lowest risk): `RT_MeshletCulling`** — Stage 2.1/2.2 meshlet cull replacement.
 - Speedup 6.25×, +0.5 PSNR, 310 LoC, 8 MiB VRAM.
 - Clean swap: software HZB readback → RT BVH traversal.
-- **3-step migration per `agent/knowledge.md §30.4` precedent**:
+- **3-step migration per `agent/knowledge.md` precedent**:
   - Step 1 (XS, ~80 LoC) `MeshletCullBVH.comp` + `vkCmdTraceRaysKHR` dispatch + per-chunk BVH.
   - Step 2 (M, ~200 LoC) BVH build per chunk dirty set + parallel dispatch в `voxel_mesh_pre.comp`.
   - Step 3 (XS, ~30 LoC) `PROJECTV_MESHLET_RT_CULL=ON|OFF` env + Tracy plot "Meshlet RT Cull Time" + unit test.
@@ -157,7 +157,7 @@ distance) bandwidth pressure.
    **directional**, not absolute.
 3. **Cross-vendor matrix analytical projection** per `dec-pipelines-async-compute` §2.2 (NVIDIA RTX 3060 Ti measured
    reference; AMD RDNA + Intel Arc + mobile projected from public docs).
-4. **Implementation effort not measured** — LoC estimates per `agent/knowledge.md §30.4` precedent.
+4. **Implementation effort not measured** — LoC estimates per `agent/knowledge.md` precedent.
 5. **Anti-pattern identification (RT 0.40× for GI surfel + HBAO)** — the most important finding. RT cores have dispatch
    latency overhead per ray; low-op-count rays suffer. **Not adopting** these candidates saves 550 LoC + 6 MiB VRAM.
 6. **Tensor peak = matmul-bound theoretical.** Real-world effective speedup per Jeff Bolz NVIDIA blog = 30-50% of peak

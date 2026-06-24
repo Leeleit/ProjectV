@@ -66,7 +66,7 @@ Headline (mean ns/unit/tick, across 5 seeds):
 
 ## Phase 6 — Integration recommendation
 
-Mainline: 3-step migration per `agent/knowledge.md §30.4`:
+Mainline: 3-step migration per `agent/knowledge.md`:
 - Step 1 (XS, ~80 LoC) `src/ai/BehaviorTree.hpp` — flat-SoA BT primitive + Selector/Sequence/Inverter/Repeater
 - Step 2 (S, ~250 LoC) `src/ai/TacticalBT.{hpp,cpp}` — Flecs component `BehaviorTreeComponent` + event-driven halts via Flecs observer
 - Step 3 (M, ~500 LoC, deferred) per-soldier BT instances + blackboard + hierarchical strategic/tactical/unit split

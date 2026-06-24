@@ -102,7 +102,7 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
 - `src/voxel/VoxelWorld.hpp/cpp` (parallel-path через `IsSparse64StorageEnabled()` /
   `PROJECTV_SPARSE_64_STORAGE` env var).
 - `tests/Sparse64TreeTests.cpp` (462 строки, 14 sub-tests).
-- `agent/knowledge.md` §30.4 — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list) — shader
+- `agent/knowledge.md` — GPU Fluid CA contract (ping-pong + atomicOr + active chunk list) — shader
   operates on SVDAG node pool, не flat array.
 - `TODO.md` §1.1, §1.2, §2.1, §2.2, §3.1, §4.1, §4.2, §5.1, §5.2 — все designed для SVDAG/64-tree read.
 - `docs/experiments/experiments/2026-06-20-sparse-64-tree-alternatives/` (analysis-only prior experiment).
@@ -555,7 +555,7 @@ re-measure with real SVDAG infrastructure on real VoxelLab + MeshingStress scene
   re-implementation in `prototype/svdag_vs_nanovdb.cpp` matches semantics.
 - `src/voxel/VoxelWorld.hpp/cpp` (parallel-path через `IsSparse64StorageEnabled()`).
 - `tests/Sparse64TreeTests.cpp` (14 sub-tests, byte-exact correctness).
-- `agent/knowledge.md` §30.4 — GPU Fluid CA contract (shader reads SVDAG, не flat array).
+- `agent/knowledge.md` — GPU Fluid CA contract (shader reads SVDAG, не flat array).
 - `TODO.md` §1.1, §1.2, §2.1, §2.2, §3.1, §4.1, §4.2, §5.1, §5.2 — all designed for SVDAG/64-tree.
 - `docs/experiments/experiments/2026-06-20-sparse-64-tree-alternatives/` — analysis-only prior
   experiment (literature-only, no measurements). This experiment closes the §5.3 measurement gap.
@@ -570,7 +570,7 @@ re-measure with real SVDAG infrastructure on real VoxelLab + MeshingStress scene
   standalone in `prototype/Svdag64` class, byte-exact behavior verified via `verify_mismatches=0`).
 - `src/voxel/VoxelWorld::sparseStorage` (per `VoxelWorld.hpp:87`) → parallel-path access.
 - Hot-path reads: `GetVoxelMaterial` (`VoxelWorld.cpp:111-117`) — called from meshing
-  (`agent/knowledge.md §25` greedy meshing), physics (`PhysicsWorld::SyncPhysicsWorld` per
+  (`agent/knowledge.md` greedy meshing), physics (`PhysicsWorld::SyncPhysicsWorld` per
   `decisions.md §30.4`), fluid CA (per `decisions.md §30.4`).
 - Hot-path writes: `SetVoxelMaterial` (`VoxelWorld.cpp:103-109`) — called from
   `VoxelInteraction.cpp` (user build/break), `FillVoxelBox` / `FillVoxelMaterial` (procedural gen).

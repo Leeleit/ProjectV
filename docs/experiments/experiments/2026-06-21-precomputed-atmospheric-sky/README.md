@@ -115,7 +115,7 @@ Standalone C++26 CPU analytical cost model `prototype/sky_sim.cpp`:
 
 ## 7. Integration recommendation
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~40 LoC):** `AtmosphereSkyController` foundation + `PROJECTV_SKY=CONSTANT|BRUNETON|HILLAIRE|ELLIAHU|HOSEK|GPU_GEMS2` env flag + `VoxelSceneLighting::skyColorAndFogDensity` → LUT-driven (soft-deprecate static color).
 

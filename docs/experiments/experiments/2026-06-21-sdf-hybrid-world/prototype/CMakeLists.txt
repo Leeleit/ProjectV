@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-# ProjectV mainline toolchain per hardware-profile.md §6 + agent/knowledge.md §17.
+# ProjectV mainline toolchain per hardware-profile.md §6 + `agent/knowledge.md`.
 # Clang 22.1.6 + LLD + libstdc++.
 add_compile_options(
     -O3

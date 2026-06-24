@@ -1,6 +1,6 @@
 # Sources — Tech Tree Research System
 
-> Web-research via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424 fallback list).
+> Web-research via direct `webfetch` to canonical URLs (Exa `web_search` HTTP 429 persistent this session per the web_search fallback chain).
 
 ## Tier 1 — Foundational algorithms
 
@@ -64,7 +64,7 @@ https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm
 
 ## Tier 3 — ProjectV cross-references
 
-### 10. ProjectV agent/knowledge.md §30.4 — 3-step migration pattern
+### 10. ProjectV `agent/knowledge.md` — 3-step migration pattern
 - **Pattern:** Step 1 (XS, ~80 LoC) foundation + env gate; Step 2 (M, ~300-500 LoC) per-strategy implementation; Step 3 (S, ~100-150 LoC) tests + Tracy + env gate default.
 - **Application:** our integration recommendation uses this exact pattern for `src/economy/TechTree.{hpp,cpp}`.
 
@@ -74,6 +74,6 @@ https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm
 
 ## Caveats / limitations
 
-- **Exa HTTP 429 persistent** this session per `agent/knowledge.md Part B §9` line 1424 fallback list → relied on direct `webfetch` to canonical Wikipedia URLs.
+- **Exa HTTP 429 persistent** this session per the web_search fallback chain → relied on direct `webfetch` to canonical Wikipedia URLs.
 - **Wikipedia version validity:** all 4 primary Wikipedia pages validated `2026-06-22` (latest edits within last 12 months).
 - **4 primary sources** (Tier 1) + **5 game production references** (Tier 2) + **2 ProjectV cross-references** (Tier 3) = **11 total sources** verified. Coverage adequate for a focused architecture comparison; deeper game-specific research (e.g. Endless Legend Fatum Machina tech tree internals) deferred to integration phase.

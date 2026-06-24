@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-per-vehicle-fuel-ammo-maintenance
 
-> **Web-research complete (Phase 1, `2026-06-22`).** 6 Tier 1 primary canonical sources fetched + 3 Tier 2 game-production references + 8 Tier 3 ProjectV cross-references. **Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session** per `agent/knowledge.md Part B §9` line 1424 fallback list; **working fallback: direct `webfetch` to canonical Wikipedia URLs**.
+> **Web-research complete (Phase 1, `2026-06-22`).** 6 Tier 1 primary canonical sources fetched + 3 Tier 2 game-production references + 8 Tier 3 ProjectV cross-references. **Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session** per the web_search fallback chain; **working fallback: direct `webfetch` to canonical Wikipedia URLs**.
 
 ---
 

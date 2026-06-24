@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-dynamic-battlefield-decal-system
 
-**Verified sources via web-search (DuckDuckGo HTML fallback per `agent/knowledge.md Part B §9`; Exa HTTP 429
+**Verified sources via web-search (DuckDuckGo HTML fallback per the web_search fallback chain; Exa HTTP 429
 persistent). Tier 1 = primary production/canonical, Tier 2 = supporting.**
 
 ## Tier 1 — Primary canonical / production references

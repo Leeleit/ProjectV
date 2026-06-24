@@ -1,6 +1,6 @@
 # Sources — `2026-06-21-factory-production-system`
 
-Web-research для **military factory production scheduling architecture axis** в ProjectV. Все ссылки верифицированы `2026-06-21` через direct `webfetch` (Exa `web_search` HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424 fallback list).
+Web-research для **military factory production scheduling architecture axis** в ProjectV. Все ссылки верифицированы `2026-06-21` через direct `webfetch` (Exa `web_search` HTTP 429 persistent this session per the web_search fallback chain).
 
 > **Caveat:** Production scheduling — это богатая академическая/индустриальная область. Я фокусируюсь на **game-specific precedents** (SupCom/HoI4/Anno 1800) + **production theory** (Lean/CPM/Topological sort) + **architectural patterns** (factory/Kanban). Это ~6 primary + 3 secondary = 9 verified. Достаточно для гипотезы.
 

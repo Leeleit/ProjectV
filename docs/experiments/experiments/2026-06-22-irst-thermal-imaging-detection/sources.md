@@ -1,7 +1,7 @@
 # Sources — 2026-06-22-irst-thermal-imaging-detection
 
 **Captured:** 2026-06-22 (this session). Web-research via direct `webfetch` to canonical Wikipedia URLs (Exa
-`web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list).
+`web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked per the web_search fallback chain).
 
 **Sources verified: 4 Tier 1 Wikipedia primary + 1 cross-ref** (current count; may expand to 6-8 if MWIR/LWIR-specific
 production refs surface during prototype build).
@@ -152,8 +152,7 @@ missiles, the fighter may be able to fire upon the target without having to turn
 | 7 | Wikipedia "AIM-9 Sidewinder" | 1 | IR seeker precedent, fire-and-forget without radar (cross-ref only) |
 
 **Caveats:**
-- Exa `web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424
-  fallback list. Direct `webfetch` to canonical Wikipedia URLs is the primary working channel.
+- Exa `web_search` HTTP 429 + DuckDuckGo HTML CAPTCHA blocked per the web_search fallback chain. Direct `webfetch` to canonical Wikipedia URLs is the primary working channel.
 - This is a single-session Web research, so depth is moderate. For mainline integration, additional sources
   (NATO STANAG 4347, FLIR product datasheets, military TM 11-5865-216-10 etc.) would be recommended.
 - No raw SOTA 2024-2026 academic IRST papers retrieved (Exa blocked); prototype uses canonical physics

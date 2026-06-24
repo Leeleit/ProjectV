@@ -6,7 +6,8 @@ Reproducible interactive voxel MVP на C++26, Vulkan 1.4, Data-Oriented Design.
 
 ## Стек
 
-- C++26 (`CMAKE_CXX_STANDARD 26`). Stdlib: libc++ на Linux/macOS, MSVC STL на Windows. Per `agent/memory.md §6` + `agent/decisions.md §17`.
+- C++26 (`CMAKE_CXX_STANDARD 26`). Stdlib: libc++ на Linux/macOS, MSVC STL на Windows. Per `agent/knowledge.md` +
+  `agent/knowledge.md`.
 - Vulkan 1.4 (volk + VMA), SDL3, JoltPhysics, flecs, fmt, Tracy, miniaudio, meshoptimizer, fastgltf, draco
 - Сборка: CMake 3.30+ + Ninja, clang-cl 22 на Windows, native clang 22 + lld 22 + libc++ на Linux. Windows-side uses MSVC STL (clang-cl flag `-stdlib=libc++` is a no-op there per `CMakeLists.txt:174`).
 
@@ -31,7 +32,7 @@ ctest --test-dir build/windows-clang-debug --output-on-failure
 ```
 
 Подробности по debug-preset family (`-ci`, `-tracy-profiler`) и runtime smoke harness — `legacy/docs/standards/cmake/`,
-`agent/decisions.md §4`, `tools/linux/Invoke-ProjectVRuntimeSmoke.sh`,
+`agent/knowledge.md`, `tools/linux/Invoke-ProjectVRuntimeSmoke.sh`,
 `tools/windows/Invoke-ProjectVRuntimeSmoke.ps1`.
 
 ## Release build
@@ -40,7 +41,7 @@ ctest --test-dir build/windows-clang-debug --output-on-failure
 без RenderDoc-маркеров, без Google Benchmark dev-harness. Conservative policy: `-O3 -flto=thin
 -NDEBUG -ffunction-sections -fdata-sections -fno-finite-math-only`; **без** `-ffast-math` (ломает
 Fluid CA determinism + TAA YCoCg clamp) и **без** `-march=native` (binary должен быть переносим
-между CPU). Полная политика — `agent/decisions.md §4` «Release presets».
+между CPU). Полная политика — `agent/knowledge.md` «Release presets».
 
 **Linux:**
 ```bash
@@ -63,6 +64,6 @@ ctest --test-dir build/windows-clang-release --output-on-failure
 
 ## Управление
 
-Управление, env-vars, debug-контролы — `docs/KT-3.1_User_Guide.md` (User Guide) и `agent/memory.md §1`.
+Управление, env-vars, debug-контролы — `docs/KT-3.1_User_Guide.md` (User Guide) и `agent/knowledge.md`.
 Рантайм-смок на `VoxelLab` reference shot — `bash tools/linux/Invoke-ProjectVRuntimeSmoke.sh` /
 `powershell -ExecutionPolicy Bypass -File tools\windows\Invoke-ProjectVRuntimeSmoke.ps1`.

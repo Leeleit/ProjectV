@@ -156,7 +156,7 @@ CelestialPlusStars should NOT run star visibility in CPU. Star occlusion and ind
 
 ## 7. Integration recommendation
 
-Per `agent/knowledge.md §30.4` (3-step migration):
+Per `agent/knowledge.md` (3-step migration):
 
 ### Step 1 — Stage 2.x (prototype): B_SimpleSunAngle (58 ns)
 
@@ -213,7 +213,7 @@ CelestialAngle calc_simple(double tick) {
 
 - Hillaire2020 LUT: `2026-06-21-precomputed-atmospheric-sky` §7 integration guide.
 - Entity lighting blend: `2026-06-21-dynamic-entity-lighting` §7 (ambient multiplier for entity light range).
-- `agent/knowledge.md §30.4` (3-step migration protocol).
+- `agent/knowledge.md` (3-step migration protocol).
 
 ### Risks
 

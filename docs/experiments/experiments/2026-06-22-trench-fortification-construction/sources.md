@@ -1,7 +1,7 @@
 # Sources — 2026-06-22-trench-fortification-construction
 
 Web-research done via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML CAPTCHA blocked
-per `agent/knowledge.md Part B §9` line 1424 fallback list, 2026-06-22 session). 10 primary sources + 4 supplementary
+per the web_search fallback chain, 2026-06-22 session). 10 primary sources + 4 supplementary
 sources verified.
 
 ---
@@ -257,7 +257,7 @@ serializable + deterministic per chunk for save/load + lockstep netcode.
 
 - `backlog.md` line 501: "trench-fortification-construction" m, independent — original hypothesis
 - `INDEX.md` §5: this experiment is currently in-progress
-- `agent/knowledge.md §30.4`: 3-step migration precedent (foundation→adoption→default flip) — see Integration
+- `agent/knowledge.md`: 3-step migration precedent (foundation→adoption→default flip) — see Integration
   recommendation in README §7
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`: 5-10% threshold for cross-axis validation
 
@@ -265,7 +265,7 @@ serializable + deterministic per chunk for save/load + lockstep netcode.
 
 **Web-research limitations this session:**
 
-- Exa `web_search` HTTP 429 persistent (per `agent/knowledge.md Part B §9` line 1424)
+- Exa `web_search` HTTP 429 persistent (per the web_search fallback chain)
 - DuckDuckGo HTML endpoint CAPTCHA blocked
 - Startpage 0 results, Brave 429, Searx 403
 - **Working:** direct `webfetch` to canonical Wikipedia + Foxhole game page only

@@ -24,7 +24,7 @@
 
 ## 2. Prior art
 
-**Web-research complete.** 8 primary sources verified this session via DuckDuckGo HTML endpoint + webfetch (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` fallback policy + operator directive):
+**Web-research complete.** 8 primary sources verified this session via DuckDuckGo HTML endpoint + webfetch (Exa MCP HTTP 429 persistent per the web_search fallback chain + operator directive):
 
 - **Mikola Lysenko 2018 "A level of detail method for blocky voxels"** [`0fps.net/2018/03/03/...`] — **Canonical blocky voxel LOD reference.** Direct validation that geomorphing eliminates need for skirts / Transvoxel / explicit seams. Key quote: *"if we have geomorphing, then we don't need to implement seams or skirts to get crack-free LOD"*. Stable LOD rounding 2-3 iter formula given.
 - **Hugues Hoppe 1997 "View-Dependent Refinement of Progressive Meshes"** [`hhoppe.com/proj/vdrpm/`, SIGGRAPH 1997, ACM 258734] — **Foundational paper for geomorphs.** *"smooth visual transitions (geomorphs) can be constructed between any two selectively refined meshes"* + *"less than 15% of total frame time on a graphics workstation"*.
@@ -171,7 +171,7 @@ Per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` 5-10% thres
 
 **Рекомендация:** Use **C_Geomorph** as default LOD transition strategy for Stage 4.2.
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~50 LoC):** Add `LodTransition::SelectStrategy()` dispatcher + `transitionZone` per-frame chunk classification (`distance ∈ [R - w/2, R + w/2]` = transition zone, `w = 8 voxels` per Hoppe 1997 sweet spot) в `src/render/HizCulling.cpp:800-805` (current hardcoded `mip=0` location).
 - **Step 2 (M, ~300 LoC):** Per-strategy implementation в `src/shaders/voxel_mesh.comp` или `voxel_mesh.mesh` (Pattern C mesh shader per `TODO.md §2.2`). Compute morph factor `t` per chunk + dual-source vertex fetch (LOD 0 + LOD 1) + interpolation per Hoppe 1997 formula `L_t(x)`.

@@ -49,5 +49,5 @@ transitions); A_Monolithic as fallback для sparse chunks + legacy compatibili
   amortizes build cost) + `2026-06-20-dec-pipelines-async-compute` (foundation: async populate).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% integration threshold
   (memory savings 73-96% validated, well above threshold).
-- `agent/knowledge.md §30.4` — 3-step migration precedent для integration.
+- `agent/knowledge.md` — 3-step migration precedent для integration.
 - `benchmarks/methodology.md` — measurement protocol followed.

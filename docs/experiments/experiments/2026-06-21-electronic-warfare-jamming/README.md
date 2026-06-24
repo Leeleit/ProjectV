@@ -27,7 +27,7 @@
 
 ## 2. Prior art
 
-Web-research via `webfetch` (Exa HTTP 429 persistent + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list) — **6 Tier-1 primary sources verified**, см. [`sources.md`](./sources.md) Tier 1 для деталей:
+Web-research via `webfetch` (Exa HTTP 429 persistent + DuckDuckGo CAPTCHA blocked per the web_search fallback chain) — **6 Tier-1 primary sources verified**, см. [`sources.md`](./sources.md) Tier 1 для деталей:
 
 - **[Wikipedia "Electronic warfare"](https://en.wikipedia.org/wiki/Electronic_warfare)** [retrieved 2026-06-21] — канонический EA/EP/ES subdivision; Krasukha reference; Scorpius (IAI Nov 2021); Ukrainian EW success vs Shahed drones (Sept 2024 ISW report); EWSP suite (DIRCM + chaff + DRFM); AESA + frequency-agility + LPI ECCMs.
 - **[Wikipedia "Radar jamming and deception"](https://en.wikipedia.org/wiki/Radar_jamming_and_deception)** [retrieved 2026-06-21, last edited 9 June 2026] — канонический **J/S = (EIRP_jam/EIRP_radar) × (4πR²/σ) × (BW_radar/BW_jam)** equation; spot/sweep/barrage noise jamming; DRFM repeater; burn-through range; ISRJ (Feng 2017); RGPO; chaff/corner reflectors/decoys; ECCM (frequency agility, AESA, ARM).
@@ -109,7 +109,7 @@ Architecture class (5-strategy EW jamming) validated as cost-effective (sub-µs 
 
 **Target stage:** Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision. EW jamming axis is **deferred** до Stage 6+ — current mainline (closed `radar-detection-system-simulation` [yes] + `recon-intel-fog-of-war` [yes]) assumes perfect radar/comms reception; adding EW jamming is an attacker-side extension that requires Stage 6+ activation.
 
-**Конкретные изменения (3-step migration per `agent/knowledge.md §30.4` precedent, ~550 LoC total, M effort, 2-3 sessions):**
+**Конкретные изменения (3-step migration per `agent/knowledge.md` precedent, ~550 LoC total, M effort, 2-3 sessions):**
 
 - **Step 1 (XS, ~100 LoC)** `src/ew/JammerComponent.{hpp,cpp}` + `JammerStrategy` enum (`NONE | NOISE_BARRAGE | DIRECTED_SPOT | DRFM_DECEPTION | HYBRID`) + `PROJECTV_EW_JAMMING=ON|OFF` env gate (default `OFF` до Stage 6+).
 - **Step 2 (M, ~350 LoC)** per-strategy implementation в Flecs ECS:
@@ -145,7 +145,7 @@ Architecture class (5-strategy EW jamming) validated as cost-effective (sub-µs 
 
 ## 8. Sources
 
-См. [`sources.md`](./sources.md) — 6 Tier-1 primary sources verified via `webfetch` (Wikipedia retrieved 2026-06-21, exa 429, DDG CAPTCHA blocked per `agent/knowledge.md Part B §9`).
+См. [`sources.md`](./sources.md) — 6 Tier-1 primary sources verified via `webfetch` (Wikipedia retrieved 2026-06-21, exa 429, DDG CAPTCHA blocked per the web_search fallback chain).
 
 ---
 

@@ -20,12 +20,12 @@
 - ✅ Claim в `backlog.md` §In progress per `AGENTS.md §13.1` + reservation record per §13.2.
 - ✅ Anti-duplicate sentinel §13.7 verified clean.
 - ✅ `experiments/2026-06-22-indirect-fire-artillery-fdc/` папка + README + STATUS + sources + RESULTS + prototype/.
-- ✅ Web-research: **6 Tier-1 primary + 3 Tier-2 supplementary sources** verified via direct `webfetch` to canonical Wikipedia URLs (Exa 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9`).
+- ✅ Web-research: **6 Tier-1 primary + 3 Tier-2 supplementary sources** verified via direct `webfetch` to canonical Wikipedia URLs (Exa 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 - ✅ Standalone C++26 CPU prototype `prototype/fdc_bench.cpp` ~475 LoC (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic -fno-fast-math -fno-math-errno`, build green **0 warnings 0 errors** after 4 fix iterations: range unit R*1000.0 bug, narrowing conversion, unused `v` variable, unused `speed` variable).
 - ✅ Benchmark complete: 5 strategies × 5 scenes × 5 seeds × 5 ammo × 1000 iter = **125,000 main measurements**, wall time **< 1 sec** на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`.
 - ✅ Output: `prototype/build/results.csv` (126 rows = 1 header + 125 data, 25 KB).
 - ✅ Verdict: **`yes` for E_Hybrid ⭐ as universal recommended default** + per-strategy: A=yes, B=mixed, C=no, D=no, E=yes.
-- ✅ Integration recommendation: 3-step mainline migration per `agent/knowledge.md §30.4` precedent, ~720 LoC, M effort, **deferred до Stage 6+ military sandbox activation** per `agent/workspace.md §2` line 36 operator 8x planning decision.
+- ✅ Integration recommendation: 3-step mainline migration per `agent/knowledge.md` precedent, ~720 LoC, M effort, **deferred до Stage 6+ military sandbox activation** per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
 ---
 

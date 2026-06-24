@@ -182,7 +182,7 @@ For ProjectV Stage 6+ persistent sandbox:
 
 ## 11. Integration recommendation (summary)
 
-Per `agent/knowledge.md §30.4` 3-step migration pattern:
+Per `agent/knowledge.md` 3-step migration pattern:
 
 **Step 1 (XS, ~80 LoC) — immediate**: `src/save/SaveController.{hpp,cpp}` + `PROJECTV_SAVE_FORMAT=D|LZ4|CAS` env gate (default `D`).
 

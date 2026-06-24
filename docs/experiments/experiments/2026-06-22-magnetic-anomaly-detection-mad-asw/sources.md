@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-magnetic-anomaly-detection-mad-asw
 
-**Web-research complete via direct `webfetch` to canonical URLs.** Exa HTTP 429 persistent + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list. Working: direct `webfetch` to Wikipedia + arXiv + GitHub. **6 Tier 1 primary + 4 Tier 2 supplementary = 10 sources verified** (sufficient for single-session experiment per `agent/knowledge.md Part A` minimum).
+**Web-research complete via direct `webfetch` to canonical URLs.** Exa HTTP 429 persistent + DuckDuckGo CAPTCHA blocked per the web_search fallback chain. Working: direct `webfetch` to Wikipedia + arXiv + GitHub. **6 Tier 1 primary + 4 Tier 2 supplementary = 10 sources verified** (sufficient for single-session experiment per `agent/knowledge.md Part A` minimum).
 
 ---
 
@@ -135,9 +135,9 @@
 
 ## Local cross-references (ProjectV-внутренние, orth or complementary)
 
-- `agent/knowledge.md §10.11` — Per-corner AO (landed 2026-06-10): **orth axis** (visual lighting vs magnetic).
-- `agent/knowledge.md §17` — Linux baseline (Clang 22.1.6 build matrix).
-- `agent/knowledge.md §30.4` — 3-step migration precedent (used in §7 Integration recommendation).
+- `agent/knowledge.md` — Per-corner AO (landed 2026-06-10): **orth axis** (visual lighting vs magnetic).
+- `agent/knowledge.md` — Linux baseline (Clang 22.1.6 build matrix).
+- `agent/knowledge.md` — 3-step migration precedent (used in §7 Integration recommendation).
 - `agent/workspace.md §2` line 36 — operator 8x planning decision (Stage 6+ deferred).
 - `docs/experiments/hardware-profile.md §1` — CPU baseline (Zen 3 5800X).
 - `docs/experiments/benchmarks/methodology.md §3` — measurement protocol (warmup + N=1000 + 5 seeds).

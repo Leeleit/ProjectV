@@ -67,7 +67,7 @@
 
 **Total sources verified:** 26 (Tier 1 = 10, Tier 2 = 10, Tier 3 = 6) — exceeds `AGENTS.md §4` minimum 10-15 per experiment.
 
-**Web search discipline:** per `agent/knowledge.md §5.3` (root) + `AGENTS.md §4`:
+**Web search discipline:** per `agent/knowledge.md` (root) + `AGENTS.md §4`:
 - Exa `web_search` → HTTP 429 persistent
 - DuckDuckGo HTML → CAPTCHA blocked
 - Startpage → working (used for Frisken 2000, Marschner 2023, MERL 2006)
@@ -111,7 +111,7 @@ Full verified citations: see [`sources.md`](./sources.md).
 - Statistics: mean / median / p95 / stddev / min / max
 - DCE-sink: `volatile float sink` accumulated across all voxels to prevent compiler from dropping unused output
 - CPU governor = `powersave` per `hardware-profile.md §1`
-- Build: `clang++ 22.1.6 -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` (per `agent/knowledge.md §17`)
+- Build: `clang++ 22.1.6 -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic` (per `agent/knowledge.md`)
 
 ---
 
@@ -201,7 +201,7 @@ head -5 build/summary_means.csv
 
 ## 7. Integration recommendation
 
-**Per `agent/knowledge.md §30.4` precedent**, 3-step migration to mainline:
+**Per `agent/knowledge.md` precedent**, 3-step migration to mainline:
 
 ### Step 1 (XS, ~80 LoC) — `src/voxel/SdfChunk.{hpp,cpp}` foundation
 ```cpp
@@ -315,4 +315,4 @@ See [`sources.md`](./sources.md) for 26 verified citations (Tier 1 = 10 primary,
 - Voxel Farm (production) — `https://voxelfarm.com`
 - Avoyd (open source production reference) — see Voxel Farm forum + Reddit r/VoxelGameDev
 
-**Web search protocol record:** Exa 429 + DuckDuckGo CAPTCHA + Startpage + Brave 429 + direct `webfetch` to canonical URLs (per `agent/knowledge.md Part B §9` line 1424 fallback list).
+**Web search protocol record:** Exa 429 + DuckDuckGo CAPTCHA + Startpage + Brave 429 + direct `webfetch` to canonical URLs (per the web_search fallback chain).

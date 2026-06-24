@@ -111,7 +111,7 @@ Web-research (Exa per `docs/experiments/AGENTS.md §4` + verification цитат
   François Duranleau / Gameloft, Stuart Smith / AMD). Replaces `VkRenderPass` + `VkFramebuffer` with
   `VkRenderingInfo` + `VkRenderingAttachmentInfo`. **Pipeline creation uses `VkPipelineRenderingCreateInfoKHR` pNext**
   with `colorAttachmentCount` + `pColorAttachmentFormats` + `depthAttachmentFormat`. **Already ProjectV mainline per
-  `agent/knowledge.md §15` + `hardware-profile.md §4` (core 1.3, dev host supports).**
+  `agent/knowledge.md` + `hardware-profile.md §4` (core 1.3, dev host supports).**
 - `VK_KHR_dynamic_rendering_local_read` (Vulkan 1.4 feature) = subpass-style tile-local reads without full render
   passes (relevant for mobile TBDR per Khronos Vulkan-Samples docs; not ProjectV desktop target).
 
@@ -284,7 +284,7 @@ mainline Stage 5.3.**
 5. **TODO §5.3 DoD explicit goal** = ghosting elimination on moving models = only achievable with vertex-out
    (depth-reproject has fundamental precision loss per Karis 2014).
 
-**Mainline integration 3-step migration** per `agent/knowledge.md §30.4` precedent — see §7 below.
+**Mainline integration 3-step migration** per `agent/knowledge.md` precedent — see §7 below.
 
 **Operator action items** (optional, not blocking verdict):
 - Build + run `prototype/` per `prototype/README.md` for actual GPU measurements.
@@ -299,7 +299,7 @@ mainline Stage 5.3.**
 
 **Target stage:** `TODO.md §5.3` TAA Motion Vectors
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 ### Step 1: Foundation — vertex shader output + MRT format (S effort, ~50 LoC, 1 session)
 
@@ -313,7 +313,7 @@ mainline Stage 5.3.**
 - `src/render/SceneResources.{hpp,cpp}` — allocate double-buffered motion vector MRT
   (8 MiB total @ 1080p)
 - `src/render/vulkan/VulkanBootstrap.cpp::TryPickPhysicalDevice` — ensure
-  `VK_KHR_dynamic_rendering` is enabled (already ProjectV mainline per `agent/knowledge.md §15`)
+  `VK_KHR_dynamic_rendering` is enabled (already ProjectV mainline per `agent/knowledge.md`)
 
 **Effort:** S, ~50 LoC across 4-5 files. Single session.
 

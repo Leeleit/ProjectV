@@ -49,7 +49,7 @@
 - `agent/workspace.md §2` — Nearest Gap callout
 - `src/render/TaaRenderTargets.{hpp,cpp}` — TAA pipeline = integration point
 - `src/render/Taa.cpp` — TAA Halton jitter = upscaling-aware input
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `2026-06-21-taa-motion-vectors` — motion vector MRT (R16G16_SFLOAT) = upscaling standard input
 - `2026-06-20-bindless-descriptor-overhead` Phase D — bindless = required for cross-vendor upscaling
 - `2026-06-21-depth-occlusion-quantization` — VRAM-budget axis (cross-cutting)

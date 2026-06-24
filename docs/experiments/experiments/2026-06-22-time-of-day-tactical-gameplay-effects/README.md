@@ -187,7 +187,7 @@ E adds civilian + vehicle warmup loops at +73 ns/tick. If the game has no civili
 
 ## 7. Integration recommendation
 
-Per `agent/knowledge.md §30.4` (3-step migration pattern):
+Per `agent/knowledge.md` (3-step migration pattern):
 
 ### Step 1 — Stage 6+ (default): C ⭐ (878 ns/tick)
 

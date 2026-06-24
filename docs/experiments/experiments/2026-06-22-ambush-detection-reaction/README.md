@@ -42,7 +42,7 @@ sequential reasoning (E).**
 ## 2. Prior art
 
 Web-research plan (Exa `web_search` first, then DuckDuckGo fallback per
-`agent/knowledge.md Part B §9` fallback list):
+the web_search fallback chain):
 
 **Tier 1 — canonical ambush/surprise/anomaly references:**
 - Wikipedia "Ambush" (military doctrine: kill zone, ambush reaction
@@ -241,7 +241,7 @@ CONFIRMED for D/E (1-2 tick latency). See `RESULTS.md §4`.
 ## 7. Integration recommendation
 
 **Target stage:** independent (Tier 2 AI / Tactical & Warfare,
-military sandbox axis). Per `agent/knowledge.md §30.4` 3-step
+military sandbox axis). Per `agent/knowledge.md` 3-step
 migration precedent (~500 LoC, M effort, 2-3 sessions, **deferred
 до Stage 6+ military sandbox activation** per `agent/workspace.md
 §2` line 36 operator 8x planning decision):

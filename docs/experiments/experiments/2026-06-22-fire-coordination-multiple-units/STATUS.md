@@ -17,12 +17,12 @@
 - ✅ Claim в `backlog.md` (2026-06-22) per §13.1 + reservation record per §13.2.
 - ✅ Anti-duplicate sentinel §13.7 verified.
 - ✅ `experiments/2026-06-22-fire-coordination-multiple-units/` папка + README + STATUS + sources + prototype.
-- ✅ Web-research: 7 Tier 1 + 1 Tier 2 sources verified via direct `webfetch` to Wikipedia canonical URLs (Exa 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9`).
+- ✅ Web-research: 7 Tier 1 + 1 Tier 2 sources verified via direct `webfetch` to Wikipedia canonical URLs (Exa 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 - ✅ Standalone C++26 CPU prototype `prototype/fire_coord_bench.cpp` (~430 LoC, Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, build green 0 errors / 3 cosmetic warnings).
 - ✅ Benchmark complete: 5 strategies × 5 scenes × 5 seeds × 1000 iter + 10 warmup = **125,000 main measurements**, wall time ~5-7 min на Zen 3 5800X governor=`powersave` per `hardware-profile.md §1`.
 - ✅ Output: `prototype/build/results.csv` (126 rows = 1 header + 125 data).
 - ✅ Verdict: `mixed per strategy; yes for B_PriorityScoreWeighted ⭐ as recommended default for balanced forces (80% win vs A 60% = +33% relative on balanced_10v10 scene)`.
-- ✅ Integration recommendation: 3-step mainline migration per `agent/knowledge.md §30.4` precedent, ~530 LoC, S-M effort, **deferred до Stage 6+ military sandbox activation** per `agent/workspace.md §2` line 36 operator 8x planning decision.
+- ✅ Integration recommendation: 3-step mainline migration per `agent/knowledge.md` precedent, ~530 LoC, S-M effort, **deferred до Stage 6+ military sandbox activation** per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
 ---
 

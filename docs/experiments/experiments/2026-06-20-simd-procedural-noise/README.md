@@ -35,7 +35,7 @@ use-case (для material ID lookup по hash-position, не сама noise — 
 
 - **A1: scalar с aggressive inlining + lookup tables** — current mainline approach (если есть). Простой, но
   bottleneck на ~10-50 ns/sample = 10M-50M samples/sec per core.
-- **A2: `std::experimental::simd<float, 8>` (P1928)** — C++26 portable SIMD. По `agent/knowledge.md §10` —
+- **A2: `std::experimental::simd<float, 8>` (P1928)** — C++26 portable SIMD. По `agent/knowledge.md` —
   Clang 19+ partial x86, GCC 15+, MSVC in progress. **На Clang 22.1.6 — expected partial / opt-in**, не
   guaranteed mature.
 - **A3: xsimd (external library)** — mature, BSD-3, 8.x поддерживает AVX2/FMA хорошо. **Cost: новая
@@ -266,7 +266,7 @@ combine в SVDAG node walks, не основной tree walk).
     - `src/voxel/SimdHashNoise.{hpp,cpp}` (новый) — содержит обе варианты (scalar + AVX2)
     - Runtime detection: `if (__builtin_cpu_supports("avx2")) { avx2_path(); } else { scalar_path(); }`
     - Compile-time gate: `-march=x86-64-v3` для дефолтного AVX2 baseline (Haswell+ / Ryzen+)
-    - ProjectV release builds target Linux x86-64-v3 per `agent/knowledge.md §17` baseline → AVX2 path
+    - ProjectV release builds target Linux x86-64-v3 per `agent/knowledge.md` baseline → AVX2 path
       default on.
 
 3. **CPU path остаётся fallback для Stage 4.1** (GPU compute shader — primary per `TODO.md §4.1`).
@@ -275,10 +275,10 @@ combine в SVDAG node walks, не основной tree walk).
     - **Мапится на `src/asset/WorldGen.cpp::GenerateChunkVoxels`** (ещё не существует, planned Stage 4.1).
 
 4. **Stage 1.1 (SVDAG tree walks) — не primary target этого эксперимента.** Tree walks = bit ops на
-   `uint64_t fillMask`, не arithmetic. Уже covered `agent/knowledge.md §11` Tier 0-3 plan для frustum
+   `uint64_t fillMask`, не arithmetic. Уже covered `agent/knowledge.md` Tier 0-3 plan для frustum
    cull. **Избегать расширения scope** — оставить эту работу отдельной.
 
-**Подход (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Подход (3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 foundation (S effort):** Реализовать `SimdHashNoise.hpp` со scalar + AVX2 путями.
   `__attribute__((target("avx2,fma")))`
@@ -294,7 +294,7 @@ combine в SVDAG node walks, не основной tree walk).
   на Intel Haswell/Skylake/Alder Lake/Raptor Lake (та же AVX2 ISA), но `__builtin_cpu_supports("avx2")`
   — обязательно для safety.
 - **Arm/Apple Silicon:** нет AVX2 на Arm. **NEON path** (SVE2) — отдельный follow-up. Для ProjectV
-  mainline на x86-64 Linux per `agent/knowledge.md §17` — не блокер.
+  mainline на x86-64 Linux per `agent/knowledge.md` — не блокер.
 - **MSVC compatibility:** MSVC AVX2 intrinsics имеют те же имена, но ABI тонкости. Per
   `legacy/docs/standards/04_evil-hacks-philosophy.md` — если mainline builds на MSVC, нужна верификация.
   Clang 22.1.6 baseline = Linux dev, MSVC = out of scope для этого эксперимента.
@@ -361,7 +361,7 @@ combine в SVDAG node walks, не основной tree walk).
 - `src/voxel/Sparse64Tree.hpp::GetCellRecursive` / `SetCellRecursive` — основная hot-path. Noise здесь
   **прямо не используется** (tree walk = bit ops на `fillMask`), **но** `Sparse64HomogeneousMaterial`
   hash + material ID combine могут выиграть от SIMD при batch evaluation.
-- Per `agent/knowledge.md §11` Tier 0-3 plan: уже планируется SIMD для frustum cull (separate axis).
+- Per `agent/knowledge.md` Tier 0-3 plan: уже планируется SIMD для frustum cull (separate axis).
   **Этот эксперимент не дублирует** frustum cull SIMD — focuses on arithmetic-bound noise eval.
 
 **Допущения / упрощения:**
@@ -373,5 +373,5 @@ combine в SVDAG node walks, не основной tree walk).
 **Что осталось неизмеренным:**
 
 - Multi-thread scaling (8 cores Zen 3 → 8× expected, но actual scaling зависит от memory contention).
-- AVX-512 / AVX-VNNI (нет на dev host — `agent/knowledge.md §1`).
+- AVX-512 / AVX-VNNI (нет на dev host — `agent/knowledge.md`).
 - Apple Silicon / Arm NEON cross-platform portability.

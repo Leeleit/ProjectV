@@ -87,7 +87,7 @@
 
 ## 5. Caveats
 
-- **CPU-only analytical prototype**: no Vulkan GPU dispatch, no Flecs ECS overhead, no real network, no real ProjectV workload coupling. Real production cost will be **2-5× higher** when integrated with Flecs ECS + VMA memory barriers + Vulkan async dispatch (per `agent/knowledge.md §30.4` precedent).
+- **CPU-only analytical prototype**: no Vulkan GPU dispatch, no Flecs ECS overhead, no real network, no real ProjectV workload coupling. Real production cost will be **2-5× higher** when integrated with Flecs ECS + VMA memory barriers + Vulkan async dispatch (per `agent/knowledge.md` precedent).
 - **Per-vehicle damage coupling is simplified**: real war-time engine wear includes thermal cycling, oil degradation, vibration fatigue. Prototype models G-load + round count only.
 - **BSFC/TSFC tables are production reference values**, not real per-vehicle calibration. Real production should sample from `data-driven-vehicle-weapon-definitions` [mixed] vehicle stat catalog.
 - **5-10% threshold met MASSIVELY on cost**, but on accuracy: B/E are 3-4× slower than A — **justified only for safety-critical subsystems** (engine, transmission, barrel) per closed `aircraft-damage-model` [yes] precedent.

@@ -287,7 +287,7 @@ biome/cave architecture, at cost of **30-55× build overhead** (acceptable per S
 **Target stage:** `TODO.md §4.1` (GPU Noise & World Gen — biome/cave generation) + `§4.2` (LOD — per-layer
 LOD) + `§5.1` (VCT — layer-boundary cone-march termination).
 
-**Подход (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Подход (3-step migration per `agent/knowledge.md` precedent):**
 
 **Step 1 (S, ~150 LoC):** introduce `ChunkLayout` enum + `ChunkStorage::payload` polymorphic container в
 `src/voxel/VoxelWorld.{hpp,cpp}`. Per-chunk `layout: u8` flag (0=monolithic, 1=palette, 2=L2_layered,
@@ -334,7 +334,7 @@ per-layer LOD downsampling (each layer = independent mesh). Selective rebuild vi
   via WFC tilesets.
 - **Complementary:** `2026-06-20-dec-pipelines-async-compute` (closed verdict=yes) — async populate для
   background chunks without blocking main thread.
-- **Foundation:** `agent/knowledge.md §30.4` (3-step migration precedent) — proven pattern for mainline
+- **Foundation:** `agent/knowledge.md` (3-step migration precedent) — proven pattern for mainline
   integration.
 
 **Estimated effort:** M (~700 LoC across `src/voxel/VoxelWorld.{hpp,cpp}` + `src/shaders/world_gen_layers.comp`
@@ -375,7 +375,7 @@ per-layer LOD downsampling (each layer = independent mesh). Selective rebuild vi
 - **No multi-channel noise FBM** — single OpenSimplex2-equivalent query per layer (heightmap per `2026-06-21-gpu-procedural-noise-compute-kernels` Step 3 multi-channel deferred до mainline adoption).
 - **No VCT measurement** — layer-boundary count = proxy metric; real VCT leak test deferred до Stage 5.1 mainline integration.
 - **No build/break cost amortization** — mutations measured in isolation; real PlayerInput batching per
-  `agent/knowledge.md §30.4` likely amortizes layer lookup cost.
+  `agent/knowledge.md` likely amortizes layer lookup cost.
 
 **Что осталось неизмеренным:**
 

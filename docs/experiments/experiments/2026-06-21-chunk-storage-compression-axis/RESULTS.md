@@ -71,7 +71,7 @@ The **5-10% threshold per `legacy/docs/philosophy/03_domain/01_optimization-phil
 
 ### 3.4 Adaptive dispatch logic
 
-Recommended mainline dispatcher (per `agent/knowledge.md §30.4` 3-step migration):
+Recommended mainline dispatcher (per `agent/knowledge.md` 3-step migration):
 
 ```cpp
 enum class ChunkFileFormat {
@@ -90,7 +90,7 @@ ChunkFileFormat SelectFormat(const VoxelChunk& chunk) {
 
 ## 4. Cross-platform projection (analytical)
 
-Per `agent/knowledge.md §4` build/verification contract, cross-platform cost estimates (calibrated from Epic ADR-00016 + PH3 Blog):
+Per `agent/knowledge.md` build/verification contract, cross-platform cost estimates (calibrated from Epic ADR-00016 + PH3 Blog):
 
 | Strategy | Zen 3 5800X (measured) | Apple M2 (est) | Snapdragon 8 Gen 2 (est) |
 |:---------|----------------------:|---------------:|--------------------------:|

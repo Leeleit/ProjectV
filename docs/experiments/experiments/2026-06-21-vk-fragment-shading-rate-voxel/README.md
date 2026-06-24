@@ -96,7 +96,7 @@ Full source list: [`sources.md`](./sources.md).
 **Тип эксперимента:** analytical + prototype + benchmark (per `experiments/_TEMPLATE/README.md §3`).
 
 **Сцена:** 4 representative voxel scenes representative of ProjectV chunks (per
-`agent/knowledge.md §1` chunkSize=8 base + 64³ chunk):
+`agent/knowledge.md` chunkSize=8 base + 64³ chunk):
 
 | Scene          | Material count | Coverage  | Description                            |
 |:---------------|:---------------|:----------|:---------------------------------------|
@@ -388,7 +388,7 @@ Unreal Engine 5.0, Epic Lumen SIGGRAPH 2022, platonvin/lum-rs).
 
 1. **CPU proxy timings** for compute_gen_us (7 ns/tile) — real GPU compute shader cost varies per architecture.
 2. **Coverage formula** = `(covered_pixels / total_pixels) × 100` — для ProjectV chunks (32³ or 64³ solid),
-   coverage может быть выше при chunkSize=8 base per `agent/knowledge.md §1`.
+   coverage может быть выше при chunkSize=8 base per `agent/knowledge.md`.
 3. **Quality risk heuristic** — simplified, не validated визуально. Real GPU prototype + PSNR/SSIM measurement
    needed for final validation.
 4. **Synthetic scenes** — не exact VoxelLab scenes; representative of ProjectV biome/cave patterns.

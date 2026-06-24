@@ -113,7 +113,7 @@ Cost is linear in N (segments). For 50 m cable with 200 segments = 0.86 µs/m, d
 
 ## 5. Recommendations for mainline ProjectV
 
-**Per `agent/knowledge.md §30.4` precedent, 3-step migration:**
+**Per `agent/knowledge.md` precedent, 3-step migration:**
 
 - **Step 1 (XS, ~80 LoC, immediate):** `src/physics/Cable.{hpp,cpp}` foundation. Flecs component `CableLink` connecting two entities (anchor + load). Per-entity: cable material (compliance), segments per meter, max length. Use **D strategy (Jakobsen) with 8-16 iterations** as default. 60 Hz physics tick.
 - **Step 2 (M, ~400 LoC, deferred до Stage 6+):** `src/physics/Winch.{hpp,cpp}` drum + retract/extend speed. `src/physics/CableSling.{hpp,cpp}` for helicopter sling load (uses CableLink). Adaptive LOD: 4 seg/m for LOD0 (close), 2 seg/m for LOD1 (mid), 1 seg/m for LOD2 (far, with simple distance constraint only). Tracy plot "Cable Tick" + "Cable Stretch".
@@ -139,7 +139,7 @@ Cost is linear in N (segments). For 50 m cable with 200 segments = 0.86 µs/m, d
 ## 6. Cross-references
 
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold: strategies C/D/E all clear massively (0.4-1% of 30 Hz budget per cable).
-- `agent/knowledge.md §30.4` — 3-step migration precedent (reused verbatim from `soft-body-physics-debris`, `tank-terrain-interaction-physics`, etc.).
+- `agent/knowledge.md` — 3-step migration precedent (reused verbatim from `soft-body-physics-debris`, `tank-terrain-interaction-physics`, etc.).
 - `agent/workspace.md §2` — Stage 6+ deferral (operator 8x planning decision).
 - `hardware-profile.md §1/§2` — Zen 3 5800X, DDR4 32 GiB, RTX 3060 Ti 8 GiB.
 - `benchmarks/methodology.md §3` — measurement protocol (1000 iter + 10 warmup, mean/median/p95/p99/std).

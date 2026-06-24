@@ -44,7 +44,7 @@ physics AABB rather than visual faces) даст:
 (50-100× headroom vs 50 µs Stage 4.1 budget, с учётом 16-32× больше work для merge decisions).
 
 **Cross-vendor:** N/A — pure CPU code, no GPU/Vulkan dependency. Cross-platform: Clang 22.1.6 + libstdc++
-(Linux) + MSVC STL (Windows), per `agent/knowledge.md §17` build matrix.
+(Linux) + MSVC STL (Windows), per `agent/knowledge.md` build matrix.
 
 **Caveat (anti-falsification):** `JPH::BoxShape` = OBB только по локальным осям chunk (axis-aligned), поэтому
 **merge = 3D AABB union of coplanar solid voxels**. No rotation, no transform. Trivial.
@@ -162,7 +162,7 @@ follow-up. A_Naive (mainline current) **fails DoD** — replacement required.
 **Recommended:** `F_TwoPass` (2D XZ per Y + vertical merge) — same reduction as D_3D but simpler code,
 naturally matches per-Y-layer chunk semantic per closed `2026-06-21-sub-chunk-layers`.
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 - **Step 1 (XS, ~30 LoC):** add `src/physics/GreedyPhysicsMerger.{hpp,cpp}` с `MergeBoxCenters()` function
   (F_TwoPass implementation). Header: AABB struct, function signature. Implementation: ~20 LoC.
@@ -254,8 +254,8 @@ positive:** 35× fewer AddShape calls + 35× fewer JPH child shape creations = J
 - `src/voxel/VoxelWorld.hpp:78-107` — `VoxelWorld` struct, `chunkSize=8`, voxel/chunk access API.
 - `agent/workspace.md §1 Phase 4` (session 2x part 4) — incremental Jolt per-chunk rebuild queue closed.
 - `agent/workspace.md §1 Phase 9` (session 2x part 5) — `ProcessChunkRebuildQueue` per-frame call closed.
-- `agent/knowledge.md §17` — build matrix (Linux clang + Windows clang-cl).
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — build matrix (Linux clang + Windows clang-cl).
+- `agent/knowledge.md` — 3-step migration precedent.
 - Closed `2026-06-20-meshing-algo-comparison` — visual meshing patterns (per-axis 2D scan from
   `voxel_mesh.comp::GreedyFacePass`); **this experiment = same algorithm family, but for physics AABB not
   visual faces**.

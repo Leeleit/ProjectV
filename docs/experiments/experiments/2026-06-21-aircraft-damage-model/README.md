@@ -98,7 +98,7 @@ The per-component OBB hit-table combined with health pools and cascading failure
 
 ## 7. Integration recommendation
 
-We recommend a 3-step mainline integration plan following the `agent/knowledge.md §30.4` precedent:
+We recommend a 3-step mainline integration plan following the `agent/knowledge.md` precedent:
 - **Step 1 (XS, ~80 LoC):** Create `src/physics/AircraftDamage.{hpp,cpp}` containing the `HitTable` structure and projectile hit dispatch using local-to-world OBB coordinates.
 - **Step 2 (M, ~300 LoC):** Implement the component health pools, fuel leak / fire propagation cascade updates, and integrate with `BallisticProjectile` and `FixedWingFlightModel` (reducing thrust/lift and applying rolling torque on wing severing).
 - **Step 3 (S, ~100 LoC):** Add `PROJECTV_AIRCRAFT_DAMAGE` environment gate, Tracy profiling zones, and unit tests in `tests/AircraftDamageTests.cpp`.

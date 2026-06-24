@@ -118,7 +118,7 @@ p95_vram_mib, mean_psnr_db, p95_psnr_db, sun_visibility, occluder_density`.
 
 ## Cross-axis projection
 
-**Mainline 3-step migration per `agent/knowledge.md §30.4` precedent** (~520 LoC total, S-M effort,
+**Mainline 3-step migration per `agent/knowledge.md` precedent** (~520 LoC total, S-M effort,
 2-3 sessions, deferred до Stage 5.x dedicated session):
 
 - **Step 1 (XS, ~50 LoC):** `GodRaysController` foundation + env gate

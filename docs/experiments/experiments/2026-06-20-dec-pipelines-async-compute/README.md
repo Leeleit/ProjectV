@@ -3,7 +3,7 @@
 **Status:** concluded-verdict-yes
 **Date opened:** 2026-06-20
 **Date closed:** 2026-06-20
-**Stage link:** TODO.md §3.1 (GPU Fluid CA per `agent/knowledge.md §30.4`) / §2.2 (HZB cull) / §4.1 (GPU world gen) /
+**Stage link:** TODO.md §3.1 (GPU Fluid CA per `agent/knowledge.md`) / §2.2 (HZB cull) / §4.1 (GPU world gen) /
 §5.1 (VCT voxelization) / §5.2 (RTX BLAS build per `bindless-descriptor-overhead` Phase E)
 **Estimated effort:** S (literature review + analytical model; no mainline changes per AGENTS.md §2)
 **Author:** research agent (`docs/experiments/AGENTS.md`)
@@ -71,7 +71,7 @@ RDNA2/3/4 + Intel Arc, **достаточный для crossing the 5% perf thre
 
 **Преимущество, если гипотеза подтвердится:**
 
-- Stage 3.1 fluid CA (compute, 20 Hz per `agent/knowledge.md §30.1`) — overlap с main render pass = скрытые
+- Stage 3.1 fluid CA (compute, 20 Hz per `agent/knowledge.md`) — overlap с main render pass = скрытые
   compute cost в graphics bubbles. На VoxelLab reference (24×17×24 chunks) — likely small benefit; на Stage 4.3
   draw distance (128+ chunks, large fluid world) — substantial.
 - Stage 4.1 GPU world gen (batch generation, periodic) — async with main render = no frame hitching при
@@ -204,7 +204,7 @@ sufficient for a `yes` verdict.
 
 For each compute pass in `TODO.md` Stages 2.2 / 3.1 / 4.1 / 5.1 / 5.2, I extracted:
 
-- **Read resources** (per `agent/knowledge.md §30.4` and `TODO.md` description).
+- **Read resources** (per `agent/knowledge.md` and `TODO.md` description).
 - **Write resources**.
 - **RAW hazard with main render pass** (read-after-write on resources consumed by `voxel.frag` /
   `voxel_mesh.comp` / CSM / present pass).
@@ -220,7 +220,7 @@ Detail in `pipeline_overlap_analysis.md`. Summary:
 | Stage 5.1 VCT voxelization | SVDAG (read-only)                    | 3D texture atlas                       | YES (fragment shader reads atlas same frame) | TIGHT        | Sequential default, async opt-in |
 | Stage 5.2 RTX BLAS build   | SVDAG mesh                           | BLAS                                   | NO (used in RT pass, naturally late)         | YES          | **ASYNC**                        |
 
-**Key insight for fluid CA:** per `agent/knowledge.md §30.1`, tick rate is **20 Hz** while frame rate is
+**Key insight for fluid CA:** per `agent/knowledge.md`, tick rate is **20 Hz** while frame rate is
 **60 Hz** = **3-frame latency** between dispatch and result consumption. The async-compute dispatch for tick N
 must complete before tick N+1's render (worst case, if no jitter), but the result is consumed by all 3
 intermediate frames' render. This is **2-3 ms hidden compute per fluid tick** (depending on `world.voxels` size).
@@ -243,7 +243,7 @@ Built from §2.2. Cross-referenced with:
 per `legacy/docs/architecture/practice/32_voxel_sync_pipeline.md` + `04_modern-vulkan-guide.md`):**
 
 - `vkQueueSubmit` + binary semaphores + `vkWaitForFences` with `UINT64_MAX`.
-- Per `agent/knowledge.md` §6.2.2: "vkWaitForFences timeout → 10ms" — operator audit confirms this is current pattern.
+- Per `agent/knowledge.md`: "vkWaitForFences timeout → 10ms" — operator audit confirms this is current pattern.
 
 **Proposed pattern (this experiment):**
 
@@ -353,7 +353,7 @@ async compute. Mali TBDR not in ProjectV current target.
 
 | Vendor                                | ProjectV dev host?                | Async benefit estimate                                                                                        | Critical caveat                                                                                |
 |:--------------------------------------|:----------------------------------|:--------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------|
-| NVIDIA RTX 3060 Ti (Ampere, dev host) | YES (per `agent/knowledge.md §9`) | 5-8% steady-state, 100% spike                                                                                 | Avoid mesh-shader + async combination (June 2025 driver bug) — not on ProjectV's current path. |
+| NVIDIA RTX 3060 Ti (Ampere, dev host) | YES (per `agent/knowledge.md`) | 5-8% steady-state, 100% spike                                                                                 | Avoid mesh-shader + async combination (June 2025 driver bug) — not on ProjectV's current path. |
 | NVIDIA RTX 40/50                      | Future                            | 5-8% steady-state, 100% spike                                                                                 | Same June 2025 driver bug. Blackwell's AMP may mitigate.                                       |
 | AMD RDNA2/3/4                         | Future                            | Potentially higher than NVIDIA (Unreal: "DX12 nvidia does not support compatible async compute but AMD does") | Use small workgroups (64 threads) for async; avoid export-bound shaders in parallel.           |
 | Intel Arc Alchemist/Battlemage        | Future                            | Similar to NVIDIA                                                                                             | Avoid Ray Queries + groupshared + async compute (L1 contention).                               |
@@ -362,7 +362,7 @@ async compute. Mali TBDR not in ProjectV current target.
 
 `vkQueueSubmit2` + timeline semaphores: **net simpler** than current `vkQueueSubmit` + binary semaphores +
 `vkWaitForFences` pattern. Code lines roughly equal; semantics strictly more powerful (per-pass stage masks,
-host-side wait with timeout, single multi-value timeline). Per `agent/knowledge.md §6.2.2` "vkWaitForFences
+host-side wait with timeout, single multi-value timeline). Per `agent/knowledge.md` "vkWaitForFences
 timeout → 10ms" audit, the new pattern enables **non-blocking host waits** cleanly.
 
 ### 5.4 DEC extensions (T4)
@@ -386,9 +386,9 @@ Stage 4.1 world gen + Stage 5.2 BLAS build. **Crosses 5% perf threshold** per
 
 | Reference                                                              | Date       | Used for                                                              |
 |:-----------------------------------------------------------------------|:-----------|:----------------------------------------------------------------------|
-| `agent/knowledge.md §30.4`                                             | 2026-06-20 | Stage 3.1 contract (fluid CA, ping-pong, atomicOr, active chunk list) |
-| `agent/knowledge.md §30.1`                                             | 2026-06-14 | Tick rate 20 Hz, pause, timeScale                                     |
-| `agent/knowledge.md §9`                                                | 2026-06-09 | Dev host = RTX 3060 Ti; web search fallbacks                          |
+| `agent/knowledge.md`                                             | 2026-06-20 | Stage 3.1 contract (fluid CA, ping-pong, atomicOr, active chunk list) |
+| `agent/knowledge.md`                                             | 2026-06-14 | Tick rate 20 Hz, pause, timeScale                                     |
+| `agent/knowledge.md`                                                | 2026-06-09 | Dev host = RTX 3060 Ti; web search fallbacks                          |
 | `TODO.md` Stages 2.2 / 3.1 / 4.1 / 5.1 / 5.2                           | 2026-06-20 | Compute passes scope                                                  |
 | `TODO.md §A1`                                                          | 2026-06-20 | Vulkan 1.3 as mainline target                                         |
 | `bindless-descriptor-overhead` (closed `2026-06-20`)                   | 2026-06-20 | Phase E RTX TLAS = shared async queue                                 |
@@ -432,7 +432,7 @@ Plus the **foundation** (sync model) is shared across all compute paths.
 
 - `src/render/vulkan/VulkanBootstrap.cpp::TryPickPhysicalDevice` (queue family setup): request 1
   `VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT` dedicated compute queue (async), in addition to existing
-  graphics+compute queue. Verify dev host (RTX 3060 Ti) exposes such family (per `agent/knowledge.md §9` it
+  graphics+compute queue. Verify dev host (RTX 3060 Ti) exposes such family (per `agent/knowledge.md` it
   does). Fall back to same-family second queue if not exposed.
 - `src/render/vulkan/VulkanSyncPrimitives.{hpp,cpp}` (new file): wrap `vkCreateSemaphore` with
   `VK_SEMAPHORE_TYPE_TIMELINE` + `initialValue=0`. Provide `RenderTimeline::signal(value)` /
@@ -488,7 +488,7 @@ Plus the **foundation** (sync model) is shared across all compute paths.
 - **Fluid CA:** 1M+ fluid voxels tick at 20 Hz with no mainline FPS drop (per `decisions.md §30.4`
   acceptance).
 - **Cross-vendor:** Tested on at least NVIDIA RTX 30/40 + AMD RDNA3/4 + Intel Arc Battlemage.
-- **CPU-side:** zero `vkWaitForFences` with `UINT64_MAX` (per `agent/knowledge.md` §6.2.2 audit).
+- **CPU-side:** zero `vkWaitForFences` with `UINT64_MAX` (per `agent/knowledge.md` audit).
 - **RenderDoc validation:** per `decisions.md §15` close-out rule, inspected runtime captures required
   (FINAL + relevant debug views).
 
@@ -559,7 +559,7 @@ Arm Mali 2026-02-18 blog, Imagination 2020-07-21 blog).
 **Допущения/упрощения:**
 
 - All 5 vendors / HW generations support async compute (verified §2.2).
-- Per `agent/knowledge.md §9`, dev host = NVIDIA RTX 3060 Ti, driver unknown; estimates are based on
+- Per `agent/knowledge.md`, dev host = NVIDIA RTX 3060 Ti, driver unknown; estimates are based on
   Ampere white paper + Bondarev 2021 blog; not measured on actual hardware.
 - Mali TBDR not in scope (desktop-only ProjectV target).
 - Cross-queue resource sharing: assume `VK_SHARING_MODE_EXCLUSIVE` + ownership transfer (per Lou Kramer
@@ -570,12 +570,12 @@ Arm Mali 2026-02-18 blog, Imagination 2020-07-21 blog).
 **Что осталось неизмеренным:**
 
 - Real GPU timing on dev host (would require ProjectV integration + RenderDoc / Nsight captures).
-- Driver-specific async-compute scheduling on this exact driver version (per `agent/knowledge.md §9`,
+- Driver-specific async-compute scheduling on this exact driver version (per `agent/knowledge.md`,
   driver version not pinned).
 - Effect of `VkQueueFamilyGlobalPriorityKHR` priority hints on NVIDIA RTX 3060 Ti specifically.
 - AMD RDNA1/2 driver maintenance branch (2025-Q4) impact on async compute perf — assumed working.
 - Mali TBDR behavior (out of scope).
-- Real Vulkan validation layer behavior with multi-queue submit (per `agent/knowledge.md §6` project
+- Real Vulkan validation layer behavior with multi-queue submit (per `agent/knowledge.md` project
   context, validation ON for debug preset).
 
 ---

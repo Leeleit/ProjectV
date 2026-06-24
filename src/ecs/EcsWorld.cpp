@@ -1,4 +1,4 @@
-import projectv.math;
+import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 import projectv.string_id;
 
 #include "ecs/EcsWorld.hpp"
@@ -53,9 +53,6 @@ struct FluidCATickState {
 	float accumulatorSeconds = 0.0f;
 };
 
-struct VoxelInteractionTickState {
-	bool dummy = false;
-};
 
 struct BenchmarkTickResult {
 	bool quitAfterFrame = false;
@@ -172,7 +169,6 @@ bool InitializeAppEcs(AppState *state)
 	ecs.world.set<DebugState>({});
 	ecs.world.set<AudioPlaylistRefreshRequest>({});
 	ecs.world.set<FluidCATickState>({});
-	ecs.world.set<VoxelInteractionTickState>({});
 	ecs.world.set<BenchmarkTickResult>({});
 	ecs.world.set<LookDevCaptureTickResult>({});
 	ecs.world.set<AppStateBinding>({state});
@@ -229,32 +225,6 @@ bool InitializeAppEcs(AppState *state)
 				}
 			}
 			simulation.fluidAccumulatorSeconds = tickState.accumulatorSeconds;
-		});
-
-	ecs.world.system<VoxelInteractionTickState>("VoxelInteractionTickSystem")
-		.kind(flecs::OnUpdate)
-		.each([](flecs::entity e, VoxelInteractionTickState &) {
-			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
-			if (!binding || !binding->state) {
-				return;
-			}
-			CameraState *camera = GetPrimaryCameraState(binding->state->ecs().get());
-			if (!camera) {
-				return;
-			}
-			WorldState *world = GetWorldState(binding->state->ecs().get());
-			if (!world) {
-				return;
-			}
-			const DebugState *debug = GetDebugState(binding->state->ecs().get());
-			const bool allowEditing = world->allowWorldEditing;
-			UpdateVoxelInteraction(
-				*camera,
-				&binding->state->input(),
-				world->voxelWorld.get(),
-				&binding->state->interaction(),
-				allowEditing,
-				binding->state->physics().get());
 		});
 
 	ecs.world.system<BenchmarkTickResult>("BenchmarkAutomationTickSystem")
@@ -315,13 +285,6 @@ void TickFluidCASystem(EcsState *ecs)
 	ecs->impl.world.progress();
 }
 
-void TickVoxelInteractionSystem(EcsState *ecs)
-{
-	if (!ecs) {
-		return;
-	}
-	ecs->impl.world.progress();
-}
 
 void TickBenchmarkAutomationSystem(EcsState *ecs)
 {

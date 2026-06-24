@@ -3,7 +3,7 @@
 **2026-06-21** (single session, ~3h)
 
 - Phase 0: Reservation per `AGENTS.md §13.1` — done. Backlog.md §In progress + INDEX.md §5 Active + folder created.
-- Phase 1: Web research (Exa 429 + DuckDuckGo CAPTCHA + Brave Search fallback per `agent/knowledge.md Part B §9` line 1424) — done. **10 Tier-1 sources verified** в `sources.md`: IFPV 2026 (Huang et al., arXiv 2605.14851, **+19.4% / -41.7%** primary hypothesis source) + Diplodocus 2022 + CICERO 2022 (Science) + DeepNash 2022 + MineDojo 2022 + Voyager 2023 + ReAct 2022 + Toolformer 2023 + Wikipedia HoI4 + Wikipedia SupCom.
+- Phase 1: Web research (Exa 429 + DuckDuckGo CAPTCHA + Brave Search fallback per the web_search fallback chain) — done. **10 Tier-1 sources verified** в `sources.md`: IFPV 2026 (Huang et al., arXiv 2605.14851, **+19.4% / -41.7%** primary hypothesis source) + Diplodocus 2022 + CICERO 2022 (Science) + DeepNash 2022 + MineDojo 2022 + Voyager 2023 + ReAct 2022 + Toolformer 2023 + Wikipedia HoI4 + Wikipedia SupCom.
 - Phase 2: Prototype `prototype/strategic_llm_bench.cpp` (C++26 CPU, ~450 LoC) — done. Build green (Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic`, 1 cosmetic warning unused-parameter).
 - Phase 3: Build — done. Binary `prototype/build/strategic_llm_bench` (43 KB).
 - Phase 4: Run benchmark — done. 5 strategies × 5 scenes × 5 seeds × 10 warmup + 1000 iter = **125,000 main measurements**, wall time **0.047 sec**. Outputs: `prototype/build/results.csv` (126 rows) + `summary_means.csv` (6 rows) + `run.log` (125 per-config lines).

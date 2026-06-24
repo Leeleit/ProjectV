@@ -43,7 +43,7 @@ D=mixed, **E=YES ⭐ high-fidelity opt-in**.
   masking, sun glint, atmospheric extinction). A is the "optimistic lie" (1.0 always), E is the "honest truth"
   (0.20-0.90 with confidence interval). The right answer is C (best cost/accuracy balance) by default, E for
   high-fidelity.
-- **Integration recommendation:** 3-step ~730 LoC, S-M effort, per `agent/knowledge.md §30.4` precedent. Defer to
+- **Integration recommendation:** 3-step ~730 LoC, S-M effort, per `agent/knowledge.md` precedent. Defer to
   dedicated session per `agent/workspace.md §2` operator 8x planning decision. Default `PROJECTV_IRST_STRATEGY=C`,
   opt-in `E`.
 - **Caveat:** CPU-only analytical model with 2-band LOWTRAN approximation. Real mainline integration would need

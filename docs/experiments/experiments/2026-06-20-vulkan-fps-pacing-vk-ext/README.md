@@ -57,7 +57,7 @@ Wayland session) поддерживает **полный SOTA frame-pacing exten
 
 4. **`VK_KHR_swapchain_maintenance1` (ratified 2025-03-31)** даёт `VkSwapchainPresentFenceInfoKHR`
    (fence signaled when present resources safe to destroy — eliminates swapchain recreate race
-   per `agent/decisions.md §30.3`) + `VkSwapchainPresentModeInfoKHR` (per-present present-mode
+   per `agent/knowledge.md`) + `VkSwapchainPresentModeInfoKHR` (per-present present-mode
    change без swap-flop) + `VkSwapchainPresentScalingCreateInfoKHR` (dimension mismatch handling).
    Direct fix для `VulkanSwapchain.cpp::RecreateSwapchain` destroy/recreate cycle per
    `decisions.md §30.3` walk-across-RecreateSwapchain-preserve-g_active.
@@ -86,7 +86,7 @@ contract (per `agent/workspace.md §2` + `dec-pipelines-async-compute` Step 1 pr
 **Альтернативы (отвергнутые):**
 
 - **MAILBOX present mode** (`VK_PRESENT_MODE_MAILBOX_KHR`) — async swap, несовместим с текущим
-  VSync-toggle UX (per `agent/decisions.md §30.2` + `presentModeTests.cpp` 12 sub-tests).
+  VSync-toggle UX (per `agent/knowledge.md` + `presentModeTests.cpp` 12 sub-tests).
 - **`VK_NV_low_latency2`** (NVIDIA Reflex / Anti-Lag+) — vendor lock-in. AMD Anti-Lag + Intel
   XeLL — каждое своё. Cross-vendor gap остаётся.
 - **Custom frame pacing layer** — duplicate logic, не SOTA.
@@ -191,7 +191,7 @@ direct-display). Это — главная ниша для prototype (`§3 Metho
     - Minimal graphics pass: clear (RGBA 0.2, 0.2, 0.2, 1.0) + present only.
     - 3 modes per measurement:
         - **Mode A (baseline):** busy-wait FIFO (`vkQueuePresentKHR` + `vkWaitForFences` polling,
-          10 ms timeout per `agent/knowledge.md §6.2.6`).
+          10 ms timeout per `agent/knowledge.md`).
         - **Mode B (hypothesis intermediate):** `VK_KHR_present_wait2` + `VK_KHR_swapchain_maintenance1`
           (no swap-flop).
         - **Mode C (SOTA):** `VK_EXT_present_timing` + `desiredPresentTime` per `refreshDuration`.
@@ -265,7 +265,7 @@ benchmark (~0.3 ms latency reduction, 5% power) + NVIDIA Wayland busy-spin fix (
   только на KHR_display direct-display (другие условия).
 - ⚠️ **CROSS-VENDOR GAP:** Только NVIDIA dev host validated. AMD RDNA 2/3/4 + Intel Arc
   Alchemist/Battlemage — mainline re-test (per `dec-pipelines-async-compute` precedent).
-- ⚠️ **INTEGRATION EFFORT:** Multi-step migration per `agent/knowledge.md §30.4` precedent —
+- ⚠️ **INTEGRATION EFFORT:** Multi-step migration per `agent/knowledge.md` precedent —
   не single-commit change. Mainline should follow 3-step (foundation → adoption → default flip).
 
 **Conditions для verdict flip `mixed` → `yes`:** mainline prototype + measured p99 variance
@@ -281,7 +281,7 @@ verdict flip `mixed` → `no`:** mainline prototype показывает p99 var
 **Target stage:** TODO.md §Stage 0 (architectural foundation, cross-cutting). Foundation шаг
 = prerequisite для Stage 3.1 GPU Fluid CA cross-frame latency contract (per `agent/workspace.md §2`).
 
-**Конкретные изменения (предварительно, в порядке 3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Конкретные изменения (предварительно, в порядке 3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (Foundation, S effort):**
     - `src/core/Types.hpp::PresentState` — добавить feature flags (`bPresentWaitSupported`,
@@ -301,7 +301,7 @@ verdict flip `mixed` → `no`:** mainline prototype показывает p99 var
     - `src/render/vulkan/VulkanSwapchain.cpp::RecreateSwapchain` — replace destroy/recreate cycle
       с `VkSwapchainPresentModeInfoKHR` per-present mode change (no swap-flop).
     - `src/render/vulkan/VulkanSwapchain.cpp::DestroySwapchainResources` — use `VkSwapchainPresentFenceInfoKHR`
-      для safe destroy race-free (per `agent/decisions.md §30.3`).
+      для safe destroy race-free (per `agent/knowledge.md`).
 
 - **Step 3 (Default flip, XS):**
     - Default `PROJECTV_USE_PRESENT_TIMING=ON` для hardware с `presentTiming + presentAtAbsoluteTime`
@@ -309,7 +309,7 @@ verdict flip `mixed` → `no`:** mainline prototype показывает p99 var
     - Fallback to Mode B (`present_wait2`) if `present_timing` unavailable.
     - Fallback to Mode A (busy-wait) if neither extension supported (Intel Iris Xe per source 11).
 
-**Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent (как `dec-pipelines-async-compute`).
+**Подход:** 3-step migration per `agent/knowledge.md` precedent (как `dec-pipelines-async-compute`).
 
 **Риски:**
 
@@ -335,7 +335,7 @@ verdict flip `mixed` → `no`:** mainline prototype показывает p99 var
 
 - **Hard:** none. Все extensions available на dev host.
 - **Soft:** `dec-pipelines-async-compute` (sync2 + timeline semaphores) — closed 2026-06-20,
-  available. Cross-frame latency contract (per `agent/decisions.md §30.4`) = prerequisite
+  available. Cross-frame latency contract (per `agent/knowledge.md`) = prerequisite
   для Stage 3.1 GPU Fluid CA.
 - **Soft:** `async-compute-overhead-numbers` (closed 2026-06-20) — async foundation available.
 
@@ -354,7 +354,7 @@ adoption, ~150-200 LoC) + **XS** (default flip). Total: **M-S** для full inte
 ## 9. Mapping to ProjectV hot-path
 
 - **Mainline consumer (primary):** `src/render/Renderer.cpp::PresentFrame` — current busy-wait
-  FIFO loop. Per `agent/knowledge.md §30.2-§30.3` VSync cycle lineage.
+  FIFO loop. Per `agent/knowledge.md`-§30.3` VSync cycle lineage.
 - **Mainline consumer (secondary):** `src/render/vulkan/VulkanSwapchain.cpp::RecreateSwapchain`
   — VSync-toggle handler, currently destroys + recreates swapchain (per `decisions.md §30.3`).
 - **Mainline consumer (tertiary):** `src/render/vulkan/VulkanSwapchain.cpp::DestroySwapchainResources`

@@ -175,7 +175,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic \
 
 ## 7. Integration recommendation
 
-**Mainline recommendation: adopt `C_IncrementalBudgeted` strategy per `agent/knowledge.md §30.4` 3-step migration.**
+**Mainline recommendation: adopt `C_IncrementalBudgeted` strategy per `agent/knowledge.md` 3-step migration.**
 
 ### Step-by-step migration
 
@@ -307,7 +307,7 @@ extensions).
 
 - `TODO.md` §1.1 (NanoVDB GPU upload cross-cutting) + §4.3 (lift draw distance VRAM scaling) + §5.2 (RTX
   BLAS pool).
-- `agent/knowledge.md §30.4` — 3-step migration precedent (used in §7 Integration recommendation).
+- `agent/knowledge.md` — 3-step migration precedent (used in §7 Integration recommendation).
 - `agent/workspace.md §2` — Nearest Gap callout для Stage 4.3 (128+ chunks draw distance, VRAM budget
   critical).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% perf threshold for adoption.

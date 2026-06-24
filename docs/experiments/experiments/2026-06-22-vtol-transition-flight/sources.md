@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-vtol-transition-flight
 
-Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list); **8 primary + 3 supplementary sources verified**.
+Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain); **8 primary + 3 supplementary sources verified**.
 
 ## Tier 1: Primary references (verified via direct `webfetch`)
 
@@ -132,11 +132,11 @@ Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + 
 
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold for performance gains
 - `legacy/docs/philosophy/02_paradigms/02_dod-philosophy.md` — Data-Oriented Design for Strategy state
-- `agent/knowledge.md §30.4` — 3-step migration precedent (XS + S + XS pattern)
+- `agent/knowledge.md` — 3-step migration precedent (XS + S + XS pattern)
 - `agent/workspace.md §2` line 36 — operator 8× planning decision (Stage 6+ military sandbox deferred)
 - `benchmarks/methodology.md §3` — N=1000 + 10 warmup protocol
 
-## Web-search methodology (per `agent/knowledge.md Part B §9` line 1424)
+## Web-search methodology (per the web_search fallback chain)
 
 - **Exa `web_search`:** HTTP 429 persistent (per known fallback list)
 - **DuckDuckGo HTML endpoint:** CAPTCHA-blocked on query 3, partial results on queries 1-2

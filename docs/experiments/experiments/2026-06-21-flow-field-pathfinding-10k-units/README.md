@@ -167,7 +167,7 @@ Detailed numbers in [`RESULTS.md`](./RESULTS.md) + raw CSV in [`prototype/build/
 **Target stage:** military sandbox axis (Tier 0 Foundation — needs to be in place before
 `hierarchical-tactical-ai-btree`, `group-formation-maneuver`, `flanking-maneuver-ai`).
 
-**Concrete changes (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Concrete changes (3-step migration per `agent/knowledge.md` precedent):**
 
 ### Step 1 — `PathfindingController` foundation + A* fallback (XS, ~80 LoC)
 - `src/ai/PathfindingController.{hpp,cpp}` — owns integration field (uint32_t vector) + flow field (uint8_t vector) per goal.
@@ -185,7 +185,7 @@ Detailed numbers in [`RESULTS.md`](./RESULTS.md) + raw CSV in [`prototype/build/
 ### Step 3 — GPU compute shader port (M, ~500 LoC, deferred до Stage 4.3)
 - Vulkan compute shader: 32×32 workgroups, each cell processes 8 neighbours.
 - Storage buffer for cost + flow field; one dispatch per goal.
-- Per-`agent/knowledge.md §30.4`: Tracy GPU context for compute dispatch profiling.
+- Per-`agent/knowledge.md`: Tracy GPU context for compute dispatch profiling.
 - Expected: <0.1 ms for 512² per `kingstone426/NativeFlowField` Unity DOTS production precedent.
 - Step 3 deferred: requires Vulkan prototype (not standalone), depends on Stage 2.x indirect draw path being ready.
 

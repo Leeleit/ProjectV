@@ -23,7 +23,7 @@
     Tier 0, не Stage 5.x, не Stage 4.1.
 - `2026-06-21` — Phase 1 (Web research) complete via direct `webfetch` to canonical URLs (Glenn Fiedler
   Gaffer On Games x3 + Wikipedia C&C Remastered). Exa `web_search` HTTP 429 persistent per
-  `agent/knowledge.md Part B §9` + DuckDuckGo bot challenge + Google bot challenge. 17 sources
+  the web_search fallback chain + DuckDuckGo bot challenge + Google bot challenge. 17 sources
   verified (S1-S17 в `sources.md`).
 - `2026-06-21` — Phase 2-3 (prototype design + build + run) complete. 5 scenes × 3 seeds × 4 strategies +
   5 K-sweep variants. 75 measurements, wall time 36.8 sec.
@@ -44,7 +44,7 @@
   (−81% bandwidth vs A, ~100 ms cold-seek, bit-exact, low record overhead). **A_FullState wins for ≤100
   entities**. **B_InputOnly = long-term archival** (smallest, slow seek). **D_DeltaEncoded is non-deterministic
   в текущем прототипе** (rng state не в delta record; fix trivial 8 B/tick но D остаётся niche).
-- **Mainline recommendation:** 3-step migration per `agent/knowledge.md §30.4` precedent (~400 LoC, S effort,
+- **Mainline recommendation:** 3-step migration per `agent/knowledge.md` precedent (~400 LoC, S effort,
   1-2 sessions, deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x
   planning decision).
 

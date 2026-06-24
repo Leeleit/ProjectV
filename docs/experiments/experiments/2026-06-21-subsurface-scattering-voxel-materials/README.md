@@ -139,7 +139,7 @@ clang++ -O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedantic \
 
 **Target stage:** Stage 5.x Visual Polish (cross-cuts Stage 6+ military sandbox skin rendering).
 
-**Recommended approach:** Per-voxel material LUT + per-fragment BSSRDF evaluation. 3-step migration per `agent/knowledge.md §30.4` precedent (~600 LoC, S-M effort, 2-3 sessions):
+**Recommended approach:** Per-voxel material LUT + per-fragment BSSRDF evaluation. 3-step migration per `agent/knowledge.md` precedent (~600 LoC, S-M effort, 2-3 sessions):
 
 - **Step 1 (XS, ~80 LoC)** `src/render/SssLut.{hpp,cpp}` foundation: `SssMaterial` struct (σ_a RGB, σ_s', g, tint) + `SssLut` per-material 32-sample LUT (5 materials × 32 × 3 = 1.9 KiB VRAM) + `SssLutManager` initialization at startup + `PROJECTV_SSS=DISABLED|DIPOLE_LUT|MULTIPOLE|SEPARABLE|BEER_LAMBERT` env gate (default `DIPOLE_LUT`).
 - **Step 2 (M, ~350 LoC)** `src/shaders/voxel.frag` integration: add `material.sssClass` lookup → fetch `SssLut` (5 options: skin/foliage/wax/ice/blood) → evaluate BSSRDF R_d(r) per fragment (LUT sample, ~10 ALU ops) → blend with Lambert via `mix(lambert, sss, sssStrength)` (artist-tunable per material). For voxel material lookup: new uniform buffer `SssLutBlock { vec4 lut[5*32*3]; }` = 5 × 32 × 3 × 16 B = 7.5 KiB (4× float per entry for SSAO-style binding convenience; can be packed to 1.9 KiB if needed).

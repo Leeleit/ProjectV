@@ -25,7 +25,7 @@ header + 125 data, 12 KB). **Verdict issued = `mixed`** (per `README.md §6`):
 **Blocker:** нет. **Date next tick:** this session closed.
 
 **Integration recommendation:** see `README.md §7`. 3-step migration per
-`agent/knowledge.md §30.4` precedent (~1650 LoC total, L effort, 3-5 sessions).
+`agent/knowledge.md` precedent (~1650 LoC total, L effort, 3-5 sessions).
 Steps 1+2 (determinism foundation + FPU mode) immediate prerequisites for 100-player
 scale; Step 3 (recovery + late-joiner) deferred до Stage 6+ military sandbox activation
 per `agent/workspace.md §2` line 36 operator 8x planning decision.

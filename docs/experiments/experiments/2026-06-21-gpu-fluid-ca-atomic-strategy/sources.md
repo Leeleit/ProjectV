@@ -17,7 +17,7 @@ Verified web-research для Stage 3.1 GPU Fluid CA atomic strategy benchmark. �
   on RTX 30/40-class**, **4.06× with 4× more FP units** (validates register/ALU tradeoff).
 - **Прямая релевантность:** GPU CA ping-pong + tile compaction — именно та же структура что
   ProjectV's `fluid_ca.comp` ping-pong + per-chunk workgroup (8×8×4 per
-  `agent/knowledge.md §30.4` line 1049). Подтверждает что правильные tile/ping-pong
+  `agent/knowledge.md`). Подтверждает что правильные tile/ping-pong
   optimizations = 4-100× speedup.
 - **Цитата для verification:** "CAT uses the well known ping-pong simulation scheme where two
   copies of the CA are used. One of them, `CA_in`, holds the current state of cells for
@@ -357,9 +357,9 @@ mobile + tensor core = **out of scope** для текущего ProjectV desktop
 
 ## Cross-refs (ProjectV internal)
 
-- `agent/knowledge.md §30.4` (lines 1037-1083) — 3-step migration precedent для Stage 3.1
+- `agent/knowledge.md` (lines 1037-1083) — 3-step migration precedent для Stage 3.1
   GPU Fluid CA, explicit `imageAtomicCompareExchange` contract (line 1045).
-- `agent/knowledge.md §30.1` (line 957) — 20 Hz tick rate default.
+- `agent/knowledge.md` (line 957) — 20 Hz tick rate default.
 - `agent/workspace.md §1 Phase 3` — current mainline `fluid_ca.comp` skeleton with
   `atomicOr` shortcut, no measurement.
 - `TODO.md §3.1` — Stage 3.1 DoD: 500K voxels в <0.5 ms, ping-pong buffers, atomic strategy.

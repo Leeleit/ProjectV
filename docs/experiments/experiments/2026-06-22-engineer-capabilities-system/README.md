@@ -185,7 +185,7 @@ Per-strategy recommendations:
 
 ## 8. Sources
 
-Verified web-research via direct `webfetch` to canonical Wikipedia URLs (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). **3 primary sources + 13 cross-references to closed ProjectV experiments** verified в [`sources.md`](./sources.md):
+Verified web-research via direct `webfetch` to canonical Wikipedia URLs (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). **3 primary sources + 13 cross-references to closed ProjectV experiments** verified в [`sources.md`](./sources.md):
 
 - **Wikipedia "Combat engineer"** (canonical terminology + mission taxonomy + equipment + obstacle breaching tools).
 - **Wikipedia "Military engineering"** (NATO definition + sub-disciplines + historical precedent from Roman *architecti* to Vauban).

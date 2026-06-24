@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-aircraft-damage-model
 
-> **Web-research complete `2026-06-21`** via direct `webfetch` to canonical sources (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked this session per `agent/knowledge.md Part B §9` line 1424 fallback list).
+> **Web-research complete `2026-06-21`** via direct `webfetch` to canonical sources (Exa `web_search` HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked this session per the web_search fallback chain).
 > **5 primary + 2 supplementary sources verified** in this prototype phase.
 
 ---
@@ -111,4 +111,4 @@ Verified clean — no existing `aircraft-damage-model` experiment in `docs/exper
 - **Lockstep determinism stress test** for cascading failure (closed `lockstep-state-sync-hybrid-netcode` mixed A_PureLockstep at 48.7 KB/s/player mean covers general case, but per-cascade events can be packet-bursty).
 - **Network serialization of damage state** for multiplayer (deferred до Stage 6+ military sandbox).
 
-Cross-refs: `agent/knowledge.md Part B §9` (web fallbacks) + `agent/knowledge.md §30.4` (3-step migration precedent) + `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
+Cross-refs: the web_search fallback chain (web fallbacks) + `agent/knowledge.md` (3-step migration precedent) + `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).

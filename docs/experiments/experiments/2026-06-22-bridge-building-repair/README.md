@@ -28,7 +28,7 @@ Sub-hypotheses:
 
 ## 2. Prior art
 
-Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list).
+Web-research via direct `webfetch` to canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 
 Key sources:
 - Wikipedia "Bailey bridge" (Donald Bailey 1941, Mabey & Johnson, 60-ton capacity, 3-man 3-hour erection, 40 m max span, 120,000 built WWII, modular Warren truss pattern) — canonical production ref

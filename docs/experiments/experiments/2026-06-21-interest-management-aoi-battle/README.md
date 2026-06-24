@@ -250,7 +250,7 @@ deferred to Stage 6+ per operator 8x planning).
 - 2D/3D position component (✅ standard in ProjectV).
 - Netcode layer (❌ not in mainline; Stage 6+ scope).
 
-**Estimated effort:** 3-step migration per `agent/knowledge.md §30.4` precedent:
+**Estimated effort:** 3-step migration per `agent/knowledge.md` precedent:
 - Step 1 (S, ~150 LoC) `AoiManager` core (grid + 9-grid lookup + 3-tier).
 - Step 2 (M, ~400 LoC) Priority queue + KNN+back cull + per-object importance ranking.
 - Step 3 (S, ~150 LoC) ECS event integration + Tracy plot + unit test.

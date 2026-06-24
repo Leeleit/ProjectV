@@ -48,7 +48,7 @@
 
 ## Migration effort
 
-**M (2-3 sessions, 1 done already with this experiment's analytical prototype + writeup).** Per `agent/knowledge.md §30.4` precedent, 3-step mainline migration:
+**M (2-3 sessions, 1 done already with this experiment's analytical prototype + writeup).** Per `agent/knowledge.md` precedent, 3-step mainline migration:
 - Step 1 (XS, ~80 LoC) `src/render/gsplat/GsplatAsset.{hpp,cpp}` + PLY/`.splat` loader
 - Step 2 (M, ~400 LoC) `src/render/gsplat/GsplatRenderer.{hpp,cpp}` + radix sort + rasterize + HZB culling + async compute
 - Step 3 (S, ~100 LoC) `PROJECTV_GSPLAT=OFF|STATIC|HYBRID` env gate + voxel H3c drop hook + Tracy plot + `ProjectVGsplatTests`

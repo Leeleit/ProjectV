@@ -150,7 +150,7 @@ E's multimodal identification requires visual silhouette + behavioral in additio
 
 ## 7. Integration recommendation
 
-Per `agent/knowledge.md §30.4` (3-step migration):
+Per `agent/knowledge.md` (3-step migration):
 
 ### Step 1 — Stage 6+ (default): B ⭐ (526 ns/decision)
 

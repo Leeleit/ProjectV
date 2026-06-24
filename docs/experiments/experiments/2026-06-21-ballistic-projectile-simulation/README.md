@@ -150,7 +150,7 @@ Build: Clang 22.1.6 `-O3 -march=native -std=c++26 -DNDEBUG -Wall -Wextra -Wpedan
 
 ## 7. Integration recommendation
 
-What mainline should do (per `agent/knowledge.md §30.4` 3-step migration precedent):
+What mainline should do (per `agent/knowledge.md` 3-step migration precedent):
 
 ### Step 1 (XS, ~80 LoC) — Ballistic library foundation
 

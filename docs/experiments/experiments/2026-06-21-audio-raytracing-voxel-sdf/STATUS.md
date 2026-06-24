@@ -66,7 +66,7 @@
 - `research/backlog.md §Closed` — closure record (next sync).
 - `INDEX.md §6` — recent closed list (next sync).
 - `hardware-profile.md §1/§2` — CPU + RAM baseline.
-- `agent/knowledge.md §28` — AudioEngine contract.
+- `agent/knowledge.md` — AudioEngine contract.
 - `2026-06-20-nanovdb-on-gpu` — SVO walker foundation.
 - `2026-06-20-flecs-soa-vs-aos-bench` — SoA storage pattern.
 - `2026-06-20-work-stealing-job-system` — serial dispatcher baseline.

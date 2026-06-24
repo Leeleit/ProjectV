@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-hierarchical-tactical-ai-btree
 
 > Web-research completed `2026-06-21` via direct `webfetch` to canonical sources
-> (Exa HTTP 429 persistent this session per `agent/knowledge.md Part B §9` line 1424
+> (Exa HTTP 429 persistent this session per the web_search fallback chain
 > fallback list; DuckDuckGo HTML endpoint CAPTCHA blocked; bypassed via direct
 > Wikipedia + Gamasutra Wayback Machine + dev blog).
 
@@ -209,7 +209,7 @@ consistently. `webfetch` to canonical URLs succeeded for:
 - `behaviortree.com` (transport error)
 - Google Scholar (not attempted due to rate limit concerns)
 
-Per `agent/knowledge.md Part B §9` line 1424 fallback list, the next-fallback after
+Per the web_search fallback chain, the next-fallback after
 Exa 429 is DuckDuckGo HTML endpoint (also CAPTCHA-blocked this session) and then
 direct URL fetch (which we used here).
 

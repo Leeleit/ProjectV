@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstddef>
+#include <cstddef> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <cstdint>
 
 struct AppState;
@@ -31,8 +31,6 @@ void TickAudioRefreshPlaylistSystem(EcsState *ecs);
 bool IsAudioPlaylistRefreshRequested(const EcsState *ecs);
 
 void TickFluidCASystem(EcsState *ecs);
-
-void TickVoxelInteractionSystem(EcsState *ecs);
 
 void TickBenchmarkAutomationSystem(EcsState *ecs);
 bool IsBenchmarkAutomationQuitRequested(const EcsState *ecs);

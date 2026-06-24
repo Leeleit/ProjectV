@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-soft-body-physics-debris
 
-> Web-research завершён `2026-06-21` в этой сессии. Verification via direct `webfetch` (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list). DuckDuckGo HTML endpoint использовался для snippet extraction; PDF binary на matthias-research.github.io не парсится (текст возвращается бинарно — fallback на snippet titles + Google scholar links).
+> Web-research завершён `2026-06-21` в этой сессии. Verification via direct `webfetch` (Exa HTTP 429 persistent per the web_search fallback chain). DuckDuckGo HTML endpoint использовался для snippet extraction; PDF binary на matthias-research.github.io не парсится (текст возвращается бинарно — fallback на snippet titles + Google scholar links).
 
 ---
 
@@ -79,7 +79,7 @@ These production references would add validation but are not strictly required f
 - `src/physics/PhysicsWorld.cpp:712-773::BuildStaticVoxelCollisionBody` — current JPH rigid body voxel pattern
 - `src/physics/PhysicsWorld.cpp:547-560::IsPhysicsSolidMaterial` — material gating
 - `src/voxel/VoxelWorld.hpp:78-107` — VoxelWorld struct, chunkSize=8
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `agent/workspace.md §2` line 36 — operator 8x planning decision (Stage 6+ military sandbox activation)
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold
 - `hardware-profile.md §1` — Zen 3 5800X dev host (AVX2 + FMA SIMD)

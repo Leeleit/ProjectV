@@ -176,7 +176,7 @@ Defer E_Octree (needs coplanar merge fix) and C_2DXZ (subsumed by F_TwoPass). A_
 
 ---
 
-## 9. Integration recommendation (3-step per `agent/knowledge.md §30.4`)
+## 9. Integration recommendation (3-step per `agent/knowledge.md`)
 
 ### Step 1 (XS, ~30 LoC) — Foundation
 
@@ -239,8 +239,8 @@ broad-phase visits each child shape → 33× fewer visits = much faster collisio
 - `src/voxel/VoxelWorld.hpp:78-107::VoxelWorld` — chunkSize=8, access API.
 - `agent/workspace.md §1 Phase 4` — incremental Jolt per-chunk wiring closed.
 - `agent/workspace.md §1 Phase 9` — ProcessChunkRebuildQueue per-frame call closed.
-- `agent/knowledge.md §17` — build matrix (Linux clang + Windows clang-cl).
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — build matrix (Linux clang + Windows clang-cl).
+- `agent/knowledge.md` — 3-step migration precedent.
 - Closed `2026-06-20-meshing-algo-comparison` — visual meshing patterns (precedent for per-axis 2D scan).
 - Closed `2026-06-20-work-stealing-job-system` (verdict=mixed) — serial dispatcher default.
 - Closed `2026-06-21-sub-chunk-layers` (verdict=mixed) — per-Y-layer chunk structure (F_TwoPass matches).

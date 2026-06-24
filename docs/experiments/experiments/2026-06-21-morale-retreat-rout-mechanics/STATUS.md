@@ -38,7 +38,7 @@ after 60 s of combat".
 
 ## Notes
 
-- Per `agent/knowledge.md §30.4` 3-step migration pattern: ready to hand off. Recommended
+- Per `agent/knowledge.md` 3-step migration pattern: ready to hand off. Recommended
   integration: Flecs `MoraleComponent` (SoA, fields: `morale: float`, `suppression: float`,
   `state: MoraleState`, `history_acc: float`, `combat_ticks: int`, `leader_alive: bool`,
   `nearby_friendlies: int`, `nearby_casualties: int`) + per-tick `MoraleUpdateSystem` + per-tick
@@ -51,7 +51,7 @@ after 60 s of combat".
   2× slower than the cheapest strategy but absolutely within budget. The optimization
   philosophy says "if perf gain < 5-10%, choose simple" — but here the comparison is on
   *behavior*, not perf. Stability gain is >100% (routs drop from 99% to 0.02%).
-- Per `agent/knowledge.md Part B §9` + parallel-agent system load: reduced kRuns from
+- Per the web_search fallback chain + parallel-agent system load: reduced kRuns from
   methodology default (1000) to 1-500 adaptive. Even so, full 125-config sweep ran in 30 s
   on this host with 5+ parallel agents active.
 

@@ -610,6 +610,7 @@ void TestVoxelWorldSnapshotRoundTripsWorldState(TestContext &context)
 	EXPECT_EQ(context, world.stats.activeChunkCount, loadedWorld->stats.activeChunkCount);
 	EXPECT_EQ(context, static_cast<uint32_t>(loadedWorld->chunks.size()), CountDirtyVoxelChunks(*loadedWorld));
 	EXPECT_EQ(context, loadedWorld->chunks.size(), loadedWorld->pendingChunkRebuildIndices.size());
+	EXPECT_EQ(context, loadedWorld->chunks.size(), loadedWorld->pendingBlasRebuildIndices.size()); // Verify all chunks queued for BLAS rebuild on load
 	for (size_t chunkIndex = 0; chunkIndex < loadedWorld->chunks.size(); ++chunkIndex) {
 		EXPECT_TRUE(context, loadedWorld->chunks[chunkIndex].rebuildQueued);
 		EXPECT_EQ(context, world.chunks[chunkIndex].nonAirVoxelCount, loadedWorld->chunks[chunkIndex].nonAirVoxelCount);
@@ -2313,7 +2314,7 @@ void TestPhysicsWorldSyncTracksVoxelEdits(TestContext &context)
 		8.0f);
 	EXPECT_TRUE(context, !hit.hasHit);
 
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, nullptr);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Glass, physics.get());
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
 	EXPECT_EQ(context, world.editVersion, GetPhysicsWorldSyncVersion(physics.get()));
 
@@ -2325,7 +2326,7 @@ void TestPhysicsWorldSyncTracksVoxelEdits(TestContext &context)
 	EXPECT_TRUE(context, hit.hasHit);
 	EXPECT_INT3_EQ(context, (Int3{1, 1, 1}), hit.voxel);
 
-	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air, nullptr);
+	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::Air, physics.get());
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
 
 	hit = RaycastPhysicsWorld(

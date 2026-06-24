@@ -59,8 +59,8 @@ frame-pacing (`vulkan-fps-pacing-vk-ext`), job-system (`work-stealing-job-system
   voxel scenes with greedy meshing = pixel-coherent = low-overdraw = **loses** for vis-buffer.
 - **`2026-06-20-dec-pipelines-async-compute`** (closed verdict=yes) — async-compute resolve
   pass would compound vis-buffer benefits (deferred compute overlap with main render).
-- **`agent/knowledge.md §25`** — greedy meshing rationale (per-axis dispatch).
-- **`agent/knowledge.md §30.4`** — 3-step migration precedent.
+- **`agent/knowledge.md`** — greedy meshing rationale (per-axis dispatch).
+- **`agent/knowledge.md`** — 3-step migration precedent.
 
 ## Anti-ritual notes
 

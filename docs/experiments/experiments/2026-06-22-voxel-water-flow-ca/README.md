@@ -34,7 +34,7 @@ A lightweight 3D cellular automaton for water/substance flow in a voxel grid (pr
 
 ## 2. Prior art
 
-Web-research via `webfetch` DuckDuckGo + Wikipedia fallback (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424).
+Web-research via `webfetch` DuckDuckGo + Wikipedia fallback (Exa HTTP 429 persistent per the web_search fallback chain).
 
 ### Primary sources (Tier 1)
 

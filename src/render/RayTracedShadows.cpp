@@ -1,4 +1,4 @@
-#include "render/RayTracedShadows.hpp"
+#include "render/RayTracedShadows.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <algorithm>
 #include <cstdlib>
@@ -393,11 +393,8 @@ void RayTracedShadows::BuildDirtyBlases(
 		m_pendingDirtyChunks.clear();
 		return;
 	}
-	const bool routeAsyncCompute = projectv::render::IsAsyncComputeEnabled()
-		&& context.hasDedicatedComputeQueue
-		&& context.dedicatedComputeQueue != VK_NULL_HANDLE
-		&& context.dedicatedComputeQueueFamilyIndex != context.queueFamilyIndex
-		&& context.asyncComputeCommandPool != VK_NULL_HANDLE;
+	// EVIL: forced sync-path — cross-queue BLAS build synced only via vkWaitForFences (no semaphore / queue-ownership transfer), so freshly-built BLAS storage buffers may read as stale on the graphics queue → those chunks cast no shadow that frame (P1A-1).
+	const bool routeAsyncCompute = false;
 	VkCommandPool submitPool = routeAsyncCompute
 		? context.asyncComputeCommandPool
 		: commandPool;
@@ -554,6 +551,19 @@ bool RayTracedShadows::BuildChunkBlas(
 	blasWriteBarrier.buffer = m_config.blasStorageBuffers[chunkIndex];
 	blasWriteBarrier.offset = 0u;
 	blasWriteBarrier.size = m_config.blasStorageCapacityBytes[chunkIndex];
+
+	// EVIL: serialize subsequent BLAS builds sharing scratchBuffer / aabbScratchBuffer to avoid write-after-read hazards (P1A-1).
+	VkBufferMemoryBarrier scratchBarrier{};
+	scratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	scratchBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	scratchBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	scratchBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	scratchBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	scratchBarrier.buffer = m_config.scratchBuffer;
+	scratchBarrier.offset = 0u;
+	scratchBarrier.size = m_config.scratchCapacityBytes;
+
+	std::array<VkBufferMemoryBarrier, 2> buildBarriers = {blasWriteBarrier, scratchBarrier};
 	vkCmdPipelineBarrier(
 		commandBuffer,
 		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
@@ -561,8 +571,29 @@ bool RayTracedShadows::BuildChunkBlas(
 		0u,
 		0u,
 		nullptr,
+		static_cast<uint32_t>(buildBarriers.size()),
+		buildBarriers.data(),
+		0u,
+		nullptr);
+
+	VkBufferMemoryBarrier aabbScratchBarrier{};
+	aabbScratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	aabbScratchBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	aabbScratchBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	aabbScratchBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	aabbScratchBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	aabbScratchBarrier.buffer = m_config.aabbScratchBuffer;
+	aabbScratchBarrier.offset = 0u;
+	aabbScratchBarrier.size = sizeof(VkAabbPositionsKHR);
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0u,
+		0u,
+		nullptr,
 		1u,
-		&blasWriteBarrier,
+		&aabbScratchBarrier,
 		0u,
 		nullptr);
 
@@ -698,6 +729,12 @@ void RayTracedShadows::UpdateTlas(
 		(m_config.tlasInstanceCapacityBytes - clamped * sizeof(VkAccelerationStructureInstanceKHR)));
 	m_config.tlasInstanceCount = static_cast<uint32_t>(clamped);
 	m_config.tlasRebuildCount += 1u;
+
+	static int capWarnCount = 0;
+	if (count > capacity && capWarnCount < 5) { // EVIL: silent TLAS capacity cap — chunks beyond capacity are dropped from shadows without log (P1A-2).
+		SDL_Log("UpdateTlas WARN: visible chunks %zu > TLAS capacity %zu — extra chunks dropped from shadow TLAS", count, capacity);
+		++capWarnCount;
+	}
 
 	static int diagCount = 0;
 	if (diagCount < 3 && clamped > 0) {
@@ -835,7 +872,7 @@ void RayTracedShadows::RecordTlasBuild(
 	vkCmdPipelineBarrier(
 		commandBuffer,
 		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, // EVIL: TLAS consumed by RT shadow trace (RAY_TRACING) + voxel.frag mask sample (FRAGMENT) — old code missed RT stage, leaving shadow trace unprotected (P1A-3a, spec violation).
 		0u,
 		1u,
 		&tlasToFragmentBarrier,

@@ -35,7 +35,7 @@
   Stage 3.1 atomic, hzb-smart-mip-select = Stage 2.1 HZB refinement, vct-3d-mip-generation = Stage 5.1 VCT
   mip, vk-multi-gpu-split-frame = multi-GPU VRAM).
 - **Mainline recommendation:** `C_IncrementalBudgeted` strategy (`maxBytesPerPass=8 MiB`) = safest default
-  per VMA docs + synthetic validation. Step 1-3 migration per `agent/knowledge.md §30.4` precedent.
+  per VMA docs + synthetic validation. Step 1-3 migration per `agent/knowledge.md` precedent.
 - **Why mixed not yes:** synthetic CPU sim shows trivial results (heap utilization too low to produce
   fragmentation). Mainline integration with real VMA + real Vulkan workload required for final verdict.
 - **Why mixed not no:** VMA official docs (`defragmentation.html`) + `CHANGELOG.md` v3.4.0 defrag race

@@ -113,7 +113,7 @@ For a 30-min session @ 60 fps = 108,000 frames:
 
 ## 6. Integration cost analysis
 
-Per `agent/knowledge.md §30.4` 3-step migration precedent:
+Per `agent/knowledge.md` 3-step migration precedent:
 
 ### Step 1 (XS, ~50 LoC)
 - CMakeLists.txt: `option(PROJECTV_CI_PIXEL_DIFF "Enable RenderDoc capture regression CI" OFF)`
@@ -141,7 +141,7 @@ Per `agent/knowledge.md §30.4` 3-step migration precedent:
 - (a) **Analytical overhead model, not real `renderdoccmd` execution.** Binary not installed on dev host
   (`which renderdoccmd` → not found 2026-06-21). Production validation = mainline scope, не this experiment.
 - (b) **GPU pass coverage = analytical from ProjectV source code** (`Renderer.cpp` pass list +
-  `agent/knowledge.md §810` 5 sub-passes + TODO.md Stage 0-6 + Stage 5.x planned passes), not runtime
+  `agent/knowledge.md` 5 sub-passes + TODO.md Stage 0-6 + Stage 5.x planned passes), not runtime
   capture. 12 passes enumerated in `prototype/capture_overhead_bench.cpp` enum class VkPass.
 - (c) **Per-pass cost model** — CPU overhead % per pass is conservative analytical estimate based on
   RenderDoc Vulkan docs "low overhead while not capturing" + per-pass state model. Real numbers may
@@ -154,7 +154,7 @@ Per `agent/knowledge.md §30.4` 3-step migration precedent:
   deferred to Phase 4 follow-up** — could be future enhancement for automatic regression triage.
 - (g) **Headless Vulkan (SwiftShader / Lavapipe) as CI fallback** not validated на dev host.
   Mesa Lavapipe supports Vulkan 1.4 per Mesa 26.2; production validation = mainline scope.
-- (h) **Cross-references in `agent/knowledge.md §810`** list 5 sub-passes within
+- (h) **Cross-references in `agent/knowledge.md`** list 5 sub-passes within
   `RecordGraphicsCommands` (shadow / meshing / taaResolve / debugOverlay / debugHud) — my analytical
   model groups these into `OpaqueForward` for simplicity. Future refinement can split into 5 sub-passes
   for finer-grained coverage analysis.

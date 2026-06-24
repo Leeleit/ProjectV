@@ -1,4 +1,4 @@
-float ProjectV_DistributionGGX(const float nDotH, const float roughness) {
+float ProjectV_DistributionGGX(const float nDotH, const float roughness) { // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
     const float alpha = roughness * roughness;
     const float alphaSq = alpha * alpha;
     const float denom = max(nDotH * nDotH * (alphaSq - 1.0) + 1.0, 0.0001);

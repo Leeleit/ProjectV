@@ -18,7 +18,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j
 ```
 
-Требования: Clang 22.1.6+ (per `agent/knowledge.md §17`), C++26 mode.
+Требования: Clang 22.1.6+ (per `agent/knowledge.md`), C++26 mode.
 
 ## Run
 

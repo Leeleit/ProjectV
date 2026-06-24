@@ -4,7 +4,7 @@
 **Date opened:** 2026-06-21
 **Date closed:** 2026-06-21 (single session, ~2h)
 **Stage link:** independent (cross-cutting для Stage 4.3 lift draw distance + Stage 5.x post-process + 8 GiB VRAM budget per `hardware-profile.md §3` + `agent/workspace.md §2` Nearest Gap callout)
-**Estimated effort:** S-M (analytical + standalone Vulkan 1.4 + C++26 prototype, ~360 LoC integration per mainline `agent/knowledge.md §30.4` 3-step migration)
+**Estimated effort:** S-M (analytical + standalone Vulkan 1.4 + C++26 prototype, ~360 LoC integration per mainline `agent/knowledge.md` 3-step migration)
 **Author:** self (operator instruction `2026-06-21`: «выбирай свободную тему или придумывай свою и исследуй»; seventh invocation this session)
 **Verdict:** `mixed` (FSR 3.1 = best cost-benefit cross-vendor Vulkan, 3.7-23% savings, PSNR 39.2 dB, +1 MiB VRAM; DLSS 4.5 + XeSS 2 XMX = real GPU measurements required [analytical model conservative for Tensor Core / XMX hardware]; FSR 4 = NOT usable on Vulkan per `mypcbottleneck 2026-06-04`; DirectSR = defer до Vulkan core promotion; Frame Generation = out of scope single-session).
 
@@ -79,7 +79,7 @@ Web-research complete. Per `AGENTS.md §5.3` + `docs/experiments/AGENTS.md §4` 
 - `agent/workspace.md §2` — Nearest Gap callout
 - `src/render/TaaRenderTargets.{hpp,cpp}` — TAA pipeline = integration point для upscaling post-process
 - `src/render/Taa.cpp` — TAA Halton jitter = upscaling-aware input
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 
 ---
 
@@ -119,7 +119,7 @@ Web-research complete. Per `AGENTS.md §5.3` + `docs/experiments/AGENTS.md §4` 
   - Intel Arc Alchemist/Battlemage (projected — XeSS XMX path)
   - **No-hardware matrix — analytical cross-vendor via published vendor benchmarks.**
 
-- **Phase E: 3-step migration recommendation per `agent/knowledge.md §30.4`** (next)
+- **Phase E: 3-step migration recommendation per `agent/knowledge.md`** (next)
   - Step 1 (XS, ~30 LoC) feature-flag `PROJECTV_UPSCALER=OFF|FSR31|XESS2|DLSS45|DIRECTSR` env + post-process pipeline slot after TAA resolve.
   - Step 2 (M, ~250 LoC) per-SDK integration: NVIDIA Streamline (DLL load + SlInit + SlSetFeature) / AMD FidelityFX (FSR 3.1 native Vulkan) / Intel XeSS 2 (XMX path) / DirectSR unified (UE 5.7 pattern).
   - Step 3 (S, ~80 LoC) quality preset selection + Tracy plot + default flip.
@@ -241,7 +241,7 @@ cmake --build build
 
 **Target stage:** `TODO.md §4.3` (Lift Draw Distance Cap) + `TODO.md §5` (GI & Temporal) post-process.
 
-**Конкретные изменения (planned mainline integration per `agent/knowledge.md §30.4` 3-step precedent):**
+**Конкретные изменения (planned mainline integration per `agent/knowledge.md` 3-step precedent):**
 
 - **Step 1 (XS, ~30 LoC, 1 session):** Foundation
   - Add `enum class UpscalerBackend { None, FSR31, XeSS2, DLSS45, DirectSR }` в `src/render/RenderTypes.hpp`
@@ -286,7 +286,7 @@ cmake --build build
 
 **Зависимости:**
 
-- `agent/knowledge.md §30.4` (3-step migration precedent)
+- `agent/knowledge.md` (3-step migration precedent)
 - `TODO.md §4.3` (Lift Draw Distance Cap — explicit future need)
 - `2026-06-21-taa-motion-vectors` (verdict=yes — motion vector MRT input already in mainline)
 - `2026-06-20-bindless-descriptor-overhead` Phase D (bindless = required for upscaling resource management)

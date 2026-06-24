@@ -36,7 +36,7 @@
 **Phase 4 (results + integration recommendation):** ✅
 - README §5 — results table + key findings + threshold analysis.
 - README §6 — verdict `mixed`.
-- README §7 — 3-step migration per `agent/knowledge.md §30.4` precedent (~750 LoC, M effort, 2-3 sessions).
+- README §7 — 3-step migration per `agent/knowledge.md` precedent (~750 LoC, M effort, 2-3 sessions).
 
 ## Headline findings
 

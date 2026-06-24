@@ -186,5 +186,5 @@ Real CPU work (hash + plan gen + eval) is <1 ms; the mock LLM latency dominates.
 - `docs/experiments/hardware-profile.md §1+§2+§3` (Zen 3 5800X + RTX 3060 Ti dev host).
 - `docs/experiments/benchmarks/methodology.md §3` (N=1000 + 10 warmup measurement protocol).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold).
-- `agent/knowledge.md §30.4` (3-step migration precedent).
+- `agent/knowledge.md` (3-step migration precedent).
 - `agent/workspace.md §2` (Stage 6+ military sandbox deferral per operator 8x planning).

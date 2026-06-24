@@ -15,7 +15,7 @@ new row in `§1 Now` + `§6 Recent closed` + `§8 Last update` added.
   + LRU page manager) = доминирующий паттерн (UE 5.7 RVT, Nanite, id Tech 5 MegaTexture,
   bgfx 40-svt, Frostbite). Per `shlom.dev 2026-02`: hardware sparse = mechanism, не policy.
 - **Recommended mainline path:** software VT (shlom.dev pattern) as default + optional HW
-  sparse для static prebake (Stage 4.1). 4-step migration per `agent/knowledge.md §30.4`
+  sparse для static prebake (Stage 4.1). 4-step migration per `agent/knowledge.md`
   precedent: foundation (PageManager + page table texture, ~150 LoC) → integration
   (voxel.frag SampleVirtualTexture, ~350 LoC) → page manager wiring (~150 LoC) → optional
   HW sparse path (~120 LoC). Total ~770 LoC + integration code, M effort.

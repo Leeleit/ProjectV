@@ -68,8 +68,8 @@ None — experiment closed successfully.
 
 ## 6. Cross-references
 
-- `agent/knowledge.md §17` Linux baseline (Clang 22.1.6 build matrix)
-- `agent/knowledge.md §30.4` 3-step migration precedent
+- `agent/knowledge.md` Linux baseline (Clang 22.1.6 build matrix)
+- `agent/knowledge.md` 3-step migration precedent
 - `agent/workspace.md §2` line 36 operator 8x planning decision (Stage 6+ military sandbox deferred)
 - `docs/experiments/hardware-profile.md §1` CPU baseline
 - `docs/experiments/benchmarks/methodology.md §3` measurement protocol

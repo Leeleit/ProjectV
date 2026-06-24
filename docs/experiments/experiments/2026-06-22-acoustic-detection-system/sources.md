@@ -2,7 +2,7 @@
 
 8 Tier 1 primary + 2 Tier 2 supplementary = 10 sources verified via direct `webfetch`
 to canonical URLs (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per
-`agent/knowledge.md Part B §9` line 1424 fallback list).
+the web_search fallback chain).
 
 **Verification:** retrieved `2026-06-22` via `webfetch` to `en.wikipedia.org/wiki/...`
 canonical pages. All cross-referenced with production references cited inline.

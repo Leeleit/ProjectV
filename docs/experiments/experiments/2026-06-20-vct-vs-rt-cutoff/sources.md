@@ -324,9 +324,9 @@
 - `TODO.md §5.1` (VCT spec) — primary target.
 - `TODO.md §5.2` (RTX shadows spec) — secondary target.
 - `decisions.md §15` [First sun-shadow path](#15-first-sun-shadow-path) — CSM baseline; RTX = additive.
-- `agent/knowledge.md §30.4` (GPU Fluid CA contract) — uses VCT volume sampling.
-- `agent/knowledge.md §17` (Linux baseline: Arch + clang-native + lld + libstdc++) — build env.
-- `agent/knowledge.md §4` (Build / verification contract) — ctest baseline.
+- `agent/knowledge.md` (GPU Fluid CA contract) — uses VCT volume sampling.
+- `agent/knowledge.md` (Linux baseline: Arch + clang-native + lld + libstdc++) — build env.
+- `agent/knowledge.md` (Build / verification contract) — ctest baseline.
 - `src/shaders/voxel.frag` (per `TODO.md §6.2.2` — 3 DDA traces) — integration point.
 - `src/shaders/voxelize.comp` (new per `TODO.md §5.1`) — voxelize from SVDAG.
 - `src/shaders/vct.frag` (new per `TODO.md §5.1`) — fragment shader cone trace.

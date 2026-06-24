@@ -141,7 +141,7 @@
 30. **ProjectV codebase** — `src/render/Renderer.cpp:290-297` (standard-Z clear), `src/render/HizCulling.{hpp,cpp}`, `src/shaders/hzb_cull.comp`, `src/render/SceneResources.cpp`, `src/render/ShadowProjection.cpp:13` (kShadowDepthPadding).
     <https://github.com/.../ProjectV> (local: `/home/le1t/Projects/ProjectV/`)
 
-31. **`agent/knowledge.md §30.4`** — 3-step migration precedent (XS foundation / S integration / M default flip).
+31. **`agent/knowledge.md`** — 3-step migration precedent (XS foundation / S integration / M default flip).
 
 32. **`hardware-profile.md §3+§4`** — dev host `obvium` (RTX 3060 Ti GA104 Ampere, 8 GiB VRAM, Vulkan 1.4.341, NVIDIA 610.43.02) + relevant extensions.
 

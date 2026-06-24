@@ -11,7 +11,7 @@
 - **Phase A:** reservation claim per `AGENTS.md §13.1` + §13.7 sentinel clean. Created folder +
   `README.md` + `STATUS.md` (initial in-progress state).
 - **Phase B:** web-research via `webfetch` + DuckDuckGo HTML endpoint (Exa HTTP 429 persistent per
-  `agent/knowledge.md Part B §9`). **5 primary + 3 secondary sources verified**: Aokana arXiv 2505.02017
+  the web_search fallback chain). **5 primary + 3 secondary sources verified**: Aokana arXiv 2505.02017
   (May 2025), DanielWLiu07/voxel-engine GitHub (2026, 2226 chunks/sec, RLE 144× compression), Voxceleron2
   architecture (3-stage async generation pipeline), UE5 World Partition (cell size + loading range +
   streaming sources + HLOD), PrismarineJS/prismarine-chunk (Minecraft Bedrock reference). DuckDuckGo

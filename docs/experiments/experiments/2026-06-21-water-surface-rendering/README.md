@@ -24,7 +24,7 @@
 
 ## 2. Prior art
 
-Web-research via `webfetch` DuckDuckGo HTML endpoint (Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback). **15+ primary + secondary sources** verified per [`sources.md`](./sources.md).
+Web-research via `webfetch` DuckDuckGo HTML endpoint (Exa `web_search` HTTP 429 persistent per the web_search fallback chain). **15+ primary + secondary sources** verified per [`sources.md`](./sources.md).
 
 **Key sources (5 most important):**
 

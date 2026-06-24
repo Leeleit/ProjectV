@@ -1,6 +1,6 @@
 # Sources — Voxel Material Weathering / Surface Aging
 
-> Web-research conducted 2026-06-22 via direct `webfetch` to canonical Wikipedia URLs (Exa `web_search` HTTP 429 persistent + DuckDuckGo CAPTCHA blocked + Google CAPTCHA blocked per `agent/knowledge.md Part B §9` fallback). Wikipedia Tier-1 sources retrieved successfully.
+> Web-research conducted 2026-06-22 via direct `webfetch` to canonical Wikipedia URLs (Exa `web_search` HTTP 429 persistent + DuckDuckGo CAPTCHA blocked + Google CAPTCHA blocked per the web_search fallback chain). Wikipedia Tier-1 sources retrieved successfully.
 
 ## Tier 1 — Academic weathering models
 

@@ -79,8 +79,8 @@ Web-research complete (3 batch queries, ~25 results, 8 key sources верифи�
 - `src/render/SceneResources.cpp` — depthImage allocation.
 - `src/render/vulkan/VulkanBootstrap.cpp` — physical device + extension probing (includes `VK_KHR_synchronization2` per `hardware-profile.md §4`).
 - `src/render/ShadowProjection.cpp:13` — `kShadowDepthPadding = 8.0f` (8-voxel padding for shadow depth precision).
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
-- `agent/knowledge.md §4` — build/verification contract.
+- `agent/knowledge.md` — 3-step migration precedent.
+- `agent/knowledge.md` — build/verification contract.
 - `TODO.md §2.1` — HZB culling integration (Pattern A = compute pre-cull + indirect draw, Pattern C = feature-flagged mesh shader).
 - `TODO.md §2.2` — mesh shader feature-flagged path.
 - `hardware-profile.md §3` — RTX 3060 Ti dev host, 8 GiB VRAM, 5.06 GiB budget, Vulkan 1.4.341.
@@ -242,7 +242,7 @@ VRAM saving 9.23 MiB at 1080p = 0.18% of 5.06 GiB budget per `hardware-profile.m
 
 **Target stage:** `TODO.md §2.1` (HZB cull foundation) + Stage 4.3 (lift draw distance) + Stage 5.1 (VCT integration, multiple depth attachments) + cross-cutting VRAM optimization (complement к closed `frame-flight-allocator-budget`).
 
-**Approach (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Approach (3-step migration per `agent/knowledge.md` precedent):**
 
 **Step 1 (XS, ~30 LoC, 1 session) — Foundation + D16 depth attachment:**
 - `src/render/SceneResources.cpp` — add `D16_UNORM` candidate в `findDepthFormat()` candidates list (after D32, with `findDepthFormat` precedence). Reversed-Z deferred to Step 2.

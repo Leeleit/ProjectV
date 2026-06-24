@@ -214,7 +214,7 @@ scales better with radius. B and D do NOT help (overhead > savings at 8³ scale)
 
 - **Target stage:** TODO.md §3.x (when chunk damage / destruction gameplay is added) +
   military sandbox Tier 1 activation.
-- **Changes (3-step migration per `agent/knowledge.md §30.4` precedent, ~150 LoC mainline):**
+- **Changes (3-step migration per `agent/knowledge.md` precedent, ~150 LoC mainline):**
   - **Step 1 (XS, ~30 LoC)** — `src/voxel/CraterController.{hpp,cpp}`:
     - `IsCraterCarveEnabled()` env gate (`PROJECTV_CRATER_CARVE=ON`, default ON per `§30.4` Step 1).
     - `CarveSphereFromChunk(Grid& g, Vec3 origin, float radius, Strategy s = E)` — wraps E

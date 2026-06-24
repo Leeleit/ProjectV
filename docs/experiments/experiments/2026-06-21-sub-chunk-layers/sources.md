@@ -79,4 +79,4 @@ Web-research complete `2026-06-21`. ~14 ключевых источников в
   Phase 9 2x part 5 per `agent/workspace.md`).
 - `TODO.md §4.1` (GPU Noise & World Gen) + `§4.2` (LOD) + `§5.1` (VCT).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% integration threshold.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.

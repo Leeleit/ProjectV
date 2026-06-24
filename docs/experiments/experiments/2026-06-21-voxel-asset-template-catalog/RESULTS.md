@@ -174,7 +174,7 @@ Per `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`, cross the 
 
 **Target stage:** Stage 4.x (asset pipeline) + Stage 6+ military sandbox (vehicle/building instantiation).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent** (~600 LoC, M effort, 2-3 sessions):
+**3-step migration per `agent/knowledge.md` precedent** (~600 LoC, M effort, 2-3 sessions):
 
 **Step 1 (XS, ~100 LoC)** `src/asset/AssetCatalog.{hpp,cpp}`:
 - `AssetTemplate` struct (matches prototype layout)

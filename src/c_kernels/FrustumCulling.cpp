@@ -1,4 +1,4 @@
-#include "c_kernels/FrustumCulling.hpp"
+#include "c_kernels/FrustumCulling.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "render/SceneResources.hpp"
 

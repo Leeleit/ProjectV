@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-anti-cheat-statistical-detection-for-lockstep-multiplayer
 
-Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list). **9 primary sources verified** (Tier 1 academic + Tier 2 production + Tier 3 cross-reference).
+Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain). **9 primary sources verified** (Tier 1 academic + Tier 2 production + Tier 3 cross-reference).
 
 ---
 
@@ -85,7 +85,7 @@ Web-research complete via direct `webfetch` to canonical URLs (Exa HTTP 429 pers
 
 ### 9. ProjectV cross-references
 
-Per `agent/knowledge.md §30.4` 3-step migration precedent + closed experiments:
+Per `agent/knowledge.md` 3-step migration precedent + closed experiments:
 - **closed `2026-06-21-lockstep-state-sync-hybrid-netcode` [mixed]** — A_PureLockstep = DEFAULT for ProjectV at 48-92 KB/s/player. **Provides the transport + determinism foundation** (input recording + FPU mode + commit-reveal) that makes our anti-cheat strategies possible. Without lockstep determinism, D_ReplayDeterministicDiff has no reference signal.
 - **closed `2026-06-21-persistent-war-server-architecture` [yes, E_Hybrid_ShardedReactive ⭐]** — server host architecture for 1000+ player persistent war. **Provides the deployment target** for anti-cheat: NATS JetStream worker per realm processes anti-cheat analysis alongside other server ticks.
 - **closed `2026-06-21-after-action-replay-system` [mixed]** — Input + state snapshot recording (every 60 ticks). **Provides the data source** for D_ReplayDeterministicDiff.
@@ -98,7 +98,7 @@ Per `agent/knowledge.md §30.4` 3-step migration precedent + closed experiments:
 
 (Tier 1: 5, Tier 2: 3, Tier 3 cross-references: 1 spanning 5 closed ProjectV experiments.)
 
-**Web-research limitations this session:** Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked + Startpage 0 results + Brave 429 + Searx 403 (per `agent/knowledge.md Part B §9` line 1424 fallback list). Working: direct `webfetch` to canonical Wikipedia + arXiv URLs only. **9 sources** vs typical 12-18 in full-coverage sessions — known limitation per AGENTS.md, accepted for Topic 9/9 cross-reference cluster. All 5 strategies covered by ≥1 source.
+**Web-research limitations this session:** Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked + Startpage 0 results + Brave 429 + Searx 403 (per the web_search fallback chain). Working: direct `webfetch` to canonical Wikipedia + arXiv URLs only. **9 sources** vs typical 12-18 in full-coverage sessions — known limitation per AGENTS.md, accepted for Topic 9/9 cross-reference cluster. All 5 strategies covered by ≥1 source.
 
 ---
 
@@ -108,5 +108,5 @@ Per `agent/knowledge.md §30.4` 3-step migration precedent + closed experiments:
 - **`src/server/RealmCore.{hpp,cpp}`** (per closed `persistent-war-server-architecture` Step 1, ~300 LoC) — anti-cheat analysis runs on NATS JetStream worker per realm.
 - **`src/voxel/Sparse64Tree.{hpp,cpp}`** (per Stage 1.1 mainline) — cheaters cannot edit voxel chunks without committing deterministic input → server validates against Sparse64Tree hash.
 - **`src/ecs/components/PlayerInput.{hpp,cpp}`** (per Stage 6.x mainline) — per-player input feature vector source for statistical + ML detection.
-- **`agent/knowledge.md §30.4`** — 3-step mainline migration pattern (~600 LoC total).
+- **`agent/knowledge.md`** — 3-step mainline migration pattern (~600 LoC total).
 - **`hardware-profile.md §1/§2`** — Zen 3 5800X + 62.7 GiB RAM sufficient for prototype + expected server-side CPU budget.

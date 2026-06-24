@@ -36,7 +36,7 @@ GPU decal atlas (precomputed 2D array of 64×64 decal sprites — bullet hole, s
 
 ## 2. Prior art
 
-Web-research complete via DuckDuckGo HTML fallback (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`).
+Web-research complete via DuckDuckGo HTML fallback (Exa HTTP 429 persistent per the web_search fallback chain).
 **Verified sources** (full list + Tier 2 в `sources.md`):
 
 - **Frostbite "Shadows & Decals: D3D10 Techniques in Frostbite" (GDC'09)** — Johansen, Drobot et al.
@@ -260,7 +260,7 @@ measurements**, wall time **0.021 sec** на dev host `obvium` Zen 3 5800X gover
 in `agent/workspace.md §2`); optionally earlier Stage 5.x для persistent damage textures / crater
 visibility on voxel surfaces.
 
-**Конкретные изменения (3-step migration per `agent/knowledge.md §30.4` precedent, ~750 LoC total):**
+**Конкретные изменения (3-step migration per `agent/knowledge.md` precedent, ~750 LoC total):**
 
 - **Step 1 (XS, ~100 LoC):** `src/render/DecalAtlas.{hpp,cpp}` — bindless texture array allocation
   (256 sprites × 64×64 RGBA8 = 4 MiB atlas), `LoadDecalSpritesFromTOML` data-driven sprite definitions,

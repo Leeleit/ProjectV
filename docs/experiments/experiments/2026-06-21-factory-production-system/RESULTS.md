@@ -168,7 +168,7 @@ This is **expected behavior** — wartime surge is fundamentally throughput-boun
 - **Stockpile** = `World.stockpile[16]` (per-item stockpile, int32).
 - **Production output** = `factory_completed[f]` counter per factory.
 
-**ProjectV integration points (per `agent/knowledge.md §30.4` 3-step migration):**
+**ProjectV integration points (per `agent/knowledge.md` 3-step migration):**
 - `src/economy/FactoryProduction.{hpp,cpp}` — production system foundation.
 - Flecs `FactoryProductionComponent` — per-entity factory state.
 - `FactoryProductionSystem::Update` — per-tick scheduler (default E_ProductionLinePipeline).
@@ -225,7 +225,7 @@ This is **expected behavior** — wartime surge is fundamentally throughput-boun
 
 **Stage 6+ military sandbox Tier 3 Economy** (per `backlog.md` Tier 3 section). Deferred до Stage 6+ military sandbox activation per `agent/workspace.md §2` line 36 operator 8x planning decision.
 
-### Mainline changes (3-step migration per `agent/knowledge.md §30.4` precedent)
+### Mainline changes (3-step migration per `agent/knowledge.md` precedent)
 
 **Total ~580 LoC, S-M effort, 1-2 sessions.**
 

@@ -1,6 +1,6 @@
 # Sources — 2026-06-22-player-roles-hierarchy
 
-**Web-research complete via direct `webfetch` to canonical Wikipedia URLs** (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list).
+**Web-research complete via direct `webfetch` to canonical Wikipedia URLs** (Exa MCP HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain).
 
 ## Primary sources (Tier 1 verified)
 
@@ -40,4 +40,4 @@
 - `rg "player.roles|player.role|commander.role|squad.leader.role|role.gate|role.hierarchy"` over `INDEX.md` + `experiments/` = only backlog.md self-ref + closed experiments cross-references + `2026-06-22-capture-repair-enemy-equipment` README mention.
 - `ls experiments/*player*` = only `2026-06-22-soldier-role-specialization` (soldier class axis, different from in-session role gating).
 - All 2 web sources verified via direct `webfetch` to canonical Wikipedia URLs.
-- Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per `agent/knowledge.md Part B §9` line 1424 fallback list → direct webfetch to Wikipedia primary sources.
+- Exa HTTP 429 + DuckDuckGo CAPTCHA blocked this session per the web_search fallback chain → direct webfetch to Wikipedia primary sources.

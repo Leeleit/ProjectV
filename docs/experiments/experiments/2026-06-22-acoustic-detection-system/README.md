@@ -47,7 +47,7 @@ acoustic has no equivalent (sensor is silent). Cross-axis orth to closed
 ## 2. Prior art
 
 Web-research plan (Exa `web_search` first, then DuckDuckGo fallback per
-`agent/knowledge.md Part B §9` line 1424 fallback list):
+the web_search fallback chain):
 
 **Tier 1 — canonical passive acoustic detection references:**
 - Wikipedia "Acoustic location" (1914-1918 WWI artillery triangulation, modern counterpart: SOSUS arrays)
@@ -251,7 +251,7 @@ deployment context (real-time vs high-precision).
 ## 7. Integration recommendation
 
 **Target stage:** independent (Tier 1 Physics + Tier 2 AI cross-cut, military sandbox axis).
-Per `agent/knowledge.md §30.4` 3-step migration precedent (~700 LoC, M effort, 2-3 sessions,
+Per `agent/knowledge.md` 3-step migration precedent (~700 LoC, M effort, 2-3 sessions,
 **deferred до Stage 6+ military sandbox activation** per `agent/workspace.md §2` line 36
 operator 8x planning decision):
 
@@ -370,8 +370,7 @@ DLR 7200-mic) + "SOSUS" (canonical military passive detection) + "Hydrophone" (L
 ## 8. Sources
 
 Pending web-research phase. Targets: 8-12 Tier 1+2 sources, all via direct `webfetch`
-(Exa 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback
-list). Full list will be extracted to `sources.md` after Phase 1.
+(Exa 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain). Full list will be extracted to `sources.md` after Phase 1.
 
 ## 9. Mapping to ProjectV hot-path
 

@@ -11,7 +11,7 @@
 
 ## 1. Hypothesis
 
-**Утверждение:** Добавление **diffraction term** через HZB-like depth-mip edge probe (per Schissler & Manocha 2014 + Tsingos 2001) к closed `2026-06-21-audio-raytracing-voxel-sdf` **Phase 1 occlusion** path (1 ray/source) даст **+2-4 dB perceived loudness** за diffraction edges при **+0.3-0.7 ms CPU cost / 64 sources / frame** на Zen 3 5800X (powersave governor) = **< 2% от 33.3 ms audio frame budget @ 30 Hz**. **Zero new GPU passes** (CPU-side computation в существующем audio thread per `agent/knowledge.md §28` `AudioEngine` contract).
+**Утверждение:** Добавление **diffraction term** через HZB-like depth-mip edge probe (per Schissler & Manocha 2014 + Tsingos 2001) к closed `2026-06-21-audio-raytracing-voxel-sdf` **Phase 1 occlusion** path (1 ray/source) даст **+2-4 dB perceived loudness** за diffraction edges при **+0.3-0.7 ms CPU cost / 64 sources / frame** на Zen 3 5800X (powersave governor) = **< 2% от 33.3 ms audio frame budget @ 30 Hz**. **Zero new GPU passes** (CPU-side computation в существующем audio thread per `agent/knowledge.md` `AudioEngine` contract).
 
 **Что проверяю:**
 
@@ -24,7 +24,7 @@
 
 Mainline может **улучшить audio quality с minimal cost**:
 - Phase 1 (occlusion) + Phase 2 (Eyring reverb) + Phase 1.5 (diffraction term) = **3-of-3 audio Phase recommendations** (Phase 3 full hybrid уже falsified в closed experiment, остаётся deferred).
-- Per `agent/knowledge.md §30.4` 3-step migration precedent — Step 1 add `Diffraction::edgeProbe()` helper (~80 LoC, XS); Step 2 wire into `AudioEngine::tick()` after occlusion (~50 LoC, XS); Step 3 env flag `PROJECTV_AUDIO_DIFFRACTION=ON` default ON (~20 LoC, XS). Total ~150 LoC, XS effort, 1-2 sessions.
+- Per `agent/knowledge.md` 3-step migration precedent — Step 1 add `Diffraction::edgeProbe()` helper (~80 LoC, XS); Step 2 wire into `AudioEngine::tick()` after occlusion (~50 LoC, XS); Step 3 env flag `PROJECTV_AUDIO_DIFFRACTION=ON` default ON (~20 LoC, XS). Total ~150 LoC, XS effort, 1-2 sessions.
 - Diffraction is **the** missing piece для physically-accurate audio propagation. Per Schissler 2014: «Diffraction is the dominant high-frequency propagation mechanism in real environments» — current Phase 1 = physically incorrect (over-muffles high frequencies).
 
 **Альтернативы:**
@@ -78,7 +78,7 @@ Web-research выполнен `2026-06-21` через Exa (per `AGENTS.md §5.3`
 
 **Локальные cross-refs** (per `AGENTS.md §3` — не дублировать):
 
-- `agent/knowledge.md §28` — `AudioEngine` contract (miniaudio PCM playback + future spatial extensions).
+- `agent/knowledge.md` — `AudioEngine` contract (miniaudio PCM playback + future spatial extensions).
 - `experiments/2026-06-21-audio-raytracing-voxel-sdf/README.md` line 459-460 — **explicitly declared follow-up**: `_audio-diffraction-hybrid_ (Schissler 2014 diffraction via HZB per `2026-06-20-hzb-binding-models`)` — этот experiment = exact follow-up.
 - `experiments/2026-06-21-audio-raytracing-voxel-sdf/README.md` §7 Phase 1+2 recommendation — Phase 1.5 = extension поверх Phase 1+2.
 - `experiments/2026-06-20-hzb-binding-models/README.md` — HZB cull pattern with `texelFetch` (closed mixed, texelFetch = recommended default per `TODO.md §2.1` line 159). This experiment reuses same `texelFetch` pattern для depth-mip probe.
@@ -206,7 +206,7 @@ Per `benchmarks/methodology.md §3`:
 
 ### 5.3 Quality analysis
 
-- **C_Tsingos achieves +1.2-1.4 dB recovery** в multi_room (worst case for occlusion), exactly in Tsingos 2007 spec range (1-2 dB). Per `agent/knowledge.md §30.4` 5% threshold: recovery > cost overhead = clear win.
+- **C_Tsingos achieves +1.2-1.4 dB recovery** в multi_room (worst case for occlusion), exactly in Tsingos 2007 spec range (1-2 dB). Per `agent/knowledge.md` 5% threshold: recovery > cost overhead = clear win.
 - **B_Schissler achieves 0 dB recovery** в моей simplified implementation. Reason: direct visibility (source → edge AND edge → listener) is rarely satisfied for separated source-listener pairs in multi_room. To reach Schissler 2014's full +2-4 dB benefit, second-order UTD (edge-to-edge paths) is required — out of scope for this prototype.
 - **A_None is the cheap baseline**; serves as Phase 1 reference per closed `audio-raytracing-voxel-sdf` recommendation.
 
@@ -255,7 +255,7 @@ Projected Zen 5 best case для 64 sources: C_Tsingos = 0.10-0.13 ms = **0.3-0.
 
 - **A_None is the cheap baseline**, serves as Phase 1 reference per closed `audio-raytracing-voxel-sdf`.
 
-**Mainline recommendation:** integrate **C_Tsingos (Phase 1.5)** immediately as drop-in addition поверх Phase 1 occlusion. XS effort (~150 LoC per `agent/knowledge.md §30.4` 3-step migration). Defer **B_Schissler (Phase 1.6)** до second-order UTD implementation или full BST deferred Phase 3 per closed `audio-raytracing-voxel-sdf`.
+**Mainline recommendation:** integrate **C_Tsingos (Phase 1.5)** immediately as drop-in addition поверх Phase 1 occlusion. XS effort (~150 LoC per `agent/knowledge.md` 3-step migration). Defer **B_Schissler (Phase 1.6)** до second-order UTD implementation или full BST deferred Phase 3 per closed `audio-raytracing-voxel-sdf`.
 
 ---
 
@@ -263,14 +263,14 @@ Projected Zen 5 best case для 64 sources: C_Tsingos = 0.10-0.13 ms = **0.3-0.
 
 **Mainline должен integrate C_Tsingos (Phase 1.5) immediately и defer B_Schissler (Phase 1.6):**
 
-- **Target stage:** `independent` (audio rendering axis, не Stage 0-6 в `TODO.md` — per `agent/knowledge.md §28` audio = future Stage 7.x). Practical integration point: after closed `audio-raytracing-voxel-sdf` Phase 1 (occlusion) + Phase 2 (Eyring reverb) merged.
+- **Target stage:** `independent` (audio rendering axis, не Stage 0-6 в `TODO.md` — per `agent/knowledge.md` audio = future Stage 7.x). Practical integration point: after closed `audio-raytracing-voxel-sdf` Phase 1 (occlusion) + Phase 2 (Eyring reverb) merged.
 
-- **Конкретные изменения:** add `Diffraction::sampleHemisphere()` helper в `src/audio/`, wire into `AudioEngine::tick()` after occlusion call. See `agent/knowledge.md §28` for AudioEngine contract.
+- **Конкретные изменения:** add `Diffraction::sampleHemisphere()` helper в `src/audio/`, wire into `AudioEngine::tick()` after occlusion call. See `agent/knowledge.md` for AudioEngine contract.
 
-- **Подход:** 3-step migration per `agent/knowledge.md §30.4` precedent:
+- **Подход:** 3-step migration per `agent/knowledge.md` precedent:
   - **Step 1 (XS, ~80 LoC):** `Diffraction::sampleHemisphere()` helper + Fibonacci sphere sample generation + depth-mip lookup stub (или single-ray per sample for CPU-only).
   - **Step 2 (XS, ~50 LoC):** wire into `AudioEngine::tick()` after occlusion call (`if (occlusion_db < -3.0) applyDiffractionRecovery();`).
-  - **Step 3 (XS, ~20 LoC):** env flag `PROJECTV_AUDIO_DIFFRACTION=ON` default ON (per `agent/knowledge.md §30.4` precedent).
+  - **Step 3 (XS, ~20 LoC):** env flag `PROJECTV_AUDIO_DIFFRACTION=ON` default ON (per `agent/knowledge.md` precedent).
   - **Total:** ~150 LoC, XS effort, 1-2 sessions.
 
 - **Риски:**
@@ -284,7 +284,7 @@ Projected Zen 5 best case для 64 sources: C_Tsingos = 0.10-0.13 ms = **0.3-0.
   - `Diffraction::sampleHemisphere()` unit tests pass.
   - Zen 3 5800X (no AVX-512) cost < 0.3 ms / frame / 64 sources (50% margin over measured 0.21 ms).
   - Cross-vendor validation: AMD Zen 4/5 + Intel Arrow Lake / Sapphire Rapids = projected within budget.
-  - **Re-evaluation triggers:** Zen 5+ AVX-512 hardware availability, HRTF integration with Meta XR Audio SDK per §2, ProjectV audio axis progression to Stage 7.x per `agent/knowledge.md §28`.
+  - **Re-evaluation triggers:** Zen 5+ AVX-512 hardware availability, HRTF integration with Meta XR Audio SDK per §2, ProjectV audio axis progression to Stage 7.x per `agent/knowledge.md`.
 
 - **Зависимости:**
   - **Blocker:** closed `audio-raytracing-voxel-sdf` Phase 1 (occlusion) integration. Phase 1.5 = extension поверх Phase 1.
@@ -327,7 +327,7 @@ Projected Zen 5 best case для 64 sources: C_Tsingos = 0.10-0.13 ms = **0.3-0.
 
 ## 9. Mapping to ProjectV hot-path
 
-**Какой участок движка:** `src/audio/AudioEngine.{hpp,cpp}` (per `agent/knowledge.md §28`). Per closed `audio-raytracing-voxel-sdf` Phase 1+2: occlusion + Eyring reverb **recommended**. This experiment = Phase 1.5 = diffraction term extension.
+**Какой участок движка:** `src/audio/AudioEngine.{hpp,cpp}` (per `agent/knowledge.md`). Per closed `audio-raytracing-voxel-sdf` Phase 1+2: occlusion + Eyring reverb **recommended**. This experiment = Phase 1.5 = diffraction term extension.
 
 **Какие допущения/упрощения:**
 - CPU-only (no GPU compute / async offload).

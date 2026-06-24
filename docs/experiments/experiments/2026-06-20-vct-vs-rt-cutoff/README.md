@@ -193,7 +193,7 @@ Web-research выполнен `2026-06-20` через Exa (per `AGENTS.md §5.3`
 - `TODO.md §5.1` (VCT spec) — primary target stage.
 - `TODO.md §5.2` (RTX shadows spec) — secondary target stage.
 - `decisions.md §15` [First sun-shadow path](#15-first-sun-shadow-path) — CSM baseline; RTX = additive.
-- `agent/knowledge.md §30.4` (GPU Fluid CA contract) — uses VCT volume sampling.
+- `agent/knowledge.md` (GPU Fluid CA contract) — uses VCT volume sampling.
 - `src/shaders/voxel.frag` (per `TODO.md §6.2.2` — 3 copies of DDA trace: `TraceLocalPointLightShadowRay`,
   `ComputeSunContactVisibility`, `TraceAmbientOcclusionRay`) — direct integration point for AO/contact
   shadows via RTX ray query.
@@ -463,7 +463,7 @@ over SSAO is dramatic for voxel scenes with sharp edges). Fallback to SSAO на 
 
 **Target stage:** `TODO.md §5.1` (VCT) + `TODO.md §5.2` (RTX shadows).
 
-**Конкретные изменения (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Конкретные изменения (3-step migration per `agent/knowledge.md` precedent):**
 
 ### Step 1: Foundation (S effort)
 

@@ -3,7 +3,7 @@
 **Current phase:** Phase 4 — sync к closure (single-pass per `AGENTS.md §13.5`)
 **Last action (2026-06-21):**
 - Reserved per `AGENTS.md §13.1` claim process (anti-duplicate sentinel clean per §13.7).
-- Web-research complete via DuckDuckGo HTML + `webfetch` (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`).
+- Web-research complete via DuckDuckGo HTML + `webfetch` (Exa HTTP 429 persistent per the web_search fallback chain).
   **5 primary sources verified:** Greene/Kass/Miller 1993 (canonical SIGGRAPH), Mike Turitzin 2020 (exact pattern statement),
   Omlor & Radicke 2025 (TPOC voxel+HZB), DeepWiki Metallic 2026-04-06 (modern production), RasterGrid 2010 (OpenGL FBO).
 - Prototype built + benchmark run complete: 100 measurements (5 scenes × 5 seeds × 4 strategies × 30 iter + 5 warmup).

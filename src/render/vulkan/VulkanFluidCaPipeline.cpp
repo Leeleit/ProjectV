@@ -1,4 +1,4 @@
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"

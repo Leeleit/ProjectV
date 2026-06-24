@@ -121,7 +121,7 @@ Output: `build/results.csv` (126 rows = 1 header + 125 data)
 
 **Target stage:** `TODO.md` §4.2 chunk 3 — deferred octree-impostor from `lod-mesh-downsampling`
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 - Step 1 (XS, ~60 LoC): `ImpostorController.{hpp,cpp}` + `ImpostorStrategy` enum + `PROJECTV_IMPOSTOR=OFF|SINGLE_QUAD|CUBEMAP|OCTREE|DYNAMIC` env gate (default `AUTO` — auto-select per chunk complexity).
 - Step 2 (M, ~400 LoC): per-strategy implementation — `ImpostorBakeSystem` for D/E (compute shader or CPU pre-bake), per-chunk impostor texture atlas, view-dependent face selection, LOD transition blending.
 - Step 3 (S, ~100 LoC): integration with existing `HizCulling.cpp` LOD dispatch + per-chunk `lodLevel` byte + Tracy plot "Impostor Layer" + `ProjectVImpostorTests`.

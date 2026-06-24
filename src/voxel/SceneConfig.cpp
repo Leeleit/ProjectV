@@ -1,4 +1,4 @@
-#include "voxel/SceneConfig.hpp"
+#include "voxel/SceneConfig.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "core/RepoRoot.hpp"
 #include "SDL3/SDL.h"

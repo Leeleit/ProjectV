@@ -1,6 +1,6 @@
 #pragma once
 
-#include "c_kernels/frustum_cull.hpp"
+#include "c_kernels/frustum_cull.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include "core/Types.hpp"
 
 #include <span>

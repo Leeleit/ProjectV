@@ -109,7 +109,7 @@ At 60 FPS frame budget (16.67 ms), this saves **0.21-0.28% of frame budget for V
 - Texture cache hit rate (VCT atlas mip chain locality)
 - Memory bandwidth utilization
 
-GPU prototype deferred to mainline integration (per `agent/knowledge.md §30.4` 3-step migration precedent).
+GPU prototype deferred to mainline integration (per `agent/knowledge.md` 3-step migration precedent).
 
 ---
 

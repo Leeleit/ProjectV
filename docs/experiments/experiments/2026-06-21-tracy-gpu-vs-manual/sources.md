@@ -124,7 +124,7 @@
 
 ## Cross-references внутри ProjectV
 
-- `agent/knowledge.md §4` — build / verification contract (Tracy instrumentation rules).
+- `agent/knowledge.md` — build / verification contract (Tracy instrumentation rules).
 - `src/debug/ProfilingGpu.hpp:54-159` — ProjectV current Tracy GPU integration
   (`TryCreateCalibratedTracyGpuContext`).
 - `src/render/vulkan/VulkanInit.cpp:21-110` — `CreateTracyGpuContext` +

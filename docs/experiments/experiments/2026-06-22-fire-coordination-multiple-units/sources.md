@@ -1,6 +1,6 @@
 # Sources — Multi-Unit Fire Coordination & Target Priority
 
-Web-research проведён 2026-06-22. **Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked** per `agent/knowledge.md Part B §9` line 1424 fallback list. Работали direct `webfetch` к canonical URLs (Wikipedia). 7 Tier 1+2 sources verified.
+Web-research проведён 2026-06-22. **Exa HTTP 429 persistent + DuckDuckGo HTML endpoint CAPTCHA blocked** per the web_search fallback chain. Работали direct `webfetch` к canonical URLs (Wikipedia). 7 Tier 1+2 sources verified.
 
 ---
 
@@ -65,9 +65,9 @@ Web-research проведён 2026-06-22. **Exa HTTP 429 persistent + DuckDuckGo
 
 ## Web-research limitations
 
-- **Exa HTTP 429 persistent** per `agent/knowledge.md Part B §9` fallback list (no work this session).
+- **Exa HTTP 429 persistent** per the web_search fallback chain (no work this session).
 - **DuckDuckGo HTML endpoint CAPTCHA blocked** (CAPTCHA challenge received 2026-06-22).
-- **Direct webfetch к Wikipedia** = working fallback per `agent/knowledge.md Part B §9` line 1424 (searx / duckduckgo / brave / bing / google / startpage + direct URLs).
+- **Direct webfetch к Wikipedia** = working fallback per the web_search fallback chain (searx / duckduckgo / brave / bing / google / startpage + direct URLs).
 - **arXiv, GDC Vault, GameAIPro PDFs not retrieved** this session (would require additional fallback chain).
 - **Total sources verified:** 7 Tier 1 + 1 Tier 2 = 8 unique canonical URLs.
 
@@ -75,7 +75,7 @@ Web-research проведён 2026-06-22. **Exa HTTP 429 persistent + DuckDuckGo
 
 - `backlog.md §In progress` — reservation record.
 - [`hardware-profile.md`](../../hardware-profile.md) §1 (Zen 3 5800X dev host, актуально на 2026-06-21).
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% threshold.
 - Closed experiments per §1:
   - `2026-06-21-combined-arms-coordination-ai` [mixed, C_Hierarchical_2Tier] = upstream

@@ -45,7 +45,7 @@ struct VoxelBuffer {
 	uint8_t at(int x, int y, int z) const { return data[idx3(x, y, z)]; }
 
 	// 0 outside chunk = air (mimics cross-chunk OOB, matches ProjectV greedy contract
-	// per agent/knowledge.md §25: ReadVoxelMaterial handles OOB returning Air).
+	// per `agent/knowledge.md`: ReadVoxelMaterial handles OOB returning Air).
 	bool is_solid(int x, int y, int z) const
 	{
 		if (x < 0 || x >= CHUNK || y < 0 || y >= CHUNK || z < 0 || z >= CHUNK)
@@ -209,7 +209,7 @@ VoxelBuffer scene_projectv_mix()
 // ====================== Algorithm 1: Naive Greedy ======================
 // Per-axis dispatch, 6 faces (X+/X-/Y+/Y-/Z+/Z-). Uses a "consumed" mask
 // to avoid re-emitting the same face. Matches current ProjectV pattern in
-// `voxel_mesh.comp::GreedyFacePass` (per agent/knowledge.md §25).
+// `voxel_mesh.comp::GreedyFacePass` (per `agent/knowledge.md`).
 
 MeshData algo_naive_greedy(const VoxelBuffer &src)
 {

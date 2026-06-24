@@ -17,7 +17,7 @@ NOT formation shape].
 
 - `2026-06-21 22:30` — Phase 0 init. Reservation зафиксирован в `research/backlog.md §In progress`. Sentinel §13.7
   clean (папки не было, никто параллельно не работает). Web-search (Exa) HTTP 429 → fallback на Startpage + direct
-  webfetch (per `agent/knowledge.md Part B §9` line 1424 fallback list).
+  webfetch (per the web_search fallback chain).
 - `2026-06-21 22:42` — Phase 1 web-research complete: **9 primary + 6 secondary = 15 verified sources** в
   [`sources.md`](./sources.md) (Reynolds 1987/1999, van den Berg ORCA 2008, Isla Halo 2 2005, Game AI Pro
   Ch.22, Wikipedia SupCom/HoI4/Military organization, DTIC Swarming PDF, OpenSteer library, V-RVO arXiv 2021,
@@ -50,7 +50,7 @@ NOT formation shape].
 
 - README.md §2 prior art: 9 primary + 6 secondary verified sources.
 - README.md §5 results: pivot table + per-strategy analysis.
-- README.md §7 integration: 3-step migration per `agent/knowledge.md §30.4` precedent (~400 LoC, S effort).
+- README.md §7 integration: 3-step migration per `agent/knowledge.md` precedent (~400 LoC, S effort).
 - RESULTS.md §1-9: full analysis, per-scene breakdown, hypothesis validation, caveats.
 - INDEX.md §5 → §6 sync на closing.
 - backlog.md §In progress → backlog_closed.md §Closed sync на closing.

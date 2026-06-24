@@ -12,7 +12,7 @@ E_AdaptiveFireArc_Optimization (AI-placed).
 
 - [x] **Phase 0 — Reservation** (per `AGENTS.md §13.1` + §13.7): backlog.md updated, folder created.
 - [x] **Phase 1 — Web research** (10 Tier 1 primary + 4 Tier 2 supplementary = 14 sources verified via
-      direct `webfetch` per `agent/knowledge.md Part B §9` line 1424 fallback list).
+      direct `webfetch` per the web_search fallback chain).
 - [x] **Phase 2 — Prototype** (C++26 CPU bench: 5 strategies × 5 scenes × 5 seeds × 200 iter = 25,000
       main measurements, build green 0 warnings 0 errors).
 - [x] **Phase 3 — Benchmark** (run + collect results.csv + verify 25,000 measurements <0.7s wall time).

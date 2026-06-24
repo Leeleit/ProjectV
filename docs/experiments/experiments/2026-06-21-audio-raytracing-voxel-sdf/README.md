@@ -19,8 +19,7 @@ fallback (1 ray/source, no reflections) даёт **~0.05 ms** — достато
 
 **Преимущество:** переиспользует **ту же SVO-структуру** (Sparse64Tree → NanoVDB-flatten для GPU) что и рендер,
 **zero data duplication** для геометрии, unified code-path: build/break мира автоматически обновляет audio (тот же
-chunk dirty flag). По сравнению с текущим `miniaudio` PCM playback (no geometric processing per `agent/knowledge.md
-§28`) — добавляет impulse response (IR) convolution слой: direct sound + early specular reflections + diffuse field
+chunk dirty flag). По сравнению с текущим `miniaudio` PCM playback (no geometric processing per `agent/knowledge.md`) — добавляет impulse response (IR) convolution слой: direct sound + early specular reflections + diffuse field
 + late reverb tail.
 
 **Альтернативы и почему гипотеза лучше:**
@@ -82,7 +81,7 @@ Web-research по теме (3 batch queries, 8 ключевых источник
    = comfortable headroom для audio rendering + miniaudio mixing.
 5. **Reflection order** = 3-4 типично perceptible (больше = diminishing returns + compute cost).
 
-**Cross-refs (не дублировать):** `agent/knowledge.md §28` audio engine contract (miniaudio, 16/44100, PCM playback, без
+**Cross-refs (не дублировать):** `agent/knowledge.md` audio engine contract (miniaudio, 16/44100, PCM playback, без
 geometric processing); `2026-06-20-nanovdb-on-gpu` SVO walker foundation; `2026-06-20-flecs-soa-vs-aos-bench` SoA
 storage pattern для audio source bookkeeping; `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md`
 5-10% threshold для integration recommendation.
@@ -112,7 +111,7 @@ storage pattern для audio source bookkeeping; `legacy/docs/philosophy/03_doma
 **Контроль:**
 
 - **baseline A**: no geometric audio (direct path only, no occlusion test) — current `AudioEngine` behavior per
-  `agent/knowledge.md §28`.
+  `agent/knowledge.md`.
 - **baseline B**: occlusion-only (1 ray/source, no reflections) — validates cheap-path latency.
 - **hypothesis C**: full hybrid (32 rays × 4 reflection orders + late reverb).
 - **hypothesis D**: full hybrid + temporal cache (skip rays whose source-listener geometry не изменилась).
@@ -157,7 +156,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra \
 ```
 
 **Зависимости:** только libc++ + libstdc++ (no Vulkan, no miniaudio, no ProjectV mainline). Соответствует
-`benchmarks/methodology.md §2` ("Clang 22.1.6 baseline per `agent/knowledge.md §17`").
+`benchmarks/methodology.md §2` ("Clang 22.1.6 baseline per `agent/knowledge.md`").
 
 ---
 
@@ -274,7 +273,7 @@ multi-threaded ECS, vendor ships AVX-512 consumer CPU.
 **Cross-vendor:** алгоритм CPU-only, не зависит от GPU → uniform across NVIDIA / AMD / Intel / Arm. Cross-platform
 производительность зависит только от CPU frequency (governor `performance` recommended для audio path).
 
-**Зависимости:** ✅ `agent/knowledge.md §28` AudioEngine contract stable, ✅ `2026-06-20-nanovdb-on-gpu` SVO walker
+**Зависимости:** ✅ `agent/knowledge.md` AudioEngine contract stable, ✅ `2026-06-20-nanovdb-on-gpu` SVO walker
 foundation, ✅ `2026-06-20-flecs-soa-vs-aos-bench` SoA storage, ✅ `2026-06-20-work-stealing-job-system` verdict=mixed →
 serial dispatcher, ✅ Stage 1.1 Sparse64Tree closed.
 
@@ -307,7 +306,7 @@ serial dispatcher, ✅ Stage 1.1 Sparse64Tree closed.
 
 - **Geometry source** — `Sparse64Tree` (Stage 1.1 closed ✅), читается через тот же walker что и
   `nanovdb-on-gpu` GPU kernel, но CPU-side (mirror структура).
-- **Audio engine hook** — `AudioEngine` (current miniaudio wrapper per `agent/knowledge.md §28`), расширяется
+- **Audio engine hook** — `AudioEngine` (current miniaudio wrapper per `agent/knowledge.md`), расширяется
   convolution слой для IR processing.
 - **ECS storage** — Flecs SoA (per `flecs-soa-vs-aos-bench` verdict=yes), `AudioSource` + `AudioListener`
   components с trivial-cache-line stride для fast iteration.

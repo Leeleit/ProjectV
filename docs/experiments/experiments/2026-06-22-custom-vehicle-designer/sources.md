@@ -127,7 +127,7 @@
 
 ## F. Web search methodology
 
-- Exa API returned HTTP 429 (rate limited) — used DuckDuckGo HTML fallback per `agent/knowledge.md Part B §9`.
+- Exa API returned HTTP 429 (rate limited) — used DuckDuckGo HTML fallback per the web_search fallback chain.
 - DuckDuckGo → webfetch pages → verify facts via cross-referencing game wikis, GitHub repos, API docs.
 - Date range: 2023–2026 (Jolt discussions), 2025 (Parry Voxels shape), 2025 (SCA Rig My Ride).
 - Search queries used: "voxel vehicle assembly collision shape compound greedy", "Jolt Physics CompoundShape vehicle dynamic", "voxel collision detection Parry Rapier shape 2025", "Jolt Physics voxel world best practice compound shape".

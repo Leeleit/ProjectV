@@ -53,7 +53,7 @@ boost ~5.0 GHz idle.
 stable.**
 
 **Anti-pattern locked in:** «add work-stealing pool = best default for parallel code» — common wisdom, NOT measured in
-this workload. Per `agent/knowledge.md` line 879 SIMD-frustum-cull priority — аналогично: per-entity ECS bookkeeping =
+this workload. Per `agent/knowledge.md` SIMD-frustum-cull priority — аналогично: per-entity ECS bookkeeping =
 small task. Don't add pool без measurement.
 
 **Re-evaluation triggers:**

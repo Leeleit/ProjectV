@@ -16,7 +16,7 @@ mesh-shader path is enabled (currently feature-flagged off per `mesh-shader-vs-c
   `§In progress`; `INDEX.md §1` + `§5` + `§8` updated; `experiments/2026-06-20-dec-pipelines-async-compute/`
   folder created with `STATUS.md` + `README.md` (initial draft, hypothesis + method + scope).
 - `2026-06-20` — web research session per `docs/experiments/AGENTS.md §4` (8 web searches, 6+
-  fallbacks per `agent/knowledge.md §9`). Cross-vendor matrix built (NVIDIA Ampere/Ada/Blackwell + AMD
+  fallbacks per `agent/knowledge.md`). Cross-vendor matrix built (NVIDIA Ampere/Ada/Blackwell + AMD
   RDNA2/3/4 + Intel Arc Alchemist/Battlemage + Arm Mali TBDR). 2024-2026 SOTA established.
 - `2026-06-20` — `pipeline_overlap_analysis.md` written (per-pass dependency graph, Amdahl-style upper
   bound, queue topology recommendation, sync point matrix).
@@ -33,7 +33,7 @@ mesh-shader path is enabled (currently feature-flagged off per `mesh-shader-vs-c
 
 - Cross-axis experiment: **sync/scheduling** axis, orthogonal к memory (svdag-vs-vdb) и layout
   (cache-oblivious-chunk-tree).
-- Direct impact: `agent/knowledge.md §30.4` (Stage 3.1 contract) — sync model now concretized as
+- Direct impact: `agent/knowledge.md` (Stage 3.1 contract) — sync model now concretized as
   `vkQueueSubmit2` + timeline semaphores + dedicated async-compute queue, not just «Pipeline barrier
   для swap ping-pong».
 - Synergy: `bindless-descriptor-overhead` Phase E (RTX BLAS async build) — shared queue manager.
@@ -51,5 +51,5 @@ mesh-shader path is enabled (currently feature-flagged off per `mesh-shader-vs-c
   async-compute-started-before-raster. ProjectV's current Stage 2.1 path is compute cull (per
   `mesh-shader-vs-compute-cull` verdict=mixed, default = compute), so bug does NOT apply. If mesh-shader
   is ever enabled, re-validate.
-- **Tooling:** web search (Exa per AGENTS.md §4) + 6+ fallbacks per `agent/knowledge.md §9` line 1424.
+- **Tooling:** web search (Exa per AGENTS.md §4) + 6+ fallbacks per `agent/knowledge.md`.
   All sources verified per `docs/experiments/AGENTS.md §2` (date, author, context).

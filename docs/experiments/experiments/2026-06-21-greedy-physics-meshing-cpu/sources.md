@@ -1,7 +1,7 @@
 # 2026-06-21-greedy-physics-meshing-cpu — Sources
 
 **Status:** web-verified 2026-06-21 via webfetch (DuckDuckGo HTML endpoint → direct URL fetch).
-**Verification methodology:** per `agent/knowledge.md Part B §9` (Web search: Exa / fallbacks) + DuckDuckGo
+**Verification methodology:** per the web_search fallback chain (Web search: Exa / fallbacks) + DuckDuckGo
 HTML endpoint для URL discovery (Exa MCP returned HTTP 429 rate-limited this session). All cited URLs
 fetched and content verified this session.
 
@@ -40,7 +40,7 @@ fetched and content verified this session.
     вокселя в CompoundShape, добавлять масштабированные коробки, соответствующие объединенным
     воксельным группам.»
 
-- **`agent/knowledge.md §30.4` (3-step migration precedent)** — standard migration pattern:
+- **`agent/knowledge.md` (3-step migration precedent)** — standard migration pattern:
   Step 1 foundation (XS, ~20-50 LoC), Step 2 main integration (S/M, ~100-300 LoC), Step 3 default
   flip + Tracy plot (XS, ~20 LoC). Применяется в §7 Integration recommendation.
 
@@ -52,7 +52,7 @@ fetched and content verified this session.
   called per-frame в `AppUpdate.cpp` after `SyncPhysicsWorld`. Closed dirty. **Greedy merge is hot
   path: per-frame call for dirty chunks.**
 
-- **`agent/knowledge.md §17` (multiplatform baseline)** — Linux clang 22.1.6 + libstdc++ 16.1.1 +
+- **`agent/knowledge.md` (multiplatform baseline)** — Linux clang 22.1.6 + libstdc++ 16.1.1 +
   Windows clang-cl + MSVC STL. Cross-platform C++26 + CMake 4.3.3.
 
 - **`docs/experiments/hardware-profile.md §1`** — dev host `obvium`, AMD Ryzen 7 5800X (Zen 3),
@@ -196,7 +196,7 @@ fetched and content verified this session.
 
 ## D. Methodology note
 
-Per `agent/knowledge.md §3 sources of truth` (корневой `AGENTS.md`): "Код ProjectV — абсолютный
+Per `agent/knowledge.md` sources of truth` (корневой `AGENTS.md`): "Код ProjectV — абсолютный
 приоритет при оценке реальности". **Code > mainline DoD > agent/knowledge contracts > closed experiments
 > web-verified references.** В этом experiment:
 

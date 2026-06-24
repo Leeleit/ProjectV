@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-subsurface-scattering-voxel-materials
 
-Web research via direct `webfetch` to canonical URLs (Exa MCP HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list — DuckDuckGo CAPTCHA blocked, Startpage low yield this session; **working: direct `webfetch` to primary sources**).
+Web research via direct `webfetch` to canonical URLs (Exa MCP HTTP 429 persistent per the web_search fallback chain — DuckDuckGo CAPTCHA blocked, Startpage low yield this session; **working: direct `webfetch` to primary sources**).
 
 **16 sources verified** (8 Tier 1 academic / 5 Tier 2 production references / 3 cross-references).
 

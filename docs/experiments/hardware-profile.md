@@ -189,15 +189,15 @@ release builds, **но** Zen kernel не обязательно = mainline user 
 
 | Tool             | Version                          | Заметка                                                                                                                                                                                     |
 |:-----------------|:---------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Clang            | **22.1.6**                       | Per `agent/knowledge.md §17` Linux baseline                                                                                                                                                 |
+| Clang            | **22.1.6**                       | Per `agent/knowledge.md` Linux baseline                                                                                                                                                 |
 | LLD              | **22.1.6**                       | `CMAKE_LINKER_TYPE=LLD`                                                                                                                                                                     |
 | libstdc++        | 16.1.1 (GCC build)               | Symbol `GLIBCXX_3.4.35` (latest)                                                                                                                                                            |
 | CMake            | 4.3.3                            | CMake 4.x                                                                                                                                                                                   |
-| SDL3             | 3.4.10                           | Per `agent/knowledge.md §17`                                                                                                                                                                |
+| SDL3             | 3.4.10                           | Per `agent/knowledge.md`                                                                                                                                                                |
 | Vulkan loader    | 1.4.350.0                        | `vulkaninfo` summary uses this                                                                                                                                                              |
 | glslangValidator | 16.3.0                           | `legacy/docs/VulkanSDK-Linux-Docs-1.4.350.1/` also vendored                                                                                                                                 |
 | glslc            | 2026.2 (1.4.350.0)               | Vulkan SDK glslc                                                                                                                                                                            |
-| Tracy            | **vendored** в `external/tracy/` | Per `agent/knowledge.md §4`: `linux-clang-debug-tracy-profiler` preset = instrumentation ON, UI binary OFF (upstream nlohmann_json collision). UI build = `tools/tracy-standalone/` script. |
+| Tracy            | **vendored** в `external/tracy/` | Per `agent/knowledge.md`: `linux-clang-debug-tracy-profiler` preset = instrumentation ON, UI binary OFF (upstream nlohmann_json collision). UI build = `tools/tracy-standalone/` script. |
 
 **`vulkaninfo` путь:** `/usr/sbin/vulkaninfo` (system). ProjectV vendors full Vulkan SDK docs в
 `legacy/docs/VulkanSDK-Linux-Docs-1.4.350.1/` per `AGENTS.md §3`.
@@ -216,7 +216,7 @@ release builds, **но** Zen kernel не обязательно = mainline user 
 | `zram0`   | 31.4 GiB  | —                    | 0    | RAM  | swap    |
 
 `/home` = NVMe. ProjectV source tree, build dir, snapshots = NVMe = fast.
-`/tmp` = tmpfs 32 GiB = RAM = ultra-fast (per `agent/knowledge.md §17`).
+`/tmp` = tmpfs 32 GiB = RAM = ultra-fast (per `agent/knowledge.md`).
 Bulk storage (saves, captures) = HDD = slow. **Stage 1.3 async audio scan, Stage 4.1 batch world gen** — test on NVMe (
 representative), validate on HDD (worst-case disk).
 
@@ -245,7 +245,7 @@ representative), validate on HDD (worst-case disk).
 ## 9. Cross-refs
 
 - `docs/experiments/AGENTS.md` §15 — где смотреть на этот файл (читать до `lscpu`/`vulkaninfo`/`nvidia-smi`).
-- `agent/knowledge.md` §17 — multiplatform baseline (Arch Linux + clang-native + lld + libstdc++).
-- `agent/knowledge.md` §4 — build / verification contract (ctest baseline, Tracy instrumentation rules).
+- `agent/knowledge.md` — multiplatform baseline (Arch Linux + clang-native + lld + libstdc++).
+- `agent/knowledge.md` — build / verification contract (ctest baseline, Tracy instrumentation rules).
 - `legacy/docs/VulkanSDK-Linux-Docs-1.4.350.1/` — vendored Vulkan 1.4 SDK docs (read before rg/grep headers).
 - `TODO.md` — stage cross-refs (each stage reads specific section above).

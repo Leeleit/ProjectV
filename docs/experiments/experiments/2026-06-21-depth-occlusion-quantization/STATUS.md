@@ -15,7 +15,7 @@
 
 **Verdict:** `yes` (с оговорками: real Vulkan prototype + cross-vendor + shadow PCF caveat per DXVK PR #5564).
 
-**Mainline integration:** 3-step migration per `agent/knowledge.md §30.4` precedent — Step 1 (XS, ~30 LoC) foundation + D16 depth attachment, Step 2 (S, ~80 LoC) reverse-Z + HZB integration, Step 3 (S, ~50 LoC) multi-attachment rollout. Total ~160 LoC across 4-6 files, S effort, 3-4 sessions.
+**Mainline integration:** 3-step migration per `agent/knowledge.md` precedent — Step 1 (XS, ~30 LoC) foundation + D16 depth attachment, Step 2 (S, ~80 LoC) reverse-Z + HZB integration, Step 3 (S, ~50 LoC) multi-attachment rollout. Total ~160 LoC across 4-6 files, S effort, 3-4 sessions.
 
 **Caveats:**
 1. **Real Vulkan prototype needed** для GPU time + cross-vendor + visual artifacts.

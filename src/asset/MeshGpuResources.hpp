@@ -1,6 +1,6 @@
 #pragma once
 
-#include <string>
+#include <string> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "asset/MeshBaker.hpp"
 #include "vk_mem_alloc.h"

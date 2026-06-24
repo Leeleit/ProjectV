@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Date opened:** 2026-06-21
 **Date closed:** N/A
-**Stage link:** independent (cross-cutting profiling, foundation для `agent/knowledge.md §4` build/verification contract + future Stage 5.x async-compute profiling)
+**Stage link:** independent (cross-cutting profiling, foundation для `agent/knowledge.md` build/verification contract + future Stage 5.x async-compute profiling)
 **Estimated effort:** S (analytical + minimal prototype)
 **Author:** self
 
@@ -186,7 +186,7 @@ build/run заменит их на измеренные (см. `prototype/script
      calibration drift more aggressive.
    - **Apple Metal** (Mac, iOS): Tracy v0.12+ Metal GPU profiling added
      (release notes). Not in ProjectV scope (Linux/Win only per
-     `agent/knowledge.md §17`).
+     `agent/knowledge.md`).
 
 **Expected measured results (from prototype operator run):**
 
@@ -365,10 +365,10 @@ Per-config verdicts:
 ≥15, C=`yes`, D=`yes` for ≥8 passes + `mixed` for ≤3.
 
 **Target stage:** independent (cross-cutting), применяется ко всем Stages 0.x/2.x/3.x/5.x
-где Tracy GPU используется в mainline. Foundation для `agent/knowledge.md §4`
+где Tracy GPU используется в mainline. Foundation для `agent/knowledge.md`
 build/verification contract.
 
-**Конкретные изменения в mainline (3-step migration per `agent/knowledge.md §30.4`):**
+**Конкретные изменения в mainline (3-step migration per `agent/knowledge.md`):**
 
 1. **`src/debug/ProfilingGpu.hpp`** — добавить новый macro `PV_PROFILE_GPU_ZONE_MANUAL`:
    ```cpp
@@ -443,7 +443,7 @@ build/verification contract.
 - Diagnostic coverage top-3 passes: 100% preserved (Tracy GPU timeline) — by design. ✓
 
 **Зависимости:**
-- `agent/knowledge.md §4` build/verification contract.
+- `agent/knowledge.md` build/verification contract.
 - `dec-pipelines-async-compute` (closed 2026-06-20, verdict=yes) — async foundation для
   per-queue Tracy contexts.
 - `vulkan-fps-pacing-vk-ext` (closed 2026-06-20, verdict=mixed) — frame budget context.
@@ -476,7 +476,7 @@ build/verification contract.
 
 Дополнительные cross-refs:
 
-- `agent/knowledge.md §4` — build / verification contract (Tracy instrumentation rules).
+- `agent/knowledge.md` — build / verification contract (Tracy instrumentation rules).
 - `src/debug/ProfilingGpu.hpp:54-159` — ProjectV current Tracy GPU integration (`TryCreateCalibratedTracyGpuContext`).
 - `src/render/vulkan/VulkanInit.cpp:21-110` — `CreateTracyGpuContext` + `TryCreateCalibratedTracyGpuContext` flow.
 - `dec-pipelines-async-compute` (closed 2026-06-20, verdict=yes) — async-compute foundation; предпосылка для multi-context Tracy overhead.

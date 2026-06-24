@@ -113,7 +113,7 @@ Cross-vendor matrix for `VK_IMAGE_CREATE_ALIAS_BIT` + `vkBindImageMemory2` overl
    ~1-2% additional VRAM savings vs greedy.
 4. **Single-GPU dev host.** RTX 3060 Ti (Ampere GA104). Cross-vendor validation deferred.
 5. **No mutation cost measured.** Chunk rebuilds create transient pressure spikes (per
-   `agent/knowledge.md §30.4` precedent). Out of scope для single-session.
+   `agent/knowledge.md` precedent). Out of scope для single-session.
 6. **Aliasing pairs counted only.** Real implementation needs cache-line alignment + sub-allocation
    padding (~5% overhead, included in pool_overhead).
 

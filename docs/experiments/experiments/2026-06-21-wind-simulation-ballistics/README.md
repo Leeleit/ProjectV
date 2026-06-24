@@ -42,7 +42,7 @@ ns/proj).
 
 ## 2. Prior art
 
-Web-research complete via direct `webfetch` + Wikipedia (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`
+Web-research complete via direct `webfetch` + Wikipedia (Exa HTTP 429 persistent per the web_search fallback chain
 line 1424). **7 primary + 3 supplementary sources verified** in [`sources.md`](./sources.md):
 
 - **Jos Stam, "Stable Fluids"** SIGGRAPH 1999 — canonical reference for unconditional stable NS solver.
@@ -246,7 +246,7 @@ session per `agent/workspace.md §2` line 36 operator planning decision.
 
 **Caveats:**
 - PSNR reference is biased (uses same Perlin formula as D); real GPU ground-truth comparison deferred.
-- All CPU prototype, no GPU dispatch (expected 5-10× speedup on RTX 3060 Ti per `agent/knowledge.md §17`).
+- All CPU prototype, no GPU dispatch (expected 5-10× speedup on RTX 3060 Ti per `agent/knowledge.md`).
 - Per-cell cost extrapolation to 256³ (cross-vendor / next-gen): 64× cells of 64³ = 1.6-25.6× per-tick cost. 256³
   GPU compute required (CPU 64³ already 19-119× over budget).
 - No smoke/cloud/grass shader wiring measured (Step 2-3 deferred до mainline integration).
@@ -283,12 +283,12 @@ Key sources:
 - The prototype models the **3D wind field tick** hot path: per-frame update of wind velocity per voxel cell, used
   downstream by ballistics, smoke, grass, clouds.
 - **Hardware baseline:** см. [`docs/experiments/hardware-profile.md`](../../hardware-profile.md) §1 (Zen 3 5800X
-  8C/16T, governor=`powersave` per `agent/knowledge.md §17`), §3 (RTX 3060 Ti GA104 Ampere, 8 GiB VRAM, Vulkan
+  8C/16T, governor=`powersave` per `agent/knowledge.md`), §3 (RTX 3060 Ti GA104 Ampere, 8 GiB VRAM, Vulkan
   1.4.341), §4 (`VK_KHR_synchronization2` + `VK_KHR_dynamic_rendering`). Data captured `2026-06-21`, dev host
   `obvium`.
 - **Unmeasured:**
   - Real GPU compute shader dispatch overhead (Vulkan `vkCmdDispatch` + synchronization) — expected 5-10×
-    speedup over CPU per `agent/knowledge.md §17`.
+    speedup over CPU per `agent/knowledge.md`.
   - Per-projectile wind sample (currently modelled as single lookup at 4 ns, real mainline may have spatial
     caching overhead).
   - Cross-vendor GPU performance (AMD RDNA, Intel Arc Battlemage).

@@ -38,7 +38,7 @@
 
 ## 2. Prior art
 
-Web research via direct `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list; used Brave Search as primary fallback).
+Web research via direct `webfetch` (Exa HTTP 429 + DuckDuckGo CAPTCHA blocked per the web_search fallback chain; used Brave Search as primary fallback).
 
 **Key production precedents:**
 - **From the Depths** (Brilliant Skies) — JSON-based vehicle saves + `plugin.json` mod manifests; `FtD_version: "v2.15"` field; integrated Steam Workshop. Source: fromthedepths.wiki.gg/wiki/Vehicle, Steam Community.
@@ -139,7 +139,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic defs_benc
 
 ## 7. Integration recommendation
 
-**Recommended 3-tier mainline architecture (per `agent/knowledge.md §30.4` precedent, ~600 LoC total, M effort, 2-3 sessions):**
+**Recommended 3-tier mainline architecture (per `agent/knowledge.md` precedent, ~600 LoC total, M effort, 2-3 sessions):**
 
 - **Target stage:** Stage 4.x asset pipeline foundation (deferred to dedicated session per `agent/workspace.md §2`).
 - **Конкретные изменения:**

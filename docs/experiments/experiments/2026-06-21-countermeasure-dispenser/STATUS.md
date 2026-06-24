@@ -12,7 +12,7 @@
 - 2026-06-21 — Opened experiment, claimed slug per AGENTS.md §13.1 + §13.7 sentinel
   clean (sibling experiments: cable-winch-towing, tracy-gpu-vs-manual, gpu-fluid-ca-atomic-strategy, factory-production-system — all orth axes).
 - 2026-06-21 — Web-research complete via DuckDuckGo HTML endpoint (Exa HTTP 429
-  persistent per `agent/knowledge.md Part B §9` line 1424 fallback list): 12+ primary
+  persistent per the web_search fallback chain): 12+ primary
   sources verified. sources.md complete.
 - 2026-06-21 — Prototype design complete: 5 strategies × 5 scenes × 5 seeds × 1000
   iter + 10 warmup = 125,000 main + 12,500 warmup. Parametric decoy model

@@ -1,7 +1,7 @@
 # Sources — `2026-06-22-squad-fire-team-command`
 
 Web-research via direct `webfetch` to canonical Wikipedia URLs (Exa `web_search` HTTP 429 persistent +
-DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` line 1424 fallback list;
+DuckDuckGo HTML endpoint CAPTCHA blocked per the web_search fallback chain;
 8 primary sources verified):
 
 ---
@@ -78,7 +78,7 @@ DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` lin
 
 ## Cross-references (closed ProjectV experiments, not new sources)
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent (~400 LoC, S effort, 1-2 sessions)
+- `agent/knowledge.md` — 3-step migration precedent (~400 LoC, S effort, 1-2 sessions)
 - `agent/workspace.md §2` — operator 8x planning decision (Stage 6+ military sandbox activation)
 - `2026-06-21-hierarchical-tactical-ai-btree` [mixed, Tier 2 AI] — per-unit BT (180-263 ns/u/tick)
 - `2026-06-21-group-formation-maneuver-axis` [closed mixed, Tier 2 AI] — formation positioning (per-slot assignment analog)
@@ -98,7 +98,7 @@ DuckDuckGo HTML endpoint CAPTCHA blocked per `agent/knowledge.md Part B §9` lin
 
 ## Notes
 
-- **Exa `web_search` HTTP 429 persistent this session** per `agent/knowledge.md Part B §9` line 1424 fallback list.
+- **Exa `web_search` HTTP 429 persistent this session** per the web_search fallback chain.
 - **DuckDuckGo HTML endpoint CAPTCHA blocked** per same source.
 - **Wikipedia direct `webfetch` working** (no rate limit detected for direct article URLs).
 - All 8 primary sources = Tier 1 (Wikipedia) for doctrine/game-AI references.

@@ -161,7 +161,7 @@
 ## Cross-references в mainline
 
 - **TODO.md §5** (Stage 5 Visual Polish — god rays **not currently planned** — это новая ось, deferred).
-- **`agent/knowledge.md §30.4`** 3-step migration precedent (Step 1 foundation + Step 2 strategy +
+- **`agent/knowledge.md`** 3-step migration precedent (Step 1 foundation + Step 2 strategy +
   Step 3 default flip + Tracy plot + test target).
 - **`docs/experiments/experiments/2026-06-21-volumetric-fog-atmosphere-rendering/`** (closed mixed) —
   complementary axis (fog = near-atmospheric scattering, god rays = directional sun shafts через occluders).

@@ -6,6 +6,6 @@
 // (Hillaire slide 28: per-slice integral = slice * (1 - transmittance) / density).
 // If changed in one shader, MUST change in the other — otherwise fog sampling
 // happens at wrong depths.
-const float kFogDepthDistributionExp = 0.5;    // pow exponent for normalizedDepth
+const float kFogDepthDistributionExp = 0.5;    // pow exponent for normalizedDepth // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 const float kFogDepthDistributionScale = 0.995; // 1.0 - bias, keeps within [0, 1]
 const float kFogDepthDistributionBias = 0.005;  // near-plane offset, avoids 0-t at zero depth

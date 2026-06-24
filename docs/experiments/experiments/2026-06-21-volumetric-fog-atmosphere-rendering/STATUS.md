@@ -14,7 +14,7 @@ WINNER RTX 3060 Ti** (1.79 ms mean / 38.75 dB PSNR / 12.39 MiB VRAM / scene-cove
 mainline baseline (8.45 dB PSNR — NOT real volumetric fog)**. **C_FullRayMarch / E_Hybrid = quality/flexibility winners
 but exceed 5 ms budget on heavy scenes — defer до RTX 4080-class hardware** per elliahu benchmarks.
 **Next:** operator review + mainline integration deferred до Stage 5.x dedicated session per `agent/workspace.md §2`
-line 36 operator 8x planning decision. 3-step migration per `agent/knowledge.md §30.4` precedent = ~480 LoC, M effort,
+line 36 operator 8x planning decision. 3-step migration per `agent/knowledge.md` precedent = ~480 LoC, M effort,
 2-3 sessions.
 
 ---

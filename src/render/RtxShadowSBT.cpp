@@ -1,4 +1,4 @@
-#include "render/RtxShadowSBT.hpp"
+#include "render/RtxShadowSBT.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <algorithm>
 #include <vector>

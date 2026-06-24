@@ -251,7 +251,7 @@ Standalone C++26 CPU prototype (per `wfc`/`lod-mesh`/`sub-chunk` precedent) — 
 
 ## 7. Integration recommendation
 
-Per `agent/knowledge.md §30.4` 3-step migration precedent. **Conditional adoption based on v1 prototype findings:**
+Per `agent/knowledge.md` 3-step migration precedent. **Conditional adoption based on v1 prototype findings:**
 
 ### Recommended for immediate integration (XS, ~50 LoC)
 

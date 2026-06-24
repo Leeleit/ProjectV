@@ -202,7 +202,7 @@ before reconsideration).
 
 **Universal default:** `F_Hybrid_B_E` (virtual anchor + light repulsion).
 
-**Migration per `agent/knowledge.md §30.4`** (~400 LoC, S effort, 1-2 sessions):
+**Migration per `agent/knowledge.md`** (~400 LoC, S effort, 1-2 sessions):
 
 - **Step 1 (XS, ~50 LoC):** `src/ai/FormationSystem.{hpp,cpp}` foundation + `FormationStrategy` enum +
   `PROJECTV_FORMATION=HYBRID|VIRTUAL_ANCHOR|HIERARCHICAL` env gate (default `HYBRID`).

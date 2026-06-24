@@ -1,6 +1,6 @@
 # Sources — 2026-06-21-cable-winch-towing
 
-**Web-research via direct `webfetch` to canonical URLs.** Exa `web_search` HTTP 429 persistent per `agent/knowledge.md Part B §9` line 1424 fallback list. DuckDuckGo HTML endpoint CAPTCHA blocked.
+**Web-research via direct `webfetch` to canonical URLs.** Exa `web_search` HTTP 429 persistent per the web_search fallback chain. DuckDuckGo HTML endpoint CAPTCHA blocked.
 
 **Captured:** 2026-06-21.
 

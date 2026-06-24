@@ -1,7 +1,7 @@
 # Sources — 2026-06-21-renderdoc-ci-capture
 
 > **Capture date:** 2026-06-21 (single session).
-> **Method:** webfetch + DuckDuckGo HTML fallback (Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`).
+> **Method:** webfetch + DuckDuckGo HTML fallback (Exa HTTP 429 persistent per the web_search fallback chain).
 > **Dev host:** `obvium` Arch Linux Zen 3 5800X / RTX 3060 Ti / Vulkan 1.4.341 per `hardware-profile.md §1+§3`.
 
 ---
@@ -138,7 +138,7 @@
 
 ## ProjectV mainline cross-references (verified `2026-06-21`)
 
-- `agent/knowledge.md §547` — `PROJECTV_ENABLE_RENDERDOC_MARKERS` contract documentation (Debug default ON,
+- `agent/knowledge.md` — `PROJECTV_ENABLE_RENDERDOC_MARKERS` contract documentation (Debug default ON,
   `linux-clang-debug` preset OFF, gated compile-time, `PV_PROFILE_GPU_LABEL` / `PV_PROFILE_GPU_LABEL_COLOR`
   macros, volk function pointers для `VK_EXT_debug_utils` always enabled).
 - `src/debug/ProfilingGpu.hpp:14,161,203` — existing RenderDoc marker integration (conditional on
@@ -147,21 +147,21 @@
   `PROJECTV_ENABLE_VALIDATION || PROJECTV_ENABLE_RENDERDOC_MARKERS`).
 - `src/render/vulkan/VulkanDebug.cpp:9` — debug utils integration (conditional on
   `!PROJECTV_ENABLE_RENDERDOC_MARKERS` — i.e. debug utils used when RenderDoc markers NOT enabled).
-- `agent/knowledge.md §810` — `RecordGraphicsCommands` 5 sub-passes (shadow / meshing / taaResolve /
+- `agent/knowledge.md` — `RecordGraphicsCommands` 5 sub-passes (shadow / meshing / taaResolve /
   debugOverlay / debugHud), `TaaRenderTargets.hpp`, `kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT`.
-- `agent/knowledge.md §4` — build/verification contract.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — build/verification contract.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `TODO.md §Stage 0` — cross-cutting DoD «reproducibility».
 
 ## ProjectV pipeline enumeration (12 Vulkan passes per Stage 0-6 + Stage 5.x planned)
 
-Per `TODO.md §Stage 0-6` + `agent/knowledge.md §810` + RenderDoc pass enumeration pattern:
+Per `TODO.md §Stage 0-6` + `agent/knowledge.md` + RenderDoc pass enumeration pattern:
 
 1. **Depth prepass** (`TODO.md §2.2`) — depth-only forward pass, 1080p ≈ 8.3 MiB depth attachment.
 2. **HZB cull compute** (`TODO.md §2.1`) — `RecordHzbCullingDispatch` + `hizVisibleCountBuffer` SSBO,
    4 B/chunk atomicAdd per visible chunk.
 3. **HIZ mip chain build** (`TODO.md §2.1`) — `BuildHizMipChain` compute, ~10 mip levels for 1080p.
-4. **voxel_mesh dispatch** (`TODO.md §2.2` / Pattern C) — compute or mesh shader per `agent/knowledge.md §32`,
+4. **voxel_mesh dispatch** (`TODO.md §2.2` / Pattern C) — compute or mesh shader per `agent/knowledge.md`,
    per-chunk greedy emit.
 5. **CSM shadow cascade** (`TODO.md §Stage 0`) — 4 cascades, depth-only.
 6. **Opaque forward pass** — `RenderGraphicsCommands` main pass (5 sub-passes).
@@ -172,7 +172,7 @@ Per `TODO.md §Stage 0-6` + `agent/knowledge.md §810` + RenderDoc pass enumerat
 10. **TAA resolve** (`TODO.md §5.3`, planned Stage 5.3) — `taa_resolve.frag` consume R16G16_SFLOAT
     motion vectors.
 11. **Transparent forward pass** (`TODO.md §Stage 0`) — sorted back-to-front transparent.
-12. **UI / debug overlay** (`agent/knowledge.md §810` debugOverlay + debugHud).
+12. **UI / debug overlay** (`agent/knowledge.md` debugOverlay + debugHud).
 
 ---
 
@@ -181,7 +181,7 @@ Per `TODO.md §Stage 0-6` + `agent/knowledge.md §810` + RenderDoc pass enumerat
 - **`renderdoccmd` не установлен на dev host `obvium`** (verified `which renderdoccmd` → not found
   2026-06-21). Production validation = mainline scope, не this experiment. CPU-only analytical overhead
   model + CMakeLists/CTest integration design (а не реальный `renderdoccmd --capture` execution).
-- **Exa HTTP 429 persistent per `agent/knowledge.md Part B §9`**; used `webfetch` + DuckDuckGo HTML
+- **Exa HTTP 429 persistent per the web_search fallback chain**; used `webfetch` + DuckDuckGo HTML
   fallback throughout Phase B.
 - **Sources freshness:** all primary RenderDoc docs fetched `2026-06-21` (RenderDoc v1.44 latest as of
   fetch). Industry CI tools (`rdc-cli`, `vision-regression-kit`) latest 2026 Q1-Q2.

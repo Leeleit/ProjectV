@@ -68,7 +68,7 @@ fallback); `C_SSR_HiZ_Trace` для no-HW-RT scenarios (AMD RDNA 2 pre-2025); `B
 ## 2. Prior art
 
 Web-research Phase A complete via `web_search` (Exa) + DuckDuckGo HTML + `webfetch` fallback per
-`agent/knowledge.md Part B §9` (Exa HTTP 429 persistent, DuckDuckGo primary).
+the web_search fallback chain (Exa HTTP 429 persistent, DuckDuckGo primary).
 
 - **Yu 2016 «Screen-space reflections on the GPU: an implementation»** (Yu X. GDC 2016, common SSR pattern
   reference, HiZ-trace fragment shader approach, 4-8 rays per pixel, jittered ray distribution, fallback to
@@ -247,7 +247,7 @@ fallback для no-HW-RT scenarios.
 **Target stage:** `TODO.md §5.2` (аппаратные отражения через Ray Query при `roughness < 0.3`) +
 Stage 5.1 VCT cutoff=0.3 integration per closed `2026-06-20-vct-vs-rt-cutoff` mixed.
 
-**3-step migration per `agent/knowledge.md §30.4` precedent:**
+**3-step migration per `agent/knowledge.md` precedent:**
 
 **Step 1 (XS, ~50 LoC):** `PROJECTV_REFLECTIONS=NONE|PROBE|SSR|RTX_1RAY|RTX_STOCHASTIC|RTX_HIERARCHICAL|RTX_TEMPORAL`
 env flag + `ReflectionStrategy::SelectStrategy()` dispatcher + `VK_KHR_ray_query` probe через

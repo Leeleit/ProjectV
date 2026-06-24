@@ -144,7 +144,7 @@ Output: `prototype/build/results.csv` (1651 rows = 1 header + 1650 data) + `prot
 
 **Recommended production default:** `E_Hybrid_ModalGranular` per the `garjan` rust crate pattern (modal + granular + noise, SIMD-friendly SoA layout).
 
-**3-step migration per `agent/knowledge.md §30.4` precedent (~450 LoC, S-M effort, 1-2 sessions):**
+**3-step migration per `agent/knowledge.md` precedent (~450 LoC, S-M effort, 1-2 sessions):**
 
 - **Step 1 (XS, ~80 LoC):** `src/audio/MaterialAudio.{hpp,cpp}` — `MaterialAudioSystem` foundation + `MaterialAudioStrategy` enum (`SAMPLE_BASED | MODAL | GRANULAR | HYBRID`) + `PROJECTV_MATERIAL_AUDIO=HYBRID` env gate (default `HYBRID`). Material property table (11 materials × 8 modal freqs + grain rate + loss factor).
 

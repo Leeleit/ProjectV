@@ -23,7 +23,7 @@ family).
     - **Workload A (light):** 3D box-filter blur 64³, 8 substeps — models Stage 5.1 VCT mip generation
     - **Workload B (medium):** HZB cull — 4096 chunk AABBs vs 8-mip HZB, 4 substeps per mip — models Stage 2.2
     - **Workload C (heavy):** Fluid CA ping-pong 64³, 4 substeps, atomicOr claims — models Stage 3.1 per
-      `agent/knowledge.md §30.4`
+      `agent/knowledge.md`
 - **Graphics dummy:** full-screen triangle, 1920×1080, dynamic rendering — baseline render pass
 - **Multiplier:** each compute workload dispatched **16 times per frame** to give GPU non-trivial work
   (realistic for ProjectV fluid CA 16 substeps per tick)

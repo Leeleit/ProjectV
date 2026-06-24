@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 // 2026-06-21-wind-simulation-ballistics — standalone C++26 CPU prototype.
-// AGENTS.md §8: no narrative comments in code (per COMMENTS.md discipline).
 // Math sources: Stam SIGGRAPH 1999, Fedkiw 2001 vorticity confinement, Bridson 2007
 // curl noise, Selle 2005. Public-domain analytical cost model — no ProjectV mainline.
 

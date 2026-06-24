@@ -185,7 +185,7 @@ For ProjectV Stage 6+ persistent sandbox: **D = DEFAULT for production save; E =
 
 **Target stage:** Stage 4.3 / Stage 6+ (deferred до dedicated session per `agent/workspace.md §2` line 36 operator 8x planning decision).
 
-**Per `agent/knowledge.md §30.4` 3-step migration pattern:**
+**Per `agent/knowledge.md` 3-step migration pattern:**
 
 ### Step 1 (XS, ~80 LoC) — immediate
 Create `src/save/SaveController.{hpp,cpp}` with:

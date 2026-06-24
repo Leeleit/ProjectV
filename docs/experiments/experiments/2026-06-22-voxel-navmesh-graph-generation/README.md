@@ -178,7 +178,7 @@ clang++ -std=c++26 -O3 -march=native -DNDEBUG -Wall -Wextra -Wpedantic -o build/
 
 > **Status:** pending (Phase 3 — after prototype complete).
 
-Per `agent/knowledge.md §30.4` precedent (3-step mainline migration):
+Per `agent/knowledge.md` precedent (3-step mainline migration):
 - Step 1 (XS-S, ~80-150 LoC): `src/voxel/NavmeshChunk.{hpp,cpp}` + `NavmeshStrategy` enum + `PROJECTV_NAVMESH=OFF|NaiveGrid|HeightField|RecastStyle|SurfaceGraph|Hybrid3D` env gate (default `Hybrid3D`).
 - Step 2 (M, ~400-600 LoC): per-strategy implementation + Flecs `NavmeshChunkComponent` + `NavmeshGenerationSystem` per 0.1-1 Hz tick + integration with `flow-field-pathfinding-10k-units` (consume navmesh as input) + `voxel-chunk-streaming-pipeline` (add/remove chunks).
 - Step 3 (S, ~150-200 LoC): `ProjectVNavmeshTests` (5 unit + 5 integration) + Tracy plot "Navmesh Gen" + "Navmesh Query" + "Navmesh Storage" + `PROJECTV_NAVMESH_UPDATE_HZ=0.5` env (default 0.5 Hz = once per 2 sec) + `PROJECTV_NAVMESH_LOD=DETAIL|MEDIUM|COARSE` env (default DETAIL = per 8³ chunk; MEDIUM = per 16³; COARSE = per 32³).
@@ -194,7 +194,7 @@ Per `agent/knowledge.md §30.4` precedent (3-step mainline migration):
 ---
 
 **Cross-refs:**
-- `agent/knowledge.md` §30.4 (3-step migration precedent)
+- `agent/knowledge.md` (3-step migration precedent)
 - `agent/workspace.md` §2 (operator 8x planning, Stage 4.1/6+ deferral)
 - `hardware-profile.md` §1 (Zen 3 5800X dev host, governor=`powersave`)
 - `benchmarks/methodology.md` (measurement protocol)

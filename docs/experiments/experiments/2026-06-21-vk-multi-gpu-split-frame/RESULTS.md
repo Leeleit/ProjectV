@@ -12,7 +12,7 @@
 draw distance + future Stage 5.x VCT/RTX scaling; **4-GPU AFR scales super-linearly (~4.0×)** across ALL
 interconnects including slow PCIe 4.0 (32 GB/s), but **single-GPU dev host can't validate end-to-end**;
 **recommended action: Step 1 API discovery probe (~30 LoC, immediate, additive)** + **Step 2 AFR dispatcher
-opt-in (~300 LoC, Stage 4.3 ship)** per `agent/knowledge.md §30.4` 3-step migration precedent.
+opt-in (~300 LoC, Stage 4.3 ship)** per `agent/knowledge.md` 3-step migration precedent.
 
 ---
 
@@ -140,7 +140,7 @@ not real multi-GPU benchmark. `prototype/api_discovery.cpp` written but not buil
 -lvulkan -o api_discovery` (requires Vulkan 1.4 SDK + volk) and run to validate.
 
 (b) **Web search unavailable** during research (`Exa HTTP 429` × 4 retries per `STATUS.md` blocker).
-Fallback per `agent/knowledge.md Part B §9`: `webfetch` to `docs.vulkan.org/refpages/...` retrieved full
+Fallback per the web_search fallback chain: `webfetch` to `docs.vulkan.org/refpages/...` retrieved full
 Vulkan 1.4 core spec for `VK_KHR_device_group` + `VK_KHR_device_group_creation` + `VkDeviceGroupPresentInfoKHR`
 2026-06-21. **Cross-vendor SOTA numbers (NVLink 4.0/4.1 production, xGMI/IF, PCIe 4.0/5.0)** cited from
 operator's pre-2026 knowledge per §9 fallback policy caveat (NOT verified via fresh web_search 2026-06-21).

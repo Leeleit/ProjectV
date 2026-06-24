@@ -120,7 +120,7 @@ Web research complete (20+ primary sources verified). См. `sources.md` for ful
 
 **Location:** `prototype/military_terrain_bench.cpp` (target ~600-800 LoC).
 
-**Build (per `agent/knowledge.md §17` Linux baseline):**
+**Build (per `agent/knowledge.md` Linux baseline):**
 
 ```bash
 cd prototype/build && \
@@ -182,7 +182,7 @@ cd prototype/build && \
 
 ## 7. Integration recommendation
 
-**Target stage:** `TODO.md §4.1` (GPU world gen) — **additive optional path** per `agent/knowledge.md §30.4` Step 1.
+**Target stage:** `TODO.md §4.1` (GPU world gen) — **additive optional path** per `agent/knowledge.md` Step 1.
 
 **Concrete mainline changes** (3-step migration per §30.4 precedent, **~600 LoC**, **S-M effort**, **2-3 sessions**):
 

@@ -1,6 +1,6 @@
 #version 460
 
-#include "common/common_constants.glsl"
+#include "common/common_constants.glsl" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 struct MaterialVisual {
     vec4 baseColor;
@@ -155,7 +155,7 @@ vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir,
         return color;
     }
 #endif
-    return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
+    return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y * 0.4; // EVIL: dampened sky on miss — kills bright punctual sky dots from reflection ray on glass/fluid silhouettes (P1B-2).
 }
 
 const float kRtxAoMinRayLengthMeters = 0.001;
@@ -786,12 +786,12 @@ vec3 TraceRtxRefractionRay(const vec3 worldOrigin, const vec3 refractionDir, con
     uint hitMat;
     vec3 hitNormal;
     
-    if (TraceVoxelIntersection(worldOrigin, refractionDir, maxDistance, hitT, hitMat, hitNormal, true, true, gl_RayFlagsNoOpaqueEXT)) {
+    if (TraceVoxelIntersection(worldOrigin, refractionDir, maxDistance, hitT, hitMat, hitNormal, true, false, gl_RayFlagsNoOpaqueEXT)) { // EVIL: ignoreFluid=false — refracted ray must see fluid interior of glass sphere, otherwise it tunnels through both media into open sky (white dots, P1B-1).
         vec3 hitPos = worldOrigin + refractionDir * hitT;
         return EvaluateVoxelLighting(hitPos, hitNormal, hitMat, -refractionDir);
     }
     
-    return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y;
+    return sceneLighting.skyColorAndFogDensity.rgb * sceneLighting.postProcess.y * 0.4; // EVIL: dampened sky on miss — kills bright punctual sky leak when refracted ray escapes the sphere upward (P1B-1).
 }
 #endif
 

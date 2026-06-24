@@ -81,7 +81,7 @@ Web-research via DuckDuckGo HTML + webfetch (Exa HTTP 429 persistent per operato
 
 ### Adjacent ProjectV references
 
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 - `src/render/SceneResources.cpp` — `BuildMaterialVisualTable()`, `materials[inMaterialIndex]` SSBO lookup
 - `src/shaders/voxel.frag:3-8` — `MaterialVisual` struct (64 B: baseColor, surface, medium, shading)
 - `src/shaders/voxel.frag:744` — `const MaterialVisual material = materials[inMaterialIndex]`
@@ -336,7 +336,7 @@ independent (modding / visual customization) — deferred to Stage 6+ (post-MVP 
 - Optional: `libslang` for Slang→WGSL→SPIR-V pipeline (deferred)
 - Mainline `src/app/main.cpp:57-80` `RebuildAllShadersFromDisk()` — can be reused for
   compile-triggered rebuild of the uber-shader template
-- `agent/knowledge.md §30.4` — 3-step migration precedent
+- `agent/knowledge.md` — 3-step migration precedent
 
 ---
 

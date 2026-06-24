@@ -285,7 +285,7 @@
 ## Source quality notes
 
 - **Exa `web_search` working this session** (2026-06-22, no HTTP 429 or CAPTCHA
-  per `agent/knowledge.md Part B §9` fallback list). All 15 sources above
+  per the web_search fallback chain). All 15 sources above
   fetched via direct `web_search` + `webfetch` of Wikipedia and ProjectEuclid
   URLs.
 - **All quotes verbatim** from source. Year, author, and URL recorded.

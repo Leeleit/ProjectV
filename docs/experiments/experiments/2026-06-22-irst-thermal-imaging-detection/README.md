@@ -44,7 +44,7 @@
 
 ## 2. Prior art
 
-Web-research complete via direct `webfetch` to canonical Wikipedia primary per `agent/knowledge.md Part B §9`
+Web-research complete via direct `webfetch` to canonical Wikipedia primary per the web_search fallback chain
 line 1424 fallback list (Exa `web_search` HTTP 429 + DuckDuckGo HTML endpoint CAPTCHA blocked this session).
 **4 Tier 1 primary + 2 Tier 1 cross-references = 6 sources verified** — см. [`sources.md`](./sources.md) for full
 extraction of cited quotes.
@@ -170,7 +170,7 @@ A and B are fallback for performance-constrained scenarios (>5000 targets/frame)
 describes the suggested architecture for mainline adoption, no specific Stage tier pre-assigned. Mainline-агент
 can pick the stage when ready.
 
-**Architecture suggestion (3-step per `agent/knowledge.md §30.4` precedent):**
+**Architecture suggestion (3-step per `agent/knowledge.md` precedent):**
 
 - **Step 1 (XS, ~80 LoC)** `src/sensor/IstSystem.{hpp,cpp}` — Flecs `IstDetectionComponent` per-entity + per-target
   update function + `IsIstSystemEnabled()` env gate + `PROJECTV_IRST_STRATEGY=A|B|C|D|E` env (default `C`).

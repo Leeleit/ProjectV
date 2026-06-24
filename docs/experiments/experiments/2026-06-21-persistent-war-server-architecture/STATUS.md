@@ -40,7 +40,7 @@ Per strategy at foxhole_war=1000 players (mean across 5 seeds):
 
 ## Next steps for mainline (deferred до Stage 6+)
 
-Per `agent/knowledge.md §30.4` precedent, 3-step migration (~1200 LoC, M-L effort, 3-5 sessions):
+Per `agent/knowledge.md` precedent, 3-step migration (~1200 LoC, M-L effort, 3-5 sessions):
 1. `src/server/RealmCore.{hpp,cpp}` (~300 LoC) — NATS JetStream + RAFT R=3 + sync_interval=always + realm sharding.
 2. `src/server/RealmOrchestrator.{hpp,cpp}` (~600 LoC) — Agones FleetAutoscaler + per-realm pod lifecycle + cross-realm event routing + player migration.
 3. `src/server/PersistenceSnapshot.{hpp,cpp}` (~300 LoC) — periodic event-log snapshot + recovery replay + `PROJECTV_SERVER_ARCH=HYBRID|REALM_NATS|AGONES|POSTGRES|DEV` env gate (default `HYBRID`) + Tracy plot + unit test.

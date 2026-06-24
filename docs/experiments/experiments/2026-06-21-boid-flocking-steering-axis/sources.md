@@ -1,7 +1,7 @@
 # Sources — `2026-06-21-boid-flocking-steering-axis`
 
 > **Web-research access log (2026-06-21):**
-> - ❌ Exa `web_search` HTTP 429 (persistent per `agent/knowledge.md Part B §9` line 1424 fallback list)
+> - ❌ Exa `web_search` HTTP 429 (persistent per the web_search fallback chain)
 > - ❌ DuckDuckGo HTML endpoint — CAPTCHA blocked
 > - ❌ Startpage — 0 results (likely index sync issue)
 > - ❌ Brave Search — 429
@@ -14,7 +14,7 @@
 >   Saska 2014, Min 2011)
 > - **Total Tier 3 production precedents: 3** (Half-Life 1998, Batman Returns 1992, PSO 1995)
 >
-> Per `agent/knowledge.md Part B §9` fallback discipline, this is the maximum achievable coverage given
+> Per the web_search fallback chain discipline, this is the maximum achievable coverage given
 > the access constraints this session.
 
 ---
@@ -187,8 +187,8 @@
 
 ## Cross-references — ProjectV mainline
 
-- **agent/knowledge.md §30.4** — 3-step migration precedent.
-- **agent/knowledge.md §17** — multiplatform baseline (Linux + clang-native + lld + libstdc++).
+- **`agent/knowledge.md`** — 3-step migration precedent.
+- **`agent/knowledge.md`** — multiplatform baseline (Linux + clang-native + lld + libstdc++).
 - **agent/workspace.md §2** — operator 8x planning decision Stage 6+ military sandbox.
 - **TODO.md** — Stage 0/2/4/5/6 cross-refs.
 - **hardware-profile.md §1** — Zen 3 5800X dev host with AVX2 + FMA + BMI2 (no AVX-512).

@@ -66,11 +66,11 @@
 
 ## 5. Key observations
 
-1. **A_NaiveInPlace baseline is FAST for 8³ chunks.** Per-edit cost = 16 ns (256 edits in 4 µs). **NOT the mainline bottleneck.** Mesh rebuild + physics rebuild queue + greedy meshing per closed `2026-06-21-greedy-physics-meshing-cpu` (~50 µs per chunk) dominates per `agent/knowledge.md §30.4` Stage 4.1 budget.
+1. **A_NaiveInPlace baseline is FAST for 8³ chunks.** Per-edit cost = 16 ns (256 edits in 4 µs). **NOT the mainline bottleneck.** Mesh rebuild + physics rebuild queue + greedy meshing per closed `2026-06-21-greedy-physics-meshing-cpu` (~50 µs per chunk) dominates per `agent/knowledge.md` Stage 4.1 budget.
 
 2. **B_DirtyFlagDeferred is the clear winner for burst gameplay patterns.** -58% on P5 (1.74 vs 4.16 µs). Mainline already has `VoxelChunk::rebuildQueued` + `pendingChunkRebuildIndices` queue — but **`SetVoxelMaterial` per-call STILL triggers per-call `MarkChunksTouchedByVoxelDirty` + `QueueChunkRebuildRequest(physics)` regardless of whether chunk was edited this frame already**. Per-call SVDAG rebuild is duplicated when same chunk edited multiple times per frame. **Recommended optimization:** coalesce SetCells per chunk per-frame — only rebuild SVDAG subtree ONCE per chunk per-frame, not per-edit. **Estimated effort:** ~30 LoC + env flag.
 
-3. **D_DoubleBufferSwap gives -45% on P5** (2.27 vs 4.16 µs) — wins because bulk clone of already-compressed tree (64 nodes) is cheap relative to N rebuilds. Useful for Stage 1.3 async streamer (per `agent/knowledge.md §17`) where snapshot consistency matters. **Out of mainline scope** unless streamer needs atomic snapshot per-chunk.
+3. **D_DoubleBufferSwap gives -45% on P5** (2.27 vs 4.16 µs) — wins because bulk clone of already-compressed tree (64 nodes) is cheap relative to N rebuilds. Useful for Stage 1.3 async streamer (per `agent/knowledge.md`) where snapshot consistency matters. **Out of mainline scope** unless streamer needs atomic snapshot per-chunk.
 
 4. **C_BatchCoalesce is SLOWER on P5** (+80%, 7.52 vs 4.16 µs). **Surprising finding**: grouping per-chunk adds overhead (hash map for chunk → batch). Only useful if chunk rebuild path is expensive (it's not for synthetic). **Counter-recommendation:** don't add per-chunk grouping layer without first measuring.
 

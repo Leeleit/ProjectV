@@ -36,7 +36,7 @@ Web-research complete (2 batch queries, 15 results, 8+ sources верифици�
 - **basta/wave-collapse 2023** (GLSL + Godot, 1 star) — exploratory GLSL compute shader port, niche.
 - **RWTH Aachen thesis** (cellular automata 3D compute shader benchmark) — **3D compute shader viability**: 60 FPS @ 1023³ grid на GeForce MX330 (low-end). Это CA, не WFC, но 3D compute dispatch на больших grids = OK.
 
-**Cross-refs:** `agent/knowledge.md §29.0` line 887 (Tier 4 R&D marker для Stage 4.1), `TODO.md §4.1`, `agent/workspace.md §1 Phase 1` (world_gen.comp skeleton), `2026-06-21-gpu-procedural-noise-compute-kernels` (closed OpenSimplex2 baseline), `2026-06-20-nanovdb-on-gpu` (chunkSize=8 + depth=2).
+**Cross-refs:** `agent/knowledge.md` (Tier 4 R&D marker для Stage 4.1), `TODO.md §4.1`, `agent/workspace.md §1 Phase 1` (world_gen.comp skeleton), `2026-06-21-gpu-procedural-noise-compute-kernels` (closed OpenSimplex2 baseline), `2026-06-20-nanovdb-on-gpu` (chunkSize=8 + depth=2).
 
 ---
 
@@ -143,7 +143,7 @@ cmake --build prototype/build -j
 
 **Target stage:** `TODO.md §4.1` (GPU Noise & World Gen) — **complementary layer** над OpenSimplex2 baseline.
 
-**Конкретные изменения (3-step migration per `agent/knowledge.md §30.4` precedent):**
+**Конкретные изменения (3-step migration per `agent/knowledge.md` precedent):**
 
 - **Step 1 (XS, ~30 LoC) — RECOMMENDED, immediate:**
   - Add `world_gen_wfc.cpp` skeleton в `src/voxel/` с single tileset (cave).
@@ -194,7 +194,7 @@ cmake --build prototype/build -j
 - `2026-06-21-gpu-procedural-noise-compute-kernels` (OpenSimplex2 baseline) — closed, available.
 - `2026-06-20-nanovdb-on-gpu` (GPU-side flatten) — closed verdict=yes.
 - `2026-06-20-dec-pipelines-async-compute` (async compute for spike isolation) — closed verdict=yes.
-- `agent/knowledge.md §30.4` (3-step migration precedent) — referenced.
+- `agent/knowledge.md` (3-step migration precedent) — referenced.
 
 **Estimated effort:** S total (Steps 1+2 = ~180 LoC, ~1-2 sessions). Step 3 = M deferred.
 
@@ -211,8 +211,8 @@ cmake --build prototype/build -j
 - https://github.com/basta/wave-collapse — 2023, exploratory GLSL compute shader WFC.
 - RWTH Aachen thesis — 3D compute shader benchmark на GeForce MX330 (60 FPS @ 1023³ grid, validates 3D compute viability не-WFC-specific).
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` — 5-10% perf threshold definition (perf axis не passed для WFC 8³ powersave; marginal на boost).
-- `agent/knowledge.md §29.0` line 887 — Tier 4 R&D marker для Stage 4.1.
-- `agent/knowledge.md §30.4` — 3-step migration precedent.
+- `agent/knowledge.md` — Tier 4 R&D marker для Stage 4.1.
+- `agent/knowledge.md` — 3-step migration precedent.
 - `TODO.md §4.1` — GPU Noise & World Gen target stage.
 - `2026-06-21-gpu-procedural-noise-compute-kernels` — closed OpenSimplex2 baseline (complementary axis).
 - `2026-06-20-nanovdb-on-gpu` — closed NanoVDB flatten verdict=yes (SSBO upload format).

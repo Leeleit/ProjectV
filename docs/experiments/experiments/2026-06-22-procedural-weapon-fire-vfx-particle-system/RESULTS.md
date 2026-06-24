@@ -101,7 +101,7 @@ All 5 strategies within **5-10% of 30Hz frame budget (33.33 ms)** on mean:
 
 ---
 
-## Mainline 3-step migration per `agent/knowledge.md §30.4` precedent
+## Mainline 3-step migration per `agent/knowledge.md` precedent
 
 **Total effort:** ~620 LoC, M effort, 2-3 sessions, **deferred до Stage 5.x dedicated session + Stage 6+ military sandbox activation per `agent/workspace.md §2` operator 8x planning decision**.
 
@@ -138,10 +138,10 @@ All 5 strategies within **5-10% of 30Hz frame budget (33.33 ms)** on mean:
 - `TODO.md` (Stage 5.x Visual Polish + Stage 6+ military sandbox activation)
 - `src/render/Renderer.cpp` (existing VFX hooks for muzzle flash, decals, particles)
 - `src/shaders/voxel.frag` (voxel fragment shader, consumer of muzzle flash dynamic light per closed `2026-06-21-dynamic-entity-lighting`)
-- `agent/knowledge.md §30.4` (3-step migration precedent)
+- `agent/knowledge.md` (3-step migration precedent)
 - `agent/workspace.md §2` (Stage 6+ deferral)
 - `legacy/docs/philosophy/03_domain/01_optimization-philosophy.md` (5-10% threshold)
 - `hardware-profile.md §1` (Zen 3 5800X dev host) + `§3` (RTX 3060 Ti GA104 38 SMs) + `§4` (`VK_EXT_mesh_shader` rev 1 + `VK_KHR_compute_shader` 1.4 core)
 - `benchmarks/methodology.md §3` (N=1000 + 10 warmup)
-- `agent/knowledge.md Part B §9` (web-search fallback list)
+- the web_search fallback chain (web-search fallback list)
 - Closed: `2026-06-21-mesh-shader-mega-instancing` [mixed, instanced rendering host] + `2026-06-21-dynamic-entity-lighting` [mixed, muzzle flash dynamic light] + `2026-06-21-destructible-building-system` [mixed, debris trigger] + `2026-06-21-chunk-damage-fracture-model` [mixed, fracture trigger] + `2026-06-21-explosion-crater-terrain-deformation` [yes, crater trigger] + `2026-06-21-ballistic-projectile-simulation` [yes, hit trigger] + `2026-06-21-ballistic-crack-thump` [closed, audio coupling] + `2026-06-21-wildfire-propagation` [in-progress, smoke sub-domain] + `2026-06-21-cloudscape-rendering` [mixed, scene-scale orth] + `2026-06-21-eye-tracked-foveated` [mixed, VRS bandwidth reduction].

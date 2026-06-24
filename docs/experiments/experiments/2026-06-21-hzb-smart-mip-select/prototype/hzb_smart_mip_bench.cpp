@@ -1,6 +1,6 @@
 // HZB Smart Mip Selection — main benchmark harness
 // Standalone C++26 CPU cull simulator.
-// Per agent/knowledge.md §30.4 + benchmarks/methodology.md §3 protocol:
+// Per `agent/knowledge.md` + benchmarks/methodology.md §3 protocol:
 //   warmup 10 iters, measure 1000 iters, mean/median/p95/p99/std.
 // CSV output: results.csv
 // Build: see README.md

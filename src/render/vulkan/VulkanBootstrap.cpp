@@ -1,4 +1,4 @@
-#include "volk.h"
+#include "volk.h" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "core/RuntimeDiagnostics.hpp"

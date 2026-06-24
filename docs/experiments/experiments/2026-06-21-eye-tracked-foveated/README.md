@@ -37,7 +37,7 @@
 
 ## 2. Prior art
 
-Web research complete (3 wave queries, ~25 sources verified, working `web_search` Exa this session per `agent/knowledge.md Part B §9` line 1424 fallback list — fallback не понадобился). Full source list в [`sources.md`](./sources.md). **Top 5 primary references:**
+Web research complete (3 wave queries, ~25 sources verified, working `web_search` Exa this session per the web_search fallback chain — fallback не понадобился). Full source list в [`sources.md`](./sources.md). **Top 5 primary references:**
 
 1. **arXiv 2503.23410 — Visual Acuity Consistent Foveated Rendering towards Retinal Resolution** — **6.5×-9.29× deferred, 10.4×-16.4× ray-casting retinal resolution** via log-polar mapping. Highest measured foveated rendering speedup в SOTA 2026 literature.
 
@@ -169,7 +169,7 @@ Total ~230 LoC, S effort, 2-3 sessions.
 - **`VK_KHR_dynamic_rendering_local_read`** (Vulkan 1.4 core, no extension needed)
 - **`XR_EXT_eye_gaze_interaction`** (only for Step 3 VR integration, not blocking Steps 1-2)
 
-**Estimated effort:** S effort, 2-3 sessions (per `agent/knowledge.md §30.4` 3-step migration precedent).
+**Estimated effort:** S effort, 2-3 sessions (per `agent/knowledge.md` 3-step migration precedent).
 
 **Re-evaluation triggers:**
 - Stage 4.3 (128+ chunks draw distance) ships + per-frame fragment cost becomes bottleneck
