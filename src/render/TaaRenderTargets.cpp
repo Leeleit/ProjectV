@@ -125,6 +125,8 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 	allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	allocationInfo.flags = 0;
 
+	// All targets in this function are single-sample (the multi-sampled render
+	// attachment is created separately in `VulkanSwapchain.cpp::RecreateSwapchain`).
 	auto allocateTarget = [&](
 							  OffscreenColorTarget &target,
 							  const VkFormat format,
@@ -132,8 +134,9 @@ std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(
 							  const VkImageLayout initialLayout) -> std::expected<void, TaaError> {
 		VkImageCreateInfo imageInfo = imageInfoTemplate;
 		imageInfo.format = format;
-
+		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.initialLayout = initialLayout;
+		target.samples = 1u;
 		VmaAllocation allocation = nullptr;
 		if (vmaCreateImage(
 				context->allocator,

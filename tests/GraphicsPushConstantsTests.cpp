@@ -158,7 +158,49 @@ int main()
 	}
 	std::printf("[OK] zero-height: aspect guard prevents inf propagation\n");
 
+	{
+		// Unjittered counterpart equals jittered when jitter is zero (degenerate case).
+		const CameraState camera = MakeIdentityCamera();
+		const VkExtent2D extent{1280u, 720u};
+		const GraphicsPushConstants pc =
+			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
+		for (uint32_t col = 0; col < 4u; ++col) {
+			for (uint32_t row = 0; row < 4u; ++row) {
+				ExpectNear(
+					pc.viewProjection.c[col][row],
+					pc.viewProjectionUnjittered.c[col][row],
+					kEpsilon,
+					"zero-jitter: unjittered matches jittered VP per element");
+			}
+		}
+	}
+	std::printf("[OK] unjittered: zero jitter makes VP unjittered == VP\n");
 
-	std::printf("ProjectVGraphicsPushConstantsTests: 6/6 passed\n");
+	{
+		// Unjittered drops m20/m21 jitter offset; rest of matrix unchanged.
+		const CameraState camera = MakeIdentityCamera();
+		const VkExtent2D extent{1280u, 720u};
+		const GraphicsPushConstants pcJit =
+			BuildGraphicsPushConstants(camera, extent, 16.0f, 9.0f);
+		ExpectNear(pcJit.viewProjectionUnjittered.c[2][0], 0.0f, kEpsilon,
+				   "unjittered: m20 jitter offset stripped");
+		ExpectNear(pcJit.viewProjectionUnjittered.c[2][1], 0.0f, kEpsilon,
+				   "unjittered: m21 jitter offset stripped");
+		for (uint32_t col = 0u; col < 4u; ++col) {
+			for (uint32_t row = 0u; row < 4u; ++row) {
+				if (col == 2u && (row == 0u || row == 1u)) {
+					continue; // skip the two jitter-offset rows we just verified
+				}
+				ExpectNear(
+					pcJit.viewProjectionUnjittered.c[col][row],
+					pcJit.viewProjection.c[col][row],
+					kEpsilon,
+					"unjittered: non-jitter rows match jittered VP");
+			}
+		}
+	}
+	std::printf("[OK] unjittered: jitter offset removed, rest of VP preserved\n");
+
+	std::printf("ProjectVGraphicsPushConstantsTests: 8/8 passed\n");
 	return EXIT_SUCCESS;
 }

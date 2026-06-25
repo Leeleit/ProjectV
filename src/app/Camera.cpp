@@ -242,8 +242,18 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	projection.c[2] = projectv::math::Vec4{jitterNdcX, jitterNdcY, farPlane / (nearPlane - farPlane), -1.0f};
 	projection.c[3] = projectv::math::Vec4{0.0f, 0.0f, nearPlane * farPlane / (nearPlane - farPlane), 0.0f};
 
+	// Unjittered projection for TAA motion vector reprojection: stores true camera transform
+	// without per-frame sub-pixel jitter, so prev/curr reprojection in voxel.frag does not
+	// contain a synthetic sub-pixel offset that triggers TAA history mis-lookup (screen shake).
+	projectv::math::Mat4 projectionUnjittered{};
+	projectionUnjittered.c[0] = projection.c[0];
+	projectionUnjittered.c[1] = projection.c[1];
+	projectionUnjittered.c[2] = projectv::math::Vec4{0.0f, 0.0f, farPlane / (nearPlane - farPlane), -1.0f};
+	projectionUnjittered.c[3] = projection.c[3];
+
 	GraphicsPushConstants pushConstants{};
 	pushConstants.viewProjection = projection * view;
+	pushConstants.viewProjectionUnjittered = projectionUnjittered * view;
 	const Float3 cameraForward = projectv::math::normalize(GetForwardVector(camera));
 	pushConstants.cameraPosition = {
 		camera.position[0],

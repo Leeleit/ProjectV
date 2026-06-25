@@ -18,7 +18,7 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-06-25 session 26x (RTX refraction chunk boundary precision fix, this session).**
+**2026-06-25 session 27x (TAA motion-vector reprojection fix, this session).**
 
 Свежий baseline после operator-инициированного reset `2026-06-24`:
 - 274 pre-reset коммитов squashed в один `chore(reset): pre-fresh-start baseline`
@@ -31,7 +31,49 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
   пересозданы как minimal baseline. Содержимое intentional empty до первой
   post-reset сессии.
 
-**Что сделано в этой сессии (26x):**
+**Что сделано в этой сессии (27x):**
+- **Phase 1a / 6 «Ideal AA pipeline»:** устранён root cause тряски TAA при `taaJitterScale > 0`.
+  Джиттер был запечён в projection matrix (`Camera.cpp:242` `projection.c[2] = {jitterNdcX, jitterNdcY, ...}`),
+  и `FramePreparation.cpp:280` сохранял jittered prev, и `voxel.frag:1391-1402` использовал
+  jittered обе матрицы → motion vector содержал синтетический sub-pixel offset → history lookup
+  в неправильную точку → тряска.
+- Добавлен `viewProjectionUnjittered` (offset 128, sizeof 128→192) в `GraphicsPushConstants`,
+  byte-exact mirrors в `voxel.vert` + `probe_update.comp`.
+- `voxel.frag` motion vector теперь `prevUnjittered - currUnjittered` (без sub-pixel jitter).
+- `RtxGiProbes.cpp:815` push-constant range bumped от literal 128 к `sizeof(GraphicsPushConstants)`.
+- `GraphicsPushConstantsTests` extended 6→8 tests (zero-jitter equivalence, jitter-only difference).
+- **Phase 1b (по feedback оператора после теста 1a):** defaults TAA были слишком
+  консервативные — `taaBlend=0.10` (10% history!), `taaJitterScale=0.0` (jitter OFF по умолчанию),
+  `taaNeighbourhoodRadius=1` (3×3 clamp). При таких defaults приходится крутить jitter
+  до 1.5+ чтобы увидеть AA, и тогда rendered scene трясётся sub-pixel каждый кадр. Новые
+  defaults: `taaBlend=0.40` (4× stronger history), `taaJitterScale=1.0` (jitter ON by default),
+  `taaNeighbourhoodRadius=1` (3×3 — для outlier clamp, не CAS).
+- **Variant A полностью (color-space fix, по диагностике оператора):** TAA смешивал
+  linear HDR (current frame) с LDR (history, post-tonemap+grading) → undefined operation →
+  обводка и тряска. Tonemap + color grading перенесены в `voxel.frag` и `model.frag`
+  (применяются ДО output в любом режиме). `taa_resolve.frag` стал pure LDR blend + CAS
+  + output. Удалены `ApplyTaaToneMap` / `ApplyTaaColorGrading` и post-blend exposure
+  multiplication (второй баг — `x * exposure` после tonemap не равно `tonemap(x * exposure)`,
+  яркость осциллировала по frame'ам при смене blend). 39/39 ctest pass, build green,
+  validation clean.
+- **Known limitation:** `model.frag.taa_on` и `voxel.frag.taa_on` пишут в один и тот же
+  attachment `taaSceneColorTarget` (Location 1). Model pass запускается ПОСЛЕ voxel
+  и затирает voxel output. TAA resolve видит только model output (без motion vector
+  для model). Это отдельный баг, фикс не в scope Variant A — нужно либо отдельный
+  attachment для model, либо alpha-compositing перед resolve.
+- **Model motion vector fix (по directive оператора):** `model.frag` теперь тоже пишет
+  motion vector (Location 3, в shared `taaMotionVectorTarget`). Model pipeline attachments
+  2→4 (color, scene, layer, motion). `ModelPushConstants` 128→192 (добавлен
+  `viewProjectionUnjittered` для motion vector compute). `model.frag` compute: тот же
+  unjittered reprojection что и в `voxel.frag`. Где model рисует — TAA resolve видит
+  motion vector модели (корректный reprojection). Где нет model — load op LOAD
+  сохраняет voxel motion vector. Был второй источник ghosting'а (model fragments
+  reproject'ились по фоновому motion vector'у). 39/39 ctest pass, validation clean.
+- Build green (320/320), 39/39 ctest pass, validation layer clean (только pre-existing DDGI
+  descriptor warnings про rtxGiIrradiance/rtxGiVolume/rtxGiDistance — НЕ от моего фикса).
+- Next phases: 2 (CAS extract) + 3 (SMAA) + 4 (Streamline/DLSS/DLAA) + 5 (UX) + 6 (tests).
+
+**Что сделано в предыдущей сессии (26x):**
 - **Корневая причина ярких точек в воде найдена и исправлена:** в `TraceVoxelIntersection`
   (обе копии — `probe_update.comp` и `voxel.frag`) материал после DDA перечитывался через
   `floor(worldHitPos)`, а DDA коммитит hit точно на стенке вокселя → FP-rounding мог выбрать
@@ -144,6 +186,66 @@ Key per-session snapshots (from `workspace.md` archive):
   view). Fix: compute normal from the ray's dominant-axis direction (the wall
   a DDA ray exits the voxel through is perpendicular to the axis with the
   largest `|dir|` component). 39/39 tests still passing.
+- **27x (2026-06-25, this session)**: Phase 1 of 6 «Ideal AA pipeline». Fixed TAA
+  motion-vector reprojection that contained a synthetic sub-pixel offset when
+  `taaJitterScale > 0`. Root cause: `BuildGraphicsPushConstants` baked jitter into
+  projection `M[2][0..1]`, and that jittered matrix was stored as `taaPrevViewProjectionMatrix`,
+  so the reprojection difference carried the per-frame jitter. Fix: added parallel
+  `viewProjectionUnjittered` to `GraphicsPushConstants` (offset 128, sizeof 128→192),
+  use it for both prev and current in `voxel.frag`. Byte-exact mirrors updated in
+  `voxel.vert` and `probe_update.comp`. `RtxGiProbes.cpp` push-constant range bumped
+  from literal 128 to `sizeof(GraphicsPushConstants)`. `GraphicsPushConstantsTests`
+  extended 6→8 tests. 39/39 ctest pass, validation layer clean (DDGI descriptor
+  warnings are pre-existing, unrelated to this fix). **Phase 1b (operator feedback
+  after 1a test):** defaults were too conservative — `taaBlend=0.10` (10% history),
+  `taaJitterScale=0.0` (jitter OFF), `taaNeighbourhoodRadius=1` (3×3). Bumped to
+  `0.40 / 1.0 / 1` for visible AA without per-frame scene wobble. **Phase 1c
+  (operator feedback after 1b test, halos):** CAS corner samples in
+  `GetSceneColorRange` were reusing the outlier-rejection radius. At radius=3 the
+  corners span 6 texels and the CAS high-pass over-shoots contrast edges, producing
+  visible halos around every element. Refactored to collect CAS corners in a
+  separate fixed ±1-texel window independent of the outlier radius; outlier radius
+  default reverted to 1 to keep history clamp conservative. Also fixed inverted
+  CAS sharpening formula in `taa_resolve.frag` (`sharpenAmount` was `(1 - blend) *
+  max`, now `blend * max` — more temporal averaging correctly applies more
+  sharpening). Outlier threshold relaxed `0.40 → 0.60`. 39/39 tests still pass.
+  **Variant A (operator directive after 1c test):** root cause of remaining
+  outlines/тряска diagnosed as color-space mismatch — `voxel.frag` and
+  `model.frag` wrote linear HDR (pre-tonemap+grading) to the TAA scene color,
+  while the resolve blended with LDR history. Tonemap+grading moved into
+  `voxel.frag` / `model.frag` (applied unconditionally before output),
+  `taa_resolve.frag` simplified to pure LDR blend + CAS + output. Removed
+  `ApplyTaaToneMap` / `ApplyTaaColorGrading` and post-blend exposure
+  multiplication. 39/39 tests still pass, validation clean. Known limitation
+  (subsequently fixed this session): model pass overwrites voxel output in
+  `taaSceneColorTarget` (both write to Location 1); the TAA resolve sees
+  only the model output for that fragment. **Model motion vector fix:**
+  `model.frag` now also writes motion vector (Location 3) to the shared
+  `taaMotionVectorTarget`. Model pipeline attachments 2→4 (color, scene,
+  layer, motion). `ModelPushConstants` 128→192 (added `viewProjectionUnjittered`).
+  TAA resolve now reprojects each fragment using the correct motion source:
+  model for model fragments, voxel for background. Second TAA ghosting
+  source eliminated. 39/39 tests still pass, validation clean.
+  **MSAA skeleton (incomplete, default `aaMode = TAA`):** added
+  `AntialiasingMode` enum + `MsaaSamplesForMode`/`IsTaaEnabledForMode` helpers
+  (`src/render/AntialiasingMode.hpp`), `taaSceneColorMsTarget` field, dynamic
+  rendering attachments с conditional MS resolve (только при `msaaSamples > 1`),
+  pipeline multisampling derived from `aaMode`. Two blockers for actual MSAA:
+  (1) `multisampledRenderToSingleSampled` доступен только в
+  `VK_EXT_multisampled_render_to_single_sampled`, не Vulkan 1.4 core — без него
+  multi-sampled scene color + single-sample layer/motion attachments в одном
+  dynamic rendering pass дают validation errors; (2) альтернатива (все attachments
+  multi-sampled) съедает память. После неудачной попытки `storeOp = DONT_CARE`
+  в colorAttachment1 сломал single-sample путь (TAA resolve читал uninitialized
+  memory), исправлено: `storeOp = DONT_CARE` только для MSAA пути, `STORE` для
+  single-sample. Default `aaMode = TAA` — single-sample TAA работает корректно.
+  39/39 tests still pass, smoke clean (только pre-existing DDGI descriptor
+  warnings). **Operator directive after 27x:** остаточная тряска + слабое
+  сглаживание — фундаментальные лимиты single-sample TAA. Переходим к Phase 4
+  DLSS/DLAA через NVIDIA Streamline (кросс-платформенный DLSS Super Resolution
+  для Linux с драйвером 525.72+, текущий 610.43.02 OK; DLSS-G/Frame
+  Generation — Windows-only, не в scope). Next: Phase 4 DLSS/Streamline
+  integration (5-7 дней), Phase 5 UX, Phase 6 tests.
 
 ---
 

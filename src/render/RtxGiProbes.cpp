@@ -812,7 +812,7 @@ bool RtxGiProbes::CreateComputePipeline(const VulkanContextState &context)
 	VkPushConstantRange pushConstantRange{
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.offset = 0,
-		.size = 128
+		.size = sizeof(GraphicsPushConstants) // tracks the C++ struct (192 B after Phase 1 motion vector fix)
 	};
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{

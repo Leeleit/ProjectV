@@ -52,6 +52,7 @@ struct OffscreenColorTarget {
 	VkImage image = VK_NULL_HANDLE;
 	VkImageView imageView = VK_NULL_HANDLE;
 	VmaAllocationHandle allocation = nullptr;
+	std::uint32_t samples = 1u; // VK_SAMPLE_COUNT_1_BIT for single-sample, VK_SAMPLE_COUNT_2_BIT for 2x MSAA, etc.
 };
 
 std::expected<void, TaaError> CreateOrRecreateTaaRenderTargets(

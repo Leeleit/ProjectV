@@ -11,6 +11,7 @@ import projectv.string_id;
 #include "asset/MeshGpuResources.hpp"
 import projectv.math;
 import projectv.string_id;
+#include "render/AntialiasingMode.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/TaaRenderTargets.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
@@ -216,15 +217,17 @@ struct GraphicsPushConstants {
 	projectv::math::Vec4 cameraForward{};
 	std::array<int32_t, 4> worldMinAndChunkSize{};
 	std::array<uint32_t, 4> chunkGridAndFlags{};
+	projectv::math::Mat4 viewProjectionUnjittered{}; // unjittered counterpart for TAA motion vector reprojection (offset 128)
 };
 static_assert(std::is_standard_layout_v<GraphicsPushConstants>);
 static_assert(std::is_trivially_copyable_v<GraphicsPushConstants>);
-static_assert(sizeof(GraphicsPushConstants) == 128);
+static_assert(sizeof(GraphicsPushConstants) == 192);
 static_assert(offsetof(GraphicsPushConstants, viewProjection) == 0);
 static_assert(offsetof(GraphicsPushConstants, cameraPosition) == 64);
 static_assert(offsetof(GraphicsPushConstants, cameraForward) == 80);
 static_assert(offsetof(GraphicsPushConstants, worldMinAndChunkSize) == 96);
 static_assert(offsetof(GraphicsPushConstants, chunkGridAndFlags) == 112);
+static_assert(offsetof(GraphicsPushConstants, viewProjectionUnjittered) == 128);
 
 struct ShadowPushConstants {
 	uint32_t cascadeIndex = 0;
@@ -841,7 +844,8 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkDescriptorPool worldGenDescriptorPool = VK_NULL_HANDLE;
 
 	bool taaEnabled = true;
-	float taaBlend = 0.10f;
+	projectv::render::AntialiasingMode aaMode = projectv::render::AntialiasingMode::TAA; // default: TAA only (single-sample). MSAA requires `VK_EXT_multisampled_render_to_single_sampled` or all attachments multi-sampled (TODO follow-up).
+	float taaBlend = 0.40f;																 // per-frame history weight; 0.4 averages sub-pixel jitter across ~3 frames for visible AA without per-frame scene wobble
 	uint32_t taaFrameCounter = 0u;
 	bool taaHistoryValid = false;
 	bool taaSceneColorNeedsInit = true;
@@ -849,8 +853,8 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	projectv::math::Mat4 taaPrevViewProjectionMatrix{};
 	float taaJitterX = 0.0f;
 	float taaJitterY = 0.0f;
-	float taaJitterScale = 0.0f;
-	int32_t taaNeighbourhoodRadius = 1;
+	float taaJitterScale = 1.0f;		// 1.0 = full Halton(2,3) sub-pixel jitter, ON by default for TAA
+	int32_t taaNeighbourhoodRadius = 1; // 3x3 (9 samples) for YCoCg outlier clamp; CAS corner samples use a fixed 3x3 window independently to avoid halos at larger radii
 
 	float taaCasSharpnessMax = 0.5f;
 
@@ -859,7 +863,8 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 
 	bool taaPrevViewProjectionMatrixInitialized = false;
 
-	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;
+	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;	  // single-sample resolve target + TAA input
+	projectv::taa::OffscreenColorTarget *taaSceneColorMsTarget = nullptr; // multi-sampled render attachment when msaaSamples > 1
 	projectv::taa::OffscreenColorTarget *taaHistoryColorTarget = nullptr;
 
 	projectv::taa::OffscreenColorTarget *taaLayerSceneColorTarget = nullptr;

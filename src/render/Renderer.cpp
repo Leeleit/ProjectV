@@ -538,8 +538,20 @@ void RecordGraphicsCommands(
 		};
 		constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
 
+		// MSAA: when `aaMode` requests MSAA samples > 1, the voxel + model + transparent
+		// passes render into `taaSceneColorMsTarget` (multi-sampled), and the
+		// dynamic-rendering auto-resolve writes the averaged result into
+		// `taaSceneColorTarget` (single-sample) which the TAA resolve reads from.
+		const std::uint32_t msaaSamples = projectv::render::MsaaSamplesForMode(render.aaMode);
+		const bool msTargetReady = msaaSamples > 1u &&
+								   render.taaSceneColorMsTarget != nullptr &&
+								   render.taaSceneColorMsTarget->imageView != VK_NULL_HANDLE;
 		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
-		const VkImageView mainColor1View = taaOn ? render.taaSceneColorTarget->imageView : VK_NULL_HANDLE;
+		const VkImageView mainColor1View = taaOn
+											   ? (msTargetReady
+													  ? render.taaSceneColorMsTarget->imageView
+													  : render.taaSceneColorTarget->imageView)
+											   : VK_NULL_HANDLE;
 		const VkImageView mainColor2View = render.taaLayerSceneColorTarget != nullptr
 											   ? render.taaLayerSceneColorTarget->imageView
 											   : VK_NULL_HANDLE;
@@ -553,6 +565,16 @@ void RecordGraphicsCommands(
 								   activeSceneColorView != VK_NULL_HANDLE;
 		const VkAttachmentLoadOp sceneColorLoadOp = skyPassActive ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
 		const VkAttachmentLoadOp depthLoadOp = skyPassActive ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+		// When MSAA is active, `mainColor1View` is the multi-sampled attachment and we
+		// must declare `resolveImageView` for the auto-resolve at end of pass. The
+		// resolve target is the single-sample `taaSceneColorTarget` (TAA input).
+		const VkImageView resolveImageView = (taaOn && msTargetReady)
+												 ? render.taaSceneColorTarget->imageView
+												 : VK_NULL_HANDLE;
+		const VkResolveModeFlagBits resolveMode = (taaOn && msTargetReady)
+													  ? VK_RESOLVE_MODE_AVERAGE_BIT
+													  : VK_RESOLVE_MODE_NONE;
 
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -571,11 +593,18 @@ void RecordGraphicsCommands(
 			.pNext = nullptr,
 			.imageView = mainColor1View,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_NONE,
-			.resolveImageView = VK_NULL_HANDLE,
-			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.resolveMode = resolveMode,
+			.resolveImageView = resolveImageView,
+			.resolveImageLayout = resolveMode == VK_RESOLVE_MODE_AVERAGE_BIT
+									  ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+									  : VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = sceneColorLoadOp,
-			.storeOp = mainColor1View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			// MSAA path: multi-sampled attachment is consumed by the auto-resolve and is
+			// not read elsewhere, so DONT_CARE is safe. Single-sample path: this
+			// attachment IS the resolve target + TAA input, must be stored.
+			.storeOp = (resolveMode == VK_RESOLVE_MODE_AVERAGE_BIT)
+						   ? VK_ATTACHMENT_STORE_OP_DONT_CARE
+						   : VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clearColorValue,
 		};
 		const VkRenderingAttachmentInfo colorAttachment2{
@@ -791,12 +820,17 @@ void RecordGraphicsCommands(
 					: render.modelPipeline);
 			struct ModelPush {
 				std::array<float, 16> viewProjection{};
+				std::array<float, 16> viewProjectionUnjittered{};
 				std::array<float, 16> modelTransform{};
 			};
 			ModelPush push{};
 			std::memcpy(
 				push.viewProjection.data(),
 				frameRenderData.graphicsPushConstants.viewProjection.data(),
+				sizeof(float) * 16);
+			std::memcpy(
+				push.viewProjectionUnjittered.data(),
+				frameRenderData.graphicsPushConstants.viewProjectionUnjittered.data(),
 				sizeof(float) * 16);
 			for (const ModelInstanceData &instance : render.visibleModelInstances) {
 				if (instance.indexCount == 0 || instance.vertexBuffer == VK_NULL_HANDLE || instance.indexBuffer == VK_NULL_HANDLE) {

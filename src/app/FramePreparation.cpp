@@ -277,7 +277,8 @@ bool PrepareFrameRenderData(
 	}
 
 	if (render->taaEnabled) {
-		render->taaPrevViewProjectionMatrix = frame->renderData.graphicsPushConstants.viewProjection;
+		// Unjittered counterpart required for correct TAA motion vector reprojection (Phase 1 fix).
+		render->taaPrevViewProjectionMatrix = frame->renderData.graphicsPushConstants.viewProjectionUnjittered;
 		render->taaPrevViewProjectionMatrixInitialized = true;
 	}
 	if (world->voxelWorld) {

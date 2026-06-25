@@ -514,6 +514,11 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	enabled.drawIndirectCount = selected.features12.drawIndirectCount ? VK_TRUE : VK_FALSE;
 	enabled.hostQueryReset = selected.features12.hostQueryReset ? VK_TRUE : VK_FALSE;
 	enabled.timelineSemaphore = selected.features12.timelineSemaphore ? VK_TRUE : VK_FALSE;
+	// `multisampledRenderToSingleSampled` is only in the EXT extension
+	// `VK_EXT_multisampled_render_to_single_sampled` (not in Vulkan 1.2/1.3/1.4 core
+	// feature structs). MSAA + single-sample attachments in the same dynamic
+	// rendering pass requires this feature, deferred to a follow-up that enables
+	// the EXT extension or makes every attachment in the main pass multi-sampled.
 	if (selected.supportsAccelerationStructure && selected.supportsRayQuery
 		&& selected.rayTracingSupport.bufferDeviceAddress) {
 		enabled.bufferDeviceAddress = VK_TRUE;

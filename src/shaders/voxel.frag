@@ -274,6 +274,7 @@ layout(push_constant) uniform PushConstants {
     vec4 cameraForward;
     ivec4 worldMinAndChunkSize;
     uvec4 chunkGridAndFlags;
+    mat4 viewProjectionUnjittered; // unjittered counterpart for TAA motion vector reprojection (offset 128)
 } pushConstants;
 
 layout(location = 0) in vec3 inNormal;
@@ -1381,7 +1382,6 @@ void main() {
         color = mix(color, fogColor, fog);
         color = color * volumetricFogTransmittance + volumetricFogAccum;
     }
-    const vec3 linearColor = color;
     color *= max(sceneLighting.postProcess.x, 0.0);
     color = ApplyToneMap(color);
     color = ApplyColorGrading(color);
@@ -1389,12 +1389,15 @@ void main() {
     outLayerMask = vec4(sunContactVisibility, localAmbientOcclusionVisibility, rawLocalPointLightVisibility, 1.0);
 
     {
+        // TAA motion vector reprojection: use unjittered prev/curr so the per-frame sub-pixel
+        // jitter does not become a synthetic offset in the reprojection lookup, which would
+        // mis-target the previous-frame sample and produce screen shake when jitter != 0.
         const vec4 prevClip = sceneLighting.prevViewProjectionMatrix *
             vec4(inWorldPosition, 1.0);
         vec2 motion = vec2(0.0);
         if (prevClip.w > 0.0001) {
             const vec2 prevNdc = prevClip.xy / prevClip.w * 0.5 + 0.5;
-            const vec4 currClip = pushConstants.viewProjection *
+            const vec4 currClip = pushConstants.viewProjectionUnjittered *
                 vec4(inWorldPosition, 1.0);
             const vec2 currNdc = currClip.xy / currClip.w * 0.5 + 0.5;
             motion = prevNdc - currNdc;
@@ -1402,8 +1405,13 @@ void main() {
         outMotionVector = motion;
     }
 
+    // Color space consistency: write the same LDR (post-tonemap, post-grading) to both
+    // TAA-on and TAA-off outputs. Previously the TAA-on path wrote linear HDR and the
+    // resolve applied tonemap+grading, but history was already LDR (from the previous
+    // resolve output), so the blend mixed HDR current with LDR history — a
+    // mathematically undefined operation that produced the outlines and shake.
 #ifdef TAA_ENABLED
-    outSceneColor = vec4(linearColor, material.baseColor.a);
+    outSceneColor = vec4(color, material.baseColor.a);
 #else
     outColor = vec4(color, material.baseColor.a);
 #endif

@@ -39,32 +39,11 @@ layout(push_constant) uniform ResolvePushConstants {
 layout(location = 0) out vec4 outColor;
 
 const float kHugeTaaRayT = 1e20;
-const float kTaaColorDistanceRejectionThreshold = 0.40;
+const float kTaaColorDistanceRejectionThreshold = 0.60; // relaxed from 0.40 — accept more history for stronger TAA, fewer visible sub-pixel outliers
 
-vec3 ApplyTaaToneMap(const vec3 linearColor) {
-    const uint toneMapOperator = uint(sceneLighting.postProcess.z + 0.5);
-    if (toneMapOperator == 0u) {
-        return clamp(linearColor, 0.0, 1.0);
-    }
-    if (toneMapOperator == 1u) {
-        return linearColor / (1.0 + max(linearColor, vec3(0.0)));
-    }
-    const vec3 a = linearColor * (2.51 * linearColor + 0.03);
-    const vec3 b = linearColor * (2.43 * linearColor + 0.59) + 0.14;
-    return clamp(a / b, 0.0, 1.0);
-}
-
-vec3 ApplyTaaColorGrading(const vec3 mappedColor) {
-    const float whitePoint = clamp(sceneLighting.colorGrading.x, 0.25, 4.0);
-    const float contrast = clamp(sceneLighting.colorGrading.y, 0.0, 2.0);
-    const float saturation = clamp(sceneLighting.colorGrading.z, 0.0, 2.0);
-    const float lift = clamp(sceneLighting.colorGrading.w, -0.25, 0.25);
-    const vec3 normalizedColor = mappedColor / whitePoint;
-    const float luma = dot(normalizedColor, vec3(0.2126, 0.7152, 0.0722));
-    const vec3 saturatedColor = mix(vec3(luma), normalizedColor, saturation);
-    return clamp((saturatedColor - vec3(0.5)) * contrast + vec3(0.5 + lift), 0.0, 1.0);
-}
-
+// Tonemap and color grading moved to voxel.frag / model.frag so the scene color and
+// history are both LDR (post-tonemap+grading). The resolve is now a pure LDR blend;
+// the previous HDR current + LDR history mix was undefined and produced outlines.
 
 vec3 RGBToYCoCg(const vec3 rgb) {
     const float co = rgb.r - rgb.b;
@@ -93,8 +72,8 @@ void GetSceneColorRange(
     out vec3 rgbMax,
     out vec3 rgbCornerSum)
 {
+    // Outlier rejection radius: drives min/max/centroid for YCoCg clamp.
     const int radius = clamp(int(sceneLighting.taaHistoryParams.w + 0.5), 1, 7);
-
     const int snappedRadius = (radius >= 7) ? 7 : (radius >= 5) ? 5 : (radius >= 3) ? 3 : 1;
     const int sideLength = 2 * snappedRadius + 1;
     const float normalizer = 1.0 / float(sideLength * sideLength);
@@ -102,7 +81,6 @@ void GetSceneColorRange(
     maxColor = vec3(-kHugeTaaRayT);
     rgbMin = vec3(kHugeTaaRayT);
     rgbMax = vec3(-kHugeTaaRayT);
-    rgbCornerSum = vec3(0.0);
     vec3 sumColor = vec3(0.0);
     for (int offsetY = -snappedRadius; offsetY <= snappedRadius; ++offsetY) {
         for (int offsetX = -snappedRadius; offsetX <= snappedRadius; ++offsetX) {
@@ -116,12 +94,7 @@ void GetSceneColorRange(
             maxColor = max(maxColor, sampleYCoCg);
             sumColor += sampleYCoCg;
 
-            const bool isCorner = (offsetX == -snappedRadius || offsetX == snappedRadius) &&
-                                  (offsetY == -snappedRadius || offsetY == snappedRadius);
             const bool isCross = (offsetX == 0 || offsetY == 0);
-            if (isCorner) {
-                rgbCornerSum += sampleColor;
-            }
             if (isCross) {
                 rgbMin = min(rgbMin, sampleColor);
                 rgbMax = max(rgbMax, sampleColor);
@@ -129,6 +102,21 @@ void GetSceneColorRange(
         }
     }
     centroidColor = sumColor * normalizer;
+
+    // CAS corner samples: fixed 3x3 window (corners at ±1 texel). Independent of the
+    // outlier-rejection radius above because at large radius (e.g. 3 = 7x7) the corners
+    // span 6 texels across and the high-pass `center - cornerAvg` over-shoots edges,
+    // producing halos around contrast boundaries.
+    rgbCornerSum = vec3(0.0);
+    for (int offsetY = -1; offsetY <= 1; offsetY += 2) {
+        for (int offsetX = -1; offsetX <= 1; offsetX += 2) {
+            const vec2 sampleUv = clamp(
+                uv + vec2(float(offsetX), float(offsetY)) * texelSize,
+                vec2(0.0),
+                vec2(1.0));
+            rgbCornerSum += texture(sceneColor, sampleUv).rgb;
+        }
+    }
 }
 
 
@@ -198,15 +186,12 @@ void main()
         : YCoCgToRGB(clamp(RGBToYCoCg(historySample), minColor, maxColor));
 
 
-    vec3 linearOut = mix(clampedCurrent, clampedHistory, blendFactor);
+    vec3 resolvedColor = mix(clampedCurrent, clampedHistory, blendFactor);
 
-    linearOut *= max(sceneLighting.postProcess.x, 0.0);
+    // CAS sharpening scales with taaBlend: higher blend = stronger temporal accumulation = more blur = more sharpening needed to recover detail.
+    // Previous formula `(1.0 - blend) * max` was inverted — high blend gave less sharpening, which made temporal blur visible.
+    const float sharpenAmount = clamp(pushConstants.taaBlend, 0.0, 1.0) * pushConstants.taaCasSharpnessMax;
+    resolvedColor = ApplyCasLinear(resolvedColor, rgbMin, rgbMax, rgbCornerSum, sharpenAmount);
 
-
-    const float sharpenAmount = max(0.0, (1.0 - pushConstants.taaBlend) * pushConstants.taaCasSharpnessMax);
-    linearOut = ApplyCasLinear(linearOut, rgbMin, rgbMax, rgbCornerSum, sharpenAmount);
-
-    vec3 mappedOut = ApplyTaaToneMap(linearOut);
-    mappedOut = ApplyTaaColorGrading(mappedOut);
-    outColor = vec4(mappedOut, 1.0);
+    outColor = vec4(resolvedColor, 1.0);
 }

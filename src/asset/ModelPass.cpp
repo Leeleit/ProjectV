@@ -5,6 +5,7 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
+#include "render/AntialiasingMode.hpp"
 
 namespace projectv::asset {
 
@@ -17,9 +18,10 @@ constexpr VkFormat kModelVertexUvFormat = VK_FORMAT_R32G32_SFLOAT;
 struct ModelPushConstants {
 
 	[[maybe_unused]] std::array<float, 16> viewProjection{};
+	[[maybe_unused]] std::array<float, 16> viewProjectionUnjittered{}; // unjittered counterpart for model motion vector (Phase 1a fix carried over to model)
 	[[maybe_unused]] std::array<float, 16> modelTransform{};
 };
-static_assert(sizeof(ModelPushConstants) == 128);
+static_assert(sizeof(ModelPushConstants) == 192);
 
 VkShaderModule CreateModelShaderModule(const VkDevice device, const char *label, const std::vector<char> &code)
 {
@@ -146,18 +148,34 @@ bool CreateModelPipeline(
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
-	VkPipelineMultisampleStateCreateInfo multisampling{
-
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-		.sampleShadingEnable = VK_FALSE,
-		.minSampleShading = 0.0f,
-		.pSampleMask = nullptr,
-		.alphaToCoverageEnable = VK_FALSE,
-		.alphaToOneEnable = VK_FALSE,
-	};
+	// MSAA: the model pass renders to `taaSceneColorMsTarget` (multi-sampled) when
+	// MSAA is active; the dynamic rendering auto-resolves to the single-sample
+	// `taaSceneColorTarget` at end of pass. Match the sample count to the AA mode.
+	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+	switch (projectv::render::MsaaSamplesForMode(render->aaMode)) {
+	case 2u:
+		msaaSamples = VK_SAMPLE_COUNT_2_BIT;
+		break;
+	case 4u:
+		msaaSamples = VK_SAMPLE_COUNT_4_BIT;
+		break;
+	case 8u:
+		msaaSamples = VK_SAMPLE_COUNT_8_BIT;
+		break;
+	default:
+		msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+		break;
+	}
+	VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.pNext = nullptr;
+	multisampling.flags = 0;
+	multisampling.rasterizationSamples = msaaSamples;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.minSampleShading = 0.0f;
+	multisampling.pSampleMask = nullptr;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -173,11 +191,13 @@ bool CreateModelPipeline(
 	const std::array colorBlendAttachments{
 		colorBlendAttachment,
 		colorBlendAttachment,
+		colorBlendAttachment,
+		colorBlendAttachment,
 	};
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.attachmentCount = 2;
+	colorBlending.attachmentCount = 4;
 	colorBlending.pAttachments = colorBlendAttachments.data();
 
 	VkPipelineDynamicStateCreateInfo dynamicState{};
@@ -197,11 +217,13 @@ bool CreateModelPipeline(
 	VkPipelineRenderingCreateInfo renderingInfo{};
 	renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 
-	const VkFormat modelColorAttachmentFormats[2] = {
+	const VkFormat modelColorAttachmentFormats[4] = {
 		colorFormat,
 		taa::kTaaSceneColorFormat,
+		taa::kTaaLayerHistoryColorFormat,
+		taa::kTaaMotionVectorFormat,
 	};
-	renderingInfo.colorAttachmentCount = 2;
+	renderingInfo.colorAttachmentCount = 4;
 	renderingInfo.pColorAttachmentFormats = modelColorAttachmentFormats;
 	renderingInfo.depthAttachmentFormat = depthFormat;
 	renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
