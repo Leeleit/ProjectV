@@ -428,6 +428,15 @@ else hits проектируются на chunk boundary faces. Ignore `Glass` m
 traversal (transparent shell не cast shadow). `grazingFactor = mix(0.25, 1.0,
 rtxLit)` для избежания pitch-black shadows.
 
+**Chunk boundary precision fix (session 26x):** В `voxel.frag` и `probe_update.comp` добавлено смещение `1e-4` к `tMin` в `TraceVoxelIntersection` при входе луча в чанк (`tMin = max(tEntry, rayTmin) + 1e-4`). Без этого смещения погрешности `float` на границах чанков приводили к выходу начальной позиции DDA наружу чанка, прерывая цикл и заставляя лучи рефракции/GI просачиваться сквозь воду в небо (белые точки).
+
+**Ray starts inside non-air voxel — DDA advance (session 26x follow-up #2):**
+В `TraceVoxelIntersection` (`voxel.frag` + `probe_update.comp`, в т.ч. inline shadow ray в `EvaluateVoxelLighting`) добавлен блок: если воксель в стартовой позиции луча non-air, вычислить `tWall = min(tExitAxis.{x,y,z})` (время до границы текущего вокселя в направлении луча), затем `tMin += tWall + 1e-4` и пересчитать `currentVoxel = floor(localStartPos)`. Без этого фикса DDA коммитился на `tCurrent = tMin` (≈0 для луча внутри чанка), и нормаль в наружном hit-блоке вычислялась из position offset (5 мм) вместо реального направления стенки. Неправильная нормаль приводила к тому, что shadow ray в `EvaluateVoxelLighting` для проб, лежащих внутри воды/стекла, уходил в небо (`shadowFactor = 0`, но яркое значение из-за неверной нормали) → пробы сохраняли яркие "sky" значения для всех направлений → GI sampling давал probe-grid артефакты. Фикс: луч теперь стартует за стенкой вокселя, DDA начинается со следующего (воздушного) вокселя, нормаль и hit position вычисляются корректно.
+
+**Hit normal derived from ray dominant axis (session 26x follow-up #3):**
+В `TraceVoxelIntersection` (наружный hit-блок после ray query) в `voxel.frag` + `probe_update.comp` нормаль ВЫЧИСЛЯЕТСЯ из направления луча (dominant axis), а не из position offset. Раньше `diff = insidePos - voxelCenter`, `insidePos = worldHitPos + dir * 0.005`, и из 6 граней выбиралась ближайшая по `abs(diff)` — это давало рандомную грань, основанную на FP-микро-плавании commit t, часто НЕ совпадающую с реальной стенкой. Неправильная нормаль попадала в shadow ray `EvaluateVoxelLighting`: для refraction ray после back face воды shadow ray уходил в воздушный gap над водой (`shadowFactor = 1`) → яркое значение в refraction result → мелкие яркие точки в Final view, НО НЕ в debug views (refraction не показывается отдельно). Корректная нормаль для DDA-луча = `sign(dir.dominantAxis) * e_dominantAxis`.
+
+
 **Почему:** RTX даёт ground-truth shadows без CSM артефактов (peter panning,
 acne, PCF tuning, cascade bleeding). RT cores имеют spare capacity
 (1080p × 120 FPS × 1 ray/pixel = 0.65% от peak).
@@ -452,7 +461,14 @@ acne, PCF tuning, cascade bleeding). RT cores имеют spare capacity
 **Shader consume:** `voxel.frag` (`SampleRtxGiProbeIrradiance`):
 - trilinear fetch among 8 nearest probes
 - normal-based cosine weight
-- Chebyshev depth test
+- **Gaussian visibility falloff (session 26x):** original Chebyshev test
+  (`p = variance / (variance + g*g)`) создавал резкий переход на
+  `distToProbe == mean`, особенно для проб внутри opaque geometry
+  (water/glass с `variance`~0.1–0.5, `mean`~1м) — это проявлялось как
+  проб-сеточный алиасинг на задней грани воды (мелкие статичные точки
+  на регулярной 8м сетке, прыгающие при движении камеры). Заменено на
+  `exp(-distExcess^2 / (2 * max(variance, 0.25)))` — плавный спад с
+  минимальной шириной 0.5м, сохраняющий окклюзионное поведение.
 - per-frame `voxel.frag` `vctDiffuseIrradiance` → `ddgiDiffuseIrradiance` substitution
 
 **Shader:** `probe_update.comp` evaluates voxel lighting per ray via

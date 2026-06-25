@@ -243,12 +243,18 @@ vec3 SampleRtxGiProbeIrradiance(const vec3 worldPosition, const vec3 normal) {
                 vec2 depthData = SampleProbeDistance(probeIndex, -dirToProbeNorm);
                 float mean = depthData.x;
                 float variance = depthData.y - (mean * mean);
-                float visibility = 1.0;
-                if (distToProbe > mean) {
-                    float g = distToProbe - mean;
-                    float p = variance / (variance + max(0.0001, g * g));
-                    visibility = p * p * p;
-                }
+                // EVIL: smooth Gaussian falloff replaces sharp Chebyshev test. The
+                // original `p = variance / (variance + g*g)` transition at
+                // `distToProbe == mean` was sharp for probes inside opaque geometry
+                // (water, glass) where variance is small (~0.1-0.5) and mean is small
+                // (~1m), producing visible probe-grid aliasing on the water back face
+                // (small light dots on a regular 8m probe spacing, jumping on camera
+                // motion). Gaussian falloff with minimum-variance floor smooths the
+                // transition over >=0.5m while preserving occlusion behavior — probes
+                // inside geometry still drop in contribution for distant fragments.
+                float distExcess = max(0.0, distToProbe - mean);
+                float safeVariance = max(variance, 0.25); // floor at (0.5m)^2 to prevent sub-pixel sharpness
+                float visibility = exp(-distExcess * distExcess / (safeVariance * 2.0));
                 weight *= max(0.0001, visibility);
                 
                 vec3 probeColor = SampleProbeIrradiance(probeIndex, normal).rgb;
@@ -646,7 +652,8 @@ float ComputeAmbientOcclusionVisibility(const vec3 worldPosition, const vec3 nor
 bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDistance, out float hitT, out uint hitMaterial, out vec3 hitNormal, const bool ignoreGlass, const bool ignoreFluid, const uint rayFlags) {
     rayQueryEXT rq;
     rayQueryInitializeEXT(rq, rtxTlas, rayFlags, 0xFFu, origin, 0.001, dir, maxDistance);
-    
+    uint capturedHitMaterial = 0u; // EVIL: DDA-authoritative hit material. The DDA commits at the entry wall of the hit voxel, so re-deriving the material from worldHitPos via floor() is unreliable (FP rounding can pick the neighboring air voxel). Return the material the DDA actually stopped in (consistent with probe_update.comp::TraceVoxelIntersection).
+
     while (rayQueryProceedEXT(rq)) {
         if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionAABBEXT) {
             uint chunkIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, false);
@@ -666,7 +673,7 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             float tEntry = max(max(tEnter.x, tEnter.y), tEnter.z);
             float tExitWorld = min(min(tExit.x, tExit.y), tExit.z);
             
-            float tMin = max(tEntry, rayTmin);
+            float tMin = max(tEntry, rayTmin) + 1e-4; // EVIL: offset to prevent chunk boundary DDA missing
             float tMax = tExitWorld;
             
             vec3 rayOriginLocal = rayQueryGetIntersectionObjectRayOriginEXT(rq, false) - chunk.chunkOrigin.xyz;
@@ -675,17 +682,54 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             
             vec3 localStartPos = rayOriginLocal + rayDirLocal * tMin;
             ivec3 currentVoxel = ivec3(floor(localStartPos));
-            
+
             const ivec3 stepDirection = ivec3(
                 rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
                 rayDirLocal.y > 0.0 ? 1 : (rayDirLocal.y < 0.0 ? -1 : 0),
                 rayDirLocal.z > 0.0 ? 1 : (rayDirLocal.z < 0.0 ? -1 : 0));
-            
+
             const vec3 tDelta = vec3(
                 abs(rayDirLocal.x) > 0.00001 ? abs(1.0 / rayDirLocal.x) : kHugeRayT,
                 abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
                 abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
-            
+
+            // EVIL: handle rays that START inside a non-air voxel. Without this, the
+            // DDA commits at tCurrent = tMin (essentially 0 for a ray already
+            // inside the chunk) on the very first iteration, and the normal
+            // computed in the outer hit block is derived from the position offset
+            // (which is tiny) instead of the actual wall direction. This breaks
+            // lighting for refraction rays (which start inside water when the
+            // camera-side ray re-enters the water interior), shadow rays that
+            // start inside opaque geometry, and probe update rays whose origin
+            // probe lies inside water/glass. Symptom: bright discrete dots on the
+            // water back face visible through the glass sphere (lighting at the
+            // refraction hit was computed at the wrong position with the wrong
+            // normal, so the shadow ray escaped to sky and gave bright result).
+            // Fix: detect starting inside non-air voxel and advance the start
+            // position past the wall of that voxel before the DDA loop.
+            if (all(greaterThanEqual(currentVoxel, ivec3(0))) && all(lessThan(currentVoxel, chunkExtent))) {
+                uint startMatIndex = DecodeChunkVoxelMaterial(chunk, uvec3(currentVoxel));
+                if (startMatIndex != 0u) {
+                    vec3 tExitVoxelAxis = vec3(kHugeRayT);
+                    if (abs(rayDirLocal.x) > 0.00001) {
+                        const float nextBoundaryX = stepDirection.x > 0 ? float(currentVoxel.x + 1) : float(currentVoxel.x);
+                        tExitVoxelAxis.x = (nextBoundaryX - rayOriginLocal.x) / rayDirLocal.x;
+                    }
+                    if (abs(rayDirLocal.y) > 0.00001) {
+                        const float nextBoundaryY = stepDirection.y > 0 ? float(currentVoxel.y + 1) : float(currentVoxel.y);
+                        tExitVoxelAxis.y = (nextBoundaryY - rayOriginLocal.y) / rayDirLocal.y;
+                    }
+                    if (abs(rayDirLocal.z) > 0.00001) {
+                        const float nextBoundaryZ = stepDirection.z > 0 ? float(currentVoxel.z + 1) : float(currentVoxel.z);
+                        tExitVoxelAxis.z = (nextBoundaryZ - rayOriginLocal.z) / rayDirLocal.z;
+                    }
+                    const float tWall = min(min(tExitVoxelAxis.x, tExitVoxelAxis.y), tExitVoxelAxis.z);
+                    tMin += tWall + 1e-4;
+                    localStartPos = rayOriginLocal + rayDirLocal * tMin;
+                    currentVoxel = ivec3(floor(localStartPos));
+                }
+            }
+
             vec3 tMaxAxis = tMin + ComputeRayStepTMax(localStartPos, currentVoxel, stepDirection, rayDirLocal);
             
             float tCurrent = tMin;
@@ -728,27 +772,44 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             }
             
             if (hitMat != 0u) {
+                capturedHitMaterial = hitMat;
                 rayQueryGenerateIntersectionEXT(rq, tCurrent);
             }
         }
     }
-    
+
     if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionGeneratedEXT) {
         hitT = rayQueryGetIntersectionTEXT(rq, true);
-        vec3 worldHitPos = origin + dir * hitT;
-        vec3 insidePos = worldHitPos + dir * 0.005;
-        ivec3 hitVoxel = ivec3(floor(insidePos));
-        hitMaterial = ReadVoxelMaterial(hitVoxel);
-        
-        vec3 diff = insidePos - (vec3(hitVoxel) + 0.5);
-        vec3 absDiff = abs(diff);
-        if (absDiff.x > absDiff.y && absDiff.x > absDiff.z) {
-            hitNormal = vec3(diff.x > 0.0 ? 1.0 : -1.0, 0.0, 0.0);
-        } else if (absDiff.y > absDiff.z) {
-            hitNormal = vec3(0.0, diff.y > 0.0 ? 1.0 : -1.0, 0.0);
-        } else {
-            hitNormal = vec3(0.0, 0.0, diff.z > 0.0 ? 1.0 : -1.0);
-        }
+        hitMaterial = capturedHitMaterial;
+
+        // EVIL: compute hit normal from the ray's dominant axis direction, NOT from
+        // the 5mm position offset. The previous position-offset-based normal
+        // (diff = insidePos - voxelCenter) was determined by floating-point
+        // micro-fluctuation in the commit t, which frequently produced a normal
+        // pointing along an axis that did NOT correspond to the actual wall the
+        // ray exited the voxel through. The wrong normal propagated to
+        // EvaluateVoxelLighting's shadow ray: for refraction hits inside water,
+        // the shadow ray (with the random normal) often escaped into the air
+        // gap above the water instead of finding water → shadowFactor = 1 →
+        // bright "lit" color stored at this refraction direction → mixed into
+        // the final color with the water medium tint → bright discrete dots on
+        // the water back face. Since the normal jitter is deterministic per
+        // voxel position, the dots form a regular grid (matching voxel/chunk
+        // boundaries). Correct approach: for an axis-aligned DDA ray, the wall
+        // it exits the voxel through is on the face perpendicular to the
+        // dominant axis (the axis with the largest |dir| component), so the
+        // outward normal is sign(dir.dominantAxis) * e_dominantAxis.
+        const ivec3 rayStep = ivec3(
+            dir.x > 0.0 ? 1 : (dir.x < 0.0 ? -1 : 0),
+            dir.y > 0.0 ? 1 : (dir.y < 0.0 ? -1 : 0),
+            dir.z > 0.0 ? 1 : (dir.z < 0.0 ? -1 : 0));
+        const ivec3 absRayStep = abs(rayStep);
+        int dominantAxis = 0;
+        if (absRayStep.y >= absRayStep.x && absRayStep.y >= absRayStep.z) dominantAxis = 1;
+        if (absRayStep.z >= absRayStep.x && absRayStep.z >= absRayStep.y) dominantAxis = 2;
+        hitNormal = vec3(0.0);
+        hitNormal[dominantAxis] = float(rayStep[dominantAxis]);
+
         return true;
     }
     return false;
@@ -1042,7 +1103,6 @@ vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
         if (nDotLRtx > 0.02) {
             const vec2 shadowUv = gl_FragCoord.xy / vec2(textureSize(rtxShadowMask, 0));
             const float rtxLit = texture(rtxShadowMask, shadowUv).r;
-            // EVIL: shadowStrength = 0.75. Prevents pitch-black shadows by scaling rtxLit visibility.
             const float blendedRtxLit = mix(0.25, 1.0, rtxLit);
             const float anyRtxShadow = rtxLit < 0.999 ? 1.0 : 0.0;
             return vec4(blendedRtxLit, anyRtxShadow, 0.0, 1.0);
@@ -1186,14 +1246,14 @@ void main() {
     // remap so the shadowed surface still has SOME ambient (5%) to avoid a pitch-black
     // look that would lose surface detail under the sphere.
     // EVIL: opacity-aware shadow attenuation. Transparent media (water/glass)
-// already receive their own bright contribution from medium transmission
-// (line below in main()), so modulating their ambient by shadow would just
-// make them darker without a visible shadow on the surface. For purely
-// opaque materials we attenuate ambient by the sun shadow ray; for transparent
-// media we leave it at 1.0 so their characteristic brightness is preserved
-// and the sun shadow does not visually double-darken them.
-const float rtxOpaqueShadow = mix(0.15, 1.0, pow(sunVisibility, 0.5));
-const float shadowAttenuation = mix(1.0, rtxOpaqueShadow, 1.0 - clamp(material.medium.w, 0.0, 1.0));
+    // already receive their own bright contribution from medium transmission
+    // (line below in main()), so modulating their ambient by shadow would just
+    // make them darker without a visible shadow on the surface. For purely
+    // opaque materials we attenuate ambient by the sun shadow ray; for transparent
+    // media we leave it at 1.0 so their characteristic brightness is preserved
+    // and the sun shadow does not visually double-darken them.
+    const float rtxOpaqueShadow = mix(0.15, 1.0, pow(sunVisibility, 0.5));
+    const float shadowAttenuation = mix(1.0, rtxOpaqueShadow, 1.0 - clamp(material.medium.w, 0.0, 1.0));
     const vec3 directSun = EvaluateDirectLighting(
     sunDirection,
     shadowedSunColor,

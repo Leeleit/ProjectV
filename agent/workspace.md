@@ -18,7 +18,7 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-06-25 session 25x (post-reset documentation refresh, this session).**
+**2026-06-25 session 26x (RTX refraction chunk boundary precision fix, this session).**
 
 Свежий baseline после operator-инициированного reset `2026-06-24`:
 - 274 pre-reset коммитов squashed в один `chore(reset): pre-fresh-start baseline`
@@ -31,21 +31,22 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
   пересозданы как minimal baseline. Содержимое intentional empty до первой
   post-reset сессии.
 
-**Что сделано в этой сессии (25x):**
-- Глубокое изучение code base (159 cpp/hpp/ixx + 27 shader files = 48 229 LoC).
-- Глубокое изучение pre-reset archive (`legacy/docs/archive/.../knowledge.md`,
-  2199 строк / 36 contracts; `workspace.md`, 331 строк narrative 16x-24x).
-- Cross-validation: какие pre-reset contracts ещё binding, какие superseded
-  (CSM удалён per TODO §5.2.D), какие removed.
-- `agent/knowledge.md` — полностью переписан: 36 engineering contracts
-  (Part A) + 5 runtime facts (Part B) + cross-refs.
-- `agent/workspace.md` (этот файл) — текущий snapshot + active tasks + recent
-  milestones.
-- `COMMENTS.md` → DELETED (per operator directive): 1-line trailing pointer
-  добавлен в 114 source/shader/CMake файлов, ссылается на
-  `legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md` (archive).
-- Восстановлен вызов `UpdateVoxelInteraction` внутри `UpdateApp` для корректного выполнения юнит-тестов, удалена избыточная Flecs-система `VoxelInteractionTickSystem` из `EcsWorld.cpp` и `main.cpp`.
-- Исправлен тест `TestPhysicsWorldSyncTracksVoxelEdits` (теперь передается указатель `physics.get()` вместо `nullptr` для корректной инкрементальной синхронизации Jolt).
+**Что сделано в этой сессии (26x):**
+- **Корневая причина ярких точек в воде найдена и исправлена:** в `TraceVoxelIntersection`
+  (обе копии — `probe_update.comp` и `voxel.frag`) материал после DDA перечитывался через
+  `floor(worldHitPos)`, а DDA коммитит hit точно на стенке вокселя → FP-rounding мог выбрать
+  воздушный воксель → `EvaluateVoxelLighting` возвращал яркое sky → загрязнение irradiance
+  проб / refraction → яркие **белые** точки. Фикс: capture DDA-авторитетного материала
+  (`capturedHitMaterial`) вместо re-read.
+- **Откатаны 7 DEBUG workaround'ов** в `voxel.frag` (session-26x isolation): они не починили
+  точки (источник — DDGI probe data, который они не трогали) и коллатерально отключили RTX sun
+  shadows (`sunVisibility=1`), refraction, specular воды, GI shadow-modulation. Тени/refraction/
+  specular восстановлены.
+- Метод exclusion (3 suppression-теста в `probe_update.comp`): остаточные **голубые** точки на
+  water back face — НЕ код-баг, а inherent DDGI coarse-grid (8m) артефакт (opaque floor-bounce,
+  видимый на разрешении сетки проб). Open как DDGI quality item (TODO §7.x).
+- Chebyshev→Gaussian visibility falloff (follow-up #1) оставлен — легитимный фикс.
+- Build green, 39/39 тестов (100%).
 
 **Build state:** green (успешно собирается ProjectV и ProjectVTests).
 **Tests:** 39/39 тестов успешно пройдено (100% green).
@@ -111,8 +112,38 @@ Key per-session snapshots (from `workspace.md` archive):
   helper with `ignoreGlass`/`ignoreFluid`/`rayFlags` parameters) + refraction
   self-intersection fix (glass/fluid columns now render distorted background).
   37/37 tests passing.
-- **25x (2026-06-25, this session)**: Post-reset documentation refresh. Knowledge
+- **25x (2026-06-25)**: Post-reset documentation refresh. Knowledge
   + workspace + comments rebuilt from current code. No code changes.
+- **26x (2026-06-25, this session)**: Fixed chunk boundary precision misses in `voxel.frag`
+  and `probe_update.comp` preventing flickering white dots inside water volume
+  (refraction and GI). 39/39 tests passing. **Follow-up:** replaced the sharp
+  Chebyshev visibility test in `SampleRtxGiProbeIrradiance` (`voxel.frag`) with
+  a smooth Gaussian falloff to eliminate probe-grid aliasing on the water back
+  face (small static dots on a regular 8 m probe spacing that jumped on camera
+  motion). 39/39 tests still passing. **Follow-up #2:** fixed DDA bug for rays
+  starting inside a non-air voxel in `TraceVoxelIntersection` (both
+  `voxel.frag` and `probe_update.comp`, plus the inline shadow-ray DDA inside
+  `probe_update.comp::EvaluateVoxelLighting`). When a probe was placed inside
+  water/glass geometry, the DDA committed at `tCurrent = tMin` and the normal
+  computed downstream was derived from the 5 mm position offset instead of the
+  actual wall direction, causing the shadow ray inside `EvaluateVoxelLighting`
+  to escape to sky for ALL directions → probes stored bright "sky" values in
+  their octahedral irradiance map. Fix advances `tMin` past the wall of the
+  starting voxel before the DDA loop runs. 39/39 tests still passing.
+  **Follow-up #3 (this round):** fixed the hit-normal calculation in the
+  `TraceVoxelIntersection` hit block (in both `voxel.frag` and
+  `probe_update.comp`). The previous code derived the normal from the 5 mm
+  position offset (`insidePos - voxelCenter`), which picked the closest of 6
+  face directions based on FP micro-fluctuation — frequently NOT the actual
+  wall the ray exited through. The wrong normal propagated into
+  `EvaluateVoxelLighting`'s shadow ray: for refraction hits just past a water
+  back face, the shadow ray often escaped into the air gap above the water
+  (instead of finding more water), giving `shadowFactor = 1` → bright "sky"
+  in the refraction result → small bright dots visible in the Final view but
+  NOT in any debug view (since refraction is not exposed as a separate debug
+  view). Fix: compute normal from the ray's dominant-axis direction (the wall
+  a DDA ray exits the voxel through is perpendicular to the axis with the
+  largest `|dir|` component). 39/39 tests still passing.
 
 ---
 

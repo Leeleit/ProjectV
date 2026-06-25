@@ -158,7 +158,8 @@ vec3 ComputeRayStepTMax(
 bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDistance, out float hitT, out uint hitMaterial, out vec3 hitNormal) {
     rayQueryEXT rq;
     rayQueryInitializeEXT(rq, rtxTlas, gl_RayFlagsNoOpaqueEXT, 0xFFu, origin, 0.001, dir, maxDistance);
-    
+    uint capturedHitMaterial = 0u; // EVIL: DDA-authoritative hit material. The DDA commits at the entry wall of the solid voxel, so re-deriving the material from worldHitPos via floor() is unreliable (FP rounding can pick the air voxel on the near side of the wall). Capture the material the DDA actually stopped in and return it directly.
+
     while (rayQueryProceedEXT(rq)) {
         if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionAABBEXT) {
             uint chunkIndex = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, false);
@@ -178,26 +179,60 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             float tEntry = max(max(tEnter.x, tEnter.y), tEnter.z);
             float tExitWorld = min(min(tExit.x, tExit.y), tExit.z);
             
-            float tMin = max(tEntry, rayTmin);
+            float tMin = max(tEntry, rayTmin) + 1e-4; // EVIL: offset to prevent chunk boundary DDA missing
             float tMax = tExitWorld;
             
             vec3 rayOriginLocal = rayQueryGetIntersectionObjectRayOriginEXT(rq, false) - chunk.chunkOrigin.xyz;
             vec3 rayDirLocal = rayQueryGetIntersectionObjectRayDirectionEXT(rq, false);
             ivec3 chunkExtent = ivec3(chunk.chunkExtentAndNonAir.xyz);
-            
+
             vec3 localStartPos = rayOriginLocal + rayDirLocal * tMin;
             ivec3 currentVoxel = ivec3(floor(localStartPos));
-            
+
             const ivec3 stepDirection = ivec3(
                 rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
                 rayDirLocal.y > 0.0 ? 1 : (rayDirLocal.y < 0.0 ? -1 : 0),
                 rayDirLocal.z > 0.0 ? 1 : (rayDirLocal.z < 0.0 ? -1 : 0));
-            
+
             const vec3 tDelta = vec3(
                 abs(rayDirLocal.x) > 0.00001 ? abs(1.0 / rayDirLocal.x) : kHugeRayT,
                 abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
                 abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
-            
+
+            // EVIL: handle rays that START inside a non-air voxel (probe lies inside
+            // water/glass). Without this, the DDA commits at tCurrent = tMin on the
+            // first iteration, and the normal computed in the outer hit block is
+            // derived from the tiny position offset instead of the actual wall
+            // direction. The wrong normal causes the shadow ray inside
+            // EvaluateVoxelLighting to escape to sky → bright "sky" value stored
+            // for ALL directions from a probe inside opaque geometry. Downstream
+            // symptom: bright discrete dots on the water back face visible
+            // through the glass sphere (probe grid sampling picks up the wrong
+            // direction-cone values). Fix: advance the start position past the
+            // wall of the starting voxel before the DDA loop.
+            if (all(greaterThanEqual(currentVoxel, ivec3(0))) && all(lessThan(currentVoxel, chunkExtent))) {
+                uint startMatIndex = DecodeChunkVoxelMaterial(chunk, uvec3(currentVoxel));
+                if (startMatIndex != 0u) {
+                    vec3 tExitVoxelAxis = vec3(kHugeRayT);
+                    if (abs(rayDirLocal.x) > 0.00001) {
+                        const float nextBoundaryX = stepDirection.x > 0 ? float(currentVoxel.x + 1) : float(currentVoxel.x);
+                        tExitVoxelAxis.x = (nextBoundaryX - rayOriginLocal.x) / rayDirLocal.x;
+                    }
+                    if (abs(rayDirLocal.y) > 0.00001) {
+                        const float nextBoundaryY = stepDirection.y > 0 ? float(currentVoxel.y + 1) : float(currentVoxel.y);
+                        tExitVoxelAxis.y = (nextBoundaryY - rayOriginLocal.y) / rayDirLocal.y;
+                    }
+                    if (abs(rayDirLocal.z) > 0.00001) {
+                        const float nextBoundaryZ = stepDirection.z > 0 ? float(currentVoxel.z + 1) : float(currentVoxel.z);
+                        tExitVoxelAxis.z = (nextBoundaryZ - rayOriginLocal.z) / rayDirLocal.z;
+                    }
+                    const float tWall = min(min(tExitVoxelAxis.x, tExitVoxelAxis.y), tExitVoxelAxis.z);
+                    tMin += tWall + 1e-4;
+                    localStartPos = rayOriginLocal + rayDirLocal * tMin;
+                    currentVoxel = ivec3(floor(localStartPos));
+                }
+            }
+
             vec3 tMaxAxis = tMin + ComputeRayStepTMax(localStartPos, currentVoxel, stepDirection, rayDirLocal);
             
             float tCurrent = tMin;
@@ -238,6 +273,7 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
             }
             
             if (hitMat != 0u) {
+                capturedHitMaterial = hitMat;
                 rayQueryGenerateIntersectionEXT(rq, tCurrent);
             }
         }
@@ -245,20 +281,27 @@ bool TraceVoxelIntersection(const vec3 origin, const vec3 dir, const float maxDi
     
     if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionGeneratedEXT) {
         hitT = rayQueryGetIntersectionTEXT(rq, true);
-        vec3 worldHitPos = origin + dir * hitT;
-        vec3 insidePos = worldHitPos + dir * 0.005;
-        ivec3 hitVoxel = ivec3(floor(insidePos));
-        hitMaterial = ReadVoxelMaterial(hitVoxel);
-        
-        vec3 diff = insidePos - (vec3(hitVoxel) + 0.5);
-        vec3 absDiff = abs(diff);
-        if (absDiff.x > absDiff.y && absDiff.x > absDiff.z) {
-            hitNormal = vec3(diff.x > 0.0 ? 1.0 : -1.0, 0.0, 0.0);
-        } else if (absDiff.y > absDiff.z) {
-            hitNormal = vec3(0.0, diff.y > 0.0 ? 1.0 : -1.0, 0.0);
-        } else {
-            hitNormal = vec3(0.0, 0.0, diff.z > 0.0 ? 1.0 : -1.0);
-        }
+        hitMaterial = capturedHitMaterial;
+
+        // EVIL: compute hit normal from the ray's dominant axis direction, NOT from
+        // the 5mm position offset. The previous position-offset-based normal
+        // frequently produced a normal pointing along an axis that did NOT
+        // correspond to the actual wall the ray exited the voxel through. The
+        // wrong normal propagated to EvaluateVoxelLighting's shadow ray, causing
+        // bright "sky" values to leak from probe directions where the probe lies
+        // inside opaque geometry (water/glass). Correct: outward normal is
+        // sign(dir.dominantAxis) * e_dominantAxis for an axis-aligned DDA ray.
+        const ivec3 rayStep = ivec3(
+            dir.x > 0.0 ? 1 : (dir.x < 0.0 ? -1 : 0),
+            dir.y > 0.0 ? 1 : (dir.y < 0.0 ? -1 : 0),
+            dir.z > 0.0 ? 1 : (dir.z < 0.0 ? -1 : 0));
+        const ivec3 absRayStep = abs(rayStep);
+        int dominantAxis = 0;
+        if (absRayStep.y >= absRayStep.x && absRayStep.y >= absRayStep.z) dominantAxis = 1;
+        if (absRayStep.z >= absRayStep.x && absRayStep.z >= absRayStep.y) dominantAxis = 2;
+        hitNormal = vec3(0.0);
+        hitNormal[dominantAxis] = float(rayStep[dominantAxis]);
+
         return true;
     }
     return false;
@@ -305,20 +348,51 @@ vec3 EvaluateVoxelLighting(const vec3 hitPos, const vec3 normal, const uint matI
             vec3 rayOriginLocal = rayQueryGetIntersectionObjectRayOriginEXT(sq, false) - chunk.chunkOrigin.xyz;
             vec3 rayDirLocal = rayQueryGetIntersectionObjectRayDirectionEXT(sq, false);
             ivec3 chunkExtent = ivec3(chunk.chunkExtentAndNonAir.xyz);
-            
+
             vec3 localStartPos = rayOriginLocal + rayDirLocal * tMin;
             ivec3 currentVoxel = ivec3(floor(localStartPos));
-            
+
             const ivec3 stepDirection = ivec3(
                 rayDirLocal.x > 0.0 ? 1 : (rayDirLocal.x < 0.0 ? -1 : 0),
                 rayDirLocal.y > 0.0 ? 1 : (rayDirLocal.y < 0.0 ? -1 : 0),
                 rayDirLocal.z > 0.0 ? 1 : (rayDirLocal.z < 0.0 ? -1 : 0));
-            
+
             const vec3 tDelta = vec3(
                 abs(rayDirLocal.x) > 0.00001 ? abs(1.0 / rayDirLocal.x) : kHugeRayT,
                 abs(rayDirLocal.y) > 0.00001 ? abs(1.0 / rayDirLocal.y) : kHugeRayT,
                 abs(rayDirLocal.z) > 0.00001 ? abs(1.0 / rayDirLocal.z) : kHugeRayT);
-            
+
+            // EVIL: handle shadow rays that START inside a non-air voxel (e.g., probe
+            // stores irradiance by tracing shadow rays from the probe position; if the
+            // probe lies inside water/glass, the shadow ray starts inside opaque
+            // geometry). Without this advance, the DDA commits at tCurrent = tMin on
+            // the first iteration and the wrong normal (computed from position offset)
+            // causes the shadow test to mis-classify the probe as unshadowed,
+            // storing bright "sky" values in the probe's octahedral map. Fix: advance
+            // past the wall of the starting voxel before the DDA loop.
+            if (all(greaterThanEqual(currentVoxel, ivec3(0))) && all(lessThan(currentVoxel, chunkExtent))) {
+                uint startMatIndex = DecodeChunkVoxelMaterial(chunk, uvec3(currentVoxel));
+                if (startMatIndex != 0u) {
+                    vec3 tExitVoxelAxis = vec3(kHugeRayT);
+                    if (abs(rayDirLocal.x) > 0.00001) {
+                        const float nextBoundaryX = stepDirection.x > 0 ? float(currentVoxel.x + 1) : float(currentVoxel.x);
+                        tExitVoxelAxis.x = (nextBoundaryX - rayOriginLocal.x) / rayDirLocal.x;
+                    }
+                    if (abs(rayDirLocal.y) > 0.00001) {
+                        const float nextBoundaryY = stepDirection.y > 0 ? float(currentVoxel.y + 1) : float(currentVoxel.y);
+                        tExitVoxelAxis.y = (nextBoundaryY - rayOriginLocal.y) / rayDirLocal.y;
+                    }
+                    if (abs(rayDirLocal.z) > 0.00001) {
+                        const float nextBoundaryZ = stepDirection.z > 0 ? float(currentVoxel.z + 1) : float(currentVoxel.z);
+                        tExitVoxelAxis.z = (nextBoundaryZ - rayOriginLocal.z) / rayDirLocal.z;
+                    }
+                    const float tWall = min(min(tExitVoxelAxis.x, tExitVoxelAxis.y), tExitVoxelAxis.z);
+                    tMin += tWall + 1e-4;
+                    localStartPos = rayOriginLocal + rayDirLocal * tMin;
+                    currentVoxel = ivec3(floor(localStartPos));
+                }
+            }
+
             vec3 tMaxAxis = tMin + ComputeRayStepTMax(localStartPos, currentVoxel, stepDirection, rayDirLocal);
             
             float tCurrent = tMin;
