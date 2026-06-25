@@ -622,10 +622,9 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"RPASS SHAD %.2f MES %.2f TAA %.2f OVL %.2f HUD %.2f CHNK %u",
+		"RPASS SHAD %.2f MES %.2f OVL %.2f HUD %.2f CHNK %u",
 		stats.renderPassShadowMs,
 		stats.renderPassMeshingMs,
-		stats.renderPassTaaResolveMs,
 		stats.renderPassDebugOverlayMs,
 		stats.renderPassDebugHudMs,
 		stats.renderPassDirtyChunkRebuiltCount);
@@ -715,33 +714,6 @@ size_t BuildStatsLines(
 		lineCount,
 		"TSHD %s",
 		TransparentShadowPolicyToString(stats.transparentShadowPolicy));
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
-		"TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s CAS %.2f",
-		GetBoolLabel(stats.taaEnabled),
-		stats.taaJitterX,
-		stats.taaJitterY,
-		stats.taaJitterScale,
-		stats.taaBlend,
-		2 * stats.taaNeighbourhoodRadius + 1,
-		2 * stats.taaNeighbourhoodRadius + 1,
-		GetBoolLabel(stats.taaHistoryValid),
-		stats.taaCasSharpnessMax);
-
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
-		"TAALYR %s BLF %.2f",
-		GetBoolLabel(stats.taaLayerHistoryValid),
-		stats.taaLayerBlendFactor);
-
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
-		"TAACUT %u CLR %.2f",
-		stats.taaCameraCutCount,
-		stats.taaCameraCutMaxDelta);
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
@@ -963,8 +935,6 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
-		PV_APPEND_HUD_LINE(outLines, lineCount, "T TAA  ;' JIT  -= BLND");
-		PV_APPEND_HUD_LINE(outLines, lineCount, ", NHOOD  . INVHIST");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");
 
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TIME [ DN  ] UP  \\ STEP  ` 1X");

@@ -11,9 +11,7 @@ import projectv.string_id;
 #include "asset/MeshGpuResources.hpp"
 import projectv.math;
 import projectv.string_id;
-#include "render/AntialiasingMode.hpp"
 #include "render/ShadowTypes.hpp"
-#include "render/TaaRenderTargets.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
 #include "render/HizCulling.hpp"
 #include "voxel/NanoVdb.hpp"
@@ -25,9 +23,6 @@ class RayTracedShadows;
 class RtxGiProbes;
 }  // namespace projectv::render
 
-namespace projectv::taa {
-struct OffscreenColorTarget;
-} // namespace projectv::taa
 #include "vk_mem_alloc.h"
 
 #include <array>
@@ -217,17 +212,15 @@ struct GraphicsPushConstants {
 	projectv::math::Vec4 cameraForward{};
 	std::array<int32_t, 4> worldMinAndChunkSize{};
 	std::array<uint32_t, 4> chunkGridAndFlags{};
-	projectv::math::Mat4 viewProjectionUnjittered{}; // unjittered counterpart for TAA motion vector reprojection (offset 128)
 };
 static_assert(std::is_standard_layout_v<GraphicsPushConstants>);
 static_assert(std::is_trivially_copyable_v<GraphicsPushConstants>);
-static_assert(sizeof(GraphicsPushConstants) == 192);
+static_assert(sizeof(GraphicsPushConstants) == 128);
 static_assert(offsetof(GraphicsPushConstants, viewProjection) == 0);
 static_assert(offsetof(GraphicsPushConstants, cameraPosition) == 64);
 static_assert(offsetof(GraphicsPushConstants, cameraForward) == 80);
 static_assert(offsetof(GraphicsPushConstants, worldMinAndChunkSize) == 96);
 static_assert(offsetof(GraphicsPushConstants, chunkGridAndFlags) == 112);
-static_assert(offsetof(GraphicsPushConstants, viewProjectionUnjittered) == 128);
 
 struct ShadowPushConstants {
 	uint32_t cascadeIndex = 0;
@@ -235,22 +228,6 @@ struct ShadowPushConstants {
 static_assert(std::is_standard_layout_v<ShadowPushConstants>);
 static_assert(std::is_trivially_copyable_v<ShadowPushConstants>);
 static_assert(sizeof(ShadowPushConstants) == 4);
-
-struct ResolvePushConstants {
-	projectv::math::Mat4 inverseCurrentViewProjection{};
-	projectv::math::Mat4 currentViewProjection{};
-	std::array<float, 2> renderExtentInverse{};
-	float taaBlend = 0.0f;
-	float taaCasSharpnessMax = 0.0f;
-};
-static_assert(std::is_standard_layout_v<ResolvePushConstants>);
-static_assert(std::is_trivially_copyable_v<ResolvePushConstants>);
-static_assert(sizeof(ResolvePushConstants) == 144);
-static_assert(offsetof(ResolvePushConstants, inverseCurrentViewProjection) == 0);
-static_assert(offsetof(ResolvePushConstants, currentViewProjection) == 64);
-static_assert(offsetof(ResolvePushConstants, renderExtentInverse) == 128);
-static_assert(offsetof(ResolvePushConstants, taaBlend) == 136);
-static_assert(offsetof(ResolvePushConstants, taaCasSharpnessMax) == 140);
 
 struct DebugOverlayPushConstants {
 	projectv::math::Mat4 viewProjection{};
@@ -386,7 +363,6 @@ struct FrameRenderData {
 	VkBuffer hzbVisibleCountBuffer = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
-	VkDescriptorSet taaResolveDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
@@ -429,7 +405,6 @@ struct DebugStats {
 	float renderPassShadowMs = 0.0f;
 	float renderPassMeshingMs = 0.0f;
 	float renderPassGraphicsMs = 0.0f;
-	float renderPassTaaResolveMs = 0.0f;
 	float renderPassDebugOverlayMs = 0.0f;
 	float renderPassDebugHudMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
@@ -475,23 +450,6 @@ struct DebugStats {
 	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
 	LightingDebugView lightingDebugView = LightingDebugView::Final;
 
-	bool taaEnabled = false;
-	float taaBlend = 0.0f;
-	uint32_t taaFrameCounter = 0u;
-	bool taaHistoryValid = false;
-	float taaJitterX = 0.0f;
-	float taaJitterY = 0.0f;
-
-	float taaJitterScale = 1.0f;
-	int32_t taaNeighbourhoodRadius = 1;
-	float taaCasSharpnessMax = 0.5f;
-
-	bool taaLayerHistoryValid = false;
-
-	float taaLayerBlendFactor = 0.4f;
-
-	uint32_t taaCameraCutCount = 0;
-	float taaCameraCutMaxDelta = 0.0f;
 	projectv::math::Vec3 sunDirection{};
 	float sunIntensity = 0.0f;
 	float sunShadowStrength = 0.0f;
@@ -656,7 +614,6 @@ struct RenderPassTimings {
 	float shadowMs = 0.0f;
 	float meshingMs = 0.0f;
 	float graphicsMs = 0.0f;
-	float taaResolveMs = 0.0f;
 	float debugOverlayMs = 0.0f;
 	float debugHudMs = 0.0f;
 
@@ -719,6 +676,11 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkImage depthImage = VK_NULL_HANDLE;
 	VkImageView depthImageView = VK_NULL_HANDLE;
 	VmaAllocation depthAllocation = nullptr;
+	VkImage sceneColorImage = VK_NULL_HANDLE;
+	VkImageView sceneColorImageView = VK_NULL_HANDLE;
+	VmaAllocation sceneColorAllocation = nullptr;
+	VkImageLayout sceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	bool sceneColorNeedsInit = false;
 	VkImage vctClipmapImage = VK_NULL_HANDLE;
 	VkImageView vctClipmapView = VK_NULL_HANDLE;
 	VmaAllocation vctClipmapAllocation = nullptr;
@@ -744,14 +706,6 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	bool hizCullingEnabled = false;
 
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VkImageLayout taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-	VkImageLayout taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-	VkImageLayout taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VkImageLayout taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VkImageLayout taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VkImageLayout taaMotionVectorHistoryCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipeline skyAtmospherePipeline = VK_NULL_HANDLE;
 	VkPipelineLayout skyAtmospherePipelineLayout = VK_NULL_HANDLE;
 	VkShaderModule skyAtmosphereVertexShaderModule = VK_NULL_HANDLE;
@@ -802,11 +756,8 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
-	VkPipeline graphicsPipelineTaaOn = VK_NULL_HANDLE;
 	VkPipeline graphicsPipelineRtx = VK_NULL_HANDLE;
-	VkPipeline graphicsPipelineRtxTaaOn = VK_NULL_HANDLE;
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
-	VkPipeline transparentGraphicsPipelineTaaOn = VK_NULL_HANDLE;
 	VkPipeline shadowGraphicsPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;
@@ -843,54 +794,12 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkDescriptorSetLayout worldGenDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool worldGenDescriptorPool = VK_NULL_HANDLE;
 
-	bool taaEnabled = true;
-	projectv::render::AntialiasingMode aaMode = projectv::render::AntialiasingMode::TAA; // default: TAA only (single-sample). MSAA requires `VK_EXT_multisampled_render_to_single_sampled` or all attachments multi-sampled (TODO follow-up).
-	float taaBlend = 0.40f;																 // per-frame history weight; 0.4 averages sub-pixel jitter across ~3 frames for visible AA without per-frame scene wobble
-	uint32_t taaFrameCounter = 0u;
-	bool taaHistoryValid = false;
-	bool taaSceneColorNeedsInit = true;
-	bool taaHistoryNeedsInit = true;
-	projectv::math::Mat4 taaPrevViewProjectionMatrix{};
-	float taaJitterX = 0.0f;
-	float taaJitterY = 0.0f;
-	float taaJitterScale = 1.0f;		// 1.0 = full Halton(2,3) sub-pixel jitter, ON by default for TAA
-	int32_t taaNeighbourhoodRadius = 1; // 3x3 (9 samples) for YCoCg outlier clamp; CAS corner samples use a fixed 3x3 window independently to avoid halos at larger radii
-
-	float taaCasSharpnessMax = 0.5f;
-
-	uint32_t taaCameraCutCount = 0;
-	float taaCameraCutMaxDelta = 0.0f;
-
-	bool taaPrevViewProjectionMatrixInitialized = false;
-
-	projectv::taa::OffscreenColorTarget *taaSceneColorTarget = nullptr;	  // single-sample resolve target + TAA input
-	projectv::taa::OffscreenColorTarget *taaSceneColorMsTarget = nullptr; // multi-sampled render attachment when msaaSamples > 1
-	projectv::taa::OffscreenColorTarget *taaHistoryColorTarget = nullptr;
-
-	projectv::taa::OffscreenColorTarget *taaLayerSceneColorTarget = nullptr;
-	projectv::taa::OffscreenColorTarget *taaLayerHistoryColorTarget = nullptr;
-
-	projectv::taa::OffscreenColorTarget *taaMotionVectorTarget = nullptr;
-	projectv::taa::OffscreenColorTarget *taaMotionVectorHistoryTarget = nullptr;
-
-	bool taaLayerHistoryValid = false;
-
-	float taaLayerBlendFactor = 0.4f;
-	VkSampler taaLinearSampler = VK_NULL_HANDLE;
-	VkImageView taaResolveAttachmentImageView = VK_NULL_HANDLE;
-	VkPipelineLayout taaResolvePipelineLayout = VK_NULL_HANDLE;
-	VkPipeline taaResolvePipeline = VK_NULL_HANDLE;
-	VkDescriptorSetLayout taaResolveDescriptorSetLayout = VK_NULL_HANDLE;
-	VkDescriptorPool taaResolveDescriptorPool = VK_NULL_HANDLE;
-	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> taaResolveDescriptorSets{};
-
 	std::vector<ModelRegistryEntry> modelRegistry;
 	std::vector<ModelInstanceData> modelInstances;
 
 	std::vector<ModelInstanceData> visibleModelInstances;
 	VkPipelineLayout modelPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline modelPipeline = VK_NULL_HANDLE;
-	VkPipeline modelPipelineTaaOn = VK_NULL_HANDLE;
 	RenderPassTimings renderPassTimings{};
 };
 

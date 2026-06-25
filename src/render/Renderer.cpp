@@ -6,7 +6,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/ScreenshotCapture.hpp"
-#include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
@@ -415,90 +414,22 @@ void RecordGraphicsCommands(
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
 		RecordShadowCommands(render, frameRenderData, cmd);
 
-		// EVIL: RecordTlasBuild moved to frame-record before RecordVoxelAwareRtxShadowPass to eliminate 1-frame TLAS latency / shimmer (P1A-3b).
-
-		const bool taaOn = render.taaEnabled &&
-						   render.taaSceneColorTarget != nullptr && render.taaHistoryColorTarget != nullptr &&
-						   render.taaResolvePipeline != VK_NULL_HANDLE && render.taaResolvePipelineLayout != VK_NULL_HANDLE;
-
-		if (!taaOn) {
-			TransitionImage(
-				cmd,
-				swapchain.images[imageIndex],
-				VK_IMAGE_ASPECT_COLOR_BIT,
-				VK_IMAGE_LAYOUT_UNDEFINED,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				VK_PIPELINE_STAGE_2_NONE,
-				0,
-				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-		} else {
-			const VkImageLayout oldSceneLayout = render.taaSceneColorCurrentLayout;
-			const VkPipelineStageFlags2 oldSceneStage =
-				oldSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED
-					? VK_PIPELINE_STAGE_2_NONE
-					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-			const VkAccessFlags2 oldSceneAccess =
-				oldSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-			TransitionImage(
-				cmd,
-				render.taaSceneColorTarget->image,
-				VK_IMAGE_ASPECT_COLOR_BIT,
-				oldSceneLayout,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				oldSceneStage,
-				oldSceneAccess,
-				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			render.taaSceneColorNeedsInit = false;
-		}
-
-		{
-			const VkImageLayout oldLayerSceneLayout = render.taaLayerSceneColorCurrentLayout;
-			const VkPipelineStageFlags2 oldLayerSceneStage =
-				oldLayerSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED
-					? VK_PIPELINE_STAGE_2_NONE
-					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-			const VkAccessFlags2 oldLayerSceneAccess =
-				oldLayerSceneLayout == VK_IMAGE_LAYOUT_UNDEFINED
-					? 0
-					: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-			TransitionImage(
-				cmd,
-				render.taaLayerSceneColorTarget->image,
-				VK_IMAGE_ASPECT_COLOR_BIT,
-				oldLayerSceneLayout,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				oldLayerSceneStage,
-				oldLayerSceneAccess,
-				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-			render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		}
-
-		{
-			const VkImageLayout oldLayerHistoryLayout = render.taaLayerHistoryColorCurrentLayout;
-			const VkPipelineStageFlags2 oldLayerHistoryStage =
-				oldLayerHistoryLayout == VK_IMAGE_LAYOUT_UNDEFINED
-					? VK_PIPELINE_STAGE_2_NONE
-					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-			const VkAccessFlags2 oldLayerHistoryAccess =
-				oldLayerHistoryLayout == VK_IMAGE_LAYOUT_UNDEFINED
-					? 0
-					: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-			TransitionImage(
-				cmd,
-				render.taaLayerHistoryColorTarget->image,
-				VK_IMAGE_ASPECT_COLOR_BIT,
-				oldLayerHistoryLayout,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				oldLayerHistoryStage,
-				oldLayerHistoryAccess,
-				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-			render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		}
+		TransitionImage(
+			cmd,
+			render.sceneColorImage,
+			VK_IMAGE_ASPECT_COLOR_BIT,
+			render.sceneColorCurrentLayout,
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			render.sceneColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED
+				? VK_PIPELINE_STAGE_2_NONE
+				: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+			render.sceneColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED
+				? 0
+				: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+		render.sceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		render.sceneColorNeedsInit = false;
 
 		const VkImageLayout oldDepthLayout = render.depthImageCurrentLayout;
 		const VkPipelineStageFlags2 oldDepthStage =
@@ -538,100 +469,25 @@ void RecordGraphicsCommands(
 		};
 		constexpr VkClearValue clearDepthValue{.depthStencil = {1.0f, 0}};
 
-		// MSAA: when `aaMode` requests MSAA samples > 1, the voxel + model + transparent
-		// passes render into `taaSceneColorMsTarget` (multi-sampled), and the
-		// dynamic-rendering auto-resolve writes the averaged result into
-		// `taaSceneColorTarget` (single-sample) which the TAA resolve reads from.
-		const std::uint32_t msaaSamples = projectv::render::MsaaSamplesForMode(render.aaMode);
-		const bool msTargetReady = msaaSamples > 1u &&
-								   render.taaSceneColorMsTarget != nullptr &&
-								   render.taaSceneColorMsTarget->imageView != VK_NULL_HANDLE;
-		const VkImageView mainColor0View = taaOn ? VK_NULL_HANDLE : swapchain.imageViews[imageIndex];
-		const VkImageView mainColor1View = taaOn
-											   ? (msTargetReady
-													  ? render.taaSceneColorMsTarget->imageView
-													  : render.taaSceneColorTarget->imageView)
-											   : VK_NULL_HANDLE;
-		const VkImageView mainColor2View = render.taaLayerSceneColorTarget != nullptr
-											   ? render.taaLayerSceneColorTarget->imageView
-											   : VK_NULL_HANDLE;
-		const VkImageView mainColor3View = render.taaMotionVectorTarget != nullptr
-											   ? render.taaMotionVectorTarget->imageView
-											   : VK_NULL_HANDLE;
-
-		const VkImageView activeSceneColorView = mainColor0View != VK_NULL_HANDLE ? mainColor0View : mainColor1View;
 		const bool skyPassActive = projectv::render::IsSkyAtmosphereEnabled() &&
 								   render.skyAtmospherePipelineEnabled &&
-								   activeSceneColorView != VK_NULL_HANDLE;
+								   render.sceneColorImageView != VK_NULL_HANDLE;
 		const VkAttachmentLoadOp sceneColorLoadOp = skyPassActive ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
 		const VkAttachmentLoadOp depthLoadOp = skyPassActive ? VK_ATTACHMENT_LOAD_OP_LOAD : VK_ATTACHMENT_LOAD_OP_CLEAR;
-
-		// When MSAA is active, `mainColor1View` is the multi-sampled attachment and we
-		// must declare `resolveImageView` for the auto-resolve at end of pass. The
-		// resolve target is the single-sample `taaSceneColorTarget` (TAA input).
-		const VkImageView resolveImageView = (taaOn && msTargetReady)
-												 ? render.taaSceneColorTarget->imageView
-												 : VK_NULL_HANDLE;
-		const VkResolveModeFlagBits resolveMode = (taaOn && msTargetReady)
-													  ? VK_RESOLVE_MODE_AVERAGE_BIT
-													  : VK_RESOLVE_MODE_NONE;
 
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
-			.imageView = mainColor0View,
+			.imageView = render.sceneColorImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = sceneColorLoadOp,
-			.storeOp = mainColor0View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clearColorValue,
 		};
-		const VkRenderingAttachmentInfo colorAttachment1{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.pNext = nullptr,
-			.imageView = mainColor1View,
-			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = resolveMode,
-			.resolveImageView = resolveImageView,
-			.resolveImageLayout = resolveMode == VK_RESOLVE_MODE_AVERAGE_BIT
-									  ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-									  : VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = sceneColorLoadOp,
-			// MSAA path: multi-sampled attachment is consumed by the auto-resolve and is
-			// not read elsewhere, so DONT_CARE is safe. Single-sample path: this
-			// attachment IS the resolve target + TAA input, must be stored.
-			.storeOp = (resolveMode == VK_RESOLVE_MODE_AVERAGE_BIT)
-						   ? VK_ATTACHMENT_STORE_OP_DONT_CARE
-						   : VK_ATTACHMENT_STORE_OP_STORE,
-			.clearValue = clearColorValue,
-		};
-		const VkRenderingAttachmentInfo colorAttachment2{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.pNext = nullptr,
-			.imageView = mainColor2View,
-			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_NONE,
-			.resolveImageView = VK_NULL_HANDLE,
-			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = mainColor2View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.clearValue = clearColorValue,
-		};
-		const VkRenderingAttachmentInfo colorAttachment3{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.pNext = nullptr,
-			.imageView = mainColor3View,
-			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_NONE,
-			.resolveImageView = VK_NULL_HANDLE,
-			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = mainColor3View != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.clearValue = clearColorValue,
-		};
-		const VkRenderingAttachmentInfo colorAttachments[4] = {colorAttachment0, colorAttachment1, colorAttachment2, colorAttachment3};
+		const VkRenderingAttachmentInfo colorAttachments[1] = {colorAttachment0};
 		const VkRenderingAttachmentInfo depthAttachment{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
@@ -651,19 +507,11 @@ void RecordGraphicsCommands(
 			.renderArea = {{0, 0}, swapchain.extent},
 			.layerCount = 1,
 			.viewMask = 0,
-			.colorAttachmentCount = 4,
+			.colorAttachmentCount = 1,
 			.pColorAttachments = colorAttachments,
 			.pDepthAttachment = &depthAttachment,
 			.pStencilAttachment = nullptr,
 		};
-
-		if (render.taaMotionVectorTarget != nullptr && render.taaMotionVectorCurrentLayout != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
-			projectv::taa::TransitionTaaMotionVectorForWrite(
-				cmd,
-				*render.taaMotionVectorTarget,
-				render.taaMotionVectorCurrentLayout);
-			render.taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		}
 
 		if (skyPassActive) {
 			projectv::render::SkyAtmospherePushConstants skyPush{};
@@ -694,7 +542,7 @@ void RecordGraphicsCommands(
 				cmd,
 				render,
 				skyPush,
-				activeSceneColorView,
+				render.sceneColorImageView,
 				render.depthImageView,
 				swapchain.extent,
 				imageIndex);
@@ -756,10 +604,10 @@ void RecordGraphicsCommands(
 				&& render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
 			VkPipeline opaquePipeline = VK_NULL_HANDLE;
 			if (rtxPathActive) {
-				opaquePipeline = taaOn ? render.graphicsPipelineRtxTaaOn : render.graphicsPipelineRtx;
+				opaquePipeline = render.graphicsPipelineRtx;
 			}
 			if (opaquePipeline == VK_NULL_HANDLE) {
-				opaquePipeline = taaOn ? render.graphicsPipelineTaaOn : render.graphicsPipeline;
+				opaquePipeline = render.graphicsPipeline;
 			}
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
 				vkCmdPushConstants(
@@ -815,22 +663,15 @@ void RecordGraphicsCommands(
 			vkCmdBindPipeline(
 				cmd,
 				VK_PIPELINE_BIND_POINT_GRAPHICS,
-				taaOn && render.modelPipelineTaaOn != VK_NULL_HANDLE
-					? render.modelPipelineTaaOn
-					: render.modelPipeline);
+				render.modelPipeline);
 			struct ModelPush {
 				std::array<float, 16> viewProjection{};
-				std::array<float, 16> viewProjectionUnjittered{};
 				std::array<float, 16> modelTransform{};
 			};
 			ModelPush push{};
 			std::memcpy(
 				push.viewProjection.data(),
 				frameRenderData.graphicsPushConstants.viewProjection.data(),
-				sizeof(float) * 16);
-			std::memcpy(
-				push.viewProjectionUnjittered.data(),
-				frameRenderData.graphicsPushConstants.viewProjectionUnjittered.data(),
 				sizeof(float) * 16);
 			for (const ModelInstanceData &instance : render.visibleModelInstances) {
 				if (instance.indexCount == 0 || instance.vertexBuffer == VK_NULL_HANDLE || instance.indexBuffer == VK_NULL_HANDLE) {
@@ -858,13 +699,13 @@ void RecordGraphicsCommands(
 			}
 		}
 
-		if ((taaOn ? render.transparentGraphicsPipelineTaaOn : render.transparentGraphicsPipeline) &&
+		if (render.transparentGraphicsPipeline &&
 			frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE &&
 			frameRenderData.chunkDescriptorCount > 0 &&
 			frameRenderData.transparentIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Transparent Pass");
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, taaOn ? render.transparentGraphicsPipelineTaaOn : render.transparentGraphicsPipeline);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.transparentGraphicsPipeline);
 			vkCmdPushConstants(
 				cmd,
 				render.graphicsPipelineLayout,
@@ -880,14 +721,12 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
-		if (!taaOn) {
-			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-			RecordDebugHudCommands(render, frameRenderData, cmd);
-		}
+		RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
+		RecordDebugHudCommands(render, frameRenderData, cmd);
 
 		const bool cloudscapePassActive = projectv::render::IsCloudscapeEnabled() &&
 										 render.cloudscapePipelineEnabled;
-		if (cloudscapePassActive && activeSceneColorView != VK_NULL_HANDLE) {
+		if (cloudscapePassActive && render.sceneColorImageView != VK_NULL_HANDLE) {
 			projectv::render::CloudscapePushConstants cloudPush{};
 			cloudPush.cloudColorAndCoverage = {
 				projectv::render::kDefaultCloudColorR,
@@ -921,7 +760,7 @@ void RecordGraphicsCommands(
 				cmd,
 				render,
 				cloudPush,
-				activeSceneColorView,
+				render.sceneColorImageView,
 				render.depthImageView,
 				swapchain.extent,
 				imageIndex);
@@ -938,277 +777,70 @@ void RecordGraphicsCommands(
 
 		vkCmdEndRendering(cmd);
 
-		render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-		if (taaOn) {
-
+		// Scene color → swapchain blit (replaces former TAA resolve pass)
+		{
 			TransitionImage(
 				cmd,
-				render.taaSceneColorTarget->image,
+				render.sceneColorImage,
 				VK_IMAGE_ASPECT_COLOR_BIT,
 				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-			render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			TransitionImage(
-				cmd,
-				render.depthImage,
-				VK_IMAGE_ASPECT_DEPTH_BIT,
-				VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-				VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-				VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-				VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-			render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-
-			TransitionImage(
-				cmd,
-				render.taaHistoryColorTarget->image,
-				VK_IMAGE_ASPECT_COLOR_BIT,
-				render.taaHistoryColorCurrentLayout,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				render.taaHistoryColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED
-					? VK_PIPELINE_STAGE_2_NONE
-					: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				render.taaHistoryColorCurrentLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0
-																			 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-			render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			render.taaHistoryNeedsInit = false;
-
-			projectv::taa::TransitionTaaMotionVectorForSample(cmd, *render.taaMotionVectorTarget);
-			render.taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				VK_PIPELINE_STAGE_2_COPY_BIT,
+				VK_ACCESS_2_TRANSFER_READ_BIT);
 
 			TransitionImage(
 				cmd,
 				swapchain.images[imageIndex],
 				VK_IMAGE_ASPECT_COLOR_BIT,
 				VK_IMAGE_LAYOUT_UNDEFINED,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 				VK_PIPELINE_STAGE_2_NONE,
 				0,
+				VK_PIPELINE_STAGE_2_COPY_BIT,
+				VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
+			const VkImageBlit blitRegion{
+				.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+				.srcOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width),
+										   static_cast<int32_t>(swapchain.extent.height), 1}},
+				.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+				.dstOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width),
+										   static_cast<int32_t>(swapchain.extent.height), 1}},
+			};
+			vkCmdBlitImage(
+				cmd,
+				render.sceneColorImage,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				swapchain.images[imageIndex],
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&blitRegion,
+				VK_FILTER_LINEAR);
+
+			TransitionImage(
+				cmd,
+				render.sceneColorImage,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_PIPELINE_STAGE_2_COPY_BIT,
+				VK_ACCESS_2_TRANSFER_READ_BIT,
+				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			render.sceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			TransitionImage(
+				cmd,
+				swapchain.images[imageIndex],
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				VK_PIPELINE_STAGE_2_COPY_BIT,
+				VK_ACCESS_2_TRANSFER_WRITE_BIT,
 				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-
-			const VkRenderingAttachmentInfo resolveColorAttachment{
-				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-				.pNext = nullptr,
-				.imageView = swapchain.imageViews[imageIndex],
-				.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				.resolveMode = VK_RESOLVE_MODE_NONE,
-				.resolveImageView = VK_NULL_HANDLE,
-				.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.clearValue = clearColorValue,
-			};
-			const VkRenderingInfo resolveRenderingInfo{
-				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-				.pNext = nullptr,
-				.flags = 0,
-				.renderArea = {{0, 0}, swapchain.extent},
-				.layerCount = 1,
-				.viewMask = 0,
-				.colorAttachmentCount = 1,
-				.pColorAttachments = &resolveColorAttachment,
-				.pDepthAttachment = nullptr,
-				.pStencilAttachment = nullptr,
-			};
-			vkCmdBeginRendering(cmd, &resolveRenderingInfo);
-			vkCmdSetViewport(cmd, 0, 1, &viewport);
-			vkCmdSetScissor(cmd, 0, 1, &scissor);
-
-			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "TAA Resolve");
-			PV_PROFILE_GPU_LABEL_COLOR(cmd, "TAA Resolve", 0.20f, 0.65f, 1.00f, 1.0f);
-
-			const Uint64 taaResolveStartCounter = SDL_GetPerformanceCounter();
-
-			const projectv::math::Mat4 currentViewProj = frameRenderData.graphicsPushConstants.viewProjection;
-			ResolvePushConstants resolvePushConstants{};
-			resolvePushConstants.inverseCurrentViewProjection = projectv::math::inverse(currentViewProj);
-			resolvePushConstants.currentViewProjection = currentViewProj;
-			resolvePushConstants.renderExtentInverse = {
-				1.0f / static_cast<float>(swapchain.extent.width),
-				1.0f / static_cast<float>(swapchain.extent.height),
-			};
-
-			resolvePushConstants.taaBlend = render.taaEnabled ? render.taaBlend : 0.0f;
-			resolvePushConstants.taaCasSharpnessMax = render.taaCasSharpnessMax;
-
-			if (frameRenderData.taaResolveDescriptorSet != VK_NULL_HANDLE) {
-				vkCmdBindDescriptorSets(
-					cmd,
-					VK_PIPELINE_BIND_POINT_GRAPHICS,
-					render.taaResolvePipelineLayout,
-					0,
-					1,
-					&frameRenderData.taaResolveDescriptorSet,
-					0,
-					nullptr);
-			}
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.taaResolvePipeline);
-			vkCmdPushConstants(
-				cmd,
-				render.taaResolvePipelineLayout,
-				VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				sizeof(resolvePushConstants),
-				&resolvePushConstants);
-
-			vkCmdDraw(cmd, 3, 1, 0, 0);
-			{
-				const Uint64 taaResolveEndCounter = SDL_GetPerformanceCounter();
-				const double seconds = static_cast<double>(taaResolveEndCounter - taaResolveStartCounter) /
-									   static_cast<double>(SDL_GetPerformanceFrequency());
-				render.renderPassTimings.taaResolveMs = static_cast<float>(seconds * 1000.0);
-			}
-
-			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-			RecordDebugHudCommands(render, frameRenderData, cmd);
-
-			vkCmdEndRendering(cmd);
-
-			if (render.taaHistoryValid) {
-				TransitionImage(
-					cmd,
-					render.taaSceneColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_READ_BIT);
-				render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-				TransitionImage(
-					cmd,
-					render.taaHistoryColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_WRITE_BIT);
-				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-				const VkImageCopy historyCopyRegion{
-					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
-					.srcOffset = {0, 0, 0},
-					.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
-					.dstOffset = {0, 0, 0},
-					.extent = {swapchain.extent.width, swapchain.extent.height, 1u},
-				};
-				vkCmdCopyImage(
-					cmd,
-					render.taaSceneColorTarget->image,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					render.taaHistoryColorTarget->image,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					1,
-					&historyCopyRegion);
-
-				TransitionImage(
-					cmd,
-					render.taaSceneColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_READ_BIT,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-				render.taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				TransitionImage(
-					cmd,
-					render.taaHistoryColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_WRITE_BIT,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-				render.taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			} else {
-
-				render.taaHistoryValid = true;
-			}
-		}
-
-		if (render.taaLayerSceneColorTarget != nullptr && render.taaLayerHistoryColorTarget != nullptr && render.taaLayerSceneColorTarget->image != VK_NULL_HANDLE && render.taaLayerHistoryColorTarget->image != VK_NULL_HANDLE) {
-			if (render.taaLayerHistoryValid) {
-				TransitionImage(
-					cmd,
-					render.taaLayerSceneColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					render.taaLayerSceneColorCurrentLayout,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_READ_BIT);
-				render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-				TransitionImage(
-					cmd,
-					render.taaLayerHistoryColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					render.taaLayerHistoryColorCurrentLayout,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_WRITE_BIT);
-				render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
-				const VkImageCopy layerHistoryCopyRegion{
-					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
-					.srcOffset = {0, 0, 0},
-					.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
-					.dstOffset = {0, 0, 0},
-					.extent = {swapchain.extent.width, swapchain.extent.height, 1u},
-				};
-				vkCmdCopyImage(
-					cmd,
-					render.taaLayerSceneColorTarget->image,
-					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					render.taaLayerHistoryColorTarget->image,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					1,
-					&layerHistoryCopyRegion);
-
-				TransitionImage(
-					cmd,
-					render.taaLayerSceneColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					render.taaLayerSceneColorCurrentLayout,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_READ_BIT,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-				render.taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				TransitionImage(
-					cmd,
-					render.taaLayerHistoryColorTarget->image,
-					VK_IMAGE_ASPECT_COLOR_BIT,
-					render.taaLayerHistoryColorCurrentLayout,
-					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_WRITE_BIT,
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-				render.taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			} else {
-
-				render.taaLayerHistoryValid = true;
-			}
 		}
 
 		if (ShouldCaptureScreenshot(render)) {

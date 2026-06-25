@@ -257,20 +257,6 @@ bool SaveScreenshotCaptureMetadata(
 		"local_point_light_source_radius={:.6f}\n"
 		"local_point_light_shadow_strength={:.6f}\n"
 		"local_point_light_shadow_bias={:.6f}\n"
-		"taa_enabled={:d}\n"
-		"taa_jitter_x={:.6f}\n"
-		"taa_jitter_y={:.6f}\n"
-		"taa_jitter_scale={:.6f}\n"
-		"taa_blend={:.6f}\n"
-		"taa_neighbourhood_radius={}\n"
-		"taa_history_valid={:d}\n"
-		"taa_clamp_color_space={}\n"
-		"taa_cas_sharpness_max={:.6f}\n"
-		"taa_camera_cut_count={}\n"
-		"taa_camera_cut_max_delta={:.6f}\n"
-		"taa_layer_history_valid={:d}\n"
-		"taa_layer_blend_factor={:.6f}\n"
-		"taa_scene_color_format={}\n"
 		"transparent_shadow_policy={}\n",
 		screenshotPath,
 		VoxelScenePresetToString(scenePreset),
@@ -310,34 +296,18 @@ bool SaveScreenshotCaptureMetadata(
 		render.currentSceneLighting.localPointLightParams[1],
 		render.currentSceneLighting.localPointLightParams[2],
 		render.currentSceneLighting.localPointLightParams[3],
-		render.taaEnabled,
-		render.taaJitterX,
-		render.taaJitterY,
-		render.taaJitterScale,
-		render.taaBlend,
-		render.taaNeighbourhoodRadius,
-		render.taaHistoryValid,
-		"YCoCg",
-		render.taaCasSharpnessMax,
-		render.taaCameraCutCount,
-		render.taaCameraCutMaxDelta,
-		render.taaLayerHistoryValid,
-		render.taaLayerBlendFactor,
-		"B10G11R11_UFLOAT",
 		TransparentShadowPolicyToString(render.transparentShadowPolicy));
 
 	stream << fmt::format(
 		"render_pass_shadow_ms={:.6f}\n"
 		"render_pass_meshing_ms={:.6f}\n"
 		"render_pass_graphics_ms={:.6f}\n"
-		"render_pass_taa_resolve_ms={:.6f}\n"
 		"render_pass_debug_overlay_ms={:.6f}\n"
 		"render_pass_debug_hud_ms={:.6f}\n"
 		"render_pass_dirty_chunk_rebuilt_count={}\n",
 		render.renderPassTimings.shadowMs,
 		render.renderPassTimings.meshingMs,
 		render.renderPassTimings.graphicsMs,
-		render.renderPassTimings.taaResolveMs,
 		render.renderPassTimings.debugOverlayMs,
 		render.renderPassTimings.debugHudMs,
 		render.renderPassTimings.dirtyChunkRebuiltCount);

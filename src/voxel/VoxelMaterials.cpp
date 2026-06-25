@@ -401,8 +401,6 @@ const char *LightingDebugViewToString(const LightingDebugView debugView)
 		return "AOCC";
 	case LightingDebugView::Fog:
 		return "FOG";
-	case LightingDebugView::Taa:
-		return "TAA";
 	case LightingDebugView::VctDiffuse:
 		return "VCT_DIFF";
 	case LightingDebugView::VctSpecular:
@@ -448,8 +446,6 @@ LightingDebugView GetNextLightingDebugView(const LightingDebugView debugView)
 	case LightingDebugView::Occlusion:
 		return LightingDebugView::Fog;
 	case LightingDebugView::Fog:
-		return LightingDebugView::Taa;
-	case LightingDebugView::Taa:
 		return LightingDebugView::VctDiffuse;
 	case LightingDebugView::VctDiffuse:
 		return LightingDebugView::VctSpecular;

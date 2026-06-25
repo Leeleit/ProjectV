@@ -879,7 +879,7 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 		GetNextLightingDebugView(LightingDebugView::Occlusion) == LightingDebugView::Fog);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::Taa) == LightingDebugView::VctDiffuse);
+		GetNextLightingDebugView(LightingDebugView::Fog) == LightingDebugView::VctDiffuse);
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::VctDiffuse) == LightingDebugView::VctSpecular);

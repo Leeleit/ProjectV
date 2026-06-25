@@ -43,10 +43,6 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
-    vec4 taaParams;
-    mat4 prevViewProjectionMatrix;
-    vec4 taaHistoryParams;
-    vec4 taaLayerHistoryParams;
     vec4 vctParams;
     vec4 vctSpecularParams;
 } sceneLighting;
@@ -55,8 +51,6 @@ layout(set = 0, binding = 4, std430) readonly buffer PackedChunkVoxelPayload {
     uint chunkVoxelWords[];
 };
 
-
-layout(set = 0, binding = 6) uniform sampler2D layerHistory;
 
 layout(set = 0, binding = 11) uniform sampler3D vctClipmap;
 // EVIL: binding 12 = volumetricFog sampler3D FRAGMENT. Per TODO §5.4 Wronski 2014 fog
@@ -274,7 +268,6 @@ layout(push_constant) uniform PushConstants {
     vec4 cameraForward;
     ivec4 worldMinAndChunkSize;
     uvec4 chunkGridAndFlags;
-    mat4 viewProjectionUnjittered; // unjittered counterpart for TAA motion vector reprojection (offset 128)
 } pushConstants;
 
 layout(location = 0) in vec3 inNormal;
@@ -282,18 +275,8 @@ layout(location = 1) in vec3 inWorldPosition;
 layout(location = 2) flat in uint inMaterialIndex;
 layout(location = 3) in float inAmbientVisibility;
 
-#ifdef TAA_ENABLED
-layout(location = 1) out vec4 outSceneColor;
-#define OUT_COLOR outSceneColor
-#else
 layout(location = 0) out vec4 outColor;
 #define OUT_COLOR outColor
-#endif
-
-
-layout(location = 2) out vec4 outLayerMask;
-
-layout(location = 3) out vec2 outMotionVector;
 
 
 
@@ -1147,34 +1130,12 @@ void main() {
     if (!IsGlass(inMaterialIndex) && !IsFluid(inMaterialIndex)) {
         localAmbientOcclusionVisibility = ComputeAmbientOcclusionVisibility(inWorldPosition, normal);
     }
-    const bool layerHistoryValid = sceneLighting.taaLayerHistoryParams.z > 0.5;
-    const vec2 layerTexelSize = sceneLighting.taaLayerHistoryParams.xy;
-    const float layerBlend = clamp(sceneLighting.taaLayerHistoryParams.w, 0.0, 1.0);
-
-    vec2 layerUv = gl_FragCoord.xy * layerTexelSize;
-    if (layerHistoryValid) {
-        const vec4 prevClip = sceneLighting.prevViewProjectionMatrix *
-            vec4(inWorldPosition, 1.0);
-        if (prevClip.w > 0.0001) {
-            const vec2 reprojectedUv = prevClip.xy / prevClip.w * 0.5 + 0.5;
-            if (all(greaterThanEqual(reprojectedUv, vec2(0.0))) &&
-                all(lessThanEqual(reprojectedUv, vec2(1.0)))) {
-                layerUv = reprojectedUv;
-            }
-        }
-    }
-
-    const vec4 historyLayerSample = layerHistoryValid
-        ? texture(layerHistory, layerUv)
-        : vec4(1.0, 1.0, 1.0, 1.0);
 
     const float rawLocalPointLightVisibility = ComputeLocalPointLightVisibility(inWorldPosition, normal);
 
-    const float blendedLocalAmbientOcclusionVisibility = mix(localAmbientOcclusionVisibility, historyLayerSample.y, layerBlend);
-
-    const float blendedSunContactVisibility = mix(sunContactVisibility, historyLayerSample.x, layerBlend);
-    const float blendedLocalPointLightVisibility = mix(rawLocalPointLightVisibility, historyLayerSample.z, layerBlend);
-    const float ambientVisibility = geometryAmbientVisibility * blendedLocalAmbientOcclusionVisibility;
+    const float ambientVisibility = geometryAmbientVisibility * localAmbientOcclusionVisibility;
+    const float blendedSunContactVisibility = sunContactVisibility;
+    const float blendedLocalPointLightVisibility = rawLocalPointLightVisibility;
     const vec3 ambient =
     SampleEnvironmentDiffuse(normal) *
     albedo *
@@ -1378,7 +1339,7 @@ void main() {
 #endif
     }
 
-    if (lightingDebugView != 8u) {
+    if (lightingDebugView != 7u) {
         color = mix(color, fogColor, fog);
         color = color * volumetricFogTransmittance + volumetricFogAccum;
     }
@@ -1386,33 +1347,5 @@ void main() {
     color = ApplyToneMap(color);
     color = ApplyColorGrading(color);
 
-    outLayerMask = vec4(sunContactVisibility, localAmbientOcclusionVisibility, rawLocalPointLightVisibility, 1.0);
-
-    {
-        // TAA motion vector reprojection: use unjittered prev/curr so the per-frame sub-pixel
-        // jitter does not become a synthetic offset in the reprojection lookup, which would
-        // mis-target the previous-frame sample and produce screen shake when jitter != 0.
-        const vec4 prevClip = sceneLighting.prevViewProjectionMatrix *
-            vec4(inWorldPosition, 1.0);
-        vec2 motion = vec2(0.0);
-        if (prevClip.w > 0.0001) {
-            const vec2 prevNdc = prevClip.xy / prevClip.w * 0.5 + 0.5;
-            const vec4 currClip = pushConstants.viewProjectionUnjittered *
-                vec4(inWorldPosition, 1.0);
-            const vec2 currNdc = currClip.xy / currClip.w * 0.5 + 0.5;
-            motion = prevNdc - currNdc;
-        }
-        outMotionVector = motion;
-    }
-
-    // Color space consistency: write the same LDR (post-tonemap, post-grading) to both
-    // TAA-on and TAA-off outputs. Previously the TAA-on path wrote linear HDR and the
-    // resolve applied tonemap+grading, but history was already LDR (from the previous
-    // resolve output), so the blend mixed HDR current with LDR history — a
-    // mathematically undefined operation that produced the outlines and shake.
-#ifdef TAA_ENABLED
-    outSceneColor = vec4(color, material.baseColor.a);
-#else
     outColor = vec4(color, material.baseColor.a);
-#endif
 }

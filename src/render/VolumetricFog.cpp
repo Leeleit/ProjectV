@@ -470,8 +470,8 @@ bool CreateVolumetricFogResources(VulkanContextState *context, RenderState *rend
 
 		VkDescriptorImageInfo sceneColorInfo{};
 		sceneColorInfo.sampler = render->volumetricFogLinearSampler;
-		sceneColorInfo.imageView = render->taaSceneColorTarget != nullptr
-									  ? render->taaSceneColorTarget->imageView
+		sceneColorInfo.imageView = render->sceneColorImageView != VK_NULL_HANDLE
+									  ? render->sceneColorImageView
 									  : VK_NULL_HANDLE;
 		sceneColorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 

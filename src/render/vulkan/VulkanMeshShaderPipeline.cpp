@@ -22,7 +22,6 @@ constexpr char kMeshShaderFilename[] = "voxel_mesh.mesh.spv";
 // Per TODO.md §5.2.B the shadow visibility lives in `voxel.frag`; the mesh
 // path inherits it automatically once the right .spv is bound.
 constexpr char kVoxelFragmentShaderFilename[] = "voxel.frag.rtx.spv";
-constexpr char kMeshFragmentTaaOnShaderFilename[] = "voxel.frag.rtx_taa_on.spv";
 
 // EVIL: kMeshMaxOutputVertices/Primitives=256 = Vulkan 1.3 spec minimum for VkPhysicalDeviceMeshShaderPropertiesEXT. Real hardware (RTX 3060 Ti GA104, RDNA 4, Battlemage) reports 1024/256+. Clamped to 256 here for cross-vendor safety; bump to maxMeshOutputVertices from device if any 8³ chunk exceeds the limit.
 constexpr uint32_t kMeshMaxOutputVertices = 256u;

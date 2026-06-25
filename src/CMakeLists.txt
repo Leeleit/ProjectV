@@ -36,8 +36,6 @@ set(SHADERS
         ${SHADER_DIR}/fluid_ca.comp
         ${SHADER_DIR}/world_gen.comp
         ${SHADER_DIR}/voxelize.comp
-        ${SHADER_DIR}/taa_resolve.vert
-        ${SHADER_DIR}/taa_resolve.frag
         ${SHADER_DIR}/debug_overlay.vert
         ${SHADER_DIR}/debug_overlay.frag
         ${SHADER_DIR}/debug_hud.vert
@@ -70,28 +68,6 @@ foreach (SHADER ${SHADERS})
     list(APPEND SPV_SHADERS ${SPV})
 endforeach ()
 
-set(VOXEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/voxel.frag.taa_on.spv)
-add_custom_command(
-        OUTPUT ${VOXEL_FRAG_TAA_SPV}
-        COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
-        -DTAA_ENABLED ${SHADER_DIR}/voxel.frag -o ${VOXEL_FRAG_TAA_SPV}
-        DEPENDS ${SHADER_DIR}/voxel.frag
-        COMMAND_EXPAND_LISTS
-        VERBATIM
-)
-list(APPEND SPV_SHADERS ${VOXEL_FRAG_TAA_SPV})
-
-set(VOXEL_FRAG_RTX_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/voxel.frag.rtx_taa_on.spv)
-add_custom_command(
-        OUTPUT ${VOXEL_FRAG_RTX_TAA_SPV}
-        COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
-        -DTAA_ENABLED -DVOXEL_RTX_ENABLED ${SHADER_DIR}/voxel.frag -o ${VOXEL_FRAG_RTX_TAA_SPV}
-        DEPENDS ${SHADER_DIR}/voxel.frag
-        COMMAND_EXPAND_LISTS
-        VERBATIM
-)
-list(APPEND SPV_SHADERS ${VOXEL_FRAG_RTX_TAA_SPV})
-
 set(VOXEL_FRAG_RTX_SPV ${CMAKE_CURRENT_BINARY_DIR}/voxel.frag.rtx.spv)
 add_custom_command(
         OUTPUT ${VOXEL_FRAG_RTX_SPV}
@@ -102,17 +78,6 @@ add_custom_command(
         VERBATIM
 )
 list(APPEND SPV_SHADERS ${VOXEL_FRAG_RTX_SPV})
-
-set(MODEL_FRAG_TAA_SPV ${CMAKE_CURRENT_BINARY_DIR}/model.frag.taa_on.spv)
-add_custom_command(
-        OUTPUT ${MODEL_FRAG_TAA_SPV}
-        COMMAND ${PROJECTV_SHADER_COMPILER} ${PROJECTV_SHADER_COMPILER_ARGS}
-        -DTAA_ENABLED ${SHADER_DIR}/model.frag -o ${MODEL_FRAG_TAA_SPV}
-        DEPENDS ${SHADER_DIR}/model.frag
-        COMMAND_EXPAND_LISTS
-        VERBATIM
-)
-list(APPEND SPV_SHADERS ${MODEL_FRAG_TAA_SPV})
 
 add_custom_target(Shaders ALL DEPENDS ${SPV_SHADERS})
 
@@ -155,13 +120,10 @@ target_sources(ProjectV PRIVATE
         render/SceneResources.cpp
         render/HizCulling.cpp
         render/LodDownsampleGpuConsume.cpp
-        render/Taa.cpp
-        render/TaaRenderTargets.cpp
         render/RayTracedShadows.cpp
         render/RtxShadowPipeline.cpp
         render/RtxShadowSBT.cpp
         render/RtxGiProbes.cpp
-        render/vulkan/TaaResolvePipeline.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp

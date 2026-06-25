@@ -1,0 +1,4 @@
+[setLogFilename:271] Warning: Logging to renamed logging file (/home/le1t/Projects/ProjectV/runtime/ngx/nvsdk_ngx_01.log)
+[NGXSafeInitializeLog:148] App logging hooks successfully initialized
+[NGXLoadLibrary:58] Loaded library from path (libnvidia-ngx.so.1)
+[NGXLoadCoreLibrary:36] Loaded NGXCore from global search paths

@@ -22,18 +22,17 @@ enum class ExposureMeteringMode : uint8_t {
 
 enum class LightingDebugView : uint8_t {
 	Final = 0,
-	Ambient,
-	Direct,
-	Local,
-	Shadow,
-	Contact,
-	Occlusion,
-	Fog,
-	Taa,
-	VctDiffuse,
-	VctSpecular,
-	VolumetricFog,
-	VolumetricTransmittance,
+	Ambient = 1,
+	Direct = 2,
+	Local = 3,
+	Shadow = 4,
+	Contact = 5,
+	Occlusion = 6,
+	Fog = 7,
+	VctDiffuse = 9,
+	VctSpecular = 10,
+	VolumetricFog = 11,
+	VolumetricTransmittance = 12,
 };
 
 struct VoxelLightingDebugControls {
@@ -73,17 +72,12 @@ struct VoxelSceneLighting {
 	std::array<float, 4> localPointLightColorAndIntensity{};
 	std::array<float, 4> localPointLightParams{};
 
-	std::array<float, 4> taaParams{};
-	projectv::math::Mat4 prevViewProjectionMatrix{};
-	std::array<float, 4> taaHistoryParams{};
-
-	std::array<float, 4> taaLayerHistoryParams{};
 	std::array<float, 4> vctParams{};
 	std::array<float, 4> vctSpecularParams{};
 };
 static_assert(std::is_standard_layout_v<VoxelSceneLighting>);
 static_assert(std::is_trivially_copyable_v<VoxelSceneLighting>);
-static_assert(sizeof(VoxelSceneLighting) == 352);
+static_assert(sizeof(VoxelSceneLighting) == 240);
 static_assert(offsetof(VoxelSceneLighting, skyColorAndFogDensity) == 0);
 static_assert(offsetof(VoxelSceneLighting, horizonColorAndFogStart) == 16);
 static_assert(offsetof(VoxelSceneLighting, groundColorAndFogMax) == 32);
@@ -97,12 +91,8 @@ static_assert(offsetof(VoxelSceneLighting, exposureControl) == 144);
 static_assert(offsetof(VoxelSceneLighting, localPointLightPositionAndRadius) == 160);
 static_assert(offsetof(VoxelSceneLighting, localPointLightColorAndIntensity) == 176);
 static_assert(offsetof(VoxelSceneLighting, localPointLightParams) == 192);
-static_assert(offsetof(VoxelSceneLighting, taaParams) == 208);
-static_assert(offsetof(VoxelSceneLighting, prevViewProjectionMatrix) == 224);
-static_assert(offsetof(VoxelSceneLighting, taaHistoryParams) == 288);
-static_assert(offsetof(VoxelSceneLighting, taaLayerHistoryParams) == 304);
-static_assert(offsetof(VoxelSceneLighting, vctParams) == 320);
-static_assert(offsetof(VoxelSceneLighting, vctSpecularParams) == 336);
+static_assert(offsetof(VoxelSceneLighting, vctParams) == 208);
+static_assert(offsetof(VoxelSceneLighting, vctSpecularParams) == 224);
 
 constexpr size_t kVoxelMaterialCount = 5;
 

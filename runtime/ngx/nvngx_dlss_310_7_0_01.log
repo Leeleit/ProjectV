@@ -1,0 +1,20 @@
+[tid:139939786474048][setLogFilename:301] Warning: Logging to renamed logging file (/home/le1t/Projects/ProjectV/runtime/ngx//nvngx_dlss_310_7_0_01.log)
+[tid:139939786474048][NGXInitLog:232] App logging hooks successfully initialized
+[tid:139939786474048][NGXInitLog:238] Build v310.7.0 CL 37997616
+[tid:139939786474048][NGXInitLog:240] Built with APP_NAME = default
+[tid:139939786474048][NGXInitLog:246] Loaded from path "/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin/ProjectV"
+[tid:139939786474048][InitCommon:110] m_pDevice: 0x(nil)->0x0x55fff3636a30
+[tid:139939786474048][Init:204] Enabling texmode_raw
+[tid:139939786474048][InitCubins:42] Loading NGXCubin kernels
+[tid:139939786474048][SetGPUArch:460] m_gpuArch = 0x170
+[tid:139939786474048][drsReadKeyImpl:166] Warning: drsReadKey() functions family not implemented
+[tid:139939786474048][genericPostInit:164] Fast UAV clear: supported
+[tid:139939786474048][InitCubins:303] Setting DLAA Cubins
+[tid:139939786474048][InitCubins:303] Setting DLSS Debug Cubins
+[tid:139939786474048][InitCubins:303] Setting DLTSS Engine Cubins
+[tid:139939786474048][InitCubins:303] Setting DLTSS NW Cubins
+[tid:139939786474048][InitCubins:303] Setting DLTSS NW E5M3_SKIP Cubins
+[tid:139939786474048][InitCubins:303] Setting DLTSS NW Cubins
+[tid:139939786474048][InitCubins:138] Setting DLDN Engine Pre / Post Cubins
+[tid:139939786474048][Init:207] Device 0xf9487cd0
+[tid:139939786474048][Shutdown:268] Delayed destroy resource list count 0

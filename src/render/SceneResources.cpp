@@ -7,7 +7,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
-#include "render/Taa.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
@@ -49,33 +48,6 @@ void RefreshSceneLightingBuffer(
 	(void)renderExtent;
 	render.currentScenePreset = world.scenePreset;
 	render.currentSceneLighting = BuildSceneLighting(world, render);
-
-	render.currentSceneLighting.taaParams = {
-		render.taaJitterX,
-		render.taaJitterY,
-		render.taaEnabled ? render.taaBlend : 0.0f,
-		render.taaEnabled ? 1.0f : 0.0f,
-	};
-	render.currentSceneLighting.prevViewProjectionMatrix = render.taaPrevViewProjectionMatrix;
-
-	const float texelX = renderExtent.width > 0u
-							 ? 1.0f / static_cast<float>(renderExtent.width)
-							 : 0.0f;
-	const float texelY = renderExtent.height > 0u
-							 ? 1.0f / static_cast<float>(renderExtent.height)
-							 : 0.0f;
-	render.currentSceneLighting.taaHistoryParams = {
-		texelX,
-		texelY,
-		render.taaHistoryValid ? 1.0f : 0.0f,
-		static_cast<float>(render.taaNeighbourhoodRadius),
-	};
-	render.currentSceneLighting.taaLayerHistoryParams = {
-		texelX,
-		texelY,
-		render.taaLayerHistoryValid ? 1.0f : 0.0f,
-		render.taaLayerBlendFactor,
-	};
 }
 
 bool CreateBuffer(

@@ -16,10 +16,6 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
-    vec4 taaParams;
-    mat4 prevViewProjectionMatrix;
-    vec4 taaHistoryParams;
-    vec4 taaLayerHistoryParams;
 } sceneLighting;
 
 

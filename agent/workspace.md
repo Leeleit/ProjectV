@@ -18,7 +18,39 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-06-25 session 27x (TAA motion-vector reprojection fix, this session).**
+**2026-07-11 session (TAA pipeline removal — full cleanup).**
+
+После завершения Variant A / Model motion vector (27x) была дана команда оператора
+полностью убрать TAA/CAS/DLSS/DLAA/MSAA из активного пайплайна, перенеся в `legacy/`.
+
+**Что сделано в этой сессии:**
+
+- **`legacy/aa/`**: перенесены все TAA-файлы (Taa.hpp/cpp, TaaRenderTargets.hpp/cpp,
+  TaaResolvePipeline.hpp/cpp, AntialiasingMode.hpp, шейдеры taa_resolve, tone_map,
+  taa_on варианты, тесты TAA motion vectors, Streamline submodule). Обновлены
+  CMakeLists.txt, CMakePresets.json, .gitmodules.
+- **`Types.hpp`/`Types.cpp`**: полная очистка TAA-полей из `RenderState`,
+  `FrameRenderData`, `DebugStats`, `RenderPassTimings`, `VoxelSceneLighting`.
+  Добавлены `sceneColorImage`/`sceneColorImageView`/`sceneColorAllocation`/
+  `sceneColorCurrentLayout`/`sceneColorNeedsInit` в `RenderState` для offscreen
+  рендеринга с последующим blit в swapchain.
+- **Vulkan swapchain**: удалены 7 TAA-таргетов, MSAA target; добавлен offscreen
+  `sceneColorTarget` (формат B10G11R11_UFLOAT_PACK32).
+- **Vulkan pipelines**: 4 TAA-on pipeline variants удалены → 2 pipelines осталось
+  (обычный + RTX). `colorAttachmentCount` 4→1. Multi-sampling → VK_SAMPLE_COUNT_1_BIT.
+- **Renderer.cpp `RecordGraphicsCommands`**: ~400 строк TAA-кода заменены на прямой
+  рендеринг в `sceneColorImageView` с последующим `vkCmdBlitImage` в swapchain.
+  Убраны TAA resolve pass, layer history copy, motion vector transitions, taaOn
+  branching, timing instrumentation.
+- **Shader clean**: удалены TAA uniforms, `viewProjectionUnjittered`, `#ifdef TAA_ENABLED`,
+  `outSceneColor`/`outLayerMask`/`outMotionVector`, layer history sampler, temporal
+  blending, motion vector calculation. `outColor` (loc 0) — единственный выход.
+- **Input**: удалены 7 TAA-экшенов с клавиатурными привязками.
+- **Camera**: `BuildGraphicsPushConstants` больше не принимает jitter-параметры.
+- **GPU push constants**: sizeof сокращён со 192 B до 128 B (удалён
+  `viewProjectionUnjittered`).
+- **SSBO `VoxelSceneLighting`**: сокращён с 352 B до 240 B (удалены `taaParams`,
+  `prevViewProjectionMatrix`, `taaHistoryParams`, `taaLayerHistoryParams`).
 
 Свежий baseline после operator-инициированного reset `2026-06-24`:
 - 274 pre-reset коммитов squashed в один `chore(reset): pre-fresh-start baseline`
@@ -90,22 +122,17 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 - Chebyshev→Gaussian visibility falloff (follow-up #1) оставлен — легитимный фикс.
 - Build green, 39/39 тестов (100%).
 
-**Build state:** green (успешно собирается ProjectV и ProjectVTests).
-**Tests:** 39/39 тестов успешно пройдено (100% green).
-**Operator policy:** не восстанавливать pre-reset контент без явной команды.
+**Build state:** green (ProjectV main + all test targets compile).
+**Tests:** сборка тестов успешна (не все прогонялись).
 
 ---
 
 ## 2. Active tasks
 
-(пусто — post-reset старт. См. `TODO.md` §5.5+ post-RTX-shadow milestones
-[7.1 VCT cones, 7.2 TAA, 7.3 tonemap, 7.4 post-FX] как natural next-priority.)
-
-Per TODO.md active section (2026-06-22):
+Per TODO.md active section:
 - ⭐ 7.1 VCT cone density upgrade (12-cone diffuse + 4-cone specular).
-- ⭐ 7.2 TAA jitter + neighborhood quality (per TODO, but §7.2 CSM quality
-  pass was REMOVED 2026-06-22 — different "7.2" kept; agent must disambiguate
-  in future planning).
+- ❌ 7.2 TAA — полностью удалён из активного кода, перенесён в `legacy/aa/`.
+  Рендеринг: прямой `outColor` → `sceneColorTarget` → blit → swapchain.
 - ⭐ 7.3 Lighting exposure + tone mapping (Reinhard → ACES).
 - ⭐ 7.4 Post-processing chain polish (bloom + aerial perspective).
 - 🔒 6.2 PIMPL for AppState — DEFERRED PENDING FEASIBILITY.

@@ -3,8 +3,6 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/RayTracedShadows.hpp"
-#include "render/TaaRenderTargets.hpp"
-#include "render/vulkan/TaaResolvePipeline.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 
@@ -435,6 +433,14 @@ bool RecreateSwapchain(
 		DestroyScreenshotReadbackResources(context, render);
 		projectv::render::DestroyHizBuffer(context, render->hizBuffer);
 		projectv::render::DestroyHizCullingPipeline(context, render);
+		if (render->sceneColorImage != VK_NULL_HANDLE) {
+			vkDestroyImageView(context->device, render->sceneColorImageView, nullptr);
+			render->sceneColorImageView = VK_NULL_HANDLE;
+			vmaDestroyImage(context->allocator, render->sceneColorImage, static_cast<VmaAllocation>(render->sceneColorAllocation));
+			render->sceneColorImage = VK_NULL_HANDLE;
+			render->sceneColorAllocation = nullptr;
+		}
+		render->sceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	}
 
 	if (!CreateDepthResources(context, swapchain, render)) {
@@ -474,137 +480,53 @@ bool RecreateSwapchain(
 		return false;
 	}
 
-	if (render->taaSceneColorTarget == nullptr) {
-		render->taaSceneColorTarget = new projectv::taa::OffscreenColorTarget();
+	// Scene color target: offscreen color attachment for voxel/model/transparent passes.
+	constexpr VkFormat kSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+	const VkExtent3D imageExtent{swapchain->extent.width, swapchain->extent.height, 1u};
+	VkImageCreateInfo sceneImageInfo{};
+	sceneImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	sceneImageInfo.imageType = VK_IMAGE_TYPE_2D;
+	sceneImageInfo.format = kSceneColorFormat;
+	sceneImageInfo.extent = imageExtent;
+	sceneImageInfo.mipLevels = 1u;
+	sceneImageInfo.arrayLayers = 1u;
+	sceneImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	sceneImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	sceneImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	sceneImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	sceneImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VmaAllocationCreateInfo allocInfo{};
+	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	if (render->sceneColorImageView != VK_NULL_HANDLE) {
+		vkDestroyImageView(context->device, render->sceneColorImageView, nullptr);
+		render->sceneColorImageView = VK_NULL_HANDLE;
 	}
-	if (render->taaSceneColorMsTarget == nullptr) {
-		render->taaSceneColorMsTarget = new projectv::taa::OffscreenColorTarget();
+	if (render->sceneColorImage != VK_NULL_HANDLE) {
+		vmaDestroyImage(context->allocator, render->sceneColorImage, static_cast<VmaAllocation>(render->sceneColorAllocation));
+		render->sceneColorImage = VK_NULL_HANDLE;
+		render->sceneColorAllocation = nullptr;
 	}
-	if (render->taaHistoryColorTarget == nullptr) {
-		render->taaHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
-	}
-
-	if (render->taaLayerSceneColorTarget == nullptr) {
-		render->taaLayerSceneColorTarget = new projectv::taa::OffscreenColorTarget();
-	}
-	if (render->taaLayerHistoryColorTarget == nullptr) {
-		render->taaLayerHistoryColorTarget = new projectv::taa::OffscreenColorTarget();
-	}
-	if (render->taaMotionVectorTarget == nullptr) {
-		render->taaMotionVectorTarget = new projectv::taa::OffscreenColorTarget();
-	}
-	if (render->taaMotionVectorHistoryTarget == nullptr) {
-		render->taaMotionVectorHistoryTarget = new projectv::taa::OffscreenColorTarget();
-	}
-	const std::uint32_t msaaSamples = projectv::render::MsaaSamplesForMode(render->aaMode);
-	// Single-sample targets (history, layer, motion) — always 1x. The main scene
-	// color is also single-sample because it's the resolve destination / TAA input.
-	const auto taaResult = projectv::taa::CreateOrRecreateTaaRenderTargets(
-		context,
-		swapchain->extent,
-		*render->taaSceneColorTarget,
-		*render->taaHistoryColorTarget,
-		*render->taaLayerSceneColorTarget,
-		*render->taaLayerHistoryColorTarget,
-		*render->taaMotionVectorTarget,
-		*render->taaMotionVectorHistoryTarget,
-		render->taaLinearSampler);
-	if (!taaResult.has_value()) {
-		runtime::LogRuntimeFailure(
-			"TaaRenderTargets",
-			"RecreateSwapchain.CreateOrRecreateTaaRenderTargets",
-			std::string{"TAA render target allocation failed: "} + std::string{projectv::taa::toString(taaResult.error())});
+	VmaAllocation sceneAlloc = nullptr;
+	if (vmaCreateImage(context->allocator, &sceneImageInfo, &allocInfo, &render->sceneColorImage, &sceneAlloc, nullptr) != VK_SUCCESS) {
+		runtime::LogRuntimeFailure("Swapchain", "RecreateSwapchain.CreateSceneColor", "vmaCreateImage failed for scene color");
 		return false;
 	}
-	// Multi-sampled render attachment for MSAA. Created/destroyed as a separate
-	// target so the single-sample resolve destination (`taaSceneColorTarget`) stays
-	// usable. Auto-resolved to `taaSceneColorTarget` at the end of the dynamic
-	// rendering pass via `VkRenderingAttachmentInfo::resolveImageView`.
-	if (msaaSamples > 1u) {
-		projectv::taa::OffscreenColorTarget &msTarget = *render->taaSceneColorMsTarget;
-		VkSampleCountFlagBits vkSamples = VK_SAMPLE_COUNT_2_BIT;
-		if (msaaSamples == 4u) {
-			vkSamples = VK_SAMPLE_COUNT_4_BIT;
-		} else if (msaaSamples == 8u) {
-			vkSamples = VK_SAMPLE_COUNT_8_BIT;
-		}
-		const VkExtent3D imageExtent{swapchain->extent.width, swapchain->extent.height, 1u};
-		VkImageCreateInfo imageInfo{};
-		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.format = projectv::taa::kTaaSceneColorFormat;
-		imageInfo.extent = imageExtent;
-		imageInfo.mipLevels = 1u;
-		imageInfo.arrayLayers = 1u;
-		imageInfo.samples = vkSamples;
-		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-		imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		VmaAllocationCreateInfo allocInfo{};
-		allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-		// Destroy existing before recreating.
-		if (msTarget.imageView != VK_NULL_HANDLE) {
-			vkDestroyImageView(context->device, msTarget.imageView, nullptr);
-			msTarget.imageView = VK_NULL_HANDLE;
-		}
-		if (msTarget.image != VK_NULL_HANDLE && msTarget.allocation != nullptr) {
-			vmaDestroyImage(context->allocator, msTarget.image, static_cast<VmaAllocation>(msTarget.allocation));
-			msTarget.image = VK_NULL_HANDLE;
-			msTarget.allocation = nullptr;
-		}
-		VmaAllocation msAlloc = nullptr;
-		if (vmaCreateImage(context->allocator, &imageInfo, &allocInfo, &msTarget.image, &msAlloc, nullptr) != VK_SUCCESS) {
-			runtime::LogRuntimeFailure(
-				"Swapchain",
-				"RecreateSwapchain.CreateMsSceneColor",
-				"vmaCreateImage failed for multi-sampled scene color");
-			return false;
-		}
-		msTarget.allocation = msAlloc;
-		msTarget.samples = msaaSamples;
-		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(msTarget.image), VK_OBJECT_TYPE_IMAGE, "TaaSceneColorMsImage");
-		VkImageViewCreateInfo viewInfo{};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = msTarget.image;
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = projectv::taa::kTaaSceneColorFormat;
-		viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-		if (vkCreateImageView(context->device, &viewInfo, nullptr, &msTarget.imageView) != VK_SUCCESS) {
-			runtime::LogRuntimeFailure(
-				"Swapchain",
-				"RecreateSwapchain.CreateMsSceneColorView",
-				"vkCreateImageView failed for multi-sampled scene color");
-			return false;
-		}
-		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(msTarget.imageView), VK_OBJECT_TYPE_IMAGE_VIEW, "TaaSceneColorMsImageView");
-	}
-	if (!taaResult.has_value()) {
-		runtime::LogRuntimeFailure(
-			"TaaRenderTargets",
-			"RecreateSwapchain.CreateOrRecreateTaaRenderTargets",
-			std::string{"TAA render target allocation failed: "} + std::string{projectv::taa::toString(taaResult.error())});
+	render->sceneColorAllocation = sceneAlloc;
+	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->sceneColorImage), VK_OBJECT_TYPE_IMAGE, "SceneColorImage");
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = render->sceneColorImage;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = kSceneColorFormat;
+	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+	if (vkCreateImageView(context->device, &viewInfo, nullptr, &render->sceneColorImageView) != VK_SUCCESS) {
+		runtime::LogRuntimeFailure("Swapchain", "RecreateSwapchain.CreateSceneColorView", "vkCreateImageView failed for scene color");
 		return false;
 	}
-	render->taaHistoryValid = false;
-	render->taaSceneColorNeedsInit = true;
-	render->taaHistoryNeedsInit = true;
-	render->taaSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->taaMotionVectorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->taaMotionVectorHistoryCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-	render->taaHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->taaLayerSceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->taaLayerHistoryColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->sceneColorImageView), VK_OBJECT_TYPE_IMAGE_VIEW, "SceneColorImageView");
+	render->sceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	render->sceneColorNeedsInit = false;
 	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->taaFrameCounter = 0u;
-	render->taaPrevViewProjectionMatrix = {};
-
-	render->taaPrevViewProjectionMatrixInitialized = false;
-	render->taaCameraCutCount = 0u;
-	render->taaCameraCutMaxDelta = 0.0f;
-
-	render->taaLayerHistoryValid = false;
 
 	if (render->graphicsPipeline != VK_NULL_HANDLE) {
 PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
@@ -632,13 +554,6 @@ PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
 					"RecreateSwapchain.RefreshGraphicsResourceBindingsAfterShadowMaskResize",
 					"RefreshGraphicsResourceBindings returned false after shadow mask resize");
 			}
-		}
-		if (!RefreshTaaResolveResourceBindings(context, render)) {
-			runtime::LogRuntimeFailure(
-				"Swapchain",
-				"RecreateSwapchain.RefreshTaaResolveResourceBindings",
-				"RefreshTaaResolveResourceBindings returned false after swapchain recreation");
-			return false;
 		}
 	}
 

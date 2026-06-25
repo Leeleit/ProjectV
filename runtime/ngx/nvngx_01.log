@@ -1,0 +1,550 @@
+[NGXSafeInitializeLog:139] App logging hooks successfully initialized
+[NGXNVAPITelemetryInit:94] warning: Telemetry not supported on Linux
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[LoadProjectIdMappingFile:1839] failed to find mapping file path
+[LaunchNGXUpdater:366] starting nvidia-ngx-updater with command line " -api update -gpuarch 352"
+[LaunchNGXUpdater:422] successfully launched nvidia-ngx-updater!
+[NGXDRSInit:210] Linux: Skipping DRS Init.
+[NGXInitContext:245] called from module ProjectV at 
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dldenoiser.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dldenoiser.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dldenoiser.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlss.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[NGXLoadLibrary:70] Loaded library from path (/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.310.7.0)
+[NGXValidateSnippetMetaData:1490] Validating snippet /home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so.310.7.0
+[NGXValidateSnippetMetaData:1492] NGX CORE API version : 0x15, Snippet requires at least : 0x13
+[NGXValidateSnippetMetaData:1494] GPU architecture : 0x170, Snippet expects at least : 0x160
+[NGXValidateSnippetMetaData:1508] Driver support flags : 0xF(SEAMLESS_OTA|LINUX_EXTENDED_DRIVER_VERSIONS|API_SPECIFIC_POPULATE_PARAMS|REQUIRE_CMSID), Snippet required flags : 0xF(SEAMLESS_OTA|LINUX_EXTENDED_DRIVER_VERSIONS|API_SPECIFIC_POPULATE_PARAMS|REQUIRE_CMSID)
+[NGXValidateSnippetMetaData:1535] Driver version : 610.43.2, Snippet expects at least : 470.0
+[NGXValidateSnippetMetaData:1561] Snippet version : 310.7.0, Embedded app Id : E658703 (0)
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlss.so' snippet from ''...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1455] app E658702 feature dlss snippet: /home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlss.so version: 310.7.0
+[NGXLoadFeature:1540] Setting override status callback for dlss
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlinpainting.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlinpainting.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlinpainting.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlisr.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlisr.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlisr.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlslowmo.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlslowmo.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlslowmo.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlvsr.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlvsr.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlvsr.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlcolorize.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlcolorize.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlcolorize.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlstyletransfer.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlstyletransfer.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlstyletransfer.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlvdenoiser.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlvdenoiser.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlvdenoiser.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlisp.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlisp.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlisp.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlresolve.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlresolve.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-dlresolve.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlssg.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[NGXLoadLibrary:70] Loaded library from path (/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlssg.so.310.7.0)
+[NGXValidateSnippetMetaData:1490] Validating snippet /home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlssg.so.310.7.0
+[NGXValidateSnippetMetaData:1492] NGX CORE API version : 0x15, Snippet requires at least : 0x13
+[NGXValidateSnippetMetaData:1494] GPU architecture : 0x170, Snippet expects at least : 0x190
+[NGXValidateSnippetMetaData:1498] error: snippet is using newer GPU arch 190 > 170
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlssg.so' snippet from ''...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1455] app E658702 feature dlssg snippet: /home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlssg.so version: 310.7.0
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-deepdvc.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-deepdvc.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-deepdvc.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlssd.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[NGXLoadLibrary:70] Loaded library from path (/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlssd.so.310.7.0)
+[NGXValidateSnippetMetaData:1490] Validating snippet /home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlssd.so.310.7.0
+[NGXValidateSnippetMetaData:1492] NGX CORE API version : 0x15, Snippet requires at least : 0x13
+[NGXValidateSnippetMetaData:1494] GPU architecture : 0x170, Snippet expects at least : 0x190
+[NGXValidateSnippetMetaData:1498] error: snippet is using newer GPU arch 190 > 170
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-dlssd.so' snippet from ''...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1455] app E658702 feature dlssd snippet: /home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel/libnvidia-ngx-dlssd.so version: 310.7.0
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-truehdr.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-truehdr.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-truehdr.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-latewarp.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-latewarp.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-latewarp.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-vsr.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-vsr.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-vsr.so doesn't exist in any of the search paths!
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '(null)'
+[NGXReadConfigFile:715] error: Invalid configuration file '(null)'
+[NGXReadConfigFile:709] Reading configuration file from '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/home/le1t/.config/nvidia-ngx-conf.json'
+[NGXReadConfigFile:709] Reading configuration file from '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadConfigFile:715] error: Invalid configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXReadJSONConfigFile:825] warning: Unable to read configuration file '/usr/share/nvidia/nvidia-ngx-conf.json'
+[NGXGetPath:1022] warning: Defaulting to '/usr/share/nvidia/ngx' models directory
+[NGXCreateDirectoryRecursively:61] failed to create directory /usr/share/nvidia/ngx - Permission denied
+[NGXCreateModelsFolder:1068] error: could not create model folder
+[NGXSecureLoadFeature:1182] unable to read the deny list. Assuming that the feature is allowed.
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-fgx.so' snippet from '/home/le1t/Projects/ProjectV/external/nvidia-dlss/lib/Linux_x86_64/rel'...
+[NGXLoadFromPath:1738]     Found 3 snippets:
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssg.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlssd.so.310.7.0
+[NGXLoadFromPath:1740]         libnvidia-ngx-dlss.so.310.7.0
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXLoadFromPath:1715] Loading most recent 'libnvidia-ngx-fgx.so' snippet from '/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin'...
+[NGXLoadFromPath:1734]     Found no snippets
+[load:713] NGXLoadFromPath failed: -1160773628
+[NGXSecureLoadFeature:1247] warning: ModuleName - libnvidia-ngx-fgx.so doesn't exist in any of the search paths!

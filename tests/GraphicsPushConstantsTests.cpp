@@ -48,7 +48,7 @@ int main()
 		const CameraState camera = MakeIdentityCamera();
 		const VkExtent2D extent{1280u, 720u};
 		const GraphicsPushConstants pc =
-			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
+			BuildGraphicsPushConstants(camera, extent);
 		ExpectNear(
 			pc.cameraPosition[0], 0.0f, kEpsilon,
 			"identity: cameraPosition.x == 0");
@@ -72,7 +72,7 @@ int main()
 		const CameraState camera = MakeIdentityCamera();
 		const VkExtent2D extent{1280u, 720u};
 		const GraphicsPushConstants pc =
-			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
+			BuildGraphicsPushConstants(camera, extent);
 		const projectv::math::Vec4 &m0 = pc.viewProjection.c[0];
 		const projectv::math::Vec4 &m1 = pc.viewProjection.c[1];
 		const projectv::math::Vec4 &m2 = pc.viewProjection.c[2];
@@ -98,7 +98,7 @@ int main()
 		camera.pitchRadians = -0.3f;
 		const VkExtent2D extent{1920u, 1080u};
 		const GraphicsPushConstants pc =
-			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
+			BuildGraphicsPushConstants(camera, extent);
 		ExpectNear(pc.cameraPosition[0], 5.0f, kEpsilon, "translated: pos.x");
 		ExpectNear(pc.cameraPosition[1], -3.0f, kEpsilon, "translated: pos.y");
 		ExpectNear(pc.cameraPosition[2], 12.0f, kEpsilon, "translated: pos.z");
@@ -112,40 +112,20 @@ int main()
 
 	{
 		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1280u, 720u};
-		const GraphicsPushConstants pcNoJitter =
-			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
-		const GraphicsPushConstants pcJitter =
-			BuildGraphicsPushConstants(camera, extent, 16.0f, 9.0f);
-		ExpectNear(pcJitter.viewProjection.c[2][0] - pcNoJitter.viewProjection.c[2][0],
-			16.0f * 2.0f / static_cast<float>(extent.width),
-			kEpsilon,
-			"jitter: VP m20 scaled by jitterX*2/width");
-		ExpectNear(pcJitter.viewProjection.c[2][1] - pcNoJitter.viewProjection.c[2][1],
-			9.0f * 2.0f / static_cast<float>(extent.height),
-			kEpsilon,
-			"jitter: VP m21 scaled by jitterY*2/height");
-	}
-	std::printf("[OK] jitter: TAA offset scaled by extent\n");
-
-
-	{
-		const CameraState camera = MakeIdentityCamera();
 		const VkExtent2D extent{1u, 1u};
 		const GraphicsPushConstants pc =
-			BuildGraphicsPushConstants(camera, extent, 0.5f, 0.5f);
-		ExpectNear(
-			pc.viewProjection.c[2][0], 0.5f * 2.0f, kEpsilon,
-			"tiny-extent: jitter scales with extent (1px)");
+			BuildGraphicsPushConstants(camera, extent);
+		Expect(std::isfinite(pc.viewProjection.c[0][0]),
+			"tiny-extent: VP m00 is finite");
 	}
-	std::printf("[OK] jitter: scales correctly with tiny extent\n");
+	std::printf("[OK] tiny extent: no inf propagation\n");
 
 
 	{
 		const CameraState camera = MakeIdentityCamera();
 		const VkExtent2D extent{1920u, 0u};
 		const GraphicsPushConstants pc =
-			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
+			BuildGraphicsPushConstants(camera, extent);
 		Expect(std::isfinite(pc.viewProjection.c[0][0]),
 			"zero-height: VP m00 is finite (no inf)");
 		ExpectNear(
@@ -153,54 +133,9 @@ int main()
 			1.0f / (1.0f * std::tan(camera.verticalFovRadians * 0.5f)),
 			kEpsilon,
 			"zero-height: aspect falls back to 1.0 (square ratio)");
-		ExpectNear(pc.viewProjection.c[2][1], 0.0f, kEpsilon,
-			"zero-height: VP m21 jitter is 0 (height==0 branch)");
 	}
 	std::printf("[OK] zero-height: aspect guard prevents inf propagation\n");
 
-	{
-		// Unjittered counterpart equals jittered when jitter is zero (degenerate case).
-		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1280u, 720u};
-		const GraphicsPushConstants pc =
-			BuildGraphicsPushConstants(camera, extent, 0.0f, 0.0f);
-		for (uint32_t col = 0; col < 4u; ++col) {
-			for (uint32_t row = 0; row < 4u; ++row) {
-				ExpectNear(
-					pc.viewProjection.c[col][row],
-					pc.viewProjectionUnjittered.c[col][row],
-					kEpsilon,
-					"zero-jitter: unjittered matches jittered VP per element");
-			}
-		}
-	}
-	std::printf("[OK] unjittered: zero jitter makes VP unjittered == VP\n");
-
-	{
-		// Unjittered drops m20/m21 jitter offset; rest of matrix unchanged.
-		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1280u, 720u};
-		const GraphicsPushConstants pcJit =
-			BuildGraphicsPushConstants(camera, extent, 16.0f, 9.0f);
-		ExpectNear(pcJit.viewProjectionUnjittered.c[2][0], 0.0f, kEpsilon,
-				   "unjittered: m20 jitter offset stripped");
-		ExpectNear(pcJit.viewProjectionUnjittered.c[2][1], 0.0f, kEpsilon,
-				   "unjittered: m21 jitter offset stripped");
-		for (uint32_t col = 0u; col < 4u; ++col) {
-			for (uint32_t row = 0u; row < 4u; ++row) {
-				if (col == 2u && (row == 0u || row == 1u)) {
-					continue; // skip the two jitter-offset rows we just verified
-				}
-				ExpectNear(
-					pcJit.viewProjectionUnjittered.c[col][row],
-					pcJit.viewProjection.c[col][row],
-					kEpsilon,
-					"unjittered: non-jitter rows match jittered VP");
-			}
-		}
-	}
-	std::printf("[OK] unjittered: jitter offset removed, rest of VP preserved\n");
-
-	std::printf("ProjectVGraphicsPushConstantsTests: 8/8 passed\n");
+	std::printf("ProjectVGraphicsPushConstantsTests: 5/5 passed\n");
 	return EXIT_SUCCESS;
 }

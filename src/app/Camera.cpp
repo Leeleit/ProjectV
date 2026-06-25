@@ -199,9 +199,7 @@ float GetCameraVisibleSceneMaxDistance(const CameraState &camera)
 
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
-	const VkExtent2D extent,
-	const float taaJitterNdcX,
-	const float taaJitterNdcY)
+	const VkExtent2D extent)
 {
 	const Float3 cameraPosition{
 		camera.position[0],
@@ -234,26 +232,14 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	[[assume(farPlane > nearPlane)]];
 	[[assume(extent.width > 0u)]];
 
-	const float jitterNdcX = extent.width > 0 ? taaJitterNdcX * 2.0f / static_cast<float>(extent.width) : 0.0f;
-	const float jitterNdcY = extent.height > 0 ? taaJitterNdcY * 2.0f / static_cast<float>(extent.height) : 0.0f;
 	projectv::math::Mat4 projection{};
 	projection.c[0] = projectv::math::Vec4{1.0f / (aspect * tanHalfFov), 0.0f, 0.0f, 0.0f};
 	projection.c[1] = projectv::math::Vec4{0.0f, -1.0f / tanHalfFov, 0.0f, 0.0f};
-	projection.c[2] = projectv::math::Vec4{jitterNdcX, jitterNdcY, farPlane / (nearPlane - farPlane), -1.0f};
+	projection.c[2] = projectv::math::Vec4{0.0f, 0.0f, farPlane / (nearPlane - farPlane), -1.0f};
 	projection.c[3] = projectv::math::Vec4{0.0f, 0.0f, nearPlane * farPlane / (nearPlane - farPlane), 0.0f};
-
-	// Unjittered projection for TAA motion vector reprojection: stores true camera transform
-	// without per-frame sub-pixel jitter, so prev/curr reprojection in voxel.frag does not
-	// contain a synthetic sub-pixel offset that triggers TAA history mis-lookup (screen shake).
-	projectv::math::Mat4 projectionUnjittered{};
-	projectionUnjittered.c[0] = projection.c[0];
-	projectionUnjittered.c[1] = projection.c[1];
-	projectionUnjittered.c[2] = projectv::math::Vec4{0.0f, 0.0f, farPlane / (nearPlane - farPlane), -1.0f};
-	projectionUnjittered.c[3] = projection.c[3];
 
 	GraphicsPushConstants pushConstants{};
 	pushConstants.viewProjection = projection * view;
-	pushConstants.viewProjectionUnjittered = projectionUnjittered * view;
 	const Float3 cameraForward = projectv::math::normalize(GetForwardVector(camera));
 	pushConstants.cameraPosition = {
 		camera.position[0],

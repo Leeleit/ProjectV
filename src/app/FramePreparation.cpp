@@ -11,7 +11,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "debug/Profiling.hpp"
 #include "render/SceneResources.hpp"
 #include "render/LodDownsampleGpuConsume.hpp"
-#include "render/Taa.hpp"
 #include "voxel/ChunkStreamer.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -220,7 +219,6 @@ bool PrepareFrameRenderData(
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
 	frame->renderData.hizCullingDescriptorSet = sceneFrameResources.hizCullingDescriptorSet;
 	frame->renderData.meshShaderDescriptorSet = sceneFrameResources.meshShaderDescriptorSet;
-	frame->renderData.taaResolveDescriptorSet = render->taaResolveDescriptorSets[frameIndex];
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
@@ -238,48 +236,11 @@ bool PrepareFrameRenderData(
 		&frame->renderData.debugOverlayBoxes,
 		*camera,
 		*render);
-	const std::array taaPixelJitter = render->taaEnabled
-										  ? projectv::taa::AdvanceTaaPixelJitter(&render->taaFrameCounter)
-										  : std::array{0.0f, 0.0f};
-
-	render->taaJitterX = taaPixelJitter[0] * render->taaJitterScale;
-	render->taaJitterY = taaPixelJitter[1] * render->taaJitterScale;
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(
 			*camera,
-			swapchain->extent,
-			render->taaJitterX,
-			render->taaJitterY);
-	}
-
-	constexpr float kTaaCameraCutThreshold = 0.10f;
-
-	if (render->taaEnabled && render->taaPrevViewProjectionMatrixInitialized) {
-		const auto &currentVP = frame->renderData.graphicsPushConstants.viewProjection;
-		const auto &prevVP = render->taaPrevViewProjectionMatrix;
-		float maxDelta = 0.0f;
-		const float *currentData = currentVP.data();
-		const float *prevData = prevVP.data();
-		for (size_t i = 0; i < 16; ++i) {
-			const float delta = std::abs(currentData[i] - prevData[i]);
-			if (delta > maxDelta) {
-				maxDelta = delta;
-			}
-		}
-		if (maxDelta > kTaaCameraCutThreshold) {
-			render->taaHistoryValid = false;
-			++render->taaCameraCutCount;
-		}
-		if (maxDelta > render->taaCameraCutMaxDelta) {
-			render->taaCameraCutMaxDelta = maxDelta;
-		}
-	}
-
-	if (render->taaEnabled) {
-		// Unjittered counterpart required for correct TAA motion vector reprojection (Phase 1 fix).
-		render->taaPrevViewProjectionMatrix = frame->renderData.graphicsPushConstants.viewProjectionUnjittered;
-		render->taaPrevViewProjectionMatrixInitialized = true;
+			swapchain->extent);
 	}
 	if (world->voxelWorld) {
 		frame->renderData.graphicsPushConstants.worldMinAndChunkSize = {

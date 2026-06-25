@@ -717,30 +717,6 @@ set_tests_properties(ProjectVLodDownsampleGpuConsumeTests PROPERTIES LABELS "uni
 
 projectv_test_add_modules(ProjectVLodDownsampleGpuConsumeTests)
 
-add_executable(ProjectVTaaMotionVectorTests
-        TaaMotionVectorTests.cpp
-)
-
-target_compile_definitions(ProjectVTaaMotionVectorTests PRIVATE
-        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
-)
-
-target_include_directories(ProjectVTaaMotionVectorTests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/external/volk
-        ${CMAKE_SOURCE_DIR}/external/glm
-        ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
-)
-
-target_link_libraries(ProjectVTaaMotionVectorTests PRIVATE projectv_build_options)
-target_link_libraries(ProjectVTaaMotionVectorTests PRIVATE volk)
-target_link_libraries(ProjectVTaaMotionVectorTests PRIVATE glm)
-
-add_test(NAME ProjectVTaaMotionVectorTests COMMAND ProjectVTaaMotionVectorTests)
-set_tests_properties(ProjectVTaaMotionVectorTests PROPERTIES LABELS "unit")
-
-projectv_test_add_modules(ProjectVTaaMotionVectorTests)
-
 add_executable(ProjectVAsyncComputeTests
         AsyncComputeTests.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp

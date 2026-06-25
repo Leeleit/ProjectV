@@ -1,0 +1,2264 @@
+[tid:140030192697920][setLogFilename:246] Logging to requested file (/home/le1t/Projects/ProjectV/runtime/ngx//nvngx_dlss_310_7_0.log) enabled successfully
+[tid:140030192697920][NGXInitLog:232] App logging hooks successfully initialized
+[tid:140030192697920][NGXInitLog:238] Build v310.7.0 CL 37997616
+[tid:140030192697920][NGXInitLog:240] Built with APP_NAME = default
+[tid:140030192697920][NGXInitLog:246] Loaded from path "/home/le1t/Projects/ProjectV/build/linux-clang-debug/bin/ProjectV"
+[tid:140030192697920][InitCommon:110] m_pDevice: 0x(nil)->0x0x559d939d4d70
+[tid:140030192697920][Init:204] Enabling texmode_raw
+[tid:140030192697920][InitCubins:42] Loading NGXCubin kernels
+[tid:140030192697920][SetGPUArch:460] m_gpuArch = 0x170
+[tid:140030192697920][drsReadKeyImpl:166] Warning: drsReadKey() functions family not implemented
+[tid:140030192697920][genericPostInit:164] Fast UAV clear: supported
+[tid:140030192697920][InitCubins:303] Setting DLAA Cubins
+[tid:140030192697920][InitCubins:303] Setting DLSS Debug Cubins
+[tid:140030192697920][InitCubins:303] Setting DLTSS Engine Cubins
+[tid:140030192697920][InitCubins:303] Setting DLTSS NW Cubins
+[tid:140030192697920][InitCubins:303] Setting DLTSS NW E5M3_SKIP Cubins
+[tid:140030192697920][InitCubins:303] Setting DLTSS NW Cubins
+[tid:140030192697920][InitCubins:138] Setting DLDN Engine Pre / Post Cubins
+[tid:140030192697920][Init:207] Device 0x9914ba30
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2130] InCreationTimeWidth 1896
+[tid:140030192697920][CreateDlssInstance:2131] InCreationTimeHeight 1034
+[tid:140030192697920][CreateDlssInstance:2132] InDynamicMaxSetDims.Width 1896
+[tid:140030192697920][CreateDlssInstance:2133] InDynamicMaxSetDims.Height 1034
+[tid:140030192697920][CreateDlssInstance:2134] InDynamicMinSetDims.Width 1877
+[tid:140030192697920][CreateDlssInstance:2135] InDynamicMinSetDims.Height 1024
+[tid:140030192697920][CreateDlssInstance:2136] OutWidth 1896
+[tid:140030192697920][CreateDlssInstance:2137] OutHeight 1034
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_DLAA (5)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (LumaResYHistory_0), m_allocCount=1, currentSize 15.1 MB, totalSize 15.1 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (LumaResYHistory_1), m_allocCount=2, currentSize 15.1 MB, totalSize 30.2 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (ChromaResYcocgHistoryAndAge_0), m_allocCount=3, currentSize 15.1 MB, totalSize 45.3 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (ChromaResYcocgHistoryAndAge_1), m_allocCount=4, currentSize 15.1 MB, totalSize 60.4 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (FoldedResHiddenHistory), m_allocCount=5, currentSize 1.1 MB, totalSize 61.5 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (PreviousFrameExposure), m_allocCount=6, currentSize 0.0 MB, totalSize 61.5 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (FastLanczosLut), m_allocCount=7, currentSize 0.0 MB, totalSize 61.5 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (FastLanczosScratchBuffer), m_allocCount=8, currentSize 0.0 MB, totalSize 61.5 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (HilumaV2Lut), m_allocCount=9, currentSize 0.5 MB, totalSize 62.0 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (HilumaV2LutScratchBuffer), m_allocCount=10, currentSize 0.5 MB, totalSize 62.5 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (ScratchBuffer), m_allocCount=11, currentSize 6.0 MB, totalSize 68.5 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (PaddedWindowAllTensors), m_allocCount=12, currentSize 10.5 MB, totalSize 79.0 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][CreateBufferResource:809] CUBIN 1D alloc (WeightsBuffer), m_allocCount=13, currentSize 3.4 MB, totalSize 82.4 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1639] OutWidth 1896
+[tid:140030192697920][EvaluateDltss:1640] OutHeight 1034
+[tid:140030192697920][EvaluateDltss:1641] MV.Scale.X 1896.000000
+[tid:140030192697920][EvaluateDltss:1642] MV.Scale.Y 1034.000000
+[tid:140030192697920][EvaluateDltss:1645] Hint.RunPrePass 1
+[tid:140030192697920][EvaluateDltss:1646] Hint.RunPass 1
+[tid:140030192697920][EvaluateDltss:1647] Hint.RunPostPass 1
+[tid:140030192697920][EvaluateDltss:1648] Hint.HDR 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d996a31a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a19c510
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99aebc60
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d996a3160
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2130] InCreationTimeWidth 1920
+[tid:140030192697920][CreateDlssInstance:2131] InCreationTimeHeight 1080
+[tid:140030192697920][CreateDlssInstance:2132] InDynamicMaxSetDims.Width 1920
+[tid:140030192697920][CreateDlssInstance:2133] InDynamicMaxSetDims.Height 1080
+[tid:140030192697920][CreateDlssInstance:2134] InDynamicMinSetDims.Width 1901
+[tid:140030192697920][CreateDlssInstance:2135] InDynamicMinSetDims.Height 1069
+[tid:140030192697920][CreateDlssInstance:2136] OutWidth 1920
+[tid:140030192697920][CreateDlssInstance:2137] OutHeight 1080
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_DLAA (5)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (LumaResYHistory_0), m_allocCount=14, currentSize 15.9 MB, totalSize 98.4 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (LumaResYHistory_1), m_allocCount=15, currentSize 15.9 MB, totalSize 114.3 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (ChromaResYcocgHistoryAndAge_0), m_allocCount=16, currentSize 15.9 MB, totalSize 130.2 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:1003] CUBIN 2D alloc (ChromaResYcocgHistoryAndAge_1), m_allocCount=17, currentSize 15.9 MB, totalSize 146.2 MB
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1639] OutWidth 1920
+[tid:140030192697920][EvaluateDltss:1640] OutHeight 1080
+[tid:140030192697920][EvaluateDltss:1641] MV.Scale.X 1920.000000
+[tid:140030192697920][EvaluateDltss:1642] MV.Scale.Y 1080.000000
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2096] Info: Optimal settings not used. Custom dimensions (1920x1080) overriding Optimal dimensions (1280x720).
+[tid:140030192697920][CreateDlssInstance:2134] InDynamicMinSetDims.Width 960
+[tid:140030192697920][CreateDlssInstance:2135] InDynamicMinSetDims.Height 540
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_MaxQuality (2)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a7f6190 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_1 -> nv.ngx.dlss.LumaResYHistory_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a85d040 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_0 -> nv.ngx.dlss.LumaResYHistory_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99f0d2f0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a8545a0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2096] Info: Optimal settings not used. Custom dimensions (1920x1080) overriding Optimal dimensions (1114x626).
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_Balanced (1)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a7f6190 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_0 -> nv.ngx.dlss.LumaResYHistory_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a85d040 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_1 -> nv.ngx.dlss.LumaResYHistory_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99f0d2f0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a8545a0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2096] Info: Optimal settings not used. Custom dimensions (1920x1080) overriding Optimal dimensions (960x540).
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_MaxPerf (0)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a85d040 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_1 -> nv.ngx.dlss.LumaResYHistory_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a7f6190 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_0 -> nv.ngx.dlss.LumaResYHistory_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a8545a0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99f0d2f0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2096] Info: Optimal settings not used. Custom dimensions (1920x1080) overriding Optimal dimensions (640x360).
+[tid:140030192697920][CreateDlssInstance:2104] Info: Dynamic scaling capability is disabled for this combination of creation parameters.
+[tid:140030192697920][CreateDlssInstance:2134] InDynamicMinSetDims.Width 1920
+[tid:140030192697920][CreateDlssInstance:2135] InDynamicMinSetDims.Height 1080
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_UltraPerformance (3)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a85d040 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_0 -> nv.ngx.dlss.LumaResYHistory_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a7f6190 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_1 -> nv.ngx.dlss.LumaResYHistory_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a8545a0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99f0d2f0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2134] InDynamicMinSetDims.Width 1901
+[tid:140030192697920][CreateDlssInstance:2135] InDynamicMinSetDims.Height 1069
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_DLAA (5)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a7f6190 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_1 -> nv.ngx.dlss.LumaResYHistory_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a85d040 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_0 -> nv.ngx.dlss.LumaResYHistory_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99f0d2f0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a8545a0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a19c510 (nv.ngx.dlss.LumaResYHistory_0)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d996a31a0 (nv.ngx.dlss.LumaResYHistory_1)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d99aebc60 (nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d996a3160 (nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0)
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][operator():1733] Info: (DLAA) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Quality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Balanced) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (Perf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraPerf) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():1733] Info: (UltraQuality) Using Default Overriden Preset Preset_D
+[tid:140030192697920][operator():2876] Info: (DLAA) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Quality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Balanced) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][operator():2876] Info: (Perf) App hint Preset Unspecified or Overridden, using title default Preset M
+[tid:140030192697920][operator():2876] Info: (UltraPerf) App hint Preset Unspecified or Overridden, using title default Preset L
+[tid:140030192697920][operator():2876] Info: (UltraQuality) App hint Preset Unspecified or Overridden, using title default Preset K
+[tid:140030192697920][CreateDlssInstance:2030] CreationNodeMask=0x1, VisibilityNodeMask=0x1, Node=0
+[tid:140030192697920][CreateDlssInstance:2138] HDR 0
+[tid:140030192697920][CreateDlssInstance:2139] Motion Vectors LowRes 0
+[tid:140030192697920][CreateDlssInstance:2140] Motion Vectors Jittered 0
+[tid:140030192697920][CreateDlssInstance:2141] Depth Inverted 0
+[tid:140030192697920][CreateDlssInstance:2142] Do Sharpening 0
+[tid:140030192697920][CreateDlssInstance:2144] Alpha Upscaling Enabled 0
+[tid:140030192697920][CreateDlssInstance:2146] PerfQualityValue NVSDK_NGX_PerfQuality_Value_DLAA (5)
+[tid:140030192697920][CreateDlssInstance:2151] DLSS-D Mode NVSDK_NGX_DLSS_Denoise_Mode_Off (0)
+[tid:140030192697920][CreateDlssInstance:3097] Dltss training set is : garrulous_pillbug_424_weightsdesc
+[tid:140030192697920][CreateDlssInstance:3098] Dltss Mask Mode is : INPUT_MASK_COLOR_VARIANCE_ONLY
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a7f6190 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_0 -> nv.ngx.dlss.LumaResYHistory_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a85d040 fmt NGXCubinFormat_R16F size (3840,2176) nv.ngx.dlss.LumaResYHistory_1 -> nv.ngx.dlss.LumaResYHistory_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99f0d2f0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d9a8545a0 fmt NGXCubinFormat_RGBA16F size (1920,1088) nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1 -> nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d986cb190 fmt NGXCubinFormat_RGBA16F size (480,288) nv.ngx.dlss.FoldedResHiddenHistory -> nv.ngx.dlss.FoldedResHiddenHistory
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreateTexture2DResourceShared:978] Recycling Texture2D resource 0x559d99af0220 fmt NGXCubinFormat_R16F size (1,1) nv.ngx.dlss.PreviousFrameExposure -> nv.ngx.dlss.PreviousFrameExposure
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1990] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][BuildDltssNetwork:3590] Use Neural Pipe overrides fused mode : NGX_DLTSS_FUSED_ALL_LAYERS -> NGX_DLTSS_FUSED_FIRST_LAYERS
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9a7cd4c0 size in Bytes (11059200) nv.ngx.dlss.PaddedWindowAllTensors -> nv.ngx.dlss.PaddedWindowAllTensors
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][CreatePaddedWindowNetwork:399] Container0Tensor: 10 MiB allocated
+[tid:140030192697920][CreatePaddedWindowNetwork:403] Container1Tensor: 12 MiB aliased
+[tid:140030192697920][CreatePaddedWindowNetwork:407] Container2Tensor: 8 MiB aliased
+[tid:140030192697920][RecycleBuffer:739] Recycling Buffer Resource 0x559d9aa0bb70 size in Bytes (3545824) nv.ngx.dlss.WeightsBuffer -> nv.ngx.dlss.WeightsBuffer
+[tid:140030192697920][getPublicName:666] ProductionResourceName: 'nv.ngx.dlss.resource'
+[tid:140030192697920][SetResourceName:1964] Vulkan SetResourceName: nv.ngx.dlss.resource
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 1
+[tid:140030192697920][EvaluateDltss:1649] NeedHistoryReset 0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7f6190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a85d040
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99f0d2f0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a8545a0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d986cb190
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d99af0220
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9aa0bb70
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cd4c0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7cb480
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7c6980
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7c9c00
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7c5af0
+[tid:140030192697920][PushToDestroy:1121] Scheduled to destroy 0x559d9a7c87c0
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7c5af0 (nv.ngx.dlss.FastLanczosLut)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7c9c00 (nv.ngx.dlss.HilumaV2LutScratchBuffer)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7cb480 (nv.ngx.dlss.ScratchBuffer)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7cd4c0 (nv.ngx.dlss.PaddedWindowAllTensors)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7c6980 (nv.ngx.dlss.FastLanczosScratchBuffer)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9aa0bb70 (nv.ngx.dlss.WeightsBuffer)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d99af0220 (nv.ngx.dlss.PreviousFrameExposure)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d986cb190 (nv.ngx.dlss.FoldedResHiddenHistory)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a8545a0 (nv.ngx.dlss.ChromaResYcocgHistoryAndAge_1)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7c87c0 (nv.ngx.dlss.HilumaV2Lut)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d99f0d2f0 (nv.ngx.dlss.ChromaResYcocgHistoryAndAge_0)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a85d040 (nv.ngx.dlss.LumaResYHistory_1)
+[tid:140030192697920][CollectGarbage:1156] Releasing resource 0x559d9a7f6190 (nv.ngx.dlss.LumaResYHistory_0)
+[tid:140030192697920][Shutdown:268] Delayed destroy resource list count 0

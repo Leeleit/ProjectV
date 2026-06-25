@@ -137,8 +137,8 @@ void TestVctDebugViewStringMapping(TestContext &context)
 
 void TestVctDebugViewCycle(TestContext &context)
 {
-	if (GetNextLightingDebugView(LightingDebugView::Taa) != LightingDebugView::VctDiffuse) {
-		context.Fail(__LINE__, "Taa -> VctDiffuse cycle break");
+	if (GetNextLightingDebugView(LightingDebugView::Fog) != LightingDebugView::VctDiffuse) {
+		context.Fail(__LINE__, "Fog -> VctDiffuse cycle break");
 	}
 	if (GetNextLightingDebugView(LightingDebugView::VctDiffuse) != LightingDebugView::VctSpecular) {
 		context.Fail(__LINE__, "VctDiffuse -> VctSpecular cycle break");

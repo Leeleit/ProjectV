@@ -12,7 +12,6 @@ import projectv.string_id;
 #include "render/RayTracedShadows.hpp"
 #include "render/RtxGiProbes.hpp"
 #include "render/SceneResources.hpp"
-#include "render/TaaRenderTargets.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
@@ -66,31 +65,6 @@ void ShutdownVulkan(AppState *state)
 		DestroySceneResources(&state->context(), &state->render());
 		projectv::asset::UnloadAllModels(&state->context(), &state->render());
 		projectv::asset::DestroyModelPipeline(&state->context(), &state->render());
-
-		if (state->render().taaSceneColorTarget != nullptr || state->render().taaHistoryColorTarget != nullptr || state->render().taaLayerSceneColorTarget != nullptr || state->render().taaLayerHistoryColorTarget != nullptr) {
-			projectv::taa::DestroyTaaRenderTargets(
-				&state->context(),
-				*state->render().taaSceneColorTarget,
-				*state->render().taaHistoryColorTarget,
-				*state->render().taaLayerSceneColorTarget,
-				*state->render().taaLayerHistoryColorTarget,
-				*state->render().taaMotionVectorTarget,
-				*state->render().taaMotionVectorHistoryTarget,
-				state->render().taaLinearSampler);
-			delete state->render().taaSceneColorTarget;
-			state->render().taaSceneColorTarget = nullptr;
-			delete state->render().taaHistoryColorTarget;
-			state->render().taaHistoryColorTarget = nullptr;
-
-			delete state->render().taaLayerSceneColorTarget;
-			state->render().taaLayerSceneColorTarget = nullptr;
-			delete state->render().taaLayerHistoryColorTarget;
-			state->render().taaLayerHistoryColorTarget = nullptr;
-			delete state->render().taaMotionVectorTarget;
-			state->render().taaMotionVectorTarget = nullptr;
-			delete state->render().taaMotionVectorHistoryTarget;
-			state->render().taaMotionVectorHistoryTarget = nullptr;
-		}
 	}
 
 	state->physics().reset();

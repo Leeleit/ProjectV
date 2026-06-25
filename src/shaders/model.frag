@@ -16,10 +16,6 @@ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
     vec4 localPointLightPositionAndRadius;
     vec4 localPointLightColorAndIntensity;
     vec4 localPointLightParams;
-    vec4 taaParams;
-    mat4 prevViewProjectionMatrix;
-    vec4 taaHistoryParams;
-    vec4 taaLayerHistoryParams;
 } sceneLighting;
 
 layout(location = 0) in vec3 inWorldPosition;
@@ -28,23 +24,11 @@ layout(location = 2) in vec2 inUv;
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
-    mat4 viewProjectionUnjittered; // for model motion vector compute
     mat4 modelTransform;
 } pushConstants;
 
-#ifdef TAA_ENABLED
-layout(location = 1) out vec4 outSceneColor;
-#define OUT_COLOR outSceneColor
-#else
 layout(location = 0) out vec4 outColor;
 #define OUT_COLOR outColor
-#endif
-
-// Model motion vector output (Location 3). The motion vector attachment is shared
-// between voxel and model passes; where the model draws it overwrites the voxel
-// motion vector with the model's own, elsewhere the load op preserves the voxel
-// value. The TAA resolve then reprojects per-fragment using the correct motion.
-layout(location = 3) out vec2 outMotionVector;
 
 void main() {
     const vec3 normal = normalize(inWorldNormal);
@@ -110,28 +94,6 @@ void main() {
         clamp(sceneLighting.colorGrading.z, 0.0, 2.0),
         clamp(sceneLighting.colorGrading.w, -0.25, 0.25));
 
-#ifdef TAA_ENABLED
-    outSceneColor = vec4(color, 1.0);
-#else
     outColor = vec4(color, 1.0);
-#endif
-
-    // Model motion vector: prevUnj - currUnj of the world position so the TAA
-    // resolve reprojects model fragments using their actual motion (not the voxel
-    // background's motion vector that the model pass would otherwise inherit via
-    // load-op). Skipped for fragments with prev.w <= 0 (camera behind near plane).
-    {
-        const vec4 prevClip = sceneLighting.prevViewProjectionMatrix *
-            vec4(inWorldPosition, 1.0);
-        vec2 motion = vec2(0.0);
-        if (prevClip.w > 0.0001) {
-            const vec2 prevNdc = prevClip.xy / prevClip.w * 0.5 + 0.5;
-            const vec4 currClip = pushConstants.viewProjectionUnjittered *
-                vec4(inWorldPosition, 1.0);
-            const vec2 currNdc = currClip.xy / currClip.w * 0.5 + 0.5;
-            motion = prevNdc - currNdc;
-        }
-        outMotionVector = motion;
-    }
 }
 

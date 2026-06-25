@@ -247,7 +247,6 @@ void MirrorRenderPassTimingsToDebugStats(
 	stats.renderPassShadowMs = render.renderPassTimings.shadowMs;
 	stats.renderPassMeshingMs = render.renderPassTimings.meshingMs;
 	stats.renderPassGraphicsMs = render.renderPassTimings.graphicsMs;
-	stats.renderPassTaaResolveMs = render.renderPassTimings.taaResolveMs;
 	stats.renderPassDebugOverlayMs = render.renderPassTimings.debugOverlayMs;
 	stats.renderPassDebugHudMs = render.renderPassTimings.debugHudMs;
 	stats.renderPassDirtyChunkRebuiltCount = render.renderPassTimings.dirtyChunkRebuiltCount;
@@ -348,19 +347,6 @@ void MirrorRenderLightingToDebugStats(
 	stats.localPointLightShadowBias = render.currentSceneLighting.localPointLightParams[3];
 	stats.shadowMapResolution = 2048u;
 	stats.transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
-	stats.taaEnabled = render.taaEnabled;
-	stats.taaBlend = render.taaBlend;
-	stats.taaFrameCounter = render.taaFrameCounter;
-	stats.taaHistoryValid = render.taaHistoryValid;
-	stats.taaJitterX = render.taaJitterX;
-	stats.taaJitterY = render.taaJitterY;
-	stats.taaJitterScale = render.taaJitterScale;
-	stats.taaNeighbourhoodRadius = render.taaNeighbourhoodRadius;
-	stats.taaCasSharpnessMax = render.taaCasSharpnessMax;
-	stats.taaCameraCutCount = render.taaCameraCutCount;
-	stats.taaCameraCutMaxDelta = render.taaCameraCutMaxDelta;
-	stats.taaLayerHistoryValid = render.taaLayerHistoryValid;
-	stats.taaLayerBlendFactor = render.taaLayerBlendFactor;
 }
 
 void MirrorWalkStatsToDebugStats(
@@ -507,49 +493,6 @@ bool ProcessInputActions(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJumpDelay)) {
 		SetPhysicsWalkAutoJumpDelayEnabled(physics, !IsPhysicsWalkAutoJumpDelayEnabled(physics));
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::ToggleTaa) &&
-		world->voxelWorld) {
-		render->taaEnabled = !render->taaEnabled;
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
-	}
-
-	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaJitterScale)) {
-		render->taaJitterScale = std::clamp(render->taaJitterScale - 0.25f, 0.0f, 2.0f);
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaJitterScale)) {
-		render->taaJitterScale = std::clamp(render->taaJitterScale + 0.25f, 0.0f, 2.0f);
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTaaBlend)) {
-		render->taaBlend = std::clamp(render->taaBlend - 0.05f, 0.0f, 1.0f);
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::IncreaseTaaBlend)) {
-		render->taaBlend = std::clamp(render->taaBlend + 0.05f, 0.0f, 1.0f);
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::CycleTaaNeighbourhoodRadius)) {
-		constexpr std::array kNeighbourhoodCycle{1, 3, 5, 7};
-		const auto current = std::ranges::find(kNeighbourhoodCycle, render->taaNeighbourhoodRadius);
-		if (current == kNeighbourhoodCycle.end()) {
-			render->taaNeighbourhoodRadius = kNeighbourhoodCycle.front();
-		} else {
-			const size_t nextIndex = (static_cast<size_t>(current - kNeighbourhoodCycle.begin()) + 1u) % kNeighbourhoodCycle.size();
-			render->taaNeighbourhoodRadius = kNeighbourhoodCycle[nextIndex];
-		}
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
-	}
-	if (ConsumeInputActionPressed(*input, InputAction::InvalidateTaaHistory)) {
-		render->taaHistoryValid = false;
-		render->taaLayerHistoryValid = false;
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTimeScale)) {
 		constexpr float kTimeScaleDownStep = 0.5f;

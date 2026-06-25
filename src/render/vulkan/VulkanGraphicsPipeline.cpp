@@ -2,12 +2,9 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
-#include "render/AntialiasingMode.hpp"
-#include "render/TaaRenderTargets.hpp"
 #include "render/RayTracedShadows.hpp"
 #include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/TaaResolvePipeline.hpp"
 
 #include <array>
 #include <vector>
@@ -76,13 +73,6 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.pImmutableSamplers = nullptr,
 	},
 
-	VkDescriptorSetLayoutBinding{
-		.binding = 6,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
 	// EVIL: binding 11 = vctClipmap sampler3D FRAGMENT. Per TODO §5.1 (VCT consume in voxel.frag).
 	// Always declared even when VCT gate is OFF (env PROJECTV_VCT_GPU=ON default OFF per
 	// `agent/knowledge.md` Step 1) — fallback 1x1x1 RGBA16F dummy bound instead.
@@ -998,14 +988,6 @@ bool RefreshGraphicsResourceBindings(
 			.range = VK_WHOLE_SIZE,
 		};
 
-		const VkDescriptorImageInfo layerHistoryImageInfo{
-			.sampler = render->taaLinearSampler,
-			.imageView = render->taaLayerHistoryColorTarget != nullptr
-							 ? render->taaLayerHistoryColorTarget->imageView
-							 : VK_NULL_HANDLE,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		};
-
 		const VkDescriptorImageInfo vctClipmapImageInfo{
 			.sampler = render->vctClipmapSampler,
 			.imageView = render->vctClipmapView != VK_NULL_HANDLE
@@ -1107,18 +1089,6 @@ bool RefreshGraphicsResourceBindings(
 			.pTexelBufferView = nullptr,
 		});
 
-		descriptorWrites.push_back(VkWriteDescriptorSet{
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.pNext = nullptr,
-			.dstSet = frameResources.graphicsDescriptorSet,
-			.dstBinding = 6,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &layerHistoryImageInfo,
-			.pBufferInfo = nullptr,
-			.pTexelBufferView = nullptr,
-		});
 		descriptorWrites.push_back(VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -1226,7 +1196,7 @@ bool RefreshGraphicsResourceBindings(
 				: render->rtxShadowMaskFallbackView;
 		if (shadowMaskView != VK_NULL_HANDLE) {
 			const VkDescriptorImageInfo shadowMaskImageInfo{
-				.sampler = render->taaLinearSampler,
+				.sampler = render->vctClipmapSampler,
 				.imageView = shadowMaskView,
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			};
@@ -1249,27 +1219,6 @@ bool RefreshGraphicsResourceBindings(
 			descriptorWrites.data(),
 			0,
 			nullptr);
-
-		if (render->taaResolveDescriptorSets[frameIndex] != VK_NULL_HANDLE) {
-			const VkWriteDescriptorSet taaResolveWrite{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = render->taaResolveDescriptorSets[frameIndex],
-				.dstBinding = 3,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &sceneLightingBufferInfo,
-				.pTexelBufferView = nullptr,
-			};
-			vkUpdateDescriptorSets(
-				context->device,
-				1,
-				&taaResolveWrite,
-				0,
-				nullptr);
-		}
 	}
 
 	// CSM removed per TODO.md §5.2.D (session 20x). RTX shadows use the
@@ -1296,11 +1245,6 @@ void DestroyGraphicsPipeline(
 		vkDestroyPipeline(context->device, render->transparentGraphicsPipeline, nullptr);
 		render->transparentGraphicsPipeline = VK_NULL_HANDLE;
 	}
-	if (render->transparentGraphicsPipelineTaaOn) {
-		PV_PROFILE_ZONE_N("DestroyTransparentGraphicsPipelineTaaOn");
-		vkDestroyPipeline(context->device, render->transparentGraphicsPipelineTaaOn, nullptr);
-		render->transparentGraphicsPipelineTaaOn = VK_NULL_HANDLE;
-	}
 
 	if (render->shadowGraphicsPipeline) {
 		PV_PROFILE_ZONE_N("DestroyShadowGraphicsPipeline");
@@ -1310,27 +1254,16 @@ void DestroyGraphicsPipeline(
 
 	DestroyDebugOverlayPipeline(*context, *render);
 	DestroyDebugHudPipeline(*context, *render);
-	DestroyTaaResolvePipeline(context, render);
 
 	if (render->graphicsPipeline) {
 		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipeline");
 		vkDestroyPipeline(context->device, render->graphicsPipeline, nullptr);
 		render->graphicsPipeline = VK_NULL_HANDLE;
 	}
-	if (render->graphicsPipelineTaaOn) {
-		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipelineTaaOn");
-		vkDestroyPipeline(context->device, render->graphicsPipelineTaaOn, nullptr);
-		render->graphicsPipelineTaaOn = VK_NULL_HANDLE;
-	}
 	if (render->graphicsPipelineRtx) {
 		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipelineRtx");
 		vkDestroyPipeline(context->device, render->graphicsPipelineRtx, nullptr);
 		render->graphicsPipelineRtx = VK_NULL_HANDLE;
-	}
-	if (render->graphicsPipelineRtxTaaOn) {
-		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipelineRtxTaaOn");
-		vkDestroyPipeline(context->device, render->graphicsPipelineRtxTaaOn, nullptr);
-		render->graphicsPipelineRtxTaaOn = VK_NULL_HANDLE;
 	}
 
 	if (render->graphicsPipelineLayout) {
@@ -1360,9 +1293,7 @@ bool CreateGraphicsPipeline(
 
 	std::vector<char> vertexShaderCode;
 	std::vector<char> fragmentShaderCode;
-	std::vector<char> fragmentShaderCodeTaaOn;
 	std::vector<char> fragmentShaderCodeRtx;
-	std::vector<char> fragmentShaderCodeRtxTaaOn;
 	const bool rtxProbeAvailable = context->rayTracing.rayQuery
 		&& context->rayTracing.accelerationStructure
 		&& projectv::render::IsRayTracedShadowEnabled(*context);
@@ -1370,15 +1301,12 @@ bool CreateGraphicsPipeline(
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ReadShaders");
 		vertexShaderCode = ReadShaderFile("voxel.vert.spv");
 		fragmentShaderCode = ReadShaderFile("voxel.frag.spv");
-		fragmentShaderCodeTaaOn = ReadShaderFile("voxel.frag.taa_on.spv");
 		if (rtxProbeAvailable) {
 			fragmentShaderCodeRtx = ReadShaderFile("voxel.frag.rtx.spv");
-			fragmentShaderCodeRtxTaaOn = ReadShaderFile("voxel.frag.rtx_taa_on.spv");
 		}
 	}
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty() ||
-		fragmentShaderCodeTaaOn.empty() ||
-		(rtxProbeAvailable && (fragmentShaderCodeRtx.empty() || fragmentShaderCodeRtxTaaOn.empty()))) {
+		(rtxProbeAvailable && fragmentShaderCodeRtx.empty())) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ReadShaders", "voxel shader blob is empty");
 		DestroyGraphicsPipeline(context, render);
 		return false;
@@ -1386,21 +1314,11 @@ bool CreateGraphicsPipeline(
 
 	VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
-	VkShaderModule fragmentShaderModuleTaaOn = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModuleRtx = VK_NULL_HANDLE;
-	VkShaderModule fragmentShaderModuleRtxTaaOn = VK_NULL_HANDLE;
 	const auto destroyShaderModules = [&] {
-		if (fragmentShaderModuleRtxTaaOn) {
-			vkDestroyShaderModule(context->device, fragmentShaderModuleRtxTaaOn, nullptr);
-			fragmentShaderModuleRtxTaaOn = VK_NULL_HANDLE;
-		}
 		if (fragmentShaderModuleRtx) {
 			vkDestroyShaderModule(context->device, fragmentShaderModuleRtx, nullptr);
 			fragmentShaderModuleRtx = VK_NULL_HANDLE;
-		}
-		if (fragmentShaderModuleTaaOn) {
-			vkDestroyShaderModule(context->device, fragmentShaderModuleTaaOn, nullptr);
-			fragmentShaderModuleTaaOn = VK_NULL_HANDLE;
 		}
 		if (fragmentShaderModule) {
 			vkDestroyShaderModule(context->device, fragmentShaderModule, nullptr);
@@ -1415,14 +1333,12 @@ bool CreateGraphicsPipeline(
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.CreateShaderModules");
 		vertexShaderModule = CreateShaderModule(context->device, vertexShaderCode);
 		fragmentShaderModule = CreateShaderModule(context->device, fragmentShaderCode);
-		fragmentShaderModuleTaaOn = CreateShaderModule(context->device, fragmentShaderCodeTaaOn);
 		if (rtxProbeAvailable) {
 			fragmentShaderModuleRtx = CreateShaderModule(context->device, fragmentShaderCodeRtx);
-			fragmentShaderModuleRtxTaaOn = CreateShaderModule(context->device, fragmentShaderCodeRtxTaaOn);
 		}
 	}
-	if (!vertexShaderModule || !fragmentShaderModule || !fragmentShaderModuleTaaOn ||
-		(rtxProbeAvailable && (!fragmentShaderModuleRtx || !fragmentShaderModuleRtxTaaOn))) {
+	if (!vertexShaderModule || !fragmentShaderModule ||
+		(rtxProbeAvailable && !fragmentShaderModuleRtx)) {
 		LogGraphicsPipelineTextFailure(
 			"CreateGraphicsPipeline.CreateShaderModules",
 			"voxel shader module creation returned null");
@@ -1440,21 +1356,12 @@ bool CreateGraphicsPipeline(
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
-	const VkPipelineShaderStageCreateInfo fragStageTaaOff{
+	const VkPipelineShaderStageCreateInfo fragStage{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
 		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.module = fragmentShaderModule,
-		.pName = "main",
-		.pSpecializationInfo = nullptr,
-	};
-	const VkPipelineShaderStageCreateInfo fragStageTaaOn{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.module = fragmentShaderModuleTaaOn,
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
@@ -1467,19 +1374,8 @@ bool CreateGraphicsPipeline(
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
-	const VkPipelineShaderStageCreateInfo fragStageRtxTaaOn{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.module = fragmentShaderModuleRtxTaaOn,
-		.pName = "main",
-		.pSpecializationInfo = nullptr,
-	};
-	const std::array shaderStagesTaaOff{vertexStageInfo, fragStageTaaOff};
-	const std::array shaderStagesTaaOn{vertexStageInfo, fragStageTaaOn};
-	const std::array shaderStagesRtxOff{vertexStageInfo, fragStageRtx};
-	const std::array shaderStagesRtxOn{vertexStageInfo, fragStageRtxTaaOn};
+	const std::array shaderStages{vertexStageInfo, fragStage};
+	const std::array shaderStagesRtx{vertexStageInfo, fragStageRtx};
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1518,31 +1414,11 @@ bool CreateGraphicsPipeline(
 	shadowRasterizer.depthBiasEnable = VK_TRUE;
 	shadowRasterizer.depthBiasConstantFactor = 1.25f;
 	shadowRasterizer.depthBiasSlopeFactor = 1.75f;
-
-	// MSAA: track the AA mode's sample count. 1 = single-sample (no MSAA), 2 = 2x MSAA.
-	// The multi-sampled attachment is `taaSceneColorMsTarget` and resolves to
-	// `taaSceneColorTarget` via `VkRenderingAttachmentInfo::resolveImageView` at end
-	// of pass (see Renderer.cpp).
-	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-	switch (projectv::render::MsaaSamplesForMode(render->aaMode)) {
-	case 2u:
-		msaaSamples = VK_SAMPLE_COUNT_2_BIT;
-		break;
-	case 4u:
-		msaaSamples = VK_SAMPLE_COUNT_4_BIT;
-		break;
-	case 8u:
-		msaaSamples = VK_SAMPLE_COUNT_8_BIT;
-		break;
-	default:
-		msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-		break;
-	}
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.pNext = nullptr;
 	multisampling.flags = 0;
-	multisampling.rasterizationSamples = msaaSamples;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.minSampleShading = 0.0f;
 	multisampling.pSampleMask = nullptr;
@@ -1562,23 +1438,17 @@ bool CreateGraphicsPipeline(
 		VK_COLOR_COMPONENT_B_BIT |
 		VK_COLOR_COMPONENT_A_BIT;
 
-	VkPipelineColorBlendAttachmentState colorBlendAttachments[4] = {
-		colorBlendAttachment,
-		colorBlendAttachment,
-		colorBlendAttachment,
+	VkPipelineColorBlendAttachmentState colorBlendAttachments[1] = {
 		colorBlendAttachment,
 	};
 	VkPipelineColorBlendAttachmentState transparentColorBlendAttachment = kAlphaBlendAttachmentState;
-	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[4] = {
-		transparentColorBlendAttachment,
-		transparentColorBlendAttachment,
-		transparentColorBlendAttachment,
+	VkPipelineColorBlendAttachmentState transparentColorBlendAttachments[1] = {
 		transparentColorBlendAttachment,
 	};
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.attachmentCount = 4;
+	colorBlending.attachmentCount = 1;
 	colorBlending.pAttachments = colorBlendAttachments;
 
 	VkPipelineColorBlendStateCreateInfo transparentColorBlending = colorBlending;
@@ -1664,26 +1534,13 @@ bool CreateGraphicsPipeline(
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelGraphicsPipelineLayout");
 
-	if (!context->supportsDynamicRenderingUnusedAttachments) {
-		LogGraphicsPipelineTextFailure(
-			"CreateGraphicsPipeline.DynamicRenderingUnusedAttachments",
-			"device does not support VK_EXT_dynamic_rendering_unused_attachments; "
-			"main voxel pipeline requires it for the dual-format TAA contract");
-		return false;
-	}
-	const VkFormat mainColorAttachmentFormats[4] = {
-		swapchain->format,
-		projectv::taa::kTaaSceneColorFormat,
-
-		projectv::taa::kTaaLayerHistoryColorFormat,
-		projectv::taa::kTaaMotionVectorFormat,
-	};
+	const VkFormat mainColorAttachmentFormat = swapchain->format;
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
-		.colorAttachmentCount = 4,
-		.pColorAttachmentFormats = mainColorAttachmentFormats,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &mainColorAttachmentFormat,
 		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
@@ -1710,126 +1567,84 @@ bool CreateGraphicsPipeline(
 	pipelineBase.pDynamicState = &dynamicState;
 	pipelineBase.layout = render->graphicsPipelineLayout;
 
-	VkGraphicsPipelineCreateInfo opaqueInfoTaaOff = pipelineBase;
-	opaqueInfoTaaOff.stageCount = static_cast<uint32_t>(shaderStagesTaaOff.size());
-	opaqueInfoTaaOff.pStages = shaderStagesTaaOff.data();
-	VkGraphicsPipelineCreateInfo opaqueInfoTaaOn = pipelineBase;
-	opaqueInfoTaaOn.stageCount = static_cast<uint32_t>(shaderStagesTaaOn.size());
-	opaqueInfoTaaOn.pStages = shaderStagesTaaOn.data();
-	const VkGraphicsPipelineCreateInfo opaquePipelineInfos[2] = {opaqueInfoTaaOff, opaqueInfoTaaOn};
-	VkPipeline opaquePipelines[2]{};
+	VkGraphicsPipelineCreateInfo opaqueInfo = pipelineBase;
+	opaqueInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+	opaqueInfo.pStages = shaderStages.data();
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.OpaquePipeline");
-		const VkResult opaquePipelinesResult = vkCreateGraphicsPipelines(
+		const VkResult result = vkCreateGraphicsPipelines(
 			context->device,
 			VK_NULL_HANDLE,
-			2,
-			opaquePipelineInfos,
+			1,
+			&opaqueInfo,
 			nullptr,
-			opaquePipelines);
-		if (opaquePipelinesResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.Opaque.vkCreateGraphicsPipelines", opaquePipelinesResult);
+			&render->graphicsPipeline);
+		if (result != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.Opaque.vkCreateGraphicsPipelines", result);
 			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
 	}
-	render->graphicsPipeline = opaquePipelines[0];
-	render->graphicsPipelineTaaOn = opaquePipelines[1];
 	SetVulkanObjectName(
 		*context,
 		reinterpret_cast<uint64_t>(render->graphicsPipeline),
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelOpaquePipeline");
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->graphicsPipelineTaaOn),
-		VK_OBJECT_TYPE_PIPELINE,
-		"VoxelOpaquePipelineTaaOn");
 
 	if (rtxProbeAvailable) {
-		VkGraphicsPipelineCreateInfo opaqueInfoRtxOff = pipelineBase;
-		opaqueInfoRtxOff.stageCount = static_cast<uint32_t>(shaderStagesRtxOff.size());
-		opaqueInfoRtxOff.pStages = shaderStagesRtxOff.data();
-		VkGraphicsPipelineCreateInfo opaqueInfoRtxOn = pipelineBase;
-		opaqueInfoRtxOn.stageCount = static_cast<uint32_t>(shaderStagesRtxOn.size());
-		opaqueInfoRtxOn.pStages = shaderStagesRtxOn.data();
-		const VkGraphicsPipelineCreateInfo opaqueRtxPipelineInfos[2] = {opaqueInfoRtxOff, opaqueInfoRtxOn};
-		VkPipeline opaqueRtxPipelines[2]{};
+		VkGraphicsPipelineCreateInfo opaqueInfoRtx = pipelineBase;
+		opaqueInfoRtx.stageCount = static_cast<uint32_t>(shaderStagesRtx.size());
+		opaqueInfoRtx.pStages = shaderStagesRtx.data();
 		{
 			PV_PROFILE_ZONE_N("CreateGraphicsPipeline.OpaqueRtxPipeline");
-			const VkResult opaqueRtxPipelinesResult = vkCreateGraphicsPipelines(
+			const VkResult result = vkCreateGraphicsPipelines(
 				context->device,
 				VK_NULL_HANDLE,
-				2,
-				opaqueRtxPipelineInfos,
+				1,
+				&opaqueInfoRtx,
 				nullptr,
-				opaqueRtxPipelines);
-			if (opaqueRtxPipelinesResult != VK_SUCCESS) {
-				LogGraphicsPipelineVkFailure(
-					"CreateGraphicsPipeline.OpaqueRtx.vkCreateGraphicsPipelines",
-					opaqueRtxPipelinesResult);
+				&render->graphicsPipelineRtx);
+			if (result != VK_SUCCESS) {
+				LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.OpaqueRtx.vkCreateGraphicsPipelines", result);
 				destroyShaderModules();
 				DestroyGraphicsPipeline(context, render);
 				return false;
 			}
 		}
-		render->graphicsPipelineRtx = opaqueRtxPipelines[0];
-		render->graphicsPipelineRtxTaaOn = opaqueRtxPipelines[1];
 		SetVulkanObjectName(
 			*context,
 			reinterpret_cast<uint64_t>(render->graphicsPipelineRtx),
 			VK_OBJECT_TYPE_PIPELINE,
 			"VoxelOpaquePipelineRtx");
-		SetVulkanObjectName(
-			*context,
-			reinterpret_cast<uint64_t>(render->graphicsPipelineRtxTaaOn),
-			VK_OBJECT_TYPE_PIPELINE,
-			"VoxelOpaquePipelineRtxTaaOn");
 	}
 
-	VkGraphicsPipelineCreateInfo transparentInfoTaaOff = pipelineBase;
-	transparentInfoTaaOff.pDepthStencilState = &transparentDepthStencil;
-	transparentInfoTaaOff.pColorBlendState = &transparentColorBlending;
-	transparentInfoTaaOff.stageCount = static_cast<uint32_t>(shaderStagesTaaOff.size());
-	transparentInfoTaaOff.pStages = shaderStagesTaaOff.data();
-	VkGraphicsPipelineCreateInfo transparentInfoTaaOn = pipelineBase;
-	transparentInfoTaaOn.pDepthStencilState = &transparentDepthStencil;
-	transparentInfoTaaOn.pColorBlendState = &transparentColorBlending;
-	transparentInfoTaaOn.stageCount = static_cast<uint32_t>(shaderStagesTaaOn.size());
-	transparentInfoTaaOn.pStages = shaderStagesTaaOn.data();
-	const VkGraphicsPipelineCreateInfo transparentPipelineInfos[2] = {transparentInfoTaaOff, transparentInfoTaaOn};
-	VkPipeline transparentPipelines[2]{};
+	VkGraphicsPipelineCreateInfo transparentInfo = pipelineBase;
+	transparentInfo.pDepthStencilState = &transparentDepthStencil;
+	transparentInfo.pColorBlendState = &transparentColorBlending;
+	transparentInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+	transparentInfo.pStages = shaderStages.data();
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.TransparentPipeline");
-		const VkResult transparentPipelinesResult = vkCreateGraphicsPipelines(
+		const VkResult result = vkCreateGraphicsPipelines(
 			context->device,
 			VK_NULL_HANDLE,
-			2,
-			transparentPipelineInfos,
+			1,
+			&transparentInfo,
 			nullptr,
-			transparentPipelines);
-		if (transparentPipelinesResult != VK_SUCCESS) {
-			LogGraphicsPipelineVkFailure(
-				"CreateGraphicsPipeline.Transparent.vkCreateGraphicsPipelines",
-				transparentPipelinesResult);
+			&render->transparentGraphicsPipeline);
+		if (result != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure("CreateGraphicsPipeline.Transparent.vkCreateGraphicsPipelines", result);
 			destroyShaderModules();
 			DestroyGraphicsPipeline(context, render);
 			return false;
 		}
 	}
-	render->transparentGraphicsPipeline = transparentPipelines[0];
-	render->transparentGraphicsPipelineTaaOn = transparentPipelines[1];
 	SetVulkanObjectName(
 		*context,
 		reinterpret_cast<uint64_t>(render->transparentGraphicsPipeline),
 		VK_OBJECT_TYPE_PIPELINE,
 		"VoxelTransparentPipeline");
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->transparentGraphicsPipelineTaaOn),
-		VK_OBJECT_TYPE_PIPELINE,
-		"VoxelTransparentPipelineTaaOn");
 
 	VkGraphicsPipelineCreateInfo shadowPipelineInfo = pipelineBase;
 	(void)shadowPipelineInfo;
@@ -1854,15 +1669,6 @@ bool CreateGraphicsPipeline(
 
 	if (!CreateDebugHudPipeline(*context, *swapchain, *render)) {
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugHud", "debug HUD pipeline creation failed");
-		destroyShaderModules();
-		DestroyGraphicsPipeline(context, render);
-		return false;
-	}
-
-	if (!CreateTaaResolvePipeline(context, swapchain, render)) {
-		LogGraphicsPipelineTextFailure(
-			"CreateGraphicsPipeline.TaaResolve",
-			"TAA resolve pipeline creation failed");
 		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);
 		return false;

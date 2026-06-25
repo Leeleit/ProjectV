@@ -161,7 +161,6 @@ bool FinalizeActiveVoxelWorldReload(AppState *state, const std::string_view oper
 	world->scenePresetReloadRequested = false;
 	world->snapshotSaveRequested = false;
 	world->snapshotLoadRequested = false;
-	state->render().taaHistoryValid = false;
 	return true;
 }
 

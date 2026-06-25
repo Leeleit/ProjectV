@@ -151,15 +151,8 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::IncreaseShadowTuningValue, SDL_SCANCODE_I);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
 	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
-	BindAction(input, InputAction::ToggleTaa, SDL_SCANCODE_T);
 	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);
 	BindAction(input, InputAction::PickTargetMaterial, SDL_SCANCODE_M);
-	BindAction(input, InputAction::DecreaseTaaJitterScale, SDL_SCANCODE_SEMICOLON);
-	BindAction(input, InputAction::IncreaseTaaJitterScale, SDL_SCANCODE_APOSTROPHE);
-	BindAction(input, InputAction::DecreaseTaaBlend, SDL_SCANCODE_MINUS);
-	BindAction(input, InputAction::IncreaseTaaBlend, SDL_SCANCODE_EQUALS);
-	BindAction(input, InputAction::CycleTaaNeighbourhoodRadius, SDL_SCANCODE_COMMA);
-	BindAction(input, InputAction::InvalidateTaaHistory, SDL_SCANCODE_PERIOD);
 
 	BindAction(input, InputAction::PickModel, SDL_SCANCODE_F);
 

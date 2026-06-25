@@ -5,7 +5,6 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
-#include "render/AntialiasingMode.hpp"
 
 namespace projectv::asset {
 
@@ -18,10 +17,9 @@ constexpr VkFormat kModelVertexUvFormat = VK_FORMAT_R32G32_SFLOAT;
 struct ModelPushConstants {
 
 	[[maybe_unused]] std::array<float, 16> viewProjection{};
-	[[maybe_unused]] std::array<float, 16> viewProjectionUnjittered{}; // unjittered counterpart for model motion vector (Phase 1a fix carried over to model)
 	[[maybe_unused]] std::array<float, 16> modelTransform{};
 };
-static_assert(sizeof(ModelPushConstants) == 192);
+static_assert(sizeof(ModelPushConstants) == 128);
 
 VkShaderModule CreateModelShaderModule(const VkDevice device, const char *label, const std::vector<char> &code)
 {
@@ -148,29 +146,11 @@ bool CreateModelPipeline(
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
-	// MSAA: the model pass renders to `taaSceneColorMsTarget` (multi-sampled) when
-	// MSAA is active; the dynamic rendering auto-resolves to the single-sample
-	// `taaSceneColorTarget` at end of pass. Match the sample count to the AA mode.
-	VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-	switch (projectv::render::MsaaSamplesForMode(render->aaMode)) {
-	case 2u:
-		msaaSamples = VK_SAMPLE_COUNT_2_BIT;
-		break;
-	case 4u:
-		msaaSamples = VK_SAMPLE_COUNT_4_BIT;
-		break;
-	case 8u:
-		msaaSamples = VK_SAMPLE_COUNT_8_BIT;
-		break;
-	default:
-		msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-		break;
-	}
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.pNext = nullptr;
 	multisampling.flags = 0;
-	multisampling.rasterizationSamples = msaaSamples;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.minSampleShading = 0.0f;
 	multisampling.pSampleMask = nullptr;
@@ -188,17 +168,11 @@ bool CreateModelPipeline(
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	colorBlendAttachment.blendEnable = VK_FALSE;
-	const std::array colorBlendAttachments{
-		colorBlendAttachment,
-		colorBlendAttachment,
-		colorBlendAttachment,
-		colorBlendAttachment,
-	};
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlending.attachmentCount = 4;
-	colorBlending.pAttachments = colorBlendAttachments.data();
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
 
 	VkPipelineDynamicStateCreateInfo dynamicState{};
 	constexpr std::array dynamicStates{
@@ -216,15 +190,8 @@ bool CreateModelPipeline(
 
 	VkPipelineRenderingCreateInfo renderingInfo{};
 	renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-
-	const VkFormat modelColorAttachmentFormats[4] = {
-		colorFormat,
-		taa::kTaaSceneColorFormat,
-		taa::kTaaLayerHistoryColorFormat,
-		taa::kTaaMotionVectorFormat,
-	};
-	renderingInfo.colorAttachmentCount = 4;
-	renderingInfo.pColorAttachmentFormats = modelColorAttachmentFormats;
+	renderingInfo.colorAttachmentCount = 1;
+	renderingInfo.pColorAttachmentFormats = &colorFormat;
 	renderingInfo.depthAttachmentFormat = depthFormat;
 	renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
 
@@ -252,64 +219,8 @@ bool CreateModelPipeline(
 
 	render->modelPipelineLayout = VK_NULL_HANDLE;
 
-	std::vector<char> fragmentShaderCodeTaaOn = ReadShaderFile("model.frag.taa_on.spv");
-	VkShaderModule fragmentModuleTaaOn = CreateModelShaderModule(
-		context->device,
-		"ModelPass.model.frag.taa_on",
-		fragmentShaderCodeTaaOn);
-	if (fragmentModuleTaaOn == VK_NULL_HANDLE) {
-		vkDestroyShaderModule(context->device, vertexModule, nullptr);
-		vkDestroyShaderModule(context->device, fragmentModule, nullptr);
-		runtime::LogRuntimeFailure(
-			"Model",
-			"CreateModelPipeline.TaaOnFragmentShader",
-			"TAA-on model fragment shader module creation failed");
-		return false;
-	}
-	const std::array stagesTaaOn{
-		VkPipelineShaderStageCreateInfo{
-
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = vertexModule,
-			.pName = "main",
-			.pSpecializationInfo = nullptr,
-		},
-		VkPipelineShaderStageCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = fragmentModuleTaaOn,
-			.pName = "main",
-			.pSpecializationInfo = nullptr,
-		},
-	};
-	VkGraphicsPipelineCreateInfo pipelineInfoTaaOn = pipelineInfo;
-	pipelineInfoTaaOn.stageCount = static_cast<uint32_t>(stagesTaaOn.size());
-	pipelineInfoTaaOn.pStages = stagesTaaOn.data();
-	if (vkCreateGraphicsPipelines(
-			context->device,
-			VK_NULL_HANDLE,
-			1,
-			&pipelineInfoTaaOn,
-			nullptr,
-			&render->modelPipelineTaaOn) != VK_SUCCESS) {
-		vkDestroyShaderModule(context->device, vertexModule, nullptr);
-		vkDestroyShaderModule(context->device, fragmentModule, nullptr);
-		vkDestroyShaderModule(context->device, fragmentModuleTaaOn, nullptr);
-		runtime::LogRuntimeFailure(
-			"Model",
-			"CreateModelPipeline.vkCreateGraphicsPipelines.TaaOn",
-			"TAA-on model pipeline creation failed");
-		return false;
-	}
-
 	vkDestroyShaderModule(context->device, vertexModule, nullptr);
 	vkDestroyShaderModule(context->device, fragmentModule, nullptr);
-	vkDestroyShaderModule(context->device, fragmentModuleTaaOn, nullptr);
 	return true;
 }
 
@@ -322,19 +233,10 @@ void DestroyModelPipeline(VulkanContextState *context, RenderState *render)
 		vkDestroyPipeline(context->device, render->modelPipeline, nullptr);
 		render->modelPipeline = VK_NULL_HANDLE;
 	}
-	if (render->modelPipelineTaaOn != VK_NULL_HANDLE) {
-		vkDestroyPipeline(context->device, render->modelPipelineTaaOn, nullptr);
-		render->modelPipelineTaaOn = VK_NULL_HANDLE;
-	}
 }
 
 VkPipeline PickModelPipeline(const RenderState &render)
 {
-	if (render.taaEnabled) {
-		return render.modelPipelineTaaOn != VK_NULL_HANDLE
-				   ? render.modelPipelineTaaOn
-				   : render.modelPipeline;
-	}
 	return render.modelPipeline;
 }
 

@@ -28,7 +28,6 @@ layout(push_constant) uniform PushConstants {
     vec4 cameraForward;
     ivec4 worldMinAndChunkSize;
     uvec4 chunkGridAndFlags;
-    mat4 viewProjectionUnjittered;
 } pushConstants;
 
 
