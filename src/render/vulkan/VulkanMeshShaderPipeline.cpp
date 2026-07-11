@@ -622,7 +622,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 	dynamicState.dynamicStateCount = 2u;
 	dynamicState.pDynamicStates = dynamicStates;
 
-	const VkFormat colorFormats[1]{VK_FORMAT_R16G16B16A16_SFLOAT};
+	const VkFormat colorFormats[1]{VK_FORMAT_B10G11R11_UFLOAT_PACK32};
 	VkPipelineRenderingCreateInfo renderingCreateInfo{};
 	renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 	renderingCreateInfo.colorAttachmentCount = 1u;

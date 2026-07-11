@@ -361,7 +361,7 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 	const bool modelPipelineCreated = projectv::asset::CreateModelPipeline(
 		&state->context(),
 		state->render().graphicsPipelineLayout,
-		state->swapchain().format,
+		VK_FORMAT_B10G11R11_UFLOAT_PACK32,
 		ChooseModelDepthFormat(state->context().physicalDevice),
 		&state->render());
 	if (!modelPipelineCreated) [[unlikely]] {

@@ -188,12 +188,13 @@ bool CreateDebugOverlayPipeline(
 		return false;
 	}
 
+	const VkFormat overlayColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
 		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &swapchain.format,
+		.pColorAttachmentFormats = &overlayColorFormat,
 		.depthAttachmentFormat = ChooseDepthFormat(context.physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
@@ -413,12 +414,13 @@ bool CreateDebugHudPipeline(
 		return false;
 	}
 
+	const VkFormat hudColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
 		.viewMask = 0,
 		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &swapchain.format,
+		.pColorAttachmentFormats = &hudColorFormat,
 		.depthAttachmentFormat = ChooseDepthFormat(context.physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};

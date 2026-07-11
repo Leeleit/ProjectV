@@ -62,6 +62,15 @@ void ShutdownVulkan(AppState *state)
 		DestroyDepthResources(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());
 		DestroyScreenshotReadbackResources(&state->context(), &state->render());
+		if (state->render().sceneColorImageView != VK_NULL_HANDLE) {
+			vkDestroyImageView(state->context().device, state->render().sceneColorImageView, nullptr);
+			state->render().sceneColorImageView = VK_NULL_HANDLE;
+		}
+		if (state->render().sceneColorImage != VK_NULL_HANDLE) {
+			vmaDestroyImage(state->context().allocator, state->render().sceneColorImage, static_cast<VmaAllocation>(state->render().sceneColorAllocation));
+			state->render().sceneColorImage = VK_NULL_HANDLE;
+			state->render().sceneColorAllocation = nullptr;
+		}
 		DestroySceneResources(&state->context(), &state->render());
 		projectv::asset::UnloadAllModels(&state->context(), &state->render());
 		projectv::asset::DestroyModelPipeline(&state->context(), &state->render());

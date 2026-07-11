@@ -200,6 +200,9 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 	if (supportsTransferSrc) {
 		imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	}
+	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0) {
+		imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	}
 
 	VkSwapchainKHR oldSwapchain = swapchain->handle;
 	VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;

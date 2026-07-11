@@ -630,7 +630,7 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.pDynamicStates = dynamicStates,
 	};
 
-	VkFormat colorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	VkFormat colorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{};
 	pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 	pipelineRenderingCreateInfo.colorAttachmentCount = 1;
