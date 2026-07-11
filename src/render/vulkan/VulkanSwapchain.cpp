@@ -106,7 +106,7 @@ VkPresentModeKHR PickBestAvailablePresentMode(
 		VK_PRESENT_MODE_FIFO_KHR,
 	};
 	for (const VkPresentModeKHR candidate : priority) {
-		if (std::find(presentModes.begin(), presentModes.end(), candidate) != presentModes.end()) {
+		if (std::ranges::find(presentModes, candidate) != presentModes.end()) {
 			return candidate;
 		}
 	}

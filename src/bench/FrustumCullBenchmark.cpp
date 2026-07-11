@@ -156,7 +156,7 @@ void RunCppScalar(
 	std::vector<uint8_t> *masks)
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-		std::fill(masks->begin(), masks->end(), 0);
+		std::ranges::fill(*masks, 0);
 		const auto &params = fixture.parameters[r];
 		for (size_t i = 0; i < kBatchSize; ++i) {
 			if (IsAabbVisibleAgainstCameraFrustum(
@@ -173,7 +173,7 @@ void RunCScalar(
 	std::vector<uint8_t> *masks)
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-		std::fill(masks->begin(), masks->end(), 0);
+		std::ranges::fill(*masks, 0);
 		const ProjectvCFrustumCullParameters cparams = ToCParams(fixture.parameters[r]);
 		projectv_cull_frustum_scalar(masks->data(), aabbs.data(), cparams, kBatchSize);
 	}
@@ -186,7 +186,7 @@ void RunCAvx2(
 	std::vector<uint8_t> *masks)
 {
 	for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-		std::fill(masks->begin(), masks->end(), 0);
+		std::ranges::fill(*masks, 0);
 		const ProjectvCFrustumCullParameters cparams = ToCParams(fixture.parameters[r]);
 		projectv_cull_frustum_avx2(masks->data(), aabbs.data(), cparams, kBatchSize);
 	}
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
 			std::vector<uint8_t> cMasks((kBatchSize + 7) / 8, 0);
 			std::vector<uint8_t> avxMasks((kBatchSize + 7) / 8, 0);
 			for (uint32_t r = 0; r < kVisibilityRuns; ++r) {
-				std::fill(cppMasks.begin(), cppMasks.end(), 0);
+				std::ranges::fill(cppMasks, 0);
 				const auto &params = fixture.parameters[r];
 				for (size_t i = 0; i < kBatchSize; ++i) {
 					if (IsAabbVisibleAgainstCameraFrustum(
@@ -278,12 +278,12 @@ int main(int argc, char *argv[])
 						cppMasks[i / 8] |= static_cast<uint8_t>(1u << (i % 8));
 					}
 				}
-				std::fill(cMasks.begin(), cMasks.end(), 0);
+				std::ranges::fill(cMasks, 0);
 				const ProjectvCFrustumCullParameters cparams = ToCParams(params);
 				projectv_cull_frustum_scalar(cMasks.data(), aabbs.data(), cparams, kBatchSize);
 				VerifyBitIdentical(cppMasks, cMasks, "cpp_scalar", "c_scalar");
 #if defined(__AVX2__)
-				std::fill(avxMasks.begin(), avxMasks.end(), 0);
+				std::ranges::fill(avxMasks, 0);
 				projectv_cull_frustum_avx2(avxMasks.data(), aabbs.data(), cparams, kBatchSize);
 				VerifyBitIdentical(cMasks, avxMasks, "c_scalar", "c_avx2");
 #endif

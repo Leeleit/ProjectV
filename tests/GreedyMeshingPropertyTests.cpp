@@ -101,18 +101,18 @@ struct QuadCoverageVerifier {
 			cov.Init(extentN, extentU, extentV);
 
 			for (const auto &f : faces) {
-				const auto unpacked = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
-				if (unpacked.faceIndex != fi) {
+				const auto [x, y, z, faceIndexLocal] = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
+				if (faceIndexLocal != fi) {
 					continue;
 				}
-				const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-				const uint32_t lc[3] = {unpacked.x, unpacked.y, unpacked.z};
+				const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+				const uint32_t lc[3] = {x, y, z};
 				const uint32_t pN = lc[kFaceAxisN[fi]];
 				const uint32_t pU = lc[kFaceAxisU[fi]];
 				const uint32_t pV = lc[kFaceAxisV[fi]];
 
-				for (uint32_t dv = 0u; dv < ext.height; ++dv) {
-					for (uint32_t du = 0u; du < ext.width; ++du) {
+				for (uint32_t dv = 0u; dv < height; ++dv) {
+					for (uint32_t du = 0u; du < width; ++du) {
 						if (cov.IsMarked(pN, pU + du, pV + dv)) {
 							ctx.Fail(__LINE__, "OVERLAP: two quads cover the same (pN,pU,pV) cell");
 							std::fprintf(stderr, "  face=%u pN=%u pU=%u pV=%u du=%u dv=%u\n", fi, pN, pU, pV, du, dv);
@@ -155,7 +155,7 @@ void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const
 		input.chunk.nonAirCount = nonAir;
 		input.chunk.chunkIndex = 0u;
 
-		const auto mesh = GenerateCpuGreedyMesh(input);
+		const auto [opaqueFaces, transparentFaces] = GenerateCpuGreedyMesh(input);
 
 		static const int32_t offsets[6][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
 		uint32_t bruteTotal = 0u;
@@ -190,14 +190,14 @@ void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const
 		}
 
 		uint32_t greedyOpaque = 0u;
-		for (const auto &f : mesh.opaqueFaces) {
-			const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-			greedyOpaque += ext.width * ext.height;
+		for (const auto &f : opaqueFaces) {
+			const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+			greedyOpaque += width * height;
 		}
 		uint32_t greedyTransparent = 0u;
-		for (const auto &f : mesh.transparentFaces) {
-			const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-			greedyTransparent += ext.width * ext.height;
+		for (const auto &f : transparentFaces) {
+			const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+			greedyTransparent += width * height;
 		}
 
 		if (greedyOpaque != bruteOpaque) {

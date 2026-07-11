@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <string_view>
 
 namespace {
@@ -20,7 +21,7 @@ using projectv::voxel::ShouldEmitVoxelFaceCPU;
 void TestFullMaterialMatrix(TestContext &ctx)
 {
 	constexpr uint8_t kMaterials[] = {0u, 1u, 2u, 3u, 4u};
-	constexpr size_t kCount = sizeof(kMaterials) / sizeof(kMaterials[0]);
+	constexpr size_t kCount = std::size(kMaterials);
 
 	for (size_t mi = 0; mi < kCount; ++mi) {
 		for (size_t ni = 0; ni < kCount; ++ni) {

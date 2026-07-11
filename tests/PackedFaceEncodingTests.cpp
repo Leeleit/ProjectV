@@ -80,8 +80,8 @@ void TestUnpackLocalVoxelFaceRoundTrip(TestContext &ctx)
 			for (uint32_t z = 0u; z <= 255u; z += 31u) {
 				for (uint32_t face = 0u; face <= 5u; ++face) {
 					const uint32_t packed = PackLocalVoxelFaceCPU(x, y, z, face);
-					const auto u = UnpackLocalVoxelFaceCPU(packed);
-					if (u.x != x || u.y != y || u.z != z || u.faceIndex != face) {
+					const auto [ux, uy, uz, faceIndex] = UnpackLocalVoxelFaceCPU(packed);
+					if (ux != x || uy != y || uz != z || faceIndex != face) {
 						ctx.Fail(__LINE__, "UnpackLocalVoxelFace round-trip failed");
 					}
 				}
@@ -95,8 +95,8 @@ void TestUnpackQuadExtentsRoundTrip(TestContext &ctx)
 	for (uint32_t w = 0u; w <= 255u; w += 7u) {
 		for (uint32_t h = 0u; h <= 255u; h += 13u) {
 			const uint32_t packed = PackQuadExtentsCPU(w, h);
-			const auto u = UnpackQuadExtentsCPU(packed);
-			if (u.width != w || u.height != h) {
+			const auto [width, height] = UnpackQuadExtentsCPU(packed);
+			if (width != w || height != h) {
 				ctx.Fail(__LINE__, "UnpackQuadExtents round-trip failed");
 			}
 		}

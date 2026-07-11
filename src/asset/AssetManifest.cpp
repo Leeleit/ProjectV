@@ -123,7 +123,7 @@ bool ParseEntry(const std::string &rawEntry, ManifestEntry &out)
 	out.rotationDegrees = glm::vec3(0.0f);
 	out.scale = 1.0f;
 
-	const auto commaCount = std::count(transformView.begin(), transformView.end(), ',');
+	const auto commaCount = std::ranges::count(transformView, ',');
 	if (transformView.empty()) {
 		return true;
 	}

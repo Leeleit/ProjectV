@@ -35,9 +35,7 @@ void AssetRegistry::Unload(const std::string &id)
 {
 	std::lock_guard lock(mMutex);
 	mEntries.erase(id);
-	mInsertionOrder.erase(
-		std::remove(mInsertionOrder.begin(), mInsertionOrder.end(), id),
-		mInsertionOrder.end());
+	std::erase(mInsertionOrder, id);
 }
 
 void AssetRegistry::Clear()

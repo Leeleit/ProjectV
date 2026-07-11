@@ -1,6 +1,8 @@
 #include "physics/walk/WalkInternals.hpp"
 #include "physics/PhysicsWorld_Internal.hpp"
 
+#include <ranges>
+
 int GetWalkSneakSupportVoxelY(const WalkSneakSupportRegion &region)
 {
 	return FloorToVoxel(
@@ -45,8 +47,8 @@ bool IsPhysicsStaticWorldBodyId(const PhysicsState &physics, const JPH::BodyID &
 	if (bodyId == physics.staticWorldBodyId) {
 		return true;
 	}
-	for (const auto &entry : physics.chunkStaticBodies) {
-		if (entry.second == bodyId) {
+	for (const JPH::BodyID chunkBodyId : physics.chunkStaticBodies | std::views::values) {
+		if (chunkBodyId == bodyId) {
 			return true;
 		}
 	}

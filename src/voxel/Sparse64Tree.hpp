@@ -326,8 +326,8 @@ private:
 			return kSparse64InvalidNodeIndex;
 		}
 		const uint64_t hash = ComputeNodeStructuralHash(candidate);
-		const auto range = dedupIndex_.equal_range(hash);
-		for (auto it = range.first; it != range.second; ++it) {
+		const auto [begin, end] = dedupIndex_.equal_range(hash);
+		for (auto it = begin; it != end; ++it) {
 			if (NodesStructurallyEqual(nodes_[it->second], candidate)) {
 				return it->second;
 			}
@@ -349,8 +349,8 @@ private:
 			return;
 		}
 		const uint64_t hash = nodes_[nodeIndex].structuralHash;
-		const auto range = dedupIndex_.equal_range(hash);
-		for (auto it = range.first; it != range.second; ++it) {
+		const auto [begin, end] = dedupIndex_.equal_range(hash);
+		for (auto it = begin; it != end; ++it) {
 			if (it->second == nodeIndex) {
 				dedupIndex_.erase(it);
 				return;

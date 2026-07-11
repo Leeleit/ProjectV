@@ -145,7 +145,7 @@ SDL_AppResult DrawFrame(
 				rtxConfig.blasDeviceAddresses,
 				&initialChunks);
 			for (const uint32_t index : initialChunks) {
-				if (std::find(blasChunks.begin(), blasChunks.end(), index) == blasChunks.end()) {
+				if (std::ranges::find(blasChunks, index) == blasChunks.end()) {
 					blasChunks.push_back(index);
 				}
 			}

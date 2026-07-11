@@ -80,8 +80,8 @@ uint32_t SumQuadAreas(const std::vector<CpuGreedyFace> &faces)
 {
 	uint32_t sum = 0u;
 	for (const auto &f : faces) {
-		const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-		sum += ext.width * ext.height;
+		const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+		sum += width * height;
 	}
 	return sum;
 }
@@ -90,10 +90,13 @@ uint32_t SumQuadAreaForFace(const std::vector<CpuGreedyFace> &faces, const uint3
 {
 	uint32_t sum = 0u;
 	for (const auto &f : faces) {
-		const auto u = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
-		if (u.faceIndex == faceIndex) {
-			const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-			sum += ext.width * ext.height;
+		const auto [x, y, z, faceIndexLocal] = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
+		(void)x;
+		(void)y;
+		(void)z;
+		if (faceIndexLocal == faceIndex) {
+			const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+			sum += width * height;
 		}
 	}
 	return sum;
@@ -186,8 +189,8 @@ void TestSingleVoxelCenter(TestContext &ctx)
 		ctx.Fail(__LINE__, "single FloorWhite voxel must produce 0 transparent faces");
 	}
 	for (const auto &f : mesh.opaqueFaces) {
-		const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-		if (ext.width != 1u || ext.height != 1u) {
+		const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+		if (width != 1u || height != 1u) {
 			ctx.Fail(__LINE__, "isolated voxel faces must be 1x1");
 		}
 	}
@@ -216,10 +219,10 @@ void TestFullyFilledChunk(TestContext &ctx)
 		std::fprintf(stderr, "  got %zu\n", mesh.opaqueFaces.size());
 	}
 	for (const auto &f : mesh.opaqueFaces) {
-		const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-		if (ext.width != 4u || ext.height != 4u) {
+		const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+		if (width != 4u || height != 4u) {
 			ctx.Fail(__LINE__, "4x4 chunk face must merge to 4x4 quad");
-			std::fprintf(stderr, "  got %ux%u\n", ext.width, ext.height);
+			std::fprintf(stderr, "  got %ux%u\n", width, height);
 		}
 	}
 	CheckVolumePreservation(ctx, input, mesh);
@@ -254,10 +257,10 @@ void TestTwoAdjacentDifferentMaterials(TestContext &ctx)
 	uint32_t floorWhiteFaces = 0u;
 	uint32_t floorGrayFaces = 0u;
 	for (const auto &f : mesh.opaqueFaces) {
-		const auto cm = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
-		if (cm.materialIndex == 3u) {
+		const auto [chunkIndex, materialIndex] = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
+		if (materialIndex == 3u) {
 			++floorWhiteFaces;
-		} else if (cm.materialIndex == 4u) {
+		} else if (materialIndex == 4u) {
 			++floorGrayFaces;
 		}
 	}
@@ -314,15 +317,15 @@ void TestDeterminism(TestContext &ctx)
 	SetVoxel(w, 4, 5, 6, 1u);
 	SetVoxel(w, 3, 3, 3, 4u);
 	const auto input = w.MakeInput();
-	const auto mesh1 = GenerateCpuGreedyMesh(input);
-	const auto mesh2 = GenerateCpuGreedyMesh(input);
-	if (mesh1.opaqueFaces.size() != mesh2.opaqueFaces.size() || mesh1.transparentFaces.size() != mesh2.transparentFaces.size()) {
+	const auto [opaqueFaces1, transparentFaces1] = GenerateCpuGreedyMesh(input);
+	const auto [opaqueFaces2, transparentFaces2] = GenerateCpuGreedyMesh(input);
+	if (opaqueFaces1.size() != opaqueFaces2.size() || transparentFaces1.size() != transparentFaces2.size()) {
 		ctx.Fail(__LINE__, "determinism: face counts must match");
 	}
-	if (mesh1.opaqueFaces != mesh2.opaqueFaces) {
+	if (opaqueFaces1 != opaqueFaces2) {
 		ctx.Fail(__LINE__, "determinism: opaque face data must be identical");
 	}
-	if (mesh1.transparentFaces != mesh2.transparentFaces) {
+	if (transparentFaces1 != transparentFaces2) {
 		ctx.Fail(__LINE__, "determinism: transparent face data must be identical");
 	}
 }
@@ -343,8 +346,8 @@ void TestCheckerboardNoMerge(TestContext &ctx)
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	CheckVolumePreservation(ctx, input, mesh);
 	for (const auto &f : mesh.opaqueFaces) {
-		const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-		if (ext.width != 1u || ext.height != 1u) {
+		const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+		if (width != 1u || height != 1u) {
 			ctx.Fail(__LINE__, "checkerboard must never merge (all quads 1x1)");
 		}
 	}
@@ -388,10 +391,11 @@ void TestMaterialPreservation(TestContext &ctx)
 	SetVoxel(w, 1, 1, 1, 3u);
 	SetVoxel(w, 2, 2, 2, 4u);
 	const auto input = w.MakeInput();
-	const auto mesh = GenerateCpuGreedyMesh(input);
-	for (const auto &f : mesh.opaqueFaces) {
-		const auto cm = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
-		if (cm.materialIndex != 3u && cm.materialIndex != 4u) {
+	const auto [opaqueFaces, transparentFaces] = GenerateCpuGreedyMesh(input);
+	(void)transparentFaces;
+	for (const auto &f : opaqueFaces) {
+		const auto [chunkIndex, materialIndex] = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
+		if (materialIndex != 3u && materialIndex != 4u) {
 			ctx.Fail(__LINE__, "emitted face material must match a source voxel material");
 		}
 	}
@@ -403,10 +407,11 @@ void TestChunkIndexEncoding(TestContext &ctx)
 	SetVoxel(w, 1, 1, 1, 3u);
 	constexpr uint32_t testChunkIndex = 42u;
 	const auto input = w.MakeInput(testChunkIndex);
-	const auto mesh = GenerateCpuGreedyMesh(input);
-	for (const auto &f : mesh.opaqueFaces) {
-		const auto cm = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
-		if (cm.chunkIndex != testChunkIndex) {
+	const auto [opaqueFaces, transparentFaces] = GenerateCpuGreedyMesh(input);
+	(void)transparentFaces;
+	for (const auto &f : opaqueFaces) {
+		const auto [chunkIndex, materialIndex] = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
+		if (chunkIndex != testChunkIndex) {
 			ctx.Fail(__LINE__, "emitted face chunkIndex must match input");
 		}
 	}
@@ -416,18 +421,19 @@ void TestLargerChunk16(TestContext &ctx)
 {
 	const TestWorld w = MakeWorld(16, 16, 16, 3u);
 	const auto input = w.MakeInput();
-	const auto mesh = GenerateCpuGreedyMesh(input);
-	if (mesh.opaqueFaces.size() != 6u) {
+	const auto [opaqueFaces, transparentFaces] = GenerateCpuGreedyMesh(input);
+	(void)transparentFaces;
+	if (opaqueFaces.size() != 6u) {
 		ctx.Fail(__LINE__, "16^3 fully filled must merge to 6 faces");
-		std::fprintf(stderr, "  got %zu\n", mesh.opaqueFaces.size());
+		std::fprintf(stderr, "  got %zu\n", opaqueFaces.size());
 	}
-	for (const auto &f : mesh.opaqueFaces) {
-		const auto ext = UnpackQuadExtentsCPU(f.packedExtents);
-		if (ext.width != 16u || ext.height != 16u) {
+	for (const auto &f : opaqueFaces) {
+		const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
+		if (width != 16u || height != 16u) {
 			ctx.Fail(__LINE__, "16^3 face must merge to 16x16 quad");
 		}
 	}
-	CheckVolumePreservation(ctx, input, mesh);
+	CheckVolumePreservation(ctx, input, {opaqueFaces, transparentFaces});
 }
 
 void TestMixedGlassAndSolidAdjacent(TestContext &ctx)

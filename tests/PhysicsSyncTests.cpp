@@ -394,12 +394,14 @@ void TestFluidCABumpOnSmallFlatWorldStaysFast(TestContext &context)
 
 void TestGetPhysicsBroadphaseStatsNullReturnsZeroed(TestContext &context)
 {
-	const PhysicsBroadphaseStats stats = GetPhysicsBroadphaseStats(nullptr);
-	if (stats.totalBodies != 0u || stats.maxBodies != 0u || stats.staticBodies != 0u ||
-		stats.dynamicBodies != 0u || stats.activeDynamicBodies != 0u ||
-		stats.kinematicBodies != 0u || stats.activeKinematicBodies != 0u ||
-		stats.pendingChunkRebuilds != 0u || stats.chunkStaticBodies != 0u ||
-		stats.chunkMergedBoxesEntries != 0u) {
+	const auto [totalBodies, maxBodies, staticBodies, dynamicBodies, activeDynamicBodies,
+		kinematicBodies, activeKinematicBodies, pendingChunkRebuilds, chunkStaticBodies,
+		chunkMergedBoxesEntries] = GetPhysicsBroadphaseStats(nullptr);
+	if (totalBodies != 0u || maxBodies != 0u || staticBodies != 0u ||
+		dynamicBodies != 0u || activeDynamicBodies != 0u ||
+		kinematicBodies != 0u || activeKinematicBodies != 0u ||
+		pendingChunkRebuilds != 0u || chunkStaticBodies != 0u ||
+		chunkMergedBoxesEntries != 0u) {
 		context.Fail(
 			__LINE__,
 			"GetPhysicsBroadphaseStats(nullptr) must return all-zero struct");

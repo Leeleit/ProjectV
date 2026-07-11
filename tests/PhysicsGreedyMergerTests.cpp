@@ -67,10 +67,10 @@ uint32_t CountSolidVoxels(const VoxelWorld &world)
 uint64_t SumMergedBoxVolumes(const std::vector<projectv::physics::MergedVoxelBox> &boxes)
 {
 	uint64_t total = 0u;
-	for (const projectv::physics::MergedVoxelBox &box : boxes) {
-		const uint64_t spanX = static_cast<uint64_t>(box.maxX - box.minX);
-		const uint64_t spanY = static_cast<uint64_t>(box.maxY - box.minY);
-		const uint64_t spanZ = static_cast<uint64_t>(box.maxZ - box.minZ);
+	for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : boxes) {
+		const uint64_t spanX = static_cast<uint64_t>(maxX - minX);
+		const uint64_t spanY = static_cast<uint64_t>(maxY - minY);
+		const uint64_t spanZ = static_cast<uint64_t>(maxZ - minZ);
 		total += spanX * spanY * spanZ;
 	}
 	return total;
@@ -309,8 +309,8 @@ void TestThinColumnMerges(TestContext &context)
 		context.Fail(__LINE__, "Thin Y-column must merge to 1 box");
 	}
 	if (!boxes.empty()) {
-		const auto &b = boxes[0];
-		if (b.minY != 0 || b.maxY != 8 || b.minX != 0 || b.maxX != 1 || b.minZ != 0 || b.maxZ != 1) {
+		const auto &[minX, minY, minZ, maxX, maxY, maxZ] = boxes[0];
+		if (minY != 0 || maxY != 8 || minX != 0 || maxX != 1 || minZ != 0 || maxZ != 1) {
 			context.Fail(__LINE__, "Column box extents must be (0,0,0)-(1,8,1)");
 		}
 	}

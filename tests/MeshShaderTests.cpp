@@ -46,9 +46,9 @@ void TestBuildMeshCullPushConstantsDispatchParams(TestContext &context)
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, 0.5f};
 	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, 0.1f};
 
-	const projectv::render::MeshCullPushConstants cull =
+	const auto [dispatchParams, frustumPlanes] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 256u);
-	ExpectEqualUInt(context, 256u, cull.dispatchParams[0], __LINE__, "dispatchParams[0] = chunk count");
+	ExpectEqualUInt(context, 256u, dispatchParams[0], __LINE__, "dispatchParams[0] = chunk count");
 }
 
 void TestBuildMeshCullPushConstantsFrustumForwardPlane(TestContext &context)
@@ -59,9 +59,10 @@ void TestBuildMeshCullPushConstantsFrustumForwardPlane(TestContext &context)
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, 0.0f};
 	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, 0.5f};
 
-	const projectv::render::MeshCullPushConstants cull =
+	const auto [dispatchParams, frustumPlanes] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 16u);
-	const auto &nearPlane = cull.frustumPlanes[4];
+	(void)dispatchParams;
+	const auto &nearPlane = frustumPlanes[4];
 	if (nearPlane[0] != 0.0f || nearPlane[1] != 0.0f || nearPlane[2] != -1.0f) {
 		std::fprintf(stderr, "Test failure at line %d: near plane normal mismatch (got %f %f %f)\n", __LINE__, nearPlane[0], nearPlane[1], nearPlane[2]);
 		++context.failures;
@@ -80,9 +81,10 @@ void TestBuildMeshCullPushConstantsFrustumFarPlane(TestContext &context)
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, 0.0f};
 	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, 0.5f};
 
-	const projectv::render::MeshCullPushConstants cull =
+	const auto [dispatchParams, frustumPlanes] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 16u);
-	const auto &farPlane = cull.frustumPlanes[5];
+	(void)dispatchParams;
+	const auto &farPlane = frustumPlanes[5];
 	if (farPlane[0] != 0.0f || farPlane[1] != 0.0f || farPlane[2] != 1.0f) {
 		std::fprintf(stderr, "Test failure at line %d: far plane normal mismatch (got %f %f %f)\n", __LINE__, farPlane[0], farPlane[1], farPlane[2]);
 		++context.failures;

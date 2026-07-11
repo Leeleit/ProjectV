@@ -1,5 +1,7 @@
 #include "physics/PhysicsWorld_Internal.hpp"
 
+#include <ranges>
+
 namespace {
 
 void DestroyStaticWorldBody(PhysicsState &physics)
@@ -155,9 +157,9 @@ void DestroyAllChunkStaticBodies(PhysicsState &physics)
 		return;
 	}
 	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-	for (const auto &entry : physics.chunkStaticBodies) {
-		bodyInterface.RemoveBody(entry.second);
-		bodyInterface.DestroyBody(entry.second);
+	for (const JPH::BodyID bodyId : physics.chunkStaticBodies | std::views::values) {
+		bodyInterface.RemoveBody(bodyId);
+		bodyInterface.DestroyBody(bodyId);
 	}
 	physics.chunkStaticBodies.clear();
 	physics.chunkMergedBoxes.clear();
@@ -173,8 +175,8 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 	}
 
 	JPH::StaticCompoundShapeSettings compoundSettings;
-	for (const auto &entry : physics.chunkMergedBoxes) {
-		for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : entry.second) {
+	for (const auto &boxes : physics.chunkMergedBoxes | std::views::values) {
+		for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : boxes) {
 			const int spanX = maxX - minX;
 			const int spanY = maxY - minY;
 			const int spanZ = maxZ - minZ;
@@ -250,8 +252,8 @@ uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world
 
 	std::vector<uint32_t> pending;
 	pending.swap(physics->pendingChunkRebuilds);
-	std::sort(pending.begin(), pending.end());
-	pending.erase(std::unique(pending.begin(), pending.end()), pending.end());
+	std::ranges::sort(pending);
+	pending.erase(std::ranges::unique(pending).begin(), pending.end());
 
 	uint32_t rebuiltCount = 0;
 	for (const uint32_t chunkIndex : pending) {

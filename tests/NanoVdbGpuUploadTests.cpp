@@ -160,7 +160,8 @@ void TestVersionedUploadTrigger(TestContext &context)
 	projectv::voxel::nanovdb::NanoVdbFlattenResult flattenB = flattenA;
 	flattenB.materials[0] = 99u;
 
-	const projectv::voxel::nanovdb::NanoVdbUpper srcUpper = flattenA.uppers[0];
+	const auto [childMask, firstLower] = flattenA.uppers[0];
+	(void)firstLower;
 	std::array<uint8_t, sizeof(projectv::voxel::nanovdb::NanoVdbUpper)> upperBytes{};
 	std::array<uint8_t, sizeof(projectv::voxel::nanovdb::NanoVdbLower)> lowerBytes{};
 	std::array<uint8_t, sizeof(projectv::voxel::nanovdb::NanoVdbLeaf)> leafBytes{};
@@ -174,7 +175,7 @@ void TestVersionedUploadTrigger(TestContext &context)
 		materialBytes.data());
 
 	const auto *packedUpper = reinterpret_cast<const projectv::voxel::nanovdb::NanoVdbUpper *>(upperBytes.data());
-	if (packedUpper->childMask != srcUpper.childMask) {
+	if (packedUpper->childMask != childMask) {
 		context.Fail(__LINE__, "Upper childMask should round-trip through pack");
 	}
 	if (materialBytes[0] != 42u) {
