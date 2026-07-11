@@ -288,7 +288,7 @@ private:
 		return z ^ z >> 31;
 	}
 
-	[[nodiscard]] uint64_t ComputeNodeStructuralHash(const Node &node) const noexcept
+	[[nodiscard]] static uint64_t ComputeNodeStructuralHash(const Node &node) noexcept
 	{
 		uint64_t h = MixSplitMix64(0x9E3779B97F4A7C15ull, node.fillMask);
 		for (std::size_t i = 0; i < node.slots.size(); ++i) {
@@ -304,7 +304,7 @@ private:
 		dedupIndex_.emplace(node.structuralHash, nodeIndex);
 	}
 
-	[[nodiscard]] bool NodesStructurallyEqual(const Node &a, const Node &b) const noexcept
+	[[nodiscard]] static bool NodesStructurallyEqual(const Node &a, const Node &b) noexcept
 	{
 		if (a.fillMask != b.fillMask) {
 			return false;
@@ -407,7 +407,7 @@ private:
 		return count;
 	}
 
-	bool CanCollapseToHomogeneous(const Node &node, uint8_t &outMaterial) const noexcept
+	static bool CanCollapseToHomogeneous(const Node &node, uint8_t &outMaterial) noexcept
 	{
 		if (node.fillMask != 0xFFFFFFFFFFFFFFFFull) {
 			return false;

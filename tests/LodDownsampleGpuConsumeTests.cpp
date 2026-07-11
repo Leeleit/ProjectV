@@ -161,7 +161,7 @@ void TestBuildLodPayloadWordsZeroPadsShortInput(TestContext &context)
 
 void TestBuildLodPayloadWordsHandlesNullSafely(TestContext &context)
 {
-	std::array<uint32_t, 4> words{0xDEADBEEFu, 0xDEADBEEFu, 0xDEADBEEFu, 0xDEADBEEFu};
+	std::array words{0xDEADBEEFu, 0xDEADBEEFu, 0xDEADBEEFu, 0xDEADBEEFu};
 	projectv::render::BuildLodPayloadWordsFromDownsampled(nullptr, 16u, words.data());
 	if (words[0] != 0xDEADBEEFu) {
 		context.Fail(__LINE__, "BuildLodPayloadWords must guard against null bytes");

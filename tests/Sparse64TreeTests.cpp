@@ -257,10 +257,10 @@ void TestByteExactParityVsFlat(TestContext &context)
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
 	std::mt19937 rng(0xC0FFEEu);
-	std::uniform_int_distribution<int> coordDistX(0, sideX - 1);
-	std::uniform_int_distribution<int> coordDistY(0, sideY - 1);
-	std::uniform_int_distribution<int> coordDistZ(0, sideZ - 1);
-	std::uniform_int_distribution<int> matDist(1, 4);
+	std::uniform_int_distribution coordDistX(0, sideX - 1);
+	std::uniform_int_distribution coordDistY(0, sideY - 1);
+	std::uniform_int_distribution coordDistZ(0, sideZ - 1);
+	std::uniform_int_distribution matDist(1, 4);
 
 	constexpr int kEditCount = 200;
 	for (int i = 0; i < kEditCount; ++i) {
@@ -349,8 +349,8 @@ void TestOverwriteParity(TestContext &context)
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
 	std::mt19937 rng(0xBADBEEFu);
-	std::uniform_int_distribution<int> coordDist(0, sideX - 1);
-	std::uniform_int_distribution<int> matDist(0, 4);
+	std::uniform_int_distribution coordDist(0, sideX - 1);
+	std::uniform_int_distribution matDist(0, 4);
 
 	for (int pass = 0; pass < 5; ++pass) {
 		for (int i = 0; i < 50; ++i) {

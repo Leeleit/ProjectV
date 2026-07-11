@@ -88,8 +88,8 @@ public:
 		const VulkanContextState &context,
 		VkCommandPool commandPool);
 
-	[[nodiscard]] VkDeviceSize ComputeBlasBuildScratchSize(
-		uint32_t primitiveCount) const noexcept;
+	[[nodiscard]] static VkDeviceSize ComputeBlasBuildScratchSize(
+		uint32_t primitiveCount) noexcept;
 
 	[[nodiscard]] bool BuildChunkBlas(
 		VkCommandBuffer commandBuffer,
@@ -131,8 +131,8 @@ public:
 	[[nodiscard]] bool IsVoxelAwareRtxActive() const noexcept { return m_voxelAwareRtxActive; }
 	[[nodiscard]] VkAccelerationStructureKHR GetTlas() const noexcept { return m_config.tlas; }
 
-	bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render);
-	void ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept;
+	static bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render);
+	static void ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept;
 
 	bool RecreateShadowMaskForExtent(const VulkanContextState &context, uint32_t width, uint32_t height);
 

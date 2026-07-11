@@ -109,7 +109,7 @@ public:
 			dummy);
 	}
 
-	[[nodiscard]] float SampleIrradianceTestValue(uint32_t probeIndex) const noexcept;
+	[[nodiscard]] static float SampleIrradianceTestValue(uint32_t probeIndex) noexcept;
 
 private:
 	bool AllocateTextures(

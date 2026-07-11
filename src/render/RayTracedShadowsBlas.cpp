@@ -82,7 +82,7 @@ void RayTracedShadows::BuildDirtyBlases(
 }
 
 VkDeviceSize RayTracedShadows::ComputeBlasBuildScratchSize(
-	const uint32_t primitiveCount) const noexcept
+	const uint32_t primitiveCount) noexcept
 {
 	if (primitiveCount == 0u) {
 		return 0u;

@@ -500,7 +500,7 @@ void RtxGiProbes::ReleaseResources(const VulkanContextState &context) noexcept
 	m_config.updateDispatchCount = 0u;
 }
 
-float RtxGiProbes::SampleIrradianceTestValue(uint32_t) const noexcept
+float RtxGiProbes::SampleIrradianceTestValue(uint32_t) noexcept
 {
 	return 0.0f;
 }

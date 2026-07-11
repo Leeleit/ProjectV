@@ -2637,7 +2637,7 @@ void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestConte
 
 		camera.yawRadians = 0.0f;
 		for (int step = 0; step < 24; ++step) {
-			const std::array<float, 3> previousPosition{camera.position[0], camera.position[1], camera.position[2]};
+			const std::array previousPosition{camera.position[0], camera.position[1], camera.position[2]};
 			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 			const float horizontalDeltaX = camera.position[0] - previousPosition[0];
@@ -2703,7 +2703,7 @@ void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestConte
 
 		camera.yawRadians = 0.78539816f;
 		for (int step = 0; step < 24; ++step) {
-			const std::array<float, 3> previousPosition{camera.position[0], camera.position[1], camera.position[2]};
+			const std::array previousPosition{camera.position[0], camera.position[1], camera.position[2]};
 			EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 			const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 			const float horizontalDeltaX = camera.position[0] - previousPosition[0];

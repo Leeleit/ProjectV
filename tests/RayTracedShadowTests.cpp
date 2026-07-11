@@ -270,7 +270,7 @@ void TestRtxSunShadowRayHelperExistsInShader()
 	if (!fp.good()) {
 		return;
 	}
-	const std::string sourceText{ std::istreambuf_iterator<char>(fp), std::istreambuf_iterator<char>() };
+	const std::string sourceText{ std::istreambuf_iterator(fp), std::istreambuf_iterator() };
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("rtxShadowMask") != std::string::npos,
 		"voxel.frag must reference rtxShadowMask (binding 18) for 5.2.E voxel-aware shadow consume");
@@ -352,7 +352,7 @@ void TestRtxAoDispatchUsesTerminateOnFirstHitFlag()
 void TestRtxAoShaderBinaryBuilt()
 {
 	bool found = false;
-	constexpr char *const kCandidatePaths[]{
+	constexpr const char *const kCandidatePaths[]{
 		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/src/voxel.frag.rtx.spv",
 		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/bin/voxel.frag.rtx.spv",
 	};
@@ -525,7 +525,7 @@ void TestRtxShadowIntersectionShaderUsesVoxelDdaPattern()
 			"voxel_rtx_shadow.rint source not found");
 		return;
 	}
-	std::string sourceText{ std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>() };
+	std::string sourceText{ std::istreambuf_iterator(source), std::istreambuf_iterator() };
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("gl_InstanceCustomIndexEXT") != std::string::npos,
 		"voxel_rtx_shadow.rint must read chunk index from gl_InstanceCustomIndexEXT");
