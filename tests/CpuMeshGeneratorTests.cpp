@@ -25,7 +25,7 @@ void ExpectTrue(TestContext &context, const bool condition, const int line, cons
 
 void TestEmptyChunkGeneratesNoFaces(TestContext &context)
 {
-	const std::vector<uint8_t> voxels(4 * 4 * 4, 0);
+	const std::vector<uint8_t> voxels(static_cast<size_t>(4) * 4 * 4, 0);
 	projectv::voxel::CpuMeshInput input{};
 	input.voxels = voxels.data();
 	input.widthX = 4;
@@ -37,8 +37,8 @@ void TestEmptyChunkGeneratesNoFaces(TestContext &context)
 
 void TestSingleVoxelAtInterior(TestContext &context)
 {
-	std::vector<uint8_t> voxels(4 * 4 * 4, 0);
-	voxels[1 + 4 * (1 + 4 * 1)] = 1;
+	std::vector<uint8_t> voxels(static_cast<size_t>(4) * 4 * 4, 0);
+	voxels[1 + static_cast<size_t>(4) * (1 + static_cast<size_t>(4) * 1)] = 1;
 	projectv::voxel::CpuMeshInput input{};
 	input.voxels = voxels.data();
 	input.widthX = 4;
@@ -50,8 +50,8 @@ void TestSingleVoxelAtInterior(TestContext &context)
 
 void TestVoxelAtBoundaryEmitsFace(TestContext &context)
 {
-	std::vector<uint8_t> voxels(4 * 4 * 4, 0);
-	voxels[3 + 4 * (1 + 4 * 1)] = 1;
+	std::vector<uint8_t> voxels(static_cast<size_t>(4) * 4 * 4, 0);
+	voxels[3 + static_cast<size_t>(4) * (1 + static_cast<size_t>(4) * 1)] = 1;
 	projectv::voxel::CpuMeshInput input{};
 	input.voxels = voxels.data();
 	input.widthX = 4;
@@ -67,7 +67,7 @@ void TestFilledChunkEmitsPerVoxelFace(TestContext &context)
 	for (int z = 0; z < 4; ++z) {
 		for (int y = 0; y < 4; ++y) {
 			for (int x = 0; x < 4; ++x) {
-				voxels[x + 4 * (y + 4 * z)] = 1;
+				voxels[x + static_cast<size_t>(4) * (y + static_cast<size_t>(4) * z)] = 1;
 			}
 		}
 	}
@@ -77,7 +77,7 @@ void TestFilledChunkEmitsPerVoxelFace(TestContext &context)
 	input.heightY = 4;
 	input.depthZ = 4;
 	const auto faces = projectv::voxel::GenerateCpuChunkMeshXPositive(input);
-	ExpectTrue(context, faces.size() == 4 * 4, __LINE__, "filled chunk -> 4 * 4 faces (X+ side of rightmost column)");
+	ExpectTrue(context, faces.size() == static_cast<size_t>(4) * 4, __LINE__, "filled chunk -> 4 * 4 faces (X+ side of rightmost column)");
 }
 
 void TestNullInputReturnsEmpty(TestContext &context)
@@ -119,7 +119,7 @@ void TestOversizedExtentReturnsEmpty(TestContext &context)
 
 void TestDifferentMaterialsBothEmit(TestContext &context)
 {
-	std::vector<uint8_t> voxels(2 * 1 * 1, 0);
+	std::vector<uint8_t> voxels(static_cast<size_t>(2) * 1 * 1, 0);
 	voxels[0] = 3;
 	voxels[1] = 4;
 	projectv::voxel::CpuMeshInput input{};
@@ -133,7 +133,7 @@ void TestDifferentMaterialsBothEmit(TestContext &context)
 
 void TestSameMaterialDoesNotEmitInterior(TestContext &context)
 {
-	std::vector<uint8_t> voxels(2 * 1 * 1, 0);
+	std::vector<uint8_t> voxels(static_cast<size_t>(2) * 1 * 1, 0);
 	voxels[0] = 3;
 	voxels[1] = 3;
 	projectv::voxel::CpuMeshInput input{};
@@ -159,7 +159,7 @@ void TestSingleVoxelAt1x1x1(TestContext &context)
 
 void TestMaterialPreservation(TestContext &context)
 {
-	std::vector<uint8_t> voxels(4 * 1 * 1, 0);
+	std::vector<uint8_t> voxels(static_cast<size_t>(4) * 1 * 1, 0);
 	voxels[0] = 3;
 	voxels[3] = 4;
 	projectv::voxel::CpuMeshInput input{};

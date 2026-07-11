@@ -256,7 +256,7 @@ void TestByteExactParityVsFlat(TestContext &context)
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
-	std::mt19937 rng(0xC0FFEEu);
+	std::mt19937 rng(0xC0FFEEu); // NOLINT: deterministic seed for reproducible parity test
 	std::uniform_int_distribution coordDistX(0, sideX - 1);
 	std::uniform_int_distribution coordDistY(0, sideY - 1);
 	std::uniform_int_distribution coordDistZ(0, sideZ - 1);
@@ -348,7 +348,7 @@ void TestOverwriteParity(TestContext &context)
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
-	std::mt19937 rng(0xBADBEEFu);
+	std::mt19937 rng(0xBADBEEFu); // NOLINT: deterministic seed for reproducible parity test
 	std::uniform_int_distribution coordDist(0, sideX - 1);
 	std::uniform_int_distribution matDist(0, 4);
 

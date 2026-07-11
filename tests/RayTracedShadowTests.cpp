@@ -494,9 +494,10 @@ void TestRtxShadowShaderFilesExistInBuildDirectory()
 								 "/voxel_rtx_shadow.rmiss.spv" }) {
 		const std::string path = baseDir + suffix;
 		std::ifstream file{ path, std::ios::binary };
+		const std::string message = "RTX shadow shader binary missing: " + path;
 		PROJECTV_RTX_EXPECT(
 			file.good(),
-			("RTX shadow shader binary missing: " + path).c_str());
+			message.c_str());
 	}
 }
 
